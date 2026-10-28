@@ -206,7 +206,9 @@ describe('buying traps', () => {
       }),
       message(Message.ClickedBuyButton({ item: 'Turret' })),
       model(({ wallet, trapStock }) => {
-        expect(wallet.balance).toBe(0)
+        expect(wallet.balance).toBe(
+          100 - TRAPS.Barricade.price - TRAPS.Turret.price,
+        )
         expect(trapStock).toEqual({ Barricade: 1, Turret: 1 })
       }),
     )
@@ -952,7 +954,7 @@ describe('between waves', () => {
       traps: () => damagedTraps,
     })
     expect(repairPrice(damagedTraps)).toBe(expectedPrice)
-    expect(expectedPrice).toBe(25)
+    expect(expectedPrice).toBe(18)
     expect(priceFor(shopping, 'RepairTraps')).toBe(expectedPrice)
     expect(SHOP_ITEMS.RepairTraps.name).toBe('Glue and Nails')
 

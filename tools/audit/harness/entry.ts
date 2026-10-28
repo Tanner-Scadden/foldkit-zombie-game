@@ -91,14 +91,24 @@ const scenarioModel = (): Model => {
         ? {
             ...p,
             arsenal: Arsenal.HoldingSpare({
-              spare: { kind: 'Smg', rounds: 360, tier: num('tier', 0) },
+              spare: {
+                kind: 'Smg',
+                rounds: 360,
+                loaded: 30,
+                tier: num('tier', 0),
+              },
             }),
           }
         : gun === 'shotgun'
           ? {
               ...p,
               arsenal: Arsenal.HoldingSpare({
-                spare: { kind: 'Shotgun', rounds: 48, tier: num('tier', 0) },
+                spare: {
+                  kind: 'Shotgun',
+                  rounds: 48,
+                  loaded: 6,
+                  tier: num('tier', 0),
+                },
               }),
             }
           : p,

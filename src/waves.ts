@@ -31,6 +31,7 @@ import {
   Alarm,
   Beat,
   type DoorId,
+  FIRST_SHOP_CATEGORY,
   type Formation,
   GameEvent,
   type Hold,
@@ -327,7 +328,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.28,
-    hpScale: 1,
+    hpScale: 1.12,
     groups: [
       squads({
         count: 12,
@@ -368,7 +369,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.35,
-    hpScale: 1,
+    hpScale: 1.22,
     groups: [
       trickle({
         count: 3,
@@ -415,7 +416,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.42,
-    hpScale: 1,
+    hpScale: 1.32,
     groups: [
       squads({
         count: 12,
@@ -479,7 +480,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.49,
-    hpScale: 1,
+    hpScale: 1.45,
     groups: [
       squads({
         count: 6,
@@ -1092,6 +1093,7 @@ const startRun = (model: Model, mode: RunMode): Model =>
       score: () => 0,
       wallet: () => emptyWallet,
       shop: () => ShopState.Away(),
+      shopCategory: () => FIRST_SHOP_CATEGORY,
       elapsedMs: () => 0,
       frameEvents: () => [],
       hitStop: () => initialHitStop,

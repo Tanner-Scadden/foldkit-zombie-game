@@ -19,7 +19,7 @@ import {
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, Tabs } from '@foldkit/ui'
 
 import {
   type AudioEngineError,
@@ -73,6 +73,7 @@ import {
   PointerDevice,
   Round,
   RunMode,
+  type ShopCategory,
   ShopItemId,
   ShopState,
   TouchControls,
@@ -90,8 +91,10 @@ import { burstCoins, dropClip, puffDust } from './particles'
 import {
   SHOP_ITEMS,
   ShopGood,
+  ShopTabs,
   isBrowsing,
   purchase,
+  selectShopCategory,
   shopItemElementId,
 } from './shop'
 import { advanceGame, clampFrameDelta, refreshIntent } from './simulation'
@@ -168,6 +171,7 @@ export const Message = defineMessageUnion({
   ClickedPlaceTrapButton: {},
   ClickedNextTrapButton: {},
   GotShopDialogMessage: { message: Dialog.Message },
+  GotShopTabsMessage: { message: Tabs.Message },
   ClickedBuyButton: { item: ShopItemId },
   PressedBuyKey: { item: ShopItemId },
   MovedShopFocus: { item: ShopItemId },
@@ -595,6 +599,22 @@ const foldShopDialogClose = Update.foldChildStep({
   foldOutMessage: foldShopDialogOutMessage,
 })
 
+const foldShopTabs = Update.foldChild({
+  update: ShopTabs.update,
+  read: (model: Model) => Option.some(model.shopTabs),
+  write: (model, nextShopTabs) =>
+    modifyFields(model, { shopTabs: () => nextShopTabs }),
+  toParentMessage: message => Message.GotShopTabsMessage({ message }),
+  foldOutMessage: Tabs.OutMessage.match<
+    UpdateStep,
+    Tabs.OutMessage<ShopCategory>
+  >({
+    Selected:
+      ({ value }) =>
+      stepModel => ({ model: selectShopCategory(stepModel, value) }),
+  }),
+})
+
 const leaveShopWithoutDialog: UpdateStep = stepModel => ({
   model: stepModel.shopDialog.isOpen ? stepModel : leaveShop(stepModel),
 })
@@ -1015,6 +1035,9 @@ const updateGame = (model: Model, message: Message) =>
         stepModel => foldShopDialog(stepModel, dialogMessage),
         leaveShopWithoutDialog,
       ]),
+
+    GotShopTabsMessage: ({ message: tabsMessage }) =>
+      isBrowsing(model.shop) ? foldShopTabs(model, tabsMessage) : { model },
 
     ClickedBuyButton: ({ item }) => buy(model, item),
 

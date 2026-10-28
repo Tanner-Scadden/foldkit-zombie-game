@@ -2,6 +2,8 @@ import { Array, Option, Schema, pipe } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
+import { Tabs } from '@foldkit/ui'
+
 import { SHOP_STALL_SYMBOL, tilesWithSymbol } from './arena'
 import {
   MONEY_TICK_PER_SECOND,
@@ -17,6 +19,7 @@ import {
   type Model,
   Phase,
   type Player,
+  type ShopCategory,
   type ShopItemId,
   ShopState,
   TrapKind,
@@ -172,21 +175,21 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
     id: 'Shotgun',
     name: WEAPONS.Shotgun.name,
     blurb: `Five pellets in a wide spray. Short reach, big shove. Comes with ${startingRounds('Shotgun')} shells.`,
-    price: 75,
+    price: 35,
     good: ShopGood.Gun({ weapon: 'Shotgun' }),
   },
   ShotgunShells: {
     id: 'ShotgunShells',
     name: 'Shell Sack',
     blurb: `${SHOTGUN_SHELLS} more shells for the ${WEAPONS.Shotgun.name}.`,
-    price: 15,
+    price: 10,
     good: ShopGood.Ammo({ weapon: 'Shotgun', rounds: SHOTGUN_SHELLS }),
   },
   Smg: {
     id: 'Smg',
     name: WEAPONS.Smg.name,
     blurb: `Fast and a little wobbly. Comes with ${startingRounds('Smg')} rounds.`,
-    price: 120,
+    price: 100,
     good: ShopGood.Gun({ weapon: 'Smg' }),
   },
   ShotgunUpgrade: {
@@ -200,7 +203,7 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
     id: 'SmgRounds',
     name: 'Chatter Drum',
     blurb: `${SMG_ROUNDS} more rounds for the ${WEAPONS.Smg.name}.`,
-    price: 20,
+    price: 15,
     good: ShopGood.Ammo({ weapon: 'Smg', rounds: SMG_ROUNDS }),
   },
   SmgUpgrade: {
@@ -248,19 +251,56 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
   },
 }
 
-export const SHOP_ORDER: Array.NonEmptyReadonlyArray<ShopItemId> = [
-  'Shotgun',
-  'ShotgunShells',
-  'ShotgunUpgrade',
-  'Smg',
-  'SmgRounds',
-  'SmgUpgrade',
-  'PistolUpgrade',
-  'Heart',
-  'Barricade',
-  'Turret',
-  'RepairTraps',
+// CATEGORIES
+
+export type ShopCategoryInfo = Readonly<{
+  label: string
+  blurb: string
+  items: Array.NonEmptyReadonlyArray<ShopItemId>
+}>
+
+export const SHOP_CATEGORIES: Readonly<Record<ShopCategory, ShopCategoryInfo>> =
+  {
+    Guns: {
+      label: 'Guns',
+      blurb: `Your ${WEAPONS[SIDEARM].name} always stays. A new gun goes in your second slot and replaces whatever is there. A new gun starts without upgrades, and the old gun's upgrades go with it.`,
+      items: ['Shotgun', 'Smg'],
+    },
+    Supplies: {
+      label: 'Supplies',
+      blurb: 'Hearts and ammo. Top up before every wave.',
+      items: ['Heart', 'ShotgunShells', 'SmgRounds'],
+    },
+    Upgrades: {
+      label: 'Upgrades',
+      blurb: 'Tiers stack. A gun keeps its upgrades until you replace it.',
+      items: ['ShotgunUpgrade', 'SmgUpgrade', 'PistolUpgrade'],
+    },
+    Traps: {
+      label: 'Traps',
+      blurb: 'Bought here, placed between waves. They keep their damage.',
+      items: ['Barricade', 'Turret', 'RepairTraps'],
+    },
+  }
+
+export const SHOP_CATEGORY_ORDER: Array.NonEmptyReadonlyArray<ShopCategory> = [
+  'Guns',
+  'Supplies',
+  'Upgrades',
+  'Traps',
 ]
+
+export const ShopTabs = Tabs.create<ShopCategory>()
+
+export const SHOP_ORDER: Array.NonEmptyReadonlyArray<ShopItemId> =
+  Array.flatMap(
+    SHOP_CATEGORY_ORDER,
+    category => SHOP_CATEGORIES[category].items,
+  )
+
+export const itemsIn = (
+  category: ShopCategory,
+): Array.NonEmptyReadonlyArray<ShopItemId> => SHOP_CATEGORIES[category].items
 
 export const priceFor = (model: Model, id: ShopItemId): number =>
   ShopGood.match(SHOP_ITEMS[id].good, {
@@ -318,8 +358,6 @@ export const itemBlurb = (model: Model, id: ShopItemId): string =>
     Trap: () => SHOP_ITEMS[id].blurb,
     Repair: () => SHOP_ITEMS[id].blurb,
   })
-
-export const SPARE_SLOT_RULE = `Your ${WEAPONS[SIDEARM].name} always stays. A new gun goes in your second slot and replaces whatever is there. A new gun starts without upgrades, and the old gun's upgrades go with it.`
 
 export const shopItemElementId = (id: ShopItemId): string => `shop-item-${id}`
 
@@ -395,6 +433,15 @@ export const verdictFor = (model: Model, id: ShopItemId): Verdict => {
     }),
   )
 }
+
+const isAvailable = (model: Model, id: ShopItemId): boolean =>
+  Verdict.isAnyOf(['Available'])(verdictFor(model, id))
+
+export const affordableCount = (model: Model, category: ShopCategory): number =>
+  Array.filter(itemsIn(category), id => isAvailable(model, id)).length
+
+export const totalAffordable = (model: Model): number =>
+  Array.filter(SHOP_ORDER, id => isAvailable(model, id)).length
 
 export const ownedNote = (model: Model, id: ShopItemId): string => {
   const { player } = model
@@ -557,8 +604,27 @@ export const isBrowsing = (shop: ShopState): boolean =>
 
 const arriveAtStall = (model: Model): ShopState =>
   isShopOpenFor(model.phase)
-    ? ShopState.Browsing({ focusedItem: Array.headNonEmpty(SHOP_ORDER) })
+    ? ShopState.Browsing({
+        focusedItem: Array.headNonEmpty(itemsIn(model.shopCategory)),
+      })
     : ShopState.Away()
+
+export const selectShopCategory = (
+  model: Model,
+  category: ShopCategory,
+): Model =>
+  modifyFields(model, {
+    shopCategory: () => category,
+    shop: shop =>
+      ShopState.match(shop, {
+        Away: () => shop,
+        Browsing: () =>
+          ShopState.Browsing({
+            focusedItem: Array.headNonEmpty(itemsIn(category)),
+          }),
+        Dismissed: () => shop,
+      }),
+  })
 
 export const refreshShopPresence = (model: Model): Model => {
   const isHere = isAtStallFront(model.player)

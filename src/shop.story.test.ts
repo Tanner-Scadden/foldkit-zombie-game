@@ -3,7 +3,7 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, Tabs } from '@foldkit/ui'
 
 import {
   BULLET_MAX,
@@ -26,14 +26,27 @@ import {
   type Model,
   Phase,
   type PlannedSpawn,
+  type ShopCategory,
   ShopState,
+  type WeaponKind,
   type Zombie,
   ZombieState,
   initialModel,
 } from './model'
-import { SHOP_ITEMS } from './shop'
+import {
+  SHOP_CATEGORY_ORDER,
+  SHOP_ITEMS,
+  affordableCount,
+  totalAffordable,
+} from './shop'
 import { FINAL_WAVE, waveBonus } from './waves'
-import { WEAPONS, magazineOf, maybeSpare, startingRounds } from './weapons'
+import {
+  UPGRADE_TIERS,
+  WEAPONS,
+  magazineOf,
+  maybeSpare,
+  startingRounds,
+} from './weapons'
 
 const FRAME_MS = 50
 const SHORT_FRAME_MS = 16
@@ -748,5 +761,168 @@ describe('zombies still need two pistol shots', () => {
         expect(wallet.balance).toBe(0)
       }),
     )
+  })
+})
+
+describe('shop categories', () => {
+  const WAVE_ONE_PAY = 6 * SHAMBLER_BOUNTY + waveBonus(1)
+
+  const selectTab = (value: ShopCategory) =>
+    message(
+      Message.GotShopTabsMessage({
+        message: Tabs.Message.SelectedTab({
+          index: Option.getOrElse(
+            Array.findFirstIndex(SHOP_CATEGORY_ORDER, tab => tab === value),
+            () => 0,
+          ),
+          value,
+        }),
+      }),
+    )
+
+  const resolveFocusTab = Command.resolve(
+    Tabs.FocusTab,
+    Tabs.Message.CompletedFocusTab(),
+  )
+
+  test('choosing a tab shows its items, focuses its first item, and moves keyboard focus to the tab', () => {
+    story(
+      update,
+      given(browsing(withMoney(readyModel, 100))),
+      model(({ shopCategory }) => {
+        expect(shopCategory).toBe('Guns')
+      }),
+      selectTab('Traps'),
+      Command.expectExact(Tabs.FocusTab),
+      resolveFocusTab,
+      model(({ shopCategory, shop }) => {
+        expect(shopCategory).toBe('Traps')
+        expect(shop).toEqual(ShopState.Browsing({ focusedItem: 'Barricade' }))
+      }),
+      selectTab('Supplies'),
+      resolveFocusTab,
+      model(({ shopCategory, shop }) => {
+        expect(shopCategory).toBe('Supplies')
+        expect(shop).toEqual(ShopState.Browsing({ focusedItem: 'Heart' }))
+      }),
+    )
+  })
+
+  test('the shop reopens on the last tab chosen in the run, and a new run starts on Guns', () => {
+    story(
+      update,
+      given(browsing(withMoney(readyModel, 100))),
+      selectTab('Upgrades'),
+      resolveFocusTab,
+      message(
+        Message.GotShopDialogMessage({
+          message: Dialog.Message.RequestedClose(),
+        }),
+      ),
+      model(({ shop, shopCategory }) => {
+        expect(shop).toEqual(ShopState.Dismissed())
+        expect(shopCategory).toBe('Upgrades')
+      }),
+    )
+
+    story(
+      update,
+      given(
+        modifyFields(besideStall(preparing(3)), {
+          shopCategory: () => 'Upgrades',
+        }),
+      ),
+      press('KeyD'),
+      ...ticks(FRAMES_TO_STALL, FRAME_MS),
+      resolveShowShop,
+      model(({ shop, shopCategory }) => {
+        expect(shopCategory).toBe('Upgrades')
+        expect(shop).toEqual(
+          ShopState.Browsing({ focusedItem: 'ShotgunUpgrade' }),
+        )
+      }),
+    )
+
+    story(
+      update,
+      given(
+        modifyFields(readyModel, {
+          phase: () => Phase.GameOver({ wave: 4 }),
+          shopCategory: () => 'Traps',
+        }),
+      ),
+      ...ticks(RESTART_GRACE_TICKS, GRACE_TICK_MS),
+      press('Enter'),
+      model(({ phase, shopCategory }) => {
+        expect(Phase.guards.Preparation(phase)).toBe(true)
+        expect(shopCategory).toBe('Guns')
+      }),
+    )
+  })
+
+  test('tab Messages change nothing while the shop is closed', () => {
+    story(
+      update,
+      given(
+        modifyFields(readyModel, {
+          phase: () => preparing(2),
+          shop: () => ShopState.Away(),
+        }),
+      ),
+      selectTab('Traps'),
+      Command.expectNone(),
+      model(({ shopCategory, shop }) => {
+        expect(shopCategory).toBe('Guns')
+        expect(shop).toEqual(ShopState.Away())
+      }),
+    )
+  })
+
+  test('each tab counts what the player can buy right now', () => {
+    const firstVisit = browsing(withMoney(readyModel, WAVE_ONE_PAY))
+    expect(affordableCount(firstVisit, 'Guns')).toBe(1)
+    expect(affordableCount(firstVisit, 'Supplies')).toBe(0)
+    expect(affordableCount(firstVisit, 'Upgrades')).toBe(0)
+    expect(affordableCount(firstVisit, 'Traps')).toBe(1)
+    expect(totalAffordable(firstVisit)).toBe(2)
+
+    const hurt = withHp(firstVisit, PLAYER_MAX_HP - 2)
+    expect(affordableCount(hurt, 'Supplies')).toBe(1)
+    expect(totalAffordable(hurt)).toBe(3)
+
+    expect(totalAffordable(withMoney(firstVisit, 0))).toBe(0)
+  })
+
+  test('the money from a clean wave 1 buys a first gun at the first visit', () => {
+    story(
+      update,
+      given(browsing(withMoney(readyModel, WAVE_ONE_PAY))),
+      message(Message.ClickedBuyButton({ item: 'Shotgun' })),
+      model(({ wallet, player }) => {
+        expect(wallet.balance).toBe(WAVE_ONE_PAY - SHOP_ITEMS.Shotgun.price)
+        expect(
+          Option.map(maybeSpare(player.arsenal), ({ kind }) => kind),
+        ).toEqual(Option.some('Shotgun'))
+      }),
+    )
+  })
+
+  test('every upgrade line starts cheap and gets steeper', () => {
+    const lines: ReadonlyArray<WeaponKind> = ['Shotgun', 'Smg', 'Pistol']
+    Array.forEach(lines, weapon => {
+      const prices = Array.map(UPGRADE_TIERS[weapon], ({ price }) => price)
+      const steps = Array.zipWith(
+        prices,
+        Array.drop(prices, 1),
+        (lower, higher) => higher - lower,
+      )
+      expect(Array.every(steps, step => step > 0)).toBe(true)
+    })
+    expect(
+      Option.map(Array.head(UPGRADE_TIERS.Smg), ({ price }) => price),
+    ).toEqual(Option.some(60))
+    expect(
+      Option.map(Array.head(UPGRADE_TIERS.Shotgun), ({ price }) => price),
+    ).toEqual(Option.some(40))
   })
 })

@@ -17,7 +17,7 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test, expect as vitestExpect } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, Tabs } from '@foldkit/ui'
 
 import indexHtml from '../index.html?raw'
 import { GAME_TITLE, PREPARATION_MS } from './constants'
@@ -153,50 +153,67 @@ describe('Shop', () => {
     wallet: () => ({ balance: 100, earned: 100, shown: 100 }),
   })
 
-  const shotgunButton = role('button', { name: 'Buy Barn Buster for $75' })
-  const shellsButton = role('button', { name: 'Buy Shell Sack for $15' })
+  const shotgunButton = role('button', { name: 'Buy Barn Buster for $35' })
+  const smgButton = role('button', { name: 'Buy Chatterbox for $100' })
+  const shellsButton = role('button', { name: 'Buy Shell Sack for $10' })
   const heartButton = role('button', { name: 'Buy Pickled Heart for $25' })
   const swapButton = role('button', { name: 'Swap to the Pop Pistol' })
+  const gunsTab = role('tab', { name: /^Guns,/ })
+  const suppliesTab = role('tab', { name: /^Supplies,/ })
+  const trapsTab = role('tab', { name: /^Traps,/ })
+  const resolveFocusTab = Command.resolve(
+    Tabs.FocusTab,
+    Tabs.Message.CompletedFocusTab(),
+  )
+  const openShop = () => [
+    Subscription.emit(Message.TickedFrame({ deltaTime: 16 })),
+    Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+    Mount.resolve(
+      Dialog.AcquireResources,
+      Dialog.Message.SucceededAcquireResources(),
+    ),
+  ]
+  const leaveShop = () => [
+    click(role('button', { name: 'LEAVE SHOP' })),
+    Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()),
+    Mount.expectEnded(Dialog.AcquireResources),
+  ]
 
-  test('opens at the stall, buys with the keyboard and a click, and closes', () => {
+  test('opens on the Guns tab, buys with the keyboard and a click, switches tabs, and closes', () => {
     scene(
       { update, view },
       given(
         modifyFields(atStall, {
-          wallet: () => ({ balance: 115, earned: 115, shown: 115 }),
+          wallet: () => ({ balance: 60, earned: 60, shown: 60 }),
         }),
       ),
       measureSurface,
       expect(role('heading', { name: "Rattles' Bone Bazaar" })).toBeAbsent(),
-      Subscription.emit(Message.TickedFrame({ deltaTime: 16 })),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-      Mount.resolve(
-        Dialog.AcquireResources,
-        Dialog.Message.SucceededAcquireResources(),
-      ),
+      ...openShop(),
       expect(role('heading', { name: "Rattles' Bone Bazaar" })).toExist(),
-      expect(text('You have $115')).toExist(),
-      expect(shellsButton).toHaveAttr('aria-disabled', 'true'),
-      expect(text('Needs the Barn Buster')).toExist(),
+      expect(text('You have $60')).toExist(),
+      expect(gunsTab).toHaveAttr('aria-selected', 'true'),
+      expect(shellsButton).toBeAbsent(),
+      expect(smgButton).toHaveAttr('aria-disabled', 'true'),
+      expect(text('Need $40 more')).toExist(),
       keydown(shotgunButton, 'ArrowDown'),
       Command.resolve(FocusShopItem, Message.CompletedFocusShopItem()),
-      keydown(shellsButton, 'Enter'),
-      expect(text('You have $115')).toExist(),
+      keydown(smgButton, 'Enter'),
+      expect(text('You have $60')).toExist(),
       keydown(shotgunButton, 'Enter'),
-      expect(text('You have $40')).toExist(),
+      expect(text('You have $25')).toExist(),
       expect(text('In your hands, 16 shells left')).toExist(),
+      keydown(gunsTab, 'ArrowRight'),
+      resolveFocusTab,
+      expect(suppliesTab).toHaveAttr('aria-selected', 'true'),
+      expect(shotgunButton).toBeAbsent(),
       expect(shellsButton).not.toHaveAttr('aria-disabled', 'true'),
       click(heartButton),
-      expect(text('You have $15')).toExist(),
+      expect(text('You have $0')).toExist(),
       expect(text('Hearts 4 of 5')).toExist(),
-      expect(heartButton).toHaveAttr('aria-disabled', 'true'),
+      expect(shellsButton).toHaveAttr('aria-disabled', 'true'),
       expect(text('Need $10 more')).toExist(),
-      click(role('button', { name: 'LEAVE SHOP' })),
-      Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
-      ),
-      Mount.expectEnded(Dialog.AcquireResources),
+      ...leaveShop(),
       expect(role('heading', { name: "Rattles' Bone Bazaar" })).toBeAbsent(),
       expect(swapButton).toHaveAttr('aria-keyshortcuts', 'Q E 1 2'),
     )
@@ -209,30 +226,48 @@ describe('Shop', () => {
       given(atStall),
       measureSurface,
       expect(placeButton).toBeAbsent(),
-      Subscription.emit(Message.TickedFrame({ deltaTime: 16 })),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-      Mount.resolve(
-        Dialog.AcquireResources,
-        Dialog.Message.SucceededAcquireResources(),
-      ),
+      ...openShop(),
+      click(trapsTab),
+      resolveFocusTab,
       expect(text('0 ready to place, 0 placed, up to 4')).toExist(),
-      click(role('button', { name: 'Buy Plank Pile for $30' })),
-      expect(text('You have $70')).toExist(),
+      click(role('button', { name: 'Buy Plank Pile for $20' })),
+      expect(text('You have $80')).toExist(),
       expect(text('1 ready to place, 0 placed, up to 4')).toExist(),
       expect(role('button', { name: 'Buy Glue and Nails for $0' })).toHaveAttr(
         'aria-disabled',
         'true',
       ),
       expect(text('Nothing needs fixing')).toExist(),
-      click(role('button', { name: 'LEAVE SHOP' })),
-      Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
-      ),
-      Mount.expectEnded(Dialog.AcquireResources),
+      ...leaveShop(),
       expect(placeButton).toHaveAttr('aria-disabled', 'true'),
       expect(placeButton).toHaveAttr('aria-keyshortcuts', 'T'),
       expect(text('Stand in a doorway to board it up')).toExist(),
+    )
+  })
+
+  test('each tab counts what the player can buy, and the shop sums it up', () => {
+    scene(
+      { update, view },
+      given(
+        modifyFields(atStall, {
+          wallet: () => ({ balance: 37, earned: 37, shown: 37 }),
+        }),
+      ),
+      measureSurface,
+      ...openShop(),
+      expect(role('tab', { name: 'Guns, 1 you can buy' })).toExist(),
+      expect(role('tab', { name: 'Supplies, 1 you can buy' })).toExist(),
+      expect(role('tab', { name: 'Upgrades, nothing you can buy' })).toExist(),
+      expect(role('tab', { name: 'Traps, 1 you can buy' })).toExist(),
+      expect(text('3 things you can buy now')).toExist(),
+      expect(
+        selector('[data-verdict="available"] #shop-item-Shotgun'),
+      ).toExist(),
+      expect(selector('[data-verdict="refused"] #shop-item-Smg')).toExist(),
+      click(shotgunButton),
+      expect(role('tab', { name: 'Guns, nothing you can buy' })).toExist(),
+      expect(role('tab', { name: 'Supplies, nothing you can buy' })).toExist(),
+      expect(text('Nothing you can buy right now')).toExist(),
     )
   })
 

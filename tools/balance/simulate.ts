@@ -30,13 +30,17 @@ const { modifyFields } = await import('foldkit/struct')
 // tables in place before the runs, so a balance idea can be tried without
 // touching src. Bake the winning numbers into src afterwards.
 if (process.env.TUNE !== undefined) {
-  const tune = await import(`${process.cwd()}/${process.env.TUNE}`)
+  const tunePath = process.env.TUNE.startsWith('/')
+    ? process.env.TUNE
+    : `${process.cwd()}/${process.env.TUNE}`
+  const tune = await import(tunePath)
   tune.default({
     WAVE_PLANS: (await import('../../src/waves')).WAVE_PLANS,
     ZOMBIE_KINDS: (await import('../../src/zombies')).ZOMBIE_KINDS,
     SHOP_ITEMS: (await import('../../src/shop')).SHOP_ITEMS,
     WEAPONS: (await import('../../src/weapons')).WEAPONS,
     UPGRADE_TIERS: (await import('../../src/weapons')).UPGRADE_TIERS,
+    TRAPS: (await import('../../src/traps')).TRAPS,
   })
 }
 
@@ -70,6 +74,9 @@ type RunResult = {
   upgradeSpend: number
   minHp: number
   waves: Array<WaveLog>
+  moneyAtVisit: Array<number | undefined>
+  gnomesPlaced: number
+  boughtAtVisit: Array<Array<string>>
 }
 
 // Per wave: hearts lost, seconds with 6 or more zombies within 48 px
@@ -236,48 +243,65 @@ const STALL_FRONT: Vector = {
   y: STALL_BOX.top - 3,
 }
 
-const canBuy = (model: Model, item: Parameters<typeof priceFor>[1]) =>
-  model.wallet.balance >= priceFor(model, item)
+// The bot shops the way a careful player would: a heart when low, the
+// first gun it can afford (the cheap shotgun right after the tutorial, the
+// SMG once it can), ammo below half, two Plank Piles, then upgrades and a
+// Grumpy Gnome while it keeps a small reserve for a refill and a heart.
+// NO_GNOME=1 keeps the old bot that never buys a gnome.
+const NO_GNOME = process.env.NO_GNOME !== undefined
+const RESERVE = Number(process.env.RESERVE ?? 30)
 
-const wantedPurchase = (
-  model: Model,
-): Parameters<typeof priceFor>[1] | undefined => {
+type ItemId = Parameters<typeof priceFor>[1]
+
+const wantedPurchase = (model: Model): ItemId | undefined => {
   const spare = Option.getOrUndefined(maybeSpare(model.player.arsenal))
-  if (model.player.hp <= 3 && canBuy(model, 'Heart')) return 'Heart'
+  const isAvailable = (item: ItemId) =>
+    verdictFor(model, item)._tag === 'Available'
+  const canSpare = (item: ItemId) =>
+    isAvailable(item) && model.wallet.balance - priceFor(model, item) >= RESERVE
+  if (model.player.hp <= 3 && isAvailable('Heart')) return 'Heart'
   if (spare === undefined) {
-    if (canBuy(model, 'Smg')) return 'Smg'
-    if (canBuy(model, 'Shotgun') && model.wallet.balance < 90) return 'Shotgun'
+    if (isAvailable('Smg')) return 'Smg'
+    if (isAvailable('Shotgun')) return 'Shotgun'
     return undefined
+  }
+  if (spare.kind === 'Shotgun' && spare.tier === 0 && isAvailable('Smg')) {
+    return 'Smg'
   }
   const refill = spare.kind === 'Smg' ? 'SmgRounds' : 'ShotgunShells'
   const cap = maxRounds(spare.kind, spare.tier)
-  if (spare.rounds < cap / 2 && canBuy(model, refill)) {
+  if (spare.rounds < cap / 2 && isAvailable(refill)) {
     return refill
-  }
-  if (spare.kind === 'Shotgun' && spare.tier === 0 && canBuy(model, 'Smg')) {
-    return 'Smg'
   }
   const barricades =
     model.trapStock.Barricade +
     model.traps.filter(trap => trap._tag === 'Barricade').length
-  if (barricades < 2 && canBuy(model, 'Barricade')) return 'Barricade'
-  if (model.player.hp <= 4 && canBuy(model, 'Heart')) return 'Heart'
-  // Upgrades come after hearts, ammo, and planks, and keep enough back for
-  // a refill and a heart so an upgrade never leaves the bot broke.
-  const reserve = 45
+  if (barricades < 2 && isAvailable('Barricade')) return 'Barricade'
+  if (model.player.hp <= 4 && isAvailable('Heart')) return 'Heart'
+  if (isAvailable('RepairTraps') && priceFor(model, 'RepairTraps') <= 25) {
+    return 'RepairTraps'
+  }
+  if (NO_UPGRADES) return undefined
+  const turrets =
+    model.trapStock.Turret +
+    model.traps.filter(trap => trap._tag === 'Turret').length
   const spareUpgrade = spare.kind === 'Smg' ? 'SmgUpgrade' : 'ShotgunUpgrade'
-  const canUpgrade = (item: Parameters<typeof priceFor>[1]) =>
-    !NO_UPGRADES &&
-    model.wallet.balance - priceFor(model, item) >= reserve &&
-    verdictFor(model, item)._tag === 'Available'
-  if (spare.tier < maxTier(spare.kind) && canUpgrade(spareUpgrade)) {
+  if (spare.tier < 1 && canSpare(spareUpgrade)) return spareUpgrade
+  if (!NO_GNOME && turrets < 1 && canSpare('Turret')) return 'Turret'
+  if (spare.tier < maxTier(spare.kind) && canSpare(spareUpgrade)) {
     return spareUpgrade
   }
-  if (spare.tier >= 2 && canUpgrade('PistolUpgrade')) return 'PistolUpgrade'
+  if (spare.tier >= 2 && canSpare('PistolUpgrade')) return 'PistolUpgrade'
+  if (!NO_GNOME && turrets < 2 && spare.tier >= 2 && canSpare('Turret')) {
+    return 'Turret'
+  }
   return undefined
 }
 
 let spentOnUpgrades = 0
+let gnomeTries = 0
+let gnomesPlaced = 0
+let boughtLog: Array<Array<string>> = []
 
 const shop = (model: Model): Model => {
   const item = wantedPurchase(model)
@@ -292,6 +316,12 @@ const shop = (model: Model): Model => {
   const bought = send(model, Message.ClickedBuyButton({ item }))
   if (item.endsWith('Upgrade')) {
     spentOnUpgrades += model.wallet.balance - bought.wallet.balance
+  }
+  if (
+    bought.wallet.balance !== model.wallet.balance &&
+    model.phase._tag === 'Preparation'
+  ) {
+    ;(boughtLog[model.phase.wave] ??= []).push(item)
   }
   return bought.wallet.balance === model.wallet.balance
     ? send(
@@ -322,7 +352,21 @@ const busiestDoor = (model: Model) => {
     | undefined
 }
 
-type PrepPlan = 'Shop' | 'Barricade' | 'Go'
+type PrepPlan = 'Shop' | 'Barricade' | 'Gnome' | 'Go'
+
+// Gnomes go a little off the middle of the room, where the bot fights.
+const GNOME_SPOTS: Array<Vector> = [
+  { x: 146, y: 88 },
+  { x: 176, y: 104 },
+]
+
+const gnomeSpot = (model: Model): Vector =>
+  GNOME_SPOTS[
+    Math.min(
+      GNOME_SPOTS.length - 1,
+      model.traps.filter(trap => trap._tag === 'Turret').length,
+    )
+  ]!
 
 const prepPlan = (model: Model, shopped: boolean): PrepPlan => {
   if (
@@ -334,6 +378,9 @@ const prepPlan = (model: Model, shopped: boolean): PrepPlan => {
   }
   if (model.trapStock.Barricade > 0 && busiestDoor(model) !== undefined) {
     return 'Barricade'
+  }
+  if (model.trapStock.Turret > 0 && gnomeTries < 90) {
+    return 'Gnome'
   }
   return 'Go'
 }
@@ -383,13 +430,24 @@ const runOnce = (seed: number): RunResult => {
   let maxAlive = 0
   let minHp = model.player.hp
   const waves: Array<WaveLog> = []
+  const moneyAtVisit: Array<number | undefined> = []
   botRandom = seed
   spentOnUpgrades = 0
+  boughtLog = []
+  gnomeTries = 0
+  gnomesPlaced = 0
   while (
     (model.phase._tag === 'Preparation' || model.phase._tag === 'Wave') &&
     model.stats.runMs < MAX_RUN_MS
   ) {
     const wave = model.phase.wave
+    if (
+      model.phase._tag === 'Preparation' &&
+      isShopOpenFor(model.phase) &&
+      moneyAtVisit[wave] === undefined
+    ) {
+      moneyAtVisit[wave] = model.wallet.balance
+    }
     if (model.shop._tag === 'Browsing') {
       model = shop(model)
       if (model.shop._tag !== 'Browsing') shoppedWave = wave
@@ -399,6 +457,7 @@ const runOnce = (seed: number): RunResult => {
       model = holdFire(model)
       const plan = prepPlan(model, shoppedWave === wave)
       if (plan === 'Go') {
+        gnomeTries = 0
         model = pressKeys(model, new Set())
         const spare = Option.getOrUndefined(maybeSpare(model.player.arsenal))
         if (
@@ -415,8 +474,17 @@ const runOnce = (seed: number): RunResult => {
       const target =
         plan === 'Shop'
           ? STALL_FRONT
-          : boxCenter(THRESHOLDS[busiestDoor(model) ?? 'North'].box)
-      if (plan === 'Barricade' && distance(model.player, target) < 8) {
+          : plan === 'Gnome'
+            ? gnomeSpot(model)
+            : boxCenter(THRESHOLDS[busiestDoor(model) ?? 'North'].box)
+      if (plan === 'Gnome' && distance(model.player, target) < 6) {
+        gnomeTries += 1
+        const selected =
+          model.selectedTrap === 'Turret' ? model : tapKey(model, 'KeyG')
+        const placed = tapKey(selected, 'KeyT')
+        gnomesPlaced += placed.trapStock.Turret < model.trapStock.Turret ? 1 : 0
+        model = pressKeys(placed, new Set())
+      } else if (plan === 'Barricade' && distance(model.player, target) < 8) {
         const placed = tapKey(model, 'KeyT')
         model =
           placed.trapStock.Barricade < model.trapStock.Barricade
@@ -501,6 +569,9 @@ const runOnce = (seed: number): RunResult => {
     upgradeSpend: spentOnUpgrades,
     minHp,
     waves,
+    moneyAtVisit,
+    gnomesPlaced,
+    boughtAtVisit: boughtLog,
   }
 }
 
@@ -582,6 +653,9 @@ console.log(
   `Upgrades at the end: spare tier median ${median(results.map(r => r.spareTier))}, pistol tier median ${median(results.map(r => r.pistolTier))}, spent median $${median(results.map(r => r.upgradeSpend))}`,
 )
 console.log(
+  `Gnomes placed per run: median ${median(results.map(r => r.gnomesPlaced))}, most ${Math.max(...results.map(r => r.gnomesPlaced))}`,
+)
+console.log(
   `Median run length: ${(median(results.map(r => r.runMs)) / 60000).toFixed(2)} min`,
 )
 console.log(
@@ -597,6 +671,32 @@ for (let wave = 1; wave <= lastWave; wave++) {
       : [r.moneyAfterWave[wave - 1]!],
   )
   if (values.length > 0) console.log(`  wave ${wave}: $${median(values)}`)
+}
+console.log(
+  '\nShop visits: money on arrival (median, p25 to p75) and what the bot bought (share of visits)',
+)
+const quantile = (values: Array<number>, q: number): number => {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  return sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!
+}
+for (let wave = 2; wave <= lastWave; wave++) {
+  const visits = results.filter(r => r.moneyAtVisit[wave] !== undefined)
+  if (visits.length === 0) continue
+  const money = visits.map(r => r.moneyAtVisit[wave]!)
+  const counts = new Map<string, number>()
+  visits.forEach(r =>
+    (r.boughtAtVisit[wave] ?? []).forEach(item =>
+      counts.set(item, (counts.get(item) ?? 0) + 1),
+    ),
+  )
+  const bought = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([item, n]) => `${item} ${((100 * n) / visits.length).toFixed(0)}%`)
+    .join(', ')
+  console.log(
+    `  before wave ${wave}: $${median(money)} ($${quantile(money, 0.25)} to $${quantile(money, 0.75)}), n=${visits.length}: ${bought}`,
+  )
 }
 const hurt = results.reduce((sum, r) => {
   ;(Object.keys(sum) as Array<Kind>).forEach(kind => {

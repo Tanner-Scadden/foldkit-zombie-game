@@ -1,7 +1,7 @@
 import { Option, Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, Tabs } from '@foldkit/ui'
 
 import {
   ARENA_HEIGHT,
@@ -451,6 +451,14 @@ export const ShopItemId = Schema.Literals([
 ])
 export type ShopItemId = typeof ShopItemId.Type
 
+export const ShopCategory = Schema.Literals([
+  'Guns',
+  'Supplies',
+  'Upgrades',
+  'Traps',
+])
+export type ShopCategory = typeof ShopCategory.Type
+
 export const ShopState = defineTaggedUnion({
   Away: {},
   Browsing: { focusedItem: ShopItemId },
@@ -563,6 +571,8 @@ export const Model = Schema.Struct({
   wallet: Wallet,
   shop: ShopState,
   shopDialog: Dialog.Model,
+  shopCategory: ShopCategory,
+  shopTabs: Tabs.Model,
   elapsedMs: Schema.Number,
   frameEvents: Schema.Array(GameEvent),
   hitStop: HitStop,
@@ -613,6 +623,10 @@ export const initialPlayer: Player = {
 export const emptyWallet: Wallet = { balance: 0, earned: 0, shown: 0 }
 
 export const SHOP_DIALOG_ID = 'shop'
+
+export const SHOP_TABS_ID = 'shop-tabs'
+
+export const FIRST_SHOP_CATEGORY: ShopCategory = 'Guns'
 
 export const idleInput: Input = {
   pressedKeys: [],
@@ -683,6 +697,8 @@ export const initialModel: Model = {
   wallet: emptyWallet,
   shop: ShopState.Away(),
   shopDialog: Dialog.init({ id: SHOP_DIALOG_ID }),
+  shopCategory: FIRST_SHOP_CATEGORY,
+  shopTabs: Tabs.init({ id: SHOP_TABS_ID }),
   elapsedMs: 0,
   frameEvents: [],
   hitStop: initialHitStop,

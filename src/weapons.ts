@@ -184,7 +184,7 @@ export const UPGRADE_TIERS: Readonly<
   Pistol: [
     {
       name: 'Shovey Popper',
-      price: 300,
+      price: 200,
       boost: {
         damage: 0,
         fireIntervalMs: 0,
@@ -228,7 +228,7 @@ export const UPGRADE_TIERS: Readonly<
   Shotgun: [
     {
       name: 'Barn Buster Plus',
-      price: 110,
+      price: 40,
       boost: {
         damage: 0,
         fireIntervalMs: 0,
@@ -242,7 +242,7 @@ export const UPGRADE_TIERS: Readonly<
     },
     {
       name: 'Silo Splitter',
-      price: 220,
+      price: 140,
       boost: {
         damage: 0,
         fireIntervalMs: -120,
@@ -256,7 +256,7 @@ export const UPGRADE_TIERS: Readonly<
     },
     {
       name: 'Hayloft Howitzer',
-      price: 380,
+      price: 320,
       boost: {
         damage: 1,
         fireIntervalMs: 0,
@@ -272,7 +272,7 @@ export const UPGRADE_TIERS: Readonly<
   Smg: [
     {
       name: 'Gossip Box',
-      price: 150,
+      price: 60,
       boost: {
         damage: 0,
         fireIntervalMs: 0,
@@ -286,7 +286,7 @@ export const UPGRADE_TIERS: Readonly<
     },
     {
       name: 'Rumor Mill',
-      price: 280,
+      price: 180,
       boost: {
         damage: 0,
         fireIntervalMs: -12,
@@ -300,7 +300,7 @@ export const UPGRADE_TIERS: Readonly<
     },
     {
       name: 'Blabbermouth 3000',
-      price: 450,
+      price: 400,
       boost: {
         damage: 1,
         fireIntervalMs: 0,

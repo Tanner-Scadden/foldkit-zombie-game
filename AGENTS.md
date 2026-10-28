@@ -45,8 +45,8 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/combat.ts`     | Strikes, wounds, and bursts applied to any list of targets    |
 | `src/traps.ts`      | The trap table, placement, chewing, turrets, and repair       |
 | `src/weapons.ts`    | The weapon table, the two-slot arsenal, magazines, and reload |
-| `src/shop.ts`       | Money, the shop's items and prices, purchases, and the stall  |
-| `src/shopView.ts`   | The shop dialog drawn as HTML over the canvas                 |
+| `src/shop.ts`       | Money, shop categories, items, prices, purchases, the stall   |
+| `src/shopView.ts`   | The shop dialog and its category tabs, HTML over the canvas   |
 | `src/stall.ts`      | The shop stall and its shopkeeper drawn on the canvas         |
 | `src/room.ts`       | The room's static floor, walls, doors, and cover shapes       |
 | `src/particles.ts`  | Particles and floor decals spawned from each frame's events   |

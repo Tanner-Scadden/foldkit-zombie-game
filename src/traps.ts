@@ -76,7 +76,7 @@ export const TRAPS: Readonly<Record<TrapKind, TrapStats>> = {
     name: 'Plank Pile',
     blurb:
       'Nail it across a doorway. Zombies must chew through it, your shots fly through the gaps.',
-    price: 30,
+    price: 20,
     hp: 30,
     limit: 4,
     pathCost: 25,
@@ -88,7 +88,7 @@ export const TRAPS: Readonly<Record<TrapKind, TrapStats>> = {
     name: 'Grumpy Gnome',
     blurb:
       'A garden gnome with a pea shooter and a grudge. Plonk it on the floor and it shoots whatever shambles near.',
-    price: 70,
+    price: 50,
     hp: 16,
     limit: 2,
     pathCost: 6,

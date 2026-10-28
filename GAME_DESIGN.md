@@ -67,10 +67,10 @@ Proposed on 2026-10-28 for step 4. These are starting numbers to play against, n
 | Item                  | Price | What it does                                                                                                      |
 | --------------------- | ----- | ----------------------------------------------------------------------------------------------------------------- |
 | Pop Pistol            | Start | 1 damage, 150 ms between shots, a 14 round magazine, 0.8 s reload, never runs out                                 |
-| Barn Buster (shotgun) | $75   | 5 pellets in a 0.75 radian spray, 1 damage each, short range, 620 ms between shots, 6 shells a load, 1.3 s reload |
-| Shell Sack            | $15   | 16 more shells, up to 48. The shotgun comes with 16                                                               |
-| Chatterbox (SMG)      | $120  | 1 damage, 70 ms between shots, a slight random spread, a 30 round magazine, 1.2 s reload                          |
-| Chatter Drum          | $20   | 120 more rounds, up to 360. The SMG comes with 150                                                                |
+| Barn Buster (shotgun) | $35   | 5 pellets in a 0.75 radian spray, 1 damage each, short range, 620 ms between shots, 6 shells a load, 1.3 s reload |
+| Shell Sack            | $10   | 16 more shells, up to 48. The shotgun comes with 16                                                               |
+| Chatterbox (SMG)      | $100  | 1 damage, 70 ms between shots, a slight random spread, a 30 round magazine, 1.2 s reload                          |
+| Chatter Drum          | $15   | 120 more rounds, up to 360. The SMG comes with 150                                                                |
 | Pickled Heart         | $25   | One heart, never past the maximum of 5                                                                            |
 
 Proposed on 2026-10-28 after the first playtest ("the pistol should have to reload, and a lower rate of fire"). Every gun fires from a magazine. The magazine size and reload time are columns in the weapon table in `src/weapons.ts`, and the upgrade tiers can change them.
@@ -91,6 +91,7 @@ Proposed on 2026-10-28 for step 5, the horde. These are starting numbers to play
 
 - **The burst.** Radius 28 px. It costs the player 1 heart unless they are blinking, and deals 6 damage to every zombie it reaches. A Gasbag caught in a burst bursts 150 ms later, so chains ripple instead of going off at once. At most 2 bursts go off in one frame and the rest wait their turn.
 - **Speed.** Each wave scales every spawn's speed, from ×1 on wave 1 to ×1.49 on wave 8. By wave 8 the fastest Hotfoots outrun the player (72 px/s).
+- **Health.** Waves 5 to 8 scale every spawn's health by ×1.12, ×1.22, ×1.32, and ×1.45, rounded per zombie. See "Shop categories and the price ramp".
 
 Rewritten on 2026-10-28 after a playtest ("zombies should come out more in groups, and it is a bit too easy"). Each wave is learn, test, combine, or twist, built from the packs and the sawtooth described under "Packs and pacing" below. Health is the expected total, Groaner 3, Hotfoot 2, Gasbag 3, Big Lug 30.
 
@@ -139,8 +140,8 @@ Proposed on 2026-10-28 for step 6, traps. These are starting numbers to play aga
 
 | Trap      | Name           | Price  | Health | Most at once | What it does                                                                                                         |
 | --------- | -------------- | ------ | ------ | ------------ | -------------------------------------------------------------------------------------------------------------------- |
-| Barricade | Plank Pile     | $30    | 30     | 4            | Boards up one doorway. Blocks zombies and the player. The player's shots and the gnome's peas fly through the gaps   |
-| Turret    | Grumpy Gnome   | $70    | 16     | 2            | Sits on a floor tile and shoots a pea (1 damage, 520 ms apart) at the nearest walking zombie it can see within 84 px |
+| Barricade | Plank Pile     | $20    | 30     | 4            | Boards up one doorway. Blocks zombies and the player. The player's shots and the gnome's peas fly through the gaps   |
+| Turret    | Grumpy Gnome   | $50    | 16     | 2            | Sits on a floor tile and shoots a pea (1 damage, 520 ms apart) at the nearest walking zombie it can see within 84 px |
 | Repair    | Glue and Nails | Varies | -      | -            | Restores every damaged trap. Costs half of each trap's price, scaled by the share of health it is missing            |
 
 - **Buying and placing.** Traps are bought at the stall and go into a trap pack shown in the HUD. The shop refuses a kind once the player owns its most at once, placed or not. During Preparation, T or the PLACE button puts the selected trap down, and G or the NEXT button switches kinds when both are owned. A Plank Pile goes in the doorway the player stands in or next to (within 16 px). A Grumpy Gnome goes on the tile in front of the player, never on a wall, cover, the stall or the tile in front of it, a doorway, another trap, the player, or a zombie. A ghost shows where it would go, green or red, and a refused placement says why on the button and above the player. The first trap bought turns on a hint, PRESS T / TAP PLACE IN A DOORWAY, until the first one is placed.
@@ -153,32 +154,97 @@ Proposed on 2026-10-28 for step 6, traps. These are starting numbers to play aga
 
 Proposed on 2026-10-28 for step 7. Still proposed, not decided. A headless bot played the game's own `update` many times to find numbers where a decent player usually falls in the second half and a full win takes about 8 minutes. Real players have not tested them yet.
 
-- **The bot.** `bun tools/balance/simulate.ts [runs] [firstSeed]` runs it at 30 frames a second. It keeps away from the nearest zombie once one is within 36 px, otherwise drifts to the middle of the room. It re-aims every 5 frames at the nearest zombie it can see, with up to 0.22 radians of hand shake, and holds the trigger while it has a target. From wave 2 it walks to the stall and buys a heart when it has 3 or fewer, the SMG when it can afford it (else the shotgun), ammo below half, and up to two Plank Piles, which it nails into the door with the most spawns. Then it starts the wave at once, so Preparation costs only the walking. Every run is deterministic for its seed.
-- **History.** The step 7 pass (drizzle waves, the pre-reload pistol) had the bot win 11 of 40 runs. After the first reload numbers it won 0 of 20 and died on wave 3. Those figures are superseded by the measurements below.
-- **The metrics.** Besides survival, money, and hearts by kind, the bot now reports for each wave the hearts lost, pressure (seconds with 6 or more zombies within 48 px), relax (seconds with none alive), the wave's length, and the most alive at once, plus close calls: the share of wins that fell to 1 heart.
+- **The bot.** `bun tools/balance/simulate.ts [runs] [firstSeed]` runs it at 30 frames a second. It keeps away from the nearest zombie once one is within 36 px, otherwise drifts to the middle of the room. It re-aims every 5 frames at the nearest zombie it can see, with up to 0.22 radians of hand shake, and holds the trigger while it has a target. From wave 2 it walks to the stall and shops (see "The bot's shopping" under "Shop categories and the price ramp"), nails its Plank Piles into the door with the most spawns, and sets its Grumpy Gnomes down a little off the middle of the room, where it fights. Then it starts the wave at once, so Preparation costs only the walking. Every run is deterministic for its seed. `NO_GNOME=1` keeps it from buying gnomes, and `TUNE=path/to/tune.ts` edits the tables in place before the runs so an idea can be tried without touching `src`.
+- **History.** The step 7 pass (drizzle waves, the pre-reload pistol) had the bot win 11 of 40 runs. After the first reload numbers it won 0 of 20 and died on wave 3. After the packs and the pistol retune, with the old prices and a bot that never bought a gnome, it won 22% (default) and 34% (`SWAP=1`). Those figures are superseded by the measurements below.
+- **The metrics.** Besides survival, money, and hearts by kind, the bot reports for each wave the hearts lost, pressure (seconds with 6 or more zombies within 48 px), relax (seconds with none alive), the wave's length, and the most alive at once, plus close calls: the share of wins that fell to 1 heart. It also reports the money it has on arriving at each shop visit and what it buys there.
 - **The targets.** The default bot wins 15 to 25% of runs and the `SWAP=1` bot 35 to 45%. Under 3% of runs die in waves 1 and 2, under 10% in 3 and 4, about 25 to 35% in 5 and 6, and the most in 7 and 8, with wave 8 the single biggest. A median win takes 7 to 9 minutes. 30 to 50% of wins are close calls.
-- **Measured** on 2026-10-28 after the packs, the sawtooth, and the pistol retune: 200 runs per bot from seed 1, upgrades on. "Died" is the share of all runs that died on that wave. The other columns are means over the runs that played the wave.
+- **Measured** on 2026-10-28 after the shop categories, the price ramp, the shopping bot, and the wave 5 to 8 health scales: 200 runs per bot from seed 1, upgrades and gnomes on. "Died" is the share of all runs that died on that wave. The other columns are means over the runs that played the wave.
 
   | Wave | Died (default) | Died (`SWAP=1`) | Hearts lost (default) | Pressure s | Relax s | Length s | Peak alive |
   | ---- | -------------- | --------------- | --------------------- | ---------- | ------- | -------- | ---------- |
   | 1    | 0%             | 0%              | 0.00                  | 0.0        | 6.3     | 18       | 2.0        |
-  | 2    | 0%             | 0%              | 0.00                  | 0.0        | 7.7     | 43       | 5.8        |
-  | 3    | 0%             | 0%              | 0.18                  | 0.4        | 7.1     | 49       | 11.1       |
-  | 4    | 2%             | 1%              | 1.03                  | 0.7        | 8.6     | 79       | 15.6       |
-  | 5    | 15%            | 5%              | 2.12                  | 1.1        | 9.2     | 72       | 14.3       |
-  | 6    | 17%            | 12%             | 2.81                  | 1.3        | 11.0    | 80       | 18.2       |
-  | 7    | 22%            | 9%              | 2.46                  | 0.7        | 9.7     | 71       | 13.0       |
-  | 8    | 24%            | 41%             | 3.36                  | 0.3        | 16.6    | 86       | 17.6       |
+  | 2    | 0%             | 0%              | 0.04                  | 0.0        | 5.6     | 43       | 7.4        |
+  | 3    | 0%             | 0%              | 0.17                  | 0.3        | 6.9     | 50       | 11.0       |
+  | 4    | 2%             | 1%              | 0.86                  | 0.7        | 8.3     | 73       | 15.3       |
+  | 5    | 6%             | 3%              | 1.32                  | 0.7        | 11.2    | 79       | 14.5       |
+  | 6    | 18%            | 10%             | 2.20                  | 1.3        | 10.9    | 68       | 18.0       |
+  | 7    | 26%            | 12%             | 2.33                  | 0.9        | 9.4     | 72       | 13.7       |
+  | 8    | 28%            | 35%             | 3.52                  | 0.4        | 16.2    | 86       | 17.4       |
 
-  | Bot      | Wins            | Close calls    | Median run | Median win | Money by the end of wave 8 |
-  | -------- | --------------- | -------------- | ---------- | ---------- | -------------------------- |
-  | Default  | 43 of 200 (22%) | 19 of 43 (44%) | 7.4 min    | 9.0 min    | $1,484                     |
-  | `SWAP=1` | 67 of 200 (34%) | 27 of 67 (40%) | 8.7 min    | 8.8 min    | $1,489                     |
+  | Bot                    | Wins            | Close calls    | Median run | Median win | Money by the end of wave 8 |
+  | ---------------------- | --------------- | -------------- | ---------- | ---------- | -------------------------- |
+  | Default                | 43 of 200 (22%) | 12 of 43 (28%) | 7.9 min    | 8.9 min    | $1,485                     |
+  | `SWAP=1`               | 81 of 200 (41%) | 20 of 81 (25%) | 8.7 min    | 8.8 min    | $1,487                     |
+  | `NO_GNOME=1` (default) | 2 of 200 (1%)   | 1 of 2         | 6.1 min    | 9.4 min    | $1,478                     |
 
-  Both bots buy spare gun tier 2 and no pistol tier (about $430 on upgrades). Gasbags cost about 31% of lost hearts, Hotfoots and Big Lugs about 25% each, and Groaners the rest. The room reaches the alive cap of 20 in a typical run.
+  Both bots end with spare gun tier 2 and pistol tier 1 (about $440 on upgrades) and place a median of 3 gnomes a run, replacing broken ones. For the default bot, Big Lugs cost about 29% of lost hearts, Gasbags 28%, Hotfoots 27%, and Groaners the rest.
 
-- **Against the targets.** The default bot is on target everywhere except the median win, which is about 9.0 minutes, at the top of the range. The `SWAP=1` bot wins 34%, just under its 35 to 45% target, and dies less than targeted in waves 5 and 6 (17%) because it re-arms its spare gun every wave. Pressure stays low because the bot backs away from anything within 36 px. A person who does not will feel the peaks far more than these numbers say.
-- **Caveats.** The bot never uses the Grumpy Gnome, never stands in a doorway, plays Preparation in a few seconds, does not dodge Gasbags, and never reacts to a telegraph. Playtest it before trusting any of this.
+- **Against the targets.** Both bots win inside their ranges, deaths in waves 1 to 4 stay under 3%, and wave 8 is the single biggest wall for both. Waves 5 and 6 together take 24% of default runs, at the bottom of the 25 to 35% target. Close calls are 25 to 28% of wins, a little under the 30 to 50% target. A median win takes 8.8 to 8.9 minutes.
+- **The gnome carries the balance.** The bot that never buys a gnome wins 1% of runs at these numbers, and with the old prices a bot that bought gnomes won 62% (default) and 68% (`SWAP=1`) instead of 22% and 34%. Two gnomes in the middle of the room nearly double the bot's damage a second for $100. A player who skips traps will find the campaign much harder than these numbers say. If playtests agree, the next lever is a weaker gnome (pea every 800 ms and 12 health took the bot from 74% to 54% at the ramp prices) with gentler wave health scales.
+- **Caveats.** The bot never stands in a doorway, plays Preparation in a few seconds, does not dodge Gasbags, and never reacts to a telegraph. Pressure stays low because it backs away from anything within 36 px. A person who does not will feel the peaks far more than these numbers say. Playtest it before trusting any of this.
+
+#### Shop categories and the price ramp
+
+Added on 2026-10-28 after a playtest ("Shop should have categories, and be more of a ramp up. Everything is so expensive."). Proposed, not decided. The categories and prices live in `src/shop.ts`, the trap prices in `src/traps.ts`, and the upgrade tiers in `src/weapons.ts`.
+
+- **Categories.** The shop is four tabs: GUNS (Barn Buster, Chatterbox, and the spare slot rule), SUPPLIES (Pickled Heart, Shell Sack, Chatter Drum), UPGRADES (one row per gun's next tier), and TRAPS (Plank Pile, Grumpy Gnome, Glue and Nails). The tabs are the `@foldkit/ui` Tabs component with automatic activation: Left and Right arrows, Home, and End move between tabs and select them, a click or tap selects one, and focus moves to the chosen tab. Up and Down, Home, and End move between the rows of the open tab, and Enter buys. Tabs are at least 48 px tall (44 px on a short landscape phone).
+- **Remembering.** The chosen tab is `shopCategory` in the Model. The shop opens on it at every visit with its first row focused, and a new run starts on GUNS.
+- **Affordable at a glance.** Each tab shows a badge with how many of its rows the player can buy now (green, or grey at zero), and the tab's accessible name says it ("Traps, 1 you can buy"). The header shows the balance and "2 things you can buy now". Prices are green when the row can be bought, and grey with a red reason ("Need $63 more") when not.
+- **Phones.** On a screen under 500 px tall, the panel widens to 760 px, the balance moves beside the title, the greeting hides, and the rows of a tab sit side by side, so every tab fits without scrolling on a landscape phone.
+
+The ramp gives the first visit a real choice, makes mid-game items attainable, and keeps the top tiers as goals for waves 6 to 8. Wave 1 pays $37 (six Groaners and the $25 clear bonus), so the first visit buys a gun.
+
+| Item              | Old price        | New price        | Category |
+| ----------------- | ---------------- | ---------------- | -------- |
+| Barn Buster       | $75              | $35              | Guns     |
+| Chatterbox        | $120             | $100             | Guns     |
+| Pickled Heart     | $25              | $25              | Supplies |
+| Shell Sack        | $15              | $10              | Supplies |
+| Chatter Drum      | $20              | $15              | Supplies |
+| Plank Pile        | $30              | $20              | Traps    |
+| Grumpy Gnome      | $70              | $50              | Traps    |
+| Barn Buster tiers | $110, $220, $380 | $40, $140, $320  | Upgrades |
+| Chatterbox tiers  | $150, $280, $450 | $60, $180, $400  | Upgrades |
+| Pop Pistol tiers  | $300, $500, $750 | $200, $500, $750 | Upgrades |
+
+Glue and Nails keeps its formula (half of each trap's price, scaled by the share of health it is missing), so it gets cheaper with the traps. The bounties and the clear bonus are unchanged.
+
+- **Money at each visit.** Measured with the default bot, 200 runs from seed 1: the median money on arriving at the stall, and what the bot bought there (a share over 100% means more than one per visit).
+
+  | Visit         | Money (median) | What it can afford                                    | What the bot bought                               |
+  | ------------- | -------------- | ----------------------------------------------------- | ------------------------------------------------- |
+  | Before wave 2 | $37            | A gun ($35), a plank, or a heart                      | Barn Buster (all runs). Before the ramp: nothing  |
+  | Before wave 3 | $104           | The Chatterbox ($100), or shotgun tier 1 and supplies | Chatterbox (all runs)                             |
+  | Before wave 4 | $149           | Ammo, two planks, a gnome                             | Two drums, two planks, a gnome in a third of runs |
+  | Before wave 5 | $284           | Chatterbox tier 1 ($60), a gnome, hearts              | Chatterbox tier 1, a heart, a gnome               |
+  | Before wave 6 | $383           | Chatterbox tier 2 ($180), a second gnome              | Chatterbox tier 2, gnomes, hearts                 |
+  | Before wave 7 | $317           | Pistol tier 1 ($200), repairs, hearts                 | Hearts, a gnome, pistol tier 1 in 60% of runs     |
+  | Before wave 8 | $346           | Saving toward Chatterbox tier 3 ($400)                | Hearts, a replacement gnome, repairs              |
+
+  Before the ramp the first visit bought nothing, the spare gun came before wave 3, and the bot carried $420 to $480 unspent into waves 7 and 8. With the ramp a typical run has a spare gun before wave 2, the Chatterbox before wave 3, and two spare gun tiers by wave 6.
+
+- **The pistol line.** Only the first pistol tier got cheaper ($300 to $200). It adds 3 rounds to the magazine and a bigger shove, about 5% more sustained fire. The rate tier stays at $500 and the damage tier at $750, because a cheap pistol damage tier broke the balance before (see "Upgrade tiers").
+- **Wave pressure.** Cheaper items and a bot that spends its money made the campaign far easier, so waves 5 to 8 got tougher instead of the shop getting expensive again: every spawn's health is scaled by ×1.12, ×1.22, ×1.32, and ×1.45 on waves 5, 6, 7, and 8 (`hpScale` in `WAVE_PLANS`, rounded per zombie). At ×1.12 only a Big Lug changes (34 health instead of 30). On wave 8 a Groaner has 4, a Hotfoot 3, and a Big Lug 44. The scaling is invisible: the campaign shows no BEEFIER banner.
+- **The bot's shopping.** It buys a heart at 3 hearts or fewer, the Chatterbox when it can afford it (else the Barn Buster), the Chatterbox over a tier 0 Barn Buster, ammo below half, two Plank Piles, a heart at 4 or fewer, Glue and Nails when it costs $25 or less, then spare gun tier 1, one gnome, the remaining spare gun tiers, pistol tiers once the spare gun is at tier 2, and a second gnome. It keeps $30 back after an upgrade or a gnome.
+- **Tuning log.** 200 runs unless noted. The first two lines use the old prices.
+
+  | Try | Change                                                               | Default | `SWAP=1` |
+  | --- | -------------------------------------------------------------------- | ------- | -------- |
+  | 0   | Old bot, old prices (the baseline)                                   | 22%     | 34%      |
+  | 1   | Shopping bot with gnomes, old prices                                 | 62%     | 68%      |
+  | 2   | Shopping bot, ramp prices                                            | 74%     | 85%      |
+  | 3   | Ramp, no gnomes (100 runs)                                           | 29%     |          |
+  | 4   | Ramp, wave health ×1.15 to ×1.4 on waves 4 to 8 (100 runs)           | 16%     |          |
+  | 5   | Ramp, gnome pea every 800 ms and 12 health (100 runs)                | 54%     |          |
+  | 6   | Try 5 with wave health ×1.1 to ×1.3 on waves 4 to 8 (100 runs)       | 12%     | 25%      |
+  | 7   | Ramp, health ×1.1, 1.2, 1.3, 1.45 on waves 5 to 8 (100 runs)         | 33%     | 42%      |
+  | 8   | Ramp, health ×1.05 to ×1.5 on waves 4 to 8 (100 runs)                | 17%     | 32%      |
+  | 9   | Ramp, health ×1.05 to ×1.55, wave 7 lower (200 runs)                 | 13%     | 29%      |
+  | 10  | Ramp, health ×1.05, 1.15, 1.22, 1.28, 1.5 on waves 4 to 8 (100 runs) | 19%     | 28%      |
+  | 11  | Ramp, health ×1.12, 1.22, 1.32, 1.45 on waves 5 to 8 (kept)          | 22%     | 41%      |
+  | 12  | Ramp, health ×1.12, 1.22, 1.3, 1.42                                  | 27%     | 41%      |
+
+  Try 11 is the only one with both bots inside their targets and wave 8 the biggest wall for both. Try 12 shows how sensitive the default bot is: two hundredths less health on waves 7 and 8 is 5 points of wins.
 
 ### Upgrade tiers and endless mode
 
@@ -194,17 +260,17 @@ Each gun has three tiers beyond its base, sold at Rattles' stall between waves. 
 
 | Gun         | Tier | Name               | Price | What changes                                                             |
 | ----------- | ---- | ------------------ | ----- | ------------------------------------------------------------------------ |
-| Pop Pistol  | 1    | Shovey Popper      | $300  | Knockback +25, magazine 14 to 17                                         |
+| Pop Pistol  | 1    | Shovey Popper      | $200  | Knockback +25, magazine 14 to 17                                         |
 | Pop Pistol  | 2    | Golden Grandpopper | $500  | Reload 0.8 to 0.5 s, 150 to 130 ms between shots                         |
 | Pop Pistol  | 3    | Double-Dip Popper  | $750  | Damage 1 to 2, knockback +15                                             |
-| Barn Buster | 1    | Barn Buster Plus   | $110  | 5 to 7 pellets, spray +0.1 radian                                        |
-| Barn Buster | 2    | Silo Splitter      | $220  | 620 to 500 ms between shots, reload 1.3 to 1.0 s, knockback +40, cap +16 |
-| Barn Buster | 3    | Hayloft Howitzer   | $380  | Damage 1 to 2 per pellet, cap +16                                        |
-| Chatterbox  | 1    | Gossip Box         | $150  | Spread 0.22 to 0.14, knockback +10                                       |
-| Chatterbox  | 2    | Rumor Mill         | $280  | 70 to 58 ms between shots, magazine 30 to 40, cap 360 to 480             |
-| Chatterbox  | 3    | Blabbermouth 3000  | $450  | Damage 1 to 2                                                            |
+| Barn Buster | 1    | Barn Buster Plus   | $40   | 5 to 7 pellets, spray +0.1 radian                                        |
+| Barn Buster | 2    | Silo Splitter      | $140  | 620 to 500 ms between shots, reload 1.3 to 1.0 s, knockback +40, cap +16 |
+| Barn Buster | 3    | Hayloft Howitzer   | $320  | Damage 1 to 2 per pellet, cap +16                                        |
+| Chatterbox  | 1    | Gossip Box         | $60   | Spread 0.22 to 0.14, knockback +10                                       |
+| Chatterbox  | 2    | Rumor Mill         | $180  | 70 to 58 ms between shots, magazine 30 to 40, cap 360 to 480             |
+| Chatterbox  | 3    | Blabbermouth 3000  | $400  | Damage 1 to 2                                                            |
 
-The pistol line is expensive on purpose. The campaign is balanced on a knife edge, and the pistol is the gun that never runs dry: in early tuning a $110 tier that doubled pistol damage took the bot from 28% wins to 100%, and even a 10% faster pistol for $100 took it to about 60%. At these prices a campaign player can afford the first pistol tier late, and the damage tier is for endless.
+The pistol line is expensive on purpose. The campaign is balanced on a knife edge, and the pistol is the gun that never runs dry: in early tuning a $110 tier that doubled pistol damage took the bot from 28% wins to 100%, and even a 10% faster pistol for $100 took it to about 60%. The first pistol tier (a bigger magazine and shove) dropped to $200 with the price ramp, and the bot buys it before wave 7 in most runs. The rate tier stays at $500 and the damage tier at $750, which is for endless.
 
 #### Modes
 
@@ -226,7 +292,7 @@ The run mode is a tagged union, `Campaign` or `Endless`, chosen per run and kept
 
 Superseded on 2026-10-28 by the measurements under "Balance pass" above,, which were taken with upgrades on.
 
-- **Endless.** `MODE=endless`, 200 runs from seed 1: the median run reaches wave 7, the best wave 10, and the worst wave 4. Of the 44 runs that reach wave 9, 32 die there and 12 on wave 10. Before the packs the median was wave 8 and the best 11. The campaign waves are now harder for the default bot, so fewer runs reach endless, and endless is still a wall after it.
+- **Endless.** `MODE=endless`, 200 runs from seed 1, after the price ramp: the median run reaches wave 7, the best wave 16, and the worst wave 4. Of the 44 runs that reach wave 9, about 8 die there, 22 on wave 10, and 10 on wave 11, and the rest go further. Before the ramp the same 44 runs reached wave 9, 32 died there, and none passed wave 10: cheaper top tiers and gnomes carry a run deeper once it survives the campaign.
 
 ## Core loop
 
