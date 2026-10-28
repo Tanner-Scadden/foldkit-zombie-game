@@ -111,22 +111,22 @@ Proposed on 2026-10-28 for step 7. Still proposed, not decided. A headless bot p
 - **The bot.** `bun tools/balance/simulate.ts [runs] [firstSeed]` runs it at 30 frames a second. It keeps away from the nearest zombie once one is within 36 px, otherwise drifts to the middle of the room. It re-aims every 5 frames at the nearest zombie it can see, with up to 0.22 radians of hand shake, and holds the trigger while it has a target. From wave 2 it walks to the stall and buys a heart when it has 3 or fewer, the SMG when it can afford it (else the shotgun), ammo below half, and up to two Plank Piles, which it nails into the door with the most spawns. Then it starts the wave at once, so Preparation costs only the walking. Every run is deterministic for its seed.
 - **Before.** With the step 5 numbers, 40 runs: every run won, the median win took 3.6 minutes, the bot lost 1 heart in all 40 runs, and it earned about $1,570 a run. A careful player could not lose and the run was too short.
 - **What changed.** Waves are longer and denser (6, 30, 48, 75, 80, 86, 90, 94 zombies instead of 4 to 40), Groaners and Gasbags have 3 health, Hotfoots 2, and Big Lugs 30. Speed climbs ×0.07 a wave instead of ×0.03. Bounties fell (Groaner $2, Hotfoot $3, Gasbag $3, Big Lug $20) so money still means choices, and the guns cost more (shotgun $75, SMG $120).
-- **After.** 100 runs with the final numbers:
+- **After.** 40 runs with the final numbers, measured after the fix that checks bullet hits along the whole path of a frame. The earlier 100-run figures were taken while bullets could skip over zombies on slow frames, which made the bot weaker than it is.
 
   | Wave | Reached | Cleared | Money earned by its end (median) |
   | ---- | ------- | ------- | -------------------------------- |
   | 1    | 100%    | 100%    | $37                              |
   | 2    | 100%    | 100%    | $137                             |
   | 3    | 100%    | 100%    | $290                             |
-  | 4    | 100%    | 100%    | $508                             |
-  | 5    | 100%    | 97%     | $782                             |
-  | 6    | 97%     | 45%     | $1,134                           |
-  | 7    | 45%     | 32%     | $1,476                           |
-  | 8    | 32%     | 8%      | $1,852                           |
+  | 4    | 100%    | 100%    | $507                             |
+  | 5    | 100%    | 98%     | $783                             |
+  | 6    | 98%     | 75%     | $1,131                           |
+  | 7    | 75%     | 60%     | $1,475                           |
+  | 8    | 60%     | 28%     | $1,848                           |
 
-  The median run lasts 6.1 minutes and the median win 8.5 minutes. The bot most often dies on wave 6. Gasbags cost it 46% of its lost hearts, Hotfoots 31%, Big Lugs 18%, and Groaners 5%. At most about 24 zombies are in the room at once.
+  The bot wins 11 of 40 runs. The median run lasts 7.9 minutes and the median win 8.5 minutes. The bot most often dies on wave 7. Gasbags cost it 55% of its lost hearts, Big Lugs 22%, Hotfoots 19%, and Groaners 5%. At most 27 zombies are in the room at once.
 
-- **Caveats.** The bot never uses the Grumpy Gnome, never swaps by hand, and plays Preparation in a few seconds, so a human run adds up to 20 seconds a wave. Wave 6 is a sharp step. Playtest it before trusting any of this.
+- **Caveats.** The bot never uses the Grumpy Gnome, never swaps by hand, and plays Preparation in a few seconds, so a human run adds up to 20 seconds a wave. The bot does not dodge Gasbags, which may be why they cost it so much. Playtest it before trusting any of this.
 
 ## Core loop
 
