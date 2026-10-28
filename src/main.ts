@@ -367,7 +367,7 @@ const startWhenAllowed = (model: Model, mode: RunMode): Model =>
   canStart(model) ? startOrResume(model, mode) : model
 
 const startFromPointer = (model: Model): Model =>
-  Phase.guards.Victory(model.phase)
+  Phase.isAnyOf(['Victory'])(model.phase)
     ? model
     : startWhenAllowed(model, RunMode.Campaign())
 
@@ -375,16 +375,15 @@ const keepGoingWhenAllowed = (model: Model): Model =>
   canStart(model) ? keepGoing(model) : model
 
 const isScreenAnimated = (phase: Phase): boolean =>
-  Phase.guards.Ready(phase) ||
-  Phase.guards.Victory(phase) ||
-  Phase.guards.GameOver(phase)
+  Phase.isAnyOf(['Ready', 'Victory', 'GameOver'])(phase)
 
 const isFrameActive = (model: Model): boolean =>
   !isSideways(model) &&
   (isRoundActive(model.phase) || isScreenAnimated(model.phase))
 
 const hasStartedWave = (before: Model, after: Model): boolean =>
-  Phase.guards.Preparation(before.phase) && Phase.guards.Wave(after.phase)
+  Phase.isAnyOf(['Preparation'])(before.phase) &&
+  Phase.isAnyOf(['Wave'])(after.phase)
 
 const learnStartWaveWhen = (before: Model, after: Model): Model =>
   hasStartedWave(before, after) ? learnStartWave(after) : after
@@ -457,11 +456,11 @@ const phaseFromKey = (model: Model, code: string): Model =>
 
 const startsRun = (before: Model, after: Model): boolean =>
   !isRoundActive(before.phase) &&
-  !Phase.guards.Paused(before.phase) &&
-  Phase.guards.Preparation(after.phase)
+  !Phase.isAnyOf(['Paused'])(before.phase) &&
+  Phase.isAnyOf(['Preparation'])(after.phase)
 
 const isSoundAudible = (model: Model): boolean =>
-  AudioState.guards.Ready(model.audio) && model.soundSetting === 'On'
+  AudioState.isAnyOf(['Ready'])(model.audio) && model.soundSetting === 'On'
 
 type SoundCue = Readonly<{ sound: SoundEffect; variation: number }>
 
@@ -583,12 +582,12 @@ const closeShop: UpdateStep = stepModel =>
     : { model: stepModel }
 
 const closeShopOutsidePreparation: UpdateStep = stepModel =>
-  Phase.guards.Preparation(stepModel.phase)
+  Phase.isAnyOf(['Preparation'])(stepModel.phase)
     ? { model: stepModel }
     : closeShop(stepModel)
 
 const purchaseCues = (item: ShopItemId): ReadonlyArray<SoundCue> =>
-  ShopGood.guards.Upgrade(SHOP_ITEMS[item].good)
+  ShopGood.isAnyOf(['Upgrade'])(SHOP_ITEMS[item].good)
     ? [uiCue('Purchase'), uiCue('PowerUp')]
     : [uiCue('Purchase')]
 
@@ -744,11 +743,20 @@ export const musicPlan = (model: Model): MusicPlan =>
   isMusicAudible(model) ? phasePlan(model.phase) : SILENT_PLAN
 
 const phaseStinger = (before: Phase, after: Phase): MusicStinger => {
-  if (Phase.guards.Victory(after) && !Phase.guards.Victory(before)) {
+  if (
+    Phase.isAnyOf(['Victory'])(after) &&
+    !Phase.isAnyOf(['Victory'])(before)
+  ) {
     return 'Victory'
-  } else if (Phase.guards.GameOver(after) && !Phase.guards.GameOver(before)) {
+  } else if (
+    Phase.isAnyOf(['GameOver'])(after) &&
+    !Phase.isAnyOf(['GameOver'])(before)
+  ) {
     return 'GameOver'
-  } else if (Phase.guards.Wave(before) && Phase.guards.Preparation(after)) {
+  } else if (
+    Phase.isAnyOf(['Wave'])(before) &&
+    Phase.isAnyOf(['Preparation'])(after)
+  ) {
     return 'Cleared'
   } else {
     return 'None'
@@ -787,7 +795,7 @@ const startFromButton = (before: Model, started: Model): UpdateReturn =>
   ])
 
 const isFreshRun = (model: Model): boolean =>
-  Phase.guards.Preparation(model.phase) &&
+  Phase.isAnyOf(['Preparation'])(model.phase) &&
   model.elapsedMs < START_SOUND_GRACE_MS
 
 const updateGame = (model: Model, message: Message) =>
@@ -1019,7 +1027,7 @@ const updateGame = (model: Model, message: Message) =>
     CompletedPlaySound: ({ outcome }) => {
       if (
         outcome === 'DroppedWhileSuspended' &&
-        AudioState.guards.Ready(model.audio)
+        AudioState.isAnyOf(['Ready'])(model.audio)
       ) {
         return {
           model: modifyFields(model, { audio: () => AudioState.Suspended() }),

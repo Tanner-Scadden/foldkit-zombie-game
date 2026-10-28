@@ -831,7 +831,7 @@ const walkingDust = (
 }
 
 const scorchDecals = (event: GameEvent): ReadonlyArray<Decal> =>
-  GameEvent.guards.Exploded(event)
+  GameEvent.isAnyOf(['Exploded'])(event)
     ? [
         {
           kind: 'Scorch',

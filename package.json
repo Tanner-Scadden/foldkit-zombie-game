@@ -10,6 +10,7 @@
     "typecheck": "effect-tsgo tsrs --noEmit",
     "format": "oxfmt",
     "test": "vitest run",
+    "perf:check": "cd tools/audit && bun perf-check.ts",
     "lint": "oxlint src && effect-tsgo oxlint --config .oxlintrc.effect.json --deny-warnings src"
   },
   "dependencies": {

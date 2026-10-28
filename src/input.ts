@@ -272,9 +272,9 @@ export const moveMouse = (
   })
 
 export const isTrackingPointer = (input: Input): boolean =>
-  Stick.guards.Active(input.moveStick) ||
-  Stick.guards.Active(input.aimStick) ||
-  MouseButton.guards.Held(input.mouseButton)
+  Stick.isAnyOf(['Active'])(input.moveStick) ||
+  Stick.isAnyOf(['Active'])(input.aimStick) ||
+  MouseButton.isAnyOf(['Held'])(input.mouseButton)
 
 // INTENT
 
@@ -303,8 +303,8 @@ const mouseAim = (input: Input, player: Player): Option.Option<Vector> =>
   )
 
 const triggerOf = (input: Input): Trigger =>
-  Stick.guards.Active(input.aimStick) ||
-  MouseButton.guards.Held(input.mouseButton) ||
+  Stick.isAnyOf(['Active'])(input.aimStick) ||
+  MouseButton.isAnyOf(['Held'])(input.mouseButton) ||
   Array.contains(input.pressedKeys, FIRE_KEY)
     ? 'Held'
     : 'Released'

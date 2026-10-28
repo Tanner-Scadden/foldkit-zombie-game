@@ -263,10 +263,10 @@ export const deathState = (
   })
 
 export const isWalking = (zombie: Zombie): boolean =>
-  ZombieState.guards.Walking(zombie.state)
+  ZombieState.isAnyOf(['Walking'])(zombie.state)
 
 export const isFusing = (zombie: Zombie): boolean =>
-  ZombieState.guards.Fusing(zombie.state)
+  ZombieState.isAnyOf(['Fusing'])(zombie.state)
 
 // STRIDE
 

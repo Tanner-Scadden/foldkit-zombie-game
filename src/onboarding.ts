@@ -29,12 +29,13 @@ const learnWhen = (isDone: boolean, atMs: number) => (lesson: Lesson) =>
   isDone ? learn(lesson, atMs) : lesson
 
 export const isLearned = (lesson: Lesson): boolean =>
-  Lesson.guards.Learned(lesson)
+  Lesson.isAnyOf(['Learned'])(lesson)
 
 const hasPlayerFired = (events: ReadonlyArray<GameEvent>): boolean =>
   Array.some(
     events,
-    event => GameEvent.guards.Fired(event) && event.weapon !== TURRET_WEAPON,
+    event =>
+      GameEvent.isAnyOf(['Fired'])(event) && event.weapon !== TURRET_WEAPON,
   )
 
 export const learnFromFrame = (model: Model): Model =>
@@ -174,7 +175,8 @@ const learnedAt = (lesson: Lesson): number =>
     Learned: ({ atMs }) => atMs,
   })
 
-const isPending = (lesson: Lesson): boolean => Lesson.guards.Pending(lesson)
+const isPending = (lesson: Lesson): boolean =>
+  Lesson.isAnyOf(['Pending'])(lesson)
 
 type HintRule = Readonly<{
   id: HintId
@@ -185,14 +187,14 @@ const ageWhen = (isShown: boolean, ageMs: number): Option.Option<number> =>
   isShown ? Option.some(ageMs) : Option.none()
 
 const isPreparation = (model: Model): boolean =>
-  Phase.guards.Preparation(model.phase)
+  Phase.isAnyOf(['Preparation'])(model.phase)
 
 const isRoundActive = (model: Model): boolean =>
-  Phase.guards.Preparation(model.phase) || Phase.guards.Wave(model.phase)
+  Phase.isAnyOf(['Preparation', 'Wave'])(model.phase)
 
 const isTrapHintFor = (model: Model, kind: 'Barricade' | 'Turret'): boolean =>
   isPreparation(model) &&
-  TrapHint.guards.Showing(model.trapHint) &&
+  TrapHint.isAnyOf(['Showing'])(model.trapHint) &&
   Option.contains(maybeSelectedKind(model), kind)
 
 const HINT_RULES: ReadonlyArray<HintRule> = [
@@ -246,7 +248,7 @@ const HINT_RULES: ReadonlyArray<HintRule> = [
     id: 'StartWave',
     maybeAgeMs: ({ phase, lessons, elapsedMs }) =>
       ageWhen(
-        Phase.guards.Preparation(phase) &&
+        Phase.isAnyOf(['Preparation'])(phase) &&
           isPending(lessons.startWave) &&
           isLearned(lessons.move) &&
           isLearned(lessons.fire),

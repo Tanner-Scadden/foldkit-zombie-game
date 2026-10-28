@@ -1,6 +1,7 @@
 import {
   Array,
   Effect,
+  Equal,
   Option,
   Order,
   Queue,
@@ -10,7 +11,7 @@ import {
   pipe,
 } from 'effect'
 import { Canvas, Mount } from 'foldkit'
-import { Document, Html, HtmlBuilder } from 'foldkit/html'
+import { Document, Html, HtmlBuilder, createLazy } from 'foldkit/html'
 
 import { type Box, DOORS, DOOR_IDS, THRESHOLDS, boxCenter } from './arena'
 import {
@@ -161,7 +162,7 @@ import {
   type ZombieKind,
   ZombieState,
 } from './model'
-import { ROOM_SHAPES } from './room'
+import { FLOOR_COLOR, ROOM_SHAPES } from './room'
 import { overlayShapes, waveLabel } from './screens'
 import { isShopOpenFor } from './shop'
 import { shopDialogView } from './shopView'
@@ -1317,8 +1318,8 @@ const openDoorwayHints = (model: Model): ReadonlyArray<Canvas.Shape> => {
 }
 
 const isPlacingNow = (model: Model): boolean =>
-  Phase.guards.Preparation(model.phase) &&
-  !ShopState.guards.Browsing(model.shop)
+  Phase.isAnyOf(['Preparation'])(model.phase) &&
+  !ShopState.isAnyOf(['Browsing'])(model.shop)
 
 const ghostShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   if (!isPlacingNow(model)) {
@@ -1337,7 +1338,7 @@ const ghostShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
           }),
           outlineShape(
             spotBox(spot),
-            PlaceVerdict.guards.Placeable(verdict)
+            PlaceVerdict.isAnyOf(['Placeable'])(verdict)
               ? GHOST_OK_COLOR
               : GHOST_BLOCKED_COLOR,
           ),
@@ -1712,7 +1713,7 @@ const slotShapes = (
 
 const loadoutShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
   const { arsenal } = player
-  const isHoldingSpare = Arsenal.guards.HoldingSpare(arsenal)
+  const isHoldingSpare = Arsenal.isAnyOf(['HoldingSpare'])(arsenal)
   const pistolSlot: SlotLook = {
     maybeGun: Option.some({ weapon: SIDEARM, tier: player.pistolTier }),
     ammo: ENDLESS_ROUNDS,
@@ -1811,7 +1812,7 @@ const MUTE_BUTTON_CLEARANCE = 34
 const SCORE_RIGHT = ARENA_WIDTH - HUD_MARGIN - MUTE_BUTTON_CLEARANCE
 
 const isHudShown = (phase: Phase): boolean =>
-  isRoundActive(phase) || Phase.guards.Paused(phase)
+  isRoundActive(phase) || Phase.isAnyOf(['Paused'])(phase)
 
 const playHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...heartShapes(model.player),
@@ -1921,21 +1922,17 @@ const shakeOffset = (model: Model): Vector =>
 const stallLook = (model: Model): StallLook => {
   if (!isShopOpenFor(model.phase)) {
     return 'Closed'
-  } else if (ShopState.guards.Away(model.shop)) {
+  } else if (ShopState.isAnyOf(['Away'])(model.shop)) {
     return 'Beckoning'
   } else {
     return 'Open'
   }
 }
 
-const titleWorldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
-  ...ROOM_SHAPES,
-  ...stallShapes('Closed', model.screenMs),
-]
+const titleWorldShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+  stallShapes('Closed', model.screenMs)
 
 const playWorldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
-  ...ROOM_SHAPES,
-  ...decalShapes(model.decals),
   ...stallShapes(stallLook(model), model.elapsedMs),
   ...shadowShapes(model),
   ...groundParticleShapes(model.particles),
@@ -1948,16 +1945,150 @@ const playWorldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
 ]
 
 const worldShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
-  Phase.guards.Ready(model.phase)
+  Phase.isAnyOf(['Ready'])(model.phase)
     ? titleWorldShapes(model)
     : playWorldShapes(model)
 
-export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
+const worldLayerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   group({ translate: shakeOffset(model), shapes: worldShapes(model) }),
+]
+
+const overlayLayerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...wavePreviewShapes(model),
   ...hudShapes(model),
   ...overlayShapes(model),
 ]
+
+export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
+  ...worldLayerShapes(model),
+  ...overlayLayerShapes(model),
+]
+
+// FLOOR LAYERS
+
+const NO_DECALS: ReadonlyArray<Decal> = []
+
+const percentOf = (part: number, whole: number): string =>
+  `${(part * 100) / whole}%`
+
+const layerCanvasView = (
+  shapes: ReadonlyArray<Canvas.Shape>,
+  h: HtmlBuilder<Message>,
+): Html =>
+  Canvas.view(
+    {
+      width: ARENA_WIDTH,
+      height: ARENA_HEIGHT,
+      shapes,
+      className: 'floor-layer-canvas',
+    },
+    h,
+  )
+
+const roomLayerView = (h: HtmlBuilder<Message>): Html =>
+  layerCanvasView(ROOM_SHAPES, h)
+
+const decalLayerView = (
+  decals: ReadonlyArray<Decal>,
+  h: HtmlBuilder<Message>,
+): Html => layerCanvasView(decalShapes(decals), h)
+
+const lazyRoomLayer = createLazy()
+const lazyDecalLayer = createLazy()
+
+const layerDecals = (model: Model): ReadonlyArray<Decal> =>
+  Phase.isAnyOf(['Ready'])(model.phase) ? NO_DECALS : model.decals
+
+// NOTE: the room and the decals change far less often than the frame, so
+// they live on their own canvases under the scene canvas, and the lazy views
+// hand back the same VNode while their arguments hold, so Canvas skips their
+// repaint. Screen shake moves them with a CSS transform of the same whole
+// arena pixels the scene canvas translates by, and the stage behind them is
+// the floor color, so the strip a shake uncovers matches the floor.
+const floorLayersView = (model: Model, h: HtmlBuilder<Message>): Html => {
+  const shake = shakeOffset(model)
+  return h.div(
+    [
+      h.Class('floor-layers'),
+      h.AriaHidden(true),
+      h.Style({
+        transform: `translate(${percentOf(shake.x, ARENA_WIDTH)}, ${percentOf(shake.y, ARENA_HEIGHT)})`,
+      }),
+    ],
+    [
+      lazyRoomLayer(roomLayerView, [h]),
+      lazyDecalLayer(decalLayerView, [layerDecals(model), h]),
+    ],
+  )
+}
+
+// OVERLAY LAYER
+
+type LastShapes = { current: ReadonlyArray<Canvas.Shape> }
+
+// NOTE: createLazy compares its arguments by reference, and the HUD and
+// screen overlays are rebuilt as new arrays every frame. This hands back the
+// previous array while the new one is structurally equal, so the overlay
+// canvas repaints only on frames where what it shows has changed.
+const keepWhileEqual =
+  (last: LastShapes) =>
+  (shapes: ReadonlyArray<Canvas.Shape>): ReadonlyArray<Canvas.Shape> => {
+    if (!Equal.equals(last.current, shapes)) {
+      last.current = shapes
+    }
+    return last.current
+  }
+
+const stableOverlayShapes = keepWhileEqual({ current: [] })
+
+const overlayLayerView = (
+  shapes: ReadonlyArray<Canvas.Shape>,
+  h: HtmlBuilder<Message>,
+): Html =>
+  Canvas.view(
+    {
+      width: ARENA_WIDTH,
+      height: ARENA_HEIGHT,
+      shapes,
+      className: 'overlay-layer-canvas',
+    },
+    h,
+  )
+
+const lazyOverlayLayer = createLazy()
+
+const gameStageView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [h.Class('game-frame')],
+    [
+      h.div(
+        [
+          h.Class('game-stage'),
+          h.Style({
+            width: `min(100cqw, 100cqh * ${ARENA_WIDTH} / ${ARENA_HEIGHT})`,
+            height: `min(100cqh, 100cqw * ${ARENA_HEIGHT} / ${ARENA_WIDTH})`,
+            backgroundColor: FLOOR_COLOR,
+          }),
+        ],
+        [
+          floorLayersView(model, h),
+          Canvas.view(
+            {
+              width: ARENA_WIDTH,
+              height: ARENA_HEIGHT,
+              shapes: worldLayerShapes(model),
+              className: 'game-canvas',
+            },
+            h,
+          ),
+          lazyOverlayLayer(overlayLayerView, [
+            stableOverlayShapes(overlayLayerShapes(model)),
+            h,
+          ]),
+        ],
+      ),
+    ],
+  )
 
 // VIEW
 
@@ -2055,7 +2186,7 @@ const loadoutView = (model: Model, h: HtmlBuilder<Message>): Html =>
 
 const swapTarget = (model: Model): Option.Option<string> =>
   Option.map(maybeSpare(model.player.arsenal), spare =>
-    Arsenal.guards.HoldingSpare(model.player.arsenal)
+    Arsenal.isAnyOf(['HoldingSpare'])(model.player.arsenal)
       ? WEAPONS[SIDEARM].name
       : WEAPONS[spare.kind].name,
   )
@@ -2238,7 +2369,7 @@ const placeButtonView = (
   h: HtmlBuilder<Message>,
 ): Html => {
   const { name } = TRAPS[kind]
-  const isBlocked = PlaceVerdict.guards.Blocked(verdict)
+  const isBlocked = PlaceVerdict.isAnyOf(['Blocked'])(verdict)
   return h.button(
     [
       h.Type('button'),
@@ -2474,15 +2605,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
           h.OnContextMenu(Message.SuppressedContextMenu()),
         ],
         [
-          Canvas.view(
-            {
-              width: ARENA_WIDTH,
-              height: ARENA_HEIGHT,
-              shapes: sceneShapes(model),
-              className: 'game-canvas',
-            },
-            h,
-          ),
+          gameStageView(model, h),
           stickView(model.input.moveStick, 'move', h),
           stickView(model.input.aimStick, 'aim', h),
         ],

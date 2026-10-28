@@ -79,7 +79,7 @@ const itemView = (
     ? name
     : `Buy ${name} for $${priceFor(model, item)}`
   const verdict = verdictFor(model, item)
-  const isRefused = Verdict.guards.Refused(verdict)
+  const isRefused = Verdict.isAnyOf(['Refused'])(verdict)
   const isFocused = focusedItem(model) === item
   const reasonView = Verdict.match(verdict, {
     Available: () => h.empty,

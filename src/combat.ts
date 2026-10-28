@@ -171,7 +171,7 @@ export const PLAYER_BLAST_TARGET: BlastTarget<Player> = {
   center: player => player,
   radius: () => PLAYER_RADIUS,
   isExposed: player =>
-    Invulnerability.guards.Vulnerable(player.invulnerability),
+    Invulnerability.isAnyOf(['Vulnerable'])(player.invulnerability),
   damageFrom: ({ playerDamage }) => playerDamage,
   hurt: (player, { damage, direction }) => ({
     target: woundPlayer(player, damage, direction),
@@ -202,11 +202,11 @@ const maybeBlastOf = (zombie: Zombie): Option.Option<BlastSpec> =>
 
 const bountyOf = (events: ReadonlyArray<GameEvent>): number =>
   Array.reduce(events, 0, (sum, event) =>
-    GameEvent.guards.ZombieKilled(event) ? sum + event.bounty : sum,
+    GameEvent.isAnyOf(['ZombieKilled'])(event) ? sum + event.bounty : sum,
   )
 
 const killCount = (events: ReadonlyArray<GameEvent>): number =>
-  Array.filter(events, GameEvent.guards.ZombieKilled).length
+  Array.filter(events, GameEvent.isAnyOf(['ZombieKilled'])).length
 
 const detonate = (model: Model, bomberId: number): Model => {
   const rest = Array.filter(model.zombies, ({ id }) => id !== bomberId)

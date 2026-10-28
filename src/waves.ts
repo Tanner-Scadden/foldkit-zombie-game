@@ -572,7 +572,7 @@ export const doorCounts = (
 // PHASES
 
 export const isRoundActive = (phase: Phase): boolean =>
-  Phase.guards.Preparation(phase) || Phase.guards.Wave(phase)
+  Phase.isAnyOf(['Preparation', 'Wave'])(phase)
 
 const beginPreparation = (
   model: Model,
@@ -643,7 +643,7 @@ export const startOrResume = (model: Model, mode: RunMode): Model =>
   })
 
 export const keepGoing = (model: Model): Model =>
-  Phase.guards.Victory(model.phase)
+  Phase.isAnyOf(['Victory'])(model.phase)
     ? beginPreparation(
         modifyFields(model, {
           mode: () => RunMode.Endless(),
@@ -656,7 +656,7 @@ export const keepGoing = (model: Model): Model =>
     : model
 
 export const isEndless = (model: Model): boolean =>
-  RunMode.guards.Endless(model.mode)
+  RunMode.isAnyOf(['Endless'])(model.mode)
 
 export const pause = (model: Model): Model =>
   Phase.match(model.phase, {
@@ -775,7 +775,7 @@ export const advanceRound = (model: Model, worldMs: number): Model =>
   Phase.match(model.phase, {
     Ready: () => model,
     Preparation: preparation =>
-      ShopState.guards.Browsing(model.shop)
+      ShopState.isAnyOf(['Browsing'])(model.shop)
         ? model
         : preparation.remainingMs > worldMs
           ? modifyFields(model, {

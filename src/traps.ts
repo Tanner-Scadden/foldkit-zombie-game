@@ -561,7 +561,7 @@ const isZombieInBox = (zombies: ReadonlyArray<Zombie>, box: Box): boolean =>
   Array.some(
     zombies,
     zombie =>
-      !ZombieState.guards.Dying(zombie.state) &&
+      !ZombieState.isAnyOf(['Dying'])(zombie.state) &&
       circleTouchesBox(zombie, radiusOf(zombie), box),
   )
 
@@ -715,19 +715,19 @@ const turretPlacement = (model: Model, isBetweenWaves: boolean): Placement => {
     [!isBetweenWaves, 'Traps go down between waves'],
     [isAtLimit(model, 'Turret'), limitReason('Turret')],
   ])
-  if (PlaceVerdict.guards.Blocked(roundVerdict)) {
+  if (PlaceVerdict.isAnyOf(['Blocked'])(roundVerdict)) {
     return floorPlacement(frontTile, roundVerdict)
   }
 
   const frontVerdict = floorVerdict(model, frontTile)
-  if (PlaceVerdict.guards.Placeable(frontVerdict)) {
+  if (PlaceVerdict.isAnyOf(['Placeable'])(frontVerdict)) {
     return floorPlacement(frontTile, frontVerdict)
   }
 
   return pipe(
     nearbyFloorTiles(player, front),
     Array.findFirst(tile =>
-      PlaceVerdict.guards.Placeable(floorVerdict(model, tile)),
+      PlaceVerdict.isAnyOf(['Placeable'])(floorVerdict(model, tile)),
     ),
     Option.match({
       onNone: () => floorPlacement(frontTile, frontVerdict),
@@ -738,7 +738,7 @@ const turretPlacement = (model: Model, isBetweenWaves: boolean): Placement => {
 
 export const maybePlacement = (model: Model): Option.Option<Placement> =>
   Option.map(maybeSelectedKind(model), kind => {
-    const isBetweenWaves = Phase.guards.Preparation(model.phase)
+    const isBetweenWaves = Phase.isAnyOf(['Preparation'])(model.phase)
     return kind === 'Barricade'
       ? barricadePlacement(model, isBetweenWaves)
       : turretPlacement(model, isBetweenWaves)

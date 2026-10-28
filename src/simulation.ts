@@ -78,7 +78,7 @@ import { Behavior, isWalking, radiusOf, statsOf, strideAt } from './zombies'
 export const refreshIntent = (model: Model): Model =>
   modifyFields(model, {
     intent: () =>
-      ShopState.guards.Browsing(model.shop)
+      ShopState.isAnyOf(['Browsing'])(model.shop)
         ? idleIntent
         : deriveIntent(model.input, model.player),
   })
@@ -766,7 +766,7 @@ const isTouching =
     circlesOverlap(zombie, radiusOf(zombie), player, PLAYER_RADIUS)
 
 const isBrawler = (zombie: Zombie): boolean =>
-  Behavior.guards.Brawler(statsOf(zombie).behavior)
+  Behavior.isAnyOf(['Brawler'])(statsOf(zombie).behavior)
 
 const popOnContact =
   (player: Player) =>
@@ -785,7 +785,7 @@ const popBombers = (model: Model): Model =>
   modifyFields(model, { zombies: Array.map(popOnContact(model.player)) })
 
 const biteOnContact = (model: Model): Model => {
-  if (Invulnerability.guards.Invulnerable(model.player.invulnerability)) {
+  if (Invulnerability.isAnyOf(['Invulnerable'])(model.player.invulnerability)) {
     return model
   }
 
@@ -858,7 +858,7 @@ export const advanceGame = (model: Model, deltaTime: number): Model => {
     frameEvents: () => [],
   })
   const isFrozenThroughout =
-    HitStop.guards.Frozen(model.hitStop) && thaw.worldMs <= 0
+    HitStop.isAnyOf(['Frozen'])(model.hitStop) && thaw.worldMs <= 0
   const stepped = isFrozenThroughout
     ? thawed
     : advanceWorld(thawed, thaw.worldMs)

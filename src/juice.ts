@@ -297,9 +297,9 @@ export const advanceJuice = (
 ): Model => {
   const seconds = deltaMs / MS_PER_SECOND
   const events = model.frameEvents
-  const kills = countWhere(events, GameEvent.guards.ZombieKilled)
-  const hurts = countWhere(events, GameEvent.guards.PlayerHurt)
-  const blasts = countWhere(events, GameEvent.guards.Exploded)
+  const kills = countWhere(events, GameEvent.isAnyOf(['ZombieKilled']))
+  const hurts = countWhere(events, GameEvent.isAnyOf(['PlayerHurt']))
+  const blasts = countWhere(events, GameEvent.isAnyOf(['Exploded']))
 
   const [shakeState, shake] = advanceShake(
     model.shake,

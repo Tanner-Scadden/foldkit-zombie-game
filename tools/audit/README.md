@@ -13,17 +13,41 @@ They use the local Google Chrome or the cached Playwright headless shell.
 
 ## Servers
 
-| Port | What                          | Command (from the repo root)                                                                                                                                     |
-| ---- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 4173 | The real production build     | `bun run build && bunx vite preview --port 4173 --strictPort`                                                                                                    |
-| 4174 | The harness                   | `node_modules/.bin/vite tools/audit/harness --port 4174 --strictPort`                                                                                            |
-| 4175 | The harness, built to profile | `node_modules/.bin/vite build tools/audit/harness --outDir dist-profile && bunx vite preview tools/audit/harness --outDir dist-profile --port 4175 --strictPort` |
+| Port | What                                              | Command (from the repo root)                                                                                                                                     |
+| ---- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4173 | The real production build                         | `bun run build && bunx vite preview --port 4173 --strictPort`                                                                                                    |
+| 4174 | The harness                                       | `node_modules/.bin/vite tools/audit/harness --port 4174 --strictPort`                                                                                            |
+| 4175 | The harness, built to profile                     | `node_modules/.bin/vite build tools/audit/harness --outDir dist-profile && bunx vite preview tools/audit/harness --outDir dist-profile --port 4175 --strictPort` |
+| 4179 | The harness, built for production by `perf:check` | Started and stopped by `bun run perf:check`                                                                                                                      |
 
-The harness boots the game's own `init`, `update`, and `view` at a state chosen by query string, such as `?wave=8&start=wave&gun=smg&fill&crowd=30`. `phase=gameover` or `phase=victory` with `stats` fills the run stats panel, `device=touch` shows touch wording, and `px` and `py` place the player. `mode=endless` starts an endless run, `tier` sets the spare gun's upgrade tier and `pistol` the pistol's, `best` sets the best endless wave this session, and `tough` gives a `crowd` 40 times its health so the room stays full. It is test tooling only and never ships.
+The harness boots the game's own `init`, `update`, and `view` at a state chosen by query string, such as `?wave=8&start=wave&gun=smg&fill&crowd=30`. `phase=gameover` or `phase=victory` with `stats` fills the run stats panel, `device=touch` shows touch wording, and `px` and `py` place the player. `mode=endless` starts an endless run, `tier` sets the spare gun's upgrade tier and `pistol` the pistol's, `best` sets the best endless wave this session, and `tough` gives a `crowd` 40 times its health so the room stays full. `freeze=N` runs exactly N frames of a fixed 1/60 second with a fixed seed and then holds the picture, so two builds can be compared pixel for pixel, and `aim=x,y` holds the trigger down aimed at that arena point. It is test tooling only and never ships.
+
+Measure frame time on a built harness, not the dev server on 4174. The dev server serves unbundled modules with development checks and the Foldkit devtools, and a frame there costs two to three times what it costs in the production build.
 
 ## Scripts
 
-- `bun perf.ts` records `requestAnimationFrame` deltas for the idle, busy, and worst campaign scenarios and two endless ones, `endless15` (endless wave 15) and `endlessCap` (the room held at the alive cap). It runs at 1x, 4x, and 6x CPU throttle and writes `perf-<TAG>.json`.
-- `bun profile.ts` profiles one second of the worst case and lists the top costs.
+- `bun perf.ts` records `requestAnimationFrame` deltas for the idle, busy, and worst campaign scenarios and two endless ones, `endless15` (endless wave 15) and `endlessCap` (the room held at the alive cap). It runs at 1x, 4x, and 6x CPU throttle and writes `perf-<TAG>.json`. `BASE` points it at a server, `ONLY` picks scenarios, and `RATES` picks throttle rates. The scenarios live in `scenarios.ts` and the measuring in `measure.ts`.
+- `bun perf-check.ts`, or `bun run perf:check` from the repo root, is the frame time gate. See below.
+- `bun profile.ts` profiles the worst case at 4x throttle against the profiling build on 4175. It prints the main thread trace by event kind, the top self times, and a CPU profile bucketed into update, scene build, paint, snabbdom, GC, and native time. `SCENARIO`, `RATE`, and `MS` change what it profiles, `FOCUS=fnName` lists the stacks through a function, and `DUMP=path` saves the raw profile.
 - `bun shots1.ts` to `bun shots7.ts` take the screenshots into `shots/`. `shots5.ts` to `shots7.ts` cover step 7: the title, the device hints, the portrait notice, the bands, and the run stats panels.
+- `bun shots9.ts` takes frozen, deterministic shots of the title, the preparation phase, two worst-case fights (one mid-shake), endless wave 15, Game Over, Victory, and two phone scenes, as `s9-<TAG>-<scene>.png`. With `COMPARE=<other tag>` it also counts the pixels that differ from that set, which is how a rendering change is checked to look the same.
 - `bun shots8.ts` covers upgrade tiers and endless mode: the mode buttons on the title and Victory screens, the endless Game Over panel, the BEEFIER banner with tier pips, and a tiered muzzle flash. `BASE` points it at another harness port.
+
+## Frame time gate
+
+`bun run perf:check` builds the harness for production, serves it on port 4179 (it refuses to start if the port is taken), and plays the `worst` and `endlessCap` scenarios at 1x, 4x, and 6x CPU throttle in headless Chrome, best of two trials each. It compares the results to `frame-baseline.json` and exits with 1 when a gated number regresses past its tolerance.
+
+| Number                   | What it is                                                     | Gate                  |
+| ------------------------ | -------------------------------------------------------------- | --------------------- |
+| js ms                    | The game's own `update` plus `view` per frame                  | Always. 25% over      |
+| main thread ms per frame | All renderer main thread work in the window, painting included | Always. 25% over      |
+| fps                      | Frames per second from `requestAnimationFrame`                 | `GATE=all`. 15% under |
+| p95 frame ms             | The 95th percentile `requestAnimationFrame` delta              | `GATE=all`. 30% over  |
+
+The two CPU time numbers are the primary gate. Frame deltas swing with how busy the host is, and on a fast machine the game holds the display's refresh rate until it is far over budget, so FPS hides a regression that CPU time shows. The CPU time numbers still slow down on a loaded host, so the check first times a fixed JavaScript workload and scales the CPU limits by how much slower it ran than when the baseline was recorded. Set `GATE=cpu` on a busy machine to report FPS and p95 without failing on them.
+
+- `UPDATE=1 bun run perf:check` records a new baseline. Record it on an idle machine after a deliberate change in cost, and commit `frame-baseline.json`.
+- `SCENARIOS`, `RATES`, `SECONDS`, and `TRIALS` change what runs. `JS_TOLERANCE`, `BUSY_TOLERANCE`, `FPS_TOLERANCE`, and `P95_TOLERANCE` take fractions such as `0.25`.
+- `BASE=http://localhost:4177/` measures a server you already started instead of building one.
+
+The deterministic half of the guard runs in `bun run test`: `src/perf.scene.test.ts` builds full rooms and counts the canvas shapes and paint operations a frame costs.

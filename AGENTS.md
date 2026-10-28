@@ -22,6 +22,7 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 | `bun run lint`                                      | Lint with oxlint and the Effect rules                                      |
 | `bun run test`                                      | Run the Story and Scene tests                                              |
 | `bun run build`                                     | Build for production                                                       |
+| `bun run perf:check`                                | Compare frame time to `tools/audit/frame-baseline.json` in headless Chrome |
 | `bun tools/balance/simulate.ts [runs]`              | Play many seeded runs with a bot and print the balance report              |
 | `MODE=endless bun tools/balance/simulate.ts [runs]` | The same bot in endless mode. `SWAP=1` makes it swap back to its spare gun |
 
@@ -74,6 +75,7 @@ Nothing here publishes on its own. There is no CI workflow.
 - **Follow the design doc.** Choices under "Decided" in `GAME_DESIGN.md` are settled. The "Reference notes" are ideas, not decisions. If a change goes against a decision, say so before making it.
 - **Use original art and names.** Do not copy art, names, or item lists from Zombie Estate 2.
 - **Keep the Effect plugin in `tsconfig.json`.** The `@effect/language-service` entry is what turns on the Effect diagnostics in `typecheck`. Without it, `typecheck` still passes but reports no Effect problems.
+- **Keep the frame cheap.** `src/perf.scene.test.ts` budgets the canvas shapes and paint operations of a full room, and `bun run perf:check` gates frame time against a recorded baseline (see `tools/audit/README.md`). In code that runs every frame, check a union's tag with `isAnyOf`, not `guards`: a guard validates the whole value through Schema, and `Phase` carries the wave's spawn list.
 - **Write tests for game logic** as Story tests that replay Messages. Break the code once to see the test fail before you trust it.
 
 ### Git

@@ -64,7 +64,7 @@ export const model = (page: Page) =>
 
 export const canvasRect = (page: Page) =>
   page.evaluate(() => {
-    const c = document.querySelector('canvas')!
+    const c = document.querySelector('.game-canvas')!
     const r = c.getBoundingClientRect()
     const scale = Math.min(r.width / 320, r.height / 180)
     const w = 320 * scale,

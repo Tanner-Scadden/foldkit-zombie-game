@@ -543,10 +543,10 @@ export const isAtStallFront = ({ x, y }: Vector): boolean =>
   y <= STALL_BOX.top
 
 export const isShopOpenFor = (phase: Phase): boolean =>
-  Phase.guards.Preparation(phase) && phase.wave >= SHOP_FIRST_WAVE
+  Phase.isAnyOf(['Preparation'])(phase) && phase.wave >= SHOP_FIRST_WAVE
 
 export const isBrowsing = (shop: ShopState): boolean =>
-  ShopState.guards.Browsing(shop)
+  ShopState.isAnyOf(['Browsing'])(shop)
 
 const arriveAtStall = (model: Model): ShopState =>
   isShopOpenFor(model.phase)

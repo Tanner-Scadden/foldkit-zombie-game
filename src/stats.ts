@@ -25,12 +25,12 @@ const killedKinds = (
 ): ReadonlyArray<ZombieKind> =>
   pipe(
     events,
-    Array.filter(GameEvent.guards.ZombieKilled),
+    Array.filter(GameEvent.isAnyOf(['ZombieKilled'])),
     Array.map(({ kind }) => kind),
   )
 
 const clearedWaves = (events: ReadonlyArray<GameEvent>): number =>
-  Array.filter(events, GameEvent.guards.WaveCleared).length
+  Array.filter(events, GameEvent.isAnyOf(['WaveCleared'])).length
 
 export const tallyFrame = (
   before: Model,

@@ -15,6 +15,7 @@ import {
   Model,
   Phase,
   Arsenal,
+  MouseButton,
   RunMode,
   initialModel,
   type Decal,
@@ -172,6 +173,16 @@ const scenarioModel = (): Model => {
     model = modifyFields(model, {
       player: p => ({ ...p, pistolTier: num('pistol', 0) }),
     })
+  if (params.has('aim')) {
+    const [aimX, aimY] = (params.get('aim') ?? '160,90').split(',').map(Number)
+    model = modifyFields(model, {
+      input: input => ({
+        ...input,
+        mouseButton: MouseButton.Held({ pointerId: 1 }),
+        maybeMousePosition: Option.some({ x: aimX, y: aimY }),
+      }),
+    })
+  }
   if (params.get('device') === 'touch')
     model = modifyFields(model, { lastDevice: () => 'Touch' as const })
   const phase = params.get('phase')
@@ -202,7 +213,20 @@ w.__countShapes = () => countShapes(sceneShapes(w.__model))
 
 w.__timings = { update: [] as Array<number>, view: [] as Array<number> }
 const instrument = params.has('instrument')
-const harnessUpdate = (model: Model, message: Message) => {
+const freezeAfter = params.has('freeze') ? num('freeze', 0) : Infinity
+const FIXED_FRAME_MS = 1000 / 60
+let framesRun = 0
+const harnessUpdate = (model: Model, incoming: Message) => {
+  const isFrozenFrame =
+    incoming._tag === 'TickedFrame' && framesRun >= freezeAfter
+  const isFreezing = Number.isFinite(freezeAfter)
+  if (isFrozenFrame) return { model }
+  if (isFreezing && incoming._tag === 'CompletedGenerateSeed') return { model }
+  const message =
+    incoming._tag === 'TickedFrame' && isFreezing
+      ? Message.TickedFrame({ deltaTime: FIXED_FRAME_MS })
+      : incoming
+  if (message._tag === 'TickedFrame') framesRun++
   const t0 = performance.now()
   const result = update(model, message)
   if (instrument && message._tag === 'TickedFrame')
@@ -225,9 +249,10 @@ const harnessInit: typeof init = (...args) => {
   w.__model = model
   return {
     ...base,
-    model: params.has('seed')
-      ? modifyFields(model, { rngState: () => num('seed', 1) })
-      : model,
+    model:
+      params.has('seed') || Number.isFinite(freezeAfter)
+        ? modifyFields(model, { rngState: () => num('seed', 1) })
+        : model,
   }
 }
 

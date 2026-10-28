@@ -20,7 +20,7 @@ import { pixelRuns } from './sprite'
 
 // PALETTE
 
-const FLOOR_COLOR = '#3b2b23'
+export const FLOOR_COLOR = '#3b2b23'
 const PLANK_SEAM_COLOR = '#2d2019'
 const PLANK_JOINT_COLOR = '#271b15'
 const WALL_COLOR = '#1f1826'
