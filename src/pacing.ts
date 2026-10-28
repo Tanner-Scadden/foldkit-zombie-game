@@ -14,7 +14,10 @@ import {
   INTENSITY_RESTLESS,
   MS_PER_SECOND,
   PACK_WARNING_MS,
+  QUIET_HURRY_MS,
   RELAX_EXTEND_MAX_MS,
+  RELAX_QUIET_MAX_MS,
+  RESTLESS_QUIET_MAX_MS,
 } from './constants'
 import {
   Alarm,
@@ -69,13 +72,19 @@ const flow = (pacing: Pacing, clockMs: number, worldMs: number): Paced =>
 const withBeat = (pacing: Pacing, beat: Beat): Pacing =>
   modifyFields(pacing, { beat: () => beat })
 
+const quietCapMs = (intensity: number): number =>
+  intensity >= INTENSITY_RESTLESS ? RESTLESS_QUIET_MAX_MS : RELAX_QUIET_MAX_MS
+
 const rest = (
   remainingMs: number,
   extendedMs: number,
   worldMs: number,
   intensity: number,
+  quietMs: number,
 ): Beat => {
-  if (remainingMs > worldMs) {
+  if (quietMs >= quietCapMs(intensity)) {
+    return Beat.Flowing()
+  } else if (remainingMs > worldMs) {
     return Beat.Resting({ remainingMs: remainingMs - worldMs, extendedMs })
   } else if (
     intensity >= INTENSITY_RESTLESS &&
@@ -102,34 +111,99 @@ const fade = (
     ? Beat.Resting({ remainingMs: relaxMs, extendedMs: 0 })
     : Beat.Fading({ releaseBelow, relaxMs, waitedMs })
 
+const isAnnounced = (
+  pacing: Pacing,
+  spawns: ReadonlyArray<PlannedSpawn>,
+): boolean =>
+  Alarm.isAnyOf(['Ringing'])(pacing.alarm) ||
+  Array.some(spawns, ({ pack }) => Array.contains(pacing.warnedPacks, pack))
+
+const isRoomQuiet = (
+  pacing: Pacing,
+  crowd: Crowd,
+  spawns: ReadonlyArray<PlannedSpawn>,
+): boolean =>
+  crowd.alive === 0 && crowd.waiting === 0 && !isAnnounced(pacing, spawns)
+
+const nextSpawnMs = (
+  spawns: ReadonlyArray<PlannedSpawn>,
+  clockMs: number,
+): Option.Option<number> =>
+  Array.reduce(spawns, Option.none<number>(), (maybeSoonest, { atMs }) =>
+    atMs > clockMs
+      ? Option.some(
+          Option.match(maybeSoonest, {
+            onNone: () => atMs,
+            onSome: soonest => Math.min(soonest, atMs),
+          }),
+        )
+      : maybeSoonest,
+  )
+
+const hurryTargetMs = (
+  pacing: Pacing,
+  clockMs: number,
+  spawns: ReadonlyArray<PlannedSpawn>,
+): number =>
+  Option.match(nextSpawnMs(spawns, clockMs), {
+    onNone: () => clockMs,
+    onSome: atMs =>
+      Math.max(
+        clockMs,
+        Option.match(Array.head(pacing.holds), {
+          onNone: () => atMs - PACK_WARNING_MS,
+          onSome: hold => Math.min(hold.atMs, atMs - PACK_WARNING_MS),
+        }),
+      ),
+  })
+
+const hurry = (paced: Paced, spawns: ReadonlyArray<PlannedSpawn>): Paced =>
+  Beat.isAnyOf(['Flowing'])(paced.pacing.beat) &&
+  paced.pacing.quietMs >= QUIET_HURRY_MS
+    ? {
+        pacing: paced.pacing,
+        clockMs: hurryTargetMs(paced.pacing, paced.clockMs, spawns),
+      }
+    : paced
+
 // NOTE: The wave clock only runs while the beat is Flowing. Fading and
 // Resting stop it, so every planned spawn after a hold waits out the fade and
 // the relax on top of its planned time. A fade gives up after FADE_MAX_MS so
-// a zombie stuck out of reach cannot stall the wave.
+// a zombie stuck out of reach cannot stall the wave. An empty room with no
+// pack at a door is quiet: a relax ends after RELAX_QUIET_MAX_MS of quiet,
+// and once the clock flows again after QUIET_HURRY_MS of quiet it skips ahead
+// to the next pack's warning, never past a hold. Only timing changes, never
+// a door or a kind, so the preview stays exact.
 export const stepBeat = (
   pacing: Pacing,
   clockMs: number,
   worldMs: number,
   crowd: Crowd,
   intensity: number,
-): Paced =>
-  Beat.match(pacing.beat, {
-    Flowing: () => flow(pacing, clockMs, worldMs),
+  spawns: ReadonlyArray<PlannedSpawn>,
+): Paced => {
+  const quieted = modifyFields(pacing, {
+    quietMs: quietMs =>
+      isRoomQuiet(pacing, crowd, spawns) ? quietMs + worldMs : 0,
+  })
+  return Beat.match(quieted.beat, {
+    Flowing: () => hurry(flow(quieted, clockMs, worldMs), spawns),
     Fading: ({ releaseBelow, relaxMs, waitedMs }) => ({
       pacing: withBeat(
-        pacing,
+        quieted,
         fade(releaseBelow, relaxMs, waitedMs + worldMs, crowd),
       ),
       clockMs,
     }),
     Resting: ({ remainingMs, extendedMs }) => ({
       pacing: withBeat(
-        pacing,
-        rest(remainingMs, extendedMs, worldMs, intensity),
+        quieted,
+        rest(remainingMs, extendedMs, worldMs, intensity, quieted.quietMs),
       ),
       clockMs,
     }),
   })
+}
 
 export const waitingCount = (
   spawns: ReadonlyArray<PlannedSpawn>,

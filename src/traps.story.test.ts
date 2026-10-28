@@ -736,7 +736,7 @@ describe('barricade damage', () => {
 })
 
 describe('bursts and traps', () => {
-  test('a Gasbag burst damages a barricade and a turret in reach', () => {
+  test('a Gasbag burst damages a barricade and breaks a turret in reach', () => {
     const blast = {
       ...zombieOf('Exploder', 60, { x: 222, y: 25 }),
       hp: 0,
@@ -754,17 +754,17 @@ describe('bursts and traps', () => {
       ),
       tick(FRAME_MS),
       model(({ traps, frameEvents }) => {
-        expect(Array.map(traps, ({ hp }) => hp)).toEqual([
-          TRAPS.Barricade.hp - burstDamage,
-          TRAPS.Turret.hp - burstDamage,
-          TRAPS.Turret.hp,
+        expect(TRAPS.Turret.hp).toBeLessThanOrEqual(burstDamage)
+        expect(Array.map(traps, ({ id, hp }) => [id, hp])).toEqual([
+          [1, TRAPS.Barricade.hp - burstDamage],
+          [3, TRAPS.Turret.hp],
         ])
         expect(
-          Array.filter(frameEvents, GameEvent.guards.TrapHit),
-        ).toHaveLength(2)
-        expect(
-          Array.filter(frameEvents, GameEvent.guards.TrapCracked),
-        ).toHaveLength(2)
+          Array.map(
+            Array.filter(frameEvents, GameEvent.guards.TrapBroken),
+            ({ kind }) => kind,
+          ),
+        ).toEqual(['Turret'])
       }),
     )
   })
@@ -796,7 +796,7 @@ describe('turrets', () => {
   test('fires at the nearest zombie in range, then waits out its cooldown', () => {
     const far = tough(70, { x: 205, y: 95 })
     const near = tough(71, { x: 140, y: 95 })
-    const cooldownTicks = Math.floor(PEA_INTERVAL_MS / FRAME_MS)
+    const cooldownTicks = Math.ceil(PEA_INTERVAL_MS / FRAME_MS)
     const frames: Array<Model> = []
     story(
       update,
@@ -824,7 +824,7 @@ describe('turrets', () => {
           ),
         ).toHaveLength(1)
       }),
-      ...recordTicks(cooldownTicks + 2, FRAME_MS, frames),
+      ...recordTicks(cooldownTicks + 1, FRAME_MS, frames),
     )
 
     const shotFrames = Array.filterMap(frames, (frame, index) =>
@@ -832,7 +832,7 @@ describe('turrets', () => {
         ? Result.succeed(index + 1)
         : Result.failVoid,
     )
-    expect(shotFrames).toEqual([cooldownTicks + 1])
+    expect(shotFrames).toEqual([cooldownTicks])
   })
 
   test('does not shoot through cover or past its range', () => {
@@ -888,7 +888,7 @@ describe('turrets', () => {
           { x: 40, y: 160 },
         ),
       ),
-      ...ticks(80, FRAME_MS),
+      ...ticks(Math.ceil((2 * PEA_INTERVAL_MS + 500) / FRAME_MS), FRAME_MS),
       model(({ wallet, zombies }) => {
         expect(wallet.balance).toBe(ZOMBIE_KINDS.Runner.bounty)
         expect(Array.every(zombies, ({ hp }) => hp <= 0)).toBe(true)
@@ -954,7 +954,7 @@ describe('between waves', () => {
       traps: () => damagedTraps,
     })
     expect(repairPrice(damagedTraps)).toBe(expectedPrice)
-    expect(expectedPrice).toBe(18)
+    expect(expectedPrice).toBe(24)
     expect(priceFor(shopping, 'RepairTraps')).toBe(expectedPrice)
     expect(SHOP_ITEMS.RepairTraps.name).toBe('Glue and Nails')
 

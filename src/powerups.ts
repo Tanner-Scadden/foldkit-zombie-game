@@ -214,10 +214,10 @@ const BURP_KNOCKBACK = 260
 // DROPS
 
 export const DROP_CHANCE: Readonly<Record<ZombieKind, number>> = {
-  Shambler: 0.02,
-  Runner: 0.02,
-  Tank: 0.3,
-  Exploder: 0.03,
+  Shambler: 0.03,
+  Runner: 0.03,
+  Tank: 0.4,
+  Exploder: 0.04,
 }
 
 export type DropRules = Readonly<{
@@ -230,7 +230,7 @@ export type DropRules = Readonly<{
 export const DROP_RULES: DropRules = {
   floorMax: 2,
   gapMs: 8000,
-  pityMs: 35000,
+  pityMs: 25000,
   prizeChance: 0.5,
 }
 export const TUTORIAL_WAVE = 1

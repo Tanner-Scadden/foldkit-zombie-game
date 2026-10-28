@@ -89,8 +89,8 @@ export const TRAPS: Readonly<Record<TrapKind, TrapStats>> = {
     name: 'Grumpy Gnome',
     blurb:
       'A garden gnome with a pea shooter. Set him down and he shoots anything that gets close.',
-    price: 50,
-    hp: 16,
+    price: 75,
+    hp: 10,
     limit: 2,
     pathCost: 6,
     breakTrauma: 0.5,

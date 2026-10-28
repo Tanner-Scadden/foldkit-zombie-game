@@ -1,6 +1,8 @@
 // Headless balance simulation. Run from the repo root:
 //   bun tools/balance/simulate.ts [runs] [firstSeed]
 //   MODE=endless bun tools/balance/simulate.ts [runs] [firstSeed]
+//   WORKERS=6 bun tools/balance/simulate.ts 200   (splits the runs over processes)
+//   TIMELINE=1 bun tools/balance/simulate.ts 40   (adds the wave timeline audit)
 // It drives the game's own init model and update with a simple bot and
 // prints survival per wave, run length, the money curve, and which zombie
 // kinds cost the bot the most hearts. Nothing here ships with the game.
@@ -86,6 +88,28 @@ type RunResult = {
   grabbed: Record<string, number>
   boostedMs: number
   waveMs: number
+  timelines: Array<WaveTimeline>
+}
+
+// The timeline of one wave in wall time from its start: every pack as it
+// walks in, and the stretches with no zombie alive. A stretch is announced
+// while a warned pack still waits at its door or the dinner bell rings.
+type PackArrival = {
+  atMs: number
+  pack: number
+  door: string
+  size: number
+  kinds: Array<string>
+  formation: string
+}
+
+type EmptyStretch = { fromMs: number; ms: number; announcedMs: number }
+
+type WaveTimeline = {
+  packs: Array<PackArrival>
+  empty: Array<EmptyStretch>
+  restMs: Array<number>
+  lengthMs: number
 }
 
 // Per wave: hearts lost, seconds with 6 or more zombies within 48 px
@@ -109,6 +133,83 @@ const emptyWaveLog = (): WaveLog => ({
   lengthMs: 0,
   peakAlive: 0,
 })
+
+const spawnKey = (spawn: { pack: number; offset: number; kind: string }) =>
+  `${spawn.pack}:${spawn.offset}:${spawn.kind}`
+
+const pendingSpawns = (model: Model) =>
+  model.phase._tag === 'Wave' || model.phase._tag === 'Preparation'
+    ? model.phase.spawns
+    : []
+
+const isAliveZombie = (zombie: Model['zombies'][number]) =>
+  zombie.state._tag === 'Walking' || zombie.state._tag === 'Fusing'
+
+const isAnnounced = (model: Model): boolean => {
+  const warned = new Set(model.pacing.warnedPacks)
+  return (
+    model.pacing.alarm._tag === 'Ringing' ||
+    pendingSpawns(model).some(spawn => warned.has(spawn.pack))
+  )
+}
+
+const emptyTimeline = (): WaveTimeline => ({
+  packs: [],
+  empty: [],
+  restMs: [],
+  lengthMs: 0,
+})
+
+const recordTimeline = (
+  timeline: WaveTimeline,
+  before: Model,
+  after: Model,
+) => {
+  const remaining = new Set(
+    after.phase._tag === 'Wave' ? after.phase.spawns.map(spawnKey) : [],
+  )
+  const released =
+    after.phase._tag === 'Wave'
+      ? pendingSpawns(before).filter(spawn => !remaining.has(spawnKey(spawn)))
+      : []
+  const atMs = timeline.lengthMs
+  released.forEach(spawn => {
+    const known = timeline.packs.find(arrival => arrival.pack === spawn.pack)
+    if (known === undefined) {
+      timeline.packs.push({
+        atMs,
+        pack: spawn.pack,
+        door: spawn.door,
+        size: 1,
+        kinds: [spawn.kind],
+        formation: spawn.formation,
+      })
+    } else {
+      known.size += 1
+      known.kinds.push(spawn.kind)
+    }
+  })
+  timeline.lengthMs += FRAME_MS
+  const isEmpty = !after.zombies.some(isAliveZombie)
+  const last = timeline.empty[timeline.empty.length - 1]
+  const isOngoing = last !== undefined && last.fromMs + last.ms >= atMs - 1
+  if (isEmpty) {
+    const stretch = isOngoing ? last : { fromMs: atMs, ms: 0, announcedMs: 0 }
+    if (!isOngoing) timeline.empty.push(stretch)
+    stretch.ms += FRAME_MS
+    stretch.announcedMs += isAnnounced(after) ? FRAME_MS : 0
+  }
+  const resting = after.pacing.beat._tag === 'Resting'
+  const wasResting = before.pacing.beat._tag === 'Resting'
+  if (resting && !wasResting) timeline.restMs.push(0)
+  if (resting) {
+    timeline.restMs[timeline.restMs.length - 1] =
+      (timeline.restMs[timeline.restMs.length - 1] ?? 0) + FRAME_MS
+  }
+}
+
+// The longest stretch inside an empty stretch with nothing announced.
+const quietPartMs = (stretch: EmptyStretch) => stretch.ms - stretch.announcedMs
 
 const send = (model: Model, message: GameMessage): Model =>
   update(model, message).model
@@ -467,6 +568,7 @@ const runOnce = (seed: number): RunResult => {
   const grabbed: Record<string, number> = {}
   let boostedMs = 0
   let waveMs = 0
+  const timelines: Array<WaveTimeline> = []
   botRandom = seed
   spentOnUpgrades = 0
   boughtLog = []
@@ -567,6 +669,12 @@ const runOnce = (seed: number): RunResult => {
     }
     maxAlive = Math.max(maxAlive, model.zombies.length)
     minHp = Math.min(minHp, model.player.hp)
+    if (
+      before.phase._tag === 'Wave' ||
+      (before.phase._tag === 'Preparation' && model.phase._tag === 'Wave')
+    ) {
+      recordTimeline((timelines[wave - 1] ??= emptyTimeline()), before, model)
+    }
     if (before.phase._tag === 'Wave') {
       const log = (waves[wave - 1] ??= emptyWaveLog())
       const alive = model.zombies.filter(
@@ -626,6 +734,7 @@ const runOnce = (seed: number): RunResult => {
     grabbed,
     boostedMs,
     waveMs,
+    timelines,
   }
 }
 
@@ -642,10 +751,53 @@ const median = (values: Array<number>): number => {
 
 const runs = Number(process.argv[2] ?? 40)
 const firstSeed = Number(process.argv[3] ?? 1)
+const seedAt = (index: number) => firstSeed + index * 7919
+const WORKERS = Math.max(1, Number(process.env.WORKERS ?? 1))
 const started = performance.now()
-const results = EffectArray.makeBy(runs, index =>
-  runOnce(firstSeed + index * 7919),
-)
+
+// A worker plays one slice of the seeds and writes its results as JSON, so
+// WORKERS=n gives the same report as one process, only sooner.
+if (process.env.WORKER_SLICE !== undefined) {
+  const [from, to] = process.env.WORKER_SLICE.split(':').map(Number)
+  const slice = EffectArray.makeBy(to! - from!, offset =>
+    runOnce(seedAt(from! + offset)),
+  )
+  await Bun.write(process.env.WORKER_OUT!, JSON.stringify(slice))
+  process.exit(0)
+}
+
+const playAll = async (): Promise<Array<RunResult>> => {
+  if (WORKERS === 1) {
+    return EffectArray.makeBy(runs, index => runOnce(seedAt(index)))
+  }
+  const per = Math.ceil(runs / WORKERS)
+  const slices = EffectArray.makeBy(WORKERS, index => [
+    index * per,
+    Math.min(runs, (index + 1) * per),
+  ]).filter(([from, to]) => to! > from!)
+  const outputs = await Promise.all(
+    slices.map(async ([from, to], index) => {
+      const out = `/tmp/simulate-${process.pid}-${index}.json`
+      const child = Bun.spawn(
+        [process.execPath, import.meta.path, String(runs), String(firstSeed)],
+        {
+          env: {
+            ...process.env,
+            WORKER_SLICE: `${from}:${to}`,
+            WORKER_OUT: out,
+          },
+          stdout: 'inherit',
+          stderr: 'inherit',
+        },
+      )
+      await child.exited
+      return (await Bun.file(out).json()) as Array<RunResult>
+    }),
+  )
+  return outputs.flat()
+}
+
+const results = await playAll()
 const elapsed = (performance.now() - started) / 1000
 
 const lastWave = IS_ENDLESS
@@ -802,3 +954,75 @@ pickupKinds.forEach(kind => {
 console.log(
   `\nMost zombies on screen at once: median ${median(results.map(r => r.maxAlive))}, worst ${Math.max(...results.map(r => r.maxAlive))}`,
 )
+
+// TIMELINE
+
+const seconds = (ms: number) => (ms / 1000).toFixed(1)
+
+const printTimeline = (result: RunResult) => {
+  console.log(
+    `\nTimeline of seed ${result.seed} (wall seconds from wave start)`,
+  )
+  result.timelines.forEach((timeline, index) => {
+    const gaps = timeline.packs
+      .slice(1)
+      .map((arrival, at) => arrival.atMs - timeline.packs[at]!.atMs)
+    console.log(
+      `  Wave ${index + 1}: ${seconds(timeline.lengthMs)} s, ${timeline.packs.length} packs, rests ${timeline.restMs.map(seconds).join(', ') || 'none'}, longest gap between packs ${seconds(Math.max(0, ...gaps))} s`,
+    )
+    console.log(
+      `    ${timeline.packs
+        .map(
+          arrival =>
+            `${seconds(arrival.atMs)} ${arrival.door[0]}${arrival.size}${arrival.formation === 'Squad' || arrival.formation === 'Trickle' ? '' : arrival.formation[0]}${new Set(arrival.kinds).size > 1 ? '*' : ''}`,
+        )
+        .join('  ')}`,
+    )
+    const empties = timeline.empty.filter(stretch => stretch.ms >= 1000)
+    if (empties.length > 0) {
+      console.log(
+        `    empty room: ${empties
+          .map(
+            stretch =>
+              `${seconds(stretch.fromMs)} for ${seconds(stretch.ms)} (quiet ${seconds(quietPartMs(stretch))})`,
+          )
+          .join(', ')}`,
+      )
+    }
+  })
+}
+
+if (process.env.TIMELINE !== undefined) {
+  printTimeline(results[0]!)
+  console.log(
+    '\nWave  first pack s  packs  sizes (min to max, distinct)  empty s  longest empty s  longest quiet s (mean, worst)  rests s',
+  )
+  for (let wave = 1; wave <= lastWave; wave++) {
+    const timelines = results.flatMap(r =>
+      r.timelines[wave - 1] === undefined ? [] : [r.timelines[wave - 1]!],
+    )
+    if (timelines.length === 0) continue
+    const sizes = timelines.flatMap(t => t.packs.map(p => p.size))
+    const distinct = mean(
+      timelines.map(t => new Set(t.packs.map(p => p.size)).size),
+    )
+    const longestQuiet = timelines.map(t =>
+      Math.max(0, ...t.empty.map(quietPartMs)),
+    )
+    console.log(
+      `${String(wave).padStart(4)}  ${seconds(mean(timelines.map(t => t.packs[0]?.atMs ?? 0))).padStart(12)}  ${mean(
+        timelines.map(t => t.packs.length),
+      )
+        .toFixed(1)
+        .padStart(
+          5,
+        )}  ${`${Math.min(...sizes)} to ${Math.max(...sizes)}, ${distinct.toFixed(1)}`.padStart(29)}  ${seconds(
+        mean(timelines.map(t => t.empty.reduce((sum, e) => sum + e.ms, 0))),
+      ).padStart(7)}  ${seconds(
+        mean(timelines.map(t => Math.max(0, ...t.empty.map(e => e.ms)))),
+      ).padStart(
+        15,
+      )}  ${`${seconds(mean(longestQuiet))}, ${seconds(Math.max(...longestQuiet))}`.padStart(30)}  ${seconds(mean(timelines.flatMap(t => t.restMs)))}`,
+    )
+  }
+}

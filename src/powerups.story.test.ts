@@ -84,6 +84,8 @@ const fightingWave = (wave: number): Model =>
   modifyFields(asVeteran(initialModel), {
     maybeSurface: () => Option.some(SURFACE),
     phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns: [HELD_SPAWN] }),
+    pacing: pacing =>
+      modifyFields(pacing, { warnedPacks: () => [HELD_SPAWN.pack] }),
   })
 
 const fighting = fightingWave(3)

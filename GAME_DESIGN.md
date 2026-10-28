@@ -126,29 +126,32 @@ Proposed on 2026-10-28 for step 5, the horde. These are starting numbers to play
 
 - **The burst.** Radius 28 px. It costs the player 1 heart unless they are blinking, and deals 6 damage to every zombie it reaches. A Gasbag caught in a burst bursts 150 ms later, so chains ripple instead of going off at once. At most 2 bursts go off in one frame and the rest wait their turn.
 - **Speed.** Each wave scales every spawn's speed, from ×1 on wave 1 to ×1.49 on wave 8. By wave 8 the fastest Hotfoots outrun the player (72 px/s).
-- **Health.** Waves 5 to 8 scale every spawn's health by ×1.12, ×1.22, ×1.32, and ×1.45, rounded per zombie. See "Shop categories and the price ramp".
+- **Health.** Waves 5 to 8 scale every spawn's health by ×1.03, ×1.08, ×1.17, and ×1.21, rounded per zombie: a Big Lug has 31, 32, 35, and 36, and a Groaner and a Gasbag have 4 from wave 7. Before the gnome pass they were ×1.12, ×1.22, ×1.32, and ×1.45. See "The gnome pass and spawn variety".
 
 Rewritten on 2026-10-28 after a playtest ("zombies should come out more in groups, and it is a bit too easy"). Each wave is learn, test, combine, or twist, built from the packs and the sawtooth described under "Packs and pacing" below. Health is the expected total, Groaner 3, Hotfoot 2, Gasbag 3, Big Lug 30.
 
-| Wave | Zombies | Health | Cycles | What is new or special                                                                                                                        |
-| ---- | ------- | ------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | 6       | 18     | 1      | The tutorial. Four slow Groaners from the north door, 3 seconds apart, then the last two as a pair                                            |
-| 2    | 31      | 83     | 2      | Groaner squads of 3 from the north and west. After a relax, NEW: Hotfoot, in pairs from the east, with two more Groaner squads                |
-| 3    | 48      | 130    | 2      | A Groaner trickle and squads from the sides, then the first pincer: Groaner squads of 4 from opposite doors. After a relax, a Hotfoot rush    |
-| 4    | 72      | 202    | 2      | NEW: Gasbag, alone from the west while Groaner squads come from the north and east. A pincer peak, a relax, then Gasbags inside Groaner packs |
-| 5    | 60      | 215    | 2      | NEW: Big Lug, alone from the north, with a squad of escorts walking in behind it. A second Big Lug from the south leads the second peak       |
-| 6    | 61      | 219    | 2      | The first full sawtooth: a pincer peak with a Big Lug, a relax, then a small horde from every door                                            |
-| 7    | 64      | 220    | 3      | A Big Lug from the west timed with a Hotfoot pack from the east, then the same trick mirrored, then a pincer led by a third Big Lug           |
-| 8    | 54      | 252    | 3      | The finale. Three rising peaks: a pincer, a pincer with two Big Lugs, then a horde from every door with the last two Big Lugs, then Victory   |
+Rewritten again on 2026-10-28 for the gnome pass ("wave 2 feels meh", "mix up the spawns"). Pack sizes are lists, so a wave mixes singles, pairs, trios, and bigger squads. Most groups draw their doors per run, and stragglers wander in from any door between packs. Health here is before the wave's scale.
 
-Each wave is a list of groups and a list of holds. A group has a count, a pack size, the gap inside a pack, a door pattern (One, Pincer, or All), the doors it uses, a start time, the gap between volleys, and weights for each kind. The door of every pack, the pincer's order and lag, the timing jitter, and every spawn's kind and offset are drawn from the seeded generator when Preparation begins, so the door preview shows exactly what will come. A kind's first wave uses a group of only that kind, so the "NEW" banner never promises a zombie the roll left out.
+| Wave | Zombies | Health | Cycles | What is new or special                                                                                                                                                          |
+| ---- | ------- | ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | 6       | 18     | 1      | The tutorial. Four slow Groaners from the north door, 3 seconds apart, then the last two as a pair                                                                              |
+| 2    | 31      | 83     | 2      | Groaner packs of 1 to 4 from two doors drawn per run, the first within 1.5 s. After a short relax, NEW: Hotfoot, in ones and twos from one drawn door, then mixed Groaner packs |
+| 3    | 49      | 130    | 2      | Stragglers and mixed Groaner squads from two drawn doors, then the first pincer, Groaner packs of 3 to 5. After a relax, a Hotfoot rush from one drawn door and more stragglers |
+| 4    | 74      | 207    | 2      | NEW: Gasbag, alone from one drawn door, while Groaner packs of 2 to 5 come from two others. A pincer peak, a relax, Gasbags in mixed squads with stragglers, then a big pincer  |
+| 5    | 62      | 221    | 2      | NEW: Big Lug, alone from the north, with escorts in packs of 2 to 4 behind it. Mixed squads of 2 to 6, then a second Big Lug from a drawn door leads a pincer                   |
+| 6    | 62      | 222    | 2      | Stragglers and squads, a Big Lug and a pincer peak, a relax, then squads, stragglers, a third Big Lug, and a horde of packs of 3 to 5 from every door                           |
+| 7    | 65      | 223    | 3      | A Big Lug with a pincer and a Hotfoot pack from one drawn door, then squads, a stream of stragglers, and a Hotfoot pair rush, then a pincer led by a third Big Lug              |
+| 8    | 60      | 268    | 3      | The finale. Mixed squads and a pincer, then squads with a pincer of two Big Lugs and a pincer, Hotfoot stragglers, then two more Big Lugs and a horde in two volleys            |
+
+Each wave is a list of groups and a list of holds. A group has a list of pack sizes, the gap inside a pack, a door pattern (One, Pincer, or All), the doors it may use and how many of them to draw for the run, a start time, the gap between volleys, the timing jitter, and weights for each kind. When Preparation begins the seeded generator shuffles each group's pack sizes, draws its doors, and then draws the door of every pack, the pincer's order and lag, the jitter, and every spawn's kind and offset, so the door preview shows exactly what will come and the same seed rolls the same wave. A kind's first wave uses a group of only that kind, from one door, so the "NEW" card never promises a zombie the roll left out. A straggler is a pack of one from any door with up to 1.5 s of jitter, so it wanders in between packs.
 
 #### Packs and pacing
 
 Added on 2026-10-28. Proposed, not decided. The packs live in `src/waves.ts` and the beats, telegraphs, doorway rule, and intensity in `src/pacing.ts`.
 
 - **Packs.** Zombies come in packs, not a drizzle. A volley draws its door once and sends a pack through it, one zombie every 180 ms (a horde: 220 ms). A Squad is one pack from one door. A Pincer is two packs from opposite doors (north and south, or west and east), the second 1.5 to 3 seconds after the first. A Horde is a pack from every door at once. A Trickle is a pack of one.
-- **Sawtooth.** A wave runs two or three cycles of Build (a trickle and squads), Peak (a pincer or a horde, 5 to 8 seconds), Fade, and Relax. A hold marks the end of a peak. At a hold the wave clock stops until fewer than 4 zombies are alive and nothing waits at a door, then rests 4.5 to 6 seconds with no spawns. A fade gives up after 20 seconds so a zombie stuck out of reach cannot stall the wave. The last cycle's peak is the wave's biggest. The clock in `Phase.Wave` is this paused spawn clock.
+- **Sawtooth.** A wave runs two or three cycles of Build (stragglers and squads), Peak (a pincer or a horde, 5 to 8 seconds), Fade, and Relax. A hold marks the end of a peak. At a hold the wave clock stops until fewer than 4 zombies are alive and nothing waits at a door, then rests 4 to 5.5 seconds with no spawns. A fade gives up after 20 seconds so a zombie stuck out of reach cannot stall the wave. The last cycle's peak is the wave's biggest. The clock in `Phase.Wave` is this paused spawn clock.
+- **No dead air.** Added on 2026-10-28 after a playtest ("I honestly thought the game broke for a second"). The room is quiet when no zombie is alive and no warned pack waits at a door (`quietMs` in `Pacing`). After 1.5 s of quiet (`QUIET_HURRY_MS`) the wave clock skips ahead to the next pack's warning, never past a hold, so its door starts rattling at once. A relax ends after 2.5 s of quiet (`RELAX_QUIET_MAX_MS`), or 4 s while the intensity is high (`RESTLESS_QUIET_MAX_MS`); a relax with zombies still alive runs its full length. So an empty, silent room lasts at most 2.5 s, or 4 s right after a beating. Like doorway camping, only timing changes, never a door or a kind, so the preview stays exact. It does make a wave shorter for a player who clears the room fast.
 - **Telegraphs.** Every pack warns about 1 second before it enters: its door rattles (two jittering planks and a pair of red eyes in the doorway), a dust puff rises at the threshold, and a synthesized Groan plays. A horde rings the DINNER BELL instead, with a short bell and groan sound and a DINNER BELL! banner for 2.2 seconds.
 - **Doorway camping.** A pack that comes due while the player stands within 16 px of its doorway waits at that door until the player steps away. Only its timing changes, never its door or kinds, so the preview stays exact.
 - **The alive cap** still holds at 20. A horde peak often reaches it, and the extra zombies wait at their doors.
@@ -173,15 +176,15 @@ Added on 2026-10-28 from the research behind the packs. These guide tuning. They
 
 Proposed on 2026-10-28 for step 6, traps. These are starting numbers to play against, not decisions. The trap table lives in `src/traps.ts`, the chewing rates in `src/zombies.ts`, and the reach and range numbers in `src/constants.ts`.
 
-| Trap      | Name           | Price  | Health | Most at once | What it does                                                                                                         |
-| --------- | -------------- | ------ | ------ | ------------ | -------------------------------------------------------------------------------------------------------------------- |
-| Barricade | Plank Pile     | $20    | 30     | 4            | Boards up one doorway. Blocks zombies and the player. The player's shots and the gnome's peas fly through the gaps   |
-| Turret    | Grumpy Gnome   | $50    | 16     | 2            | Sits on a floor tile and shoots a pea (1 damage, 520 ms apart) at the nearest walking zombie it can see within 84 px |
-| Repair    | Glue and Nails | Varies | -      | -            | Restores every damaged trap. Costs half of each trap's price, scaled by the share of health it is missing            |
+| Trap      | Name           | Price  | Health | Most at once | What it does                                                                                                          |
+| --------- | -------------- | ------ | ------ | ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Barricade | Plank Pile     | $20    | 30     | 4            | Boards up one doorway. Blocks zombies and the player. The player's shots and the gnome's peas fly through the gaps    |
+| Turret    | Grumpy Gnome   | $75    | 10     | 2            | Sits on a floor tile and shoots a pea (1 damage, 1200 ms apart) at the nearest walking zombie it can see within 84 px |
+| Repair    | Glue and Nails | Varies | -      | -            | Restores every damaged trap. Costs half of each trap's price, scaled by the share of health it is missing             |
 
 - **Buying and placing.** Traps are bought at the stall and go into a trap pack shown in the HUD. The shop refuses a kind once the player owns its most at once, placed or not. During Preparation, T or the PLACE button puts the selected trap down, and G or the NEXT button switches kinds when both are owned. A Plank Pile goes in the doorway the player stands in or next to (within 16 px). A Grumpy Gnome goes on the tile in front of the player, never on a wall, cover, the stall or the tile in front of it, a doorway, another trap, the player, or a zombie. A ghost shows where it would go, green or red, and a refused placement says why on the button and above the player. The first trap bought turns on a hint, PRESS T / TAP PLACE IN A DOORWAY, until the first one is placed.
 - **Chewing.** A walking zombie that touches a trap chews it: a Groaner 3 health a second, a Hotfoot 2, a Big Lug 12. A Gasbag that touches a trap fuses as if it had touched the player. A Plank Pile cracks at two thirds and one third of its health, shedding planks, and breaks with a crash. A Grumpy Gnome breaks with a pop.
-- **Bursts.** A Gasbag burst deals 15 damage to every trap it reaches.
+- **Bursts.** A Gasbag burst deals 15 damage to every trap it reaches, so one burst breaks a Grumpy Gnome (10 health).
 - **Pathing.** A barricaded doorway stays in the flow field at a toll of 25 extra tiles, and a gnome's tile at 6. A zombie outside a boarded door compares walking around the outside of the room to another door against chewing through, and takes the cheaper. The flow fields are recomputed when the player changes tile or a trap is placed or breaks.
 - **Between waves.** Traps stay where they were placed and keep their damage. Broken traps are gone. A new run clears every trap and the trap pack. The wave preview stays exact: spawns are rolled when Preparation begins, and traps change only a zombie's path, never its door.
 
@@ -189,7 +192,7 @@ Proposed on 2026-10-28 for step 6, traps. These are starting numbers to play aga
 
 Proposed on 2026-10-28 for step 7. Still proposed, not decided. A headless bot played the game's own `update` many times to find numbers where a decent player usually falls in the second half and a full win takes about 8 minutes. Real players have not tested them yet.
 
-- **The bot.** `bun tools/balance/simulate.ts [runs] [firstSeed]` runs it at 30 frames a second. It keeps away from the nearest zombie once one is within 36 px, otherwise drifts to the middle of the room. It re-aims every 5 frames at the nearest zombie it can see, with up to 0.22 radians of hand shake, and holds the trigger while it has a target. From wave 2 it walks to the stall and shops (see "The bot's shopping" under "Shop categories and the price ramp"), nails its Plank Piles into the door with the most spawns, and sets its Grumpy Gnomes down a little off the middle of the room, where it fights. Then it starts the wave at once, so Preparation costs only the walking. Every run is deterministic for its seed. `NO_GNOME=1` keeps it from buying gnomes, and `TUNE=path/to/tune.ts` edits the tables in place before the runs so an idea can be tried without touching `src`.
+- **The bot.** `bun tools/balance/simulate.ts [runs] [firstSeed]` runs it at 30 frames a second. It keeps away from the nearest zombie once one is within 36 px, otherwise drifts to the middle of the room. It re-aims every 5 frames at the nearest zombie it can see, with up to 0.22 radians of hand shake, and holds the trigger while it has a target. From wave 2 it walks to the stall and shops (see "The bot's shopping" under "Shop categories and the price ramp"), nails its Plank Piles into the door with the most spawns, and sets its Grumpy Gnomes down a little off the middle of the room, where it fights. Then it starts the wave at once, so Preparation costs only the walking. Every run is deterministic for its seed. `WORKERS=n` splits the runs over processes, `TIMELINE=1` adds the wave timeline audit (see "The gnome pass and spawn variety"), `NO_GNOME=1` keeps it from buying gnomes, and `TUNE=path/to/tune.ts` edits the tables in place before the runs so an idea can be tried without touching `src`.
 - **History.** The step 7 pass (drizzle waves, the pre-reload pistol) had the bot win 11 of 40 runs. After the first reload numbers it won 0 of 20 and died on wave 3. After the packs and the pistol retune, with the old prices and a bot that never bought a gnome, it won 22% (default) and 34% (`SWAP=1`). Those figures are superseded by the measurements below.
 - **The metrics.** Besides survival, money, and hearts by kind, the bot reports for each wave the hearts lost, pressure (seconds with 6 or more zombies within 48 px), relax (seconds with none alive), the wave's length, and the most alive at once, plus close calls: the share of wins that fell to 1 heart. It also reports the money it has on arriving at each shop visit and what it buys there.
 - **The targets.** The default bot wins 15 to 25% of runs and the `SWAP=1` bot 35 to 45%. Under 3% of runs die in waves 1 and 2, under 10% in 3 and 4, about 25 to 35% in 5 and 6, and the most in 7 and 8, with wave 8 the single biggest. A median win takes 7 to 9 minutes. 30 to 50% of wins are close calls.
@@ -215,7 +218,7 @@ Proposed on 2026-10-28 for step 7. Still proposed, not decided. A headless bot p
   Both bots end with spare gun tier 2 and pistol tier 1 (about $440 on upgrades) and place a median of 3 gnomes a run, replacing broken ones. For the default bot, Big Lugs cost about 29% of lost hearts, Gasbags 28%, Hotfoots 27%, and Groaners the rest.
 
 - **Against the targets.** Both bots win inside their ranges, deaths in waves 1 to 4 stay under 3%, and wave 8 is the single biggest wall for both. Waves 5 and 6 together take 24% of default runs, at the bottom of the 25 to 35% target. Close calls are 25 to 28% of wins, a little under the 30 to 50% target. A median win takes 8.8 to 8.9 minutes. These numbers predate the power-ups. See "Power-up balance" under "Power-ups" for the bots with them.
-- **The gnome carries the balance.** The bot that never buys a gnome wins 1% of runs at these numbers, and with the old prices a bot that bought gnomes won 62% (default) and 68% (`SWAP=1`) instead of 22% and 34%. Two gnomes in the middle of the room nearly double the bot's damage a second for $100. A player who skips traps will find the campaign much harder than these numbers say. If playtests agree, the next lever is a weaker gnome (pea every 800 ms and 12 health took the bot from 74% to 54% at the ramp prices) with gentler wave health scales.
+- **The gnome carries the balance.** The bot that never buys a gnome wins 1% of runs at these numbers, and with the old prices a bot that bought gnomes won 62% (default) and 68% (`SWAP=1`) instead of 22% and 34%. Two gnomes in the middle of the room nearly double the bot's damage a second for $100. A player who skips traps will find the campaign much harder than these numbers say. Superseded by "The gnome pass and spawn variety" below. If playtests agree, the next lever is a weaker gnome (pea every 800 ms and 12 health took the bot from 74% to 54% at the ramp prices) with gentler wave health scales.
 - **Caveats.** The bot never stands in a doorway, plays Preparation in a few seconds, does not dodge Gasbags, and never reacts to a telegraph. Pressure stays low because it backs away from anything within 36 px. A person who does not will feel the peaks far more than these numbers say. Playtest it before trusting any of this.
 
 #### Shop categories and the price ramp
@@ -259,7 +262,7 @@ Glue and Nails keeps its formula (half of each trap's price, scaled by the share
   Before the ramp the first visit bought nothing, the spare gun came before wave 3, and the bot carried $420 to $480 unspent into waves 7 and 8. With the ramp a typical run has a spare gun before wave 2, the Chatterbox before wave 3, and two spare gun tiers by wave 6.
 
 - **The pistol line.** Only the first pistol tier got cheaper ($300 to $200). It adds 3 rounds to the magazine and a bigger shove, about 5% more sustained fire. The rate tier stays at $500 and the damage tier at $750, because a cheap pistol damage tier broke the balance before (see "Upgrade tiers").
-- **Wave pressure.** Cheaper items and a bot that spends its money made the campaign far easier, so waves 5 to 8 got tougher instead of the shop getting expensive again: every spawn's health is scaled by ×1.12, ×1.22, ×1.32, and ×1.45 on waves 5, 6, 7, and 8 (`hpScale` in `WAVE_PLANS`, rounded per zombie). At ×1.12 only a Big Lug changes (34 health instead of 30). On wave 8 a Groaner has 4, a Hotfoot 3, and a Big Lug 44. The scaling is invisible: the campaign shows no BEEFIER banner.
+- **Wave pressure.** Cheaper items and a bot that spends its money made the campaign far easier, so waves 5 to 8 got tougher instead of the shop getting expensive again: every spawn's health is scaled by ×1.12, ×1.22, ×1.32, and ×1.45 on waves 5, 6, 7, and 8 (`hpScale` in `WAVE_PLANS`, rounded per zombie). At ×1.12 only a Big Lug changes (34 health instead of 30). On wave 8 a Groaner has 4, a Hotfoot 3, and a Big Lug 44. The scaling is invisible: the campaign shows no BEEFIER banner. The gnome pass softened these to ×1.03, ×1.08, ×1.17, and ×1.21.
 - **The bot's shopping.** It buys a heart at 3 hearts or fewer, the Chatterbox when it can afford it (else the Barn Buster), the Chatterbox over a tier 0 Barn Buster, ammo below half, two Plank Piles, a heart at 4 or fewer, Glue and Nails when it costs $25 or less, then spare gun tier 1, one gnome, the remaining spare gun tiers, pistol tiers once the spare gun is at tier 2, and a second gnome. It keeps $30 back after an upgrade or a gnome.
 - **Tuning log.** 200 runs unless noted. The first two lines use the old prices.
 
@@ -307,9 +310,9 @@ Zombies sometimes drop a goodie on the floor. The player grabs it by walking ove
 Every drop is decided by its own seeded generator, `loot.rngState` in the Model, seeded from the run's seed when a run starts. Drops never draw from the game's generator, so they never change which zombies come or from where, and the same seed and Messages drop the same pickups in the same places.
 
 - **Wave 1** drops nothing except one Hot Sauce on its third kill, to teach the grab.
-- **Each kill** from wave 2 on rolls its kind's chance: Groaner 2%, Hotfoot 2%, Gasbag 3%, Big Lug 30%. These rolls wait for 8 seconds after the last drop, so drops do not clump.
+- **Each kill** from wave 2 on rolls its kind's chance: Groaner 3%, Hotfoot 3%, Gasbag 4%, Big Lug 40% (2%, 2%, 3%, and 30% before the gnome pass). These rolls wait for 8 seconds after the last drop, so drops do not clump.
 - **Peaks.** When a peak's fade begins (the beat turns `Fading`, the crest of the sawtooth), the next kill rolls 50% for a prize, whether or not the gap is over. Win or lose, the prize is spent.
-- **Pity.** After 35 seconds of wave time with no drop, the next kill drops for sure.
+- **Pity.** After 25 seconds of wave time with no drop (35 before the gnome pass), the next kill drops for sure.
 - **The cap.** At most 2 pickups lie on the floor. A kill while the floor is full drops nothing and keeps the pity time and any owed prize.
 - **The kind** is drawn by weight from the table, leaving out the heart while the player has every heart.
 
@@ -338,7 +341,7 @@ Measured on 2026-10-28, 200 runs per bot from seed 1. The bot walks over a picku
 Of 3,134 drops over the default runs, 30% were Hot Sauce (the wave 1 drop is one per run), 22% Mean Beans, 20% Shish Kebullets, 16% Zoomy Socks, 11% Big Burp, and 1.6% hearts, about one dropped heart every four runs. Endless (`MODE=endless`): median wave 8, best 16, worst 3, against median 8, best 17, worst 4 for the bot that ignores pickups.
 
 - **Against the targets.** Both bots win inside their ranges, deaths in waves 1 to 4 stay at or under 1%, and wave 8 is the biggest wall for both. Close calls fell to 21 to 24% of wins, further under the 30 to 50% target: a boost often turns a near death into a clean finish.
-- **Traps still carry the balance.** Power-ups barely move the bot that never buys a gnome: 1% wins against 0.5% when it ignores them. That bot dies in waves 5 to 7 with too little damage a second, and 8 to 10 seconds of a boost every 30 seconds or so does not close that gap. Power-ups add highlight moments for every player, but they do not replace the gnome. Giving non-trap players a real path means a weaker gnome with stronger drops: a gnome firing every 700 ms with 14 health, with the first-guess drops below, took the bots to 14.5% and 26.5%, too hard, so the right mix needs its own pass.
+- **Traps still carry the balance.** Power-ups barely move the bot that never buys a gnome: 1% wins against 0.5% when it ignores them. That bot dies in waves 5 to 7 with too little damage a second, and 8 to 10 seconds of a boost every 30 seconds or so does not close that gap. Power-ups add highlight moments for every player, but they do not replace the gnome. Giving non-trap players a real path means a weaker gnome with stronger drops: a gnome firing every 700 ms with 14 health, with the first-guess drops below, took the bots to 14.5% and 26.5%, too hard, so the right mix needs its own pass. That pass is "The gnome pass and spawn variety" below.
 - **Tuning log.** 200 runs per bot.
 
   | Try | Change                                                                          | Default | `SWAP=1` | `NO_GNOME=1` |
@@ -350,6 +353,71 @@ Of 3,134 drops over the default runs, 30% were Hot Sauce (the wave 1 drop is one
   | 4   | Try 1 drops with a gnome firing every 700 ms and 14 health                      | 14.5%   | 26.5%    |              |
 
   Try 3 drops fewer pickups than try 2 and still wins more often, so a few points either way at 200 runs is noise. With try 1 the no-gnome bot won 2.5% whether or not it went for the pickups. `TUNE` files can now also edit `DROP_CHANCE`, `DROP_RULES`, `BOOSTS`, and `PICKUPS`.
+
+#### The gnome pass and spawn variety
+
+Added on 2026-10-28 after a playtest: "Do the pass for Grumpy Gnome", "Wave 2 feels meh because it's just 3 zombie groups, and they're spaced out a lot. I honestly thought the game broke for a second", and "Would be cool to mix up the spawns a bit more." Proposed, not decided. The gnome lives in `src/traps.ts` and its pea in `src/weapons.ts`, the waves in `src/waves.ts`, the quiet rule in `src/pacing.ts`, and the drops in `src/powerups.ts`.
+
+- **The gnome.** It fires a pea every 1200 ms instead of 520, has 10 health instead of 16, and costs $75 instead of $50. Its range (84 px) and the limit of 2 are unchanged. One Gasbag burst (15) now breaks it. Two gnomes used to nearly double the bot's damage a second for $100; now they add about a fifth of the Chatterbox's for $150.
+- **Wave health.** Waves 5 to 8 scale health by ×1.03, ×1.08, ×1.17, and ×1.21 instead of ×1.12, ×1.22, ×1.32, and ×1.45. Rounded per zombie, that is a Big Lug of 31, 32, 35, and 36 instead of 34, 37, 40, and 44, a Groaner and a Gasbag of 4 on waves 7 and 8 only, and a Hotfoot of 2 throughout. The rounding makes the scales coarse: ×1.18 to ×1.21 on wave 8 differ only by one Big Lug health point.
+- **Drops.** A kill drops a goodie 3% of the time (Groaner and Hotfoot), 4% (Gasbag), or 40% (Big Lug), up from 2%, 2%, 3%, and 30%, and the pity timer is 25 s instead of 35 s. A run sees about 20 drops instead of 16, with a boost running for about a quarter of wave time.
+- **Variety rules.** Every group's pack sizes are a list, shuffled per run, so a wave mixes singles, pairs, trios, and squads of up to 6 in a new order each time while its zombie count stays fixed. Most groups draw one, two, or three doors per run from all four, so a seed decides which doors a wave favors. Stragglers (packs of one from any door with up to 1.5 s of jitter) wander in between packs from wave 3. Many groups from wave 2 on mix kinds inside a pack. A kind's debut group is only that kind and comes from one drawn door. Wave 1 keeps its fixed tutorial at the north door, and the Big Lug's debut keeps the north door with its escorts behind it. Endless build squads, pincers, and hordes vary their pack sizes around the endless pack size the same way. All of it is drawn from the seeded generator when Preparation begins, so the same seed gives the same wave and the preview stays exact.
+- **The timeline audit.** `TIMELINE=1 bun tools/balance/simulate.ts [runs]` prints the first run's waves in wall seconds (each pack as it walks in: time, door initial, size, P for pincer and H for horde, * for mixed kinds), every stretch of at least a second with no zombie alive, and how much of it was quiet (nothing warned at a door). It then prints, per wave over all runs, the first pack's arrival, the packs, the pack sizes, the empty seconds, the longest empty stretch, and the longest quiet stretch. `WORKERS=n` splits the runs over n processes and gives the same report. Measured with the default bot, 40 runs before and 100 after:
+
+  | Wave | First pack (before, after) | Packs (before, after) | Sizes (before, after) | Longest quiet s, mean (before, after) | Longest quiet s, worst (before, after) |
+  | ---- | -------------------------- | --------------------- | --------------------- | ------------------------------------- | -------------------------------------- |
+  | 1    | 1.7 s, 1.7 s               | 5, 5                  | 1 to 2, 1 to 2        | 1.4, 1.3                              | 2.1, 1.5                               |
+  | 2    | 1.2 s, 1.4 s               | 12, 14                | 2 to 3, 1 to 4        | 3.6, 1.8                              | 6.8, 2.6                               |
+  | 3    | 1.0 s, 1.7 s               | 22, 23                | 1 to 4, 1 to 5        | 4.1, 2.5                              | 7.4, 4.1                               |
+  | 4    | 0.8 s, 0.8 s               | 20, 27                | 1 to 5, 1 to 6        | 4.4, 2.4                              | 7.2, 4.1                               |
+  | 5    | 1.7 s, 1.4 s               | 15, 21                | 1 to 5, 1 to 6        | 5.2, 2.3                              | 10.2, 4.1                              |
+  | 6    | 0.7 s, 1.3 s               | 18, 22                | 1 to 5, 1 to 6        | 5.3, 2.3                              | 7.7, 4.1                               |
+  | 7    | 1.2 s, 1.2 s               | 25, 29                | 1 to 4, 1 to 5        | 4.2, 2.0                              | 9.8, 4.1                               |
+  | 8    | 0.6 s, 0.8 s               | 23, 27                | 1 to 4, 1 to 3        | 6.2, 2.4                              | 9.0, 4.1                               |
+
+  The worst quiet stretch after is the 4 s restless relax, right after the bot lost hearts. Wave 2 before was five Groaner trios 3.8 s apart from the north and west, a 10.4 s gap across its relax with 3.7 s of a silent, empty room, then Hotfoot pairs always from the east. Now its first pack comes in 1.5 s, packs of 1 to 4 come every 2.8 s from two drawn doors, the relax is 4 s, and the Hotfoots come in ones and twos from a drawn door, followed by mixed packs. Wave 8 before had two silent, empty stretches of 7 to 9 s in a typical run. The longest stretch with no zombie alive is now 2.9 to 3.6 s on average, including the door's 1 s warning.
+
+- **Measured** on 2026-10-28, 400 runs per bot from seed 1, the default bot's endless run 200. "Died" is the share of all runs that died on that wave.
+
+  | Wave | Died (default) | Died (`SWAP=1`) | Died (`NO_GNOME=1`) | Hearts lost (default) | Length s (default) | Peak alive (default) |
+  | ---- | -------------- | --------------- | ------------------- | --------------------- | ------------------ | -------------------- |
+  | 1    | 0%             | 0%              | 0%                  | 0.00                  | 17                 | 2.0                  |
+  | 2    | 0%             | 0%              | 0%                  | 0.11                  | 40                 | 8.0                  |
+  | 3    | 1%             | 1%              | 1%                  | 0.23                  | 49                 | 10.9                 |
+  | 4    | 0%             | 0%              | 0%                  | 0.79                  | 68                 | 13.0                 |
+  | 5    | 6%             | 5%              | 10%                 | 1.17                  | 77                 | 14.3                 |
+  | 6    | 16%            | 8%              | 14%                 | 2.19                  | 64                 | 18.4                 |
+  | 7    | 16%            | 9%              | 16%                 | 2.34                  | 73                 | 13.4                 |
+  | 8    | 40%            | 48%             | 44%                 | 3.96                  | 83                 | 17.5                 |
+
+  | Bot          | Wins before     | Wins after        | Close calls after | Median run | Median win |
+  | ------------ | --------------- | ----------------- | ----------------- | ---------- | ---------- |
+  | Default      | 49 of 200 (25%) | 90 of 400 (22.5%) | 35 of 90 (39%)    | 8.2 min    | 8.6 min    |
+  | `SWAP=1`     | 85 of 200 (43%) | 117 of 400 (29%)  | 39 of 117 (33%)   | 8.2 min    | 8.5 min    |
+  | `NO_GNOME=1` | 2 of 200 (1%)   | 60 of 400 (15%)   | 27 of 60 (45%)    | 8.0 min    | 8.6 min    |
+
+  Endless (`MODE=endless`, 200 runs): median wave 8, best 12, worst 3, against median 8, best 16, worst 3 before. Fewer runs go deep, since a gnome no longer carries a run past wave 10.
+
+- **Against the targets.** The default bot wins inside 15 to 25%, the bot that never buys a gnome wins 15% instead of 1%, and close calls are 33 to 45% of wins, inside 30 to 50% for the first time. Deaths fall in waves 5 to 8 with wave 8 the biggest for every bot, and waves 1 to 4 stay at or under 1%. A gnome is now worth about 7 points of wins, not 24. The `SWAP=1` bot misses its 35 to 45% target at 29%: its edge over the default bot shrank from 18 points to 7 at every setting tried, and no setting in this pass's files put both bots in range. A real player who swaps back to a refilled spare is still likely to beat the default bot.
+- **Tuning log.** Tries 1 to 9 used a `TUNE` file that edited `TRAPS.Turret.price`, which the shop copies into `SHOP_ITEMS` when it loads, so those runs still sold the gnome at $50. A `TUNE` file must edit `SHOP_ITEMS.Turret.price` to change the price.
+
+  | Try | Change                                                                 | Runs | Default | `SWAP=1` | `NO_GNOME=1` |
+  | --- | ---------------------------------------------------------------------- | ---- | ------- | -------- | ------------ |
+  | 0   | Before: old waves, gnome 520 ms, 16 health, $50, health ×1.12 to ×1.45 | 200  | 25%     | 43%      | 1%           |
+  | 1   | New waves and the quiet rule, old gnome and health                     | 200  | 17.5%   | 24.5%    | 2%           |
+  | 2   | Gnome 750 ms, 12 health, health ×1.06, 1.12, 1.2, 1.3                  | 200  | 16%     | 24%      | 3%           |
+  | 3   | Try 2 with health ×1, 1.05, 1.1, 1.15                                  | 200  | 39.5%   | 52.5%    | 18.5%        |
+  | 4   | Try 3 with drops 3, 3, 4, and 40% and pity 25 s                        | 200  | 51%     | 55%      | 23%          |
+  | 5   | Gnome 950 ms, 10 health, health ×1.02, 1.07, 1.12, 1.18, try 4 drops   | 200  | 26.5%   | 45%      | 14.5%        |
+  | 6   | Gnome 950 ms, 10 health, health ×1, 1.05, 1.1, 1.15, old drops         | 200  | 33.5%   | 41%      | 18.5%        |
+  | 7   | Try 5 with health ×1.03, 1.08, 1.14, 1.21                              | 200  | 26.5%   | 38.5%    | 13.5%        |
+  | 8   | Try 7 with drops 2.5, 2.5, 3.5, and 35% and pity 30 s                  | 200  | 32.5%   | 36%      | 13%          |
+  | 9   | Gnome 1000 ms, try 7 health and drops                                  | 400  | 31.5%   | 40%      | 14%          |
+  | 10  | Try 9 with wave 7 at ×1.17                                             | 400  | 27.75%  | 34%      | 15%          |
+  | 11  | Try 10 with the gnome at 1200 ms                                       | 400  | 24.75%  | 31%      | 15%          |
+  | 12  | Try 11 baked into `src` with the gnome really at $75 (kept)            | 400  | 22.5%   | 29%      | 15%          |
+
+  Runs of 200 swing by about 5 points from noise alone: tries 5 and 7 differ only by one Big Lug health point on wave 8, and the `SWAP=1` bot moved 6.5 points between them.
 
 ### Upgrade tiers and endless mode
 

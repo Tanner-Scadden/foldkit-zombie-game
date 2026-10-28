@@ -490,6 +490,7 @@ export const Pacing = Schema.Struct({
   beat: Beat,
   warnedPacks: Schema.Array(Schema.Number),
   alarm: Alarm,
+  quietMs: Schema.Number,
 })
 export type Pacing = typeof Pacing.Type
 
@@ -775,6 +776,7 @@ export const calmPacing: Pacing = {
   beat: Beat.Flowing(),
   warnedPacks: [],
   alarm: Alarm.Quiet(),
+  quietMs: 0,
 }
 
 export const idleBoosts: Boosts = {

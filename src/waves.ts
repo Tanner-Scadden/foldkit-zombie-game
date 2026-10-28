@@ -21,6 +21,7 @@ import {
   PINCER_LAG_MIN_MS,
   PREPARATION_MS,
   SPAWN_JITTER_MS,
+  STRAGGLER_JITTER_MS,
   WAVE_BONUS_BASE,
   WAVE_BONUS_PER_WAVE,
   ZOMBIE_ALIVE_MAX,
@@ -79,15 +80,21 @@ export type KindWeight = Readonly<{ kind: ZombieKind; weight: number }>
 
 export type DoorPattern = 'One' | 'Pincer' | 'All'
 
+// NOTE: A group's packs are its pack sizes. Their order is shuffled per run,
+// so a wave mixes singles, pairs, and squads differently every time while its
+// zombie count stays the same. doorDraw doors are drawn from doors once per
+// run, so a group's doors change from run to run too.
 export type SpawnGroup = Readonly<{
   count: number
-  packSize: number
+  packs: Array.NonEmptyReadonlyArray<number>
   packGapMs: number
   pattern: DoorPattern
   mix: Array.NonEmptyReadonlyArray<KindWeight>
   doors: Array.NonEmptyReadonlyArray<DoorId>
+  doorDraw: number
   startMs: number
   intervalMs: number
+  jitterMs: number
 }>
 
 export type WavePlan = Readonly<{
@@ -118,58 +125,82 @@ const mixOf = (
   { kind: 'Exploder', weight: exploders },
 ]
 
-type GroupSpec = Readonly<{
-  count: number
-  mix: Array.NonEmptyReadonlyArray<KindWeight>
+type DoorChoice = Readonly<{
   doors: Array.NonEmptyReadonlyArray<DoorId>
+  draw: number
+}>
+
+const fromDoors = (doors: Array.NonEmptyReadonlyArray<DoorId>): DoorChoice => ({
+  doors,
+  draw: doors.length,
+})
+
+const through = (...doors: Array.NonEmptyReadonlyArray<DoorId>): DoorChoice =>
+  fromDoors(doors)
+
+const anyDoors = (draw: number): DoorChoice => ({ doors: ALL_DOORS, draw })
+
+const EVERY_DOOR = anyDoors(ALL_DOORS.length)
+
+type GroupSpec = Readonly<{
+  packs: Array.NonEmptyReadonlyArray<number>
+  mix: Array.NonEmptyReadonlyArray<KindWeight>
+  from: DoorChoice
   startMs: number
   everyMs: number
 }>
 
-type PackSpec = GroupSpec & Readonly<{ size: number }>
+const sumOf = (sizes: ReadonlyArray<number>): number =>
+  Array.reduce(sizes, 0, (sum, size) => sum + size)
 
-const trickle = ({
-  count,
+const squads = ({
+  packs,
   mix,
-  doors,
+  from,
   startMs,
   everyMs,
 }: GroupSpec): SpawnGroup => ({
-  count,
-  packSize: 1,
-  packGapMs: 0,
+  count: sumOf(packs),
+  packs,
+  packGapMs: PACK_GAP_MS,
   pattern: 'One',
   mix,
-  doors,
+  doors: from.doors,
+  doorDraw: from.draw,
   startMs,
   intervalMs: everyMs,
+  jitterMs: SPAWN_JITTER_MS,
 })
 
-const squads = (spec: PackSpec): SpawnGroup => ({
-  ...trickle(spec),
-  packSize: spec.size,
-  packGapMs: PACK_GAP_MS,
+const singles = (count: number): Array.NonEmptyReadonlyArray<number> =>
+  Array.makeBy(Math.max(1, count), () => 1)
+
+type TrickleSpec = Omit<GroupSpec, 'packs'> & Readonly<{ count: number }>
+
+const trickle = (spec: TrickleSpec): SpawnGroup =>
+  squads({ ...spec, packs: singles(spec.count) })
+
+const stragglers = (spec: Omit<TrickleSpec, 'from'>): SpawnGroup => ({
+  ...trickle({ ...spec, from: EVERY_DOOR }),
+  jitterMs: STRAGGLER_JITTER_MS,
 })
 
-const pincers = (spec: PackSpec): SpawnGroup => ({
-  ...squads(spec),
+const pincers = (spec: Omit<GroupSpec, 'from'>): SpawnGroup => ({
+  ...squads({ ...spec, from: EVERY_DOOR }),
   pattern: 'Pincer',
 })
 
-const hordes = (spec: Omit<PackSpec, 'doors'>): SpawnGroup => ({
-  ...squads({ ...spec, doors: ALL_DOORS }),
+const hordes = (spec: Omit<GroupSpec, 'from'>): SpawnGroup => ({
+  ...squads({ ...spec, from: EVERY_DOOR }),
   packGapMs: HORDE_GAP_MS,
   pattern: 'All',
 })
 
-const lug = (door: DoorId, atMs: number): SpawnGroup =>
-  trickle({
-    count: 1,
-    mix: only('Tank'),
-    doors: [door],
-    startMs: atMs,
-    everyMs: 0,
-  })
+const lug = (from: DoorChoice, atMs: number): SpawnGroup =>
+  trickle({ count: 1, mix: only('Tank'), from, startMs: atMs, everyMs: 0 })
+
+const lugPincer = (atMs: number): SpawnGroup =>
+  pincers({ packs: [1, 1], mix: only('Tank'), startMs: atMs, everyMs: 0 })
 
 const fadeThenRelax = (atMs: number, relaxMs: number): Hold => ({
   atMs,
@@ -182,7 +213,8 @@ const MIXED = mixOf(3, 2, 1.5)
 // NOTE: Each wave is two or three cycles of Build, Peak, Fade, and Relax. A
 // hold stops the wave clock at its time until fewer than its threshold are
 // alive, then rests for its relax time, so the times of every later group
-// are on that paused clock.
+// are on that paused clock. A kind's first wave brings it in a group of only
+// that kind, so the NEW card never promises a zombie the roll left out.
 export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   {
     speedScale: 1.0,
@@ -191,15 +223,14 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
       trickle({
         count: 4,
         mix: only('Shambler'),
-        doors: ['North'],
+        from: through('North'),
         startMs: 1500,
         everyMs: 3000,
       }),
       squads({
-        count: 2,
-        size: 2,
+        packs: [2],
         mix: only('Shambler'),
-        doors: ['North'],
+        from: through('North'),
         startMs: 14500,
         everyMs: 0,
       }),
@@ -211,343 +242,284 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
     hpScale: 1,
     groups: [
       squads({
-        count: 15,
-        size: 3,
+        packs: [2, 3, 1, 3, 2, 4],
         mix: only('Shambler'),
-        doors: ['North', 'West'],
-        startMs: 1000,
-        everyMs: 3800,
+        from: anyDoors(2),
+        startMs: 1200,
+        everyMs: 2800,
       }),
       squads({
-        count: 10,
-        size: 2,
+        packs: [2, 1, 2, 2, 1],
         mix: only('Runner'),
-        doors: ['East'],
-        startMs: 22000,
-        everyMs: 3000,
+        from: anyDoors(1),
+        startMs: 18700,
+        everyMs: 2600,
       }),
       squads({
-        count: 6,
-        size: 3,
-        mix: only('Shambler'),
-        doors: ['North', 'West'],
-        startMs: 24000,
-        everyMs: 5000,
+        packs: [3, 1, 4],
+        mix: mixOf(3, 1, 0),
+        from: anyDoors(2),
+        startMs: 21000,
+        everyMs: 4000,
       }),
     ],
-    holds: [fadeThenRelax(20500, 4500)],
+    holds: [fadeThenRelax(17500, 4000)],
   },
   {
     speedScale: 1.14,
     hpScale: 1,
     groups: [
-      trickle({
-        count: 8,
+      stragglers({
+        count: 5,
         mix: mixOf(3, 1, 0),
-        doors: ['West', 'East'],
         startMs: 800,
-        everyMs: 2200,
+        everyMs: 2600,
       }),
       squads({
-        count: 9,
-        size: 3,
-        mix: only('Shambler'),
-        doors: ['West', 'East'],
-        startMs: 3000,
-        everyMs: 5000,
-      }),
-      pincers({
-        count: 16,
-        size: 4,
-        mix: only('Shambler'),
-        doors: ALL_DOORS,
-        startMs: 17000,
-        everyMs: 4500,
-      }),
-      squads({
-        count: 12,
-        size: 3,
-        mix: only('Runner'),
-        doors: ['South'],
-        startMs: 29000,
-        everyMs: 2500,
-      }),
-      trickle({
-        count: 3,
-        mix: only('Shambler'),
-        doors: ['North'],
-        startMs: 30500,
+        packs: [3, 2, 3, 1, 2, 2],
+        mix: mixOf(4, 1, 0),
+        from: anyDoors(2),
+        startMs: 2000,
         everyMs: 3000,
       }),
+      pincers({
+        packs: [4, 3, 4, 5],
+        mix: only('Shambler'),
+        startMs: 17500,
+        everyMs: 4000,
+      }),
+      squads({
+        packs: [3, 2, 4, 1, 2],
+        mix: only('Runner'),
+        from: anyDoors(1),
+        startMs: 27700,
+        everyMs: 2400,
+      }),
+      stragglers({
+        count: 3,
+        mix: mixOf(3, 1, 0),
+        startMs: 29000,
+        everyMs: 2800,
+      }),
     ],
-    holds: [fadeThenRelax(27500, 5000)],
+    holds: [fadeThenRelax(26500, 4500)],
   },
   {
     speedScale: 1.21,
     hpScale: 1,
     groups: [
       squads({
-        count: 16,
-        size: 4,
+        packs: [4, 2, 5, 3, 2],
         mix: mixOf(3, 1, 0),
-        doors: ['North', 'East'],
+        from: anyDoors(2),
         startMs: 600,
-        everyMs: 5000,
+        everyMs: 3400,
       }),
       trickle({
         count: 5,
         mix: only('Exploder'),
-        doors: ['West'],
-        startMs: 4000,
+        from: anyDoors(1),
+        startMs: 3500,
         everyMs: 3000,
       }),
       pincers({
-        count: 16,
-        size: 4,
+        packs: [4, 3, 5, 4],
         mix: mixOf(2, 1, 0),
-        doors: ALL_DOORS,
-        startMs: 19000,
-        everyMs: 4000,
+        startMs: 18000,
+        everyMs: 4500,
       }),
       squads({
-        count: 15,
-        size: 5,
+        packs: [4, 2, 5, 1, 3],
         mix: mixOf(2, 0, 1),
-        doors: ['West', 'East', 'South'],
-        startMs: 31500,
-        everyMs: 4000,
+        from: anyDoors(3),
+        startMs: 30200,
+        everyMs: 3200,
+      }),
+      stragglers({
+        count: 4,
+        mix: mixOf(2, 1, 1),
+        startMs: 31000,
+        everyMs: 3500,
       }),
       pincers({
-        count: 20,
-        size: 5,
+        packs: [5, 4, 6, 3],
         mix: mixOf(2, 1, 1),
-        doors: ALL_DOORS,
-        startMs: 48000,
+        startMs: 47000,
         everyMs: 4000,
       }),
     ],
-    holds: [fadeThenRelax(30000, 5000)],
+    holds: [fadeThenRelax(29000, 5000)],
   },
   {
     speedScale: 1.28,
-    hpScale: 1.12,
+    hpScale: 1.03,
     groups: [
       squads({
-        count: 12,
-        size: 4,
+        packs: [3, 4, 2, 3],
         mix: mixOf(3, 2, 1),
-        doors: ['West', 'East'],
-        startMs: 1500,
-        everyMs: 4500,
+        from: anyDoors(2),
+        startMs: 1200,
+        everyMs: 3500,
       }),
-      lug('North', 17000),
-      squads({
-        count: 10,
-        size: 5,
-        mix: mixOf(2, 1, 0),
-        doors: ['North'],
-        startMs: 19500,
+      stragglers({
+        count: 3,
+        mix: mixOf(3, 1, 0),
+        startMs: 6000,
         everyMs: 3000,
       }),
+      lug(through('North'), 15500),
       squads({
-        count: 20,
-        size: 5,
-        mix: mixOf(3, 2, 1),
-        doors: ['North', 'South'],
-        startMs: 30500,
-        everyMs: 4000,
+        packs: [4, 2, 3],
+        mix: mixOf(2, 1, 0),
+        from: through('North'),
+        startMs: 17500,
+        everyMs: 2600,
       }),
-      lug('South', 45000),
+      squads({
+        packs: [4, 6, 3, 5, 2],
+        mix: mixOf(3, 2, 1),
+        from: anyDoors(2),
+        startMs: 27700,
+        everyMs: 3300,
+      }),
+      lug(anyDoors(1), 42000),
       pincers({
-        count: 16,
-        size: 4,
+        packs: [4, 3, 5, 4],
         mix: MIXED,
-        doors: ALL_DOORS,
-        startMs: 46500,
+        startMs: 43500,
         everyMs: 4000,
       }),
     ],
-    holds: [fadeThenRelax(29000, 6000)],
+    holds: [fadeThenRelax(26500, 5000)],
   },
   {
     speedScale: 1.35,
-    hpScale: 1.22,
+    hpScale: 1.08,
     groups: [
-      trickle({
-        count: 3,
-        mix: MIXED,
-        doors: ALL_DOORS,
-        startMs: 500,
-        everyMs: 1500,
-      }),
+      stragglers({ count: 3, mix: MIXED, startMs: 500, everyMs: 1600 }),
       squads({
-        count: 8,
-        size: 4,
+        packs: [3, 5, 2],
         mix: MIXED,
-        doors: ALL_DOORS,
+        from: anyDoors(2),
         startMs: 2000,
-        everyMs: 5000,
+        everyMs: 3800,
       }),
-      lug('South', 18000),
+      lug(anyDoors(1), 14000),
       pincers({
-        count: 20,
-        size: 5,
+        packs: [5, 4, 6, 5],
         mix: MIXED,
-        doors: ALL_DOORS,
-        startMs: 19000,
+        startMs: 15500,
         everyMs: 3500,
       }),
       squads({
-        count: 12,
-        size: 4,
+        packs: [4, 2, 2],
         mix: MIXED,
-        doors: ['North', 'South'],
-        startMs: 31000,
-        everyMs: 4000,
+        from: anyDoors(2),
+        startMs: 27200,
+        everyMs: 3000,
       }),
-      lug('East', 37000),
+      stragglers({ count: 3, mix: MIXED, startMs: 29000, everyMs: 3000 }),
+      lug(anyDoors(1), 35000),
       hordes({
-        count: 16,
-        size: 4,
+        packs: [4, 3, 5, 4],
         mix: MIXED,
-        startMs: 47000,
-        everyMs: 2500,
-      }),
-    ],
-    holds: [fadeThenRelax(29500, 6000)],
-  },
-  {
-    speedScale: 1.42,
-    hpScale: 1.32,
-    groups: [
-      squads({
-        count: 12,
-        size: 3,
-        mix: MIXED,
-        doors: ALL_DOORS,
-        startMs: 1000,
-        everyMs: 4000,
-      }),
-      lug('West', 17000),
-      pincers({
-        count: 8,
-        size: 4,
-        mix: MIXED,
-        doors: ALL_DOORS,
-        startMs: 19000,
-        everyMs: 4000,
-      }),
-      squads({
-        count: 6,
-        size: 3,
-        mix: only('Runner'),
-        doors: ['East'],
-        startMs: 23000,
-        everyMs: 2500,
-      }),
-      squads({
-        count: 12,
-        size: 4,
-        mix: MIXED,
-        doors: ['North', 'South'],
-        startMs: 32000,
-        everyMs: 3500,
-      }),
-      squads({
-        count: 4,
-        size: 4,
-        mix: only('Runner'),
-        doors: ['West'],
         startMs: 40000,
         everyMs: 0,
       }),
-      trickle({
-        count: 8,
-        mix: mixOf(3, 1, 0),
-        doors: ['West', 'East'],
-        startMs: 37500,
-        everyMs: 1200,
-      }),
-      lug('North', 49500),
-      pincers({
-        count: 12,
-        size: 4,
+    ],
+    holds: [fadeThenRelax(26000, 5500)],
+  },
+  {
+    speedScale: 1.42,
+    hpScale: 1.17,
+    groups: [
+      squads({
+        packs: [2, 4, 3, 1, 2],
         mix: MIXED,
-        doors: ALL_DOORS,
-        startMs: 50500,
+        from: anyDoors(3),
+        startMs: 1000,
+        everyMs: 3200,
+      }),
+      lug(anyDoors(1), 15500),
+      pincers({ packs: [5, 3], mix: MIXED, startMs: 17000, everyMs: 0 }),
+      squads({
+        packs: [3, 2, 1],
+        mix: only('Runner'),
+        from: anyDoors(1),
+        startMs: 19500,
+        everyMs: 2400,
+      }),
+      squads({
+        packs: [4, 3, 5],
+        mix: MIXED,
+        from: anyDoors(2),
+        startMs: 29200,
+        everyMs: 3000,
+      }),
+      stragglers({
+        count: 9,
+        mix: mixOf(3, 1, 0),
+        startMs: 33000,
+        everyMs: 1300,
+      }),
+      squads({
+        packs: [2, 2],
+        mix: only('Runner'),
+        from: anyDoors(1),
+        startMs: 38000,
+        everyMs: 1500,
+      }),
+      lug(anyDoors(1), 46200),
+      pincers({
+        packs: [4, 2, 3, 3],
+        mix: MIXED,
+        startMs: 47200,
         everyMs: 3500,
       }),
     ],
-    holds: [fadeThenRelax(30500, 6000), fadeThenRelax(48000, 5000)],
+    holds: [fadeThenRelax(28000, 5500), fadeThenRelax(45000, 5000)],
   },
   {
     speedScale: 1.49,
-    hpScale: 1.45,
+    hpScale: 1.21,
     groups: [
       squads({
-        count: 6,
-        size: 3,
+        packs: [3, 1, 2, 2],
         mix: MIXED,
-        doors: ALL_DOORS,
-        startMs: 400,
-        everyMs: 3500,
+        from: anyDoors(3),
+        startMs: 600,
+        everyMs: 2800,
       }),
-      pincers({
-        count: 6,
-        size: 3,
-        mix: MIXED,
-        doors: ALL_DOORS,
-        startMs: 14000,
-        everyMs: 0,
-      }),
+      pincers({ packs: [3, 3], mix: MIXED, startMs: 11500, everyMs: 0 }),
       squads({
-        count: 8,
-        size: 4,
+        packs: [3, 1, 2, 2],
         mix: MIXED,
-        doors: ALL_DOORS,
-        startMs: 23000,
-        everyMs: 3500,
+        from: anyDoors(2),
+        startMs: 19700,
+        everyMs: 2800,
       }),
+      lugPincer(28500),
       pincers({
-        count: 2,
-        size: 1,
-        mix: only('Tank'),
-        doors: ALL_DOORS,
-        startMs: 33000,
-        everyMs: 0,
-      }),
-      pincers({
-        count: 6,
-        size: 3,
+        packs: [3, 2, 3, 2],
         mix: MIXED,
-        doors: ALL_DOORS,
-        startMs: 34000,
+        startMs: 30000,
         everyMs: 3000,
       }),
-      trickle({
+      stragglers({
         count: 4,
         mix: only('Runner'),
-        doors: ALL_DOORS,
-        startMs: 46500,
+        startMs: 39700,
         everyMs: 1500,
       }),
-      pincers({
-        count: 2,
-        size: 1,
-        mix: only('Tank'),
-        doors: ['West', 'East'],
-        startMs: 54000,
-        everyMs: 0,
-      }),
+      lugPincer(45000),
       hordes({
-        count: 20,
-        size: 3,
+        packs: [3, 2, 3, 2, 3, 2, 3, 2],
         mix: MIXED,
-        startMs: 55000,
+        startMs: 46000,
         everyMs: 2500,
       }),
     ],
-    holds: [fadeThenRelax(21000, 5000), fadeThenRelax(44500, 6000)],
+    holds: [fadeThenRelax(18500, 5000), fadeThenRelax(38500, 5500)],
   },
 ]
 
@@ -661,23 +633,26 @@ type PackPlace = Readonly<{ door: DoorId; delayMs: number }>
 type VolleyRolls = Readonly<{ door: number; order: number; lag: number }>
 
 type PatternRules = Readonly<{
-  formation: (group: SpawnGroup) => Formation
-  packsPerVolley: (group: SpawnGroup) => number
-  places: (group: SpawnGroup, rolls: VolleyRolls) => ReadonlyArray<PackPlace>
+  formation: (size: number) => Formation
+  packsPerVolley: (doors: ReadonlyArray<DoorId>) => number
+  places: (
+    doors: Array.NonEmptyReadonlyArray<DoorId>,
+    rolls: VolleyRolls,
+  ) => ReadonlyArray<PackPlace>
 }>
 
 const DOOR_PATTERNS: Readonly<Record<DoorPattern, PatternRules>> = {
   One: {
-    formation: ({ packSize }) => (packSize > 1 ? 'Squad' : 'Trickle'),
+    formation: size => (size > 1 ? 'Squad' : 'Trickle'),
     packsPerVolley: () => 1,
-    places: ({ doors }, rolls) => [
+    places: (doors, rolls) => [
       { door: pickOne(doors, rolls.door), delayMs: 0 },
     ],
   },
   Pincer: {
     formation: () => 'Pincer',
     packsPerVolley: () => 2,
-    places: ({ doors }, rolls) => {
+    places: (doors, rolls) => {
       const pair = pickOne(pincerPairs(doors), rolls.door)
       const ordered = rolls.order < 0.5 ? pair : Array.reverse(pair)
       const lagMs = between(rolls.lag, PINCER_LAG_MIN_MS, PINCER_LAG_MAX_MS)
@@ -689,19 +664,51 @@ const DOOR_PATTERNS: Readonly<Record<DoorPattern, PatternRules>> = {
   },
   All: {
     formation: () => 'Horde',
-    packsPerVolley: ({ doors }) => doors.length,
-    places: ({ doors }) => Array.map(doors, door => ({ door, delayMs: 0 })),
+    packsPerVolley: doors => doors.length,
+    places: doors => Array.map(doors, door => ({ door, delayMs: 0 })),
   },
 }
 
-const volleyCount = (group: SpawnGroup): number =>
-  Math.ceil(
-    group.count /
-      Math.max(
-        1,
-        group.packSize * DOOR_PATTERNS[group.pattern].packsPerVolley(group),
-      ),
+type Keyed<A> = Readonly<{ key: number; item: A }>
+
+const byKey = <A>(): Order.Order<Keyed<A>> =>
+  Order.mapInput(Order.Number, ({ key }: Keyed<A>) => key)
+
+const shuffle = <A>(
+  state: number,
+  items: Array.NonEmptyReadonlyArray<A>,
+): Seeded<Array.NonEmptyReadonlyArray<A>> => {
+  const [nextState, keyed] = Array.mapAccum(
+    items,
+    state,
+    (drawState, item): Seeded<Keyed<A>> => {
+      const draw = nextRandom(drawState)
+      return [draw.nextState, { key: draw.value, item }]
+    },
   )
+  return [
+    nextState,
+    Array.map(Array.sort(keyed, byKey<A>()), ({ item }) => item),
+  ]
+}
+
+const drawDoors = (
+  state: number,
+  group: SpawnGroup,
+): Seeded<Array.NonEmptyReadonlyArray<DoorId>> => {
+  if (group.doorDraw >= group.doors.length) {
+    return [state, group.doors]
+  }
+
+  const [nextState, shuffled] = shuffle(state, group.doors)
+  return [
+    nextState,
+    Array.match(Array.take(shuffled, Math.max(1, group.doorDraw)), {
+      onEmpty: () => group.doors,
+      onNonEmpty: doors => doors,
+    }),
+  ]
+}
 
 const PACK_ID_STRIDE = 10
 const GROUP_ID_STRIDE = 1000
@@ -736,20 +743,28 @@ const rollPack =
             speedScale: plan.speedScale,
             hpScale: plan.hpScale,
             pack,
-            formation: DOOR_PATTERNS[group.pattern].formation(group),
+            formation: DOOR_PATTERNS[group.pattern].formation(size),
           },
         ]
       },
     )
 
 const rollVolley =
-  (group: SpawnGroup, groupIndex: number) =>
-  (state: number, volley: number): Seeded<ReadonlyArray<PackRoll>> => {
+  (
+    group: SpawnGroup,
+    groupIndex: number,
+    doors: Array.NonEmptyReadonlyArray<DoorId>,
+  ) =>
+  (
+    state: number,
+    sizes: ReadonlyArray<number>,
+    volley: number,
+  ): Seeded<ReadonlyArray<PackRoll>> => {
     const doorDraw = nextRandom(state)
     const orderDraw = nextRandom(doorDraw.nextState)
     const lagDraw = nextRandom(orderDraw.nextState)
     const jitterDraw = nextRandom(lagDraw.nextState)
-    const places = DOOR_PATTERNS[group.pattern].places(group, {
+    const places = DOOR_PATTERNS[group.pattern].places(doors, {
       door: doorDraw.value,
       order: orderDraw.value,
       lag: lagDraw.value,
@@ -757,25 +772,24 @@ const rollVolley =
     const startMs =
       group.startMs +
       volley * group.intervalMs +
-      jitterDraw.value * SPAWN_JITTER_MS
-    const filledBefore = volley * group.packSize * places.length
+      jitterDraw.value * group.jitterMs
     return [
       jitterDraw.nextState,
-      Array.filterMap(places, ({ door, delayMs }, index) => {
-        const size = Math.min(
-          group.packSize,
-          group.count - filledBefore - index * group.packSize,
-        )
-        return size > 0
-          ? Result.succeed({
-              pack:
-                groupIndex * GROUP_ID_STRIDE + volley * PACK_ID_STRIDE + index,
-              door,
-              startMs: startMs + delayMs,
-              size,
-            })
-          : Result.failVoid
-      }),
+      Array.filterMap(
+        Array.zip(places, sizes),
+        ([{ door, delayMs }, size], index) =>
+          size > 0
+            ? Result.succeed({
+                pack:
+                  groupIndex * GROUP_ID_STRIDE +
+                  volley * PACK_ID_STRIDE +
+                  index,
+                door,
+                startMs: startMs + delayMs,
+                size,
+              })
+            : Result.failVoid,
+      ),
     ]
   }
 
@@ -786,14 +800,16 @@ const rollGroup =
     group: SpawnGroup,
     groupIndex: number,
   ): Seeded<ReadonlyArray<PlannedSpawn>> => {
-    const volleyIndices: ReadonlyArray<number> = Array.makeBy(
-      volleyCount(group),
-      index => index,
+    const [doorState, doors] = drawDoors(state, group)
+    const [sizeState, sizes] = shuffle(doorState, group.packs)
+    const volleySizes = Array.chunksOf(
+      sizes,
+      Math.max(1, DOOR_PATTERNS[group.pattern].packsPerVolley(doors)),
     )
     const [volleyState, volleys] = Array.mapAccum(
-      volleyIndices,
-      state,
-      rollVolley(group, groupIndex),
+      volleySizes,
+      sizeState,
+      rollVolley(group, groupIndex, doors),
     )
     const [packState, packs] = Array.mapAccum(
       Array.flatten(volleys),
@@ -862,6 +878,40 @@ const peakEveryMs = (volleys: number, lagMs: number): number =>
     (ENDLESS_PEAK_MS - lagMs) / Math.max(1, volleys - 1),
   )
 
+const variedSizes = (size: number): Array.NonEmptyReadonlyArray<number> => [
+  size,
+  Math.max(1, size - 2),
+  size + 1,
+  Math.max(1, size - 1),
+  size + 2,
+]
+
+type Filling = Readonly<{ filled: number }>
+
+const packsOf = (
+  count: number,
+  sizes: Array.NonEmptyReadonlyArray<number>,
+): Array.NonEmptyReadonlyArray<number> => {
+  const [, taken] = Array.mapAccum(
+    Array.makeBy(Math.max(1, count), index => index),
+    { filled: 0 },
+    ({ filled }: Filling, index): readonly [Filling, number] => {
+      const size = Math.min(
+        Option.getOrElse(Array.get(sizes, index % sizes.length), () => 1),
+        count - filled,
+      )
+      return [{ filled: filled + Math.max(0, size) }, Math.max(0, size)]
+    },
+  )
+  return Array.match(
+    Array.filter(taken, size => size > 0),
+    {
+      onEmpty: () => [Math.max(1, count)],
+      onNonEmpty: packs => packs,
+    },
+  )
+}
+
 const endlessPeak = (
   cycle: EndlessCycle,
   count: number,
@@ -870,26 +920,25 @@ const endlessPeak = (
 ): SpawnGroup => {
   const startMs = cycle.startMs + ENDLESS_BUILD_MS
   if (cycle.peak === 'All') {
-    const size = Math.max(
-      ENDLESS_HORDE_PACK_MIN,
-      packSize - ENDLESS_HORDE_PACK_SHRINK,
-    )
-    const volleys = Math.ceil(count / (size * ALL_DOORS.length))
-    return hordes({
+    const packs = packsOf(
       count,
-      size,
+      variedSizes(
+        Math.max(ENDLESS_HORDE_PACK_MIN, packSize - ENDLESS_HORDE_PACK_SHRINK),
+      ),
+    )
+    const volleys = Math.ceil(packs.length / ALL_DOORS.length)
+    return hordes({
+      packs,
       mix,
       startMs,
       everyMs: peakEveryMs(volleys, 0),
     })
   } else {
-    const size = packSize + 1
-    const volleys = Math.ceil(count / (size * 2))
+    const packs = packsOf(count, variedSizes(packSize + 1))
+    const volleys = Math.ceil(packs.length / 2)
     return pincers({
-      count,
-      size,
+      packs,
       mix,
-      doors: ALL_DOORS,
       startMs,
       everyMs: peakEveryMs(volleys, PINCER_LAG_MAX_MS),
     })
@@ -902,15 +951,13 @@ const endlessCycleGroups = (
   mix: Array.NonEmptyReadonlyArray<KindWeight>,
 ): Array.NonEmptyReadonlyArray<SpawnGroup> => {
   const buildCount = Math.round(cycle.escorts * ENDLESS_BUILD_SHARE)
-  const buildVolleys = Math.max(1, Math.ceil(buildCount / packSize))
+  const buildPacks = packsOf(buildCount, variedSizes(packSize))
   const tankGroups: ReadonlyArray<SpawnGroup> =
     cycle.tanks > 0
       ? [
           pincers({
-            count: cycle.tanks,
-            size: 1,
+            packs: singles(cycle.tanks),
             mix: only('Tank'),
-            doors: ALL_DOORS,
             startMs: cycle.startMs + ENDLESS_BUILD_MS - ENDLESS_TANK_LEAD_MS,
             everyMs: ENDLESS_PEAK_EVERY_MAX_MS,
           }),
@@ -918,12 +965,11 @@ const endlessCycleGroups = (
       : []
   return [
     squads({
-      count: buildCount,
-      size: packSize,
+      packs: buildPacks,
       mix,
-      doors: cycle.buildDoors,
+      from: fromDoors(cycle.buildDoors),
       startMs: cycle.startMs,
-      everyMs: ENDLESS_BUILD_MS / buildVolleys,
+      everyMs: ENDLESS_BUILD_MS / buildPacks.length,
     }),
     ...tankGroups,
     endlessPeak(cycle, cycle.escorts - buildCount, packSize, mix),
@@ -1081,6 +1127,7 @@ const beginPreparation = (
       beat: Beat.Flowing(),
       warnedPacks: [],
       alarm: Alarm.Quiet(),
+      quietMs: 0,
     }),
     rngState: () => rngState,
   })
@@ -1289,6 +1336,7 @@ const advanceWave = (
       waiting: waitingCount(spawns, elapsedMs),
     },
     model.intensity,
+    spawns,
   )
   const clockMs = paced.clockMs
   const camped = delayCampedPacks(spawns, clockMs, worldMs, model.player)

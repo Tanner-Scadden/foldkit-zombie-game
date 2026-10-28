@@ -131,7 +131,7 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
   Peashooter: {
     name: 'Pea Shooter',
     roundsLabel: 'peas',
-    fireIntervalMs: 520,
+    fireIntervalMs: 1200,
     // NOTE: The Grumpy Gnome fires on its own cooldown and never reloads, so
     // nothing reads its magazine.
     magazine: 1,

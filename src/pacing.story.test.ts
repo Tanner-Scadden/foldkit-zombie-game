@@ -14,7 +14,9 @@ import {
   PINCER_LAG_MAX_MS,
   PINCER_LAG_MIN_MS,
   PLAYER_INVULNERABLE_MS,
+  QUIET_HURRY_MS,
   RELAX_EXTEND_MAX_MS,
+  RELAX_QUIET_MAX_MS,
 } from './constants'
 import { Message, update } from './main'
 import {
@@ -32,7 +34,14 @@ import {
   calmPacing,
   initialModel,
 } from './model'
-import { FINAL_WAVE, doorCounts, rollSpawns, rollWave } from './waves'
+import { asVeteran } from './veteran'
+import {
+  FINAL_WAVE,
+  debutKinds,
+  doorCounts,
+  rollSpawns,
+  rollWave,
+} from './waves'
 
 const FRAME_MS = 50
 
@@ -89,8 +98,16 @@ const waveModel = (
     zombies: () => zombies,
   })
 
+const LINGERER_ID = 499
+
+const lingerer = standingZombie(LINGERER_ID, 40, 150)
+
 const arrivedDoors = (current: Model): ReadonlyArray<DoorId> =>
-  Array.map(current.zombies, zombie => nearestDoor(zombie).id)
+  pipe(
+    current.zombies,
+    Array.filter(({ id }) => id !== LINGERER_ID),
+    Array.map(zombie => nearestDoor(zombie).id),
+  )
 
 const waveClock = (current: Model): number =>
   Phase.guards.Wave(current.phase) ? current.phase.elapsedMs : -1
@@ -106,6 +123,8 @@ const packsOf = (
   )
 
 const volleyOf = (pack: number): number => Math.floor(pack / 10)
+
+const GROUP_STRIDE = 1000
 
 const EVERY_DOOR: ReadonlyArray<DoorId> = ['East', 'North', 'South', 'West']
 
@@ -243,7 +262,11 @@ describe('telegraphs', () => {
     story(
       update,
       given(
-        waveModel([spawnAt(atMs, 'East', 1), spawnAt(atMs + 200, 'East', 1)]),
+        waveModel(
+          [spawnAt(atMs, 'East', 1), spawnAt(atMs + 200, 'East', 1)],
+          calmPacing,
+          [lingerer],
+        ),
       ),
       ...ticksFor(warnedAt - FRAME_MS),
       model(current => {
@@ -262,7 +285,7 @@ describe('telegraphs', () => {
           }),
         ])
         expect(current.pacing.warnedPacks).toEqual([1])
-        expect(current.zombies).toEqual([])
+        expect(arrivedDoors(current)).toEqual([])
       }),
       tick,
       model(current => {
@@ -359,9 +382,10 @@ describe('sawtooth', () => {
       story(
         update,
         given(
-          modifyFields(waveModel([spawnAt(100_000, 'North', 9)], resting), {
-            intensity: () => intensity,
-          }),
+          modifyFields(
+            waveModel([spawnAt(100_000, 'North', 9)], resting, [lingerer]),
+            { intensity: () => intensity },
+          ),
         ),
         ...Array.flatMap(ticksFor(8000), frame => [
           frame,
@@ -441,6 +465,84 @@ describe('mercy', () => {
   })
 })
 
+type Arrival = Readonly<{ kind: string; door: DoorId; atMs: number }>
+
+type Played = Readonly<{
+  spawns: ReadonlyArray<PlannedSpawn>
+  arrivals: ReadonlyArray<Arrival>
+  quietFrames: ReadonlyArray<boolean>
+}>
+
+const isAnnounced = (current: Model): boolean =>
+  Alarm.guards.Ringing(current.pacing.alarm) ||
+  (Phase.guards.Wave(current.phase) &&
+    Array.some(current.phase.spawns, ({ pack }) =>
+      Array.contains(current.pacing.warnedPacks, pack),
+    ))
+
+// NOTE: This plays a wave as a player who kills every zombie the moment it
+// walks in, the worst case for an empty room. A frame is quiet when the room
+// is empty and no warned pack waits at a door. The player has met every kind,
+// so a new zombie intro does not hold the wave clock.
+const playKillingEverything = (wave: number, seed: number): Played => {
+  const [rngState, rolled] = rollWave(seed, wave)
+  const preparing = modifyFields(asVeteran(waveModel([])), {
+    phase: () =>
+      Phase.Preparation({
+        wave,
+        remainingMs: 5000,
+        durationMs: 5000,
+        spawns: rolled.spawns,
+      }),
+    pacing: () => modifyFields(calmPacing, { holds: () => rolled.holds }),
+    rngState: () => rngState,
+  })
+  const started = update(preparing, Message.PressedKey({ code: 'Enter' })).model
+  const seen = new Map<number, Arrival>()
+  const quietFrames: Array<boolean> = []
+  Array.reduce(
+    Array.makeBy(6000, index => index + 1),
+    started,
+    (current, frame) => {
+      if (!Phase.guards.Wave(current.phase)) {
+        return current
+      }
+      const next = update(
+        current,
+        Message.TickedFrame({ deltaTime: FRAME_MS }),
+      ).model
+      Array.forEach(next.zombies, zombie => {
+        if (!seen.has(zombie.id)) {
+          seen.set(zombie.id, {
+            kind: zombie.kind,
+            door: nearestDoor(zombie).id,
+            atMs: frame * FRAME_MS,
+          })
+        }
+      })
+      if (Phase.guards.Wave(next.phase)) {
+        quietFrames.push(!isAnnounced(next))
+      }
+      return modifyFields(next, { zombies: () => [] })
+    },
+  )
+  return {
+    spawns: rolled.spawns,
+    arrivals: Array.fromIterable(seen.values()),
+    quietFrames,
+  }
+}
+
+const longestQuietMs = (quietFrames: ReadonlyArray<boolean>): number =>
+  Array.reduce(
+    quietFrames,
+    { run: 0, longest: 0 },
+    ({ run, longest }, quiet) => {
+      const next = quiet ? run + FRAME_MS : 0
+      return { run: next, longest: Math.max(longest, next) }
+    },
+  ).longest
+
 describe('determinism and the preview', () => {
   test('the same seed rolls the same packs, doors, and holds', () => {
     Array.forEach(
@@ -453,55 +555,6 @@ describe('determinism and the preview', () => {
       },
     )
   })
-
-  const playKillingEverything = (
-    wave: number,
-    seed: number,
-  ): Readonly<{
-    spawns: ReadonlyArray<PlannedSpawn>
-    arrivals: ReadonlyArray<Readonly<{ kind: string; door: DoorId }>>
-  }> => {
-    const [rngState, rolled] = rollWave(seed, wave)
-    const preparing = modifyFields(waveModel([]), {
-      phase: () =>
-        Phase.Preparation({
-          wave,
-          remainingMs: 5000,
-          durationMs: 5000,
-          spawns: rolled.spawns,
-        }),
-      pacing: () => modifyFields(calmPacing, { holds: () => rolled.holds }),
-      rngState: () => rngState,
-    })
-    const started = update(
-      preparing,
-      Message.PressedKey({ code: 'Enter' }),
-    ).model
-    const seen = new Map<number, Readonly<{ kind: string; door: DoorId }>>()
-    Array.reduce(
-      Array.makeBy(6000, () => FRAME_MS),
-      started,
-      (current, deltaTime) => {
-        if (!Phase.guards.Wave(current.phase)) {
-          return current
-        }
-        const next = update(current, Message.TickedFrame({ deltaTime })).model
-        Array.forEach(next.zombies, zombie => {
-          if (!seen.has(zombie.id)) {
-            seen.set(zombie.id, {
-              kind: zombie.kind,
-              door: nearestDoor(zombie).id,
-            })
-          }
-        })
-        return modifyFields(next, { zombies: () => [] })
-      },
-    )
-    return {
-      spawns: rolled.spawns,
-      arrivals: Array.fromIterable(seen.values()),
-    }
-  }
 
   test('the preview matches every zombie that comes out of each door', () => {
     Array.forEach([4, 6, FINAL_WAVE, FINAL_WAVE + 2], wave => {
@@ -524,5 +577,195 @@ describe('determinism and the preview', () => {
     const first = playKillingEverything(6, 777)
     const second = playKillingEverything(6, 777)
     expect(second).toEqual(first)
+  })
+})
+
+describe('dead air', () => {
+  const DEAD_AIR_MAX_MS = 3000
+  const SEEDS = Array.makeBy(12, index => 1 + index * 7919)
+
+  test("wave 2's first pack walks in within 2 seconds of the wave starting", () => {
+    Array.forEach(SEEDS, seed => {
+      const { arrivals } = playKillingEverything(2, seed)
+      const firstMs = Math.min(...Array.map(arrivals, ({ atMs }) => atMs))
+      expect(firstMs).toBeLessThanOrEqual(2000)
+    })
+  })
+
+  test('no wave leaves the room empty and unannounced for longer than a short relax', () => {
+    Array.forEach(
+      Array.makeBy(FINAL_WAVE + 2, index => index + 1),
+      wave => {
+        Array.forEach(Array.take(SEEDS, wave > FINAL_WAVE ? 1 : 5), seed => {
+          const { quietFrames } = playKillingEverything(wave, seed)
+          expect(longestQuietMs(quietFrames)).toBeLessThanOrEqual(
+            DEAD_AIR_MAX_MS,
+          )
+        })
+      },
+    )
+  }, 60_000)
+
+  test('an empty, quiet room pulls the next pack forward to its warning', () => {
+    const atMs = 10_000
+    story(
+      update,
+      given(waveModel([spawnAt(atMs, 'East', 1)])),
+      ...ticksFor(QUIET_HURRY_MS - FRAME_MS),
+      model(current => {
+        expect(current.pacing.warnedPacks).toEqual([])
+      }),
+      ...ticksFor(2 * FRAME_MS),
+      model(current => {
+        expect(current.pacing.warnedPacks).toEqual([1])
+        expect(waveClock(current)).toBeLessThan(atMs)
+      }),
+      ...ticksFor(PACK_WARNING_MS),
+      model(current => {
+        expect(arrivedDoors(current)).toEqual(['East'])
+      }),
+    )
+  })
+
+  test('a hurry never skips a hold', () => {
+    const holdAtMs = 4000
+    const holding: Pacing = modifyFields(calmPacing, {
+      holds: () => [
+        { atMs: holdAtMs, releaseBelow: FADE_RELEASE_BELOW, relaxMs: 20_000 },
+      ],
+    })
+    story(
+      update,
+      given(waveModel([spawnAt(holdAtMs + 3000, 'West', 2)], holding)),
+      ...ticksFor(QUIET_HURRY_MS + 2 * FRAME_MS),
+      model(current => {
+        expect(waveClock(current)).toBe(holdAtMs)
+        expect(current.pacing.warnedPacks).toEqual([])
+      }),
+    )
+  })
+
+  test('a relax in an empty, quiet room ends early, and one with a zombie left runs its course', () => {
+    const resting = modifyFields(calmPacing, {
+      beat: () => Beat.Resting({ remainingMs: 10_000, extendedMs: 0 }),
+    })
+    const restLength = (zombies: ReadonlyArray<Zombie>): number => {
+      const clocks: Array<number> = []
+      story(
+        update,
+        given(waveModel([spawnAt(100_000, 'North', 9)], resting, zombies)),
+        ...Array.flatMap(ticksFor(12_000), frame => [
+          frame,
+          model((current: Model) => {
+            clocks.push(waveClock(current))
+          }),
+        ]),
+      )
+      return Array.filter(clocks, clock => clock === 0).length * FRAME_MS
+    }
+    expect(restLength([])).toBeLessThanOrEqual(RELAX_QUIET_MAX_MS + FRAME_MS)
+    expect(restLength([lingerer])).toBeGreaterThanOrEqual(10_000 - FRAME_MS)
+  })
+})
+
+describe('spawn variety', () => {
+  const SEEDS = Array.makeBy(20, index => 3 + index * 104_729)
+  const CAMPAIGN = Array.makeBy(FINAL_WAVE - 1, index => index + 2)
+
+  const packSizes = (spawns: ReadonlyArray<PlannedSpawn>) =>
+    Array.map(packsOf(spawns), pack => pack.length)
+
+  const doorOrder = (seed: number, wave: number): string =>
+    Array.join(
+      Array.map(
+        packsOf(rollSpawns(seed, wave)[1]),
+        pack => Option.getOrThrow(Array.head(pack)).door,
+      ),
+      ' ',
+    )
+
+  test('pack sizes vary inside every wave from wave 2 on', () => {
+    Array.forEach(CAMPAIGN, wave => {
+      Array.forEach(Array.take(SEEDS, 5), seed => {
+        const [, spawns] = rollSpawns(seed, wave)
+        expect(new Set(packSizes(spawns)).size).toBeGreaterThanOrEqual(3)
+      })
+    })
+  })
+
+  test('the same seed rolls the same doors, and other seeds roll other door orders', () => {
+    Array.forEach(CAMPAIGN, wave => {
+      Array.forEach(SEEDS, seed => {
+        expect(doorOrder(seed, wave)).toBe(doorOrder(seed, wave))
+      })
+      const orders = new Set(Array.map(SEEDS, seed => doorOrder(seed, wave)))
+      expect(orders.size).toBeGreaterThanOrEqual(SEEDS.length - 2)
+    })
+  })
+
+  test('a debut comes alone and from one door per run, and that door changes between runs', () => {
+    Array.forEach([2, 4], wave => {
+      const debut = Option.getOrThrow(Array.head(debutKinds(wave)))
+      const debutDoors = Array.map(SEEDS, seed => {
+        const [, spawns] = rollSpawns(seed, wave)
+        const first = Option.getOrThrow(
+          Array.findFirst(spawns, ({ kind }) => kind === debut),
+        )
+        const debutGroup = Array.filter(
+          spawns,
+          ({ pack }) =>
+            Math.floor(pack / GROUP_STRIDE) ===
+            Math.floor(first.pack / GROUP_STRIDE),
+        )
+        expect(Array.every(debutGroup, ({ kind }) => kind === debut)).toBe(true)
+        expect(new Set(Array.map(debutGroup, ({ door }) => door)).size).toBe(1)
+        return first.door
+      })
+      expect(new Set(debutDoors).size).toBeGreaterThan(1)
+    })
+  })
+
+  test('later waves mix kinds inside a pack and send stragglers from several doors', () => {
+    Array.forEach(Array.take(SEEDS, 5), seed => {
+      const [, spawns] = rollSpawns(seed, 6)
+      const mixed = Array.filter(
+        packsOf(spawns),
+        pack => new Set(Array.map(pack, ({ kind }) => kind)).size > 1,
+      )
+      expect(Array.isReadonlyArrayNonEmpty(mixed)).toBe(true)
+      const [, third] = rollSpawns(seed, 3)
+      const strays = Array.filter(
+        third,
+        ({ formation }) => formation === 'Trickle',
+      )
+      expect(
+        new Set(Array.map(strays, ({ door }) => door)).size,
+      ).toBeGreaterThan(1)
+    })
+  })
+
+  test('the preview matches every zombie on every campaign wave for several seeds', () => {
+    Array.forEach(
+      Array.makeBy(FINAL_WAVE, index => index + 1),
+      wave => {
+        Array.forEach([11, 4242], seed => {
+          const { spawns, arrivals } = playKillingEverything(wave, seed)
+          expect(arrivals).toHaveLength(spawns.length)
+          Array.forEach(doorCounts(spawns), ({ door, kinds }) => {
+            const atDoor = Array.filter(
+              arrivals,
+              arrival => arrival.door === door,
+            )
+            expect(
+              Array.map(kinds, ({ kind }) => ({
+                kind,
+                count: Array.filter(atDoor, arrival => arrival.kind === kind)
+                  .length,
+              })),
+            ).toEqual(kinds)
+          })
+        })
+      },
+    )
   })
 })
