@@ -130,6 +130,8 @@ import {
   COUNT_SPRITES,
   GLYPH_HEIGHT,
   type TextTone,
+  bakeText,
+  placeBaked,
   textShapes,
   textWidth,
 } from './font'
@@ -141,6 +143,7 @@ import {
   Arsenal,
   type Blast,
   type Bullet,
+  DebutCard,
   type Decal,
   type DecalKind,
   type DoorId,
@@ -169,6 +172,12 @@ import {
   type ZombieKind,
   ZombieState,
 } from './model'
+import {
+  type GhostStick,
+  isDebutCardUp,
+  isPracticeGateHeld,
+  shownGhostSticks,
+} from './onboarding'
 import { rattlingDoors } from './pacing'
 import { FLOOR_COLOR, ROOM_SHAPES } from './room'
 import { overlayShapes, waveLabel } from './screens'
@@ -1616,16 +1625,26 @@ const hudText = (
 ): ReadonlyArray<Canvas.Shape> =>
   textShapes(content, tone, ARENA_WIDTH / 2, y, 'Center')
 
+const TRY_CONTROLS = bakeText('TRY THE CONTROLS FIRST', 'Prompt')
+
 const roundHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   Phase.match(model.phase, {
     Ready: () => [],
     Preparation: ({ wave, remainingMs }) => [
       ...hudText(HUD_TITLE_Y, waveLabel(model.mode, wave), 'Plain'),
-      ...hudText(
-        HUD_SUBTITLE_Y,
-        `STARTS IN ${secondsLeft(remainingMs)}`,
-        'Prompt',
-      ),
+      ...(isPracticeGateHeld(model)
+        ? [
+            placeBaked(TRY_CONTROLS, {
+              x: ARENA_WIDTH / 2,
+              y: HUD_SUBTITLE_Y,
+              align: 'Center',
+            }),
+          ]
+        : hudText(
+            HUD_SUBTITLE_Y,
+            `STARTS IN ${secondsLeft(remainingMs)}`,
+            'Prompt',
+          )),
     ],
     Wave: ({ wave, spawns }) => [
       ...hudText(HUD_TITLE_Y, waveLabel(model.mode, wave), 'Plain'),
@@ -1890,6 +1909,33 @@ const DOOR_MARKER_COUNT_X = 1
 const DOOR_MARKER_BACK_COLOR = 'rgba(8, 10, 12, 0.55)'
 const DOOR_MARKER_BACK_WIDTH = 24
 
+const NEW_TAG = bakeText('NEW', 'Fresh')
+const NEW_TAG_GAP = 2
+
+const NEW_TAG_PAD = 1
+
+const newTagTop = (outwardY: number, top: number, rows: number): number =>
+  outwardY < 0
+    ? top + rows * DOOR_MARKER_ROW_PX - DOOR_MARKER_ROW_PX / 2 + NEW_TAG_GAP
+    : top - DOOR_MARKER_ROW_PX / 2 - GLYPH_HEIGHT - NEW_TAG_GAP
+
+const newTagShapes = (
+  isNew: boolean,
+  y: number,
+): ReadonlyArray<Canvas.Shape> =>
+  isNew
+    ? [
+        Canvas.Rect({
+          x: -Math.ceil(NEW_TAG.width / 2) - NEW_TAG_PAD,
+          y: y - NEW_TAG_PAD,
+          width: NEW_TAG.width + NEW_TAG_PAD * 2 + 1,
+          height: GLYPH_HEIGHT + NEW_TAG_PAD * 2,
+          fill: DOOR_MARKER_BACK_COLOR,
+        }),
+        placeBaked(NEW_TAG, { x: 0, y, align: 'Center' }),
+      ]
+    : []
+
 const countShapes = (count: number): ReadonlyArray<Canvas.Shape> =>
   Option.match(Array.get(COUNT_SPRITES, count), {
     onNone: () => textShapes(`x${count}`, 'Kill', 0, -2, 'Left'),
@@ -1918,7 +1964,7 @@ const markerTop = (outwardY: number, rows: number): number => {
 }
 
 const doorMarkerShapes =
-  (elapsedMs: number) =>
+  (elapsedMs: number, debuts: ReadonlyArray<ZombieKind>) =>
   ({ door, kinds }: DoorCount): ReadonlyArray<Canvas.Shape> => {
     const { center, outward } = DOORS[door]
     const x = Math.round(center.x - outward.x * DOOR_MARKER_INSET)
@@ -1941,6 +1987,10 @@ const doorMarkerShapes =
             fill: DOOR_MARKER_BACK_COLOR,
           }),
           ...Array.flatMap(kinds, markerRowShapes(top)),
+          ...newTagShapes(
+            Array.some(kinds, ({ kind }) => Array.contains(debuts, kind)),
+            newTagTop(outward.y, top, kinds.length),
+          ),
         ],
       }),
     ]
@@ -1949,8 +1999,11 @@ const doorMarkerShapes =
 const wavePreviewShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   Phase.match(model.phase, {
     Ready: () => [],
-    Preparation: ({ spawns }) =>
-      Array.flatMap(doorCounts(spawns), doorMarkerShapes(model.elapsedMs)),
+    Preparation: ({ wave, spawns }) =>
+      Array.flatMap(
+        doorCounts(spawns),
+        doorMarkerShapes(model.elapsedMs, debutKinds(wave)),
+      ),
     Wave: () => [],
     Paused: () => [],
     Victory: () => [],
@@ -2260,6 +2313,31 @@ const statsLabel = (model: Model): string => {
   return `${waveStatsLabel(model)} Zombies munched back: ${totalKills(stats)} (${killLabel(stats)}). Run time ${runTimeLabel(stats)}. Accuracy ${accuracyPercent(stats)} percent. Money earned $${model.wallet.earned}. Hearts lost ${stats.heartsLost}. Traps placed ${stats.trapsPlaced}. Score ${model.score}.`
 }
 
+const toSentenceCase = (shouted: string): string =>
+  shouted
+    .toLowerCase()
+    .replace(
+      /(^|[.!?]\s+)([a-z])/g,
+      (_match, lead: string, letter: string) => lead + letter.toUpperCase(),
+    )
+
+export const debutPitch = (kind: ZombieKind): string =>
+  toSentenceCase(Array.join(ZOMBIE_KINDS[kind].pitch, ' '))
+
+const debutCardStatus = (model: Model): Option.Option<string> =>
+  DebutCard.match(model.debutCard, {
+    Hidden: () => Option.none(),
+    Showing: ({ kind }) =>
+      Option.some(
+        `New zombie: ${ZOMBIE_KINDS[kind].name}. ${debutPitch(kind)} Press Enter or Space, or choose Got it, to carry on.`,
+      ),
+  })
+
+const practiceGateNote = (model: Model): string =>
+  isPracticeGateHeld(model)
+    ? ' The wave waits until you try moving, aiming, and firing.'
+    : ''
+
 export const statusText = (model: Model): string => {
   if (isSideways(model)) {
     return 'Paused. Turn your phone sideways to play.'
@@ -2268,7 +2346,11 @@ export const statusText = (model: Model): string => {
   return Phase.match(model.phase, {
     Ready: () => `${GAME_TITLE}. ${PLAY_AGAIN}`,
     Preparation: ({ wave }) =>
-      `Get ready for ${statusWave(model, wave)}. Press Enter, or use the Start wave button, to start it now.${shopHint(model)}`,
+      Option.getOrElse(
+        debutCardStatus(model),
+        () =>
+          `Get ready for ${statusWave(model, wave)}. Press Enter, or use the Start wave button, to start it now.${practiceGateNote(model)}${shopHint(model)}`,
+      ),
     Wave: ({ wave }) => `Fighting ${statusWave(model, wave)}.`,
     Paused: ({ round }) =>
       `Paused during ${statusWave(model, round.wave)}. Tap, click, or press Enter to resume.`,
@@ -2318,7 +2400,7 @@ const swapTarget = (model: Model): Option.Option<string> =>
   )
 
 const swapButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
-  if (!isRoundActive(model.phase)) {
+  if (!isRoundActive(model.phase) || isDebutCardUp(model)) {
     return h.empty
   }
 
@@ -2341,7 +2423,9 @@ const swapButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
 }
 
 const reloadButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  isRoundActive(model.phase) && model.lastDevice === 'Touch'
+  isRoundActive(model.phase) &&
+  model.lastDevice === 'Touch' &&
+  !isDebutCardUp(model)
     ? h.button(
         [
           h.Type('button'),
@@ -2590,7 +2674,12 @@ const trapControlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
       ),
   })
 
-const preparationControlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const preparationControlsView = (
+  model: Model,
+  h: HtmlBuilder<Message>,
+): Html => (isDebutCardUp(model) ? h.empty : preparationButtonsView(model, h))
+
+const preparationButtonsView = (model: Model, h: HtmlBuilder<Message>): Html =>
   Phase.match(model.phase, {
     Ready: () => h.empty,
     Preparation: ({ wave, remainingMs, spawns }) =>
@@ -2708,6 +2797,79 @@ const modeChoiceView = (model: Model, h: HtmlBuilder<Message>): Html =>
           ),
       })
 
+const DEBUT_TITLE_ID = 'debut-title'
+const DEBUT_BODY_ID = 'debut-body'
+
+const debutCardButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.button(
+    [
+      h.Type('button'),
+      h.Class('debut-card-button'),
+      h.AriaKeyshortcuts('Enter Space'),
+      h.OnClick(Message.ClickedDebutCardButton(), {
+        focusSelector: '.game-surface',
+      }),
+    ],
+    [
+      'GOT IT',
+      ...(model.lastDevice === 'KeyboardMouse'
+        ? [h.span([h.Class('debut-card-key'), h.AriaHidden(true)], ['ENTER'])]
+        : []),
+    ],
+  )
+
+const debutCardView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isSideways(model) || !Phase.isAnyOf(['Preparation'])(model.phase)
+    ? h.empty
+    : DebutCard.match(model.debutCard, {
+        Hidden: () => h.empty,
+        Showing: ({ kind }) =>
+          h.div(
+            [
+              h.Class('debut-card'),
+              h.Role('dialog'),
+              h.AriaModal(true),
+              h.AriaLabelledBy(DEBUT_TITLE_ID),
+              h.AriaDescribedBy(DEBUT_BODY_ID),
+            ],
+            [
+              h.h2(
+                [h.Id(DEBUT_TITLE_ID), h.Class('sr-only')],
+                [`New zombie: ${ZOMBIE_KINDS[kind].name}`],
+              ),
+              h.p(
+                [h.Id(DEBUT_BODY_ID), h.Class('sr-only')],
+                [debutPitch(kind)],
+              ),
+              debutCardButtonView(model, h),
+            ],
+          ),
+      })
+
+const GHOST_LABELS: Readonly<Record<GhostStick, string>> = {
+  Move: 'MOVE',
+  Aim: 'AIM + FIRE',
+}
+
+const ghostSticksView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  Array.match(shownGhostSticks(model), {
+    onEmpty: () => h.empty,
+    onNonEmpty: ghosts =>
+      h.div(
+        [h.Class('ghost-sticks'), h.AriaHidden(true)],
+        Array.map(ghosts, ghost =>
+          h.keyed('div')(
+            ghost,
+            [h.Class('ghost-stick'), h.DataAttribute('ghost', ghost)],
+            [
+              h.div([h.Class('ghost-stick-thumb')]),
+              h.span([h.Class('ghost-stick-label')], [GHOST_LABELS[ghost]]),
+            ],
+          ),
+        ),
+      ),
+  })
+
 const ROTATE_TITLE_ID = 'rotate-title'
 const ROTATE_BODY_ID = 'rotate-body'
 
@@ -2756,6 +2918,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
         ],
         [
           gameStageView(model, h),
+          ghostSticksView(model, h),
           stickView(model.input.moveStick, 'move', h),
           stickView(model.input.aimStick, 'aim', h),
         ],
@@ -2763,6 +2926,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       loadoutView(model, h),
       preparationControlsView(model, h),
       gunButtonsView(model, h),
+      debutCardView(model, h),
       modeChoiceView(model, h),
       audioButtonsView(model, h),
       shopDialogView(model, h),

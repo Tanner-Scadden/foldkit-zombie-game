@@ -21,8 +21,10 @@ import {
   type Decal,
   type DecalKind,
 } from '@game/model'
+import { raiseDebutCard } from '@game/onboarding'
 import { view, sceneShapes } from '@game/view'
 import { rollSpawns, startOrResume } from '@game/waves'
+import { ZOMBIE_KIND_ORDER } from '@game/zombies'
 
 const params = new URLSearchParams(location.search)
 const num = (key: string, fallback: number) =>
@@ -195,6 +197,16 @@ const scenarioModel = (): Model => {
   }
   if (params.get('device') === 'touch')
     model = modifyFields(model, { lastDevice: () => 'Touch' as const })
+  const seen = params.get('seen')
+  if (seen !== null)
+    model = raiseDebutCard(
+      modifyFields(model, {
+        introducedKinds: () =>
+          seen === 'all'
+            ? ZOMBIE_KIND_ORDER
+            : (seen.split(',') as Array<(typeof ZOMBIE_KIND_ORDER)[number]>),
+      }),
+    )
   const phase = params.get('phase')
   if (phase === 'victory')
     model = modifyFields(model, {

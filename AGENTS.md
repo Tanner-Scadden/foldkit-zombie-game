@@ -34,7 +34,8 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | ------------------- | ------------------------------------------------------------- |
 | `src/model.ts`      | The Model and its Schema types                                |
 | `src/main.ts`       | Messages, `init`, `update`, Commands, and Subscriptions       |
-| `src/onboarding.ts` | Lessons the player has learned and the device-aware hints     |
+| `src/onboarding.ts` | Lessons, the practice gate, the new zombie card, and hints    |
+| `src/veteran.ts`    | A returning player's Model for tests and the balance bot      |
 | `src/stats.ts`      | Run stats: kills, accuracy, run time, and the verdicts        |
 | `src/simulation.ts` | The pure step that advances the game one frame                |
 | `src/arena.ts`      | The room's tile map, doorways, collision, and line of sight   |

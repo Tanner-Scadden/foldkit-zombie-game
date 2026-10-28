@@ -677,3 +677,138 @@ body {
   color: #c9d3c0;
   line-height: 1.5;
 }
+
+.debut-card {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.debut-card-button {
+  position: relative;
+  min-width: 160px;
+  min-height: 56px;
+  padding: 0 24px;
+  border: 3px solid #ff8a3d;
+  border-radius: 6px;
+  background: rgba(24, 14, 22, 0.94);
+  color: #ffe066;
+  font: bold 16px monospace;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  touch-action: manipulation;
+  pointer-events: auto;
+}
+
+.debut-card-button:hover {
+  background: rgba(60, 30, 20, 0.95);
+}
+
+.debut-card-button:focus-visible {
+  outline: 2px solid #9be36a;
+  outline-offset: 2px;
+}
+
+.debut-card-key {
+  position: absolute;
+  top: -9px;
+  right: 6px;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  background: #140c10;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.ghost-sticks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ghost-stick {
+  position: absolute;
+  bottom: 22%;
+  width: 112px;
+  height: 112px;
+  margin-left: -56px;
+  box-sizing: border-box;
+  border: 3px dashed rgba(244, 241, 222, 0.6);
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ghost-pulse 1.4s ease-in-out infinite;
+}
+
+.ghost-stick[data-ghost='Move'] {
+  left: 22%;
+}
+
+.ghost-stick[data-ghost='Aim'] {
+  left: 78%;
+  border-color: rgba(255, 224, 102, 0.75);
+}
+
+.ghost-stick-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  background: rgba(244, 241, 222, 0.4);
+  animation: ghost-drag 1.4s ease-in-out infinite;
+}
+
+.ghost-stick[data-ghost='Aim'] .ghost-stick-thumb {
+  background: rgba(255, 224, 102, 0.5);
+}
+
+.ghost-stick-label {
+  position: absolute;
+  top: 100%;
+  margin-top: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(8, 10, 12, 0.7);
+  color: #f4f1de;
+  font: bold 13px monospace;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.ghost-stick[data-ghost='Aim'] .ghost-stick-label {
+  color: #ffe066;
+}
+
+@keyframes ghost-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes ghost-drag {
+  0%,
+  20% {
+    transform: translate(0, 0);
+  }
+  60%,
+  80% {
+    transform: translate(26px, -14px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ghost-stick,
+  .ghost-stick-thumb {
+    animation: none;
+  }
+}

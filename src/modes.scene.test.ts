@@ -19,6 +19,7 @@ import { Dialog, Tabs } from '@foldkit/ui'
 import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { Message, update } from './main'
 import { Arsenal, type Model, Phase, RunMode, initialModel } from './model'
+import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
 
 const measureSurface = Mount.resolve(
@@ -43,7 +44,7 @@ describe('Mode choice', () => {
   test('the title offers Campaign and Endless, and the Endless button starts endless', () => {
     scene(
       { update, view },
-      given(initialModel),
+      given(asVeteran(initialModel)),
       measureSurface,
       expect(campaignButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
       expect(endlessButton).toHaveAttr('aria-keyshortcuts', 'E'),
@@ -60,7 +61,11 @@ describe('Mode choice', () => {
   test('the Campaign button starts the 8 wave campaign', () => {
     scene(
       { update, view },
-      given(modifyFields(initialModel, { mode: () => RunMode.Endless() })),
+      given(
+        modifyFields(asVeteran(initialModel), {
+          mode: () => RunMode.Endless(),
+        }),
+      ),
       measureSurface,
       click(campaignButton),
       expect(role('status')).toHaveText(
@@ -80,7 +85,7 @@ describe('Mode choice', () => {
   })
 
   test('Victory offers Keep going after the grace, and it carries on into wave 9', () => {
-    const victorious: Model = modifyFields(initialModel, {
+    const victorious: Model = modifyFields(asVeteran(initialModel), {
       phase: () => Phase.Victory(),
       wallet: () => ({ balance: 321, earned: 1900, shown: 321 }),
       player: player =>

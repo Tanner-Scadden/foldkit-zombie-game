@@ -61,6 +61,7 @@ export type Footfall = Readonly<{
 export type ZombieKindStats = Readonly<{
   name: string
   tagline: string
+  pitch: Readonly<[string, string]>
   speedMin: number
   speedMax: number
   hp: number
@@ -92,6 +93,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
   Shambler: {
     name: 'Groaner',
     tagline: 'SLOW AND HUNGRY',
+    pitch: ['SLOW, HUNGRY, AND NOT VERY BRIGHT.', 'BACK UP AND KEEP SHOOTING.'],
     speedMin: ZOMBIE_SPEED_MIN,
     speedMax: ZOMBIE_SPEED_MAX,
     hp: ZOMBIE_MAX_HP,
@@ -122,6 +124,10 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
   Runner: {
     name: 'Hotfoot',
     tagline: 'FAST BUT FLIMSY',
+    pitch: [
+      'ALL LEGS, NO BRAINS, MADE OF PAPER.',
+      'AIM EARLY. ONE GOOD SHOT DROPS IT.',
+    ],
     speedMin: 44,
     speedMax: 52,
     hp: 2,
@@ -158,6 +164,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
   Tank: {
     name: 'Big Lug',
     tagline: 'FOCUS FIRE ON HIM',
+    pitch: ['A WALL OF MEAT THAT WALKS.', 'KEEP MOVING AND POUR IT ON.'],
     speedMin: 11,
     speedMax: 14,
     hp: 30,
@@ -194,6 +201,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
   Exploder: {
     name: 'Gasbag',
     tagline: 'POPS. KEEP YOUR DISTANCE',
+    pitch: ['POPS WHEN IT DIES. KEEP YOUR DISTANCE,', 'OR POP IT IN A CROWD.'],
     speedMin: 20,
     speedMax: 25,
     hp: 3,

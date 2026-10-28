@@ -15,12 +15,23 @@ import {
   ZombieState,
   initialModel,
 } from './model'
-import { HINT_TEXT, type HintId, shownHints } from './onboarding'
+import {
+  DEBUT_CARD_MIN_MS,
+  HINT_TEXT,
+  type HintId,
+  LESSON_MIN_SHOWN_MS,
+  shownHints,
+} from './onboarding'
 import { accuracyPercent, totalKills } from './stats'
 import { ZOMBIE_KINDS } from './zombies'
 
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 const FRAME_MS = 16
+const TICK_MS = 50
+const CARD_TICKS = Math.ceil(DEBUT_CARD_MIN_MS / TICK_MS)
+const MOVE_TICKS = 10
+const SHOWN_TICKS = Math.ceil(LESSON_MIN_SHOWN_MS / TICK_MS)
+const FIRE_TICKS = 30
 
 const SURFACE_ARENA_X = (clientX: number): number =>
   Option.getOrThrow(clientToArena(SURFACE, { x: clientX, y: 200 })).x
@@ -119,10 +130,13 @@ describe('input device', () => {
 })
 
 describe('onboarding hints', () => {
-  test('keyboard hints teach moving and firing, then go once each is done', () => {
+  test('keyboard hints teach moving and firing, then go once each is practised', () => {
     story(
       update,
       given(readyModel),
+      press('Enter'),
+      release('Enter'),
+      ...ticks(CARD_TICKS, TICK_MS),
       press('Enter'),
       release('Enter'),
       model(current => {
@@ -133,14 +147,16 @@ describe('onboarding hints', () => {
         ])
       }),
       press('KeyD'),
-      tick(FRAME_MS),
+      ...ticks(MOVE_TICKS, TICK_MS),
       release('KeyD'),
+      ...ticks(SHOWN_TICKS, TICK_MS),
       model(current => {
         expect(hintIds(current)).toEqual(['Fire'])
       }),
-      press('Space'),
-      tick(FRAME_MS),
-      release('Space'),
+      message(Message.MovedMouse({ clientX: 700, clientY: 100 })),
+      mouseDown(700, 100),
+      ...ticks(FIRE_TICKS, TICK_MS),
+      message(Message.ReleasedPointer({ pointerId: 1 })),
       model(current => {
         expect(hintIds(current)).toEqual(['StartWave'])
         expect(hintTexts(current)).toEqual([
@@ -155,33 +171,38 @@ describe('onboarding hints', () => {
     )
   })
 
-  test('touch hints speak of thumbs and the START WAVE button', () => {
+  test('touch hints speak of both thumbs and the START WAVE button', () => {
     story(
       update,
       given(readyModel),
       touchDown(1, 700, 200),
       message(Message.ReleasedPointer({ pointerId: 1 })),
+      ...ticks(CARD_TICKS, TICK_MS),
+      message(Message.ClickedDebutCardButton()),
       model(current => {
         expect(current.lastDevice).toBe('Touch')
         expect(hintTexts(current)).toEqual([
-          'LEFT THUMB MOVES',
-          'RIGHT THUMB AIMS AND FIRES',
+          'DRAG YOUR LEFT THUMB TO MOVE',
+          'DRAG YOUR RIGHT THUMB TO AIM AND FIRE',
         ])
       }),
       touchDown(2, 100, 200),
       message(
         Message.MovedPointer({ pointerId: 2, clientX: 160, clientY: 200 }),
       ),
-      tick(FRAME_MS),
+      ...ticks(MOVE_TICKS, TICK_MS),
       message(Message.ReleasedPointer({ pointerId: 2 })),
+      ...ticks(SHOWN_TICKS, TICK_MS),
       model(current => {
-        expect(hintTexts(current)).toEqual(['RIGHT THUMB AIMS AND FIRES'])
+        expect(hintTexts(current)).toEqual([
+          'DRAG YOUR RIGHT THUMB TO AIM AND FIRE',
+        ])
       }),
       touchDown(3, 700, 200),
       message(
         Message.MovedPointer({ pointerId: 3, clientX: 760, clientY: 200 }),
       ),
-      tick(FRAME_MS),
+      ...ticks(FIRE_TICKS, TICK_MS),
       message(Message.ReleasedPointer({ pointerId: 3 })),
       model(current => {
         expect(hintTexts(current)).toEqual(['READY? TAP START WAVE'])

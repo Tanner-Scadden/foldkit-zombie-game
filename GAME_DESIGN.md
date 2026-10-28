@@ -42,9 +42,25 @@ Decided on 2026-10-27. The first playable is a fun one-screen arena that a stran
 - **Zombies.** Shambler, Runner, Tank, and Exploder.
 - **Traps.** One or two simple kinds, likely a barricade for doorways and a turret.
 - **Health.** A few hearts. A hit knocks the player back and gives a short invulnerable blink. Hearts are bought in the shop and rarely dropped.
-- **Onboarding.** Wave 1 is the tutorial. Control hints for the current device fade in, and the first zombies are a few slow Shamblers. No walls of text.
+- **Onboarding.** Wave 1 is the tutorial. Control hints for the current device fade in, and the first zombies are a few slow Shamblers. No walls of text. See "Onboarding" below for the practice gate and the new zombie card.
 - **Working title.** Munch Manor. It lives in `GAME_TITLE` in `src/constants.ts`, which builds the title screen logo, the document title, and the page heading. `index.html` repeats it for the first paint, and a Scene test checks the two agree.
 - **Sound.** Sound effects with an audio-unlock on the first input, and synthesized chiptune music that follows the run. See "Music" below.
+
+#### Onboarding
+
+Built on 2026-10-28 after a first-time phone player said the right stick was never taught, the tutorial was too easy to dismiss, and new zombies came in unexplained. The logic lives in `src/onboarding.ts`.
+
+- **Hints clear on practice, not on any input.** WASD MOVES clears once the player has walked 24 px of their own movement. MOUSE AIMS, CLICK FIRES clears after 3 shots fired while aiming, with the mouse or the right stick. A tap on the right half fires along the facing without aiming, so it does not count. Neither hint clears before it has been up for 2.5 seconds of play. Other keys, buttons, audio toggles, and mouse moves leave them alone.
+- **Touch teaches both thumbs.** The touch hints say DRAG YOUR LEFT THUMB TO MOVE and DRAG YOUR RIGHT THUMB TO AIM AND FIRE. During wave 1, pulsing ghost sticks labelled MOVE and AIM + FIRE sit on each half of the screen until that lesson is learned. A ghost hides while its thumb is down and comes back on release if the lesson is still pending, so the AIM + FIRE ghost stays until the player has really aimed with the right stick and fired.
+- **The practice gate.** Wave 1's 6 second countdown does not start until the player has learned to move and to aim and fire. The HUD says TRY THE CONTROLS FIRST, and START WAVE (Enter) skips the gate. R stays reload. A returning player who learned both earlier in the session never sees it.
+- **The new zombie card.** When Preparation begins for a wave holding a kind not yet introduced this session, a card shows the kind's walk cycle large, its name, and a two-line pitch. It is drawn on the canvas, with an HTML dialog behind it that carries the name and pitch for screen readers and a GOT IT button. While it is up the whole game is frozen, so the Preparation timer loses nothing. Only GOT IT, Enter, or Space put it away, and only after it has been up 0.7 seconds, so a fire key or a stray tap cannot skip it. Movement, the mouse, the sticks, and the other buttons do nothing to it. Escape still pauses. Each kind is introduced once per page session, in campaign or endless, and nothing is saved. The door preview tags a door with NEW when it brings a kind that debuts that wave.
+
+| Kind    | Card pitch                                                             |
+| ------- | ---------------------------------------------------------------------- |
+| Groaner | SLOW, HUNGRY, AND NOT VERY BRIGHT. BACK UP AND KEEP SHOOTING.          |
+| Hotfoot | ALL LEGS, NO BRAINS, MADE OF PAPER. AIM EARLY. ONE GOOD SHOT DROPS IT. |
+| Gasbag  | POPS WHEN IT DIES. KEEP YOUR DISTANCE, OR POP IT IN A CROWD.           |
+| Big Lug | A WALL OF MEAT THAT WALKS. KEEP MOVING AND POUR IT ON.                 |
 
 #### Music
 

@@ -1,4 +1,4 @@
-import { Option } from 'effect'
+import { Array, Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 import {
   Command,
@@ -23,6 +23,8 @@ import indexHtml from '../index.html?raw'
 import { GAME_TITLE, PREPARATION_MS } from './constants'
 import { FocusShopItem, Message, update } from './main'
 import { Arsenal, type Model, Phase, Reload, initialModel } from './model'
+import { DEBUT_CARD_MIN_MS } from './onboarding'
+import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
 
 const measureSurface = Mount.resolve(
@@ -45,7 +47,7 @@ describe('Ready screen', () => {
   test('invites the player to start and starts on a tap', () => {
     scene(
       { update, view },
-      given(initialModel),
+      given(asVeteran(initialModel)),
       measureSurface,
       expect(role('heading', { name: GAME_TITLE })).toExist(),
       expect(role('status')).toHaveText(READY_STATUS),
@@ -106,7 +108,7 @@ describe('Start wave button', () => {
     const startWaveButton = role('button', { name: 'Start wave 1 now' })
     scene(
       { update, view },
-      given(initialModel),
+      given(asVeteran(initialModel)),
       measureSurface,
       expect(startWaveButton).toBeAbsent(),
       pointerDown(role('application', { name: 'Game surface' }), {
@@ -549,6 +551,37 @@ describe('Title', () => {
       measureSurface,
       expect(selector(`[data-document-title="${GAME_TITLE}"]`)).toExist(),
       expect(role('heading', { name: GAME_TITLE })).toExist(),
+    )
+  })
+})
+
+const CARD_TICKS = Math.ceil(DEBUT_CARD_MIN_MS / 50)
+
+describe('New zombie card', () => {
+  test('reads out the new kind as a dialog and goes away on GOT IT', () => {
+    const gotIt = role('button', { name: 'GOT IT' })
+    const card = role('dialog', { name: 'New zombie: Groaner' })
+    scene(
+      { update, view },
+      given(modifyFields(initialModel, { lastDevice: () => 'Touch' })),
+      measureSurface,
+      click(role('button', { name: 'Campaign: 8 waves, then victory' })),
+      expect(card).toExist(),
+      expect(
+        text('Slow, hungry, and not very bright. Back up and keep shooting.'),
+      ).toExist(),
+      expect(role('button', { name: 'Start wave 1 now' })).toBeAbsent(),
+      expect(gotIt).toHaveAttr('aria-keyshortcuts', 'Enter Space'),
+      ...Array.makeBy(CARD_TICKS, () =>
+        Subscription.emit(Message.TickedFrame({ deltaTime: 50 })),
+      ),
+      click(gotIt),
+      expect(card).toBeAbsent(),
+      expect(role('status')).toHaveText(
+        'Get ready for wave 1 of 8. Press Enter, or use the Start wave button, to start it now. The wave waits until you try moving, aiming, and firing.',
+      ),
+      expect(selector('[data-ghost="Move"]')).toExist(),
+      expect(selector('[data-ghost="Aim"]')).toExist(),
     )
   })
 })

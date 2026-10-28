@@ -23,6 +23,7 @@ import {
 import { clamp } from './geometry'
 import {
   Alarm,
+  DebutCard,
   type HintBand,
   type InputDevice,
   type Model,
@@ -327,6 +328,97 @@ const waveBanner = (
         Option.some(HERE_THEY_COME),
       )
     : alarmBanner(model)
+
+// DEBUT CARD
+
+const CARD_LEFT = 62
+const CARD_RIGHT = ARENA_WIDTH - CARD_LEFT
+const CARD_TOP = 14
+const CARD_BOTTOM = 128
+const CARD_FILL = 'rgba(24, 14, 22, 0.94)'
+const CARD_EDGE = '#ff8a3d'
+const CARD_HEADING_Y = CARD_TOP + 6
+const CARD_FEET_Y = 74
+const CARD_SPRITE_HEIGHT = 40
+const CARD_STRIDE_MS = 170
+const CARD_HOP_MS = 320
+const CARD_HOP_PX = 10
+const CARD_SHADOW = 'rgba(0, 0, 0, 0.45)'
+const CARD_NAME_Y = 82
+const CARD_PITCH_Y = 102
+const CARD_PITCH_ROW_PX = 10
+
+const NEW_ZOMBIE = bakeText('NEW ZOMBIE!', 'Fresh')
+
+type CardText = Readonly<{
+  name: BakedText
+  pitch: ReadonlyArray<BakedText>
+}>
+
+const CARD_TEXTS: Readonly<Record<ZombieKind, CardText>> = Record.map(
+  ZOMBIE_KINDS,
+  stats => ({
+    name: bakeText(String.toUpperCase(stats.name), 'Title'),
+    pitch: Array.map(stats.pitch, line => bakeText(line, 'Plain')),
+  }),
+)
+
+const cardSpriteScale = (kind: ZombieKind): number =>
+  Math.max(2, Math.floor(CARD_SPRITE_HEIGHT / ZOMBIE_SPRITES[kind].height))
+
+const cardHop = (ageMs: number): number =>
+  ageMs < CARD_HOP_MS
+    ? Math.round(CARD_HOP_PX * Math.sin((Math.PI * ageMs) / CARD_HOP_MS))
+    : 0
+
+const debutCardShapes = (
+  kind: ZombieKind,
+  ageMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const { name, pitch } = CARD_TEXTS[kind]
+  const scale = cardSpriteScale(kind)
+  const stride = Math.floor(ageMs / CARD_STRIDE_MS)
+  return [
+    DIM_BACKDROP,
+    Canvas.Rect({
+      x: CARD_LEFT - 1,
+      y: CARD_TOP - 1,
+      width: CARD_RIGHT - CARD_LEFT + 2,
+      height: CARD_BOTTOM - CARD_TOP + 2,
+      fill: CARD_EDGE,
+    }),
+    Canvas.Rect({
+      x: CARD_LEFT,
+      y: CARD_TOP,
+      width: CARD_RIGHT - CARD_LEFT,
+      height: CARD_BOTTOM - CARD_TOP,
+      fill: CARD_FILL,
+    }),
+    centered(NEW_ZOMBIE, CARD_HEADING_Y, 1, isBlinkOn(ageMs) ? 1 : 0.6),
+    Canvas.Rect({
+      x: CENTER_X - 4 * scale,
+      y: CARD_FEET_Y - scale,
+      width: 8 * scale,
+      height: 2 * scale,
+      fill: CARD_SHADOW,
+    }),
+    group({
+      translate: { x: CENTER_X, y: CARD_FEET_Y - cardHop(ageMs) },
+      scale: { x: scale, y: scale },
+      shapes: frameAt(ZOMBIE_SPRITES[kind].walk, stride).Normal.Right,
+    }),
+    centered(name, CARD_NAME_Y, TITLE_SCALE),
+    ...Array.map(pitch, (line, index) =>
+      centered(line, CARD_PITCH_Y + index * CARD_PITCH_ROW_PX),
+    ),
+  ]
+}
+
+const debutCardOverlay = (model: Model): ReadonlyArray<Canvas.Shape> =>
+  DebutCard.match(model.debutCard, {
+    Hidden: () => [],
+    Showing: ({ kind, ageMs }) => debutCardShapes(kind, ageMs),
+  })
 
 // LOGO
 
@@ -815,6 +907,7 @@ export const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
     Preparation: ({ wave, remainingMs, durationMs }) => [
       ...preparationBanner(model, wave, durationMs - remainingMs),
       ...hintShapes(model),
+      ...debutCardOverlay(model),
     ],
     Wave: ({ wave, elapsedMs }) => [
       ...waveBanner(model, wave, elapsedMs),

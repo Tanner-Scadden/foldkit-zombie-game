@@ -39,6 +39,7 @@ import {
   affordableCount,
   totalAffordable,
 } from './shop'
+import { asVeteran } from './veteran'
 import { FINAL_WAVE, waveBonus } from './waves'
 import {
   UPGRADE_TIERS,
@@ -54,7 +55,7 @@ const PLAYER_Y = 90
 const BESIDE_STALL = { x: 252, y: 142 }
 const FRAMES_TO_STALL = 3
 
-const readyModel: Model = modifyFields(initialModel, {
+const readyModel: Model = modifyFields(asVeteran(initialModel), {
   maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
 })
 

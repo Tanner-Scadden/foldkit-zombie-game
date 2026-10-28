@@ -60,6 +60,7 @@ import {
   ZombieState,
   initialModel,
 } from './model'
+import { asVeteran } from './veteran'
 
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 const LEFT_THUMB = 11
@@ -67,7 +68,7 @@ const RIGHT_THUMB = 12
 const STRAY_POINTER = 99
 const MOUSE_POINTER = 1
 
-const readyModel: Model = modifyFields(initialModel, {
+const readyModel: Model = modifyFields(asVeteran(initialModel), {
   maybeSurface: () => Option.some(SURFACE),
 })
 

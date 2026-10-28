@@ -15,6 +15,7 @@ Object.assign(globalThis, {
 
 const { Message, update } = await import('../../src/main')
 const { initialModel } = await import('../../src/model')
+const { asVeteran } = await import('../../src/veteran')
 const { THRESHOLDS, boxCenter, hasLineOfSight } =
   await import('../../src/arena')
 const { STALL_BOX, isShopOpenFor, priceFor, verdictFor } =
@@ -418,7 +419,7 @@ const runOnce = (seed: number): RunResult => {
   const hurtBy = emptyHurt()
   const moneyAfterWave: Array<number> = []
   const ready = send(
-    modifyFields(initialModel, { rngState: () => seed }),
+    modifyFields(asVeteran(initialModel), { rngState: () => seed }),
     Message.MeasuredGameSurface(SURFACE),
   )
   let model = tapKey(ready, IS_ENDLESS ? 'KeyE' : 'Enter')

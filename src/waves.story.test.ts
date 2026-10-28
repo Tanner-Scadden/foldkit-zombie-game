@@ -22,6 +22,7 @@ import {
   ZombieState,
   initialModel,
 } from './model'
+import { asVeteran } from './veteran'
 import {
   FINAL_WAVE,
   type SpawnGroup,
@@ -34,7 +35,7 @@ import { ZOMBIE_KINDS } from './zombies'
 const FRAME_MS = 50
 const MUZZLE_X = ARENA_WIDTH / 2 + 10
 
-const readyModel: Model = modifyFields(initialModel, {
+const readyModel: Model = modifyFields(asVeteran(initialModel), {
   maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
 })
 

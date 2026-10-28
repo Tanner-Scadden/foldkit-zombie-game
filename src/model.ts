@@ -532,6 +532,18 @@ export const Lessons = Schema.Struct({
 })
 export type Lessons = typeof Lessons.Type
 
+export const Practice = Schema.Struct({
+  movedPx: Schema.Number,
+  aimedShots: Schema.Number,
+})
+export type Practice = typeof Practice.Type
+
+export const DebutCard = defineTaggedUnion({
+  Hidden: {},
+  Showing: { kind: ZombieKind, ageMs: Schema.Number },
+})
+export type DebutCard = typeof DebutCard.Type
+
 export const HintBand = Schema.Literals(['Top', 'Bottom'])
 export type HintBand = typeof HintBand.Type
 
@@ -595,6 +607,9 @@ export const Model = Schema.Struct({
   touchControls: TouchControls,
   orientation: Orientation,
   lessons: Lessons,
+  practice: Practice,
+  debutCard: DebutCard,
+  introducedKinds: Schema.Array(ZombieKind),
   hintBand: HintBand,
   stats: RunStats,
   screenMs: Schema.Number,
@@ -651,6 +666,8 @@ export const freshLessons: Lessons = {
   shop: Lesson.Pending(),
   swap: Lesson.Pending(),
 }
+
+export const noPractice: Practice = { movedPx: 0, aimedShots: 0 }
 
 export const noKills: KillCounts = {
   Shambler: 0,
@@ -721,6 +738,9 @@ export const initialModel: Model = {
   touchControls: 'Allowed',
   orientation: 'Landscape',
   lessons: freshLessons,
+  practice: noPractice,
+  debutCard: DebutCard.Hidden(),
+  introducedKinds: [],
   hintBand: 'Top',
   stats: freshStats,
   screenMs: 0,

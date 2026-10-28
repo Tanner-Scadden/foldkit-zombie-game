@@ -15,6 +15,7 @@ import {
   initialModel,
 } from './model'
 import type { MusicMood } from './music'
+import { asVeteran } from './veteran'
 import { FINAL_WAVE } from './waves'
 
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
@@ -31,7 +32,7 @@ const FAR_AWAY_SPAWN: PlannedSpawn = {
 }
 
 const titleScreen = (audio: AudioState): Model =>
-  modifyFields(initialModel, {
+  modifyFields(asVeteran(initialModel), {
     maybeSurface: () => Option.some(SURFACE),
     audio: () => audio,
   })

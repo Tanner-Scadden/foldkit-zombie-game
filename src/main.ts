@@ -81,6 +81,9 @@ import {
 } from './model'
 import { MusicLevel, MusicMood, MusicStinger } from './music'
 import {
+  ageDebutCard,
+  dismissDebutCard,
+  isDebutCardUp,
   learnFromFrame,
   learnShop,
   learnStartWave,
@@ -166,6 +169,7 @@ export const Message = defineMessageUnion({
   ClickedEndlessButton: {},
   ClickedKeepGoingButton: {},
   ClickedStartWaveButton: {},
+  ClickedDebutCardButton: {},
   ClickedSwapButton: {},
   ClickedReloadButton: {},
   ClickedPlaceTrapButton: {},
@@ -435,7 +439,11 @@ const WEAPON_CHOICES: Readonly<
 }
 
 const chooseWeapon = (model: Model, choice: WeaponChoice): Model => {
-  if (!isRoundActive(model.phase) || isBrowsing(model.shop)) {
+  if (
+    !isRoundActive(model.phase) ||
+    isBrowsing(model.shop) ||
+    isDebutCardUp(model)
+  ) {
     return model
   }
 
@@ -455,6 +463,21 @@ const weaponFromKey = (model: Model, code: string): Model =>
 
 const changedWeapon = (before: Model, after: Model): boolean =>
   heldWeapon(before.player.arsenal) !== heldWeapon(after.player.arsenal)
+
+const isPreparing = Phase.isAnyOf(['Preparation'])
+
+const isDebutCardBlocking = (model: Model): boolean =>
+  isPreparing(model.phase) && isDebutCardUp(model)
+
+const debutCardFromKey = (model: Model, code: string): Model => {
+  if (isStartKey(code)) {
+    return dismissDebutCard(model)
+  } else if (isPauseKey(code)) {
+    return pause(model)
+  } else {
+    return model
+  }
+}
 
 const phaseFromKey = (model: Model, code: string): Model =>
   Phase.match(model.phase, {
@@ -854,9 +877,12 @@ const isFreshRun = (model: Model): boolean =>
 const updateGame = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
     TickedFrame: ({ deltaTime }) => {
-      if (isRoundActive(model.phase)) {
+      if (isDebutCardBlocking(model)) {
+        return { model: ageDebutCard(model, clampFrameDelta(deltaTime)) }
+      } else if (isRoundActive(model.phase)) {
         const advanced = moveHintBand(
           learnFromFrame(
+            model,
             tallyFrame(
               model,
               advanceGame(model, deltaTime),
@@ -888,6 +914,15 @@ const updateGame = (model: Model, message: Message) =>
         return unlockAudio(
           withInput(toggleAudioFromKey(keyed, code), input =>
             pressKey(input, code),
+          ),
+        )
+      }
+
+      if (isDebutCardBlocking(keyed)) {
+        return unlockAudio(
+          withInput(
+            toggleAudioFromKey(debutCardFromKey(keyed, code), code),
+            input => pressKey(input, code),
           ),
         )
       }
@@ -1002,7 +1037,7 @@ const updateGame = (model: Model, message: Message) =>
       startFromButton(model, keepGoingWhenAllowed(model)),
 
     ClickedStartWaveButton: () =>
-      isBrowsing(model.shop)
+      isBrowsing(model.shop) || isDebutCardBlocking(model)
         ? { model }
         : unlockAudio(learnStartWaveWhen(model, startWaveEarly(model))),
 
@@ -1018,15 +1053,22 @@ const updateGame = (model: Model, message: Message) =>
     },
 
     ClickedReloadButton: () =>
-      Update.combine(model, [unlockAudio, reloadHeldGun]),
+      isDebutCardBlocking(model)
+        ? { model }
+        : Update.combine(model, [unlockAudio, reloadHeldGun]),
+
+    ClickedDebutCardButton: () =>
+      isDebutCardBlocking(model)
+        ? unlockAudio(dismissDebutCard(model))
+        : { model },
 
     ClickedPlaceTrapButton: () =>
-      isBrowsing(model.shop)
+      isBrowsing(model.shop) || isDebutCardBlocking(model)
         ? { model }
         : Update.combine(model, [unlockAudio, placeSelectedTrap]),
 
     ClickedNextTrapButton: () =>
-      isBrowsing(model.shop)
+      isBrowsing(model.shop) || isDebutCardBlocking(model)
         ? { model }
         : Update.combine(model, [unlockAudio, nextTrap]),
 

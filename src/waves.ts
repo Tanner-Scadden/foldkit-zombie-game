@@ -53,7 +53,7 @@ import {
   initialPlayer,
   stillShake,
 } from './model'
-import { settleLessons } from './onboarding'
+import { isPracticeGateHeld, raiseDebutCard, settleLessons } from './onboarding'
 import {
   aliveCount,
   delayCampedPacks,
@@ -1066,17 +1066,24 @@ const beginPreparation = (
   durationMs: number,
 ): Model => {
   const [rngState, { spawns, holds }] = rollWave(model.rngState, wave)
-  return modifyFields(model, {
-    phase: () =>
-      Phase.Preparation({ wave, remainingMs: durationMs, durationMs, spawns }),
-    pacing: () => ({
-      holds,
-      beat: Beat.Flowing(),
-      warnedPacks: [],
-      alarm: Alarm.Quiet(),
+  return raiseDebutCard(
+    modifyFields(model, {
+      phase: () =>
+        Phase.Preparation({
+          wave,
+          remainingMs: durationMs,
+          durationMs,
+          spawns,
+        }),
+      pacing: () => ({
+        holds,
+        beat: Beat.Flowing(),
+        warnedPacks: [],
+        alarm: Alarm.Quiet(),
+      }),
+      rngState: () => rngState,
     }),
-    rngState: () => rngState,
-  })
+  )
 }
 
 const startRun = (model: Model, mode: RunMode): Model =>
@@ -1305,7 +1312,7 @@ export const advanceRound = (model: Model, worldMs: number): Model =>
   Phase.match(model.phase, {
     Ready: () => model,
     Preparation: preparation =>
-      ShopState.isAnyOf(['Browsing'])(model.shop)
+      ShopState.isAnyOf(['Browsing'])(model.shop) || isPracticeGateHeld(model)
         ? model
         : preparation.remainingMs > worldMs
           ? modifyFields(model, {
