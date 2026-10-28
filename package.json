@@ -1,0 +1,38 @@
+{
+  "name": "foldkit-zombie-game",
+  "license": "MIT",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "effect-tsgo tsrs --noEmit",
+    "format": "oxfmt",
+    "test": "vitest run",
+    "lint": "oxlint src && effect-tsgo oxlint --config .oxlintrc.effect.json --deny-warnings src"
+  },
+  "dependencies": {
+    "@effect/platform-browser": "4.0.0",
+    "@foldkit/ui": "0.169.0",
+    "effect": "4.0.0",
+    "foldkit": "0.169.0"
+  },
+  "devDependencies": {
+    "@effect/tsgo": "0.62.0",
+    "@foldkit/devtools": "0.169.0",
+    "@foldkit/devtools-mcp": "0.25.0",
+    "@foldkit/oxlint-plugin": "0.15.3",
+    "@foldkit/vite-plugin": "0.28.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "happy-dom": "^20.14.5",
+    "oxfmt": "^0.66.0",
+    "oxlint": "1.89.0",
+    "oxlint-tsgolint": "7.0.2005",
+    "tailwindcss": "^4.3.3",
+    "tsrs": "0.20.0-ts7.1.0-beta",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}
