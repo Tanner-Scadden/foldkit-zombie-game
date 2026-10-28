@@ -1,4 +1,4 @@
-import { Array, Option, String, pipe } from 'effect'
+import { Array, Option, Record, String, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
 type Palette = Readonly<Record<string, string>>
@@ -94,27 +94,40 @@ const spriteWidth = (pixels: ReadonlyArray<string>): number =>
     Array.reduce(0, Math.max),
   )
 
+type Anchor = Readonly<{ x: number; y: number }>
+
+const centerAnchor = (pixels: ReadonlyArray<string>): Anchor => ({
+  x: Math.floor(spriteWidth(pixels) / 2),
+  y: Math.floor(pixels.length / 2),
+})
+
 export const spriteShapes = (
   pixels: ReadonlyArray<string>,
   palette: Palette,
-): ReadonlyArray<Canvas.Shape> => {
-  const anchorX = Math.floor(spriteWidth(pixels) / 2)
-  const anchorY = Math.floor(pixels.length / 2)
-  return Array.map(pixelRuns(pixels, palette), run =>
+  anchor: Anchor = centerAnchor(pixels),
+): ReadonlyArray<Canvas.Shape> =>
+  Array.map(pixelRuns(pixels, palette), run =>
     Canvas.Rect({
-      x: run.x - anchorX,
-      y: run.y - anchorY,
+      x: run.x - anchor.x,
+      y: run.y - anchor.y,
       width: run.width,
       height: run.height,
       fill: run.color,
     }),
   )
-}
 
 const mirrorRows = (pixels: ReadonlyArray<string>): ReadonlyArray<string> =>
   Array.map(pixels, row =>
     pipe(String.split(row, ''), Array.reverse, Array.join('')),
   )
+
+const padRow = (row: string, left: number, right: number): string =>
+  `${TRANSPARENT.repeat(left)}${row}${TRANSPARENT.repeat(right)}`
+
+const FLASH_COLOR = '#ffffff'
+
+const flashPalette = (palette: Palette): Palette =>
+  Record.map(palette, () => FLASH_COLOR)
 
 // PIXEL MAPS
 
@@ -129,17 +142,84 @@ const PLAYER_PALETTE: Palette = {
   G: '#9aa3ad',
 }
 
-const PLAYER_PIXELS: ReadonlyArray<string> = [
+const PLAYER_WIDTH = 8
+const PLAYER_BLANK_ROW = padRow('', PLAYER_WIDTH, 0)
+
+const PLAYER_HEAD: ReadonlyArray<string> = [
   '..HHHH..',
   '.HHHHHH.',
   '.HSSSSH.',
   '.SESSES.',
   '..SSSS..',
+]
+
+const PLAYER_TORSO_HAND_UP: ReadonlyArray<string> = [
+  'SBBDDBB.',
+  '.BBDDBBG',
+  '.BBBBBBG',
+]
+
+const PLAYER_TORSO_HAND_MIDDLE: ReadonlyArray<string> = [
   '.BBDDBB.',
   'SBBDDBBG',
   '.BBBBBBG',
-  '.LL..LL.',
-  '.KK..KK.',
+]
+
+const PLAYER_TORSO_HAND_DOWN: ReadonlyArray<string> = [
+  '.BBDDBB.',
+  '.BBDDBBG',
+  'SBBBBBBG',
+]
+
+const PLAYER_TORSO_EXHALE: ReadonlyArray<string> = ['SBBDDBBG', '.BBBBBBG']
+
+const PLAYER_LEGS_STAND: ReadonlyArray<string> = ['.LL..LL.', '.KK..KK.']
+
+const PLAYER_LEGS_STRIDE: ReadonlyArray<string> = ['.LL..LL.', 'KK....KK']
+
+const PLAYER_LEGS_PASS_FRONT: ReadonlyArray<string> = [
+  '..LLLL..',
+  '..LL.KK.',
+  '..KK....',
+]
+
+const PLAYER_LEGS_PASS_BACK: ReadonlyArray<string> = [
+  '..LLLL..',
+  '.KK.LL..',
+  '....KK..',
+]
+
+const PLAYER_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
+  [
+    PLAYER_BLANK_ROW,
+    ...PLAYER_HEAD,
+    ...PLAYER_TORSO_HAND_DOWN,
+    ...PLAYER_LEGS_STRIDE,
+  ],
+  [...PLAYER_HEAD, ...PLAYER_TORSO_HAND_MIDDLE, ...PLAYER_LEGS_PASS_FRONT],
+  [
+    PLAYER_BLANK_ROW,
+    ...PLAYER_HEAD,
+    ...PLAYER_TORSO_HAND_UP,
+    ...PLAYER_LEGS_STRIDE,
+  ],
+  [...PLAYER_HEAD, ...PLAYER_TORSO_HAND_MIDDLE, ...PLAYER_LEGS_PASS_BACK],
+]
+
+const PLAYER_IDLE_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
+  [
+    PLAYER_BLANK_ROW,
+    ...PLAYER_HEAD,
+    ...PLAYER_TORSO_HAND_MIDDLE,
+    ...PLAYER_LEGS_STAND,
+  ],
+  [
+    PLAYER_BLANK_ROW,
+    PLAYER_BLANK_ROW,
+    ...PLAYER_HEAD,
+    ...PLAYER_TORSO_EXHALE,
+    ...PLAYER_LEGS_STAND,
+  ],
 ]
 
 const ZOMBIE_PALETTE: Palette = {
@@ -153,27 +233,59 @@ const ZOMBIE_PALETTE: Palette = {
   P: '#3b3a46',
 }
 
-const ZOMBIE_UPPER_PIXELS: ReadonlyArray<string> = [
-  '..GGGG..',
-  '.GFGGGG.',
-  '.GRGGRG.',
-  '.GGMMGG.',
-  '..GFGG..',
-  '.TTTTTT.',
-  'GTUTTDTG',
-  '.TTTUTT.',
+const ZOMBIE_SWAY_ROOM = 1
+const ZOMBIE_BODY_WIDTH = 8
+
+const ZOMBIE_UPPER_ARMS_HIGH: ReadonlyArray<string> = [
+  '..GGGG....',
+  '.GFGGGG...',
+  '.GRGGRG...',
+  '.GGMMGG...',
+  '..GFGG....',
+  '.TTTTTTGGG',
+  '.TUTTDTT..',
+  '.TTTUTTGG.',
 ]
 
-const ZOMBIE_STEP_PIXELS: ReadonlyArray<string> = [
-  ...ZOMBIE_UPPER_PIXELS,
-  '.PP..PP.',
-  '.PP..PP.',
+const ZOMBIE_UPPER_ARMS_LOW: ReadonlyArray<string> = [
+  '..GGGG....',
+  '.GFGGGG...',
+  '.GRGGRG...',
+  '.GGMMGG...',
+  '..GFGG....',
+  '.TTTTTTT..',
+  '.TUTTDTGGG',
+  '.TTTUTTTGG',
 ]
 
-const ZOMBIE_STRIDE_PIXELS: ReadonlyArray<string> = [
-  ...ZOMBIE_UPPER_PIXELS,
-  '..PP.PP.',
-  '..PP..PP',
+const ZOMBIE_LEGS_PLANTED: ReadonlyArray<string> = [
+  '..PP..PP....',
+  '..PP..PP....',
+]
+
+const ZOMBIE_LEGS_FRONT_DRAG: ReadonlyArray<string> = [
+  '...PP.PP....',
+  '...PP..PP...',
+]
+
+const ZOMBIE_LEGS_BACK_DRAG: ReadonlyArray<string> = [
+  '..PP.PP.....',
+  '.PP..PP.....',
+]
+
+const swayRows = (
+  rows: ReadonlyArray<string>,
+  sway: number,
+): ReadonlyArray<string> =>
+  Array.map(rows, row =>
+    padRow(row, ZOMBIE_SWAY_ROOM + sway, ZOMBIE_SWAY_ROOM - sway),
+  )
+
+const ZOMBIE_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
+  [...swayRows(ZOMBIE_UPPER_ARMS_HIGH, 0), ...ZOMBIE_LEGS_PLANTED],
+  [...swayRows(ZOMBIE_UPPER_ARMS_LOW, 1), ...ZOMBIE_LEGS_FRONT_DRAG],
+  [...swayRows(ZOMBIE_UPPER_ARMS_HIGH, 0), ...ZOMBIE_LEGS_PLANTED],
+  [...swayRows(ZOMBIE_UPPER_ARMS_LOW, -1), ...ZOMBIE_LEGS_BACK_DRAG],
 ]
 
 const HEART_PALETTE: Palette = { R: '#e8333a', W: '#ff8a8f' }
@@ -188,30 +300,75 @@ const HEART_PIXELS: ReadonlyArray<string> = [
   '...R...',
 ]
 
-export type Facing = 'Left' | 'Right'
-export type Gait = 'Step' | 'Stride'
+// SPRITES
 
-type Sprite = ReadonlyArray<Canvas.Shape>
+export type Facing = 'Left' | 'Right'
+export type Tone = 'Normal' | 'Flash'
+
+export type Sprite = ReadonlyArray<Canvas.Shape>
+export type SpriteSet = Readonly<Record<Tone, Readonly<Record<Facing, Sprite>>>>
+export type SpriteFrames = Array.NonEmptyReadonlyArray<SpriteSet>
+
+const footAnchor = (pixels: ReadonlyArray<string>, x: number): Anchor => ({
+  x,
+  y: pixels.length,
+})
 
 const facingSprites = (
   pixels: ReadonlyArray<string>,
   palette: Palette,
+  anchorX: number,
 ): Readonly<Record<Facing, Sprite>> => ({
-  Right: spriteShapes(pixels, palette),
-  Left: spriteShapes(mirrorRows(pixels), palette),
+  Right: spriteShapes(pixels, palette, footAnchor(pixels, anchorX)),
+  Left: spriteShapes(
+    mirrorRows(pixels),
+    palette,
+    footAnchor(pixels, spriteWidth(pixels) - anchorX),
+  ),
 })
 
-export const PLAYER_SPRITES = facingSprites(PLAYER_PIXELS, PLAYER_PALETTE)
+const spriteSet =
+  (palette: Palette, anchorX: number) =>
+  (pixels: ReadonlyArray<string>): SpriteSet => ({
+    Normal: facingSprites(pixels, palette, anchorX),
+    Flash: facingSprites(pixels, flashPalette(palette), anchorX),
+  })
 
-export const ZOMBIE_SPRITES: Readonly<
-  Record<Gait, Readonly<Record<Facing, Sprite>>>
-> = {
-  Step: facingSprites(ZOMBIE_STEP_PIXELS, ZOMBIE_PALETTE),
-  Stride: facingSprites(ZOMBIE_STRIDE_PIXELS, ZOMBIE_PALETTE),
-}
+const spriteFrames = (
+  framePixels: Array.NonEmptyReadonlyArray<ReadonlyArray<string>>,
+  palette: Palette,
+  anchorX: number,
+): SpriteFrames => Array.map(framePixels, spriteSet(palette, anchorX))
+
+export const frameAt = (frames: SpriteFrames, frameIndex: number): SpriteSet =>
+  Option.getOrElse(Array.get(frames, frameIndex % frames.length), () =>
+    Array.headNonEmpty(frames),
+  )
+
+export const PLAYER_WALK_FRAMES = spriteFrames(
+  PLAYER_WALK_PIXELS,
+  PLAYER_PALETTE,
+  PLAYER_WIDTH / 2,
+)
+
+export const PLAYER_IDLE_FRAMES = spriteFrames(
+  PLAYER_IDLE_PIXELS,
+  PLAYER_PALETTE,
+  PLAYER_WIDTH / 2,
+)
+
+export const ZOMBIE_WALK_FRAMES = spriteFrames(
+  ZOMBIE_WALK_PIXELS,
+  ZOMBIE_PALETTE,
+  ZOMBIE_SWAY_ROOM + ZOMBIE_BODY_WIDTH / 2,
+)
 
 export const HEART_SPRITE = spriteShapes(HEART_PIXELS, HEART_PALETTE)
 export const EMPTY_HEART_SPRITE = spriteShapes(
   HEART_PIXELS,
   EMPTY_HEART_PALETTE,
+)
+export const FLASH_HEART_SPRITE = spriteShapes(
+  HEART_PIXELS,
+  flashPalette(HEART_PALETTE),
 )

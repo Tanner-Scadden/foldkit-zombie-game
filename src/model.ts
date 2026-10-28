@@ -60,20 +60,39 @@ export const Intent = Schema.Struct({
 })
 export type Intent = typeof Intent.Type
 
+export const Invulnerability = defineTaggedUnion({
+  Vulnerable: {},
+  Invulnerable: { remainingMs: Schema.Number },
+})
+export type Invulnerability = typeof Invulnerability.Type
+
 export const Player = Schema.Struct({
   x: Schema.Number,
   y: Schema.Number,
   hp: Schema.Number,
   facing: Vector,
   fireCooldownMs: Schema.Number,
+  knockback: Vector,
+  invulnerability: Invulnerability,
+  recoilRemainingMs: Schema.Number,
 })
 export type Player = typeof Player.Type
+
+export const ZombieState = defineTaggedUnion({
+  Walking: {},
+  Dying: { remainingMs: Schema.Number, direction: Vector },
+})
+export type ZombieState = typeof ZombieState.Type
 
 export const Zombie = Schema.Struct({
   id: Schema.Number,
   x: Schema.Number,
   y: Schema.Number,
   speed: Schema.Number,
+  hp: Schema.Number,
+  knockback: Vector,
+  hitRemainingMs: Schema.Number,
+  state: ZombieState,
 })
 export type Zombie = typeof Zombie.Type
 
@@ -86,6 +105,14 @@ export const Bullet = Schema.Struct({
   remainingMs: Schema.Number,
 })
 export type Bullet = typeof Bullet.Type
+
+export const GameEvent = defineTaggedUnion({
+  Fired: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  ZombieHit: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  ZombieKilled: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  PlayerHurt: { x: Schema.Number, y: Schema.Number, direction: Vector },
+})
+export type GameEvent = typeof GameEvent.Type
 
 export const Phase = defineTaggedUnion({
   Ready: {},
@@ -103,6 +130,7 @@ export const Model = Schema.Struct({
   nextEntityId: Schema.Number,
   score: Schema.Number,
   elapsedMs: Schema.Number,
+  frameEvents: Schema.Array(GameEvent),
   spawnCooldownMs: Schema.Number,
   rngState: Schema.Number,
   input: Input,
@@ -117,6 +145,9 @@ export const initialPlayer: Player = {
   hp: PLAYER_MAX_HP,
   facing: { x: 1, y: 0 },
   fireCooldownMs: 0,
+  knockback: { x: 0, y: 0 },
+  invulnerability: Invulnerability.Vulnerable(),
+  recoilRemainingMs: 0,
 }
 
 export const idleInput: Input = {
@@ -141,6 +172,7 @@ export const initialModel: Model = {
   nextEntityId: 0,
   score: 0,
   elapsedMs: 0,
+  frameEvents: [],
   spawnCooldownMs: FIRST_SPAWN_DELAY_MS,
   rngState: DEFAULT_SEED,
   input: idleInput,

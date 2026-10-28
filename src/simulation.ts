@@ -9,15 +9,27 @@ import {
   BULLET_SPEED,
   FIRE_INTERVAL_MS,
   FIRST_SPAWN_DELAY_MS,
+  KNOCKBACK_REST_SPEED,
   MAX_FRAME_DELTA_MS,
   MS_PER_SECOND,
   MUZZLE_DISTANCE,
+  PISTOL_DAMAGE,
+  PLAYER_INVULNERABLE_MS,
+  PLAYER_KNOCKBACK_DECAY_PER_SECOND,
+  PLAYER_KNOCKBACK_SPEED,
   PLAYER_RADIUS,
+  PLAYER_RECOIL_MS,
   PLAYER_SPEED,
   SCORE_PER_ZOMBIE,
   SPAWN_INTERVAL_DECAY_MS_PER_SECOND,
   SPAWN_INTERVAL_MIN_MS,
   SPAWN_INTERVAL_START_MS,
+  ZOMBIE_BUMP_SPEED,
+  ZOMBIE_DYING_MS,
+  ZOMBIE_HIT_PULSE_MS,
+  ZOMBIE_KNOCKBACK_DECAY_PER_SECOND,
+  ZOMBIE_KNOCKBACK_SPEED,
+  ZOMBIE_MAX_HP,
   ZOMBIE_RADIUS,
   ZOMBIE_SPAWN_MARGIN,
   ZOMBIE_SPEED_GROWTH_MAX,
@@ -25,15 +37,27 @@ import {
   ZOMBIE_SPEED_MAX,
   ZOMBIE_SPEED_MIN,
 } from './constants'
-import { circlesOverlap, clamp, directionBetween, normalize } from './geometry'
+import {
+  ZERO_VECTOR,
+  addVectors,
+  circlesOverlap,
+  clamp,
+  directionBetween,
+  normalize,
+  scaleVector,
+  vectorLength,
+} from './geometry'
 import { deriveIntent } from './input'
 import {
   type Bullet,
+  GameEvent,
+  Invulnerability,
   type Model,
   Phase,
   type Player,
   type Vector,
   type Zombie,
+  ZombieState,
   initialPlayer,
 } from './model'
 import { nextRandom } from './prng'
@@ -54,6 +78,7 @@ const startRound = (model: Model): Model =>
       bullets: () => [],
       score: () => 0,
       elapsedMs: () => 0,
+      frameEvents: () => [],
       spawnCooldownMs: () => FIRST_SPAWN_DELAY_MS,
     }),
   )
@@ -71,23 +96,65 @@ export const pause = (model: Model): Model =>
     ? modifyFields(model, { phase: () => Phase.Paused() })
     : model
 
+// TIMERS
+
+const countDown = (remainingMs: number, deltaMs: number): number =>
+  Math.max(0, remainingMs - deltaMs)
+
+const decayKnockback = (
+  knockback: Vector,
+  decayPerSecond: number,
+  seconds: number,
+): Vector => {
+  const decayed = scaleVector(knockback, Math.exp(-decayPerSecond * seconds))
+  if (vectorLength(decayed) < KNOCKBACK_REST_SPEED) {
+    return ZERO_VECTOR
+  } else {
+    return decayed
+  }
+}
+
 // PLAYER
 
-const movePlayer = (player: Player, move: Vector, seconds: number): Player =>
-  modifyFields(player, {
+const tickInvulnerability = (
+  invulnerability: Invulnerability,
+  deltaMs: number,
+): Invulnerability =>
+  Invulnerability.match(invulnerability, {
+    Vulnerable: () => invulnerability,
+    Invulnerable: ({ remainingMs }) =>
+      remainingMs > deltaMs
+        ? Invulnerability.Invulnerable({ remainingMs: remainingMs - deltaMs })
+        : Invulnerability.Vulnerable(),
+  })
+
+const movePlayer = (
+  player: Player,
+  move: Vector,
+  seconds: number,
+  deltaMs: number,
+): Player => {
+  const velocity = addVectors(scaleVector(move, PLAYER_SPEED), player.knockback)
+  return modifyFields(player, {
     x: x =>
       clamp(
-        x + move.x * PLAYER_SPEED * seconds,
+        x + velocity.x * seconds,
         PLAYER_RADIUS,
         ARENA_WIDTH - PLAYER_RADIUS,
       ),
     y: y =>
       clamp(
-        y + move.y * PLAYER_SPEED * seconds,
+        y + velocity.y * seconds,
         PLAYER_RADIUS,
         ARENA_HEIGHT - PLAYER_RADIUS,
       ),
+    knockback: knockback =>
+      decayKnockback(knockback, PLAYER_KNOCKBACK_DECAY_PER_SECOND, seconds),
+    invulnerability: invulnerability =>
+      tickInvulnerability(invulnerability, deltaMs),
+    recoilRemainingMs: remainingMs => countDown(remainingMs, deltaMs),
   })
+}
 
 const faceTowardIntent = (model: Model): Model =>
   modifyFields(model, {
@@ -130,13 +197,18 @@ const fire = (model: Model, deltaMs: number): Model => {
   const isTriggerHeld = intent.trigger === 'Held'
 
   if (isTriggerHeld && player.fireCooldownMs <= 0) {
+    const bullet = makeBullet(nextEntityId, player)
     return modifyFields(model, {
-      bullets: Array.append(makeBullet(nextEntityId, player)),
+      bullets: Array.append(bullet),
       nextEntityId: id => id + 1,
       player: () =>
         modifyFields(player, {
           fireCooldownMs: cooldown => cooldown + FIRE_INTERVAL_MS - deltaMs,
+          recoilRemainingMs: () => PLAYER_RECOIL_MS,
         }),
+      frameEvents: Array.append(
+        GameEvent.Fired({ x: bullet.x, y: bullet.y, direction: player.facing }),
+      ),
     })
   } else {
     return modifyFields(model, {
@@ -176,35 +248,140 @@ const advanceBullets = (
 
 // ZOMBIES
 
-const chase =
-  (target: Vector, seconds: number) =>
-  (zombie: Zombie): Zombie =>
-    Option.match(directionBetween(zombie, target), {
-      onNone: () => zombie,
-      onSome: direction =>
-        modifyFields(zombie, {
-          x: x => x + direction.x * zombie.speed * seconds,
-          y: y => y + direction.y * zombie.speed * seconds,
-        }),
-    })
+const isWalking = (zombie: Zombie): boolean =>
+  ZombieState.guards.Walking(zombie.state)
 
-type BulletHit = Readonly<{ bulletId: number; zombieId: number }>
+const isFinishedDying = (zombie: Zombie): boolean =>
+  ZombieState.match(zombie.state, {
+    Walking: () => false,
+    Dying: ({ remainingMs }) => remainingMs <= 0,
+  })
+
+const chaseVelocity = (zombie: Zombie, target: Vector): Vector =>
+  ZombieState.match(zombie.state, {
+    Walking: () =>
+      Option.match(directionBetween(zombie, target), {
+        onNone: () => ZERO_VECTOR,
+        onSome: direction => scaleVector(direction, zombie.speed),
+      }),
+    Dying: () => ZERO_VECTOR,
+  })
+
+const tickZombieState = (state: ZombieState, deltaMs: number): ZombieState =>
+  ZombieState.match(state, {
+    Walking: () => state,
+    Dying: ({ remainingMs, direction }) =>
+      ZombieState.Dying({ remainingMs: remainingMs - deltaMs, direction }),
+  })
+
+const advanceZombie =
+  (target: Vector, seconds: number, deltaMs: number) =>
+  (zombie: Zombie): Zombie => {
+    const velocity = addVectors(chaseVelocity(zombie, target), zombie.knockback)
+    return modifyFields(zombie, {
+      x: x => x + velocity.x * seconds,
+      y: y => y + velocity.y * seconds,
+      knockback: knockback =>
+        decayKnockback(knockback, ZOMBIE_KNOCKBACK_DECAY_PER_SECOND, seconds),
+      hitRemainingMs: remainingMs => countDown(remainingMs, deltaMs),
+      state: state => tickZombieState(state, deltaMs),
+    })
+  }
+
+const advanceZombies = (
+  zombies: ReadonlyArray<Zombie>,
+  target: Vector,
+  seconds: number,
+  deltaMs: number,
+): ReadonlyArray<Zombie> =>
+  pipe(
+    zombies,
+    Array.map(advanceZombie(target, seconds, deltaMs)),
+    Array.filter(zombie => !isFinishedDying(zombie)),
+  )
+
+type BulletHit = Readonly<{
+  bulletId: number
+  zombieId: number
+  x: number
+  y: number
+  direction: Vector
+}>
+
+const bulletDirection = (bullet: Bullet): Vector =>
+  Option.getOrElse(
+    normalize({ x: bullet.velocityX, y: bullet.velocityY }),
+    () => ZERO_VECTOR,
+  )
 
 const findBulletHits = (
   bullets: ReadonlyArray<Bullet>,
   zombies: ReadonlyArray<Zombie>,
-): ReadonlyArray<BulletHit> =>
-  Array.getSomes(
+): ReadonlyArray<BulletHit> => {
+  const targets = Array.filter(zombies, isWalking)
+  return Array.getSomes(
     Array.map(bullets, bullet =>
       pipe(
-        zombies,
+        targets,
         Array.findFirst(zombie =>
           circlesOverlap(bullet, BULLET_RADIUS, zombie, ZOMBIE_RADIUS),
         ),
-        Option.map(zombie => ({ bulletId: bullet.id, zombieId: zombie.id })),
+        Option.map(zombie => ({
+          bulletId: bullet.id,
+          zombieId: zombie.id,
+          x: bullet.x,
+          y: bullet.y,
+          direction: bulletDirection(bullet),
+        })),
       ),
     ),
   )
+}
+
+const strikeZombie = (
+  zombie: Zombie,
+  damage: number,
+  direction: Vector,
+): Zombie => {
+  const hp = Math.max(0, zombie.hp - damage)
+  return modifyFields(zombie, {
+    hp: () => hp,
+    knockback: () => scaleVector(direction, ZOMBIE_KNOCKBACK_SPEED),
+    hitRemainingMs: () => ZOMBIE_HIT_PULSE_MS,
+    state: state =>
+      hp > 0
+        ? state
+        : ZombieState.Dying({ remainingMs: ZOMBIE_DYING_MS, direction }),
+  })
+}
+
+const applyHits =
+  (hits: ReadonlyArray<BulletHit>) =>
+  (zombie: Zombie): Zombie => {
+    const zombieHits = Array.filter(hits, hit => hit.zombieId === zombie.id)
+    return Option.match(Array.last(zombieHits), {
+      onNone: () => zombie,
+      onSome: lastHit =>
+        strikeZombie(
+          zombie,
+          zombieHits.length * PISTOL_DAMAGE,
+          lastHit.direction,
+        ),
+    })
+  }
+
+const hitEvent = ({ x, y, direction }: BulletHit): GameEvent =>
+  GameEvent.ZombieHit({ x, y, direction })
+
+const killEvent = (zombie: Zombie): GameEvent =>
+  GameEvent.ZombieKilled({
+    x: zombie.x,
+    y: zombie.y,
+    direction: ZombieState.match(zombie.state, {
+      Walking: () => ZERO_VECTOR,
+      Dying: ({ direction }) => direction,
+    }),
+  })
 
 const resolveBulletHits = (model: Model): Model => {
   const hits = findBulletHits(model.bullets, model.zombies)
@@ -214,27 +391,66 @@ const resolveBulletHits = (model: Model): Model => {
 
   const hitBulletIds = Array.map(hits, ({ bulletId }) => bulletId)
   const hitZombieIds = Array.dedupe(Array.map(hits, ({ zombieId }) => zombieId))
+  const zombies = Array.map(model.zombies, applyHits(hits))
+  const killedZombies = Array.filter(
+    zombies,
+    zombie => zombie.hp <= 0 && Array.contains(hitZombieIds, zombie.id),
+  )
   return modifyFields(model, {
     bullets: Array.filter(({ id }) => !Array.contains(hitBulletIds, id)),
-    zombies: Array.filter(({ id }) => !Array.contains(hitZombieIds, id)),
-    score: score => score + hitZombieIds.length * SCORE_PER_ZOMBIE,
+    zombies: () => zombies,
+    score: score => score + killedZombies.length * SCORE_PER_ZOMBIE,
+    frameEvents: frameEvents => [
+      ...frameEvents,
+      ...Array.map(hits, hitEvent),
+      ...Array.map(killedZombies, killEvent),
+    ],
+  })
+}
+
+const bumpAttacker =
+  (attackerId: number, direction: Vector) =>
+  (zombie: Zombie): Zombie =>
+    zombie.id === attackerId
+      ? modifyFields(zombie, {
+          knockback: () => scaleVector(direction, -ZOMBIE_BUMP_SPEED),
+        })
+      : zombie
+
+const hurtPlayer = (model: Model, attacker: Zombie): Model => {
+  const { player } = model
+  const direction = Option.getOrElse(directionBetween(attacker, player), () =>
+    scaleVector(player.facing, -1),
+  )
+  return modifyFields(model, {
+    player: () =>
+      modifyFields(player, {
+        hp: hp => Math.max(0, hp - 1),
+        knockback: () => scaleVector(direction, PLAYER_KNOCKBACK_SPEED),
+        invulnerability: () =>
+          Invulnerability.Invulnerable({ remainingMs: PLAYER_INVULNERABLE_MS }),
+      }),
+    zombies: Array.map(bumpAttacker(attacker.id, direction)),
+    frameEvents: Array.append(
+      GameEvent.PlayerHurt({ x: player.x, y: player.y, direction }),
+    ),
   })
 }
 
 const resolvePlayerContact = (model: Model): Model => {
-  const isTouchingPlayer = (zombie: Zombie): boolean =>
-    circlesOverlap(zombie, ZOMBIE_RADIUS, model.player, PLAYER_RADIUS)
-  const touchingZombies = Array.filter(model.zombies, isTouchingPlayer)
-  if (Array.isArrayEmpty(touchingZombies)) {
+  if (Invulnerability.guards.Invulnerable(model.player.invulnerability)) {
     return model
   }
 
-  return modifyFields(model, {
-    zombies: Array.filter(zombie => !isTouchingPlayer(zombie)),
-    player: player =>
-      modifyFields(player, {
-        hp: hp => Math.max(0, hp - touchingZombies.length),
-      }),
+  const maybeAttacker = Array.findFirst(
+    model.zombies,
+    zombie =>
+      isWalking(zombie) &&
+      circlesOverlap(zombie, ZOMBIE_RADIUS, model.player, PLAYER_RADIUS),
+  )
+  return Option.match(maybeAttacker, {
+    onNone: () => model,
+    onSome: attacker => hurtPlayer(model, attacker),
   })
 }
 
@@ -287,6 +503,10 @@ const spawnZombie = (model: Model): Model => {
       ZOMBIE_SPEED_MIN +
       (ZOMBIE_SPEED_MAX - ZOMBIE_SPEED_MIN) * speedDraw.value +
       speedBonus(model.elapsedMs),
+    hp: ZOMBIE_MAX_HP,
+    knockback: ZERO_VECTOR,
+    hitRemainingMs: 0,
+    state: ZombieState.Walking(),
   }
 
   return modifyFields(model, {
@@ -324,8 +544,9 @@ export const advanceGame = (model: Model, deltaTime: number): Model => {
 
   const moved = refreshIntent(
     modifyFields(model, {
-      player: player => movePlayer(player, model.intent.move, seconds),
+      player: player => movePlayer(player, model.intent.move, seconds, deltaMs),
       elapsedMs: elapsedMs => elapsedMs + deltaMs,
+      frameEvents: () => [],
     }),
   )
 
@@ -333,7 +554,7 @@ export const advanceGame = (model: Model, deltaTime: number): Model => {
 
   const advanced = modifyFields(armed, {
     bullets: bullets => advanceBullets(bullets, seconds, deltaMs),
-    zombies: Array.map(chase(armed.player, seconds)),
+    zombies: zombies => advanceZombies(zombies, armed.player, seconds, deltaMs),
   })
 
   return pipe(

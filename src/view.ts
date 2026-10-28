@@ -5,29 +5,69 @@ import { Document, Html, HtmlBuilder } from 'foldkit/html'
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
+  HEART_FLASH_MS,
+  HEART_PULSE_GROWTH,
+  HEART_PULSE_MS,
+  HEART_SHAKE_CYCLES,
+  HEART_SHAKE_PX,
+  MS_PER_SECOND,
   MUZZLE_DISTANCE,
+  PLAYER_BLINK_MS,
+  PLAYER_BLINK_OPACITY,
+  PLAYER_BREATH_FRAME_MS,
+  PLAYER_FOOT_OFFSET,
+  PLAYER_HURT_FLASH_MS,
+  PLAYER_HURT_PULSE_MS,
+  PLAYER_HURT_SQUASH,
+  PLAYER_INVULNERABLE_MS,
   PLAYER_MAX_HP,
+  PLAYER_RECOIL_KICK_PX,
+  PLAYER_RECOIL_MS,
+  PLAYER_RECOIL_SQUASH,
+  PLAYER_WALK_FRAME_MS,
   STICK_RADIUS_PX,
+  ZOMBIE_DEATH_FADE_START,
+  ZOMBIE_DEATH_FALL_END,
+  ZOMBIE_DEATH_LANDING_END,
+  ZOMBIE_DEATH_LANDING_SQUASH,
+  ZOMBIE_DEATH_POP_END,
+  ZOMBIE_DEATH_POP_PINCH,
+  ZOMBIE_DEATH_POP_STRETCH,
+  ZOMBIE_DYING_MS,
+  ZOMBIE_FOOT_OFFSET,
+  ZOMBIE_HIT_FLASH_MS,
+  ZOMBIE_HIT_PULSE_MS,
+  ZOMBIE_HIT_SQUASH,
+  ZOMBIE_SHAMBLE_PHASE_PER_ID,
+  ZOMBIE_SHAMBLE_PX_PER_FRAME,
 } from './constants'
+import { clamp, vectorLength } from './geometry'
 import { thumbOffset } from './input'
 import { Message } from './main'
 import {
   type Bullet,
+  Invulnerability,
   type Model,
   Phase,
   type Player,
   type PointerDevice,
   Stick,
+  type Vector,
   type Zombie,
+  ZombieState,
 } from './model'
 import { nextRandom } from './prng'
 import {
   EMPTY_HEART_SPRITE,
+  FLASH_HEART_SPRITE,
   type Facing,
-  type Gait,
   HEART_SPRITE,
-  PLAYER_SPRITES,
-  ZOMBIE_SPRITES,
+  PLAYER_IDLE_FRAMES,
+  PLAYER_WALK_FRAMES,
+  type SpriteSet,
+  type Tone,
+  ZOMBIE_WALK_FRAMES,
+  frameAt,
 } from './sprite'
 
 // MOUNT
@@ -73,8 +113,6 @@ const BULLET_SIZE = 2
 const BULLET_COLOR = '#ffe066'
 const MUZZLE_SIZE = 2
 const MUZZLE_COLOR = '#d9dde3'
-const ZOMBIE_GAIT_PERIOD_MS = 220
-const ZOMBIE_GAIT_PHASE_PER_ID = 137
 const HEART_SPACING = 9
 const HUD_MARGIN = 5
 const HUD_FONT = 'bold 8px monospace'
@@ -135,51 +173,246 @@ const bulletShape = ({ x, y }: Bullet): Canvas.Shape =>
     fill: BULLET_COLOR,
   })
 
-const zombieGait = (zombie: Zombie, elapsedMs: number): Gait => {
-  const stepIndex = Math.floor(
-    (elapsedMs + zombie.id * ZOMBIE_GAIT_PHASE_PER_ID) / ZOMBIE_GAIT_PERIOD_MS,
-  )
-  return stepIndex % 2 === 0 ? 'Step' : 'Stride'
+const UNIT_SCALE: Vector = { x: 1, y: 1 }
+const QUARTER_TURN = Math.PI / 2
+const FULL_TURN = Math.PI * 2
+
+const footPosition = (position: Vector, footOffset: number): Vector => ({
+  x: Math.round(position.x),
+  y: Math.round(position.y) + footOffset,
+})
+
+const multiplyScales = (first: Vector, second: Vector): Vector => ({
+  x: first.x * second.x,
+  y: first.y * second.y,
+})
+
+const squashPulse = (
+  remainingMs: number,
+  durationMs: number,
+  strength: number,
+): Vector => {
+  if (remainingMs <= 0) {
+    return UNIT_SCALE
+  }
+
+  const remaining = remainingMs / durationMs
+  const amount = strength * remaining * Math.cos(FULL_TURN * (1 - remaining))
+  return { x: 1 + amount, y: 1 - amount }
 }
+
+const progressBetween = (progress: number, start: number, end: number) =>
+  clamp((progress - start) / (end - start), 0, 1)
 
 const facingToward = (fromX: number, toX: number): Facing =>
   toX < fromX ? 'Left' : 'Right'
 
+const zombieFrameIndex = (zombie: Zombie, elapsedMs: number): number =>
+  Math.floor(
+    ((elapsedMs / MS_PER_SECOND) * zombie.speed) / ZOMBIE_SHAMBLE_PX_PER_FRAME +
+      zombie.id * ZOMBIE_SHAMBLE_PHASE_PER_ID,
+  )
+
+const zombieHitTone = (hitRemainingMs: number): Tone =>
+  hitRemainingMs > 0 &&
+  ZOMBIE_HIT_PULSE_MS - hitRemainingMs < ZOMBIE_HIT_FLASH_MS
+    ? 'Flash'
+    : 'Normal'
+
+const walkingZombieShape = (
+  zombie: Zombie,
+  player: Player,
+  elapsedMs: number,
+): Canvas.Shape =>
+  Canvas.Group({
+    translate: footPosition(zombie, ZOMBIE_FOOT_OFFSET),
+    scale: squashPulse(
+      zombie.hitRemainingMs,
+      ZOMBIE_HIT_PULSE_MS,
+      ZOMBIE_HIT_SQUASH,
+    ),
+    shapes: frameAt(ZOMBIE_WALK_FRAMES, zombieFrameIndex(zombie, elapsedMs))[
+      zombieHitTone(zombie.hitRemainingMs)
+    ][facingToward(zombie.x, player.x)],
+  })
+
+const dyingZombieShape = (
+  zombie: Zombie,
+  remainingMs: number,
+  direction: Vector,
+): Canvas.Shape => {
+  const progress = clamp(1 - remainingMs / ZOMBIE_DYING_MS, 0, 1)
+  const pop = Math.sin(
+    Math.PI * progressBetween(progress, 0, ZOMBIE_DEATH_POP_END),
+  )
+  const fall = progressBetween(
+    progress,
+    ZOMBIE_DEATH_POP_END,
+    ZOMBIE_DEATH_FALL_END,
+  )
+  const landing = Math.sin(
+    Math.PI *
+      progressBetween(
+        progress,
+        ZOMBIE_DEATH_FALL_END,
+        ZOMBIE_DEATH_LANDING_END,
+      ),
+  )
+  const isFallingRight = direction.x >= 0
+  const tone: Tone = progress < ZOMBIE_DEATH_POP_END ? 'Flash' : 'Normal'
+  const facing: Facing = isFallingRight ? 'Left' : 'Right'
+  return Canvas.Group({
+    translate: footPosition(zombie, ZOMBIE_FOOT_OFFSET),
+    rotate: (isFallingRight ? 1 : -1) * QUARTER_TURN * fall * fall,
+    scale: {
+      x:
+        (1 - ZOMBIE_DEATH_POP_PINCH * pop) *
+        (1 - ZOMBIE_DEATH_LANDING_SQUASH * landing),
+      y: 1 + ZOMBIE_DEATH_POP_STRETCH * pop,
+    },
+    opacity: 1 - progressBetween(progress, ZOMBIE_DEATH_FADE_START, 1),
+    shapes: frameAt(ZOMBIE_WALK_FRAMES, 0)[tone][facing],
+  })
+}
+
 const zombieShape =
   (player: Player, elapsedMs: number) =>
   (zombie: Zombie): Canvas.Shape =>
-    placeSprite(
-      zombie.x,
-      zombie.y,
-      ZOMBIE_SPRITES[zombieGait(zombie, elapsedMs)][
-        facingToward(zombie.x, player.x)
-      ],
-    )
+    ZombieState.match(zombie.state, {
+      Walking: () => walkingZombieShape(zombie, player, elapsedMs),
+      Dying: ({ remainingMs, direction }) =>
+        dyingZombieShape(zombie, remainingMs, direction),
+    })
 
-const playerShapes = (player: Player): ReadonlyArray<Canvas.Shape> => [
-  placeSprite(
-    player.x,
-    player.y,
-    PLAYER_SPRITES[player.facing.x < 0 ? 'Left' : 'Right'],
-  ),
-  Canvas.Rect({
-    x: Math.round(player.x + player.facing.x * MUZZLE_DISTANCE) - 1,
-    y: Math.round(player.y + player.facing.y * MUZZLE_DISTANCE) - 1,
-    width: MUZZLE_SIZE,
-    height: MUZZLE_SIZE,
-    fill: MUZZLE_COLOR,
-  }),
-]
+const maybeMsSinceHurt = (player: Player): Option.Option<number> =>
+  Invulnerability.match(player.invulnerability, {
+    Vulnerable: () => Option.none(),
+    Invulnerable: ({ remainingMs }) =>
+      Option.some(PLAYER_INVULNERABLE_MS - remainingMs),
+  })
 
-const heartShape = (hp: number) => (index: number) =>
-  placeSprite(
-    HUD_MARGIN + 3 + index * HEART_SPACING,
-    HUD_MARGIN + 3,
-    index < hp ? HEART_SPRITE : EMPTY_HEART_SPRITE,
+const playerFrames = (model: Model): SpriteSet =>
+  vectorLength(model.intent.move) > 0
+    ? frameAt(
+        PLAYER_WALK_FRAMES,
+        Math.floor(model.elapsedMs / PLAYER_WALK_FRAME_MS),
+      )
+    : frameAt(
+        PLAYER_IDLE_FRAMES,
+        Math.floor(model.elapsedMs / PLAYER_BREATH_FRAME_MS),
+      )
+
+const playerTone = (player: Player): Tone =>
+  Option.match(maybeMsSinceHurt(player), {
+    onNone: () => 'Normal',
+    onSome: msSinceHurt =>
+      msSinceHurt < PLAYER_HURT_FLASH_MS ? 'Flash' : 'Normal',
+  })
+
+const playerOpacity = (player: Player): number =>
+  Invulnerability.match(player.invulnerability, {
+    Vulnerable: () => 1,
+    Invulnerable: ({ remainingMs }) =>
+      Math.floor(remainingMs / PLAYER_BLINK_MS) % 2 === 0
+        ? 1
+        : PLAYER_BLINK_OPACITY,
+  })
+
+const playerHurtScale = (player: Player): Vector =>
+  Option.match(maybeMsSinceHurt(player), {
+    onNone: () => UNIT_SCALE,
+    onSome: msSinceHurt =>
+      squashPulse(
+        PLAYER_HURT_PULSE_MS - msSinceHurt,
+        PLAYER_HURT_PULSE_MS,
+        PLAYER_HURT_SQUASH,
+      ),
+  })
+
+const playerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
+  const { player } = model
+  const recoil = player.recoilRemainingMs / PLAYER_RECOIL_MS
+  const kick = PLAYER_RECOIL_KICK_PX * recoil
+  const bodyX = player.x - player.facing.x * kick
+  const bodyY = player.y - player.facing.y * kick
+  const facing: Facing = player.facing.x < 0 ? 'Left' : 'Right'
+  return [
+    Canvas.Group({
+      translate: footPosition({ x: bodyX, y: bodyY }, PLAYER_FOOT_OFFSET),
+      scale: multiplyScales(playerHurtScale(player), {
+        x: 1 + PLAYER_RECOIL_SQUASH * recoil,
+        y: 1 - PLAYER_RECOIL_SQUASH * recoil,
+      }),
+      opacity: playerOpacity(player),
+      shapes: playerFrames(model)[playerTone(player)][facing],
+    }),
+    Canvas.Rect({
+      x: Math.round(bodyX + player.facing.x * MUZZLE_DISTANCE) - 1,
+      y: Math.round(bodyY + player.facing.y * MUZZLE_DISTANCE) - 1,
+      width: MUZZLE_SIZE,
+      height: MUZZLE_SIZE,
+      fill: MUZZLE_COLOR,
+    }),
+  ]
+}
+
+const heartShakeX = (maybeHeartPulseMs: Option.Option<number>): number =>
+  Option.match(maybeHeartPulseMs, {
+    onNone: () => 0,
+    onSome: pulseMs => {
+      const progress = pulseMs / HEART_PULSE_MS
+      return Math.round(
+        Math.sin(progress * FULL_TURN * HEART_SHAKE_CYCLES) *
+          HEART_SHAKE_PX *
+          (1 - progress),
+      )
+    },
+  })
+
+const lostHeartShape = (
+  x: number,
+  y: number,
+  maybeHeartPulseMs: Option.Option<number>,
+): Canvas.Shape =>
+  Option.match(maybeHeartPulseMs, {
+    onNone: () => placeSprite(x, y, EMPTY_HEART_SPRITE),
+    onSome: pulseMs => {
+      const growth =
+        1 + HEART_PULSE_GROWTH * Math.sin((Math.PI * pulseMs) / HEART_PULSE_MS)
+      return Canvas.Group({
+        translate: { x: Math.round(x), y: Math.round(y) },
+        scale: { x: growth, y: growth },
+        shapes:
+          pulseMs < HEART_FLASH_MS ? FLASH_HEART_SPRITE : EMPTY_HEART_SPRITE,
+      })
+    },
+  })
+
+const heartShape =
+  (hp: number, maybeHeartPulseMs: Option.Option<number>) =>
+  (index: number): Canvas.Shape => {
+    const x =
+      HUD_MARGIN + 3 + index * HEART_SPACING + heartShakeX(maybeHeartPulseMs)
+    const y = HUD_MARGIN + 3
+    if (index < hp) {
+      return placeSprite(x, y, HEART_SPRITE)
+    } else if (index === hp) {
+      return lostHeartShape(x, y, maybeHeartPulseMs)
+    } else {
+      return placeSprite(x, y, EMPTY_HEART_SPRITE)
+    }
+  }
+
+const heartShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
+  const maybeHeartPulseMs = Option.filter(
+    maybeMsSinceHurt(player),
+    msSinceHurt => msSinceHurt < HEART_PULSE_MS,
   )
+  return Array.makeBy(PLAYER_MAX_HP, heartShape(player.hp, maybeHeartPulseMs))
+}
 
 const hudShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
-  ...Array.makeBy(PLAYER_MAX_HP, heartShape(model.player.hp)),
+  ...heartShapes(model.player),
   Canvas.Text({
     x: ARENA_WIDTH - HUD_MARGIN,
     y: HUD_MARGIN,
@@ -258,7 +491,7 @@ export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...BACKGROUND,
   ...Array.map(model.bullets, bulletShape),
   ...Array.map(model.zombies, zombieShape(model.player, model.elapsedMs)),
-  ...playerShapes(model.player),
+  ...playerShapes(model),
   ...hudShapes(model),
   ...overlayShapes(model),
 ]

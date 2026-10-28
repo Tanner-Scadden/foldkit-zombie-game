@@ -7,18 +7,26 @@ import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
   FIRE_INTERVAL_MS,
+  PLAYER_INVULNERABLE_MS,
   PLAYER_MAX_HP,
   PLAYER_SPEED,
   SCORE_PER_ZOMBIE,
   STICK_RADIUS_PX,
+  ZOMBIE_DYING_MS,
+  ZOMBIE_HIT_PULSE_MS,
+  ZOMBIE_KNOCKBACK_SPEED,
+  ZOMBIE_MAX_HP,
 } from './constants'
 import { Message, update } from './main'
 import {
+  GameEvent,
+  Invulnerability,
   type Model,
   MouseButton,
   Phase,
   Stick,
   type Zombie,
+  ZombieState,
   initialModel,
 } from './model'
 
@@ -41,7 +49,25 @@ const zombieAt = (id: number, x: number, y: number, speed = 20): Zombie => ({
   x,
   y,
   speed,
+  hp: ZOMBIE_MAX_HP,
+  knockback: { x: 0, y: 0 },
+  hitRemainingMs: 0,
+  state: ZombieState.Walking(),
 })
+
+const dyingZombieAt = (id: number, x: number, y: number): Zombie =>
+  modifyFields(zombieAt(id, x, y, 0), {
+    hp: () => 0,
+    state: () =>
+      ZombieState.Dying({
+        remainingMs: ZOMBIE_DYING_MS,
+        direction: { x: 1, y: 0 },
+      }),
+  })
+
+const MUZZLE_X = ARENA_WIDTH / 2 + 10
+const FRAME_MS = 16
+const RIGHT = { x: 1, y: 0 }
 
 const withZombies = (base: Model, zombies: ReadonlyArray<Zombie>): Model =>
   modifyFields(base, { zombies: () => zombies })
@@ -214,40 +240,167 @@ describe('zombies', () => {
     )
   })
 
-  test('a bullet that hits a zombie removes both and scores', () => {
-    const muzzleX = ARENA_WIDTH / 2 + 10
-
+  test('a zombie takes two pistol hits to die and scores on the kill', () => {
     story(
       update,
       given(
         withZombies(playingModel, [
-          zombieAt(100, muzzleX, ARENA_HEIGHT / 2, 0),
+          zombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2, 0),
           zombieAt(101, 20, 20, 0),
         ]),
       ),
       message(Message.PressedKey({ code: 'Space' })),
-      tick(16),
+      tick(FRAME_MS),
       model(({ bullets, zombies, score }) => {
         expect(bullets).toEqual([])
-        expect(Array.map(zombies, ({ id }) => id)).toEqual([101])
+        expect(Array.map(zombies, ({ id, hp }) => ({ id, hp }))).toEqual([
+          { id: 100, hp: ZOMBIE_MAX_HP - 1 },
+          { id: 101, hp: ZOMBIE_MAX_HP },
+        ])
+        expect(Array.map(zombies, ({ state }) => state._tag)).toEqual([
+          'Walking',
+          'Walking',
+        ])
+        expect(score).toBe(0)
+      }),
+      ...ticks(10, FRAME_MS),
+      model(({ zombies, score }) => {
+        const struck = Option.getOrThrow(Array.head(zombies))
+        expect(struck.hp).toBe(0)
+        expect(ZombieState.guards.Dying(struck.state)).toBe(true)
         expect(score).toBe(SCORE_PER_ZOMBIE)
       }),
     )
   })
 
-  test('a zombie that reaches the player costs one HP and is removed', () => {
+  test('a hit flashes and knocks the zombie back along the bullet, then both decay', () => {
     story(
       update,
       given(
         withZombies(playingModel, [
-          zombieAt(100, ARENA_WIDTH / 2 + 2, ARENA_HEIGHT / 2),
+          zombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2, 0),
         ]),
       ),
-      tick(16),
-      model(({ zombies, player, phase }) => {
+      message(Message.PressedKey({ code: 'Space' })),
+      tick(FRAME_MS),
+      message(Message.ReleasedKey({ code: 'Space' })),
+      model(({ zombies }) => {
+        expect(zombies).toEqual([
+          modifyFields(zombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2, 0), {
+            hp: () => ZOMBIE_MAX_HP - 1,
+            knockback: () => ({ x: ZOMBIE_KNOCKBACK_SPEED, y: 0 }),
+            hitRemainingMs: () => ZOMBIE_HIT_PULSE_MS,
+          }),
+        ])
+      }),
+      tick(FRAME_MS),
+      model(({ zombies }) => {
+        const zombie = Option.getOrThrow(Array.head(zombies))
+        expect(zombie.x).toBeGreaterThan(MUZZLE_X)
+        expect(zombie.knockback.x).toBeGreaterThan(0)
+        expect(zombie.knockback.x).toBeLessThan(ZOMBIE_KNOCKBACK_SPEED)
+        expect(zombie.hitRemainingMs).toBe(ZOMBIE_HIT_PULSE_MS - FRAME_MS)
+      }),
+      ...ticks(30, FRAME_MS),
+      model(({ zombies }) => {
+        const zombie = Option.getOrThrow(Array.head(zombies))
+        expect(zombie.knockback).toEqual({ x: 0, y: 0 })
+        expect(zombie.hitRemainingMs).toBe(0)
+      }),
+    )
+  })
+
+  test('a dying zombie does not hurt the player and is removed when its animation ends', () => {
+    const frameCount = Math.ceil(ZOMBIE_DYING_MS / FRAME_MS)
+
+    story(
+      update,
+      given(
+        withZombies(playingModel, [
+          dyingZombieAt(100, ARENA_WIDTH / 2 + 2, ARENA_HEIGHT / 2),
+        ]),
+      ),
+      ...ticks(frameCount - 1, FRAME_MS),
+      model(({ zombies, player }) => {
+        expect(Array.map(zombies, ({ id }) => id)).toEqual([100])
+        expect(player.hp).toBe(PLAYER_MAX_HP)
+        expect(player.invulnerability).toEqual(Invulnerability.Vulnerable())
+      }),
+      tick(FRAME_MS),
+      model(({ zombies, player }) => {
         expect(zombies).toEqual([])
+        expect(player.hp).toBe(PLAYER_MAX_HP)
+      }),
+    )
+  })
+
+  test('bullets pass through a dying zombie', () => {
+    story(
+      update,
+      given(
+        withZombies(playingModel, [
+          dyingZombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2),
+        ]),
+      ),
+      message(Message.PressedKey({ code: 'Space' })),
+      tick(FRAME_MS),
+      model(({ bullets, score }) => {
+        expect(bullets).toHaveLength(1)
+        expect(score).toBe(0)
+      }),
+    )
+  })
+
+  test('a zombie that reaches the player costs one heart, knocks the player back, and stays', () => {
+    story(
+      update,
+      given(
+        withZombies(playingModel, [
+          zombieAt(100, ARENA_WIDTH / 2 + 2, ARENA_HEIGHT / 2, 0),
+        ]),
+      ),
+      tick(FRAME_MS),
+      model(({ zombies, player, phase }) => {
+        expect(Array.map(zombies, ({ id }) => id)).toEqual([100])
         expect(player.hp).toBe(PLAYER_MAX_HP - 1)
+        expect(player.knockback.x).toBeLessThan(0)
+        expect(player.invulnerability).toEqual(
+          Invulnerability.Invulnerable({ remainingMs: PLAYER_INVULNERABLE_MS }),
+        )
         expect(phase).toEqual(Phase.Playing())
+      }),
+      tick(FRAME_MS),
+      model(({ player }) => {
+        expect(player.x).toBeLessThan(ARENA_WIDTH / 2)
+      }),
+    )
+  })
+
+  test('contact during invulnerability costs nothing, and contact after it ends hurts again', () => {
+    const invulnerableFrames = PLAYER_INVULNERABLE_MS / FRAME_MS
+
+    story(
+      update,
+      given(
+        withZombies(playingModel, [
+          zombieAt(100, ARENA_WIDTH / 2 + 2, ARENA_HEIGHT / 2, 60),
+          zombieAt(101, ARENA_WIDTH / 2 - 2, ARENA_HEIGHT / 2, 60),
+        ]),
+      ),
+      tick(FRAME_MS),
+      model(({ player }) => {
+        expect(player.hp).toBe(PLAYER_MAX_HP - 1)
+      }),
+      ...ticks(Math.floor(invulnerableFrames) - 1, FRAME_MS),
+      model(({ player }) => {
+        expect(player.hp).toBe(PLAYER_MAX_HP - 1)
+        expect(
+          Invulnerability.guards.Invulnerable(player.invulnerability),
+        ).toBe(true)
+      }),
+      ...ticks(2, FRAME_MS),
+      model(({ player }) => {
+        expect(player.hp).toBe(PLAYER_MAX_HP - 2)
       }),
     )
   })
@@ -296,6 +449,75 @@ describe('zombies', () => {
           ({ x, y }) => x < 0 || x > ARENA_WIDTH || y < 0 || y > ARENA_HEIGHT,
         )
         expect(isOffScreen).toBe(true)
+      }),
+    )
+  })
+})
+
+describe('game events', () => {
+  test('a frame records what happened in it and the next frame clears them', () => {
+    const shot = { x: ARENA_WIDTH / 2 + 6, y: ARENA_HEIGHT / 2 }
+    const zombieX = MUZZLE_X
+
+    story(
+      update,
+      given(
+        withZombies(playingModel, [
+          modifyFields(zombieAt(100, zombieX, ARENA_HEIGHT / 2, 0), {
+            hp: () => 1,
+          }),
+        ]),
+      ),
+      message(Message.PressedKey({ code: 'Space' })),
+      tick(FRAME_MS),
+      message(Message.ReleasedKey({ code: 'Space' })),
+      model(({ frameEvents }) => {
+        expect(Array.map(frameEvents, ({ _tag }) => _tag)).toEqual([
+          'Fired',
+          'ZombieHit',
+          'ZombieKilled',
+        ])
+        expect(Array.head(frameEvents)).toEqual(
+          Option.some(GameEvent.Fired({ ...shot, direction: RIGHT })),
+        )
+        expect(Array.last(frameEvents)).toEqual(
+          Option.some(
+            GameEvent.ZombieKilled({
+              x: zombieX,
+              y: ARENA_HEIGHT / 2,
+              direction: RIGHT,
+            }),
+          ),
+        )
+      }),
+      tick(FRAME_MS),
+      model(({ frameEvents }) => {
+        expect(frameEvents).toEqual([])
+      }),
+    )
+  })
+
+  test('a contact frame records PlayerHurt once', () => {
+    story(
+      update,
+      given(
+        withZombies(playingModel, [
+          zombieAt(100, ARENA_WIDTH / 2 + 2, ARENA_HEIGHT / 2, 0),
+        ]),
+      ),
+      tick(FRAME_MS),
+      model(({ frameEvents }) => {
+        expect(frameEvents).toEqual([
+          GameEvent.PlayerHurt({
+            x: ARENA_WIDTH / 2,
+            y: ARENA_HEIGHT / 2,
+            direction: { x: -1, y: 0 },
+          }),
+        ])
+      }),
+      tick(FRAME_MS),
+      model(({ frameEvents }) => {
+        expect(frameEvents).toEqual([])
       }),
     )
   })
