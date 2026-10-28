@@ -1,0 +1,5 @@
+node_modules
+shots
+dist
+dist-profile
+perf-*.json

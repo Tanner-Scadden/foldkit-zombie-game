@@ -1,0 +1,15 @@
+{
+  "name": "zombie-audit",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "playwright-core": "^1.64.1"
+  }
+}
