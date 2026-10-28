@@ -63,6 +63,7 @@ const playing = (audio: AudioState): Model =>
 
 const zombieAt = (id: number, x: number, y: number): Zombie => ({
   id,
+  kind: 'Shambler',
   x,
   y,
   speed: 0,
@@ -283,6 +284,7 @@ describe('frame sounds', () => {
       velocityX: 1,
       velocityY: 0,
       remainingMs: 900,
+      weapon: 'Pistol',
     }))
 
     story(
@@ -318,6 +320,7 @@ describe('frame sounds', () => {
       velocityX: 1,
       velocityY: 0,
       remainingMs: 900,
+      weapon: 'Pistol',
     }
     Array.forEach(silentStates, audio => {
       story(

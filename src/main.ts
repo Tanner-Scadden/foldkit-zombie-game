@@ -10,6 +10,8 @@ import {
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
+import { Dialog } from '@foldkit/ui'
+
 import {
   type AudioEngineError,
   AudioEngineResource,
@@ -23,10 +25,12 @@ import {
   resumeAudio,
 } from './audio'
 import {
+  type WeaponChoice,
   isPauseKey,
   isStartKey,
   isStartWaveKey,
   isTrackingPointer,
+  maybeWeaponChoice,
   moveMouse,
   movePointer,
   pressKey,
@@ -36,16 +40,28 @@ import {
   releasePointer,
 } from './input'
 import {
+  type Arsenal,
   AudioState,
   GameEvent,
   type Input,
   Model,
   Phase,
   PointerDevice,
+  ShopItemId,
+  ShopState,
   initialModel,
 } from './model'
+import { burstCoins } from './particles'
+import { isBrowsing, purchase, shopItemElementId } from './shop'
 import { advanceGame, refreshIntent } from './simulation'
 import { isRoundActive, pause, startOrResume, startWaveEarly } from './waves'
+import {
+  WEAPONS,
+  heldWeapon,
+  holdPistol,
+  holdSpare,
+  swapWeapon,
+} from './weapons'
 
 export { Model } from './model'
 
@@ -84,6 +100,13 @@ export const Message = defineMessageUnion({
   CompletedGenerateSeed: { seed: Schema.Number },
   ClickedMuteButton: {},
   ClickedStartWaveButton: {},
+  ClickedSwapButton: {},
+  GotShopDialogMessage: { message: Dialog.Message },
+  ClickedBuyButton: { item: ShopItemId },
+  PressedBuyKey: { item: ShopItemId },
+  MovedShopFocus: { item: ShopItemId },
+  FocusedShopItem: { item: ShopItemId },
+  CompletedFocusShopItem: {},
   AcquiredAudioEngine: {},
   FailedAcquireAudioEngine: { reason: Schema.String },
   ReleasedAudioEngine: {},
@@ -174,6 +197,16 @@ export const PlaySound = Command.define('PlaySound', {
     ),
 })
 
+export const FocusShopItem = Command.define('FocusShopItem', {
+  args: { item: ShopItemId },
+  messages: [Message.CompletedFocusShopItem],
+  execute: ({ item }) =>
+    Dom.focus(`#${shopItemElementId(item)}`).pipe(
+      Effect.ignore,
+      Effect.as(Message.CompletedFocusShopItem()),
+    ),
+})
+
 // INIT
 
 export const init: Runtime.ApplicationInit<Model, Message> = () => ({
@@ -205,6 +238,33 @@ const preparationFromKey = (model: Model, code: string): Model => {
 const startFromKey = (model: Model, code: string): Model =>
   isStartKey(code) ? startOrResume(model) : model
 
+const WEAPON_CHOICES: Readonly<
+  Record<WeaponChoice, (arsenal: Arsenal) => Arsenal>
+> = {
+  Swap: swapWeapon,
+  Pistol: holdPistol,
+  Spare: holdSpare,
+}
+
+const chooseWeapon = (model: Model, choice: WeaponChoice): Model => {
+  if (!isRoundActive(model.phase) || isBrowsing(model.shop)) {
+    return model
+  }
+
+  return modifyFields(model, {
+    player: player => modifyFields(player, { arsenal: WEAPON_CHOICES[choice] }),
+  })
+}
+
+const weaponFromKey = (model: Model, code: string): Model =>
+  Option.match(maybeWeaponChoice(code), {
+    onNone: () => model,
+    onSome: choice => chooseWeapon(model, choice),
+  })
+
+const changedWeapon = (before: Model, after: Model): boolean =>
+  heldWeapon(before.player.arsenal) !== heldWeapon(after.player.arsenal)
+
 const phaseFromKey = (model: Model, code: string): Model =>
   Phase.match(model.phase, {
     Ready: () => startFromKey(model, code),
@@ -227,11 +287,13 @@ type SoundCue = Readonly<{ sound: SoundEffect; variation: number }>
 
 const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
   GameEvent.match(event, {
-    Fired: () => Option.some<SoundEffect>('Shot'),
+    Fired: ({ weapon }) => Option.some(WEAPONS[weapon].sound),
     ZombieHit: () => Option.some<SoundEffect>('ZombieHit'),
     ZombieKilled: () => Option.some<SoundEffect>('ZombieDeath'),
     PlayerHurt: () => Option.some<SoundEffect>('PlayerHurt'),
     BulletStruck: () => Option.none<SoundEffect>(),
+    RanDry: () => Option.some<SoundEffect>('DryClick'),
+    WaveCleared: () => Option.some<SoundEffect>('Payday'),
   })
 
 const maybeEventSoundCue = (event: GameEvent): Option.Option<SoundCue> =>
@@ -263,10 +325,100 @@ const playSounds =
     }
   }
 
-const START_CUE: SoundCue = { sound: 'Start', variation: 0 }
+const uiCue = (sound: SoundEffect): SoundCue => ({ sound, variation: 0 })
 
 const playStartSoundWhen = (isRoundStart: boolean): UpdateStep =>
-  playSounds(isRoundStart ? [START_CUE] : [])
+  playSounds(isRoundStart ? [uiCue('Start')] : [])
+
+const playSwapSoundWhen = (isSwap: boolean): UpdateStep =>
+  playSounds(isSwap ? [uiCue('Swap')] : [])
+
+// SHOP
+
+const foldShopDialogOutMessage = Dialog.OutMessage.match<UpdateStep>({
+  Opened: () => stepModel => ({ model: stepModel }),
+  Closed: () => leaveShopStep,
+})
+
+const leaveShop = (model: Model): Model =>
+  isBrowsing(model.shop)
+    ? refreshIntent(modifyFields(model, { shop: () => ShopState.Dismissed() }))
+    : model
+
+const foldShopDialog = Update.foldChild({
+  update: Dialog.update,
+  read: (model: Model) => Option.some(model.shopDialog),
+  write: (model, nextShopDialog) =>
+    modifyFields(model, { shopDialog: () => nextShopDialog }),
+  toParentMessage: message => Message.GotShopDialogMessage({ message }),
+  foldOutMessage: foldShopDialogOutMessage,
+})
+
+const foldShopDialogOpen = Update.foldChildStep({
+  update: Dialog.open,
+  read: (model: Model) => Option.some(model.shopDialog),
+  write: (model, nextShopDialog) =>
+    modifyFields(model, { shopDialog: () => nextShopDialog }),
+  toParentMessage: message => Message.GotShopDialogMessage({ message }),
+  foldOutMessage: foldShopDialogOutMessage,
+})
+
+const foldShopDialogClose = Update.foldChildStep({
+  update: Dialog.close,
+  read: (model: Model) => Option.some(model.shopDialog),
+  write: (model, nextShopDialog) =>
+    modifyFields(model, { shopDialog: () => nextShopDialog }),
+  toParentMessage: message => Message.GotShopDialogMessage({ message }),
+  foldOutMessage: foldShopDialogOutMessage,
+})
+
+const leaveShopWithoutDialog: UpdateStep = stepModel => ({
+  model: stepModel.shopDialog.isOpen ? stepModel : leaveShop(stepModel),
+})
+
+const leaveShopStep: UpdateStep = stepModel => ({
+  model: leaveShop(stepModel),
+})
+
+const enterShop: UpdateStep = stepModel =>
+  Update.combine(withInput(stepModel, releaseAll), [
+    foldShopDialogOpen,
+    playSounds([uiCue('ShopBell')]),
+  ])
+
+const closeShop: UpdateStep = stepModel =>
+  isBrowsing(stepModel.shop)
+    ? Update.combine(stepModel, [foldShopDialogClose, leaveShopStep])
+    : { model: stepModel }
+
+const closeShopOutsidePreparation: UpdateStep = stepModel =>
+  Phase.guards.Preparation(stepModel.phase)
+    ? { model: stepModel }
+    : closeShop(stepModel)
+
+const buy = (model: Model, item: ShopItemId): UpdateReturn => {
+  if (!isBrowsing(model.shop)) {
+    return { model }
+  }
+
+  return Option.match(purchase(model, item), {
+    onNone: () => playSounds([uiCue('Denied')])(model),
+    onSome: bought =>
+      playSounds([uiCue('Purchase')])(
+        burstCoins(bought, bought.player.x, bought.player.y),
+      ),
+  })
+}
+
+const focusShopItem = (model: Model, item: ShopItemId): Model =>
+  ShopState.match(model.shop, {
+    Away: () => model,
+    Browsing: () =>
+      modifyFields(model, {
+        shop: () => ShopState.Browsing({ focusedItem: item }),
+      }),
+    Dismissed: () => model,
+  })
 
 const unlockAudio: UpdateStep = stepModel =>
   AudioState.match(stepModel.audio, {
@@ -296,20 +448,38 @@ export const update = (model: Model, message: Message) =>
     TickedFrame: ({ deltaTime }) => {
       if (isRoundActive(model.phase)) {
         const advanced = advanceGame(model, deltaTime)
-        return playSounds(frameSoundCues(advanced.frameEvents))(advanced)
+        const hasEnteredShop =
+          !isBrowsing(model.shop) && isBrowsing(advanced.shop)
+        return Update.combine(advanced, [
+          playSounds(frameSoundCues(advanced.frameEvents)),
+          ...(hasEnteredShop ? [enterShop] : []),
+          closeShopOutsidePreparation,
+        ])
       } else {
         return { model }
       }
     },
 
     PressedKey: ({ code }) => {
+      if (isBrowsing(model.shop)) {
+        return unlockAudio(
+          withInput(toggleSoundFromKey(model, code), input =>
+            pressKey(input, code),
+          ),
+        )
+      }
+
       const pressed = withInput(
-        toggleSoundFromKey(phaseFromKey(model, code), code),
+        weaponFromKey(
+          toggleSoundFromKey(phaseFromKey(model, code), code),
+          code,
+        ),
         input => pressKey(input, code),
       )
       return Update.combine(pressed, [
         unlockAudio,
         playStartSoundWhen(startsRun(model, pressed)),
+        playSwapSoundWhen(changedWeapon(model, pressed)),
       ])
     },
 
@@ -321,7 +491,10 @@ export const update = (model: Model, message: Message) =>
 
     ChangedPageVisibility: ({ visibility }) => {
       if (visibility === 'Hidden') {
-        return { model: withInput(pause(model), releaseAll) }
+        return Update.combine(model, [
+          closeShop,
+          stepModel => ({ model: withInput(pause(stepModel), releaseAll) }),
+        ])
       } else {
         return { model }
       }
@@ -369,7 +542,41 @@ export const update = (model: Model, message: Message) =>
 
     ClickedMuteButton: () => unlockAudio(toggleSound(model)),
 
-    ClickedStartWaveButton: () => unlockAudio(startWaveEarly(model)),
+    ClickedStartWaveButton: () =>
+      isBrowsing(model.shop) ? { model } : unlockAudio(startWaveEarly(model)),
+
+    ClickedSwapButton: () => {
+      const swapped = refreshIntent(chooseWeapon(model, 'Swap'))
+      return Update.combine(swapped, [
+        unlockAudio,
+        playSwapSoundWhen(changedWeapon(model, swapped)),
+      ])
+    },
+
+    GotShopDialogMessage: ({ message: dialogMessage }) =>
+      Update.combine(model, [
+        stepModel => foldShopDialog(stepModel, dialogMessage),
+        leaveShopWithoutDialog,
+      ]),
+
+    ClickedBuyButton: ({ item }) => buy(model, item),
+
+    PressedBuyKey: ({ item }) => buy(model, item),
+
+    MovedShopFocus: ({ item }) => {
+      if (isBrowsing(model.shop)) {
+        return {
+          model: focusShopItem(model, item),
+          commands: [FocusShopItem({ item })],
+        }
+      } else {
+        return { model }
+      }
+    },
+
+    FocusedShopItem: ({ item }) => ({ model: focusShopItem(model, item) }),
+
+    CompletedFocusShopItem: () => ({ model }),
 
     AcquiredAudioEngine: () => ({
       model: modifyFields(model, { audio: () => AudioState.Suspended() }),
@@ -424,12 +631,15 @@ const playingActivity = (model: Model): Activity =>
 const pointerTrackingActivity = (model: Model): Activity =>
   isTrackingPointer(model.input) ? 'Active' : 'Idle'
 
+const isInsideDialog = (target: EventTarget | null): boolean =>
+  target instanceof Element && target.closest('dialog') !== null
+
 const keyboardMessages = Stream.merge(
   Dom.streamFromEventFilterMap({
     target: document,
     type: 'keydown',
     filterMapEvent: event =>
-      event.repeat
+      event.repeat || isInsideDialog(event.target)
         ? Option.none()
         : Option.some(Message.PressedKey({ code: event.code })),
   }),

@@ -2,13 +2,16 @@ import { Array, Option, Record, String, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
 import {
+  ALERT_GLYPH_COLOR,
+  COIN_GLYPH_COLOR,
   DAMAGE_GLYPH_COLOR,
   GLYPH_SHADOW_COLOR,
   KILL_GLYPH_COLOR,
   STREAK_GLYPH_COLOR,
 } from './constants'
+import type { WeaponKind } from './model'
 
-type Palette = Readonly<Record<string, string>>
+export type Palette = Readonly<Record<string, string>>
 
 type PixelRun = Readonly<{
   x: number
@@ -101,7 +104,7 @@ const spriteWidth = (pixels: ReadonlyArray<string>): number =>
     Array.reduce(0, Math.max),
   )
 
-type Anchor = Readonly<{ x: number; y: number }>
+export type Anchor = Readonly<{ x: number; y: number }>
 
 const centerAnchor = (pixels: ReadonlyArray<string>): Anchor => ({
   x: Math.floor(spriteWidth(pixels) / 2),
@@ -332,6 +335,19 @@ const GLYPH_PIXELS = {
   '9': ['###', '#.#', '###', '..#', '##.'],
   '+': ['...', '.#.', '###', '.#.', '...'],
   x: ['...', '#.#', '.#.', '#.#', '...'],
+  $: ['.##', '#..', '###', '..#', '##.'],
+  C: ['###', '#..', '#..', '#..', '###'],
+  D: ['##.', '#.#', '#.#', '#.#', '##.'],
+  E: ['###', '#..', '##.', '#..', '###'],
+  H: ['#.#', '#.#', '###', '#.#', '#.#'],
+  L: ['#..', '#..', '#..', '#..', '###'],
+  M: ['#.#', '###', '###', '#.#', '#.#'],
+  O: ['###', '#.#', '#.#', '#.#', '###'],
+  P: ['##.', '#.#', '##.', '#..', '#..'],
+  S: ['.##', '#..', '.#.', '..#', '##.'],
+  T: ['###', '.#.', '.#.', '.#.', '.#.'],
+  Y: ['#.#', '#.#', '.#.', '.#.', '.#.'],
+  Z: ['###', '..#', '.#.', '#..', '###'],
 } satisfies Readonly<Record<string, ReadonlyArray<string>>>
 
 export const GLYPH_WIDTH = 3
@@ -442,12 +458,14 @@ export const FLASH_HEART_SPRITE = spriteShapes(
 export const SKULL_SPRITE = spriteShapes(SKULL_PIXELS, SKULL_PALETTE)
 
 export type Glyph = keyof typeof GLYPH_PIXELS
-export type GlyphTone = 'Damage' | 'Kill' | 'Streak'
+export type GlyphTone = 'Damage' | 'Kill' | 'Streak' | 'Coin' | 'Alert'
 
 const GLYPH_COLORS: Readonly<Record<GlyphTone, string>> = {
   Damage: DAMAGE_GLYPH_COLOR,
   Kill: KILL_GLYPH_COLOR,
   Streak: STREAK_GLYPH_COLOR,
+  Coin: COIN_GLYPH_COLOR,
+  Alert: ALERT_GLYPH_COLOR,
 }
 
 const TOP_LEFT: Anchor = { x: 0, y: 0 }
@@ -469,3 +487,116 @@ const GLYPHS: ReadonlyArray<Glyph> = Record.keys(GLYPH_PIXELS)
 
 export const toGlyph = (symbol: string): Option.Option<Glyph> =>
   Array.findFirst(GLYPHS, glyph => glyph === symbol)
+
+const glyphPixels = (symbol: string): Option.Option<ReadonlyArray<string>> =>
+  Option.map(toGlyph(symbol), glyph => GLYPH_PIXELS[glyph])
+
+export const textPixels = (text: string): ReadonlyArray<string> => {
+  const glyphs = Array.getSomes(Array.map(String.split(text, ''), glyphPixels))
+  return Array.makeBy(GLYPH_HEIGHT - 1, row =>
+    pipe(
+      glyphs,
+      Array.map(pixels =>
+        Option.getOrElse(Array.get(pixels, row), () =>
+          TRANSPARENT.repeat(GLYPH_WIDTH),
+        ),
+      ),
+      Array.join(TRANSPARENT),
+    ),
+  )
+}
+
+// GUNS
+
+const GUN_PALETTE: Palette = {
+  K: '#26262e',
+  G: '#8d96a3',
+  H: '#d9dde3',
+  W: '#8a5a2b',
+  V: '#5c3a1a',
+  M: '#4a4f5a',
+  R: '#d8423a',
+}
+
+type GunPixels = Readonly<{ pixels: ReadonlyArray<string>; pivot: Anchor }>
+
+const GUN_PIXELS: Readonly<Record<WeaponKind, GunPixels>> = {
+  Pistol: {
+    pixels: ['HGGGG', 'GKK..', 'K....'],
+    pivot: { x: 0, y: 1 },
+  },
+  Shotgun: {
+    pixels: ['VWWKGGGGGH', 'VW.KKRGGGG', 'V...K.....'],
+    pivot: { x: 3, y: 1 },
+  },
+  Smg: {
+    pixels: ['.KGGGGGH', 'KKKKKGG.', 'K..M....', '...M....'],
+    pivot: { x: 1, y: 1 },
+  },
+}
+
+export const GUN_DIRECTIONS = 16
+const STRAIGHT_UP_TOLERANCE = 1e-9
+
+const symbolOf = (
+  pixels: ReadonlyArray<string>,
+  x: number,
+  y: number,
+): string =>
+  pipe(
+    Array.get(pixels, y),
+    Option.flatMap(row => (x < 0 ? Option.none() : String.at(row, x))),
+    Option.getOrElse(() => TRANSPARENT),
+  )
+
+const rotatedGun = ({ pixels, pivot }: GunPixels, angle: number): Sprite => {
+  const isPointingLeft = Math.cos(angle) < -STRAIGHT_UP_TOLERANCE
+  const source = isPointingLeft ? Array.reverse(pixels) : pixels
+  const pivotY = isPointingLeft ? pixels.length - 1 - pivot.y : pivot.y
+  const reach = Math.ceil(Math.hypot(spriteWidth(pixels), pixels.length)) + 1
+  const size = reach * 2 + 1
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+  const rows = Array.makeBy(size, targetY =>
+    pipe(
+      Array.makeBy(size, targetX => {
+        const dx = targetX - reach
+        const dy = targetY - reach
+        return symbolOf(
+          source,
+          Math.round(cos * dx + sin * dy + pivot.x),
+          Math.round(-sin * dx + cos * dy + pivotY),
+        )
+      }),
+      Array.join(''),
+    ),
+  )
+  return spriteShapes(rows, GUN_PALETTE, { x: reach, y: reach })
+}
+
+export const GUN_SPRITES: Readonly<
+  Record<WeaponKind, Array.NonEmptyReadonlyArray<Sprite>>
+> = Record.map(GUN_PIXELS, gun =>
+  Array.prepend(
+    Array.makeBy(GUN_DIRECTIONS - 1, index =>
+      rotatedGun(gun, ((index + 1) * Math.PI * 2) / GUN_DIRECTIONS),
+    ),
+    rotatedGun(gun, 0),
+  ),
+)
+
+export const GUN_ICONS: Readonly<Record<WeaponKind, Sprite>> = Record.map(
+  GUN_PIXELS,
+  ({ pixels }) => spriteShapes(pixels, GUN_PALETTE),
+)
+
+export const gunSprite = (kind: WeaponKind, angle: number): Sprite => {
+  const turns = GUN_SPRITES[kind]
+  const step = (Math.PI * 2) / GUN_DIRECTIONS
+  const index =
+    ((Math.round(angle / step) % GUN_DIRECTIONS) + GUN_DIRECTIONS) %
+    GUN_DIRECTIONS
+  return Option.getOrElse(Array.get(turns, index), () =>
+    Array.headNonEmpty(turns),
+  )
+}

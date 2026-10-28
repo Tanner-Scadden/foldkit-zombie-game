@@ -1,17 +1,26 @@
+import { Option } from 'effect'
 import {
+  Command,
   Mount,
+  Subscription,
   click,
   expect,
   given,
+  keydown,
   pointerDown,
   role,
   scene,
   selector,
+  text,
 } from 'foldkit/scene'
+import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Message, update } from './main'
-import { initialModel } from './model'
+import { Dialog } from '@foldkit/ui'
+
+import { PREPARATION_MS } from './constants'
+import { FocusShopItem, Message, update } from './main'
+import { Arsenal, type Model, Phase, initialModel } from './model'
 import { MeasureGameSurface, view } from './view'
 
 const measureSurface = Mount.resolve(
@@ -82,6 +91,94 @@ describe('Start wave button', () => {
       expect(role('status')).toHaveText('Fighting wave 1 of 8.'),
       expect(startWaveButton).toBeAbsent(),
       expect(role('timer')).toBeAbsent(),
+    )
+  })
+})
+
+describe('Shop', () => {
+  const atStall: Model = modifyFields(initialModel, {
+    maybeSurface: () =>
+      Option.some({ left: 0, top: 0, width: 800, height: 400 }),
+    phase: () =>
+      Phase.Preparation({
+        wave: 2,
+        remainingMs: 15_000,
+        durationMs: PREPARATION_MS,
+        spawns: [
+          {
+            atMs: 1e9,
+            kind: 'Shambler',
+            door: 'North',
+            offset: 0,
+            speedBonus: 0,
+          },
+        ],
+      }),
+    player: player =>
+      modifyFields(player, { x: () => 270, y: () => 142, hp: () => 3 }),
+    wallet: () => ({ balance: 100, earned: 100, shown: 100 }),
+  })
+
+  const shotgunButton = role('button', { name: 'Buy Barn Buster for $60' })
+  const shellsButton = role('button', { name: 'Buy Shell Sack for $15' })
+  const heartButton = role('button', { name: 'Buy Pickled Heart for $25' })
+  const swapButton = role('button', { name: 'Swap to the Pop Pistol' })
+
+  test('opens at the stall, buys with the keyboard and a click, and closes', () => {
+    scene(
+      { update, view },
+      given(atStall),
+      measureSurface,
+      expect(role('heading', { name: "Rattles' Bone Bazaar" })).toBeAbsent(),
+      Subscription.emit(Message.TickedFrame({ deltaTime: 16 })),
+      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      Mount.resolve(
+        Dialog.AcquireResources,
+        Dialog.Message.SucceededAcquireResources(),
+      ),
+      expect(role('heading', { name: "Rattles' Bone Bazaar" })).toExist(),
+      expect(text('You have $100')).toExist(),
+      expect(shellsButton).toHaveAttr('aria-disabled', 'true'),
+      expect(text('Needs the Barn Buster')).toExist(),
+      keydown(shotgunButton, 'ArrowDown'),
+      Command.resolve(FocusShopItem, Message.CompletedFocusShopItem()),
+      keydown(shellsButton, 'Enter'),
+      expect(text('You have $100')).toExist(),
+      keydown(shotgunButton, 'Enter'),
+      expect(text('You have $40')).toExist(),
+      expect(text('In your hands, 16 shells left')).toExist(),
+      expect(shellsButton).not.toHaveAttr('aria-disabled', 'true'),
+      click(heartButton),
+      expect(text('You have $15')).toExist(),
+      expect(text('Hearts 4 of 5')).toExist(),
+      expect(heartButton).toHaveAttr('aria-disabled', 'true'),
+      expect(text('Need $10 more')).toExist(),
+      click(role('button', { name: 'LEAVE SHOP' })),
+      Command.resolve(
+        Dialog.CloseDialog,
+        Dialog.Message.CompletedCloseDialog(),
+      ),
+      Mount.expectEnded(Dialog.AcquireResources),
+      expect(role('heading', { name: "Rattles' Bone Bazaar" })).toBeAbsent(),
+      expect(swapButton).toHaveAttr('aria-keyshortcuts', 'Q E 1 2'),
+    )
+  })
+
+  test('the swap button appears with a second gun and names the gun it swaps to', () => {
+    scene(
+      { update, view },
+      given(
+        modifyFields(atStall, {
+          player: player =>
+            modifyFields(player, {
+              arsenal: () =>
+                Arsenal.HoldingSpare({ spare: { kind: 'Smg', rounds: 30 } }),
+            }),
+        }),
+      ),
+      measureSurface,
+      click(role('button', { name: 'Swap to the Pop Pistol' })),
+      expect(role('button', { name: 'Swap to the Chatterbox' })).toExist(),
     )
   })
 })

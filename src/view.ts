@@ -19,10 +19,10 @@ import {
   BLOOD_DECAL_COLOR,
   BLOOD_DECAL_FADED_COLOR,
   BLOOD_PARTICLE_COLOR,
-  BULLET_SPEED,
   BULLET_TRAIL_COLOR,
   BULLET_TRAIL_PX,
   CHIP_COLOR,
+  COIN_COLOR,
   DAMAGE_POPUP_HOP_PX,
   DAMAGE_POPUP_RISE_PX,
   DECAL_FADE_COUNT,
@@ -37,16 +37,19 @@ import {
   HEART_PULSE_MS,
   HEART_SHAKE_CYCLES,
   HEART_SHAKE_PX,
+  HULL_COLOR,
+  HULL_DECAL_COLOR,
+  HULL_DECAL_FADED_COLOR,
   KILL_POPUP_BIG_SCALE,
   KILL_POPUP_FLASH_MS,
   KILL_POPUP_HOP_PX,
   KILL_POPUP_RISE_PX,
   KILL_POPUP_SCALE,
+  LINK_COLOR,
   MEAT_DECAL_COLOR,
   MEAT_DECAL_FADED_COLOR,
   MEAT_GIB_COLOR,
   MS_PER_SECOND,
-  MUZZLE_DISTANCE,
   MUZZLE_FLASH_BIG_MS,
   MUZZLE_FLASH_CORE_COLOR,
   MUZZLE_FLASH_MS,
@@ -60,9 +63,6 @@ import {
   PLAYER_HURT_SQUASH,
   PLAYER_INVULNERABLE_MS,
   PLAYER_MAX_HP,
-  PLAYER_RECOIL_KICK_PX,
-  PLAYER_RECOIL_MS,
-  PLAYER_RECOIL_SQUASH,
   PLAYER_SHADOW_WIDTH,
   PLAYER_WALK_FRAME_MS,
   POPUP_FADE_START,
@@ -110,6 +110,7 @@ import { thumbOffset } from './input'
 import { POPUP_LIFETIME_MS } from './juice'
 import { Message } from './main'
 import {
+  Arsenal,
   type Bullet,
   type Decal,
   type DecalKind,
@@ -121,13 +122,17 @@ import {
   type Player,
   type PointerDevice,
   type Popup,
+  ShopState,
   Stick,
   Streak,
   type Vector,
+  type WeaponKind,
   type Zombie,
   ZombieState,
 } from './model'
 import { ROOM_SHAPES } from './room'
+import { isShopOpenFor } from './shop'
+import { shopDialogView } from './shopView'
 import {
   EMPTY_HEART_SPRITE,
   FLASH_HEART_SPRITE,
@@ -135,6 +140,7 @@ import {
   GLYPH_ADVANCE,
   GLYPH_HEIGHT,
   GLYPH_SPRITES,
+  GUN_ICONS,
   type GlyphTone,
   HEART_SPRITE,
   PLAYER_IDLE_FRAMES,
@@ -144,15 +150,26 @@ import {
   type Tone,
   ZOMBIE_WALK_FRAMES,
   frameAt,
+  gunSprite,
   toGlyph,
 } from './sprite'
+import { type StallLook, stallShapes } from './stall'
 import {
   type DoorCount,
   FINAL_WAVE,
   doorCounts,
   isRoundActive,
+  waveBonus,
   zombiesRemaining,
 } from './waves'
+import {
+  type MuzzleFlash,
+  SIDEARM,
+  WEAPONS,
+  type WeaponStats,
+  heldWeapon,
+  maybeSpare,
+} from './weapons'
 
 // MOUNT
 
@@ -190,8 +207,6 @@ export const MeasureGameSurface = Mount.defineStream('MeasureGameSurface', {
 
 const BULLET_SIZE = 2
 const BULLET_COLOR = '#ffe066'
-const MUZZLE_SIZE = 2
-const MUZZLE_COLOR = '#d9dde3'
 const HEART_SPACING = 9
 const HUD_MARGIN = 5
 const HUD_FONT = 'bold 8px monospace'
@@ -219,26 +234,27 @@ const bulletShapes = ({
   y,
   velocityX,
   velocityY,
-}: Bullet): ReadonlyArray<Canvas.Shape> => [
-  Canvas.Rect({
-    x:
-      Math.round(x - (velocityX / BULLET_SPEED) * BULLET_TRAIL_PX) -
-      BULLET_SIZE / 2,
-    y:
-      Math.round(y - (velocityY / BULLET_SPEED) * BULLET_TRAIL_PX) -
-      BULLET_SIZE / 2,
-    width: BULLET_SIZE,
-    height: BULLET_SIZE,
-    fill: BULLET_TRAIL_COLOR,
-  }),
-  Canvas.Rect({
-    x: Math.round(x) - BULLET_SIZE / 2,
-    y: Math.round(y) - BULLET_SIZE / 2,
-    width: BULLET_SIZE,
-    height: BULLET_SIZE,
-    fill: BULLET_COLOR,
-  }),
-]
+}: Bullet): ReadonlyArray<Canvas.Shape> => {
+  const speed = Math.max(1, Math.hypot(velocityX, velocityY))
+  return [
+    Canvas.Rect({
+      x:
+        Math.round(x - (velocityX / speed) * BULLET_TRAIL_PX) - BULLET_SIZE / 2,
+      y:
+        Math.round(y - (velocityY / speed) * BULLET_TRAIL_PX) - BULLET_SIZE / 2,
+      width: BULLET_SIZE,
+      height: BULLET_SIZE,
+      fill: BULLET_TRAIL_COLOR,
+    }),
+    Canvas.Rect({
+      x: Math.round(x) - BULLET_SIZE / 2,
+      y: Math.round(y) - BULLET_SIZE / 2,
+      width: BULLET_SIZE,
+      height: BULLET_SIZE,
+      fill: BULLET_COLOR,
+    }),
+  ]
+}
 
 const UNIT_SCALE: Vector = { x: 1, y: 1 }
 const QUARTER_TURN = Math.PI / 2
@@ -411,59 +427,102 @@ const centeredRect = (
     fill,
   })
 
+const MUZZLE_FLASHES: Readonly<
+  Record<
+    MuzzleFlash,
+    (isBig: boolean, x: number, y: number) => ReadonlyArray<Canvas.Shape>
+  >
+> = {
+  Flicker: (isBig, x, y) =>
+    isBig
+      ? [
+          centeredRect(x, y, 3, 3, MUZZLE_FLASH_OUTER_COLOR),
+          centeredRect(x, y, 1, 1, MUZZLE_FLASH_CORE_COLOR),
+        ]
+      : [centeredRect(x, y, 1, 1, MUZZLE_FLASH_OUTER_COLOR)],
+  Pop: (isBig, x, y) =>
+    isBig
+      ? [
+          centeredRect(x, y, 5, 3, MUZZLE_FLASH_OUTER_COLOR),
+          centeredRect(x, y, 3, 5, MUZZLE_FLASH_OUTER_COLOR),
+          centeredRect(x, y, 3, 3, MUZZLE_FLASH_CORE_COLOR),
+        ]
+      : [
+          centeredRect(x, y, 3, 3, MUZZLE_FLASH_OUTER_COLOR),
+          centeredRect(x, y, 1, 1, MUZZLE_FLASH_CORE_COLOR),
+        ],
+  Blast: (isBig, x, y) =>
+    isBig
+      ? [
+          centeredRect(x, y, 11, 5, MUZZLE_FLASH_OUTER_COLOR),
+          centeredRect(x, y, 5, 11, MUZZLE_FLASH_OUTER_COLOR),
+          centeredRect(x, y, 7, 7, MUZZLE_FLASH_OUTER_COLOR),
+          centeredRect(x, y, 5, 5, MUZZLE_FLASH_CORE_COLOR),
+        ]
+      : [
+          centeredRect(x, y, 7, 5, MUZZLE_FLASH_OUTER_COLOR),
+          centeredRect(x, y, 5, 7, MUZZLE_FLASH_OUTER_COLOR),
+          centeredRect(x, y, 3, 3, MUZZLE_FLASH_CORE_COLOR),
+        ],
+}
+
 const muzzleFlashShapes = (
   player: Player,
+  stats: WeaponStats,
   muzzleX: number,
   muzzleY: number,
 ): ReadonlyArray<Canvas.Shape> => {
-  const msSinceShot = PLAYER_RECOIL_MS - player.recoilRemainingMs
+  const msSinceShot = stats.recoilMs - player.recoilRemainingMs
   if (player.recoilRemainingMs <= 0 || msSinceShot >= MUZZLE_FLASH_MS) {
     return []
-  } else if (msSinceShot < MUZZLE_FLASH_BIG_MS) {
-    return [
-      centeredRect(muzzleX, muzzleY, 5, 3, MUZZLE_FLASH_OUTER_COLOR),
-      centeredRect(muzzleX, muzzleY, 3, 5, MUZZLE_FLASH_OUTER_COLOR),
-      centeredRect(muzzleX, muzzleY, 3, 3, MUZZLE_FLASH_CORE_COLOR),
-    ]
   } else {
-    return [
-      centeredRect(muzzleX, muzzleY, 3, 3, MUZZLE_FLASH_OUTER_COLOR),
-      centeredRect(muzzleX, muzzleY, 1, 1, MUZZLE_FLASH_CORE_COLOR),
-    ]
+    return MUZZLE_FLASHES[stats.flash](
+      msSinceShot < MUZZLE_FLASH_BIG_MS,
+      muzzleX,
+      muzzleY,
+    )
   }
 }
 
+const GUN_HOLD_PX = 2
+const AIMING_UP = -0.35
+
 const playerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   const { player } = model
-  const recoil = player.recoilRemainingMs / PLAYER_RECOIL_MS
-  const kick = PLAYER_RECOIL_KICK_PX * recoil
+  const weapon = heldWeapon(player.arsenal)
+  const stats = WEAPONS[weapon]
+  const recoil = clamp(player.recoilRemainingMs / stats.recoilMs, 0, 1)
+  const kick = stats.recoilKickPx * recoil
   const bodyX = player.x - player.facing.x * kick
   const bodyY = player.y - player.facing.y * kick
   const facing: Facing = player.facing.x < 0 ? 'Left' : 'Right'
-  const flashReach = MUZZLE_DISTANCE + 2
-  return [
-    Canvas.Group({
-      translate: footPosition({ x: bodyX, y: bodyY }, PLAYER_FOOT_OFFSET),
-      scale: multiplyScales(playerHurtScale(player), {
-        x: 1 + PLAYER_RECOIL_SQUASH * recoil,
-        y: 1 - PLAYER_RECOIL_SQUASH * recoil,
-      }),
-      opacity: playerOpacity(player),
-      shapes: playerFrames(model)[playerTone(player)][facing],
+  const flashReach = stats.muzzleReach + 2
+  const body = Canvas.Group({
+    translate: footPosition({ x: bodyX, y: bodyY }, PLAYER_FOOT_OFFSET),
+    scale: multiplyScales(playerHurtScale(player), {
+      x: 1 + stats.recoilSquash * recoil,
+      y: 1 - stats.recoilSquash * recoil,
     }),
-    Canvas.Rect({
-      x: Math.round(bodyX + player.facing.x * MUZZLE_DISTANCE) - 1,
-      y: Math.round(bodyY + player.facing.y * MUZZLE_DISTANCE) - 1,
-      width: MUZZLE_SIZE,
-      height: MUZZLE_SIZE,
-      fill: MUZZLE_COLOR,
-    }),
-    ...muzzleFlashShapes(
-      player,
-      Math.round(bodyX + player.facing.x * flashReach),
-      Math.round(bodyY + player.facing.y * flashReach),
-    ),
-  ]
+    opacity: playerOpacity(player),
+    shapes: playerFrames(model)[playerTone(player)][facing],
+  })
+  const gun = Canvas.Group({
+    translate: {
+      x: Math.round(bodyX + player.facing.x * GUN_HOLD_PX),
+      y: Math.round(bodyY + player.facing.y * GUN_HOLD_PX),
+    },
+    opacity: playerOpacity(player),
+    shapes: gunSprite(weapon, Math.atan2(player.facing.y, player.facing.x)),
+  })
+  const flash = muzzleFlashShapes(
+    player,
+    stats,
+    Math.round(bodyX + player.facing.x * flashReach),
+    Math.round(bodyY + player.facing.y * flashReach),
+  )
+  return player.facing.y < AIMING_UP
+    ? [gun, body, ...flash]
+    : [body, gun, ...flash]
 }
 
 // WORLD LIFE
@@ -473,6 +532,7 @@ const DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   Meat: MEAT_DECAL_COLOR,
   Rot: ROT_DECAL_COLOR,
   Shell: SHELL_DECAL_COLOR,
+  Hull: HULL_DECAL_COLOR,
 }
 
 const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
@@ -480,6 +540,7 @@ const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   Meat: MEAT_DECAL_FADED_COLOR,
   Rot: ROT_DECAL_FADED_COLOR,
   Shell: SHELL_DECAL_FADED_COLOR,
+  Hull: HULL_DECAL_FADED_COLOR,
 }
 
 const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
@@ -487,9 +548,17 @@ const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
   MeatGib: MEAT_GIB_COLOR,
   RotGib: ROT_GIB_COLOR,
   Shell: SHELL_COLOR,
+  Hull: HULL_COLOR,
+  Link: LINK_COLOR,
   Dust: DUST_COLOR,
   Chip: CHIP_COLOR,
+  Coin: COIN_COLOR,
 }
+
+const CASINGS: ReadonlyArray<ParticleKind> = ['Shell', 'Hull', 'Link']
+
+const isCasing = (particle: Particle): boolean =>
+  Array.contains(CASINGS, particle.kind)
 
 const decalShapes = (
   decals: ReadonlyArray<Decal>,
@@ -513,8 +582,8 @@ const isGround = (particle: Particle): boolean => particle.kind === 'Dust'
 const isGib = (particle: Particle): boolean =>
   particle.kind === 'MeatGib' || particle.kind === 'RotGib'
 
-const isShellUpright = (particle: Particle): boolean =>
-  particle.kind === 'Shell' &&
+const isCasingUpright = (particle: Particle): boolean =>
+  isCasing(particle) &&
   Math.floor(particle.remainingMs / SHELL_TUMBLE_MS) % 2 === 1
 
 const particleColor = (particle: Particle): string =>
@@ -523,10 +592,14 @@ const particleColor = (particle: Particle): string =>
     : PARTICLE_COLORS[particle.kind]
 
 const particleShape = (particle: Particle): Canvas.Shape => {
-  const isUpright = isShellUpright(particle)
-  const width = isUpright ? 1 : particle.size
-  const height =
-    particle.kind === 'Shell' ? (isUpright ? particle.size : 1) : particle.size
+  const isUpright = isCasingUpright(particle)
+  const thickness = particle.kind === 'Hull' ? 2 : 1
+  const width = isUpright ? thickness : particle.size
+  const height = isCasing(particle)
+    ? isUpright
+      ? particle.size
+      : thickness
+    : particle.size
   return centeredRect(
     Math.round(particle.x),
     Math.round(particle.y - particle.z),
@@ -668,6 +741,21 @@ type PopupLook = Readonly<{
   risePx: number
 }>
 
+const payoutLook = (
+  popup: Popup,
+  bigScale: number,
+  scale: number,
+): PopupLook => ({
+  text: `+$${popup.value}`,
+  tone: popup.ageMs < KILL_POPUP_FLASH_MS ? 'Damage' : 'Coin',
+  scale: popup.ageMs < KILL_POPUP_FLASH_MS ? bigScale : scale,
+  hopPx: KILL_POPUP_HOP_PX,
+  risePx: KILL_POPUP_RISE_PX,
+})
+
+const PAYDAY_POPUP_SCALE = 3
+const PAYDAY_POPUP_BIG_SCALE = 4
+
 const popupLook = (popup: Popup): PopupLook => {
   if (popup.kind === 'Damage') {
     return {
@@ -677,22 +765,18 @@ const popupLook = (popup: Popup): PopupLook => {
       hopPx: DAMAGE_POPUP_HOP_PX,
       risePx: DAMAGE_POPUP_RISE_PX,
     }
-  } else if (popup.ageMs < KILL_POPUP_FLASH_MS) {
+  } else if (popup.kind === 'Empty') {
     return {
-      text: `+${popup.value}`,
-      tone: 'Damage',
-      scale: KILL_POPUP_BIG_SCALE,
-      hopPx: KILL_POPUP_HOP_PX,
-      risePx: KILL_POPUP_RISE_PX,
+      text: 'EMPTY',
+      tone: 'Alert',
+      scale: 1,
+      hopPx: DAMAGE_POPUP_HOP_PX,
+      risePx: DAMAGE_POPUP_RISE_PX,
     }
+  } else if (popup.kind === 'Payday') {
+    return payoutLook(popup, PAYDAY_POPUP_BIG_SCALE, PAYDAY_POPUP_SCALE)
   } else {
-    return {
-      text: `+${popup.value}`,
-      tone: 'Kill',
-      scale: KILL_POPUP_SCALE,
-      hopPx: KILL_POPUP_HOP_PX,
-      risePx: KILL_POPUP_RISE_PX,
-    }
+    return payoutLook(popup, KILL_POPUP_BIG_SCALE, KILL_POPUP_SCALE)
   }
 }
 
@@ -715,7 +799,7 @@ const popupShape = (popup: Popup): Canvas.Shape => {
 }
 
 const STREAK_X = HUD_MARGIN + 8
-const STREAK_Y = HUD_MARGIN + 19
+const STREAK_Y = HUD_MARGIN + 30
 
 const streakShapes = (streak: Streak): ReadonlyArray<Canvas.Shape> =>
   Streak.match(streak, {
@@ -847,9 +931,128 @@ const roundHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
     GameOver: () => [],
   })
 
+const MONEY_Y = HUD_MARGIN + 9
+const MONEY_FONT = 'bold 8px monospace'
+const MONEY_PULSE_SCALE = 1.25
+
+const moneyShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
+  const { shown, balance } = model.wallet
+  const isTicking = shown !== balance
+  const scale = isTicking ? MONEY_PULSE_SCALE : 1
+  return [
+    Canvas.Group({
+      translate: { x: HUD_MARGIN, y: MONEY_Y },
+      scale: { x: scale, y: scale },
+      shapes: [
+        Canvas.Text({
+          x: 0,
+          y: 1,
+          content: `$${shown}`,
+          font: MONEY_FONT,
+          fill: BANNER_SHADOW_COLOR,
+          align: 'Left',
+          baseline: 'Top',
+        }),
+        Canvas.Text({
+          x: 0,
+          y: 0,
+          content: `$${shown}`,
+          font: MONEY_FONT,
+          fill: isTicking ? MUZZLE_FLASH_CORE_COLOR : COIN_COLOR,
+          align: 'Left',
+          baseline: 'Top',
+        }),
+      ],
+    }),
+  ]
+}
+
+const SLOT_WIDTH = 34
+const SLOT_HEIGHT = 12
+const SLOT_GAP = 3
+const SLOT_TOP = ARENA_HEIGHT - HUD_MARGIN - SLOT_HEIGHT
+const SLOT_FILL = 'rgba(8, 10, 12, 0.6)'
+const SLOT_BORDER = 'rgba(244, 241, 222, 0.25)'
+const SLOT_HELD_BORDER = '#ffe066'
+const SLOT_FONT = 'bold 7px monospace'
+const SLOT_EMPTY_COLOR = '#ff6b5e'
+const ENDLESS_ROUNDS = '\u221e'
+
+type SlotLook = Readonly<{
+  maybeWeapon: Option.Option<WeaponKind>
+  ammo: string
+  isHeld: boolean
+  isDry: boolean
+}>
+
+const slotShapes = (
+  index: number,
+  { maybeWeapon, ammo, isHeld, isDry }: SlotLook,
+): ReadonlyArray<Canvas.Shape> => {
+  const x = HUD_MARGIN + index * (SLOT_WIDTH + SLOT_GAP)
+  const border = isHeld ? SLOT_HELD_BORDER : SLOT_BORDER
+  return [
+    Canvas.Rect({
+      x,
+      y: SLOT_TOP,
+      width: SLOT_WIDTH,
+      height: SLOT_HEIGHT,
+      fill: border,
+    }),
+    Canvas.Rect({
+      x: x + 1,
+      y: SLOT_TOP + 1,
+      width: SLOT_WIDTH - 2,
+      height: SLOT_HEIGHT - 2,
+      fill: SLOT_FILL,
+    }),
+    ...Option.match(maybeWeapon, {
+      onNone: () => [],
+      onSome: weapon => [placeSprite(x + 8, SLOT_TOP + 6, GUN_ICONS[weapon])],
+    }),
+    Canvas.Text({
+      x: x + SLOT_WIDTH - 3,
+      y: SLOT_TOP + SLOT_HEIGHT / 2 + 1,
+      content: ammo,
+      font: SLOT_FONT,
+      fill: isDry ? SLOT_EMPTY_COLOR : HUD_TEXT_COLOR,
+      align: 'Right',
+      baseline: 'Middle',
+    }),
+  ]
+}
+
+const loadoutShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
+  const { arsenal } = player
+  const isHoldingSpare = Arsenal.guards.HoldingSpare(arsenal)
+  const pistolSlot: SlotLook = {
+    maybeWeapon: Option.some(SIDEARM),
+    ammo: ENDLESS_ROUNDS,
+    isHeld: !isHoldingSpare,
+    isDry: false,
+  }
+  const spareSlot: SlotLook = Option.match(maybeSpare(arsenal), {
+    onNone: () => ({
+      maybeWeapon: Option.none(),
+      ammo: '--',
+      isHeld: false,
+      isDry: false,
+    }),
+    onSome: spare => ({
+      maybeWeapon: Option.some(spare.kind),
+      ammo: `${spare.rounds}`,
+      isHeld: isHoldingSpare,
+      isDry: spare.rounds <= 0,
+    }),
+  })
+  return [...slotShapes(0, pistolSlot), ...slotShapes(1, spareSlot)]
+}
+
 const hudShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...heartShapes(model.player),
+  ...moneyShapes(model),
   ...streakShapes(model.streak),
+  ...loadoutShapes(model.player),
   ...roundHudShapes(model),
   Canvas.Text({
     x: ARENA_WIDTH - HUD_MARGIN,
@@ -935,7 +1138,15 @@ const preparationBanner = (
       ),
     ]
   } else if (durationMs - remainingMs < WAVE_CLEARED_BANNER_MS) {
-    return bannerText(BANNER_Y, 'WAVE CLEARED', TITLE_FONT, VICTORY_COLOR)
+    return [
+      ...bannerText(BANNER_Y, 'WAVE CLEARED', TITLE_FONT, VICTORY_COLOR),
+      ...bannerText(
+        BANNER_SUBTITLE_Y,
+        `+$${waveBonus(wave - 1)} BONUS. THE $ STALL IS OPEN`,
+        PROMPT_FONT,
+        PROMPT_COLOR,
+      ),
+    ]
   } else {
     return []
   }
@@ -956,6 +1167,8 @@ const waveBanner = (
         ),
       ]
     : []
+
+const earnedLabel = (model: Model): string => `EARNED $${model.wallet.earned}`
 
 const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   Phase.match(model.phase, {
@@ -984,8 +1197,9 @@ const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
         HUD_TEXT_COLOR,
       ),
       centeredText(92, `SCORE ${model.score}`, PROMPT_FONT, HUD_TEXT_COLOR),
+      centeredText(104, earnedLabel(model), PROMPT_FONT, COIN_COLOR),
       centeredText(
-        114,
+        124,
         `${START_PROMPT} TO PLAY AGAIN`,
         PROMPT_FONT,
         PROMPT_COLOR,
@@ -996,7 +1210,8 @@ const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
       centeredText(56, 'GAME OVER', TITLE_FONT, DEFEAT_COLOR),
       centeredText(78, waveLabel(wave), PROMPT_FONT, HUD_TEXT_COLOR),
       centeredText(92, `SCORE ${model.score}`, PROMPT_FONT, HUD_TEXT_COLOR),
-      centeredText(114, `${START_PROMPT} TO RETRY`, PROMPT_FONT, PROMPT_COLOR),
+      centeredText(104, earnedLabel(model), PROMPT_FONT, COIN_COLOR),
+      centeredText(124, `${START_PROMPT} TO RETRY`, PROMPT_FONT, PROMPT_COLOR),
     ],
   })
 
@@ -1050,9 +1265,20 @@ const STILL: Vector = { x: 0, y: 0 }
 const shakeOffset = (model: Model): Vector =>
   isRoundActive(model.phase) ? model.shake.offset : STILL
 
+const stallLook = (model: Model): StallLook => {
+  if (!isShopOpenFor(model.phase)) {
+    return 'Closed'
+  } else if (ShopState.guards.Away(model.shop)) {
+    return 'Beckoning'
+  } else {
+    return 'Open'
+  }
+}
+
 const worldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...ROOM_SHAPES,
   ...decalShapes(model.decals),
+  ...stallShapes(stallLook(model), model.elapsedMs),
   ...shadowShapes(model),
   ...groundParticleShapes(model.particles),
   ...Array.flatMap(model.bullets, bulletShapes),
@@ -1072,19 +1298,71 @@ export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
 
 const statusWave = (wave: number): string => `wave ${wave} of ${FINAL_WAVE}`
 
+const shopHint = (model: Model): string =>
+  isShopOpenFor(model.phase)
+    ? ' The shop stall in the bottom right corner is open. Walk up to its sign to browse.'
+    : ''
+
 export const statusText = (model: Model): string =>
   Phase.match(model.phase, {
     Ready: () => 'Tap, click, or press Enter to start.',
     Preparation: ({ wave }) =>
-      `Get ready for ${statusWave(wave)}. Press Enter or R, or use the Start wave button, to start it now.`,
+      `Get ready for ${statusWave(wave)}. Press Enter or R, or use the Start wave button, to start it now.${shopHint(model)}`,
     Wave: ({ wave }) => `Fighting ${statusWave(wave)}.`,
     Paused: ({ round }) =>
       `Paused during ${statusWave(round.wave)}. Tap, click, or press Enter to resume.`,
     Victory: () =>
-      `Victory. All ${FINAL_WAVE} waves survived. Score ${model.score}. Tap, click, or press Enter to play again.`,
+      `Victory. All ${FINAL_WAVE} waves survived. Score ${model.score}. Earned $${model.wallet.earned}. Tap, click, or press Enter to play again.`,
     GameOver: ({ wave }) =>
-      `Game over on ${statusWave(wave)}. Score ${model.score}. Tap, click, or press Enter to play again.`,
+      `Game over on ${statusWave(wave)}. Score ${model.score}. Earned $${model.wallet.earned}. Tap, click, or press Enter to play again.`,
   })
+
+const gunLabel = (model: Model): string => {
+  const held = WEAPONS[heldWeapon(model.player.arsenal)].name
+  return Option.match(maybeSpare(model.player.arsenal), {
+    onNone: () => `Holding the ${held}. Your second slot is empty.`,
+    onSome: spare =>
+      `Holding the ${held}. Second slot: ${WEAPONS[spare.kind].name} with ${spare.rounds} ${WEAPONS[spare.kind].roundsLabel}.`,
+  })
+}
+
+const loadoutView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isRoundActive(model.phase)
+    ? h.p(
+        [h.Class('sr-only')],
+        [`You have $${model.wallet.balance}. ${gunLabel(model)}`],
+      )
+    : h.empty
+
+const swapTarget = (model: Model): Option.Option<string> =>
+  Option.map(maybeSpare(model.player.arsenal), spare =>
+    Arsenal.guards.HoldingSpare(model.player.arsenal)
+      ? WEAPONS[SIDEARM].name
+      : WEAPONS[spare.kind].name,
+  )
+
+const swapButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
+  if (!isRoundActive(model.phase)) {
+    return h.empty
+  }
+
+  return Option.match(swapTarget(model), {
+    onNone: () => h.empty,
+    onSome: target =>
+      h.button(
+        [
+          h.Type('button'),
+          h.Class('swap-button'),
+          h.AriaLabel(`Swap to the ${target}`),
+          h.AriaKeyshortcuts('Q E 1 2'),
+          h.OnClick(Message.ClickedSwapButton(), {
+            focusSelector: '.game-surface',
+          }),
+        ],
+        ['SWAP'],
+      ),
+  })
+}
 
 const PRIMARY_MOUSE_BUTTON = 0
 
@@ -1233,8 +1511,11 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
           stickView(model.input.aimStick, 'aim', h),
         ],
       ),
+      loadoutView(model, h),
       preparationControlsView(model, h),
+      swapButtonView(model, h),
       muteButtonView(model, h),
+      shopDialogView(model, h),
     ],
   ),
 })

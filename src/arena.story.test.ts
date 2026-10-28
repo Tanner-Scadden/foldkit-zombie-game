@@ -56,6 +56,7 @@ const withPlayerAt = (base: Model, x: number, y: number): Model =>
 
 const zombieAt = (id: number, x: number, y: number, speed = 0): Zombie => ({
   id,
+  kind: 'Shambler',
   x,
   y,
   speed,
@@ -207,6 +208,7 @@ describe('bullets and cover', () => {
     velocityX: 0,
     velocityY: -240,
     remainingMs: 900,
+    weapon: 'Pistol',
   }
   const hiddenZombie = zombieAt(901, CRATE_STACK_X, 25)
 
@@ -249,6 +251,7 @@ describe('bullets and cover', () => {
               velocityX: 240,
               velocityY: 0,
               remainingMs: 900,
+              weapon: 'Pistol',
             },
           ],
         }),

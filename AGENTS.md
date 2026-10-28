@@ -35,6 +35,10 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/arena.ts`      | The room's tile map, doorways, collision, and line of sight   |
 | `src/pathing.ts`    | The flow field toward the player and zombie steering          |
 | `src/waves.ts`      | Wave plans, spawning, and the phase changes of a run          |
+| `src/weapons.ts`    | The weapon table and the two-slot arsenal                     |
+| `src/shop.ts`       | Money, the shop's items and prices, purchases, and the stall  |
+| `src/shopView.ts`   | The shop dialog drawn as HTML over the canvas                 |
+| `src/stall.ts`      | The shop stall and its shopkeeper drawn on the canvas         |
 | `src/room.ts`       | The room's static floor, walls, doors, and cover shapes       |
 | `src/particles.ts`  | Particles and floor decals spawned from each frame's events   |
 | `src/juice.ts`      | Screen shake, hit-stop, damage numbers, and the kill streak   |

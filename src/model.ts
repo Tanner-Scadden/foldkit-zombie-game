@@ -1,6 +1,8 @@
 import { Option, Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
+import { Dialog } from '@foldkit/ui'
+
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
@@ -66,6 +68,22 @@ export const Invulnerability = defineTaggedUnion({
 })
 export type Invulnerability = typeof Invulnerability.Type
 
+export const WeaponKind = Schema.Literals(['Pistol', 'Shotgun', 'Smg'])
+export type WeaponKind = typeof WeaponKind.Type
+
+export const CarriedGun = Schema.Struct({
+  kind: WeaponKind,
+  rounds: Schema.Number,
+})
+export type CarriedGun = typeof CarriedGun.Type
+
+export const Arsenal = defineTaggedUnion({
+  PistolOnly: {},
+  HoldingPistol: { spare: CarriedGun },
+  HoldingSpare: { spare: CarriedGun },
+})
+export type Arsenal = typeof Arsenal.Type
+
 export const Player = Schema.Struct({
   x: Schema.Number,
   y: Schema.Number,
@@ -75,8 +93,12 @@ export const Player = Schema.Struct({
   knockback: Vector,
   invulnerability: Invulnerability,
   recoilRemainingMs: Schema.Number,
+  arsenal: Arsenal,
 })
 export type Player = typeof Player.Type
+
+export const ZombieKind = Schema.Literals(['Shambler'])
+export type ZombieKind = typeof ZombieKind.Type
 
 export const ZombieState = defineTaggedUnion({
   Walking: {},
@@ -86,6 +108,7 @@ export type ZombieState = typeof ZombieState.Type
 
 export const Zombie = Schema.Struct({
   id: Schema.Number,
+  kind: ZombieKind,
   x: Schema.Number,
   y: Schema.Number,
   speed: Schema.Number,
@@ -103,6 +126,7 @@ export const Bullet = Schema.Struct({
   velocityX: Schema.Number,
   velocityY: Schema.Number,
   remainingMs: Schema.Number,
+  weapon: WeaponKind,
 })
 export type Bullet = typeof Bullet.Type
 
@@ -111,8 +135,11 @@ export const ParticleKind = Schema.Literals([
   'MeatGib',
   'RotGib',
   'Shell',
+  'Hull',
+  'Link',
   'Dust',
   'Chip',
+  'Coin',
 ])
 export type ParticleKind = typeof ParticleKind.Type
 
@@ -129,7 +156,13 @@ export const Particle = Schema.Struct({
 })
 export type Particle = typeof Particle.Type
 
-export const DecalKind = Schema.Literals(['Blood', 'Meat', 'Rot', 'Shell'])
+export const DecalKind = Schema.Literals([
+  'Blood',
+  'Meat',
+  'Rot',
+  'Shell',
+  'Hull',
+])
 export type DecalKind = typeof DecalKind.Type
 
 export const Decal = Schema.Struct({
@@ -142,16 +175,28 @@ export const Decal = Schema.Struct({
 export type Decal = typeof Decal.Type
 
 export const GameEvent = defineTaggedUnion({
-  Fired: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  Fired: {
+    x: Schema.Number,
+    y: Schema.Number,
+    direction: Vector,
+    weapon: WeaponKind,
+  },
   ZombieHit: {
     x: Schema.Number,
     y: Schema.Number,
     direction: Vector,
     damage: Schema.Number,
   },
-  ZombieKilled: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  ZombieKilled: {
+    x: Schema.Number,
+    y: Schema.Number,
+    direction: Vector,
+    bounty: Schema.Number,
+  },
   PlayerHurt: { x: Schema.Number, y: Schema.Number, direction: Vector },
   BulletStruck: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  RanDry: { x: Schema.Number, y: Schema.Number },
+  WaveCleared: { x: Schema.Number, y: Schema.Number, bonus: Schema.Number },
 })
 export type GameEvent = typeof GameEvent.Type
 
@@ -164,7 +209,7 @@ export type HitStop = typeof HitStop.Type
 export const Shake = Schema.Struct({ trauma: Schema.Number, offset: Vector })
 export type Shake = typeof Shake.Type
 
-export const PopupKind = Schema.Literals(['Damage', 'Kill'])
+export const PopupKind = Schema.Literals(['Damage', 'Kill', 'Payday', 'Empty'])
 export type PopupKind = typeof PopupKind.Type
 
 export const Popup = Schema.Struct({
@@ -197,9 +242,6 @@ export type SoundSetting = typeof SoundSetting.Type
 
 export const DoorId = Schema.Literals(['North', 'West', 'East', 'South'])
 export type DoorId = typeof DoorId.Type
-
-export const ZombieKind = Schema.Literals(['Shambler'])
-export type ZombieKind = typeof ZombieKind.Type
 
 export const PlannedSpawn = Schema.Struct({
   atMs: Schema.Number,
@@ -245,6 +287,29 @@ export const FlowField = Schema.Struct({
 })
 export type FlowField = typeof FlowField.Type
 
+export const ShopItemId = Schema.Literals([
+  'Shotgun',
+  'ShotgunShells',
+  'Smg',
+  'SmgRounds',
+  'Heart',
+])
+export type ShopItemId = typeof ShopItemId.Type
+
+export const ShopState = defineTaggedUnion({
+  Away: {},
+  Browsing: { focusedItem: ShopItemId },
+  Dismissed: {},
+})
+export type ShopState = typeof ShopState.Type
+
+export const Wallet = Schema.Struct({
+  balance: Schema.Number,
+  earned: Schema.Number,
+  shown: Schema.Number,
+})
+export type Wallet = typeof Wallet.Type
+
 export const Model = Schema.Struct({
   phase: Phase,
   player: Player,
@@ -255,6 +320,9 @@ export const Model = Schema.Struct({
   dustCooldownMs: Schema.Number,
   nextEntityId: Schema.Number,
   score: Schema.Number,
+  wallet: Wallet,
+  shop: ShopState,
+  shopDialog: Dialog.Model,
   elapsedMs: Schema.Number,
   frameEvents: Schema.Array(GameEvent),
   hitStop: HitStop,
@@ -280,7 +348,12 @@ export const initialPlayer: Player = {
   knockback: { x: 0, y: 0 },
   invulnerability: Invulnerability.Vulnerable(),
   recoilRemainingMs: 0,
+  arsenal: Arsenal.PistolOnly(),
 }
+
+export const emptyWallet: Wallet = { balance: 0, earned: 0, shown: 0 }
+
+export const SHOP_DIALOG_ID = 'shop'
 
 export const idleInput: Input = {
   pressedKeys: [],
@@ -310,6 +383,9 @@ export const initialModel: Model = {
   dustCooldownMs: 0,
   nextEntityId: 0,
   score: 0,
+  wallet: emptyWallet,
+  shop: ShopState.Away(),
+  shopDialog: Dialog.init({ id: SHOP_DIALOG_ID }),
   elapsedMs: 0,
   frameEvents: [],
   hitStop: initialHitStop,

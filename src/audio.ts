@@ -7,10 +7,18 @@ import { generateMany, nextRandom } from './prng'
 
 export const SoundEffect = Schema.Literals([
   'Shot',
+  'ShotgunBlast',
+  'SmgShot',
+  'DryClick',
+  'Swap',
   'ZombieHit',
   'ZombieDeath',
   'PlayerHurt',
   'Start',
+  'ShopBell',
+  'Purchase',
+  'Denied',
+  'Payday',
 ])
 export type SoundEffect = typeof SoundEffect.Type
 
@@ -175,6 +183,86 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
       },
     ],
   },
+  ShotgunBlast: {
+    variationCents: 60,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 260), at(0.16, 42)],
+        envelope: envelope(0.3, 0.002, 0.18),
+      },
+      {
+        wave: 'sine',
+        pitch: [at(0, 120), at(0.2, 38)],
+        envelope: envelope(0.55, 0.002, 0.22),
+      },
+    ],
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 0.8,
+        cutoff: [at(0, 3800), at(0.22, 260)],
+        envelope: envelope(0.85, 0.001, 0.24),
+      },
+    ],
+  },
+  SmgShot: {
+    variationCents: 90,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 980), at(0.035, 240)],
+        envelope: envelope(0.16, 0.001, 0.04),
+      },
+    ],
+    noises: [
+      {
+        filter: 'highpass',
+        quality: 0.7,
+        cutoff: [at(0, 3400), at(0.03, 1600)],
+        envelope: envelope(0.36, 0.001, 0.03),
+      },
+    ],
+  },
+  DryClick: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 1900), at(0.012, 1100)],
+        envelope: envelope(0.12, 0.001, 0.012),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 1500), at(0.012, 900)],
+        envelope: envelope(0.1, 0.001, 0.012, 0.06),
+      },
+    ],
+    noises: [],
+  },
+  Swap: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'triangle',
+        pitch: [at(0, 420), at(0.03, 380)],
+        envelope: envelope(0.22, 0.002, 0.04),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 640), at(0.03, 700)],
+        envelope: envelope(0.22, 0.002, 0.05, 0.06),
+      },
+    ],
+    noises: [
+      {
+        filter: 'highpass',
+        quality: 1,
+        cutoff: [at(0, 4200), at(0.02, 2600)],
+        envelope: envelope(0.2, 0.001, 0.02, 0.06),
+      },
+    ],
+  },
   ZombieHit: {
     variationCents: 160,
     tones: [
@@ -254,6 +342,90 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
       },
     ],
     noises: [],
+  },
+  ShopBell: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'sine',
+        pitch: [at(0, 1046), at(0.4, 1040)],
+        envelope: envelope(0.22, 0.003, 0.42),
+      },
+      {
+        wave: 'sine',
+        pitch: [at(0, 1568), at(0.4, 1560)],
+        envelope: envelope(0.16, 0.003, 0.46, 0.1),
+      },
+    ],
+    noises: [],
+  },
+  Purchase: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 1318), at(0.05, 1318)],
+        envelope: envelope(0.12, 0.002, 0.06, 0.07),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 1760), at(0.2, 1760)],
+        envelope: envelope(0.14, 0.002, 0.26, 0.13),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 2,
+        cutoff: [at(0, 2400), at(0.06, 1400)],
+        envelope: envelope(0.5, 0.001, 0.06),
+      },
+      {
+        filter: 'highpass',
+        quality: 3,
+        cutoff: [at(0, 7000), at(0.24, 5200)],
+        envelope: envelope(0.18, 0.002, 0.24, 0.13),
+      },
+    ],
+  },
+  Denied: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 180), at(0.16, 140)],
+        envelope: envelope(0.16, 0.004, 0.16),
+      },
+    ],
+    noises: [],
+  },
+  Payday: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 988), at(0.05, 988)],
+        envelope: envelope(0.12, 0.002, 0.06),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 1318), at(0.05, 1318)],
+        envelope: envelope(0.12, 0.002, 0.06, 0.07),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 1976), at(0.2, 1976)],
+        envelope: envelope(0.13, 0.002, 0.24, 0.14),
+      },
+    ],
+    noises: [
+      {
+        filter: 'highpass',
+        quality: 3,
+        cutoff: [at(0, 6800), at(0.3, 5000)],
+        envelope: envelope(0.16, 0.002, 0.3, 0.14),
+      },
+    ],
   },
 }
 

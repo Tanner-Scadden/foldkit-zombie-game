@@ -53,6 +53,7 @@ const zombieAt = (
   hp = ZOMBIE_MAX_HP,
 ): Zombie => ({
   id,
+  kind: 'Shambler',
   x,
   y,
   speed: 0,
@@ -69,6 +70,7 @@ const bulletInto = (id: number, zombie: Zombie): Bullet => ({
   velocityX: 1,
   velocityY: 0,
   remainingMs: 900,
+  weapon: 'Pistol',
 })
 
 const inWave = (

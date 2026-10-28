@@ -26,6 +26,15 @@ import {
   CHIP_SPEED_MAX,
   CHIP_SPEED_MIN,
   CHIP_SPREAD,
+  COINS_PER_PURCHASE,
+  COIN_DRAG_PER_SECOND,
+  COIN_GRAVITY,
+  COIN_LIFETIME_MS,
+  COIN_LIFT_MAX,
+  COIN_LIFT_MIN,
+  COIN_RESTITUTION,
+  COIN_SPEED_MAX,
+  COIN_SPEED_MIN,
   DECAL_MAX,
   DUST_DRAG_PER_SECOND,
   DUST_HURT_SPEED_MAX,
@@ -75,6 +84,7 @@ import {
   type Vector,
 } from './model'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
+import { WEAPONS } from './weapons'
 
 // PHYSICS
 
@@ -110,6 +120,18 @@ const PHYSICS: Readonly<Record<ParticleKind, ParticlePhysics>> = {
     restitution: SHELL_RESTITUTION,
     maybeDecalKind: Option.some('Shell'),
   },
+  Hull: {
+    gravity: SHELL_GRAVITY,
+    dragPerSecond: SHELL_DRAG_PER_SECOND,
+    restitution: SHELL_RESTITUTION,
+    maybeDecalKind: Option.some('Hull'),
+  },
+  Link: {
+    gravity: SHELL_GRAVITY,
+    dragPerSecond: SHELL_DRAG_PER_SECOND,
+    restitution: SHELL_RESTITUTION,
+    maybeDecalKind: Option.some('Shell'),
+  },
   Dust: {
     gravity: 0,
     dragPerSecond: DUST_DRAG_PER_SECOND,
@@ -122,6 +144,24 @@ const PHYSICS: Readonly<Record<ParticleKind, ParticlePhysics>> = {
     restitution: CHIP_RESTITUTION,
     maybeDecalKind: Option.none(),
   },
+  Coin: {
+    gravity: COIN_GRAVITY,
+    dragPerSecond: COIN_DRAG_PER_SECOND,
+    restitution: COIN_RESTITUTION,
+    maybeDecalKind: Option.none(),
+  },
+}
+
+const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
+  Blood: 1,
+  MeatGib: 2,
+  RotGib: 2,
+  Shell: 2,
+  Hull: 3,
+  Link: 1,
+  Dust: 2,
+  Chip: 1,
+  Coin: 2,
 }
 
 const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
@@ -129,6 +169,7 @@ const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
   Meat: size => size,
   Rot: size => size,
   Shell: () => 1,
+  Hull: () => 2,
 }
 
 type ParticleStep = Result.Result<Particle, Option.Option<Decal>>
@@ -305,7 +346,7 @@ const gib =
   }
 
 const shellCasing =
-  (ground: Vector, facing: Vector) =>
+  (ground: Vector, facing: Vector, kind: ParticleKind) =>
   (state: number): Seeded<Particle> => {
     const speedDraw = nextRandom(state)
     const liftDraw = nextRandom(speedDraw.nextState)
@@ -316,7 +357,7 @@ const shellCasing =
     return [
       liftDraw.nextState,
       launch({
-        kind: 'Shell',
+        kind,
         ground,
         height: PLAYER_FOOT_OFFSET,
         angle: ejectAngle,
@@ -326,7 +367,7 @@ const shellCasing =
           SHELL_EJECT_SPEED_MAX,
         ),
         lift: between(liftDraw.value, SHELL_LIFT_MIN, SHELL_LIFT_MAX),
-        size: 2,
+        size: LAUNCH_SIZE[kind],
         lifetimeMs: SHELL_LIFETIME_MS,
       }),
     ]
@@ -379,6 +420,27 @@ const chip =
     ]
   }
 
+const coin =
+  (ground: Vector) =>
+  (state: number): Seeded<Particle> => {
+    const angleDraw = nextRandom(state)
+    const speedDraw = nextRandom(angleDraw.nextState)
+    const liftDraw = nextRandom(speedDraw.nextState)
+    return [
+      liftDraw.nextState,
+      launch({
+        kind: 'Coin',
+        ground,
+        height: PLAYER_FOOT_OFFSET,
+        angle: angleDraw.value * Math.PI * 2,
+        speed: between(speedDraw.value, COIN_SPEED_MIN, COIN_SPEED_MAX),
+        lift: between(liftDraw.value, COIN_LIFT_MIN, COIN_LIFT_MAX),
+        size: LAUNCH_SIZE.Coin,
+        lifetimeMs: COIN_LIFETIME_MS,
+      }),
+    ]
+  }
+
 const chain = (
   state: number,
   batches: ReadonlyArray<
@@ -420,13 +482,22 @@ const killParticles = (
   ])
 }
 
+const noParticles = (state: number): Seeded<ReadonlyArray<Particle>> => [
+  state,
+  [],
+]
+
 const eventParticles = (
   state: number,
   event: GameEvent,
 ): Seeded<ReadonlyArray<Particle>> =>
   GameEvent.match(event, {
-    Fired: ({ x, y, direction }) =>
-      generateMany(state, 1, shellCasing(playerGround(x, y), direction)),
+    Fired: ({ x, y, direction, weapon }) =>
+      generateMany(
+        state,
+        1,
+        shellCasing(playerGround(x, y), direction, WEAPONS[weapon].casing),
+      ),
     ZombieHit: ({ x, y, direction }) =>
       generateMany(
         state,
@@ -468,6 +539,8 @@ const eventParticles = (
           ),
       ])
     },
+    RanDry: () => noParticles(state),
+    WaveCleared: () => noParticles(state),
   })
 
 type Spawn = Readonly<{
@@ -547,5 +620,17 @@ export const advanceParticles = (
         : keepNewest([...decals, ...landed], DECAL_MAX),
     rngState: () => dust.rngState,
     dustCooldownMs: () => dust.dustCooldownMs,
+  })
+}
+
+export const burstCoins = (model: Model, x: number, y: number): Model => {
+  const [rngState, coins] = generateMany(
+    model.rngState,
+    COINS_PER_PURCHASE,
+    coin(playerGround(x, y)),
+  )
+  return modifyFields(model, {
+    particles: particles => keepNewest([...particles, ...coins], PARTICLE_MAX),
+    rngState: () => rngState,
   })
 }

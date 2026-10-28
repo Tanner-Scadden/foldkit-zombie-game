@@ -1,4 +1,4 @@
-import { Array, Option, pipe } from 'effect'
+import { Array, Option, Schema, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { STICK_DEAD_ZONE, STICK_RADIUS_PX } from './constants'
@@ -35,6 +35,26 @@ const FIRE_KEY = 'Space'
 const START_KEYS: ReadonlyArray<string> = ['Enter', 'Space']
 const PAUSE_KEYS: ReadonlyArray<string> = ['Escape', 'KeyP']
 const START_WAVE_KEYS: ReadonlyArray<string> = ['Enter', 'KeyR']
+const SWAP_KEYS: ReadonlyArray<string> = ['KeyQ', 'KeyE']
+const PISTOL_KEY = 'Digit1'
+const SPARE_KEY = 'Digit2'
+
+export const WeaponChoice = Schema.Literals(['Swap', 'Pistol', 'Spare'])
+export type WeaponChoice = typeof WeaponChoice.Type
+
+export const maybeWeaponChoice = (
+  code: string,
+): Option.Option<WeaponChoice> => {
+  if (Array.contains(SWAP_KEYS, code)) {
+    return Option.some('Swap')
+  } else if (code === PISTOL_KEY) {
+    return Option.some('Pistol')
+  } else if (code === SPARE_KEY) {
+    return Option.some('Spare')
+  } else {
+    return Option.none()
+  }
+}
 
 export const isStartKey = (code: string): boolean =>
   Array.contains(START_KEYS, code)

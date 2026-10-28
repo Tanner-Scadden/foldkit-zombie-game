@@ -6,7 +6,10 @@ import {
   DOOR_SPAWN_SPREAD_PX,
   FIRST_PREPARATION_MS,
   PREPARATION_MS,
+  SHAMBLER_BOUNTY,
   SPAWN_JITTER_MS,
+  WAVE_BONUS_BASE,
+  WAVE_BONUS_PER_WAVE,
   ZOMBIE_MAX_HP,
   ZOMBIE_SPEED_MAX,
   ZOMBIE_SPEED_MIN,
@@ -15,32 +18,45 @@ import { ZERO_VECTOR } from './geometry'
 import { deriveIntent } from './input'
 import {
   type DoorId,
+  GameEvent,
   type Model,
   Phase,
   type PlannedSpawn,
   Round,
+  ShopState,
   Streak,
   type Zombie,
   type ZombieKind,
   ZombieState,
+  emptyWallet,
   initialHitStop,
   initialPlayer,
   stillShake,
 } from './model'
 import { flowFieldToward } from './pathing'
 import { type Seeded, between, nextRandom } from './prng'
+import { earn } from './shop'
 
 // ZOMBIE KINDS
 
-type ZombieStats = Readonly<{ speedMin: number; speedMax: number; hp: number }>
+type ZombieStats = Readonly<{
+  speedMin: number
+  speedMax: number
+  hp: number
+  bounty: number
+}>
 
 export const ZOMBIE_STATS: Readonly<Record<ZombieKind, ZombieStats>> = {
   Shambler: {
     speedMin: ZOMBIE_SPEED_MIN,
     speedMax: ZOMBIE_SPEED_MAX,
     hp: ZOMBIE_MAX_HP,
+    bounty: SHAMBLER_BOUNTY,
   },
 }
+
+export const waveBonus = (wave: number): number =>
+  WAVE_BONUS_BASE + WAVE_BONUS_PER_WAVE * wave
 
 // WAVE PLANS
 
@@ -299,6 +315,8 @@ const startRun = (model: Model): Model =>
       decals: () => [],
       dustCooldownMs: () => 0,
       score: () => 0,
+      wallet: () => emptyWallet,
+      shop: () => ShopState.Away(),
       elapsedMs: () => 0,
       frameEvents: () => [],
       hitStop: () => initialHitStop,
@@ -366,6 +384,7 @@ const spawnZombie = (model: Model, spawn: PlannedSpawn): Model => {
   const point = doorSpawnPoint(spawn.door, spawn.offset)
   const zombie: Zombie = {
     id: model.nextEntityId,
+    kind: spawn.kind,
     x: point.x,
     y: point.y,
     speed:
@@ -390,11 +409,22 @@ const isWaveCleared = (
   Array.isReadonlyArrayEmpty(spawns) &&
   !Array.some(model.zombies, zombie => ZombieState.guards.Walking(zombie.state))
 
+const payWaveBonus = (model: Model, wave: number): Model => {
+  const bonus = waveBonus(wave)
+  return modifyFields(model, {
+    wallet: wallet => earn(wallet, bonus),
+    frameEvents: Array.append(
+      GameEvent.WaveCleared({ x: model.player.x, y: model.player.y, bonus }),
+    ),
+  })
+}
+
 const clearWave = (model: Model, wave: number): Model => {
+  const paid = payWaveBonus(model, wave)
   if (wave >= FINAL_WAVE) {
-    return modifyFields(model, { phase: () => Phase.Victory() })
+    return modifyFields(paid, { phase: () => Phase.Victory() })
   } else {
-    return beginPreparation(model, wave + 1, PREPARATION_MS)
+    return beginPreparation(paid, wave + 1, PREPARATION_MS)
   }
 }
 
@@ -422,17 +452,19 @@ export const advanceRound = (model: Model, worldMs: number): Model =>
   Phase.match(model.phase, {
     Ready: () => model,
     Preparation: preparation =>
-      preparation.remainingMs > worldMs
-        ? modifyFields(model, {
-            phase: () =>
-              Phase.Preparation({
-                wave: preparation.wave,
-                remainingMs: preparation.remainingMs - worldMs,
-                durationMs: preparation.durationMs,
-                spawns: preparation.spawns,
-              }),
-          })
-        : startWaveEarly(model),
+      ShopState.guards.Browsing(model.shop)
+        ? model
+        : preparation.remainingMs > worldMs
+          ? modifyFields(model, {
+              phase: () =>
+                Phase.Preparation({
+                  wave: preparation.wave,
+                  remainingMs: preparation.remainingMs - worldMs,
+                  durationMs: preparation.durationMs,
+                  spawns: preparation.spawns,
+                }),
+            })
+          : startWaveEarly(model),
     Wave: ({ wave, elapsedMs, spawns }) =>
       advanceWave(model, wave, elapsedMs + worldMs, spawns),
     Paused: () => model,

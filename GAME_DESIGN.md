@@ -45,6 +45,25 @@ Decided on 2026-10-27. The first playable is a fun one-screen arena that a stran
 - **Onboarding.** Wave 1 is the tutorial. Control hints for the current device fade in, and the first zombies are a few slow Shamblers. No walls of text.
 - **Sound.** Sound effects now, with an audio-unlock on the first input. Music comes later.
 
+#### Proposed balance
+
+Proposed on 2026-10-28 for step 4. These are starting numbers to play against, not decisions. They live in `src/constants.ts`, `src/weapons.ts`, and `src/shop.ts`.
+
+- **Money.** $5 for each Shambler kill. Clearing wave _n_ pays $20 + $5 × _n_, so wave 1 pays $25 and wave 8 pays $60. A perfect run earns about $1,000.
+- **The shop.** It opens from the wave 2 preparation onward. Wave 1 is the tutorial, the player has no money yet, and its preparation is only 6 seconds, so the stall sleeps behind a CLOSED sign until wave 1 is cleared.
+- **Slots.** The pistol always stays in the first slot. A bought gun goes in the second slot and replaces whatever is there, along with its ammo. A new gun comes out in the player's hands.
+
+| Item                  | Price | What it does                                                                       |
+| --------------------- | ----- | ---------------------------------------------------------------------------------- |
+| Pop Pistol            | Start | 1 damage, 140 ms between shots, never runs out                                     |
+| Barn Buster (shotgun) | $60   | 5 pellets in a 0.75 radian spray, 1 damage each, short range, 620 ms between shots |
+| Shell Sack            | $15   | 16 more shells, up to 48. The shotgun comes with 16                                |
+| Chatterbox (SMG)      | $90   | 1 damage, 70 ms between shots, a slight random spread                              |
+| Chatter Drum          | $20   | 120 more rounds, up to 360. The SMG comes with 120                                 |
+| Pickled Heart         | $25   | One heart, never past the maximum of 5                                             |
+
+There are no magazines or reloads yet. Limited ammo is a reserve. When it runs out, the next pull of the trigger clicks, pops EMPTY, and swaps to the pistol.
+
 ## Core loop
 
 | Phase         | What the player does                                                          |
@@ -124,7 +143,7 @@ The roadmap leads to the first playable. The order puts feel first: juice is bui
 | 1    | **Controls and the bare arena.** Twin-stick on desktop and touch, chasing zombies, shooting, score.                                                                                                                                                                                                                                                                                            | Done                                     |
 | 2    | **Feel.** Animation frames driven by Model time, walk cycles and idle bob, hit flash, knockback, squash and stretch, death animations and gibs, particles, blood decals that stay, shadows, screen shake, muzzle flash, shell casings, hit-stop, damage numbers. Hearts with knockback and an invulnerable blink. Sound effects with an audio unlock. Measure frame time on a mid-range phone. | Built. Phone frame time not yet measured |
 | 3    | **The room and the loop.** One screen with cover and three or four doorways, collision, zombies that spawn at doorways and steer around cover. Waves with a preview of which doorways they come from, and a Preparation phase with a 20 second timer that can be skipped.                                                                                                                      | Built                                    |
-| 4    | **Money and the shop.** Money from kills and a bonus for each wave cleared. A shop stall to walk onto, and an overlay with weapons, ammo, and hearts. Weapons as data: pistol, shotgun, SMG. Carry two and swap. Ammo for everything but the pistol.                                                                                                                                           | Planned                                  |
+| 4    | **Money and the shop.** Money from kills and a bonus for each wave cleared. A shop stall to walk onto, and an overlay with weapons, ammo, and hearts. Weapons as data: pistol, shotgun, SMG. Carry two and swap. Ammo for everything but the pistol.                                                                                                                                           | Built. Balance not yet playtested        |
 | 5    | **The horde.** Runner, Tank, and Exploder beside the Shambler, with chain explosions. Spawn tables for each wave from the seeded generator. The 8 wave arc, with a Tank-heavy finale and Victory.                                                                                                                                                                                              | Planned                                  |
 | 6    | **Traps.** A barricade for doorways and a turret, placed during Preparation.                                                                                                                                                                                                                                                                                                                   | Planned                                  |
 | 7    | **Ready for strangers.** Wave 1 as the tutorial with hints for the current device, a title screen, Game Over and Victory screens with run stats, a balance pass so a run takes 5 to 10 minutes, a phone performance pass, and a public link.                                                                                                                                                   | Planned                                  |
@@ -143,8 +162,6 @@ After the first playable, roughly in this order:
 
 ## Open questions
 
-- How are the pistol, shotgun, and SMG balanced against each other, and what do they cost?
-- How much money comes from a kill compared with a cleared wave?
 - Do traps break, wear out, or get rebuilt each preparation phase? Proposed: barricades take damage and can be repaired for money.
 - Does a dropped heart exist, and how rare is it?
 - Co-op: local play with gamepads on desktop is one path. Online play is another, and the deterministic `update` is what would make a lockstep approach possible. Phones cannot share a screen, so mobile co-op means online.

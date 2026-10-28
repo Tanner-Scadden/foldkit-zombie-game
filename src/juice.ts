@@ -4,6 +4,8 @@ import { modifyFields } from 'foldkit/struct'
 import {
   DAMAGE_POPUP_LIFETIME_MS,
   DAMAGE_POPUP_LIFT_PX,
+  EMPTY_POPUP_LIFETIME_MS,
+  EMPTY_POPUP_LIFT_PX,
   HIT_STOP_COOLDOWN_MS,
   HIT_STOP_EXTRA_KILL_MS,
   HIT_STOP_HURT_MS,
@@ -13,12 +15,12 @@ import {
   KILL_POPUP_LIFETIME_MS,
   KILL_POPUP_LIFT_PX,
   MS_PER_SECOND,
+  PAYDAY_POPUP_LIFETIME_MS,
+  PAYDAY_POPUP_LIFT_PX,
   POPUP_DRIFT_SPEED_MAX,
   POPUP_MAX,
-  SCORE_PER_ZOMBIE,
   SHAKE_DECAY_PER_SECOND,
   SHAKE_MAX_PX,
-  SHAKE_TRAUMA_FIRED,
   SHAKE_TRAUMA_HURT,
   SHAKE_TRAUMA_KILL,
   SHAKE_TRAUMA_MAX,
@@ -35,6 +37,8 @@ import {
   stillShake,
 } from './model'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
+import { tickShownMoney } from './shop'
+import { WEAPONS } from './weapons'
 
 // HIT-STOP
 
@@ -90,11 +94,13 @@ const triggerHitStop = (
 
 const eventTrauma = (event: GameEvent): number =>
   GameEvent.match(event, {
-    Fired: () => SHAKE_TRAUMA_FIRED,
+    Fired: ({ weapon }) => WEAPONS[weapon].shakeTrauma,
     ZombieHit: () => 0,
     ZombieKilled: () => SHAKE_TRAUMA_KILL,
     PlayerHurt: () => SHAKE_TRAUMA_HURT,
     BulletStruck: () => 0,
+    RanDry: () => 0,
+    WaveCleared: () => 0,
   })
 
 const shakeAxis = (roll: number, trauma: number): number => {
@@ -140,6 +146,8 @@ const advanceShake = (
 export const POPUP_LIFETIME_MS: Readonly<Record<PopupKind, number>> = {
   Damage: DAMAGE_POPUP_LIFETIME_MS,
   Kill: KILL_POPUP_LIFETIME_MS,
+  Payday: PAYDAY_POPUP_LIFETIME_MS,
+  Empty: EMPTY_POPUP_LIFETIME_MS,
 }
 
 const popup =
@@ -177,14 +185,18 @@ const eventPopups = (
         1,
         popup('Damage', damage, x, y - DAMAGE_POPUP_LIFT_PX),
       ),
-    ZombieKilled: ({ x, y }) =>
+    ZombieKilled: ({ x, y, bounty }) =>
+      generateMany(state, 1, popup('Kill', bounty, x, y - KILL_POPUP_LIFT_PX)),
+    PlayerHurt: () => noPopups(state),
+    BulletStruck: () => noPopups(state),
+    RanDry: ({ x, y }) =>
+      generateMany(state, 1, popup('Empty', 0, x, y - EMPTY_POPUP_LIFT_PX)),
+    WaveCleared: ({ x, y, bonus }) =>
       generateMany(
         state,
         1,
-        popup('Kill', SCORE_PER_ZOMBIE, x, y - KILL_POPUP_LIFT_PX),
+        popup('Payday', bonus, x, y - PAYDAY_POPUP_LIFT_PX),
       ),
-    PlayerHurt: () => noPopups(state),
-    BulletStruck: () => noPopups(state),
   })
 
 const agePopups = (
@@ -273,6 +285,7 @@ export const advanceJuice = (
         POPUP_MAX,
       ),
     streak: streak => advanceStreak(streak, kills, worldMs),
+    wallet: wallet => tickShownMoney(wallet, seconds),
     rngState: () => popupState,
   })
 }

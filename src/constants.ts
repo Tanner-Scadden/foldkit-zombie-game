@@ -230,3 +230,36 @@ export const DAMAGE_GLYPH_COLOR = '#fff4d6'
 export const KILL_GLYPH_COLOR = '#ffd23f'
 export const STREAK_GLYPH_COLOR = '#ff8a3d'
 export const GLYPH_SHADOW_COLOR = '#2a1418'
+
+export const BULLET_MAX = 48
+
+export const SHAMBLER_BOUNTY = 5
+export const WAVE_BONUS_BASE = 20
+export const WAVE_BONUS_PER_WAVE = 5
+export const MONEY_TICK_PER_SECOND = 10
+
+export const SHOP_FIRST_WAVE = 2
+export const SHOP_REACH_PX = 12
+export const COINS_PER_PURCHASE = 10
+export const COIN_SPEED_MIN = 25
+export const COIN_SPEED_MAX = 60
+export const COIN_LIFT_MIN = 70
+export const COIN_LIFT_MAX = 110
+export const COIN_GRAVITY = 300
+export const COIN_DRAG_PER_SECOND = 1.5
+export const COIN_RESTITUTION = 0.5
+export const COIN_LIFETIME_MS = 900
+export const COIN_COLOR = '#ffd23f'
+
+export const DRY_FIRE_DELAY_MS = 260
+export const HULL_COLOR = '#d8423a'
+export const LINK_COLOR = '#d98a4e'
+export const HULL_DECAL_COLOR = '#8e2a25'
+export const HULL_DECAL_FADED_COLOR = '#4f2624'
+
+export const PAYDAY_POPUP_LIFETIME_MS = 1300
+export const PAYDAY_POPUP_LIFT_PX = 16
+export const EMPTY_POPUP_LIFETIME_MS = 650
+export const EMPTY_POPUP_LIFT_PX = 12
+export const ALERT_GLYPH_COLOR = '#ff6b5e'
+export const COIN_GLYPH_COLOR = '#ffe066'

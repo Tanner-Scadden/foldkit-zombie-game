@@ -85,7 +85,9 @@ export const symbolAt = (column: number, row: number): Option.Option<string> =>
   )
 
 const isSolidSymbol = (symbol: string): boolean =>
-  symbol === WALL_SYMBOL || Record.has(COVER_SYMBOLS, symbol)
+  symbol === WALL_SYMBOL ||
+  symbol === SHOP_STALL_SYMBOL ||
+  Record.has(COVER_SYMBOLS, symbol)
 
 export const tileIndex = (column: number, row: number): number =>
   row * ROOM_COLUMNS + column

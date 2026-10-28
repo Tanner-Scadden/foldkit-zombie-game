@@ -33,6 +33,7 @@ import {
   SHAKE_TRAUMA_HURT,
   SHAKE_TRAUMA_KILL,
   SHAKE_TRAUMA_MAX,
+  SHAMBLER_BOUNTY,
   STICK_RADIUS_PX,
   STREAK_WINDOW_MS,
   ZOMBIE_DYING_MS,
@@ -89,6 +90,7 @@ const playingModel: Model = modifyFields(readyModel, {
 
 const zombieAt = (id: number, x: number, y: number, speed = 20): Zombie => ({
   id,
+  kind: 'Shambler',
   x,
   y,
   speed,
@@ -512,7 +514,9 @@ describe('game events', () => {
           'ZombieKilled',
         ])
         expect(Array.head(frameEvents)).toEqual(
-          Option.some(GameEvent.Fired({ ...shot, direction: RIGHT })),
+          Option.some(
+            GameEvent.Fired({ ...shot, direction: RIGHT, weapon: 'Pistol' }),
+          ),
         )
         expect(Array.last(frameEvents)).toEqual(
           Option.some(
@@ -520,6 +524,7 @@ describe('game events', () => {
               x: zombieX,
               y: ARENA_HEIGHT / 2,
               direction: RIGHT,
+              bounty: SHAMBLER_BOUNTY,
             }),
           ),
         )
@@ -712,6 +717,7 @@ describe('particles and decals', () => {
       velocityX: 1,
       velocityY: 0,
       remainingMs: 900,
+      weapon: 'Pistol',
     }))
     const oldDecal: Decal = { kind: 'Shell', x: 1, y: 1, width: 2, height: 1 }
     const floodModel = modifyFields(withZombies(playingModel, victims), {
@@ -820,6 +826,7 @@ const bulletInto = (id: number, { x, y }: Zombie): Bullet => ({
   velocityX: 1,
   velocityY: 0,
   remainingMs: 900,
+  weapon: 'Pistol',
 })
 
 const massacreModel = (count: number): Model => {
@@ -849,6 +856,7 @@ const STRAY_BULLET: Bullet = {
   velocityX: 60,
   velocityY: 0,
   remainingMs: 900,
+  weapon: 'Pistol',
 }
 
 const freezeVictim = doomedZombieAt(400, 250, 30)
@@ -1138,7 +1146,7 @@ describe('hit-stop', () => {
 })
 
 describe('damage numbers', () => {
-  test('a hit pops the damage dealt and a kill pops a point value', () => {
+  test('a hit pops the damage dealt and a kill pops the money it pays', () => {
     story(
       update,
       given(withZombies(playingModel, [zombieAt(100, MUZZLE_X, 90, 0)])),
@@ -1157,7 +1165,7 @@ describe('damage numbers', () => {
       model(nextModel => {
         expect(kindsAndValues(nextModel)).toEqual([
           ['Damage', PISTOL_DAMAGE],
-          ['Kill', SCORE_PER_ZOMBIE],
+          ['Kill', SHAMBLER_BOUNTY],
         ])
       }),
     )
