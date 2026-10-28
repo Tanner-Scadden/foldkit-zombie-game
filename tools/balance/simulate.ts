@@ -14,9 +14,8 @@ Object.assign(globalThis, {
 
 const { Message, update } = await import('../../src/main')
 const { initialModel } = await import('../../src/model')
-const { THRESHOLDS, boxCenter, hasLineOfSight } = await import(
-  '../../src/arena'
-)
+const { THRESHOLDS, boxCenter, hasLineOfSight } =
+  await import('../../src/arena')
 const { STALL_BOX, isShopOpenFor, priceFor } = await import('../../src/shop')
 const { FINAL_WAVE } = await import('../../src/waves')
 const { maxRounds, maybeSpare } = await import('../../src/weapons')
@@ -68,7 +67,9 @@ const distance = (a: Vector, b: Vector) => Math.hypot(a.x - b.x, a.y - b.y)
 
 const steerToward = (from: Vector, to: Vector): Vector => {
   const length = distance(from, to)
-  return length < 2 ? { x: 0, y: 0 } : { x: (to.x - from.x) / length, y: (to.y - from.y) / length }
+  return length < 2
+    ? { x: 0, y: 0 }
+    : { x: (to.x - from.x) / length, y: (to.y - from.y) / length }
 }
 
 // Keeps its distance from the nearest zombie only once it is inside the
@@ -147,7 +148,9 @@ const aimAndFire = (model: Model, frame: number): Model => {
   const target = nearestVisible(model)
   const isHeld = model.input.mouseButton._tag === 'Held'
   if (target === undefined) {
-    return isHeld ? send(model, Message.ReleasedPointer({ pointerId: 1 })) : model
+    return isHeld
+      ? send(model, Message.ReleasedPointer({ pointerId: 1 }))
+      : model
   }
   const angle =
     Math.atan2(target.y - model.player.y, target.x - model.player.x) +
@@ -217,7 +220,9 @@ const shop = (model: Model): Model => {
   if (item === undefined) {
     return send(
       model,
-      Message.GotShopDialogMessage({ message: Dialog.Message.RequestedClose() }),
+      Message.GotShopDialogMessage({
+        message: Dialog.Message.RequestedClose(),
+      }),
     )
   }
   const bought = send(model, Message.ClickedBuyButton({ item }))
@@ -253,7 +258,11 @@ const busiestDoor = (model: Model) => {
 type PrepPlan = 'Shop' | 'Barricade' | 'Go'
 
 const prepPlan = (model: Model, shopped: boolean): PrepPlan => {
-  if (isShopOpenFor(model.phase) && !shopped && wantedPurchase(model) !== undefined) {
+  if (
+    isShopOpenFor(model.phase) &&
+    !shopped &&
+    wantedPurchase(model) !== undefined
+  ) {
     return 'Shop'
   }
   if (model.trapStock.Barricade > 0 && busiestDoor(model) !== undefined) {
@@ -343,7 +352,9 @@ const runOnce = (seed: number): RunResult => {
           stuckFrames = 0
         }
         const sidestep =
-          stuckFrames > 5 ? { x: -direction.y * strafe, y: direction.x * strafe } : direction
+          stuckFrames > 5
+            ? { x: -direction.y * strafe, y: direction.x * strafe }
+            : direction
         model = pressKeys(model, desiredKeys(sidestep))
       }
     } else {
@@ -360,7 +371,23 @@ const runOnce = (seed: number): RunResult => {
     maxAlive = Math.max(maxAlive, model.zombies.length)
     if (process.env.DEBUG && frame % 150 === 0) {
       const near = walking(model).map(z => distance(model.player, z))
-      console.log(model.phase._tag, wave, 'zombies', near.length, 'closest', Math.min(...near).toFixed(0), 'player', model.player.x.toFixed(0), model.player.y.toFixed(0), 'hp', model.player.hp, 'shots', model.stats.shotsFired, model.stats.shotsHit, model.player.arsenal._tag)
+      console.log(
+        model.phase._tag,
+        wave,
+        'zombies',
+        near.length,
+        'closest',
+        Math.min(...near).toFixed(0),
+        'player',
+        model.player.x.toFixed(0),
+        model.player.y.toFixed(0),
+        'hp',
+        model.player.hp,
+        'shots',
+        model.stats.shotsFired,
+        model.stats.shotsHit,
+        model.player.arsenal._tag,
+      )
     }
     if (model.frameEvents.some(event => event._tag === 'WaveCleared')) {
       moneyAfterWave.push(model.wallet.earned)
@@ -391,7 +418,9 @@ const median = (values: Array<number>): number => {
 const runs = Number(process.argv[2] ?? 40)
 const firstSeed = Number(process.argv[3] ?? 1)
 const started = performance.now()
-const results = EffectArray.makeBy(runs, index => runOnce(firstSeed + index * 7919))
+const results = EffectArray.makeBy(runs, index =>
+  runOnce(firstSeed + index * 7919),
+)
 const elapsed = (performance.now() - started) / 1000
 
 console.log(`${runs} runs in ${elapsed.toFixed(1)} s`)
@@ -403,17 +432,27 @@ for (let wave = 1; wave <= FINAL_WAVE; wave++) {
     `${String(wave).padStart(4)}  ${((100 * reached) / runs).toFixed(0).padStart(6)}%  ${((100 * cleared) / runs).toFixed(0).padStart(6)}%`,
   )
 }
-const deaths = results.filter(result => !result.victory).map(result => result.cleared + 1)
+const deaths = results
+  .filter(result => !result.victory)
+  .map(result => result.cleared + 1)
 const wins = results.filter(result => result.victory)
 console.log(`\nVictories: ${wins.length} of ${runs}`)
 console.log(`Median wave of death: ${median(deaths)}`)
-console.log(`Median run length: ${(median(results.map(r => r.runMs)) / 60000).toFixed(2)} min`)
+console.log(
+  `Median run length: ${(median(results.map(r => r.runMs)) / 60000).toFixed(2)} min`,
+)
 console.log(
   `Median win length: ${(median(wins.map(r => r.runMs)) / 60000).toFixed(2)} min`,
 )
-console.log('\nMoney earned by the end of wave (median of runs that cleared it)')
+console.log(
+  '\nMoney earned by the end of wave (median of runs that cleared it)',
+)
 for (let wave = 1; wave <= FINAL_WAVE; wave++) {
-  const values = results.flatMap(r => (r.moneyAfterWave[wave - 1] === undefined ? [] : [r.moneyAfterWave[wave - 1]!]))
+  const values = results.flatMap(r =>
+    r.moneyAfterWave[wave - 1] === undefined
+      ? []
+      : [r.moneyAfterWave[wave - 1]!],
+  )
   if (values.length > 0) console.log(`  wave ${wave}: $${median(values)}`)
 }
 const hurt = results.reduce((sum, r) => {

@@ -55,6 +55,27 @@ export const circlesOverlap = (
   return deltaX * deltaX + deltaY * deltaY <= reach * reach
 }
 
+export const closestPointOnSegment = (
+  point: Vector,
+  from: Vector,
+  to: Vector,
+): Vector => {
+  const segmentX = to.x - from.x
+  const segmentY = to.y - from.y
+  const lengthSquared = segmentX * segmentX + segmentY * segmentY
+  if (lengthSquared <= 0) {
+    return from
+  }
+
+  const along = clamp(
+    ((point.x - from.x) * segmentX + (point.y - from.y) * segmentY) /
+      lengthSquared,
+    0,
+    1,
+  )
+  return { x: from.x + segmentX * along, y: from.y + segmentY * along }
+}
+
 export const arenaScale = (surface: SurfaceRectangle): number =>
   Math.min(surface.width / ARENA_WIDTH, surface.height / ARENA_HEIGHT)
 

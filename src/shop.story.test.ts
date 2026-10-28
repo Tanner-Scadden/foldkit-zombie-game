@@ -300,13 +300,38 @@ describe('the shop stall', () => {
         ...ticks(FRAMES_TO_STALL + 2, FRAME_MS),
         Command.expectNone(),
         model(({ shop, shopDialog }) => {
-          expect(shop).toEqual(ShopState.Dismissed())
+          expect(shop).toEqual(ShopState.Away())
           expect(shopDialog.isOpen).toBe(false)
         }),
       )
 
     walkUpDuring(fighting(3))
     walkUpDuring(preparing(1))
+  })
+
+  test('a player who ends a wave at the stall gets the shop once preparation begins', () => {
+    story(
+      update,
+      given(
+        killShot(
+          modifyFields(at(readyModel, 270, 144), {
+            phase: () => Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [] }),
+          }),
+        ),
+      ),
+      tick(SHORT_FRAME_MS),
+      model(({ phase, shop }) => {
+        expect(Phase.guards.Preparation(phase)).toBe(true)
+        expect(shop).toEqual(ShopState.Away())
+      }),
+      tick(FRAME_MS),
+      Command.expectExact(Dialog.ShowDialog),
+      resolveShowShop,
+      model(({ shop, shopDialog }) => {
+        expect(ShopState.guards.Browsing(shop)).toBe(true)
+        expect(shopDialog.isOpen).toBe(true)
+      }),
+    )
   })
 
   test('the stall blocks movement like cover', () => {

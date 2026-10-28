@@ -1,4 +1,12 @@
-import { launch, desktop, mobile, shot, wait, HARNESS as GAME, model } from './lib'
+import {
+  launch,
+  desktop,
+  mobile,
+  shot,
+  wait,
+  HARNESS as GAME,
+  model,
+} from './lib'
 
 const browser = await launch()
 

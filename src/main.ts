@@ -199,12 +199,18 @@ const COARSE_POINTER_QUERY = '(pointer: coarse)'
 
 export const DetectInputDevice = Command.define('DetectInputDevice', {
   messages: [Message.CompletedDetectInputDevice],
-  execute: Effect.sync(() =>
-    Message.CompletedDetectInputDevice({
-      device: window.matchMedia(COARSE_POINTER_QUERY).matches
-        ? 'Touch'
-        : 'KeyboardMouse',
-    }),
+  execute: pipe(
+    Effect.try(() => window.matchMedia(COARSE_POINTER_QUERY).matches),
+    Effect.map(isCoarsePointer =>
+      Message.CompletedDetectInputDevice({
+        device: isCoarsePointer ? 'Touch' : 'KeyboardMouse',
+      }),
+    ),
+    Effect.catch(() =>
+      Effect.succeed(
+        Message.CompletedDetectInputDevice({ device: 'KeyboardMouse' }),
+      ),
+    ),
   ),
 })
 
@@ -556,6 +562,10 @@ const placeSelectedTrap = (model: Model): UpdateReturn => {
 }
 
 const nextTrap = (model: Model): UpdateReturn => {
+  if (!isRoundActive(model.phase)) {
+    return { model }
+  }
+
   const cycled = cycleTrap(model)
   return playSounds(
     cycled.selectedTrap === model.selectedTrap ? [] : [uiCue('Swap')],

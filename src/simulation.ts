@@ -31,6 +31,7 @@ import {
   addVectors,
   circlesOverlap,
   clamp,
+  closestPointOnSegment,
   directionBetween,
   normalize,
   scaleVector,
@@ -567,28 +568,60 @@ const bulletDirection = (bullet: Bullet): Vector =>
     () => ZERO_VECTOR,
   )
 
+type Contact = Readonly<{ zombie: Zombie; point: Vector; reach: number }>
+
+const maybeContact = (
+  from: Vector,
+  to: Vector,
+  zombie: Zombie,
+): Option.Option<Contact> => {
+  const point = closestPointOnSegment(zombie, from, to)
+  return circlesOverlap(point, BULLET_RADIUS, zombie, radiusOf(zombie))
+    ? Option.some({
+        zombie,
+        point,
+        reach: Math.hypot(point.x - from.x, point.y - from.y),
+      })
+    : Option.none()
+}
+
+const nearerContact = (
+  nearest: Option.Option<Contact>,
+  contact: Contact,
+): Option.Option<Contact> =>
+  Option.match(nearest, {
+    onNone: () => Option.some(contact),
+    onSome: current =>
+      contact.reach < current.reach ? Option.some(contact) : nearest,
+  })
+
 const findBulletHits = (
   bullets: ReadonlyArray<Bullet>,
   zombies: ReadonlyArray<Zombie>,
+  seconds: number,
 ): ReadonlyArray<BulletHit> => {
   const targets = Array.filter(zombies, isWalking)
   return Array.getSomes(
-    Array.map(bullets, bullet =>
-      pipe(
+    Array.map(bullets, bullet => {
+      const from = {
+        x: bullet.x - bullet.velocityX * seconds,
+        y: bullet.y - bullet.velocityY * seconds,
+      }
+      return pipe(
         targets,
-        Array.findFirst(zombie =>
-          circlesOverlap(bullet, BULLET_RADIUS, zombie, radiusOf(zombie)),
-        ),
-        Option.map(zombie => ({
+        Array.map(zombie => maybeContact(from, bullet, zombie)),
+        Array.getSomes,
+        Array.reduce(Option.none<Contact>(), nearerContact),
+        Option.map(({ zombie, point }) => ({
           bulletId: bullet.id,
           zombieId: zombie.id,
-          x: bullet.x,
-          y: bullet.y,
+          x: point.x,
+          y: point.y,
           direction: bulletDirection(bullet),
           weapon: bullet.weapon,
         })),
-      ),
-    ),
+      )
+    }),
   )
 }
 
@@ -645,8 +678,8 @@ const killEventOn =
       }),
     )
 
-const resolveBulletHits = (model: Model): Model => {
-  const hits = findBulletHits(model.bullets, model.zombies)
+const resolveBulletHits = (model: Model, seconds: number): Model => {
+  const hits = findBulletHits(model.bullets, model.zombies, seconds)
   if (Array.isReadonlyArrayEmpty(hits)) {
     return model
   }
@@ -792,7 +825,7 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
 
   return pipe(
     recordFootfalls(advanced, deltaMs),
-    resolveBulletHits,
+    footed => resolveBulletHits(footed, seconds),
     trapped => advanceTraps(trapped, seconds, deltaMs),
     resolvePlayerContact,
     resolveBlasts,

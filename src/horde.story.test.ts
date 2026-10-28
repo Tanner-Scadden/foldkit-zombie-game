@@ -41,6 +41,7 @@ import {
 import { Behavior, ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
 
 const FRAME_MS = 16
+const LONG_FRAME_MS = 50
 const CENTER_X = ARENA_WIDTH / 2
 const CENTER_Y = ARENA_HEIGHT / 2
 
@@ -221,6 +222,57 @@ describe('the kind table', () => {
     )
   })
 
+  test('a fast bullet in a long frame still hits a Hotfoot it passes through', () => {
+    const runner = zombieOf('Runner', 1, 200, 60)
+    const grazing: Bullet = {
+      id: 10,
+      x: 192,
+      y: 63.5,
+      velocityX: 240,
+      velocityY: 0,
+      remainingMs: 900,
+      weapon: 'Pistol',
+    }
+
+    story(
+      update,
+      given(withScene([runner], [grazing])),
+      tick(LONG_FRAME_MS),
+      model(({ zombies, bullets }) => {
+        expect(Array.map(zombies, ({ hp }) => hp)).toEqual([
+          ZOMBIE_KINDS.Runner.hp - 1,
+        ])
+        expect(bullets).toEqual([])
+      }),
+    )
+  })
+
+  test('a bullet hits the first zombie along its path in a long frame', () => {
+    const near = zombieOf('Shambler', 1, 200, 60)
+    const far = zombieOf('Shambler', 2, 208, 60)
+    const piercing: Bullet = {
+      id: 10,
+      x: 194,
+      y: 60,
+      velocityX: 240,
+      velocityY: 0,
+      remainingMs: 900,
+      weapon: 'Pistol',
+    }
+
+    story(
+      update,
+      given(withScene([far, near], [piercing])),
+      tick(LONG_FRAME_MS),
+      model(({ zombies }) => {
+        expect(Array.map(zombies, ({ id, hp }) => [id, hp])).toEqual([
+          [2, ZOMBIE_KINDS.Shambler.hp],
+          [1, ZOMBIE_KINDS.Shambler.hp - 1],
+        ])
+      }),
+    )
+  })
+
   test('a Tank bite costs two hearts and the Tank barely flinches', () => {
     const tank = zombieOf('Tank', 1, CENTER_X + 6, CENTER_Y)
     story(
@@ -336,6 +388,27 @@ describe('exploders', () => {
       PLAYER_MAX_HP - EXPLODER.playerDamage,
     )
     expect(Array.isReadonlyArrayNonEmpty(burst.blasts)).toBe(true)
+  })
+
+  test('a shot Exploder sprays goo and never blood', () => {
+    const gasbag = zombieOf('Exploder', 1, 200, 60)
+
+    story(
+      update,
+      given(
+        withScene([gasbag], pistolsInto(10, ZOMBIE_KINDS.Exploder.hp, gasbag)),
+      ),
+      tick(FRAME_MS),
+      model(({ zombies, particles }) => {
+        expect(Array.map(zombies, ({ state }) => state._tag)).toEqual([
+          'Fusing',
+        ])
+        expect(Array.isReadonlyArrayNonEmpty(particles)).toBe(true)
+        expect(Array.filter(particles, ({ kind }) => kind === 'Blood')).toEqual(
+          [],
+        )
+      }),
+    )
   })
 
   test('two Exploders chain, the second bursting a fuse later', () => {

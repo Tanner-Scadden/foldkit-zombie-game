@@ -376,7 +376,7 @@ export const isBrowsing = (shop: ShopState): boolean =>
 const arriveAtStall = (model: Model): ShopState =>
   isShopOpenFor(model.phase)
     ? ShopState.Browsing({ focusedItem: Array.headNonEmpty(SHOP_ORDER) })
-    : ShopState.Dismissed()
+    : ShopState.Away()
 
 export const refreshShopPresence = (model: Model): Model => {
   const isHere = isAtStallFront(model.player)

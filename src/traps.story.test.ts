@@ -466,6 +466,25 @@ describe('placing a turret', () => {
       }),
     )
   })
+
+  test('the trap selection stays put outside a round', () => {
+    story(
+      update,
+      given(
+        modifyFields(stocked(1, 1), {
+          phase: () => Phase.Victory(),
+        }),
+      ),
+      press('KeyG'),
+      model(({ selectedTrap }) => {
+        expect(selectedTrap).toBe('Barricade')
+      }),
+      message(Message.ClickedNextTrapButton()),
+      model(({ selectedTrap }) => {
+        expect(selectedTrap).toBe('Barricade')
+      }),
+    )
+  })
 })
 
 describe('barricades and pathing', () => {

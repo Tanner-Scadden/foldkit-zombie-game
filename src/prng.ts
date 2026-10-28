@@ -22,11 +22,13 @@ export const generateMany = <A>(
   count: number,
   generate: (drawState: number) => Seeded<A>,
 ): Seeded<ReadonlyArray<A>> =>
-  Array.mapAccum(
-    Array.makeBy(count, () => count),
-    state,
-    drawState => generate(drawState),
-  )
+  count > 0
+    ? Array.mapAccum(
+        Array.makeBy(count, () => count),
+        state,
+        drawState => generate(drawState),
+      )
+    : [state, []]
 
 export const between = (roll: number, min: number, max: number): number =>
   min + (max - min) * roll
