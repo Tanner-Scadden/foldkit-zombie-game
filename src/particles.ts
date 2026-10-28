@@ -25,6 +25,10 @@ import {
   CHIP_SPEED_MAX,
   CHIP_SPEED_MIN,
   CHIP_SPREAD,
+  CLIP_DROP_SPEED,
+  CLIP_LIFETIME_MS,
+  CLIP_LIFT,
+  CLIP_SIZE_PX,
   COINS_PER_PURCHASE,
   COIN_DRAG_PER_SECOND,
   COIN_GRAVITY,
@@ -110,10 +114,11 @@ import {
   type ParticleKind,
   type TrapKind,
   type Vector,
+  type WeaponKind,
   type ZombieKind,
 } from './model'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
-import { WEAPONS } from './weapons'
+import { WEAPONS, heldWeapon } from './weapons'
 import { ZOMBIE_KINDS } from './zombies'
 
 // PHYSICS
@@ -216,6 +221,12 @@ const PHYSICS: Readonly<Record<ParticleKind, ParticlePhysics>> = {
     restitution: GIB_RESTITUTION,
     maybeDecalKind: Option.some('Wood'),
   },
+  Clip: {
+    gravity: SHELL_GRAVITY,
+    dragPerSecond: SHELL_DRAG_PER_SECOND,
+    restitution: GIB_RESTITUTION,
+    maybeDecalKind: Option.some('Clip'),
+  },
 }
 
 const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
@@ -234,6 +245,7 @@ const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
   Spark: 1,
   Splinter: 1,
   Plank: 4,
+  Clip: CLIP_SIZE_PX,
 }
 
 const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
@@ -247,6 +259,7 @@ const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
   Goo: size => size,
   Scorch: size => size,
   Wood: () => 1,
+  Clip: () => 2,
 }
 
 type ParticleStep = Result.Result<Particle, Option.Option<Decal>>
@@ -482,6 +495,35 @@ const shellCasing =
     ]
   }
 
+const CLIP_DROP_TURN = Math.PI * 0.75
+
+const spentClip = (
+  ground: Vector,
+  facing: Vector,
+  kind: ParticleKind,
+): Particle =>
+  launch({
+    kind,
+    ground,
+    height: PLAYER_FOOT_OFFSET,
+    angle: angleOf(facing) + CLIP_DROP_TURN,
+    speed: CLIP_DROP_SPEED,
+    lift: CLIP_LIFT,
+    size: LAUNCH_SIZE[kind],
+    lifetimeMs: CLIP_LIFETIME_MS,
+  })
+
+const clipParticles = (
+  x: number,
+  y: number,
+  facing: Vector,
+  weapon: WeaponKind,
+): ReadonlyArray<Particle> =>
+  Option.match(WEAPONS[weapon].maybeSpentClip, {
+    onNone: () => [],
+    onSome: kind => [spentClip(playerGround(x, y), facing, kind)],
+  })
+
 const dustPuff =
   (ground: Vector, heading: number, spread: number, minSpeed: number) =>
   (maxSpeed: number) =>
@@ -580,6 +622,11 @@ const noParticles = (state: number): Seeded<ReadonlyArray<Particle>> => [
   state,
   [],
 ]
+
+const withState = (
+  state: number,
+  particles: ReadonlyArray<Particle>,
+): Seeded<ReadonlyArray<Particle>> => [state, particles]
 
 const chain = (
   state: number,
@@ -784,6 +831,10 @@ const eventParticles = (
       ])
     },
     RanDry: () => noParticles(state),
+    DryFired: () => noParticles(state),
+    ReloadStarted: ({ x, y, direction, weapon }) =>
+      withState(state, clipParticles(x, y, direction, weapon)),
+    Reloaded: () => noParticles(state),
     WaveCleared: () => noParticles(state),
     TrapHit: ({ x, y }) =>
       woodBits('Splinter', { x, y }, SPLINTERS_PER_HIT)(state),
@@ -915,4 +966,20 @@ export const puffDust = (model: Model, x: number, y: number): Model => {
     particles: particles => keepNewest([...particles, ...puffs], PARTICLE_MAX),
     rngState: () => rngState,
   })
+}
+
+export const dropClip = (model: Model): Model => {
+  const { player } = model
+  const clips = clipParticles(
+    player.x,
+    player.y,
+    player.facing,
+    heldWeapon(player.arsenal),
+  )
+  return Array.isReadonlyArrayEmpty(clips)
+    ? model
+    : modifyFields(model, {
+        particles: particles =>
+          keepNewest([...particles, ...clips], PARTICLE_MAX),
+      })
 }

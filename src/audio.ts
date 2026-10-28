@@ -25,6 +25,8 @@ export const SoundEffect = Schema.Literals([
   'ShotgunBlast',
   'SmgShot',
   'DryClick',
+  'MagOut',
+  'MagIn',
   'Swap',
   'ZombieHit',
   'ZombieDeath',
@@ -345,6 +347,57 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
       },
     ],
     noises: [],
+  },
+  MagOut: {
+    variationCents: 60,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 620), at(0.05, 260)],
+        envelope: envelope(0.12, 0.002, 0.06),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 180), at(0.08, 120)],
+        envelope: envelope(0.2, 0.002, 0.08, 0.05),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 2,
+        cutoff: [at(0, 2400), at(0.06, 1200)],
+        envelope: envelope(0.22, 0.002, 0.06),
+      },
+    ],
+  },
+  MagIn: {
+    variationCents: 60,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 1300), at(0.015, 700)],
+        envelope: envelope(0.14, 0.001, 0.02),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 1700), at(0.015, 900)],
+        envelope: envelope(0.16, 0.001, 0.025, 0.07),
+      },
+      {
+        wave: 'sine',
+        pitch: [at(0, 160), at(0.06, 90)],
+        envelope: envelope(0.3, 0.001, 0.07, 0.07),
+      },
+    ],
+    noises: [
+      {
+        filter: 'highpass',
+        quality: 0.8,
+        cutoff: [at(0, 3600), at(0.02, 2200)],
+        envelope: envelope(0.18, 0.001, 0.02, 0.07),
+      },
+    ],
   },
   Swap: {
     variationCents: 0,

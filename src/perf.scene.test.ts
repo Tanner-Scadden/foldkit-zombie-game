@@ -162,7 +162,7 @@ const fullRoom = (mode: RunMode, wave: number, tier: number): Model => {
     player: player => ({
       ...player,
       arsenal: Arsenal.HoldingSpare({
-        spare: { kind: 'Smg', rounds: 300, tier },
+        spare: { kind: 'Smg', rounds: 300, loaded: 30, tier },
       }),
     }),
   })

@@ -33,7 +33,7 @@ import {
 } from './model'
 import { SHOP_ITEMS } from './shop'
 import { FINAL_WAVE, waveBonus } from './waves'
-import { WEAPONS } from './weapons'
+import { WEAPONS, magazineOf, maybeSpare } from './weapons'
 
 const FRAME_MS = 50
 const SHORT_FRAME_MS = 16
@@ -124,6 +124,7 @@ const gun = (
 ): CarriedGun => ({
   kind,
   rounds,
+  loaded: Math.min(rounds, magazineOf(kind, tier)),
   tier,
 })
 
@@ -432,6 +433,7 @@ describe('the shop stall', () => {
       update,
       given(shopping),
       press('Escape'),
+      press('Enter'),
       press('KeyR'),
       press('KeyQ'),
       message(Message.ClickedStartWaveButton()),
@@ -606,7 +608,14 @@ describe('carrying two guns', () => {
         expect(Array.every(bullets, ({ weapon }) => weapon === 'Shotgun')).toBe(
           true,
         )
-        expect(player.arsenal).toEqual(holdingSpare(15))
+        expect(
+          Option.map(maybeSpare(player.arsenal), ({ rounds, loaded }) => ({
+            rounds,
+            loaded,
+          })),
+        ).toEqual(
+          Option.some({ rounds: 15, loaded: WEAPONS.Shotgun.magazine - 1 }),
+        )
         expect(Array.filter(frameEvents, GameEvent.guards.Fired)).toHaveLength(
           1,
         )

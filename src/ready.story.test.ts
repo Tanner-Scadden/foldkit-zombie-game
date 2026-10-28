@@ -228,7 +228,7 @@ const shootingGallery: Model = modifyFields(readyModel, {
   nextEntityId: () => 10,
 })
 
-const SHOOTING_TICKS = 60
+const SHOOTING_TICKS = 110
 
 const shootOut = (record: (finished: Model) => void) =>
   story(

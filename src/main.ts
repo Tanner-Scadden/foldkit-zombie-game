@@ -46,6 +46,7 @@ import {
   isEndlessKey,
   isKeepGoingKey,
   isPauseKey,
+  isReloadKey,
   isStartKey,
   isStartWaveKey,
   isTrackingPointer,
@@ -85,7 +86,7 @@ import {
   learnSwap,
   moveHintBand,
 } from './onboarding'
-import { burstCoins, puffDust } from './particles'
+import { burstCoins, dropClip, puffDust } from './particles'
 import {
   SHOP_ITEMS,
   ShopGood,
@@ -113,6 +114,9 @@ import {
 } from './waves'
 import {
   WEAPONS,
+  beginReload,
+  canReload,
+  cancelReload,
   heldWeapon,
   holdPistol,
   holdSpare,
@@ -160,6 +164,7 @@ export const Message = defineMessageUnion({
   ClickedKeepGoingButton: {},
   ClickedStartWaveButton: {},
   ClickedSwapButton: {},
+  ClickedReloadButton: {},
   ClickedPlaceTrapButton: {},
   ClickedNextTrapButton: {},
   GotShopDialogMessage: { message: Dialog.Message },
@@ -430,9 +435,12 @@ const chooseWeapon = (model: Model, choice: WeaponChoice): Model => {
     return model
   }
 
-  return modifyFields(model, {
+  const chosen = modifyFields(model, {
     player: player => modifyFields(player, { arsenal: WEAPON_CHOICES[choice] }),
   })
+  return changedWeapon(model, chosen)
+    ? modifyFields(chosen, { player: cancelReload })
+    : chosen
 }
 
 const weaponFromKey = (model: Model, code: string): Model =>
@@ -480,6 +488,9 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     PlayerHurt: () => Option.some<SoundEffect>('PlayerHurt'),
     BulletStruck: () => Option.none<SoundEffect>(),
     RanDry: () => Option.some<SoundEffect>('DryClick'),
+    DryFired: () => Option.some<SoundEffect>('DryClick'),
+    ReloadStarted: () => Option.some<SoundEffect>('MagOut'),
+    Reloaded: () => Option.some<SoundEffect>('MagIn'),
     WaveCleared: () => Option.some<SoundEffect>('Payday'),
     TrapHit: () => Option.none<SoundEffect>(),
     TrapCracked: ({ kind }) => Option.some(TRAPS[kind].crackSound),
@@ -522,6 +533,26 @@ const playStartSoundWhen = (isRoundStart: boolean): UpdateStep =>
 
 const playSwapSoundWhen = (isSwap: boolean): UpdateStep =>
   playSounds(isSwap ? [uiCue('Swap')] : [])
+
+// RELOAD
+
+const reloadHeldGun: UpdateStep = stepModel => {
+  const { player } = stepModel
+  if (
+    !isRoundActive(stepModel.phase) ||
+    isBrowsing(stepModel.shop) ||
+    !canReload(player)
+  ) {
+    return { model: stepModel }
+  }
+
+  return playSounds([
+    { sound: 'MagOut', variation: positionVariation(player.x, player.y) },
+  ])(dropClip(modifyFields(stepModel, { player: beginReload })))
+}
+
+const reloadFromKey: (code: string) => UpdateStep = code => stepModel =>
+  isReloadKey(code) ? reloadHeldGun(stepModel) : { model: stepModel }
 
 // SHOP
 
@@ -855,6 +886,7 @@ const updateGame = (model: Model, message: Message) =>
       return Update.combine(pressed, [
         unlockAudio,
         trapFromKey(code),
+        reloadFromKey(code),
         playStartSoundWhen(startsRun(model, pressed)),
         playSwapSoundWhen(changedWeapon(model, pressed)),
       ])
@@ -962,6 +994,9 @@ const updateGame = (model: Model, message: Message) =>
         playSwapSoundWhen(changedWeapon(model, swapped)),
       ])
     },
+
+    ClickedReloadButton: () =>
+      Update.combine(model, [unlockAudio, reloadHeldGun]),
 
     ClickedPlaceTrapButton: () =>
       isBrowsing(model.shop)

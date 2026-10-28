@@ -49,6 +49,7 @@ import {
   Invulnerability,
   type Model,
   type Player,
+  Reload,
   ShopState,
   type Vector,
   type WeaponKind,
@@ -70,7 +71,19 @@ import {
   trapBlockers,
 } from './traps'
 import { advanceRound, endWhenDefeated } from './waves'
-import { SIDEARM, type WeaponStats, holdPistol, statsAt } from './weapons'
+import {
+  SIDEARM,
+  type WeaponStats,
+  beginReload,
+  canReload,
+  finishReload,
+  heldLoaded,
+  heldWeapon,
+  holdPistol,
+  isReloading,
+  spendRound,
+  statsAt,
+} from './weapons'
 import { Behavior, isWalking, radiusOf, statsOf, strideAt } from './zombies'
 
 // INTENT
@@ -221,18 +234,6 @@ const nextFireCooldown = (
   }
 }
 
-const spendRound = (arsenal: Arsenal): Arsenal =>
-  Arsenal.match(arsenal, {
-    PistolOnly: () => arsenal,
-    HoldingPistol: () => arsenal,
-    HoldingSpare: ({ spare }) =>
-      Arsenal.HoldingSpare({
-        spare: modifyFields(spare, {
-          rounds: rounds => Math.max(0, rounds - 1),
-        }),
-      }),
-  })
-
 const shoot = (
   model: Model,
   weapon: WeaponKind,
@@ -259,11 +260,12 @@ const shoot = (
     rngState: () => rngState,
     stats: runStats => countShots(runStats, pellets.length),
     player: () =>
-      modifyFields(player, {
-        fireCooldownMs: cooldown => cooldown + stats.fireIntervalMs - deltaMs,
-        recoilRemainingMs: () => stats.recoilMs,
-        arsenal: spendRound,
-      }),
+      spendRound(
+        modifyFields(player, {
+          fireCooldownMs: cooldown => cooldown + stats.fireIntervalMs - deltaMs,
+          recoilRemainingMs: () => stats.recoilMs,
+        }),
+      ),
     frameEvents: Array.append(
       GameEvent.Fired({
         x: muzzle.x,
@@ -293,26 +295,100 @@ const pullTrigger = (model: Model, deltaMs: number): Model =>
     HoldingPistol: () =>
       shoot(model, SIDEARM, model.player.pistolTier, deltaMs),
     HoldingSpare: ({ spare }) =>
-      spare.rounds > 0
+      spare.loaded > 0
         ? shoot(model, spare.kind, spare.tier, deltaMs)
         : runDry(model),
   })
+
+const coolTrigger = (
+  model: Model,
+  deltaMs: number,
+  isTriggerHeld: boolean,
+): Model =>
+  modifyFields(model, {
+    player: player =>
+      modifyFields(player, {
+        fireCooldownMs: cooldown =>
+          nextFireCooldown(cooldown, deltaMs, isTriggerHeld),
+      }),
+  })
+
+const autoReload = (model: Model, isTriggerHeld: boolean): Model => {
+  const { player } = model
+  const started = GameEvent.ReloadStarted({
+    x: player.x,
+    y: player.y,
+    direction: player.facing,
+    weapon: heldWeapon(player.arsenal),
+  })
+  return modifyFields(model, {
+    player: () =>
+      beginReload(modifyFields(player, { fireCooldownMs: () => 0 })),
+    frameEvents: frameEvents => [
+      ...frameEvents,
+      ...(isTriggerHeld
+        ? [GameEvent.DryFired({ x: player.x, y: player.y })]
+        : []),
+      started,
+    ],
+  })
+}
+
+const isShopBrowsing = (model: Model): boolean =>
+  ShopState.isAnyOf(['Browsing'])(model.shop)
 
 const fire = (model: Model, deltaMs: number): Model => {
   const { player, intent } = model
   const isTriggerHeld = intent.trigger === 'Held'
 
-  if (isTriggerHeld && player.fireCooldownMs <= 0) {
+  if (
+    isShopBrowsing(model) ||
+    isReloading(player) ||
+    player.fireCooldownMs > 0
+  ) {
+    return coolTrigger(model, deltaMs, isTriggerHeld && !isReloading(player))
+  } else if (heldLoaded(player) <= 0 && canReload(player)) {
+    return autoReload(model, isTriggerHeld)
+  } else if (isTriggerHeld) {
     return pullTrigger(model, deltaMs)
   } else {
-    return modifyFields(model, {
-      player: () =>
-        modifyFields(player, {
-          fireCooldownMs: cooldown =>
-            nextFireCooldown(cooldown, deltaMs, isTriggerHeld),
-        }),
-    })
+    return coolTrigger(model, deltaMs, isTriggerHeld)
   }
+}
+
+// RELOADING
+
+const tickReload = (model: Model, deltaMs: number): Model => {
+  const { player } = model
+  if (isShopBrowsing(model)) {
+    return model
+  }
+
+  return Reload.match(player.reload, {
+    Ready: () => model,
+    Reloading: ({ remainingMs, durationMs }) =>
+      remainingMs > deltaMs
+        ? modifyFields(model, {
+            player: () =>
+              modifyFields(player, {
+                reload: () =>
+                  Reload.Reloading({
+                    remainingMs: remainingMs - deltaMs,
+                    durationMs,
+                  }),
+              }),
+          })
+        : modifyFields(model, {
+            player: () => finishReload(player),
+            frameEvents: Array.append(
+              GameEvent.Reloaded({
+                x: player.x,
+                y: player.y,
+                weapon: heldWeapon(player.arsenal),
+              }),
+            ),
+          }),
+  })
 }
 
 // BULLETS
@@ -831,7 +907,7 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
     ),
   )
 
-  const armed = fire(faceTowardIntent(routed), deltaMs)
+  const armed = fire(tickReload(faceTowardIntent(routed), deltaMs), deltaMs)
 
   const advanced = modifyFields(advanceBullets(armed, seconds, deltaMs), {
     zombies: () => advanceZombies(armed, seconds, deltaMs),

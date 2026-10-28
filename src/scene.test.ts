@@ -22,7 +22,7 @@ import { Dialog } from '@foldkit/ui'
 import indexHtml from '../index.html?raw'
 import { GAME_TITLE, PREPARATION_MS } from './constants'
 import { FocusShopItem, Message, update } from './main'
-import { Arsenal, type Model, Phase, initialModel } from './model'
+import { Arsenal, type Model, Phase, Reload, initialModel } from './model'
 import { MeasureGameSurface, view } from './view'
 
 const measureSurface = Mount.resolve(
@@ -39,7 +39,7 @@ const KEEP_GOING =
 const READY_STATUS = `${GAME_TITLE}. ${PLAY_AGAIN}`
 
 const PREPARING_WAVE_ONE =
-  'Get ready for wave 1 of 8. Press Enter or R, or use the Start wave button, to start it now.'
+  'Get ready for wave 1 of 8. Press Enter, or use the Start wave button, to start it now.'
 
 describe('Ready screen', () => {
   test('invites the player to start and starts on a tap', () => {
@@ -117,7 +117,7 @@ describe('Start wave button', () => {
       }),
       expect(role('status')).toHaveText(PREPARING_WAVE_ONE),
       expect(role('timer')).toHaveText('6 seconds until wave 1.'),
-      expect(startWaveButton).toHaveAttr('aria-keyshortcuts', 'Enter R'),
+      expect(startWaveButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
       click(startWaveButton),
       expect(role('status')).toHaveText('Fighting wave 1 of 8.'),
       expect(startWaveButton).toBeAbsent(),
@@ -243,7 +243,7 @@ describe('Shop', () => {
             modifyFields(player, {
               arsenal: () =>
                 Arsenal.HoldingSpare({
-                  spare: { kind: 'Smg', rounds: 30, tier: 0 },
+                  spare: { kind: 'Smg', rounds: 30, loaded: 30, tier: 0 },
                 }),
             }),
         }),
@@ -251,6 +251,38 @@ describe('Shop', () => {
       measureSurface,
       click(role('button', { name: 'Swap to the Pop Pistol' })),
       expect(role('button', { name: 'Swap to the Chatterbox' })).toExist(),
+    )
+  })
+})
+
+describe('Reload button', () => {
+  const fighting: Model = modifyFields(initialModel, {
+    phase: () => Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [] }),
+    player: player => modifyFields(player, { pistolLoaded: () => 2 }),
+  })
+  const reloadButton = role('button', { name: 'Reload the Pop Pistol' })
+
+  test('shows on touch and starts a reload when tapped', () => {
+    scene(
+      { update, view },
+      given(modifyFields(fighting, { lastDevice: () => 'Touch' })),
+      measureSurface,
+      expect(reloadButton).toHaveAttr('aria-keyshortcuts', 'R'),
+      click(reloadButton),
+      expect(reloadButton).toExist(),
+    )
+    const reloaded = update(fighting, Message.ClickedReloadButton()).model
+    vitestExpect(Reload.isAnyOf(['Reloading'])(reloaded.player.reload)).toBe(
+      true,
+    )
+  })
+
+  test('stays hidden on a keyboard, where R reloads', () => {
+    scene(
+      { update, view },
+      given(fighting),
+      measureSurface,
+      expect(reloadButton).toBeAbsent(),
     )
   })
 })

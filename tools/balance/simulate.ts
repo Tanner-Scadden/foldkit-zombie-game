@@ -20,7 +20,8 @@ const { THRESHOLDS, boxCenter, hasLineOfSight } =
 const { STALL_BOX, isShopOpenFor, priceFor, verdictFor } =
   await import('../../src/shop')
 const { FINAL_WAVE } = await import('../../src/waves')
-const { maxRounds, maxTier, maybeSpare } = await import('../../src/weapons')
+const { canReload, heldLoaded, heldStats, maxRounds, maxTier, maybeSpare } =
+  await import('../../src/weapons')
 const { Dialog } = await import('@foldkit/ui')
 const { Option, Array: EffectArray } = await import('effect')
 const { modifyFields } = await import('foldkit/struct')
@@ -153,6 +154,16 @@ const nearestVisible = (model: Model) =>
     .filter(zombie => hasLineOfSight(model.player, zombie))
     .sort((a, b) => distance(model.player, a) - distance(model.player, b))[0]
 
+// Reloads when nothing is in sight and the magazine is under half, or when
+// the room is empty, the way a player tops off between fights instead of
+// every time a zombie ducks behind cover. An empty gun reloads on its own.
+const topOff = (model: Model): Model => {
+  const isLow = heldLoaded(model.player) < heldStats(model.player).magazine / 2
+  return canReload(model.player) && (isLow || walking(model).length === 0)
+    ? tapKey(model, 'KeyR')
+    : model
+}
+
 const aimAndFire = (model: Model, frame: number): Model => {
   if (frame % AIM_EVERY_FRAMES !== 0) {
     return model
@@ -160,9 +171,9 @@ const aimAndFire = (model: Model, frame: number): Model => {
   const target = nearestVisible(model)
   const isHeld = model.input.mouseButton._tag === 'Held'
   if (target === undefined) {
-    return isHeld
-      ? send(model, Message.ReleasedPointer({ pointerId: 1 }))
-      : model
+    return topOff(
+      isHeld ? send(model, Message.ReleasedPointer({ pointerId: 1 })) : model,
+    )
   }
   const angle =
     Math.atan2(target.y - model.player.y, target.x - model.player.x) +
@@ -372,7 +383,7 @@ const runOnce = (seed: number): RunResult => {
         ) {
           model = tapKey(model, 'Digit2')
         }
-        model = tapKey(model, 'Enter')
+        model = tapKey(topOff(model), 'Enter')
         continue
       }
       const target =

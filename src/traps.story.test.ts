@@ -4,7 +4,12 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { THRESHOLDS, doorSpawnPoint, isInsideRoomAt } from './arena'
-import { PLAYER_RADIUS, PREPARATION_MS, TURRET_RANGE_PX } from './constants'
+import {
+  FIRE_INTERVAL_MS,
+  PLAYER_RADIUS,
+  PREPARATION_MS,
+  TURRET_RANGE_PX,
+} from './constants'
 import { RESTART_GRACE_MS } from './constants'
 import { Message, update } from './main'
 import {
@@ -709,7 +714,7 @@ describe('barricade damage', () => {
       ),
       press('KeyA'),
       press('Space'),
-      ...ticks(20, FRAME_MS),
+      ...ticks(Math.ceil(FIRE_INTERVAL_MS / FRAME_MS) + 2, FRAME_MS),
       model(({ player, frameEvents, bullets }) => {
         expect(player.x).toBeCloseTo(
           THRESHOLDS.West.box.right + PLAYER_RADIUS,
@@ -1013,7 +1018,7 @@ describe('trap determinism', () => {
       ...ticks(30, FRAME_MS),
       release('KeyS'),
       press('KeyT'),
-      press('KeyR'),
+      press('Enter'),
       press('Space'),
       ...ticks(400, FRAME_MS),
       model(finalModel => {

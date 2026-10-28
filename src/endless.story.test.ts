@@ -109,7 +109,9 @@ const victorious: Model = modifyFields(readyModel, {
       hp: () => 3,
       pistolTier: () => 1,
       arsenal: () =>
-        Arsenal.HoldingSpare({ spare: { kind: 'Smg', rounds: 210, tier: 2 } }),
+        Arsenal.HoldingSpare({
+          spare: { kind: 'Smg', rounds: 210, loaded: 40, tier: 2 },
+        }),
     }),
 })
 

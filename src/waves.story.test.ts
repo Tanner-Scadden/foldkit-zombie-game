@@ -162,7 +162,7 @@ describe('preparation', () => {
     )
   })
 
-  test('Enter or R starts the wave early, and Space only fires', () => {
+  test('Enter starts the wave early, and R and Space do not', () => {
     const skipWith = (code: string) =>
       story(
         update,
@@ -172,7 +172,7 @@ describe('preparation', () => {
         tick(FRAME_MS),
         press(code),
         model(({ phase }) => {
-          expect(phase._tag).toBe(code === 'Space' ? 'Preparation' : 'Wave')
+          expect(phase._tag).toBe(code === 'Enter' ? 'Wave' : 'Preparation')
         }),
       )
 
@@ -459,7 +459,7 @@ describe('a full wave', () => {
       press('KeyW'),
       tick(FRAME_MS),
       release('KeyW'),
-      press('KeyR'),
+      press('Enter'),
       press('Space'),
       ...Array.flatMap(
         ticks((SECONDS_PER_RUN * 1000) / FRAME_MS, FRAME_MS),

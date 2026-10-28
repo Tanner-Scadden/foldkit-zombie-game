@@ -27,6 +27,9 @@ import {
   BULLET_TRAIL_COLOR,
   BULLET_TRAIL_PX,
   CHIP_COLOR,
+  CLIP_COLOR,
+  CLIP_DECAL_COLOR,
+  CLIP_DECAL_FADED_COLOR,
   COIN_COLOR,
   DAMAGE_POPUP_HOP_PX,
   DAMAGE_POPUP_RISE_PX,
@@ -80,6 +83,10 @@ import {
   PLAYER_WALK_FRAME_MS,
   POPUP_FADE_START,
   POPUP_HOP_MS,
+  RELOAD_BAR_BACK_COLOR,
+  RELOAD_BAR_COLOR,
+  RELOAD_BAR_LIFT_PX,
+  RELOAD_BAR_WIDTH,
   RESTART_GRACE_MS,
   ROT_DECAL_COLOR,
   ROT_DECAL_FADED_COLOR,
@@ -147,6 +154,7 @@ import {
   type Player,
   type PointerDevice,
   type Popup,
+  Reload,
   RunMode,
   type RunStats,
   ShopState,
@@ -231,6 +239,8 @@ import {
   type WeaponStats,
   heldTier,
   heldWeapon,
+  isReloading,
+  looseRounds,
   maxTier,
   maybeSpare,
   statsAt,
@@ -907,6 +917,7 @@ const DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   Goo: GOO_DECAL_COLOR,
   Scorch: SCORCH_DECAL_COLOR,
   Wood: WOOD_DECAL_COLOR,
+  Clip: CLIP_DECAL_COLOR,
 }
 
 const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
@@ -920,6 +931,7 @@ const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   Goo: GOO_DECAL_FADED_COLOR,
   Scorch: SCORCH_DECAL_FADED_COLOR,
   Wood: WOOD_DECAL_FADED_COLOR,
+  Clip: CLIP_DECAL_FADED_COLOR,
 }
 
 const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
@@ -938,9 +950,18 @@ const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
   Spark: SPARK_COLOR,
   Splinter: SPLINTER_COLOR,
   Plank: PLANK_COLOR,
+  Clip: CLIP_COLOR,
 }
 
-const CASINGS: ReadonlyArray<ParticleKind> = ['Shell', 'Hull', 'Link', 'Plank']
+const CASINGS: ReadonlyArray<ParticleKind> = [
+  'Shell',
+  'Hull',
+  'Link',
+  'Plank',
+  'Clip',
+]
+
+const THICK_CASINGS: ReadonlyArray<ParticleKind> = ['Hull', 'Clip']
 
 const isCasing = (particle: Particle): boolean =>
   Array.contains(CASINGS, particle.kind)
@@ -985,7 +1006,7 @@ const particleColor = (particle: Particle): string =>
 
 const particleShape = (particle: Particle): Canvas.Shape => {
   const isUpright = isCasingUpright(particle)
-  const thickness = particle.kind === 'Hull' ? 2 : 1
+  const thickness = Array.contains(THICK_CASINGS, particle.kind) ? 2 : 1
   const width = isUpright ? thickness : particle.size
   const height = isCasing(particle)
     ? isUpright
@@ -1633,7 +1654,7 @@ const moneyShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   )
 }
 
-const SLOT_WIDTH = 34
+const SLOT_WIDTH = 40
 const SLOT_HEIGHT = 12
 const SLOT_GAP = 3
 const SLOT_TOP = ARENA_HEIGHT - HUD_MARGIN - SLOT_HEIGHT
@@ -1652,12 +1673,20 @@ const PIP_OFF_COLOR = 'rgba(244, 241, 222, 0.25)'
 
 type SlotGun = Readonly<{ weapon: WeaponKind; tier: number }>
 
+type AmmoLook = 'Loaded' | 'Reloading' | 'Empty'
+
 type SlotLook = Readonly<{
   maybeGun: Option.Option<SlotGun>
   ammo: string
   isHeld: boolean
-  isDry: boolean
+  ammoLook: AmmoLook
 }>
+
+const AMMO_TONES: Readonly<Record<AmmoLook, TextTone>> = {
+  Loaded: 'Plain',
+  Reloading: 'Prompt',
+  Empty: 'Alert',
+}
 
 const tierPipShapes = (
   x: number,
@@ -1675,7 +1704,7 @@ const tierPipShapes = (
 
 const slotShapes = (
   index: number,
-  { maybeGun, ammo, isHeld, isDry }: SlotLook,
+  { maybeGun, ammo, isHeld, ammoLook }: SlotLook,
 ): ReadonlyArray<Canvas.Shape> => {
   const x = HUD_MARGIN + index * (SLOT_WIDTH + SLOT_GAP)
   const border = isHeld ? SLOT_HELD_BORDER : SLOT_BORDER
@@ -1703,7 +1732,7 @@ const slotShapes = (
     }),
     ...textShapes(
       ammo,
-      isDry ? 'Alert' : 'Plain',
+      AMMO_TONES[ammoLook],
       x + SLOT_WIDTH - 3,
       SLOT_TOP + SLOT_TEXT_TOP,
       'Right',
@@ -1711,27 +1740,41 @@ const slotShapes = (
   ]
 }
 
+const ammoLook = (
+  player: Player,
+  isHeld: boolean,
+  loaded: number,
+): AmmoLook => {
+  if (isHeld && isReloading(player)) {
+    return 'Reloading'
+  } else if (loaded <= 0) {
+    return 'Empty'
+  } else {
+    return 'Loaded'
+  }
+}
+
 const loadoutShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
   const { arsenal } = player
   const isHoldingSpare = Arsenal.isAnyOf(['HoldingSpare'])(arsenal)
   const pistolSlot: SlotLook = {
     maybeGun: Option.some({ weapon: SIDEARM, tier: player.pistolTier }),
-    ammo: ENDLESS_ROUNDS,
+    ammo: `${player.pistolLoaded}/${ENDLESS_ROUNDS}`,
     isHeld: !isHoldingSpare,
-    isDry: false,
+    ammoLook: ammoLook(player, !isHoldingSpare, player.pistolLoaded),
   }
   const spareSlot: SlotLook = Option.match(maybeSpare(arsenal), {
     onNone: () => ({
       maybeGun: Option.none(),
       ammo: '--',
       isHeld: false,
-      isDry: false,
+      ammoLook: 'Loaded',
     }),
     onSome: spare => ({
       maybeGun: Option.some({ weapon: spare.kind, tier: spare.tier }),
-      ammo: `${spare.rounds}`,
+      ammo: `${spare.loaded}/${looseRounds(spare)}`,
       isHeld: isHoldingSpare,
-      isDry: spare.rounds <= 0,
+      ammoLook: ammoLook(player, isHoldingSpare, spare.loaded),
     }),
   })
   return [...slotShapes(0, pistolSlot), ...slotShapes(1, spareSlot)]
@@ -1916,6 +1959,33 @@ const wavePreviewShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
 
 const STILL: Vector = { x: 0, y: 0 }
 
+const reloadBarShapes = (player: Player): ReadonlyArray<Canvas.Shape> =>
+  Reload.match(player.reload, {
+    Ready: () => [],
+    Reloading: ({ remainingMs, durationMs }) => {
+      const progress =
+        durationMs > 0 ? clamp(1 - remainingMs / durationMs, 0, 1) : 1
+      const left = Math.round(player.x - RELOAD_BAR_WIDTH / 2)
+      const top = Math.round(player.y) - RELOAD_BAR_LIFT_PX
+      return [
+        Canvas.Rect({
+          x: left - 1,
+          y: top - 1,
+          width: RELOAD_BAR_WIDTH + 2,
+          height: 3,
+          fill: RELOAD_BAR_BACK_COLOR,
+        }),
+        Canvas.Rect({
+          x: left,
+          y: top,
+          width: Math.max(1, Math.round(RELOAD_BAR_WIDTH * progress)),
+          height: 1,
+          fill: RELOAD_BAR_COLOR,
+        }),
+      ]
+    },
+  })
+
 const shakeOffset = (model: Model): Vector =>
   isRoundActive(model.phase) ? model.shake.offset : STILL
 
@@ -1942,6 +2012,7 @@ const playWorldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...Array.flatMap(model.blasts, blastShapes),
   ...airborneParticleShapes(model.particles),
   ...Array.map(model.popups, popupShape),
+  ...reloadBarShapes(model.player),
 ]
 
 const worldShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
@@ -2142,7 +2213,7 @@ export const statusText = (model: Model): string => {
   return Phase.match(model.phase, {
     Ready: () => `${GAME_TITLE}. ${PLAY_AGAIN}`,
     Preparation: ({ wave }) =>
-      `Get ready for ${statusWave(model, wave)}. Press Enter or R, or use the Start wave button, to start it now.${shopHint(model)}`,
+      `Get ready for ${statusWave(model, wave)}. Press Enter, or use the Start wave button, to start it now.${shopHint(model)}`,
     Wave: ({ wave }) => `Fighting ${statusWave(model, wave)}.`,
     Paused: ({ round }) =>
       `Paused during ${statusWave(model, round.wave)}. Tap, click, or press Enter to resume.`,
@@ -2213,6 +2284,30 @@ const swapButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
       ),
   })
 }
+
+const reloadButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isRoundActive(model.phase) && model.lastDevice === 'Touch'
+    ? h.button(
+        [
+          h.Type('button'),
+          h.Class('reload-button'),
+          h.AriaLabel(
+            `Reload the ${WEAPONS[heldWeapon(model.player.arsenal)].name}`,
+          ),
+          h.AriaKeyshortcuts('R'),
+          h.OnClick(Message.ClickedReloadButton(), {
+            focusSelector: '.game-surface',
+          }),
+        ],
+        ['RELOAD'],
+      )
+    : h.empty
+
+const gunButtonsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [h.Class('gun-buttons')],
+    [reloadButtonView(model, h), swapButtonView(model, h)],
+  )
 
 const PRIMARY_MOUSE_BUTTON = 0
 
@@ -2353,7 +2448,7 @@ const startWaveButtonView = (wave: number, h: HtmlBuilder<Message>): Html =>
       h.Type('button'),
       h.Class('start-wave-button'),
       h.AriaLabel(`Start wave ${wave} now`),
-      h.AriaKeyshortcuts('Enter R'),
+      h.AriaKeyshortcuts('Enter'),
       h.OnClick(Message.ClickedStartWaveButton(), {
         focusSelector: '.game-surface',
       }),
@@ -2612,7 +2707,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       ),
       loadoutView(model, h),
       preparationControlsView(model, h),
-      swapButtonView(model, h),
+      gunButtonsView(model, h),
       modeChoiceView(model, h),
       audioButtonsView(model, h),
       shopDialogView(model, h),

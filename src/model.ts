@@ -7,6 +7,7 @@ import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
   DEFAULT_SEED,
+  PISTOL_MAGAZINE,
   PLAYER_MAX_HP,
 } from './constants'
 import { flowFieldToward } from './pathing'
@@ -88,6 +89,7 @@ export type WeaponKind = typeof WeaponKind.Type
 export const CarriedGun = Schema.Struct({
   kind: WeaponKind,
   rounds: Schema.Number,
+  loaded: Schema.Number,
   tier: Schema.Number,
 })
 export type CarriedGun = typeof CarriedGun.Type
@@ -98,6 +100,12 @@ export const Arsenal = defineTaggedUnion({
   HoldingSpare: { spare: CarriedGun },
 })
 export type Arsenal = typeof Arsenal.Type
+
+export const Reload = defineTaggedUnion({
+  Ready: {},
+  Reloading: { remainingMs: Schema.Number, durationMs: Schema.Number },
+})
+export type Reload = typeof Reload.Type
 
 export const Player = Schema.Struct({
   x: Schema.Number,
@@ -110,6 +118,8 @@ export const Player = Schema.Struct({
   recoilRemainingMs: Schema.Number,
   arsenal: Arsenal,
   pistolTier: Schema.Number,
+  pistolLoaded: Schema.Number,
+  reload: Reload,
 })
 export type Player = typeof Player.Type
 
@@ -171,6 +181,7 @@ export const ParticleKind = Schema.Literals([
   'Spark',
   'Splinter',
   'Plank',
+  'Clip',
 ])
 export type ParticleKind = typeof ParticleKind.Type
 
@@ -198,6 +209,7 @@ export const DecalKind = Schema.Literals([
   'Goo',
   'Scorch',
   'Wood',
+  'Clip',
 ])
 export type DecalKind = typeof DecalKind.Type
 
@@ -244,6 +256,14 @@ export const GameEvent = defineTaggedUnion({
   PlayerHurt: { x: Schema.Number, y: Schema.Number, direction: Vector },
   BulletStruck: { x: Schema.Number, y: Schema.Number, direction: Vector },
   RanDry: { x: Schema.Number, y: Schema.Number },
+  DryFired: { x: Schema.Number, y: Schema.Number },
+  ReloadStarted: {
+    x: Schema.Number,
+    y: Schema.Number,
+    direction: Vector,
+    weapon: WeaponKind,
+  },
+  Reloaded: { x: Schema.Number, y: Schema.Number, weapon: WeaponKind },
   WaveCleared: { x: Schema.Number, y: Schema.Number, bonus: Schema.Number },
   TrapHit: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
   TrapCracked: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
@@ -534,6 +554,8 @@ export const initialPlayer: Player = {
   recoilRemainingMs: 0,
   arsenal: Arsenal.PistolOnly(),
   pistolTier: 0,
+  pistolLoaded: PISTOL_MAGAZINE,
+  reload: Reload.Ready(),
 }
 
 export const emptyWallet: Wallet = { balance: 0, earned: 0, shown: 0 }

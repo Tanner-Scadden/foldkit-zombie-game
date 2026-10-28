@@ -37,7 +37,7 @@ const keepGoingButton = role('button', {
 })
 
 const START_PROMPT =
-  'Press Enter or R, or use the Start wave button, to start it now.'
+  'Press Enter, or use the Start wave button, to start it now.'
 
 describe('Mode choice', () => {
   test('the title offers Campaign and Endless, and the Endless button starts endless', () => {
@@ -87,7 +87,7 @@ describe('Mode choice', () => {
         modifyFields(player, {
           arsenal: () =>
             Arsenal.HoldingSpare({
-              spare: { kind: 'Smg', rounds: 99, tier: 2 },
+              spare: { kind: 'Smg', rounds: 99, loaded: 40, tier: 2 },
             }),
         }),
     })
@@ -158,7 +158,7 @@ describe('Upgrades in the shop', () => {
         y: () => 142,
         arsenal: () =>
           Arsenal.HoldingSpare({
-            spare: { kind: 'Shotgun', rounds: 16, tier: 2 },
+            spare: { kind: 'Shotgun', rounds: 16, loaded: 6, tier: 2 },
           }),
       }),
     wallet: () => ({ balance: 400, earned: 400, shown: 400 }),

@@ -8,6 +8,8 @@ import {
   FIRE_INTERVAL_MS,
   MUZZLE_DISTANCE,
   PISTOL_DAMAGE,
+  PISTOL_MAGAZINE,
+  PISTOL_RELOAD_MS,
   PLAYER_RECOIL_KICK_PX,
   PLAYER_RECOIL_MS,
   PLAYER_RECOIL_SQUASH,
@@ -19,6 +21,7 @@ import {
   type CarriedGun,
   type ParticleKind,
   type Player,
+  Reload,
   type WeaponKind,
 } from './model'
 
@@ -32,6 +35,8 @@ export type WeaponStats = Readonly<{
   name: string
   roundsLabel: string
   fireIntervalMs: number
+  magazine: number
+  reloadMs: number
   damage: number
   pellets: number
   spread: number
@@ -46,6 +51,7 @@ export type WeaponStats = Readonly<{
   shakeTrauma: number
   flash: MuzzleFlash
   casing: ParticleKind
+  maybeSpentClip: Option.Option<ParticleKind>
   sound: SoundEffect
   maybeRoundLimit: Option.Option<RoundLimit>
 }>
@@ -55,6 +61,8 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     name: 'Pop Pistol',
     roundsLabel: 'rounds',
     fireIntervalMs: FIRE_INTERVAL_MS,
+    magazine: PISTOL_MAGAZINE,
+    reloadMs: PISTOL_RELOAD_MS,
     damage: PISTOL_DAMAGE,
     pellets: 1,
     spread: 0,
@@ -69,6 +77,7 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     shakeTrauma: SHAKE_TRAUMA_FIRED,
     flash: 'Pop',
     casing: 'Shell',
+    maybeSpentClip: Option.some('Clip'),
     sound: 'Shot',
     maybeRoundLimit: Option.none(),
   },
@@ -76,6 +85,8 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     name: 'Barn Buster',
     roundsLabel: 'shells',
     fireIntervalMs: 620,
+    magazine: 6,
+    reloadMs: 1300,
     damage: 1,
     pellets: 5,
     spread: 0.75,
@@ -90,6 +101,7 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     shakeTrauma: 0.65,
     flash: 'Blast',
     casing: 'Hull',
+    maybeSpentClip: Option.none(),
     sound: 'ShotgunBlast',
     maybeRoundLimit: Option.some({ starting: 16, max: 48 }),
   },
@@ -97,6 +109,8 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     name: 'Chatterbox',
     roundsLabel: 'rounds',
     fireIntervalMs: 70,
+    magazine: 30,
+    reloadMs: 1400,
     damage: 1,
     pellets: 1,
     spread: 0.22,
@@ -111,6 +125,7 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     shakeTrauma: 0.12,
     flash: 'Flicker',
     casing: 'Link',
+    maybeSpentClip: Option.some('Clip'),
     sound: 'SmgShot',
     maybeRoundLimit: Option.some({ starting: 120, max: 360 }),
   },
@@ -118,6 +133,10 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     name: 'Pea Shooter',
     roundsLabel: 'peas',
     fireIntervalMs: 520,
+    // NOTE: The Grumpy Gnome fires on its own cooldown and never reloads, so
+    // nothing reads its magazine.
+    magazine: 1,
+    reloadMs: 0,
     damage: 1,
     pellets: 1,
     spread: 0,
@@ -132,6 +151,7 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     shakeTrauma: 0,
     flash: 'Flicker',
     casing: 'Shell',
+    maybeSpentClip: Option.none(),
     sound: 'TurretShot',
     maybeRoundLimit: Option.none(),
   },
@@ -144,6 +164,8 @@ export const SIDEARM: WeaponKind = 'Pistol'
 export type TierBoost = Readonly<{
   damage: number
   fireIntervalMs: number
+  magazine: number
+  reloadMs: number
   spread: number
   pellets: number
   knockback: number
@@ -166,6 +188,8 @@ export const UPGRADE_TIERS: Readonly<
       boost: {
         damage: 0,
         fireIntervalMs: 0,
+        magazine: 2,
+        reloadMs: 0,
         spread: 0,
         pellets: 0,
         knockback: 25,
@@ -177,7 +201,9 @@ export const UPGRADE_TIERS: Readonly<
       price: 500,
       boost: {
         damage: 0,
-        fireIntervalMs: -10,
+        fireIntervalMs: -30,
+        magazine: 0,
+        reloadMs: -200,
         spread: 0,
         pellets: 0,
         knockback: 0,
@@ -190,6 +216,8 @@ export const UPGRADE_TIERS: Readonly<
       boost: {
         damage: 1,
         fireIntervalMs: 0,
+        magazine: 0,
+        reloadMs: 0,
         spread: 0,
         pellets: 0,
         knockback: 15,
@@ -204,6 +232,8 @@ export const UPGRADE_TIERS: Readonly<
       boost: {
         damage: 0,
         fireIntervalMs: 0,
+        magazine: 0,
+        reloadMs: 0,
         spread: 0.1,
         pellets: 2,
         knockback: 0,
@@ -216,6 +246,8 @@ export const UPGRADE_TIERS: Readonly<
       boost: {
         damage: 0,
         fireIntervalMs: -120,
+        magazine: 0,
+        reloadMs: -300,
         spread: 0,
         pellets: 0,
         knockback: 40,
@@ -228,6 +260,8 @@ export const UPGRADE_TIERS: Readonly<
       boost: {
         damage: 1,
         fireIntervalMs: 0,
+        magazine: 0,
+        reloadMs: 0,
         spread: 0,
         pellets: 0,
         knockback: 0,
@@ -242,6 +276,8 @@ export const UPGRADE_TIERS: Readonly<
       boost: {
         damage: 0,
         fireIntervalMs: 0,
+        magazine: 0,
+        reloadMs: 0,
         spread: -0.08,
         pellets: 0,
         knockback: 10,
@@ -254,6 +290,8 @@ export const UPGRADE_TIERS: Readonly<
       boost: {
         damage: 0,
         fireIntervalMs: -12,
+        magazine: 10,
+        reloadMs: 0,
         spread: 0,
         pellets: 0,
         knockback: 0,
@@ -266,6 +304,8 @@ export const UPGRADE_TIERS: Readonly<
       boost: {
         damage: 1,
         fireIntervalMs: 0,
+        magazine: 0,
+        reloadMs: 0,
         spread: 0,
         pellets: 0,
         knockback: 0,
@@ -292,6 +332,8 @@ const applyBoost = (stats: WeaponStats, boost: TierBoost): WeaponStats =>
   modifyFields(stats, {
     damage: damage => damage + boost.damage,
     fireIntervalMs: interval => Math.max(1, interval + boost.fireIntervalMs),
+    magazine: magazine => Math.max(1, magazine + boost.magazine),
+    reloadMs: reloadMs => Math.max(0, reloadMs + boost.reloadMs),
     spread: spread => Math.max(0, spread + boost.spread),
     pellets: pellets => Math.max(1, pellets + boost.pellets),
     knockback: knockback => knockback + boost.knockback,
@@ -383,3 +425,96 @@ export const maxRounds = (kind: WeaponKind, tier: number): number =>
     onNone: () => 0,
     onSome: ({ max }) => max,
   })
+
+// MAGAZINES
+
+export const magazineOf = (kind: WeaponKind, tier: number): number =>
+  statsAt(kind, tier).magazine
+
+export const heldLoaded = (player: Player): number =>
+  Arsenal.match(player.arsenal, {
+    PistolOnly: () => player.pistolLoaded,
+    HoldingPistol: () => player.pistolLoaded,
+    HoldingSpare: ({ spare }) => spare.loaded,
+  })
+
+export const looseRounds = (spare: CarriedGun): number =>
+  Math.max(0, spare.rounds - spare.loaded)
+
+const hasLooseRounds = (player: Player): boolean =>
+  Arsenal.match(player.arsenal, {
+    PistolOnly: () => true,
+    HoldingPistol: () => true,
+    HoldingSpare: ({ spare }) => looseRounds(spare) > 0,
+  })
+
+export const isReloading = (player: Player): boolean =>
+  Reload.isAnyOf(['Reloading'])(player.reload)
+
+export const canReload = (player: Player): boolean =>
+  !isReloading(player) &&
+  heldLoaded(player) < heldStats(player).magazine &&
+  hasLooseRounds(player)
+
+export const beginReload = (player: Player): Player => {
+  const { reloadMs } = heldStats(player)
+  return modifyFields(player, {
+    reload: () =>
+      Reload.Reloading({ remainingMs: reloadMs, durationMs: reloadMs }),
+  })
+}
+
+export const cancelReload = (player: Player): Player =>
+  isReloading(player)
+    ? modifyFields(player, { reload: () => Reload.Ready() })
+    : player
+
+const fillSpare = (spare: CarriedGun): CarriedGun =>
+  modifyFields(spare, {
+    loaded: () => Math.min(spare.rounds, magazineOf(spare.kind, spare.tier)),
+  })
+
+export const finishReload = (player: Player): Player =>
+  modifyFields(player, {
+    reload: () => Reload.Ready(),
+    pistolLoaded: loaded =>
+      Arsenal.isAnyOf(['HoldingSpare'])(player.arsenal)
+        ? loaded
+        : magazineOf(SIDEARM, player.pistolTier),
+    arsenal: arsenal =>
+      Arsenal.match(arsenal, {
+        PistolOnly: () => arsenal,
+        HoldingPistol: () => arsenal,
+        HoldingSpare: ({ spare }) =>
+          Arsenal.HoldingSpare({ spare: fillSpare(spare) }),
+      }),
+  })
+
+export const spendRound = (player: Player): Player =>
+  Arsenal.match(player.arsenal, {
+    PistolOnly: () =>
+      modifyFields(player, {
+        pistolLoaded: loaded => Math.max(0, loaded - 1),
+      }),
+    HoldingPistol: () =>
+      modifyFields(player, {
+        pistolLoaded: loaded => Math.max(0, loaded - 1),
+      }),
+    HoldingSpare: ({ spare }) =>
+      modifyFields(player, {
+        arsenal: () =>
+          Arsenal.HoldingSpare({
+            spare: modifyFields(spare, {
+              rounds: rounds => Math.max(0, rounds - 1),
+              loaded: loaded => Math.max(0, loaded - 1),
+            }),
+          }),
+      }),
+  })
+
+export const freshSpare = (kind: WeaponKind): CarriedGun => ({
+  kind,
+  rounds: startingRounds(kind),
+  loaded: Math.min(startingRounds(kind), magazineOf(kind, 0)),
+  tier: 0,
+})

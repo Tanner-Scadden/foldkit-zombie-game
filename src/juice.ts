@@ -114,6 +114,9 @@ const eventTrauma = (event: GameEvent): number =>
     PlayerHurt: () => SHAKE_TRAUMA_HURT,
     BulletStruck: () => 0,
     RanDry: () => 0,
+    DryFired: () => 0,
+    ReloadStarted: () => 0,
+    Reloaded: () => 0,
     WaveCleared: () => 0,
     TrapHit: () => 0,
     TrapCracked: () => TRAP_CRACK_TRAUMA,
@@ -210,6 +213,9 @@ const eventPopups = (
     BulletStruck: () => noPopups(state),
     RanDry: ({ x, y }) =>
       generateMany(state, 1, popup('Empty', 0, x, y - EMPTY_POPUP_LIFT_PX)),
+    DryFired: () => noPopups(state),
+    ReloadStarted: () => noPopups(state),
+    Reloaded: () => noPopups(state),
     WaveCleared: ({ x, y, bonus }) =>
       generateMany(
         state,

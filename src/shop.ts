@@ -5,6 +5,7 @@ import { modifyFields } from 'foldkit/struct'
 import { SHOP_STALL_SYMBOL, tilesWithSymbol } from './arena'
 import {
   MONEY_TICK_PER_SECOND,
+  MS_PER_SECOND,
   PLAYER_MAX_HP,
   SHOP_FIRST_WAVE,
   SHOP_REACH_PX,
@@ -36,6 +37,8 @@ import {
   SIDEARM,
   WEAPONS,
   type WeaponTier,
+  cancelReload,
+  freshSpare,
   maxRounds,
   maxTier,
   maybeNextTier,
@@ -129,6 +132,17 @@ export const upgradeChanges = (weapon: WeaponKind, tier: number): string => {
         roundTo(before.spread, 2),
         roundTo(after.spread, 2),
         (from, to) => (to < from ? 'Tighter aim' : 'A wider spray'),
+      ),
+      ...changeText(
+        before.magazine,
+        after.magazine,
+        (from, to) => `Loads ${to} ${roundsLabel} instead of ${from}`,
+      ),
+      ...changeText(
+        before.reloadMs,
+        after.reloadMs,
+        (from, to) =>
+          `Reloads in ${to / MS_PER_SECOND} s instead of ${from / MS_PER_SECOND}`,
       ),
       ...changeText(before.knockback, after.knockback, () => 'A bigger shove'),
       ...changeText(
@@ -469,15 +483,8 @@ const grant = (model: Model, good: ShopGood): Model =>
   ShopGood.match(good, {
     Gun: ({ weapon }) =>
       equip(model, player =>
-        modifyFields(player, {
-          arsenal: () =>
-            Arsenal.HoldingSpare({
-              spare: {
-                kind: weapon,
-                rounds: startingRounds(weapon),
-                tier: 0,
-              },
-            }),
+        modifyFields(cancelReload(player), {
+          arsenal: () => Arsenal.HoldingSpare({ spare: freshSpare(weapon) }),
         }),
       ),
     Ammo: ({ weapon, rounds }) =>

@@ -19,6 +19,7 @@ import {
 import { Verdict, verdictFor } from './shop'
 import {
   UPGRADE_TIERS,
+  magazineOf,
   maxRounds,
   maxTier,
   maybeSpare,
@@ -60,6 +61,7 @@ const browsing = (balance: number, arsenal: Arsenal): Model =>
 const spare = (kind: WeaponKind, rounds: number, tier = 0): CarriedGun => ({
   kind,
   rounds,
+  loaded: Math.min(rounds, magazineOf(kind, tier)),
   tier,
 })
 

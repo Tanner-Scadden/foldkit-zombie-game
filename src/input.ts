@@ -36,7 +36,8 @@ const START_KEYS: ReadonlyArray<string> = ['Enter', 'Space']
 const ENDLESS_KEY = 'KeyE'
 const KEEP_GOING_KEY = 'KeyK'
 const PAUSE_KEYS: ReadonlyArray<string> = ['Escape', 'KeyP']
-const START_WAVE_KEYS: ReadonlyArray<string> = ['Enter', 'KeyR']
+const START_WAVE_KEY = 'Enter'
+const RELOAD_KEY = 'KeyR'
 const SWAP_KEYS: ReadonlyArray<string> = ['KeyQ', 'KeyE']
 const PISTOL_KEY = 'Digit1'
 const SPARE_KEY = 'Digit2'
@@ -83,8 +84,9 @@ export const isKeepGoingKey = (code: string): boolean => code === KEEP_GOING_KEY
 export const isPauseKey = (code: string): boolean =>
   Array.contains(PAUSE_KEYS, code)
 
-export const isStartWaveKey = (code: string): boolean =>
-  Array.contains(START_WAVE_KEYS, code)
+export const isStartWaveKey = (code: string): boolean => code === START_WAVE_KEY
+
+export const isReloadKey = (code: string): boolean => code === RELOAD_KEY
 
 const isAnyPressed = (
   pressedKeys: ReadonlyArray<string>,

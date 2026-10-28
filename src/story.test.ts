@@ -233,27 +233,27 @@ describe('keyboard intent', () => {
 
 describe('firing', () => {
   test('fires at most once per fire interval while the trigger is held', () => {
-    const frameMs = FIRE_INTERVAL_MS / 4
+    const frameMs = FIRE_INTERVAL_MS / 5
 
     story(
       update,
       given(playingModel),
       message(Message.PressedKey({ code: 'Space' })),
       tick(frameMs),
-      model(({ bullets }) => {
-        expect(bullets).toHaveLength(1)
-      }),
-      ...ticks(3, frameMs),
-      model(({ bullets }) => {
-        expect(bullets).toHaveLength(1)
-      }),
-      tick(frameMs),
-      model(({ bullets }) => {
-        expect(bullets).toHaveLength(2)
+      model(({ stats }) => {
+        expect(stats.shotsFired).toBe(1)
       }),
       ...ticks(4, frameMs),
-      model(({ bullets }) => {
-        expect(bullets).toHaveLength(3)
+      model(({ stats }) => {
+        expect(stats.shotsFired).toBe(1)
+      }),
+      tick(frameMs),
+      model(({ stats }) => {
+        expect(stats.shotsFired).toBe(2)
+      }),
+      ...ticks(5, frameMs),
+      model(({ stats }) => {
+        expect(stats.shotsFired).toBe(3)
       }),
     )
   })
@@ -319,7 +319,7 @@ describe('zombies', () => {
         ])
         expect(score).toBe(0)
       }),
-      ...ticks(25, FRAME_MS),
+      ...ticks(Math.ceil((2 * FIRE_INTERVAL_MS) / FRAME_MS) + 8, FRAME_MS),
       model(({ zombies, score }) => {
         const struck = Option.getOrThrow(Array.head(zombies))
         expect(struck.hp).toBe(0)
@@ -577,7 +577,8 @@ describe('determinism', () => {
       update,
       given(modifyFields(readyModel, { rngState: () => seed })),
       message(Message.PressedKey({ code: 'Enter' })),
-      message(Message.PressedKey({ code: 'KeyR' })),
+      message(Message.ReleasedKey({ code: 'Enter' })),
+      message(Message.PressedKey({ code: 'Enter' })),
       message(Message.PressedKey({ code: 'Space' })),
       message(Message.PressedKey({ code: 'KeyW' })),
       ...ticks(120, 16),

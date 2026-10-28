@@ -64,16 +64,21 @@ Proposed on 2026-10-28 for step 4. These are starting numbers to play against, n
 - **The shop.** It opens from the wave 2 preparation onward. Wave 1 is the tutorial, the player has no money yet, and its preparation is only 6 seconds, so the stall sleeps behind a CLOSED sign until wave 1 is cleared.
 - **Slots.** The pistol always stays in the first slot. A bought gun goes in the second slot and replaces whatever is there, along with its ammo. A new gun comes out in the player's hands.
 
-| Item                  | Price | What it does                                                                       |
-| --------------------- | ----- | ---------------------------------------------------------------------------------- |
-| Pop Pistol            | Start | 1 damage, 140 ms between shots, never runs out                                     |
-| Barn Buster (shotgun) | $75   | 5 pellets in a 0.75 radian spray, 1 damage each, short range, 620 ms between shots |
-| Shell Sack            | $15   | 16 more shells, up to 48. The shotgun comes with 16                                |
-| Chatterbox (SMG)      | $120  | 1 damage, 70 ms between shots, a slight random spread                              |
-| Chatter Drum          | $20   | 120 more rounds, up to 360. The SMG comes with 120                                 |
-| Pickled Heart         | $25   | One heart, never past the maximum of 5                                             |
+| Item                  | Price | What it does                                                                                                      |
+| --------------------- | ----- | ----------------------------------------------------------------------------------------------------------------- |
+| Pop Pistol            | Start | 1 damage, 250 ms between shots, an 8 round magazine, 1.1 s reload, never runs out                                 |
+| Barn Buster (shotgun) | $75   | 5 pellets in a 0.75 radian spray, 1 damage each, short range, 620 ms between shots, 6 shells a load, 1.3 s reload |
+| Shell Sack            | $15   | 16 more shells, up to 48. The shotgun comes with 16                                                               |
+| Chatterbox (SMG)      | $120  | 1 damage, 70 ms between shots, a slight random spread, a 30 round magazine, 1.4 s reload                          |
+| Chatter Drum          | $20   | 120 more rounds, up to 360. The SMG comes with 120                                                                |
+| Pickled Heart         | $25   | One heart, never past the maximum of 5                                                                            |
 
-There are no magazines or reloads yet. Limited ammo is a reserve. When it runs out, the next pull of the trigger clicks, pops EMPTY, and swaps to the pistol.
+Proposed on 2026-10-28 after the first playtest ("the pistol should have to reload, and a lower rate of fire"). Every gun fires from a magazine. The magazine size and reload time are columns in the weapon table in `src/weapons.ts`, and the upgrade tiers can change them.
+
+- **The pistol** keeps its infinite reserve: a reload always fills its magazine. It fires about 4 shots a second instead of 7.
+- **The shotgun and the SMG** load their magazines from their limited rounds. The HUD shows the magazine and the loose rounds as `30/90`, and the pistol as `8/∞`. When the last round is gone, the next pull of the trigger clicks, pops EMPTY, and swaps to the pistol, as before.
+- **Reloading.** An empty magazine reloads on its own once the gun has cycled after its last shot, with a dry click if the trigger is still held. R reloads early on a keyboard, and a RELOAD button above SWAP does it on touch. Start wave moved to Enter only. A reload plays a mag-out sound, drops a spent magazine (pistol and SMG) that stays on the floor, fills a bar over the player, turns the HUD readout yellow, and ends with a mag-in click. A reload stands still while the game is paused or the shop is open.
+- **Swapping cancels a reload.** Each gun keeps its own magazine, so swapping to a loaded pistol is faster than waiting out a reload. Swapping back means reloading again.
 
 Proposed on 2026-10-28 for step 5, the horde. These are starting numbers to play against, not decisions. The kind stats live in `src/zombies.ts` and the wave arc in `src/waves.ts`.
 
@@ -144,23 +149,23 @@ Added on 2026-10-28, after the first playable. Proposed, not decided. Real playe
 
 #### Upgrade tiers
 
-Each gun has three tiers beyond its base, sold at Rattles' stall between waves. A tier is a row in `UPGRADE_TIERS` in `src/weapons.ts`: a name, a price, and a boost that adds to damage, the time between shots, spread, pellets, knockback, and the ammo cap. Tiers stack, and firing reads the held gun's stats at its tier through `statsAt`. Adding a tier is a data change. The bullet carries its damage and knockback, so a shot keeps the tier it was fired with.
+Each gun has three tiers beyond its base, sold at Rattles' stall between waves. A tier is a row in `UPGRADE_TIERS` in `src/weapons.ts`: a name, a price, and a boost that adds to damage, the time between shots, the magazine, the reload time, spread, pellets, knockback, and the ammo cap. Tiers stack, and firing reads the held gun's stats at its tier through `statsAt`. Adding a tier is a data change. The bullet carries its damage and knockback, so a shot keeps the tier it was fired with.
 
 - **Where tiers live.** The pistol's tier is on the player. The spare gun's tier is on the carried gun, so buying a different spare gun replaces the slot and its upgrades. The shop says so in its rule line and on the gun's row. A new run resets every tier.
 - **In the shop.** One row per gun, named for the next tier ("Upgrade to Gossip Box"), with the changes spelled out ("Hits for 2 instead of 1"), the price, and the current tier. A row is disabled with a reason when the gun is not carried, the gun is maxed ("Fully upgraded", price shown as MAX), or the player is short.
 - **Feedback.** The gun's highlight changes color per tier (blue, pink, then gold), the muzzle flash throws more sparks per tier, and each HUD slot shows three tier pips. Buying a tier plays the cha-ching and a rising PowerUp arpeggio.
 
-| Gun         | Tier | Name               | Price | What changes                                        |
-| ----------- | ---- | ------------------ | ----- | --------------------------------------------------- |
-| Pop Pistol  | 1    | Shovey Popper      | $300  | Knockback +25                                       |
-| Pop Pistol  | 2    | Golden Grandpopper | $500  | 140 to 130 ms between shots                         |
-| Pop Pistol  | 3    | Double-Dip Popper  | $750  | Damage 1 to 2, knockback +15                        |
-| Barn Buster | 1    | Barn Buster Plus   | $110  | 5 to 7 pellets, spray +0.1 radian                   |
-| Barn Buster | 2    | Silo Splitter      | $220  | 620 to 500 ms between shots, knockback +40, cap +16 |
-| Barn Buster | 3    | Hayloft Howitzer   | $380  | Damage 1 to 2 per pellet, cap +16                   |
-| Chatterbox  | 1    | Gossip Box         | $150  | Spread 0.22 to 0.14, knockback +10                  |
-| Chatterbox  | 2    | Rumor Mill         | $280  | 70 to 58 ms between shots, cap 360 to 480           |
-| Chatterbox  | 3    | Blabbermouth 3000  | $450  | Damage 1 to 2                                       |
+| Gun         | Tier | Name               | Price | What changes                                                             |
+| ----------- | ---- | ------------------ | ----- | ------------------------------------------------------------------------ |
+| Pop Pistol  | 1    | Shovey Popper      | $300  | Knockback +25, magazine 8 to 10                                          |
+| Pop Pistol  | 2    | Golden Grandpopper | $500  | 250 to 220 ms between shots, reload 1.1 to 0.9 s                         |
+| Pop Pistol  | 3    | Double-Dip Popper  | $750  | Damage 1 to 2, knockback +15                                             |
+| Barn Buster | 1    | Barn Buster Plus   | $110  | 5 to 7 pellets, spray +0.1 radian                                        |
+| Barn Buster | 2    | Silo Splitter      | $220  | 620 to 500 ms between shots, reload 1.3 to 1.0 s, knockback +40, cap +16 |
+| Barn Buster | 3    | Hayloft Howitzer   | $380  | Damage 1 to 2 per pellet, cap +16                                        |
+| Chatterbox  | 1    | Gossip Box         | $150  | Spread 0.22 to 0.14, knockback +10                                       |
+| Chatterbox  | 2    | Rumor Mill         | $280  | 70 to 58 ms between shots, magazine 30 to 40, cap 360 to 480             |
+| Chatterbox  | 3    | Blabbermouth 3000  | $450  | Damage 1 to 2                                                            |
 
 The pistol line is expensive on purpose. The campaign is balanced on a knife edge, and the pistol is the gun that never runs dry: in early tuning a $110 tier that doubled pistol damage took the bot from 28% wins to 100%, and even a 10% faster pistol for $100 took it to about 60%. At these prices a campaign player can afford the first pistol tier late, and the damage tier is for endless.
 
