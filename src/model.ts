@@ -142,11 +142,44 @@ export type Decal = typeof Decal.Type
 
 export const GameEvent = defineTaggedUnion({
   Fired: { x: Schema.Number, y: Schema.Number, direction: Vector },
-  ZombieHit: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  ZombieHit: {
+    x: Schema.Number,
+    y: Schema.Number,
+    direction: Vector,
+    damage: Schema.Number,
+  },
   ZombieKilled: { x: Schema.Number, y: Schema.Number, direction: Vector },
   PlayerHurt: { x: Schema.Number, y: Schema.Number, direction: Vector },
 })
 export type GameEvent = typeof GameEvent.Type
+
+export const HitStop = defineTaggedUnion({
+  Running: { cooldownMs: Schema.Number },
+  Frozen: { remainingMs: Schema.Number },
+})
+export type HitStop = typeof HitStop.Type
+
+export const Shake = Schema.Struct({ trauma: Schema.Number, offset: Vector })
+export type Shake = typeof Shake.Type
+
+export const PopupKind = Schema.Literals(['Damage', 'Kill'])
+export type PopupKind = typeof PopupKind.Type
+
+export const Popup = Schema.Struct({
+  kind: PopupKind,
+  value: Schema.Number,
+  x: Schema.Number,
+  y: Schema.Number,
+  velocityX: Schema.Number,
+  ageMs: Schema.Number,
+})
+export type Popup = typeof Popup.Type
+
+export const Streak = defineTaggedUnion({
+  Cold: {},
+  Hot: { count: Schema.Number, remainingMs: Schema.Number },
+})
+export type Streak = typeof Streak.Type
 
 export const Phase = defineTaggedUnion({
   Ready: {},
@@ -168,6 +201,10 @@ export const Model = Schema.Struct({
   score: Schema.Number,
   elapsedMs: Schema.Number,
   frameEvents: Schema.Array(GameEvent),
+  hitStop: HitStop,
+  shake: Shake,
+  popups: Schema.Array(Popup),
+  streak: Streak,
   spawnCooldownMs: Schema.Number,
   rngState: Schema.Number,
   input: Input,
@@ -201,6 +238,10 @@ export const idleIntent: Intent = {
   trigger: 'Released',
 }
 
+export const initialHitStop: HitStop = HitStop.Running({ cooldownMs: 0 })
+
+export const stillShake: Shake = { trauma: 0, offset: { x: 0, y: 0 } }
+
 export const initialModel: Model = {
   phase: Phase.Ready(),
   player: initialPlayer,
@@ -213,6 +254,10 @@ export const initialModel: Model = {
   score: 0,
   elapsedMs: 0,
   frameEvents: [],
+  hitStop: initialHitStop,
+  shake: stillShake,
+  popups: [],
+  streak: Streak.Cold(),
   spawnCooldownMs: FIRST_SPAWN_DELAY_MS,
   rngState: DEFAULT_SEED,
   input: idleInput,

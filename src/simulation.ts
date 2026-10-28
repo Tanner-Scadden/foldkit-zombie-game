@@ -48,17 +48,22 @@ import {
   vectorLength,
 } from './geometry'
 import { deriveIntent } from './input'
+import { advanceJuice, thawHitStop } from './juice'
 import {
   type Bullet,
   GameEvent,
+  HitStop,
   Invulnerability,
   type Model,
   Phase,
   type Player,
+  Streak,
   type Vector,
   type Zombie,
   ZombieState,
+  initialHitStop,
   initialPlayer,
+  stillShake,
 } from './model'
 import { advanceParticles } from './particles'
 import { nextRandom } from './prng'
@@ -83,6 +88,10 @@ const startRound = (model: Model): Model =>
       score: () => 0,
       elapsedMs: () => 0,
       frameEvents: () => [],
+      hitStop: () => initialHitStop,
+      shake: () => stillShake,
+      popups: () => [],
+      streak: () => Streak.Cold(),
       spawnCooldownMs: () => FIRST_SPAWN_DELAY_MS,
     }),
   )
@@ -375,7 +384,7 @@ const applyHits =
   }
 
 const hitEvent = ({ x, y, direction }: BulletHit): GameEvent =>
-  GameEvent.ZombieHit({ x, y, direction })
+  GameEvent.ZombieHit({ x, y, direction, damage: PISTOL_DAMAGE })
 
 const killEvent = (zombie: Zombie): GameEvent =>
   GameEvent.ZombieKilled({
@@ -542,8 +551,7 @@ const endWhenDefeated = (model: Model): Model =>
 export const clampFrameDelta = (deltaTime: number): number =>
   clamp(deltaTime, 0, MAX_FRAME_DELTA_MS)
 
-export const advanceGame = (model: Model, deltaTime: number): Model => {
-  const deltaMs = clampFrameDelta(deltaTime)
+const advanceWorld = (model: Model, deltaMs: number): Model => {
   const seconds = deltaMs / MS_PER_SECOND
 
   const moved = refreshIntent(
@@ -569,4 +577,19 @@ export const advanceGame = (model: Model, deltaTime: number): Model => {
     spawned => spawnWhenDue(spawned, deltaMs),
     endWhenDefeated,
   )
+}
+
+export const advanceGame = (model: Model, deltaTime: number): Model => {
+  const deltaMs = clampFrameDelta(deltaTime)
+  const thaw = thawHitStop(model.hitStop, deltaMs)
+  const thawed = modifyFields(model, {
+    hitStop: () => thaw.hitStop,
+    frameEvents: () => [],
+  })
+  const isFrozenThroughout =
+    HitStop.guards.Frozen(model.hitStop) && thaw.worldMs <= 0
+  const stepped = isFrozenThroughout
+    ? thawed
+    : advanceWorld(thawed, thaw.worldMs)
+  return advanceJuice(stepped, deltaMs, thaw.worldMs)
 }

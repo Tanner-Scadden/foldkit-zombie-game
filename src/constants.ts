@@ -162,3 +162,46 @@ export const SHADOW_HIDE_START = 0.85
 export const MUZZLE_FLASH_OUTER_COLOR = '#ffd23f'
 export const MUZZLE_FLASH_CORE_COLOR = '#fffbe6'
 export const BULLET_TRAIL_COLOR = 'rgba(255, 224, 102, 0.45)'
+
+export const SHAKE_MAX_PX = 3
+export const SHAKE_TRAUMA_MAX = 1
+export const SHAKE_DECAY_PER_SECOND = 2.5
+export const SHAKE_TRAUMA_FIRED = 0.25
+export const SHAKE_TRAUMA_KILL = 0.5
+export const SHAKE_TRAUMA_HURT = 0.9
+
+export const HIT_STOP_KILL_MS = 40
+export const HIT_STOP_EXTRA_KILL_MS = 10
+export const HIT_STOP_KILL_MAX_MS = 60
+export const HIT_STOP_HURT_MS = 70
+export const HIT_STOP_MAX_MS = 70
+export const HIT_STOP_COOLDOWN_MS = 120
+
+export const POPUP_MAX = 10
+export const DAMAGE_POPUP_LIFETIME_MS = 480
+export const KILL_POPUP_LIFETIME_MS = 720
+export const POPUP_HOP_MS = 140
+export const DAMAGE_POPUP_HOP_PX = 5
+export const KILL_POPUP_HOP_PX = 7
+export const DAMAGE_POPUP_RISE_PX = 8
+export const KILL_POPUP_RISE_PX = 10
+export const DAMAGE_POPUP_LIFT_PX = 6
+export const KILL_POPUP_LIFT_PX = 12
+export const POPUP_DRIFT_SPEED_MAX = 14
+export const POPUP_FADE_START = 0.6
+export const KILL_POPUP_FLASH_MS = 70
+export const KILL_POPUP_BIG_SCALE = 3
+export const KILL_POPUP_SCALE = 2
+
+export const STREAK_WINDOW_MS = 1600
+export const STREAK_MIN_SHOWN = 2
+export const STREAK_PULSE_MS = 110
+export const STREAK_SCALE = 2
+export const STREAK_PULSE_SCALE = 3
+export const STREAK_FADE_MS = 400
+export const STREAK_FADED_OPACITY = 0.45
+
+export const DAMAGE_GLYPH_COLOR = '#fff4d6'
+export const KILL_GLYPH_COLOR = '#ffd23f'
+export const STREAK_GLYPH_COLOR = '#ff8a3d'
+export const GLYPH_SHADOW_COLOR = '#2a1418'

@@ -6,6 +6,7 @@ import {
   Queue,
   Result,
   Stream,
+  String,
   pipe,
 } from 'effect'
 import { Canvas, Mount } from 'foldkit'
@@ -20,6 +21,8 @@ import {
   BULLET_SPEED,
   BULLET_TRAIL_COLOR,
   BULLET_TRAIL_PX,
+  DAMAGE_POPUP_HOP_PX,
+  DAMAGE_POPUP_RISE_PX,
   DECAL_FADE_COUNT,
   DECAL_MAX,
   DUST_COLOR,
@@ -32,6 +35,11 @@ import {
   HEART_PULSE_MS,
   HEART_SHAKE_CYCLES,
   HEART_SHAKE_PX,
+  KILL_POPUP_BIG_SCALE,
+  KILL_POPUP_FLASH_MS,
+  KILL_POPUP_HOP_PX,
+  KILL_POPUP_RISE_PX,
+  KILL_POPUP_SCALE,
   MEAT_DECAL_COLOR,
   MEAT_DECAL_FADED_COLOR,
   MEAT_GIB_COLOR,
@@ -55,6 +63,8 @@ import {
   PLAYER_RECOIL_SQUASH,
   PLAYER_SHADOW_WIDTH,
   PLAYER_WALK_FRAME_MS,
+  POPUP_FADE_START,
+  POPUP_HOP_MS,
   ROT_DECAL_COLOR,
   ROT_DECAL_FADED_COLOR,
   ROT_GIB_COLOR,
@@ -63,11 +73,19 @@ import {
   SHADOW_FADE_START,
   SHADOW_HEIGHT,
   SHADOW_HIDE_START,
+  SHAKE_MAX_PX,
   SHELL_COLOR,
   SHELL_DECAL_COLOR,
   SHELL_DECAL_FADED_COLOR,
   SHELL_TUMBLE_MS,
   STICK_RADIUS_PX,
+  STREAK_FADED_OPACITY,
+  STREAK_FADE_MS,
+  STREAK_MIN_SHOWN,
+  STREAK_PULSE_MS,
+  STREAK_PULSE_SCALE,
+  STREAK_SCALE,
+  STREAK_WINDOW_MS,
   ZOMBIE_DEATH_FADE_START,
   ZOMBIE_DEATH_FALL_END,
   ZOMBIE_DEATH_LANDING_END,
@@ -86,6 +104,7 @@ import {
 } from './constants'
 import { clamp, vectorLength } from './geometry'
 import { thumbOffset } from './input'
+import { POPUP_LIFETIME_MS } from './juice'
 import { Message } from './main'
 import {
   type Bullet,
@@ -98,7 +117,9 @@ import {
   Phase,
   type Player,
   type PointerDevice,
+  type Popup,
   Stick,
+  Streak,
   type Vector,
   type Zombie,
   ZombieState,
@@ -108,6 +129,10 @@ import {
   EMPTY_HEART_SPRITE,
   FLASH_HEART_SPRITE,
   type Facing,
+  GLYPH_ADVANCE,
+  GLYPH_HEIGHT,
+  GLYPH_SPRITES,
+  type GlyphTone,
   HEART_SPRITE,
   PLAYER_IDLE_FRAMES,
   PLAYER_WALK_FRAMES,
@@ -115,6 +140,7 @@ import {
   type Tone,
   ZOMBIE_WALK_FRAMES,
   frameAt,
+  toGlyph,
 } from './sprite'
 
 // MOUNT
@@ -192,10 +218,10 @@ const speckleShape = (index: number): Canvas.Shape => {
 
 const BACKGROUND: ReadonlyArray<Canvas.Shape> = [
   Canvas.Rect({
-    x: 0,
-    y: 0,
-    width: ARENA_WIDTH,
-    height: ARENA_HEIGHT,
+    x: -SHAKE_MAX_PX,
+    y: -SHAKE_MAX_PX,
+    width: ARENA_WIDTH + SHAKE_MAX_PX * 2,
+    height: ARENA_HEIGHT + SHAKE_MAX_PX * 2,
     fill: GROUND_COLOR,
   }),
   ...Array.makeBy(SPECKLE_COUNT, speckleShape),
@@ -639,6 +665,103 @@ const entityShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   )
 }
 
+// POPUPS
+
+const glyphRowShapes = (
+  text: string,
+  tone: GlyphTone,
+): ReadonlyArray<Canvas.Shape> => {
+  const glyphs = Array.getSomes(Array.map(String.split(text, ''), toGlyph))
+  const left = -Math.floor((glyphs.length * GLYPH_ADVANCE - 1) / 2)
+  const top = -Math.floor(GLYPH_HEIGHT / 2)
+  return Array.map(glyphs, (glyph, index) =>
+    Canvas.Group({
+      translate: { x: left + index * GLYPH_ADVANCE, y: top },
+      shapes: GLYPH_SPRITES[tone][glyph],
+    }),
+  )
+}
+
+type PopupLook = Readonly<{
+  text: string
+  tone: GlyphTone
+  scale: number
+  hopPx: number
+  risePx: number
+}>
+
+const popupLook = (popup: Popup): PopupLook => {
+  if (popup.kind === 'Damage') {
+    return {
+      text: `${popup.value}`,
+      tone: 'Damage',
+      scale: 1,
+      hopPx: DAMAGE_POPUP_HOP_PX,
+      risePx: DAMAGE_POPUP_RISE_PX,
+    }
+  } else if (popup.ageMs < KILL_POPUP_FLASH_MS) {
+    return {
+      text: `+${popup.value}`,
+      tone: 'Damage',
+      scale: KILL_POPUP_BIG_SCALE,
+      hopPx: KILL_POPUP_HOP_PX,
+      risePx: KILL_POPUP_RISE_PX,
+    }
+  } else {
+    return {
+      text: `+${popup.value}`,
+      tone: 'Kill',
+      scale: KILL_POPUP_SCALE,
+      hopPx: KILL_POPUP_HOP_PX,
+      risePx: KILL_POPUP_RISE_PX,
+    }
+  }
+}
+
+const popupShape = (popup: Popup): Canvas.Shape => {
+  const look = popupLook(popup)
+  const progress = clamp(popup.ageMs / POPUP_LIFETIME_MS[popup.kind], 0, 1)
+  const hop =
+    popup.ageMs < POPUP_HOP_MS
+      ? look.hopPx * Math.sin((Math.PI * popup.ageMs) / POPUP_HOP_MS)
+      : 0
+  return Canvas.Group({
+    translate: {
+      x: Math.round(popup.x),
+      y: Math.round(popup.y - hop - look.risePx * progress),
+    },
+    scale: { x: look.scale, y: look.scale },
+    opacity: 1 - progressBetween(progress, POPUP_FADE_START, 1),
+    shapes: glyphRowShapes(look.text, look.tone),
+  })
+}
+
+const STREAK_X = HUD_MARGIN + 8
+const STREAK_Y = HUD_MARGIN + 19
+
+const streakShapes = (streak: Streak): ReadonlyArray<Canvas.Shape> =>
+  Streak.match(streak, {
+    Cold: () => [],
+    Hot: ({ count, remainingMs }) => {
+      if (count < STREAK_MIN_SHOWN) {
+        return []
+      }
+
+      const scale =
+        STREAK_WINDOW_MS - remainingMs < STREAK_PULSE_MS
+          ? STREAK_PULSE_SCALE
+          : STREAK_SCALE
+      return [
+        Canvas.Group({
+          translate: { x: STREAK_X, y: STREAK_Y },
+          scale: { x: scale, y: scale },
+          opacity: remainingMs < STREAK_FADE_MS ? STREAK_FADED_OPACITY : 1,
+          shapes: glyphRowShapes(`x${count}`, 'Streak'),
+        }),
+      ]
+    },
+  })
+
 const heartShakeX = (maybeHeartPulseMs: Option.Option<number>): number =>
   Option.match(maybeHeartPulseMs, {
     onNone: () => 0,
@@ -696,6 +819,7 @@ const heartShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
 
 const hudShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...heartShapes(model.player),
+  ...streakShapes(model.streak),
   Canvas.Text({
     x: ARENA_WIDTH - HUD_MARGIN,
     y: HUD_MARGIN,
@@ -770,7 +894,12 @@ const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
     ],
   })
 
-export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
+const STILL: Vector = { x: 0, y: 0 }
+
+const shakeOffset = (model: Model): Vector =>
+  Phase.guards.Playing(model.phase) ? model.shake.offset : STILL
+
+const worldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...BACKGROUND,
   ...decalShapes(model.decals),
   ...shadowShapes(model),
@@ -778,6 +907,11 @@ export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...Array.flatMap(model.bullets, bulletShapes),
   ...entityShapes(model),
   ...airborneParticleShapes(model.particles),
+  ...Array.map(model.popups, popupShape),
+]
+
+export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
+  Canvas.Group({ translate: shakeOffset(model), shapes: worldShapes(model) }),
   ...hudShapes(model),
   ...overlayShapes(model),
 ]
