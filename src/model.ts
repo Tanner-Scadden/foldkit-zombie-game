@@ -283,6 +283,9 @@ export type AudioState = typeof AudioState.Type
 export const SoundSetting = Schema.Literals(['On', 'Muted'])
 export type SoundSetting = typeof SoundSetting.Type
 
+export const MusicSetting = Schema.Literals(['On', 'Off'])
+export type MusicSetting = typeof MusicSetting.Type
+
 export const DoorId = Schema.Literals(['North', 'West', 'East', 'South'])
 export type DoorId = typeof DoorId.Type
 
@@ -491,6 +494,7 @@ export const Model = Schema.Struct({
   screenMs: Schema.Number,
   audio: AudioState,
   soundSetting: SoundSetting,
+  musicSetting: MusicSetting,
 })
 export type Model = typeof Model.Type
 
@@ -594,4 +598,5 @@ export const initialModel: Model = {
   screenMs: 0,
   audio: AudioState.Locked(),
   soundSetting: 'On',
+  musicSetting: 'On',
 }

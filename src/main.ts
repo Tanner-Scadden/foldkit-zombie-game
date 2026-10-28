@@ -28,6 +28,7 @@ import {
   Playback,
   SoundEffect,
   acquireAudioEngine,
+  playMusic,
   playSound,
   positionVariation,
   releaseAudioEngine,
@@ -65,10 +66,12 @@ import {
   type Orientation,
   Phase,
   PointerDevice,
+  Round,
   ShopItemId,
   ShopState,
   initialModel,
 } from './model'
+import { MusicLevel, MusicMood, MusicStinger } from './music'
 import {
   learnFromFrame,
   learnShop,
@@ -88,7 +91,13 @@ import {
   refusePlacement,
   trapCenter,
 } from './traps'
-import { isRoundActive, pause, startOrResume, startWaveEarly } from './waves'
+import {
+  FINAL_WAVE,
+  isRoundActive,
+  pause,
+  startOrResume,
+  startWaveEarly,
+} from './waves'
 import {
   WEAPONS,
   heldWeapon,
@@ -135,6 +144,7 @@ export const Message = defineMessageUnion({
   CompletedGenerateSeed: { seed: Schema.Number },
   CompletedDetectInputDevice: { device: InputDevice },
   ClickedMuteButton: {},
+  ClickedMusicButton: {},
   ClickedStartWaveButton: {},
   ClickedSwapButton: {},
   ClickedPlaceTrapButton: {},
@@ -152,6 +162,8 @@ export const Message = defineMessageUnion({
   FailedResumeAudio: { reason: Schema.String },
   CompletedPlaySound: { sound: SoundEffect, outcome: PlayOutcome },
   FailedPlaySound: { sound: SoundEffect, reason: Schema.String },
+  CompletedCueMusic: { mood: MusicMood },
+  FailedCueMusic: { mood: MusicMood, reason: Schema.String },
 })
 export type Message = typeof Message.Type
 
@@ -254,6 +266,25 @@ export const PlaySound = Command.define('PlaySound', {
     ),
 })
 
+export const CueMusic = Command.define('CueMusic', {
+  args: { mood: MusicMood, level: MusicLevel, stinger: MusicStinger },
+  messages: [Message.CompletedCueMusic, Message.FailedCueMusic],
+  execute: cue =>
+    pipe(
+      AudioEngineResource.get,
+      Effect.flatMap(engine => playMusic(engine, cue)),
+      Effect.as(Message.CompletedCueMusic({ mood: cue.mood })),
+      Effect.catch(error =>
+        Effect.succeed(
+          Message.FailedCueMusic({
+            mood: cue.mood,
+            reason: audioFailureReason(error),
+          }),
+        ),
+      ),
+    ),
+})
+
 export const FocusShopItem = Command.define('FocusShopItem', {
   args: { item: ShopItemId },
   messages: [Message.CompletedFocusShopItem],
@@ -278,6 +309,7 @@ type UpdateStep = Update.Step<Model, Message, AudioServices>
 
 const START_SOUND_GRACE_MS = 1000
 const MUTE_KEY = 'KeyM'
+const MUSIC_KEY = 'KeyN'
 
 const withInput = (model: Model, toNextInput: (input: Input) => Input) =>
   refreshIntent(modifyFields(model, { input: toNextInput }))
@@ -614,11 +646,88 @@ const toggleSound = (model: Model): Model =>
 const toggleSoundFromKey = (model: Model, code: string): Model =>
   code === MUTE_KEY ? toggleSound(model) : model
 
+const toggleMusic = (model: Model): Model =>
+  modifyFields(model, {
+    musicSetting: setting => (setting === 'On' ? 'Off' : 'On'),
+  })
+
+const toggleMusicFromKey = (model: Model, code: string): Model =>
+  code === MUSIC_KEY ? toggleMusic(model) : model
+
+const toggleAudioFromKey = (model: Model, code: string): Model =>
+  toggleMusicFromKey(toggleSoundFromKey(model, code), code)
+
+// MUSIC
+
+type MusicPlan = Readonly<{ mood: MusicMood; level: MusicLevel }>
+
+const SILENT_PLAN: MusicPlan = { mood: 'Silence', level: 'Full' }
+
+const roundMood = (round: Round): MusicMood =>
+  Round.match(round, {
+    Preparation: (): MusicMood => 'Creep',
+    Wave: ({ wave }): MusicMood => (wave >= FINAL_WAVE ? 'Stampede' : 'Romp'),
+  })
+
+const phasePlan = (phase: Phase): MusicPlan =>
+  Phase.match(phase, {
+    Ready: (): MusicPlan => ({ mood: 'Creep', level: 'Full' }),
+    Preparation: (round): MusicPlan => ({
+      mood: roundMood(round),
+      level: 'Full',
+    }),
+    Wave: (round): MusicPlan => ({ mood: roundMood(round), level: 'Full' }),
+    Paused: ({ round }): MusicPlan => ({
+      mood: roundMood(round),
+      level: 'Ducked',
+    }),
+    Victory: () => SILENT_PLAN,
+    GameOver: () => SILENT_PLAN,
+  })
+
+const isMusicAudible = (model: Model): boolean =>
+  isSoundAudible(model) && model.musicSetting === 'On'
+
+export const musicPlan = (model: Model): MusicPlan =>
+  isMusicAudible(model) ? phasePlan(model.phase) : SILENT_PLAN
+
+const phaseStinger = (before: Phase, after: Phase): MusicStinger => {
+  if (Phase.guards.Victory(after) && !Phase.guards.Victory(before)) {
+    return 'Victory'
+  } else if (Phase.guards.GameOver(after) && !Phase.guards.GameOver(before)) {
+    return 'GameOver'
+  } else if (Phase.guards.Wave(before) && Phase.guards.Preparation(after)) {
+    return 'Cleared'
+  } else {
+    return 'None'
+  }
+}
+
+const isSamePlan = (first: MusicPlan, second: MusicPlan): boolean =>
+  first.mood === second.mood && first.level === second.level
+
+const cueMusicFrom =
+  (before: Model): UpdateStep =>
+  stepModel => {
+    const plan = musicPlan(stepModel)
+    const stinger = isMusicAudible(stepModel)
+      ? phaseStinger(before.phase, stepModel.phase)
+      : 'None'
+    if (isSamePlan(musicPlan(before), plan) && stinger === 'None') {
+      return { model: stepModel }
+    } else {
+      return {
+        model: stepModel,
+        commands: [CueMusic({ mood: plan.mood, level: plan.level, stinger })],
+      }
+    }
+  }
+
 const isFreshRun = (model: Model): boolean =>
   Phase.guards.Preparation(model.phase) &&
   model.elapsedMs < START_SOUND_GRACE_MS
 
-export const update = (model: Model, message: Message) =>
+const updateGame = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
     TickedFrame: ({ deltaTime }) => {
       if (isRoundActive(model.phase)) {
@@ -653,7 +762,7 @@ export const update = (model: Model, message: Message) =>
       const keyed = useDevice(model, 'KeyboardMouse')
       if (isBrowsing(keyed.shop)) {
         return unlockAudio(
-          withInput(toggleSoundFromKey(keyed, code), input =>
+          withInput(toggleAudioFromKey(keyed, code), input =>
             pressKey(input, code),
           ),
         )
@@ -665,7 +774,7 @@ export const update = (model: Model, message: Message) =>
           model,
           withInput(
             weaponFromKey(
-              toggleSoundFromKey(phaseFromKey(keyed, code), code),
+              toggleAudioFromKey(phaseFromKey(keyed, code), code),
               code,
             ),
             input => pressKey(input, code),
@@ -746,6 +855,8 @@ export const update = (model: Model, message: Message) =>
       pauseWhenSideways(useDevice(model, device)),
 
     ClickedMuteButton: () => unlockAudio(toggleSound(model)),
+
+    ClickedMusicButton: () => unlockAudio(toggleMusic(model)),
 
     ClickedStartWaveButton: () =>
       isBrowsing(model.shop)
@@ -838,7 +949,17 @@ export const update = (model: Model, message: Message) =>
     },
 
     FailedPlaySound: () => ({ model }),
+
+    CompletedCueMusic: () => ({ model }),
+
+    FailedCueMusic: () => ({ model }),
   })
+
+export const update = (model: Model, message: Message): UpdateReturn =>
+  Update.combine(model, [
+    stepModel => updateGame(stepModel, message),
+    cueMusicFrom(model),
+  ])
 
 // SUBSCRIPTION
 

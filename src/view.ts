@@ -2050,6 +2050,27 @@ const muteButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
   )
 }
 
+const musicButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.button(
+    [
+      h.Type('button'),
+      h.Class('music-button'),
+      h.AriaLabel('Music'),
+      h.AriaPressed(model.musicSetting === 'On' ? 'true' : 'false'),
+      h.AriaKeyshortcuts('N'),
+      h.OnClick(Message.ClickedMusicButton(), {
+        focusSelector: '.game-surface',
+      }),
+    ],
+    ['MUSIC'],
+  )
+
+const audioButtonsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [h.Class('audio-buttons')],
+    [muteButtonView(model, h), musicButtonView(model, h)],
+  )
+
 const kindLabel = ({ kind, count }: KindCount): string =>
   `${count} ${ZOMBIE_KINDS[kind].name}`
 
@@ -2258,7 +2279,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       loadoutView(model, h),
       preparationControlsView(model, h),
       swapButtonView(model, h),
-      muteButtonView(model, h),
+      audioButtonsView(model, h),
       shopDialogView(model, h),
       sidewaysView(model, h),
     ],

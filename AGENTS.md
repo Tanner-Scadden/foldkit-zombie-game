@@ -49,6 +49,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/particles.ts`  | Particles and floor decals spawned from each frame's events   |
 | `src/juice.ts`      | Screen shake, hit-stop, damage numbers, and the kill streak   |
 | `src/input.ts`      | Keyboard, mouse, and touch input turned into movement and aim |
+| `src/music.ts`      | The music's tunes as data, its instruments, and its scheduler |
 | `src/view.ts`       | The canvas scene and the on-screen touch sticks               |
 | `src/screens.ts`    | Title, banners, hints, pause, and the run stats panels        |
 | `src/font.ts`       | The pixel font, its glyph sprites, and text layout            |

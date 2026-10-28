@@ -44,7 +44,17 @@ Decided on 2026-10-27. The first playable is a fun one-screen arena that a stran
 - **Health.** A few hearts. A hit knocks the player back and gives a short invulnerable blink. Hearts are bought in the shop and rarely dropped.
 - **Onboarding.** Wave 1 is the tutorial. Control hints for the current device fade in, and the first zombies are a few slow Shamblers. No walls of text.
 - **Working title.** Munch Manor. It lives in `GAME_TITLE` in `src/constants.ts`, which builds the title screen logo, the document title, and the page heading. `index.html` repeats it for the first paint, and a Scene test checks the two agree.
-- **Sound.** Sound effects now, with an audio-unlock on the first input. Music comes later.
+- **Sound.** Sound effects with an audio-unlock on the first input, and synthesized chiptune music that follows the run. See "Music" below.
+
+#### Music
+
+Added on 2026-10-28, after the first playable. The music is original and synthesized with Web Audio: no audio files. It is a goofy, swung haunted-house groove in E minor: a bouncy filtered-square bass, a square-and-sine organ with a shared vibrato, offbeat stabs, a wobbly sine "theremin", and a noise kit. The patterns are data in `src/music.ts`, written one token per eighth note.
+
+- **Moods.** The title and Preparation share Creep, a sneaky 100 BPM shuffle. A wave plays Romp, a driving 138 BPM loop. Wave 8 plays Stampede, a heavier 152 BPM variation with a four-on-the-floor kick and a tritone bass. Victory and Game Over silence the loop.
+- **Stingers.** A cleared wave plays a short rising fanfare before Creep returns. Victory plays a major-key fanfare. Game Over plays a descending "wah wah" phrase.
+- **Transitions.** Loops change on the next bar line so they stay in time. Stingers start on the next beat so they land with the moment. Pause ducks the music to under a third of its volume, and resuming brings it back at once.
+- **Mixing.** Music runs through its own bus into the shared compressor, below the sound effects. Mute (M) silences everything. Music has its own toggle: N, or the MUSIC button under MUTE.
+- **Who owns what.** `update` decides only the mood, its level, and any stinger, from the phase and the two settings. It sends a `CueMusic` Command when that cue changes. Music plays only once audio is Ready, music is on, and sound is not muted. The scheduler lives with the audio engine: a fiber forked into the audio resource's scope, so releasing the resource stops it. Every 40 ms it schedules notes up to 0.2 s ahead on the `AudioContext` clock. Music never feeds back into the Model, so the game stays deterministic.
 
 #### Proposed balance
 
@@ -223,7 +233,7 @@ After the first playable, roughly in this order:
 
 - The tile-map estate with rooms, doors, a scrolling camera, and flow-field pathing.
 - Content depth: more weapons and upgrade tiers, hats, Spitter, the 15-wave campaign, and an endless mode.
-- Music.
+- Music. Done on 2026-10-28: see "Music" under the first playable.
 - Co-op.
 
 ### Risks
@@ -248,7 +258,7 @@ After the first playable, roughly in this order:
   - **What it costs.** In the worst case at 4×, `update` is about 12% of the main thread, building the scene about 7%, and Foldkit's canvas paint about 12%, with garbage collection under 2% and the rest idle or browser work. Inside `update`, the variant checks of tagged unions (`guards`) run a full Schema check on each call and show up in particle and zombie stepping. In paint, each shape costs a `save` and `restore` and an Effect `Match`. Before the `group` helper, `view` took 4.3 ms a frame in the worst case at 4× and 6.7 ms at 6×.
   - **Verdict.** p95 stays under 16.7 ms at 4× in every scenario. At 6× the worst case sits right at the 60 fps budget and drops some frames. Measure on a real mid-range phone before adding more shapes per frame.
   - **Remeasured for step 7.** The pixel font draws every HUD and overlay string from cached glyph sprites, so text costs more shapes than `Canvas.Text` did (idle went from 515 to 1,055 shapes) but is crisp at every scale. Same method, built harness: worst case p95 9.4 ms at 1×, 10.2 ms at 4×, and 16.7 ms at 6× (23 long frames). `view` means 0.8, 1.9, and 2.9 ms. Busy at 4× has p95 10.1 ms. p95 stays under 16.7 ms at 4×.
-- **Determinism and juice.** Animation, particles, and shake live in the Model and use the seeded generator, so they stay reproducible. Sound plays through Commands and never feeds back into the game.
+- **Determinism and juice.** Animation, particles, and shake live in the Model and use the seeded generator, so they stay reproducible. Sound and music play through Commands and never feed back into the game.
 
 ## Open questions
 

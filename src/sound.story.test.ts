@@ -38,6 +38,7 @@ const SHOT_Y = ARENA_HEIGHT / 2
 
 const readyScreen: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some(SURFACE),
+  musicSetting: () => 'Off',
 })
 
 const withAudio = (base: Model, audio: AudioState): Model =>

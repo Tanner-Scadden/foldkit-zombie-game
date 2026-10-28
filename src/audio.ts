@@ -1,6 +1,21 @@
-import { Array, Data, Effect, MutableRef, Schema, pipe } from 'effect'
+import {
+  Array,
+  Data,
+  Effect,
+  MutableRef,
+  Schema,
+  type Scope,
+  pipe,
+} from 'effect'
 import { ManagedResource } from 'foldkit'
 
+import {
+  type MusicCue,
+  type MusicDeck,
+  cueMusic,
+  makeMusicDeck,
+  runMusicScheduler,
+} from './music'
 import { generateMany, nextRandom } from './prng'
 
 // SOUND
@@ -52,6 +67,7 @@ export type AudioEngine = Readonly<{
   output: GainNode
   noise: AudioBuffer
   activeVoices: MutableRef.MutableRef<number>
+  music: MusicDeck
 }>
 
 export const AudioEngineResource =
@@ -102,14 +118,26 @@ const buildEngine = (): AudioEngine => {
   const noise = context.createBuffer(1, sampleCount, context.sampleRate)
   noise.copyToChannel(whiteNoise(sampleCount), 0)
 
-  return { context, output, noise, activeVoices: MutableRef.make(0) }
+  return {
+    context,
+    output,
+    noise,
+    activeVoices: MutableRef.make(0),
+    music: makeMusicDeck(context, compressor, noise),
+  }
 }
 
-export const acquireAudioEngine: Effect.Effect<AudioEngine, AudioEngineError> =
+export const acquireAudioEngine: Effect.Effect<
+  AudioEngine,
+  AudioEngineError,
+  Scope.Scope
+> = pipe(
   Effect.try({
     try: buildEngine,
     catch: error => new AudioEngineError({ reason: describeError(error) }),
-  })
+  }),
+  Effect.tap(engine => Effect.forkScoped(runMusicScheduler(engine.music))),
+)
 
 export const releaseAudioEngine = (engine: AudioEngine): Effect.Effect<void> =>
   pipe(
@@ -856,6 +884,17 @@ export const playSound = (
         catch: error => new AudioEngineError({ reason: describeError(error) }),
       })
     }
+  })
+
+// MUSIC
+
+export const playMusic = (
+  engine: AudioEngine,
+  cue: MusicCue,
+): Effect.Effect<void, AudioEngineError> =>
+  Effect.try({
+    try: () => cueMusic(engine.music, cue),
+    catch: error => new AudioEngineError({ reason: describeError(error) }),
   })
 
 // VARIATION

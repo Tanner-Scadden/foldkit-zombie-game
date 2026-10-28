@@ -74,6 +74,27 @@ describe('Mute button', () => {
   })
 })
 
+describe('Music button', () => {
+  test('sits beside mute, toggles music with a click or tap, and reports its pressed state', () => {
+    const musicButton = role('button', { name: 'Music' })
+    const muteButton = role('button', { name: 'Mute sound' })
+    scene(
+      { update, view },
+      given(initialModel),
+      measureSurface,
+      expect(musicButton).toHaveAttr('aria-pressed', 'true'),
+      expect(musicButton).toHaveAttr('aria-keyshortcuts', 'N'),
+      expect(musicButton).toHaveText('MUSIC'),
+      click(musicButton),
+      expect(musicButton).toHaveAttr('aria-pressed', 'false'),
+      expect(muteButton).toHaveAttr('aria-pressed', 'false'),
+      expect(role('status')).toHaveText(READY_STATUS),
+      click(musicButton),
+      expect(musicButton).toHaveAttr('aria-pressed', 'true'),
+    )
+  })
+})
+
 describe('Start wave button', () => {
   test('appears during preparation, starts the wave on a click, then goes away', () => {
     const startWaveButton = role('button', { name: 'Start wave 1 now' })
