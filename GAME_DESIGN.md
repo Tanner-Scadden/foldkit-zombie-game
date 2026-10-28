@@ -25,6 +25,26 @@ Those four things are the pillars. Everything else serves them. The art, names, 
 - **The loop.** Preparation, then a wave, then preparation again, until the player dies or wins.
 - **How the code is organized.** One Foldkit Model. A pure, deterministic `update` driven by animation-frame Messages. Randomness comes from a seeded generator whose state lives in the Model, so the same seed and the same inputs give the same game.
 
+### The first playable
+
+Decided on 2026-10-27. The first playable is a fun one-screen arena that a stranger can open from a link. The scrolling estate comes after it.
+
+- **Audience.** Strangers on the web. The first 30 seconds have to hook someone who knows nothing about the game.
+- **Run length.** 5 to 10 minutes when a run goes well.
+- **Tone.** Goofy-gory cartoon. Chunky, bright, bouncy sprites, cartoon splatter, and zombies that are funny more than scary.
+- **Liveliness.** Every sprite moves. That means walk cycles and idle motion, hit feedback (white flash, knockback, squash and stretch, death animations, gibs), screen juice (shake, muzzle flash, shell casings, hit-stop, damage numbers), and world life (blood decals that stay, dust, particles, shadows).
+- **The arena.** One 320×180 room with some cover and three or four doorways that zombies come through. It teaches that doors are chokepoints before the estate exists.
+- **Waves.** 8 waves. The last is a Tank-heavy horde, and Victory follows it. This changes the casual target of 15 from "Waves" below for the first playable. 15 waves and an endless mode come later.
+- **Preparation.** About 20 seconds, with a visible timer, and the player can skip it.
+- **Shop.** A stall in the room. The player walks onto it to open the shop overlay.
+- **Weapons.** The player starts with a pistol, buys more in the shop, carries two, and swaps between them.
+- **Ammo.** The pistol never runs out. Other guns have limited ammo that costs money.
+- **Zombies.** Shambler, Runner, Tank, and Exploder.
+- **Traps.** One or two simple kinds, likely a barricade for doorways and a turret.
+- **Health.** A few hearts. A hit knocks the player back and gives a short invulnerable blink. Hearts are bought in the shop and rarely dropped.
+- **Onboarding.** Wave 1 is the tutorial. Control hints for the current device fade in, and the first zombies are a few slow Shamblers. No walls of text.
+- **Sound.** Sound effects now, with an audio-unlock on the first input. Music comes later.
+
 ## Core loop
 
 | Phase         | What the player does                                                          |
@@ -95,27 +115,40 @@ Ideas to try first:
 - Touch input uses a document-level pointer Subscription that tracks each finger by `pointerId`, because the canvas pointer callbacks do not say which pointer fired.
 - Game logic is covered by Story tests that replay Messages. Determinism is itself tested.
 
-## Milestones
+## Roadmap
 
-| Milestone | Goal                                                                                                                       | Status      |
-| --------- | -------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| 1         | A single arena: twin-stick controls on desktop and touch, chasing zombies, shooting, score, waves                          | In progress |
-| 2         | The tile-map estate with rooms and doors, a scrolling camera, pathing, and the wave and preparation loop with a small shop | Planned     |
-| 3         | Traps and four or five zombie types with spawn tables                                                                      | Planned     |
-| 4         | Content depth: more weapons and upgrade tiers, hats, a 15-wave campaign, and an endless mode                               | Planned     |
-| 5         | Co-op                                                                                                                      | Later       |
+The roadmap leads to the first playable. The order puts feel first: juice is built on the arena that exists today, so every later system looks and sounds good the day it lands. Each step ends with something playable.
+
+| Step | Goal                                                                                                                                                                                                                                                                                                                                                                                           | Status  |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| 1    | **Controls and the bare arena.** Twin-stick on desktop and touch, chasing zombies, shooting, score.                                                                                                                                                                                                                                                                                            | Done    |
+| 2    | **Feel.** Animation frames driven by Model time, walk cycles and idle bob, hit flash, knockback, squash and stretch, death animations and gibs, particles, blood decals that stay, shadows, screen shake, muzzle flash, shell casings, hit-stop, damage numbers. Hearts with knockback and an invulnerable blink. Sound effects with an audio unlock. Measure frame time on a mid-range phone. | Next    |
+| 3    | **The room and the loop.** One screen with cover and three or four doorways, collision, zombies that spawn at doorways and steer around cover. Waves with a preview of which doorways they come from, and a Preparation phase with a 20 second timer that can be skipped.                                                                                                                      | Planned |
+| 4    | **Money and the shop.** Money from kills and a bonus for each wave cleared. A shop stall to walk onto, and an overlay with weapons, ammo, and hearts. Weapons as data: pistol, shotgun, SMG. Carry two and swap. Ammo for everything but the pistol.                                                                                                                                           | Planned |
+| 5    | **The horde.** Runner, Tank, and Exploder beside the Shambler, with chain explosions. Spawn tables for each wave from the seeded generator. The 8 wave arc, with a Tank-heavy finale and Victory.                                                                                                                                                                                              | Planned |
+| 6    | **Traps.** A barricade for doorways and a turret, placed during Preparation.                                                                                                                                                                                                                                                                                                                   | Planned |
+| 7    | **Ready for strangers.** Wave 1 as the tutorial with hints for the current device, a title screen, Game Over and Victory screens with run stats, a balance pass so a run takes 5 to 10 minutes, a phone performance pass, and a public link.                                                                                                                                                   | Planned |
+
+After the first playable, roughly in this order:
+
+- The tile-map estate with rooms, doors, a scrolling camera, and flow-field pathing.
+- Content depth: more weapons and upgrade tiers, hats, Spitter, the 15-wave campaign, and an endless mode.
+- Music.
+- Co-op.
+
+### Risks
+
+- **Phone frame time.** Particles, decals, and animation add shapes on every frame. Step 2 measures this before the rest is built on it. Decals may need to be baked, which is a strong reason for [foldkit/foldkit#1831](https://github.com/foldkit/foldkit/issues/1831).
+- **Determinism and juice.** Animation, particles, and shake live in the Model and use the seeded generator, so they stay reproducible. Sound plays through Commands and never feeds back into the game.
 
 ## Open questions
 
-- Which weapons ship first, and how are they balanced against each other?
-- How does money work: per kill, per wave, or both?
-- Can the player carry more than one weapon at a time?
-- Do traps break, wear out, or get rebuilt each preparation phase?
-- What is the art direction beyond "pixel art zombies"?
-- Sound: effects and music, and the audio-unlock step browsers require on first touch.
+- How are the pistol, shotgun, and SMG balanced against each other, and what do they cost?
+- How much money comes from a kill compared with a cleared wave?
+- Do traps break, wear out, or get rebuilt each preparation phase? Proposed: barricades take damage and can be repaired for money.
+- Does a dropped heart exist, and how rare is it?
 - Co-op: local play with gamepads on desktop is one path. Online play is another, and the deterministic `update` is what would make a lockstep approach possible. Phones cannot share a screen, so mobile co-op means online.
-- Where does the shop live: a menu, or a place on the map the player has to walk to?
-- Where do zombies spawn: only at the map edge, or also inside rooms and corners?
+- Where do zombies spawn in the estate: only at the map edge, or also inside rooms and corners?
 - Is there a second, permanent currency for unlocks, separate from the money spent within a run?
 
 ## Reference notes: Zombie Estate 2

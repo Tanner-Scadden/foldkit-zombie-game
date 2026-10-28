@@ -10,7 +10,7 @@ subtree_prompted: false
 
 ## Project Notes
 
-A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the decided choices, and the milestones are in [`GAME_DESIGN.md`](./GAME_DESIGN.md). Read it before changing how the game plays.
+A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the decided choices, and the roadmap are in [`GAME_DESIGN.md`](./GAME_DESIGN.md). Read it before changing how the game plays.
 
 ### Commands
 
