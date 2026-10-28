@@ -291,6 +291,9 @@ export type SoundSetting = typeof SoundSetting.Type
 export const MusicSetting = Schema.Literals(['On', 'Off'])
 export type MusicSetting = typeof MusicSetting.Type
 
+export const PageVisibility = Schema.Literals(['Visible', 'Hidden'])
+export type PageVisibility = typeof PageVisibility.Type
+
 export const DoorId = Schema.Literals(['North', 'West', 'East', 'South'])
 export type DoorId = typeof DoorId.Type
 
@@ -512,6 +515,7 @@ export const Model = Schema.Struct({
   audio: AudioState,
   soundSetting: SoundSetting,
   musicSetting: MusicSetting,
+  pageVisibility: PageVisibility,
 })
 export type Model = typeof Model.Type
 
@@ -619,4 +623,5 @@ export const initialModel: Model = {
   audio: AudioState.Locked(),
   soundSetting: 'On',
   musicSetting: 'On',
+  pageVisibility: 'Visible',
 }

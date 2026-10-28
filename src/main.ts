@@ -66,6 +66,7 @@ import {
   InputDevice,
   Model,
   type Orientation,
+  PageVisibility,
   Phase,
   PointerDevice,
   Round,
@@ -117,12 +118,9 @@ import {
 } from './weapons'
 import { ZOMBIE_KINDS } from './zombies'
 
-export { Model } from './model'
+export { Model, PageVisibility } from './model'
 
 // MESSAGE
-
-export const PageVisibility = Schema.Literals(['Visible', 'Hidden'])
-export type PageVisibility = typeof PageVisibility.Type
 
 export const Message = defineMessageUnion({
   TickedFrame: { deltaTime: Schema.Number },
@@ -725,7 +723,9 @@ const phasePlan = (phase: Phase): MusicPlan =>
   })
 
 const isMusicAudible = (model: Model): boolean =>
-  isSoundAudible(model) && model.musicSetting === 'On'
+  isSoundAudible(model) &&
+  model.musicSetting === 'On' &&
+  model.pageVisibility === 'Visible'
 
 export const musicPlan = (model: Model): MusicPlan =>
   isMusicAudible(model) ? phasePlan(model.phase) : SILENT_PLAN
@@ -752,7 +752,12 @@ const cueMusicFrom =
     const stinger = isMusicAudible(stepModel)
       ? phaseStinger(before.phase, stepModel.phase)
       : 'None'
-    if (isSamePlan(musicPlan(before), plan) && stinger === 'None') {
+    const hasGoneQuiet = isMusicAudible(before) && !isMusicAudible(stepModel)
+    if (
+      isSamePlan(musicPlan(before), plan) &&
+      stinger === 'None' &&
+      !hasGoneQuiet
+    ) {
       return { model: stepModel }
     } else {
       return {
@@ -841,13 +846,14 @@ const updateGame = (model: Model, message: Message) =>
     BlurredWindow: () => ({ model: withInput(model, releaseAll) }),
 
     ChangedPageVisibility: ({ visibility }) => {
+      const noted = modifyFields(model, { pageVisibility: () => visibility })
       if (visibility === 'Hidden') {
-        return Update.combine(model, [
+        return Update.combine(noted, [
           closeShop,
           stepModel => ({ model: withInput(pause(stepModel), releaseAll) }),
         ])
       } else {
-        return { model }
+        return { model: noted }
       }
     },
 

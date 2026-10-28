@@ -326,6 +326,23 @@ describe('music only plays when it can be heard', () => {
     )
   })
 
+  test('a hidden tab silences the title music, and coming back resumes it', () => {
+    story(
+      update,
+      given(titleScreen(AudioState.Ready())),
+      message(Message.ChangedPageVisibility({ visibility: 'Hidden' })),
+      Command.expectExact(
+        CueMusic({ mood: 'Silence', level: 'Full', stinger: 'None' }),
+      ),
+      resolveCue('Silence'),
+      message(Message.ChangedPageVisibility({ visibility: 'Visible' })),
+      Command.expectExact(
+        CueMusic({ mood: 'Creep', level: 'Full', stinger: 'None' }),
+      ),
+      resolveCue('Creep'),
+    )
+  })
+
   test('a muted run plays no stinger when it ends', () => {
     story(
       update,
@@ -338,6 +355,64 @@ describe('music only plays when it can be heard', () => {
       tick,
       model(({ phase }) => {
         expect(phase).toEqual(Phase.Victory())
+      }),
+      Command.expectNone(),
+    )
+  })
+})
+
+describe('the end stingers stop when the music goes quiet', () => {
+  const victoryScreen = (audio: AudioState): Model =>
+    modifyFields(titleScreen(audio), {
+      phase: () => Phase.Victory(),
+      screenMs: () => 0,
+    })
+
+  test('mute during the Victory stinger stops it', () => {
+    story(
+      update,
+      given(victoryScreen(AudioState.Ready())),
+      pressKey('KeyM'),
+      model(({ soundSetting }) => {
+        expect(soundSetting).toBe('Muted')
+      }),
+      Command.expectExact(
+        CueMusic({ mood: 'Silence', level: 'Full', stinger: 'None' }),
+      ),
+      resolveCue('Silence'),
+    )
+  })
+
+  test('turning music off during the Game Over stinger stops it', () => {
+    story(
+      update,
+      given(
+        modifyFields(victoryScreen(AudioState.Ready()), {
+          phase: () => Phase.GameOver({ wave: 4 }),
+        }),
+      ),
+      message(Message.ClickedMusicButton()),
+      model(({ musicSetting }) => {
+        expect(musicSetting).toBe('Off')
+      }),
+      Command.expectExact(
+        CueMusic({ mood: 'Silence', level: 'Full', stinger: 'None' }),
+      ),
+      resolveCue('Silence'),
+    )
+  })
+
+  test('unmuting on the Victory screen does not replay the stinger', () => {
+    story(
+      update,
+      given(
+        modifyFields(victoryScreen(AudioState.Ready()), {
+          soundSetting: () => 'Muted',
+        }),
+      ),
+      pressKey('KeyM'),
+      model(({ soundSetting }) => {
+        expect(soundSetting).toBe('On')
       }),
       Command.expectNone(),
     )
