@@ -6,10 +6,17 @@ import { describe, expect, test } from 'vitest'
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
+  BLOOD_PER_HIT,
+  BLOOD_PER_KILL,
+  DECAL_MAX,
+  DUST_INTERVAL_MS,
   FIRE_INTERVAL_MS,
+  MEAT_GIBS_PER_KILL,
+  PARTICLE_MAX,
   PLAYER_INVULNERABLE_MS,
   PLAYER_MAX_HP,
   PLAYER_SPEED,
+  ROT_GIBS_PER_KILL,
   SCORE_PER_ZOMBIE,
   STICK_RADIUS_PX,
   ZOMBIE_DYING_MS,
@@ -19,10 +26,13 @@ import {
 } from './constants'
 import { Message, update } from './main'
 import {
+  type Bullet,
+  type Decal,
   GameEvent,
   Invulnerability,
   type Model,
   MouseButton,
+  type Particle,
   Phase,
   Stick,
   type Zombie,
@@ -553,6 +563,225 @@ describe('determinism', () => {
 
   test('a different seed produces a different game', () => {
     expect(playSession(1234).zombies).not.toEqual(playSession(98765).zombies)
+  })
+})
+
+describe('particles and decals', () => {
+  const countKind = (
+    items: ReadonlyArray<Particle | Decal>,
+    kind: string,
+  ): number => Array.filter(items, item => item.kind === kind).length
+
+  const landingFrames = ticks(150, FRAME_MS)
+
+  const shotZombieModel = (hp: number): Model =>
+    withZombies(playingModel, [
+      modifyFields(zombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2, 0), {
+        hp: () => hp,
+      }),
+    ])
+
+  test('a hit sprays blood along the bullet and the shot ejects a shell', () => {
+    story(
+      update,
+      given(shotZombieModel(ZOMBIE_MAX_HP)),
+      message(Message.PressedKey({ code: 'Space' })),
+      tick(FRAME_MS),
+      model(({ particles }) => {
+        const blood = Array.filter(particles, ({ kind }) => kind === 'Blood')
+        expect(blood).toHaveLength(BLOOD_PER_HIT)
+        expect(Array.every(blood, ({ velocityX }) => velocityX > 0)).toBe(true)
+        expect(countKind(particles, 'Shell')).toBe(1)
+        expect(countKind(particles, 'MeatGib')).toBe(0)
+      }),
+    )
+  })
+
+  test('a kill pops red and green gibs upward', () => {
+    story(
+      update,
+      given(shotZombieModel(1)),
+      message(Message.PressedKey({ code: 'Space' })),
+      tick(FRAME_MS),
+      model(({ particles }) => {
+        expect(countKind(particles, 'MeatGib')).toBe(MEAT_GIBS_PER_KILL)
+        expect(countKind(particles, 'RotGib')).toBe(ROT_GIBS_PER_KILL)
+        expect(countKind(particles, 'Blood')).toBe(
+          BLOOD_PER_HIT + BLOOD_PER_KILL,
+        )
+        const gibs = Array.filter(
+          particles,
+          ({ kind }) => kind === 'MeatGib' || kind === 'RotGib',
+        )
+        expect(Array.every(gibs, ({ velocityZ }) => velocityZ > 0)).toBe(true)
+      }),
+    )
+  })
+
+  test('particles expire and what lands leaves decals on whole pixels', () => {
+    story(
+      update,
+      given(shotZombieModel(1)),
+      message(Message.PressedKey({ code: 'Space' })),
+      tick(FRAME_MS),
+      message(Message.ReleasedKey({ code: 'Space' })),
+      model(({ decals }) => {
+        expect(decals).toEqual([])
+      }),
+      ...landingFrames,
+      model(({ particles, decals }) => {
+        expect(particles).toEqual([])
+        expect(countKind(decals, 'Blood')).toBe(BLOOD_PER_HIT + BLOOD_PER_KILL)
+        expect(countKind(decals, 'Meat')).toBe(MEAT_GIBS_PER_KILL)
+        expect(countKind(decals, 'Rot')).toBe(ROT_GIBS_PER_KILL)
+        expect(countKind(decals, 'Shell')).toBe(1)
+        expect(
+          Array.every(
+            decals,
+            ({ x, y }) => Number.isInteger(x) && Number.isInteger(y),
+          ),
+        ).toBe(true)
+      }),
+    )
+  })
+
+  test('walking kicks up a dust puff every dust interval', () => {
+    const framesBeforeSecondPuff = Math.ceil(DUST_INTERVAL_MS / FRAME_MS)
+
+    story(
+      update,
+      given(playingModel),
+      message(Message.PressedKey({ code: 'KeyD' })),
+      tick(FRAME_MS),
+      model(({ particles }) => {
+        expect(countKind(particles, 'Dust')).toBe(1)
+      }),
+      ...ticks(framesBeforeSecondPuff - 2, FRAME_MS),
+      model(({ particles }) => {
+        expect(countKind(particles, 'Dust')).toBe(1)
+      }),
+      tick(FRAME_MS),
+      model(({ particles }) => {
+        expect(countKind(particles, 'Dust')).toBe(2)
+      }),
+    )
+  })
+
+  test('particle and decal caps hold under a flood of kills', () => {
+    const floodSize = 40
+    const victims = Array.makeBy(floodSize, index =>
+      modifyFields(
+        zombieAt(
+          200 + index,
+          20 + (index % 10) * 30,
+          20 + Math.floor(index / 10) * 40,
+          0,
+        ),
+        { hp: () => 1 },
+      ),
+    )
+    const killingBullets = Array.map(victims, ({ id, x, y }): Bullet => ({
+      id: id + floodSize,
+      x,
+      y,
+      velocityX: 1,
+      velocityY: 0,
+      remainingMs: 900,
+    }))
+    const oldDecal: Decal = { kind: 'Shell', x: 1, y: 1, width: 2, height: 1 }
+    const floodModel = modifyFields(withZombies(playingModel, victims), {
+      bullets: () => killingBullets,
+      decals: () => Array.makeBy(DECAL_MAX, () => oldDecal),
+    })
+
+    story(
+      update,
+      given(floodModel),
+      tick(FRAME_MS),
+      model(({ particles, score }) => {
+        expect(score).toBe(floodSize * SCORE_PER_ZOMBIE)
+        expect(particles).toHaveLength(PARTICLE_MAX)
+      }),
+      ...landingFrames,
+      model(({ particles, decals }) => {
+        expect(particles).toEqual([])
+        expect(decals).toHaveLength(DECAL_MAX)
+        expect(countKind(decals, 'Shell')).toBeLessThan(DECAL_MAX)
+        expect(Array.last(decals)).not.toEqual(Option.some(oldDecal))
+      }),
+    )
+  })
+
+  test('a new round clears the particles and decals', () => {
+    const messyModel = modifyFields(playingModel, {
+      phase: () => Phase.GameOver(),
+      particles: () => [
+        {
+          kind: 'MeatGib',
+          x: 40,
+          y: 40,
+          z: 3,
+          velocityX: 0,
+          velocityY: 0,
+          velocityZ: 10,
+          size: 2,
+          remainingMs: 500,
+        },
+      ],
+      decals: () => [{ kind: 'Blood', x: 50, y: 50, width: 2, height: 1 }],
+      dustCooldownMs: () => 40,
+    })
+
+    story(
+      update,
+      given(messyModel),
+      message(Message.PressedKey({ code: 'Enter' })),
+      model(({ phase, particles, decals, dustCooldownMs }) => {
+        expect(phase).toEqual(Phase.Playing())
+        expect(particles).toEqual([])
+        expect(decals).toEqual([])
+        expect(dustCooldownMs).toBe(0)
+      }),
+    )
+  })
+
+  const playParticleSession = (seed: number): Model => {
+    const sessions: Array<Model> = []
+    story(
+      update,
+      given(
+        withZombies(modifyFields(playingModel, { rngState: () => seed }), [
+          zombieAt(100, 200, ARENA_HEIGHT / 2, 0),
+          zombieAt(101, 230, ARENA_HEIGHT / 2, 0),
+          zombieAt(102, 260, ARENA_HEIGHT / 2, 0),
+        ]),
+      ),
+      message(Message.PressedKey({ code: 'Space' })),
+      message(Message.PressedKey({ code: 'KeyD' })),
+      ...ticks(40, FRAME_MS),
+      model(finalModel => {
+        sessions.push(finalModel)
+      }),
+    )
+    return Option.getOrThrow(Array.head(sessions))
+  }
+
+  test('the same seed and Messages produce the same particles and decals', () => {
+    const first = playParticleSession(1234)
+    const second = playParticleSession(1234)
+
+    expect(countKind(first.particles, 'MeatGib')).toBeGreaterThan(0)
+    expect(countKind(first.particles, 'Dust')).toBeGreaterThan(0)
+    expect(first.decals.length).toBeGreaterThan(0)
+    expect(second.particles).toEqual(first.particles)
+    expect(second.decals).toEqual(first.decals)
+    expect(second.rngState).toBe(first.rngState)
+  })
+
+  test('a different seed scatters the particles differently', () => {
+    expect(playParticleSession(1234).particles).not.toEqual(
+      playParticleSession(98765).particles,
+    )
   })
 })
 

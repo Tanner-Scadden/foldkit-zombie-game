@@ -1,3 +1,5 @@
+import { Array } from 'effect'
+
 const MULBERRY_INCREMENT = 0x6d2b79f5
 const UINT32_RANGE = 4294967296
 
@@ -12,3 +14,19 @@ export const nextRandom = (state: number): RandomDraw => {
     nextState: advanced >>> 0,
   }
 }
+
+export type Seeded<A> = readonly [nextState: number, value: A]
+
+export const generateMany = <A>(
+  state: number,
+  count: number,
+  generate: (drawState: number) => Seeded<A>,
+): Seeded<ReadonlyArray<A>> =>
+  Array.mapAccum(
+    Array.makeBy(count, () => count),
+    state,
+    drawState => generate(drawState),
+  )
+
+export const between = (roll: number, min: number, max: number): number =>
+  min + (max - min) * roll

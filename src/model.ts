@@ -106,6 +106,40 @@ export const Bullet = Schema.Struct({
 })
 export type Bullet = typeof Bullet.Type
 
+export const ParticleKind = Schema.Literals([
+  'Blood',
+  'MeatGib',
+  'RotGib',
+  'Shell',
+  'Dust',
+])
+export type ParticleKind = typeof ParticleKind.Type
+
+export const Particle = Schema.Struct({
+  kind: ParticleKind,
+  x: Schema.Number,
+  y: Schema.Number,
+  z: Schema.Number,
+  velocityX: Schema.Number,
+  velocityY: Schema.Number,
+  velocityZ: Schema.Number,
+  size: Schema.Number,
+  remainingMs: Schema.Number,
+})
+export type Particle = typeof Particle.Type
+
+export const DecalKind = Schema.Literals(['Blood', 'Meat', 'Rot', 'Shell'])
+export type DecalKind = typeof DecalKind.Type
+
+export const Decal = Schema.Struct({
+  kind: DecalKind,
+  x: Schema.Number,
+  y: Schema.Number,
+  width: Schema.Number,
+  height: Schema.Number,
+})
+export type Decal = typeof Decal.Type
+
 export const GameEvent = defineTaggedUnion({
   Fired: { x: Schema.Number, y: Schema.Number, direction: Vector },
   ZombieHit: { x: Schema.Number, y: Schema.Number, direction: Vector },
@@ -127,6 +161,9 @@ export const Model = Schema.Struct({
   player: Player,
   zombies: Schema.Array(Zombie),
   bullets: Schema.Array(Bullet),
+  particles: Schema.Array(Particle),
+  decals: Schema.Array(Decal),
+  dustCooldownMs: Schema.Number,
   nextEntityId: Schema.Number,
   score: Schema.Number,
   elapsedMs: Schema.Number,
@@ -169,6 +206,9 @@ export const initialModel: Model = {
   player: initialPlayer,
   zombies: [],
   bullets: [],
+  particles: [],
+  decals: [],
+  dustCooldownMs: 0,
   nextEntityId: 0,
   score: 0,
   elapsedMs: 0,

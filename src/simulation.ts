@@ -60,6 +60,7 @@ import {
   ZombieState,
   initialPlayer,
 } from './model'
+import { advanceParticles } from './particles'
 import { nextRandom } from './prng'
 
 // ROUND
@@ -76,6 +77,9 @@ const startRound = (model: Model): Model =>
       player: () => initialPlayer,
       zombies: () => [],
       bullets: () => [],
+      particles: () => [],
+      decals: () => [],
+      dustCooldownMs: () => 0,
       score: () => 0,
       elapsedMs: () => 0,
       frameEvents: () => [],
@@ -561,6 +565,7 @@ export const advanceGame = (model: Model, deltaTime: number): Model => {
     advanced,
     resolveBulletHits,
     resolvePlayerContact,
+    contacted => advanceParticles(contacted, seconds, deltaMs),
     spawned => spawnWhenDue(spawned, deltaMs),
     endWhenDefeated,
   )

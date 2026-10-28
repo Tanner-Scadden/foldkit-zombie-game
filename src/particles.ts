@@ -1,0 +1,488 @@
+import { Array, Option, Result } from 'effect'
+import { modifyFields } from 'foldkit/struct'
+
+import {
+  ARENA_HEIGHT,
+  ARENA_WIDTH,
+  BLOOD_DRAG_PER_SECOND,
+  BLOOD_GRAVITY,
+  BLOOD_LIFETIME_MS,
+  BLOOD_LIFT_MAX,
+  BLOOD_LIFT_MIN,
+  BLOOD_PER_HIT,
+  BLOOD_PER_KILL,
+  BLOOD_SPEED_MAX,
+  BLOOD_SPEED_MIN,
+  BLOOD_SPRAY_SPREAD,
+  DECAL_MAX,
+  DUST_DRAG_PER_SECOND,
+  DUST_HURT_SPEED_MAX,
+  DUST_HURT_SPEED_MIN,
+  DUST_INTERVAL_MS,
+  DUST_LIFETIME_MAX_MS,
+  DUST_LIFETIME_MIN_MS,
+  DUST_LIFT,
+  DUST_PER_HURT,
+  DUST_SPEED_MAX,
+  DUST_SPEED_MIN,
+  GIB_DRAG_PER_SECOND,
+  GIB_FORWARD_PUSH,
+  GIB_GRAVITY,
+  GIB_LIFETIME_MS,
+  GIB_LIFT_MAX,
+  GIB_LIFT_MIN,
+  GIB_RESTITUTION,
+  GIB_SPEED_MAX,
+  GIB_SPEED_MIN,
+  MEAT_GIBS_PER_KILL,
+  PARTICLE_BOUNCE_FRICTION,
+  PARTICLE_BOUNCE_MIN_SPEED,
+  PARTICLE_MAX,
+  PLAYER_FOOT_OFFSET,
+  ROT_GIBS_PER_KILL,
+  SHELL_DRAG_PER_SECOND,
+  SHELL_EJECT_SPEED_MAX,
+  SHELL_EJECT_SPEED_MIN,
+  SHELL_GRAVITY,
+  SHELL_KICK_BACK,
+  SHELL_LIFETIME_MS,
+  SHELL_LIFT_MAX,
+  SHELL_LIFT_MIN,
+  SHELL_RESTITUTION,
+  ZOMBIE_FOOT_OFFSET,
+} from './constants'
+import { vectorLength } from './geometry'
+import {
+  type Decal,
+  type DecalKind,
+  GameEvent,
+  type Model,
+  type Particle,
+  type ParticleKind,
+  type Vector,
+} from './model'
+import { type Seeded, between, generateMany, nextRandom } from './prng'
+
+// PHYSICS
+
+type ParticlePhysics = Readonly<{
+  gravity: number
+  dragPerSecond: number
+  restitution: number
+  maybeDecalKind: Option.Option<DecalKind>
+}>
+
+const PHYSICS: Readonly<Record<ParticleKind, ParticlePhysics>> = {
+  Blood: {
+    gravity: BLOOD_GRAVITY,
+    dragPerSecond: BLOOD_DRAG_PER_SECOND,
+    restitution: 0,
+    maybeDecalKind: Option.some('Blood'),
+  },
+  MeatGib: {
+    gravity: GIB_GRAVITY,
+    dragPerSecond: GIB_DRAG_PER_SECOND,
+    restitution: GIB_RESTITUTION,
+    maybeDecalKind: Option.some('Meat'),
+  },
+  RotGib: {
+    gravity: GIB_GRAVITY,
+    dragPerSecond: GIB_DRAG_PER_SECOND,
+    restitution: GIB_RESTITUTION,
+    maybeDecalKind: Option.some('Rot'),
+  },
+  Shell: {
+    gravity: SHELL_GRAVITY,
+    dragPerSecond: SHELL_DRAG_PER_SECOND,
+    restitution: SHELL_RESTITUTION,
+    maybeDecalKind: Option.some('Shell'),
+  },
+  Dust: {
+    gravity: 0,
+    dragPerSecond: DUST_DRAG_PER_SECOND,
+    restitution: 0,
+    maybeDecalKind: Option.none(),
+  },
+}
+
+const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
+  Blood: () => 1,
+  Meat: size => size,
+  Rot: size => size,
+  Shell: () => 1,
+}
+
+type ParticleStep = Result.Result<Particle, Option.Option<Decal>>
+
+const flying = (particle: Particle): ParticleStep => Result.succeed(particle)
+
+const LEFT_NOTHING: ParticleStep = Result.fail(Option.none())
+
+const leftDecal = (decal: Decal): ParticleStep =>
+  Result.fail(Option.some(decal))
+
+const isOnFloor = (x: number, y: number): boolean =>
+  x >= 0 && x < ARENA_WIDTH && y >= 0 && y < ARENA_HEIGHT
+
+const land = (particle: Particle, x: number, y: number): ParticleStep => {
+  const floorX = Math.round(x)
+  const floorY = Math.round(y)
+  return Option.match(PHYSICS[particle.kind].maybeDecalKind, {
+    onNone: () => LEFT_NOTHING,
+    onSome: kind =>
+      isOnFloor(floorX, floorY)
+        ? leftDecal({
+            kind,
+            x: floorX,
+            y: floorY,
+            width: particle.size,
+            height: DECAL_HEIGHT[kind](particle.size),
+          })
+        : LEFT_NOTHING,
+  })
+}
+
+const stepParticle =
+  (seconds: number, deltaMs: number) =>
+  (particle: Particle): ParticleStep => {
+    const physics = PHYSICS[particle.kind]
+    const remainingMs = particle.remainingMs - deltaMs
+    if (remainingMs <= 0) {
+      return LEFT_NOTHING
+    }
+
+    const drag = Math.exp(-physics.dragPerSecond * seconds)
+    const velocityZ = particle.velocityZ - physics.gravity * seconds
+    const x = particle.x + particle.velocityX * seconds
+    const y = particle.y + particle.velocityY * seconds
+    const z = particle.z + velocityZ * seconds
+    const isTouchingDown = z <= 0 && velocityZ < 0
+    const reboundSpeed = -velocityZ * physics.restitution
+
+    if (!isTouchingDown) {
+      return flying(
+        modifyFields(particle, {
+          x: () => x,
+          y: () => y,
+          z: () => z,
+          velocityX: velocityX => velocityX * drag,
+          velocityY: velocityY => velocityY * drag,
+          velocityZ: () => velocityZ,
+          remainingMs: () => remainingMs,
+        }),
+      )
+    } else if (reboundSpeed > PARTICLE_BOUNCE_MIN_SPEED) {
+      return flying(
+        modifyFields(particle, {
+          x: () => x,
+          y: () => y,
+          z: () => 0,
+          velocityX: velocityX => velocityX * PARTICLE_BOUNCE_FRICTION,
+          velocityY: velocityY => velocityY * PARTICLE_BOUNCE_FRICTION,
+          velocityZ: () => reboundSpeed,
+          remainingMs: () => remainingMs,
+        }),
+      )
+    } else {
+      return land(particle, x, y)
+    }
+  }
+
+// SPAWNING
+
+type Launch = Readonly<{
+  kind: ParticleKind
+  ground: Vector
+  height: number
+  angle: number
+  speed: number
+  lift: number
+  size: number
+  lifetimeMs: number
+}>
+
+const launch = ({
+  kind,
+  ground,
+  height,
+  angle,
+  speed,
+  lift,
+  size,
+  lifetimeMs,
+}: Launch): Particle => ({
+  kind,
+  x: ground.x,
+  y: ground.y,
+  z: height,
+  velocityX: Math.cos(angle) * speed,
+  velocityY: Math.sin(angle) * speed,
+  velocityZ: lift,
+  size,
+  remainingMs: lifetimeMs,
+})
+
+const angleOf = ({ x, y }: Vector): number => Math.atan2(y, x)
+
+const zombieGround = (x: number, y: number): Vector => ({
+  x,
+  y: y + ZOMBIE_FOOT_OFFSET,
+})
+
+const playerGround = (x: number, y: number): Vector => ({
+  x,
+  y: y + PLAYER_FOOT_OFFSET,
+})
+
+const bloodDroplet =
+  (ground: Vector, heading: number, spread: number) =>
+  (state: number): Seeded<Particle> => {
+    const angleDraw = nextRandom(state)
+    const speedDraw = nextRandom(angleDraw.nextState)
+    const liftDraw = nextRandom(speedDraw.nextState)
+    const sizeDraw = nextRandom(liftDraw.nextState)
+    return [
+      sizeDraw.nextState,
+      launch({
+        kind: 'Blood',
+        ground,
+        height: ZOMBIE_FOOT_OFFSET,
+        angle: heading + (angleDraw.value - 0.5) * spread,
+        speed: between(speedDraw.value, BLOOD_SPEED_MIN, BLOOD_SPEED_MAX),
+        lift: between(liftDraw.value, BLOOD_LIFT_MIN, BLOOD_LIFT_MAX),
+        size: 1 + Math.floor(sizeDraw.value * 2),
+        lifetimeMs: BLOOD_LIFETIME_MS,
+      }),
+    ]
+  }
+
+const gib =
+  (kind: ParticleKind, ground: Vector, push: Vector) =>
+  (state: number): Seeded<Particle> => {
+    const angleDraw = nextRandom(state)
+    const speedDraw = nextRandom(angleDraw.nextState)
+    const liftDraw = nextRandom(speedDraw.nextState)
+    const sizeDraw = nextRandom(liftDraw.nextState)
+    const angle = angleDraw.value * Math.PI * 2
+    const speed = between(speedDraw.value, GIB_SPEED_MIN, GIB_SPEED_MAX)
+    return [
+      sizeDraw.nextState,
+      {
+        kind,
+        x: ground.x,
+        y: ground.y,
+        z: ZOMBIE_FOOT_OFFSET,
+        velocityX: Math.cos(angle) * speed + push.x * GIB_FORWARD_PUSH,
+        velocityY: Math.sin(angle) * speed + push.y * GIB_FORWARD_PUSH,
+        velocityZ: between(liftDraw.value, GIB_LIFT_MIN, GIB_LIFT_MAX),
+        size: 2 + Math.floor(sizeDraw.value * 2),
+        remainingMs: GIB_LIFETIME_MS,
+      },
+    ]
+  }
+
+const shellCasing =
+  (ground: Vector, facing: Vector) =>
+  (state: number): Seeded<Particle> => {
+    const speedDraw = nextRandom(state)
+    const liftDraw = nextRandom(speedDraw.nextState)
+    const ejectAngle = angleOf({
+      x: -facing.y - facing.x * SHELL_KICK_BACK,
+      y: facing.x - facing.y * SHELL_KICK_BACK,
+    })
+    return [
+      liftDraw.nextState,
+      launch({
+        kind: 'Shell',
+        ground,
+        height: PLAYER_FOOT_OFFSET,
+        angle: ejectAngle,
+        speed: between(
+          speedDraw.value,
+          SHELL_EJECT_SPEED_MIN,
+          SHELL_EJECT_SPEED_MAX,
+        ),
+        lift: between(liftDraw.value, SHELL_LIFT_MIN, SHELL_LIFT_MAX),
+        size: 2,
+        lifetimeMs: SHELL_LIFETIME_MS,
+      }),
+    ]
+  }
+
+const dustPuff =
+  (ground: Vector, heading: number, spread: number, minSpeed: number) =>
+  (maxSpeed: number) =>
+  (state: number): Seeded<Particle> => {
+    const angleDraw = nextRandom(state)
+    const speedDraw = nextRandom(angleDraw.nextState)
+    const lifetimeDraw = nextRandom(speedDraw.nextState)
+    return [
+      lifetimeDraw.nextState,
+      launch({
+        kind: 'Dust',
+        ground,
+        height: 0,
+        angle: heading + (angleDraw.value - 0.5) * spread,
+        speed: between(speedDraw.value, minSpeed, maxSpeed),
+        lift: DUST_LIFT,
+        size: 2,
+        lifetimeMs: between(
+          lifetimeDraw.value,
+          DUST_LIFETIME_MIN_MS,
+          DUST_LIFETIME_MAX_MS,
+        ),
+      }),
+    ]
+  }
+
+const chain = (
+  state: number,
+  batches: ReadonlyArray<
+    (drawState: number) => Seeded<ReadonlyArray<Particle>>
+  >,
+): Seeded<ReadonlyArray<Particle>> => {
+  const [nextState, particles] = Array.mapAccum(
+    batches,
+    state,
+    (drawState, batch) => batch(drawState),
+  )
+  return [nextState, Array.flatten(particles)]
+}
+
+const killParticles = (
+  state: number,
+  { x, y, direction }: Readonly<{ x: number; y: number; direction: Vector }>,
+): Seeded<ReadonlyArray<Particle>> => {
+  const ground = zombieGround(x, y)
+  return chain(state, [
+    drawState =>
+      generateMany(
+        drawState,
+        MEAT_GIBS_PER_KILL,
+        gib('MeatGib', ground, direction),
+      ),
+    drawState =>
+      generateMany(
+        drawState,
+        ROT_GIBS_PER_KILL,
+        gib('RotGib', ground, direction),
+      ),
+    drawState =>
+      generateMany(
+        drawState,
+        BLOOD_PER_KILL,
+        bloodDroplet(ground, angleOf(direction), Math.PI * 2),
+      ),
+  ])
+}
+
+const eventParticles = (
+  state: number,
+  event: GameEvent,
+): Seeded<ReadonlyArray<Particle>> =>
+  GameEvent.match(event, {
+    Fired: ({ x, y, direction }) =>
+      generateMany(state, 1, shellCasing(playerGround(x, y), direction)),
+    ZombieHit: ({ x, y, direction }) =>
+      generateMany(
+        state,
+        BLOOD_PER_HIT,
+        bloodDroplet(
+          zombieGround(x, y),
+          angleOf(direction),
+          BLOOD_SPRAY_SPREAD,
+        ),
+      ),
+    ZombieKilled: killed => killParticles(state, killed),
+    PlayerHurt: ({ x, y }) =>
+      generateMany(
+        state,
+        DUST_PER_HURT,
+        dustPuff(
+          playerGround(x, y),
+          0,
+          Math.PI * 2,
+          DUST_HURT_SPEED_MIN,
+        )(DUST_HURT_SPEED_MAX),
+      ),
+  })
+
+type Spawn = Readonly<{
+  rngState: number
+  dustCooldownMs: number
+  particles: ReadonlyArray<Particle>
+}>
+
+const walkingDust = (
+  model: Model,
+  deltaMs: number,
+  rngState: number,
+): Spawn => {
+  const { player, intent } = model
+  if (vectorLength(intent.move) <= 0) {
+    return { rngState, dustCooldownMs: 0, particles: [] }
+  }
+
+  const dustCooldownMs = model.dustCooldownMs - deltaMs
+  if (dustCooldownMs > 0) {
+    return { rngState, dustCooldownMs, particles: [] }
+  }
+
+  const heading = angleOf(intent.move) + Math.PI
+  const [nextState, particles] = generateMany(
+    rngState,
+    1,
+    dustPuff(
+      playerGround(player.x, player.y),
+      heading,
+      Math.PI / 2,
+      DUST_SPEED_MIN,
+    )(DUST_SPEED_MAX),
+  )
+  return {
+    rngState: nextState,
+    dustCooldownMs: dustCooldownMs + DUST_INTERVAL_MS,
+    particles,
+  }
+}
+
+// FRAME
+
+const keepNewest = <A>(
+  items: ReadonlyArray<A>,
+  max: number,
+): ReadonlyArray<A> =>
+  items.length > max ? Array.takeRight(items, max) : items
+
+export const advanceParticles = (
+  model: Model,
+  seconds: number,
+  deltaMs: number,
+): Model => {
+  const [stillFlying, leftBehind] = Array.partition(
+    model.particles,
+    stepParticle(seconds, deltaMs),
+  )
+  const landed = Array.getSomes(leftBehind)
+
+  const [eventState, eventBatches] = Array.mapAccum(
+    model.frameEvents,
+    model.rngState,
+    eventParticles,
+  )
+  const dust = walkingDust(model, deltaMs, eventState)
+
+  return modifyFields(model, {
+    particles: () =>
+      keepNewest(
+        [...stillFlying, ...Array.flatten(eventBatches), ...dust.particles],
+        PARTICLE_MAX,
+      ),
+    decals: decals =>
+      Array.isReadonlyArrayEmpty(landed)
+        ? decals
+        : keepNewest([...decals, ...landed], DECAL_MAX),
+    rngState: () => dust.rngState,
+    dustCooldownMs: () => dust.dustCooldownMs,
+  })
+}

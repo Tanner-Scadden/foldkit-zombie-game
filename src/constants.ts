@@ -74,3 +74,91 @@ export const HEART_PULSE_GROWTH = 0.8
 export const HEART_SHAKE_PX = 1.5
 export const HEART_SHAKE_CYCLES = 3
 export const ZOMBIE_DEATH_POP_PINCH = 0.3
+
+export const PARTICLE_MAX = 160
+export const DECAL_MAX = 220
+export const DECAL_FADE_COUNT = 40
+
+export const PARTICLE_BOUNCE_FRICTION = 0.55
+export const PARTICLE_BOUNCE_MIN_SPEED = 18
+
+export const BLOOD_PER_HIT = 5
+export const BLOOD_PER_KILL = 4
+export const BLOOD_SPRAY_SPREAD = 0.9
+export const BLOOD_SPEED_MIN = 35
+export const BLOOD_SPEED_MAX = 105
+export const BLOOD_LIFT_MIN = 10
+export const BLOOD_LIFT_MAX = 55
+export const BLOOD_GRAVITY = 260
+export const BLOOD_DRAG_PER_SECOND = 1.5
+export const BLOOD_LIFETIME_MS = 2000
+
+export const MEAT_GIBS_PER_KILL = 4
+export const ROT_GIBS_PER_KILL = 2
+export const GIB_SPEED_MIN = 20
+export const GIB_SPEED_MAX = 75
+export const GIB_FORWARD_PUSH = 30
+export const GIB_LIFT_MIN = 60
+export const GIB_LIFT_MAX = 115
+export const GIB_GRAVITY = 300
+export const GIB_DRAG_PER_SECOND = 0.8
+export const GIB_RESTITUTION = 0.45
+export const GIB_LIFETIME_MS = 3000
+
+export const SHELL_EJECT_SPEED_MIN = 28
+export const SHELL_EJECT_SPEED_MAX = 46
+export const SHELL_KICK_BACK = 0.35
+export const SHELL_LIFT_MIN = 40
+export const SHELL_LIFT_MAX = 60
+export const SHELL_GRAVITY = 320
+export const SHELL_DRAG_PER_SECOND = 1
+export const SHELL_RESTITUTION = 0.4
+export const SHELL_LIFETIME_MS = 2000
+export const SHELL_TUMBLE_MS = 45
+
+export const DUST_INTERVAL_MS = 170
+export const DUST_PER_HURT = 5
+export const DUST_SPEED_MIN = 6
+export const DUST_SPEED_MAX = 22
+export const DUST_HURT_SPEED_MIN = 20
+export const DUST_HURT_SPEED_MAX = 50
+export const DUST_LIFT = 8
+export const DUST_DRAG_PER_SECOND = 5
+export const DUST_LIFETIME_MIN_MS = 260
+export const DUST_LIFETIME_MAX_MS = 460
+export const DUST_FADE_MS = 160
+
+export const MUZZLE_FLASH_MS = 34
+export const MUZZLE_FLASH_BIG_MS = 17
+export const BULLET_TRAIL_PX = 3
+
+export const PLAYER_SHADOW_WIDTH = 7
+export const ZOMBIE_SHADOW_WIDTH = 8
+export const SHADOW_HEIGHT = 2
+export const GIB_SHADOW_WIDTH = 2
+
+export const BLOOD_PARTICLE_COLOR = '#ff3b3f'
+export const MEAT_GIB_COLOR = '#d42a35'
+export const ROT_GIB_COLOR = '#7fd04b'
+export const SHELL_COLOR = '#f2c14e'
+export const DUST_COLOR = 'rgba(214, 196, 160, 0.55)'
+export const DUST_FADED_COLOR = 'rgba(214, 196, 160, 0.25)'
+
+export const BLOOD_DECAL_COLOR = '#a8202a'
+export const MEAT_DECAL_COLOR = '#8e1c25'
+export const ROT_DECAL_COLOR = '#4f9a32'
+export const SHELL_DECAL_COLOR = '#b88e33'
+export const BLOOD_DECAL_FADED_COLOR = '#5a2427'
+export const MEAT_DECAL_FADED_COLOR = '#502226'
+export const ROT_DECAL_FADED_COLOR = '#335a2a'
+export const SHELL_DECAL_FADED_COLOR = '#5f5434'
+
+export const SHADOW_COLOR = 'rgba(0, 0, 0, 0.38)'
+export const SHADOW_FADED_COLOR = 'rgba(0, 0, 0, 0.18)'
+export const GIB_SHADOW_COLOR = 'rgba(0, 0, 0, 0.3)'
+export const SHADOW_FADE_START = 0.6
+export const SHADOW_HIDE_START = 0.85
+
+export const MUZZLE_FLASH_OUTER_COLOR = '#ffd23f'
+export const MUZZLE_FLASH_CORE_COLOR = '#fffbe6'
+export const BULLET_TRAIL_COLOR = 'rgba(255, 224, 102, 0.45)'

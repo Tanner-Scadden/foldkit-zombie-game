@@ -1,17 +1,46 @@
-import { Array, Effect, Option, Queue, Stream, pipe } from 'effect'
+import {
+  Array,
+  Effect,
+  Option,
+  Order,
+  Queue,
+  Result,
+  Stream,
+  pipe,
+} from 'effect'
 import { Canvas, Mount } from 'foldkit'
 import { Document, Html, HtmlBuilder } from 'foldkit/html'
 
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
+  BLOOD_DECAL_COLOR,
+  BLOOD_DECAL_FADED_COLOR,
+  BLOOD_PARTICLE_COLOR,
+  BULLET_SPEED,
+  BULLET_TRAIL_COLOR,
+  BULLET_TRAIL_PX,
+  DECAL_FADE_COUNT,
+  DECAL_MAX,
+  DUST_COLOR,
+  DUST_FADED_COLOR,
+  DUST_FADE_MS,
+  GIB_SHADOW_COLOR,
+  GIB_SHADOW_WIDTH,
   HEART_FLASH_MS,
   HEART_PULSE_GROWTH,
   HEART_PULSE_MS,
   HEART_SHAKE_CYCLES,
   HEART_SHAKE_PX,
+  MEAT_DECAL_COLOR,
+  MEAT_DECAL_FADED_COLOR,
+  MEAT_GIB_COLOR,
   MS_PER_SECOND,
   MUZZLE_DISTANCE,
+  MUZZLE_FLASH_BIG_MS,
+  MUZZLE_FLASH_CORE_COLOR,
+  MUZZLE_FLASH_MS,
+  MUZZLE_FLASH_OUTER_COLOR,
   PLAYER_BLINK_MS,
   PLAYER_BLINK_OPACITY,
   PLAYER_BREATH_FRAME_MS,
@@ -24,7 +53,20 @@ import {
   PLAYER_RECOIL_KICK_PX,
   PLAYER_RECOIL_MS,
   PLAYER_RECOIL_SQUASH,
+  PLAYER_SHADOW_WIDTH,
   PLAYER_WALK_FRAME_MS,
+  ROT_DECAL_COLOR,
+  ROT_DECAL_FADED_COLOR,
+  ROT_GIB_COLOR,
+  SHADOW_COLOR,
+  SHADOW_FADED_COLOR,
+  SHADOW_FADE_START,
+  SHADOW_HEIGHT,
+  SHADOW_HIDE_START,
+  SHELL_COLOR,
+  SHELL_DECAL_COLOR,
+  SHELL_DECAL_FADED_COLOR,
+  SHELL_TUMBLE_MS,
   STICK_RADIUS_PX,
   ZOMBIE_DEATH_FADE_START,
   ZOMBIE_DEATH_FALL_END,
@@ -38,6 +80,7 @@ import {
   ZOMBIE_HIT_FLASH_MS,
   ZOMBIE_HIT_PULSE_MS,
   ZOMBIE_HIT_SQUASH,
+  ZOMBIE_SHADOW_WIDTH,
   ZOMBIE_SHAMBLE_PHASE_PER_ID,
   ZOMBIE_SHAMBLE_PX_PER_FRAME,
 } from './constants'
@@ -46,8 +89,12 @@ import { thumbOffset } from './input'
 import { Message } from './main'
 import {
   type Bullet,
+  type Decal,
+  type DecalKind,
   Invulnerability,
   type Model,
+  type Particle,
+  type ParticleKind,
   Phase,
   type Player,
   type PointerDevice,
@@ -164,14 +211,31 @@ const placeSprite = (
     shapes: sprite,
   })
 
-const bulletShape = ({ x, y }: Bullet): Canvas.Shape =>
+const bulletShapes = ({
+  x,
+  y,
+  velocityX,
+  velocityY,
+}: Bullet): ReadonlyArray<Canvas.Shape> => [
+  Canvas.Rect({
+    x:
+      Math.round(x - (velocityX / BULLET_SPEED) * BULLET_TRAIL_PX) -
+      BULLET_SIZE / 2,
+    y:
+      Math.round(y - (velocityY / BULLET_SPEED) * BULLET_TRAIL_PX) -
+      BULLET_SIZE / 2,
+    width: BULLET_SIZE,
+    height: BULLET_SIZE,
+    fill: BULLET_TRAIL_COLOR,
+  }),
   Canvas.Rect({
     x: Math.round(x) - BULLET_SIZE / 2,
     y: Math.round(y) - BULLET_SIZE / 2,
     width: BULLET_SIZE,
     height: BULLET_SIZE,
     fill: BULLET_COLOR,
-  })
+  }),
+]
 
 const UNIT_SCALE: Vector = { x: 1, y: 1 }
 const QUARTER_TURN = Math.PI / 2
@@ -329,6 +393,43 @@ const playerHurtScale = (player: Player): Vector =>
       ),
   })
 
+const centeredRect = (
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  fill: string,
+): Canvas.Shape =>
+  Canvas.Rect({
+    x: x - Math.floor(width / 2),
+    y: y - Math.floor(height / 2),
+    width,
+    height,
+    fill,
+  })
+
+const muzzleFlashShapes = (
+  player: Player,
+  muzzleX: number,
+  muzzleY: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const msSinceShot = PLAYER_RECOIL_MS - player.recoilRemainingMs
+  if (player.recoilRemainingMs <= 0 || msSinceShot >= MUZZLE_FLASH_MS) {
+    return []
+  } else if (msSinceShot < MUZZLE_FLASH_BIG_MS) {
+    return [
+      centeredRect(muzzleX, muzzleY, 5, 3, MUZZLE_FLASH_OUTER_COLOR),
+      centeredRect(muzzleX, muzzleY, 3, 5, MUZZLE_FLASH_OUTER_COLOR),
+      centeredRect(muzzleX, muzzleY, 3, 3, MUZZLE_FLASH_CORE_COLOR),
+    ]
+  } else {
+    return [
+      centeredRect(muzzleX, muzzleY, 3, 3, MUZZLE_FLASH_OUTER_COLOR),
+      centeredRect(muzzleX, muzzleY, 1, 1, MUZZLE_FLASH_CORE_COLOR),
+    ]
+  }
+}
+
 const playerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   const { player } = model
   const recoil = player.recoilRemainingMs / PLAYER_RECOIL_MS
@@ -336,6 +437,7 @@ const playerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   const bodyX = player.x - player.facing.x * kick
   const bodyY = player.y - player.facing.y * kick
   const facing: Facing = player.facing.x < 0 ? 'Left' : 'Right'
+  const flashReach = MUZZLE_DISTANCE + 2
   return [
     Canvas.Group({
       translate: footPosition({ x: bodyX, y: bodyY }, PLAYER_FOOT_OFFSET),
@@ -353,7 +455,188 @@ const playerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
       height: MUZZLE_SIZE,
       fill: MUZZLE_COLOR,
     }),
+    ...muzzleFlashShapes(
+      player,
+      Math.round(bodyX + player.facing.x * flashReach),
+      Math.round(bodyY + player.facing.y * flashReach),
+    ),
   ]
+}
+
+// WORLD LIFE
+
+const DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
+  Blood: BLOOD_DECAL_COLOR,
+  Meat: MEAT_DECAL_COLOR,
+  Rot: ROT_DECAL_COLOR,
+  Shell: SHELL_DECAL_COLOR,
+}
+
+const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
+  Blood: BLOOD_DECAL_FADED_COLOR,
+  Meat: MEAT_DECAL_FADED_COLOR,
+  Rot: ROT_DECAL_FADED_COLOR,
+  Shell: SHELL_DECAL_FADED_COLOR,
+}
+
+const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
+  Blood: BLOOD_PARTICLE_COLOR,
+  MeatGib: MEAT_GIB_COLOR,
+  RotGib: ROT_GIB_COLOR,
+  Shell: SHELL_COLOR,
+  Dust: DUST_COLOR,
+}
+
+const decalShapes = (
+  decals: ReadonlyArray<Decal>,
+): ReadonlyArray<Canvas.Shape> => {
+  const fadedCount = decals.length - (DECAL_MAX - DECAL_FADE_COUNT)
+  return Array.map(decals, (decal, index) =>
+    centeredRect(
+      decal.x,
+      decal.y,
+      decal.width,
+      decal.height,
+      index < fadedCount
+        ? FADED_DECAL_COLORS[decal.kind]
+        : DECAL_COLORS[decal.kind],
+    ),
+  )
+}
+
+const isGround = (particle: Particle): boolean => particle.kind === 'Dust'
+
+const isGib = (particle: Particle): boolean =>
+  particle.kind === 'MeatGib' || particle.kind === 'RotGib'
+
+const isShellUpright = (particle: Particle): boolean =>
+  particle.kind === 'Shell' &&
+  Math.floor(particle.remainingMs / SHELL_TUMBLE_MS) % 2 === 1
+
+const particleColor = (particle: Particle): string =>
+  particle.kind === 'Dust' && particle.remainingMs < DUST_FADE_MS
+    ? DUST_FADED_COLOR
+    : PARTICLE_COLORS[particle.kind]
+
+const particleShape = (particle: Particle): Canvas.Shape => {
+  const isUpright = isShellUpright(particle)
+  const width = isUpright ? 1 : particle.size
+  const height =
+    particle.kind === 'Shell' ? (isUpright ? particle.size : 1) : particle.size
+  return centeredRect(
+    Math.round(particle.x),
+    Math.round(particle.y - particle.z),
+    width,
+    height,
+    particleColor(particle),
+  )
+}
+
+const particleShapesWhere =
+  (isInLayer: (particle: Particle) => boolean) =>
+  (particles: ReadonlyArray<Particle>): ReadonlyArray<Canvas.Shape> =>
+    Array.filterMap(particles, particle =>
+      isInLayer(particle)
+        ? Result.succeed(particleShape(particle))
+        : Result.failVoid,
+    )
+
+const groundParticleShapes = particleShapesWhere(isGround)
+
+const airborneParticleShapes = particleShapesWhere(
+  particle => !isGround(particle),
+)
+
+const footShadow = (
+  position: Vector,
+  footOffset: number,
+  width: number,
+  fill: string,
+): Canvas.Shape => {
+  const foot = footPosition(position, footOffset)
+  return centeredRect(foot.x, foot.y, width, SHADOW_HEIGHT, fill)
+}
+
+const zombieShadow = (zombie: Zombie): Result.Result<Canvas.Shape, void> =>
+  ZombieState.match(zombie.state, {
+    Walking: () =>
+      Result.succeed(
+        footShadow(
+          zombie,
+          ZOMBIE_FOOT_OFFSET,
+          ZOMBIE_SHADOW_WIDTH,
+          SHADOW_COLOR,
+        ),
+      ),
+    Dying: ({ remainingMs }) => {
+      const progress = 1 - remainingMs / ZOMBIE_DYING_MS
+      if (progress < SHADOW_FADE_START) {
+        return Result.succeed(
+          footShadow(
+            zombie,
+            ZOMBIE_FOOT_OFFSET,
+            ZOMBIE_SHADOW_WIDTH,
+            SHADOW_COLOR,
+          ),
+        )
+      } else if (progress < SHADOW_HIDE_START) {
+        return Result.succeed(
+          footShadow(
+            zombie,
+            ZOMBIE_FOOT_OFFSET,
+            ZOMBIE_SHADOW_WIDTH,
+            SHADOW_FADED_COLOR,
+          ),
+        )
+      } else {
+        return Result.failVoid
+      }
+    },
+  })
+
+const gibShadow = (particle: Particle): Result.Result<Canvas.Shape, void> =>
+  isGib(particle)
+    ? Result.succeed(
+        centeredRect(
+          Math.round(particle.x),
+          Math.round(particle.y),
+          GIB_SHADOW_WIDTH,
+          1,
+          GIB_SHADOW_COLOR,
+        ),
+      )
+    : Result.failVoid
+
+const shadowShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
+  footShadow(
+    model.player,
+    PLAYER_FOOT_OFFSET,
+    PLAYER_SHADOW_WIDTH,
+    SHADOW_COLOR,
+  ),
+  ...Array.filterMap(model.zombies, zombieShadow),
+  ...Array.filterMap(model.particles, gibShadow),
+]
+
+type Drawable = Readonly<{ depth: number; shapes: ReadonlyArray<Canvas.Shape> }>
+
+const byDepth = Order.mapInput(Order.Number, ({ depth }: Drawable) => depth)
+
+const entityShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
+  const drawZombie = zombieShape(model.player, model.elapsedMs)
+  return pipe(
+    model.zombies,
+    Array.map((zombie): Drawable => ({
+      depth: zombie.y,
+      shapes: [drawZombie(zombie)],
+    })),
+    Array.append<Drawable>({
+      depth: model.player.y,
+      shapes: playerShapes(model),
+    }),
+    Array.sort(byDepth),
+    Array.flatMap(({ shapes }) => shapes),
+  )
 }
 
 const heartShakeX = (maybeHeartPulseMs: Option.Option<number>): number =>
@@ -489,9 +772,12 @@ const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
 
 export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...BACKGROUND,
-  ...Array.map(model.bullets, bulletShape),
-  ...Array.map(model.zombies, zombieShape(model.player, model.elapsedMs)),
-  ...playerShapes(model),
+  ...decalShapes(model.decals),
+  ...shadowShapes(model),
+  ...groundParticleShapes(model.particles),
+  ...Array.flatMap(model.bullets, bulletShapes),
+  ...entityShapes(model),
+  ...airborneParticleShapes(model.particles),
   ...hudShapes(model),
   ...overlayShapes(model),
 ]

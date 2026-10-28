@@ -32,6 +32,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/model.ts`      | The Model and its Schema types                                |
 | `src/main.ts`       | Messages, `init`, `update`, Commands, and Subscriptions       |
 | `src/simulation.ts` | The pure step that advances the game one frame                |
+| `src/particles.ts`  | Particles and floor decals spawned from each frame's events   |
 | `src/input.ts`      | Keyboard, mouse, and touch input turned into movement and aim |
 | `src/view.ts`       | The canvas scene and the on-screen touch sticks               |
 | `src/sprite.ts`     | Pixel maps turned into canvas shapes                          |
