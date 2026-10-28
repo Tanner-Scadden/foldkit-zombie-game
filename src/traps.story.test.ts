@@ -32,7 +32,7 @@ import {
 import { SHOP_ITEMS, priceFor } from './shop'
 import { TRAPS, repairPrice, stageOf, tollsOf } from './traps'
 import { WEAPONS } from './weapons'
-import { ZOMBIE_KINDS } from './zombies'
+import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
 
 const FRAME_MS = 16
 const LONG_FRAME_MS = 50
@@ -1012,6 +1012,7 @@ describe('trap determinism', () => {
         modifyFields(stocked(1, 1), {
           rngState: () => seed,
           phase: () => preparing(PLANNED_SPAWNS),
+          introducedKinds: () => ZOMBIE_KIND_ORDER,
         }),
       ),
       press('KeyT'),

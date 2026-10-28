@@ -6,7 +6,6 @@ import {
   ARENA_WIDTH,
   GAME_TITLE,
   MS_PER_SECOND,
-  RESTART_GRACE_MS,
   WAVE_BANNER_MS,
   WAVE_CLEARED_BANNER_MS,
 } from './constants'
@@ -18,6 +17,7 @@ import {
   glyphPixels,
   placeBaked,
   textShapes,
+  textWidth,
   toGlyph,
 } from './font'
 import { clamp } from './geometry'
@@ -33,9 +33,11 @@ import {
   type ZombieKind,
 } from './model'
 import {
+  DEBUT_CARD_MS,
   HINT_TEXT,
   type HintId,
   type ShownHint,
+  isDebutCardUp,
   shownHints,
 } from './onboarding'
 import {
@@ -113,13 +115,6 @@ const RESUME_PROMPT = deviceText(
   'Prompt',
 )
 
-const AGAIN_PROMPT = bakeText('ENTER: CAMPAIGN   E: ENDLESS', 'Prompt')
-
-const KEEP_GOING_PROMPT = bakeText(
-  'K: KEEP GOING   ENTER: CAMPAIGN   E: ENDLESS',
-  'Prompt',
-)
-
 // BANDS
 
 const BAND_TOP: Readonly<Record<HintBand, number>> = { Top: 21, Bottom: 100 }
@@ -185,7 +180,7 @@ const WAVE_TITLES: ReadonlyArray<BakedText> = Array.makeBy(
 
 const CLEARED_SUBTITLES: ReadonlyArray<BakedText> = Array.makeBy(
   BAKED_WAVES + 1,
-  wave => bakeText(`+$${waveBonus(wave)} BONUS. THE $ STALL IS OPEN`, 'Prompt'),
+  wave => bakeText(`+$${waveBonus(wave)} BONUS. THE SHOP IS OPEN`, 'Prompt'),
 )
 
 const BEEFIER = bakeText('THEY GOT BEEFIER', 'Fresh')
@@ -212,6 +207,10 @@ const NEW_KIND_BANNER_MS = 3600
 const NEW_KIND_ICON_SCALE = 2
 const NEW_KIND_ICON_GAP = 10
 const NEW_KIND_HOP_MS = 260
+const NEW_KIND_ICON_PX = 7
+const NEW_KIND_SHIFT = Math.round(
+  (NEW_KIND_ICON_GAP + (NEW_KIND_ICON_SCALE * NEW_KIND_ICON_PX) / 2) / 2,
+)
 
 const bannerAt = (
   band: HintBand,
@@ -236,7 +235,8 @@ const newKindBanner = (
       ? 1 + 0.5 * Math.sin((Math.PI * shownMs) / NEW_KIND_HOP_MS)
       : 1
   const scale = NEW_KIND_ICON_SCALE * hop
-  const titleLeft = Math.round(CENTER_X - (title.width * TITLE_SCALE) / 2)
+  const titleX = CENTER_X + NEW_KIND_SHIFT
+  const titleLeft = Math.round(titleX - (title.width * TITLE_SCALE) / 2)
   return [
     group({
       translate: {
@@ -246,7 +246,13 @@ const newKindBanner = (
       scale: { x: scale, y: scale },
       shapes: ZOMBIE_SPRITES[kind].icon,
     }),
-    ...bannerAt(band, title, Option.some(tagline)),
+    placeBaked(title, {
+      x: titleX,
+      y: BAND_TOP[band],
+      align: 'Center',
+      scale: TITLE_SCALE,
+    }),
+    centered(tagline, BAND_TOP[band] + SUBTITLE_OFFSET),
   ]
 }
 
@@ -331,35 +337,35 @@ const waveBanner = (
 
 // DEBUT CARD
 
-const CARD_LEFT = 62
-const CARD_RIGHT = ARENA_WIDTH - CARD_LEFT
-const CARD_TOP = 14
-const CARD_BOTTOM = 128
+const CARD_TOP = 40
+const CARD_BOTTOM = 136
 const CARD_FILL = 'rgba(24, 14, 22, 0.94)'
 const CARD_EDGE = '#ff8a3d'
+const CARD_BACKDROP = backdrop('rgba(8, 10, 12, 0.4)')
 const CARD_HEADING_Y = CARD_TOP + 6
-const CARD_FEET_Y = 74
+const CARD_FEET_Y = 94
 const CARD_SPRITE_HEIGHT = 40
 const CARD_STRIDE_MS = 170
 const CARD_HOP_MS = 320
-const CARD_HOP_PX = 10
+const CARD_HOP_PX = 8
 const CARD_SHADOW = 'rgba(0, 0, 0, 0.45)'
-const CARD_NAME_Y = 82
-const CARD_PITCH_Y = 102
-const CARD_PITCH_ROW_PX = 10
+const CARD_NAME_Y = 100
+const CARD_PITCH_Y = 117
+const CARD_TIMER_Y = 128
+const CARD_TIMER_WIDTH = 96
+const CARD_TIMER_BACK = 'rgba(255, 138, 61, 0.25)'
+const CARD_SLIDE_IN_MS = 160
+const CARD_SLIDE_OUT_MS = 200
 
 const NEW_ZOMBIE = bakeText('NEW ZOMBIE!', 'Fresh')
 
-type CardText = Readonly<{
-  name: BakedText
-  pitch: ReadonlyArray<BakedText>
-}>
+type CardText = Readonly<{ name: BakedText; pitch: BakedText }>
 
 const CARD_TEXTS: Readonly<Record<ZombieKind, CardText>> = Record.map(
   ZOMBIE_KINDS,
   stats => ({
     name: bakeText(String.toUpperCase(stats.name), 'Title'),
-    pitch: Array.map(stats.pitch, line => bakeText(line, 'Plain')),
+    pitch: bakeText(stats.pitch, 'Plain'),
   }),
 )
 
@@ -371,6 +377,44 @@ const cardHop = (ageMs: number): number =>
     ? Math.round(CARD_HOP_PX * Math.sin((Math.PI * ageMs) / CARD_HOP_MS))
     : 0
 
+const easeOut = (progress: number): number => 1 - (1 - progress) ** 3
+
+const cardSlideX = (ageMs: number): number => {
+  const leftMs = DEBUT_CARD_MS - ageMs
+  if (ageMs < CARD_SLIDE_IN_MS) {
+    return Math.round(-ARENA_WIDTH * (1 - easeOut(ageMs / CARD_SLIDE_IN_MS)))
+  } else if (leftMs < CARD_SLIDE_OUT_MS) {
+    return Math.round(
+      ARENA_WIDTH * easeOut(1 - leftMs / CARD_SLIDE_OUT_MS) ** 2,
+    )
+  } else {
+    return 0
+  }
+}
+
+const cardTimerShapes = (ageMs: number): ReadonlyArray<Canvas.Shape> => {
+  const left = CENTER_X - CARD_TIMER_WIDTH / 2
+  const remaining = Math.round(
+    CARD_TIMER_WIDTH * clamp(1 - ageMs / DEBUT_CARD_MS, 0, 1),
+  )
+  return [
+    Canvas.Rect({
+      x: left,
+      y: CARD_TIMER_Y,
+      width: CARD_TIMER_WIDTH,
+      height: 2,
+      fill: CARD_TIMER_BACK,
+    }),
+    Canvas.Rect({
+      x: left,
+      y: CARD_TIMER_Y,
+      width: remaining,
+      height: 2,
+      fill: CARD_EDGE,
+    }),
+  ]
+}
+
 const debutCardShapes = (
   kind: ZombieKind,
   ageMs: number,
@@ -379,38 +423,42 @@ const debutCardShapes = (
   const scale = cardSpriteScale(kind)
   const stride = Math.floor(ageMs / CARD_STRIDE_MS)
   return [
-    DIM_BACKDROP,
-    Canvas.Rect({
-      x: CARD_LEFT - 1,
-      y: CARD_TOP - 1,
-      width: CARD_RIGHT - CARD_LEFT + 2,
-      height: CARD_BOTTOM - CARD_TOP + 2,
-      fill: CARD_EDGE,
-    }),
-    Canvas.Rect({
-      x: CARD_LEFT,
-      y: CARD_TOP,
-      width: CARD_RIGHT - CARD_LEFT,
-      height: CARD_BOTTOM - CARD_TOP,
-      fill: CARD_FILL,
-    }),
-    centered(NEW_ZOMBIE, CARD_HEADING_Y, 1, isBlinkOn(ageMs) ? 1 : 0.6),
-    Canvas.Rect({
-      x: CENTER_X - 4 * scale,
-      y: CARD_FEET_Y - scale,
-      width: 8 * scale,
-      height: 2 * scale,
-      fill: CARD_SHADOW,
-    }),
+    CARD_BACKDROP,
     group({
-      translate: { x: CENTER_X, y: CARD_FEET_Y - cardHop(ageMs) },
-      scale: { x: scale, y: scale },
-      shapes: frameAt(ZOMBIE_SPRITES[kind].walk, stride).Normal.Right,
+      translate: { x: cardSlideX(ageMs), y: 0 },
+      shapes: [
+        Canvas.Rect({
+          x: 0,
+          y: CARD_TOP - 1,
+          width: ARENA_WIDTH,
+          height: CARD_BOTTOM - CARD_TOP + 2,
+          fill: CARD_EDGE,
+        }),
+        Canvas.Rect({
+          x: 0,
+          y: CARD_TOP,
+          width: ARENA_WIDTH,
+          height: CARD_BOTTOM - CARD_TOP,
+          fill: CARD_FILL,
+        }),
+        centered(NEW_ZOMBIE, CARD_HEADING_Y, 1, isBlinkOn(ageMs) ? 1 : 0.6),
+        Canvas.Rect({
+          x: CENTER_X - 4 * scale,
+          y: CARD_FEET_Y - scale,
+          width: 8 * scale,
+          height: 2 * scale,
+          fill: CARD_SHADOW,
+        }),
+        group({
+          translate: { x: CENTER_X, y: CARD_FEET_Y - cardHop(ageMs) },
+          scale: { x: scale, y: scale },
+          shapes: frameAt(ZOMBIE_SPRITES[kind].walk, stride).Normal.Right,
+        }),
+        centered(name, CARD_NAME_Y, TITLE_SCALE),
+        centered(pitch, CARD_PITCH_Y),
+        ...cardTimerShapes(ageMs),
+      ],
     }),
-    centered(name, CARD_NAME_Y, TITLE_SCALE),
-    ...Array.map(pitch, (line, index) =>
-      centered(line, CARD_PITCH_Y + index * CARD_PITCH_ROW_PX),
-    ),
   ]
 }
 
@@ -688,10 +736,7 @@ const paradeShapes = (screenMs: number): ReadonlyArray<Canvas.Shape> =>
 
 // READY
 
-const TAGLINE = bakeText(
-  'ONE HOUSE. EIGHT WAVES. WAY TOO MANY ZOMBIES.',
-  'Hint',
-)
+const TAGLINE = bakeText('SURVIVE 8 WAVES. TRY NOT TO GET EATEN.', 'Hint')
 const TAGLINE_Y = 72
 const START_PROMPT_Y = 100
 
@@ -731,7 +776,6 @@ const PANEL_ROW_PX = 9
 const PANEL_PAD = 6
 const PANEL_FILL = 'rgba(24, 14, 22, 0.92)'
 const PANEL_EDGE = '#5a3a4a'
-const PROMPT_Y = 156
 
 type StatRow = Readonly<{ label: BakedText; value: string; tone: TextTone }>
 
@@ -739,7 +783,7 @@ const STAT_LABELS = {
   waves: bakeText('WAVES CLEARED', 'Hint'),
   reached: bakeText('WAVE REACHED', 'Hint'),
   best: bakeText('BEST THIS SESSION', 'Hint'),
-  kills: bakeText('ZOMBIES MUNCHED BACK', 'Hint'),
+  kills: bakeText('ZOMBIES SPLATTED', 'Hint'),
   time: bakeText('RUN TIME', 'Hint'),
   accuracy: bakeText('ACCURACY', 'Hint'),
   money: bakeText('MONEY EARNED', 'Hint'),
@@ -820,6 +864,8 @@ const statRowShapes = (
 }
 
 const KILL_SLOT_PX = 40
+const KILL_ICON_PX = 7
+const KILL_ICON_GAP = 4
 
 const killShapes = (
   stats: RunStats,
@@ -829,10 +875,17 @@ const killShapes = (
     CENTER_X - (ZOMBIE_KIND_ORDER.length * KILL_SLOT_PX) / 2,
   )
   return Array.flatMap(ZOMBIE_KIND_ORDER, (kind, index) => {
-    const x = left + index * KILL_SLOT_PX + 8
+    const count = `x${stats.kills[kind]}`
+    const slotCenter = left + index * KILL_SLOT_PX + KILL_SLOT_PX / 2
+    const x = Math.round(
+      slotCenter - (KILL_ICON_PX + KILL_ICON_GAP + textWidth(count)) / 2,
+    )
     return [
-      group({ translate: { x, y: y + 3 }, shapes: ZOMBIE_SPRITES[kind].icon }),
-      ...textShapes(`x${stats.kills[kind]}`, 'Kill', x + 7, y, 'Left'),
+      group({
+        translate: { x: x + KILL_ICON_PX / 2, y: y + 3 },
+        shapes: ZOMBIE_SPRITES[kind].icon,
+      }),
+      ...textShapes(count, 'Kill', x + KILL_ICON_PX + KILL_ICON_GAP, y, 'Left'),
     ]
   })
 }
@@ -870,21 +923,10 @@ const panelShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
 
 const VERDICT_Y = 29
 
-const endPromptShapes = (
-  model: Model,
-  prompt: BakedText,
-): ReadonlyArray<Canvas.Shape> =>
-  model.lastDevice === 'KeyboardMouse' &&
-  model.screenMs >= RESTART_GRACE_MS &&
-  isBlinkOn(model.screenMs)
-    ? [centered(prompt, PROMPT_Y)]
-    : []
-
 const endShapes = (
   model: Model,
   title: BakedText,
   verdict: string,
-  prompt: BakedText,
 ): ReadonlyArray<Canvas.Shape> => [
   DIM_BACKDROP,
   centered(title, 10, TITLE_SCALE),
@@ -896,7 +938,6 @@ const endShapes = (
     'Center',
   ),
   ...panelShapes(model),
-  ...endPromptShapes(model, prompt),
 ]
 
 // OVERLAY
@@ -907,25 +948,13 @@ export const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
     Preparation: ({ wave, remainingMs, durationMs }) => [
       ...preparationBanner(model, wave, durationMs - remainingMs),
       ...hintShapes(model),
-      ...debutCardOverlay(model),
     ],
-    Wave: ({ wave, elapsedMs }) => [
-      ...waveBanner(model, wave, elapsedMs),
-      ...hintShapes(model),
-    ],
+    Wave: ({ wave, elapsedMs }) =>
+      isDebutCardUp(model)
+        ? debutCardOverlay(model)
+        : [...waveBanner(model, wave, elapsedMs), ...hintShapes(model)],
     Paused: ({ round }) => pausedShapes(model, round.wave),
-    Victory: () =>
-      endShapes(
-        model,
-        YOU_SURVIVED,
-        victoryVerdict(model.stats),
-        KEEP_GOING_PROMPT,
-      ),
+    Victory: () => endShapes(model, YOU_SURVIVED, victoryVerdict(model.stats)),
     GameOver: ({ wave }) =>
-      endShapes(
-        model,
-        GAME_OVER,
-        defeatVerdict(wave, model.stats),
-        AGAIN_PROMPT,
-      ),
+      endShapes(model, GAME_OVER, defeatVerdict(wave, model.stats)),
   })

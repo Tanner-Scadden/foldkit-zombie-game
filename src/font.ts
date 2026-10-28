@@ -94,7 +94,7 @@ const rowWidth = (pixels: ReadonlyArray<string>): number =>
   pipe(
     pixels,
     Array.map(row => row.length),
-    Array.reduce(0, Math.max),
+    Array.reduce(0, (widest, length) => Math.max(widest, length)),
   )
 
 const glyphWidth = (glyph: Glyph): number => rowWidth(GLYPH_PIXELS[glyph])

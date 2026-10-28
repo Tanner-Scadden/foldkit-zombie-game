@@ -174,7 +174,7 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
   Shotgun: {
     id: 'Shotgun',
     name: WEAPONS.Shotgun.name,
-    blurb: `Five pellets in a wide spray. Short reach, big shove. Comes with ${startingRounds('Shotgun')} shells.`,
+    blurb: `Sprays five pellets and shoves hard, but only up close. Comes with ${startingRounds('Shotgun')} shells.`,
     price: 35,
     good: ShopGood.Gun({ weapon: 'Shotgun' }),
   },
@@ -244,8 +244,7 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
   RepairTraps: {
     id: 'RepairTraps',
     name: 'Glue and Nails',
-    blurb:
-      'Patches every damaged trap back to full. The price grows with the damage.',
+    blurb: 'Fixes every damaged trap. Costs more the worse they look.',
     price: 0,
     good: ShopGood.Repair(),
   },
@@ -263,22 +262,22 @@ export const SHOP_CATEGORIES: Readonly<Record<ShopCategory, ShopCategoryInfo>> =
   {
     Guns: {
       label: 'Guns',
-      blurb: `Your ${WEAPONS[SIDEARM].name} always stays. A new gun goes in your second slot and replaces whatever is there. A new gun starts without upgrades, and the old gun's upgrades go with it.`,
+      blurb: `You always keep the ${WEAPONS[SIDEARM].name}. A new gun takes your second slot, and whatever was there goes, upgrades and all.`,
       items: ['Shotgun', 'Smg'],
     },
     Supplies: {
       label: 'Supplies',
-      blurb: 'Hearts and ammo. Top up before every wave.',
+      blurb: 'Hearts and ammo. Stock up.',
       items: ['Heart', 'ShotgunShells', 'SmgRounds'],
     },
     Upgrades: {
       label: 'Upgrades',
-      blurb: 'Tiers stack. A gun keeps its upgrades until you replace it.',
+      blurb: 'A gun keeps its upgrades until you replace it.',
       items: ['ShotgunUpgrade', 'SmgUpgrade', 'PistolUpgrade'],
     },
     Traps: {
       label: 'Traps',
-      blurb: 'Bought here, placed between waves. They keep their damage.',
+      blurb: 'Set them down between waves. Damage stays until you fix it.',
       items: ['Barricade', 'Turret', 'RepairTraps'],
     },
   }

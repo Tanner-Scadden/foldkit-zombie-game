@@ -721,7 +721,7 @@ describe('timers', () => {
 
   test('boosts, pickups, and callouts stand still under the new zombie card', () => {
     staysFrozen(
-      modifyFields(preparing, {
+      modifyFields(fighting, {
         debutCard: () => DebutCard.Showing({ kind: 'Tank', ageMs: 0 }),
       }),
     )

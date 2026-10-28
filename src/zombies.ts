@@ -61,7 +61,7 @@ export type Footfall = Readonly<{
 export type ZombieKindStats = Readonly<{
   name: string
   tagline: string
-  pitch: Readonly<[string, string]>
+  pitch: string
   speedMin: number
   speedMax: number
   hp: number
@@ -93,7 +93,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
   Shambler: {
     name: 'Groaner',
     tagline: 'SLOW AND HUNGRY',
-    pitch: ['SLOW, HUNGRY, AND NOT VERY BRIGHT.', 'BACK UP AND KEEP SHOOTING.'],
+    pitch: "HE'S SLOW. BACK UP AND KEEP SHOOTING.",
     speedMin: ZOMBIE_SPEED_MIN,
     speedMax: ZOMBIE_SPEED_MAX,
     hp: ZOMBIE_MAX_HP,
@@ -124,10 +124,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
   Runner: {
     name: 'Hotfoot',
     tagline: 'FAST BUT FLIMSY',
-    pitch: [
-      'ALL LEGS, NO BRAINS, MADE OF PAPER.',
-      'AIM EARLY. ONE GOOD SHOT DROPS IT.',
-    ],
+    pitch: 'ZOOMS RIGHT AT YOU. ONE SHOT DROPS IT.',
     speedMin: 44,
     speedMax: 52,
     hp: 2,
@@ -138,7 +135,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     bounty: 3,
     mass: 0.6,
     knockbackScale: 1.4,
-    killTrauma: 0.4,
+    killTrauma: 0.12,
     behavior: Behavior.Brawler(),
     clearance: 'Narrow',
     deathStyle: 'Tumble',
@@ -163,8 +160,8 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
   },
   Tank: {
     name: 'Big Lug',
-    tagline: 'FOCUS FIRE ON HIM',
-    pitch: ['A WALL OF MEAT THAT WALKS.', 'KEEP MOVING AND POUR IT ON.'],
+    tagline: 'BIG AND VERY TOUGH',
+    pitch: "TAKES A TON OF BULLETS. DON'T GET CORNERED.",
     speedMin: 11,
     speedMax: 14,
     hp: 30,
@@ -175,7 +172,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     bounty: 20,
     mass: 6,
     knockbackScale: 0.12,
-    killTrauma: 1,
+    killTrauma: 0.7,
     behavior: Behavior.Brawler(),
     clearance: 'Wide',
     deathStyle: 'Slump',
@@ -200,8 +197,8 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
   },
   Exploder: {
     name: 'Gasbag',
-    tagline: 'POPS. KEEP YOUR DISTANCE',
-    pitch: ['POPS WHEN IT DIES. KEEP YOUR DISTANCE,', 'OR POP IT IN A CROWD.'],
+    tagline: "DON'T POP IT UP CLOSE",
+    pitch: 'BLOWS UP WHEN IT DIES. POP IT NEAR ITS PALS.',
     speedMin: 20,
     speedMax: 25,
     hp: 3,
@@ -212,7 +209,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     bounty: 3,
     mass: 1.3,
     knockbackScale: 0.8,
-    killTrauma: 0.3,
+    killTrauma: 0.15,
     behavior: Behavior.Bomber({
       shotFuseMs: 140,
       contactFuseMs: 220,

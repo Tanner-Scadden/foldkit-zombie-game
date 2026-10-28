@@ -82,13 +82,13 @@ import {
 import { MusicLevel, MusicMood, MusicStinger } from './music'
 import {
   ageDebutCard,
-  dismissDebutCard,
   isDebutCardUp,
   learnFromFrame,
   learnShop,
   learnStartWave,
   learnSwap,
   moveHintBand,
+  skipDebutCard,
 } from './onboarding'
 import { burstCoins, dropClip, puffDust } from './particles'
 import { PICKUPS } from './powerups'
@@ -465,14 +465,17 @@ const weaponFromKey = (model: Model, code: string): Model =>
 const changedWeapon = (before: Model, after: Model): boolean =>
   heldWeapon(before.player.arsenal) !== heldWeapon(after.player.arsenal)
 
-const isPreparing = Phase.isAnyOf(['Preparation'])
+const isFighting = Phase.isAnyOf(['Wave'])
 
 const isDebutCardBlocking = (model: Model): boolean =>
-  isPreparing(model.phase) && isDebutCardUp(model)
+  isFighting(model.phase) && isDebutCardUp(model)
+
+const skipDebutCardWhenUp = (model: Model): Model =>
+  isDebutCardBlocking(model) ? skipDebutCard(model) : model
 
 const debutCardFromKey = (model: Model, code: string): Model => {
   if (isStartKey(code)) {
-    return dismissDebutCard(model)
+    return skipDebutCard(model)
   } else if (isPauseKey(code)) {
     return pause(model)
   } else {
@@ -975,8 +978,13 @@ const updateGame = (model: Model, message: Message) =>
 
     PressedPointer: rawPress => {
       const press = asAllowedPress(model, rawPress)
-      const started = startFromPointer(
-        useDevice(model, press.device === 'Touch' ? 'Touch' : 'KeyboardMouse'),
+      const started = skipDebutCardWhenUp(
+        startFromPointer(
+          useDevice(
+            model,
+            press.device === 'Touch' ? 'Touch' : 'KeyboardMouse',
+          ),
+        ),
       )
       const pressed = withInput(started, input =>
         pressPointer(input, started.maybeSurface, press),
@@ -1065,7 +1073,7 @@ const updateGame = (model: Model, message: Message) =>
 
     ClickedDebutCardButton: () =>
       isDebutCardBlocking(model)
-        ? unlockAudio(dismissDebutCard(model))
+        ? unlockAudio(skipDebutCard(model))
         : { model },
 
     ClickedPlaceTrapButton: () =>

@@ -16,7 +16,6 @@ import {
   initialModel,
 } from './model'
 import {
-  DEBUT_CARD_MIN_MS,
   HINT_TEXT,
   type HintId,
   LESSON_MIN_SHOWN_MS,
@@ -28,7 +27,6 @@ import { ZOMBIE_KINDS } from './zombies'
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 const FRAME_MS = 16
 const TICK_MS = 50
-const CARD_TICKS = Math.ceil(DEBUT_CARD_MIN_MS / TICK_MS)
 const MOVE_TICKS = 10
 const SHOWN_TICKS = Math.ceil(LESSON_MIN_SHOWN_MS / TICK_MS)
 const FIRE_TICKS = 30
@@ -136,9 +134,6 @@ describe('onboarding hints', () => {
       given(readyModel),
       press('Enter'),
       release('Enter'),
-      ...ticks(CARD_TICKS, TICK_MS),
-      press('Enter'),
-      release('Enter'),
       model(current => {
         expect(hintIds(current)).toEqual(['Move', 'Fire'])
         expect(hintTexts(current)).toEqual([
@@ -159,9 +154,7 @@ describe('onboarding hints', () => {
       message(Message.ReleasedPointer({ pointerId: 1 })),
       model(current => {
         expect(hintIds(current)).toEqual(['StartWave'])
-        expect(hintTexts(current)).toEqual([
-          'READY? PRESS ENTER TO START THE WAVE',
-        ])
+        expect(hintTexts(current)).toEqual(['PRESS ENTER WHEN YOU ARE READY'])
       }),
       press('Enter'),
       model(current => {
@@ -177,8 +170,6 @@ describe('onboarding hints', () => {
       given(readyModel),
       touchDown(1, 700, 200),
       message(Message.ReleasedPointer({ pointerId: 1 })),
-      ...ticks(CARD_TICKS, TICK_MS),
-      message(Message.ClickedDebutCardButton()),
       model(current => {
         expect(current.lastDevice).toBe('Touch')
         expect(hintTexts(current)).toEqual([
@@ -205,7 +196,9 @@ describe('onboarding hints', () => {
       ...ticks(FIRE_TICKS, TICK_MS),
       message(Message.ReleasedPointer({ pointerId: 3 })),
       model(current => {
-        expect(hintTexts(current)).toEqual(['READY? TAP START WAVE'])
+        expect(hintTexts(current)).toEqual([
+          'TAP START WAVE WHEN YOU ARE READY',
+        ])
       }),
       message(Message.ClickedStartWaveButton()),
       model(current => {

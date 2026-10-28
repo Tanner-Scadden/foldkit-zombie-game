@@ -215,7 +215,7 @@ describe('Upgrades in the shop', () => {
       Command.resolve(Tabs.FocusTab, Tabs.Message.CompletedFocusTab()),
       expect(
         text(
-          "Your Pop Pistol always stays. A new gun goes in your second slot and replaces whatever is there. A new gun starts without upgrades, and the old gun's upgrades go with it.",
+          'You always keep the Pop Pistol. A new gun takes your second slot, and whatever was there goes, upgrades and all.',
         ),
       ).toExist(),
       expect(

@@ -76,7 +76,7 @@ export const TRAPS: Readonly<Record<TrapKind, TrapStats>> = {
   Barricade: {
     name: 'Plank Pile',
     blurb:
-      'Nail it across a doorway. Zombies must chew through it, your shots fly through the gaps.',
+      "Nail it across a doorway. Zombies have to chew through. Your bullets don't.",
     price: 20,
     hp: 30,
     limit: 4,
@@ -88,7 +88,7 @@ export const TRAPS: Readonly<Record<TrapKind, TrapStats>> = {
   Turret: {
     name: 'Grumpy Gnome',
     blurb:
-      'A garden gnome with a pea shooter and a grudge. Plonk it on the floor and it shoots whatever shambles near.',
+      'A garden gnome with a pea shooter. Set him down and he shoots anything that gets close.',
     price: 50,
     hp: 16,
     limit: 2,

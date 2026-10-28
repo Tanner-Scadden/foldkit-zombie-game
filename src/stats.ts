@@ -79,18 +79,18 @@ const POOR_AIM_PERCENT = 25
 
 export const defeatVerdict = (wave: number, stats: RunStats): string => {
   if (wave <= 1) {
-    return 'You got munched on wave 1. They were so slow!'
+    return 'Eaten on wave 1. Those were the slow ones'
   } else if (
     stats.shotsFired > 0 &&
     accuracyPercent(stats) < POOR_AIM_PERCENT
   ) {
-    return `You got munched on wave ${wave}. Aim for the heads`
+    return `Eaten on wave ${wave}. Try hitting them`
   } else {
-    return `You got munched on wave ${wave}`
+    return `Eaten on wave ${wave}`
   }
 }
 
 export const victoryVerdict = (stats: RunStats): string =>
   stats.heartsLost === 0
-    ? 'Not one bite. The estate is yours, for now'
-    : 'The estate is yours, for now'
+    ? 'Not a single bite. Show-off'
+    : 'The house is yours. For now'

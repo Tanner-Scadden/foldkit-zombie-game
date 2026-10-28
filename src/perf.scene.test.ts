@@ -25,6 +25,7 @@ import {
   BulletGlaze,
   type Decal,
   DecalKind,
+  Lesson,
   type Model,
   type Particle,
   ParticleKind,
@@ -44,6 +45,7 @@ import {
   initialModel,
 } from './model'
 import { DROP_RULES } from './powerups'
+import { asVeteran } from './veteran'
 import { MeasureGameSurface, sceneShapes, view } from './view'
 import { rollSpawns, startOrResume } from './waves'
 import { ZOMBIE_KINDS } from './zombies'
@@ -166,8 +168,19 @@ const ALL_BOOSTED: Boosts = {
   Pierce: BoostTimer.On({ remainingMs: 4000, durationMs: 9000 }),
 }
 
+// NOTE: the room is played by a veteran who has learned every lesson, so no
+// tutorial hint is drawn. The budgets were recorded without hints.
 const fullRoom = (mode: RunMode, wave: number, tier: number): Model => {
-  const started = startOrResume(initialModel, mode)
+  const started = startOrResume(
+    modifyFields(asVeteran(initialModel), {
+      lessons: lessons =>
+        modifyFields(lessons, {
+          pickup: () => Lesson.Learned({ atMs: 0 }),
+          swap: () => Lesson.Learned({ atMs: 0 }),
+        }),
+    }),
+    mode,
+  )
   const [rngState, spawns] = rollSpawns(started.rngState, wave)
   return modifyFields(started, {
     rngState: () => rngState,

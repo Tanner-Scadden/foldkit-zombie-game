@@ -509,7 +509,7 @@ describe('Run stats', () => {
       }),
     })
   const STATS =
-    'Waves cleared: 3 of 8. Zombies munched back: 69 (41 Groaner, 17 Hotfoot, 9 Gasbag, 2 Big Lug). Run time 6:11. Accuracy 43 percent. Money earned $615. Hearts lost 7. Traps placed 3. Score 690.'
+    'Waves cleared: 3 of 8. Zombies splatted: 69 (41 Groaner, 17 Hotfoot, 9 Gasbag, 2 Big Lug). Run time 6:11. Accuracy 43 percent. Money earned $615. Hearts lost 7. Traps placed 3. Score 690.'
 
   test('Game Over reads out the verdict and the whole run', () => {
     scene(
@@ -517,7 +517,7 @@ describe('Run stats', () => {
       given(finished(Phase.GameOver({ wave: 4 }))),
       measureSurface,
       expect(role('status')).toHaveText(
-        `Game over. You got munched on wave 4. ${STATS} ${PLAY_AGAIN}`,
+        `Game over. Eaten on wave 4. ${STATS} ${PLAY_AGAIN}`,
       ),
     )
   })
@@ -528,7 +528,7 @@ describe('Run stats', () => {
       given(finished(Phase.Victory())),
       measureSurface,
       expect(role('status')).toHaveText(
-        `Victory. The estate is yours, for now. ${STATS} ${KEEP_GOING} ${PLAY_AGAIN}`,
+        `Victory. The house is yours. For now. ${STATS} ${KEEP_GOING} ${PLAY_AGAIN}`,
       ),
     )
   })
@@ -558,30 +558,30 @@ describe('Title', () => {
 const CARD_TICKS = Math.ceil(DEBUT_CARD_MIN_MS / 50)
 
 describe('New zombie card', () => {
-  test('reads out the new kind as a dialog and goes away on GOT IT', () => {
+  test('stays out of Preparation, then reads out the new kind when the wave starts', () => {
     const gotIt = role('button', { name: 'GOT IT' })
-    const card = role('dialog', { name: 'New zombie: Groaner' })
+    const card = role('group', { name: 'New zombie: Groaner' })
     scene(
       { update, view },
       given(modifyFields(initialModel, { lastDevice: () => 'Touch' })),
       measureSurface,
       click(role('button', { name: 'Campaign: 8 waves, then victory' })),
+      expect(card).toBeAbsent(),
+      expect(selector('[data-ghost="Move"]')).toExist(),
+      expect(selector('[data-ghost="Aim"]')).toExist(),
+      click(role('button', { name: 'Start wave 1 now' })),
       expect(card).toExist(),
-      expect(
-        text('Slow, hungry, and not very bright. Back up and keep shooting.'),
-      ).toExist(),
-      expect(role('button', { name: 'Start wave 1 now' })).toBeAbsent(),
+      expect(text("He's slow. Back up and keep shooting.")).toExist(),
       expect(gotIt).toHaveAttr('aria-keyshortcuts', 'Enter Space'),
+      expect(role('status')).toHaveText(
+        "New zombie: Groaner. He's slow. Back up and keep shooting. The wave starts in a moment. Press Enter or choose Got it to start now.",
+      ),
       ...Array.makeBy(CARD_TICKS, () =>
         Subscription.emit(Message.TickedFrame({ deltaTime: 50 })),
       ),
       click(gotIt),
       expect(card).toBeAbsent(),
-      expect(role('status')).toHaveText(
-        'Get ready for wave 1 of 8. Press Enter, or use the Start wave button, to start it now. The wave waits until you try moving, aiming, and firing.',
-      ),
-      expect(selector('[data-ghost="Move"]')).toExist(),
-      expect(selector('[data-ghost="Aim"]')).toExist(),
+      expect(role('status')).toHaveText('Fighting wave 1 of 8.'),
     )
   })
 })

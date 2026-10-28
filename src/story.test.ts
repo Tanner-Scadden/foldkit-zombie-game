@@ -28,8 +28,8 @@ import {
   ROT_GIBS_PER_KILL,
   SCORE_PER_ZOMBIE,
   SHAKE_DECAY_PER_SECOND,
+  SHAKE_FIRING_TRAUMA_MAX,
   SHAKE_MAX_PX,
-  SHAKE_TRAUMA_FIRED,
   SHAKE_TRAUMA_HURT,
   SHAKE_TRAUMA_KILL,
   SHAKE_TRAUMA_MAX,
@@ -44,6 +44,7 @@ import {
 import { RESTART_GRACE_MS } from './constants'
 import { Message, update } from './main'
 import {
+  Arsenal,
   type Bullet,
   type Decal,
   GameEvent,
@@ -935,7 +936,7 @@ describe('screen shake', () => {
       message(Message.PressedKey({ code: 'Space' })),
       tick(FRAME_MS),
       model(({ shake }) => {
-        expect(shake.trauma).toBeCloseTo(SHAKE_TRAUMA_FIRED)
+        expect(shake).toEqual({ trauma: 0, offset: { x: 0, y: 0 } })
       }),
     )
 
@@ -945,7 +946,7 @@ describe('screen shake', () => {
       message(Message.PressedKey({ code: 'Space' })),
       tick(FRAME_MS),
       model(({ shake }) => {
-        expect(shake.trauma).toBeCloseTo(SHAKE_TRAUMA_FIRED + SHAKE_TRAUMA_KILL)
+        expect(shake.trauma).toBeCloseTo(SHAKE_TRAUMA_KILL)
       }),
     )
 
@@ -958,8 +959,61 @@ describe('screen shake', () => {
       }),
     )
 
-    expect(SHAKE_TRAUMA_HURT).toBeGreaterThan(SHAKE_TRAUMA_KILL)
-    expect(SHAKE_TRAUMA_KILL).toBeGreaterThan(SHAKE_TRAUMA_FIRED)
+    expect(SHAKE_TRAUMA_HURT).toBeGreaterThan(SHAKE_TRAUMA_KILL * 4)
+  })
+
+  const holdingSpare = (weapon: 'Shotgun' | 'Smg'): Model =>
+    modifyFields(playingModel, {
+      player: player =>
+        modifyFields(player, {
+          arsenal: () =>
+            Arsenal.HoldingSpare({
+              spare: { kind: weapon, rounds: 999, loaded: 999, tier: 0 },
+            }),
+        }),
+    })
+
+  const holdFire = (
+    base: Model,
+  ): ReadonlyArray<Readonly<{ trauma: number; x: number; y: number }>> => {
+    const frames: Array<Readonly<{ trauma: number; x: number; y: number }>> = []
+    story(
+      update,
+      given(base),
+      message(Message.PressedKey({ code: 'Space' })),
+      ...Array.flatMap(ticks(180, FRAME_MS), frame => [
+        frame,
+        model(({ shake }: Model) => {
+          frames.push({ trauma: shake.trauma, ...shake.offset })
+        }),
+      ]),
+      model(({ stats }) => {
+        expect(stats.shotsFired).toBeGreaterThan(2)
+      }),
+    )
+    return frames
+  }
+
+  test('held fire from the pistol and the Chatterbox never moves the screen', () => {
+    Array.forEach([playingModel, holdingSpare('Smg')], base => {
+      expect(
+        Array.every(holdFire(base), ({ x, y }) => x === 0 && y === 0),
+      ).toBe(true)
+    })
+  })
+
+  test('held fire from the Barn Buster kicks a little and stays under the firing cap', () => {
+    const frames = holdFire(holdingSpare('Shotgun'))
+    expect(Array.some(frames, ({ trauma }) => trauma > 0)).toBe(true)
+    expect(
+      Array.every(
+        frames,
+        ({ trauma, x, y }) =>
+          trauma <= SHAKE_FIRING_TRAUMA_MAX &&
+          Math.abs(x) <= 1 &&
+          Math.abs(y) <= 1,
+      ),
+    ).toBe(true)
   })
 
   test('trauma is capped, stays on whole pixels within the max, and decays to rest', () => {
@@ -1271,6 +1325,11 @@ describe('kill streak', () => {
 })
 
 describe('juice determinism', () => {
+  const bigKillAt = (id: number, x: number): Zombie =>
+    modifyFields(zombieAt(id, x, ARENA_HEIGHT / 2, 0), {
+      kind: () => 'Tank',
+    })
+
   const playJuiceSession = (seed: number): ReadonlyArray<Model> => {
     const frames: Array<Model> = []
     const record = model((frame: Model) => {
@@ -1280,9 +1339,9 @@ describe('juice determinism', () => {
       update,
       given(
         withZombies(modifyFields(playingModel, { rngState: () => seed }), [
-          zombieAt(100, 200, ARENA_HEIGHT / 2, 0),
-          zombieAt(101, 230, ARENA_HEIGHT / 2, 0),
-          zombieAt(102, 260, ARENA_HEIGHT / 2, 0),
+          bigKillAt(100, 200),
+          bigKillAt(101, 230),
+          bigKillAt(102, 260),
         ]),
       ),
       message(Message.PressedKey({ code: 'Space' })),

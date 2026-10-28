@@ -1951,23 +1951,45 @@ const hudShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
 // WAVE PREVIEW
 
 const DOOR_MARKER_INSET = 20
-const DOOR_MARKER_PULSE_MS = 700
-const DOOR_MARKER_PULSE = 0.1
+const DOOR_MARKER_PULSE_MS = 1400
 const DOOR_MARKER_ROW_PX = 9
-const DOOR_MARKER_ICON_X = -5
-const DOOR_MARKER_COUNT_X = 1
-const DOOR_MARKER_BACK_COLOR = 'rgba(8, 10, 12, 0.55)'
-const DOOR_MARKER_BACK_WIDTH = 24
+const DOOR_MARKER_ICON_X = -6
+const DOOR_MARKER_COUNT_X = 0
+const DOOR_MARKER_PAD = 2
+const DOOR_MARKER_BACK_COLOR = 'rgba(14, 8, 12, 0.86)'
+const DOOR_MARKER_EDGE_COLOR = '#ff8a3d'
+const DOOR_MARKER_EDGE_DIM = 0.35
+const DOOR_MARKER_BACK_WIDTH = 26
 
 const NEW_TAG = bakeText('NEW', 'Fresh')
 const NEW_TAG_GAP = 2
-
 const NEW_TAG_PAD = 1
+
+const NORTH_MARKER_SIDE_PX = 24
+
+const markerAnchor = (door: DoorId): Readonly<{ x: number; y: number }> => {
+  const { center, outward } = DOORS[door]
+  const inside = {
+    x: Math.round(center.x - outward.x * DOOR_MARKER_INSET),
+    y: Math.round(center.y - outward.y * DOOR_MARKER_INSET),
+  }
+  return door === 'North'
+    ? { x: inside.x + NORTH_MARKER_SIDE_PX, y: inside.y - DOOR_MARKER_ROW_PX }
+    : inside
+}
 
 const newTagTop = (outwardY: number, top: number, rows: number): number =>
   outwardY < 0
-    ? top + rows * DOOR_MARKER_ROW_PX - DOOR_MARKER_ROW_PX / 2 + NEW_TAG_GAP
-    : top - DOOR_MARKER_ROW_PX / 2 - GLYPH_HEIGHT - NEW_TAG_GAP
+    ? top +
+      rows * DOOR_MARKER_ROW_PX -
+      DOOR_MARKER_ROW_PX / 2 +
+      DOOR_MARKER_PAD +
+      NEW_TAG_GAP
+    : top -
+      DOOR_MARKER_ROW_PX / 2 -
+      DOOR_MARKER_PAD -
+      GLYPH_HEIGHT -
+      NEW_TAG_GAP
 
 const newTagShapes = (
   isNew: boolean,
@@ -1986,19 +2008,28 @@ const newTagShapes = (
       ]
     : []
 
-const countShapes = (count: number): ReadonlyArray<Canvas.Shape> =>
-  Option.match(Array.get(COUNT_SPRITES, count), {
-    onNone: () => textShapes(`x${count}`, 'Kill', 0, -2, 'Left'),
-    onSome: sprite => sprite,
-  })
+const countShapes = (
+  count: number,
+  isNew: boolean,
+): ReadonlyArray<Canvas.Shape> =>
+  isNew
+    ? textShapes(`x${count}`, 'Fresh', 0, -2, 'Left')
+    : Option.match(Array.get(COUNT_SPRITES, count), {
+        onNone: () => textShapes(`x${count}`, 'Kill', 0, -2, 'Left'),
+        onSome: sprite => sprite,
+      })
 
 const markerRowShapes =
-  (top: number) =>
+  (top: number, debuts: ReadonlyArray<ZombieKind>) =>
   ({ kind, count }: KindCount, index: number): ReadonlyArray<Canvas.Shape> => {
     const y = top + index * DOOR_MARKER_ROW_PX
     return [
       placeSprite(DOOR_MARKER_ICON_X, y, ZOMBIE_SPRITES[kind].icon),
-      placeSprite(DOOR_MARKER_COUNT_X, y, countShapes(count)),
+      placeSprite(
+        DOOR_MARKER_COUNT_X,
+        y,
+        countShapes(count, Array.contains(debuts, kind)),
+      ),
     ]
   }
 
@@ -2013,30 +2044,44 @@ const markerTop = (outwardY: number, rows: number): number => {
   }
 }
 
+const markerEdgeOpacity = (elapsedMs: number): number =>
+  DOOR_MARKER_EDGE_DIM +
+  (1 - DOOR_MARKER_EDGE_DIM) *
+    (0.5 + 0.5 * Math.sin((FULL_TURN * elapsedMs) / DOOR_MARKER_PULSE_MS))
+
 const doorMarkerShapes =
   (elapsedMs: number, debuts: ReadonlyArray<ZombieKind>) =>
   ({ door, kinds }: DoorCount): ReadonlyArray<Canvas.Shape> => {
-    const { center, outward } = DOORS[door]
-    const x = Math.round(center.x - outward.x * DOOR_MARKER_INSET)
-    const y = Math.round(center.y - outward.y * DOOR_MARKER_INSET)
-    const pulse =
-      1 +
-      DOOR_MARKER_PULSE *
-        Math.sin((FULL_TURN * elapsedMs) / DOOR_MARKER_PULSE_MS)
+    const { outward } = DOORS[door]
+    const anchor = markerAnchor(door)
     const top = markerTop(outward.y, kinds.length)
+    const boxTop = top - DOOR_MARKER_ROW_PX / 2 - DOOR_MARKER_PAD
+    const boxHeight = kinds.length * DOOR_MARKER_ROW_PX + DOOR_MARKER_PAD * 2
+    const boxLeft = -DOOR_MARKER_BACK_WIDTH / 2
     return [
       group({
-        translate: { x, y },
-        scale: { x: pulse, y: pulse },
+        translate: anchor,
         shapes: [
+          group({
+            opacity: Math.round(markerEdgeOpacity(elapsedMs) * 10) / 10,
+            shapes: [
+              Canvas.Rect({
+                x: boxLeft - 1,
+                y: boxTop - 1,
+                width: DOOR_MARKER_BACK_WIDTH + 2,
+                height: boxHeight + 2,
+                fill: DOOR_MARKER_EDGE_COLOR,
+              }),
+            ],
+          }),
           Canvas.Rect({
-            x: -DOOR_MARKER_BACK_WIDTH / 2,
-            y: top - DOOR_MARKER_ROW_PX / 2,
+            x: boxLeft,
+            y: boxTop,
             width: DOOR_MARKER_BACK_WIDTH,
-            height: kinds.length * DOOR_MARKER_ROW_PX,
+            height: boxHeight,
             fill: DOOR_MARKER_BACK_COLOR,
           }),
-          ...Array.flatMap(kinds, markerRowShapes(top)),
+          ...Array.flatMap(kinds, markerRowShapes(top, debuts)),
           ...newTagShapes(
             Array.some(kinds, ({ kind }) => Array.contains(debuts, kind)),
             newTagTop(outward.y, top, kinds.length),
@@ -2046,7 +2091,7 @@ const doorMarkerShapes =
     ]
   }
 
-const wavePreviewShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+export const wavePreviewShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   Phase.match(model.phase, {
     Ready: () => [],
     Preparation: ({ wave, spawns }) =>
@@ -2366,7 +2411,7 @@ const waveStatsLabel = (model: Model): string =>
 
 const statsLabel = (model: Model): string => {
   const { stats } = model
-  return `${waveStatsLabel(model)} Zombies munched back: ${totalKills(stats)} (${killLabel(stats)}). Run time ${runTimeLabel(stats)}. Accuracy ${accuracyPercent(stats)} percent. Money earned $${model.wallet.earned}. Hearts lost ${stats.heartsLost}. Traps placed ${stats.trapsPlaced}. Score ${model.score}.`
+  return `${waveStatsLabel(model)} Zombies splatted: ${totalKills(stats)} (${killLabel(stats)}). Run time ${runTimeLabel(stats)}. Accuracy ${accuracyPercent(stats)} percent. Money earned $${model.wallet.earned}. Hearts lost ${stats.heartsLost}. Traps placed ${stats.trapsPlaced}. Score ${model.score}.`
 }
 
 const toSentenceCase = (shouted: string): string =>
@@ -2378,14 +2423,14 @@ const toSentenceCase = (shouted: string): string =>
     )
 
 export const debutPitch = (kind: ZombieKind): string =>
-  toSentenceCase(Array.join(ZOMBIE_KINDS[kind].pitch, ' '))
+  toSentenceCase(ZOMBIE_KINDS[kind].pitch)
 
 const debutCardStatus = (model: Model): Option.Option<string> =>
   DebutCard.match(model.debutCard, {
     Hidden: () => Option.none(),
     Showing: ({ kind }) =>
       Option.some(
-        `New zombie: ${ZOMBIE_KINDS[kind].name}. ${debutPitch(kind)} Press Enter or Space, or choose Got it, to carry on.`,
+        `New zombie: ${ZOMBIE_KINDS[kind].name}. ${debutPitch(kind)} The wave starts in a moment. Press Enter or choose Got it to start now.`,
       ),
   })
 
@@ -2402,12 +2447,12 @@ export const statusText = (model: Model): string => {
   return Phase.match(model.phase, {
     Ready: () => `${GAME_TITLE}. ${PLAY_AGAIN}`,
     Preparation: ({ wave }) =>
+      `Get ready for ${statusWave(model, wave)}. Press Enter, or use the Start wave button, to start it now.${practiceGateNote(model)}${shopHint(model)}`,
+    Wave: ({ wave }) =>
       Option.getOrElse(
         debutCardStatus(model),
-        () =>
-          `Get ready for ${statusWave(model, wave)}. Press Enter, or use the Start wave button, to start it now.${practiceGateNote(model)}${shopHint(model)}`,
+        () => `Fighting ${statusWave(model, wave)}.`,
       ),
-    Wave: ({ wave }) => `Fighting ${statusWave(model, wave)}.`,
     Paused: ({ round }) =>
       `Paused during ${statusWave(model, round.wave)}. Tap, click, or press Enter to resume.`,
     Victory: () =>
@@ -2741,12 +2786,7 @@ const trapControlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
       ),
   })
 
-const preparationControlsView = (
-  model: Model,
-  h: HtmlBuilder<Message>,
-): Html => (isDebutCardUp(model) ? h.empty : preparationButtonsView(model, h))
-
-const preparationButtonsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const preparationControlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
   Phase.match(model.phase, {
     Ready: () => h.empty,
     Preparation: ({ wave, remainingMs, spawns }) =>
@@ -2886,7 +2926,7 @@ const debutCardButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
   )
 
 const debutCardView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  isSideways(model) || !Phase.isAnyOf(['Preparation'])(model.phase)
+  isSideways(model) || !Phase.isAnyOf(['Wave'])(model.phase)
     ? h.empty
     : DebutCard.match(model.debutCard, {
         Hidden: () => h.empty,
@@ -2894,8 +2934,7 @@ const debutCardView = (model: Model, h: HtmlBuilder<Message>): Html =>
           h.div(
             [
               h.Class('debut-card'),
-              h.Role('dialog'),
-              h.AriaModal(true),
+              h.Role('group'),
               h.AriaLabelledBy(DEBUT_TITLE_ID),
               h.AriaDescribedBy(DEBUT_BODY_ID),
             ],

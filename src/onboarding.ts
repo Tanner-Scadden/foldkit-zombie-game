@@ -107,19 +107,20 @@ export const isPracticeGateHeld = (model: Model): boolean =>
 
 // DEBUT CARD
 
-export const DEBUT_CARD_MIN_MS = 700
+export const DEBUT_CARD_MIN_MS = 500
+export const DEBUT_CARD_MS = 2600
 
 const maybeDebutKind = (model: Model): Option.Option<ZombieKind> =>
   Phase.match(model.phase, {
     Ready: () => Option.none(),
-    Preparation: ({ spawns }) =>
+    Preparation: () => Option.none(),
+    Wave: ({ spawns }) =>
       Array.findFirst(
         ZOMBIE_KIND_ORDER,
         kind =>
           !Array.contains(model.introducedKinds, kind) &&
           Array.some(spawns, spawn => spawn.kind === kind),
       ),
-    Wave: () => Option.none(),
     Paused: () => Option.none(),
     Victory: () => Option.none(),
     GameOver: () => Option.none(),
@@ -137,24 +138,26 @@ export const raiseDebutCard = (model: Model): Model =>
 export const isDebutCardUp = (model: Model): boolean =>
   DebutCard.isAnyOf(['Showing'])(model.debutCard)
 
+const finishDebutCard = (model: Model, kind: ZombieKind): Model =>
+  raiseDebutCard(modifyFields(model, { introducedKinds: Array.append(kind) }))
+
 export const ageDebutCard = (model: Model, deltaMs: number): Model =>
   DebutCard.match(model.debutCard, {
     Hidden: () => model,
     Showing: ({ kind, ageMs }) =>
-      modifyFields(model, {
-        debutCard: () => DebutCard.Showing({ kind, ageMs: ageMs + deltaMs }),
-      }),
+      ageMs + deltaMs >= DEBUT_CARD_MS
+        ? finishDebutCard(model, kind)
+        : modifyFields(model, {
+            debutCard: () =>
+              DebutCard.Showing({ kind, ageMs: ageMs + deltaMs }),
+          }),
   })
 
-export const dismissDebutCard = (model: Model): Model =>
+export const skipDebutCard = (model: Model): Model =>
   DebutCard.match(model.debutCard, {
     Hidden: () => model,
     Showing: ({ kind, ageMs }) =>
-      ageMs < DEBUT_CARD_MIN_MS
-        ? model
-        : raiseDebutCard(
-            modifyFields(model, { introducedKinds: Array.append(kind) }),
-          ),
+      ageMs < DEBUT_CARD_MIN_MS ? model : finishDebutCard(model, kind),
   })
 
 export const learnShop = (model: Model): Model =>
@@ -236,8 +239,8 @@ export const HINT_TEXT: Readonly<
     Touch: 'DRAG YOUR RIGHT THUMB TO AIM AND FIRE',
   },
   Pickup: {
-    KeyboardMouse: 'WALK OVER THE GLOWING GOODIE TO GRAB IT',
-    Touch: 'STEER OVER THE GLOWING GOODIE TO GRAB IT',
+    KeyboardMouse: 'WALK OVER THE GOODIE TO GRAB IT',
+    Touch: 'STEER OVER THE GOODIE TO GRAB IT',
   },
   Barricade: {
     KeyboardMouse: 'STAND IN A DOORWAY AND PRESS T',
@@ -256,8 +259,8 @@ export const HINT_TEXT: Readonly<
     Touch: 'TAP SWAP TO CHANGE GUNS',
   },
   StartWave: {
-    KeyboardMouse: 'READY? PRESS ENTER TO START THE WAVE',
-    Touch: 'READY? TAP START WAVE',
+    KeyboardMouse: 'PRESS ENTER WHEN YOU ARE READY',
+    Touch: 'TAP START WAVE WHEN YOU ARE READY',
   },
 }
 

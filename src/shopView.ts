@@ -168,8 +168,7 @@ const itemView = (
 // DIALOG
 
 const SHOP_TITLE = "Rattles' Bone Bazaar"
-const SHOP_GREETING =
-  'Fresh guns, gently haunted. No refunds, no returns, no heads.'
+const SHOP_GREETING = 'Everything here is a little haunted. No refunds.'
 
 const thingsLabel = (count: number): string =>
   count === 1 ? '1 thing' : `${count} things`

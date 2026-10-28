@@ -53,14 +53,33 @@ Built on 2026-10-28 after a first-time phone player said the right stick was nev
 - **Hints clear on practice, not on any input.** WASD MOVES clears once the player has walked 24 px of their own movement. MOUSE AIMS, CLICK FIRES clears after 3 shots fired while aiming, with the mouse or the right stick. A tap on the right half fires along the facing without aiming, so it does not count. Neither hint clears before it has been up for 2.5 seconds of play. Other keys, buttons, audio toggles, and mouse moves leave them alone.
 - **Touch teaches both thumbs.** The touch hints say DRAG YOUR LEFT THUMB TO MOVE and DRAG YOUR RIGHT THUMB TO AIM AND FIRE. During wave 1, pulsing ghost sticks labelled MOVE and AIM + FIRE sit on each half of the screen until that lesson is learned. A ghost hides while its thumb is down and comes back on release if the lesson is still pending, so the AIM + FIRE ghost stays until the player has really aimed with the right stick and fired.
 - **The practice gate.** Wave 1's 6 second countdown does not start until the player has learned to move and to aim and fire. The HUD says TRY THE CONTROLS FIRST, and START WAVE (Enter) skips the gate. R stays reload. A returning player who learned both earlier in the session never sees it.
-- **The new zombie card.** When Preparation begins for a wave holding a kind not yet introduced this session, a card shows the kind's walk cycle large, its name, and a two-line pitch. It is drawn on the canvas, with an HTML dialog behind it that carries the name and pitch for screen readers and a GOT IT button. While it is up the whole game is frozen, so the Preparation timer loses nothing. Only GOT IT, Enter, or Space put it away, and only after it has been up 0.7 seconds, so a fire key or a stray tap cannot skip it. Movement, the mouse, the sticks, and the other buttons do nothing to it. Escape still pauses. Each kind is introduced once per page session, in campaign or endless, and nothing is saved. The door preview tags a door with NEW when it brings a kind that debuts that wave.
+- **The new zombie card.** Changed on 2026-10-28 after a playtest: the card used to come up at the start of Preparation and freeze the game until GOT IT, which felt like a modal interruption. Now it comes up the moment the wave starts, when the countdown runs out or START WAVE is pressed, for the first kind in that wave not yet introduced this session. It is a band across the middle of the screen that slides in with the kind's walk cycle large, its name, a one-line pitch, and a bar that drains over 2.6 seconds. The world holds still while it is up, so no zombie spawns and the wave clock does not run, and then it slides away on its own and the wave begins. After 0.5 seconds, fire (Space or Enter), a click or tap anywhere, or the GOT IT button skip the rest. Movement keys and held thumbs are kept, so the player moves the moment it goes. Escape pauses it, and it carries on after resuming. Preparation is never held up by it. The HTML behind it is a labelled group with the name and pitch and the GOT IT button, and the screen reader status line reads the name and pitch. Each kind is introduced once per page session, in campaign or endless, and nothing is saved. During Preparation the door preview tags a door with NEW, colors the new kind's count orange, and the NEW: banner names the kind, so the card is never the first warning.
 
-| Kind    | Card pitch                                                             |
-| ------- | ---------------------------------------------------------------------- |
-| Groaner | SLOW, HUNGRY, AND NOT VERY BRIGHT. BACK UP AND KEEP SHOOTING.          |
-| Hotfoot | ALL LEGS, NO BRAINS, MADE OF PAPER. AIM EARLY. ONE GOOD SHOT DROPS IT. |
-| Gasbag  | POPS WHEN IT DIES. KEEP YOUR DISTANCE, OR POP IT IN A CROWD.           |
-| Big Lug | A WALL OF MEAT THAT WALKS. KEEP MOVING AND POUR IT ON.                 |
+| Kind    | Card pitch                                   |
+| ------- | -------------------------------------------- |
+| Groaner | HE'S SLOW. BACK UP AND KEEP SHOOTING.        |
+| Hotfoot | ZOOMS RIGHT AT YOU. ONE SHOT DROPS IT.       |
+| Gasbag  | BLOWS UP WHEN IT DIES. POP IT NEAR ITS PALS. |
+| Big Lug | TAKES A TON OF BULLETS. DON'T GET CORNERED.  |
+
+- **The door preview.** It is drawn on the overlay canvas, which never shakes, and it holds still: only the orange frame around each door's box pulses. Each box lists the kinds coming through that door with an icon and a count, on a dark backing. The North door's box hangs to the right of the doorway, so the centered banners and hints never cover it.
+
+#### Screen shake
+
+Changed on 2026-10-28 after a playtest said the screen shook too much while shooting. Shake comes from trauma, which moves the screen up to 3 px per unit and decays 2.5 units a second.
+
+| Source                              | Trauma before | Trauma now |
+| ----------------------------------- | ------------- | ---------- |
+| Pop Pistol shot                     | 0.25          | 0          |
+| Chatterbox shot                     | 0.12          | 0.04       |
+| Barn Buster shot                    | 0.65          | 0.3        |
+| Groaner kill                        | 0.5           | 0.15       |
+| Hotfoot kill                        | 0.4           | 0.12       |
+| Gasbag kill (its blast adds 1)      | 0.3           | 0.15       |
+| Big Lug kill                        | 1             | 0.7        |
+| Getting hurt, a blast, the Big Burp | 0.9, 1, 0.9   | unchanged  |
+
+Shots can only raise trauma to 0.3 between them, so held fire never shakes more than about 1 px. Hurts, blasts, big kills, and broken traps add on top of that, up to the cap of 1.
 
 #### Music
 

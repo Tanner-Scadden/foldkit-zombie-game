@@ -192,8 +192,8 @@ export const BULLET_TRAIL_COLOR = 'rgba(255, 224, 102, 0.45)'
 export const SHAKE_MAX_PX = 3
 export const SHAKE_TRAUMA_MAX = 1
 export const SHAKE_DECAY_PER_SECOND = 2.5
-export const SHAKE_TRAUMA_FIRED = 0.25
-export const SHAKE_TRAUMA_KILL = 0.5
+export const SHAKE_FIRING_TRAUMA_MAX = 0.3
+export const SHAKE_TRAUMA_KILL = 0.15
 export const SHAKE_TRAUMA_HURT = 0.9
 
 export const HIT_STOP_KILL_MS = 40

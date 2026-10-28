@@ -14,6 +14,7 @@ import {
 } from './model'
 import {
   DEBUT_CARD_MIN_MS,
+  DEBUT_CARD_MS,
   type HintId,
   LESSON_MIN_SHOWN_MS,
   isLearned,
@@ -26,6 +27,7 @@ import { rollSpawns } from './waves'
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 const TICK_MS = 50
 const CARD_TICKS = Math.ceil(DEBUT_CARD_MIN_MS / TICK_MS)
+const AUTO_TICKS = Math.ceil(DEBUT_CARD_MS / TICK_MS)
 const SHOWN_TICKS = Math.ceil(LESSON_MIN_SHOWN_MS / TICK_MS)
 
 const freshModel: Model = modifyFields(initialModel, {
@@ -53,11 +55,6 @@ const mouseDown = (clientX: number, clientY: number) =>
     Message.PressedPointer({ pointerId: 1, device: 'Mouse', clientX, clientY }),
   )
 
-const dismissCard = [
-  ...ticks(CARD_TICKS),
-  message(Message.ClickedDebutCardButton()),
-]
-
 const cardKind = (current: Model): Option.Option<ZombieKind> =>
   DebutCard.match(current.debutCard, {
     Hidden: () => Option.none(),
@@ -77,6 +74,16 @@ const remainingMs = (current: Model): number =>
     GameOver: () => -1,
   })
 
+const waveClockMs = (current: Model): number =>
+  Phase.match(current.phase, {
+    Ready: () => -1,
+    Preparation: () => -1,
+    Wave: wave => wave.elapsedMs,
+    Paused: () => -1,
+    Victory: () => -1,
+    GameOver: () => -1,
+  })
+
 const clearingWave = (wave: number, base: Model): Model =>
   modifyFields(base, {
     phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns: [] }),
@@ -85,26 +92,80 @@ const clearingWave = (wave: number, base: Model): Model =>
 const introduced = (base: Model, kinds: ReadonlyArray<ZombieKind>): Model =>
   modifyFields(base, { introducedKinds: () => kinds })
 
+const atWaveStart = (kinds: ReadonlyArray<ZombieKind>): Model => {
+  const [, spawns] = rollSpawns(1, 2)
+  return update(
+    modifyFields(introduced(asVeteran(freshModel), kinds), {
+      phase: () =>
+        Phase.Preparation({
+          wave: 2,
+          remainingMs: PREPARATION_MS,
+          durationMs: PREPARATION_MS,
+          spawns,
+        }),
+    }),
+    Message.ClickedStartWaveButton(),
+  ).model
+}
+
 describe('new zombie card', () => {
-  test('comes up before a debut wave and only once per session', () => {
+  test('stays out of Preparation and comes up when the wave starts', () => {
     story(
       update,
       given(freshModel),
       ...tap('Enter'),
       model(current => {
+        expect(Phase.guards.Preparation(current.phase)).toBe(true)
+        expect(cardKind(current)).toStrictEqual(Option.none())
+        expect(hintIds(current)).toEqual(['Move', 'Fire'])
+      }),
+      message(Message.ClickedStartWaveButton()),
+      model(current => {
+        expect(Phase.guards.Wave(current.phase)).toBe(true)
         expect(cardKind(current)).toStrictEqual(Option.some('Shambler'))
         expect(hintIds(current)).toEqual([])
       }),
-      ...ticks(CARD_TICKS),
-      ...tap('Enter'),
+    )
+  })
+
+  test('does not hold up the Preparation countdown, and comes up when it runs out', () => {
+    story(
+      update,
+      given(clearingWave(1, introduced(asVeteran(freshModel), ['Shambler']))),
+      tick,
       model(current => {
         expect(cardKind(current)).toStrictEqual(Option.none())
-        expect(current.introducedKinds).toEqual(['Shambler'])
-        expect(Phase.guards.Preparation(current.phase)).toBe(true)
+        expect(remainingMs(current)).toBe(PREPARATION_MS)
       }),
-      ...tap('Escape'),
+      ...ticks(4),
       model(current => {
-        expect(Phase.guards.Paused(current.phase)).toBe(true)
+        expect(remainingMs(current)).toBe(PREPARATION_MS - 4 * TICK_MS)
+      }),
+      ...ticks(Math.ceil(PREPARATION_MS / TICK_MS)),
+      model(current => {
+        expect(Phase.guards.Wave(current.phase)).toBe(true)
+        expect(cardKind(current)).toStrictEqual(Option.some('Runner'))
+      }),
+    )
+  })
+
+  test('introduces each kind once per session', () => {
+    story(
+      update,
+      given(atWaveStart(['Shambler'])),
+      ...ticks(AUTO_TICKS),
+      model(current => {
+        expect(cardKind(current)).toStrictEqual(Option.none())
+        expect(current.introducedKinds).toEqual(['Shambler', 'Runner'])
+      }),
+    )
+
+    story(
+      update,
+      given(atWaveStart(['Shambler', 'Runner'])),
+      model(current => {
+        expect(Phase.guards.Wave(current.phase)).toBe(true)
+        expect(cardKind(current)).toStrictEqual(Option.none())
       }),
     )
 
@@ -120,35 +181,9 @@ describe('new zombie card', () => {
         ),
       ),
       ...tap('Enter'),
+      message(Message.ClickedStartWaveButton()),
       model(current => {
-        expect(Phase.guards.Preparation(current.phase)).toBe(true)
-        expect(cardKind(current)).toStrictEqual(Option.none())
-      }),
-    )
-  })
-
-  test('introduces the Hotfoot when wave 1 is cleared, and never again', () => {
-    story(
-      update,
-      given(clearingWave(1, introduced(asVeteran(freshModel), ['Shambler']))),
-      tick,
-      model(current => {
-        expect(Phase.guards.Preparation(current.phase)).toBe(true)
-        expect(cardKind(current)).toStrictEqual(Option.some('Runner'))
-      }),
-    )
-
-    story(
-      update,
-      given(
-        clearingWave(
-          1,
-          introduced(asVeteran(freshModel), ['Shambler', 'Runner']),
-        ),
-      ),
-      tick,
-      model(current => {
-        expect(Phase.guards.Preparation(current.phase)).toBe(true)
+        expect(Phase.guards.Wave(current.phase)).toBe(true)
         expect(cardKind(current)).toStrictEqual(Option.none())
       }),
     )
@@ -168,8 +203,9 @@ describe('new zombie card', () => {
       update,
       given(victorious(['Shambler', 'Runner', 'Exploder', 'Tank'])),
       ...tap('KeyK'),
+      message(Message.ClickedStartWaveButton()),
       model(current => {
-        expect(Phase.guards.Preparation(current.phase)).toBe(true)
+        expect(Phase.guards.Wave(current.phase)).toBe(true)
         expect(cardKind(current)).toStrictEqual(Option.none())
       }),
     )
@@ -179,88 +215,103 @@ describe('new zombie card', () => {
       given(victorious(['Shambler', 'Runner', 'Exploder'])),
       ...tap('KeyK'),
       model(current => {
+        expect(cardKind(current)).toStrictEqual(Option.none())
+      }),
+      message(Message.ClickedStartWaveButton()),
+      model(current => {
         expect(cardKind(current)).toStrictEqual(Option.some('Tank'))
       }),
     )
   })
 
-  test('freezes the preparation timer and the world while it is up', () => {
+  test('holds the world still while it is up, then lets the wave go on its own', () => {
     story(
       update,
-      given(clearingWave(1, introduced(asVeteran(freshModel), ['Shambler']))),
-      tick,
-      model(current => {
-        expect(remainingMs(current)).toBe(PREPARATION_MS)
-      }),
+      given(atWaveStart(['Shambler'])),
       press('KeyD'),
-      ...ticks(40),
+      ...ticks(AUTO_TICKS - 1),
       model(current => {
         expect(cardKind(current)).toStrictEqual(Option.some('Runner'))
-        expect(remainingMs(current)).toBe(PREPARATION_MS)
+        expect(waveClockMs(current)).toBe(0)
+        expect(current.zombies).toEqual([])
         expect(current.player.x).toBe(initialModel.player.x)
       }),
-      message(Message.ClickedDebutCardButton()),
-      ...ticks(4),
+      tick,
       model(current => {
         expect(cardKind(current)).toStrictEqual(Option.none())
-        expect(remainingMs(current)).toBe(PREPARATION_MS - 4 * TICK_MS)
+      }),
+      ...ticks(4),
+      model(current => {
+        expect(waveClockMs(current)).toBeGreaterThan(0)
         expect(current.player.x).toBeGreaterThan(initialModel.player.x)
       }),
     )
   })
 
-  test('stray movement, firing, and buttons leave it up, while GOT IT puts it away', () => {
+  test('fire, a tap, Enter, or GOT IT skip it, but only after a short minimum', () => {
+    const skips = [
+      tap('Space'),
+      tap('Enter'),
+      [mouseDown(700, 200), message(Message.ReleasedPointer({ pointerId: 1 }))],
+      [touchDown(4, 100, 200), touchUp(4)],
+      [message(Message.ClickedDebutCardButton())],
+    ]
+    Array.forEach(skips, skip => {
+      story(
+        update,
+        given(atWaveStart(['Shambler'])),
+        ...skip,
+        model(current => {
+          expect(cardKind(current)).toStrictEqual(Option.some('Runner'))
+        }),
+        ...ticks(CARD_TICKS),
+        ...skip,
+        model(current => {
+          expect(cardKind(current)).toStrictEqual(Option.none())
+          expect(current.introducedKinds).toEqual(['Shambler', 'Runner'])
+          expect(Phase.guards.Wave(current.phase)).toBe(true)
+        }),
+      )
+    })
+  })
+
+  test('movement and the other keys and buttons leave it up', () => {
     story(
       update,
-      given(freshModel),
-      ...tap('Enter'),
-      ...tap('Space'),
-      ...tap('Enter'),
-      model(current => {
-        expect(cardKind(current)).toStrictEqual(Option.some('Shambler'))
-      }),
+      given(atWaveStart(['Shambler'])),
       ...ticks(CARD_TICKS),
       press('KeyW'),
       press('KeyD'),
       ...tap('KeyR'),
       ...tap('KeyQ'),
       ...tap('KeyT'),
-      mouseDown(700, 200),
-      message(Message.ReleasedPointer({ pointerId: 1 })),
-      touchDown(4, 100, 200),
-      touchMove(4, 160, 200),
-      touchDown(5, 700, 200),
-      touchMove(5, 760, 200),
-      touchUp(4),
-      touchUp(5),
-      message(Message.ClickedStartWaveButton()),
+      ...tap('KeyM'),
+      message(Message.MovedMouse({ clientX: 700, clientY: 100 })),
       message(Message.ClickedSwapButton()),
       message(Message.ClickedReloadButton()),
       message(Message.ClickedPlaceTrapButton()),
-      ...ticks(4),
+      tick,
       model(current => {
-        expect(cardKind(current)).toStrictEqual(Option.some('Shambler'))
-        expect(Phase.guards.Preparation(current.phase)).toBe(true)
+        expect(cardKind(current)).toStrictEqual(Option.some('Runner'))
         expect(current.stats.shotsFired).toBe(0)
-      }),
-      message(Message.ClickedDebutCardButton()),
-      model(current => {
-        expect(cardKind(current)).toStrictEqual(Option.none())
-        expect(Phase.guards.Preparation(current.phase)).toBe(true)
       }),
     )
   })
 
-  test('Enter puts it away without starting the wave', () => {
+  test('Escape pauses it, and it carries on after resuming', () => {
     story(
       update,
-      given(introduced(asVeteran(freshModel), [])),
-      ...tap('Enter'),
+      given(atWaveStart(['Shambler'])),
       ...ticks(CARD_TICKS),
+      ...tap('Escape'),
+      model(current => {
+        expect(Phase.guards.Paused(current.phase)).toBe(true)
+      }),
+      ...ticks(AUTO_TICKS),
       ...tap('Enter'),
       model(current => {
-        expect(cardKind(current)).toStrictEqual(Option.none())
-        expect(remainingMs(current)).toBe(FIRST_PREPARATION_MS)
+        expect(Phase.guards.Wave(current.phase)).toBe(true)
+        expect(cardKind(current)).toStrictEqual(Option.some('Runner'))
       }),
     )
   })
@@ -277,10 +328,6 @@ describe('touch first play', () => {
       given(touchPlayer),
       touchDown(1, 400, 200),
       touchUp(1),
-      model(current => {
-        expect(shownGhostSticks(current)).toEqual([])
-      }),
-      ...dismissCard,
       model(current => {
         expect(shownGhostSticks(current)).toEqual(['Move', 'Aim'])
       }),
@@ -320,7 +367,6 @@ describe('touch first play', () => {
       update,
       given(freshModel),
       ...tap('Enter'),
-      ...dismissCard,
       model(current => {
         expect(hintIds(current)).toEqual(['Move', 'Fire'])
         expect(shownGhostSticks(current)).toEqual([])
@@ -335,7 +381,6 @@ describe('tutorial hints', () => {
       update,
       given(freshModel),
       ...tap('Enter'),
-      ...dismissCard,
       ...tap('KeyQ'),
       ...tap('KeyM'),
       ...tap('KeyM'),
@@ -358,7 +403,6 @@ describe('tutorial hints', () => {
       update,
       given(freshModel),
       ...tap('Enter'),
-      ...dismissCard,
       press('KeyD'),
       ...ticks(10),
       release('KeyD'),
@@ -380,7 +424,6 @@ describe('wave 1 practice gate', () => {
       update,
       given(freshModel),
       ...tap('Enter'),
-      ...dismissCard,
       ...ticks(Math.ceil((FIRST_PREPARATION_MS * 3) / TICK_MS)),
       ...tap('KeyR'),
       model(current => {
@@ -398,7 +441,6 @@ describe('wave 1 practice gate', () => {
       update,
       given(freshModel),
       ...tap('Enter'),
-      ...dismissCard,
       press('KeyD'),
       ...ticks(10),
       release('KeyD'),

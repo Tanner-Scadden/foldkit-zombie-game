@@ -22,6 +22,7 @@ import {
   POPUP_DRIFT_SPEED_MAX,
   POPUP_MAX,
   SHAKE_DECAY_PER_SECOND,
+  SHAKE_FIRING_TRAUMA_MAX,
   SHAKE_MAX_PX,
   SHAKE_TRAUMA_BLAST,
   SHAKE_TRAUMA_BURP,
@@ -102,9 +103,12 @@ const triggerHitStop = (
 
 // SHAKE
 
+const firingTrauma = (event: GameEvent): number =>
+  GameEvent.isAnyOf(['Fired'])(event) ? WEAPONS[event.weapon].shakeTrauma : 0
+
 const eventTrauma = (event: GameEvent): number =>
   GameEvent.match(event, {
-    Fired: ({ weapon }) => WEAPONS[weapon].shakeTrauma,
+    Fired: () => 0,
     ZombieHit: () => 0,
     ZombieKilled: ({ kind }) => ZOMBIE_KINDS[kind].killTrauma,
     Exploded: () => SHAKE_TRAUMA_BLAST,
@@ -142,15 +146,14 @@ const advanceShake = (
   seconds: number,
   rngState: number,
 ): Seeded<Shake> => {
-  const addedTrauma = Array.reduce(
-    events,
-    0,
-    (sum, event) => sum + eventTrauma(event),
+  const sumOf = (traumaOf: (event: GameEvent) => number): number =>
+    Array.reduce(events, 0, (sum, event) => sum + traumaOf(event))
+  const decayed = Math.max(0, shake.trauma - SHAKE_DECAY_PER_SECOND * seconds)
+  const afterFiring = Math.max(
+    decayed,
+    Math.min(SHAKE_FIRING_TRAUMA_MAX, decayed + sumOf(firingTrauma)),
   )
-  const trauma = Math.min(
-    SHAKE_TRAUMA_MAX,
-    Math.max(0, shake.trauma - SHAKE_DECAY_PER_SECOND * seconds) + addedTrauma,
-  )
+  const trauma = Math.min(SHAKE_TRAUMA_MAX, afterFiring + sumOf(eventTrauma))
   if (trauma <= 0) {
     return [rngState, stillShake]
   }

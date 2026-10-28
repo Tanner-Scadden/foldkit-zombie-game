@@ -1068,24 +1068,22 @@ const beginPreparation = (
   durationMs: number,
 ): Model => {
   const [rngState, { spawns, holds }] = rollWave(model.rngState, wave)
-  return raiseDebutCard(
-    modifyFields(model, {
-      phase: () =>
-        Phase.Preparation({
-          wave,
-          remainingMs: durationMs,
-          durationMs,
-          spawns,
-        }),
-      pacing: () => ({
-        holds,
-        beat: Beat.Flowing(),
-        warnedPacks: [],
-        alarm: Alarm.Quiet(),
+  return modifyFields(model, {
+    phase: () =>
+      Phase.Preparation({
+        wave,
+        remainingMs: durationMs,
+        durationMs,
+        spawns,
       }),
-      rngState: () => rngState,
+    pacing: () => ({
+      holds,
+      beat: Beat.Flowing(),
+      warnedPacks: [],
+      alarm: Alarm.Quiet(),
     }),
-  )
+    rngState: () => rngState,
+  })
 }
 
 const startRun = (model: Model, mode: RunMode): Model =>
@@ -1183,9 +1181,11 @@ export const startWaveEarly = (model: Model): Model =>
   Phase.match(model.phase, {
     Ready: () => model,
     Preparation: ({ wave, spawns }) =>
-      modifyFields(model, {
-        phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns }),
-      }),
+      raiseDebutCard(
+        modifyFields(model, {
+          phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns }),
+        }),
+      ),
     Wave: () => model,
     Paused: () => model,
     Victory: () => model,
