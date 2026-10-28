@@ -1,5 +1,6 @@
 import {
   Mount,
+  click,
   expect,
   given,
   pointerDown,
@@ -36,6 +37,23 @@ describe('Ready screen', () => {
       expect(role('status')).toHaveText('Game in progress.'),
       expect(selector('[data-stick="move"]')).toExist(),
       expect(selector('[data-stick="aim"]')).toBeAbsent(),
+    )
+  })
+})
+
+describe('Mute button', () => {
+  test('toggles sound with a click or tap and reports its pressed state', () => {
+    const muteButton = role('button', { name: 'Mute sound' })
+    scene(
+      { update, view },
+      given(initialModel),
+      measureSurface,
+      expect(muteButton).toHaveAttr('aria-pressed', 'false'),
+      click(muteButton),
+      expect(muteButton).toHaveAttr('aria-pressed', 'true'),
+      expect(role('status')).toHaveText('Tap, click, or press Enter to start.'),
+      click(muteButton),
+      expect(muteButton).toHaveAttr('aria-pressed', 'false'),
     )
   })
 })

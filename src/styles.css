@@ -75,3 +75,34 @@ body {
 .touch-stick[data-stick='aim'] .touch-stick-thumb {
   background: rgba(255, 224, 102, 0.65);
 }
+
+.game-surface:focus {
+  outline: none;
+}
+
+.mute-button {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  right: calc(env(safe-area-inset-right, 0px) + 8px);
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 2px solid rgba(244, 241, 222, 0.55);
+  border-radius: 6px;
+  background: rgba(8, 10, 12, 0.6);
+  color: #f4f1de;
+  font: bold 12px monospace;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.mute-button[aria-pressed='true'] {
+  border-color: rgba(255, 224, 102, 0.75);
+  color: #ffe066;
+}
+
+.mute-button:focus-visible {
+  outline: 2px solid #9be36a;
+  outline-offset: 2px;
+}

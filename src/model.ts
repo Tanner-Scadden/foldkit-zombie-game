@@ -181,6 +181,18 @@ export const Streak = defineTaggedUnion({
 })
 export type Streak = typeof Streak.Type
 
+export const AudioState = defineTaggedUnion({
+  Locked: {},
+  Unlocking: {},
+  Suspended: {},
+  Ready: {},
+  Unavailable: {},
+})
+export type AudioState = typeof AudioState.Type
+
+export const SoundSetting = Schema.Literals(['On', 'Muted'])
+export type SoundSetting = typeof SoundSetting.Type
+
 export const Phase = defineTaggedUnion({
   Ready: {},
   Playing: {},
@@ -210,6 +222,8 @@ export const Model = Schema.Struct({
   input: Input,
   intent: Intent,
   maybeSurface: Schema.Option(SurfaceRectangle),
+  audio: AudioState,
+  soundSetting: SoundSetting,
 })
 export type Model = typeof Model.Type
 
@@ -263,4 +277,6 @@ export const initialModel: Model = {
   input: idleInput,
   intent: idleIntent,
   maybeSurface: Option.none(),
+  audio: AudioState.Locked(),
+  soundSetting: 'On',
 }

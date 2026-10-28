@@ -985,6 +985,23 @@ const stickView = (
     },
   })
 
+const muteButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
+  const isMuted = model.soundSetting === 'Muted'
+  return h.button(
+    [
+      h.Type('button'),
+      h.Class('mute-button'),
+      h.AriaLabel('Mute sound'),
+      h.AriaPressed(isMuted ? 'true' : 'false'),
+      h.AriaKeyshortcuts('M'),
+      h.OnClick(Message.ClickedMuteButton(), {
+        focusSelector: '.game-surface',
+      }),
+    ],
+    ['MUTE'],
+  )
+}
+
 export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
   title: 'Zombie Shooter',
   body: h.main(
@@ -997,6 +1014,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
           h.Class('game-surface'),
           h.Role('application'),
           h.AriaLabel('Game surface'),
+          h.Tabindex(-1),
           h.OnMount(MeasureGameSurface()),
           h.OnPointerDown(toPressedPointer),
           h.OnContextMenu(Message.SuppressedContextMenu()),
@@ -1015,6 +1033,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
           stickView(model.input.aimStick, 'aim', h),
         ],
       ),
+      muteButtonView(model, h),
     ],
   ),
 })

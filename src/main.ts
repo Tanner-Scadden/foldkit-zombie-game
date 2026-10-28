@@ -1,8 +1,27 @@
-import { Effect, Option, Random, Schema, Stream } from 'effect'
-import { Command, Dom, Runtime, Subscription, type Update } from 'foldkit'
+import { Array, Effect, Option, Random, Schema, Stream, pipe } from 'effect'
+import {
+  Command,
+  Dom,
+  ManagedResource,
+  Runtime,
+  Subscription,
+  Update,
+} from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
+import {
+  type AudioEngineError,
+  AudioEngineResource,
+  PlayOutcome,
+  Playback,
+  SoundEffect,
+  acquireAudioEngine,
+  playSound,
+  positionVariation,
+  releaseAudioEngine,
+  resumeAudio,
+} from './audio'
 import {
   isPauseKey,
   isStartKey,
@@ -15,7 +34,15 @@ import {
   releaseKey,
   releasePointer,
 } from './input'
-import { type Input, Model, Phase, PointerDevice, initialModel } from './model'
+import {
+  AudioState,
+  GameEvent,
+  type Input,
+  Model,
+  Phase,
+  PointerDevice,
+  initialModel,
+} from './model'
 import { advanceGame, pause, refreshIntent, startOrResume } from './simulation'
 
 export { Model } from './model'
@@ -53,8 +80,45 @@ export const Message = defineMessageUnion({
     height: Schema.Number,
   },
   CompletedGenerateSeed: { seed: Schema.Number },
+  ClickedMuteButton: {},
+  AcquiredAudioEngine: {},
+  FailedAcquireAudioEngine: { reason: Schema.String },
+  ReleasedAudioEngine: {},
+  CompletedResumeAudio: { playback: Playback },
+  FailedResumeAudio: { reason: Schema.String },
+  CompletedPlaySound: { sound: SoundEffect, outcome: PlayOutcome },
+  FailedPlaySound: { sound: SoundEffect, reason: Schema.String },
 })
 export type Message = typeof Message.Type
+
+// RESOURCE
+
+const wantsAudioEngine = (audio: AudioState): boolean =>
+  AudioState.match(audio, {
+    Locked: () => false,
+    Unlocking: () => true,
+    Suspended: () => true,
+    Ready: () => true,
+    Unavailable: () => false,
+  })
+
+export const managedResources = ManagedResource.make<Model, Message>()(
+  entry => ({
+    audioEngine: entry(Schema.Option(Schema.Null), {
+      resource: AudioEngineResource,
+      modelToMaybeRequirements: model =>
+        wantsAudioEngine(model.audio) ? Option.some(null) : Option.none(),
+      acquire: () => acquireAudioEngine,
+      release: releaseAudioEngine,
+      onAcquired: () => Message.AcquiredAudioEngine(),
+      onAcquireError: error =>
+        Message.FailedAcquireAudioEngine({ reason: String(error) }),
+      onReleased: () => Message.ReleasedAudioEngine(),
+    }),
+  }),
+)
+
+type AudioServices = ManagedResource.ServicesOf<typeof managedResources>
 
 // COMMAND
 
@@ -67,6 +131,46 @@ export const GenerateSeed = Command.define('GenerateSeed', {
   ),
 })
 
+const audioFailureReason = (
+  error: AudioEngineError | ManagedResource.ResourceNotAvailable,
+): string =>
+  error._tag === 'AudioEngineError'
+    ? error.reason
+    : `${error.resource} is not acquired`
+
+export const ResumeAudio = Command.define('ResumeAudio', {
+  messages: [Message.CompletedResumeAudio, Message.FailedResumeAudio],
+  execute: pipe(
+    AudioEngineResource.get,
+    Effect.flatMap(resumeAudio),
+    Effect.map(playback => Message.CompletedResumeAudio({ playback })),
+    Effect.catch(error =>
+      Effect.succeed(
+        Message.FailedResumeAudio({ reason: audioFailureReason(error) }),
+      ),
+    ),
+  ),
+})
+
+export const PlaySound = Command.define('PlaySound', {
+  args: { sound: SoundEffect, variation: Schema.Number },
+  messages: [Message.CompletedPlaySound, Message.FailedPlaySound],
+  execute: ({ sound, variation }) =>
+    pipe(
+      AudioEngineResource.get,
+      Effect.flatMap(engine => playSound(engine, sound, variation)),
+      Effect.map(outcome => Message.CompletedPlaySound({ sound, outcome })),
+      Effect.catch(error =>
+        Effect.succeed(
+          Message.FailedPlaySound({
+            sound,
+            reason: audioFailureReason(error),
+          }),
+        ),
+      ),
+    ),
+})
+
 // INIT
 
 export const init: Runtime.ApplicationInit<Model, Message> = () => ({
@@ -75,6 +179,12 @@ export const init: Runtime.ApplicationInit<Model, Message> = () => ({
 })
 
 // UPDATE
+
+type UpdateReturn = Update.Return<Model, Message, AudioServices>
+type UpdateStep = Update.Step<Model, Message, AudioServices>
+
+const START_SOUND_GRACE_MS = 1000
+const MUTE_KEY = 'KeyM'
 
 const withInput = (model: Model, toNextInput: (input: Input) => Input) =>
   refreshIntent(modifyFields(model, { input: toNextInput }))
@@ -90,21 +200,99 @@ const startOrPauseFromKey = (model: Model, code: string): Model => {
   }
 }
 
+const startsRound = (before: Model, after: Model): boolean =>
+  !Phase.guards.Playing(before.phase) &&
+  !Phase.guards.Paused(before.phase) &&
+  Phase.guards.Playing(after.phase)
+
+const isSoundAudible = (model: Model): boolean =>
+  AudioState.guards.Ready(model.audio) && model.soundSetting === 'On'
+
+type SoundCue = Readonly<{ sound: SoundEffect; variation: number }>
+
+const eventSound = (event: GameEvent): SoundEffect =>
+  GameEvent.match(event, {
+    Fired: (): SoundEffect => 'Shot',
+    ZombieHit: (): SoundEffect => 'ZombieHit',
+    ZombieKilled: (): SoundEffect => 'ZombieDeath',
+    PlayerHurt: (): SoundEffect => 'PlayerHurt',
+  })
+
+const eventSoundCue = (event: GameEvent): SoundCue => ({
+  sound: eventSound(event),
+  variation: positionVariation(event.x, event.y),
+})
+
+const frameSoundCues = (
+  events: ReadonlyArray<GameEvent>,
+): ReadonlyArray<SoundCue> =>
+  pipe(
+    events,
+    Array.map(eventSoundCue),
+    Array.dedupeWith((first, second) => first.sound === second.sound),
+  )
+
+const playSounds =
+  (cues: ReadonlyArray<SoundCue>): UpdateStep =>
+  stepModel => {
+    if (isSoundAudible(stepModel)) {
+      return {
+        model: stepModel,
+        commands: Array.map(cues, cue => PlaySound(cue)),
+      }
+    } else {
+      return { model: stepModel }
+    }
+  }
+
+const START_CUE: SoundCue = { sound: 'Start', variation: 0 }
+
+const playStartSoundWhen = (isRoundStart: boolean): UpdateStep =>
+  playSounds(isRoundStart ? [START_CUE] : [])
+
+const unlockAudio: UpdateStep = stepModel =>
+  AudioState.match(stepModel.audio, {
+    Locked: () => ({
+      model: modifyFields(stepModel, { audio: () => AudioState.Unlocking() }),
+    }),
+    Unlocking: () => ({ model: stepModel }),
+    Suspended: () => ({ model: stepModel, commands: [ResumeAudio()] }),
+    Ready: () => ({ model: stepModel }),
+    Unavailable: () => ({ model: stepModel }),
+  })
+
+const toggleSound = (model: Model): Model =>
+  modifyFields(model, {
+    soundSetting: setting => (setting === 'On' ? 'Muted' : 'On'),
+  })
+
+const toggleSoundFromKey = (model: Model, code: string): Model =>
+  code === MUTE_KEY ? toggleSound(model) : model
+
+const isFreshRound = (model: Model): boolean =>
+  Phase.guards.Playing(model.phase) && model.elapsedMs < START_SOUND_GRACE_MS
+
 export const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
+  Message.match<UpdateReturn>(message, {
     TickedFrame: ({ deltaTime }) => {
       if (Phase.guards.Playing(model.phase)) {
-        return { model: advanceGame(model, deltaTime) }
+        const advanced = advanceGame(model, deltaTime)
+        return playSounds(frameSoundCues(advanced.frameEvents))(advanced)
       } else {
         return { model }
       }
     },
 
-    PressedKey: ({ code }) => ({
-      model: withInput(startOrPauseFromKey(model, code), input =>
-        pressKey(input, code),
-      ),
-    }),
+    PressedKey: ({ code }) => {
+      const pressed = withInput(
+        toggleSoundFromKey(startOrPauseFromKey(model, code), code),
+        input => pressKey(input, code),
+      )
+      return Update.combine(pressed, [
+        unlockAudio,
+        playStartSoundWhen(startsRound(model, pressed)),
+      ])
+    },
 
     ReleasedKey: ({ code }) => ({
       model: withInput(model, input => releaseKey(input, code)),
@@ -122,20 +310,21 @@ export const update = (model: Model, message: Message) =>
 
     PressedPointer: press => {
       const started = startOrResume(model)
-      return {
-        model: withInput(started, input =>
-          pressPointer(input, started.maybeSurface, press),
-        ),
-      }
+      const pressed = withInput(started, input =>
+        pressPointer(input, started.maybeSurface, press),
+      )
+      return Update.combine(pressed, [
+        unlockAudio,
+        playStartSoundWhen(startsRound(model, pressed)),
+      ])
     },
 
     MovedPointer: position => ({
       model: withInput(model, input => movePointer(input, position)),
     }),
 
-    ReleasedPointer: ({ pointerId }) => ({
-      model: withInput(model, input => releasePointer(input, pointerId)),
-    }),
+    ReleasedPointer: ({ pointerId }) =>
+      unlockAudio(withInput(model, input => releasePointer(input, pointerId))),
 
     CancelledPointer: ({ pointerId }) => ({
       model: withInput(model, input => releasePointer(input, pointerId)),
@@ -158,6 +347,49 @@ export const update = (model: Model, message: Message) =>
     CompletedGenerateSeed: ({ seed }) => ({
       model: modifyFields(model, { rngState: () => seed }),
     }),
+
+    ClickedMuteButton: () => unlockAudio(toggleSound(model)),
+
+    AcquiredAudioEngine: () => ({
+      model: modifyFields(model, { audio: () => AudioState.Suspended() }),
+      commands: [ResumeAudio()],
+    }),
+
+    FailedAcquireAudioEngine: () => ({
+      model: modifyFields(model, { audio: () => AudioState.Unavailable() }),
+    }),
+
+    ReleasedAudioEngine: () => ({ model }),
+
+    CompletedResumeAudio: ({ playback }) => {
+      if (playback === 'Running') {
+        const ready = modifyFields(model, { audio: () => AudioState.Ready() })
+        return playStartSoundWhen(isFreshRound(ready))(ready)
+      } else {
+        return {
+          model: modifyFields(model, { audio: () => AudioState.Suspended() }),
+        }
+      }
+    },
+
+    FailedResumeAudio: () => ({
+      model: modifyFields(model, { audio: () => AudioState.Suspended() }),
+    }),
+
+    CompletedPlaySound: ({ outcome }) => {
+      if (
+        outcome === 'DroppedWhileSuspended' &&
+        AudioState.guards.Ready(model.audio)
+      ) {
+        return {
+          model: modifyFields(model, { audio: () => AudioState.Suspended() }),
+        }
+      } else {
+        return { model }
+      }
+    },
+
+    FailedPlaySound: () => ({ model }),
   })
 
 // SUBSCRIPTION
