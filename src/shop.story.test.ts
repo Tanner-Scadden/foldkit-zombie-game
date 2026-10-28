@@ -16,6 +16,7 @@ import {
   WAVE_BONUS_PER_WAVE,
   ZOMBIE_MAX_HP,
 } from './constants'
+import { RESTART_GRACE_MS } from './constants'
 import { Message, update } from './main'
 import {
   Arsenal,
@@ -56,6 +57,9 @@ const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
 
 const ticks = (count: number, deltaTime: number) =>
   Array.makeBy(count, () => tick(deltaTime))
+
+const GRACE_TICK_MS = 50
+const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
 
 const press = (code: string) => message(Message.PressedKey({ code }))
 const release = (code: string) => message(Message.ReleasedKey({ code }))
@@ -235,6 +239,7 @@ describe('money', () => {
           200 + SHAMBLER_BOUNTY + waveBonus(FINAL_WAVE),
         )
       }),
+      ...ticks(RESTART_GRACE_TICKS, GRACE_TICK_MS),
       press('Enter'),
       model(({ wallet, player }) => {
         expect(wallet).toEqual({ balance: 0, earned: 0, shown: 0 })

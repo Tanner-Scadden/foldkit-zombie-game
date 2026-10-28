@@ -19,10 +19,10 @@ They use the local Google Chrome or the cached Playwright headless shell.
 | 4174 | The harness                   | `node_modules/.bin/vite tools/audit/harness --port 4174 --strictPort`                                                                                            |
 | 4175 | The harness, built to profile | `node_modules/.bin/vite build tools/audit/harness --outDir dist-profile && bunx vite preview tools/audit/harness --outDir dist-profile --port 4175 --strictPort` |
 
-The harness boots the game's own `init`, `update`, and `view` at a state chosen by query string, such as `?wave=8&start=wave&gun=smg&fill&crowd=30`. It is test tooling only and never ships.
+The harness boots the game's own `init`, `update`, and `view` at a state chosen by query string, such as `?wave=8&start=wave&gun=smg&fill&crowd=30`. `phase=gameover` or `phase=victory` with `stats` fills the run stats panel, `device=touch` shows touch wording, and `px` and `py` place the player. It is test tooling only and never ships.
 
 ## Scripts
 
 - `bun perf.ts` records `requestAnimationFrame` deltas at 1x, 4x, and 6x CPU throttle and writes `perf-<TAG>.json`.
 - `bun profile.ts` profiles one second of the worst case and lists the top costs.
-- `bun shots1.ts` to `bun shots4.ts` take the screenshots into `shots/`.
+- `bun shots1.ts` to `bun shots7.ts` take the screenshots into `shots/`. `shots5.ts` to `shots7.ts` cover step 7: the title, the device hints, the portrait notice, the bands, and the run stats panels.

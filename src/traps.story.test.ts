@@ -5,6 +5,7 @@ import { describe, expect, test } from 'vitest'
 
 import { THRESHOLDS, doorSpawnPoint, isInsideRoomAt } from './arena'
 import { PLAYER_RADIUS, PREPARATION_MS, TURRET_RANGE_PX } from './constants'
+import { RESTART_GRACE_MS } from './constants'
 import { Message, update } from './main'
 import {
   GameEvent,
@@ -366,7 +367,7 @@ describe('placing a turret', () => {
     )
   })
 
-  test('placement is refused on walls, cover, doorways, other traps, and over the limit', () => {
+  test('placement is refused on walls, doorways, and over the limit, even with free floor nearby', () => {
     const refusedWith = (start: Model, reason: string) =>
       story(
         update,
@@ -379,7 +380,7 @@ describe('placing a turret', () => {
       )
 
     refusedWith(
-      stocked(0, 1, { x: 165, y: 25 }, { x: 0, y: 1 }),
+      stocked(0, 1, { x: 165, y: 25 }, { x: 0, y: -1 }),
       'Something is in the way',
     )
     refusedWith(
@@ -388,20 +389,46 @@ describe('placing a turret', () => {
     )
     refusedWith(
       modifyFields(stocked(0, 1, ROOM_MIDDLE), {
-        traps: () => [turret(1, 17, 9)],
-      }),
-      'A trap is already there',
-    )
-    refusedWith(
-      modifyFields(stocked(0, 1, ROOM_MIDDLE), {
         traps: () => [turret(1, 3, 9), turret(2, 25, 9)],
       }),
       'All 2 Grumpy Gnomes are out',
     )
-    refusedWith(
+  })
+
+  test('a blocked front tile falls back to the nearest free tile ahead', () => {
+    const placedTile = (start: Model) => {
+      const placed: Array<readonly [number, number]> = []
+      story(
+        update,
+        given(start),
+        press('KeyT'),
+        model(({ traps }) => {
+          Array.forEach(traps, trap => {
+            if (Trap.guards.Turret(trap) && trap.id !== 1) {
+              placed.push([trap.column, trap.row])
+            }
+          })
+        }),
+      )
+      return placed
+    }
+
+    expect(
+      placedTile(stocked(0, 1, { x: 168, y: 95 }, { x: 1, y: 0 })),
+    ).toEqual([[18, 9]])
+    expect(
+      placedTile(
+        modifyFields(stocked(0, 1, ROOM_MIDDLE), {
+          traps: () => [turret(1, 17, 9)],
+        }),
+      ),
+    ).toEqual([[16, 8]])
+    const besideStall = placedTile(
       stocked(0, 1, { x: 275, y: 135 }, { x: 0, y: 1 }),
-      'Keep the shop stall clear',
     )
+    expect(besideStall).toHaveLength(1)
+    expect(besideStall).not.toContainEqual([27, 14])
+    expect(besideStall).not.toContainEqual([26, 14])
   })
 
   test('G and the NEXT button switch between the kinds the player owns', () => {
@@ -831,7 +858,7 @@ describe('turrets', () => {
           { x: 40, y: 160 },
         ),
       ),
-      ...ticks(20, FRAME_MS),
+      ...ticks(80, FRAME_MS),
       model(({ wallet, zombies }) => {
         expect(wallet.balance).toBe(ZOMBIE_KINDS.Runner.bounty)
         expect(Array.every(zombies, ({ hp }) => hp <= 0)).toBe(true)
@@ -925,6 +952,7 @@ describe('between waves', () => {
       given(
         modifyFields(readyModel, {
           phase: () => Phase.GameOver({ wave: 4 }),
+          screenMs: () => RESTART_GRACE_MS,
           traps: () => damagedTraps,
           trapStock: () => ({ Barricade: 2, Turret: 1 }),
           selectedTrap: () => 'Turret',

@@ -59,7 +59,9 @@ import { advanceParticles } from './particles'
 import { type Clearance, refreshFlowField, steerToward } from './pathing'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
 import { earn, refreshShopPresence } from './shop'
+import { countHits, countShots } from './stats'
 import {
+  TURRET_WEAPON,
   advanceTraps,
   barricadedDoors,
   clearBrokenTraps,
@@ -245,6 +247,7 @@ const shoot = (model: Model, weapon: WeaponKind, deltaMs: number): Model => {
     bullets: bullets => Array.takeRight([...bullets, ...pellets], BULLET_MAX),
     nextEntityId: id => id + pellets.length,
     rngState: () => rngState,
+    stats: runStats => countShots(runStats, pellets.length),
     player: () =>
       modifyFields(player, {
         fireCooldownMs: cooldown => cooldown + stats.fireIntervalMs - deltaMs,
@@ -666,6 +669,11 @@ const resolveBulletHits = (model: Model): Model => {
   return modifyFields(model, {
     bullets: Array.filter(({ id }) => !Array.contains(hitBulletIds, id)),
     zombies: () => zombies,
+    stats: stats =>
+      countHits(
+        stats,
+        Array.filter(hits, ({ weapon }) => weapon !== TURRET_WEAPON).length,
+      ),
     score: score => score + killedZombies.length * SCORE_PER_ZOMBIE,
     wallet: wallet => earn(wallet, bounty),
     frameEvents: frameEvents => [

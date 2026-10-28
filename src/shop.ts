@@ -95,7 +95,7 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
     id: 'Shotgun',
     name: WEAPONS.Shotgun.name,
     blurb: `Five pellets in a wide spray. Short reach, big shove. Comes with ${startingRounds('Shotgun')} shells.`,
-    price: 60,
+    price: 75,
     good: ShopGood.Gun({ weapon: 'Shotgun' }),
   },
   ShotgunShells: {
@@ -109,7 +109,7 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
     id: 'Smg',
     name: WEAPONS.Smg.name,
     blurb: `Fast and a little wobbly. Comes with ${startingRounds('Smg')} rounds.`,
-    price: 90,
+    price: 120,
     good: ShopGood.Gun({ weapon: 'Smg' }),
   },
   SmgRounds: {

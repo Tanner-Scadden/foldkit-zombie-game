@@ -14,7 +14,6 @@ import { Document, Html, HtmlBuilder } from 'foldkit/html'
 
 import { type Box, DOORS, DOOR_IDS, THRESHOLDS, boxCenter } from './arena'
 import {
-  ALERT_GLYPH_COLOR,
   ARENA_HEIGHT,
   ARENA_WIDTH,
   BLAST_FLASH_MS,
@@ -35,6 +34,7 @@ import {
   DUST_COLOR,
   DUST_FADED_COLOR,
   DUST_FADE_MS,
+  GAME_TITLE,
   GIB_SHADOW_COLOR,
   GIB_SHADOW_WIDTH,
   GOO_COLOR,
@@ -105,8 +105,6 @@ import {
   STREAK_WINDOW_MS,
   TRAP_HIT_FLASH_MS,
   TRAP_HIT_PULSE_MS,
-  WAVE_BANNER_MS,
-  WAVE_CLEARED_BANNER_MS,
   WOOD_DECAL_COLOR,
   WOOD_DECAL_FADED_COLOR,
   ZOMBIE_DEATH_FADE_START,
@@ -120,10 +118,17 @@ import {
   ZOMBIE_HIT_PULSE_MS,
   ZOMBIE_HIT_SQUASH,
 } from './constants'
+import {
+  COUNT_SPRITES,
+  GLYPH_HEIGHT,
+  type TextTone,
+  textShapes,
+  textWidth,
+} from './font'
 import { clamp, vectorLength } from './geometry'
 import { thumbOffset } from './input'
 import { POPUP_LIFETIME_MS } from './juice'
-import { Message } from './main'
+import { Message, isSideways } from './main'
 import {
   Arsenal,
   type Blast,
@@ -140,11 +145,11 @@ import {
   type Player,
   type PointerDevice,
   type Popup,
+  type RunStats,
   ShopState,
   Stick,
   Streak,
   Trap,
-  TrapHint,
   type TrapKind,
   TrapNotice,
   TurretGun,
@@ -155,22 +160,17 @@ import {
   ZombieState,
 } from './model'
 import { ROOM_SHAPES } from './room'
+import { overlayShapes, waveLabel } from './screens'
 import { isShopOpenFor } from './shop'
 import { shopDialogView } from './shopView'
 import {
   BARRICADE_SPRITES,
-  COUNT_SPRITES,
   EMPTY_HEART_SPRITE,
   FLASH_HEART_SPRITE,
   type Facing,
-  GLYPH_ADVANCE,
-  GLYPH_HEIGHT,
-  GLYPH_SPRITES,
   GNOME_HEIGHT,
   GNOME_SPRITES,
   GUN_ICONS,
-  type Glyph,
-  type GlyphTone,
   HEART_SPRITE,
   type Lay,
   PLAYER_IDLE_FRAMES,
@@ -184,9 +184,15 @@ import {
   frameAt,
   group,
   gunSprite,
-  toGlyph,
 } from './sprite'
 import { type StallLook, stallShapes } from './stall'
+import {
+  accuracyPercent,
+  defeatVerdict,
+  runTimeLabel,
+  totalKills,
+  victoryVerdict,
+} from './stats'
 import {
   PlaceVerdict,
   type Placement,
@@ -210,7 +216,6 @@ import {
   debutKinds,
   doorCounts,
   isRoundActive,
-  waveBonus,
   zombiesRemaining,
 } from './waves'
 import {
@@ -224,6 +229,7 @@ import {
 import {
   type DeathStyle,
   ZOMBIE_KINDS,
+  ZOMBIE_KIND_ORDER,
   type ZombieKindStats,
   statsOf,
   strideAt,
@@ -267,15 +273,6 @@ const BULLET_SIZE = 2
 const BULLET_COLOR = '#ffe066'
 const HEART_SPACING = 9
 const HUD_MARGIN = 5
-const HUD_FONT = 'bold 8px monospace'
-const HUD_TEXT_COLOR = '#f4f1de'
-const OVERLAY_COLOR = 'rgba(8, 10, 12, 0.72)'
-const TITLE_FONT = 'bold 16px monospace'
-const PROMPT_FONT = 'bold 8px monospace'
-const HINT_FONT = '7px monospace'
-const TITLE_COLOR = '#9be36a'
-const PROMPT_COLOR = '#ffe066'
-const HINT_COLOR = '#b8c2b0'
 
 const placeSprite = (
   x: number,
@@ -1368,27 +1365,16 @@ const blastShapes = (blast: Blast): ReadonlyArray<Canvas.Shape> => {
 
 // POPUPS
 
-const glyphsOf = (text: string): ReadonlyArray<Glyph> =>
-  Array.getSomes(Array.map(String.split(text, ''), toGlyph))
+const POPUP_TOP = -Math.floor(GLYPH_HEIGHT / 2)
 
-const glyphRowShapes = (
+const centeredGlyphs = (
   text: string,
-  tone: GlyphTone,
-): ReadonlyArray<Canvas.Shape> => {
-  const glyphs = glyphsOf(text)
-  const left = -Math.floor((glyphs.length * GLYPH_ADVANCE - 1) / 2)
-  const top = -Math.floor(GLYPH_HEIGHT / 2)
-  return Array.map(glyphs, (glyph, index) =>
-    group({
-      translate: { x: left + index * GLYPH_ADVANCE, y: top },
-      shapes: GLYPH_SPRITES[tone][glyph],
-    }),
-  )
-}
+  tone: TextTone,
+): ReadonlyArray<Canvas.Shape> => textShapes(text, tone, 0, POPUP_TOP, 'Center')
 
 type PopupLook = Readonly<{
   text: string
-  tone: GlyphTone
+  tone: TextTone
   scale: number
   hopPx: number
   risePx: number
@@ -1440,9 +1426,7 @@ const popupShape = (popup: Popup): Canvas.Shape => {
     popup.ageMs < POPUP_HOP_MS
       ? look.hopPx * Math.sin((Math.PI * popup.ageMs) / POPUP_HOP_MS)
       : 0
-  const halfWidth = Math.ceil(
-    (glyphsOf(look.text).length * GLYPH_ADVANCE * look.scale) / 2,
-  )
+  const halfWidth = Math.ceil((textWidth(look.text) * look.scale) / 2)
   return group({
     translate: {
       x: Math.round(
@@ -1452,7 +1436,7 @@ const popupShape = (popup: Popup): Canvas.Shape => {
     },
     scale: { x: look.scale, y: look.scale },
     opacity: 1 - progressBetween(progress, POPUP_FADE_START, 1),
-    shapes: glyphRowShapes(look.text, look.tone),
+    shapes: centeredGlyphs(look.text, look.tone),
   })
 }
 
@@ -1476,7 +1460,7 @@ const streakShapes = (streak: Streak): ReadonlyArray<Canvas.Shape> =>
           translate: { x: STREAK_X, y: STREAK_Y },
           scale: { x: scale, y: scale },
           opacity: remainingMs < STREAK_FADE_MS ? STREAK_FADED_OPACITY : 1,
-          shapes: glyphRowShapes(`x${count}`, 'Streak'),
+          shapes: centeredGlyphs(`x${count}`, 'Streak'),
         }),
       ]
     },
@@ -1537,10 +1521,8 @@ const heartShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
   return Array.makeBy(PLAYER_MAX_HP, heartShape(player.hp, maybeHeartPulseMs))
 }
 
-const SMALL_HUD_FONT = '7px monospace'
-const HUD_SUBTITLE_Y = 12
-
-const waveLabel = (wave: number): string => `WAVE ${wave} / ${FINAL_WAVE}`
+const HUD_TITLE_Y = HUD_MARGIN - 2
+const HUD_SUBTITLE_Y = 11
 
 const secondsLeft = (remainingMs: number): number =>
   Math.ceil(remainingMs / MS_PER_SECOND)
@@ -1548,81 +1530,46 @@ const secondsLeft = (remainingMs: number): number =>
 const hudText = (
   y: number,
   content: string,
-  font: string,
-  fill: string,
-): Canvas.Shape =>
-  Canvas.Text({
-    x: ARENA_WIDTH / 2,
-    y,
-    content,
-    font,
-    fill,
-    align: 'Center',
-    baseline: 'Top',
-  })
+  tone: TextTone,
+): ReadonlyArray<Canvas.Shape> =>
+  textShapes(content, tone, ARENA_WIDTH / 2, y, 'Center')
 
 const roundHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   Phase.match(model.phase, {
     Ready: () => [],
     Preparation: ({ wave, remainingMs }) => [
-      hudText(HUD_MARGIN - 2, waveLabel(wave), HUD_FONT, HUD_TEXT_COLOR),
-      hudText(
+      ...hudText(HUD_TITLE_Y, waveLabel(wave), 'Plain'),
+      ...hudText(
         HUD_SUBTITLE_Y,
         `STARTS IN ${secondsLeft(remainingMs)}`,
-        SMALL_HUD_FONT,
-        PROMPT_COLOR,
+        'Prompt',
       ),
     ],
     Wave: ({ wave, spawns }) => [
-      hudText(HUD_MARGIN - 2, waveLabel(wave), HUD_FONT, HUD_TEXT_COLOR),
-      hudText(
+      ...hudText(HUD_TITLE_Y, waveLabel(wave), 'Plain'),
+      ...hudText(
         HUD_SUBTITLE_Y,
         `ZOMBIES ${zombiesRemaining(model, spawns)}`,
-        SMALL_HUD_FONT,
-        HINT_COLOR,
+        'Hint',
       ),
     ],
-    Paused: ({ round }) => [
-      hudText(HUD_MARGIN - 2, waveLabel(round.wave), HUD_FONT, HUD_TEXT_COLOR),
-    ],
+    Paused: () => [],
     Victory: () => [],
     GameOver: () => [],
   })
 
 const MONEY_Y = HUD_MARGIN + 9
-const MONEY_FONT = 'bold 8px monospace'
-const MONEY_PULSE_SCALE = 1.25
 
 const moneyShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   const { shown, balance } = model.wallet
   const isTicking = shown !== balance
-  const scale = isTicking ? MONEY_PULSE_SCALE : 1
-  return [
-    group({
-      translate: { x: HUD_MARGIN, y: MONEY_Y },
-      scale: { x: scale, y: scale },
-      shapes: [
-        Canvas.Text({
-          x: 0,
-          y: 1,
-          content: `$${shown}`,
-          font: MONEY_FONT,
-          fill: BANNER_SHADOW_COLOR,
-          align: 'Left',
-          baseline: 'Top',
-        }),
-        Canvas.Text({
-          x: 0,
-          y: 0,
-          content: `$${shown}`,
-          font: MONEY_FONT,
-          fill: isTicking ? MUZZLE_FLASH_CORE_COLOR : COIN_COLOR,
-          align: 'Left',
-          baseline: 'Top',
-        }),
-      ],
-    }),
-  ]
+  return textShapes(
+    `$${shown}`,
+    isTicking ? 'Damage' : 'Coin',
+    HUD_MARGIN,
+    isTicking ? MONEY_Y - 1 : MONEY_Y,
+    'Left',
+  )
 }
 
 const SLOT_WIDTH = 34
@@ -1632,8 +1579,7 @@ const SLOT_TOP = ARENA_HEIGHT - HUD_MARGIN - SLOT_HEIGHT
 const SLOT_FILL = 'rgba(8, 10, 12, 0.6)'
 const SLOT_BORDER = 'rgba(244, 241, 222, 0.25)'
 const SLOT_HELD_BORDER = '#ffe066'
-const SLOT_FONT = 'bold 7px monospace'
-const SLOT_EMPTY_COLOR = '#ff6b5e'
+const SLOT_TEXT_TOP = 3
 const ENDLESS_ROUNDS = '\u221e'
 
 type SlotLook = Readonly<{
@@ -1668,15 +1614,13 @@ const slotShapes = (
       onNone: () => [],
       onSome: weapon => [placeSprite(x + 8, SLOT_TOP + 6, GUN_ICONS[weapon])],
     }),
-    Canvas.Text({
-      x: x + SLOT_WIDTH - 3,
-      y: SLOT_TOP + SLOT_HEIGHT / 2 + 1,
-      content: ammo,
-      font: SLOT_FONT,
-      fill: isDry ? SLOT_EMPTY_COLOR : HUD_TEXT_COLOR,
-      align: 'Right',
-      baseline: 'Middle',
-    }),
+    ...textShapes(
+      ammo,
+      isDry ? 'Alert' : 'Plain',
+      x + SLOT_WIDTH - 3,
+      SLOT_TOP + SLOT_TEXT_TOP,
+      'Right',
+    ),
   ]
 }
 
@@ -1732,15 +1676,13 @@ const trapSlotShapes = (
       fill: SLOT_FILL,
     }),
     placeSprite(x + 6, TRAP_SLOT_TOP + 6, TRAP_ICONS[kind]),
-    Canvas.Text({
-      x: x + TRAP_SLOT_WIDTH - 3,
-      y: TRAP_SLOT_TOP + SLOT_HEIGHT / 2 + 1,
-      content: `x${count}`,
-      font: SLOT_FONT,
-      fill: HUD_TEXT_COLOR,
-      align: 'Right',
-      baseline: 'Middle',
-    }),
+    ...textShapes(
+      `x${count}`,
+      'Plain',
+      x + TRAP_SLOT_WIDTH - 3,
+      TRAP_SLOT_TOP + SLOT_TEXT_TOP,
+      'Right',
+    ),
   ]
 }
 
@@ -1760,277 +1702,52 @@ const trapStockShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   )
 }
 
-const TRAP_HINT_Y = 24
 const NOTICE_LIFT_PX = 14
-
-const trapHintText = (kind: TrapKind): string =>
-  kind === 'Barricade'
-    ? 'PRESS T / TAP PLACE IN A DOORWAY'
-    : 'PRESS T / TAP PLACE TO SET THE GNOME DOWN'
-
-const trapHintShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
-  if (!isPlacingNow(model) || !TrapHint.guards.Showing(model.trapHint)) {
-    return []
-  }
-
-  return Option.match(maybeSelectedKind(model), {
-    onNone: () => [],
-    onSome: kind =>
-      bannerText(TRAP_HINT_Y, trapHintText(kind), PROMPT_FONT, PROMPT_COLOR),
-  })
-}
+const NOTICE_MARGIN_PX = 4
 
 const trapNoticeShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   TrapNotice.match(model.trapNotice, {
     Quiet: () => [],
     Refused: ({ reason }) => {
-      const x = clamp(Math.round(model.player.x), 60, ARENA_WIDTH - 60)
-      const y = Math.max(8, Math.round(model.player.y) - NOTICE_LIFT_PX)
       const content = String.toUpperCase(reason)
-      return [
-        Canvas.Text({
-          x,
-          y: y + 1,
-          content,
-          font: HINT_FONT,
-          fill: BANNER_SHADOW_COLOR,
-          align: 'Center',
-          baseline: 'Middle',
-        }),
-        Canvas.Text({
-          x,
-          y,
-          content,
-          font: HINT_FONT,
-          fill: ALERT_GLYPH_COLOR,
-          align: 'Center',
-          baseline: 'Middle',
-        }),
-      ]
+      const halfWidth = Math.ceil(textWidth(content) / 2) + NOTICE_MARGIN_PX
+      const x = clamp(
+        Math.round(model.player.x),
+        halfWidth,
+        ARENA_WIDTH - halfWidth,
+      )
+      const y = Math.max(4, Math.round(model.player.y) - NOTICE_LIFT_PX)
+      return textShapes(content, 'Alert', x, y, 'Center')
     },
   })
 
 const MUTE_BUTTON_CLEARANCE = 34
 const SCORE_RIGHT = ARENA_WIDTH - HUD_MARGIN - MUTE_BUTTON_CLEARANCE
 
-const hudShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
+const isHudShown = (phase: Phase): boolean =>
+  isRoundActive(phase) || Phase.guards.Paused(phase)
+
+const playHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...heartShapes(model.player),
   ...moneyShapes(model),
   ...streakShapes(model.streak),
   ...loadoutShapes(model.player),
   ...trapStockShapes(model),
-  ...trapHintShapes(model),
   ...trapNoticeShapes(model),
   ...roundHudShapes(model),
-  Canvas.Text({
-    x: SCORE_RIGHT,
-    y: HUD_MARGIN,
-    content: `SCORE ${model.score}`,
-    font: HUD_FONT,
-    fill: HUD_TEXT_COLOR,
-    align: 'Right',
-    baseline: 'Top',
-  }),
+  ...(isRoundActive(model.phase)
+    ? textShapes(
+        `SCORE ${model.score}`,
+        'Plain',
+        SCORE_RIGHT,
+        HUD_MARGIN,
+        'Right',
+      )
+    : []),
 ]
 
-const centeredText = (
-  y: number,
-  content: string,
-  font: string,
-  fill: string,
-): Canvas.Shape =>
-  Canvas.Text({
-    x: ARENA_WIDTH / 2,
-    y,
-    content,
-    font,
-    fill,
-    align: 'Center',
-    baseline: 'Middle',
-  })
-
-const OVERLAY_BACKDROP = Canvas.Rect({
-  x: 0,
-  y: 0,
-  width: ARENA_WIDTH,
-  height: ARENA_HEIGHT,
-  fill: OVERLAY_COLOR,
-})
-
-const START_PROMPT = 'TAP, CLICK OR PRESS ENTER'
-
-const CONTROL_HINTS: ReadonlyArray<Canvas.Shape> = [
-  centeredText(
-    128,
-    'KEYS: WASD OR ARROWS MOVE, MOUSE AIMS, CLICK OR SPACE FIRES',
-    HINT_FONT,
-    HINT_COLOR,
-  ),
-  centeredText(
-    140,
-    'TOUCH: LEFT THUMB MOVES, RIGHT THUMB AIMS AND FIRES',
-    HINT_FONT,
-    HINT_COLOR,
-  ),
-]
-
-const VICTORY_COLOR = '#ffd23f'
-const DEFEAT_COLOR = '#e8333a'
-const BANNER_SHADOW_COLOR = '#140c10'
-const BANNER_Y = 66
-const BANNER_SUBTITLE_Y = 84
-const TUTORIAL_BANNER_Y = 60
-const TUTORIAL_SUBTITLE_Y = 76
-
-const bannerText = (
-  y: number,
-  content: string,
-  font: string,
-  fill: string,
-): ReadonlyArray<Canvas.Shape> => [
-  centeredText(y + 1, content, font, BANNER_SHADOW_COLOR),
-  centeredText(y, content, font, fill),
-]
-
-const NEW_KIND_BANNER_MS = 3600
-const NEW_KIND_COLOR = '#ff8a3d'
-const NEW_KIND_ICON_Y = 50
-const NEW_KIND_ICON_SCALE = 3
-const NEW_KIND_HOP_MS = 260
-
-const newKindBanner = (
-  kind: ZombieKind,
-  shownMs: number,
-): ReadonlyArray<Canvas.Shape> => {
-  const hop =
-    shownMs < NEW_KIND_HOP_MS
-      ? 1 + 0.5 * Math.sin((Math.PI * shownMs) / NEW_KIND_HOP_MS)
-      : 1
-  const scale = NEW_KIND_ICON_SCALE * hop
-  const stats = ZOMBIE_KINDS[kind]
-  return [
-    group({
-      translate: { x: ARENA_WIDTH / 2, y: NEW_KIND_ICON_Y },
-      scale: { x: scale, y: scale },
-      shapes: ZOMBIE_SPRITES[kind].icon,
-    }),
-    ...bannerText(
-      BANNER_Y + 10,
-      `NEW: ${String.toUpperCase(stats.name)}`,
-      TITLE_FONT,
-      NEW_KIND_COLOR,
-    ),
-    ...bannerText(
-      BANNER_SUBTITLE_Y + 10,
-      stats.tagline,
-      PROMPT_FONT,
-      PROMPT_COLOR,
-    ),
-  ]
-}
-
-const debutBanner = (
-  wave: number,
-  shownMs: number,
-): ReadonlyArray<Canvas.Shape> =>
-  Option.match(Array.head(debutKinds(wave)), {
-    onNone: () => [],
-    onSome: kind =>
-      shownMs < NEW_KIND_BANNER_MS ? newKindBanner(kind, shownMs) : [],
-  })
-
-const preparationBanner = (
-  wave: number,
-  remainingMs: number,
-  durationMs: number,
-): ReadonlyArray<Canvas.Shape> => {
-  if (wave === 1) {
-    return [
-      ...bannerText(TUTORIAL_BANNER_Y, 'GET READY', TITLE_FONT, TITLE_COLOR),
-      ...bannerText(
-        TUTORIAL_SUBTITLE_Y,
-        'MOVE AND SHOOT. ENTER OR R STARTS THE WAVE',
-        HINT_FONT,
-        HINT_COLOR,
-      ),
-    ]
-  } else if (durationMs - remainingMs < WAVE_CLEARED_BANNER_MS) {
-    return [
-      ...bannerText(BANNER_Y, 'WAVE CLEARED', TITLE_FONT, VICTORY_COLOR),
-      ...bannerText(
-        BANNER_SUBTITLE_Y,
-        `+$${waveBonus(wave - 1)} BONUS. THE $ STALL IS OPEN`,
-        PROMPT_FONT,
-        PROMPT_COLOR,
-      ),
-    ]
-  } else {
-    return debutBanner(wave, durationMs - remainingMs - WAVE_CLEARED_BANNER_MS)
-  }
-}
-
-const waveBanner = (
-  wave: number,
-  elapsedMs: number,
-): ReadonlyArray<Canvas.Shape> =>
-  elapsedMs < WAVE_BANNER_MS
-    ? [
-        ...bannerText(BANNER_Y, `WAVE ${wave}`, TITLE_FONT, DEFEAT_COLOR),
-        ...bannerText(
-          BANNER_SUBTITLE_Y,
-          'HERE THEY COME',
-          PROMPT_FONT,
-          PROMPT_COLOR,
-        ),
-      ]
-    : []
-
-const earnedLabel = (model: Model): string => `EARNED $${model.wallet.earned}`
-
-const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
-  Phase.match(model.phase, {
-    Ready: () => [
-      OVERLAY_BACKDROP,
-      centeredText(58, 'ZOMBIE SHOOTER', TITLE_FONT, TITLE_COLOR),
-      centeredText(92, START_PROMPT, PROMPT_FONT, PROMPT_COLOR),
-      ...CONTROL_HINTS,
-    ],
-    Preparation: ({ wave, remainingMs, durationMs }) =>
-      preparationBanner(wave, remainingMs, durationMs),
-    Wave: ({ wave, elapsedMs }) => waveBanner(wave, elapsedMs),
-    Paused: ({ round }) => [
-      OVERLAY_BACKDROP,
-      centeredText(62, 'PAUSED', TITLE_FONT, TITLE_COLOR),
-      centeredText(82, waveLabel(round.wave), PROMPT_FONT, HUD_TEXT_COLOR),
-      centeredText(102, `${START_PROMPT} TO RESUME`, PROMPT_FONT, PROMPT_COLOR),
-    ],
-    Victory: () => [
-      OVERLAY_BACKDROP,
-      centeredText(56, 'YOU SURVIVED!', TITLE_FONT, VICTORY_COLOR),
-      centeredText(
-        78,
-        `ALL ${FINAL_WAVE} WAVES CLEARED`,
-        PROMPT_FONT,
-        HUD_TEXT_COLOR,
-      ),
-      centeredText(92, `SCORE ${model.score}`, PROMPT_FONT, HUD_TEXT_COLOR),
-      centeredText(104, earnedLabel(model), PROMPT_FONT, COIN_COLOR),
-      centeredText(
-        124,
-        `${START_PROMPT} TO PLAY AGAIN`,
-        PROMPT_FONT,
-        PROMPT_COLOR,
-      ),
-    ],
-    GameOver: ({ wave }) => [
-      OVERLAY_BACKDROP,
-      centeredText(56, 'GAME OVER', TITLE_FONT, DEFEAT_COLOR),
-      centeredText(78, waveLabel(wave), PROMPT_FONT, HUD_TEXT_COLOR),
-      centeredText(92, `SCORE ${model.score}`, PROMPT_FONT, HUD_TEXT_COLOR),
-      centeredText(104, earnedLabel(model), PROMPT_FONT, COIN_COLOR),
-      centeredText(124, `${START_PROMPT} TO RETRY`, PROMPT_FONT, PROMPT_COLOR),
-    ],
-  })
+const hudShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+  isHudShown(model.phase) ? playHudShapes(model) : []
 
 // WAVE PREVIEW
 
@@ -2045,12 +1762,7 @@ const DOOR_MARKER_BACK_WIDTH = 24
 
 const countShapes = (count: number): ReadonlyArray<Canvas.Shape> =>
   Option.match(Array.get(COUNT_SPRITES, count), {
-    onNone: () => [
-      group({
-        translate: { x: GLYPH_ADVANCE * 2, y: 0 },
-        shapes: glyphRowShapes(`x${count}`, 'Kill'),
-      }),
-    ],
+    onNone: () => textShapes(`x${count}`, 'Kill', 0, -2, 'Left'),
     onSome: sprite => sprite,
   })
 
@@ -2130,7 +1842,12 @@ const stallLook = (model: Model): StallLook => {
   }
 }
 
-const worldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
+const titleWorldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
+  ...ROOM_SHAPES,
+  ...stallShapes('Closed', model.screenMs),
+]
+
+const playWorldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...ROOM_SHAPES,
   ...decalShapes(model.decals),
   ...stallShapes(stallLook(model), model.elapsedMs),
@@ -2143,6 +1860,11 @@ const worldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...airborneParticleShapes(model.particles),
   ...Array.map(model.popups, popupShape),
 ]
+
+const worldShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+  Phase.guards.Ready(model.phase)
+    ? titleWorldShapes(model)
+    : playWorldShapes(model)
 
 export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   group({ translate: shakeOffset(model), shapes: worldShapes(model) }),
@@ -2160,19 +1882,38 @@ const shopHint = (model: Model): string =>
     ? ' The shop stall in the bottom right corner is open. Walk up to its sign to browse.'
     : ''
 
-export const statusText = (model: Model): string =>
-  Phase.match(model.phase, {
-    Ready: () => 'Tap, click, or press Enter to start.',
+const PLAY_AGAIN = 'Tap, click, or press Enter to play again.'
+
+const killLabel = (stats: RunStats): string =>
+  pipe(
+    ZOMBIE_KIND_ORDER,
+    Array.map(kind => `${stats.kills[kind]} ${ZOMBIE_KINDS[kind].name}`),
+    Array.join(', '),
+  )
+
+const statsLabel = (model: Model): string => {
+  const { stats } = model
+  return `Waves cleared: ${stats.wavesCleared} of ${FINAL_WAVE}. Zombies munched back: ${totalKills(stats)} (${killLabel(stats)}). Run time ${runTimeLabel(stats)}. Accuracy ${accuracyPercent(stats)} percent. Money earned $${model.wallet.earned}. Hearts lost ${stats.heartsLost}. Traps placed ${stats.trapsPlaced}. Score ${model.score}.`
+}
+
+export const statusText = (model: Model): string => {
+  if (isSideways(model)) {
+    return 'Paused. Turn your phone sideways to play.'
+  }
+
+  return Phase.match(model.phase, {
+    Ready: () => `${GAME_TITLE}. Tap, click, or press Enter to start.`,
     Preparation: ({ wave }) =>
       `Get ready for ${statusWave(wave)}. Press Enter or R, or use the Start wave button, to start it now.${shopHint(model)}`,
     Wave: ({ wave }) => `Fighting ${statusWave(wave)}.`,
     Paused: ({ round }) =>
       `Paused during ${statusWave(round.wave)}. Tap, click, or press Enter to resume.`,
     Victory: () =>
-      `Victory. All ${FINAL_WAVE} waves survived. Score ${model.score}. Earned $${model.wallet.earned}. Tap, click, or press Enter to play again.`,
+      `Victory. ${victoryVerdict(model.stats)}. ${statsLabel(model)} ${PLAY_AGAIN}`,
     GameOver: ({ wave }) =>
-      `Game over on ${statusWave(wave)}. Score ${model.score}. Earned $${model.wallet.earned}. Tap, click, or press Enter to play again.`,
+      `Game over. ${defeatVerdict(wave, model.stats)}. ${statsLabel(model)} ${PLAY_AGAIN}`,
   })
+}
 
 const gunLabel = (model: Model): string => {
   const held = WEAPONS[heldWeapon(model.player.arsenal)].name
@@ -2454,12 +2195,41 @@ const preparationControlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
     GameOver: () => h.empty,
   })
 
+const ROTATE_TITLE_ID = 'rotate-title'
+const ROTATE_BODY_ID = 'rotate-body'
+
+const sidewaysView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isSideways(model)
+    ? h.div(
+        [
+          h.Class('rotate-overlay'),
+          h.Role('dialog'),
+          h.AriaModal(true),
+          h.AriaLabelledBy(ROTATE_TITLE_ID),
+          h.AriaDescribedBy(ROTATE_BODY_ID),
+        ],
+        [
+          h.div([h.Class('rotate-phone'), h.AriaHidden(true)]),
+          h.h2(
+            [h.Id(ROTATE_TITLE_ID), h.Class('rotate-title')],
+            ['Turn your phone sideways'],
+          ),
+          h.p(
+            [h.Id(ROTATE_BODY_ID), h.Class('rotate-body')],
+            [
+              `${GAME_TITLE} plays in landscape. The game waits until you turn it.`,
+            ],
+          ),
+        ],
+      )
+    : h.empty
+
 export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
-  title: 'Zombie Shooter',
+  title: GAME_TITLE,
   body: h.main(
     [h.Class('game-root')],
     [
-      h.h1([h.Class('sr-only')], ['Zombie Shooter']),
+      h.h1([h.Class('sr-only')], [GAME_TITLE]),
       h.p([h.Class('sr-only'), h.Role('status')], [statusText(model)]),
       h.div(
         [
@@ -2490,6 +2260,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       swapButtonView(model, h),
       muteButtonView(model, h),
       shopDialogView(model, h),
+      sidewaysView(model, h),
     ],
   ),
 })

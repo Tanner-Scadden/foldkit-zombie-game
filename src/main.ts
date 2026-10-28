@@ -33,7 +33,11 @@ import {
   releaseAudioEngine,
   resumeAudio,
 } from './audio'
-import { SHAKE_TRAUMA_MAX, TRAP_PLACE_TRAUMA } from './constants'
+import {
+  RESTART_GRACE_MS,
+  SHAKE_TRAUMA_MAX,
+  TRAP_PLACE_TRAUMA,
+} from './constants'
 import {
   type TrapChoice,
   type WeaponChoice,
@@ -56,16 +60,26 @@ import {
   AudioState,
   GameEvent,
   type Input,
+  InputDevice,
   Model,
+  type Orientation,
   Phase,
   PointerDevice,
   ShopItemId,
   ShopState,
   initialModel,
 } from './model'
+import {
+  learnFromFrame,
+  learnShop,
+  learnStartWave,
+  learnSwap,
+  moveHintBand,
+} from './onboarding'
 import { burstCoins, puffDust } from './particles'
 import { isBrowsing, purchase, shopItemElementId } from './shop'
-import { advanceGame, refreshIntent } from './simulation'
+import { advanceGame, clampFrameDelta, refreshIntent } from './simulation'
+import { tallyFrame } from './stats'
 import {
   TRAPS,
   cycleTrap,
@@ -119,6 +133,7 @@ export const Message = defineMessageUnion({
     height: Schema.Number,
   },
   CompletedGenerateSeed: { seed: Schema.Number },
+  CompletedDetectInputDevice: { device: InputDevice },
   ClickedMuteButton: {},
   ClickedStartWaveButton: {},
   ClickedSwapButton: {},
@@ -180,6 +195,19 @@ export const GenerateSeed = Command.define('GenerateSeed', {
   ),
 })
 
+const COARSE_POINTER_QUERY = '(pointer: coarse)'
+
+export const DetectInputDevice = Command.define('DetectInputDevice', {
+  messages: [Message.CompletedDetectInputDevice],
+  execute: Effect.sync(() =>
+    Message.CompletedDetectInputDevice({
+      device: window.matchMedia(COARSE_POINTER_QUERY).matches
+        ? 'Touch'
+        : 'KeyboardMouse',
+    }),
+  ),
+})
+
 const audioFailureReason = (
   error: AudioEngineError | ManagedResource.ResourceNotAvailable,
 ): string =>
@@ -234,7 +262,7 @@ export const FocusShopItem = Command.define('FocusShopItem', {
 
 export const init: Runtime.ApplicationInit<Model, Message> = () => ({
   model: initialModel,
-  commands: [GenerateSeed()],
+  commands: [GenerateSeed(), DetectInputDevice()],
 })
 
 // UPDATE
@@ -248,6 +276,52 @@ const MUTE_KEY = 'KeyM'
 const withInput = (model: Model, toNextInput: (input: Input) => Input) =>
   refreshIntent(modifyFields(model, { input: toNextInput }))
 
+export const isSideways = (model: Model): boolean =>
+  model.lastDevice === 'Touch' && model.orientation === 'Portrait'
+
+const useDevice = (model: Model, device: InputDevice): Model =>
+  model.lastDevice === device
+    ? model
+    : modifyFields(model, { lastDevice: () => device })
+
+const orientationOf = (width: number, height: number): Orientation =>
+  height > width ? 'Portrait' : 'Landscape'
+
+const isPastRestartGrace = (model: Model): boolean =>
+  model.screenMs >= RESTART_GRACE_MS
+
+const canStart = (model: Model): boolean =>
+  !isSideways(model) &&
+  Phase.match(model.phase, {
+    Ready: () => true,
+    Preparation: () => false,
+    Wave: () => false,
+    Paused: () => true,
+    Victory: () => isPastRestartGrace(model),
+    GameOver: () => isPastRestartGrace(model),
+  })
+
+const startWhenAllowed = (model: Model): Model =>
+  canStart(model) ? startOrResume(model) : model
+
+const isScreenAnimated = (phase: Phase): boolean =>
+  Phase.guards.Ready(phase) ||
+  Phase.guards.Victory(phase) ||
+  Phase.guards.GameOver(phase)
+
+const isFrameActive = (model: Model): boolean =>
+  !isSideways(model) &&
+  (isRoundActive(model.phase) || isScreenAnimated(model.phase))
+
+const hasStartedWave = (before: Model, after: Model): boolean =>
+  Phase.guards.Preparation(before.phase) && Phase.guards.Wave(after.phase)
+
+const learnStartWaveWhen = (before: Model, after: Model): Model =>
+  hasStartedWave(before, after) ? learnStartWave(after) : after
+
+const learnSwapWhen = (before: Model, after: Model): Model =>
+  changedWeapon(before, after) ? learnSwap(after) : after
+
 const preparationFromKey = (model: Model, code: string): Model => {
   if (isPauseKey(code)) {
     return pause(model)
@@ -259,7 +333,7 @@ const preparationFromKey = (model: Model, code: string): Model => {
 }
 
 const startFromKey = (model: Model, code: string): Model =>
-  isStartKey(code) ? startOrResume(model) : model
+  isStartKey(code) ? startWhenAllowed(model) : model
 
 const WEAPON_CHOICES: Readonly<
   Record<WeaponChoice, (arsenal: Arsenal) => Arsenal>
@@ -501,6 +575,16 @@ const trapFromKey: (code: string) => UpdateStep = code => stepModel =>
     onSome: choice => TRAP_CHOICES[choice](stepModel),
   })
 
+const pauseWhenSideways: UpdateStep = stepModel =>
+  isSideways(stepModel) && isRoundActive(stepModel.phase)
+    ? Update.combine(stepModel, [
+        closeShop,
+        sidewaysModel => ({
+          model: withInput(pause(sidewaysModel), releaseAll),
+        }),
+      ])
+    : { model: stepModel }
+
 const unlockAudio: UpdateStep = stepModel =>
   AudioState.match(stepModel.audio, {
     Locked: () => ({
@@ -528,34 +612,55 @@ export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
     TickedFrame: ({ deltaTime }) => {
       if (isRoundActive(model.phase)) {
-        const advanced = advanceGame(model, deltaTime)
+        const advanced = moveHintBand(
+          learnFromFrame(
+            tallyFrame(
+              model,
+              advanceGame(model, deltaTime),
+              clampFrameDelta(deltaTime),
+            ),
+          ),
+        )
         const hasEnteredShop =
           !isBrowsing(model.shop) && isBrowsing(advanced.shop)
-        return Update.combine(advanced, [
+        return Update.combine(hasEnteredShop ? learnShop(advanced) : advanced, [
           playSounds(frameSoundCues(advanced.frameEvents)),
           ...(hasEnteredShop ? [enterShop] : []),
           closeShopOutsidePreparation,
         ])
+      } else if (isScreenAnimated(model.phase)) {
+        return {
+          model: modifyFields(model, {
+            screenMs: screenMs => screenMs + clampFrameDelta(deltaTime),
+          }),
+        }
       } else {
         return { model }
       }
     },
 
     PressedKey: ({ code }) => {
-      if (isBrowsing(model.shop)) {
+      const keyed = useDevice(model, 'KeyboardMouse')
+      if (isBrowsing(keyed.shop)) {
         return unlockAudio(
-          withInput(toggleSoundFromKey(model, code), input =>
+          withInput(toggleSoundFromKey(keyed, code), input =>
             pressKey(input, code),
           ),
         )
       }
 
-      const pressed = withInput(
-        weaponFromKey(
-          toggleSoundFromKey(phaseFromKey(model, code), code),
-          code,
+      const pressed = learnSwapWhen(
+        model,
+        learnStartWaveWhen(
+          model,
+          withInput(
+            weaponFromKey(
+              toggleSoundFromKey(phaseFromKey(keyed, code), code),
+              code,
+            ),
+            input => pressKey(input, code),
+          ),
         ),
-        input => pressKey(input, code),
       )
       return Update.combine(pressed, [
         unlockAudio,
@@ -583,13 +688,16 @@ export const update = (model: Model, message: Message) =>
     },
 
     PressedPointer: press => {
-      const started = startOrResume(model)
+      const started = startWhenAllowed(
+        useDevice(model, press.device === 'Touch' ? 'Touch' : 'KeyboardMouse'),
+      )
       const pressed = withInput(started, input =>
         pressPointer(input, started.maybeSurface, press),
       )
       return Update.combine(pressed, [
         unlockAudio,
         playStartSoundWhen(startsRun(model, pressed)),
+        pauseWhenSideways,
       ])
     },
 
@@ -605,30 +713,40 @@ export const update = (model: Model, message: Message) =>
     }),
 
     MovedMouse: ({ clientX, clientY }) => ({
-      model: withInput(model, input =>
+      model: withInput(useDevice(model, 'KeyboardMouse'), input =>
         moveMouse(input, model.maybeSurface, { x: clientX, y: clientY }),
       ),
     }),
 
     SuppressedContextMenu: () => ({ model }),
 
-    MeasuredGameSurface: surface => ({
-      model: modifyFields(model, {
-        maybeSurface: () => Option.some(surface),
-      }),
-    }),
+    MeasuredGameSurface: surface =>
+      pauseWhenSideways(
+        modifyFields(model, {
+          maybeSurface: () => Option.some(surface),
+          orientation: () => orientationOf(surface.width, surface.height),
+        }),
+      ),
 
     CompletedGenerateSeed: ({ seed }) => ({
       model: modifyFields(model, { rngState: () => seed }),
     }),
 
+    CompletedDetectInputDevice: ({ device }) =>
+      pauseWhenSideways(useDevice(model, device)),
+
     ClickedMuteButton: () => unlockAudio(toggleSound(model)),
 
     ClickedStartWaveButton: () =>
-      isBrowsing(model.shop) ? { model } : unlockAudio(startWaveEarly(model)),
+      isBrowsing(model.shop)
+        ? { model }
+        : unlockAudio(learnStartWaveWhen(model, startWaveEarly(model))),
 
     ClickedSwapButton: () => {
-      const swapped = refreshIntent(chooseWeapon(model, 'Swap'))
+      const swapped = learnSwapWhen(
+        model,
+        refreshIntent(chooseWeapon(model, 'Swap')),
+      )
       return Update.combine(swapped, [
         unlockAudio,
         playSwapSoundWhen(changedWeapon(model, swapped)),
@@ -790,7 +908,7 @@ const mouseMessages = Dom.streamFromEventFilterMap({
 
 export const subscriptions = Subscription.make<Model, Message>()(entry => ({
   frame: Subscription.animationFrameEntry({
-    isActive: model => isRoundActive(model.phase),
+    isActive: isFrameActive,
     toMessage: deltaTime => Message.TickedFrame({ deltaTime }),
   }),
 

@@ -185,7 +185,7 @@ describe('the kind table', () => {
     )
   })
 
-  test('a Runner dies to one pistol hit and a Tank takes its full health', () => {
+  test('a Runner and a Tank each take their full health in pistol hits', () => {
     const runner = zombieOf('Runner', 1, 200, 60)
     const tank = zombieOf('Tank', 2, 100, 100)
     const tankHp = ZOMBIE_KINDS.Tank.hp
@@ -195,7 +195,10 @@ describe('the kind table', () => {
       given(
         withScene(
           [runner, tank],
-          [pistolInto(10, runner), ...pistolsInto(20, tankHp - 1, tank)],
+          [
+            ...pistolsInto(10, ZOMBIE_KINDS.Runner.hp, runner),
+            ...pistolsInto(20, tankHp - 1, tank),
+          ],
         ),
       ),
       tick(FRAME_MS),
@@ -297,7 +300,10 @@ describe('exploders', () => {
       given(
         withScene(
           [left, right, shambler, tank],
-          Array.flatten([pistolsInto(10, 2, left), pistolsInto(20, 2, right)]),
+          Array.flatten([
+            pistolsInto(10, ZOMBIE_KINDS.Exploder.hp, left),
+            pistolsInto(20, ZOMBIE_KINDS.Exploder.hp, right),
+          ]),
         ),
       ),
       tick(FRAME_MS),
@@ -339,7 +345,12 @@ describe('exploders', () => {
 
     story(
       update,
-      given(withScene([first, second], pistolsInto(10, 2, first))),
+      given(
+        withScene(
+          [first, second],
+          pistolsInto(10, ZOMBIE_KINDS.Exploder.hp, first),
+        ),
+      ),
       ...recordTicks(60, FRAME_MS, frames),
     )
 
@@ -549,7 +560,7 @@ describe('spawn tables', () => {
         }),
       ),
       message(Message.PressedKey({ code: 'Enter' })),
-      ...Array.flatMap(ticks(500, 50), frame => [
+      ...Array.flatMap(ticks(1000, 50), frame => [
         frame,
         model((current: Model) => {
           Array.forEach(current.zombies, zombie => {

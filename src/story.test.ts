@@ -41,6 +41,7 @@ import {
   ZOMBIE_KNOCKBACK_SPEED,
   ZOMBIE_MAX_HP,
 } from './constants'
+import { RESTART_GRACE_MS } from './constants'
 import { Message, update } from './main'
 import {
   type Bullet,
@@ -121,6 +122,9 @@ const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
 
 const ticks = (count: number, deltaTime: number) =>
   Array.makeBy(count, () => tick(deltaTime))
+
+const GRACE_TICK_MS = 50
+const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
 
 const waitOutFreeze = (freezeMs: number) =>
   Array.makeBy(Math.ceil(freezeMs / FRAME_MS), index =>
@@ -290,7 +294,7 @@ describe('zombies', () => {
     )
   })
 
-  test('a zombie takes two pistol hits to die and scores on the kill', () => {
+  test('a zombie takes its health in pistol hits to die and scores on the kill', () => {
     story(
       update,
       given(
@@ -313,7 +317,7 @@ describe('zombies', () => {
         ])
         expect(score).toBe(0)
       }),
-      ...ticks(10, FRAME_MS),
+      ...ticks(25, FRAME_MS),
       model(({ zombies, score }) => {
         const struck = Option.getOrThrow(Array.head(zombies))
         expect(struck.hp).toBe(0)
@@ -479,6 +483,7 @@ describe('zombies', () => {
       model(({ elapsedMs }) => {
         expect(elapsedMs).toBe(16)
       }),
+      ...ticks(RESTART_GRACE_TICKS, GRACE_TICK_MS),
       message(Message.PressedKey({ code: 'Enter' })),
       model(({ phase, player, score, zombies }) => {
         expect(Phase.guards.Preparation(phase)).toBe(true)
@@ -747,6 +752,7 @@ describe('particles and decals', () => {
   test('a new round clears the particles and decals', () => {
     const messyModel = modifyFields(playingModel, {
       phase: () => Phase.GameOver({ wave: 2 }),
+      screenMs: () => RESTART_GRACE_MS,
       particles: () => [
         {
           kind: 'MeatGib',
@@ -1130,6 +1136,7 @@ describe('hit-stop', () => {
       given(
         modifyFields(massacreModel(4), {
           phase: () => Phase.GameOver({ wave: 3 }),
+          screenMs: () => RESTART_GRACE_MS,
           hitStop: () => HitStop.Frozen({ remainingMs: 30 }),
           shake: () => ({ trauma: 0.5, offset: { x: 1, y: -1 } }),
           streak: () => Streak.Hot({ count: 4, remainingMs: 100 }),

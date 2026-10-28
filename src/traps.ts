@@ -53,6 +53,7 @@ import {
   type Zombie,
   ZombieState,
 } from './model'
+import { countTrapPlaced } from './stats'
 import { WEAPONS } from './weapons'
 import { Behavior, isWalking, radiusOf, statsOf } from './zombies'
 
@@ -626,33 +627,111 @@ const barricadePlacement = (model: Model, isBetweenWaves: boolean) =>
 const tileCoordinate = (position: number): number =>
   Math.floor(position / TILE_SIZE)
 
+const TURRET_SEARCH_PX = 15
+
+type FloorTile = Readonly<{ column: number; row: number }>
+
+const floorVerdict = (
+  model: Model,
+  { column, row }: FloorTile,
+): PlaceVerdict => {
+  const index = tileIndex(column, row)
+  const box = tileBox({ column, row })
+  const isOccupied = Array.some(model.traps, trap =>
+    Array.contains(trapTileIndices(trap), index),
+  )
+  return firstReason([
+    [!isWalkableTile(column, row), 'Something is in the way'],
+    [isDoorTile(column, row), 'Doorways are for Plank Piles'],
+    [isOccupied, 'A trap is already there'],
+    [Array.contains(STALL_FRONT, index), 'Keep the shop stall clear'],
+    [
+      circleTouchesBox(model.player, PLAYER_RADIUS, box),
+      'Too close. Step back',
+    ],
+    [isZombieInBox(model.zombies, box), 'A zombie is in the way'],
+  ])
+}
+
+const SEARCH_OFFSETS: ReadonlyArray<number> = [-2, -1, 0, 1, 2]
+
+const nearbyFloorTiles = (
+  player: Player,
+  front: Vector,
+): ReadonlyArray<FloorTile> => {
+  const frontColumn = tileCoordinate(front.x)
+  const frontRow = tileCoordinate(front.y)
+  const distanceFromFront = ({ column, row }: FloorTile): number => {
+    const center = boxCenter(tileBox({ column, row }))
+    return Math.hypot(center.x - front.x, center.y - front.y)
+  }
+  const isAhead = ({ column, row }: FloorTile): boolean => {
+    const center = boxCenter(tileBox({ column, row }))
+    return (
+      (center.x - player.x) * player.facing.x +
+        (center.y - player.y) * player.facing.y >
+      0
+    )
+  }
+  const isFront = ({ column, row }: FloorTile): boolean =>
+    column === frontColumn && row === frontRow
+  return pipe(
+    SEARCH_OFFSETS,
+    Array.flatMap(rowOffset =>
+      Array.map(SEARCH_OFFSETS, columnOffset => ({
+        column: frontColumn + columnOffset,
+        row: frontRow + rowOffset,
+      })),
+    ),
+    Array.filter(
+      tile =>
+        !isFront(tile) &&
+        isAhead(tile) &&
+        distanceFromFront(tile) <= TURRET_SEARCH_PX,
+    ),
+    Array.sort(Order.mapInput(Order.Number, distanceFromFront)),
+  )
+}
+
+const floorPlacement = (tile: FloorTile, verdict: PlaceVerdict): Placement => ({
+  kind: 'Turret',
+  maybeSpot: Option.some(TrapSpot.Floor(tile)),
+  verdict,
+})
+
 const turretPlacement = (model: Model, isBetweenWaves: boolean): Placement => {
   const { player } = model
   const front = addVectors(
     player,
     scaleVector(player.facing, TURRET_PLACE_REACH_PX),
   )
-  const column = tileCoordinate(front.x)
-  const row = tileCoordinate(front.y)
-  const index = tileIndex(column, row)
-  const box = tileBox({ column, row })
-  const isOccupied = Array.some(model.traps, trap =>
-    Array.contains(trapTileIndices(trap), index),
-  )
-  return {
-    kind: 'Turret',
-    maybeSpot: Option.some(TrapSpot.Floor({ column, row })),
-    verdict: firstReason([
-      [!isBetweenWaves, 'Traps go down between waves'],
-      [isAtLimit(model, 'Turret'), limitReason('Turret')],
-      [!isWalkableTile(column, row), 'Something is in the way'],
-      [isDoorTile(column, row), 'Doorways are for Plank Piles'],
-      [isOccupied, 'A trap is already there'],
-      [Array.contains(STALL_FRONT, index), 'Keep the shop stall clear'],
-      [circleTouchesBox(player, PLAYER_RADIUS, box), 'Too close. Step back'],
-      [isZombieInBox(model.zombies, box), 'A zombie is in the way'],
-    ]),
+  const frontTile: FloorTile = {
+    column: tileCoordinate(front.x),
+    row: tileCoordinate(front.y),
   }
+  const roundVerdict = firstReason([
+    [!isBetweenWaves, 'Traps go down between waves'],
+    [isAtLimit(model, 'Turret'), limitReason('Turret')],
+  ])
+  if (PlaceVerdict.guards.Blocked(roundVerdict)) {
+    return floorPlacement(frontTile, roundVerdict)
+  }
+
+  const frontVerdict = floorVerdict(model, frontTile)
+  if (PlaceVerdict.guards.Placeable(frontVerdict)) {
+    return floorPlacement(frontTile, frontVerdict)
+  }
+
+  return pipe(
+    nearbyFloorTiles(player, front),
+    Array.findFirst(tile =>
+      PlaceVerdict.guards.Placeable(floorVerdict(model, tile)),
+    ),
+    Option.match({
+      onNone: () => floorPlacement(frontTile, frontVerdict),
+      onSome: tile => floorPlacement(tile, PlaceVerdict.Placeable()),
+    }),
+  )
 }
 
 export const maybePlacement = (model: Model): Option.Option<Placement> =>
@@ -726,6 +805,7 @@ export const placeTrap = (model: Model): Result.Result<Placed, string> =>
                   player: player => stepOutOfDoorway(player, spot),
                   trapHint: () => TrapHint.Seen(),
                   trapNotice: () => TrapNotice.Quiet(),
+                  stats: countTrapPlaced,
                 }),
               })
             },

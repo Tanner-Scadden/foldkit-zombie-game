@@ -1,4 +1,5 @@
 import { Option } from 'effect'
+import type { HtmlBuilder } from 'foldkit/html'
 import {
   Command,
   Mount,
@@ -14,11 +15,12 @@ import {
   text,
 } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
-import { describe, test } from 'vitest'
+import { describe, test, expect as vitestExpect } from 'vitest'
 
 import { Dialog } from '@foldkit/ui'
 
-import { PREPARATION_MS } from './constants'
+import indexHtml from '../index.html?raw'
+import { GAME_TITLE, PREPARATION_MS } from './constants'
 import { FocusShopItem, Message, update } from './main'
 import { Arsenal, type Model, Phase, initialModel } from './model'
 import { MeasureGameSurface, view } from './view'
@@ -27,6 +29,8 @@ const measureSurface = Mount.resolve(
   MeasureGameSurface,
   Message.MeasuredGameSurface({ left: 0, top: 0, width: 800, height: 400 }),
 )
+
+const READY_STATUS = `${GAME_TITLE}. Tap, click, or press Enter to start.`
 
 const PREPARING_WAVE_ONE =
   'Get ready for wave 1 of 8. Press Enter or R, or use the Start wave button, to start it now.'
@@ -37,8 +41,8 @@ describe('Ready screen', () => {
       { update, view },
       given(initialModel),
       measureSurface,
-      expect(role('heading', { name: 'Zombie Shooter' })).toExist(),
-      expect(role('status')).toHaveText('Tap, click, or press Enter to start.'),
+      expect(role('heading', { name: GAME_TITLE })).toExist(),
+      expect(role('status')).toHaveText(READY_STATUS),
       expect(selector('[data-stick="move"]')).toBeAbsent(),
       pointerDown(role('application', { name: 'Game surface' }), {
         pointerType: 'touch',
@@ -63,7 +67,7 @@ describe('Mute button', () => {
       expect(muteButton).toHaveAttr('aria-pressed', 'false'),
       click(muteButton),
       expect(muteButton).toHaveAttr('aria-pressed', 'true'),
-      expect(role('status')).toHaveText('Tap, click, or press Enter to start.'),
+      expect(role('status')).toHaveText(READY_STATUS),
       click(muteButton),
       expect(muteButton).toHaveAttr('aria-pressed', 'false'),
     )
@@ -119,7 +123,7 @@ describe('Shop', () => {
     wallet: () => ({ balance: 100, earned: 100, shown: 100 }),
   })
 
-  const shotgunButton = role('button', { name: 'Buy Barn Buster for $60' })
+  const shotgunButton = role('button', { name: 'Buy Barn Buster for $75' })
   const shellsButton = role('button', { name: 'Buy Shell Sack for $15' })
   const heartButton = role('button', { name: 'Buy Pickled Heart for $25' })
   const swapButton = role('button', { name: 'Swap to the Pop Pistol' })
@@ -127,7 +131,11 @@ describe('Shop', () => {
   test('opens at the stall, buys with the keyboard and a click, and closes', () => {
     scene(
       { update, view },
-      given(atStall),
+      given(
+        modifyFields(atStall, {
+          wallet: () => ({ balance: 115, earned: 115, shown: 115 }),
+        }),
+      ),
       measureSurface,
       expect(role('heading', { name: "Rattles' Bone Bazaar" })).toBeAbsent(),
       Subscription.emit(Message.TickedFrame({ deltaTime: 16 })),
@@ -137,13 +145,13 @@ describe('Shop', () => {
         Dialog.Message.SucceededAcquireResources(),
       ),
       expect(role('heading', { name: "Rattles' Bone Bazaar" })).toExist(),
-      expect(text('You have $100')).toExist(),
+      expect(text('You have $115')).toExist(),
       expect(shellsButton).toHaveAttr('aria-disabled', 'true'),
       expect(text('Needs the Barn Buster')).toExist(),
       keydown(shotgunButton, 'ArrowDown'),
       Command.resolve(FocusShopItem, Message.CompletedFocusShopItem()),
       keydown(shellsButton, 'Enter'),
-      expect(text('You have $100')).toExist(),
+      expect(text('You have $115')).toExist(),
       keydown(shotgunButton, 'Enter'),
       expect(text('You have $40')).toExist(),
       expect(text('In your hands, 16 shells left')).toExist(),
@@ -283,6 +291,159 @@ describe('Place button', () => {
       ),
       measureSurface,
       expect(role('button', { name: 'Place a Plank Pile' })).toBeAbsent(),
+    )
+  })
+})
+
+describe('Turning the phone', () => {
+  const fightingOnTouch: Model = modifyFields(initialModel, {
+    lastDevice: () => 'Touch',
+    phase: () =>
+      Phase.Wave({
+        wave: 3,
+        elapsedMs: 4000,
+        spawns: [
+          {
+            atMs: 1e9,
+            kind: 'Shambler',
+            door: 'North',
+            offset: 0,
+            speedScale: 1,
+          },
+        ],
+      }),
+  })
+  const sideways = role('dialog', { name: 'Turn your phone sideways' })
+
+  test('portrait pauses behind a turn-sideways notice, and landscape lifts it', () => {
+    scene(
+      { update, view },
+      given(fightingOnTouch),
+      Mount.resolve(
+        MeasureGameSurface,
+        Message.MeasuredGameSurface({
+          left: 0,
+          top: 0,
+          width: 844,
+          height: 390,
+        }),
+      ),
+      expect(sideways).toBeAbsent(),
+      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
+      Subscription.emit(
+        Message.MeasuredGameSurface({
+          left: 0,
+          top: 0,
+          width: 390,
+          height: 844,
+        }),
+      ),
+      expect(sideways).toExist(),
+      expect(role('status')).toHaveText(
+        'Paused. Turn your phone sideways to play.',
+      ),
+      Subscription.emit(
+        Message.MeasuredGameSurface({
+          left: 0,
+          top: 0,
+          width: 844,
+          height: 390,
+        }),
+      ),
+      expect(sideways).toBeAbsent(),
+      expect(role('status')).toHaveText(
+        'Paused during wave 3 of 8. Tap, click, or press Enter to resume.',
+      ),
+      pointerDown(role('application', { name: 'Game surface' }), {
+        pointerType: 'touch',
+        pointerId: 5,
+        clientX: 700,
+        clientY: 200,
+      }),
+      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
+    )
+  })
+
+  test('a keyboard and mouse never see the notice in portrait', () => {
+    scene(
+      { update, view },
+      given(
+        modifyFields(fightingOnTouch, { lastDevice: () => 'KeyboardMouse' }),
+      ),
+      Mount.resolve(
+        MeasureGameSurface,
+        Message.MeasuredGameSurface({
+          left: 0,
+          top: 0,
+          width: 390,
+          height: 844,
+        }),
+      ),
+      expect(sideways).toBeAbsent(),
+      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
+    )
+  })
+})
+
+describe('Run stats', () => {
+  const finished = (phase: Phase): Model =>
+    modifyFields(initialModel, {
+      phase: () => phase,
+      score: () => 690,
+      wallet: () => ({ balance: 40, earned: 615, shown: 40 }),
+      stats: () => ({
+        kills: { Shambler: 41, Runner: 17, Tank: 2, Exploder: 9 },
+        wavesCleared: 3,
+        shotsFired: 1240,
+        shotsHit: 532,
+        heartsLost: 7,
+        trapsPlaced: 3,
+        runMs: 371_000,
+      }),
+    })
+  const STATS =
+    'Waves cleared: 3 of 8. Zombies munched back: 69 (41 Groaner, 17 Hotfoot, 9 Gasbag, 2 Big Lug). Run time 6:11. Accuracy 43 percent. Money earned $615. Hearts lost 7. Traps placed 3. Score 690.'
+
+  test('Game Over reads out the verdict and the whole run', () => {
+    scene(
+      { update, view },
+      given(finished(Phase.GameOver({ wave: 4 }))),
+      measureSurface,
+      expect(role('status')).toHaveText(
+        `Game over. You got munched on wave 4. ${STATS} Tap, click, or press Enter to play again.`,
+      ),
+    )
+  })
+
+  test('Victory reads out the verdict and the whole run', () => {
+    scene(
+      { update, view },
+      given(finished(Phase.Victory())),
+      measureSurface,
+      expect(role('status')).toHaveText(
+        `Victory. The estate is yours, for now. ${STATS} Tap, click, or press Enter to play again.`,
+      ),
+    )
+  })
+})
+
+describe('Title', () => {
+  const titledView = (current: Model, h: HtmlBuilder<Message>) => {
+    const document = view(current, h)
+    return h.div(
+      [h.DataAttribute('document-title', document.title)],
+      [document.body],
+    )
+  }
+
+  test('the working title names the document, the page, and index.html', () => {
+    vitestExpect(indexHtml).toContain(`<title>${GAME_TITLE}</title>`)
+    scene(
+      { update, view: titledView },
+      given(initialModel),
+      measureSurface,
+      expect(selector(`[data-document-title="${GAME_TITLE}"]`)).toExist(),
+      expect(role('heading', { name: GAME_TITLE })).toExist(),
     )
   })
 })

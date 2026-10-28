@@ -11,6 +11,7 @@ import {
   PREPARATION_MS,
   ZOMBIE_MAX_HP,
 } from './constants'
+import { RESTART_GRACE_MS } from './constants'
 import { Message, update } from './main'
 import {
   type Bullet,
@@ -34,6 +35,9 @@ const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
 
 const ticks = (count: number, deltaTime: number) =>
   Array.makeBy(count, () => tick(deltaTime))
+
+const GRACE_TICK_MS = 50
+const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
 
 const press = (code: string) => message(Message.PressedKey({ code }))
 const release = (code: string) => message(Message.ReleasedKey({ code }))
@@ -269,6 +273,7 @@ describe('waves', () => {
       model(({ elapsedMs }) => {
         expect(elapsedMs).toBe(FRAME_MS)
       }),
+      ...ticks(RESTART_GRACE_TICKS, GRACE_TICK_MS),
       press('Enter'),
       model(({ phase, score }) => {
         expect(Phase.guards.Preparation(phase)).toBe(true)

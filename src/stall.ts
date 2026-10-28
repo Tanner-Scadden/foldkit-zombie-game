@@ -1,15 +1,9 @@
 import { Array } from 'effect'
 import { Canvas } from 'foldkit'
 
+import { GLYPH_SPRITES, textPixels } from './font'
 import { STALL_BOX } from './shop'
-import {
-  GLYPH_SPRITES,
-  type Palette,
-  type Sprite,
-  group,
-  spriteShapes,
-  textPixels,
-} from './sprite'
+import { type Palette, type Sprite, group, spriteShapes } from './sprite'
 
 // PALETTE
 

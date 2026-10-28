@@ -140,10 +140,32 @@ const scenarioModel = (): Model => {
       nextEntityId: () => 2000,
     })
   }
+  const sampleStats = {
+    kills: { Shambler: 41, Runner: 17, Tank: 2, Exploder: 9 },
+    wavesCleared: Math.max(0, wave - 1),
+    shotsFired: 1240,
+    shotsHit: 532,
+    heartsLost: 7,
+    trapsPlaced: 3,
+    runMs: 371_000,
+  }
+  if (params.has('stats'))
+    model = modifyFields(model, {
+      stats: () => sampleStats,
+      wallet: w => ({ ...w, earned: 615 }),
+    })
+  if (params.has('py'))
+    model = modifyFields(model, {
+      player: p => ({ ...p, x: num('px', p.x), y: num('py', p.y) }),
+      hintBand: () => (num('py', 90) < 70 ? 'Bottom' : 'Top'),
+    })
+  if (params.get('device') === 'touch')
+    model = modifyFields(model, { lastDevice: () => 'Touch' as const })
   const phase = params.get('phase')
   if (phase === 'victory')
     model = modifyFields(model, {
       phase: () => Phase.Victory(),
+      stats: s => ({ ...s, wavesCleared: 8 }),
       score: () => 4321,
     })
   if (phase === 'gameover')

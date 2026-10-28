@@ -43,6 +43,12 @@ export type MouseButton = typeof MouseButton.Type
 export const PointerDevice = Schema.Literals(['Mouse', 'Touch'])
 export type PointerDevice = typeof PointerDevice.Type
 
+export const InputDevice = Schema.Literals(['KeyboardMouse', 'Touch'])
+export type InputDevice = typeof InputDevice.Type
+
+export const Orientation = Schema.Literals(['Landscape', 'Portrait'])
+export type Orientation = typeof Orientation.Type
+
 export const Trigger = Schema.Literals(['Released', 'Held'])
 export type Trigger = typeof Trigger.Type
 
@@ -409,6 +415,43 @@ export const TrapNotice = defineTaggedUnion({
 })
 export type TrapNotice = typeof TrapNotice.Type
 
+export const Lesson = defineTaggedUnion({
+  Pending: {},
+  Learned: { atMs: Schema.Number },
+})
+export type Lesson = typeof Lesson.Type
+
+export const Lessons = Schema.Struct({
+  move: Lesson,
+  fire: Lesson,
+  startWave: Lesson,
+  shop: Lesson,
+  swap: Lesson,
+})
+export type Lessons = typeof Lessons.Type
+
+export const HintBand = Schema.Literals(['Top', 'Bottom'])
+export type HintBand = typeof HintBand.Type
+
+export const KillCounts = Schema.Struct({
+  Shambler: Schema.Number,
+  Runner: Schema.Number,
+  Tank: Schema.Number,
+  Exploder: Schema.Number,
+})
+export type KillCounts = typeof KillCounts.Type
+
+export const RunStats = Schema.Struct({
+  kills: KillCounts,
+  wavesCleared: Schema.Number,
+  shotsFired: Schema.Number,
+  shotsHit: Schema.Number,
+  heartsLost: Schema.Number,
+  trapsPlaced: Schema.Number,
+  runMs: Schema.Number,
+})
+export type RunStats = typeof RunStats.Type
+
 export const Model = Schema.Struct({
   phase: Phase,
   player: Player,
@@ -440,6 +483,12 @@ export const Model = Schema.Struct({
   input: Input,
   intent: Intent,
   maybeSurface: Schema.Option(SurfaceRectangle),
+  lastDevice: InputDevice,
+  orientation: Orientation,
+  lessons: Lessons,
+  hintBand: HintBand,
+  stats: RunStats,
+  screenMs: Schema.Number,
   audio: AudioState,
   soundSetting: SoundSetting,
 })
@@ -477,6 +526,31 @@ export const idleIntent: Intent = {
 
 export const emptyTrapStock: TrapCounts = { Barricade: 0, Turret: 0 }
 
+export const freshLessons: Lessons = {
+  move: Lesson.Pending(),
+  fire: Lesson.Pending(),
+  startWave: Lesson.Pending(),
+  shop: Lesson.Pending(),
+  swap: Lesson.Pending(),
+}
+
+export const noKills: KillCounts = {
+  Shambler: 0,
+  Runner: 0,
+  Tank: 0,
+  Exploder: 0,
+}
+
+export const freshStats: RunStats = {
+  kills: noKills,
+  wavesCleared: 0,
+  shotsFired: 0,
+  shotsHit: 0,
+  heartsLost: 0,
+  trapsPlaced: 0,
+  runMs: 0,
+}
+
 export const initialHitStop: HitStop = HitStop.Running({ cooldownMs: 0 })
 
 export const stillShake: Shake = { trauma: 0, offset: { x: 0, y: 0 } }
@@ -512,6 +586,12 @@ export const initialModel: Model = {
   input: idleInput,
   intent: idleIntent,
   maybeSurface: Option.none(),
+  lastDevice: 'KeyboardMouse',
+  orientation: 'Landscape',
+  lessons: freshLessons,
+  hintBand: 'Top',
+  stats: freshStats,
+  screenMs: 0,
   audio: AudioState.Locked(),
   soundSetting: 'On',
 }

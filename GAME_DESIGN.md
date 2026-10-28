@@ -43,22 +43,23 @@ Decided on 2026-10-27. The first playable is a fun one-screen arena that a stran
 - **Traps.** One or two simple kinds, likely a barricade for doorways and a turret.
 - **Health.** A few hearts. A hit knocks the player back and gives a short invulnerable blink. Hearts are bought in the shop and rarely dropped.
 - **Onboarding.** Wave 1 is the tutorial. Control hints for the current device fade in, and the first zombies are a few slow Shamblers. No walls of text.
+- **Working title.** Munch Manor. It lives in `GAME_TITLE` in `src/constants.ts`, which builds the title screen logo, the document title, and the page heading. `index.html` repeats it for the first paint, and a Scene test checks the two agree.
 - **Sound.** Sound effects now, with an audio-unlock on the first input. Music comes later.
 
 #### Proposed balance
 
 Proposed on 2026-10-28 for step 4. These are starting numbers to play against, not decisions. They live in `src/constants.ts`, `src/weapons.ts`, and `src/shop.ts`.
 
-- **Money.** Each kill pays the bounty of its kind (see the horde below). Clearing wave _n_ pays $20 + $5 × _n_, so wave 1 pays $25 and wave 8 pays $60. A perfect run earns about $1,000.
+- **Money.** Each kill pays the bounty of its kind (see the horde below). Clearing wave _n_ pays $20 + $5 × _n_, so wave 1 pays $25 and wave 8 pays $60. A full run earns about $1,850 (see "Balance pass" below).
 - **The shop.** It opens from the wave 2 preparation onward. Wave 1 is the tutorial, the player has no money yet, and its preparation is only 6 seconds, so the stall sleeps behind a CLOSED sign until wave 1 is cleared.
 - **Slots.** The pistol always stays in the first slot. A bought gun goes in the second slot and replaces whatever is there, along with its ammo. A new gun comes out in the player's hands.
 
 | Item                  | Price | What it does                                                                       |
 | --------------------- | ----- | ---------------------------------------------------------------------------------- |
 | Pop Pistol            | Start | 1 damage, 140 ms between shots, never runs out                                     |
-| Barn Buster (shotgun) | $60   | 5 pellets in a 0.75 radian spray, 1 damage each, short range, 620 ms between shots |
+| Barn Buster (shotgun) | $75   | 5 pellets in a 0.75 radian spray, 1 damage each, short range, 620 ms between shots |
 | Shell Sack            | $15   | 16 more shells, up to 48. The shotgun comes with 16                                |
-| Chatterbox (SMG)      | $90   | 1 damage, 70 ms between shots, a slight random spread                              |
+| Chatterbox (SMG)      | $120  | 1 damage, 70 ms between shots, a slight random spread                              |
 | Chatter Drum          | $20   | 120 more rounds, up to 360. The SMG comes with 120                                 |
 | Pickled Heart         | $25   | One heart, never past the maximum of 5                                             |
 
@@ -68,24 +69,24 @@ Proposed on 2026-10-28 for step 5, the horde. These are starting numbers to play
 
 | Kind     | Name    | Speed (px/s) | Health | Bite     | Radius | Bounty | Notes                                                                                  |
 | -------- | ------- | ------------ | ------ | -------- | ------ | ------ | -------------------------------------------------------------------------------------- |
-| Shambler | Groaner | 16 to 28     | 2      | 1 heart  | 4      | $5     | The baseline                                                                           |
-| Runner   | Hotfoot | 44 to 52     | 1      | 1 heart  | 3.5    | $6     | Light, so it is shoved around and knocked back further                                 |
-| Tank     | Big Lug | 11 to 14     | 14     | 2 hearts | 6.5    | $40    | Takes 12% of knockback, shoves the crowd aside, shows a health bar once hurt           |
-| Exploder | Gasbag  | 20 to 25     | 2      | none     | 4.5    | $8     | Bursts 140 ms after it dies, or 220 ms after it touches the player, which pays nothing |
+| Shambler | Groaner | 16 to 28     | 3      | 1 heart  | 4      | $2     | The baseline                                                                           |
+| Runner   | Hotfoot | 44 to 52     | 2      | 1 heart  | 3.5    | $3     | Light, so it is shoved around and knocked back further                                 |
+| Tank     | Big Lug | 11 to 14     | 30     | 2 hearts | 6.5    | $20    | Takes 12% of knockback, shoves the crowd aside, shows a health bar once hurt           |
+| Exploder | Gasbag  | 20 to 25     | 3      | none     | 4.5    | $3     | Bursts 140 ms after it dies, or 220 ms after it touches the player, which pays nothing |
 
 - **The burst.** Radius 28 px. It costs the player 1 heart unless they are blinking, and deals 6 damage to every zombie it reaches. A Gasbag caught in a burst bursts 150 ms later, so chains ripple instead of going off at once. At most 2 bursts go off in one frame and the rest wait their turn.
-- **Speed.** Each wave scales every spawn's speed, from ×1 on wave 1 to ×1.22 on wave 8.
+- **Speed.** Each wave scales every spawn's speed, from ×1 on wave 1 to ×1.49 on wave 8. By wave 8 the fastest Hotfoots outrun the player (72 px/s).
 
-| Wave | Zombies | What is new or special                                                                  |
-| ---- | ------- | --------------------------------------------------------------------------------------- |
-| 1    | 4       | The tutorial. Four slow Groaners from the north door                                    |
-| 2    | 9       | NEW: Hotfoot. Six Groaners from the north and west, then three Hotfoots from the east   |
-| 3    | 14      | Groaners and Hotfoots from the sides, then a Hotfoot rush from the south                |
-| 4    | 17      | NEW: Gasbag. Three Gasbags from the west, then a mix from the south                     |
-| 5    | 18      | NEW: Big Lug. One Big Lug from the north with Groaners, Hotfoots, and Gasbags around it |
-| 6    | 27      | One Big Lug from the south while every door opens                                       |
-| 7    | 32      | Two Big Lugs, west and east, with a fast mixed crowd                                    |
-| 8    | 40      | The finale. Four Big Lugs in two pairs, with 36 escorts from every door, then Victory   |
+| Wave | Zombies | What is new or special                                                                     |
+| ---- | ------- | ------------------------------------------------------------------------------------------ |
+| 1    | 6       | The tutorial. Six slow Groaners from the north door, 3 seconds apart                       |
+| 2    | 30      | NEW: Hotfoot. Twenty Groaners from the north and west, then ten Hotfoots from the east     |
+| 3    | 48      | Groaners and Hotfoots from the sides, then a Hotfoot rush from the south                   |
+| 4    | 75      | NEW: Gasbag. Ten Gasbags from the west among a mix from the north, east, and south         |
+| 5    | 80      | NEW: Big Lug. Two Big Lugs from the north with Groaners, Hotfoots, and Gasbags around them |
+| 6    | 86      | Two Big Lugs from the south and two from the east while every door opens                   |
+| 7    | 90      | Three Big Lugs, west and east, with a fast mixed crowd                                     |
+| 8    | 94      | The finale. Four Big Lugs in two pairs, with 90 escorts from every door, then Victory      |
 
 Each wave is a list of groups. A group has a count, the doors it uses, a start time and an interval, and weights for each kind. The kind, door, timing jitter, and offset of every spawn are drawn from the seeded generator when Preparation begins, so the door preview shows exactly what will come. A kind's first wave uses a group of only that kind, so the "NEW" banner never promises a zombie the roll left out.
 
@@ -102,6 +103,30 @@ Proposed on 2026-10-28 for step 6, traps. These are starting numbers to play aga
 - **Bursts.** A Gasbag burst deals 15 damage to every trap it reaches.
 - **Pathing.** A barricaded doorway stays in the flow field at a toll of 25 extra tiles, and a gnome's tile at 6. A zombie outside a boarded door compares walking around the outside of the room to another door against chewing through, and takes the cheaper. The flow fields are recomputed when the player changes tile or a trap is placed or breaks.
 - **Between waves.** Traps stay where they were placed and keep their damage. Broken traps are gone. A new run clears every trap and the trap pack. The wave preview stays exact: spawns are rolled when Preparation begins, and traps change only a zombie's path, never its door.
+
+#### Balance pass
+
+Proposed on 2026-10-28 for step 7. Still proposed, not decided. A headless bot played the game's own `update` many times to find numbers where a decent player usually falls in the second half and a full win takes about 8 minutes. Real players have not tested them yet.
+
+- **The bot.** `bun tools/balance/simulate.ts [runs] [firstSeed]` runs it at 30 frames a second. It keeps away from the nearest zombie once one is within 36 px, otherwise drifts to the middle of the room. It re-aims every 5 frames at the nearest zombie it can see, with up to 0.22 radians of hand shake, and holds the trigger while it has a target. From wave 2 it walks to the stall and buys a heart when it has 3 or fewer, the SMG when it can afford it (else the shotgun), ammo below half, and up to two Plank Piles, which it nails into the door with the most spawns. Then it starts the wave at once, so Preparation costs only the walking. Every run is deterministic for its seed.
+- **Before.** With the step 5 numbers, 40 runs: every run won, the median win took 3.6 minutes, the bot lost 1 heart in all 40 runs, and it earned about $1,570 a run. A careful player could not lose and the run was too short.
+- **What changed.** Waves are longer and denser (6, 30, 48, 75, 80, 86, 90, 94 zombies instead of 4 to 40), Groaners and Gasbags have 3 health, Hotfoots 2, and Big Lugs 30. Speed climbs ×0.07 a wave instead of ×0.03. Bounties fell (Groaner $2, Hotfoot $3, Gasbag $3, Big Lug $20) so money still means choices, and the guns cost more (shotgun $75, SMG $120).
+- **After.** 100 runs with the final numbers:
+
+  | Wave | Reached | Cleared | Money earned by its end (median) |
+  | ---- | ------- | ------- | -------------------------------- |
+  | 1    | 100%    | 100%    | $37                              |
+  | 2    | 100%    | 100%    | $137                             |
+  | 3    | 100%    | 100%    | $290                             |
+  | 4    | 100%    | 100%    | $508                             |
+  | 5    | 100%    | 97%     | $782                             |
+  | 6    | 97%     | 45%     | $1,134                           |
+  | 7    | 45%     | 32%     | $1,476                           |
+  | 8    | 32%     | 8%      | $1,852                           |
+
+  The median run lasts 6.1 minutes and the median win 8.5 minutes. The bot most often dies on wave 6. Gasbags cost it 46% of its lost hearts, Hotfoots 31%, Big Lugs 18%, and Groaners 5%. At most about 24 zombies are in the room at once.
+
+- **Caveats.** The bot never uses the Grumpy Gnome, never swaps by hand, and plays Preparation in a few seconds, so a human run adds up to 20 seconds a wave. Wave 6 is a sharp step. Playtest it before trusting any of this.
 
 ## Core loop
 
@@ -192,7 +217,7 @@ The roadmap leads to the first playable. The order puts feel first: juice is bui
 | 4    | **Money and the shop.** Money from kills and a bonus for each wave cleared. A shop stall to walk onto, and an overlay with weapons, ammo, and hearts. Weapons as data: pistol, shotgun, SMG. Carry two and swap. Ammo for everything but the pistol.                                                                                                                                           | Built. Balance not yet playtested                                       |
 | 5    | **The horde.** Runner, Tank, and Exploder beside the Shambler, with chain explosions. Spawn tables for each wave from the seeded generator. The 8 wave arc, with a Tank-heavy finale and Victory.                                                                                                                                                                                              | Built. Balance not yet playtested                                       |
 | 6    | **Traps.** A barricade for doorways and a turret, placed during Preparation.                                                                                                                                                                                                                                                                                                                   | Built. Balance not yet playtested                                       |
-| 7    | **Ready for strangers.** Wave 1 as the tutorial with hints for the current device, a title screen, Game Over and Victory screens with run stats, a balance pass so a run takes 5 to 10 minutes, a phone performance pass, and a public link.                                                                                                                                                   | Planned                                                                 |
+| 7    | **Ready for strangers.** Wave 1 as the tutorial with hints for the current device, a title screen, Game Over and Victory screens with run stats, a balance pass so a run takes 5 to 10 minutes, a phone performance pass, and a public link.                                                                                                                                                   | Built. The real-phone check and the public link wait on the owner       |
 
 After the first playable, roughly in this order:
 
@@ -222,6 +247,7 @@ After the first playable, roughly in this order:
 
   - **What it costs.** In the worst case at 4×, `update` is about 12% of the main thread, building the scene about 7%, and Foldkit's canvas paint about 12%, with garbage collection under 2% and the rest idle or browser work. Inside `update`, the variant checks of tagged unions (`guards`) run a full Schema check on each call and show up in particle and zombie stepping. In paint, each shape costs a `save` and `restore` and an Effect `Match`. Before the `group` helper, `view` took 4.3 ms a frame in the worst case at 4× and 6.7 ms at 6×.
   - **Verdict.** p95 stays under 16.7 ms at 4× in every scenario. At 6× the worst case sits right at the 60 fps budget and drops some frames. Measure on a real mid-range phone before adding more shapes per frame.
+  - **Remeasured for step 7.** The pixel font draws every HUD and overlay string from cached glyph sprites, so text costs more shapes than `Canvas.Text` did (idle went from 515 to 1,055 shapes) but is crisp at every scale. Same method, built harness: worst case p95 9.4 ms at 1×, 10.2 ms at 4×, and 16.7 ms at 6× (23 long frames). `view` means 0.8, 1.9, and 2.9 ms. Busy at 4× has p95 10.1 ms. p95 stays under 16.7 ms at 4×.
 - **Determinism and juice.** Animation, particles, and shake live in the Model and use the seeded generator, so they stay reproducible. Sound plays through Commands and never feeds back into the game.
 
 ## Open questions

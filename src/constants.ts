@@ -24,7 +24,7 @@ export const ZOMBIE_SPEED_MIN = 16
 export const ZOMBIE_SPEED_MAX = 28
 export const ZOMBIE_SPAWN_MARGIN = 10
 export const SCORE_PER_ZOMBIE = 10
-export const ZOMBIE_MAX_HP = 2
+export const ZOMBIE_MAX_HP = 3
 export const ZOMBIE_HIT_PULSE_MS = 160
 export const ZOMBIE_HIT_FLASH_MS = 70
 export const ZOMBIE_KNOCKBACK_SPEED = 110
@@ -231,7 +231,7 @@ export const GLYPH_SHADOW_COLOR = '#2a1418'
 
 export const BULLET_MAX = 48
 
-export const SHAMBLER_BOUNTY = 5
+export const SHAMBLER_BOUNTY = 2
 export const WAVE_BONUS_BASE = 20
 export const WAVE_BONUS_PER_WAVE = 5
 export const MONEY_TICK_PER_SECOND = 10
@@ -331,3 +331,7 @@ export const SPLINTER_COLOR = '#c99a5b'
 export const PLANK_COLOR = '#8a5a2b'
 export const WOOD_DECAL_COLOR = '#6b4423'
 export const WOOD_DECAL_FADED_COLOR = '#3f2c1c'
+
+export const GAME_TITLE = 'Munch Manor'
+
+export const RESTART_GRACE_MS = 900

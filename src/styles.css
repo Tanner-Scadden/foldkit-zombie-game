@@ -354,3 +354,59 @@ body {
   outline: 2px solid #9be36a;
   outline-offset: 2px;
 }
+
+.rotate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  background: #140c14;
+  color: #f4f1de;
+  text-align: center;
+  font: 16px monospace;
+}
+
+.rotate-phone {
+  width: 48px;
+  height: 80px;
+  border: 4px solid #9be36a;
+  border-radius: 10px;
+  box-sizing: border-box;
+  animation: rotate-phone 2.4s ease-in-out infinite;
+}
+
+@keyframes rotate-phone {
+  0%,
+  25% {
+    transform: rotate(0deg);
+  }
+  55%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-phone {
+    animation: none;
+    transform: rotate(-90deg);
+  }
+}
+
+.rotate-title {
+  margin: 0;
+  color: #9be36a;
+  font: bold 22px monospace;
+}
+
+.rotate-body {
+  margin: 0;
+  max-width: 280px;
+  color: #c9d3c0;
+  line-height: 1.5;
+}

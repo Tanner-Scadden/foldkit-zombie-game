@@ -14,14 +14,15 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 
 ### Commands
 
-| Command             | What it does                                      |
-| ------------------- | ------------------------------------------------- |
-| `bun install`       | Install dependencies                              |
-| `bun dev`           | Start the dev server                              |
-| `bun run typecheck` | Typecheck with `tsrs`, including the Effect rules |
-| `bun run lint`      | Lint with oxlint and the Effect rules             |
-| `bun run test`      | Run the Story and Scene tests                     |
-| `bun run build`     | Build for production                              |
+| Command                                | What it does                                                  |
+| -------------------------------------- | ------------------------------------------------------------- |
+| `bun install`                          | Install dependencies                                          |
+| `bun dev`                              | Start the dev server                                          |
+| `bun run typecheck`                    | Typecheck with `tsrs`, including the Effect rules             |
+| `bun run lint`                         | Lint with oxlint and the Effect rules                         |
+| `bun run test`                         | Run the Story and Scene tests                                 |
+| `bun run build`                        | Build for production                                          |
+| `bun tools/balance/simulate.ts [runs]` | Play many seeded runs with a bot and print the balance report |
 
 Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All four must pass.
 
@@ -31,6 +32,8 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | ------------------- | ------------------------------------------------------------- |
 | `src/model.ts`      | The Model and its Schema types                                |
 | `src/main.ts`       | Messages, `init`, `update`, Commands, and Subscriptions       |
+| `src/onboarding.ts` | Lessons the player has learned and the device-aware hints     |
+| `src/stats.ts`      | Run stats: kills, accuracy, run time, and the verdicts        |
 | `src/simulation.ts` | The pure step that advances the game one frame                |
 | `src/arena.ts`      | The room's tile map, doorways, collision, and line of sight   |
 | `src/pathing.ts`    | The flow field toward the player and zombie steering          |
@@ -47,9 +50,20 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/juice.ts`      | Screen shake, hit-stop, damage numbers, and the kill streak   |
 | `src/input.ts`      | Keyboard, mouse, and touch input turned into movement and aim |
 | `src/view.ts`       | The canvas scene and the on-screen touch sticks               |
+| `src/screens.ts`    | Title, banners, hints, pause, and the run stats panels        |
+| `src/font.ts`       | The pixel font, its glyph sprites, and text layout            |
 | `src/sprite.ts`     | Pixel maps turned into canvas shapes                          |
 | `src/prng.ts`       | The seeded random number generator                            |
 | `src/constants.ts`  | Sizes, speeds, and other tuning numbers                       |
+
+### Deploying
+
+`bun run build` writes a static site to `dist/`. Vite's `base` is `'./'`, so every asset path is relative and `dist/` works from any sub-path. Check it with `bunx vite preview` before publishing. It needs an HTTP server: opening `dist/index.html` straight from disk does not load the module script.
+
+- **GitHub Pages.** Publish the contents of `dist/` to a `gh-pages` branch, or upload `dist/` as the Pages artifact, and point Pages at it. The game then lives at `https://<user>.github.io/<repo>/`.
+- **itch.io.** Zip the contents of `dist/` with `index.html` at the top of the zip, upload it as an HTML game, and set the viewport to 16:9 with fullscreen allowed.
+
+Nothing here publishes on its own. There is no CI workflow.
 
 ### Rules
 

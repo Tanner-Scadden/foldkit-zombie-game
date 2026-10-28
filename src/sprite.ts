@@ -1,14 +1,6 @@
 import { Array, Option, Record, String, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
-import {
-  ALERT_GLYPH_COLOR,
-  COIN_GLYPH_COLOR,
-  DAMAGE_GLYPH_COLOR,
-  GLYPH_SHADOW_COLOR,
-  KILL_GLYPH_COLOR,
-  STREAK_GLYPH_COLOR,
-} from './constants'
 import type { TrapKind, WeaponKind, ZombieKind } from './model'
 import type { TrapStage } from './traps'
 
@@ -22,7 +14,7 @@ type PixelRun = Readonly<{
   color: string
 }>
 
-const TRANSPARENT = '.'
+export const TRANSPARENT = '.'
 
 const appendToRowRuns =
   (y: number, palette: Palette) =>
@@ -106,6 +98,8 @@ const spriteWidth = (pixels: ReadonlyArray<string>): number =>
   )
 
 export type Anchor = Readonly<{ x: number; y: number }>
+
+export const TOP_LEFT: Anchor = { x: 0, y: 0 }
 
 const centerAnchor = (pixels: ReadonlyArray<string>): Anchor => ({
   x: Math.floor(spriteWidth(pixels) / 2),
@@ -507,66 +501,6 @@ const HEART_PIXELS: ReadonlyArray<string> = [
   '...R...',
 ]
 
-const GLYPH_PIXELS = {
-  '0': ['###', '#.#', '#.#', '#.#', '###'],
-  '1': ['.#.', '##.', '.#.', '.#.', '###'],
-  '2': ['##.', '..#', '.#.', '#..', '###'],
-  '3': ['##.', '..#', '.#.', '..#', '##.'],
-  '4': ['#.#', '#.#', '###', '..#', '..#'],
-  '5': ['###', '#..', '##.', '..#', '##.'],
-  '6': ['.##', '#..', '###', '#.#', '###'],
-  '7': ['###', '..#', '.#.', '.#.', '.#.'],
-  '8': ['###', '#.#', '.#.', '#.#', '###'],
-  '9': ['###', '#.#', '###', '..#', '##.'],
-  '+': ['...', '.#.', '###', '.#.', '...'],
-  x: ['...', '#.#', '.#.', '#.#', '...'],
-  $: ['.##', '##.', '.#.', '.##', '##.'],
-  C: ['###', '#..', '#..', '#..', '###'],
-  D: ['##.', '#.#', '#.#', '#.#', '##.'],
-  E: ['###', '#..', '##.', '#..', '###'],
-  H: ['#.#', '#.#', '###', '#.#', '#.#'],
-  L: ['#..', '#..', '#..', '#..', '###'],
-  M: ['#.#', '###', '###', '#.#', '#.#'],
-  O: ['###', '#.#', '#.#', '#.#', '###'],
-  P: ['##.', '#.#', '##.', '#..', '#..'],
-  S: ['.##', '#..', '.#.', '..#', '##.'],
-  T: ['###', '.#.', '.#.', '.#.', '.#.'],
-  Y: ['#.#', '#.#', '.#.', '.#.', '.#.'],
-  Z: ['###', '..#', '.#.', '#..', '###'],
-} satisfies Readonly<Record<string, ReadonlyArray<string>>>
-
-export const GLYPH_WIDTH = 3
-export const GLYPH_HEIGHT = 6
-export const GLYPH_ADVANCE = GLYPH_WIDTH + 1
-
-const GLYPH_FILL = '#'
-const GLYPH_SHADOW = 'S'
-
-const withDropShadow = (
-  pixels: ReadonlyArray<string>,
-): ReadonlyArray<string> => {
-  const isFilled = (x: number, y: number): boolean =>
-    pipe(
-      Array.get(pixels, y),
-      Option.flatMap(row => String.at(row, x)),
-      Option.exists(symbol => symbol === GLYPH_FILL),
-    )
-  return Array.makeBy(pixels.length + 1, y =>
-    pipe(
-      Array.makeBy(GLYPH_WIDTH, x => {
-        if (isFilled(x, y)) {
-          return GLYPH_FILL
-        } else if (isFilled(x, y - 1)) {
-          return GLYPH_SHADOW
-        } else {
-          return TRANSPARENT
-        }
-      }),
-      Array.join(''),
-    ),
-  )
-}
-
 // SPRITES
 
 export type Facing = 'Left' | 'Right'
@@ -709,71 +643,6 @@ export const EMPTY_HEART_SPRITE = spriteShapes(
 export const FLASH_HEART_SPRITE = spriteShapes(
   HEART_PIXELS,
   flashPalette(HEART_PALETTE),
-)
-
-export type Glyph = keyof typeof GLYPH_PIXELS
-export type GlyphTone = 'Damage' | 'Kill' | 'Streak' | 'Coin' | 'Alert'
-
-const GLYPH_COLORS: Readonly<Record<GlyphTone, string>> = {
-  Damage: DAMAGE_GLYPH_COLOR,
-  Kill: KILL_GLYPH_COLOR,
-  Streak: STREAK_GLYPH_COLOR,
-  Coin: COIN_GLYPH_COLOR,
-  Alert: ALERT_GLYPH_COLOR,
-}
-
-const TOP_LEFT: Anchor = { x: 0, y: 0 }
-
-const glyphSprites = (color: string): Readonly<Record<Glyph, Sprite>> =>
-  Record.map(GLYPH_PIXELS, pixels =>
-    spriteShapes(
-      withDropShadow(pixels),
-      { [GLYPH_FILL]: color, [GLYPH_SHADOW]: GLYPH_SHADOW_COLOR },
-      TOP_LEFT,
-    ),
-  )
-
-export const GLYPH_SPRITES: Readonly<
-  Record<GlyphTone, Readonly<Record<Glyph, Sprite>>>
-> = Record.map(GLYPH_COLORS, glyphSprites)
-
-const GLYPHS: ReadonlyArray<Glyph> = Record.keys(GLYPH_PIXELS)
-
-export const toGlyph = (symbol: string): Option.Option<Glyph> =>
-  Array.findFirst(GLYPHS, glyph => glyph === symbol)
-
-const glyphPixels = (symbol: string): Option.Option<ReadonlyArray<string>> =>
-  Option.map(toGlyph(symbol), glyph => GLYPH_PIXELS[glyph])
-
-export const textPixels = (text: string): ReadonlyArray<string> => {
-  const glyphs = Array.getSomes(Array.map(String.split(text, ''), glyphPixels))
-  return Array.makeBy(GLYPH_HEIGHT - 1, row =>
-    pipe(
-      glyphs,
-      Array.map(pixels =>
-        Option.getOrElse(Array.get(pixels, row), () =>
-          TRANSPARENT.repeat(GLYPH_WIDTH),
-        ),
-      ),
-      Array.join(TRANSPARENT),
-    ),
-  )
-}
-
-// COUNTS
-
-export const COUNT_SPRITE_MAX = 40
-
-const COUNT_ANCHOR: Anchor = { x: 0, y: Math.floor((GLYPH_HEIGHT - 1) / 2) }
-
-export const COUNT_SPRITES: ReadonlyArray<Sprite> = Array.makeBy(
-  COUNT_SPRITE_MAX + 1,
-  count =>
-    spriteShapes(
-      textPixels(`x${count}`),
-      { [GLYPH_FILL]: KILL_GLYPH_COLOR },
-      COUNT_ANCHOR,
-    ),
 )
 
 // GUNS

@@ -28,10 +28,12 @@ import {
   ZombieState,
   emptyTrapStock,
   emptyWallet,
+  freshStats,
   initialHitStop,
   initialPlayer,
   stillShake,
 } from './model'
+import { settleLessons } from './onboarding'
 import { flowFieldToward } from './pathing'
 import { type Seeded, between, nextRandom } from './prng'
 import { earn } from './shop'
@@ -70,228 +72,235 @@ const only = (kind: ZombieKind): Array.NonEmptyReadonlyArray<KindWeight> => [
 
 export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   {
-    speedScale: 1,
-    groups: [
-      {
-        count: 4,
-        mix: only('Shambler'),
-        doors: ['North'],
-        startMs: 1000,
-        intervalMs: 2600,
-      },
-    ],
-  },
-  {
-    speedScale: 1.03,
+    speedScale: 1.0,
     groups: [
       {
         count: 6,
         mix: only('Shambler'),
-        doors: ['North', 'West'],
-        startMs: 800,
-        intervalMs: 1900,
-      },
-      {
-        count: 3,
-        mix: only('Runner'),
-        doors: ['East'],
-        startMs: 6000,
-        intervalMs: 1800,
+        doors: ['North'],
+        startMs: 1500,
+        intervalMs: 3000,
       },
     ],
   },
   {
-    speedScale: 1.06,
+    speedScale: 1.07,
     groups: [
       {
+        count: 20,
+        mix: only('Shambler'),
+        doors: ['North', 'West'],
+        startMs: 1000,
+        intervalMs: 2200,
+      },
+      {
         count: 10,
+        mix: only('Runner'),
+        doors: ['East'],
+        startMs: 8000,
+        intervalMs: 2500,
+      },
+    ],
+  },
+  {
+    speedScale: 1.14,
+    groups: [
+      {
+        count: 35,
         mix: [
           { kind: 'Shambler', weight: 3 },
           { kind: 'Runner', weight: 1 },
         ],
         doors: ['West', 'East'],
-        startMs: 600,
-        intervalMs: 1400,
+        startMs: 800,
+        intervalMs: 1700,
       },
       {
-        count: 4,
+        count: 13,
         mix: only('Runner'),
         doors: ['South'],
-        startMs: 7000,
-        intervalMs: 900,
-      },
-    ],
-  },
-  {
-    speedScale: 1.09,
-    groups: [
-      {
-        count: 8,
-        mix: [
-          { kind: 'Shambler', weight: 3 },
-          { kind: 'Runner', weight: 1 },
-        ],
-        doors: ['North', 'East'],
-        startMs: 500,
-        intervalMs: 1300,
-      },
-      {
-        count: 3,
-        mix: only('Exploder'),
-        doors: ['West'],
-        startMs: 3000,
-        intervalMs: 2200,
-      },
-      {
-        count: 6,
-        mix: [
-          { kind: 'Shambler', weight: 2 },
-          { kind: 'Exploder', weight: 1 },
-        ],
-        doors: ['South'],
-        startMs: 9000,
+        startMs: 14000,
         intervalMs: 1200,
       },
     ],
   },
   {
-    speedScale: 1.12,
+    speedScale: 1.21,
     groups: [
       {
-        count: 1,
-        mix: only('Tank'),
-        doors: ['North'],
-        startMs: 2000,
-        intervalMs: 0,
+        count: 35,
+        mix: [
+          { kind: 'Shambler', weight: 3 },
+          { kind: 'Runner', weight: 1 },
+        ],
+        doors: ['North', 'East'],
+        startMs: 600,
+        intervalMs: 1600,
       },
       {
-        count: 11,
+        count: 10,
+        mix: only('Exploder'),
+        doors: ['West'],
+        startMs: 4000,
+        intervalMs: 2500,
+      },
+      {
+        count: 30,
+        mix: [
+          { kind: 'Shambler', weight: 2 },
+          { kind: 'Exploder', weight: 1 },
+        ],
+        doors: ['South'],
+        startMs: 16000,
+        intervalMs: 1300,
+      },
+    ],
+  },
+  {
+    speedScale: 1.28,
+    groups: [
+      {
+        count: 2,
+        mix: only('Tank'),
+        doors: ['North'],
+        startMs: 3000,
+        intervalMs: 9000,
+      },
+      {
+        count: 47,
         mix: [
           { kind: 'Shambler', weight: 3 },
           { kind: 'Runner', weight: 2 },
           { kind: 'Exploder', weight: 1 },
         ],
         doors: ['West', 'East'],
-        startMs: 3000,
-        intervalMs: 1000,
+        startMs: 2000,
+        intervalMs: 1300,
       },
       {
-        count: 6,
+        count: 31,
         mix: [
           { kind: 'Shambler', weight: 2 },
           { kind: 'Runner', weight: 1 },
         ],
         doors: ['South'],
-        startMs: 10000,
-        intervalMs: 1000,
+        startMs: 18000,
+        intervalMs: 1100,
       },
     ],
   },
   {
-    speedScale: 1.15,
+    speedScale: 1.35,
     groups: [
       {
-        count: 1,
+        count: 2,
         mix: only('Tank'),
         doors: ['South'],
-        startMs: 6000,
-        intervalMs: 0,
-      },
-      {
-        count: 16,
-        mix: [
-          { kind: 'Shambler', weight: 3 },
-          { kind: 'Runner', weight: 2 },
-          { kind: 'Exploder', weight: 2 },
-        ],
-        doors: ALL_DOORS,
-        startMs: 400,
-        intervalMs: 800,
-      },
-      {
-        count: 10,
-        mix: [
-          { kind: 'Runner', weight: 2 },
-          { kind: 'Exploder', weight: 1 },
-        ],
-        doors: ['North', 'South'],
-        startMs: 5000,
-        intervalMs: 800,
-      },
-    ],
-  },
-  {
-    speedScale: 1.18,
-    groups: [
-      {
-        count: 2,
-        mix: only('Tank'),
-        doors: ['West', 'East'],
-        startMs: 1000,
-        intervalMs: 7000,
-      },
-      {
-        count: 18,
-        mix: [
-          { kind: 'Shambler', weight: 3 },
-          { kind: 'Runner', weight: 2 },
-          { kind: 'Exploder', weight: 2 },
-        ],
-        doors: ALL_DOORS,
-        startMs: 400,
-        intervalMs: 700,
-      },
-      {
-        count: 12,
-        mix: [
-          { kind: 'Shambler', weight: 1 },
-          { kind: 'Runner', weight: 2 },
-          { kind: 'Exploder', weight: 1 },
-        ],
-        doors: ['North', 'South'],
-        startMs: 6000,
-        intervalMs: 650,
-      },
-    ],
-  },
-  {
-    speedScale: 1.22,
-    groups: [
-      {
-        count: 2,
-        mix: only('Tank'),
-        doors: ['North', 'South'],
-        startMs: 1500,
-        intervalMs: 1500,
-      },
-      {
-        count: 2,
-        mix: only('Tank'),
-        doors: ['West', 'East'],
-        startMs: 13000,
-        intervalMs: 1500,
-      },
-      {
-        count: 20,
-        mix: [
-          { kind: 'Shambler', weight: 3 },
-          { kind: 'Runner', weight: 2 },
-          { kind: 'Exploder', weight: 2 },
-        ],
-        doors: ALL_DOORS,
-        startMs: 300,
-        intervalMs: 650,
-      },
-      {
-        count: 16,
-        mix: [
-          { kind: 'Shambler', weight: 1 },
-          { kind: 'Runner', weight: 2 },
-          { kind: 'Exploder', weight: 2 },
-        ],
-        doors: ALL_DOORS,
         startMs: 8000,
-        intervalMs: 500,
+        intervalMs: 10000,
+      },
+      {
+        count: 52,
+        mix: [
+          { kind: 'Shambler', weight: 3 },
+          { kind: 'Runner', weight: 2 },
+          { kind: 'Exploder', weight: 2 },
+        ],
+        doors: ALL_DOORS,
+        startMs: 500,
+        intervalMs: 1100,
+      },
+      {
+        count: 30,
+        mix: [
+          { kind: 'Runner', weight: 2 },
+          { kind: 'Exploder', weight: 1 },
+        ],
+        doors: ['North', 'South'],
+        startMs: 14000,
+        intervalMs: 1000,
+      },
+      {
+        count: 2,
+        mix: only('Tank'),
+        doors: ['East'],
+        startMs: 26000,
+        intervalMs: 8000,
+      },
+    ],
+  },
+  {
+    speedScale: 1.42,
+    groups: [
+      {
+        count: 3,
+        mix: only('Tank'),
+        doors: ['West', 'East'],
+        startMs: 2000,
+        intervalMs: 14000,
+      },
+      {
+        count: 54,
+        mix: [
+          { kind: 'Shambler', weight: 3 },
+          { kind: 'Runner', weight: 2 },
+          { kind: 'Exploder', weight: 2 },
+        ],
+        doors: ALL_DOORS,
+        startMs: 500,
+        intervalMs: 1000,
+      },
+      {
+        count: 33,
+        mix: [
+          { kind: 'Shambler', weight: 1 },
+          { kind: 'Runner', weight: 2 },
+          { kind: 'Exploder', weight: 1 },
+        ],
+        doors: ['North', 'South'],
+        startMs: 16000,
+        intervalMs: 900,
+      },
+    ],
+  },
+  {
+    speedScale: 1.49,
+    groups: [
+      {
+        count: 2,
+        mix: only('Tank'),
+        doors: ['North', 'South'],
+        startMs: 2000,
+        intervalMs: 2000,
+      },
+      {
+        count: 2,
+        mix: only('Tank'),
+        doors: ['West', 'East'],
+        startMs: 22000,
+        intervalMs: 2000,
+      },
+      {
+        count: 50,
+        mix: [
+          { kind: 'Shambler', weight: 3 },
+          { kind: 'Runner', weight: 2 },
+          { kind: 'Exploder', weight: 2 },
+        ],
+        doors: ALL_DOORS,
+        startMs: 400,
+        intervalMs: 900,
+      },
+      {
+        count: 40,
+        mix: [
+          { kind: 'Shambler', weight: 1 },
+          { kind: 'Runner', weight: 2 },
+          { kind: 'Exploder', weight: 2 },
+        ],
+        doors: ALL_DOORS,
+        startMs: 14000,
+        intervalMs: 800,
       },
     ],
   },
@@ -480,6 +489,10 @@ const startRun = (model: Model): Model =>
       flowField: () => flowFieldToward(initialPlayer, 'Narrow', []),
       wideFlowField: () => flowFieldToward(initialPlayer, 'Wide', []),
       intent: () => deriveIntent(model.input, initialPlayer),
+      stats: () => freshStats,
+      lessons: settleLessons,
+      hintBand: () => 'Top',
+      screenMs: () => 0,
     }),
     1,
     FIRST_PREPARATION_MS,
@@ -581,7 +594,10 @@ const payWaveBonus = (model: Model, wave: number): Model => {
 const clearWave = (model: Model, wave: number): Model => {
   const paid = payWaveBonus(model, wave)
   if (wave >= FINAL_WAVE) {
-    return modifyFields(paid, { phase: () => Phase.Victory() })
+    return modifyFields(paid, {
+      phase: () => Phase.Victory(),
+      screenMs: () => 0,
+    })
   } else {
     return beginPreparation(paid, wave + 1, PREPARATION_MS)
   }
@@ -645,6 +661,7 @@ export const endWhenDefeated = (model: Model): Model =>
   model.player.hp <= 0
     ? modifyFields(model, {
         phase: () => Phase.GameOver({ wave: roundWave(model.phase) }),
+        screenMs: () => 0,
       })
     : model
 
