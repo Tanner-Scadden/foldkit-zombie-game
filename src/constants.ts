@@ -22,8 +22,6 @@ export const PISTOL_DAMAGE = 1
 export const ZOMBIE_RADIUS = 4
 export const ZOMBIE_SPEED_MIN = 16
 export const ZOMBIE_SPEED_MAX = 28
-export const ZOMBIE_SPEED_GROWTH_PER_SECOND = 0.2
-export const ZOMBIE_SPEED_GROWTH_MAX = 24
 export const ZOMBIE_SPAWN_MARGIN = 10
 export const SCORE_PER_ZOMBIE = 10
 export const ZOMBIE_MAX_HP = 2
@@ -36,10 +34,23 @@ export const ZOMBIE_DYING_MS = 560
 
 export const KNOCKBACK_REST_SPEED = 2
 
-export const FIRST_SPAWN_DELAY_MS = 800
-export const SPAWN_INTERVAL_START_MS = 1500
-export const SPAWN_INTERVAL_MIN_MS = 260
-export const SPAWN_INTERVAL_DECAY_MS_PER_SECOND = 20
+export const TILE_SIZE = 10
+export const COLLISION_STEP_PX = 2
+export const BULLET_STEP_PX = 2
+
+export const DIRECT_CHASE_FULL_PX = 72
+export const DIRECT_CHASE_RANGE_PX = 104
+export const LINE_OF_SIGHT_STEP_PX = 3
+export const SEPARATION_DISTANCE = 8
+export const SEPARATION_SPEED = 40
+
+export const FINAL_WAVE = 8
+export const FIRST_PREPARATION_MS = 6000
+export const PREPARATION_MS = 20000
+export const SPAWN_JITTER_MS = 400
+export const DOOR_SPAWN_SPREAD_PX = 5
+export const WAVE_CLEARED_BANNER_MS = 2200
+export const WAVE_BANNER_MS = 1600
 
 export const STICK_RADIUS_PX = 56
 export const STICK_DEAD_ZONE = 0.15
@@ -127,6 +138,20 @@ export const DUST_DRAG_PER_SECOND = 5
 export const DUST_LIFETIME_MIN_MS = 260
 export const DUST_LIFETIME_MAX_MS = 460
 export const DUST_FADE_MS = 160
+
+export const CHIPS_PER_STRIKE = 4
+export const DUST_PER_STRIKE = 2
+export const CHIP_SPREAD = 1.6
+export const CHIP_SPEED_MIN = 30
+export const CHIP_SPEED_MAX = 70
+export const CHIP_LIFT_MIN = 25
+export const CHIP_LIFT_MAX = 55
+export const CHIP_HEIGHT = 4
+export const CHIP_GRAVITY = 280
+export const CHIP_DRAG_PER_SECOND = 2
+export const CHIP_RESTITUTION = 0.3
+export const CHIP_LIFETIME_MS = 700
+export const CHIP_COLOR = '#d8c8a8'
 
 export const MUZZLE_FLASH_MS = 34
 export const MUZZLE_FLASH_BIG_MS = 17

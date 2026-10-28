@@ -307,6 +307,18 @@ const HEART_PIXELS: ReadonlyArray<string> = [
   '...R...',
 ]
 
+const SKULL_PALETTE: Palette = { W: '#f4f1de', E: '#2a1418', D: '#8c1f24' }
+
+const SKULL_PIXELS: ReadonlyArray<string> = [
+  '.WWWWW.',
+  'WWWWWWW',
+  'WEEWEEW',
+  'WEEWEEW',
+  'WWWDWWW',
+  '.WWWWW.',
+  '.W.W.W.',
+]
+
 const GLYPH_PIXELS = {
   '0': ['###', '#.#', '#.#', '#.#', '###'],
   '1': ['.#.', '##.', '.#.', '.#.', '###'],
@@ -426,6 +438,8 @@ export const FLASH_HEART_SPRITE = spriteShapes(
   HEART_PIXELS,
   flashPalette(HEART_PALETTE),
 )
+
+export const SKULL_SPRITE = spriteShapes(SKULL_PIXELS, SKULL_PALETTE)
 
 export type Glyph = keyof typeof GLYPH_PIXELS
 export type GlyphTone = 'Damage' | 'Kill' | 'Streak'

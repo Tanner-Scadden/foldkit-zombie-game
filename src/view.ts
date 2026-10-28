@@ -12,6 +12,7 @@ import {
 import { Canvas, Mount } from 'foldkit'
 import { Document, Html, HtmlBuilder } from 'foldkit/html'
 
+import { DOORS } from './arena'
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
@@ -21,6 +22,7 @@ import {
   BULLET_SPEED,
   BULLET_TRAIL_COLOR,
   BULLET_TRAIL_PX,
+  CHIP_COLOR,
   DAMAGE_POPUP_HOP_PX,
   DAMAGE_POPUP_RISE_PX,
   DECAL_FADE_COUNT,
@@ -73,7 +75,6 @@ import {
   SHADOW_FADE_START,
   SHADOW_HEIGHT,
   SHADOW_HIDE_START,
-  SHAKE_MAX_PX,
   SHELL_COLOR,
   SHELL_DECAL_COLOR,
   SHELL_DECAL_FADED_COLOR,
@@ -86,6 +87,8 @@ import {
   STREAK_PULSE_SCALE,
   STREAK_SCALE,
   STREAK_WINDOW_MS,
+  WAVE_BANNER_MS,
+  WAVE_CLEARED_BANNER_MS,
   ZOMBIE_DEATH_FADE_START,
   ZOMBIE_DEATH_FALL_END,
   ZOMBIE_DEATH_LANDING_END,
@@ -124,7 +127,7 @@ import {
   type Zombie,
   ZombieState,
 } from './model'
-import { nextRandom } from './prng'
+import { ROOM_SHAPES } from './room'
 import {
   EMPTY_HEART_SPRITE,
   FLASH_HEART_SPRITE,
@@ -136,12 +139,20 @@ import {
   HEART_SPRITE,
   PLAYER_IDLE_FRAMES,
   PLAYER_WALK_FRAMES,
+  SKULL_SPRITE,
   type SpriteSet,
   type Tone,
   ZOMBIE_WALK_FRAMES,
   frameAt,
   toGlyph,
 } from './sprite'
+import {
+  type DoorCount,
+  FINAL_WAVE,
+  doorCounts,
+  isRoundActive,
+  zombiesRemaining,
+} from './waves'
 
 // MOUNT
 
@@ -177,11 +188,6 @@ export const MeasureGameSurface = Mount.defineStream('MeasureGameSurface', {
 
 // SCENE
 
-const GROUND_COLOR = '#1c2620'
-const SPECKLE_COLORS: ReadonlyArray<string> = ['#24331f', '#2b3a26', '#18201b']
-const SPECKLE_COUNT = 70
-const SPECKLE_SEED = 0x51ed270b
-const SPECKLE_INDEX_MIXER = 0x9e3779b1
 const BULLET_SIZE = 2
 const BULLET_COLOR = '#ffe066'
 const MUZZLE_SIZE = 2
@@ -197,35 +203,6 @@ const HINT_FONT = '7px monospace'
 const TITLE_COLOR = '#9be36a'
 const PROMPT_COLOR = '#ffe066'
 const HINT_COLOR = '#b8c2b0'
-
-const speckleShape = (index: number): Canvas.Shape => {
-  const xDraw = nextRandom(SPECKLE_SEED ^ Math.imul(index, SPECKLE_INDEX_MIXER))
-  const yDraw = nextRandom(xDraw.nextState)
-  const colorDraw = nextRandom(yDraw.nextState)
-  const color = pipe(
-    SPECKLE_COLORS,
-    Array.get(Math.floor(colorDraw.value * SPECKLE_COLORS.length)),
-    Option.getOrElse(() => GROUND_COLOR),
-  )
-  return Canvas.Rect({
-    x: Math.floor(xDraw.value * ARENA_WIDTH),
-    y: Math.floor(yDraw.value * ARENA_HEIGHT),
-    width: 2,
-    height: 1,
-    fill: color,
-  })
-}
-
-const BACKGROUND: ReadonlyArray<Canvas.Shape> = [
-  Canvas.Rect({
-    x: -SHAKE_MAX_PX,
-    y: -SHAKE_MAX_PX,
-    width: ARENA_WIDTH + SHAKE_MAX_PX * 2,
-    height: ARENA_HEIGHT + SHAKE_MAX_PX * 2,
-    fill: GROUND_COLOR,
-  }),
-  ...Array.makeBy(SPECKLE_COUNT, speckleShape),
-]
 
 const placeSprite = (
   x: number,
@@ -511,6 +488,7 @@ const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
   RotGib: ROT_GIB_COLOR,
   Shell: SHELL_COLOR,
   Dust: DUST_COLOR,
+  Chip: CHIP_COLOR,
 }
 
 const decalShapes = (
@@ -817,9 +795,62 @@ const heartShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
   return Array.makeBy(PLAYER_MAX_HP, heartShape(player.hp, maybeHeartPulseMs))
 }
 
+const SMALL_HUD_FONT = '7px monospace'
+const HUD_SUBTITLE_Y = 12
+
+const waveLabel = (wave: number): string => `WAVE ${wave} / ${FINAL_WAVE}`
+
+const secondsLeft = (remainingMs: number): number =>
+  Math.ceil(remainingMs / MS_PER_SECOND)
+
+const hudText = (
+  y: number,
+  content: string,
+  font: string,
+  fill: string,
+): Canvas.Shape =>
+  Canvas.Text({
+    x: ARENA_WIDTH / 2,
+    y,
+    content,
+    font,
+    fill,
+    align: 'Center',
+    baseline: 'Top',
+  })
+
+const roundHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+  Phase.match(model.phase, {
+    Ready: () => [],
+    Preparation: ({ wave, remainingMs }) => [
+      hudText(HUD_MARGIN - 2, waveLabel(wave), HUD_FONT, HUD_TEXT_COLOR),
+      hudText(
+        HUD_SUBTITLE_Y,
+        `STARTS IN ${secondsLeft(remainingMs)}`,
+        SMALL_HUD_FONT,
+        PROMPT_COLOR,
+      ),
+    ],
+    Wave: ({ wave, spawns }) => [
+      hudText(HUD_MARGIN - 2, waveLabel(wave), HUD_FONT, HUD_TEXT_COLOR),
+      hudText(
+        HUD_SUBTITLE_Y,
+        `ZOMBIES ${zombiesRemaining(model, spawns)}`,
+        SMALL_HUD_FONT,
+        HINT_COLOR,
+      ),
+    ],
+    Paused: ({ round }) => [
+      hudText(HUD_MARGIN - 2, waveLabel(round.wave), HUD_FONT, HUD_TEXT_COLOR),
+    ],
+    Victory: () => [],
+    GameOver: () => [],
+  })
+
 const hudShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...heartShapes(model.player),
   ...streakShapes(model.streak),
+  ...roundHudShapes(model),
   Canvas.Text({
     x: ARENA_WIDTH - HUD_MARGIN,
     y: HUD_MARGIN,
@@ -872,6 +903,60 @@ const CONTROL_HINTS: ReadonlyArray<Canvas.Shape> = [
   ),
 ]
 
+const VICTORY_COLOR = '#ffd23f'
+const DEFEAT_COLOR = '#e8333a'
+const BANNER_SHADOW_COLOR = '#140c10'
+const BANNER_Y = 66
+const BANNER_SUBTITLE_Y = 84
+
+const bannerText = (
+  y: number,
+  content: string,
+  font: string,
+  fill: string,
+): ReadonlyArray<Canvas.Shape> => [
+  centeredText(y + 1, content, font, BANNER_SHADOW_COLOR),
+  centeredText(y, content, font, fill),
+]
+
+const preparationBanner = (
+  wave: number,
+  remainingMs: number,
+  durationMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  if (wave === 1) {
+    return [
+      ...bannerText(BANNER_Y, 'GET READY', TITLE_FONT, TITLE_COLOR),
+      ...bannerText(
+        BANNER_SUBTITLE_Y,
+        'MOVE AND SHOOT. ENTER OR R STARTS THE WAVE',
+        HINT_FONT,
+        HINT_COLOR,
+      ),
+    ]
+  } else if (durationMs - remainingMs < WAVE_CLEARED_BANNER_MS) {
+    return bannerText(BANNER_Y, 'WAVE CLEARED', TITLE_FONT, VICTORY_COLOR)
+  } else {
+    return []
+  }
+}
+
+const waveBanner = (
+  wave: number,
+  elapsedMs: number,
+): ReadonlyArray<Canvas.Shape> =>
+  elapsedMs < WAVE_BANNER_MS
+    ? [
+        ...bannerText(BANNER_Y, `WAVE ${wave}`, TITLE_FONT, DEFEAT_COLOR),
+        ...bannerText(
+          BANNER_SUBTITLE_Y,
+          'HERE THEY COME',
+          PROMPT_FONT,
+          PROMPT_COLOR,
+        ),
+      ]
+    : []
+
 const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   Phase.match(model.phase, {
     Ready: () => [
@@ -880,27 +965,93 @@ const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
       centeredText(92, START_PROMPT, PROMPT_FONT, PROMPT_COLOR),
       ...CONTROL_HINTS,
     ],
-    Playing: () => [],
-    Paused: () => [
+    Preparation: ({ wave, remainingMs, durationMs }) =>
+      preparationBanner(wave, remainingMs, durationMs),
+    Wave: ({ wave, elapsedMs }) => waveBanner(wave, elapsedMs),
+    Paused: ({ round }) => [
       OVERLAY_BACKDROP,
-      centeredText(70, 'PAUSED', TITLE_FONT, TITLE_COLOR),
-      centeredText(98, `${START_PROMPT} TO RESUME`, PROMPT_FONT, PROMPT_COLOR),
+      centeredText(62, 'PAUSED', TITLE_FONT, TITLE_COLOR),
+      centeredText(82, waveLabel(round.wave), PROMPT_FONT, HUD_TEXT_COLOR),
+      centeredText(102, `${START_PROMPT} TO RESUME`, PROMPT_FONT, PROMPT_COLOR),
     ],
-    GameOver: () => [
+    Victory: () => [
       OVERLAY_BACKDROP,
-      centeredText(62, 'GAME OVER', TITLE_FONT, '#e8333a'),
-      centeredText(84, `SCORE ${model.score}`, PROMPT_FONT, HUD_TEXT_COLOR),
-      centeredText(106, `${START_PROMPT} TO RETRY`, PROMPT_FONT, PROMPT_COLOR),
+      centeredText(56, 'YOU SURVIVED!', TITLE_FONT, VICTORY_COLOR),
+      centeredText(
+        78,
+        `ALL ${FINAL_WAVE} WAVES CLEARED`,
+        PROMPT_FONT,
+        HUD_TEXT_COLOR,
+      ),
+      centeredText(92, `SCORE ${model.score}`, PROMPT_FONT, HUD_TEXT_COLOR),
+      centeredText(
+        114,
+        `${START_PROMPT} TO PLAY AGAIN`,
+        PROMPT_FONT,
+        PROMPT_COLOR,
+      ),
     ],
+    GameOver: ({ wave }) => [
+      OVERLAY_BACKDROP,
+      centeredText(56, 'GAME OVER', TITLE_FONT, DEFEAT_COLOR),
+      centeredText(78, waveLabel(wave), PROMPT_FONT, HUD_TEXT_COLOR),
+      centeredText(92, `SCORE ${model.score}`, PROMPT_FONT, HUD_TEXT_COLOR),
+      centeredText(114, `${START_PROMPT} TO RETRY`, PROMPT_FONT, PROMPT_COLOR),
+    ],
+  })
+
+// WAVE PREVIEW
+
+const DOOR_MARKER_INSET = 20
+const DOOR_MARKER_PULSE_MS = 700
+const DOOR_MARKER_PULSE = 0.15
+const DOOR_MARKER_GROWTH = 0.08
+const DOOR_MARKER_MAX_SCALE = 2.2
+const DOOR_MARKER_COUNT_GAP = 9
+
+const doorMarkerShapes =
+  (elapsedMs: number) =>
+  ({ door, count }: DoorCount): ReadonlyArray<Canvas.Shape> => {
+    const { center, outward } = DOORS[door]
+    const x = Math.round(center.x - outward.x * DOOR_MARKER_INSET)
+    const y = Math.round(center.y - outward.y * DOOR_MARKER_INSET)
+    const pulse =
+      1 +
+      DOOR_MARKER_PULSE *
+        Math.sin((FULL_TURN * elapsedMs) / DOOR_MARKER_PULSE_MS)
+    const scale =
+      Math.min(DOOR_MARKER_MAX_SCALE, 1 + count * DOOR_MARKER_GROWTH) * pulse
+    return [
+      Canvas.Group({
+        translate: { x, y },
+        scale: { x: scale, y: scale },
+        shapes: SKULL_SPRITE,
+      }),
+      Canvas.Group({
+        translate: { x, y: y + DOOR_MARKER_COUNT_GAP + Math.round(scale * 2) },
+        shapes: glyphRowShapes(`x${count}`, 'Kill'),
+      }),
+    ]
+  }
+
+const wavePreviewShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+  Phase.match(model.phase, {
+    Ready: () => [],
+    Preparation: ({ spawns }) =>
+      Array.flatMap(doorCounts(spawns), doorMarkerShapes(model.elapsedMs)),
+    Wave: () => [],
+    Paused: () => [],
+    Victory: () => [],
+    GameOver: () => [],
   })
 
 const STILL: Vector = { x: 0, y: 0 }
 
 const shakeOffset = (model: Model): Vector =>
-  Phase.guards.Playing(model.phase) ? model.shake.offset : STILL
+  isRoundActive(model.phase) ? model.shake.offset : STILL
 
 const worldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
-  ...BACKGROUND,
+  ...ROOM_SHAPES,
   ...decalShapes(model.decals),
   ...shadowShapes(model),
   ...groundParticleShapes(model.particles),
@@ -912,19 +1063,27 @@ const worldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
 
 export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   Canvas.Group({ translate: shakeOffset(model), shapes: worldShapes(model) }),
+  ...wavePreviewShapes(model),
   ...hudShapes(model),
   ...overlayShapes(model),
 ]
 
 // VIEW
 
+const statusWave = (wave: number): string => `wave ${wave} of ${FINAL_WAVE}`
+
 export const statusText = (model: Model): string =>
   Phase.match(model.phase, {
     Ready: () => 'Tap, click, or press Enter to start.',
-    Playing: () => 'Game in progress.',
-    Paused: () => 'Paused. Tap, click, or press Enter to resume.',
-    GameOver: () =>
-      `Game over. Score ${model.score}. Tap, click, or press Enter to play again.`,
+    Preparation: ({ wave }) =>
+      `Get ready for ${statusWave(wave)}. Press Enter or R, or use the Start wave button, to start it now.`,
+    Wave: ({ wave }) => `Fighting ${statusWave(wave)}.`,
+    Paused: ({ round }) =>
+      `Paused during ${statusWave(round.wave)}. Tap, click, or press Enter to resume.`,
+    Victory: () =>
+      `Victory. All ${FINAL_WAVE} waves survived. Score ${model.score}. Tap, click, or press Enter to play again.`,
+    GameOver: ({ wave }) =>
+      `Game over on ${statusWave(wave)}. Score ${model.score}. Tap, click, or press Enter to play again.`,
   })
 
 const PRIMARY_MOUSE_BUTTON = 0
@@ -1002,6 +1161,47 @@ const muteButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
   )
 }
 
+const preparationTimerView = (
+  wave: number,
+  remainingMs: number,
+  h: HtmlBuilder<Message>,
+): Html =>
+  h.p(
+    [h.Class('sr-only'), h.Role('timer')],
+    [`${secondsLeft(remainingMs)} seconds until wave ${wave}.`],
+  )
+
+const startWaveButtonView = (wave: number, h: HtmlBuilder<Message>): Html =>
+  h.button(
+    [
+      h.Type('button'),
+      h.Class('start-wave-button'),
+      h.AriaLabel(`Start wave ${wave} now`),
+      h.AriaKeyshortcuts('Enter R'),
+      h.OnClick(Message.ClickedStartWaveButton(), {
+        focusSelector: '.game-surface',
+      }),
+    ],
+    ['START WAVE'],
+  )
+
+const preparationControlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  Phase.match(model.phase, {
+    Ready: () => h.empty,
+    Preparation: ({ wave, remainingMs }) =>
+      h.div(
+        [h.Class('preparation-controls')],
+        [
+          preparationTimerView(wave, remainingMs, h),
+          startWaveButtonView(wave, h),
+        ],
+      ),
+    Wave: () => h.empty,
+    Paused: () => h.empty,
+    Victory: () => h.empty,
+    GameOver: () => h.empty,
+  })
+
 export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
   title: 'Zombie Shooter',
   body: h.main(
@@ -1033,6 +1233,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
           stickView(model.input.aimStick, 'aim', h),
         ],
       ),
+      preparationControlsView(model, h),
       muteButtonView(model, h),
     ],
   ),

@@ -1,6 +1,7 @@
-import { Array, Option, pipe } from 'effect'
+import { Array, Option, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { findStrike, moveCircle } from './arena'
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
@@ -8,7 +9,6 @@ import {
   BULLET_RADIUS,
   BULLET_SPEED,
   FIRE_INTERVAL_MS,
-  FIRST_SPAWN_DELAY_MS,
   KNOCKBACK_REST_SPEED,
   MAX_FRAME_DELTA_MS,
   MS_PER_SECOND,
@@ -21,21 +21,14 @@ import {
   PLAYER_RECOIL_MS,
   PLAYER_SPEED,
   SCORE_PER_ZOMBIE,
-  SPAWN_INTERVAL_DECAY_MS_PER_SECOND,
-  SPAWN_INTERVAL_MIN_MS,
-  SPAWN_INTERVAL_START_MS,
+  SEPARATION_DISTANCE,
+  SEPARATION_SPEED,
   ZOMBIE_BUMP_SPEED,
   ZOMBIE_DYING_MS,
   ZOMBIE_HIT_PULSE_MS,
   ZOMBIE_KNOCKBACK_DECAY_PER_SECOND,
   ZOMBIE_KNOCKBACK_SPEED,
-  ZOMBIE_MAX_HP,
   ZOMBIE_RADIUS,
-  ZOMBIE_SPAWN_MARGIN,
-  ZOMBIE_SPEED_GROWTH_MAX,
-  ZOMBIE_SPEED_GROWTH_PER_SECOND,
-  ZOMBIE_SPEED_MAX,
-  ZOMBIE_SPEED_MIN,
 } from './constants'
 import {
   ZERO_VECTOR,
@@ -51,63 +44,26 @@ import { deriveIntent } from './input'
 import { advanceJuice, thawHitStop } from './juice'
 import {
   type Bullet,
+  type FlowField,
   GameEvent,
   HitStop,
   Invulnerability,
   type Model,
-  Phase,
   type Player,
-  Streak,
   type Vector,
   type Zombie,
   ZombieState,
-  initialHitStop,
-  initialPlayer,
-  stillShake,
 } from './model'
 import { advanceParticles } from './particles'
-import { nextRandom } from './prng'
+import { refreshFlowField, steerToward } from './pathing'
+import { advanceRound, endWhenDefeated } from './waves'
 
-// ROUND
+// INTENT
 
 export const refreshIntent = (model: Model): Model =>
   modifyFields(model, {
     intent: () => deriveIntent(model.input, model.player),
   })
-
-const startRound = (model: Model): Model =>
-  refreshIntent(
-    modifyFields(model, {
-      phase: () => Phase.Playing(),
-      player: () => initialPlayer,
-      zombies: () => [],
-      bullets: () => [],
-      particles: () => [],
-      decals: () => [],
-      dustCooldownMs: () => 0,
-      score: () => 0,
-      elapsedMs: () => 0,
-      frameEvents: () => [],
-      hitStop: () => initialHitStop,
-      shake: () => stillShake,
-      popups: () => [],
-      streak: () => Streak.Cold(),
-      spawnCooldownMs: () => FIRST_SPAWN_DELAY_MS,
-    }),
-  )
-
-export const startOrResume = (model: Model): Model =>
-  Phase.match(model.phase, {
-    Ready: () => startRound(model),
-    Playing: () => model,
-    Paused: () => modifyFields(model, { phase: () => Phase.Playing() }),
-    GameOver: () => startRound(model),
-  })
-
-export const pause = (model: Model): Model =>
-  Phase.guards.Playing(model.phase)
-    ? modifyFields(model, { phase: () => Phase.Paused() })
-    : model
 
 // TIMERS
 
@@ -148,19 +104,14 @@ const movePlayer = (
   deltaMs: number,
 ): Player => {
   const velocity = addVectors(scaleVector(move, PLAYER_SPEED), player.knockback)
+  const moved = moveCircle(
+    player,
+    scaleVector(velocity, seconds),
+    PLAYER_RADIUS,
+  )
   return modifyFields(player, {
-    x: x =>
-      clamp(
-        x + velocity.x * seconds,
-        PLAYER_RADIUS,
-        ARENA_WIDTH - PLAYER_RADIUS,
-      ),
-    y: y =>
-      clamp(
-        y + velocity.y * seconds,
-        PLAYER_RADIUS,
-        ARENA_HEIGHT - PLAYER_RADIUS,
-      ),
+    x: () => clamp(moved.x, PLAYER_RADIUS, ARENA_WIDTH - PLAYER_RADIUS),
+    y: () => clamp(moved.y, PLAYER_RADIUS, ARENA_HEIGHT - PLAYER_RADIUS),
     knockback: knockback =>
       decayKnockback(knockback, PLAYER_KNOCKBACK_DECAY_PER_SECOND, seconds),
     invulnerability: invulnerability =>
@@ -248,16 +199,44 @@ const advanceBullet =
       remainingMs: remainingMs => remainingMs - deltaMs,
     })
 
+type BulletFlight = Result.Result<Bullet, Option.Option<GameEvent>>
+
+const flyBullet =
+  (seconds: number, deltaMs: number) =>
+  (bullet: Bullet): BulletFlight => {
+    const advanced = advanceBullet(seconds, deltaMs)(bullet)
+    return Option.match(findStrike(bullet, advanced), {
+      onSome: point =>
+        Result.fail(
+          Option.some(
+            GameEvent.BulletStruck({
+              x: point.x,
+              y: point.y,
+              direction: bulletDirection(bullet),
+            }),
+          ),
+        ),
+      onNone: () =>
+        advanced.remainingMs > 0 && isInsideArena(advanced)
+          ? Result.succeed(advanced)
+          : Result.fail(Option.none()),
+    })
+  }
+
 const advanceBullets = (
-  bullets: ReadonlyArray<Bullet>,
+  model: Model,
   seconds: number,
   deltaMs: number,
-): ReadonlyArray<Bullet> =>
-  pipe(
-    bullets,
-    Array.map(advanceBullet(seconds, deltaMs)),
-    Array.filter(bullet => bullet.remainingMs > 0 && isInsideArena(bullet)),
+): Model => {
+  const [flying, stopped] = Array.partition(
+    model.bullets,
+    flyBullet(seconds, deltaMs),
   )
+  return modifyFields(model, {
+    bullets: () => flying,
+    frameEvents: frameEvents => [...frameEvents, ...Array.getSomes(stopped)],
+  })
+}
 
 // ZOMBIES
 
@@ -270,13 +249,51 @@ const isFinishedDying = (zombie: Zombie): boolean =>
     Dying: ({ remainingMs }) => remainingMs <= 0,
   })
 
-const chaseVelocity = (zombie: Zombie, target: Vector): Vector =>
+// SEPARATION
+
+const pushApart = (zombie: Zombie, other: Zombie): Vector => {
+  const deltaX = zombie.x - other.x
+  const deltaY = zombie.y - other.y
+  const distance = Math.hypot(deltaX, deltaY)
+  if (other.id === zombie.id || distance >= SEPARATION_DISTANCE) {
+    return ZERO_VECTOR
+  }
+
+  const strength = (SEPARATION_DISTANCE - distance) / SEPARATION_DISTANCE
+  if (distance > 0) {
+    return {
+      x: (deltaX / distance) * strength,
+      y: (deltaY / distance) * strength,
+    }
+  } else {
+    return { x: zombie.id < other.id ? -strength : strength, y: 0 }
+  }
+}
+
+const separationPushes = (
+  zombies: ReadonlyArray<Zombie>,
+): ReadonlyArray<Vector> => {
+  const walking = Array.filter(zombies, isWalking)
+  return Array.map(zombies, zombie =>
+    isWalking(zombie)
+      ? Array.reduce(walking, ZERO_VECTOR, (push, other) =>
+          addVectors(push, pushApart(zombie, other)),
+        )
+      : ZERO_VECTOR,
+  )
+}
+
+const steeringVelocity = (
+  zombie: Zombie,
+  flowField: FlowField,
+  target: Vector,
+): Vector =>
   ZombieState.match(zombie.state, {
     Walking: () =>
-      Option.match(directionBetween(zombie, target), {
-        onNone: () => ZERO_VECTOR,
-        onSome: direction => scaleVector(direction, zombie.speed),
-      }),
+      scaleVector(
+        steerToward(flowField, zombie, target, ZOMBIE_RADIUS - 1),
+        zombie.speed,
+      ),
     Dying: () => ZERO_VECTOR,
   })
 
@@ -287,31 +304,54 @@ const tickZombieState = (state: ZombieState, deltaMs: number): ZombieState =>
       ZombieState.Dying({ remainingMs: remainingMs - deltaMs, direction }),
   })
 
-const advanceZombie =
-  (target: Vector, seconds: number, deltaMs: number) =>
-  (zombie: Zombie): Zombie => {
-    const velocity = addVectors(chaseVelocity(zombie, target), zombie.knockback)
-    return modifyFields(zombie, {
-      x: x => x + velocity.x * seconds,
-      y: y => y + velocity.y * seconds,
-      knockback: knockback =>
-        decayKnockback(knockback, ZOMBIE_KNOCKBACK_DECAY_PER_SECOND, seconds),
-      hitRemainingMs: remainingMs => countDown(remainingMs, deltaMs),
-      state: state => tickZombieState(state, deltaMs),
-    })
-  }
-
-const advanceZombies = (
-  zombies: ReadonlyArray<Zombie>,
+const advanceZombie = (
+  zombie: Zombie,
+  separation: Vector,
+  flowField: FlowField,
   target: Vector,
   seconds: number,
   deltaMs: number,
-): ReadonlyArray<Zombie> =>
-  pipe(
-    zombies,
-    Array.map(advanceZombie(target, seconds, deltaMs)),
+): Zombie => {
+  const velocity = addVectors(
+    addVectors(steeringVelocity(zombie, flowField, target), zombie.knockback),
+    scaleVector(separation, SEPARATION_SPEED),
+  )
+  const moved = moveCircle(
+    zombie,
+    scaleVector(velocity, seconds),
+    ZOMBIE_RADIUS,
+  )
+  return modifyFields(zombie, {
+    x: () => moved.x,
+    y: () => moved.y,
+    knockback: knockback =>
+      decayKnockback(knockback, ZOMBIE_KNOCKBACK_DECAY_PER_SECOND, seconds),
+    hitRemainingMs: remainingMs => countDown(remainingMs, deltaMs),
+    state: state => tickZombieState(state, deltaMs),
+  })
+}
+
+const advanceZombies = (
+  model: Model,
+  seconds: number,
+  deltaMs: number,
+): ReadonlyArray<Zombie> => {
+  const separations = separationPushes(model.zombies)
+  return pipe(
+    model.zombies,
+    Array.map((zombie, index) =>
+      advanceZombie(
+        zombie,
+        Option.getOrElse(Array.get(separations, index), () => ZERO_VECTOR),
+        model.flowField,
+        model.player,
+        seconds,
+        deltaMs,
+      ),
+    ),
     Array.filter(zombie => !isFinishedDying(zombie)),
   )
+}
 
 type BulletHit = Readonly<{
   bulletId: number
@@ -467,86 +507,7 @@ const resolvePlayerContact = (model: Model): Model => {
   })
 }
 
-// SPAWNING
-
-export const spawnInterval = (elapsedMs: number): number =>
-  Math.max(
-    SPAWN_INTERVAL_MIN_MS,
-    SPAWN_INTERVAL_START_MS -
-      (elapsedMs / MS_PER_SECOND) * SPAWN_INTERVAL_DECAY_MS_PER_SECOND,
-  )
-
-const EDGE_COUNT = 4
-
-const spawnPoint = (edgeRoll: number, alongRoll: number): Vector => {
-  const edge = Math.floor(edgeRoll * EDGE_COUNT)
-  if (edge === 0) {
-    return { x: alongRoll * ARENA_WIDTH, y: -ZOMBIE_SPAWN_MARGIN }
-  } else if (edge === 1) {
-    return {
-      x: ARENA_WIDTH + ZOMBIE_SPAWN_MARGIN,
-      y: alongRoll * ARENA_HEIGHT,
-    }
-  } else if (edge === 2) {
-    return {
-      x: alongRoll * ARENA_WIDTH,
-      y: ARENA_HEIGHT + ZOMBIE_SPAWN_MARGIN,
-    }
-  } else {
-    return { x: -ZOMBIE_SPAWN_MARGIN, y: alongRoll * ARENA_HEIGHT }
-  }
-}
-
-const speedBonus = (elapsedMs: number): number =>
-  Math.min(
-    ZOMBIE_SPEED_GROWTH_MAX,
-    (elapsedMs / MS_PER_SECOND) * ZOMBIE_SPEED_GROWTH_PER_SECOND,
-  )
-
-const spawnZombie = (model: Model): Model => {
-  const edgeDraw = nextRandom(model.rngState)
-  const alongDraw = nextRandom(edgeDraw.nextState)
-  const speedDraw = nextRandom(alongDraw.nextState)
-  const point = spawnPoint(edgeDraw.value, alongDraw.value)
-  const zombie: Zombie = {
-    id: model.nextEntityId,
-    x: point.x,
-    y: point.y,
-    speed:
-      ZOMBIE_SPEED_MIN +
-      (ZOMBIE_SPEED_MAX - ZOMBIE_SPEED_MIN) * speedDraw.value +
-      speedBonus(model.elapsedMs),
-    hp: ZOMBIE_MAX_HP,
-    knockback: ZERO_VECTOR,
-    hitRemainingMs: 0,
-    state: ZombieState.Walking(),
-  }
-
-  return modifyFields(model, {
-    zombies: Array.append(zombie),
-    nextEntityId: id => id + 1,
-    rngState: () => speedDraw.nextState,
-    spawnCooldownMs: cooldown => cooldown + spawnInterval(model.elapsedMs),
-  })
-}
-
-const spawnWhenDue = (model: Model, deltaMs: number): Model => {
-  const counted = modifyFields(model, {
-    spawnCooldownMs: cooldown => cooldown - deltaMs,
-  })
-  if (counted.spawnCooldownMs <= 0) {
-    return spawnZombie(counted)
-  } else {
-    return counted
-  }
-}
-
 // FRAME
-
-const endWhenDefeated = (model: Model): Model =>
-  model.player.hp <= 0
-    ? modifyFields(model, { phase: () => Phase.GameOver() })
-    : model
 
 export const clampFrameDelta = (deltaTime: number): number =>
   clamp(deltaTime, 0, MAX_FRAME_DELTA_MS)
@@ -561,12 +522,14 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
       frameEvents: () => [],
     }),
   )
+  const routed = modifyFields(moved, {
+    flowField: flowField => refreshFlowField(flowField, moved.player),
+  })
 
-  const armed = fire(faceTowardIntent(moved), deltaMs)
+  const armed = fire(faceTowardIntent(routed), deltaMs)
 
-  const advanced = modifyFields(armed, {
-    bullets: bullets => advanceBullets(bullets, seconds, deltaMs),
-    zombies: zombies => advanceZombies(zombies, armed.player, seconds, deltaMs),
+  const advanced = modifyFields(advanceBullets(armed, seconds, deltaMs), {
+    zombies: () => advanceZombies(armed, seconds, deltaMs),
   })
 
   return pipe(
@@ -574,7 +537,7 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
     resolveBulletHits,
     resolvePlayerContact,
     contacted => advanceParticles(contacted, seconds, deltaMs),
-    spawned => spawnWhenDue(spawned, deltaMs),
+    particled => advanceRound(particled, deltaMs),
     endWhenDefeated,
   )
 }

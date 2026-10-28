@@ -1,6 +1,7 @@
 import { Array, Option, Result } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { isSolidAt } from './arena'
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
@@ -14,6 +15,17 @@ import {
   BLOOD_SPEED_MAX,
   BLOOD_SPEED_MIN,
   BLOOD_SPRAY_SPREAD,
+  CHIPS_PER_STRIKE,
+  CHIP_DRAG_PER_SECOND,
+  CHIP_GRAVITY,
+  CHIP_HEIGHT,
+  CHIP_LIFETIME_MS,
+  CHIP_LIFT_MAX,
+  CHIP_LIFT_MIN,
+  CHIP_RESTITUTION,
+  CHIP_SPEED_MAX,
+  CHIP_SPEED_MIN,
+  CHIP_SPREAD,
   DECAL_MAX,
   DUST_DRAG_PER_SECOND,
   DUST_HURT_SPEED_MAX,
@@ -23,6 +35,7 @@ import {
   DUST_LIFETIME_MIN_MS,
   DUST_LIFT,
   DUST_PER_HURT,
+  DUST_PER_STRIKE,
   DUST_SPEED_MAX,
   DUST_SPEED_MIN,
   GIB_DRAG_PER_SECOND,
@@ -103,6 +116,12 @@ const PHYSICS: Readonly<Record<ParticleKind, ParticlePhysics>> = {
     restitution: 0,
     maybeDecalKind: Option.none(),
   },
+  Chip: {
+    gravity: CHIP_GRAVITY,
+    dragPerSecond: CHIP_DRAG_PER_SECOND,
+    restitution: CHIP_RESTITUTION,
+    maybeDecalKind: Option.none(),
+  },
 }
 
 const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
@@ -122,7 +141,11 @@ const leftDecal = (decal: Decal): ParticleStep =>
   Result.fail(Option.some(decal))
 
 const isOnFloor = (x: number, y: number): boolean =>
-  x >= 0 && x < ARENA_WIDTH && y >= 0 && y < ARENA_HEIGHT
+  x >= 0 &&
+  x < ARENA_WIDTH &&
+  y >= 0 &&
+  y < ARENA_HEIGHT &&
+  !isSolidAt({ x, y })
 
 const land = (particle: Particle, x: number, y: number): ParticleStep => {
   const floorX = Math.round(x)
@@ -335,6 +358,27 @@ const dustPuff =
     ]
   }
 
+const chip =
+  (ground: Vector, heading: number) =>
+  (state: number): Seeded<Particle> => {
+    const angleDraw = nextRandom(state)
+    const speedDraw = nextRandom(angleDraw.nextState)
+    const liftDraw = nextRandom(speedDraw.nextState)
+    return [
+      liftDraw.nextState,
+      launch({
+        kind: 'Chip',
+        ground,
+        height: CHIP_HEIGHT,
+        angle: heading + (angleDraw.value - 0.5) * CHIP_SPREAD,
+        speed: between(speedDraw.value, CHIP_SPEED_MIN, CHIP_SPEED_MAX),
+        lift: between(liftDraw.value, CHIP_LIFT_MIN, CHIP_LIFT_MAX),
+        size: 1,
+        lifetimeMs: CHIP_LIFETIME_MS,
+      }),
+    ]
+  }
+
 const chain = (
   state: number,
   batches: ReadonlyArray<
@@ -405,6 +449,25 @@ const eventParticles = (
           DUST_HURT_SPEED_MIN,
         )(DUST_HURT_SPEED_MAX),
       ),
+    BulletStruck: ({ x, y, direction }) => {
+      const ground = { x, y }
+      const heading = angleOf(direction) + Math.PI
+      return chain(state, [
+        drawState =>
+          generateMany(drawState, CHIPS_PER_STRIKE, chip(ground, heading)),
+        drawState =>
+          generateMany(
+            drawState,
+            DUST_PER_STRIKE,
+            dustPuff(
+              ground,
+              heading,
+              CHIP_SPREAD,
+              DUST_SPEED_MIN,
+            )(DUST_SPEED_MAX),
+          ),
+      ])
+    },
   })
 
 type Spawn = Readonly<{

@@ -45,7 +45,20 @@ const withAudio = (base: Model, audio: AudioState): Model =>
 
 const playing = (audio: AudioState): Model =>
   modifyFields(withAudio(readyScreen, audio), {
-    phase: () => Phase.Playing(),
+    phase: () =>
+      Phase.Wave({
+        wave: 1,
+        elapsedMs: 0,
+        spawns: [
+          {
+            atMs: 1e9,
+            kind: 'Shambler',
+            door: 'North',
+            offset: 0,
+            speedBonus: 0,
+          },
+        ],
+      }),
   })
 
 const zombieAt = (id: number, x: number, y: number): Zombie => ({
@@ -260,7 +273,7 @@ describe('frame sounds', () => {
       oneHitZombieAt(
         200 + index,
         20 + (index % 10) * 30,
-        20 + Math.floor(index / 10) * 40,
+        25 + Math.floor(index / 10) * 40,
       ),
     )
     const killingBullets = Array.map(victims, ({ id, x, y }): Bullet => ({

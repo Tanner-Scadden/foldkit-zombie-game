@@ -94,6 +94,7 @@ const eventTrauma = (event: GameEvent): number =>
     ZombieHit: () => 0,
     ZombieKilled: () => SHAKE_TRAUMA_KILL,
     PlayerHurt: () => SHAKE_TRAUMA_HURT,
+    BulletStruck: () => 0,
   })
 
 const shakeAxis = (roll: number, trauma: number): number => {
@@ -183,6 +184,7 @@ const eventPopups = (
         popup('Kill', SCORE_PER_ZOMBIE, x, y - KILL_POPUP_LIFT_PX),
       ),
     PlayerHurt: () => noPopups(state),
+    BulletStruck: () => noPopups(state),
   })
 
 const agePopups = (

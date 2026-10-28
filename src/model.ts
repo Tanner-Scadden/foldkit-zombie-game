@@ -5,9 +5,9 @@ import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
   DEFAULT_SEED,
-  FIRST_SPAWN_DELAY_MS,
   PLAYER_MAX_HP,
 } from './constants'
+import { flowFieldToward } from './pathing'
 
 export const Vector = Schema.Struct({ x: Schema.Number, y: Schema.Number })
 export type Vector = typeof Vector.Type
@@ -112,6 +112,7 @@ export const ParticleKind = Schema.Literals([
   'RotGib',
   'Shell',
   'Dust',
+  'Chip',
 ])
 export type ParticleKind = typeof ParticleKind.Type
 
@@ -150,6 +151,7 @@ export const GameEvent = defineTaggedUnion({
   },
   ZombieKilled: { x: Schema.Number, y: Schema.Number, direction: Vector },
   PlayerHurt: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  BulletStruck: { x: Schema.Number, y: Schema.Number, direction: Vector },
 })
 export type GameEvent = typeof GameEvent.Type
 
@@ -193,13 +195,55 @@ export type AudioState = typeof AudioState.Type
 export const SoundSetting = Schema.Literals(['On', 'Muted'])
 export type SoundSetting = typeof SoundSetting.Type
 
+export const DoorId = Schema.Literals(['North', 'West', 'East', 'South'])
+export type DoorId = typeof DoorId.Type
+
+export const ZombieKind = Schema.Literals(['Shambler'])
+export type ZombieKind = typeof ZombieKind.Type
+
+export const PlannedSpawn = Schema.Struct({
+  atMs: Schema.Number,
+  kind: ZombieKind,
+  door: DoorId,
+  offset: Schema.Number,
+  speedBonus: Schema.Number,
+})
+export type PlannedSpawn = typeof PlannedSpawn.Type
+
+const preparationFields = {
+  wave: Schema.Number,
+  remainingMs: Schema.Number,
+  durationMs: Schema.Number,
+  spawns: Schema.Array(PlannedSpawn),
+}
+
+const waveFields = {
+  wave: Schema.Number,
+  elapsedMs: Schema.Number,
+  spawns: Schema.Array(PlannedSpawn),
+}
+
+export const Round = defineTaggedUnion({
+  Preparation: preparationFields,
+  Wave: waveFields,
+})
+export type Round = typeof Round.Type
+
 export const Phase = defineTaggedUnion({
   Ready: {},
-  Playing: {},
-  Paused: {},
-  GameOver: {},
+  Preparation: preparationFields,
+  Wave: waveFields,
+  Paused: { round: Round },
+  Victory: {},
+  GameOver: { wave: Schema.Number },
 })
 export type Phase = typeof Phase.Type
+
+export const FlowField = Schema.Struct({
+  originIndex: Schema.Number,
+  distances: Schema.Array(Schema.Number),
+})
+export type FlowField = typeof FlowField.Type
 
 export const Model = Schema.Struct({
   phase: Phase,
@@ -217,7 +261,7 @@ export const Model = Schema.Struct({
   shake: Shake,
   popups: Schema.Array(Popup),
   streak: Streak,
-  spawnCooldownMs: Schema.Number,
+  flowField: FlowField,
   rngState: Schema.Number,
   input: Input,
   intent: Intent,
@@ -272,7 +316,7 @@ export const initialModel: Model = {
   shake: stillShake,
   popups: [],
   streak: Streak.Cold(),
-  spawnCooldownMs: FIRST_SPAWN_DELAY_MS,
+  flowField: flowFieldToward(initialPlayer),
   rngState: DEFAULT_SEED,
   input: idleInput,
   intent: idleIntent,

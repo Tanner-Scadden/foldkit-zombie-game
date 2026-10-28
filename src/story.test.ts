@@ -51,6 +51,7 @@ import {
   MouseButton,
   type Particle,
   Phase,
+  type PlannedSpawn,
   Stick,
   Streak,
   type Zombie,
@@ -68,8 +69,22 @@ const readyModel: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some(SURFACE),
 })
 
+const DISTANT_SPAWN: PlannedSpawn = {
+  atMs: 1e9,
+  kind: 'Shambler',
+  door: 'North',
+  offset: 0,
+  speedBonus: 0,
+}
+
+const FIGHTING_PHASE: Phase = Phase.Wave({
+  wave: 1,
+  elapsedMs: 0,
+  spawns: [DISTANT_SPAWN],
+})
+
 const playingModel: Model = modifyFields(readyModel, {
-  phase: () => Phase.Playing(),
+  phase: () => FIGHTING_PHASE,
 })
 
 const zombieAt = (id: number, x: number, y: number, speed = 20): Zombie => ({
@@ -196,13 +211,13 @@ describe('keyboard intent', () => {
     )
   })
 
-  test('Enter starts the game from the Ready screen', () => {
+  test('Enter starts the run in the first preparation', () => {
     story(
       update,
       given(readyModel),
       message(Message.PressedKey({ code: 'Enter' })),
       model(({ phase }) => {
-        expect(phase).toEqual(Phase.Playing())
+        expect(Phase.guards.Preparation(phase)).toBe(true)
       }),
     )
   })
@@ -262,13 +277,13 @@ describe('firing', () => {
 })
 
 describe('zombies', () => {
-  test('chase the player', () => {
+  test('chase a nearby player in a straight line', () => {
     story(
       update,
-      given(withZombies(playingModel, [zombieAt(100, 10, ARENA_HEIGHT / 2)])),
+      given(withZombies(playingModel, [zombieAt(100, 100, ARENA_HEIGHT / 2)])),
       tick(50),
       model(({ zombies }) => {
-        expect(zombies).toEqual([zombieAt(100, 11, ARENA_HEIGHT / 2)])
+        expect(zombies).toEqual([zombieAt(100, 101, ARENA_HEIGHT / 2)])
       }),
     )
   })
@@ -400,7 +415,7 @@ describe('zombies', () => {
         expect(player.invulnerability).toEqual(
           Invulnerability.Invulnerable({ remainingMs: PLAYER_INVULNERABLE_MS }),
         )
-        expect(phase).toEqual(Phase.Playing())
+        expect(Phase.guards.Wave(phase)).toBe(true)
       }),
       ...waitOutFreeze(HIT_STOP_HURT_MS),
       tick(FRAME_MS),
@@ -440,7 +455,7 @@ describe('zombies', () => {
     )
   })
 
-  test('the game ends when HP reaches zero, and Enter starts a fresh round', () => {
+  test('the game ends when HP reaches zero, and Enter starts a fresh run', () => {
     const lastHeartModel = withZombies(
       modifyFields(playingModel, {
         player: player => modifyFields(player, { hp: () => 1 }),
@@ -454,7 +469,7 @@ describe('zombies', () => {
       given(lastHeartModel),
       tick(16),
       model(({ phase, player, score }) => {
-        expect(phase).toEqual(Phase.GameOver())
+        expect(phase).toEqual(Phase.GameOver({ wave: 1 }))
         expect(player.hp).toBe(0)
         expect(score).toBe(120)
       }),
@@ -464,26 +479,10 @@ describe('zombies', () => {
       }),
       message(Message.PressedKey({ code: 'Enter' })),
       model(({ phase, player, score, zombies }) => {
-        expect(phase).toEqual(Phase.Playing())
+        expect(Phase.guards.Preparation(phase)).toBe(true)
         expect(player.hp).toBe(PLAYER_MAX_HP)
         expect(score).toBe(0)
         expect(zombies).toEqual([])
-      }),
-    )
-  })
-
-  test('spawn off-screen once the spawn cooldown elapses', () => {
-    story(
-      update,
-      given(playingModel),
-      ...ticks(20, 50),
-      model(({ zombies }) => {
-        expect(zombies).toHaveLength(1)
-        const isOffScreen = Array.some(
-          zombies,
-          ({ x, y }) => x < 0 || x > ARENA_WIDTH || y < 0 || y > ARENA_HEIGHT,
-        )
-        expect(isOffScreen).toBe(true)
       }),
     )
   })
@@ -565,6 +564,7 @@ describe('determinism', () => {
       update,
       given(modifyFields(readyModel, { rngState: () => seed })),
       message(Message.PressedKey({ code: 'Enter' })),
+      message(Message.PressedKey({ code: 'KeyR' })),
       message(Message.PressedKey({ code: 'Space' })),
       message(Message.PressedKey({ code: 'KeyW' })),
       ...ticks(120, 16),
@@ -699,7 +699,7 @@ describe('particles and decals', () => {
         zombieAt(
           200 + index,
           20 + (index % 10) * 30,
-          20 + Math.floor(index / 10) * 40,
+          25 + Math.floor(index / 10) * 40,
           0,
         ),
         { hp: () => 1 },
@@ -739,7 +739,7 @@ describe('particles and decals', () => {
 
   test('a new round clears the particles and decals', () => {
     const messyModel = modifyFields(playingModel, {
-      phase: () => Phase.GameOver(),
+      phase: () => Phase.GameOver({ wave: 2 }),
       particles: () => [
         {
           kind: 'MeatGib',
@@ -762,7 +762,7 @@ describe('particles and decals', () => {
       given(messyModel),
       message(Message.PressedKey({ code: 'Enter' })),
       model(({ phase, particles, decals, dustCooldownMs }) => {
-        expect(phase).toEqual(Phase.Playing())
+        expect(Phase.guards.Preparation(phase)).toBe(true)
         expect(particles).toEqual([])
         expect(decals).toEqual([])
         expect(dustCooldownMs).toBe(0)
@@ -827,7 +827,7 @@ const massacreModel = (count: number): Model => {
     doomedZombieAt(
       300 + index,
       20 + (index % 10) * 30,
-      20 + Math.floor(index / 10) * 40,
+      25 + Math.floor(index / 10) * 40,
     ),
   )
   return modifyFields(withZombies(playingModel, victims), {
@@ -840,12 +840,12 @@ const contactZombie = (id: number): Zombie =>
   zombieAt(id, ARENA_WIDTH / 2 + 2, ARENA_HEIGHT / 2, 0)
 
 const BYSTANDER_ID = 401
-const BYSTANDER_X = 40
+const BYSTANDER_X = 100
 const BYSTANDER_SPEED = 20
 const STRAY_BULLET: Bullet = {
   id: 600,
   x: 20,
-  y: 170,
+  y: 160,
   velocityX: 60,
   velocityY: 0,
   remainingMs: 900,
@@ -1112,7 +1112,7 @@ describe('hit-stop', () => {
       message(Message.PressedKey({ code: 'Escape' })),
       message(Message.PressedKey({ code: 'Enter' })),
       model(({ phase }) => {
-        expect(phase).toEqual(Phase.Playing())
+        expect(Phase.guards.Wave(phase)).toBe(true)
       }),
     )
 
@@ -1120,7 +1120,7 @@ describe('hit-stop', () => {
       update,
       given(
         modifyFields(massacreModel(4), {
-          phase: () => Phase.GameOver(),
+          phase: () => Phase.GameOver({ wave: 3 }),
           hitStop: () => HitStop.Frozen({ remainingMs: 30 }),
           shake: () => ({ trauma: 0.5, offset: { x: 1, y: -1 } }),
           streak: () => Streak.Hot({ count: 4, remainingMs: 100 }),
@@ -1403,13 +1403,13 @@ describe('touch sticks', () => {
     )
   })
 
-  test('a tap on the Ready screen starts the game and grabs a stick', () => {
+  test('a tap on the Ready screen starts the run and grabs a stick', () => {
     story(
       update,
       given(readyModel),
       touchDown(LEFT_THUMB, 100, 300),
       model(({ phase, input }) => {
-        expect(phase).toEqual(Phase.Playing())
+        expect(Phase.guards.Preparation(phase)).toBe(true)
         expect(Stick.guards.Active(input.moveStick)).toBe(true)
       }),
     )
@@ -1464,7 +1464,7 @@ describe('page visibility', () => {
       message(Message.PressedKey({ code: 'KeyD' })),
       message(Message.ChangedPageVisibility({ visibility: 'Hidden' })),
       model(({ phase, input, intent }) => {
-        expect(phase).toEqual(Phase.Paused())
+        expect(phase).toEqual(Phase.Paused({ round: FIGHTING_PHASE }))
         expect(input.moveStick).toEqual(Stick.Idle())
         expect(input.pressedKeys).toEqual([])
         expect(intent.move).toEqual({ x: 0, y: 0 })
@@ -1475,7 +1475,7 @@ describe('page visibility', () => {
       }),
       message(Message.PressedKey({ code: 'Enter' })),
       model(({ phase }) => {
-        expect(phase).toEqual(Phase.Playing())
+        expect(phase).toEqual(FIGHTING_PHASE)
       }),
     )
   })

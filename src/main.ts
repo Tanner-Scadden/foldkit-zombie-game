@@ -25,6 +25,7 @@ import {
 import {
   isPauseKey,
   isStartKey,
+  isStartWaveKey,
   isTrackingPointer,
   moveMouse,
   movePointer,
@@ -43,7 +44,8 @@ import {
   PointerDevice,
   initialModel,
 } from './model'
-import { advanceGame, pause, refreshIntent, startOrResume } from './simulation'
+import { advanceGame, refreshIntent } from './simulation'
+import { isRoundActive, pause, startOrResume, startWaveEarly } from './waves'
 
 export { Model } from './model'
 
@@ -81,6 +83,7 @@ export const Message = defineMessageUnion({
   },
   CompletedGenerateSeed: { seed: Schema.Number },
   ClickedMuteButton: {},
+  ClickedStartWaveButton: {},
   AcquiredAudioEngine: {},
   FailedAcquireAudioEngine: { reason: Schema.String },
   ReleasedAudioEngine: {},
@@ -189,46 +192,61 @@ const MUTE_KEY = 'KeyM'
 const withInput = (model: Model, toNextInput: (input: Input) => Input) =>
   refreshIntent(modifyFields(model, { input: toNextInput }))
 
-const startOrPauseFromKey = (model: Model, code: string): Model => {
-  const isPlaying = Phase.guards.Playing(model.phase)
-  if (!isPlaying && isStartKey(code)) {
-    return startOrResume(model)
-  } else if (isPlaying && isPauseKey(code)) {
+const preparationFromKey = (model: Model, code: string): Model => {
+  if (isPauseKey(code)) {
     return pause(model)
+  } else if (isStartWaveKey(code)) {
+    return startWaveEarly(model)
   } else {
     return model
   }
 }
 
-const startsRound = (before: Model, after: Model): boolean =>
-  !Phase.guards.Playing(before.phase) &&
+const startFromKey = (model: Model, code: string): Model =>
+  isStartKey(code) ? startOrResume(model) : model
+
+const phaseFromKey = (model: Model, code: string): Model =>
+  Phase.match(model.phase, {
+    Ready: () => startFromKey(model, code),
+    Preparation: () => preparationFromKey(model, code),
+    Wave: () => (isPauseKey(code) ? pause(model) : model),
+    Paused: () => startFromKey(model, code),
+    Victory: () => startFromKey(model, code),
+    GameOver: () => startFromKey(model, code),
+  })
+
+const startsRun = (before: Model, after: Model): boolean =>
+  !isRoundActive(before.phase) &&
   !Phase.guards.Paused(before.phase) &&
-  Phase.guards.Playing(after.phase)
+  Phase.guards.Preparation(after.phase)
 
 const isSoundAudible = (model: Model): boolean =>
   AudioState.guards.Ready(model.audio) && model.soundSetting === 'On'
 
 type SoundCue = Readonly<{ sound: SoundEffect; variation: number }>
 
-const eventSound = (event: GameEvent): SoundEffect =>
+const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
   GameEvent.match(event, {
-    Fired: (): SoundEffect => 'Shot',
-    ZombieHit: (): SoundEffect => 'ZombieHit',
-    ZombieKilled: (): SoundEffect => 'ZombieDeath',
-    PlayerHurt: (): SoundEffect => 'PlayerHurt',
+    Fired: () => Option.some<SoundEffect>('Shot'),
+    ZombieHit: () => Option.some<SoundEffect>('ZombieHit'),
+    ZombieKilled: () => Option.some<SoundEffect>('ZombieDeath'),
+    PlayerHurt: () => Option.some<SoundEffect>('PlayerHurt'),
+    BulletStruck: () => Option.none<SoundEffect>(),
   })
 
-const eventSoundCue = (event: GameEvent): SoundCue => ({
-  sound: eventSound(event),
-  variation: positionVariation(event.x, event.y),
-})
+const maybeEventSoundCue = (event: GameEvent): Option.Option<SoundCue> =>
+  Option.map(maybeEventSound(event), sound => ({
+    sound,
+    variation: positionVariation(event.x, event.y),
+  }))
 
 const frameSoundCues = (
   events: ReadonlyArray<GameEvent>,
 ): ReadonlyArray<SoundCue> =>
   pipe(
     events,
-    Array.map(eventSoundCue),
+    Array.map(maybeEventSoundCue),
+    Array.getSomes,
     Array.dedupeWith((first, second) => first.sound === second.sound),
   )
 
@@ -269,13 +287,14 @@ const toggleSound = (model: Model): Model =>
 const toggleSoundFromKey = (model: Model, code: string): Model =>
   code === MUTE_KEY ? toggleSound(model) : model
 
-const isFreshRound = (model: Model): boolean =>
-  Phase.guards.Playing(model.phase) && model.elapsedMs < START_SOUND_GRACE_MS
+const isFreshRun = (model: Model): boolean =>
+  Phase.guards.Preparation(model.phase) &&
+  model.elapsedMs < START_SOUND_GRACE_MS
 
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
     TickedFrame: ({ deltaTime }) => {
-      if (Phase.guards.Playing(model.phase)) {
+      if (isRoundActive(model.phase)) {
         const advanced = advanceGame(model, deltaTime)
         return playSounds(frameSoundCues(advanced.frameEvents))(advanced)
       } else {
@@ -285,12 +304,12 @@ export const update = (model: Model, message: Message) =>
 
     PressedKey: ({ code }) => {
       const pressed = withInput(
-        toggleSoundFromKey(startOrPauseFromKey(model, code), code),
+        toggleSoundFromKey(phaseFromKey(model, code), code),
         input => pressKey(input, code),
       )
       return Update.combine(pressed, [
         unlockAudio,
-        playStartSoundWhen(startsRound(model, pressed)),
+        playStartSoundWhen(startsRun(model, pressed)),
       ])
     },
 
@@ -315,7 +334,7 @@ export const update = (model: Model, message: Message) =>
       )
       return Update.combine(pressed, [
         unlockAudio,
-        playStartSoundWhen(startsRound(model, pressed)),
+        playStartSoundWhen(startsRun(model, pressed)),
       ])
     },
 
@@ -350,6 +369,8 @@ export const update = (model: Model, message: Message) =>
 
     ClickedMuteButton: () => unlockAudio(toggleSound(model)),
 
+    ClickedStartWaveButton: () => unlockAudio(startWaveEarly(model)),
+
     AcquiredAudioEngine: () => ({
       model: modifyFields(model, { audio: () => AudioState.Suspended() }),
       commands: [ResumeAudio()],
@@ -364,7 +385,7 @@ export const update = (model: Model, message: Message) =>
     CompletedResumeAudio: ({ playback }) => {
       if (playback === 'Running') {
         const ready = modifyFields(model, { audio: () => AudioState.Ready() })
-        return playStartSoundWhen(isFreshRound(ready))(ready)
+        return playStartSoundWhen(isFreshRun(ready))(ready)
       } else {
         return {
           model: modifyFields(model, { audio: () => AudioState.Suspended() }),
@@ -398,7 +419,7 @@ const Activity = Schema.Literals(['Idle', 'Active'])
 type Activity = typeof Activity.Type
 
 const playingActivity = (model: Model): Activity =>
-  Phase.guards.Playing(model.phase) ? 'Active' : 'Idle'
+  isRoundActive(model.phase) ? 'Active' : 'Idle'
 
 const pointerTrackingActivity = (model: Model): Activity =>
   isTrackingPointer(model.input) ? 'Active' : 'Idle'
@@ -467,7 +488,7 @@ const mouseMessages = Dom.streamFromEventFilterMap({
 
 export const subscriptions = Subscription.make<Model, Message>()(entry => ({
   frame: Subscription.animationFrameEntry({
-    isActive: model => Phase.guards.Playing(model.phase),
+    isActive: model => isRoundActive(model.phase),
     toMessage: deltaTime => Message.TickedFrame({ deltaTime }),
   }),
 

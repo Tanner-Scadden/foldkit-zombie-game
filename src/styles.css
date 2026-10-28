@@ -106,3 +106,29 @@ body {
   outline: 2px solid #9be36a;
   outline-offset: 2px;
 }
+
+.preparation-controls {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  transform: translateX(-50%);
+}
+
+.start-wave-button {
+  min-width: 132px;
+  min-height: 52px;
+  padding: 0 18px;
+  border: 2px solid rgba(255, 224, 102, 0.8);
+  border-radius: 6px;
+  background: rgba(8, 10, 12, 0.7);
+  color: #ffe066;
+  font: bold 14px monospace;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.start-wave-button:focus-visible {
+  outline: 2px solid #9be36a;
+  outline-offset: 2px;
+}

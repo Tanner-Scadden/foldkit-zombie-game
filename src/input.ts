@@ -34,12 +34,16 @@ const RIGHT_KEYS: ReadonlyArray<string> = ['KeyD', 'ArrowRight']
 const FIRE_KEY = 'Space'
 const START_KEYS: ReadonlyArray<string> = ['Enter', 'Space']
 const PAUSE_KEYS: ReadonlyArray<string> = ['Escape', 'KeyP']
+const START_WAVE_KEYS: ReadonlyArray<string> = ['Enter', 'KeyR']
 
 export const isStartKey = (code: string): boolean =>
   Array.contains(START_KEYS, code)
 
 export const isPauseKey = (code: string): boolean =>
   Array.contains(PAUSE_KEYS, code)
+
+export const isStartWaveKey = (code: string): boolean =>
+  Array.contains(START_WAVE_KEYS, code)
 
 const isAnyPressed = (
   pressedKeys: ReadonlyArray<string>,
