@@ -52,6 +52,8 @@ const DISTANT_SPAWN: PlannedSpawn = {
   offset: 0,
   speedScale: 1,
   hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
 }
 
 const fightingModel: Model = modifyFields(initialModel, {
@@ -151,6 +153,8 @@ describe('the kind table', () => {
         offset: 5,
         speedScale: 1.1,
         hpScale: 1,
+        pack: 0,
+        formation: 'Squad',
       }),
     )
 
@@ -607,11 +611,17 @@ describe('spawn tables', () => {
   })
 
   test('the finale is a Tank-heavy horde for every seed', () => {
+    const healthOf = (spawns: ReadonlyArray<PlannedSpawn>): number =>
+      Array.reduce(spawns, 0, (sum, { kind }) => sum + ZOMBIE_KINDS[kind].hp)
     Array.forEach([1, 2, 3, 99, 31337], seed => {
       const [, finale] = rollSpawns(seed, FINAL_WAVE)
       const [, before] = rollSpawns(seed, FINAL_WAVE - 1)
       expect(kindsOf(finale, 'Tank')).toBe(4)
-      expect(finale.length).toBeGreaterThan(before.length)
+      expect(kindsOf(finale, 'Tank')).toBeGreaterThan(kindsOf(before, 'Tank'))
+      expect(healthOf(finale)).toBeGreaterThan(healthOf(before))
+      expect(Array.some(finale, ({ formation }) => formation === 'Horde')).toBe(
+        true,
+      )
     })
   })
 
@@ -637,12 +647,15 @@ describe('spawn tables', () => {
             modifyFields(player, {
               hp: () => 1e6,
               invulnerability: () =>
-                Invulnerability.Invulnerable({ remainingMs: 1e9 }),
+                Invulnerability.Invulnerable({
+                  remainingMs: 1e9,
+                  durationMs: 1e9,
+                }),
             }),
         }),
       ),
       message(Message.PressedKey({ code: 'Enter' })),
-      ...Array.flatMap(ticks(1000, 50), frame => [
+      ...Array.flatMap(ticks(4000, 50), frame => [
         frame,
         model((current: Model) => {
           Array.forEach(current.zombies, zombie => {
@@ -702,7 +715,10 @@ describe('tank pathing', () => {
                 x: () => target.x,
                 y: () => target.y,
                 invulnerability: () =>
-                  Invulnerability.Invulnerable({ remainingMs: 1e9 }),
+                  Invulnerability.Invulnerable({
+                    remainingMs: 1e9,
+                    durationMs: 1e9,
+                  }),
               }),
           },
         ),

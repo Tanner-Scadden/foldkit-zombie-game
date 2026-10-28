@@ -74,7 +74,7 @@ export type Intent = typeof Intent.Type
 
 export const Invulnerability = defineTaggedUnion({
   Vulnerable: {},
-  Invulnerable: { remainingMs: Schema.Number },
+  Invulnerable: { remainingMs: Schema.Number, durationMs: Schema.Number },
 })
 export type Invulnerability = typeof Invulnerability.Type
 
@@ -225,6 +225,17 @@ export type Decal = typeof Decal.Type
 export const TrapKind = Schema.Literals(['Barricade', 'Turret'])
 export type TrapKind = typeof TrapKind.Type
 
+export const DoorId = Schema.Literals(['North', 'West', 'East', 'South'])
+export type DoorId = typeof DoorId.Type
+
+export const Formation = Schema.Literals([
+  'Trickle',
+  'Squad',
+  'Pincer',
+  'Horde',
+])
+export type Formation = typeof Formation.Type
+
 export const GameEvent = defineTaggedUnion({
   Fired: {
     x: Schema.Number,
@@ -265,6 +276,12 @@ export const GameEvent = defineTaggedUnion({
   },
   Reloaded: { x: Schema.Number, y: Schema.Number, weapon: WeaponKind },
   WaveCleared: { x: Schema.Number, y: Schema.Number, bonus: Schema.Number },
+  PackWarned: {
+    x: Schema.Number,
+    y: Schema.Number,
+    door: DoorId,
+    formation: Formation,
+  },
   TrapHit: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
   TrapCracked: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
   TrapBroken: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
@@ -317,9 +334,6 @@ export type MusicSetting = typeof MusicSetting.Type
 export const PageVisibility = Schema.Literals(['Visible', 'Hidden'])
 export type PageVisibility = typeof PageVisibility.Type
 
-export const DoorId = Schema.Literals(['North', 'West', 'East', 'South'])
-export type DoorId = typeof DoorId.Type
-
 export const PlannedSpawn = Schema.Struct({
   atMs: Schema.Number,
   kind: ZombieKind,
@@ -327,6 +341,8 @@ export const PlannedSpawn = Schema.Struct({
   offset: Schema.Number,
   speedScale: Schema.Number,
   hpScale: Schema.Number,
+  pack: Schema.Number,
+  formation: Formation,
 })
 export type PlannedSpawn = typeof PlannedSpawn.Type
 
@@ -337,6 +353,8 @@ const preparationFields = {
   spawns: Schema.Array(PlannedSpawn),
 }
 
+// NOTE: A wave's elapsedMs is its spawn clock, not wall time. It stops while
+// the pacing beat is Fading or Resting.
 const waveFields = {
   wave: Schema.Number,
   elapsedMs: Schema.Number,
@@ -364,6 +382,38 @@ export const Phase = defineTaggedUnion({
   GameOver: { wave: Schema.Number },
 })
 export type Phase = typeof Phase.Type
+
+export const Hold = Schema.Struct({
+  atMs: Schema.Number,
+  releaseBelow: Schema.Number,
+  relaxMs: Schema.Number,
+})
+export type Hold = typeof Hold.Type
+
+export const Beat = defineTaggedUnion({
+  Flowing: {},
+  Fading: {
+    releaseBelow: Schema.Number,
+    relaxMs: Schema.Number,
+    waitedMs: Schema.Number,
+  },
+  Resting: { remainingMs: Schema.Number, extendedMs: Schema.Number },
+})
+export type Beat = typeof Beat.Type
+
+export const Alarm = defineTaggedUnion({
+  Quiet: {},
+  Ringing: { remainingMs: Schema.Number },
+})
+export type Alarm = typeof Alarm.Type
+
+export const Pacing = Schema.Struct({
+  holds: Schema.Array(Hold),
+  beat: Beat,
+  warnedPacks: Schema.Array(Schema.Number),
+  alarm: Alarm,
+})
+export type Pacing = typeof Pacing.Type
 
 export const Toll = Schema.Struct({
   index: Schema.Number,
@@ -498,6 +548,8 @@ export type RunStats = typeof RunStats.Type
 
 export const Model = Schema.Struct({
   phase: Phase,
+  pacing: Pacing,
+  intensity: Schema.Number,
   mode: RunMode,
   maybeBestEndlessWave: Schema.Option(Schema.Number),
   player: Player,
@@ -603,12 +655,21 @@ export const freshStats: RunStats = {
   runMs: 0,
 }
 
+export const calmPacing: Pacing = {
+  holds: [],
+  beat: Beat.Flowing(),
+  warnedPacks: [],
+  alarm: Alarm.Quiet(),
+}
+
 export const initialHitStop: HitStop = HitStop.Running({ cooldownMs: 0 })
 
 export const stillShake: Shake = { trauma: 0, offset: { x: 0, y: 0 } }
 
 export const initialModel: Model = {
   phase: Phase.Ready(),
+  pacing: calmPacing,
+  intensity: 0,
   mode: RunMode.Campaign(),
   maybeBestEndlessWave: Option.none(),
   player: initialPlayer,

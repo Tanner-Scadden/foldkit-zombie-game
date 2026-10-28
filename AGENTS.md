@@ -39,7 +39,8 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/simulation.ts` | The pure step that advances the game one frame                |
 | `src/arena.ts`      | The room's tile map, doorways, collision, and line of sight   |
 | `src/pathing.ts`    | The flow field toward the player and zombie steering          |
-| `src/waves.ts`      | Spawn tables, the wave arc, spawning, and the phases of a run |
+| `src/waves.ts`      | Spawn tables, packs, the wave arc, spawning, and run phases   |
+| `src/pacing.ts`     | Sawtooth beats, pack telegraphs, door camping, and intensity  |
 | `src/zombies.ts`    | The zombie kind table: stats, behavior, deaths, and sounds    |
 | `src/combat.ts`     | Strikes, wounds, and bursts applied to any list of targets    |
 | `src/traps.ts`      | The trap table, placement, chewing, turrets, and repair       |

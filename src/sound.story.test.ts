@@ -58,6 +58,8 @@ const playing = (audio: AudioState): Model =>
             offset: 0,
             speedScale: 1,
             hpScale: 1,
+            pack: 0,
+            formation: 'Squad',
           },
         ],
       }),

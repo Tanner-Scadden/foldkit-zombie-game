@@ -54,6 +54,8 @@ const plannedSpawn = (atMs: number): PlannedSpawn => ({
   offset: 0,
   speedScale: 1,
   hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
 })
 
 const zombieAt = (id: number, x: number, y: number, hp: number): Zombie => ({
@@ -264,6 +266,8 @@ describe('campaign and endless after wave 8', () => {
                   offset: 0,
                   speedScale: 1,
                   hpScale: hpScaleFor(wave),
+                  pack: 0,
+                  formation: 'Squad',
                 },
                 plannedSpawn(1e9),
               ],

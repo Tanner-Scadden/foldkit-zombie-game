@@ -201,6 +201,8 @@ const HELD_SPAWN: PlannedSpawn = {
   offset: 0,
   speedScale: 1,
   hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
 }
 
 const standing = (id: number, kind: ZombieKind, x: number): Zombie => ({

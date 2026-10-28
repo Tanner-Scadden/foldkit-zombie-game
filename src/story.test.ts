@@ -78,6 +78,8 @@ const DISTANT_SPAWN: PlannedSpawn = {
   offset: 0,
   speedScale: 1,
   hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
 }
 
 const FIGHTING_PHASE: Phase = Phase.Wave({
@@ -421,7 +423,10 @@ describe('zombies', () => {
         expect(player.hp).toBe(PLAYER_MAX_HP - 1)
         expect(player.knockback.x).toBeLessThan(0)
         expect(player.invulnerability).toEqual(
-          Invulnerability.Invulnerable({ remainingMs: PLAYER_INVULNERABLE_MS }),
+          Invulnerability.Invulnerable({
+            remainingMs: PLAYER_INVULNERABLE_MS,
+            durationMs: PLAYER_INVULNERABLE_MS,
+          }),
         )
         expect(Phase.guards.Wave(phase)).toBe(true)
       }),

@@ -77,7 +77,6 @@ import {
   PLAYER_HURT_FLASH_MS,
   PLAYER_HURT_PULSE_MS,
   PLAYER_HURT_SQUASH,
-  PLAYER_INVULNERABLE_MS,
   PLAYER_MAX_HP,
   PLAYER_SHADOW_WIDTH,
   PLAYER_WALK_FRAME_MS,
@@ -170,6 +169,7 @@ import {
   type ZombieKind,
   ZombieState,
 } from './model'
+import { rattlingDoors } from './pacing'
 import { FLOOR_COLOR, ROOM_SHAPES } from './room'
 import { overlayShapes, waveLabel } from './screens'
 import { isShopOpenFor } from './shop'
@@ -701,8 +701,8 @@ const zombieShapes =
 const maybeMsSinceHurt = (player: Player): Option.Option<number> =>
   Invulnerability.match(player.invulnerability, {
     Vulnerable: () => Option.none(),
-    Invulnerable: ({ remainingMs }) =>
-      Option.some(PLAYER_INVULNERABLE_MS - remainingMs),
+    Invulnerable: ({ remainingMs, durationMs }) =>
+      Option.some(durationMs - remainingMs),
   })
 
 const playerFrames = (model: Model): SpriteSet =>
@@ -1957,6 +1957,60 @@ const wavePreviewShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
     GameOver: () => [],
   })
 
+// DOOR RATTLE
+
+const RATTLE_EYE_COLOR = '#ff4a4f'
+const RATTLE_SLAT_COLOR = '#8a5a2b'
+const RATTLE_SHAKE_MS = 45
+const RATTLE_BLINK_MS = 260
+const RATTLE_EYE_DEPTH_PX = 4
+const RATTLE_EYE_GAP_PX = 2
+const RATTLE_SLAT_SPAN_PX = 7
+
+const rattleShapes =
+  (elapsedMs: number) =>
+  (door: DoorId): ReadonlyArray<Canvas.Shape> => {
+    const { center, outward } = DOORS[door]
+    const across = { x: -outward.y, y: outward.x }
+    const shake = Math.round(Math.sin(elapsedMs / RATTLE_SHAKE_MS))
+    const eyes = {
+      x: center.x + outward.x * RATTLE_EYE_DEPTH_PX,
+      y: center.y + outward.y * RATTLE_EYE_DEPTH_PX,
+    }
+    const isBlinking = Math.floor(elapsedMs / RATTLE_BLINK_MS) % 4 === 3
+    const slat = (side: number): Canvas.Shape =>
+      Canvas.Rect({
+        x:
+          Math.round(
+            center.x + across.x * side * RATTLE_SLAT_SPAN_PX + across.x * shake,
+          ) - 1,
+        y:
+          Math.round(
+            center.y + across.y * side * RATTLE_SLAT_SPAN_PX + across.y * shake,
+          ) - 1,
+        width: 2,
+        height: 2,
+        fill: RATTLE_SLAT_COLOR,
+      })
+    const eye = (side: number): Canvas.Shape =>
+      Canvas.Rect({
+        x: Math.round(eyes.x + across.x * side * RATTLE_EYE_GAP_PX),
+        y: Math.round(eyes.y + across.y * side * RATTLE_EYE_GAP_PX),
+        width: 1,
+        height: 1,
+        fill: RATTLE_EYE_COLOR,
+      })
+    return [slat(-1), slat(1), ...(isBlinking ? [] : [eye(-1), eye(1)])]
+  }
+
+const doorRattleShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+  Phase.isAnyOf(['Wave'])(model.phase)
+    ? Array.flatMap(
+        rattlingDoors(model.phase.spawns, model.pacing.warnedPacks),
+        rattleShapes(model.elapsedMs),
+      )
+    : []
+
 const STILL: Vector = { x: 0, y: 0 }
 
 const reloadBarShapes = (player: Player): ReadonlyArray<Canvas.Shape> =>
@@ -2007,6 +2061,7 @@ const playWorldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...shadowShapes(model),
   ...groundParticleShapes(model.particles),
   ...ghostShapes(model),
+  ...doorRattleShapes(model),
   ...Array.flatMap(model.bullets, bulletShapes),
   ...entityShapes(model),
   ...Array.flatMap(model.blasts, blastShapes),

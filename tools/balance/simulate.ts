@@ -68,7 +68,31 @@ type RunResult = {
   pistolTier: number
   spareTier: number
   upgradeSpend: number
+  minHp: number
+  waves: Array<WaveLog>
 }
+
+// Per wave: hearts lost, seconds with 6 or more zombies within 48 px
+// (pressure), seconds with none alive (relax), its length, and the most
+// alive at once.
+type WaveLog = {
+  heartsLost: number
+  pressureMs: number
+  relaxMs: number
+  lengthMs: number
+  peakAlive: number
+}
+
+const PRESSURE_PX = 48
+const PRESSURE_CROWD = 6
+
+const emptyWaveLog = (): WaveLog => ({
+  heartsLost: 0,
+  pressureMs: 0,
+  relaxMs: 0,
+  lengthMs: 0,
+  peakAlive: 0,
+})
 
 const send = (model: Model, message: GameMessage): Model =>
   update(model, message).model
@@ -357,6 +381,8 @@ const runOnce = (seed: number): RunResult => {
   let strafe = 1
   let frame = 0
   let maxAlive = 0
+  let minHp = model.player.hp
+  const waves: Array<WaveLog> = []
   botRandom = seed
   spentOnUpgrades = 0
   while (
@@ -422,6 +448,21 @@ const runOnce = (seed: number): RunResult => {
     model = send(model, Message.TickedFrame({ deltaTime: FRAME_MS }))
     blame(before, model, hurtBy)
     maxAlive = Math.max(maxAlive, model.zombies.length)
+    minHp = Math.min(minHp, model.player.hp)
+    if (before.phase._tag === 'Wave') {
+      const log = (waves[wave - 1] ??= emptyWaveLog())
+      const alive = model.zombies.filter(
+        zombie => zombie.state._tag !== 'Dying',
+      )
+      const crowd = alive.filter(
+        zombie => distance(model.player, zombie) <= PRESSURE_PX,
+      ).length
+      log.heartsLost += Math.max(0, before.player.hp - model.player.hp)
+      log.lengthMs += FRAME_MS
+      log.pressureMs += crowd >= PRESSURE_CROWD ? FRAME_MS : 0
+      log.relaxMs += alive.length === 0 ? FRAME_MS : 0
+      log.peakAlive = Math.max(log.peakAlive, alive.length)
+    }
     if (process.env.DEBUG && frame % 150 === 0) {
       const near = walking(model).map(z => distance(model.player, z))
       console.log(
@@ -458,6 +499,8 @@ const runOnce = (seed: number): RunResult => {
     pistolTier: model.player.pistolTier,
     spareTier: finalSpare?.tier ?? 0,
     upgradeSpend: spentOnUpgrades,
+    minHp,
+    waves,
   }
 }
 
@@ -498,7 +541,36 @@ const deaths = results
   .filter(result => !result.victory)
   .map(result => result.cleared + 1)
 const wins = results.filter(result => result.victory)
+const mean = (values: Array<number>): number =>
+  values.length === 0 ? 0 : values.reduce((a, b) => a + b, 0) / values.length
+console.log(
+  '\nWave  died  hearts lost  pressure s  relax s  length s  peak alive  (means over runs that played the wave)',
+)
+for (let wave = 1; wave <= lastWave; wave++) {
+  const logs = results.flatMap(r =>
+    r.waves[wave - 1] === undefined ? [] : [r.waves[wave - 1]!],
+  )
+  const died = deaths.filter(death => death === wave).length
+  console.log(
+    `${String(wave).padStart(4)}  ${((100 * died) / runs).toFixed(0).padStart(3)}%  ${mean(
+      logs.map(l => l.heartsLost),
+    )
+      .toFixed(2)
+      .padStart(11)}  ${mean(logs.map(l => l.pressureMs / 1000))
+      .toFixed(1)
+      .padStart(10)}  ${mean(logs.map(l => l.relaxMs / 1000))
+      .toFixed(1)
+      .padStart(7)}  ${mean(logs.map(l => l.lengthMs / 1000))
+      .toFixed(0)
+      .padStart(8)}  ${mean(logs.map(l => l.peakAlive))
+      .toFixed(1)
+      .padStart(10)}`,
+  )
+}
 console.log(`\nVictories: ${wins.length} of ${runs}`)
+console.log(
+  `Close calls: ${wins.filter(r => r.minHp <= 1).length} of ${wins.length} wins reached 1 heart`,
+)
 console.log(`Median wave of death: ${median(deaths)}`)
 if (IS_ENDLESS) {
   const reached = results.map(result => result.cleared + 1)

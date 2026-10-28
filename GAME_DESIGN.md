@@ -60,22 +60,22 @@ Added on 2026-10-28, after the first playable. The music is original and synthes
 
 Proposed on 2026-10-28 for step 4. These are starting numbers to play against, not decisions. They live in `src/constants.ts`, `src/weapons.ts`, and `src/shop.ts`.
 
-- **Money.** Each kill pays the bounty of its kind (see the horde below). Clearing wave _n_ pays $20 + $5 × _n_, so wave 1 pays $25 and wave 8 pays $60. A full run earns about $1,850 (see "Balance pass" below).
+- **Money.** Each kill pays the bounty of its kind (see the horde below). Clearing wave _n_ pays $20 + $5 × _n_, so wave 1 pays $25 and wave 8 pays $60. A full run earns about $1,490 (see "Balance pass" below).
 - **The shop.** It opens from the wave 2 preparation onward. Wave 1 is the tutorial, the player has no money yet, and its preparation is only 6 seconds, so the stall sleeps behind a CLOSED sign until wave 1 is cleared.
 - **Slots.** The pistol always stays in the first slot. A bought gun goes in the second slot and replaces whatever is there, along with its ammo. A new gun comes out in the player's hands.
 
 | Item                  | Price | What it does                                                                                                      |
 | --------------------- | ----- | ----------------------------------------------------------------------------------------------------------------- |
-| Pop Pistol            | Start | 1 damage, 250 ms between shots, an 8 round magazine, 1.1 s reload, never runs out                                 |
+| Pop Pistol            | Start | 1 damage, 150 ms between shots, a 14 round magazine, 0.8 s reload, never runs out                                 |
 | Barn Buster (shotgun) | $75   | 5 pellets in a 0.75 radian spray, 1 damage each, short range, 620 ms between shots, 6 shells a load, 1.3 s reload |
 | Shell Sack            | $15   | 16 more shells, up to 48. The shotgun comes with 16                                                               |
-| Chatterbox (SMG)      | $120  | 1 damage, 70 ms between shots, a slight random spread, a 30 round magazine, 1.4 s reload                          |
-| Chatter Drum          | $20   | 120 more rounds, up to 360. The SMG comes with 120                                                                |
+| Chatterbox (SMG)      | $120  | 1 damage, 70 ms between shots, a slight random spread, a 30 round magazine, 1.2 s reload                          |
+| Chatter Drum          | $20   | 120 more rounds, up to 360. The SMG comes with 150                                                                |
 | Pickled Heart         | $25   | One heart, never past the maximum of 5                                                                            |
 
 Proposed on 2026-10-28 after the first playtest ("the pistol should have to reload, and a lower rate of fire"). Every gun fires from a magazine. The magazine size and reload time are columns in the weapon table in `src/weapons.ts`, and the upgrade tiers can change them.
 
-- **The pistol** keeps its infinite reserve: a reload always fills its magazine. It fires about 4 shots a second instead of 7.
+- **The pistol** keeps its infinite reserve: a reload always fills its magazine. Retuned on 2026-10-28 with the packs below, because the first reload numbers (250 ms, 8 rounds, 1.1 s) fired only 2.6 shots a second over a fight and the bot lost every run on wave 3. It now fires 6.7 shots a second while the magazine lasts and 4.75 a second sustained, counting the reload: 14 / (14 × 0.15 + 0.8). That is 33% below the pre-reload pistol's 7.1 a second. A magazine lasts 2.1 seconds of held fire, so a reload lands in the middle of every peak and is safe during a relax.
 - **The shotgun and the SMG** load their magazines from their limited rounds. The HUD shows the magazine and the loose rounds as `30/90`, and the pistol as `8/∞`. When the last round is gone, the next pull of the trigger clicks, pops EMPTY, and swaps to the pistol, as before.
 - **Reloading.** An empty magazine reloads on its own once the gun has cycled after its last shot, with a dry click if the trigger is still held. R reloads early on a keyboard, and a RELOAD button above SWAP does it on touch. Start wave moved to Enter only. A reload plays a mag-out sound, drops a spent magazine (pistol and SMG) that stays on the floor, fills a bar over the player, turns the HUD readout yellow, and ends with a mag-in click. A reload stands still while the game is paused or the shop is open.
 - **Swapping cancels a reload.** Each gun keeps its own magazine, so swapping to a loaded pistol is faster than waiting out a reload. Swapping back means reloading again.
@@ -92,18 +92,48 @@ Proposed on 2026-10-28 for step 5, the horde. These are starting numbers to play
 - **The burst.** Radius 28 px. It costs the player 1 heart unless they are blinking, and deals 6 damage to every zombie it reaches. A Gasbag caught in a burst bursts 150 ms later, so chains ripple instead of going off at once. At most 2 bursts go off in one frame and the rest wait their turn.
 - **Speed.** Each wave scales every spawn's speed, from ×1 on wave 1 to ×1.49 on wave 8. By wave 8 the fastest Hotfoots outrun the player (72 px/s).
 
-| Wave | Zombies | What is new or special                                                                     |
-| ---- | ------- | ------------------------------------------------------------------------------------------ |
-| 1    | 6       | The tutorial. Six slow Groaners from the north door, 3 seconds apart                       |
-| 2    | 30      | NEW: Hotfoot. Twenty Groaners from the north and west, then ten Hotfoots from the east     |
-| 3    | 48      | Groaners and Hotfoots from the sides, then a Hotfoot rush from the south                   |
-| 4    | 75      | NEW: Gasbag. Ten Gasbags from the west among a mix from the north, east, and south         |
-| 5    | 80      | NEW: Big Lug. Two Big Lugs from the north with Groaners, Hotfoots, and Gasbags around them |
-| 6    | 86      | Two Big Lugs from the south and two from the east while every door opens                   |
-| 7    | 90      | Three Big Lugs, west and east, with a fast mixed crowd                                     |
-| 8    | 94      | The finale. Four Big Lugs in two pairs, with 90 escorts from every door, then Victory      |
+Rewritten on 2026-10-28 after a playtest ("zombies should come out more in groups, and it is a bit too easy"). Each wave is learn, test, combine, or twist, built from the packs and the sawtooth described under "Packs and pacing" below. Health is the expected total, Groaner 3, Hotfoot 2, Gasbag 3, Big Lug 30.
 
-Each wave is a list of groups. A group has a count, the doors it uses, a start time and an interval, and weights for each kind. The kind, door, timing jitter, and offset of every spawn are drawn from the seeded generator when Preparation begins, so the door preview shows exactly what will come. A kind's first wave uses a group of only that kind, so the "NEW" banner never promises a zombie the roll left out.
+| Wave | Zombies | Health | Cycles | What is new or special                                                                                                                        |
+| ---- | ------- | ------ | ------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | 6       | 18     | 1      | The tutorial. Four slow Groaners from the north door, 3 seconds apart, then the last two as a pair                                            |
+| 2    | 31      | 83     | 2      | Groaner squads of 3 from the north and west. After a relax, NEW: Hotfoot, in pairs from the east, with two more Groaner squads                |
+| 3    | 48      | 130    | 2      | A Groaner trickle and squads from the sides, then the first pincer: Groaner squads of 4 from opposite doors. After a relax, a Hotfoot rush    |
+| 4    | 72      | 202    | 2      | NEW: Gasbag, alone from the west while Groaner squads come from the north and east. A pincer peak, a relax, then Gasbags inside Groaner packs |
+| 5    | 60      | 215    | 2      | NEW: Big Lug, alone from the north, with a squad of escorts walking in behind it. A second Big Lug from the south leads the second peak       |
+| 6    | 61      | 219    | 2      | The first full sawtooth: a pincer peak with a Big Lug, a relax, then a small horde from every door                                            |
+| 7    | 64      | 220    | 3      | A Big Lug from the west timed with a Hotfoot pack from the east, then the same trick mirrored, then a pincer led by a third Big Lug           |
+| 8    | 54      | 252    | 3      | The finale. Three rising peaks: a pincer, a pincer with two Big Lugs, then a horde from every door with the last two Big Lugs, then Victory   |
+
+Each wave is a list of groups and a list of holds. A group has a count, a pack size, the gap inside a pack, a door pattern (One, Pincer, or All), the doors it uses, a start time, the gap between volleys, and weights for each kind. The door of every pack, the pincer's order and lag, the timing jitter, and every spawn's kind and offset are drawn from the seeded generator when Preparation begins, so the door preview shows exactly what will come. A kind's first wave uses a group of only that kind, so the "NEW" banner never promises a zombie the roll left out.
+
+#### Packs and pacing
+
+Added on 2026-10-28. Proposed, not decided. The packs live in `src/waves.ts` and the beats, telegraphs, doorway rule, and intensity in `src/pacing.ts`.
+
+- **Packs.** Zombies come in packs, not a drizzle. A volley draws its door once and sends a pack through it, one zombie every 180 ms (a horde: 220 ms). A Squad is one pack from one door. A Pincer is two packs from opposite doors (north and south, or west and east), the second 1.5 to 3 seconds after the first. A Horde is a pack from every door at once. A Trickle is a pack of one.
+- **Sawtooth.** A wave runs two or three cycles of Build (a trickle and squads), Peak (a pincer or a horde, 5 to 8 seconds), Fade, and Relax. A hold marks the end of a peak. At a hold the wave clock stops until fewer than 4 zombies are alive and nothing waits at a door, then rests 4.5 to 6 seconds with no spawns. A fade gives up after 20 seconds so a zombie stuck out of reach cannot stall the wave. The last cycle's peak is the wave's biggest. The clock in `Phase.Wave` is this paused spawn clock.
+- **Telegraphs.** Every pack warns about 1 second before it enters: its door rattles (two jittering planks and a pair of red eyes in the doorway), a dust puff rises at the threshold, and a synthesized Groan plays. A horde rings the DINNER BELL instead, with a short bell and groan sound and a DINNER BELL! banner for 2.2 seconds.
+- **Doorway camping.** A pack that comes due while the player stands within 16 px of its doorway waits at that door until the player steps away. Only its timing changes, never its door or kinds, so the preview stays exact.
+- **The alive cap** still holds at 20. A horde peak often reaches it, and the extra zombies wait at their doors.
+
+#### Mercy rules
+
+Added on 2026-10-28. Proposed, not decided. Both are invisible and deterministic. Neither draws from the seeded generator, and neither changes which zombie comes or from which door.
+
+- **Last-heart grace.** A hit that leaves the player on 1 heart blinks for 1.5 s (`LAST_HEART_INVULNERABLE_MS`) instead of 1 s (`PLAYER_INVULNERABLE_MS`).
+- **Pacing intensity.** `intensity` in the Model is a number from 0 to 1. It rises by 0.35 for each heart lost and by 0.12 a second for each walking zombie within 24 px, and decays by about 11% a second. While it is at least 0.4 when a relax ends, the relax keeps going, for up to 4 more seconds (`RELAX_EXTEND_MAX_MS`). It never shortens anything and never adds or removes a zombie.
+
+#### Difficulty principles
+
+Added on 2026-10-28 from the research behind the packs. These guide tuning. They are not rules the code enforces.
+
+- **Stay in the flow channel.** Challenge should rise about as fast as the player's skill and gear do. Each wave teaches one thing, tests it, combines it with an earlier thing, or twists it.
+- **Sawtooth intensity.** Tension should climb to a peak, then fall to a real rest, several times a wave. During a peak, incoming zombie health a second should briefly reach 1.5 to 2.5 times the player's damage a second. During a relax it should be near zero. Constant pressure is less fun than rising and falling pressure, even at the same average.
+- **Telegraph every threat.** A pack that warns before it enters is fair even when it is big. Surprise should come from what the warning means, not from a zombie that appears without one.
+- **Invisible mercy.** Small, hidden, deterministic help at the edge of death (a longer blink at the last heart, a longer rest after a beating) makes close calls more common than deaths.
+- **No rubber banding.** The game never makes waves easier because the player is losing or harder because they are winning. What comes, and from where, is fixed by the seed when Preparation begins.
+- **Measure with the bot.** The targets below are for `tools/balance/simulate.ts`, not for people. Playtest before trusting them.
 
 Proposed on 2026-10-28 for step 6, traps. These are starting numbers to play against, not decisions. The trap table lives in `src/traps.ts`, the chewing rates in `src/zombies.ts`, and the reach and range numbers in `src/constants.ts`.
 
@@ -124,24 +154,31 @@ Proposed on 2026-10-28 for step 6, traps. These are starting numbers to play aga
 Proposed on 2026-10-28 for step 7. Still proposed, not decided. A headless bot played the game's own `update` many times to find numbers where a decent player usually falls in the second half and a full win takes about 8 minutes. Real players have not tested them yet.
 
 - **The bot.** `bun tools/balance/simulate.ts [runs] [firstSeed]` runs it at 30 frames a second. It keeps away from the nearest zombie once one is within 36 px, otherwise drifts to the middle of the room. It re-aims every 5 frames at the nearest zombie it can see, with up to 0.22 radians of hand shake, and holds the trigger while it has a target. From wave 2 it walks to the stall and buys a heart when it has 3 or fewer, the SMG when it can afford it (else the shotgun), ammo below half, and up to two Plank Piles, which it nails into the door with the most spawns. Then it starts the wave at once, so Preparation costs only the walking. Every run is deterministic for its seed.
-- **Before.** With the step 5 numbers, 40 runs: every run won, the median win took 3.6 minutes, the bot lost 1 heart in all 40 runs, and it earned about $1,570 a run. A careful player could not lose and the run was too short.
-- **What changed.** Waves are longer and denser (6, 30, 48, 75, 80, 86, 90, 94 zombies instead of 4 to 40), Groaners and Gasbags have 3 health, Hotfoots 2, and Big Lugs 30. Speed climbs ×0.07 a wave instead of ×0.03. Bounties fell (Groaner $2, Hotfoot $3, Gasbag $3, Big Lug $20) so money still means choices, and the guns cost more (shotgun $75, SMG $120).
-- **After.** 40 runs with the final numbers, measured after the fix that checks bullet hits along the whole path of a frame. The earlier 100-run figures were taken while bullets could skip over zombies on slow frames, which made the bot weaker than it is.
+- **History.** The step 7 pass (drizzle waves, the pre-reload pistol) had the bot win 11 of 40 runs. After the first reload numbers it won 0 of 20 and died on wave 3. Those figures are superseded by the measurements below.
+- **The metrics.** Besides survival, money, and hearts by kind, the bot now reports for each wave the hearts lost, pressure (seconds with 6 or more zombies within 48 px), relax (seconds with none alive), the wave's length, and the most alive at once, plus close calls: the share of wins that fell to 1 heart.
+- **The targets.** The default bot wins 15 to 25% of runs and the `SWAP=1` bot 35 to 45%. Under 3% of runs die in waves 1 and 2, under 10% in 3 and 4, about 25 to 35% in 5 and 6, and the most in 7 and 8, with wave 8 the single biggest. A median win takes 7 to 9 minutes. 30 to 50% of wins are close calls.
+- **Measured** on 2026-10-28 after the packs, the sawtooth, and the pistol retune: 200 runs per bot from seed 1, upgrades on. "Died" is the share of all runs that died on that wave. The other columns are means over the runs that played the wave.
 
-  | Wave | Reached | Cleared | Money earned by its end (median) |
-  | ---- | ------- | ------- | -------------------------------- |
-  | 1    | 100%    | 100%    | $37                              |
-  | 2    | 100%    | 100%    | $137                             |
-  | 3    | 100%    | 100%    | $290                             |
-  | 4    | 100%    | 100%    | $507                             |
-  | 5    | 100%    | 98%     | $783                             |
-  | 6    | 98%     | 75%     | $1,131                           |
-  | 7    | 75%     | 60%     | $1,475                           |
-  | 8    | 60%     | 28%     | $1,848                           |
+  | Wave | Died (default) | Died (`SWAP=1`) | Hearts lost (default) | Pressure s | Relax s | Length s | Peak alive |
+  | ---- | -------------- | --------------- | --------------------- | ---------- | ------- | -------- | ---------- |
+  | 1    | 0%             | 0%              | 0.00                  | 0.0        | 6.3     | 18       | 2.0        |
+  | 2    | 0%             | 0%              | 0.00                  | 0.0        | 7.7     | 43       | 5.8        |
+  | 3    | 0%             | 0%              | 0.18                  | 0.4        | 7.1     | 49       | 11.1       |
+  | 4    | 2%             | 1%              | 1.03                  | 0.7        | 8.6     | 79       | 15.6       |
+  | 5    | 15%            | 5%              | 2.12                  | 1.1        | 9.2     | 72       | 14.3       |
+  | 6    | 17%            | 12%             | 2.81                  | 1.3        | 11.0    | 80       | 18.2       |
+  | 7    | 22%            | 9%              | 2.46                  | 0.7        | 9.7     | 71       | 13.0       |
+  | 8    | 24%            | 41%             | 3.36                  | 0.3        | 16.6    | 86       | 17.6       |
 
-  The bot wins 11 of 40 runs. The median run lasts 7.9 minutes and the median win 8.5 minutes. The bot most often dies on wave 7. Gasbags cost it 55% of its lost hearts, Big Lugs 22%, Hotfoots 19%, and Groaners 5%. At most 27 zombies are in the room at once.
+  | Bot      | Wins            | Close calls    | Median run | Median win | Money by the end of wave 8 |
+  | -------- | --------------- | -------------- | ---------- | ---------- | -------------------------- |
+  | Default  | 43 of 200 (22%) | 19 of 43 (44%) | 7.4 min    | 9.0 min    | $1,484                     |
+  | `SWAP=1` | 67 of 200 (34%) | 27 of 67 (40%) | 8.7 min    | 8.8 min    | $1,489                     |
 
-- **Caveats.** The bot never uses the Grumpy Gnome, never swaps by hand, and plays Preparation in a few seconds, so a human run adds up to 20 seconds a wave. The bot does not dodge Gasbags, which may be why they cost it so much. Playtest it before trusting any of this.
+  Both bots buy spare gun tier 2 and no pistol tier (about $430 on upgrades). Gasbags cost about 31% of lost hearts, Hotfoots and Big Lugs about 25% each, and Groaners the rest. The room reaches the alive cap of 20 in a typical run.
+
+- **Against the targets.** The default bot is on target everywhere except the median win, which is about 9.0 minutes, at the top of the range. The `SWAP=1` bot wins 34%, just under its 35 to 45% target, and dies less than targeted in waves 5 and 6 (17%) because it re-arms its spare gun every wave. Pressure stays low because the bot backs away from anything within 36 px. A person who does not will feel the peaks far more than these numbers say.
+- **Caveats.** The bot never uses the Grumpy Gnome, never stands in a doorway, plays Preparation in a few seconds, does not dodge Gasbags, and never reacts to a telegraph. Playtest it before trusting any of this.
 
 ### Upgrade tiers and endless mode
 
@@ -157,8 +194,8 @@ Each gun has three tiers beyond its base, sold at Rattles' stall between waves. 
 
 | Gun         | Tier | Name               | Price | What changes                                                             |
 | ----------- | ---- | ------------------ | ----- | ------------------------------------------------------------------------ |
-| Pop Pistol  | 1    | Shovey Popper      | $300  | Knockback +25, magazine 8 to 10                                          |
-| Pop Pistol  | 2    | Golden Grandpopper | $500  | 250 to 220 ms between shots, reload 1.1 to 0.9 s                         |
+| Pop Pistol  | 1    | Shovey Popper      | $300  | Knockback +25, magazine 14 to 17                                         |
+| Pop Pistol  | 2    | Golden Grandpopper | $500  | Reload 0.8 to 0.5 s, 150 to 130 ms between shots                         |
 | Pop Pistol  | 3    | Double-Dip Popper  | $750  | Damage 1 to 2, knockback +15                                             |
 | Barn Buster | 1    | Barn Buster Plus   | $110  | 5 to 7 pellets, spray +0.1 radian                                        |
 | Barn Buster | 2    | Silo Splitter      | $220  | 620 to 500 ms between shots, reload 1.3 to 1.0 s, knockback +40, cap +16 |
@@ -177,8 +214,9 @@ The run mode is a tagged union, `Campaign` or `Endless`, chosen per run and kept
 - **Keep going.** Victory also offers KEEP GOING (K), which carries the same run into endless wave 9 with its money, guns, tiers, traps, hearts, score, and stats.
 - **Endless waves.** Waves 1 to 8 are the hand-made campaign waves. From wave 9, each wave _n_ (depth _d_ = _n_ - 8) is generated from the seeded generator when Preparation begins, so the door preview stays exact and a seed replays the same waves:
   - Health ×(1 + 0.12 _d_): wave 9 is ×1.12, wave 15 ×1.84, wave 20 ×2.44. `Zombie.maxHp` keeps the Big Lug health bar honest.
-  - 4 + ⌊_d_ / 2⌋ Big Lugs from a random pair of doors, spread over the first 30 seconds.
-  - 90 + 6 _d_ escorts in two groups: a main group from every door and a later rush from a random pair. Gasbag weight is 2 + 0.25 _d_ against 3 Groaners and 2 Hotfoots, and spawn intervals shrink 30 ms a wave down to a floor.
+  - Three sawtooth cycles, built from the campaign's blocks. Each cycle has 18 seconds of squads from a random pair of doors, then a 7 second peak. The first two peaks are pincers and the last is a horde from every door. A fade and a relax of 6 seconds (200 ms shorter a wave, down to 4) follow each of the first two peaks.
+  - 90 + 6 _d_ escorts split 30%, 32%, and 38% across the cycles. Squads hold 4 + ⌊_d_ / 3⌋ zombies, up to 7. Pincer packs are one bigger and horde packs two smaller, at least 3. Gasbag weight is 2 + 0.25 _d_ against 3 Groaners and 2 Hotfoots.
+  - 4 + ⌊_d_ / 2⌋ Big Lugs, in pincers just before each peak: a third of them each before the first two peaks and the rest before the horde.
   - Speed ×(1.49 + 0.01 _d_), capped at ×1.6.
 - **The alive cap.** At most 20 zombies are in the room at once, in every mode. A spawn that comes due while the room is full waits at its door and walks in when a place frees up. Without the cap the campaign bot peaked at 21 or 22 zombies in a typical run and 29 at worst, so the cap trims the busiest moments of the late campaign waves as well as endless. The balance below was measured with it.
 - **What stays the same.** Preparation, the shop, traps, the wave preview, and the music (wave 9 onward plays Stampede) work as in the campaign. Endless waves bring no NEW banner, since every kind has already appeared. A THEY GOT BEEFIER banner with the health bonus shows instead, and the screen-reader preview reads it out. The HUD shows WAVE 12 without "/ 8".
@@ -186,18 +224,9 @@ The run mode is a tagged union, `Campaign` or `Endless`, chosen per run and kept
 
 #### Balance with upgrades
 
-Measured with `bun tools/balance/simulate.ts` after the tiers landed. The bot now buys a refill, the SMG, planks, and hearts first, then spare gun tiers, then pistol tiers once its spare gun is at tier 2. It keeps $45 back after any upgrade. Two seed batches of 40 runs each (first seed 1 and first seed 500001), because one batch of 40 swings by several wins.
+Superseded on 2026-10-28 by the measurements under "Balance pass" above,, which were taken with upgrades on.
 
-| Bot                             | Wins           | Median run       | Median win       | Where it falls                            |
-| ------------------------------- | -------------- | ---------------- | ---------------- | ----------------------------------------- |
-| No upgrades (the step 7 bot)    | 24 of 80 (30%) | 7.9 min (seed 1) | 8.5 min (seed 1) | Wave 6 (27 runs), wave 8 (21), wave 7 (8) |
-| With upgrades, alive cap 20     | 26 of 80 (33%) | 7.9 to 8.4 min   | 8.6 to 8.7 min   | Wave 8 (25 runs), wave 6 (23), wave 7 (6) |
-| `SWAP=1`, no upgrades, seed 1   | 16 of 40 (40%) | 8.1 min          | 8.4 min          | Wave 6                                    |
-| `SWAP=1`, with upgrades, seed 1 | 26 of 40 (65%) | 8.5 min          | 8.6 min          | Wave 8                                    |
-
-- **Campaign.** With upgrades the bot wins about a third of its runs, a median win takes 8.6 minutes, and it buys spare gun tier 2 and pistol tier 1 by the end (about $730). Wave 6 is still the first wall and wave 8 the second.
-- **Swapping.** The default bot never swaps by hand, so once its spare gun first runs dry it fights on with the pistol and never feels its spare gun's tiers. `SWAP=1` re-arms the spare gun before each wave. For that bot the tiers are worth 25 points of win rate, so a player who swaps will find the campaign easier with upgrades than the default numbers suggest.
-- **Endless.** `MODE=endless`, same two batches: the median run reaches wave 8, the best wave 11. Of the 26 runs that reach wave 9, 13 die there, 10 on wave 10, and 3 on wave 11. Endless is a wall after the campaign, which suits a mode that only ends one way. Playtest before trusting it.
+- **Endless.** `MODE=endless`, 200 runs from seed 1: the median run reaches wave 7, the best wave 10, and the worst wave 4. Of the 44 runs that reach wave 9, 32 die there and 12 on wave 10. Before the packs the median was wave 8 and the best 11. The campaign waves are now harder for the default bot, so fewer runs reach endless, and endless is still a wall after it.
 
 ## Core loop
 
@@ -322,6 +351,7 @@ After the first playable, roughly in this order:
   - **Verdict.** p95 stays under 16.7 ms at 4× in every scenario. At 6× the worst case sits right at the 60 fps budget and drops some frames. Measure on a real mid-range phone before adding more shapes per frame.
   - **Remeasured for step 7.** The pixel font draws every HUD and overlay string from cached glyph sprites, so text costs more shapes than `Canvas.Text` did (idle went from 515 to 1,055 shapes) but is crisp at every scale. Same method, built harness: worst case p95 9.4 ms at 1×, 10.2 ms at 4×, and 16.7 ms at 6× (23 long frames). `view` means 0.8, 1.9, and 2.9 ms. Busy at 4× has p95 10.1 ms. p95 stays under 16.7 ms at 4×.
   - **Endless and the alive cap.** Measured on 2026-10-28, same method, built harness, at 4×. Two new scenarios: endless wave 15 after 15 seconds of spawning with a tier 3 SMG and full decals, and the worst endless case, where the room is held at the alive cap (as many zombies as the cap, with 40 times their health, full decals, constant fire). Endless wave 15 at 4×: p95 10.2 and 10.3 ms in two runs. The at-cap case was measured at four caps, two runs each at 4×: 36 gave p95 16.7 ms, 30 gave 16.4 and 16.4 ms, 24 gave 10.3 and 14.8 ms, and 20 gave 10.2 and 10.3 ms with 6 long frames, `update` 1.65 ms and `view` 2.3 ms a frame. The cap is 20, which leaves real headroom under the 16.7 ms budget for a phone. At 30 the capped room at 6× dropped frames (p95 about 25 ms); 20 was not measured at 6×. The cap is what bounds the cost: an endless wave spawns 100 to 150 zombies, and without it they would all be in the room at once.
+- **Packs and the frame budget.** Measured on 2026-10-28 with `src/perf.scene.test.ts`. The worst case now also has every door rattling and the DINNER BELL! banner up. That built 2,209 shapes, over the old 2,200 budget, so the shapes-built budget is 2,250. Steady paint went from 1,376 to 1,392 operations, inside the unchanged 1,500 budget. The banner has no subtitle to keep it cheap.
 - **Determinism and juice.** Animation, particles, and shake live in the Model and use the seeded generator, so they stay reproducible. Sound and music play through Commands and never feed back into the game.
 
 ## Open questions

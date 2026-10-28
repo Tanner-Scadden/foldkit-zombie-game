@@ -22,6 +22,7 @@ import {
 } from './font'
 import { clamp } from './geometry'
 import {
+  Alarm,
   type HintBand,
   type InputDevice,
   type Model,
@@ -172,6 +173,7 @@ export const hintShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
 const GET_READY = bakeText('GET READY', 'Title')
 const WAVE_CLEARED = bakeText('WAVE CLEARED', 'Victory')
 const HERE_THEY_COME = bakeText('HERE THEY COME', 'Prompt')
+const DINNER_BELL = bakeText('DINNER BELL!', 'Fresh')
 
 const BAKED_WAVES = FINAL_WAVE * 4
 
@@ -307,6 +309,12 @@ const preparationBanner = (
   }
 }
 
+const alarmBanner = (model: Model): ReadonlyArray<Canvas.Shape> =>
+  Alarm.match(model.pacing.alarm, {
+    Quiet: () => [],
+    Ringing: () => bannerAt(model.hintBand, DINNER_BELL, Option.none()),
+  })
+
 const waveBanner = (
   model: Model,
   wave: number,
@@ -318,7 +326,7 @@ const waveBanner = (
         bakedFor(WAVE_TITLES, wave, () => bakeText(`WAVE ${wave}`, 'Defeat')),
         Option.some(HERE_THEY_COME),
       )
-    : []
+    : alarmBanner(model)
 
 // LOGO
 

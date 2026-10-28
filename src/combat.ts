@@ -3,6 +3,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import {
   BLAST_MAX,
+  LAST_HEART_INVULNERABLE_MS,
   MAX_BLASTS_PER_FRAME,
   PLAYER_INVULNERABLE_MS,
   PLAYER_KNOCKBACK_SPEED,
@@ -78,17 +79,23 @@ export const killEvent = (zombie: Zombie, direction: Vector): GameEvent =>
     kind: zombie.kind,
   })
 
+export const invulnerableMsAt = (hp: number): number =>
+  hp === 1 ? LAST_HEART_INVULNERABLE_MS : PLAYER_INVULNERABLE_MS
+
 export const woundPlayer = (
   player: Player,
   damage: number,
   direction: Vector,
-): Player =>
-  modifyFields(player, {
-    hp: hp => Math.max(0, hp - damage),
+): Player => {
+  const hp = Math.max(0, player.hp - damage)
+  const durationMs = invulnerableMsAt(hp)
+  return modifyFields(player, {
+    hp: () => hp,
     knockback: () => scaleVector(direction, PLAYER_KNOCKBACK_SPEED),
     invulnerability: () =>
-      Invulnerability.Invulnerable({ remainingMs: PLAYER_INVULNERABLE_MS }),
+      Invulnerability.Invulnerable({ remainingMs: durationMs, durationMs }),
   })
+}
 
 // BLASTS
 

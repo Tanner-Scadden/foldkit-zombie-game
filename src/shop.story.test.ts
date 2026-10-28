@@ -33,7 +33,7 @@ import {
 } from './model'
 import { SHOP_ITEMS } from './shop'
 import { FINAL_WAVE, waveBonus } from './waves'
-import { WEAPONS, magazineOf, maybeSpare } from './weapons'
+import { WEAPONS, magazineOf, maybeSpare, startingRounds } from './weapons'
 
 const FRAME_MS = 50
 const SHORT_FRAME_MS = 16
@@ -52,6 +52,8 @@ const DISTANT_SPAWN: PlannedSpawn = {
   offset: 0,
   speedScale: 1,
   hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
 }
 
 const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
@@ -481,7 +483,7 @@ describe('buying', () => {
       message(Message.ClickedBuyButton({ item: 'Smg' })),
       model(({ player, wallet }) => {
         expect(player.arsenal).toEqual(
-          Arsenal.HoldingSpare({ spare: gun('Smg', 120) }),
+          Arsenal.HoldingSpare({ spare: gun('Smg', startingRounds('Smg')) }),
         )
         expect(wallet.balance).toBe(200 - SHOP_ITEMS.Smg.price)
       }),

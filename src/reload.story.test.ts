@@ -42,6 +42,8 @@ const HELD_SPAWN: PlannedSpawn = {
   offset: 0,
   speedScale: 1,
   hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
 }
 
 const fighting: Model = modifyFields(initialModel, {

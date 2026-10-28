@@ -75,6 +75,7 @@ import {
   PLANK_SPEED_MAX,
   PLANK_SPEED_MIN,
   PLAYER_FOOT_OFFSET,
+  RATTLE_DUST_PER_WARNING,
   SCORCH_SIZE_PX,
   SHELL_DRAG_PER_SECOND,
   SHELL_EJECT_SPEED_MAX,
@@ -836,6 +837,8 @@ const eventParticles = (
       withState(state, clipParticles(x, y, direction, weapon)),
     Reloaded: () => noParticles(state),
     WaveCleared: () => noParticles(state),
+    PackWarned: ({ x, y }) =>
+      dustRing({ x, y }, RATTLE_DUST_PER_WARNING)(state),
     TrapHit: ({ x, y }) =>
       woodBits('Splinter', { x, y }, SPLINTERS_PER_HIT)(state),
     TrapCracked: cracked => crackParticles(state, cracked),

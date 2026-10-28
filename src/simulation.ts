@@ -57,6 +57,7 @@ import {
   ZombieState,
   idleIntent,
 } from './model'
+import { advanceIntensity } from './pacing'
 import { advanceParticles } from './particles'
 import { type Clearance, refreshFlowField, steerToward } from './pathing'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
@@ -122,9 +123,12 @@ const tickInvulnerability = (
 ): Invulnerability =>
   Invulnerability.match(invulnerability, {
     Vulnerable: () => invulnerability,
-    Invulnerable: ({ remainingMs }) =>
+    Invulnerable: ({ remainingMs, durationMs }) =>
       remainingMs > deltaMs
-        ? Invulnerability.Invulnerable({ remainingMs: remainingMs - deltaMs })
+        ? Invulnerability.Invulnerable({
+            remainingMs: remainingMs - deltaMs,
+            durationMs,
+          })
         : Invulnerability.Vulnerable(),
   })
 
@@ -878,6 +882,20 @@ const biteOnContact = (model: Model): Model => {
 const resolvePlayerContact = (model: Model): Model =>
   popBombers(biteOnContact(model))
 
+// INTENSITY
+
+const feelIntensity = (before: Model, after: Model, deltaMs: number): Model =>
+  modifyFields(after, {
+    intensity: intensity =>
+      advanceIntensity(
+        intensity,
+        Math.max(0, before.player.hp - after.player.hp),
+        after.zombies,
+        after.player,
+        deltaMs,
+      ),
+  })
+
 // FRAME
 
 export const clampFrameDelta = (deltaTime: number): number =>
@@ -920,8 +938,9 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
     resolvePlayerContact,
     resolveBlasts,
     clearBrokenTraps,
-    blasted => advanceParticles(blasted, seconds, deltaMs),
-    particled => advanceRound(particled, deltaMs),
+    blasted => feelIntensity(model, blasted, deltaMs),
+    felt => advanceRound(felt, deltaMs),
+    rounded => advanceParticles(rounded, seconds, deltaMs),
     endWhenDefeated,
   )
 }

@@ -149,6 +149,8 @@ describe('Upgrades in the shop', () => {
             offset: 0,
             speedScale: 1,
             hpScale: 1,
+            pack: 0,
+            formation: 'Squad',
           },
         ],
       }),

@@ -45,6 +45,8 @@ const DISTANT_SPAWN: PlannedSpawn = {
   offset: 0,
   speedScale: 1,
   hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
 }
 
 const PLANNED_SPAWNS: ReadonlyArray<PlannedSpawn> = [
@@ -81,7 +83,7 @@ const withPlayer = (
         y: () => y,
         facing: () => facing,
         invulnerability: () =>
-          Invulnerability.Invulnerable({ remainingMs: 1e9 }),
+          Invulnerability.Invulnerable({ remainingMs: 1e9, durationMs: 1e9 }),
       }),
   })
 

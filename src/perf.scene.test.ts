@@ -16,6 +16,7 @@ import {
 } from './constants'
 import { Message, update } from './main'
 import {
+  Alarm,
   Arsenal,
   type Blast,
   type Bullet,
@@ -148,6 +149,11 @@ const fullRoom = (mode: RunMode, wave: number, tier: number): Model => {
     rngState: () => rngState,
     maybeSurface: () => Option.some(SURFACE),
     phase: () => Phase.Wave({ wave, elapsedMs: 30_000, spawns }),
+    pacing: pacing =>
+      modifyFields(pacing, {
+        warnedPacks: () => Array.map(spawns, ({ pack }) => pack),
+        alarm: () => Alarm.Ringing({ remainingMs: 1000 }),
+      }),
     zombies: () => Array.makeBy(ZOMBIE_ALIVE_MAX, zombieAt(wave)),
     particles: () => Array.makeBy(PARTICLE_MAX, particleAt),
     decals: () => Array.makeBy(DECAL_MAX, decalAt),
@@ -315,8 +321,11 @@ const measureFrames = (model: Model): FrameCost => {
 
 // BUDGETS
 
+// NOTE: shapesBuilt went from 2200 to 2250 when a horde's DINNER BELL banner
+// and the rattling doors joined the worst case. The paint budgets did not
+// change.
 const BUDGET: FrameCost = {
-  shapesBuilt: 2200,
+  shapesBuilt: 2250,
   steadyPaintOps: 1500,
   steadyFillStyleChanges: 1500,
   steadyShapesPainted: 1600,

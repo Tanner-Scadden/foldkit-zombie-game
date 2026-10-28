@@ -50,6 +50,8 @@ export const SoundEffect = Schema.Literals([
   'Crack',
   'Crash',
   'Pop',
+  'Groan',
+  'DinnerBell',
 ])
 export type SoundEffect = typeof SoundEffect.Type
 
@@ -794,6 +796,68 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
         quality: 4,
         cutoff: [at(0, 1200), at(0.15, 500)],
         envelope: envelope(0.5, 0.004, 0.16, 0.08),
+      },
+    ],
+  },
+  Groan: {
+    variationCents: 260,
+    tones: [
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 92), at(0.18, 128), at(0.55, 70)],
+        envelope: envelope(0.2, 0.06, 0.5),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 138), at(0.2, 190), at(0.5, 104)],
+        envelope: envelope(0.07, 0.08, 0.42),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 6,
+        cutoff: [at(0, 380), at(0.25, 620), at(0.55, 300)],
+        envelope: envelope(0.28, 0.05, 0.5),
+      },
+      {
+        filter: 'lowpass',
+        quality: 1,
+        cutoff: [at(0, 900), at(0.1, 250)],
+        envelope: envelope(0.3, 0.002, 0.12),
+      },
+    ],
+  },
+  DinnerBell: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'triangle',
+        pitch: [at(0, 1568), at(0.12, 1560)],
+        envelope: envelope(0.24, 0.002, 0.14),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 1568), at(0.12, 1560)],
+        envelope: envelope(0.24, 0.002, 0.14, 0.16),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 1568), at(0.3, 1550)],
+        envelope: envelope(0.26, 0.002, 0.34, 0.32),
+      },
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 82), at(0.3, 118), at(0.8, 64)],
+        envelope: envelope(0.16, 0.1, 0.7, 0.3),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 5,
+        cutoff: [at(0, 340), at(0.4, 560), at(0.9, 260)],
+        envelope: envelope(0.22, 0.1, 0.7, 0.3),
       },
     ],
   },

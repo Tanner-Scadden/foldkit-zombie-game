@@ -26,6 +26,8 @@ const FAR_AWAY_SPAWN: PlannedSpawn = {
   offset: 0,
   speedScale: 1,
   hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
 }
 
 const titleScreen = (audio: AudioState): Model =>

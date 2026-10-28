@@ -492,6 +492,8 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     ReloadStarted: () => Option.some<SoundEffect>('MagOut'),
     Reloaded: () => Option.some<SoundEffect>('MagIn'),
     WaveCleared: () => Option.some<SoundEffect>('Payday'),
+    PackWarned: ({ formation }) =>
+      Option.some<SoundEffect>(formation === 'Horde' ? 'DinnerBell' : 'Groan'),
     TrapHit: () => Option.none<SoundEffect>(),
     TrapCracked: ({ kind }) => Option.some(TRAPS[kind].crackSound),
     TrapBroken: ({ kind }) => Option.some(TRAPS[kind].breakSound),

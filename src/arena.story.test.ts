@@ -43,6 +43,8 @@ const DISTANT_SPAWN: PlannedSpawn = {
   offset: 0,
   speedScale: 1,
   hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
 }
 
 const fightingModel: Model = modifyFields(initialModel, {
@@ -342,6 +344,8 @@ describe('pathing', () => {
                     offset: 0,
                     speedScale: 1,
                     hpScale: 1,
+                    pack: 0,
+                    formation: 'Squad',
                   },
                   DISTANT_SPAWN,
                 ],

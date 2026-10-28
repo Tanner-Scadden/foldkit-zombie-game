@@ -110,7 +110,7 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     roundsLabel: 'rounds',
     fireIntervalMs: 70,
     magazine: 30,
-    reloadMs: 1400,
+    reloadMs: 1200,
     damage: 1,
     pellets: 1,
     spread: 0.22,
@@ -127,7 +127,7 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     casing: 'Link',
     maybeSpentClip: Option.some('Clip'),
     sound: 'SmgShot',
-    maybeRoundLimit: Option.some({ starting: 120, max: 360 }),
+    maybeRoundLimit: Option.some({ starting: 150, max: 360 }),
   },
   Peashooter: {
     name: 'Pea Shooter',
@@ -188,7 +188,7 @@ export const UPGRADE_TIERS: Readonly<
       boost: {
         damage: 0,
         fireIntervalMs: 0,
-        magazine: 2,
+        magazine: 3,
         reloadMs: 0,
         spread: 0,
         pellets: 0,
@@ -201,9 +201,9 @@ export const UPGRADE_TIERS: Readonly<
       price: 500,
       boost: {
         damage: 0,
-        fireIntervalMs: -30,
+        fireIntervalMs: -20,
         magazine: 0,
-        reloadMs: -200,
+        reloadMs: -300,
         spread: 0,
         pellets: 0,
         knockback: 0,

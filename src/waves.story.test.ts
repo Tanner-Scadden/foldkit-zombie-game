@@ -22,7 +22,14 @@ import {
   ZombieState,
   initialModel,
 } from './model'
-import { FINAL_WAVE, WAVE_PLANS, doorCounts, rollSpawns } from './waves'
+import {
+  FINAL_WAVE,
+  type SpawnGroup,
+  WAVE_PLANS,
+  doorCounts,
+  rollSpawns,
+} from './waves'
+import { ZOMBIE_KINDS } from './zombies'
 
 const FRAME_MS = 50
 const MUZZLE_X = ARENA_WIDTH / 2 + 10
@@ -49,6 +56,8 @@ const plannedSpawn = (atMs: number): PlannedSpawn => ({
   offset: 0,
   speedScale: 1,
   hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
 })
 
 const zombieAt = (
@@ -398,9 +407,37 @@ describe('wave plans', () => {
       (sum, group) => sum + group.count,
     )
 
-  test('there are eight waves that grow with the wave number', () => {
+  const mixHealth = (group: SpawnGroup): number => {
+    const totalWeight = Array.reduce(
+      group.mix,
+      0,
+      (sum, { weight }) => sum + weight,
+    )
+    return Array.reduce(
+      group.mix,
+      0,
+      (sum, { kind, weight }) =>
+        sum + (weight / totalWeight) * ZOMBIE_KINDS[kind].hp,
+    )
+  }
+
+  const healthOf = (wave: number) =>
+    Array.reduce(
+      Option.getOrThrow(Array.get(WAVE_PLANS, wave - 1)).groups,
+      0,
+      (sum, group) => sum + group.count * mixHealth(group),
+    )
+
+  test('there are eight waves that grow in health and speed with the wave number', () => {
     expect(FINAL_WAVE).toBe(8)
-    const totals = Array.makeBy(FINAL_WAVE, index => totalOf(index + 1))
+    const totals = Array.makeBy(FINAL_WAVE, index => healthOf(index + 1))
+    const speeds = Array.map(WAVE_PLANS, ({ speedScale }) => speedScale)
+    expect(
+      Array.every(
+        Array.zip(Array.dropRight(speeds, 1), Array.drop(speeds, 1)),
+        ([earlier, later]) => later > earlier,
+      ),
+    ).toBe(true)
     expect(
       Array.every(
         Array.zip(Array.dropRight(totals, 1), Array.drop(totals, 1)),
