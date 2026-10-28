@@ -1,7 +1,7 @@
 import { Array, Option, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { findStrike, moveCircle } from './arena'
+import { type Box, findStrike, moveCircle } from './arena'
 import {
   hitEvent,
   killEvent,
@@ -41,6 +41,7 @@ import { advanceJuice, thawHitStop } from './juice'
 import {
   Arsenal,
   type Bullet,
+  type DoorId,
   type FlowField,
   GameEvent,
   HitStop,
@@ -58,6 +59,13 @@ import { advanceParticles } from './particles'
 import { type Clearance, refreshFlowField, steerToward } from './pathing'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
 import { earn, refreshShopPresence } from './shop'
+import {
+  advanceTraps,
+  barricadedDoors,
+  clearBrokenTraps,
+  tollsOf,
+  trapBlockers,
+} from './traps'
 import { advanceRound, endWhenDefeated } from './waves'
 import { SIDEARM, WEAPONS, type WeaponStats, holdPistol } from './weapons'
 import { Behavior, isWalking, radiusOf, statsOf, strideAt } from './zombies'
@@ -107,6 +115,7 @@ const tickInvulnerability = (
 const movePlayer = (
   player: Player,
   move: Vector,
+  blockers: ReadonlyArray<Box>,
   seconds: number,
   deltaMs: number,
 ): Player => {
@@ -115,6 +124,7 @@ const movePlayer = (
     player,
     scaleVector(velocity, seconds),
     PLAYER_RADIUS,
+    blockers,
   )
   return modifyFields(player, {
     x: () => clamp(moved.x, PLAYER_RADIUS, ARENA_WIDTH - PLAYER_RADIUS),
@@ -391,10 +401,16 @@ const separationPushes = (
 
 type FlowFields = Readonly<Record<Clearance, FlowField>>
 
+type Obstacles = Readonly<{
+  blockers: ReadonlyArray<Box>
+  barricaded: ReadonlyArray<DoorId>
+}>
+
 const steeringVelocity = (
   zombie: Zombie,
   flowFields: FlowFields,
   target: Vector,
+  barricaded: ReadonlyArray<DoorId>,
 ): Vector => {
   const stats = statsOf(zombie)
   return ZombieState.match(zombie.state, {
@@ -406,6 +422,7 @@ const steeringVelocity = (
           target,
           stats.radius - 1,
           stats.clearance,
+          barricaded,
         ),
         zombie.speed,
       ),
@@ -427,18 +444,23 @@ const advanceZombie = (
   zombie: Zombie,
   separation: Vector,
   flowFields: FlowFields,
+  obstacles: Obstacles,
   target: Vector,
   seconds: number,
   deltaMs: number,
 ): Zombie => {
   const velocity = addVectors(
-    addVectors(steeringVelocity(zombie, flowFields, target), zombie.knockback),
+    addVectors(
+      steeringVelocity(zombie, flowFields, target, obstacles.barricaded),
+      zombie.knockback,
+    ),
     scaleVector(separation, SEPARATION_SPEED),
   )
   const moved = moveCircle(
     zombie,
     scaleVector(velocity, seconds),
     radiusOf(zombie),
+    obstacles.blockers,
   )
   return modifyFields(zombie, {
     x: () => moved.x,
@@ -460,6 +482,10 @@ const advanceZombies = (
     Narrow: model.flowField,
     Wide: model.wideFlowField,
   }
+  const obstacles: Obstacles = {
+    blockers: trapBlockers(model.traps),
+    barricaded: barricadedDoors(model.traps),
+  }
   return pipe(
     model.zombies,
     Array.map((zombie, index) =>
@@ -467,6 +493,7 @@ const advanceZombies = (
         zombie,
         Option.getOrElse(Array.get(separations, index), () => ZERO_VECTOR),
         flowFields,
+        obstacles,
         model.player,
         seconds,
         deltaMs,
@@ -728,9 +755,12 @@ export const clampFrameDelta = (deltaTime: number): number =>
 const advanceWorld = (model: Model, deltaMs: number): Model => {
   const seconds = deltaMs / MS_PER_SECOND
 
+  const blockers = trapBlockers(model.traps)
+  const tolls = tollsOf(model.traps)
   const moved = refreshIntent(
     modifyFields(model, {
-      player: player => movePlayer(player, model.intent.move, seconds, deltaMs),
+      player: player =>
+        movePlayer(player, model.intent.move, blockers, seconds, deltaMs),
       elapsedMs: elapsedMs => elapsedMs + deltaMs,
       frameEvents: () => [],
     }),
@@ -739,9 +769,9 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
     refreshShopPresence(
       modifyFields(moved, {
         flowField: flowField =>
-          refreshFlowField(flowField, moved.player, 'Narrow'),
+          refreshFlowField(flowField, moved.player, 'Narrow', tolls),
         wideFlowField: flowField =>
-          refreshFlowField(flowField, moved.player, 'Wide'),
+          refreshFlowField(flowField, moved.player, 'Wide', tolls),
       }),
     ),
   )
@@ -755,8 +785,10 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
   return pipe(
     recordFootfalls(advanced, deltaMs),
     resolveBulletHits,
+    trapped => advanceTraps(trapped, seconds, deltaMs),
     resolvePlayerContact,
     resolveBlasts,
+    clearBrokenTraps,
     blasted => advanceParticles(blasted, seconds, deltaMs),
     particled => advanceRound(particled, deltaMs),
     endWhenDefeated,

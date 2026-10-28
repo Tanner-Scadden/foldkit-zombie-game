@@ -11,6 +11,7 @@ import {
   SPARE_SLOT_RULE,
   Verdict,
   ownedNote,
+  priceFor,
   shopItemElementId,
   verdictFor,
 } from './shop'
@@ -69,7 +70,8 @@ const itemView = (
   initialFocus: Dialog.RenderInfo['initialFocus'],
   h: HtmlBuilder<Message>,
 ): Html => {
-  const { name, blurb, price } = SHOP_ITEMS[item]
+  const { name, blurb } = SHOP_ITEMS[item]
+  const price = priceFor(model, item)
   const verdict = verdictFor(model, item)
   const isRefused = Verdict.guards.Refused(verdict)
   const isFocused = focusedItem(model) === item

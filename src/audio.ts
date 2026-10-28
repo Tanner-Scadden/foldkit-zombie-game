@@ -27,6 +27,11 @@ export const SoundEffect = Schema.Literals([
   'Purchase',
   'Denied',
   'Payday',
+  'TurretShot',
+  'Thunk',
+  'Crack',
+  'Crash',
+  'Pop',
 ])
 export type SoundEffect = typeof SoundEffect.Type
 
@@ -582,6 +587,128 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
         quality: 3,
         cutoff: [at(0, 6800), at(0.3, 5000)],
         envelope: envelope(0.16, 0.002, 0.3, 0.14),
+      },
+    ],
+  },
+  TurretShot: {
+    variationCents: 140,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 900), at(0.05, 420)],
+        envelope: envelope(0.1, 0.001, 0.05),
+      },
+      {
+        wave: 'sine',
+        pitch: [at(0, 520), at(0.04, 260)],
+        envelope: envelope(0.22, 0.001, 0.05),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 3,
+        cutoff: [at(0, 3000), at(0.04, 1500)],
+        envelope: envelope(0.18, 0.001, 0.03),
+      },
+    ],
+  },
+  Thunk: {
+    variationCents: 40,
+    tones: [
+      {
+        wave: 'sine',
+        pitch: [at(0, 170), at(0.12, 55)],
+        envelope: envelope(0.7, 0.002, 0.14),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 320), at(0.05, 140)],
+        envelope: envelope(0.25, 0.001, 0.06),
+      },
+    ],
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 1.5,
+        cutoff: [at(0, 1400), at(0.1, 200)],
+        envelope: envelope(0.5, 0.001, 0.1),
+      },
+    ],
+  },
+  Crack: {
+    variationCents: 160,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 240), at(0.06, 110)],
+        envelope: envelope(0.16, 0.001, 0.07),
+      },
+    ],
+    noises: [
+      {
+        filter: 'highpass',
+        quality: 1.2,
+        cutoff: [at(0, 2600), at(0.08, 900)],
+        envelope: envelope(0.7, 0.001, 0.08),
+      },
+      {
+        filter: 'bandpass',
+        quality: 5,
+        cutoff: [at(0, 700), at(0.1, 300)],
+        envelope: envelope(0.4, 0.002, 0.1, 0.03),
+      },
+    ],
+  },
+  Crash: {
+    variationCents: 90,
+    tones: [
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 180), at(0.3, 50)],
+        envelope: envelope(0.25, 0.003, 0.32),
+      },
+      {
+        wave: 'sine',
+        pitch: [at(0, 110), at(0.25, 40)],
+        envelope: envelope(0.6, 0.002, 0.28),
+      },
+    ],
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 0.8,
+        cutoff: [at(0, 4200), at(0.4, 300)],
+        envelope: envelope(0.9, 0.002, 0.42),
+      },
+      {
+        filter: 'bandpass',
+        quality: 4,
+        cutoff: [at(0, 1200), at(0.15, 500)],
+        envelope: envelope(0.5, 0.004, 0.16, 0.08),
+      },
+    ],
+  },
+  Pop: {
+    variationCents: 120,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 520), at(0.04, 1400), at(0.16, 200)],
+        envelope: envelope(0.18, 0.002, 0.18),
+      },
+      {
+        wave: 'sine',
+        pitch: [at(0, 140), at(0.2, 45)],
+        envelope: envelope(0.6, 0.002, 0.22),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 2,
+        cutoff: [at(0, 3600), at(0.2, 700)],
+        envelope: envelope(0.6, 0.001, 0.2),
       },
     ],
   },

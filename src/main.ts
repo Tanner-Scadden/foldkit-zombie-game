@@ -1,4 +1,13 @@
-import { Array, Effect, Option, Random, Schema, Stream, pipe } from 'effect'
+import {
+  Array,
+  Effect,
+  Option,
+  Random,
+  Result,
+  Schema,
+  Stream,
+  pipe,
+} from 'effect'
 import {
   Command,
   Dom,
@@ -24,12 +33,15 @@ import {
   releaseAudioEngine,
   resumeAudio,
 } from './audio'
+import { SHAKE_TRAUMA_MAX, TRAP_PLACE_TRAUMA } from './constants'
 import {
+  type TrapChoice,
   type WeaponChoice,
   isPauseKey,
   isStartKey,
   isStartWaveKey,
   isTrackingPointer,
+  maybeTrapChoice,
   maybeWeaponChoice,
   moveMouse,
   movePointer,
@@ -51,9 +63,17 @@ import {
   ShopState,
   initialModel,
 } from './model'
-import { burstCoins } from './particles'
+import { burstCoins, puffDust } from './particles'
 import { isBrowsing, purchase, shopItemElementId } from './shop'
 import { advanceGame, refreshIntent } from './simulation'
+import {
+  TRAPS,
+  cycleTrap,
+  maybeSelectedKind,
+  placeTrap,
+  refusePlacement,
+  trapCenter,
+} from './traps'
 import { isRoundActive, pause, startOrResume, startWaveEarly } from './waves'
 import {
   WEAPONS,
@@ -102,6 +122,8 @@ export const Message = defineMessageUnion({
   ClickedMuteButton: {},
   ClickedStartWaveButton: {},
   ClickedSwapButton: {},
+  ClickedPlaceTrapButton: {},
+  ClickedNextTrapButton: {},
   GotShopDialogMessage: { message: Dialog.Message },
   ClickedBuyButton: { item: ShopItemId },
   PressedBuyKey: { item: ShopItemId },
@@ -303,6 +325,9 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     BulletStruck: () => Option.none<SoundEffect>(),
     RanDry: () => Option.some<SoundEffect>('DryClick'),
     WaveCleared: () => Option.some<SoundEffect>('Payday'),
+    TrapHit: () => Option.none<SoundEffect>(),
+    TrapCracked: ({ kind }) => Option.some(TRAPS[kind].crackSound),
+    TrapBroken: ({ kind }) => Option.some(TRAPS[kind].breakSound),
   })
 
 const maybeEventSoundCue = (event: GameEvent): Option.Option<SoundCue> =>
@@ -429,6 +454,53 @@ const focusShopItem = (model: Model, item: ShopItemId): Model =>
     Dismissed: () => model,
   })
 
+// TRAPS
+
+const shakeBy = (model: Model, trauma: number): Model =>
+  modifyFields(model, {
+    shake: shake =>
+      modifyFields(shake, {
+        trauma: current => Math.min(SHAKE_TRAUMA_MAX, current + trauma),
+      }),
+  })
+
+const placeSelectedTrap = (model: Model): UpdateReturn => {
+  if (Option.isNone(maybeSelectedKind(model)) || !isRoundActive(model.phase)) {
+    return { model }
+  }
+
+  return Result.match(placeTrap(model), {
+    onFailure: reason =>
+      playSounds([uiCue('Denied')])(refusePlacement(model, reason)),
+    onSuccess: ({ model: placed, trap }) => {
+      const { x, y } = trapCenter(trap)
+      return playSounds([{ sound: 'Thunk', variation: 0 }])(
+        shakeBy(puffDust(placed, x, y), TRAP_PLACE_TRAUMA),
+      )
+    },
+  })
+}
+
+const nextTrap = (model: Model): UpdateReturn => {
+  const cycled = cycleTrap(model)
+  return playSounds(
+    cycled.selectedTrap === model.selectedTrap ? [] : [uiCue('Swap')],
+  )(cycled)
+}
+
+const TRAP_CHOICES: Readonly<
+  Record<TrapChoice, (model: Model) => UpdateReturn>
+> = {
+  Place: placeSelectedTrap,
+  Next: nextTrap,
+}
+
+const trapFromKey: (code: string) => UpdateStep = code => stepModel =>
+  Option.match(maybeTrapChoice(code), {
+    onNone: () => ({ model: stepModel }),
+    onSome: choice => TRAP_CHOICES[choice](stepModel),
+  })
+
 const unlockAudio: UpdateStep = stepModel =>
   AudioState.match(stepModel.audio, {
     Locked: () => ({
@@ -487,6 +559,7 @@ export const update = (model: Model, message: Message) =>
       )
       return Update.combine(pressed, [
         unlockAudio,
+        trapFromKey(code),
         playStartSoundWhen(startsRun(model, pressed)),
         playSwapSoundWhen(changedWeapon(model, pressed)),
       ])
@@ -561,6 +634,16 @@ export const update = (model: Model, message: Message) =>
         playSwapSoundWhen(changedWeapon(model, swapped)),
       ])
     },
+
+    ClickedPlaceTrapButton: () =>
+      isBrowsing(model.shop)
+        ? { model }
+        : Update.combine(model, [unlockAudio, placeSelectedTrap]),
+
+    ClickedNextTrapButton: () =>
+      isBrowsing(model.shop)
+        ? { model }
+        : Update.combine(model, [unlockAudio, nextTrap]),
 
     GotShopDialogMessage: ({ message: dialogMessage }) =>
       Update.combine(model, [

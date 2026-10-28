@@ -38,6 +38,7 @@ export const Behavior = defineTaggedUnion({
     blastRadius: Schema.Number,
     playerDamage: Schema.Number,
     zombieDamage: Schema.Number,
+    trapDamage: Schema.Number,
     blastKnockback: Schema.Number,
   },
 })
@@ -64,6 +65,7 @@ export type ZombieKindStats = Readonly<{
   speedMax: number
   hp: number
   contactDamage: number
+  trapBitePerSecond: number
   radius: number
   footOffset: number
   bounty: number
@@ -94,6 +96,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     speedMax: ZOMBIE_SPEED_MAX,
     hp: ZOMBIE_MAX_HP,
     contactDamage: 1,
+    trapBitePerSecond: 3,
     radius: ZOMBIE_RADIUS,
     footOffset: ZOMBIE_FOOT_OFFSET,
     bounty: SHAMBLER_BOUNTY,
@@ -123,6 +126,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     speedMax: 52,
     hp: 1,
     contactDamage: 1,
+    trapBitePerSecond: 2,
     radius: 3.5,
     footOffset: ZOMBIE_FOOT_OFFSET,
     bounty: 6,
@@ -158,6 +162,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     speedMax: 14,
     hp: 14,
     contactDamage: 2,
+    trapBitePerSecond: 12,
     radius: 6.5,
     footOffset: 7,
     bounty: 40,
@@ -193,6 +198,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     speedMax: 25,
     hp: 2,
     contactDamage: 0,
+    trapBitePerSecond: 0,
     radius: 4.5,
     footOffset: ZOMBIE_FOOT_OFFSET,
     bounty: 8,
@@ -206,6 +212,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
       blastRadius: 28,
       playerDamage: 1,
       zombieDamage: 6,
+      trapDamage: 15,
       blastKnockback: 190,
     }),
     clearance: 'Narrow',

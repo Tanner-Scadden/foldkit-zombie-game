@@ -112,6 +112,67 @@ body {
   left: 50%;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
   transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.trap-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.trap-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.place-button,
+.next-trap-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  min-height: 52px;
+  padding: 0 12px;
+  border: 2px solid rgba(155, 227, 106, 0.8);
+  border-radius: 6px;
+  background: rgba(8, 10, 12, 0.7);
+  color: #9be36a;
+  font: bold 14px monospace;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.place-button-stock {
+  font-size: 10px;
+  color: #f4f1de;
+}
+
+.place-button[aria-disabled='true'] {
+  border-color: rgba(255, 107, 94, 0.7);
+  color: #b8c2b0;
+  cursor: not-allowed;
+}
+
+.place-button:focus-visible,
+.next-trap-button:focus-visible {
+  outline: 2px solid #ffe066;
+  outline-offset: 2px;
+}
+
+.place-reason {
+  margin: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(8, 10, 12, 0.7);
+  color: #ff6b5e;
+  font: bold 11px monospace;
+  white-space: nowrap;
 }
 
 .start-wave-button {

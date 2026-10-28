@@ -17,10 +17,20 @@ import {
   type Player,
   type ShopItemId,
   ShopState,
+  TrapKind,
   type Vector,
   type Wallet,
   WeaponKind,
 } from './model'
+import {
+  TRAPS,
+  isDamaged,
+  ownedCount,
+  placedCount,
+  repairPrice,
+  repairTraps,
+  stockTrap,
+} from './traps'
 import {
   SIDEARM,
   WEAPONS,
@@ -64,6 +74,8 @@ export const ShopGood = defineTaggedUnion({
   Gun: { weapon: WeaponKind },
   Ammo: { weapon: WeaponKind, rounds: Schema.Number },
   Heart: {},
+  Trap: { kind: TrapKind },
+  Repair: {},
 })
 export type ShopGood = typeof ShopGood.Type
 
@@ -114,6 +126,28 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
     price: 25,
     good: ShopGood.Heart(),
   },
+  Barricade: {
+    id: 'Barricade',
+    name: TRAPS.Barricade.name,
+    blurb: TRAPS.Barricade.blurb,
+    price: TRAPS.Barricade.price,
+    good: ShopGood.Trap({ kind: 'Barricade' }),
+  },
+  Turret: {
+    id: 'Turret',
+    name: TRAPS.Turret.name,
+    blurb: TRAPS.Turret.blurb,
+    price: TRAPS.Turret.price,
+    good: ShopGood.Trap({ kind: 'Turret' }),
+  },
+  RepairTraps: {
+    id: 'RepairTraps',
+    name: 'Glue and Nails',
+    blurb:
+      'Patches every damaged trap back to full. The price grows with the damage.',
+    price: 0,
+    good: ShopGood.Repair(),
+  },
 }
 
 export const SHOP_ORDER: Array.NonEmptyReadonlyArray<ShopItemId> = [
@@ -122,7 +156,19 @@ export const SHOP_ORDER: Array.NonEmptyReadonlyArray<ShopItemId> = [
   'Smg',
   'SmgRounds',
   'Heart',
+  'Barricade',
+  'Turret',
+  'RepairTraps',
 ]
+
+export const priceFor = (model: Model, id: ShopItemId): number =>
+  ShopGood.match(SHOP_ITEMS[id].good, {
+    Gun: () => SHOP_ITEMS[id].price,
+    Ammo: () => SHOP_ITEMS[id].price,
+    Heart: () => SHOP_ITEMS[id].price,
+    Trap: () => SHOP_ITEMS[id].price,
+    Repair: () => repairPrice(model.traps),
+  })
 
 export const SPARE_SLOT_RULE = `Your ${WEAPONS[SIDEARM].name} always stays. A new gun goes in your second slot and replaces whatever is there.`
 
@@ -139,8 +185,9 @@ export type Verdict = typeof Verdict.Type
 const isCarrying = (player: Player, weapon: WeaponKind): boolean =>
   Option.exists(maybeSpare(player.arsenal), spare => spare.kind === weapon)
 
-const blockedReason = (player: Player, good: ShopGood): Option.Option<string> =>
-  ShopGood.match(good, {
+const blockedReason = (model: Model, good: ShopGood): Option.Option<string> => {
+  const { player } = model
+  return ShopGood.match(good, {
     Gun: ({ weapon }) =>
       isCarrying(player, weapon)
         ? Option.some('You already carry it')
@@ -163,15 +210,25 @@ const blockedReason = (player: Player, good: ShopGood): Option.Option<string> =>
       player.hp >= PLAYER_MAX_HP
         ? Option.some('Your hearts are full')
         : Option.none(),
+    Trap: ({ kind }) =>
+      ownedCount(model, kind) >= TRAPS[kind].limit
+        ? Option.some(`You can only own ${TRAPS[kind].limit}`)
+        : Option.none(),
+    Repair: () =>
+      Array.some(model.traps, isDamaged)
+        ? Option.none()
+        : Option.some('Nothing needs fixing'),
   })
+}
 
 export const verdictFor = (model: Model, id: ShopItemId): Verdict => {
   const item = SHOP_ITEMS[id]
+  const price = priceFor(model, id)
   return pipe(
-    blockedReason(model.player, item.good),
+    blockedReason(model, item.good),
     Option.orElse(() =>
-      item.price > model.wallet.balance
-        ? Option.some(`Need $${item.price - model.wallet.balance} more`)
+      price > model.wallet.balance
+        ? Option.some(`Need $${price - model.wallet.balance} more`)
         : Option.none(),
     ),
     Option.match({
@@ -203,6 +260,14 @@ export const ownedNote = (model: Model, id: ShopItemId): string => {
         },
       ),
     Heart: () => `Hearts ${player.hp} of ${PLAYER_MAX_HP}`,
+    Trap: ({ kind }) =>
+      `${model.trapStock[kind]} ready to place, ${placedCount(model.traps, kind)} placed, up to ${TRAPS[kind].limit}`,
+    Repair: () => {
+      const damaged = Array.filter(model.traps, isDamaged).length
+      return damaged === 1
+        ? '1 trap is damaged'
+        : `${damaged} traps are damaged`
+    },
   })
 }
 
@@ -227,21 +292,32 @@ const refill = (
   })
 }
 
-const grant = (player: Player, good: ShopGood): Player =>
+const equip = (model: Model, toPlayer: (player: Player) => Player): Model =>
+  modifyFields(model, { player: toPlayer })
+
+const grant = (model: Model, good: ShopGood): Model =>
   ShopGood.match(good, {
     Gun: ({ weapon }) =>
-      modifyFields(player, {
-        arsenal: () =>
-          Arsenal.HoldingSpare({
-            spare: { kind: weapon, rounds: startingRounds(weapon) },
-          }),
-      }),
+      equip(model, player =>
+        modifyFields(player, {
+          arsenal: () =>
+            Arsenal.HoldingSpare({
+              spare: { kind: weapon, rounds: startingRounds(weapon) },
+            }),
+        }),
+      ),
     Ammo: ({ weapon, rounds }) =>
-      modifyFields(player, {
-        arsenal: arsenal => refill(arsenal, weapon, rounds),
-      }),
+      equip(model, player =>
+        modifyFields(player, {
+          arsenal: arsenal => refill(arsenal, weapon, rounds),
+        }),
+      ),
     Heart: () =>
-      modifyFields(player, { hp: hp => Math.min(PLAYER_MAX_HP, hp + 1) }),
+      equip(model, player =>
+        modifyFields(player, { hp: hp => Math.min(PLAYER_MAX_HP, hp + 1) }),
+      ),
+    Trap: ({ kind }) => stockTrap(model, kind),
+    Repair: () => modifyFields(model, { traps: repairTraps }),
   })
 
 export const purchase = (
@@ -249,13 +325,14 @@ export const purchase = (
   id: ShopItemId,
 ): Option.Option<Model> => {
   const item = SHOP_ITEMS[id]
+  const price = priceFor(model, id)
   return Verdict.match(verdictFor(model, id), {
     Available: () =>
       Option.some(
-        modifyFields(model, {
-          wallet: wallet => spend(wallet, item.price),
-          player: player => grant(player, item.good),
-        }),
+        grant(
+          modifyFields(model, { wallet: wallet => spend(wallet, price) }),
+          item.good,
+        ),
       ),
     Refused: () => Option.none(),
   })

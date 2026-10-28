@@ -161,6 +161,37 @@ export const tilesWithSymbol = (symbol: string): ReadonlyArray<Tile> =>
     ),
   )
 
+export type Box = Readonly<{
+  left: number
+  top: number
+  right: number
+  bottom: number
+}>
+
+export const tileBox = ({ column, row }: Tile): Box => ({
+  left: column * TILE_SIZE,
+  top: row * TILE_SIZE,
+  right: (column + 1) * TILE_SIZE,
+  bottom: (row + 1) * TILE_SIZE,
+})
+
+export const boxCenter = ({ left, top, right, bottom }: Box): Vector => ({
+  x: (left + right) / 2,
+  y: (top + bottom) / 2,
+})
+
+export const distanceToBox = (position: Vector, box: Box): number =>
+  Math.hypot(
+    position.x - clamp(position.x, box.left, box.right),
+    position.y - clamp(position.y, box.top, box.bottom),
+  )
+
+export const circleTouchesBox = (
+  position: Vector,
+  radius: number,
+  box: Box,
+): boolean => distanceToBox(position, box) < radius
+
 // DOORS
 
 export type Door = Readonly<{ id: DoorId; center: Vector; outward: Vector }>
@@ -185,6 +216,74 @@ export const DOORS: Readonly<Record<DoorId, Door>> = {
   East: makeDoor('East'),
   South: makeDoor('South'),
 }
+
+const DOOR_TILE_SYMBOLS: ReadonlyArray<string> = Array.map(
+  DOOR_IDS,
+  id => DOOR_SYMBOLS[id],
+)
+
+export const isDoorTile = (column: number, row: number): boolean =>
+  Option.exists(symbolAt(column, row), symbol =>
+    Array.contains(DOOR_TILE_SYMBOLS, symbol),
+  )
+
+export type Threshold = Readonly<{
+  tiles: ReadonlyArray<Tile>
+  indices: ReadonlyArray<number>
+  box: Box
+}>
+
+const boundingBox = (tiles: ReadonlyArray<Tile>): Box =>
+  Array.reduce(
+    Array.map(tiles, tileBox),
+    {
+      left: Infinity,
+      top: Infinity,
+      right: -Infinity,
+      bottom: -Infinity,
+    },
+    (bounds, box) => ({
+      left: Math.min(bounds.left, box.left),
+      top: Math.min(bounds.top, box.top),
+      right: Math.max(bounds.right, box.right),
+      bottom: Math.max(bounds.bottom, box.bottom),
+    }),
+  )
+
+const makeThreshold = (id: DoorId): Threshold => {
+  const outward = DOOR_OUTWARD[id]
+  const tiles = Array.filter(
+    tilesWithSymbol(DOOR_SYMBOLS[id]),
+    ({ column, row }) => {
+      const innerColumn = column - outward.x
+      const innerRow = row - outward.y
+      return (
+        isWalkableTile(innerColumn, innerRow) &&
+        !isDoorTile(innerColumn, innerRow)
+      )
+    },
+  )
+  return {
+    tiles,
+    indices: Array.map(tiles, ({ column, row }) => tileIndex(column, row)),
+    box: boundingBox(tiles),
+  }
+}
+
+export const THRESHOLDS: Readonly<Record<DoorId, Threshold>> = {
+  North: makeThreshold('North'),
+  West: makeThreshold('West'),
+  East: makeThreshold('East'),
+  South: makeThreshold('South'),
+}
+
+export const DOOR_TILE_INDICES: Readonly<
+  Record<DoorId, ReadonlyArray<number>>
+> = Record.map(DOOR_SYMBOLS, symbol =>
+  Array.map(tilesWithSymbol(symbol), ({ column, row }) =>
+    tileIndex(column, row),
+  ),
+)
 
 const edgeCoordinate = (
   outward: number,
@@ -228,15 +327,8 @@ export const nearestDoor = (position: Vector): Door =>
 
 // COLLISION
 
-const pushOutOfTile = (
-  position: Vector,
-  radius: number,
-  { column, row }: Tile,
-): Vector => {
-  const left = column * TILE_SIZE
-  const top = row * TILE_SIZE
-  const right = left + TILE_SIZE
-  const bottom = top + TILE_SIZE
+const pushOutOfBox = (position: Vector, radius: number, box: Box): Vector => {
+  const { left, top, right, bottom } = box
   const deltaX = position.x - clamp(position.x, left, right)
   const deltaY = position.y - clamp(position.y, top, bottom)
   const distance = Math.hypot(deltaX, deltaY)
@@ -286,22 +378,31 @@ const solidTilesNear = (
       ),
   )
 
-export const resolveCircle = (position: Vector, radius: number): Vector =>
-  Array.reduce(solidTilesNear(position, radius), position, (resolved, tile) =>
-    pushOutOfTile(resolved, radius, tile),
+export const resolveCircle = (
+  position: Vector,
+  radius: number,
+  blockers: ReadonlyArray<Box> = [],
+): Vector =>
+  Array.reduce(
+    blockers,
+    Array.reduce(solidTilesNear(position, radius), position, (resolved, tile) =>
+      pushOutOfBox(resolved, radius, tileBox(tile)),
+    ),
+    (resolved, box) => pushOutOfBox(resolved, radius, box),
   )
 
 export const moveCircle = (
   position: Vector,
   delta: Vector,
   radius: number,
+  blockers: ReadonlyArray<Box> = [],
 ): Vector => {
   const steps = Math.max(1, Math.ceil(vectorLength(delta) / COLLISION_STEP_PX))
   const step = scaleVector(delta, 1 / steps)
   return Array.reduce(
     Array.makeBy(steps, () => step),
     position,
-    (moved, part) => resolveCircle(addVectors(moved, part), radius),
+    (moved, part) => resolveCircle(addVectors(moved, part), radius, blockers),
   )
 }
 
@@ -335,6 +436,8 @@ export const findStrike = (from: Vector, to: Vector): Option.Option<Vector> => {
 
 const isLaneClear = (from: Vector, to: Vector): boolean =>
   !Array.some(pointsAlong(from, to, LINE_OF_SIGHT_STEP_PX), isSolidAt)
+
+export const hasLineOfSight = isLaneClear
 
 export const hasClearPath = (
   from: Vector,

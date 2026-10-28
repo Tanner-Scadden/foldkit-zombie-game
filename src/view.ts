@@ -12,8 +12,9 @@ import {
 import { Canvas, Mount } from 'foldkit'
 import { Document, Html, HtmlBuilder } from 'foldkit/html'
 
-import { DOORS } from './arena'
+import { type Box, DOORS, DOOR_IDS, THRESHOLDS, boxCenter } from './arena'
 import {
+  ALERT_GLYPH_COLOR,
   ARENA_HEIGHT,
   ARENA_WIDTH,
   BLAST_FLASH_MS,
@@ -64,6 +65,7 @@ import {
   MUZZLE_FLASH_CORE_COLOR,
   MUZZLE_FLASH_MS,
   MUZZLE_FLASH_OUTER_COLOR,
+  PLANK_COLOR,
   PLAYER_BLINK_MS,
   PLAYER_BLINK_OPACITY,
   PLAYER_BREATH_FRAME_MS,
@@ -92,6 +94,7 @@ import {
   SHELL_DECAL_FADED_COLOR,
   SHELL_TUMBLE_MS,
   SPARK_COLOR,
+  SPLINTER_COLOR,
   STICK_RADIUS_PX,
   STREAK_FADED_OPACITY,
   STREAK_FADE_MS,
@@ -100,8 +103,12 @@ import {
   STREAK_PULSE_SCALE,
   STREAK_SCALE,
   STREAK_WINDOW_MS,
+  TRAP_HIT_FLASH_MS,
+  TRAP_HIT_PULSE_MS,
   WAVE_BANNER_MS,
   WAVE_CLEARED_BANNER_MS,
+  WOOD_DECAL_COLOR,
+  WOOD_DECAL_FADED_COLOR,
   ZOMBIE_DEATH_FADE_START,
   ZOMBIE_DEATH_FALL_END,
   ZOMBIE_DEATH_LANDING_END,
@@ -123,6 +130,7 @@ import {
   type Bullet,
   type Decal,
   type DecalKind,
+  type DoorId,
   Invulnerability,
   type Model,
   type Particle,
@@ -135,6 +143,11 @@ import {
   ShopState,
   Stick,
   Streak,
+  Trap,
+  TrapHint,
+  type TrapKind,
+  TrapNotice,
+  TurretGun,
   type Vector,
   type WeaponKind,
   type Zombie,
@@ -145,6 +158,7 @@ import { ROOM_SHAPES } from './room'
 import { isShopOpenFor } from './shop'
 import { shopDialogView } from './shopView'
 import {
+  BARRICADE_SPRITES,
   COUNT_SPRITES,
   EMPTY_HEART_SPRITE,
   FLASH_HEART_SPRITE,
@@ -152,13 +166,18 @@ import {
   GLYPH_ADVANCE,
   GLYPH_HEIGHT,
   GLYPH_SPRITES,
+  GNOME_HEIGHT,
+  GNOME_SPRITES,
   GUN_ICONS,
   type GlyphTone,
   HEART_SPRITE,
+  type Lay,
   PLAYER_IDLE_FRAMES,
   PLAYER_WALK_FRAMES,
+  type Sprite,
   type SpriteFrames,
   type SpriteSet,
+  TRAP_ICONS,
   type Tone,
   ZOMBIE_SPRITES,
   frameAt,
@@ -166,6 +185,22 @@ import {
   toGlyph,
 } from './sprite'
 import { type StallLook, stallShapes } from './stall'
+import {
+  PlaceVerdict,
+  type Placement,
+  TRAPS,
+  TRAP_KIND_ORDER,
+  TURRET_WEAPON,
+  TrapSpot,
+  barricadedDoors,
+  maybeNextKind,
+  maybePlacement,
+  maybeSelectedKind,
+  spotBox,
+  stageOf,
+  trapBox,
+  trapCenter,
+} from './traps'
 import {
   type DoorCount,
   FINAL_WAVE,
@@ -811,6 +846,7 @@ const DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   Hide: HIDE_DECAL_COLOR,
   Goo: GOO_DECAL_COLOR,
   Scorch: SCORCH_DECAL_COLOR,
+  Wood: WOOD_DECAL_COLOR,
 }
 
 const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
@@ -823,6 +859,7 @@ const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   Hide: HIDE_DECAL_FADED_COLOR,
   Goo: GOO_DECAL_FADED_COLOR,
   Scorch: SCORCH_DECAL_FADED_COLOR,
+  Wood: WOOD_DECAL_FADED_COLOR,
 }
 
 const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
@@ -839,9 +876,11 @@ const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
   HideGib: HIDE_GIB_COLOR,
   Goo: GOO_COLOR,
   Spark: SPARK_COLOR,
+  Splinter: SPLINTER_COLOR,
+  Plank: PLANK_COLOR,
 }
 
-const CASINGS: ReadonlyArray<ParticleKind> = ['Shell', 'Hull', 'Link']
+const CASINGS: ReadonlyArray<ParticleKind> = ['Shell', 'Hull', 'Link', 'Plank']
 
 const isCasing = (particle: Particle): boolean =>
   Array.contains(CASINGS, particle.kind)
@@ -968,6 +1007,22 @@ const gibShadow = (particle: Particle): Result.Result<Canvas.Shape, void> =>
       )
     : Result.failVoid
 
+const TURRET_SHADOW_WIDTH = 8
+
+const trapShadow = (trap: Trap): Result.Result<Canvas.Shape, void> =>
+  Trap.match(trap, {
+    Barricade: (): Result.Result<Canvas.Shape, void> => Result.failVoid,
+    Turret: (): Result.Result<Canvas.Shape, void> =>
+      Result.succeed(
+        footShadow(
+          trapCenter(trap),
+          TURRET_FOOT_DROP,
+          TURRET_SHADOW_WIDTH,
+          SHADOW_COLOR,
+        ),
+      ),
+  })
+
 const shadowShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   footShadow(
     model.player,
@@ -976,6 +1031,7 @@ const shadowShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
     SHADOW_COLOR,
   ),
   ...Array.filterMap(model.zombies, zombieShadow),
+  ...Array.filterMap(model.traps, trapShadow),
   ...Array.filterMap(model.particles, gibShadow),
 ]
 
@@ -983,14 +1039,269 @@ type Drawable = Readonly<{ depth: number; shapes: ReadonlyArray<Canvas.Shape> }>
 
 const byDepth = Order.mapInput(Order.Number, ({ depth }: Drawable) => depth)
 
+// TRAPS
+
+const LAYS: Readonly<Record<DoorId, Lay>> = {
+  North: 'Across',
+  South: 'Across',
+  West: 'Upright',
+  East: 'Upright',
+}
+
+const trapTone = (hitRemainingMs: number): Tone =>
+  hitRemainingMs > 0 && TRAP_HIT_PULSE_MS - hitRemainingMs < TRAP_HIT_FLASH_MS
+    ? 'Flash'
+    : 'Normal'
+
+const TRAP_JOLT_MS = 35
+
+const trapJolt = (hitRemainingMs: number): number => {
+  if (hitRemainingMs <= 0) {
+    return 0
+  } else {
+    return Math.floor(hitRemainingMs / TRAP_JOLT_MS) % 2 === 0 ? 1 : -1
+  }
+}
+
+const barricadeSprite = (door: DoorId, hp: number, tone: Tone): Sprite =>
+  BARRICADE_SPRITES[LAYS[door]][stageOf('Barricade', hp)][tone]
+
+const TURRET_FOOT_DROP = 4
+const TURRET_IDLE_SWAY = 0.35
+const TURRET_IDLE_SWAY_MS = 900
+const TURRET_HEALTH_BAR_WIDTH = 10
+const TURRET_HEALTH_COLOR = '#9be36a'
+
+const turretFoot = (center: Vector): Vector => ({
+  x: Math.round(center.x),
+  y: Math.round(center.y) + TURRET_FOOT_DROP,
+})
+
+const msSinceTurretShot = (gun: TurretGun): Option.Option<number> =>
+  TurretGun.match(gun, {
+    Armed: () => Option.none(),
+    CoolingDown: ({ remainingMs }) =>
+      Option.some(WEAPONS[TURRET_WEAPON].fireIntervalMs - remainingMs),
+  })
+
+const turretAngle = (
+  facing: Vector,
+  gun: TurretGun,
+  id: number,
+  elapsedMs: number,
+): number => {
+  const aim = Math.atan2(facing.y, facing.x)
+  return TurretGun.match(gun, {
+    Armed: () =>
+      aim +
+      TURRET_IDLE_SWAY *
+        Math.sin((FULL_TURN * elapsedMs) / TURRET_IDLE_SWAY_MS + id),
+    CoolingDown: () => aim,
+  })
+}
+
+const turretHealthBar = (
+  center: Vector,
+  hp: number,
+): ReadonlyArray<Canvas.Shape> => {
+  if (hp >= TRAPS.Turret.hp) {
+    return []
+  }
+
+  const foot = turretFoot(center)
+  const top = foot.y - GNOME_HEIGHT - HEALTH_BAR_GAP
+  const left = foot.x - TURRET_HEALTH_BAR_WIDTH / 2
+  return [
+    Canvas.Rect({
+      x: left - 1,
+      y: top - 1,
+      width: TURRET_HEALTH_BAR_WIDTH + 2,
+      height: 3,
+      fill: HEALTH_BAR_BACK_COLOR,
+    }),
+    Canvas.Rect({
+      x: left,
+      y: top,
+      width: Math.max(
+        1,
+        Math.round((TURRET_HEALTH_BAR_WIDTH * hp) / TRAPS.Turret.hp),
+      ),
+      height: 1,
+      fill: TURRET_HEALTH_COLOR,
+    }),
+  ]
+}
+
+const gnomeShapes = (
+  center: Vector,
+  facing: Vector,
+  angle: number,
+  tone: Tone,
+  jolt: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const foot = turretFoot(center)
+  const side: Facing = facing.x < 0 ? 'Left' : 'Right'
+  const body = Canvas.Group({
+    translate: { x: foot.x + jolt, y: foot.y },
+    shapes: GNOME_SPRITES[tone][side],
+  })
+  const gun = Canvas.Group({
+    translate: { x: foot.x + jolt, y: Math.round(center.y) },
+    shapes: gunSprite(TURRET_WEAPON, angle),
+  })
+  return Math.sin(angle) < AIMING_UP ? [gun, body] : [body, gun]
+}
+
+const turretShapes = (
+  turret: Extract<Trap, Readonly<{ _tag: 'Turret' }>>,
+  elapsedMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const center = trapCenter(turret)
+  const angle = turretAngle(turret.facing, turret.gun, turret.id, elapsedMs)
+  const reach = WEAPONS[TURRET_WEAPON].muzzleReach + 1
+  const flash = Option.match(msSinceTurretShot(turret.gun), {
+    onNone: () => [],
+    onSome: msSinceShot =>
+      msSinceShot < MUZZLE_FLASH_MS
+        ? MUZZLE_FLASHES[WEAPONS[TURRET_WEAPON].flash](
+            msSinceShot < MUZZLE_FLASH_BIG_MS,
+            Math.round(center.x + Math.cos(angle) * reach),
+            Math.round(center.y + Math.sin(angle) * reach),
+          )
+        : [],
+  })
+  return [
+    ...gnomeShapes(
+      center,
+      turret.facing,
+      angle,
+      trapTone(turret.hitRemainingMs),
+      trapJolt(turret.hitRemainingMs),
+    ),
+    ...flash,
+    ...turretHealthBar(center, turret.hp),
+  ]
+}
+
+const trapShapes =
+  (elapsedMs: number) =>
+  (trap: Trap): ReadonlyArray<Canvas.Shape> =>
+    Trap.match(trap, {
+      Barricade: ({ door, hp, hitRemainingMs }) => {
+        const center = trapCenter(trap)
+        return [
+          placeSprite(
+            center.x + trapJolt(hitRemainingMs),
+            center.y,
+            barricadeSprite(door, hp, trapTone(hitRemainingMs)),
+          ),
+        ]
+      },
+      Turret: turret => turretShapes(turret, elapsedMs),
+    })
+
+const trapDepth = (trap: Trap): number => trapBox(trap).bottom
+
+const GHOST_OPACITY = 0.5
+const GHOST_OK_COLOR = '#9be36a'
+const GHOST_BLOCKED_COLOR = '#ff6b5e'
+const DOORWAY_HINT_COLOR = 'rgba(255, 224, 102, 0.8)'
+const DOORWAY_HINT_PULSE_MS = 600
+
+const ghostSprite = (
+  spot: TrapSpot,
+  model: Model,
+): ReadonlyArray<Canvas.Shape> =>
+  TrapSpot.match(spot, {
+    Doorway: ({ door }) => {
+      const center = boxCenter(spotBox(spot))
+      return [
+        placeSprite(
+          center.x,
+          center.y,
+          barricadeSprite(door, TRAPS.Barricade.hp, 'Normal'),
+        ),
+      ]
+    },
+    Floor: () =>
+      gnomeShapes(
+        boxCenter(spotBox(spot)),
+        model.player.facing,
+        Math.atan2(model.player.facing.y, model.player.facing.x),
+        'Normal',
+        0,
+      ),
+  })
+
+const outlineShape = (box: Box, color: string): Canvas.Shape =>
+  Canvas.Rect({
+    x: box.left + 0.5,
+    y: box.top + 0.5,
+    width: box.right - box.left - 1,
+    height: box.bottom - box.top - 1,
+    stroke: color,
+    lineWidth: 1,
+  })
+
+const openDoorwayHints = (model: Model): ReadonlyArray<Canvas.Shape> => {
+  const boarded = barricadedDoors(model.traps)
+  const isLit = Math.floor(model.elapsedMs / DOORWAY_HINT_PULSE_MS) % 2 === 0
+  return isLit
+    ? Array.filterMap(DOOR_IDS, door =>
+        Array.contains(boarded, door)
+          ? Result.failVoid
+          : Result.succeed(
+              outlineShape(THRESHOLDS[door].box, DOORWAY_HINT_COLOR),
+            ),
+      )
+    : []
+}
+
+const isPlacingNow = (model: Model): boolean =>
+  Phase.guards.Preparation(model.phase) &&
+  !ShopState.guards.Browsing(model.shop)
+
+const ghostShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
+  if (!isPlacingNow(model)) {
+    return []
+  }
+
+  return Option.match(maybePlacement(model), {
+    onNone: () => [],
+    onSome: ({ maybeSpot, verdict }) =>
+      Option.match(maybeSpot, {
+        onNone: () => openDoorwayHints(model),
+        onSome: spot => [
+          Canvas.Group({
+            opacity: GHOST_OPACITY,
+            shapes: ghostSprite(spot, model),
+          }),
+          outlineShape(
+            spotBox(spot),
+            PlaceVerdict.guards.Placeable(verdict)
+              ? GHOST_OK_COLOR
+              : GHOST_BLOCKED_COLOR,
+          ),
+        ],
+      }),
+  })
+}
+
 const entityShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   const drawZombie = zombieShapes(model.player, model.elapsedMs)
+  const drawTrap = trapShapes(model.elapsedMs)
   return pipe(
     model.zombies,
     Array.map((zombie): Drawable => ({
       depth: zombie.y,
       shapes: drawZombie(zombie),
     })),
+    Array.appendAll(
+      Array.map(model.traps, (trap): Drawable => ({
+        depth: trapDepth(trap),
+        shapes: drawTrap(trap),
+      })),
+    ),
     Array.append<Drawable>({
       depth: model.player.y,
       shapes: playerShapes(model),
@@ -1385,11 +1696,118 @@ const loadoutShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
   return [...slotShapes(0, pistolSlot), ...slotShapes(1, spareSlot)]
 }
 
+const TRAP_SLOT_WIDTH = 24
+const TRAP_SLOTS_LEFT = HUD_MARGIN + 2 * (SLOT_WIDTH + SLOT_GAP)
+
+const trapSlotShapes = (
+  kind: TrapKind,
+  count: number,
+  index: number,
+  isSelected: boolean,
+): ReadonlyArray<Canvas.Shape> => {
+  const x = TRAP_SLOTS_LEFT + index * (TRAP_SLOT_WIDTH + SLOT_GAP)
+  return [
+    Canvas.Rect({
+      x,
+      y: SLOT_TOP,
+      width: TRAP_SLOT_WIDTH,
+      height: SLOT_HEIGHT,
+      fill: isSelected ? SLOT_HELD_BORDER : SLOT_BORDER,
+    }),
+    Canvas.Rect({
+      x: x + 1,
+      y: SLOT_TOP + 1,
+      width: TRAP_SLOT_WIDTH - 2,
+      height: SLOT_HEIGHT - 2,
+      fill: SLOT_FILL,
+    }),
+    placeSprite(x + 6, SLOT_TOP + 6, TRAP_ICONS[kind]),
+    Canvas.Text({
+      x: x + TRAP_SLOT_WIDTH - 3,
+      y: SLOT_TOP + SLOT_HEIGHT / 2 + 1,
+      content: `x${count}`,
+      font: SLOT_FONT,
+      fill: HUD_TEXT_COLOR,
+      align: 'Right',
+      baseline: 'Middle',
+    }),
+  ]
+}
+
+const trapStockShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
+  const maybeSelected = maybeSelectedKind(model)
+  return pipe(
+    TRAP_KIND_ORDER,
+    Array.filter(kind => model.trapStock[kind] > 0),
+    Array.flatMap((kind, index) =>
+      trapSlotShapes(
+        kind,
+        model.trapStock[kind],
+        index,
+        Option.contains(maybeSelected, kind),
+      ),
+    ),
+  )
+}
+
+const TRAP_HINT_Y = 24
+const NOTICE_LIFT_PX = 14
+
+const trapHintText = (kind: TrapKind): string =>
+  kind === 'Barricade'
+    ? 'PRESS T / TAP PLACE IN A DOORWAY'
+    : 'PRESS T / TAP PLACE TO SET THE GNOME DOWN'
+
+const trapHintShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
+  if (!isPlacingNow(model) || !TrapHint.guards.Showing(model.trapHint)) {
+    return []
+  }
+
+  return Option.match(maybeSelectedKind(model), {
+    onNone: () => [],
+    onSome: kind =>
+      bannerText(TRAP_HINT_Y, trapHintText(kind), PROMPT_FONT, PROMPT_COLOR),
+  })
+}
+
+const trapNoticeShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+  TrapNotice.match(model.trapNotice, {
+    Quiet: () => [],
+    Refused: ({ reason }) => {
+      const x = clamp(Math.round(model.player.x), 60, ARENA_WIDTH - 60)
+      const y = Math.max(8, Math.round(model.player.y) - NOTICE_LIFT_PX)
+      const content = String.toUpperCase(reason)
+      return [
+        Canvas.Text({
+          x,
+          y: y + 1,
+          content,
+          font: HINT_FONT,
+          fill: BANNER_SHADOW_COLOR,
+          align: 'Center',
+          baseline: 'Middle',
+        }),
+        Canvas.Text({
+          x,
+          y,
+          content,
+          font: HINT_FONT,
+          fill: ALERT_GLYPH_COLOR,
+          align: 'Center',
+          baseline: 'Middle',
+        }),
+      ]
+    },
+  })
+
 const hudShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...heartShapes(model.player),
   ...moneyShapes(model),
   ...streakShapes(model.streak),
   ...loadoutShapes(model.player),
+  ...trapStockShapes(model),
+  ...trapHintShapes(model),
+  ...trapNoticeShapes(model),
   ...roundHudShapes(model),
   Canvas.Text({
     x: ARENA_WIDTH - HUD_MARGIN,
@@ -1703,6 +2121,7 @@ const worldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...stallShapes(stallLook(model), model.elapsedMs),
   ...shadowShapes(model),
   ...groundParticleShapes(model.particles),
+  ...ghostShapes(model),
   ...Array.flatMap(model.bullets, bulletShapes),
   ...entityShapes(model),
   ...Array.flatMap(model.blasts, blastShapes),
@@ -1749,11 +2168,24 @@ const gunLabel = (model: Model): string => {
   })
 }
 
+const trapLabel = (model: Model): string => {
+  const ready = Array.filterMap(TRAP_KIND_ORDER, kind =>
+    model.trapStock[kind] > 0
+      ? Result.succeed(`${model.trapStock[kind]} ${TRAPS[kind].name}`)
+      : Result.failVoid,
+  )
+  return Array.isReadonlyArrayEmpty(ready)
+    ? ''
+    : ` Traps ready to place: ${Array.join(ready, ', ')}.`
+}
+
 const loadoutView = (model: Model, h: HtmlBuilder<Message>): Html =>
   isRoundActive(model.phase)
     ? h.p(
         [h.Class('sr-only')],
-        [`You have $${model.wallet.balance}. ${gunLabel(model)}`],
+        [
+          `You have $${model.wallet.balance}. ${gunLabel(model)}${trapLabel(model)}`,
+        ],
       )
     : h.empty
 
@@ -1909,6 +2341,85 @@ const startWaveButtonView = (wave: number, h: HtmlBuilder<Message>): Html =>
     ['START WAVE'],
   )
 
+const PLACE_REASON_ID = 'place-trap-reason'
+
+const placeButtonView = (
+  model: Model,
+  { kind, verdict }: Placement,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const { name } = TRAPS[kind]
+  const isBlocked = PlaceVerdict.guards.Blocked(verdict)
+  return h.button(
+    [
+      h.Type('button'),
+      h.Class('place-button'),
+      h.AriaLabel(`Place a ${name}`),
+      h.AriaKeyshortcuts('T'),
+      ...(isBlocked
+        ? [h.AriaDisabled(true), h.AriaDescribedBy(PLACE_REASON_ID)]
+        : []),
+      h.OnClick(Message.ClickedPlaceTrapButton(), {
+        focusSelector: '.game-surface',
+      }),
+    ],
+    [
+      h.span([h.Class('place-button-label')], ['PLACE']),
+      h.span(
+        [h.Class('place-button-stock')],
+        [`${String.toUpperCase(name)} x${model.trapStock[kind]}`],
+      ),
+    ],
+  )
+}
+
+const placeReasonView = (
+  { verdict }: Placement,
+  h: HtmlBuilder<Message>,
+): Html =>
+  PlaceVerdict.match(verdict, {
+    Placeable: () => h.empty,
+    Blocked: ({ reason }) =>
+      h.p([h.Id(PLACE_REASON_ID), h.Class('place-reason')], [reason]),
+  })
+
+const nextTrapButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  Option.match(maybeNextKind(model), {
+    onNone: () => h.empty,
+    onSome: kind =>
+      h.button(
+        [
+          h.Type('button'),
+          h.Class('next-trap-button'),
+          h.AriaLabel(`Switch to the ${TRAPS[kind].name}`),
+          h.AriaKeyshortcuts('G'),
+          h.OnClick(Message.ClickedNextTrapButton(), {
+            focusSelector: '.game-surface',
+          }),
+        ],
+        ['NEXT'],
+      ),
+  })
+
+const trapControlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  Option.match(maybePlacement(model), {
+    onNone: () => h.empty,
+    onSome: placement =>
+      h.div(
+        [h.Class('trap-controls')],
+        [
+          placeReasonView(placement, h),
+          h.div(
+            [h.Class('trap-buttons')],
+            [
+              placeButtonView(model, placement, h),
+              nextTrapButtonView(model, h),
+            ],
+          ),
+        ],
+      ),
+  })
+
 const preparationControlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
   Phase.match(model.phase, {
     Ready: () => h.empty,
@@ -1918,6 +2429,7 @@ const preparationControlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
         [
           preparationTimerView(wave, remainingMs, h),
           wavePreviewView(wave, spawns, h),
+          trapControlsView(model, h),
           startWaveButtonView(wave, h),
         ],
       ),

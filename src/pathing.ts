@@ -1,8 +1,12 @@
-import { Array, Option, Result, pipe } from 'effect'
+import { Array, Option, Order, Result, pipe } from 'effect'
 
 import {
+  DOORS,
+  DOOR_IDS,
+  DOOR_TILE_INDICES,
   TILE_COUNT,
   type Tile,
+  doorSpawnPoint,
   hasClearPath,
   isInsideRoomAt,
   isOpenBlock,
@@ -13,7 +17,15 @@ import {
   tileIndexAt,
   tileOfIndex,
 } from './arena'
-import { DIRECT_CHASE_FULL_PX, DIRECT_CHASE_RANGE_PX } from './constants'
+import {
+  ARENA_HEIGHT,
+  ARENA_WIDTH,
+  DIRECT_CHASE_FULL_PX,
+  DIRECT_CHASE_RANGE_PX,
+  DOOR_HALF_WIDTH_PX,
+  TILE_SIZE,
+  ZOMBIE_SPAWN_MARGIN,
+} from './constants'
 import {
   ZERO_VECTOR,
   addVectors,
@@ -22,7 +34,7 @@ import {
   normalize,
   scaleVector,
 } from './geometry'
-import type { FlowField, Vector } from './model'
+import type { DoorId, FlowField, Toll, Vector } from './model'
 
 // FLOW FIELD
 
@@ -85,66 +97,113 @@ const openNeighbors = (
 const distanceAt = (distances: ReadonlyArray<number>, index: number): number =>
   Option.getOrElse(Array.get(distances, index), () => UNREACHED_DISTANCE)
 
+type Arrival = Readonly<{ index: number; distance: number }>
+
+type TollMap = ReadonlyMap<number, number>
+
+const tollAt = (tolls: TollMap, index: number): number =>
+  Option.getOrElse(Option.fromNullishOr(tolls.get(index)), () => 0)
+
+const isUnreached = (distances: ReadonlyArray<number>, index: number) =>
+  distanceAt(distances, index) === UNREACHED_DISTANCE
+
+const nearestArrival = (arrivals: Array.NonEmptyReadonlyArray<Arrival>) =>
+  Array.reduce(arrivals, UNREACHED_DISTANCE, (nearest, { distance }) =>
+    Math.min(nearest, distance),
+  )
+
 const spread = (
   distances: ReadonlyArray<number>,
-  frontier: ReadonlyArray<number>,
-  depth: number,
+  pending: ReadonlyArray<Arrival>,
   clearance: Clearance,
-): ReadonlyArray<number> => {
-  if (Array.isReadonlyArrayEmpty(frontier)) {
-    return distances
-  }
-
-  const ringClearance: Clearance = depth === 0 ? 'Narrow' : clearance
-  const reached = new Set(
-    pipe(
-      frontier,
-      Array.flatMap(index => openNeighbors(index, ringClearance)),
-      Array.filter(
-        index => distanceAt(distances, index) === UNREACHED_DISTANCE,
-      ),
-    ),
+  tolls: TollMap,
+): ReadonlyArray<number> =>
+  Array.match(
+    Array.filter(pending, ({ index }) => isUnreached(distances, index)),
+    {
+      onEmpty: () => distances,
+      onNonEmpty: open => {
+        const depth = nearestArrival(open)
+        const settled = new Set(
+          pipe(
+            open,
+            Array.filter(({ distance }) => distance === depth),
+            Array.map(({ index }) => index),
+          ),
+        )
+        const settledDistances = Array.map(distances, (distance, index) =>
+          settled.has(index) ? depth : distance,
+        )
+        const ringClearance: Clearance = depth === 0 ? 'Narrow' : clearance
+        const arrivals = pipe(
+          Array.fromIterable(settled),
+          Array.flatMap(index => openNeighbors(index, ringClearance)),
+          Array.filter(index => isUnreached(settledDistances, index)),
+          Array.map(index => ({
+            index,
+            distance: depth + 1 + tollAt(tolls, index),
+          })),
+        )
+        return spread(
+          settledDistances,
+          [
+            ...Array.filter(open, ({ distance }) => distance !== depth),
+            ...arrivals,
+          ],
+          clearance,
+          tolls,
+        )
+      },
+    },
   )
-  return spread(
-    Array.map(distances, (distance, index) =>
-      reached.has(index) ? depth + 1 : distance,
-    ),
-    Array.fromIterable(reached),
-    depth + 1,
-    clearance,
-  )
-}
 
 export const computeFlowField = (
   originIndex: number,
   clearance: Clearance,
+  tolls: ReadonlyArray<Toll>,
 ): FlowField => ({
   originIndex,
+  tolls,
   distances: spread(
-    Array.makeBy(TILE_COUNT, index =>
-      index === originIndex ? 0 : UNREACHED_DISTANCE,
-    ),
-    [originIndex],
-    0,
+    Array.makeBy(TILE_COUNT, () => UNREACHED_DISTANCE),
+    [{ index: originIndex, distance: 0 }],
     clearance,
+    new Map(Array.map(tolls, ({ index, cost }) => [index, cost])),
   ),
 })
 
 export const flowFieldToward = (
   target: Vector,
   clearance: Clearance,
-): FlowField => computeFlowField(tileIndexAt(target), clearance)
+  tolls: ReadonlyArray<Toll>,
+): FlowField => computeFlowField(tileIndexAt(target), clearance, tolls)
+
+const isSameToll = (first: Toll, second: Toll): boolean =>
+  first.index === second.index && first.cost === second.cost
+
+const areSameTolls = (
+  first: ReadonlyArray<Toll>,
+  second: ReadonlyArray<Toll>,
+): boolean =>
+  first.length === second.length &&
+  Array.every(Array.zip(first, second), ([left, right]) =>
+    isSameToll(left, right),
+  )
 
 export const refreshFlowField = (
   flowField: FlowField,
   target: Vector,
   clearance: Clearance,
+  tolls: ReadonlyArray<Toll>,
 ): FlowField => {
   const originIndex = tileIndexAt(target)
-  if (originIndex === flowField.originIndex) {
+  if (
+    originIndex === flowField.originIndex &&
+    areSameTolls(flowField.tolls, tolls)
+  ) {
     return flowField
   } else {
-    return computeFlowField(originIndex, clearance)
+    return computeFlowField(originIndex, clearance, tolls)
   }
 }
 
@@ -243,19 +302,191 @@ const insideSteering = (
   })
 }
 
+// OUTSIDE
+
+const LOOP_LEFT = -ZOMBIE_SPAWN_MARGIN
+const LOOP_TOP = -ZOMBIE_SPAWN_MARGIN
+const LOOP_RIGHT = ARENA_WIDTH + ZOMBIE_SPAWN_MARGIN
+const LOOP_BOTTOM = ARENA_HEIGHT + ZOMBIE_SPAWN_MARGIN
+const LOOP_WIDTH = LOOP_RIGHT - LOOP_LEFT
+const LOOP_HEIGHT = LOOP_BOTTOM - LOOP_TOP
+const LOOP_LENGTH = (LOOP_WIDTH + LOOP_HEIGHT) * 2
+const CORNER_REACHED_PX = 1
+
+type LoopMark = Readonly<{ at: number; point: Vector }>
+
+type LoopSide = Readonly<{ gap: number; at: number }>
+
+const loopPositionOf = ({ x, y }: Vector): number => {
+  const alongX = clamp(x, LOOP_LEFT, LOOP_RIGHT)
+  const alongY = clamp(y, LOOP_TOP, LOOP_BOTTOM)
+  const sides: Array.NonEmptyReadonlyArray<LoopSide> = [
+    { gap: Math.abs(y - LOOP_TOP), at: alongX - LOOP_LEFT },
+    { gap: Math.abs(x - LOOP_RIGHT), at: LOOP_WIDTH + alongY - LOOP_TOP },
+    {
+      gap: Math.abs(y - LOOP_BOTTOM),
+      at: LOOP_WIDTH + LOOP_HEIGHT + LOOP_RIGHT - alongX,
+    },
+    {
+      gap: Math.abs(x - LOOP_LEFT),
+      at: LOOP_WIDTH * 2 + LOOP_HEIGHT + LOOP_BOTTOM - alongY,
+    },
+  ]
+  return Array.reduce(sides, Array.headNonEmpty(sides), (nearest, side) =>
+    side.gap < nearest.gap ? side : nearest,
+  ).at
+}
+
+const LOOP_CORNERS: ReadonlyArray<LoopMark> = [
+  { at: 0, point: { x: LOOP_LEFT, y: LOOP_TOP } },
+  { at: LOOP_WIDTH, point: { x: LOOP_RIGHT, y: LOOP_TOP } },
+  { at: LOOP_WIDTH + LOOP_HEIGHT, point: { x: LOOP_RIGHT, y: LOOP_BOTTOM } },
+  {
+    at: LOOP_WIDTH * 2 + LOOP_HEIGHT,
+    point: { x: LOOP_LEFT, y: LOOP_BOTTOM },
+  },
+]
+
+const doorLoopMark = (id: DoorId): LoopMark => {
+  const point = doorSpawnPoint(id, 0)
+  return { at: loopPositionOf(point), point }
+}
+
+const DOOR_LOOP_MARKS: Readonly<Record<DoorId, LoopMark>> = {
+  North: doorLoopMark('North'),
+  West: doorLoopMark('West'),
+  East: doorLoopMark('East'),
+  South: doorLoopMark('South'),
+}
+
+const forwardGap = (from: number, to: number): number =>
+  (((to - from) % LOOP_LENGTH) + LOOP_LENGTH) % LOOP_LENGTH
+
+type LoopLeg = Readonly<{ distance: number; isClockwise: boolean }>
+
+const loopLeg = (from: number, to: number): LoopLeg => {
+  const clockwise = forwardGap(from, to)
+  const counterClockwise = forwardGap(to, from)
+  return clockwise <= counterClockwise
+    ? { distance: clockwise, isClockwise: true }
+    : { distance: counterClockwise, isClockwise: false }
+}
+
+const nextWaypoint = (from: number, destination: LoopMark): Vector => {
+  const leg = loopLeg(from, destination.at)
+  const gapAhead = (at: number): number =>
+    leg.isClockwise ? forwardGap(from, at) : forwardGap(at, from)
+  return pipe(
+    LOOP_CORNERS,
+    Array.filter(corner => {
+      const gap = gapAhead(corner.at)
+      return gap > CORNER_REACHED_PX && gap < leg.distance
+    }),
+    Array.sort(
+      Order.mapInput(Order.Number, (corner: LoopMark) => gapAhead(corner.at)),
+    ),
+    Array.head,
+    Option.match({
+      onNone: () => destination.point,
+      onSome: corner => corner.point,
+    }),
+  )
+}
+
+const isAtDoor = (position: Vector, id: DoorId): boolean => {
+  const { center, outward } = DOORS[id]
+  const offsetX = position.x - center.x
+  const offsetY = position.y - center.y
+  const outwardness = offsetX * outward.x + offsetY * outward.y
+  const sideways = Math.abs(offsetX * outward.y - offsetY * outward.x)
+  return outwardness > 0 && sideways <= DOOR_HALF_WIDTH_PX
+}
+
+export const doorEntryDistance = (flowField: FlowField, id: DoorId): number =>
+  Array.reduce(DOOR_TILE_INDICES[id], UNREACHED_DISTANCE, (nearest, index) =>
+    Math.min(nearest, distanceAt(flowField.distances, index)),
+  )
+
+type Entry = Readonly<{ door: DoorId; cost: number }>
+
+const entryCost = (flowField: FlowField, from: number, door: DoorId): number =>
+  loopLeg(from, DOOR_LOOP_MARKS[door].at).distance / TILE_SIZE +
+  doorEntryDistance(flowField, door)
+
+export const bestEntry = (flowField: FlowField, position: Vector): DoorId => {
+  const here = loopPositionOf(position)
+  return pipe(
+    DOOR_IDS,
+    Array.reduce(Option.none<Entry>(), (best, door): Option.Option<Entry> => {
+      const cost = entryCost(flowField, here, door)
+      return Option.match(best, {
+        onNone: () => Option.some({ door, cost }),
+        onSome: current =>
+          cost < current.cost ? Option.some({ door, cost }) : best,
+      })
+    }),
+    Option.match({
+      onNone: () => nearestDoor(position).id,
+      onSome: ({ door }) => door,
+    }),
+  )
+}
+
+const towardDoor = (position: Vector, id: DoorId): Vector =>
+  Option.getOrElse(
+    directionBetween(position, DOORS[id].center),
+    () => ZERO_VECTOR,
+  )
+
+const routeAround = (
+  flowField: FlowField,
+  position: Vector,
+  maybeHere: Option.Option<DoorId>,
+): Vector => {
+  const entry = bestEntry(flowField, position)
+  if (Option.contains(maybeHere, entry)) {
+    return towardDoor(position, entry)
+  }
+
+  return Option.getOrElse(
+    directionBetween(
+      position,
+      nextWaypoint(loopPositionOf(position), DOOR_LOOP_MARKS[entry]),
+    ),
+    () => towardDoor(position, entry),
+  )
+}
+
+const outsideSteering = (
+  flowField: FlowField,
+  position: Vector,
+  barricaded: ReadonlyArray<DoorId>,
+): Vector => {
+  if (Array.isReadonlyArrayEmpty(barricaded)) {
+    return towardDoor(position, nearestDoor(position).id)
+  }
+
+  const maybeHere = Array.findFirst(DOOR_IDS, id => isAtDoor(position, id))
+  return Option.match(maybeHere, {
+    onNone: () => routeAround(flowField, position, maybeHere),
+    onSome: here =>
+      Array.contains(barricaded, here)
+        ? routeAround(flowField, position, maybeHere)
+        : towardDoor(position, here),
+  })
+}
+
 export const steerToward = (
   flowField: FlowField,
   position: Vector,
   target: Vector,
   halfWidth: number,
   clearance: Clearance,
+  barricaded: ReadonlyArray<DoorId>,
 ): Vector => {
   if (isInsideRoomAt(position)) {
     return insideSteering(flowField, position, target, halfWidth, clearance)
   } else {
-    return Option.getOrElse(
-      directionBetween(position, nearestDoor(position).center),
-      () => ZERO_VECTOR,
-    )
+    return outsideSteering(flowField, position, barricaded)
   }
 }

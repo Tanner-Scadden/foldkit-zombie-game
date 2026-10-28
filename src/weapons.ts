@@ -112,6 +112,27 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     sound: 'SmgShot',
     maybeRoundLimit: Option.some({ starting: 120, max: 360 }),
   },
+  Peashooter: {
+    name: 'Pea Shooter',
+    roundsLabel: 'peas',
+    fireIntervalMs: 520,
+    damage: 1,
+    pellets: 1,
+    spread: 0,
+    speedJitter: 0,
+    bulletSpeed: 230,
+    bulletLifetimeMs: 420,
+    knockback: 60,
+    muzzleReach: 6,
+    recoilMs: 120,
+    recoilKickPx: 1,
+    recoilSquash: 0.1,
+    shakeTrauma: 0,
+    flash: 'Flicker',
+    casing: 'Shell',
+    sound: 'TurretShot',
+    maybeRoundLimit: Option.none(),
+  },
 }
 
 export const SIDEARM: WeaponKind = 'Pistol'

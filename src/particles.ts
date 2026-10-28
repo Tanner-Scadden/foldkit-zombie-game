@@ -43,6 +43,7 @@ import {
   DUST_LIFETIME_MIN_MS,
   DUST_LIFT,
   DUST_PER_HURT,
+  DUST_PER_PLACEMENT,
   DUST_PER_STRIKE,
   DUST_SPEED_MAX,
   DUST_SPEED_MIN,
@@ -62,6 +63,13 @@ import {
   PARTICLE_BOUNCE_FRICTION,
   PARTICLE_BOUNCE_MIN_SPEED,
   PARTICLE_MAX,
+  PLANKS_PER_BREAK,
+  PLANKS_PER_CRACK,
+  PLANK_LIFETIME_MS,
+  PLANK_LIFT_MAX,
+  PLANK_LIFT_MIN,
+  PLANK_SPEED_MAX,
+  PLANK_SPEED_MIN,
   PLAYER_FOOT_OFFSET,
   SCORCH_SIZE_PX,
   SHELL_DRAG_PER_SECOND,
@@ -74,6 +82,7 @@ import {
   SHELL_LIFT_MIN,
   SHELL_RESTITUTION,
   SPARKS_PER_BLAST,
+  SPARKS_PER_TURRET_BREAK,
   SPARK_DRAG_PER_SECOND,
   SPARK_GRAVITY,
   SPARK_LIFETIME_MS,
@@ -81,6 +90,14 @@ import {
   SPARK_LIFT_MIN,
   SPARK_SPEED_MAX,
   SPARK_SPEED_MIN,
+  SPLINTERS_PER_BREAK,
+  SPLINTERS_PER_CRACK,
+  SPLINTERS_PER_HIT,
+  SPLINTER_LIFETIME_MS,
+  SPLINTER_LIFT_MAX,
+  SPLINTER_LIFT_MIN,
+  SPLINTER_SPEED_MAX,
+  SPLINTER_SPEED_MIN,
   ZOMBIE_FOOT_OFFSET,
 } from './constants'
 import { vectorLength } from './geometry'
@@ -91,6 +108,7 @@ import {
   type Model,
   type Particle,
   type ParticleKind,
+  type TrapKind,
   type Vector,
   type ZombieKind,
 } from './model'
@@ -186,6 +204,18 @@ const PHYSICS: Readonly<Record<ParticleKind, ParticlePhysics>> = {
     restitution: 0,
     maybeDecalKind: Option.none(),
   },
+  Splinter: {
+    gravity: CHIP_GRAVITY,
+    dragPerSecond: CHIP_DRAG_PER_SECOND,
+    restitution: CHIP_RESTITUTION,
+    maybeDecalKind: Option.some('Wood'),
+  },
+  Plank: {
+    gravity: GIB_GRAVITY,
+    dragPerSecond: GIB_DRAG_PER_SECOND,
+    restitution: GIB_RESTITUTION,
+    maybeDecalKind: Option.some('Wood'),
+  },
 }
 
 const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
@@ -202,6 +232,8 @@ const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
   HideGib: 3,
   Goo: 2,
   Spark: 1,
+  Splinter: 1,
+  Plank: 4,
 }
 
 const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
@@ -214,6 +246,7 @@ const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
   Hide: size => size,
   Goo: size => size,
   Scorch: size => size,
+  Wood: () => 1,
 }
 
 type ParticleStep = Result.Result<Particle, Option.Option<Decal>>
@@ -517,6 +550,32 @@ const coin =
     ]
   }
 
+const woodBit =
+  (kind: ParticleKind, ground: Vector) =>
+  (state: number): Seeded<Particle> => {
+    const angleDraw = nextRandom(state)
+    const speedDraw = nextRandom(angleDraw.nextState)
+    const liftDraw = nextRandom(speedDraw.nextState)
+    const isPlank = kind === 'Plank'
+    return [
+      liftDraw.nextState,
+      launch({
+        kind,
+        ground,
+        height: CHIP_HEIGHT,
+        angle: angleDraw.value * Math.PI * 2,
+        speed: isPlank
+          ? between(speedDraw.value, PLANK_SPEED_MIN, PLANK_SPEED_MAX)
+          : between(speedDraw.value, SPLINTER_SPEED_MIN, SPLINTER_SPEED_MAX),
+        lift: isPlank
+          ? between(liftDraw.value, PLANK_LIFT_MIN, PLANK_LIFT_MAX)
+          : between(liftDraw.value, SPLINTER_LIFT_MIN, SPLINTER_LIFT_MAX),
+        size: LAUNCH_SIZE[kind],
+        lifetimeMs: isPlank ? PLANK_LIFETIME_MS : SPLINTER_LIFETIME_MS,
+      }),
+    ]
+  }
+
 const noParticles = (state: number): Seeded<ReadonlyArray<Particle>> => [
   state,
   [],
@@ -605,6 +664,69 @@ const footfallDust = (
       ),
   })
 
+const woodBits =
+  (kind: ParticleKind, ground: Vector, count: number) =>
+  (drawState: number): Seeded<ReadonlyArray<Particle>> =>
+    generateMany(drawState, count, woodBit(kind, ground))
+
+const dustRing =
+  (ground: Vector, count: number) =>
+  (drawState: number): Seeded<ReadonlyArray<Particle>> =>
+    generateMany(
+      drawState,
+      count,
+      dustPuff(
+        ground,
+        0,
+        Math.PI * 2,
+        DUST_HURT_SPEED_MIN,
+      )(DUST_HURT_SPEED_MAX),
+    )
+
+type Batch = (drawState: number) => Seeded<ReadonlyArray<Particle>>
+
+const sparks =
+  (ground: Vector, count: number): Batch =>
+  drawState =>
+    generateMany(drawState, count, spark(ground))
+
+type Debris = Readonly<{
+  crack: (ground: Vector) => Batch
+  wreck: (ground: Vector) => Batch
+}>
+
+const TRAP_DEBRIS: Readonly<Record<TrapKind, Debris>> = {
+  Barricade: {
+    crack: ground => woodBits('Plank', ground, PLANKS_PER_CRACK),
+    wreck: ground => woodBits('Plank', ground, PLANKS_PER_BREAK),
+  },
+  Turret: {
+    crack: ground => sparks(ground, PLANKS_PER_CRACK),
+    wreck: ground => sparks(ground, SPARKS_PER_TURRET_BREAK),
+  },
+}
+
+type TrapAt = Readonly<{ x: number; y: number; kind: TrapKind }>
+
+const crackParticles = (
+  state: number,
+  { x, y, kind }: TrapAt,
+): Seeded<ReadonlyArray<Particle>> =>
+  chain(state, [
+    woodBits('Splinter', { x, y }, SPLINTERS_PER_CRACK),
+    TRAP_DEBRIS[kind].crack({ x, y }),
+  ])
+
+const breakParticles = (
+  state: number,
+  { x, y, kind }: TrapAt,
+): Seeded<ReadonlyArray<Particle>> =>
+  chain(state, [
+    woodBits('Splinter', { x, y }, SPLINTERS_PER_BREAK),
+    TRAP_DEBRIS[kind].wreck({ x, y }),
+    dustRing({ x, y }, DUST_PER_HURT),
+  ])
+
 const eventParticles = (
   state: number,
   event: GameEvent,
@@ -663,6 +785,10 @@ const eventParticles = (
     },
     RanDry: () => noParticles(state),
     WaveCleared: () => noParticles(state),
+    TrapHit: ({ x, y }) =>
+      woodBits('Splinter', { x, y }, SPLINTERS_PER_HIT)(state),
+    TrapCracked: cracked => crackParticles(state, cracked),
+    TrapBroken: broken => breakParticles(state, broken),
   })
 
 type Spawn = Readonly<{
@@ -776,6 +902,17 @@ export const burstCoins = (model: Model, x: number, y: number): Model => {
   )
   return modifyFields(model, {
     particles: particles => keepNewest([...particles, ...coins], PARTICLE_MAX),
+    rngState: () => rngState,
+  })
+}
+
+export const puffDust = (model: Model, x: number, y: number): Model => {
+  const [rngState, puffs] = dustRing(
+    { x, y },
+    DUST_PER_PLACEMENT,
+  )(model.rngState)
+  return modifyFields(model, {
+    particles: particles => keepNewest([...particles, ...puffs], PARTICLE_MAX),
     rngState: () => rngState,
   })
 }

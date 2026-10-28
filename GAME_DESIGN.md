@@ -89,6 +89,20 @@ Proposed on 2026-10-28 for step 5, the horde. These are starting numbers to play
 
 Each wave is a list of groups. A group has a count, the doors it uses, a start time and an interval, and weights for each kind. The kind, door, timing jitter, and offset of every spawn are drawn from the seeded generator when Preparation begins, so the door preview shows exactly what will come. A kind's first wave uses a group of only that kind, so the "NEW" banner never promises a zombie the roll left out.
 
+Proposed on 2026-10-28 for step 6, traps. These are starting numbers to play against, not decisions. The trap table lives in `src/traps.ts`, the chewing rates in `src/zombies.ts`, and the reach and range numbers in `src/constants.ts`.
+
+| Trap      | Name           | Price  | Health | Most at once | What it does                                                                                                         |
+| --------- | -------------- | ------ | ------ | ------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Barricade | Plank Pile     | $30    | 30     | 4            | Boards up one doorway. Blocks zombies and the player. The player's shots and the gnome's peas fly through the gaps   |
+| Turret    | Grumpy Gnome   | $70    | 16     | 2            | Sits on a floor tile and shoots a pea (1 damage, 520 ms apart) at the nearest walking zombie it can see within 84 px |
+| Repair    | Glue and Nails | Varies | -      | -            | Restores every damaged trap. Costs half of each trap's price, scaled by the share of health it is missing            |
+
+- **Buying and placing.** Traps are bought at the stall and go into a trap pack shown in the HUD. The shop refuses a kind once the player owns its most at once, placed or not. During Preparation, T or the PLACE button puts the selected trap down, and G or the NEXT button switches kinds when both are owned. A Plank Pile goes in the doorway the player stands in or next to (within 16 px). A Grumpy Gnome goes on the tile in front of the player, never on a wall, cover, the stall or the tile in front of it, a doorway, another trap, the player, or a zombie. A ghost shows where it would go, green or red, and a refused placement says why on the button and above the player. The first trap bought turns on a hint, PRESS T / TAP PLACE IN A DOORWAY, until the first one is placed.
+- **Chewing.** A walking zombie that touches a trap chews it: a Groaner 3 health a second, a Hotfoot 2, a Big Lug 12. A Gasbag that touches a trap fuses as if it had touched the player. A Plank Pile cracks at two thirds and one third of its health, shedding planks, and breaks with a crash. A Grumpy Gnome breaks with a pop.
+- **Bursts.** A Gasbag burst deals 15 damage to every trap it reaches.
+- **Pathing.** A barricaded doorway stays in the flow field at a toll of 25 extra tiles, and a gnome's tile at 6. A zombie outside a boarded door compares walking around the outside of the room to another door against chewing through, and takes the cheaper. The flow fields are recomputed when the player changes tile or a trap is placed or breaks.
+- **Between waves.** Traps stay where they were placed and keep their damage. Broken traps are gone. A new run clears every trap and the trap pack. The wave preview stays exact: spawns are rolled when Preparation begins, and traps change only a zombie's path, never its door.
+
 ## Core loop
 
 | Phase         | What the player does                                                          |
@@ -124,6 +138,8 @@ The phase is a tagged union, never a set of booleans.
 
 Traps are placed on tiles or in doorways during Preparation. Each kind is a variant of a tagged union that carries its own state, such as armed or cooling down, and is handled by an exhaustive match.
 
+The barricade (Plank Pile) and the turret (Grumpy Gnome) are built. Their numbers are under "Proposed balance" above.
+
 Ideas to try first:
 
 - Barricade: blocks a door and takes damage until it breaks.
@@ -147,7 +163,7 @@ The first four are built. Their numbers are under "Proposed balance" above.
 
 - **Data, not logic.** A kind is a row in a table: speed, health, bite, radius, mass, knockback, bounty, a behavior tag (`Brawler` bites, `Bomber` fuses and bursts), how it dies, its gibs, its sounds, and its footfalls. Its sprites are a row in a second table keyed by the same kind. Both tables are exhaustive records, so a new kind will not compile until it has both rows.
 - **Big zombies path differently.** The Big Lug is wider than one tile, so it follows its own flow field that only steps between tiles sharing an open 2×2 block. It goes around the one-tile gaps above the crates and the piano that a Groaner squeezes through.
-- **Bursts hit anything.** Burst damage is applied through one function that takes any list of targets, so traps can join the player and zombies in step 6.
+- **Bursts hit anything.** Burst damage is applied through one function that takes any list of targets: the player, zombies, and traps.
 
 ## Waves
 
@@ -174,7 +190,7 @@ The roadmap leads to the first playable. The order puts feel first: juice is bui
 | 3    | **The room and the loop.** One screen with cover and three or four doorways, collision, zombies that spawn at doorways and steer around cover. Waves with a preview of which doorways they come from, and a Preparation phase with a 20 second timer that can be skipped.                                                                                                                      | Built                                    |
 | 4    | **Money and the shop.** Money from kills and a bonus for each wave cleared. A shop stall to walk onto, and an overlay with weapons, ammo, and hearts. Weapons as data: pistol, shotgun, SMG. Carry two and swap. Ammo for everything but the pistol.                                                                                                                                           | Built. Balance not yet playtested        |
 | 5    | **The horde.** Runner, Tank, and Exploder beside the Shambler, with chain explosions. Spawn tables for each wave from the seeded generator. The 8 wave arc, with a Tank-heavy finale and Victory.                                                                                                                                                                                              | Built. Balance not yet playtested        |
-| 6    | **Traps.** A barricade for doorways and a turret, placed during Preparation.                                                                                                                                                                                                                                                                                                                   | Planned                                  |
+| 6    | **Traps.** A barricade for doorways and a turret, placed during Preparation.                                                                                                                                                                                                                                                                                                                   | Built. Balance not yet playtested        |
 | 7    | **Ready for strangers.** Wave 1 as the tutorial with hints for the current device, a title screen, Game Over and Victory screens with run stats, a balance pass so a run takes 5 to 10 minutes, a phone performance pass, and a public link.                                                                                                                                                   | Planned                                  |
 
 After the first playable, roughly in this order:
@@ -191,7 +207,7 @@ After the first playable, roughly in this order:
 
 ## Open questions
 
-- Do traps break, wear out, or get rebuilt each preparation phase? Proposed: barricades take damage and can be repaired for money.
+- Do traps break, wear out, or get rebuilt each preparation phase? Proposed for step 6, not yet decided: traps stay where they were placed between waves and keep their damage, the shop sells a repair for all of them priced by the missing health, broken traps are gone, and a new run clears them. See "Proposed balance".
 - Does a dropped heart exist, and how rare is it?
 - Co-op: local play with gamepads on desktop is one path. Online play is another, and the deterministic `update` is what would make a lockstep approach possible. Phones cannot share a screen, so mobile co-op means online.
 - Where do zombies spawn in the estate: only at the map edge, or also inside rooms and corners?

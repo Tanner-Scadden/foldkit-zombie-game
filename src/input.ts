@@ -38,6 +38,21 @@ const START_WAVE_KEYS: ReadonlyArray<string> = ['Enter', 'KeyR']
 const SWAP_KEYS: ReadonlyArray<string> = ['KeyQ', 'KeyE']
 const PISTOL_KEY = 'Digit1'
 const SPARE_KEY = 'Digit2'
+const PLACE_TRAP_KEY = 'KeyT'
+const NEXT_TRAP_KEY = 'KeyG'
+
+export const TrapChoice = Schema.Literals(['Place', 'Next'])
+export type TrapChoice = typeof TrapChoice.Type
+
+export const maybeTrapChoice = (code: string): Option.Option<TrapChoice> => {
+  if (code === PLACE_TRAP_KEY) {
+    return Option.some('Place')
+  } else if (code === NEXT_TRAP_KEY) {
+    return Option.some('Next')
+  } else {
+    return Option.none()
+  }
+}
 
 export const WeaponChoice = Schema.Literals(['Swap', 'Pistol', 'Spare'])
 export type WeaponChoice = typeof WeaponChoice.Type

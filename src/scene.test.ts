@@ -164,6 +164,40 @@ describe('Shop', () => {
     )
   })
 
+  test('buys a Plank Pile, and the PLACE button explains it needs a doorway', () => {
+    const placeButton = role('button', { name: 'Place a Plank Pile' })
+    scene(
+      { update, view },
+      given(atStall),
+      measureSurface,
+      expect(placeButton).toBeAbsent(),
+      Subscription.emit(Message.TickedFrame({ deltaTime: 16 })),
+      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      Mount.resolve(
+        Dialog.AcquireResources,
+        Dialog.Message.SucceededAcquireResources(),
+      ),
+      expect(text('0 ready to place, 0 placed, up to 4')).toExist(),
+      click(role('button', { name: 'Buy Plank Pile for $30' })),
+      expect(text('You have $70')).toExist(),
+      expect(text('1 ready to place, 0 placed, up to 4')).toExist(),
+      expect(role('button', { name: 'Buy Glue and Nails for $0' })).toHaveAttr(
+        'aria-disabled',
+        'true',
+      ),
+      expect(text('Nothing needs fixing')).toExist(),
+      click(role('button', { name: 'LEAVE SHOP' })),
+      Command.resolve(
+        Dialog.CloseDialog,
+        Dialog.Message.CompletedCloseDialog(),
+      ),
+      Mount.expectEnded(Dialog.AcquireResources),
+      expect(placeButton).toHaveAttr('aria-disabled', 'true'),
+      expect(placeButton).toHaveAttr('aria-keyshortcuts', 'T'),
+      expect(text('Stand in a doorway to board it up')).toExist(),
+    )
+  })
+
   test('the swap button appears with a second gun and names the gun it swaps to', () => {
     scene(
       { update, view },
@@ -179,6 +213,76 @@ describe('Shop', () => {
       measureSurface,
       click(role('button', { name: 'Swap to the Pop Pistol' })),
       expect(role('button', { name: 'Swap to the Chatterbox' })).toExist(),
+    )
+  })
+})
+
+describe('Place button', () => {
+  const atNorthDoor: Model = modifyFields(initialModel, {
+    maybeSurface: () =>
+      Option.some({ left: 0, top: 0, width: 800, height: 400 }),
+    phase: () =>
+      Phase.Preparation({
+        wave: 2,
+        remainingMs: 15_000,
+        durationMs: PREPARATION_MS,
+        spawns: [
+          {
+            atMs: 1e9,
+            kind: 'Shambler',
+            door: 'North',
+            offset: 0,
+            speedScale: 1,
+          },
+        ],
+      }),
+    player: player => modifyFields(player, { x: () => 220, y: () => 27 }),
+    trapStock: () => ({ Barricade: 1, Turret: 1 }),
+  })
+
+  test('places the selected trap on a tap, and NEXT switches the kind', () => {
+    const plankButton = role('button', { name: 'Place a Plank Pile' })
+    const gnomeButton = role('button', { name: 'Place a Grumpy Gnome' })
+    scene(
+      { update, view },
+      given(atNorthDoor),
+      measureSurface,
+      expect(plankButton).not.toHaveAttr('aria-disabled', 'true'),
+      expect(text('PLANK PILE x1')).toExist(),
+      click(role('button', { name: 'Switch to the Grumpy Gnome' })),
+      expect(gnomeButton).toExist(),
+      expect(plankButton).toBeAbsent(),
+      click(role('button', { name: 'Switch to the Plank Pile' })),
+      click(plankButton),
+      expect(plankButton).toBeAbsent(),
+      expect(gnomeButton).toExist(),
+      expect(role('button', { name: 'Switch to the Plank Pile' })).toBeAbsent(),
+      click(gnomeButton),
+      expect(gnomeButton).toBeAbsent(),
+      expect(text('Traps go down between waves')).toBeAbsent(),
+    )
+  })
+
+  test('is not offered without traps or outside Preparation', () => {
+    scene(
+      { update, view },
+      given(
+        modifyFields(atNorthDoor, {
+          trapStock: () => ({ Barricade: 0, Turret: 0 }),
+        }),
+      ),
+      measureSurface,
+      expect(role('button', { name: 'Place a Plank Pile' })).toBeAbsent(),
+    )
+    scene(
+      { update, view },
+      given(
+        modifyFields(atNorthDoor, {
+          phase: () => Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [] }),
+        }),
+      ),
+      measureSurface,
+      expect(role('button', { name: 'Place a Plank Pile' })).toBeAbsent(),
     )
   })
 })

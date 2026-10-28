@@ -68,7 +68,12 @@ export const Invulnerability = defineTaggedUnion({
 })
 export type Invulnerability = typeof Invulnerability.Type
 
-export const WeaponKind = Schema.Literals(['Pistol', 'Shotgun', 'Smg'])
+export const WeaponKind = Schema.Literals([
+  'Pistol',
+  'Shotgun',
+  'Smg',
+  'Peashooter',
+])
 export type WeaponKind = typeof WeaponKind.Type
 
 export const CarriedGun = Schema.Struct({
@@ -150,6 +155,8 @@ export const ParticleKind = Schema.Literals([
   'HideGib',
   'Goo',
   'Spark',
+  'Splinter',
+  'Plank',
 ])
 export type ParticleKind = typeof ParticleKind.Type
 
@@ -176,6 +183,7 @@ export const DecalKind = Schema.Literals([
   'Hide',
   'Goo',
   'Scorch',
+  'Wood',
 ])
 export type DecalKind = typeof DecalKind.Type
 
@@ -187,6 +195,9 @@ export const Decal = Schema.Struct({
   height: Schema.Number,
 })
 export type Decal = typeof Decal.Type
+
+export const TrapKind = Schema.Literals(['Barricade', 'Turret'])
+export type TrapKind = typeof TrapKind.Type
 
 export const GameEvent = defineTaggedUnion({
   Fired: {
@@ -220,6 +231,9 @@ export const GameEvent = defineTaggedUnion({
   BulletStruck: { x: Schema.Number, y: Schema.Number, direction: Vector },
   RanDry: { x: Schema.Number, y: Schema.Number },
   WaveCleared: { x: Schema.Number, y: Schema.Number, bonus: Schema.Number },
+  TrapHit: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
+  TrapCracked: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
+  TrapBroken: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
 })
 export type GameEvent = typeof GameEvent.Type
 
@@ -304,8 +318,15 @@ export const Phase = defineTaggedUnion({
 })
 export type Phase = typeof Phase.Type
 
+export const Toll = Schema.Struct({
+  index: Schema.Number,
+  cost: Schema.Number,
+})
+export type Toll = typeof Toll.Type
+
 export const FlowField = Schema.Struct({
   originIndex: Schema.Number,
+  tolls: Schema.Array(Toll),
   distances: Schema.Array(Schema.Number),
 })
 export type FlowField = typeof FlowField.Type
@@ -324,6 +345,9 @@ export const ShopItemId = Schema.Literals([
   'Smg',
   'SmgRounds',
   'Heart',
+  'Barricade',
+  'Turret',
+  'RepairTraps',
 ])
 export type ShopItemId = typeof ShopItemId.Type
 
@@ -340,6 +364,50 @@ export const Wallet = Schema.Struct({
   shown: Schema.Number,
 })
 export type Wallet = typeof Wallet.Type
+
+export const TurretGun = defineTaggedUnion({
+  Armed: {},
+  CoolingDown: { remainingMs: Schema.Number },
+})
+export type TurretGun = typeof TurretGun.Type
+
+export const Trap = defineTaggedUnion({
+  Barricade: {
+    id: Schema.Number,
+    door: DoorId,
+    hp: Schema.Number,
+    hitRemainingMs: Schema.Number,
+  },
+  Turret: {
+    id: Schema.Number,
+    column: Schema.Number,
+    row: Schema.Number,
+    hp: Schema.Number,
+    hitRemainingMs: Schema.Number,
+    facing: Vector,
+    gun: TurretGun,
+  },
+})
+export type Trap = typeof Trap.Type
+
+export const TrapCounts = Schema.Struct({
+  Barricade: Schema.Number,
+  Turret: Schema.Number,
+})
+export type TrapCounts = typeof TrapCounts.Type
+
+export const TrapHint = defineTaggedUnion({
+  Unseen: {},
+  Showing: {},
+  Seen: {},
+})
+export type TrapHint = typeof TrapHint.Type
+
+export const TrapNotice = defineTaggedUnion({
+  Quiet: {},
+  Refused: { reason: Schema.String, remainingMs: Schema.Number },
+})
+export type TrapNotice = typeof TrapNotice.Type
 
 export const Model = Schema.Struct({
   phase: Phase,
@@ -361,6 +429,11 @@ export const Model = Schema.Struct({
   popups: Schema.Array(Popup),
   streak: Streak,
   blasts: Schema.Array(Blast),
+  traps: Schema.Array(Trap),
+  trapStock: TrapCounts,
+  selectedTrap: TrapKind,
+  trapHint: TrapHint,
+  trapNotice: TrapNotice,
   flowField: FlowField,
   wideFlowField: FlowField,
   rngState: Schema.Number,
@@ -402,6 +475,8 @@ export const idleIntent: Intent = {
   trigger: 'Released',
 }
 
+export const emptyTrapStock: TrapCounts = { Barricade: 0, Turret: 0 }
+
 export const initialHitStop: HitStop = HitStop.Running({ cooldownMs: 0 })
 
 export const stillShake: Shake = { trauma: 0, offset: { x: 0, y: 0 } }
@@ -426,8 +501,13 @@ export const initialModel: Model = {
   popups: [],
   streak: Streak.Cold(),
   blasts: [],
-  flowField: flowFieldToward(initialPlayer, 'Narrow'),
-  wideFlowField: flowFieldToward(initialPlayer, 'Wide'),
+  traps: [],
+  trapStock: emptyTrapStock,
+  selectedTrap: 'Barricade',
+  trapHint: TrapHint.Unseen(),
+  trapNotice: TrapNotice.Quiet(),
+  flowField: flowFieldToward(initialPlayer, 'Narrow', []),
+  wideFlowField: flowFieldToward(initialPlayer, 'Wide', []),
   rngState: DEFAULT_SEED,
   input: idleInput,
   intent: idleIntent,

@@ -27,6 +27,7 @@ import {
   SHAKE_TRAUMA_HURT,
   SHAKE_TRAUMA_MAX,
   STREAK_WINDOW_MS,
+  TRAP_CRACK_TRAUMA,
 } from './constants'
 import {
   type Blast,
@@ -41,6 +42,7 @@ import {
 } from './model'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
 import { tickShownMoney } from './shop'
+import { TRAPS } from './traps'
 import { WEAPONS } from './weapons'
 import { ZOMBIE_KINDS } from './zombies'
 
@@ -113,6 +115,9 @@ const eventTrauma = (event: GameEvent): number =>
     BulletStruck: () => 0,
     RanDry: () => 0,
     WaveCleared: () => 0,
+    TrapHit: () => 0,
+    TrapCracked: () => TRAP_CRACK_TRAUMA,
+    TrapBroken: ({ kind }) => TRAPS[kind].breakTrauma,
   })
 
 const shakeAxis = (roll: number, trauma: number): number => {
@@ -211,6 +216,9 @@ const eventPopups = (
         1,
         popup('Payday', bonus, x, y - PAYDAY_POPUP_LIFT_PX),
       ),
+    TrapHit: () => noPopups(state),
+    TrapCracked: () => noPopups(state),
+    TrapBroken: () => noPopups(state),
   })
 
 const agePopups = (

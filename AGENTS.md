@@ -37,6 +37,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/waves.ts`      | Spawn tables, the wave arc, spawning, and the phases of a run |
 | `src/zombies.ts`    | The zombie kind table: stats, behavior, deaths, and sounds    |
 | `src/combat.ts`     | Strikes, wounds, and bursts applied to any list of targets    |
+| `src/traps.ts`      | The trap table, placement, chewing, turrets, and repair       |
 | `src/weapons.ts`    | The weapon table and the two-slot arsenal                     |
 | `src/shop.ts`       | Money, the shop's items and prices, purchases, and the stall  |
 | `src/shopView.ts`   | The shop dialog drawn as HTML over the canvas                 |

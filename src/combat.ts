@@ -21,6 +21,7 @@ import {
   ZombieState,
 } from './model'
 import { earn } from './shop'
+import { TRAP_BLAST_TARGET } from './traps'
 import {
   Behavior,
   type DeathCause,
@@ -97,6 +98,7 @@ export type BlastSpec = Readonly<{
   radius: number
   playerDamage: number
   zombieDamage: number
+  trapDamage: number
   knockback: number
 }>
 
@@ -180,13 +182,20 @@ export const PLAYER_BLAST_TARGET: BlastTarget<Player> = {
 const maybeBlastOf = (zombie: Zombie): Option.Option<BlastSpec> =>
   Behavior.match(statsOf(zombie).behavior, {
     Brawler: () => Option.none(),
-    Bomber: ({ blastRadius, playerDamage, zombieDamage, blastKnockback }) =>
+    Bomber: ({
+      blastRadius,
+      playerDamage,
+      zombieDamage,
+      trapDamage,
+      blastKnockback,
+    }) =>
       Option.some({
         x: zombie.x,
         y: zombie.y,
         radius: blastRadius,
         playerDamage,
         zombieDamage,
+        trapDamage,
         knockback: blastKnockback,
       }),
   })
@@ -211,9 +220,11 @@ const detonate = (model: Model, bomberId: number): Model => {
     onSome: blast => {
       const zombieOutcome = blastAll(blast, rest, ZOMBIE_BLAST_TARGET)
       const playerOutcome = blastOne(blast, PLAYER_BLAST_TARGET)(model.player)
+      const trapOutcome = blastAll(blast, model.traps, TRAP_BLAST_TARGET)
       return modifyFields(model, {
         zombies: () => zombieOutcome.targets,
         player: () => playerOutcome.target,
+        traps: () => trapOutcome.targets,
         score: score =>
           score + killCount(zombieOutcome.events) * SCORE_PER_ZOMBIE,
         wallet: wallet => earn(wallet, bountyOf(zombieOutcome.events)),
@@ -230,6 +241,7 @@ const detonate = (model: Model, bomberId: number): Model => {
           GameEvent.Exploded({ x: blast.x, y: blast.y, radius: blast.radius }),
           ...playerOutcome.events,
           ...zombieOutcome.events,
+          ...trapOutcome.events,
         ],
       })
     },
