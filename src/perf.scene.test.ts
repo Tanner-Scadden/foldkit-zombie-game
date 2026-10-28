@@ -19,13 +19,19 @@ import {
   Alarm,
   Arsenal,
   type Blast,
+  BoostTimer,
+  type Boosts,
   type Bullet,
+  BulletGlaze,
   type Decal,
   DecalKind,
   type Model,
   type Particle,
   ParticleKind,
   Phase,
+  type Pickup,
+  PickupKind,
+  Pierce,
   type Popup,
   PopupKind,
   RunMode,
@@ -37,6 +43,7 @@ import {
   ZombieState,
   initialModel,
 } from './model'
+import { DROP_RULES } from './powerups'
 import { MeasureGameSurface, sceneShapes, view } from './view'
 import { rollSpawns, startOrResume } from './waves'
 import { ZOMBIE_KINDS } from './zombies'
@@ -109,6 +116,8 @@ const bulletAt = (index: number): Bullet => ({
   weapon: index % 2 === 0 ? 'Smg' : 'Shotgun',
   damage: 1,
   knockback: 60,
+  glaze: cycle(BulletGlaze.literals, index),
+  pierce: Pierce.Stops(),
 })
 
 const blastAt = (index: number): Blast => ({
@@ -142,6 +151,21 @@ const TRAPS: ReadonlyArray<Trap> = [
   }),
 ]
 
+const pickupAt = (index: number): Pickup => ({
+  id: 7000 + index,
+  kind: cycle(PickupKind.literals, index * 3),
+  x: 60 + index * 140,
+  y: 120,
+  ageMs: 8000,
+})
+
+const ALL_BOOSTED: Boosts = {
+  RapidFire: BoostTimer.On({ remainingMs: 1500, durationMs: 8000 }),
+  Damage: BoostTimer.On({ remainingMs: 6000, durationMs: 8000 }),
+  Speed: BoostTimer.On({ remainingMs: 9000, durationMs: 10000 }),
+  Pierce: BoostTimer.On({ remainingMs: 4000, durationMs: 9000 }),
+}
+
 const fullRoom = (mode: RunMode, wave: number, tier: number): Model => {
   const started = startOrResume(initialModel, mode)
   const [rngState, spawns] = rollSpawns(started.rngState, wave)
@@ -161,6 +185,9 @@ const fullRoom = (mode: RunMode, wave: number, tier: number): Model => {
     blasts: () => Array.makeBy(BLAST_MAX / 2, blastAt),
     popups: () => Array.makeBy(POPUP_MAX, popupAt),
     traps: () => TRAPS,
+    pickups: () => Array.makeBy(DROP_RULES.floorMax, pickupAt),
+    boosts: () => ALL_BOOSTED,
+    callouts: () => [{ kind: 'Pierce', x: 160, y: 90, ageMs: 600 }],
     streak: () => Streak.Hot({ count: 12, remainingMs: 900 }),
     score: () => 98_765,
     trapStock: () => ({ Barricade: 2, Turret: 1 }),
@@ -322,14 +349,17 @@ const measureFrames = (model: Model): FrameCost => {
 // BUDGETS
 
 // NOTE: shapesBuilt went from 2200 to 2250 when a horde's DINNER BELL banner
-// and the rattling doors joined the worst case. The paint budgets did not
-// change.
+// and the rattling doors joined the worst case. It went to 2450, and
+// fullRepaintPaintOps from 2550 to 2750, when power-ups joined it: two pickups
+// on the floor, all four boosts running, and a callout with the longest name.
+// The callout is about two thirds of that and sits on the overlay canvas, so
+// the steady paint budgets did not change.
 const BUDGET: FrameCost = {
-  shapesBuilt: 2250,
+  shapesBuilt: 2450,
   steadyPaintOps: 1500,
   steadyFillStyleChanges: 1500,
   steadyShapesPainted: 1600,
-  fullRepaintPaintOps: 2550,
+  fullRepaintPaintOps: 2750,
 }
 
 const BUDGET_KEYS: ReadonlyArray<keyof FrameCost> = [

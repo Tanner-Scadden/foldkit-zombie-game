@@ -286,6 +286,13 @@ export const HIT_STOP_BLAST_MS = 70
 
 export const GOO_PER_BLAST = 14
 export const SPARKS_PER_BLAST = 10
+export const SPARKS_PER_DROP = 6
+export const SPARKS_PER_GRAB = 10
+export const COINS_PER_GRAB = 4
+export const DUST_PER_FIZZLE = 4
+export const DUST_PER_BURP = 14
+export const SHAKE_TRAUMA_GRAB = 0.25
+export const SHAKE_TRAUMA_BURP = 0.9
 export const MEAT_GIBS_PER_BLAST = 3
 export const SPARK_SPEED_MIN = 60
 export const SPARK_SPEED_MAX = 150

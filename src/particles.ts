@@ -29,6 +29,7 @@ import {
   CLIP_LIFETIME_MS,
   CLIP_LIFT,
   CLIP_SIZE_PX,
+  COINS_PER_GRAB,
   COINS_PER_PURCHASE,
   COIN_DRAG_PER_SECOND,
   COIN_GRAVITY,
@@ -46,6 +47,8 @@ import {
   DUST_LIFETIME_MAX_MS,
   DUST_LIFETIME_MIN_MS,
   DUST_LIFT,
+  DUST_PER_BURP,
+  DUST_PER_FIZZLE,
   DUST_PER_HURT,
   DUST_PER_PLACEMENT,
   DUST_PER_STRIKE,
@@ -87,6 +90,8 @@ import {
   SHELL_LIFT_MIN,
   SHELL_RESTITUTION,
   SPARKS_PER_BLAST,
+  SPARKS_PER_DROP,
+  SPARKS_PER_GRAB,
   SPARKS_PER_TURRET_BREAK,
   SPARK_DRAG_PER_SECOND,
   SPARK_GRAVITY,
@@ -843,6 +848,15 @@ const eventParticles = (
       woodBits('Splinter', { x, y }, SPLINTERS_PER_HIT)(state),
     TrapCracked: cracked => crackParticles(state, cracked),
     TrapBroken: broken => breakParticles(state, broken),
+    PickupDropped: ({ x, y }) => sparks({ x, y }, SPARKS_PER_DROP)(state),
+    PickupGrabbed: ({ x, y }) =>
+      chain(state, [
+        sparks({ x, y }, SPARKS_PER_GRAB),
+        drawState => generateMany(drawState, COINS_PER_GRAB, coin({ x, y })),
+      ]),
+    PickupFizzled: ({ x, y }) => dustRing({ x, y }, DUST_PER_FIZZLE)(state),
+    BoostFaded: () => noParticles(state),
+    Burped: ({ x, y }) => dustRing(playerGround(x, y), DUST_PER_BURP)(state),
   })
 
 type Spawn = Readonly<{

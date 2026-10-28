@@ -91,6 +91,7 @@ import {
   moveHintBand,
 } from './onboarding'
 import { burstCoins, dropClip, puffDust } from './particles'
+import { PICKUPS } from './powerups'
 import {
   SHOP_ITEMS,
   ShopGood,
@@ -524,6 +525,11 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     TrapHit: () => Option.none<SoundEffect>(),
     TrapCracked: ({ kind }) => Option.some(TRAPS[kind].crackSound),
     TrapBroken: ({ kind }) => Option.some(TRAPS[kind].breakSound),
+    PickupDropped: () => Option.some<SoundEffect>('LootPop'),
+    PickupGrabbed: ({ kind }) => Option.some(PICKUPS[kind].sound),
+    PickupFizzled: () => Option.none<SoundEffect>(),
+    BoostFaded: () => Option.some<SoundEffect>('PowerDown'),
+    Burped: () => Option.none<SoundEffect>(),
   })
 
 const maybeEventSoundCue = (event: GameEvent): Option.Option<SoundCue> =>

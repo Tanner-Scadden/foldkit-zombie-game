@@ -42,6 +42,10 @@ if (process.env.TUNE !== undefined) {
     WEAPONS: (await import('../../src/weapons')).WEAPONS,
     UPGRADE_TIERS: (await import('../../src/weapons')).UPGRADE_TIERS,
     TRAPS: (await import('../../src/traps')).TRAPS,
+    DROP_CHANCE: (await import('../../src/powerups')).DROP_CHANCE,
+    DROP_RULES: (await import('../../src/powerups')).DROP_RULES,
+    BOOSTS: (await import('../../src/powerups')).BOOSTS,
+    PICKUPS: (await import('../../src/powerups')).PICKUPS,
   })
 }
 
@@ -78,6 +82,10 @@ type RunResult = {
   moneyAtVisit: Array<number | undefined>
   gnomesPlaced: number
   boughtAtVisit: Array<Array<string>>
+  dropped: Record<string, number>
+  grabbed: Record<string, number>
+  boostedMs: number
+  waveMs: number
 }
 
 // Per wave: hearts lost, seconds with 6 or more zombies within 48 px
@@ -122,6 +130,25 @@ const steerToward = (from: Vector, to: Vector): Vector => {
 // something gets close, and drifts back toward the middle otherwise.
 const FLEE_PX = Number(process.env.FLEE_PX ?? 36)
 
+// It walks over a pickup when nothing is inside its comfort radius, the
+// pickup is close, and no zombie stands near the pickup. NO_PICKUPS=1 keeps
+// it from ever going for one.
+const IGNORES_PICKUPS = process.env.NO_PICKUPS !== undefined
+const PICKUP_SEEK_PX = Number(process.env.PICKUP_SEEK_PX ?? 90)
+const PICKUP_SAFE_PX = 28
+
+const safePickup = (model: Model): Vector | undefined => {
+  if (IGNORES_PICKUPS) return undefined
+  const zombies = walking(model)
+  return model.pickups
+    .filter(
+      pickup =>
+        distance(model.player, pickup) < PICKUP_SEEK_PX &&
+        zombies.every(zombie => distance(zombie, pickup) > PICKUP_SAFE_PX),
+    )
+    .sort((a, b) => distance(model.player, a) - distance(model.player, b))[0]
+}
+
 const kite = (model: Model): Vector => {
   const { player } = model
   const nearest = walking(model).sort(
@@ -129,6 +156,10 @@ const kite = (model: Model): Vector => {
   )[0]
   if (nearest !== undefined && distance(player, nearest) < FLEE_PX) {
     return steerToward(nearest, player)
+  }
+  const pickup = safePickup(model)
+  if (pickup !== undefined) {
+    return steerToward(player, pickup)
   }
   return distance(player, ROOM_CENTER) > 40
     ? steerToward(player, ROOM_CENTER)
@@ -432,6 +463,10 @@ const runOnce = (seed: number): RunResult => {
   let minHp = model.player.hp
   const waves: Array<WaveLog> = []
   const moneyAtVisit: Array<number | undefined> = []
+  const dropped: Record<string, number> = {}
+  const grabbed: Record<string, number> = {}
+  let boostedMs = 0
+  let waveMs = 0
   botRandom = seed
   spentOnUpgrades = 0
   boughtLog = []
@@ -516,6 +551,20 @@ const runOnce = (seed: number): RunResult => {
     const before = model
     model = send(model, Message.TickedFrame({ deltaTime: FRAME_MS }))
     blame(before, model, hurtBy)
+    model.frameEvents.forEach(event => {
+      if (event._tag === 'PickupDropped') {
+        dropped[event.kind] = (dropped[event.kind] ?? 0) + 1
+      }
+      if (event._tag === 'PickupGrabbed') {
+        grabbed[event.kind] = (grabbed[event.kind] ?? 0) + 1
+      }
+    })
+    if (before.phase._tag === 'Wave') {
+      waveMs += FRAME_MS
+      if (Object.values(model.boosts).some(timer => timer._tag === 'On')) {
+        boostedMs += FRAME_MS
+      }
+    }
     maxAlive = Math.max(maxAlive, model.zombies.length)
     minHp = Math.min(minHp, model.player.hp)
     if (before.phase._tag === 'Wave') {
@@ -573,6 +622,10 @@ const runOnce = (seed: number): RunResult => {
     moneyAtVisit,
     gnomesPlaced,
     boughtAtVisit: boughtLog,
+    dropped,
+    grabbed,
+    boostedMs,
+    waveMs,
   }
 }
 
@@ -710,6 +763,39 @@ console.log('\nHearts lost by kind')
 ;(Object.keys(hurt) as Array<Kind>).forEach(kind => {
   console.log(
     `  ${kind.padEnd(9)} ${String(hurt[kind]).padStart(5)}  ${((100 * hurt[kind]) / Math.max(1, totalHurt)).toFixed(0)}%`,
+  )
+})
+
+const pickupKinds = [
+  ...new Set(
+    results.flatMap(r => [
+      ...Object.keys(r.dropped),
+      ...Object.keys(r.grabbed),
+    ]),
+  ),
+].sort()
+const sumOf = (pick: (r: RunResult) => Record<string, number>, kind: string) =>
+  results.reduce((sum, r) => sum + (pick(r)[kind] ?? 0), 0)
+const totalDropped = pickupKinds.reduce(
+  (sum, kind) => sum + sumOf(r => r.dropped, kind),
+  0,
+)
+const totalGrabbed = pickupKinds.reduce(
+  (sum, kind) => sum + sumOf(r => r.grabbed, kind),
+  0,
+)
+console.log(
+  `\nPickups: ${(totalDropped / runs).toFixed(1)} dropped and ${(totalGrabbed / runs).toFixed(1)} grabbed a run${IGNORES_PICKUPS ? ' (the bot ignores them)' : ''}, boosted ${(
+    (100 * results.reduce((sum, r) => sum + r.boostedMs, 0)) /
+    Math.max(
+      1,
+      results.reduce((sum, r) => sum + r.waveMs, 0),
+    )
+  ).toFixed(0)}% of wave time`,
+)
+pickupKinds.forEach(kind => {
+  console.log(
+    `  ${kind.padEnd(9)} dropped ${String(sumOf(r => r.dropped, kind)).padStart(5)}  grabbed ${String(sumOf(r => r.grabbed, kind)).padStart(5)}`,
   )
 })
 

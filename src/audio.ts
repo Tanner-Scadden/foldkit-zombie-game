@@ -52,6 +52,14 @@ export const SoundEffect = Schema.Literals([
   'Pop',
   'Groan',
   'DinnerBell',
+  'LootPop',
+  'GrabHotSauce',
+  'GrabMeanBeans',
+  'GrabZoomySocks',
+  'GrabKebullets',
+  'GrabBurp',
+  'GrabHeart',
+  'PowerDown',
 ])
 export type SoundEffect = typeof SoundEffect.Type
 
@@ -273,6 +281,21 @@ const pitched = (recipe: Recipe, cents: number): Recipe => {
     })),
   }
 }
+
+const PICKUP_CHIRP: ReadonlyArray<ToneLayer> = [
+  {
+    wave: 'square',
+    pitch: [at(0, 880), at(0.06, 1760)],
+    envelope: envelope(0.12, 0.002, 0.07),
+  },
+  {
+    wave: 'triangle',
+    pitch: [at(0, 1760), at(0.08, 2637)],
+    envelope: envelope(0.1, 0.002, 0.09, 0.03),
+  },
+]
+
+const JINGLE_START_SECONDS = 0.08
 
 const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
   Shot: {
@@ -860,6 +883,191 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
         envelope: envelope(0.22, 0.1, 0.7, 0.3),
       },
     ],
+  },
+  LootPop: {
+    variationCents: 90,
+    tones: [
+      {
+        wave: 'sine',
+        pitch: [at(0, 300), at(0.05, 900), at(0.12, 700)],
+        envelope: envelope(0.2, 0.003, 0.12),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 2093), at(0.1, 2637)],
+        envelope: envelope(0.07, 0.002, 0.12, 0.05),
+      },
+    ],
+    noises: [],
+  },
+  GrabHotSauce: {
+    variationCents: 0,
+    tones: [
+      ...PICKUP_CHIRP,
+      {
+        wave: 'square',
+        pitch: [at(0, 659), at(0.05, 659)],
+        envelope: envelope(0.1, 0.002, 0.05, JINGLE_START_SECONDS),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 988), at(0.05, 988)],
+        envelope: envelope(0.1, 0.002, 0.05, JINGLE_START_SECONDS + 0.06),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 1319), at(0.2, 1397)],
+        envelope: envelope(0.12, 0.002, 0.22, JINGLE_START_SECONDS + 0.12),
+      },
+    ],
+    noises: [
+      {
+        filter: 'highpass',
+        quality: 1,
+        cutoff: [at(0, 4200), at(0.4, 6800)],
+        envelope: envelope(0.16, 0.02, 0.4, JINGLE_START_SECONDS),
+      },
+    ],
+  },
+  GrabMeanBeans: {
+    variationCents: 0,
+    tones: [
+      ...PICKUP_CHIRP,
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 98), at(0.18, 196)],
+        envelope: envelope(0.2, 0.01, 0.22, JINGLE_START_SECONDS),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 196), at(0.12, 392)],
+        envelope: envelope(0.1, 0.004, 0.14, JINGLE_START_SECONDS + 0.12),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 392), at(0.2, 392)],
+        envelope: envelope(0.1, 0.004, 0.2, JINGLE_START_SECONDS + 0.24),
+      },
+    ],
+    noises: [],
+  },
+  GrabZoomySocks: {
+    variationCents: 0,
+    tones: [
+      ...PICKUP_CHIRP,
+      {
+        wave: 'sine',
+        pitch: [at(0, 392), at(0.3, 1568)],
+        envelope: envelope(0.18, 0.01, 0.32, JINGLE_START_SECONDS),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 3,
+        cutoff: [at(0, 600), at(0.32, 4200)],
+        envelope: envelope(0.3, 0.04, 0.3, JINGLE_START_SECONDS),
+      },
+    ],
+  },
+  GrabKebullets: {
+    variationCents: 0,
+    tones: [
+      ...PICKUP_CHIRP,
+      {
+        wave: 'triangle',
+        pitch: [at(0, 1976), at(0.16, 1960)],
+        envelope: envelope(0.14, 0.002, 0.16, JINGLE_START_SECONDS),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 2637), at(0.24, 2620)],
+        envelope: envelope(0.14, 0.002, 0.26, JINGLE_START_SECONDS + 0.1),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 8,
+        cutoff: [at(0, 5200), at(0.12, 7600)],
+        envelope: envelope(0.24, 0.002, 0.12, JINGLE_START_SECONDS),
+      },
+      {
+        filter: 'bandpass',
+        quality: 8,
+        cutoff: [at(0, 6000), at(0.14, 8400)],
+        envelope: envelope(0.22, 0.002, 0.14, JINGLE_START_SECONDS + 0.1),
+      },
+    ],
+  },
+  GrabBurp: {
+    variationCents: 0,
+    tones: [
+      ...PICKUP_CHIRP,
+      {
+        wave: 'sawtooth',
+        pitch: [
+          at(0, 150),
+          at(0.08, 118),
+          at(0.16, 140),
+          at(0.26, 104),
+          at(0.4, 82),
+          at(0.55, 70),
+        ],
+        envelope: envelope(0.32, 0.03, 0.55, JINGLE_START_SECONDS),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 75), at(0.5, 52)],
+        envelope: envelope(0.16, 0.03, 0.5, JINGLE_START_SECONDS),
+      },
+    ],
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 6,
+        cutoff: [at(0, 700), at(0.3, 420), at(0.6, 200)],
+        envelope: envelope(0.4, 0.03, 0.6, JINGLE_START_SECONDS),
+      },
+    ],
+  },
+  GrabHeart: {
+    variationCents: 0,
+    tones: [
+      ...PICKUP_CHIRP,
+      {
+        wave: 'sine',
+        pitch: [at(0, 784), at(0.12, 784)],
+        envelope: envelope(0.2, 0.004, 0.14, JINGLE_START_SECONDS),
+      },
+      {
+        wave: 'sine',
+        pitch: [at(0, 1046), at(0.3, 1046)],
+        envelope: envelope(0.22, 0.004, 0.34, JINGLE_START_SECONDS + 0.12),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 1568), at(0.3, 1568)],
+        envelope: envelope(0.1, 0.004, 0.3, JINGLE_START_SECONDS + 0.12),
+      },
+    ],
+    noises: [],
+  },
+  PowerDown: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 784), at(0.28, 196)],
+        envelope: envelope(0.09, 0.004, 0.3),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 392), at(0.32, 98)],
+        envelope: envelope(0.12, 0.004, 0.34, 0.04),
+      },
+    ],
+    noises: [],
   },
   Pop: {
     variationCents: 120,

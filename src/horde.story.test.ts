@@ -23,6 +23,7 @@ import {
   Invulnerability,
   type Model,
   Phase,
+  Pierce,
   type PlannedSpawn,
   type Zombie,
   type ZombieKind,
@@ -90,6 +91,8 @@ const pistolInto = (id: number, zombie: Zombie): Bullet => ({
   weapon: 'Pistol',
   damage: 1,
   knockback: 110,
+  glaze: 'Plain',
+  pierce: Pierce.Stops(),
 })
 
 const pistolsInto = (
@@ -243,6 +246,8 @@ describe('the kind table', () => {
       weapon: 'Pistol',
       damage: 1,
       knockback: 110,
+      glaze: 'Plain',
+      pierce: Pierce.Stops(),
     }
 
     story(
@@ -271,6 +276,8 @@ describe('the kind table', () => {
       weapon: 'Pistol',
       damage: 1,
       knockback: 110,
+      glaze: 'Plain',
+      pierce: Pierce.Stops(),
     }
 
     story(

@@ -143,6 +143,7 @@ import {
   Arsenal,
   type Blast,
   type Bullet,
+  type BulletGlaze,
   DebutCard,
   type Decal,
   type DecalKind,
@@ -179,6 +180,14 @@ import {
   shownGhostSticks,
 } from './onboarding'
 import { rattlingDoors } from './pacing'
+import {
+  auraShapes,
+  boostChipShapes,
+  burpRingShapes,
+  calloutShapes,
+  pickupShapes,
+} from './powerupView'
+import { BOOST_KIND_ORDER, PICKUPS, isBoosted } from './powerups'
 import { FLOOR_COLOR, ROOM_SHAPES } from './room'
 import { overlayShapes, waveLabel } from './screens'
 import { isShopOpenFor } from './shop'
@@ -313,29 +322,64 @@ const placeSprite = (
     shapes: sprite,
   })
 
+type BulletLook = Readonly<{
+  size: number
+  color: string
+  trail: string
+  trailPx: number
+}>
+
+const BULLET_LOOKS: Readonly<Record<BulletGlaze, BulletLook>> = {
+  Plain: {
+    size: BULLET_SIZE,
+    color: BULLET_COLOR,
+    trail: BULLET_TRAIL_COLOR,
+    trailPx: BULLET_TRAIL_PX,
+  },
+  Spicy: {
+    size: BULLET_SIZE,
+    color: '#ff9a3d',
+    trail: 'rgba(255, 74, 46, 0.6)',
+    trailPx: BULLET_TRAIL_PX + 1,
+  },
+  Mean: {
+    size: BULLET_SIZE + 1,
+    color: '#e6b3ff',
+    trail: 'rgba(156, 74, 224, 0.6)',
+    trailPx: BULLET_TRAIL_PX,
+  },
+  Skewer: {
+    size: BULLET_SIZE,
+    color: '#d8ff9a',
+    trail: 'rgba(127, 208, 75, 0.6)',
+    trailPx: BULLET_TRAIL_PX + 3,
+  },
+}
+
 const bulletShapes = ({
   x,
   y,
   velocityX,
   velocityY,
+  glaze,
 }: Bullet): ReadonlyArray<Canvas.Shape> => {
+  const look = BULLET_LOOKS[glaze]
   const speed = Math.max(1, Math.hypot(velocityX, velocityY))
+  const half = Math.floor(look.size / 2)
   return [
     Canvas.Rect({
-      x:
-        Math.round(x - (velocityX / speed) * BULLET_TRAIL_PX) - BULLET_SIZE / 2,
-      y:
-        Math.round(y - (velocityY / speed) * BULLET_TRAIL_PX) - BULLET_SIZE / 2,
-      width: BULLET_SIZE,
-      height: BULLET_SIZE,
-      fill: BULLET_TRAIL_COLOR,
+      x: Math.round(x - (velocityX / speed) * look.trailPx) - half,
+      y: Math.round(y - (velocityY / speed) * look.trailPx) - half,
+      width: look.size,
+      height: look.size,
+      fill: look.trail,
     }),
     Canvas.Rect({
-      x: Math.round(x) - BULLET_SIZE / 2,
-      y: Math.round(y) - BULLET_SIZE / 2,
-      width: BULLET_SIZE,
-      height: BULLET_SIZE,
-      fill: BULLET_COLOR,
+      x: Math.round(x) - half,
+      y: Math.round(y) - half,
+      width: look.size,
+      height: look.size,
+      fill: look.color,
     }),
   ]
 }
@@ -1394,7 +1438,10 @@ const entityShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
     ),
     Array.append<Drawable>({
       depth: model.player.y,
-      shapes: playerShapes(model),
+      shapes: [
+        ...auraShapes(model.player, model.boosts, model.elapsedMs),
+        ...playerShapes(model),
+      ],
     }),
     Array.sort(byDepth),
     Array.flatMap(({ shapes }) => shapes),
@@ -1870,6 +1917,8 @@ const trapNoticeShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
     },
   })
 
+const BOOST_CHIPS_LEFT = HUD_MARGIN + 2 * (SLOT_WIDTH + SLOT_GAP)
+
 const MUTE_BUTTON_CLEARANCE = 34
 const SCORE_RIGHT = ARENA_WIDTH - HUD_MARGIN - MUTE_BUTTON_CLEARANCE
 
@@ -1881,6 +1930,7 @@ const playHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...moneyShapes(model),
   ...streakShapes(model.streak),
   ...loadoutShapes(model.player),
+  ...boostChipShapes(model.boosts, BOOST_CHIPS_LEFT, SLOT_TOP),
   ...trapStockShapes(model),
   ...trapNoticeShapes(model),
   ...roundHudShapes(model),
@@ -2115,9 +2165,11 @@ const playWorldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...groundParticleShapes(model.particles),
   ...ghostShapes(model),
   ...doorRattleShapes(model),
+  ...Array.flatMap(model.pickups, pickupShapes),
   ...Array.flatMap(model.bullets, bulletShapes),
   ...entityShapes(model),
   ...Array.flatMap(model.blasts, blastShapes),
+  ...Array.flatMap(model.callouts, burpRingShapes),
   ...airborneParticleShapes(model.particles),
   ...Array.map(model.popups, popupShape),
   ...reloadBarShapes(model.player),
@@ -2132,9 +2184,13 @@ const worldLayerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   group({ translate: shakeOffset(model), shapes: worldShapes(model) }),
 ]
 
+const calloutLayerShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+  isRoundActive(model.phase) ? Array.flatMap(model.callouts, calloutShapes) : []
+
 const overlayLayerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...wavePreviewShapes(model),
   ...hudShapes(model),
+  ...calloutLayerShapes(model),
   ...overlayShapes(model),
 ]
 
@@ -2382,12 +2438,23 @@ const trapLabel = (model: Model): string => {
     : ` Traps ready to place: ${Array.join(ready, ', ')}.`
 }
 
+const boostLabel = (model: Model): string => {
+  const running = Array.filterMap(BOOST_KIND_ORDER, kind =>
+    isBoosted(model.boosts, kind)
+      ? Result.succeed(toSentenceCase(PICKUPS[kind].name))
+      : Result.failVoid,
+  )
+  return Array.isReadonlyArrayEmpty(running)
+    ? ''
+    : ` Power-ups running: ${Array.join(running, ', ')}.`
+}
+
 const loadoutView = (model: Model, h: HtmlBuilder<Message>): Html =>
   isRoundActive(model.phase)
     ? h.p(
         [h.Class('sr-only')],
         [
-          `You have $${model.wallet.balance}. ${gunLabel(model)}${trapLabel(model)}`,
+          `You have $${model.wallet.balance}. ${gunLabel(model)}${trapLabel(model)}${boostLabel(model)}`,
         ],
       )
     : h.empty

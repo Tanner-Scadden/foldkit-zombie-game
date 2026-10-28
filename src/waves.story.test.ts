@@ -17,6 +17,7 @@ import {
   type Bullet,
   type Model,
   Phase,
+  Pierce,
   type PlannedSpawn,
   type Zombie,
   ZombieState,
@@ -89,6 +90,8 @@ const bulletInto = (id: number, zombie: Zombie): Bullet => ({
   weapon: 'Pistol',
   damage: 1,
   knockback: 110,
+  glaze: 'Plain',
+  pierce: Pierce.Stops(),
 })
 
 const inWave = (

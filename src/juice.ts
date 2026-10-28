@@ -24,6 +24,8 @@ import {
   SHAKE_DECAY_PER_SECOND,
   SHAKE_MAX_PX,
   SHAKE_TRAUMA_BLAST,
+  SHAKE_TRAUMA_BURP,
+  SHAKE_TRAUMA_GRAB,
   SHAKE_TRAUMA_HURT,
   SHAKE_TRAUMA_MAX,
   STREAK_WINDOW_MS,
@@ -122,6 +124,11 @@ const eventTrauma = (event: GameEvent): number =>
     TrapHit: () => 0,
     TrapCracked: () => TRAP_CRACK_TRAUMA,
     TrapBroken: ({ kind }) => TRAPS[kind].breakTrauma,
+    PickupDropped: () => 0,
+    PickupGrabbed: () => SHAKE_TRAUMA_GRAB,
+    PickupFizzled: () => 0,
+    BoostFaded: () => 0,
+    Burped: () => SHAKE_TRAUMA_BURP,
   })
 
 const shakeAxis = (roll: number, trauma: number): number => {
@@ -227,6 +234,11 @@ const eventPopups = (
     TrapHit: () => noPopups(state),
     TrapCracked: () => noPopups(state),
     TrapBroken: () => noPopups(state),
+    PickupDropped: () => noPopups(state),
+    PickupGrabbed: () => noPopups(state),
+    PickupFizzled: () => noPopups(state),
+    BoostFaded: () => noPopups(state),
+    Burped: () => noPopups(state),
   })
 
 const agePopups = (

@@ -24,6 +24,8 @@ import {
   type Bullet,
   type Model,
   Phase,
+  Pierce,
+  type PlannedSpawn,
   type Zombie,
   ZombieState,
   initialModel,
@@ -44,26 +46,23 @@ const readyScreen: Model = modifyFields(initialModel, {
 const withAudio = (base: Model, audio: AudioState): Model =>
   modifyFields(base, { audio: () => audio })
 
-const playing = (audio: AudioState): Model =>
+const HELD_SPAWN: PlannedSpawn = {
+  atMs: 1e9,
+  kind: 'Shambler',
+  door: 'North',
+  offset: 0,
+  speedScale: 1,
+  hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
+}
+
+const playingWave = (audio: AudioState, wave: number): Model =>
   modifyFields(withAudio(readyScreen, audio), {
-    phase: () =>
-      Phase.Wave({
-        wave: 1,
-        elapsedMs: 0,
-        spawns: [
-          {
-            atMs: 1e9,
-            kind: 'Shambler',
-            door: 'North',
-            offset: 0,
-            speedScale: 1,
-            hpScale: 1,
-            pack: 0,
-            formation: 'Squad',
-          },
-        ],
-      }),
+    phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns: [HELD_SPAWN] }),
   })
+
+const playing = (audio: AudioState): Model => playingWave(audio, 1)
 
 const zombieAt = (id: number, x: number, y: number): Zombie => ({
   id,
@@ -292,12 +291,14 @@ describe('frame sounds', () => {
       weapon: 'Pistol',
       damage: 1,
       knockback: 110,
+      glaze: 'Plain',
+      pierce: Pierce.Stops(),
     }))
 
     story(
       update,
       given(
-        modifyFields(playing(AudioState.Ready()), {
+        modifyFields(playingWave(AudioState.Ready(), 2), {
           zombies: () => victims,
           bullets: () => killingBullets,
         }),
@@ -330,6 +331,8 @@ describe('frame sounds', () => {
       weapon: 'Pistol',
       damage: 1,
       knockback: 110,
+      glaze: 'Plain',
+      pierce: Pierce.Stops(),
     }
     Array.forEach(silentStates, audio => {
       story(

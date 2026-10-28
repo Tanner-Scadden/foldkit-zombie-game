@@ -27,6 +27,7 @@ import {
   type Model,
   type Particle,
   Phase,
+  Pierce,
   type PlannedSpawn,
   type Zombie,
   ZombieState,
@@ -215,6 +216,8 @@ describe('bullets and cover', () => {
     weapon: 'Pistol',
     damage: 1,
     knockback: 110,
+    glaze: 'Plain',
+    pierce: Pierce.Stops(),
   }
   const hiddenZombie = zombieAt(901, CRATE_STACK_X, 25)
 
@@ -260,6 +263,8 @@ describe('bullets and cover', () => {
               weapon: 'Pistol',
               damage: 1,
               knockback: 110,
+              glaze: 'Plain',
+              pierce: Pierce.Stops(),
             },
           ],
         }),

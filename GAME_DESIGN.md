@@ -195,7 +195,7 @@ Proposed on 2026-10-28 for step 7. Still proposed, not decided. A headless bot p
 
   Both bots end with spare gun tier 2 and pistol tier 1 (about $440 on upgrades) and place a median of 3 gnomes a run, replacing broken ones. For the default bot, Big Lugs cost about 29% of lost hearts, Gasbags 28%, Hotfoots 27%, and Groaners the rest.
 
-- **Against the targets.** Both bots win inside their ranges, deaths in waves 1 to 4 stay under 3%, and wave 8 is the single biggest wall for both. Waves 5 and 6 together take 24% of default runs, at the bottom of the 25 to 35% target. Close calls are 25 to 28% of wins, a little under the 30 to 50% target. A median win takes 8.8 to 8.9 minutes.
+- **Against the targets.** Both bots win inside their ranges, deaths in waves 1 to 4 stay under 3%, and wave 8 is the single biggest wall for both. Waves 5 and 6 together take 24% of default runs, at the bottom of the 25 to 35% target. Close calls are 25 to 28% of wins, a little under the 30 to 50% target. A median win takes 8.8 to 8.9 minutes. These numbers predate the power-ups. See "Power-up balance" under "Power-ups" for the bots with them.
 - **The gnome carries the balance.** The bot that never buys a gnome wins 1% of runs at these numbers, and with the old prices a bot that bought gnomes won 62% (default) and 68% (`SWAP=1`) instead of 22% and 34%. Two gnomes in the middle of the room nearly double the bot's damage a second for $100. A player who skips traps will find the campaign much harder than these numbers say. If playtests agree, the next lever is a weaker gnome (pea every 800 ms and 12 health took the bot from 74% to 54% at the ramp prices) with gentler wave health scales.
 - **Caveats.** The bot never stands in a doorway, plays Preparation in a few seconds, does not dodge Gasbags, and never reacts to a telegraph. Pressure stays low because it backs away from anything within 36 px. A person who does not will feel the peaks far more than these numbers say. Playtest it before trusting any of this.
 
@@ -261,6 +261,76 @@ Glue and Nails keeps its formula (half of each trap's price, scaled by the share
   | 12  | Ramp, health ×1.12, 1.22, 1.3, 1.42                                  | 27%     | 41%      |
 
   Try 11 is the only one with both bots inside their targets and wave 8 the biggest wall for both. Try 12 shows how sensitive the default bot is: two hundredths less health on waves 7 and 8 is 5 points of wins.
+
+#### Power-ups
+
+Added on 2026-10-28 after a playtest ("Temporary power ups that get dropped would be sick."). Proposed, not decided. The tables and the drop rules live in `src/powerups.ts`, and the pickups, callouts, aura, and HUD timers are drawn by `src/powerupView.ts`.
+
+Zombies sometimes drop a goodie on the floor. The player grabs it by walking over it, with the keys or the move stick, within 8 px of its middle. Four are timed boosts and two act at once.
+
+| Kind      | Name            | What it does                                                                                      | Lasts | Weight |
+| --------- | --------------- | ------------------------------------------------------------------------------------------------- | ----- | ------ |
+| RapidFire | Hot Sauce       | 0.55 times the time between shots, tops off the magazine, spends no rounds, and never reloads     | 8 s   | 24     |
+| Damage    | Mean Beans      | Twice the damage and 1.5 times the knockback on every shot                                        | 8 s   | 22     |
+| Speed     | Zoomy Socks     | Runs 1.4 times as fast                                                                            | 10 s  | 16     |
+| Pierce    | Shish Kebullets | Each shot goes through 3 zombies and stops in the 4th                                             | 9 s   | 20     |
+| Burp      | Big Burp        | At once: 5 damage and a hard shove to every walking zombie within 110 px, and pays their bounties | -     | 10     |
+| Heart     | Pickled Heart   | At once: one heart, never past 5. Only drops while the player is missing one                      | -     | 8      |
+
+- **Stacking.** Different boosts run side by side on their own timers. Grabbing a boost that is already running adds its duration, up to 1.5 times one pickup's duration, and the HUD timer starts full again. The boosts are a record of `Off` or `On` timers in the Model, and one place, `firingStats` and `playerSpeed` in `src/powerups.ts`, turns the running boosts into the gun's fire interval, damage, knockback, piercing, and ammo use and the player's speed.
+- **Time.** Boosts, pickups, and callouts count down with the world: they stand still while the game is paused, the shop is open, hit-stop holds the frame, or the new zombie card is up. Boosts keep running through Preparation outside the shop. A new run clears all of it.
+- **The floor.** A pickup lies on the floor for 10 seconds, bobbing in a pulsing glow of its color. It blinks for its last 3 seconds, faster in the last second, then fizzles in a puff of dust. It lands where the zombie fell, pulled inside the room and off walls, cover, and traps.
+- **Feel.** A drop pops in with sparks and a soft pop sound. A grab plays a chirp and a jingle of its own (a sizzle for Hot Sauce, a growl for Mean Beans, a whoosh for Zoomy Socks, a double shing for Shish Kebullets, a long frog burp for Big Burp, and two warm notes for the heart), shakes the screen a little, throws sparks and coins, and puts the name and a one-line blurb over the player in big pixel letters for 1.6 seconds. Big Burp also throws a ring 110 px wide and a dust ring. While a boost runs, the player stands in an aura of its color (cycling when several run), shots take its glaze (orange for Hot Sauce, bigger and purple for Mean Beans, green with a long trail for Shish Kebullets), and a chip right of the gun slots shows its icon over a draining bar. The chip and the aura blink for the last 2 seconds, and a falling tone plays when a boost runs out. The screen reader loadout line lists the boosts that are running.
+- **Onboarding.** The first pickup on the floor this session shows WALK OVER THE GLOWING GOODIE TO GRAB IT (STEER OVER on touch) until one is grabbed.
+
+##### Drops
+
+Every drop is decided by its own seeded generator, `loot.rngState` in the Model, seeded from the run's seed when a run starts. Drops never draw from the game's generator, so they never change which zombies come or from where, and the same seed and Messages drop the same pickups in the same places.
+
+- **Wave 1** drops nothing except one Hot Sauce on its third kill, to teach the grab.
+- **Each kill** from wave 2 on rolls its kind's chance: Groaner 2%, Hotfoot 2%, Gasbag 3%, Big Lug 30%. These rolls wait for 8 seconds after the last drop, so drops do not clump.
+- **Peaks.** When a peak's fade begins (the beat turns `Fading`, the crest of the sawtooth), the next kill rolls 50% for a prize, whether or not the gap is over. Win or lose, the prize is spent.
+- **Pity.** After 35 seconds of wave time with no drop, the next kill drops for sure.
+- **The cap.** At most 2 pickups lie on the floor. A kill while the floor is full drops nothing and keeps the pity time and any owed prize.
+- **The kind** is drawn by weight from the table, leaving out the heart while the player has every heart.
+
+##### Power-up balance
+
+Measured on 2026-10-28, 200 runs per bot from seed 1. The bot walks over a pickup within 90 px when nothing is inside its comfort radius and no zombie stands within 28 px of the pickup. `NO_PICKUPS=1` makes it ignore them, though it still walks over about 2 a run by accident. The bot reports pickups dropped and grabbed by kind and the share of wave time with a boost running.
+
+| Bot                       | Wins            | Close calls    | Median run | Median win | Dropped a run | Grabbed a run | Boosted |
+| ------------------------- | --------------- | -------------- | ---------- | ---------- | ------------- | ------------- | ------- |
+| Default                   | 49 of 200 (25%) | 12 of 49 (24%) | 8.4 min    | 8.8 min    | 15.7          | 11.9          | 19%     |
+| `SWAP=1`                  | 85 of 200 (43%) | 18 of 85 (21%) | 8.7 min    | 8.8 min    | 17.0          | 12.0          | 18%     |
+| `NO_GNOME=1`              | 2 of 200 (1%)   | 1 of 2         | 6.6 min    | 9.1 min    | 13.3          | 10.4          | 19%     |
+| `NO_GNOME=1 NO_PICKUPS=1` | 1 of 200 (0.5%) | 1 of 1         | 6.4 min    | 9.0 min    | 13.0          | 2.1           | 4%      |
+
+| Wave | Died (default) | Died (`SWAP=1`) | Hearts lost (default) |
+| ---- | -------------- | --------------- | --------------------- |
+| 1    | 0%             | 0%              | 0.00                  |
+| 2    | 0%             | 0%              | 0.10                  |
+| 3    | 1%             | 1%              | 0.17                  |
+| 4    | 0%             | 0%              | 0.89                  |
+| 5    | 6%             | 3%              | 1.04                  |
+| 6    | 15%            | 7%              | 1.95                  |
+| 7    | 25%            | 10%             | 2.27                  |
+| 8    | 30%            | 38%             | 3.30                  |
+
+Of 3,134 drops over the default runs, 30% were Hot Sauce (the wave 1 drop is one per run), 22% Mean Beans, 20% Shish Kebullets, 16% Zoomy Socks, 11% Big Burp, and 1.6% hearts, about one dropped heart every four runs. Endless (`MODE=endless`): median wave 8, best 16, worst 3, against median 8, best 17, worst 4 for the bot that ignores pickups.
+
+- **Against the targets.** Both bots win inside their ranges, deaths in waves 1 to 4 stay at or under 1%, and wave 8 is the biggest wall for both. Close calls fell to 21 to 24% of wins, further under the 30 to 50% target: a boost often turns a near death into a clean finish.
+- **Traps still carry the balance.** Power-ups barely move the bot that never buys a gnome: 1% wins against 0.5% when it ignores them. That bot dies in waves 5 to 7 with too little damage a second, and 8 to 10 seconds of a boost every 30 seconds or so does not close that gap. Power-ups add highlight moments for every player, but they do not replace the gnome. Giving non-trap players a real path means a weaker gnome with stronger drops: a gnome firing every 700 ms with 14 health, with the first-guess drops below, took the bots to 14.5% and 26.5%, too hard, so the right mix needs its own pass.
+- **Tuning log.** 200 runs per bot.
+
+  | Try | Change                                                                          | Default | `SWAP=1` | `NO_GNOME=1` |
+  | --- | ------------------------------------------------------------------------------- | ------- | -------- | ------------ |
+  | 0   | Before power-ups                                                                | 22%     | 41%      | 1%           |
+  | 1   | First guess: chance 3, 3, 4, and 40%, a prize at every peak, gap 6 s, pity 30 s | 31%     | 46.5%    | 2.5%         |
+  | 2   | Chance 2, 2, 3, and 30%, prize 50%, gap 8 s, pity 35 s (kept)                   | 24.5%   | 42.5%    | 1%           |
+  | 3   | Chance 1.5, 1.5, 2, and 25%, prize 35%, gap 10 s, pity 40 s                     | 27.5%   | 41.5%    |              |
+  | 4   | Try 1 drops with a gnome firing every 700 ms and 14 health                      | 14.5%   | 26.5%    |              |
+
+  Try 3 drops fewer pickups than try 2 and still wins more often, so a few points either way at 200 runs is noise. With try 1 the no-gnome bot won 2.5% whether or not it went for the pickups. `TUNE` files can now also edit `DROP_CHANCE`, `DROP_RULES`, `BOOSTS`, and `PICKUPS`.
 
 ### Upgrade tiers and endless mode
 
@@ -408,6 +478,7 @@ After the first playable, roughly in this order:
 - Upgrade tiers. Done on 2026-10-28: see "Upgrade tiers and endless mode" under the first playable.
 - An endless mode. Done on 2026-10-28, with Keep going from Victory: see "Upgrade tiers and endless mode".
 - Music. Done on 2026-10-28: see "Music" under the first playable.
+- Dropped power-ups. Done on 2026-10-28: see "Power-ups" under the first playable.
 - Co-op.
 
 ### Risks
@@ -439,7 +510,7 @@ After the first playable, roughly in this order:
 ## Open questions
 
 - Do traps break, wear out, or get rebuilt each preparation phase? Proposed for step 6, not yet decided: traps stay where they were placed between waves and keep their damage, the shop sells a repair for all of them priced by the missing health, broken traps are gone, and a new run clears them. See "Proposed balance".
-- Does a dropped heart exist, and how rare is it?
+- Does a dropped heart exist, and how rare is it? Proposed on 2026-10-28 with the power-ups: yes, the Pickled Heart, weighted so it is about 1.6% of drops (one every four runs for the bot), and only while the player is missing a heart.
 - Co-op: local play with gamepads on desktop is one path. Online play is another, and the deterministic `update` is what would make a lockstep approach possible. Phones cannot share a screen, so mobile co-op means online.
 - Where do zombies spawn in the estate: only at the map edge, or also inside rooms and corners?
 - Is there a second, permanent currency for unlocks, separate from the money spent within a run?

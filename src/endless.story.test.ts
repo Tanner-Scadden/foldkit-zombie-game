@@ -17,6 +17,7 @@ import {
   type Bullet,
   type Model,
   Phase,
+  Pierce,
   type PlannedSpawn,
   RunMode,
   Trap,
@@ -81,6 +82,8 @@ const bulletInto = (id: number, zombie: Zombie): Bullet => ({
   weapon: 'Pistol',
   damage: 1,
   knockback: 110,
+  glaze: 'Plain',
+  pierce: Pierce.Stops(),
 })
 
 const doomed = zombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2, 1)

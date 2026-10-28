@@ -61,6 +61,9 @@ const distanceWalked = (before: Model, after: Model): number =>
 const hasFiredWhileAiming = (model: Model): boolean =>
   hasPlayerFired(model.frameEvents) && Option.isSome(model.intent.maybeAim)
 
+const hasGrabbedPickup = (events: ReadonlyArray<GameEvent>): boolean =>
+  Array.some(events, GameEvent.isAnyOf(['PickupGrabbed']))
+
 const practise = (before: Model, after: Model): Practice => ({
   movedPx: after.practice.movedPx + distanceWalked(before, after),
   aimedShots: after.practice.aimedShots + (hasFiredWhileAiming(after) ? 1 : 0),
@@ -81,6 +84,7 @@ export const learnFromFrame = (before: Model, after: Model): Model => {
           isShownLongEnough && practice.aimedShots >= AIM_LESSON_SHOTS,
           after.elapsedMs,
         ),
+        pickup: learnWhen(hasGrabbedPickup(after.frameEvents), after.elapsedMs),
       }),
   })
 }
@@ -186,6 +190,7 @@ export const settleLessons = (lessons: Lessons): Lessons =>
     startWave: settle,
     shop: settle,
     swap: settle,
+    pickup: settle,
   })
 
 // BAND
@@ -213,6 +218,7 @@ export const moveHintBand = (model: Model): Model =>
 export const HintId = Schema.Literals([
   'Move',
   'Fire',
+  'Pickup',
   'Barricade',
   'Turret',
   'Shop',
@@ -228,6 +234,10 @@ export const HINT_TEXT: Readonly<
   Fire: {
     KeyboardMouse: 'MOUSE AIMS, CLICK FIRES',
     Touch: 'DRAG YOUR RIGHT THUMB TO AIM AND FIRE',
+  },
+  Pickup: {
+    KeyboardMouse: 'WALK OVER THE GLOWING GOODIE TO GRAB IT',
+    Touch: 'STEER OVER THE GLOWING GOODIE TO GRAB IT',
   },
   Barricade: {
     KeyboardMouse: 'STAND IN A DOORWAY AND PRESS T',
@@ -315,6 +325,17 @@ const HINT_RULES: ReadonlyArray<HintRule> = [
       ageWhen(
         isFirstWave(model.phase) && isPending(model.lessons.fire),
         model.elapsedMs,
+      ),
+  },
+  {
+    id: 'Pickup',
+    maybeAgeMs: model =>
+      ageWhen(
+        isPending(model.lessons.pickup) &&
+          Array.isReadonlyArrayNonEmpty(model.pickups),
+        Array.reduce(model.pickups, 0, (oldest, { ageMs }) =>
+          Math.max(oldest, ageMs),
+        ),
       ),
   },
   {

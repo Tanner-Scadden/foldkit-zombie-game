@@ -20,7 +20,6 @@ import {
   MS_PER_SECOND,
   PLAYER_KNOCKBACK_DECAY_PER_SECOND,
   PLAYER_RADIUS,
-  PLAYER_SPEED,
   SCORE_PER_ZOMBIE,
   SEPARATION_SPEED,
   ZOMBIE_BUMP_SPEED,
@@ -42,12 +41,14 @@ import { advanceJuice, thawHitStop } from './juice'
 import {
   Arsenal,
   type Bullet,
+  type BulletGlaze,
   type DoorId,
   type FlowField,
   GameEvent,
   HitStop,
   Invulnerability,
   type Model,
+  Pierce,
   type Player,
   Reload,
   ShopState,
@@ -60,6 +61,15 @@ import {
 import { advanceIntensity } from './pacing'
 import { advanceParticles } from './particles'
 import { type Clearance, refreshFlowField, steerToward } from './pathing'
+import {
+  advancePowerUps,
+  bulletGlaze,
+  bulletPierce,
+  firingStats,
+  isAmmoFree,
+  keepTopped,
+  playerSpeed,
+} from './powerups'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
 import { earn, refreshShopPresence } from './shop'
 import { countHits, countShots } from './stats'
@@ -83,7 +93,6 @@ import {
   holdPistol,
   isReloading,
   spendRound,
-  statsAt,
 } from './weapons'
 import { Behavior, isWalking, radiusOf, statsOf, strideAt } from './zombies'
 
@@ -135,11 +144,12 @@ const tickInvulnerability = (
 const movePlayer = (
   player: Player,
   move: Vector,
+  speed: number,
   blockers: ReadonlyArray<Box>,
   seconds: number,
   deltaMs: number,
 ): Player => {
-  const velocity = addVectors(scaleVector(move, PLAYER_SPEED), player.knockback)
+  const velocity = addVectors(scaleVector(move, speed), player.knockback)
   const moved = moveCircle(
     player,
     scaleVector(velocity, seconds),
@@ -208,12 +218,18 @@ const aimPellets = (
   }
 }
 
+type Load = Readonly<{
+  stats: WeaponStats
+  weapon: WeaponKind
+  glaze: BulletGlaze
+  pierce: Pierce
+}>
+
 const makeBullet = (
   id: number,
   muzzle: Vector,
   velocity: Vector,
-  stats: WeaponStats,
-  weapon: WeaponKind,
+  { stats, weapon, glaze, pierce }: Load,
 ): Bullet => ({
   id,
   x: muzzle.x,
@@ -224,6 +240,8 @@ const makeBullet = (
   weapon,
   damage: stats.damage,
   knockback: stats.knockback,
+  glaze,
+  pierce,
 })
 
 const nextFireCooldown = (
@@ -244,8 +262,14 @@ const shoot = (
   tier: number,
   deltaMs: number,
 ): Model => {
-  const { player, nextEntityId } = model
-  const stats = statsAt(weapon, tier)
+  const { player, nextEntityId, boosts } = model
+  const stats = firingStats(boosts, weapon, tier)
+  const load: Load = {
+    stats,
+    weapon,
+    glaze: bulletGlaze(boosts),
+    pierce: bulletPierce(boosts),
+  }
   const muzzle = addVectors(
     player,
     scaleVector(player.facing, stats.muzzleReach),
@@ -256,20 +280,20 @@ const shoot = (
     stats,
   )
   const pellets = Array.map(velocities, (velocity, index) =>
-    makeBullet(nextEntityId + index, muzzle, velocity, stats, weapon),
+    makeBullet(nextEntityId + index, muzzle, velocity, load),
   )
   return modifyFields(model, {
     bullets: bullets => Array.takeRight([...bullets, ...pellets], BULLET_MAX),
     nextEntityId: id => id + pellets.length,
     rngState: () => rngState,
     stats: runStats => countShots(runStats, pellets.length),
-    player: () =>
-      spendRound(
-        modifyFields(player, {
-          fireCooldownMs: cooldown => cooldown + stats.fireIntervalMs - deltaMs,
-          recoilRemainingMs: () => stats.recoilMs,
-        }),
-      ),
+    player: () => {
+      const cycled = modifyFields(player, {
+        fireCooldownMs: cooldown => cooldown + stats.fireIntervalMs - deltaMs,
+        recoilRemainingMs: () => stats.recoilMs,
+      })
+      return isAmmoFree(boosts) ? cycled : spendRound(cycled)
+    },
     frameEvents: Array.append(
       GameEvent.Fired({
         x: muzzle.x,
@@ -341,7 +365,15 @@ const autoReload = (model: Model, isTriggerHeld: boolean): Model => {
 const isShopBrowsing = (model: Model): boolean =>
   ShopState.isAnyOf(['Browsing'])(model.shop)
 
-const fire = (model: Model, deltaMs: number): Model => {
+const topUp = (model: Model): Model =>
+  isShopBrowsing(model)
+    ? model
+    : modifyFields(model, {
+        player: player => keepTopped(player, model.boosts),
+      })
+
+const fire = (stocked: Model, deltaMs: number): Model => {
+  const model = topUp(stocked)
   const { player, intent } = model
   const isTriggerHeld = intent.trigger === 'Held'
 
@@ -689,6 +721,22 @@ const nearerContact = (
       contact.reach < current.reach ? Option.some(contact) : nearest,
   })
 
+const struckBy = (bullet: Bullet): ReadonlyArray<number> =>
+  Pierce.match(bullet.pierce, {
+    Stops: () => [],
+    Skewers: ({ struck }) => struck,
+  })
+
+const targetsFor = (
+  bullet: Bullet,
+  targets: ReadonlyArray<Zombie>,
+): ReadonlyArray<Zombie> => {
+  const struck = struckBy(bullet)
+  return Array.isReadonlyArrayEmpty(struck)
+    ? targets
+    : Array.filter(targets, ({ id }) => !Array.contains(struck, id))
+}
+
 const findBulletHits = (
   bullets: ReadonlyArray<Bullet>,
   zombies: ReadonlyArray<Zombie>,
@@ -702,7 +750,7 @@ const findBulletHits = (
         y: bullet.y - bullet.velocityY * seconds,
       }
       return pipe(
-        targets,
+        targetsFor(bullet, targets),
         Array.map(zombie => maybeContact(from, bullet, zombie)),
         Array.getSomes,
         Array.reduce(Option.none<Contact>(), nearerContact),
@@ -772,13 +820,38 @@ const killEventOn =
       }),
     )
 
+const skewer =
+  (hits: ReadonlyArray<BulletHit>) =>
+  (bullet: Bullet): Result.Result<Bullet, void> =>
+    Option.match(
+      Array.findFirst(hits, ({ bulletId }) => bulletId === bullet.id),
+      {
+        onNone: () => Result.succeed(bullet),
+        onSome: ({ zombieId }) =>
+          Pierce.match(bullet.pierce, {
+            Stops: () => Result.failVoid,
+            Skewers: ({ left, struck }) =>
+              left > 0
+                ? Result.succeed(
+                    modifyFields(bullet, {
+                      pierce: () =>
+                        Pierce.Skewers({
+                          left: left - 1,
+                          struck: [...struck, zombieId],
+                        }),
+                    }),
+                  )
+                : Result.failVoid,
+          }),
+      },
+    )
+
 const resolveBulletHits = (model: Model, seconds: number): Model => {
   const hits = findBulletHits(model.bullets, model.zombies, seconds)
   if (Array.isReadonlyArrayEmpty(hits)) {
     return model
   }
 
-  const hitBulletIds = Array.map(hits, ({ bulletId }) => bulletId)
   const hitZombieIds = Array.dedupe(Array.map(hits, ({ zombieId }) => zombieId))
   const zombies = Array.map(model.zombies, applyHits(hits))
   const killedZombies = Array.filter(
@@ -794,7 +867,7 @@ const resolveBulletHits = (model: Model, seconds: number): Model => {
     (sum, zombie) => sum + statsOf(zombie).bounty,
   )
   return modifyFields(model, {
-    bullets: Array.filter(({ id }) => !Array.contains(hitBulletIds, id)),
+    bullets: Array.filterMap(skewer(hits)),
     zombies: () => zombies,
     stats: stats =>
       countHits(
@@ -909,7 +982,14 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
   const moved = refreshIntent(
     modifyFields(model, {
       player: player =>
-        movePlayer(player, model.intent.move, blockers, seconds, deltaMs),
+        movePlayer(
+          player,
+          model.intent.move,
+          playerSpeed(model.boosts),
+          blockers,
+          seconds,
+          deltaMs,
+        ),
       elapsedMs: elapsedMs => elapsedMs + deltaMs,
       frameEvents: () => [],
     }),
@@ -939,7 +1019,7 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
     resolveBlasts,
     clearBrokenTraps,
     blasted => feelIntensity(model, blasted, deltaMs),
-    felt => advanceRound(felt, deltaMs),
+    felt => advancePowerUps(felt, advanceRound(felt, deltaMs), deltaMs),
     rounded => advanceParticles(rounded, seconds, deltaMs),
     endWhenDefeated,
   )

@@ -53,6 +53,7 @@ import {
   MouseButton,
   type Particle,
   Phase,
+  Pierce,
   type PlannedSpawn,
   Stick,
   Streak,
@@ -735,6 +736,8 @@ describe('particles and decals', () => {
       weapon: 'Pistol',
       damage: 1,
       knockback: 110,
+      glaze: 'Plain',
+      pierce: Pierce.Stops(),
     }))
     const oldDecal: Decal = { kind: 'Shell', x: 1, y: 1, width: 2, height: 1 }
     const floodModel = modifyFields(withZombies(playingModel, victims), {
@@ -847,6 +850,8 @@ const bulletInto = (id: number, { x, y }: Zombie): Bullet => ({
   weapon: 'Pistol',
   damage: 1,
   knockback: 110,
+  glaze: 'Plain',
+  pierce: Pierce.Stops(),
 })
 
 const massacreModel = (count: number): Model => {
@@ -879,6 +884,8 @@ const STRAY_BULLET: Bullet = {
   weapon: 'Pistol',
   damage: 1,
   knockback: 110,
+  glaze: 'Plain',
+  pierce: Pierce.Stops(),
 }
 
 const freezeVictim = doomedZombieAt(400, 250, 30)

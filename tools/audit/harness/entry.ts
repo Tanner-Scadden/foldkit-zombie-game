@@ -207,6 +207,67 @@ const scenarioModel = (): Model => {
             : (seen.split(',') as Array<(typeof ZOMBIE_KIND_ORDER)[number]>),
       }),
     )
+  const PICKUP_KINDS = [
+    'RapidFire',
+    'Damage',
+    'Speed',
+    'Pierce',
+    'Burp',
+    'Heart',
+  ] as const
+  type PickupKindName = (typeof PICKUP_KINDS)[number]
+  const kindsParam = (key: string): Array<PickupKindName> => {
+    const raw = params.get(key)
+    if (raw === null) return []
+    return raw === 'all'
+      ? [...PICKUP_KINDS]
+      : (raw.split(',') as Array<PickupKindName>)
+  }
+  const pickupKinds = kindsParam('pickups')
+  if (pickupKinds.length > 0) {
+    const pickupY = num('pickupY', 128)
+    model = modifyFields(model, {
+      pickups: () =>
+        pickupKinds.map((kind, index) => ({
+          id: 3000 + index,
+          kind,
+          x: Math.round(160 + (index - (pickupKinds.length - 1) / 2) * 26),
+          y: pickupY,
+          ageMs: num('pickupAge', 2000) + index * 170,
+        })),
+    })
+  }
+  const boostKinds = kindsParam('boosts').filter(
+    kind => kind !== 'Burp' && kind !== 'Heart',
+  )
+  if (boostKinds.length > 0) {
+    const boostMs = num('boostMs', 5000)
+    model = modifyFields(model, {
+      boosts: boosts => {
+        const next: Record<string, unknown> = { ...boosts }
+        boostKinds.forEach((kind, index) => {
+          next[kind] = {
+            _tag: 'On',
+            remainingMs: Math.max(1, boostMs - index * 2200),
+            durationMs: 8000,
+          }
+        })
+        return next as typeof boosts
+      },
+    })
+  }
+  const calloutKind = params.get('callout')
+  if (calloutKind !== null)
+    model = modifyFields(model, {
+      callouts: () => [
+        {
+          kind: calloutKind as PickupKindName,
+          x: model.player.x,
+          y: model.player.y,
+          ageMs: num('calloutAge', 400),
+        },
+      ],
+    })
   const phase = params.get('phase')
   if (phase === 'victory')
     model = modifyFields(model, {

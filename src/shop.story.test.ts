@@ -25,6 +25,7 @@ import {
   GameEvent,
   type Model,
   Phase,
+  Pierce,
   type PlannedSpawn,
   type ShopCategory,
   ShopState,
@@ -167,6 +168,8 @@ const bulletInto = (id: number, { x, y }: Zombie): Bullet => ({
   weapon: 'Pistol',
   damage: 1,
   knockback: 110,
+  glaze: 'Plain',
+  pierce: Pierce.Stops(),
 })
 
 const doomed = zombieAt(100, 170, PLAYER_Y, 1)
@@ -723,6 +726,8 @@ describe('shotgun spread', () => {
       weapon: 'Pistol',
       damage: 1,
       knockback: 110,
+      glaze: 'Plain',
+      pierce: Pierce.Stops(),
     }))
     story(
       update,

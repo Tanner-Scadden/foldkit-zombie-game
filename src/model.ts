@@ -152,6 +152,15 @@ export const Zombie = Schema.Struct({
 })
 export type Zombie = typeof Zombie.Type
 
+export const BulletGlaze = Schema.Literals(['Plain', 'Spicy', 'Mean', 'Skewer'])
+export type BulletGlaze = typeof BulletGlaze.Type
+
+export const Pierce = defineTaggedUnion({
+  Stops: {},
+  Skewers: { left: Schema.Number, struck: Schema.Array(Schema.Number) },
+})
+export type Pierce = typeof Pierce.Type
+
 export const Bullet = Schema.Struct({
   id: Schema.Number,
   x: Schema.Number,
@@ -162,6 +171,8 @@ export const Bullet = Schema.Struct({
   weapon: WeaponKind,
   damage: Schema.Number,
   knockback: Schema.Number,
+  glaze: BulletGlaze,
+  pierce: Pierce,
 })
 export type Bullet = typeof Bullet.Type
 
@@ -236,6 +247,68 @@ export const Formation = Schema.Literals([
 ])
 export type Formation = typeof Formation.Type
 
+export const BoostKind = Schema.Literals([
+  'RapidFire',
+  'Damage',
+  'Speed',
+  'Pierce',
+])
+export type BoostKind = typeof BoostKind.Type
+
+export const PickupKind = Schema.Literals([
+  'RapidFire',
+  'Damage',
+  'Speed',
+  'Pierce',
+  'Burp',
+  'Heart',
+])
+export type PickupKind = typeof PickupKind.Type
+
+export const Pickup = Schema.Struct({
+  id: Schema.Number,
+  kind: PickupKind,
+  x: Schema.Number,
+  y: Schema.Number,
+  ageMs: Schema.Number,
+})
+export type Pickup = typeof Pickup.Type
+
+export const BoostTimer = defineTaggedUnion({
+  Off: {},
+  On: { remainingMs: Schema.Number, durationMs: Schema.Number },
+})
+export type BoostTimer = typeof BoostTimer.Type
+
+export const Boosts = Schema.Struct({
+  RapidFire: BoostTimer,
+  Damage: BoostTimer,
+  Speed: BoostTimer,
+  Pierce: BoostTimer,
+})
+export type Boosts = typeof Boosts.Type
+
+export const Prize = defineTaggedUnion({
+  Settled: {},
+  Owed: {},
+})
+export type Prize = typeof Prize.Type
+
+export const Loot = Schema.Struct({
+  rngState: Schema.Number,
+  dryMs: Schema.Number,
+  prize: Prize,
+})
+export type Loot = typeof Loot.Type
+
+export const Callout = Schema.Struct({
+  kind: PickupKind,
+  x: Schema.Number,
+  y: Schema.Number,
+  ageMs: Schema.Number,
+})
+export type Callout = typeof Callout.Type
+
 export const GameEvent = defineTaggedUnion({
   Fired: {
     x: Schema.Number,
@@ -285,6 +358,11 @@ export const GameEvent = defineTaggedUnion({
   TrapHit: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
   TrapCracked: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
   TrapBroken: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
+  PickupDropped: { x: Schema.Number, y: Schema.Number, kind: PickupKind },
+  PickupGrabbed: { x: Schema.Number, y: Schema.Number, kind: PickupKind },
+  PickupFizzled: { x: Schema.Number, y: Schema.Number },
+  BoostFaded: { x: Schema.Number, y: Schema.Number, kind: BoostKind },
+  Burped: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
 })
 export type GameEvent = typeof GameEvent.Type
 
@@ -529,6 +607,7 @@ export const Lessons = Schema.Struct({
   startWave: Lesson,
   shop: Lesson,
   swap: Lesson,
+  pickup: Lesson,
 })
 export type Lessons = typeof Lessons.Type
 
@@ -593,6 +672,10 @@ export const Model = Schema.Struct({
   streak: Streak,
   blasts: Schema.Array(Blast),
   traps: Schema.Array(Trap),
+  pickups: Schema.Array(Pickup),
+  boosts: Boosts,
+  loot: Loot,
+  callouts: Schema.Array(Callout),
   trapStock: TrapCounts,
   selectedTrap: TrapKind,
   trapHint: TrapHint,
@@ -665,6 +748,7 @@ export const freshLessons: Lessons = {
   startWave: Lesson.Pending(),
   shop: Lesson.Pending(),
   swap: Lesson.Pending(),
+  pickup: Lesson.Pending(),
 }
 
 export const noPractice: Practice = { movedPx: 0, aimedShots: 0 }
@@ -692,6 +776,21 @@ export const calmPacing: Pacing = {
   warnedPacks: [],
   alarm: Alarm.Quiet(),
 }
+
+export const idleBoosts: Boosts = {
+  RapidFire: BoostTimer.Off(),
+  Damage: BoostTimer.Off(),
+  Speed: BoostTimer.Off(),
+  Pierce: BoostTimer.Off(),
+}
+
+const LOOT_SEED_SALT = 0x5eed10e7
+
+export const freshLoot = (seed: number): Loot => ({
+  rngState: (seed ^ LOOT_SEED_SALT) >>> 0,
+  dryMs: 0,
+  prize: Prize.Settled(),
+})
 
 export const initialHitStop: HitStop = HitStop.Running({ cooldownMs: 0 })
 
@@ -724,6 +823,10 @@ export const initialModel: Model = {
   streak: Streak.Cold(),
   blasts: [],
   traps: [],
+  pickups: [],
+  boosts: idleBoosts,
+  loot: freshLoot(DEFAULT_SEED),
+  callouts: [],
   trapStock: emptyTrapStock,
   selectedTrap: 'Barricade',
   trapHint: TrapHint.Unseen(),

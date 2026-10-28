@@ -207,12 +207,12 @@ const maybeBlastOf = (zombie: Zombie): Option.Option<BlastSpec> =>
       }),
   })
 
-const bountyOf = (events: ReadonlyArray<GameEvent>): number =>
+export const bountyOf = (events: ReadonlyArray<GameEvent>): number =>
   Array.reduce(events, 0, (sum, event) =>
     GameEvent.isAnyOf(['ZombieKilled'])(event) ? sum + event.bounty : sum,
   )
 
-const killCount = (events: ReadonlyArray<GameEvent>): number =>
+export const killCount = (events: ReadonlyArray<GameEvent>): number =>
   Array.filter(events, GameEvent.isAnyOf(['ZombieKilled'])).length
 
 const detonate = (model: Model, bomberId: number): Model => {

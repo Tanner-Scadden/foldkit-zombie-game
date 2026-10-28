@@ -40,6 +40,7 @@ import {
   GameEvent,
   type Model,
   Phase,
+  Pierce,
   type Player,
   type Toll,
   Trap,
@@ -355,6 +356,8 @@ const peaFrom = (id: number, muzzle: Vector, direction: Vector): Bullet => {
     weapon: TURRET_WEAPON,
     damage: stats.damage,
     knockback: stats.knockback,
+    glaze: 'Plain',
+    pierce: Pierce.Stops(),
   }
 }
 
