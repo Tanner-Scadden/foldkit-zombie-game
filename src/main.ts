@@ -40,6 +40,7 @@ import {
   TRAP_PLACE_TRAUMA,
 } from './constants'
 import {
+  type PointerPress,
   type TrapChoice,
   type WeaponChoice,
   isEndlessKey,
@@ -73,6 +74,7 @@ import {
   RunMode,
   ShopItemId,
   ShopState,
+  TouchControls,
   initialModel,
 } from './model'
 import { MusicLevel, MusicMood, MusicStinger } from './music'
@@ -150,7 +152,7 @@ export const Message = defineMessageUnion({
     height: Schema.Number,
   },
   CompletedGenerateSeed: { seed: Schema.Number },
-  CompletedDetectInputDevice: { device: InputDevice },
+  CompletedDetectInputDevice: { touchControls: TouchControls },
   ClickedMuteButton: {},
   ClickedMusicButton: {},
   ClickedCampaignButton: {},
@@ -219,19 +221,25 @@ export const GenerateSeed = Command.define('GenerateSeed', {
 })
 
 const COARSE_POINTER_QUERY = '(pointer: coarse)'
+const MOBILE_SCREEN_MAX_SIDE_PX = 600
+
+const isMobileTouchScreen = (): boolean =>
+  window.matchMedia(COARSE_POINTER_QUERY).matches &&
+  Math.min(window.screen.width, window.screen.height) <=
+    MOBILE_SCREEN_MAX_SIDE_PX
 
 export const DetectInputDevice = Command.define('DetectInputDevice', {
   messages: [Message.CompletedDetectInputDevice],
   execute: pipe(
-    Effect.try(() => window.matchMedia(COARSE_POINTER_QUERY).matches),
-    Effect.map(isCoarsePointer =>
+    Effect.try(isMobileTouchScreen),
+    Effect.map(isMobile =>
       Message.CompletedDetectInputDevice({
-        device: isCoarsePointer ? 'Touch' : 'KeyboardMouse',
+        touchControls: isMobile ? 'Allowed' : 'Blocked',
       }),
     ),
     Effect.catch(() =>
       Effect.succeed(
-        Message.CompletedDetectInputDevice({ device: 'KeyboardMouse' }),
+        Message.CompletedDetectInputDevice({ touchControls: 'Blocked' }),
       ),
     ),
   ),
@@ -332,6 +340,11 @@ const useDevice = (model: Model, device: InputDevice): Model =>
   model.lastDevice === device
     ? model
     : modifyFields(model, { lastDevice: () => device })
+
+const asAllowedPress = (model: Model, press: PointerPress): PointerPress =>
+  press.device === 'Touch' && model.touchControls === 'Blocked'
+    ? { ...press, device: 'Mouse' }
+    : press
 
 const orientationOf = (width: number, height: number): Orientation =>
   height > width ? 'Portrait' : 'Landscape'
@@ -857,7 +870,8 @@ const updateGame = (model: Model, message: Message) =>
       }
     },
 
-    PressedPointer: press => {
+    PressedPointer: rawPress => {
+      const press = asAllowedPress(model, rawPress)
       const started = startFromPointer(
         useDevice(model, press.device === 'Touch' ? 'Touch' : 'KeyboardMouse'),
       )
@@ -872,7 +886,9 @@ const updateGame = (model: Model, message: Message) =>
     },
 
     MovedPointer: position => ({
-      model: withInput(model, input => movePointer(input, position)),
+      model: withInput(model, input =>
+        movePointer(input, model.maybeSurface, position),
+      ),
     }),
 
     ReleasedPointer: ({ pointerId }) =>
@@ -902,8 +918,13 @@ const updateGame = (model: Model, message: Message) =>
       model: modifyFields(model, { rngState: () => seed }),
     }),
 
-    CompletedDetectInputDevice: ({ device }) =>
-      pauseWhenSideways(useDevice(model, device)),
+    CompletedDetectInputDevice: ({ touchControls }) =>
+      pauseWhenSideways(
+        useDevice(
+          modifyFields(model, { touchControls: () => touchControls }),
+          touchControls === 'Allowed' ? 'Touch' : 'KeyboardMouse',
+        ),
+      ),
 
     ClickedMuteButton: () => unlockAudio(toggleSound(model)),
 

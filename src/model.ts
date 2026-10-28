@@ -46,6 +46,9 @@ export type PointerDevice = typeof PointerDevice.Type
 export const InputDevice = Schema.Literals(['KeyboardMouse', 'Touch'])
 export type InputDevice = typeof InputDevice.Type
 
+export const TouchControls = Schema.Literals(['Allowed', 'Blocked'])
+export type TouchControls = typeof TouchControls.Type
+
 export const Orientation = Schema.Literals(['Landscape', 'Portrait'])
 export type Orientation = typeof Orientation.Type
 
@@ -507,6 +510,7 @@ export const Model = Schema.Struct({
   intent: Intent,
   maybeSurface: Schema.Option(SurfaceRectangle),
   lastDevice: InputDevice,
+  touchControls: TouchControls,
   orientation: Orientation,
   lessons: Lessons,
   hintBand: HintBand,
@@ -615,6 +619,7 @@ export const initialModel: Model = {
   intent: idleIntent,
   maybeSurface: Option.none(),
   lastDevice: 'KeyboardMouse',
+  touchControls: 'Allowed',
   orientation: 'Landscape',
   lessons: freshLessons,
   hintBand: 'Top',

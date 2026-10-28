@@ -214,11 +214,26 @@ const moveStickPointer = (stick: Stick, position: PointerPosition): Stick =>
         : stick,
   })
 
-export const movePointer = (input: Input, position: PointerPosition): Input =>
-  modifyFields(input, {
-    moveStick: stick => moveStickPointer(stick, position),
-    aimStick: stick => moveStickPointer(stick, position),
+const isMouseHeldBy = (input: Input, pointerId: number): boolean =>
+  MouseButton.match(input.mouseButton, {
+    Released: () => false,
+    Held: held => held.pointerId === pointerId,
   })
+
+export const movePointer = (
+  input: Input,
+  maybeSurface: Option.Option<SurfaceRectangle>,
+  position: PointerPosition,
+): Input =>
+  isMouseHeldBy(input, position.pointerId)
+    ? moveMouse(input, maybeSurface, {
+        x: position.clientX,
+        y: position.clientY,
+      })
+    : modifyFields(input, {
+        moveStick: stick => moveStickPointer(stick, position),
+        aimStick: stick => moveStickPointer(stick, position),
+      })
 
 const releaseStickPointer = (stick: Stick, pointerId: number): Stick =>
   Stick.match(stick, {

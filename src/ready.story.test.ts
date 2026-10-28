@@ -4,6 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { RESTART_GRACE_MS } from './constants'
+import { clientToArena } from './geometry'
 import { Message, update } from './main'
 import {
   type Model,
@@ -20,6 +21,9 @@ import { ZOMBIE_KINDS } from './zombies'
 
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 const FRAME_MS = 16
+
+const SURFACE_ARENA_X = (clientX: number): number =>
+  Option.getOrThrow(clientToArena(SURFACE, { x: clientX, y: 200 })).x
 
 const readyModel: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some(SURFACE),
@@ -73,9 +77,42 @@ describe('input device', () => {
       model(({ lastDevice }) => {
         expect(lastDevice).toBe('KeyboardMouse')
       }),
-      message(Message.CompletedDetectInputDevice({ device: 'Touch' })),
+      message(Message.CompletedDetectInputDevice({ touchControls: 'Allowed' })),
       model(({ lastDevice }) => {
         expect(lastDevice).toBe('Touch')
+      }),
+    )
+  })
+
+  test('a touch on a screen bigger than a phone acts like the mouse', () => {
+    story(
+      update,
+      given(readyModel),
+      message(Message.CompletedDetectInputDevice({ touchControls: 'Blocked' })),
+      model(({ lastDevice }) => {
+        expect(lastDevice).toBe('KeyboardMouse')
+      }),
+      touchDown(3, 100, 200),
+      model(({ lastDevice, input }) => {
+        expect(lastDevice).toBe('KeyboardMouse')
+        expect(input.moveStick._tag).toBe('Idle')
+        expect(input.mouseButton._tag).toBe('Held')
+        expect(
+          Option.map(input.maybeMousePosition, ({ x }) => x),
+        ).toStrictEqual(Option.some(SURFACE_ARENA_X(100)))
+      }),
+      message(
+        Message.MovedPointer({ pointerId: 3, clientX: 400, clientY: 200 }),
+      ),
+      model(({ input }) => {
+        expect(input.moveStick._tag).toBe('Idle')
+        expect(
+          Option.map(input.maybeMousePosition, ({ x }) => x),
+        ).toStrictEqual(Option.some(SURFACE_ARENA_X(400)))
+      }),
+      message(Message.ReleasedPointer({ pointerId: 3 })),
+      model(({ input }) => {
+        expect(input.mouseButton._tag).toBe('Released')
       }),
     )
   })
