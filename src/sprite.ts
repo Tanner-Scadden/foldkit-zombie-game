@@ -520,7 +520,7 @@ const GLYPH_PIXELS = {
   '9': ['###', '#.#', '###', '..#', '##.'],
   '+': ['...', '.#.', '###', '.#.', '...'],
   x: ['...', '#.#', '.#.', '#.#', '...'],
-  $: ['.##', '#..', '###', '..#', '##.'],
+  $: ['.##', '##.', '.#.', '.##', '##.'],
   C: ['###', '#..', '#..', '#..', '###'],
   D: ['##.', '#.#', '#.#', '#.#', '##.'],
   E: ['###', '#..', '##.', '#..', '###'],
@@ -575,6 +575,21 @@ export type Tone = 'Normal' | 'Flash'
 export type Sprite = ReadonlyArray<Canvas.Shape>
 export type SpriteSet = Readonly<Record<Tone, Readonly<Record<Facing, Sprite>>>>
 export type SpriteFrames = Array.NonEmptyReadonlyArray<SpriteSet>
+
+export type GroupFields = Omit<Canvas.Group, '_tag'>
+
+// NOTE: Canvas.Group re-parses every nested shape through Schema on each call,
+// because its shapes field is recursive. The scene builds hundreds of Groups a
+// frame around shapes the Canvas constructors already made, so this builds the
+// same Group value without parsing the whole subtree again.
+export const group = (fields: GroupFields): Canvas.Group => ({
+  _tag: 'Group',
+  shapes: fields.shapes,
+  translate: fields.translate,
+  rotate: fields.rotate,
+  scale: fields.scale,
+  opacity: fields.opacity,
+})
 
 const footAnchor = (pixels: ReadonlyArray<string>, x: number): Anchor => ({
   x,

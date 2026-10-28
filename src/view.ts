@@ -169,6 +169,7 @@ import {
   GNOME_HEIGHT,
   GNOME_SPRITES,
   GUN_ICONS,
+  type Glyph,
   type GlyphTone,
   HEART_SPRITE,
   type Lay,
@@ -181,6 +182,7 @@ import {
   type Tone,
   ZOMBIE_SPRITES,
   frameAt,
+  group,
   gunSprite,
   toGlyph,
 } from './sprite'
@@ -280,7 +282,7 @@ const placeSprite = (
   y: number,
   sprite: ReadonlyArray<Canvas.Shape>,
 ): Canvas.Shape =>
-  Canvas.Group({
+  group({
     translate: { x: Math.round(x), y: Math.round(y) },
     shapes: sprite,
   })
@@ -481,7 +483,7 @@ const walkingZombieShapes = (
   const frames: SpriteFrames = isLit ? sprites.lit : sprites.walk
   return [
     ...glowShapes(zombie, gait, pulse, isLit),
-    Canvas.Group({
+    group({
       translate: footPosition(zombie, stats.footOffset),
       rotate:
         gait.leanRadians * (facing === 'Right' ? 1 : -1) +
@@ -518,7 +520,7 @@ const fusingZombieShapes = (
   const foot = footPosition(zombie, stats.footOffset)
   return [
     ...glowShapes(zombie, GAITS[zombie.kind], swell * 1.3, true),
-    Canvas.Group({
+    group({
       translate: { x: foot.x + (flicker ? 1 : -1), y: foot.y },
       scale: { x: swell, y: swell },
       shapes: frameAt(sprites.lit, 0)[flicker ? 'Flash' : 'Normal'][
@@ -560,7 +562,7 @@ const toppleShape = ({
   const isFallingRight = direction.x >= 0
   const tone: Tone = progress < ZOMBIE_DEATH_POP_END ? 'Flash' : 'Normal'
   const facing: Facing = isFallingRight ? 'Left' : 'Right'
-  return Canvas.Group({
+  return group({
     translate: footPosition(zombie, statsOf(zombie).footOffset),
     rotate: (isFallingRight ? 1 : -1) * QUARTER_TURN * fall * fall,
     scale: {
@@ -587,7 +589,7 @@ const tumbleShape = ({
   const eased = 1 - (1 - progress) * (1 - progress)
   const foot = footPosition(zombie, statsOf(zombie).footOffset)
   const spin = direction.x >= 0 ? 1 : -1
-  return Canvas.Group({
+  return group({
     translate: {
       x: Math.round(foot.x + direction.x * TUMBLE_SLIDE_PX * eased),
       y: Math.round(
@@ -629,7 +631,7 @@ const slumpShape = ({
       ? 1
       : -1
   const isFallingRight = direction.x >= 0
-  return Canvas.Group({
+  return group({
     translate: { x: foot.x + (isShuddering ? shudder : 0), y: foot.y },
     rotate: (isFallingRight ? 1 : -1) * QUARTER_TURN * fall * fall * fall,
     scale: { x: 1 + 0.25 * landing, y: 1 - 0.4 * landing },
@@ -806,7 +808,7 @@ const playerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   const bodyY = player.y - player.facing.y * kick
   const facing: Facing = player.facing.x < 0 ? 'Left' : 'Right'
   const flashReach = stats.muzzleReach + 2
-  const body = Canvas.Group({
+  const body = group({
     translate: footPosition({ x: bodyX, y: bodyY }, PLAYER_FOOT_OFFSET),
     scale: multiplyScales(playerHurtScale(player), {
       x: 1 + stats.recoilSquash * recoil,
@@ -815,7 +817,7 @@ const playerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
     opacity: playerOpacity(player),
     shapes: playerFrames(model)[playerTone(player)][facing],
   })
-  const gun = Canvas.Group({
+  const gun = group({
     translate: {
       x: Math.round(bodyX + player.facing.x * GUN_HOLD_PX),
       y: Math.round(bodyY + player.facing.y * GUN_HOLD_PX),
@@ -1141,11 +1143,11 @@ const gnomeShapes = (
 ): ReadonlyArray<Canvas.Shape> => {
   const foot = turretFoot(center)
   const side: Facing = facing.x < 0 ? 'Left' : 'Right'
-  const body = Canvas.Group({
+  const body = group({
     translate: { x: foot.x + jolt, y: foot.y },
     shapes: GNOME_SPRITES[tone][side],
   })
-  const gun = Canvas.Group({
+  const gun = group({
     translate: { x: foot.x + jolt, y: Math.round(center.y) },
     shapes: gunSprite(TURRET_WEAPON, angle),
   })
@@ -1272,7 +1274,7 @@ const ghostShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
       Option.match(maybeSpot, {
         onNone: () => openDoorwayHints(model),
         onSome: spot => [
-          Canvas.Group({
+          group({
             opacity: GHOST_OPACITY,
             shapes: ghostSprite(spot, model),
           }),
@@ -1337,7 +1339,7 @@ const blastShapes = (blast: Blast): ReadonlyArray<Canvas.Shape> => {
 
   const progress = clamp(blast.ageMs / BLAST_FLASH_MS, 0, 1)
   return [
-    Canvas.Group({
+    group({
       opacity: 1 - progress,
       shapes: [
         Canvas.Circle({
@@ -1366,15 +1368,18 @@ const blastShapes = (blast: Blast): ReadonlyArray<Canvas.Shape> => {
 
 // POPUPS
 
+const glyphsOf = (text: string): ReadonlyArray<Glyph> =>
+  Array.getSomes(Array.map(String.split(text, ''), toGlyph))
+
 const glyphRowShapes = (
   text: string,
   tone: GlyphTone,
 ): ReadonlyArray<Canvas.Shape> => {
-  const glyphs = Array.getSomes(Array.map(String.split(text, ''), toGlyph))
+  const glyphs = glyphsOf(text)
   const left = -Math.floor((glyphs.length * GLYPH_ADVANCE - 1) / 2)
   const top = -Math.floor(GLYPH_HEIGHT / 2)
   return Array.map(glyphs, (glyph, index) =>
-    Canvas.Group({
+    group({
       translate: { x: left + index * GLYPH_ADVANCE, y: top },
       shapes: GLYPH_SPRITES[tone][glyph],
     }),
@@ -1435,9 +1440,14 @@ const popupShape = (popup: Popup): Canvas.Shape => {
     popup.ageMs < POPUP_HOP_MS
       ? look.hopPx * Math.sin((Math.PI * popup.ageMs) / POPUP_HOP_MS)
       : 0
-  return Canvas.Group({
+  const halfWidth = Math.ceil(
+    (glyphsOf(look.text).length * GLYPH_ADVANCE * look.scale) / 2,
+  )
+  return group({
     translate: {
-      x: Math.round(popup.x),
+      x: Math.round(
+        clamp(popup.x, halfWidth, Math.max(halfWidth, ARENA_WIDTH - halfWidth)),
+      ),
       y: Math.round(popup.y - hop - look.risePx * progress),
     },
     scale: { x: look.scale, y: look.scale },
@@ -1462,7 +1472,7 @@ const streakShapes = (streak: Streak): ReadonlyArray<Canvas.Shape> =>
           ? STREAK_PULSE_SCALE
           : STREAK_SCALE
       return [
-        Canvas.Group({
+        group({
           translate: { x: STREAK_X, y: STREAK_Y },
           scale: { x: scale, y: scale },
           opacity: remainingMs < STREAK_FADE_MS ? STREAK_FADED_OPACITY : 1,
@@ -1495,7 +1505,7 @@ const lostHeartShape = (
     onSome: pulseMs => {
       const growth =
         1 + HEART_PULSE_GROWTH * Math.sin((Math.PI * pulseMs) / HEART_PULSE_MS)
-      return Canvas.Group({
+      return group({
         translate: { x: Math.round(x), y: Math.round(y) },
         scale: { x: growth, y: growth },
         shapes:
@@ -1588,7 +1598,7 @@ const moneyShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   const isTicking = shown !== balance
   const scale = isTicking ? MONEY_PULSE_SCALE : 1
   return [
-    Canvas.Group({
+    group({
       translate: { x: HUD_MARGIN, y: MONEY_Y },
       scale: { x: scale, y: scale },
       shapes: [
@@ -1697,7 +1707,7 @@ const loadoutShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
 }
 
 const TRAP_SLOT_WIDTH = 24
-const TRAP_SLOTS_LEFT = HUD_MARGIN + 2 * (SLOT_WIDTH + SLOT_GAP)
+const TRAP_SLOT_TOP = SLOT_TOP - SLOT_HEIGHT - SLOT_GAP
 
 const trapSlotShapes = (
   kind: TrapKind,
@@ -1705,26 +1715,26 @@ const trapSlotShapes = (
   index: number,
   isSelected: boolean,
 ): ReadonlyArray<Canvas.Shape> => {
-  const x = TRAP_SLOTS_LEFT + index * (TRAP_SLOT_WIDTH + SLOT_GAP)
+  const x = HUD_MARGIN + index * (TRAP_SLOT_WIDTH + SLOT_GAP)
   return [
     Canvas.Rect({
       x,
-      y: SLOT_TOP,
+      y: TRAP_SLOT_TOP,
       width: TRAP_SLOT_WIDTH,
       height: SLOT_HEIGHT,
       fill: isSelected ? SLOT_HELD_BORDER : SLOT_BORDER,
     }),
     Canvas.Rect({
       x: x + 1,
-      y: SLOT_TOP + 1,
+      y: TRAP_SLOT_TOP + 1,
       width: TRAP_SLOT_WIDTH - 2,
       height: SLOT_HEIGHT - 2,
       fill: SLOT_FILL,
     }),
-    placeSprite(x + 6, SLOT_TOP + 6, TRAP_ICONS[kind]),
+    placeSprite(x + 6, TRAP_SLOT_TOP + 6, TRAP_ICONS[kind]),
     Canvas.Text({
       x: x + TRAP_SLOT_WIDTH - 3,
-      y: SLOT_TOP + SLOT_HEIGHT / 2 + 1,
+      y: TRAP_SLOT_TOP + SLOT_HEIGHT / 2 + 1,
       content: `x${count}`,
       font: SLOT_FONT,
       fill: HUD_TEXT_COLOR,
@@ -1800,6 +1810,9 @@ const trapNoticeShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
     },
   })
 
+const MUTE_BUTTON_CLEARANCE = 34
+const SCORE_RIGHT = ARENA_WIDTH - HUD_MARGIN - MUTE_BUTTON_CLEARANCE
+
 const hudShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...heartShapes(model.player),
   ...moneyShapes(model),
@@ -1810,7 +1823,7 @@ const hudShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...trapNoticeShapes(model),
   ...roundHudShapes(model),
   Canvas.Text({
-    x: ARENA_WIDTH - HUD_MARGIN,
+    x: SCORE_RIGHT,
     y: HUD_MARGIN,
     content: `SCORE ${model.score}`,
     font: HUD_FONT,
@@ -1866,6 +1879,8 @@ const DEFEAT_COLOR = '#e8333a'
 const BANNER_SHADOW_COLOR = '#140c10'
 const BANNER_Y = 66
 const BANNER_SUBTITLE_Y = 84
+const TUTORIAL_BANNER_Y = 60
+const TUTORIAL_SUBTITLE_Y = 76
 
 const bannerText = (
   y: number,
@@ -1894,7 +1909,7 @@ const newKindBanner = (
   const scale = NEW_KIND_ICON_SCALE * hop
   const stats = ZOMBIE_KINDS[kind]
   return [
-    Canvas.Group({
+    group({
       translate: { x: ARENA_WIDTH / 2, y: NEW_KIND_ICON_Y },
       scale: { x: scale, y: scale },
       shapes: ZOMBIE_SPRITES[kind].icon,
@@ -1931,9 +1946,9 @@ const preparationBanner = (
 ): ReadonlyArray<Canvas.Shape> => {
   if (wave === 1) {
     return [
-      ...bannerText(BANNER_Y, 'GET READY', TITLE_FONT, TITLE_COLOR),
+      ...bannerText(TUTORIAL_BANNER_Y, 'GET READY', TITLE_FONT, TITLE_COLOR),
       ...bannerText(
-        BANNER_SUBTITLE_Y,
+        TUTORIAL_SUBTITLE_Y,
         'MOVE AND SHOOT. ENTER OR R STARTS THE WAVE',
         HINT_FONT,
         HINT_COLOR,
@@ -2031,7 +2046,7 @@ const DOOR_MARKER_BACK_WIDTH = 24
 const countShapes = (count: number): ReadonlyArray<Canvas.Shape> =>
   Option.match(Array.get(COUNT_SPRITES, count), {
     onNone: () => [
-      Canvas.Group({
+      group({
         translate: { x: GLYPH_ADVANCE * 2, y: 0 },
         shapes: glyphRowShapes(`x${count}`, 'Kill'),
       }),
@@ -2072,7 +2087,7 @@ const doorMarkerShapes =
         Math.sin((FULL_TURN * elapsedMs) / DOOR_MARKER_PULSE_MS)
     const top = markerTop(outward.y, kinds.length)
     return [
-      Canvas.Group({
+      group({
         translate: { x, y },
         scale: { x: pulse, y: pulse },
         shapes: [
@@ -2130,7 +2145,7 @@ const worldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
 ]
 
 export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
-  Canvas.Group({ translate: shakeOffset(model), shapes: worldShapes(model) }),
+  group({ translate: shakeOffset(model), shapes: worldShapes(model) }),
   ...wavePreviewShapes(model),
   ...hudShapes(model),
   ...overlayShapes(model),

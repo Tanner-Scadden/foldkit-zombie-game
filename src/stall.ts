@@ -6,6 +6,7 @@ import {
   GLYPH_SPRITES,
   type Palette,
   type Sprite,
+  group,
   spriteShapes,
   textPixels,
 } from './sprite'
@@ -171,7 +172,7 @@ const signShapes = (
   return [
     rect(boardLeft - 1, SIGN_TOP - 1, boardWidth + 2, boardHeight + 2, edge),
     rect(boardLeft, SIGN_TOP, boardWidth, boardHeight, board),
-    Canvas.Group({
+    group({
       translate: { x: boardLeft + SIGN_PADDING, y: SIGN_TOP + SIGN_PADDING },
       shapes: spriteShapes(pixels, { '#': letters }, TOP_LEFT),
     }),
@@ -197,7 +198,7 @@ const CLOSED_SIGN = signShapes(
 const awakeShopkeeper = (elapsedMs: number): ReadonlyArray<Canvas.Shape> => {
   const frame = Math.floor(elapsedMs / AWAKE_FRAME_MS) % AWAKE_FRAMES
   return [
-    Canvas.Group({
+    group({
       translate: {
         x: SHOPKEEPER_LEFT,
         y: SHOPKEEPER_TOP + (frame < AWAKE_FRAMES / 2 ? 0 : 1),
@@ -213,14 +214,14 @@ const sleepingShopkeeper = (elapsedMs: number): ReadonlyArray<Canvas.Shape> => {
   const breath = Math.floor(elapsedMs / SLEEP_FRAME_MS) % 2
   const snore = (elapsedMs % SNORE_CYCLE_MS) / SNORE_CYCLE_MS
   return [
-    Canvas.Group({
+    group({
       translate: {
         x: SHOPKEEPER_LEFT,
         y: SHOPKEEPER_TOP + SLEEP_SINK_PX + breath,
       },
       shapes: SHOPKEEPER_BLINK,
     }),
-    Canvas.Group({
+    group({
       translate: {
         x: SHOPKEEPER_LEFT + SHOPKEEPER_WIDTH + 1,
         y: Math.round(top - 4 - snore * SNORE_RISE_PX),
@@ -232,7 +233,7 @@ const sleepingShopkeeper = (elapsedMs: number): ReadonlyArray<Canvas.Shape> => {
 }
 
 const beaconShapes = (elapsedMs: number): ReadonlyArray<Canvas.Shape> => [
-  Canvas.Group({
+  group({
     translate: {
       x: centerX - Math.floor(BEACON_SCALE * 1.5),
       y: Math.round(
