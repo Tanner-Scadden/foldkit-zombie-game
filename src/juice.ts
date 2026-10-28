@@ -1,11 +1,13 @@
-import { Array, Result } from 'effect'
+import { Array, Option, Result } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import {
+  BLAST_FLASH_MS,
   DAMAGE_POPUP_LIFETIME_MS,
   DAMAGE_POPUP_LIFT_PX,
   EMPTY_POPUP_LIFETIME_MS,
   EMPTY_POPUP_LIFT_PX,
+  HIT_STOP_BLAST_MS,
   HIT_STOP_COOLDOWN_MS,
   HIT_STOP_EXTRA_KILL_MS,
   HIT_STOP_HURT_MS,
@@ -21,12 +23,13 @@ import {
   POPUP_MAX,
   SHAKE_DECAY_PER_SECOND,
   SHAKE_MAX_PX,
+  SHAKE_TRAUMA_BLAST,
   SHAKE_TRAUMA_HURT,
-  SHAKE_TRAUMA_KILL,
   SHAKE_TRAUMA_MAX,
   STREAK_WINDOW_MS,
 } from './constants'
 import {
+  type Blast,
   GameEvent,
   HitStop,
   type Model,
@@ -39,6 +42,7 @@ import {
 import { type Seeded, between, generateMany, nextRandom } from './prng'
 import { tickShownMoney } from './shop'
 import { WEAPONS } from './weapons'
+import { ZOMBIE_KINDS } from './zombies'
 
 // HIT-STOP
 
@@ -71,6 +75,7 @@ const triggerHitStop = (
   hitStop: HitStop,
   kills: number,
   hurts: number,
+  blasts: number,
   worldMs: number,
 ): HitStop =>
   HitStop.match(hitStop, {
@@ -82,6 +87,7 @@ const triggerHitStop = (
         Math.max(
           killFreezeMs(kills, cooledMs),
           hurts > 0 ? HIT_STOP_HURT_MS : 0,
+          blasts > 0 && cooledMs <= 0 ? HIT_STOP_BLAST_MS : 0,
         ),
       )
       return freezeMs > 0
@@ -96,7 +102,13 @@ const eventTrauma = (event: GameEvent): number =>
   GameEvent.match(event, {
     Fired: ({ weapon }) => WEAPONS[weapon].shakeTrauma,
     ZombieHit: () => 0,
-    ZombieKilled: () => SHAKE_TRAUMA_KILL,
+    ZombieKilled: ({ kind }) => ZOMBIE_KINDS[kind].killTrauma,
+    Exploded: () => SHAKE_TRAUMA_BLAST,
+    Footfall: ({ kind, nearness }) =>
+      Option.match(ZOMBIE_KINDS[kind].maybeFootfall, {
+        onNone: () => 0,
+        onSome: ({ trauma }) => trauma * nearness,
+      }),
     PlayerHurt: () => SHAKE_TRAUMA_HURT,
     BulletStruck: () => 0,
     RanDry: () => 0,
@@ -187,6 +199,8 @@ const eventPopups = (
       ),
     ZombieKilled: ({ x, y, bounty }) =>
       generateMany(state, 1, popup('Kill', bounty, x, y - KILL_POPUP_LIFT_PX)),
+    Exploded: () => noPopups(state),
+    Footfall: () => noPopups(state),
     PlayerHurt: () => noPopups(state),
     BulletStruck: () => noPopups(state),
     RanDry: ({ x, y }) =>
@@ -217,6 +231,23 @@ const agePopups = (
         })
       : Result.failVoid
   })
+
+// BLASTS
+
+const ageBlasts = (
+  blasts: ReadonlyArray<Blast>,
+  deltaMs: number,
+): ReadonlyArray<Blast> =>
+  Array.filterMap(blasts, blast =>
+    blast.ageMs + deltaMs < BLAST_FLASH_MS
+      ? Result.succeed({
+          x: blast.x,
+          y: blast.y,
+          radius: blast.radius,
+          ageMs: blast.ageMs + deltaMs,
+        })
+      : Result.failVoid,
+  )
 
 // STREAK
 
@@ -260,6 +291,7 @@ export const advanceJuice = (
   const events = model.frameEvents
   const kills = countWhere(events, GameEvent.guards.ZombieKilled)
   const hurts = countWhere(events, GameEvent.guards.PlayerHurt)
+  const blasts = countWhere(events, GameEvent.guards.Exploded)
 
   const [shakeState, shake] = advanceShake(
     model.shake,
@@ -274,7 +306,11 @@ export const advanceJuice = (
   )
 
   return modifyFields(model, {
-    hitStop: hitStop => triggerHitStop(hitStop, kills, hurts, worldMs),
+    hitStop: hitStop => triggerHitStop(hitStop, kills, hurts, blasts, worldMs),
+    blasts: current =>
+      Array.isReadonlyArrayEmpty(current)
+        ? current
+        : ageBlasts(current, deltaMs),
     shake: () => shake,
     popups: popups =>
       Array.takeRight(

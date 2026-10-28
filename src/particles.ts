@@ -11,7 +11,6 @@ import {
   BLOOD_LIFT_MAX,
   BLOOD_LIFT_MIN,
   BLOOD_PER_HIT,
-  BLOOD_PER_KILL,
   BLOOD_SPEED_MAX,
   BLOOD_SPEED_MIN,
   BLOOD_SPRAY_SPREAD,
@@ -56,12 +55,15 @@ import {
   GIB_RESTITUTION,
   GIB_SPEED_MAX,
   GIB_SPEED_MIN,
-  MEAT_GIBS_PER_KILL,
+  GOO_PER_BLAST,
+  GOO_SPEED_MAX,
+  GOO_SPEED_MIN,
+  MEAT_GIBS_PER_BLAST,
   PARTICLE_BOUNCE_FRICTION,
   PARTICLE_BOUNCE_MIN_SPEED,
   PARTICLE_MAX,
   PLAYER_FOOT_OFFSET,
-  ROT_GIBS_PER_KILL,
+  SCORCH_SIZE_PX,
   SHELL_DRAG_PER_SECOND,
   SHELL_EJECT_SPEED_MAX,
   SHELL_EJECT_SPEED_MIN,
@@ -71,6 +73,14 @@ import {
   SHELL_LIFT_MAX,
   SHELL_LIFT_MIN,
   SHELL_RESTITUTION,
+  SPARKS_PER_BLAST,
+  SPARK_DRAG_PER_SECOND,
+  SPARK_GRAVITY,
+  SPARK_LIFETIME_MS,
+  SPARK_LIFT_MAX,
+  SPARK_LIFT_MIN,
+  SPARK_SPEED_MAX,
+  SPARK_SPEED_MIN,
   ZOMBIE_FOOT_OFFSET,
 } from './constants'
 import { vectorLength } from './geometry'
@@ -82,9 +92,11 @@ import {
   type Particle,
   type ParticleKind,
   type Vector,
+  type ZombieKind,
 } from './model'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
 import { WEAPONS } from './weapons'
+import { ZOMBIE_KINDS } from './zombies'
 
 // PHYSICS
 
@@ -150,6 +162,30 @@ const PHYSICS: Readonly<Record<ParticleKind, ParticlePhysics>> = {
     restitution: COIN_RESTITUTION,
     maybeDecalKind: Option.none(),
   },
+  BoneGib: {
+    gravity: GIB_GRAVITY,
+    dragPerSecond: GIB_DRAG_PER_SECOND,
+    restitution: GIB_RESTITUTION,
+    maybeDecalKind: Option.some('Bone'),
+  },
+  HideGib: {
+    gravity: GIB_GRAVITY,
+    dragPerSecond: GIB_DRAG_PER_SECOND,
+    restitution: GIB_RESTITUTION,
+    maybeDecalKind: Option.some('Hide'),
+  },
+  Goo: {
+    gravity: BLOOD_GRAVITY,
+    dragPerSecond: BLOOD_DRAG_PER_SECOND,
+    restitution: 0,
+    maybeDecalKind: Option.some('Goo'),
+  },
+  Spark: {
+    gravity: SPARK_GRAVITY,
+    dragPerSecond: SPARK_DRAG_PER_SECOND,
+    restitution: 0,
+    maybeDecalKind: Option.none(),
+  },
 }
 
 const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
@@ -162,6 +198,10 @@ const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
   Dust: 2,
   Chip: 1,
   Coin: 2,
+  BoneGib: 2,
+  HideGib: 3,
+  Goo: 2,
+  Spark: 1,
 }
 
 const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
@@ -170,6 +210,10 @@ const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
   Rot: size => size,
   Shell: () => 1,
   Hull: () => 2,
+  Bone: () => 1,
+  Hide: size => size,
+  Goo: size => size,
+  Scorch: size => size,
 }
 
 type ParticleStep = Result.Result<Particle, Option.Option<Decal>>
@@ -288,9 +332,9 @@ const launch = ({
 
 const angleOf = ({ x, y }: Vector): number => Math.atan2(y, x)
 
-const zombieGround = (x: number, y: number): Vector => ({
+const zombieGround = (x: number, y: number, kind: ZombieKind): Vector => ({
   x,
-  y: y + ZOMBIE_FOOT_OFFSET,
+  y: y + ZOMBIE_KINDS[kind].footOffset,
 })
 
 const playerGround = (x: number, y: number): Vector => ({
@@ -298,8 +342,19 @@ const playerGround = (x: number, y: number): Vector => ({
   y: y + PLAYER_FOOT_OFFSET,
 })
 
-const bloodDroplet =
-  (ground: Vector, heading: number, spread: number) =>
+type Speed = Readonly<{ min: number; max: number }>
+
+const BLOOD_SPEED: Speed = { min: BLOOD_SPEED_MIN, max: BLOOD_SPEED_MAX }
+const GOO_BURST_SPEED: Speed = { min: GOO_SPEED_MIN, max: GOO_SPEED_MAX }
+
+const droplet =
+  (
+    kind: ParticleKind,
+    ground: Vector,
+    heading: number,
+    spread: number,
+    speed: Speed,
+  ) =>
   (state: number): Seeded<Particle> => {
     const angleDraw = nextRandom(state)
     const speedDraw = nextRandom(angleDraw.nextState)
@@ -308,14 +363,35 @@ const bloodDroplet =
     return [
       sizeDraw.nextState,
       launch({
-        kind: 'Blood',
+        kind,
         ground,
         height: ZOMBIE_FOOT_OFFSET,
         angle: heading + (angleDraw.value - 0.5) * spread,
-        speed: between(speedDraw.value, BLOOD_SPEED_MIN, BLOOD_SPEED_MAX),
+        speed: between(speedDraw.value, speed.min, speed.max),
         lift: between(liftDraw.value, BLOOD_LIFT_MIN, BLOOD_LIFT_MAX),
         size: 1 + Math.floor(sizeDraw.value * 2),
         lifetimeMs: BLOOD_LIFETIME_MS,
+      }),
+    ]
+  }
+
+const spark =
+  (ground: Vector) =>
+  (state: number): Seeded<Particle> => {
+    const angleDraw = nextRandom(state)
+    const speedDraw = nextRandom(angleDraw.nextState)
+    const liftDraw = nextRandom(speedDraw.nextState)
+    return [
+      liftDraw.nextState,
+      launch({
+        kind: 'Spark',
+        ground,
+        height: ZOMBIE_FOOT_OFFSET,
+        angle: angleDraw.value * Math.PI * 2,
+        speed: between(speedDraw.value, SPARK_SPEED_MIN, SPARK_SPEED_MAX),
+        lift: between(liftDraw.value, SPARK_LIFT_MIN, SPARK_LIFT_MAX),
+        size: LAUNCH_SIZE.Spark,
+        lifetimeMs: SPARK_LIFETIME_MS,
       }),
     ]
   }
@@ -441,6 +517,11 @@ const coin =
     ]
   }
 
+const noParticles = (state: number): Seeded<ReadonlyArray<Particle>> => [
+  state,
+  [],
+]
+
 const chain = (
   state: number,
   batches: ReadonlyArray<
@@ -457,35 +538,72 @@ const chain = (
 
 const killParticles = (
   state: number,
-  { x, y, direction }: Readonly<{ x: number; y: number; direction: Vector }>,
+  {
+    x,
+    y,
+    direction,
+    kind,
+  }: Readonly<{ x: number; y: number; direction: Vector; kind: ZombieKind }>,
 ): Seeded<ReadonlyArray<Particle>> => {
-  const ground = zombieGround(x, y)
+  const ground = zombieGround(x, y, kind)
+  const stats = ZOMBIE_KINDS[kind]
   return chain(state, [
+    ...Array.map(
+      stats.gibs,
+      gibs => (drawState: number) =>
+        generateMany(drawState, gibs.count, gib(gibs.kind, ground, direction)),
+    ),
     drawState =>
       generateMany(
         drawState,
-        MEAT_GIBS_PER_KILL,
-        gib('MeatGib', ground, direction),
-      ),
-    drawState =>
-      generateMany(
-        drawState,
-        ROT_GIBS_PER_KILL,
-        gib('RotGib', ground, direction),
-      ),
-    drawState =>
-      generateMany(
-        drawState,
-        BLOOD_PER_KILL,
-        bloodDroplet(ground, angleOf(direction), Math.PI * 2),
+        stats.bloodPerKill,
+        droplet('Blood', ground, angleOf(direction), Math.PI * 2, BLOOD_SPEED),
       ),
   ])
 }
 
-const noParticles = (state: number): Seeded<ReadonlyArray<Particle>> => [
-  state,
-  [],
-]
+const NO_PUSH: Vector = { x: 0, y: 0 }
+
+const blastParticles = (
+  state: number,
+  { x, y }: Readonly<{ x: number; y: number }>,
+): Seeded<ReadonlyArray<Particle>> => {
+  const ground = { x, y: y + ZOMBIE_FOOT_OFFSET }
+  return chain(state, [
+    drawState =>
+      generateMany(
+        drawState,
+        GOO_PER_BLAST,
+        droplet('Goo', ground, 0, Math.PI * 2, GOO_BURST_SPEED),
+      ),
+    drawState => generateMany(drawState, SPARKS_PER_BLAST, spark(ground)),
+    drawState =>
+      generateMany(
+        drawState,
+        MEAT_GIBS_PER_BLAST,
+        gib('MeatGib', ground, NO_PUSH),
+      ),
+  ])
+}
+
+const footfallDust = (
+  state: number,
+  { x, y, kind }: Readonly<{ x: number; y: number; kind: ZombieKind }>,
+): Seeded<ReadonlyArray<Particle>> =>
+  Option.match(ZOMBIE_KINDS[kind].maybeFootfall, {
+    onNone: () => noParticles(state),
+    onSome: ({ dustPuffs }) =>
+      generateMany(
+        state,
+        dustPuffs,
+        dustPuff(
+          zombieGround(x, y, kind),
+          0,
+          Math.PI * 2,
+          DUST_SPEED_MIN,
+        )(DUST_SPEED_MAX),
+      ),
+  })
 
 const eventParticles = (
   state: number,
@@ -498,17 +616,21 @@ const eventParticles = (
         1,
         shellCasing(playerGround(x, y), direction, WEAPONS[weapon].casing),
       ),
-    ZombieHit: ({ x, y, direction }) =>
+    ZombieHit: ({ x, y, direction, kind }) =>
       generateMany(
         state,
         BLOOD_PER_HIT,
-        bloodDroplet(
-          zombieGround(x, y),
+        droplet(
+          ZOMBIE_KINDS[kind].hitSpray,
+          zombieGround(x, y, kind),
           angleOf(direction),
           BLOOD_SPRAY_SPREAD,
+          BLOOD_SPEED,
         ),
       ),
     ZombieKilled: killed => killParticles(state, killed),
+    Exploded: exploded => blastParticles(state, exploded),
+    Footfall: footfall => footfallDust(state, footfall),
     PlayerHurt: ({ x, y }) =>
       generateMany(
         state,
@@ -582,6 +704,26 @@ const walkingDust = (
   }
 }
 
+const scorchDecals = (event: GameEvent): ReadonlyArray<Decal> =>
+  GameEvent.guards.Exploded(event)
+    ? [
+        {
+          kind: 'Scorch',
+          x: Math.round(event.x),
+          y: Math.round(event.y + ZOMBIE_FOOT_OFFSET),
+          width: SCORCH_SIZE_PX,
+          height: SCORCH_SIZE_PX / 2,
+        },
+        {
+          kind: 'Scorch',
+          x: Math.round(event.x),
+          y: Math.round(event.y + ZOMBIE_FOOT_OFFSET),
+          width: SCORCH_SIZE_PX / 2,
+          height: SCORCH_SIZE_PX * 0.75,
+        },
+      ]
+    : []
+
 // FRAME
 
 const keepNewest = <A>(
@@ -599,7 +741,10 @@ export const advanceParticles = (
     model.particles,
     stepParticle(seconds, deltaMs),
   )
-  const landed = Array.getSomes(leftBehind)
+  const landed = [
+    ...Array.flatMap(model.frameEvents, scorchDecals),
+    ...Array.getSomes(leftBehind),
+  ]
 
   const [eventState, eventBatches] = Array.mapAccum(
     model.frameEvents,

@@ -62,6 +62,7 @@ import {
   holdSpare,
   swapWeapon,
 } from './weapons'
+import { ZOMBIE_KINDS } from './zombies'
 
 export { Model } from './model'
 
@@ -288,8 +289,16 @@ type SoundCue = Readonly<{ sound: SoundEffect; variation: number }>
 const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
   GameEvent.match(event, {
     Fired: ({ weapon }) => Option.some(WEAPONS[weapon].sound),
-    ZombieHit: () => Option.some<SoundEffect>('ZombieHit'),
-    ZombieKilled: () => Option.some<SoundEffect>('ZombieDeath'),
+    ZombieHit: ({ kind }) => Option.some(ZOMBIE_KINDS[kind].hitSound),
+    ZombieKilled: ({ kind }) => Option.some(ZOMBIE_KINDS[kind].deathSound),
+    Exploded: () => Option.some<SoundEffect>('Boom'),
+    Footfall: ({ kind, nearness }) =>
+      nearness > 0
+        ? Option.flatMap(
+            ZOMBIE_KINDS[kind].maybeFootfall,
+            ({ maybeSound }) => maybeSound,
+          )
+        : Option.none<SoundEffect>(),
     PlayerHurt: () => Option.some<SoundEffect>('PlayerHurt'),
     BulletStruck: () => Option.none<SoundEffect>(),
     RanDry: () => Option.some<SoundEffect>('DryClick'),

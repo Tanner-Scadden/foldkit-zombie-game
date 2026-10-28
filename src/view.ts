@@ -16,9 +16,13 @@ import { DOORS } from './arena'
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
+  BLAST_FLASH_MS,
   BLOOD_DECAL_COLOR,
   BLOOD_DECAL_FADED_COLOR,
   BLOOD_PARTICLE_COLOR,
+  BONE_DECAL_COLOR,
+  BONE_DECAL_FADED_COLOR,
+  BONE_GIB_COLOR,
   BULLET_TRAIL_COLOR,
   BULLET_TRAIL_PX,
   CHIP_COLOR,
@@ -32,11 +36,17 @@ import {
   DUST_FADE_MS,
   GIB_SHADOW_COLOR,
   GIB_SHADOW_WIDTH,
+  GOO_COLOR,
+  GOO_DECAL_COLOR,
+  GOO_DECAL_FADED_COLOR,
   HEART_FLASH_MS,
   HEART_PULSE_GROWTH,
   HEART_PULSE_MS,
   HEART_SHAKE_CYCLES,
   HEART_SHAKE_PX,
+  HIDE_DECAL_COLOR,
+  HIDE_DECAL_FADED_COLOR,
+  HIDE_GIB_COLOR,
   HULL_COLOR,
   HULL_DECAL_COLOR,
   HULL_DECAL_FADED_COLOR,
@@ -70,6 +80,8 @@ import {
   ROT_DECAL_COLOR,
   ROT_DECAL_FADED_COLOR,
   ROT_GIB_COLOR,
+  SCORCH_DECAL_COLOR,
+  SCORCH_DECAL_FADED_COLOR,
   SHADOW_COLOR,
   SHADOW_FADED_COLOR,
   SHADOW_FADE_START,
@@ -79,6 +91,7 @@ import {
   SHELL_DECAL_COLOR,
   SHELL_DECAL_FADED_COLOR,
   SHELL_TUMBLE_MS,
+  SPARK_COLOR,
   STICK_RADIUS_PX,
   STREAK_FADED_OPACITY,
   STREAK_FADE_MS,
@@ -96,14 +109,9 @@ import {
   ZOMBIE_DEATH_POP_END,
   ZOMBIE_DEATH_POP_PINCH,
   ZOMBIE_DEATH_POP_STRETCH,
-  ZOMBIE_DYING_MS,
-  ZOMBIE_FOOT_OFFSET,
   ZOMBIE_HIT_FLASH_MS,
   ZOMBIE_HIT_PULSE_MS,
   ZOMBIE_HIT_SQUASH,
-  ZOMBIE_SHADOW_WIDTH,
-  ZOMBIE_SHAMBLE_PHASE_PER_ID,
-  ZOMBIE_SHAMBLE_PX_PER_FRAME,
 } from './constants'
 import { clamp, vectorLength } from './geometry'
 import { thumbOffset } from './input'
@@ -111,6 +119,7 @@ import { POPUP_LIFETIME_MS } from './juice'
 import { Message } from './main'
 import {
   Arsenal,
+  type Blast,
   type Bullet,
   type Decal,
   type DecalKind,
@@ -119,6 +128,7 @@ import {
   type Particle,
   type ParticleKind,
   Phase,
+  type PlannedSpawn,
   type Player,
   type PointerDevice,
   type Popup,
@@ -128,12 +138,14 @@ import {
   type Vector,
   type WeaponKind,
   type Zombie,
+  type ZombieKind,
   ZombieState,
 } from './model'
 import { ROOM_SHAPES } from './room'
 import { isShopOpenFor } from './shop'
 import { shopDialogView } from './shopView'
 import {
+  COUNT_SPRITES,
   EMPTY_HEART_SPRITE,
   FLASH_HEART_SPRITE,
   type Facing,
@@ -145,10 +157,10 @@ import {
   HEART_SPRITE,
   PLAYER_IDLE_FRAMES,
   PLAYER_WALK_FRAMES,
-  SKULL_SPRITE,
+  type SpriteFrames,
   type SpriteSet,
   type Tone,
-  ZOMBIE_WALK_FRAMES,
+  ZOMBIE_SPRITES,
   frameAt,
   gunSprite,
   toGlyph,
@@ -157,6 +169,8 @@ import { type StallLook, stallShapes } from './stall'
 import {
   type DoorCount,
   FINAL_WAVE,
+  type KindCount,
+  debutKinds,
   doorCounts,
   isRoundActive,
   waveBonus,
@@ -170,6 +184,13 @@ import {
   heldWeapon,
   maybeSpare,
 } from './weapons'
+import {
+  type DeathStyle,
+  ZOMBIE_KINDS,
+  type ZombieKindStats,
+  statsOf,
+  strideAt,
+} from './zombies'
 
 // MOUNT
 
@@ -290,41 +311,201 @@ const progressBetween = (progress: number, start: number, end: number) =>
 const facingToward = (fromX: number, toX: number): Facing =>
   toX < fromX ? 'Left' : 'Right'
 
-const zombieFrameIndex = (zombie: Zombie, elapsedMs: number): number =>
-  Math.floor(
-    ((elapsedMs / MS_PER_SECOND) * zombie.speed) / ZOMBIE_SHAMBLE_PX_PER_FRAME +
-      zombie.id * ZOMBIE_SHAMBLE_PHASE_PER_ID,
-  )
-
 const zombieHitTone = (hitRemainingMs: number): Tone =>
   hitRemainingMs > 0 &&
   ZOMBIE_HIT_PULSE_MS - hitRemainingMs < ZOMBIE_HIT_FLASH_MS
     ? 'Flash'
     : 'Normal'
 
-const walkingZombieShape = (
+type Gait = Readonly<{
+  leanRadians: number
+  waddleRadians: number
+  stompSquash: number
+  pulse: number
+  fuseTellPx: number
+  glowRadius: number
+}>
+
+const STILL_GAIT: Gait = {
+  leanRadians: 0,
+  waddleRadians: 0,
+  stompSquash: 0,
+  pulse: 0,
+  fuseTellPx: 0,
+  glowRadius: 0,
+}
+
+const GAITS: Readonly<Record<ZombieKind, Gait>> = {
+  Shambler: STILL_GAIT,
+  Runner: { ...STILL_GAIT, leanRadians: 0.3 },
+  Tank: { ...STILL_GAIT, stompSquash: 0.08 },
+  Exploder: {
+    ...STILL_GAIT,
+    waddleRadians: 0.14,
+    pulse: 0.07,
+    fuseTellPx: 70,
+    glowRadius: 7,
+  },
+}
+
+const PULSE_MS = 620
+const FUSE_BLINK_SLOW_MS = 480
+const FUSE_BLINK_FAST_MS = 70
+const GLOW_COLOR = 'rgba(255, 157, 46, 0.2)'
+const GLOW_LIT_COLOR = 'rgba(255, 220, 120, 0.42)'
+
+const distanceBetween = (first: Vector, second: Vector): number =>
+  Math.hypot(first.x - second.x, first.y - second.y)
+
+const isFuseLit = (
   zombie: Zombie,
   player: Player,
   elapsedMs: number,
-): Canvas.Shape =>
-  Canvas.Group({
-    translate: footPosition(zombie, ZOMBIE_FOOT_OFFSET),
-    scale: squashPulse(
-      zombie.hitRemainingMs,
-      ZOMBIE_HIT_PULSE_MS,
-      ZOMBIE_HIT_SQUASH,
-    ),
-    shapes: frameAt(ZOMBIE_WALK_FRAMES, zombieFrameIndex(zombie, elapsedMs))[
-      zombieHitTone(zombie.hitRemainingMs)
-    ][facingToward(zombie.x, player.x)],
-  })
+  gait: Gait,
+): boolean => {
+  if (gait.fuseTellPx <= 0) {
+    return false
+  }
 
-const dyingZombieShape = (
+  const nearness = clamp(
+    1 - distanceBetween(zombie, player) / gait.fuseTellPx,
+    0,
+    1,
+  )
+  const periodMs =
+    FUSE_BLINK_SLOW_MS + (FUSE_BLINK_FAST_MS - FUSE_BLINK_SLOW_MS) * nearness
+  return Math.floor(elapsedMs / periodMs) % 2 === 1
+}
+
+const glowShapes = (
   zombie: Zombie,
+  gait: Gait,
+  scale: number,
+  isLit: boolean,
+): ReadonlyArray<Canvas.Shape> =>
+  gait.glowRadius > 0
+    ? [
+        Canvas.Circle({
+          x: Math.round(zombie.x),
+          y: Math.round(zombie.y),
+          radius: gait.glowRadius * scale,
+          fill: isLit ? GLOW_LIT_COLOR : GLOW_COLOR,
+        }),
+      ]
+    : []
+
+const HEALTH_BAR_WIDTH = 12
+const HEALTH_BAR_BACK_COLOR = '#140c10'
+const HEALTH_BAR_COLOR = '#ff3b3f'
+const HEALTH_BAR_GAP = 3
+
+const healthBarShapes = (
+  zombie: Zombie,
+  stats: ZombieKindStats,
+): ReadonlyArray<Canvas.Shape> => {
+  if (stats.healthBar === 'Hidden' || zombie.hp >= stats.hp) {
+    return []
+  }
+
+  const foot = footPosition(zombie, stats.footOffset)
+  const top = foot.y - ZOMBIE_SPRITES[zombie.kind].height - HEALTH_BAR_GAP
+  const left = foot.x - HEALTH_BAR_WIDTH / 2
+  return [
+    Canvas.Rect({
+      x: left - 1,
+      y: top - 1,
+      width: HEALTH_BAR_WIDTH + 2,
+      height: 3,
+      fill: HEALTH_BAR_BACK_COLOR,
+    }),
+    Canvas.Rect({
+      x: left,
+      y: top,
+      width: Math.max(1, Math.round((HEALTH_BAR_WIDTH * zombie.hp) / stats.hp)),
+      height: 1,
+      fill: HEALTH_BAR_COLOR,
+    }),
+  ]
+}
+
+const walkingZombieShapes = (
+  zombie: Zombie,
+  player: Player,
+  elapsedMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const stats = statsOf(zombie)
+  const gait = GAITS[zombie.kind]
+  const sprites = ZOMBIE_SPRITES[zombie.kind]
+  const stride = strideAt(zombie, elapsedMs)
+  const facing = facingToward(zombie.x, player.x)
+  const isPlanted = stride % 2 === 0
+  const stomp = isPlanted ? gait.stompSquash : 0
+  const pulse =
+    1 + gait.pulse * Math.sin((FULL_TURN * elapsedMs) / PULSE_MS + zombie.id)
+  const isLit = isFuseLit(zombie, player, elapsedMs, gait)
+  const frames: SpriteFrames = isLit ? sprites.lit : sprites.walk
+  return [
+    ...glowShapes(zombie, gait, pulse, isLit),
+    Canvas.Group({
+      translate: footPosition(zombie, stats.footOffset),
+      rotate:
+        gait.leanRadians * (facing === 'Right' ? 1 : -1) +
+        gait.waddleRadians * (isPlanted ? 1 : -1),
+      scale: multiplyScales(
+        squashPulse(
+          zombie.hitRemainingMs,
+          ZOMBIE_HIT_PULSE_MS,
+          ZOMBIE_HIT_SQUASH,
+        ),
+        { x: (1 + stomp) * pulse, y: (1 - stomp) * pulse },
+      ),
+      shapes: frameAt(frames, stride)[zombieHitTone(zombie.hitRemainingMs)][
+        facing
+      ],
+    }),
+    ...healthBarShapes(zombie, stats),
+  ]
+}
+
+const FUSE_SWELL_MS = 220
+const FUSE_SWELL = 0.55
+const FUSE_FLASH_MS = 40
+
+const fusingZombieShapes = (
+  zombie: Zombie,
+  player: Player,
   remainingMs: number,
-  direction: Vector,
-): Canvas.Shape => {
-  const progress = clamp(1 - remainingMs / ZOMBIE_DYING_MS, 0, 1)
+): ReadonlyArray<Canvas.Shape> => {
+  const stats = statsOf(zombie)
+  const sprites = ZOMBIE_SPRITES[zombie.kind]
+  const swell = 1 + FUSE_SWELL * (1 - clamp(remainingMs / FUSE_SWELL_MS, 0, 1))
+  const flicker = Math.floor(remainingMs / FUSE_FLASH_MS) % 2 === 0
+  const foot = footPosition(zombie, stats.footOffset)
+  return [
+    ...glowShapes(zombie, GAITS[zombie.kind], swell * 1.3, true),
+    Canvas.Group({
+      translate: { x: foot.x + (flicker ? 1 : -1), y: foot.y },
+      scale: { x: swell, y: swell },
+      shapes: frameAt(sprites.lit, 0)[flicker ? 'Flash' : 'Normal'][
+        facingToward(zombie.x, player.x)
+      ],
+    }),
+  ]
+}
+
+type DeathPose = Readonly<{
+  zombie: Zombie
+  progress: number
+  direction: Vector
+  sprite: SpriteSet
+}>
+
+const toppleShape = ({
+  zombie,
+  progress,
+  direction,
+  sprite,
+}: DeathPose): Canvas.Shape => {
   const pop = Math.sin(
     Math.PI * progressBetween(progress, 0, ZOMBIE_DEATH_POP_END),
   )
@@ -345,7 +526,7 @@ const dyingZombieShape = (
   const tone: Tone = progress < ZOMBIE_DEATH_POP_END ? 'Flash' : 'Normal'
   const facing: Facing = isFallingRight ? 'Left' : 'Right'
   return Canvas.Group({
-    translate: footPosition(zombie, ZOMBIE_FOOT_OFFSET),
+    translate: footPosition(zombie, statsOf(zombie).footOffset),
     rotate: (isFallingRight ? 1 : -1) * QUARTER_TURN * fall * fall,
     scale: {
       x:
@@ -354,17 +535,110 @@ const dyingZombieShape = (
       y: 1 + ZOMBIE_DEATH_POP_STRETCH * pop,
     },
     opacity: 1 - progressBetween(progress, ZOMBIE_DEATH_FADE_START, 1),
-    shapes: frameAt(ZOMBIE_WALK_FRAMES, 0)[tone][facing],
+    shapes: sprite[tone][facing],
   })
 }
 
-const zombieShape =
+const TUMBLE_TURNS = 1.25
+const TUMBLE_SLIDE_PX = 14
+const TUMBLE_FLASH_END = 0.15
+
+const tumbleShape = ({
+  zombie,
+  progress,
+  direction,
+  sprite,
+}: DeathPose): Canvas.Shape => {
+  const eased = 1 - (1 - progress) * (1 - progress)
+  const foot = footPosition(zombie, statsOf(zombie).footOffset)
+  const spin = direction.x >= 0 ? 1 : -1
+  return Canvas.Group({
+    translate: {
+      x: Math.round(foot.x + direction.x * TUMBLE_SLIDE_PX * eased),
+      y: Math.round(
+        foot.y +
+          direction.y * TUMBLE_SLIDE_PX * eased -
+          4 * Math.sin(Math.PI * progressBetween(progress, 0, 0.5)),
+      ),
+    },
+    rotate: spin * FULL_TURN * TUMBLE_TURNS * eased,
+    opacity: 1 - progressBetween(progress, ZOMBIE_DEATH_FADE_START, 1),
+    shapes:
+      sprite[progress < TUMBLE_FLASH_END ? 'Flash' : 'Normal'][
+        spin > 0 ? 'Left' : 'Right'
+      ],
+  })
+}
+
+const SLUMP_SHUDDER_END = 0.3
+const SLUMP_FALL_END = 0.7
+const SLUMP_LANDING_END = 0.85
+const SLUMP_SHUDDER_MS = 45
+
+const slumpShape = ({
+  zombie,
+  progress,
+  direction,
+  sprite,
+}: DeathPose): Canvas.Shape => {
+  const isShuddering = progress < SLUMP_SHUDDER_END
+  const fall = progressBetween(progress, SLUMP_SHUDDER_END, SLUMP_FALL_END)
+  const landing = Math.sin(
+    Math.PI * progressBetween(progress, SLUMP_FALL_END, SLUMP_LANDING_END),
+  )
+  const foot = footPosition(zombie, statsOf(zombie).footOffset)
+  const shudder =
+    isShuddering &&
+    Math.floor((progress * statsOf(zombie).dyingMs) / SLUMP_SHUDDER_MS) % 2 ===
+      0
+      ? 1
+      : -1
+  const isFallingRight = direction.x >= 0
+  return Canvas.Group({
+    translate: { x: foot.x + (isShuddering ? shudder : 0), y: foot.y },
+    rotate: (isFallingRight ? 1 : -1) * QUARTER_TURN * fall * fall * fall,
+    scale: { x: 1 + 0.25 * landing, y: 1 - 0.4 * landing },
+    opacity: 1 - progressBetween(progress, SLUMP_LANDING_END, 1),
+    shapes:
+      sprite[isShuddering && shudder > 0 ? 'Flash' : 'Normal'][
+        isFallingRight ? 'Left' : 'Right'
+      ],
+  })
+}
+
+const DEATH_POSES: Readonly<
+  Record<DeathStyle, (pose: DeathPose) => Canvas.Shape>
+> = {
+  Topple: toppleShape,
+  Tumble: tumbleShape,
+  Slump: slumpShape,
+  Burst: toppleShape,
+}
+
+const dyingZombieShape = (
+  zombie: Zombie,
+  remainingMs: number,
+  direction: Vector,
+): Canvas.Shape => {
+  const stats = statsOf(zombie)
+  return DEATH_POSES[stats.deathStyle]({
+    zombie,
+    progress: clamp(1 - remainingMs / Math.max(1, stats.dyingMs), 0, 1),
+    direction,
+    sprite: frameAt(ZOMBIE_SPRITES[zombie.kind].walk, 0),
+  })
+}
+
+const zombieShapes =
   (player: Player, elapsedMs: number) =>
-  (zombie: Zombie): Canvas.Shape =>
+  (zombie: Zombie): ReadonlyArray<Canvas.Shape> =>
     ZombieState.match(zombie.state, {
-      Walking: () => walkingZombieShape(zombie, player, elapsedMs),
-      Dying: ({ remainingMs, direction }) =>
+      Walking: () => walkingZombieShapes(zombie, player, elapsedMs),
+      Fusing: ({ remainingMs }) =>
+        fusingZombieShapes(zombie, player, remainingMs),
+      Dying: ({ remainingMs, direction }) => [
         dyingZombieShape(zombie, remainingMs, direction),
+      ],
     })
 
 const maybeMsSinceHurt = (player: Player): Option.Option<number> =>
@@ -533,6 +807,10 @@ const DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   Rot: ROT_DECAL_COLOR,
   Shell: SHELL_DECAL_COLOR,
   Hull: HULL_DECAL_COLOR,
+  Bone: BONE_DECAL_COLOR,
+  Hide: HIDE_DECAL_COLOR,
+  Goo: GOO_DECAL_COLOR,
+  Scorch: SCORCH_DECAL_COLOR,
 }
 
 const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
@@ -541,6 +819,10 @@ const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   Rot: ROT_DECAL_FADED_COLOR,
   Shell: SHELL_DECAL_FADED_COLOR,
   Hull: HULL_DECAL_FADED_COLOR,
+  Bone: BONE_DECAL_FADED_COLOR,
+  Hide: HIDE_DECAL_FADED_COLOR,
+  Goo: GOO_DECAL_FADED_COLOR,
+  Scorch: SCORCH_DECAL_FADED_COLOR,
 }
 
 const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
@@ -553,6 +835,10 @@ const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
   Dust: DUST_COLOR,
   Chip: CHIP_COLOR,
   Coin: COIN_COLOR,
+  BoneGib: BONE_GIB_COLOR,
+  HideGib: HIDE_GIB_COLOR,
+  Goo: GOO_COLOR,
+  Spark: SPARK_COLOR,
 }
 
 const CASINGS: ReadonlyArray<ParticleKind> = ['Shell', 'Hull', 'Link']
@@ -579,8 +865,15 @@ const decalShapes = (
 
 const isGround = (particle: Particle): boolean => particle.kind === 'Dust'
 
+const GIBS: ReadonlyArray<ParticleKind> = [
+  'MeatGib',
+  'RotGib',
+  'BoneGib',
+  'HideGib',
+]
+
 const isGib = (particle: Particle): boolean =>
-  particle.kind === 'MeatGib' || particle.kind === 'RotGib'
+  Array.contains(GIBS, particle.kind)
 
 const isCasingUpright = (particle: Particle): boolean =>
   isCasing(particle) &&
@@ -634,37 +927,28 @@ const footShadow = (
   return centeredRect(foot.x, foot.y, width, SHADOW_HEIGHT, fill)
 }
 
+const zombieFootShadow = (zombie: Zombie, fill: string): Canvas.Shape => {
+  const stats = statsOf(zombie)
+  return footShadow(
+    zombie,
+    stats.footOffset,
+    Math.round(stats.radius * 2),
+    fill,
+  )
+}
+
 const zombieShadow = (zombie: Zombie): Result.Result<Canvas.Shape, void> =>
   ZombieState.match(zombie.state, {
-    Walking: () =>
-      Result.succeed(
-        footShadow(
-          zombie,
-          ZOMBIE_FOOT_OFFSET,
-          ZOMBIE_SHADOW_WIDTH,
-          SHADOW_COLOR,
-        ),
-      ),
-    Dying: ({ remainingMs }) => {
-      const progress = 1 - remainingMs / ZOMBIE_DYING_MS
+    Walking: (): Result.Result<Canvas.Shape, void> =>
+      Result.succeed(zombieFootShadow(zombie, SHADOW_COLOR)),
+    Fusing: (): Result.Result<Canvas.Shape, void> =>
+      Result.succeed(zombieFootShadow(zombie, SHADOW_COLOR)),
+    Dying: ({ remainingMs }): Result.Result<Canvas.Shape, void> => {
+      const progress = 1 - remainingMs / Math.max(1, statsOf(zombie).dyingMs)
       if (progress < SHADOW_FADE_START) {
-        return Result.succeed(
-          footShadow(
-            zombie,
-            ZOMBIE_FOOT_OFFSET,
-            ZOMBIE_SHADOW_WIDTH,
-            SHADOW_COLOR,
-          ),
-        )
+        return Result.succeed(zombieFootShadow(zombie, SHADOW_COLOR))
       } else if (progress < SHADOW_HIDE_START) {
-        return Result.succeed(
-          footShadow(
-            zombie,
-            ZOMBIE_FOOT_OFFSET,
-            ZOMBIE_SHADOW_WIDTH,
-            SHADOW_FADED_COLOR,
-          ),
-        )
+        return Result.succeed(zombieFootShadow(zombie, SHADOW_FADED_COLOR))
       } else {
         return Result.failVoid
       }
@@ -700,12 +984,12 @@ type Drawable = Readonly<{ depth: number; shapes: ReadonlyArray<Canvas.Shape> }>
 const byDepth = Order.mapInput(Order.Number, ({ depth }: Drawable) => depth)
 
 const entityShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
-  const drawZombie = zombieShape(model.player, model.elapsedMs)
+  const drawZombie = zombieShapes(model.player, model.elapsedMs)
   return pipe(
     model.zombies,
     Array.map((zombie): Drawable => ({
       depth: zombie.y,
-      shapes: [drawZombie(zombie)],
+      shapes: drawZombie(zombie),
     })),
     Array.append<Drawable>({
       depth: model.player.y,
@@ -714,6 +998,59 @@ const entityShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
     Array.sort(byDepth),
     Array.flatMap(({ shapes }) => shapes),
   )
+}
+
+// BLASTS
+
+const BLAST_FLASH_END_MS = 50
+const BLAST_CORE_COLOR = '#fffbe6'
+const BLAST_FLASH_COLOR = '#ffd23f'
+const BLAST_FIRE_COLOR = '#ff7a2e'
+const BLAST_RING_COLOR = '#ffe066'
+const BLAST_SMOKE_COLOR = 'rgba(40, 30, 28, 0.45)'
+
+const blastShapes = (blast: Blast): ReadonlyArray<Canvas.Shape> => {
+  const x = Math.round(blast.x)
+  const y = Math.round(blast.y)
+  if (blast.ageMs < BLAST_FLASH_END_MS) {
+    return [
+      Canvas.Circle({ x, y, radius: blast.radius, fill: BLAST_FLASH_COLOR }),
+      Canvas.Circle({
+        x,
+        y,
+        radius: blast.radius * 0.6,
+        fill: BLAST_CORE_COLOR,
+      }),
+    ]
+  }
+
+  const progress = clamp(blast.ageMs / BLAST_FLASH_MS, 0, 1)
+  return [
+    Canvas.Group({
+      opacity: 1 - progress,
+      shapes: [
+        Canvas.Circle({
+          x,
+          y: y - Math.round(6 * progress),
+          radius: blast.radius * (0.5 + 0.4 * progress),
+          fill: BLAST_SMOKE_COLOR,
+        }),
+        Canvas.Circle({
+          x,
+          y,
+          radius: Math.max(1, blast.radius * 0.7 * (1 - progress)),
+          fill: BLAST_FIRE_COLOR,
+        }),
+        Canvas.Circle({
+          x,
+          y,
+          radius: blast.radius * (0.7 + 0.45 * progress),
+          stroke: BLAST_RING_COLOR,
+          lineWidth: 2,
+        }),
+      ],
+    }),
+  ]
 }
 
 // POPUPS
@@ -1122,6 +1459,53 @@ const bannerText = (
   centeredText(y, content, font, fill),
 ]
 
+const NEW_KIND_BANNER_MS = 3600
+const NEW_KIND_COLOR = '#ff8a3d'
+const NEW_KIND_ICON_Y = 50
+const NEW_KIND_ICON_SCALE = 3
+const NEW_KIND_HOP_MS = 260
+
+const newKindBanner = (
+  kind: ZombieKind,
+  shownMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const hop =
+    shownMs < NEW_KIND_HOP_MS
+      ? 1 + 0.5 * Math.sin((Math.PI * shownMs) / NEW_KIND_HOP_MS)
+      : 1
+  const scale = NEW_KIND_ICON_SCALE * hop
+  const stats = ZOMBIE_KINDS[kind]
+  return [
+    Canvas.Group({
+      translate: { x: ARENA_WIDTH / 2, y: NEW_KIND_ICON_Y },
+      scale: { x: scale, y: scale },
+      shapes: ZOMBIE_SPRITES[kind].icon,
+    }),
+    ...bannerText(
+      BANNER_Y + 10,
+      `NEW: ${String.toUpperCase(stats.name)}`,
+      TITLE_FONT,
+      NEW_KIND_COLOR,
+    ),
+    ...bannerText(
+      BANNER_SUBTITLE_Y + 10,
+      stats.tagline,
+      PROMPT_FONT,
+      PROMPT_COLOR,
+    ),
+  ]
+}
+
+const debutBanner = (
+  wave: number,
+  shownMs: number,
+): ReadonlyArray<Canvas.Shape> =>
+  Option.match(Array.head(debutKinds(wave)), {
+    onNone: () => [],
+    onSome: kind =>
+      shownMs < NEW_KIND_BANNER_MS ? newKindBanner(kind, shownMs) : [],
+  })
+
 const preparationBanner = (
   wave: number,
   remainingMs: number,
@@ -1148,7 +1532,7 @@ const preparationBanner = (
       ),
     ]
   } else {
-    return []
+    return debutBanner(wave, durationMs - remainingMs - WAVE_CLEARED_BANNER_MS)
   }
 }
 
@@ -1219,14 +1603,48 @@ const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
 
 const DOOR_MARKER_INSET = 20
 const DOOR_MARKER_PULSE_MS = 700
-const DOOR_MARKER_PULSE = 0.15
-const DOOR_MARKER_GROWTH = 0.08
-const DOOR_MARKER_MAX_SCALE = 2.2
-const DOOR_MARKER_COUNT_GAP = 9
+const DOOR_MARKER_PULSE = 0.1
+const DOOR_MARKER_ROW_PX = 9
+const DOOR_MARKER_ICON_X = -5
+const DOOR_MARKER_COUNT_X = 1
+const DOOR_MARKER_BACK_COLOR = 'rgba(8, 10, 12, 0.55)'
+const DOOR_MARKER_BACK_WIDTH = 24
+
+const countShapes = (count: number): ReadonlyArray<Canvas.Shape> =>
+  Option.match(Array.get(COUNT_SPRITES, count), {
+    onNone: () => [
+      Canvas.Group({
+        translate: { x: GLYPH_ADVANCE * 2, y: 0 },
+        shapes: glyphRowShapes(`x${count}`, 'Kill'),
+      }),
+    ],
+    onSome: sprite => sprite,
+  })
+
+const markerRowShapes =
+  (top: number) =>
+  ({ kind, count }: KindCount, index: number): ReadonlyArray<Canvas.Shape> => {
+    const y = top + index * DOOR_MARKER_ROW_PX
+    return [
+      placeSprite(DOOR_MARKER_ICON_X, y, ZOMBIE_SPRITES[kind].icon),
+      placeSprite(DOOR_MARKER_COUNT_X, y, countShapes(count)),
+    ]
+  }
+
+const markerTop = (outwardY: number, rows: number): number => {
+  const span = (rows - 1) * DOOR_MARKER_ROW_PX
+  if (outwardY < 0) {
+    return 0
+  } else if (outwardY > 0) {
+    return -span
+  } else {
+    return -Math.round(span / 2)
+  }
+}
 
 const doorMarkerShapes =
   (elapsedMs: number) =>
-  ({ door, count }: DoorCount): ReadonlyArray<Canvas.Shape> => {
+  ({ door, kinds }: DoorCount): ReadonlyArray<Canvas.Shape> => {
     const { center, outward } = DOORS[door]
     const x = Math.round(center.x - outward.x * DOOR_MARKER_INSET)
     const y = Math.round(center.y - outward.y * DOOR_MARKER_INSET)
@@ -1234,17 +1652,21 @@ const doorMarkerShapes =
       1 +
       DOOR_MARKER_PULSE *
         Math.sin((FULL_TURN * elapsedMs) / DOOR_MARKER_PULSE_MS)
-    const scale =
-      Math.min(DOOR_MARKER_MAX_SCALE, 1 + count * DOOR_MARKER_GROWTH) * pulse
+    const top = markerTop(outward.y, kinds.length)
     return [
       Canvas.Group({
         translate: { x, y },
-        scale: { x: scale, y: scale },
-        shapes: SKULL_SPRITE,
-      }),
-      Canvas.Group({
-        translate: { x, y: y + DOOR_MARKER_COUNT_GAP + Math.round(scale * 2) },
-        shapes: glyphRowShapes(`x${count}`, 'Kill'),
+        scale: { x: pulse, y: pulse },
+        shapes: [
+          Canvas.Rect({
+            x: -DOOR_MARKER_BACK_WIDTH / 2,
+            y: top - DOOR_MARKER_ROW_PX / 2,
+            width: DOOR_MARKER_BACK_WIDTH,
+            height: kinds.length * DOOR_MARKER_ROW_PX,
+            fill: DOOR_MARKER_BACK_COLOR,
+          }),
+          ...Array.flatMap(kinds, markerRowShapes(top)),
+        ],
       }),
     ]
   }
@@ -1283,6 +1705,7 @@ const worldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...groundParticleShapes(model.particles),
   ...Array.flatMap(model.bullets, bulletShapes),
   ...entityShapes(model),
+  ...Array.flatMap(model.blasts, blastShapes),
   ...airborneParticleShapes(model.particles),
   ...Array.map(model.popups, popupShape),
 ]
@@ -1439,6 +1862,29 @@ const muteButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
   )
 }
 
+const kindLabel = ({ kind, count }: KindCount): string =>
+  `${count} ${ZOMBIE_KINDS[kind].name}`
+
+const doorPreviewLabel = ({ door, kinds }: DoorCount): string =>
+  `${door} door: ${Array.join(Array.map(kinds, kindLabel), ', ')}`
+
+const previewLabel = (
+  wave: number,
+  spawns: ReadonlyArray<PlannedSpawn>,
+): string => {
+  const debuts = Array.map(debutKinds(wave), kind => ZOMBIE_KINDS[kind].name)
+  const debutText = Array.isReadonlyArrayEmpty(debuts)
+    ? ''
+    : ` New this wave: ${Array.join(debuts, ', ')}.`
+  return `Coming in wave ${wave}. ${Array.join(Array.map(doorCounts(spawns), doorPreviewLabel), '. ')}.${debutText}`
+}
+
+const wavePreviewView = (
+  wave: number,
+  spawns: ReadonlyArray<PlannedSpawn>,
+  h: HtmlBuilder<Message>,
+): Html => h.p([h.Class('sr-only')], [previewLabel(wave, spawns)])
+
 const preparationTimerView = (
   wave: number,
   remainingMs: number,
@@ -1466,11 +1912,12 @@ const startWaveButtonView = (wave: number, h: HtmlBuilder<Message>): Html =>
 const preparationControlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
   Phase.match(model.phase, {
     Ready: () => h.empty,
-    Preparation: ({ wave, remainingMs }) =>
+    Preparation: ({ wave, remainingMs, spawns }) =>
       h.div(
         [h.Class('preparation-controls')],
         [
           preparationTimerView(wave, remainingMs, h),
+          wavePreviewView(wave, spawns, h),
           startWaveButtonView(wave, h),
         ],
       ),

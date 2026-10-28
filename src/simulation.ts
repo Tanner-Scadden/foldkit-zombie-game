@@ -3,6 +3,13 @@ import { modifyFields } from 'foldkit/struct'
 
 import { findStrike, moveCircle } from './arena'
 import {
+  hitEvent,
+  killEvent,
+  resolveBlasts,
+  strikeZombie,
+  woundPlayer,
+} from './combat'
+import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
   BULLET_MAX,
@@ -11,19 +18,13 @@ import {
   KNOCKBACK_REST_SPEED,
   MAX_FRAME_DELTA_MS,
   MS_PER_SECOND,
-  PLAYER_INVULNERABLE_MS,
   PLAYER_KNOCKBACK_DECAY_PER_SECOND,
-  PLAYER_KNOCKBACK_SPEED,
   PLAYER_RADIUS,
   PLAYER_SPEED,
   SCORE_PER_ZOMBIE,
-  SEPARATION_DISTANCE,
   SEPARATION_SPEED,
   ZOMBIE_BUMP_SPEED,
-  ZOMBIE_DYING_MS,
-  ZOMBIE_HIT_PULSE_MS,
   ZOMBIE_KNOCKBACK_DECAY_PER_SECOND,
-  ZOMBIE_RADIUS,
 } from './constants'
 import {
   ZERO_VECTOR,
@@ -54,11 +55,12 @@ import {
   idleIntent,
 } from './model'
 import { advanceParticles } from './particles'
-import { refreshFlowField, steerToward } from './pathing'
+import { type Clearance, refreshFlowField, steerToward } from './pathing'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
 import { earn, refreshShopPresence } from './shop'
-import { ZOMBIE_STATS, advanceRound, endWhenDefeated } from './waves'
+import { advanceRound, endWhenDefeated } from './waves'
 import { SIDEARM, WEAPONS, type WeaponStats, holdPistol } from './weapons'
+import { Behavior, isWalking, radiusOf, statsOf, strideAt } from './zombies'
 
 // INTENT
 
@@ -342,12 +344,10 @@ const advanceBullets = (
 
 // ZOMBIES
 
-const isWalking = (zombie: Zombie): boolean =>
-  ZombieState.guards.Walking(zombie.state)
-
 const isFinishedDying = (zombie: Zombie): boolean =>
   ZombieState.match(zombie.state, {
     Walking: () => false,
+    Fusing: () => false,
     Dying: ({ remainingMs }) => remainingMs <= 0,
   })
 
@@ -357,11 +357,15 @@ const pushApart = (zombie: Zombie, other: Zombie): Vector => {
   const deltaX = zombie.x - other.x
   const deltaY = zombie.y - other.y
   const distance = Math.hypot(deltaX, deltaY)
-  if (other.id === zombie.id || distance >= SEPARATION_DISTANCE) {
+  const reach = radiusOf(zombie) + radiusOf(other)
+  if (other.id === zombie.id || distance >= reach) {
     return ZERO_VECTOR
   }
 
-  const strength = (SEPARATION_DISTANCE - distance) / SEPARATION_DISTANCE
+  const mass = statsOf(zombie).mass
+  const otherMass = statsOf(other).mass
+  const share = (2 * otherMass) / (mass + otherMass)
+  const strength = ((reach - distance) / reach) * share
   if (distance > 0) {
     return {
       x: (deltaX / distance) * strength,
@@ -385,23 +389,36 @@ const separationPushes = (
   )
 }
 
+type FlowFields = Readonly<Record<Clearance, FlowField>>
+
 const steeringVelocity = (
   zombie: Zombie,
-  flowField: FlowField,
+  flowFields: FlowFields,
   target: Vector,
-): Vector =>
-  ZombieState.match(zombie.state, {
+): Vector => {
+  const stats = statsOf(zombie)
+  return ZombieState.match(zombie.state, {
     Walking: () =>
       scaleVector(
-        steerToward(flowField, zombie, target, ZOMBIE_RADIUS - 1),
+        steerToward(
+          flowFields[stats.clearance],
+          zombie,
+          target,
+          stats.radius - 1,
+          stats.clearance,
+        ),
         zombie.speed,
       ),
+    Fusing: () => ZERO_VECTOR,
     Dying: () => ZERO_VECTOR,
   })
+}
 
 const tickZombieState = (state: ZombieState, deltaMs: number): ZombieState =>
   ZombieState.match(state, {
     Walking: () => state,
+    Fusing: ({ remainingMs }) =>
+      ZombieState.Fusing({ remainingMs: remainingMs - deltaMs }),
     Dying: ({ remainingMs, direction }) =>
       ZombieState.Dying({ remainingMs: remainingMs - deltaMs, direction }),
   })
@@ -409,19 +426,19 @@ const tickZombieState = (state: ZombieState, deltaMs: number): ZombieState =>
 const advanceZombie = (
   zombie: Zombie,
   separation: Vector,
-  flowField: FlowField,
+  flowFields: FlowFields,
   target: Vector,
   seconds: number,
   deltaMs: number,
 ): Zombie => {
   const velocity = addVectors(
-    addVectors(steeringVelocity(zombie, flowField, target), zombie.knockback),
+    addVectors(steeringVelocity(zombie, flowFields, target), zombie.knockback),
     scaleVector(separation, SEPARATION_SPEED),
   )
   const moved = moveCircle(
     zombie,
     scaleVector(velocity, seconds),
-    ZOMBIE_RADIUS,
+    radiusOf(zombie),
   )
   return modifyFields(zombie, {
     x: () => moved.x,
@@ -439,13 +456,17 @@ const advanceZombies = (
   deltaMs: number,
 ): ReadonlyArray<Zombie> => {
   const separations = separationPushes(model.zombies)
+  const flowFields: FlowFields = {
+    Narrow: model.flowField,
+    Wide: model.wideFlowField,
+  }
   return pipe(
     model.zombies,
     Array.map((zombie, index) =>
       advanceZombie(
         zombie,
         Option.getOrElse(Array.get(separations, index), () => ZERO_VECTOR),
-        model.flowField,
+        flowFields,
         model.player,
         seconds,
         deltaMs,
@@ -454,6 +475,52 @@ const advanceZombies = (
     Array.filter(zombie => !isFinishedDying(zombie)),
   )
 }
+
+// FOOTFALLS
+
+const maybeFootfall =
+  (player: Player, previousMs: number, elapsedMs: number) =>
+  (zombie: Zombie): Option.Option<GameEvent> =>
+    Option.flatMap(statsOf(zombie).maybeFootfall, footfall => {
+      const stride = strideAt(zombie, elapsedMs)
+      if (
+        !isWalking(zombie) ||
+        stride === strideAt(zombie, previousMs) ||
+        stride % footfall.everyStrides !== 0
+      ) {
+        return Option.none()
+      }
+
+      const distance = Math.hypot(zombie.x - player.x, zombie.y - player.y)
+      return Option.some(
+        GameEvent.Footfall({
+          x: zombie.x,
+          y: zombie.y,
+          kind: zombie.kind,
+          nearness:
+            footfall.rangePx > 0
+              ? clamp(1 - distance / footfall.rangePx, 0, 1)
+              : 0,
+        }),
+      )
+    })
+
+const recordFootfalls = (model: Model, deltaMs: number): Model =>
+  modifyFields(model, {
+    frameEvents: frameEvents => [
+      ...frameEvents,
+      ...Array.getSomes(
+        Array.map(
+          model.zombies,
+          maybeFootfall(
+            model.player,
+            model.elapsedMs - deltaMs,
+            model.elapsedMs,
+          ),
+        ),
+      ),
+    ],
+  })
 
 type BulletHit = Readonly<{
   bulletId: number
@@ -480,7 +547,7 @@ const findBulletHits = (
       pipe(
         targets,
         Array.findFirst(zombie =>
-          circlesOverlap(bullet, BULLET_RADIUS, zombie, ZOMBIE_RADIUS),
+          circlesOverlap(bullet, BULLET_RADIUS, zombie, radiusOf(zombie)),
         ),
         Option.map(zombie => ({
           bulletId: bullet.id,
@@ -493,24 +560,6 @@ const findBulletHits = (
       ),
     ),
   )
-}
-
-const strikeZombie = (
-  zombie: Zombie,
-  damage: number,
-  direction: Vector,
-  knockbackSpeed: number,
-): Zombie => {
-  const hp = Math.max(0, zombie.hp - damage)
-  return modifyFields(zombie, {
-    hp: () => hp,
-    knockback: () => scaleVector(direction, knockbackSpeed),
-    hitRemainingMs: () => ZOMBIE_HIT_PULSE_MS,
-    state: state =>
-      hp > 0
-        ? state
-        : ZombieState.Dying({ remainingMs: ZOMBIE_DYING_MS, direction }),
-  })
 }
 
 const totalDamage = (hits: ReadonlyArray<BulletHit>): number =>
@@ -536,32 +585,35 @@ const applyHits =
       onSome: lastHit =>
         strikeZombie(
           zombie,
-          totalDamage(zombieHits),
-          lastHit.direction,
-          strongestKnockback(zombieHits),
+          {
+            damage: totalDamage(zombieHits),
+            direction: lastHit.direction,
+            knockbackSpeed: strongestKnockback(zombieHits),
+          },
+          'Shot',
         ),
     })
   }
 
-const hitEvent =
+const hitEventOn =
   (hits: ReadonlyArray<BulletHit>) =>
-  (zombieId: number): Option.Option<GameEvent> => {
-    const zombieHits = hitsOn(hits, zombieId)
+  (zombie: Zombie): Option.Option<GameEvent> => {
+    const zombieHits = hitsOn(hits, zombie.id)
     return Option.map(Array.last(zombieHits), ({ x, y, direction }) =>
-      GameEvent.ZombieHit({ x, y, direction, damage: totalDamage(zombieHits) }),
+      hitEvent(zombie, { x, y }, direction, totalDamage(zombieHits)),
     )
   }
 
-const killEvent = (zombie: Zombie): GameEvent =>
-  GameEvent.ZombieKilled({
-    x: zombie.x,
-    y: zombie.y,
-    direction: ZombieState.match(zombie.state, {
-      Walking: () => ZERO_VECTOR,
-      Dying: ({ direction }) => direction,
-    }),
-    bounty: ZOMBIE_STATS[zombie.kind].bounty,
-  })
+const killEventOn =
+  (hits: ReadonlyArray<BulletHit>) =>
+  (zombie: Zombie): GameEvent =>
+    killEvent(
+      zombie,
+      Option.match(Array.last(hitsOn(hits, zombie.id)), {
+        onNone: () => ZERO_VECTOR,
+        onSome: ({ direction }) => direction,
+      }),
+    )
 
 const resolveBulletHits = (model: Model): Model => {
   const hits = findBulletHits(model.bullets, model.zombies)
@@ -576,10 +628,13 @@ const resolveBulletHits = (model: Model): Model => {
     zombies,
     zombie => zombie.hp <= 0 && Array.contains(hitZombieIds, zombie.id),
   )
+  const hitZombies = Array.filter(zombies, zombie =>
+    Array.contains(hitZombieIds, zombie.id),
+  )
   const bounty = Array.reduce(
     killedZombies,
     0,
-    (sum, zombie) => sum + ZOMBIE_STATS[zombie.kind].bounty,
+    (sum, zombie) => sum + statsOf(zombie).bounty,
   )
   return modifyFields(model, {
     bullets: Array.filter(({ id }) => !Array.contains(hitBulletIds, id)),
@@ -588,57 +643,82 @@ const resolveBulletHits = (model: Model): Model => {
     wallet: wallet => earn(wallet, bounty),
     frameEvents: frameEvents => [
       ...frameEvents,
-      ...Array.getSomes(Array.map(hitZombieIds, hitEvent(hits))),
-      ...Array.map(killedZombies, killEvent),
+      ...Array.getSomes(Array.map(hitZombies, hitEventOn(hits))),
+      ...Array.map(killedZombies, killEventOn(hits)),
     ],
   })
 }
 
 const bumpAttacker =
-  (attackerId: number, direction: Vector) =>
+  (attacker: Zombie, direction: Vector) =>
   (zombie: Zombie): Zombie =>
-    zombie.id === attackerId
+    zombie.id === attacker.id
       ? modifyFields(zombie, {
-          knockback: () => scaleVector(direction, -ZOMBIE_BUMP_SPEED),
+          knockback: () =>
+            scaleVector(
+              direction,
+              -ZOMBIE_BUMP_SPEED * statsOf(attacker).knockbackScale,
+            ),
         })
       : zombie
 
-const hurtPlayer = (model: Model, attacker: Zombie): Model => {
+const bitePlayer = (model: Model, attacker: Zombie): Model => {
   const { player } = model
   const direction = Option.getOrElse(directionBetween(attacker, player), () =>
     scaleVector(player.facing, -1),
   )
   return modifyFields(model, {
     player: () =>
-      modifyFields(player, {
-        hp: hp => Math.max(0, hp - 1),
-        knockback: () => scaleVector(direction, PLAYER_KNOCKBACK_SPEED),
-        invulnerability: () =>
-          Invulnerability.Invulnerable({ remainingMs: PLAYER_INVULNERABLE_MS }),
-      }),
-    zombies: Array.map(bumpAttacker(attacker.id, direction)),
+      woundPlayer(player, statsOf(attacker).contactDamage, direction),
+    zombies: Array.map(bumpAttacker(attacker, direction)),
     frameEvents: Array.append(
       GameEvent.PlayerHurt({ x: player.x, y: player.y, direction }),
     ),
   })
 }
 
-const resolvePlayerContact = (model: Model): Model => {
+const isTouching =
+  (player: Player) =>
+  (zombie: Zombie): boolean =>
+    isWalking(zombie) &&
+    circlesOverlap(zombie, radiusOf(zombie), player, PLAYER_RADIUS)
+
+const isBrawler = (zombie: Zombie): boolean =>
+  Behavior.guards.Brawler(statsOf(zombie).behavior)
+
+const popOnContact =
+  (player: Player) =>
+  (zombie: Zombie): Zombie =>
+    isTouching(player)(zombie)
+      ? Behavior.match(statsOf(zombie).behavior, {
+          Brawler: () => zombie,
+          Bomber: ({ contactFuseMs }) =>
+            modifyFields(zombie, {
+              state: () => ZombieState.Fusing({ remainingMs: contactFuseMs }),
+            }),
+        })
+      : zombie
+
+const popBombers = (model: Model): Model =>
+  modifyFields(model, { zombies: Array.map(popOnContact(model.player)) })
+
+const biteOnContact = (model: Model): Model => {
   if (Invulnerability.guards.Invulnerable(model.player.invulnerability)) {
     return model
   }
 
   const maybeAttacker = Array.findFirst(
     model.zombies,
-    zombie =>
-      isWalking(zombie) &&
-      circlesOverlap(zombie, ZOMBIE_RADIUS, model.player, PLAYER_RADIUS),
+    zombie => isBrawler(zombie) && isTouching(model.player)(zombie),
   )
   return Option.match(maybeAttacker, {
     onNone: () => model,
-    onSome: attacker => hurtPlayer(model, attacker),
+    onSome: attacker => bitePlayer(model, attacker),
   })
 }
+
+const resolvePlayerContact = (model: Model): Model =>
+  popBombers(biteOnContact(model))
 
 // FRAME
 
@@ -658,7 +738,10 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
   const routed = refreshIntent(
     refreshShopPresence(
       modifyFields(moved, {
-        flowField: flowField => refreshFlowField(flowField, moved.player),
+        flowField: flowField =>
+          refreshFlowField(flowField, moved.player, 'Narrow'),
+        wideFlowField: flowField =>
+          refreshFlowField(flowField, moved.player, 'Wide'),
       }),
     ),
   )
@@ -670,10 +753,11 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
   })
 
   return pipe(
-    advanced,
+    recordFootfalls(advanced, deltaMs),
     resolveBulletHits,
     resolvePlayerContact,
-    contacted => advanceParticles(contacted, seconds, deltaMs),
+    resolveBlasts,
+    blasted => advanceParticles(blasted, seconds, deltaMs),
     particled => advanceRound(particled, deltaMs),
     endWhenDefeated,
   )

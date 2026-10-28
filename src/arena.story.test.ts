@@ -41,7 +41,7 @@ const DISTANT_SPAWN: PlannedSpawn = {
   kind: 'Shambler',
   door: 'North',
   offset: 0,
-  speedBonus: 0,
+  speedScale: 1,
 }
 
 const fightingModel: Model = modifyFields(initialModel, {
@@ -334,7 +334,7 @@ describe('pathing', () => {
                     kind: 'Shambler',
                     door: 'North',
                     offset: 0,
-                    speedBonus: 0,
+                    speedScale: 1,
                   },
                   DISTANT_SPAWN,
                 ],

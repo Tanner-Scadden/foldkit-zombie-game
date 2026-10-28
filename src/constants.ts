@@ -41,7 +41,6 @@ export const BULLET_STEP_PX = 2
 export const DIRECT_CHASE_FULL_PX = 72
 export const DIRECT_CHASE_RANGE_PX = 104
 export const LINE_OF_SIGHT_STEP_PX = 3
-export const SEPARATION_DISTANCE = 8
 export const SEPARATION_SPEED = 40
 
 export const FINAL_WAVE = 8
@@ -158,7 +157,6 @@ export const MUZZLE_FLASH_BIG_MS = 17
 export const BULLET_TRAIL_PX = 3
 
 export const PLAYER_SHADOW_WIDTH = 7
-export const ZOMBIE_SHADOW_WIDTH = 8
 export const SHADOW_HEIGHT = 2
 export const GIB_SHADOW_WIDTH = 2
 
@@ -263,3 +261,38 @@ export const EMPTY_POPUP_LIFETIME_MS = 650
 export const EMPTY_POPUP_LIFT_PX = 12
 export const ALERT_GLYPH_COLOR = '#ff6b5e'
 export const COIN_GLYPH_COLOR = '#ffe066'
+
+export const DOOR_HALF_WIDTH_PX = 10
+
+export const MAX_BLASTS_PER_FRAME = 2
+export const BLAST_FLASH_MS = 320
+export const BLAST_MAX = 8
+export const SHAKE_TRAUMA_BLAST = 1
+export const HIT_STOP_BLAST_MS = 70
+
+export const GOO_PER_BLAST = 14
+export const SPARKS_PER_BLAST = 10
+export const MEAT_GIBS_PER_BLAST = 3
+export const SPARK_SPEED_MIN = 60
+export const SPARK_SPEED_MAX = 150
+export const SPARK_LIFT_MIN = 20
+export const SPARK_LIFT_MAX = 80
+export const SPARK_GRAVITY = 120
+export const SPARK_DRAG_PER_SECOND = 5
+export const SPARK_LIFETIME_MS = 380
+export const GOO_SPEED_MIN = 40
+export const GOO_SPEED_MAX = 130
+export const SCORCH_SIZE_PX = 14
+
+export const BONE_GIB_COLOR = '#efe6cf'
+export const HIDE_GIB_COLOR = '#6d7f99'
+export const GOO_COLOR = '#c6e83a'
+export const SPARK_COLOR = '#ffb341'
+export const BONE_DECAL_COLOR = '#b8ae96'
+export const HIDE_DECAL_COLOR = '#4d5a6e'
+export const GOO_DECAL_COLOR = '#7f9a22'
+export const SCORCH_DECAL_COLOR = '#1a1210'
+export const BONE_DECAL_FADED_COLOR = '#5f5a4d'
+export const HIDE_DECAL_FADED_COLOR = '#353b47'
+export const GOO_DECAL_FADED_COLOR = '#45521f'
+export const SCORCH_DECAL_FADED_COLOR = '#241a16'

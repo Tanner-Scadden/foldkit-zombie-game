@@ -43,7 +43,7 @@ const plannedSpawn = (atMs: number): PlannedSpawn => ({
   kind: 'Shambler',
   door: 'North',
   offset: 0,
-  speedBonus: 0,
+  speedScale: 1,
 })
 
 const zombieAt = (

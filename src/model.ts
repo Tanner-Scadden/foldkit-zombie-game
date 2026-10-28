@@ -97,11 +97,17 @@ export const Player = Schema.Struct({
 })
 export type Player = typeof Player.Type
 
-export const ZombieKind = Schema.Literals(['Shambler'])
+export const ZombieKind = Schema.Literals([
+  'Shambler',
+  'Runner',
+  'Tank',
+  'Exploder',
+])
 export type ZombieKind = typeof ZombieKind.Type
 
 export const ZombieState = defineTaggedUnion({
   Walking: {},
+  Fusing: { remainingMs: Schema.Number },
   Dying: { remainingMs: Schema.Number, direction: Vector },
 })
 export type ZombieState = typeof ZombieState.Type
@@ -140,6 +146,10 @@ export const ParticleKind = Schema.Literals([
   'Dust',
   'Chip',
   'Coin',
+  'BoneGib',
+  'HideGib',
+  'Goo',
+  'Spark',
 ])
 export type ParticleKind = typeof ParticleKind.Type
 
@@ -162,6 +172,10 @@ export const DecalKind = Schema.Literals([
   'Rot',
   'Shell',
   'Hull',
+  'Bone',
+  'Hide',
+  'Goo',
+  'Scorch',
 ])
 export type DecalKind = typeof DecalKind.Type
 
@@ -186,12 +200,21 @@ export const GameEvent = defineTaggedUnion({
     y: Schema.Number,
     direction: Vector,
     damage: Schema.Number,
+    kind: ZombieKind,
   },
   ZombieKilled: {
     x: Schema.Number,
     y: Schema.Number,
     direction: Vector,
     bounty: Schema.Number,
+    kind: ZombieKind,
+  },
+  Exploded: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
+  Footfall: {
+    x: Schema.Number,
+    y: Schema.Number,
+    kind: ZombieKind,
+    nearness: Schema.Number,
   },
   PlayerHurt: { x: Schema.Number, y: Schema.Number, direction: Vector },
   BulletStruck: { x: Schema.Number, y: Schema.Number, direction: Vector },
@@ -248,7 +271,7 @@ export const PlannedSpawn = Schema.Struct({
   kind: ZombieKind,
   door: DoorId,
   offset: Schema.Number,
-  speedBonus: Schema.Number,
+  speedScale: Schema.Number,
 })
 export type PlannedSpawn = typeof PlannedSpawn.Type
 
@@ -286,6 +309,14 @@ export const FlowField = Schema.Struct({
   distances: Schema.Array(Schema.Number),
 })
 export type FlowField = typeof FlowField.Type
+
+export const Blast = Schema.Struct({
+  x: Schema.Number,
+  y: Schema.Number,
+  radius: Schema.Number,
+  ageMs: Schema.Number,
+})
+export type Blast = typeof Blast.Type
 
 export const ShopItemId = Schema.Literals([
   'Shotgun',
@@ -329,7 +360,9 @@ export const Model = Schema.Struct({
   shake: Shake,
   popups: Schema.Array(Popup),
   streak: Streak,
+  blasts: Schema.Array(Blast),
   flowField: FlowField,
+  wideFlowField: FlowField,
   rngState: Schema.Number,
   input: Input,
   intent: Intent,
@@ -392,7 +425,9 @@ export const initialModel: Model = {
   shake: stillShake,
   popups: [],
   streak: Streak.Cold(),
-  flowField: flowFieldToward(initialPlayer),
+  blasts: [],
+  flowField: flowFieldToward(initialPlayer, 'Narrow'),
+  wideFlowField: flowFieldToward(initialPlayer, 'Wide'),
   rngState: DEFAULT_SEED,
   input: idleInput,
   intent: idleIntent,

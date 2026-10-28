@@ -9,7 +9,7 @@ import {
   KILL_GLYPH_COLOR,
   STREAK_GLYPH_COLOR,
 } from './constants'
-import type { WeaponKind } from './model'
+import type { WeaponKind, ZombieKind } from './model'
 
 export type Palette = Readonly<Record<string, string>>
 
@@ -298,6 +298,202 @@ const ZOMBIE_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
   [...swayRows(ZOMBIE_UPPER_ARMS_LOW, -1), ...ZOMBIE_LEGS_BACK_DRAG],
 ]
 
+const RUNNER_PALETTE: Palette = {
+  H: '#3a2418',
+  S: '#c9d660',
+  W: '#ffffff',
+  M: '#5a1418',
+  O: '#ff7a2e',
+  Q: '#ffe066',
+  B: '#2f5fb3',
+  K: '#1b1b2a',
+}
+
+const RUNNER_HEAD: ReadonlyArray<string> = [
+  '...HHHH...',
+  '..HSSSSH..',
+  '...SWSW...',
+  '...SSSS...',
+  '....SMS...',
+]
+
+const RUNNER_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
+  [
+    '.........S',
+    ...RUNNER_HEAD,
+    '...OOOOSS.',
+    '.S.OQOO...',
+    '..SOOOO...',
+    '...BBBB...',
+    '...S..S...',
+    '..KK...KK.',
+  ],
+  [
+    ...RUNNER_HEAD,
+    '..SOOOOS..',
+    '.S.OQOO.S.',
+    '...OOOO...',
+    '...BBBB...',
+    '....SS....',
+    '....KK....',
+  ],
+  [
+    'S.........',
+    ...RUNNER_HEAD,
+    '.SSOOOO...',
+    '...OQOO.S.',
+    '...OOOOS..',
+    '...BBBB...',
+    '...S..S...',
+    '.KK...KK..',
+  ],
+  [
+    ...RUNNER_HEAD,
+    '.SSOOOOSS.',
+    '...OQOO...',
+    '...OOOO...',
+    '...BBBB...',
+    '....SS....',
+    '...KK.....',
+  ],
+]
+
+const TANK_PALETTE: Palette = {
+  G: '#8a9bb5',
+  F: '#5f6f8a',
+  S: '#2a1a14',
+  E: '#ffd23f',
+  M: '#5a1418',
+  O: '#8a5a2b',
+  P: '#5c3a1a',
+  Y: '#f2c14e',
+  K: '#26262e',
+}
+
+const TANK_UPPER: ReadonlyArray<string> = [
+  '.....GGGG.....',
+  '....GSGGSG....',
+  '....GEGGEG....',
+  '....GGMMGG....',
+  '..GGGGGGGGGG..',
+  '.GGGOOGGOOGGG.',
+  'GGFOOOOOOOOFGG',
+  'GG.OOYOOYOO.GG',
+  'GG.OOOOOOOO.GG',
+]
+
+const TANK_FISTS_LOW: ReadonlyArray<string> = [
+  'FF.OOOOOOOO.FF',
+  'FF.PPPPPPPP.FF',
+]
+
+const TANK_FISTS_SWING: ReadonlyArray<string> = [
+  'FF.OOOOOOOO.GG',
+  '...PPPPPPPP.FF',
+]
+
+const TANK_FISTS_SWING_BACK: ReadonlyArray<string> = [
+  'GG.OOOOOOOO.FF',
+  'FF.PPPPPPPP...',
+]
+
+const TANK_LEGS_PLANTED: ReadonlyArray<string> = [
+  '...PPP..PPP...',
+  '...PPP..PPP...',
+  '..KKKK..KKKK..',
+]
+
+const TANK_LEGS_LEFT_UP: ReadonlyArray<string> = [
+  '...PPP..PPP...',
+  '..KKKK..PPP...',
+  '........KKKK..',
+]
+
+const TANK_LEGS_RIGHT_UP: ReadonlyArray<string> = [
+  '...PPP..PPP...',
+  '...PPP..KKKK..',
+  '..KKKK........',
+]
+
+const TANK_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
+  [...TANK_UPPER, ...TANK_FISTS_LOW, ...TANK_LEGS_PLANTED],
+  [...TANK_UPPER, ...TANK_FISTS_SWING, ...TANK_LEGS_LEFT_UP],
+  [...TANK_UPPER, ...TANK_FISTS_LOW, ...TANK_LEGS_PLANTED],
+  [...TANK_UPPER, ...TANK_FISTS_SWING_BACK, ...TANK_LEGS_RIGHT_UP],
+]
+
+const EXPLODER_PALETTE: Palette = {
+  Y: '#b7cc3c',
+  D: '#86992a',
+  B: '#e3ec8a',
+  O: '#ff9d2e',
+  E: '#2a1418',
+  M: '#8c1f24',
+  L: '#56662a',
+}
+
+const EXPLODER_LIT_PALETTE: Palette = {
+  ...EXPLODER_PALETTE,
+  O: '#fff3b0',
+  B: '#fbffd0',
+}
+
+const EXPLODER_BODY: ReadonlyArray<string> = [
+  '...YYYYY...',
+  '..YEYYYEY..',
+  '.YYYYMMYYY.',
+  'YYOYYYYYOYY',
+  'YDYBBBBBYDY',
+  'YOYBBOBBYOY',
+  'YDYBBBBBYDY',
+  '.YYBBBBBYY.',
+  '..DYYOYYD..',
+]
+
+const EXPLODER_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> =
+  [
+    [...swayRows(EXPLODER_BODY, 0), '....LL.LL....', '....LL.LL....'],
+    [...swayRows(EXPLODER_BODY, 1), '.....LL.LL...', '....LL...LL..'],
+    [...swayRows(EXPLODER_BODY, 0), '....LL.LL....', '....LL.LL....'],
+    [...swayRows(EXPLODER_BODY, -1), '...LL.LL.....', '..LL...LL....'],
+  ]
+
+const SHAMBLER_ICON_PIXELS: ReadonlyArray<string> = [
+  '.GGGGG.',
+  'GFGGGGG',
+  'GRGGGRG',
+  'GGGMMGG',
+  '.GFGGG.',
+  '.TTTTT.',
+]
+
+const RUNNER_ICON_PIXELS: ReadonlyArray<string> = [
+  '.HHHHH.',
+  'HSSSSSH',
+  'SWSSSWS',
+  'SSSMSSS',
+  '.SSSSS.',
+  '.OQOQO.',
+]
+
+const TANK_ICON_PIXELS: ReadonlyArray<string> = [
+  '.GGGGG.',
+  'GSGGGSG',
+  'GEGGGEG',
+  'GGMMMGG',
+  'GGGGGGG',
+  'OOYOYOO',
+]
+
+const EXPLODER_ICON_PIXELS: ReadonlyArray<string> = [
+  '..YYY..',
+  '.YEYEY.',
+  'YOYMYOY',
+  'YBBBBBY',
+  'YBBOBBY',
+  '.YYYYY.',
+]
+
 const HEART_PALETTE: Palette = { R: '#e8333a', W: '#ff8a8f' }
 const EMPTY_HEART_PALETTE: Palette = { R: '#3a2328', W: '#3a2328' }
 
@@ -308,18 +504,6 @@ const HEART_PIXELS: ReadonlyArray<string> = [
   '.RRRRR.',
   '..RRR..',
   '...R...',
-]
-
-const SKULL_PALETTE: Palette = { W: '#f4f1de', E: '#2a1418', D: '#8c1f24' }
-
-const SKULL_PIXELS: ReadonlyArray<string> = [
-  '.WWWWW.',
-  'WWWWWWW',
-  'WEEWEEW',
-  'WEEWEEW',
-  'WWWDWWW',
-  '.WWWWW.',
-  '.W.W.W.',
 ]
 
 const GLYPH_PIXELS = {
@@ -439,11 +623,67 @@ export const PLAYER_IDLE_FRAMES = spriteFrames(
   PLAYER_WIDTH / 2,
 )
 
-export const ZOMBIE_WALK_FRAMES = spriteFrames(
+const ZOMBIE_WALK_FRAMES = spriteFrames(
   ZOMBIE_WALK_PIXELS,
   ZOMBIE_PALETTE,
   ZOMBIE_SWAY_ROOM + ZOMBIE_BODY_WIDTH / 2,
 )
+
+const RUNNER_WALK_FRAMES = spriteFrames(RUNNER_WALK_PIXELS, RUNNER_PALETTE, 5)
+
+const TANK_WALK_FRAMES = spriteFrames(TANK_WALK_PIXELS, TANK_PALETTE, 7)
+
+const EXPLODER_ANCHOR_X = ZOMBIE_SWAY_ROOM + 5
+
+const EXPLODER_WALK_FRAMES = spriteFrames(
+  EXPLODER_WALK_PIXELS,
+  EXPLODER_PALETTE,
+  EXPLODER_ANCHOR_X,
+)
+
+const EXPLODER_LIT_FRAMES = spriteFrames(
+  EXPLODER_WALK_PIXELS,
+  EXPLODER_LIT_PALETTE,
+  EXPLODER_ANCHOR_X,
+)
+
+export type ZombieSprites = Readonly<{
+  walk: SpriteFrames
+  lit: SpriteFrames
+  icon: Sprite
+  height: number
+}>
+
+const frameHeight = (
+  framePixels: Array.NonEmptyReadonlyArray<ReadonlyArray<string>>,
+): number => Array.headNonEmpty(framePixels).length
+
+export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
+  Shambler: {
+    walk: ZOMBIE_WALK_FRAMES,
+    lit: ZOMBIE_WALK_FRAMES,
+    icon: spriteShapes(SHAMBLER_ICON_PIXELS, ZOMBIE_PALETTE),
+    height: frameHeight(ZOMBIE_WALK_PIXELS),
+  },
+  Runner: {
+    walk: RUNNER_WALK_FRAMES,
+    lit: RUNNER_WALK_FRAMES,
+    icon: spriteShapes(RUNNER_ICON_PIXELS, RUNNER_PALETTE),
+    height: frameHeight(RUNNER_WALK_PIXELS),
+  },
+  Tank: {
+    walk: TANK_WALK_FRAMES,
+    lit: TANK_WALK_FRAMES,
+    icon: spriteShapes(TANK_ICON_PIXELS, TANK_PALETTE),
+    height: frameHeight(TANK_WALK_PIXELS),
+  },
+  Exploder: {
+    walk: EXPLODER_WALK_FRAMES,
+    lit: EXPLODER_LIT_FRAMES,
+    icon: spriteShapes(EXPLODER_ICON_PIXELS, EXPLODER_PALETTE),
+    height: frameHeight(EXPLODER_WALK_PIXELS),
+  },
+}
 
 export const HEART_SPRITE = spriteShapes(HEART_PIXELS, HEART_PALETTE)
 export const EMPTY_HEART_SPRITE = spriteShapes(
@@ -454,8 +694,6 @@ export const FLASH_HEART_SPRITE = spriteShapes(
   HEART_PIXELS,
   flashPalette(HEART_PALETTE),
 )
-
-export const SKULL_SPRITE = spriteShapes(SKULL_PIXELS, SKULL_PALETTE)
 
 export type Glyph = keyof typeof GLYPH_PIXELS
 export type GlyphTone = 'Damage' | 'Kill' | 'Streak' | 'Coin' | 'Alert'
@@ -505,6 +743,22 @@ export const textPixels = (text: string): ReadonlyArray<string> => {
     ),
   )
 }
+
+// COUNTS
+
+export const COUNT_SPRITE_MAX = 40
+
+const COUNT_ANCHOR: Anchor = { x: 0, y: Math.floor((GLYPH_HEIGHT - 1) / 2) }
+
+export const COUNT_SPRITES: ReadonlyArray<Sprite> = Array.makeBy(
+  COUNT_SPRITE_MAX + 1,
+  count =>
+    spriteShapes(
+      textPixels(`x${count}`),
+      { [GLYPH_FILL]: KILL_GLYPH_COLOR },
+      COUNT_ANCHOR,
+    ),
+)
 
 // GUNS
 

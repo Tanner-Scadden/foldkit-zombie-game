@@ -75,7 +75,7 @@ const DISTANT_SPAWN: PlannedSpawn = {
   kind: 'Shambler',
   door: 'North',
   offset: 0,
-  speedBonus: 0,
+  speedScale: 1,
 }
 
 const FIGHTING_PHASE: Phase = Phase.Wave({
@@ -525,6 +525,7 @@ describe('game events', () => {
               y: ARENA_HEIGHT / 2,
               direction: RIGHT,
               bounty: SHAMBLER_BOUNTY,
+              kind: 'Shambler',
             }),
           ),
         )

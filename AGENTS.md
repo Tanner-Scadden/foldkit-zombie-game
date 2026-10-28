@@ -34,7 +34,9 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/simulation.ts` | The pure step that advances the game one frame                |
 | `src/arena.ts`      | The room's tile map, doorways, collision, and line of sight   |
 | `src/pathing.ts`    | The flow field toward the player and zombie steering          |
-| `src/waves.ts`      | Wave plans, spawning, and the phase changes of a run          |
+| `src/waves.ts`      | Spawn tables, the wave arc, spawning, and the phases of a run |
+| `src/zombies.ts`    | The zombie kind table: stats, behavior, deaths, and sounds    |
+| `src/combat.ts`     | Strikes, wounds, and bursts applied to any list of targets    |
 | `src/weapons.ts`    | The weapon table and the two-slot arsenal                     |
 | `src/shop.ts`       | Money, the shop's items and prices, purchases, and the stall  |
 | `src/shopView.ts`   | The shop dialog drawn as HTML over the canvas                 |

@@ -1,20 +1,17 @@
-import { Array, Option, Order, Result } from 'effect'
+import { Array, Option, Order, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { DOOR_IDS, doorSpawnPoint } from './arena'
 import {
+  DOOR_HALF_WIDTH_PX,
   DOOR_SPAWN_SPREAD_PX,
   FIRST_PREPARATION_MS,
   PREPARATION_MS,
-  SHAMBLER_BOUNTY,
   SPAWN_JITTER_MS,
   WAVE_BONUS_BASE,
   WAVE_BONUS_PER_WAVE,
-  ZOMBIE_MAX_HP,
-  ZOMBIE_SPEED_MAX,
-  ZOMBIE_SPEED_MIN,
 } from './constants'
-import { ZERO_VECTOR } from './geometry'
+import { ZERO_VECTOR, clamp } from './geometry'
 import { deriveIntent } from './input'
 import {
   type DoorId,
@@ -36,40 +33,25 @@ import {
 import { flowFieldToward } from './pathing'
 import { type Seeded, between, nextRandom } from './prng'
 import { earn } from './shop'
-
-// ZOMBIE KINDS
-
-type ZombieStats = Readonly<{
-  speedMin: number
-  speedMax: number
-  hp: number
-  bounty: number
-}>
-
-export const ZOMBIE_STATS: Readonly<Record<ZombieKind, ZombieStats>> = {
-  Shambler: {
-    speedMin: ZOMBIE_SPEED_MIN,
-    speedMax: ZOMBIE_SPEED_MAX,
-    hp: ZOMBIE_MAX_HP,
-    bounty: SHAMBLER_BOUNTY,
-  },
-}
+import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, isFusing, isWalking } from './zombies'
 
 export const waveBonus = (wave: number): number =>
   WAVE_BONUS_BASE + WAVE_BONUS_PER_WAVE * wave
 
-// WAVE PLANS
+// SPAWN TABLES
+
+export type KindWeight = Readonly<{ kind: ZombieKind; weight: number }>
 
 export type SpawnGroup = Readonly<{
-  kind: ZombieKind
   count: number
+  mix: Array.NonEmptyReadonlyArray<KindWeight>
   doors: Array.NonEmptyReadonlyArray<DoorId>
   startMs: number
   intervalMs: number
 }>
 
 export type WavePlan = Readonly<{
-  speedBonus: number
+  speedScale: number
   groups: Array.NonEmptyReadonlyArray<SpawnGroup>
 }>
 
@@ -80,13 +62,17 @@ const ALL_DOORS: Array.NonEmptyReadonlyArray<DoorId> = [
   'South',
 ]
 
+const only = (kind: ZombieKind): Array.NonEmptyReadonlyArray<KindWeight> => [
+  { kind, weight: 1 },
+]
+
 export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   {
-    speedBonus: 0,
+    speedScale: 1,
     groups: [
       {
-        kind: 'Shambler',
         count: 4,
+        mix: only('Shambler'),
         doors: ['North'],
         startMs: 1000,
         intervalMs: 2600,
@@ -94,118 +80,213 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
     ],
   },
   {
-    speedBonus: 1,
+    speedScale: 1.03,
     groups: [
       {
-        kind: 'Shambler',
-        count: 7,
+        count: 6,
+        mix: only('Shambler'),
         doors: ['North', 'West'],
         startMs: 800,
         intervalMs: 1900,
       },
-    ],
-  },
-  {
-    speedBonus: 2,
-    groups: [
       {
-        kind: 'Shambler',
-        count: 10,
-        doors: ['West', 'East'],
-        startMs: 600,
-        intervalMs: 1500,
+        count: 3,
+        mix: only('Runner'),
+        doors: ['East'],
+        startMs: 6000,
+        intervalMs: 1800,
       },
     ],
   },
   {
-    speedBonus: 3,
+    speedScale: 1.06,
     groups: [
       {
-        kind: 'Shambler',
+        count: 10,
+        mix: [
+          { kind: 'Shambler', weight: 3 },
+          { kind: 'Runner', weight: 1 },
+        ],
+        doors: ['West', 'East'],
+        startMs: 600,
+        intervalMs: 1400,
+      },
+      {
+        count: 4,
+        mix: only('Runner'),
+        doors: ['South'],
+        startMs: 7000,
+        intervalMs: 900,
+      },
+    ],
+  },
+  {
+    speedScale: 1.09,
+    groups: [
+      {
         count: 8,
+        mix: [
+          { kind: 'Shambler', weight: 3 },
+          { kind: 'Runner', weight: 1 },
+        ],
         doors: ['North', 'East'],
         startMs: 500,
         intervalMs: 1300,
       },
       {
-        kind: 'Shambler',
-        count: 6,
-        doors: ['South'],
-        startMs: 6000,
-        intervalMs: 1500,
-      },
-    ],
-  },
-  {
-    speedBonus: 4,
-    groups: [
-      {
-        kind: 'Shambler',
-        count: 12,
-        doors: ['North', 'West', 'East'],
-        startMs: 500,
-        intervalMs: 1100,
+        count: 3,
+        mix: only('Exploder'),
+        doors: ['West'],
+        startMs: 3000,
+        intervalMs: 2200,
       },
       {
-        kind: 'Shambler',
         count: 6,
+        mix: [
+          { kind: 'Shambler', weight: 2 },
+          { kind: 'Exploder', weight: 1 },
+        ],
         doors: ['South'],
-        startMs: 4000,
+        startMs: 9000,
         intervalMs: 1200,
       },
     ],
   },
   {
-    speedBonus: 5,
+    speedScale: 1.12,
     groups: [
       {
-        kind: 'Shambler',
-        count: 14,
-        doors: ['West', 'East'],
-        startMs: 400,
-        intervalMs: 900,
+        count: 1,
+        mix: only('Tank'),
+        doors: ['North'],
+        startMs: 2000,
+        intervalMs: 0,
       },
       {
-        kind: 'Shambler',
-        count: 10,
-        doors: ['North', 'South'],
+        count: 11,
+        mix: [
+          { kind: 'Shambler', weight: 3 },
+          { kind: 'Runner', weight: 2 },
+          { kind: 'Exploder', weight: 1 },
+        ],
+        doors: ['West', 'East'],
         startMs: 3000,
+        intervalMs: 1000,
+      },
+      {
+        count: 6,
+        mix: [
+          { kind: 'Shambler', weight: 2 },
+          { kind: 'Runner', weight: 1 },
+        ],
+        doors: ['South'],
+        startMs: 10000,
         intervalMs: 1000,
       },
     ],
   },
   {
-    speedBonus: 6,
+    speedScale: 1.15,
     groups: [
       {
-        kind: 'Shambler',
+        count: 1,
+        mix: only('Tank'),
+        doors: ['South'],
+        startMs: 6000,
+        intervalMs: 0,
+      },
+      {
         count: 16,
+        mix: [
+          { kind: 'Shambler', weight: 3 },
+          { kind: 'Runner', weight: 2 },
+          { kind: 'Exploder', weight: 2 },
+        ],
         doors: ALL_DOORS,
         startMs: 400,
         intervalMs: 800,
       },
       {
-        kind: 'Shambler',
-        count: 12,
+        count: 10,
+        mix: [
+          { kind: 'Runner', weight: 2 },
+          { kind: 'Exploder', weight: 1 },
+        ],
         doors: ['North', 'South'],
         startMs: 5000,
-        intervalMs: 700,
+        intervalMs: 800,
       },
     ],
   },
   {
-    speedBonus: 8,
+    speedScale: 1.18,
     groups: [
       {
-        kind: 'Shambler',
+        count: 2,
+        mix: only('Tank'),
+        doors: ['West', 'East'],
+        startMs: 1000,
+        intervalMs: 7000,
+      },
+      {
+        count: 18,
+        mix: [
+          { kind: 'Shambler', weight: 3 },
+          { kind: 'Runner', weight: 2 },
+          { kind: 'Exploder', weight: 2 },
+        ],
+        doors: ALL_DOORS,
+        startMs: 400,
+        intervalMs: 700,
+      },
+      {
+        count: 12,
+        mix: [
+          { kind: 'Shambler', weight: 1 },
+          { kind: 'Runner', weight: 2 },
+          { kind: 'Exploder', weight: 1 },
+        ],
+        doors: ['North', 'South'],
+        startMs: 6000,
+        intervalMs: 650,
+      },
+    ],
+  },
+  {
+    speedScale: 1.22,
+    groups: [
+      {
+        count: 2,
+        mix: only('Tank'),
+        doors: ['North', 'South'],
+        startMs: 1500,
+        intervalMs: 1500,
+      },
+      {
+        count: 2,
+        mix: only('Tank'),
+        doors: ['West', 'East'],
+        startMs: 13000,
+        intervalMs: 1500,
+      },
+      {
         count: 20,
+        mix: [
+          { kind: 'Shambler', weight: 3 },
+          { kind: 'Runner', weight: 2 },
+          { kind: 'Exploder', weight: 2 },
+        ],
         doors: ALL_DOORS,
         startMs: 300,
         intervalMs: 650,
       },
       {
-        kind: 'Shambler',
         count: 16,
+        mix: [
+          { kind: 'Shambler', weight: 1 },
+          { kind: 'Runner', weight: 2 },
+          { kind: 'Exploder', weight: 2 },
+        ],
         doors: ALL_DOORS,
         startMs: 8000,
         intervalMs: 500,
@@ -221,6 +302,26 @@ export const planFor = (wave: number): WavePlan =>
     Array.lastNonEmpty(WAVE_PLANS),
   )
 
+const kindsInPlan = (plan: WavePlan): ReadonlyArray<ZombieKind> =>
+  pipe(
+    plan.groups,
+    Array.flatMap(({ mix }) => mix),
+    Array.filter(({ weight }) => weight > 0),
+    Array.map(({ kind }) => kind),
+  )
+
+export const debutKinds = (wave: number): ReadonlyArray<ZombieKind> => {
+  const earlier = Array.flatMap(
+    Array.take(WAVE_PLANS, Math.max(0, wave - 1)),
+    kindsInPlan,
+  )
+  const present = kindsInPlan(planFor(wave))
+  return Array.filter(
+    ZOMBIE_KIND_ORDER,
+    kind => Array.contains(present, kind) && !Array.contains(earlier, kind),
+  )
+}
+
 const pickDoor = (
   doors: Array.NonEmptyReadonlyArray<DoorId>,
   roll: number,
@@ -229,14 +330,42 @@ const pickDoor = (
     Array.headNonEmpty(doors),
   )
 
+type KindPick = Readonly<{
+  reached: number
+  maybeKind: Option.Option<ZombieKind>
+}>
+
+const NOTHING_PICKED: KindPick = { reached: 0, maybeKind: Option.none() }
+
+export const pickKind = (
+  mix: Array.NonEmptyReadonlyArray<KindWeight>,
+  roll: number,
+): ZombieKind => {
+  const total = Array.reduce(mix, 0, (sum, { weight }) => sum + weight)
+  const target = roll * total
+  const picked = Array.reduce(
+    mix,
+    NOTHING_PICKED,
+    ({ reached, maybeKind }, { kind, weight }): KindPick => ({
+      reached: reached + weight,
+      maybeKind:
+        Option.isNone(maybeKind) && target < reached + weight
+          ? Option.some(kind)
+          : maybeKind,
+    }),
+  )
+  return Option.getOrElse(picked.maybeKind, () => Array.lastNonEmpty(mix).kind)
+}
+
 const rollGroup =
-  (speedBonus: number) =>
+  (speedScale: number) =>
   (state: number, group: SpawnGroup): Seeded<ReadonlyArray<PlannedSpawn>> =>
     Array.mapAccum(
       Array.makeBy(group.count, index => index),
       state,
       (drawState, index): Seeded<PlannedSpawn> => {
-        const doorDraw = nextRandom(drawState)
+        const kindDraw = nextRandom(drawState)
+        const doorDraw = nextRandom(kindDraw.nextState)
         const jitterDraw = nextRandom(doorDraw.nextState)
         const offsetDraw = nextRandom(jitterDraw.nextState)
         return [
@@ -246,14 +375,14 @@ const rollGroup =
               group.startMs +
               index * group.intervalMs +
               jitterDraw.value * SPAWN_JITTER_MS,
-            kind: group.kind,
+            kind: pickKind(group.mix, kindDraw.value),
             door: pickDoor(group.doors, doorDraw.value),
             offset: between(
               offsetDraw.value,
               -DOOR_SPAWN_SPREAD_PX,
               DOOR_SPAWN_SPREAD_PX,
             ),
-            speedBonus,
+            speedScale,
           },
         ]
       },
@@ -272,19 +401,37 @@ export const rollSpawns = (
   const [nextState, groups] = Array.mapAccum(
     plan.groups,
     state,
-    rollGroup(plan.speedBonus),
+    rollGroup(plan.speedScale),
   )
   return [nextState, Array.sort(Array.flatten(groups), bySpawnTime)]
 }
 
-export type DoorCount = Readonly<{ door: DoorId; count: number }>
+export type KindCount = Readonly<{ kind: ZombieKind; count: number }>
+
+export type DoorCount = Readonly<{
+  door: DoorId
+  count: number
+  kinds: Array.NonEmptyReadonlyArray<KindCount>
+}>
+
+const kindCounts = (
+  spawns: ReadonlyArray<PlannedSpawn>,
+): ReadonlyArray<KindCount> =>
+  Array.filterMap(ZOMBIE_KIND_ORDER, kind => {
+    const count = Array.filter(spawns, spawn => spawn.kind === kind).length
+    return count > 0 ? Result.succeed({ kind, count }) : Result.failVoid
+  })
 
 export const doorCounts = (
   spawns: ReadonlyArray<PlannedSpawn>,
 ): ReadonlyArray<DoorCount> =>
   Array.filterMap(DOOR_IDS, door => {
-    const count = Array.filter(spawns, spawn => spawn.door === door).length
-    return count > 0 ? Result.succeed({ door, count }) : Result.failVoid
+    const atDoor = Array.filter(spawns, spawn => spawn.door === door)
+    return Array.match(kindCounts(atDoor), {
+      onEmpty: () => Result.failVoid,
+      onNonEmpty: kinds =>
+        Result.succeed({ door, count: atDoor.length, kinds }),
+    })
   })
 
 // PHASES
@@ -323,7 +470,9 @@ const startRun = (model: Model): Model =>
       shake: () => stillShake,
       popups: () => [],
       streak: () => Streak.Cold(),
-      flowField: () => flowFieldToward(initialPlayer),
+      blasts: () => [],
+      flowField: () => flowFieldToward(initialPlayer, 'Narrow'),
+      wideFlowField: () => flowFieldToward(initialPlayer, 'Wide'),
       intent: () => deriveIntent(model.input, initialPlayer),
     }),
     1,
@@ -379,17 +528,21 @@ export const startWaveEarly = (model: Model): Model =>
 // SPAWNING
 
 const spawnZombie = (model: Model, spawn: PlannedSpawn): Model => {
-  const stats = ZOMBIE_STATS[spawn.kind]
+  const stats = ZOMBIE_KINDS[spawn.kind]
   const speedDraw = nextRandom(model.rngState)
-  const point = doorSpawnPoint(spawn.door, spawn.offset)
+  const doorRoom = Math.max(0, DOOR_HALF_WIDTH_PX - stats.radius)
+  const point = doorSpawnPoint(
+    spawn.door,
+    clamp(spawn.offset, -doorRoom, doorRoom),
+  )
   const zombie: Zombie = {
     id: model.nextEntityId,
     kind: spawn.kind,
     x: point.x,
     y: point.y,
     speed:
-      between(speedDraw.value, stats.speedMin, stats.speedMax) +
-      spawn.speedBonus,
+      between(speedDraw.value, stats.speedMin, stats.speedMax) *
+      spawn.speedScale,
     hp: stats.hp,
     knockback: ZERO_VECTOR,
     hitRemainingMs: 0,
@@ -407,7 +560,7 @@ const isWaveCleared = (
   spawns: ReadonlyArray<PlannedSpawn>,
 ): boolean =>
   Array.isReadonlyArrayEmpty(spawns) &&
-  !Array.some(model.zombies, zombie => ZombieState.guards.Walking(zombie.state))
+  !Array.some(model.zombies, zombie => isWalking(zombie) || isFusing(zombie))
 
 const payWaveBonus = (model: Model, wave: number): Model => {
   const bonus = waveBonus(wave)
@@ -492,8 +645,4 @@ export const endWhenDefeated = (model: Model): Model =>
 export const zombiesRemaining = (
   model: Model,
   spawns: ReadonlyArray<PlannedSpawn>,
-): number =>
-  spawns.length +
-  Array.filter(model.zombies, zombie =>
-    ZombieState.guards.Walking(zombie.state),
-  ).length
+): number => spawns.length + Array.filter(model.zombies, isWalking).length

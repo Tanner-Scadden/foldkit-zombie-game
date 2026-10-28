@@ -55,7 +55,7 @@ const playing = (audio: AudioState): Model =>
             kind: 'Shambler',
             door: 'North',
             offset: 0,
-            speedBonus: 0,
+            speedScale: 1,
           },
         ],
       }),

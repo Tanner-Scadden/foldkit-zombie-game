@@ -13,6 +13,14 @@ export const SoundEffect = Schema.Literals([
   'Swap',
   'ZombieHit',
   'ZombieDeath',
+  'RunnerHit',
+  'RunnerDeath',
+  'TankHit',
+  'TankDeath',
+  'ExploderHit',
+  'ExploderFuse',
+  'Boom',
+  'Stomp',
   'PlayerHurt',
   'Start',
   'ShopBell',
@@ -164,6 +172,70 @@ const at = (atSeconds: number, frequency: number): PitchPoint => ({
   frequency,
 })
 
+const ZOMBIE_HIT_RECIPE: Recipe = {
+  variationCents: 160,
+  tones: [
+    {
+      wave: 'sine',
+      pitch: [at(0, 210), at(0.07, 70)],
+      envelope: envelope(0.45, 0.003, 0.08),
+    },
+  ],
+  noises: [
+    {
+      filter: 'lowpass',
+      quality: 4,
+      cutoff: [at(0, 1600), at(0.08, 260)],
+      envelope: envelope(0.6, 0.002, 0.09),
+    },
+  ],
+}
+
+const ZOMBIE_DEATH_RECIPE: Recipe = {
+  variationCents: 220,
+  tones: [
+    {
+      wave: 'triangle',
+      pitch: [at(0, 180), at(0.05, 720), at(0.24, 85)],
+      envelope: envelope(0.5, 0.008, 0.26),
+    },
+  ],
+  noises: [
+    {
+      filter: 'bandpass',
+      quality: 7,
+      cutoff: [at(0, 2800), at(0.2, 240)],
+      envelope: envelope(0.55, 0.004, 0.2, 0.02),
+    },
+  ],
+}
+
+const CENTS_PER_OCTAVE = 1200
+
+const shiftPoints = (
+  points: ReadonlyArray<PitchPoint>,
+  factor: number,
+): ReadonlyArray<PitchPoint> =>
+  Array.map(points, point => at(point.atSeconds, point.frequency * factor))
+
+const pitched = (recipe: Recipe, cents: number): Recipe => {
+  const factor = 2 ** (cents / CENTS_PER_OCTAVE)
+  return {
+    variationCents: recipe.variationCents,
+    tones: Array.map(recipe.tones, tone => ({
+      wave: tone.wave,
+      pitch: shiftPoints(tone.pitch, factor),
+      envelope: tone.envelope,
+    })),
+    noises: Array.map(recipe.noises, noise => ({
+      filter: noise.filter,
+      quality: noise.quality,
+      cutoff: shiftPoints(noise.cutoff, factor),
+      envelope: noise.envelope,
+    })),
+  }
+}
+
 const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
   Shot: {
     variationCents: 70,
@@ -263,39 +335,125 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
       },
     ],
   },
-  ZombieHit: {
-    variationCents: 160,
+  ZombieHit: ZOMBIE_HIT_RECIPE,
+  ZombieDeath: ZOMBIE_DEATH_RECIPE,
+  RunnerHit: pitched(ZOMBIE_HIT_RECIPE, 700),
+  RunnerDeath: pitched(ZOMBIE_DEATH_RECIPE, 600),
+  TankHit: {
+    variationCents: 120,
     tones: [
+      ...pitched(ZOMBIE_HIT_RECIPE, -1000).tones,
       {
         wave: 'sine',
-        pitch: [at(0, 210), at(0.07, 70)],
-        envelope: envelope(0.45, 0.003, 0.08),
+        pitch: [at(0, 90), at(0.1, 40)],
+        envelope: envelope(0.5, 0.002, 0.11),
+      },
+    ],
+    noises: pitched(ZOMBIE_HIT_RECIPE, -900).noises,
+  },
+  TankDeath: {
+    variationCents: 80,
+    tones: [
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 140), at(0.08, 190), at(0.5, 45)],
+        envelope: envelope(0.32, 0.01, 0.52),
+      },
+      {
+        wave: 'sine',
+        pitch: [at(0, 70), at(0.3, 30)],
+        envelope: envelope(0.7, 0.004, 0.34, 0.18),
       },
     ],
     noises: [
       {
         filter: 'lowpass',
-        quality: 4,
-        cutoff: [at(0, 1600), at(0.08, 260)],
-        envelope: envelope(0.6, 0.002, 0.09),
+        quality: 1,
+        cutoff: [at(0, 900), at(0.3, 120)],
+        envelope: envelope(0.6, 0.004, 0.3, 0.18),
       },
     ],
   },
-  ZombieDeath: {
-    variationCents: 220,
+  ExploderHit: {
+    variationCents: 180,
     tones: [
       {
-        wave: 'triangle',
-        pitch: [at(0, 180), at(0.05, 720), at(0.24, 85)],
-        envelope: envelope(0.5, 0.008, 0.26),
+        wave: 'sine',
+        pitch: [at(0, 420), at(0.06, 160)],
+        envelope: envelope(0.35, 0.002, 0.07),
       },
     ],
     noises: [
       {
         filter: 'bandpass',
-        quality: 7,
-        cutoff: [at(0, 2800), at(0.2, 240)],
-        envelope: envelope(0.55, 0.004, 0.2, 0.02),
+        quality: 9,
+        cutoff: [at(0, 900), at(0.07, 2400)],
+        envelope: envelope(0.5, 0.002, 0.08),
+      },
+    ],
+  },
+  ExploderFuse: {
+    variationCents: 120,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 520), at(0.14, 1500)],
+        envelope: envelope(0.1, 0.004, 0.15),
+      },
+    ],
+    noises: [
+      {
+        filter: 'highpass',
+        quality: 2,
+        cutoff: [at(0, 2400), at(0.14, 6200)],
+        envelope: envelope(0.3, 0.01, 0.14),
+      },
+    ],
+  },
+  Boom: {
+    variationCents: 90,
+    tones: [
+      {
+        wave: 'sine',
+        pitch: [at(0, 150), at(0.45, 32)],
+        envelope: envelope(0.9, 0.003, 0.5),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 220), at(0.12, 50)],
+        envelope: envelope(0.25, 0.002, 0.14),
+      },
+    ],
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 0.7,
+        cutoff: [at(0, 5200), at(0.55, 150)],
+        envelope: envelope(1, 0.002, 0.6),
+      },
+      {
+        filter: 'bandpass',
+        quality: 6,
+        cutoff: [at(0, 1800), at(0.2, 500)],
+        envelope: envelope(0.45, 0.01, 0.22, 0.04),
+      },
+    ],
+  },
+  Stomp: {
+    variationCents: 60,
+    tones: [
+      {
+        wave: 'sine',
+        pitch: [at(0, 80), at(0.09, 38)],
+        envelope: envelope(0.5, 0.003, 0.1),
+      },
+    ],
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 1,
+        cutoff: [at(0, 500), at(0.08, 120)],
+        envelope: envelope(0.3, 0.002, 0.08),
       },
     ],
   },

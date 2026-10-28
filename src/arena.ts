@@ -116,6 +116,24 @@ export const isSolidTile = (column: number, row: number): boolean =>
 export const isWalkableTile = (column: number, row: number): boolean =>
   isInsideRoom(column, row) && !SOLID_TILES.has(tileIndex(column, row))
 
+const OPEN_BLOCKS: ReadonlySet<number> = new Set(
+  Array.filter(
+    Array.makeBy(TILE_COUNT, index => index),
+    index => {
+      const { column, row } = tileOfIndex(index)
+      return (
+        isWalkableTile(column, row) &&
+        isWalkableTile(column + 1, row) &&
+        isWalkableTile(column, row + 1) &&
+        isWalkableTile(column + 1, row + 1)
+      )
+    },
+  ),
+)
+
+export const isOpenBlock = (column: number, row: number): boolean =>
+  isInsideRoom(column, row) && OPEN_BLOCKS.has(tileIndex(column, row))
+
 const tileCoordinate = (position: number): number =>
   Math.floor(position / TILE_SIZE)
 

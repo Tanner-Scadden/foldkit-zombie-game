@@ -49,7 +49,7 @@ const DISTANT_SPAWN: PlannedSpawn = {
   kind: 'Shambler',
   door: 'North',
   offset: 0,
-  speedBonus: 0,
+  speedScale: 1,
 }
 
 const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
@@ -172,6 +172,7 @@ describe('money', () => {
               y: doomed.y,
               direction: { x: 1, y: 0 },
               bounty: SHAMBLER_BOUNTY,
+              kind: 'Shambler',
             }),
           ),
         )

@@ -49,7 +49,7 @@ Decided on 2026-10-27. The first playable is a fun one-screen arena that a stran
 
 Proposed on 2026-10-28 for step 4. These are starting numbers to play against, not decisions. They live in `src/constants.ts`, `src/weapons.ts`, and `src/shop.ts`.
 
-- **Money.** $5 for each Shambler kill. Clearing wave _n_ pays $20 + $5 × _n_, so wave 1 pays $25 and wave 8 pays $60. A perfect run earns about $1,000.
+- **Money.** Each kill pays the bounty of its kind (see the horde below). Clearing wave _n_ pays $20 + $5 × _n_, so wave 1 pays $25 and wave 8 pays $60. A perfect run earns about $1,000.
 - **The shop.** It opens from the wave 2 preparation onward. Wave 1 is the tutorial, the player has no money yet, and its preparation is only 6 seconds, so the stall sleeps behind a CLOSED sign until wave 1 is cleared.
 - **Slots.** The pistol always stays in the first slot. A bought gun goes in the second slot and replaces whatever is there, along with its ammo. A new gun comes out in the player's hands.
 
@@ -63,6 +63,31 @@ Proposed on 2026-10-28 for step 4. These are starting numbers to play against, n
 | Pickled Heart         | $25   | One heart, never past the maximum of 5                                             |
 
 There are no magazines or reloads yet. Limited ammo is a reserve. When it runs out, the next pull of the trigger clicks, pops EMPTY, and swaps to the pistol.
+
+Proposed on 2026-10-28 for step 5, the horde. These are starting numbers to play against, not decisions. The kind stats live in `src/zombies.ts` and the wave arc in `src/waves.ts`.
+
+| Kind     | Name    | Speed (px/s) | Health | Bite     | Radius | Bounty | Notes                                                                                  |
+| -------- | ------- | ------------ | ------ | -------- | ------ | ------ | -------------------------------------------------------------------------------------- |
+| Shambler | Groaner | 16 to 28     | 2      | 1 heart  | 4      | $5     | The baseline                                                                           |
+| Runner   | Hotfoot | 44 to 52     | 1      | 1 heart  | 3.5    | $6     | Light, so it is shoved around and knocked back further                                 |
+| Tank     | Big Lug | 11 to 14     | 14     | 2 hearts | 6.5    | $40    | Takes 12% of knockback, shoves the crowd aside, shows a health bar once hurt           |
+| Exploder | Gasbag  | 20 to 25     | 2      | none     | 4.5    | $8     | Bursts 140 ms after it dies, or 220 ms after it touches the player, which pays nothing |
+
+- **The burst.** Radius 28 px. It costs the player 1 heart unless they are blinking, and deals 6 damage to every zombie it reaches. A Gasbag caught in a burst bursts 150 ms later, so chains ripple instead of going off at once. At most 2 bursts go off in one frame and the rest wait their turn.
+- **Speed.** Each wave scales every spawn's speed, from ×1 on wave 1 to ×1.22 on wave 8.
+
+| Wave | Zombies | What is new or special                                                                  |
+| ---- | ------- | --------------------------------------------------------------------------------------- |
+| 1    | 4       | The tutorial. Four slow Groaners from the north door                                    |
+| 2    | 9       | NEW: Hotfoot. Six Groaners from the north and west, then three Hotfoots from the east   |
+| 3    | 14      | Groaners and Hotfoots from the sides, then a Hotfoot rush from the south                |
+| 4    | 17      | NEW: Gasbag. Three Gasbags from the west, then a mix from the south                     |
+| 5    | 18      | NEW: Big Lug. One Big Lug from the north with Groaners, Hotfoots, and Gasbags around it |
+| 6    | 27      | One Big Lug from the south while every door opens                                       |
+| 7    | 32      | Two Big Lugs, west and east, with a fast mixed crowd                                    |
+| 8    | 40      | The finale. Four Big Lugs in two pairs, with 36 escorts from every door, then Victory   |
+
+Each wave is a list of groups. A group has a count, the doors it uses, a start time and an interval, and weights for each kind. The kind, door, timing jitter, and offset of every spawn are drawn from the seeded generator when Preparation begins, so the door preview shows exactly what will come. A kind's first wave uses a group of only that kind, so the "NEW" banner never promises a zombie the roll left out.
 
 ## Core loop
 
@@ -110,15 +135,19 @@ Ideas to try first:
 
 Zombie types are a table of speed, health, and damage, plus a behavior tag. Each wave draws from a weighted spawn table using the seeded generator, so waves are reproducible.
 
-Ideas to try first:
+The first four are built. Their numbers are under "Proposed balance" above.
 
-| Type     | Idea                                                    |
-| -------- | ------------------------------------------------------- |
-| Shambler | The baseline. Slow, average health.                     |
-| Runner   | Fast and fragile. Punishes a room with many doors.      |
-| Tank     | Slow and very tough. Rewards traps and strong guns.     |
-| Spitter  | Attacks from range, so a closed door alone is not safe. |
-| Exploder | Bursts when killed, damaging nearby traps and players.  |
+| Type     | Name shown to players | Idea                                                    |
+| -------- | --------------------- | ------------------------------------------------------- |
+| Shambler | Groaner               | The baseline. Slow, average health.                     |
+| Runner   | Hotfoot               | Fast and fragile. Punishes a room with many doors.      |
+| Tank     | Big Lug               | Slow and very tough. Rewards traps and strong guns.     |
+| Spitter  | Not built yet         | Attacks from range, so a closed door alone is not safe. |
+| Exploder | Gasbag                | Bursts when killed, damaging nearby traps and players.  |
+
+- **Data, not logic.** A kind is a row in a table: speed, health, bite, radius, mass, knockback, bounty, a behavior tag (`Brawler` bites, `Bomber` fuses and bursts), how it dies, its gibs, its sounds, and its footfalls. Its sprites are a row in a second table keyed by the same kind. Both tables are exhaustive records, so a new kind will not compile until it has both rows.
+- **Big zombies path differently.** The Big Lug is wider than one tile, so it follows its own flow field that only steps between tiles sharing an open 2×2 block. It goes around the one-tile gaps above the crates and the piano that a Groaner squeezes through.
+- **Bursts hit anything.** Burst damage is applied through one function that takes any list of targets, so traps can join the player and zombies in step 6.
 
 ## Waves
 
@@ -144,7 +173,7 @@ The roadmap leads to the first playable. The order puts feel first: juice is bui
 | 2    | **Feel.** Animation frames driven by Model time, walk cycles and idle bob, hit flash, knockback, squash and stretch, death animations and gibs, particles, blood decals that stay, shadows, screen shake, muzzle flash, shell casings, hit-stop, damage numbers. Hearts with knockback and an invulnerable blink. Sound effects with an audio unlock. Measure frame time on a mid-range phone. | Built. Phone frame time not yet measured |
 | 3    | **The room and the loop.** One screen with cover and three or four doorways, collision, zombies that spawn at doorways and steer around cover. Waves with a preview of which doorways they come from, and a Preparation phase with a 20 second timer that can be skipped.                                                                                                                      | Built                                    |
 | 4    | **Money and the shop.** Money from kills and a bonus for each wave cleared. A shop stall to walk onto, and an overlay with weapons, ammo, and hearts. Weapons as data: pistol, shotgun, SMG. Carry two and swap. Ammo for everything but the pistol.                                                                                                                                           | Built. Balance not yet playtested        |
-| 5    | **The horde.** Runner, Tank, and Exploder beside the Shambler, with chain explosions. Spawn tables for each wave from the seeded generator. The 8 wave arc, with a Tank-heavy finale and Victory.                                                                                                                                                                                              | Planned                                  |
+| 5    | **The horde.** Runner, Tank, and Exploder beside the Shambler, with chain explosions. Spawn tables for each wave from the seeded generator. The 8 wave arc, with a Tank-heavy finale and Victory.                                                                                                                                                                                              | Built. Balance not yet playtested        |
 | 6    | **Traps.** A barricade for doorways and a turret, placed during Preparation.                                                                                                                                                                                                                                                                                                                   | Planned                                  |
 | 7    | **Ready for strangers.** Wave 1 as the tutorial with hints for the current device, a title screen, Game Over and Victory screens with run stats, a balance pass so a run takes 5 to 10 minutes, a phone performance pass, and a public link.                                                                                                                                                   | Planned                                  |
 
