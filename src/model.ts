@@ -530,12 +530,7 @@ export const ShopItemId = Schema.Literals([
 ])
 export type ShopItemId = typeof ShopItemId.Type
 
-export const ShopCategory = Schema.Literals([
-  'Guns',
-  'Supplies',
-  'Upgrades',
-  'Traps',
-])
+export const ShopCategory = Schema.Literals(['Guns', 'Health', 'Traps'])
 export type ShopCategory = typeof ShopCategory.Type
 
 export const ShopState = defineTaggedUnion({

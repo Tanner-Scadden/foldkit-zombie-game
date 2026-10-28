@@ -14,7 +14,7 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Dialog, Tabs } from '@foldkit/ui'
+import { Dialog } from '@foldkit/ui'
 
 import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { Message, update } from './main'
@@ -173,11 +173,11 @@ describe('Upgrades in the shop', () => {
 
   test('names the next tier, says what changes, buys it, and shows MAX once done', () => {
     const nextShotgunTier = role('button', {
-      name: 'Buy Upgrade to Hayloft Howitzer for $320',
+      name: 'Hayloft Howitzer, upgrade for Silo Splitter, $320',
     })
     scene(
       { update, view },
-      given(modifyFields(atStall, { shopCategory: () => 'Upgrades' })),
+      given(atStall),
       measureSurface,
       Subscription.emit(Message.TickedFrame({ deltaTime: 16 })),
       Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
@@ -185,34 +185,34 @@ describe('Upgrades in the shop', () => {
         Dialog.AcquireResources,
         Dialog.Message.SucceededAcquireResources(),
       ),
-      expect(role('tab', { name: /^Upgrades,/ })).toHaveAttr(
+      expect(role('tab', { name: /^Guns,/ })).toHaveAttr(
         'aria-selected',
         'true',
       ),
+      expect(role('heading', { name: 'Silo Splitter' })).toExist(),
       expect(
         text('Hits for 2 instead of 1. Holds 80 shells instead of 64.'),
       ).toExist(),
-      expect(text('Tier 2 of 3')).toExist(),
+      expect(role('img', { name: 'Tier 2 of 3' })).toExist(),
       expect(
-        role('button', { name: 'Buy Upgrade to Shovey Popper for $200' }),
+        role('button', { name: 'Shovey Popper, upgrade for Pop Pistol, $200' }),
       ).not.toHaveAttr('aria-disabled', 'true'),
       expect(
-        role('button', { name: 'Buy Upgrade to Gossip Box for $60' }),
-      ).toHaveAttr('aria-disabled', 'true'),
-      expect(text('Buy the Chatterbox first')).toExist(),
+        role('button', { name: 'Gossip Box, upgrade for Chatterbox, $60' }),
+      ).toBeAbsent(),
       click(nextShotgunTier),
       expect(text('You have $80')).toExist(),
+      expect(role('heading', { name: 'Hayloft Howitzer' })).toExist(),
+      expect(role('img', { name: 'Tier 3 of 3' })).toExist(),
       expect(
         role('button', { name: 'Hayloft Howitzer, fully upgraded' }),
       ).toHaveAttr('aria-disabled', 'true'),
       expect(text('Fully upgraded')).toExist(),
       expect(text('MAX')).toExist(),
       expect(
-        role('button', { name: 'Buy Upgrade to Shovey Popper for $200' }),
+        role('button', { name: 'Shovey Popper, upgrade for Pop Pistol, $200' }),
       ).toHaveAttr('aria-disabled', 'true'),
       expect(text('Need $120 more')).toExist(),
-      click(role('tab', { name: /^Guns,/ })),
-      Command.resolve(Tabs.FocusTab, Tabs.Message.CompletedFocusTab()),
       expect(
         text(
           'You always keep the Pop Pistol. A new gun takes your second slot, and whatever was there goes, upgrades and all.',

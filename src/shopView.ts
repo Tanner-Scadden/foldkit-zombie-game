@@ -1,4 +1,4 @@
-import { Array, Option, pipe } from 'effect'
+import { Array, Option, String, pipe } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Button, Dialog, Tabs } from '@foldkit/ui'
@@ -9,24 +9,27 @@ import {
   type ShopCategory,
   type ShopItemId,
   ShopState,
+  type WeaponKind,
 } from './model'
 import {
+  GunShelf,
   SHOP_CATEGORIES,
   SHOP_CATEGORY_ORDER,
   ShopTabs,
   Verdict,
   affordableCount,
-  isMaxedUpgrade,
+  gunShelves,
+  itemAriaLabel,
   itemBlurb,
   itemName,
   itemsIn,
   ownedNote,
-  priceFor,
   priceLabel,
   shopItemElementId,
   totalAffordable,
   verdictFor,
 } from './shop'
+import { maxTier, tierName } from './weapons'
 
 // FOCUS
 
@@ -83,22 +86,25 @@ const reasonId = (item: ShopItemId): string =>
 
 const focusedItem = (model: Model): ShopItemId =>
   ShopState.match(model.shop, {
-    Away: () => Array.headNonEmpty(itemsIn(model.shopCategory)),
+    Away: () => Array.headNonEmpty(itemsIn(model, model.shopCategory)),
     Browsing: ({ focusedItem }) => focusedItem,
-    Dismissed: () => Array.headNonEmpty(itemsIn(model.shopCategory)),
+    Dismissed: () => Array.headNonEmpty(itemsIn(model, model.shopCategory)),
   })
 
-const itemView = (
+type RowShape = Readonly<{
+  rowClass: string
+  itemClass: string
+  details: ReadonlyArray<Html>
+  describedBy: ReadonlyArray<string>
+}>
+
+const rowView = (
   model: Model,
   item: ShopItemId,
+  shape: RowShape,
   initialFocus: Dialog.RenderInfo['initialFocus'],
   h: HtmlBuilder<Message>,
 ): Html => {
-  const name = itemName(model, item)
-  const blurb = itemBlurb(model, item)
-  const ariaLabel = isMaxedUpgrade(model, item)
-    ? name
-    : `Buy ${name} for $${priceFor(model, item)}`
   const verdict = verdictFor(model, item)
   const isRefused = Verdict.isAnyOf(['Refused'])(verdict)
   const isFocused = focusedItem(model) === item
@@ -107,14 +113,15 @@ const itemView = (
     Refused: ({ reason }) =>
       h.span([h.Id(reasonId(item)), h.Class('shop-item-reason')], [reason]),
   })
-  const describedBy = isRefused
-    ? `${detailsId(item)} ${noteId(item)} ${reasonId(item)}`
-    : `${detailsId(item)} ${noteId(item)}`
+  const describedBy = Array.join(
+    isRefused ? [...shape.describedBy, reasonId(item)] : shape.describedBy,
+    ' ',
+  )
 
   return h.keyed('li')(
     item,
     [
-      h.Class('shop-row'),
+      h.Class(shape.rowClass),
       h.DataAttribute('verdict', isRefused ? 'refused' : 'available'),
     ],
     [
@@ -128,33 +135,29 @@ const itemView = (
                 ...attributes.button,
                 ...(isFocused ? initialFocus : []),
                 h.Id(shopItemElementId(item)),
-                h.Class('shop-item'),
-                h.AriaLabel(ariaLabel),
+                h.Class(shape.itemClass),
+                h.AriaLabel(itemAriaLabel(model, item)),
                 h.AriaDescribedBy(describedBy),
                 h.OnFocus(Message.FocusedShopItem({ item })),
                 h.OnKeyDownPreventDefault(key =>
-                  keyMessage(itemsIn(model.shopCategory), item, key),
+                  keyMessage(itemsIn(model, model.shopCategory), item, key),
                 ),
               ],
               [
                 h.span(
                   [h.Class('shop-item-heading')],
                   [
-                    h.span([h.Class('shop-item-name')], [name]),
+                    h.span(
+                      [h.Class('shop-item-name')],
+                      [itemName(model, item)],
+                    ),
                     h.span(
                       [h.Class('shop-item-price')],
                       [priceLabel(model, item)],
                     ),
                   ],
                 ),
-                h.span(
-                  [h.Id(detailsId(item)), h.Class('shop-item-blurb')],
-                  [blurb],
-                ),
-                h.span(
-                  [h.Id(noteId(item)), h.Class('shop-item-note')],
-                  [ownedNote(model, item)],
-                ),
+                ...shape.details,
                 reasonView,
               ],
             ),
@@ -164,6 +167,138 @@ const itemView = (
     ],
   )
 }
+
+const itemView = (
+  model: Model,
+  item: ShopItemId,
+  initialFocus: Dialog.RenderInfo['initialFocus'],
+  h: HtmlBuilder<Message>,
+): Html =>
+  rowView(
+    model,
+    item,
+    {
+      rowClass: 'shop-row',
+      itemClass: 'shop-item',
+      details: [
+        h.span(
+          [h.Id(detailsId(item)), h.Class('shop-item-blurb')],
+          [itemBlurb(model, item)],
+        ),
+        h.span(
+          [h.Id(noteId(item)), h.Class('shop-item-note')],
+          [ownedNote(model, item)],
+        ),
+      ],
+      describedBy: [detailsId(item), noteId(item)],
+    },
+    initialFocus,
+    h,
+  )
+
+const subItemView = (
+  model: Model,
+  item: ShopItemId,
+  initialFocus: Dialog.RenderInfo['initialFocus'],
+  h: HtmlBuilder<Message>,
+): Html =>
+  rowView(
+    model,
+    item,
+    {
+      rowClass: 'shop-row shop-subrow',
+      itemClass: 'shop-item shop-subitem',
+      details: [
+        h.span(
+          [h.Id(detailsId(item)), h.Class('shop-item-blurb')],
+          [itemBlurb(model, item)],
+        ),
+      ],
+      describedBy: [detailsId(item)],
+    },
+    initialFocus,
+    h,
+  )
+
+// GUNS
+
+const tierPipsView = (
+  weapon: WeaponKind,
+  tier: number,
+  h: HtmlBuilder<Message>,
+): Html =>
+  h.span(
+    [
+      h.Class('shop-pips'),
+      h.Role('img'),
+      h.AriaLabel(`Tier ${tier} of ${maxTier(weapon)}`),
+    ],
+    Array.makeBy(maxTier(weapon), index =>
+      h.span([h.Class(index < tier ? 'shop-pip is-filled' : 'shop-pip')]),
+    ),
+  )
+
+const ownedGunView = (
+  model: Model,
+  weapon: WeaponKind,
+  tier: number,
+  status: string,
+  items: Array.NonEmptyReadonlyArray<ShopItemId>,
+  initialFocus: Dialog.RenderInfo['initialFocus'],
+  h: HtmlBuilder<Message>,
+): Html => {
+  const name = tierName(weapon, tier)
+  return h.keyed('li')(
+    `owned-${weapon}`,
+    [h.Class('shop-gun')],
+    [
+      h.div(
+        [h.Class('shop-gun-heading')],
+        [
+          h.h3([h.Class('shop-gun-name')], [name]),
+          h.span([h.Class('shop-gun-owned')], ['OWNED']),
+        ],
+      ),
+      h.div(
+        [h.Class('shop-gun-status')],
+        [
+          h.span([h.Class('shop-gun-rounds')], [status]),
+          tierPipsView(weapon, tier, h),
+        ],
+      ),
+      h.ul(
+        [h.Class('shop-subrows'), h.AriaLabel(`For your ${name}`)],
+        Array.map(items, item => subItemView(model, item, initialFocus, h)),
+      ),
+    ],
+  )
+}
+
+const gunShelfView = (
+  model: Model,
+  shelf: GunShelf,
+  initialFocus: Dialog.RenderInfo['initialFocus'],
+  h: HtmlBuilder<Message>,
+): Html =>
+  GunShelf.match(shelf, {
+    ForSale: ({ item }) => itemView(model, item, initialFocus, h),
+    Owned: ({ weapon, tier, status, items }) =>
+      ownedGunView(model, weapon, tier, status, items, initialFocus, h),
+  })
+
+const categoryRowsView = (
+  model: Model,
+  category: ShopCategory,
+  initialFocus: Dialog.RenderInfo['initialFocus'],
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> =>
+  category === 'Guns'
+    ? Array.map(gunShelves(model), shelf =>
+        gunShelfView(model, shelf, initialFocus, h),
+      )
+    : Array.map(itemsIn(model, category), item =>
+        itemView(model, item, initialFocus, h),
+      )
 
 // DIALOG
 
@@ -202,7 +337,7 @@ const tabButtonView = (
           h.Class(count === 0 ? 'shop-tab-count is-empty' : 'shop-tab-count'),
           h.AriaHidden(true),
         ],
-        [String(count)],
+        [`${count}`],
       ),
     ],
   )
@@ -220,12 +355,10 @@ const categoryPanelView = (
       h.p([h.Class('shop-rule')], [SHOP_CATEGORIES[tab.value].blurb]),
       h.ul(
         [
-          h.Class('shop-items'),
+          h.Class(`shop-items shop-items-${String.toLowerCase(tab.value)}`),
           h.AriaLabel(`${SHOP_CATEGORIES[tab.value].label} for sale`),
         ],
-        Array.map(itemsIn(tab.value), item =>
-          itemView(model, item, initialFocus, h),
-        ),
+        categoryRowsView(model, tab.value, initialFocus, h),
       ),
     ],
   )

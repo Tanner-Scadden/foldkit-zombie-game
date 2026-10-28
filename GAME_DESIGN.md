@@ -225,10 +225,21 @@ Proposed on 2026-10-28 for step 7. Still proposed, not decided. A headless bot p
 
 Added on 2026-10-28 after a playtest ("Shop should have categories, and be more of a ramp up. Everything is so expensive."). Proposed, not decided. The categories and prices live in `src/shop.ts`, the trap prices in `src/traps.ts`, and the upgrade tiers in `src/weapons.ts`.
 
-- **Categories.** The shop is four tabs: GUNS (Barn Buster, Chatterbox, and the spare slot rule), SUPPLIES (Pickled Heart, Shell Sack, Chatter Drum), UPGRADES (one row per gun's next tier), and TRAPS (Plank Pile, Grumpy Gnome, Glue and Nails). The tabs are the `@foldkit/ui` Tabs component with automatic activation: Left and Right arrows, Home, and End move between tabs and select them, a click or tap selects one, and focus moves to the chosen tab. Up and Down, Home, and End move between the rows of the open tab, and Enter buys. Tabs are at least 48 px tall (44 px on a short landscape phone).
+- **Categories.** The shop is three tabs: GUNS (every gun, with its ammo and upgrades, see "Ammo and upgrades under the gun" below), HEALTH (Pickled Heart), and TRAPS (Plank Pile, Grumpy Gnome, Glue and Nails). The tabs are the `@foldkit/ui` Tabs component with automatic activation: Left and Right arrows, Home, and End move between tabs and select them, a click or tap selects one, and focus moves to the chosen tab. Up and Down, Home, and End move between the rows of the open tab, sub-rows included, and Enter buys. Tabs are at least 48 px tall (44 px on a short landscape phone).
 - **Remembering.** The chosen tab is `shopCategory` in the Model. The shop opens on it at every visit with its first row focused, and a new run starts on GUNS.
 - **Affordable at a glance.** Each tab shows a badge with how many of its rows the player can buy now (green, or grey at zero), and the tab's accessible name says it ("Traps, 1 you can buy"). The header shows the balance and "2 things you can buy now". Prices are green when the row can be bought, and grey with a red reason ("Need $63 more") when not.
-- **Phones.** On a screen under 500 px tall, the panel widens to 760 px, the balance moves beside the title, the greeting hides, and the rows of a tab sit side by side, so every tab fits without scrolling on a landscape phone.
+- **Phones.** On a screen under 500 px tall, the panel widens to 820 px, the balance and LEAVE SHOP move beside the title, the greeting and the tab's rule line hide, the text shrinks a step, and the rows of a tab sit side by side (GUNS always in three columns, one per gun), so every tab fits without scrolling on an 844x390 or 667x375 landscape phone. Checked with `tools/audit/shots14.ts`, which prints any tab that scrolls.
+
+#### Ammo and upgrades under the gun
+
+Added on 2026-10-28 after a playtest ("Ammo should also be a sub section of the gun after you buy it, for fluidness."). Proposed, not decided. The layout lives in `gunShelves` in `src/shop.ts` and `src/shopView.ts`.
+
+- **One card per gun.** GUNS lists the Barn Buster, the Chatterbox, and the Pop Pistol, always in that order so a gun never jumps around. A gun the player does not carry is a single buy row, as before. A gun they carry is a card: its name at its tier ("Barn Buster Plus"), an OWNED tag, the rounds in the magazine and in reserve ("6 loaded, 14 spare"), and tier pips. Under it sit its ammo refill and its next upgrade as sub-rows. The pistol is always a card, with "never runs dry" for its reserve and only an upgrade under it.
+- **The ammo sub-row.** It shows the price and what it adds: "Adds 16 shells. You have 20 of 48.", "adds 4 shells and fills it" when it would hit the cap, and when the gun is full it is disabled with "Your Barn Buster is full". A screen reader hears "Shell Sack, ammo for Barn Buster, $10, adds 16 shells".
+- **The upgrade sub-row.** As the old UPGRADES row: "Upgrade to Silo Splitter", the changes spelled out, the price, MAX once maxed. A screen reader hears "Silo Splitter, upgrade for Barn Buster Plus, $140".
+- **Why UPGRADES went away.** With each gun's upgrade under its card, the UPGRADES tab only held rows for guns the player did not carry, all disabled with "Needs the Barn Buster". Upgrades for a gun you cannot use are noise, and the old tab split one decision (what to do with my gun) across three tabs. Item ids did not change, so the balance bot is untouched.
+- **Why HEALTH.** Without the ammo, SUPPLIES held only the Pickled Heart. HEALTH says what is in it, and its badge tells a hurt player at a glance whether a heart is affordable. Folding the heart into GUNS or TRAPS would hide the panic buy under a name that does not say health and make those tabs taller on a phone.
+- **Focus.** Buying a gun removes its buy row, so focus moves to the new card's first sub-row, its ammo. Buying ammo or an upgrade keeps focus on the same row. A refused buy moves nothing.
 
 The ramp gives the first visit a real choice, makes mid-game items attainable, and keeps the top tiers as goals for waves 6 to 8. Wave 1 pays $37 (six Groaners and the $25 clear bonus), so the first visit buys a gun.
 
@@ -236,14 +247,14 @@ The ramp gives the first visit a real choice, makes mid-game items attainable, a
 | ----------------- | ---------------- | ---------------- | -------- |
 | Barn Buster       | $75              | $35              | Guns     |
 | Chatterbox        | $120             | $100             | Guns     |
-| Pickled Heart     | $25              | $25              | Supplies |
-| Shell Sack        | $15              | $10              | Supplies |
-| Chatter Drum      | $20              | $15              | Supplies |
+| Pickled Heart     | $25              | $25              | Health   |
+| Shell Sack        | $15              | $10              | Guns     |
+| Chatter Drum      | $20              | $15              | Guns     |
 | Plank Pile        | $30              | $20              | Traps    |
 | Grumpy Gnome      | $70              | $50              | Traps    |
-| Barn Buster tiers | $110, $220, $380 | $40, $140, $320  | Upgrades |
-| Chatterbox tiers  | $150, $280, $450 | $60, $180, $400  | Upgrades |
-| Pop Pistol tiers  | $300, $500, $750 | $200, $500, $750 | Upgrades |
+| Barn Buster tiers | $110, $220, $380 | $40, $140, $320  | Guns     |
+| Chatterbox tiers  | $150, $280, $450 | $60, $180, $400  | Guns     |
+| Pop Pistol tiers  | $300, $500, $750 | $200, $500, $750 | Guns     |
 
 Glue and Nails keeps its formula (half of each trap's price, scaled by the share of health it is missing), so it gets cheaper with the traps. The bounties and the clear bonus are unchanged.
 
@@ -428,7 +439,7 @@ Added on 2026-10-28, after the first playable. Proposed, not decided. Real playe
 Each gun has three tiers beyond its base, sold at Rattles' stall between waves. A tier is a row in `UPGRADE_TIERS` in `src/weapons.ts`: a name, a price, and a boost that adds to damage, the time between shots, the magazine, the reload time, spread, pellets, knockback, and the ammo cap. Tiers stack, and firing reads the held gun's stats at its tier through `statsAt`. Adding a tier is a data change. The bullet carries its damage and knockback, so a shot keeps the tier it was fired with.
 
 - **Where tiers live.** The pistol's tier is on the player. The spare gun's tier is on the carried gun, so buying a different spare gun replaces the slot and its upgrades. The shop says so in its rule line and on the gun's row. A new run resets every tier.
-- **In the shop.** One row per gun, named for the next tier ("Upgrade to Gossip Box"), with the changes spelled out ("Hits for 2 instead of 1"), the price, and the current tier. A row is disabled with a reason when the gun is not carried, the gun is maxed ("Fully upgraded", price shown as MAX), or the player is short.
+- **In the shop.** A sub-row under each carried gun's card on the GUNS tab, named for the next tier ("Upgrade to Gossip Box"), with the changes spelled out ("Hits for 2 instead of 1"), the price, and the current tier as pips on the card. A row is disabled with a reason when the gun is maxed ("Fully upgraded", price shown as MAX) or the player is short. A gun the player does not carry shows no upgrade.
 - **Feedback.** The gun's highlight changes color per tier (blue, pink, then gold), the muzzle flash throws more sparks per tier, and each HUD slot shows three tier pips. Buying a tier plays the cha-ching and a rising PowerUp arpeggio.
 
 | Gun         | Tier | Name               | Price | What changes                                                             |

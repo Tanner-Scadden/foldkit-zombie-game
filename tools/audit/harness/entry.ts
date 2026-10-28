@@ -95,8 +95,8 @@ const scenarioModel = (): Model => {
             arsenal: Arsenal.HoldingSpare({
               spare: {
                 kind: 'Smg',
-                rounds: 360,
-                loaded: 30,
+                rounds: num('rounds', 360),
+                loaded: Math.min(30, num('rounds', 360)),
                 tier: num('tier', 0),
               },
             }),
@@ -107,8 +107,8 @@ const scenarioModel = (): Model => {
               arsenal: Arsenal.HoldingSpare({
                 spare: {
                   kind: 'Shotgun',
-                  rounds: 48,
-                  loaded: 6,
+                  rounds: num('rounds', 48),
+                  loaded: Math.min(6, num('rounds', 48)),
                   tier: num('tier', 0),
                 },
               }),

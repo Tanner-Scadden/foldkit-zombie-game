@@ -97,6 +97,7 @@ import {
   ShopGood,
   ShopTabs,
   isBrowsing,
+  maybeDisplacedFocus,
   purchase,
   selectShopCategory,
   shopItemElementId,
@@ -684,11 +685,21 @@ const buy = (model: Model, item: ShopItemId): UpdateReturn => {
   return Option.match(purchase(model, item), {
     onNone: () => playSounds([uiCue('Denied')])(model),
     onSome: bought =>
-      playSounds(purchaseCues(item))(
-        burstCoins(bought, bought.player.x, bought.player.y),
-      ),
+      Update.combine(burstCoins(bought, bought.player.x, bought.player.y), [
+        playSounds(purchaseCues(item)),
+        refocusDisplacedRow,
+      ]),
   })
 }
+
+const refocusDisplacedRow: UpdateStep = stepModel =>
+  Option.match(maybeDisplacedFocus(stepModel), {
+    onNone: () => ({ model: stepModel }),
+    onSome: nextItem => ({
+      model: focusShopItem(stepModel, nextItem),
+      commands: [FocusShopItem({ item: nextItem })],
+    }),
+  })
 
 const focusShopItem = (model: Model, item: ShopItemId): Model =>
   ShopState.match(model.shop, {

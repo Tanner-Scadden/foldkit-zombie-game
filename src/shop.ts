@@ -1,4 +1,4 @@
-import { Array, Option, Schema, pipe } from 'effect'
+import { Array, Option, Schema, String, pipe } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
@@ -20,7 +20,7 @@ import {
   Phase,
   type Player,
   type ShopCategory,
-  type ShopItemId,
+  ShopItemId,
   ShopState,
   TrapKind,
   type Vector,
@@ -42,6 +42,7 @@ import {
   type WeaponTier,
   cancelReload,
   freshSpare,
+  looseRounds,
   maxRounds,
   maxTier,
   maybeNextTier,
@@ -255,7 +256,6 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
 export type ShopCategoryInfo = Readonly<{
   label: string
   blurb: string
-  items: Array.NonEmptyReadonlyArray<ShopItemId>
 }>
 
 export const SHOP_CATEGORIES: Readonly<Record<ShopCategory, ShopCategoryInfo>> =
@@ -263,43 +263,149 @@ export const SHOP_CATEGORIES: Readonly<Record<ShopCategory, ShopCategoryInfo>> =
     Guns: {
       label: 'Guns',
       blurb: `You always keep the ${WEAPONS[SIDEARM].name}. A new gun takes your second slot, and whatever was there goes, upgrades and all.`,
-      items: ['Shotgun', 'Smg'],
     },
-    Supplies: {
-      label: 'Supplies',
-      blurb: 'Hearts and ammo. Stock up.',
-      items: ['Heart', 'ShotgunShells', 'SmgRounds'],
-    },
-    Upgrades: {
-      label: 'Upgrades',
-      blurb: 'A gun keeps its upgrades until you replace it.',
-      items: ['ShotgunUpgrade', 'SmgUpgrade', 'PistolUpgrade'],
+    Health: {
+      label: 'Health',
+      blurb: `One heart at a time, up to ${PLAYER_MAX_HP}.`,
     },
     Traps: {
       label: 'Traps',
       blurb: 'Set them down between waves. Damage stays until you fix it.',
-      items: ['Barricade', 'Turret', 'RepairTraps'],
     },
   }
 
 export const SHOP_CATEGORY_ORDER: Array.NonEmptyReadonlyArray<ShopCategory> = [
   'Guns',
-  'Supplies',
-  'Upgrades',
+  'Health',
   'Traps',
 ]
 
 export const ShopTabs = Tabs.create<ShopCategory>()
 
-export const SHOP_ORDER: Array.NonEmptyReadonlyArray<ShopItemId> =
-  Array.flatMap(
-    SHOP_CATEGORY_ORDER,
-    category => SHOP_CATEGORIES[category].items,
+// GUNS
+
+type SpareLine = Readonly<{
+  weapon: WeaponKind
+  gun: ShopItemId
+  ammo: ShopItemId
+  upgrade: ShopItemId
+}>
+
+const SPARE_LINES: Array.NonEmptyReadonlyArray<SpareLine> = [
+  {
+    weapon: 'Shotgun',
+    gun: 'Shotgun',
+    ammo: 'ShotgunShells',
+    upgrade: 'ShotgunUpgrade',
+  },
+  { weapon: 'Smg', gun: 'Smg', ammo: 'SmgRounds', upgrade: 'SmgUpgrade' },
+]
+
+export const GunShelf = defineTaggedUnion({
+  ForSale: { weapon: WeaponKind, item: ShopItemId },
+  Owned: {
+    weapon: WeaponKind,
+    tier: Schema.Number,
+    status: Schema.String,
+    items: Schema.NonEmptyArray(ShopItemId),
+  },
+})
+export type GunShelf = typeof GunShelf.Type
+
+const carried = (
+  player: Player,
+  weapon: WeaponKind,
+): Option.Option<CarriedGun> =>
+  Option.filter(maybeSpare(player.arsenal), spare => spare.kind === weapon)
+
+const isCarrying = (player: Player, weapon: WeaponKind): boolean =>
+  Option.isSome(carried(player, weapon))
+
+const spareShelf = (player: Player, line: SpareLine): GunShelf =>
+  Option.match(carried(player, line.weapon), {
+    onNone: () => GunShelf.ForSale({ weapon: line.weapon, item: line.gun }),
+    onSome: spare =>
+      GunShelf.Owned({
+        weapon: line.weapon,
+        tier: spare.tier,
+        status: `${spare.loaded} loaded, ${looseRounds(spare)} spare`,
+        items: [line.ammo, line.upgrade],
+      }),
+  })
+
+const sidearmShelf = (player: Player): GunShelf =>
+  GunShelf.Owned({
+    weapon: SIDEARM,
+    tier: player.pistolTier,
+    status: `${player.pistolLoaded} loaded, never runs dry`,
+    items: ['PistolUpgrade'],
+  })
+
+export const gunShelves = (
+  model: Model,
+): Array.NonEmptyReadonlyArray<GunShelf> =>
+  Array.append(
+    Array.map(SPARE_LINES, line => spareShelf(model.player, line)),
+    sidearmShelf(model.player),
   )
 
+const shelfItems = (shelf: GunShelf): Array.NonEmptyReadonlyArray<ShopItemId> =>
+  GunShelf.match(shelf, {
+    ForSale: ({ item }) => Array.of(item),
+    Owned: ({ items }) => items,
+  })
+
 export const itemsIn = (
+  model: Model,
   category: ShopCategory,
-): Array.NonEmptyReadonlyArray<ShopItemId> => SHOP_CATEGORIES[category].items
+): Array.NonEmptyReadonlyArray<ShopItemId> => {
+  if (category === 'Guns') {
+    return Array.flatMap(gunShelves(model), shelfItems)
+  } else if (category === 'Health') {
+    return ['Heart']
+  } else {
+    return ['Barricade', 'Turret', 'RepairTraps']
+  }
+}
+
+const maybeGunOf = (item: ShopItemId): Option.Option<WeaponKind> =>
+  ShopGood.match(SHOP_ITEMS[item].good, {
+    Gun: ({ weapon }) => Option.some(weapon),
+    Ammo: ({ weapon }) => Option.some(weapon),
+    Upgrade: ({ weapon }) => Option.some(weapon),
+    Heart: () => Option.none(),
+    Trap: () => Option.none(),
+    Repair: () => Option.none(),
+  })
+
+const replacementFor = (model: Model, item: ShopItemId): ShopItemId => {
+  const isShown = Array.contains(itemsIn(model, model.shopCategory), item)
+  if (model.shopCategory !== 'Guns' || isShown) {
+    return item
+  }
+
+  return pipe(
+    maybeGunOf(item),
+    Option.flatMap(weapon =>
+      Array.findFirst(gunShelves(model), shelf => shelf.weapon === weapon),
+    ),
+    Option.match({
+      onNone: () => item,
+      onSome: shelf => Array.headNonEmpty(shelfItems(shelf)),
+    }),
+  )
+}
+
+export const maybeDisplacedFocus = (model: Model): Option.Option<ShopItemId> =>
+  ShopState.match(model.shop, {
+    Away: () => Option.none(),
+    Browsing: ({ focusedItem }) =>
+      Option.liftPredicate(
+        replacementFor(model, focusedItem),
+        replacement => replacement !== focusedItem,
+      ),
+    Dismissed: () => Option.none(),
+  })
 
 export const priceFor = (model: Model, id: ShopItemId): number =>
   ShopGood.match(SHOP_ITEMS[id].good, {
@@ -342,10 +448,50 @@ export const itemName = (model: Model, id: ShopItemId): string =>
     Repair: () => SHOP_ITEMS[id].name,
   })
 
+const ammoGain = (model: Model, weapon: WeaponKind, rounds: number): string => {
+  const roundsLabel = WEAPONS[weapon].roundsLabel
+  const room = Option.match(carried(model.player, weapon), {
+    onNone: () => rounds,
+    onSome: spare => maxRounds(weapon, spare.tier) - spare.rounds,
+  })
+  if (room <= 0) {
+    return `adds up to ${rounds} ${roundsLabel}`
+  } else if (room < rounds) {
+    return `adds ${room} ${roundsLabel} and fills it`
+  } else {
+    return `adds ${rounds} ${roundsLabel}`
+  }
+}
+
+export const itemAriaLabel = (model: Model, id: ShopItemId): string => {
+  const price = `$${priceFor(model, id)}`
+  const gunName = (weapon: WeaponKind): string =>
+    tierName(weapon, tierOf(model.player, weapon))
+  return ShopGood.match(SHOP_ITEMS[id].good, {
+    Gun: () => `Buy ${itemName(model, id)} for ${price}`,
+    Ammo: ({ weapon, rounds }) =>
+      `${itemName(model, id)}, ammo for ${gunName(weapon)}, ${price}, ${ammoGain(model, weapon, rounds)}`,
+    Upgrade: ({ weapon }) =>
+      Option.match(nextTierFor(model, weapon), {
+        onNone: () => itemName(model, id),
+        onSome: ({ name }) =>
+          `${name}, upgrade for ${gunName(weapon)}, ${price}`,
+      }),
+    Heart: () => `Buy ${itemName(model, id)} for ${price}`,
+    Trap: () => `Buy ${itemName(model, id)} for ${price}`,
+    Repair: () => `Buy ${itemName(model, id)} for ${price}`,
+  })
+}
+
 export const itemBlurb = (model: Model, id: ShopItemId): string =>
   ShopGood.match(SHOP_ITEMS[id].good, {
     Gun: () => SHOP_ITEMS[id].blurb,
-    Ammo: () => SHOP_ITEMS[id].blurb,
+    Ammo: ({ weapon, rounds }) =>
+      Option.match(carried(model.player, weapon), {
+        onNone: () => SHOP_ITEMS[id].blurb,
+        onSome: spare =>
+          `${String.capitalize(ammoGain(model, weapon, rounds))}. You have ${spare.rounds} of ${maxRounds(weapon, spare.tier)}.`,
+      }),
     Upgrade: ({ weapon }) => {
       const tier = tierOf(model.player, weapon)
       return Option.match(nextTierFor(model, weapon), {
@@ -367,9 +513,6 @@ export const Verdict = defineTaggedUnion({
   Refused: { reason: Schema.String },
 })
 export type Verdict = typeof Verdict.Type
-
-const isCarrying = (player: Player, weapon: WeaponKind): boolean =>
-  Option.exists(maybeSpare(player.arsenal), spare => spare.kind === weapon)
 
 const blockedReason = (model: Model, good: ShopGood): Option.Option<string> => {
   const { player } = model
@@ -437,10 +580,14 @@ const isAvailable = (model: Model, id: ShopItemId): boolean =>
   Verdict.isAnyOf(['Available'])(verdictFor(model, id))
 
 export const affordableCount = (model: Model, category: ShopCategory): number =>
-  Array.filter(itemsIn(category), id => isAvailable(model, id)).length
+  Array.filter(itemsIn(model, category), id => isAvailable(model, id)).length
 
 export const totalAffordable = (model: Model): number =>
-  Array.filter(SHOP_ORDER, id => isAvailable(model, id)).length
+  Array.reduce(
+    SHOP_CATEGORY_ORDER,
+    0,
+    (total, category) => total + affordableCount(model, category),
+  )
 
 export const ownedNote = (model: Model, id: ShopItemId): string => {
   const { player } = model
@@ -604,7 +751,7 @@ export const isBrowsing = (shop: ShopState): boolean =>
 const arriveAtStall = (model: Model): ShopState =>
   isShopOpenFor(model.phase)
     ? ShopState.Browsing({
-        focusedItem: Array.headNonEmpty(itemsIn(model.shopCategory)),
+        focusedItem: Array.headNonEmpty(itemsIn(model, model.shopCategory)),
       })
     : ShopState.Away()
 
@@ -619,7 +766,7 @@ export const selectShopCategory = (
         Away: () => shop,
         Browsing: () =>
           ShopState.Browsing({
-            focusedItem: Array.headNonEmpty(itemsIn(category)),
+            focusedItem: Array.headNonEmpty(itemsIn(model, category)),
           }),
         Dismissed: () => shop,
       }),

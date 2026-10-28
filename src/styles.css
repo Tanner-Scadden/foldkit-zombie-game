@@ -357,7 +357,7 @@ body {
 .shop-panel {
   position: relative;
   box-sizing: border-box;
-  width: min(480px, calc(100vw - 24px));
+  width: min(600px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -372,7 +372,7 @@ body {
 }
 
 .shop-header {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .shop-title {
@@ -407,9 +407,9 @@ body {
 
 .shop-tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .shop-tab {
@@ -470,7 +470,7 @@ body {
 .shop-items {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -535,6 +535,76 @@ body {
   font-weight: bold;
 }
 
+.shop-gun {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border: 2px solid #8a5a2b;
+  border-radius: 6px;
+  background: #261d2e;
+}
+
+.shop-gun-heading,
+.shop-gun-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.shop-gun-name {
+  margin: 0;
+  color: #ffe066;
+  font: bold 14px monospace;
+}
+
+.shop-gun-owned {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #8a5a2b;
+  color: #f4f1de;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+}
+
+.shop-gun-rounds {
+  color: #b8c2b0;
+  font-size: 12px;
+}
+
+.shop-pips {
+  display: flex;
+  gap: 3px;
+}
+
+.shop-pip {
+  width: 10px;
+  height: 6px;
+  border: 1px solid #ffe066;
+  border-radius: 2px;
+}
+
+.shop-pip.is-filled {
+  background: #ffe066;
+}
+
+.shop-subrows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0 0 0 10px;
+  border-left: 2px solid rgba(138, 90, 43, 0.6);
+  list-style: none;
+}
+
+.shop-subitem {
+  min-height: 44px;
+  padding: 6px 10px;
+}
+
 .shop-rule {
   margin: 0 0 10px;
   color: #b8c2b0;
@@ -547,20 +617,26 @@ body {
 
 @media (max-height: 500px) {
   .shop-panel {
-    width: min(760px, calc(100vw - 24px));
-    max-height: calc(100dvh - 12px);
-    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    column-gap: 10px;
+    width: min(820px, calc(100vw - 16px));
+    max-height: calc(100dvh - 8px);
+    padding: 8px 10px;
   }
 
   .shop-header {
     display: flex;
+    grid-column: 1;
+    grid-row: 1;
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
   }
 
-  .shop-greeting {
+  .shop-greeting,
+  .shop-rule {
     display: none;
   }
 
@@ -571,36 +647,88 @@ body {
     text-align: right;
   }
 
+  .shop-categories {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin-bottom: 0;
+  }
+
+  .shop-close {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+    width: auto;
+    min-height: 44px;
+    padding: 0 14px;
+  }
+
   .shop-tabs {
-    margin-bottom: 6px;
+    margin-bottom: 4px;
   }
 
   .shop-tab {
     min-height: 44px;
   }
 
-  .shop-rule {
-    margin-bottom: 6px;
-  }
-
   .shop-items {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
     gap: 6px;
+  }
+
+  .shop-items-guns {
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .shop-item {
     height: 100%;
-    min-height: 48px;
-    padding: 8px 10px;
-  }
-
-  .shop-categories {
-    margin-bottom: 8px;
-  }
-
-  .shop-close {
     min-height: 44px;
+    padding: 5px 8px;
+  }
+
+  .shop-item-heading {
+    gap: 6px;
+    font-size: 13px;
+  }
+
+  .shop-item-blurb,
+  .shop-item-note,
+  .shop-item-reason,
+  .shop-gun-rounds {
+    font-size: 11px;
+    line-height: 1.25;
+  }
+
+  .shop-gun {
+    gap: 3px;
+    padding: 5px 6px 6px;
+  }
+
+  .shop-gun-name {
+    font-size: 13px;
+  }
+
+  .shop-gun-owned {
+    padding: 1px 4px;
+    font-size: 10px;
+  }
+
+  .shop-gun-status {
+    align-items: flex-start;
+  }
+
+  .shop-pips {
+    padding-top: 3px;
+  }
+
+  .shop-subrows {
+    gap: 4px;
+    padding: 0;
+    border-left: 0;
+  }
+
+  .shop-subitem {
+    height: auto;
   }
 }
 

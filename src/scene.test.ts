@@ -157,11 +157,16 @@ describe('Shop', () => {
 
   const shotgunButton = role('button', { name: 'Buy Barn Buster for $35' })
   const smgButton = role('button', { name: 'Buy Chatterbox for $100' })
-  const shellsButton = role('button', { name: 'Buy Shell Sack for $10' })
+  const shellsButton = role('button', {
+    name: 'Shell Sack, ammo for Barn Buster, $10, adds 16 shells',
+  })
+  const shotgunUpgradeButton = role('button', {
+    name: 'Barn Buster Plus, upgrade for Barn Buster, $40',
+  })
   const heartButton = role('button', { name: 'Buy Pickled Heart for $25' })
   const swapButton = role('button', { name: 'Swap to the Pop Pistol' })
   const gunsTab = role('tab', { name: /^Guns,/ })
-  const suppliesTab = role('tab', { name: /^Supplies,/ })
+  const healthTab = role('tab', { name: /^Health,/ })
   const trapsTab = role('tab', { name: /^Traps,/ })
   const resolveFocusTab = Command.resolve(
     Tabs.FocusTab,
@@ -186,38 +191,108 @@ describe('Shop', () => {
       { update, view },
       given(
         modifyFields(atStall, {
-          wallet: () => ({ balance: 60, earned: 60, shown: 60 }),
+          wallet: () => ({ balance: 70, earned: 70, shown: 70 }),
         }),
       ),
       measureSurface,
       expect(role('heading', { name: "Rattles' Bone Bazaar" })).toBeAbsent(),
       ...openShop(),
       expect(role('heading', { name: "Rattles' Bone Bazaar" })).toExist(),
-      expect(text('You have $60')).toExist(),
+      expect(text('You have $70')).toExist(),
       expect(gunsTab).toHaveAttr('aria-selected', 'true'),
       expect(shellsButton).toBeAbsent(),
       expect(smgButton).toHaveAttr('aria-disabled', 'true'),
-      expect(text('Need $40 more')).toExist(),
+      expect(text('Need $30 more')).toExist(),
       keydown(shotgunButton, 'ArrowDown'),
       Command.resolve(FocusShopItem, Message.CompletedFocusShopItem()),
       keydown(smgButton, 'Enter'),
-      expect(text('You have $60')).toExist(),
+      expect(text('You have $70')).toExist(),
+      keydown(smgButton, 'ArrowUp'),
+      Command.resolve(FocusShopItem, Message.CompletedFocusShopItem()),
       keydown(shotgunButton, 'Enter'),
+      Command.resolve(
+        FocusShopItem({ item: 'ShotgunShells' }),
+        Message.CompletedFocusShopItem(),
+      ),
+      expect(text('You have $35')).toExist(),
+      expect(shotgunButton).toBeAbsent(),
+      expect(role('heading', { name: 'Barn Buster' })).toExist(),
+      expect(text('OWNED')).toExist(),
+      expect(text('6 loaded, 10 spare')).toExist(),
+      expect(role('img', { name: 'Tier 0 of 3' })).toExist(),
+      expect(role('list', { name: 'For your Barn Buster' })).toExist(),
+      expect(text('Adds 16 shells. You have 16 of 48.')).toExist(),
+      expect(shotgunUpgradeButton).toHaveAttr('aria-disabled', 'true'),
+      expect(text('Need $5 more')).toExist(),
+      keydown(shellsButton, 'Enter'),
       expect(text('You have $25')).toExist(),
-      expect(text('In your hands, 16 shells left')).toExist(),
+      expect(text('6 loaded, 26 spare')).toExist(),
+      expect(shellsButton).not.toHaveAttr('aria-disabled', 'true'),
+      expect(text('Need $15 more')).toExist(),
+      keydown(shellsButton, 'ArrowDown'),
+      Command.resolve(
+        FocusShopItem({ item: 'ShotgunUpgrade' }),
+        Message.CompletedFocusShopItem(),
+      ),
+      keydown(shotgunUpgradeButton, 'ArrowDown'),
+      Command.resolve(
+        FocusShopItem({ item: 'Smg' }),
+        Message.CompletedFocusShopItem(),
+      ),
+      keydown(smgButton, 'ArrowDown'),
+      Command.resolve(
+        FocusShopItem({ item: 'PistolUpgrade' }),
+        Message.CompletedFocusShopItem(),
+      ),
+      expect(
+        role('button', { name: 'Shovey Popper, upgrade for Pop Pistol, $200' }),
+      ).toHaveAttr('aria-disabled', 'true'),
       keydown(gunsTab, 'ArrowRight'),
       resolveFocusTab,
-      expect(suppliesTab).toHaveAttr('aria-selected', 'true'),
-      expect(shotgunButton).toBeAbsent(),
-      expect(shellsButton).not.toHaveAttr('aria-disabled', 'true'),
+      expect(healthTab).toHaveAttr('aria-selected', 'true'),
+      expect(shellsButton).toBeAbsent(),
       click(heartButton),
       expect(text('You have $0')).toExist(),
       expect(text('Hearts 4 of 5')).toExist(),
-      expect(shellsButton).toHaveAttr('aria-disabled', 'true'),
-      expect(text('Need $10 more')).toExist(),
       ...leaveShop(),
       expect(role('heading', { name: "Rattles' Bone Bazaar" })).toBeAbsent(),
       expect(swapButton).toHaveAttr('aria-keyshortcuts', 'Q E 1 2'),
+    )
+  })
+
+  test('a full gun cannot take more ammo, and says why', () => {
+    scene(
+      { update, view },
+      given(
+        modifyFields(atStall, {
+          player: player =>
+            modifyFields(player, {
+              arsenal: () =>
+                Arsenal.HoldingSpare({
+                  spare: { kind: 'Shotgun', rounds: 44, loaded: 6, tier: 0 },
+                }),
+            }),
+        }),
+      ),
+      measureSurface,
+      ...openShop(),
+      expect(
+        role('button', {
+          name: 'Shell Sack, ammo for Barn Buster, $10, adds 4 shells and fills it',
+        }),
+      ).not.toHaveAttr('aria-disabled', 'true'),
+      click(
+        role('button', {
+          name: 'Shell Sack, ammo for Barn Buster, $10, adds 4 shells and fills it',
+        }),
+      ),
+      expect(
+        role('button', {
+          name: 'Shell Sack, ammo for Barn Buster, $10, adds up to 16 shells',
+        }),
+      ).toHaveAttr('aria-disabled', 'true'),
+      expect(text('Your Barn Buster is full')).toExist(),
+      expect(text('6 loaded, 42 spare')).toExist(),
     )
   })
 
@@ -258,8 +333,7 @@ describe('Shop', () => {
       measureSurface,
       ...openShop(),
       expect(role('tab', { name: 'Guns, 1 you can buy' })).toExist(),
-      expect(role('tab', { name: 'Supplies, 1 you can buy' })).toExist(),
-      expect(role('tab', { name: 'Upgrades, nothing you can buy' })).toExist(),
+      expect(role('tab', { name: 'Health, 1 you can buy' })).toExist(),
       expect(role('tab', { name: 'Traps, 1 you can buy' })).toExist(),
       expect(text('3 things you can buy now')).toExist(),
       expect(
@@ -267,8 +341,9 @@ describe('Shop', () => {
       ).toExist(),
       expect(selector('[data-verdict="refused"] #shop-item-Smg')).toExist(),
       click(shotgunButton),
+      Command.resolve(FocusShopItem, Message.CompletedFocusShopItem()),
       expect(role('tab', { name: 'Guns, nothing you can buy' })).toExist(),
-      expect(role('tab', { name: 'Supplies, nothing you can buy' })).toExist(),
+      expect(role('tab', { name: 'Health, nothing you can buy' })).toExist(),
       expect(text('Nothing you can buy right now')).toExist(),
     )
   })
