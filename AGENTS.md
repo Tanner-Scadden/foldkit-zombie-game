@@ -14,15 +14,16 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 
 ### Commands
 
-| Command                                | What it does                                                  |
-| -------------------------------------- | ------------------------------------------------------------- |
-| `bun install`                          | Install dependencies                                          |
-| `bun dev`                              | Start the dev server                                          |
-| `bun run typecheck`                    | Typecheck with `tsrs`, including the Effect rules             |
-| `bun run lint`                         | Lint with oxlint and the Effect rules                         |
-| `bun run test`                         | Run the Story and Scene tests                                 |
-| `bun run build`                        | Build for production                                          |
-| `bun tools/balance/simulate.ts [runs]` | Play many seeded runs with a bot and print the balance report |
+| Command                                             | What it does                                                               |
+| --------------------------------------------------- | -------------------------------------------------------------------------- |
+| `bun install`                                       | Install dependencies                                                       |
+| `bun dev`                                           | Start the dev server                                                       |
+| `bun run typecheck`                                 | Typecheck with `tsrs`, including the Effect rules                          |
+| `bun run lint`                                      | Lint with oxlint and the Effect rules                                      |
+| `bun run test`                                      | Run the Story and Scene tests                                              |
+| `bun run build`                                     | Build for production                                                       |
+| `bun tools/balance/simulate.ts [runs]`              | Play many seeded runs with a bot and print the balance report              |
+| `MODE=endless bun tools/balance/simulate.ts [runs]` | The same bot in endless mode. `SWAP=1` makes it swap back to its spare gun |
 
 Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All four must pass.
 

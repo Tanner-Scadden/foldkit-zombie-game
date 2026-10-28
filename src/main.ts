@@ -42,6 +42,8 @@ import {
 import {
   type TrapChoice,
   type WeaponChoice,
+  isEndlessKey,
+  isKeepGoingKey,
   isPauseKey,
   isStartKey,
   isStartWaveKey,
@@ -67,6 +69,7 @@ import {
   Phase,
   PointerDevice,
   Round,
+  RunMode,
   ShopItemId,
   ShopState,
   initialModel,
@@ -80,7 +83,13 @@ import {
   moveHintBand,
 } from './onboarding'
 import { burstCoins, puffDust } from './particles'
-import { isBrowsing, purchase, shopItemElementId } from './shop'
+import {
+  SHOP_ITEMS,
+  ShopGood,
+  isBrowsing,
+  purchase,
+  shopItemElementId,
+} from './shop'
 import { advanceGame, clampFrameDelta, refreshIntent } from './simulation'
 import { tallyFrame } from './stats'
 import {
@@ -94,6 +103,7 @@ import {
 import {
   FINAL_WAVE,
   isRoundActive,
+  keepGoing,
   pause,
   startOrResume,
   startWaveEarly,
@@ -145,6 +155,9 @@ export const Message = defineMessageUnion({
   CompletedDetectInputDevice: { device: InputDevice },
   ClickedMuteButton: {},
   ClickedMusicButton: {},
+  ClickedCampaignButton: {},
+  ClickedEndlessButton: {},
+  ClickedKeepGoingButton: {},
   ClickedStartWaveButton: {},
   ClickedSwapButton: {},
   ClickedPlaceTrapButton: {},
@@ -339,8 +352,16 @@ const canStart = (model: Model): boolean =>
     GameOver: () => isPastRestartGrace(model),
   })
 
-const startWhenAllowed = (model: Model): Model =>
-  canStart(model) ? startOrResume(model) : model
+const startWhenAllowed = (model: Model, mode: RunMode): Model =>
+  canStart(model) ? startOrResume(model, mode) : model
+
+const startFromPointer = (model: Model): Model =>
+  Phase.guards.Victory(model.phase)
+    ? model
+    : startWhenAllowed(model, RunMode.Campaign())
+
+const keepGoingWhenAllowed = (model: Model): Model =>
+  canStart(model) ? keepGoing(model) : model
 
 const isScreenAnimated = (phase: Phase): boolean =>
   Phase.guards.Ready(phase) ||
@@ -370,8 +391,21 @@ const preparationFromKey = (model: Model, code: string): Model => {
   }
 }
 
-const startFromKey = (model: Model, code: string): Model =>
-  isStartKey(code) ? startWhenAllowed(model) : model
+const startFromKey = (model: Model, code: string): Model => {
+  if (isStartKey(code)) {
+    return startWhenAllowed(model, RunMode.Campaign())
+  } else if (isEndlessKey(code)) {
+    return startWhenAllowed(model, RunMode.Endless())
+  } else {
+    return model
+  }
+}
+
+const resumeFromKey = (model: Model, code: string): Model =>
+  isStartKey(code) ? startWhenAllowed(model, model.mode) : model
+
+const victoryFromKey = (model: Model, code: string): Model =>
+  isKeepGoingKey(code) ? keepGoingWhenAllowed(model) : startFromKey(model, code)
 
 const WEAPON_CHOICES: Readonly<
   Record<WeaponChoice, (arsenal: Arsenal) => Arsenal>
@@ -405,8 +439,8 @@ const phaseFromKey = (model: Model, code: string): Model =>
     Ready: () => startFromKey(model, code),
     Preparation: () => preparationFromKey(model, code),
     Wave: () => (isPauseKey(code) ? pause(model) : model),
-    Paused: () => startFromKey(model, code),
-    Victory: () => startFromKey(model, code),
+    Paused: () => resumeFromKey(model, code),
+    Victory: () => victoryFromKey(model, code),
     GameOver: () => startFromKey(model, code),
   })
 
@@ -542,6 +576,11 @@ const closeShopOutsidePreparation: UpdateStep = stepModel =>
     ? { model: stepModel }
     : closeShop(stepModel)
 
+const purchaseCues = (item: ShopItemId): ReadonlyArray<SoundCue> =>
+  ShopGood.guards.Upgrade(SHOP_ITEMS[item].good)
+    ? [uiCue('Purchase'), uiCue('PowerUp')]
+    : [uiCue('Purchase')]
+
 const buy = (model: Model, item: ShopItemId): UpdateReturn => {
   if (!isBrowsing(model.shop)) {
     return { model }
@@ -550,7 +589,7 @@ const buy = (model: Model, item: ShopItemId): UpdateReturn => {
   return Option.match(purchase(model, item), {
     onNone: () => playSounds([uiCue('Denied')])(model),
     onSome: bought =>
-      playSounds([uiCue('Purchase')])(
+      playSounds(purchaseCues(item))(
         burstCoins(bought, bought.player.x, bought.player.y),
       ),
   })
@@ -723,6 +762,12 @@ const cueMusicFrom =
     }
   }
 
+const startFromButton = (before: Model, started: Model): UpdateReturn =>
+  Update.combine(withInput(started, releaseAll), [
+    unlockAudio,
+    playStartSoundWhen(startsRun(before, started)),
+  ])
+
 const isFreshRun = (model: Model): boolean =>
   Phase.guards.Preparation(model.phase) &&
   model.elapsedMs < START_SOUND_GRACE_MS
@@ -807,7 +852,7 @@ const updateGame = (model: Model, message: Message) =>
     },
 
     PressedPointer: press => {
-      const started = startWhenAllowed(
+      const started = startFromPointer(
         useDevice(model, press.device === 'Touch' ? 'Touch' : 'KeyboardMouse'),
       )
       const pressed = withInput(started, input =>
@@ -857,6 +902,15 @@ const updateGame = (model: Model, message: Message) =>
     ClickedMuteButton: () => unlockAudio(toggleSound(model)),
 
     ClickedMusicButton: () => unlockAudio(toggleMusic(model)),
+
+    ClickedCampaignButton: () =>
+      startFromButton(model, startWhenAllowed(model, RunMode.Campaign())),
+
+    ClickedEndlessButton: () =>
+      startFromButton(model, startWhenAllowed(model, RunMode.Endless())),
+
+    ClickedKeepGoingButton: () =>
+      startFromButton(model, keepGoingWhenAllowed(model)),
 
     ClickedStartWaveButton: () =>
       isBrowsing(model.shop)

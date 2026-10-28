@@ -12,6 +12,7 @@ import {
 } from './constants'
 import {
   Arsenal,
+  type CarriedGun,
   type Model,
   Phase,
   type Player,
@@ -34,9 +35,15 @@ import {
 import {
   SIDEARM,
   WEAPONS,
+  type WeaponTier,
   maxRounds,
+  maxTier,
+  maybeNextTier,
   maybeSpare,
   startingRounds,
+  statsAt,
+  tierName,
+  tierOf,
 } from './weapons'
 
 // MONEY
@@ -73,11 +80,67 @@ export const tickShownMoney = (wallet: Wallet, seconds: number): Wallet => {
 export const ShopGood = defineTaggedUnion({
   Gun: { weapon: WeaponKind },
   Ammo: { weapon: WeaponKind, rounds: Schema.Number },
+  Upgrade: { weapon: WeaponKind },
   Heart: {},
   Trap: { kind: TrapKind },
   Repair: {},
 })
 export type ShopGood = typeof ShopGood.Type
+
+// UPGRADES
+
+const nextTierFor = (
+  model: Model,
+  weapon: WeaponKind,
+): Option.Option<WeaponTier> =>
+  maybeNextTier(weapon, tierOf(model.player, weapon))
+
+const changeText = (
+  before: number,
+  after: number,
+  describe: (from: number, to: number) => string,
+): ReadonlyArray<string> => (before === after ? [] : [describe(before, after)])
+
+const roundTo = (value: number, places: number): number =>
+  Math.round(value * 10 ** places) / 10 ** places
+
+export const upgradeChanges = (weapon: WeaponKind, tier: number): string => {
+  const before = statsAt(weapon, tier)
+  const after = statsAt(weapon, tier + 1)
+  const roundsLabel = WEAPONS[weapon].roundsLabel
+  return pipe(
+    [
+      ...changeText(
+        before.damage,
+        after.damage,
+        (from, to) => `Hits for ${to} instead of ${from}`,
+      ),
+      ...changeText(
+        before.pellets,
+        after.pellets,
+        (from, to) => `${to} pellets instead of ${from}`,
+      ),
+      ...changeText(
+        before.fireIntervalMs,
+        after.fireIntervalMs,
+        (from, to) => `${to} ms between shots instead of ${from}`,
+      ),
+      ...changeText(
+        roundTo(before.spread, 2),
+        roundTo(after.spread, 2),
+        (from, to) => (to < from ? 'Tighter aim' : 'A wider spray'),
+      ),
+      ...changeText(before.knockback, after.knockback, () => 'A bigger shove'),
+      ...changeText(
+        maxRounds(weapon, tier),
+        maxRounds(weapon, tier + 1),
+        (from, to) => `Holds ${to} ${roundsLabel} instead of ${from}`,
+      ),
+    ],
+    Array.join('. '),
+    text => `${text}.`,
+  )
+}
 
 export type ShopItem = Readonly<{
   id: ShopItemId
@@ -112,12 +175,33 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
     price: 120,
     good: ShopGood.Gun({ weapon: 'Smg' }),
   },
+  ShotgunUpgrade: {
+    id: 'ShotgunUpgrade',
+    name: `${WEAPONS.Shotgun.name} upgrade`,
+    blurb: `Bolts something louder onto your ${WEAPONS.Shotgun.name}.`,
+    price: 0,
+    good: ShopGood.Upgrade({ weapon: 'Shotgun' }),
+  },
   SmgRounds: {
     id: 'SmgRounds',
     name: 'Chatter Drum',
     blurb: `${SMG_ROUNDS} more rounds for the ${WEAPONS.Smg.name}.`,
     price: 20,
     good: ShopGood.Ammo({ weapon: 'Smg', rounds: SMG_ROUNDS }),
+  },
+  SmgUpgrade: {
+    id: 'SmgUpgrade',
+    name: `${WEAPONS.Smg.name} upgrade`,
+    blurb: `Teaches your ${WEAPONS.Smg.name} some new words.`,
+    price: 0,
+    good: ShopGood.Upgrade({ weapon: 'Smg' }),
+  },
+  PistolUpgrade: {
+    id: 'PistolUpgrade',
+    name: `${WEAPONS.Pistol.name} upgrade`,
+    blurb: `Shines up the ${WEAPONS.Pistol.name} you never put down.`,
+    price: 0,
+    good: ShopGood.Upgrade({ weapon: 'Pistol' }),
   },
   Heart: {
     id: 'Heart',
@@ -153,8 +237,11 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
 export const SHOP_ORDER: Array.NonEmptyReadonlyArray<ShopItemId> = [
   'Shotgun',
   'ShotgunShells',
+  'ShotgunUpgrade',
   'Smg',
   'SmgRounds',
+  'SmgUpgrade',
+  'PistolUpgrade',
   'Heart',
   'Barricade',
   'Turret',
@@ -165,12 +252,60 @@ export const priceFor = (model: Model, id: ShopItemId): number =>
   ShopGood.match(SHOP_ITEMS[id].good, {
     Gun: () => SHOP_ITEMS[id].price,
     Ammo: () => SHOP_ITEMS[id].price,
+    Upgrade: ({ weapon }) =>
+      Option.match(nextTierFor(model, weapon), {
+        onNone: () => 0,
+        onSome: ({ price }) => price,
+      }),
     Heart: () => SHOP_ITEMS[id].price,
     Trap: () => SHOP_ITEMS[id].price,
     Repair: () => repairPrice(model.traps),
   })
 
-export const SPARE_SLOT_RULE = `Your ${WEAPONS[SIDEARM].name} always stays. A new gun goes in your second slot and replaces whatever is there.`
+export const isMaxedUpgrade = (model: Model, id: ShopItemId): boolean =>
+  ShopGood.match(SHOP_ITEMS[id].good, {
+    Gun: () => false,
+    Ammo: () => false,
+    Upgrade: ({ weapon }) => Option.isNone(nextTierFor(model, weapon)),
+    Heart: () => false,
+    Trap: () => false,
+    Repair: () => false,
+  })
+
+export const priceLabel = (model: Model, id: ShopItemId): string =>
+  isMaxedUpgrade(model, id) ? 'MAX' : `$${priceFor(model, id)}`
+
+export const itemName = (model: Model, id: ShopItemId): string =>
+  ShopGood.match(SHOP_ITEMS[id].good, {
+    Gun: () => SHOP_ITEMS[id].name,
+    Ammo: () => SHOP_ITEMS[id].name,
+    Upgrade: ({ weapon }) =>
+      Option.match(nextTierFor(model, weapon), {
+        onNone: () => `${tierName(weapon, maxTier(weapon))}, fully upgraded`,
+        onSome: ({ name }) => `Upgrade to ${name}`,
+      }),
+    Heart: () => SHOP_ITEMS[id].name,
+    Trap: () => SHOP_ITEMS[id].name,
+    Repair: () => SHOP_ITEMS[id].name,
+  })
+
+export const itemBlurb = (model: Model, id: ShopItemId): string =>
+  ShopGood.match(SHOP_ITEMS[id].good, {
+    Gun: () => SHOP_ITEMS[id].blurb,
+    Ammo: () => SHOP_ITEMS[id].blurb,
+    Upgrade: ({ weapon }) => {
+      const tier = tierOf(model.player, weapon)
+      return Option.match(nextTierFor(model, weapon), {
+        onNone: () => `Your ${WEAPONS[weapon].name} cannot get any fancier.`,
+        onSome: () => upgradeChanges(weapon, tier),
+      })
+    },
+    Heart: () => SHOP_ITEMS[id].blurb,
+    Trap: () => SHOP_ITEMS[id].blurb,
+    Repair: () => SHOP_ITEMS[id].blurb,
+  })
+
+export const SPARE_SLOT_RULE = `Your ${WEAPONS[SIDEARM].name} always stays. A new gun goes in your second slot and replaces whatever is there. A new gun starts without upgrades, and the old gun's upgrades go with it.`
 
 export const shopItemElementId = (id: ShopItemId): string => `shop-item-${id}`
 
@@ -201,11 +336,20 @@ const blockedReason = (model: Model, good: ShopGood): Option.Option<string> => {
         {
           onNone: () => Option.some(`Needs the ${WEAPONS[weapon].name}`),
           onSome: spare =>
-            spare.rounds >= maxRounds(weapon)
+            spare.rounds >= maxRounds(weapon, spare.tier)
               ? Option.some(`Your ${WEAPONS[weapon].name} is full`)
               : Option.none(),
         },
       ),
+    Upgrade: ({ weapon }) => {
+      if (weapon !== SIDEARM && !isCarrying(player, weapon)) {
+        return Option.some(`Needs the ${WEAPONS[weapon].name}`)
+      } else if (Option.isNone(nextTierFor(model, weapon))) {
+        return Option.some('Fully upgraded')
+      } else {
+        return Option.none()
+      }
+    },
     Heart: () =>
       player.hp >= PLAYER_MAX_HP
         ? Option.some('Your hearts are full')
@@ -248,7 +392,9 @@ export const ownedNote = (model: Model, id: ShopItemId): string => {
         onSome: spare =>
           spare.kind === weapon
             ? `In your hands, ${spare.rounds} ${WEAPONS[weapon].roundsLabel} left`
-            : `Replaces your ${WEAPONS[spare.kind].name}`,
+            : spare.tier > 0
+              ? `Replaces your ${tierName(spare.kind, spare.tier)}, and its upgrades are lost`
+              : `Replaces your ${WEAPONS[spare.kind].name}`,
       }),
     Ammo: ({ weapon }) =>
       Option.match(
@@ -256,9 +402,13 @@ export const ownedNote = (model: Model, id: ShopItemId): string => {
         {
           onNone: () => `You do not carry the ${WEAPONS[weapon].name}`,
           onSome: spare =>
-            `You have ${spare.rounds} of ${maxRounds(weapon)} ${WEAPONS[weapon].roundsLabel}`,
+            `You have ${spare.rounds} of ${maxRounds(weapon, spare.tier)} ${WEAPONS[weapon].roundsLabel}`,
         },
       ),
+    Upgrade: ({ weapon }) =>
+      weapon !== SIDEARM && !isCarrying(player, weapon)
+        ? `Buy the ${WEAPONS[weapon].name} first`
+        : `Tier ${tierOf(player, weapon)} of ${maxTier(weapon)}`,
     Heart: () => `Hearts ${player.hp} of ${PLAYER_MAX_HP}`,
     Trap: ({ kind }) =>
       `${model.trapStock[kind]} ready to place, ${placedCount(model.traps, kind)} placed, up to ${TRAPS[kind].limit}`,
@@ -273,24 +423,44 @@ export const ownedNote = (model: Model, id: ShopItemId): string => {
 
 // PURCHASE
 
+const mapSpare = (
+  arsenal: Arsenal,
+  toSpare: (spare: CarriedGun) => CarriedGun,
+): Arsenal =>
+  Arsenal.match(arsenal, {
+    PistolOnly: () => arsenal,
+    HoldingPistol: ({ spare }) =>
+      Arsenal.HoldingPistol({ spare: toSpare(spare) }),
+    HoldingSpare: ({ spare }) =>
+      Arsenal.HoldingSpare({ spare: toSpare(spare) }),
+  })
+
 const refill = (
   arsenal: Arsenal,
   weapon: WeaponKind,
   rounds: number,
 ): Arsenal => {
-  const topUp = (kind: WeaponKind, current: number) => ({
-    kind,
-    rounds:
-      kind === weapon ? Math.min(maxRounds(weapon), current + rounds) : current,
-  })
-  return Arsenal.match(arsenal, {
-    PistolOnly: () => arsenal,
-    HoldingPistol: ({ spare }) =>
-      Arsenal.HoldingPistol({ spare: topUp(spare.kind, spare.rounds) }),
-    HoldingSpare: ({ spare }) =>
-      Arsenal.HoldingSpare({ spare: topUp(spare.kind, spare.rounds) }),
-  })
+  const topUp = (spare: CarriedGun): CarriedGun =>
+    modifyFields(spare, {
+      rounds: current =>
+        spare.kind === weapon
+          ? Math.min(maxRounds(weapon, spare.tier), current + rounds)
+          : current,
+    })
+  return mapSpare(arsenal, topUp)
 }
+
+const upgrade = (player: Player, weapon: WeaponKind): Player =>
+  weapon === SIDEARM
+    ? modifyFields(player, { pistolTier: tier => tier + 1 })
+    : modifyFields(player, {
+        arsenal: arsenal =>
+          mapSpare(arsenal, spare =>
+            spare.kind === weapon
+              ? modifyFields(spare, { tier: tier => tier + 1 })
+              : spare,
+          ),
+      })
 
 const equip = (model: Model, toPlayer: (player: Player) => Player): Model =>
   modifyFields(model, { player: toPlayer })
@@ -302,7 +472,11 @@ const grant = (model: Model, good: ShopGood): Model =>
         modifyFields(player, {
           arsenal: () =>
             Arsenal.HoldingSpare({
-              spare: { kind: weapon, rounds: startingRounds(weapon) },
+              spare: {
+                kind: weapon,
+                rounds: startingRounds(weapon),
+                tier: 0,
+              },
             }),
         }),
       ),
@@ -312,6 +486,7 @@ const grant = (model: Model, good: ShopGood): Model =>
           arsenal: arsenal => refill(arsenal, weapon, rounds),
         }),
       ),
+    Upgrade: ({ weapon }) => equip(model, player => upgrade(player, weapon)),
     Heart: () =>
       equip(model, player =>
         modifyFields(player, { hp: hp => Math.min(PLAYER_MAX_HP, hp + 1) }),

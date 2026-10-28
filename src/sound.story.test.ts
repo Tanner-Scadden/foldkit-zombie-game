@@ -57,6 +57,7 @@ const playing = (audio: AudioState): Model =>
             door: 'North',
             offset: 0,
             speedScale: 1,
+            hpScale: 1,
           },
         ],
       }),
@@ -69,6 +70,7 @@ const zombieAt = (id: number, x: number, y: number): Zombie => ({
   y,
   speed: 0,
   hp: ZOMBIE_MAX_HP,
+  maxHp: ZOMBIE_MAX_HP,
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
@@ -286,6 +288,8 @@ describe('frame sounds', () => {
       velocityY: 0,
       remainingMs: 900,
       weapon: 'Pistol',
+      damage: 1,
+      knockback: 110,
     }))
 
     story(
@@ -322,6 +326,8 @@ describe('frame sounds', () => {
       velocityY: 0,
       remainingMs: 900,
       weapon: 'Pistol',
+      damage: 1,
+      knockback: 110,
     }
     Array.forEach(silentStates, audio => {
       story(

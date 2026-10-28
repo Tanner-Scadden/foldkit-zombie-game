@@ -163,6 +163,7 @@ const HELD_SPAWN: PlannedSpawn = {
   door: 'North',
   offset: 0,
   speedScale: 1,
+  hpScale: 1,
 }
 
 const standing = (id: number, kind: ZombieKind, x: number): Zombie => ({
@@ -172,6 +173,7 @@ const standing = (id: number, kind: ZombieKind, x: number): Zombie => ({
   y: 90,
   speed: 0,
   hp: ZOMBIE_KINDS[kind].hp,
+  maxHp: ZOMBIE_KINDS[kind].hp,
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),

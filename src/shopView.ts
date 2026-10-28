@@ -6,12 +6,15 @@ import { Button, Dialog } from '@foldkit/ui'
 import { Message } from './main'
 import { type Model, type ShopItemId, ShopState } from './model'
 import {
-  SHOP_ITEMS,
   SHOP_ORDER,
   SPARE_SLOT_RULE,
   Verdict,
+  isMaxedUpgrade,
+  itemBlurb,
+  itemName,
   ownedNote,
   priceFor,
+  priceLabel,
   shopItemElementId,
   verdictFor,
 } from './shop'
@@ -70,8 +73,11 @@ const itemView = (
   initialFocus: Dialog.RenderInfo['initialFocus'],
   h: HtmlBuilder<Message>,
 ): Html => {
-  const { name, blurb } = SHOP_ITEMS[item]
-  const price = priceFor(model, item)
+  const name = itemName(model, item)
+  const blurb = itemBlurb(model, item)
+  const ariaLabel = isMaxedUpgrade(model, item)
+    ? name
+    : `Buy ${name} for $${priceFor(model, item)}`
   const verdict = verdictFor(model, item)
   const isRefused = Verdict.guards.Refused(verdict)
   const isFocused = focusedItem(model) === item
@@ -99,7 +105,7 @@ const itemView = (
                 ...(isFocused ? initialFocus : []),
                 h.Id(shopItemElementId(item)),
                 h.Class('shop-item'),
-                h.AriaLabel(`Buy ${name} for $${price}`),
+                h.AriaLabel(ariaLabel),
                 h.AriaDescribedBy(describedBy),
                 h.OnFocus(Message.FocusedShopItem({ item })),
                 h.OnKeyDownPreventDefault(key => keyMessage(item, key)),
@@ -109,7 +115,10 @@ const itemView = (
                   [h.Class('shop-item-heading')],
                   [
                     h.span([h.Class('shop-item-name')], [name]),
-                    h.span([h.Class('shop-item-price')], [`$${price}`]),
+                    h.span(
+                      [h.Class('shop-item-price')],
+                      [priceLabel(model, item)],
+                    ),
                   ],
                 ),
                 h.span(

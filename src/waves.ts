@@ -5,11 +5,20 @@ import { DOOR_IDS, doorSpawnPoint } from './arena'
 import {
   DOOR_HALF_WIDTH_PX,
   DOOR_SPAWN_SPREAD_PX,
+  ENDLESS_ESCORTS_BASE,
+  ENDLESS_ESCORTS_PER_WAVE,
+  ENDLESS_EXPLODER_WEIGHT_PER_WAVE,
+  ENDLESS_HP_PER_WAVE,
+  ENDLESS_SPEED_MAX,
+  ENDLESS_SPEED_PER_WAVE,
+  ENDLESS_TANKS_BASE,
+  ENDLESS_WAVES_PER_EXTRA_TANK,
   FIRST_PREPARATION_MS,
   PREPARATION_MS,
   SPAWN_JITTER_MS,
   WAVE_BONUS_BASE,
   WAVE_BONUS_PER_WAVE,
+  ZOMBIE_ALIVE_MAX,
 } from './constants'
 import { ZERO_VECTOR, clamp } from './geometry'
 import { deriveIntent } from './input'
@@ -20,6 +29,7 @@ import {
   Phase,
   type PlannedSpawn,
   Round,
+  RunMode,
   ShopState,
   Streak,
   TrapNotice,
@@ -56,6 +66,7 @@ export type SpawnGroup = Readonly<{
 
 export type WavePlan = Readonly<{
   speedScale: number
+  hpScale: number
   groups: Array.NonEmptyReadonlyArray<SpawnGroup>
 }>
 
@@ -73,6 +84,7 @@ const only = (kind: ZombieKind): Array.NonEmptyReadonlyArray<KindWeight> => [
 export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   {
     speedScale: 1.0,
+    hpScale: 1,
     groups: [
       {
         count: 6,
@@ -85,6 +97,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.07,
+    hpScale: 1,
     groups: [
       {
         count: 20,
@@ -104,6 +117,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.14,
+    hpScale: 1,
     groups: [
       {
         count: 35,
@@ -126,6 +140,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.21,
+    hpScale: 1,
     groups: [
       {
         count: 35,
@@ -158,6 +173,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.28,
+    hpScale: 1,
     groups: [
       {
         count: 2,
@@ -191,6 +207,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.35,
+    hpScale: 1,
     groups: [
       {
         count: 2,
@@ -231,6 +248,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.42,
+    hpScale: 1,
     groups: [
       {
         count: 3,
@@ -265,6 +283,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.49,
+    hpScale: 1,
     groups: [
       {
         count: 2,
@@ -322,6 +341,10 @@ const kindsInPlan = (plan: WavePlan): ReadonlyArray<ZombieKind> =>
   )
 
 export const debutKinds = (wave: number): ReadonlyArray<ZombieKind> => {
+  if (wave > FINAL_WAVE) {
+    return []
+  }
+
   const earlier = Array.flatMap(
     Array.take(WAVE_PLANS, Math.max(0, wave - 1)),
     kindsInPlan,
@@ -333,12 +356,9 @@ export const debutKinds = (wave: number): ReadonlyArray<ZombieKind> => {
   )
 }
 
-const pickDoor = (
-  doors: Array.NonEmptyReadonlyArray<DoorId>,
-  roll: number,
-): DoorId =>
-  Option.getOrElse(Array.get(doors, Math.floor(roll * doors.length)), () =>
-    Array.headNonEmpty(doors),
+const pickOne = <A>(items: Array.NonEmptyReadonlyArray<A>, roll: number): A =>
+  Option.getOrElse(Array.get(items, Math.floor(roll * items.length)), () =>
+    Array.headNonEmpty(items),
   )
 
 type KindPick = Readonly<{
@@ -369,7 +389,7 @@ export const pickKind = (
 }
 
 const rollGroup =
-  (speedScale: number) =>
+  ({ speedScale, hpScale }: WavePlan) =>
   (state: number, group: SpawnGroup): Seeded<ReadonlyArray<PlannedSpawn>> =>
     Array.mapAccum(
       Array.makeBy(group.count, index => index),
@@ -387,13 +407,14 @@ const rollGroup =
               index * group.intervalMs +
               jitterDraw.value * SPAWN_JITTER_MS,
             kind: pickKind(group.mix, kindDraw.value),
-            door: pickDoor(group.doors, doorDraw.value),
+            door: pickOne(group.doors, doorDraw.value),
             offset: between(
               offsetDraw.value,
               -DOOR_SPAWN_SPREAD_PX,
               DOOR_SPAWN_SPREAD_PX,
             ),
             speedScale,
+            hpScale,
           },
         ]
       },
@@ -404,15 +425,118 @@ const bySpawnTime = Order.mapInput(
   ({ atMs }: PlannedSpawn) => atMs,
 )
 
+// ENDLESS
+
+export const endlessDepth = (wave: number): number =>
+  Math.max(0, wave - FINAL_WAVE)
+
+export const hpScaleFor = (wave: number): number =>
+  1 + ENDLESS_HP_PER_WAVE * endlessDepth(wave)
+
+const DOOR_PAIRS: Array.NonEmptyReadonlyArray<
+  Array.NonEmptyReadonlyArray<DoorId>
+> = [
+  ['North', 'South'],
+  ['West', 'East'],
+  ['North', 'East'],
+  ['West', 'South'],
+  ['North', 'West'],
+  ['East', 'South'],
+]
+
+const TANK_SPREAD_MS = 30000
+const TANK_INTERVAL_MIN_MS = 2500
+const MAIN_INTERVAL_MS = 900
+const MAIN_INTERVAL_MIN_MS = 450
+const RUSH_INTERVAL_MS = 800
+const RUSH_INTERVAL_MIN_MS = 400
+const INTERVAL_DROP_PER_WAVE_MS = 30
+const MAIN_SHARE_MIN = 0.5
+const MAIN_SHARE_MAX = 0.65
+
+export const endlessTankCount = (wave: number): number =>
+  ENDLESS_TANKS_BASE +
+  Math.floor(endlessDepth(wave) / ENDLESS_WAVES_PER_EXTRA_TANK)
+
+export const endlessZombieCount = (wave: number): number =>
+  endlessTankCount(wave) +
+  ENDLESS_ESCORTS_BASE +
+  ENDLESS_ESCORTS_PER_WAVE * endlessDepth(wave)
+
+const endlessPlan = (state: number, wave: number): Seeded<WavePlan> => {
+  const depth = endlessDepth(wave)
+  const tankDoorsDraw = nextRandom(state)
+  const rushDoorsDraw = nextRandom(tankDoorsDraw.nextState)
+  const splitDraw = nextRandom(rushDoorsDraw.nextState)
+  const tanks = endlessTankCount(wave)
+  const escorts = endlessZombieCount(wave) - tanks
+  const mainCount = Math.round(
+    escorts * between(splitDraw.value, MAIN_SHARE_MIN, MAIN_SHARE_MAX),
+  )
+  const exploderWeight = 2 + ENDLESS_EXPLODER_WEIGHT_PER_WAVE * depth
+  const intervalDrop = INTERVAL_DROP_PER_WAVE_MS * depth
+  return [
+    splitDraw.nextState,
+    {
+      speedScale: Math.min(
+        ENDLESS_SPEED_MAX,
+        Array.lastNonEmpty(WAVE_PLANS).speedScale +
+          ENDLESS_SPEED_PER_WAVE * depth,
+      ),
+      hpScale: hpScaleFor(wave),
+      groups: [
+        {
+          count: tanks,
+          mix: only('Tank'),
+          doors: pickOne(DOOR_PAIRS, tankDoorsDraw.value),
+          startMs: 2000,
+          intervalMs: Math.max(TANK_INTERVAL_MIN_MS, TANK_SPREAD_MS / tanks),
+        },
+        {
+          count: mainCount,
+          mix: [
+            { kind: 'Shambler', weight: 3 },
+            { kind: 'Runner', weight: 2 },
+            { kind: 'Exploder', weight: exploderWeight },
+          ],
+          doors: ALL_DOORS,
+          startMs: 400,
+          intervalMs: Math.max(
+            MAIN_INTERVAL_MIN_MS,
+            MAIN_INTERVAL_MS - intervalDrop,
+          ),
+        },
+        {
+          count: escorts - mainCount,
+          mix: [
+            { kind: 'Shambler', weight: 1 },
+            { kind: 'Runner', weight: 2 },
+            { kind: 'Exploder', weight: exploderWeight },
+          ],
+          doors: pickOne(DOOR_PAIRS, rushDoorsDraw.value),
+          startMs: 14000,
+          intervalMs: Math.max(
+            RUSH_INTERVAL_MIN_MS,
+            RUSH_INTERVAL_MS - intervalDrop,
+          ),
+        },
+      ],
+    },
+  ]
+}
+
+export const rollPlan = (state: number, wave: number): Seeded<WavePlan> =>
+  wave > FINAL_WAVE ? endlessPlan(state, wave) : [state, planFor(wave)]
+
 export const rollSpawns = (
   state: number,
   wave: number,
 ): Seeded<ReadonlyArray<PlannedSpawn>> => {
-  const plan = planFor(wave)
+  const [planState, plan] = rollPlan(state, wave)
   const [nextState, groups] = Array.mapAccum(
     plan.groups,
-    state,
-    rollGroup(plan.speedScale),
+    planState,
+    rollGroup(plan),
   )
   return [nextState, Array.sort(Array.flatten(groups), bySpawnTime)]
 }
@@ -463,9 +587,10 @@ const beginPreparation = (
   })
 }
 
-const startRun = (model: Model): Model =>
+const startRun = (model: Model, mode: RunMode): Model =>
   beginPreparation(
     modifyFields(model, {
+      mode: () => mode,
       player: () => initialPlayer,
       zombies: () => [],
       bullets: () => [],
@@ -507,15 +632,31 @@ const resume = (model: Model, round: Round): Model =>
       }),
   })
 
-export const startOrResume = (model: Model): Model =>
+export const startOrResume = (model: Model, mode: RunMode): Model =>
   Phase.match(model.phase, {
-    Ready: () => startRun(model),
+    Ready: () => startRun(model, mode),
     Preparation: () => model,
     Wave: () => model,
     Paused: ({ round }) => resume(model, round),
-    Victory: () => startRun(model),
-    GameOver: () => startRun(model),
+    Victory: () => startRun(model, mode),
+    GameOver: () => startRun(model, mode),
   })
+
+export const keepGoing = (model: Model): Model =>
+  Phase.guards.Victory(model.phase)
+    ? beginPreparation(
+        modifyFields(model, {
+          mode: () => RunMode.Endless(),
+          shop: () => ShopState.Away(),
+          screenMs: () => 0,
+        }),
+        FINAL_WAVE + 1,
+        PREPARATION_MS,
+      )
+    : model
+
+export const isEndless = (model: Model): boolean =>
+  RunMode.guards.Endless(model.mode)
 
 export const pause = (model: Model): Model =>
   Phase.match(model.phase, {
@@ -546,6 +687,9 @@ export const startWaveEarly = (model: Model): Model =>
 
 // SPAWNING
 
+const scaledHp = (hp: number, hpScale: number): number =>
+  Math.max(1, Math.round(hp * hpScale))
+
 const spawnZombie = (model: Model, spawn: PlannedSpawn): Model => {
   const stats = ZOMBIE_KINDS[spawn.kind]
   const speedDraw = nextRandom(model.rngState)
@@ -562,7 +706,8 @@ const spawnZombie = (model: Model, spawn: PlannedSpawn): Model => {
     speed:
       between(speedDraw.value, stats.speedMin, stats.speedMax) *
       spawn.speedScale,
-    hp: stats.hp,
+    hp: scaledHp(stats.hp, spawn.hpScale),
+    maxHp: scaledHp(stats.hp, spawn.hpScale),
     knockback: ZERO_VECTOR,
     hitRemainingMs: 0,
     state: ZombieState.Walking(),
@@ -593,7 +738,7 @@ const payWaveBonus = (model: Model, wave: number): Model => {
 
 const clearWave = (model: Model, wave: number): Model => {
   const paid = payWaveBonus(model, wave)
-  if (wave >= FINAL_WAVE) {
+  if (wave >= FINAL_WAVE && !isEndless(model)) {
     return modifyFields(paid, {
       phase: () => Phase.Victory(),
       screenMs: () => 0,
@@ -609,8 +754,11 @@ const advanceWave = (
   elapsedMs: number,
   spawns: ReadonlyArray<PlannedSpawn>,
 ): Model => {
-  const [due, pending] = Array.span(spawns, spawn => spawn.atMs <= elapsedMs)
-  const withArrivals = Array.reduce(due, model, (current: Model, spawn) =>
+  const [due, later] = Array.span(spawns, spawn => spawn.atMs <= elapsedMs)
+  const room = Math.max(0, ZOMBIE_ALIVE_MAX - model.zombies.length)
+  const [arriving, held] = Array.splitAt(due, room)
+  const pending = Array.appendAll(held, later)
+  const withArrivals = Array.reduce(arriving, model, (current: Model, spawn) =>
     spawnZombie(current, spawn),
   )
   const spawned = modifyFields(withArrivals, {
@@ -657,13 +805,33 @@ export const roundWave = (phase: Phase): number =>
     GameOver: ({ wave }) => wave,
   })
 
-export const endWhenDefeated = (model: Model): Model =>
-  model.player.hp <= 0
+const recordBestWave = (model: Model, wave: number): Model =>
+  isEndless(model)
     ? modifyFields(model, {
-        phase: () => Phase.GameOver({ wave: roundWave(model.phase) }),
-        screenMs: () => 0,
+        maybeBestEndlessWave: maybeBest =>
+          Option.some(
+            Option.match(maybeBest, {
+              onNone: () => wave,
+              onSome: best => Math.max(best, wave),
+            }),
+          ),
       })
     : model
+
+export const endWhenDefeated = (model: Model): Model => {
+  if (model.player.hp > 0) {
+    return model
+  }
+
+  const wave = roundWave(model.phase)
+  return recordBestWave(
+    modifyFields(model, {
+      phase: () => Phase.GameOver({ wave }),
+      screenMs: () => 0,
+    }),
+    wave,
+  )
+}
 
 export const zombiesRemaining = (
   model: Model,

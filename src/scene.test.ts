@@ -30,7 +30,13 @@ const measureSurface = Mount.resolve(
   Message.MeasuredGameSurface({ left: 0, top: 0, width: 800, height: 400 }),
 )
 
-const READY_STATUS = `${GAME_TITLE}. Tap, click, or press Enter to start.`
+const PLAY_AGAIN =
+  'Press Enter or choose Campaign for 8 waves, or press E or choose Endless to fight until you fall.'
+
+const KEEP_GOING =
+  'Press K or choose Keep going to carry on into endless from wave 9 with your money, guns, and traps.'
+
+const READY_STATUS = `${GAME_TITLE}. ${PLAY_AGAIN}`
 
 const PREPARING_WAVE_ONE =
   'Get ready for wave 1 of 8. Press Enter or R, or use the Start wave button, to start it now.'
@@ -136,6 +142,7 @@ describe('Shop', () => {
             door: 'North',
             offset: 0,
             speedScale: 1,
+            hpScale: 1,
           },
         ],
       }),
@@ -235,7 +242,9 @@ describe('Shop', () => {
           player: player =>
             modifyFields(player, {
               arsenal: () =>
-                Arsenal.HoldingSpare({ spare: { kind: 'Smg', rounds: 30 } }),
+                Arsenal.HoldingSpare({
+                  spare: { kind: 'Smg', rounds: 30, tier: 0 },
+                }),
             }),
         }),
       ),
@@ -262,6 +271,7 @@ describe('Place button', () => {
             door: 'North',
             offset: 0,
             speedScale: 1,
+            hpScale: 1,
           },
         ],
       }),
@@ -330,6 +340,7 @@ describe('Turning the phone', () => {
             door: 'North',
             offset: 0,
             speedScale: 1,
+            hpScale: 1,
           },
         ],
       }),
@@ -431,7 +442,7 @@ describe('Run stats', () => {
       given(finished(Phase.GameOver({ wave: 4 }))),
       measureSurface,
       expect(role('status')).toHaveText(
-        `Game over. You got munched on wave 4. ${STATS} Tap, click, or press Enter to play again.`,
+        `Game over. You got munched on wave 4. ${STATS} ${PLAY_AGAIN}`,
       ),
     )
   })
@@ -442,7 +453,7 @@ describe('Run stats', () => {
       given(finished(Phase.Victory())),
       measureSurface,
       expect(role('status')).toHaveText(
-        `Victory. The estate is yours, for now. ${STATS} Tap, click, or press Enter to play again.`,
+        `Victory. The estate is yours, for now. ${STATS} ${KEEP_GOING} ${PLAY_AGAIN}`,
       ),
     )
   })

@@ -51,6 +51,7 @@ const DISTANT_SPAWN: PlannedSpawn = {
   door: 'North',
   offset: 0,
   speedScale: 1,
+  hpScale: 1,
 }
 
 const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
@@ -116,9 +117,14 @@ const withHp = (base: Model, hp: number): Model =>
     player: player => modifyFields(player, { hp: () => hp }),
   })
 
-const gun = (kind: CarriedGun['kind'], rounds: number): CarriedGun => ({
+const gun = (
+  kind: CarriedGun['kind'],
+  rounds: number,
+  tier = 0,
+): CarriedGun => ({
   kind,
   rounds,
+  tier,
 })
 
 const zombieAt = (id: number, x: number, y: number, hp: number): Zombie => ({
@@ -128,6 +134,7 @@ const zombieAt = (id: number, x: number, y: number, hp: number): Zombie => ({
   y,
   speed: 0,
   hp,
+  maxHp: hp,
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
@@ -141,6 +148,8 @@ const bulletInto = (id: number, { x, y }: Zombie): Bullet => ({
   velocityY: 0,
   remainingMs: 900,
   weapon: 'Pistol',
+  damage: 1,
+  knockback: 110,
 })
 
 const doomed = zombieAt(100, 170, PLAYER_Y, 1)
@@ -687,6 +696,8 @@ describe('shotgun spread', () => {
       velocityY: 0,
       remainingMs: 9000,
       weapon: 'Pistol',
+      damage: 1,
+      knockback: 110,
     }))
     story(
       update,

@@ -79,6 +79,7 @@ import {
   PLAYER_WALK_FRAME_MS,
   POPUP_FADE_START,
   POPUP_HOP_MS,
+  RESTART_GRACE_MS,
   ROT_DECAL_COLOR,
   ROT_DECAL_FADED_COLOR,
   ROT_GIB_COLOR,
@@ -145,6 +146,7 @@ import {
   type Player,
   type PointerDevice,
   type Popup,
+  RunMode,
   type RunStats,
   ShopState,
   Stick,
@@ -170,7 +172,6 @@ import {
   type Facing,
   GNOME_HEIGHT,
   GNOME_SPRITES,
-  GUN_ICONS,
   HEART_SPRITE,
   type Lay,
   PLAYER_IDLE_FRAMES,
@@ -183,6 +184,7 @@ import {
   ZOMBIE_SPRITES,
   frameAt,
   group,
+  gunIcon,
   gunSprite,
 } from './sprite'
 import { type StallLook, stallShapes } from './stall'
@@ -215,7 +217,10 @@ import {
   type KindCount,
   debutKinds,
   doorCounts,
+  endlessDepth,
+  hpScaleFor,
   isRoundActive,
+  roundWave,
   zombiesRemaining,
 } from './waves'
 import {
@@ -223,8 +228,12 @@ import {
   SIDEARM,
   WEAPONS,
   type WeaponStats,
+  heldTier,
   heldWeapon,
+  maxTier,
   maybeSpare,
+  statsAt,
+  tierName,
 } from './weapons'
 import {
   type DeathStyle,
@@ -437,7 +446,7 @@ const healthBarShapes = (
   zombie: Zombie,
   stats: ZombieKindStats,
 ): ReadonlyArray<Canvas.Shape> => {
-  if (stats.healthBar === 'Hidden' || zombie.hp >= stats.hp) {
+  if (stats.healthBar === 'Hidden' || zombie.hp >= zombie.maxHp) {
     return []
   }
 
@@ -455,7 +464,10 @@ const healthBarShapes = (
     Canvas.Rect({
       x: left,
       y: top,
-      width: Math.max(1, Math.round((HEALTH_BAR_WIDTH * zombie.hp) / stats.hp)),
+      width: Math.max(
+        1,
+        Math.round((HEALTH_BAR_WIDTH * zombie.hp) / zombie.maxHp),
+      ),
       height: 1,
       fill: HEALTH_BAR_COLOR,
     }),
@@ -774,9 +786,51 @@ const MUZZLE_FLASHES: Readonly<
         ],
 }
 
+type FlashSpark = Readonly<{ dx: number; dy: number; fill: string }>
+
+const SPARK_BLUE = '#9be3ff'
+const SPARK_PINK = '#ff9df0'
+const SPARK_GOLD = '#ffe066'
+
+const TIER_SPARKS: ReadonlyArray<ReadonlyArray<FlashSpark>> = [
+  [],
+  [
+    { dx: -3, dy: -3, fill: SPARK_BLUE },
+    { dx: 3, dy: 3, fill: SPARK_BLUE },
+  ],
+  [
+    { dx: -3, dy: -3, fill: SPARK_BLUE },
+    { dx: 3, dy: 3, fill: SPARK_BLUE },
+    { dx: 3, dy: -3, fill: SPARK_PINK },
+    { dx: -3, dy: 3, fill: SPARK_PINK },
+  ],
+  [
+    { dx: -3, dy: -3, fill: SPARK_GOLD },
+    { dx: 3, dy: 3, fill: SPARK_GOLD },
+    { dx: 3, dy: -3, fill: SPARK_GOLD },
+    { dx: -3, dy: 3, fill: SPARK_GOLD },
+    { dx: 0, dy: -5, fill: SPARK_PINK },
+    { dx: 0, dy: 5, fill: SPARK_PINK },
+    { dx: -5, dy: 0, fill: SPARK_BLUE },
+    { dx: 5, dy: 0, fill: SPARK_BLUE },
+  ],
+]
+
+const tierSparkShapes = (
+  tier: number,
+  x: number,
+  y: number,
+): ReadonlyArray<Canvas.Shape> =>
+  Array.map(
+    Option.getOrElse(Array.get(TIER_SPARKS, tier), () => []),
+    ({ dx, dy, fill }) =>
+      Canvas.Rect({ x: x + dx, y: y + dy, width: 1, height: 1, fill }),
+  )
+
 const muzzleFlashShapes = (
   player: Player,
   stats: WeaponStats,
+  tier: number,
   muzzleX: number,
   muzzleY: number,
 ): ReadonlyArray<Canvas.Shape> => {
@@ -784,11 +838,11 @@ const muzzleFlashShapes = (
   if (player.recoilRemainingMs <= 0 || msSinceShot >= MUZZLE_FLASH_MS) {
     return []
   } else {
-    return MUZZLE_FLASHES[stats.flash](
-      msSinceShot < MUZZLE_FLASH_BIG_MS,
-      muzzleX,
-      muzzleY,
-    )
+    const isBig = msSinceShot < MUZZLE_FLASH_BIG_MS
+    return [
+      ...MUZZLE_FLASHES[stats.flash](isBig, muzzleX, muzzleY),
+      ...(isBig ? tierSparkShapes(tier, muzzleX, muzzleY) : []),
+    ]
   }
 }
 
@@ -798,7 +852,8 @@ const AIMING_UP = -0.35
 const playerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   const { player } = model
   const weapon = heldWeapon(player.arsenal)
-  const stats = WEAPONS[weapon]
+  const tier = heldTier(player)
+  const stats = statsAt(weapon, tier)
   const recoil = clamp(player.recoilRemainingMs / stats.recoilMs, 0, 1)
   const kick = stats.recoilKickPx * recoil
   const bodyX = player.x - player.facing.x * kick
@@ -820,11 +875,16 @@ const playerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
       y: Math.round(bodyY + player.facing.y * GUN_HOLD_PX),
     },
     opacity: playerOpacity(player),
-    shapes: gunSprite(weapon, Math.atan2(player.facing.y, player.facing.x)),
+    shapes: gunSprite(
+      weapon,
+      tier,
+      Math.atan2(player.facing.y, player.facing.x),
+    ),
   })
   const flash = muzzleFlashShapes(
     player,
     stats,
+    tier,
     Math.round(bodyX + player.facing.x * flashReach),
     Math.round(bodyY + player.facing.y * flashReach),
   )
@@ -1146,7 +1206,7 @@ const gnomeShapes = (
   })
   const gun = group({
     translate: { x: foot.x + jolt, y: Math.round(center.y) },
-    shapes: gunSprite(TURRET_WEAPON, angle),
+    shapes: gunSprite(TURRET_WEAPON, 0, angle),
   })
   return Math.sin(angle) < AIMING_UP ? [gun, body] : [body, gun]
 }
@@ -1538,7 +1598,7 @@ const roundHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   Phase.match(model.phase, {
     Ready: () => [],
     Preparation: ({ wave, remainingMs }) => [
-      ...hudText(HUD_TITLE_Y, waveLabel(wave), 'Plain'),
+      ...hudText(HUD_TITLE_Y, waveLabel(model.mode, wave), 'Plain'),
       ...hudText(
         HUD_SUBTITLE_Y,
         `STARTS IN ${secondsLeft(remainingMs)}`,
@@ -1546,7 +1606,7 @@ const roundHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
       ),
     ],
     Wave: ({ wave, spawns }) => [
-      ...hudText(HUD_TITLE_Y, waveLabel(wave), 'Plain'),
+      ...hudText(HUD_TITLE_Y, waveLabel(model.mode, wave), 'Plain'),
       ...hudText(
         HUD_SUBTITLE_Y,
         `ZOMBIES ${zombiesRemaining(model, spawns)}`,
@@ -1582,16 +1642,39 @@ const SLOT_HELD_BORDER = '#ffe066'
 const SLOT_TEXT_TOP = 3
 const ENDLESS_ROUNDS = '\u221e'
 
+const PIP_WIDTH = 2
+const PIP_GAP = 1
+const PIP_LEFT = 3
+const PIP_DROP = 3
+const PIP_ON_COLOR = '#ffe066'
+const PIP_OFF_COLOR = 'rgba(244, 241, 222, 0.25)'
+
+type SlotGun = Readonly<{ weapon: WeaponKind; tier: number }>
+
 type SlotLook = Readonly<{
-  maybeWeapon: Option.Option<WeaponKind>
+  maybeGun: Option.Option<SlotGun>
   ammo: string
   isHeld: boolean
   isDry: boolean
 }>
 
+const tierPipShapes = (
+  x: number,
+  { weapon, tier }: SlotGun,
+): ReadonlyArray<Canvas.Shape> =>
+  Array.makeBy(maxTier(weapon), index =>
+    Canvas.Rect({
+      x: x + PIP_LEFT + index * (PIP_WIDTH + PIP_GAP),
+      y: SLOT_TOP + SLOT_HEIGHT - PIP_DROP,
+      width: PIP_WIDTH,
+      height: 1,
+      fill: index < tier ? PIP_ON_COLOR : PIP_OFF_COLOR,
+    }),
+  )
+
 const slotShapes = (
   index: number,
-  { maybeWeapon, ammo, isHeld, isDry }: SlotLook,
+  { maybeGun, ammo, isHeld, isDry }: SlotLook,
 ): ReadonlyArray<Canvas.Shape> => {
   const x = HUD_MARGIN + index * (SLOT_WIDTH + SLOT_GAP)
   const border = isHeld ? SLOT_HELD_BORDER : SLOT_BORDER
@@ -1610,9 +1693,12 @@ const slotShapes = (
       height: SLOT_HEIGHT - 2,
       fill: SLOT_FILL,
     }),
-    ...Option.match(maybeWeapon, {
+    ...Option.match(maybeGun, {
       onNone: () => [],
-      onSome: weapon => [placeSprite(x + 8, SLOT_TOP + 6, GUN_ICONS[weapon])],
+      onSome: slotGun => [
+        placeSprite(x + 8, SLOT_TOP + 5, gunIcon(slotGun.weapon, slotGun.tier)),
+        ...tierPipShapes(x, slotGun),
+      ],
     }),
     ...textShapes(
       ammo,
@@ -1628,20 +1714,20 @@ const loadoutShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
   const { arsenal } = player
   const isHoldingSpare = Arsenal.guards.HoldingSpare(arsenal)
   const pistolSlot: SlotLook = {
-    maybeWeapon: Option.some(SIDEARM),
+    maybeGun: Option.some({ weapon: SIDEARM, tier: player.pistolTier }),
     ammo: ENDLESS_ROUNDS,
     isHeld: !isHoldingSpare,
     isDry: false,
   }
   const spareSlot: SlotLook = Option.match(maybeSpare(arsenal), {
     onNone: () => ({
-      maybeWeapon: Option.none(),
+      maybeGun: Option.none(),
       ammo: '--',
       isHeld: false,
       isDry: false,
     }),
     onSome: spare => ({
-      maybeWeapon: Option.some(spare.kind),
+      maybeGun: Option.some({ weapon: spare.kind, tier: spare.tier }),
       ammo: `${spare.rounds}`,
       isHeld: isHoldingSpare,
       isDry: spare.rounds <= 0,
@@ -1875,14 +1961,21 @@ export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
 
 // VIEW
 
-const statusWave = (wave: number): string => `wave ${wave} of ${FINAL_WAVE}`
+const statusWave = (model: Model, wave: number): string =>
+  RunMode.match(model.mode, {
+    Campaign: () => `wave ${wave} of ${FINAL_WAVE}`,
+    Endless: () => `endless wave ${wave}`,
+  })
 
 const shopHint = (model: Model): string =>
   isShopOpenFor(model.phase)
     ? ' The shop stall in the bottom right corner is open. Walk up to its sign to browse.'
     : ''
 
-const PLAY_AGAIN = 'Tap, click, or press Enter to play again.'
+const PLAY_AGAIN =
+  'Press Enter or choose Campaign for 8 waves, or press E or choose Endless to fight until you fall.'
+
+const KEEP_GOING = `Press K or choose Keep going to carry on into endless from wave ${FINAL_WAVE + 1} with your money, guns, and traps.`
 
 const killLabel = (stats: RunStats): string =>
   pipe(
@@ -1891,9 +1984,23 @@ const killLabel = (stats: RunStats): string =>
     Array.join(', '),
   )
 
+const waveStatsLabel = (model: Model): string =>
+  RunMode.match(model.mode, {
+    Campaign: () =>
+      `Waves cleared: ${model.stats.wavesCleared} of ${FINAL_WAVE}.`,
+    Endless: () =>
+      `Wave reached: ${roundWave(model.phase)}. ${Option.match(
+        model.maybeBestEndlessWave,
+        {
+          onNone: () => '',
+          onSome: best => `Best this session: wave ${best}.`,
+        },
+      )}`,
+  })
+
 const statsLabel = (model: Model): string => {
   const { stats } = model
-  return `Waves cleared: ${stats.wavesCleared} of ${FINAL_WAVE}. Zombies munched back: ${totalKills(stats)} (${killLabel(stats)}). Run time ${runTimeLabel(stats)}. Accuracy ${accuracyPercent(stats)} percent. Money earned $${model.wallet.earned}. Hearts lost ${stats.heartsLost}. Traps placed ${stats.trapsPlaced}. Score ${model.score}.`
+  return `${waveStatsLabel(model)} Zombies munched back: ${totalKills(stats)} (${killLabel(stats)}). Run time ${runTimeLabel(stats)}. Accuracy ${accuracyPercent(stats)} percent. Money earned $${model.wallet.earned}. Hearts lost ${stats.heartsLost}. Traps placed ${stats.trapsPlaced}. Score ${model.score}.`
 }
 
 export const statusText = (model: Model): string => {
@@ -1902,25 +2009,26 @@ export const statusText = (model: Model): string => {
   }
 
   return Phase.match(model.phase, {
-    Ready: () => `${GAME_TITLE}. Tap, click, or press Enter to start.`,
+    Ready: () => `${GAME_TITLE}. ${PLAY_AGAIN}`,
     Preparation: ({ wave }) =>
-      `Get ready for ${statusWave(wave)}. Press Enter or R, or use the Start wave button, to start it now.${shopHint(model)}`,
-    Wave: ({ wave }) => `Fighting ${statusWave(wave)}.`,
+      `Get ready for ${statusWave(model, wave)}. Press Enter or R, or use the Start wave button, to start it now.${shopHint(model)}`,
+    Wave: ({ wave }) => `Fighting ${statusWave(model, wave)}.`,
     Paused: ({ round }) =>
-      `Paused during ${statusWave(round.wave)}. Tap, click, or press Enter to resume.`,
+      `Paused during ${statusWave(model, round.wave)}. Tap, click, or press Enter to resume.`,
     Victory: () =>
-      `Victory. ${victoryVerdict(model.stats)}. ${statsLabel(model)} ${PLAY_AGAIN}`,
+      `Victory. ${victoryVerdict(model.stats)}. ${statsLabel(model)} ${KEEP_GOING} ${PLAY_AGAIN}`,
     GameOver: ({ wave }) =>
       `Game over. ${defeatVerdict(wave, model.stats)}. ${statsLabel(model)} ${PLAY_AGAIN}`,
   })
 }
 
 const gunLabel = (model: Model): string => {
-  const held = WEAPONS[heldWeapon(model.player.arsenal)].name
-  return Option.match(maybeSpare(model.player.arsenal), {
+  const { player } = model
+  const held = tierName(heldWeapon(player.arsenal), heldTier(player))
+  return Option.match(maybeSpare(player.arsenal), {
     onNone: () => `Holding the ${held}. Your second slot is empty.`,
     onSome: spare =>
-      `Holding the ${held}. Second slot: ${WEAPONS[spare.kind].name} with ${spare.rounds} ${WEAPONS[spare.kind].roundsLabel}.`,
+      `Holding the ${held}. Second slot: ${tierName(spare.kind, spare.tier)}, upgrade tier ${spare.tier} of ${maxTier(spare.kind)}, with ${spare.rounds} ${WEAPONS[spare.kind].roundsLabel}. Pistol upgrade tier ${player.pistolTier} of ${maxTier(SIDEARM)}.`,
   })
 }
 
@@ -2085,7 +2193,11 @@ const previewLabel = (
   const debutText = Array.isReadonlyArrayEmpty(debuts)
     ? ''
     : ` New this wave: ${Array.join(debuts, ', ')}.`
-  return `Coming in wave ${wave}. ${Array.join(Array.map(doorCounts(spawns), doorPreviewLabel), '. ')}.${debutText}`
+  const healthText =
+    endlessDepth(wave) > 0
+      ? ` Zombies have ${Math.round((hpScaleFor(wave) - 1) * 100)} percent more health.`
+      : ''
+  return `Coming in wave ${wave}. ${Array.join(Array.map(doorCounts(spawns), doorPreviewLabel), '. ')}.${debutText}${healthText}`
 }
 
 const wavePreviewView = (
@@ -2216,6 +2328,105 @@ const preparationControlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
     GameOver: () => h.empty,
   })
 
+type ModeButton = Readonly<{
+  className: string
+  label: string
+  detail: string
+  key: string
+  keyName: string
+  ariaLabel: string
+  message: Message
+}>
+
+const CAMPAIGN_BUTTON: ModeButton = {
+  className: 'mode-button',
+  label: 'CAMPAIGN',
+  detail: `${FINAL_WAVE} WAVES`,
+  key: 'ENTER',
+  keyName: 'Enter',
+  ariaLabel: `Campaign: ${FINAL_WAVE} waves, then victory`,
+  message: Message.ClickedCampaignButton(),
+}
+
+const ENDLESS_BUTTON: ModeButton = {
+  className: 'mode-button',
+  label: 'ENDLESS',
+  detail: 'UNTIL YOU DROP',
+  key: 'E',
+  keyName: 'E',
+  ariaLabel: 'Endless: waves keep coming until you fall',
+  message: Message.ClickedEndlessButton(),
+}
+
+const KEEP_GOING_BUTTON: ModeButton = {
+  className: 'mode-button keep-going-button',
+  label: 'KEEP GOING',
+  detail: `ON TO WAVE ${FINAL_WAVE + 1}`,
+  key: 'K',
+  keyName: 'K',
+  ariaLabel: `Keep going: carry on into endless from wave ${FINAL_WAVE + 1} with your money, guns, and traps`,
+  message: Message.ClickedKeepGoingButton(),
+}
+
+const modeButtonView = (
+  model: Model,
+  button: ModeButton,
+  h: HtmlBuilder<Message>,
+): Html =>
+  h.button(
+    [
+      h.Type('button'),
+      h.Class(button.className),
+      h.AriaLabel(button.ariaLabel),
+      h.AriaKeyshortcuts(button.keyName),
+      h.OnClick(button.message, { focusSelector: '.game-surface' }),
+    ],
+    [
+      h.span([h.Class('mode-button-label')], [button.label]),
+      h.span([h.Class('mode-button-detail')], [button.detail]),
+      ...(model.lastDevice === 'KeyboardMouse'
+        ? [
+            h.span(
+              [h.Class('mode-button-key'), h.AriaHidden(true)],
+              [button.key],
+            ),
+          ]
+        : []),
+    ],
+  )
+
+const modeButtons = (model: Model): ReadonlyArray<ModeButton> =>
+  Phase.match(model.phase, {
+    Ready: () => [CAMPAIGN_BUTTON, ENDLESS_BUTTON],
+    Preparation: () => [],
+    Wave: () => [],
+    Paused: () => [],
+    Victory: () =>
+      model.screenMs >= RESTART_GRACE_MS
+        ? [KEEP_GOING_BUTTON, CAMPAIGN_BUTTON, ENDLESS_BUTTON]
+        : [],
+    GameOver: () =>
+      model.screenMs >= RESTART_GRACE_MS
+        ? [CAMPAIGN_BUTTON, ENDLESS_BUTTON]
+        : [],
+  })
+
+const modeChoiceView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isSideways(model)
+    ? h.empty
+    : Array.match(modeButtons(model), {
+        onEmpty: () => h.empty,
+        onNonEmpty: buttons =>
+          h.div(
+            [
+              h.Class('mode-choice'),
+              h.Role('group'),
+              h.AriaLabel('Choose a mode'),
+            ],
+            Array.map(buttons, button => modeButtonView(model, button, h)),
+          ),
+      })
+
 const ROTATE_TITLE_ID = 'rotate-title'
 const ROTATE_BODY_ID = 'rotate-body'
 
@@ -2279,6 +2490,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       loadoutView(model, h),
       preparationControlsView(model, h),
       swapButtonView(model, h),
+      modeChoiceView(model, h),
       audioButtonsView(model, h),
       shopDialogView(model, h),
       sidewaysView(model, h),

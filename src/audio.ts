@@ -40,6 +40,7 @@ export const SoundEffect = Schema.Literals([
   'Start',
   'ShopBell',
   'Purchase',
+  'PowerUp',
   'Denied',
   'Payday',
   'TurretShot',
@@ -578,6 +579,32 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
         envelope: envelope(0.18, 0.002, 0.24, 0.13),
       },
     ],
+  },
+  PowerUp: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 523), at(0.18, 523)],
+        envelope: envelope(0.1, 0.002, 0.06, 0.12),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 659), at(0.24, 659)],
+        envelope: envelope(0.1, 0.002, 0.06, 0.18),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 784), at(0.3, 784)],
+        envelope: envelope(0.1, 0.002, 0.06, 0.24),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0.3, 1046), at(0.6, 1568)],
+        envelope: envelope(0.14, 0.004, 0.3, 0.3),
+      },
+    ],
+    noises: [],
   },
   Denied: {
     variationCents: 0,

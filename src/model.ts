@@ -85,6 +85,7 @@ export type WeaponKind = typeof WeaponKind.Type
 export const CarriedGun = Schema.Struct({
   kind: WeaponKind,
   rounds: Schema.Number,
+  tier: Schema.Number,
 })
 export type CarriedGun = typeof CarriedGun.Type
 
@@ -105,6 +106,7 @@ export const Player = Schema.Struct({
   invulnerability: Invulnerability,
   recoilRemainingMs: Schema.Number,
   arsenal: Arsenal,
+  pistolTier: Schema.Number,
 })
 export type Player = typeof Player.Type
 
@@ -130,6 +132,7 @@ export const Zombie = Schema.Struct({
   y: Schema.Number,
   speed: Schema.Number,
   hp: Schema.Number,
+  maxHp: Schema.Number,
   knockback: Vector,
   hitRemainingMs: Schema.Number,
   state: ZombieState,
@@ -144,6 +147,8 @@ export const Bullet = Schema.Struct({
   velocityY: Schema.Number,
   remainingMs: Schema.Number,
   weapon: WeaponKind,
+  damage: Schema.Number,
+  knockback: Schema.Number,
 })
 export type Bullet = typeof Bullet.Type
 
@@ -295,6 +300,7 @@ export const PlannedSpawn = Schema.Struct({
   door: DoorId,
   offset: Schema.Number,
   speedScale: Schema.Number,
+  hpScale: Schema.Number,
 })
 export type PlannedSpawn = typeof PlannedSpawn.Type
 
@@ -316,6 +322,12 @@ export const Round = defineTaggedUnion({
   Wave: waveFields,
 })
 export type Round = typeof Round.Type
+
+export const RunMode = defineTaggedUnion({
+  Campaign: {},
+  Endless: {},
+})
+export type RunMode = typeof RunMode.Type
 
 export const Phase = defineTaggedUnion({
   Ready: {},
@@ -351,8 +363,11 @@ export type Blast = typeof Blast.Type
 export const ShopItemId = Schema.Literals([
   'Shotgun',
   'ShotgunShells',
+  'ShotgunUpgrade',
   'Smg',
   'SmgRounds',
+  'SmgUpgrade',
+  'PistolUpgrade',
   'Heart',
   'Barricade',
   'Turret',
@@ -457,6 +472,8 @@ export type RunStats = typeof RunStats.Type
 
 export const Model = Schema.Struct({
   phase: Phase,
+  mode: RunMode,
+  maybeBestEndlessWave: Schema.Option(Schema.Number),
   player: Player,
   zombies: Schema.Array(Zombie),
   bullets: Schema.Array(Bullet),
@@ -508,6 +525,7 @@ export const initialPlayer: Player = {
   invulnerability: Invulnerability.Vulnerable(),
   recoilRemainingMs: 0,
   arsenal: Arsenal.PistolOnly(),
+  pistolTier: 0,
 }
 
 export const emptyWallet: Wallet = { balance: 0, earned: 0, shown: 0 }
@@ -561,6 +579,8 @@ export const stillShake: Shake = { trauma: 0, offset: { x: 0, y: 0 } }
 
 export const initialModel: Model = {
   phase: Phase.Ready(),
+  mode: RunMode.Campaign(),
+  maybeBestEndlessWave: Option.none(),
   player: initialPlayer,
   zombies: [],
   bullets: [],

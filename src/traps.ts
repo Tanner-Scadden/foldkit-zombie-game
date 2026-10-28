@@ -353,6 +353,8 @@ const peaFrom = (id: number, muzzle: Vector, direction: Vector): Bullet => {
     velocityY: direction.y * stats.bulletSpeed,
     remainingMs: stats.bulletLifetimeMs,
     weapon: TURRET_WEAPON,
+    damage: stats.damage,
+    knockback: stats.knockback,
   }
 }
 

@@ -30,6 +30,16 @@ const scenarios: Record<
     warm: async () => wait(4000),
     bot: true,
   },
+  endlessCap: {
+    q: '?wave=15&mode=endless&start=wave&god&fill&crowd=20&tough',
+    warm: async () => wait(6000),
+    bot: true,
+  },
+  endless15: {
+    q: '?wave=15&mode=endless&start=wave&god&gun=smg&tier=3&fill',
+    warm: async () => wait(15000),
+    bot: true,
+  },
 }
 
 const stats = (xs: Array<number>) => {

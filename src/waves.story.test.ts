@@ -48,6 +48,7 @@ const plannedSpawn = (atMs: number): PlannedSpawn => ({
   door: 'North',
   offset: 0,
   speedScale: 1,
+  hpScale: 1,
 })
 
 const zombieAt = (
@@ -62,6 +63,7 @@ const zombieAt = (
   y,
   speed: 0,
   hp,
+  maxHp: hp,
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
@@ -75,6 +77,8 @@ const bulletInto = (id: number, zombie: Zombie): Bullet => ({
   velocityY: 0,
   remainingMs: 900,
   weapon: 'Pistol',
+  damage: 1,
+  knockback: 110,
 })
 
 const inWave = (

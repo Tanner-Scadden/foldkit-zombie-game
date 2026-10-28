@@ -51,6 +51,7 @@ const DISTANT_SPAWN: PlannedSpawn = {
   door: 'North',
   offset: 0,
   speedScale: 1,
+  hpScale: 1,
 }
 
 const fightingModel: Model = modifyFields(initialModel, {
@@ -71,6 +72,7 @@ const zombieOf = (
   y,
   speed,
   hp: ZOMBIE_KINDS[kind].hp,
+  maxHp: ZOMBIE_KINDS[kind].hp,
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
@@ -84,6 +86,8 @@ const pistolInto = (id: number, zombie: Zombie): Bullet => ({
   velocityY: 0,
   remainingMs: 900,
   weapon: 'Pistol',
+  damage: 1,
+  knockback: 110,
 })
 
 const pistolsInto = (
@@ -146,6 +150,7 @@ describe('the kind table', () => {
         door: Option.getOrThrow(Array.get(DOOR_IDS, index)),
         offset: 5,
         speedScale: 1.1,
+        hpScale: 1,
       }),
     )
 
@@ -232,6 +237,8 @@ describe('the kind table', () => {
       velocityY: 0,
       remainingMs: 900,
       weapon: 'Pistol',
+      damage: 1,
+      knockback: 110,
     }
 
     story(
@@ -258,6 +265,8 @@ describe('the kind table', () => {
       velocityY: 0,
       remainingMs: 900,
       weapon: 'Pistol',
+      damage: 1,
+      knockback: 110,
     }
 
     story(

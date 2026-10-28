@@ -15,6 +15,7 @@ import {
   Model,
   Phase,
   Arsenal,
+  RunMode,
   initialModel,
   type Decal,
   type DecalKind,
@@ -57,7 +58,9 @@ const makeDecals = (count: number): Array<Decal> => {
 const scenarioModel = (): Model => {
   const wave = num('wave', 0)
   if (wave === 0) return initialModel
-  const started = startOrResume(initialModel)
+  const mode =
+    params.get('mode') === 'endless' ? RunMode.Endless() : RunMode.Campaign()
+  const started = startOrResume(initialModel, mode)
   const [rngState, spawns] = rollSpawns(started.rngState, wave)
   const gun = params.get('gun')
   let model = modifyFields(started, {
@@ -87,19 +90,20 @@ const scenarioModel = (): Model => {
         ? {
             ...p,
             arsenal: Arsenal.HoldingSpare({
-              spare: { kind: 'Smg', rounds: 360 },
+              spare: { kind: 'Smg', rounds: 360, tier: num('tier', 0) },
             }),
           }
         : gun === 'shotgun'
           ? {
               ...p,
               arsenal: Arsenal.HoldingSpare({
-                spare: { kind: 'Shotgun', rounds: 48 },
+                spare: { kind: 'Shotgun', rounds: 48, tier: num('tier', 0) },
               }),
             }
           : p,
   })
   const crowd = num('crowd', 0)
+  const toughness = params.has('tough') ? 40 : 1
   if (crowd > 0) {
     const kinds = [
       'Shambler',
@@ -129,7 +133,8 @@ const scenarioModel = (): Model => {
         x: sx + ((i * 7) % 13) - 6,
         y: sy + ((i * 5) % 11) - 5,
         speed: kind === 'Runner' ? 46 : kind === 'Tank' ? 12 : 22,
-        hp: kind === 'Tank' ? 14 : kind === 'Runner' ? 1 : 2,
+        hp: (kind === 'Tank' ? 14 : kind === 'Runner' ? 1 : 2) * toughness,
+        maxHp: (kind === 'Tank' ? 30 : kind === 'Runner' ? 2 : 3) * toughness,
         knockback: { x: 0, y: 0 },
         hitRemainingMs: 0,
         state: { _tag: 'Walking' },
@@ -158,6 +163,14 @@ const scenarioModel = (): Model => {
     model = modifyFields(model, {
       player: p => ({ ...p, x: num('px', p.x), y: num('py', p.y) }),
       hintBand: () => (num('py', 90) < 70 ? 'Bottom' : 'Top'),
+    })
+  if (params.has('best'))
+    model = modifyFields(model, {
+      maybeBestEndlessWave: () => Option.some(num('best', 0)),
+    })
+  if (params.has('pistol'))
+    model = modifyFields(model, {
+      player: p => ({ ...p, pistolTier: num('pistol', 0) }),
     })
   if (params.get('device') === 'touch')
     model = modifyFields(model, { lastDevice: () => 'Touch' as const })

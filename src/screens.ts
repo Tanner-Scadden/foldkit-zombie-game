@@ -26,6 +26,7 @@ import {
   type InputDevice,
   type Model,
   Phase,
+  RunMode,
   type RunStats,
   type ZombieKind,
 } from './model'
@@ -51,7 +52,14 @@ import {
   totalKills,
   victoryVerdict,
 } from './stats'
-import { FINAL_WAVE, debutKinds, waveBonus } from './waves'
+import {
+  FINAL_WAVE,
+  debutKinds,
+  endlessDepth,
+  hpScaleFor,
+  roundWave,
+  waveBonus,
+} from './waves'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
 
 // SHARED
@@ -73,8 +81,11 @@ const centered = (
 ): Canvas.Shape =>
   placeBaked(baked, { x: CENTER_X, y, align: 'Center', scale, opacity })
 
-export const waveLabel = (wave: number): string =>
-  `WAVE ${wave} / ${FINAL_WAVE}`
+export const waveLabel = (mode: RunMode, wave: number): string =>
+  RunMode.match(mode, {
+    Campaign: () => `WAVE ${wave} / ${FINAL_WAVE}`,
+    Endless: () => `WAVE ${wave}`,
+  })
 
 const isBlinkOn = (ms: number): boolean => ms % 1000 < 700
 
@@ -88,7 +99,7 @@ const deviceText = (
 ): DeviceText => Record.map(texts, text => bakeText(text, tone))
 
 const START_PROMPT = deviceText(
-  { KeyboardMouse: 'CLICK OR PRESS ENTER', Touch: 'TAP TO START' },
+  { KeyboardMouse: 'ENTER: CAMPAIGN   E: ENDLESS', Touch: 'PICK A MODE BELOW' },
   'Prompt',
 )
 
@@ -100,11 +111,10 @@ const RESUME_PROMPT = deviceText(
   'Prompt',
 )
 
-const AGAIN_PROMPT = deviceText(
-  {
-    KeyboardMouse: 'CLICK OR PRESS ENTER TO PLAY AGAIN',
-    Touch: 'TAP TO PLAY AGAIN',
-  },
+const AGAIN_PROMPT = bakeText('ENTER: CAMPAIGN   E: ENDLESS', 'Prompt')
+
+const KEEP_GOING_PROMPT = bakeText(
+  'K: KEEP GOING   ENTER: CAMPAIGN   E: ENDLESS',
   'Prompt',
 )
 
@@ -163,14 +173,26 @@ const GET_READY = bakeText('GET READY', 'Title')
 const WAVE_CLEARED = bakeText('WAVE CLEARED', 'Victory')
 const HERE_THEY_COME = bakeText('HERE THEY COME', 'Prompt')
 
+const BAKED_WAVES = FINAL_WAVE * 4
+
 const WAVE_TITLES: ReadonlyArray<BakedText> = Array.makeBy(
-  FINAL_WAVE + 1,
+  BAKED_WAVES + 1,
   wave => bakeText(`WAVE ${wave}`, 'Defeat'),
 )
 
 const CLEARED_SUBTITLES: ReadonlyArray<BakedText> = Array.makeBy(
-  FINAL_WAVE + 1,
+  BAKED_WAVES + 1,
   wave => bakeText(`+$${waveBonus(wave)} BONUS. THE $ STALL IS OPEN`, 'Prompt'),
+)
+
+const BEEFIER = bakeText('THEY GOT BEEFIER', 'Fresh')
+
+const healthBoostText = (wave: number): string =>
+  `ZOMBIES HAVE +${Math.round((hpScaleFor(wave) - 1) * 100)}% HEALTH`
+
+const HEALTH_BOOSTS: ReadonlyArray<BakedText> = Array.makeBy(
+  BAKED_WAVES + 1,
+  wave => bakeText(healthBoostText(wave), 'Prompt'),
 )
 
 type KindBanner = Readonly<{ title: BakedText; tagline: BakedText }>
@@ -225,13 +247,30 @@ const newKindBanner = (
   ]
 }
 
+const beefierBanner = (
+  band: HintBand,
+  wave: number,
+  shownMs: number,
+): ReadonlyArray<Canvas.Shape> =>
+  endlessDepth(wave) > 0 && shownMs < NEW_KIND_BANNER_MS
+    ? bannerAt(
+        band,
+        BEEFIER,
+        Option.some(
+          Option.getOrElse(Array.get(HEALTH_BOOSTS, wave), () =>
+            bakeText(healthBoostText(wave), 'Prompt'),
+          ),
+        ),
+      )
+    : []
+
 const debutBanner = (
   band: HintBand,
   wave: number,
   shownMs: number,
 ): ReadonlyArray<Canvas.Shape> =>
   Option.match(Array.head(debutKinds(wave)), {
-    onNone: () => [],
+    onNone: () => beefierBanner(band, wave, shownMs),
     onSome: kind =>
       shownMs < NEW_KIND_BANNER_MS ? newKindBanner(band, kind, shownMs) : [],
   })
@@ -576,7 +615,7 @@ const pausedShapes = (
 ): ReadonlyArray<Canvas.Shape> => [
   DIM_BACKDROP,
   centered(PAUSED, 56, TITLE_SCALE),
-  ...textShapes(waveLabel(wave), 'Plain', CENTER_X, 78, 'Center'),
+  ...textShapes(waveLabel(model.mode, wave), 'Plain', CENTER_X, 78, 'Center'),
   centered(RESUME_PROMPT[model.lastDevice], 96),
 ]
 
@@ -598,6 +637,8 @@ type StatRow = Readonly<{ label: BakedText; value: string; tone: TextTone }>
 
 const STAT_LABELS = {
   waves: bakeText('WAVES CLEARED', 'Hint'),
+  reached: bakeText('WAVE REACHED', 'Hint'),
+  best: bakeText('BEST THIS SESSION', 'Hint'),
   kills: bakeText('ZOMBIES MUNCHED BACK', 'Hint'),
   time: bakeText('RUN TIME', 'Hint'),
   accuracy: bakeText('ACCURACY', 'Hint'),
@@ -607,14 +648,36 @@ const STAT_LABELS = {
   score: bakeText('SCORE', 'Hint'),
 }
 
+const waveRows = (model: Model): ReadonlyArray<StatRow> =>
+  RunMode.match(model.mode, {
+    Campaign: (): ReadonlyArray<StatRow> => [
+      {
+        label: STAT_LABELS.waves,
+        value: `${model.stats.wavesCleared} / ${FINAL_WAVE}`,
+        tone: 'Plain',
+      },
+    ],
+    Endless: (): ReadonlyArray<StatRow> => [
+      {
+        label: STAT_LABELS.reached,
+        value: `${roundWave(model.phase)}`,
+        tone: 'Plain',
+      },
+      {
+        label: STAT_LABELS.best,
+        value: Option.match(model.maybeBestEndlessWave, {
+          onNone: () => '--',
+          onSome: best => `WAVE ${best}`,
+        }),
+        tone: 'Victory',
+      },
+    ],
+  })
+
 const statRows = (model: Model): ReadonlyArray<StatRow> => {
   const { stats } = model
   return [
-    {
-      label: STAT_LABELS.waves,
-      value: `${stats.wavesCleared} / ${FINAL_WAVE}`,
-      tone: 'Plain',
-    },
+    ...waveRows(model),
     {
       label: STAT_LABELS.kills,
       value: `${totalKills(stats)}`,
@@ -705,17 +768,23 @@ const panelShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   ]
 }
 
-const againScale = (model: Model): number =>
-  AGAIN_PROMPT[model.lastDevice].width * TITLE_SCALE <= ARENA_WIDTH - 8
-    ? TITLE_SCALE
-    : 1
-
 const VERDICT_Y = 29
+
+const endPromptShapes = (
+  model: Model,
+  prompt: BakedText,
+): ReadonlyArray<Canvas.Shape> =>
+  model.lastDevice === 'KeyboardMouse' &&
+  model.screenMs >= RESTART_GRACE_MS &&
+  isBlinkOn(model.screenMs)
+    ? [centered(prompt, PROMPT_Y)]
+    : []
 
 const endShapes = (
   model: Model,
   title: BakedText,
   verdict: string,
+  prompt: BakedText,
 ): ReadonlyArray<Canvas.Shape> => [
   DIM_BACKDROP,
   centered(title, 10, TITLE_SCALE),
@@ -727,9 +796,7 @@ const endShapes = (
     'Center',
   ),
   ...panelShapes(model),
-  ...(model.screenMs >= RESTART_GRACE_MS && isBlinkOn(model.screenMs)
-    ? [centered(AGAIN_PROMPT[model.lastDevice], PROMPT_Y, againScale(model))]
-    : []),
+  ...endPromptShapes(model, prompt),
 ]
 
 // OVERLAY
@@ -746,7 +813,18 @@ export const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
       ...hintShapes(model),
     ],
     Paused: ({ round }) => pausedShapes(model, round.wave),
-    Victory: () => endShapes(model, YOU_SURVIVED, victoryVerdict(model.stats)),
+    Victory: () =>
+      endShapes(
+        model,
+        YOU_SURVIVED,
+        victoryVerdict(model.stats),
+        KEEP_GOING_PROMPT,
+      ),
     GameOver: ({ wave }) =>
-      endShapes(model, GAME_OVER, defeatVerdict(wave, model.stats)),
+      endShapes(
+        model,
+        GAME_OVER,
+        defeatVerdict(wave, model.stats),
+        AGAIN_PROMPT,
+      ),
   })

@@ -335,3 +335,13 @@ export const WOOD_DECAL_FADED_COLOR = '#3f2c1c'
 export const GAME_TITLE = 'Munch Manor'
 
 export const RESTART_GRACE_MS = 900
+
+export const ZOMBIE_ALIVE_MAX = 20
+export const ENDLESS_HP_PER_WAVE = 0.12
+export const ENDLESS_SPEED_PER_WAVE = 0.01
+export const ENDLESS_SPEED_MAX = 1.6
+export const ENDLESS_ESCORTS_BASE = 90
+export const ENDLESS_ESCORTS_PER_WAVE = 6
+export const ENDLESS_TANKS_BASE = 4
+export const ENDLESS_WAVES_PER_EXTRA_TANK = 2
+export const ENDLESS_EXPLODER_WEIGHT_PER_WAVE = 0.25

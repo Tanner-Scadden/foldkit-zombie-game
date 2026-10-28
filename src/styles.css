@@ -208,6 +208,66 @@ body {
   outline-offset: 2px;
 }
 
+.mode-choice {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+}
+
+.mode-button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 120px;
+  min-height: 44px;
+  padding: 4px 16px;
+  border: 2px solid rgba(255, 224, 102, 0.8);
+  border-radius: 6px;
+  background: rgba(8, 10, 12, 0.75);
+  color: #ffe066;
+  font: bold 14px monospace;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.keep-going-button {
+  border-color: rgba(155, 227, 106, 0.9);
+  color: #9be36a;
+}
+
+.mode-button-detail {
+  color: #b8c2b0;
+  font-size: 10px;
+  font-weight: normal;
+}
+
+.mode-button-key {
+  position: absolute;
+  top: -9px;
+  right: 6px;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  background: #140c10;
+  font-size: 10px;
+}
+
+.mode-button:hover {
+  background: rgba(40, 30, 20, 0.85);
+}
+
+.mode-button:focus-visible {
+  outline: 2px solid #9be36a;
+  outline-offset: 2px;
+}
+
 .swap-button {
   position: fixed;
   right: calc(env(safe-area-inset-right, 0px) + 12px);

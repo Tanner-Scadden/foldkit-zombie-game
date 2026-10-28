@@ -138,6 +138,62 @@ Proposed on 2026-10-28 for step 7. Still proposed, not decided. A headless bot p
 
 - **Caveats.** The bot never uses the Grumpy Gnome, never swaps by hand, and plays Preparation in a few seconds, so a human run adds up to 20 seconds a wave. The bot does not dodge Gasbags, which may be why they cost it so much. Playtest it before trusting any of this.
 
+### Upgrade tiers and endless mode
+
+Added on 2026-10-28, after the first playable. Proposed, not decided. Real players have not tested any of it.
+
+#### Upgrade tiers
+
+Each gun has three tiers beyond its base, sold at Rattles' stall between waves. A tier is a row in `UPGRADE_TIERS` in `src/weapons.ts`: a name, a price, and a boost that adds to damage, the time between shots, spread, pellets, knockback, and the ammo cap. Tiers stack, and firing reads the held gun's stats at its tier through `statsAt`. Adding a tier is a data change. The bullet carries its damage and knockback, so a shot keeps the tier it was fired with.
+
+- **Where tiers live.** The pistol's tier is on the player. The spare gun's tier is on the carried gun, so buying a different spare gun replaces the slot and its upgrades. The shop says so in its rule line and on the gun's row. A new run resets every tier.
+- **In the shop.** One row per gun, named for the next tier ("Upgrade to Gossip Box"), with the changes spelled out ("Hits for 2 instead of 1"), the price, and the current tier. A row is disabled with a reason when the gun is not carried, the gun is maxed ("Fully upgraded", price shown as MAX), or the player is short.
+- **Feedback.** The gun's highlight changes color per tier (blue, pink, then gold), the muzzle flash throws more sparks per tier, and each HUD slot shows three tier pips. Buying a tier plays the cha-ching and a rising PowerUp arpeggio.
+
+| Gun         | Tier | Name               | Price | What changes                                        |
+| ----------- | ---- | ------------------ | ----- | --------------------------------------------------- |
+| Pop Pistol  | 1    | Shovey Popper      | $300  | Knockback +25                                       |
+| Pop Pistol  | 2    | Golden Grandpopper | $500  | 140 to 130 ms between shots                         |
+| Pop Pistol  | 3    | Double-Dip Popper  | $750  | Damage 1 to 2, knockback +15                        |
+| Barn Buster | 1    | Barn Buster Plus   | $110  | 5 to 7 pellets, spray +0.1 radian                   |
+| Barn Buster | 2    | Silo Splitter      | $220  | 620 to 500 ms between shots, knockback +40, cap +16 |
+| Barn Buster | 3    | Hayloft Howitzer   | $380  | Damage 1 to 2 per pellet, cap +16                   |
+| Chatterbox  | 1    | Gossip Box         | $150  | Spread 0.22 to 0.14, knockback +10                  |
+| Chatterbox  | 2    | Rumor Mill         | $280  | 70 to 58 ms between shots, cap 360 to 480           |
+| Chatterbox  | 3    | Blabbermouth 3000  | $450  | Damage 1 to 2                                       |
+
+The pistol line is expensive on purpose. The campaign is balanced on a knife edge, and the pistol is the gun that never runs dry: in early tuning a $110 tier that doubled pistol damage took the bot from 28% wins to 100%, and even a 10% faster pistol for $100 took it to about 60%. At these prices a campaign player can afford the first pistol tier late, and the damage tier is for endless.
+
+#### Modes
+
+The run mode is a tagged union, `Campaign` or `Endless`, chosen per run and kept in the Model.
+
+- **Choosing.** The title, Game Over, and Victory screens show CAMPAIGN and ENDLESS buttons, which are ordinary HTML buttons for touch and mouse. On a keyboard, Enter or Space starts a campaign and E starts endless. The canvas prompt names the keys on a keyboard and says PICK A MODE BELOW on touch. A tap or click on the game itself still starts a campaign from the title and Game Over. On Victory it does nothing, so a stray tap cannot throw away Keep going: only the three buttons and their keys act there.
+- **Keep going.** Victory also offers KEEP GOING (K), which carries the same run into endless wave 9 with its money, guns, tiers, traps, hearts, score, and stats.
+- **Endless waves.** Waves 1 to 8 are the hand-made campaign waves. From wave 9, each wave _n_ (depth _d_ = _n_ - 8) is generated from the seeded generator when Preparation begins, so the door preview stays exact and a seed replays the same waves:
+  - Health ×(1 + 0.12 _d_): wave 9 is ×1.12, wave 15 ×1.84, wave 20 ×2.44. `Zombie.maxHp` keeps the Big Lug health bar honest.
+  - 4 + ⌊_d_ / 2⌋ Big Lugs from a random pair of doors, spread over the first 30 seconds.
+  - 90 + 6 _d_ escorts in two groups: a main group from every door and a later rush from a random pair. Gasbag weight is 2 + 0.25 _d_ against 3 Groaners and 2 Hotfoots, and spawn intervals shrink 30 ms a wave down to a floor.
+  - Speed ×(1.49 + 0.01 _d_), capped at ×1.6.
+- **The alive cap.** At most 20 zombies are in the room at once, in every mode. A spawn that comes due while the room is full waits at its door and walks in when a place frees up. Without the cap the campaign bot peaked at 21 or 22 zombies in a typical run and 29 at worst, so the cap trims the busiest moments of the late campaign waves as well as endless. The balance below was measured with it.
+- **What stays the same.** Preparation, the shop, traps, the wave preview, and the music (wave 9 onward plays Stampede) work as in the campaign. Endless waves bring no NEW banner, since every kind has already appeared. A THEY GOT BEEFIER banner with the health bonus shows instead, and the screen-reader preview reads it out. The HUD shows WAVE 12 without "/ 8".
+- **Game Over in endless** shows the wave reached and the best wave this session. The best lives in the Model and is not saved anywhere.
+
+#### Balance with upgrades
+
+Measured with `bun tools/balance/simulate.ts` after the tiers landed. The bot now buys a refill, the SMG, planks, and hearts first, then spare gun tiers, then pistol tiers once its spare gun is at tier 2. It keeps $45 back after any upgrade. Two seed batches of 40 runs each (first seed 1 and first seed 500001), because one batch of 40 swings by several wins.
+
+| Bot                             | Wins           | Median run       | Median win       | Where it falls                            |
+| ------------------------------- | -------------- | ---------------- | ---------------- | ----------------------------------------- |
+| No upgrades (the step 7 bot)    | 24 of 80 (30%) | 7.9 min (seed 1) | 8.5 min (seed 1) | Wave 6 (27 runs), wave 8 (21), wave 7 (8) |
+| With upgrades, alive cap 20     | 26 of 80 (33%) | 7.9 to 8.4 min   | 8.6 to 8.7 min   | Wave 8 (25 runs), wave 6 (23), wave 7 (6) |
+| `SWAP=1`, no upgrades, seed 1   | 16 of 40 (40%) | 8.1 min          | 8.4 min          | Wave 6                                    |
+| `SWAP=1`, with upgrades, seed 1 | 26 of 40 (65%) | 8.5 min          | 8.6 min          | Wave 8                                    |
+
+- **Campaign.** With upgrades the bot wins about a third of its runs, a median win takes 8.6 minutes, and it buys spare gun tier 2 and pistol tier 1 by the end (about $730). Wave 6 is still the first wall and wave 8 the second.
+- **Swapping.** The default bot never swaps by hand, so once its spare gun first runs dry it fights on with the pistol and never feels its spare gun's tiers. `SWAP=1` re-arms the spare gun before each wave. For that bot the tiers are worth 25 points of win rate, so a player who swaps will find the campaign easier with upgrades than the default numbers suggest.
+- **Endless.** `MODE=endless`, same two batches: the median run reaches wave 8, the best wave 11. Of the 26 runs that reach wave 9, 13 die there, 10 on wave 10, and 3 on wave 11. Endless is a wall after the campaign, which suits a mode that only ends one way. Playtest before trusting it.
+
 ## Core loop
 
 | Phase         | What the player does                                                          |
@@ -166,7 +222,7 @@ The phase is a tagged union, never a set of booleans.
 ## Weapons and upgrades
 
 - Weapons are data: fire rate, damage, spread, ammo, reload, and upgrade tiers. Adding a weapon is a data change, not new logic.
-- Each weapon upgrades in a few tiers, paid for between waves.
+- Each weapon upgrades in a few tiers, paid for between waves. Built: three tiers per gun, see "Upgrade tiers" under the first playable.
 - Later: stat-boosting hats and characters with different stats.
 
 ## Traps
@@ -203,7 +259,7 @@ The first four are built. Their numbers are under "Proposed balance" above.
 ## Waves
 
 - Casual play runs a set number of waves and ends in `Victory`. The target is 15.
-- An endless mode keeps going until the player dies.
+- An endless mode keeps going until the player dies. Built: see "Modes" under the first playable.
 - Wave contents come from spawn tables that grow harder with the wave number.
 
 ## Technical notes
@@ -232,7 +288,9 @@ The roadmap leads to the first playable. The order puts feel first: juice is bui
 After the first playable, roughly in this order:
 
 - The tile-map estate with rooms, doors, a scrolling camera, and flow-field pathing.
-- Content depth: more weapons and upgrade tiers, hats, Spitter, the 15-wave campaign, and an endless mode.
+- Content depth: more weapons, hats, Spitter, and the 15-wave campaign.
+- Upgrade tiers. Done on 2026-10-28: see "Upgrade tiers and endless mode" under the first playable.
+- An endless mode. Done on 2026-10-28, with Keep going from Victory: see "Upgrade tiers and endless mode".
 - Music. Done on 2026-10-28: see "Music" under the first playable.
 - Co-op.
 
@@ -258,6 +316,7 @@ After the first playable, roughly in this order:
   - **What it costs.** In the worst case at 4×, `update` is about 12% of the main thread, building the scene about 7%, and Foldkit's canvas paint about 12%, with garbage collection under 2% and the rest idle or browser work. Inside `update`, the variant checks of tagged unions (`guards`) run a full Schema check on each call and show up in particle and zombie stepping. In paint, each shape costs a `save` and `restore` and an Effect `Match`. Before the `group` helper, `view` took 4.3 ms a frame in the worst case at 4× and 6.7 ms at 6×.
   - **Verdict.** p95 stays under 16.7 ms at 4× in every scenario. At 6× the worst case sits right at the 60 fps budget and drops some frames. Measure on a real mid-range phone before adding more shapes per frame.
   - **Remeasured for step 7.** The pixel font draws every HUD and overlay string from cached glyph sprites, so text costs more shapes than `Canvas.Text` did (idle went from 515 to 1,055 shapes) but is crisp at every scale. Same method, built harness: worst case p95 9.4 ms at 1×, 10.2 ms at 4×, and 16.7 ms at 6× (23 long frames). `view` means 0.8, 1.9, and 2.9 ms. Busy at 4× has p95 10.1 ms. p95 stays under 16.7 ms at 4×.
+  - **Endless and the alive cap.** Measured on 2026-10-28, same method, built harness, at 4×. Two new scenarios: endless wave 15 after 15 seconds of spawning with a tier 3 SMG and full decals, and the worst endless case, where the room is held at the alive cap (as many zombies as the cap, with 40 times their health, full decals, constant fire). Endless wave 15 at 4×: p95 10.2 and 10.3 ms in two runs. The at-cap case was measured at four caps, two runs each at 4×: 36 gave p95 16.7 ms, 30 gave 16.4 and 16.4 ms, 24 gave 10.3 and 14.8 ms, and 20 gave 10.2 and 10.3 ms with 6 long frames, `update` 1.65 ms and `view` 2.3 ms a frame. The cap is 20, which leaves real headroom under the 16.7 ms budget for a phone. At 30 the capped room at 6× dropped frames (p95 about 25 ms); 20 was not measured at 6×. The cap is what bounds the cost: an endless wave spawns 100 to 150 zombies, and without it they would all be in the room at once.
 - **Determinism and juice.** Animation, particles, and shake live in the Model and use the seeded generator, so they stay reproducible. Sound and music play through Commands and never feed back into the game.
 
 ## Open questions

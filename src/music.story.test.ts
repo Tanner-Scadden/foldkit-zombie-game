@@ -25,6 +25,7 @@ const FAR_AWAY_SPAWN: PlannedSpawn = {
   door: 'North',
   offset: 0,
   speedScale: 1,
+  hpScale: 1,
 }
 
 const titleScreen = (audio: AudioState): Model =>
@@ -166,6 +167,7 @@ describe('music follows the phase', () => {
               y: ARENA_HEIGHT / 2,
               speed: 0,
               hp: ZOMBIE_MAX_HP,
+              maxHp: ZOMBIE_MAX_HP,
               knockback: { x: 0, y: 0 },
               hitRemainingMs: 0,
               state: ZombieState.Walking(),

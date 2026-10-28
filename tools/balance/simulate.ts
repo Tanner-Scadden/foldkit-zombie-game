@@ -1,5 +1,6 @@
 // Headless balance simulation. Run from the repo root:
 //   bun tools/balance/simulate.ts [runs] [firstSeed]
+//   MODE=endless bun tools/balance/simulate.ts [runs] [firstSeed]
 // It drives the game's own init model and update with a simple bot and
 // prints survival per wave, run length, the money curve, and which zombie
 // kinds cost the bot the most hearts. Nothing here ships with the game.
@@ -16,9 +17,10 @@ const { Message, update } = await import('../../src/main')
 const { initialModel } = await import('../../src/model')
 const { THRESHOLDS, boxCenter, hasLineOfSight } =
   await import('../../src/arena')
-const { STALL_BOX, isShopOpenFor, priceFor } = await import('../../src/shop')
+const { STALL_BOX, isShopOpenFor, priceFor, verdictFor } =
+  await import('../../src/shop')
 const { FINAL_WAVE } = await import('../../src/waves')
-const { maxRounds, maybeSpare } = await import('../../src/weapons')
+const { maxRounds, maxTier, maybeSpare } = await import('../../src/weapons')
 const { Dialog } = await import('@foldkit/ui')
 const { Option, Array: EffectArray } = await import('effect')
 const { modifyFields } = await import('foldkit/struct')
@@ -33,6 +35,7 @@ if (process.env.TUNE !== undefined) {
     ZOMBIE_KINDS: (await import('../../src/zombies')).ZOMBIE_KINDS,
     SHOP_ITEMS: (await import('../../src/shop')).SHOP_ITEMS,
     WEAPONS: (await import('../../src/weapons')).WEAPONS,
+    UPGRADE_TIERS: (await import('../../src/weapons')).UPGRADE_TIERS,
   })
 }
 
@@ -41,8 +44,14 @@ type GameMessage = Parameters<typeof update>[1]
 type Vector = { x: number; y: number }
 type Kind = 'Shambler' | 'Runner' | 'Tank' | 'Exploder'
 
+const IS_ENDLESS = process.env.MODE === 'endless'
+const NO_UPGRADES = process.env.NO_UPGRADES !== undefined
+// SWAP=1 re-arms the spare gun before each wave while it has rounds, the
+// way a player swaps back after a refill. The default bot never swaps, so
+// once its spare runs dry it fights on with the pistol.
+const SWAPS_BACK = process.env.SWAP !== undefined
 const FRAME_MS = 1000 / 30
-const MAX_RUN_MS = 20 * 60 * 1000
+const MAX_RUN_MS = (IS_ENDLESS ? 90 : 20) * 60 * 1000
 const SURFACE = { left: 0, top: 0, width: 320, height: 180 }
 const ROOM_CENTER: Vector = { x: 160, y: 95 }
 const KEYS = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' }
@@ -55,6 +64,9 @@ type RunResult = {
   moneyAfterWave: Array<number>
   hurtBy: Record<Kind, number>
   maxAlive: number
+  pistolTier: number
+  spareTier: number
+  upgradeSpend: number
 }
 
 const send = (model: Model, message: GameMessage): Model =>
@@ -203,17 +215,34 @@ const wantedPurchase = (
     return undefined
   }
   const refill = spare.kind === 'Smg' ? 'SmgRounds' : 'ShotgunShells'
-  if (spare.rounds < maxRounds(spare.kind) / 2 && canBuy(model, refill)) {
+  const cap = maxRounds(spare.kind, spare.tier)
+  if (spare.rounds < cap / 2 && canBuy(model, refill)) {
     return refill
   }
-  if (spare.kind === 'Shotgun' && canBuy(model, 'Smg')) return 'Smg'
+  if (spare.kind === 'Shotgun' && spare.tier === 0 && canBuy(model, 'Smg')) {
+    return 'Smg'
+  }
   const barricades =
     model.trapStock.Barricade +
     model.traps.filter(trap => trap._tag === 'Barricade').length
   if (barricades < 2 && canBuy(model, 'Barricade')) return 'Barricade'
   if (model.player.hp <= 4 && canBuy(model, 'Heart')) return 'Heart'
+  // Upgrades come after hearts, ammo, and planks, and keep enough back for
+  // a refill and a heart so an upgrade never leaves the bot broke.
+  const reserve = 45
+  const spareUpgrade = spare.kind === 'Smg' ? 'SmgUpgrade' : 'ShotgunUpgrade'
+  const canUpgrade = (item: Parameters<typeof priceFor>[1]) =>
+    !NO_UPGRADES &&
+    model.wallet.balance - priceFor(model, item) >= reserve &&
+    verdictFor(model, item)._tag === 'Available'
+  if (spare.tier < maxTier(spare.kind) && canUpgrade(spareUpgrade)) {
+    return spareUpgrade
+  }
+  if (spare.tier >= 2 && canUpgrade('PistolUpgrade')) return 'PistolUpgrade'
   return undefined
 }
+
+let spentOnUpgrades = 0
 
 const shop = (model: Model): Model => {
   const item = wantedPurchase(model)
@@ -226,6 +255,9 @@ const shop = (model: Model): Model => {
     )
   }
   const bought = send(model, Message.ClickedBuyButton({ item }))
+  if (item.endsWith('Upgrade')) {
+    spentOnUpgrades += model.wallet.balance - bought.wallet.balance
+  }
   return bought.wallet.balance === model.wallet.balance
     ? send(
         bought,
@@ -307,7 +339,7 @@ const runOnce = (seed: number): RunResult => {
     modifyFields(initialModel, { rngState: () => seed }),
     Message.MeasuredGameSurface(SURFACE),
   )
-  let model = tapKey(ready, 'Enter')
+  let model = tapKey(ready, IS_ENDLESS ? 'KeyE' : 'Enter')
   let shoppedWave = 0
   let stuckFrames = 0
   let lastPosition: Vector = model.player
@@ -315,6 +347,7 @@ const runOnce = (seed: number): RunResult => {
   let frame = 0
   let maxAlive = 0
   botRandom = seed
+  spentOnUpgrades = 0
   while (
     (model.phase._tag === 'Preparation' || model.phase._tag === 'Wave') &&
     model.stats.runMs < MAX_RUN_MS
@@ -330,6 +363,15 @@ const runOnce = (seed: number): RunResult => {
       const plan = prepPlan(model, shoppedWave === wave)
       if (plan === 'Go') {
         model = pressKeys(model, new Set())
+        const spare = Option.getOrUndefined(maybeSpare(model.player.arsenal))
+        if (
+          SWAPS_BACK &&
+          model.player.arsenal._tag === 'HoldingPistol' &&
+          spare !== undefined &&
+          spare.rounds > 0
+        ) {
+          model = tapKey(model, 'Digit2')
+        }
         model = tapKey(model, 'Enter')
         continue
       }
@@ -393,6 +435,7 @@ const runOnce = (seed: number): RunResult => {
       moneyAfterWave.push(model.wallet.earned)
     }
   }
+  const finalSpare = Option.getOrUndefined(maybeSpare(model.player.arsenal))
   return {
     seed,
     cleared: model.stats.wavesCleared,
@@ -401,6 +444,9 @@ const runOnce = (seed: number): RunResult => {
     moneyAfterWave,
     hurtBy,
     maxAlive,
+    pistolTier: model.player.pistolTier,
+    spareTier: finalSpare?.tier ?? 0,
+    upgradeSpend: spentOnUpgrades,
   }
 }
 
@@ -423,9 +469,14 @@ const results = EffectArray.makeBy(runs, index =>
 )
 const elapsed = (performance.now() - started) / 1000
 
-console.log(`${runs} runs in ${elapsed.toFixed(1)} s`)
+const lastWave = IS_ENDLESS
+  ? Math.max(...results.map(result => result.cleared + 1))
+  : FINAL_WAVE
+console.log(
+  `${runs} ${IS_ENDLESS ? 'endless' : 'campaign'} runs in ${elapsed.toFixed(1)} s${NO_UPGRADES ? ', no upgrades' : ''}${SWAPS_BACK ? ', swaps back to the spare' : ''}`,
+)
 console.log('\nWave  reached  cleared')
-for (let wave = 1; wave <= FINAL_WAVE; wave++) {
+for (let wave = 1; wave <= lastWave; wave++) {
   const reached = results.filter(result => result.cleared >= wave - 1).length
   const cleared = results.filter(result => result.cleared >= wave).length
   console.log(
@@ -438,6 +489,15 @@ const deaths = results
 const wins = results.filter(result => result.victory)
 console.log(`\nVictories: ${wins.length} of ${runs}`)
 console.log(`Median wave of death: ${median(deaths)}`)
+if (IS_ENDLESS) {
+  const reached = results.map(result => result.cleared + 1)
+  console.log(
+    `Endless wave reached: median ${median(reached)}, best ${Math.max(...reached)}, worst ${Math.min(...reached)}`,
+  )
+}
+console.log(
+  `Upgrades at the end: spare tier median ${median(results.map(r => r.spareTier))}, pistol tier median ${median(results.map(r => r.pistolTier))}, spent median $${median(results.map(r => r.upgradeSpend))}`,
+)
 console.log(
   `Median run length: ${(median(results.map(r => r.runMs)) / 60000).toFixed(2)} min`,
 )
@@ -447,7 +507,7 @@ console.log(
 console.log(
   '\nMoney earned by the end of wave (median of runs that cleared it)',
 )
-for (let wave = 1; wave <= FINAL_WAVE; wave++) {
+for (let wave = 1; wave <= lastWave; wave++) {
   const values = results.flatMap(r =>
     r.moneyAfterWave[wave - 1] === undefined
       ? []

@@ -42,6 +42,7 @@ const DISTANT_SPAWN: PlannedSpawn = {
   door: 'North',
   offset: 0,
   speedScale: 1,
+  hpScale: 1,
 }
 
 const fightingModel: Model = modifyFields(initialModel, {
@@ -61,6 +62,7 @@ const zombieAt = (id: number, x: number, y: number, speed = 0): Zombie => ({
   y,
   speed,
   hp: ZOMBIE_MAX_HP,
+  maxHp: ZOMBIE_MAX_HP,
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
@@ -209,6 +211,8 @@ describe('bullets and cover', () => {
     velocityY: -240,
     remainingMs: 900,
     weapon: 'Pistol',
+    damage: 1,
+    knockback: 110,
   }
   const hiddenZombie = zombieAt(901, CRATE_STACK_X, 25)
 
@@ -252,6 +256,8 @@ describe('bullets and cover', () => {
               velocityY: 0,
               remainingMs: 900,
               weapon: 'Pistol',
+              damage: 1,
+              knockback: 110,
             },
           ],
         }),
@@ -335,6 +341,7 @@ describe('pathing', () => {
                     door: 'North',
                     offset: 0,
                     speedScale: 1,
+                    hpScale: 1,
                   },
                   DISTANT_SPAWN,
                 ],

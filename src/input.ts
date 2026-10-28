@@ -33,6 +33,8 @@ const LEFT_KEYS: ReadonlyArray<string> = ['KeyA', 'ArrowLeft']
 const RIGHT_KEYS: ReadonlyArray<string> = ['KeyD', 'ArrowRight']
 const FIRE_KEY = 'Space'
 const START_KEYS: ReadonlyArray<string> = ['Enter', 'Space']
+const ENDLESS_KEY = 'KeyE'
+const KEEP_GOING_KEY = 'KeyK'
 const PAUSE_KEYS: ReadonlyArray<string> = ['Escape', 'KeyP']
 const START_WAVE_KEYS: ReadonlyArray<string> = ['Enter', 'KeyR']
 const SWAP_KEYS: ReadonlyArray<string> = ['KeyQ', 'KeyE']
@@ -73,6 +75,10 @@ export const maybeWeaponChoice = (
 
 export const isStartKey = (code: string): boolean =>
   Array.contains(START_KEYS, code)
+
+export const isEndlessKey = (code: string): boolean => code === ENDLESS_KEY
+
+export const isKeepGoingKey = (code: string): boolean => code === KEEP_GOING_KEY
 
 export const isPauseKey = (code: string): boolean =>
   Array.contains(PAUSE_KEYS, code)

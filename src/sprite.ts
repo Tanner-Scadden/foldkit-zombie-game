@@ -694,7 +694,25 @@ const symbolOf = (
     Option.getOrElse(() => TRANSPARENT),
   )
 
-const rotatedGun = ({ pixels, pivot }: GunPixels, angle: number): Sprite => {
+const GUN_TIER_TRIMS: ReadonlyArray<Palette> = [
+  {},
+  { H: '#9be3ff' },
+  { H: '#ff9df0', M: '#7a3fa0' },
+  { G: '#e0a92e', H: '#fff3a0', M: '#a8741a' },
+]
+
+const gunPalette = (tier: number): Palette =>
+  Option.match(Array.get(GUN_TIER_TRIMS, tier), {
+    onNone: () => GUN_PALETTE,
+    onSome: trim =>
+      Record.union(GUN_PALETTE, trim, (_base, trimmed) => trimmed),
+  })
+
+const rotatedGun = (
+  { pixels, pivot }: GunPixels,
+  palette: Palette,
+  angle: number,
+): Sprite => {
   const isPointingLeft = Math.cos(angle) < -STRAIGHT_UP_TOLERANCE
   const source = isPointingLeft ? Array.reverse(pixels) : pixels
   const pivotY = isPointingLeft ? pixels.length - 1 - pivot.y : pivot.y
@@ -716,27 +734,53 @@ const rotatedGun = ({ pixels, pivot }: GunPixels, angle: number): Sprite => {
       Array.join(''),
     ),
   )
-  return spriteShapes(rows, GUN_PALETTE, { x: reach, y: reach })
+  return spriteShapes(rows, palette, { x: reach, y: reach })
 }
 
-export const GUN_SPRITES: Readonly<
-  Record<WeaponKind, Array.NonEmptyReadonlyArray<Sprite>>
-> = Record.map(GUN_PIXELS, gun =>
+const gunTurns = (
+  gun: GunPixels,
+  palette: Palette,
+): Array.NonEmptyReadonlyArray<Sprite> =>
   Array.prepend(
     Array.makeBy(GUN_DIRECTIONS - 1, index =>
-      rotatedGun(gun, ((index + 1) * Math.PI * 2) / GUN_DIRECTIONS),
+      rotatedGun(gun, palette, ((index + 1) * Math.PI * 2) / GUN_DIRECTIONS),
     ),
-    rotatedGun(gun, 0),
-  ),
+    rotatedGun(gun, palette, 0),
+  )
+
+const GUN_TIERS: ReadonlyArray<number> = Array.makeBy(
+  GUN_TIER_TRIMS.length,
+  tier => tier,
 )
 
-export const GUN_ICONS: Readonly<Record<WeaponKind, Sprite>> = Record.map(
-  GUN_PIXELS,
-  ({ pixels }) => spriteShapes(pixels, GUN_PALETTE),
+export const GUN_SPRITES: Readonly<
+  Record<WeaponKind, ReadonlyArray<Array.NonEmptyReadonlyArray<Sprite>>>
+> = Record.map(GUN_PIXELS, gun =>
+  Array.map(GUN_TIERS, tier => gunTurns(gun, gunPalette(tier))),
 )
 
-export const gunSprite = (kind: WeaponKind, angle: number): Sprite => {
-  const turns = GUN_SPRITES[kind]
+export const GUN_ICONS: Readonly<Record<WeaponKind, ReadonlyArray<Sprite>>> =
+  Record.map(GUN_PIXELS, ({ pixels }) =>
+    Array.map(GUN_TIERS, tier => spriteShapes(pixels, gunPalette(tier))),
+  )
+
+export const gunIcon = (kind: WeaponKind, tier: number): Sprite =>
+  pipe(
+    Array.get(GUN_ICONS[kind], tier),
+    Option.orElse(() => Array.head(GUN_ICONS[kind])),
+    Option.getOrElse(() => []),
+  )
+
+export const gunSprite = (
+  kind: WeaponKind,
+  tier: number,
+  angle: number,
+): Sprite => {
+  const turns = Option.getOrElse(Array.get(GUN_SPRITES[kind], tier), () =>
+    Option.getOrElse(Array.head(GUN_SPRITES[kind]), () =>
+      gunTurns(GUN_PIXELS[kind], GUN_PALETTE),
+    ),
+  )
   const step = (Math.PI * 2) / GUN_DIRECTIONS
   const index =
     ((Math.round(angle / step) % GUN_DIRECTIONS) + GUN_DIRECTIONS) %

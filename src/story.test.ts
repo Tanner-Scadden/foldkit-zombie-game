@@ -77,6 +77,7 @@ const DISTANT_SPAWN: PlannedSpawn = {
   door: 'North',
   offset: 0,
   speedScale: 1,
+  hpScale: 1,
 }
 
 const FIGHTING_PHASE: Phase = Phase.Wave({
@@ -96,6 +97,7 @@ const zombieAt = (id: number, x: number, y: number, speed = 20): Zombie => ({
   y,
   speed,
   hp: ZOMBIE_MAX_HP,
+  maxHp: ZOMBIE_MAX_HP,
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
@@ -724,6 +726,8 @@ describe('particles and decals', () => {
       velocityY: 0,
       remainingMs: 900,
       weapon: 'Pistol',
+      damage: 1,
+      knockback: 110,
     }))
     const oldDecal: Decal = { kind: 'Shell', x: 1, y: 1, width: 2, height: 1 }
     const floodModel = modifyFields(withZombies(playingModel, victims), {
@@ -834,6 +838,8 @@ const bulletInto = (id: number, { x, y }: Zombie): Bullet => ({
   velocityY: 0,
   remainingMs: 900,
   weapon: 'Pistol',
+  damage: 1,
+  knockback: 110,
 })
 
 const massacreModel = (count: number): Model => {
@@ -864,6 +870,8 @@ const STRAY_BULLET: Bullet = {
   velocityY: 0,
   remainingMs: 900,
   weapon: 'Pistol',
+  damage: 1,
+  knockback: 110,
 }
 
 const freezeVictim = doomedZombieAt(400, 250, 30)

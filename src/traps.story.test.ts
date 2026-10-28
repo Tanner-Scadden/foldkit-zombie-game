@@ -39,6 +39,7 @@ const DISTANT_SPAWN: PlannedSpawn = {
   door: 'North',
   offset: 0,
   speedScale: 1,
+  hpScale: 1,
 }
 
 const PLANNED_SPAWNS: ReadonlyArray<PlannedSpawn> = [
@@ -127,6 +128,7 @@ const zombieOf = (
   y,
   speed,
   hp,
+  maxHp: hp,
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),

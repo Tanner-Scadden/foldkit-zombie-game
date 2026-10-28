@@ -70,7 +70,7 @@ import {
   trapBlockers,
 } from './traps'
 import { advanceRound, endWhenDefeated } from './waves'
-import { SIDEARM, WEAPONS, type WeaponStats, holdPistol } from './weapons'
+import { SIDEARM, type WeaponStats, holdPistol, statsAt } from './weapons'
 import { Behavior, isWalking, radiusOf, statsOf, strideAt } from './zombies'
 
 // INTENT
@@ -205,6 +205,8 @@ const makeBullet = (
   velocityY: velocity.y,
   remainingMs: stats.bulletLifetimeMs,
   weapon,
+  damage: stats.damage,
+  knockback: stats.knockback,
 })
 
 const nextFireCooldown = (
@@ -225,13 +227,20 @@ const spendRound = (arsenal: Arsenal): Arsenal =>
     HoldingPistol: () => arsenal,
     HoldingSpare: ({ spare }) =>
       Arsenal.HoldingSpare({
-        spare: { kind: spare.kind, rounds: Math.max(0, spare.rounds - 1) },
+        spare: modifyFields(spare, {
+          rounds: rounds => Math.max(0, rounds - 1),
+        }),
       }),
   })
 
-const shoot = (model: Model, weapon: WeaponKind, deltaMs: number): Model => {
+const shoot = (
+  model: Model,
+  weapon: WeaponKind,
+  tier: number,
+  deltaMs: number,
+): Model => {
   const { player, nextEntityId } = model
-  const stats = WEAPONS[weapon]
+  const stats = statsAt(weapon, tier)
   const muzzle = addVectors(
     player,
     scaleVector(player.facing, stats.muzzleReach),
@@ -280,10 +289,13 @@ const runDry = (model: Model): Model =>
 
 const pullTrigger = (model: Model, deltaMs: number): Model =>
   Arsenal.match(model.player.arsenal, {
-    PistolOnly: () => shoot(model, SIDEARM, deltaMs),
-    HoldingPistol: () => shoot(model, SIDEARM, deltaMs),
+    PistolOnly: () => shoot(model, SIDEARM, model.player.pistolTier, deltaMs),
+    HoldingPistol: () =>
+      shoot(model, SIDEARM, model.player.pistolTier, deltaMs),
     HoldingSpare: ({ spare }) =>
-      spare.rounds > 0 ? shoot(model, spare.kind, deltaMs) : runDry(model),
+      spare.rounds > 0
+        ? shoot(model, spare.kind, spare.tier, deltaMs)
+        : runDry(model),
   })
 
 const fire = (model: Model, deltaMs: number): Model => {
@@ -560,6 +572,8 @@ type BulletHit = Readonly<{
   y: number
   direction: Vector
   weapon: WeaponKind
+  damage: number
+  knockback: number
 }>
 
 const bulletDirection = (bullet: Bullet): Vector =>
@@ -619,6 +633,8 @@ const findBulletHits = (
           y: point.y,
           direction: bulletDirection(bullet),
           weapon: bullet.weapon,
+          damage: bullet.damage,
+          knockback: bullet.knockback,
         })),
       )
     }),
@@ -626,12 +642,10 @@ const findBulletHits = (
 }
 
 const totalDamage = (hits: ReadonlyArray<BulletHit>): number =>
-  Array.reduce(hits, 0, (sum, hit) => sum + WEAPONS[hit.weapon].damage)
+  Array.reduce(hits, 0, (sum, hit) => sum + hit.damage)
 
 const strongestKnockback = (hits: ReadonlyArray<BulletHit>): number =>
-  Array.reduce(hits, 0, (strongest, hit) =>
-    Math.max(strongest, WEAPONS[hit.weapon].knockback),
-  )
+  Array.reduce(hits, 0, (strongest, hit) => Math.max(strongest, hit.knockback))
 
 const hitsOn = (
   hits: ReadonlyArray<BulletHit>,
