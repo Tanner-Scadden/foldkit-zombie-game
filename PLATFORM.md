@@ -1,6 +1,19 @@
 # Platform
 
-**Status: thinking. One direction chosen: our own mini sync engine over scopes, for personal and shared state (2026-10-28). Everything else is undecided.** This file collects the plan for running Munch Manor on Cloudflare with an Effect-native stack: hosting, analytics, local data, sync, and the server side of multiplayer. None of it is on the roadmap yet. When a piece is chosen it moves into the "Decided" section of [`GAME_DESIGN.md`](./GAME_DESIGN.md) with a date. The multiplayer ideas live in [`MULTIPLAYER.md`](./MULTIPLAYER.md); this file is the ground they would stand on.
+**Status: thinking, with some directions chosen (see "Decided so far"). Everything else is undecided.**
+
+## Decided so far
+
+All on 2026-10-28.
+
+- **Everything moves to Cloudflare.** GitHub Pages was only for testing on other devices. It is removed (the site and `.github/workflows/pages.yml`) once the Cloudflare deploy is live.
+- **Free plan first.** Upgrade to Workers Paid only if the game takes off.
+- **Our own mini sync engine over scopes**, for personal and shared state. See "Sync engine".
+- **Browser SQLite uses the `opfs-sahpool` VFS.** It needs no COOP/COEP headers, works on Safari 16.4 and later, and allows one connection, which matches one leader tab.
+- **We write our own small Effect wrapper over `@sqlite.org/sqlite-wasm`**, since no Effect SQL client for browser wasm turned up, and open source it with the sync engine.
+- **Every WebSocket uses the Durable Object WebSocket Hibernation API.** Plain `accept()` bills duration for as long as a socket is open.
+- **Multiplayer rooms batch inputs at 20 messages a second per player.**
+- **The leader tab is chosen with the Web Locks API.** Not separately verified, by choice. This file collects the plan for running Munch Manor on Cloudflare with an Effect-native stack: hosting, analytics, local data, sync, and the server side of multiplayer. None of it is on the roadmap yet. When a piece is chosen it moves into the "Decided" section of [`GAME_DESIGN.md`](./GAME_DESIGN.md) with a date. The multiplayer ideas live in [`MULTIPLAYER.md`](./MULTIPLAYER.md); this file is the ground they would stand on.
 
 ## The idea
 
@@ -74,7 +87,7 @@ The hard parts, in the order we expect to meet them: one tab at a time owning th
 
 Rough size: two to four weeks for player scopes, plus about two to three weeks for shared scopes, permissions, snapshots, and sharding. A hardened general-purpose engine is a multi-year effort, which is not what we are building.
 
-Leaderboards rely on verifying runs by replay, which needs a fixed timestep, deterministic trig across browsers and the Workers runtime, and replays pinned to the build that recorded them. Replay CPU needs the Workers Paid plan and a queue. Those are shared with multiplayer.
+Leaderboards can be verified by replay, which needs a fixed timestep, deterministic trig across browsers and the Workers runtime (required: even two V8 versions can disagree on `Math.sin`), and replays pinned to the build that recorded them. Replay CPU needs the Workers Paid plan, so on the free plan leaderboards start unverified (see "Costs and limits"). The fixed timestep and deterministic trig are shared with multiplayer.
 
 What we borrow from LiveStore's design: an append-only event log as the source of truth, one total order chosen by the server, a leader per client, and rebase by replay.
 
@@ -105,10 +118,22 @@ The first spike builds settings and personal bests (a player scope), then the da
 
 ## Costs and limits
 
-- Static assets and the Workers free tier should cover a hobby game at $0.
-- D1 and Durable Objects have generous free tiers. Long-lived connections to Durable Objects are what starts to cost money, so idle rooms should hibernate.
-- SQLite in wasm adds roughly a megabyte of download to a game that is about 540 KB today. Load it after the title screen so the first paint stays fast.
-- Alchemy is alpha and expects breaking changes, so pin exact versions.
+Checked against Cloudflare's pricing pages on 2026-10-28.
+
+|                                             | Free                                | Paid (Workers Paid, $5 a month minimum)            |
+| ------------------------------------------- | ----------------------------------- | -------------------------------------------------- |
+| Worker CPU per request                      | 10 ms                               | 30 s by default, up to 5 minutes                   |
+| Durable Object requests                     | 100,000 a day, then operations fail | 1 million a month, then $0.15 per million          |
+| Durable Object duration (billed at 128 MB)  | 13,000 GB-s a day                   | 400,000 GB-s a month, then $12.50 per million GB-s |
+| Durable Object SQLite rows read and written | 5 million and 100,000 a day         | 25 billion and 50 million a month included         |
+| Durable Object storage                      | 5 GB                                | 5 GB-month, then $0.20 per GB-month                |
+
+- **WebSocket messages.** Opening a socket is one request. Incoming messages bill at 20 to 1. Outgoing messages, pings, and auto-responses are free. A hibernating socket is not billed for duration. Assumed but not verified: the free plan counts requests with the same 20 to 1 ratio.
+- **Player sync** is a handful of mutations a run over a hibernating socket. Effectively free.
+- **A 4-player room for a 9-minute game** with inputs batched at 20 a second is about 2,200 billed requests and about 68 GB-s, so the free plan fits about 46 room games a day. Past that, requests fail until 00:00 UTC; nothing is charged.
+- **Replay verification does not fit the free plan.** Replaying a run costs about 2 to 3 seconds of CPU (the balance bot spends about 3.1 s a run including its own logic), far over 10 ms. On the free plan, leaderboards launch with sanity checks only (a plausible score for the wave and run length, rate limits, initials) while runs are still recorded with their seed and inputs, so they can be verified later if we upgrade.
+- **Bundle size.** `sqlite3.wasm` is 879 KB raw and about 400 KB gzipped, plus its JavaScript glue. The game is 612 KB raw and 190 KB gzipped today. Load SQLite after the title screen.
+- **Alchemy** is alpha and expects breaking changes, so pin exact versions.
 
 ## Privacy and safety
 
@@ -130,7 +155,7 @@ Each change gets recorded as a dated decision when we make it.
 ## Open questions
 
 1. Which Cloudflare account, and the free `workers.dev` address or a real domain?
-2. Keep GitHub Pages running in parallel, and for how long?
+2. ~~Keep GitHub Pages running in parallel?~~ No. It is removed once Cloudflare is live.
 3. Which analytics fields earn their place, and how long are rows kept?
 4. Do we store full runs (seed plus inputs) for replays?
 5. ~~LiveStore, or our own sync on Effect SQL?~~ Our own mini sync engine, chosen 2026-10-28. LiveStore is revisited at 1.0.
@@ -138,6 +163,10 @@ Each change gets recorded as a dated decision when we make it.
 7. Does local SQLite load on the title screen or only when it is first needed?
 
 ## Sources
+
+- [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/) and [Workers limits](https://developers.cloudflare.com/workers/platform/limits)
+- [SQLite wasm persistence (OPFS, `opfs-sahpool`, COOP/COEP)](https://sqlite.org/wasm/doc/tip/persistence.md) and [MDN `createSyncAccessHandle`](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createSyncAccessHandle)
+- [JS engines diverging on `Math.sin`](https://codeberg.org/perplexdotgg/bounce/issues/8)
 
 - [Alchemy](https://alchemy.run/) and its [README](https://cdn.jsdelivr.net/npm/alchemy@2.0.0-beta.74/README.md)
 - [Alchemy D1 provider](https://alchemy.run/providers/sql/d1) and [LiveStore on Cloudflare guide](https://alchemy.run/guides/cloudflare-livestore)
