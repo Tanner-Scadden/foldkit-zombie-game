@@ -39,8 +39,7 @@ const atMost = (
   source,
 })
 
-const BALANCE_PASS = 'Balance pass: the targets'
-const LEVELS = 'Difficulty levels and planks as bait: Balance'
+const TARGETS_SECTION = 'How balance is checked: the targets'
 const PRINCIPLES = 'Difficulty principles: sawtooth intensity'
 
 // NOTE: the incoming health a second at a peak, against the player's damage
@@ -78,7 +77,6 @@ export const QUIET_TARGET: Readonly<{
   longestMaxSeconds: 1.2,
 }
 
-const PACING = 'Packs and pacing: no dead air'
 const PORTRAIT = 'Portrait play: Balance'
 
 // NOTE: each portrait pass plays a landscape job's bot in the 390x844
@@ -114,11 +112,23 @@ export const PORTRAIT_PAIRS: ReadonlyArray<PortraitPair> = [
 export const PORTRAIT_GAP_TOLERANCE = 0.08
 
 const WIN_TARGETS: ReadonlyArray<Target> = [
-  between('normal.wins', 'Normal wins (default bot)', 0.15, 0.25, LEVELS),
-  between('normal-swap.wins', 'Normal wins (SWAP=1)', 0.3, 0.45, LEVELS),
-  between('easy.wins', 'Easy wins', 0.55, 0.7, LEVELS),
-  between('hard.wins', 'Hard wins', 0.05, 0.12, LEVELS),
-  between('nightmare.wins', 'Nightmare wins', 0.01, 0.04, LEVELS),
+  between(
+    'normal.wins',
+    'Normal wins (default bot)',
+    0.15,
+    0.25,
+    TARGETS_SECTION,
+  ),
+  between(
+    'normal-swap.wins',
+    'Normal wins (SWAP=1)',
+    0.3,
+    0.45,
+    TARGETS_SECTION,
+  ),
+  between('easy.wins', 'Easy wins', 0.55, 0.7, TARGETS_SECTION),
+  between('hard.wins', 'Hard wins', 0.05, 0.12, TARGETS_SECTION),
+  between('nightmare.wins', 'Nightmare wins', 0.01, 0.04, TARGETS_SECTION),
 ]
 
 // NOTE: portrait is judged against the same win targets as landscape.
@@ -141,41 +151,41 @@ export const TARGETS: ReadonlyArray<Target> = [
     'normal.died.w1-2',
     'Normal deaths in waves 1 and 2',
     0.03,
-    BALANCE_PASS,
+    TARGETS_SECTION,
   ),
   atMost(
     'normal.died.w3-4',
     'Normal deaths in waves 3 and 4',
     0.1,
-    BALANCE_PASS,
+    TARGETS_SECTION,
   ),
   between(
     'normal.died.w5-6',
     'Normal deaths in waves 5 and 6',
     0.25,
     0.35,
-    BALANCE_PASS,
+    TARGETS_SECTION,
   ),
   between(
     'normal.died.peakWave',
     'Normal wave with the most deaths',
     8,
     8,
-    BALANCE_PASS,
+    TARGETS_SECTION,
   ),
   between(
     'normal.medianWin',
     'Normal median win (minutes)',
     7,
     9,
-    BALANCE_PASS,
+    TARGETS_SECTION,
   ),
   between(
     'normal.closeCalls',
     'Normal close calls (share of wins at 1 heart)',
     0.3,
     0.5,
-    BALANCE_PASS,
+    TARGETS_SECTION,
   ),
   ...PEAK_RATIO_WAVES.map(wave =>
     between(
@@ -191,19 +201,19 @@ export const TARGETS: ReadonlyArray<Target> = [
       `waves.w${wave}.medianLength`,
       `Wave ${wave} median length in the snapshot pass (seconds)`,
       maxSeconds,
-      PACING,
+      TARGETS_SECTION,
     ),
     atMost(
       `waves.w${wave}.quiet`,
       `Wave ${wave} quiet empty room mid-wave, mean (seconds)`,
       QUIET_TARGET.meanMaxSeconds,
-      PACING,
+      TARGETS_SECTION,
     ),
     atMost(
       `waves.w${wave}.worstQuiet`,
       `Wave ${wave} longest quiet empty room in any run (seconds)`,
       QUIET_TARGET.longestMaxSeconds,
-      PACING,
+      TARGETS_SECTION,
     ),
   ]),
 ]

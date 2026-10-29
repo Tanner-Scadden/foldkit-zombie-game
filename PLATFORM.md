@@ -342,12 +342,7 @@ Checked against Cloudflare's pricing pages on 2026-10-28.
 
 ## Conflicts with the design doc
 
-`GAME_DESIGN.md` lists under "Not now":
-
-- **Server-side anything.** Analytics and sync both change this.
-- **Accounts, leaderboards, or saved progress.** Local SQLite starts saved progress on one device. Sync carries it across devices and needs some idea of identity, which edges toward accounts.
-
-Each change gets recorded as a dated decision when we make it. "Not now" records both as relaxed on 2026-10-29, when analytics, the SQLite save, and sync reached production: server-side code for analytics and sync, and saved progress on the device and across linked devices. Accounts and leaderboards are still out.
+Settled on 2026-10-29. `GAME_DESIGN.md` used to list "server-side anything" and "saved progress" under "Not now". Analytics, the SQLite save, and sync reached production, so both left that list, and "Decided" now says online runs on Cloudflare only. Accounts stay out, and a leaderboard waits for the daily challenge scope.
 
 ## Open questions
 
