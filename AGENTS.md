@@ -43,7 +43,8 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/pathing.ts`       | The flow field toward the player and zombie steering                   |
 | `src/waves.ts`         | Spawn tables, packs, the wave arc, spawning, and run phases            |
 | `src/pacing.ts`        | Sawtooth beats, pack telegraphs, door camping, and intensity           |
-| `src/zombies.ts`       | The zombie kind table: stats, behavior, deaths, and sounds             |
+| `src/zombies.ts`       | The zombie kind table: stats, behavior, deaths, sounds, and wear       |
+| `src/boss.ts`          | The boss: its rules, its entrance, its attacks, and its health bar     |
 | `src/combat.ts`        | Strikes, wounds, and bursts applied to any list of targets             |
 | `src/traps.ts`         | The trap table, placement, chewing, turrets, and repair                |
 | `src/weapons.ts`       | The weapon table, the two-slot arsenal, magazines, and reload          |
@@ -58,7 +59,8 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/worldView.ts`     | The world scene: ground, depth-sorted actors, overhead effects         |
 | `src/depth.ts`         | The drawable type and the foot-depth sort order                        |
 | `src/drawing.ts`       | Shape helpers shared by the world views: sprites, feet, pulses         |
-| `src/zombieView.ts`    | Zombies walking, fusing, and dying, their shadows and health bars      |
+| `src/zombieView.ts`    | Zombies walking, fusing, and dying, worn parts, shadows, health bars   |
+| `src/bossView.ts`      | The boss's stomp ring, its health bar, and its entrance band           |
 | `src/playerView.ts`    | The player, the gun, muzzle flashes, and the reload bar                |
 | `src/trapView.ts`      | Barricades, turrets, and the trap placement ghost                      |
 | `src/effectsView.ts`   | Bullets, decals, particles, blasts, popups, and rattling doors         |

@@ -228,7 +228,7 @@ export const preparationControlsView = (
         [h.Class('preparation-controls')],
         [
           preparationTimerView(wave, remainingMs, h),
-          wavePreviewView(wave, spawns, h),
+          wavePreviewView(wave, spawns, model.boss, h),
           trapControlsView(model, h),
           startWaveButtonView(wave, h),
         ],

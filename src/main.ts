@@ -525,6 +525,11 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     PickupFizzled: () => Option.none<SoundEffect>(),
     BoostFaded: () => Option.some<SoundEffect>('PowerDown'),
     Burped: () => Option.none<SoundEffect>(),
+    PartShed: () => Option.some<SoundEffect>('LimbPop'),
+    BossRoared: () => Option.some<SoundEffect>('BossRoar'),
+    BossWoundUp: () => Option.some<SoundEffect>('BossWindUp'),
+    BossStomped: () => Option.some<SoundEffect>('BossStomp'),
+    BossBelched: () => Option.some<SoundEffect>('BossBelch'),
   })
 
 const maybeEventSoundCue = (event: GameEvent): Option.Option<SoundCue> =>

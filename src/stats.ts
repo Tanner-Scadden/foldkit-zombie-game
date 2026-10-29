@@ -18,6 +18,7 @@ const addKill = (kills: KillCounts, kind: ZombieKind): KillCounts =>
     Runner: count => (kind === 'Runner' ? count + 1 : count),
     Tank: count => (kind === 'Tank' ? count + 1 : count),
     Exploder: count => (kind === 'Exploder' ? count + 1 : count),
+    Boss: count => (kind === 'Boss' ? count + 1 : count),
   })
 
 const killedKinds = (
@@ -61,7 +62,7 @@ export const countTrapPlaced = (stats: RunStats): RunStats =>
 // READING
 
 export const totalKills = ({ kills }: RunStats): number =>
-  kills.Shambler + kills.Runner + kills.Tank + kills.Exploder
+  kills.Shambler + kills.Runner + kills.Tank + kills.Exploder + kills.Boss
 
 export const accuracyPercent = ({ shotsFired, shotsHit }: RunStats): number =>
   shotsFired > 0 ? Math.round((100 * shotsHit) / shotsFired) : 0

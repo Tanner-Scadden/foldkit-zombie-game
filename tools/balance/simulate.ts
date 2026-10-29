@@ -23,6 +23,7 @@ const { THRESHOLDS, boxCenter, hasLineOfSight } =
 const { STALL_BOX, isShopOpenFor, priceFor, verdictFor } =
   await import('../../src/shop')
 const { FINAL_WAVE } = await import('../../src/waves')
+const { BOSS_RULES } = await import('../../src/boss')
 const { canReload, heldLoaded, heldStats, maxRounds, maxTier, maybeSpare } =
   await import('../../src/weapons')
 const { Dialog } = await import('@foldkit/ui')
@@ -48,13 +49,14 @@ if (process.env.TUNE !== undefined) {
     DROP_RULES: (await import('../../src/powerups')).DROP_RULES,
     BOOSTS: (await import('../../src/powerups')).BOOSTS,
     PICKUPS: (await import('../../src/powerups')).PICKUPS,
+    BOSS_RULES: (await import('../../src/boss')).BOSS_RULES,
   })
 }
 
 type Model = typeof initialModel
 type GameMessage = Parameters<typeof update>[1]
 type Vector = { x: number; y: number }
-type Kind = 'Shambler' | 'Runner' | 'Tank' | 'Exploder'
+type Kind = 'Shambler' | 'Runner' | 'Tank' | 'Exploder' | 'Boss'
 
 const IS_ENDLESS = process.env.MODE === 'endless'
 const NO_UPGRADES = process.env.NO_UPGRADES !== undefined
@@ -89,7 +91,23 @@ type RunResult = {
   boostedMs: number
   waveMs: number
   timelines: Array<WaveTimeline>
+  boss: BossLog
 }
+
+// Each boss wave the run reached: whether the boss walked in, whether it
+// fell, how long it stood, and whether the run ended while it stood.
+type BossFight = {
+  wave: number
+  arrived: boolean
+  felled: boolean
+  fightMs: number
+  diedToIt: boolean
+  stomps: number
+  stompHits: number
+  belches: number
+}
+
+type BossLog = Array<BossFight>
 
 // The timeline of one wave in wall time from its start: every pack as it
 // walks in, and the stretches with no zombie alive. A stretch is announced
@@ -250,12 +268,42 @@ const safePickup = (model: Model): Vector | undefined => {
     .sort((a, b) => distance(model.player, a) - distance(model.player, b))[0]
 }
 
+// It steps out of a stomp ring the way a player who has seen one does:
+// straight away from the boss once the wind-up starts. It keeps a wider
+// berth from the boss than from the horde, since the boss is wider.
+const DODGE_MARGIN_PX = Number(process.env.DODGE_MARGIN ?? 10)
+const NO_DODGE = process.env.NO_DODGE !== undefined
+
+const bossOf = (model: Model) => {
+  const { boss } = model
+  return boss._tag === 'Fighting'
+    ? walking(model).find(zombie => zombie.id === boss.id)
+    : undefined
+}
+
+const stompDodge = (model: Model): Vector | undefined => {
+  if (NO_DODGE || model.boss._tag !== 'Fighting') return undefined
+  const move = model.boss.move
+  if (move._tag !== 'WindingUp' || move.attack !== 'Stomp') return undefined
+  const boss = bossOf(model)
+  if (boss === undefined) return undefined
+  return distance(model.player, boss) < BOSS_RULES.stompRadius + DODGE_MARGIN_PX
+    ? steerToward(boss, model.player)
+    : { x: 0, y: 0 }
+}
+
+const BOSS_BERTH_PX = Number(process.env.BOSS_BERTH ?? 16)
+
 const kite = (model: Model): Vector => {
   const { player } = model
-  const nearest = walking(model).sort(
-    (a, b) => distance(player, a) - distance(player, b),
-  )[0]
-  if (nearest !== undefined && distance(player, nearest) < FLEE_PX) {
+  const dodge = stompDodge(model)
+  if (dodge !== undefined) {
+    return dodge
+  }
+  const reach = (zombie: Model['zombies'][number]) =>
+    distance(player, zombie) - (zombie.kind === 'Boss' ? BOSS_BERTH_PX : 0)
+  const nearest = walking(model).sort((a, b) => reach(a) - reach(b))[0]
+  if (nearest !== undefined && reach(nearest) < FLEE_PX) {
     return steerToward(nearest, player)
   }
   const pickup = safePickup(model)
@@ -525,6 +573,7 @@ const emptyHurt = (): Record<Kind, number> => ({
   Runner: 0,
   Tank: 0,
   Exploder: 0,
+  Boss: 0,
 })
 
 const blame = (before: Model, after: Model, hurtBy: Record<Kind, number>) => {
@@ -537,6 +586,10 @@ const blame = (before: Model, after: Model, hurtBy: Record<Kind, number>) => {
   )
   if (burst) {
     hurtBy.Exploder += lost
+    return
+  }
+  if (after.frameEvents.some(event => event._tag === 'BossStomped')) {
+    hurtBy.Boss += lost
     return
   }
   const nearest = walking(before).sort(
@@ -569,6 +622,7 @@ const runOnce = (seed: number): RunResult => {
   let boostedMs = 0
   let waveMs = 0
   const timelines: Array<WaveTimeline> = []
+  const bossLog: BossLog = []
   botRandom = seed
   spentOnUpgrades = 0
   boughtLog = []
@@ -667,6 +721,47 @@ const runOnce = (seed: number): RunResult => {
         boostedMs += FRAME_MS
       }
     }
+    if (before.phase._tag === 'Wave') {
+      const hasBoss = before.boss._tag !== 'Absent'
+      const known = bossLog.find(fight => fight.wave === wave)
+      const fight =
+        known ??
+        (hasBoss
+          ? (bossLog.push({
+              wave,
+              arrived: false,
+              felled: false,
+              fightMs: 0,
+              diedToIt: false,
+              stomps: 0,
+              stompHits: 0,
+              belches: 0,
+            }),
+            bossLog[bossLog.length - 1]!)
+          : undefined)
+      if (fight !== undefined) {
+        if (model.boss._tag === 'Fighting') {
+          fight.arrived = true
+          fight.fightMs += FRAME_MS
+        }
+        model.frameEvents.forEach(event => {
+          if (event._tag === 'ZombieKilled' && event.kind === 'Boss') {
+            fight.felled = true
+          }
+          if (event._tag === 'BossStomped') fight.stomps += 1
+          if (event._tag === 'BossBelched') fight.belches += 1
+        })
+        if (
+          model.frameEvents.some(event => event._tag === 'BossStomped') &&
+          model.player.hp < before.player.hp
+        ) {
+          fight.stompHits += 1
+        }
+        if (model.player.hp <= 0 && model.boss._tag === 'Fighting') {
+          fight.diedToIt = true
+        }
+      }
+    }
     maxAlive = Math.max(maxAlive, model.zombies.length)
     minHp = Math.min(minHp, model.player.hp)
     if (
@@ -735,6 +830,7 @@ const runOnce = (seed: number): RunResult => {
     boostedMs,
     waveMs,
     timelines,
+    boss: bossLog,
   }
 }
 
@@ -948,6 +1044,26 @@ console.log(
 pickupKinds.forEach(kind => {
   console.log(
     `  ${kind.padEnd(9)} dropped ${String(sumOf(r => r.dropped, kind)).padStart(5)}  grabbed ${String(sumOf(r => r.grabbed, kind)).padStart(5)}`,
+  )
+})
+
+const fights = results.flatMap(r => r.boss)
+const fightWaves = [...new Set(fights.map(fight => fight.wave))].sort(
+  (a, b) => a - b,
+)
+console.log('\nBoss fights (per boss wave reached)')
+fightWaves.forEach(bossWave => {
+  const atWave = fights.filter(fight => fight.wave === bossWave)
+  const arrived = atWave.filter(fight => fight.arrived)
+  const felled = atWave.filter(fight => fight.felled)
+  const diedTo = atWave.filter(fight => fight.diedToIt)
+  const diedAtWave = results.filter(
+    r => !r.victory && r.cleared + 1 === bossWave,
+  ).length
+  const stomps = arrived.reduce((sum, fight) => sum + fight.stomps, 0)
+  const stompHits = arrived.reduce((sum, fight) => sum + fight.stompHits, 0)
+  console.log(
+    `  wave ${bossWave}: reached ${atWave.length}, boss arrived ${arrived.length}, felled ${felled.length}, runs that died with it standing ${diedTo.length} of ${diedAtWave} deaths on the wave, median fight ${(median(arrived.map(fight => fight.fightMs)) / 1000).toFixed(1)} s, stomps ${(stomps / Math.max(1, arrived.length)).toFixed(1)} a fight (${((100 * stompHits) / Math.max(1, stomps)).toFixed(0)}% hit), belches ${(arrived.reduce((sum, fight) => sum + fight.belches, 0) / Math.max(1, arrived.length)).toFixed(1)} a fight`,
   )
 })
 

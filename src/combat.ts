@@ -26,9 +26,9 @@ import { TRAP_BLAST_TARGET } from './traps'
 import {
   Behavior,
   type DeathCause,
+  bodyRadiusOf,
   deathState,
   isWalking,
-  radiusOf,
   statsOf,
 } from './zombies'
 
@@ -159,7 +159,7 @@ export const blastAll = <A>(
 
 export const ZOMBIE_BLAST_TARGET: BlastTarget<Zombie> = {
   center: zombie => zombie,
-  radius: radiusOf,
+  radius: bodyRadiusOf,
   isExposed: isWalking,
   damageFrom: ({ zombieDamage }) => zombieDamage,
   hurt: (zombie, strike) => {

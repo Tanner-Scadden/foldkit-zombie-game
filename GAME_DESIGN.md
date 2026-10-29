@@ -34,7 +34,7 @@ Decided on 2026-10-27. The first playable is a fun one-screen arena that a stran
 - **Tone.** Goofy-gory cartoon. Chunky, bright, bouncy sprites, cartoon splatter, and zombies that are funny more than scary.
 - **Liveliness.** Every sprite moves. That means walk cycles and idle motion, hit feedback (white flash, knockback, squash and stretch, death animations, gibs), screen juice (shake, muzzle flash, shell casings, hit-stop, damage numbers), and world life (blood decals that stay, dust, particles, shadows).
 - **The arena.** One 320×180 room with some cover and three or four doorways that zombies come through. It teaches that doors are chokepoints before the estate exists.
-- **Waves.** 8 waves. The last is a Tank-heavy horde, and Victory follows it. This changes the casual target of 15 from "Waves" below for the first playable. 15 waves and an endless mode come later.
+- **Waves.** 8 waves. The last is a Tank-heavy horde, and Victory follows it. This changes the casual target of 15 from "Waves" below for the first playable. 15 waves and an endless mode come later. Since 2026-10-28 a boss, Uncle Chunk, comes on top of the last wave's horde (see "Wear and the boss").
 - **Preparation.** About 20 seconds, with a visible timer, and the player can skip it.
 - **Shop.** A stall in the room. The player walks onto it to open the shop overlay.
 - **Weapons.** The player starts with a pistol, buys more in the shop, carries two, and swaps between them.
@@ -68,16 +68,18 @@ Built on 2026-10-28 after a first-time phone player said the right stick was nev
 
 Changed on 2026-10-28 after a playtest said the screen shook too much while shooting. Shake comes from trauma, which moves the screen up to 3 px per unit and decays 2.5 units a second.
 
-| Source                              | Trauma before | Trauma now |
-| ----------------------------------- | ------------- | ---------- |
-| Pop Pistol shot                     | 0.25          | 0          |
-| Chatterbox shot                     | 0.12          | 0.04       |
-| Barn Buster shot                    | 0.65          | 0.3        |
-| Groaner kill                        | 0.5           | 0.15       |
-| Hotfoot kill                        | 0.4           | 0.12       |
-| Gasbag kill (its blast adds 1)      | 0.3           | 0.15       |
-| Big Lug kill                        | 1             | 0.7        |
-| Getting hurt, a blast, the Big Burp | 0.9, 1, 0.9   | unchanged  |
+| Source                              | Trauma before | Trauma now  |
+| ----------------------------------- | ------------- | ----------- |
+| Pop Pistol shot                     | 0.25          | 0           |
+| Chatterbox shot                     | 0.12          | 0.04        |
+| Barn Buster shot                    | 0.65          | 0.3         |
+| Groaner kill                        | 0.5           | 0.15        |
+| Hotfoot kill                        | 0.4           | 0.12        |
+| Gasbag kill (its blast adds 1)      | 0.3           | 0.15        |
+| Big Lug kill                        | 1             | 0.7         |
+| Getting hurt, a blast, the Big Burp | 0.9, 1, 0.9   | unchanged   |
+| Uncle Chunk: stomp, roar, belch     | new           | 1, 0.6, 0.3 |
+| Uncle Chunk: a part off, his kill   | new           | 0.35, 1     |
 
 Shots can only raise trauma to 0.3 between them, so held fire never shakes more than about 1 px. Hurts, blasts, big kills, and broken traps add on top of that, up to the cap of 1.
 
@@ -521,6 +523,81 @@ Superseded on 2026-10-28 by the measurements under "Balance pass" above,, which 
 
 - **Endless.** `MODE=endless`, 200 runs from seed 1, after the price ramp: the median run reaches wave 7, the best wave 16, and the worst wave 4. Of the 44 runs that reach wave 9, about 8 die there, 22 on wave 10, and 10 on wave 11, and the rest go further. Before the ramp the same 44 runs reached wave 9, 32 died there, and none passed wave 10: cheaper top tiers and gnomes carry a run deeper once it survives the campaign.
 
+### Wear and the boss
+
+Added on 2026-10-28 from owner feedback: "Would love for us to have parts of the zombie start to fall off as they lose HP" and "Wave 8 should have a final boss too that spawns near the last third of the zombies." Proposed, not decided. Real players have not tested any of it.
+
+#### Wear
+
+- **The rule.** Each kind's row in `ZOMBIE_KINDS` lists its wear stages. A stage comes off once health falls to its share of the zombie's most health, so wear is read from `hp` and `maxHp` alone, with no randomness and no extra state (`wearOf` in `src/zombies.ts`). Each frame compares every zombie's wear at the start and the end of the frame and records a `PartShed` event for each stage it crossed, so a part comes off exactly once, and one big hit past two thresholds sheds both in order. A killing hit sheds nothing: the death gibs cover it, and the falling body uses the fully worn sprite.
+- **What comes off.**
+
+  | Kind        | Comes off at       | What comes off                                                                                        |
+  | ----------- | ------------------ | ----------------------------------------------------------------------------------------------------- |
+  | Groaner     | 2/3, 1/3           | One reaching arm, leaving a red stump, then the top of its skull, showing pink brain and an empty eye |
+  | Hotfoot     | 1/2                | Its hair and scalp, showing pink brain                                                                |
+  | Big Lug     | 3/4, 1/2, 1/4      | One arm, the other arm, then its jaw                                                                  |
+  | Gasbag      | 2/3, 1/3           | A patch of skin, then another. Each hole leaks gas puffs, and the bag shrinks 7% a stage              |
+  | Uncle Chunk | 4/5, 3/5, 2/5, 1/5 | One arm, his party hat with his scalp, the other arm, then his belly bursts open                      |
+
+  With 3 health a Groaner and a Gasbag lose a part to each of the first two hits. With 4 (waves 7 and 8) the first hit takes nothing off and the next two do. A Hotfoot with 2 health loses its scalp to the first hit. A Big Lug of 36 loses parts at 27, 18, and 9.
+
+- **The pop.** A part flies off along the hit as a particle shaped like it and tumbles, with 6 drops of blood and a meat gib, and a short wet pop sound (`LimbPop`). It bounces and lands as a decal that stays like the gibs, and a limb keeps a red stump pixel at one end. The caps are unchanged: 160 particles and 220 decals, newest kept.
+- **Movement and balance.** Unchanged. A worn Groaner, Hotfoot, or Big Lug only waddles a little more, and that is drawing, not movement.
+- **Sprites.** Every stage of every kind is built once at module scope from the base pixel art plus pixel patches (`applyPatches` in `src/sprite.ts`). A Story test checks each kind has one sprite per stage plus its fresh one, each different from the last.
+
+#### Uncle Chunk
+
+- **Who.** A hulking, pot-bellied zombie with a tiny head, a tiny green party hat, a stained undershirt, red suspenders, blue jeans, and arms that hang to his knees. His sprite is 26 by 26 pixels, about twice a Big Lug in each direction. He walks in a four-frame cycle with a stomp squash and a waddle, flashes faster and faster while a stomp winds up, and gapes with green drool before a belch.
+- **Numbers.** Health 80 times the wave's health scale (97 on wave 8). Speed 10 to 11 px/s. A bite costs 2 hearts. His body is 12 px across for bullets, bursts, bites, and the crowd, but he walks on an 8 px radius and the wide flow field, so he fits through every door and around the crates. Mass 40, knockback ×0.03, chews a trap at 20 a second. Bounty $150, and his kill always drops a goodie. Shown to players as UNCLE CHUNK with the line STEP OUT OF THE RED RING.
+- **Stomp.** When his cooldown is up and the player is within 44 px, he stops, rises, and flashes for 1 s while a red ring of 34 px fills the floor around him and a yellow sweep grows to its edge. Then he lands: a player whose body touches the ring loses 1 heart and is shoved out, and every zombie in it is shoved away. He recovers for 0.6 s and waits 1.6 s before the next attack.
+- **Belch.** Otherwise he swells for 0.8 s, gapes, and burps up a Groaner with the wave's health in front of him. He skips it when the room is at the alive cap. He recovers for 0.4 s and waits 9 s. He stands still through every wind-up and recovery, which is when he is easiest to hit. His first attack comes 2.5 s after he walks in.
+- **When he comes.** Wave 8's Preparation draws his door from the seeded generator, and the door preview shows a red-framed BOSS marker with his face at that door (the screen reader says which door). He waits outside until only a third of the wave's planned spawns are left, rounded, so two thirds have come in. Then his door rattles for 2.6 s, he roars, the screen shakes, and a band shows his name and STEP OUT OF THE RED RING. Then he walks in through the door.
+- **He has the floor.** The wave clock stops while he arrives and for his first 15 s in the room, so the last third of the wave, with its Big Lugs and the horde, comes after he has had a turn on his own. The zombies already in the room keep coming.
+- **His bar.** While he stands, the HUD shows his name in red and an 80 px health bar at the top of the screen, on the overlay canvas, so it never shakes. The wave line moves up to read WAVE 8 / 8 ZOMBIES 23.
+- **His death.** He slumps over 1.6 s with 12 meat gibs, 4 pink chunks, 2 limbs, and 24 drops of blood, the shake hits its cap, and the world runs at quarter speed for 1.4 s. Victory waits until his body has finished falling and every other zombie is dead.
+- **Endless.** Every eighth wave brings him back, so an endless run meets him on waves 8, 16, 24, and so on, with that wave's health bonus: 157 on wave 16 and 214 on wave 24. One boss per boss wave.
+- **The Decided finale still holds.** "The last is a Tank-heavy horde" is unchanged: wave 8's plan, its four Big Lugs, and its horde are all still there, and Uncle Chunk comes on top of them.
+
+#### Boss balance
+
+The bot now steps straight out of a stomp ring once a stomp starts winding up and it is within 10 px of the ring, and it keeps 16 px more distance from the boss than from the horde. Hearts lost to a stomp are blamed on the boss, and the report prints each boss wave's fights: how often he arrived and fell, the median fight, the runs that died with him standing, and his stomps and belches. `BOSS_RULES` joins the `TUNE` hook.
+
+Tuning log, 200 runs per bot (`WORKERS` split). "Felled" is the share of the fights where he arrived that ended with him dead.
+
+| Try | Change                                                         | Default wins | `SWAP=1` wins | Felled (default) | Note                                                     |
+| --- | -------------------------------------------------------------- | ------------ | ------------- | ---------------- | -------------------------------------------------------- |
+| 0   | No boss (before this change)                                   | 24.5%        | 33%           |                  | The baseline                                             |
+| 1   | Health 220, belch 2 every 4.2 s                                | 8%           |               | 15%              | A wall: 6 belches a fight, 12 extra Groaners             |
+| 2   | Health 150, belch every 6.5 s                                  | 8.5%         | 9%            | 16%              |                                                          |
+| 3   | Try 2 with wave 8 health ×1.15                                 | 13%          | 10.5%         | 22%              |                                                          |
+| 4   | Health 120, belch 1 every 6.5 s                                | 12%          | 16.5%         | 23%              |                                                          |
+| 5   | Try 4 with the bot's berth fixed                               | 9%           | 12.5%         | 17%              | The bot used to flee the boss straight into the horde    |
+| 6   | Health 1 and no belches: a boss that does nothing              | 20%          | 29.5%         | 48%              | The cost of the entrance and the bot's distraction alone |
+| 7   | Health 160, wave 8 without its Hotfoot stragglers, horde of 15 | 11.5%        | 10%           | 18%              |                                                          |
+| 8   | Health 120, belch 2, wave 8 trimmed by 10                      | 12%          | 17.5%         | 18%              |                                                          |
+| 9   | The 15 s hold added, health 120, belch 2 every 6.5 s           | 11.5%        | 18.5%         | 21%              |                                                          |
+| 10  | Hold 20 s, health 160                                          | 12%          | 10%           | 22%              |                                                          |
+| 11  | Health 120, belches that bring no one                          | 22%          | 25.5%         | 42%              | The belched Groaners are most of his cost                |
+| 12  | Health 100, belch 2 every 12 s                                 | 16%          | 21.5%         | 31%              |                                                          |
+| 13  | Health 100, belch 1 every 9 s                                  | 17%          | 26%           | 33%              |                                                          |
+| 14  | Try 13 with wave 8 without its Hotfoot stragglers              | 20%          | 24.5%         | 38%              |                                                          |
+| 15  | Health 80, belch 1 every 9 s (kept)                            | 23%          | 30.5%         | 45%              | Both bots inside their targets                           |
+| 16  | Try 13 with a horde of 15                                      | 15%          | 22.5%         | 28%              | Trimming the horde did less than trimming the boss       |
+| 17  | Try 15 baked into `src`                                        | 23%          | 30.5%         | 45%              | Matches try 15, so the run is deterministic              |
+
+- **The kept numbers.** 200 runs per bot, `WORKERS=6`:
+
+  | Bot          | Wins  | Wave 8 deaths | Close calls | Median win | Boss arrived | Boss fell | Died with him standing | Median fight |
+  | ------------ | ----- | ------------- | ----------- | ---------- | ------------ | --------- | ---------------------- | ------------ |
+  | Default      | 23%   | 44%           | 18 of 46    | 9.2 min    | 107 of 133   | 48        | 59 of 87 wave 8 deaths | 33 s         |
+  | `SWAP=1`     | 30.5% | 49%           | 14 of 61    | 9.0 min    | 134 of 158   | 62        | 71 of 98               | 38 s         |
+  | `NO_GNOME=1` | 12%   | 48%           | 14 of 24    | 9.2 min    | 89 of 119    | 26        | 63 of 95               | 32 s         |
+
+  Wave 8 is still the biggest killer for every bot, and deaths in waves 1 to 4 stay at or under 1%. A fight sees about 3.5 belches and 0.2 to 0.3 stomps, and the bot steps out of most stomps: stomps cost 2 to 3% of all hearts lost. Most of what he costs is the Groaners he burps up and the ammo his body soaks, so his health and his belch rate were the levers, not his stomp. The bot that never buys a gnome won 15% before the boss and 12% now. Endless (`MODE=endless`): median wave 8, best 12, worst 2, against median 8, best 12, worst 3 before. No endless run in 200 reached wave 16, so his endless return is untested by the bot.
+
+- **Caveats.** The bot keeps its distance and shoots the nearest zombie, so it almost never stands in a stomp ring and rarely fights him up close. A person who stands their ground will see far more stomps. The 15 s hold was kept from try 9 on for pacing, not for the bot: it gave the bot only a point or two.
+
 ## Core loop
 
 | Phase         | What the player does                                                          |
@@ -569,7 +646,7 @@ Ideas to try first:
 
 Zombie types are a table of speed, health, and damage, plus a behavior tag. Each wave draws from a weighted spawn table using the seeded generator, so waves are reproducible.
 
-The first four are built. Their numbers are under "Proposed balance" above.
+The first four are built, and so is the boss. Their numbers are under "Proposed balance" above, and the boss's under "Wear and the boss".
 
 | Type     | Name shown to players | Idea                                                    |
 | -------- | --------------------- | ------------------------------------------------------- |
@@ -578,6 +655,7 @@ The first four are built. Their numbers are under "Proposed balance" above.
 | Tank     | Big Lug               | Slow and very tough. Rewards traps and strong guns.     |
 | Spitter  | Not built yet         | Attacks from range, so a closed door alone is not safe. |
 | Exploder | Gasbag                | Bursts when killed, damaging nearby traps and players.  |
+| Boss     | Uncle Chunk           | The wave 8 finale. Stomps, burps up Groaners, sheds.    |
 
 - **Data, not logic.** A kind is a row in a table: speed, health, bite, radius, mass, knockback, bounty, a behavior tag (`Brawler` bites, `Bomber` fuses and bursts), how it dies, its gibs, its sounds, and its footfalls. Its sprites are a row in a second table keyed by the same kind. Both tables are exhaustive records, so a new kind will not compile until it has both rows.
 - **Big zombies path differently.** The Big Lug is wider than one tile, so it follows its own flow field that only steps between tiles sharing an open 2×2 block. It goes around the one-tile gaps above the crates and the piano that a Groaner squeezes through.

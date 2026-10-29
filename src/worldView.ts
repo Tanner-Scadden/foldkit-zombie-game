@@ -1,6 +1,7 @@
 import { Array } from 'effect'
 import type { Canvas } from 'foldkit'
 
+import { bossGroundShapes } from './bossView'
 import { type Camera, sceneOffset } from './camera'
 import { type Drawable, depthSortedShapes } from './depth'
 import {
@@ -81,6 +82,7 @@ const groundShapes = (
   ...stallGroundShapes(look, model.elapsedMs),
   playerShadow(model.player),
   ...Array.filterMap(model.zombies, zombieShadow),
+  ...bossGroundShapes(model),
   ...Array.filterMap(model.traps, trapShadow),
   ...Array.filterMap(model.particles, gibShadow),
   ...groundParticleShapes(model.particles),
@@ -95,7 +97,7 @@ const standingDrawables = (
   model: Model,
   look: StallLook,
 ): ReadonlyArray<Drawable> => {
-  const drawZombie = zombieShapes(model.player, model.elapsedMs)
+  const drawZombie = zombieShapes(model.player, model.elapsedMs, model.boss)
   const drawTrap = trapShapes(model.elapsedMs)
   return [
     {

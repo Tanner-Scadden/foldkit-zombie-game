@@ -3,6 +3,7 @@ import { Option } from 'effect'
 import { Runtime } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
+import { hasBoss, planBoss } from '@game/boss'
 import { DECAL_MAX, PLAYER_MAX_HP } from '@game/constants'
 import { sceneShapes } from '@game/layers'
 import {
@@ -25,7 +26,7 @@ import {
 import { raiseDebutCard } from '@game/onboarding'
 import { view } from '@game/view'
 import { pause, rollSpawns, startOrResume } from '@game/waves'
-import { ZOMBIE_KIND_ORDER } from '@game/zombies'
+import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from '@game/zombies'
 
 const params = new URLSearchParams(location.search)
 const num = (key: string, fallback: number) =>
@@ -71,7 +72,7 @@ const scenarioModel = (): Model => {
     rngState: () => rngState,
     phase: () =>
       params.get('start') === 'wave'
-        ? Phase.Wave({ wave, elapsedMs: 0, spawns })
+        ? Phase.Wave({ wave, elapsedMs: num('elapsed', 0), spawns })
         : Phase.Preparation({
             wave,
             remainingMs: num('prep', 20000),
@@ -159,8 +160,132 @@ const scenarioModel = (): Model => {
       nextEntityId: () => 2000,
     })
   }
+  const lineup = params.get('lineup')
+  const stageHp = (kind: LineupKind, maxHp: number, stage: number) =>
+    stage === 0
+      ? maxHp
+      : Math.max(
+          1,
+          Math.floor(maxHp * ZOMBIE_KINDS[kind].wear[stage - 1]!.below),
+        )
+  type LineupKind = 'Shambler' | 'Runner' | 'Tank' | 'Exploder' | 'Boss'
+  const standing = (
+    id: number,
+    kind: LineupKind,
+    x: number,
+    y: number,
+    maxHp: number,
+    stage: number,
+  ) => ({
+    id,
+    kind,
+    x,
+    y,
+    speed: 0,
+    hp: stageHp(kind, maxHp, stage),
+    maxHp,
+    knockback: { x: 0, y: 0 },
+    hitRemainingMs: 0,
+    state: { _tag: 'Walking' as const },
+  })
+  if (lineup === 'wear') {
+    const rows: Array<[LineupKind, number, number, number]> = [
+      ['Shambler', 4, 60, 62],
+      ['Runner', 2, 60, 84],
+      ['Exploder', 4, 60, 102],
+      ['Tank', 36, 190, 84],
+    ]
+    const zombies = rows.flatMap(([kind, maxHp, left, y], row) =>
+      Array.from({ length: ZOMBIE_KINDS[kind].wear.length + 1 }, (_, stage) =>
+        standing(
+          1000 + row * 10 + stage,
+          kind,
+          left + stage * (kind === 'Tank' ? 30 : 28),
+          y,
+          maxHp,
+          stage,
+        ),
+      ),
+    )
+    model = modifyFields(model, {
+      zombies: () => zombies as any,
+      nextEntityId: () => 2000,
+    })
+  }
+  if (lineup === 'boss') {
+    const zombies = Array.from({ length: 5 }, (_, stage) =>
+      standing(1100 + stage, 'Boss', 48 + stage * 56, 80, 97, stage),
+    )
+    model = modifyFields(model, {
+      zombies: () => zombies as any,
+      nextEntityId: () => 2000,
+    })
+  }
+  const bossParam = params.get('boss')
+  if (bossParam !== null) {
+    const bossHp = Math.round(97 * num('bosshp', 1))
+    const bossZombie = {
+      ...standing(1500, 'Boss', num('bx', 200), num('by', 80), 97, 0),
+      hp: bossHp,
+      speed: 10,
+    }
+    const door = (params.get('door') ?? 'East') as
+      | 'North'
+      | 'West'
+      | 'East'
+      | 'South'
+    const windUp = (attack: 'Stomp' | 'Belch') => ({
+      _tag: 'Fighting' as const,
+      id: 1500,
+      standingMs: 4000,
+      move: {
+        _tag: 'WindingUp' as const,
+        attack,
+        remainingMs: num('windMs', 1000),
+        durationMs: 1000,
+      },
+    })
+    const bossState =
+      bossParam === 'arriving'
+        ? {
+            _tag: 'Arriving' as const,
+            door,
+            hp: 97,
+            remainingMs: num('arriveMs', 2600),
+            durationMs: 2600,
+          }
+        : bossParam === 'stomp'
+          ? windUp('Stomp')
+          : bossParam === 'belch'
+            ? windUp('Belch')
+            : {
+                _tag: 'Fighting' as const,
+                id: 1500,
+                standingMs: 4000,
+                move: {
+                  _tag: 'Stalking' as const,
+                  cooldownMs: num('cooldownMs', 60_000),
+                },
+              }
+    model = modifyFields(model, {
+      boss: () => bossState as any,
+      zombies: zombies =>
+        bossParam === 'arriving' ? zombies : ([...zombies, bossZombie] as any),
+      nextEntityId: () => 2000,
+    })
+  } else if (hasBoss(wave)) {
+    const spawns =
+      model.phase._tag === 'Preparation' || model.phase._tag === 'Wave'
+        ? model.phase.spawns
+        : []
+    const [bossRng, planned] = planBoss(model.rngState, wave, spawns)
+    model = modifyFields(model, {
+      boss: () => planned,
+      rngState: () => bossRng,
+    })
+  }
   const sampleStats = {
-    kills: { Shambler: 41, Runner: 17, Tank: 2, Exploder: 9 },
+    kills: { Shambler: 41, Runner: 17, Tank: 2, Exploder: 9, Boss: 0 },
     wavesCleared: Math.max(0, wave - 1),
     shotsFired: 1240,
     shotsHit: 532,

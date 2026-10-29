@@ -1,6 +1,8 @@
 import { Array, Option, String, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
+import { maybeBossBar } from './boss'
+import { bossBarShapes } from './bossView'
 import { type Camera, worldToView } from './camera'
 import {
   HEART_FLASH_MS,
@@ -181,14 +183,25 @@ const roundHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
             'Prompt',
           )),
     ],
-    Wave: ({ wave, spawns }) => [
-      ...hudText(HUD_TITLE_Y, waveLabel(model.mode, wave), 'Plain'),
-      ...hudText(
-        HUD_SUBTITLE_Y,
-        `ZOMBIES ${zombiesRemaining(model, spawns)}`,
-        'Hint',
-      ),
-    ],
+    Wave: ({ wave, spawns }) =>
+      Option.match(maybeBossBar(model), {
+        onNone: () => [
+          ...hudText(HUD_TITLE_Y, waveLabel(model.mode, wave), 'Plain'),
+          ...hudText(
+            HUD_SUBTITLE_Y,
+            `ZOMBIES ${zombiesRemaining(model, spawns)}`,
+            'Hint',
+          ),
+        ],
+        onSome: bar => [
+          ...hudText(
+            HUD_TITLE_Y,
+            `${waveLabel(model.mode, wave)}  ZOMBIES ${zombiesRemaining(model, spawns)}`,
+            'Plain',
+          ),
+          ...bossBarShapes(bar, HUD_SUBTITLE_Y + 1),
+        ],
+      }),
     Paused: () => [],
     Victory: () => [],
     GameOver: () => [],

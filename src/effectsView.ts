@@ -2,6 +2,7 @@ import { Array, Result } from 'effect'
 import { Canvas } from 'foldkit'
 
 import { DOORS } from './arena'
+import { bossRattleDoors } from './boss'
 import type { Camera } from './camera'
 import {
   BLAST_FLASH_MS,
@@ -152,6 +153,79 @@ export const bulletShapes = ({
 
 // DECALS AND PARTICLES
 
+type PartLook = Readonly<{
+  particle: string
+  decal: string
+  faded: string
+  hasStump: boolean
+}>
+
+const PART_LOOKS: Readonly<
+  Record<
+    | 'GreenLimb'
+    | 'GreenScalp'
+    | 'HairScalp'
+    | 'BlueLimb'
+    | 'BlueChunk'
+    | 'GasPatch'
+    | 'PinkLimb'
+    | 'PinkChunk',
+    PartLook
+  >
+> = {
+  GreenLimb: {
+    particle: '#6fae4f',
+    decal: '#5a9640',
+    faded: '#3f5f33',
+    hasStump: true,
+  },
+  GreenScalp: {
+    particle: '#4d8a35',
+    decal: '#4d8a35',
+    faded: '#36552c',
+    hasStump: false,
+  },
+  HairScalp: {
+    particle: '#3a2418',
+    decal: '#3a2418',
+    faded: '#2c2220',
+    hasStump: false,
+  },
+  BlueLimb: {
+    particle: '#8a9bb5',
+    decal: '#7787a0',
+    faded: '#4d5566',
+    hasStump: true,
+  },
+  BlueChunk: {
+    particle: '#5f6f8a',
+    decal: '#56647c',
+    faded: '#3c4352',
+    hasStump: false,
+  },
+  GasPatch: {
+    particle: '#b7cc3c',
+    decal: '#86992a',
+    faded: '#56602a',
+    hasStump: false,
+  },
+  PinkLimb: {
+    particle: '#b49ab0',
+    decal: '#a0879c',
+    faded: '#625562',
+    hasStump: true,
+  },
+  PinkChunk: {
+    particle: '#c0587a',
+    decal: '#a8475f',
+    faded: '#5e3240',
+    hasStump: false,
+  },
+}
+
+const STUMP_COLOR = '#a8262c'
+const STUMP_FADED_COLOR = '#4a1c20'
+
 const DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   Blood: BLOOD_DECAL_COLOR,
   Meat: MEAT_DECAL_COLOR,
@@ -164,6 +238,14 @@ const DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   Scorch: SCORCH_DECAL_COLOR,
   Wood: WOOD_DECAL_COLOR,
   Clip: CLIP_DECAL_COLOR,
+  GreenLimb: PART_LOOKS.GreenLimb.decal,
+  GreenScalp: PART_LOOKS.GreenScalp.decal,
+  HairScalp: PART_LOOKS.HairScalp.decal,
+  BlueLimb: PART_LOOKS.BlueLimb.decal,
+  BlueChunk: PART_LOOKS.BlueChunk.decal,
+  GasPatch: PART_LOOKS.GasPatch.decal,
+  PinkLimb: PART_LOOKS.PinkLimb.decal,
+  PinkChunk: PART_LOOKS.PinkChunk.decal,
 }
 
 const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
@@ -178,6 +260,14 @@ const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   Scorch: SCORCH_DECAL_FADED_COLOR,
   Wood: WOOD_DECAL_FADED_COLOR,
   Clip: CLIP_DECAL_FADED_COLOR,
+  GreenLimb: PART_LOOKS.GreenLimb.faded,
+  GreenScalp: PART_LOOKS.GreenScalp.faded,
+  HairScalp: PART_LOOKS.HairScalp.faded,
+  BlueLimb: PART_LOOKS.BlueLimb.faded,
+  BlueChunk: PART_LOOKS.BlueChunk.faded,
+  GasPatch: PART_LOOKS.GasPatch.faded,
+  PinkLimb: PART_LOOKS.PinkLimb.faded,
+  PinkChunk: PART_LOOKS.PinkChunk.faded,
 }
 
 const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
@@ -197,7 +287,32 @@ const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
   Splinter: SPLINTER_COLOR,
   Plank: PLANK_COLOR,
   Clip: CLIP_COLOR,
+  GreenLimb: PART_LOOKS.GreenLimb.particle,
+  GreenScalp: PART_LOOKS.GreenScalp.particle,
+  HairScalp: PART_LOOKS.HairScalp.particle,
+  BlueLimb: PART_LOOKS.BlueLimb.particle,
+  BlueChunk: PART_LOOKS.BlueChunk.particle,
+  GasPatch: PART_LOOKS.GasPatch.particle,
+  PinkLimb: PART_LOOKS.PinkLimb.particle,
+  PinkChunk: PART_LOOKS.PinkChunk.particle,
 }
+
+const LIMBS: ReadonlyArray<ParticleKind | DecalKind> = [
+  'GreenLimb',
+  'BlueLimb',
+  'PinkLimb',
+]
+
+const PARTS: ReadonlyArray<ParticleKind> = [
+  'GreenLimb',
+  'BlueLimb',
+  'PinkLimb',
+  'GreenScalp',
+  'HairScalp',
+  'BlueChunk',
+  'GasPatch',
+  'PinkChunk',
+]
 
 const CASINGS: ReadonlyArray<ParticleKind> = [
   'Shell',
@@ -212,21 +327,39 @@ const THICK_CASINGS: ReadonlyArray<ParticleKind> = ['Hull', 'Clip']
 const isCasing = (particle: Particle): boolean =>
   Array.contains(CASINGS, particle.kind)
 
+const stumpShapes = (
+  decal: Decal,
+  isFaded: boolean,
+): ReadonlyArray<Canvas.Shape> =>
+  Array.contains(LIMBS, decal.kind)
+    ? [
+        Canvas.Rect({
+          x: decal.x - Math.floor(decal.width / 2) + decal.width - 1,
+          y: decal.y - Math.floor(decal.height / 2),
+          width: 1,
+          height: decal.height,
+          fill: isFaded ? STUMP_FADED_COLOR : STUMP_COLOR,
+        }),
+      ]
+    : []
+
 export const decalShapes = (
   decals: ReadonlyArray<Decal>,
 ): ReadonlyArray<Canvas.Shape> => {
   const fadedCount = decals.length - (DECAL_MAX - DECAL_FADE_COUNT)
-  return Array.map(decals, (decal, index) =>
-    centeredRect(
-      decal.x,
-      decal.y,
-      decal.width,
-      decal.height,
-      index < fadedCount
-        ? FADED_DECAL_COLORS[decal.kind]
-        : DECAL_COLORS[decal.kind],
-    ),
-  )
+  return Array.flatMap(decals, (decal, index) => {
+    const isFaded = index < fadedCount
+    return [
+      centeredRect(
+        decal.x,
+        decal.y,
+        decal.width,
+        decal.height,
+        isFaded ? FADED_DECAL_COLORS[decal.kind] : DECAL_COLORS[decal.kind],
+      ),
+      ...stumpShapes(decal, isFaded),
+    ]
+  })
 }
 
 const isGround = (particle: Particle): boolean => particle.kind === 'Dust'
@@ -236,6 +369,7 @@ const GIBS: ReadonlyArray<ParticleKind> = [
   'RotGib',
   'BoneGib',
   'HideGib',
+  ...PARTS,
 ]
 
 const isGib = (particle: Particle): boolean =>
@@ -265,15 +399,40 @@ const particleColor = (particle: Particle): string =>
     ? DUST_FADED_COLOR
     : PARTICLE_COLORS[particle.kind]
 
+const PART_TUMBLE_MS = 90
+
+const partHeight = (particle: Particle): number => {
+  const isLimb = Array.contains(LIMBS, particle.kind)
+  const isTurned = Math.floor(particle.remainingMs / PART_TUMBLE_MS) % 2 === 1
+  if (isLimb) {
+    return isTurned ? particle.size : 2
+  } else {
+    return Math.max(2, particle.size - 1)
+  }
+}
+
+const partWidth = (particle: Particle): number =>
+  Array.contains(LIMBS, particle.kind) &&
+  Math.floor(particle.remainingMs / PART_TUMBLE_MS) % 2 === 1
+    ? 2
+    : particle.size
+
 const particleShape = (particle: Particle): Canvas.Shape => {
   const isUpright = isCasingUpright(particle)
+  const isPart = Array.contains(PARTS, particle.kind)
   const thickness = Array.contains(THICK_CASINGS, particle.kind) ? 2 : 1
-  const width = isUpright ? thickness : particle.size
-  const height = isCasing(particle)
-    ? isUpright
-      ? particle.size
-      : thickness
-    : particle.size
+  const width = isPart
+    ? partWidth(particle)
+    : isUpright
+      ? thickness
+      : particle.size
+  const height = isPart
+    ? partHeight(particle)
+    : isCasing(particle)
+      ? isUpright
+        ? particle.size
+        : thickness
+      : particle.size
   return centeredRect(
     Math.round(particle.x),
     Math.round(particle.y - particle.z),
@@ -476,7 +635,10 @@ const rattleShapes =
 export const doorRattleShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   Phase.isAnyOf(['Wave'])(model.phase)
     ? Array.flatMap(
-        rattlingDoors(model.phase.spawns, model.pacing.warnedPacks),
+        Array.dedupe([
+          ...rattlingDoors(model.phase.spawns, model.pacing.warnedPacks),
+          ...bossRattleDoors(model.boss),
+        ]),
         rattleShapes(model.elapsedMs),
       )
     : []

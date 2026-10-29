@@ -2,6 +2,12 @@ import { Array, Option, Order, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { DOOR_IDS, doorSpawnPoint } from './arena'
+import {
+  advanceBossEntrance,
+  isBossOutside,
+  isWaveHeldByBoss,
+  planBoss,
+} from './boss'
 import { arenaCamera } from './camera'
 import {
   DOOR_HALF_WIDTH_PX,
@@ -27,7 +33,7 @@ import {
   WAVE_BONUS_PER_WAVE,
   ZOMBIE_ALIVE_MAX,
 } from './constants'
-import { ZERO_VECTOR, clamp } from './geometry'
+import { clamp } from './geometry'
 import { deriveIntent } from './input'
 import {
   Alarm,
@@ -45,9 +51,7 @@ import {
   ShopState,
   Streak,
   TrapNotice,
-  type Zombie,
   type ZombieKind,
-  ZombieState,
   emptyTrapStock,
   emptyWallet,
   freshLoot,
@@ -70,7 +74,14 @@ import {
 import { flowFieldToward } from './pathing'
 import { type Seeded, between, nextRandom } from './prng'
 import { earn } from './shop'
-import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, isWalking } from './zombies'
+import {
+  ZOMBIE_KINDS,
+  ZOMBIE_KIND_ORDER,
+  arrivingZombie,
+  isBoss,
+  isWalking,
+  scaledHp,
+} from './zombies'
 
 export const waveBonus = (wave: number): number =>
   WAVE_BONUS_BASE + WAVE_BONUS_PER_WAVE * wave
@@ -1114,8 +1125,10 @@ const beginPreparation = (
   wave: number,
   durationMs: number,
 ): Model => {
-  const [rngState, { spawns, holds }] = rollWave(model.rngState, wave)
+  const [waveState, { spawns, holds }] = rollWave(model.rngState, wave)
+  const [rngState, boss] = planBoss(waveState, wave, spawns)
   return modifyFields(model, {
+    boss: () => boss,
     phase: () =>
       Phase.Preparation({
         wave,
@@ -1243,31 +1256,18 @@ export const startWaveEarly = (model: Model): Model =>
 
 // SPAWNING
 
-const scaledHp = (hp: number, hpScale: number): number =>
-  Math.max(1, Math.round(hp * hpScale))
-
 const spawnZombie = (model: Model, spawn: PlannedSpawn): Model => {
   const stats = ZOMBIE_KINDS[spawn.kind]
   const speedDraw = nextRandom(model.rngState)
   const doorRoom = Math.max(0, DOOR_HALF_WIDTH_PX - stats.radius)
-  const point = doorSpawnPoint(
-    spawn.door,
-    clamp(spawn.offset, -doorRoom, doorRoom),
-  )
-  const zombie: Zombie = {
+  const zombie = arrivingZombie({
     id: model.nextEntityId,
     kind: spawn.kind,
-    x: point.x,
-    y: point.y,
-    speed:
-      between(speedDraw.value, stats.speedMin, stats.speedMax) *
-      spawn.speedScale,
+    at: doorSpawnPoint(spawn.door, clamp(spawn.offset, -doorRoom, doorRoom)),
+    speedRoll: speedDraw.value,
+    speedScale: spawn.speedScale,
     hp: scaledHp(stats.hp, spawn.hpScale),
-    maxHp: scaledHp(stats.hp, spawn.hpScale),
-    knockback: ZERO_VECTOR,
-    hitRemainingMs: 0,
-    state: ZombieState.Walking(),
-  }
+  })
   return modifyFields(model, {
     zombies: Array.append(zombie),
     nextEntityId: id => id + 1,
@@ -1279,7 +1279,9 @@ const isWaveCleared = (
   model: Model,
   spawns: ReadonlyArray<PlannedSpawn>,
 ): boolean =>
-  Array.isReadonlyArrayEmpty(spawns) && !Array.some(model.zombies, isAlive)
+  Array.isReadonlyArrayEmpty(spawns) &&
+  !isBossOutside(model.boss) &&
+  !Array.some(model.zombies, zombie => isAlive(zombie) || isBoss(zombie))
 
 const payWaveBonus = (model: Model, wave: number): Model => {
   const bonus = waveBonus(wave)
@@ -1329,10 +1331,11 @@ const advanceWave = (
   spawns: ReadonlyArray<PlannedSpawn>,
   worldMs: number,
 ): Model => {
+  const pacedMs = isWaveHeldByBoss(model.boss) ? 0 : worldMs
   const paced = stepBeat(
     model.pacing,
     elapsedMs,
-    worldMs,
+    pacedMs,
     {
       alive: aliveCount(model.zombies),
       waiting: waitingCount(spawns, elapsedMs),
@@ -1341,7 +1344,7 @@ const advanceWave = (
     spawns,
   )
   const clockMs = paced.clockMs
-  const camped = delayCampedPacks(spawns, clockMs, worldMs, model.player)
+  const camped = delayCampedPacks(spawns, clockMs, pacedMs, model.player)
   const warned = warnPacks(
     modifyFields(model, {
       pacing: () =>
@@ -1353,7 +1356,12 @@ const advanceWave = (
     clockMs,
   )
   const released = releaseDue(warned, camped, clockMs)
-  const spawned = modifyFields(released.model, {
+  const entered = advanceBossEntrance(
+    released.model,
+    released.pending.length,
+    worldMs,
+  )
+  const spawned = modifyFields(entered, {
     phase: () =>
       Phase.Wave({ wave, elapsedMs: clockMs, spawns: released.pending }),
   })

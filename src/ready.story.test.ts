@@ -275,6 +275,7 @@ describe('run stats', () => {
       Runner: 1,
       Tank: 0,
       Exploder: 0,
+      Boss: 0,
     })
     expect(totalKills(stats)).toBe(2)
     expect(stats.shotsHit).toBe(

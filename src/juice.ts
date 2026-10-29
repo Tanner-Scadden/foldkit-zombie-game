@@ -53,9 +53,23 @@ import { ZOMBIE_KINDS } from './zombies'
 
 export type Thaw = Readonly<{ hitStop: HitStop; worldMs: number }>
 
+export const BOSS_SLOW_MOTION_MS = 1400
+export const BOSS_SLOW_MOTION_RATE = 0.25
+
 export const thawHitStop = (hitStop: HitStop, deltaMs: number): Thaw =>
   HitStop.match(hitStop, {
     Running: () => ({ hitStop, worldMs: deltaMs }),
+    Slowed: ({ remainingMs }) =>
+      remainingMs > deltaMs
+        ? {
+            hitStop: HitStop.Slowed({ remainingMs: remainingMs - deltaMs }),
+            worldMs: deltaMs * BOSS_SLOW_MOTION_RATE,
+          }
+        : {
+            hitStop: HitStop.Running({ cooldownMs: HIT_STOP_COOLDOWN_MS }),
+            worldMs:
+              remainingMs * BOSS_SLOW_MOTION_RATE + (deltaMs - remainingMs),
+          },
     Frozen: ({ remainingMs }) =>
       remainingMs > deltaMs
         ? {
@@ -85,6 +99,7 @@ const triggerHitStop = (
 ): HitStop =>
   HitStop.match(hitStop, {
     Frozen: () => hitStop,
+    Slowed: () => hitStop,
     Running: ({ cooldownMs }) => {
       const cooledMs = Math.max(0, cooldownMs - worldMs)
       const freezeMs = Math.min(
@@ -102,6 +117,10 @@ const triggerHitStop = (
   })
 
 // SHAKE
+
+const BOSS_PART_TRAUMA = 0.35
+const BOSS_ROAR_TRAUMA = 0.6
+const BOSS_BELCH_TRAUMA = 0.3
 
 const firingTrauma = (event: GameEvent): number =>
   GameEvent.isAnyOf(['Fired'])(event) ? WEAPONS[event.weapon].shakeTrauma : 0
@@ -133,6 +152,11 @@ const eventTrauma = (event: GameEvent): number =>
     PickupFizzled: () => 0,
     BoostFaded: () => 0,
     Burped: () => SHAKE_TRAUMA_BURP,
+    PartShed: ({ kind }) => (kind === 'Boss' ? BOSS_PART_TRAUMA : 0),
+    BossRoared: () => BOSS_ROAR_TRAUMA,
+    BossWoundUp: () => 0,
+    BossStomped: () => SHAKE_TRAUMA_MAX,
+    BossBelched: () => BOSS_BELCH_TRAUMA,
   })
 
 const shakeAxis = (roll: number, trauma: number): number => {
@@ -242,6 +266,11 @@ const eventPopups = (
     PickupFizzled: () => noPopups(state),
     BoostFaded: () => noPopups(state),
     Burped: () => noPopups(state),
+    PartShed: () => noPopups(state),
+    BossRoared: () => noPopups(state),
+    BossWoundUp: () => noPopups(state),
+    BossStomped: () => noPopups(state),
+    BossBelched: () => noPopups(state),
   })
 
 const agePopups = (
@@ -336,8 +365,17 @@ export const advanceJuice = (
     eventPopups,
   )
 
+  const isBossFelled = Array.some(
+    events,
+    event =>
+      GameEvent.isAnyOf(['ZombieKilled'])(event) && event.kind === 'Boss',
+  )
+
   return modifyFields(model, {
-    hitStop: hitStop => triggerHitStop(hitStop, kills, hurts, blasts, worldMs),
+    hitStop: hitStop =>
+      isBossFelled
+        ? HitStop.Slowed({ remainingMs: BOSS_SLOW_MOTION_MS })
+        : triggerHitStop(hitStop, kills, hurts, blasts, worldMs),
     blasts: current =>
       Array.isReadonlyArrayEmpty(current)
         ? current

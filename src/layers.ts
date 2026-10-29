@@ -3,6 +3,7 @@ import { Canvas } from 'foldkit'
 import { type Html, type HtmlBuilder, createLazy } from 'foldkit/html'
 
 import { ARENA_LEVEL, type Level } from './arena'
+import { bossBandShapes } from './bossView'
 import { type Camera, cameraOf } from './camera'
 import { VIEW_HEIGHT, VIEW_WIDTH } from './constants'
 import { decalShapes } from './effectsView'
@@ -34,6 +35,7 @@ const overlayLayerShapes = (
   ...hudShapes(model, camera),
   ...calloutLayerShapes(model, camera),
   ...overlayShapes(model),
+  ...(Phase.isAnyOf(['Wave'])(model.phase) ? bossBandShapes(model) : []),
 ]
 
 export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {

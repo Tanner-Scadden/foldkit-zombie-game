@@ -22,6 +22,8 @@ import {
   type Blast,
   BoostTimer,
   type Boosts,
+  Boss,
+  BossMove,
   type Bullet,
   BulletGlaze,
   type Decal,
@@ -41,7 +43,7 @@ import {
   Trap,
   TurretGun,
   type Zombie,
-  ZombieKind,
+  type ZombieKind,
   ZombieState,
   initialModel,
 } from './model'
@@ -74,7 +76,7 @@ const zombieStateAt = (index: number): ZombieState => {
 const zombieAt =
   (wave: number) =>
   (index: number): Zombie => {
-    const kind = cycle(ZombieKind.literals, index)
+    const kind = cycle(HORDE_KINDS, index)
     return {
       id: 1000 + index,
       kind,
@@ -88,6 +90,28 @@ const zombieAt =
       state: zombieStateAt(index),
     }
   }
+
+const HORDE_KINDS: Array.NonEmptyReadonlyArray<ZombieKind> = [
+  'Shambler',
+  'Runner',
+  'Exploder',
+  'Tank',
+]
+
+const BOSS_ID = 999
+
+const bossAt = (wave: number): Zombie => ({
+  id: BOSS_ID,
+  kind: 'Boss',
+  x: 170,
+  y: 70,
+  speed: 10,
+  hp: ZOMBIE_KINDS.Boss.hp * 0.3,
+  maxHp: ZOMBIE_KINDS.Boss.hp + wave,
+  knockback: { x: 0, y: 0 },
+  hitRemainingMs: 0,
+  state: ZombieState.Walking(),
+})
 
 const particleAt = (index: number): Particle => ({
   kind: cycle(ParticleKind.literals, index),
@@ -192,7 +216,20 @@ const fullRoom = (mode: RunMode, wave: number, tier: number): Model => {
         warnedPacks: () => Array.map(spawns, ({ pack }) => pack),
         alarm: () => Alarm.Ringing({ remainingMs: 1000 }),
       }),
-    zombies: () => Array.makeBy(ZOMBIE_ALIVE_MAX, zombieAt(wave)),
+    zombies: () => [
+      ...Array.makeBy(ZOMBIE_ALIVE_MAX, zombieAt(wave)),
+      bossAt(wave),
+    ],
+    boss: () =>
+      Boss.Fighting({
+        id: BOSS_ID,
+        move: BossMove.WindingUp({
+          attack: 'Stomp',
+          remainingMs: 400,
+          durationMs: 1000,
+        }),
+        standingMs: 4000,
+      }),
     particles: () => Array.makeBy(PARTICLE_MAX, particleAt),
     decals: () => Array.makeBy(DECAL_MAX, decalAt),
     bullets: () => Array.makeBy(BULLET_MAX, bulletAt),
@@ -367,13 +404,18 @@ const measureFrames = (model: Model): FrameCost => {
 // fullRepaintPaintOps from 2550 to 2750, when power-ups joined it: two pickups
 // on the floor, all four boosts running, and a callout with the longest name.
 // The callout is about two thirds of that and sits on the overlay canvas, so
-// the steady paint budgets did not change.
+// the steady paint budgets did not change. The boss and wear raised them
+// again: the room was 2430 shapes, 1420 steady paint operations, and 2720 on
+// a full repaint before. Worn sprites, gas leaks, and the red stump on a limb
+// decal add about 30 shapes and 40 paint operations. Uncle Chunk adds about
+// 150 shapes: his sprite is about 65 rectangles, his stomp ring 3 circles, and
+// his bar about 70 more on the overlay, most of them the letters of his name.
 const BUDGET: FrameCost = {
-  shapesBuilt: 2450,
-  steadyPaintOps: 1500,
-  steadyFillStyleChanges: 1500,
-  steadyShapesPainted: 1600,
-  fullRepaintPaintOps: 2750,
+  shapesBuilt: 2650,
+  steadyPaintOps: 1560,
+  steadyFillStyleChanges: 1560,
+  steadyShapesPainted: 1650,
+  fullRepaintPaintOps: 2975,
 }
 
 const BUDGET_KEYS: ReadonlyArray<keyof FrameCost> = [
@@ -386,7 +428,7 @@ const BUDGET_KEYS: ReadonlyArray<keyof FrameCost> = [
 
 const SCENARIOS: ReadonlyArray<Readonly<{ name: string; model: Model }>> = [
   {
-    name: 'campaign wave 8 at the alive cap',
+    name: 'campaign wave 8 at the alive cap with the boss mid-stomp',
     model: fullRoom(RunMode.Campaign(), 8, 0),
   },
   {

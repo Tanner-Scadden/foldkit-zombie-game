@@ -2,6 +2,7 @@ import { Array, Option, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { ARENA_LEVEL, type Box, findStrike, moveCircle } from './arena'
+import { advanceBossMoves, isRooted } from './boss'
 import { cameraOf } from './camera'
 import {
   hitEvent,
@@ -39,6 +40,7 @@ import { deriveIntent } from './input'
 import { advanceJuice, thawHitStop } from './juice'
 import {
   Arsenal,
+  type Boss,
   type Bullet,
   type BulletGlaze,
   type DoorId,
@@ -93,7 +95,15 @@ import {
   isReloading,
   spendRound,
 } from './weapons'
-import { Behavior, isWalking, radiusOf, statsOf, strideAt } from './zombies'
+import {
+  Behavior,
+  bodyRadiusOf,
+  isWalking,
+  radiusOf,
+  statsOf,
+  strideAt,
+  wearOf,
+} from './zombies'
 
 // INTENT
 
@@ -494,7 +504,7 @@ const pushApart = (zombie: Zombie, other: Zombie): Vector => {
   const deltaX = zombie.x - other.x
   const deltaY = zombie.y - other.y
   const distance = Math.hypot(deltaX, deltaY)
-  const reach = radiusOf(zombie) + radiusOf(other)
+  const reach = bodyRadiusOf(zombie) + bodyRadiusOf(other)
   if (other.id === zombie.id || distance >= reach) {
     return ZERO_VECTOR
   }
@@ -531,6 +541,7 @@ type FlowFields = Readonly<Record<Clearance, FlowField>>
 type Obstacles = Readonly<{
   blockers: ReadonlyArray<Box>
   barricaded: ReadonlyArray<DoorId>
+  boss: Boss
 }>
 
 const steeringVelocity = (
@@ -538,21 +549,24 @@ const steeringVelocity = (
   flowFields: FlowFields,
   target: Vector,
   barricaded: ReadonlyArray<DoorId>,
+  isHeld: boolean,
 ): Vector => {
   const stats = statsOf(zombie)
   return ZombieState.match(zombie.state, {
     Walking: () =>
-      scaleVector(
-        steerToward(
-          flowFields[stats.clearance],
-          zombie,
-          target,
-          stats.radius - 1,
-          stats.clearance,
-          barricaded,
-        ),
-        zombie.speed,
-      ),
+      isHeld
+        ? ZERO_VECTOR
+        : scaleVector(
+            steerToward(
+              flowFields[stats.clearance],
+              zombie,
+              target,
+              stats.radius - 1,
+              stats.clearance,
+              barricaded,
+            ),
+            zombie.speed,
+          ),
     Fusing: () => ZERO_VECTOR,
     Dying: () => ZERO_VECTOR,
   })
@@ -578,7 +592,13 @@ const advanceZombie = (
 ): Zombie => {
   const velocity = addVectors(
     addVectors(
-      steeringVelocity(zombie, flowFields, target, obstacles.barricaded),
+      steeringVelocity(
+        zombie,
+        flowFields,
+        target,
+        obstacles.barricaded,
+        isRooted(obstacles.boss, zombie),
+      ),
       zombie.knockback,
     ),
     scaleVector(separation, SEPARATION_SPEED),
@@ -612,6 +632,7 @@ const advanceZombies = (
   const obstacles: Obstacles = {
     blockers: trapBlockers(model.traps),
     barricaded: barricadedDoors(model.traps),
+    boss: model.boss,
   }
   return pipe(
     model.zombies,
@@ -701,7 +722,7 @@ const maybeContact = (
   zombie: Zombie,
 ): Option.Option<Contact> => {
   const point = closestPointOnSegment(zombie, from, to)
-  return circlesOverlap(point, BULLET_RADIUS, zombie, radiusOf(zombie))
+  return circlesOverlap(point, BULLET_RADIUS, zombie, bodyRadiusOf(zombie))
     ? Option.some({
         zombie,
         point,
@@ -915,7 +936,7 @@ const isTouching =
   (player: Player) =>
   (zombie: Zombie): boolean =>
     isWalking(zombie) &&
-    circlesOverlap(zombie, radiusOf(zombie), player, PLAYER_RADIUS)
+    circlesOverlap(zombie, bodyRadiusOf(zombie), player, PLAYER_RADIUS)
 
 const isBrawler = (zombie: Zombie): boolean =>
   Behavior.isAnyOf(['Brawler'])(statsOf(zombie).behavior)
@@ -953,6 +974,57 @@ const biteOnContact = (model: Model): Model => {
 
 const resolvePlayerContact = (model: Model): Model =>
   popBombers(biteOnContact(model))
+
+// WEAR
+
+const OUTWARD: Vector = { x: 1, y: 0 }
+
+const shedDirection = (zombie: Zombie, player: Player): Vector =>
+  pipe(
+    normalize(zombie.knockback),
+    Option.orElse(() => directionBetween(player, zombie)),
+    Option.getOrElse(() => OUTWARD),
+  )
+
+const shedEvents =
+  (before: ReadonlyArray<Zombie>, player: Player) =>
+  (zombie: Zombie): ReadonlyArray<GameEvent> => {
+    const worn = wearOf(zombie)
+    if (zombie.hp <= 0 || worn === 0) {
+      return []
+    }
+
+    const wasWorn = Option.match(
+      Array.findFirst(before, ({ id }) => id === zombie.id),
+      { onNone: () => worn, onSome: wearOf },
+    )
+    if (worn <= wasWorn) {
+      return []
+    }
+
+    const direction = shedDirection(zombie, player)
+    return Array.map(Array.range(wasWorn, worn - 1), stage =>
+      GameEvent.PartShed({
+        x: zombie.x,
+        y: zombie.y,
+        direction,
+        kind: zombie.kind,
+        stage,
+      }),
+    )
+  }
+
+export const shedParts = (before: Model, after: Model): Model => {
+  const shed = Array.flatMap(
+    after.zombies,
+    shedEvents(before.zombies, after.player),
+  )
+  return Array.isReadonlyArrayEmpty(shed)
+    ? after
+    : modifyFields(after, {
+        frameEvents: frameEvents => [...frameEvents, ...shed],
+      })
+}
 
 // INTENSITY
 
@@ -1015,11 +1087,13 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
     footed => resolveBulletHits(footed, seconds),
     trapped => advanceTraps(trapped, seconds, deltaMs),
     resolvePlayerContact,
+    bossed => advanceBossMoves(bossed, deltaMs),
     resolveBlasts,
     clearBrokenTraps,
     blasted => feelIntensity(model, blasted, deltaMs),
     felt => advancePowerUps(felt, advanceRound(felt, deltaMs), deltaMs),
-    rounded => advanceParticles(rounded, seconds, deltaMs),
+    rounded => shedParts(model, rounded),
+    shed => advanceParticles(shed, seconds, deltaMs),
     endWhenDefeated,
   )
 }

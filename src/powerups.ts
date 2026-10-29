@@ -216,6 +216,7 @@ export const DROP_CHANCE: Readonly<Record<ZombieKind, number>> = {
   Runner: 0.03,
   Tank: 0.4,
   Exploder: 0.04,
+  Boss: 1,
 }
 
 export type DropRules = Readonly<{

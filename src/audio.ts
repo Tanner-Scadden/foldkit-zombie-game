@@ -60,6 +60,12 @@ export const SoundEffect = Schema.Literals([
   'GrabBurp',
   'GrabHeart',
   'PowerDown',
+  'LimbPop',
+  'BossRoar',
+  'BossWindUp',
+  'BossStomp',
+  'BossBelch',
+  'BossDeath',
 ])
 export type SoundEffect = typeof SoundEffect.Type
 
@@ -1089,6 +1095,156 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
         quality: 2,
         cutoff: [at(0, 3600), at(0.2, 700)],
         envelope: envelope(0.6, 0.001, 0.2),
+      },
+    ],
+  },
+  LimbPop: {
+    variationCents: 240,
+    tones: [
+      {
+        wave: 'sine',
+        pitch: [at(0, 320), at(0.03, 900), at(0.09, 180)],
+        envelope: envelope(0.4, 0.001, 0.09),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 5,
+        cutoff: [at(0, 2200), at(0.08, 500)],
+        envelope: envelope(0.55, 0.001, 0.08),
+      },
+      {
+        filter: 'lowpass',
+        quality: 1,
+        cutoff: [at(0, 1200), at(0.12, 200)],
+        envelope: envelope(0.35, 0.002, 0.12, 0.04),
+      },
+    ],
+  },
+  BossRoar: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 70), at(0.25, 118), at(0.9, 52), at(1.3, 40)],
+        envelope: envelope(0.42, 0.12, 1.2),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 104), at(0.3, 176), at(0.9, 78)],
+        envelope: envelope(0.12, 0.15, 1),
+      },
+      {
+        wave: 'sine',
+        pitch: [at(0, 46), at(1, 30)],
+        envelope: envelope(0.7, 0.05, 1.2),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 4,
+        cutoff: [at(0, 300), at(0.3, 700), at(1.1, 220)],
+        envelope: envelope(0.5, 0.1, 1.1),
+      },
+    ],
+  },
+  BossWindUp: {
+    variationCents: 60,
+    tones: [
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 60), at(0.6, 150)],
+        envelope: envelope(0.26, 0.3, 0.4),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 120), at(0.6, 300)],
+        envelope: envelope(0.12, 0.3, 0.35),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 5,
+        cutoff: [at(0, 400), at(0.6, 1100)],
+        envelope: envelope(0.22, 0.3, 0.35),
+      },
+    ],
+  },
+  BossStomp: {
+    variationCents: 40,
+    tones: [
+      {
+        wave: 'sine',
+        pitch: [at(0, 110), at(0.5, 28)],
+        envelope: envelope(1, 0.002, 0.55),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 160), at(0.15, 40)],
+        envelope: envelope(0.22, 0.002, 0.16),
+      },
+    ],
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 0.8,
+        cutoff: [at(0, 2600), at(0.5, 90)],
+        envelope: envelope(0.9, 0.002, 0.5),
+      },
+    ],
+  },
+  BossBelch: {
+    variationCents: 120,
+    tones: [
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 95), at(0.1, 70), at(0.25, 84), at(0.5, 55)],
+        envelope: envelope(0.45, 0.02, 0.5),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 48), at(0.5, 36)],
+        envelope: envelope(0.2, 0.02, 0.45),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 3,
+        cutoff: [at(0, 500), at(0.2, 300), at(0.5, 160)],
+        envelope: envelope(0.45, 0.02, 0.5),
+      },
+    ],
+  },
+  BossDeath: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 150), at(0.15, 210), at(1.2, 36)],
+        envelope: envelope(0.4, 0.01, 1.3),
+      },
+      {
+        wave: 'sine',
+        pitch: [at(0, 80), at(0.9, 24)],
+        envelope: envelope(0.9, 0.004, 1, 0.2),
+      },
+    ],
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 0.7,
+        cutoff: [at(0, 4200), at(1.2, 100)],
+        envelope: envelope(0.9, 0.003, 1.2, 0.15),
+      },
+      {
+        filter: 'bandpass',
+        quality: 5,
+        cutoff: [at(0, 1600), at(0.4, 400)],
+        envelope: envelope(0.5, 0.01, 0.4),
       },
     ],
   },

@@ -129,6 +129,58 @@ const mirrorRows = (pixels: ReadonlyArray<string>): ReadonlyArray<string> =>
 const padRow = (row: string, left: number, right: number): string =>
   `${TRANSPARENT.repeat(left)}${row}${TRANSPARENT.repeat(right)}`
 
+// WEAR PATCHES
+
+type Patch = Readonly<{
+  x: number
+  y: number
+  width: number
+  height: number
+  symbol: string
+}>
+
+const patch = (
+  x: number,
+  y: number,
+  symbol: string,
+  width = 1,
+  height = 1,
+): Patch => ({ x, y, width, height, symbol })
+
+const isInsidePatch =
+  (x: number, y: number) =>
+  (candidate: Patch): boolean =>
+    x >= candidate.x &&
+    x < candidate.x + candidate.width &&
+    y >= candidate.y &&
+    y < candidate.y + candidate.height
+
+const applyPatches = (
+  rows: ReadonlyArray<string>,
+  patches: ReadonlyArray<Patch>,
+): ReadonlyArray<string> =>
+  Array.isReadonlyArrayEmpty(patches)
+    ? rows
+    : Array.map(rows, (row, y) =>
+        pipe(
+          String.split(row, ''),
+          Array.map((symbol, x) =>
+            Option.match(Array.findLast(patches, isInsidePatch(x, y)), {
+              onNone: () => symbol,
+              onSome: found => found.symbol,
+            }),
+          ),
+          Array.join(''),
+        ),
+      )
+
+const wornThrough = (
+  stagePatches: ReadonlyArray<ReadonlyArray<Patch>>,
+  stage: number,
+): ReadonlyArray<Patch> => Array.flatten(Array.take(stagePatches, stage))
+
+type FramePixels = Array.NonEmptyReadonlyArray<ReadonlyArray<string>>
+
 const FLASH_COLOR = '#ffffff'
 
 const flashPalette = (palette: Palette): Palette =>
@@ -236,6 +288,8 @@ const ZOMBIE_PALETTE: Palette = {
   U: '#5b4170',
   D: '#8c1f24',
   P: '#3b3a46',
+  K: '#f28fb0',
+  J: '#c0587a',
 }
 
 const ZOMBIE_SWAY_ROOM = 1
@@ -278,6 +332,22 @@ const ZOMBIE_LEGS_BACK_DRAG: ReadonlyArray<string> = [
   '.PP..PP.....',
 ]
 
+const GROANER_SCALP: ReadonlyArray<Patch> = [
+  patch(2, 0, 'K', 4),
+  patch(2, 1, 'K', 3),
+  patch(5, 2, 'M'),
+]
+
+const GROANER_HIGH_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
+  [patch(8, 5, TRANSPARENT, 2), patch(7, 5, 'D'), patch(7, 6, 'D')],
+  GROANER_SCALP,
+]
+
+const GROANER_LOW_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
+  [patch(8, 6, TRANSPARENT, 2), patch(7, 6, 'D'), patch(7, 7, 'D')],
+  GROANER_SCALP,
+]
+
 const swayRows = (
   rows: ReadonlyArray<string>,
   sway: number,
@@ -286,12 +356,22 @@ const swayRows = (
     padRow(row, ZOMBIE_SWAY_ROOM + sway, ZOMBIE_SWAY_ROOM - sway),
   )
 
-const ZOMBIE_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
-  [...swayRows(ZOMBIE_UPPER_ARMS_HIGH, 0), ...ZOMBIE_LEGS_PLANTED],
-  [...swayRows(ZOMBIE_UPPER_ARMS_LOW, 1), ...ZOMBIE_LEGS_FRONT_DRAG],
-  [...swayRows(ZOMBIE_UPPER_ARMS_HIGH, 0), ...ZOMBIE_LEGS_PLANTED],
-  [...swayRows(ZOMBIE_UPPER_ARMS_LOW, -1), ...ZOMBIE_LEGS_BACK_DRAG],
-]
+const groanerWalkPixels = (stage: number): FramePixels => {
+  const high = applyPatches(
+    ZOMBIE_UPPER_ARMS_HIGH,
+    wornThrough(GROANER_HIGH_WEAR, stage),
+  )
+  const low = applyPatches(
+    ZOMBIE_UPPER_ARMS_LOW,
+    wornThrough(GROANER_LOW_WEAR, stage),
+  )
+  return [
+    [...swayRows(high, 0), ...ZOMBIE_LEGS_PLANTED],
+    [...swayRows(low, 1), ...ZOMBIE_LEGS_FRONT_DRAG],
+    [...swayRows(high, 0), ...ZOMBIE_LEGS_PLANTED],
+    [...swayRows(low, -1), ...ZOMBIE_LEGS_BACK_DRAG],
+  ]
+}
 
 const RUNNER_PALETTE: Palette = {
   H: '#3a2418',
@@ -302,6 +382,8 @@ const RUNNER_PALETTE: Palette = {
   Q: '#ffe066',
   B: '#2f5fb3',
   K: '#1b1b2a',
+  N: '#f28fb0',
+  J: '#c0587a',
 }
 
 const RUNNER_HEAD: ReadonlyArray<string> = [
@@ -312,10 +394,14 @@ const RUNNER_HEAD: ReadonlyArray<string> = [
   '....SMS...',
 ]
 
-const RUNNER_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
+const RUNNER_HEAD_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
+  [patch(3, 0, 'N', 4), patch(3, 1, 'N', 4), patch(5, 2, 'M')],
+]
+
+const runnerFramesWith = (head: ReadonlyArray<string>): FramePixels => [
   [
     '.........S',
-    ...RUNNER_HEAD,
+    ...head,
     '...OOOOSS.',
     '.S.OQOO...',
     '..SOOOO...',
@@ -324,7 +410,7 @@ const RUNNER_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
     '..KK...KK.',
   ],
   [
-    ...RUNNER_HEAD,
+    ...head,
     '..SOOOOS..',
     '.S.OQOO.S.',
     '...OOOO...',
@@ -334,7 +420,7 @@ const RUNNER_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
   ],
   [
     'S.........',
-    ...RUNNER_HEAD,
+    ...head,
     '.SSOOOO...',
     '...OQOO.S.',
     '...OOOOS..',
@@ -343,7 +429,7 @@ const RUNNER_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
     '.KK...KK..',
   ],
   [
-    ...RUNNER_HEAD,
+    ...head,
     '.SSOOOOSS.',
     '...OQOO...',
     '...OOOO...',
@@ -352,6 +438,11 @@ const RUNNER_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
     '...KK.....',
   ],
 ]
+
+const runnerWalkPixels = (stage: number): FramePixels =>
+  runnerFramesWith(
+    applyPatches(RUNNER_HEAD, wornThrough(RUNNER_HEAD_WEAR, stage)),
+  )
 
 const TANK_PALETTE: Palette = {
   G: '#8a9bb5',
@@ -363,6 +454,7 @@ const TANK_PALETTE: Palette = {
   P: '#5c3a1a',
   Y: '#f2c14e',
   K: '#26262e',
+  D: '#a8262c',
 }
 
 const TANK_UPPER: ReadonlyArray<string> = [
@@ -410,12 +502,38 @@ const TANK_LEGS_RIGHT_UP: ReadonlyArray<string> = [
   '..KKKK........',
 ]
 
-const TANK_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
-  [...TANK_UPPER, ...TANK_FISTS_LOW, ...TANK_LEGS_PLANTED],
-  [...TANK_UPPER, ...TANK_FISTS_SWING, ...TANK_LEGS_LEFT_UP],
-  [...TANK_UPPER, ...TANK_FISTS_LOW, ...TANK_LEGS_PLANTED],
-  [...TANK_UPPER, ...TANK_FISTS_SWING_BACK, ...TANK_LEGS_RIGHT_UP],
+const TANK_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
+  [patch(0, 6, TRANSPARENT, 2, 5), patch(1, 6, 'D'), patch(2, 7, 'D')],
+  [patch(12, 6, TRANSPARENT, 2, 5), patch(12, 6, 'D'), patch(11, 7, 'D')],
+  [
+    patch(5, 2, 'S'),
+    patch(5, 3, 'D', 4),
+    patch(6, 4, 'D', 2),
+    patch(7, 5, 'D'),
+  ],
 ]
+
+const tankWalkPixels = (stage: number): FramePixels => {
+  const wear = wornThrough(TANK_WEAR, stage)
+  return [
+    applyPatches(
+      [...TANK_UPPER, ...TANK_FISTS_LOW, ...TANK_LEGS_PLANTED],
+      wear,
+    ),
+    applyPatches(
+      [...TANK_UPPER, ...TANK_FISTS_SWING, ...TANK_LEGS_LEFT_UP],
+      wear,
+    ),
+    applyPatches(
+      [...TANK_UPPER, ...TANK_FISTS_LOW, ...TANK_LEGS_PLANTED],
+      wear,
+    ),
+    applyPatches(
+      [...TANK_UPPER, ...TANK_FISTS_SWING_BACK, ...TANK_LEGS_RIGHT_UP],
+      wear,
+    ),
+  ]
+}
 
 const EXPLODER_PALETTE: Palette = {
   Y: '#b7cc3c',
@@ -425,6 +543,8 @@ const EXPLODER_PALETTE: Palette = {
   E: '#2a1418',
   M: '#8c1f24',
   L: '#56662a',
+  H: '#2a2410',
+  R: '#a8262c',
 }
 
 const EXPLODER_LIT_PALETTE: Palette = {
@@ -445,13 +565,156 @@ const EXPLODER_BODY: ReadonlyArray<string> = [
   '..DYYOYYD..',
 ]
 
-const EXPLODER_WALK_PIXELS: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> =
-  [
-    [...swayRows(EXPLODER_BODY, 0), '....LL.LL....', '....LL.LL....'],
-    [...swayRows(EXPLODER_BODY, 1), '.....LL.LL...', '....LL...LL..'],
-    [...swayRows(EXPLODER_BODY, 0), '....LL.LL....', '....LL.LL....'],
-    [...swayRows(EXPLODER_BODY, -1), '...LL.LL.....', '..LL...LL....'],
+type GasHole = Readonly<{ x: number; y: number }>
+
+const EXPLODER_HOLES: ReadonlyArray<GasHole> = [
+  { x: 8, y: 3 },
+  { x: 1, y: 5 },
+]
+
+const EXPLODER_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = Array.map(
+  EXPLODER_HOLES,
+  ({ x, y }) => [patch(x, y, 'R', 2, 3), patch(x, y + 1, 'H', 2)],
+)
+
+const exploderWalkPixels = (stage: number): FramePixels => {
+  const body = applyPatches(EXPLODER_BODY, wornThrough(EXPLODER_WEAR, stage))
+  return [
+    [...swayRows(body, 0), '....LL.LL....', '....LL.LL....'],
+    [...swayRows(body, 1), '.....LL.LL...', '....LL...LL..'],
+    [...swayRows(body, 0), '....LL.LL....', '....LL.LL....'],
+    [...swayRows(body, -1), '...LL.LL.....', '..LL...LL....'],
   ]
+}
+
+// BOSS
+
+const BOSS_PALETTE: Palette = {
+  P: '#b49ab0',
+  Q: '#86708a',
+  W: '#e6dfc0',
+  S: '#b9b08c',
+  Y: '#c9a83a',
+  R: '#d8423a',
+  B: '#4a5a8a',
+  C: '#36426a',
+  K: '#26262e',
+  E: '#ffd23f',
+  M: '#2a1418',
+  T: '#f4f1de',
+  D: '#a8262c',
+  N: '#5fd35a',
+  O: '#ffd23f',
+  J: '#f28fb0',
+  G: '#c0587a',
+  V: '#9be36a',
+}
+
+const BOSS_WIDTH = 26
+
+const BOSS_UPPER: ReadonlyArray<string> = [
+  '............O.............',
+  '...........NON............',
+  '..........NONON...........',
+  '.........QPPPPPPQ.........',
+  '.........PEEPPEEP.........',
+  '.........PPPPPPPP.........',
+  '.........PMTTTTMP.........',
+  '.......QPPMMMMMMPPQ.......',
+  '....QPPPPPPPPPPPPPPPPQ....',
+  '..QPPPPPWWWWWWWWWWPPPPPQ..',
+  '.QPPPPPRWWWWWWWWWWRPPPPPQ.',
+  '.PPPP.PRWWWWWWWWWWRP.PPPP.',
+  '.PPPP.WRWWWWWWWWWWRW.PPPP.',
+  '.PPPPWWRWWWWWWWWWWRWWPPPP.',
+  '.PPPPWWRWWWWWWWWWWRWWPPPP.',
+  '.PPPPWWRWWWWWWYWWWRWWPPPP.',
+  '.PPPPWWRWWWWWMWWWWRWWPPPP.',
+  '.PPPPWWRWWWWWWWWWWRWWPPPP.',
+  '.PPPPSSRSSSSSSSSSSRSSPPPP.',
+  'PPPPP.SRSSSSSSSSSSRS.PPPPP',
+  'PPPPP.BBBBBBBBBBBBBB.PPPPP',
+  '.QQQ..BBBBBBBBBBBBBB..QQQ.',
+]
+
+const BOSS_GAPE_MOUTH: ReadonlyArray<Patch> = [
+  patch(10, 5, 'M', 6),
+  patch(10, 6, 'M', 6),
+  patch(11, 6, 'V', 4),
+  patch(12, 7, 'V', 2),
+  patch(12, 8, 'V'),
+]
+
+const BOSS_LEGS_PLANTED: ReadonlyArray<string> = [
+  '......BBBBBCCCCBBBBB......',
+  '......BBBBB....BBBBB......',
+  '......BBBBB....BBBBB......',
+  '.....KKKKKK....KKKKKK.....',
+]
+
+const BOSS_LEGS_LEFT_UP: ReadonlyArray<string> = [
+  '......BBBBBCCCCBBBBB......',
+  '......BBBBB....BBBBB......',
+  '.....KKKKKK....BBBBB......',
+  '...............KKKKKK.....',
+]
+
+const BOSS_LEGS_RIGHT_UP: ReadonlyArray<string> = [
+  '......BBBBBCCCCBBBBB......',
+  '......BBBBB....BBBBB......',
+  '......BBBBB....KKKKKK.....',
+  '.....KKKKKK...............',
+]
+
+const BOSS_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
+  [patch(0, 11, TRANSPARENT, 5, 11), patch(1, 11, 'D', 3), patch(2, 12, 'D')],
+  [patch(9, 0, TRANSPARENT, 7, 3), patch(10, 3, 'J', 6), patch(14, 4, 'D', 2)],
+  [
+    patch(21, 11, TRANSPARENT, 5, 11),
+    patch(22, 11, 'D', 3),
+    patch(23, 12, 'D'),
+  ],
+  [
+    patch(11, 13, 'D', 4),
+    patch(10, 14, 'D', 6, 4),
+    patch(11, 14, 'J', 2),
+    patch(13, 14, 'G'),
+    patch(10, 15, 'J', 3),
+    patch(13, 15, 'J', 2),
+    patch(11, 16, 'G'),
+    patch(12, 16, 'J', 3),
+    patch(12, 17, 'J'),
+    patch(12, 18, 'D'),
+    patch(14, 18, 'D'),
+    patch(12, 19, 'D'),
+  ],
+]
+
+const bossPixels = (
+  legs: ReadonlyArray<string>,
+  stage: number,
+  isGaping: boolean,
+): ReadonlyArray<string> =>
+  applyPatches(
+    [...BOSS_UPPER, ...legs],
+    [...(isGaping ? BOSS_GAPE_MOUTH : []), ...wornThrough(BOSS_WEAR, stage)],
+  )
+
+const bossWalkPixels = (stage: number): FramePixels => [
+  bossPixels(BOSS_LEGS_PLANTED, stage, false),
+  bossPixels(BOSS_LEGS_LEFT_UP, stage, false),
+  bossPixels(BOSS_LEGS_PLANTED, stage, false),
+  bossPixels(BOSS_LEGS_RIGHT_UP, stage, false),
+]
+
+const BOSS_ICON_PIXELS: ReadonlyArray<string> = [
+  '...O...',
+  '..NON..',
+  '.QPPPQ.',
+  '.PEPEP.',
+  '.PMTMP.',
+  'QPPPPPQ',
+]
 
 const SHAMBLER_ICON_PIXELS: ReadonlyArray<string> = [
   '.GGGGG.',
@@ -573,67 +836,131 @@ export const PLAYER_IDLE_FRAMES = spriteFrames(
   PLAYER_WIDTH / 2,
 )
 
-const ZOMBIE_WALK_FRAMES = spriteFrames(
-  ZOMBIE_WALK_PIXELS,
-  ZOMBIE_PALETTE,
-  ZOMBIE_SWAY_ROOM + ZOMBIE_BODY_WIDTH / 2,
-)
-
-const RUNNER_WALK_FRAMES = spriteFrames(RUNNER_WALK_PIXELS, RUNNER_PALETTE, 5)
-
-const TANK_WALK_FRAMES = spriteFrames(TANK_WALK_PIXELS, TANK_PALETTE, 7)
+const GROANER_ANCHOR_X = ZOMBIE_SWAY_ROOM + ZOMBIE_BODY_WIDTH / 2
 
 const EXPLODER_ANCHOR_X = ZOMBIE_SWAY_ROOM + 5
 
-const EXPLODER_WALK_FRAMES = spriteFrames(
-  EXPLODER_WALK_PIXELS,
-  EXPLODER_PALETTE,
-  EXPLODER_ANCHOR_X,
-)
+const BOSS_ANCHOR_X = BOSS_WIDTH / 2
 
-const EXPLODER_LIT_FRAMES = spriteFrames(
-  EXPLODER_WALK_PIXELS,
-  EXPLODER_LIT_PALETTE,
-  EXPLODER_ANCHOR_X,
-)
+export type WornFrames = Readonly<{
+  walk: SpriteFrames
+  lit: SpriteFrames
+  gape: SpriteSet
+}>
 
 export type ZombieSprites = Readonly<{
   walk: SpriteFrames
   lit: SpriteFrames
   icon: Sprite
   height: number
+  stages: Array.NonEmptyReadonlyArray<WornFrames>
 }>
 
-const frameHeight = (
-  framePixels: Array.NonEmptyReadonlyArray<ReadonlyArray<string>>,
-): number => Array.headNonEmpty(framePixels).length
+type WearArt = Readonly<{
+  stageCount: number
+  pixelsAt: (stage: number) => FramePixels
+  gapeAt: (stage: number) => ReadonlyArray<string>
+  palette: Palette
+  litPalette: Palette
+  anchorX: number
+  icon: ReadonlyArray<string>
+}>
+
+const firstFrame = (stage: number, pixelsAt: (stage: number) => FramePixels) =>
+  Array.headNonEmpty(pixelsAt(stage))
+
+const wornFrames =
+  (art: WearArt) =>
+  (stage: number): WornFrames => {
+    const pixels = art.pixelsAt(stage)
+    const walk = spriteFrames(pixels, art.palette, art.anchorX)
+    return {
+      walk,
+      lit:
+        art.litPalette === art.palette
+          ? walk
+          : spriteFrames(pixels, art.litPalette, art.anchorX),
+      gape: spriteSet(art.palette, art.anchorX)(art.gapeAt(stage)),
+    }
+  }
+
+const zombieSprites = (art: WearArt): ZombieSprites => {
+  const stages = Array.map(Array.range(0, art.stageCount), wornFrames(art))
+  const fresh = Array.headNonEmpty(stages)
+  return {
+    walk: fresh.walk,
+    lit: fresh.lit,
+    icon: spriteShapes(art.icon, art.palette),
+    height: firstFrame(0, art.pixelsAt).length,
+    stages,
+  }
+}
 
 export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
-  Shambler: {
-    walk: ZOMBIE_WALK_FRAMES,
-    lit: ZOMBIE_WALK_FRAMES,
-    icon: spriteShapes(SHAMBLER_ICON_PIXELS, ZOMBIE_PALETTE),
-    height: frameHeight(ZOMBIE_WALK_PIXELS),
-  },
-  Runner: {
-    walk: RUNNER_WALK_FRAMES,
-    lit: RUNNER_WALK_FRAMES,
-    icon: spriteShapes(RUNNER_ICON_PIXELS, RUNNER_PALETTE),
-    height: frameHeight(RUNNER_WALK_PIXELS),
-  },
-  Tank: {
-    walk: TANK_WALK_FRAMES,
-    lit: TANK_WALK_FRAMES,
-    icon: spriteShapes(TANK_ICON_PIXELS, TANK_PALETTE),
-    height: frameHeight(TANK_WALK_PIXELS),
-  },
-  Exploder: {
-    walk: EXPLODER_WALK_FRAMES,
-    lit: EXPLODER_LIT_FRAMES,
-    icon: spriteShapes(EXPLODER_ICON_PIXELS, EXPLODER_PALETTE),
-    height: frameHeight(EXPLODER_WALK_PIXELS),
-  },
+  Shambler: zombieSprites({
+    stageCount: GROANER_HIGH_WEAR.length,
+    pixelsAt: groanerWalkPixels,
+    gapeAt: stage => firstFrame(stage, groanerWalkPixels),
+    palette: ZOMBIE_PALETTE,
+    litPalette: ZOMBIE_PALETTE,
+    anchorX: GROANER_ANCHOR_X,
+    icon: SHAMBLER_ICON_PIXELS,
+  }),
+  Runner: zombieSprites({
+    stageCount: RUNNER_HEAD_WEAR.length,
+    pixelsAt: runnerWalkPixels,
+    gapeAt: stage => firstFrame(stage, runnerWalkPixels),
+    palette: RUNNER_PALETTE,
+    litPalette: RUNNER_PALETTE,
+    anchorX: 5,
+    icon: RUNNER_ICON_PIXELS,
+  }),
+  Tank: zombieSprites({
+    stageCount: TANK_WEAR.length,
+    pixelsAt: tankWalkPixels,
+    gapeAt: stage => firstFrame(stage, tankWalkPixels),
+    palette: TANK_PALETTE,
+    litPalette: TANK_PALETTE,
+    anchorX: 7,
+    icon: TANK_ICON_PIXELS,
+  }),
+  Exploder: zombieSprites({
+    stageCount: EXPLODER_WEAR.length,
+    pixelsAt: exploderWalkPixels,
+    gapeAt: stage => firstFrame(stage, exploderWalkPixels),
+    palette: EXPLODER_PALETTE,
+    litPalette: EXPLODER_LIT_PALETTE,
+    anchorX: EXPLODER_ANCHOR_X,
+    icon: EXPLODER_ICON_PIXELS,
+  }),
+  Boss: zombieSprites({
+    stageCount: BOSS_WEAR.length,
+    pixelsAt: bossWalkPixels,
+    gapeAt: stage => bossPixels(BOSS_LEGS_PLANTED, stage, true),
+    palette: BOSS_PALETTE,
+    litPalette: BOSS_PALETTE,
+    anchorX: BOSS_ANCHOR_X,
+    icon: BOSS_ICON_PIXELS,
+  }),
 }
+
+export const wornFramesAt = (kind: ZombieKind, stage: number): WornFrames => {
+  const { stages } = ZOMBIE_SPRITES[kind]
+  return Option.getOrElse(
+    Array.get(stages, Math.min(stage, stages.length - 1)),
+    () => Array.headNonEmpty(stages),
+  )
+}
+
+export const BOSS_ICON = ZOMBIE_SPRITES.Boss.icon
+
+const EXPLODER_FRAME_HEIGHT = firstFrame(0, exploderWalkPixels).length
+
+export const GAS_LEAKS: ReadonlyArray<Readonly<{ x: number; y: number }>> =
+  Array.map(EXPLODER_HOLES, ({ x, y }) => ({
+    x: x + ZOMBIE_SWAY_ROOM + 1 - EXPLODER_ANCHOR_X,
+    y: y + 1 - EXPLODER_FRAME_HEIGHT,
+  }))
 
 export const HEART_SPRITE = spriteShapes(HEART_PIXELS, HEART_PALETTE)
 export const EMPTY_HEART_SPRITE = spriteShapes(

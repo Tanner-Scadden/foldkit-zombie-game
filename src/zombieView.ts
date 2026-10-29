@@ -1,4 +1,4 @@
-import { Result } from 'effect'
+import { Array, Result } from 'effect'
 import { Canvas } from 'foldkit'
 
 import {
@@ -31,6 +31,8 @@ import {
 } from './drawing'
 import { clamp } from './geometry'
 import {
+  Boss,
+  BossMove,
   type Player,
   type Vector,
   type Zombie,
@@ -39,14 +41,16 @@ import {
 } from './model'
 import {
   type Facing,
+  GAS_LEAKS,
   type SpriteFrames,
   type SpriteSet,
   type Tone,
   ZOMBIE_SPRITES,
   frameAt,
   group,
+  wornFramesAt,
 } from './sprite'
-import { type DeathStyle, statsOf, strideAt } from './zombies'
+import { type DeathStyle, statsOf, strideAt, wearOf } from './zombies'
 
 // ZOMBIES
 
@@ -85,7 +89,14 @@ const GAITS: Readonly<Record<ZombieKind, Gait>> = {
     fuseTellPx: 70,
     glowRadius: 7,
   },
+  Boss: { ...STILL_GAIT, stompSquash: 0.06, waddleRadians: 0.05 },
 }
+
+const WEAR_WOBBLE_RADIANS = 0.05
+const LEAK_DEFLATE_PER_STAGE = 0.07
+
+const deflation = (zombie: Zombie, stage: number): number =>
+  zombie.kind === 'Exploder' ? 1 - LEAK_DEFLATE_PER_STAGE * stage : 1
 
 const PULSE_MS = 620
 const FUSE_BLINK_SLOW_MS = 480
@@ -172,40 +183,162 @@ export const zombieHealthBarShapes = (
   ]
 }
 
+// GAS LEAKS
+
+const LEAK_CYCLE_MS = 700
+const LEAK_RISE_PX = 7
+const LEAK_COLOR = 'rgba(230, 250, 140, 0.9)'
+const LEAK_FADED_COLOR = 'rgba(214, 242, 92, 0.45)'
+
+const leakShapes = (
+  zombie: Zombie,
+  stage: number,
+  facing: Facing,
+  elapsedMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  if (zombie.kind !== 'Exploder' || stage === 0) {
+    return []
+  }
+
+  const foot = footPosition(zombie, statsOf(zombie).footOffset)
+  const mirror = facing === 'Right' ? 1 : -1
+  return Array.flatMap(Array.take(GAS_LEAKS, stage), (hole, index) => {
+    const phase =
+      ((elapsedMs + zombie.id * 97 + index * 311) % LEAK_CYCLE_MS) /
+      LEAK_CYCLE_MS
+    const rise = Math.round(LEAK_RISE_PX * phase)
+    const drift = Math.round(mirror * (1 + 2 * phase))
+    const size = phase < 0.4 ? 2 : 3
+    return [
+      Canvas.Rect({
+        x: foot.x + mirror * hole.x + drift - 1,
+        y: foot.y + hole.y - rise - 1,
+        width: size,
+        height: size,
+        fill: phase < 0.6 ? LEAK_COLOR : LEAK_FADED_COLOR,
+      }),
+    ]
+  })
+}
+
+// BOSS POSES
+
+const BOSS_RISE_STRETCH = 0.16
+const BOSS_CROUCH_SQUASH = 0.12
+const BOSS_BELCH_SWELL = 0.18
+const BOSS_TELL_FAST_MS = 60
+const BOSS_TELL_SLOW_MS = 180
+const BOSS_LANDING_SQUASH = 0.2
+
+type Pose = Readonly<{
+  scale: Vector
+  tone: Tone
+  isGaping: boolean
+  shakePx: number
+}>
+
+const STANDING_POSE: Pose = {
+  scale: { x: 1, y: 1 },
+  tone: 'Normal',
+  isGaping: false,
+  shakePx: 0,
+}
+
+const tellTone = (remainingMs: number, durationMs: number): Tone => {
+  const urgency = 1 - remainingMs / Math.max(1, durationMs)
+  const periodMs =
+    BOSS_TELL_SLOW_MS + (BOSS_TELL_FAST_MS - BOSS_TELL_SLOW_MS) * urgency
+  return Math.floor(remainingMs / periodMs) % 2 === 0 ? 'Flash' : 'Normal'
+}
+
+const bossPose = (boss: Boss, zombie: Zombie): Pose =>
+  Boss.isAnyOf(['Fighting'])(boss) && boss.id === zombie.id
+    ? BossMove.match(boss.move, {
+        Stalking: (): Pose => STANDING_POSE,
+        WindingUp: ({ attack, remainingMs, durationMs }): Pose => {
+          const progress = 1 - remainingMs / Math.max(1, durationMs)
+          if (attack === 'Stomp') {
+            const rise = Math.sin(Math.PI * Math.min(1, progress * 1.2))
+            return {
+              scale: {
+                x: 1 - BOSS_CROUCH_SQUASH * rise * 0.5,
+                y: 1 + BOSS_RISE_STRETCH * rise,
+              },
+              tone: tellTone(remainingMs, durationMs),
+              isGaping: true,
+              shakePx: 0,
+            }
+          } else {
+            const swell = BOSS_BELCH_SWELL * progress
+            return {
+              scale: { x: 1 + swell, y: 1 - swell * 0.4 },
+              tone: 'Normal',
+              isGaping: progress > 0.5,
+              shakePx: progress > 0.5 ? 1 : 0,
+            }
+          }
+        },
+        Recovering: ({ remainingMs }): Pose => ({
+          scale: {
+            x: 1 + BOSS_LANDING_SQUASH * Math.min(1, remainingMs / 400),
+            y: 1 - BOSS_LANDING_SQUASH * Math.min(1, remainingMs / 400),
+          },
+          tone: 'Normal',
+          isGaping: false,
+          shakePx: 0,
+        }),
+      })
+    : STANDING_POSE
+
 const walkingZombieShapes = (
   zombie: Zombie,
   player: Player,
   elapsedMs: number,
+  boss: Boss,
 ): ReadonlyArray<Canvas.Shape> => {
   const stats = statsOf(zombie)
   const gait = GAITS[zombie.kind]
-  const sprites = ZOMBIE_SPRITES[zombie.kind]
-  const stride = strideAt(zombie, elapsedMs)
+  const stage = wearOf(zombie)
+  const sprites = wornFramesAt(zombie.kind, stage)
+  const pose = zombie.kind === 'Boss' ? bossPose(boss, zombie) : STANDING_POSE
+  const isStill = pose !== STANDING_POSE
+  const stride = isStill ? 0 : strideAt(zombie, elapsedMs)
   const facing = facingToward(zombie.x, player.x)
   const isPlanted = stride % 2 === 0
-  const stomp = isPlanted ? gait.stompSquash : 0
+  const stomp = isPlanted && !isStill ? gait.stompSquash : 0
   const pulse =
-    1 + gait.pulse * Math.sin((FULL_TURN * elapsedMs) / PULSE_MS + zombie.id)
+    (1 +
+      gait.pulse * Math.sin((FULL_TURN * elapsedMs) / PULSE_MS + zombie.id)) *
+    deflation(zombie, stage)
   const isLit = isFuseLit(zombie, player, elapsedMs, gait)
   const frames: SpriteFrames = isLit ? sprites.lit : sprites.walk
+  const wobble =
+    zombie.kind === 'Boss' ? 0 : WEAR_WOBBLE_RADIANS * Math.min(stage, 2)
+  const foot = footPosition(zombie, stats.footOffset)
+  const toned = zombieHitTone(zombie.hitRemainingMs)
+  const tone: Tone = toned === 'Flash' ? toned : pose.tone
+  const sprite = pose.isGaping ? sprites.gape : frameAt(frames, stride)
+  const shake = pose.shakePx * (Math.floor(elapsedMs / 50) % 2 === 0 ? 1 : -1)
   return [
     ...glowShapes(zombie, gait, pulse, isLit),
+    ...leakShapes(zombie, stage, facing, elapsedMs),
     group({
-      translate: footPosition(zombie, stats.footOffset),
+      translate: { x: foot.x + shake, y: foot.y },
       rotate:
         gait.leanRadians * (facing === 'Right' ? 1 : -1) +
-        gait.waddleRadians * (isPlanted ? 1 : -1),
+        (isStill ? 0 : (gait.waddleRadians + wobble) * (isPlanted ? 1 : -1)),
       scale: multiplyScales(
         squashPulse(
           zombie.hitRemainingMs,
           ZOMBIE_HIT_PULSE_MS,
           ZOMBIE_HIT_SQUASH,
         ),
-        { x: (1 + stomp) * pulse, y: (1 - stomp) * pulse },
+        multiplyScales(pose.scale, {
+          x: (1 + stomp) * pulse,
+          y: (1 - stomp) * pulse,
+        }),
       ),
-      shapes: frameAt(frames, stride)[zombieHitTone(zombie.hitRemainingMs)][
-        facing
-      ],
+      shapes: sprite[tone][facing],
     }),
   ]
 }
@@ -220,7 +353,7 @@ const fusingZombieShapes = (
   remainingMs: number,
 ): ReadonlyArray<Canvas.Shape> => {
   const stats = statsOf(zombie)
-  const sprites = ZOMBIE_SPRITES[zombie.kind]
+  const sprites = wornFramesAt(zombie.kind, wearOf(zombie))
   const swell = 1 + FUSE_SWELL * (1 - clamp(remainingMs / FUSE_SWELL_MS, 0, 1))
   const flicker = Math.floor(remainingMs / FUSE_FLASH_MS) % 2 === 0
   const foot = footPosition(zombie, stats.footOffset)
@@ -368,15 +501,18 @@ const dyingZombieShape = (
     zombie,
     progress: clamp(1 - remainingMs / Math.max(1, stats.dyingMs), 0, 1),
     direction,
-    sprite: frameAt(ZOMBIE_SPRITES[zombie.kind].walk, 0),
+    sprite: frameAt(
+      wornFramesAt(zombie.kind, statsOf(zombie).wear.length).walk,
+      0,
+    ),
   })
 }
 
 export const zombieShapes =
-  (player: Player, elapsedMs: number) =>
+  (player: Player, elapsedMs: number, boss: Boss) =>
   (zombie: Zombie): ReadonlyArray<Canvas.Shape> =>
     ZombieState.match(zombie.state, {
-      Walking: () => walkingZombieShapes(zombie, player, elapsedMs),
+      Walking: () => walkingZombieShapes(zombie, player, elapsedMs, boss),
       Fusing: ({ remainingMs }) =>
         fusingZombieShapes(zombie, player, remainingMs),
       Dying: ({ remainingMs, direction }) => [

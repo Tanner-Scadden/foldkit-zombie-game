@@ -123,9 +123,16 @@ import {
 } from './model'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
 import { WEAPONS, heldWeapon } from './weapons'
-import { ZOMBIE_KINDS } from './zombies'
+import { type WearStage, ZOMBIE_KINDS } from './zombies'
 
 // PHYSICS
+
+const partPhysics = (decalKind: DecalKind): ParticlePhysics => ({
+  gravity: GIB_GRAVITY,
+  dragPerSecond: GIB_DRAG_PER_SECOND,
+  restitution: GIB_RESTITUTION,
+  maybeDecalKind: Option.some(decalKind),
+})
 
 type ParticlePhysics = Readonly<{
   gravity: number
@@ -231,6 +238,14 @@ const PHYSICS: Readonly<Record<ParticleKind, ParticlePhysics>> = {
     restitution: GIB_RESTITUTION,
     maybeDecalKind: Option.some('Clip'),
   },
+  GreenLimb: partPhysics('GreenLimb'),
+  GreenScalp: partPhysics('GreenScalp'),
+  HairScalp: partPhysics('HairScalp'),
+  BlueLimb: partPhysics('BlueLimb'),
+  BlueChunk: partPhysics('BlueChunk'),
+  GasPatch: partPhysics('GasPatch'),
+  PinkLimb: partPhysics('PinkLimb'),
+  PinkChunk: partPhysics('PinkChunk'),
 }
 
 const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
@@ -250,6 +265,14 @@ const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
   Splinter: 1,
   Plank: 4,
   Clip: CLIP_SIZE_PX,
+  GreenLimb: 4,
+  GreenScalp: 3,
+  HairScalp: 3,
+  BlueLimb: 5,
+  BlueChunk: 4,
+  GasPatch: 3,
+  PinkLimb: 7,
+  PinkChunk: 5,
 }
 
 const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
@@ -264,6 +287,14 @@ const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
   Scorch: size => size,
   Wood: () => 1,
   Clip: () => 2,
+  GreenLimb: () => 2,
+  GreenScalp: () => 2,
+  HairScalp: () => 2,
+  BlueLimb: () => 2,
+  BlueChunk: () => 3,
+  GasPatch: () => 2,
+  PinkLimb: () => 3,
+  PinkChunk: () => 4,
 }
 
 type ParticleStep = Result.Result<Particle, Option.Option<Decal>>
@@ -674,6 +705,110 @@ const killParticles = (
 
 const NO_PUSH: Vector = { x: 0, y: 0 }
 
+const PART_SPEED_MIN = 45
+const PART_SPEED_MAX = 80
+const PART_SPREAD = 1.1
+const PART_LIFT_MIN = 80
+const PART_LIFT_MAX = 125
+const BLOOD_PER_PART = 6
+
+const flyingPart =
+  (kind: ParticleKind, ground: Vector, heading: number, heightPx: number) =>
+  (state: number): Seeded<Particle> => {
+    const angleDraw = nextRandom(state)
+    const speedDraw = nextRandom(angleDraw.nextState)
+    const liftDraw = nextRandom(speedDraw.nextState)
+    return [
+      liftDraw.nextState,
+      launch({
+        kind,
+        ground,
+        height: heightPx,
+        angle: heading + (angleDraw.value - 0.5) * PART_SPREAD,
+        speed: between(speedDraw.value, PART_SPEED_MIN, PART_SPEED_MAX),
+        lift: between(liftDraw.value, PART_LIFT_MIN, PART_LIFT_MAX),
+        size: LAUNCH_SIZE[kind],
+        lifetimeMs: GIB_LIFETIME_MS,
+      }),
+    ]
+  }
+
+const wearStageAt = (
+  kind: ZombieKind,
+  stage: number,
+): Option.Option<WearStage> => Array.get(ZOMBIE_KINDS[kind].wear, stage)
+
+const shedParticles = (
+  state: number,
+  {
+    x,
+    y,
+    direction,
+    kind,
+    stage,
+  }: Readonly<{
+    x: number
+    y: number
+    direction: Vector
+    kind: ZombieKind
+    stage: number
+  }>,
+): Seeded<ReadonlyArray<Particle>> =>
+  Option.match(wearStageAt(kind, stage), {
+    onNone: () => noParticles(state),
+    onSome: ({ part, heightPx }) => {
+      const ground = zombieGround(x, y, kind)
+      const heading = angleOf(direction)
+      return chain(state, [
+        drawState =>
+          generateMany(
+            drawState,
+            1,
+            flyingPart(part, ground, heading, heightPx),
+          ),
+        drawState =>
+          generateMany(
+            drawState,
+            BLOOD_PER_PART,
+            droplet('Blood', ground, heading, Math.PI, BLOOD_SPEED),
+          ),
+        drawState =>
+          generateMany(drawState, 1, gib('MeatGib', ground, direction)),
+      ])
+    },
+  })
+
+const STOMP_DUST = 14
+const STOMP_CHIPS = 8
+const BELCH_GOO = 10
+
+const stompParticles = (
+  state: number,
+  { x, y, radius }: Readonly<{ x: number; y: number; radius: number }>,
+): Seeded<ReadonlyArray<Particle>> => {
+  const ground = zombieGround(x, y, 'Boss')
+  return chain(state, [
+    dustRing(ground, STOMP_DUST),
+    drawState => generateMany(drawState, STOMP_CHIPS, chip(ground, 0)),
+    drawState =>
+      generateMany(
+        drawState,
+        STOMP_CHIPS,
+        dustPuff(ground, 0, Math.PI * 2, radius)(radius * 2),
+      ),
+  ])
+}
+
+const belchParticles = (
+  state: number,
+  { x, y }: Readonly<{ x: number; y: number }>,
+): Seeded<ReadonlyArray<Particle>> =>
+  generateMany(
+    state,
+    BELCH_GOO,
+    droplet('Goo', { x, y }, Math.PI / 2, Math.PI * 2, GOO_BURST_SPEED),
+  )
+
 const blastParticles = (
   state: number,
   { x, y }: Readonly<{ x: number; y: number }>,
@@ -855,6 +990,12 @@ const eventParticles = (
     PickupFizzled: ({ x, y }) => dustRing({ x, y }, DUST_PER_FIZZLE)(state),
     BoostFaded: () => noParticles(state),
     Burped: ({ x, y }) => dustRing(playerGround(x, y), DUST_PER_BURP)(state),
+    PartShed: shed => shedParticles(state, shed),
+    BossRoared: ({ x, y }) =>
+      dustRing({ x, y }, RATTLE_DUST_PER_WARNING * 2)(state),
+    BossWoundUp: () => noParticles(state),
+    BossStomped: stomped => stompParticles(state, stomped),
+    BossBelched: belched => belchParticles(state, belched),
   })
 
 type Spawn = Readonly<{

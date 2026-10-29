@@ -69,7 +69,9 @@ const zombieIndex = (current: Model, zombie: Zombie): number =>
   indexOf(
     worldShapesOf(current),
     Option.getOrThrow(
-      Array.last(zombieShapes(current.player, current.elapsedMs)(zombie)),
+      Array.last(
+        zombieShapes(current.player, current.elapsedMs, current.boss)(zombie),
+      ),
     ),
   )
 

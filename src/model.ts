@@ -123,6 +123,7 @@ export const ZombieKind = Schema.Literals([
   'Runner',
   'Tank',
   'Exploder',
+  'Boss',
 ])
 export type ZombieKind = typeof ZombieKind.Type
 
@@ -146,6 +147,20 @@ export const Zombie = Schema.Struct({
   state: ZombieState,
 })
 export type Zombie = typeof Zombie.Type
+
+export const BossAttack = Schema.Literals(['Stomp', 'Belch'])
+export type BossAttack = typeof BossAttack.Type
+
+export const BossMove = defineTaggedUnion({
+  Stalking: { cooldownMs: Schema.Number },
+  WindingUp: {
+    attack: BossAttack,
+    remainingMs: Schema.Number,
+    durationMs: Schema.Number,
+  },
+  Recovering: { remainingMs: Schema.Number, cooldownMs: Schema.Number },
+})
+export type BossMove = typeof BossMove.Type
 
 export const BulletGlaze = Schema.Literals(['Plain', 'Spicy', 'Mean', 'Skewer'])
 export type BulletGlaze = typeof BulletGlaze.Type
@@ -188,6 +203,14 @@ export const ParticleKind = Schema.Literals([
   'Splinter',
   'Plank',
   'Clip',
+  'GreenLimb',
+  'GreenScalp',
+  'HairScalp',
+  'BlueLimb',
+  'BlueChunk',
+  'GasPatch',
+  'PinkLimb',
+  'PinkChunk',
 ])
 export type ParticleKind = typeof ParticleKind.Type
 
@@ -216,6 +239,14 @@ export const DecalKind = Schema.Literals([
   'Scorch',
   'Wood',
   'Clip',
+  'GreenLimb',
+  'GreenScalp',
+  'HairScalp',
+  'BlueLimb',
+  'BlueChunk',
+  'GasPatch',
+  'PinkLimb',
+  'PinkChunk',
 ])
 export type DecalKind = typeof DecalKind.Type
 
@@ -358,12 +389,24 @@ export const GameEvent = defineTaggedUnion({
   PickupFizzled: { x: Schema.Number, y: Schema.Number },
   BoostFaded: { x: Schema.Number, y: Schema.Number, kind: BoostKind },
   Burped: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
+  PartShed: {
+    x: Schema.Number,
+    y: Schema.Number,
+    direction: Vector,
+    kind: ZombieKind,
+    stage: Schema.Number,
+  },
+  BossRoared: { x: Schema.Number, y: Schema.Number, door: DoorId },
+  BossWoundUp: { x: Schema.Number, y: Schema.Number, attack: BossAttack },
+  BossStomped: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
+  BossBelched: { x: Schema.Number, y: Schema.Number },
 })
 export type GameEvent = typeof GameEvent.Type
 
 export const HitStop = defineTaggedUnion({
   Running: { cooldownMs: Schema.Number },
   Frozen: { remainingMs: Schema.Number },
+  Slowed: { remainingMs: Schema.Number },
 })
 export type HitStop = typeof HitStop.Type
 
@@ -455,6 +498,23 @@ export const Phase = defineTaggedUnion({
   GameOver: { wave: Schema.Number },
 })
 export type Phase = typeof Phase.Type
+
+// NOTE: A boss wave holds its boss outside until only waitBelow planned
+// spawns are left, then rattles its door for the entrance before it walks in.
+// While it arrives and for its first seconds in the room, the wave clock
+// waits, so the rest of the wave comes after the boss has had the floor.
+export const Boss = defineTaggedUnion({
+  Absent: {},
+  Waiting: { door: DoorId, waitBelow: Schema.Number, hp: Schema.Number },
+  Arriving: {
+    door: DoorId,
+    hp: Schema.Number,
+    remainingMs: Schema.Number,
+    durationMs: Schema.Number,
+  },
+  Fighting: { id: Schema.Number, move: BossMove, standingMs: Schema.Number },
+})
+export type Boss = typeof Boss.Type
 
 export const Hold = Schema.Struct({
   atMs: Schema.Number,
@@ -622,6 +682,7 @@ export const KillCounts = Schema.Struct({
   Runner: Schema.Number,
   Tank: Schema.Number,
   Exploder: Schema.Number,
+  Boss: Schema.Number,
 })
 export type KillCounts = typeof KillCounts.Type
 
@@ -639,6 +700,7 @@ export type RunStats = typeof RunStats.Type
 export const Model = Schema.Struct({
   phase: Phase,
   pacing: Pacing,
+  boss: Boss,
   intensity: Schema.Number,
   mode: RunMode,
   maybeBestEndlessWave: Schema.Option(Schema.Number),
@@ -749,6 +811,7 @@ export const noKills: KillCounts = {
   Runner: 0,
   Tank: 0,
   Exploder: 0,
+  Boss: 0,
 }
 
 export const freshStats: RunStats = {
@@ -791,6 +854,7 @@ export const stillShake: Shake = { trauma: 0, offset: { x: 0, y: 0 } }
 export const initialModel: Model = {
   phase: Phase.Ready(),
   pacing: calmPacing,
+  boss: Boss.Absent(),
   intensity: 0,
   mode: RunMode.Campaign(),
   maybeBestEndlessWave: Option.none(),

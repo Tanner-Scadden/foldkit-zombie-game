@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect'
+import { Array, Option, Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
 import type { SoundEffect } from './audio'
@@ -58,6 +58,15 @@ export type Footfall = Readonly<{
   maybeSound: Option.Option<SoundEffect>
 }>
 
+// NOTE: A wear stage comes off once health falls to its share of the most
+// health, so a zombie's wear is read from hp and maxHp alone and each part
+// comes off exactly once.
+export type WearStage = Readonly<{
+  below: number
+  part: ParticleKind
+  heightPx: number
+}>
+
 export type ZombieKindStats = Readonly<{
   name: string
   tagline: string
@@ -68,6 +77,7 @@ export type ZombieKindStats = Readonly<{
   contactDamage: number
   trapBitePerSecond: number
   radius: number
+  bodyRadius: number
   footOffset: number
   bounty: number
   mass: number
@@ -85,6 +95,7 @@ export type ZombieKindStats = Readonly<{
   hitSound: SoundEffect
   deathSound: SoundEffect
   maybeFootfall: Option.Option<Footfall>
+  wear: ReadonlyArray<WearStage>
 }>
 
 // KINDS
@@ -100,6 +111,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     contactDamage: 1,
     trapBitePerSecond: 3,
     radius: ZOMBIE_RADIUS,
+    bodyRadius: ZOMBIE_RADIUS,
     footOffset: ZOMBIE_FOOT_OFFSET,
     bounty: SHAMBLER_BOUNTY,
     mass: 1,
@@ -120,6 +132,10 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     hitSound: 'ZombieHit',
     deathSound: 'ZombieDeath',
     maybeFootfall: Option.none(),
+    wear: [
+      { below: 2 / 3, part: 'GreenLimb', heightPx: 6 },
+      { below: 1 / 3, part: 'GreenScalp', heightPx: 9 },
+    ],
   },
   Runner: {
     name: 'Hotfoot',
@@ -131,6 +147,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     contactDamage: 1,
     trapBitePerSecond: 2,
     radius: 3.5,
+    bodyRadius: 3.5,
     footOffset: ZOMBIE_FOOT_OFFSET,
     bounty: 3,
     mass: 0.6,
@@ -157,6 +174,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
       trauma: 0,
       maybeSound: Option.none(),
     }),
+    wear: [{ below: 1 / 2, part: 'HairScalp', heightPx: 10 }],
   },
   Tank: {
     name: 'Big Lug',
@@ -168,6 +186,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     contactDamage: 2,
     trapBitePerSecond: 12,
     radius: 6.5,
+    bodyRadius: 6.5,
     footOffset: 7,
     bounty: 20,
     mass: 6,
@@ -194,6 +213,11 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
       trauma: 0.22,
       maybeSound: Option.some('Stomp'),
     }),
+    wear: [
+      { below: 3 / 4, part: 'BlueLimb', heightPx: 7 },
+      { below: 1 / 2, part: 'BlueLimb', heightPx: 7 },
+      { below: 1 / 4, part: 'BlueChunk', heightPx: 11 },
+    ],
   },
   Exploder: {
     name: 'Gasbag',
@@ -205,6 +229,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     contactDamage: 0,
     trapBitePerSecond: 0,
     radius: 4.5,
+    bodyRadius: 4.5,
     footOffset: ZOMBIE_FOOT_OFFSET,
     bounty: 3,
     mass: 1.3,
@@ -231,6 +256,55 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     hitSound: 'ExploderHit',
     deathSound: 'ExploderFuse',
     maybeFootfall: Option.none(),
+    wear: [
+      { below: 2 / 3, part: 'GasPatch', heightPx: 6 },
+      { below: 1 / 3, part: 'GasPatch', heightPx: 4 },
+    ],
+  },
+  Boss: {
+    name: 'Uncle Chunk',
+    tagline: 'STEP OUT OF THE RED RING',
+    pitch: 'HE STOMPS AND BURPS UP GROANERS. STEP OUT OF THE RED RING.',
+    speedMin: 10,
+    speedMax: 11,
+    hp: 80,
+    contactDamage: 2,
+    trapBitePerSecond: 20,
+    radius: 8,
+    bodyRadius: 12,
+    footOffset: 12,
+    bounty: 150,
+    mass: 40,
+    knockbackScale: 0.03,
+    killTrauma: 1,
+    behavior: Behavior.Brawler(),
+    clearance: 'Wide',
+    deathStyle: 'Slump',
+    dyingMs: 1600,
+    stridePx: 3,
+    healthBar: 'Hidden',
+    hitSpray: 'Blood',
+    bloodPerKill: 24,
+    gibs: [
+      { kind: 'MeatGib', count: 12 },
+      { kind: 'PinkChunk', count: 4 },
+      { kind: 'PinkLimb', count: 2 },
+    ],
+    hitSound: 'TankHit',
+    deathSound: 'BossDeath',
+    maybeFootfall: Option.some({
+      everyStrides: 2,
+      dustPuffs: 3,
+      rangePx: 140,
+      trauma: 0.3,
+      maybeSound: Option.some('Stomp'),
+    }),
+    wear: [
+      { below: 0.8, part: 'PinkLimb', heightPx: 16 },
+      { below: 0.6, part: 'PinkChunk', heightPx: 28 },
+      { below: 0.4, part: 'PinkLimb', heightPx: 16 },
+      { below: 0.2, part: 'PinkChunk', heightPx: 12 },
+    ],
   },
 }
 
@@ -245,6 +319,24 @@ export const statsOf = (zombie: Zombie): ZombieKindStats =>
   ZOMBIE_KINDS[zombie.kind]
 
 export const radiusOf = (zombie: Zombie): number => statsOf(zombie).radius
+
+export const bodyRadiusOf = (zombie: Zombie): number =>
+  statsOf(zombie).bodyRadius
+
+export const isBoss = (zombie: Zombie): boolean => zombie.kind === 'Boss'
+
+// WEAR
+
+const WEAR_TOLERANCE = 1e-9
+
+export const wearAt = (kind: ZombieKind, hp: number, maxHp: number): number =>
+  Array.filter(
+    ZOMBIE_KINDS[kind].wear,
+    ({ below }) => hp <= maxHp * below + WEAR_TOLERANCE,
+  ).length
+
+export const wearOf = (zombie: Zombie): number =>
+  wearAt(zombie.kind, zombie.hp, zombie.maxHp)
 
 // STATE
 
@@ -272,6 +364,45 @@ export const isWalking = (zombie: Zombie): boolean =>
 
 export const isFusing = (zombie: Zombie): boolean =>
   ZombieState.isAnyOf(['Fusing'])(zombie.state)
+
+// ARRIVAL
+
+export const scaledHp = (hp: number, hpScale: number): number =>
+  Math.max(1, Math.round(hp * hpScale))
+
+export type Arrival = Readonly<{
+  id: number
+  kind: ZombieKind
+  at: Vector
+  speedRoll: number
+  speedScale: number
+  hp: number
+}>
+
+export const arrivingZombie = ({
+  id,
+  kind,
+  at,
+  speedRoll,
+  speedScale,
+  hp,
+}: Arrival): Zombie => {
+  const stats = ZOMBIE_KINDS[kind]
+  return {
+    id,
+    kind,
+    x: at.x,
+    y: at.y,
+    speed:
+      (stats.speedMin + (stats.speedMax - stats.speedMin) * speedRoll) *
+      speedScale,
+    hp,
+    maxHp: hp,
+    knockback: { x: 0, y: 0 },
+    hitRemainingMs: 0,
+    state: ZombieState.Walking(),
+  }
+}
 
 // STRIDE
 

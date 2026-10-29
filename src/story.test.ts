@@ -631,13 +631,16 @@ describe('particles and decals', () => {
     withZombies(playingModel, [
       modifyFields(zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 0), {
         hp: () => hp,
+        maxHp: () => Math.max(hp, ZOMBIE_MAX_HP),
       }),
     ])
+
+  const HEALTH_THAT_KEEPS_ITS_PARTS = 6
 
   test('a hit sprays blood along the bullet and the shot ejects a shell', () => {
     story(
       update,
-      given(shotZombieModel(ZOMBIE_MAX_HP)),
+      given(shotZombieModel(HEALTH_THAT_KEEPS_ITS_PARTS)),
       holdFire,
       tick(FRAME_MS),
       model(({ particles }) => {

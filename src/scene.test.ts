@@ -645,7 +645,7 @@ describe('Run stats', () => {
       score: () => 690,
       wallet: () => ({ balance: 40, earned: 615, shown: 40 }),
       stats: () => ({
-        kills: { Shambler: 41, Runner: 17, Tank: 2, Exploder: 9 },
+        kills: { Shambler: 41, Runner: 17, Tank: 2, Exploder: 9, Boss: 0 },
         wavesCleared: 3,
         shotsFired: 1240,
         shotsHit: 532,

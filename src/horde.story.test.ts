@@ -638,7 +638,7 @@ describe('spawn tables', () => {
   })
 
   test('the preview matches the kinds that come out of each door', () => {
-    const seed = 2468
+    const seed = 1357
     const wave = FINAL_WAVE
     const [rngState, spawns] = rollSpawns(seed, wave)
     const seen = new Map<number, Readonly<{ kind: ZombieKind; door: DoorId }>>()

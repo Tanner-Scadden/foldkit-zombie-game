@@ -3,6 +3,7 @@ import { Canvas } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { DOORS } from './arena'
+import { maybeBossDoor } from './boss'
 import { type Camera, worldToView } from './camera'
 import { FULL_TURN, placeSprite } from './drawing'
 import {
@@ -14,13 +15,14 @@ import {
 } from './font'
 import type { Message } from './main'
 import {
+  type Boss,
   type DoorId,
   type Model,
   Phase,
   type PlannedSpawn,
   type ZombieKind,
 } from './model'
-import { ZOMBIE_SPRITES, group } from './sprite'
+import { BOSS_ICON, ZOMBIE_SPRITES, group } from './sprite'
 import {
   type DoorCount,
   type KindCount,
@@ -174,17 +176,97 @@ const doorMarkerShapes =
     ]
   }
 
+// BOSS MARKER
+
+const BOSS_TAG = bakeText('BOSS', 'Defeat')
+const BOSS_MARKER_WIDTH = 30
+const BOSS_MARKER_HEIGHT = DOOR_MARKER_ROW_PX + DOOR_MARKER_PAD * 2
+const BOSS_MARKER_EDGE_COLOR = '#ff4a4f'
+const BOSS_MARKER_SIDE_STEP_PX = 32
+const BOSS_MARKER_ROW_STEP_PX = 6
+const BOSS_ICON_X = -9
+const BOSS_TAG_X = -3
+
+const bossMarkerOffset = (
+  door: DoorId,
+  counts: ReadonlyArray<DoorCount>,
+): Readonly<{ x: number; y: number }> => {
+  const { outward } = DOORS[door]
+  const rows = Option.match(
+    Array.findFirst(counts, count => count.door === door),
+    { onNone: () => 0, onSome: ({ kinds }) => kinds.length },
+  )
+  if (rows === 0) {
+    return { x: 0, y: 0 }
+  } else if (outward.x !== 0) {
+    return { x: -outward.x * BOSS_MARKER_SIDE_STEP_PX, y: 0 }
+  } else {
+    const step =
+      rows * DOOR_MARKER_ROW_PX + DOOR_MARKER_PAD * 2 + BOSS_MARKER_ROW_STEP_PX
+    return { x: 0, y: -outward.y * step }
+  }
+}
+
+const bossMarkerShapes = (
+  boss: Boss,
+  camera: Camera,
+  elapsedMs: number,
+  counts: ReadonlyArray<DoorCount>,
+): ReadonlyArray<Canvas.Shape> =>
+  Option.match(maybeBossDoor(boss), {
+    onNone: () => [],
+    onSome: door => {
+      const anchor = worldToView(camera, markerAnchor(door))
+      const offset = bossMarkerOffset(door, counts)
+      const left = -BOSS_MARKER_WIDTH / 2
+      const top = -BOSS_MARKER_HEIGHT / 2
+      return [
+        group({
+          translate: { x: anchor.x + offset.x, y: anchor.y + offset.y },
+          shapes: [
+            group({
+              opacity: Math.round(markerEdgeOpacity(elapsedMs) * 10) / 10,
+              shapes: [
+                Canvas.Rect({
+                  x: left - 1,
+                  y: top - 1,
+                  width: BOSS_MARKER_WIDTH + 2,
+                  height: BOSS_MARKER_HEIGHT + 2,
+                  fill: BOSS_MARKER_EDGE_COLOR,
+                }),
+              ],
+            }),
+            Canvas.Rect({
+              x: left,
+              y: top,
+              width: BOSS_MARKER_WIDTH,
+              height: BOSS_MARKER_HEIGHT,
+              fill: DOOR_MARKER_BACK_COLOR,
+            }),
+            placeSprite(BOSS_ICON_X, 0, BOSS_ICON),
+            placeBaked(BOSS_TAG, { x: BOSS_TAG_X, y: -2, align: 'Left' }),
+          ],
+        }),
+      ]
+    },
+  })
+
 export const wavePreviewShapes = (
   model: Model,
   camera: Camera,
 ): ReadonlyArray<Canvas.Shape> =>
   Phase.match(model.phase, {
     Ready: () => [],
-    Preparation: ({ wave, spawns }) =>
-      Array.flatMap(
-        doorCounts(spawns),
-        doorMarkerShapes(camera, model.elapsedMs, debutKinds(wave)),
-      ),
+    Preparation: ({ wave, spawns }) => {
+      const counts = doorCounts(spawns)
+      return [
+        ...Array.flatMap(
+          counts,
+          doorMarkerShapes(camera, model.elapsedMs, debutKinds(wave)),
+        ),
+        ...bossMarkerShapes(model.boss, camera, model.elapsedMs, counts),
+      ]
+    },
     Wave: () => [],
     Paused: () => [],
     Victory: () => [],
@@ -199,9 +281,17 @@ const kindLabel = ({ kind, count }: KindCount): string =>
 const doorPreviewLabel = ({ door, kinds }: DoorCount): string =>
   `${door} door: ${Array.join(Array.map(kinds, kindLabel), ', ')}`
 
+const bossLabel = (boss: Boss): string =>
+  Option.match(maybeBossDoor(boss), {
+    onNone: () => '',
+    onSome: door =>
+      ` Boss: ${ZOMBIE_KINDS.Boss.name} comes through the ${door} door late in the wave.`,
+  })
+
 const previewLabel = (
   wave: number,
   spawns: ReadonlyArray<PlannedSpawn>,
+  boss: Boss,
 ): string => {
   const debuts = Array.map(debutKinds(wave), kind => ZOMBIE_KINDS[kind].name)
   const debutText = Array.isReadonlyArrayEmpty(debuts)
@@ -211,11 +301,12 @@ const previewLabel = (
     endlessDepth(wave) > 0
       ? ` Zombies have ${Math.round((hpScaleFor(wave) - 1) * 100)} percent more health.`
       : ''
-  return `Coming in wave ${wave}. ${Array.join(Array.map(doorCounts(spawns), doorPreviewLabel), '. ')}.${debutText}${healthText}`
+  return `Coming in wave ${wave}. ${Array.join(Array.map(doorCounts(spawns), doorPreviewLabel), '. ')}.${debutText}${healthText}${bossLabel(boss)}`
 }
 
 export const wavePreviewView = (
   wave: number,
   spawns: ReadonlyArray<PlannedSpawn>,
+  boss: Boss,
   h: HtmlBuilder<Message>,
-): Html => h.p([h.Class('sr-only')], [previewLabel(wave, spawns)])
+): Html => h.p([h.Class('sr-only')], [previewLabel(wave, spawns, boss)])
