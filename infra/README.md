@@ -2,16 +2,19 @@
 
 The Cloudflare side of Munch Manor, declared with [Alchemy](https://alchemy.run/). It has its own `package.json` because Alchemy needs a newer Effect (4.0.7) than the game, which Foldkit pins to 4.0.0. Versions are pinned exactly, since Alchemy v2 is still in beta.
 
-| File               | What it holds                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------- |
-| `alchemy.run.ts`   | The game as a `Cloudflare.Website.Foldkit` Worker, the analytics API Worker and its D1, and the comment |
-| `github.ts`        | The narrow CI token and the two GitHub Actions secrets it is written to                                 |
-| `worker/api.ts`    | The analytics `HttpApi`: `POST /api/runs` and `GET /api/health`, its errors, and the handlers           |
-| `worker/rules.ts`  | The pure rules: the size cap, the rate limit decision, the daily address hash input, and the D1 row     |
-| `worker/main.ts`   | The Worker entry: Cloudflare bindings turned into the handlers' services                                |
-| `worker/*.test.ts` | `bun test` for the rules and the handler, over in-memory SQLite with the real migration                 |
-| `migrations/`      | The analytics D1 migrations, applied in order on deploy                                                 |
-| `oneEffect.ts`     | The `bun test` preload that loads the shared `src/analytics.ts` against infra's Effect                  |
+| File                  | What it holds                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------- |
+| `alchemy.run.ts`      | The game as a `Cloudflare.Website.Foldkit` Worker, the analytics API Worker and its D1, and the comment |
+| `github.ts`           | The narrow CI token and the two GitHub Actions secrets it is written to                                 |
+| `worker/api.ts`       | The analytics `HttpApi`: `POST /api/runs` and `GET /api/health`, its errors, and the handlers           |
+| `worker/rules.ts`     | The pure rules: the size cap, the rate limit decision, the daily address hash input, and the D1 row     |
+| `worker/main.ts`      | The Worker entry: `/sync` paths to sync, the rest to analytics, with the bindings as services           |
+| `worker/sync.ts`      | The sync Durable Objects (`SyncScope`, `SyncDirectory`) and the `/sync` routes                          |
+| `worker/syncCore.ts`  | The sync logic they run, kept apart so `bun test` covers it without the Workers runtime                 |
+| `worker/workerd.d.ts` | Types for the Workers globals the sync object uses (`WebSocketPair`, auto-responses)                    |
+| `worker/*.test.ts`    | `bun test` for the rules and the handler, over in-memory SQLite with the real migration                 |
+| `migrations/`         | The analytics D1 migrations, applied in order on deploy                                                 |
+| `oneEffect.ts`        | The `bun test` preload that loads the shared game files and the sync engine against infra's Effect      |
 
 ## Stages
 
@@ -41,6 +44,23 @@ bun run typecheck
 ```
 
 Alchemy skips the build when no input changed, and `alchemy drift` does not notice a Worker that something else overwrote. Use `--force` to put the declared version back.
+
+## Sync
+
+The same API Worker serves `/sync` for the sync engine (see "What phase 4 built" in `PLATFORM.md` and `packages/sync-engine/README.md`). Keeping it in one Worker gives the game one API origin and one deploy.
+
+| Path                         | Goes to                                        | What it does                                                        |
+| ---------------------------- | ---------------------------------------------- | ------------------------------------------------------------------- |
+| `POST /sync/challenge`       | the Worker                                     | A stateless, MACed nonce for the device to sign                     |
+| `POST /sync/session`         | `SyncDirectory`                                | Trades a signed nonce for a session token, registering a new device |
+| `POST /sync/link`            | `SyncDirectory`                                | A link code for the token's player                                  |
+| `POST /sync/link/redeem`     | `SyncDirectory`, then the player's `SyncScope` | Moves the device to the code's player and records the device count  |
+| `GET /sync/socket?scope=`    | the scope's `SyncScope`                        | The WebSocket, accepted with the Hibernation API                    |
+| `POST /sync/exchange?scope=` | the scope's `SyncScope`                        | The HTTP fallback: a batch of protocol messages in, the replies out |
+
+- **Durable Objects.** `SyncScope` (one per `player:<id>`, by name) and `SyncDirectory` (one, named `directory`) are SQLite backed, so they run on the free plan, and declared as `Cloudflare.DurableObject` bindings on the API Worker; Alchemy adds them as new SQLite classes. Their SQL goes through `@effect/sql-sqlite-do` 4.0.7. They are plain classes with `fetch` and `webSocketMessage`, so the bundle never imports `cloudflare:workers`.
+- **Secrets and limits.** `SyncSecret` (an `Alchemy.Random` per stage) signs tokens and nonces. `SYNC_BY_ADDRESS` (namespace 7103) allows 30 identity requests a minute per address. Sockets and exchanges need a valid token in their Hello.
+- **The shared files.** The Worker bundles `src/playerScope.ts`, `src/playerData.ts`, and the engine against infra's Effect, the same way as `src/analytics.ts`.
 
 ## Analytics
 
