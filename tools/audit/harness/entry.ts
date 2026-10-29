@@ -1140,6 +1140,7 @@ const application = Runtime.makeApplication({
   subscriptions,
   managedResources,
   container: document.getElementById('root'),
+  devTools: params.has('nodev') ? false : undefined,
 })
 
 Runtime.run(application)

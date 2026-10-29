@@ -11,6 +11,7 @@
 // miss.
 //   BASE=http://localhost:4174/ bun taps.ts
 //   PORTRAIT=1 BASE=http://localhost:4174/ bun taps.ts
+// VIEWPORTS picks phones by name, such as `VIEWPORTS=u390,u360`.
 // ONLY picks scenes, such as `ONLY=home,munchopedia`.
 import type { Page } from 'playwright-core'
 
@@ -32,7 +33,11 @@ const PORTRAIT: ReadonlyArray<Viewport> = [
   { name: 'u360', width: 360, height: 800 },
 ]
 
-const VIEWPORTS = process.env.PORTRAIT === undefined ? LANDSCAPE : PORTRAIT
+const PICKED = process.env.VIEWPORTS?.split(',')
+
+const VIEWPORTS = (
+  process.env.PORTRAIT === undefined ? LANDSCAPE : PORTRAIT
+).filter(viewport => PICKED === undefined || PICKED.includes(viewport.name))
 
 type Scene = Readonly<{
   name: string
@@ -111,7 +116,7 @@ const TAP_LEAVES =
 const isTapMessage = (tag: string): boolean => TAP_LEAVES.test(tag)
 
 const openScene = async (page: Page, scene: Scene) => {
-  await page.goto(`${BASE}?${scene.query}&device=touch`)
+  await page.goto(`${BASE}?${scene.query}&device=touch&nodev`)
   await wait(SETTLE_MS)
   if (scene.openWith !== undefined) {
     const box = await page.locator(scene.openWith).boundingBox()

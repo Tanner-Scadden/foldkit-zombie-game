@@ -120,7 +120,7 @@ for (const viewport of VIEWPORTS) {
     }
     const page = await openPage(browser, viewport)
     const separator = scene.query === '' ? '' : '&'
-    await page.goto(`${BASE}?${scene.query}${separator}device=touch`)
+    await page.goto(`${BASE}?${scene.query}${separator}device=touch&nodev`)
     await wait(1200)
     if (scene.act) {
       await scene.act(page)
