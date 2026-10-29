@@ -321,6 +321,28 @@ const savedBests = (bests: PlayerBests): SavedBests => ({
   },
 })
 
+// NOTE: every Model field saveOf reads. Most Messages, every frame among
+// them, leave all of these as the same references, so the save needs no
+// rebuilding or comparing. Keep this in step with saveOf.
+export const SAVED_FIELDS = [
+  'lessons',
+  'trapHint',
+  'introducedKinds',
+  'homeScreenTip',
+  'soundSetting',
+  'musicSetting',
+  'shakeSetting',
+  'shareStats',
+  'appearance',
+  'difficulty',
+  'difficultyCard',
+  'bests',
+  'home',
+] as const satisfies ReadonlyArray<keyof Model>
+
+export const hasSaveFieldsChanged = (before: Model, after: Model): boolean =>
+  Array.some(SAVED_FIELDS, field => before[field] !== after[field])
+
 export const saveOf = (model: Model): PlayerSave => ({
   version: SAVE_VERSION,
   onboarding: {

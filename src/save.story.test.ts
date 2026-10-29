@@ -23,6 +23,7 @@ import {
   type Model,
   Phase,
   type PlannedSpawn,
+  RunTally,
   TrapHint,
   freshLessons,
   initialModel,
@@ -33,9 +34,11 @@ import { isPracticeGateHeld, shownHints } from './onboarding'
 import { PlayerChange } from './playerSync'
 import {
   type PlayerSave,
+  SAVED_FIELDS,
   SAVE_KEY,
   decodeSave,
   encodeSave,
+  hasSaveFieldsChanged,
   noSavedBests,
   readLegacySave,
   restoreSave,
@@ -554,6 +557,47 @@ describe('writing the save', () => {
 
   test('a frame that changes nothing saved writes nothing', () => {
     story(update, given(read), tick(50), Command.expectNone())
+  })
+
+  test('a frame mid-wave leaves every saved field as it was, so the save is not rebuilt', () => {
+    const fighting = modifyFields(restoreSave(read, learnedSave), {
+      phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [farSpawn] }),
+    })
+    story(
+      update,
+      given(fighting),
+      message(Message.PressedKey({ code: 'KeyD' })),
+      tick(16),
+      tick(16),
+      Command.expectNone(),
+      model(current => {
+        expect(current.player.x).not.toBe(fighting.player.x)
+        expect(
+          SAVED_FIELDS.filter(field => fighting[field] !== current[field]),
+        ).toEqual([])
+        expect(hasSaveFieldsChanged(fighting, current)).toBe(false)
+      }),
+    )
+  })
+
+  test('the saved fields are all the save reads', () => {
+    const played = modifyFields(restoreSave(read, learnedSave), {
+      phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [farSpawn] }),
+      wallet: wallet => modifyFields(wallet, { balance: () => 300 }),
+      stats: stats =>
+        modifyFields(stats, {
+          kills: () => modifyFields(noKills, { Shambler: () => 4 }),
+        }),
+      runTally: () => RunTally.Counted({ kills: noKills }),
+      panel: () => 'Settings',
+      orientation: () => 'Portrait',
+    })
+    const savedFromInitial = Object.fromEntries(
+      SAVED_FIELDS.map(field => [field, initialModel[field]]),
+    )
+    expect(saveOf({ ...played, ...savedFromInitial })).toEqual(
+      saveOf(initialModel),
+    )
   })
 
   test('nothing is written before the save has been read', () => {

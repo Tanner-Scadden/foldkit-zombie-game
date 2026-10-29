@@ -20,7 +20,13 @@ import {
   type TutorialReset,
 } from '../model'
 import { LinkFlow, changesBetween } from '../playerSync'
-import { type PlayerSave, isSameSave, restoreSave, saveOf } from '../save'
+import {
+  type PlayerSave,
+  hasSaveFieldsChanged,
+  isSameSave,
+  restoreSave,
+  saveOf,
+} from '../save'
 import type { UpdateReturn, UpdateStep } from './step'
 
 // LOADING
@@ -77,7 +83,8 @@ export const writeSaveFrom =
       before.saveStatus === 'Unread' ||
       stepModel.saveStatus === 'Unread' ||
       message._tag === 'UpdatedSyncedSave' ||
-      message._tag === 'CompletedReloadSyncedSave'
+      message._tag === 'CompletedReloadSyncedSave' ||
+      !hasSaveFieldsChanged(before, stepModel)
     ) {
       return { model: stepModel }
     }

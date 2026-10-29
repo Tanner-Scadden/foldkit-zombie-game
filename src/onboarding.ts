@@ -71,23 +71,38 @@ const practise = (before: Model, after: Model): Practice => ({
   aimedShots: after.practice.aimedShots + (hasFiredWhileAiming(after) ? 1 : 0),
 })
 
+// NOTE: the lessons keep their reference on a frame that learns nothing, so
+// the save check sees at a glance that nothing saved changed.
+const learnFromPractice = (
+  lessons: Lessons,
+  practice: Practice,
+  after: Model,
+): Lessons => {
+  const isShownLongEnough = after.elapsedMs >= LESSON_MIN_SHOWN_MS
+  const move = learnWhen(
+    isShownLongEnough && practice.movedPx >= MOVE_LESSON_PX,
+    after.elapsedMs,
+  )(lessons.move)
+  const fire = learnWhen(
+    isShownLongEnough && practice.aimedShots >= AIM_LESSON_SHOTS,
+    after.elapsedMs,
+  )(lessons.fire)
+  const pickup = learnWhen(
+    hasGrabbedPickup(after.frameEvents),
+    after.elapsedMs,
+  )(lessons.pickup)
+  return move === lessons.move &&
+    fire === lessons.fire &&
+    pickup === lessons.pickup
+    ? lessons
+    : { ...lessons, move, fire, pickup }
+}
+
 export const learnFromFrame = (before: Model, after: Model): Model => {
   const practice = practise(before, after)
-  const isShownLongEnough = after.elapsedMs >= LESSON_MIN_SHOWN_MS
   return modifyFields(after, {
     practice: () => practice,
-    lessons: lessons =>
-      modifyFields(lessons, {
-        move: learnWhen(
-          isShownLongEnough && practice.movedPx >= MOVE_LESSON_PX,
-          after.elapsedMs,
-        ),
-        fire: learnWhen(
-          isShownLongEnough && practice.aimedShots >= AIM_LESSON_SHOTS,
-          after.elapsedMs,
-        ),
-        pickup: learnWhen(hasGrabbedPickup(after.frameEvents), after.elapsedMs),
-      }),
+    lessons: lessons => learnFromPractice(lessons, practice, after),
   })
 }
 
