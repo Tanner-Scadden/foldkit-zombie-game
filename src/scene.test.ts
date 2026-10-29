@@ -27,6 +27,7 @@ import { Arsenal, type Model, Phase, Reload, initialModel } from './model'
 import { DEBUT_CARD_MIN_MS } from './onboarding'
 import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
+import { pause } from './waves'
 import { maxRounds } from './weapons'
 
 const measureSurface = Mount.resolve(
@@ -40,30 +41,45 @@ const PLAY_AGAIN =
 const KEEP_GOING =
   'Press K or choose Keep going to carry on into endless from wave 9 with your money, guns, and traps.'
 
+const BACK_HOME = 'Press H or choose Menu to go back to the main menu.'
+
 const FEEDBACK = 'Tell whoever sent you this what you think!'
-const READY_STATUS = `${GAME_TITLE}, an early alpha. ${PLAY_AGAIN} Press C or choose Character to change how you look.`
+const READY_STATUS = `${GAME_TITLE}, an early alpha. Main menu. Press Enter or choose Play for the 8 wave campaign, or press E or choose Endless to fight until you fall. Press C or choose Character to change how you look. How to play and Settings are there too. Arrow keys move between the buttons.`
+
+const PAUSED_STATUS =
+  'Paused during wave 3 of 8. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.'
+
+const playButton = role('button', {
+  name: 'Play the campaign: 8 waves, then victory',
+})
+
+const pausedRound: Model = pause(
+  modifyFields(asVeteran(initialModel), {
+    phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),
+  }),
+)
 
 const PREPARING_WAVE_ONE =
   'Get ready for wave 1 of 8. Press Enter, or use the Start wave button, to start it now.'
 
 describe('Ready screen', () => {
-  test('invites the player to start and starts on a tap', () => {
+  test('waits for a button: a tap beside the buttons starts nothing, and Play starts the campaign', () => {
     scene(
       { update, view },
       given(asVeteran(initialModel)),
       measureSurface,
       expect(role('heading', { name: GAME_TITLE })).toExist(),
       expect(role('status')).toHaveText(READY_STATUS),
-      expect(selector('[data-stick="move"]')).toBeAbsent(),
       pointerDown(role('application', { name: 'Game surface' }), {
         pointerType: 'touch',
         pointerId: 7,
         clientX: 120,
         clientY: 300,
       }),
+      expect(role('status')).toHaveText(READY_STATUS),
+      expect(selector('[data-stick="move"]')).toBeAbsent(),
+      click(playButton),
       expect(role('status')).toHaveText(PREPARING_WAVE_ONE),
-      expect(selector('[data-stick="move"]')).toExist(),
-      expect(selector('[data-stick="aim"]')).toBeAbsent(),
     )
   })
 })
@@ -73,12 +89,12 @@ describe('Mute button', () => {
     const muteButton = role('button', { name: 'Mute sound' })
     scene(
       { update, view },
-      given(initialModel),
+      given(pausedRound),
       measureSurface,
       expect(muteButton).toHaveAttr('aria-pressed', 'false'),
       click(muteButton),
       expect(muteButton).toHaveAttr('aria-pressed', 'true'),
-      expect(role('status')).toHaveText(READY_STATUS),
+      expect(role('status')).toHaveText(PAUSED_STATUS),
       click(muteButton),
       expect(muteButton).toHaveAttr('aria-pressed', 'false'),
     )
@@ -91,14 +107,14 @@ describe('Music button', () => {
     const muteButton = role('button', { name: 'Mute sound' })
     scene(
       { update, view },
-      given(initialModel),
+      given(pausedRound),
       measureSurface,
       expect(musicButton).toHaveAttr('aria-pressed', 'true'),
       expect(musicButton).toHaveAttr('aria-keyshortcuts', 'N'),
       click(musicButton),
       expect(musicButton).toHaveAttr('aria-pressed', 'false'),
       expect(muteButton).toHaveAttr('aria-pressed', 'false'),
-      expect(role('status')).toHaveText(READY_STATUS),
+      expect(role('status')).toHaveText(PAUSED_STATUS),
       click(musicButton),
       expect(musicButton).toHaveAttr('aria-pressed', 'true'),
     )
@@ -113,12 +129,7 @@ describe('Start wave button', () => {
       given(asVeteran(initialModel)),
       measureSurface,
       expect(startWaveButton).toBeAbsent(),
-      pointerDown(role('application', { name: 'Game surface' }), {
-        pointerType: 'mouse',
-        pointerId: 1,
-        clientX: 600,
-        clientY: 200,
-      }),
+      click(playButton),
       expect(role('status')).toHaveText(PREPARING_WAVE_ONE),
       expect(role('timer')).toHaveText('6 seconds until wave 1.'),
       expect(startWaveButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
@@ -604,7 +615,7 @@ describe('Turning the phone', () => {
       ),
       expect(sideways).toBeAbsent(),
       expect(role('status')).toHaveText(
-        'Paused during wave 3 of 8. Tap, click, or press Escape to resume.',
+        'Paused during wave 3 of 8. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.',
       ),
       pointerDown(role('application', { name: 'Game surface' }), {
         pointerType: 'touch',
@@ -662,7 +673,7 @@ describe('Run stats', () => {
       given(finished(Phase.GameOver({ wave: 4 }))),
       measureSurface,
       expect(role('status')).toHaveText(
-        `Game over. Eaten on wave 4. ${STATS} ${PLAY_AGAIN} ${FEEDBACK}`,
+        `Game over. Eaten on wave 4. ${STATS} ${PLAY_AGAIN} ${BACK_HOME} ${FEEDBACK}`,
       ),
     )
   })
@@ -673,7 +684,7 @@ describe('Run stats', () => {
       given(finished(Phase.Victory())),
       measureSurface,
       expect(role('status')).toHaveText(
-        `Victory. The house is yours. For now. ${STATS} ${KEEP_GOING} ${PLAY_AGAIN} ${FEEDBACK}`,
+        `Victory. The house is yours. For now. ${STATS} ${KEEP_GOING} ${PLAY_AGAIN} ${BACK_HOME} ${FEEDBACK}`,
       ),
     )
   })
@@ -710,7 +721,7 @@ describe('New zombie card', () => {
       { update, view },
       given(modifyFields(initialModel, { lastDevice: () => 'Touch' })),
       measureSurface,
-      click(role('button', { name: 'Campaign: 8 waves, then victory' })),
+      click(playButton),
       expect(card).toBeAbsent(),
       expect(selector('[data-ghost="Move"]')).toExist(),
       expect(selector('[data-ghost="Aim"]')).toExist(),
@@ -741,7 +752,7 @@ describe('New zombie card', () => {
         modifyFields(asVeteran(initialModel), { introducedKinds: () => [] }),
       ),
       measureSurface,
-      click(role('button', { name: 'Campaign: 8 waves, then victory' })),
+      click(playButton),
       click(role('button', { name: 'Start wave 1 now' })),
       expect(continueButton).toBeAbsent(),
       ...Array.makeBy(CARD_TICKS, () =>

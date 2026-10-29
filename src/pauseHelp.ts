@@ -62,6 +62,7 @@ const KEYBOARD_HELP: DeviceHelp = {
         control('G', 'Next trap'),
         control('Enter', 'Start the wave'),
         control('Esc', 'Pause or resume'),
+        control('H', 'Back to the menu'),
         control('M', 'Mute'),
         control('N', 'Music on or off'),
       ],
@@ -188,6 +189,26 @@ const tipView = ({ topic, text }: Tip, h: HtmlBuilder<Message>): Html =>
     [h.strong([h.Class('pause-help-topic')], [`${topic}:`]), ` ${text}`],
   )
 
+export const helpLabel = (device: InputDevice): string =>
+  DEVICE_HELP[device].label
+
+export const howToPlayView = (
+  device: InputDevice,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> => {
+  const help = DEVICE_HELP[device]
+  return [
+    h.div(
+      [h.Class('pause-help-groups')],
+      Array.map(help.groups, group => controlGroupView(help, group, h)),
+    ),
+    h.ul(
+      [h.Class('pause-help-tips'), h.AriaLabel('Tips')],
+      Array.map(TIPS, tip => tipView(tip, h)),
+    ),
+  ]
+}
+
 const isPauseHelpUp = (model: Model): boolean =>
   Phase.isAnyOf(['Paused'])(model.phase) && !isSideways(model)
 
@@ -219,14 +240,7 @@ export const pauseHelpView = (
               h.span([h.Class('sr-only')], [` with ${help.label}`]),
             ],
           ),
-          h.div(
-            [h.Class('pause-help-groups')],
-            Array.map(help.groups, group => controlGroupView(help, group, h)),
-          ),
-          h.ul(
-            [h.Class('pause-help-tips'), h.AriaLabel('Tips')],
-            Array.map(TIPS, tip => tipView(tip, h)),
-          ),
+          ...howToPlayView(model.lastDevice, h),
         ],
       ),
     ],

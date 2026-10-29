@@ -217,8 +217,7 @@ describe('audio unlock', () => {
       model(({ audio }) => {
         expect(audio).toEqual(AudioState.Ready())
       }),
-      Command.expectExact(PlaySound({ sound: 'Start', variation: 0 })),
-      resolvePlayed('Start'),
+      Command.expectNone(),
     )
   })
 

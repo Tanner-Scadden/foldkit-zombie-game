@@ -39,7 +39,7 @@ const keyboardHelp = role('region', {
 })
 const touchHelp = role('region', { name: 'How to play with touch' })
 const PAUSED_STATUS =
-  'Paused during wave 3 of 8. Tap, click, or press Escape to resume.'
+  'Paused during wave 3 of 8. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.'
 const FIGHTING_STATUS = 'Fighting wave 3 of 8.'
 
 const row = (inputs: string, action: string) =>
@@ -71,13 +71,14 @@ describe('Pause screen controls', () => {
         expect(row('G', 'Next trap')).toExist(),
         expect(row('Enter', 'Start the wave')).toExist(),
         expect(row('Esc', 'Pause or resume')).toExist(),
+        expect(row('H', 'Back to the menu')).toExist(),
         expect(row('M', 'Mute')).toExist(),
         expect(row('N', 'Music on or off')).toExist(),
         expect(role('rowheader', { name: 'T' })).toExist(),
-        expectAll(all.role('row')).toHaveCount(6),
+        expectAll(all.role('row')).toHaveCount(7),
       ),
-      expectAll(all.selector('.pause-help-inputs')).toHaveCount(11),
-      expectAll(all.selector('.pause-help-inputs kbd')).toHaveCount(11),
+      expectAll(all.selector('.pause-help-inputs')).toHaveCount(12),
+      expectAll(all.selector('.pause-help-inputs kbd')).toHaveCount(12),
       inside(
         role('list', { name: 'Tips' }),
         expect(

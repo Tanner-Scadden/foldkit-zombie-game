@@ -56,9 +56,29 @@ const buildId = (): Plugin => {
   }
 }
 
+const BUILT_STYLESHEET =
+  /<link rel="stylesheet" crossorigin href="([^"]+\.css)">/
+
+// NOTE: the built stylesheet would block the first paint, splash included,
+// until it downloads. Preloading it instead lets the inline splash in
+// index.html paint at once. The game waits for it before the splash goes:
+// see LoadStyles in src/main.ts.
+const loadStylesBehindSplash = (): Plugin => ({
+  name: 'load-styles-behind-splash',
+  apply: 'build',
+  transformIndexHtml: {
+    order: 'post',
+    handler: html =>
+      html.replace(
+        BUILT_STYLESHEET,
+        `<link id="game-styles" rel="preload" as="style" crossorigin href="$1" onload="this.rel='stylesheet'">`,
+      ),
+  },
+})
+
 export default defineConfig({
   base: './',
-  plugins: [tailwindcss(), foldkit(), buildId()],
+  plugins: [tailwindcss(), foldkit(), buildId(), loadStylesBehindSplash()],
   optimizeDeps: {
     entries: ['src/entry.ts'],
   },

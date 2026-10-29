@@ -1514,14 +1514,14 @@ describe('touch sticks', () => {
     )
   })
 
-  test('a tap on the Ready screen starts the run and grabs a stick', () => {
+  test('a tap on the home menu, beside its buttons, starts nothing and grabs no stick', () => {
     story(
       update,
       given(readyModel),
       touchDown(LEFT_THUMB, 100, 300),
       model(({ phase, input }) => {
-        expect(Phase.guards.Preparation(phase)).toBe(true)
-        expect(Stick.guards.Active(input.moveStick)).toBe(true)
+        expect(Phase.guards.Ready(phase)).toBe(true)
+        expect(Stick.guards.Idle(input.moveStick)).toBe(true)
       }),
     )
   })

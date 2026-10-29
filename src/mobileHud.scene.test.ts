@@ -159,7 +159,7 @@ describe('the corner', () => {
       expect(fullscreenButton).toBeAbsent(),
       click(pauseButton),
       expect(role('status')).toHaveText(
-        'Paused during wave 3 of 8. Tap, click, or press Escape to resume.',
+        'Paused during wave 3 of 8. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.',
       ),
       expect(pauseButton).toBeAbsent(),
     )
@@ -180,18 +180,29 @@ describe('the corner', () => {
       click(musicButton),
       expect(musicButton).toHaveAttr('aria-pressed', 'false'),
       expect(role('status')).toHaveText(
-        'Paused during wave 3 of 8. Tap, click, or press Escape to resume.',
+        'Paused during wave 3 of 8. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.',
       ),
     )
   })
 
-  test('full screen shows on the title and the pause screen, never mid-wave', () => {
+  test('full screen shows in Settings and on the pause screen, never mid-wave', () => {
     const canFill = (base: Model): Model =>
       modifyFields(base, { screenFit: () => 'Fullscreen' })
     scene(
       { update, view },
       given(canFill(initialModel)),
       measureSurface,
+      expect(fullscreenButton).toBeAbsent(),
+      click(
+        role('button', {
+          name: 'Settings: sound, music, shake, and full screen',
+        }),
+      ),
+      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      Mount.resolve(
+        Dialog.AcquireResources,
+        Dialog.Message.SucceededAcquireResources(),
+      ),
       expect(fullscreenButton).toHaveAttr('aria-pressed', 'false'),
     )
     scene(
@@ -227,7 +238,9 @@ describe('the Add to Home Screen tip', () => {
       expect(homeScreenTip).toExist(),
       expect(dismissTip).toExist(),
       expect(fullscreenButton).toBeAbsent(),
-      click(role('button', { name: 'Campaign: 8 waves, then victory' })),
+      click(
+        role('button', { name: 'Play the campaign: 8 waves, then victory' }),
+      ),
       expect(homeScreenTip).toBeAbsent(),
     )
     scene(
@@ -343,15 +356,14 @@ describe('the title icons and the character picker', () => {
     ),
   ]
 
-  test('the audio icons toggle on the title and step aside for the picker', () => {
+  test('the title keeps its corner clear and the tip steps aside for the picker', () => {
     scene(
       { update, view },
       given(
         modifyFields(onTouch(initialModel), { screenFit: () => 'HomeScreen' }),
       ),
       measureSurface,
-      click(muteButton),
-      expect(muteButton).toHaveAttr('aria-pressed', 'true'),
+      expect(muteButton).toBeAbsent(),
       expect(homeScreenTip).toExist(),
       click(role('button', { name: 'Character: change how you look' })),
       ...showPicker,
@@ -362,20 +374,14 @@ describe('the title icons and the character picker', () => {
     )
   })
 
-  test('C still opens the picker with the icons up', () => {
+  test('C opens the picker from the title', () => {
     scene(
       { update, view },
-      given(
-        modifyFields(asVeteran(initialModel), {
-          screenFit: () => 'Fullscreen',
-        }),
-      ),
+      given(asVeteran(initialModel)),
       measureSurface,
-      expect(fullscreenButton).toExist(),
       Subscription.emit(Message.PressedKey({ code: 'KeyC' })),
       ...showPicker,
       expect(role('dialog', { name: 'Character' })).toExist(),
-      expect(fullscreenButton).toBeAbsent(),
     )
   })
 })

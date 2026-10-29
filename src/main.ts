@@ -42,17 +42,26 @@ import {
   TRAP_PLACE_TRAUMA,
 } from './constants'
 import {
+  homeButtonId,
+  isOnHome,
+  recordSessionBests,
+  returnHome,
+  steppedHomeFocus,
+} from './home'
+import {
   type PointerPress,
   type TrapChoice,
   isCharacterKey,
   isEndlessKey,
   isKeepGoingKey,
+  isMenuKey,
   isPauseKey,
   isReloadKey,
   isStartKey,
   isStartWaveKey,
   isSwapKey,
   isTrackingPointer,
+  maybeFocusStep,
   maybeTrapChoice,
   moveMouse,
   movePointer,
@@ -69,8 +78,13 @@ import {
   FullscreenSetting,
   GameEvent,
   GunSlot,
+  HomeButton,
   type Input,
   InputDevice,
+  LOAD_STEPS,
+  type LoadStep,
+  Loading,
+  type MenuPanel,
   Model,
   type Orientation,
   PageVisibility,
@@ -109,6 +123,13 @@ import {
   shopItemElementId,
 } from './shop'
 import { advanceGame, clampFrameDelta, refreshIntent } from './simulation'
+import {
+  awaitFirstFrame,
+  hideSplash,
+  loadFonts,
+  loadStyles,
+  showSplashProgress,
+} from './splash'
 import { tallyFrame } from './stats'
 import {
   TRAPS,
@@ -227,6 +248,22 @@ export const Message = defineMessageUnion({
   ClickedUpdateButton: {},
   CompletedReloadPage: {},
   FailedReloadPage: { reason: Schema.String },
+  ClickedHowToPlayButton: {},
+  ClickedSettingsButton: {},
+  ClickedMenuButton: {},
+  ClickedLeaveRunButton: {},
+  ClickedStayButton: {},
+  GotPanelDialogMessage: { message: Dialog.Message },
+  ClickedShakeButton: {},
+  FocusedHomeButton: { button: HomeButton },
+  BlurredHomeButton: {},
+  CompletedFocusHomeButton: {},
+  CompletedLoadStyles: {},
+  CompletedLoadFonts: {},
+  FailedLoadFonts: { reason: Schema.String },
+  CompletedAwaitFirstFrame: {},
+  CompletedShowLoadProgress: {},
+  CompletedHideSplash: {},
 })
 export type Message = typeof Message.Type
 
@@ -455,11 +492,81 @@ export const ReloadPage = Command.define('ReloadPage', {
   ),
 })
 
+export const FocusHomeButton = Command.define('FocusHomeButton', {
+  args: { button: HomeButton },
+  messages: [Message.CompletedFocusHomeButton],
+  execute: ({ button }) =>
+    Dom.focus(`#${homeButtonId(button)}`).pipe(
+      Effect.ignore,
+      Effect.as(Message.CompletedFocusHomeButton()),
+    ),
+})
+
+// SPLASH
+
+export const LoadStyles = Command.define('LoadStyles', {
+  messages: [Message.CompletedLoadStyles],
+  execute: pipe(
+    loadStyles,
+    Effect.ignore,
+    Effect.as(Message.CompletedLoadStyles()),
+  ),
+})
+
+export const LoadFonts = Command.define('LoadFonts', {
+  messages: [Message.CompletedLoadFonts, Message.FailedLoadFonts],
+  execute: pipe(
+    loadFonts,
+    Effect.as(Message.CompletedLoadFonts()),
+    Effect.catch(error =>
+      Effect.succeed(Message.FailedLoadFonts({ reason: String(error) })),
+    ),
+  ),
+})
+
+export const AwaitFirstFrame = Command.define('AwaitFirstFrame', {
+  messages: [Message.CompletedAwaitFirstFrame],
+  execute: Effect.as(awaitFirstFrame, Message.CompletedAwaitFirstFrame()),
+})
+
+export const ShowLoadProgress = Command.define('ShowLoadProgress', {
+  args: { loaded: Schema.Number, total: Schema.Number },
+  messages: [Message.CompletedShowLoadProgress],
+  execute: ({ loaded, total }) =>
+    pipe(
+      showSplashProgress(loaded, total),
+      Effect.ignore,
+      Effect.as(Message.CompletedShowLoadProgress()),
+    ),
+})
+
+export const HideSplash = Command.define('HideSplash', {
+  messages: [Message.CompletedHideSplash],
+  execute: pipe(
+    hideSplash,
+    Effect.ignore,
+    Effect.as(Message.CompletedHideSplash()),
+  ),
+})
+
 // INIT
 
+// NOTE: every LoadStep must finish before the splash goes. A step that
+// fails still counts as finished, so a missing font never holds the game.
+// New assets, such as images for Canvas.Image, join LOAD_STEPS with a
+// Command that loads them.
 export const init: Runtime.ApplicationInit<Model, Message> = () => ({
-  model: initialModel,
-  commands: [GenerateSeed(), DetectInputDevice(), DetectScreenFit()],
+  model: modifyFields(initialModel, {
+    loading: () => Loading.Loading({ pending: LOAD_STEPS }),
+  }),
+  commands: [
+    GenerateSeed(),
+    DetectInputDevice(),
+    DetectScreenFit(),
+    LoadStyles(),
+    LoadFonts(),
+    AwaitFirstFrame(),
+  ],
 })
 
 // UPDATE
@@ -507,10 +614,8 @@ const canStart = (model: Model): boolean =>
 const startWhenAllowed = (model: Model, mode: RunMode): Model =>
   canStart(model) ? startOrResume(model, mode) : model
 
-const startFromPointer = (model: Model): Model =>
-  Phase.isAnyOf(['Victory'])(model.phase)
-    ? model
-    : startWhenAllowed(model, RunMode.Campaign())
+const resumeFromPointer = (model: Model): Model =>
+  isPaused(model.phase) ? startWhenAllowed(model, model.mode) : model
 
 const keepGoingWhenAllowed = (model: Model): Model =>
   canStart(model) ? keepGoing(model) : model
@@ -908,6 +1013,155 @@ const openCharacterPicker: UpdateStep = stepModel =>
 const characterFromKey: (code: string) => UpdateStep = code => stepModel =>
   isCharacterKey(code) ? openCharacterPicker(stepModel) : { model: stepModel }
 
+// MENU
+
+const writePanelDialog = (model: Model, nextPanelDialog: Dialog.Model): Model =>
+  modifyFields(model, { panelDialog: () => nextPanelDialog })
+
+const foldPanelDialogOutMessage = Dialog.OutMessage.match<UpdateStep>({
+  Opened: () => stepModel => ({ model: stepModel }),
+  Closed: () => stepModel => ({ model: stepModel }),
+})
+
+const foldPanelDialog = Update.foldChild({
+  update: Dialog.update,
+  read: (model: Model) => Option.some(model.panelDialog),
+  write: writePanelDialog,
+  toParentMessage: message => Message.GotPanelDialogMessage({ message }),
+  foldOutMessage: foldPanelDialogOutMessage,
+})
+
+const foldPanelDialogOpen = Update.foldChildStep({
+  update: Dialog.open,
+  read: (model: Model) => Option.some(model.panelDialog),
+  write: writePanelDialog,
+  toParentMessage: message => Message.GotPanelDialogMessage({ message }),
+  foldOutMessage: foldPanelDialogOutMessage,
+})
+
+const foldPanelDialogClose = Update.foldChildStep({
+  update: Dialog.close,
+  read: (model: Model) => Option.some(model.panelDialog),
+  write: writePanelDialog,
+  toParentMessage: message => Message.GotPanelDialogMessage({ message }),
+  foldOutMessage: foldPanelDialogOutMessage,
+})
+
+const isPanelAllowed = (model: Model, panel: MenuPanel): boolean => {
+  if (
+    isSideways(model) ||
+    model.panelDialog.isOpen ||
+    model.character.dialog.isOpen
+  ) {
+    return false
+  } else if (panel === 'LeaveRun') {
+    return isPaused(model.phase)
+  } else {
+    return isOnHome(model.phase)
+  }
+}
+
+const openPanel =
+  (panel: MenuPanel): UpdateStep =>
+  stepModel =>
+    isPanelAllowed(stepModel, panel)
+      ? foldPanelDialogOpen(
+          withInput(
+            modifyFields(stepModel, { panel: () => panel }),
+            releaseAll,
+          ),
+        )
+      : { model: stepModel }
+
+const closePanel: UpdateStep = stepModel =>
+  stepModel.panelDialog.isOpen
+    ? foldPanelDialogClose(stepModel)
+    : { model: stepModel }
+
+const goHome: UpdateStep = stepModel => ({
+  model: returnHome(withInput(stepModel, releaseAll)),
+})
+
+const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
+
+const leaveFromMenu: UpdateStep = stepModel => {
+  if (isPaused(stepModel.phase)) {
+    return openPanel('LeaveRun')(stepModel)
+  } else if (
+    isEndScreen(stepModel.phase) &&
+    isPastRestartGrace(stepModel) &&
+    !isSideways(stepModel)
+  ) {
+    return goHome(stepModel)
+  } else {
+    return { model: stepModel }
+  }
+}
+
+const leaveRun: UpdateStep = stepModel =>
+  isPaused(stepModel.phase) && stepModel.panel === 'LeaveRun'
+    ? Update.combine(stepModel, [closePanel, goHome])
+    : { model: stepModel }
+
+const menuFromKey: (code: string) => UpdateStep = code => stepModel =>
+  isMenuKey(code) ? leaveFromMenu(stepModel) : { model: stepModel }
+
+const canMoveHomeFocus = (model: Model): boolean =>
+  isOnHome(model.phase) &&
+  !isSideways(model) &&
+  !model.panelDialog.isOpen &&
+  !model.character.dialog.isOpen
+
+const homeFocusFromKey: (code: string) => UpdateStep = code => stepModel =>
+  Option.match(maybeFocusStep(code), {
+    onNone: () => ({ model: stepModel }),
+    onSome: step => {
+      if (!canMoveHomeFocus(stepModel)) {
+        return { model: stepModel }
+      }
+
+      const button = steppedHomeFocus(stepModel.maybeHomeFocus, step)
+      return {
+        model: modifyFields(stepModel, {
+          maybeHomeFocus: () => Option.some(button),
+        }),
+        commands: [FocusHomeButton({ button })],
+      }
+    },
+  })
+
+const toggleShake = (model: Model): Model =>
+  modifyFields(model, {
+    shakeSetting: setting => (setting === 'On' ? 'Off' : 'On'),
+  })
+
+// SPLASH
+
+const finishLoadStep = (model: Model, step: LoadStep): UpdateReturn =>
+  Loading.match(model.loading, {
+    Loaded: () => ({ model }),
+    Loading: ({ pending }) => {
+      const remaining = Array.filter(pending, waiting => waiting !== step)
+      const progress = ShowLoadProgress({
+        loaded: LOAD_STEPS.length - remaining.length,
+        total: LOAD_STEPS.length,
+      })
+      if (Array.isReadonlyArrayEmpty(remaining)) {
+        return {
+          model: modifyFields(model, { loading: () => Loading.Loaded() }),
+          commands: [progress, HideSplash()],
+        }
+      } else {
+        return {
+          model: modifyFields(model, {
+            loading: () => Loading.Loading({ pending: remaining }),
+          }),
+          commands: [progress],
+        }
+      }
+    },
+  })
+
 // TRAPS
 
 const shakeBy = (model: Model, trauma: number): Model =>
@@ -1174,6 +1428,8 @@ const updateGame = (model: Model, message: Message) =>
       return Update.combine(pressed, [
         unlockAudio,
         characterFromKey(code),
+        menuFromKey(code),
+        homeFocusFromKey(code),
         trapFromKey(code),
         reloadFromKey(code),
         playStartSoundWhen(startsRun(model, pressed)),
@@ -1198,14 +1454,14 @@ const updateGame = (model: Model, message: Message) =>
 
     PressedPointer: rawPress => {
       const press = asAllowedPress(model, rawPress)
-      const started = startFromPointer(
+      const started = resumeFromPointer(
         useDevice(model, press.device === 'Touch' ? 'Touch' : 'KeyboardMouse'),
       )
-      const pressed = isPaused(model.phase)
-        ? refreshIntent(started)
-        : withInput(skipDebutCardWhenUp(started), input =>
+      const pressed = isRoundActive(model.phase)
+        ? withInput(skipDebutCardWhenUp(started), input =>
             pressPointer(input, started.maybeSurface, press),
           )
+        : refreshIntent(started)
       return Update.combine(pressed, [
         unlockAudio,
         playStartSoundWhen(startsRun(model, pressed)),
@@ -1462,6 +1718,46 @@ const updateGame = (model: Model, message: Message) =>
     CompletedReloadPage: () => ({ model }),
 
     FailedReloadPage: () => ({ model }),
+
+    ClickedHowToPlayButton: () =>
+      Update.combine(model, [unlockAudio, openPanel('HowToPlay')]),
+
+    ClickedSettingsButton: () =>
+      Update.combine(model, [unlockAudio, openPanel('Settings')]),
+
+    ClickedMenuButton: () =>
+      Update.combine(model, [unlockAudio, leaveFromMenu]),
+
+    ClickedLeaveRunButton: () => leaveRun(model),
+
+    ClickedStayButton: () => closePanel(model),
+
+    GotPanelDialogMessage: ({ message: dialogMessage }) =>
+      foldPanelDialog(model, dialogMessage),
+
+    ClickedShakeButton: () => ({ model: toggleShake(model) }),
+
+    FocusedHomeButton: ({ button }) => ({
+      model: modifyFields(model, { maybeHomeFocus: () => Option.some(button) }),
+    }),
+
+    BlurredHomeButton: () => ({
+      model: modifyFields(model, { maybeHomeFocus: () => Option.none() }),
+    }),
+
+    CompletedFocusHomeButton: () => ({ model }),
+
+    CompletedLoadStyles: () => finishLoadStep(model, 'Styles'),
+
+    CompletedLoadFonts: () => finishLoadStep(model, 'Fonts'),
+
+    FailedLoadFonts: () => finishLoadStep(model, 'Fonts'),
+
+    CompletedAwaitFirstFrame: () => finishLoadStep(model, 'FirstFrame'),
+
+    CompletedShowLoadProgress: () => ({ model }),
+
+    CompletedHideSplash: () => ({ model }),
   })
 
 const dismissHomeScreenTip = (model: Model): Model =>
@@ -1519,6 +1815,7 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     stepModel => updateGame(stepModel, message),
     cueMusicFrom(model),
     dismissHomeScreenTipFrom(model),
+    stepModel => ({ model: recordSessionBests(model, stepModel) }),
   ])
 
 // SUBSCRIPTION

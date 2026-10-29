@@ -1,10 +1,13 @@
 import { Array, Option, Record, String, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
+import { playerSprites } from './appearance'
 import {
   FEEDBACK_LINE,
   GAME_TITLE,
   MS_PER_SECOND,
+  PLAYER_FOOT_OFFSET,
+  PLAYER_WALK_FRAME_MS,
   VIEW_HEIGHT,
   VIEW_WIDTH,
   WAVE_BANNER_MS,
@@ -25,6 +28,7 @@ import {
 import { clamp } from './geometry'
 import {
   Alarm,
+  type Appearance,
   DebutCard,
   type HintBand,
   type InputDevice,
@@ -50,6 +54,7 @@ import {
   ZOMBIE_SPRITES,
   frameAt,
   group,
+  gunSprite,
   spriteShapes,
 } from './sprite'
 import {
@@ -104,11 +109,6 @@ const deviceText = (
   texts: Readonly<Record<InputDevice, string>>,
   tone: TextTone,
 ): DeviceText => Record.map(texts, text => bakeText(text, tone))
-
-const START_PROMPT = deviceText(
-  { KeyboardMouse: 'ENTER: CAMPAIGN   E: ENDLESS', Touch: 'PICK A MODE BELOW' },
-  'Prompt',
-)
 
 const RESUME_PROMPT = deviceText(
   {
@@ -731,9 +731,9 @@ const PARADE: ReadonlyArray<Marcher> = [
   { kind: 'Shambler', y: 166, speed: 16, offset: 0, direction: 1 },
   { kind: 'Shambler', y: 168, speed: 16, offset: 22, direction: 1 },
   { kind: 'Runner', y: 167, speed: 30, offset: 90, direction: 1 },
-  { kind: 'Tank', y: 146, speed: 9, offset: 40, direction: -1 },
-  { kind: 'Exploder', y: 150, speed: 18, offset: 200, direction: -1 },
-  { kind: 'Shambler', y: 148, speed: 14, offset: 150, direction: -1 },
+  { kind: 'Tank', y: 157, speed: 9, offset: 40, direction: -1 },
+  { kind: 'Exploder', y: 160, speed: 18, offset: 200, direction: -1 },
+  { kind: 'Shambler', y: 158, speed: 14, offset: 150, direction: -1 },
 ]
 
 const PARADE_MARGIN = 24
@@ -773,18 +773,53 @@ const paradeShapes = (screenMs: number): ReadonlyArray<Canvas.Shape> =>
 // READY
 
 const TAGLINE = bakeText('SURVIVE 8 WAVES. TRY NOT TO GET EATEN.', 'Hint')
-const TAGLINE_Y = 72
-const START_PROMPT_Y = 100
+const TAGLINE_Y = 70
+
+// NOTE: the player backpedals ahead of the bottom lane's Shamblers, facing
+// them with the pistol up, at their speed so the gap never closes.
+const RUNNER_LANE_Y = 167
+const RUNNER_SPEED = 16
+const RUNNER_OFFSET = 60
+const RUNNER_GUN_PX = 2
+
+const runnerShapes = (
+  appearance: Appearance,
+  screenMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const travelled = RUNNER_OFFSET + (RUNNER_SPEED * screenMs) / MS_PER_SECOND
+  const x = Math.round((travelled % PARADE_SPAN) - PARADE_MARGIN)
+  return [
+    Canvas.Rect({
+      x: x - 3,
+      y: RUNNER_LANE_Y - 1,
+      width: 7,
+      height: 2,
+      fill: PARADE_SHADOW,
+    }),
+    group({
+      translate: { x, y: RUNNER_LANE_Y },
+      shapes: frameAt(
+        playerSprites(appearance).walk,
+        Math.floor(screenMs / PLAYER_WALK_FRAME_MS),
+      ).Normal.Left,
+    }),
+    group({
+      translate: {
+        x: x - RUNNER_GUN_PX,
+        y: RUNNER_LANE_Y - PLAYER_FOOT_OFFSET,
+      },
+      shapes: gunSprite('Pistol', 0, Math.PI),
+    }),
+  ]
+}
 
 const readyShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   TITLE_BACKDROP,
   ...paradeShapes(model.screenMs),
+  ...runnerShapes(model.appearance, model.screenMs),
   ...logoShapes(model.screenMs),
   ...ALPHA_CHIP,
   centered(TAGLINE, TAGLINE_Y),
-  ...(isBlinkOn(model.screenMs)
-    ? [centered(START_PROMPT[model.lastDevice], START_PROMPT_Y, TITLE_SCALE)]
-    : []),
 ]
 
 // PAUSED

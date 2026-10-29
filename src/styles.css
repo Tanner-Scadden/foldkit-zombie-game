@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './menu.css';
 
 html,
 body {
@@ -117,8 +118,8 @@ body {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   padding: 0;
   border: 2px solid rgba(244, 241, 222, 0.5);
   border-radius: 9999px;
@@ -129,14 +130,19 @@ body {
   transition: opacity 80ms linear;
 }
 
-.icon-button:hover,
 .icon-button:active,
 .icon-button:focus-visible {
   opacity: 1;
 }
 
+@media (hover: hover) {
+  .icon-button:hover {
+    opacity: 1;
+  }
+}
+
 .icon-button:active {
-  transform: scale(0.94);
+  box-shadow: inset 0 0 0 3px rgba(255, 224, 102, 0.6);
   background: rgba(40, 30, 20, 0.85);
 }
 
@@ -336,7 +342,7 @@ body {
 
 .start-wave-pill {
   min-width: 112px;
-  min-height: 44px;
+  min-height: 48px;
   padding: 0 16px;
   border: 2px solid rgba(255, 224, 102, 0.8);
   border-radius: 9999px;
@@ -382,7 +388,7 @@ body {
   justify-content: center;
   gap: 2px;
   min-width: 120px;
-  min-height: 44px;
+  min-height: 48px;
   padding: 4px 16px;
   border: 2px solid rgba(255, 224, 102, 0.8);
   border-radius: 6px;
@@ -421,8 +427,15 @@ body {
   font-size: 10px;
 }
 
-.mode-button:hover {
-  background: rgba(40, 30, 20, 0.85);
+@media (hover: hover) {
+  .mode-button:hover {
+    background: rgba(40, 30, 20, 0.85);
+  }
+}
+
+.mode-button:active {
+  box-shadow: inset 0 0 0 3px rgba(255, 224, 102, 0.6);
+  background: rgba(60, 40, 20, 0.95);
 }
 
 .mode-button:focus-visible {
@@ -591,7 +604,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
+  min-height: 48px;
   border: 2px solid rgba(244, 241, 222, 0.25);
   border-radius: 6px;
   background: #2b2233;
@@ -606,7 +619,7 @@ body {
 }
 
 .look-swatch-option {
-  width: 36px;
+  width: 48px;
   padding: 0;
 }
 
@@ -617,8 +630,10 @@ body {
   box-shadow: 0 0 0 1px rgba(244, 241, 222, 0.4);
 }
 
-.look-option:hover {
-  border-color: rgba(255, 224, 102, 0.6);
+@media (hover: hover) {
+  .look-option:hover {
+    border-color: rgba(255, 224, 102, 0.6);
+  }
 }
 
 .look-option[aria-checked='true'] {
@@ -690,24 +705,15 @@ body {
   }
 
   .look-rows {
-    gap: 5px;
+    gap: 3px;
   }
 
   .look-row {
     grid-template-columns: 72px 1fr;
   }
 
-  .look-option {
-    min-height: 34px;
-  }
-
-  .look-swatch-option {
-    width: 34px;
-  }
-
-  .look-randomize,
-  .look-done {
-    min-height: 40px;
+  .look-options {
+    gap: 4px;
   }
 }
 
@@ -799,8 +805,10 @@ body {
   touch-action: manipulation;
 }
 
-.shop-tab:hover {
-  border-color: rgba(255, 224, 102, 0.6);
+@media (hover: hover) {
+  .shop-tab:hover {
+    border-color: rgba(255, 224, 102, 0.6);
+  }
 }
 
 .shop-tab[data-selected] {
@@ -862,9 +870,14 @@ body {
   touch-action: manipulation;
 }
 
-.shop-item:hover,
 .shop-item:focus-visible {
   border-color: #ffe066;
+}
+
+@media (hover: hover) {
+  .shop-item:hover {
+    border-color: #ffe066;
+  }
 }
 
 .shop-item:focus-visible {
@@ -1368,7 +1381,7 @@ body {
 .debut-card-button {
   position: relative;
   min-width: 120px;
-  min-height: 44px;
+  min-height: 48px;
   padding: 0 18px;
   border: 3px solid #ff8a3d;
   border-radius: 6px;
@@ -1381,8 +1394,10 @@ body {
   pointer-events: auto;
 }
 
-.debut-card-button:hover {
-  background: rgba(60, 30, 20, 0.95);
+@media (hover: hover) {
+  .debut-card-button:hover {
+    background: rgba(60, 30, 20, 0.95);
+  }
 }
 
 .debut-card-button:focus-visible {
@@ -1629,7 +1644,7 @@ body {
 }
 
 .home-screen-tip-open {
-  min-height: 44px;
+  min-height: 48px;
   padding: 0 4px 0 10px;
   border: 0;
   border-radius: 9999px;
@@ -1649,8 +1664,8 @@ body {
 
 .home-screen-tip-close {
   flex: none;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border: 0;
   border-radius: 9999px;
   background: transparent;
@@ -1734,7 +1749,7 @@ body {
 }
 
 .home-screen-steps-done {
-  min-height: 44px;
+  min-height: 48px;
   border: 2px solid rgba(255, 224, 102, 0.8);
   border-radius: 6px;
   background: rgba(8, 10, 12, 0.7);

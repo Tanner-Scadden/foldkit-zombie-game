@@ -102,6 +102,7 @@ describe('input device', () => {
       model(({ lastDevice }) => {
         expect(lastDevice).toBe('KeyboardMouse')
       }),
+      message(Message.ClickedCampaignButton()),
       touchDown(3, 100, 200),
       model(({ lastDevice, input }) => {
         expect(lastDevice).toBe('KeyboardMouse')
@@ -171,6 +172,7 @@ describe('onboarding hints', () => {
       given(readyModel),
       touchDown(1, 700, 200),
       message(Message.ReleasedPointer({ pointerId: 1 })),
+      message(Message.ClickedCampaignButton()),
       model(current => {
         expect(current.lastDevice).toBe('Touch')
         expect(hintTexts(current)).toEqual([

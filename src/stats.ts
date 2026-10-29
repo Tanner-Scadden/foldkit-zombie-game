@@ -69,7 +69,10 @@ export const accuracyPercent = ({ shotsFired, shotsHit }: RunStats): number =>
 
 const SECONDS_PER_MINUTE = 60
 
-export const runTimeLabel = ({ runMs }: RunStats): string => {
+export const runTimeLabel = ({ runMs }: RunStats): string =>
+  durationLabel(runMs)
+
+export const durationLabel = (runMs: number): string => {
   const totalSeconds = Math.floor(runMs / MS_PER_SECOND)
   const minutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE)
   const seconds = totalSeconds % SECONDS_PER_MINUTE

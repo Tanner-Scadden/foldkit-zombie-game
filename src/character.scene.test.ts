@@ -77,7 +77,7 @@ describe('Character picker', () => {
       given(onTitle),
       measureSurface(),
       expect(characterButton).toHaveAttr('aria-keyshortcuts', 'C'),
-      expect(within(characterButton, selector('.mode-button-key'))).toHaveText(
+      expect(within(characterButton, selector('.home-button-key'))).toHaveText(
         'C',
       ),
       expect(pickerDialog).toBeAbsent(),
@@ -179,7 +179,7 @@ describe('Character picker', () => {
       given(modifyFields(onTitle, { lastDevice: () => 'Touch' })),
       measureSurface(),
       expect(
-        within(characterButton, selector('.mode-button-key')),
+        within(characterButton, selector('.home-button-key')),
       ).toBeAbsent(),
       click(characterButton),
       ...showPicker(),
@@ -205,7 +205,7 @@ describe('Character picker', () => {
     )
   })
 
-  test('is offered on Game Over after the grace, and not during a wave', () => {
+  test('lives on the home menu: Game Over offers Menu instead, and a wave offers neither', () => {
     scene(
       { update, view },
       given(
@@ -215,7 +215,10 @@ describe('Character picker', () => {
         }),
       ),
       measureSurface(),
-      expect(characterButton).toExist(),
+      expect(characterButton).toBeAbsent(),
+      expect(
+        role('button', { name: 'Menu: back to the home screen' }),
+      ).toExist(),
     )
     scene(
       { update, view },

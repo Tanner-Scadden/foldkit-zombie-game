@@ -30,6 +30,9 @@ const measureSurface = Mount.resolve(
 const campaignButton = role('button', {
   name: 'Campaign: 8 waves, then victory',
 })
+const playButton = role('button', {
+  name: 'Play the campaign: 8 waves, then victory',
+})
 const endlessButton = role('button', {
   name: 'Endless: waves keep coming until you fall',
 })
@@ -46,9 +49,9 @@ describe('Mode choice', () => {
       { update, view },
       given(asVeteran(initialModel)),
       measureSurface,
-      expect(campaignButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
+      expect(playButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
       expect(endlessButton).toHaveAttr('aria-keyshortcuts', 'E'),
-      expect(selector('.mode-button-key')).toExist(),
+      expect(selector('.home-button-key')).toExist(),
       expect(keepGoingButton).toBeAbsent(),
       click(endlessButton),
       expect(role('status')).toHaveText(
@@ -58,7 +61,7 @@ describe('Mode choice', () => {
     )
   })
 
-  test('the Campaign button starts the 8 wave campaign', () => {
+  test('the Play button starts the 8 wave campaign', () => {
     scene(
       { update, view },
       given(
@@ -67,7 +70,7 @@ describe('Mode choice', () => {
         }),
       ),
       measureSurface,
-      click(campaignButton),
+      click(playButton),
       expect(role('status')).toHaveText(
         `Get ready for wave 1 of 8. ${START_PROMPT}`,
       ),
@@ -79,8 +82,8 @@ describe('Mode choice', () => {
       { update, view },
       given(modifyFields(initialModel, { lastDevice: () => 'Touch' })),
       measureSurface,
-      expect(campaignButton).toExist(),
-      expect(selector('.mode-button-key')).toBeAbsent(),
+      expect(playButton).toExist(),
+      expect(selector('.home-button-key')).toBeAbsent(),
     )
   })
 

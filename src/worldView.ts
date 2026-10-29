@@ -56,7 +56,9 @@ import {
 const STILL: Vector = { x: 0, y: 0 }
 
 const shakeOffset = (model: Model): Vector =>
-  isRoundActive(model.phase) ? model.shake.offset : STILL
+  isRoundActive(model.phase) && model.shakeSetting === 'On'
+    ? model.shake.offset
+    : STILL
 
 export const worldOffset = (model: Model, camera: Camera): Vector =>
   sceneOffset(camera, shakeOffset(model))

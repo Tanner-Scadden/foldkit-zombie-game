@@ -463,7 +463,7 @@ describe('keep going from Victory', () => {
     )
   })
 
-  test('a tap still starts a campaign from Game Over', () => {
+  test('a tap on Game Over, beside its buttons, starts nothing', () => {
     story(
       update,
       given(
@@ -478,9 +478,8 @@ describe('keep going from Victory', () => {
           clientY: 200,
         }),
       ),
-      model(({ phase, mode }) => {
-        expect(preparationWave(phase)).toEqual(Option.some(1))
-        expect(mode).toEqual(RunMode.Campaign())
+      model(({ phase }) => {
+        expect(Phase.guards.GameOver(phase)).toBe(true)
       }),
     )
   })

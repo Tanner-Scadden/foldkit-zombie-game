@@ -333,6 +333,7 @@ describe('touch first play', () => {
       given(touchPlayer),
       touchDown(1, 400, 200),
       touchUp(1),
+      message(Message.ClickedCampaignButton()),
       model(current => {
         expect(shownGhostSticks(current)).toEqual(['Move', 'Aim'])
       }),

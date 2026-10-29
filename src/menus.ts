@@ -4,6 +4,7 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 import { Dialog } from '@foldkit/ui'
 
 import { GAME_TITLE, RESTART_GRACE_MS } from './constants'
+import { pauseMenuButtonView } from './homeView'
 import {
   ADD_TO_HOME_SCREEN_ICON,
   FULLSCREEN_ICON,
@@ -98,10 +99,14 @@ const cornerButtons = (
 ): ReadonlyArray<Html> => {
   const audioButtons = [musicButtonView(model, h), muteButtonView(model, h)]
   return Phase.match(model.phase, {
-    Ready: () => [fullscreenButtonView(model, h), ...audioButtons],
+    Ready: () => [],
     Preparation: () => [pauseButtonView(h)],
     Wave: () => [pauseButtonView(h)],
-    Paused: () => [fullscreenButtonView(model, h), ...audioButtons],
+    Paused: () => [
+      pauseMenuButtonView(model, h),
+      fullscreenButtonView(model, h),
+      ...audioButtons,
+    ],
     Victory: () => audioButtons,
     GameOver: () => audioButtons,
   })
@@ -280,14 +285,14 @@ const KEEP_GOING_BUTTON: ModeButton = {
   message: Message.ClickedKeepGoingButton(),
 }
 
-const CHARACTER_BUTTON: ModeButton = {
-  className: 'mode-button character-button',
-  label: 'CHARACTER',
-  detail: 'YOUR LOOK',
-  key: 'C',
-  keyName: 'C',
-  ariaLabel: 'Character: change how you look',
-  message: Message.ClickedCharacterButton(),
+const MENU_BUTTON: ModeButton = {
+  className: 'mode-button menu-button',
+  label: 'MENU',
+  detail: 'BACK HOME',
+  key: 'H',
+  keyName: 'H',
+  ariaLabel: 'Menu: back to the home screen',
+  message: Message.ClickedMenuButton(),
 }
 
 const modeButtonView = (
@@ -301,7 +306,10 @@ const modeButtonView = (
       h.Class(button.className),
       h.AriaLabel(button.ariaLabel),
       h.AriaKeyshortcuts(button.keyName),
-      h.OnClick(button.message, { focusSelector: '.game-surface' }),
+      h.OnClick(button.message, {
+        focusSelector: '.game-surface',
+        propagation: 'Stop',
+      }),
     ],
     [
       h.span([h.Class('mode-button-label')], [button.label]),
@@ -319,7 +327,7 @@ const modeButtonView = (
 
 const modeButtons = (model: Model): ReadonlyArray<ModeButton> =>
   Phase.match(model.phase, {
-    Ready: () => [CAMPAIGN_BUTTON, ENDLESS_BUTTON],
+    Ready: () => [],
     Preparation: () => [],
     Wave: () => [],
     Paused: () => [],
@@ -350,7 +358,7 @@ export const modeChoiceView = (model: Model, h: HtmlBuilder<Message>): Html =>
                 ],
                 Array.map(buttons, button => modeButtonView(model, button, h)),
               ),
-              modeButtonView(model, CHARACTER_BUTTON, h),
+              modeButtonView(model, MENU_BUTTON, h),
             ],
           ),
       })

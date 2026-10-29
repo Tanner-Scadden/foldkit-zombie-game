@@ -501,6 +501,39 @@ export type FullscreenSetting = typeof FullscreenSetting.Type
 export const HomeScreenTip = Schema.Literals(['Unseen', 'Dismissed'])
 export type HomeScreenTip = typeof HomeScreenTip.Type
 
+export const ShakeSetting = Schema.Literals(['On', 'Off'])
+export type ShakeSetting = typeof ShakeSetting.Type
+
+export const HomeButton = Schema.Literals([
+  'Play',
+  'Endless',
+  'Character',
+  'HowToPlay',
+  'Settings',
+])
+export type HomeButton = typeof HomeButton.Type
+
+export const MenuPanel = Schema.Literals(['HowToPlay', 'Settings', 'LeaveRun'])
+export type MenuPanel = typeof MenuPanel.Type
+
+// NOTE: the bests live in memory for the page session only, beside
+// maybeBestEndlessWave. They are plain data on purpose: they move into the
+// SQLite player scope from PLATFORM.md as personal bests.
+export const SessionBests = Schema.Struct({
+  maybeFastestWinMs: Schema.Option(Schema.Number),
+  kills: Schema.Number,
+})
+export type SessionBests = typeof SessionBests.Type
+
+export const LoadStep = Schema.Literals(['Styles', 'Fonts', 'FirstFrame'])
+export type LoadStep = typeof LoadStep.Type
+
+export const Loading = defineTaggedUnion({
+  Loading: { pending: Schema.Array(LoadStep) },
+  Loaded: {},
+})
+export type Loading = typeof Loading.Type
+
 export const PageVisibility = Schema.Literals(['Visible', 'Hidden'])
 export type PageVisibility = typeof PageVisibility.Type
 
@@ -901,6 +934,12 @@ export const Model = Schema.Struct({
   maybeNewerBuild: Schema.Option(Schema.String),
   appearance: Appearance,
   character: CharacterPicker,
+  shakeSetting: ShakeSetting,
+  maybeHomeFocus: Schema.Option(HomeButton),
+  panel: MenuPanel,
+  panelDialog: Dialog.Model,
+  sessionBests: SessionBests,
+  loading: Loading,
 })
 export type Model = typeof Model.Type
 
@@ -1021,6 +1060,19 @@ export const closedCharacterPicker: CharacterPicker = {
   shirtColor: RadioGroup.init({ id: 'look-shirt-color' }),
 }
 
+export const PANEL_DIALOG_ID = 'menu-panel'
+
+export const LOAD_STEPS: ReadonlyArray<LoadStep> = [
+  'Styles',
+  'Fonts',
+  'FirstFrame',
+]
+
+export const noSessionBests: SessionBests = {
+  maybeFastestWinMs: Option.none(),
+  kills: 0,
+}
+
 export const initialModel: Model = {
   phase: Phase.Ready(),
   pacing: calmPacing,
@@ -1084,4 +1136,10 @@ export const initialModel: Model = {
   maybeNewerBuild: Option.none(),
   appearance: defaultAppearance,
   character: closedCharacterPicker,
+  shakeSetting: 'On',
+  maybeHomeFocus: Option.none(),
+  panel: 'HowToPlay',
+  panelDialog: Dialog.init({ id: PANEL_DIALOG_ID }),
+  sessionBests: noSessionBests,
+  loading: Loading.Loaded(),
 }

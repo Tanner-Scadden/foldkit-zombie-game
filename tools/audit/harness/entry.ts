@@ -500,6 +500,14 @@ const scenarioModel = (): Model => {
     model = modifyFields(model, {
       maybeNewerBuild: () => Option.some(params.get('newer') || 'next'),
     })
+  if (params.has('bests'))
+    model = modifyFields(model, {
+      maybeBestEndlessWave: () => Option.some(12),
+      sessionBests: () => ({
+        maybeFastestWinMs: Option.some(402_000),
+        kills: 341,
+      }),
+    })
   const look = params.get('look')
   if (look !== null) {
     const [body, hairStyle, hairColor, skinTone, shirtColor] = look.split(',')
@@ -532,7 +540,24 @@ const instrument = params.has('instrument')
 const freezeAfter = params.has('freeze') ? num('freeze', 0) : Infinity
 const FIXED_FRAME_MS = 1000 / 60
 let framesRun = 0
+const QUIET_MESSAGES = new Set([
+  'TickedFrame',
+  'MovedPointer',
+  'MovedMouse',
+  'CompletedPlaySound',
+  'CompletedCueMusic',
+  'FailedCueMusic',
+  'FailedPlaySound',
+])
+w.__messages = [] as Array<string>
 const harnessUpdate = (model: Model, incoming: Message) => {
+  if (!QUIET_MESSAGES.has(incoming._tag)) {
+    const chain = (message: any): Array<string> =>
+      message?._tag === undefined
+        ? []
+        : [message._tag, ...chain(message.message)]
+    w.__messages.push(chain(incoming).join(':'))
+  }
   const isFrozenFrame =
     incoming._tag === 'TickedFrame' && framesRun >= freezeAfter
   const isFreezing = Number.isFinite(freezeAfter)

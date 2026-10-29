@@ -42,6 +42,24 @@ const RELOAD_KEY = 'KeyR'
 const SWAP_KEY = 'KeyQ'
 const PLACE_TRAP_KEY = 'KeyT'
 const NEXT_TRAP_KEY = 'KeyG'
+const MENU_KEY = 'KeyH'
+const PREVIOUS_BUTTON_KEYS: ReadonlyArray<string> = ['ArrowLeft', 'ArrowUp']
+const NEXT_BUTTON_KEYS: ReadonlyArray<string> = ['ArrowRight', 'ArrowDown']
+
+export const FocusStep = Schema.Literals(['Previous', 'Next'])
+export type FocusStep = typeof FocusStep.Type
+
+export const maybeFocusStep = (code: string): Option.Option<FocusStep> => {
+  if (Array.contains(PREVIOUS_BUTTON_KEYS, code)) {
+    return Option.some('Previous')
+  } else if (Array.contains(NEXT_BUTTON_KEYS, code)) {
+    return Option.some('Next')
+  } else {
+    return Option.none()
+  }
+}
+
+export const isMenuKey = (code: string): boolean => code === MENU_KEY
 
 export const TrapChoice = Schema.Literals(['Place', 'Next'])
 export type TrapChoice = typeof TrapChoice.Type

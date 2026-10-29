@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#3b2160" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -17,6 +17,95 @@
       content="black-translucent"
     />
     <meta name="apple-mobile-web-app-title" content="Munch Manor" />
+    <style>
+      html {
+        background: #160b24;
+      }
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: radial-gradient(circle at 50% 42%, #3b2160, #160b24 70%);
+        color: #f4f1de;
+        font: bold 14px/1.2 ui-monospace, Menlo, Consolas, monospace;
+        transition: opacity 0.2s linear;
+      }
+      #splash.is-gone {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .splash-zombie {
+        width: 66px;
+        height: 60px;
+        shape-rendering: crispEdges;
+        animation: splash-chomp 0.5s steps(2) infinite;
+      }
+      .splash-word {
+        margin: 0;
+        font-size: clamp(26px, 7vmin, 48px);
+        letter-spacing: 0.12em;
+        text-shadow:
+          3px 3px 0 #140c10,
+          -2px -2px 0 #140c10;
+      }
+      .splash-munch {
+        color: #9be36a;
+      }
+      .splash-manor {
+        color: #c9a0f0;
+      }
+      .splash-line {
+        margin: 0;
+        color: #b8c2b0;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+      }
+      .splash-bar {
+        position: relative;
+        width: 160px;
+        height: 8px;
+        overflow: hidden;
+        border: 2px solid #140c10;
+        background: #24123a;
+      }
+      .splash-fill {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 30%;
+        background: #9be36a;
+        animation: splash-slide 0.9s steps(8) infinite;
+      }
+      #splash[data-progress='Known'] .splash-fill {
+        width: calc(var(--splash-progress, 0) * 100%);
+        animation: none;
+      }
+      @keyframes splash-chomp {
+        to {
+          transform: translateY(-3px);
+        }
+      }
+      @keyframes splash-slide {
+        from {
+          left: -30%;
+        }
+        to {
+          left: 100%;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .splash-zombie,
+        .splash-fill {
+          animation: none;
+        }
+      }
+    </style>
     <link href="/src/styles.css" rel="stylesheet" />
     <title>Munch Manor</title>
     <meta
@@ -53,7 +142,27 @@
       content="https://munch-manor.tanner-scadden.workers.dev/og-image.png"
     />
   </head>
-  <body>
+  <body ontouchstart="">
+    <div id="splash" role="status" aria-live="polite" aria-busy="true">
+      <svg class="splash-zombie" viewBox="0 0 11 10" aria-hidden="true">
+        <path fill="#7cc95a" d="M2 0h7v1h-7zM1 1h9v1h-9zM0 2h11v6h-11zM1 8h9v1h-9zM2 9h3v1h-3zM6 9h3v1h-3z" />
+        <path fill="#a6e07f" d="M2 1h2v1h-2zM1 2h1v1h-1z" />
+        <path fill="#4e8f3a" d="M10 3h1v5h-1zM9 8h1v1h-1zM4 9h1v1h-1zM7 9h2v1h-2z" />
+        <path fill="#f4f1de" d="M1 3h2v2h-2zM7 3h2v2h-2z" />
+        <path fill="#c4232b" d="M2 4h1v1h-1zM8 4h1v1h-1z" />
+        <path fill="#2a0f1a" d="M2 6h7v2h-7z" />
+        <path fill="#f4f1de" d="M3 7h1v1h-1zM5 7h1v1h-1zM7 7h1v1h-1z" />
+      </svg>
+      <p class="splash-word">
+        <span class="splash-munch">MUNCH</span>
+        <span class="splash-manor">MANOR</span>
+      </p>
+      <p class="splash-line">Waking the dead...</p>
+      <div class="splash-bar" aria-hidden="true">
+        <div class="splash-fill"></div>
+      </div>
+      <noscript><p class="splash-line">Munch Manor needs JavaScript to rise.</p></noscript>
+    </div>
     <div id="root"></div>
     <script type="module" src="./src/entry.ts"></script>
   </body>

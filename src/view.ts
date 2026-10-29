@@ -4,6 +4,7 @@ import { Document, Html, HtmlBuilder } from 'foldkit/html'
 
 import * as CharacterView from './characterView'
 import { FEEDBACK_LINE, GAME_TITLE } from './constants'
+import { homeMenuView, menuPanelView } from './homeView'
 import { gameStageView } from './layers'
 import { Message, isSideways } from './main'
 import {
@@ -111,7 +112,10 @@ const shopHint = (model: Model): string =>
 const PLAY_AGAIN =
   'Press Enter or choose Campaign for 8 waves, or press E or choose Endless to fight until you fall.'
 
-const PICK_CHARACTER = 'Press C or choose Character to change how you look.'
+const HOME_MENU =
+  'Main menu. Press Enter or choose Play for the 8 wave campaign, or press E or choose Endless to fight until you fall. Press C or choose Character to change how you look. How to play and Settings are there too. Arrow keys move between the buttons.'
+
+const BACK_HOME = 'Press H or choose Menu to go back to the main menu.'
 
 const KEEP_GOING = `Press K or choose Keep going to carry on into endless from wave ${FINAL_WAVE + 1} with your money, guns, and traps.`
 
@@ -161,8 +165,7 @@ export const statusText = (model: Model): string => {
   }
 
   return Phase.match(model.phase, {
-    Ready: () =>
-      `${GAME_TITLE}, an early alpha. ${PLAY_AGAIN} ${PICK_CHARACTER}`,
+    Ready: () => `${GAME_TITLE}, an early alpha. ${HOME_MENU}`,
     Preparation: ({ wave }) =>
       `Get ready for ${statusWave(model, wave)}. ${isOpenBreak(model) ? 'There is no timer this break. ' : ''}Press Enter, or use the Start wave button, to start it now.${practiceGateNote(model)}${shopHint(model)}`,
     Wave: ({ wave }) =>
@@ -171,11 +174,11 @@ export const statusText = (model: Model): string => {
         () => `Fighting ${statusWave(model, wave)}.`,
       ),
     Paused: ({ round }) =>
-      `Paused during ${statusWave(model, round.wave)}. Tap, click, or press Escape to resume.`,
+      `Paused during ${statusWave(model, round.wave)}. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.`,
     Victory: () =>
-      `Victory. ${victoryVerdict(model.stats)}. ${statsLabel(model)} ${KEEP_GOING} ${PLAY_AGAIN} ${FEEDBACK_LINE}`,
+      `Victory. ${victoryVerdict(model.stats)}. ${statsLabel(model)} ${KEEP_GOING} ${PLAY_AGAIN} ${BACK_HOME} ${FEEDBACK_LINE}`,
     GameOver: ({ wave }) =>
-      `Game over. ${defeatVerdict(wave, model.stats)}. ${statsLabel(model)} ${PLAY_AGAIN} ${FEEDBACK_LINE}`,
+      `Game over. ${defeatVerdict(wave, model.stats)}. ${statsLabel(model)} ${PLAY_AGAIN} ${BACK_HOME} ${FEEDBACK_LINE}`,
   })
 }
 
@@ -276,6 +279,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       ),
       loadoutView(model, h),
       pauseHelpView(model, h.OnPointerDown(toPressedPointer), h),
+      homeMenuView(model, h),
       preparationControlsView(model, h),
       gunButtonsView(model, h),
       gunSlotsView(model, h),
@@ -287,6 +291,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       updateChipView(model, h),
       homeScreenStepsView(model, h),
       shopDialogView(model, h),
+      menuPanelView(model, h),
       h.submodel({
         slotId: 'character-picker',
         model: model.character,
