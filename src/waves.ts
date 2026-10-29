@@ -8,7 +8,6 @@ import {
   isWaveHeldByBoss,
   planBoss,
 } from './boss'
-import { arenaCamera } from './camera'
 import { CHUCKER_RULES } from './chucker'
 import {
   DOOR_HALF_WIDTH_PX,
@@ -39,14 +38,12 @@ import { burrowed, drawSurfacingSpot } from './crawler'
 import { toughenSpawns, withBests } from './difficulty'
 import { routeSpawns } from './doorRoute'
 import { frenzyOnArrival, frenzyPacksOf } from './frenzy'
-import { ZERO_VECTOR, clamp } from './geometry'
-import { deriveIntent } from './input'
+import { clamp } from './geometry'
 import {
   Alarm,
   Beat,
   BreakClock,
   type DoorId,
-  FIRST_SHOP_CATEGORY,
   type Formation,
   GameEvent,
   type Hold,
@@ -55,22 +52,11 @@ import {
   type PlannedSpawn,
   Round,
   RunMode,
-  RunTally,
   ShopState,
-  Streak,
   type Trap,
-  TrapNotice,
   type Vector,
   ZombieAction,
   type ZombieKind,
-  emptyTrapStock,
-  emptyWallet,
-  freshLoot,
-  freshStats,
-  idleBoosts,
-  initialHitStop,
-  initialPlayer,
-  stillShake,
 } from './model'
 import {
   isPracticeGateHeld,
@@ -89,8 +75,8 @@ import {
   waitingCount,
   warnPacks,
 } from './pacing'
-import { flowFieldToward } from './pathing'
 import { type Seeded, between, nextRandom } from './prng'
+import { freshRun } from './runReset'
 import { earn } from './shop'
 import {
   ZOMBIE_KINDS,
@@ -1249,45 +1235,12 @@ export const beginPreparation = (
 
 const startRun = (model: Model, mode: RunMode): Model =>
   beginPreparation(
-    modifyFields(model, {
-      mode: () => mode,
-      intensity: () => 0,
-      player: () => initialPlayer,
-      cameraLean: () => ZERO_VECTOR,
-      zombies: () => [],
-      bullets: () => [],
-      particles: () => [],
-      decals: () => [],
-      dustCooldownMs: () => 0,
-      score: () => 0,
-      wallet: () => emptyWallet,
-      shop: () => ShopState.Away(),
-      shopCategory: () => FIRST_SHOP_CATEGORY,
-      elapsedMs: () => 0,
-      frameEvents: () => [],
-      hitStop: () => initialHitStop,
-      shake: () => stillShake,
-      popups: () => [],
-      streak: () => Streak.Cold(),
-      blasts: () => [],
-      traps: () => [],
-      pickups: () => [],
-      boosts: () => idleBoosts,
-      loot: () => freshLoot(model.rngState),
-      callouts: () => [],
-      trapStock: () => emptyTrapStock,
-      selectedTrap: () => 'Barricade',
-      trapNotice: () => TrapNotice.Quiet(),
-      flowField: () => flowFieldToward(initialPlayer, 'Narrow', []),
-      wideFlowField: () => flowFieldToward(initialPlayer, 'Wide', []),
-      intent: () =>
-        deriveIntent(model.input, initialPlayer, arenaCamera(initialPlayer)),
-      stats: () => freshStats,
-      runTally: () => RunTally.Uncounted(),
-      lessons: settleLessons,
-      hintBand: () => 'Top',
-      screenMs: () => 0,
-    }),
+    {
+      ...model,
+      ...freshRun(model),
+      mode,
+      lessons: settleLessons(model.lessons),
+    },
     1,
     FIRST_PREPARATION_MS,
   )

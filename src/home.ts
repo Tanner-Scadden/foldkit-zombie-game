@@ -15,9 +15,9 @@ import {
   RunMode,
   RunTally,
   type ZombieKind,
-  initialModel,
 } from './model'
 import { isDiscovered, newlyDiscovered } from './munchopedia'
+import { freshRun } from './runReset'
 import { addKills, killTotal, killsSince } from './stats'
 
 // BUTTONS
@@ -204,39 +204,13 @@ export const endOffer = (model: Model): EndOffer => {
   }
 }
 
-export const returnHome = (model: Model): Model =>
-  modifyFields(model, {
-    phase: () => Phase.Ready(),
-    pacing: () => initialModel.pacing,
-    boss: () => initialModel.boss,
-    intensity: () => 0,
-    player: () => initialModel.player,
-    zombies: () => [],
-    bullets: () => [],
-    particles: () => [],
-    decals: () => [],
-    score: () => 0,
-    wallet: () => initialModel.wallet,
-    shop: () => initialModel.shop,
-    frameEvents: () => [],
-    hitStop: () => initialModel.hitStop,
-    shake: () => initialModel.shake,
-    popups: () => [],
-    streak: () => initialModel.streak,
-    blasts: () => [],
-    traps: () => [],
-    pickups: () => [],
-    boosts: () => initialModel.boosts,
-    callouts: () => [],
-    trapStock: () => initialModel.trapStock,
-    flowField: () => initialModel.flowField,
-    wideFlowField: () => initialModel.wideFlowField,
-    debutCard: () => initialModel.debutCard,
-    stats: () => initialModel.stats,
-    runTally: () => RunTally.Uncounted(),
-    screenMs: () => 0,
-    maybeHomeFocus: () => Option.none(),
-  })
+// NOTE: going home ends the run, so every run field goes back to a fresh start.
+export const returnHome = (model: Model): Model => ({
+  ...model,
+  ...freshRun(model),
+  phase: Phase.Ready(),
+  maybeHomeFocus: Option.none(),
+})
 
 // BESTS
 

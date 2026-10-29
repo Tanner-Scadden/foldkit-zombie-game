@@ -99,6 +99,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/analyticsRun.ts`     | When a run ends, and the RunSummary built from the Model                                                               |
 | `src/analyticsBeacon.ts`  | The visit id, the API origin, and the beacon that posts a summary                                                      |
 | `src/veteran.ts`          | A returning player's Model for tests and the balance bot                                                               |
+| `src/runReset.ts`         | Every field of one run, reset when a run starts and on going home                                                      |
 | `src/stats.ts`            | Run stats: kills, accuracy, run time, and the verdicts                                                                 |
 | `src/simulation.ts`       | The pure step that advances the game one frame                                                                         |
 | `src/arena.ts`            | The level record, the tile map, doorways, collision, and line of sight                                                 |
