@@ -23,14 +23,11 @@ import {
   HINT_TEXT,
   shownHints,
 } from './onboarding'
+import { tick, ticks } from './testing'
 import { asVeteran } from './veteran'
 import { keepGoing } from './waves'
 
 const TICK_MS = 50
-
-const tick = message(Message.TickedFrame({ deltaTime: TICK_MS }))
-
-const ticks = (count: number) => Array.makeBy(count, () => tick)
 
 const tapKey = (code: string) => [
   message(Message.PressedKey({ code })),
@@ -72,14 +69,14 @@ describe('the first break waits', () => {
     story(
       update,
       given(clearingWave(1)),
-      tick,
+      tick(TICK_MS),
       model(current => {
         expect(isBreak(current)).toBe(true)
         expect(breakClock(current)).toEqual(
           Option.some(BreakClock.Waiting({ elapsedMs: 0 })),
         )
       }),
-      ...ticks(BREAK_TICKS),
+      ...ticks(BREAK_TICKS, TICK_MS),
       model(current => {
         expect(isBreak(current)).toBe(true)
         expect(hintTexts(current)).toContain(OPEN_BREAK_LINE)
@@ -96,12 +93,12 @@ describe('the first break waits', () => {
     story(
       update,
       given(clearingWave(2)),
-      tick,
+      tick(TICK_MS),
       model(current => {
         expect(breakClock(current)).toEqual(Option.some(BreakClock.Counting()))
         expect(hintTexts(current)).toContain(TIMED_HEADS_UP)
       }),
-      ...ticks(BREAK_TICKS),
+      ...ticks(BREAK_TICKS, TICK_MS),
       model(current => {
         expect(isFighting(current)).toBe(true)
         expect(current.lessons.timedBreaks._tag).toBe('Learned')
@@ -128,7 +125,7 @@ describe('the first break waits', () => {
           mode: () => RunMode.Endless(),
         }),
       ),
-      tick,
+      tick(TICK_MS),
       model(current => {
         expect(breakClock(current)).toEqual(
           Option.some(BreakClock.Waiting({ elapsedMs: 0 })),
@@ -154,14 +151,14 @@ describe('the new zombie card', () => {
     story(
       update,
       given(carded),
-      ...ticks(DEBUT_CARD_MIN_MS / TICK_MS - 1),
+      ...ticks(DEBUT_CARD_MIN_MS / TICK_MS - 1, TICK_MS),
       ...tapKey('Enter'),
       message(Message.ClickedDebutCardButton()),
       model(current => {
         expect(current.debutCard._tag).toBe('Showing')
         expect(current.player.x).toBe(veteran.player.x)
       }),
-      tick,
+      tick(TICK_MS),
       ...tapKey('Enter'),
       model(current => {
         expect(current.debutCard).toEqual(DebutCard.Hidden())
@@ -170,11 +167,11 @@ describe('the new zombie card', () => {
     story(
       update,
       given(carded),
-      ...ticks(DEBUT_CARD_MS / TICK_MS - 1),
+      ...ticks(DEBUT_CARD_MS / TICK_MS - 1, TICK_MS),
       model(current => {
         expect(current.debutCard._tag).toBe('Showing')
       }),
-      tick,
+      tick(TICK_MS),
       model(current => {
         expect(current.debutCard).toEqual(DebutCard.Hidden())
       }),

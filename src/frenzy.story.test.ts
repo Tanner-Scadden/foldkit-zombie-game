@@ -1,34 +1,27 @@
 import { Array, Option } from 'effect'
-import { given, message, model, story } from 'foldkit/story'
+import { given, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { ARENA_LEVEL } from './arena'
 import { FRENZY_RULES, frenzyPace, frenzyPacksOf } from './frenzy'
-import { Message, update } from './main'
+import { update } from './main'
 import {
-  type Bullet,
   Frenzy,
   GameEvent,
   Invulnerability,
   type Model,
   Phase,
-  Pierce,
   type PlannedSpawn,
   type Zombie,
-  ZombieAction,
-  ZombieState,
   initialModel,
 } from './model'
+import { bulletInto, tick, ticks, zombieAt } from './testing'
 import { rollSpawns } from './waves'
 
 const FRAME_MS = 16
 const CENTER_X = ARENA_LEVEL.width / 2
 const CENTER_Y = ARENA_LEVEL.height / 2
-
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-
-const ticks = (count: number) => Array.makeBy(count, () => tick(FRAME_MS))
 
 const spawnOf = (
   pack: number,
@@ -74,41 +67,6 @@ const frenziedOf = (current: Model): ReadonlyArray<Zombie> =>
     Frenzy.isAnyOf(['Frenzied'])(zombie.frenzy),
   )
 
-const zombieAt = (
-  id: number,
-  x: number,
-  y: number,
-  frenzy: Frenzy,
-  hp = 1,
-): Zombie => ({
-  id,
-  kind: 'Shambler',
-  x,
-  y,
-  speed: 0,
-  hp,
-  maxHp: 3,
-  knockback: { x: 0, y: 0 },
-  hitRemainingMs: 0,
-  state: ZombieState.Walking(),
-  action: ZombieAction.Roaming(),
-  frenzy,
-})
-
-const bulletInto = (id: number, zombie: Zombie): Bullet => ({
-  id,
-  x: zombie.x,
-  y: zombie.y,
-  velocityX: 1,
-  velocityY: 0,
-  remainingMs: 900,
-  weapon: 'Pistol',
-  damage: 5,
-  knockback: 0,
-  glaze: 'Plain',
-  pierce: Pierce.Stops(),
-})
-
 describe('horde frenzy', () => {
   test('a pack of four or more frenzies, a pack of three does not', () => {
     const four = packOf(1, 4)
@@ -120,7 +78,7 @@ describe('horde frenzy', () => {
     story(
       update,
       given(sturdyIn([...four, ...three])),
-      ...ticks(200),
+      ...ticks(200, FRAME_MS),
       model(current => {
         const byPack = (pack: number) =>
           Array.filter(current.zombies, zombie =>
@@ -143,13 +101,12 @@ describe('horde frenzy', () => {
   })
 
   test('the pack warning rings a HORDE! callout and a frenzied zombie is about a sixth faster', () => {
-    const calm = zombieAt(1, 40, 40, Frenzy.Calm())
-    const frenzied = zombieAt(
-      2,
-      40,
-      50,
-      Frenzy.Frenzied({ pack: 1, apartMs: 0 }),
-    )
+    const calm = zombieAt(1, 40, 40, { frenzy: Frenzy.Calm(), hp: 1, maxHp: 3 })
+    const frenzied = zombieAt(2, 40, 50, {
+      frenzy: Frenzy.Frenzied({ pack: 1, apartMs: 0 }),
+      hp: 1,
+      maxHp: 3,
+    })
     expect(frenzyPace(calm)).toBe(1)
     expect(frenzyPace(frenzied)).toBeGreaterThanOrEqual(1.15)
     expect(frenzyPace(frenzied)).toBeLessThanOrEqual(1.2)
@@ -157,7 +114,7 @@ describe('horde frenzy', () => {
     story(
       update,
       given(sturdyIn(packOf(1, 5, 1500))),
-      ...ticks(40),
+      ...ticks(40, FRAME_MS),
       model(current => {
         expect(Array.some(current.popups, ({ kind }) => kind === 'Horde')).toBe(
           true,
@@ -169,11 +126,11 @@ describe('horde frenzy', () => {
   test('the frenzy fades from a straggler that drifts away from its pack', () => {
     const pack = Frenzy.Frenzied({ pack: 7, apartMs: 0 })
     const together = [
-      zombieAt(1, 40, 40, pack, 3),
-      zombieAt(2, 48, 40, pack, 3),
-      zombieAt(3, 40, 48, pack, 3),
+      zombieAt(1, 40, 40, { frenzy: pack }),
+      zombieAt(2, 48, 40, { frenzy: pack }),
+      zombieAt(3, 40, 48, { frenzy: pack }),
     ]
-    const straggler = zombieAt(4, 280, 160, pack, 3)
+    const straggler = zombieAt(4, 280, 160, { frenzy: pack })
     const start = modifyFields(sturdyIn([]), {
       zombies: () => [...together, straggler],
       frenzyPacks: () => [{ pack: 7, left: 4, bonus: 4 }],
@@ -186,7 +143,7 @@ describe('horde frenzy', () => {
     story(
       update,
       given(start),
-      ...ticks(apartFrames),
+      ...ticks(apartFrames, FRAME_MS),
       model(current => {
         const loner = Option.getOrThrow(
           Array.findFirst(current.zombies, ({ id }) => id === 4),
@@ -195,7 +152,7 @@ describe('horde frenzy', () => {
         expect(frenzyPace(loner)).toBeLessThan(FRENZY_RULES.paceScale)
         expect(frenziedOf(current)).toHaveLength(3)
       }),
-      ...ticks(fadeFrames),
+      ...ticks(fadeFrames, FRAME_MS),
       model(current => {
         const loner = Option.getOrThrow(
           Array.findFirst(current.zombies, ({ id }) => id === 4),
@@ -208,8 +165,12 @@ describe('horde frenzy', () => {
 
   test('wiping out the whole pack pays its bonus once', () => {
     const pack = Frenzy.Frenzied({ pack: 3, apartMs: 0 })
-    const first = zombieAt(1, 60, 60, pack)
-    const second = zombieAt(2, 66, 60, Frenzy.Spent({ pack: 3 }))
+    const first = zombieAt(1, 60, 60, { frenzy: pack, hp: 1, maxHp: 3 })
+    const second = zombieAt(2, 66, 60, {
+      frenzy: Frenzy.Spent({ pack: 3 }),
+      hp: 1,
+      maxHp: 3,
+    })
     const start = modifyFields(sturdyIn([]), {
       zombies: () => [first, second],
       frenzyPacks: () => [{ pack: 3, left: 2, bonus: 9 }],
@@ -219,7 +180,7 @@ describe('horde frenzy', () => {
       update,
       given(
         modifyFields(start, {
-          bullets: () => [bulletInto(500, first)],
+          bullets: () => [bulletInto(500, first, { damage: 5, knockback: 0 })],
         }),
       ),
       tick(FRAME_MS),
@@ -235,7 +196,10 @@ describe('horde frenzy', () => {
       update,
       given(
         modifyFields(start, {
-          bullets: () => [bulletInto(500, first), bulletInto(501, second)],
+          bullets: () => [
+            bulletInto(500, first, { damage: 5, knockback: 0 }),
+            bulletInto(501, second, { damage: 5, knockback: 0 }),
+          ],
         }),
       ),
       tick(FRAME_MS),
@@ -249,7 +213,7 @@ describe('horde frenzy', () => {
         expect(current.frenzyPacks).toEqual([])
         expect(current.wallet.earned - start.wallet.earned).toBe(9 + 2 * 2)
       }),
-      ...ticks(3),
+      ...ticks(3, FRAME_MS),
       model(current => {
         expect(
           Array.some(current.frameEvents, GameEvent.isAnyOf(['PackWiped'])),

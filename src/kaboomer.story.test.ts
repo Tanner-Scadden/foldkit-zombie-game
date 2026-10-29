@@ -1,12 +1,12 @@
 import { Array, Option, Result } from 'effect'
 import type { Canvas } from 'foldkit'
-import { given, message, model, story } from 'foldkit/story'
+import { given, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { ARENA_LEVEL } from './arena'
 import { HIT_STOP_KILL_MAX_MS } from './constants'
-import { Message, update } from './main'
+import { update } from './main'
 import { debutPitch } from './menus'
 import {
   type Bullet,
@@ -14,7 +14,6 @@ import {
   GameEvent,
   type Model,
   Phase,
-  Pierce,
   type PlannedSpawn,
   type Zombie,
   ZombieAction,
@@ -22,6 +21,7 @@ import {
   initialModel,
 } from './model'
 import { KABOOMER_FUSE_MAX } from './sprite'
+import { bulletInto, tick, ticks } from './testing'
 import { wavePreviewLabel } from './wavePreview'
 import { rollSpawns } from './waves'
 import {
@@ -34,10 +34,6 @@ import { Behavior, ZOMBIE_KINDS } from './zombies'
 const FRAME_MS = 10
 const CENTER_X = ARENA_LEVEL.width / 2
 const CENTER_Y = ARENA_LEVEL.height / 2
-
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-
-const ticks = (count: number) => Array.makeBy(count, () => tick(FRAME_MS))
 
 const BOMBER = Behavior.match(ZOMBIE_KINDS.Exploder.behavior, {
   Brawler: () => undefined,
@@ -91,20 +87,6 @@ const sceneWith = (
     bullets: () => bullets,
   })
 
-const bulletInto = (id: number, zombie: Zombie): Bullet => ({
-  id,
-  x: zombie.x,
-  y: zombie.y,
-  velocityX: 1,
-  velocityY: 0,
-  remainingMs: 900,
-  weapon: 'Pistol',
-  damage: 3,
-  knockback: 0,
-  glaze: 'Plain',
-  pierce: Pierce.Stops(),
-})
-
 const blewUp = (current: Model): boolean =>
   Array.some(current.frameEvents, GameEvent.isAnyOf(['Exploded']))
 
@@ -133,12 +115,12 @@ describe('the Kaboomer', () => {
           circleRadii(zombieGroundShapes(current.zombies, current.elapsedMs)),
         ).toContain(radius)
       }),
-      ...ticks(Math.floor(contactMs / FRAME_MS) - 1),
+      ...ticks(Math.floor(contactMs / FRAME_MS) - 1, FRAME_MS),
       model(current => {
         expect(blewUp(current)).toBe(false)
         expect(current.zombies).toHaveLength(1)
       }),
-      ...ticks(2),
+      ...ticks(2, FRAME_MS),
       model(current => {
         expect(current.zombies).toHaveLength(0)
       }),
@@ -152,7 +134,12 @@ describe('the Kaboomer', () => {
 
     story(
       update,
-      given(sceneWith([gasbag], [bulletInto(5, gasbag)])),
+      given(
+        sceneWith(
+          [gasbag],
+          [bulletInto(5, gasbag, { damage: 3, knockback: 0 })],
+        ),
+      ),
       tick(FRAME_MS),
       model(current => {
         expect(
@@ -161,11 +148,11 @@ describe('the Kaboomer', () => {
           ),
         ).toBe(true)
       }),
-      ...ticks(Math.floor(shotMs / FRAME_MS) - 1),
+      ...ticks(Math.floor(shotMs / FRAME_MS) - 1, FRAME_MS),
       model(current => {
         expect(current.zombies).toHaveLength(1)
       }),
-      ...ticks(2 + Math.ceil(HIT_STOP_KILL_MAX_MS / FRAME_MS)),
+      ...ticks(2 + Math.ceil(HIT_STOP_KILL_MAX_MS / FRAME_MS), FRAME_MS),
       model(current => {
         expect(current.zombies).toHaveLength(0)
       }),
@@ -192,7 +179,12 @@ describe('the Kaboomer', () => {
 
     story(
       update,
-      given(sceneWith([first, second], [bulletInto(5, first)])),
+      given(
+        sceneWith(
+          [first, second],
+          [bulletInto(5, first, { damage: 3, knockback: 0 })],
+        ),
+      ),
       ...recorded,
     )
 

@@ -30,6 +30,7 @@ import {
   initialModel,
   noKills,
 } from './model'
+import { showDialog } from './testing'
 import { asVeteran } from './veteran'
 import { pause } from './waves'
 
@@ -52,9 +53,6 @@ const withKills = (base: Model, shamblers: number, runMs: number): Model =>
         runMs: () => runMs,
       }),
   })
-
-const showDialog = () =>
-  Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog())
 
 const farSpawn: PlannedSpawn = {
   atMs: 1e9,

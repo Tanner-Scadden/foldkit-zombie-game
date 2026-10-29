@@ -1,5 +1,4 @@
 import {
-  Mount,
   Subscription,
   all,
   click,
@@ -18,18 +17,10 @@ import { describe, test, expect as vitestExpect } from 'vitest'
 import { PREPARATION_MS } from './constants'
 import { Message, update } from './main'
 import { Arsenal, type Model, MouseButton, Phase, initialModel } from './model'
-import { MeasureGameSurface, view } from './view'
+import { fighting, measureSurface } from './testing'
+import { view } from './view'
 import { pause } from './waves'
 import { WEAPONS, tierName } from './weapons'
-
-const measureSurface = Mount.resolve(
-  MeasureGameSurface,
-  Message.MeasuredGameSurface({ left: 0, top: 0, width: 800, height: 400 }),
-)
-
-const fighting: Model = modifyFields(initialModel, {
-  phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),
-})
 
 const pausedOn = (device: Model['lastDevice']): Model =>
   pause(modifyFields(fighting, { lastDevice: () => device }))

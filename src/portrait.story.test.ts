@@ -29,6 +29,7 @@ import {
   screenOf,
   thumbAreaTop,
 } from './screen'
+import { ticks } from './testing'
 import { asVeteran } from './veteran'
 
 const PORTRAIT_SURFACE = { left: 0, top: 0, width: 390, height: 844 }
@@ -62,10 +63,6 @@ const fightingInLandscape: Model = modifyFields(fightingInPortrait, {
 
 const standingAt = (base: Model, x: number, y: number): Model =>
   modifyFields(base, { player: player => ({ ...player, x, y }) })
-
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-
-const ticks = (count: number) => Array.makeBy(count, () => tick(FRAME_MS))
 
 const pressThumb = (pointerId: number, clientX: number, clientY: number) =>
   message(
@@ -213,7 +210,7 @@ describe('the aim lean', () => {
       given(standingAt(fightingInPortrait, 160, 120)),
       pressThumb(RIGHT_THUMB, 300, 700),
       moveThumb(RIGHT_THUMB, 300 + STICK_RADIUS_PX, 700),
-      ...ticks(90),
+      ...ticks(90, FRAME_MS),
       model(current => {
         expect(current.cameraLean.x).toBeGreaterThan(CAMERA_LEAN_PX - 1)
         expect(current.cameraLean.x).toBeLessThanOrEqual(CAMERA_LEAN_PX)
@@ -223,7 +220,7 @@ describe('the aim lean', () => {
         expect(current.player.x - camera.x).toBeLessThan(135 / 2)
       }),
       message(Message.ReleasedPointer({ pointerId: RIGHT_THUMB })),
-      ...ticks(120),
+      ...ticks(120, FRAME_MS),
       model(current => {
         expect(current.cameraLean).toEqual({ x: 0, y: 0 })
       }),
@@ -347,7 +344,7 @@ describe('turning the phone', () => {
         expect(Stick.isAnyOf(['Active'])(current.input.aimStick)).toBe(true)
         expect(current.intent.trigger).toBe('Held')
       }),
-      ...ticks(3),
+      ...ticks(3, FRAME_MS),
       model(current => {
         expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)
         expect(current.stats.shotsFired).toBeGreaterThan(0)

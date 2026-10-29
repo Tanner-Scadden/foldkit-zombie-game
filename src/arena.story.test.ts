@@ -1,5 +1,5 @@
 import { Array, Option, Result, pipe } from 'effect'
-import { given, message, model, story } from 'foldkit/story'
+import { given, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
@@ -20,21 +20,18 @@ import {
   ZOMBIE_MAX_HP,
   ZOMBIE_RADIUS,
 } from './constants'
-import { Message, update } from './main'
+import { update } from './main'
 import {
   type Bullet,
-  Frenzy,
   type Model,
   type Particle,
   Phase,
   Pierce,
   type PlannedSpawn,
-  type Zombie,
-  ZombieAction,
-  ZombieState,
   initialModel,
 } from './model'
 import { UNREACHED_DISTANCE } from './pathing'
+import { press, tick, ticks, zombieAt } from './testing'
 
 const FRAME_MS = 16
 
@@ -58,28 +55,6 @@ const withPlayerAt = (base: Model, x: number, y: number): Model =>
   modifyFields(base, {
     player: player => modifyFields(player, { x: () => x, y: () => y }),
   })
-
-const zombieAt = (id: number, x: number, y: number, speed = 0): Zombie => ({
-  id,
-  kind: 'Shambler',
-  x,
-  y,
-  speed,
-  hp: ZOMBIE_MAX_HP,
-  maxHp: ZOMBIE_MAX_HP,
-  knockback: { x: 0, y: 0 },
-  hitRemainingMs: 0,
-  state: ZombieState.Walking(),
-  action: ZombieAction.Roaming(),
-  frenzy: Frenzy.Calm(),
-})
-
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-
-const ticks = (count: number, deltaTime: number) =>
-  Array.makeBy(count, () => tick(deltaTime))
-
-const press = (code: string) => message(Message.PressedKey({ code }))
 
 const PIANO_RIGHT = 70
 const PIANO_BOTTOM = 50

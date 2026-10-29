@@ -28,9 +28,8 @@ import {
   unopenedKinds,
 } from './munchopedia'
 import { saveOf } from './save'
+import { SURFACE, press, showDialog, tick } from './testing'
 import { asVeteran } from './veteran'
-
-const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 
 const home: Model = modifyFields(asVeteran(initialModel), {
   maybeSurface: () => Option.some(SURFACE),
@@ -38,14 +37,7 @@ const home: Model = modifyFields(asVeteran(initialModel), {
 
 const homeAfterRead: Model = modifyFields(home, { saveStatus: () => 'Read' })
 
-const showDialog = () =>
-  Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog())
-
 const writeSave = () => Command.resolve(WriteSave, Message.CompletedWriteSave())
-
-const press = (code: string) => message(Message.PressedKey({ code }))
-
-const tick = message(Message.TickedFrame({ deltaTime: 16 }))
 
 const farSpawn: PlannedSpawn = {
   atMs: 1e9,
@@ -328,7 +320,7 @@ describe('the Munchopedia', () => {
       given(
         withKills(dyingWith(home, { Runner: 1, Shambler: 3 }), { Shambler: 5 }),
       ),
-      tick,
+      tick(16),
       model(current => {
         expect(Phase.guards.GameOver(current.phase)).toBe(true)
         expect(current.home.newEntries).toEqual(['Runner'])
@@ -402,7 +394,7 @@ describe('the Munchopedia', () => {
     story(
       update,
       given(withKills(dyingWith(home, { Runner: 4 }), { Runner: 9 })),
-      tick,
+      tick(16),
       model(current => {
         expect(current.bests.killsByKind.Runner).toBe(13)
         expect(current.home.newEntries).toEqual([])
@@ -414,7 +406,7 @@ describe('the Munchopedia', () => {
     story(
       update,
       given(dyingWith(home, { Boss: 1, Shambler: 20 })),
-      tick,
+      tick(16),
       model(current => {
         expect(isDiscovered(current.bests.killsByKind, 'Boss')).toBe(true)
         expect(current.bests.killsByKind.Boss).toBe(1)

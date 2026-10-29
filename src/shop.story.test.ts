@@ -22,7 +22,6 @@ import {
   Arsenal,
   type Bullet,
   type CarriedGun,
-  Frenzy,
   GameEvent,
   type Model,
   Phase,
@@ -32,9 +31,6 @@ import {
   type ShopItemId,
   ShopState,
   type WeaponKind,
-  type Zombie,
-  ZombieAction,
-  ZombieState,
   initialModel,
 } from './model'
 import {
@@ -45,7 +41,15 @@ import {
   stallPrompt,
   totalAffordable,
 } from './shop'
-import { holdFire } from './testInput'
+import {
+  bulletInto,
+  holdFire,
+  press,
+  release,
+  tick,
+  ticks,
+  zombieAt,
+} from './testing'
 import { asVeteran } from './veteran'
 import { FINAL_WAVE, waveBonus } from './waves'
 import {
@@ -77,16 +81,8 @@ const DISTANT_SPAWN: PlannedSpawn = {
   formation: 'Squad',
 }
 
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-
-const ticks = (count: number, deltaTime: number) =>
-  Array.makeBy(count, () => tick(deltaTime))
-
 const GRACE_TICK_MS = 50
 const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
-
-const press = (code: string) => message(Message.PressedKey({ code }))
-const release = (code: string) => message(Message.ReleasedKey({ code }))
 
 const resolveShowShop = Command.resolve(
   Dialog.ShowDialog,
@@ -159,36 +155,7 @@ const gun = (
   tier,
 })
 
-const zombieAt = (id: number, x: number, y: number, hp: number): Zombie => ({
-  id,
-  kind: 'Shambler',
-  x,
-  y,
-  speed: 0,
-  hp,
-  maxHp: hp,
-  knockback: { x: 0, y: 0 },
-  hitRemainingMs: 0,
-  state: ZombieState.Walking(),
-  action: ZombieAction.Roaming(),
-  frenzy: Frenzy.Calm(),
-})
-
-const bulletInto = (id: number, { x, y }: Zombie): Bullet => ({
-  id,
-  x,
-  y,
-  velocityX: 1,
-  velocityY: 0,
-  remainingMs: 900,
-  weapon: 'Pistol',
-  damage: 1,
-  knockback: 110,
-  glaze: 'Plain',
-  pierce: Pierce.Stops(),
-})
-
-const doomed = zombieAt(100, 170, PLAYER_Y, 1)
+const doomed = zombieAt(100, 170, PLAYER_Y, { hp: 1 })
 
 const killShot = (base: Model): Model =>
   modifyFields(base, {
@@ -768,7 +735,7 @@ describe('shotgun spread', () => {
 
 describe('zombies still need two pistol shots', () => {
   test('the pistol deals one damage per bullet', () => {
-    const tough = zombieAt(100, 170, PLAYER_Y, ZOMBIE_MAX_HP)
+    const tough = zombieAt(100, 170, PLAYER_Y, { hp: ZOMBIE_MAX_HP })
     story(
       update,
       given(

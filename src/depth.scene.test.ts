@@ -5,21 +5,12 @@ import { describe, expect, test } from 'vitest'
 
 import { type Drawable, depthSortedShapes } from './depth'
 import { sceneShapes } from './layers'
-import {
-  Frenzy,
-  type Model,
-  Phase,
-  type Zombie,
-  ZombieAction,
-  type ZombieKind,
-  ZombieState,
-  initialModel,
-} from './model'
+import { type Model, Phase, type Zombie, initialModel } from './model'
 import { playerShapes } from './playerView'
 import { STALL_BOX } from './shop'
 import { stallShapes } from './stall'
+import { zombieOf } from './testing'
 import { zombieShapes } from './zombieView'
-import { ZOMBIE_KINDS } from './zombies'
 
 const marker = (id: number): Canvas.Shape =>
   Canvas.Rect({ x: id, y: 0, width: 1, height: 1, fill: '#fff' })
@@ -33,21 +24,6 @@ const fightingModel = (
     player: current => ({ ...current, ...player }),
     zombies: () => zombies,
   })
-
-const zombieOf = (kind: ZombieKind, id: number, x: number, y: number) => ({
-  id,
-  kind,
-  x,
-  y,
-  speed: 0,
-  hp: ZOMBIE_KINDS[kind].hp,
-  maxHp: ZOMBIE_KINDS[kind].hp,
-  knockback: { x: 0, y: 0 },
-  hitRemainingMs: 0,
-  state: ZombieState.Walking(),
-  action: ZombieAction.Roaming(),
-  frenzy: Frenzy.Calm(),
-})
 
 const worldShapesOf = (current: Model): ReadonlyArray<Canvas.Shape> =>
   Option.match(Array.head(sceneShapes(current)), {

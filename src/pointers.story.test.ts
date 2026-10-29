@@ -6,9 +6,9 @@ import { describe, expect, test } from 'vitest'
 import { isTrackingPointer } from './input'
 import { Message, subscriptions, update } from './main'
 import { type Model, MouseButton, Phase, Stick, initialModel } from './model'
+import { SURFACE } from './testing'
 import { asVeteran } from './veteran'
 
-const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 const LEFT_THUMB = 11
 const RIGHT_THUMB = 12
 const MOUSE_POINTER = 1

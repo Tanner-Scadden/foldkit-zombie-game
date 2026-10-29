@@ -22,9 +22,9 @@ import {
   Stick,
   initialModel,
 } from './model'
+import { SURFACE, tick } from './testing'
 import { asVeteran } from './veteran'
 
-const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 const FRAME_MS = 16
 const MOUSE_POINTER = 1
 const RIGHT_THUMB = 12
@@ -64,8 +64,6 @@ const fightingModel: Model = modifyFields(readyModel, {
 const pausedModel: Model = modifyFields(readyModel, {
   phase: () => Phase.Paused({ round: FIGHTING_PHASE }),
 })
-
-const tick = message(Message.TickedFrame({ deltaTime: FRAME_MS }))
 
 const blurWindow = message(Message.BlurredWindow())
 
@@ -113,7 +111,7 @@ describe('leaving the window', () => {
         expect(input.mouseButton).toEqual(MouseButton.Released())
         expect(intent.trigger).toBe('Released')
       }),
-      tick,
+      tick(FRAME_MS),
       model(({ phase }) => {
         expect(phase).toEqual(Phase.Paused({ round: FIGHTING_PHASE }))
       }),
@@ -192,13 +190,13 @@ describe('resuming', () => {
         expect(input.mouseButton).toEqual(MouseButton.Released())
         expect(intent.trigger).toBe('Released')
       }),
-      tick,
+      tick(FRAME_MS),
       model(({ stats }) => {
         expect(stats.shotsFired).toBe(0)
       }),
       message(Message.ReleasedPointer({ pointerId: MOUSE_POINTER })),
       mouseDown,
-      tick,
+      tick(FRAME_MS),
       model(({ stats }) => {
         expect(stats.shotsFired).toBe(1)
       }),

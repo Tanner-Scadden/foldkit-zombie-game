@@ -10,15 +10,14 @@ import { clientToView } from './geometry'
 import { deriveIntent } from './input'
 import { Message, update } from './main'
 import { type Input, type Model, Phase, initialModel } from './model'
-
-const SURFACE = { left: 0, top: 0, width: 1280, height: 720 }
+import { WIDE_SURFACE } from './testing'
 
 const WIDE_LEVEL = makeLevel(Array.map(ROOM_MAP, line => line + line))
 
 const NARROW_LEVEL = makeLevel(Array.map(ROOM_MAP, line => line.slice(0, 16)))
 
 const playingModel: Model = modifyFields(initialModel, {
-  maybeSurface: () => Option.some(SURFACE),
+  maybeSurface: () => Option.some(WIDE_SURFACE),
   phase: () =>
     Phase.Wave({
       wave: 1,
@@ -100,7 +99,7 @@ describe('camera', () => {
     expect(camera).toMatchObject({ x: 240, y: 0 })
 
     const cursorInView = Option.getOrThrow(
-      clientToView(SURFACE, { x: 1120, y: 360 }),
+      clientToView(WIDE_SURFACE, { x: 1120, y: 360 }),
     )
     expect(cursorInView).toEqual({ x: 280, y: 90 })
     expect(viewToWorld(camera, cursorInView)).toEqual({ x: 520, y: 90 })

@@ -32,15 +32,11 @@ import {
   initialModel,
 } from './model'
 import { DEBUT_CARD_MIN_MS } from './onboarding'
+import { measureSurface } from './testing'
 import { asVeteran } from './veteran'
-import { MeasureGameSurface, view } from './view'
+import { view } from './view'
 import { pause } from './waves'
 import { maxRounds } from './weapons'
-
-const measureSurface = Mount.resolve(
-  MeasureGameSurface,
-  Message.MeasuredGameSurface({ left: 0, top: 0, width: 800, height: 400 }),
-)
 
 const PLAY_AGAIN =
   'Press Enter or choose Campaign for 8 waves, or press E or choose Endless to fight until you fall.'

@@ -1,38 +1,14 @@
 import { Option } from 'effect'
-import {
-  Command,
-  Mount,
-  click,
-  expect,
-  given,
-  inside,
-  role,
-  scene,
-  text,
-} from 'foldkit/scene'
+import { click, expect, given, inside, role, scene, text } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
-
 import { RESTART_GRACE_MS } from './constants'
-import { Message, update } from './main'
+import { update } from './main'
 import { type Model, Phase, initialModel } from './model'
+import { measureSurface, showDialogInScene } from './testing'
 import { asVeteran } from './veteran'
-import { MeasureGameSurface, view } from './view'
-
-const measureSurface = Mount.resolve(
-  MeasureGameSurface,
-  Message.MeasuredGameSurface({ left: 0, top: 0, width: 800, height: 400 }),
-)
-
-const showDialog = () => [
-  Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-  Mount.resolve(
-    Dialog.AcquireResources,
-    Dialog.Message.SucceededAcquireResources(),
-  ),
-]
+import { view } from './view'
 
 const playButton = role('button', {
   name: 'Play the campaign: 8 waves, then victory',
@@ -61,7 +37,7 @@ describe('the difficulty card', () => {
       given(initialModel),
       measureSurface,
       click(playButton),
-      ...showDialog(),
+      ...showDialogInScene(),
       inside(
         card,
         expect(easy).toExist(),
@@ -83,7 +59,7 @@ describe('the difficulty card', () => {
       ),
       measureSurface,
       click(playButton),
-      ...showDialog(),
+      ...showDialogInScene(),
       inside(
         card,
         expect(openNightmare).toExist(),
@@ -101,7 +77,7 @@ describe('difficulty in SETTINGS', () => {
       given(asVeteran(initialModel)),
       measureSurface,
       click(settingsButton),
-      ...showDialog(),
+      ...showDialogInScene(),
       inside(
         settings,
         expect(normal).toHaveAttr('aria-pressed', 'true'),

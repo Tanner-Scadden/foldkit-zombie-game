@@ -25,10 +25,10 @@ import {
   initialModel,
 } from './model'
 import type { MusicMood } from './music'
+import { SURFACE, tick } from './testing'
 import { asVeteran } from './veteran'
 import { FINAL_WAVE } from './waves'
 
-const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 const FRAME_MS = 16
 const FAR_AWAY_SPAWN: PlannedSpawn = {
   atMs: 1e9,
@@ -67,7 +67,6 @@ const fighting = (wave: number, audio: AudioState): Model =>
     phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns: [FAR_AWAY_SPAWN] }),
   })
 
-const tick = message(Message.TickedFrame({ deltaTime: FRAME_MS }))
 const pressKey = (code: string) => message(Message.PressedKey({ code }))
 
 const resolveCue = (mood: MusicMood) =>
@@ -133,7 +132,7 @@ describe('music follows the phase', () => {
         CueMusic({ mood: 'Romp', level: 'Full', stinger: 'None' }),
       ),
       resolveCue('Romp'),
-      tick,
+      tick(FRAME_MS),
       model(({ phase }) => {
         expect(phase._tag).toBe('Preparation')
       }),
@@ -154,7 +153,7 @@ describe('music follows the phase', () => {
         CueMusic({ mood: 'Stampede', level: 'Full', stinger: 'None' }),
       ),
       resolveCue('Stampede'),
-      tick,
+      tick(FRAME_MS),
       model(({ phase }) => {
         expect(phase).toEqual(Phase.Victory())
       }),
@@ -190,7 +189,7 @@ describe('music follows the phase', () => {
           ],
         }),
       ),
-      tick,
+      tick(FRAME_MS),
       model(({ phase }) => {
         expect(phase._tag).toBe('GameOver')
       }),
@@ -206,8 +205,8 @@ describe('music follows the phase', () => {
     story(
       update,
       given(fighting(2, AudioState.Ready())),
-      tick,
-      tick,
+      tick(FRAME_MS),
+      tick(FRAME_MS),
       Command.expectNone(),
     )
   })
@@ -235,7 +234,7 @@ describe('music only plays when it can be heard', () => {
               }),
           }),
         ),
-        tick,
+        tick(FRAME_MS),
         model(({ phase }) => {
           expect(phase._tag).toBe('Wave')
         }),
@@ -372,7 +371,7 @@ describe('music only plays when it can be heard', () => {
         }),
       ),
       pressKey('Enter'),
-      tick,
+      tick(FRAME_MS),
       model(({ phase }) => {
         expect(phase).toEqual(Phase.Victory())
       }),

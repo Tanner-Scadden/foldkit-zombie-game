@@ -1,9 +1,9 @@
 import { Array, Option } from 'effect'
-import { given, message, model, story } from 'foldkit/story'
+import { given, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { Message, update } from './main'
+import { update } from './main'
 import {
   Frenzy,
   Invulnerability,
@@ -13,11 +13,9 @@ import {
   Trap,
   type Vector,
   type Zombie,
-  ZombieAction,
-  type ZombieKind,
-  ZombieState,
   initialModel,
 } from './model'
+import { ticks, zombieOf } from './testing'
 import { TRAPS } from './traps'
 import { ZOMBIE_KINDS } from './zombies'
 
@@ -46,25 +44,6 @@ const westPlank = Trap.Barricade({
   hitRemainingMs: 0,
 })
 
-const zombieOf = (
-  kind: ZombieKind,
-  at: Vector,
-  frenzy: Frenzy = Frenzy.Calm(),
-): Zombie => ({
-  id: 50,
-  kind,
-  x: at.x,
-  y: at.y,
-  speed: SPEED,
-  hp: ZOMBIE_KINDS[kind].hp,
-  maxHp: ZOMBIE_KINDS[kind].hp,
-  knockback: { x: 0, y: 0 },
-  hitRemainingMs: 0,
-  state: ZombieState.Walking(),
-  action: ZombieAction.Roaming(),
-  frenzy,
-})
-
 const fightingWith = (zombie: Zombie): Model =>
   modifyFields(initialModel, {
     maybeSurface: () =>
@@ -81,11 +60,6 @@ const fightingWith = (zombie: Zombie): Model =>
       }),
   })
 
-const ticks = (count: number) =>
-  Array.makeBy(count, () =>
-    message(Message.TickedFrame({ deltaTime: FRAME_MS })),
-  )
-
 const onlyZombie = (current: Model): Zombie =>
   Option.getOrThrow(Array.head(current.zombies))
 
@@ -99,12 +73,18 @@ describe('planks as bait', () => {
   test('a Groaner near a Plank Pile walks over and chews it instead of chasing the player', () => {
     story(
       update,
-      given(fightingWith(zombieOf('Shambler', NEAR_WEST_PLANK))),
-      ...ticks(20),
+      given(
+        fightingWith(
+          zombieOf('Shambler', 50, NEAR_WEST_PLANK.x, NEAR_WEST_PLANK.y, {
+            speed: SPEED,
+          }),
+        ),
+      ),
+      ...ticks(20, FRAME_MS),
       model(current => {
         expect(onlyZombie(current).x).toBeLessThan(NEAR_WEST_PLANK.x - 10)
       }),
-      ...ticks(40),
+      ...ticks(40, FRAME_MS),
       model(current => {
         expect(plankHp(current)).toBeLessThan(TRAPS.Barricade.hp - 3)
         expect(onlyZombie(current).x).toBeLessThan(NEAR_WEST_PLANK.x)
@@ -115,8 +95,14 @@ describe('planks as bait', () => {
   test('a Big Lug is drawn too, and chews much faster', () => {
     story(
       update,
-      given(fightingWith(zombieOf('Tank', NEAR_WEST_PLANK))),
-      ...ticks(60),
+      given(
+        fightingWith(
+          zombieOf('Tank', 50, NEAR_WEST_PLANK.x, NEAR_WEST_PLANK.y, {
+            speed: SPEED,
+          }),
+        ),
+      ),
+      ...ticks(60, FRAME_MS),
       model(current => {
         expect(plankHp(current)).toBeLessThan(TRAPS.Barricade.hp - 10)
       }),
@@ -126,8 +112,14 @@ describe('planks as bait', () => {
   test('a Hotfoot ignores the plank and goes for the player', () => {
     story(
       update,
-      given(fightingWith(zombieOf('Runner', NEAR_WEST_PLANK))),
-      ...ticks(20),
+      given(
+        fightingWith(
+          zombieOf('Runner', 50, NEAR_WEST_PLANK.x, NEAR_WEST_PLANK.y, {
+            speed: SPEED,
+          }),
+        ),
+      ),
+      ...ticks(20, FRAME_MS),
       model(current => {
         expect(onlyZombie(current).x).toBeGreaterThan(NEAR_WEST_PLANK.x + 10)
         expect(plankHp(current)).toBe(TRAPS.Barricade.hp)
@@ -140,8 +132,14 @@ describe('planks as bait', () => {
     expect(ZOMBIE_KINDS.Thrower.bait).toBe('Ignores')
     story(
       update,
-      given(fightingWith(zombieOf('Thrower', NEAR_WEST_PLANK))),
-      ...ticks(20),
+      given(
+        fightingWith(
+          zombieOf('Thrower', 50, NEAR_WEST_PLANK.x, NEAR_WEST_PLANK.y, {
+            speed: SPEED,
+          }),
+        ),
+      ),
+      ...ticks(20, FRAME_MS),
       model(current => {
         expect(onlyZombie(current).x).toBeGreaterThan(NEAR_WEST_PLANK.x + 3)
         expect(plankHp(current)).toBe(TRAPS.Barricade.hp)
@@ -154,14 +152,13 @@ describe('planks as bait', () => {
       update,
       given(
         fightingWith(
-          zombieOf(
-            'Shambler',
-            NEAR_WEST_PLANK,
-            Frenzy.Frenzied({ pack: 1, apartMs: 0 }),
-          ),
+          zombieOf('Shambler', 50, NEAR_WEST_PLANK.x, NEAR_WEST_PLANK.y, {
+            speed: SPEED,
+            frenzy: Frenzy.Frenzied({ pack: 1, apartMs: 0 }),
+          }),
         ),
       ),
-      ...ticks(10),
+      ...ticks(10, FRAME_MS),
       model(current => {
         expect(onlyZombie(current).x).toBeGreaterThan(NEAR_WEST_PLANK.x + 5)
       }),
@@ -171,8 +168,14 @@ describe('planks as bait', () => {
   test('a Groaner beyond the pull radius chases the player', () => {
     story(
       update,
-      given(fightingWith(zombieOf('Shambler', FAR_FROM_PLANKS))),
-      ...ticks(20),
+      given(
+        fightingWith(
+          zombieOf('Shambler', 50, FAR_FROM_PLANKS.x, FAR_FROM_PLANKS.y, {
+            speed: SPEED,
+          }),
+        ),
+      ),
+      ...ticks(20, FRAME_MS),
       model(current => {
         expect(onlyZombie(current).x).toBeGreaterThan(FAR_FROM_PLANKS.x + 10)
       }),
@@ -183,11 +186,19 @@ describe('planks as bait', () => {
     story(
       update,
       given(
-        modifyFields(fightingWith(zombieOf('Shambler', NEAR_WEST_PLANK)), {
-          player: player => modifyFields(player, { x: () => 70, y: () => 90 }),
-        }),
+        modifyFields(
+          fightingWith(
+            zombieOf('Shambler', 50, NEAR_WEST_PLANK.x, NEAR_WEST_PLANK.y, {
+              speed: SPEED,
+            }),
+          ),
+          {
+            player: player =>
+              modifyFields(player, { x: () => 70, y: () => 90 }),
+          },
+        ),
       ),
-      ...ticks(10),
+      ...ticks(10, FRAME_MS),
       model(current => {
         expect(onlyZombie(current).x).toBeGreaterThan(NEAR_WEST_PLANK.x + 5)
       }),

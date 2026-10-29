@@ -21,20 +21,12 @@ import {
   ShopState,
   initialModel,
 } from './model'
-import { holdFire, releaseFire } from './testInput'
+import { holdFire, press, release, releaseFire, tick, ticks } from './testing'
 import { WEAPONS, maybeSpare } from './weapons'
 
 const FRAME_MS = 50
 const TICKS_PER_SHOT = FIRE_INTERVAL_MS / FRAME_MS
 const PISTOL_RELOAD_TICKS = PISTOL_RELOAD_MS / FRAME_MS
-
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-
-const ticks = (count: number, deltaTime: number) =>
-  Array.makeBy(count, () => tick(deltaTime))
-
-const press = (code: string) => message(Message.PressedKey({ code }))
-const release = (code: string) => message(Message.ReleasedKey({ code }))
 
 const HELD_SPAWN: PlannedSpawn = {
   atMs: 1e9,

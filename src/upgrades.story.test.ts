@@ -17,7 +17,7 @@ import {
   initialModel,
 } from './model'
 import { Verdict, verdictFor } from './shop'
-import { holdFire } from './testInput'
+import { holdFire, press, tick } from './testing'
 import {
   UPGRADE_TIERS,
   magazineOf,
@@ -68,8 +68,6 @@ const spare = (kind: WeaponKind, rounds: number, tier = 0): CarriedGun => ({
   tier,
 })
 
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-const press = (code: string) => message(Message.PressedKey({ code }))
 const buy = (item: ShopItemId) => message(Message.PressedBuyKey({ item }))
 
 const tierPrices = (kind: WeaponKind): ReadonlyArray<number> =>

@@ -46,7 +46,6 @@ import {
   Arsenal,
   type Bullet,
   type Decal,
-  Frenzy,
   GameEvent,
   HitStop,
   Invulnerability,
@@ -59,14 +58,20 @@ import {
   Stick,
   Streak,
   type Zombie,
-  ZombieAction,
   ZombieState,
   initialModel,
 } from './model'
-import { holdFire, releaseFire } from './testInput'
+import {
+  SURFACE,
+  bulletInto,
+  holdFire,
+  releaseFire,
+  tick,
+  ticks,
+  zombieAt,
+} from './testing'
 import { asVeteran } from './veteran'
 
-const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 const LEFT_THUMB = 11
 const RIGHT_THUMB = 12
 const STRAY_POINTER = 99
@@ -97,23 +102,8 @@ const playingModel: Model = modifyFields(readyModel, {
   phase: () => FIGHTING_PHASE,
 })
 
-const zombieAt = (id: number, x: number, y: number, speed = 20): Zombie => ({
-  id,
-  kind: 'Shambler',
-  x,
-  y,
-  speed,
-  hp: ZOMBIE_MAX_HP,
-  maxHp: ZOMBIE_MAX_HP,
-  knockback: { x: 0, y: 0 },
-  hitRemainingMs: 0,
-  state: ZombieState.Walking(),
-  action: ZombieAction.Roaming(),
-  frenzy: Frenzy.Calm(),
-})
-
 const dyingZombieAt = (id: number, x: number, y: number): Zombie =>
-  modifyFields(zombieAt(id, x, y, 0), {
+  modifyFields(zombieAt(id, x, y, { speed: 0 }), {
     hp: () => 0,
     state: () =>
       ZombieState.Dying({
@@ -128,11 +118,6 @@ const RIGHT = { x: 1, y: 0 }
 
 const withZombies = (base: Model, zombies: ReadonlyArray<Zombie>): Model =>
   modifyFields(base, { zombies: () => zombies })
-
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-
-const ticks = (count: number, deltaTime: number) =>
-  Array.makeBy(count, () => tick(deltaTime))
 
 const GRACE_TICK_MS = 50
 const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
@@ -302,11 +287,15 @@ describe('zombies', () => {
     story(
       update,
       given(
-        withZombies(playingModel, [zombieAt(100, 100, ARENA_LEVEL.height / 2)]),
+        withZombies(playingModel, [
+          zombieAt(100, 100, ARENA_LEVEL.height / 2, { speed: 20 }),
+        ]),
       ),
       tick(50),
       model(({ zombies }) => {
-        expect(zombies).toEqual([zombieAt(100, 101, ARENA_LEVEL.height / 2)])
+        expect(zombies).toEqual([
+          zombieAt(100, 101, ARENA_LEVEL.height / 2, { speed: 20 }),
+        ])
       }),
     )
   })
@@ -316,8 +305,8 @@ describe('zombies', () => {
       update,
       given(
         withZombies(playingModel, [
-          zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 0),
-          zombieAt(101, 20, 20, 0),
+          zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, { speed: 0 }),
+          zombieAt(101, 20, 20, { speed: 0 }),
         ]),
       ),
       holdFire,
@@ -349,7 +338,7 @@ describe('zombies', () => {
       update,
       given(
         withZombies(playingModel, [
-          zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 0),
+          zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, { speed: 0 }),
         ]),
       ),
       holdFire,
@@ -357,11 +346,14 @@ describe('zombies', () => {
       releaseFire,
       model(({ zombies }) => {
         expect(zombies).toEqual([
-          modifyFields(zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 0), {
-            hp: () => ZOMBIE_MAX_HP - 1,
-            knockback: () => ({ x: ZOMBIE_KNOCKBACK_SPEED, y: 0 }),
-            hitRemainingMs: () => ZOMBIE_HIT_PULSE_MS,
-          }),
+          modifyFields(
+            zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, { speed: 0 }),
+            {
+              hp: () => ZOMBIE_MAX_HP - 1,
+              knockback: () => ({ x: ZOMBIE_KNOCKBACK_SPEED, y: 0 }),
+              hitRemainingMs: () => ZOMBIE_HIT_PULSE_MS,
+            },
+          ),
         ])
       }),
       tick(FRAME_MS),
@@ -427,7 +419,9 @@ describe('zombies', () => {
       update,
       given(
         withZombies(playingModel, [
-          zombieAt(100, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2, 0),
+          zombieAt(100, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2, {
+            speed: 0,
+          }),
         ]),
       ),
       tick(FRAME_MS),
@@ -458,8 +452,12 @@ describe('zombies', () => {
       update,
       given(
         withZombies(playingModel, [
-          zombieAt(100, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2, 60),
-          zombieAt(101, ARENA_LEVEL.width / 2 - 2, ARENA_LEVEL.height / 2, 60),
+          zombieAt(100, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2, {
+            speed: 60,
+          }),
+          zombieAt(101, ARENA_LEVEL.width / 2 - 2, ARENA_LEVEL.height / 2, {
+            speed: 60,
+          }),
         ]),
       ),
       tick(FRAME_MS),
@@ -487,7 +485,11 @@ describe('zombies', () => {
         player: player => modifyFields(player, { hp: () => 1 }),
         score: () => 120,
       }),
-      [zombieAt(100, ARENA_LEVEL.width / 2, ARENA_LEVEL.height / 2 + 3)],
+      [
+        zombieAt(100, ARENA_LEVEL.width / 2, ARENA_LEVEL.height / 2 + 3, {
+          speed: 20,
+        }),
+      ],
     )
 
     story(
@@ -524,9 +526,12 @@ describe('game events', () => {
       update,
       given(
         withZombies(playingModel, [
-          modifyFields(zombieAt(100, zombieX, ARENA_LEVEL.height / 2, 0), {
-            hp: () => 1,
-          }),
+          modifyFields(
+            zombieAt(100, zombieX, ARENA_LEVEL.height / 2, { speed: 0 }),
+            {
+              hp: () => 1,
+            },
+          ),
         ]),
       ),
       holdFire,
@@ -567,7 +572,9 @@ describe('game events', () => {
       update,
       given(
         withZombies(playingModel, [
-          zombieAt(100, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2, 0),
+          zombieAt(100, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2, {
+            speed: 0,
+          }),
         ]),
       ),
       tick(FRAME_MS),
@@ -634,10 +641,13 @@ describe('particles and decals', () => {
 
   const shotZombieModel = (hp: number): Model =>
     withZombies(playingModel, [
-      modifyFields(zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 0), {
-        hp: () => hp,
-        maxHp: () => Math.max(hp, ZOMBIE_MAX_HP),
-      }),
+      modifyFields(
+        zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, { speed: 0 }),
+        {
+          hp: () => hp,
+          maxHp: () => Math.max(hp, ZOMBIE_MAX_HP),
+        },
+      ),
     ])
 
   const HEALTH_THAT_KEEPS_ITS_PARTS = 6
@@ -736,7 +746,7 @@ describe('particles and decals', () => {
           200 + index,
           20 + (index % 10) * 30,
           25 + Math.floor(index / 10) * 40,
-          0,
+          { speed: 0 },
         ),
         { hp: () => 1 },
       ),
@@ -818,9 +828,9 @@ describe('particles and decals', () => {
       update,
       given(
         withZombies(modifyFields(playingModel, { rngState: () => seed }), [
-          zombieAt(100, 200, ARENA_LEVEL.height / 2, 0),
-          zombieAt(101, 230, ARENA_LEVEL.height / 2, 0),
-          zombieAt(102, 260, ARENA_LEVEL.height / 2, 0),
+          zombieAt(100, 200, ARENA_LEVEL.height / 2, { speed: 0 }),
+          zombieAt(101, 230, ARENA_LEVEL.height / 2, { speed: 0 }),
+          zombieAt(102, 260, ARENA_LEVEL.height / 2, { speed: 0 }),
         ]),
       ),
       holdFire,
@@ -853,21 +863,7 @@ describe('particles and decals', () => {
 })
 
 const doomedZombieAt = (id: number, x: number, y: number): Zombie =>
-  modifyFields(zombieAt(id, x, y, 0), { hp: () => 1 })
-
-const bulletInto = (id: number, { x, y }: Zombie): Bullet => ({
-  id,
-  x,
-  y,
-  velocityX: 1,
-  velocityY: 0,
-  remainingMs: 900,
-  weapon: 'Pistol',
-  damage: 1,
-  knockback: 110,
-  glaze: 'Plain',
-  pierce: Pierce.Stops(),
-})
+  modifyFields(zombieAt(id, x, y, { speed: 0 }), { hp: () => 1 })
 
 const massacreModel = (count: number): Model => {
   const victims = Array.makeBy(count, index =>
@@ -884,7 +880,7 @@ const massacreModel = (count: number): Model => {
 }
 
 const contactZombie = (id: number): Zombie =>
-  zombieAt(id, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2, 0)
+  zombieAt(id, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2, { speed: 0 })
 
 const BYSTANDER_ID = 401
 const BYSTANDER_X = 100
@@ -908,12 +904,9 @@ const freezeVictim = doomedZombieAt(400, 250, 30)
 const freezeModel: Model = modifyFields(
   withZombies(playingModel, [
     freezeVictim,
-    zombieAt(
-      BYSTANDER_ID,
-      BYSTANDER_X,
-      ARENA_LEVEL.height / 2,
-      BYSTANDER_SPEED,
-    ),
+    zombieAt(BYSTANDER_ID, BYSTANDER_X, ARENA_LEVEL.height / 2, {
+      speed: BYSTANDER_SPEED,
+    }),
   ]),
   { bullets: () => [bulletInto(500, freezeVictim), STRAY_BULLET] },
 )
@@ -1252,7 +1245,9 @@ describe('damage numbers', () => {
   test('a hit pops the damage dealt and a kill pops the money it pays', () => {
     story(
       update,
-      given(withZombies(playingModel, [zombieAt(100, MUZZLE_X, 90, 0)])),
+      given(
+        withZombies(playingModel, [zombieAt(100, MUZZLE_X, 90, { speed: 0 })]),
+      ),
       holdFire,
       tick(FRAME_MS),
       model(nextModel => {
@@ -1345,7 +1340,7 @@ describe('kill streak', () => {
 
 describe('juice determinism', () => {
   const bigKillAt = (id: number, x: number): Zombie =>
-    modifyFields(zombieAt(id, x, ARENA_LEVEL.height / 2, 0), {
+    modifyFields(zombieAt(id, x, ARENA_LEVEL.height / 2, { speed: 0 }), {
       kind: () => 'Tank',
     })
 

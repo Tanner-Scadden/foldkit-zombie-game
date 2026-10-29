@@ -46,11 +46,11 @@ import {
 } from './model'
 import { PlayerChange } from './playerSync'
 import { saveOf } from './save'
+import { SURFACE, showDialog } from './testing'
 import { asVeteran } from './veteran'
 import { pause } from './waves'
 
 const VISIT_ID = '0123456789abcdef'
-const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 
 const home: Model = modifyFields(asVeteran(initialModel), {
   maybeSurface: () => Option.some(SURFACE),
@@ -121,9 +121,6 @@ const expectedSummary = (
   frameTime: 'Under17Ms',
   ...overrides,
 })
-
-const showDialog = () =>
-  Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog())
 
 const closeDialog = () =>
   Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog())

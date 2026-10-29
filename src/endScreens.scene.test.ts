@@ -1,7 +1,6 @@
 import { Array, Option } from 'effect'
 import {
   Command,
-  Mount,
   Subscription,
   all,
   click,
@@ -19,15 +18,9 @@ import { describe, test } from 'vitest'
 import { RESTART_GRACE_MS } from './constants'
 import { FocusEndMenuButton, Message, update } from './main'
 import { type Model, Phase, initialModel } from './model'
+import { emitPressedKey, measureSurface } from './testing'
 import { asVeteran } from './veteran'
-import { MeasureGameSurface, view } from './view'
-
-const measureSurface = Mount.resolve(
-  MeasureGameSurface,
-  Message.MeasuredGameSurface({ left: 0, top: 0, width: 800, height: 400 }),
-)
-
-const press = (code: string) => Subscription.emit(Message.PressedKey({ code }))
+import { view } from './view'
 
 const tickPastGrace = () =>
   Array.makeBy(Math.ceil(RESTART_GRACE_MS / 50), () =>
@@ -120,7 +113,7 @@ describe('the end screens', () => {
         given(withNewerBuild(onEndScreen(phase, 0))),
         measureSurface,
         expect(menuButton).toBeAbsent(),
-        press('Enter'),
+        emitPressedKey('Enter'),
         expect(mainMenu).toBeAbsent(),
         ...tickPastGrace(),
         Command.expectExact(FocusEndMenuButton),
@@ -130,7 +123,7 @@ describe('the end screens', () => {
         ),
         expect(menuButton).toExist(),
         expect(updateNote).toExist(),
-        press('Enter'),
+        emitPressedKey('Enter'),
         expect(mainMenu).toExist(),
         expect(updateChip).toExist(),
       )

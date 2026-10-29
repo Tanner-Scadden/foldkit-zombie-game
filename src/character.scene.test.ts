@@ -19,14 +19,9 @@ import { Dialog, RadioGroup } from '@foldkit/ui'
 
 import { Message, update } from './main'
 import { type Model, Phase, initialModel } from './model'
+import { measureSurface } from './testing'
 import { asVeteran } from './veteran'
-import { MeasureGameSurface, view } from './view'
-
-const measureSurface = () =>
-  Mount.resolve(
-    MeasureGameSurface,
-    Message.MeasuredGameSurface({ left: 0, top: 0, width: 800, height: 400 }),
-  )
+import { view } from './view'
 
 const characterButton = role('button', {
   name: 'Character: change how you look',
@@ -75,7 +70,7 @@ describe('Character picker', () => {
     scene(
       { update, view },
       given(onTitle),
-      measureSurface(),
+      measureSurface,
       expect(characterButton).toHaveAttr('aria-keyshortcuts', 'C'),
       expect(within(characterButton, selector('.home-key'))).toHaveText('C'),
       expect(pickerDialog).toBeAbsent(),
@@ -86,7 +81,7 @@ describe('Character picker', () => {
     scene(
       { update, view },
       given(onTitle),
-      measureSurface(),
+      measureSurface,
       click(characterButton),
       ...showPicker(),
       expect(pickerDialog).toExist(),
@@ -114,7 +109,7 @@ describe('Character picker', () => {
     scene(
       { update, view },
       given(onTitle),
-      measureSurface(),
+      measureSurface,
       click(characterButton),
       ...showPicker(),
       ...pick('Body', 'Female'),
@@ -136,7 +131,7 @@ describe('Character picker', () => {
     scene(
       { update, view },
       given(onTitle),
-      measureSurface(),
+      measureSurface,
       click(characterButton),
       ...showPicker(),
       ...pick('Skin', 'Brown'),
@@ -150,7 +145,7 @@ describe('Character picker', () => {
     scene(
       { update, view },
       given(onTitle),
-      measureSurface(),
+      measureSurface,
       Subscription.emit(Message.PressedKey({ code: 'KeyC' })),
       ...showPicker(),
       expect(pickerDialog).toExist(),
@@ -175,7 +170,7 @@ describe('Character picker', () => {
     scene(
       { update, view },
       given(modifyFields(onTitle, { lastDevice: () => 'Touch' })),
-      measureSurface(),
+      measureSurface,
       expect(
         within(characterButton, selector('.home-button-key')),
       ).toBeAbsent(),
@@ -193,7 +188,7 @@ describe('Character picker', () => {
     scene(
       { update, view },
       given(modifyFields(onTitle, { rngState: () => 7 })),
-      measureSurface(),
+      measureSurface,
       click(characterButton),
       ...showPicker(),
       click(randomizeButton),
@@ -212,7 +207,7 @@ describe('Character picker', () => {
           screenMs: () => 99_999,
         }),
       ),
-      measureSurface(),
+      measureSurface,
       expect(characterButton).toBeAbsent(),
       expect(
         role('button', { name: 'Menu: back to the home screen' }),
@@ -225,7 +220,7 @@ describe('Character picker', () => {
           phase: () => Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [] }),
         }),
       ),
-      measureSurface(),
+      measureSurface,
       expect(characterButton).toBeAbsent(),
       Subscription.emit(Message.PressedKey({ code: 'KeyC' })),
       expect(pickerDialog).toBeAbsent(),

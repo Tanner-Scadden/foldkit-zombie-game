@@ -2,7 +2,6 @@ import { Array, Option } from 'effect'
 import {
   Command,
   Mount,
-  Subscription,
   all,
   click,
   expect,
@@ -34,29 +33,15 @@ import {
 import { type Model, Phase, initialModel } from './model'
 import { SyncState } from './playerSync'
 import { noSavedBests, restoreSave, saveOf } from './save'
+import { emitPressedKey, measureSurface, showDialogInScene } from './testing'
 import { asVeteran } from './veteran'
-import { MeasureGameSurface, view } from './view'
+import { view } from './view'
 import { pause } from './waves'
-
-const measureSurface = Mount.resolve(
-  MeasureGameSurface,
-  Message.MeasuredGameSurface({ left: 0, top: 0, width: 800, height: 400 }),
-)
-
-const showDialog = () => [
-  Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-  Mount.resolve(
-    Dialog.AcquireResources,
-    Dialog.Message.SucceededAcquireResources(),
-  ),
-]
 
 const closeDialog = () => [
   Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()),
   Mount.expectEnded(Dialog.AcquireResources),
 ]
-
-const press = (code: string) => Subscription.emit(Message.PressedKey({ code }))
 
 const playButton = role('button', {
   name: 'Play the campaign: 8 waves, then victory',
@@ -154,7 +139,7 @@ describe('Home menu', () => {
       given(home),
       measureSurface,
       click(difficultyBadge),
-      ...showDialog(),
+      ...showDialogInScene(),
       click(role('button', { name: /^Hard:/ })),
       ...closeDialog(),
       expect(role('button', { name: 'Difficulty: Hard. Change it' })).toExist(),
@@ -231,7 +216,7 @@ describe('Home menu', () => {
       { update, view },
       given(home),
       measureSurface,
-      press('Enter'),
+      emitPressedKey('Enter'),
       expect(role('status')).toContainText(PREPARING),
       expect(mainMenu).toBeAbsent(),
     )
@@ -243,7 +228,7 @@ describe('Home menu', () => {
         playCluster,
         expect(selector('.home-play')).toHaveAttr('id', 'home-play'),
       ),
-      press('KeyE'),
+      emitPressedKey('KeyE'),
       expect(
         role('button', { name: 'Mode: Endless. Switch to Campaign' }),
       ).toExist(),
@@ -253,7 +238,7 @@ describe('Home menu', () => {
         expect(playEndlessButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
       ),
       expect(mainMenu).toExist(),
-      press('Enter'),
+      emitPressedKey('Enter'),
       expect(role('status')).toContainText('Get ready for endless wave 1.'),
     )
   })
@@ -263,8 +248,8 @@ describe('Home menu', () => {
       { update, view },
       given(home),
       measureSurface,
-      press('KeyC'),
-      ...showDialog(),
+      emitPressedKey('KeyC'),
+      ...showDialogInScene(),
       expect(role('dialog', { name: 'Character' })).toExist(),
     )
     scene(
@@ -272,7 +257,7 @@ describe('Home menu', () => {
       given(home),
       measureSurface,
       click(characterButton),
-      ...showDialog(),
+      ...showDialogInScene(),
       expect(role('dialog', { name: 'Character' })).toExist(),
     )
   })
@@ -282,7 +267,7 @@ describe('Home menu', () => {
       { update, view },
       given(home),
       measureSurface,
-      press('ArrowRight'),
+      emitPressedKey('ArrowRight'),
       Command.resolve(
         FocusHomeButton({ button: 'Play' }),
         Message.CompletedFocusHomeButton(),
@@ -298,14 +283,14 @@ describe('Home menu', () => {
           'Play',
         ] as const,
         button => [
-          press('ArrowDown'),
+          emitPressedKey('ArrowDown'),
           Command.resolve(
             FocusHomeButton({ button }),
             Message.CompletedFocusHomeButton(),
           ),
         ],
       ),
-      press('ArrowUp'),
+      emitPressedKey('ArrowUp'),
       Command.resolve(
         FocusHomeButton({ button: 'Settings' }),
         Message.CompletedFocusHomeButton(),
@@ -319,7 +304,7 @@ describe('Home menu', () => {
       given(home),
       measureSurface,
       click(howToPlayButton),
-      ...showDialog(),
+      ...showDialogInScene(),
       inside(
         role('dialog', { name: 'How to play' }),
         expect(role('table', { name: 'Move and fight' })).toExist(),
@@ -342,7 +327,7 @@ describe('Home menu', () => {
       given(home),
       measureSurface,
       click(settingsButton),
-      ...showDialog(),
+      ...showDialogInScene(),
       expect(soundToggle).toHaveAttr('aria-pressed', 'true'),
       expect(soundToggle).toHaveAttr('aria-keyshortcuts', 'M'),
       expect(musicToggle).toHaveAttr('aria-keyshortcuts', 'N'),
@@ -364,7 +349,7 @@ describe('Home menu', () => {
       given(home),
       measureSurface,
       click(settingsButton),
-      ...showDialog(),
+      ...showDialogInScene(),
       expect(shareToggle).toHaveAttr('aria-pressed', 'true'),
       expect(text(SHARE_STATS_NOTE)).toExist(),
       click(shareToggle),
@@ -381,7 +366,7 @@ describe('Home menu', () => {
       given(synced),
       measureSurface,
       click(settingsButton),
-      ...showDialog(),
+      ...showDialogInScene(),
       expect(text(LINK_TAKES_PROGRESS_NOTE)).toBeAbsent(),
       click(role('button', { name: 'Use a code' })),
       expect(text(LINK_TAKES_PROGRESS_NOTE)).toExist(),
@@ -403,7 +388,7 @@ describe('Home menu', () => {
       given(modifyFields(home, { saveStatus: () => 'Read' })),
       measureSurface,
       click(settingsButton),
-      ...showDialog(),
+      ...showDialogInScene(),
       expect(text('Saved on this device.')).toExist(),
       click(resetButton),
       focusReset(KEEP_TUTORIAL_BUTTON_ID),
@@ -453,7 +438,7 @@ describe('Menu from a run', () => {
       measureSurface,
       expect(pauseMenuButton).toHaveAttr('aria-keyshortcuts', 'H'),
       click(pauseMenuButton),
-      ...showDialog(),
+      ...showDialogInScene(),
       expect(leaveQuestion).toExist(),
       click(role('button', { name: 'Stay' })),
       ...closeDialog(),
@@ -467,8 +452,8 @@ describe('Menu from a run', () => {
       { update, view },
       given(pausedRound),
       measureSurface,
-      press('KeyH'),
-      ...showDialog(),
+      emitPressedKey('KeyH'),
+      ...showDialogInScene(),
       inside(leaveQuestion, click(role('button', { name: 'Leave' }))),
       ...closeDialog(),
       expect(mainMenu).toExist(),
@@ -507,7 +492,7 @@ describe('Menu from a run', () => {
         { update, view },
         given(afterGrace(phase)),
         measureSurface,
-        press('KeyH'),
+        emitPressedKey('KeyH'),
         expect(mainMenu).toExist(),
       )
     })

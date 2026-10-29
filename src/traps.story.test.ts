@@ -13,7 +13,6 @@ import {
 import { RESTART_GRACE_MS } from './constants'
 import { Message, update } from './main'
 import {
-  Frenzy,
   GameEvent,
   Invulnerability,
   type Model,
@@ -26,13 +25,12 @@ import {
   TurretGun,
   type Vector,
   type Zombie,
-  ZombieAction,
   type ZombieKind,
   ZombieState,
   initialModel,
 } from './model'
 import { SHOP_ITEMS, Verdict, priceFor, verdictFor } from './shop'
-import { holdFire } from './testInput'
+import { holdFire, press, release, tick, ticks, zombieOf } from './testing'
 import { TRAPS, repairPrice, stageOf, tollsOf } from './traps'
 import { WEAPONS } from './weapons'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
@@ -125,27 +123,6 @@ const turret = (
     gun: TurretGun.Armed(),
   })
 
-const zombieOf = (
-  kind: ZombieKind,
-  id: number,
-  { x, y }: Vector,
-  speed = 0,
-  hp = ZOMBIE_KINDS[kind].hp,
-): Zombie => ({
-  id,
-  kind,
-  x,
-  y,
-  speed,
-  hp,
-  maxHp: hp,
-  knockback: { x: 0, y: 0 },
-  hitRemainingMs: 0,
-  state: ZombieState.Walking(),
-  action: ZombieAction.Roaming(),
-  frenzy: Frenzy.Calm(),
-})
-
 const fightingWith = (
   traps: ReadonlyArray<Trap>,
   zombies: ReadonlyArray<Zombie>,
@@ -157,11 +134,6 @@ const fightingWith = (
     zombies: () => zombies,
   })
 
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-
-const ticks = (count: number, deltaTime: number) =>
-  Array.makeBy(count, () => tick(deltaTime))
-
 const recordTicks = (count: number, deltaTime: number, frames: Array<Model>) =>
   Array.flatMap(ticks(count, deltaTime), frame => [
     frame,
@@ -169,9 +141,6 @@ const recordTicks = (count: number, deltaTime: number, frames: Array<Model>) =>
       frames.push(current)
     }),
   ])
-
-const press = (code: string) => message(Message.PressedKey({ code }))
-const release = (code: string) => message(Message.ReleasedKey({ code }))
 
 const refusal = (current: Model): Option.Option<string> =>
   TrapNotice.match(current.trapNotice, {
@@ -562,7 +531,7 @@ describe('barricades and pathing', () => {
       given(
         fightingWith(
           [barricade(1, 'North')],
-          [zombieOf('Shambler', 50, northSpawn, 40)],
+          [zombieOf('Shambler', 50, northSpawn.x, northSpawn.y, { speed: 40 })],
           { x: 230, y: 100 },
         ),
       ),
@@ -593,7 +562,7 @@ describe('barricades and pathing', () => {
             barricade(3, 'East'),
             barricade(4, 'South'),
           ],
-          [zombieOf('Shambler', 50, northSpawn, 40)],
+          [zombieOf('Shambler', 50, northSpawn.x, northSpawn.y, { speed: 40 })],
           ROOM_MIDDLE,
         ),
       ),
@@ -624,7 +593,7 @@ describe('barricades and pathing', () => {
       given(
         fightingWith(
           [barricade(1, 'North')],
-          [zombieOf('Shambler', 50, northSpawn, 40)],
+          [zombieOf('Shambler', 50, northSpawn.x, northSpawn.y, { speed: 40 })],
           { x: 220, y: 32 },
         ),
       ),
@@ -649,7 +618,15 @@ describe('barricade damage', () => {
       given(
         fightingWith(
           [barricade(1, 'North')],
-          [zombieOf('Shambler', 50, pressedAgainstNorth, 30)],
+          [
+            zombieOf(
+              'Shambler',
+              50,
+              pressedAgainstNorth.x,
+              pressedAgainstNorth.y,
+              { speed: 30 },
+            ),
+          ],
           { x: 220, y: 40 },
         ),
       ),
@@ -703,7 +680,7 @@ describe('barricade damage', () => {
         given(
           fightingWith(
             [barricade(1, 'North')],
-            [zombieOf(kind, 50, { x: 220, y: 2 }, 20)],
+            [zombieOf(kind, 50, 220, 2, { speed: 20 })],
             { x: 220, y: 40 },
           ),
         ),
@@ -762,7 +739,7 @@ describe('barricade damage', () => {
 describe('bursts and traps', () => {
   test('a Kaboomer burst damages a barricade and breaks a turret in reach', () => {
     const blast = {
-      ...zombieOf('Exploder', 60, { x: 222, y: 25 }),
+      ...zombieOf('Exploder', 60, 222, 25),
       hp: 0,
       state: ZombieState.Fusing({ remainingMs: 0 }),
     }
@@ -800,7 +777,7 @@ describe('bursts and traps', () => {
       given(
         fightingWith(
           [barricade(1, 'North', 10)],
-          [zombieOf('Exploder', 60, { x: 220, y: 1 }, 20)],
+          [zombieOf('Exploder', 60, 220, 1, { speed: 20 })],
           { x: 220, y: 60 },
         ),
       ),
@@ -815,7 +792,8 @@ describe('bursts and traps', () => {
 describe('turrets', () => {
   const TURRET_TILE = { column: 16, row: 9 }
   const turretCenter = { x: 165, y: 95 }
-  const tough = (id: number, at: Vector) => zombieOf('Shambler', id, at, 0, 999)
+  const tough = (id: number, at: Vector) =>
+    zombieOf('Shambler', id, at.x, at.y, { speed: 0, hp: 999 })
 
   test('fires at the nearest zombie in range, then waits out its cooldown', () => {
     const far = tough(70, { x: 205, y: 95 })
@@ -908,7 +886,7 @@ describe('turrets', () => {
       given(
         fightingWith(
           [turret(1, TURRET_TILE.column, TURRET_TILE.row)],
-          [zombieOf('Runner', 75, { x: 200, y: 95 })],
+          [zombieOf('Runner', 75, 200, 95)],
           { x: 40, y: 160 },
         ),
       ),
@@ -932,7 +910,7 @@ describe('turrets', () => {
       given(
         fightingWith(
           [turret(1, TURRET_TILE.column, TURRET_TILE.row)],
-          [zombieOf('Tank', 76, { x: 165, y: 107 }, 20)],
+          [zombieOf('Tank', 76, 165, 107, { speed: 20 })],
           { x: 165, y: 70 },
         ),
       ),

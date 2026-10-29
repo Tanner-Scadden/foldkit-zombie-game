@@ -28,14 +28,10 @@ import {
   RunMode,
   initialModel,
 } from './model'
+import { measureSurface } from './testing'
 import { asVeteran } from './veteran'
-import { MeasureGameSurface, view } from './view'
+import { view } from './view'
 import { tierName } from './weapons'
-
-const measureSurface = Mount.resolve(
-  MeasureGameSurface,
-  Message.MeasuredGameSurface({ left: 0, top: 0, width: 800, height: 400 }),
-)
 
 const SMG_NAME = tierName('Smg', 0)
 

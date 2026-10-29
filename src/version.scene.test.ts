@@ -1,7 +1,6 @@
 import { Option } from 'effect'
 import {
   Command,
-  Mount,
   Subscription,
   click,
   expect,
@@ -15,13 +14,9 @@ import { describe, test } from 'vitest'
 import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { Message, ReloadPage, update } from './main'
 import { type Model, Phase, initialModel } from './model'
-import { MeasureGameSurface, view } from './view'
+import { fighting, measureSurface } from './testing'
+import { view } from './view'
 import { pause } from './waves'
-
-const measureSurface = Mount.resolve(
-  MeasureGameSurface,
-  Message.MeasuredGameSurface({ left: 0, top: 0, width: 800, height: 400 }),
-)
 
 const updateChip = role('button', { name: /New version ready/ })
 const mainMenu = role('navigation', { name: 'Main menu' })
@@ -31,10 +26,6 @@ const withNewerBuild = (model: Model): Model =>
 
 const onPhase = (phase: Phase): Model =>
   withNewerBuild(modifyFields(initialModel, { phase: () => phase }))
-
-const fighting: Model = modifyFields(initialModel, {
-  phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),
-})
 
 const breakBetweenWaves = Phase.Preparation({
   wave: 3,

@@ -16,14 +16,11 @@ import {
   updateCheckActivity,
 } from './main'
 import { type Model, Phase, initialModel } from './model'
+import { fighting } from './testing'
 import { RUNNING_BUILD, isCheckingForUpdates } from './version'
 import { pause } from './waves'
 
 const NEWER_BUILD = 'newer-build'
-
-const fighting: Model = modifyFields(initialModel, {
-  phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),
-})
 
 const onPhase = (phase: Phase): Model =>
   modifyFields(initialModel, { phase: () => phase })

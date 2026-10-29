@@ -52,14 +52,13 @@ import {
   initialModel,
 } from './model'
 import { DROP_RULES } from './powerups'
+import { WIDE_SURFACE } from './testing'
 import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
 import { rollSpawns, startOrResume } from './waves'
 import { ZOMBIE_KINDS } from './zombies'
 
 // WORST-CASE ROOMS
-
-const SURFACE = { left: 0, top: 0, width: 1280, height: 720 }
 
 const cycle = <A>(items: Array.NonEmptyReadonlyArray<A>, index: number): A =>
   pipe(
@@ -323,7 +322,7 @@ const fullRoom = (mode: RunMode, wave: number, tier: number): Model => {
   const [rngState, spawns] = rollSpawns(started.rngState, wave)
   return modifyFields(started, {
     rngState: () => rngState,
-    maybeSurface: () => Option.some(SURFACE),
+    maybeSurface: () => Option.some(WIDE_SURFACE),
     phase: () => Phase.Wave({ wave, elapsedMs: 30_000, spawns }),
     pacing: pacing =>
       modifyFields(pacing, {
@@ -509,7 +508,10 @@ const measureFrames = (model: Model): Measured => {
   scene(
     { update, view: recordingView },
     given(model),
-    Mount.resolve(MeasureGameSurface, Message.MeasuredGameSurface(SURFACE)),
+    Mount.resolve(
+      MeasureGameSurface,
+      Message.MeasuredGameSurface(WIDE_SURFACE),
+    ),
     Subscription.emit(Message.MovedMouse({ clientX: 900, clientY: 300 })),
   )
   const last = Option.getOrElse(Array.last(renders), () => [])

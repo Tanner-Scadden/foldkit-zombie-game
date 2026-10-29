@@ -17,13 +17,11 @@ import {
   initialModel,
 } from './model'
 import { DEBUT_CARD_MIN_MS } from './onboarding'
+import { press, release, tick } from './testing'
 import { asVeteran } from './veteran'
 
 const FRAME_MS = 50
 
-const tick = message(Message.TickedFrame({ deltaTime: FRAME_MS }))
-const press = (code: string) => message(Message.PressedKey({ code }))
-const release = (code: string) => message(Message.ReleasedKey({ code }))
 const tap = (code: string) => [press(code), release(code)]
 
 const HELD_SPAWN: PlannedSpawn = {
@@ -88,7 +86,7 @@ describe('one key per action: removed keys do nothing', () => {
         model(({ intent }) => {
           expect(intent.move).toEqual({ x: 0, y: 0 })
         }),
-        tick,
+        tick(FRAME_MS),
         model(({ player }) => {
           expect(player.x).toBe(fighting.player.x)
           expect(player.y).toBe(fighting.player.y)
@@ -105,8 +103,8 @@ describe('one key per action: removed keys do nothing', () => {
       model(({ intent }) => {
         expect(intent.trigger).toBe('Released')
       }),
-      tick,
-      tick,
+      tick(FRAME_MS),
+      tick(FRAME_MS),
       model(({ stats, bullets }) => {
         expect(stats.shotsFired).toBe(0)
         expect(bullets).toEqual([])
@@ -316,7 +314,7 @@ describe('one key per action: the kept keys work', () => {
         model(current => {
           expect(current.phase).toEqual(Phase.Paused({ round }))
         }),
-        tick,
+        tick(FRAME_MS),
         ...tap('Escape'),
         model(current => {
           expect(current.phase).toEqual(start.phase)

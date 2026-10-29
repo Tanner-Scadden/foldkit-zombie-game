@@ -21,12 +21,11 @@ import {
   ZombieState,
   initialModel,
 } from './model'
+import { SURFACE, press, showDialog, tick } from './testing'
 import { asVeteran } from './veteran'
 import { ZOMBIE_KINDS } from './zombies'
 
 const REPLAYED: ReadonlyArray<Difficulty> = ['Easy', 'Hard', 'Nightmare']
-
-const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 
 const firstVisit: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some(SURFACE),
@@ -36,15 +35,8 @@ const veteran: Model = modifyFields(asVeteran(initialModel), {
   maybeSurface: () => Option.some(SURFACE),
 })
 
-const showDialog = () =>
-  Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog())
-
 const closeDialog = () =>
   Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog())
-
-const press = (code: string) => message(Message.PressedKey({ code }))
-
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
 
 const pick = (difficulty: Difficulty) =>
   message(Message.ClickedDifficultyCardButton({ difficulty }))

@@ -25,10 +25,16 @@ import {
   shownHints,
 } from './onboarding'
 import { accuracyPercent, totalKills } from './stats'
-import { holdFire, releaseFire } from './testInput'
+import {
+  SURFACE,
+  holdFire,
+  press,
+  release,
+  releaseFire,
+  ticks,
+} from './testing'
 import { ZOMBIE_KINDS } from './zombies'
 
-const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 const FRAME_MS = 16
 const TICK_MS = 50
 const MOVE_TICKS = 10
@@ -42,14 +48,6 @@ const readyModel: Model = modifyFields(initialModel, {
   difficultyCard: () => DifficultyCard.Seen(),
   maybeSurface: () => Option.some(SURFACE),
 })
-
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-
-const ticks = (count: number, deltaTime: number) =>
-  Array.makeBy(count, () => tick(deltaTime))
-
-const press = (code: string) => message(Message.PressedKey({ code }))
-const release = (code: string) => message(Message.ReleasedKey({ code }))
 
 const touchDown = (pointerId: number, clientX: number, clientY: number) =>
   message(

@@ -3,7 +3,6 @@ import {
   Command,
   type StorySimulation,
   given,
-  message,
   model,
   story,
 } from 'foldkit/story'
@@ -17,18 +16,14 @@ import {
   AudioState,
   type Bullet,
   type Decal,
-  Frenzy,
   GameEvent,
   type Model,
   type Particle,
   type ParticleKind,
   Phase,
-  Pierce,
   type PlannedSpawn,
   type Zombie,
-  ZombieAction,
   ZombieKind,
-  ZombieState,
   initialModel,
 } from './model'
 import {
@@ -37,6 +32,7 @@ import {
   frameAt,
   kaboomerFuseTip,
 } from './sprite'
+import { bulletInto, tick, zombieOf } from './testing'
 import { zombieHealthBarShapes } from './zombieView'
 import { ZOMBIE_KINDS, isArmorPart, isArmorShedAt, wearAt } from './zombies'
 
@@ -60,41 +56,6 @@ const fightingModel: Model = modifyFields(initialModel, {
   phase: () => Phase.Wave({ wave: 1, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
 })
 
-const zombieOf = (
-  kind: ZombieKind,
-  id: number,
-  x: number,
-  y: number,
-  hp: number,
-): Zombie => ({
-  id,
-  kind,
-  x,
-  y,
-  speed: 0,
-  hp,
-  maxHp: hp,
-  knockback: { x: 0, y: 0 },
-  hitRemainingMs: 0,
-  state: ZombieState.Walking(),
-  action: ZombieAction.Roaming(),
-  frenzy: Frenzy.Calm(),
-})
-
-const bulletInto = (id: number, zombie: Zombie, damage = 1): Bullet => ({
-  id,
-  x: zombie.x,
-  y: zombie.y,
-  velocityX: 1,
-  velocityY: 0,
-  remainingMs: 900,
-  weapon: 'Pistol',
-  damage,
-  knockback: 110,
-  glaze: 'Plain',
-  pierce: Pierce.Stops(),
-})
-
 const withScene = (
   zombies: ReadonlyArray<Zombie>,
   bullets: ReadonlyArray<Bullet> = [],
@@ -103,8 +64,6 @@ const withScene = (
     zombies: () => zombies,
     bullets: () => bullets,
   })
-
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
 
 const shedIn = (
   events: ReadonlyArray<GameEvent>,
@@ -181,7 +140,7 @@ describe('wear stages', () => {
 
 describe('parts coming off', () => {
   test('a Groaner sheds its arm, then its scalp, once each, and nothing on the kill', () => {
-    const groaner = zombieOf('Shambler', 100, FAR_X, ROW_Y, 3)
+    const groaner = zombieOf('Shambler', 100, FAR_X, ROW_Y, { hp: 3 })
     const shed: Array<
       ReadonlyArray<Readonly<{ kind: ZombieKind; stage: number }>>
     > = []
@@ -229,10 +188,10 @@ describe('parts coming off', () => {
   })
 
   test('one big hit past two thresholds sheds both parts in order', () => {
-    const lug = zombieOf('Tank', 100, FAR_X, ROW_Y, 36)
+    const lug = zombieOf('Tank', 100, FAR_X, ROW_Y, { hp: 36 })
     story(
       update,
-      given(withScene([lug], [bulletInto(500, lug, 19)])),
+      given(withScene([lug], [bulletInto(500, lug, { damage: 19 })])),
       tick(FRAME_MS),
       model(({ frameEvents, zombies }) => {
         expect(zombies[0]?.hp).toBe(17)
@@ -245,7 +204,7 @@ describe('parts coming off', () => {
   })
 
   test('the part flies off and lands as a decal that stays', () => {
-    const groaner = zombieOf('Shambler', 100, FAR_X, ROW_Y, 3)
+    const groaner = zombieOf('Shambler', 100, FAR_X, ROW_Y, { hp: 3 })
     const landed: Array<ReadonlyArray<Decal>> = []
     story(
       update,
@@ -277,7 +236,7 @@ describe('caps', () => {
       200 + index,
       40 + (index % 9) * 28,
       64 + Math.floor(index / 9) * 12,
-      36,
+      { hp: 36 },
     ),
   )
 
@@ -310,7 +269,7 @@ describe('caps', () => {
       reload(
         current,
         Array.map(current.zombies, (zombie, index) =>
-          bulletInto(900 + index, zombie, 9),
+          bulletInto(900 + index, zombie, { damage: 9 }),
         ),
       )
     const shedCounts: Array<number> = []
@@ -346,7 +305,9 @@ describe('the Big Lug armor', () => {
   ]
 
   const lugAt = (hp: number): Zombie =>
-    modifyFields(zombieOf('Tank', 100, FAR_X, ROW_Y, 36), { hp: () => hp })
+    modifyFields(zombieOf('Tank', 100, FAR_X, ROW_Y, { hp: 36 }), {
+      hp: () => hp,
+    })
 
   const soundsOf = (
     commands: StorySimulation<Model, Message>['commands'],
@@ -385,7 +346,7 @@ describe('the Big Lug armor', () => {
     ({ stage, hp, part }) => {
       heardSounds.length = 0
       const lug = lugAt(hp)
-      const scene = withScene([lug], [bulletInto(500, lug, 9)])
+      const scene = withScene([lug], [bulletInto(500, lug, { damage: 9 })])
       story(
         update,
         given(modifyFields(scene, { audio: () => AudioState.Ready() })),
@@ -444,7 +405,7 @@ describe('the Kaboomer health bar', () => {
   const SPARK_REACH_PX = 2
 
   test('shows once he is hurt, over his fuse, and not before', () => {
-    const kaboomer = zombieOf('Exploder', 100, FAR_X, ROW_Y, 6)
+    const kaboomer = zombieOf('Exploder', 100, FAR_X, ROW_Y, { hp: 6 })
     expect(zombieHealthBarShapes(kaboomer)).toEqual([])
     const hurt = modifyFields(kaboomer, { hp: () => 3 })
     const bar = zombieHealthBarShapes(hurt)

@@ -14,20 +14,15 @@ import { DIFFICULTIES, bestsFor, withBests } from './difficulty'
 import { Message, update } from './main'
 import {
   Arsenal,
-  type Bullet,
   DifficultyCard,
-  Frenzy,
   type Model,
   Phase,
-  Pierce,
   type PlannedSpawn,
   RunMode,
   Trap,
-  type Zombie,
-  ZombieAction,
-  ZombieState,
   initialModel,
 } from './model'
+import { bulletInto, press, tick, zombieAt } from './testing'
 import {
   FINAL_WAVE,
   endlessTankCount,
@@ -47,8 +42,6 @@ const readyModel: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
 })
 
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-const press = (code: string) => message(Message.PressedKey({ code }))
 const waitOutGrace = () =>
   Array.makeBy(RESTART_GRACE_TICKS, () => tick(GRACE_TICK_MS))
 
@@ -63,36 +56,7 @@ const plannedSpawn = (atMs: number): PlannedSpawn => ({
   formation: 'Squad',
 })
 
-const zombieAt = (id: number, x: number, y: number, hp: number): Zombie => ({
-  id,
-  kind: 'Shambler',
-  x,
-  y,
-  speed: 0,
-  hp,
-  maxHp: hp,
-  knockback: { x: 0, y: 0 },
-  hitRemainingMs: 0,
-  state: ZombieState.Walking(),
-  action: ZombieAction.Roaming(),
-  frenzy: Frenzy.Calm(),
-})
-
-const bulletInto = (id: number, zombie: Zombie): Bullet => ({
-  id,
-  x: zombie.x,
-  y: zombie.y,
-  velocityX: 1,
-  velocityY: 0,
-  remainingMs: 900,
-  weapon: 'Pistol',
-  damage: 1,
-  knockback: 110,
-  glaze: 'Plain',
-  pierce: Pierce.Stops(),
-})
-
-const doomed = zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 1)
+const doomed = zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, { hp: 1 })
 
 const clearingFinalWave = (mode: RunMode): Model =>
   modifyFields(readyModel, {
@@ -332,9 +296,11 @@ describe('campaign and endless after wave 8', () => {
 
   test('a queued zombie walks in as soon as a place frees up', () => {
     const full = Array.makeBy(ZOMBIE_ALIVE_MAX, index =>
-      zombieAt(index + 1, 30 + (index % 6) * 8, 30 + index, ZOMBIE_MAX_HP),
+      zombieAt(index + 1, 30 + (index % 6) * 8, 30 + index, {
+        hp: ZOMBIE_MAX_HP,
+      }),
     )
-    const victim = zombieAt(999, MUZZLE_X, ARENA_LEVEL.height / 2, 1)
+    const victim = zombieAt(999, MUZZLE_X, ARENA_LEVEL.height / 2, { hp: 1 })
     story(
       update,
       given(

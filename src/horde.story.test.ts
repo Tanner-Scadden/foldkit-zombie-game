@@ -23,7 +23,6 @@ import { Message, update } from './main'
 import {
   type Bullet,
   type DoorId,
-  Frenzy,
   GameEvent,
   Invulnerability,
   type Model,
@@ -36,7 +35,7 @@ import {
   ZombieState,
   initialModel,
 } from './model'
-import { holdFire } from './testInput'
+import { holdFire, tick, ticks, zombieOf } from './testing'
 import {
   FINAL_WAVE,
   type KindWeight,
@@ -75,27 +74,6 @@ const fightingModel: Model = modifyFields(initialModel, {
   phase: () => Phase.Wave({ wave: 1, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
 })
 
-const zombieOf = (
-  kind: ZombieKind,
-  id: number,
-  x: number,
-  y: number,
-  speed = 0,
-): Zombie => ({
-  id,
-  kind,
-  x,
-  y,
-  speed,
-  hp: ZOMBIE_KINDS[kind].hp,
-  maxHp: ZOMBIE_KINDS[kind].hp,
-  knockback: { x: 0, y: 0 },
-  hitRemainingMs: 0,
-  state: ZombieState.Walking(),
-  action: ZombieAction.Roaming(),
-  frenzy: Frenzy.Calm(),
-})
-
 const pistolInto = (id: number, zombie: Zombie): Bullet => ({
   id,
   x: zombie.x,
@@ -125,11 +103,6 @@ const withScene = (
     zombies: () => zombies,
     bullets: () => bullets,
   })
-
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-
-const ticks = (count: number, deltaTime: number) =>
-  Array.makeBy(count, () => tick(deltaTime))
 
 const recordTicks = (count: number, deltaTime: number, frames: Array<Model>) =>
   Array.flatMap(ticks(count, deltaTime), frame => [
@@ -384,8 +357,10 @@ describe('the kind table', () => {
 
 describe('exploders', () => {
   test('a shot Exploder fuses, then bursts once, hurting the player once and the zombies nearby', () => {
-    const left = zombieOf('Exploder', 1, CENTER_X + 18, CENTER_Y, 0)
-    const right = zombieOf('Exploder', 2, CENTER_X + 18, CENTER_Y + 8, 0)
+    const left = zombieOf('Exploder', 1, CENTER_X + 18, CENTER_Y, { speed: 0 })
+    const right = zombieOf('Exploder', 2, CENTER_X + 18, CENTER_Y + 8, {
+      speed: 0,
+    })
     const shambler = zombieOf('Shambler', 3, CENTER_X + 32, CENTER_Y)
     const tank = zombieOf('Tank', 4, CENTER_X + 18, CENTER_Y - 18)
     const frames: Array<Model> = []
@@ -552,9 +527,9 @@ describe('exploders', () => {
         zombieOf('Exploder', index + 1, 196 + index * 9, 70 + (index % 2) * 6),
       ),
       ...Array.makeBy(4, index =>
-        zombieOf('Shambler', index + 10, 200 + index * 10, 84, 20),
+        zombieOf('Shambler', index + 10, 200 + index * 10, 84, { speed: 20 }),
       ),
-      zombieOf('Runner', 20, 250, 60, 45),
+      zombieOf('Runner', 20, 250, 60, { speed: 45 }),
     ]
     const play = (seed: number): ReadonlyArray<Model> => {
       const frames: Array<Model> = []
@@ -754,7 +729,9 @@ describe('tank pathing', () => {
       update,
       given(
         modifyFields(
-          withScene([zombieOf('Tank', 1, start.x, start.y, TANK_TEST_SPEED)]),
+          withScene([
+            zombieOf('Tank', 1, start.x, start.y, { speed: TANK_TEST_SPEED }),
+          ]),
           {
             player: player =>
               modifyFields(player, {

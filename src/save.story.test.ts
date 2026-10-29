@@ -44,9 +44,8 @@ import {
   unvisitedHome,
   writeLegacySave,
 } from './save'
+import { SURFACE, showDialog, tick } from './testing'
 import { ZOMBIE_KIND_ORDER } from './zombies'
-
-const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 
 const learnedSave: PlayerSave = {
   version: 5,
@@ -112,11 +111,6 @@ const read: Model = modifyFields(loading, {
   loading: () => Loading.Loaded(),
   saveStatus: () => 'Read',
 })
-
-const showDialog = () =>
-  Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog())
-
-const tick = message(Message.TickedFrame({ deltaTime: 50 }))
 
 const farSpawn: PlannedSpawn = {
   atMs: 1e9,
@@ -313,7 +307,7 @@ describe('loading the save', () => {
         )
       }),
       message(Message.ClickedCampaignButton()),
-      tick,
+      tick(50),
       model(current => {
         expect(Phase.guards.Preparation(current.phase)).toBe(true)
         expect(shownHints(current)).toEqual([])
@@ -341,7 +335,7 @@ describe('loading the save', () => {
         Dialog.Message.CompletedCloseDialog(),
       ),
       Command.resolve(WriteSave, Message.CompletedWriteSave()),
-      tick,
+      tick(50),
       model(current => {
         expect(current.saveStatus).toBe('Read')
         expect(isPracticeGateHeld(current)).toBe(true)
@@ -532,7 +526,7 @@ describe('writing the save', () => {
     story(
       update,
       given(dying),
-      tick,
+      tick(50),
       model(current => {
         expect(Phase.guards.GameOver(current.phase)).toBe(true)
         expect(saveOf(current).bests).toEqual({
@@ -555,11 +549,11 @@ describe('writing the save', () => {
           kills: () => modifyFields(noKills, { Shambler: () => 4 }),
         }),
     })
-    story(update, given(fighting), tick, Command.expectNone())
+    story(update, given(fighting), tick(50), Command.expectNone())
   })
 
   test('a frame that changes nothing saved writes nothing', () => {
-    story(update, given(read), tick, Command.expectNone())
+    story(update, given(read), tick(50), Command.expectNone())
   })
 
   test('nothing is written before the save has been read', () => {

@@ -20,13 +20,9 @@ import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { withBests } from './difficulty'
 import { Message, update } from './main'
 import { Arsenal, type Model, Phase, RunMode, initialModel } from './model'
+import { measureSurface } from './testing'
 import { asVeteran } from './veteran'
-import { MeasureGameSurface, view } from './view'
-
-const measureSurface = Mount.resolve(
-  MeasureGameSurface,
-  Message.MeasuredGameSurface({ left: 0, top: 0, width: 800, height: 400 }),
-)
+import { view } from './view'
 
 const campaignButton = role('button', {
   name: 'Campaign: 8 waves, then victory',

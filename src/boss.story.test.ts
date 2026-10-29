@@ -25,25 +25,20 @@ import {
   Boss,
   type BossAttack,
   BossMove,
-  type Bullet,
   type DoorId,
-  Frenzy,
   GameEvent,
   Glob,
   HitStop,
   Invulnerability,
   type Model,
   Phase,
-  Pierce,
   type PlannedSpawn,
   RunMode,
   type Zombie,
-  ZombieAction,
-  type ZombieKind,
-  ZombieState,
   initialModel,
 } from './model'
 import { BOSS_ICON } from './sprite'
+import { bulletInto, tick, ticks, zombieOf } from './testing'
 import { wavePreviewShapes } from './wavePreview'
 import { FINAL_WAVE, WAVE_PLANS, hpScaleFor, rollSpawns } from './waves'
 import { ZOMBIE_KINDS, scaledHp } from './zombies'
@@ -82,29 +77,8 @@ const inWave = (
     zombies: () => zombies,
   })
 
-const zombieOf = (
-  kind: ZombieKind,
-  id: number,
-  x: number,
-  y: number,
-  hp: number,
-): Zombie => ({
-  id,
-  kind,
-  x,
-  y,
-  speed: 0,
-  hp,
-  maxHp: hp,
-  knockback: { x: 0, y: 0 },
-  hitRemainingMs: 0,
-  state: ZombieState.Walking(),
-  action: ZombieAction.Roaming(),
-  frenzy: Frenzy.Calm(),
-})
-
 const bossAt = (x: number, y: number, hp = BOSS_HP): Zombie =>
-  modifyFields(zombieOf('Boss', BOSS_ID, x, y, hp), {
+  modifyFields(zombieOf('Boss', BOSS_ID, x, y, { hp }), {
     maxHp: () => BOSS_HP,
   })
 
@@ -139,30 +113,14 @@ const bossIn = (current: Model): Zombie =>
     Array.findFirst(current.zombies, ({ id }) => id === BOSS_ID),
   )
 
-const bulletInto = (id: number, zombie: Zombie, damage = 1): Bullet => ({
-  id,
-  x: zombie.x,
-  y: zombie.y,
-  velocityX: 1,
-  velocityY: 0,
-  remainingMs: 900,
-  weapon: 'Pistol',
-  damage,
-  knockback: 110,
-  glaze: 'Plain',
-  pierce: Pierce.Stops(),
-})
-
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-
-const ticks = (count: number) => Array.makeBy(count, () => tick(FRAME_MS))
-
 const eventsTagged = (
   events: ReadonlyArray<GameEvent>,
   tag: GameEvent['_tag'],
 ): ReadonlyArray<GameEvent> => Array.filter(events, event => event._tag === tag)
 
-const DOOMED: Zombie = zombieOf('Shambler', 100, CENTER_X + 30, CENTER_Y, 1)
+const DOOMED: Zombie = zombieOf('Shambler', 100, CENTER_X + 30, CENTER_Y, {
+  hp: 1,
+})
 
 const clearing = (wave: number): Model =>
   modifyFields(readyModel, {
@@ -359,18 +317,18 @@ describe('the boss has the floor', () => {
     story(
       update,
       given(sturdy(inWave(FINAL_WAVE, soon, arriving))),
-      ...ticks(Math.ceil(1000 / FRAME_MS) + 10),
+      ...ticks(Math.ceil(1000 / FRAME_MS) + 10, FRAME_MS),
       model(current => {
         expect(Boss.isAnyOf(['Fighting'])(current.boss)).toBe(true)
         expect(waveClock(current)).toBe(0)
         expect(pending(current)).toBe(soon.length)
       }),
-      ...ticks(rejoinFrames - 30),
+      ...ticks(rejoinFrames - 30, FRAME_MS),
       model(current => {
         expect(waveClock(current)).toBe(0)
         expect(pending(current)).toBe(soon.length)
       }),
-      ...ticks(50),
+      ...ticks(50, FRAME_MS),
       model(current => {
         expect(waveClock(current)).toBeGreaterThan(0)
         expect(pending(current)).toBe(soon.length - 1)
@@ -390,7 +348,7 @@ describe('telegraphed attacks', () => {
     story(
       update,
       given(start),
-      ...Array.flatMap(ticks(frames), frame => [
+      ...Array.flatMap(ticks(frames, FRAME_MS), frame => [
         frame,
         model((current: Model) => {
           log.push(
@@ -506,7 +464,7 @@ describe('telegraphed attacks', () => {
     story(
       update,
       given(start),
-      ...ticks(windUpFrames('Belch') + 2),
+      ...ticks(windUpFrames('Belch') + 2, FRAME_MS),
       model(current => {
         const groaners = Array.filter(
           current.zombies,
@@ -530,7 +488,7 @@ describe('telegraphed attacks', () => {
   test('it never belches past the alive cap', () => {
     const boss = bossAt(CENTER_X + 90, CENTER_Y)
     const crowd = Array.makeBy(ZOMBIE_ALIVE_MAX - 1, index =>
-      zombieOf('Shambler', 200 + index, 30 + index * 4, 160, 3),
+      zombieOf('Shambler', 200 + index, 30 + index * 4, 160, { hp: 3 }),
     )
     story(
       update,
@@ -576,7 +534,7 @@ describe('telegraphed attacks', () => {
           [boss],
         ),
       ),
-      ...ticks(10),
+      ...ticks(10, FRAME_MS),
       model(current => {
         const moved = Option.getOrThrow(
           Array.findFirst(current.zombies, ({ id }) => id === BOSS_ID),
@@ -601,7 +559,7 @@ describe('far attacks', () => {
     story(
       update,
       given(start),
-      ...Array.flatMap(ticks(frames), frame => [
+      ...Array.flatMap(ticks(frames, FRAME_MS), frame => [
         frame,
         model((current: Model) => {
           log.push(Array.map(current.frameEvents, ({ _tag }) => _tag))
@@ -648,7 +606,9 @@ describe('far attacks', () => {
 
   test('the rush follows the line locked at the brace, not the player', () => {
     const offLine = { x: CENTER_X, y: CENTER_Y + 40 }
-    const bystander = zombieOf('Shambler', 300, CENTER_X + 45, CENTER_Y + 4, 3)
+    const bystander = zombieOf('Shambler', 300, CENTER_X + 45, CENTER_Y + 4, {
+      hp: 3,
+    })
     const ys: Array<number> = []
     const moves: Array<BossMove['_tag']> = []
     const ends: Array<Model> = []
@@ -674,7 +634,7 @@ describe('far attacks', () => {
           },
         ),
       ),
-      ...Array.flatMap(ticks(60), frame => [
+      ...Array.flatMap(ticks(60, FRAME_MS), frame => [
         frame,
         model((current: Model) => {
           ys.push(bossIn(current).y)
@@ -719,7 +679,7 @@ describe('far attacks', () => {
           [bossAt(FAR_X, CENTER_Y + 2)],
         ),
       ),
-      ...Array.flatMap(ticks(40), frame => [
+      ...Array.flatMap(ticks(40, FRAME_MS), frame => [
         frame,
         model((current: Model) => {
           if (current.player.hp < PLAYER_MAX_HP) {
@@ -751,7 +711,7 @@ describe('far attacks', () => {
           [wallBound],
         ),
       ),
-      ...Array.flatMap(ticks(20), frame => [
+      ...Array.flatMap(ticks(20, FRAME_MS), frame => [
         frame,
         model((current: Model) => {
           states.push(current)
@@ -785,7 +745,7 @@ describe('far attacks', () => {
       model(current => {
         expect(bossIn(current).hp).toBe(dazedBoss.hp - 2)
       }),
-      ...ticks(framesOf(BOSS_RULES.dazedMs)),
+      ...ticks(framesOf(BOSS_RULES.dazedMs), FRAME_MS),
       model(current => {
         expect(BossMove.isAnyOf(['Dazed'])(fightOf(current).move)).toBe(false)
       }),
@@ -816,7 +776,7 @@ describe('far attacks', () => {
     story(
       update,
       given(start),
-      ...ticks(spatAt + 1),
+      ...ticks(spatAt + 1, FRAME_MS),
       model(current => {
         expect(fightOf(current).globs).toEqual([
           Glob.Flying({
@@ -827,7 +787,7 @@ describe('far attacks', () => {
           }),
         ])
       }),
-      ...ticks(landedAt - spatAt),
+      ...ticks(landedAt - spatAt, FRAME_MS),
       model(current => {
         expect(fightOf(current).globs).toEqual([
           Glob.Pooled({
@@ -871,7 +831,7 @@ describe('far attacks', () => {
       model(current => {
         expect(current.player.hp).toBe(PLAYER_MAX_HP)
       }),
-      ...ticks(2),
+      ...ticks(2, FRAME_MS),
       model(current => {
         expect(current.player.hp).toBe(PLAYER_MAX_HP - BOSS_RULES.spitDamage)
       }),
@@ -879,7 +839,7 @@ describe('far attacks', () => {
     story(
       update,
       given(landing({ x: PLAYER.x, y: PLAYER.y + BOSS_RULES.spitRadius + 6 })),
-      ...ticks(3),
+      ...ticks(3, FRAME_MS),
       model(current => {
         expect(eventsTagged(current.frameEvents, 'GlobLanded')).toHaveLength(1)
         expect(current.player.hp).toBe(PLAYER_MAX_HP)
@@ -905,7 +865,7 @@ describe('far attacks', () => {
           ),
         ),
         message(Message.PressedKey({ code: 'KeyA' })),
-        ...ticks(6),
+        ...ticks(6, FRAME_MS),
         model(current => {
           ends.push(current.player.x)
         }),
@@ -933,7 +893,7 @@ describe('far attacks', () => {
           [bossAt(FAR_X + 40, CENTER_Y - 60)],
         ),
       ),
-      ...ticks(framesOf(BOSS_RULES.puddleMs) + 1),
+      ...ticks(framesOf(BOSS_RULES.puddleMs) + 1, FRAME_MS),
       model(current => {
         expect(fightOf(current).globs).toEqual([])
       }),
@@ -955,7 +915,7 @@ describe('far attacks', () => {
             ),
           ),
         ),
-        ...ticks(62),
+        ...ticks(62, FRAME_MS),
         model(current => {
           lefts.push(fightOf(current).belchMs)
         }),
@@ -1030,7 +990,7 @@ describe('enrage', () => {
             ),
           ),
         ),
-        ...ticks(20),
+        ...ticks(20, FRAME_MS),
         model(current => {
           xs.push(bossIn(current).x)
         }),
@@ -1119,6 +1079,7 @@ describe('one tell at a time', () => {
       }),
       ...ticks(
         Math.ceil(300 / FRAME_MS) + Math.ceil(BOSS_RULES.retryMs / FRAME_MS),
+        FRAME_MS,
       ),
       model(current => {
         expect(
@@ -1153,7 +1114,7 @@ describe('one tell at a time', () => {
           ),
         ),
       ),
-      ...Array.flatMap(ticks(900), frame => [
+      ...Array.flatMap(ticks(900, FRAME_MS), frame => [
         frame,
         model((current: Model) => {
           tells.push(tellsOf(current))
@@ -1188,7 +1149,11 @@ describe('the health bar', () => {
     expect(maybeBossBar(readyModel)).toEqual(Option.none())
     story(
       update,
-      given(modifyFields(start, { bullets: () => [bulletInto(1, boss, 5)] })),
+      given(
+        modifyFields(start, {
+          bullets: () => [bulletInto(1, boss, { damage: 5 })],
+        }),
+      ),
       tick(FRAME_MS),
       model(current => {
         expect(maybeBossBar(current)).toEqual(
@@ -1215,7 +1180,7 @@ describe('victory', () => {
         expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)
         expect(Boss.isAnyOf(['Arriving'])(current.boss)).toBe(true)
       }),
-      ...ticks(Math.ceil(BOSS_RULES.entranceMs / FRAME_MS)),
+      ...ticks(Math.ceil(BOSS_RULES.entranceMs / FRAME_MS), FRAME_MS),
       model(current => {
         expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)
         expect(Boss.isAnyOf(['Fighting'])(current.boss)).toBe(true)
@@ -1247,7 +1212,7 @@ describe('victory', () => {
         )
         expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)
       }),
-      ...ticks(frames),
+      ...ticks(frames, FRAME_MS),
       model(current => {
         expect(current.phase).toEqual(Phase.Victory())
         expect(current.boss).toEqual(Boss.Absent())
@@ -1257,7 +1222,7 @@ describe('victory', () => {
 
   test('a Groaner still standing holds victory after the boss falls', () => {
     const lastLegs = bossAt(CENTER_X + 60, CENTER_Y, 1)
-    const straggler = zombieOf('Shambler', 300, 30, 30, 3)
+    const straggler = zombieOf('Shambler', 300, 30, 30, { hp: 3 })
     story(
       update,
       given(
@@ -1271,7 +1236,7 @@ describe('victory', () => {
           { bullets: () => [bulletInto(1, lastLegs)] },
         ),
       ),
-      ...ticks(Math.ceil(ZOMBIE_KINDS.Boss.dyingMs / FRAME_MS) + 120),
+      ...ticks(Math.ceil(ZOMBIE_KINDS.Boss.dyingMs / FRAME_MS) + 120, FRAME_MS),
       model(current => {
         expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)
         expect(current.boss).toEqual(Boss.Absent())
@@ -1355,7 +1320,7 @@ describe('determinism', () => {
       story(
         update,
         given(start(seed)),
-        ...Array.flatMap(ticks(700), frame => [
+        ...Array.flatMap(ticks(700, FRAME_MS), frame => [
           frame,
           model((current: Model) => {
             tags.push(...Array.map(current.frameEvents, ({ _tag }) => _tag))
@@ -1393,7 +1358,7 @@ describe('determinism', () => {
       story(
         update,
         given(start(seed)),
-        ...ticks(600),
+        ...ticks(600, FRAME_MS),
         model(current => {
           ends.push(current)
         }),

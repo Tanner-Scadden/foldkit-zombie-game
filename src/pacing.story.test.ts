@@ -35,6 +35,7 @@ import {
   calmPacing,
   initialModel,
 } from './model'
+import { tick, ticks } from './testing'
 import { asVeteran } from './veteran'
 import {
   FINAL_WAVE,
@@ -46,11 +47,7 @@ import {
 
 const FRAME_MS = 50
 
-const tick = message(Message.TickedFrame({ deltaTime: FRAME_MS }))
-
-const ticks = (count: number) => Array.makeBy(count, () => tick)
-
-const ticksFor = (ms: number) => ticks(Math.round(ms / FRAME_MS))
+const ticksFor = (ms: number) => ticks(Math.round(ms / FRAME_MS), FRAME_MS)
 
 const spawnAt = (
   atMs: number,
@@ -275,7 +272,7 @@ describe('telegraphs', () => {
       model(current => {
         expect(current.pacing.warnedPacks).toEqual([])
       }),
-      tick,
+      tick(FRAME_MS),
       model(current => {
         expect(
           Array.filter(current.frameEvents, GameEvent.guards.PackWarned),
@@ -290,7 +287,7 @@ describe('telegraphs', () => {
         expect(current.pacing.warnedPacks).toEqual([1])
         expect(arrivedDoors(current)).toEqual([])
       }),
-      tick,
+      tick(FRAME_MS),
       model(current => {
         expect(
           Array.filter(current.frameEvents, GameEvent.guards.PackWarned),
@@ -422,7 +419,7 @@ describe('mercy', () => {
           },
         ),
       ),
-      tick,
+      tick(FRAME_MS),
       model((current: Model) => {
         models.push(current)
       }),

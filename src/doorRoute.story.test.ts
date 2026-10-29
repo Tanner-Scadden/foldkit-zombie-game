@@ -20,6 +20,7 @@ import {
   ZombieState,
   initialModel,
 } from './model'
+import { ticks } from './testing'
 import { TRAPS, trapBox } from './traps'
 import { doorCounts } from './waves'
 
@@ -65,11 +66,6 @@ const fighting = (
     traps: () => traps,
   })
 
-const ticks = (count: number) =>
-  Array.makeBy(count, () =>
-    message(Message.TickedFrame({ deltaTime: FRAME_MS })),
-  )
-
 const doorsOf = (current: Model): ReadonlyArray<DoorId> =>
   Array.map(current.zombies, zombie => nearestDoor(zombie).id)
 
@@ -89,7 +85,7 @@ describe('boarded doors are no spawn points', () => {
     story(
       update,
       given(fighting([spawnAt('North', 1)], [plank(1, 'North')])),
-      ...ticks(2),
+      ...ticks(2, FRAME_MS),
       model(current => {
         expect(doorsOf(current)).toEqual(['East'])
       }),
@@ -99,7 +95,7 @@ describe('boarded doors are no spawn points', () => {
       given(
         fighting([spawnAt('North', 1)], [plank(1, 'North'), plank(2, 'East')]),
       ),
-      ...ticks(2),
+      ...ticks(2, FRAME_MS),
       model(current => {
         expect(doorsOf(current)).toEqual(['South'])
       }),
@@ -114,7 +110,7 @@ describe('boarded doors are no spawn points', () => {
     story(
       update,
       given(fighting(pincer, [plank(1, 'North'), plank(2, 'South')])),
-      ...ticks(2),
+      ...ticks(2, FRAME_MS),
       model(current => {
         expect(Array.sort(doorsOf(current), stringOrder)).toEqual([
           'East',
@@ -125,7 +121,7 @@ describe('boarded doors are no spawn points', () => {
     story(
       update,
       given(fighting(pincer, [plank(1, 'North'), plank(2, 'East')])),
-      ...ticks(2),
+      ...ticks(2, FRAME_MS),
       model(current => {
         expect(Array.sort(doorsOf(current), stringOrder)).toEqual([
           'South',
@@ -144,7 +140,7 @@ describe('boarded doors are no spawn points', () => {
           [plank(1, 'North')],
         ),
       ),
-      ...ticks(2),
+      ...ticks(2, FRAME_MS),
       model(current => {
         expect(Array.sort(doorsOf(current), stringOrder)).toEqual([
           'East',
@@ -180,12 +176,12 @@ describe('boarded doors are no spawn points', () => {
           { zombies: () => [chewer] },
         ),
       ),
-      ...ticks(2),
+      ...ticks(2, FRAME_MS),
       model(current => {
         expect(doorsOf(current)).toEqual(['North', 'East'])
         expect(current.traps).toHaveLength(1)
       }),
-      ...ticks(200),
+      ...ticks(200, FRAME_MS),
       model(current => {
         expect(current.traps).toEqual([])
         expect(Array.drop(doorsOf(current), 2)).toEqual(['North'])

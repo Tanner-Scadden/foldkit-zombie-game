@@ -1,7 +1,5 @@
 import { Array, Option } from 'effect'
 import {
-  Command,
-  Mount,
   all,
   click,
   expect,
@@ -16,27 +14,13 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
-
 import { NEWS_DAYS } from './changelog'
 import { RESTART_GRACE_MS } from './constants'
-import { Message, update } from './main'
+import { update } from './main'
 import { type Model, Phase, type ZombieKind, initialModel } from './model'
+import { measureSurface, showDialogInScene } from './testing'
 import { asVeteran } from './veteran'
-import { MeasureGameSurface, view } from './view'
-
-const measureSurface = Mount.resolve(
-  MeasureGameSurface,
-  Message.MeasuredGameSurface({ left: 0, top: 0, width: 800, height: 400 }),
-)
-
-const showDialog = () => [
-  Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-  Mount.resolve(
-    Dialog.AcquireResources,
-    Dialog.Message.SucceededAcquireResources(),
-  ),
-]
+import { view } from './view'
 
 const home: Model = asVeteran(initialModel)
 
@@ -79,7 +63,7 @@ describe("What's New", () => {
       expect(whatsNewWithDot).toExist(),
       expect(selector('.home-rail-dot')).toExist(),
       click(whatsNewWithDot),
-      ...showDialog(),
+      ...showDialogInScene(),
       inside(
         whatsNewDialog,
         expect(text(`${newestDay.date}: ${newestDay.title}`)).toExist(),
@@ -101,7 +85,7 @@ describe("What's New", () => {
       given(home),
       measureSurface,
       click(whatsNewWithDot),
-      ...showDialog(),
+      ...showDialogInScene(),
       click(role('button', { name: 'Older news' })),
       inside(
         whatsNewDialog,
@@ -124,7 +108,7 @@ describe('the Munchopedia', () => {
       measureSurface,
       expect(munchopediaButton).toExist(),
       click(munchopediaButton),
-      ...showDialog(),
+      ...showDialogInScene(),
       inside(
         munchopediaDialog,
         expect(text('0 of 7 discovered, 0 zombies splatted')).toExist(),
@@ -153,7 +137,7 @@ describe('the Munchopedia', () => {
       measureSurface,
       expect(munchopediaWithDot).toExist(),
       click(munchopediaWithDot),
-      ...showDialog(),
+      ...showDialogInScene(),
       inside(
         munchopediaDialog,
         expect(text('2 of 7 discovered, 1,210 zombies splatted')).toExist(),
@@ -185,7 +169,7 @@ describe('the Munchopedia', () => {
       given(withKills(home, { Tank: 12 })),
       measureSurface,
       click(munchopediaWithDot),
-      ...showDialog(),
+      ...showDialogInScene(),
       click(role('button', { name: 'Big Lug, 12 splatted, new entry' })),
       inside(
         role('list', { name: 'Badges' }),
@@ -208,7 +192,7 @@ describe('the Munchopedia', () => {
       given(withKills(home, { Boss: 2 })),
       measureSurface,
       click(munchopediaWithDot),
-      ...showDialog(),
+      ...showDialogInScene(),
       click(role('button', { name: 'Uncle Chunk, Beaten 2 times, new entry' })),
       expect(role('heading', { name: 'Uncle Chunk' })).toExist(),
       expect(text('Beaten 2 times')).toExist(),
@@ -227,7 +211,7 @@ describe('the Munchopedia', () => {
       click(
         role('button', { name: 'New Munchopedia entry: Hotfoot. Open it' }),
       ),
-      ...showDialog(),
+      ...showDialogInScene(),
       inside(
         munchopediaDialog,
         expect(role('heading', { name: 'Hotfoot' })).toExist(),

@@ -22,11 +22,18 @@ import {
   shownGhostSticks,
   shownHints,
 } from './onboarding'
-import { holdFire, releaseFire } from './testInput'
+import {
+  SURFACE,
+  holdFire,
+  press,
+  release,
+  releaseFire,
+  tick,
+  ticks,
+} from './testing'
 import { asVeteran } from './veteran'
 import { rollSpawns } from './waves'
 
-const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 const TICK_MS = 50
 const CARD_TICKS = Math.ceil(DEBUT_CARD_MIN_MS / TICK_MS)
 const AUTO_TICKS = Math.ceil(DEBUT_CARD_MS / TICK_MS)
@@ -37,11 +44,6 @@ const freshModel: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some(SURFACE),
 })
 
-const tick = message(Message.TickedFrame({ deltaTime: TICK_MS }))
-const ticks = (count: number) => Array.makeBy(count, () => tick)
-
-const press = (code: string) => message(Message.PressedKey({ code }))
-const release = (code: string) => message(Message.ReleasedKey({ code }))
 const tap = (code: string) => [press(code), release(code)]
 
 const touchDown = (pointerId: number, clientX: number, clientY: number) =>
@@ -173,16 +175,16 @@ describe('new zombie card', () => {
           introduced(asVeteran(freshModel), ['Shambler', 'Runner']),
         ),
       ),
-      tick,
+      tick(TICK_MS),
       model(current => {
         expect(cardKind(current)).toStrictEqual(Option.none())
         expect(remainingMs(current)).toBe(PREPARATION_MS)
       }),
-      ...ticks(4),
+      ...ticks(4, TICK_MS),
       model(current => {
         expect(remainingMs(current)).toBe(PREPARATION_MS - 4 * TICK_MS)
       }),
-      ...ticks(Math.ceil(PREPARATION_MS / TICK_MS)),
+      ...ticks(Math.ceil(PREPARATION_MS / TICK_MS), TICK_MS),
       model(current => {
         expect(Phase.guards.Wave(current.phase)).toBe(true)
         expect(cardKind(current)).toStrictEqual(Option.some('Exploder'))
@@ -194,7 +196,7 @@ describe('new zombie card', () => {
     story(
       update,
       given(atWaveStart(['Shambler'])),
-      ...ticks(AUTO_TICKS),
+      ...ticks(AUTO_TICKS, TICK_MS),
       model(current => {
         expect(cardKind(current)).toStrictEqual(Option.none())
         expect(current.introducedKinds).toEqual(['Shambler', 'Runner'])
@@ -281,18 +283,18 @@ describe('new zombie card', () => {
       update,
       given(atWaveStart(['Shambler'])),
       press('KeyD'),
-      ...ticks(AUTO_TICKS - 1),
+      ...ticks(AUTO_TICKS - 1, TICK_MS),
       model(current => {
         expect(cardKind(current)).toStrictEqual(Option.some('Runner'))
         expect(waveClockMs(current)).toBe(0)
         expect(current.zombies).toEqual([])
         expect(current.player.x).toBe(initialModel.player.x)
       }),
-      tick,
+      tick(TICK_MS),
       model(current => {
         expect(cardKind(current)).toStrictEqual(Option.none())
       }),
-      ...ticks(4),
+      ...ticks(4, TICK_MS),
       model(current => {
         expect(waveClockMs(current)).toBeGreaterThan(0)
         expect(current.player.x).toBeGreaterThan(initialModel.player.x)
@@ -315,7 +317,7 @@ describe('new zombie card', () => {
         model(current => {
           expect(cardKind(current)).toStrictEqual(Option.some('Runner'))
         }),
-        ...ticks(CARD_TICKS),
+        ...ticks(CARD_TICKS, TICK_MS),
         ...skip,
         model(current => {
           expect(cardKind(current)).toStrictEqual(Option.none())
@@ -330,7 +332,7 @@ describe('new zombie card', () => {
     story(
       update,
       given(atWaveStart(['Shambler'])),
-      ...ticks(CARD_TICKS),
+      ...ticks(CARD_TICKS, TICK_MS),
       press('KeyW'),
       press('KeyD'),
       ...tap('KeyR'),
@@ -341,7 +343,7 @@ describe('new zombie card', () => {
       message(Message.ClickedSwapButton()),
       message(Message.ClickedReloadButton()),
       message(Message.ClickedPlaceTrapButton()),
-      tick,
+      tick(TICK_MS),
       model(current => {
         expect(cardKind(current)).toStrictEqual(Option.some('Runner'))
         expect(current.stats.shotsFired).toBe(0)
@@ -353,12 +355,12 @@ describe('new zombie card', () => {
     story(
       update,
       given(atWaveStart(['Shambler'])),
-      ...ticks(CARD_TICKS),
+      ...ticks(CARD_TICKS, TICK_MS),
       ...tap('Escape'),
       model(current => {
         expect(Phase.guards.Paused(current.phase)).toBe(true)
       }),
-      ...ticks(AUTO_TICKS),
+      ...ticks(AUTO_TICKS, TICK_MS),
       ...tap('Escape'),
       model(current => {
         expect(Phase.guards.Wave(current.phase)).toBe(true)
@@ -384,20 +386,20 @@ describe('touch first play', () => {
         expect(shownGhostSticks(current)).toEqual(['Move', 'Aim'])
       }),
       touchDown(2, 700, 200),
-      ...ticks(10),
+      ...ticks(10, TICK_MS),
       model(current => {
         expect(current.stats.shotsFired).toBeGreaterThan(0)
         expect(shownGhostSticks(current)).toEqual(['Move'])
       }),
       touchUp(2),
-      ...ticks(SHOWN_TICKS),
+      ...ticks(SHOWN_TICKS, TICK_MS),
       model(current => {
         expect(isLearned(current.lessons.fire)).toBe(false)
         expect(shownGhostSticks(current)).toEqual(['Move', 'Aim'])
       }),
       touchDown(3, 100, 200),
       touchMove(3, 160, 200),
-      ...ticks(10),
+      ...ticks(10, TICK_MS),
       touchUp(3),
       model(current => {
         expect(isLearned(current.lessons.move)).toBe(true)
@@ -405,7 +407,7 @@ describe('touch first play', () => {
       }),
       touchDown(4, 700, 200),
       touchMove(4, 760, 180),
-      ...ticks(30),
+      ...ticks(30, TICK_MS),
       touchUp(4),
       model(current => {
         expect(isLearned(current.lessons.fire)).toBe(true)
@@ -440,11 +442,11 @@ describe('tutorial hints', () => {
       ...tap('Digit2'),
       message(Message.MovedMouse({ clientX: 700, clientY: 100 })),
       press('KeyD'),
-      tick,
+      tick(TICK_MS),
       release('KeyD'),
       holdFire,
       releaseFire,
-      ...ticks(SHOWN_TICKS),
+      ...ticks(SHOWN_TICKS, TICK_MS),
       model(current => {
         expect(hintIds(current)).toEqual(['Move', 'Fire'])
       }),
@@ -457,13 +459,13 @@ describe('tutorial hints', () => {
       given(freshModel),
       ...tap('Enter'),
       press('KeyD'),
-      ...ticks(10),
+      ...ticks(10, TICK_MS),
       release('KeyD'),
       model(current => {
         expect(current.practice.movedPx).toBeGreaterThan(24)
         expect(hintIds(current)).toEqual(['Move', 'Fire'])
       }),
-      ...ticks(SHOWN_TICKS),
+      ...ticks(SHOWN_TICKS, TICK_MS),
       model(current => {
         expect(hintIds(current)).toEqual(['Fire'])
       }),
@@ -477,7 +479,7 @@ describe('wave 1 practice gate', () => {
       update,
       given(freshModel),
       ...tap('Enter'),
-      ...ticks(Math.ceil((FIRST_PREPARATION_MS * 3) / TICK_MS)),
+      ...ticks(Math.ceil((FIRST_PREPARATION_MS * 3) / TICK_MS), TICK_MS),
       ...tap('KeyR'),
       model(current => {
         expect(remainingMs(current)).toBe(FIRST_PREPARATION_MS)
@@ -495,17 +497,17 @@ describe('wave 1 practice gate', () => {
       given(freshModel),
       ...tap('Enter'),
       press('KeyD'),
-      ...ticks(10),
+      ...ticks(10, TICK_MS),
       release('KeyD'),
       message(Message.MovedMouse({ clientX: 700, clientY: 100 })),
       mouseDown(700, 100),
-      ...ticks(SHOWN_TICKS),
+      ...ticks(SHOWN_TICKS, TICK_MS),
       message(Message.ReleasedPointer({ pointerId: 1 })),
       model(current => {
         expect(isLearned(current.lessons.move)).toBe(true)
         expect(isLearned(current.lessons.fire)).toBe(true)
       }),
-      ...ticks(Math.ceil(FIRST_PREPARATION_MS / TICK_MS) + 1),
+      ...ticks(Math.ceil(FIRST_PREPARATION_MS / TICK_MS) + 1, TICK_MS),
       model(current => {
         expect(Phase.guards.Wave(current.phase)).toBe(true)
       }),
@@ -527,7 +529,7 @@ describe('wave 1 practice gate', () => {
             }),
         }),
       ),
-      ...ticks(Math.ceil(1000 / TICK_MS) + 1),
+      ...ticks(Math.ceil(1000 / TICK_MS) + 1, TICK_MS),
       model(current => {
         expect(Phase.guards.Wave(current.phase)).toBe(true)
       }),

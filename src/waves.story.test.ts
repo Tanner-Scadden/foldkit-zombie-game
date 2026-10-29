@@ -9,23 +9,25 @@ import {
   FIRST_PREPARATION_MS,
   PLAYER_MAX_HP,
   PREPARATION_MS,
-  ZOMBIE_MAX_HP,
 } from './constants'
 import { RESTART_GRACE_MS } from './constants'
 import { Message, update } from './main'
 import {
-  type Bullet,
-  Frenzy,
   type Model,
   Phase,
-  Pierce,
   type PlannedSpawn,
   type Zombie,
-  ZombieAction,
-  ZombieState,
   initialModel,
 } from './model'
-import { holdFire } from './testInput'
+import {
+  bulletInto,
+  holdFire,
+  press,
+  release,
+  tick,
+  ticks,
+  zombieAt,
+} from './testing'
 import { asVeteran } from './veteran'
 import {
   FINAL_WAVE,
@@ -43,16 +45,8 @@ const readyModel: Model = modifyFields(asVeteran(initialModel), {
   maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
 })
 
-const tick = (deltaTime: number) => message(Message.TickedFrame({ deltaTime }))
-
-const ticks = (count: number, deltaTime: number) =>
-  Array.makeBy(count, () => tick(deltaTime))
-
 const GRACE_TICK_MS = 50
 const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
-
-const press = (code: string) => message(Message.PressedKey({ code }))
-const release = (code: string) => message(Message.ReleasedKey({ code }))
 
 const plannedSpawn = (atMs: number): PlannedSpawn => ({
   atMs,
@@ -63,40 +57,6 @@ const plannedSpawn = (atMs: number): PlannedSpawn => ({
   hpScale: 1,
   pack: 0,
   formation: 'Squad',
-})
-
-const zombieAt = (
-  id: number,
-  x: number,
-  y: number,
-  hp = ZOMBIE_MAX_HP,
-): Zombie => ({
-  id,
-  kind: 'Shambler',
-  x,
-  y,
-  speed: 0,
-  hp,
-  maxHp: hp,
-  knockback: { x: 0, y: 0 },
-  hitRemainingMs: 0,
-  state: ZombieState.Walking(),
-  action: ZombieAction.Roaming(),
-  frenzy: Frenzy.Calm(),
-})
-
-const bulletInto = (id: number, zombie: Zombie): Bullet => ({
-  id,
-  x: zombie.x,
-  y: zombie.y,
-  velocityX: 1,
-  velocityY: 0,
-  remainingMs: 900,
-  weapon: 'Pistol',
-  damage: 1,
-  knockback: 110,
-  glaze: 'Plain',
-  pierce: Pierce.Stops(),
 })
 
 const inWave = (
@@ -112,7 +72,7 @@ const inWave = (
 const killShot = (base: Model, zombie: Zombie): Model =>
   modifyFields(base, { bullets: () => [bulletInto(500, zombie)] })
 
-const doomed = zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 1)
+const doomed = zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, { hp: 1 })
 const farAway = zombieAt(101, 40, 150)
 
 describe('preparation', () => {

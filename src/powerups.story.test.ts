@@ -18,9 +18,7 @@ import {
   type BoostKind,
   BoostTimer,
   type Boosts,
-  type Bullet,
   DebutCard,
-  Frenzy,
   GameEvent,
   HitStop,
   type Hold,
@@ -29,15 +27,12 @@ import {
   Phase,
   type Pickup,
   type PickupKind,
-  Pierce,
   type PlannedSpawn,
   Prize,
   Reload,
   ShopState,
   type Zombie,
-  ZombieAction,
   type ZombieKind,
-  ZombieState,
   idleBoosts,
   initialModel,
 } from './model'
@@ -54,23 +49,25 @@ import {
   TUTORIAL_DROP,
   TUTORIAL_DROP_KILL,
 } from './powerups'
-import { holdFire, releaseFire } from './testInput'
+import {
+  SURFACE,
+  bulletInto,
+  holdFire,
+  press,
+  release,
+  releaseFire,
+  tick,
+  ticks,
+  zombieOf,
+} from './testing'
 import { asVeteran } from './veteran'
 import { ZOMBIE_KINDS } from './zombies'
 
 // SETUP
 
 const FRAME_MS = 50
-const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 
-const tick = message(Message.TickedFrame({ deltaTime: FRAME_MS }))
-
-const ticks = (count: number) => Array.makeBy(count, () => tick)
-
-const ticksFor = (ms: number) => ticks(Math.round(ms / FRAME_MS))
-
-const press = (code: string) => message(Message.PressedKey({ code }))
-const release = (code: string) => message(Message.ReleasedKey({ code }))
+const ticksFor = (ms: number) => ticks(Math.round(ms / FRAME_MS), FRAME_MS)
 
 const HELD_SPAWN: PlannedSpawn = {
   atMs: 1e9,
@@ -112,50 +109,18 @@ const withLoot = (base: Model, loot: Partial<Loot>): Model =>
     }),
   })
 
-const zombieAt = (
-  id: number,
-  kind: ZombieKind,
-  x: number,
-  y: number,
-  hp: number,
-): Zombie => ({
-  id,
-  kind,
-  x,
-  y,
-  speed: 0,
-  hp,
-  maxHp: hp,
-  knockback: { x: 0, y: 0 },
-  hitRemainingMs: 0,
-  state: ZombieState.Walking(),
-  action: ZombieAction.Roaming(),
-  frenzy: Frenzy.Calm(),
-})
-
-const bulletInto = (zombie: Zombie): Bullet => ({
-  id: zombie.id + 500,
-  x: zombie.x,
-  y: zombie.y,
-  velocityX: 1,
-  velocityY: 0,
-  remainingMs: 900,
-  weapon: 'Pistol',
-  damage: 1,
-  knockback: 0,
-  glaze: 'Plain',
-  pierce: Pierce.Stops(),
-})
-
 const victimsOf = (kind: ZombieKind, count: number): ReadonlyArray<Zombie> =>
   Array.makeBy(count, index =>
-    zombieAt(100 + index, kind, 30 + index * 22, 62, 1),
+    zombieOf(kind, 100 + index, 30 + index * 22, 62, { hp: 1 }),
   )
 
 const withKills = (base: Model, victims: ReadonlyArray<Zombie>): Model =>
   modifyFields(base, {
     zombies: () => victims,
-    bullets: () => Array.map(victims, bulletInto),
+    bullets: () =>
+      Array.map(victims, victim =>
+        bulletInto(victim.id + 500, victim, { knockback: 0 }),
+      ),
   })
 
 const pickupAt = (
@@ -210,7 +175,7 @@ describe('drops', () => {
     story(
       update,
       given(tankRoom(rngState)),
-      tick,
+      tick(FRAME_MS),
       model(({ pickups }) => {
         seen.push(dropsOf(pickups))
       }),
@@ -234,7 +199,7 @@ describe('drops', () => {
     story(
       update,
       given(withLoot(tankRoom(12345), { dryMs: DROP_RULES.pityMs })),
-      tick,
+      tick(FRAME_MS),
       model(({ loot, pickups }) => {
         expect(pickups).toHaveLength(1)
         expect(loot.rngState).not.toBe(12345)
@@ -247,7 +212,7 @@ describe('drops', () => {
     story(
       update,
       given(withLoot(withKills(fighting, victimsOf('Tank', 6)), { dryMs: 0 })),
-      tick,
+      tick(FRAME_MS),
       model(({ pickups, loot, frameEvents }) => {
         expect(
           Array.filter(frameEvents, GameEvent.isAnyOf(['ZombieKilled'])),
@@ -273,7 +238,7 @@ describe('drops', () => {
           full,
         ),
       ),
-      tick,
+      tick(FRAME_MS),
       model(({ pickups, loot }) => {
         expect(pickups).toHaveLength(DROP_RULES.floorMax)
         expect(loot.prize).toEqual(Prize.Owed())
@@ -286,7 +251,7 @@ describe('drops', () => {
     story(
       update,
       given(withLoot(fighting, { dryMs: 0 })),
-      ...ticks(10),
+      ...ticks(10, FRAME_MS),
       model(({ loot }) => {
         expect(loot.dryMs).toBe(10 * FRAME_MS)
       }),
@@ -298,7 +263,7 @@ describe('drops', () => {
           dryMs: DROP_RULES.pityMs,
         }),
       ),
-      tick,
+      tick(FRAME_MS),
       model(({ pickups, loot, frameEvents }) => {
         expect(pickups).toHaveLength(1)
         expect(tagsOf(frameEvents)).toContain('PickupDropped')
@@ -310,13 +275,16 @@ describe('drops', () => {
   test('a peak owes a prize: the first kill after its fade begins rolls the prize odds', () => {
     const hold: Hold = { atMs: 1000, releaseBelow: 4, relaxMs: 5000 }
     const crowd = Array.makeBy(5, index =>
-      zombieAt(300 + index, 'Tank', 40 + index * 20, 150, 30),
+      zombieOf('Tank', 300 + index, 40 + index * 20, 150, { hp: 30 }),
     )
-    const target = zombieAt(400, 'Shambler', 120, 40, 1)
-    const incoming = modifyFields(bulletInto(target), {
-      x: x => x - 18,
-      velocityX: () => 240,
-    })
+    const target = zombieOf('Shambler', 400, 120, 40, { hp: 1 })
+    const incoming = modifyFields(
+      bulletInto(target.id + 500, target, { knockback: 0 }),
+      {
+        x: x => x - 18,
+        velocityX: () => 240,
+      },
+    )
     const peakRoom = (rngState: number): Model =>
       modifyFields(withLoot(fighting, { dryMs: 0, rngState }), {
         phase: () =>
@@ -331,13 +299,13 @@ describe('drops', () => {
       story(
         update,
         given(peakRoom(rngState)),
-        tick,
+        tick(FRAME_MS),
         model(({ pacing, loot, pickups }) => {
           expect(Beat.isAnyOf(['Fading'])(pacing.beat)).toBe(true)
           expect(loot.prize).toEqual(Prize.Owed())
           expect(pickups).toEqual([])
         }),
-        tick,
+        tick(FRAME_MS),
         model(({ loot, pickups, frameEvents }) => {
           expect(tagsOf(frameEvents)).toContain('ZombieKilled')
           expect(loot.prize).toEqual(Prize.Settled())
@@ -361,7 +329,7 @@ describe('drops', () => {
           prize: Prize.Owed(),
         }),
       ),
-      tick,
+      tick(FRAME_MS),
       model(({ pickups }) => {
         expect(Array.map(pickups, ({ kind }) => kind)).toEqual([TUTORIAL_DROP])
         const third = Option.getOrThrow(
@@ -375,13 +343,13 @@ describe('drops', () => {
   })
 
   test('a pickup lands inside the room, never in a wall or a doorway', () => {
-    const atDoor = zombieAt(100, 'Tank', 215, 4, 1)
+    const atDoor = zombieOf('Tank', 100, 215, 4, { hp: 1 })
     story(
       update,
       given(
         withLoot(withKills(fighting, [atDoor]), { dryMs: DROP_RULES.pityMs }),
       ),
-      tick,
+      tick(FRAME_MS),
       model(({ pickups }) => {
         const pickup = Option.getOrThrow(Array.head(pickups))
         expect(pickup.y).toBeGreaterThanOrEqual(26)
@@ -399,12 +367,12 @@ describe('grabbing', () => {
     story(
       update,
       given(withPickups(fighting, [pickupAt(900, 'RapidFire', x + 14, y)])),
-      tick,
+      tick(FRAME_MS),
       model(({ pickups }) => {
         expect(pickups).toHaveLength(1)
       }),
       press('KeyD'),
-      ...ticks(3),
+      ...ticks(3, FRAME_MS),
       model(({ pickups, boosts, callouts, lessons }) => {
         expect(pickups).toEqual([])
         expect(remainingOf(boosts, 'RapidFire')).toBeGreaterThan(0)
@@ -430,7 +398,7 @@ describe('grabbing', () => {
       message(
         Message.MovedPointer({ pointerId: 7, clientX: 160, clientY: 300 }),
       ),
-      ...ticks(4),
+      ...ticks(4, FRAME_MS),
       model(({ pickups, boosts }) => {
         expect(pickups).toEqual([])
         expect(remainingOf(boosts, 'Speed')).toBeGreaterThan(0)
@@ -443,7 +411,7 @@ describe('grabbing', () => {
     story(
       update,
       given(withPickups(fighting, [pickupAt(900, 'Damage', x + 20, y)])),
-      ...ticks(5),
+      ...ticks(5, FRAME_MS),
       model(({ pickups, boosts }) => {
         expect(pickups).toHaveLength(1)
         expect(boosts).toEqual(idleBoosts)
@@ -456,14 +424,14 @@ describe('grabbing', () => {
     story(
       update,
       given(withPickups(fighting, [pickupAt(900, 'Damage', x + 14, y)])),
-      tick,
+      tick(FRAME_MS),
       model(current => {
         expect(Array.map(shownHints(current), ({ id }) => id)).toContain(
           'Pickup',
         )
       }),
       press('KeyD'),
-      ...ticks(3),
+      ...ticks(3, FRAME_MS),
       release('KeyD'),
       model(current => {
         expect(Array.map(shownHints(current), ({ id }) => id)).not.toContain(
@@ -506,7 +474,7 @@ describe('effects', () => {
     story(
       update,
       given(underPlayer(reloading, 'RapidFire')),
-      tick,
+      tick(FRAME_MS),
       model(({ player }) => {
         expect(Reload.isAnyOf(['Ready'])(player.reload)).toBe(true)
         expect(player.pistolLoaded).toBeGreaterThan(0)
@@ -519,7 +487,7 @@ describe('effects', () => {
       update,
       given(withBoost(fighting, 'Damage', 5000)),
       holdFire,
-      tick,
+      tick(FRAME_MS),
       model(({ bullets }) => {
         const bullet = Option.getOrThrow(Array.head(bullets))
         expect(bullet.damage).toBe(PISTOL_DAMAGE * 2)
@@ -549,12 +517,12 @@ describe('effects', () => {
     modifyFields(base, {
       zombies: () =>
         Array.makeBy(5, index =>
-          zombieAt(
-            200 + index,
+          zombieOf(
             'Shambler',
+            200 + index,
             base.player.x + 20 + index * 10,
             base.player.y,
-            1,
+            { hp: 1 },
           ),
         ),
     })
@@ -564,9 +532,9 @@ describe('effects', () => {
       update,
       given(withBoost(skewerLine(fighting), 'Pierce', 5000)),
       holdFire,
-      tick,
+      tick(FRAME_MS),
       releaseFire,
-      ...ticks(30),
+      ...ticks(30, FRAME_MS),
       model(({ zombies, stats }) => {
         expect(stats.shotsFired).toBe(1)
         expect(stats.kills.Shambler).toBe(1 + BOOSTS.Pierce.pierce)
@@ -577,9 +545,9 @@ describe('effects', () => {
       update,
       given(skewerLine(fighting)),
       holdFire,
-      tick,
+      tick(FRAME_MS),
       releaseFire,
-      ...ticks(30),
+      ...ticks(30, FRAME_MS),
       model(({ zombies, stats }) => {
         expect(stats.shotsFired).toBe(1)
         expect(stats.kills.Shambler).toBe(1)
@@ -590,8 +558,8 @@ describe('effects', () => {
 
   test('a Big Burp blasts every zombie in reach and pays for the kills', () => {
     const { x, y } = fighting.player
-    const near = zombieAt(300, 'Shambler', x + 50, y, BURP_DAMAGE)
-    const far = zombieAt(301, 'Shambler', x - BURP_RADIUS - 20, y, 3)
+    const near = zombieOf('Shambler', 300, x + 50, y, { hp: BURP_DAMAGE })
+    const far = zombieOf('Shambler', 301, x - BURP_RADIUS - 20, y, { hp: 3 })
     story(
       update,
       given(
@@ -599,7 +567,7 @@ describe('effects', () => {
           zombies: () => [near, far],
         }),
       ),
-      tick,
+      tick(FRAME_MS),
       model(({ zombies, wallet, frameEvents, boosts }) => {
         const byId = (id: number) =>
           Option.getOrThrow(
@@ -623,7 +591,7 @@ describe('effects', () => {
     story(
       update,
       given(underPlayer(hurt, 'Heart')),
-      tick,
+      tick(FRAME_MS),
       model(({ player }) => {
         expect(player.hp).toBe(3)
       }),
@@ -631,7 +599,7 @@ describe('effects', () => {
     story(
       update,
       given(underPlayer(fighting, 'Heart')),
-      tick,
+      tick(FRAME_MS),
       model(({ player, pickups }) => {
         expect(player.hp).toBe(PLAYER_MAX_HP)
         expect(pickups).toEqual([])
@@ -648,7 +616,7 @@ describe('timers', () => {
     story(
       update,
       given(underPlayer(fighting, 'Damage')),
-      tick,
+      tick(FRAME_MS),
       model(({ boosts }) => {
         expect(remainingOf(boosts, 'Damage')).toBe(durationMs)
       }),
@@ -656,13 +624,13 @@ describe('timers', () => {
       model(({ boosts }) => {
         expect(remainingOf(boosts, 'Damage')).toBe(FRAME_MS)
       }),
-      tick,
+      tick(FRAME_MS),
       model(({ boosts, frameEvents }) => {
         expect(boosts.Damage).toEqual(BoostTimer.Off())
         expect(tagsOf(frameEvents)).toContain('BoostFaded')
       }),
       holdFire,
-      tick,
+      tick(FRAME_MS),
       model(({ bullets }) => {
         const bullet = Option.getOrThrow(Array.last(bullets))
         expect(bullet.damage).toBe(PISTOL_DAMAGE)
@@ -692,7 +660,7 @@ describe('timers', () => {
     story(
       update,
       given(frozenRoom(base)),
-      ...ticks(10),
+      ...ticks(10, FRAME_MS),
       model(current => {
         expect(timersOf(current)).toEqual(before)
       }),
@@ -738,7 +706,7 @@ describe('timers', () => {
     story(
       update,
       given(withBoost(preparing, 'Speed', 4000)),
-      ...ticks(10),
+      ...ticks(10, FRAME_MS),
       model(({ boosts }) => {
         expect(remainingOf(boosts, 'Speed')).toBe(4000 - 10 * FRAME_MS)
       }),
@@ -755,7 +723,7 @@ describe('timers', () => {
       given(
         secondGrab(withBoost(fighting, 'RapidFire', durationMs - elapsedMs)),
       ),
-      tick,
+      tick(FRAME_MS),
       model(({ boosts }) => {
         expect(remainingOf(boosts, 'RapidFire')).toBe(
           durationMs * BOOST_STACK_MAX,
@@ -765,7 +733,7 @@ describe('timers', () => {
     story(
       update,
       given(secondGrab(withBoost(fighting, 'RapidFire', 1000))),
-      tick,
+      tick(FRAME_MS),
       model(({ boosts }) => {
         expect(remainingOf(boosts, 'RapidFire')).toBe(
           1000 - FRAME_MS + durationMs,
@@ -778,7 +746,7 @@ describe('timers', () => {
     story(
       update,
       given(underPlayer(withBoost(fighting, 'Speed', 3000), 'Damage')),
-      tick,
+      tick(FRAME_MS),
       model(({ boosts }) => {
         expect(remainingOf(boosts, 'Speed')).toBe(3000 - FRAME_MS)
         expect(remainingOf(boosts, 'Damage')).toBe(BOOSTS.Damage.durationMs)
@@ -818,7 +786,7 @@ describe('the floor', () => {
           PICKUP_LIFETIME_MS - FRAME_MS,
         ])
       }),
-      tick,
+      tick(FRAME_MS),
       model(({ pickups, frameEvents }) => {
         expect(pickups).toEqual([])
         expect(tagsOf(frameEvents)).toContain('PickupFizzled')
