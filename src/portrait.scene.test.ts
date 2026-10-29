@@ -1,0 +1,265 @@
+import { Array, Option } from 'effect'
+import { Canvas } from 'foldkit'
+import {
+  Mount,
+  Subscription,
+  expect,
+  given,
+  role,
+  scene,
+  selector,
+  within,
+} from 'foldkit/scene'
+import { modifyFields } from 'foldkit/struct'
+import { describe, test, expect as vitestExpect } from 'vitest'
+
+import { screenCameraOf } from './camera'
+import { hudShapes } from './hud'
+import { Message, update } from './main'
+import {
+  BreakClock,
+  type Model,
+  Phase,
+  type PlannedSpawn,
+  initialModel,
+} from './model'
+import { screenOf, thumbAreaTop } from './screen'
+import { asVeteran } from './veteran'
+import { MeasureGameSurface, view } from './view'
+import { wavePreviewShapes } from './wavePreview'
+
+type Box = Readonly<{ x: number; y: number; width: number; height: number }>
+
+const rectsOf = (
+  shapes: ReadonlyArray<Canvas.Shape>,
+  offset: Readonly<{ x: number; y: number }>,
+): ReadonlyArray<Canvas.Rect & Box> =>
+  Array.flatMap(shapes, shape => {
+    if (shape._tag === 'Group') {
+      return rectsOf(shape.shapes, {
+        x: offset.x + (shape.translate?.x ?? 0),
+        y: offset.y + (shape.translate?.y ?? 0),
+      })
+    } else if (shape._tag === 'Rect') {
+      return [
+        Canvas.Rect({ ...shape, x: shape.x + offset.x, y: shape.y + offset.y }),
+      ]
+    } else {
+      return []
+    }
+  })
+
+const boxesOf = (
+  shapes: ReadonlyArray<Canvas.Shape>,
+  offset: Readonly<{ x: number; y: number }>,
+): ReadonlyArray<Box> =>
+  Array.flatMap(shapes, (shape): ReadonlyArray<Box> => {
+    if (shape._tag === 'Group') {
+      return boxesOf(shape.shapes, {
+        x: offset.x + (shape.translate?.x ?? 0),
+        y: offset.y + (shape.translate?.y ?? 0),
+      })
+    } else if (shape._tag === 'Rect' || shape._tag === 'Image') {
+      return [
+        {
+          x: shape.x + offset.x,
+          y: shape.y + offset.y,
+          width: shape.width,
+          height: shape.height,
+        },
+      ]
+    } else {
+      return []
+    }
+  })
+
+const PORTRAIT = { left: 0, top: 0, width: 390, height: 844 }
+const LANDSCAPE = { left: 0, top: 0, width: 844, height: 390 }
+
+const DISTANT_SPAWN: PlannedSpawn = {
+  atMs: 1e9,
+  kind: 'Shambler',
+  door: 'North',
+  offset: 0,
+  speedScale: 1,
+  hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
+}
+
+const onTouch = (phase: Phase): Model =>
+  modifyFields(asVeteran(initialModel), {
+    lastDevice: () => 'Touch',
+    phase: () => phase,
+  })
+
+const fighting = onTouch(
+  Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [DISTANT_SPAWN] }),
+)
+
+const inPortrait = (model: Model): Model =>
+  modifyFields(model, {
+    orientation: () => 'Portrait',
+    maybeSurface: () => Option.some(PORTRAIT),
+  })
+
+const SLOT_FILL = 'rgba(8, 10, 12, 0.6)'
+
+const gunSlotFills = (model: Model): ReadonlyArray<Box> =>
+  Array.filter(
+    rectsOf(hudShapes(model, screenOf(model), screenCameraOf(model)), {
+      x: 0,
+      y: 0,
+    }),
+    rect => rect.fill === SLOT_FILL && rect.width === 38,
+  )
+
+const root = selector('.game-root')
+const measure = (surface: typeof PORTRAIT) =>
+  Mount.resolve(MeasureGameSurface, Message.MeasuredGameSurface(surface))
+
+describe('the portrait HUD and thumb area', () => {
+  test('the guns sit in the thumb area under the world window', () => {
+    const portrait = inPortrait(fighting)
+    const screen = screenOf(portrait)
+    const slots = gunSlotFills(portrait)
+    vitestExpect(slots).toHaveLength(2)
+    Array.forEach(slots, slot => {
+      vitestExpect(slot.y).toBeGreaterThan(thumbAreaTop(screen))
+      vitestExpect(slot.y + slot.height).toBeLessThanOrEqual(screen.height)
+      vitestExpect(slot.x).toBeGreaterThanOrEqual(0)
+      vitestExpect(slot.x + slot.width).toBeLessThanOrEqual(screen.width)
+    })
+  })
+
+  test('the hearts, money, and wave label sit in the band above the world window', () => {
+    const portrait = inPortrait(fighting)
+    const screen = screenOf(portrait)
+    const rects = boxesOf(
+      hudShapes(portrait, screen, screenCameraOf(portrait)),
+      {
+        x: 0,
+        y: 0,
+      },
+    )
+    const topRects = Array.filter(rects, rect => rect.y < screen.world.y)
+    const lowRects = Array.filter(
+      rects,
+      rect => rect.y >= screen.world.y + screen.world.height,
+    )
+    vitestExpect(
+      Array.every(rects, rect => rect.x + rect.width <= screen.width),
+    ).toBe(true)
+    vitestExpect(Array.isReadonlyArrayNonEmpty(topRects)).toBe(true)
+    vitestExpect(Array.isReadonlyArrayNonEmpty(lowRects)).toBe(true)
+    vitestExpect(
+      Array.filter(
+        rects,
+        rect =>
+          rect.y >= screen.world.y &&
+          rect.y + rect.height <= screen.world.y + screen.world.height,
+      ),
+    ).toHaveLength(0)
+  })
+
+  test('the gun cluster buttons follow the guns into the thumb area', () => {
+    scene(
+      { update, view },
+      given(fighting),
+      measure(PORTRAIT),
+      expect(root).toHaveAttr('data-layout', 'Portrait'),
+      expect(selector('.gun-cluster')).toHaveAttr('data-layout', 'Portrait'),
+      expect(selector('.gun-cluster')).toHaveStyle(
+        'bottom',
+        '1.2820512820512822%',
+      ),
+      expect(
+        within(selector('.gun-cluster'), role('group', { name: 'Your guns' })),
+      ).toExist(),
+      expect(role('button', { name: 'Pause' })).toExist(),
+    )
+  })
+})
+
+describe('turning the phone', () => {
+  test('switches the layout live mid-wave and keeps fighting', () => {
+    scene(
+      { update, view },
+      given(fighting),
+      measure(LANDSCAPE),
+      expect(root).toHaveAttr('data-layout', 'Landscape'),
+      expect(root).toHaveStyle('--screen-w', '320'),
+      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
+      Subscription.emit(Message.MeasuredGameSurface(PORTRAIT)),
+      expect(root).toHaveAttr('data-layout', 'Portrait'),
+      expect(root).toHaveStyle('--screen-w', '180'),
+      expect(root).toHaveStyle('--screen-h', '390'),
+      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
+      expect(role('dialog', { name: 'Turn your phone sideways' })).toBeAbsent(),
+      expect(role('group', { name: 'Your guns' })).toExist(),
+      Subscription.emit(Message.MeasuredGameSurface(LANDSCAPE)),
+      expect(root).toHaveAttr('data-layout', 'Landscape'),
+      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
+    )
+  })
+
+  test('a keyboard and mouse keep the landscape layout in a tall window', () => {
+    scene(
+      { update, view },
+      given(modifyFields(fighting, { lastDevice: () => 'KeyboardMouse' })),
+      measure(PORTRAIT),
+      expect(root).toHaveAttr('data-layout', 'Landscape'),
+      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
+    )
+  })
+})
+
+describe('the portrait home menu', () => {
+  test('keeps every slot: status, the player, the rail, and PLAY', () => {
+    scene(
+      { update, view },
+      given(onTouch(Phase.Ready())),
+      measure(PORTRAIT),
+      expect(root).toHaveAttr('data-layout', 'Portrait'),
+      expect(role('navigation', { name: 'Main menu' })).toExist(),
+      expect(role('group', { name: 'Play' })).toExist(),
+      expect(role('button', { name: /^Play/ })).toExist(),
+      expect(role('button', { name: /^Difficulty/ })).toExist(),
+      expect(selector('.home-hero')).toExist(),
+    )
+  })
+})
+
+describe('the portrait door preview', () => {
+  test('pins the markers of doors out of view to the window edge', () => {
+    const breakAtWestWall = inPortrait(
+      modifyFields(
+        onTouch(
+          Phase.Preparation({
+            wave: 3,
+            remainingMs: 15000,
+            durationMs: 20000,
+            spawns: Array.flatMap(
+              ['North', 'East', 'West', 'South'] as const,
+              door => [{ ...DISTANT_SPAWN, atMs: 1000, door }],
+            ),
+            clock: BreakClock.Counting(),
+          }),
+        ),
+        { player: player => ({ ...player, x: 40, y: 90 }) },
+      ),
+    )
+    const screen = screenOf(breakAtWestWall)
+    const rects = rectsOf(
+      wavePreviewShapes(breakAtWestWall, screenCameraOf(breakAtWestWall)),
+      { x: 0, y: 0 },
+    )
+    vitestExpect(rects.length).toBeGreaterThan(0)
+    Array.forEach(rects, rect => {
+      vitestExpect(rect.x).toBeGreaterThanOrEqual(screen.world.x)
+      vitestExpect(rect.x + rect.width).toBeLessThanOrEqual(
+        screen.world.x + screen.world.width,
+      )
+    })
+  })
+})

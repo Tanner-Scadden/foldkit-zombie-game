@@ -2,7 +2,7 @@ import { Array, Option } from 'effect'
 import type { Attribute, Html, HtmlBuilder } from 'foldkit/html'
 
 import { NEXT_TRAP_ICON, PAUSE_ICON, TRAP_BUTTON_ICONS } from './icons'
-import { Message, isSideways } from './main'
+import { Message } from './main'
 import { type InputDevice, type Model, Phase } from './model'
 import { TRAPS } from './traps'
 
@@ -223,7 +223,7 @@ export const howToPlayView = (
 }
 
 const isPauseHelpUp = (model: Model): boolean =>
-  Phase.isAnyOf(['Paused'])(model.phase) && !isSideways(model)
+  Phase.isAnyOf(['Paused'])(model.phase)
 
 export const pauseHelpView = (
   model: Model,

@@ -9,13 +9,13 @@
 }
 
 .home-stage {
-  --arena-px: min(100cqw / 320, 100cqh / 180);
+  --arena-px: min(100cqw / var(--screen-w), 100cqh / var(--screen-h));
   --a: var(--arena-px);
   position: absolute;
-  left: calc((100cqw - 320 * var(--a)) / 2);
-  top: calc((100cqh - 180 * var(--a)) / 2);
-  width: calc(320 * var(--a));
-  height: calc(180 * var(--a));
+  left: calc((100cqw - var(--screen-w) * var(--a)) / 2);
+  top: calc((100cqh - var(--screen-h) * var(--a)) / 2);
+  width: calc(var(--screen-w) * var(--a));
+  height: calc(var(--screen-h) * var(--a));
   color: #f4f1de;
   font-family: monospace;
   pointer-events: none;
@@ -1238,4 +1238,48 @@
   .menu-keys {
     display: none;
   }
+}
+
+/* PORTRAIT */
+
+.game-root[data-layout='Portrait'] .home-play-cluster {
+  left: calc(4 * var(--a));
+}
+
+.game-root[data-layout='Portrait'] .home-play {
+  flex: 1;
+  width: auto;
+}
+
+.game-root[data-layout='Portrait'] .home-rail {
+  right: calc(4 * var(--a));
+  bottom: calc(7 * var(--a) + max(56px, 28 * var(--a)));
+}
+
+.game-root[data-layout='Portrait'] .home-rail-list {
+  flex-direction: row;
+  gap: max(4px, 2 * var(--a));
+}
+
+.game-root[data-layout='Portrait'] .home-rail-list > li {
+  flex: 1;
+  min-width: 0;
+}
+
+.game-root[data-layout='Portrait'] .home-rail-button {
+  width: 100%;
+  min-height: 56px;
+}
+
+.game-root[data-layout='Portrait'] .home-status {
+  max-width: calc(172 * var(--a) - 56px);
+}
+
+.game-root[data-layout='Portrait'] .home-hero {
+  left: calc(70 * var(--a));
+  top: calc((112 + var(--world-top)) * var(--a));
+}
+
+.game-root[data-layout='Portrait'] .home-stage .new-entry {
+  top: calc((80 + var(--world-top)) * var(--a));
 }

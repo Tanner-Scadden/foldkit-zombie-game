@@ -39,7 +39,7 @@ import { burrowed, drawSurfacingSpot } from './crawler'
 import { toughenSpawns, withBests } from './difficulty'
 import { routeSpawns } from './doorRoute'
 import { frenzyOnArrival, frenzyPacksOf } from './frenzy'
-import { clamp } from './geometry'
+import { ZERO_VECTOR, clamp } from './geometry'
 import { deriveIntent } from './input'
 import {
   Alarm,
@@ -1253,6 +1253,7 @@ const startRun = (model: Model, mode: RunMode): Model =>
       mode: () => mode,
       intensity: () => 0,
       player: () => initialPlayer,
+      cameraLean: () => ZERO_VECTOR,
       zombies: () => [],
       bullets: () => [],
       particles: () => [],

@@ -1,11 +1,11 @@
 import { Array, Option } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
-import { STICK_RADIUS_PX, VIEW_HEIGHT, VIEW_WIDTH } from './constants'
-import { GUN_CLUSTER_BOX, gunSlotBox, secondsLeft } from './hud'
+import { STICK_RADIUS_PX } from './constants'
+import { gunClusterBox, gunSlotBox, secondsLeft } from './hud'
 import { NEXT_TRAP_ICON, RELOAD_ICON, TRAP_BUTTON_ICONS } from './icons'
 import { thumbOffset } from './input'
-import { Message, isSideways } from './main'
+import { Message } from './main'
 import {
   Arsenal,
   BreakClock,
@@ -15,6 +15,7 @@ import {
   Stick,
 } from './model'
 import { type GhostStick, isDebutCardUp, shownGhostSticks } from './onboarding'
+import { type Screen, screenOf } from './screen'
 import { STALL_BOX, gunName } from './shop'
 import {
   PlaceVerdict,
@@ -75,7 +76,7 @@ export const iconButtonView = (
 const isOnTouch = (model: Model): boolean => model.lastDevice === 'Touch'
 
 const isClusterUp = (model: Model): boolean =>
-  isRoundActive(model.phase) && !isDebutCardUp(model) && !isSideways(model)
+  isRoundActive(model.phase) && !isDebutCardUp(model)
 
 const keyBadgeView = (
   model: Model,
@@ -113,11 +114,13 @@ const SLOT_INDEX: Readonly<Record<GunSlot, number>> = { Sidearm: 0, Spare: 1 }
 
 const gunSlotButtonView = (
   model: Model,
+  screen: Screen,
   { slot, name }: SlotGun,
   h: HtmlBuilder<Message>,
 ): Html => {
   const isHeld = slot === heldSlot(model)
-  const box = gunSlotBox(SLOT_INDEX[slot])
+  const box = gunSlotBox(screen, SLOT_INDEX[slot])
+  const cluster = gunClusterBox(screen)
   return h.keyed('button')(
     slot,
     [
@@ -128,8 +131,8 @@ const gunSlotButtonView = (
       h.AriaKeyshortcuts(isHeld ? 'R' : 'Q'),
       ...(isHeld && !canReload(model.player) ? [h.AriaDisabled(true)] : []),
       h.Style({
-        left: percentOf(box.x - GUN_CLUSTER_BOX.x, GUN_CLUSTER_BOX.width),
-        width: percentOf(box.width, GUN_CLUSTER_BOX.width),
+        left: percentOf(box.x - cluster.x, cluster.width),
+        width: percentOf(box.width, cluster.width),
       }),
       h.OnClick(Message.ClickedGunSlot({ slot }), {
         focusSelector: '.game-surface',
@@ -139,10 +142,14 @@ const gunSlotButtonView = (
   )
 }
 
-const gunSlotsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const gunSlotsView = (
+  model: Model,
+  screen: Screen,
+  h: HtmlBuilder<Message>,
+): Html =>
   h.div(
     [h.Class('gun-slots'), h.Role('group'), h.AriaLabel('Your guns')],
-    Array.map(slotGuns(model), gun => gunSlotButtonView(model, gun, h)),
+    Array.map(slotGuns(model), gun => gunSlotButtonView(model, screen, gun, h)),
   )
 
 // UTILITY ICONS
@@ -244,25 +251,34 @@ const trapIconsView = (
     : []
 
 // NOTE: the icons beside the guns wrap upward before they reach the stall's
-// outline, so a narrow phone stacks them instead of covering the stall.
+// outline, so a narrow phone stacks them instead of covering the stall. In
+// portrait the stall is up in the world window, so they run to the edge.
 const SIDE_GAP = 2
-const SIDE_RIGHT = STALL_BOX.left - 10
-const SIDE_ROOM = SIDE_RIGHT - GUN_CLUSTER_BOX.x - GUN_CLUSTER_BOX.width
+const SIDE_MARGIN = 4
 
-const clusterSideView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.div(
+const sideRight = (screen: Screen): number =>
+  screen.layout === 'Landscape'
+    ? STALL_BOX.left - 10
+    : screen.width - SIDE_MARGIN
+
+const clusterSideView = (
+  model: Model,
+  screen: Screen,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const cluster = gunClusterBox(screen)
+  const room = sideRight(screen) - cluster.x - cluster.width
+  return h.div(
     [
       h.Class('gun-cluster-side'),
       h.Style({
-        left: percentOf(
-          GUN_CLUSTER_BOX.width + SIDE_GAP,
-          GUN_CLUSTER_BOX.width,
-        ),
-        width: percentOf(SIDE_ROOM - SIDE_GAP, GUN_CLUSTER_BOX.width),
+        left: percentOf(cluster.width + SIDE_GAP, cluster.width),
+        width: percentOf(room - SIDE_GAP, cluster.width),
       }),
     ],
     [reloadIconView(model, h), ...trapIconsView(model, h)],
   )
+}
 
 // START WAVE
 
@@ -297,39 +313,47 @@ const startWaveButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
 
 // GUN CLUSTER
 
-export const gunClusterView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  isClusterUp(model)
-    ? h.div(
-        [h.Class('hud-tap-frame')],
+const clusterView = (
+  model: Model,
+  screen: Screen,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const cluster = gunClusterBox(screen)
+  return h.div(
+    [h.Class('hud-tap-frame')],
+    [
+      h.div(
+        [h.Class('hud-tap-stage')],
         [
           h.div(
-            [h.Class('hud-tap-stage')],
             [
-              h.div(
-                [
-                  h.Class('gun-cluster'),
-                  h.DataAttribute('device', model.lastDevice),
-                  h.Style({
-                    left: percentOf(GUN_CLUSTER_BOX.x, VIEW_WIDTH),
-                    width: percentOf(GUN_CLUSTER_BOX.width, VIEW_WIDTH),
-                    bottom: percentOf(
-                      VIEW_HEIGHT - GUN_CLUSTER_BOX.y - GUN_CLUSTER_BOX.height,
-                      VIEW_HEIGHT,
-                    ),
-                    height: `max(48px, ${percentOf(GUN_CLUSTER_BOX.height, VIEW_HEIGHT)})`,
-                  }),
-                ],
-                [
-                  gunSlotsView(model, h),
-                  clusterSideView(model, h),
-                  startWaveButtonView(model, h),
-                ],
-              ),
+              h.Class('gun-cluster'),
+              h.DataAttribute('device', model.lastDevice),
+              h.DataAttribute('layout', screen.layout),
+              h.Style({
+                left: percentOf(cluster.x, screen.width),
+                width: percentOf(cluster.width, screen.width),
+                bottom: percentOf(
+                  screen.height - cluster.y - cluster.height,
+                  screen.height,
+                ),
+                height: `max(48px, ${percentOf(cluster.height, screen.height)})`,
+              }),
+            ],
+            [
+              gunSlotsView(model, screen, h),
+              clusterSideView(model, screen, h),
+              startWaveButtonView(model, h),
             ],
           ),
         ],
-      )
-    : h.empty
+      ),
+    ],
+  )
+}
+
+export const gunClusterView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isClusterUp(model) ? clusterView(model, screenOf(model), h) : h.empty
 
 // STICKS
 

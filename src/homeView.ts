@@ -31,7 +31,7 @@ import {
   PADLOCK_ICON,
   SETTINGS_ICON,
 } from './icons'
-import { Message, isSideways } from './main'
+import { Message } from './main'
 import {
   type Difficulty,
   DifficultyCard,
@@ -420,7 +420,7 @@ export const newEntryNoticeView = (
   model: Model,
   h: HtmlBuilder<Message>,
 ): Html =>
-  isEndScreen(model.phase) && !isSideways(model)
+  isEndScreen(model.phase)
     ? Option.match(newEntryText(model), {
         onNone: () => h.empty,
         onSome: text =>
@@ -441,7 +441,7 @@ export const newEntryNoticeView = (
 // HOME MENU
 
 export const homeMenuView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  isOnHome(model.phase) && !isSideways(model)
+  isOnHome(model.phase)
     ? h.div(
         [
           h.Class('home-frame'),
@@ -470,7 +470,7 @@ export const pauseMenuButtonView = (
   model: Model,
   h: HtmlBuilder<Message>,
 ): Html =>
-  Phase.isAnyOf(['Paused'])(model.phase) && !isSideways(model)
+  Phase.isAnyOf(['Paused'])(model.phase)
     ? h.button(
         [
           h.Type('button'),

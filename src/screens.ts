@@ -49,6 +49,7 @@ import {
   msIntoPhase,
   shownHints,
 } from './onboarding'
+import { type Screen, landscapeFrameOffset } from './screen'
 import {
   type Palette,
   type Sprite,
@@ -82,8 +83,17 @@ import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
 const CENTER_X = VIEW_WIDTH / 2
 const TITLE_SCALE = 2
 
+// NOTE: a backdrop reaches well past the landscape screen, so in portrait,
+// where these screens are drawn over the world window, it still dims the
+// HUD band and the thumb area. The canvas clips what is past its edges.
 const backdrop = (fill: string): Canvas.Shape =>
-  Canvas.Rect({ x: 0, y: 0, width: VIEW_WIDTH, height: VIEW_HEIGHT, fill })
+  Canvas.Rect({
+    x: -VIEW_WIDTH,
+    y: -VIEW_HEIGHT * 2,
+    width: VIEW_WIDTH * 3,
+    height: VIEW_HEIGHT * 5,
+    fill,
+  })
 
 const DIM_BACKDROP = backdrop('rgba(8, 10, 12, 0.72)')
 const TITLE_BACKDROP = backdrop('rgba(14, 8, 20, 0.6)')
@@ -830,6 +840,7 @@ const RESUME_Y = 164
 const pausedShapes = (
   model: Model,
   wave: number,
+  resumeY: number,
 ): ReadonlyArray<Canvas.Shape> => [
   DIM_BACKDROP,
   centered(PAUSED, PAUSED_Y, TITLE_SCALE),
@@ -840,7 +851,7 @@ const pausedShapes = (
     PAUSED_WAVE_Y,
     'Center',
   ),
-  centered(RESUME_PROMPT[model.lastDevice], RESUME_Y),
+  centered(RESUME_PROMPT[model.lastDevice], resumeY),
 ]
 
 // RUN STATS
@@ -1054,7 +1065,19 @@ const endShapes = (
 
 // OVERLAY
 
-export const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+const PORTRAIT_RESUME_LIFT = 34
+
+// NOTE: in portrait the pause panel fills the world window, so the resume
+// prompt drops to the thumb area, just above the gun slots.
+const resumeYFor = (screen: Screen): number =>
+  screen.layout === 'Landscape'
+    ? RESUME_Y
+    : screen.height - landscapeFrameOffset(screen).y - PORTRAIT_RESUME_LIFT
+
+export const overlayShapes = (
+  model: Model,
+  screen: Screen,
+): ReadonlyArray<Canvas.Shape> =>
   Phase.match(model.phase, {
     Ready: () => readyShapes(model),
     Preparation: ({ wave }) => [
@@ -1065,7 +1088,7 @@ export const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
       isDebutCardUp(model)
         ? debutCardOverlay(model)
         : [...waveBanner(model, wave, elapsedMs), ...hintShapes(model)],
-    Paused: ({ round }) => pausedShapes(model, round.wave),
+    Paused: ({ round }) => pausedShapes(model, round.wave, resumeYFor(screen)),
     Victory: () => endShapes(model, YOU_SURVIVED, victoryVerdict(model.stats)),
     GameOver: ({ wave }) =>
       endShapes(model, GAME_OVER, defeatVerdict(wave, model.stats)),

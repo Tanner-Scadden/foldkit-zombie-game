@@ -16,7 +16,7 @@ import {
   puddleSlowAt,
   woundScaleOf,
 } from './boss'
-import { cameraOf } from './camera'
+import { leanCamera, screenCameraOf } from './camera'
 import { advanceChuckers, maybeChuckerHeading, maybeShieldFor } from './chucker'
 import {
   hitEvent,
@@ -138,7 +138,7 @@ export const refreshIntent = (model: Model): Model =>
     intent: () =>
       ShopState.isAnyOf(['Browsing'])(model.shop)
         ? idleIntent
-        : deriveIntent(model.input, model.player, cameraOf(model)),
+        : deriveIntent(model.input, model.player, screenCameraOf(model)),
   })
 
 // TIMERS
@@ -1234,5 +1234,8 @@ export const advanceGame = (model: Model, deltaTime: number): Model => {
   const stepped = isFrozenThroughout
     ? thawed
     : advanceWorld(thawed, thaw.worldMs)
-  return advanceJuice(stepped, deltaMs, thaw.worldMs)
+  const leaned = modifyFields(stepped, {
+    cameraLean: lean => leanCamera(lean, stepped.intent.maybeAim, deltaMs),
+  })
+  return advanceJuice(leaned, deltaMs, thaw.worldMs)
 }

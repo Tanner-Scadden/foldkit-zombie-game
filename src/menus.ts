@@ -3,7 +3,6 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Dialog } from '@foldkit/ui'
 
-import { GAME_TITLE } from './constants'
 import { END_MENU_BUTTON_ID, endOffer } from './home'
 import { pauseMenuButtonView } from './homeView'
 import {
@@ -16,7 +15,7 @@ import {
   SOUND_OFF_ICON,
   SOUND_ON_ICON,
 } from './icons'
-import { Message, isSideways } from './main'
+import { Message } from './main'
 import { DebutCard, type Model, Phase, type ZombieKind } from './model'
 import { canSkipDebutCard } from './onboarding'
 import { iconButtonView } from './touchControls'
@@ -120,7 +119,7 @@ export const cornerButtonsView = (
   model: Model,
   h: HtmlBuilder<Message>,
 ): Html =>
-  isSideways(model) || isPickingCharacter(model)
+  isPickingCharacter(model)
     ? h.empty
     : h.div([h.Class('corner-buttons')], cornerButtons(model, h))
 
@@ -133,7 +132,6 @@ export const homeScreenTipView = (
   model.screenFit === 'HomeScreen' &&
   model.homeScreenTip === 'Unseen' &&
   Phase.isAnyOf(['Ready'])(model.phase) &&
-  !isSideways(model) &&
   !isPickingCharacter(model)
     ? h.div(
         [h.Class('home-screen-tip')],
@@ -369,10 +367,6 @@ const menuAndModesView = (model: Model, h: HtmlBuilder<Message>): Html =>
   )
 
 export const modeChoiceView = (model: Model, h: HtmlBuilder<Message>): Html => {
-  if (isSideways(model)) {
-    return h.empty
-  }
-
   const offer = endOffer(model)
   if (offer === 'MenuOnly') {
     return menuOnlyView(model, h)
@@ -410,7 +404,7 @@ const debutCardButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
     : h.empty
 
 export const debutCardView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  isSideways(model) || !Phase.isAnyOf(['Wave'])(model.phase)
+  !Phase.isAnyOf(['Wave'])(model.phase)
     ? h.empty
     : DebutCard.match(model.debutCard, {
         Hidden: () => h.empty,
@@ -435,34 +429,3 @@ export const debutCardView = (model: Model, h: HtmlBuilder<Message>): Html =>
             ],
           ),
       })
-
-// ROTATE NOTICE
-
-const ROTATE_TITLE_ID = 'rotate-title'
-const ROTATE_BODY_ID = 'rotate-body'
-
-export const sidewaysView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  isSideways(model)
-    ? h.div(
-        [
-          h.Class('rotate-overlay'),
-          h.Role('dialog'),
-          h.AriaModal(true),
-          h.AriaLabelledBy(ROTATE_TITLE_ID),
-          h.AriaDescribedBy(ROTATE_BODY_ID),
-        ],
-        [
-          h.div([h.Class('rotate-phone'), h.AriaHidden(true)]),
-          h.h2(
-            [h.Id(ROTATE_TITLE_ID), h.Class('rotate-title')],
-            ['Turn your phone sideways'],
-          ),
-          h.p(
-            [h.Id(ROTATE_BODY_ID), h.Class('rotate-body')],
-            [
-              `${GAME_TITLE} plays in landscape. The game waits until you turn it.`,
-            ],
-          ),
-        ],
-      )
-    : h.empty

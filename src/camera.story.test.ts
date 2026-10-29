@@ -43,7 +43,7 @@ describe('camera', () => {
         { x: 310, y: 170 },
       ],
       focus => {
-        expect(cameraFor(ARENA_LEVEL, focus)).toEqual({ x: 0, y: 0 })
+        expect(cameraFor(ARENA_LEVEL, focus)).toMatchObject({ x: 0, y: 0 })
       },
     )
   })
@@ -52,13 +52,19 @@ describe('camera', () => {
     expect(WIDE_LEVEL.width).toBe(VIEW_WIDTH * 2)
     expect(WIDE_LEVEL.height).toBe(VIEW_HEIGHT)
 
-    expect(cameraFor(WIDE_LEVEL, { x: 320, y: 90 })).toEqual({ x: 160, y: 0 })
-    expect(cameraFor(WIDE_LEVEL, { x: 400.4, y: 30 })).toEqual({
+    expect(cameraFor(WIDE_LEVEL, { x: 320, y: 90 })).toMatchObject({
+      x: 160,
+      y: 0,
+    })
+    expect(cameraFor(WIDE_LEVEL, { x: 400.4, y: 30 })).toMatchObject({
       x: 240,
       y: 0,
     })
-    expect(cameraFor(WIDE_LEVEL, { x: 40, y: 90 })).toEqual({ x: 0, y: 0 })
-    expect(cameraFor(WIDE_LEVEL, { x: 620, y: 170 })).toEqual({
+    expect(cameraFor(WIDE_LEVEL, { x: 40, y: 90 })).toMatchObject({
+      x: 0,
+      y: 0,
+    })
+    expect(cameraFor(WIDE_LEVEL, { x: 620, y: 170 })).toMatchObject({
       x: WIDE_LEVEL.width - VIEW_WIDTH,
       y: 0,
     })
@@ -74,11 +80,11 @@ describe('camera', () => {
 
   test('centers a map narrower than the view and holds it still', () => {
     expect(NARROW_LEVEL.width).toBe(VIEW_WIDTH / 2)
-    expect(cameraFor(NARROW_LEVEL, { x: 10, y: 90 })).toEqual({
+    expect(cameraFor(NARROW_LEVEL, { x: 10, y: 90 })).toMatchObject({
       x: -VIEW_WIDTH / 4,
       y: 0,
     })
-    expect(cameraFor(NARROW_LEVEL, { x: 150, y: 90 })).toEqual({
+    expect(cameraFor(NARROW_LEVEL, { x: 150, y: 90 })).toMatchObject({
       x: -VIEW_WIDTH / 4,
       y: 0,
     })
@@ -91,7 +97,7 @@ describe('camera', () => {
       y: 90,
     }
     const camera = cameraFor(WIDE_LEVEL, player)
-    expect(camera).toEqual({ x: 240, y: 0 })
+    expect(camera).toMatchObject({ x: 240, y: 0 })
 
     const cursorInView = Option.getOrThrow(
       clientToView(SURFACE, { x: 1120, y: 360 }),
@@ -124,7 +130,7 @@ describe('camera', () => {
       ),
       message(Message.MovedMouse({ clientX: 1000, clientY: 360 })),
       model(current => {
-        expect(cameraOf(current)).toEqual({ x: 0, y: 0 })
+        expect(cameraOf(current)).toMatchObject({ x: 0, y: 0 })
         expect(current.input.maybeMouseInView).toEqual(
           Option.some({ x: 250, y: 90 }),
         )

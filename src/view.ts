@@ -7,7 +7,7 @@ import { FEEDBACK_LINE, GAME_TITLE } from './constants'
 import { DIFFICULTIES, bestsFor } from './difficulty'
 import { homeMenuView, menuPanelView, newEntryNoticeView } from './homeView'
 import { gameStageView } from './layers'
-import { Message, isSideways } from './main'
+import { Message } from './main'
 import {
   cornerButtonsView,
   debutCardView,
@@ -15,7 +15,6 @@ import {
   homeScreenStepsView,
   homeScreenTipView,
   modeChoiceView,
-  sidewaysView,
   toSentenceCase,
 } from './menus'
 import {
@@ -29,6 +28,7 @@ import {
 import { isOpenBreak, isPracticeGateHeld } from './onboarding'
 import { pauseHelpView } from './pauseHelp'
 import { BOOST_KIND_ORDER, PICKUPS, isBoosted } from './powerups'
+import { screenOf } from './screen'
 import { isShopOpenFor } from './shop'
 import { shopDialogView } from './shopView'
 import {
@@ -162,10 +162,6 @@ const practiceGateNote = (model: Model): string =>
     : ''
 
 export const statusText = (model: Model): string => {
-  if (isSideways(model)) {
-    return 'Paused. Turn your phone sideways to play.'
-  }
-
   return Phase.match(model.phase, {
     Ready: () => `${GAME_TITLE}, an early alpha. ${HOME_MENU}`,
     Preparation: ({ wave }) =>
@@ -255,52 +251,65 @@ const toPressedPointer = (
 
 // VIEW
 
-export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
-  title: GAME_TITLE,
-  body: h.main(
-    [h.Class('game-root')],
-    [
-      h.h1([h.Class('sr-only')], [GAME_TITLE]),
-      h.p([h.Class('sr-only'), h.Role('status')], [statusText(model)]),
-      h.div(
-        [
-          h.Class('game-surface'),
-          h.Role('application'),
-          h.AriaLabel('Game surface'),
-          h.Tabindex(-1),
-          h.OnMount(MeasureGameSurface()),
-          h.OnPointerDown(toPressedPointer),
-          h.OnContextMenu(Message.SuppressedContextMenu()),
-        ],
-        [
-          gameStageView(model, h),
-          ghostSticksView(model, h),
-          stickView(model.input.moveStick, 'move', h),
-          stickView(model.input.aimStick, 'aim', h),
-        ],
-      ),
-      loadoutView(model, h),
-      pauseHelpView(model, h.OnPointerDown(toPressedPointer), h),
-      homeMenuView(model, h),
-      preparationControlsView(model, h),
-      gunClusterView(model, h),
-      debutCardView(model, h),
-      modeChoiceView(model, h),
-      newEntryNoticeView(model, h),
-      cornerButtonsView(model, h),
-      homeScreenTipView(model, h),
-      updateChipView(model, h),
-      homeScreenStepsView(model, h),
-      shopDialogView(model, h),
-      menuPanelView(model, h),
-      h.submodel({
-        slotId: 'character-picker',
-        model: model.character,
-        view: CharacterView.view,
-        viewInputs: { appearance: model.appearance, screenMs: model.screenMs },
-        toParentMessage: message => Message.GotCharacterMessage({ message }),
-      }),
-      sidewaysView(model, h),
-    ],
-  ),
-})
+export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
+  const screen = screenOf(model)
+  return {
+    title: GAME_TITLE,
+    body: h.main(
+      [
+        h.Class('game-root'),
+        h.DataAttribute('layout', screen.layout),
+        h.Style({
+          '--screen-w': `${screen.width}`,
+          '--screen-h': `${screen.height}`,
+          '--world-top': `${screen.world.y}`,
+        }),
+      ],
+      [
+        h.h1([h.Class('sr-only')], [GAME_TITLE]),
+        h.p([h.Class('sr-only'), h.Role('status')], [statusText(model)]),
+        h.div(
+          [
+            h.Class('game-surface'),
+            h.Role('application'),
+            h.AriaLabel('Game surface'),
+            h.Tabindex(-1),
+            h.OnMount(MeasureGameSurface()),
+            h.OnPointerDown(toPressedPointer),
+            h.OnContextMenu(Message.SuppressedContextMenu()),
+          ],
+          [
+            gameStageView(model, h),
+            ghostSticksView(model, h),
+            stickView(model.input.moveStick, 'move', h),
+            stickView(model.input.aimStick, 'aim', h),
+          ],
+        ),
+        loadoutView(model, h),
+        pauseHelpView(model, h.OnPointerDown(toPressedPointer), h),
+        homeMenuView(model, h),
+        preparationControlsView(model, h),
+        gunClusterView(model, h),
+        debutCardView(model, h),
+        modeChoiceView(model, h),
+        newEntryNoticeView(model, h),
+        cornerButtonsView(model, h),
+        homeScreenTipView(model, h),
+        updateChipView(model, h),
+        homeScreenStepsView(model, h),
+        shopDialogView(model, h),
+        menuPanelView(model, h),
+        h.submodel({
+          slotId: 'character-picker',
+          model: model.character,
+          view: CharacterView.view,
+          viewInputs: {
+            appearance: model.appearance,
+            screenMs: model.screenMs,
+          },
+          toParentMessage: message => Message.GotCharacterMessage({ message }),
+        }),
+      ],
+    ),
+  }
+}

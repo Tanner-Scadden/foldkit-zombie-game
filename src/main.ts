@@ -702,9 +702,6 @@ const MUSIC_KEY = 'KeyN'
 const withInput = (model: Model, toNextInput: (input: Input) => Input) =>
   refreshIntent(modifyFields(model, { input: toNextInput }))
 
-export const isSideways = (model: Model): boolean =>
-  model.lastDevice === 'Touch' && model.orientation === 'Portrait'
-
 const useDevice = (model: Model, device: InputDevice): Model =>
   model.lastDevice === device
     ? model
@@ -722,7 +719,6 @@ const isPastRestartGrace = (model: Model): boolean =>
   model.screenMs >= RESTART_GRACE_MS
 
 const canStart = (model: Model): boolean =>
-  !isSideways(model) &&
   Phase.match(model.phase, {
     Ready: () => true,
     Preparation: () => false,
@@ -745,8 +741,7 @@ const isScreenAnimated = (phase: Phase): boolean =>
   Phase.isAnyOf(['Ready', 'Victory', 'GameOver'])(phase)
 
 const isFrameActive = (model: Model): boolean =>
-  !isSideways(model) &&
-  (isRoundActive(model.phase) || isScreenAnimated(model.phase))
+  isRoundActive(model.phase) || isScreenAnimated(model.phase)
 
 const hasStartedWave = (before: Model, after: Model): boolean =>
   Phase.isAnyOf(['Preparation'])(before.phase) &&
@@ -1090,7 +1085,6 @@ const focusShopItem = (model: Model, item: ShopItemId): Model =>
 // CHARACTER
 
 const canPickCharacter = (model: Model): boolean =>
-  !isSideways(model) &&
   Phase.match(model.phase, {
     Ready: () => true,
     Preparation: () => false,
@@ -1187,11 +1181,7 @@ const foldPanelDialogClose = Update.foldChildStep({
 })
 
 const isPanelAllowed = (model: Model, panel: MenuPanel): boolean => {
-  if (
-    isSideways(model) ||
-    model.panelDialog.isOpen ||
-    model.character.dialog.isOpen
-  ) {
+  if (model.panelDialog.isOpen || model.character.dialog.isOpen) {
     return false
   } else if (panel === 'LeaveRun') {
     return isPaused(model.phase)
@@ -1229,11 +1219,7 @@ const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
 const leaveFromMenu: UpdateStep = stepModel => {
   if (isPaused(stepModel.phase)) {
     return openPanel('LeaveRun')(stepModel)
-  } else if (
-    isEndScreen(stepModel.phase) &&
-    isPastRestartGrace(stepModel) &&
-    !isSideways(stepModel)
-  ) {
+  } else if (isEndScreen(stepModel.phase) && isPastRestartGrace(stepModel)) {
     return goHome(stepModel)
   } else {
     return { model: stepModel }
@@ -1255,7 +1241,6 @@ const menuFromKey: (code: string) => UpdateStep = code => stepModel =>
 
 const canMoveHomeFocus = (model: Model): boolean =>
   isOnHome(model.phase) &&
-  !isSideways(model) &&
   !model.panelDialog.isOpen &&
   !model.character.dialog.isOpen
 
@@ -1567,11 +1552,6 @@ const pauseRound: UpdateStep = stepModel =>
     }),
   ])
 
-const pauseWhenSideways: UpdateStep = stepModel =>
-  isSideways(stepModel) && isRoundActive(stepModel.phase)
-    ? pauseRound(stepModel)
-    : { model: stepModel }
-
 const pauseWhenAway: UpdateStep = stepModel =>
   isRoundActive(stepModel.phase)
     ? pauseRound(stepModel)
@@ -1813,7 +1793,6 @@ const updateGame = (model: Model, message: Message) =>
       return Update.combine(pressed, [
         unlockAudio,
         playStartSoundWhen(startsRun(model, pressed)),
-        pauseWhenSideways,
       ])
     },
 
@@ -1842,25 +1821,23 @@ const updateGame = (model: Model, message: Message) =>
 
     SuppressedContextMenu: () => ({ model }),
 
-    MeasuredGameSurface: surface =>
-      pauseWhenSideways(
-        modifyFields(model, {
-          maybeSurface: () => Option.some(surface),
-          orientation: () => orientationOf(surface.width, surface.height),
-        }),
-      ),
+    MeasuredGameSurface: surface => ({
+      model: modifyFields(model, {
+        maybeSurface: () => Option.some(surface),
+        orientation: () => orientationOf(surface.width, surface.height),
+      }),
+    }),
 
     CompletedGenerateSeed: ({ seed }) => ({
       model: modifyFields(model, { rngState: () => seed }),
     }),
 
-    CompletedDetectInputDevice: ({ touchControls }) =>
-      pauseWhenSideways(
-        useDevice(
-          modifyFields(model, { touchControls: () => touchControls }),
-          touchControls === 'Allowed' ? 'Touch' : 'KeyboardMouse',
-        ),
+    CompletedDetectInputDevice: ({ touchControls }) => ({
+      model: useDevice(
+        modifyFields(model, { touchControls: () => touchControls }),
+        touchControls === 'Allowed' ? 'Touch' : 'KeyboardMouse',
       ),
+    }),
 
     ClickedMuteButton: () => unlockAudio(toggleSound(model)),
 
@@ -2220,7 +2197,7 @@ const dismissHomeScreenTipFrom =
   })
 
 const isOfferingOnlyMenu = (model: Model): boolean =>
-  endOffer(model) === 'MenuOnly' && !isSideways(model)
+  endOffer(model) === 'MenuOnly'
 
 const focusEndMenuFrom =
   (before: Model): UpdateStep =>
