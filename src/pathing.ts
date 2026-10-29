@@ -94,68 +94,83 @@ const openNeighbors = (
   )
 }
 
+const OPEN_NEIGHBORS: Readonly<
+  Record<Clearance, ReadonlyArray<ReadonlyArray<number>>>
+> = {
+  Narrow: Array.makeBy(TILE_COUNT, index => openNeighbors(index, 'Narrow')),
+  Wide: Array.makeBy(TILE_COUNT, index => openNeighbors(index, 'Wide')),
+}
+
+const openNeighborsOf = (
+  index: number,
+  clearance: Clearance,
+): ReadonlyArray<number> =>
+  Option.getOrElse(Array.get(OPEN_NEIGHBORS[clearance], index), () => [])
+
 const distanceAt = (distances: ReadonlyArray<number>, index: number): number =>
   Option.getOrElse(Array.get(distances, index), () => UNREACHED_DISTANCE)
-
-type Arrival = Readonly<{ index: number; distance: number }>
 
 type TollMap = ReadonlyMap<number, number>
 
 const tollAt = (tolls: TollMap, index: number): number =>
   Option.getOrElse(Option.fromNullishOr(tolls.get(index)), () => 0)
 
-const isUnreached = (distances: ReadonlyArray<number>, index: number) =>
-  distanceAt(distances, index) === UNREACHED_DISTANCE
+type Buckets = Map<number, Array<number>>
 
-const nearestArrival = (arrivals: Array.NonEmptyReadonlyArray<Arrival>) =>
-  Array.reduce(arrivals, UNREACHED_DISTANCE, (nearest, { distance }) =>
-    Math.min(nearest, distance),
+const nearestDepth = (buckets: Buckets): number =>
+  Array.reduce(
+    Array.fromIterable(buckets.keys()),
+    UNREACHED_DISTANCE,
+    (nearest, depth) => Math.min(nearest, depth),
   )
 
+const addArrival = (buckets: Buckets, depth: number, index: number): void => {
+  const bucket = buckets.get(depth)
+  if (bucket === undefined) {
+    buckets.set(depth, [index])
+  } else {
+    bucket.push(index)
+  }
+}
+
+// NOTE: the field is a shortest path search with whole tile steps, so it
+// settles tiles one distance at a time from a bucket per distance. The
+// distances and the buckets are scratch arrays local to one search and
+// mutated in place, which keeps a refresh linear in the tile count. Copying
+// the whole grid once per ring made a refresh cost a frame on a slow phone
+// every time the player crossed a tile.
 const spread = (
-  distances: ReadonlyArray<number>,
-  pending: ReadonlyArray<Arrival>,
+  originIndex: number,
   clearance: Clearance,
   tolls: TollMap,
-): ReadonlyArray<number> =>
-  Array.match(
-    Array.filter(pending, ({ index }) => isUnreached(distances, index)),
-    {
-      onEmpty: () => distances,
-      onNonEmpty: open => {
-        const depth = nearestArrival(open)
-        const settled = new Set(
-          pipe(
-            open,
-            Array.filter(({ distance }) => distance === depth),
-            Array.map(({ index }) => index),
-          ),
-        )
-        const settledDistances = Array.map(distances, (distance, index) =>
-          settled.has(index) ? depth : distance,
-        )
-        const ringClearance: Clearance = depth === 0 ? 'Narrow' : clearance
-        const arrivals = pipe(
-          Array.fromIterable(settled),
-          Array.flatMap(index => openNeighbors(index, ringClearance)),
-          Array.filter(index => isUnreached(settledDistances, index)),
-          Array.map(index => ({
-            index,
-            distance: depth + 1 + tollAt(tolls, index),
-          })),
-        )
-        return spread(
-          settledDistances,
-          [
-            ...Array.filter(open, ({ distance }) => distance !== depth),
-            ...arrivals,
-          ],
-          clearance,
-          tolls,
-        )
-      },
-    },
-  )
+): ReadonlyArray<number> => {
+  const distances = Array.makeBy(TILE_COUNT, () => UNREACHED_DISTANCE)
+  const buckets: Buckets = new Map([[0, [originIndex]]])
+  const settleRing = (depth: number): void => {
+    const ring = Option.getOrElse(
+      Option.fromNullishOr(buckets.get(depth)),
+      () => [],
+    )
+    buckets.delete(depth)
+    const ringClearance: Clearance = depth === 0 ? 'Narrow' : clearance
+    Array.forEach(ring, index => {
+      if (distances[index] !== UNREACHED_DISTANCE) {
+        return
+      }
+      distances[index] = depth
+      Array.forEach(openNeighborsOf(index, ringClearance), neighbor => {
+        if (distances[neighbor] === UNREACHED_DISTANCE) {
+          addArrival(buckets, depth + 1 + tollAt(tolls, neighbor), neighbor)
+        }
+      })
+    })
+    if (buckets.size > 0) {
+      settleRing(nearestDepth(buckets))
+    }
+  }
+  settleRing(0)
+  return distances
+}
 
 export const computeFlowField = (
   originIndex: number,
@@ -165,8 +180,7 @@ export const computeFlowField = (
   originIndex,
   tolls,
   distances: spread(
-    Array.makeBy(TILE_COUNT, () => UNREACHED_DISTANCE),
-    [{ index: originIndex, distance: 0 }],
+    originIndex,
     clearance,
     new Map(Array.map(tolls, ({ index, cost }) => [index, cost])),
   ),

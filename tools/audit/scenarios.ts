@@ -23,6 +23,11 @@ export const SCENARIOS: Record<string, Scenario> = {
     warm: () => wait(6000),
     bot: true,
   },
+  gasbags: {
+    q: '?wave=6&start=wave&god&gun=smg&fill&gasbags=16',
+    warm: () => wait(4000),
+    bot: true,
+  },
   endless15: {
     q: '?wave=15&mode=endless&start=wave&god&gun=smg&tier=3&fill',
     warm: () => wait(15000),

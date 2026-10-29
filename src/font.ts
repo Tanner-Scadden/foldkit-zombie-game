@@ -82,7 +82,8 @@ const SPACE_WIDTH = 2
 const GLYPH_FILL = '#'
 const GLYPH_SHADOW = 'S'
 
-const GLYPHS: ReadonlyArray<Glyph> = Record.keys(GLYPH_PIXELS)
+const isGlyph = (symbol: string): symbol is Glyph =>
+  Object.hasOwn(GLYPH_PIXELS, symbol)
 
 // COIN
 
@@ -121,7 +122,7 @@ export const glyphPixels = (glyph: Glyph): ReadonlyArray<string> =>
   GLYPH_PIXELS[glyph]
 
 export const toGlyph = (symbol: string): Option.Option<Glyph> =>
-  Array.findFirst(GLYPHS, glyph => glyph === symbol)
+  Option.liftPredicate(symbol, isGlyph)
 
 const rowWidth = (pixels: ReadonlyArray<string>): number =>
   pipe(

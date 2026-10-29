@@ -1462,13 +1462,14 @@ const releaseDue = (
   }
 }
 
+type WaveRound = Phase & { readonly _tag: 'Wave' }
+
 const advanceWave = (
   model: Model,
-  wave: number,
-  elapsedMs: number,
-  spawns: ReadonlyArray<PlannedSpawn>,
+  round: WaveRound,
   worldMs: number,
 ): Model => {
+  const { wave, elapsedMs, spawns } = round
   const pacedMs = isWaveHeldByBoss(model.boss) ? 0 : worldMs
   const paced = stepBeat(
     model.pacing,
@@ -1501,7 +1502,10 @@ const advanceWave = (
   )
   const spawned = modifyFields(entered, {
     phase: () =>
-      Phase.Wave({ wave, elapsedMs: clockMs, spawns: released.pending }),
+      modifyFields(round, {
+        elapsedMs: () => clockMs,
+        spawns: () => released.pending,
+      }),
   })
   if (isWaveCleared(spawned, released.pending)) {
     return clearWave(spawned, wave)
@@ -1520,24 +1524,16 @@ const countDownBreak = (
       preparation.remainingMs > worldMs
         ? modifyFields(model, {
             phase: () =>
-              Phase.Preparation({
-                wave: preparation.wave,
-                remainingMs: preparation.remainingMs - worldMs,
-                durationMs: preparation.durationMs,
-                spawns: preparation.spawns,
-                clock: preparation.clock,
+              modifyFields(preparation, {
+                remainingMs: remainingMs => remainingMs - worldMs,
               }),
           })
         : startWaveEarly(model),
     Waiting: ({ elapsedMs }) =>
       modifyFields(model, {
         phase: () =>
-          Phase.Preparation({
-            wave: preparation.wave,
-            remainingMs: preparation.remainingMs,
-            durationMs: preparation.durationMs,
-            spawns: preparation.spawns,
-            clock: BreakClock.Waiting({ elapsedMs: elapsedMs + worldMs }),
+          modifyFields(preparation, {
+            clock: () => BreakClock.Waiting({ elapsedMs: elapsedMs + worldMs }),
           }),
       }),
   })
@@ -1549,8 +1545,7 @@ export const advanceRound = (model: Model, worldMs: number): Model =>
       ShopState.isAnyOf(['Browsing'])(model.shop) || isPracticeGateHeld(model)
         ? model
         : countDownBreak(model, preparation, worldMs),
-    Wave: ({ wave, elapsedMs, spawns }) =>
-      advanceWave(model, wave, elapsedMs, spawns, worldMs),
+    Wave: round => advanceWave(model, round, worldMs),
     Paused: () => model,
     Victory: () => model,
     GameOver: () => model,
