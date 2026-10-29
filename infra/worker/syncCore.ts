@@ -1,7 +1,14 @@
 import * as Array from 'effect/Array'
+import * as Clock from 'effect/Clock'
+import * as Data from 'effect/Data'
+import * as Duration from 'effect/Duration'
 import * as Effect from 'effect/Effect'
+import * as Exit from 'effect/Exit'
+import * as Layer from 'effect/Layer'
 import * as Option from 'effect/Option'
 import * as Schema from 'effect/Schema'
+import * as Scope from 'effect/Scope'
+import * as Semaphore from 'effect/Semaphore'
 import type * as SqlClient from 'effect/sql/SqlClient'
 
 import {
@@ -24,6 +31,7 @@ import {
   handleMessage,
   handleRaw,
   identityFailureStatus,
+  makeDirectory,
   makeScopeServer,
   parseScopeId,
   verifyToken,
@@ -66,16 +74,112 @@ export const failureResponse = (failure: IdentityFailure): Response =>
     Schema.encodeSync(Schema.fromJsonString(IdentityFailure))(failure),
   )
 
+// ERRORS
+
+// NOTE: a Durable Object's services (its SQLite client and the scope host or
+// directory on it) could not be built. The next request tries again.
+export class SyncSetupFailed extends Data.TaggedError('SyncSetupFailed')<{
+  readonly cause: unknown
+}> {}
+
+// NOTE: the scope server could not open its log and tables.
+export class ScopeHostFailed extends Data.TaggedError('ScopeHostFailed')<{
+  readonly cause: unknown
+}> {}
+
+// NOTE: reading a body, or a call to another Durable Object, failed.
+export class SyncCallFailed extends Data.TaggedError('SyncCallFailed')<{
+  readonly step: string
+  readonly cause: unknown
+}> {}
+
+// NOTE: an internal request whose body did not decode.
+export class BadSyncBody extends Data.TaggedError('BadSyncBody')<{
+  readonly reason: string
+}> {}
+
+export type SyncError = SyncSetupFailed | SyncCallFailed | BadSyncBody
+
+// NOTE: every sync error becomes a JSON answer, and the internal ones are
+// logged. The client treats a failed request as one to try again later.
+export const syncErrorResponse = (
+  effect: Effect.Effect<Response, SyncError>,
+): Effect.Effect<Response> =>
+  effect.pipe(
+    Effect.catchTags({
+      BadSyncBody: error =>
+        Effect.succeed(
+          json(
+            400,
+            JSON.stringify({ _tag: 'BadRequest', reason: error.reason }),
+          ),
+        ),
+      SyncSetupFailed: error =>
+        Effect.as(
+          Effect.logError('Sync setup failed', error.cause),
+          json(500, '{}'),
+        ),
+      SyncCallFailed: error =>
+        Effect.as(
+          Effect.logError(`Sync call failed: ${error.step}`, error.cause),
+          json(500, '{}'),
+        ),
+    }),
+  )
+
+export const tryCall = <A>(step: string, call: () => PromiseLike<A>) =>
+  Effect.tryPromise({
+    try: () => call(),
+    catch: cause => new SyncCallFailed({ step, cause }),
+  })
+
+// SETUP
+
+// NOTE: a Durable Object builds its Effect services once, on first use, in a
+// scope that lives as long as the object. Only a success is kept: a failed
+// build closes its scope and the next caller builds again, so one failure
+// does not break the object until it is evicted. Callers that arrive while a
+// build is running share it.
+export const setupOnce = <A, E>(
+  setup: Effect.Effect<A, E, Scope.Scope>,
+): Effect.Effect<Effect.Effect<A, E>> =>
+  Effect.cachedWithTTL(
+    Effect.gen(function* () {
+      const scope = yield* Scope.make()
+      return yield* setup.pipe(
+        Scope.provide(scope),
+        Effect.onError(cause => Scope.close(scope, Exit.failCause(cause))),
+      )
+    }),
+    exit => (Exit.isSuccess(exit) ? Duration.infinity : Duration.zero),
+  )
+
+// NOTE: builds the SQLite client in the setup's scope, then the services on
+// it, so the client lives as long as they do. A storage call that throws is
+// a setup failure too, so it is answered and retried like one.
+const buildOn = <A, E1, E2>(
+  sql: Layer.Layer<SqlClient.SqlClient, E1>,
+  make: Effect.Effect<A, E2, SqlClient.SqlClient>,
+): Effect.Effect<A, SyncSetupFailed, Scope.Scope> =>
+  Effect.flatMap(Layer.build(sql), context =>
+    Effect.provide(make, context),
+  ).pipe(
+    Effect.mapError(cause => new SyncSetupFailed({ cause })),
+    Effect.catchDefect(cause => Effect.fail(new SyncSetupFailed({ cause }))),
+  )
+
 // AUTH
 
 export const authenticateWith =
-  (secret: string, nowMs: () => number): Authenticate =>
+  (secret: string): Authenticate =>
   token =>
-    Effect.map(verifyToken(secret, token, nowMs()), claims =>
-      Actor.cases.Device.make({
-        playerId: claims.playerId,
-        deviceId: claims.deviceId,
-      }),
+    Effect.flatMap(Clock.currentTimeMillis, nowMs =>
+      Effect.map(verifyToken(secret, token, nowMs), claims =>
+        Actor.cases.Device.make({
+          playerId: claims.playerId,
+          deviceId: claims.deviceId,
+        }),
+      ),
     )
 
 const bearerOf = (request: Request): Option.Option<string> =>
@@ -148,9 +252,12 @@ const joinedOf = (sockets: ReadonlyArray<Socket>) =>
 export const makeScopeHost = (
   scope: string,
   authenticate: Authenticate,
-): Effect.Effect<ScopeHost, unknown, SqlClient.SqlClient> =>
+): Effect.Effect<ScopeHost, ScopeHostFailed, SqlClient.SqlClient> =>
   Effect.gen(function* () {
-    const server = yield* makeScopeServer({ definition: PlayerScope, scope })
+    const server = yield* Effect.mapError(
+      makeScopeServer({ definition: PlayerScope, scope }),
+      cause => new ScopeHostFailed({ cause }),
+    )
 
     const onMessage = (
       socket: Socket,
@@ -250,7 +357,7 @@ export interface Linked {
 
 const decodeBody = <A, I>(schema: Schema.Codec<A, I>, body: string) =>
   Effect.mapError(
-    Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(body),
+    Schema.decodeEffect(Schema.fromJsonString(schema))(body),
     error =>
       new IdentityRefused({
         failure: IdentityFailure.cases.BadRequest.make({
@@ -363,6 +470,68 @@ export const handleDirectory = (
       }),
     ),
   )
+
+// DURABLE OBJECT HOSTS
+
+// NOTE: what SyncScope runs, apart from the Workers runtime: its scope host,
+// built once on first use.
+export const scopeHostOnce = <E>(
+  sql: Layer.Layer<SqlClient.SqlClient, E>,
+  scope: string,
+  secret: string,
+): Effect.Effect<Effect.Effect<ScopeHost, SyncSetupFailed>> =>
+  setupOnce(buildOn(sql, makeScopeHost(scope, authenticateWith(secret))))
+
+export interface DirectoryHost {
+  readonly fetch: (request: Request) => Effect.Effect<Response>
+}
+
+// NOTE: what SyncDirectory runs, apart from the Workers runtime. One request
+// is handled at a time: the input gate only covers storage, and token checks
+// await WebCrypto. After a link, the player's scope is told the new device
+// count. The link is already saved by then, so a failure to tell is logged
+// and the link still answers 200.
+export const makeDirectoryHost = <E>(options: {
+  readonly sql: Layer.Layer<SqlClient.SqlClient, E>
+  readonly secret: string
+  readonly tellScope: (linked: Linked) => Effect.Effect<void, SyncCallFailed>
+}): Effect.Effect<DirectoryHost> =>
+  Effect.gen(function* () {
+    const lock = yield* Semaphore.make(1)
+    const directory = yield* setupOnce(
+      buildOn(options.sql, makeDirectory(options.secret)),
+    )
+    const fetch = (request: Request) =>
+      syncErrorResponse(
+        Effect.gen(function* () {
+          const ready = yield* directory
+          const body = yield* tryCall('read the body', () => request.text())
+          const nowMs = yield* Clock.currentTimeMillis
+          const handled = yield* lock.withPermit(
+            handleDirectory(
+              ready,
+              options.secret,
+              directoryRequestOf(request, body),
+              nowMs,
+            ),
+          )
+          if (Option.isSome(handled.linked)) {
+            yield* options
+              .tellScope(handled.linked.value)
+              .pipe(
+                Effect.catchTag('SyncCallFailed', error =>
+                  Effect.logWarning(
+                    `Telling the scope about a link failed: ${error.step}`,
+                    error.cause,
+                  ),
+                ),
+              )
+          }
+          return handled.response
+        }),
+      )
+    return { fetch }
+  })
 
 export const directoryRequestOf = (
   request: Request,

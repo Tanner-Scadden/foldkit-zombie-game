@@ -50,13 +50,24 @@ const cleanUp = (env: Bindings, scheduledMs: number) =>
     Effect.provide(D1Client.layer({ db: env.DB })),
   )
 
+// NOTE: the edge. Each request runs one Effect: routeSync answers the /sync
+// paths and every failure on them, and anything else goes to the analytics
+// handler.
+const respond = (request: Request, env: Bindings) =>
+  Effect.flatMap(
+    routeSync(request, env),
+    Option.match({
+      onSome: Effect.succeed,
+      onNone: () =>
+        Effect.promise(() =>
+          handler(request, Context.make(WorkerEnv, servicesOf(env))),
+        ),
+    }),
+  )
+
 export default {
-  fetch: async (request: Request, env: Bindings): Promise<Response> => {
-    const synced = await routeSync(request, env)
-    return Option.isSome(synced)
-      ? synced.value
-      : handler(request, Context.make(WorkerEnv, servicesOf(env)))
-  },
+  fetch: (request: Request, env: Bindings): Promise<Response> =>
+    Effect.runPromise(respond(request, env)),
   scheduled: (
     controller: ScheduledController,
     env: Bindings,

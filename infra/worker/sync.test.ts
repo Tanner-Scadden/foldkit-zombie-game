@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import * as Context from 'effect/Context'
 import * as Effect from 'effect/Effect'
+import * as Exit from 'effect/Exit'
 import * as Layer from 'effect/Layer'
 import * as Option from 'effect/Option'
 import * as Schema from 'effect/Schema'
@@ -22,13 +23,18 @@ import {
 
 import { ChangedSettings } from '../../src/playerScope.ts'
 import {
+  type DirectoryHost,
+  type Linked,
   SessionResponseJson,
   type Socket,
+  SyncCallFailed,
   authenticateWith,
   handleDirectory,
+  makeDirectoryHost,
   makeScopeHost,
   playerScopeId,
   playerScopeOf,
+  setupOnce,
 } from './syncCore.ts'
 
 const SECRET = 'infra-sync-test-secret'
@@ -51,16 +57,25 @@ const directoryOn = async () => {
   )
 }
 
-const signedIn = async (
-  directory: Awaited<ReturnType<typeof directoryOn>>,
-  playerId: string,
-) => {
+const sessionBody = async (playerId: string): Promise<string> => {
   const stored = await Effect.runPromise(generateKey)
   const key = await Effect.runPromise(importKey(stored))
   const nonce = await Effect.runPromise(makeChallenge(SECRET, Date.now()))
   const signature = await Effect.runPromise(
     key.sign(sessionMessage(nonce, playerId)),
   )
+  return JSON.stringify({
+    publicKey: stored.publicKey,
+    playerId,
+    nonce,
+    signature,
+  })
+}
+
+const signedIn = async (
+  directory: Awaited<ReturnType<typeof directoryOn>>,
+  playerId: string,
+) => {
   const handled = await Effect.runPromise(
     handleDirectory(
       directory,
@@ -68,18 +83,13 @@ const signedIn = async (
       {
         path: '/sync/session',
         bearer: Option.none(),
-        body: JSON.stringify({
-          publicKey: stored.publicKey,
-          playerId,
-          nonce,
-          signature,
-        }),
+        body: await sessionBody(playerId),
       },
       Date.now(),
     ),
   )
   expect(handled.response.status).toBe(200)
-  return Schema.decodeUnknownSync(Schema.fromJsonString(SessionResponseJson))(
+  return Schema.decodeSync(Schema.fromJsonString(SessionResponseJson))(
     await handled.response.text(),
   )
 }
@@ -163,7 +173,7 @@ describe('the sync Worker', () => {
     const scope = playerScopeId(PLAYER)
     const host = await Effect.runPromise(
       Effect.provideService(
-        makeScopeHost(scope, authenticateWith(SECRET, Date.now)),
+        makeScopeHost(scope, authenticateWith(SECRET)),
         SqlClient.SqlClient,
         sql,
       ),
@@ -218,9 +228,9 @@ describe('the sync Worker', () => {
     const reply = await Effect.runPromise(
       host.exchange(`[${hello(session.token)}]`, everyone),
     )
-    const messages = Schema.decodeUnknownSync(
-      Schema.fromJsonString(ExchangeReply),
-    )(await reply.text())
+    const messages = Schema.decodeSync(Schema.fromJsonString(ExchangeReply))(
+      await reply.text(),
+    )
     expect(messages[0]).toMatchObject({ _tag: 'Deltas', head: 1 })
 
     await Effect.runPromise(host.linkedDevices(2, 'linked-x-2', everyone))
@@ -228,5 +238,132 @@ describe('the sync Worker', () => {
       _tag: 'Deltas',
       deltas: [{ name: 'LinkedDevices', origin: 'Server' }],
     })
+  })
+})
+
+// NOTE: a SQLite layer whose first build fails, as a Durable Object's
+// storage can on a cold start, and whose later builds work.
+const flakySql = () => {
+  const counts = { builds: 0 }
+  const layer = Layer.unwrap(
+    Effect.sync(() => {
+      counts.builds += 1
+      return counts.builds === 1
+        ? Layer.effectDiscard(
+            Effect.fail(new SyncCallFailed({ step: 'open', cause: 'cold' })),
+          ).pipe(
+            Layer.provideMerge(SqliteClient.layer({ filename: ':memory:' })),
+          )
+        : SqliteClient.layer({ filename: ':memory:' })
+    }),
+  )
+  return { layer, counts }
+}
+
+const post = (
+  host: DirectoryHost,
+  path: string,
+  body: string,
+  token: Option.Option<string> = Option.none(),
+) =>
+  Effect.runPromise(
+    host.fetch(
+      new Request(`https://sync${path}`, {
+        method: 'POST',
+        body,
+        headers: Option.match(token, {
+          onNone: () => ({}),
+          onSome: value => ({ authorization: `Bearer ${value}` }),
+        }),
+      }),
+    ),
+  )
+
+describe('a sync Durable Object', () => {
+  test('a failed setup is not kept: the next request builds again', async () => {
+    const sql = flakySql()
+    const host = await Effect.runPromise(
+      makeDirectoryHost({
+        sql: sql.layer,
+        secret: SECRET,
+        tellScope: () => Effect.void,
+      }),
+    )
+    const first = await post(host, '/sync/link', '{}')
+    expect(first.status).toBe(500)
+    const second = await post(host, '/sync/link', '{}')
+    expect(second.status).toBe(401)
+    const third = await post(host, '/sync/link', '{}')
+    expect(third.status).toBe(401)
+    expect(sql.counts.builds).toBe(2)
+  })
+
+  test('a failed setup closes its scope, and a success keeps its scope open', async () => {
+    const closed: Array<string> = []
+    const attempts = { count: 0 }
+    const setup = Effect.gen(function* () {
+      attempts.count += 1
+      const attempt = attempts.count
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          closed.push(`attempt ${attempt}`)
+        }),
+      )
+      if (attempt === 1) {
+        return yield* Effect.fail('cold storage')
+      }
+      return attempt
+    })
+    const once = await Effect.runPromise(setupOnce(setup))
+    expect(Exit.isFailure(await Effect.runPromiseExit(once))).toBe(true)
+    expect(closed).toEqual(['attempt 1'])
+    expect(await Effect.runPromise(once)).toBe(2)
+    expect(await Effect.runPromise(once)).toBe(2)
+    expect(closed).toEqual(['attempt 1'])
+  })
+
+  test('a link still succeeds when telling the scope fails', async () => {
+    const told: Array<Linked> = []
+    const host = await Effect.runPromise(
+      makeDirectoryHost({
+        sql: SqliteClient.layer({ filename: ':memory:' }),
+        secret: SECRET,
+        tellScope: linked =>
+          Effect.suspend(() => {
+            told.push(linked)
+            return Effect.fail(
+              new SyncCallFailed({ step: 'tell the scope', cause: 'down' }),
+            )
+          }),
+      }),
+    )
+    const decodeSession = Schema.decodeSync(
+      Schema.fromJsonString(SessionResponseJson),
+    )
+    const phone = decodeSession(
+      await (
+        await post(host, '/sync/session', await sessionBody(PLAYER))
+      ).text(),
+    )
+    const laptop = decodeSession(
+      await (
+        await post(
+          host,
+          '/sync/session',
+          await sessionBody('BBBBBBBBBBBBBBBBBBBBBB'),
+        )
+      ).text(),
+    )
+    const link = await post(host, '/sync/link', '{}', Option.some(phone.token))
+    const { code } = JSON.parse(await link.text())
+    const redeem = await post(
+      host,
+      '/sync/link/redeem',
+      JSON.stringify({ code }),
+      Option.some(laptop.token),
+    )
+    expect(redeem.status).toBe(200)
+    expect(decodeSession(await redeem.text()).playerId).toBe(PLAYER)
+    expect(told.map(linked => linked.playerId)).toEqual([PLAYER])
   })
 })

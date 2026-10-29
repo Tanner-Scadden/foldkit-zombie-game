@@ -1,45 +1,44 @@
 import * as Array from 'effect/Array'
 import * as Clock from 'effect/Clock'
-import * as Context from 'effect/Context'
 import * as Effect from 'effect/Effect'
-import * as Layer from 'effect/Layer'
 import * as Option from 'effect/Option'
 import * as Schema from 'effect/Schema'
-import * as Scope from 'effect/Scope'
 import * as Semaphore from 'effect/Semaphore'
-import * as SqlClient from 'effect/sql/SqlClient'
 
 import type {
   DurableObjectNamespace,
   DurableObjectState,
   RateLimit,
-  WebSocket as CloudflareWebSocket,
+  WebSocket as WorkersWebSocket,
 } from '@cloudflare/workers-types'
 import * as SqliteClient from '@effect/sql-sqlite-do/SqliteClient'
 import {
   Connection,
-  type Directory,
   IDENTITY_PATHS,
   IdentityFailure,
   OPENED,
   PING_JSON,
   PONG_JSON,
   makeChallenge,
-  makeDirectory,
 } from '@munch/sync-engine'
 
 import {
+  BadSyncBody,
   CORS_HEADERS,
+  type DirectoryHost,
+  type Linked,
   type ScopeHost,
   type Socket,
-  authenticateWith,
-  directoryRequestOf,
+  SyncCallFailed,
+  type SyncSetupFailed,
   failureResponse,
-  handleDirectory,
   json,
-  makeScopeHost,
+  makeDirectoryHost,
   playerScopeId,
   playerScopeOf,
+  scopeHostOnce,
+  syncErrorResponse,
+  tryCall,
 } from './syncCore.ts'
 
 export type SyncBindings = Readonly<{
@@ -53,20 +52,11 @@ const DIRECTORY_NAME = 'directory'
 const SCOPE_HEADER = 'x-sync-scope'
 const LINKED_DEVICES_PATH = '/internal/linked-devices'
 
-const nowMs = () => Date.now()
-
-// NOTE: each Durable Object builds its Effect services once, on first use,
-// in a scope that lives as long as the object. One message is handled at a
-// time: the input gate only covers storage, and token checks await WebCrypto.
-const openSql = (storage: DurableObjectState['storage']) =>
-  Effect.gen(function* () {
-    const scope = yield* Scope.make()
-    const context = yield* Layer.buildWithScope(
-      SqliteClient.layer({ storage }),
-      scope,
-    )
-    return Context.get(context, SqlClient.SqlClient)
-  })
+// NOTE: each Durable Object's SQLite client, over its own storage. The hosts
+// in syncCore.ts build it once, on first use, and keep it for the object's
+// life (see setupOnce).
+const sqlOf = (storage: DurableObjectState['storage']) =>
+  SqliteClient.layer({ storage })
 
 const AttachmentSchema = Schema.Struct({
   scope: Schema.String,
@@ -76,11 +66,24 @@ type Attachment = typeof AttachmentSchema.Type
 
 const decodeAttachment = Schema.decodeUnknownOption(AttachmentSchema)
 
+const LinkedDevicesBody = Schema.fromJsonString(
+  Schema.Struct({ count: Schema.Number, id: Schema.String }),
+)
+
+const decodeLinkedDevices = (body: string) =>
+  Effect.mapError(
+    Schema.decodeEffect(LinkedDevicesBody)(body),
+    error => new BadSyncBody({ reason: error.message }),
+  )
+
 // SCOPE
 
+// NOTE: one message is handled at a time: the input gate only covers
+// storage, and token checks await WebCrypto.
 export class SyncScope {
-  private readonly lock = Effect.runSync(Semaphore.make(1))
-  private host: Option.Option<Promise<ScopeHost>> = Option.none()
+  private readonly lock = Semaphore.makeUnsafe(1)
+  private host: Option.Option<Effect.Effect<ScopeHost, SyncSetupFailed>> =
+    Option.none()
 
   constructor(
     private readonly ctx: DurableObjectState,
@@ -91,24 +94,22 @@ export class SyncScope {
     )
   }
 
-  private hostFor(scope: string): Promise<ScopeHost> {
-    return Option.getOrElse(this.host, () => {
-      const made = Effect.runPromise(
-        Effect.flatMap(openSql(this.ctx.storage), sql =>
-          Effect.provideService(
-            makeScopeHost(scope, authenticateWith(this.env.SYNC_SECRET, nowMs)),
-            SqlClient.SqlClient,
-            sql,
-          ),
-        ),
-      )
-      this.host = Option.some(made)
-      return made
-    })
+  // NOTE: the object is named by its scope (fetch checks), so every caller
+  // passes the same scope and the first one builds the host.
+  private hostFor(scope: string): Effect.Effect<ScopeHost, SyncSetupFailed> {
+    return Effect.suspend(() =>
+      Option.getOrElse(this.host, () => {
+        const once = Effect.runSync(
+          scopeHostOnce(sqlOf(this.ctx.storage), scope, this.env.SYNC_SECRET),
+        )
+        this.host = Option.some(once)
+        return once
+      }),
+    )
   }
 
   private socketOf(
-    socket: CloudflareWebSocket,
+    socket: WorkersWebSocket,
   ): Option.Option<Socket & { scope: string }> {
     return Option.map(
       decodeAttachment(socket.deserializeAttachment()),
@@ -132,70 +133,84 @@ export class SyncScope {
     )
   }
 
-  private run<A>(effect: Effect.Effect<A>): Promise<A> {
-    return Effect.runPromise(this.lock.withPermit(effect))
+  private accept(scope: string): Response {
+    const pair = new WebSocketPair()
+    const client = pair[0]
+    const server = pair[1]
+    this.ctx.acceptWebSocket(server)
+    const attachment: Attachment = { scope, connection: OPENED }
+    server.serializeAttachment(Schema.encodeSync(AttachmentSchema)(attachment))
+    return new Response(null, { status: 101, webSocket: client })
   }
 
-  async fetch(request: Request): Promise<Response> {
+  private handle(
+    request: Request,
+  ): Effect.Effect<Response, SyncSetupFailed | SyncCallFailed | BadSyncBody> {
     const url = new URL(request.url)
     const scope = request.headers.get(SCOPE_HEADER) ?? ''
     if (!this.ctx.id.equals(this.env.SYNC_SCOPES.idFromName(scope))) {
-      return json(400, '{"_tag":"BadRequest","reason":"Wrong scope"}')
-    }
-    const host = await this.hostFor(scope)
-    if (url.pathname === IDENTITY_PATHS.socket) {
-      const pair = new WebSocketPair()
-      const client = pair[0]
-      const server = pair[1]
-      this.ctx.acceptWebSocket(server)
-      const attachment: Attachment = { scope, connection: OPENED }
-      server.serializeAttachment(
-        Schema.encodeSync(AttachmentSchema)(attachment),
-      )
-      return new Response(null, { status: 101, webSocket: client })
-    }
-    if (url.pathname === IDENTITY_PATHS.exchange) {
-      const body = await request.text()
-      return this.run(
-        Effect.suspend(() => host.exchange(body, this.everyone())),
+      return Effect.succeed(
+        json(400, '{"_tag":"BadRequest","reason":"Wrong scope"}'),
       )
     }
-    if (url.pathname === LINKED_DEVICES_PATH) {
-      const { count, id } = Schema.decodeUnknownSync(
-        Schema.fromJsonString(
-          Schema.Struct({ count: Schema.Number, id: Schema.String }),
-        ),
-      )(await request.text())
-      await this.run(
-        Effect.suspend(() => host.linkedDevices(count, id, this.everyone())),
-      )
-      return json(200, '{}')
-    }
-    return json(404, '{}')
+    const { lock } = this
+    const everyone = () => this.everyone()
+    const accept = () => this.accept(scope)
+    const hostFor = this.hostFor(scope)
+    return Effect.gen(function* () {
+      const host = yield* hostFor
+      if (url.pathname === IDENTITY_PATHS.socket) {
+        return accept()
+      }
+      if (url.pathname === IDENTITY_PATHS.exchange) {
+        const body = yield* tryCall('read the body', () => request.text())
+        return yield* lock.withPermit(
+          Effect.suspend(() => host.exchange(body, everyone())),
+        )
+      }
+      if (url.pathname === LINKED_DEVICES_PATH) {
+        const text = yield* tryCall('read the body', () => request.text())
+        const { count, id } = yield* decodeLinkedDevices(text)
+        yield* lock.withPermit(
+          Effect.suspend(() => host.linkedDevices(count, id, everyone())),
+        )
+        return json(200, '{}')
+      }
+      return json(404, '{}')
+    })
   }
 
-  async webSocketMessage(
-    socket: CloudflareWebSocket,
+  fetch(request: Request): Promise<Response> {
+    return Effect.runPromise(syncErrorResponse(this.handle(request)))
+  }
+
+  webSocketMessage(
+    socket: WorkersWebSocket,
     message: string | ArrayBuffer,
-  ) {
+  ): Promise<void> {
     const maybeSocket = this.socketOf(socket)
     if (Option.isNone(maybeSocket) || typeof message !== 'string') {
       socket.close(1003, 'Unsupported')
-      return
+      return Promise.resolve()
     }
-    const host = await this.hostFor(maybeSocket.value.scope)
-    await this.run(
-      Effect.suspend(() =>
-        host.onMessage(maybeSocket.value, message, this.everyone()),
+    const { lock } = this
+    const everyone = () => this.everyone()
+    return Effect.runPromise(
+      Effect.flatMap(this.hostFor(maybeSocket.value.scope), host =>
+        lock.withPermit(
+          Effect.suspend(() =>
+            host.onMessage(maybeSocket.value, message, everyone()),
+          ),
+        ),
+      ).pipe(
+        Effect.catchTag('SyncSetupFailed', error =>
+          Effect.logError('Sync setup failed', error.cause),
+        ),
       ),
     )
   }
 
-  async webSocketClose(
-    socket: CloudflareWebSocket,
-    code: number,
-    reason: string,
-  ) {
+  webSocketClose(socket: WorkersWebSocket, code: number, reason: string): void {
     socket.close(code, reason)
   }
 }
@@ -203,178 +218,170 @@ export class SyncScope {
 // DIRECTORY
 
 export class SyncDirectory {
-  constructor(
-    private readonly ctx: DurableObjectState,
-    private readonly env: SyncBindings,
-  ) {}
+  private readonly host: DirectoryHost
 
-  private readonly lock = Effect.runSync(Semaphore.make(1))
-  private directory: Option.Option<Promise<Directory>> = Option.none()
-
-  private directoryOnce() {
-    return Option.getOrElse(this.directory, () => {
-      const made = Effect.runPromise(
-        Effect.flatMap(openSql(this.ctx.storage), sql =>
-          Effect.provideService(
-            Effect.orDie(makeDirectory(this.env.SYNC_SECRET)),
-            SqlClient.SqlClient,
-            sql,
-          ),
-        ),
-      )
-      this.directory = Option.some(made)
-      return made
-    })
+  constructor(ctx: DurableObjectState, env: SyncBindings) {
+    this.host = Effect.runSync(
+      makeDirectoryHost({
+        sql: sqlOf(ctx.storage),
+        secret: env.SYNC_SECRET,
+        tellScope: linked => tellScope(env, linked),
+      }),
+    )
   }
 
-  async fetch(request: Request): Promise<Response> {
-    const directory = await this.directoryOnce()
-    const body = await request.text()
-    const handled = await Effect.runPromise(
-      this.lock.withPermit(
-        handleDirectory(
-          directory,
-          this.env.SYNC_SECRET,
-          directoryRequestOf(request, body),
-          nowMs(),
-        ),
-      ),
-    )
-    await Option.match(handled.linked, {
-      onNone: () => Promise.resolve(),
-      onSome: linked =>
-        tellScope(this.env, linked.playerId, linked.devices, linked.deviceId),
-    })
-    return handled.response
+  fetch(request: Request): Promise<Response> {
+    return Effect.runPromise(this.host.fetch(request))
   }
 }
 
 // NOTE: the cross-scope step, done by hand until there is an outbox for
 // server mutations: after a link, the player's scope records the new device
 // count. The id makes a retry harmless.
-const tellScope = async (
-  env: SyncBindings,
-  playerId: string,
-  devices: number,
-  deviceId: string,
-) => {
-  const scope = playerScopeId(playerId)
-  const stub = env.SYNC_SCOPES.get(env.SYNC_SCOPES.idFromName(scope))
-  await stub.fetch(`https://sync${LINKED_DEVICES_PATH}`, {
-    method: 'POST',
-    headers: { [SCOPE_HEADER]: scope },
-    body: JSON.stringify({
-      count: devices,
-      id: `linked-${deviceId}-${devices}`,
-    }),
+const tellScope = (env: SyncBindings, linked: Linked) =>
+  Effect.gen(function* () {
+    const scope = playerScopeId(linked.playerId)
+    const stub = env.SYNC_SCOPES.get(env.SYNC_SCOPES.idFromName(scope))
+    const response = yield* tryCall('tell the scope', () =>
+      stub.fetch(`https://sync${LINKED_DEVICES_PATH}`, {
+        method: 'POST',
+        headers: { [SCOPE_HEADER]: scope },
+        body: JSON.stringify({
+          count: linked.devices,
+          id: `linked-${linked.deviceId}-${linked.devices}`,
+        }),
+      }),
+    )
+    if (!response.ok) {
+      return yield* new SyncCallFailed({
+        step: 'tell the scope',
+        cause: `HTTP ${response.status}`,
+      })
+    }
   })
-}
 
 // ROUTES
 
-const isWithinRate = async (env: SyncBindings, request: Request) => {
+// NOTE: a rate limiter that errors lets the request through, as the
+// analytics limits do, and is logged.
+const isWithinRate = (env: SyncBindings, request: Request) => {
   const address = request.headers.get('cf-connecting-ip') ?? 'unknown'
-  const outcome = await env.SYNC_BY_ADDRESS.limit({
-    key: `sync:${address}`,
-  }).catch(() => ({
-    success: true,
-  }))
-  return outcome.success
+  return tryCall('check the rate limit', () =>
+    env.SYNC_BY_ADDRESS.limit({ key: `sync:${address}` }),
+  ).pipe(
+    Effect.map(outcome => outcome.success),
+    Effect.catchTag('SyncCallFailed', error =>
+      Effect.as(
+        Effect.logWarning(
+          'The sync rate limiter failed, so the request goes through',
+          error.cause,
+        ),
+        true,
+      ),
+    ),
+  )
 }
 
-// NOTE: every /sync path. The rest of the Worker is the analytics API.
-export const routeSync = async (
-  request: Request,
-  env: SyncBindings,
-): Promise<Option.Option<Response>> => {
-  const url = new URL(request.url)
-  if (!url.pathname.startsWith('/sync/')) {
-    return Option.none()
-  }
-  if (request.method === 'OPTIONS') {
-    return Option.some(
-      new Response(null, { status: 204, headers: CORS_HEADERS }),
-    )
-  }
-  if (
-    url.pathname === IDENTITY_PATHS.socket ||
-    url.pathname === IDENTITY_PATHS.exchange
-  ) {
-    return Option.some(await forwardToScope(request, env, url))
-  }
-  if (request.method !== 'POST') {
-    return Option.some(json(405, '{}'))
-  }
-  if (!(await isWithinRate(env, request))) {
-    return Option.some(
-      failureResponse(IdentityFailure.cases.RateLimited.make({})),
-    )
-  }
-  if (url.pathname === IDENTITY_PATHS.challenge) {
-    const nonce = await Effect.runPromise(
-      Effect.orDie(
-        Effect.flatMap(Clock.currentTimeMillis, now =>
-          makeChallenge(env.SYNC_SECRET, now),
-        ),
-      ),
-    )
-    return Option.some(json(200, JSON.stringify({ nonce })))
-  }
-  if (
-    url.pathname === IDENTITY_PATHS.session ||
-    url.pathname === IDENTITY_PATHS.link ||
-    url.pathname === IDENTITY_PATHS.redeem
-  ) {
-    const stub = env.SYNC_DIRECTORY.get(
-      env.SYNC_DIRECTORY.idFromName(DIRECTORY_NAME),
-    )
-    const response = await stub.fetch(request.url, {
-      method: 'POST',
-      headers: Object.fromEntries(request.headers.entries()),
-      body: await request.text(),
-    })
-    return Option.some(
-      new Response(await response.text(), {
+const isIdentityPath = (pathname: string): boolean =>
+  pathname === IDENTITY_PATHS.session ||
+  pathname === IDENTITY_PATHS.link ||
+  pathname === IDENTITY_PATHS.redeem
+
+const routeSyncPath = (request: Request, env: SyncBindings, url: URL) =>
+  Effect.gen(function* () {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: CORS_HEADERS })
+    }
+    if (
+      url.pathname === IDENTITY_PATHS.socket ||
+      url.pathname === IDENTITY_PATHS.exchange
+    ) {
+      return yield* forwardToScope(request, env, url)
+    }
+    if (request.method !== 'POST') {
+      return json(405, '{}')
+    }
+    if (!(yield* isWithinRate(env, request))) {
+      return failureResponse(IdentityFailure.cases.RateLimited.make({}))
+    }
+    if (url.pathname === IDENTITY_PATHS.challenge) {
+      const now = yield* Clock.currentTimeMillis
+      const nonce = yield* Effect.mapError(
+        makeChallenge(env.SYNC_SECRET, now),
+        cause => new SyncCallFailed({ step: 'make a challenge', cause }),
+      )
+      return json(200, JSON.stringify({ nonce }))
+    }
+    if (isIdentityPath(url.pathname)) {
+      const stub = env.SYNC_DIRECTORY.get(
+        env.SYNC_DIRECTORY.idFromName(DIRECTORY_NAME),
+      )
+      const body = yield* tryCall('read the body', () => request.text())
+      const response = yield* tryCall('call the directory', () =>
+        stub.fetch(request.url, {
+          method: 'POST',
+          headers: Object.fromEntries(request.headers.entries()),
+          body,
+        }),
+      )
+      const text = yield* tryCall('read the directory answer', () =>
+        response.text(),
+      )
+      return new Response(text, {
         status: response.status,
         headers: { ...CORS_HEADERS, 'content-type': 'application/json' },
-      }),
-    )
-  }
-  return Option.some(json(404, '{}'))
-}
+      })
+    }
+    return json(404, '{}')
+  })
 
-const forwardToScope = async (
+// NOTE: every /sync path. The rest of the Worker is the analytics API. Every
+// failure is answered here, so the effect never fails.
+export const routeSync = (
   request: Request,
   env: SyncBindings,
-  url: URL,
-) => {
-  const maybeScope = playerScopeOf(url)
-  if (Option.isNone(maybeScope)) {
-    return json(400, '{"_tag":"BadRequest","reason":"Bad scope"}')
-  }
-  const isUpgrade =
-    request.headers.get('upgrade')?.toLowerCase() === 'websocket'
-  if (url.pathname === IDENTITY_PATHS.socket && !isUpgrade) {
-    return json(426, '{}')
-  }
-  const stub = env.SYNC_SCOPES.get(env.SYNC_SCOPES.idFromName(maybeScope.value))
-  const headers = {
-    ...Object.fromEntries(request.headers.entries()),
-    [SCOPE_HEADER]: maybeScope.value,
-  }
-  const response = await stub.fetch(request.url, {
-    method: request.method,
-    headers,
-    body: request.method === 'POST' ? await request.text() : undefined,
+): Effect.Effect<Option.Option<Response>> =>
+  Effect.suspend(() => {
+    const url = new URL(request.url)
+    return url.pathname.startsWith('/sync/')
+      ? Effect.asSome(syncErrorResponse(routeSyncPath(request, env, url)))
+      : Effect.succeedNone
   })
-  if (isUpgrade) {
-    return new Response(null, {
+
+const forwardToScope = (request: Request, env: SyncBindings, url: URL) =>
+  Effect.gen(function* () {
+    const maybeScope = playerScopeOf(url)
+    if (Option.isNone(maybeScope)) {
+      return json(400, '{"_tag":"BadRequest","reason":"Bad scope"}')
+    }
+    const isUpgrade =
+      request.headers.get('upgrade')?.toLowerCase() === 'websocket'
+    if (url.pathname === IDENTITY_PATHS.socket && !isUpgrade) {
+      return json(426, '{}')
+    }
+    const stub = env.SYNC_SCOPES.get(
+      env.SYNC_SCOPES.idFromName(maybeScope.value),
+    )
+    const headers = {
+      ...Object.fromEntries(request.headers.entries()),
+      [SCOPE_HEADER]: maybeScope.value,
+    }
+    const body =
+      request.method === 'POST'
+        ? yield* tryCall('read the body', () => request.text())
+        : undefined
+    const response = yield* tryCall('call the scope', () =>
+      stub.fetch(request.url, { method: request.method, headers, body }),
+    )
+    if (isUpgrade) {
+      return new Response(null, {
+        status: response.status,
+        webSocket: response.webSocket,
+      })
+    }
+    const text = yield* tryCall('read the scope answer', () => response.text())
+    return new Response(text, {
       status: response.status,
-      webSocket: response.webSocket,
+      headers: { ...CORS_HEADERS, 'content-type': 'application/json' },
     })
-  }
-  return new Response(await response.text(), {
-    status: response.status,
-    headers: { ...CORS_HEADERS, 'content-type': 'application/json' },
   })
-}
