@@ -60,7 +60,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/model.ts`         | The Model and its Schema types                                         |
 | `src/main.ts`          | Messages, `init`, `update`, Commands, and Subscriptions                |
 | `src/onboarding.ts`    | Lessons, the practice gate, the new zombie card, and hints             |
-| `src/home.ts`          | The home menu's buttons, going home, and the session bests             |
+| `src/home.ts`          | The home menu's buttons, going home, and counting runs into the bests  |
 | `src/homeView.ts`      | The home menu, its panels, the pause MENU pill, and the bests strip    |
 | `src/menu.css`         | Styles for the home menu, its panels, and the MENU pill                |
 | `src/splash.ts`        | The loading splash's effects: load steps, progress, and hiding it      |

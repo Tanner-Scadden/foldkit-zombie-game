@@ -52,10 +52,10 @@ import {
   END_MENU_BUTTON_ID,
   KEEP_TUTORIAL_BUTTON_ID,
   RESET_TUTORIAL_BUTTON_ID,
+  countRunFrom,
   endOffer,
   homeButtonId,
   isOnHome,
-  recordSessionBests,
   returnHome,
   steppedHomeFocus,
 } from './home'
@@ -2116,7 +2116,7 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     dismissHomeScreenTipFrom(model),
     settleNightmareFrom(model),
     unlockNightmareFrom(model),
-    stepModel => ({ model: recordSessionBests(model, stepModel) }),
+    stepModel => ({ model: countRunFrom(model, stepModel) }),
     writeSaveFrom(model),
   ])
 

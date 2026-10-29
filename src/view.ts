@@ -134,7 +134,7 @@ const waveStatsLabel = (model: Model): string =>
         bestsFor(model).maybeBestEndlessWave,
         {
           onNone: () => '',
-          onSome: best => `Best this session: wave ${best}.`,
+          onSome: best => `Your best: wave ${best}.`,
         },
       )}`,
   })

@@ -55,6 +55,7 @@ import {
   type PlannedSpawn,
   Round,
   RunMode,
+  RunTally,
   ShopState,
   Streak,
   type Trap,
@@ -1280,6 +1281,7 @@ const startRun = (model: Model, mode: RunMode): Model =>
       intent: () =>
         deriveIntent(model.input, initialPlayer, arenaCamera(initialPlayer)),
       stats: () => freshStats,
+      runTally: () => RunTally.Uncounted(),
       lessons: settleLessons,
       hintBand: () => 'Top',
       screenMs: () => 0,

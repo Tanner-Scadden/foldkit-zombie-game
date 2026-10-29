@@ -220,9 +220,9 @@ describe('unlocking Nightmare', () => {
         expect(Phase.guards.Victory(current.phase)).toBe(true)
         expect(current.difficulty.nightmare).toBe('JustUnlocked')
         expect(bestsFor(current).maybeFastestWinMs).toEqual(Option.some(16))
-        expect(
-          current.sessionBests.byDifficulty.Normal.maybeFastestWinMs,
-        ).toEqual(Option.none())
+        expect(current.bests.byDifficulty.Normal.maybeFastestWinMs).toEqual(
+          Option.none(),
+        )
       }),
     )
 

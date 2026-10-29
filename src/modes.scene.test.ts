@@ -141,7 +141,7 @@ describe('Mode choice', () => {
     )
   })
 
-  test('an endless Game Over reads out the wave reached and the best this session', () => {
+  test('an endless Game Over reads out the wave reached and your best', () => {
     scene(
       { update, view },
       given(
@@ -159,7 +159,7 @@ describe('Mode choice', () => {
       ),
       measureSurface,
       expect(role('status')).toContainText(
-        'Wave reached: 12. Best this session: wave 14.',
+        'Wave reached: 12. Your best: wave 14.',
       ),
     )
   })

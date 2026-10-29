@@ -717,7 +717,7 @@ const scenarioModel = (): Model => {
         maybeBestEndlessWave: Option.some(12),
         maybeFastestWinMs: Option.some(402_000),
       })),
-      { sessionBests: bests => ({ ...bests, kills: 341 }) },
+      { bests: bests => ({ ...bests, totalKills: 341 }) },
     )
   model = modifyFields(model, {
     difficultyCard: () =>

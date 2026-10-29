@@ -130,7 +130,7 @@ const homeButtonView = (
 
 type Best = Readonly<{ label: string; value: string }>
 
-const sessionBests = (model: Model): ReadonlyArray<Best> => [
+const shownBests = (model: Model): ReadonlyArray<Best> => [
   ...Option.match(bestsFor(model).maybeBestEndlessWave, {
     onNone: () => [],
     onSome: wave => [{ label: 'Best endless', value: `Wave ${wave}` }],
@@ -139,8 +139,8 @@ const sessionBests = (model: Model): ReadonlyArray<Best> => [
     onNone: () => [],
     onSome: runMs => [{ label: 'Fastest win', value: durationLabel(runMs) }],
   }),
-  ...(model.sessionBests.kills > 0
-    ? [{ label: 'Zombies splatted', value: `${model.sessionBests.kills}` }]
+  ...(model.bests.totalKills > 0
+    ? [{ label: 'Zombies splatted', value: `${model.bests.totalKills}` }]
     : []),
 ]
 
@@ -161,9 +161,9 @@ const bestsView = (model: Model, h: HtmlBuilder<Message>): Html =>
     [
       h.h2(
         [h.Id(BESTS_TITLE_ID), h.Class('home-bests-title')],
-        [`This session, ${DIFFICULTIES[model.difficulty.chosen].name}`],
+        [`Your bests, ${DIFFICULTIES[model.difficulty.chosen].name}`],
       ),
-      Array.match(sessionBests(model), {
+      Array.match(shownBests(model), {
         onEmpty: () =>
           h.p(
             [h.Class('home-bests-empty')],

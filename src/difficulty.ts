@@ -132,7 +132,7 @@ export const unlockNightmare = (model: Model): Model =>
 // BESTS
 
 export const bestsFor = (model: Model): DifficultyBests =>
-  model.sessionBests.byDifficulty[model.difficulty.chosen]
+  model.bests.byDifficulty[model.difficulty.chosen]
 
 export const withBests = (
   model: Model,
@@ -140,7 +140,7 @@ export const withBests = (
 ): Model => {
   const chosen = model.difficulty.chosen
   return modifyFields(model, {
-    sessionBests: bests =>
+    bests: bests =>
       modifyFields(bests, {
         byDifficulty: byDifficulty =>
           modifyFields(byDifficulty, {

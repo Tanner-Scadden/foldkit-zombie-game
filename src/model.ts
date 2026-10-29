@@ -628,11 +628,25 @@ export const DifficultyBests = Schema.Struct({
 })
 export type DifficultyBests = typeof DifficultyBests.Type
 
-// NOTE: the bests live in memory for the page session only, one set for each
-// difficulty. They are plain data on purpose: they move into the SQLite
-// player scope from PLATFORM.md as personal bests.
-export const SessionBests = Schema.Struct({
-  kills: Schema.Number,
+export const KillCounts = Schema.Struct({
+  Shambler: Schema.Number,
+  Runner: Schema.Number,
+  Tank: Schema.Number,
+  Exploder: Schema.Number,
+  Thrower: Schema.Number,
+  Crawler: Schema.Number,
+  Boss: Schema.Number,
+})
+export type KillCounts = typeof KillCounts.Type
+
+// NOTE: the bests are kept in the on-device save (src/save.ts): one set for
+// each difficulty, plus the runs played and the zombies splatted in all and
+// per kind. They are plain data on purpose: they move into the SQLite player
+// scope from PLATFORM.md as personal bests.
+export const PlayerBests = Schema.Struct({
+  runsPlayed: Schema.Number,
+  totalKills: Schema.Number,
+  killsByKind: KillCounts,
   byDifficulty: Schema.Struct({
     Easy: DifficultyBests,
     Normal: DifficultyBests,
@@ -640,7 +654,16 @@ export const SessionBests = Schema.Struct({
     Nightmare: DifficultyBests,
   }),
 })
-export type SessionBests = typeof SessionBests.Type
+export type PlayerBests = typeof PlayerBests.Type
+
+// NOTE: a run is added to the bests when it ends. Counted holds the kills
+// already added, so a win that goes on into endless adds only its new kills
+// when it ends again.
+export const RunTally = defineTaggedUnion({
+  Uncounted: {},
+  Counted: { kills: KillCounts },
+})
+export type RunTally = typeof RunTally.Type
 
 export const LoadStep = Schema.Literals([
   'Save',
@@ -1012,17 +1035,6 @@ export type DebutCard = typeof DebutCard.Type
 export const HintBand = Schema.Literals(['Top', 'Bottom'])
 export type HintBand = typeof HintBand.Type
 
-export const KillCounts = Schema.Struct({
-  Shambler: Schema.Number,
-  Runner: Schema.Number,
-  Tank: Schema.Number,
-  Exploder: Schema.Number,
-  Thrower: Schema.Number,
-  Crawler: Schema.Number,
-  Boss: Schema.Number,
-})
-export type KillCounts = typeof KillCounts.Type
-
 export const RunStats = Schema.Struct({
   kills: KillCounts,
   wavesCleared: Schema.Number,
@@ -1103,7 +1115,8 @@ export const Model = Schema.Struct({
   maybeHomeFocus: Schema.Option(HomeButton),
   panel: MenuPanel,
   panelDialog: Dialog.Model,
-  sessionBests: SessionBests,
+  bests: PlayerBests,
+  runTally: RunTally,
   loading: Loading,
   saveStatus: SaveStatus,
   tutorialReset: TutorialReset,
@@ -1246,8 +1259,10 @@ export const noDifficultyBests: DifficultyBests = {
   maybeBestEndlessWave: Option.none(),
 }
 
-export const noSessionBests: SessionBests = {
-  kills: 0,
+export const noBests: PlayerBests = {
+  runsPlayed: 0,
+  totalKills: 0,
+  killsByKind: noKills,
   byDifficulty: {
     Easy: noDifficultyBests,
     Normal: noDifficultyBests,
@@ -1325,7 +1340,8 @@ export const initialModel: Model = {
   maybeHomeFocus: Option.none(),
   panel: 'HowToPlay',
   panelDialog: Dialog.init({ id: PANEL_DIALOG_ID }),
-  sessionBests: noSessionBests,
+  bests: noBests,
+  runTally: RunTally.Uncounted(),
   loading: Loading.Loaded(),
   saveStatus: 'Unread',
   tutorialReset: 'Idle',

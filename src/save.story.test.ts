@@ -22,9 +22,12 @@ import {
   Loading,
   type Model,
   Phase,
+  type PlannedSpawn,
   TrapHint,
   freshLessons,
   initialModel,
+  noBests,
+  noKills,
 } from './model'
 import { isPracticeGateHeld, shownHints } from './onboarding'
 import {
@@ -32,6 +35,7 @@ import {
   SAVE_KEY,
   decodeSave,
   encodeSave,
+  noSavedBests,
   readSave,
   restoreSave,
   saveOf,
@@ -43,7 +47,7 @@ import { ZOMBIE_KIND_ORDER } from './zombies'
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 
 const learnedSave: PlayerSave = {
-  version: 2,
+  version: 3,
   onboarding: {
     lessons: {
       move: 'Learned',
@@ -68,7 +72,20 @@ const learnedSave: PlayerSave = {
     shirtColor: 'Teal',
   },
   difficulty: { chosen: 'Hard', card: 'Seen', nightmare: 'Unlocked' },
+  bests: {
+    runsPlayed: 12,
+    totalKills: 341,
+    killsByKind: { Shambler: 200, Runner: 90, Tank: 11, Exploder: 40 },
+    byDifficulty: {
+      Easy: { fastestWinMs: null, bestEndlessWave: null },
+      Normal: { fastestWinMs: 402_000, bestEndlessWave: 12 },
+      Hard: { fastestWinMs: null, bestEndlessWave: 9 },
+      Nightmare: { fastestWinMs: null, bestEndlessWave: null },
+    },
+  },
 }
+
+const { bests: _bests, ...versionTwoSave } = learnedSave
 
 const loading: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some(SURFACE),
@@ -93,6 +110,17 @@ const showDialog = () =>
 
 const tick = message(Message.TickedFrame({ deltaTime: 50 }))
 
+const farSpawn: PlannedSpawn = {
+  atMs: 1e9,
+  kind: 'Shambler',
+  door: 'North',
+  offset: 0,
+  speedScale: 1,
+  hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
+}
+
 describe('the schema', () => {
   test('a save round trips through JSON', () => {
     const json = Option.getOrThrow(encodeSave(learnedSave))
@@ -111,18 +139,41 @@ describe('the schema', () => {
     expect(decodeSave(json)).toEqual(Option.some(fresh))
   })
 
+  test('the bests round trip through the model', () => {
+    expect(saveOf(restoreSave(initialModel, learnedSave)).bests).toEqual(
+      learnedSave.bests,
+    )
+  })
+
   test('a version 1 save still loads, as Normal with the card still to come', () => {
-    const { difficulty: _, ...withoutDifficulty } = learnedSave
+    const { difficulty: _, ...withoutDifficulty } = versionTwoSave
     const json = JSON.stringify({ ...withoutDifficulty, version: 1 })
     expect(decodeSave(json)).toEqual(
-      Option.some({ ...learnedSave, difficulty: unpickedDifficulty }),
+      Option.some({
+        ...learnedSave,
+        difficulty: unpickedDifficulty,
+        bests: noSavedBests,
+      }),
     )
+  })
+
+  test('a version 2 save keeps every field and starts the bests at zero', () => {
+    const json = JSON.stringify({ ...versionTwoSave, version: 2 })
+    expect(decodeSave(json)).toEqual(
+      Option.some({ ...learnedSave, bests: noSavedBests }),
+    )
+    const restored = restoreSave(
+      initialModel,
+      Option.getOrThrow(decodeSave(json)),
+    )
+    expect(restored.bests).toEqual(noBests)
+    expect(restored.difficulty.chosen).toBe('Hard')
   })
 
   test('corrupted JSON, a wrong version, and a missing field read as no save', () => {
     const json = Option.getOrThrow(encodeSave(learnedSave))
-    expect(decodeSave('{"version":2,')).toEqual(Option.none())
-    expect(decodeSave(json.replace('"version":2', '"version":0'))).toEqual(
+    expect(decodeSave('{"version":3,')).toEqual(Option.none())
+    expect(decodeSave(json.replace('"version":3', '"version":0'))).toEqual(
       Option.none(),
     )
     expect(
@@ -168,6 +219,15 @@ describe('loading the save', () => {
           nightmare: 'Unlocked',
         })
         expect(current.difficultyCard).toEqual(DifficultyCard.Seen())
+        expect(current.bests.totalKills).toBe(341)
+        expect(current.bests.runsPlayed).toBe(12)
+        expect(current.bests.killsByKind.Tank).toBe(11)
+        expect(current.bests.byDifficulty.Normal.maybeFastestWinMs).toEqual(
+          Option.some(402_000),
+        )
+        expect(current.bests.byDifficulty.Hard.maybeBestEndlessWave).toEqual(
+          Option.some(9),
+        )
       }),
       message(Message.ClickedCampaignButton()),
       tick,
@@ -229,6 +289,10 @@ describe('loading the save', () => {
         ...learnedSave.onboarding,
         introducedKinds: ['Shambler', 'Gone'],
       },
+      bests: {
+        ...learnedSave.bests,
+        killsByKind: { Shambler: 5, Gone: 9 },
+      },
     }
     story(
       update,
@@ -238,6 +302,10 @@ describe('loading the save', () => {
       model(current => {
         expect(current.introducedKinds).toEqual(['Shambler'])
         expect(current.soundSetting).toBe('Muted')
+        expect(current.bests.killsByKind).toEqual(
+          modifyFields(noKills, { Shambler: () => 5 }),
+        )
+        expect(current.bests.totalKills).toBe(341)
       }),
     )
   })
@@ -358,6 +426,45 @@ describe('writing the save', () => {
     )
   })
 
+  test('the end of a run writes its kills and the run into the save', () => {
+    const dying = modifyFields(read, {
+      phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [farSpawn] }),
+      player: player => modifyFields(player, { hp: () => 0 }),
+      stats: stats =>
+        modifyFields(stats, {
+          kills: () =>
+            modifyFields(noKills, { Shambler: () => 4, Tank: () => 1 }),
+        }),
+    })
+    story(
+      update,
+      given(dying),
+      tick,
+      model(current => {
+        expect(Phase.guards.GameOver(current.phase)).toBe(true)
+        expect(saveOf(current).bests).toEqual({
+          ...noSavedBests,
+          runsPlayed: 1,
+          totalKills: 5,
+          killsByKind: { Shambler: 4, Tank: 1 },
+        })
+      }),
+      Command.expectHas(WriteSave),
+      Command.resolve(WriteSave, Message.CompletedWriteSave()),
+    )
+  })
+
+  test('kills mid-run write nothing until the run ends', () => {
+    const fighting = modifyFields(read, {
+      phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [farSpawn] }),
+      stats: stats =>
+        modifyFields(stats, {
+          kills: () => modifyFields(noKills, { Shambler: () => 4 }),
+        }),
+    })
+    story(update, given(fighting), tick, Command.expectNone())
+  })
+
   test('a frame that changes nothing saved writes nothing', () => {
     story(update, given(read), tick, Command.expectNone())
   })
@@ -390,6 +497,7 @@ describe('reset tutorial', () => {
     soundSetting: () => 'Muted',
     shakeSetting: () => 'Off',
     appearance: () => learnedSave.appearance,
+    bests: () => restoreSave(read, learnedSave).bests,
   })
 
   test('asks first, then clears the onboarding only and saves', () => {
@@ -419,6 +527,7 @@ describe('reset tutorial', () => {
         expect(current.shakeSetting).toBe('Off')
         expect(current.appearance).toEqual(learnedSave.appearance)
         expect(current.homeScreenTip).toBe('Dismissed')
+        expect(saveOf(current).bests).toEqual(learnedSave.bests)
       }),
       Command.resolve(
         FocusTutorialReset({ id: RESET_TUTORIAL_BUTTON_ID }),

@@ -1,16 +1,28 @@
-import { Array, Data, Effect, Option, Result, Schema, pipe } from 'effect'
+import {
+  Array,
+  Data,
+  Effect,
+  Option,
+  Record,
+  Result,
+  Schema,
+  pipe,
+} from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import {
   Appearance,
   DebutCard,
   Difficulty,
+  type DifficultyBests,
   DifficultyCard,
   HomeScreenTip,
+  type KillCounts,
   Lesson,
   type Lessons,
   type Model,
   MusicSetting,
+  type PlayerBests,
   ShakeSetting,
   SoundSetting,
   TrapHint,
@@ -26,7 +38,7 @@ import {
 // into that scope and this key is retired. A new field goes in here with a
 // version bump, and decodeSave migrates or drops the older version.
 export const SAVE_KEY = 'munch-manor:save'
-export const SAVE_VERSION = 2
+export const SAVE_VERSION = 3
 
 export const SavedLesson = Schema.Literals(['Pending', 'Learned'])
 export type SavedLesson = typeof SavedLesson.Type
@@ -75,6 +87,29 @@ export const SavedDifficulty = Schema.Struct({
 })
 export type SavedDifficulty = typeof SavedDifficulty.Type
 
+// NOTE: version 3 added the bests: runs played, zombies splatted in all and
+// per kind, and the fastest win and best endless wave for each difficulty.
+// Kills per kind are keyed by kind id, ready for the Munchopedia. A win or a
+// wave not reached yet is null.
+export const SavedDifficultyBests = Schema.Struct({
+  fastestWinMs: Schema.NullOr(Schema.Number),
+  bestEndlessWave: Schema.NullOr(Schema.Number),
+})
+export type SavedDifficultyBests = typeof SavedDifficultyBests.Type
+
+export const SavedBests = Schema.Struct({
+  runsPlayed: Schema.Number,
+  totalKills: Schema.Number,
+  killsByKind: Schema.Record(Schema.String, Schema.Number),
+  byDifficulty: Schema.Struct({
+    Easy: SavedDifficultyBests,
+    Normal: SavedDifficultyBests,
+    Hard: SavedDifficultyBests,
+    Nightmare: SavedDifficultyBests,
+  }),
+})
+export type SavedBests = typeof SavedBests.Type
+
 const PlayerSaveV1 = Schema.Struct({
   version: Schema.Literal(1),
   onboarding: SavedOnboarding,
@@ -84,6 +119,16 @@ const PlayerSaveV1 = Schema.Struct({
 })
 type PlayerSaveV1 = typeof PlayerSaveV1.Type
 
+const PlayerSaveV2 = Schema.Struct({
+  version: Schema.Literal(2),
+  onboarding: SavedOnboarding,
+  homeScreenTip: HomeScreenTip,
+  settings: SavedSettings,
+  appearance: Appearance,
+  difficulty: SavedDifficulty,
+})
+type PlayerSaveV2 = typeof PlayerSaveV2.Type
+
 export const PlayerSave = Schema.Struct({
   version: Schema.Literal(SAVE_VERSION),
   onboarding: SavedOnboarding,
@@ -91,10 +136,13 @@ export const PlayerSave = Schema.Struct({
   settings: SavedSettings,
   appearance: Appearance,
   difficulty: SavedDifficulty,
+  bests: SavedBests,
 })
 export type PlayerSave = typeof PlayerSave.Type
 
 const PlayerSaveJson = Schema.fromJsonString(PlayerSave)
+
+const PlayerSaveV2Json = Schema.fromJsonString(PlayerSaveV2)
 
 const PlayerSaveV1Json = Schema.fromJsonString(PlayerSaveV1)
 
@@ -104,8 +152,25 @@ export const unpickedDifficulty: SavedDifficulty = {
   nightmare: 'Locked',
 }
 
-const migrateV1 = (save: PlayerSaveV1): PlayerSave => ({
-  version: SAVE_VERSION,
+const noSavedDifficultyBests: SavedDifficultyBests = {
+  fastestWinMs: null,
+  bestEndlessWave: null,
+}
+
+export const noSavedBests: SavedBests = {
+  runsPlayed: 0,
+  totalKills: 0,
+  killsByKind: {},
+  byDifficulty: {
+    Easy: noSavedDifficultyBests,
+    Normal: noSavedDifficultyBests,
+    Hard: noSavedDifficultyBests,
+    Nightmare: noSavedDifficultyBests,
+  },
+}
+
+const migrateV1 = (save: PlayerSaveV1): PlayerSaveV2 => ({
+  version: 2,
   onboarding: save.onboarding,
   homeScreenTip: save.homeScreenTip,
   settings: save.settings,
@@ -113,11 +178,26 @@ const migrateV1 = (save: PlayerSaveV1): PlayerSave => ({
   difficulty: unpickedDifficulty,
 })
 
+const migrateV2 = (save: PlayerSaveV2): PlayerSave => ({
+  version: SAVE_VERSION,
+  onboarding: save.onboarding,
+  homeScreenTip: save.homeScreenTip,
+  settings: save.settings,
+  appearance: save.appearance,
+  difficulty: save.difficulty,
+  bests: noSavedBests,
+})
+
 export const decodeSave = (raw: string): Option.Option<PlayerSave> =>
   pipe(
     Schema.decodeOption(PlayerSaveJson)(raw),
     Option.orElse(() =>
-      Option.map(Schema.decodeOption(PlayerSaveV1Json)(raw), migrateV1),
+      Option.map(Schema.decodeOption(PlayerSaveV2Json)(raw), migrateV2),
+    ),
+    Option.orElse(() =>
+      Option.map(Schema.decodeOption(PlayerSaveV1Json)(raw), save =>
+        migrateV2(migrateV1(save)),
+      ),
     ),
   )
 
@@ -133,6 +213,25 @@ const savedLesson = (lesson: Lesson): SavedLesson =>
 
 const savedTrapHint = (hint: TrapHint): SavedTrapHint =>
   TrapHint.isAnyOf(['Seen'])(hint) ? 'Seen' : 'Unseen'
+
+const savedDifficultyBests = (
+  bests: DifficultyBests,
+): SavedDifficultyBests => ({
+  fastestWinMs: Option.getOrNull(bests.maybeFastestWinMs),
+  bestEndlessWave: Option.getOrNull(bests.maybeBestEndlessWave),
+})
+
+const savedBests = (bests: PlayerBests): SavedBests => ({
+  runsPlayed: bests.runsPlayed,
+  totalKills: bests.totalKills,
+  killsByKind: Record.filter(bests.killsByKind, count => count > 0),
+  byDifficulty: {
+    Easy: savedDifficultyBests(bests.byDifficulty.Easy),
+    Normal: savedDifficultyBests(bests.byDifficulty.Normal),
+    Hard: savedDifficultyBests(bests.byDifficulty.Hard),
+    Nightmare: savedDifficultyBests(bests.byDifficulty.Nightmare),
+  },
+})
 
 export const saveOf = (model: Model): PlayerSave => ({
   version: SAVE_VERSION,
@@ -164,6 +263,7 @@ export const saveOf = (model: Model): PlayerSave => ({
       : 'Unseen',
     nightmare: model.difficulty.nightmare === 'Locked' ? 'Locked' : 'Unlocked',
   },
+  bests: savedBests(model.bests),
 })
 
 // INTO THE MODEL
@@ -194,6 +294,47 @@ const knownKinds = (kinds: ReadonlyArray<string>): ReadonlyArray<ZombieKind> =>
     isZombieKind(kind) ? Result.succeed(kind) : Result.failVoid,
   )
 
+const restoreDifficultyBests = (
+  saved: SavedDifficultyBests,
+): DifficultyBests => ({
+  maybeFastestWinMs: Option.fromNullishOr(saved.fastestWinMs),
+  maybeBestEndlessWave: Option.fromNullishOr(saved.bestEndlessWave),
+})
+
+const savedKillsOf =
+  (killsByKind: Readonly<Record<string, number>>) =>
+  (kind: ZombieKind): number =>
+    Option.getOrElse(Record.get(killsByKind, kind), () => 0)
+
+// NOTE: only the known kinds are read back, the same way, so the count of a
+// renamed or removed kind is dropped. The total stays as it was saved.
+const restoreKills = (
+  killsByKind: Readonly<Record<string, number>>,
+): KillCounts => {
+  const killsOf = savedKillsOf(killsByKind)
+  return {
+    Shambler: killsOf('Shambler'),
+    Runner: killsOf('Runner'),
+    Tank: killsOf('Tank'),
+    Exploder: killsOf('Exploder'),
+    Thrower: killsOf('Thrower'),
+    Crawler: killsOf('Crawler'),
+    Boss: killsOf('Boss'),
+  }
+}
+
+const restoreBests = (saved: SavedBests): PlayerBests => ({
+  runsPlayed: saved.runsPlayed,
+  totalKills: saved.totalKills,
+  killsByKind: restoreKills(saved.killsByKind),
+  byDifficulty: {
+    Easy: restoreDifficultyBests(saved.byDifficulty.Easy),
+    Normal: restoreDifficultyBests(saved.byDifficulty.Normal),
+    Hard: restoreDifficultyBests(saved.byDifficulty.Hard),
+    Nightmare: restoreDifficultyBests(saved.byDifficulty.Nightmare),
+  },
+})
+
 export const restoreSave = (model: Model, save: PlayerSave): Model =>
   modifyFields(model, {
     lessons: lessons => restoreLessons(lessons, save.onboarding.lessons),
@@ -217,10 +358,13 @@ export const restoreSave = (model: Model, save: PlayerSave): Model =>
       }),
     difficultyCard: card =>
       save.difficulty.card === 'Seen' ? DifficultyCard.Seen() : card,
+    bests: () => restoreBests(save.bests),
   })
 
 // RESET
 
+// NOTE: the reset forgets only the tutorial. The look, the settings, the
+// difficulty, and the bests and kills are kept.
 export const forgetTutorial = (model: Model): Model =>
   modifyFields(model, {
     lessons: () => freshLessons,

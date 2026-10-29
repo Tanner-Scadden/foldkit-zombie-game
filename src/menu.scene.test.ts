@@ -31,6 +31,7 @@ import {
   update,
 } from './main'
 import { type Model, Phase, initialModel } from './model'
+import { noSavedBests, restoreSave, saveOf } from './save'
 import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
 import { pause } from './waves'
@@ -74,7 +75,7 @@ const pauseMenuButton = role('button', { name: 'Menu: leave this run' })
 const endMenuButton = role('button', { name: 'Menu: back to the home screen' })
 const leaveQuestion = role('dialog', { name: 'Leave this run?' })
 const mainMenu = role('navigation', { name: 'Main menu' })
-const bests = role('region', { name: 'This session, Normal' })
+const bests = role('region', { name: 'Your bests, Normal' })
 
 // NOTE: Scene refuses a pointerdown that no handler on the element or its
 // ancestors would receive. That refusal is the check: a press on these
@@ -131,7 +132,7 @@ describe('Home menu', () => {
     )
   })
 
-  test("shows this session's best endless wave, fastest win, and kills", () => {
+  test('shows your best endless wave, fastest win, and kills', () => {
     scene(
       { update, view },
       given(
@@ -141,7 +142,7 @@ describe('Home menu', () => {
             maybeFastestWinMs: Option.some(402_000),
           })),
           {
-            sessionBests: bests => modifyFields(bests, { kills: () => 341 }),
+            bests: bests => modifyFields(bests, { totalKills: () => 341 }),
           },
         ),
       ),
@@ -154,6 +155,32 @@ describe('Home menu', () => {
         expect(text('6:42')).toExist(),
         expect(text('Zombies splatted')).toExist(),
         expect(text('341')).toExist(),
+      ),
+    )
+  })
+
+  test('a loaded save shows the bests from earlier visits', () => {
+    const saved = {
+      ...saveOf(home),
+      bests: {
+        ...noSavedBests,
+        runsPlayed: 4,
+        totalKills: 97,
+        killsByKind: { Shambler: 80, Tank: 17 },
+        byDifficulty: {
+          ...noSavedBests.byDifficulty,
+          Normal: { fastestWinMs: null, bestEndlessWave: 9 },
+        },
+      },
+    }
+    scene(
+      { update, view },
+      given(restoreSave(home, saved)),
+      measureSurface,
+      inside(
+        bests,
+        expect(text('Wave 9')).toExist(),
+        expect(text('97')).toExist(),
       ),
     )
   })

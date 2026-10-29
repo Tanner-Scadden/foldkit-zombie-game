@@ -63,7 +63,7 @@ export const countTrapPlaced = (stats: RunStats): RunStats =>
 
 // READING
 
-export const totalKills = ({ kills }: RunStats): number =>
+export const killTotal = (kills: KillCounts): number =>
   kills.Shambler +
   kills.Runner +
   kills.Tank +
@@ -71,6 +71,31 @@ export const totalKills = ({ kills }: RunStats): number =>
   kills.Thrower +
   kills.Crawler +
   kills.Boss
+
+export const totalKills = ({ kills }: RunStats): number => killTotal(kills)
+
+const zipKills = (
+  first: KillCounts,
+  second: KillCounts,
+  combine: (firstCount: number, secondCount: number) => number,
+): KillCounts => ({
+  Shambler: combine(first.Shambler, second.Shambler),
+  Runner: combine(first.Runner, second.Runner),
+  Tank: combine(first.Tank, second.Tank),
+  Exploder: combine(first.Exploder, second.Exploder),
+  Thrower: combine(first.Thrower, second.Thrower),
+  Crawler: combine(first.Crawler, second.Crawler),
+  Boss: combine(first.Boss, second.Boss),
+})
+
+export const addKills = (kills: KillCounts, more: KillCounts): KillCounts =>
+  zipKills(kills, more, (count, extra) => count + extra)
+
+export const killsSince = (
+  kills: KillCounts,
+  earlier: KillCounts,
+): KillCounts =>
+  zipKills(kills, earlier, (count, before) => Math.max(0, count - before))
 
 export const accuracyPercent = ({ shotsFired, shotsHit }: RunStats): number =>
   shotsFired > 0 ? Math.round((100 * shotsHit) / shotsFired) : 0
