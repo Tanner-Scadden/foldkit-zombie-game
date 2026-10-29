@@ -8,6 +8,7 @@ import {
   expectAll,
   given,
   inside,
+  keydown,
   pointerDown,
   role,
   scene,
@@ -19,17 +20,30 @@ import { describe, test, expect as vitestExpect } from 'vitest'
 
 import { Dialog } from '@foldkit/ui'
 
-import { FocusHomeButton, FocusTutorialReset, WriteSave } from './commands'
+import {
+  ApplyRotation,
+  FocusHandCard,
+  FocusHomeButton,
+  FocusTutorialReset,
+  WriteSave,
+} from './commands'
 import { RESTART_GRACE_MS } from './constants'
 import { withBests } from './difficulty'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
 import { LINK_TAKES_PROGRESS_NOTE, SHARE_STATS_NOTE } from './homeView'
 import { update } from './main'
 import { Message } from './message'
-import { type Model, Phase, initialModel } from './model'
+import { type HandCard, type Model, Phase, initialModel } from './model'
 import { SyncState } from './playerSync'
 import { noSavedBests, restoreSave, saveOf } from './save'
-import { emitPressedKey, measureSurface, showDialogInScene } from './testing'
+import {
+  emitPressedKey,
+  manorButton,
+  measureSurface,
+  openHandInScene,
+  pickCardInScene,
+  showDialogInScene,
+} from './testing'
 import { asVeteran } from './veteran'
 import { view } from './view'
 import { pause } from './waves'
@@ -48,26 +62,33 @@ const playEndlessButton = role('button', {
 const modeButton = role('button', {
   name: 'Mode: Campaign. Switch to Endless',
 })
-const whatsNewButton = role('button', { name: /^What's new/ })
-const munchopediaButton = role('button', { name: /^Munchopedia/ })
-const difficultyBadge = role('button', {
+const difficultyButton = role('button', {
   name: 'Difficulty: Normal. Change it',
 })
 const playCluster = role('group', { name: 'Play' })
-const characterButton = role('button', {
-  name: 'Character: change how you look',
-})
-const howToPlayButton = role('button', {
-  name: 'How to play: the controls and some tips',
-})
+const hand = role('dialog', { name: 'The manor' })
+const closeHandButton = role('button', { name: 'Close the manor' })
+const CARD_NAMES = {
+  Character: 'Character: change how you look',
+  Munchopedia: 'Munchopedia: every zombie you have splatted',
+  WhatsNew: "What's new: the latest changes",
+  HowToPlay: 'How to play: the controls',
+} as const
+const characterCard = role('button', { name: CARD_NAMES.Character })
+const munchopediaCard = role('button', { name: /^Munchopedia:/ })
+const whatsNewCard = role('button', { name: /^What's new:/ })
+const howToPlayCard = role('button', { name: CARD_NAMES.HowToPlay })
 const settingsButton = role('button', {
-  name: 'Settings: sound, music, shake, and full screen',
+  name: 'Settings: sound, music, shake, and devices',
+})
+const lockedNightmare = role('button', {
+  name: 'Nightmare, locked. Beat Hard to unlock',
 })
 const pauseMenuButton = role('button', { name: 'Menu: leave this run' })
 const endMenuButton = role('button', { name: 'Menu: back to the home screen' })
 const leaveQuestion = role('dialog', { name: 'Leave this run?' })
-const mainMenu = role('navigation', { name: 'Main menu' })
-const bests = role('region', { name: 'Your bests, Normal' })
+const mainMenu = manorButton
+const bests = role('region', { name: 'Your bests · Normal' })
 
 // NOTE: Scene refuses a pointerdown that no handler on the element or its
 // ancestors would receive. That refusal is the check: a press on these
@@ -94,33 +115,27 @@ const afterGrace = (phase: Phase): Model =>
   })
 
 describe('Home menu', () => {
-  test('fills the fixed slots: status, the play cluster, the rail, and the hero, with a key badge on every button on a keyboard', () => {
+  test('fills the slots: bests, the gear, the MANOR deck, and PLAY with its mode and difficulty, with a key badge on every button on a keyboard', () => {
     scene(
       { update, view },
       given(home),
       measureSurface,
       inside(
         playCluster,
-        expectAll(all.role('button')).toHaveCount(2),
+        expectAll(all.role('button')).toHaveCount(3),
         expect(playButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
         expect(modeButton).toHaveAttr('aria-keyshortcuts', 'E'),
+        expect(difficultyButton).toHaveAttr('aria-keyshortcuts', 'X'),
+        expect(difficultyButton).toHaveAttr('aria-haspopup', 'dialog'),
       ),
+      expect(manorButton).toHaveAttr('aria-keyshortcuts', 'V'),
+      expect(manorButton).toHaveAttr('aria-haspopup', 'dialog'),
       inside(
-        mainMenu,
-        expectAll(all.role('button')).toHaveCount(5),
-        expect(whatsNewButton).toHaveAttr('aria-keyshortcuts', 'L'),
-        expect(munchopediaButton).toHaveAttr('aria-keyshortcuts', 'Z'),
-        expect(characterButton).toHaveAttr('aria-keyshortcuts', 'C'),
-        expect(howToPlayButton).toHaveAttr('aria-keyshortcuts', 'I'),
+        selector('.home-corner'),
         expect(settingsButton).toHaveAttr('aria-keyshortcuts', 'O'),
         expect(settingsButton).toHaveAttr('aria-haspopup', 'dialog'),
       ),
-      expectAll(all.selector('.home-key')).toHaveCount(7),
-      inside(
-        selector('.home-status'),
-        expect(difficultyBadge).toHaveAttr('aria-haspopup', 'dialog'),
-        expect(bests).toExist(),
-      ),
+      expectAll(all.selector('.home-stage .home-key')).toHaveCount(5),
       expect(
         role('button', { name: 'Your character: change how you look' }),
       ).toHaveAttr('aria-haspopup', 'dialog'),
@@ -129,17 +144,134 @@ describe('Home menu', () => {
     )
   })
 
-  test('the difficulty badge opens the picker, and a pick changes it without starting a run', () => {
+  test('the MANOR hand deals a card for each page with its key, and CLOSE puts it away', () => {
     scene(
       { update, view },
       given(home),
       measureSurface,
-      click(difficultyBadge),
+      expect(hand).toBeAbsent(),
+      ...openHandInScene(),
+      inside(
+        hand,
+        expectAll(all.selector('.hand-card')).toHaveCount(4),
+        expect(characterCard).toHaveAttr('aria-keyshortcuts', 'C'),
+        expect(munchopediaCard).toHaveAttr('aria-keyshortcuts', 'Z'),
+        expect(whatsNewCard).toHaveAttr('aria-keyshortcuts', 'L'),
+        expect(howToPlayCard).toHaveAttr('aria-keyshortcuts', 'I'),
+        expect(role('link', { name: /^Tip jar/ })).toBeAbsent(),
+        click(closeHandButton),
+      ),
+      ...closeDialog(),
+      expect(hand).toBeAbsent(),
+      expect(mainMenu).toExist(),
+    )
+  })
+
+  test('V deals the hand from the keyboard, and the arrow keys walk its cards and wrap', () => {
+    const focusCard = (card: HandCard) =>
+      Command.resolve(FocusHandCard({ card }), Message.CompletedFocusHandCard())
+    scene(
+      { update, view },
+      given(home),
+      measureSurface,
+      emitPressedKey('KeyV'),
       ...showDialogInScene(),
+      expect(hand).toExist(),
+      keydown(characterCard, 'ArrowRight'),
+      focusCard('Munchopedia'),
+      keydown(howToPlayCard, 'ArrowDown'),
+      focusCard('Character'),
+      keydown(characterCard, 'ArrowLeft'),
+      focusCard('HowToPlay'),
+    )
+  })
+
+  test('the tip jar is a card in the hand only while a support link is set', () => {
+    scene(
+      { update, view },
+      given(
+        modifyFields(home, {
+          maybeSupportUrl: () => Option.some('https://buy.stripe.com/test'),
+        }),
+      ),
+      measureSurface,
+      expect(role('link', { name: /^Tip jar/ })).toBeAbsent(),
+      ...openHandInScene(),
+      inside(
+        hand,
+        expectAll(all.selector('.hand-card')).toHaveCount(5),
+        expect(role('link', { name: /^Tip jar/ })).toHaveAttr(
+          'href',
+          'https://buy.stripe.com/test',
+        ),
+      ),
+    )
+  })
+
+  test('each card opens its own page from the hand', () => {
+    Array.forEach(
+      [
+        { name: CARD_NAMES.Character, dialog: 'Character' },
+        { name: CARD_NAMES.Munchopedia, dialog: 'Munchopedia' },
+        { name: `${CARD_NAMES.WhatsNew}. Something new`, dialog: "What's new" },
+        { name: CARD_NAMES.HowToPlay, dialog: 'How to play' },
+      ],
+      ({ name, dialog }) => {
+        scene(
+          { update, view },
+          given(home),
+          measureSurface,
+          ...openHandInScene(),
+          ...pickCardInScene(name),
+          expect(hand).toBeAbsent(),
+          expect(role('dialog', { name: dialog })).toExist(),
+        )
+      },
+    )
+  })
+
+  test('the difficulty beside PLAY opens the picker, a pick changes it without starting a run, and Nightmare stays locked', () => {
+    scene(
+      { update, view },
+      given(home),
+      measureSurface,
+      click(difficultyButton),
+      ...showDialogInScene(),
+      expect(lockedNightmare).toHaveAttr('aria-disabled', 'true'),
+      expect(
+        selector("[data-difficulty='Nightmare'] .difficulty-padlock"),
+      ).toExist(),
+      expect(role('dialog', { name: 'Difficulty' })).toExist(),
       click(role('button', { name: /^Hard:/ })),
       ...closeDialog(),
       expect(role('button', { name: 'Difficulty: Hard. Change it' })).toExist(),
+      expect(role('region', { name: 'Your bests · Hard' })).toExist(),
       expect(mainMenu).toExist(),
+    )
+  })
+
+  test('X opens the difficulty picker by PLAY on a keyboard, and a tap opens it on touch', () => {
+    scene(
+      { update, view },
+      given(home),
+      measureSurface,
+      emitPressedKey('KeyX'),
+      ...showDialogInScene(),
+      expect(role('dialog', { name: 'Difficulty' })).toHaveAttr(
+        'data-anchor',
+        'Play',
+      ),
+    )
+    scene(
+      { update, view },
+      given(modifyFields(home, { lastDevice: () => 'Touch' })),
+      measureSurface,
+      inside(playCluster, expect(selector('.home-key')).toBeAbsent()),
+      click(difficultyButton),
+      ...showDialogInScene(),
+      click(role('button', { name: /^Easy:/ })),
+      ...closeDialog(),
+      expect(role('button', { name: 'Difficulty: Easy. Change it' })).toExist(),
     )
   })
 
@@ -148,8 +280,9 @@ describe('Home menu', () => {
       { update, view },
       given(modifyFields(home, { lastDevice: () => 'Touch' })),
       measureSurface,
-      inside(playCluster, expectAll(all.role('button')).toHaveCount(2)),
-      inside(mainMenu, expectAll(all.role('button')).toHaveCount(5)),
+      inside(playCluster, expectAll(all.role('button')).toHaveCount(3)),
+      expect(manorButton).toExist(),
+      expect(settingsButton).toExist(),
       expect(selector('.home-key')).toBeAbsent(),
     )
   })
@@ -175,7 +308,7 @@ describe('Home menu', () => {
         expect(text('Wave 12')).toExist(),
         expect(text('Fastest win')).toExist(),
         expect(text('6:42')).toExist(),
-        expect(text('Zombies splatted')).toExist(),
+        expect(text('Splatted')).toExist(),
         expect(text('341')).toExist(),
       ),
     )
@@ -239,7 +372,7 @@ describe('Home menu', () => {
     )
   })
 
-  test('C and the Character button open the picker', () => {
+  test('C opens the picker straight from the menu, without the hand', () => {
     scene(
       { update, view },
       given(home),
@@ -247,14 +380,29 @@ describe('Home menu', () => {
       emitPressedKey('KeyC'),
       ...showDialogInScene(),
       expect(role('dialog', { name: 'Character' })).toExist(),
+      expect(hand).toBeAbsent(),
     )
-    scene(
-      { update, view },
-      given(home),
-      measureSurface,
-      click(characterButton),
-      ...showDialogInScene(),
-      expect(role('dialog', { name: 'Character' })).toExist(),
+  })
+
+  test('L, Z, I, and O open their pages straight from the menu', () => {
+    Array.forEach(
+      [
+        { key: 'KeyL', dialog: "What's new" },
+        { key: 'KeyZ', dialog: 'Munchopedia' },
+        { key: 'KeyI', dialog: 'How to play' },
+        { key: 'KeyO', dialog: 'Settings' },
+      ],
+      ({ key, dialog }) => {
+        scene(
+          { update, view },
+          given(home),
+          measureSurface,
+          emitPressedKey(key),
+          ...showDialogInScene(),
+          expect(role('dialog', { name: dialog })).toExist(),
+          expect(hand).toBeAbsent(),
+        )
+      },
     )
   })
 
@@ -269,15 +417,7 @@ describe('Home menu', () => {
         Message.CompletedFocusHomeButton(),
       ),
       ...Array.flatMap(
-        [
-          'Mode',
-          'WhatsNew',
-          'Munchopedia',
-          'Character',
-          'HowToPlay',
-          'Settings',
-          'Play',
-        ] as const,
+        ['Mode', 'Difficulty', 'Manor', 'Settings', 'Play'] as const,
         button => [
           emitPressedKey('ArrowDown'),
           Command.resolve(
@@ -294,18 +434,21 @@ describe('Home menu', () => {
     )
   })
 
-  test('How to play opens the controls for the device, and Done closes it', () => {
+  test('How to play shows the controls as cards for the device, and Done closes it', () => {
     scene(
       { update, view },
       given(home),
       measureSurface,
-      click(howToPlayButton),
-      ...showDialogInScene(),
+      ...openHandInScene(),
+      ...pickCardInScene(CARD_NAMES.HowToPlay),
       inside(
         role('dialog', { name: 'How to play' }),
-        expect(role('table', { name: 'Move and fight' })).toExist(),
-        expect(role('table', { name: 'Traps and stuff' })).toExist(),
-        expect(role('list', { name: 'Tips' })).toExist(),
+        inside(
+          role('list', { name: 'Controls' }),
+          expectAll(all.role('listitem')).toHaveCount(8),
+        ),
+        expect(role('list', { name: 'More keys' })).toExist(),
+        expect(role('region', { name: 'On the menu' })).toExist(),
         click(role('button', { name: 'Done' })),
       ),
       ...closeDialog(),
@@ -314,7 +457,7 @@ describe('Home menu', () => {
     )
   })
 
-  test('Settings toggles sound, music, screen shake, and the big cursor', () => {
+  test('the gear opens Settings, and its tiles toggle sound, music, screen shake, and the big cursor', () => {
     const soundToggle = role('button', { name: 'Sound' })
     const musicToggle = role('button', { name: 'Music' })
     const shakeToggle = role('button', { name: 'Screen shake' })
@@ -325,6 +468,7 @@ describe('Home menu', () => {
       measureSurface,
       click(settingsButton),
       ...showDialogInScene(),
+      expect(role('dialog', { name: 'Settings' })).toExist(),
       expect(soundToggle).toHaveAttr('aria-pressed', 'true'),
       expect(soundToggle).toHaveAttr('aria-keyshortcuts', 'M'),
       expect(musicToggle).toHaveAttr('aria-keyshortcuts', 'N'),
@@ -391,7 +535,6 @@ describe('Home menu', () => {
       measureSurface,
       click(settingsButton),
       ...showDialogInScene(),
-      expect(text('Saved on this device.')).toExist(),
       click(resetButton),
       focusReset(KEEP_TUTORIAL_BUTTON_ID),
       expect(text('Show the tips and zombie cards again?')).toExist(),
@@ -409,15 +552,7 @@ describe('Home menu', () => {
 
   test('a press on a menu button never reaches the game surface', () => {
     Array.forEach(
-      [
-        playButton,
-        modeButton,
-        whatsNewButton,
-        munchopediaButton,
-        characterButton,
-        howToPlayButton,
-        settingsButton,
-      ],
+      [playButton, modeButton, difficultyButton, manorButton, settingsButton],
       button => {
         vitestExpect(() =>
           scene(
@@ -498,5 +633,42 @@ describe('Menu from a run', () => {
         expect(mainMenu).toExist(),
       )
     })
+  })
+})
+
+describe('the rotation tile', () => {
+  const rotateTile = role('button', { name: 'Turn with the phone' })
+
+  test('Settings shows ROTATE only on a phone that can lock how it turns', () => {
+    scene(
+      { update, view },
+      given(home),
+      measureSurface,
+      click(settingsButton),
+      ...showDialogInScene(),
+      expect(role('dialog', { name: 'Settings' })).toExist(),
+      expect(rotateTile).toBeAbsent(),
+    )
+    scene(
+      { update, view },
+      given(
+        modifyFields(home, {
+          lastDevice: () => 'Touch',
+          orientationLock: () => 'Supported',
+        }),
+      ),
+      measureSurface,
+      click(settingsButton),
+      ...showDialogInScene(),
+      expect(rotateTile).toHaveAttr('aria-pressed', 'false'),
+      expect(rotateTile).toContainText('LOCKED'),
+      click(rotateTile),
+      Command.resolve(
+        ApplyRotation({ rotation: 'Auto' }),
+        Message.CompletedApplyRotation(),
+      ),
+      expect(rotateTile).toHaveAttr('aria-pressed', 'true'),
+      expect(rotateTile).toContainText('AUTO'),
+    )
   })
 })

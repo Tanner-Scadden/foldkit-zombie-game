@@ -13,11 +13,11 @@ import { view } from './view'
 const playButton = role('button', {
   name: 'Play the campaign: 8 waves, then victory',
 })
-const settingsButton = role('button', {
-  name: 'Settings: sound, music, shake, and full screen',
+const difficultyButton = role('button', {
+  name: 'Difficulty: Normal. Change it',
 })
 const card = role('dialog', { name: 'How tough are you?' })
-const settings = role('dialog', { name: 'Settings' })
+const picker = role('dialog', { name: 'Difficulty' })
 const easy = role('button', { name: 'Easy: Just here for the vibes' })
 const normal = role('button', {
   name: "Normal: The way it's meant to be played",
@@ -74,40 +74,22 @@ describe('the difficulty card', () => {
   })
 })
 
-describe('difficulty in SETTINGS', () => {
-  test('shows the choice pressed, and a click changes it', () => {
+describe('the difficulty picker by PLAY', () => {
+  test('marks the chosen level, keeps Nightmare locked, and opens on the chosen level', () => {
     scene(
       { update, view },
       given(asVeteran(initialModel)),
       measureSurface,
-      click(settingsButton),
+      click(difficultyButton),
       ...showDialogInScene(),
       inside(
-        settings,
-        expect(normal).toHaveAttr('aria-pressed', 'true'),
+        picker,
+        expect(normal).toHaveAttr('data-chosen', 'Chosen'),
+        expect(hard).not.toHaveAttr('data-chosen', 'Chosen'),
         expect(lockedNightmare).toHaveAttr('aria-disabled', 'true'),
-        click(hard),
-        expect(hard).toHaveAttr('aria-pressed', 'true'),
-        expect(normal).toHaveAttr('aria-pressed', 'false'),
-      ),
-    )
-  })
-
-  test('opens on the chosen difficulty, so a scrolled panel shows its top', () => {
-    scene(
-      { update, view },
-      given(asVeteran(initialModel)),
-      measureSurface,
-      click(settingsButton),
-      ...showDialogInScene(),
-      inside(
-        settings,
         expect(normal).toHaveAttr(INITIAL_FOCUS),
         expect(hard).not.toHaveAttr(INITIAL_FOCUS),
         expect(done).not.toHaveAttr(INITIAL_FOCUS),
-        click(hard),
-        expect(hard).toHaveAttr(INITIAL_FOCUS),
-        expect(normal).not.toHaveAttr(INITIAL_FOCUS),
       ),
     )
   })

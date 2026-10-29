@@ -84,6 +84,7 @@ const legacySave: PlayerSave = {
   },
   home: { seenNewsDay: 'October 28, 2026', openedEntries: ['Shambler'] },
   seenPowerUps: ['RapidFire'],
+  rotation: 'Landscape',
 }
 
 interface FakeLegacy {
@@ -274,6 +275,29 @@ describe('the save in the player scope', () => {
         const second = yield* openOn(hub, fake.legacy)
         expect(yield* second.load).toEqual(
           Option.some({ ...legacySave, seenPowerUps: [] }),
+        )
+      }),
+    ))
+
+  test('a player row from before the rotation gains it, locked to landscape', () =>
+    run(
+      Effect.gen(function* () {
+        const hub = yield* makeHub()
+        const fake = yield* makeLegacy(Option.some(legacySave))
+        const first = yield* openOn(hub, fake.legacy)
+        yield* first.load
+        const sql = yield* sqlOn(hub)
+        yield* pipe(
+          Effect.all([
+            sql`ALTER TABLE player DROP COLUMN rotation`,
+            sql`ALTER TABLE sync_confirmed_player DROP COLUMN rotation`,
+            sql`DELETE FROM sync_migrations WHERE id = '0006_add_rotation'`,
+          ]),
+          Effect.orDie,
+        )
+        const second = yield* openOn(hub, fake.legacy)
+        expect(yield* second.load).toEqual(
+          Option.some({ ...legacySave, rotation: 'Landscape' }),
         )
       }),
     ))
@@ -544,6 +568,7 @@ describe('two devices syncing one player', () => {
           ...restyled,
           settings: { ...restyled.settings, music: 'Off' },
           home: { ...restyled.home, openedEntries: ['Shambler', 'Runner'] },
+          rotation: 'Auto',
         }
         yield* write(laptop, restyled, quiet)
         const onPhone = yield* until(phone.load, maybeSave =>
@@ -776,6 +801,7 @@ const migratedLiveSave: PlayerSave = {
     openedEntries: ['Shambler', 'Runner'],
   },
   seenPowerUps: [],
+  rotation: 'Landscape',
 }
 
 const realLegacy: LegacySave = {

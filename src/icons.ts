@@ -263,6 +263,121 @@ export const COFFEE_ICON = pixelIconUrl(
   COFFEE_PALETTE,
 )
 
+// THE MANOR HAND
+
+// NOTE: three cards fanned out, for the MANOR button that deals the hand.
+export const HAND_ICON = pixelIconUrl(
+  [
+    '...YYYYYYY...',
+    '...YOOOOOY...',
+    'PPPYOOOOOYGGG',
+    'POPYOOYOOYGOG',
+    'POPYOYYYOYGOG',
+    'POPYOOYOOYGOG',
+    'POPYOOOOOYGOG',
+    'POPYOOOOOYGOG',
+    'POPYYYYYYYGOG',
+    'PPP.......GGG',
+  ],
+  RAIL_PALETTE,
+)
+
+// SETTINGS
+
+export const SHAKE_ICON = icon([
+  'X.XXXXX.X',
+  'X.X...X.X',
+  '..X.X.X..',
+  'X.X...X.X',
+  'X.XXXXX.X',
+])
+
+export const STATS_ICON = icon([
+  '.......XX',
+  '.......XX',
+  '....XX.XX',
+  '....XX.XX',
+  '.XX.XX.XX',
+  '.XX.XX.XX',
+  'XXXXXXXXX',
+])
+
+export const DEVICES_ICON = icon([
+  'XXXXX....',
+  'X...X....',
+  'X...XXXXX',
+  'X...XX..X',
+  'XXXXXX..X',
+  '.X..XX..X',
+  '....XXXXX',
+])
+
+// CONTROLS
+
+export const MOVE_ICON = icon([
+  '....X....',
+  '...XXX...',
+  '....X....',
+  '.X.....X.',
+  'XXX.X.XXX',
+  '.X.....X.',
+  '....X....',
+  '...XXX...',
+  '....X....',
+])
+
+export const AIM_ICON = icon([
+  '....X....',
+  '..XXXXX..',
+  '.X..X..X.',
+  '.X.....X.',
+  'XXX.R.XXX',
+  '.X.....X.',
+  '.X..X..X.',
+  '..XXXXX..',
+  '....X....',
+])
+
+const SHOOT_PALETTE: Palette = { X: LIGHT, Y: '#ffe066', R: ALERT }
+
+export const SHOOT_ICON = pixelIconUrl(
+  [
+    '......Y..',
+    '.....YRY.',
+    'XXXXXRRRY',
+    'XXXXXX.Y.',
+    'X.XX.....',
+    'X.XX.....',
+    '..XX.....',
+  ],
+  SHOOT_PALETTE,
+)
+
+export const SWAP_ICON = icon([
+  '......X..',
+  'XXXXXXXX.',
+  '......X..',
+  '.........',
+  '..X......',
+  '.XXXXXXXX',
+  '..X......',
+])
+
+const COIN_PALETTE: Palette = { Y: '#ffe066', O: '#a87a1e' }
+
+export const SHOP_ICON = pixelIconUrl(
+  [
+    '..YYYYY..',
+    '.YYOOOYY.',
+    'YYOYYYOYY',
+    'YYOYYYYYY',
+    'YYOYYYOYY',
+    '.YYOOOYY.',
+    '..YYYYY..',
+  ],
+  COIN_PALETTE,
+)
+
 // NOTE: an upright phone with a little Groaner on its screen. The portrait
 // home menu's turn hint tips it on its side with CSS.
 export const TURN_PHONE_ICON = pixelIconUrl(

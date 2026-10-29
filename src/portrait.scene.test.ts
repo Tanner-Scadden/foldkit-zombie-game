@@ -222,13 +222,14 @@ describe('turning the phone', () => {
 })
 
 describe('the portrait home menu', () => {
-  test('keeps every slot: status, the player, the rail, and PLAY', () => {
+  test('keeps every slot: the bests, the player, the MANOR deck, and PLAY with its mode and difficulty', () => {
     scene(
       { update, view },
       given(onTouch(Phase.Ready())),
       measure(PORTRAIT),
       expect(root).toHaveAttr('data-layout', 'Portrait'),
-      expect(role('navigation', { name: 'Main menu' })).toExist(),
+      expect(role('button', { name: /^Manor:/ })).toExist(),
+      expect(role('region', { name: /^Your bests/ })).toExist(),
       expect(role('group', { name: 'Play' })).toExist(),
       expect(role('button', { name: /^Play/ })).toExist(),
       expect(role('button', { name: /^Difficulty/ })).toExist(),
@@ -238,15 +239,16 @@ describe('the portrait home menu', () => {
 })
 
 describe('the turn hint', () => {
-  const turnHint = text(TURN_HINT_TEXT)
+  const turnHint = role('img', { name: TURN_HINT_TEXT })
 
-  test('shows on the portrait home menu and goes when the phone turns', () => {
+  test('shows the tipping phone, with no words, on the portrait home menu and goes when the phone turns', () => {
     scene(
       { update, view },
       given(onTouch(Phase.Ready())),
       measure(PORTRAIT),
       expect(turnHint).toExist(),
       expect(selector('.home-turn-hint')).toExist(),
+      expect(text(TURN_HINT_TEXT)).toBeAbsent(),
       Subscription.emit(Message.MeasuredGameSurface(LANDSCAPE)),
       expect(root).toHaveAttr('data-layout', 'Landscape'),
       expect(turnHint).toBeAbsent(),

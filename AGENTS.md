@@ -63,7 +63,7 @@ Paths are under `src/`. The API Worker is in `infra/worker/` (analytics, and syn
 | `update/character.ts`, `update/home.ts`                 | The character picker's Messages and OutMessages; menu panels, home keys, difficulty, settings, end focus                                                      |
 | `update/save.ts`, `update/sound.ts`                     | Load steps, the save, synced saves, the link flow, the tutorial reset; sound cues, UI sounds, and mute keys                                                   |
 | `onboarding.ts`, `hintIcons.ts`                         | Lessons, the practice gate, the new zombie card, and hints; the hints' moving pixel icons                                                                     |
-| `home.ts`, `homeView.ts`, `menu.css`                    | The home layout's buttons, keys, mode, and bests; the menu, its panels, and the pause MENU pill; their styles                                                 |
+| `home.ts`, `homeView.ts`, `menu.css`                    | The home layout's buttons, keys, MANOR hand cards, mode, and bests; the menu, the hand, its panels, the pause MENU pill; the `--menu-*` style tokens          |
 | `changelog.ts`, `whatsNewView.ts`                       | `CHANGELOG.md` decoded at build time into What's New days, and the What's New panel                                                                           |
 | `munchopedia.ts`, `guideView.ts`                        | The Munchopedia's entries, unlocks, badges, and walking pictures, and its panel                                                                               |
 | `save.ts`, `playerData.ts`                              | `PlayerSave`: versions, the Model mapping, and the reset; its Schemas, shared with the sync Worker                                                            |
@@ -94,12 +94,12 @@ Paths are under `src/`. The API Worker is in `infra/worker/` (analytics, and syn
 | `sightView.ts`                                          | The Laser Sight from the shop: a laser line or a spread fan on the floor showing where the shot goes                                                          |
 | `hud.ts`, `wavePreview.ts`                              | Hearts, money, the streak, gun and trap slots, the round text; the door markers that preview a wave                                                           |
 | `input.ts`, `touchControls.ts`, `thumbArea.ts`          | Keyboard, mouse, and touch input; sticks, ghost sticks, and icon buttons; the portrait thumb area                                                             |
-| `menus.ts`, `pauseHelp.ts`, `screens.ts`                | Mode buttons, the zombie card, corner icons; the pause panel; title, banners, pause, and stats panels                                                         |
+| `menus.ts`, `pauseHelp.ts`, `screens.ts`                | Mode buttons, the zombie card, corner icons; the control cards (pause and How to play); title, banners, pause, and stats panels                               |
 | `font.ts`, `sprite.ts`, `png.ts`                        | The pixel font and coin; pixel maps baked into sprite images; colors, rasters, and the PNG encoder                                                            |
 | `testPng.ts`, `icons.ts`                                | PNG data URLs read back into pixels for tests; pixel maps turned into SVG icons for HTML buttons                                                              |
 | `version.ts`, `updateChip.ts`, `splash.ts`              | The build id, the `version.json` check, and reloading; the update chip; the loading splash's load steps                                                       |
 | `serviceWorker.ts`, `sw/worker.ts`, `sw/precache.ts`    | Registering the service worker and handing over to a new build; the worker; its precache list, built from Vite's output                                       |
-| `support.ts`, `supportView.ts`                          | The tip jar's `SUPPORT_URL` (empty hides it) and its check; the coffee button on home and Victory                                                             |
+| `support.ts`, `supportView.ts`                          | The tip jar's `SUPPORT_URL` (empty hides it) and its check; the coffee pill on Victory (home: the hand's TIP JAR card)                                        |
 | `prng.ts`, `constants.ts`                               | The seeded random number generator; the view size, speeds, and other tuning numbers                                                                           |
 
 ### Elsewhere

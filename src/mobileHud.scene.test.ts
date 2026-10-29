@@ -269,7 +269,7 @@ describe('the corner', () => {
       inside(selector('.home-corner'), expect(fullscreenButton).toExist()),
       click(
         role('button', {
-          name: 'Settings: sound, music, shake, and full screen',
+          name: 'Settings: sound, music, shake, and devices',
         }),
       ),
       Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
@@ -442,7 +442,7 @@ describe('the title icons and the character picker', () => {
       measureSurface,
       expect(muteButton).toBeAbsent(),
       expect(homeScreenTip).toExist(),
-      click(role('button', { name: 'Character: change how you look' })),
+      click(role('button', { name: 'Your character: change how you look' })),
       ...showPicker,
       expect(role('dialog', { name: 'Character' })).toExist(),
       expect(muteButton).toBeAbsent(),

@@ -34,11 +34,11 @@ const PAUSED_STATUS =
   'Paused during wave 3 of 8. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.'
 const FIGHTING_STATUS = 'Fighting wave 3 of 8.'
 
-const row = (inputs: string, action: string) =>
-  role('row', { name: new RegExp(`^${inputs}\\s*${action}$`) })
+const card = (action: string, input: string) =>
+  role('listitem', { name: new RegExp(`^${action}\\s*${input}$`) })
 
 describe('Pause screen controls', () => {
-  test('lists the keyboard and mouse controls, traps included', () => {
+  test('shows the keyboard and mouse controls as cards, with the other keys in one line', () => {
     scene(
       { update, view },
       given(fighting),
@@ -49,50 +49,24 @@ describe('Pause screen controls', () => {
       expect(touchHelp).toBeAbsent(),
       expect(keyboardHelp).toExist(),
       inside(
-        role('table', { name: 'Move and fight' }),
-        expect(row('WASD', 'Move')).toExist(),
-        expect(row('Mouse', 'Aim')).toExist(),
-        expect(row('Click', 'Fire')).toExist(),
-        expect(row('R', 'Reload')).toExist(),
-        expect(row('Q', 'Swap guns')).toExist(),
-        expectAll(all.role('row')).toHaveCount(5),
+        role('list', { name: 'Controls' }),
+        expect(card('Move', 'WASD')).toExist(),
+        expect(card('Aim', 'Mouse')).toExist(),
+        expect(card('Shoot', 'Hold click')).toExist(),
+        expect(card('Reload', 'R')).toExist(),
+        expect(card('Swap guns', 'Q')).toExist(),
+        expect(card('Shop', 'Walk into the stall')).toExist(),
+        expect(card('Planks', 'T')).toExist(),
+        expect(card('Pause', 'Esc')).toExist(),
+        expectAll(all.role('listitem')).toHaveCount(8),
       ),
       inside(
-        role('table', { name: 'Traps and stuff' }),
-        expect(row('T', 'Place a trap')).toExist(),
-        expect(row('G', 'Next trap')).toExist(),
-        expect(row('Enter', 'Start the wave')).toExist(),
-        expect(row('Esc', 'Pause or resume')).toExist(),
-        expect(row('H', 'Back to the menu')).toExist(),
-        expect(row('M', 'Mute')).toExist(),
-        expect(row('N', 'Music on or off')).toExist(),
-        expect(role('rowheader', { name: 'T' })).toExist(),
-        expectAll(all.role('row')).toHaveCount(7),
-      ),
-      expectAll(all.selector('.pause-help-inputs')).toHaveCount(12),
-      expectAll(all.selector('.pause-help-inputs kbd')).toHaveCount(12),
-      inside(
-        role('list', { name: 'Tips' }),
-        expect(
-          role('listitem', {
-            name: 'Plank Pile: Two at most, in doorways between waves. Slow zombies stop to chew.',
-          }),
-        ).toExist(),
-        expect(
-          role('listitem', {
-            name: 'Grumpy Gnome: Plonk it in front of you. It shoots anything close.',
-          }),
-        ).toExist(),
-        expect(
-          role('listitem', {
-            name: 'Shop: Open between waves. Walk into the stall.',
-          }),
-        ).toExist(),
-        expect(
-          role('listitem', {
-            name: 'Goodies: Zombies drop them. Walk over one to grab it.',
-          }),
-        ).toExist(),
+        role('list', { name: 'More keys' }),
+        expect(role('listitem', { name: 'G next trap' })).toExist(),
+        expect(role('listitem', { name: 'Enter start the wave' })).toExist(),
+        expect(role('listitem', { name: 'H menu' })).toExist(),
+        expect(role('listitem', { name: 'M sound' })).toExist(),
+        expect(role('listitem', { name: 'N music' })).toExist(),
       ),
       Subscription.emit(Message.PressedKey({ code: 'Escape' })),
       expect(role('status')).toHaveText(FIGHTING_STATUS),
@@ -100,7 +74,7 @@ describe('Pause screen controls', () => {
     )
   })
 
-  test('lists the touch controls, the trap buttons included, and no keys', () => {
+  test('shows the touch controls as cards, with no keys', () => {
     scene(
       { update, view },
       given(pausedOn('Touch')),
@@ -108,19 +82,16 @@ describe('Pause screen controls', () => {
       expect(keyboardHelp).toBeAbsent(),
       expect(touchHelp).toExist(),
       expect(selector('kbd')).toBeAbsent(),
+      expect(role('list', { name: 'More keys' })).toBeAbsent(),
       inside(
-        role('table', { name: 'Move and fight' }),
-        expect(row('Left thumb', 'Move')).toExist(),
-        expect(row('Right thumb', 'Aim and fire')).toExist(),
-        expect(row('Tap your gun', 'Reload')).toExist(),
-        expect(row('Tap the other gun', 'Swap guns')).toExist(),
-      ),
-      inside(
-        role('table', { name: 'Traps and stuff' }),
-        expect(row('Trap button', 'Place a trap')).toExist(),
-        expect(row('Next button', 'Next trap')).toExist(),
-        expect(row('START WAVE', 'Start the wave')).toExist(),
-        expect(row('Pause button', 'Pause')).toExist(),
+        role('list', { name: 'Controls' }),
+        expect(card('Move', 'Left thumb')).toExist(),
+        expect(card('Aim', 'Right thumb')).toExist(),
+        expect(card('Shoot', 'Hold right thumb')).toExist(),
+        expect(card('Reload', 'Tap your gun')).toExist(),
+        expect(card('Swap guns', 'Tap the other gun')).toExist(),
+        expect(card('Planks', 'Trap button')).toExist(),
+        expect(card('Pause', 'Pause button')).toExist(),
       ),
     )
   })

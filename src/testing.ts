@@ -94,6 +94,27 @@ export const showDialogInScene = () => [
   ),
 ]
 
+export const manorButton = Scene.role('button', { name: /^Manor:/ })
+
+// NOTE: deals the MANOR hand on the home menu.
+export const openHandInScene = () => [
+  Scene.click(manorButton),
+  ...showDialogInScene(),
+]
+
+// NOTE: a card puts the hand away, then opens its own dialog.
+export const pickCardInScene = (name: string | RegExp) => [
+  Scene.click(Scene.role('button', { name })),
+  Scene.Command.resolve(
+    Dialog.CloseDialog,
+    Dialog.Message.CompletedCloseDialog(),
+  ),
+  Scene.Command.resolve(
+    Dialog.ShowDialog,
+    Dialog.Message.SucceededShowDialog(),
+  ),
+]
+
 export const fighting: Model = modifyFields(initialModel, {
   phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),
 })

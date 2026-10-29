@@ -162,38 +162,56 @@ describe('the first-time difficulty card', () => {
   })
 })
 
-const settingsOpen = (base: Model): Model =>
-  modifyFields(base, { panel: () => 'Settings' })
+const pickerOpen = (base: Model): Model =>
+  modifyFields(base, {
+    panel: () => 'Difficulty',
+    panelDialog: dialog => ({ ...dialog, isOpen: true }),
+  })
 
-describe('difficulty in SETTINGS', () => {
-  test('SETTINGS on the home menu changes the difficulty, but not Nightmare while locked', () => {
+describe('difficulty by PLAY', () => {
+  test('the picker by PLAY changes the difficulty, but not Nightmare while locked', () => {
     story(
       update,
       given(veteran),
-      message(Message.ClickedSettingsButton()),
+      message(Message.ClickedDifficultyBadge()),
       showDialog(),
-      message(Message.ClickedDifficultySettingButton({ difficulty: 'Hard' })),
+      message(Message.ClickedDifficultyCardButton({ difficulty: 'Nightmare' })),
       model(current => {
-        expect(current.difficulty.chosen).toBe('Hard')
+        expect(current.difficulty.chosen).toBe('Normal')
+        expect(current.panelDialog.isOpen).toBe(true)
       }),
-      message(
-        Message.ClickedDifficultySettingButton({ difficulty: 'Nightmare' }),
-      ),
+      message(Message.ClickedDifficultyCardButton({ difficulty: 'Hard' })),
+      closeDialog(),
       model(current => {
         expect(current.difficulty.chosen).toBe('Hard')
+        expect(current.panelDialog.isOpen).toBe(false)
+        expect(Phase.guards.Ready(current.phase)).toBe(true)
       }),
     )
   })
 
-  test('a difficulty click outside SETTINGS on the home menu does nothing', () => {
+  test('X opens the picker on the home menu', () => {
+    story(
+      update,
+      given(veteran),
+      press('KeyX'),
+      showDialog(),
+      model(current => {
+        expect(current.panel).toBe('Difficulty')
+        expect(current.panelDialog.isOpen).toBe(true)
+      }),
+    )
+  })
+
+  test('a difficulty click outside the home menu does nothing', () => {
     story(
       update,
       given(
-        modifyFields(settingsOpen(veteran), {
+        modifyFields(pickerOpen(veteran), {
           phase: () => Phase.Wave({ wave: 3, elapsedMs: 0, spawns: [] }),
         }),
       ),
-      message(Message.ClickedDifficultySettingButton({ difficulty: 'Easy' })),
+      message(Message.ClickedDifficultyCardButton({ difficulty: 'Easy' })),
       model(current => {
         expect(current.difficulty.chosen).toBe('Normal')
       }),
@@ -207,7 +225,7 @@ const winning = (base: Model): Model =>
   })
 
 describe('unlocking Nightmare', () => {
-  test('a Hard campaign win unlocks it, the next run settles it, and SETTINGS can pick it', () => {
+  test('a Hard campaign win unlocks it, the next run settles it, and the picker can pick it', () => {
     story(
       update,
       given(winning(withDifficulty(veteran, 'Hard'))),
@@ -234,10 +252,9 @@ describe('unlocking Nightmare', () => {
 
     story(
       update,
-      given(settingsOpen(withDifficulty(veteran, 'Hard', 'Unlocked'))),
-      message(
-        Message.ClickedDifficultySettingButton({ difficulty: 'Nightmare' }),
-      ),
+      given(pickerOpen(withDifficulty(veteran, 'Hard', 'Unlocked'))),
+      message(Message.ClickedDifficultyCardButton({ difficulty: 'Nightmare' })),
+      closeDialog(),
       model(current => {
         expect(current.difficulty.chosen).toBe('Nightmare')
       }),

@@ -10,6 +10,7 @@ import {
   scene,
   selector,
   text,
+  within,
 } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
@@ -18,7 +19,13 @@ import { NEWS_DAYS } from './changelog'
 import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { type Model, Phase, type ZombieKind, initialModel } from './model'
-import { measureSurface, showDialogInScene } from './testing'
+import {
+  manorButton,
+  measureSurface,
+  openHandInScene,
+  pickCardInScene,
+  showDialogInScene,
+} from './testing'
 import { asVeteran } from './veteran'
 import { view } from './view'
 
@@ -39,9 +46,6 @@ const withKills = (
 
 const newestDay = Option.getOrThrow(Array.head(NEWS_DAYS))
 
-const whatsNewButton = role('button', {
-  name: "What's new: the latest changes",
-})
 const whatsNewWithDot = role('button', {
   name: "What's new: the latest changes. Something new",
 })
@@ -51,19 +55,31 @@ const munchopediaButton = role('button', {
 const munchopediaWithDot = role('button', {
   name: 'Munchopedia: every zombie you have splatted. Something new',
 })
+const WHATS_NEW_NEWS = "What's new: the latest changes. Something new"
+const MUNCHOPEDIA = 'Munchopedia: every zombie you have splatted'
+const MUNCHOPEDIA_NEWS = `${MUNCHOPEDIA}. Something new`
+const newsPip = selector(".manor-pip[data-card='WhatsNew']")
+const munchopediaPip = selector(".manor-pip[data-card='Munchopedia']")
 const whatsNewDialog = role('dialog', { name: "What's new" })
 const munchopediaDialog = role('dialog', { name: 'Munchopedia' })
 
 describe("What's New", () => {
-  test('the rail icon has a dot until the newest day is seen, and the panel shows that day', () => {
+  test("the closed MANOR button shows a What's New pip and its card a NEW tag until the newest day is seen, and the panel shows that day", () => {
     scene(
       { update, view },
       given(home),
       measureSurface,
+      expect(newsPip).toExist(),
+      expect(manorButton).toHaveAttr(
+        'aria-label',
+        "Manor: character, Munchopedia, what is new, and more. Something new in What's new",
+      ),
+      ...openHandInScene(),
       expect(whatsNewWithDot).toExist(),
-      expect(selector('.home-rail-dot')).toExist(),
-      click(whatsNewWithDot),
-      ...showDialogInScene(),
+      expect(within(whatsNewWithDot, selector('.hand-card-new'))).toHaveText(
+        'NEW',
+      ),
+      ...pickCardInScene(WHATS_NEW_NEWS),
       inside(
         whatsNewDialog,
         expect(text(`${newestDay.date}: ${newestDay.title}`)).toExist(),
@@ -73,8 +89,8 @@ describe("What's New", () => {
         expect(role('button', { name: 'Older news' })).toExist(),
         expect(role('button', { name: 'Newer news' })).toBeAbsent(),
       ),
-      expect(whatsNewButton).toExist(),
-      expect(whatsNewWithDot).toBeAbsent(),
+      expect(newsPip).toBeAbsent(),
+      expect(munchopediaPip).toBeAbsent(),
     )
   })
 
@@ -84,8 +100,8 @@ describe("What's New", () => {
       { update, view },
       given(home),
       measureSurface,
-      click(whatsNewWithDot),
-      ...showDialogInScene(),
+      ...openHandInScene(),
+      ...pickCardInScene(WHATS_NEW_NEWS),
       click(role('button', { name: 'Older news' })),
       inside(
         whatsNewDialog,
@@ -106,9 +122,9 @@ describe('the Munchopedia', () => {
       { update, view },
       given(home),
       measureSurface,
+      ...openHandInScene(),
       expect(munchopediaButton).toExist(),
-      click(munchopediaButton),
-      ...showDialogInScene(),
+      ...pickCardInScene(MUNCHOPEDIA),
       inside(
         munchopediaDialog,
         expect(text('0 of 7 discovered, 0 zombies splatted')).toExist(),
@@ -130,14 +146,15 @@ describe('the Munchopedia', () => {
     )
   })
 
-  test('a found zombie shows its name, bio, tips, kills, and badges, and the dot goes once it is opened', () => {
+  test('a found zombie shows its name, bio, tips, kills, and badges, and the Munchopedia pip stays until every new entry is opened', () => {
     scene(
       { update, view },
       given(withKills(home, { Shambler: 1203, Runner: 7 })),
       measureSurface,
+      expect(munchopediaPip).toExist(),
+      ...openHandInScene(),
       expect(munchopediaWithDot).toExist(),
-      click(munchopediaWithDot),
-      ...showDialogInScene(),
+      ...pickCardInScene(MUNCHOPEDIA_NEWS),
       inside(
         munchopediaDialog,
         expect(text('2 of 7 discovered, 1,210 zombies splatted')).toExist(),
@@ -159,7 +176,7 @@ describe('the Munchopedia', () => {
         ).toExist(),
         expect(role('button', { name: 'Groaner, 1,203 splatted' })).toExist(),
       ),
-      expect(munchopediaWithDot).toExist(),
+      expect(munchopediaPip).toExist(),
     )
   })
 
@@ -168,8 +185,8 @@ describe('the Munchopedia', () => {
       { update, view },
       given(withKills(home, { Tank: 12 })),
       measureSurface,
-      click(munchopediaWithDot),
-      ...showDialogInScene(),
+      ...openHandInScene(),
+      ...pickCardInScene(MUNCHOPEDIA_NEWS),
       click(role('button', { name: 'Big Lug, 12 splatted, new entry' })),
       inside(
         role('list', { name: 'Badges' }),
@@ -191,8 +208,8 @@ describe('the Munchopedia', () => {
       { update, view },
       given(withKills(home, { Boss: 2 })),
       measureSurface,
-      click(munchopediaWithDot),
-      ...showDialogInScene(),
+      ...openHandInScene(),
+      ...pickCardInScene(MUNCHOPEDIA_NEWS),
       click(role('button', { name: 'Uncle Chunk, Beaten 2 times, new entry' })),
       expect(role('heading', { name: 'Uncle Chunk' })).toExist(),
       expect(text('Beaten 2 times')).toExist(),
@@ -216,7 +233,7 @@ describe('the Munchopedia', () => {
         munchopediaDialog,
         expect(role('heading', { name: 'Hotfoot' })).toExist(),
       ),
-      expect(munchopediaButton).toExist(),
+      expect(munchopediaPip).toBeAbsent(),
     )
   })
 

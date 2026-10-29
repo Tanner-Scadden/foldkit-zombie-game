@@ -30,6 +30,11 @@ export type CursorSetting = typeof CursorSetting.Type
 export const ShareStatsSetting = Schema.Literals(['On', 'Off'])
 export type ShareStatsSetting = typeof ShareStatsSetting.Type
 
+// NOTE: how an installed phone app turns. Landscape locks it sideways, the
+// default for everyone; Auto lets it follow the phone into portrait.
+export const RotationSetting = Schema.Literals(['Landscape', 'Auto'])
+export type RotationSetting = typeof RotationSetting.Type
+
 export const Difficulty = Schema.Literals([
   'Easy',
   'Normal',
@@ -88,7 +93,7 @@ export type Appearance = typeof Appearance.Type
 
 // SAVED
 
-export const SAVE_VERSION = 7
+export const SAVE_VERSION = 8
 
 export const SavedLesson = Schema.Literals(['Pending', 'Learned'])
 export type SavedLesson = typeof SavedLesson.Type
@@ -181,6 +186,8 @@ export type SavedHome = typeof SavedHome.Type
 export const SavedPowerUps = Schema.Array(Schema.String)
 export type SavedPowerUps = typeof SavedPowerUps.Type
 
+// NOTE: version 8 added the rotation, kept apart from the other settings so
+// it syncs as its own last-write-wins change.
 export const PlayerSave = Schema.Struct({
   version: Schema.Literal(SAVE_VERSION),
   onboarding: SavedOnboarding,
@@ -191,5 +198,6 @@ export const PlayerSave = Schema.Struct({
   bests: SavedBests,
   home: SavedHome,
   seenPowerUps: SavedPowerUps,
+  rotation: RotationSetting,
 })
 export type PlayerSave = typeof PlayerSave.Type

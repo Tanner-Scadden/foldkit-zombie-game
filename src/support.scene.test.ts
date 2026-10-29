@@ -6,14 +6,14 @@ import { describe, test } from 'vitest'
 import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { type Model, Phase, initialModel } from './model'
-import { fighting, measureSurface } from './testing'
+import { fighting, measureSurface, openHandInScene } from './testing'
 import { asVeteran } from './veteran'
 import { view } from './view'
 import { pause } from './waves'
 
 const TEST_LINK = 'https://buy.stripe.com/test_coffee'
 
-const coffeeLink = role('link', { name: /Buy the shopkeeper a coffee/ })
+const coffeeLink = role('link', { name: /buy the shopkeeper a coffee/i })
 
 const withLink = (model: Model): Model =>
   modifyFields(model, { maybeSupportUrl: () => Option.some(TEST_LINK) })
@@ -28,10 +28,7 @@ const onPhase = (phase: Phase, screenMs: number): Model =>
 
 const victory = onPhase(Phase.Victory(), RESTART_GRACE_MS)
 
-const SHOWN_ON: ReadonlyArray<readonly [string, Model]> = [
-  ['the home menu', home],
-  ['Victory', victory],
-]
+const SHOWN_ON: ReadonlyArray<readonly [string, Model]> = [['Victory', victory]]
 
 const NEVER_ON: ReadonlyArray<readonly [string, Model]> = [
   ['a wave', withLink(fighting)],
@@ -62,6 +59,26 @@ describe('the coffee button', () => {
       given(withLink(model)),
       measureSurface,
       expect(coffeeLink).toExist(),
+      expect(coffeeLink).toHaveAttr('href', TEST_LINK),
+      expect(coffeeLink).toHaveAttr('target', '_blank'),
+      expect(coffeeLink).toHaveAttr('rel', 'noopener noreferrer'),
+    )
+  })
+
+  test('is the TIP JAR card in the home menu hand, and only with the link', () => {
+    scene(
+      { update, view },
+      given(withoutLink(home)),
+      measureSurface,
+      ...openHandInScene(),
+      expect(coffeeLink).toBeAbsent(),
+    )
+    scene(
+      { update, view },
+      given(withLink(home)),
+      measureSurface,
+      expect(coffeeLink).toBeAbsent(),
+      ...openHandInScene(),
       expect(coffeeLink).toHaveAttr('href', TEST_LINK),
       expect(coffeeLink).toHaveAttr('target', '_blank'),
       expect(coffeeLink).toHaveAttr('rel', 'noopener noreferrer'),

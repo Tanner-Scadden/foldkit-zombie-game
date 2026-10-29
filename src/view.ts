@@ -6,7 +6,12 @@ import * as CharacterView from './characterView'
 import { GAME_TITLE } from './constants'
 import { DIFFICULTIES, bestsFor } from './difficulty'
 import { feedbackSentence } from './home'
-import { homeMenuView, menuPanelView, newEntryNoticeView } from './homeView'
+import {
+  homeMenuView,
+  manorHandView,
+  menuPanelView,
+  newEntryNoticeView,
+} from './homeView'
 import { gameStageView } from './layers'
 import {
   cornerButtonsView,
@@ -115,7 +120,7 @@ const PLAY_AGAIN =
   'Press Enter or choose Campaign for 8 waves, or press E or choose Endless to fight until you fall.'
 
 const HOME_MENU =
-  'Main menu. Press Enter or choose Play for the 8 wave campaign, or press E or choose Endless to fight until you fall. Press C or choose Character to change how you look. How to play and Settings are there too. Arrow keys move between the buttons.'
+  'Main menu. Press Enter or choose Play to start. Press E to switch between the campaign and endless, and X to pick the difficulty. Press V or choose Manor for your character, the Munchopedia, what is new, and how to play. Press O or choose the gear for settings. Arrow keys move between the buttons.'
 
 const BACK_HOME = 'Press H or choose Menu to go back to the main menu.'
 
@@ -304,6 +309,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
         updateChipView(model, h),
         homeScreenStepsView(model, h),
         shopDialogView(model, h),
+        manorHandView(model, h),
         menuPanelView(model, h),
         h.submodel({
           slotId: 'character-picker',

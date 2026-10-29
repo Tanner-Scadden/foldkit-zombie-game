@@ -100,6 +100,7 @@ const learnedSave: PlayerSave = {
     openedEntries: ['Shambler', 'Runner'],
   },
   seenPowerUps: ['RapidFire', 'Burp'],
+  rotation: 'Landscape',
 }
 
 // NOTE: a save from before the cursor setting comes back with the bold
@@ -481,15 +482,20 @@ describe('writing the save', () => {
     )
   })
 
-  test('choosing a difficulty in SETTINGS writes the new save', () => {
+  test('choosing a difficulty by PLAY writes the new save', () => {
     const settings = modifyFields(read, {
-      panel: () => 'Settings',
+      panel: () => 'Difficulty',
+      panelDialog: dialog => ({ ...dialog, isOpen: true }),
       difficultyCard: () => DifficultyCard.Seen(),
     })
     story(
       update,
       given(settings),
-      message(Message.ClickedDifficultySettingButton({ difficulty: 'Easy' })),
+      message(Message.ClickedDifficultyCardButton({ difficulty: 'Easy' })),
+      Command.resolve(
+        Dialog.CloseDialog,
+        Dialog.Message.CompletedCloseDialog(),
+      ),
       Command.expectExact(
         WriteSave({
           save: saveOf(

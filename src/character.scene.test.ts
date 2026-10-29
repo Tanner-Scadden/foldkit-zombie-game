@@ -20,11 +20,14 @@ import { Dialog, RadioGroup } from '@foldkit/ui'
 import { update } from './main'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
-import { measureSurface } from './testing'
+import { measureSurface, openHandInScene, pickCardInScene } from './testing'
 import { asVeteran } from './veteran'
 import { view } from './view'
 
 const characterButton = role('button', {
+  name: 'Your character: change how you look',
+})
+const characterCard = role('button', {
   name: 'Character: change how you look',
 })
 const pickerDialog = role('dialog', { name: 'Character' })
@@ -67,14 +70,20 @@ const pick = (groupName: string, name: string) => [
 const onTitle: Model = asVeteran(initialModel)
 
 describe('Character picker', () => {
-  test('the title offers a Character button with the C key badge', () => {
+  test('the MANOR hand deals a Character card with the C key badge, and the player on stage opens it too', () => {
     scene(
       { update, view },
       given(onTitle),
       measureSurface,
-      expect(characterButton).toHaveAttr('aria-keyshortcuts', 'C'),
-      expect(within(characterButton, selector('.home-key'))).toHaveText('C'),
+      expect(characterButton).toExist(),
+      ...openHandInScene(),
+      expect(characterCard).toHaveAttr('aria-keyshortcuts', 'C'),
+      expect(within(characterCard, selector('.home-key'))).toHaveText('C'),
       expect(pickerDialog).toBeAbsent(),
+      ...pickCardInScene('Character: change how you look'),
+      expect(pickerDialog).toExist(),
+      click(doneButton),
+      ...closePicker(),
     )
   })
 

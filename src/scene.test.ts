@@ -50,7 +50,7 @@ const KEEP_GOING =
 const BACK_HOME = 'Press H or choose Menu to go back to the main menu.'
 
 const FEEDBACK = 'Tell whoever sent you this what you think!'
-const READY_STATUS = `${GAME_TITLE}, an early alpha. Main menu. Press Enter or choose Play for the 8 wave campaign, or press E or choose Endless to fight until you fall. Press C or choose Character to change how you look. How to play and Settings are there too. Arrow keys move between the buttons.`
+const READY_STATUS = `${GAME_TITLE}, an early alpha. Main menu. Press Enter or choose Play to start. Press E to switch between the campaign and endless, and X to pick the difficulty. Press V or choose Manor for your character, the Munchopedia, what is new, and how to play. Press O or choose the gear for settings. Arrow keys move between the buttons.`
 
 const PAUSED_STATUS =
   'Paused during wave 3 of 8. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.'

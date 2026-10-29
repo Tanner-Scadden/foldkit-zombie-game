@@ -4,13 +4,12 @@ Things the game is blocked on until the owner does or decides them. Agents add a
 
 ## To do
 
-- [ ] **Stop repeating words the player has seen?** Two screens still say the same thing every time: the pause screen's four tips (shop, Plank Pile, Gnome, goodies) under the controls, and the portrait home menu's TURN YOUR PHONE SIDEWAYS TO SEE THE WHOLE ROOM pill. Recommended: drop the pause tips (the controls table stays), and keep the tipping phone picture but drop its words. The end screens' feedback line now shows only on a player's first three runs. The shop's long row text and the power-up callouts are being reworked by other agents already.
-- [ ] **Let the installed Android app play in portrait?** Portrait play is decided, but `public/manifest.webmanifest` still locks the installed Android app to landscape, and the full screen request asks for landscape. Recommended: yes. Set the manifest orientation to `any` and drop the landscape lock, after a check on one Android phone.
+- [ ] **Check the rotation setting on a real Android phone (installed app).** The app now starts in landscape, and Settings' ROTATE tile (LOCKED or AUTO) lets it turn. Install it, flip ROTATE, turn the phone, and say if it follows.
 - [ ] **Set up the Stripe tip link.** The "Buy the shopkeeper a coffee" button is built and hidden until the link exists.
   1. Sign up at stripe.com as an individual (sole proprietor). No LLC needed. Use https://munch-manor.tanner-scadden.workers.dev as the website.
   2. Payment Links, then New. Product: "Buy the shopkeeper a coffee". Turn on "Customers choose what to pay", suggested amount $3.
   3. Optional: after payment, redirect to https://munch-manor.tanner-scadden.workers.dev.
-  4. Send the `https://buy.stripe.com/...` link to an agent. It goes in `SUPPORT_URL` and the button appears on the home menu and the Victory screen.
+  4. Send the `https://buy.stripe.com/...` link to an agent. It goes in `SUPPORT_URL`, and the TIP JAR card appears in the home menu's MANOR hand and a coffee pill on the Victory screen.
   5. Call it support or a coffee, never a donation.
 - [ ] **Name the mystery box.** Ideas so far: the Lunchbox (Uncle Chunk's rattling lunchbox), the Mystery Meat Crate (moves rooms on a dumbwaiter), the Haunted Hamper (sometimes bites back).
 

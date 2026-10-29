@@ -804,6 +804,10 @@ const scenarioModel = (): Model => {
     model = modifyFields(model, {
       maybeNewerBuild: () => Option.some(newer || 'next'),
     })
+  if (config.support)
+    model = modifyFields(model, {
+      maybeSupportUrl: () => Option.some('https://buy.stripe.com/test_harness'),
+    })
   if (config.bests)
     model = modifyFields(
       withBests(model, () => ({
@@ -1044,6 +1048,10 @@ const harnessUpdate = (model: Model, incoming: Message) => {
       model: modifyFields(model, {
         screenFit: () => (config.fit === 'home' ? 'HomeScreen' : 'Fullscreen'),
       }),
+    }
+  if (config.rotate && incoming._tag === 'CompletedDetectOrientationLock')
+    return {
+      model: modifyFields(model, { orientationLock: () => 'Supported' }),
     }
   const message =
     incoming._tag === 'TickedFrame' && isFreezing

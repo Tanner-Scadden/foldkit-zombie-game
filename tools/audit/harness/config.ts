@@ -229,6 +229,8 @@ export const HarnessConfig = Schema.Struct({
   newsseen: Flag,
   newer: Schema.optionalKey(Schema.String),
   fit: Choice(['home', 'full']),
+  support: Flag,
+  rotate: Flag,
   // Measuring
   freeze: MaybeNum,
   seed: MaybeNum,

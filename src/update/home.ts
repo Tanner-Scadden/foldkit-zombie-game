@@ -1,11 +1,11 @@
-import { Option } from 'effect'
+import { Array, Option } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import { Dialog } from '@foldkit/ui'
 
 import { NEWS_DAYS } from '../changelog'
-import { FocusEndMenuButton, FocusHomeButton } from '../commands'
+import { FocusEndMenuButton, FocusHandCard, FocusHomeButton } from '../commands'
 import { dialogFolds } from '../dialogs'
 import {
   chooseDifficulty,
@@ -15,11 +15,15 @@ import {
   unlockNightmare,
 } from '../difficulty'
 import {
-  type RailButton,
+  type KeyedHandCard,
+  dealtCards,
   endOffer,
+  isDifficultyKey,
+  isManorKey,
   isModeKey,
   isOnHome,
-  maybeRailButtonOfKey,
+  isSettingsKey,
+  maybeHandCardOfKey,
   returnHome,
   runModeOf,
   seeNews,
@@ -33,6 +37,7 @@ import { Message } from '../message'
 import {
   type Difficulty,
   DifficultyCard,
+  type HandCard,
   type MenuPanel,
   type Model,
   MunchopediaPage,
@@ -75,7 +80,11 @@ const panelDialog = dialogFolds({
 export const foldPanelDialog = panelDialog.fold
 
 const isPanelAllowed = (model: Model, panel: MenuPanel): boolean => {
-  if (model.panelDialog.isOpen || model.character.dialog.isOpen) {
+  if (
+    model.panelDialog.isOpen ||
+    model.character.dialog.isOpen ||
+    model.handDialog.isOpen
+  ) {
     return false
   } else if (panel === 'LeaveRun') {
     return isPaused(model.phase)
@@ -136,7 +145,41 @@ export const menuFromKey: (code: string) => UpdateStep = code => stepModel =>
 export const canMoveHomeFocus = (model: Model): boolean =>
   isOnHome(model.phase) &&
   !model.panelDialog.isOpen &&
-  !model.character.dialog.isOpen
+  !model.character.dialog.isOpen &&
+  !model.handDialog.isOpen
+
+// THE MANOR HAND
+
+const handDialog = dialogFolds({
+  read: (model: Model) => model.handDialog,
+  write: (model, nextHandDialog) =>
+    modifyFields(model, { handDialog: () => nextHandDialog }),
+  toParentMessage: message => Message.GotHandDialogMessage({ message }),
+})
+
+export const foldHandDialog = handDialog.fold
+
+export const openHand: UpdateStep = stepModel =>
+  canMoveHomeFocus(stepModel)
+    ? handDialog.open(withInput(stepModel, releaseAll))
+    : { model: stepModel }
+
+const closeHand: UpdateStep = stepModel =>
+  stepModel.handDialog.isOpen
+    ? handDialog.close(stepModel)
+    : { model: stepModel }
+
+// NOTE: a card puts the hand away, then opens its panel, so the panel's
+// Done or Esc lands back on the menu, not in the hand.
+export const fromHand =
+  (step: UpdateStep): UpdateStep =>
+  stepModel =>
+    Update.combine(stepModel, [closeHand, step])
+
+export const stepHandFocus = (model: Model, card: HandCard): UpdateReturn =>
+  model.handDialog.isOpen && Array.contains(dealtCards(model), card)
+    ? { model, commands: [FocusHandCard({ card })] }
+    : { model }
 
 export const homeFocusFromKey: (code: string) => UpdateStep =
   code => stepModel =>
@@ -192,28 +235,34 @@ export const turnNews = (model: Model, step: number): UpdateReturn => ({
     : model,
 })
 
-const RAIL_OPENERS: Readonly<Record<RailButton, UpdateStep>> = {
+const CARD_OPENERS: Readonly<Record<KeyedHandCard, UpdateStep>> = {
   WhatsNew: openWhatsNew,
   Munchopedia: openMunchopedia(MunchopediaPage.List()),
   Character: openCharacterPicker,
   HowToPlay: openPanel('HowToPlay'),
-  Settings: openPanel('Settings'),
 }
 
 // NOTE: C opens the character picker on every screen that offers it, so it
-// stays with characterFromKey and is left out here.
+// stays with characterFromKey and is left out here. The card keys work from
+// the menu without opening the hand first.
 export const homeFromKey: (code: string) => UpdateStep = code => stepModel => {
   if (!canMoveHomeFocus(stepModel)) {
     return { model: stepModel }
   } else if (isModeKey(code)) {
     return { model: switchMode(stepModel) }
+  } else if (isDifficultyKey(code)) {
+    return openPanel('Difficulty')(stepModel)
+  } else if (isManorKey(code)) {
+    return openHand(stepModel)
+  } else if (isSettingsKey(code)) {
+    return openPanel('Settings')(stepModel)
   } else {
-    return Option.match(maybeRailButtonOfKey(code), {
+    return Option.match(maybeHandCardOfKey(code), {
       onNone: () => ({ model: stepModel }),
-      onSome: button =>
-        button === 'Character'
+      onSome: card =>
+        card === 'Character'
           ? { model: stepModel }
-          : RAIL_OPENERS[button](stepModel),
+          : CARD_OPENERS[card](stepModel),
     })
   }
 }
@@ -281,14 +330,6 @@ export const pickFromCard =
               ],
             ),
     })
-
-export const pickFromSettings = (
-  model: Model,
-  difficulty: Difficulty,
-): Model =>
-  isOnHome(model.phase) && model.panel === 'Settings'
-    ? chooseDifficulty(model, difficulty)
-    : model
 
 export const settleNightmareFrom =
   (before: Model): UpdateStep =>

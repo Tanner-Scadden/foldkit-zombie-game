@@ -1,5 +1,5 @@
 // Taps every visible button on the home menu (with the full screen icon, the
-// update chip, and a NEW ENTRY pop too), What's New, the Munchopedia list and
+// update chip, and a NEW ENTRY pop too), the MANOR hand, What's New, the Munchopedia list and
 // an entry, the difficulty picker, its other panels, the pause screen,
 // the character picker, the leave question, the gun cluster in a wave and a
 // break, the shop (its cards, tabs, and the close X), Game Over, and Victory on
@@ -58,10 +58,11 @@ const VIEWPORTS = pickViewports(
 type Scene = Readonly<{
   name: string
   query: string
-  openWith?: string
-  thenOpen?: string
+  open?: ReadonlyArray<string>
   opensDialog?: boolean
 }>
+
+const MANOR = '#home-manor'
 
 const SCENES: ReadonlyArray<Scene> = [
   { name: 'home', query: '' },
@@ -70,33 +71,32 @@ const SCENES: ReadonlyArray<Scene> = [
     query: 'fit=full&kills=Runner:3&newentries=Runner',
   },
   { name: 'home-iphone', query: 'fit=home' },
-  { name: 'whats-new', query: '', openWith: '#home-whats-new' },
+  { name: 'hand', query: 'support', open: [MANOR] },
+  { name: 'whats-new', query: '', open: [MANOR, '#hand-card-whatsnew'] },
   {
     name: 'whats-new-older',
     query: '',
-    openWith: '#home-whats-new',
-    thenOpen: '.news-page',
+    open: [MANOR, '#hand-card-whatsnew', '.news-page'],
   },
   {
     name: 'munchopedia',
     query: 'kills=Shambler:40,Runner:3',
-    openWith: '#home-munchopedia',
+    open: [MANOR, '#hand-card-munchopedia'],
   },
   {
     name: 'munchopedia-entry',
     query: 'kills=Shambler:40,Runner:3',
-    openWith: '#home-munchopedia',
-    thenOpen: '.munch-tile',
+    open: [MANOR, '#hand-card-munchopedia', '.munch-tile'],
   },
-  { name: 'difficulty', query: '', openWith: '.home-difficulty' },
-  { name: 'how-to-play', query: '', openWith: '#home-how-to-play' },
-  { name: 'settings', query: 'fit=full', openWith: '#home-settings' },
-  { name: 'character', query: '', openWith: '#home-character' },
+  { name: 'difficulty', query: '', open: ['#home-difficulty'] },
+  { name: 'how-to-play', query: '', open: [MANOR, '#hand-card-howtoplay'] },
+  { name: 'settings', query: 'fit=full&rotate', open: ['#home-settings'] },
+  { name: 'character', query: '', open: [MANOR, '#hand-card-character'] },
   { name: 'paused', query: 'wave=3&seen=all&start=wave&phase=paused' },
   {
     name: 'leave',
     query: 'wave=3&seen=all&start=wave&phase=paused',
-    openWith: '.pause-menu-button',
+    open: ['.pause-menu-button'],
   },
   {
     name: 'wave-lowammo',
@@ -169,14 +169,10 @@ const waitForDialog = (page: Page) =>
 const openScene = async (page: Page, scene: Scene) => {
   await page.goto(harnessUrl(scene.query, 'device=touch', 'nodev'))
   await wait(SETTLE_MS)
-  if (scene.openWith !== undefined) {
-    await tapToOpen(page, scene, scene.openWith)
+  for (const selector of scene.open ?? []) {
+    await tapToOpen(page, scene, selector)
     await waitForDialog(page)
     await wait(500)
-  }
-  if (scene.thenOpen !== undefined) {
-    await tapToOpen(page, scene, scene.thenOpen)
-    await wait(400)
   }
   await settleAnimations(page)
 }
@@ -325,7 +321,7 @@ const checkScene = async (
 ): Promise<ReadonlyArray<string>> => {
   const failures: Array<string> = []
   const page = await openFreshScene(viewport, scene)
-  const hasDialog = scene.openWith !== undefined || scene.opensDialog === true
+  const hasDialog = (scene.open ?? []).length > 0 || scene.opensDialog === true
   const indices = await visibleTargets(page)
   const where = `${viewport.name} ${scene.name}`
   if (indices.length === 0) {

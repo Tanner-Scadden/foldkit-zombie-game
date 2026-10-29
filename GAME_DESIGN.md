@@ -27,7 +27,7 @@ Everything else serves them. The art, names, and characters here are original. O
 - **Show, don't explain.** Decided with the owner on 2026-10-29. It is a fun game, so it should read at a glance and teach by doing. Prefer pictures, icons, motion, and sound to text. Keep every label and line short, cut explanations a player can learn by playing, and say a thing once: once the player has seen something (a power-up, a zombie, a control), stop repeating what it does. Older text-heavy screens are listed for the owner in `TANNER_TODO.md`.
 - **Making money.** Decided with the owner on 2026-10-29. The game stays free to play.
   - **Cosmetics and a supporter pack.** One-time purchases of looks, hats, gun skins, and a founder's hat. Nothing bought changes how the game plays. Bought on the web through Stripe Checkout confirmed by a Worker, and kept in the player's synced scope so it follows linked devices. Not built yet.
-  - **A tip jar.** A small "buy the shopkeeper a coffee" link. Built on 2026-10-29: a pill with a pixel mug under the difficulty badge on the home menu and in the top left corner of Victory, never in a run, on pause, or on Game Over. It opens a Stripe Payment Link in a new tab and stays hidden until `SUPPORT_URL` in `src/support.ts` holds that link.
+  - **A tip jar.** A small "buy the shopkeeper a coffee" link. Built on 2026-10-29: the TIP JAR card (a pixel mug) in the home menu's MANOR hand, and a pill in the top left corner of Victory, never in a run, on pause, or on Game Over. It opens a Stripe Payment Link in a new tab and stays hidden until `SUPPORT_URL` in `src/support.ts` holds that link.
   - **Never.** No ads of any kind, no pay-to-win, and no real-money loot boxes. The mystery box uses in-game money only.
 - **Online is Cloudflare only.** Hosting, analytics, and player sync run on Cloudflare Workers, D1, and Durable Objects, with our own sync engine. See `PLATFORM.md`.
 - **Co-op.** Decided with the owner on 2026-10-29: online co-op for up to 4 players, server-authoritative in a Durable Object. The rules (money, revives, READY, scaling) are in "Decided" in `MULTIPLAYER.md`. Not built yet.
@@ -311,7 +311,7 @@ Proposed, not decided. The rules are in `src/main.ts` and `src/update/home.ts`.
 
 - **Leaving the window pauses.** A hidden tab or a window blur during Preparation or a wave pauses, closes the shop, and lets go of every held input. Coming back waits for a click, a tap, or Esc.
 - **The resume press does only that.** It is never also a shot or a stick.
-- **The pause screen** shows the controls for the last device used as keycaps and icons, and four short tips (`src/pauseHelp.ts`), with the MENU pill to leave the run.
+- **The pause screen** shows the controls for the last device used as eight small cards (an icon, the action, and its key or thumb), and on a keyboard one line with the other keys (`src/pauseHelp.ts`, the same cards as the home menu's How to play), with the MENU pill to leave the run. The four tips are gone (owner, 2026-10-29: "Show, don't explain").
 - **One key press, one action.** Space or Enter on a focused HTML button belongs to the button. A clicked button hands focus back to the game.
 - **One key per action.** Decided on 2026-10-28 at the owner's request ("Only one key per action"). Keys are read by `event.code`.
 
@@ -331,7 +331,10 @@ Proposed, not decided. The rules are in `src/main.ts` and `src/update/home.ts`.
   | Switch mode (home), endless (end) | E             |
   | Keep going (Victory)              | K             |
   | Back to the menu                  | H             |
-  | The home rail                     | L, Z, C, I, O |
+  | Difficulty (home)                 | X             |
+  | The MANOR hand (home)             | V             |
+  | The hand's cards (home)           | C, Z, L, I    |
+  | Settings (home)                   | O             |
   | Move between menu buttons         | Arrows or Tab |
   | Close a panel or dialog           | Esc           |
 
@@ -366,14 +369,15 @@ Redrawn on 2026-10-29 after the owner said the first room felt disjointed. Waiti
 
 Built on 2026-10-29, owner-approved: "so phone players do not have to turn the phone". The owner's firm rule holds: no hints or arrows for zombies out of view. The rules are in `src/screen.ts` and `src/camera.ts`, checked with `tools/audit/shots34.ts` and `PORTRAIT=1 bun taps.ts`.
 
-- **When.** A touch device whose game surface is taller than wide. A keyboard and mouse keep landscape in any window. Turning the phone switches layout live, mid-wave too. The installed Android app still locks to landscape in its manifest (an open question for the owner in `TANNER_TODO.md`).
+- **When.** A touch device whose game surface is taller than wide. A keyboard and mouse keep landscape in any window. Turning the phone switches layout live, mid-wave too.
+- **Rotation.** Decided with the owner on 2026-10-29: the installed Android app starts in landscape but may turn. The manifest allows any orientation, and Settings has a ROTATE tile, LOCKED (the default for everyone, older saves included) or AUTO, shown only on a touch device whose browser has `screen.orientation.lock` (never on desktop or iOS). The `ApplyRotation` Command locks landscape or unlocks; a refusal (a plain tab, outside full screen) is ignored. It runs once the device is known to lock, once the save is read, when the setting changes, when full screen comes on, and when the page is shown again, since a browser can drop a lock. Saved in the PlayerSave (version 8) and synced, last write wins.
 - **The screen.** 180 screen pixels wide, so the HUD keeps the scale of a landscape phone, and 300 to 440 tall. From the top: a 44 pixel HUD band, the world window, and the thumb area.
 - **The zoom.** Changed on 2026-10-29 at the owner's request. The window shows the room's full height and zooms in, showing 120 to 180 pixels of its width, picked from the phone's shape so the thumb area is at least 76 pixels and the window under 63% of the screen. A 390x844 phone shows 135 by 180 of the room at 4/3. The world canvas is stretched with crisp pixels, so the zoom costs nothing per frame.
 - **The camera.** It follows the player and stops at the walls, and leans up to 28 room pixels toward the aim, eased, kept in the Model as `cameraLean` so it stays deterministic. The door rattles and groans carry the warning for zombies out of view.
 - **Thumb area.** Dressed as the manor's wainscot (`src/thumbArea.ts`), holding the gun slots, START WAVE, the trap counts, and the floating sticks.
 - **Banners and cards** are drawn as in landscape, centered on the world window. HTML that lines up with them reads `--frame-top`.
 - **The door preview.** A marker for a door out of the window is pinned to the window's edge with a small arrow, between waves only, as "No off-screen hints" allows. During a wave no marker or arrow shows.
-- **The home menu** keeps the same slots, rearranged. A pill with a tipping pixel phone suggests turning sideways to see the whole room, since portrait plays harder.
+- **The home menu** keeps the same slots, rearranged: the MANOR deck at the bottom left, beside it MODE and DIFFICULTY over a wide PLAY, and the hand deals its cards in two rows. A tipping pixel phone, no words (owner, 2026-10-29), suggests turning sideways, since portrait plays harder; a screen reader hears its line.
 - **Dialogs** fit a portrait phone without the page scrolling.
 - **Balance.** The bot with `VIEW=portrait` sees only the window. Nightly, 2026-10-29, 390x844: Normal default 11% against 16% in landscape, Easy 49% against 66.5% (most of the gap on wave 8). The nightly tracks the gap; nothing is retuned yet.
 
@@ -381,16 +385,18 @@ Built on 2026-10-29, owner-approved: "so phone players do not have to turn the p
 
 From owner feedback on 2026-10-28: a home base, a loading page, and taps that land. The views are `src/homeView.ts` and `src/menu.css`, the rules `src/home.ts`, checked with `tools/audit/shots33.ts`, `tools/audit/taps.ts`, and `tools/audit/splash.ts`.
 
-- **The fixed home layout.** Decided on 2026-10-29, owner-approved. The same slots on a phone and a computer, placed in arena pixels. A new feature goes into the left rail or the mode toggle, never a new slot, so PLAY never moves.
-  - **Top left, status.** The difficulty badge (opens the difficulty picker) and YOUR BESTS: best endless wave, fastest win, and zombies splatted.
-  - **Center stage.** The logo, the tagline, and the player in their look, walking on the spot while the parade shuffles past. Tapping the player opens CHARACTER. A NEW ENTRY pop appears when a run unlocked a Munchopedia entry.
-  - **Bottom right, play.** A big PLAY and a MODE toggle (CAMPAIGN or ENDLESS). Switching changes only the words, never PLAY's box.
-  - **Left rail.** Icon buttons: What's New, Munchopedia, Character, How to play, Settings. A red dot marks anything unseen.
-  - **Top right.** Full screen, the "New version ready" chip, or the iPhone Home Screen tip.
-  - **Keys.** One per button, used nowhere else: Enter PLAY, E mode, L What's New, Z Munchopedia, C Character, I How to play, O Settings.
+- **The home layout.** Decided on 2026-10-29, owner-approved, and reworked the same day from owner feedback ("Settings becomes a small gear", the pages as "a card like menu that pops out, kinda like an option wheel but gamified", and the difficulty "next to the play area"). The same slots on a phone and a computer, placed in arena pixels. A new feature is a new card in the MANOR hand, never a new slot, so PLAY never moves.
+  - **Top left, bests.** YOUR BESTS · the difficulty: best endless wave, fastest win, and zombies splatted.
+  - **Top right, the corner.** The gear (Settings) in the corner itself, full screen just inside it where the browser can do it, then the "New version ready" chip. The iPhone Home Screen tip hangs under the gear.
+  - **Center stage.** The logo, the tagline, and the player in their look. Tapping the player opens CHARACTER. A NEW ENTRY pop appears when a run unlocked a Munchopedia entry.
+  - **Bottom right, play.** A big PLAY, and beside it MODE (CAMPAIGN or ENDLESS) over DIFFICULTY, so a run is picked where it starts. Switching the mode changes only the words, never PLAY's box. DIFFICULTY opens the picker hanging from the cluster, with Nightmare padlocked until Hard is beaten.
+  - **Bottom left, the MANOR deck.** One chunky button that deals a hand of cards, fanned in with a quick deal: Character, Munchopedia, What's New, How to play, and the TIP JAR while a support link is set. A card is its picture and its name; the Munchopedia adds a found tally. The closed deck wears a pip per card with news (the card's icon and a red dot), and the card a NEW tag, so What's New and the Munchopedia stay visible. CLOSE sits where the deck was, Esc and a tap outside also put it away, and the arrow keys walk the cards. Why a hand and not a rail or an icon wheel: one obvious place for everything that is not PLAY, room for the cosmetic shop and the co-op lobby as more cards, and the dialog it is built on (`src/dialogs.ts`) gives focus, Esc, and the backdrop for free.
+  - **Keys.** One per action, used nowhere else: Enter PLAY, E mode, X difficulty, V the hand, O Settings, and the cards' own keys work without opening the hand: C Character, Z Munchopedia, L What's New, I How to play. The arrow keys walk PLAY, MODE, DIFFICULTY, MANOR, and the gear.
+  - **Menu styles.** One calm visual language in the `--menu-*` tokens at the top of `src/menu.css` (colors, radii, spacing, type sizes, icon sizes, the keycap), shared by every panel, the pause controls, and the shop.
 - **What's New.** The newest day of `CHANGELOG.md`, paged with OLDER and NEWER. `src/changelog.ts` decodes the file at build time; it is the only source.
 - **The Munchopedia.** A field guide to every zombie (`src/munchopedia.ts`, `src/guideView.ts`). Unfound kinds are silhouettes. An entry shows the zombie walking through its wear, a one-line bio, how it plays and how to beat it, the player's kills of it, and badges at 10, 100, and 1,000.
-- **SETTINGS.** Sound, music, screen shake, the big cursor (a bold yellow crosshair over the game in place of the thin system one, on by default since 2026-10-29), full screen, the difficulty, linking devices, sharing anonymous play stats, and RESET TUTORIAL behind a confirm.
+- **HOW TO PLAY.** Eight control cards for the last device used: move, aim, shoot, reload, swap, the shop, planks, and pause, each an icon, a word, and its key or thumb. On a keyboard, one line of the other keys and one of the menu keys.
+- **SETTINGS.** Behind the gear. A row of icon tiles (sound, music, screen shake, the big cursor on a mouse (a bold yellow crosshair over the game in place of the thin system one, on by default), full screen where it works, and ROTATE on a phone that can lock), then sharing anonymous play stats and the devices row with its link buttons, and a quiet RESET TUTORIAL behind a confirm. It fits 667x375 without scrolling. The difficulty moved to the PLAY cluster.
 - **MENU.** From pause (or H) it asks LEAVE THIS RUN? with STAY focused. Going home keeps the look, settings, lessons, and bests.
 - **It plays on a plane.** Decided 2026-10-29 from the owner ("I want to enjoy it on an airplane"): once visited, the game cold starts and plays single player with no network, saving on the device. See "How updates reach installed apps" in `PLATFORM.md`.
 - **Updates wait on the home menu.** From owner feedback on 2026-10-28: the "New version ready" chip shows only on the home menu, so a reload never costs a run. When a newer build waits, Game Over and Victory offer only MENU. See "How updates reach installed apps" in `PLATFORM.md`.
@@ -402,7 +408,7 @@ From owner feedback on 2026-10-28: a home base, a loading page, and taps that la
 
 From owner feedback on 2026-10-28 ("save if they've already done the tutorial"). The record is `PlayerSave` in `src/save.ts`, kept in SQLite on OPFS as the player sync scope, so linked devices share it. See "The on-device save" in `PLATFORM.md`.
 
-- **What is saved.** The lessons, the zombie cards seen, the Home Screen tip, sound, music, screen shake, the look, the difficulty and the Nightmare unlock, the bests and kills per kind, the What's New day seen, the Munchopedia entries opened, the play stats setting, the power-up kinds grabbed (merged across linked devices as a union), and the cursor setting (version 7).
+- **What is saved.** The lessons, the zombie cards seen, the Home Screen tip, sound, music, screen shake, the look, the difficulty and the Nightmare unlock, the bests and kills per kind, the What's New day seen, the Munchopedia entries opened, the play stats setting, the power-up kinds grabbed (merged across linked devices as a union), the cursor setting (version 7), and the rotation (version 8).
 - **What is not.** The run itself and full screen.
 - **Loading and writing.** The splash waits for the save, so no hint flashes. A missing, corrupt, or unreadable save reads as no save. It is written only when a saved field changes.
 - **Reset tutorial** clears the lessons, the cards, and the power-ups seen, and keeps everything else.
@@ -451,7 +457,7 @@ The bot dodges every tell and shoots him unless another zombie is within 60 px. 
 
 From a playtester on 2026-10-28: "She wants to be able to select a female/male for the character!" Built, not yet playtested.
 
-- **Where.** The rail's Character button, a tap on the player on the home menu, or C. A dialog with a walking preview, Randomize, and Done. Never during a run.
+- **Where.** The Character card in the home menu's MANOR hand, a tap on the player on the home menu, or C. A dialog with a walking preview, Randomize, and Done. Never during a run.
 - **The choices.** Body (Female, Male), Hair (Crop, Long, Ponytail, Curls), Hair color (Black, Brown, Ginger, Blonde, Pink), Skin (Fair, Light, Medium, Tan, Brown, Deep), Shirt (Blue, Red, Yellow, Teal, Pink, Purple). No green skin: the player must stand out from the zombies.
 - **Randomize** draws from the Model's seeded generator and never returns the current look.
 - **Sprites.** A look is composed from parts and a palette the first time it is drawn and cached.

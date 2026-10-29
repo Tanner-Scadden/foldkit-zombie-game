@@ -178,7 +178,23 @@ const PlayerSaveV6 = Schema.Struct({
 })
 type PlayerSaveV6 = typeof PlayerSaveV6.Type
 
+// NOTE: version 7 is the save before the rotation: the cursor setting.
+const PlayerSaveV7 = Schema.Struct({
+  version: Schema.Literal(7),
+  onboarding: SavedOnboarding,
+  homeScreenTip: HomeScreenTip,
+  settings: SavedSettings,
+  appearance: Appearance,
+  difficulty: SavedDifficulty,
+  bests: SavedBests,
+  home: SavedHome,
+  seenPowerUps: SavedPowerUps,
+})
+type PlayerSaveV7 = typeof PlayerSaveV7.Type
+
 const PlayerSaveJson = Schema.fromJsonString(PlayerSave)
+
+const PlayerSaveV7Json = Schema.fromJsonString(PlayerSaveV7)
 
 const PlayerSaveV6Json = Schema.fromJsonString(PlayerSaveV6)
 
@@ -303,8 +319,8 @@ const migrateV5 = (save: PlayerSaveV5): PlayerSaveV6 => ({
   seenPowerUps: [],
 })
 
-const migrateV6 = (save: PlayerSaveV6): PlayerSave => ({
-  version: SAVE_VERSION,
+const migrateV6 = (save: PlayerSaveV6): PlayerSaveV7 => ({
+  version: 7,
   onboarding: save.onboarding,
   homeScreenTip: save.homeScreenTip,
   settings: boldCursorSettings(save.settings),
@@ -313,6 +329,20 @@ const migrateV6 = (save: PlayerSaveV6): PlayerSave => ({
   bests: save.bests,
   home: save.home,
   seenPowerUps: save.seenPowerUps,
+})
+
+// NOTE: every save from before the rotation turns as before: landscape.
+const migrateV7 = (save: PlayerSaveV7): PlayerSave => ({
+  version: SAVE_VERSION,
+  onboarding: save.onboarding,
+  homeScreenTip: save.homeScreenTip,
+  settings: save.settings,
+  appearance: save.appearance,
+  difficulty: save.difficulty,
+  bests: save.bests,
+  home: save.home,
+  seenPowerUps: save.seenPowerUps,
+  rotation: 'Landscape',
 })
 
 // NOTE: the one list of save versions this build reads, newest first, each
@@ -329,50 +359,61 @@ const SAVE_VERSIONS: ReadonlyArray<
 > = [
   { version: SAVE_VERSION, read: Schema.decodeOption(PlayerSaveJson) },
   {
+    version: 7,
+    read: raw =>
+      Option.map(Schema.decodeOption(PlayerSaveV7Json)(raw), migrateV7),
+  },
+  {
     version: 6,
     read: raw =>
-      Option.map(Schema.decodeOption(PlayerSaveV6Json)(raw), migrateV6),
+      Option.map(Schema.decodeOption(PlayerSaveV6Json)(raw), save =>
+        migrateV7(migrateV6(save)),
+      ),
   },
   {
     version: 5,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV5Json)(raw), save =>
-        migrateV6(migrateV5(save)),
+        migrateV7(migrateV6(migrateV5(save))),
       ),
   },
   {
     version: 4,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV4Json)(raw), save =>
-        migrateV6(migrateV5(migrateV4(save))),
+        migrateV7(migrateV6(migrateV5(migrateV4(save)))),
       ),
   },
   {
     version: 4,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSavePreviewV4Json)(raw), save =>
-        migrateV6(migrateV5(migratePreviewV4(save))),
+        migrateV7(migrateV6(migrateV5(migratePreviewV4(save)))),
       ),
   },
   {
     version: 3,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV3Json)(raw), save =>
-        migrateV6(migrateV5(migrateV4(migrateV3(save)))),
+        migrateV7(migrateV6(migrateV5(migrateV4(migrateV3(save))))),
       ),
   },
   {
     version: 2,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV2Json)(raw), save =>
-        migrateV6(migrateV5(migrateV4(migrateV3(migrateV2(save))))),
+        migrateV7(migrateV6(migrateV5(migrateV4(migrateV3(migrateV2(save)))))),
       ),
   },
   {
     version: 1,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV1Json)(raw), save =>
-        migrateV6(migrateV5(migrateV4(migrateV3(migrateV2(migrateV1(save)))))),
+        migrateV7(
+          migrateV6(
+            migrateV5(migrateV4(migrateV3(migrateV2(migrateV1(save))))),
+          ),
+        ),
       ),
   },
 ]
@@ -433,6 +474,7 @@ export const SAVED_FIELDS = [
   'bests',
   'home',
   'seenPowerUps',
+  'rotationSetting',
 ] as const satisfies ReadonlyArray<keyof Model>
 
 export const hasSaveFieldsChanged = (before: Model, after: Model): boolean =>
@@ -476,6 +518,7 @@ export const saveOf = (model: Model): PlayerSave => ({
     openedEntries: model.home.openedEntries,
   },
   seenPowerUps: model.seenPowerUps,
+  rotation: model.rotationSetting,
 })
 
 // INTO THE MODEL
@@ -589,6 +632,7 @@ export const restoreSave = (model: Model, save: PlayerSave): Model =>
           Array.union(opened, knownKinds(save.home.openedEntries)),
       }),
     seenPowerUps: seen => Array.union(seen, knownPowerUps(save.seenPowerUps)),
+    rotationSetting: () => save.rotation,
   })
 
 // RESET

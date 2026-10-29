@@ -1,8 +1,9 @@
-// The fixed home layout pass: the home menu fresh (dots on What's New and
-// the Munchopedia), with bests, a NEW ENTRY pop, the update chip, and full
-// screen, in Endless, What's New and an older day, the Munchopedia empty and
-// half found, an unlocked, a locked, and Uncle Chunk's entry, the difficulty
-// picker from the badge, and Game Over with a NEW ENTRY notice, on 667x375
+// The home layout pass: the home menu fresh (news pips on the MANOR
+// deck), with bests, a NEW ENTRY pop, the update chip, and full screen, in
+// Endless, the MANOR hand (with the tip jar card) and once found, What's New
+// and an older day, the Munchopedia empty and half found, an unlocked, a
+// locked, and Uncle Chunk's entry, How to play, Settings (also with ROTATE),
+// the difficulty picker by PLAY (also on Hard), the shop, and Game Over with a NEW ENTRY notice, on 667x375
 // and 844x390 phones with touch and on 1280x720 and 1920x1080 with a
 // keyboard, as `s33-<TAG>-<viewport>-<scene>.png`. On a keyboard it also
 // walks the arrow keys from PLAY and shoots each focused button as
@@ -48,6 +49,8 @@ const VIEWPORTS: ReadonlyArray<Viewport> = [
 const FOUND =
   'bests&kills=Shambler:1203,Runner:140,Tank:12,Exploder:9,Thrower:3,Boss:2&opened=Shambler,Tank'
 
+const MANOR = '#home-manor'
+
 type Scene = Readonly<{
   name: string
   query: string
@@ -61,30 +64,52 @@ const SCENES: ReadonlyArray<Scene> = [
     query: `${FOUND}&newentries=Thrower&fit=full&newer&newsseen`,
   },
   { name: 'home-endless', query: `${FOUND}&homemode=endless&newsseen` },
-  { name: 'whats-new', query: '', open: ['#home-whats-new'] },
+  { name: 'hand', query: 'support', open: [MANOR] },
+  { name: 'hand-found', query: `${FOUND}&newsseen`, open: [MANOR] },
+  { name: 'whats-new', query: '', open: [MANOR, '#hand-card-whatsnew'] },
   {
     name: 'whats-new-older',
     query: '',
-    open: ['#home-whats-new', '.news-page'],
+    open: [MANOR, '#hand-card-whatsnew', '.news-page'],
   },
-  { name: 'munchopedia-empty', query: '', open: ['#home-munchopedia'] },
-  { name: 'munchopedia', query: FOUND, open: ['#home-munchopedia'] },
+  {
+    name: 'munchopedia-empty',
+    query: '',
+    open: [MANOR, '#hand-card-munchopedia'],
+  },
+  {
+    name: 'munchopedia',
+    query: FOUND,
+    open: [MANOR, '#hand-card-munchopedia'],
+  },
   {
     name: 'entry-unlocked',
     query: FOUND,
-    open: ['#home-munchopedia', '.munch-tile >> nth=0'],
+    open: [MANOR, '#hand-card-munchopedia', '.munch-tile >> nth=0'],
   },
   {
     name: 'entry-locked',
     query: FOUND,
-    open: ['#home-munchopedia', '.munch-tile >> nth=5'],
+    open: [MANOR, '#hand-card-munchopedia', '.munch-tile >> nth=5'],
   },
   {
     name: 'entry-boss',
     query: FOUND,
-    open: ['#home-munchopedia', '.munch-tile >> nth=6'],
+    open: [MANOR, '#hand-card-munchopedia', '.munch-tile >> nth=6'],
   },
-  { name: 'difficulty', query: '', open: ['.home-difficulty'] },
+  { name: 'howto', query: '', open: [MANOR, '#hand-card-howtoplay'] },
+  { name: 'settings', query: '', open: ['#home-settings'] },
+  {
+    name: 'settings-rotate',
+    query: 'rotate&fit=full',
+    open: ['#home-settings'],
+  },
+  { name: 'difficulty', query: '', open: ['#home-difficulty'] },
+  {
+    name: 'difficulty-hard',
+    query: 'difficulty=Hard&nightmare=Unlocked',
+    open: ['#home-difficulty'],
+  },
   { name: 'shop', query: 'wave=5&money=180&gun=smg&tier=1&px=270&py=142' },
   { name: 'shop-broke', query: 'wave=3&money=12&gun=shotgun&px=270&py=142' },
   {
@@ -235,7 +260,7 @@ const checkViewport = async (
     await page.goto(harnessUrl(FOUND, 'newsseen'))
     await wait(1200)
     const order: Array<string> = []
-    for (let step = 1; step <= 8; step++) {
+    for (let step = 1; step <= 6; step++) {
       await page.keyboard.press('ArrowDown')
       await wait(250)
       order.push(

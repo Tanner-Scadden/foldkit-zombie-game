@@ -16,6 +16,7 @@ import {
   HomeScreenTip,
   MusicSetting,
   PlayerSave,
+  RotationSetting,
   SavedBestsByDifficulty,
   SavedCard,
   type SavedDifficultyBests,
@@ -30,7 +31,7 @@ import {
 } from './playerData'
 
 // NOTE: the player scope, `player:<playerId>`: one player's settings, look,
-// difficulty, onboarding, bests, home menu, and power-ups seen, synced
+// difficulty, onboarding, bests, home menu, power-ups seen, and rotation, synced
 // between that player's devices.
 // Shared with the sync Worker in infra/worker, so it imports only `effect`,
 // the sync engine, and src/playerData.ts. The tables are the ones the game
@@ -62,6 +63,7 @@ export const PlayerRow = Schema.Struct({
   home: Schema.fromJsonString(SavedHome),
   seen_power_ups: Schema.fromJsonString(SavedPowerUps),
   cursor: CursorSetting,
+  rotation: RotationSetting,
 })
 export type PlayerRow = typeof PlayerRow.Type
 
@@ -88,6 +90,7 @@ export const PLAYER_COLUMNS = Array.make(
   'home',
   'seen_power_ups',
   'cursor',
+  'rotation',
 )
 
 export const rowOfSave = (save: PlayerSave): PlayerRow => ({
@@ -107,6 +110,7 @@ export const rowOfSave = (save: PlayerSave): PlayerRow => ({
   home: save.home,
   seen_power_ups: save.seenPowerUps,
   cursor: save.settings.cursor,
+  rotation: save.rotation,
 })
 
 export const killsRowsOfSave = (save: PlayerSave): ReadonlyArray<KillsRow> =>
@@ -144,11 +148,11 @@ const updatePlayer = (
 // NOTE: the first thing a device writes to its scope: its whole save, from
 // before sync. It only seeds an empty scope. On a scope that already has a
 // player (a device that linked to another device's player) it does nothing,
-// so linking never overwrites the player it joined. Version 4 is the save
-// with the cursor setting (save version 7).
+// so linking never overwrites the player it joined. Version 5 is the save
+// with the rotation (save version 8).
 export const SeededPlayer = defineMutation({
   name: 'SeededPlayer',
-  version: 4,
+  version: 5,
   args: Schema.Struct({ save: PlayerSave }),
   scopes: [PLAYER_SCOPE_KIND],
   writer: 'Owner',
@@ -291,6 +295,17 @@ export const ChangedHome = defineMutation({
       ),
       json => updatePlayer(context, { home: json }),
     ),
+})
+
+// NOTE: how an installed phone app turns. The last device to change it
+// wins, like the other settings.
+export const ChangedRotation = defineMutation({
+  name: 'ChangedRotation',
+  version: 1,
+  args: Schema.Struct({ rotation: RotationSetting }),
+  scopes: [PLAYER_SCOPE_KIND],
+  writer: 'Owner',
+  apply: ({ rotation }, context) => updatePlayer(context, { rotation }),
 })
 
 const PowerUpsRow = Schema.Struct({
@@ -464,6 +479,7 @@ export const PlayerScope = defineScope({
   mutations: [
     SeededPlayer,
     ChangedSettings,
+    ChangedRotation,
     ChangedAppearance,
     ChangedDifficulty,
     UnlockedNightmare,
@@ -531,6 +547,14 @@ export const PlayerScope = defineScope({
         const sql = yield* SqlClient.SqlClient
         yield* sql`ALTER TABLE ${sql(table('player'))}
           ADD COLUMN cursor TEXT NOT NULL DEFAULT 'Bold'`
+      }),
+    // NOTE: the rotation came after the cursor, added the same way. Every
+    // player starts locked to landscape.
+    '0006_add_rotation': table =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        yield* sql`ALTER TABLE ${sql(table('player'))}
+          ADD COLUMN rotation TEXT NOT NULL DEFAULT 'Landscape'`
       }),
   },
 })

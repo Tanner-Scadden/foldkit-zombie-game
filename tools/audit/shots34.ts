@@ -1,5 +1,6 @@
 // The portrait pass: a wave, a break with the door preview, the shop, the
-// home menu, the boss fight, pause, Game Over, and the menu panels, on three
+// home menu and its MANOR hand, the boss fight, pause, Game Over, and the
+// menu panels, on three
 // portrait phones (390x844, 430x932, 360x800, 375x667) and a landscape one (844x390),
 // all with touch, as `s34-<TAG>-<viewport>-<scene>.png`. For every visible
 // button it checks that it is at least 48 px and that its center hits it, and
@@ -54,6 +55,11 @@ const clickButton = (name: RegExp) => async (page: Page) => {
   await wait(500)
 }
 
+const fromHand = (name: RegExp) => async (page: Page) => {
+  await clickButton(/^manor/i)(page)
+  await clickButton(name)(page)
+}
+
 const SCENES: ReadonlyArray<Scene> = [
   {
     name: 'wave',
@@ -96,15 +102,21 @@ const SCENES: ReadonlyArray<Scene> = [
   { name: 'pause', query: 'wave=3&seen=all&start=wave&phase=paused' },
   { name: 'gameover', query: 'wave=5&phase=gameover&stats' },
   { name: 'victory', query: 'wave=8&phase=victory&stats' },
-  { name: 'whatsnew', query: '', act: clickButton(/what's new/i) },
+  { name: 'hand', query: 'support', act: clickButton(/^manor/i) },
+  { name: 'whatsnew', query: '', act: fromHand(/what's new/i) },
   {
     name: 'munchopedia',
     query: 'kills=Shambler:40,Runner:12',
-    act: clickButton(/munchopedia/i),
+    act: fromHand(/munchopedia/i),
   },
-  { name: 'character', query: '', act: clickButton(/^character/i) },
-  { name: 'howto', query: '', act: clickButton(/how to play/i) },
+  { name: 'character', query: '', act: fromHand(/^character/i) },
+  { name: 'howto', query: '', act: fromHand(/how to play/i) },
   { name: 'settings', query: '', act: clickButton(/settings/i) },
+  {
+    name: 'settings-rotate',
+    query: 'rotate&fit=full',
+    act: clickButton(/settings/i),
+  },
   { name: 'difficulty', query: '', act: clickButton(/difficulty/i) },
 ]
 

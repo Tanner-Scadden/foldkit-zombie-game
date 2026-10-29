@@ -46,6 +46,7 @@ import {
   ChangedDifficulty,
   ChangedHome,
   ChangedOnboarding,
+  ChangedRotation,
   ChangedSettings,
   ForgotPowerUps,
   KillsRow,
@@ -168,6 +169,7 @@ const saveOfRow = (
   },
   home: row.home,
   seenPowerUps: row.seen_power_ups,
+  rotation: row.rotation,
 })
 
 // LEGACY
@@ -400,6 +402,8 @@ const offlineApi: IdentityApi = {
 const runChange = (replica: Replica, change: PlayerChange) => {
   if (change._tag === 'ChangedSettings') {
     return replica.run(ChangedSettings, { settings: change.settings })
+  } else if (change._tag === 'ChangedRotation') {
+    return replica.run(ChangedRotation, { rotation: change.rotation })
   } else if (change._tag === 'ChangedAppearance') {
     return replica.run(ChangedAppearance, { appearance: change.appearance })
   } else if (change._tag === 'UnlockedNightmare') {

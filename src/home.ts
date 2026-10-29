@@ -6,6 +6,7 @@ import { FEEDBACK_LINE, RESTART_GRACE_MS } from './constants'
 import { hasJustWon, withBests } from './difficulty'
 import type { FocusStep } from './input'
 import {
+  type HandCard,
   type HomeButton,
   type HomeMode,
   type KillCounts,
@@ -22,62 +23,106 @@ import { addKills, killTotal, killsSince } from './stats'
 
 // BUTTONS
 
-// NOTE: the fixed home layout. Arrow keys walk PLAY, the mode toggle, then
-// the rail top to bottom. A new feature joins the rail or the mode toggle,
-// so PLAY never moves.
+// NOTE: the home layout. Arrow keys walk PLAY, the mode, the difficulty, the
+// MANOR button, then the gear. Everything else lives in the MANOR hand, so a
+// new feature is a new card there and PLAY never moves.
 export const HOME_BUTTONS: Array.NonEmptyReadonlyArray<HomeButton> = [
   'Play',
   'Mode',
-  'WhatsNew',
-  'Munchopedia',
-  'Character',
-  'HowToPlay',
-  'Settings',
-]
-
-export type RailButton = Exclude<HomeButton, 'Play' | 'Mode'>
-
-export const RAIL_BUTTONS: Array.NonEmptyReadonlyArray<RailButton> = [
-  'WhatsNew',
-  'Munchopedia',
-  'Character',
-  'HowToPlay',
+  'Difficulty',
+  'Manor',
   'Settings',
 ]
 
 const HOME_BUTTON_IDS: Readonly<Record<HomeButton, string>> = {
   Play: 'home-play',
   Mode: 'home-mode',
-  WhatsNew: 'home-whats-new',
-  Munchopedia: 'home-munchopedia',
-  Character: 'home-character',
-  HowToPlay: 'home-how-to-play',
+  Difficulty: 'home-difficulty',
+  Manor: 'home-manor',
   Settings: 'home-settings',
 }
 
 type HomeKey = Readonly<{ code: string; cap: string; name: string }>
 
-// NOTE: one key per button. Enter, E, and C were already the home keys. The
-// rail's other keys are letters no other screen uses, so WASD, R, Q, T, G,
-// H, K, M, and N keep their one meaning: L for the latest news, Z for
-// zombies, I for info, and O for options.
+// NOTE: one key per action. Enter, E, C, L, Z, I, and O were already the
+// home keys. X picks the difficulty and V opens the MANOR hand, letters no
+// other screen uses, so WASD, R, Q, T, G, H, K, M, and N keep their one
+// meaning.
 export const HOME_KEYS: Readonly<Record<HomeButton, HomeKey>> = {
   Play: { code: 'Enter', cap: 'ENTER', name: 'Enter' },
   Mode: { code: 'KeyE', cap: 'E', name: 'E' },
-  WhatsNew: { code: 'KeyL', cap: 'L', name: 'L' },
-  Munchopedia: { code: 'KeyZ', cap: 'Z', name: 'Z' },
-  Character: { code: 'KeyC', cap: 'C', name: 'C' },
-  HowToPlay: { code: 'KeyI', cap: 'I', name: 'I' },
+  Difficulty: { code: 'KeyX', cap: 'X', name: 'X' },
+  Manor: { code: 'KeyV', cap: 'V', name: 'V' },
   Settings: { code: 'KeyO', cap: 'O', name: 'O' },
 }
 
-export const maybeRailButtonOfKey = (code: string): Option.Option<RailButton> =>
-  Array.findFirst(RAIL_BUTTONS, button => HOME_KEYS[button].code === code)
-
 export const isModeKey = (code: string): boolean => code === HOME_KEYS.Mode.code
+
+export const isDifficultyKey = (code: string): boolean =>
+  code === HOME_KEYS.Difficulty.code
+
+export const isManorKey = (code: string): boolean =>
+  code === HOME_KEYS.Manor.code
+
+export const isSettingsKey = (code: string): boolean =>
+  code === HOME_KEYS.Settings.code
 
 export const homeButtonId = (button: HomeButton): string =>
   HOME_BUTTON_IDS[button]
+
+// THE MANOR HAND
+
+// NOTE: the order the cards are dealt, left to right. A future feature, such
+// as the cosmetic shop or the co-op lobby, is one more card here.
+export const HAND_CARDS: Array.NonEmptyReadonlyArray<HandCard> = [
+  'Character',
+  'Munchopedia',
+  'WhatsNew',
+  'HowToPlay',
+  'Support',
+]
+
+export type KeyedHandCard = Exclude<HandCard, 'Support'>
+
+// NOTE: every card but the coffee keeps the key its rail button had, and the
+// key works straight from the menu without opening the hand.
+export const HAND_KEYS: Readonly<Record<KeyedHandCard, HomeKey>> = {
+  Character: { code: 'KeyC', cap: 'C', name: 'C' },
+  Munchopedia: { code: 'KeyZ', cap: 'Z', name: 'Z' },
+  WhatsNew: { code: 'KeyL', cap: 'L', name: 'L' },
+  HowToPlay: { code: 'KeyI', cap: 'I', name: 'I' },
+}
+
+const KEYED_HAND_CARDS: ReadonlyArray<KeyedHandCard> = [
+  'Character',
+  'Munchopedia',
+  'WhatsNew',
+  'HowToPlay',
+]
+
+export const maybeHandCardOfKey = (
+  code: string,
+): Option.Option<KeyedHandCard> =>
+  Array.findFirst(KEYED_HAND_CARDS, card => HAND_KEYS[card].code === code)
+
+export const handCardId = (card: HandCard): string =>
+  `hand-card-${card.toLowerCase()}`
+
+export const dealtCards = (model: Model): ReadonlyArray<HandCard> =>
+  Array.filter(
+    HAND_CARDS,
+    card => card !== 'Support' || Option.isSome(model.maybeSupportUrl),
+  )
+
+export const steppedHandCard = (
+  cards: ReadonlyArray<HandCard>,
+  from: HandCard,
+  step: number,
+): Option.Option<HandCard> =>
+  Option.flatMap(
+    Array.findFirstIndex(cards, card => card === from),
+    index => Array.get(cards, (index + step + cards.length) % cards.length),
+  )
 
 export const RESET_TUTORIAL_BUTTON_ID = 'reset-tutorial'
 export const KEEP_TUTORIAL_BUTTON_ID = 'keep-tutorial'

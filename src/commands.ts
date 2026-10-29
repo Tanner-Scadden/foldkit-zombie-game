@@ -14,13 +14,15 @@ import {
   releaseAudioEngine,
   resumeAudio,
 } from './audio'
-import { END_MENU_BUTTON_ID, homeButtonId } from './home'
+import { END_MENU_BUTTON_ID, handCardId, homeButtonId } from './home'
 import { Message } from './message'
 import {
   AudioState,
   FullscreenSetting,
+  HandCard,
   HomeButton,
   type Model,
+  RotationSetting,
   type ScreenFit,
   ShopItemId,
   defaultAppearance,
@@ -152,16 +154,58 @@ export const DetectScreenFit = Command.define('DetectScreenFit', {
   ),
 })
 
+// NOTE: the rotation lock is ApplyRotation's, issued once full screen is on.
+const enterFullscreen = Effect.tryPromise(() =>
+  document.documentElement.requestFullscreen({ navigationUI: 'hide' }),
+)
+
+// NOTE: screen.orientation.lock exists in Chromium on every device, but only
+// a phone or tablet can turn, and iPhones have no lock at all. WebKit's
+// navigator.standalone marks an Apple browser.
+const canLockOrientation = (): boolean =>
+  typeof screen.orientation?.lock === 'function' &&
+  window.matchMedia(COARSE_POINTER_QUERY).matches &&
+  !Reflect.has(navigator, 'standalone')
+
+export const DetectOrientationLock = Command.define('DetectOrientationLock', {
+  messages: [Message.CompletedDetectOrientationLock],
+  execute: pipe(
+    Effect.try(canLockOrientation),
+    Effect.map(canLock =>
+      Message.CompletedDetectOrientationLock({
+        orientationLock: canLock ? 'Supported' : 'Unsupported',
+      }),
+    ),
+    Effect.catch(() =>
+      Effect.succeed(
+        Message.CompletedDetectOrientationLock({
+          orientationLock: 'Unsupported',
+        }),
+      ),
+    ),
+  ),
+})
+
 const lockLandscape = Effect.tryPromise(() =>
   screen.orientation.lock('landscape'),
-).pipe(Effect.ignore)
-
-const enterFullscreen = pipe(
-  Effect.tryPromise(() =>
-    document.documentElement.requestFullscreen({ navigationUI: 'hide' }),
-  ),
-  Effect.andThen(lockLandscape),
 )
+
+const unlockRotation = Effect.try(() => screen.orientation.unlock())
+
+// NOTE: Landscape locks the page sideways and Auto lets it follow the phone.
+// A lock rejects in a plain browser tab, outside full screen, and wherever
+// it is unsupported, and that refusal is ignored: the game plays on as the
+// phone is held.
+export const ApplyRotation = Command.define('ApplyRotation', {
+  args: { rotation: RotationSetting },
+  messages: [Message.CompletedApplyRotation],
+  execute: ({ rotation }) =>
+    pipe(
+      rotation === 'Landscape' ? lockLandscape : unlockRotation,
+      Effect.ignore,
+      Effect.as(Message.CompletedApplyRotation()),
+    ),
+})
 
 const exitFullscreen = Effect.tryPromise(() =>
   document.fullscreenElement === null
@@ -316,6 +360,16 @@ export const FocusHomeButton = Command.define('FocusHomeButton', {
     Dom.focus(`#${homeButtonId(button)}`).pipe(
       Effect.ignore,
       Effect.as(Message.CompletedFocusHomeButton()),
+    ),
+})
+
+export const FocusHandCard = Command.define('FocusHandCard', {
+  args: { card: HandCard },
+  messages: [Message.CompletedFocusHandCard],
+  execute: ({ card }) =>
+    Dom.focus(`#${handCardId(card)}`).pipe(
+      Effect.ignore,
+      Effect.as(Message.CompletedFocusHandCard()),
     ),
 })
 

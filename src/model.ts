@@ -12,6 +12,7 @@ import {
   Difficulty,
   HomeScreenTip,
   MusicSetting,
+  RotationSetting,
   ShakeSetting,
   ShareStatsSetting,
   SoundSetting,
@@ -34,6 +35,7 @@ export {
   HairStyle,
   HomeScreenTip,
   MusicSetting,
+  RotationSetting,
   ShakeSetting,
   ShareStatsSetting,
   ShirtColor,
@@ -620,6 +622,11 @@ export type AudioState = typeof AudioState.Type
 export const GunSlot = Schema.Literals(['Sidearm', 'Spare'])
 export type GunSlot = typeof GunSlot.Type
 
+// NOTE: whether this device can lock how the page turns: a touch screen
+// whose browser has screen.orientation.lock. Desktops and iPhones cannot.
+export const OrientationLock = Schema.Literals(['Supported', 'Unsupported'])
+export type OrientationLock = typeof OrientationLock.Type
+
 export const ScreenFit = Schema.Literals([
   'Unknown',
   'Fullscreen',
@@ -635,13 +642,22 @@ export type FullscreenSetting = typeof FullscreenSetting.Type
 export const HomeButton = Schema.Literals([
   'Play',
   'Mode',
-  'WhatsNew',
-  'Munchopedia',
-  'Character',
-  'HowToPlay',
+  'Difficulty',
+  'Manor',
   'Settings',
 ])
 export type HomeButton = typeof HomeButton.Type
+
+// NOTE: the cards the MANOR button deals. Support is the tip jar's coffee
+// card, dealt only while a support link is set.
+export const HandCard = Schema.Literals([
+  'Character',
+  'Munchopedia',
+  'WhatsNew',
+  'HowToPlay',
+  'Support',
+])
+export type HandCard = typeof HandCard.Type
 
 export const MenuPanel = Schema.Literals([
   'HowToPlay',
@@ -1183,12 +1199,15 @@ export const Model = Schema.Struct({
   appearance: Appearance,
   character: CharacterPicker,
   shakeSetting: ShakeSetting,
+  rotationSetting: RotationSetting,
+  orientationLock: OrientationLock,
   shareStats: ShareStatsSetting,
   cursorSetting: CursorSetting,
   maybeVisitId: Schema.Option(Schema.String),
   maybeHomeFocus: Schema.Option(HomeButton),
   panel: MenuPanel,
   panelDialog: Dialog.Model,
+  handDialog: Dialog.Model,
   bests: PlayerBests,
   runTally: RunTally,
   loading: Loading,
@@ -1332,6 +1351,7 @@ const closedCharacterPicker: CharacterPicker = {
 }
 
 const PANEL_DIALOG_ID = 'menu-panel'
+const HAND_DIALOG_ID = 'manor-hand'
 
 export const LOAD_STEPS: ReadonlyArray<LoadStep> = [
   'Save',
@@ -1429,12 +1449,15 @@ export const initialModel: Model = {
   appearance: defaultAppearance,
   character: closedCharacterPicker,
   shakeSetting: 'On',
+  rotationSetting: 'Landscape',
+  orientationLock: 'Unsupported',
   shareStats: 'On',
   cursorSetting: 'Bold',
   maybeVisitId: Option.none(),
   maybeHomeFocus: Option.none(),
   panel: 'HowToPlay',
   panelDialog: Dialog.init({ id: PANEL_DIALOG_ID }),
+  handDialog: Dialog.init({ id: HAND_DIALOG_ID }),
   bests: noBests,
   runTally: RunTally.Uncounted(),
   loading: Loading.Loaded(),

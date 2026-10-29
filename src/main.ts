@@ -8,6 +8,7 @@ import {
   AwaitFirstFrame,
   DecodeSprites,
   DetectInputDevice,
+  DetectOrientationLock,
   DetectScreenFit,
   FetchBuild,
   GenerateSeed,
@@ -75,6 +76,7 @@ import {
 import { dropClip } from './particles'
 import { LinkFlow } from './playerSync'
 import { forgetTutorial } from './save'
+import { isUsingServiceWorker } from './serviceWorker'
 import { isBrowsing } from './shop'
 import { advanceGame, clampFrameDelta, refreshIntent } from './simulation'
 import { tallyFrame } from './stats'
@@ -92,8 +94,10 @@ import {
   dismissHomeScreenTipFrom,
   finishHomeScreenSteps,
   focusEndMenuFrom,
+  foldHandDialog,
   foldHomeScreenSteps,
   foldPanelDialog,
+  fromHand,
   homeFocusFromKey,
   homeFromKey,
   homeStartFromKey,
@@ -101,14 +105,15 @@ import {
   leaveFromMenu,
   leaveRun,
   menuFromKey,
+  openHand,
   openHomeScreenSteps,
   openMunchopedia,
   openPanel,
   openWhatsNew,
   pickFromCard,
-  pickFromSettings,
   settleNightmareFrom,
   startOrAsk,
+  stepHandFocus,
   toggleCursor,
   toggleShake,
   toggleShareStats,
@@ -116,6 +121,7 @@ import {
   turnNews,
   unlockNightmareFrom,
 } from './update/home'
+import { applyRotationFrom, toggleRotation } from './update/rotation'
 import {
   isPaused,
   isScreenAnimated,
@@ -163,7 +169,6 @@ import {
 } from './update/sound'
 import { type UpdateReturn, type UpdateStep, withInput } from './update/step'
 import { nextTrap, placeSelectedTrap, trapFromKey } from './update/traps'
-import { isUsingServiceWorker } from './serviceWorker'
 import { RUNNING_BUILD, isCheckingForUpdates, maybeNewerBuild } from './version'
 import { isRoundActive, pause, startWaveEarly } from './waves'
 import {
@@ -195,6 +200,7 @@ export const init: Runtime.ApplicationInit<
     GenerateVisitId(),
     DetectInputDevice(),
     DetectScreenFit(),
+    DetectOrientationLock(),
     LoadStyles(),
     LoadFonts(),
     AwaitFirstFrame(),
@@ -589,7 +595,7 @@ const updateGame = (model: Model, message: Message) =>
       startFromButton(model, keepGoingWhenAllowed(model)),
 
     ClickedCharacterButton: () =>
-      Update.combine(model, [unlockAudio, openCharacterPicker]),
+      Update.combine(model, [unlockAudio, fromHand(openCharacterPicker)]),
 
     GotCharacterMessage: ({ message: characterMessage }) =>
       foldCharacter(model, characterMessage),
@@ -643,6 +649,14 @@ const updateGame = (model: Model, message: Message) =>
     CompletedDetectScreenFit: ({ screenFit }) => ({
       model: modifyFields(model, { screenFit: () => screenFit }),
     }),
+
+    CompletedDetectOrientationLock: ({ orientationLock }) => ({
+      model: modifyFields(model, { orientationLock: () => orientationLock }),
+    }),
+
+    ClickedRotationButton: () => ({ model: toggleRotation(model) }),
+
+    CompletedApplyRotation: () => ({ model }),
 
     ClickedDismissHomeScreenTip: () => ({
       model: dismissHomeScreenTip(model),
@@ -765,7 +779,7 @@ const updateGame = (model: Model, message: Message) =>
     FailedUpdateServiceWorker: () => ({ model }),
 
     ClickedHowToPlayButton: () =>
-      Update.combine(model, [unlockAudio, openPanel('HowToPlay')]),
+      Update.combine(model, [unlockAudio, fromHand(openPanel('HowToPlay'))]),
 
     ClickedSettingsButton: () =>
       Update.combine(model, [unlockAudio, openPanel('Settings')]),
@@ -786,10 +800,6 @@ const updateGame = (model: Model, message: Message) =>
 
     ClickedDifficultyCardButton: ({ difficulty }) =>
       pickFromCard(difficulty)(model),
-
-    ClickedDifficultySettingButton: ({ difficulty }) => ({
-      model: pickFromSettings(model, difficulty),
-    }),
 
     FocusedHomeButton: ({ button }) => ({
       model: modifyFields(model, { maybeHomeFocus: () => Option.some(button) }),
@@ -914,7 +924,7 @@ const updateGame = (model: Model, message: Message) =>
     }),
 
     ClickedWhatsNewButton: () =>
-      Update.combine(model, [unlockAudio, openWhatsNew]),
+      Update.combine(model, [unlockAudio, fromHand(openWhatsNew)]),
 
     ClickedOlderNewsButton: () => turnNews(model, 1),
 
@@ -923,7 +933,7 @@ const updateGame = (model: Model, message: Message) =>
     ClickedMunchopediaButton: () =>
       Update.combine(model, [
         unlockAudio,
-        openMunchopedia(MunchopediaPage.List()),
+        fromHand(openMunchopedia(MunchopediaPage.List())),
       ]),
 
     ClickedMunchopediaEntryButton: ({ kind }) =>
@@ -940,6 +950,15 @@ const updateGame = (model: Model, message: Message) =>
 
     ClickedDifficultyBadge: () =>
       Update.combine(model, [unlockAudio, openPanel('Difficulty')]),
+
+    ClickedManorButton: () => Update.combine(model, [unlockAudio, openHand]),
+
+    GotHandDialogMessage: ({ message: dialogMessage }) =>
+      foldHandDialog(model, dialogMessage),
+
+    SteppedHandFocus: ({ card }) => stepHandFocus(model, card),
+
+    CompletedFocusHandCard: () => ({ model }),
   })
 
 export const update = (model: Model, message: Message): UpdateReturn =>
@@ -947,6 +966,7 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     stepModel => updateGame(stepModel, message),
     cueMusicFrom(model),
     focusEndMenuFrom(model),
+    applyRotationFrom(model),
     dismissHomeScreenTipFrom(model),
     settleNightmareFrom(model),
     unlockNightmareFrom(model),

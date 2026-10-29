@@ -1,226 +1,173 @@
 import { Array, Option } from 'effect'
 import type { Attribute, Html, HtmlBuilder } from 'foldkit/html'
 
-import { NEXT_TRAP_ICON, PAUSE_ICON, TRAP_BUTTON_ICONS } from './icons'
+import {
+  AIM_ICON,
+  MOVE_ICON,
+  PAUSE_ICON,
+  RELOAD_ICON,
+  SHOOT_ICON,
+  SHOP_ICON,
+  SWAP_ICON,
+  TRAP_BUTTON_ICONS,
+} from './icons'
 import { Message } from './message'
 import { type InputDevice, type Model, Phase } from './model'
-import { TRAPS } from './traps'
 
 // CONTROLS
 
-type ControlLook = 'Words' | 'Pill'
+// NOTE: the one list of controls a new player needs. The home menu's HOW TO
+// PLAY and the pause screen both draw it, as a grid of small cards, with the
+// keys or the touch words for the last device used.
+type Input = Readonly<{
+  keys: ReadonlyArray<string>
+  words: string
+}>
 
-type Control = Readonly<{
-  input: string
+type ControlCard = Readonly<{
   action: string
-  look?: ControlLook
-  maybeIcon?: string
+  icon: string
+  keyboard: Input
+  touch: Input
 }>
 
-type ControlGroup = Readonly<{
-  title: string
-  controls: Array.NonEmptyReadonlyArray<Control>
-}>
-
-type InputStyle = 'Keycap' | 'TouchButton'
-
-type DeviceHelp = Readonly<{
-  label: string
-  inputStyle: InputStyle
-  groups: Array.NonEmptyReadonlyArray<ControlGroup>
-}>
-
-const control = (input: string, action: string): Control => ({
-  input,
-  action,
+const keys = (...caps: ReadonlyArray<string>): Input => ({
+  keys: caps,
+  words: '',
 })
 
-const iconControl = (icon: string, input: string, action: string): Control => ({
-  input,
-  action,
-  maybeIcon: icon,
-})
+const words = (text: string): Input => ({ keys: [], words: text })
 
-const KEYBOARD_HELP: DeviceHelp = {
-  label: 'keyboard and mouse',
-  inputStyle: 'Keycap',
-  groups: [
-    {
-      title: 'Move and fight',
-      controls: [
-        control('WASD', 'Move'),
-        control('Mouse', 'Aim'),
-        control('Click', 'Fire'),
-        control('R', 'Reload'),
-        control('Q', 'Swap guns'),
-      ],
-    },
-    {
-      title: 'Traps and stuff',
-      controls: [
-        control('T', 'Place a trap'),
-        control('G', 'Next trap'),
-        control('Enter', 'Start the wave'),
-        control('Esc', 'Pause or resume'),
-        control('H', 'Back to the menu'),
-        control('M', 'Mute'),
-        control('N', 'Music on or off'),
-      ],
-    },
-  ],
-}
-
-const TOUCH_HELP: DeviceHelp = {
-  label: 'touch',
-  inputStyle: 'TouchButton',
-  groups: [
-    {
-      title: 'Move and fight',
-      controls: [
-        control('Left thumb', 'Move'),
-        control('Right thumb', 'Aim and fire'),
-        control('Tap your gun', 'Reload'),
-        control('Tap the other gun', 'Swap guns'),
-      ],
-    },
-    {
-      title: 'Traps and stuff',
-      controls: [
-        iconControl(TRAP_BUTTON_ICONS.Barricade, 'Trap button', 'Place a trap'),
-        iconControl(NEXT_TRAP_ICON, 'Next button', 'Next trap'),
-        { input: 'START WAVE', action: 'Start the wave', look: 'Pill' },
-        iconControl(PAUSE_ICON, 'Pause button', 'Pause'),
-      ],
-    },
-  ],
-}
-
-const DEVICE_HELP: Readonly<Record<InputDevice, DeviceHelp>> = {
-  KeyboardMouse: KEYBOARD_HELP,
-  Touch: TOUCH_HELP,
-}
-
-// TIPS
-
-type Tip = Readonly<{ topic: string; text: string }>
-
-const TIPS: Array.NonEmptyReadonlyArray<Tip> = [
-  { topic: 'Shop', text: 'Open between waves. Walk into the stall.' },
+export const CONTROL_CARDS: Array.NonEmptyReadonlyArray<ControlCard> = [
   {
-    topic: TRAPS.Barricade.name,
-    text: 'Two at most, in doorways between waves. Slow zombies stop to chew.',
+    action: 'Move',
+    icon: MOVE_ICON,
+    keyboard: keys('WASD'),
+    touch: words('Left thumb'),
   },
   {
-    topic: TRAPS.Turret.name,
-    text: 'Plonk it in front of you. It shoots anything close.',
+    action: 'Aim',
+    icon: AIM_ICON,
+    keyboard: words('Mouse'),
+    touch: words('Right thumb'),
   },
-  { topic: 'Goodies', text: 'Zombies drop them. Walk over one to grab it.' },
+  {
+    action: 'Shoot',
+    icon: SHOOT_ICON,
+    keyboard: words('Hold click'),
+    touch: words('Hold right thumb'),
+  },
+  {
+    action: 'Reload',
+    icon: RELOAD_ICON,
+    keyboard: keys('R'),
+    touch: words('Tap your gun'),
+  },
+  {
+    action: 'Swap guns',
+    icon: SWAP_ICON,
+    keyboard: keys('Q'),
+    touch: words('Tap the other gun'),
+  },
+  {
+    action: 'Shop',
+    icon: SHOP_ICON,
+    keyboard: words('Walk into the stall'),
+    touch: words('Walk into the stall'),
+  },
+  {
+    action: 'Planks',
+    icon: TRAP_BUTTON_ICONS.Barricade,
+    keyboard: keys('T'),
+    touch: words('Trap button'),
+  },
+  {
+    action: 'Pause',
+    icon: PAUSE_ICON,
+    keyboard: keys('Esc'),
+    touch: words('Pause button'),
+  },
 ]
+
+type ExtraKey = Readonly<{ key: string; action: string }>
+
+// NOTE: the rest of the keyboard's keys, one short line under the cards, so
+// every key still has a home on the screen that teaches the controls.
+export const EXTRA_KEYS: Array.NonEmptyReadonlyArray<ExtraKey> = [
+  { key: 'G', action: 'next trap' },
+  { key: 'Enter', action: 'start the wave' },
+  { key: 'H', action: 'menu' },
+  { key: 'M', action: 'sound' },
+  { key: 'N', action: 'music' },
+]
+
+const DEVICE_LABELS: Readonly<Record<InputDevice, string>> = {
+  KeyboardMouse: 'keyboard and mouse',
+  Touch: 'touch',
+}
+
+const inputOf = (card: ControlCard, device: InputDevice): Input =>
+  device === 'KeyboardMouse' ? card.keyboard : card.touch
 
 // VIEW
 
 const HELP_TITLE_ID = 'pause-help-title'
 
-const touchInputView = (
-  { input, look, maybeIcon }: Control,
-  h: HtmlBuilder<Message>,
-): Html =>
-  maybeIcon === undefined
-    ? h.span(
-        [h.Class(look === 'Pill' ? 'pause-help-button' : 'pause-help-touch')],
-        [input],
-      )
-    : h.span(
-        [h.Class('pause-help-icon')],
-        [
-          h.span([
-            h.Class('pause-help-icon-glyph'),
-            h.AriaHidden(true),
-            h.Style({ backgroundImage: maybeIcon }),
-          ]),
-          h.span([h.Class('sr-only')], [input]),
-        ],
-      )
-
-const inputView = (
-  help: DeviceHelp,
-  item: Control,
-  h: HtmlBuilder<Message>,
-): Html =>
-  help.inputStyle === 'Keycap'
-    ? h.kbd([h.Class('pause-help-key')], [item.input])
-    : touchInputView(item, h)
-
-const controlRowView = (
-  help: DeviceHelp,
-  item: Control,
-  h: HtmlBuilder<Message>,
-): Html =>
-  h.tr(
-    [],
-    [
-      h.th(
-        [h.Scope('row'), h.Class('pause-help-inputs')],
-        [inputView(help, item, h)],
+const inputView = (input: Input, h: HtmlBuilder<Message>): Html =>
+  Array.match(input.keys, {
+    onEmpty: () => h.span([h.Class('help-card-words')], [input.words]),
+    onNonEmpty: caps =>
+      h.span(
+        [h.Class('help-card-keys')],
+        Array.map(caps, cap => h.kbd([h.Class('menu-key')], [cap])),
       ),
-      h.td([h.Class('pause-help-action')], [item.action]),
-    ],
-  )
+  })
 
-const controlGroupView = (
-  help: DeviceHelp,
-  group: ControlGroup,
+const controlCardView = (
+  card: ControlCard,
+  device: InputDevice,
   h: HtmlBuilder<Message>,
 ): Html =>
-  h.table(
-    [h.Class('pause-help-table')],
-    [
-      h.caption([h.Class('pause-help-caption')], [group.title]),
-      h.tbody(
-        [],
-        Array.map(group.controls, item => controlRowView(help, item, h)),
-      ),
-    ],
-  )
-
-const tipView = ({ topic, text }: Tip, h: HtmlBuilder<Message>): Html =>
   h.li(
-    [h.Class('pause-help-tip')],
-    [h.strong([h.Class('pause-help-topic')], [`${topic}:`]), ` ${text}`],
+    [h.Class('help-card')],
+    [
+      h.span([
+        h.Class('help-card-icon'),
+        h.AriaHidden(true),
+        h.Style({ backgroundImage: card.icon }),
+      ]),
+      h.span([h.Class('help-card-action')], [card.action]),
+      inputView(inputOf(card, device), h),
+    ],
   )
 
-export const helpLabel = (device: InputDevice): string =>
-  DEVICE_HELP[device].label
+const extraKeysView = (h: HtmlBuilder<Message>): Html =>
+  h.ul(
+    [h.Class('help-extra'), h.AriaLabel('More keys')],
+    Array.map(EXTRA_KEYS, ({ key, action }) =>
+      h.li(
+        [h.Class('help-extra-item')],
+        [h.kbd([h.Class('menu-key')], [key]), ` ${action}`],
+      ),
+    ),
+  )
 
-// NOTE: the home menu's HOW TO PLAY puts its own keys under the first
-// table, where the first column has room to spare.
+export const helpLabel = (device: InputDevice): string => DEVICE_LABELS[device]
+
+// NOTE: the home menu's HOW TO PLAY adds its own keys under the cards on a
+// keyboard.
 export const howToPlayView = (
   device: InputDevice,
   h: HtmlBuilder<Message>,
-  maybeUnderFirst: Option.Option<Html> = Option.none(),
-): ReadonlyArray<Html> => {
-  const help = DEVICE_HELP[device]
-  const [first, ...rest] = help.groups
-  return [
-    h.div(
-      [h.Class('pause-help-groups')],
-      [
-        h.div(
-          [h.Class('pause-help-column')],
-          [
-            controlGroupView(help, first, h),
-            ...Option.toArray(maybeUnderFirst),
-          ],
-        ),
-        ...Array.map(rest, group => controlGroupView(help, group, h)),
-      ],
-    ),
-    h.ul(
-      [h.Class('pause-help-tips'), h.AriaLabel('Tips')],
-      Array.map(TIPS, tip => tipView(tip, h)),
-    ),
-  ]
-}
+  maybeUnder: Option.Option<Html> = Option.none(),
+): ReadonlyArray<Html> => [
+  h.ul(
+    [h.Class('help-cards'), h.AriaLabel('Controls')],
+    Array.map(CONTROL_CARDS, card => controlCardView(card, device, h)),
+  ),
+  ...(device === 'KeyboardMouse' ? [extraKeysView(h)] : []),
+  ...Option.toArray(maybeUnder),
+]
 
 const isPauseHelpUp = (model: Model): boolean =>
   Phase.isAnyOf(['Paused'])(model.phase)
@@ -234,7 +181,6 @@ export const pauseHelpView = (
     return h.empty
   }
 
-  const help = DEVICE_HELP[model.lastDevice]
   return h.div(
     [h.Class('pause-help-frame')],
     [
@@ -250,7 +196,10 @@ export const pauseHelpView = (
             [h.Id(HELP_TITLE_ID), h.Class('pause-help-title')],
             [
               'How to play',
-              h.span([h.Class('sr-only')], [` with ${help.label}`]),
+              h.span(
+                [h.Class('sr-only')],
+                [` with ${helpLabel(model.lastDevice)}`],
+              ),
             ],
           ),
           ...howToPlayView(model.lastDevice, h),
