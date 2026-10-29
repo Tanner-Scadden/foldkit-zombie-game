@@ -41,6 +41,12 @@ const RUNS_PER_ADDRESS_PER_MINUTE = 60
 // Sync messages themselves need a token and go to the scope's object.
 const SYNC_REQUESTS_PER_ADDRESS_PER_MINUTE = 30
 
+// NOTE: the analytics retention cleanup (worker/main.ts) runs once a day at
+// 04:17 UTC and deletes run rows older than 90 days. Only production gets
+// the Cron Trigger: the free plan allows five per account, and a preview's
+// database is destroyed with its pull request anyway.
+const RETENTION_CRON = '17 4 * * *'
+
 const Analytics = Effect.gen(function* () {
   const stage = yield* Alchemy.Stage
 
@@ -57,6 +63,7 @@ const Analytics = Effect.gen(function* () {
   return yield* Cloudflare.Worker('Api', {
     name: apiWorkerName(stage),
     main: Path.resolve(import.meta.dirname, 'worker/main.ts'),
+    crons: stage === PRODUCTION_STAGE ? [RETENTION_CRON] : [],
     env: {
       DB: database,
       ADDRESS_SALT: addressSalt,

@@ -26,6 +26,7 @@ All on 2026-10-28.
 - **Sync identity is a session token after a signed challenge, and pairing is a six-symbol code** good once for ten minutes; linking replaces the joining device's progress. Sync is hosted by the API Worker, with one SQLite Durable Object per player scope and one directory. Decided 2026-10-29, which settles open question 6 for now. See "What phase 4 built".
 - **Without OPFS the database opens in memory** and says so in a typed `Persistence` (`Opfs`, or `Memory` with a reason). The game then keeps writing its old localStorage copy. Decided 2026-10-29.
 - **SQLite loads behind the splash, lazily.** The save is the first thing the game reads, so the splash waits for it as it waited for localStorage, but the SQLite code, worker, and wasm are their own chunks fetched only then, alongside the fonts and sprites. A 12 second limit falls back to localStorage for the session. Decided 2026-10-29, which settles open question 7.
+- **Analytics run rows are kept for 90 days.** A Cron Trigger on the production API Worker runs once a day at 04:17 UTC and deletes every `runs` row whose `received_day` is more than 90 days back. Previews get no trigger, since the free plan allows five per account and a preview's database goes with its pull request. Decided 2026-10-29, which settles the rest of open question 3. See "Retention".
 - **The engine and the SQLite wrapper live in `packages/` in this repo** while the API settles, then move to their own repo and npm packages. The name is still open. This file collects the plan for running Munch Manor on Cloudflare with an Effect-native stack: hosting, analytics, local data, sync, and the server side of multiplayer. None of it is on the roadmap yet. When a piece is chosen it moves into the "Decided" section of [`GAME_DESIGN.md`](./GAME_DESIGN.md) with a date. The multiplayer ideas live in [`MULTIPLAYER.md`](./MULTIPLAYER.md); this file is the ground they would stand on.
 
 ## The idea
@@ -128,9 +129,17 @@ Each stage has its own API Worker, `munch-manor-api` in production and `munch-ma
 - **D1.** One database per stage, `munch-manor-analytics` or `munch-manor-analytics-<stage>`, with migrations in `infra/migrations` applied on deploy. One table, `runs`: one row per summary, the fields above as columns (`outcome` and `killed_by` split out), `kills` as a JSON object, plus `received_at` and `received_day` from the server clock. No column holds an address.
 - **Free plan.** One run is one Worker request and one D1 row written. The free plan allows 100,000 of each a day.
 
+### Retention
+
+Run rows are kept for 90 days (decided 2026-10-29).
+
+- **The rule.** `retentionCutoffDay` in `infra/worker/rules.ts` is the UTC day 90 days before now. `deleteExpiredRuns` in `infra/worker/api.ts` deletes every row whose `received_day` is before it, one range delete over the `runs_by_day` index. A row lives 90 to 91 days, depending on the hour it came in.
+- **The schedule.** `infra/alchemy.run.ts` gives the production API Worker the Cron Trigger `17 4 * * *` (04:17 UTC daily). `worker/main.ts` exports a `scheduled` handler that runs the delete as an Effect over the same D1 `SqlClient`, as of the trigger's scheduled time, and logs how many rows went.
+- **Previews.** No trigger, to stay inside the free plan's five Cron Triggers per account. A preview's rows go when its stage is destroyed.
+- **Free plan.** Each deleted row counts as a D1 row written, so a day's cleanup costs about one day's runs.
+
 ### Not decided yet
 
-- How long rows are kept. Nothing deletes them yet.
 - Whether to store full runs (seed plus inputs) for replays.
 
 ## Sync engine
@@ -286,7 +295,7 @@ Checked against Cloudflare's pricing pages on 2026-10-28.
 - Strangers, possibly children, open the game from a link. Collecting anything personal changes the legal picture, so the default is to collect nothing personal.
 - Every endpoint decodes with Schema, caps the body size, and rate limits.
 - Secrets (the Cloudflare API token, any signing keys) live in CI secrets and Alchemy's secret handling, never in the client or the repo. The sync token secret is an `Alchemy.Random` per stage.
-- Sync stores nothing personal. The directory keeps each device's public key coordinates, its player id, and when it was created and last seen; a player scope keeps the save (settings, look, difficulty, onboarding, bests, and the home menu's seen news and opened entries). Neither keeps an address. Link codes are deleted when used and replaced when a new one is asked for, and expire after ten minutes. A device's private key never leaves it.
+- Sync stores nothing personal. The directory keeps each device's public key coordinates, its player id, and when it was created and last seen; a player scope keeps the save (settings, look, difficulty, onboarding, bests, and the home menu's seen news and opened entries). Neither keeps an address. Analytics run rows are deleted after 90 days. Link codes are deleted when used and replaced when a new one is asked for, and expire after ten minutes. A device's private key never leaves it.
 
 ## Conflicts with the design doc
 
@@ -301,7 +310,7 @@ Each change gets recorded as a dated decision when we make it.
 
 1. ~~Which Cloudflare account, and the free `workers.dev` address or a real domain?~~ The owner's one account and `workers.dev` for now. A real domain is still open.
 2. ~~Keep GitHub Pages running in parallel?~~ No. It is removed once Cloudflare is live.
-3. ~~Which analytics fields earn their place?~~ The `RunSummary` fields above, chosen 2026-10-29. How long rows are kept is still open.
+3. ~~Which analytics fields earn their place?~~ The `RunSummary` fields above, chosen 2026-10-29. ~~How long rows are kept?~~ 90 days, with a daily cleanup, chosen 2026-10-29.
 4. Do we store full runs (seed plus inputs) for replays?
 5. ~~LiveStore, or our own sync on Effect SQL?~~ Our own mini sync engine, chosen 2026-10-28. LiveStore is revisited at 1.0.
 6. ~~What identity, if any, does sync need: a device key, a passkey, a magic link?~~ A device key with a signed challenge, and a link code between devices, chosen 2026-10-29. A passkey or magic link for recovering a lost device is still open.

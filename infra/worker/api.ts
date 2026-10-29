@@ -24,6 +24,7 @@ import {
   declaredSize,
   decodeSummary,
   rateOutcome,
+  retentionCutoffDay,
   rowOf,
   utcDay,
   visitRateKey,
@@ -111,6 +112,18 @@ const insertRun = (row: RunRow) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
     yield* sql`INSERT INTO runs ${sql.insert(row)}`
+  })
+
+// NOTE: the retention rule: every run row received before the cutoff day
+// goes. `runs_by_day` indexes received_day, so this is one range delete.
+// Answers how many rows went.
+export const deleteExpiredRuns = (nowMs: number) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient
+    const deleted = yield* sql<{
+      readonly id: number
+    }>`DELETE FROM runs WHERE received_day < ${retentionCutoffDay(nowMs)} RETURNING id`
+    return deleted.length
   })
 
 const checkDatabase = Effect.gen(function* () {

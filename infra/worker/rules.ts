@@ -61,6 +61,19 @@ const DAY_LENGTH = 10
 export const utcDay = (nowMs: number): string =>
   new Date(nowMs).toISOString().slice(0, DAY_LENGTH)
 
+// RETENTION
+
+// NOTE: run rows are kept for 90 days, then the daily cleanup (api.ts,
+// scheduled from main.ts) deletes them. A row is kept while its received
+// day is on or after the day 90 days before now, so a row lives for 90 to
+// 91 days depending on the hour it came in.
+export const RETENTION_DAYS = 90
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+export const retentionCutoffDay = (nowMs: number): string =>
+  utcDay(nowMs - RETENTION_DAYS * DAY_MS)
+
 // NOTE: the address bucket is a hash of the IP with a secret salt and the UTC
 // day, so it changes every day and cannot be reversed without the salt. It is
 // only ever a rate limit key: it is never stored or logged.

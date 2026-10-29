@@ -8,7 +8,7 @@ The Cloudflare side of Munch Manor, declared with [Alchemy](https://alchemy.run/
 | `github.ts`           | The narrow CI token and the two GitHub Actions secrets it is written to                                 |
 | `worker/api.ts`       | The analytics `HttpApi`: `POST /api/runs` and `GET /api/health`, its errors, and the handlers           |
 | `worker/rules.ts`     | The pure rules: the size cap, the rate limit decision, the daily address hash input, and the D1 row     |
-| `worker/main.ts`      | The Worker entry: `/sync` paths to sync, the rest to analytics, with the bindings as services           |
+| `worker/main.ts`      | The Worker entry: `/sync` paths to sync, the rest to analytics, and the daily retention cleanup         |
 | `worker/sync.ts`      | The sync Durable Objects (`SyncScope`, `SyncDirectory`) and the `/sync` routes                          |
 | `worker/syncCore.ts`  | The sync logic they run, kept apart so `bun test` covers it without the Workers runtime                 |
 | `worker/workerd.d.ts` | Types for the Workers globals the sync object uses (`WebSocketPair`, auto-responses)                    |
@@ -70,6 +70,7 @@ The game posts one run summary per run to its stage's API Worker (see "Analytics
 - **Migrations.** Add a new numbered file to `migrations/`, such as `0002_add_column.sql`. Never edit one that has shipped: Alchemy records each file's hash in the database's `__alchemy_migrations` table and applies new files in order on the next deploy.
 - **Secrets.** The address salt is an `Alchemy.Random`, made once per stage and kept in Alchemy's state. It reaches the Worker as a `secret_text` binding.
 - **Rate limits.** Cloudflare Rate Limiting bindings, namespaces 7101 (per visit) and 7102 (per address bucket), shared by every stage.
+- **Retention.** Run rows are kept for 90 days. Production's API Worker has the Cron Trigger `17 4 * * *` (`RETENTION_CRON` in `alchemy.run.ts`), and the `scheduled` handler in `worker/main.ts` runs `deleteExpiredRuns` (`worker/api.ts`) over D1, deleting rows whose `received_day` is before `retentionCutoffDay` (`worker/rules.ts`). Other stages get `crons: []`: the free plan allows five Cron Triggers per account, and a preview's database is destroyed with it. The rule is covered by `bun test`. The schedule shows under the Worker's **Settings**, **Trigger events** in the dashboard.
 
 ```sh
 bun test                                                     # the Worker's tests

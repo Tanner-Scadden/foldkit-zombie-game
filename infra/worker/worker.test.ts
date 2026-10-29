@@ -17,12 +17,19 @@ import {
   type RunSummary,
   RunSummaryJson,
 } from '../../src/analytics.ts'
-import { type RateLimiter, WorkerEnv, makeHandler } from './api.ts'
 import {
+  type RateLimiter,
+  WorkerEnv,
+  deleteExpiredRuns,
+  makeHandler,
+} from './api.ts'
+import {
+  RETENTION_DAYS,
   bodySize,
   decideRate,
   declaredSize,
   decodeSummary,
+  retentionCutoffDay,
   rowOf,
   utcDay,
 } from './rules.ts'
@@ -277,5 +284,69 @@ describe('GET /api/health', () => {
       setup.context,
     )
     expect(response.status).toBe(404)
+  })
+})
+
+// RETENTION
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+const insertRowAt = (setup: Setup, atMs: number) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const row = rowOf(summary, atMs)
+      yield* setup.sql`INSERT INTO runs ${setup.sql.insert(row)}`
+    }),
+  )
+
+describe('the 90 day retention', () => {
+  test('the cutoff is the UTC day 90 days back', () => {
+    expect(RETENTION_DAYS).toBe(90)
+    expect(retentionCutoffDay(Date.UTC(2026, 9, 29, 4, 17))).toBe('2026-07-31')
+    expect(retentionCutoffDay(Date.UTC(2026, 0, 15, 23, 59))).toBe('2025-10-17')
+  })
+
+  test('the cleanup deletes rows older than 90 days and keeps the rest', async () => {
+    const setup = await setUp()
+    const now = Date.UTC(2026, 9, 29, 4, 17)
+    await insertRowAt(setup, now - 200 * DAY_MS)
+    await insertRowAt(setup, now - 91 * DAY_MS)
+    await insertRowAt(setup, now - 90 * DAY_MS)
+    await insertRowAt(setup, now - 30 * DAY_MS)
+    await insertRowAt(setup, now)
+    const deleted = await Effect.runPromise(
+      Effect.provideService(
+        deleteExpiredRuns(now),
+        SqlClient.SqlClient,
+        setup.sql,
+      ),
+    )
+    expect(deleted).toBe(2)
+    const days = await query(
+      setup,
+      'SELECT received_day FROM runs ORDER BY received_day',
+    )
+    expect(days).toEqual([
+      { received_day: '2026-07-31' },
+      { received_day: '2026-09-29' },
+      { received_day: '2026-10-29' },
+    ])
+  })
+
+  test('a second cleanup on the same day deletes nothing', async () => {
+    const setup = await setUp()
+    const now = Date.UTC(2026, 9, 29, 4, 17)
+    await insertRowAt(setup, now - 120 * DAY_MS)
+    const run = () =>
+      Effect.runPromise(
+        Effect.provideService(
+          deleteExpiredRuns(now),
+          SqlClient.SqlClient,
+          setup.sql,
+        ),
+      )
+    expect(await run()).toBe(1)
+    expect(await run()).toBe(0)
+    expect(await rowCount(setup)).toBe(0)
   })
 })
