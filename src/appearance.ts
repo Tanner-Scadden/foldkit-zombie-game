@@ -15,6 +15,7 @@ import {
   type SpriteFrames,
   TRANSPARENT,
   padRow,
+  recordedSpriteSources,
   spriteFrames,
 } from './sprite'
 
@@ -274,6 +275,16 @@ export const playerSprites = (appearance: Appearance): PlayerSprites => {
     )
   }
   return built
+}
+
+// NOTE: every sprite image built so far, with the given look's frames built
+// first. The warm-up canvases and the loading splash read it once the game
+// has loaded, so it holds the sprites of every module.
+export const spriteWarmUpSources = (
+  look: Appearance,
+): ReadonlyArray<string> => {
+  playerSprites(look)
+  return recordedSpriteSources()
 }
 
 // RANDOMIZE

@@ -103,11 +103,18 @@ describe('sprite images', () => {
     expect(spriteShapes(['...', '...'], PALETTE)).toEqual([])
   })
 
-  test('every zombie frame, facing, tone, and wear stage is one image', () => {
+  test('every zombie frame, facing, tone, frenzy look, and wear stage is one image', () => {
     const sprites = Array.flatMap(Record.values(ZOMBIE_SPRITES), kind =>
       Array.flatMap(kind.stages, stage =>
         Array.flatMap(
-          [...stage.walk, ...stage.lit, stage.gape, stage.litGape],
+          [
+            ...stage.walk,
+            ...stage.lit,
+            ...stage.rage,
+            stage.gape,
+            stage.litGape,
+            stage.rageGape,
+          ],
           set =>
             Array.flatMap(Record.values(set), facings =>
               Record.values(facings),

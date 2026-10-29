@@ -82,7 +82,7 @@ const SCENES: ReadonlyArray<Scene> = [
   {
     name: 'gasbags',
     query:
-      'wave=6&start=wave&god&gun=smg&fill&gasbags=16&aim=160,40&freeze=150',
+      'wave=6&start=wave&god&gun=smg&fill&gasroom=16&aim=160,40&freeze=150',
   },
   { name: 'looks', query: 'looksheet&freeze=10' },
 ]

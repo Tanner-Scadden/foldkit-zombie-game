@@ -21,7 +21,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import { Dialog, Tabs } from '@foldkit/ui'
 
-import { randomAppearance } from './appearance'
+import { randomAppearance, spriteWarmUpSources } from './appearance'
 import {
   type AudioEngineError,
   AudioEngineResource,
@@ -74,7 +74,6 @@ import {
   releasePointer,
   releaseSticks,
 } from './input'
-import { warmUpSources } from './layers'
 import {
   Arsenal,
   AudioState,
@@ -100,6 +99,7 @@ import {
   ShopItemId,
   ShopState,
   TouchControls,
+  defaultAppearance,
   initialModel,
 } from './model'
 import { MusicLevel, MusicMood, MusicStinger } from './music'
@@ -550,7 +550,11 @@ export const DecodeSprites = Command.define('DecodeSprites', {
   messages: [Message.CompletedDecodeSprites],
   execute: pipe(
     awaitFirstFrame,
-    Effect.andThen(Effect.suspend(() => decodeImages(warmUpSources()))),
+    Effect.andThen(
+      Effect.suspend(() =>
+        decodeImages(spriteWarmUpSources(defaultAppearance)),
+      ),
+    ),
     Effect.as(Message.CompletedDecodeSprites()),
   ),
 })

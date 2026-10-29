@@ -46,7 +46,7 @@ const ROAMING = { _tag: 'Roaming' as const }
 const CALM = { _tag: 'Calm' as const }
 const num = (key: string, fallback: number) =>
   params.has(key) ? Number(params.get(key)) : fallback
-const gasbags = num('gasbags', 0)
+const gasbagRoom = num('gasroom', 0)
 
 const KINDS: Array<DecalKind> = [
   'Blood',
@@ -137,7 +137,7 @@ const roomModel = (): Model => {
             }
           : p,
   })
-  const crowd = num('crowd', gasbags)
+  const crowd = num('crowd', gasbagRoom)
   const toughness = params.has('tough') ? 40 : 1
   if (crowd > 0) {
     const kinds = [
@@ -161,7 +161,7 @@ const roomModel = (): Model => {
     ]
     const zombies = Array.from({ length: crowd }, (_, i) => {
       const kind =
-        gasbags > 0 ? 'Exploder' : i < 4 ? 'Tank' : kinds[i % kinds.length]
+        gasbagRoom > 0 ? 'Exploder' : i < 4 ? 'Tank' : kinds[i % kinds.length]
       const [sx, sy] = spots[i % spots.length]
       return {
         id: 1000 + i,
@@ -700,7 +700,7 @@ const scenarioModel = (): Model => {
 
 const god = params.has('god')
 
-// NOTE: `gasbags=N` keeps N Gasbags in the room: when shots and chain bursts
+// NOTE: `gasroom=N` keeps N Gasbags in the room: when shots and chain bursts
 // pop them, new ones walk in at the doors, so a measurement window stays full
 // of fusing, bursting, and spawning Gasbags.
 const GASBAG_DOORS = [
@@ -713,7 +713,7 @@ const topUpGasbags = (model: Model): Model => {
   const alive = model.zombies.filter(
     z => z.kind === 'Exploder' && z.state._tag === 'Walking',
   ).length
-  const missing = Math.max(0, Math.min(4, gasbags - alive))
+  const missing = Math.max(0, Math.min(4, gasbagRoom - alive))
   if (missing === 0 || model.phase._tag !== 'Wave') return model
   const fresh = Array.from({ length: missing }, (_, i) => {
     const [x, y] = GASBAG_DOORS[(model.nextEntityId + i) % GASBAG_DOORS.length]
@@ -728,6 +728,8 @@ const topUpGasbags = (model: Model): Model => {
       knockback: { x: 0, y: 0 },
       hitRemainingMs: 0,
       state: { _tag: 'Walking' as const },
+      action: ROAMING,
+      frenzy: CALM,
     }
   })
   return modifyFields(model, {
@@ -808,7 +810,7 @@ const harnessUpdate = (model: Model, incoming: Message) => {
       }
     : result
   const next =
-    gasbags > 0 && message._tag === 'TickedFrame'
+    gasbagRoom > 0 && message._tag === 'TickedFrame'
       ? { ...kept, model: topUpGasbags(kept.model) }
       : kept
   w.__model = next.model
