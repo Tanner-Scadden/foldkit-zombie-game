@@ -7,6 +7,7 @@ import { thumbOffset } from './input'
 import { Message } from './main'
 import { Arsenal, type Model, Phase, Stick } from './model'
 import { type GhostStick, isDebutCardUp, shownGhostSticks } from './onboarding'
+import { gunName } from './shop'
 import {
   PlaceVerdict,
   type Placement,
@@ -16,15 +17,15 @@ import {
 } from './traps'
 import { wavePreviewView } from './wavePreview'
 import { isRoundActive } from './waves'
-import { SIDEARM, WEAPONS, heldWeapon, maybeSpare } from './weapons'
+import { SIDEARM, heldWeapon, maybeSpare } from './weapons'
 
 // GUN BUTTONS
 
 const swapTarget = (model: Model): Option.Option<string> =>
   Option.map(maybeSpare(model.player.arsenal), spare =>
     Arsenal.isAnyOf(['HoldingSpare'])(model.player.arsenal)
-      ? WEAPONS[SIDEARM].name
-      : WEAPONS[spare.kind].name,
+      ? gunName(model, SIDEARM)
+      : gunName(model, spare.kind),
   )
 
 const swapButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
@@ -40,7 +41,7 @@ const swapButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
           h.Type('button'),
           h.Class('swap-button'),
           h.AriaLabel(`Swap to the ${target}`),
-          h.AriaKeyshortcuts('Q E 1 2'),
+          h.AriaKeyshortcuts('Q'),
           h.OnClick(Message.ClickedSwapButton(), {
             focusSelector: '.game-surface',
           }),
@@ -59,7 +60,7 @@ const reloadButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
           h.Type('button'),
           h.Class('reload-button'),
           h.AriaLabel(
-            `Reload the ${WEAPONS[heldWeapon(model.player.arsenal)].name}`,
+            `Reload the ${gunName(model, heldWeapon(model.player.arsenal))}`,
           ),
           h.AriaKeyshortcuts('R'),
           h.OnClick(Message.ClickedReloadButton(), {

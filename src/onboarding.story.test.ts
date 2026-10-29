@@ -21,6 +21,7 @@ import {
   shownGhostSticks,
   shownHints,
 } from './onboarding'
+import { holdFire, releaseFire } from './testInput'
 import { asVeteran } from './veteran'
 import { rollSpawns } from './waves'
 
@@ -248,9 +249,8 @@ describe('new zombie card', () => {
     )
   })
 
-  test('fire, a tap, Enter, or GOT IT skip it, but only after a short minimum', () => {
+  test('a click, a tap, Enter, or GOT IT skip it, but only after a short minimum', () => {
     const skips = [
-      tap('Space'),
       tap('Enter'),
       [mouseDown(700, 200), message(Message.ReleasedPointer({ pointerId: 1 }))],
       [touchDown(4, 100, 200), touchUp(4)],
@@ -308,7 +308,7 @@ describe('new zombie card', () => {
         expect(Phase.guards.Paused(current.phase)).toBe(true)
       }),
       ...ticks(AUTO_TICKS),
-      ...tap('Enter'),
+      ...tap('Escape'),
       model(current => {
         expect(Phase.guards.Wave(current.phase)).toBe(true)
         expect(cardKind(current)).toStrictEqual(Option.some('Runner'))
@@ -390,7 +390,8 @@ describe('tutorial hints', () => {
       press('KeyD'),
       tick,
       release('KeyD'),
-      ...tap('Space'),
+      holdFire,
+      releaseFire,
       ...ticks(SHOWN_TICKS),
       model(current => {
         expect(hintIds(current)).toEqual(['Move', 'Fire'])

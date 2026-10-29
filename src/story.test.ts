@@ -61,6 +61,7 @@ import {
   ZombieState,
   initialModel,
 } from './model'
+import { holdFire, releaseFire } from './testInput'
 import { asVeteran } from './veteran'
 
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
@@ -165,7 +166,7 @@ describe('movement', () => {
     story(
       update,
       given(playingModel),
-      message(Message.PressedKey({ code: 'ArrowLeft' })),
+      message(Message.PressedKey({ code: 'KeyA' })),
       tick(5000),
       model(({ player, elapsedMs }) => {
         expect(player.x).toBeCloseTo(
@@ -212,8 +213,8 @@ describe('keyboard intent', () => {
     story(
       update,
       given(playingModel),
-      message(Message.PressedKey({ code: 'ArrowDown' })),
-      message(Message.PressedKey({ code: 'Space' })),
+      message(Message.PressedKey({ code: 'KeyS' })),
+      holdFire,
       model(({ intent }) => {
         expect(intent.move).toEqual({ x: 0, y: 1 })
         expect(intent.trigger).toBe('Held')
@@ -246,7 +247,7 @@ describe('firing', () => {
     story(
       update,
       given(playingModel),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(frameMs),
       model(({ stats }) => {
         expect(stats.shotsFired).toBe(1)
@@ -281,9 +282,9 @@ describe('firing', () => {
     story(
       update,
       given(playingModel),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(16),
-      message(Message.ReleasedKey({ code: 'Space' })),
+      releaseFire,
       ...ticks(20, 50),
       model(({ bullets }) => {
         expect(bullets).toEqual([])
@@ -315,7 +316,7 @@ describe('zombies', () => {
           zombieAt(101, 20, 20, 0),
         ]),
       ),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(FRAME_MS),
       model(({ bullets, zombies, score }) => {
         expect(bullets).toEqual([])
@@ -347,9 +348,9 @@ describe('zombies', () => {
           zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 0),
         ]),
       ),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(FRAME_MS),
-      message(Message.ReleasedKey({ code: 'Space' })),
+      releaseFire,
       model(({ zombies }) => {
         expect(zombies).toEqual([
           modifyFields(zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 0), {
@@ -408,7 +409,7 @@ describe('zombies', () => {
           dyingZombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2),
         ]),
       ),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(FRAME_MS),
       model(({ bullets, score }) => {
         expect(bullets).toHaveLength(1)
@@ -524,9 +525,9 @@ describe('game events', () => {
           }),
         ]),
       ),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(FRAME_MS),
-      message(Message.ReleasedKey({ code: 'Space' })),
+      releaseFire,
       model(({ frameEvents }) => {
         expect(Array.map(frameEvents, ({ _tag }) => _tag)).toEqual([
           'Fired',
@@ -592,7 +593,7 @@ describe('determinism', () => {
       message(Message.PressedKey({ code: 'Enter' })),
       message(Message.ReleasedKey({ code: 'Enter' })),
       message(Message.PressedKey({ code: 'Enter' })),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       message(Message.PressedKey({ code: 'KeyW' })),
       ...ticks(120, 16),
       message(Message.ReleasedKey({ code: 'KeyW' })),
@@ -637,7 +638,7 @@ describe('particles and decals', () => {
     story(
       update,
       given(shotZombieModel(ZOMBIE_MAX_HP)),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(FRAME_MS),
       model(({ particles }) => {
         const blood = Array.filter(particles, ({ kind }) => kind === 'Blood')
@@ -653,7 +654,7 @@ describe('particles and decals', () => {
     story(
       update,
       given(shotZombieModel(1)),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(FRAME_MS),
       model(({ particles }) => {
         expect(countKind(particles, 'MeatGib')).toBe(MEAT_GIBS_PER_KILL)
@@ -674,9 +675,9 @@ describe('particles and decals', () => {
     story(
       update,
       given(shotZombieModel(1)),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(FRAME_MS),
-      message(Message.ReleasedKey({ code: 'Space' })),
+      releaseFire,
       model(({ decals }) => {
         expect(decals).toEqual([])
       }),
@@ -814,7 +815,7 @@ describe('particles and decals', () => {
           zombieAt(102, 260, ARENA_LEVEL.height / 2, 0),
         ]),
       ),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       message(Message.PressedKey({ code: 'KeyD' })),
       ...ticks(40, FRAME_MS),
       model(finalModel => {
@@ -943,7 +944,7 @@ describe('screen shake', () => {
     story(
       update,
       given(playingModel),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(FRAME_MS),
       model(({ shake }) => {
         expect(shake).toEqual({ trauma: 0, offset: { x: 0, y: 0 } })
@@ -953,7 +954,7 @@ describe('screen shake', () => {
     story(
       update,
       given(withZombies(playingModel, [doomedZombieAt(100, MUZZLE_X, 90)])),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(FRAME_MS),
       model(({ shake }) => {
         expect(shake.trauma).toBeCloseTo(SHAKE_TRAUMA_KILL)
@@ -983,14 +984,14 @@ describe('screen shake', () => {
         }),
     })
 
-  const holdFire = (
+  const shakeWhileFiring = (
     base: Model,
   ): ReadonlyArray<Readonly<{ trauma: number; x: number; y: number }>> => {
     const frames: Array<Readonly<{ trauma: number; x: number; y: number }>> = []
     story(
       update,
       given(base),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       ...Array.flatMap(ticks(180, FRAME_MS), frame => [
         frame,
         model(({ shake }: Model) => {
@@ -1007,13 +1008,13 @@ describe('screen shake', () => {
   test('held fire from the pistol and the Chatterbox never moves the screen', () => {
     Array.forEach([playingModel, holdingSpare('Smg')], base => {
       expect(
-        Array.every(holdFire(base), ({ x, y }) => x === 0 && y === 0),
+        Array.every(shakeWhileFiring(base), ({ x, y }) => x === 0 && y === 0),
       ).toBe(true)
     })
   })
 
   test('held fire from the Barn Buster kicks a little and stays under the firing cap', () => {
-    const frames = holdFire(holdingSpare('Shotgun'))
+    const frames = shakeWhileFiring(holdingSpare('Shotgun'))
     expect(Array.some(frames, ({ trauma }) => trauma > 0)).toBe(true)
     expect(
       Array.every(
@@ -1211,7 +1212,7 @@ describe('hit-stop', () => {
         expect(Streak.guards.Hot(nextModel.streak)).toBe(true)
       }),
       message(Message.PressedKey({ code: 'Escape' })),
-      message(Message.PressedKey({ code: 'Enter' })),
+      message(Message.PressedKey({ code: 'Escape' })),
       model(({ phase }) => {
         expect(Phase.guards.Wave(phase)).toBe(true)
       }),
@@ -1244,7 +1245,7 @@ describe('damage numbers', () => {
     story(
       update,
       given(withZombies(playingModel, [zombieAt(100, MUZZLE_X, 90, 0)])),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(FRAME_MS),
       model(nextModel => {
         expect(kindsAndValues(nextModel)).toEqual([['Damage', PISTOL_DAMAGE]])
@@ -1254,7 +1255,7 @@ describe('damage numbers', () => {
     story(
       update,
       given(withZombies(playingModel, [doomedZombieAt(100, MUZZLE_X, 90)])),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(FRAME_MS),
       model(nextModel => {
         expect(kindsAndValues(nextModel)).toEqual([
@@ -1272,9 +1273,9 @@ describe('damage numbers', () => {
     story(
       update,
       given(withZombies(playingModel, [doomedZombieAt(100, MUZZLE_X, 90)])),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick(FRAME_MS),
-      message(Message.ReleasedKey({ code: 'Space' })),
+      releaseFire,
       tick(FRAME_MS),
       model(({ popups, hitStop }) => {
         expect(HitStop.guards.Frozen(hitStop)).toBe(true)
@@ -1354,7 +1355,7 @@ describe('juice determinism', () => {
           bigKillAt(102, 260),
         ]),
       ),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       ...Array.flatMap(ticks(60, FRAME_MS), frame => [frame, record]),
     )
     return frames
@@ -1580,7 +1581,7 @@ describe('page visibility', () => {
       model(({ elapsedMs }) => {
         expect(elapsedMs).toBe(0)
       }),
-      message(Message.PressedKey({ code: 'Enter' })),
+      message(Message.PressedKey({ code: 'Escape' })),
       model(({ phase }) => {
         expect(phase).toEqual(FIGHTING_PHASE)
       }),

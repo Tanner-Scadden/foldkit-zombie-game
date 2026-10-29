@@ -286,7 +286,7 @@ describe('Shop', () => {
       expect(text('Hearts 4 of 5')).toExist(),
       ...leaveShop(),
       expect(role('heading', { name: "Rattles' Bone Bazaar" })).toBeAbsent(),
-      expect(swapButton).toHaveAttr('aria-keyshortcuts', 'Q E 1 2'),
+      expect(swapButton).toHaveAttr('aria-keyshortcuts', 'Q'),
     )
   })
 
@@ -605,7 +605,7 @@ describe('Turning the phone', () => {
       ),
       expect(sideways).toBeAbsent(),
       expect(role('status')).toHaveText(
-        'Paused during wave 3 of 8. Tap, click, or press Enter to resume.',
+        'Paused during wave 3 of 8. Tap, click, or press Escape to resume.',
       ),
       pointerDown(role('application', { name: 'Game surface' }), {
         pointerType: 'touch',
@@ -718,7 +718,7 @@ describe('New zombie card', () => {
       click(role('button', { name: 'Start wave 1 now' })),
       expect(card).toExist(),
       expect(text("He's slow. Back up and keep shooting.")).toExist(),
-      expect(gotIt).toHaveAttr('aria-keyshortcuts', 'Enter Space'),
+      expect(gotIt).toHaveAttr('aria-keyshortcuts', 'Enter'),
       expect(role('status')).toHaveText(
         "New zombie: Groaner. He's slow. Back up and keep shooting. The wave starts in a moment. Press Enter or choose Got it to start now.",
       ),

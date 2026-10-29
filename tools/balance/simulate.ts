@@ -604,7 +604,7 @@ const runOnce = (seed: number): RunResult => {
           spare !== undefined &&
           spare.rounds > 0
         ) {
-          model = tapKey(model, 'Digit2')
+          model = tapKey(model, 'KeyQ')
         }
         model = tapKey(topOff(model), 'Enter')
         continue

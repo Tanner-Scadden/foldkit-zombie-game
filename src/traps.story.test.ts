@@ -30,6 +30,7 @@ import {
   initialModel,
 } from './model'
 import { SHOP_ITEMS, priceFor } from './shop'
+import { holdFire } from './testInput'
 import { TRAPS, repairPrice, stageOf, tollsOf } from './traps'
 import { WEAPONS } from './weapons'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
@@ -717,7 +718,7 @@ describe('barricade damage', () => {
         ),
       ),
       press('KeyA'),
-      press('Space'),
+      holdFire,
       ...ticks(Math.ceil(FIRE_INTERVAL_MS / FRAME_MS) + 2, FRAME_MS),
       model(({ player, frameEvents, bullets }) => {
         expect(player.x).toBeCloseTo(
@@ -1024,7 +1025,7 @@ describe('trap determinism', () => {
       release('KeyS'),
       press('KeyT'),
       press('Enter'),
-      press('Space'),
+      holdFire,
       ...ticks(400, FRAME_MS),
       model(finalModel => {
         sessions.push(finalModel)

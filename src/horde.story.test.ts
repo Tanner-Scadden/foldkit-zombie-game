@@ -34,6 +34,7 @@ import {
   ZombieState,
   initialModel,
 } from './model'
+import { holdFire } from './testInput'
 import {
   FINAL_WAVE,
   type KindWeight,
@@ -548,7 +549,7 @@ describe('exploders', () => {
               modifyFields(player, { x: () => 150, y: () => 72 }),
           }),
         ),
-        message(Message.PressedKey({ code: 'Space' })),
+        holdFire,
         ...recordTicks(150, FRAME_MS, frames),
       )
       return frames

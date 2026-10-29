@@ -22,6 +22,7 @@ import {
   shownHints,
 } from './onboarding'
 import { accuracyPercent, totalKills } from './stats'
+import { holdFire, releaseFire } from './testInput'
 import { ZOMBIE_KINDS } from './zombies'
 
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
@@ -250,9 +251,9 @@ const shootOut = (record: (finished: Model) => void) =>
   story(
     update,
     given(shootingGallery),
-    press('Space'),
+    holdFire,
     ...ticks(SHOOTING_TICKS, FRAME_MS),
-    release('Space'),
+    releaseFire,
     model(record),
   )
 

@@ -4,7 +4,7 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 import { GAME_TITLE, RESTART_GRACE_MS } from './constants'
 import { Message, isSideways } from './main'
 import { DebutCard, type Model, Phase, type ZombieKind } from './model'
-import { FINAL_WAVE } from './waves'
+import { FINAL_WAVE, isRoundActive } from './waves'
 import { ZOMBIE_KINDS } from './zombies'
 
 // TEXT
@@ -20,7 +20,7 @@ export const toSentenceCase = (shouted: string): string =>
 export const debutPitch = (kind: ZombieKind): string =>
   toSentenceCase(ZOMBIE_KINDS[kind].pitch)
 
-// AUDIO BUTTONS
+// CORNER BUTTONS
 
 const muteButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
   const isMuted = model.soundSetting === 'Muted'
@@ -54,10 +54,33 @@ const musicButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
     ['MUSIC'],
   )
 
-export const audioButtonsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const pauseButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isRoundActive(model.phase) && !isSideways(model)
+    ? h.button(
+        [
+          h.Type('button'),
+          h.Class('pause-button'),
+          h.AriaLabel('Pause'),
+          h.AriaKeyshortcuts('Escape'),
+          h.OnClick(Message.ClickedPauseButton(), {
+            focusSelector: '.game-surface',
+          }),
+        ],
+        ['PAUSE'],
+      )
+    : h.empty
+
+export const cornerButtonsView = (
+  model: Model,
+  h: HtmlBuilder<Message>,
+): Html =>
   h.div(
-    [h.Class('audio-buttons')],
-    [muteButtonView(model, h), musicButtonView(model, h)],
+    [h.Class('corner-buttons')],
+    [
+      muteButtonView(model, h),
+      musicButtonView(model, h),
+      pauseButtonView(model, h),
+    ],
   )
 
 // MODE BUTTONS
@@ -171,7 +194,7 @@ const debutCardButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
     [
       h.Type('button'),
       h.Class('debut-card-button'),
-      h.AriaKeyshortcuts('Enter Space'),
+      h.AriaKeyshortcuts('Enter'),
       h.OnClick(Message.ClickedDebutCardButton(), {
         focusSelector: '.game-surface',
       }),

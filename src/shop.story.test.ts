@@ -43,6 +43,7 @@ import {
   stallPrompt,
   totalAffordable,
 } from './shop'
+import { holdFire } from './testInput'
 import { asVeteran } from './veteran'
 import { FINAL_WAVE, waveBonus } from './waves'
 import {
@@ -400,7 +401,7 @@ describe('the shop stall', () => {
         frozen.push(current)
       }),
       press('KeyD'),
-      press('Space'),
+      holdFire,
       press('Enter'),
       ...ticks(10, FRAME_MS),
       model(({ phase, player, bullets, elapsedMs, intent }) => {
@@ -594,7 +595,7 @@ describe('carrying two guns', () => {
     { phase: () => fighting(2) },
   )
 
-  test('Q, E, 1, 2, and the swap button switch guns', () => {
+  test('Q and the swap button switch guns', () => {
     const spare = Arsenal.HoldingSpare({ spare: gun('Shotgun', 16) })
     const pistol = Arsenal.HoldingPistol({ spare: gun('Shotgun', 16) })
     story(
@@ -604,16 +605,7 @@ describe('carrying two guns', () => {
       model(({ player }) => {
         expect(player.arsenal).toEqual(spare)
       }),
-      press('KeyE'),
-      model(({ player }) => {
-        expect(player.arsenal).toEqual(pistol)
-      }),
-      press('Digit2'),
-      press('Digit2'),
-      model(({ player }) => {
-        expect(player.arsenal).toEqual(spare)
-      }),
-      press('Digit1'),
+      press('KeyQ'),
       model(({ player }) => {
         expect(player.arsenal).toEqual(pistol)
       }),
@@ -640,7 +632,7 @@ describe('carrying two guns', () => {
     story(
       update,
       given(withArsenal(armed, holdingSpare(16))),
-      press('Space'),
+      holdFire,
       tick(SHORT_FRAME_MS),
       model(({ bullets, player, frameEvents }) => {
         expect(bullets).toHaveLength(WEAPONS.Shotgun.pellets)
@@ -667,7 +659,7 @@ describe('carrying two guns', () => {
     story(
       update,
       given(withArsenal(armed, holdingSpare(1, 'Smg'))),
-      press('Space'),
+      holdFire,
       tick(SHORT_FRAME_MS),
       model(({ player, bullets }) => {
         expect(player.arsenal).toEqual(holdingSpare(0, 'Smg'))
@@ -709,7 +701,7 @@ describe('shotgun spread', () => {
           rngState: () => seed,
         }),
       ),
-      press('Space'),
+      holdFire,
       tick(SHORT_FRAME_MS),
       model(({ bullets }) => {
         shots.push(bullets)
@@ -758,7 +750,7 @@ describe('shotgun spread', () => {
           bullets: () => parked,
         }),
       ),
-      press('Space'),
+      holdFire,
       tick(SHORT_FRAME_MS),
       model(({ bullets }) => {
         expect(bullets).toHaveLength(BULLET_MAX)

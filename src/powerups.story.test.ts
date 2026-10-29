@@ -52,6 +52,7 @@ import {
   TUTORIAL_DROP,
   TUTORIAL_DROP_KILL,
 } from './powerups'
+import { holdFire, releaseFire } from './testInput'
 import { asVeteran } from './veteran'
 import { ZOMBIE_KINDS } from './zombies'
 
@@ -479,7 +480,7 @@ describe('effects', () => {
     story(
       update,
       given(withBoost(loaded, 'RapidFire', 5000)),
-      press('Space'),
+      holdFire,
       ...ticksFor(2000),
       model(({ stats, player }) => {
         const plainShots = 2000 / FIRE_INTERVAL_MS
@@ -513,7 +514,7 @@ describe('effects', () => {
     story(
       update,
       given(withBoost(fighting, 'Damage', 5000)),
-      press('Space'),
+      holdFire,
       tick,
       model(({ bullets }) => {
         const bullet = Option.getOrThrow(Array.head(bullets))
@@ -558,9 +559,9 @@ describe('effects', () => {
     story(
       update,
       given(withBoost(skewerLine(fighting), 'Pierce', 5000)),
-      press('Space'),
+      holdFire,
       tick,
-      release('Space'),
+      releaseFire,
       ...ticks(30),
       model(({ zombies, stats }) => {
         expect(stats.shotsFired).toBe(1)
@@ -571,9 +572,9 @@ describe('effects', () => {
     story(
       update,
       given(skewerLine(fighting)),
-      press('Space'),
+      holdFire,
       tick,
-      release('Space'),
+      releaseFire,
       ...ticks(30),
       model(({ zombies, stats }) => {
         expect(stats.shotsFired).toBe(1)
@@ -656,7 +657,7 @@ describe('timers', () => {
         expect(boosts.Damage).toEqual(BoostTimer.Off())
         expect(tagsOf(frameEvents)).toContain('BoostFaded')
       }),
-      press('Space'),
+      holdFire,
       tick,
       model(({ bullets }) => {
         const bullet = Option.getOrThrow(Array.last(bullets))

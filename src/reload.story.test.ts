@@ -21,6 +21,7 @@ import {
   ShopState,
   initialModel,
 } from './model'
+import { holdFire, releaseFire } from './testInput'
 import { WEAPONS, maybeSpare } from './weapons'
 
 const FRAME_MS = 50
@@ -98,7 +99,7 @@ describe('magazines', () => {
     story(
       update,
       given(withPistolLoaded(fighting, 2)),
-      press('Space'),
+      holdFire,
       ...ticks(1 + TICKS_PER_SHOT, FRAME_MS),
       model(({ player, stats }) => {
         expect(stats.shotsFired).toBe(2)
@@ -126,7 +127,7 @@ describe('magazines', () => {
     story(
       update,
       given(withPistolLoaded(fighting, 0)),
-      press('Space'),
+      holdFire,
       tick(FRAME_MS),
       model(({ player, stats }) => {
         expect(stats.shotsFired).toBe(0)
@@ -170,7 +171,7 @@ describe('magazines', () => {
     story(
       update,
       given(fighting),
-      press('Space'),
+      holdFire,
       ...ticks(magazines * magazineTicks, FRAME_MS),
       model(({ player, stats }) => {
         expect(stats.shotsFired).toBeGreaterThan(magazines * PISTOL_MAGAZINE)
@@ -190,9 +191,9 @@ describe('magazines', () => {
           Arsenal.HoldingSpare({ spare: smg(magazine + 10, magazine) }),
         ),
       ),
-      press('Space'),
+      holdFire,
       ...ticks(60, FRAME_MS),
-      release('Space'),
+      releaseFire,
       model(({ player }) => {
         expect(spareRounds(player.arsenal)).toEqual(
           Option.some({ rounds: 10, loaded: 0 }),
@@ -304,7 +305,7 @@ describe('reload pauses', () => {
           Option.some(PISTOL_RELOAD_MS - 4 * FRAME_MS),
         )
       }),
-      press('Enter'),
+      press('Escape'),
       ...ticks(PISTOL_RELOAD_TICKS - 4, FRAME_MS),
       model(({ player }) => {
         expect(player.pistolLoaded).toBe(PISTOL_MAGAZINE)

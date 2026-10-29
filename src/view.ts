@@ -6,7 +6,7 @@ import { FEEDBACK_LINE, GAME_TITLE } from './constants'
 import { gameStageView } from './layers'
 import { Message, isSideways } from './main'
 import {
-  audioButtonsView,
+  cornerButtonsView,
   debutCardView,
   debutPitch,
   modeChoiceView,
@@ -157,7 +157,7 @@ export const statusText = (model: Model): string => {
         () => `Fighting ${statusWave(model, wave)}.`,
       ),
     Paused: ({ round }) =>
-      `Paused during ${statusWave(model, round.wave)}. Tap, click, or press Enter to resume.`,
+      `Paused during ${statusWave(model, round.wave)}. Tap, click, or press Escape to resume.`,
     Victory: () =>
       `Victory. ${victoryVerdict(model.stats)}. ${statsLabel(model)} ${KEEP_GOING} ${PLAY_AGAIN} ${FEEDBACK_LINE}`,
     GameOver: ({ wave }) =>
@@ -266,7 +266,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       gunButtonsView(model, h),
       debutCardView(model, h),
       modeChoiceView(model, h),
-      audioButtonsView(model, h),
+      cornerButtonsView(model, h),
       shopDialogView(model, h),
       sidewaysView(model, h),
     ],

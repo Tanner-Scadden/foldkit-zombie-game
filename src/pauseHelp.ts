@@ -7,10 +7,7 @@ import { TRAPS } from './traps'
 
 // CONTROLS
 
-type Control = Readonly<{
-  inputs: Array.NonEmptyReadonlyArray<string>
-  action: string
-}>
+type Control = Readonly<{ input: string; action: string }>
 
 type ControlGroup = Readonly<{
   title: string
@@ -25,10 +22,10 @@ type DeviceHelp = Readonly<{
   groups: Array.NonEmptyReadonlyArray<ControlGroup>
 }>
 
-const control = (
-  inputs: Array.NonEmptyReadonlyArray<string>,
-  action: string,
-): Control => ({ inputs, action })
+const control = (input: string, action: string): Control => ({
+  input,
+  action,
+})
 
 const KEYBOARD_HELP: DeviceHelp = {
   label: 'keyboard and mouse',
@@ -37,23 +34,22 @@ const KEYBOARD_HELP: DeviceHelp = {
     {
       title: 'Move and fight',
       controls: [
-        control(['WASD', 'Arrows'], 'Move'),
-        control(['Mouse'], 'Aim'),
-        control(['Click', 'Space'], 'Fire'),
-        control(['R'], 'Reload'),
-        control(['Q', 'E'], 'Swap guns'),
-        control(['1', '2'], 'Pick a gun'),
+        control('WASD', 'Move'),
+        control('Mouse', 'Aim'),
+        control('Click', 'Fire'),
+        control('R', 'Reload'),
+        control('Q', 'Swap guns'),
       ],
     },
     {
       title: 'Traps and stuff',
       controls: [
-        control(['T'], 'Place a trap'),
-        control(['G'], 'Next trap'),
-        control(['Enter'], 'Start the wave'),
-        control(['Esc', 'P'], 'Pause'),
-        control(['M'], 'Mute'),
-        control(['N'], 'Music on or off'),
+        control('T', 'Place a trap'),
+        control('G', 'Next trap'),
+        control('Enter', 'Start the wave'),
+        control('Esc', 'Pause or resume'),
+        control('M', 'Mute'),
+        control('N', 'Music on or off'),
       ],
     },
   ],
@@ -66,20 +62,21 @@ const TOUCH_HELP: DeviceHelp = {
     {
       title: 'Move and fight',
       controls: [
-        control(['Left thumb'], 'Move'),
-        control(['Right thumb'], 'Aim and fire'),
-        control(['RELOAD'], 'Reload'),
-        control(['SWAP'], 'Swap guns'),
+        control('Left thumb', 'Move'),
+        control('Right thumb', 'Aim and fire'),
+        control('RELOAD', 'Reload'),
+        control('SWAP', 'Swap guns'),
       ],
     },
     {
       title: 'Traps and stuff',
       controls: [
-        control(['PLACE'], 'Place a trap'),
-        control(['NEXT'], 'Next trap'),
-        control(['START WAVE'], 'Start the wave'),
-        control(['MUTE'], 'Mute'),
-        control(['MUSIC'], 'Music on or off'),
+        control('PLACE', 'Place a trap'),
+        control('NEXT', 'Next trap'),
+        control('START WAVE', 'Start the wave'),
+        control('PAUSE', 'Pause'),
+        control('MUTE', 'Mute'),
+        control('MUSIC', 'Music on or off'),
       ],
     },
   ],
@@ -111,23 +108,18 @@ const TIPS: Array.NonEmptyReadonlyArray<Tip> = [
 
 const HELP_TITLE_ID = 'pause-help-title'
 
-const inputsView = (
+const inputView = (
   help: DeviceHelp,
-  inputs: Array.NonEmptyReadonlyArray<string>,
+  input: string,
   h: HtmlBuilder<Message>,
-): ReadonlyArray<Html | string> =>
-  Array.intersperse(
-    Array.map(inputs, input =>
-      help.inputStyle === 'Keycap'
-        ? h.kbd([h.Class('pause-help-key')], [input])
-        : h.span([h.Class('pause-help-button')], [input]),
-    ),
-    h.span([h.Class('pause-help-or')], [' or ']),
-  )
+): Html =>
+  help.inputStyle === 'Keycap'
+    ? h.kbd([h.Class('pause-help-key')], [input])
+    : h.span([h.Class('pause-help-button')], [input])
 
 const controlRowView = (
   help: DeviceHelp,
-  { inputs, action }: Control,
+  { input, action }: Control,
   h: HtmlBuilder<Message>,
 ): Html =>
   h.tr(
@@ -135,7 +127,7 @@ const controlRowView = (
     [
       h.th(
         [h.Scope('row'), h.Class('pause-help-inputs')],
-        inputsView(help, inputs, h),
+        [inputView(help, input, h)],
       ),
       h.td([h.Class('pause-help-action')], [action]),
     ],

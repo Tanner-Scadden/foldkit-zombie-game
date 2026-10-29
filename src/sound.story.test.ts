@@ -31,6 +31,7 @@ import {
   ZombieState,
   initialModel,
 } from './model'
+import { holdFire } from './testInput'
 
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 const FRAME_MS = 16
@@ -87,7 +88,7 @@ const withOneHitZombieInFront = (base: Model): Model =>
   })
 
 const tick = message(Message.TickedFrame({ deltaTime: FRAME_MS }))
-const pressFire = message(Message.PressedKey({ code: 'Space' }))
+const pressFire = holdFire
 const pressMute = message(Message.PressedKey({ code: 'KeyM' }))
 
 const soundsOf = (
@@ -233,7 +234,7 @@ describe('audio unlock', () => {
         expect(current.audio).toEqual(AudioState.Unavailable())
         expect(requestsAudioEngine(current)).toBe(false)
       }),
-      message(Message.PressedKey({ code: 'Space' })),
+      holdFire,
       tick,
       Command.expectNone(),
     )

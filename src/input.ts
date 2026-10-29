@@ -28,20 +28,17 @@ import {
 
 // KEYS
 
-const UP_KEYS: ReadonlyArray<string> = ['KeyW', 'ArrowUp']
-const DOWN_KEYS: ReadonlyArray<string> = ['KeyS', 'ArrowDown']
-const LEFT_KEYS: ReadonlyArray<string> = ['KeyA', 'ArrowLeft']
-const RIGHT_KEYS: ReadonlyArray<string> = ['KeyD', 'ArrowRight']
-const FIRE_KEY = 'Space'
-const START_KEYS: ReadonlyArray<string> = ['Enter', 'Space']
+const UP_KEY = 'KeyW'
+const DOWN_KEY = 'KeyS'
+const LEFT_KEY = 'KeyA'
+const RIGHT_KEY = 'KeyD'
+const START_KEY = 'Enter'
 const ENDLESS_KEY = 'KeyE'
 const KEEP_GOING_KEY = 'KeyK'
-const PAUSE_KEYS: ReadonlyArray<string> = ['Escape', 'KeyP']
+const PAUSE_KEY = 'Escape'
 const START_WAVE_KEY = 'Enter'
 const RELOAD_KEY = 'KeyR'
-const SWAP_KEYS: ReadonlyArray<string> = ['KeyQ', 'KeyE']
-const PISTOL_KEY = 'Digit1'
-const SPARE_KEY = 'Digit2'
+const SWAP_KEY = 'KeyQ'
 const PLACE_TRAP_KEY = 'KeyT'
 const NEXT_TRAP_KEY = 'KeyG'
 
@@ -58,41 +55,19 @@ export const maybeTrapChoice = (code: string): Option.Option<TrapChoice> => {
   }
 }
 
-export const WeaponChoice = Schema.Literals(['Swap', 'Pistol', 'Spare'])
-export type WeaponChoice = typeof WeaponChoice.Type
-
-export const maybeWeaponChoice = (
-  code: string,
-): Option.Option<WeaponChoice> => {
-  if (Array.contains(SWAP_KEYS, code)) {
-    return Option.some('Swap')
-  } else if (code === PISTOL_KEY) {
-    return Option.some('Pistol')
-  } else if (code === SPARE_KEY) {
-    return Option.some('Spare')
-  } else {
-    return Option.none()
-  }
-}
-
-export const isStartKey = (code: string): boolean =>
-  Array.contains(START_KEYS, code)
+export const isStartKey = (code: string): boolean => code === START_KEY
 
 export const isEndlessKey = (code: string): boolean => code === ENDLESS_KEY
 
 export const isKeepGoingKey = (code: string): boolean => code === KEEP_GOING_KEY
 
-export const isPauseKey = (code: string): boolean =>
-  Array.contains(PAUSE_KEYS, code)
+export const isPauseKey = (code: string): boolean => code === PAUSE_KEY
 
 export const isStartWaveKey = (code: string): boolean => code === START_WAVE_KEY
 
 export const isReloadKey = (code: string): boolean => code === RELOAD_KEY
 
-const isAnyPressed = (
-  pressedKeys: ReadonlyArray<string>,
-  codes: ReadonlyArray<string>,
-): boolean => Array.some(codes, code => Array.contains(pressedKeys, code))
+export const isSwapKey = (code: string): boolean => code === SWAP_KEY
 
 const axis = (isNegative: boolean, isPositive: boolean): number =>
   (isPositive ? 1 : 0) - (isNegative ? 1 : 0)
@@ -101,12 +76,12 @@ export const keyboardMove = (pressedKeys: ReadonlyArray<string>): Vector =>
   pipe(
     {
       x: axis(
-        isAnyPressed(pressedKeys, LEFT_KEYS),
-        isAnyPressed(pressedKeys, RIGHT_KEYS),
+        Array.contains(pressedKeys, LEFT_KEY),
+        Array.contains(pressedKeys, RIGHT_KEY),
       ),
       y: axis(
-        isAnyPressed(pressedKeys, UP_KEYS),
-        isAnyPressed(pressedKeys, DOWN_KEYS),
+        Array.contains(pressedKeys, UP_KEY),
+        Array.contains(pressedKeys, DOWN_KEY),
       ),
     },
     normalize,
@@ -311,8 +286,7 @@ const mouseAim = (
 
 const triggerOf = (input: Input): Trigger =>
   Stick.isAnyOf(['Active'])(input.aimStick) ||
-  MouseButton.isAnyOf(['Held'])(input.mouseButton) ||
-  Array.contains(input.pressedKeys, FIRE_KEY)
+  MouseButton.isAnyOf(['Held'])(input.mouseButton)
     ? 'Held'
     : 'Released'
 

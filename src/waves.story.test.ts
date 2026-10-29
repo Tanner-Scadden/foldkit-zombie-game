@@ -22,6 +22,7 @@ import {
   ZombieState,
   initialModel,
 } from './model'
+import { holdFire } from './testInput'
 import { asVeteran } from './veteran'
 import {
   FINAL_WAVE,
@@ -164,7 +165,7 @@ describe('preparation', () => {
       press('Enter'),
       release('Enter'),
       press('KeyD'),
-      press('Space'),
+      holdFire,
       ...ticks(4, FRAME_MS),
       model(({ phase, player, bullets }) => {
         expect(Phase.guards.Preparation(phase)).toBe(true)
@@ -345,7 +346,7 @@ describe('waves', () => {
 })
 
 describe('pause', () => {
-  test('pausing preparation freezes its timer and Enter resumes it rather than skipping', () => {
+  test('pausing preparation freezes its timer and Escape resumes it rather than skipping', () => {
     const preparation = Phase.Preparation({
       wave: 3,
       remainingMs: 12_345,
@@ -361,7 +362,7 @@ describe('pause', () => {
         expect(phase).toEqual(Phase.Paused({ round: preparation }))
       }),
       ...ticks(30, FRAME_MS),
-      press('Enter'),
+      press('Escape'),
       model(({ phase }) => {
         expect(phase).toEqual(preparation)
       }),
@@ -502,7 +503,7 @@ describe('a full wave', () => {
       tick(FRAME_MS),
       release('KeyW'),
       press('Enter'),
-      press('Space'),
+      holdFire,
       ...Array.flatMap(
         ticks((SECONDS_PER_RUN * 1000) / FRAME_MS, FRAME_MS),
         frame => [frame, record],

@@ -42,16 +42,15 @@ import {
 import {
   type PointerPress,
   type TrapChoice,
-  type WeaponChoice,
   isEndlessKey,
   isKeepGoingKey,
   isPauseKey,
   isReloadKey,
   isStartKey,
   isStartWaveKey,
+  isSwapKey,
   isTrackingPointer,
   maybeTrapChoice,
-  maybeWeaponChoice,
   moveMouse,
   movePointer,
   pressKey,
@@ -61,7 +60,6 @@ import {
   releasePointer,
 } from './input'
 import {
-  type Arsenal,
   AudioState,
   GameEvent,
   type Input,
@@ -126,8 +124,6 @@ import {
   canReload,
   cancelReload,
   heldWeapon,
-  holdPistol,
-  holdSpare,
   swapWeapon,
 } from './weapons'
 import { ZOMBIE_KINDS } from './zombies'
@@ -166,6 +162,7 @@ export const Message = defineMessageUnion({
   CompletedGenerateSeed: { seed: Schema.Number },
   CompletedDetectInputDevice: { touchControls: TouchControls },
   ClickedMuteButton: {},
+  ClickedPauseButton: {},
   ClickedMusicButton: {},
   ClickedCampaignButton: {},
   ClickedEndlessButton: {},
@@ -427,20 +424,12 @@ const startFromKey = (model: Model, code: string): Model => {
 }
 
 const resumeFromKey = (model: Model, code: string): Model =>
-  isStartKey(code) ? startWhenAllowed(model, model.mode) : model
+  isPauseKey(code) ? startWhenAllowed(model, model.mode) : model
 
 const victoryFromKey = (model: Model, code: string): Model =>
   isKeepGoingKey(code) ? keepGoingWhenAllowed(model) : startFromKey(model, code)
 
-const WEAPON_CHOICES: Readonly<
-  Record<WeaponChoice, (arsenal: Arsenal) => Arsenal>
-> = {
-  Swap: swapWeapon,
-  Pistol: holdPistol,
-  Spare: holdSpare,
-}
-
-const chooseWeapon = (model: Model, choice: WeaponChoice): Model => {
+const swapGun = (model: Model): Model => {
   if (
     !isRoundActive(model.phase) ||
     isBrowsing(model.shop) ||
@@ -449,19 +438,16 @@ const chooseWeapon = (model: Model, choice: WeaponChoice): Model => {
     return model
   }
 
-  const chosen = modifyFields(model, {
-    player: player => modifyFields(player, { arsenal: WEAPON_CHOICES[choice] }),
+  const swapped = modifyFields(model, {
+    player: player => modifyFields(player, { arsenal: swapWeapon }),
   })
-  return changedWeapon(model, chosen)
-    ? modifyFields(chosen, { player: cancelReload })
-    : chosen
+  return changedWeapon(model, swapped)
+    ? modifyFields(swapped, { player: cancelReload })
+    : swapped
 }
 
-const weaponFromKey = (model: Model, code: string): Model =>
-  Option.match(maybeWeaponChoice(code), {
-    onNone: () => model,
-    onSome: choice => chooseWeapon(model, choice),
-  })
+const swapFromKey = (model: Model, code: string): Model =>
+  isSwapKey(code) ? swapGun(model) : model
 
 const changedWeapon = (before: Model, after: Model): boolean =>
   heldWeapon(before.player.arsenal) !== heldWeapon(after.player.arsenal)
@@ -966,7 +952,7 @@ const updateGame = (model: Model, message: Message) =>
         learnStartWaveWhen(
           model,
           withInput(
-            weaponFromKey(toggleAudioFromKey(phased, code), code),
+            swapFromKey(toggleAudioFromKey(phased, code), code),
             input =>
               hasResumed(model, phased) ? input : pressKey(input, code),
           ),
@@ -1056,6 +1042,11 @@ const updateGame = (model: Model, message: Message) =>
 
     ClickedMuteButton: () => unlockAudio(toggleSound(model)),
 
+    ClickedPauseButton: () =>
+      isRoundActive(model.phase)
+        ? Update.combine(model, [unlockAudio, pauseRound])
+        : { model },
+
     ClickedMusicButton: () => unlockAudio(toggleMusic(model)),
 
     ClickedCampaignButton: () =>
@@ -1073,10 +1064,7 @@ const updateGame = (model: Model, message: Message) =>
         : unlockAudio(learnStartWaveWhen(model, startWaveEarly(model))),
 
     ClickedSwapButton: () => {
-      const swapped = learnSwapWhen(
-        model,
-        refreshIntent(chooseWeapon(model, 'Swap')),
-      )
+      const swapped = learnSwapWhen(model, refreshIntent(swapGun(model)))
       return Update.combine(swapped, [
         unlockAudio,
         playSwapSoundWhen(changedWeapon(model, swapped)),

@@ -111,7 +111,7 @@ const START_PROMPT = deviceText(
 
 const RESUME_PROMPT = deviceText(
   {
-    KeyboardMouse: 'CLICK OR PRESS ENTER TO RESUME',
+    KeyboardMouse: 'CLICK OR PRESS ESC TO RESUME',
     Touch: 'TAP TO RESUME',
   },
   'Prompt',

@@ -224,12 +224,12 @@ describe('resuming', () => {
     )
   })
 
-  test('Space resumes without firing, and a movement key held through the pause still moves', () => {
+  test('Esc resumes without firing, and a movement key held through the pause still moves', () => {
     story(
       update,
       given(pausedModel),
       message(Message.PressedKey({ code: 'KeyD' })),
-      message(Message.PressedKey({ code: 'Space' })),
+      message(Message.PressedKey({ code: 'Escape' })),
       model(({ phase, input, intent }) => {
         expect(phase).toEqual(FIGHTING_PHASE)
         expect(input.pressedKeys).toEqual(['KeyD'])

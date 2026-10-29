@@ -15,13 +15,12 @@ bun dev
 
 ## Controls
 
-| Input    | Move                   | Aim                     | Fire                                |
-| -------- | ---------------------- | ----------------------- | ----------------------------------- |
-| Keyboard | WASD or arrow keys     | Facing direction        | Hold Space                          |
-| Mouse    | Keyboard               | Pointer position        | Hold the primary button             |
-| Touch    | Thumb on the left half | Thumb on the right half | Fires while the right thumb is down |
+| Input              | Move                   | Aim                     | Fire                                |
+| ------------------ | ---------------------- | ----------------------- | ----------------------------------- |
+| Keyboard and mouse | WASD                   | Pointer position        | Hold the primary button             |
+| Touch              | Thumb on the left half | Thumb on the right half | Fires while the right thumb is down |
 
-Tap, click, or press Enter to start, resume, or retry. Escape or P pauses, and the game also pauses when the page is hidden.
+Tap, click, or press Enter to start or retry. Esc pauses and resumes, and so does the PAUSE button in the top right corner. A tap or click on the pause screen also resumes. The game pauses when the page is hidden. R reloads, Q swaps guns, T places a trap, G picks the next trap, Enter starts the wave, M mutes, and N toggles the music. Each action has one key.
 
 ## Scripts
 

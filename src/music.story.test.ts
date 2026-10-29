@@ -114,12 +114,12 @@ describe('music follows the phase', () => {
         CueMusic({ mood: 'Romp', level: 'Full', stinger: 'None' }),
       ),
       resolveCue('Romp'),
-      pressKey('KeyP'),
+      pressKey('Escape'),
       Command.expectExact(
         CueMusic({ mood: 'Romp', level: 'Ducked', stinger: 'None' }),
       ),
       resolveCue('Romp'),
-      pressKey('Enter'),
+      pressKey('Escape'),
       Command.expectExact(
         CueMusic({ mood: 'Romp', level: 'Full', stinger: 'None' }),
       ),

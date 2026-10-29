@@ -17,6 +17,7 @@ import {
   initialModel,
 } from './model'
 import { Verdict, verdictFor } from './shop'
+import { holdFire } from './testInput'
 import {
   UPGRADE_TIERS,
   magazineOf,
@@ -189,7 +190,7 @@ describe('upgrade tiers', () => {
     story(
       update,
       given(fighting(3, Arsenal.PistolOnly())),
-      press('Space'),
+      holdFire,
       tick(FRAME_MS),
       model(({ bullets, player }) => {
         expect(
@@ -212,7 +213,7 @@ describe('upgrade tiers', () => {
       given(
         fighting(0, Arsenal.HoldingSpare({ spare: spare('Shotgun', 16, 1) })),
       ),
-      press('Space'),
+      holdFire,
       tick(FRAME_MS),
       model(({ bullets }) => {
         expect(bullets.length).toBe(statsAt('Shotgun', 1).pellets)

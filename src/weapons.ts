@@ -388,13 +388,6 @@ export const holdPistol = (arsenal: Arsenal): Arsenal =>
     HoldingSpare: ({ spare }) => Arsenal.HoldingPistol({ spare }),
   })
 
-export const holdSpare = (arsenal: Arsenal): Arsenal =>
-  Arsenal.match(arsenal, {
-    PistolOnly: () => arsenal,
-    HoldingPistol: ({ spare }) => Arsenal.HoldingSpare({ spare }),
-    HoldingSpare: () => arsenal,
-  })
-
 export const heldTier = (player: Player): number =>
   Arsenal.match(player.arsenal, {
     PistolOnly: () => player.pistolTier,
