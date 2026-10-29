@@ -28,8 +28,9 @@ import {
   initialModel,
   noKills,
 } from './model'
+import { scoreOf } from './stats'
 import { maybeKeyDownMessage } from './subscriptions'
-import { showDialog } from './testing'
+import { scoring, showDialog } from './testing'
 import { asVeteran } from './veteran'
 import { pause } from './waves'
 
@@ -258,7 +259,7 @@ describe('leaving a run', () => {
 
   test('going home clears the room but keeps the look, the settings, and the bests', () => {
     const messy = modifyFields(withEndlessBest(fighting, 11), {
-      score: () => 900,
+      stats: scoring(900),
       soundSetting: () => 'Muted',
       shakeSetting: () => 'Off',
       appearance: appearance =>
@@ -266,7 +267,7 @@ describe('leaving a run', () => {
     })
     const cleared = returnHome(messy)
     expect(Phase.guards.Ready(cleared.phase)).toBe(true)
-    expect(cleared.score).toBe(0)
+    expect(scoreOf(cleared.stats)).toBe(0)
     expect(cleared.zombies).toEqual([])
     expect(cleared.player).toEqual(initialModel.player)
     expect(cleared.soundSetting).toBe('Muted')

@@ -62,11 +62,13 @@ import {
   ZombieState,
   initialModel,
 } from './model'
+import { scoreOf } from './stats'
 import {
   SURFACE,
   bulletInto,
   holdFire,
   releaseFire,
+  scoring,
   tick,
   ticks,
   zombieAt,
@@ -312,7 +314,7 @@ describe('zombies', () => {
       ),
       holdFire,
       tick(FRAME_MS),
-      model(({ bullets, zombies, score }) => {
+      model(({ bullets, zombies, stats }) => {
         expect(bullets).toEqual([])
         expect(Array.map(zombies, ({ id, hp }) => ({ id, hp }))).toEqual([
           { id: 100, hp: ZOMBIE_MAX_HP - 1 },
@@ -322,14 +324,14 @@ describe('zombies', () => {
           'Walking',
           'Walking',
         ])
-        expect(score).toBe(0)
+        expect(scoreOf(stats)).toBe(0)
       }),
       ...ticks(Math.ceil((2 * FIRE_INTERVAL_MS) / FRAME_MS) + 8, FRAME_MS),
-      model(({ zombies, score }) => {
+      model(({ zombies, stats }) => {
         const struck = Option.getOrThrow(Array.head(zombies))
         expect(struck.hp).toBe(0)
         expect(ZombieState.guards.Dying(struck.state)).toBe(true)
-        expect(score).toBe(SCORE_PER_ZOMBIE)
+        expect(scoreOf(stats)).toBe(SCORE_PER_ZOMBIE)
       }),
     )
   })
@@ -408,9 +410,9 @@ describe('zombies', () => {
       ),
       holdFire,
       tick(FRAME_MS),
-      model(({ bullets, score }) => {
+      model(({ bullets, stats }) => {
         expect(bullets).toHaveLength(1)
-        expect(score).toBe(0)
+        expect(scoreOf(stats)).toBe(0)
       }),
     )
   })
@@ -484,7 +486,7 @@ describe('zombies', () => {
     const lastHeartModel = withZombies(
       modifyFields(playingModel, {
         player: player => modifyFields(player, { hp: () => 1 }),
-        score: () => 120,
+        stats: scoring(120),
       }),
       [
         zombieAt(100, ARENA_LEVEL.width / 2, ARENA_LEVEL.height / 2 + 3, {
@@ -497,10 +499,10 @@ describe('zombies', () => {
       update,
       given(lastHeartModel),
       tick(16),
-      model(({ phase, player, score }) => {
+      model(({ phase, player, stats }) => {
         expect(phase).toEqual(Phase.GameOver({ wave: 1 }))
         expect(player.hp).toBe(0)
-        expect(score).toBe(120)
+        expect(scoreOf(stats)).toBe(120)
       }),
       tick(16),
       model(({ elapsedMs }) => {
@@ -508,10 +510,10 @@ describe('zombies', () => {
       }),
       ...ticks(RESTART_GRACE_TICKS, GRACE_TICK_MS),
       message(Message.PressedKey({ code: 'Enter' })),
-      model(({ phase, player, score, zombies }) => {
+      model(({ phase, player, stats, zombies }) => {
         expect(Phase.guards.Preparation(phase)).toBe(true)
         expect(player.hp).toBe(PLAYER_MAX_HP)
-        expect(score).toBe(0)
+        expect(scoreOf(stats)).toBe(0)
         expect(zombies).toEqual([])
       }),
     )
@@ -623,7 +625,7 @@ describe('determinism', () => {
     const first = playSession(1234)
     const second = playSession(1234)
 
-    expect(first.zombies.length + first.score).toBeGreaterThan(0)
+    expect(first.zombies.length + scoreOf(first.stats)).toBeGreaterThan(0)
     expect(second).toEqual(first)
   })
 
@@ -775,8 +777,8 @@ describe('particles and decals', () => {
       update,
       given(floodModel),
       tick(FRAME_MS),
-      model(({ particles, score }) => {
-        expect(score).toBe(floodSize * SCORE_PER_ZOMBIE)
+      model(({ particles, stats }) => {
+        expect(scoreOf(stats)).toBe(floodSize * SCORE_PER_ZOMBIE)
         expect(particles).toHaveLength(PARTICLE_MAX)
       }),
       ...landingFrames,
@@ -1133,8 +1135,8 @@ describe('hit-stop', () => {
       update,
       given(massacreModel(30)),
       tick(FRAME_MS),
-      model(({ hitStop, score }) => {
-        expect(score).toBe(30 * SCORE_PER_ZOMBIE)
+      model(({ hitStop, stats }) => {
+        expect(scoreOf(stats)).toBe(30 * SCORE_PER_ZOMBIE)
         expect(hitStop).toEqual(
           HitStop.Frozen({ remainingMs: HIT_STOP_KILL_MAX_MS }),
         )

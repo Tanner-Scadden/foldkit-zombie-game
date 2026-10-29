@@ -35,6 +35,7 @@ import {
   accuracyPercent,
   defeatVerdict,
   runTimeLabel,
+  scoreOf,
   totalKills,
   victoryVerdict,
 } from './stats'
@@ -144,7 +145,7 @@ const nightmareNews = (model: Model): string =>
 
 const statsLabel = (model: Model): string => {
   const { stats } = model
-  return `Difficulty: ${DIFFICULTIES[model.difficulty.chosen].name}.${nightmareNews(model)} ${waveStatsLabel(model)} Zombies splatted: ${totalKills(stats)} (${killLabel(stats)}). Run time ${runTimeLabel(stats)}. Accuracy ${accuracyPercent(stats)} percent. Money earned $${model.wallet.earned}. Hearts lost ${stats.heartsLost}. Traps placed ${stats.trapsPlaced}. Score ${model.score}.`
+  return `Difficulty: ${DIFFICULTIES[model.difficulty.chosen].name}.${nightmareNews(model)} ${waveStatsLabel(model)} Zombies splatted: ${totalKills(stats)} (${killLabel(stats)}). Run time ${runTimeLabel(stats)}. Accuracy ${accuracyPercent(stats)} percent. Money earned $${model.wallet.earned}. Hearts lost ${stats.heartsLost}. Traps placed ${stats.trapsPlaced}. Score ${scoreOf(stats)}.`
 }
 
 const debutCardStatus = (model: Model): Option.Option<string> =>

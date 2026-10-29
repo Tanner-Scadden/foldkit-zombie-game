@@ -65,6 +65,7 @@ import {
   accuracyPercent,
   defeatVerdict,
   runTimeLabel,
+  scoreOf,
   totalKills,
   victoryVerdict,
 } from './stats'
@@ -951,7 +952,7 @@ const statRows = (model: Model): ReadonlyArray<StatRow> => {
       value: `${stats.trapsPlaced}`,
       tone: 'Plain',
     },
-    { label: STAT_LABELS.score, value: `${model.score}`, tone: 'Victory' },
+    { label: STAT_LABELS.score, value: `${scoreOf(model.stats)}`, tone: 'Victory' },
   ]
 }
 

@@ -23,7 +23,8 @@ import {
   Trap,
   initialModel,
 } from './model'
-import { bulletInto, press, tick, zombieAt } from './testing'
+import { scoreOf } from './stats'
+import { bulletInto, press, scoring, tick, zombieAt } from './testing'
 import {
   FINAL_WAVE,
   endlessTankCount,
@@ -79,7 +80,7 @@ const victorious: Model = modifyFields(readyModel, {
   wallet: () => ({ balance: 412, earned: 1900, shown: 412 }),
   traps: () => [PLANK_PILE],
   trapStock: () => ({ Barricade: 1, Turret: 1 }),
-  score: () => 4200,
+  stats: scoring(4200),
   player: player =>
     modifyFields(player, {
       hp: () => 3,
@@ -362,7 +363,7 @@ describe('keep going from Victory', () => {
       }),
       ...waitOutGrace(),
       press('KeyK'),
-      model(({ mode, phase, wallet, player, traps, trapStock, score }) => {
+      model(({ mode, phase, wallet, player, traps, trapStock, stats }) => {
         expect(mode).toEqual(RunMode.Endless())
         expect(preparationWave(phase)).toEqual(Option.some(FINAL_WAVE + 1))
         expect(wallet).toEqual(victorious.wallet)
@@ -371,7 +372,7 @@ describe('keep going from Victory', () => {
         expect(player.hp).toBe(3)
         expect(traps).toEqual([PLANK_PILE])
         expect(trapStock).toEqual({ Barricade: 1, Turret: 1 })
-        expect(score).toBe(4200)
+        expect(scoreOf(stats)).toBe(4200)
       }),
     )
   })

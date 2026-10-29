@@ -30,7 +30,8 @@ import {
   screenOf,
   thumbAreaTop,
 } from './screen'
-import { ticks } from './testing'
+import { scoreOf } from './stats'
+import { scoring, ticks } from './testing'
 import { asVeteran } from './veteran'
 
 const PORTRAIT_SURFACE = { left: 0, top: 0, width: 390, height: 844 }
@@ -326,7 +327,7 @@ describe('portrait input', () => {
 describe('turning the phone', () => {
   test('mid-wave, the run, the money, and both thumbs carry over, with no pause', () => {
     const rich = modifyFields(standingAt(fightingInLandscape, 120, 90), {
-      score: () => 340,
+      stats: scoring(340),
       wallet: () => ({ balance: 75, earned: 120, shown: 75 }),
     })
     story(
@@ -339,7 +340,7 @@ describe('turning the phone', () => {
       model(current => {
         expect(isPortrait(current)).toBe(true)
         expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)
-        expect(current.score).toBe(340)
+        expect(scoreOf(current.stats)).toBe(340)
         expect(current.wallet.balance).toBe(75)
         expect(Stick.isAnyOf(['Active'])(current.input.moveStick)).toBe(true)
         expect(Stick.isAnyOf(['Active'])(current.input.aimStick)).toBe(true)

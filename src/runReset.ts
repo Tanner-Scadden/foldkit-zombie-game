@@ -38,7 +38,6 @@ export type RunFields = Pick<
   | 'particles'
   | 'decals'
   | 'dustCooldownMs'
-  | 'score'
   | 'wallet'
   | 'shop'
   | 'shopCategory'
@@ -79,7 +78,6 @@ export const freshRun = (model: Model): RunFields => ({
   particles: [],
   decals: [],
   dustCooldownMs: 0,
-  score: 0,
   wallet: emptyWallet,
   shop: ShopState.Away(),
   shopCategory: FIRST_SHOP_CATEGORY,

@@ -52,6 +52,7 @@ import {
   group,
   gunIcon,
 } from './sprite'
+import { scoreOf } from './stats'
 import { TRAP_KIND_ORDER, maybeSelectedKind } from './traps'
 import { isRoundActive, zombiesRemaining } from './waves'
 import {
@@ -573,7 +574,7 @@ const playHudShapes = (
   ...roundHudShapes(model, layout),
   ...(isRoundActive(model.phase)
     ? textShapes(
-        `SCORE ${model.score}`,
+        `SCORE ${scoreOf(model.stats)}`,
         'Plain',
         layout.scoreRight,
         HUD_MARGIN,

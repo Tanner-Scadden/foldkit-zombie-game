@@ -1,7 +1,7 @@
 import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { MS_PER_SECOND } from './constants'
+import { MS_PER_SECOND, SCORE_PER_ZOMBIE } from './constants'
 import {
   GameEvent,
   type KillCounts,
@@ -94,6 +94,10 @@ export const killTotal = (kills: KillCounts): number =>
   kills.Boss
 
 export const totalKills = ({ kills }: RunStats): number => killTotal(kills)
+
+// NOTE: every kill scores the same, so the score is read from the kills.
+export const scoreOf = (stats: RunStats): number =>
+  totalKills(stats) * SCORE_PER_ZOMBIE
 
 const zipKills = (
   first: KillCounts,

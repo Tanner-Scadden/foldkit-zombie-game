@@ -8,7 +8,6 @@ import {
   PLAYER_INVULNERABLE_MS,
   PLAYER_KNOCKBACK_SPEED,
   PLAYER_RADIUS,
-  SCORE_PER_ZOMBIE,
   ZOMBIE_HIT_PULSE_MS,
 } from './constants'
 import { circlesOverlap, directionBetween, scaleVector } from './geometry'
@@ -226,9 +225,6 @@ export const bountyOf = (events: ReadonlyArray<GameEvent>): number =>
     GameEvent.isAnyOf(['ZombieKilled'])(event) ? sum + event.bounty : sum,
   )
 
-export const killCount = (events: ReadonlyArray<GameEvent>): number =>
-  Array.filter(events, GameEvent.isAnyOf(['ZombieKilled'])).length
-
 const detonate = (model: Model, bomberId: number): Model => {
   const rest = Array.filter(model.zombies, ({ id }) => id !== bomberId)
   const maybeBlast = pipe(
@@ -246,8 +242,6 @@ const detonate = (model: Model, bomberId: number): Model => {
         zombies: () => zombieOutcome.targets,
         player: () => playerOutcome.target,
         traps: () => trapOutcome.targets,
-        score: score =>
-          score + killCount(zombieOutcome.events) * SCORE_PER_ZOMBIE,
         wallet: wallet => earn(wallet, bountyOf(zombieOutcome.events)),
         blasts: blasts =>
           Array.takeRight(

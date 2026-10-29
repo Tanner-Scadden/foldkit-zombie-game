@@ -747,14 +747,20 @@ const roomModel = (): Model => {
   if (phase === 'victory')
     model = modifyFields(model, {
       phase: () => Phase.Victory(),
-      stats: s => ({ ...s, wavesCleared: 8 }),
-      score: () => 4321,
+      stats: s => ({
+        ...s,
+        wavesCleared: 8,
+        kills: { ...s.kills, Shambler: s.kills.Shambler + 432 },
+      }),
     })
   if (phase === 'paused') model = pause(model)
   if (phase === 'gameover')
     model = modifyFields(model, {
       phase: () => Phase.GameOver({ wave }),
-      score: () => 1234,
+      stats: s => ({
+        ...s,
+        kills: { ...s.kills, Shambler: s.kills.Shambler + 123 },
+      }),
     })
   return model
 }

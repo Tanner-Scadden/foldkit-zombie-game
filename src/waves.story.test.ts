@@ -20,11 +20,13 @@ import {
   type Zombie,
   initialModel,
 } from './model'
+import { scoreOf } from './stats'
 import {
   bulletInto,
   holdFire,
   press,
   release,
+  scoring,
   tick,
   ticks,
   zombieAt,
@@ -244,13 +246,13 @@ describe('waves', () => {
       update,
       given(
         modifyFields(killShot(inWave(FINAL_WAVE, [], [doomed]), doomed), {
-          score: () => 990,
+          stats: scoring(990),
         }),
       ),
       tick(FRAME_MS),
-      model(({ phase, score }) => {
+      model(({ phase, stats }) => {
         expect(phase).toEqual(Phase.Victory())
-        expect(score).toBe(1000)
+        expect(scoreOf(stats)).toBe(1000)
       }),
       ...ticks(5, FRAME_MS),
       model(({ elapsedMs }) => {
@@ -258,9 +260,9 @@ describe('waves', () => {
       }),
       ...ticks(RESTART_GRACE_TICKS, GRACE_TICK_MS),
       press('Enter'),
-      model(({ phase, score }) => {
+      model(({ phase, stats }) => {
         expect(Phase.guards.Preparation(phase)).toBe(true)
-        expect(score).toBe(0)
+        expect(scoreOf(stats)).toBe(0)
       }),
     )
   })
@@ -493,7 +495,7 @@ describe('a full wave', () => {
       ({ phase }) => Phase.guards.Preparation(phase) && phase.wave === 2,
     )
     const cleared = Option.getOrThrow(maybeCleared)
-    expect(cleared.score).toBeGreaterThan(0)
+    expect(scoreOf(cleared.stats)).toBeGreaterThan(0)
     expect(cleared.player.hp).toBeGreaterThan(0)
     expect(cleared.player.hp).toBeLessThanOrEqual(PLAYER_MAX_HP)
     expect(second).toEqual(first)

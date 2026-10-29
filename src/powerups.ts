@@ -9,13 +9,11 @@ import {
   ZOMBIE_BLAST_TARGET,
   blastAll,
   bountyOf,
-  killCount,
 } from './combat'
 import {
   PLAYER_MAX_HP,
   PLAYER_RADIUS,
   PLAYER_SPEED,
-  SCORE_PER_ZOMBIE,
 } from './constants'
 import {
   Beat,
@@ -416,7 +414,6 @@ const burpAt = (model: Model, at: Vector): Model => {
   const outcome = blastAll(blast, model.zombies, ZOMBIE_BLAST_TARGET)
   return modifyFields(model, {
     zombies: () => outcome.targets,
-    score: score => score + killCount(outcome.events) * SCORE_PER_ZOMBIE,
     wallet: wallet => earn(wallet, bountyOf(outcome.events)),
     frameEvents: frameEvents => [
       ...frameEvents,

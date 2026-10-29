@@ -34,7 +34,6 @@ import {
   MS_PER_SECOND,
   PLAYER_KNOCKBACK_DECAY_PER_SECOND,
   PLAYER_RADIUS,
-  SCORE_PER_ZOMBIE,
   SEPARATION_SPEED,
   ZOMBIE_BUMP_SPEED,
   ZOMBIE_KNOCKBACK_DECAY_PER_SECOND,
@@ -1005,7 +1004,6 @@ const resolveBulletHits = (model: Model, seconds: number): Model => {
         stats,
         Array.filter(hits, ({ weapon }) => weapon !== TURRET_WEAPON).length,
       ),
-    score: score => score + killedZombies.length * SCORE_PER_ZOMBIE,
     wallet: wallet => earn(wallet, bounty),
     frameEvents: frameEvents => [
       ...frameEvents,

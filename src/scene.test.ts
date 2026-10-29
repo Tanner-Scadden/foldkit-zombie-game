@@ -569,7 +569,6 @@ describe('Run stats', () => {
   const finished = (phase: Phase): Model =>
     modifyFields(initialModel, {
       phase: () => phase,
-      score: () => 690,
       wallet: () => ({ balance: 40, earned: 615, shown: 40 }),
       stats: () => ({
         kills: {

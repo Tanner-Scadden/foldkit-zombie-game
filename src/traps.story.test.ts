@@ -31,6 +31,7 @@ import {
   initialModel,
 } from './model'
 import { SHOP_ITEMS, Verdict, priceFor, verdictFor } from './shop'
+import { scoreOf } from './stats'
 import { holdFire, press, release, tick, ticks, zombieOf } from './testing'
 import { TRAPS, repairPrice, stageOf, tollsOf } from './traps'
 import { WEAPONS } from './weapons'
@@ -1044,7 +1045,7 @@ describe('trap determinism', () => {
   test('a wave with traps replays identically from the same seed', () => {
     const first = playWithTraps(4321)
     expect(first.traps).toHaveLength(2)
-    expect(first.score).toBeGreaterThan(0)
+    expect(scoreOf(first.stats)).toBeGreaterThan(0)
     expect(playWithTraps(4321)).toEqual(first)
     expect(playWithTraps(8765)).not.toEqual(first)
   })

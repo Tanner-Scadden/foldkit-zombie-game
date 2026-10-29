@@ -53,7 +53,7 @@ import {
   initialModel,
 } from './model'
 import { DROP_RULES } from './powerups'
-import { WIDE_SURFACE } from './testing'
+import { WIDE_SURFACE, scoring } from './testing'
 import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
 import { rollSpawns, startOrResume } from './waves'
@@ -358,7 +358,7 @@ const fullRoom = (mode: RunMode, wave: number, tier: number): Model => {
     boosts: () => ALL_BOOSTED,
     callouts: () => [{ kind: 'Pierce', x: 160, y: 90, ageMs: 600 }],
     streak: () => Streak.Hot({ count: 12, remainingMs: 900 }),
-    score: () => 98_765,
+    stats: scoring(98_760),
     trapStock: () => ({ Barricade: 2, Turret: 1 }),
     wallet: wallet => ({ ...wallet, balance: 1234, shown: 1234 }),
     player: player => ({

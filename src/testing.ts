@@ -4,7 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import { Dialog } from '@foldkit/ui'
 
-import { ZOMBIE_MAX_HP } from './constants'
+import { SCORE_PER_ZOMBIE, ZOMBIE_MAX_HP } from './constants'
 import { Message } from './message'
 import {
   type Bullet,
@@ -12,6 +12,7 @@ import {
   type Model,
   Phase,
   Pierce,
+  type RunStats,
   type Zombie,
   ZombieAction,
   type ZombieKind,
@@ -20,6 +21,18 @@ import {
 } from './model'
 import { MeasureGameSurface } from './view'
 import { ZOMBIE_KINDS } from './zombies'
+
+// NOTE: the score is read from the kills, so a test that wants a score
+// gives the run that many points of Groaners.
+export const scoring =
+  (score: number) =>
+  (stats: RunStats): RunStats => ({
+    ...stats,
+    kills: {
+      ...stats.kills,
+      Shambler: stats.kills.Shambler + score / SCORE_PER_ZOMBIE,
+    },
+  })
 
 export const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 

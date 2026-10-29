@@ -29,7 +29,6 @@ const RUN_FIELDS = [
   'particles',
   'decals',
   'dustCooldownMs',
-  'score',
   'wallet',
   'shop',
   'shopCategory',
@@ -90,7 +89,6 @@ describe('going home', () => {
     const messy = modifyFields(played[0]!, {
       cameraLean: () => ({ x: 12, y: -7 }),
       dustCooldownMs: () => 90,
-      score: () => 1200,
       shopCategory: () => 'Traps',
       selectedTrap: () => 'Turret',
       trapNotice: () =>
