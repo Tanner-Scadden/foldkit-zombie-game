@@ -9,13 +9,22 @@ import { DIFFICULTY_ORDER } from '../../src/difficulty'
 import type { Difficulty } from '../../src/model'
 import { type BalanceModel, type WaveRow, loadoutLabel } from './model'
 import type { CampaignSummary, WavePassSummary } from './summary'
-import { TARGETS, type Target } from './targets'
+import {
+  PORTRAIT_GAP_TOLERANCE,
+  PORTRAIT_PAIRS,
+  type PortraitPair,
+  TARGETS,
+  type Target,
+} from './targets'
 
 // JOBS
+
+export type View = 'Landscape' | 'Portrait'
 
 export type Job = Readonly<{
   id: string
   title: string
+  view: View
   env: Readonly<Record<string, string>>
   args: ReadonlyArray<string>
 }>
@@ -24,12 +33,25 @@ export type JobSizes = Readonly<{ campaignRuns: number; waveRuns: number }>
 
 export const NIGHTLY_SIZES: JobSizes = { campaignRuns: 200, waveRuns: 100 }
 
+// NOTE: every job sets VIEW, so a VIEW left in the caller's shell never
+// turns a landscape job into a portrait one.
+const viewEnv = (view: View): Readonly<Record<string, string>> => ({
+  VIEW: view === 'Portrait' ? 'portrait' : 'landscape',
+})
+
 const campaignJob = (
   id: string,
   title: string,
   env: Readonly<Record<string, string>>,
   sizes: JobSizes,
-): Job => ({ id, title, env, args: [`${sizes.campaignRuns}`, '1'] })
+  view: View = 'Landscape',
+): Job => ({
+  id,
+  title,
+  view,
+  env: { ...env, ...viewEnv(view) },
+  args: [`${sizes.campaignRuns}`, '1'],
+})
 
 export const nightlyJobs = (sizes: JobSizes): ReadonlyArray<Job> => [
   campaignJob('normal', 'Normal, default bot', { DIFFICULTY: 'normal' }, sizes),
@@ -53,17 +75,32 @@ export const nightlyJobs = (sizes: JobSizes): ReadonlyArray<Job> => [
     { DIFFICULTY: 'normal', MODE: 'endless' },
     sizes,
   ),
+  campaignJob(
+    'portrait-normal',
+    'Portrait, Normal, default bot',
+    { DIFFICULTY: 'normal' },
+    sizes,
+    'Portrait',
+  ),
+  campaignJob(
+    'portrait-easy',
+    'Portrait, Easy, default bot',
+    { DIFFICULTY: 'easy' },
+    sizes,
+    'Portrait',
+  ),
   {
     id: 'waves',
     title: 'Wave snapshots on Normal, every wave',
-    env: { DIFFICULTY: 'normal' },
+    view: 'Landscape',
+    env: { DIFFICULTY: 'normal', ...viewEnv('Landscape') },
     args: ['--wave', 'all', '--runs', `${sizes.waveRuns}`],
   },
 ]
 
 // ARGUMENTS
 
-export type BaselinePolicy = 'Update' | 'KeepUnlessMissing'
+export type BaselinePolicy = 'Update' | 'Extend' | 'KeepUnlessMissing'
 
 export type Invocation = Readonly<{
   sizes: JobSizes
@@ -90,7 +127,9 @@ export const parseInvocation = (args: ReadonlyArray<string>): Invocation => ({
   },
   baselinePolicy: Array.contains(args, '--update-baseline')
     ? 'Update'
-    : 'KeepUnlessMissing',
+    : Array.contains(args, '--extend-baseline')
+      ? 'Extend'
+      : 'KeepUnlessMissing',
 })
 
 // DATES
@@ -455,6 +494,68 @@ export const compareToBaseline = (
   return [...compared, ...missing]
 }
 
+// NOTE: keeps every number already in the baseline and adds the metrics it
+// has never seen, so a new job gets a baseline without moving the old ones.
+export const extendBaseline = (
+  before: Baseline,
+  metrics: ReadonlyArray<Metric>,
+): Baseline => ({
+  ...before,
+  metrics: {
+    ...baselineOf(metrics, before.createdAt, before.commit).metrics,
+    ...before.metrics,
+  },
+})
+
+// PORTRAIT
+
+export type PortraitGap = Readonly<{
+  pair: PortraitPair
+  landscape: CampaignSummary
+  portrait: CampaignSummary
+  winGap: number
+  isBeyond: boolean
+}>
+
+const summaryOf = (
+  results: ReadonlyArray<CampaignResult>,
+  id: string,
+): Option.Option<CampaignSummary> =>
+  Option.map(
+    Array.findFirst(results, ({ job }) => job.id === id),
+    ({ summary }) => summary,
+  )
+
+export const portraitGaps = (
+  results: ReadonlyArray<CampaignResult>,
+): ReadonlyArray<PortraitGap> =>
+  Array.flatMap(PORTRAIT_PAIRS, pair =>
+    Option.match(
+      Option.all([
+        summaryOf(results, pair.landscapeId),
+        summaryOf(results, pair.portraitId),
+      ]),
+      {
+        onNone: () => [],
+        onSome: ([landscape, portrait]): ReadonlyArray<PortraitGap> => {
+          const winGap = portrait.winShare - landscape.winShare
+          return [
+            {
+              pair,
+              landscape,
+              portrait,
+              winGap,
+              isBeyond: Math.abs(winGap) > PORTRAIT_GAP_TOLERANCE + EPSILON,
+            },
+          ]
+        },
+      },
+    ),
+  )
+
+export const portraitGapLine = (gap: PortraitGap): string =>
+  `${gap.pair.title}: portrait wins ${formatValue(gap.portrait.winShare, 'Share')} against landscape ${formatValue(gap.landscape.winShare, 'Share')} (${formatDelta(gap.winGap, 'Share')}, tolerance ${formatValue(PORTRAIT_GAP_TOLERANCE, 'Share')})`
+
 // REPORT
 
 const formatValue = (value: number, unit: Unit): string =>
@@ -523,7 +624,7 @@ export type BaselineState =
   | Readonly<{ _tag: 'Compared'; baseline: Baseline }>
   | Readonly<{ _tag: 'Absent' }>
 
-export type BaselineWrite = 'Written' | 'Kept'
+export type BaselineWrite = 'Written' | 'Extended' | 'Kept'
 
 export type CampaignResult = Readonly<{
   job: Job
@@ -688,6 +789,16 @@ export const formatReport = (input: ReportInput): string => {
       ? compareToBaseline(input.metrics, input.baselineState.baseline)
       : []
   const drifted = Array.filter(drifts, isDrift)
+  const gaps = portraitGaps(input.campaigns)
+  const wideGaps = Array.filter(gaps, ({ isBeyond }) => isBeyond)
+  const landscapeCampaigns = Array.filter(
+    input.campaigns,
+    ({ job }) => job.view === 'Landscape',
+  )
+  const portraitCampaigns = Array.filter(
+    input.campaigns,
+    ({ job }) => job.view === 'Portrait',
+  )
   const baselineNote =
     input.baselineState._tag === 'Absent'
       ? 'No baseline yet, so nothing is compared.'
@@ -695,7 +806,9 @@ export const formatReport = (input: ReportInput): string => {
   const writeNote =
     input.baselineWrite === 'Written'
       ? ' This run wrote a new baseline to tools/balance/baseline.json.'
-      : ''
+      : input.baselineWrite === 'Extended'
+        ? ' This run added its new metrics to tools/balance/baseline.json and kept the rest.'
+        : ''
   return Array.join(
     [
       `# Balance nightly, ${input.date}`,
@@ -720,17 +833,44 @@ export const formatReport = (input: ReportInput): string => {
         Array.map(outOfTarget, verdict => verdictLine(input.metrics, verdict)),
       ),
       '',
+      `### Portrait wins beyond tolerance against landscape (${wideGaps.length})`,
+      '',
+      ...bullets(Array.map(wideGaps, portraitGapLine)),
+      '',
       '## Campaign bots',
       '',
-      campaignTable(input.campaigns),
+      campaignTable(landscapeCampaigns),
       '',
       'Share of all runs that died on each wave:',
       '',
-      deathsTable(input.campaigns),
+      deathsTable(landscapeCampaigns),
       '',
       'Normal, default bot, per wave (means over runs that played the wave):',
       '',
-      normalWavesTable(input.campaigns),
+      normalWavesTable(landscapeCampaigns),
+      '',
+      '## Portrait',
+      '',
+      'The same bots in the portrait window of a 390x844 phone (135 by 180 of the room), seeing only the zombies inside it.',
+      '',
+      Array.isReadonlyArrayEmpty(portraitCampaigns)
+        ? 'No portrait campaign in this run.'
+        : campaignTable(portraitCampaigns),
+      '',
+      'Portrait against landscape:',
+      '',
+      ...bullets(Array.map(gaps, portraitGapLine)),
+      '',
+      'Share of all runs that died on each wave, landscape and portrait side by side:',
+      '',
+      deathsTable(
+        Array.flatMap(PORTRAIT_PAIRS, ({ landscapeId, portraitId }) =>
+          Array.filter(
+            input.campaigns,
+            ({ job }) => job.id === landscapeId || job.id === portraitId,
+          ),
+        ),
+      ),
       '',
       '## Wave snapshots',
       '',

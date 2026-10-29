@@ -9,12 +9,12 @@ Three layers of balance checks, cheapest first. Run the heavy ones through the g
 | `bun run balance -- --wave 4 --runs 200`       | Wave snapshots  | Seconds                    |
 | `bun run balance -- --wave all --runs 100`     | Wave snapshots  | About a minute             |
 | `bun run balance [runs]`                       | Campaign bot    | Minutes                    |
-| `bun run balance:nightly`                      | Everything      | About 15 minutes           |
+| `bun run balance:nightly`                      | Everything      | About 20 minutes           |
 | `bun run balance:nightly -- --update-baseline` | Everything      | Also rewrites the baseline |
 
 ## Portrait view
 
-`VIEW=portrait` (for example `VIEW=portrait bun run balance -- --wave all --runs 100`) makes the bot see only the zombies inside the portrait camera's window, the 180 by 180 window that follows it and leans toward its aim, the way a phone held upright shows the room. It does not shoot or flee what it cannot see. See "Portrait play" in `GAME_DESIGN.md` for the comparison.
+`VIEW=portrait` (for example `VIEW=portrait bun run balance -- --wave all --runs 100`) makes the bot see only the zombies inside the portrait camera's window on a 390x844 phone, 135 by 180 of the room, which follows it and leans toward its aim, the way a phone held upright shows the room. It does not shoot or flee what it cannot see. The nightly plays two portrait campaign passes (see below). See "Portrait play" in `GAME_DESIGN.md` for the comparison.
 
 ## The analytical model
 
@@ -30,9 +30,11 @@ Snapshots are derived by playing, not saved as fixtures. A fixture would be a wh
 
 ## The nightly suite
 
-`nightly.ts` runs these jobs one after another, each through `simulate.ts --json` with the guard's `WORKERS`: Normal default, Normal `SWAP=1`, Easy, Hard, Nightmare, endless on Normal (200 runs each), and the snapshot pass for every wave on Normal (100 runs a wave). It decodes each summary with the Schemas in `summary.ts`, adds the model's numbers, judges the targets in `targets.ts`, compares everything with `baseline.json`, and writes `reports/<YYYY-MM-DD>.md` (gitignored). The summary at the top lists what is in target, what drifted past its noise tolerance, and what is out of target. It exits 0 and prints the report's path. `--runs n` and `--wave-runs n` shrink the jobs for a quick try.
+`nightly.ts` runs these jobs one after another, each through `simulate.ts --json` with the guard's `WORKERS`: Normal default, Normal `SWAP=1`, Easy, Hard, Nightmare, endless on Normal, the portrait passes (200 runs each), and the snapshot pass for every wave on Normal (100 runs a wave). It decodes each summary with the Schemas in `summary.ts`, adds the model's numbers, judges the targets in `targets.ts`, compares everything with `baseline.json`, and writes `reports/<YYYY-MM-DD>.md` (gitignored). The summary at the top lists what is in target, what drifted past its noise tolerance, what is out of target, and which portrait passes win too far from landscape. It exits 0 and prints the report's path. `--runs n` and `--wave-runs n` shrink the jobs for a quick try. Every job sets `VIEW`, so a `VIEW` in your shell does not leak into the landscape jobs.
 
-The baseline is written when it is missing or with `--update-baseline`. The tolerances in `suite.ts` sit at the noise of the batch sizes: about 5 points for a share over 200 runs and 8 over 100.
+The portrait passes are Normal default and Easy, each with `VIEW=portrait` (`PORTRAIT_PAIRS` in `targets.ts`). Each is held to the same win target as its landscape twin, and the report's Portrait section puts them side by side: their table, a line per pair with the win gap, and deaths by wave for both. A gap over 8 points (`PORTRAIT_GAP_TOLERANCE`, about two standard errors of the difference of two 200 run shares) is listed in the summary. Each pass costs over two minutes, so `SWAP=1` stays landscape only, and Hard and Nightmare do too, since their win shares are too close to zero to show a gap in 200 runs. For a one-off portrait check of another bot, run it by hand: `VIEW=portrait SWAP=1 bun run balance 200`.
+
+The baseline is written when it is missing or with `--update-baseline`. `--extend-baseline` adds only the metrics the baseline has never seen, such as a new job's, and keeps every stored number. The tolerances in `suite.ts` sit at the noise of the batch sizes: about 5 points for a share over 200 runs and 8 over 100.
 
 ## Files
 

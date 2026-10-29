@@ -1,10 +1,12 @@
 // The nightly balance suite. Run it through the heavy guard, never
 // directly: `bun run balance:nightly`. It plays every campaign bot, endless,
-// and the wave snapshot pass for every wave, one job after another with the
-// guard's WORKERS, holds the results to the targets and the stored baseline,
-// and writes tools/balance/reports/<YYYY-MM-DD>.md. `--update-baseline`
-// rewrites tools/balance/baseline.json, which is also written when it is
-// missing. `--runs n` and `--wave-runs n` shrink the jobs for a quick try.
+// the portrait campaign bots, and the wave snapshot pass for every wave, one
+// job after another with the guard's WORKERS, holds the results to the
+// targets and the stored baseline, and writes
+// tools/balance/reports/<YYYY-MM-DD>.md. `--update-baseline` rewrites
+// tools/balance/baseline.json, which is also written when it is missing.
+// `--extend-baseline` adds only the metrics the baseline lacks. `--runs n`
+// and `--wave-runs n` shrink the jobs for a quick try.
 
 import {
   Array,
@@ -37,6 +39,7 @@ import {
   type Metric,
   baselineOf,
   campaignMetrics,
+  extendBaseline,
   formatReport,
   localDate,
   modelMetrics,
@@ -220,7 +223,9 @@ const program = Effect.gen(function* () {
   const baselineWrite: BaselineWrite =
     invocation.baselinePolicy === 'Update' || baselineState._tag === 'Absent'
       ? 'Written'
-      : 'Kept'
+      : invocation.baselinePolicy === 'Extend'
+        ? 'Extended'
+        : 'Kept'
   const endedAt = yield* Clock.currentTimeMillis
   const report = formatReport({
     date,
@@ -237,10 +242,12 @@ const program = Effect.gen(function* () {
   yield* fs.makeDirectory(REPORTS, { recursive: true })
   const reportPath = path.join(REPORTS, `${date}.md`)
   yield* fs.writeFileString(reportPath, report)
-  if (baselineWrite === 'Written') {
-    const encoded = yield* Schema.encodeEffect(Baseline)(
-      baselineOf(metrics, date, commit),
-    ).pipe(
+  if (baselineWrite !== 'Kept') {
+    const next =
+      baselineWrite === 'Extended' && baselineState._tag === 'Compared'
+        ? extendBaseline(baselineState.baseline, metrics)
+        : baselineOf(metrics, date, commit)
+    const encoded = yield* Schema.encodeEffect(Baseline)(next).pipe(
       Effect.mapError(
         error => new BadSummary({ job: 'baseline', reason: error.message }),
       ),

@@ -3,19 +3,23 @@ import { describe, expect, test } from 'vitest'
 
 import {
   type Baseline,
+  type CampaignResult,
   type Metric,
   NIGHTLY_SIZES,
   baselineOf,
   campaignMetrics,
   compareToBaseline,
   driftLine,
+  extendBaseline,
   judge,
   localDate,
   nightlyJobs,
   parseInvocation,
+  portraitGapLine,
+  portraitGaps,
 } from './suite'
 import type { CampaignSummary } from './summary'
-import type { Target } from './targets'
+import { PORTRAIT_PAIRS, TARGETS, type Target } from './targets'
 
 const share = (key: string, value: number, tolerance = 0.05): Metric => ({
   key,
@@ -86,6 +90,94 @@ describe('the baseline comparison', () => {
         ({ _tag }) => _tag,
       ),
     ).toEqual(['Within'])
+  })
+})
+
+describe('extending the baseline', () => {
+  test('keeps the stored numbers and adds the new ones', () => {
+    const extended = extendBaseline(baseline({ 'normal.wins': 0.16 }), [
+      share('normal.wins', 0.3),
+      share('portrait-normal.wins', 0.123456),
+    ])
+    expect(extended).toEqual({
+      createdAt: '2026-10-28',
+      commit: 'abc1234',
+      metrics: { 'normal.wins': 0.16, 'portrait-normal.wins': 0.1235 },
+    })
+  })
+})
+
+describe('portrait against landscape', () => {
+  const campaign = (winShare: number): CampaignSummary => ({
+    _tag: 'Campaign',
+    difficulty: 'Normal',
+    kind: 'Campaign',
+    style: 'Default',
+    runs: 200,
+    wallSeconds: 10,
+    winShare,
+    closeCallShare: 0.4,
+    medianWinMinutes: 8,
+    medianRunMinutes: 7,
+    medianWaveReached: 8,
+    bestWave: 8,
+    worstWave: 3,
+    diedShareByWave: [],
+    heartsLostByWave: [],
+    lengthSecondsByWave: [],
+    hurtShareByKind: {},
+  })
+  const resultsWith = (
+    shares: Record<string, number>,
+  ): ReadonlyArray<CampaignResult> => {
+    const jobs = nightlyJobs(NIGHTLY_SIZES)
+    return Array.flatMap(Object.entries(shares), ([id, winShare]) =>
+      Option.match(
+        Array.findFirst(jobs, job => job.id === id),
+        {
+          onNone: () => [],
+          onSome: job => [{ job, summary: campaign(winShare) }],
+        },
+      ),
+    )
+  }
+
+  test('a gap within the tolerance is not called out', () => {
+    const gaps = portraitGaps(
+      resultsWith({ normal: 0.2, 'portrait-normal': 0.14 }),
+    )
+    expect(Array.map(gaps, ({ isBeyond }) => isBeyond)).toEqual([false])
+  })
+
+  test('a gap past the tolerance either way is called out', () => {
+    const gaps = portraitGaps(
+      resultsWith({
+        normal: 0.2,
+        'portrait-normal': 0.1,
+        easy: 0.6,
+        'portrait-easy': 0.7,
+      }),
+    )
+    expect(Array.map(gaps, ({ isBeyond }) => isBeyond)).toEqual([true, true])
+    expect(portraitGapLine(gaps[0]!)).toBe(
+      'Normal, default bot: portrait wins 10.0% against landscape 20.0% (-10.0 points, tolerance 8.0%)',
+    )
+  })
+
+  test('a pair missing either side has no gap', () => {
+    expect(portraitGaps(resultsWith({ 'portrait-normal': 0.1 }))).toEqual([])
+  })
+
+  test('each portrait pass is held to its twin win target', () => {
+    Array.forEach(PORTRAIT_PAIRS, ({ portraitId, landscapeId }) => {
+      const find = (key: string) =>
+        Option.map(
+          Array.findFirst(TARGETS, target => target.key === key),
+          ({ maybeMin, maybeMax }) => [maybeMin, maybeMax],
+        )
+      expect(find(`${portraitId}.wins`)).toEqual(find(`${landscapeId}.wins`))
+      expect(Option.isSome(find(`${portraitId}.wins`))).toBe(true)
+    })
   })
 })
 
@@ -189,8 +281,27 @@ describe('the nightly invocation', () => {
       'hard',
       'nightmare',
       'endless',
+      'portrait-normal',
+      'portrait-easy',
       'waves',
     ])
+  })
+
+  test('only the portrait jobs play the portrait window', () => {
+    const jobs = nightlyJobs(NIGHTLY_SIZES)
+    expect(
+      Array.map(jobs, ({ id, view, env }) => [id, view, env['VIEW']]),
+    ).toEqual(
+      Array.map(jobs, ({ id }) =>
+        id.startsWith('portrait-')
+          ? [id, 'Portrait', 'portrait']
+          : [id, 'Landscape', 'landscape'],
+      ),
+    )
+  })
+
+  test('--extend-baseline adds new metrics only', () => {
+    expect(parseInvocation(['--extend-baseline']).baselinePolicy).toBe('Extend')
   })
 
   test('a report is named for the local day', () => {
