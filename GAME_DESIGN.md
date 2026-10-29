@@ -598,6 +598,28 @@ Tuning log, 200 runs per bot (`WORKERS` split). "Felled" is the share of the fig
 
 - **Caveats.** The bot keeps its distance and shoots the nearest zombie, so it almost never stands in a stomp ring and rarely fights him up close. A person who stands their ground will see far more stomps. The 15 s hold was kept from try 9 on for pacing, not for the bot: it gave the bot only a point or two.
 
+### Character
+
+Added on 2026-10-28 from a playtester: "She wants to be able to select a female/male for the character! Maybe some customizations." Built, not yet playtested.
+
+- **Where.** A CHARACTER button sits beside CAMPAIGN and ENDLESS on the title, Game Over, and Victory screens, and C opens it from the keyboard. It opens a dialog over the canvas, like the shop, with a walking preview of the player, a Randomize button, and Done. It never opens during a run.
+- **The choices.** Each is its own row, and none depends on another, so any hair works with either body.
+
+  | Row        | Options                               |
+  | ---------- | ------------------------------------- |
+  | Body       | Female, Male                          |
+  | Hair       | Crop, Long, Ponytail, Curls           |
+  | Hair color | Black, Brown, Ginger, Blonde, Pink    |
+  | Skin       | Fair, Light, Medium, Tan, Brown, Deep |
+  | Shirt      | Blue, Red, Yellow, Teal, Pink, Purple |
+
+- **The art.** The player stays 8 pixels wide with the same walk cycle, idle breath, gun hold, hit flash, and reload bar. The female body has taller eyes, a mouth, and a scoop neck; the male body has the collar stripe the player always had. A ponytail is tied with a band in the shirt color. Pink hair is the one silly option. There is no green skin: the zombies are green, and the player has to stand out from them at a glance.
+- **The default.** Male, Crop, Brown, Light, Blue: the look the player had before.
+- **Randomize.** Draws every row from the Model's seeded generator, so it is deterministic, and never hands back the look you already have.
+- **How long it lasts.** The page session only. It survives every new run, Keep going, and restarts, and resets when the page reloads. It is the first setting to move into the player scope of local SQLite (see `PLATFORM.md`), stored whole by a `ChangedAppearance` mutation.
+- **Sprites.** A look's frames are composed from parts (a face and torso for each body, a hair overlay for each style) and a palette, built the first time that look is drawn and kept in a small cache, never rebuilt each frame.
+- **Later.** Hats stay a later unlockable, on top of this.
+
 ## Core loop
 
 | Phase         | What the player does                                                          |
@@ -703,7 +725,8 @@ The roadmap leads to the first playable. The order puts feel first: juice is bui
 After the first playable, roughly in this order:
 
 - The tile-map estate with rooms, doors, a scrolling camera, and flow-field pathing.
-- Content depth: more weapons, hats, Spitter, and the 15-wave campaign.
+- Content depth: more weapons, hats, Spitter, and the 15-wave campaign. Hats will sit on top of the character looks.
+- Character looks. Built on 2026-10-28, kept for the page session: see "Character" under the first playable. Saving them waits on local SQLite.
 - Upgrade tiers. Done on 2026-10-28: see "Upgrade tiers and endless mode" under the first playable.
 - An endless mode. Done on 2026-10-28, with Keep going from Victory: see "Upgrade tiers and endless mode".
 - Music. Done on 2026-10-28: see "Music" under the first playable.

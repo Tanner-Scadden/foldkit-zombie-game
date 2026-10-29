@@ -1,2 +1,8 @@
 @import '@game/styles.css';
 @source '../../../src';
+
+.look-sheet {
+  width: 1600px;
+  height: 880px;
+  image-rendering: pixelated;
+}

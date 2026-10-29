@@ -1,9 +1,18 @@
 import './harness.css'
 import { Option } from 'effect'
-import { Runtime } from 'foldkit'
+import { Canvas, Runtime } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
+import {
+  BODIES,
+  HAIR_COLORS,
+  HAIR_STYLES,
+  SHIRT_COLORS,
+  SKIN_TONES,
+  playerSprites,
+} from '@game/appearance'
 import { hasBoss, planBoss } from '@game/boss'
+import { SHADOW_COLOR } from '@game/constants'
 import { DECAL_MAX, PLAYER_MAX_HP } from '@game/constants'
 import { sceneShapes } from '@game/layers'
 import {
@@ -20,10 +29,13 @@ import {
   MouseButton,
   RunMode,
   initialModel,
+  type Appearance,
   type Decal,
   type DecalKind,
 } from '@game/model'
 import { raiseDebutCard } from '@game/onboarding'
+import { FLOOR_COLOR } from '@game/room'
+import { frameAt, group, gunSprite } from '@game/sprite'
 import { view } from '@game/view'
 import { pause, rollSpawns, startOrResume } from '@game/waves'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from '@game/zombies'
@@ -60,7 +72,7 @@ const makeDecals = (count: number): Array<Decal> => {
   return out
 }
 
-const scenarioModel = (): Model => {
+const roomModel = (): Model => {
   const wave = num('wave', 0)
   if (wave === 0) return initialModel
   const mode =
@@ -418,6 +430,24 @@ const scenarioModel = (): Model => {
   return model
 }
 
+const scenarioModel = (): Model => {
+  let model = roomModel()
+  const look = params.get('look')
+  if (look !== null) {
+    const [body, hairStyle, hairColor, skinTone, shirtColor] = look.split(',')
+    model = modifyFields(model, {
+      appearance: a => ({
+        body: (body || a.body) as typeof a.body,
+        hairStyle: (hairStyle || a.hairStyle) as typeof a.hairStyle,
+        hairColor: (hairColor || a.hairColor) as typeof a.hairColor,
+        skinTone: (skinTone || a.skinTone) as typeof a.skinTone,
+        shirtColor: (shirtColor || a.shirtColor) as typeof a.shirtColor,
+      }),
+    })
+  }
+  return model
+}
+
 const god = params.has('god')
 const w = window as any
 w.__shapeCounts = []
@@ -465,20 +495,153 @@ const harnessInit: typeof init = (...args) => {
   const base = init(...args)
   const model = scenarioModel()
   w.__model = model
-  return {
-    ...base,
-    model:
-      params.has('seed') || Number.isFinite(freezeAfter)
-        ? modifyFields(model, { rngState: () => num('seed', 1) })
-        : model,
+  const seeded =
+    params.has('seed') || Number.isFinite(freezeAfter)
+      ? modifyFields(model, { rngState: () => num('seed', 1) })
+      : model
+  if (params.has('picker')) {
+    const opened = update(
+      modifyFields(seeded, { screenMs: () => 99999 }),
+      Message.ClickedCharacterButton(),
+    )
+    w.__model = opened.model
+    return {
+      ...base,
+      model: opened.model,
+      commands: [...(base.commands ?? []), ...(opened.commands ?? [])],
+    }
   }
+  return { ...base, model: seeded }
 }
+
+const CELL_W = 12
+const CELL_H = 16
+const lookSheetShapes = (): Array<Canvas.Shape> => {
+  const shapes: Array<Canvas.Shape> = [
+    Canvas.Rect({ x: 0, y: 0, width: 400, height: 220, fill: FLOOR_COLOR }),
+  ]
+  const draw = (
+    appearance: Appearance,
+    x: number,
+    y: number,
+    frames: 'walk' | 'idle',
+    frame: number,
+    facing: 'Left' | 'Right',
+    tone: 'Normal' | 'Flash',
+  ) => {
+    const sprites = playerSprites(appearance)
+    shapes.push(
+      Canvas.Rect({
+        x: x - 3,
+        y: y - 1,
+        width: 7,
+        height: 2,
+        fill: SHADOW_COLOR,
+      }),
+      group({
+        translate: { x, y },
+        shapes: frameAt(sprites[frames], frame)[tone][facing],
+      }),
+      group({
+        translate: { x: x + (facing === 'Right' ? 2 : -2), y: y - 5 },
+        shapes: gunSprite('Pistol', 0, facing === 'Right' ? 0 : Math.PI),
+      }),
+    )
+  }
+  BODIES.forEach((body, b) =>
+    HAIR_STYLES.forEach((hairStyle, st) => {
+      const row = b * HAIR_STYLES.length + st
+      SKIN_TONES.forEach((skinTone, sk) =>
+        HAIR_COLORS.forEach((hairColor, hc) => {
+          const col = sk * HAIR_COLORS.length + hc
+          draw(
+            {
+              body,
+              hairStyle,
+              hairColor,
+              skinTone,
+              shirtColor: SHIRT_COLORS[col % SHIRT_COLORS.length],
+            },
+            col * CELL_W + 8,
+            row * CELL_H + 15,
+            'idle',
+            0,
+            'Right',
+            'Normal',
+          )
+        }),
+      )
+    }),
+  )
+  const samples: Array<Appearance> = [
+    {
+      body: 'Male',
+      hairStyle: 'Crop',
+      hairColor: 'Brown',
+      skinTone: 'Light',
+      shirtColor: 'Blue',
+    },
+    {
+      body: 'Female',
+      hairStyle: 'Long',
+      hairColor: 'Black',
+      skinTone: 'Deep',
+      shirtColor: 'Yellow',
+    },
+    {
+      body: 'Female',
+      hairStyle: 'Ponytail',
+      hairColor: 'Ginger',
+      skinTone: 'Fair',
+      shirtColor: 'Teal',
+    },
+    {
+      body: 'Male',
+      hairStyle: 'Curls',
+      hairColor: 'Black',
+      skinTone: 'Brown',
+      shirtColor: 'Red',
+    },
+  ]
+  samples.forEach((appearance, i) => {
+    const y = 8 * CELL_H + 18 + i * CELL_H
+    ;[0, 1, 2, 3].forEach(f =>
+      draw(appearance, 8 + f * CELL_W, y, 'walk', f, 'Right', 'Normal'),
+    )
+    ;[0, 1].forEach(f =>
+      draw(appearance, 8 + (4 + f) * CELL_W, y, 'idle', f, 'Right', 'Normal'),
+    )
+    draw(appearance, 8 + 6 * CELL_W, y, 'walk', 0, 'Left', 'Normal')
+    draw(appearance, 8 + 7 * CELL_W, y, 'idle', 0, 'Left', 'Normal')
+    draw(appearance, 8 + 8 * CELL_W, y, 'idle', 0, 'Right', 'Flash')
+  })
+  return shapes
+}
+
+const lookSheetView = (h: any) => ({
+  title: 'Looks',
+  body: h.div(
+    [h.Style({ background: '#000', padding: '8px' })],
+    [
+      Canvas.view(
+        {
+          width: 400,
+          height: 220,
+          shapes: lookSheetShapes(),
+          className: 'look-sheet',
+        },
+        h,
+      ),
+    ],
+  ),
+})
 
 const application = Runtime.makeApplication({
   Model,
   init: harnessInit,
   update: harnessUpdate,
   view: (model: Model, h: any) => {
+    if (params.has('looksheet')) return lookSheetView(h)
     const t0 = performance.now()
     const out = view(model, h)
     if (instrument) w.__timings.view.push(performance.now() - t0)

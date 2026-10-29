@@ -1,6 +1,7 @@
 import { Array, Option } from 'effect'
 import { Canvas } from 'foldkit'
 
+import { playerSprites } from './appearance'
 import {
   MUZZLE_FLASH_BIG_MS,
   MUZZLE_FLASH_CORE_COLOR,
@@ -41,8 +42,6 @@ import {
 } from './model'
 import {
   type Facing,
-  PLAYER_IDLE_FRAMES,
-  PLAYER_WALK_FRAMES,
   type SpriteSet,
   type Tone,
   frameAt,
@@ -66,16 +65,15 @@ export const maybeMsSinceHurt = (player: Player): Option.Option<number> =>
       Option.some(durationMs - remainingMs),
   })
 
-const playerFrames = (model: Model): SpriteSet =>
-  vectorLength(model.intent.move) > 0
-    ? frameAt(
-        PLAYER_WALK_FRAMES,
-        Math.floor(model.elapsedMs / PLAYER_WALK_FRAME_MS),
-      )
+const playerFrames = (model: Model): SpriteSet => {
+  const sprites = playerSprites(model.appearance)
+  return vectorLength(model.intent.move) > 0
+    ? frameAt(sprites.walk, Math.floor(model.elapsedMs / PLAYER_WALK_FRAME_MS))
     : frameAt(
-        PLAYER_IDLE_FRAMES,
+        sprites.idle,
         Math.floor(model.elapsedMs / PLAYER_BREATH_FRAME_MS),
       )
+}
 
 const playerTone = (player: Player): Tone =>
   Option.match(maybeMsSinceHurt(player), {

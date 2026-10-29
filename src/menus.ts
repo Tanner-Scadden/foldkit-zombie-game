@@ -125,6 +125,16 @@ const KEEP_GOING_BUTTON: ModeButton = {
   message: Message.ClickedKeepGoingButton(),
 }
 
+const CHARACTER_BUTTON: ModeButton = {
+  className: 'mode-button character-button',
+  label: 'CHARACTER',
+  detail: 'YOUR LOOK',
+  key: 'C',
+  keyName: 'C',
+  ariaLabel: 'Character: change how you look',
+  message: Message.ClickedCharacterButton(),
+}
+
 const modeButtonView = (
   model: Model,
   button: ModeButton,
@@ -175,12 +185,18 @@ export const modeChoiceView = (model: Model, h: HtmlBuilder<Message>): Html =>
         onEmpty: () => h.empty,
         onNonEmpty: buttons =>
           h.div(
+            [h.Class('mode-choice')],
             [
-              h.Class('mode-choice'),
-              h.Role('group'),
-              h.AriaLabel('Choose a mode'),
+              h.div(
+                [
+                  h.Class('mode-group'),
+                  h.Role('group'),
+                  h.AriaLabel('Choose a mode'),
+                ],
+                Array.map(buttons, button => modeButtonView(model, button, h)),
+              ),
+              modeButtonView(model, CHARACTER_BUTTON, h),
             ],
-            Array.map(buttons, button => modeButtonView(model, button, h)),
           ),
       })
 

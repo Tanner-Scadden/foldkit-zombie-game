@@ -65,6 +65,9 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/zombieView.ts`    | Zombies walking, fusing, and dying, worn parts, shadows, health bars   |
 | `src/bossView.ts`      | The boss's stomp ring, its health bar, and its entrance band           |
 | `src/playerView.ts`    | The player, the gun, muzzle flashes, and the reload bar                |
+| `src/appearance.ts`    | Character looks: options, palettes, pixel parts, the sprite cache      |
+| `src/character.ts`     | The character picker: its Messages, update, and OutMessages            |
+| `src/characterView.ts` | The character picker dialog and its walking preview                    |
 | `src/trapView.ts`      | Barricades, turrets, and the trap placement ghost                      |
 | `src/effectsView.ts`   | Bullets, decals, particles, blasts, popups, and rattling doors         |
 | `src/hud.ts`           | Hearts, money, the streak, gun and trap slots, and the round text      |

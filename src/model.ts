@@ -1,7 +1,7 @@
 import { Option, Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
-import { Dialog, Tabs } from '@foldkit/ui'
+import { Dialog, RadioGroup, Tabs } from '@foldkit/ui'
 
 import { ARENA_LEVEL } from './arena'
 import { DEFAULT_SEED, PISTOL_MAGAZINE, PLAYER_MAX_HP } from './constants'
@@ -450,6 +450,72 @@ export type MusicSetting = typeof MusicSetting.Type
 export const PageVisibility = Schema.Literals(['Visible', 'Hidden'])
 export type PageVisibility = typeof PageVisibility.Type
 
+export const Body = Schema.Literals(['Female', 'Male'])
+export type Body = typeof Body.Type
+
+export const HairStyle = Schema.Literals(['Crop', 'Long', 'Ponytail', 'Curls'])
+export type HairStyle = typeof HairStyle.Type
+
+export const HairColor = Schema.Literals([
+  'Black',
+  'Brown',
+  'Ginger',
+  'Blonde',
+  'Pink',
+])
+export type HairColor = typeof HairColor.Type
+
+export const SkinTone = Schema.Literals([
+  'Fair',
+  'Light',
+  'Medium',
+  'Tan',
+  'Brown',
+  'Deep',
+])
+export type SkinTone = typeof SkinTone.Type
+
+export const ShirtColor = Schema.Literals([
+  'Blue',
+  'Red',
+  'Yellow',
+  'Teal',
+  'Pink',
+  'Purple',
+])
+export type ShirtColor = typeof ShirtColor.Type
+
+// NOTE: the appearance lives in memory for the page session only. It is
+// plain data on purpose: it is the first setting to move into the SQLite
+// player scope from PLATFORM.md, stored whole by a ChangedAppearance mutation.
+export const Appearance = Schema.Struct({
+  body: Body,
+  hairStyle: HairStyle,
+  hairColor: HairColor,
+  skinTone: SkinTone,
+  shirtColor: ShirtColor,
+})
+export type Appearance = typeof Appearance.Type
+
+export const LookPart = Schema.Literals([
+  'Body',
+  'HairStyle',
+  'HairColor',
+  'SkinTone',
+  'ShirtColor',
+])
+export type LookPart = typeof LookPart.Type
+
+export const CharacterPicker = Schema.Struct({
+  dialog: Dialog.Model,
+  body: RadioGroup.Model,
+  hairStyle: RadioGroup.Model,
+  hairColor: RadioGroup.Model,
+  skinTone: RadioGroup.Model,
+  shirtColor: RadioGroup.Model,
+})
+export type CharacterPicker = typeof CharacterPicker.Type
+
 export const PlannedSpawn = Schema.Struct({
   atMs: Schema.Number,
   kind: ZombieKind,
@@ -753,6 +819,8 @@ export const Model = Schema.Struct({
   soundSetting: SoundSetting,
   musicSetting: MusicSetting,
   pageVisibility: PageVisibility,
+  appearance: Appearance,
+  character: CharacterPicker,
 })
 export type Model = typeof Model.Type
 
@@ -851,6 +919,25 @@ export const initialHitStop: HitStop = HitStop.Running({ cooldownMs: 0 })
 
 export const stillShake: Shake = { trauma: 0, offset: { x: 0, y: 0 } }
 
+export const defaultAppearance: Appearance = {
+  body: 'Male',
+  hairStyle: 'Crop',
+  hairColor: 'Brown',
+  skinTone: 'Light',
+  shirtColor: 'Blue',
+}
+
+export const CHARACTER_DIALOG_ID = 'character'
+
+export const closedCharacterPicker: CharacterPicker = {
+  dialog: Dialog.init({ id: CHARACTER_DIALOG_ID }),
+  body: RadioGroup.init({ id: 'look-body' }),
+  hairStyle: RadioGroup.init({ id: 'look-hair-style' }),
+  hairColor: RadioGroup.init({ id: 'look-hair-color' }),
+  skinTone: RadioGroup.init({ id: 'look-skin-tone' }),
+  shirtColor: RadioGroup.init({ id: 'look-shirt-color' }),
+}
+
 export const initialModel: Model = {
   phase: Phase.Ready(),
   pacing: calmPacing,
@@ -907,4 +994,6 @@ export const initialModel: Model = {
   soundSetting: 'On',
   musicSetting: 'On',
   pageVisibility: 'Visible',
+  appearance: defaultAppearance,
+  character: closedCharacterPicker,
 }

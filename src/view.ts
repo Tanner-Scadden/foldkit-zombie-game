@@ -2,6 +2,7 @@ import { Array, Effect, Option, Queue, Result, Stream, pipe } from 'effect'
 import { Mount } from 'foldkit'
 import { Document, Html, HtmlBuilder } from 'foldkit/html'
 
+import * as CharacterView from './characterView'
 import { FEEDBACK_LINE, GAME_TITLE } from './constants'
 import { gameStageView } from './layers'
 import { Message, isSideways } from './main'
@@ -100,6 +101,8 @@ const shopHint = (model: Model): string =>
 const PLAY_AGAIN =
   'Press Enter or choose Campaign for 8 waves, or press E or choose Endless to fight until you fall.'
 
+const PICK_CHARACTER = 'Press C or choose Character to change how you look.'
+
 const KEEP_GOING = `Press K or choose Keep going to carry on into endless from wave ${FINAL_WAVE + 1} with your money, guns, and traps.`
 
 const killLabel = (stats: RunStats): string =>
@@ -148,7 +151,8 @@ export const statusText = (model: Model): string => {
   }
 
   return Phase.match(model.phase, {
-    Ready: () => `${GAME_TITLE}, an early alpha. ${PLAY_AGAIN}`,
+    Ready: () =>
+      `${GAME_TITLE}, an early alpha. ${PLAY_AGAIN} ${PICK_CHARACTER}`,
     Preparation: ({ wave }) =>
       `Get ready for ${statusWave(model, wave)}. Press Enter, or use the Start wave button, to start it now.${practiceGateNote(model)}${shopHint(model)}`,
     Wave: ({ wave }) =>
@@ -268,6 +272,13 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       modeChoiceView(model, h),
       cornerButtonsView(model, h),
       shopDialogView(model, h),
+      h.submodel({
+        slotId: 'character-picker',
+        model: model.character,
+        view: CharacterView.view,
+        viewInputs: { appearance: model.appearance, screenMs: model.screenMs },
+        toParentMessage: message => Message.GotCharacterMessage({ message }),
+      }),
       sidewaysView(model, h),
     ],
   ),

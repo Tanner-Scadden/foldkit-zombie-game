@@ -21,6 +21,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import { Dialog, Tabs } from '@foldkit/ui'
 
+import { randomAppearance } from './appearance'
 import {
   type AudioEngineError,
   AudioEngineResource,
@@ -34,6 +35,7 @@ import {
   releaseAudioEngine,
   resumeAudio,
 } from './audio'
+import * as Character from './character'
 import {
   RESTART_GRACE_MS,
   SHAKE_TRAUMA_MAX,
@@ -42,6 +44,7 @@ import {
 import {
   type PointerPress,
   type TrapChoice,
+  isCharacterKey,
   isEndlessKey,
   isKeepGoingKey,
   isPauseKey,
@@ -167,6 +170,8 @@ export const Message = defineMessageUnion({
   ClickedCampaignButton: {},
   ClickedEndlessButton: {},
   ClickedKeepGoingButton: {},
+  ClickedCharacterButton: {},
+  GotCharacterMessage: { message: Character.Message },
   ClickedStartWaveButton: {},
   ClickedDebutCardButton: {},
   ClickedSwapButton: {},
@@ -707,6 +712,66 @@ const focusShopItem = (model: Model, item: ShopItemId): Model =>
     Dismissed: () => model,
   })
 
+// CHARACTER
+
+const canPickCharacter = (model: Model): boolean =>
+  !isSideways(model) &&
+  Phase.match(model.phase, {
+    Ready: () => true,
+    Preparation: () => false,
+    Wave: () => false,
+    Paused: () => false,
+    Victory: () => isPastRestartGrace(model),
+    GameOver: () => isPastRestartGrace(model),
+  })
+
+const foldCharacterOutMessage = Character.OutMessage.match<UpdateStep>({
+  ChoseLook:
+    ({ choice }) =>
+    stepModel => ({
+      model: modifyFields(stepModel, {
+        appearance: appearance => Character.chooseLook(appearance, choice),
+      }),
+    }),
+  RequestedRandomLook: () => stepModel => {
+    const [rngState, appearance] = randomAppearance(
+      stepModel.rngState,
+      stepModel.appearance,
+    )
+    return {
+      model: modifyFields(stepModel, {
+        rngState: () => rngState,
+        appearance: () => appearance,
+      }),
+    }
+  },
+})
+
+const foldCharacter = Update.foldChild({
+  update: Character.update,
+  read: (model: Model) => Option.some(model.character),
+  write: (model, nextCharacter) =>
+    modifyFields(model, { character: () => nextCharacter }),
+  toParentMessage: message => Message.GotCharacterMessage({ message }),
+  foldOutMessage: foldCharacterOutMessage,
+})
+
+const foldCharacterOpen = Update.foldChildStep({
+  update: Character.open,
+  read: (model: Model) => Option.some(model.character),
+  write: (model, nextCharacter) =>
+    modifyFields(model, { character: () => nextCharacter }),
+  toParentMessage: message => Message.GotCharacterMessage({ message }),
+})
+
+const openCharacterPicker: UpdateStep = stepModel =>
+  canPickCharacter(stepModel) && !stepModel.character.dialog.isOpen
+    ? foldCharacterOpen(withInput(stepModel, releaseAll))
+    : { model: stepModel }
+
+const characterFromKey: (code: string) => UpdateStep = code => stepModel =>
+  isCharacterKey(code) ? openCharacterPicker(stepModel) : { model: stepModel }
+
 // TRAPS
 
 const shakeBy = (model: Model, trauma: number): Model =>
@@ -965,6 +1030,7 @@ const updateGame = (model: Model, message: Message) =>
       )
       return Update.combine(pressed, [
         unlockAudio,
+        characterFromKey(code),
         trapFromKey(code),
         reloadFromKey(code),
         playStartSoundWhen(startsRun(model, pressed)),
@@ -1062,6 +1128,12 @@ const updateGame = (model: Model, message: Message) =>
 
     ClickedKeepGoingButton: () =>
       startFromButton(model, keepGoingWhenAllowed(model)),
+
+    ClickedCharacterButton: () =>
+      Update.combine(model, [unlockAudio, openCharacterPicker]),
+
+    GotCharacterMessage: ({ message: characterMessage }) =>
+      foldCharacter(model, characterMessage),
 
     ClickedStartWaveButton: () =>
       isBrowsing(model.shop) || isDebutCardBlocking(model)

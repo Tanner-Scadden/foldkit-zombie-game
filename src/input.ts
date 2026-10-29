@@ -35,6 +35,7 @@ const RIGHT_KEY = 'KeyD'
 const START_KEY = 'Enter'
 const ENDLESS_KEY = 'KeyE'
 const KEEP_GOING_KEY = 'KeyK'
+const CHARACTER_KEY = 'KeyC'
 const PAUSE_KEY = 'Escape'
 const START_WAVE_KEY = 'Enter'
 const RELOAD_KEY = 'KeyR'
@@ -60,6 +61,8 @@ export const isStartKey = (code: string): boolean => code === START_KEY
 export const isEndlessKey = (code: string): boolean => code === ENDLESS_KEY
 
 export const isKeepGoingKey = (code: string): boolean => code === KEEP_GOING_KEY
+
+export const isCharacterKey = (code: string): boolean => code === CHARACTER_KEY
 
 export const isPauseKey = (code: string): boolean => code === PAUSE_KEY
 
