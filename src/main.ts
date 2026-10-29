@@ -61,6 +61,7 @@ import {
   releaseAll,
   releaseKey,
   releasePointer,
+  releaseSticks,
 } from './input'
 import {
   AudioState,
@@ -154,6 +155,7 @@ export const Message = defineMessageUnion({
   },
   ReleasedPointer: { pointerId: Schema.Number },
   CancelledPointer: { pointerId: Schema.Number },
+  ReleasedEveryTouch: {},
   MovedMouse: { clientX: Schema.Number, clientY: Schema.Number },
   SuppressedContextMenu: {},
   MeasuredGameSurface: {
@@ -1083,6 +1085,10 @@ const updateGame = (model: Model, message: Message) =>
       model: withInput(model, input => releasePointer(input, pointerId)),
     }),
 
+    ReleasedEveryTouch: () => ({
+      model: withInput(model, releaseSticks),
+    }),
+
     MovedMouse: ({ clientX, clientY }) => ({
       model: withInput(useDevice(model, 'KeyboardMouse'), input =>
         moveMouse(input, model.maybeSurface, { x: clientX, y: clientY }),
@@ -1307,22 +1313,34 @@ const keyboardMessages = Stream.merge(
   }),
 )
 
-const trackedPointerMessages = Stream.mergeAll<Message, never, never>(
+const pointerMoveMessages = Dom.streamFromEventFilterMap({
+  target: document,
+  type: 'pointermove',
+  filterMapEvent: event =>
+    event.pointerType === 'mouse'
+      ? Option.none()
+      : Option.some(
+          Message.MovedPointer({
+            pointerId: event.pointerId,
+            clientX: event.clientX,
+            clientY: event.clientY,
+          }),
+        ),
+})
+
+const maybeEveryTouchEndedMessage = (
+  event: TouchEvent,
+): Option.Option<Message> =>
+  event.touches.length === 0
+    ? Option.some(Message.ReleasedEveryTouch())
+    : Option.none()
+
+// NOTE: releases listen all the time, not only while a pointer is tracked.
+// A quick tap can lift its finger before a tracking-only listener is
+// attached, and a missed release leaves the stick held forever. Releasing a
+// pointer that is not tracked changes nothing.
+export const pointerReleaseMessages = Stream.mergeAll<Message, never, never>(
   [
-    Dom.streamFromEventFilterMap({
-      target: document,
-      type: 'pointermove',
-      filterMapEvent: event =>
-        event.pointerType === 'mouse'
-          ? Option.none()
-          : Option.some(
-              Message.MovedPointer({
-                pointerId: event.pointerId,
-                clientX: event.clientX,
-                clientY: event.clientY,
-              }),
-            ),
-    }),
     Dom.streamFromEvent({
       target: document,
       type: 'pointerup',
@@ -1334,6 +1352,16 @@ const trackedPointerMessages = Stream.mergeAll<Message, never, never>(
       type: 'pointercancel',
       mapEvent: event =>
         Message.CancelledPointer({ pointerId: event.pointerId }),
+    }),
+    Dom.streamFromEventFilterMap({
+      target: document,
+      type: 'touchend',
+      filterMapEvent: maybeEveryTouchEndedMessage,
+    }),
+    Dom.streamFromEventFilterMap({
+      target: document,
+      type: 'touchcancel',
+      filterMapEvent: maybeEveryTouchEndedMessage,
     }),
   ],
   { concurrency: 'unbounded' },
@@ -1393,6 +1421,8 @@ export const subscriptions = Subscription.make<Model, Message>()(entry => ({
     },
   ),
 
+  pointerReleases: Subscription.persistentEntry(pointerReleaseMessages),
+
   trackedPointers: entry(
     { activity: Activity },
     {
@@ -1401,7 +1431,7 @@ export const subscriptions = Subscription.make<Model, Message>()(entry => ({
       }),
       dependenciesToStream: ({ activity }) =>
         Stream.when(
-          trackedPointerMessages,
+          pointerMoveMessages,
           Effect.sync(() => activity === 'Active'),
         ),
     },

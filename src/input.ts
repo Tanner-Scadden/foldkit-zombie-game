@@ -112,6 +112,12 @@ export const releaseAll = (input: Input): Input =>
     aimStick: () => Stick.Idle(),
   })
 
+export const releaseSticks = (input: Input): Input =>
+  modifyFields(input, {
+    moveStick: () => Stick.Idle(),
+    aimStick: () => Stick.Idle(),
+  })
+
 // POINTERS
 
 export type PointerPress = Readonly<{
