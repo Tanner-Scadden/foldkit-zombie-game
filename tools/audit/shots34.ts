@@ -22,6 +22,7 @@ import {
   launch,
   openPage,
   pickViewports,
+  settleAnimations,
   shot,
   tagOr,
   wait,
@@ -117,6 +118,7 @@ for (const viewport of VIEWPORTS) {
     if (scene.act) {
       await scene.act(page)
     }
+    await settleAnimations(page)
     const report = await page.evaluate(() => {
       const isShown = (element: Element) => {
         const box = element.getBoundingClientRect()

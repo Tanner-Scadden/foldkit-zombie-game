@@ -159,6 +159,27 @@ export const shot = (page: Page, name: string) =>
 
 export const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
 
+// NOTE: waits for every animation that ends, such as a button's pop in, so a
+// size check never measures a button mid scale. A blink that loops forever
+// is left running, and it gives up after `limitMs`.
+export const settleAnimations = (page: Page, limitMs = 3000) =>
+  page.evaluate(
+    limitMs =>
+      Promise.race([
+        Promise.all(
+          document
+            .getAnimations()
+            .filter(
+              animation =>
+                animation.effect?.getComputedTiming().iterations !== Infinity,
+            )
+            .map(animation => animation.finished.catch(() => undefined)),
+        ),
+        new Promise(resolve => setTimeout(resolve, limitMs)),
+      ]).then(() => undefined),
+    limitMs,
+  )
+
 // PIXEL COMPARE
 
 const pngDataUrl = async (path: string) =>

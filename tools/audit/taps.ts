@@ -28,6 +28,7 @@ import {
   launch,
   openPage,
   pickViewports,
+  settleAnimations,
   wait,
 } from './lib'
 
@@ -143,10 +144,11 @@ const openScene = async (page: Page, scene: Scene) => {
     await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
     await wait(400)
   }
+  await settleAnimations(page)
 }
 
-const visibleTargets = (page: Page): Promise<ReadonlyArray<Target>> =>
-  page.evaluate(inset => {
+const visibleTargets = (page: Page): Promise<ReadonlyArray<number>> =>
+  page.evaluate(() => {
     const openDialog = document.querySelector('dialog[open]')
     const scope: ParentNode = openDialog ?? document
     return Array.from(scope.querySelectorAll('button'))
@@ -162,32 +164,57 @@ const visibleTargets = (page: Page): Promise<ReadonlyArray<Target>> =>
           (openDialog !== null || button.closest('dialog') === null)
         )
       })
-      .map(({ button, index }) => {
-        const box = button.getBoundingClientRect()
-        const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
-        return {
-          label:
-            button.getAttribute('aria-label') ??
-            button.textContent?.trim() ??
-            '?',
-          index,
-          center,
-          width: box.width,
-          height: box.height,
-          points: [
-            { name: 'center', point: center },
-            { name: 'left', point: { x: box.left + inset, y: center.y } },
-            { name: 'right', point: { x: box.right - inset, y: center.y } },
-            { name: 'top', point: { x: center.x, y: box.top + inset } },
-            { name: 'bottom', point: { x: center.x, y: box.bottom - inset } },
-            {
-              name: 'corner',
-              point: { x: box.left + inset * 4, y: box.top + inset * 4 },
-            },
-          ],
-        }
-      })
-  }, EDGE_INSET)
+      .map(({ index }) => index)
+  })
+
+// NOTE: only a dialog's own panel counts. A list inside it, such as the
+// Munchopedia's tiles, may keep its place.
+const openedScroll = (page: Page): Promise<number> =>
+  page.evaluate(() =>
+    Math.round(document.querySelector('dialog[open] .panel')?.scrollTop ?? 0),
+  )
+
+// NOTE: a panel that scrolls, such as Settings on a landscape phone, can
+// open with some buttons out of view. A player scrolls to them, so each
+// button is scrolled into view before it is measured, hit tested, and tapped.
+const placeTarget = (
+  page: Page,
+  index: number,
+  hasDialog: boolean,
+): Promise<Target> =>
+  page.evaluate(
+    ({ index, hasDialog, inset }) => {
+      const scope: ParentNode = hasDialog
+        ? (document.querySelector('dialog[open]') ?? document)
+        : document
+      const button = scope.querySelectorAll('button')[index]!
+      button.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      const box = button.getBoundingClientRect()
+      const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+      return {
+        label:
+          button.getAttribute('aria-label') ??
+          button.textContent?.trim() ??
+          '?',
+        index,
+        center,
+        width: box.width,
+        height: box.height,
+        points: [
+          { name: 'center', point: center },
+          { name: 'left', point: { x: box.left + inset, y: center.y } },
+          { name: 'right', point: { x: box.right - inset, y: center.y } },
+          { name: 'top', point: { x: center.x, y: box.top + inset } },
+          { name: 'bottom', point: { x: center.x, y: box.bottom - inset } },
+          {
+            name: 'corner',
+            point: { x: box.left + inset * 4, y: box.top + inset * 4 },
+          },
+        ],
+      }
+    },
+    { index, hasDialog, inset: EDGE_INSET },
+  )
 
 const hitsButton = (
   page: Page,
@@ -213,23 +240,37 @@ const hitsButton = (
 
 const failures: Array<string> = []
 const browser = await launch()
+
+// NOTE: a tap can write the save, such as PLAY dismissing the iPhone tip.
+// The save lives in SQLite on OPFS, which clearing localStorage does not
+// reach, so every reopen gets a new browser context with empty storage.
+const openFreshScene = async (viewport: Viewport, scene: Scene) => {
+  const page = await openPage(browser, viewport)
+  await openScene(page, scene)
+  return page
+}
 for (const viewport of VIEWPORTS) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
       continue
     }
-    const page = await openPage(browser, viewport)
-    // NOTE: a tap can write the save, such as PLAY dismissing the iPhone
-    // tip, so every reopen starts from no save and shows the same scene.
-    await page.addInitScript(() => localStorage.clear())
-    await openScene(page, scene)
+    const page = await openFreshScene(viewport, scene)
     const hasDialog = scene.openWith !== undefined
-    const targets = await visibleTargets(page)
+    const indices = await visibleTargets(page)
     const where = `${viewport.name} ${scene.name}`
-    if (targets.length === 0) {
+    if (indices.length === 0) {
       failures.push(`${where}: no buttons`)
     }
-    for (const target of targets) {
+    const openScroll = await openedScroll(page)
+    if (openScroll > 0) {
+      failures.push(
+        `${where}: the open panel starts ${openScroll} px down, hiding its top`,
+      )
+    }
+    const targets: Array<Target> = []
+    for (const index of indices) {
+      const target = await placeTarget(page, index, hasDialog)
+      targets.push(target)
       if (target.width < MIN_SIDE || target.height < MIN_SIDE) {
         failures.push(
           `${where} "${target.label}": ${Math.round(target.width)}x${Math.round(target.height)} is under ${MIN_SIDE} px`,
@@ -242,18 +283,22 @@ for (const viewport of VIEWPORTS) {
       }
     }
     for (const target of targets) {
-      for (const { name, point } of target.points.filter(
+      for (const { name } of target.points.filter(
         ({ name }) => name === 'center' || name === 'corner',
       )) {
-        await openScene(page, scene)
-        await page.evaluate(() => {
+        const tapPage = await openFreshScene(viewport, scene)
+        const tapPoint = (
+          await placeTarget(tapPage, target.index, hasDialog)
+        ).points.find(placed => placed.name === name)!.point
+        await tapPage.evaluate(() => {
           ;(window as any).__messages.length = 0
         })
-        await page.touchscreen.tap(point.x, point.y)
+        await tapPage.touchscreen.tap(tapPoint.x, tapPoint.y)
         await wait(AFTER_TAP_MS)
-        const tags: ReadonlyArray<string> = await page.evaluate(() => [
+        const tags: ReadonlyArray<string> = await tapPage.evaluate(() => [
           ...(window as any).__messages,
         ])
+        await tapPage.context().close()
         const tapTags = tags.filter(isTapMessage)
         const reachedSurface = tags.some(tag => surfaceTags.has(tag))
         const isOk = tapTags.length === 1 && !reachedSurface

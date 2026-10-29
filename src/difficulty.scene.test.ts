@@ -29,6 +29,10 @@ const lockedNightmare = role('button', {
 const openNightmare = role('button', {
   name: 'Nightmare: No mercy. Bring snacks',
 })
+const done = role('button', { name: 'Done' })
+
+// NOTE: the attribute the Foldkit dialog focuses when it opens.
+const INITIAL_FOCUS = 'data-foldkit-dialog-initial-focus'
 
 describe('the difficulty card', () => {
   test('the first PLAY shows four choices with Nightmare locked', () => {
@@ -85,6 +89,25 @@ describe('difficulty in SETTINGS', () => {
         click(hard),
         expect(hard).toHaveAttr('aria-pressed', 'true'),
         expect(normal).toHaveAttr('aria-pressed', 'false'),
+      ),
+    )
+  })
+
+  test('opens on the chosen difficulty, so a scrolled panel shows its top', () => {
+    scene(
+      { update, view },
+      given(asVeteran(initialModel)),
+      measureSurface,
+      click(settingsButton),
+      ...showDialogInScene(),
+      inside(
+        settings,
+        expect(normal).toHaveAttr(INITIAL_FOCUS),
+        expect(hard).not.toHaveAttr(INITIAL_FOCUS),
+        expect(done).not.toHaveAttr(INITIAL_FOCUS),
+        click(hard),
+        expect(hard).toHaveAttr(INITIAL_FOCUS),
+        expect(normal).not.toHaveAttr(INITIAL_FOCUS),
       ),
     )
   })

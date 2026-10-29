@@ -738,16 +738,19 @@ const difficultyChoiceView = (
 const difficultySettingView = (
   model: Model,
   difficulty: Difficulty,
+  renderInfo: Dialog.RenderInfo,
   h: HtmlBuilder<Message>,
 ): Html => {
   const locked = isLocked(model.difficulty, difficulty)
+  const isChosen = model.difficulty.chosen === difficulty
   return h.button(
     [
+      ...(isChosen ? renderInfo.initialFocus : []),
       h.Type('button'),
       h.Class('difficulty-option'),
       h.DataAttribute('difficulty', difficulty),
       h.AriaLabel(difficultyLabel(model, difficulty)),
-      h.AriaPressed(model.difficulty.chosen === difficulty ? 'true' : 'false'),
+      h.AriaPressed(isChosen ? 'true' : 'false'),
       ...(locked ? [h.AriaDisabled(true)] : []),
       h.OnClick(Message.ClickedDifficultySettingButton({ difficulty }), {
         propagation: 'Stop',
@@ -763,7 +766,14 @@ const difficultySettingView = (
 
 const DIFFICULTY_ROW_ID = 'setting-difficulty'
 
-const difficultyRowView = (model: Model, h: HtmlBuilder<Message>): Html =>
+// NOTE: the Settings panel scrolls on a landscape phone, and focusing a
+// button scrolls it into view. Opening on the chosen difficulty, not Done,
+// keeps the title and the difficulty row on screen.
+const difficultyRowView = (
+  model: Model,
+  renderInfo: Dialog.RenderInfo,
+  h: HtmlBuilder<Message>,
+): Html =>
   h.div(
     [h.Class('difficulty-setting')],
     [
@@ -778,7 +788,7 @@ const difficultyRowView = (model: Model, h: HtmlBuilder<Message>): Html =>
           h.AriaLabelledBy(DIFFICULTY_ROW_ID),
         ],
         Array.map(DIFFICULTY_ORDER, difficulty =>
-          difficultySettingView(model, difficulty, h),
+          difficultySettingView(model, difficulty, renderInfo, h),
         ),
       ),
       h.p(
@@ -995,11 +1005,12 @@ const panelText = (model: Model, panel: MenuPanel): PanelText => {
 const doneButtonView = (
   { closeButton, initialFocus }: Dialog.RenderInfo,
   h: HtmlBuilder<Message>,
+  focus: 'TakesInitialFocus' | 'LeavesInitialFocus' = 'TakesInitialFocus',
 ): Html =>
   h.button(
     [
       ...closeButton,
-      ...initialFocus,
+      ...(focus === 'TakesInitialFocus' ? initialFocus : []),
       h.Class('panel-button panel-done'),
       h.AriaKeyshortcuts('Escape'),
     ],
@@ -1025,7 +1036,7 @@ const panelBodyView = (
     ]
   } else if (model.panel === 'Settings') {
     return [
-      difficultyRowView(model, h),
+      difficultyRowView(model, renderInfo, h),
       h.ul(
         [h.Class('setting-list')],
         [
@@ -1034,7 +1045,10 @@ const panelBodyView = (
           devicesView(model, h),
         ],
       ),
-      h.div([h.Class('panel-actions')], [doneButtonView(renderInfo, h)]),
+      h.div(
+        [h.Class('panel-actions')],
+        [doneButtonView(renderInfo, h, 'LeavesInitialFocus')],
+      ),
     ]
   } else if (model.panel === 'WhatsNew') {
     return whatsNewBodyView(model, doneButtonView(renderInfo, h), h)
