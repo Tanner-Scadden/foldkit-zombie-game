@@ -135,6 +135,20 @@ describe('planks as bait', () => {
     )
   })
 
+  test('a Kaboomer and a Big Leaguer ignore the plank too', () => {
+    expect(ZOMBIE_KINDS.Exploder.bait).toBe('Ignores')
+    expect(ZOMBIE_KINDS.Thrower.bait).toBe('Ignores')
+    story(
+      update,
+      given(fightingWith(zombieOf('Thrower', NEAR_WEST_PLANK))),
+      ...ticks(20),
+      model(current => {
+        expect(onlyZombie(current).x).toBeGreaterThan(NEAR_WEST_PLANK.x + 3)
+        expect(plankHp(current)).toBe(TRAPS.Barricade.hp)
+      }),
+    )
+  })
+
   test('a frenzied Groaner only has eyes for the player', () => {
     story(
       update,
