@@ -3,6 +3,7 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Dialog } from '@foldkit/ui'
 
+import { dialogShell } from './dialogs'
 import {
   DIFFICULTIES,
   DIFFICULTY_ORDER,
@@ -31,7 +32,7 @@ import {
   PADLOCK_ICON,
   SETTINGS_ICON,
 } from './icons'
-import { Message } from './main'
+import { Message } from './message'
 import {
   type Difficulty,
   DifficultyCard,
@@ -1097,29 +1098,15 @@ const panelView = (
 }
 
 export const menuPanelView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.submodel({
-    slotId: model.panelDialog.id,
-    model: model.panelDialog,
-    view: Dialog.view,
-    viewInputs: {
-      hasDescription: true,
-      toView: renderInfo =>
-        h.dialog(
-          [
-            ...renderInfo.dialog,
-            h.Class('panel-dialog'),
-            h.DataAttribute('panel', model.panel),
-          ],
-          renderInfo.isVisible
-            ? [
-                h.div([...renderInfo.backdrop, h.Class('panel-backdrop')]),
-                h.div(
-                  [...renderInfo.panel, h.Class('panel')],
-                  panelView(model, renderInfo, h),
-                ),
-              ]
-            : [],
-        ),
+  dialogShell(
+    {
+      dialog: model.panelDialog,
+      dialogClass: 'panel-dialog',
+      backdropClass: 'panel-backdrop',
+      panelClass: 'panel',
+      dialogAttributes: [h.DataAttribute('panel', model.panel)],
+      panelView: renderInfo => panelView(model, renderInfo, h),
+      toParentMessage: message => Message.GotPanelDialogMessage({ message }),
     },
-    toParentMessage: message => Message.GotPanelDialogMessage({ message }),
-  })
+    h,
+  )

@@ -17,7 +17,8 @@ import {
   QUIET_HURRY_MS,
   RELAX_EXTEND_MAX_MS,
 } from './constants'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   Alarm,
   Beat,

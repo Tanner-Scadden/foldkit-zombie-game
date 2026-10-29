@@ -15,7 +15,8 @@ import { describe, test, expect as vitestExpect } from 'vitest'
 
 import { screenCameraOf } from './camera'
 import { hudShapes } from './hud'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   BreakClock,
   type Model,

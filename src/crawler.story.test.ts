@@ -7,7 +7,8 @@ import { ARENA_LEVEL, isSolidAt } from './arena'
 import { PREPARATION_MS } from './constants'
 import { CRAWLER_RULES, drawSurfacingSpot } from './crawler'
 import { frenzyPacksOf } from './frenzy'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   Frenzy,
   GameEvent,

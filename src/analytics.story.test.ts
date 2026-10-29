@@ -21,15 +21,10 @@ import {
 } from './analyticsBeacon'
 import { frameTimeBucket } from './analyticsRun'
 import { ARENA_LEVEL } from './arena'
+import { GenerateVisitId, SendRunSummary, WriteSave } from './commands'
 import { ZOMBIE_MAX_HP } from './constants'
-import {
-  GenerateVisitId,
-  Message,
-  SendRunSummary,
-  WriteSave,
-  init,
-  update,
-} from './main'
+import { init, update } from './main'
+import { Message } from './message'
 import {
   Difficulty,
   Frenzy,

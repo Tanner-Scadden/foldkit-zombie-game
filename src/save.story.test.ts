@@ -5,15 +5,15 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { Dialog } from '@foldkit/ui'
 
-import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
 import {
   FocusTutorialReset,
   HideSplash,
-  Message,
   ShowLoadProgress,
   WriteSave,
-  update,
-} from './main'
+} from './commands'
+import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
+import { update } from './main'
+import { Message } from './message'
 import {
   BreakClock,
   DebutCard,

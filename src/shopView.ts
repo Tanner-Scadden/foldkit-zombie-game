@@ -3,8 +3,9 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Button, Dialog, Tabs } from '@foldkit/ui'
 
+import { dialogShell } from './dialogs'
 import { COIN_SYMBOL } from './font'
-import { Message } from './main'
+import { Message } from './message'
 import {
   type Model,
   type ShopCategory,
@@ -471,25 +472,14 @@ const panelView = (
 ]
 
 export const shopDialogView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.submodel({
-    slotId: model.shopDialog.id,
-    model: model.shopDialog,
-    view: Dialog.view,
-    viewInputs: {
-      hasDescription: true,
-      toView: renderInfo =>
-        h.dialog(
-          [...renderInfo.dialog, h.Class('shop-dialog')],
-          renderInfo.isVisible
-            ? [
-                h.div([...renderInfo.backdrop, h.Class('shop-backdrop')]),
-                h.div(
-                  [...renderInfo.panel, h.Class('shop-panel')],
-                  panelView(model, renderInfo, h),
-                ),
-              ]
-            : [],
-        ),
+  dialogShell(
+    {
+      dialog: model.shopDialog,
+      dialogClass: 'shop-dialog',
+      backdropClass: 'shop-backdrop',
+      panelClass: 'shop-panel',
+      panelView: renderInfo => panelView(model, renderInfo, h),
+      toParentMessage: message => Message.GotShopDialogMessage({ message }),
     },
-    toParentMessage: message => Message.GotShopDialogMessage({ message }),
-  })
+    h,
+  )

@@ -1,92 +1,40 @@
-import {
-  Array,
-  Effect,
-  Option,
-  Random,
-  Result,
-  Schema,
-  Stream,
-  pipe,
-} from 'effect'
-import {
-  Command,
-  Dom,
-  ManagedResource,
-  Runtime,
-  Subscription,
-  Update,
-} from 'foldkit'
-import { defineMessageUnion } from 'foldkit/message'
+import { Option } from 'effect'
+import { Runtime, Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { Dialog, Tabs } from '@foldkit/ui'
-
-import { RunSummary } from './analytics'
-import { generateVisitId, sendRunSummary } from './analyticsBeacon'
 import { maybeRunOutcome, runSummaryOf } from './analyticsRun'
-import { randomAppearance, spriteWarmUpSources } from './appearance'
+import { positionVariation } from './audio'
 import {
-  type AudioEngineError,
-  AudioEngineResource,
-  PlayOutcome,
-  Playback,
-  SoundEffect,
-  acquireAudioEngine,
-  playMusic,
-  playSound,
-  positionVariation,
-  releaseAudioEngine,
-  resumeAudio,
-} from './audio'
-import { NEWS_DAYS } from './changelog'
-import * as Character from './character'
+  AwaitFirstFrame,
+  DecodeSprites,
+  DetectInputDevice,
+  DetectScreenFit,
+  FetchBuild,
+  GenerateSeed,
+  GenerateVisitId,
+  LoadFonts,
+  LoadSave,
+  LoadStyles,
+  ReloadPage,
+  ResumeAudio,
+  SendRunSummary,
+  SetFullscreen,
+} from './commands'
 import {
-  RESTART_GRACE_MS,
-  SHAKE_TRAUMA_MAX,
-  TRAP_PLACE_TRAUMA,
-} from './constants'
-import {
-  chooseDifficulty,
-  isLocked,
-  isNightmareUnlockedBy,
-  settleNightmare,
-  unlockNightmare,
-} from './difficulty'
-import {
-  END_MENU_BUTTON_ID,
-  KEEP_TUTORIAL_BUTTON_ID,
-  RESET_TUTORIAL_BUTTON_ID,
-  type RailButton,
   countRunFrom,
-  endOffer,
   forgetNewEntriesFrom,
-  homeButtonId,
-  isModeKey,
-  isOnHome,
-  maybeRailButtonOfKey,
-  returnHome,
   runModeOf,
-  seeNews,
-  showMunchopediaPage,
-  steppedHomeFocus,
   switchMode,
-  turnNewsPage,
 } from './home'
 import {
   type PointerPress,
-  type TrapChoice,
-  isCharacterKey,
   isEndlessKey,
   isKeepGoingKey,
-  isMenuKey,
   isPauseKey,
   isReloadKey,
   isStartKey,
   isStartWaveKey,
   isSwapKey,
-  isTrackingPointer,
-  maybeFocusStep,
-  maybeTrapChoice,
   moveMouse,
   movePointer,
   pressKey,
@@ -96,40 +44,22 @@ import {
   releasePointer,
   releaseSticks,
 } from './input'
+import { Message } from './message'
 import {
   Arsenal,
   AudioState,
-  Difficulty,
-  DifficultyCard,
-  FullscreenSetting,
-  GameEvent,
   GunSlot,
-  HomeButton,
-  type Input,
   InputDevice,
   LOAD_STEPS,
-  type LoadStep,
   Loading,
-  type MenuPanel,
   Model,
   MunchopediaPage,
   type Orientation,
-  PageVisibility,
   Phase,
-  PointerDevice,
-  Round,
   RunMode,
-  ScreenFit,
-  type ShopCategory,
-  ShopItemId,
-  ShopState,
-  TouchControls,
-  type TutorialReset,
-  ZombieKind,
-  defaultAppearance,
   initialModel,
 } from './model'
-import { MusicLevel, MusicMood, MusicStinger } from './music'
+import { cueMusicFrom } from './musicPlan'
 import {
   ageDebutCard,
   isDebutCardUp,
@@ -140,624 +70,101 @@ import {
   moveHintBand,
   skipDebutCard,
 } from './onboarding'
-import { burstCoins, dropClip, puffDust } from './particles'
-import {
-  LinkFlow,
-  LinkProblem,
-  PlayerChange,
-  SyncState,
-  changesBetween,
-} from './playerSync'
-import { PICKUPS } from './powerups'
-import {
-  PlayerSave,
-  forgetTutorial,
-  isSameSave,
-  restoreSave,
-  saveOf,
-} from './save'
-import {
-  SHOP_ITEMS,
-  ShopGood,
-  ShopTabs,
-  isBrowsing,
-  maybeDisplacedFocus,
-  purchase,
-  selectShopCategory,
-  shopItemElementId,
-} from './shop'
+import { dropClip } from './particles'
+import { LinkFlow } from './playerSync'
+import { forgetTutorial } from './save'
+import { isBrowsing } from './shop'
 import { advanceGame, clampFrameDelta, refreshIntent } from './simulation'
-import {
-  awaitFirstFrame,
-  decodeImages,
-  hideSplash,
-  loadFonts,
-  loadStyles,
-  showSplashProgress,
-} from './splash'
 import { tallyFrame } from './stats'
 import { PlayerStore } from './store'
 import {
-  TRAPS,
-  cycleTrap,
-  maybeSelectedKind,
-  placeTrap,
-  refusePlacement,
-  trapCenter,
-} from './traps'
+  characterFromKey,
+  foldCharacter,
+  openCharacterPicker,
+} from './update/character'
 import {
-  RUNNING_BUILD,
-  UPDATE_CHECK_INTERVAL,
-  fetchRemoteBuild,
-  isCheckingForUpdates,
-  isUpdateCheckWindow,
-  maybeNewerBuild,
-  reloadPage,
-} from './version'
+  canMoveHomeFocus,
+  closePanel,
+  difficultyCardFromKey,
+  dismissHomeScreenTip,
+  dismissHomeScreenTipFrom,
+  finishHomeScreenSteps,
+  focusEndMenuFrom,
+  foldHomeScreenSteps,
+  foldPanelDialog,
+  homeFocusFromKey,
+  homeFromKey,
+  homeStartFromKey,
+  isAskingDifficultyFirst,
+  leaveFromMenu,
+  leaveRun,
+  menuFromKey,
+  openHomeScreenSteps,
+  openMunchopedia,
+  openPanel,
+  openWhatsNew,
+  pickFromCard,
+  pickFromSettings,
+  settleNightmareFrom,
+  startOrAsk,
+  toggleShake,
+  toggleShareStats,
+  turnMunchopediaPage,
+  turnNews,
+  unlockNightmareFrom,
+} from './update/home'
 import {
-  FINAL_WAVE,
-  isRoundActive,
-  keepGoing,
-  pause,
-  startOrResume,
-  startWaveEarly,
-} from './waves'
+  isPaused,
+  isScreenAnimated,
+  keepGoingWhenAllowed,
+  startFromButton,
+  startWhenAllowed,
+  startsRun,
+} from './update/run'
 import {
-  WEAPONS,
+  answerTutorialReset,
+  askToResetTutorial,
+  finishLoadStep,
+  finishWrite,
+  loadSave,
+  startLinking,
+  submitLinkCode,
+  takeSyncedSave,
+  typeLinkCode,
+  writeSaveFrom,
+} from './update/save'
+import {
+  buy,
+  closeShop,
+  closeShopOutsidePreparation,
+  enterShop,
+  focusShopItem,
+  foldShopDialog,
+  foldShopTabs,
+  leaveShopWithoutDialog,
+  moveShopFocus,
+} from './update/shop'
+import {
+  frameSoundCues,
+  playSounds,
+  playStartSoundWhen,
+  playSwapSoundWhen,
+  toggleAudioFromKey,
+  toggleMusic,
+  toggleSound,
+  unlockAudio,
+} from './update/sound'
+import { type UpdateReturn, type UpdateStep, withInput } from './update/step'
+import { nextTrap, placeSelectedTrap, trapFromKey } from './update/traps'
+import { RUNNING_BUILD, isCheckingForUpdates, maybeNewerBuild } from './version'
+import { isRoundActive, pause, startWaveEarly } from './waves'
+import {
   beginReload,
   canReload,
   cancelReload,
   heldWeapon,
   swapWeapon,
 } from './weapons'
-import { ZOMBIE_KINDS, isArmorShedAt } from './zombies'
-
-export { Model, PageVisibility } from './model'
-
-// MESSAGE
-
-export const Message = defineMessageUnion({
-  TickedFrame: { deltaTime: Schema.Number },
-  PressedKey: { code: Schema.String },
-  ReleasedKey: { code: Schema.String },
-  BlurredWindow: {},
-  ChangedPageVisibility: { visibility: PageVisibility },
-  PressedPointer: {
-    pointerId: Schema.Number,
-    device: PointerDevice,
-    clientX: Schema.Number,
-    clientY: Schema.Number,
-  },
-  MovedPointer: {
-    pointerId: Schema.Number,
-    clientX: Schema.Number,
-    clientY: Schema.Number,
-  },
-  ReleasedPointer: { pointerId: Schema.Number },
-  CancelledPointer: { pointerId: Schema.Number },
-  ReleasedEveryTouch: {},
-  MovedMouse: { clientX: Schema.Number, clientY: Schema.Number },
-  SuppressedContextMenu: {},
-  MeasuredGameSurface: {
-    left: Schema.Number,
-    top: Schema.Number,
-    width: Schema.Number,
-    height: Schema.Number,
-  },
-  CompletedGenerateSeed: { seed: Schema.Number },
-  CompletedDetectInputDevice: { touchControls: TouchControls },
-  ClickedMuteButton: {},
-  ClickedPauseButton: {},
-  ClickedMusicButton: {},
-  ClickedCampaignButton: {},
-  ClickedEndlessButton: {},
-  ClickedKeepGoingButton: {},
-  ClickedCharacterButton: {},
-  GotCharacterMessage: { message: Character.Message },
-  ClickedStartWaveButton: {},
-  ClickedDebutCardButton: {},
-  ClickedSwapButton: {},
-  ClickedGunSlot: { slot: GunSlot },
-  ClickedReloadButton: {},
-  ClickedFullscreenButton: {},
-  CompletedSetFullscreen: { fullscreen: FullscreenSetting },
-  FailedSetFullscreen: { reason: Schema.String },
-  ChangedFullscreen: { fullscreen: FullscreenSetting },
-  CompletedDetectScreenFit: { screenFit: ScreenFit },
-  ClickedDismissHomeScreenTip: {},
-  ClickedHomeScreenTip: {},
-  ClickedHomeScreenStepsDoneButton: {},
-  GotHomeScreenStepsMessage: { message: Dialog.Message },
-  ClickedPlaceTrapButton: {},
-  ClickedNextTrapButton: {},
-  GotShopDialogMessage: { message: Dialog.Message },
-  GotShopTabsMessage: { message: Tabs.Message },
-  ClickedBuyButton: { item: ShopItemId },
-  PressedBuyKey: { item: ShopItemId },
-  MovedShopFocus: { item: ShopItemId },
-  FocusedShopItem: { item: ShopItemId },
-  CompletedFocusShopItem: {},
-  AcquiredAudioEngine: {},
-  FailedAcquireAudioEngine: { reason: Schema.String },
-  ReleasedAudioEngine: {},
-  CompletedResumeAudio: { playback: Playback },
-  FailedResumeAudio: { reason: Schema.String },
-  CompletedPlaySound: { sound: SoundEffect, outcome: PlayOutcome },
-  FailedPlaySound: { sound: SoundEffect, reason: Schema.String },
-  CompletedCueMusic: { mood: MusicMood },
-  FailedCueMusic: { mood: MusicMood, reason: Schema.String },
-  FocusedWindow: {},
-  RestoredPageFromCache: {},
-  TickedUpdateCheck: {},
-  CompletedFetchBuild: { build: Schema.String },
-  FailedFetchBuild: { reason: Schema.String },
-  ClickedUpdateButton: {},
-  CompletedReloadPage: {},
-  FailedReloadPage: { reason: Schema.String },
-  ClickedHowToPlayButton: {},
-  ClickedSettingsButton: {},
-  ClickedMenuButton: {},
-  ClickedLeaveRunButton: {},
-  ClickedStayButton: {},
-  GotPanelDialogMessage: { message: Dialog.Message },
-  ClickedShakeButton: {},
-  ClickedDifficultyCardButton: { difficulty: Difficulty },
-  ClickedDifficultySettingButton: { difficulty: Difficulty },
-  FocusedHomeButton: { button: HomeButton },
-  BlurredHomeButton: {},
-  CompletedFocusHomeButton: {},
-  CompletedFocusEndMenuButton: {},
-  CompletedLoadStyles: {},
-  CompletedLoadFonts: {},
-  FailedLoadFonts: { reason: Schema.String },
-  CompletedAwaitFirstFrame: {},
-  CompletedDecodeSprites: {},
-  CompletedShowLoadProgress: {},
-  CompletedHideSplash: {},
-  CompletedLoadSave: { maybeSave: Schema.Option(PlayerSave) },
-  FailedLoadSave: { reason: Schema.String },
-  CompletedWriteSave: {},
-  FailedWriteSave: { reason: Schema.String },
-  ClickedShareStatsButton: {},
-  CompletedGenerateVisitId: { visitId: Schema.String },
-  CompletedSendRunSummary: {},
-  FailedSendRunSummary: { reason: Schema.String },
-  ClickedResetTutorialButton: {},
-  ClickedConfirmResetTutorialButton: {},
-  ClickedCancelResetTutorialButton: {},
-  CompletedFocusTutorialReset: {},
-  UpdatedSyncedSave: { save: PlayerSave },
-  CompletedReloadSyncedSave: { maybeSave: Schema.Option(PlayerSave) },
-  UpdatedSyncStatus: { state: SyncState },
-  ClickedLinkDeviceButton: {},
-  SucceededRequestLinkCode: { code: Schema.String },
-  FailedRequestLinkCode: { problem: LinkProblem },
-  ClickedUseCodeButton: {},
-  UpdatedLinkCode: { value: Schema.String },
-  SubmittedLinkCode: {},
-  SucceededRedeemLinkCode: {},
-  FailedRedeemLinkCode: { problem: LinkProblem },
-  ClickedCancelLinkButton: {},
-  ClickedPlayButton: {},
-  ClickedModeButton: {},
-  ClickedWhatsNewButton: {},
-  ClickedOlderNewsButton: {},
-  ClickedNewerNewsButton: {},
-  ClickedMunchopediaButton: {},
-  ClickedMunchopediaEntryButton: { kind: ZombieKind },
-  ClickedMunchopediaListButton: {},
-  ClickedNewEntryButton: { kind: ZombieKind },
-  ClickedDifficultyBadge: {},
-})
-export type Message = typeof Message.Type
-
-// RESOURCE
-
-const wantsAudioEngine = (audio: AudioState): boolean =>
-  AudioState.match(audio, {
-    Locked: () => false,
-    Unlocking: () => true,
-    Suspended: () => true,
-    Ready: () => true,
-    Unavailable: () => false,
-  })
-
-export const managedResources = ManagedResource.make<Model, Message>()(
-  entry => ({
-    audioEngine: entry(Schema.Option(Schema.Null), {
-      resource: AudioEngineResource,
-      modelToMaybeRequirements: model =>
-        wantsAudioEngine(model.audio) ? Option.some(null) : Option.none(),
-      acquire: () => acquireAudioEngine,
-      release: releaseAudioEngine,
-      onAcquired: () => Message.AcquiredAudioEngine(),
-      onAcquireError: error =>
-        Message.FailedAcquireAudioEngine({ reason: String(error) }),
-      onReleased: () => Message.ReleasedAudioEngine(),
-    }),
-  }),
-)
-
-type AudioServices = ManagedResource.ServicesOf<typeof managedResources>
-
-type AppServices = AudioServices | PlayerStore
-
-// COMMAND
-
-const UINT32_MAX = 0xffffffff
-
-export const GenerateSeed = Command.define('GenerateSeed', {
-  messages: [Message.CompletedGenerateSeed],
-  execute: Effect.map(Random.nextIntBetween(0, UINT32_MAX), seed =>
-    Message.CompletedGenerateSeed({ seed }),
-  ),
-})
-
-const COARSE_POINTER_QUERY = '(pointer: coarse)'
-const MOBILE_SCREEN_MAX_SIDE_PX = 600
-
-const isMobileTouchScreen = (): boolean =>
-  window.matchMedia(COARSE_POINTER_QUERY).matches &&
-  Math.min(window.screen.width, window.screen.height) <=
-    MOBILE_SCREEN_MAX_SIDE_PX
-
-export const DetectInputDevice = Command.define('DetectInputDevice', {
-  messages: [Message.CompletedDetectInputDevice],
-  execute: pipe(
-    Effect.try(isMobileTouchScreen),
-    Effect.map(isMobile =>
-      Message.CompletedDetectInputDevice({
-        touchControls: isMobile ? 'Allowed' : 'Blocked',
-      }),
-    ),
-    Effect.catch(() =>
-      Effect.succeed(
-        Message.CompletedDetectInputDevice({ touchControls: 'Blocked' }),
-      ),
-    ),
-  ),
-})
-
-const isInstalledApp = (): boolean =>
-  window.matchMedia('(display-mode: fullscreen)').matches ||
-  window.matchMedia('(display-mode: standalone)').matches ||
-  Reflect.get(navigator, 'standalone') === true
-
-// NOTE: no feature check tells whether a browser offers Add to Home Screen.
-// `navigator.standalone` exists only in Apple's WebKit, and every iPhone
-// browser runs on it and can add to the Home Screen from iOS 16.4, so its
-// presence is the narrowest honest check. Element full screen comes first, so
-// an iPad or an Android phone gets the full screen button instead.
-const canAddToHomeScreen = (): boolean =>
-  Reflect.has(navigator, 'standalone') &&
-  window.matchMedia(COARSE_POINTER_QUERY).matches
-
-const detectScreenFit = (): ScreenFit => {
-  if (isInstalledApp()) {
-    return 'Installed'
-  } else if (document.fullscreenEnabled) {
-    return 'Fullscreen'
-  } else if (canAddToHomeScreen()) {
-    return 'HomeScreen'
-  } else {
-    return 'Unavailable'
-  }
-}
-
-export const DetectScreenFit = Command.define('DetectScreenFit', {
-  messages: [Message.CompletedDetectScreenFit],
-  execute: pipe(
-    Effect.try(detectScreenFit),
-    Effect.map(screenFit => Message.CompletedDetectScreenFit({ screenFit })),
-    Effect.catch(() =>
-      Effect.succeed(
-        Message.CompletedDetectScreenFit({ screenFit: 'Unavailable' }),
-      ),
-    ),
-  ),
-})
-
-const lockLandscape = Effect.tryPromise(() =>
-  screen.orientation.lock('landscape'),
-).pipe(Effect.ignore)
-
-const enterFullscreen = pipe(
-  Effect.tryPromise(() =>
-    document.documentElement.requestFullscreen({ navigationUI: 'hide' }),
-  ),
-  Effect.andThen(lockLandscape),
-)
-
-const exitFullscreen = Effect.tryPromise(() =>
-  document.fullscreenElement === null
-    ? Promise.resolve()
-    : document.exitFullscreen(),
-)
-
-export const SetFullscreen = Command.define('SetFullscreen', {
-  args: { fullscreen: FullscreenSetting },
-  messages: [Message.CompletedSetFullscreen, Message.FailedSetFullscreen],
-  execute: ({ fullscreen }) =>
-    pipe(
-      fullscreen === 'On' ? enterFullscreen : exitFullscreen,
-      Effect.as(Message.CompletedSetFullscreen({ fullscreen })),
-      Effect.catch(error =>
-        Effect.succeed(Message.FailedSetFullscreen({ reason: String(error) })),
-      ),
-    ),
-})
-
-const audioFailureReason = (
-  error: AudioEngineError | ManagedResource.ResourceNotAvailable,
-): string =>
-  error._tag === 'AudioEngineError'
-    ? error.reason
-    : `${error.resource} is not acquired`
-
-export const ResumeAudio = Command.define('ResumeAudio', {
-  messages: [Message.CompletedResumeAudio, Message.FailedResumeAudio],
-  execute: pipe(
-    AudioEngineResource.get,
-    Effect.flatMap(resumeAudio),
-    Effect.map(playback => Message.CompletedResumeAudio({ playback })),
-    Effect.catch(error =>
-      Effect.succeed(
-        Message.FailedResumeAudio({ reason: audioFailureReason(error) }),
-      ),
-    ),
-  ),
-})
-
-export const PlaySound = Command.define('PlaySound', {
-  args: { sound: SoundEffect, variation: Schema.Number },
-  messages: [Message.CompletedPlaySound, Message.FailedPlaySound],
-  execute: ({ sound, variation }) =>
-    pipe(
-      AudioEngineResource.get,
-      Effect.flatMap(engine => playSound(engine, sound, variation)),
-      Effect.map(outcome => Message.CompletedPlaySound({ sound, outcome })),
-      Effect.catch(error =>
-        Effect.succeed(
-          Message.FailedPlaySound({
-            sound,
-            reason: audioFailureReason(error),
-          }),
-        ),
-      ),
-    ),
-})
-
-export const CueMusic = Command.define('CueMusic', {
-  args: { mood: MusicMood, level: MusicLevel, stinger: MusicStinger },
-  messages: [Message.CompletedCueMusic, Message.FailedCueMusic],
-  execute: cue =>
-    pipe(
-      AudioEngineResource.get,
-      Effect.flatMap(engine => playMusic(engine, cue)),
-      Effect.as(Message.CompletedCueMusic({ mood: cue.mood })),
-      Effect.catch(error =>
-        Effect.succeed(
-          Message.FailedCueMusic({
-            mood: cue.mood,
-            reason: audioFailureReason(error),
-          }),
-        ),
-      ),
-    ),
-})
-
-export const FocusShopItem = Command.define('FocusShopItem', {
-  args: { item: ShopItemId },
-  messages: [Message.CompletedFocusShopItem],
-  execute: ({ item }) =>
-    Dom.focus(`#${shopItemElementId(item)}`).pipe(
-      Effect.ignore,
-      Effect.as(Message.CompletedFocusShopItem()),
-    ),
-})
-
-export const FetchBuild = Command.define('FetchBuild', {
-  messages: [Message.CompletedFetchBuild, Message.FailedFetchBuild],
-  execute: pipe(
-    fetchRemoteBuild,
-    Effect.map(build => Message.CompletedFetchBuild({ build })),
-    Effect.catch(error =>
-      Effect.succeed(Message.FailedFetchBuild({ reason: error.reason })),
-    ),
-  ),
-})
-
-export const ReloadPage = Command.define('ReloadPage', {
-  messages: [Message.CompletedReloadPage, Message.FailedReloadPage],
-  execute: pipe(
-    reloadPage,
-    Effect.as(Message.CompletedReloadPage()),
-    Effect.catch(error =>
-      Effect.succeed(Message.FailedReloadPage({ reason: error.reason })),
-    ),
-  ),
-})
-
-export const FocusHomeButton = Command.define('FocusHomeButton', {
-  args: { button: HomeButton },
-  messages: [Message.CompletedFocusHomeButton],
-  execute: ({ button }) =>
-    Dom.focus(`#${homeButtonId(button)}`).pipe(
-      Effect.ignore,
-      Effect.as(Message.CompletedFocusHomeButton()),
-    ),
-})
-
-export const FocusEndMenuButton = Command.define('FocusEndMenuButton', {
-  messages: [Message.CompletedFocusEndMenuButton],
-  execute: Dom.focus(`#${END_MENU_BUTTON_ID}`).pipe(
-    Effect.ignore,
-    Effect.as(Message.CompletedFocusEndMenuButton()),
-  ),
-})
-
-// SPLASH
-
-export const LoadStyles = Command.define('LoadStyles', {
-  messages: [Message.CompletedLoadStyles],
-  execute: pipe(
-    loadStyles,
-    Effect.ignore,
-    Effect.as(Message.CompletedLoadStyles()),
-  ),
-})
-
-export const LoadFonts = Command.define('LoadFonts', {
-  messages: [Message.CompletedLoadFonts, Message.FailedLoadFonts],
-  execute: pipe(
-    loadFonts,
-    Effect.as(Message.CompletedLoadFonts()),
-    Effect.catch(error =>
-      Effect.succeed(Message.FailedLoadFonts({ reason: String(error) })),
-    ),
-  ),
-})
-
-export const AwaitFirstFrame = Command.define('AwaitFirstFrame', {
-  messages: [Message.CompletedAwaitFirstFrame],
-  execute: Effect.as(awaitFirstFrame, Message.CompletedAwaitFirstFrame()),
-})
-
-// NOTE: the warm-up canvases start Foldkit loading every sprite image on the
-// first frame. This waits for that frame, then decodes the same sources, so
-// the splash stays up until the sprites are ready to draw.
-export const DecodeSprites = Command.define('DecodeSprites', {
-  messages: [Message.CompletedDecodeSprites],
-  execute: pipe(
-    awaitFirstFrame,
-    Effect.andThen(
-      Effect.suspend(() =>
-        decodeImages(spriteWarmUpSources(defaultAppearance)),
-      ),
-    ),
-    Effect.as(Message.CompletedDecodeSprites()),
-  ),
-})
-
-export const ShowLoadProgress = Command.define('ShowLoadProgress', {
-  args: { loaded: Schema.Number, total: Schema.Number },
-  messages: [Message.CompletedShowLoadProgress],
-  execute: ({ loaded, total }) =>
-    pipe(
-      showSplashProgress(loaded, total),
-      Effect.ignore,
-      Effect.as(Message.CompletedShowLoadProgress()),
-    ),
-})
-
-export const HideSplash = Command.define('HideSplash', {
-  messages: [Message.CompletedHideSplash],
-  execute: pipe(
-    hideSplash,
-    Effect.ignore,
-    Effect.as(Message.CompletedHideSplash()),
-  ),
-})
-
-// SAVE
-
-export const LoadSave = Command.define('LoadSave', {
-  messages: [Message.CompletedLoadSave, Message.FailedLoadSave],
-  execute: pipe(
-    PlayerStore.use(store => store.load),
-    Effect.map(maybeSave => Message.CompletedLoadSave({ maybeSave })),
-    Effect.catch(error =>
-      Effect.succeed(Message.FailedLoadSave({ reason: error.reason })),
-    ),
-  ),
-})
-
-// NOTE: the whole save goes along with what changed in it: the store runs
-// the changes as player scope mutations, and keeps the whole save only
-// where it still writes the localStorage copy.
-export const WriteSave = Command.define('WriteSave', {
-  args: { save: PlayerSave, changes: Schema.Array(PlayerChange) },
-  messages: [Message.CompletedWriteSave, Message.FailedWriteSave],
-  execute: ({ save, changes }) =>
-    pipe(
-      PlayerStore.use(store => store.write(save, changes)),
-      Effect.as(Message.CompletedWriteSave()),
-      Effect.catch(error =>
-        Effect.succeed(Message.FailedWriteSave({ reason: error.reason })),
-      ),
-    ),
-})
-
-// SYNC
-
-export const ReloadSyncedSave = Command.define('ReloadSyncedSave', {
-  messages: [Message.CompletedReloadSyncedSave],
-  execute: pipe(
-    PlayerStore.use(store => store.load),
-    Effect.map(maybeSave => Message.CompletedReloadSyncedSave({ maybeSave })),
-    Effect.orElseSucceed(() =>
-      Message.CompletedReloadSyncedSave({ maybeSave: Option.none() }),
-    ),
-  ),
-})
-
-export const RequestLinkCode = Command.define('RequestLinkCode', {
-  messages: [Message.SucceededRequestLinkCode, Message.FailedRequestLinkCode],
-  execute: pipe(
-    PlayerStore.use(store => store.requestLinkCode),
-    Effect.map(code => Message.SucceededRequestLinkCode({ code })),
-    Effect.catch(error =>
-      Effect.succeed(Message.FailedRequestLinkCode({ problem: error.problem })),
-    ),
-  ),
-})
-
-export const RedeemLinkCode = Command.define('RedeemLinkCode', {
-  args: { code: Schema.String },
-  messages: [Message.SucceededRedeemLinkCode, Message.FailedRedeemLinkCode],
-  execute: ({ code }) =>
-    pipe(
-      PlayerStore.use(store => store.redeemLinkCode(code)),
-      Effect.as(Message.SucceededRedeemLinkCode()),
-      Effect.catch(error =>
-        Effect.succeed(
-          Message.FailedRedeemLinkCode({ problem: error.problem }),
-        ),
-      ),
-    ),
-})
-
-// ANALYTICS
-
-export const GenerateVisitId = Command.define('GenerateVisitId', {
-  messages: [Message.CompletedGenerateVisitId],
-  execute: Effect.map(generateVisitId, visitId =>
-    Message.CompletedGenerateVisitId({ visitId }),
-  ),
-})
-
-export const SendRunSummary = Command.define('SendRunSummary', {
-  args: { summary: RunSummary },
-  messages: [Message.CompletedSendRunSummary, Message.FailedSendRunSummary],
-  execute: ({ summary }) =>
-    pipe(
-      sendRunSummary(summary),
-      Effect.as(Message.CompletedSendRunSummary()),
-      Effect.catch(error =>
-        Effect.succeed(Message.FailedSendRunSummary({ reason: error.reason })),
-      ),
-    ),
-})
-
-export const FocusTutorialReset = Command.define('FocusTutorialReset', {
-  args: { id: Schema.String },
-  messages: [Message.CompletedFocusTutorialReset],
-  execute: ({ id }) =>
-    Dom.focus(`#${id}`).pipe(
-      Effect.ignore,
-      Effect.as(Message.CompletedFocusTutorialReset()),
-    ),
-})
 
 // INIT
 
@@ -789,15 +196,7 @@ export const init: Runtime.ApplicationInit<
 
 // UPDATE
 
-type UpdateReturn = Update.Return<Model, Message, AppServices>
-type UpdateStep = Update.Step<Model, Message, AppServices>
-
 const START_SOUND_GRACE_MS = 1000
-const MUTE_KEY = 'KeyM'
-const MUSIC_KEY = 'KeyN'
-
-const withInput = (model: Model, toNextInput: (input: Input) => Input) =>
-  refreshIntent(modifyFields(model, { input: toNextInput }))
 
 const useDevice = (model: Model, device: InputDevice): Model =>
   model.lastDevice === device
@@ -812,33 +211,8 @@ const asAllowedPress = (model: Model, press: PointerPress): PointerPress =>
 const orientationOf = (width: number, height: number): Orientation =>
   height > width ? 'Portrait' : 'Landscape'
 
-const isPastRestartGrace = (model: Model): boolean =>
-  model.screenMs >= RESTART_GRACE_MS
-
-const canStart = (model: Model): boolean =>
-  Phase.match(model.phase, {
-    Ready: () => true,
-    Preparation: () => false,
-    Wave: () => false,
-    Paused: () => true,
-    Victory: () => endOffer(model) === 'MenuAndModes',
-    GameOver: () => endOffer(model) === 'MenuAndModes',
-  })
-
-const startWhenAllowed = (model: Model, mode: RunMode): Model =>
-  canStart(model) ? startOrResume(model, mode) : model
-
 const resumeFromPointer = (model: Model): Model =>
   isPaused(model.phase) ? startWhenAllowed(model, model.mode) : model
-
-const keepGoingWhenAllowed = (model: Model): Model =>
-  canStart(model) ? keepGoing(model) : model
-
-const isScreenAnimated = (phase: Phase): boolean =>
-  Phase.isAnyOf(['Ready', 'Victory', 'GameOver'])(phase)
-
-const isFrameActive = (model: Model): boolean =>
-  isRoundActive(model.phase) || isScreenAnimated(model.phase)
 
 const hasStartedWave = (before: Model, after: Model): boolean =>
   Phase.isAnyOf(['Preparation'])(before.phase) &&
@@ -931,115 +305,8 @@ const phaseFromKey = (model: Model, code: string): Model =>
     GameOver: () => startFromKey(model, code),
   })
 
-const isPaused = Phase.isAnyOf(['Paused'])
-
 const hasResumed = (before: Model, after: Model): boolean =>
   isPaused(before.phase) && !isPaused(after.phase)
-
-const startsRun = (before: Model, after: Model): boolean =>
-  !isRoundActive(before.phase) &&
-  !Phase.isAnyOf(['Paused'])(before.phase) &&
-  Phase.isAnyOf(['Preparation'])(after.phase)
-
-const isSoundAudible = (model: Model): boolean =>
-  AudioState.isAnyOf(['Ready'])(model.audio) && model.soundSetting === 'On'
-
-type SoundCue = Readonly<{ sound: SoundEffect; variation: number }>
-
-const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
-  GameEvent.match(event, {
-    Fired: ({ weapon }) => Option.some(WEAPONS[weapon].sound),
-    ZombieHit: ({ kind }) => Option.some(ZOMBIE_KINDS[kind].hitSound),
-    ZombieKilled: ({ kind }) => Option.some(ZOMBIE_KINDS[kind].deathSound),
-    Exploded: () => Option.some<SoundEffect>('Boom'),
-    Footfall: ({ kind, nearness }) =>
-      nearness > 0
-        ? Option.flatMap(
-            ZOMBIE_KINDS[kind].maybeFootfall,
-            ({ maybeSound }) => maybeSound,
-          )
-        : Option.none<SoundEffect>(),
-    PlayerHurt: () => Option.some<SoundEffect>('PlayerHurt'),
-    BulletStruck: () => Option.none<SoundEffect>(),
-    RanDry: () => Option.some<SoundEffect>('DryClick'),
-    DryFired: () => Option.some<SoundEffect>('DryClick'),
-    ReloadStarted: () => Option.some<SoundEffect>('MagOut'),
-    Reloaded: () => Option.some<SoundEffect>('MagIn'),
-    WaveCleared: () => Option.some<SoundEffect>('Payday'),
-    PackWarned: ({ formation }) =>
-      Option.some<SoundEffect>(formation === 'Horde' ? 'DinnerBell' : 'Groan'),
-    TrapHit: () => Option.none<SoundEffect>(),
-    TrapCracked: ({ kind }) => Option.some(TRAPS[kind].crackSound),
-    TrapBroken: ({ kind }) => Option.some(TRAPS[kind].breakSound),
-    PickupDropped: () => Option.some<SoundEffect>('LootPop'),
-    PickupGrabbed: ({ kind }) => Option.some(PICKUPS[kind].sound),
-    PickupFizzled: () => Option.none<SoundEffect>(),
-    BoostFaded: () => Option.some<SoundEffect>('PowerDown'),
-    Burped: () => Option.none<SoundEffect>(),
-    PartShed: ({ kind, stage }) =>
-      Option.some<SoundEffect>(
-        isArmorShedAt(kind, stage) ? 'Clang' : 'LimbPop',
-      ),
-    BossRoared: () => Option.some<SoundEffect>('BossRoar'),
-    BossWoundUp: ({ attack }) =>
-      Option.some<SoundEffect>(
-        attack === 'Charge' ? 'BossChargeUp' : 'BossWindUp',
-      ),
-    BossStomped: () => Option.some<SoundEffect>('BossStomp'),
-    BossBelched: () => Option.some<SoundEffect>('BossBelch'),
-    BossRushed: () => Option.some<SoundEffect>('BossRush'),
-    BossRammed: () => Option.none<SoundEffect>(),
-    BossBonked: () => Option.some<SoundEffect>('BossBonk'),
-    BossSpat: () => Option.some<SoundEffect>('BossSpit'),
-    GlobLanded: () => Option.some<SoundEffect>('BossSplat'),
-    BossEnraged: () => Option.some<SoundEffect>('BossRoar'),
-    ZombieGrabbed: () => Option.some<SoundEffect>('Heave'),
-    ShieldRaised: () => Option.some<SoundEffect>('Yank'),
-    ZombieThrown: () => Option.some<SoundEffect>('Whoosh'),
-    ZombieLanded: () => Option.some<SoundEffect>('Thud'),
-    CrawlerStirred: () => Option.some<SoundEffect>('Rumble'),
-    CrawlerSurfaced: () => Option.some<SoundEffect>('Burrow'),
-    AnklesGrabbed: () => Option.some<SoundEffect>('Clutch'),
-    PackFrenzied: () => Option.some<SoundEffect>('Howl'),
-    PackWiped: () => Option.some<SoundEffect>('PackBonus'),
-  })
-
-const maybeEventSoundCue = (event: GameEvent): Option.Option<SoundCue> =>
-  Option.map(maybeEventSound(event), sound => ({
-    sound,
-    variation: positionVariation(event.x, event.y),
-  }))
-
-const frameSoundCues = (
-  events: ReadonlyArray<GameEvent>,
-): ReadonlyArray<SoundCue> =>
-  pipe(
-    events,
-    Array.map(maybeEventSoundCue),
-    Array.getSomes,
-    Array.dedupeWith((first, second) => first.sound === second.sound),
-  )
-
-const playSounds =
-  (cues: ReadonlyArray<SoundCue>): UpdateStep =>
-  stepModel => {
-    if (isSoundAudible(stepModel)) {
-      return {
-        model: stepModel,
-        commands: Array.map(cues, cue => PlaySound(cue)),
-      }
-    } else {
-      return { model: stepModel }
-    }
-  }
-
-const uiCue = (sound: SoundEffect): SoundCue => ({ sound, variation: 0 })
-
-const playStartSoundWhen = (isRoundStart: boolean): UpdateStep =>
-  playSounds(isRoundStart ? [uiCue('Start')] : [])
-
-const playSwapSoundWhen = (isSwap: boolean): UpdateStep =>
-  playSounds(isSwap ? [uiCue('Swap')] : [])
 
 // RELOAD
 
@@ -1061,457 +328,7 @@ const reloadHeldGun: UpdateStep = stepModel => {
 const reloadFromKey: (code: string) => UpdateStep = code => stepModel =>
   isReloadKey(code) ? reloadHeldGun(stepModel) : { model: stepModel }
 
-// SHOP
-
-const foldShopDialogOutMessage = Dialog.OutMessage.match<UpdateStep>({
-  Opened: () => stepModel => ({ model: stepModel }),
-  Closed: () => leaveShopStep,
-})
-
-const leaveShop = (model: Model): Model =>
-  isBrowsing(model.shop)
-    ? refreshIntent(modifyFields(model, { shop: () => ShopState.Dismissed() }))
-    : model
-
-const foldShopDialog = Update.foldChild({
-  update: Dialog.update,
-  read: (model: Model) => Option.some(model.shopDialog),
-  write: (model, nextShopDialog) =>
-    modifyFields(model, { shopDialog: () => nextShopDialog }),
-  toParentMessage: message => Message.GotShopDialogMessage({ message }),
-  foldOutMessage: foldShopDialogOutMessage,
-})
-
-const foldShopDialogOpen = Update.foldChildStep({
-  update: Dialog.open,
-  read: (model: Model) => Option.some(model.shopDialog),
-  write: (model, nextShopDialog) =>
-    modifyFields(model, { shopDialog: () => nextShopDialog }),
-  toParentMessage: message => Message.GotShopDialogMessage({ message }),
-  foldOutMessage: foldShopDialogOutMessage,
-})
-
-const foldShopDialogClose = Update.foldChildStep({
-  update: Dialog.close,
-  read: (model: Model) => Option.some(model.shopDialog),
-  write: (model, nextShopDialog) =>
-    modifyFields(model, { shopDialog: () => nextShopDialog }),
-  toParentMessage: message => Message.GotShopDialogMessage({ message }),
-  foldOutMessage: foldShopDialogOutMessage,
-})
-
-const foldShopTabs = Update.foldChild({
-  update: ShopTabs.update,
-  read: (model: Model) => Option.some(model.shopTabs),
-  write: (model, nextShopTabs) =>
-    modifyFields(model, { shopTabs: () => nextShopTabs }),
-  toParentMessage: message => Message.GotShopTabsMessage({ message }),
-  foldOutMessage: Tabs.OutMessage.match<
-    UpdateStep,
-    Tabs.OutMessage<ShopCategory>
-  >({
-    Selected:
-      ({ value }) =>
-      stepModel => ({ model: selectShopCategory(stepModel, value) }),
-  }),
-})
-
-const leaveShopWithoutDialog: UpdateStep = stepModel => ({
-  model: stepModel.shopDialog.isOpen ? stepModel : leaveShop(stepModel),
-})
-
-const leaveShopStep: UpdateStep = stepModel => ({
-  model: leaveShop(stepModel),
-})
-
-const enterShop: UpdateStep = stepModel =>
-  Update.combine(withInput(stepModel, releaseAll), [
-    foldShopDialogOpen,
-    playSounds([uiCue('ShopBell')]),
-  ])
-
-const closeShop: UpdateStep = stepModel =>
-  isBrowsing(stepModel.shop)
-    ? Update.combine(stepModel, [foldShopDialogClose, leaveShopStep])
-    : { model: stepModel }
-
-const closeShopOutsidePreparation: UpdateStep = stepModel =>
-  Phase.isAnyOf(['Preparation'])(stepModel.phase)
-    ? { model: stepModel }
-    : closeShop(stepModel)
-
-const purchaseCues = (item: ShopItemId): ReadonlyArray<SoundCue> =>
-  ShopGood.isAnyOf(['Upgrade'])(SHOP_ITEMS[item].good)
-    ? [uiCue('Purchase'), uiCue('PowerUp')]
-    : [uiCue('Purchase')]
-
-const buy = (model: Model, item: ShopItemId): UpdateReturn => {
-  if (!isBrowsing(model.shop)) {
-    return { model }
-  }
-
-  return Option.match(purchase(model, item), {
-    onNone: () => playSounds([uiCue('Denied')])(model),
-    onSome: bought =>
-      Update.combine(burstCoins(bought, bought.player.x, bought.player.y), [
-        playSounds(purchaseCues(item)),
-        refocusDisplacedRow,
-      ]),
-  })
-}
-
-const refocusDisplacedRow: UpdateStep = stepModel =>
-  Option.match(maybeDisplacedFocus(stepModel), {
-    onNone: () => ({ model: stepModel }),
-    onSome: nextItem => ({
-      model: focusShopItem(stepModel, nextItem),
-      commands: [FocusShopItem({ item: nextItem })],
-    }),
-  })
-
-const focusShopItem = (model: Model, item: ShopItemId): Model =>
-  ShopState.match(model.shop, {
-    Away: () => model,
-    Browsing: () =>
-      modifyFields(model, {
-        shop: () => ShopState.Browsing({ focusedItem: item }),
-      }),
-    Dismissed: () => model,
-  })
-
-// CHARACTER
-
-const canPickCharacter = (model: Model): boolean =>
-  Phase.match(model.phase, {
-    Ready: () => true,
-    Preparation: () => false,
-    Wave: () => false,
-    Paused: () => false,
-    Victory: () => isPastRestartGrace(model),
-    GameOver: () => isPastRestartGrace(model),
-  })
-
-const foldCharacterOutMessage = Character.OutMessage.match<UpdateStep>({
-  ChoseLook:
-    ({ choice }) =>
-    stepModel => ({
-      model: modifyFields(stepModel, {
-        appearance: appearance => Character.chooseLook(appearance, choice),
-      }),
-    }),
-  RequestedRandomLook: () => stepModel => {
-    const [rngState, appearance] = randomAppearance(
-      stepModel.rngState,
-      stepModel.appearance,
-    )
-    return {
-      model: modifyFields(stepModel, {
-        rngState: () => rngState,
-        appearance: () => appearance,
-      }),
-    }
-  },
-})
-
-const foldCharacter = Update.foldChild({
-  update: Character.update,
-  read: (model: Model) => Option.some(model.character),
-  write: (model, nextCharacter) =>
-    modifyFields(model, { character: () => nextCharacter }),
-  toParentMessage: message => Message.GotCharacterMessage({ message }),
-  foldOutMessage: foldCharacterOutMessage,
-})
-
-const foldCharacterOpen = Update.foldChildStep({
-  update: Character.open,
-  read: (model: Model) => Option.some(model.character),
-  write: (model, nextCharacter) =>
-    modifyFields(model, { character: () => nextCharacter }),
-  toParentMessage: message => Message.GotCharacterMessage({ message }),
-})
-
-const openCharacterPicker: UpdateStep = stepModel =>
-  canPickCharacter(stepModel) && !stepModel.character.dialog.isOpen
-    ? foldCharacterOpen(withInput(stepModel, releaseAll))
-    : { model: stepModel }
-
-const characterFromKey: (code: string) => UpdateStep = code => stepModel =>
-  isCharacterKey(code) ? openCharacterPicker(stepModel) : { model: stepModel }
-
-// MENU
-
-const writePanelDialog = (model: Model, nextPanelDialog: Dialog.Model): Model =>
-  modifyFields(model, { panelDialog: () => nextPanelDialog })
-
-const forgetAskedMode = (model: Model): Model =>
-  DifficultyCard.isAnyOf(['Asking'])(model.difficultyCard)
-    ? modifyFields(model, { difficultyCard: () => DifficultyCard.Unseen() })
-    : model
-
-const foldPanelDialogOutMessage = Dialog.OutMessage.match<UpdateStep>({
-  Opened: () => stepModel => ({ model: stepModel }),
-  Closed: () => stepModel => ({ model: forgetAskedMode(stepModel) }),
-})
-
-const foldPanelDialog = Update.foldChild({
-  update: Dialog.update,
-  read: (model: Model) => Option.some(model.panelDialog),
-  write: writePanelDialog,
-  toParentMessage: message => Message.GotPanelDialogMessage({ message }),
-  foldOutMessage: foldPanelDialogOutMessage,
-})
-
-const foldPanelDialogOpen = Update.foldChildStep({
-  update: Dialog.open,
-  read: (model: Model) => Option.some(model.panelDialog),
-  write: writePanelDialog,
-  toParentMessage: message => Message.GotPanelDialogMessage({ message }),
-  foldOutMessage: foldPanelDialogOutMessage,
-})
-
-const foldPanelDialogClose = Update.foldChildStep({
-  update: Dialog.close,
-  read: (model: Model) => Option.some(model.panelDialog),
-  write: writePanelDialog,
-  toParentMessage: message => Message.GotPanelDialogMessage({ message }),
-  foldOutMessage: foldPanelDialogOutMessage,
-})
-
-const isPanelAllowed = (model: Model, panel: MenuPanel): boolean => {
-  if (model.panelDialog.isOpen || model.character.dialog.isOpen) {
-    return false
-  } else if (panel === 'LeaveRun') {
-    return isPaused(model.phase)
-  } else {
-    return isOnHome(model.phase)
-  }
-}
-
-const openPanel =
-  (panel: MenuPanel): UpdateStep =>
-  stepModel =>
-    isPanelAllowed(stepModel, panel)
-      ? foldPanelDialogOpen(
-          withInput(
-            modifyFields(stepModel, {
-              panel: () => panel,
-              tutorialReset: () => 'Idle',
-            }),
-            releaseAll,
-          ),
-        )
-      : { model: stepModel }
-
-const closePanel: UpdateStep = stepModel =>
-  stepModel.panelDialog.isOpen
-    ? foldPanelDialogClose(stepModel)
-    : { model: stepModel }
-
-const goHome: UpdateStep = stepModel => ({
-  model: returnHome(withInput(stepModel, releaseAll)),
-})
-
-const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
-
-const leaveFromMenu: UpdateStep = stepModel => {
-  if (isPaused(stepModel.phase)) {
-    return openPanel('LeaveRun')(stepModel)
-  } else if (isEndScreen(stepModel.phase) && isPastRestartGrace(stepModel)) {
-    return goHome(stepModel)
-  } else {
-    return { model: stepModel }
-  }
-}
-
-const leaveRun: UpdateStep = stepModel =>
-  isPaused(stepModel.phase) && stepModel.panel === 'LeaveRun'
-    ? Update.combine(stepModel, [closePanel, goHome])
-    : { model: stepModel }
-
-const isEndMenuKey = (model: Model, code: string): boolean =>
-  isMenuKey(code) || (isStartKey(code) && endOffer(model) === 'MenuOnly')
-
-const menuFromKey: (code: string) => UpdateStep = code => stepModel =>
-  isEndMenuKey(stepModel, code)
-    ? leaveFromMenu(stepModel)
-    : { model: stepModel }
-
-const canMoveHomeFocus = (model: Model): boolean =>
-  isOnHome(model.phase) &&
-  !model.panelDialog.isOpen &&
-  !model.character.dialog.isOpen
-
-const homeFocusFromKey: (code: string) => UpdateStep = code => stepModel =>
-  Option.match(maybeFocusStep(code), {
-    onNone: () => ({ model: stepModel }),
-    onSome: step => {
-      if (!canMoveHomeFocus(stepModel)) {
-        return { model: stepModel }
-      }
-
-      const button = steppedHomeFocus(stepModel.maybeHomeFocus, step)
-      return {
-        model: modifyFields(stepModel, {
-          maybeHomeFocus: () => Option.some(button),
-        }),
-        commands: [FocusHomeButton({ button })],
-      }
-    },
-  })
-
-// HOME MENU
-
-const isPanelOpen = (model: Model, panel: MenuPanel): boolean =>
-  model.panelDialog.isOpen && model.panel === panel
-
-const homeStartFromKey = (model: Model, code: string): Model =>
-  isStartKey(code) ? startWhenAllowed(model, runModeOf(model.home.mode)) : model
-
-const openWhatsNew: UpdateStep = stepModel =>
-  isPanelAllowed(stepModel, 'WhatsNew')
-    ? openPanel('WhatsNew')(seeNews(stepModel))
-    : { model: stepModel }
-
-const openMunchopedia =
-  (page: MunchopediaPage): UpdateStep =>
-  stepModel =>
-    isPanelAllowed(stepModel, 'Munchopedia')
-      ? openPanel('Munchopedia')(showMunchopediaPage(stepModel, page))
-      : { model: stepModel }
-
-const turnMunchopediaPage = (
-  model: Model,
-  page: MunchopediaPage,
-): UpdateReturn => ({
-  model: isPanelOpen(model, 'Munchopedia')
-    ? showMunchopediaPage(model, page)
-    : model,
-})
-
-const turnNews = (model: Model, step: number): UpdateReturn => ({
-  model: isPanelOpen(model, 'WhatsNew')
-    ? turnNewsPage(model, step, NEWS_DAYS.length)
-    : model,
-})
-
-const RAIL_OPENERS: Readonly<Record<RailButton, UpdateStep>> = {
-  WhatsNew: openWhatsNew,
-  Munchopedia: openMunchopedia(MunchopediaPage.List()),
-  Character: openCharacterPicker,
-  HowToPlay: openPanel('HowToPlay'),
-  Settings: openPanel('Settings'),
-}
-
-// NOTE: C opens the character picker on every screen that offers it, so it
-// stays with characterFromKey and is left out here.
-const homeFromKey: (code: string) => UpdateStep = code => stepModel => {
-  if (!canMoveHomeFocus(stepModel)) {
-    return { model: stepModel }
-  } else if (isModeKey(code)) {
-    return { model: switchMode(stepModel) }
-  } else {
-    return Option.match(maybeRailButtonOfKey(code), {
-      onNone: () => ({ model: stepModel }),
-      onSome: button =>
-        button === 'Character'
-          ? { model: stepModel }
-          : RAIL_OPENERS[button](stepModel),
-    })
-  }
-}
-
-// DIFFICULTY
-
-const isAskingDifficultyFirst = (model: Model): boolean =>
-  DifficultyCard.isAnyOf(['Unseen'])(model.difficultyCard) &&
-  isOnHome(model.phase)
-
-const askDifficulty =
-  (mode: RunMode): UpdateStep =>
-  stepModel =>
-    isPanelAllowed(stepModel, 'Difficulty')
-      ? openPanel('Difficulty')(
-          modifyFields(stepModel, {
-            difficultyCard: () => DifficultyCard.Asking({ mode }),
-          }),
-        )
-      : { model: stepModel }
-
-const startOrAsk =
-  (mode: RunMode): UpdateStep =>
-  stepModel =>
-    isAskingDifficultyFirst(stepModel)
-      ? Update.combine(stepModel, [unlockAudio, askDifficulty(mode)])
-      : startFromButton(stepModel, startWhenAllowed(stepModel, mode))
-
-const difficultyCardFromKey: (code: string) => UpdateStep = code => stepModel =>
-  isAskingDifficultyFirst(stepModel) && isStartKey(code)
-    ? askDifficulty(runModeOf(stepModel.home.mode))(stepModel)
-    : { model: stepModel }
-
-const pickFromBadge =
-  (difficulty: Difficulty): UpdateStep =>
-  stepModel =>
-    isPanelOpen(stepModel, 'Difficulty') &&
-    isOnHome(stepModel.phase) &&
-    !isLocked(stepModel.difficulty, difficulty)
-      ? closePanel(
-          modifyFields(chooseDifficulty(stepModel, difficulty), {
-            difficultyCard: () => DifficultyCard.Seen(),
-          }),
-        )
-      : { model: stepModel }
-
-const pickFromCard =
-  (difficulty: Difficulty): UpdateStep =>
-  stepModel =>
-    DifficultyCard.match(stepModel.difficultyCard, {
-      Unseen: () => pickFromBadge(difficulty)(stepModel),
-      Seen: () => pickFromBadge(difficulty)(stepModel),
-      Asking: ({ mode }) =>
-        isLocked(stepModel.difficulty, difficulty)
-          ? { model: stepModel }
-          : Update.combine(
-              modifyFields(chooseDifficulty(stepModel, difficulty), {
-                difficultyCard: () => DifficultyCard.Seen(),
-              }),
-              [
-                closePanel,
-                nextModel =>
-                  startFromButton(nextModel, startWhenAllowed(nextModel, mode)),
-              ],
-            ),
-    })
-
-const pickFromSettings = (model: Model, difficulty: Difficulty): Model =>
-  isOnHome(model.phase) && model.panel === 'Settings'
-    ? chooseDifficulty(model, difficulty)
-    : model
-
-const settleNightmareFrom =
-  (before: Model): UpdateStep =>
-  stepModel => ({
-    model: startsRun(before, stepModel)
-      ? settleNightmare(stepModel)
-      : stepModel,
-  })
-
-const unlockNightmareFrom =
-  (before: Model): UpdateStep =>
-  stepModel =>
-    isNightmareUnlockedBy(before, stepModel)
-      ? playSounds([uiCue('PowerUp')])(unlockNightmare(stepModel))
-      : { model: stepModel }
-
-const toggleShake = (model: Model): Model =>
-  modifyFields(model, {
-    shakeSetting: setting => (setting === 'On' ? 'Off' : 'On'),
-  })
-
-const toggleShareStats = (model: Model): Model =>
-  modifyFields(model, {
-    shareStats: setting => (setting === 'On' ? 'Off' : 'On'),
-  })
+// ANALYTICS
 
 // NOTE: the summary is built here from the Model, so update stays pure. The
 // visit id comes from GenerateVisitId and the build id is a build constant.
@@ -1544,218 +361,7 @@ const sendRunSummaryFrom =
     )
   }
 
-// SPLASH
-
-const finishLoadStep = (model: Model, step: LoadStep): UpdateReturn =>
-  Loading.match(model.loading, {
-    Loaded: () => ({ model }),
-    Loading: ({ pending }) => {
-      const remaining = Array.filter(pending, waiting => waiting !== step)
-      const progress = ShowLoadProgress({
-        loaded: LOAD_STEPS.length - remaining.length,
-        total: LOAD_STEPS.length,
-      })
-      if (Array.isReadonlyArrayEmpty(remaining)) {
-        return {
-          model: modifyFields(model, { loading: () => Loading.Loaded() }),
-          commands: [progress, HideSplash()],
-        }
-      } else {
-        return {
-          model: modifyFields(model, {
-            loading: () => Loading.Loading({ pending: remaining }),
-          }),
-          commands: [progress],
-        }
-      }
-    },
-  })
-
-// SAVE
-
-const loadSave = (
-  model: Model,
-  maybeSave: Option.Option<PlayerSave>,
-): UpdateReturn =>
-  finishLoadStep(
-    modifyFields(
-      Option.match(maybeSave, {
-        onNone: () => model,
-        onSome: save => restoreSave(model, save),
-      }),
-      { saveStatus: () => 'Read' },
-    ),
-    'Save',
-  )
-
-// NOTE: a save that arrived from sync is already in the store, so taking
-// it into the Model writes nothing back. Every other change to the save is
-// written with the mutations that describe it.
-const writeSaveFrom =
-  (before: Model, message: Message): UpdateStep =>
-  stepModel => {
-    if (
-      before.saveStatus === 'Unread' ||
-      stepModel.saveStatus === 'Unread' ||
-      message._tag === 'UpdatedSyncedSave' ||
-      message._tag === 'CompletedReloadSyncedSave'
-    ) {
-      return { model: stepModel }
-    }
-
-    const beforeSave = saveOf(before)
-    const save = saveOf(stepModel)
-    return isSameSave(beforeSave, save)
-      ? { model: stepModel }
-      : {
-          model: modifyFields(stepModel, {
-            writesInFlight: count => count + 1,
-          }),
-          commands: [
-            WriteSave({ save, changes: changesBetween(beforeSave, save) }),
-          ],
-        }
-  }
-
-// NOTE: a save from another device, or from the server, replaces what this
-// device shows: its look, settings, difficulty, and bests. Lessons and
-// unlocks only ever move forward, as on load.
-const takeSyncedSave = (model: Model, save: PlayerSave): UpdateReturn =>
-  model.writesInFlight > 0
-    ? { model: modifyFields(model, { syncedSave: () => 'Stale' }) }
-    : { model: restoreSave(model, save) }
-
-// NOTE: once this device's own writes have landed, a save from sync that
-// was held back is read again from the store, which by then has both.
-const finishWrite = (model: Model): UpdateReturn => {
-  const next = modifyFields(model, {
-    writesInFlight: count => Math.max(count - 1, 0),
-  })
-  return next.writesInFlight === 0 && next.syncedSave === 'Stale'
-    ? {
-        model: modifyFields(next, { syncedSave: () => 'Current' }),
-        commands: [ReloadSyncedSave()],
-      }
-    : { model: next }
-}
-
-const startLinking = (model: Model): UpdateReturn =>
-  LinkFlow.match(model.linkFlow, {
-    Requesting: () => ({ model }),
-    Redeeming: () => ({ model }),
-    Idle: () => requestLinkCode(model),
-    Showing: () => requestLinkCode(model),
-    Entering: () => requestLinkCode(model),
-    Linked: () => requestLinkCode(model),
-    Failed: () => requestLinkCode(model),
-  })
-
-const requestLinkCode = (model: Model): UpdateReturn => ({
-  model: modifyFields(model, { linkFlow: () => LinkFlow.Requesting() }),
-  commands: [RequestLinkCode()],
-})
-
-const typeLinkCode = (model: Model, value: string): UpdateReturn =>
-  LinkFlow.isAnyOf(['Entering', 'Failed'])(model.linkFlow)
-    ? {
-        model: modifyFields(model, {
-          linkFlow: () =>
-            LinkFlow.Entering({ code: value.toUpperCase().slice(0, 7) }),
-        }),
-      }
-    : { model }
-
-const submitLinkCode = (model: Model): UpdateReturn =>
-  LinkFlow.match(model.linkFlow, {
-    Entering: ({ code }) => ({
-      model: modifyFields(model, {
-        linkFlow: () => LinkFlow.Redeeming({ code }),
-      }),
-      commands: [RedeemLinkCode({ code })],
-    }),
-    Idle: () => ({ model }),
-    Requesting: () => ({ model }),
-    Showing: () => ({ model }),
-    Redeeming: () => ({ model }),
-    Linked: () => ({ model }),
-    Failed: () => ({ model }),
-  })
-
-const isSettingsOpen = (model: Model): boolean =>
-  model.panelDialog.isOpen && model.panel === 'Settings'
-
-const askToResetTutorial = (model: Model): UpdateReturn =>
-  isSettingsOpen(model)
-    ? {
-        model: modifyFields(model, { tutorialReset: () => 'Asking' }),
-        commands: [FocusTutorialReset({ id: KEEP_TUTORIAL_BUTTON_ID })],
-      }
-    : { model }
-
-const answerTutorialReset = (
-  model: Model,
-  forget: (model: Model) => Model,
-  tutorialReset: TutorialReset,
-): UpdateReturn =>
-  model.tutorialReset === 'Asking'
-    ? {
-        model: modifyFields(forget(model), {
-          tutorialReset: () => tutorialReset,
-        }),
-        commands: [FocusTutorialReset({ id: RESET_TUTORIAL_BUTTON_ID })],
-      }
-    : { model }
-
-// TRAPS
-
-const shakeBy = (model: Model, trauma: number): Model =>
-  modifyFields(model, {
-    shake: shake =>
-      modifyFields(shake, {
-        trauma: current => Math.min(SHAKE_TRAUMA_MAX, current + trauma),
-      }),
-  })
-
-const placeSelectedTrap = (model: Model): UpdateReturn => {
-  if (Option.isNone(maybeSelectedKind(model)) || !isRoundActive(model.phase)) {
-    return { model }
-  }
-
-  return Result.match(placeTrap(model), {
-    onFailure: reason =>
-      playSounds([uiCue('Denied')])(refusePlacement(model, reason)),
-    onSuccess: ({ model: placed, trap }) => {
-      const { x, y } = trapCenter(trap)
-      return playSounds([{ sound: 'Thunk', variation: 0 }])(
-        shakeBy(puffDust(placed, x, y), TRAP_PLACE_TRAUMA),
-      )
-    },
-  })
-}
-
-const nextTrap = (model: Model): UpdateReturn => {
-  if (!isRoundActive(model.phase)) {
-    return { model }
-  }
-
-  const cycled = cycleTrap(model)
-  return playSounds(
-    cycled.selectedTrap === model.selectedTrap ? [] : [uiCue('Swap')],
-  )(cycled)
-}
-
-const TRAP_CHOICES: Readonly<
-  Record<TrapChoice, (model: Model) => UpdateReturn>
-> = {
-  Place: placeSelectedTrap,
-  Next: nextTrap,
-}
-
-const trapFromKey: (code: string) => UpdateStep = code => stepModel =>
-  Option.match(maybeTrapChoice(code), {
-    onNone: () => ({ model: stepModel }),
-    onSome: choice => TRAP_CHOICES[choice](stepModel),
-  })
+// PAUSE
 
 const pauseRound: UpdateStep = stepModel =>
   Update.combine(stepModel, [
@@ -1769,124 +375,6 @@ const pauseWhenAway: UpdateStep = stepModel =>
   isRoundActive(stepModel.phase)
     ? pauseRound(stepModel)
     : { model: withInput(stepModel, releaseAll) }
-
-const unlockAudio: UpdateStep = stepModel =>
-  AudioState.match(stepModel.audio, {
-    Locked: () => ({
-      model: modifyFields(stepModel, { audio: () => AudioState.Unlocking() }),
-    }),
-    Unlocking: () => ({ model: stepModel }),
-    Suspended: () => ({ model: stepModel, commands: [ResumeAudio()] }),
-    Ready: () => ({ model: stepModel }),
-    Unavailable: () => ({ model: stepModel }),
-  })
-
-const toggleSound = (model: Model): Model =>
-  modifyFields(model, {
-    soundSetting: setting => (setting === 'On' ? 'Muted' : 'On'),
-  })
-
-const toggleSoundFromKey = (model: Model, code: string): Model =>
-  code === MUTE_KEY ? toggleSound(model) : model
-
-const toggleMusic = (model: Model): Model =>
-  modifyFields(model, {
-    musicSetting: setting => (setting === 'On' ? 'Off' : 'On'),
-  })
-
-const toggleMusicFromKey = (model: Model, code: string): Model =>
-  code === MUSIC_KEY ? toggleMusic(model) : model
-
-const toggleAudioFromKey = (model: Model, code: string): Model =>
-  toggleMusicFromKey(toggleSoundFromKey(model, code), code)
-
-// MUSIC
-
-type MusicPlan = Readonly<{ mood: MusicMood; level: MusicLevel }>
-
-const SILENT_PLAN: MusicPlan = { mood: 'Silence', level: 'Full' }
-
-const roundMood = (round: Round): MusicMood =>
-  Round.match(round, {
-    Preparation: (): MusicMood => 'Creep',
-    Wave: ({ wave }): MusicMood => (wave >= FINAL_WAVE ? 'Stampede' : 'Romp'),
-  })
-
-const phasePlan = (phase: Phase): MusicPlan =>
-  Phase.match(phase, {
-    Ready: (): MusicPlan => ({ mood: 'Creep', level: 'Full' }),
-    Preparation: (round): MusicPlan => ({
-      mood: roundMood(round),
-      level: 'Full',
-    }),
-    Wave: (round): MusicPlan => ({ mood: roundMood(round), level: 'Full' }),
-    Paused: ({ round }): MusicPlan => ({
-      mood: roundMood(round),
-      level: 'Ducked',
-    }),
-    Victory: () => SILENT_PLAN,
-    GameOver: () => SILENT_PLAN,
-  })
-
-const isMusicAudible = (model: Model): boolean =>
-  isSoundAudible(model) &&
-  model.musicSetting === 'On' &&
-  model.pageVisibility === 'Visible'
-
-export const musicPlan = (model: Model): MusicPlan =>
-  isMusicAudible(model) ? phasePlan(model.phase) : SILENT_PLAN
-
-const phaseStinger = (before: Phase, after: Phase): MusicStinger => {
-  if (
-    Phase.isAnyOf(['Victory'])(after) &&
-    !Phase.isAnyOf(['Victory'])(before)
-  ) {
-    return 'Victory'
-  } else if (
-    Phase.isAnyOf(['GameOver'])(after) &&
-    !Phase.isAnyOf(['GameOver'])(before)
-  ) {
-    return 'GameOver'
-  } else if (
-    Phase.isAnyOf(['Wave'])(before) &&
-    Phase.isAnyOf(['Preparation'])(after)
-  ) {
-    return 'Cleared'
-  } else {
-    return 'None'
-  }
-}
-
-const isSamePlan = (first: MusicPlan, second: MusicPlan): boolean =>
-  first.mood === second.mood && first.level === second.level
-
-const cueMusicFrom =
-  (before: Model): UpdateStep =>
-  stepModel => {
-    const plan = musicPlan(stepModel)
-    const stinger = isMusicAudible(stepModel)
-      ? phaseStinger(before.phase, stepModel.phase)
-      : 'None'
-    const hasGoneQuiet = isMusicAudible(before) && !isMusicAudible(stepModel)
-    if (
-      isSamePlan(musicPlan(before), plan) &&
-      stinger === 'None' &&
-      !hasGoneQuiet
-    ) {
-      return { model: stepModel }
-    } else {
-      return {
-        model: stepModel,
-        commands: [CueMusic({ mood: plan.mood, level: plan.level, stinger })],
-      }
-    }
-  }
-
-const startFromButton = (before: Model, started: Model): UpdateReturn =>
-  Update.combine(withInput(started, releaseAll), [
-    unlockAudio,
-    playStartSoundWhen(startsRun(before, started)),
-  ])
 
 const isFreshRun = (model: Model): boolean =>
   Phase.isAnyOf(['Preparation'])(model.phase) &&
@@ -2128,16 +616,9 @@ const updateGame = (model: Model, message: Message) =>
       model: dismissHomeScreenTip(model),
     }),
 
-    ClickedHomeScreenTip: () =>
-      isOnTitle(model.phase) && !model.homeScreenSteps.isOpen
-        ? foldHomeScreenStepsOpen(withInput(model, releaseAll))
-        : { model },
+    ClickedHomeScreenTip: () => openHomeScreenSteps(model),
 
-    ClickedHomeScreenStepsDoneButton: () =>
-      Update.combine(model, [
-        foldHomeScreenStepsClose,
-        stepModel => ({ model: dismissHomeScreenTip(stepModel) }),
-      ]),
+    ClickedHomeScreenStepsDoneButton: () => finishHomeScreenSteps(model),
 
     GotHomeScreenStepsMessage: ({ message: dialogMessage }) =>
       foldHomeScreenSteps(model, dialogMessage),
@@ -2175,16 +656,7 @@ const updateGame = (model: Model, message: Message) =>
 
     PressedBuyKey: ({ item }) => buy(model, item),
 
-    MovedShopFocus: ({ item }) => {
-      if (isBrowsing(model.shop)) {
-        return {
-          model: focusShopItem(model, item),
-          commands: [FocusShopItem({ item })],
-        }
-      } else {
-        return { model }
-      }
-    },
+    MovedShopFocus: ({ item }) => moveShopFocus(model, item),
 
     FocusedShopItem: ({ item }) => ({ model: focusShopItem(model, item) }),
 
@@ -2419,66 +891,6 @@ const updateGame = (model: Model, message: Message) =>
       Update.combine(model, [unlockAudio, openPanel('Difficulty')]),
   })
 
-const dismissHomeScreenTip = (model: Model): Model =>
-  model.homeScreenTip === 'Dismissed'
-    ? model
-    : modifyFields(model, { homeScreenTip: () => 'Dismissed' })
-
-const isOnTitle = Phase.isAnyOf(['Ready'])
-
-const ignoreHomeScreenStepsOutMessage = Dialog.OutMessage.match<UpdateStep>({
-  Opened: () => stepModel => ({ model: stepModel }),
-  Closed: () => stepModel => ({ model: stepModel }),
-})
-
-const writeHomeScreenSteps = (
-  model: Model,
-  nextHomeScreenSteps: Dialog.Model,
-): Model => modifyFields(model, { homeScreenSteps: () => nextHomeScreenSteps })
-
-const foldHomeScreenSteps = Update.foldChild({
-  update: Dialog.update,
-  read: (model: Model) => Option.some(model.homeScreenSteps),
-  write: writeHomeScreenSteps,
-  toParentMessage: message => Message.GotHomeScreenStepsMessage({ message }),
-  foldOutMessage: ignoreHomeScreenStepsOutMessage,
-})
-
-const foldHomeScreenStepsOpen = Update.foldChildStep({
-  update: Dialog.open,
-  read: (model: Model) => Option.some(model.homeScreenSteps),
-  write: writeHomeScreenSteps,
-  toParentMessage: message => Message.GotHomeScreenStepsMessage({ message }),
-  foldOutMessage: ignoreHomeScreenStepsOutMessage,
-})
-
-const foldHomeScreenStepsClose = Update.foldChildStep({
-  update: Dialog.close,
-  read: (model: Model) => Option.some(model.homeScreenSteps),
-  write: writeHomeScreenSteps,
-  toParentMessage: message => Message.GotHomeScreenStepsMessage({ message }),
-  foldOutMessage: ignoreHomeScreenStepsOutMessage,
-})
-
-const dismissHomeScreenTipFrom =
-  (before: Model): UpdateStep =>
-  stepModel => ({
-    model:
-      isOnTitle(before.phase) && !isOnTitle(stepModel.phase)
-        ? dismissHomeScreenTip(stepModel)
-        : stepModel,
-  })
-
-const isOfferingOnlyMenu = (model: Model): boolean =>
-  endOffer(model) === 'MenuOnly'
-
-const focusEndMenuFrom =
-  (before: Model): UpdateStep =>
-  stepModel =>
-    !isOfferingOnlyMenu(before) && isOfferingOnlyMenu(stepModel)
-      ? { model: stepModel, commands: [FocusEndMenuButton()] }
-      : { model: stepModel }
-
 export const update = (model: Model, message: Message): UpdateReturn =>
   Update.combine(model, [
     stepModel => updateGame(stepModel, message),
@@ -2492,268 +904,3 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     stepModel => ({ model: forgetNewEntriesFrom(model, stepModel) }),
     writeSaveFrom(model, message),
   ])
-
-// SUBSCRIPTION
-
-const Activity = Schema.Literals(['Idle', 'Active'])
-type Activity = typeof Activity.Type
-
-const playingActivity = (model: Model): Activity =>
-  isRoundActive(model.phase) ? 'Active' : 'Idle'
-
-const pointerTrackingActivity = (model: Model): Activity =>
-  isTrackingPointer(model.input) ? 'Active' : 'Idle'
-
-const isInsideDialog = (target: EventTarget | null): boolean =>
-  target instanceof Element && target.closest('dialog') !== null
-
-const BUTTON_ACTIVATION_KEYS: ReadonlyArray<string> = ['Enter', 'Space']
-
-const isActivatingButton = (
-  target: EventTarget | null,
-  code: string,
-): boolean =>
-  Array.contains(BUTTON_ACTIVATION_KEYS, code) &&
-  target instanceof Element &&
-  target.closest('button') !== null
-
-export type KeyDown = Readonly<{
-  code: string
-  repeat: boolean
-  target: EventTarget | null
-}>
-
-export const maybeKeyDownMessage = ({
-  code,
-  repeat,
-  target,
-}: KeyDown): Option.Option<Message> =>
-  repeat || isInsideDialog(target) || isActivatingButton(target, code)
-    ? Option.none()
-    : Option.some(Message.PressedKey({ code }))
-
-export const maybeWindowBlurMessage = ({
-  target,
-}: Readonly<{ target: EventTarget | null }>): Option.Option<Message> =>
-  target instanceof Window
-    ? Option.some(Message.BlurredWindow())
-    : Option.none()
-
-export const maybeWindowFocusMessage = ({
-  target,
-}: Readonly<{ target: EventTarget | null }>): Option.Option<Message> =>
-  target === window ? Option.some(Message.FocusedWindow()) : Option.none()
-
-export const maybePageShowMessage = ({
-  persisted,
-}: Readonly<{ persisted: boolean }>): Option.Option<Message> =>
-  persisted ? Option.some(Message.RestoredPageFromCache()) : Option.none()
-
-export const pageVisibilityMessage = (
-  visibilityState: DocumentVisibilityState,
-): Message =>
-  Message.ChangedPageVisibility({
-    visibility: visibilityState === 'hidden' ? 'Hidden' : 'Visible',
-  })
-
-export const updateCheckActivity = (model: Model): Activity =>
-  isCheckingForUpdates(RUNNING_BUILD) && isUpdateCheckWindow(model.phase)
-    ? 'Active'
-    : 'Idle'
-
-const updateCheckMessages = Stream.map(Stream.tick(UPDATE_CHECK_INTERVAL), () =>
-  Message.TickedUpdateCheck(),
-)
-
-const keyboardMessages = Stream.merge(
-  Dom.streamFromEventFilterMap({
-    target: document,
-    type: 'keydown',
-    filterMapEvent: maybeKeyDownMessage,
-  }),
-  Dom.streamFromEvent({
-    target: document,
-    type: 'keyup',
-    mapEvent: event => Message.ReleasedKey({ code: event.code }),
-  }),
-)
-
-const pointerMoveMessages = Dom.streamFromEventFilterMap({
-  target: document,
-  type: 'pointermove',
-  filterMapEvent: event =>
-    event.pointerType === 'mouse'
-      ? Option.none()
-      : Option.some(
-          Message.MovedPointer({
-            pointerId: event.pointerId,
-            clientX: event.clientX,
-            clientY: event.clientY,
-          }),
-        ),
-})
-
-const maybeEveryTouchEndedMessage = (
-  event: TouchEvent,
-): Option.Option<Message> =>
-  event.touches.length === 0
-    ? Option.some(Message.ReleasedEveryTouch())
-    : Option.none()
-
-// NOTE: releases listen all the time, not only while a pointer is tracked.
-// A quick tap can lift its finger before a tracking-only listener is
-// attached, and a missed release leaves the stick held forever. Releasing a
-// pointer that is not tracked changes nothing.
-export const pointerReleaseMessages = Stream.mergeAll<Message, never, never>(
-  [
-    Dom.streamFromEvent({
-      target: document,
-      type: 'pointerup',
-      mapEvent: event =>
-        Message.ReleasedPointer({ pointerId: event.pointerId }),
-    }),
-    Dom.streamFromEvent({
-      target: document,
-      type: 'pointercancel',
-      mapEvent: event =>
-        Message.CancelledPointer({ pointerId: event.pointerId }),
-    }),
-    Dom.streamFromEventFilterMap({
-      target: document,
-      type: 'touchend',
-      filterMapEvent: maybeEveryTouchEndedMessage,
-    }),
-    Dom.streamFromEventFilterMap({
-      target: document,
-      type: 'touchcancel',
-      filterMapEvent: maybeEveryTouchEndedMessage,
-    }),
-  ],
-  { concurrency: 'unbounded' },
-)
-
-const mouseMessages = Dom.streamFromEventFilterMap({
-  target: document,
-  type: 'pointermove',
-  filterMapEvent: event =>
-    event.pointerType === 'mouse'
-      ? Option.some(
-          Message.MovedMouse({
-            clientX: event.clientX,
-            clientY: event.clientY,
-          }),
-        )
-      : Option.none(),
-})
-
-// NOTE: what the store hears from sync: a save another device or the
-// server changed, and the status line for SETTINGS.
-const syncMessages: Stream.Stream<Message, never, PlayerStore> = Stream.unwrap(
-  PlayerStore.use(store =>
-    Effect.succeed(
-      Stream.map(store.events, (event): Message =>
-        event._tag === 'SyncedSave'
-          ? Message.UpdatedSyncedSave({ save: event.save })
-          : Message.UpdatedSyncStatus({ state: event.state }),
-      ),
-    ),
-  ),
-)
-
-export const subscriptions = Subscription.make<Model, Message, PlayerStore>()(
-  entry => ({
-    playerSync: Subscription.persistentEntry(syncMessages),
-
-    frame: Subscription.animationFrameEntry({
-      isActive: isFrameActive,
-      toMessage: deltaTime => Message.TickedFrame({ deltaTime }),
-    }),
-
-    keyboard: Subscription.persistentEntry(keyboardMessages),
-
-    windowBlur: Subscription.persistentEntry(
-      Dom.streamFromEventFilterMap({
-        target: window,
-        type: 'blur',
-        filterMapEvent: maybeWindowBlurMessage,
-      }),
-    ),
-
-    pageVisibility: Subscription.persistentEntry(
-      Dom.streamFromEvent({
-        target: document,
-        type: 'visibilitychange',
-        mapEvent: () => pageVisibilityMessage(document.visibilityState),
-      }),
-    ),
-
-    windowFocus: Subscription.persistentEntry(
-      Dom.streamFromEventFilterMap({
-        target: window,
-        type: 'focus',
-        filterMapEvent: maybeWindowFocusMessage,
-      }),
-    ),
-
-    pageRestores: Subscription.persistentEntry(
-      Dom.streamFromEventFilterMap({
-        target: window,
-        type: 'pageshow',
-        filterMapEvent: maybePageShowMessage,
-      }),
-    ),
-
-    updateCheck: entry(
-      { activity: Activity },
-      {
-        modelToDependencies: model => ({
-          activity: updateCheckActivity(model),
-        }),
-        dependenciesToStream: ({ activity }) =>
-          Stream.when(
-            updateCheckMessages,
-            Effect.sync(() => activity === 'Active'),
-          ),
-      },
-    ),
-
-    mouseAim: entry(
-      { activity: Activity },
-      {
-        modelToDependencies: model => ({ activity: playingActivity(model) }),
-        dependenciesToStream: ({ activity }) =>
-          Stream.when(
-            mouseMessages,
-            Effect.sync(() => activity === 'Active'),
-          ),
-      },
-    ),
-
-    pointerReleases: Subscription.persistentEntry(pointerReleaseMessages),
-
-    fullscreenChanges: Subscription.persistentEntry(
-      Dom.streamFromEvent({
-        target: document,
-        type: 'fullscreenchange',
-        mapEvent: () =>
-          Message.ChangedFullscreen({
-            fullscreen: document.fullscreenElement === null ? 'Off' : 'On',
-          }),
-      }),
-    ),
-
-    trackedPointers: entry(
-      { activity: Activity },
-      {
-        modelToDependencies: model => ({
-          activity: pointerTrackingActivity(model),
-        }),
-        dependenciesToStream: ({ activity }) =>
-          Stream.when(
-            pointerMoveMessages,
-            Effect.sync(() => activity === 'Active'),
-          ),
-      },
-    ),
-  }),
-)

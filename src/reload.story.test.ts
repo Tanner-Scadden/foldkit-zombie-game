@@ -9,7 +9,8 @@ import {
   PISTOL_RELOAD_MS,
   PREPARATION_MS,
 } from './constants'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   Arsenal,
   type CarriedGun,

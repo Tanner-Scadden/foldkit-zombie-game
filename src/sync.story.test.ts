@@ -4,13 +4,13 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import {
-  Message,
   RedeemLinkCode,
   ReloadSyncedSave,
   RequestLinkCode,
   WriteSave,
-  update,
-} from './main'
+} from './commands'
+import { update } from './main'
+import { Message } from './message'
 import { Loading, type Model, initialModel } from './model'
 import {
   LinkFlow,

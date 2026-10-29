@@ -7,7 +7,6 @@ import { FEEDBACK_LINE, GAME_TITLE } from './constants'
 import { DIFFICULTIES, bestsFor } from './difficulty'
 import { homeMenuView, menuPanelView, newEntryNoticeView } from './homeView'
 import { gameStageView } from './layers'
-import { Message } from './main'
 import {
   cornerButtonsView,
   debutCardView,
@@ -17,6 +16,7 @@ import {
   modeChoiceView,
   toSentenceCase,
 } from './menus'
+import { Message } from './message'
 import {
   DebutCard,
   type Model,

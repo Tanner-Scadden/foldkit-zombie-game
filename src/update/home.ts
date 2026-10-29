@@ -1,0 +1,368 @@
+import { Option } from 'effect'
+import { Update } from 'foldkit'
+import { modifyFields } from 'foldkit/struct'
+
+import { Dialog } from '@foldkit/ui'
+
+import { NEWS_DAYS } from '../changelog'
+import { FocusEndMenuButton, FocusHomeButton } from '../commands'
+import { dialogFolds } from '../dialogs'
+import {
+  chooseDifficulty,
+  isLocked,
+  isNightmareUnlockedBy,
+  settleNightmare,
+  unlockNightmare,
+} from '../difficulty'
+import {
+  type RailButton,
+  endOffer,
+  isModeKey,
+  isOnHome,
+  maybeRailButtonOfKey,
+  returnHome,
+  runModeOf,
+  seeNews,
+  showMunchopediaPage,
+  steppedHomeFocus,
+  switchMode,
+  turnNewsPage,
+} from '../home'
+import { isMenuKey, isStartKey, maybeFocusStep, releaseAll } from '../input'
+import { Message } from '../message'
+import {
+  type Difficulty,
+  DifficultyCard,
+  type MenuPanel,
+  type Model,
+  MunchopediaPage,
+  Phase,
+  type RunMode,
+} from '../model'
+import { openCharacterPicker } from './character'
+import {
+  isPastRestartGrace,
+  isPaused,
+  startFromButton,
+  startWhenAllowed,
+  startsRun,
+} from './run'
+import { playSounds, uiCue, unlockAudio } from './sound'
+import { type UpdateReturn, type UpdateStep, withInput } from './step'
+
+// MENU
+
+const writePanelDialog = (model: Model, nextPanelDialog: Dialog.Model): Model =>
+  modifyFields(model, { panelDialog: () => nextPanelDialog })
+
+const forgetAskedMode = (model: Model): Model =>
+  DifficultyCard.isAnyOf(['Asking'])(model.difficultyCard)
+    ? modifyFields(model, { difficultyCard: () => DifficultyCard.Unseen() })
+    : model
+
+const foldPanelDialogOutMessage = Dialog.OutMessage.match<UpdateStep>({
+  Opened: () => stepModel => ({ model: stepModel }),
+  Closed: () => stepModel => ({ model: forgetAskedMode(stepModel) }),
+})
+
+const panelDialog = dialogFolds({
+  read: (model: Model) => model.panelDialog,
+  write: writePanelDialog,
+  toParentMessage: message => Message.GotPanelDialogMessage({ message }),
+  foldOutMessage: foldPanelDialogOutMessage,
+})
+
+export const foldPanelDialog = panelDialog.fold
+
+const isPanelAllowed = (model: Model, panel: MenuPanel): boolean => {
+  if (model.panelDialog.isOpen || model.character.dialog.isOpen) {
+    return false
+  } else if (panel === 'LeaveRun') {
+    return isPaused(model.phase)
+  } else {
+    return isOnHome(model.phase)
+  }
+}
+
+export const openPanel =
+  (panel: MenuPanel): UpdateStep =>
+  stepModel =>
+    isPanelAllowed(stepModel, panel)
+      ? panelDialog.open(
+          withInput(
+            modifyFields(stepModel, {
+              panel: () => panel,
+              tutorialReset: () => 'Idle',
+            }),
+            releaseAll,
+          ),
+        )
+      : { model: stepModel }
+
+export const closePanel: UpdateStep = stepModel =>
+  stepModel.panelDialog.isOpen
+    ? panelDialog.close(stepModel)
+    : { model: stepModel }
+
+const goHome: UpdateStep = stepModel => ({
+  model: returnHome(withInput(stepModel, releaseAll)),
+})
+
+const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
+
+export const leaveFromMenu: UpdateStep = stepModel => {
+  if (isPaused(stepModel.phase)) {
+    return openPanel('LeaveRun')(stepModel)
+  } else if (isEndScreen(stepModel.phase) && isPastRestartGrace(stepModel)) {
+    return goHome(stepModel)
+  } else {
+    return { model: stepModel }
+  }
+}
+
+export const leaveRun: UpdateStep = stepModel =>
+  isPaused(stepModel.phase) && stepModel.panel === 'LeaveRun'
+    ? Update.combine(stepModel, [closePanel, goHome])
+    : { model: stepModel }
+
+const isEndMenuKey = (model: Model, code: string): boolean =>
+  isMenuKey(code) || (isStartKey(code) && endOffer(model) === 'MenuOnly')
+
+export const menuFromKey: (code: string) => UpdateStep = code => stepModel =>
+  isEndMenuKey(stepModel, code)
+    ? leaveFromMenu(stepModel)
+    : { model: stepModel }
+
+export const canMoveHomeFocus = (model: Model): boolean =>
+  isOnHome(model.phase) &&
+  !model.panelDialog.isOpen &&
+  !model.character.dialog.isOpen
+
+export const homeFocusFromKey: (code: string) => UpdateStep =
+  code => stepModel =>
+    Option.match(maybeFocusStep(code), {
+      onNone: () => ({ model: stepModel }),
+      onSome: step => {
+        if (!canMoveHomeFocus(stepModel)) {
+          return { model: stepModel }
+        }
+
+        const button = steppedHomeFocus(stepModel.maybeHomeFocus, step)
+        return {
+          model: modifyFields(stepModel, {
+            maybeHomeFocus: () => Option.some(button),
+          }),
+          commands: [FocusHomeButton({ button })],
+        }
+      },
+    })
+
+// HOME MENU
+
+const isPanelOpen = (model: Model, panel: MenuPanel): boolean =>
+  model.panelDialog.isOpen && model.panel === panel
+
+export const homeStartFromKey = (model: Model, code: string): Model =>
+  isStartKey(code) ? startWhenAllowed(model, runModeOf(model.home.mode)) : model
+
+export const openWhatsNew: UpdateStep = stepModel =>
+  isPanelAllowed(stepModel, 'WhatsNew')
+    ? openPanel('WhatsNew')(seeNews(stepModel))
+    : { model: stepModel }
+
+export const openMunchopedia =
+  (page: MunchopediaPage): UpdateStep =>
+  stepModel =>
+    isPanelAllowed(stepModel, 'Munchopedia')
+      ? openPanel('Munchopedia')(showMunchopediaPage(stepModel, page))
+      : { model: stepModel }
+
+export const turnMunchopediaPage = (
+  model: Model,
+  page: MunchopediaPage,
+): UpdateReturn => ({
+  model: isPanelOpen(model, 'Munchopedia')
+    ? showMunchopediaPage(model, page)
+    : model,
+})
+
+export const turnNews = (model: Model, step: number): UpdateReturn => ({
+  model: isPanelOpen(model, 'WhatsNew')
+    ? turnNewsPage(model, step, NEWS_DAYS.length)
+    : model,
+})
+
+const RAIL_OPENERS: Readonly<Record<RailButton, UpdateStep>> = {
+  WhatsNew: openWhatsNew,
+  Munchopedia: openMunchopedia(MunchopediaPage.List()),
+  Character: openCharacterPicker,
+  HowToPlay: openPanel('HowToPlay'),
+  Settings: openPanel('Settings'),
+}
+
+// NOTE: C opens the character picker on every screen that offers it, so it
+// stays with characterFromKey and is left out here.
+export const homeFromKey: (code: string) => UpdateStep = code => stepModel => {
+  if (!canMoveHomeFocus(stepModel)) {
+    return { model: stepModel }
+  } else if (isModeKey(code)) {
+    return { model: switchMode(stepModel) }
+  } else {
+    return Option.match(maybeRailButtonOfKey(code), {
+      onNone: () => ({ model: stepModel }),
+      onSome: button =>
+        button === 'Character'
+          ? { model: stepModel }
+          : RAIL_OPENERS[button](stepModel),
+    })
+  }
+}
+
+// DIFFICULTY
+
+export const isAskingDifficultyFirst = (model: Model): boolean =>
+  DifficultyCard.isAnyOf(['Unseen'])(model.difficultyCard) &&
+  isOnHome(model.phase)
+
+const askDifficulty =
+  (mode: RunMode): UpdateStep =>
+  stepModel =>
+    isPanelAllowed(stepModel, 'Difficulty')
+      ? openPanel('Difficulty')(
+          modifyFields(stepModel, {
+            difficultyCard: () => DifficultyCard.Asking({ mode }),
+          }),
+        )
+      : { model: stepModel }
+
+export const startOrAsk =
+  (mode: RunMode): UpdateStep =>
+  stepModel =>
+    isAskingDifficultyFirst(stepModel)
+      ? Update.combine(stepModel, [unlockAudio, askDifficulty(mode)])
+      : startFromButton(stepModel, startWhenAllowed(stepModel, mode))
+
+export const difficultyCardFromKey: (code: string) => UpdateStep =
+  code => stepModel =>
+    isAskingDifficultyFirst(stepModel) && isStartKey(code)
+      ? askDifficulty(runModeOf(stepModel.home.mode))(stepModel)
+      : { model: stepModel }
+
+const pickFromBadge =
+  (difficulty: Difficulty): UpdateStep =>
+  stepModel =>
+    isPanelOpen(stepModel, 'Difficulty') &&
+    isOnHome(stepModel.phase) &&
+    !isLocked(stepModel.difficulty, difficulty)
+      ? closePanel(
+          modifyFields(chooseDifficulty(stepModel, difficulty), {
+            difficultyCard: () => DifficultyCard.Seen(),
+          }),
+        )
+      : { model: stepModel }
+
+export const pickFromCard =
+  (difficulty: Difficulty): UpdateStep =>
+  stepModel =>
+    DifficultyCard.match(stepModel.difficultyCard, {
+      Unseen: () => pickFromBadge(difficulty)(stepModel),
+      Seen: () => pickFromBadge(difficulty)(stepModel),
+      Asking: ({ mode }) =>
+        isLocked(stepModel.difficulty, difficulty)
+          ? { model: stepModel }
+          : Update.combine(
+              modifyFields(chooseDifficulty(stepModel, difficulty), {
+                difficultyCard: () => DifficultyCard.Seen(),
+              }),
+              [
+                closePanel,
+                nextModel =>
+                  startFromButton(nextModel, startWhenAllowed(nextModel, mode)),
+              ],
+            ),
+    })
+
+export const pickFromSettings = (
+  model: Model,
+  difficulty: Difficulty,
+): Model =>
+  isOnHome(model.phase) && model.panel === 'Settings'
+    ? chooseDifficulty(model, difficulty)
+    : model
+
+export const settleNightmareFrom =
+  (before: Model): UpdateStep =>
+  stepModel => ({
+    model: startsRun(before, stepModel)
+      ? settleNightmare(stepModel)
+      : stepModel,
+  })
+
+export const unlockNightmareFrom =
+  (before: Model): UpdateStep =>
+  stepModel =>
+    isNightmareUnlockedBy(before, stepModel)
+      ? playSounds([uiCue('PowerUp')])(unlockNightmare(stepModel))
+      : { model: stepModel }
+
+// SETTINGS
+
+export const toggleShake = (model: Model): Model =>
+  modifyFields(model, {
+    shakeSetting: setting => (setting === 'On' ? 'Off' : 'On'),
+  })
+
+export const toggleShareStats = (model: Model): Model =>
+  modifyFields(model, {
+    shareStats: setting => (setting === 'On' ? 'Off' : 'On'),
+  })
+
+// HOME SCREEN TIP
+
+export const dismissHomeScreenTip = (model: Model): Model =>
+  model.homeScreenTip === 'Dismissed'
+    ? model
+    : modifyFields(model, { homeScreenTip: () => 'Dismissed' })
+
+const isOnTitle = Phase.isAnyOf(['Ready'])
+
+const homeScreenSteps = dialogFolds({
+  read: (model: Model) => model.homeScreenSteps,
+  write: (model, nextHomeScreenSteps) =>
+    modifyFields(model, { homeScreenSteps: () => nextHomeScreenSteps }),
+  toParentMessage: message => Message.GotHomeScreenStepsMessage({ message }),
+})
+
+export const foldHomeScreenSteps = homeScreenSteps.fold
+
+export const openHomeScreenSteps: UpdateStep = stepModel =>
+  isOnTitle(stepModel.phase) && !stepModel.homeScreenSteps.isOpen
+    ? homeScreenSteps.open(withInput(stepModel, releaseAll))
+    : { model: stepModel }
+
+export const finishHomeScreenSteps: UpdateStep = stepModel =>
+  Update.combine(stepModel, [
+    homeScreenSteps.close,
+    closedModel => ({ model: dismissHomeScreenTip(closedModel) }),
+  ])
+
+export const dismissHomeScreenTipFrom =
+  (before: Model): UpdateStep =>
+  stepModel => ({
+    model:
+      isOnTitle(before.phase) && !isOnTitle(stepModel.phase)
+        ? dismissHomeScreenTip(stepModel)
+        : stepModel,
+  })
+
+// END SCREENS
+
+const isOfferingOnlyMenu = (model: Model): boolean =>
+  endOffer(model) === 'MenuOnly'
+
+export const focusEndMenuFrom =
+  (before: Model): UpdateStep =>
+  stepModel =>
+    !isOfferingOnlyMenu(before) && isOfferingOnlyMenu(stepModel)
+      ? { model: stepModel, commands: [FocusEndMenuButton()] }
+      : { model: stepModel }

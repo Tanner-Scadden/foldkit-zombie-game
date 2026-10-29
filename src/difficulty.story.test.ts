@@ -6,7 +6,8 @@ import { describe, expect, test } from 'vitest'
 import { Dialog } from '@foldkit/ui'
 
 import { bestsFor, biteDamage } from './difficulty'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   type Difficulty,
   DifficultyCard,

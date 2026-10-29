@@ -13,16 +13,12 @@ import {
 } from '@game/appearance'
 import { DOORS } from '@game/arena'
 import { BOSS_RULES, hasBoss, planBoss } from '@game/boss'
+import { managedResources } from '@game/commands'
 import { DECAL_MAX, PLAYER_MAX_HP, SHADOW_COLOR } from '@game/constants'
 import { withBests } from '@game/difficulty'
 import { sceneShapes } from '@game/layers'
-import {
-  Message,
-  init,
-  managedResources,
-  subscriptions,
-  update,
-} from '@game/main'
+import { init, update } from '@game/main'
+import { Message } from '@game/message'
 import {
   DifficultyCard,
   Trap,
@@ -45,6 +41,7 @@ import { STALL_BOX } from '@game/shop'
 import { shedParts } from '@game/simulation'
 import { frameAt, group, gunSprite } from '@game/sprite'
 import { type PlayerStore, layer as PlayerStoreLayer } from '@game/store'
+import { subscriptions } from '@game/subscriptions'
 import { view } from '@game/view'
 import { pause, planFor, rollSpawns, startOrResume } from '@game/waves'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'

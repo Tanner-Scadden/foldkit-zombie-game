@@ -5,6 +5,7 @@ import { describe, expect, test } from 'vitest'
 
 import { Dialog, Tabs } from '@foldkit/ui'
 
+import { FocusShopItem } from './commands'
 import {
   BULLET_MAX,
   COINS_PER_PURCHASE,
@@ -17,7 +18,8 @@ import {
   ZOMBIE_MAX_HP,
 } from './constants'
 import { RESTART_GRACE_MS } from './constants'
-import { FocusShopItem, Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   Arsenal,
   type Bullet,

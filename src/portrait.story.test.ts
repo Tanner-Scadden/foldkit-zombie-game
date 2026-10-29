@@ -12,7 +12,8 @@ import {
 } from './camera'
 import { CAMERA_LEAN_PX, STICK_RADIUS_PX } from './constants'
 import { clientToView } from './geometry'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   type Model,
   Phase,

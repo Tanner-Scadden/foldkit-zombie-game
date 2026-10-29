@@ -4,7 +4,8 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { FIRST_PREPARATION_MS, PREPARATION_MS } from './constants'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   DebutCard,
   DifficultyCard,

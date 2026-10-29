@@ -1,14 +1,11 @@
 import { Runtime } from 'foldkit'
 
-import {
-  Message,
-  Model,
-  init,
-  managedResources,
-  subscriptions,
-  update,
-} from './main'
+import { managedResources } from './commands'
+import { init, update } from './main'
+import { Message } from './message'
+import { Model } from './model'
 import { layer as PlayerStoreLayer } from './store'
+import { subscriptions } from './subscriptions'
 import { view } from './view'
 
 const application = Runtime.makeApplication({

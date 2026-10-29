@@ -20,7 +20,8 @@ import {
   ZOMBIE_ALIVE_MAX,
 } from './constants'
 import { DIFFICULTIES } from './difficulty'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   Boss,
   type BossAttack,

@@ -8,7 +8,7 @@ import { bossBandShapes } from './bossView'
 import { type Camera, toScreenCamera, worldCameraFor } from './camera'
 import { decalShapes } from './effectsView'
 import { hudShapes } from './hud'
-import type { Message } from './main'
+import type { Message } from './message'
 import {
   type Decal,
   type Model,

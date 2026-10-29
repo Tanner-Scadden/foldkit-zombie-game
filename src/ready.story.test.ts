@@ -5,7 +5,8 @@ import { describe, expect, test } from 'vitest'
 
 import { RESTART_GRACE_MS } from './constants'
 import { clientToView } from './geometry'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   DifficultyCard,
   Frenzy,

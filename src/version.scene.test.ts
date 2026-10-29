@@ -11,8 +11,10 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
+import { ReloadPage } from './commands'
 import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
-import { Message, ReloadPage, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
 import { fighting, measureSurface } from './testing'
 import { view } from './view'

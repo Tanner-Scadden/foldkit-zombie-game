@@ -19,7 +19,8 @@ import { describe, test } from 'vitest'
 import { Dialog } from '@foldkit/ui'
 
 import { PREPARATION_MS } from './constants'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   Arsenal,
   BreakClock,

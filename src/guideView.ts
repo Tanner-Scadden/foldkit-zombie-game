@@ -1,7 +1,7 @@
 import { Array, Option } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
-import { Message } from './main'
+import { Message } from './message'
 import { type Model, MunchopediaPage, type ZombieKind } from './model'
 import {
   BADGES,

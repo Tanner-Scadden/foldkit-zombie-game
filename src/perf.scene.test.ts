@@ -16,7 +16,8 @@ import {
   ZOMBIE_ALIVE_MAX,
 } from './constants'
 import { WARM_UP_CLASS, sceneShapes } from './layers'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   Alarm,
   Arsenal,

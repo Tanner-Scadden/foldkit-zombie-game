@@ -5,7 +5,7 @@ import { STICK_RADIUS_PX } from './constants'
 import { gunClusterBox, gunSlotBox, secondsLeft } from './hud'
 import { NEXT_TRAP_ICON, RELOAD_ICON, TRAP_BUTTON_ICONS } from './icons'
 import { thumbOffset } from './input'
-import { Message } from './main'
+import { Message } from './message'
 import {
   Arsenal,
   BreakClock,

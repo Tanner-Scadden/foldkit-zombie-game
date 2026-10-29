@@ -4,8 +4,10 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { isTrackingPointer } from './input'
-import { Message, subscriptions, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import { type Model, MouseButton, Phase, Stick, initialModel } from './model'
+import { subscriptions } from './subscriptions'
 import { SURFACE } from './testing'
 import { asVeteran } from './veteran'
 

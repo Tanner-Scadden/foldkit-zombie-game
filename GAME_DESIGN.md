@@ -513,7 +513,7 @@ The run mode is a tagged union, `Campaign` or `Endless`, chosen per run and kept
 
 #### Pausing, focus, and the end screens
 
-Added on 2026-10-28 before sharing the game more widely. Proposed, not decided. The rules live in `src/main.ts`.
+Added on 2026-10-28 before sharing the game more widely. Proposed, not decided. The rules live in `src/main.ts` and `src/update/home.ts`.
 
 - **Leaving the window pauses.** During Preparation or a wave, a hidden tab or a blur of the window itself (clicking into another app on desktop) pauses the game, closes the shop, and lets go of every held key, button, and thumb. Focus moving between elements on the page, such as into the shop dialog, its tabs, or GOT IT, is not a window blur and pauses nothing. The title, Game Over, Victory, and the pause screen ignore it. Coming back does not resume on its own: the pause screen waits for a click, a tap, or Esc.
 - **The resume press does only that.** The click, tap, or Esc that resumes is not also a shot or a stick. A movement key held through the pause still moves the player after it.

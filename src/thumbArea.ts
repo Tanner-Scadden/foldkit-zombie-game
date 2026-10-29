@@ -2,7 +2,7 @@ import { Option } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 import { createLazy } from 'foldkit/html'
 
-import type { Message } from './main'
+import type { Message } from './message'
 import { type Screen, thumbAreaTop } from './screen'
 import { type Palette, spriteDataUrl } from './sprite'
 

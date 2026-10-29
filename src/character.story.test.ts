@@ -22,7 +22,8 @@ import {
 } from './appearance'
 import * as Character from './character'
 import { RESTART_GRACE_MS } from './constants'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   type Appearance,
   type LookPart,

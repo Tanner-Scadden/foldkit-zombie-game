@@ -21,8 +21,10 @@ import { describe, test, expect as vitestExpect } from 'vitest'
 import { Dialog, Tabs } from '@foldkit/ui'
 
 import indexHtml from '../index.html?raw'
+import { FocusShopItem } from './commands'
 import { GAME_TITLE, PREPARATION_MS } from './constants'
-import { FocusShopItem, Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   Arsenal,
   DifficultyCard,

@@ -17,7 +17,8 @@ import { describe, test } from 'vitest'
 
 import { Dialog, RadioGroup } from '@foldkit/ui'
 
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
 import { measureSurface } from './testing'
 import { asVeteran } from './veteran'

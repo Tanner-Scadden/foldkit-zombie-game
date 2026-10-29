@@ -12,13 +12,9 @@ import { describe, expect, test } from 'vitest'
 
 import { ARENA_LEVEL } from './arena'
 import { type SoundEffect, positionVariation } from './audio'
-import {
-  Message,
-  PlaySound,
-  ResumeAudio,
-  managedResources,
-  update,
-} from './main'
+import { PlaySound, ResumeAudio, managedResources } from './commands'
+import { update } from './main'
+import { Message } from './message'
 import {
   AudioState,
   type Bullet,

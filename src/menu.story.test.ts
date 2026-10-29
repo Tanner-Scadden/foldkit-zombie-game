@@ -5,9 +5,6 @@ import { describe, expect, test } from 'vitest'
 
 import { Dialog } from '@foldkit/ui'
 
-import { RESTART_GRACE_MS } from './constants'
-import { bestsFor, withBests } from './difficulty'
-import { returnHome } from './home'
 import {
   AwaitFirstFrame,
   DecodeSprites,
@@ -15,12 +12,13 @@ import {
   LoadFonts,
   LoadSave,
   LoadStyles,
-  Message,
   ShowLoadProgress,
-  init,
-  maybeKeyDownMessage,
-  update,
-} from './main'
+} from './commands'
+import { RESTART_GRACE_MS } from './constants'
+import { bestsFor, withBests } from './difficulty'
+import { returnHome } from './home'
+import { init, update } from './main'
+import { Message } from './message'
 import {
   Loading,
   type Model,
@@ -30,6 +28,7 @@ import {
   initialModel,
   noKills,
 } from './model'
+import { maybeKeyDownMessage } from './subscriptions'
 import { showDialog } from './testing'
 import { asVeteran } from './veteran'
 import { pause } from './waves'

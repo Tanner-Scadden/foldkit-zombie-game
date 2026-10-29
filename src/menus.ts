@@ -3,6 +3,7 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Dialog } from '@foldkit/ui'
 
+import { dialogShell } from './dialogs'
 import { END_MENU_BUTTON_ID, endOffer } from './home'
 import { pauseMenuButtonView } from './homeView'
 import {
@@ -15,7 +16,7 @@ import {
   SOUND_OFF_ICON,
   SOUND_ON_ICON,
 } from './icons'
-import { Message } from './main'
+import { Message } from './message'
 import { DebutCard, type Model, Phase, type ZombieKind } from './model'
 import { canSkipDebutCard } from './onboarding'
 import { iconButtonView } from './touchControls'
@@ -216,31 +217,18 @@ export const homeScreenStepsView = (
   model: Model,
   h: HtmlBuilder<Message>,
 ): Html =>
-  h.submodel({
-    slotId: model.homeScreenSteps.id,
-    model: model.homeScreenSteps,
-    view: Dialog.view,
-    viewInputs: {
-      hasDescription: true,
-      toView: renderInfo =>
-        h.dialog(
-          [...renderInfo.dialog, h.Class('home-screen-steps-dialog')],
-          renderInfo.isVisible
-            ? [
-                h.div([
-                  ...renderInfo.backdrop,
-                  h.Class('home-screen-steps-backdrop'),
-                ]),
-                h.div(
-                  [...renderInfo.panel, h.Class('home-screen-steps-panel')],
-                  homeScreenStepsPanelView(renderInfo, h),
-                ),
-              ]
-            : [],
-        ),
+  dialogShell(
+    {
+      dialog: model.homeScreenSteps,
+      dialogClass: 'home-screen-steps-dialog',
+      backdropClass: 'home-screen-steps-backdrop',
+      panelClass: 'home-screen-steps-panel',
+      panelView: renderInfo => homeScreenStepsPanelView(renderInfo, h),
+      toParentMessage: message =>
+        Message.GotHomeScreenStepsMessage({ message }),
     },
-    toParentMessage: message => Message.GotHomeScreenStepsMessage({ message }),
-  })
+    h,
+  )
 
 // MODE BUTTONS
 

@@ -6,7 +6,7 @@ import { describe, expect, test } from 'vitest'
 
 import { playerSprites } from './appearance'
 import { COIN_SPRITE, GLYPH_SPRITES } from './font'
-import type { Message } from './main'
+import type { Message } from './message'
 import { defaultAppearance } from './model'
 import {
   BARRICADE_SPRITES,

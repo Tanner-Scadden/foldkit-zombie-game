@@ -10,8 +10,10 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { ARENA_LEVEL } from './arena'
+import { PlaySound } from './commands'
 import { DECAL_MAX, PARTICLE_MAX } from './constants'
-import { Message, PlaySound, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   AudioState,
   type Bullet,

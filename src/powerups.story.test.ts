@@ -12,7 +12,8 @@ import {
   PREPARATION_MS,
   ZOMBIE_KNOCKBACK_SPEED,
 } from './constants'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   Beat,
   type BoostKind,

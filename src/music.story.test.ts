@@ -5,15 +5,10 @@ import { describe, expect, test } from 'vitest'
 
 import { ARENA_LEVEL } from './arena'
 import type { SoundEffect } from './audio'
+import { CueMusic, FetchBuild, PlaySound, ResumeAudio } from './commands'
 import { ZOMBIE_MAX_HP } from './constants'
-import {
-  CueMusic,
-  FetchBuild,
-  Message,
-  PlaySound,
-  ResumeAudio,
-  update,
-} from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   AudioState,
   Frenzy,

@@ -5,7 +5,7 @@ import { modifyFields } from 'foldkit/struct'
 import { Dialog } from '@foldkit/ui'
 
 import { ZOMBIE_MAX_HP } from './constants'
-import { Message } from './main'
+import { Message } from './message'
 import {
   type Bullet,
   Frenzy,

@@ -6,6 +6,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import { Dialog, RadioGroup } from '@foldkit/ui'
 
+import { dialogFolds } from './dialogs'
 import {
   type Appearance,
   Body,
@@ -77,40 +78,16 @@ type UpdateReturn = Update.ReturnWithOutMessage<
   OutMessage
 >
 
-const ignoreDialogOutMessage = Dialog.OutMessage.match<
-  Update.Step<CharacterPicker, Message>
->({
-  Opened: () => stepPicker => ({ model: stepPicker }),
-  Closed: () => stepPicker => ({ model: stepPicker }),
-})
-
-const writeDialog = (
-  picker: CharacterPicker,
-  nextDialog: Dialog.Model,
-): CharacterPicker => modifyFields(picker, { dialog: () => nextDialog })
-
-const foldDialog = Update.foldChild({
-  update: Dialog.update,
-  read: (picker: CharacterPicker) => Option.some(picker.dialog),
-  write: writeDialog,
+const dialog = dialogFolds({
+  read: (picker: CharacterPicker) => picker.dialog,
+  write: (picker, nextDialog) =>
+    modifyFields(picker, { dialog: () => nextDialog }),
   toParentMessage: message => Message.GotDialogMessage({ message }),
-  foldOutMessage: ignoreDialogOutMessage,
 })
 
-const foldDialogStep = (
-  step: (dialog: Dialog.Model) => ReturnType<typeof Dialog.open>,
-) =>
-  Update.foldChildStep({
-    update: step,
-    read: (picker: CharacterPicker) => Option.some(picker.dialog),
-    write: writeDialog,
-    toParentMessage: message => Message.GotDialogMessage({ message }),
-    foldOutMessage: ignoreDialogOutMessage,
-  })
+export const open = dialog.open
 
-export const open = foldDialogStep(Dialog.open)
-
-export const close = foldDialogStep(Dialog.close)
+export const close = dialog.close
 
 type PartLens = Readonly<{
   read: (picker: CharacterPicker) => RadioGroup.Model
@@ -189,7 +166,7 @@ const PART_FOLDS = {
 export const update = (picker: CharacterPicker, message: Message) =>
   Message.match<UpdateReturn>(message, {
     GotDialogMessage: ({ message: dialogMessage }) =>
-      foldDialog(picker, dialogMessage),
+      dialog.fold(picker, dialogMessage),
     GotBodyMessage: ({ message: groupMessage }) =>
       PART_FOLDS.Body(picker, groupMessage),
     GotHairStyleMessage: ({ message: groupMessage }) =>

@@ -4,13 +4,8 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
-import {
-  type KeyDown,
-  Message,
-  maybeKeyDownMessage,
-  maybeWindowBlurMessage,
-  update,
-} from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   Arsenal,
   type Model,
@@ -22,6 +17,11 @@ import {
   Stick,
   initialModel,
 } from './model'
+import {
+  type KeyDown,
+  maybeKeyDownMessage,
+  maybeWindowBlurMessage,
+} from './subscriptions'
 import { SURFACE, tick } from './testing'
 import { asVeteran } from './veteran'
 

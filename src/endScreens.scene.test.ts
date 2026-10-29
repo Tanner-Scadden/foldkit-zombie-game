@@ -15,8 +15,10 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
+import { FocusEndMenuButton } from './commands'
 import { RESTART_GRACE_MS } from './constants'
-import { FocusEndMenuButton, Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
 import { emitPressedKey, measureSurface } from './testing'
 import { asVeteran } from './veteran'

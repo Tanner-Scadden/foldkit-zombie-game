@@ -7,8 +7,10 @@ import { Dialog } from '@foldkit/ui'
 
 import changelogMarkdown from '../CHANGELOG.md?raw'
 import { NEWS_DAYS, parseChangelog } from './changelog'
+import { WriteSave } from './commands'
 import { HOME_BUTTONS, HOME_KEYS, isNewsUnseen } from './home'
-import { Message, WriteSave, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   type MenuPanel,
   type Model,

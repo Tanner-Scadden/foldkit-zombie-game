@@ -60,89 +60,107 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 
 ### Where things are
 
-| File                     | What it holds                                                                                                          |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `src/model.ts`           | The Model and its Schema types                                                                                         |
-| `src/main.ts`            | Messages, `init`, `update`, Commands, and Subscriptions                                                                |
-| `src/onboarding.ts`      | Lessons, the practice gate, the new zombie card, and hints                                                             |
-| `src/home.ts`            | The home layout's buttons and keys, the mode, going home, the bests                                                    |
-| `src/homeView.ts`        | The home menu, its panels, the pause MENU pill, and the bests strip                                                    |
-| `src/menu.css`           | Styles for the home menu, its panels, and the MENU pill                                                                |
-| `src/changelog.ts`       | `CHANGELOG.md` read at build time and decoded into What's New days                                                     |
-| `src/whatsNewView.ts`    | The What's New panel: a day's intro and bullets, Older and Newer                                                       |
-| `src/munchopedia.ts`     | The Munchopedia's entries, unlocks, badges, and walking pictures                                                       |
-| `src/guideView.ts`       | The Munchopedia panel: the list of tiles and an entry                                                                  |
-| `src/splash.ts`          | The loading splash's effects: load steps, progress, and hiding it                                                      |
-| `src/save.ts`            | `PlayerSave`: its Schema, versions, the Model mapping, and the reset                                                   |
-| `src/store.ts`           | `PlayerStore`: the save in SQLite, or the localStorage fallback                                                        |
-| `src/storeSqlite.ts`     | The `player` table, its migrations, and the one-time import                                                            |
-| `src/store.worker.ts`    | The SQLite worker entry                                                                                                |
-| `src/playerData.ts`      | The save's Schemas, shared with the sync Worker (only `effect`)                                                        |
-| `src/playerScope.ts`     | The player sync scope: its tables and mutations, shared with the Worker                                                |
-| `src/playerSync.ts`      | Save changes as mutations, the sync status line, and the link flow                                                     |
-| `packages/`              | `sqlite-wasm-effect` (an Effect `SqlClient` over sqlite-wasm) and `sync-engine` (scopes, mutations, outbox, authority) |
-| `src/analytics.ts`       | The RunSummary Schema shared with the analytics Worker (only `effect`)                                                 |
-| `src/analyticsRun.ts`    | When a run ends, and the RunSummary built from the Model                                                               |
-| `src/analyticsBeacon.ts` | The visit id, the API origin, and the beacon that posts a summary                                                      |
-| `src/veteran.ts`         | A returning player's Model for tests and the balance bot                                                               |
-| `src/stats.ts`           | Run stats: kills, accuracy, run time, and the verdicts                                                                 |
-| `src/simulation.ts`      | The pure step that advances the game one frame                                                                         |
-| `src/arena.ts`           | The level record, the tile map, doorways, collision, and line of sight                                                 |
-| `src/screen.ts`          | Landscape and portrait screens: sizes, the world window, the HUD band                                                  |
-| `src/camera.ts`          | The camera derived from the player and the level, the aim lean                                                         |
-| `src/pathing.ts`         | The flow field toward the player and zombie steering                                                                   |
-| `src/waves.ts`           | Spawn tables, packs, the wave arc, spawning, and run phases                                                            |
-| `src/pacing.ts`          | Sawtooth beats, pack telegraphs, door camping, and intensity                                                           |
-| `src/zombies.ts`         | The zombie kind table: stats, behavior, deaths, sounds, and wear                                                       |
-| `src/actions.ts`         | Winded and dazed zombies getting back on their feet                                                                    |
-| `src/frenzy.ts`          | Horde frenzy: which packs frenzy, fading stragglers, the pack bonus                                                    |
-| `src/chucker.ts`         | The Big Leaguer: hanging back, heaving, throwing, and his shield                                                       |
-| `src/crawler.ts`         | The Ankle Biter: where it comes up, surfacing, and clinging                                                            |
-| `src/boss.ts`            | The boss: its rules, its entrance, its attacks, and its health bar                                                     |
-| `src/combat.ts`          | Strikes, wounds, and bursts applied to any list of targets                                                             |
-| `src/traps.ts`           | The trap table, placement, chewing, turrets, and repair                                                                |
-| `src/weapons.ts`         | The weapon table, the two-slot arsenal, magazines, and reload                                                          |
-| `src/powerups.ts`        | Power-up tables, drops, grabbing, boost timers, boosted stats                                                          |
-| `src/shop.ts`            | Money, shop categories, items, prices, purchases, the stall                                                            |
-| `src/particles.ts`       | Particles and floor decals spawned from each frame's events                                                            |
-| `src/juice.ts`           | Screen shake, hit-stop, damage numbers, and the kill streak                                                            |
-| `src/input.ts`           | Keyboard, mouse, and touch input turned into movement and aim                                                          |
-| `src/music.ts`           | The music's tunes as data, its instruments, and its scheduler                                                          |
-| `src/view.ts`            | The root view: the page layout, the status text, the surface                                                           |
-| `src/layers.ts`          | The floor, scene, and overlay canvases and the stage                                                                   |
-| `src/thumbArea.ts`       | The portrait thumb area's wainscot tiles and its view                                                                  |
-| `src/worldView.ts`       | The world scene: ground, depth-sorted actors, overhead effects                                                         |
-| `src/depth.ts`           | The drawable type and the foot-depth sort order                                                                        |
-| `src/drawing.ts`         | Shape helpers shared by the world views: sprites, feet, pulses                                                         |
-| `src/zombieView.ts`      | Zombies walking, fusing, and dying, worn parts, shadows, health bars                                                   |
-| `src/bossView.ts`        | The boss's floor tells, globs, stars, steam, health bar, and band                                                      |
-| `src/playerView.ts`      | The player, the gun, muzzle flashes, and the reload bar                                                                |
-| `src/appearance.ts`      | Character looks: options, palettes, pixel parts, the sprite cache                                                      |
-| `src/character.ts`       | The character picker: its Messages, update, and OutMessages                                                            |
-| `src/characterView.ts`   | The character picker dialog and its walking preview                                                                    |
-| `src/trapView.ts`        | Barricades, turrets, and the trap placement ghost                                                                      |
-| `src/effectsView.ts`     | Bullets, decals, particles, blasts, popups, and rattling doors                                                         |
-| `src/hud.ts`             | Hearts, money, the streak, gun and trap slots, and the round text                                                      |
-| `src/wavePreview.ts`     | The door markers that preview a wave, and their spoken text                                                            |
-| `src/touchControls.ts`   | Sticks, ghost sticks, icon buttons, and the gun cluster with its icons                                                 |
-| `src/menus.ts`           | Mode buttons, the new zombie card, corner icons, tips, rotate notice                                                   |
-| `src/pauseHelp.ts`       | The pause screen's panel of controls and tips for each device                                                          |
-| `src/powerupView.ts`     | Pickups, callouts, the boost aura, and HUD timers on canvas                                                            |
-| `src/shopView.ts`        | The shop dialog and its category tabs, HTML over the canvas                                                            |
-| `src/stall.ts`           | The stall, its shopkeeper, entrance outline, and prompt                                                                |
-| `src/room.ts`            | The room's static floor, walls, doors, and cover shapes                                                                |
-| `src/screens.ts`         | Title, banners, hints, pause, and the run stats panels                                                                 |
-| `src/font.ts`            | The pixel font, the money coin, and text layout                                                                        |
-| `src/sprite.ts`          | Pixel maps turned into sprite images, baking, and placing them                                                         |
-| `src/png.ts`             | Colors, rasters, and the PNG data URL encoder for sprite images                                                        |
-| `src/testPng.ts`         | Reads those PNG data URLs back into pixels, for tests                                                                  |
-| `src/icons.ts`           | Pixel maps turned into SVG icons for the HTML buttons                                                                  |
-| `src/prng.ts`            | The seeded random number generator                                                                                     |
-| `src/version.ts`         | The running build id, the `version.json` check, and reloading                                                          |
-| `src/updateChip.ts`      | The "New version ready" chip shown on the home menu                                                                    |
-| `src/constants.ts`       | The view size, speeds, and other tuning numbers                                                                        |
-| `infra/worker/`          | The API Worker: analytics (its HttpApi and rules), sync (its Durable Objects in `sync.ts`), and their tests            |
-| `tools/analytics/`       | The analytics report and smoke test, through the Cloudflare API                                                        |
+| File                      | What it holds                                                                                                          |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `src/model.ts`            | The Model and its Schema types                                                                                         |
+| `src/entry.ts`            | The page entry: the runtime built from `init`, `update`, the view, and the store                                       |
+| `src/main.ts`             | `init`, `update`, and `updateGame`, which handles each Message                                                         |
+| `src/message.ts`          | The Message union                                                                                                      |
+| `src/commands.ts`         | Commands: device checks, full screen, audio, focus, splash, save, sync, analytics, and the audio resource              |
+| `src/subscriptions.ts`    | Subscriptions: frames, keys, pointers, window and page events, sync, and the update check                              |
+| `src/musicPlan.ts`        | Which tune and level play for the phase, and the stingers between phases                                               |
+| `src/dialogs.ts`          | `dialogFolds` (fold, open, and close for a Dialog field) and `dialogShell` (the dialog's view)                         |
+| `src/update/step.ts`      | The update's Return and Step types, and `withInput`                                                                    |
+| `src/update/sound.ts`     | Sound cues for each frame's events, UI sounds, unlocking audio, and the mute keys                                      |
+| `src/update/run.ts`       | Starting, resuming, and keeping going in a run                                                                         |
+| `src/update/shop.ts`      | The shop dialog and tabs, entering and leaving the shop, buying, and focus                                             |
+| `src/update/character.ts` | Opening the character picker and folding its Messages and OutMessages                                                  |
+| `src/update/home.ts`      | Menu panels, home focus and keys, difficulty, settings, the home screen tip, end screen focus                          |
+| `src/update/save.ts`      | Load steps, loading and writing the save, synced saves, the link flow, and the tutorial reset                          |
+| `src/update/traps.ts`     | Placing and cycling traps                                                                                              |
+| `src/onboarding.ts`       | Lessons, the practice gate, the new zombie card, and hints                                                             |
+| `src/home.ts`             | The home layout's buttons and keys, the mode, going home, the bests                                                    |
+| `src/homeView.ts`         | The home menu, its panels, the pause MENU pill, and the bests strip                                                    |
+| `src/menu.css`            | Styles for the home menu, its panels, and the MENU pill                                                                |
+| `src/changelog.ts`        | `CHANGELOG.md` read at build time and decoded into What's New days                                                     |
+| `src/whatsNewView.ts`     | The What's New panel: a day's intro and bullets, Older and Newer                                                       |
+| `src/munchopedia.ts`      | The Munchopedia's entries, unlocks, badges, and walking pictures                                                       |
+| `src/guideView.ts`        | The Munchopedia panel: the list of tiles and an entry                                                                  |
+| `src/splash.ts`           | The loading splash's effects: load steps, progress, and hiding it                                                      |
+| `src/save.ts`             | `PlayerSave`: its Schema, versions, the Model mapping, and the reset                                                   |
+| `src/store.ts`            | `PlayerStore`: the save in SQLite, or the localStorage fallback                                                        |
+| `src/storeSqlite.ts`      | The `player` table, its migrations, and the one-time import                                                            |
+| `src/store.worker.ts`     | The SQLite worker entry                                                                                                |
+| `src/playerData.ts`       | The save's Schemas, shared with the sync Worker (only `effect`)                                                        |
+| `src/playerScope.ts`      | The player sync scope: its tables and mutations, shared with the Worker                                                |
+| `src/playerSync.ts`       | Save changes as mutations, the sync status line, and the link flow                                                     |
+| `packages/`               | `sqlite-wasm-effect` (an Effect `SqlClient` over sqlite-wasm) and `sync-engine` (scopes, mutations, outbox, authority) |
+| `src/analytics.ts`        | The RunSummary Schema shared with the analytics Worker (only `effect`)                                                 |
+| `src/analyticsRun.ts`     | When a run ends, and the RunSummary built from the Model                                                               |
+| `src/analyticsBeacon.ts`  | The visit id, the API origin, and the beacon that posts a summary                                                      |
+| `src/veteran.ts`          | A returning player's Model for tests and the balance bot                                                               |
+| `src/stats.ts`            | Run stats: kills, accuracy, run time, and the verdicts                                                                 |
+| `src/simulation.ts`       | The pure step that advances the game one frame                                                                         |
+| `src/arena.ts`            | The level record, the tile map, doorways, collision, and line of sight                                                 |
+| `src/screen.ts`           | Landscape and portrait screens: sizes, the world window, the HUD band                                                  |
+| `src/camera.ts`           | The camera derived from the player and the level, the aim lean                                                         |
+| `src/pathing.ts`          | The flow field toward the player and zombie steering                                                                   |
+| `src/geometry.ts`         | Vectors, clamping, circle and segment checks, and screen to view coordinates                                           |
+| `src/waves.ts`            | Spawn tables, packs, the wave arc, spawning, and run phases                                                            |
+| `src/doorRoute.ts`        | Which door each pack comes through, around Plank Piles and a pincer's mate                                             |
+| `src/difficulty.ts`       | The difficulty table and scales, choosing, the Nightmare unlock, and the bests                                         |
+| `src/pacing.ts`           | Sawtooth beats, pack telegraphs, door camping, and intensity                                                           |
+| `src/zombies.ts`          | The zombie kind table: stats, behavior, deaths, sounds, and wear                                                       |
+| `src/actions.ts`          | Winded and dazed zombies getting back on their feet                                                                    |
+| `src/frenzy.ts`           | Horde frenzy: which packs frenzy, fading stragglers, the pack bonus                                                    |
+| `src/chucker.ts`          | The Big Leaguer: hanging back, heaving, throwing, and his shield                                                       |
+| `src/crawler.ts`          | The Ankle Biter: where it comes up, surfacing, and clinging                                                            |
+| `src/boss.ts`             | The boss: its rules, its entrance, its attacks, and its health bar                                                     |
+| `src/combat.ts`           | Strikes, wounds, and bursts applied to any list of targets                                                             |
+| `src/traps.ts`            | The trap table, placement, chewing, turrets, and repair                                                                |
+| `src/weapons.ts`          | The weapon table, the two-slot arsenal, magazines, and reload                                                          |
+| `src/powerups.ts`         | Power-up tables, drops, grabbing, boost timers, boosted stats                                                          |
+| `src/shop.ts`             | Money, shop categories, items, prices, purchases, the stall                                                            |
+| `src/particles.ts`        | Particles and floor decals spawned from each frame's events                                                            |
+| `src/juice.ts`            | Screen shake, hit-stop, damage numbers, and the kill streak                                                            |
+| `src/input.ts`            | Keyboard, mouse, and touch input turned into movement and aim                                                          |
+| `src/audio.ts`            | Sound effects: the audio engine resource, the synth recipes, and playing sounds and music                              |
+| `src/music.ts`            | The music's tunes as data, its instruments, and its scheduler                                                          |
+| `src/view.ts`             | The root view: the page layout, the status text, the surface                                                           |
+| `src/layers.ts`           | The floor, scene, and overlay canvases and the stage                                                                   |
+| `src/thumbArea.ts`        | The portrait thumb area's wainscot tiles and its view                                                                  |
+| `src/worldView.ts`        | The world scene: ground, depth-sorted actors, overhead effects                                                         |
+| `src/depth.ts`            | The drawable type and the foot-depth sort order                                                                        |
+| `src/drawing.ts`          | Shape helpers shared by the world views: sprites, feet, pulses                                                         |
+| `src/zombieView.ts`       | Zombies walking, fusing, and dying, worn parts, shadows, health bars                                                   |
+| `src/bossView.ts`         | The boss's floor tells, globs, stars, steam, health bar, and band                                                      |
+| `src/playerView.ts`       | The player, the gun, muzzle flashes, and the reload bar                                                                |
+| `src/appearance.ts`       | Character looks: options, palettes, pixel parts, the sprite cache                                                      |
+| `src/character.ts`        | The character picker: its Messages, update, and OutMessages                                                            |
+| `src/characterView.ts`    | The character picker dialog and its walking preview                                                                    |
+| `src/trapView.ts`         | Barricades, turrets, and the trap placement ghost                                                                      |
+| `src/effectsView.ts`      | Bullets, decals, particles, blasts, popups, and rattling doors                                                         |
+| `src/hud.ts`              | Hearts, money, the streak, gun and trap slots, and the round text                                                      |
+| `src/wavePreview.ts`      | The door markers that preview a wave, and their spoken text                                                            |
+| `src/touchControls.ts`    | Sticks, ghost sticks, icon buttons, and the gun cluster with its icons                                                 |
+| `src/menus.ts`            | Mode buttons, the new zombie card, corner icons, tips, rotate notice                                                   |
+| `src/pauseHelp.ts`        | The pause screen's panel of controls and tips for each device                                                          |
+| `src/powerupView.ts`      | Pickups, callouts, the boost aura, and HUD timers on canvas                                                            |
+| `src/shopView.ts`         | The shop dialog and its category tabs, HTML over the canvas                                                            |
+| `src/stall.ts`            | The stall, its shopkeeper, entrance outline, and prompt                                                                |
+| `src/room.ts`             | The room's static floor, walls, doors, and cover shapes                                                                |
+| `src/screens.ts`          | Title, banners, hints, pause, and the run stats panels                                                                 |
+| `src/font.ts`             | The pixel font, the money coin, and text layout                                                                        |
+| `src/sprite.ts`           | Pixel maps turned into sprite images, baking, and placing them                                                         |
+| `src/png.ts`              | Colors, rasters, and the PNG data URL encoder for sprite images                                                        |
+| `src/testPng.ts`          | Reads those PNG data URLs back into pixels, for tests                                                                  |
+| `src/icons.ts`            | Pixel maps turned into SVG icons for the HTML buttons                                                                  |
+| `src/prng.ts`             | The seeded random number generator                                                                                     |
+| `src/version.ts`          | The running build id, the `version.json` check, and reloading                                                          |
+| `src/updateChip.ts`       | The "New version ready" chip shown on the home menu                                                                    |
+| `src/constants.ts`        | The view size, speeds, and other tuning numbers                                                                        |
+| `infra/worker/`           | The API Worker: analytics (its HttpApi and rules), sync (its Durable Objects in `sync.ts`), and their tests            |
+| `tools/analytics/`        | The analytics report and smoke test, through the Cloudflare API                                                        |
 
 ### The Foldkit patch
 

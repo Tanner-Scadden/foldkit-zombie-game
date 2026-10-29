@@ -2,7 +2,7 @@ import { Option } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { isOnHome } from './home'
-import { Message } from './main'
+import { Message } from './message'
 import type { InputDevice, Model } from './model'
 
 const actionLabel = (device: InputDevice): string =>

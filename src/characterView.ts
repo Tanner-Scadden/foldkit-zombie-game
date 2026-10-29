@@ -28,6 +28,7 @@ import {
   PLAYER_WALK_FRAME_MS,
   SHADOW_COLOR,
 } from './constants'
+import { dialogShell } from './dialogs'
 import type {
   Appearance,
   Body,
@@ -363,26 +364,15 @@ type ViewInputs = Readonly<{ appearance: Appearance; screenMs: number }>
 
 export const view = Submodel.defineView<CharacterPicker, Message, ViewInputs>(
   (picker, inputs, h) =>
-    h.submodel({
-      slotId: picker.dialog.id,
-      model: picker.dialog,
-      view: Dialog.view,
-      viewInputs: {
-        hasDescription: true,
-        toView: renderInfo =>
-          h.dialog(
-            [...renderInfo.dialog, h.Class('look-dialog')],
-            renderInfo.isVisible
-              ? [
-                  h.div([...renderInfo.backdrop, h.Class('look-backdrop')]),
-                  h.div(
-                    [...renderInfo.panel, h.Class('look-panel')],
-                    panelView(picker, inputs, renderInfo, h),
-                  ),
-                ]
-              : [],
-          ),
+    dialogShell(
+      {
+        dialog: picker.dialog,
+        dialogClass: 'look-dialog',
+        backdropClass: 'look-backdrop',
+        panelClass: 'look-panel',
+        panelView: renderInfo => panelView(picker, inputs, renderInfo, h),
+        toParentMessage: message => Message.GotDialogMessage({ message }),
       },
-      toParentMessage: message => Message.GotDialogMessage({ message }),
-    }),
+      h,
+    ),
 )

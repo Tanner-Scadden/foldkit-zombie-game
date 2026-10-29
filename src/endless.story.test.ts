@@ -11,7 +11,8 @@ import {
   ZOMBIE_MAX_HP,
 } from './constants'
 import { DIFFICULTIES, bestsFor, withBests } from './difficulty'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   Arsenal,
   DifficultyCard,

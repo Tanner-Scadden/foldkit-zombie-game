@@ -3,19 +3,17 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
+import { FetchBuild, FocusEndMenuButton, ReloadPage } from './commands'
 import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
+import { update } from './main'
+import { Message } from './message'
+import { type Model, Phase, initialModel } from './model'
 import {
-  FetchBuild,
-  FocusEndMenuButton,
-  Message,
-  ReloadPage,
   maybePageShowMessage,
   maybeWindowFocusMessage,
   pageVisibilityMessage,
-  update,
   updateCheckActivity,
-} from './main'
-import { type Model, Phase, initialModel } from './model'
+} from './subscriptions'
 import { fighting } from './testing'
 import { RUNNING_BUILD, isCheckingForUpdates } from './version'
 import { pause } from './waves'

@@ -4,7 +4,8 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   Arsenal,
   type CarriedGun,

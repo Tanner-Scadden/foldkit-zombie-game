@@ -19,17 +19,13 @@ import { describe, test, expect as vitestExpect } from 'vitest'
 
 import { Dialog } from '@foldkit/ui'
 
+import { FocusHomeButton, FocusTutorialReset, WriteSave } from './commands'
 import { RESTART_GRACE_MS } from './constants'
 import { withBests } from './difficulty'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
 import { LINK_TAKES_PROGRESS_NOTE, SHARE_STATS_NOTE } from './homeView'
-import {
-  FocusHomeButton,
-  FocusTutorialReset,
-  Message,
-  WriteSave,
-  update,
-} from './main'
+import { update } from './main'
+import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
 import { SyncState } from './playerSync'
 import { noSavedBests, restoreSave, saveOf } from './save'

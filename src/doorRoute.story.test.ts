@@ -6,7 +6,8 @@ import { describe, expect, test } from 'vitest'
 import { distanceToBox, isInsideRoomAt, nearestDoor } from './arena'
 import { PREPARATION_MS } from './constants'
 import { drawSurfacingSpot } from './crawler'
-import { Message, update } from './main'
+import { update } from './main'
+import { Message } from './message'
 import {
   type DoorId,
   Frenzy,

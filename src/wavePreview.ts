@@ -14,7 +14,7 @@ import {
   textShapes,
 } from './font'
 import { clamp } from './geometry'
-import type { Message } from './main'
+import type { Message } from './message'
 import {
   type Boss,
   type DoorId,

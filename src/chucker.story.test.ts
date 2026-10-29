@@ -6,8 +6,9 @@ import { describe, expect, test } from 'vitest'
 import { ARENA_LEVEL } from './arena'
 import { CHUCKER_RULES } from './chucker'
 import { HIT_STOP_HURT_MS, PLAYER_MAX_HP } from './constants'
-import { Message, update } from './main'
+import { update } from './main'
 import { debutPitch } from './menus'
+import { Message } from './message'
 import {
   type Bullet,
   GameEvent,
