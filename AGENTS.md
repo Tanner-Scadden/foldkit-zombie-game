@@ -31,6 +31,13 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 
 Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All four must pass.
 
+**Go easy on the laptop.** This is developed on one laptop (12 cores), often with several agents at once. Two agents running 8-process balance batches together pushed the load average to 30 and made every step about three times slower.
+
+- Run the balance bot with `WORKERS=4` at most, and never two balance runs at the same time, across all agents. Check `uptime` first; if the load average is above the core count, wait or use fewer workers.
+- Cap tuning at about three batches per change. Results within a few points of a target are fine; list misses as follow-ups instead of running more batches.
+- Prefer 100 runs to sort ideas and 200 runs only to confirm the final numbers.
+- The same goes for headless Chrome audits and `perf:check`: one at a time, and not while the balance bot is running, since load skews frame times.
+
 ### Where things are
 
 | File                   | What it holds                                                          |
