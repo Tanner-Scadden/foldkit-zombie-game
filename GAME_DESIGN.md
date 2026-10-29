@@ -24,6 +24,10 @@ Those four things are the pillars. Everything else serves them. The art, names, 
   - Touch: the left thumb moves, the right thumb aims, and the player fires while the right thumb is held. Two thumbs at once must work.
 - **The loop.** Preparation, then a wave, then preparation again, until the player dies or wins.
 - **How the code is organized.** One Foldkit Model. A pure, deterministic `update` driven by animation-frame Messages. Randomness comes from a seeded generator whose state lives in the Model, so the same seed and the same inputs give the same game.
+- **Making money.** Decided with the owner on 2026-10-29. The game stays free to play.
+  - **Cosmetics and a supporter pack.** One-time purchases of looks, hats, gun skins, and a founder's hat. Nothing bought changes how the game plays. Bought on the web through Stripe Checkout confirmed by a Worker, and kept in the player's synced scope so it follows linked devices. Not built yet.
+  - **A tip jar.** A small "buy the shopkeeper a coffee" link. Not built yet.
+  - **Never.** No ads of any kind, no pay-to-win, and no real-money loot boxes. The mystery box uses in-game money only.
 
 ### The first playable
 
