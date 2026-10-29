@@ -6,8 +6,8 @@ One entry per day, newest first. Only things a player would notice, a handful of
 
 - 💀 Pick Easy, Normal, or Hard. Beat Hard and Nightmare unlocks. Good luck.
 - 🪵 Waves are tighter with no waiting around. Planks cost more, nothing climbs through a boarded door, and slow zombies still love a snack of fresh planks.
-- 💣 Meet the Kaboomer, who brought a bomb to share, and the Big Leaguer, who pitches zombies and hides behind his buddies.
-- 🛡️ Big Lugs wear junk armor now. Knock it off, one clang at a time.
+- 💣 Meet the Kaboomer, who brought a bomb to share, and the Big Leaguer, who pitches zombies. Big Lugs wear junk armor now.
+- 📖 A brand new menu with the Munchopedia: meet every zombie you've splatted. What's New lives there too.
 - 🎯 Your guns sit right under your thumbs, and your kills and bests stick around after updates.
 
 ## October 28, 2026: Opening night
