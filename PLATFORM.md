@@ -62,7 +62,7 @@ Package names and APIs need checking against the Effect version the game uses (E
 3. **Local SQLite. Built and in production since 2026-10-29.** `packages/sqlite-wasm-effect` (published name still open, `@munch/sqlite-wasm-effect` for now) is the Effect wrapper: sqlite-wasm 3.54.1-build1 in a worker on `opfs-sahpool`, behind an `effect/sql` `SqlClient`, with the leader tab chosen by Web Locks. See its README. The on-device save moved into it as the `player` row (`src/store.ts`, `src/storeSqlite.ts`); see "The on-device save". `tools/audit/sqlite.ts` checks it in headless Chrome. The plan as first written: move settings and personal bests into SQLite in the browser. This is the first client mutation path and proves out the wasm build, OPFS, and migrations before sync depends on them. The character's look (`Appearance` in `src/model.ts`) is stored whole by the `ChangedAppearance` mutation.
    - **The difficulty** (`SavedDifficulty` in `src/save.ts`, save version 2): the chosen level, whether the first-time card was answered, and the Nightmare unlock. A version 1 save migrates as Normal with the card still to come. A Hard campaign win unlocks Nightmare, so the server will want to check that win before it trusts the unlock.
    - **The bests** (`SavedBests` in `src/save.ts`, save version 3, added 2026-10-29): runs played, the zombies splatted in all, the kills per zombie kind keyed by kind id, and the fastest win and best endless wave for each difficulty (null until reached). They are on the device now, in the SQLite `player` row and the `kills_by_kind` table. A version 2 save migrates with every field kept and the bests at zero, and unknown kind ids are dropped on load. They change once a run, when it ends, so they map to one `RecordedRun` style mutation a run. The server will want to check them like the Nightmare unlock before a leaderboard trusts them.
-4. **Sync. Built and in production since 2026-10-29.** `packages/sync-engine` (`@munch/sync-engine` for now) is the engine; the player scope (`src/playerScope.ts`) is its first user; the API Worker hosts one SQLite Durable Object per player scope and one directory of devices. Two devices can be linked with a code from SETTINGS. See "What phase 4 built" below and the package README.
+4. **Sync. Built and in production since 2026-10-29.** `packages/sync-engine` (`@munch/sync-engine` for now) is the engine; the player scope (`src/playerScope.ts`) is its first user; the API Worker hosts one SQLite Durable Object per player scope and one directory of devices. Two devices can be linked with a code from SETTINGS. See "What phase 4 built" below and the package README. Its next phase is "Ideas borrowed from TanStack DB" below.
 5. **Multiplayer rooms.** Durable Objects as rooms with room codes, as sketched in `MULTIPLAYER.md`, reusing the sync transport and the shared Schemas.
 
 ### The on-device save
@@ -280,6 +280,33 @@ What blocks it for us today:
 Revisit LiveStore when it reaches 1.0, or when Foldkit moves to Effect 4.0.3 or later and server-side validation is settled.
 
 The first spike builds settings and personal bests (a player scope), then the daily challenge with an initials leaderboard (the first shared scope).
+
+### Ideas borrowed from TanStack DB
+
+The sync engine's next phase, planned on 2026-10-29. The owner approved borrowing ideas from [TanStack DB](https://tanstack.com/db); we are not adopting the library.
+
+What it has that we lacked: each collection has a status lifecycle (`idle`, `loading`, `ready`, `error`, `crashed`, `cleaned-up`), with sync trouble after the first `ready` kept apart as health, so a ready collection stays ready while it reconnects. A write can be awaited until the server confirms it (`awaitTxId`, `tx.when('settled')`). Several collections of one kind can be live at once, subscribed and garbage collected by reference count.
+
+What our engine already had: confirmed tables apart from view tables, rebuilt with replay; an outbox with mutation ids; a Web Locks leader; backoff; `Acked { id, seq }` receipts from the server. But only `Rejected` and `Failed` reached `Sync.receipts`, and the only status was the connection's (`Following`, `Connecting`, `Online`, `Offline`).
+
+**Why we do not adopt it:**
+
+- **No server.** It syncs into collections from someone else's backend (Electric, a query function) and has no authority that orders, validates, and rejects mutations. Ours is the Durable Object per scope.
+- **Two copies in memory.** Its collections live in JavaScript memory beside the store they sync from, where ours are SQLite tables the game already reads.
+- **Whole rows, not operations.** Its optimistic state is replayed as row changes. We replay operations, which is what lets `RecordedRun` from two offline devices merge as increments instead of one overwriting the other.
+- **Promises, not Effect.** Its API is Promise based; ours is Effect from the apply functions to the transports.
+- **Churn.** It is still in release candidates, with API changes between them.
+
+**The plan, ranked, built in this order:**
+
+1. **A status lifecycle per scope. In progress, built 2026-10-29.** `ScopeStatus` is `Idle`, `Loading`, `Ready { seq, fresh }`, or `Failed { reason }` (a Schema tagged union in `Replica.ts`), apart from `SyncStatus`, which stays as connection health. Rows cached in SQLite from an earlier session open as `Ready { fresh: false }`; the first snapshot or deltas this session make it `fresh: true`; a reconnect keeps it ready. It lives in a `sync_status` table, so follower tabs see the leader's. The game holds the player scope's status in the Model (`playerScopeStatus`), and SETTINGS' Devices line says "Connecting. Showing saved progress" or "Sync is not working on this device" from it.
+2. **Awaiting confirmation. In progress, built 2026-10-29.** `Sync.receipts` carries `Confirmed { id, seq }` too, and `replica.awaitSettled(id)` waits for `Confirmed { seq }` or `Rejected { code, reason }`, answering at once for an id that already left the outbox (outcomes are kept in `sync_settled`, the newest 200 per kind). The game's `WriteSave` returns a finished run's mutation id, and the `AwaitRunSettled` Command answers with `SettledRecordedRun`, so the Model's `lastRunSync` knows whether the run reached the server.
+3. **Several instances per scope kind**, with reference-counted subscriptions and a `gcTime` that keeps a scope's tables a while after its last subscriber leaves. Read-only scopes (leaderboards, the daily board) get per-instance table names; the player tables stay as they are. `client.subscribe(scopeId)` returns a scoped `ScopeHandle` (its status, its rows, its `awaitSettled`) that unsubscribes when its Scope closes. This lifts the "one instance per scope kind" limit in the engine README.
+4. **A `liveQuery` helper:** run a SQL query again whenever one of its tables changes, and drop repeats with `Stream.changesWith`. No differential dataflow: at our sizes, running the query again is cheaper than maintaining one.
+5. **A cheaper rebase** when the kind has no pending outbox rows: apply deltas to confirmed and copy only the touched tables into the view, instead of rebuilding every table and replaying nothing.
+6. **Top-N leaderboard tables** kept by the server's apply (an entry that falls out of the top 100 is deleted in the same apply that adds the new one), with "my rank" as a plain HTTP read rather than a synced row.
+7. **Polish:** a pending marker per row, so a view can show "saving" on just the rows with unconfirmed changes, and coalescing in the outbox for whole-value mutations (`ChangedSettings`, `ChangedAppearance`, `ChangedHome`), where only the newest of several pending ones needs to go out.
+8. **Later, a TanStack DB adapter**, so a scope can back a TanStack DB collection, for reach once the engine is open source.
 
 ## Costs and limits
 
