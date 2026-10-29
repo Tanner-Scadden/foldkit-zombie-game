@@ -655,7 +655,15 @@ describe('Run stats', () => {
       score: () => 690,
       wallet: () => ({ balance: 40, earned: 615, shown: 40 }),
       stats: () => ({
-        kills: { Shambler: 41, Runner: 17, Tank: 2, Exploder: 9, Boss: 0 },
+        kills: {
+          Shambler: 41,
+          Runner: 17,
+          Tank: 2,
+          Exploder: 9,
+          Thrower: 0,
+          Crawler: 0,
+          Boss: 0,
+        },
         wavesCleared: 3,
         shotsFired: 1240,
         shotsHit: 532,
@@ -665,7 +673,7 @@ describe('Run stats', () => {
       }),
     })
   const STATS =
-    'Waves cleared: 3 of 8. Zombies splatted: 69 (41 Groaner, 17 Hotfoot, 9 Gasbag, 2 Big Lug). Run time 6:11. Accuracy 43 percent. Money earned $615. Hearts lost 7. Traps placed 3. Score 690.'
+    'Waves cleared: 3 of 8. Zombies splatted: 69 (41 Groaner, 17 Hotfoot, 9 Gasbag, 2 Big Lug, 0 Chucker, 0 Ankle Biter). Run time 6:11. Accuracy 43 percent. Money earned $615. Hearts lost 7. Traps placed 3. Score 690.'
 
   test('Game Over reads out the verdict and the whole run', () => {
     scene(

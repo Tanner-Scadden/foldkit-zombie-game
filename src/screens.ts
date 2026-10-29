@@ -944,9 +944,9 @@ const statRowShapes = (
   ]
 }
 
-const KILL_SLOT_PX = 40
+const KILL_SLOT_PX = 28
 const KILL_ICON_PX = 7
-const KILL_ICON_GAP = 4
+const KILL_ICON_GAP = 2
 
 const killShapes = (
   stats: RunStats,

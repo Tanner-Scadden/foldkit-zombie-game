@@ -19,9 +19,11 @@ import {
   ZOMBIE_SPEED_MIN,
 } from './constants'
 import {
+  Frenzy,
   type ParticleKind,
   type Vector,
   type Zombie,
+  ZombieAction,
   type ZombieKind,
   ZombieState,
 } from './model'
@@ -41,10 +43,14 @@ export const Behavior = defineTaggedUnion({
     trapDamage: Schema.Number,
     blastKnockback: Schema.Number,
   },
+  Thrower: {},
+  Crawler: {},
 })
 export type Behavior = typeof Behavior.Type
 
 export type DeathStyle = 'Topple' | 'Tumble' | 'Slump' | 'Burst'
+
+export type Arrival = 'Door' | 'Floor'
 
 export type HealthBar = 'Shown' | 'Hidden'
 
@@ -96,6 +102,7 @@ export type ZombieKindStats = Readonly<{
   deathSound: SoundEffect
   maybeFootfall: Option.Option<Footfall>
   wear: ReadonlyArray<WearStage>
+  arrival: Arrival
 }>
 
 // KINDS
@@ -136,6 +143,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
       { below: 2 / 3, part: 'GreenLimb', heightPx: 6 },
       { below: 1 / 3, part: 'GreenScalp', heightPx: 9 },
     ],
+    arrival: 'Door',
   },
   Runner: {
     name: 'Hotfoot',
@@ -175,6 +183,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
       maybeSound: Option.none(),
     }),
     wear: [{ below: 1 / 2, part: 'HairScalp', heightPx: 10 }],
+    arrival: 'Door',
   },
   Tank: {
     name: 'Big Lug',
@@ -218,6 +227,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
       { below: 1 / 2, part: 'BlueLimb', heightPx: 7 },
       { below: 1 / 4, part: 'BlueChunk', heightPx: 11 },
     ],
+    arrival: 'Door',
   },
   Exploder: {
     name: 'Gasbag',
@@ -236,8 +246,8 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     knockbackScale: 0.8,
     killTrauma: 0.15,
     behavior: Behavior.Bomber({
-      shotFuseMs: 140,
-      contactFuseMs: 220,
+      shotFuseMs: 200,
+      contactFuseMs: 340,
       chainFuseMs: 150,
       blastRadius: 28,
       playerDamage: 1,
@@ -252,14 +262,89 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     healthBar: 'Hidden',
     hitSpray: 'Goo',
     bloodPerKill: 0,
-    gibs: [{ kind: 'Goo', count: 3 }],
+    gibs: [
+      { kind: 'Goo', count: 4 },
+      { kind: 'GasPatch', count: 2 },
+    ],
     hitSound: 'ExploderHit',
     deathSound: 'ExploderFuse',
     maybeFootfall: Option.none(),
     wear: [
       { below: 2 / 3, part: 'GasPatch', heightPx: 6 },
-      { below: 1 / 3, part: 'GasPatch', heightPx: 4 },
+      { below: 1 / 3, part: 'GasPatch', heightPx: 8 },
     ],
+    arrival: 'Door',
+  },
+  Thrower: {
+    name: 'Chucker',
+    tagline: 'HE THROWS GROANERS',
+    pitch: 'HE HURLS GROANERS AT YOU. GET OFF THE MARK!',
+    speedMin: 17,
+    speedMax: 21,
+    hp: 8,
+    contactDamage: 1,
+    trapBitePerSecond: 4,
+    radius: 4.5,
+    bodyRadius: 5,
+    footOffset: 6,
+    bounty: 8,
+    mass: 1.6,
+    knockbackScale: 0.6,
+    killTrauma: 0.3,
+    behavior: Behavior.Thrower(),
+    clearance: 'Narrow',
+    deathStyle: 'Topple',
+    dyingMs: 700,
+    stridePx: 3,
+    healthBar: 'Shown',
+    hitSpray: 'Blood',
+    bloodPerKill: 6,
+    gibs: [
+      { kind: 'MeatGib', count: 4 },
+      { kind: 'RotGib', count: 2 },
+    ],
+    hitSound: 'ZombieHit',
+    deathSound: 'ZombieDeath',
+    maybeFootfall: Option.none(),
+    wear: [
+      { below: 2 / 3, part: 'TealScalp', heightPx: 15 },
+      { below: 1 / 3, part: 'TealLimb', heightPx: 10 },
+    ],
+    arrival: 'Door',
+  },
+  Crawler: {
+    name: 'Ankle Biter',
+    tagline: 'IT COMES UP THROUGH THE FLOOR',
+    pitch: 'IT CLAWS UP THROUGH THE FLOOR AND GRABS YOUR ANKLES.',
+    speedMin: 26,
+    speedMax: 32,
+    hp: 2,
+    contactDamage: 0,
+    trapBitePerSecond: 2,
+    radius: 3.5,
+    bodyRadius: 3.5,
+    footOffset: 2,
+    bounty: 3,
+    mass: 0.6,
+    knockbackScale: 1.3,
+    killTrauma: 0.12,
+    behavior: Behavior.Crawler(),
+    clearance: 'Narrow',
+    deathStyle: 'Slump',
+    dyingMs: 450,
+    stridePx: 3,
+    healthBar: 'Hidden',
+    hitSpray: 'Blood',
+    bloodPerKill: 4,
+    gibs: [
+      { kind: 'MeatGib', count: 2 },
+      { kind: 'BoneGib', count: 2 },
+    ],
+    hitSound: 'RunnerHit',
+    deathSound: 'RunnerDeath',
+    maybeFootfall: Option.none(),
+    wear: [{ below: 1 / 2, part: 'PaleScalp', heightPx: 4 }],
+    arrival: 'Floor',
   },
   Boss: {
     name: 'Uncle Chunk',
@@ -305,6 +390,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
       { below: 0.4, part: 'PinkLimb', heightPx: 16 },
       { below: 0.2, part: 'PinkChunk', heightPx: 12 },
     ],
+    arrival: 'Door',
   },
 }
 
@@ -313,6 +399,8 @@ export const ZOMBIE_KIND_ORDER: ReadonlyArray<ZombieKind> = [
   'Runner',
   'Exploder',
   'Tank',
+  'Thrower',
+  'Crawler',
 ]
 
 export const statsOf = (zombie: Zombie): ZombieKindStats =>
@@ -357,6 +445,16 @@ export const deathState = (
       ZombieState.Fusing({
         remainingMs: cause === 'Shot' ? shotFuseMs : chainFuseMs,
       }),
+    Thrower: () =>
+      ZombieState.Dying({
+        remainingMs: ZOMBIE_KINDS[kind].dyingMs,
+        direction,
+      }),
+    Crawler: () =>
+      ZombieState.Dying({
+        remainingMs: ZOMBIE_KINDS[kind].dyingMs,
+        direction,
+      }),
   })
 
 export const isWalking = (zombie: Zombie): boolean =>
@@ -365,18 +463,47 @@ export const isWalking = (zombie: Zombie): boolean =>
 export const isFusing = (zombie: Zombie): boolean =>
   ZombieState.isAnyOf(['Fusing'])(zombie.state)
 
+const isOnTheFloor = ZombieAction.isAnyOf([
+  'Roaming',
+  'Winded',
+  'Hefting',
+  'Dazed',
+  'Clinging',
+])
+
+const isOnItsFeet = ZombieAction.isAnyOf(['Roaming', 'Winded'])
+
+// NOTE: a grounded zombie is alive and standing in the room, so bullets,
+// bursts, traps, and the crowd can reach it. One Burrowed under the floor,
+// Carried overhead, or Flying through the air is out of reach.
+export const isGrounded = (zombie: Zombie): boolean =>
+  isWalking(zombie) && isOnTheFloor(zombie.action)
+
+// NOTE: a free zombie walks after the player and can bite. One busy heaving,
+// dazed, or clinging stands still.
+export const isFree = (zombie: Zombie): boolean =>
+  isWalking(zombie) && isOnItsFeet(zombie.action)
+
+export const arrivalOf = (kind: ZombieKind): Arrival =>
+  ZOMBIE_KINDS[kind].arrival
+
+export const isFloorKind = (kind: ZombieKind): boolean =>
+  arrivalOf(kind) === 'Floor'
+
 // ARRIVAL
 
 export const scaledHp = (hp: number, hpScale: number): number =>
   Math.max(1, Math.round(hp * hpScale))
 
-export type Arrival = Readonly<{
+export type Entry = Readonly<{
   id: number
   kind: ZombieKind
   at: Vector
   speedRoll: number
   speedScale: number
   hp: number
+  action?: ZombieAction
+  frenzy?: Frenzy
 }>
 
 export const arrivingZombie = ({
@@ -386,7 +513,9 @@ export const arrivingZombie = ({
   speedRoll,
   speedScale,
   hp,
-}: Arrival): Zombie => {
+  action = ZombieAction.Roaming(),
+  frenzy = Frenzy.Calm(),
+}: Entry): Zombie => {
   const stats = ZOMBIE_KINDS[kind]
   return {
     id,
@@ -401,6 +530,8 @@ export const arrivingZombie = ({
     knockback: { x: 0, y: 0 },
     hitRemainingMs: 0,
     state: ZombieState.Walking(),
+    action,
+    frenzy,
   }
 }
 

@@ -169,20 +169,41 @@ const PART_LOOKS: Readonly<
     | 'BlueChunk'
     | 'GasPatch'
     | 'PinkLimb'
-    | 'PinkChunk',
+    | 'PinkChunk'
+    | 'TealLimb'
+    | 'TealScalp'
+    | 'PaleScalp',
     PartLook
   >
 > = {
   GreenLimb: {
-    particle: '#6fae4f',
-    decal: '#5a9640',
-    faded: '#3f5f33',
+    particle: '#8ed65e',
+    decal: '#72b84a',
+    faded: '#45693a',
     hasStump: true,
   },
   GreenScalp: {
-    particle: '#4d8a35',
-    decal: '#4d8a35',
-    faded: '#36552c',
+    particle: '#62ad45',
+    decal: '#5a9e40',
+    faded: '#3b5a30',
+    hasStump: false,
+  },
+  TealLimb: {
+    particle: '#7fdcb6',
+    decal: '#64c29c',
+    faded: '#3d6a58',
+    hasStump: true,
+  },
+  TealScalp: {
+    particle: '#4fae8c',
+    decal: '#4a9f80',
+    faded: '#335a4c',
+    hasStump: false,
+  },
+  PaleScalp: {
+    particle: '#cfe3b4',
+    decal: '#b8cc9c',
+    faded: '#5f6852',
     hasStump: false,
   },
   HairScalp: {
@@ -204,9 +225,9 @@ const PART_LOOKS: Readonly<
     hasStump: false,
   },
   GasPatch: {
-    particle: '#b7cc3c',
-    decal: '#86992a',
-    faded: '#56602a',
+    particle: '#d7e65a',
+    decal: '#a9b83a',
+    faded: '#5c6630',
     hasStump: false,
   },
   PinkLimb: {
@@ -222,6 +243,10 @@ const PART_LOOKS: Readonly<
     hasStump: false,
   },
 }
+
+const GAS_COLOR = 'rgba(206, 246, 96, 0.6)'
+const GAS_FADED_COLOR = 'rgba(206, 246, 96, 0.25)'
+const GAS_FADE_MS = 220
 
 const STUMP_COLOR = '#a8262c'
 const STUMP_FADED_COLOR = '#4a1c20'
@@ -246,6 +271,9 @@ const DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   GasPatch: PART_LOOKS.GasPatch.decal,
   PinkLimb: PART_LOOKS.PinkLimb.decal,
   PinkChunk: PART_LOOKS.PinkChunk.decal,
+  TealLimb: PART_LOOKS.TealLimb.decal,
+  TealScalp: PART_LOOKS.TealScalp.decal,
+  PaleScalp: PART_LOOKS.PaleScalp.decal,
 }
 
 const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
@@ -268,6 +296,9 @@ const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   GasPatch: PART_LOOKS.GasPatch.faded,
   PinkLimb: PART_LOOKS.PinkLimb.faded,
   PinkChunk: PART_LOOKS.PinkChunk.faded,
+  TealLimb: PART_LOOKS.TealLimb.faded,
+  TealScalp: PART_LOOKS.TealScalp.faded,
+  PaleScalp: PART_LOOKS.PaleScalp.faded,
 }
 
 const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
@@ -295,23 +326,31 @@ const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
   GasPatch: PART_LOOKS.GasPatch.particle,
   PinkLimb: PART_LOOKS.PinkLimb.particle,
   PinkChunk: PART_LOOKS.PinkChunk.particle,
+  TealLimb: PART_LOOKS.TealLimb.particle,
+  TealScalp: PART_LOOKS.TealScalp.particle,
+  PaleScalp: PART_LOOKS.PaleScalp.particle,
+  Gas: GAS_COLOR,
 }
 
 const LIMBS: ReadonlyArray<ParticleKind | DecalKind> = [
   'GreenLimb',
   'BlueLimb',
   'PinkLimb',
+  'TealLimb',
 ]
 
 const PARTS: ReadonlyArray<ParticleKind> = [
   'GreenLimb',
   'BlueLimb',
   'PinkLimb',
+  'TealLimb',
   'GreenScalp',
   'HairScalp',
   'BlueChunk',
   'GasPatch',
   'PinkChunk',
+  'TealScalp',
+  'PaleScalp',
 ]
 
 const CASINGS: ReadonlyArray<ParticleKind> = [
@@ -394,10 +433,15 @@ const isCasingUpright = (particle: Particle): boolean =>
   isCasing(particle) &&
   Math.floor(particle.remainingMs / SHELL_TUMBLE_MS) % 2 === 1
 
-const particleColor = (particle: Particle): string =>
-  particle.kind === 'Dust' && particle.remainingMs < DUST_FADE_MS
-    ? DUST_FADED_COLOR
-    : PARTICLE_COLORS[particle.kind]
+const particleColor = (particle: Particle): string => {
+  if (particle.kind === 'Dust' && particle.remainingMs < DUST_FADE_MS) {
+    return DUST_FADED_COLOR
+  } else if (particle.kind === 'Gas' && particle.remainingMs < GAS_FADE_MS) {
+    return GAS_FADED_COLOR
+  } else {
+    return PARTICLE_COLORS[particle.kind]
+  }
+}
 
 const PART_TUMBLE_MS = 90
 
@@ -464,7 +508,7 @@ const BLAST_CORE_COLOR = '#fffbe6'
 const BLAST_FLASH_COLOR = '#ffd23f'
 const BLAST_FIRE_COLOR = '#ff7a2e'
 const BLAST_RING_COLOR = '#ffe066'
-const BLAST_SMOKE_COLOR = 'rgba(40, 30, 28, 0.45)'
+const BLAST_SMOKE_COLOR = 'rgba(126, 178, 54, 0.45)'
 
 export const blastShapes = (blast: Blast): ReadonlyArray<Canvas.Shape> => {
   const x = Math.round(blast.x)
@@ -535,8 +579,26 @@ const payoutLook = (
 const PAYDAY_POPUP_SCALE = 3
 const PAYDAY_POPUP_BIG_SCALE = 4
 
+const HORDE_POPUP_SCALE = 2
+
 const popupLook = (popup: Popup): PopupLook => {
-  if (popup.kind === 'Damage') {
+  if (popup.kind === 'Horde') {
+    return {
+      text: 'HORDE!',
+      tone: popup.ageMs < KILL_POPUP_FLASH_MS ? 'Damage' : 'Alert',
+      scale: HORDE_POPUP_SCALE,
+      hopPx: KILL_POPUP_HOP_PX,
+      risePx: DAMAGE_POPUP_RISE_PX,
+    }
+  } else if (popup.kind === 'Wipe') {
+    return {
+      text: `+$${popup.value}`,
+      tone: popup.ageMs < KILL_POPUP_FLASH_MS ? 'Damage' : 'Coin',
+      scale: popup.ageMs < KILL_POPUP_FLASH_MS ? 3 : HORDE_POPUP_SCALE,
+      hopPx: KILL_POPUP_HOP_PX,
+      risePx: KILL_POPUP_RISE_PX,
+    }
+  } else if (popup.kind === 'Damage') {
     return {
       text: `${popup.value}`,
       tone: 'Damage',

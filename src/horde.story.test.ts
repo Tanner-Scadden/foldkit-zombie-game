@@ -23,6 +23,7 @@ import { Message, update } from './main'
 import {
   type Bullet,
   type DoorId,
+  Frenzy,
   GameEvent,
   Invulnerability,
   type Model,
@@ -30,6 +31,7 @@ import {
   Pierce,
   type PlannedSpawn,
   type Zombie,
+  ZombieAction,
   type ZombieKind,
   ZombieState,
   initialModel,
@@ -41,10 +43,16 @@ import {
   WAVE_PLANS,
   debutKinds,
   doorCounts,
+  floorCounts,
   pickKind,
   rollSpawns,
 } from './waves'
-import { Behavior, ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
+import {
+  Behavior,
+  ZOMBIE_KINDS,
+  ZOMBIE_KIND_ORDER,
+  isFloorKind,
+} from './zombies'
 
 const FRAME_MS = 16
 const LONG_FRAME_MS = 50
@@ -84,6 +92,8 @@ const zombieOf = (
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
+  action: ZombieAction.Roaming(),
+  frenzy: Frenzy.Calm(),
 })
 
 const pistolInto = (id: number, zombie: Zombie): Bullet => ({
@@ -135,6 +145,12 @@ const bomberOf = (kind: ZombieKind) =>
       throw new Error(`${kind} is not a bomber`)
     },
     Bomber: bomber => bomber,
+    Thrower: () => {
+      throw new Error(`${kind} is not a bomber`)
+    },
+    Crawler: () => {
+      throw new Error(`${kind} is not a bomber`)
+    },
   })
 
 const EXPLODER = bomberOf('Exploder')
@@ -151,13 +167,17 @@ const explosionsIn = (frame: Model): number =>
   Array.filter(frame.frameEvents, GameEvent.guards.Exploded).length
 
 describe('the kind table', () => {
-  test('each kind spawns at its door with its table stats', () => {
-    const spawns: ReadonlyArray<PlannedSpawn> = Array.map(
+  test('each kind that walks in spawns at its door with its table stats', () => {
+    const doorKinds = Array.filter(
       ZOMBIE_KIND_ORDER,
+      kind => !isFloorKind(kind),
+    )
+    const spawns: ReadonlyArray<PlannedSpawn> = Array.map(
+      doorKinds,
       (kind, index) => ({
         atMs: 0,
         kind,
-        door: Option.getOrThrow(Array.get(DOOR_IDS, index)),
+        door: Option.getOrThrow(Array.get(DOOR_IDS, index % DOOR_IDS.length)),
         offset: 5,
         speedScale: 1.1,
         hpScale: 1,
@@ -180,9 +200,7 @@ describe('the kind table', () => {
       ),
       tick(FRAME_MS),
       model(({ zombies }) => {
-        expect(Array.map(zombies, ({ kind }) => kind)).toEqual(
-          ZOMBIE_KIND_ORDER,
-        )
+        expect(Array.map(zombies, ({ kind }) => kind)).toEqual(doorKinds)
         Array.forEach(zombies, (zombie, index) => {
           const stats = ZOMBIE_KINDS[zombie.kind]
           const spawn = Option.getOrThrow(Array.get(spawns, index))
@@ -608,12 +626,12 @@ describe('spawn tables', () => {
       [],
       ['Exploder'],
       ['Tank'],
-      [],
-      [],
+      ['Thrower'],
+      ['Crawler'],
       [],
     ])
     Array.forEach([1, 2, 3, 99, 31337], seed => {
-      Array.forEach([2, 4, 5], wave => {
+      Array.forEach([2, 4, 5, 6, 7], wave => {
         const [, spawns] = rollSpawns(seed, wave)
         Array.forEach(debutKinds(wave), kind => {
           expect(kindsOf(spawns, kind)).toBeGreaterThan(0)
@@ -637,11 +655,14 @@ describe('spawn tables', () => {
     })
   })
 
-  test('the preview matches the kinds that come out of each door', () => {
+  test('the preview matches the kinds that come out of each door and the floor', () => {
     const seed = 1357
     const wave = FINAL_WAVE
     const [rngState, spawns] = rollSpawns(seed, wave)
-    const seen = new Map<number, Readonly<{ kind: ZombieKind; door: DoorId }>>()
+    const seen = new Map<
+      number,
+      Readonly<{ kind: ZombieKind; door: DoorId | 'Floor' }>
+    >()
     const preparation = Phase.Preparation({
       wave,
       remainingMs: 5000,
@@ -674,7 +695,9 @@ describe('spawn tables', () => {
             if (!seen.has(zombie.id)) {
               seen.set(zombie.id, {
                 kind: zombie.kind,
-                door: nearestDoor(zombie).id,
+                door: ZombieAction.isAnyOf(['Burrowed'])(zombie.action)
+                  ? 'Floor'
+                  : nearestDoor(zombie).id,
               })
             }
           })
@@ -700,6 +723,15 @@ describe('spawn tables', () => {
     expect(arrivedCounts).toEqual(
       Array.map(doorCounts(spawns), ({ door, kinds }) => ({ door, kinds })),
     )
+    const fromTheFloor = Array.filterMap(ZOMBIE_KIND_ORDER, kind => {
+      const count = Array.filter(
+        arrivals,
+        arrival => arrival.door === 'Floor' && arrival.kind === kind,
+      ).length
+      return count > 0 ? Result.succeed({ kind, count }) : Result.failVoid
+    })
+    expect(fromTheFloor).toEqual(floorCounts(spawns))
+    expect(Array.isReadonlyArrayEmpty(fromTheFloor)).toBe(false)
   })
 })
 

@@ -123,6 +123,8 @@ export const ZombieKind = Schema.Literals([
   'Runner',
   'Tank',
   'Exploder',
+  'Thrower',
+  'Crawler',
   'Boss',
 ])
 export type ZombieKind = typeof ZombieKind.Type
@@ -133,6 +135,43 @@ export const ZombieState = defineTaggedUnion({
   Dying: { remainingMs: Schema.Number, direction: Vector },
 })
 export type ZombieState = typeof ZombieState.Type
+
+// NOTE: an action is what a living zombie is busy with, apart from whether it
+// is alive. A Chucker heaves a Groaner, which is Carried, then Flying, then
+// Dazed where it lands. An Ankle Biter waits Burrowed under the floor, then
+// clings to the player's ankles. Winded walks like Roaming but cannot grab.
+export const ZombieAction = defineTaggedUnion({
+  Roaming: {},
+  Winded: { remainingMs: Schema.Number },
+  Hefting: {
+    victimId: Schema.Number,
+    remainingMs: Schema.Number,
+    durationMs: Schema.Number,
+  },
+  Carried: { byId: Schema.Number },
+  Flying: {
+    from: Vector,
+    to: Vector,
+    remainingMs: Schema.Number,
+    durationMs: Schema.Number,
+  },
+  Dazed: { remainingMs: Schema.Number, durationMs: Schema.Number },
+  Burrowed: { remainingMs: Schema.Number, durationMs: Schema.Number },
+  Clinging: { remainingMs: Schema.Number },
+})
+export type ZombieAction = typeof ZombieAction.Type
+
+// NOTE: a pack of four or more that comes in together is Frenzied while its
+// members stay close. A member that drifts away from the rest Fades, then is
+// Spent for good. The pack id stays on it, so its kill still counts toward
+// the bonus for wiping out the whole pack.
+export const Frenzy = defineTaggedUnion({
+  Calm: {},
+  Frenzied: { pack: Schema.Number, apartMs: Schema.Number },
+  Fading: { pack: Schema.Number, remainingMs: Schema.Number },
+  Spent: { pack: Schema.Number },
+})
+export type Frenzy = typeof Frenzy.Type
 
 export const Zombie = Schema.Struct({
   id: Schema.Number,
@@ -145,6 +184,8 @@ export const Zombie = Schema.Struct({
   knockback: Vector,
   hitRemainingMs: Schema.Number,
   state: ZombieState,
+  action: ZombieAction,
+  frenzy: Frenzy,
 })
 export type Zombie = typeof Zombie.Type
 
@@ -241,6 +282,10 @@ export const ParticleKind = Schema.Literals([
   'GasPatch',
   'PinkLimb',
   'PinkChunk',
+  'TealLimb',
+  'TealScalp',
+  'PaleScalp',
+  'Gas',
 ])
 export type ParticleKind = typeof ParticleKind.Type
 
@@ -277,6 +322,9 @@ export const DecalKind = Schema.Literals([
   'GasPatch',
   'PinkLimb',
   'PinkChunk',
+  'TealLimb',
+  'TealScalp',
+  'PaleScalp',
 ])
 export type DecalKind = typeof DecalKind.Type
 
@@ -436,6 +484,14 @@ export const GameEvent = defineTaggedUnion({
   BossSpat: { x: Schema.Number, y: Schema.Number },
   GlobLanded: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
   BossEnraged: { x: Schema.Number, y: Schema.Number },
+  ZombieGrabbed: { x: Schema.Number, y: Schema.Number },
+  ZombieThrown: { x: Schema.Number, y: Schema.Number },
+  ZombieLanded: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
+  CrawlerStirred: { x: Schema.Number, y: Schema.Number },
+  CrawlerSurfaced: { x: Schema.Number, y: Schema.Number },
+  AnklesGrabbed: { x: Schema.Number, y: Schema.Number },
+  PackFrenzied: { x: Schema.Number, y: Schema.Number, door: DoorId },
+  PackWiped: { x: Schema.Number, y: Schema.Number, bonus: Schema.Number },
 })
 export type GameEvent = typeof GameEvent.Type
 
@@ -449,7 +505,14 @@ export type HitStop = typeof HitStop.Type
 export const Shake = Schema.Struct({ trauma: Schema.Number, offset: Vector })
 export type Shake = typeof Shake.Type
 
-export const PopupKind = Schema.Literals(['Damage', 'Kill', 'Payday', 'Empty'])
+export const PopupKind = Schema.Literals([
+  'Damage',
+  'Kill',
+  'Payday',
+  'Empty',
+  'Horde',
+  'Wipe',
+])
 export type PopupKind = typeof PopupKind.Type
 
 export const Popup = Schema.Struct({
@@ -689,6 +752,16 @@ export const Boss = defineTaggedUnion({
 })
 export type Boss = typeof Boss.Type
 
+// NOTE: a frenzy pack pays its bonus once every one of its zombies has been
+// killed. left counts the ones still to kill, including any still waiting
+// outside behind the alive cap.
+export const FrenzyPack = Schema.Struct({
+  pack: Schema.Number,
+  left: Schema.Number,
+  bonus: Schema.Number,
+})
+export type FrenzyPack = typeof FrenzyPack.Type
+
 export const Hold = Schema.Struct({
   atMs: Schema.Number,
   releaseBelow: Schema.Number,
@@ -856,6 +929,8 @@ export const KillCounts = Schema.Struct({
   Runner: Schema.Number,
   Tank: Schema.Number,
   Exploder: Schema.Number,
+  Thrower: Schema.Number,
+  Crawler: Schema.Number,
   Boss: Schema.Number,
 })
 export type KillCounts = typeof KillCounts.Type
@@ -875,6 +950,7 @@ export const Model = Schema.Struct({
   phase: Phase,
   pacing: Pacing,
   boss: Boss,
+  frenzyPacks: Schema.Array(FrenzyPack),
   intensity: Schema.Number,
   mode: RunMode,
   maybeBestEndlessWave: Schema.Option(Schema.Number),
@@ -1001,6 +1077,8 @@ export const noKills: KillCounts = {
   Runner: 0,
   Tank: 0,
   Exploder: 0,
+  Thrower: 0,
+  Crawler: 0,
   Boss: 0,
 }
 
@@ -1077,6 +1155,7 @@ export const initialModel: Model = {
   phase: Phase.Ready(),
   pacing: calmPacing,
   boss: Boss.Absent(),
+  frenzyPacks: [],
   intensity: 0,
   mode: RunMode.Campaign(),
   maybeBestEndlessWave: Option.none(),

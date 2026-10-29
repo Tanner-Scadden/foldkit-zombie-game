@@ -46,6 +46,7 @@ import {
   Arsenal,
   type Bullet,
   type Decal,
+  Frenzy,
   GameEvent,
   HitStop,
   Invulnerability,
@@ -58,6 +59,7 @@ import {
   Stick,
   Streak,
   type Zombie,
+  ZombieAction,
   ZombieState,
   initialModel,
 } from './model'
@@ -106,6 +108,8 @@ const zombieAt = (id: number, x: number, y: number, speed = 20): Zombie => ({
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
+  action: ZombieAction.Roaming(),
+  frenzy: Frenzy.Calm(),
 })
 
 const dyingZombieAt = (id: number, x: number, y: number): Zombie =>

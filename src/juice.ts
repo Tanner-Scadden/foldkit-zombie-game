@@ -1,6 +1,7 @@
 import { Array, Option, Result } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { DOORS } from './arena'
 import {
   BLAST_FLASH_MS,
   DAMAGE_POPUP_LIFETIME_MS,
@@ -125,6 +126,12 @@ const BOSS_RUSH_TRAUMA = 0.2
 const BOSS_RAM_TRAUMA = 0.8
 const BOSS_SPIT_TRAUMA = 0.08
 const GLOB_LANDED_TRAUMA = 0.15
+const THROW_TRAUMA = 0.05
+const LANDING_TRAUMA = 0.3
+const STIR_TRAUMA = 0.05
+const SURFACE_TRAUMA = 0.2
+const ANKLE_TRAUMA = 0.15
+const FRENZY_TRAUMA = 0.1
 
 const firingTrauma = (event: GameEvent): number =>
   GameEvent.isAnyOf(['Fired'])(event) ? WEAPONS[event.weapon].shakeTrauma : 0
@@ -167,6 +174,14 @@ const eventTrauma = (event: GameEvent): number =>
     BossSpat: () => BOSS_SPIT_TRAUMA,
     GlobLanded: () => GLOB_LANDED_TRAUMA,
     BossEnraged: () => BOSS_ROAR_TRAUMA,
+    ZombieGrabbed: () => 0,
+    ZombieThrown: () => THROW_TRAUMA,
+    ZombieLanded: () => LANDING_TRAUMA,
+    CrawlerStirred: () => STIR_TRAUMA,
+    CrawlerSurfaced: () => SURFACE_TRAUMA,
+    AnklesGrabbed: () => ANKLE_TRAUMA,
+    PackFrenzied: () => FRENZY_TRAUMA,
+    PackWiped: () => 0,
   })
 
 const shakeAxis = (roll: number, trauma: number): number => {
@@ -208,11 +223,16 @@ const advanceShake = (
 
 // POPUPS
 
+const HORDE_POPUP_LIFETIME_MS = 1400
+const HORDE_POPUP_INSET_PX = 22
+
 export const POPUP_LIFETIME_MS: Readonly<Record<PopupKind, number>> = {
   Damage: DAMAGE_POPUP_LIFETIME_MS,
   Kill: KILL_POPUP_LIFETIME_MS,
   Payday: PAYDAY_POPUP_LIFETIME_MS,
   Empty: EMPTY_POPUP_LIFETIME_MS,
+  Horde: HORDE_POPUP_LIFETIME_MS,
+  Wipe: PAYDAY_POPUP_LIFETIME_MS,
 }
 
 const popup =
@@ -287,6 +307,25 @@ const eventPopups = (
     BossSpat: () => noPopups(state),
     GlobLanded: () => noPopups(state),
     BossEnraged: () => noPopups(state),
+    ZombieGrabbed: () => noPopups(state),
+    ZombieThrown: () => noPopups(state),
+    ZombieLanded: () => noPopups(state),
+    CrawlerStirred: () => noPopups(state),
+    CrawlerSurfaced: () => noPopups(state),
+    AnklesGrabbed: () => noPopups(state),
+    PackFrenzied: ({ x, y, door }) =>
+      generateMany(
+        state,
+        1,
+        popup(
+          'Horde',
+          0,
+          x - DOORS[door].outward.x * HORDE_POPUP_INSET_PX,
+          y - DOORS[door].outward.y * HORDE_POPUP_INSET_PX,
+        ),
+      ),
+    PackWiped: ({ x, y, bonus }) =>
+      generateMany(state, 1, popup('Wipe', bonus, x, y - PAYDAY_POPUP_LIFT_PX)),
   })
 
 const agePopups = (
@@ -307,6 +346,21 @@ const agePopups = (
         })
       : Result.failVoid
   })
+
+// NOTE: packs that frenzy at once share one HORDE! callout, the newest, so
+// a horde from every door does not stack four of them.
+const keepNewestHorde = (popups: ReadonlyArray<Popup>): ReadonlyArray<Popup> =>
+  Option.match(
+    Array.findLastIndex(popups, ({ kind }) => kind === 'Horde'),
+    {
+      onNone: () => popups,
+      onSome: newest =>
+        Array.filter(
+          popups,
+          ({ kind }, index) => kind !== 'Horde' || index === newest,
+        ),
+    },
+  )
 
 // BLASTS
 
@@ -398,12 +452,14 @@ export const advanceJuice = (
         : ageBlasts(current, deltaMs),
     shake: () => shake,
     popups: popups =>
-      Array.takeRight(
-        [
-          ...agePopups(popups, seconds, deltaMs),
-          ...Array.flatten(popupBatches),
-        ],
-        POPUP_MAX,
+      keepNewestHorde(
+        Array.takeRight(
+          [
+            ...agePopups(popups, seconds, deltaMs),
+            ...Array.flatten(popupBatches),
+          ],
+          POPUP_MAX,
+        ),
       ),
     streak: streak => advanceStreak(streak, kills, worldMs),
     wallet: wallet => tickShownMoney(wallet, seconds),

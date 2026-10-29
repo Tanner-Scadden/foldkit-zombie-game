@@ -7,10 +7,12 @@ import { RESTART_GRACE_MS } from './constants'
 import { clientToView } from './geometry'
 import { Message, update } from './main'
 import {
+  Frenzy,
   type Model,
   Phase,
   type PlannedSpawn,
   type Zombie,
+  ZombieAction,
   type ZombieKind,
   ZombieState,
   initialModel,
@@ -233,6 +235,8 @@ const standing = (id: number, kind: ZombieKind, x: number): Zombie => ({
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
+  action: ZombieAction.Roaming(),
+  frenzy: Frenzy.Calm(),
 })
 
 const shootingGallery: Model = modifyFields(readyModel, {
@@ -277,6 +281,8 @@ describe('run stats', () => {
       Runner: 1,
       Tank: 0,
       Exploder: 0,
+      Thrower: 0,
+      Crawler: 0,
       Boss: 0,
     })
     expect(totalKills(stats)).toBe(2)

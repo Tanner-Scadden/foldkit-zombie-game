@@ -188,10 +188,12 @@ const flashPalette = (palette: Palette): Palette =>
 
 // PIXEL MAPS
 
+const FRENZY_EYE = '#ff2b2b'
+
 const ZOMBIE_PALETTE: Palette = {
-  G: '#6fae4f',
-  F: '#4d8a35',
-  R: '#e8333a',
+  G: '#8ed65e',
+  F: '#5fa83f',
+  R: '#fff3a6',
   M: '#2a1a14',
   T: '#7a5a8c',
   U: '#5b4170',
@@ -284,7 +286,7 @@ const groanerWalkPixels = (stage: number): FramePixels => {
 
 const RUNNER_PALETTE: Palette = {
   H: '#3a2418',
-  S: '#c9d660',
+  S: '#dcee7a',
   W: '#ffffff',
   M: '#5a1418',
   O: '#ff7a2e',
@@ -444,47 +446,63 @@ const tankWalkPixels = (stage: number): FramePixels => {
   ]
 }
 
+// NOTE: the Gasbag is a sickly yellow sack around a glowing belly of gas.
+// Its lit frames are the pulse: the belly and the brass valve on its head
+// flare white-hot, faster and faster as it nears the player or gets shot.
 const EXPLODER_PALETTE: Palette = {
-  Y: '#b7cc3c',
-  D: '#86992a',
-  B: '#e3ec8a',
-  O: '#ff9d2e',
+  Y: '#e4d860',
+  D: '#a99a34',
+  B: '#9df03a',
+  b: '#dcff8a',
+  V: '#d9a441',
+  v: '#7a5a22',
   E: '#2a1418',
   M: '#8c1f24',
-  L: '#56662a',
+  L: '#6e6a2c',
   H: '#2a2410',
   R: '#a8262c',
 }
 
 const EXPLODER_LIT_PALETTE: Palette = {
   ...EXPLODER_PALETTE,
-  O: '#fff3b0',
-  B: '#fbffd0',
+  B: '#e8ff9c',
+  b: '#ffffff',
+  V: '#ffe066',
+  Y: '#f2ea8a',
 }
 
 const EXPLODER_BODY: ReadonlyArray<string> = [
-  '...YYYYY...',
-  '..YEYYYEY..',
+  '....VV.....',
+  '...YVVYY...',
+  '..YYYYYYY..',
+  '.YYEYYYEYY.',
   '.YYYYMMYYY.',
-  'YYOYYYYYOYY',
-  'YDYBBBBBYDY',
-  'YOYBBOBBYOY',
-  'YDYBBBBBYDY',
-  '.YYBBBBBYY.',
-  '..DYYOYYD..',
+  'YYDBBBBBDYY',
+  'YDBBbbBBBDY',
+  'YDBBbbBBBDY',
+  'YDBBBBBBBDY',
+  '.YDBBBBBDY.',
+  '..YYDDDYY..',
 ]
 
 type GasHole = Readonly<{ x: number; y: number }>
 
 const EXPLODER_HOLES: ReadonlyArray<GasHole> = [
+  { x: 1, y: 6 },
   { x: 8, y: 3 },
-  { x: 1, y: 5 },
 ]
 
-const EXPLODER_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = Array.map(
-  EXPLODER_HOLES,
-  ({ x, y }) => [patch(x, y, 'R', 2, 3), patch(x, y + 1, 'H', 2)],
-)
+const EXPLODER_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
+  [patch(1, 6, 'R', 2, 3), patch(1, 7, 'H', 2)],
+  [
+    patch(4, 0, 'v', 2),
+    patch(4, 1, 'H', 2),
+    patch(8, 3, 'R', 2, 2),
+    patch(8, 4, 'H', 2),
+  ],
+]
+
+export const GASBAG_BELLY = { left: 3, top: 6, width: 5, height: 4 }
 
 const exploderWalkPixels = (stage: number): FramePixels => {
   const body = applyPatches(EXPLODER_BODY, wornThrough(EXPLODER_WEAR, stage))
@@ -495,6 +513,171 @@ const exploderWalkPixels = (stage: number): FramePixels => {
     [...swayRows(body, -1), '...LL.LL.....', '..LL...LL....'],
   ]
 }
+
+// CHUCKER
+
+const CHUCKER_PALETTE: Palette = {
+  C: '#80dcb4',
+  c: '#4fae8c',
+  E: '#fff3a6',
+  M: '#2a1418',
+  S: '#ece4cc',
+  r: '#d0484a',
+  P: '#7a5232',
+  K: '#26262e',
+  N: '#f28fb0',
+  J: '#c0587a',
+  D: '#a8262c',
+}
+
+const CHUCKER_HEAD: ReadonlyArray<string> = [
+  '....cccc....',
+  '...cCCCCc...',
+  '...CECCEC...',
+  '...CCMMCC...',
+  '....cCCc....',
+]
+
+const CHUCKER_FRAMES: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
+  [
+    ...CHUCKER_HEAD,
+    '..CCSSSSCC..',
+    '.CC.SrrS.CC.',
+    '.CC.SSSS.CC.',
+    '.C..SrrS..C.',
+    '.C..SSSS..C.',
+    '.C..PPPP..C.',
+    'cCc.PPPP.cCc',
+    'cCc.P..P.cCc',
+    '....P..P....',
+    '....P..P....',
+    '...KK..KK...',
+  ],
+  [
+    ...CHUCKER_HEAD,
+    '..CCSSSSCC..',
+    '.CC.SrrS.CC.',
+    '.C..SSSS.CC.',
+    '.C..SrrS..C.',
+    '.C..SSSS..C.',
+    'cCc.PPPP..C.',
+    'cCc.PPPP.cCc',
+    '....P..P.cCc',
+    '....P..P....',
+    '...PP...P...',
+    '..KK....KK..',
+  ],
+  [
+    ...CHUCKER_HEAD,
+    '..CCSSSSCC..',
+    '.CC.SrrS.CC.',
+    '.CC.SSSS.CC.',
+    '.C..SrrS..C.',
+    '.C..SSSS..C.',
+    '.C..PPPP..C.',
+    'cCc.PPPP.cCc',
+    'cCc.P..P.cCc',
+    '....P..P....',
+    '....P..P....',
+    '...KK..KK...',
+  ],
+  [
+    ...CHUCKER_HEAD,
+    '..CCSSSSCC..',
+    '.CC.SrrS.CC.',
+    '.CC.SSSS..C.',
+    '.C..SrrS..C.',
+    '.C..SSSS..C.',
+    '.C..PPPP.cCc',
+    'cCc.PPPP.cCc',
+    'cCc.P..P....',
+    '....P..P....',
+    '...P...PP...',
+    '..KK....KK..',
+  ],
+]
+
+const CHUCKER_HEFT: ReadonlyArray<string> = [
+  'cCc......cCc',
+  '.C..cccc..C.',
+  '.C.cCCCCc.C.',
+  '.C.CECCEC.C.',
+  '.CC.CMMC.CC.',
+  '..CSSSSSSC..',
+  '...SrrrrS...',
+  '...SSSSSS...',
+  '...SrrrrS...',
+  '...SSSSSS...',
+  '....PPPP....',
+  '....PPPP....',
+  '....P..P....',
+  '...PP..PP...',
+  '...P....P...',
+  '..KK....KK..',
+]
+
+const CHUCKER_SCALP: ReadonlyArray<Patch> = [
+  patch(4, 0, 'N', 4),
+  patch(4, 1, 'J', 4),
+  patch(6, 2, 'M'),
+]
+
+const CHUCKER_WALK_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
+  CHUCKER_SCALP,
+  [patch(9, 5, TRANSPARENT, 3, 9), patch(9, 5, 'D')],
+]
+
+const CHUCKER_HEFT_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
+  [patch(4, 1, 'N', 4), patch(4, 2, 'J', 4), patch(6, 3, 'M')],
+  [patch(9, 0, TRANSPARENT, 3, 5), patch(9, 5, 'D')],
+]
+
+const chuckerWalkPixels = (stage: number): FramePixels =>
+  Array.map(CHUCKER_FRAMES, frame =>
+    applyPatches(frame, wornThrough(CHUCKER_WALK_WEAR, stage)),
+  )
+
+const chuckerHeftPixels = (stage: number): ReadonlyArray<string> =>
+  applyPatches(CHUCKER_HEFT, wornThrough(CHUCKER_HEFT_WEAR, stage))
+
+// ANKLE BITER
+
+const CRAWLER_PALETTE: Palette = {
+  w: '#dcf5b8',
+  c: '#9ec786',
+  E: '#2a1418',
+  M: '#a8262c',
+  r: '#c2ad8a',
+  q: '#8a7558',
+  k: '#4a3c30',
+  N: '#f28fb0',
+  J: '#c0587a',
+}
+
+const CRAWLER_HEAD: ReadonlyArray<string> = [
+  '.......cww..',
+  '......cwwww.',
+  '......wEwEw.',
+  '......wwMMw.',
+  '..rrr..www..',
+  '.rrrrrrcw...',
+]
+
+const CRAWLER_FRAMES: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
+  [...CRAWLER_HEAD, 'kkrrqrrrwww.', 'k......w..w.'],
+  [...CRAWLER_HEAD, 'kkrrqrrrww..', '.k......ww.w'],
+  [...CRAWLER_HEAD, 'kkrrqrrrwww.', 'k.......w..w'],
+  [...CRAWLER_HEAD, 'kkrrqrrrww..', '.k.....w.w..'],
+]
+
+const CRAWLER_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
+  [patch(8, 0, 'N', 2), patch(7, 1, 'J', 4), patch(9, 2, 'M')],
+]
+
+const crawlerWalkPixels = (stage: number): FramePixels =>
+  Array.map(CRAWLER_FRAMES, frame =>
+    applyPatches(frame, wornThrough(CRAWLER_WEAR, stage)),
+  )
 
 // BOSS
 
@@ -662,12 +845,30 @@ const TANK_ICON_PIXELS: ReadonlyArray<string> = [
 ]
 
 const EXPLODER_ICON_PIXELS: ReadonlyArray<string> = [
-  '..YYY..',
-  '.YEYEY.',
-  'YOYMYOY',
-  'YBBBBBY',
-  'YBBOBBY',
+  '...V...',
   '.YYYYY.',
+  'YEYMYEY',
+  'YBBbBBY',
+  'YBbbbBY',
+  '.YDDDY.',
+]
+
+const CHUCKER_ICON_PIXELS: ReadonlyArray<string> = [
+  'C.ccc.C',
+  'CcCCCcC',
+  '.CECEC.',
+  '.CCMCC.',
+  '..SrS..',
+  '.SSSSS.',
+]
+
+const CRAWLER_ICON_PIXELS: ReadonlyArray<string> = [
+  '....cw.',
+  '...cwww',
+  '...wEwE',
+  'r..wMMw',
+  'rrr.ww.',
+  'krrrcww',
 ]
 
 const HEART_PALETTE: Palette = { R: '#e8333a', W: '#ff8a8f' }
@@ -748,11 +949,17 @@ const EXPLODER_ANCHOR_X = ZOMBIE_SWAY_ROOM + 5
 
 const BOSS_ANCHOR_X = BOSS_WIDTH / 2
 
+const CHUCKER_ANCHOR_X = 6
+
+const CRAWLER_ANCHOR_X = 6
+
 export type WornFrames = Readonly<{
   walk: SpriteFrames
   lit: SpriteFrames
   gape: SpriteSet
   litGape: SpriteSet
+  rage: SpriteFrames
+  rageGape: SpriteSet
 }>
 
 export type ZombieSprites = Readonly<{
@@ -769,9 +976,17 @@ type WearArt = Readonly<{
   gapeAt: (stage: number) => ReadonlyArray<string>
   palette: Palette
   litPalette: Palette
+  ragePalette: Palette
   anchorX: number
   icon: ReadonlyArray<string>
 }>
+
+// NOTE: a frenzied zombie's eyes glow red, so its rage frames are its walk
+// frames with the eye color swapped.
+const withRedEyes = (palette: Palette, eye: string): Palette => ({
+  ...palette,
+  [eye]: FRENZY_EYE,
+})
 
 const firstFrame = (stage: number, pixelsAt: (stage: number) => FramePixels) =>
   Array.headNonEmpty(pixelsAt(stage))
@@ -790,6 +1005,8 @@ const wornFrames =
       litGape: isLitSame
         ? gape
         : spriteSet(art.litPalette, art.anchorX)(art.gapeAt(stage)),
+      rage: spriteFrames(pixels, art.ragePalette, art.anchorX),
+      rageGape: spriteSet(art.ragePalette, art.anchorX)(art.gapeAt(stage)),
     }
   }
 
@@ -812,6 +1029,7 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     gapeAt: stage => firstFrame(stage, groanerWalkPixels),
     palette: ZOMBIE_PALETTE,
     litPalette: ZOMBIE_PALETTE,
+    ragePalette: withRedEyes(ZOMBIE_PALETTE, 'R'),
     anchorX: GROANER_ANCHOR_X,
     icon: SHAMBLER_ICON_PIXELS,
   }),
@@ -821,6 +1039,7 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     gapeAt: stage => firstFrame(stage, runnerWalkPixels),
     palette: RUNNER_PALETTE,
     litPalette: RUNNER_PALETTE,
+    ragePalette: withRedEyes(RUNNER_PALETTE, 'W'),
     anchorX: 5,
     icon: RUNNER_ICON_PIXELS,
   }),
@@ -830,6 +1049,7 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     gapeAt: stage => firstFrame(stage, tankWalkPixels),
     palette: TANK_PALETTE,
     litPalette: TANK_PALETTE,
+    ragePalette: withRedEyes(TANK_PALETTE, 'E'),
     anchorX: 7,
     icon: TANK_ICON_PIXELS,
   }),
@@ -839,8 +1059,29 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     gapeAt: stage => firstFrame(stage, exploderWalkPixels),
     palette: EXPLODER_PALETTE,
     litPalette: EXPLODER_LIT_PALETTE,
+    ragePalette: withRedEyes(EXPLODER_PALETTE, 'E'),
     anchorX: EXPLODER_ANCHOR_X,
     icon: EXPLODER_ICON_PIXELS,
+  }),
+  Thrower: zombieSprites({
+    stageCount: CHUCKER_WALK_WEAR.length,
+    pixelsAt: chuckerWalkPixels,
+    gapeAt: chuckerHeftPixels,
+    palette: CHUCKER_PALETTE,
+    litPalette: CHUCKER_PALETTE,
+    ragePalette: withRedEyes(CHUCKER_PALETTE, 'E'),
+    anchorX: CHUCKER_ANCHOR_X,
+    icon: CHUCKER_ICON_PIXELS,
+  }),
+  Crawler: zombieSprites({
+    stageCount: CRAWLER_WEAR.length,
+    pixelsAt: crawlerWalkPixels,
+    gapeAt: stage => firstFrame(stage, crawlerWalkPixels),
+    palette: CRAWLER_PALETTE,
+    litPalette: CRAWLER_PALETTE,
+    ragePalette: withRedEyes(CRAWLER_PALETTE, 'E'),
+    anchorX: CRAWLER_ANCHOR_X,
+    icon: CRAWLER_ICON_PIXELS,
   }),
   Boss: zombieSprites({
     stageCount: BOSS_WEAR.length,
@@ -848,6 +1089,7 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     gapeAt: stage => bossPixels(BOSS_LEGS_PLANTED, stage, true),
     palette: BOSS_PALETTE,
     litPalette: BOSS_ENRAGED_PALETTE,
+    ragePalette: BOSS_ENRAGED_PALETTE,
     anchorX: BOSS_ANCHOR_X,
     icon: BOSS_ICON_PIXELS,
   }),
@@ -870,6 +1112,18 @@ export const GAS_LEAKS: ReadonlyArray<Readonly<{ x: number; y: number }>> =
     x: x + ZOMBIE_SWAY_ROOM + 1 - EXPLODER_ANCHOR_X,
     y: y + 1 - EXPLODER_FRAME_HEIGHT,
   }))
+
+export const GASBAG_BELLY_BOX = {
+  left: GASBAG_BELLY.left + ZOMBIE_SWAY_ROOM - EXPLODER_ANCHOR_X,
+  top: GASBAG_BELLY.top - EXPLODER_FRAME_HEIGHT,
+  width: GASBAG_BELLY.width,
+  height: GASBAG_BELLY.height,
+}
+
+export const GASBAG_VALVE = {
+  x: 4 + ZOMBIE_SWAY_ROOM - EXPLODER_ANCHOR_X,
+  y: -EXPLODER_FRAME_HEIGHT - 1,
+}
 
 export const HEART_SPRITE = spriteShapes(HEART_PIXELS, HEART_PALETTE)
 export const EMPTY_HEART_SPRITE = spriteShapes(

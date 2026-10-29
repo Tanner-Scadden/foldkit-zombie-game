@@ -127,6 +127,8 @@ import { type WearStage, ZOMBIE_KINDS } from './zombies'
 
 // PHYSICS
 
+const GAS_RISE = 30
+
 const partPhysics = (decalKind: DecalKind): ParticlePhysics => ({
   gravity: GIB_GRAVITY,
   dragPerSecond: GIB_DRAG_PER_SECOND,
@@ -246,6 +248,15 @@ const PHYSICS: Readonly<Record<ParticleKind, ParticlePhysics>> = {
   GasPatch: partPhysics('GasPatch'),
   PinkLimb: partPhysics('PinkLimb'),
   PinkChunk: partPhysics('PinkChunk'),
+  TealLimb: partPhysics('TealLimb'),
+  TealScalp: partPhysics('TealScalp'),
+  PaleScalp: partPhysics('PaleScalp'),
+  Gas: {
+    gravity: -GAS_RISE,
+    dragPerSecond: DUST_DRAG_PER_SECOND,
+    restitution: 0,
+    maybeDecalKind: Option.none(),
+  },
 }
 
 const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
@@ -273,6 +284,10 @@ const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
   GasPatch: 3,
   PinkLimb: 7,
   PinkChunk: 5,
+  TealLimb: 6,
+  TealScalp: 3,
+  PaleScalp: 3,
+  Gas: 3,
 }
 
 const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
@@ -295,6 +310,9 @@ const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
   GasPatch: () => 2,
   PinkLimb: () => 3,
   PinkChunk: () => 4,
+  TealLimb: () => 2,
+  TealScalp: () => 2,
+  PaleScalp: () => 2,
 }
 
 type ParticleStep = Result.Result<Particle, Option.Option<Decal>>
@@ -585,6 +603,36 @@ const dustPuff =
     ]
   }
 
+const GAS_SPEED_MIN = 10
+const GAS_SPEED_MAX = 34
+const GAS_LIFETIME_MIN_MS = 420
+const GAS_LIFETIME_MAX_MS = 760
+
+const gasPuff =
+  (ground: Vector) =>
+  (state: number): Seeded<Particle> => {
+    const angleDraw = nextRandom(state)
+    const speedDraw = nextRandom(angleDraw.nextState)
+    const lifetimeDraw = nextRandom(speedDraw.nextState)
+    return [
+      lifetimeDraw.nextState,
+      launch({
+        kind: 'Gas',
+        ground,
+        height: ZOMBIE_FOOT_OFFSET,
+        angle: angleDraw.value * Math.PI * 2,
+        speed: between(speedDraw.value, GAS_SPEED_MIN, GAS_SPEED_MAX),
+        lift: 4,
+        size: LAUNCH_SIZE.Gas,
+        lifetimeMs: between(
+          lifetimeDraw.value,
+          GAS_LIFETIME_MIN_MS,
+          GAS_LIFETIME_MAX_MS,
+        ),
+      }),
+    ]
+  }
+
 const chip =
   (ground: Vector, heading: number) =>
   (state: number): Seeded<Particle> => {
@@ -778,6 +826,16 @@ const shedParticles = (
     },
   })
 
+const THROW_DUST = 4
+const LANDING_DUST = 10
+const LANDING_CHIPS = 6
+const STIR_DUST = 4
+const SURFACE_DUST = 12
+const SURFACE_SPLINTERS = 6
+const SURFACE_CHIPS = 6
+const GRAB_DUST = 6
+const WIPE_COINS = 8
+
 const STOMP_DUST = 14
 const STOMP_CHIPS = 8
 const BELCH_GOO = 10
@@ -835,12 +893,15 @@ const belchParticles = (
     droplet('Goo', { x, y }, Math.PI / 2, Math.PI * 2, GOO_BURST_SPEED),
   )
 
+const GAS_PER_BLAST = 6
+
 const blastParticles = (
   state: number,
   { x, y }: Readonly<{ x: number; y: number }>,
 ): Seeded<ReadonlyArray<Particle>> => {
   const ground = { x, y: y + ZOMBIE_FOOT_OFFSET }
   return chain(state, [
+    drawState => generateMany(drawState, GAS_PER_BLAST, gasPuff(ground)),
     drawState =>
       generateMany(
         drawState,
@@ -1035,6 +1096,30 @@ const eventParticles = (
     GlobLanded: landed => splatParticles(state, landed),
     BossEnraged: ({ x, y }) =>
       dustRing(zombieGround(x, y, 'Boss'), STOMP_DUST)(state),
+    ZombieGrabbed: () => noParticles(state),
+    ZombieThrown: ({ x, y }) =>
+      dustRing(zombieGround(x, y, 'Thrower'), THROW_DUST)(state),
+    ZombieLanded: ({ x, y }) =>
+      chain(state, [
+        dustRing({ x, y }, LANDING_DUST),
+        drawState => generateMany(drawState, LANDING_CHIPS, chip({ x, y }, 0)),
+      ]),
+    CrawlerStirred: ({ x, y }) => dustRing({ x, y }, STIR_DUST)(state),
+    CrawlerSurfaced: ({ x, y }) =>
+      chain(state, [
+        dustRing({ x, y }, SURFACE_DUST),
+        drawState =>
+          generateMany(
+            drawState,
+            SURFACE_SPLINTERS,
+            woodBit('Splinter', { x, y }),
+          ),
+        drawState => generateMany(drawState, SURFACE_CHIPS, chip({ x, y }, 0)),
+      ]),
+    AnklesGrabbed: ({ x, y }) => dustRing(playerGround(x, y), GRAB_DUST)(state),
+    PackFrenzied: ({ x, y }) =>
+      dustRing({ x, y }, RATTLE_DUST_PER_WARNING)(state),
+    PackWiped: ({ x, y }) => generateMany(state, WIPE_COINS, coin({ x, y })),
   })
 
 type Spawn = Readonly<{

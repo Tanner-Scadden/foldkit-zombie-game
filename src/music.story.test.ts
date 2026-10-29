@@ -16,9 +16,11 @@ import {
 } from './main'
 import {
   AudioState,
+  Frenzy,
   type Model,
   Phase,
   type PlannedSpawn,
+  ZombieAction,
   ZombieState,
   initialModel,
 } from './model'
@@ -182,6 +184,8 @@ describe('music follows the phase', () => {
               knockback: { x: 0, y: 0 },
               hitRemainingMs: 0,
               state: ZombieState.Walking(),
+              action: ZombieAction.Roaming(),
+              frenzy: Frenzy.Calm(),
             },
           ],
         }),

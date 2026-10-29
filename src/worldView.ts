@@ -46,6 +46,7 @@ import {
 import { isRoundActive } from './waves'
 import {
   zombieFootY,
+  zombieGroundShapes,
   zombieHealthBarShapes,
   zombieShadow,
   zombieShapes,
@@ -83,6 +84,7 @@ const groundShapes = (
 ): ReadonlyArray<Canvas.Shape> => [
   ...stallGroundShapes(look, model.elapsedMs),
   playerShadow(model.player),
+  ...zombieGroundShapes(model.zombies, model.elapsedMs),
   ...Array.filterMap(model.zombies, zombieShadow),
   ...bossGroundShapes(model),
   ...Array.filterMap(model.traps, trapShadow),

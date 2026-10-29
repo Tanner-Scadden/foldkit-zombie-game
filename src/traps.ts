@@ -56,7 +56,7 @@ import {
 } from './model'
 import { countTrapPlaced } from './stats'
 import { WEAPONS } from './weapons'
-import { Behavior, isWalking, radiusOf, statsOf } from './zombies'
+import { Behavior, isFree, isGrounded, radiusOf, statsOf } from './zombies'
 
 // TABLE
 
@@ -236,7 +236,7 @@ export const clearBrokenTraps = (model: Model): Model => {
 const isTouchingBox =
   (box: Box) =>
   (zombie: Zombie): boolean =>
-    isWalking(zombie) &&
+    isFree(zombie) &&
     distanceToBox(zombie, box) <= radiusOf(zombie) + TRAP_REACH_PX
 
 const chewDamage = (
@@ -273,6 +273,8 @@ const fuseAgainst =
               state: () => ZombieState.Fusing({ remainingMs: contactFuseMs }),
             })
           : zombie,
+      Thrower: () => zombie,
+      Crawler: () => zombie,
     })
 
 const countDown = (remainingMs: number, deltaMs: number): number =>
@@ -318,7 +320,7 @@ export const maybeTurretTarget = (
     zombies,
     Array.filterMap(zombie => {
       const distance = Math.hypot(zombie.x - from.x, zombie.y - from.y)
-      return isWalking(zombie) &&
+      return isGrounded(zombie) &&
         isInsideRoomAt(zombie) &&
         distance <= TURRET_RANGE_PX
         ? Result.succeed({ zombie, distance })

@@ -71,6 +71,14 @@ export const SoundEffect = Schema.Literals([
   'BossBonk',
   'BossSpit',
   'BossSplat',
+  'Heave',
+  'Whoosh',
+  'Thud',
+  'Rumble',
+  'Burrow',
+  'Clutch',
+  'Howl',
+  'PackBonus',
 ])
 export type SoundEffect = typeof SoundEffect.Type
 
@@ -1371,6 +1379,168 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
         envelope: envelope(0.7, 0.002, 0.28),
       },
     ],
+  },
+  Heave: {
+    variationCents: 120,
+    tones: [
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 110), at(0.25, 160), at(0.5, 120)],
+        envelope: envelope(0.22, 0.08, 0.45),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 5,
+        cutoff: [at(0, 300), at(0.3, 700)],
+        envelope: envelope(0.25, 0.06, 0.4),
+      },
+    ],
+  },
+  Whoosh: {
+    variationCents: 90,
+    tones: [],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 2,
+        cutoff: [at(0, 500), at(0.18, 2600), at(0.4, 900)],
+        envelope: envelope(0.55, 0.05, 0.35),
+      },
+    ],
+  },
+  Thud: {
+    variationCents: 80,
+    tones: [
+      {
+        wave: 'sine',
+        pitch: [at(0, 150), at(0.16, 48)],
+        envelope: envelope(0.85, 0.002, 0.22),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 240), at(0.05, 420), at(0.2, 110)],
+        envelope: envelope(0.2, 0.004, 0.2, 0.04),
+      },
+    ],
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 1,
+        cutoff: [at(0, 1800), at(0.2, 160)],
+        envelope: envelope(0.6, 0.002, 0.22),
+      },
+    ],
+  },
+  Rumble: {
+    variationCents: 60,
+    tones: [
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 46), at(0.6, 58)],
+        envelope: envelope(0.18, 0.2, 0.6),
+      },
+    ],
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 2,
+        cutoff: [at(0, 260), at(0.5, 520), at(0.9, 200)],
+        envelope: envelope(0.5, 0.25, 0.65),
+      },
+      {
+        filter: 'highpass',
+        quality: 3,
+        cutoff: [at(0, 3800), at(0.5, 2600)],
+        envelope: envelope(0.08, 0.3, 0.4, 0.2),
+      },
+    ],
+  },
+  Burrow: {
+    variationCents: 110,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 90), at(0.06, 220), at(0.24, 70)],
+        envelope: envelope(0.18, 0.004, 0.26),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 1.2,
+        cutoff: [at(0, 3200), at(0.25, 400)],
+        envelope: envelope(0.7, 0.002, 0.3),
+      },
+    ],
+  },
+  Clutch: {
+    variationCents: 140,
+    tones: [
+      {
+        wave: 'triangle',
+        pitch: [at(0, 330), at(0.08, 520), at(0.2, 260)],
+        envelope: envelope(0.25, 0.004, 0.2),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 6,
+        cutoff: [at(0, 1400), at(0.15, 600)],
+        envelope: envelope(0.35, 0.003, 0.16),
+      },
+    ],
+  },
+  Howl: {
+    variationCents: 50,
+    tones: [
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 140), at(0.25, 330), at(0.7, 210)],
+        envelope: envelope(0.18, 0.06, 0.7),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 210), at(0.25, 495), at(0.7, 315)],
+        envelope: envelope(0.07, 0.08, 0.65),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 6,
+        cutoff: [at(0, 500), at(0.3, 1100), at(0.7, 600)],
+        envelope: envelope(0.25, 0.06, 0.65),
+      },
+    ],
+  },
+  PackBonus: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 784), at(0.06, 784)],
+        envelope: envelope(0.12, 0.002, 0.07),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 988), at(0.06, 988)],
+        envelope: envelope(0.12, 0.002, 0.07, 0.07),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 1175), at(0.06, 1175)],
+        envelope: envelope(0.12, 0.002, 0.07, 0.14),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 1568), at(0.25, 1568)],
+        envelope: envelope(0.2, 0.002, 0.25, 0.21),
+      },
+    ],
+    noises: [],
   },
 }
 

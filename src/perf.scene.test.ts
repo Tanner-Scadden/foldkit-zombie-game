@@ -29,6 +29,7 @@ import {
   BulletGlaze,
   type Decal,
   DecalKind,
+  Frenzy,
   Glob,
   Lesson,
   type Model,
@@ -39,12 +40,13 @@ import {
   PickupKind,
   Pierce,
   type Popup,
-  PopupKind,
+  type PopupKind,
   RunMode,
   Streak,
   Trap,
   TurretGun,
   type Zombie,
+  ZombieAction,
   type ZombieKind,
   ZombieState,
   initialModel,
@@ -75,7 +77,7 @@ const zombieStateAt = (index: number): ZombieState => {
   }
 }
 
-const zombieAt =
+const plainZombieAt =
   (wave: number) =>
   (index: number): Zombie => {
     const kind = cycle(HORDE_KINDS, index)
@@ -90,6 +92,8 @@ const zombieAt =
       knockback: { x: 0, y: 0 },
       hitRemainingMs: index % 3 === 0 ? 60 : 0,
       state: zombieStateAt(index),
+      action: ZombieAction.Roaming(),
+      frenzy: Frenzy.Calm(),
     }
   }
 
@@ -99,6 +103,74 @@ const HORDE_KINDS: Array.NonEmptyReadonlyArray<ZombieKind> = [
   'Exploder',
   'Tank',
 ]
+
+const CHUCKER_INDEX = 1
+const CARRIED_INDEX = 3
+const FLYING_INDEX = 8
+const BURROWED_INDEX = 11
+const GLOWING_INDEX = 2
+const FRENZIED_INDICES: ReadonlyArray<number> = [4, 9, 12, 13, 16, 17, 19]
+const FRENZY_PACK = 77
+
+// NOTE: the worst case stages one of each new sight: a Chucker heaving a
+// Groaner overhead while another Groaner is in the air over its landing mark,
+// an Ankle Biter about to break through the floor, a Gasbag shot twice and
+// pulsing hard beside the player, and a frenzied pack with its steam.
+const stagedZombie = (zombie: Zombie, index: number): Zombie => {
+  if (index === CHUCKER_INDEX) {
+    return modifyFields(zombie, {
+      kind: () => 'Thrower',
+      action: () =>
+        ZombieAction.Hefting({
+          victimId: 1000 + CARRIED_INDEX,
+          remainingMs: 300,
+          durationMs: 900,
+        }),
+    })
+  } else if (index === CARRIED_INDEX) {
+    return modifyFields(zombie, {
+      kind: () => 'Shambler',
+      x: () => 30 + ((CHUCKER_INDEX * 37) % 260),
+      y: () => 30 + ((CHUCKER_INDEX * 23) % 120),
+      action: () => ZombieAction.Carried({ byId: 1000 + CHUCKER_INDEX }),
+    })
+  } else if (index === FLYING_INDEX) {
+    return modifyFields(zombie, {
+      kind: () => 'Shambler',
+      action: () =>
+        ZombieAction.Flying({
+          from: { x: 230, y: 60 },
+          to: { x: 150, y: 100 },
+          remainingMs: 400,
+          durationMs: 900,
+        }),
+    })
+  } else if (index === BURROWED_INDEX) {
+    return modifyFields(zombie, {
+      kind: () => 'Crawler',
+      action: () =>
+        ZombieAction.Burrowed({ remainingMs: 100, durationMs: 1500 }),
+    })
+  } else if (index === GLOWING_INDEX) {
+    return modifyFields(zombie, {
+      x: () => 172,
+      y: () => 92,
+      hp: () => 1,
+      maxHp: () => 3,
+    })
+  } else if (Array.contains(FRENZIED_INDICES, index)) {
+    return modifyFields(zombie, {
+      frenzy: () => Frenzy.Frenzied({ pack: FRENZY_PACK, apartMs: 0 }),
+    })
+  } else {
+    return zombie
+  }
+}
+
+const zombieAt =
+  (wave: number) =>
+  (index: number): Zombie =>
+    stagedZombie(plainZombieAt(wave)(index), index)
 
 const BOSS_ID = 999
 
@@ -113,6 +185,8 @@ const bossAt = (wave: number): Zombie => ({
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
+  action: ZombieAction.Roaming(),
+  frenzy: Frenzy.Calm(),
 })
 
 const particleAt = (index: number): Particle => ({
@@ -156,8 +230,27 @@ const blastAt = (index: number): Blast => ({
   ageMs: 40 + index * 20,
 })
 
+// NOTE: the game keeps only the newest HORDE! callout, so the worst case has
+// one of them, a pack bonus, and the other kinds in turn.
+const POPUP_KINDS_IN_TURN: Array.NonEmptyReadonlyArray<PopupKind> = [
+  'Damage',
+  'Kill',
+  'Payday',
+  'Empty',
+]
+
+const popupKindAt = (index: number): PopupKind => {
+  if (index === POPUP_MAX - 1) {
+    return 'Horde'
+  } else if (index === POPUP_MAX - 2) {
+    return 'Wipe'
+  } else {
+    return cycle(POPUP_KINDS_IN_TURN, index)
+  }
+}
+
 const popupAt = (index: number): Popup => ({
-  kind: cycle(PopupKind.literals, index),
+  kind: popupKindAt(index),
   value: 10 + index * 7,
   x: 40 + index * 25,
   y: 50 + (index % 4) * 15,
@@ -440,12 +533,23 @@ const measureFrames = (model: Model): FrameCost => {
 // mid-stomp: 2614 shapes, 1527 steady paint operations, and 2935 on a full
 // repaint before, 2628, 1554, and 2952 after. ENRAGED replaces his name on
 // the bar instead of joining it, which keeps the overlay the same size.
+// The Chucker, the Ankle Biter, frenzy, and the new Gasbag raised the steady
+// paint budget from 1560 to 1585. The staged sights alone cost nothing net:
+// an Ankle Biter under the floor is a ring and a few cracks, cheaper than the
+// Big Lug it replaced, and a held or thrown Groaner draws no health bar. What
+// they add is the one HORDE! callout the game allows at a time (14 paint
+// operations, its letters) and a red glow and a puff of steam on each of
+// the seven frenzied zombies (14). The Gasbag's sprite was redrawn so its
+// glowing belly costs no more runs than the old one, and its two bubbles and
+// valve spark add 3. The room measured 2656 shapes, 1577 steady paint
+// operations, 1564 fill changes, 1659 shapes painted, and 2986 on a full
+// repaint.
 const BUDGET: FrameCost = {
-  shapesBuilt: 2650,
-  steadyPaintOps: 1560,
-  steadyFillStyleChanges: 1560,
-  steadyShapesPainted: 1650,
-  fullRepaintPaintOps: 2975,
+  shapesBuilt: 2665,
+  steadyPaintOps: 1585,
+  steadyFillStyleChanges: 1570,
+  steadyShapesPainted: 1665,
+  fullRepaintPaintOps: 2995,
 }
 
 const BUDGET_KEYS: ReadonlyArray<keyof FrameCost> = [

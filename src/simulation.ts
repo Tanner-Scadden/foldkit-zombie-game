@@ -1,6 +1,7 @@
 import { Array, Option, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { recoverActions } from './actions'
 import { ARENA_LEVEL, type Box, findStrike, moveCircle } from './arena'
 import {
   advanceBossMoves,
@@ -10,6 +11,7 @@ import {
   woundScaleOf,
 } from './boss'
 import { cameraOf } from './camera'
+import { advanceChuckers, maybeChuckerHeading } from './chucker'
 import {
   hitEvent,
   killEvent,
@@ -31,6 +33,8 @@ import {
   ZOMBIE_BUMP_SPEED,
   ZOMBIE_KNOCKBACK_DECAY_PER_SECOND,
 } from './constants'
+import { advanceCrawlers, ankleSlowAt } from './crawler'
+import { advanceFrenzy, frenzyPace, payWipedPacks } from './frenzy'
 import {
   ZERO_VECTOR,
   addVectors,
@@ -104,7 +108,8 @@ import {
 import {
   Behavior,
   bodyRadiusOf,
-  isWalking,
+  isFree,
+  isGrounded,
   radiusOf,
   statsOf,
   strideAt,
@@ -532,9 +537,9 @@ const pushApart = (zombie: Zombie, other: Zombie): Vector => {
 const separationPushes = (
   zombies: ReadonlyArray<Zombie>,
 ): ReadonlyArray<Vector> => {
-  const walking = Array.filter(zombies, isWalking)
+  const walking = Array.filter(zombies, isGrounded)
   return Array.map(zombies, zombie =>
-    isWalking(zombie)
+    isGrounded(zombie)
       ? Array.reduce(walking, ZERO_VECTOR, (push, other) =>
           addVectors(push, pushApart(zombie, other)),
         )
@@ -548,36 +553,58 @@ type Obstacles = Readonly<{
   blockers: ReadonlyArray<Box>
   barricaded: ReadonlyArray<DoorId>
   boss: Boss
+  zombies: ReadonlyArray<Zombie>
 }>
+
+const flowHeading = (
+  zombie: Zombie,
+  flowFields: FlowFields,
+  target: Vector,
+  barricaded: ReadonlyArray<DoorId>,
+): Vector => {
+  const stats = statsOf(zombie)
+  return steerToward(
+    flowFields[stats.clearance],
+    zombie,
+    target,
+    stats.radius - 1,
+    stats.clearance,
+    barricaded,
+  )
+}
+
+const heading = (
+  zombie: Zombie,
+  flowFields: FlowFields,
+  target: Vector,
+  obstacles: Obstacles,
+): Vector =>
+  zombie.kind === 'Thrower'
+    ? Option.getOrElse(
+        maybeChuckerHeading(zombie, obstacles.zombies, target),
+        () => flowHeading(zombie, flowFields, target, obstacles.barricaded),
+      )
+    : flowHeading(zombie, flowFields, target, obstacles.barricaded)
 
 const steeringVelocity = (
   zombie: Zombie,
   flowFields: FlowFields,
   target: Vector,
-  barricaded: ReadonlyArray<DoorId>,
+  obstacles: Obstacles,
   isHeld: boolean,
   pace: number,
-): Vector => {
-  const stats = statsOf(zombie)
-  return ZombieState.match(zombie.state, {
+): Vector =>
+  ZombieState.match(zombie.state, {
     Walking: () =>
-      isHeld
+      isHeld || !isFree(zombie)
         ? ZERO_VECTOR
         : scaleVector(
-            steerToward(
-              flowFields[stats.clearance],
-              zombie,
-              target,
-              stats.radius - 1,
-              stats.clearance,
-              barricaded,
-            ),
-            zombie.speed * pace,
+            heading(zombie, flowFields, target, obstacles),
+            zombie.speed * pace * frenzyPace(zombie),
           ),
     Fusing: () => ZERO_VECTOR,
     Dying: () => ZERO_VECTOR,
   })
-}
 
 const tickZombieState = (state: ZombieState, deltaMs: number): ZombieState =>
   ZombieState.match(state, {
@@ -603,7 +630,7 @@ const advanceZombie = (
         zombie,
         flowFields,
         target,
-        obstacles.barricaded,
+        obstacles,
         isRooted(obstacles.boss, zombie),
         paceOf(obstacles.boss, zombie, target),
       ),
@@ -641,6 +668,7 @@ const advanceZombies = (
     blockers: trapBlockers(model.traps),
     barricaded: barricadedDoors(model.traps),
     boss: model.boss,
+    zombies: model.zombies,
   }
   return pipe(
     model.zombies,
@@ -667,7 +695,7 @@ const maybeFootfall =
     Option.flatMap(statsOf(zombie).maybeFootfall, footfall => {
       const stride = strideAt(zombie, elapsedMs)
       if (
-        !isWalking(zombie) ||
+        !isFree(zombie) ||
         stride === strideAt(zombie, previousMs) ||
         stride % footfall.everyStrides !== 0
       ) {
@@ -771,7 +799,7 @@ const findBulletHits = (
   boss: Boss,
   seconds: number,
 ): ReadonlyArray<BulletHit> => {
-  const targets = Array.filter(zombies, isWalking)
+  const targets = Array.filter(zombies, isGrounded)
   return Array.getSomes(
     Array.map(bullets, bullet => {
       const from = {
@@ -944,11 +972,11 @@ const bitePlayer = (model: Model, attacker: Zombie): Model => {
 const isTouching =
   (player: Player) =>
   (zombie: Zombie): boolean =>
-    isWalking(zombie) &&
+    isFree(zombie) &&
     circlesOverlap(zombie, bodyRadiusOf(zombie), player, PLAYER_RADIUS)
 
 const isBrawler = (zombie: Zombie): boolean =>
-  Behavior.isAnyOf(['Brawler'])(statsOf(zombie).behavior)
+  Behavior.isAnyOf(['Brawler', 'Thrower'])(statsOf(zombie).behavior)
 
 const popOnContact =
   (player: Player) =>
@@ -960,6 +988,8 @@ const popOnContact =
             modifyFields(zombie, {
               state: () => ZombieState.Fusing({ remainingMs: contactFuseMs }),
             }),
+          Thrower: () => zombie,
+          Crawler: () => zombie,
         })
       : zombie
 
@@ -1065,7 +1095,9 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
         movePlayer(
           player,
           model.intent.move,
-          playerSpeed(model.boosts) * puddleSlowAt(model.boss, model.player),
+          playerSpeed(model.boosts) *
+            puddleSlowAt(model.boss, model.player) *
+            ankleSlowAt(model.zombies),
           blockers,
           seconds,
           deltaMs,
@@ -1096,8 +1128,13 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
     footed => resolveBulletHits(footed, seconds),
     trapped => advanceTraps(trapped, seconds, deltaMs),
     resolvePlayerContact,
-    bossed => advanceBossMoves(bossed, deltaMs),
+    contacted => recoverActions(contacted, deltaMs),
+    recovered => advanceChuckers(recovered, deltaMs),
+    heaved => advanceCrawlers(heaved, deltaMs),
+    crawled => advanceBossMoves(crawled, deltaMs),
     resolveBlasts,
+    blasted => advanceFrenzy(blasted, deltaMs),
+    frenzied => payWipedPacks(model, frenzied),
     clearBrokenTraps,
     blasted => feelIntensity(model, blasted, deltaMs),
     felt => advancePowerUps(felt, advanceRound(felt, deltaMs), deltaMs),

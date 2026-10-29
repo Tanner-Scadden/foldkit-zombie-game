@@ -28,7 +28,7 @@ import {
   type DeathCause,
   bodyRadiusOf,
   deathState,
-  isWalking,
+  isGrounded,
   statsOf,
 } from './zombies'
 
@@ -160,7 +160,7 @@ export const blastAll = <A>(
 export const ZOMBIE_BLAST_TARGET: BlastTarget<Zombie> = {
   center: zombie => zombie,
   radius: bodyRadiusOf,
-  isExposed: isWalking,
+  isExposed: isGrounded,
   damageFrom: ({ zombieDamage }) => zombieDamage,
   hurt: (zombie, strike) => {
     const struck = strikeZombie(zombie, strike, 'Blast')
@@ -205,6 +205,8 @@ const maybeBlastOf = (zombie: Zombie): Option.Option<BlastSpec> =>
         trapDamage,
         knockback: blastKnockback,
       }),
+    Thrower: () => Option.none(),
+    Crawler: () => Option.none(),
   })
 
 export const bountyOf = (events: ReadonlyArray<GameEvent>): number =>

@@ -32,6 +32,7 @@ import {
   ZOMBIE_KINDS,
   arrivingZombie,
   bodyRadiusOf,
+  isGrounded,
   isWalking,
   radiusOf,
   scaledHp,
@@ -541,7 +542,7 @@ const shoveFrom =
   (boss: Zombie) =>
   (zombie: Zombie): Zombie =>
     zombie.id !== boss.id &&
-    isWalking(zombie) &&
+    isGrounded(zombie) &&
     circlesOverlap(boss, BOSS_RULES.stompRadius, zombie, bodyRadiusOf(zombie))
       ? modifyFields(zombie, {
           knockback: () =>
@@ -726,7 +727,7 @@ const bowl =
   (boss: Zombie, direction: Vector) =>
   (zombie: Zombie): Zombie =>
     zombie.id !== boss.id &&
-    isWalking(zombie) &&
+    isGrounded(zombie) &&
     circlesOverlap(boss, bodyRadiusOf(boss), zombie, bodyRadiusOf(zombie))
       ? modifyFields(zombie, {
           knockback: () =>

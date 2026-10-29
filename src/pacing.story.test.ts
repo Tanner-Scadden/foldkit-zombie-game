@@ -23,6 +23,7 @@ import {
   Alarm,
   Beat,
   type DoorId,
+  Frenzy,
   GameEvent,
   Invulnerability,
   type Model,
@@ -30,6 +31,7 @@ import {
   Phase,
   type PlannedSpawn,
   type Zombie,
+  ZombieAction,
   ZombieState,
   calmPacing,
   initialModel,
@@ -78,6 +80,8 @@ const standingZombie = (id: number, x: number, y: number): Zombie => ({
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
+  action: ZombieAction.Roaming(),
+  frenzy: Frenzy.Calm(),
 })
 
 const crowdOf = (count: number): ReadonlyArray<Zombie> =>

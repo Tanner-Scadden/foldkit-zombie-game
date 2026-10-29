@@ -9,6 +9,7 @@ import {
   planBoss,
 } from './boss'
 import { arenaCamera } from './camera'
+import { CHUCKER_RULES } from './chucker'
 import {
   DOOR_HALF_WIDTH_PX,
   DOOR_SPAWN_SPREAD_PX,
@@ -34,6 +35,8 @@ import {
   WAVE_BONUS_PER_WAVE,
   ZOMBIE_ALIVE_MAX,
 } from './constants'
+import { burrowed, drawSurfacingSpot } from './crawler'
+import { frenzyOnArrival, frenzyPacksOf } from './frenzy'
 import { clamp } from './geometry'
 import { deriveIntent } from './input'
 import {
@@ -53,6 +56,8 @@ import {
   ShopState,
   Streak,
   TrapNotice,
+  type Vector,
+  ZombieAction,
   type ZombieKind,
   emptyTrapStock,
   emptyWallet,
@@ -87,6 +92,7 @@ import {
   ZOMBIE_KIND_ORDER,
   arrivingZombie,
   isBoss,
+  isFloorKind,
   isWalking,
   scaledHp,
 } from './zombies'
@@ -219,6 +225,22 @@ const hordes = (spec: Omit<GroupSpec, 'from'>): SpawnGroup => ({
 const lug = (from: DoorChoice, atMs: number): SpawnGroup =>
   trickle({ count: 1, mix: only('Tank'), from, startMs: atMs, everyMs: 0 })
 
+const chuckers = (
+  from: DoorChoice,
+  count: number,
+  atMs: number,
+  everyMs: number,
+): SpawnGroup =>
+  trickle({ count, mix: only('Thrower'), from, startMs: atMs, everyMs })
+
+// NOTE: an Ankle Biter comes up through the floor, so its door is never
+// used. It still gets one, drawn like a straggler's, so the plan stays one
+// shape. The door preview counts it as FLOOR instead.
+const crawlers = (spec: Omit<TrickleSpec, 'from' | 'mix'>): SpawnGroup => ({
+  ...trickle({ ...spec, mix: only('Crawler'), from: anyDoors(1) }),
+  jitterMs: STRAGGLER_JITTER_MS,
+})
+
 const lugPincer = (atMs: number): SpawnGroup =>
   pincers({ packs: [1, 1], mix: only('Tank'), startMs: atMs, everyMs: 0 })
 
@@ -262,7 +284,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
     hpScale: 1,
     groups: [
       squads({
-        packs: [2, 3, 1, 3, 2, 4],
+        packs: [2, 3, 1, 3, 3, 3],
         mix: only('Shambler'),
         from: anyDoors(2),
         startMs: 1200,
@@ -276,7 +298,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
         everyMs: 2600,
       }),
       squads({
-        packs: [3, 1, 4],
+        packs: [3, 2, 3],
         mix: mixOf(3, 1, 0),
         from: anyDoors(2),
         startMs: 21000,
@@ -416,7 +438,8 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
     speedScale: 1.35,
     hpScale: 1.08,
     groups: [
-      stragglers({ count: 3, mix: MIXED, startMs: 500, everyMs: 1600 }),
+      stragglers({ count: 2, mix: MIXED, startMs: 500, everyMs: 1600 }),
+      chuckers(anyDoors(1), 2, 4500, 16000),
       squads({
         packs: [3, 5, 2],
         mix: MIXED,
@@ -453,6 +476,8 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
     speedScale: 1.42,
     hpScale: 1.17,
     groups: [
+      crawlers({ count: 3, startMs: 7000, everyMs: 9000 }),
+      chuckers(anyDoors(1), 1, 30000, 0),
       squads({
         packs: [2, 4, 3, 1, 2],
         mix: MIXED,
@@ -503,6 +528,8 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
     speedScale: 1.49,
     hpScale: 1.1,
     groups: [
+      crawlers({ count: 2, startMs: 9000, everyMs: 16000 }),
+      chuckers(anyDoors(1), 1, 21000, 0),
       squads({
         packs: [3, 1, 2, 2],
         mix: MIXED,
@@ -879,10 +906,30 @@ export const endlessTankCount = (wave: number): number =>
   ENDLESS_TANKS_BASE +
   Math.floor(endlessDepth(wave) / ENDLESS_WAVES_PER_EXTRA_TANK)
 
+const ENDLESS_CHUCKERS_BASE = 1
+const ENDLESS_WAVES_PER_EXTRA_CHUCKER = 4
+const ENDLESS_CRAWLERS_BASE = 1
+const ENDLESS_WAVES_PER_EXTRA_CRAWLER = 3
+const ENDLESS_CHUCKER_START_MS = ENDLESS_CYCLE_MS + 3000
+const ENDLESS_CRAWLER_START_MS = 6000
+const ENDLESS_CRAWLER_EVERY_MS = 19000
+
+export const endlessChuckerCount = (wave: number): number =>
+  ENDLESS_CHUCKERS_BASE +
+  Math.floor(endlessDepth(wave) / ENDLESS_WAVES_PER_EXTRA_CHUCKER)
+
+export const endlessCrawlerCount = (wave: number): number =>
+  ENDLESS_CRAWLERS_BASE +
+  Math.floor(endlessDepth(wave) / ENDLESS_WAVES_PER_EXTRA_CRAWLER)
+
+const endlessEscortCount = (wave: number): number =>
+  ENDLESS_ESCORTS_BASE + ENDLESS_ESCORTS_PER_WAVE * endlessDepth(wave)
+
 export const endlessZombieCount = (wave: number): number =>
   endlessTankCount(wave) +
-  ENDLESS_ESCORTS_BASE +
-  ENDLESS_ESCORTS_PER_WAVE * endlessDepth(wave)
+  endlessEscortCount(wave) +
+  endlessChuckerCount(wave) +
+  endlessCrawlerCount(wave)
 
 type EndlessCycle = Readonly<{
   startMs: number
@@ -1010,7 +1057,7 @@ const endlessPlan = (state: number, wave: number): Seeded<WavePlan> => {
     },
   )
   const tanks = endlessTankCount(wave)
-  const escorts = endlessZombieCount(wave) - tanks
+  const escorts = endlessEscortCount(wave)
   const packSize = Math.min(
     ENDLESS_PACK_SIZE_MAX,
     ENDLESS_PACK_SIZE_BASE + Math.floor(depth / ENDLESS_WAVES_PER_PACK_GROWTH),
@@ -1050,9 +1097,22 @@ const endlessPlan = (state: number, wave: number): Seeded<WavePlan> => {
           ENDLESS_SPEED_PER_WAVE * depth,
       ),
       hpScale: hpScaleFor(wave),
-      groups: Array.flatMap(cycles, cycle =>
-        endlessCycleGroups(cycle, packSize, mix),
-      ),
+      groups: [
+        ...Array.flatMap(cycles, cycle =>
+          endlessCycleGroups(cycle, packSize, mix),
+        ),
+        chuckers(
+          anyDoors(1),
+          endlessChuckerCount(wave),
+          ENDLESS_CHUCKER_START_MS,
+          ENDLESS_BUILD_MS,
+        ),
+        crawlers({
+          count: endlessCrawlerCount(wave),
+          startMs: ENDLESS_CRAWLER_START_MS,
+          everyMs: ENDLESS_CRAWLER_EVERY_MS,
+        }),
+      ],
       holds: Array.makeBy(lastCycle, index =>
         fadeThenRelax(
           (index + 1) * ENDLESS_CYCLE_MS - ENDLESS_CYCLE_LEAD_MS,
@@ -1111,11 +1171,23 @@ const kindCounts = (
     return count > 0 ? Result.succeed({ kind, count }) : Result.failVoid
   })
 
+const isThroughDoor = (spawn: PlannedSpawn): boolean => !isFloorKind(spawn.kind)
+
+// NOTE: zombies that come up through the floor are counted apart from the
+// doors, so every door's count is exactly what walks through it.
+export const floorCounts = (
+  spawns: ReadonlyArray<PlannedSpawn>,
+): ReadonlyArray<KindCount> =>
+  kindCounts(Array.filter(spawns, spawn => !isThroughDoor(spawn)))
+
 export const doorCounts = (
   spawns: ReadonlyArray<PlannedSpawn>,
 ): ReadonlyArray<DoorCount> =>
   Array.filterMap(DOOR_IDS, door => {
-    const atDoor = Array.filter(spawns, spawn => spawn.door === door)
+    const atDoor = Array.filter(
+      spawns,
+      spawn => isThroughDoor(spawn) && spawn.door === door,
+    )
     return Array.match(kindCounts(atDoor), {
       onEmpty: () => Result.failVoid,
       onNonEmpty: kinds =>
@@ -1143,6 +1215,7 @@ const beginPreparation = (
   const [rngState, boss] = planBoss(waveState, wave, spawns)
   return modifyFields(model, {
     boss: () => boss,
+    frenzyPacks: () => frenzyPacksOf(spawns),
     phase: () =>
       Phase.Preparation({
         wave,
@@ -1274,22 +1347,64 @@ export const startWaveEarly = (model: Model): Model =>
 
 // SPAWNING
 
+type Arrival = Readonly<{
+  at: Vector
+  action: ZombieAction
+  rngState: number
+  events: ReadonlyArray<GameEvent>
+}>
+
+const arrivalAction = (spawn: PlannedSpawn): ZombieAction =>
+  spawn.kind === 'Thrower'
+    ? ZombieAction.Winded({ remainingMs: CHUCKER_RULES.arrivalWindedMs })
+    : ZombieAction.Roaming()
+
+const arriveAt = (model: Model, spawn: PlannedSpawn): Arrival => {
+  if (isFloorKind(spawn.kind)) {
+    const [rngState, at] = drawSurfacingSpot(
+      model.rngState,
+      model.player,
+      model.traps,
+    )
+    return {
+      at,
+      action: burrowed(),
+      rngState,
+      events: [GameEvent.CrawlerStirred({ x: at.x, y: at.y })],
+    }
+  }
+
+  const doorRoom = Math.max(
+    0,
+    DOOR_HALF_WIDTH_PX - ZOMBIE_KINDS[spawn.kind].radius,
+  )
+  return {
+    at: doorSpawnPoint(spawn.door, clamp(spawn.offset, -doorRoom, doorRoom)),
+    action: arrivalAction(spawn),
+    rngState: model.rngState,
+    events: [],
+  }
+}
+
 const spawnZombie = (model: Model, spawn: PlannedSpawn): Model => {
   const stats = ZOMBIE_KINDS[spawn.kind]
-  const speedDraw = nextRandom(model.rngState)
-  const doorRoom = Math.max(0, DOOR_HALF_WIDTH_PX - stats.radius)
+  const arrival = arriveAt(model, spawn)
+  const speedDraw = nextRandom(arrival.rngState)
   const zombie = arrivingZombie({
     id: model.nextEntityId,
     kind: spawn.kind,
-    at: doorSpawnPoint(spawn.door, clamp(spawn.offset, -doorRoom, doorRoom)),
+    at: arrival.at,
     speedRoll: speedDraw.value,
     speedScale: spawn.speedScale,
     hp: scaledHp(stats.hp, spawn.hpScale),
+    action: arrival.action,
+    frenzy: frenzyOnArrival(model.frenzyPacks, spawn),
   })
   return modifyFields(model, {
     zombies: Array.append(zombie),
     nextEntityId: id => id + 1,
     rngState: () => speedDraw.nextState,
+    frameEvents: frameEvents => [...frameEvents, ...arrival.events],
   })
 }
 

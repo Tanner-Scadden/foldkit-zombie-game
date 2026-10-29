@@ -20,6 +20,7 @@ import {
   type Boosts,
   type Bullet,
   DebutCard,
+  Frenzy,
   GameEvent,
   HitStop,
   type Hold,
@@ -34,6 +35,7 @@ import {
   Reload,
   ShopState,
   type Zombie,
+  ZombieAction,
   type ZombieKind,
   ZombieState,
   idleBoosts,
@@ -127,6 +129,8 @@ const zombieAt = (
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
+  action: ZombieAction.Roaming(),
+  frenzy: Frenzy.Calm(),
 })
 
 const bulletInto = (zombie: Zombie): Bullet => ({

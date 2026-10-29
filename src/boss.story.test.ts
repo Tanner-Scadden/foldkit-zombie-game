@@ -26,6 +26,7 @@ import {
   BossMove,
   type Bullet,
   type DoorId,
+  Frenzy,
   GameEvent,
   Glob,
   HitStop,
@@ -36,6 +37,7 @@ import {
   type PlannedSpawn,
   RunMode,
   type Zombie,
+  ZombieAction,
   type ZombieKind,
   ZombieState,
   initialModel,
@@ -96,6 +98,8 @@ const zombieOf = (
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
+  action: ZombieAction.Roaming(),
+  frenzy: Frenzy.Calm(),
 })
 
 const bossAt = (x: number, y: number, hp = BOSS_HP): Zombie =>

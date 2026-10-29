@@ -110,6 +110,39 @@ const atWaveStart = (kinds: ReadonlyArray<ZombieKind>): Model => {
 }
 
 describe('new zombie card', () => {
+  test('wave 6 brings the Chucker card and wave 7 the Ankle Biter card', () => {
+    const startOf = (wave: number, kinds: ReadonlyArray<ZombieKind>) => {
+      const [, spawns] = rollSpawns(1, wave)
+      return modifyFields(introduced(asVeteran(freshModel), kinds), {
+        phase: () =>
+          Phase.Preparation({
+            wave,
+            remainingMs: PREPARATION_MS,
+            durationMs: PREPARATION_MS,
+            spawns,
+          }),
+      })
+    }
+
+    story(
+      update,
+      given(startOf(6, ['Shambler', 'Runner', 'Exploder', 'Tank'])),
+      message(Message.ClickedStartWaveButton()),
+      model(current => {
+        expect(cardKind(current)).toStrictEqual(Option.some('Thrower'))
+      }),
+    )
+
+    story(
+      update,
+      given(startOf(7, ['Shambler', 'Runner', 'Exploder', 'Tank', 'Thrower'])),
+      message(Message.ClickedStartWaveButton()),
+      model(current => {
+        expect(cardKind(current)).toStrictEqual(Option.some('Crawler'))
+      }),
+    )
+  })
+
   test('stays out of Preparation and comes up when the wave starts', () => {
     story(
       update,
@@ -207,7 +240,16 @@ describe('new zombie card', () => {
 
     story(
       update,
-      given(victorious(['Shambler', 'Runner', 'Exploder', 'Tank'])),
+      given(
+        victorious([
+          'Shambler',
+          'Runner',
+          'Exploder',
+          'Tank',
+          'Thrower',
+          'Crawler',
+        ]),
+      ),
       ...tap('KeyK'),
       message(Message.ClickedStartWaveButton()),
       model(current => {
@@ -218,7 +260,9 @@ describe('new zombie card', () => {
 
     story(
       update,
-      given(victorious(['Shambler', 'Runner', 'Exploder'])),
+      given(
+        victorious(['Shambler', 'Runner', 'Exploder', 'Thrower', 'Crawler']),
+      ),
       ...tap('KeyK'),
       model(current => {
         expect(cardKind(current)).toStrictEqual(Option.none())

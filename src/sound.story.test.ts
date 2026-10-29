@@ -23,11 +23,13 @@ import {
 import {
   AudioState,
   type Bullet,
+  Frenzy,
   type Model,
   Phase,
   Pierce,
   type PlannedSpawn,
   type Zombie,
+  ZombieAction,
   ZombieState,
   initialModel,
 } from './model'
@@ -77,6 +79,8 @@ const zombieAt = (id: number, x: number, y: number): Zombie => ({
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
+  action: ZombieAction.Roaming(),
+  frenzy: Frenzy.Calm(),
 })
 
 const oneHitZombieAt = (id: number, x: number, y: number): Zombie =>

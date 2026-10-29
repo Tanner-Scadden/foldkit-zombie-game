@@ -776,6 +776,14 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     BossSpat: () => Option.some<SoundEffect>('BossSpit'),
     GlobLanded: () => Option.some<SoundEffect>('BossSplat'),
     BossEnraged: () => Option.some<SoundEffect>('BossRoar'),
+    ZombieGrabbed: () => Option.some<SoundEffect>('Heave'),
+    ZombieThrown: () => Option.some<SoundEffect>('Whoosh'),
+    ZombieLanded: () => Option.some<SoundEffect>('Thud'),
+    CrawlerStirred: () => Option.some<SoundEffect>('Rumble'),
+    CrawlerSurfaced: () => Option.some<SoundEffect>('Burrow'),
+    AnklesGrabbed: () => Option.some<SoundEffect>('Clutch'),
+    PackFrenzied: () => Option.some<SoundEffect>('Howl'),
+    PackWiped: () => Option.some<SoundEffect>('PackBonus'),
   })
 
 const maybeEventSoundCue = (event: GameEvent): Option.Option<SoundCue> =>

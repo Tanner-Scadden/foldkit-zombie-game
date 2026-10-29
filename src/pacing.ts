@@ -19,6 +19,7 @@ import {
   RELAX_QUIET_MAX_MS,
   RESTLESS_QUIET_MAX_MS,
 } from './constants'
+import { isFrenzyPack } from './frenzy'
 import {
   Alarm,
   Beat,
@@ -30,7 +31,7 @@ import {
   type Vector,
   type Zombie,
 } from './model'
-import { isFusing, isWalking } from './zombies'
+import { isFloorKind, isFree, isFusing, isWalking } from './zombies'
 
 // CROWD
 
@@ -230,6 +231,13 @@ const warnedEvent = (spawn: PlannedSpawn): GameEvent => {
   })
 }
 
+const frenziedEvent = (spawn: PlannedSpawn): GameEvent => {
+  const { x, y } = warningPoint(spawn.door)
+  return GameEvent.PackFrenzied({ x, y, door: spawn.door })
+}
+
+const isThroughDoor = (spawn: PlannedSpawn): boolean => !isFloorKind(spawn.kind)
+
 const ringFor = (alarm: Alarm, warned: ReadonlyArray<PlannedSpawn>): Alarm =>
   Array.some(warned, ({ formation }) => formation === 'Horde')
     ? Alarm.Ringing({ remainingMs: DINNER_BELL_MS })
@@ -246,9 +254,13 @@ export const warnPacks = (
     Array.filter(
       spawn =>
         spawn.atMs <= clockMs + PACK_WARNING_MS &&
+        isThroughDoor(spawn) &&
         !Array.contains(warnedPacks, spawn.pack),
     ),
     firstOfEachPack,
+  )
+  const frenzied = Array.filter(fresh, spawn =>
+    isFrenzyPack(model.frenzyPacks, spawn.pack),
   )
   if (Array.isReadonlyArrayEmpty(fresh)) {
     return model
@@ -266,6 +278,7 @@ export const warnPacks = (
     frameEvents: frameEvents => [
       ...frameEvents,
       ...Array.map(fresh, warnedEvent),
+      ...Array.map(frenzied, frenziedEvent),
     ],
   })
 }
@@ -285,7 +298,9 @@ export const rattlingDoors = (
 ): ReadonlyArray<DoorId> =>
   pipe(
     spawns,
-    Array.filter(({ pack }) => Array.contains(warnedPacks, pack)),
+    Array.filter(
+      spawn => isThroughDoor(spawn) && Array.contains(warnedPacks, spawn.pack),
+    ),
     Array.map(({ door }) => door),
     Array.dedupe,
   )
@@ -304,7 +319,10 @@ export const delayCampedPacks = (
   const campedPacks = pipe(
     spawns,
     Array.filter(
-      spawn => isDue(clockMs)(spawn) && isCampingDoor(player, spawn.door),
+      spawn =>
+        isDue(clockMs)(spawn) &&
+        isThroughDoor(spawn) &&
+        isCampingDoor(player, spawn.door),
     ),
     Array.map(({ pack }) => pack),
     Array.dedupe,
@@ -323,7 +341,7 @@ export const delayCampedPacks = (
 const isClose =
   (player: Vector) =>
   (zombie: Zombie): boolean =>
-    isWalking(zombie) &&
+    isFree(zombie) &&
     Math.hypot(zombie.x - player.x, zombie.y - player.y) <= INTENSITY_CLOSE_PX
 
 // NOTE: Intensity is a hidden measure of how hard the last few seconds were.

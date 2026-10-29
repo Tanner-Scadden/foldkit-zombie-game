@@ -14,11 +14,13 @@ import { RESTART_GRACE_MS } from './constants'
 import { Message, update } from './main'
 import {
   type Bullet,
+  Frenzy,
   type Model,
   Phase,
   Pierce,
   type PlannedSpawn,
   type Zombie,
+  ZombieAction,
   ZombieState,
   initialModel,
 } from './model'
@@ -78,6 +80,8 @@ const zombieAt = (
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
+  action: ZombieAction.Roaming(),
+  frenzy: Frenzy.Calm(),
 })
 
 const bulletInto = (id: number, zombie: Zombie): Bullet => ({

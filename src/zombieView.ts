@@ -1,7 +1,8 @@
-import { Array, Result } from 'effect'
+import { Array, Option, Result } from 'effect'
 import { Canvas } from 'foldkit'
 
 import { isEnraged } from './boss'
+import { CHUCKER_RULES } from './chucker'
 import {
   SHADOW_COLOR,
   SHADOW_FADED_COLOR,
@@ -14,10 +15,12 @@ import {
   ZOMBIE_DEATH_POP_END,
   ZOMBIE_DEATH_POP_PINCH,
   ZOMBIE_DEATH_POP_STRETCH,
+  ZOMBIE_FOOT_OFFSET,
   ZOMBIE_HIT_FLASH_MS,
   ZOMBIE_HIT_PULSE_MS,
   ZOMBIE_HIT_SQUASH,
 } from './constants'
+import { surfacingProgress } from './crawler'
 import {
   FULL_TURN,
   HEALTH_BAR_BACK_COLOR,
@@ -34,15 +37,19 @@ import { clamp } from './geometry'
 import {
   Boss,
   BossMove,
+  Frenzy,
   type PlantedAttack,
   type Player,
   type Vector,
   type Zombie,
+  ZombieAction,
   type ZombieKind,
   ZombieState,
 } from './model'
 import {
   type Facing,
+  GASBAG_BELLY_BOX,
+  GASBAG_VALVE,
   GAS_LEAKS,
   type SpriteFrames,
   type SpriteSet,
@@ -52,7 +59,14 @@ import {
   group,
   wornFramesAt,
 } from './sprite'
-import { type DeathStyle, statsOf, strideAt, wearOf } from './zombies'
+import {
+  Behavior,
+  type DeathStyle,
+  isGrounded,
+  statsOf,
+  strideAt,
+  wearOf,
+} from './zombies'
 
 // ZOMBIES
 
@@ -87,10 +101,12 @@ const GAITS: Readonly<Record<ZombieKind, Gait>> = {
   Exploder: {
     ...STILL_GAIT,
     waddleRadians: 0.14,
-    pulse: 0.07,
-    fuseTellPx: 70,
-    glowRadius: 7,
+    pulse: 0.08,
+    fuseTellPx: 80,
+    glowRadius: 8,
   },
+  Thrower: { ...STILL_GAIT, waddleRadians: 0.08 },
+  Crawler: { ...STILL_GAIT, waddleRadians: 0.04 },
   Boss: { ...STILL_GAIT, stompSquash: 0.06, waddleRadians: 0.05 },
 }
 
@@ -100,23 +116,27 @@ const LEAK_DEFLATE_PER_STAGE = 0.07
 const deflation = (zombie: Zombie, stage: number): number =>
   zombie.kind === 'Exploder' ? 1 - LEAK_DEFLATE_PER_STAGE * stage : 1
 
-const PULSE_MS = 620
-const FUSE_BLINK_SLOW_MS = 480
-const FUSE_BLINK_FAST_MS = 70
-const GLOW_COLOR = 'rgba(255, 157, 46, 0.2)'
-const GLOW_LIT_COLOR = 'rgba(255, 220, 120, 0.42)'
+const FUSE_BLINK_SLOW_MS = 700
+const FUSE_BLINK_FAST_MS = 150
+const URGENCY_STEPS = 5
+const WEAR_URGENCY = 0.35
+const GLOW_COLOR = 'rgba(170, 240, 70, 0.22)'
+const GLOW_LIT_COLOR = 'rgba(230, 255, 150, 0.45)'
 
 const distanceBetween = (first: Vector, second: Vector): number =>
   Math.hypot(first.x - second.x, first.y - second.y)
 
-const isFuseLit = (
+// NOTE: a Gasbag's pulse quickens as it closes in and each time it is shot.
+// Urgency is stepped so the beat changes tempo in a few clean jumps instead
+// of jittering every frame as the distance changes.
+const fuseUrgency = (
   zombie: Zombie,
   player: Player,
-  elapsedMs: number,
   gait: Gait,
-): boolean => {
+  stage: number,
+): number => {
   if (gait.fuseTellPx <= 0) {
-    return false
+    return 0
   }
 
   const nearness = clamp(
@@ -124,10 +144,21 @@ const isFuseLit = (
     0,
     1,
   )
-  const periodMs =
-    FUSE_BLINK_SLOW_MS + (FUSE_BLINK_FAST_MS - FUSE_BLINK_SLOW_MS) * nearness
-  return Math.floor(elapsedMs / periodMs) % 2 === 1
+  const urgency = clamp(nearness + WEAR_URGENCY * stage, 0, 1)
+  return Math.round(urgency * URGENCY_STEPS) / URGENCY_STEPS
 }
+
+const fusePeriodMs = (urgency: number): number =>
+  FUSE_BLINK_SLOW_MS + (FUSE_BLINK_FAST_MS - FUSE_BLINK_SLOW_MS) * urgency
+
+export const gasbagPulseMs = (zombie: Zombie, player: Player): number =>
+  fusePeriodMs(fuseUrgency(zombie, player, GAITS[zombie.kind], wearOf(zombie)))
+
+const pulsePhase = (zombie: Zombie, elapsedMs: number, urgency: number) =>
+  ((elapsedMs + zombie.id * 137) % fusePeriodMs(urgency)) /
+  fusePeriodMs(urgency)
+
+const LIT_SHARE = 0.3
 
 const glowShapes = (
   zombie: Zombie,
@@ -139,12 +170,62 @@ const glowShapes = (
     ? [
         Canvas.Circle({
           x: Math.round(zombie.x),
-          y: Math.round(zombie.y),
-          radius: gait.glowRadius * scale,
+          y: Math.round(zombie.y) + 1,
+          radius: Math.round(gait.glowRadius * scale),
           fill: isLit ? GLOW_LIT_COLOR : GLOW_COLOR,
         }),
       ]
     : []
+
+// GASBAG BELLY
+
+const BUBBLE_COLOR = '#f6ffd2'
+const BUBBLES = 2
+const SPARK_COLORS: ReadonlyArray<string> = ['#ffe066', '#ffffff', '#ff9d2e']
+const SPARK_MS = 70
+
+const bubbleShapes = (
+  zombie: Zombie,
+  elapsedMs: number,
+  urgency: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const box = GASBAG_BELLY_BOX
+  const riseMs = 520 - 300 * urgency
+  return Array.makeBy(BUBBLES, index => {
+    const phase =
+      ((elapsedMs + zombie.id * 211 + index * riseMs * 0.5) % riseMs) / riseMs
+    return Canvas.Rect({
+      x: box.left + ((zombie.id + index * 3) % box.width),
+      y: box.top + box.height - 1 - Math.floor(phase * box.height),
+      width: 1,
+      height: 1,
+      fill: BUBBLE_COLOR,
+    })
+  })
+}
+
+const valveShapes = (
+  zombie: Zombie,
+  elapsedMs: number,
+  urgency: number,
+): ReadonlyArray<Canvas.Shape> => {
+  if (urgency < 0.4) {
+    return []
+  }
+  const flick = Math.floor((elapsedMs + zombie.id * 31) / SPARK_MS)
+  return [
+    Canvas.Rect({
+      x: GASBAG_VALVE.x + (flick % 2),
+      y: GASBAG_VALVE.y - (flick % 3 === 0 ? 1 : 0),
+      width: 1,
+      height: 1,
+      fill: Option.getOrElse(
+        Array.get(SPARK_COLORS, flick % SPARK_COLORS.length),
+        () => BUBBLE_COLOR,
+      ),
+    }),
+  ]
+}
 
 const HEALTH_BAR_WIDTH = 12
 const HEALTH_BAR_COLOR = '#ff3b3f'
@@ -154,7 +235,7 @@ export const zombieHealthBarShapes = (
 ): ReadonlyArray<Canvas.Shape> => {
   const stats = statsOf(zombie)
   if (
-    !ZombieState.isAnyOf(['Walking'])(zombie.state) ||
+    !isGrounded(zombie) ||
     stats.healthBar === 'Hidden' ||
     zombie.hp >= zombie.maxHp
   ) {
@@ -344,43 +425,226 @@ const bossPose = (boss: Boss, zombie: Zombie): Pose =>
       })
     : STANDING_POSE
 
+// FRENZY
+
+const STEAM_RISE_PX = 6
+const STEAM_CYCLE_MS = 520
+const STEAM_COLOR = 'rgba(244, 241, 222, 0.6)'
+const FADE_BLINK_MS = 110
+
+const isRaging = (zombie: Zombie): boolean =>
+  Frenzy.match(zombie.frenzy, {
+    Calm: () => false,
+    Frenzied: () => true,
+    Fading: ({ remainingMs }) =>
+      Math.floor(remainingMs / FADE_BLINK_MS) % 2 === 0,
+    Spent: () => false,
+  })
+
+const HALO_COLOR = 'rgba(255, 43, 43, 0.32)'
+const HALO_RADIUS = 4
+const HALO_BELOW_TOP_PX = 3
+
+const haloShapes = (
+  zombie: Zombie,
+  headTop: number,
+): ReadonlyArray<Canvas.Shape> =>
+  Frenzy.isAnyOf(['Frenzied'])(zombie.frenzy)
+    ? [
+        Canvas.Circle({
+          x: Math.round(zombie.x),
+          y: headTop + HALO_BELOW_TOP_PX,
+          radius: HALO_RADIUS,
+          fill: HALO_COLOR,
+        }),
+      ]
+    : []
+
+const steamShapes = (
+  zombie: Zombie,
+  elapsedMs: number,
+  headY: number,
+): ReadonlyArray<Canvas.Shape> => {
+  if (!Frenzy.isAnyOf(['Frenzied'])(zombie.frenzy)) {
+    return []
+  }
+  const phase =
+    ((elapsedMs + zombie.id * 173) % STEAM_CYCLE_MS) / STEAM_CYCLE_MS
+  const side = zombie.id % 2 === 0 ? 1 : -1
+  return [
+    Canvas.Rect({
+      x: Math.round(zombie.x) + side * (2 + Math.round(phase * 2)),
+      y: headY - 1 - Math.round(phase * STEAM_RISE_PX),
+      width: phase < 0.5 ? 1 : 2,
+      height: phase < 0.5 ? 1 : 2,
+      fill: STEAM_COLOR,
+    }),
+  ]
+}
+
+// ACTIONS
+
+const HEFT_TELL_SLOW_MS = 200
+const HEFT_TELL_FAST_MS = 60
+const CARRY_LIFT_PX = 25
+const CARRY_WIGGLE_MS = 90
+const FLIGHT_PEAK_PX = 34
+const FLIGHT_LIFT_PX = 15
+const FLIGHT_SPIN_MS = 260
+const DAZE_STAR_MS = 700
+const DAZE_STAR_COLOR = '#ffe066'
+const CLING_SHAKE_MS = 60
+
+const heftTone = (zombie: Zombie): Tone => {
+  if (!ZombieAction.isAnyOf(['Hefting'])(zombie.action)) {
+    return 'Normal'
+  }
+  const { remainingMs, durationMs } = zombie.action
+  const urgency = 1 - remainingMs / Math.max(1, durationMs)
+  const periodMs =
+    HEFT_TELL_SLOW_MS + (HEFT_TELL_FAST_MS - HEFT_TELL_SLOW_MS) * urgency
+  return Math.floor(remainingMs / periodMs) % 2 === 0 ? 'Flash' : 'Normal'
+}
+
+type Placement = Readonly<{
+  lift: number
+  rotate: number
+  nudgeX: number
+  isStill: boolean
+}>
+
+const ON_FEET: Placement = { lift: 0, rotate: 0, nudgeX: 0, isStill: false }
+
+// NOTE: a Groaner held overhead hangs upside down by its ankles in the
+// Chucker's raised hands, kicking. A half turn hangs its body below its feet,
+// so its feet are lifted above the Chucker's head by its own height.
+
+const placementOf = (zombie: Zombie, elapsedMs: number): Placement =>
+  ZombieAction.match(zombie.action, {
+    Roaming: () => ON_FEET,
+    Winded: () => ON_FEET,
+    Hefting: () => ({
+      lift: 0,
+      rotate: 0,
+      nudgeX: Math.floor(elapsedMs / 50) % 2 === 0 ? 1 : 0,
+      isStill: true,
+    }),
+    Carried: () => ({
+      lift: CARRY_LIFT_PX,
+      rotate:
+        Math.PI +
+        (Math.floor(elapsedMs / CARRY_WIGGLE_MS) % 2 === 0 ? 0.12 : -0.12),
+      nudgeX: 0,
+      isStill: false,
+    }),
+    Flying: ({ remainingMs, durationMs }) => {
+      const progress = 1 - remainingMs / Math.max(1, durationMs)
+      return {
+        lift:
+          4 * FLIGHT_PEAK_PX * progress * (1 - progress) +
+          FLIGHT_LIFT_PX * (1 - progress),
+        rotate: (FULL_TURN * (durationMs - remainingMs)) / FLIGHT_SPIN_MS,
+        nudgeX: 0,
+        isStill: false,
+      }
+    },
+    Dazed: () => ({
+      lift: 0,
+      rotate: QUARTER_TURN,
+      nudgeX: 0,
+      isStill: true,
+    }),
+    Burrowed: () => ON_FEET,
+    Clinging: () => ({
+      lift: 0,
+      rotate: 0,
+      nudgeX: Math.floor(elapsedMs / CLING_SHAKE_MS) % 2 === 0 ? 1 : -1,
+      isStill: true,
+    }),
+  })
+
+const dazeStarShapes = (
+  zombie: Zombie,
+  elapsedMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  if (!ZombieAction.isAnyOf(['Dazed'])(zombie.action)) {
+    return []
+  }
+  return Array.makeBy(2, index => {
+    const angle =
+      (FULL_TURN * elapsedMs) / DAZE_STAR_MS + Math.PI * index + zombie.id
+    return Canvas.Rect({
+      x: Math.round(zombie.x + Math.cos(angle) * 5),
+      y: Math.round(zombie.y - 2 + Math.sin(angle) * 2),
+      width: 1,
+      height: 1,
+      fill: DAZE_STAR_COLOR,
+    })
+  })
+}
+
 const walkingZombieShapes = (
   zombie: Zombie,
   player: Player,
   elapsedMs: number,
   boss: Boss,
 ): ReadonlyArray<Canvas.Shape> => {
+  if (ZombieAction.isAnyOf(['Burrowed'])(zombie.action)) {
+    return []
+  }
+
   const stats = statsOf(zombie)
   const gait = GAITS[zombie.kind]
   const stage = wearOf(zombie)
   const sprites = wornFramesAt(zombie.kind, stage)
   const pose = zombie.kind === 'Boss' ? bossPose(boss, zombie) : STANDING_POSE
-  const isStill = pose !== STANDING_POSE
+  const placement = placementOf(zombie, elapsedMs)
+  const isStill = pose !== STANDING_POSE || placement.isStill
   const stride = isStill ? 0 : strideAt(zombie, elapsedMs)
   const facing = facingToward(zombie.x, player.x)
   const isPlanted = stride % 2 === 0
   const stomp = isPlanted && !isStill ? gait.stompSquash : 0
+  const urgency = fuseUrgency(zombie, player, gait, stage)
+  const phase = pulsePhase(zombie, elapsedMs, urgency)
+  const isLit = gait.fuseTellPx > 0 && phase < LIT_SHARE
   const pulse =
-    (1 +
-      gait.pulse * Math.sin((FULL_TURN * elapsedMs) / PULSE_MS + zombie.id)) *
+    (1 + gait.pulse * (1 + urgency) * Math.cos(FULL_TURN * phase)) *
     deflation(zombie, stage)
-  const isLit = isFuseLit(zombie, player, elapsedMs, gait)
-  const isRaging = zombie.kind === 'Boss' && isEnraged(boss)
-  const frames: SpriteFrames = isLit || isRaging ? sprites.lit : sprites.walk
+  const isBossRaging = zombie.kind === 'Boss' && isEnraged(boss)
+  const isFrenzied = isRaging(zombie)
+  const isHefting = ZombieAction.isAnyOf(['Hefting'])(zombie.action)
+  const frames: SpriteFrames =
+    isLit || isBossRaging
+      ? sprites.lit
+      : isFrenzied
+        ? sprites.rage
+        : sprites.walk
   const wobble =
     zombie.kind === 'Boss' ? 0 : WEAR_WOBBLE_RADIANS * Math.min(stage, 2)
   const foot = footPosition(zombie, stats.footOffset)
   const toned = zombieHitTone(zombie.hitRemainingMs)
-  const tone: Tone = toned === 'Flash' ? toned : pose.tone
-  const gape = isRaging ? sprites.litGape : sprites.gape
-  const sprite = pose.isGaping ? gape : frameAt(frames, stride)
-  const shake = pose.shakePx * (Math.floor(elapsedMs / 50) % 2 === 0 ? 1 : -1)
+  const tone: Tone =
+    toned === 'Flash' ? toned : isHefting ? heftTone(zombie) : pose.tone
+  const gape = isBossRaging
+    ? sprites.litGape
+    : isFrenzied
+      ? sprites.rageGape
+      : sprites.gape
+  const sprite = pose.isGaping || isHefting ? gape : frameAt(frames, stride)
+  const shake =
+    pose.shakePx * (Math.floor(elapsedMs / 50) % 2 === 0 ? 1 : -1) +
+    placement.nudgeX
+  const top = Math.round(foot.y - placement.lift)
+  const isExploder = gait.fuseTellPx > 0
+  const headTop = top - ZOMBIE_SPRITES[zombie.kind].height
   return [
     ...glowShapes(zombie, gait, pulse, isLit),
+    ...haloShapes(zombie, headTop),
     ...leakShapes(zombie, stage, facing, elapsedMs),
     group({
-      translate: { x: foot.x + shake, y: foot.y },
+      translate: { x: foot.x + shake, y: top },
       rotate:
+        placement.rotate +
         pose.leanRadians +
         gait.leanRadians * (facing === 'Right' ? 1 : -1) +
         (isStill ? 0 : (gait.waddleRadians + wobble) * (isPlanted ? 1 : -1)),
@@ -395,13 +659,21 @@ const walkingZombieShapes = (
           y: (1 - stomp) * pulse,
         }),
       ),
-      shapes: sprite[tone][facing],
+      shapes: isExploder
+        ? [
+            ...sprite[tone][facing],
+            ...bubbleShapes(zombie, elapsedMs, urgency),
+            ...valveShapes(zombie, elapsedMs, urgency),
+          ]
+        : sprite[tone][facing],
     }),
+    ...steamShapes(zombie, elapsedMs, headTop),
+    ...dazeStarShapes(zombie, elapsedMs),
   ]
 }
 
-const FUSE_SWELL_MS = 220
-const FUSE_SWELL = 0.55
+const FUSE_SWELL_MS = 300
+const FUSE_SWELL = 0.6
 const FUSE_FLASH_MS = 40
 
 const fusingZombieShapes = (
@@ -415,10 +687,10 @@ const fusingZombieShapes = (
   const flicker = Math.floor(remainingMs / FUSE_FLASH_MS) % 2 === 0
   const foot = footPosition(zombie, stats.footOffset)
   return [
-    ...glowShapes(zombie, GAITS[zombie.kind], swell * 1.3, true),
+    ...glowShapes(zombie, GAITS[zombie.kind], swell * 1.4, true),
     group({
       translate: { x: foot.x + (flicker ? 1 : -1), y: foot.y },
-      scale: { x: swell, y: swell },
+      scale: { x: swell * (flicker ? 1.08 : 1), y: swell },
       shapes: frameAt(sprites.lit, 0)[flicker ? 'Flash' : 'Normal'][
         facingToward(zombie.x, player.x)
       ],
@@ -579,8 +851,24 @@ export const zombieShapes =
 
 // DEPTH AND SHADOW
 
+const CARRIED_DEPTH_PX = 2
+const FLYING_DEPTH_PX = 1000
+
+// NOTE: a Groaner held overhead draws just after its Chucker, and one in the
+// air draws after everything standing, since it flies over their heads.
 export const zombieFootY = (zombie: Zombie): number =>
-  zombie.y + statsOf(zombie).footOffset
+  zombie.y +
+  statsOf(zombie).footOffset +
+  ZombieAction.match(zombie.action, {
+    Roaming: () => 0,
+    Winded: () => 0,
+    Hefting: () => 0,
+    Carried: () => CARRIED_DEPTH_PX,
+    Flying: () => FLYING_DEPTH_PX,
+    Dazed: () => 0,
+    Burrowed: () => 0,
+    Clinging: () => 0,
+  })
 
 const zombieFootShadow = (zombie: Zombie, fill: string): Canvas.Shape => {
   const stats = statsOf(zombie)
@@ -592,12 +880,23 @@ const zombieFootShadow = (zombie: Zombie, fill: string): Canvas.Shape => {
   )
 }
 
+const hasShadow = ZombieAction.isAnyOf([
+  'Roaming',
+  'Winded',
+  'Hefting',
+  'Flying',
+  'Dazed',
+  'Clinging',
+])
+
 export const zombieShadow = (
   zombie: Zombie,
 ): Result.Result<Canvas.Shape, void> =>
   ZombieState.match(zombie.state, {
     Walking: (): Result.Result<Canvas.Shape, void> =>
-      Result.succeed(zombieFootShadow(zombie, SHADOW_COLOR)),
+      hasShadow(zombie.action)
+        ? Result.succeed(zombieFootShadow(zombie, SHADOW_COLOR))
+        : Result.failVoid,
     Fusing: (): Result.Result<Canvas.Shape, void> =>
       Result.succeed(zombieFootShadow(zombie, SHADOW_COLOR)),
     Dying: ({ remainingMs }): Result.Result<Canvas.Shape, void> => {
@@ -611,3 +910,177 @@ export const zombieShadow = (
       }
     },
   })
+
+// FLOOR TELLS
+
+const TELL_EDGE_COLOR = '#ff4a4f'
+const TELL_SWEEP_COLOR = '#ffe066'
+
+const tellAlpha = (faint: number, strong: number, progress: number): number =>
+  Math.round((faint + (strong - faint) * progress) * 100) / 100
+
+const tellFill = (progress: number): string =>
+  `rgba(255, 58, 63, ${tellAlpha(0.1, 0.3, progress)})`
+
+const tellRingShapes = (
+  at: Vector,
+  radius: number,
+  progress: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const x = Math.round(at.x)
+  const y = Math.round(at.y)
+  return [
+    Canvas.Circle({
+      x,
+      y,
+      radius,
+      fill: tellFill(progress),
+      stroke: TELL_EDGE_COLOR,
+      lineWidth: 1,
+    }),
+    Canvas.Circle({
+      x,
+      y,
+      radius: Math.max(1, Math.round(radius * progress)),
+      stroke: TELL_SWEEP_COLOR,
+      lineWidth: 1,
+    }),
+  ]
+}
+
+const blastRadiusOf = (zombie: Zombie): number =>
+  Behavior.match(statsOf(zombie).behavior, {
+    Brawler: () => 0,
+    Bomber: ({ blastRadius }) => blastRadius,
+    Thrower: () => 0,
+    Crawler: () => 0,
+  })
+
+const fuseLengthOf = (zombie: Zombie): number =>
+  Behavior.match(statsOf(zombie).behavior, {
+    Brawler: () => 1,
+    Bomber: ({ contactFuseMs }) => contactFuseMs,
+    Thrower: () => 1,
+    Crawler: () => 1,
+  })
+
+const fuseRingShapes = (
+  zombie: Zombie,
+  remainingMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const radius = blastRadiusOf(zombie)
+  return radius > 0
+    ? tellRingShapes(
+        zombie,
+        radius,
+        clamp(1 - remainingMs / Math.max(1, fuseLengthOf(zombie)), 0, 1),
+      )
+    : []
+}
+
+const landingShapes = (zombie: Zombie): ReadonlyArray<Canvas.Shape> => {
+  if (!ZombieAction.isAnyOf(['Flying'])(zombie.action)) {
+    return []
+  }
+  const { to, remainingMs, durationMs } = zombie.action
+  return tellRingShapes(
+    { x: to.x, y: to.y + ZOMBIE_FOOT_OFFSET },
+    CHUCKER_RULES.landRadius,
+    clamp(1 - remainingMs / Math.max(1, durationMs), 0, 1),
+  )
+}
+
+const CRACK_COLOR = '#f0c27a'
+const HOLE_COLOR = '#140c10'
+const CLAW_COLOR = '#dcf5b8'
+const CRACK_RING_COLOR = 'rgba(240, 194, 122, 0.55)'
+const CRACK_DUST_COLOR = 'rgba(214, 196, 160, 0.8)'
+const CRACK_JUMP_MS = 90
+const CRACK_RING_MIN_PX = 3
+const CRACK_RING_GROW_PX = 8
+
+type Crack = Readonly<{ dx: number; dy: number; length: number }>
+
+const CRACKS: ReadonlyArray<Crack> = [
+  { dx: 1, dy: 0, length: 7 },
+  { dx: -1, dy: 0, length: 6 },
+  { dx: 0, dy: 1, length: 3 },
+  { dx: 0, dy: -1, length: 4 },
+]
+
+// NOTE: the floor tells where an Ankle Biter is coming up: a ring of dust
+// spreads, pale cracks split the boards, a hole opens, and a claw pokes
+// through just before it climbs out.
+const crackShapes = (
+  zombie: Zombie,
+  elapsedMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const progress = surfacingProgress(zombie)
+  const x = Math.round(zombie.x)
+  const y = Math.round(zombie.y) + statsOf(zombie).footOffset
+  const jump = Math.floor((elapsedMs + zombie.id * 53) / CRACK_JUMP_MS) % 2
+  const ring = Canvas.Circle({
+    x,
+    y,
+    radius: CRACK_RING_MIN_PX + Math.round(CRACK_RING_GROW_PX * progress),
+    stroke: CRACK_RING_COLOR,
+    lineWidth: 1,
+  })
+  const cracks = Array.map(CRACKS, ({ dx, dy, length }) => {
+    const reach = Math.max(1, Math.round(length * Math.min(1, progress * 1.4)))
+    return Canvas.Rect({
+      x: dx < 0 ? x - reach : x + (dx > 0 ? 1 : 0),
+      y: dy < 0 ? y - reach : y + (dy > 0 ? 1 : 0),
+      width: dx === 0 ? 1 : reach,
+      height: dy === 0 ? 1 : reach,
+      fill: CRACK_COLOR,
+    })
+  })
+  const hole =
+    progress > 0.4
+      ? [
+          Canvas.Rect({
+            x: x - 2,
+            y: y - 1,
+            width: progress > 0.7 ? 5 : 3,
+            height: progress > 0.7 ? 3 : 2,
+            fill: HOLE_COLOR,
+          }),
+        ]
+      : []
+  const claw =
+    progress > 0.8 && jump === 0
+      ? [Canvas.Rect({ x, y: y - 2, width: 1, height: 2, fill: CLAW_COLOR })]
+      : []
+  const dust =
+    progress > 0.2
+      ? [
+          Canvas.Rect({
+            x: x - 4 + jump * 7,
+            y: y - 2 - Math.round(progress * 4),
+            width: 2,
+            height: 1,
+            fill: CRACK_DUST_COLOR,
+          }),
+        ]
+      : []
+  return [ring, ...cracks, ...hole, ...claw, ...dust]
+}
+
+const groundTellShapes =
+  (elapsedMs: number) =>
+  (zombie: Zombie): ReadonlyArray<Canvas.Shape> =>
+    ZombieState.match(zombie.state, {
+      Walking: () =>
+        ZombieAction.isAnyOf(['Burrowed'])(zombie.action)
+          ? crackShapes(zombie, elapsedMs)
+          : landingShapes(zombie),
+      Fusing: ({ remainingMs }) => fuseRingShapes(zombie, remainingMs),
+      Dying: () => [],
+    })
+
+export const zombieGroundShapes = (
+  zombies: ReadonlyArray<Zombie>,
+  elapsedMs: number,
+): ReadonlyArray<Canvas.Shape> =>
+  Array.flatMap(zombies, groundTellShapes(elapsedMs))

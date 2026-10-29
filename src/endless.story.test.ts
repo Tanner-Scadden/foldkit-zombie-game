@@ -14,6 +14,7 @@ import { Message, update } from './main'
 import {
   Arsenal,
   type Bullet,
+  Frenzy,
   type Model,
   Phase,
   Pierce,
@@ -21,6 +22,7 @@ import {
   RunMode,
   Trap,
   type Zombie,
+  ZombieAction,
   ZombieState,
   initialModel,
 } from './model'
@@ -69,6 +71,8 @@ const zombieAt = (id: number, x: number, y: number, hp: number): Zombie => ({
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
+  action: ZombieAction.Roaming(),
+  frenzy: Frenzy.Calm(),
 })
 
 const bulletInto = (id: number, zombie: Zombie): Bullet => ({

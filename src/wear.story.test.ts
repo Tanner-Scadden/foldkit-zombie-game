@@ -9,6 +9,7 @@ import { Message, update } from './main'
 import {
   type Bullet,
   type Decal,
+  Frenzy,
   GameEvent,
   type Model,
   type Particle,
@@ -16,6 +17,7 @@ import {
   Pierce,
   type PlannedSpawn,
   type Zombie,
+  ZombieAction,
   ZombieKind,
   ZombieState,
   initialModel,
@@ -60,6 +62,8 @@ const zombieOf = (
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
+  action: ZombieAction.Roaming(),
+  frenzy: Frenzy.Calm(),
 })
 
 const bulletInto = (id: number, zombie: Zombie, damage = 1): Bullet => ({

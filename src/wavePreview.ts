@@ -29,6 +29,7 @@ import {
   debutKinds,
   doorCounts,
   endlessDepth,
+  floorCounts,
   hpScaleFor,
 } from './waves'
 import { ZOMBIE_KINDS } from './zombies'
@@ -251,6 +252,63 @@ const bossMarkerShapes = (
     },
   })
 
+// FLOOR MARKER
+
+const FLOOR_TAG = bakeText('FLOOR', 'Prompt')
+const FLOOR_ANCHOR = { x: 160, y: 120 }
+const FLOOR_MARKER_EDGE_COLOR = '#c08a4a'
+const FLOOR_MARKER_WIDTH = 30
+const FLOOR_TAG_GAP = 2
+
+const floorMarkerShapes = (
+  kinds: ReadonlyArray<KindCount>,
+  camera: Camera,
+  elapsedMs: number,
+  debuts: ReadonlyArray<ZombieKind>,
+): ReadonlyArray<Canvas.Shape> =>
+  Array.match(kinds, {
+    onEmpty: () => [],
+    onNonEmpty: rows => {
+      const anchor = worldToView(camera, FLOOR_ANCHOR)
+      const tagTop = -DOOR_MARKER_ROW_PX / 2 - DOOR_MARKER_PAD - GLYPH_HEIGHT
+      const top = tagTop - FLOOR_TAG_GAP - DOOR_MARKER_PAD
+      const height =
+        rows.length * DOOR_MARKER_ROW_PX +
+        DOOR_MARKER_PAD * 3 +
+        GLYPH_HEIGHT +
+        FLOOR_TAG_GAP
+      const left = -FLOOR_MARKER_WIDTH / 2
+      return [
+        group({
+          translate: anchor,
+          shapes: [
+            group({
+              opacity: Math.round(markerEdgeOpacity(elapsedMs) * 10) / 10,
+              shapes: [
+                Canvas.Rect({
+                  x: left - 1,
+                  y: top - 1,
+                  width: FLOOR_MARKER_WIDTH + 2,
+                  height: height + 2,
+                  fill: FLOOR_MARKER_EDGE_COLOR,
+                }),
+              ],
+            }),
+            Canvas.Rect({
+              x: left,
+              y: top,
+              width: FLOOR_MARKER_WIDTH,
+              height,
+              fill: DOOR_MARKER_BACK_COLOR,
+            }),
+            placeBaked(FLOOR_TAG, { x: 0, y: tagTop, align: 'Center' }),
+            ...Array.flatMap(rows, markerRowShapes(0, debuts)),
+          ],
+        }),
+      ]
+    },
+  })
+
 export const wavePreviewShapes = (
   model: Model,
   camera: Camera,
@@ -265,6 +323,12 @@ export const wavePreviewShapes = (
           doorMarkerShapes(camera, model.elapsedMs, debutKinds(wave)),
         ),
         ...bossMarkerShapes(model.boss, camera, model.elapsedMs, counts),
+        ...floorMarkerShapes(
+          floorCounts(spawns),
+          camera,
+          model.elapsedMs,
+          debutKinds(wave),
+        ),
       ]
     },
     Wave: () => [],
@@ -280,6 +344,13 @@ const kindLabel = ({ kind, count }: KindCount): string =>
 
 const doorPreviewLabel = ({ door, kinds }: DoorCount): string =>
   `${door} door: ${Array.join(Array.map(kinds, kindLabel), ', ')}`
+
+const floorLabel = (spawns: ReadonlyArray<PlannedSpawn>): string =>
+  Array.match(floorCounts(spawns), {
+    onEmpty: () => '',
+    onNonEmpty: kinds =>
+      ` Up through the floor: ${Array.join(Array.map(kinds, kindLabel), ', ')}.`,
+  })
 
 const bossLabel = (boss: Boss): string =>
   Option.match(maybeBossDoor(boss), {
@@ -301,7 +372,7 @@ const previewLabel = (
     endlessDepth(wave) > 0
       ? ` Zombies have ${Math.round((hpScaleFor(wave) - 1) * 100)} percent more health.`
       : ''
-  return `Coming in wave ${wave}. ${Array.join(Array.map(doorCounts(spawns), doorPreviewLabel), '. ')}.${debutText}${healthText}${bossLabel(boss)}`
+  return `Coming in wave ${wave}. ${Array.join(Array.map(doorCounts(spawns), doorPreviewLabel), '. ')}.${floorLabel(spawns)}${debutText}${healthText}${bossLabel(boss)}`
 }
 
 export const wavePreviewView = (

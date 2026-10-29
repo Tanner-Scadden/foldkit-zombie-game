@@ -6,9 +6,11 @@ import { describe, expect, test } from 'vitest'
 import { type Drawable, depthSortedShapes } from './depth'
 import { sceneShapes } from './layers'
 import {
+  Frenzy,
   type Model,
   Phase,
   type Zombie,
+  ZombieAction,
   type ZombieKind,
   ZombieState,
   initialModel,
@@ -43,6 +45,8 @@ const zombieOf = (kind: ZombieKind, id: number, x: number, y: number) => ({
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
+  action: ZombieAction.Roaming(),
+  frenzy: Frenzy.Calm(),
 })
 
 const worldShapesOf = (current: Model): ReadonlyArray<Canvas.Shape> =>

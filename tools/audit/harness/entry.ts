@@ -42,6 +42,8 @@ import { pause, planFor, rollSpawns, startOrResume } from '@game/waves'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
 
 const params = new URLSearchParams(location.search)
+const ROAMING = { _tag: 'Roaming' as const }
+const CALM = { _tag: 'Calm' as const }
 const num = (key: string, fallback: number) =>
   params.has(key) ? Number(params.get(key)) : fallback
 
@@ -170,6 +172,8 @@ const roomModel = (): Model => {
         knockback: { x: 0, y: 0 },
         hitRemainingMs: 0,
         state: { _tag: 'Walking' },
+        action: ROAMING,
+        frenzy: CALM,
       }
     })
     model = modifyFields(model, {
@@ -185,7 +189,14 @@ const roomModel = (): Model => {
           1,
           Math.floor(maxHp * ZOMBIE_KINDS[kind].wear[stage - 1]!.below),
         )
-  type LineupKind = 'Shambler' | 'Runner' | 'Tank' | 'Exploder' | 'Boss'
+  type LineupKind =
+    | 'Shambler'
+    | 'Runner'
+    | 'Tank'
+    | 'Exploder'
+    | 'Thrower'
+    | 'Crawler'
+    | 'Boss'
   const standing = (
     id: number,
     kind: LineupKind,
@@ -204,13 +215,17 @@ const roomModel = (): Model => {
     knockback: { x: 0, y: 0 },
     hitRemainingMs: 0,
     state: { _tag: 'Walking' as const },
+    action: ROAMING,
+    frenzy: CALM,
   })
   if (lineup === 'wear') {
     const rows: Array<[LineupKind, number, number, number]> = [
-      ['Shambler', 4, 60, 62],
-      ['Runner', 2, 60, 84],
-      ['Exploder', 4, 60, 102],
-      ['Tank', 36, 190, 84],
+      ['Shambler', 4, 50, 50],
+      ['Runner', 2, 50, 72],
+      ['Exploder', 4, 50, 96],
+      ['Tank', 36, 180, 64],
+      ['Thrower', 9, 180, 100],
+      ['Crawler', 2, 50, 118],
     ]
     const zombies = rows.flatMap(([kind, maxHp, left, y], row) =>
       Array.from({ length: ZOMBIE_KINDS[kind].wear.length + 1 }, (_, stage) =>
@@ -356,8 +371,165 @@ const roomModel = (): Model => {
       rngState: () => bossRng,
     })
   }
+  const staged: Array<any> = []
+  const stagedZombie = (
+    id: number,
+    kind: LineupKind,
+    x: number,
+    y: number,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    ...standing(id, kind, x, y, ZOMBIE_KINDS[kind].hp, 0),
+    speed: 20,
+    ...extra,
+  })
+  const gasbags = params.get('gasbags')
+  if (gasbags !== null) {
+    staged.push(
+      stagedZombie(1700, 'Exploder', 70, 60),
+      stagedZombie(1701, 'Exploder', num('px', 160) + 22, num('py', 90) - 4, {
+        hp: 1,
+      }),
+      stagedZombie(1702, 'Exploder', 240, 120, {
+        hp: 0,
+        state: { _tag: 'Fusing', remainingMs: num('fuseMs', 150) },
+      }),
+    )
+  }
+  if (params.has('frenzy')) {
+    const pack = 4242
+    const kinds: Array<LineupKind> = [
+      'Shambler',
+      'Shambler',
+      'Runner',
+      'Shambler',
+      'Exploder',
+    ]
+    kinds.forEach((kind, index) =>
+      staged.push(
+        stagedZombie(
+          1720 + index,
+          kind,
+          50 + (index % 3) * 10,
+          80 + Math.floor(index / 3) * 12 + (index % 2) * 3,
+          {
+            frenzy: { _tag: 'Frenzied', pack, apartMs: 0 },
+          },
+        ),
+      ),
+    )
+    staged.push(
+      stagedZombie(1730, 'Shambler', 120, 150, {
+        frenzy: { _tag: 'Fading', pack, remainingMs: 500 },
+      }),
+    )
+    model = modifyFields(model, {
+      popups: () => [
+        {
+          kind: 'Horde',
+          value: 0,
+          x: 40,
+          y: 72,
+          velocityX: 0,
+          ageMs: num('hordeAge', 300),
+        },
+        ...(params.has('wipe')
+          ? [
+              {
+                kind: 'Wipe' as const,
+                value: 5,
+                x: 200,
+                y: 80,
+                velocityX: 0,
+                ageMs: 400,
+              },
+            ]
+          : []),
+      ],
+    })
+  }
+  const chucker = params.get('chucker')
+  if (chucker === 'heft') {
+    staged.push(
+      stagedZombie(1740, 'Thrower', num('cx', 230), num('cy', 70), {
+        action: {
+          _tag: 'Hefting',
+          victimId: 1741,
+          remainingMs: num('heftMs', 450),
+          durationMs: 900,
+        },
+      }),
+      stagedZombie(1741, 'Shambler', num('cx', 230), num('cy', 70), {
+        action: { _tag: 'Carried', byId: 1740 },
+      }),
+    )
+  }
+  if (chucker === 'throw') {
+    const from = { x: num('cx', 240), y: num('cy', 60) }
+    const to = { x: num('px', 160), y: num('py', 90) }
+    const durationMs = 900
+    const remainingMs = num('flyMs', 400)
+    const progress = 1 - remainingMs / durationMs
+    staged.push(
+      stagedZombie(1750, 'Thrower', from.x, from.y, {
+        action: { _tag: 'Winded', remainingMs: 2000 },
+      }),
+      stagedZombie(
+        1751,
+        'Shambler',
+        from.x + (to.x - from.x) * progress,
+        from.y + (to.y - from.y) * progress,
+        {
+          action: { _tag: 'Flying', from, to, remainingMs, durationMs },
+        },
+      ),
+    )
+  }
+  if (chucker === 'dazed') {
+    staged.push(
+      stagedZombie(1760, 'Shambler', num('px', 160) + 14, num('py', 90) + 4, {
+        action: { _tag: 'Dazed', remainingMs: 700, durationMs: 1000 },
+      }),
+    )
+  }
+  const crawler = params.get('crawler')
+  if (crawler === 'surfacing') {
+    staged.push(
+      stagedZombie(1770, 'Crawler', num('wx', 100), num('wy', 125), {
+        action: {
+          _tag: 'Burrowed',
+          remainingMs: num('surfMs', 400),
+          durationMs: 1500,
+        },
+      }),
+      stagedZombie(1771, 'Crawler', 230, 50, {
+        action: { _tag: 'Burrowed', remainingMs: 1100, durationMs: 1500 },
+      }),
+    )
+  }
+  if (crawler === 'cling') {
+    staged.push(
+      stagedZombie(1780, 'Crawler', num('px', 160), num('py', 90) + 2, {
+        action: { _tag: 'Clinging', remainingMs: 800 },
+      }),
+      stagedZombie(1781, 'Crawler', num('px', 160) + 40, num('py', 90) + 20),
+    )
+  }
+  if (staged.length > 0)
+    model = modifyFields(model, {
+      zombies: zombies => [...zombies, ...staged] as any,
+      nextEntityId: () => 3000,
+    })
   const sampleStats = {
-    kills: { Shambler: 41, Runner: 17, Tank: 2, Exploder: 9, Boss: 0 },
+    kills: {
+      Shambler: 41,
+      Runner: 17,
+      Tank: 2,
+      Exploder: 9,
+      Thrower: 2,
+      Crawler: 3,
+      Boss: 0,
+    },
     wavesCleared: Math.max(0, wave - 1),
     shotsFired: 1240,
     shotsHit: 532,

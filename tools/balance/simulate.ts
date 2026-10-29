@@ -4,6 +4,7 @@
 //   WORKERS=6 bun tools/balance/simulate.ts 200   (splits the runs over processes)
 //   TIMELINE=1 bun tools/balance/simulate.ts 40   (adds the wave timeline audit)
 //   KITE=1 bun tools/balance/simulate.ts 200   (runs from the boss, never dodges)
+//   NO_DODGE=1 bun tools/balance/simulate.ts 200   (ignores every floor tell)
 // It drives the game's own init model and update with a simple bot and
 // prints survival per wave, run length, the money curve, and which zombie
 // kinds cost the bot the most hearts. Nothing here ships with the game.
@@ -25,6 +26,9 @@ const { STALL_BOX, isShopOpenFor, priceFor, verdictFor } =
   await import('../../src/shop')
 const { FINAL_WAVE } = await import('../../src/waves')
 const { BOSS_RULES } = await import('../../src/boss')
+const { CHUCKER_RULES } = await import('../../src/chucker')
+const { CRAWLER_RULES } = await import('../../src/crawler')
+const { FRENZY_RULES } = await import('../../src/frenzy')
 const { canReload, heldLoaded, heldStats, maxRounds, maxTier, maybeSpare } =
   await import('../../src/weapons')
 const { Dialog } = await import('@foldkit/ui')
@@ -51,13 +55,23 @@ if (process.env.TUNE !== undefined) {
     BOOSTS: (await import('../../src/powerups')).BOOSTS,
     PICKUPS: (await import('../../src/powerups')).PICKUPS,
     BOSS_RULES: (await import('../../src/boss')).BOSS_RULES,
+    CHUCKER_RULES: (await import('../../src/chucker')).CHUCKER_RULES,
+    CRAWLER_RULES: (await import('../../src/crawler')).CRAWLER_RULES,
+    FRENZY_RULES: (await import('../../src/frenzy')).FRENZY_RULES,
   })
 }
 
 type Model = typeof initialModel
 type GameMessage = Parameters<typeof update>[1]
 type Vector = { x: number; y: number }
-type Kind = 'Shambler' | 'Runner' | 'Tank' | 'Exploder' | 'Boss'
+type Kind =
+  | 'Shambler'
+  | 'Runner'
+  | 'Tank'
+  | 'Exploder'
+  | 'Thrower'
+  | 'Crawler'
+  | 'Boss'
 
 const IS_ENDLESS = process.env.MODE === 'endless'
 const NO_UPGRADES = process.env.NO_UPGRADES !== undefined
@@ -93,7 +107,31 @@ type RunResult = {
   waveMs: number
   timelines: Array<WaveTimeline>
   boss: BossLog
+  newKinds: NewKindLog
 }
+
+// What the Chucker, the Ankle Biter, and frenzied packs did in a run.
+type NewKindLog = {
+  throws: number
+  throwHits: number
+  grabs: number
+  surfaced: number
+  frenzies: number
+  wipes: number
+  wipeBonus: number
+  heartsWhileClung: number
+}
+
+const emptyNewKinds = (): NewKindLog => ({
+  throws: 0,
+  throwHits: 0,
+  grabs: 0,
+  surfaced: 0,
+  frenzies: 0,
+  wipes: 0,
+  wipeBonus: 0,
+  heartsWhileClung: 0,
+})
 
 // Each boss wave the run reached: whether the boss walked in, whether it
 // fell, how long it stood, and whether the run ended while it stood.
@@ -252,8 +290,15 @@ const quietPartMs = (stretch: EmptyStretch) => stretch.ms - stretch.announcedMs
 const send = (model: Model, message: GameMessage): Model =>
   update(model, message).model
 
+// The zombies standing in the room: alive, and not under the floor, held
+// overhead, or in the air, so the bot can see, shoot, and flee them.
+const OUT_OF_REACH = new Set(['Burrowed', 'Carried', 'Flying'])
+
 const walking = (model: Model) =>
-  model.zombies.filter(zombie => zombie.state._tag === 'Walking')
+  model.zombies.filter(
+    zombie =>
+      zombie.state._tag === 'Walking' && !OUT_OF_REACH.has(zombie.action._tag),
+  )
 
 const distance = (a: Vector, b: Vector) => Math.hypot(a.x - b.x, a.y - b.y)
 
@@ -366,7 +411,40 @@ const clearSide = (model: Model, boss: Vector): Vector => {
     : { x: -across.x, y: -across.y }
 }
 
+// It steps off a thrown Groaner's landing mark the way it steps off a glob's,
+// and keeps clear of the cracks where an Ankle Biter is about to come up.
+const LANDING_MARGIN_PX = Number(process.env.LANDING_MARGIN ?? 6)
+const CRACK_BERTH_PX = Number(process.env.CRACK_BERTH ?? 8)
+
+const landingDodge = (model: Model): Vector | undefined => {
+  const mark = model.zombies.find(
+    zombie =>
+      zombie.action._tag === 'Flying' &&
+      distance(model.player, zombie.action.to) <
+        CHUCKER_RULES.landRadius + PLAYER_BODY_PX + LANDING_MARGIN_PX,
+  )
+  if (mark === undefined || mark.action._tag !== 'Flying') return undefined
+  const center = mark.action.to
+  return distance(model.player, center) < 3
+    ? clearSide(model, mark.action.from)
+    : steerToward(center, model.player)
+}
+
+const crackDodge = (model: Model): Vector | undefined => {
+  const crack = model.zombies.find(
+    zombie =>
+      zombie.action._tag === 'Burrowed' &&
+      distance(model.player, zombie) < CRAWLER_RULES.holdPx + CRACK_BERTH_PX,
+  )
+  return crack === undefined ? undefined : steerToward(crack, model.player)
+}
+
+const floorDodge = (model: Model): Vector | undefined =>
+  NO_DODGE ? undefined : (landingDodge(model) ?? crackDodge(model))
+
 const telegraphDodge = (model: Model): Vector | undefined => {
+  const floor = floorDodge(model)
+  if (floor !== undefined) return floor
   if (NO_DODGE || KITES || model.boss._tag !== 'Fighting') return undefined
   const boss = bossOf(model)
   const marker = model.boss.globs.find(
@@ -408,6 +486,10 @@ const telegraphDodge = (model: Model): Vector | undefined => {
 }
 
 const BOSS_BERTH_PX = Number(process.env.BOSS_BERTH ?? 16)
+
+// A frenzied zombie closes the gap faster, so the bot backs off from it
+// sooner, in proportion to the frenzy's extra speed.
+const FRENZY_BERTH_PX = Math.round(FLEE_PX * (FRENZY_RULES.paceScale - 1))
 
 // The spots a kiting player runs between: the four corners and the middle
 // of each wall, a little in from the walls.
@@ -455,7 +537,9 @@ const kite = (model: Model): Vector => {
     return dodge
   }
   const reach = (zombie: Model['zombies'][number]) =>
-    distance(player, zombie) - (zombie.kind === 'Boss' ? BOSS_BERTH_PX : 0)
+    distance(player, zombie) -
+    (zombie.kind === 'Boss' ? BOSS_BERTH_PX : 0) -
+    (zombie.frenzy._tag === 'Frenzied' ? FRENZY_BERTH_PX : 0)
   const nearest = walking(model)
     .filter(zombie => !KITES || zombie.kind !== 'Boss')
     .sort((a, b) => reach(a) - reach(b))[0]
@@ -702,6 +786,7 @@ const busiestDoor = (model: Model) => {
   if (model.phase._tag !== 'Preparation') return undefined
   const counts = new Map<string, number>()
   model.phase.spawns.forEach(spawn => {
+    if (spawn.kind === 'Crawler') return
     counts.set(spawn.door, (counts.get(spawn.door) ?? 0) + 1)
   })
   const boarded = new Set(
@@ -757,6 +842,8 @@ const emptyHurt = (): Record<Kind, number> => ({
   Runner: 0,
   Tank: 0,
   Exploder: 0,
+  Thrower: 0,
+  Crawler: 0,
   Boss: 0,
 })
 
@@ -778,6 +865,10 @@ const blame = (before: Model, after: Model, hurtBy: Record<Kind, number>) => {
   )
   if (burst) {
     hurtBy.Exploder += lost
+    return
+  }
+  if (after.frameEvents.some(event => event._tag === 'ZombieLanded')) {
+    hurtBy.Thrower += lost
     return
   }
   if (bossBlameOf(after) !== undefined) {
@@ -815,6 +906,7 @@ const runOnce = (seed: number): RunResult => {
   let waveMs = 0
   const timelines: Array<WaveTimeline> = []
   const bossLog: BossLog = []
+  const newKinds = emptyNewKinds()
   botRandom = seed
   spentOnUpgrades = 0
   boughtLog = []
@@ -899,6 +991,28 @@ const runOnce = (seed: number): RunResult => {
     const before = model
     model = send(model, Message.TickedFrame({ deltaTime: FRAME_MS }))
     blame(before, model, hurtBy)
+    model.frameEvents.forEach(event => {
+      if (event._tag === 'ZombieThrown') newKinds.throws += 1
+      if (event._tag === 'AnklesGrabbed') newKinds.grabs += 1
+      if (event._tag === 'CrawlerSurfaced') newKinds.surfaced += 1
+      if (event._tag === 'PackFrenzied') newKinds.frenzies += 1
+      if (event._tag === 'PackWiped') {
+        newKinds.wipes += 1
+        newKinds.wipeBonus += event.bonus
+      }
+    })
+    if (
+      model.player.hp < before.player.hp &&
+      model.frameEvents.some(event => event._tag === 'ZombieLanded')
+    ) {
+      newKinds.throwHits += 1
+    }
+    if (
+      model.player.hp < before.player.hp &&
+      before.zombies.some(zombie => zombie.action._tag === 'Clinging')
+    ) {
+      newKinds.heartsWhileClung += before.player.hp - model.player.hp
+    }
     model.frameEvents.forEach(event => {
       if (event._tag === 'PickupDropped') {
         dropped[event.kind] = (dropped[event.kind] ?? 0) + 1
@@ -1083,6 +1197,7 @@ const runOnce = (seed: number): RunResult => {
     waveMs,
     timelines,
     boss: bossLog,
+    newKinds,
   }
 }
 
@@ -1362,6 +1477,27 @@ fightWaves.forEach(bossWave => {
     `    hearts lost while he stood ${lostToBoss} (${share(lostToBoss, waveHearts)} of the wave's ${waveHearts}): stomp ${sum(fight => fight.heartsByAttack.Stomp)}, charge ${sum(fight => fight.heartsByAttack.Charge)}, glob ${sum(fight => fight.heartsByAttack.Glob)}, his bite ${sum(fight => fight.heartsByAttack.Bite)}, the rest to the crowd`,
   )
 })
+
+const newKindTotal = (pick: (log: NewKindLog) => number) =>
+  results.reduce((sum, r) => sum + pick(r.newKinds), 0)
+const perRun = (pick: (log: NewKindLog) => number) =>
+  (newKindTotal(pick) / Math.max(1, runs)).toFixed(1)
+console.log('\nNew kinds and frenzy (per run)')
+console.log(
+  `  Chucker throws ${perRun(log => log.throws)}, landed on the bot ${perRun(log => log.throwHits)} (${(
+    (100 * newKindTotal(log => log.throwHits)) /
+    Math.max(
+      1,
+      newKindTotal(log => log.throws),
+    )
+  ).toFixed(0)}%)`,
+)
+console.log(
+  `  Ankle Biters surfaced ${perRun(log => log.surfaced)}, grabbed the bot ${perRun(log => log.grabs)}, hearts lost while held ${perRun(log => log.heartsWhileClung)}`,
+)
+console.log(
+  `  Frenzied packs ${perRun(log => log.frenzies)}, wiped for the bonus ${perRun(log => log.wipes)}, bonus paid $${perRun(log => log.wipeBonus)}`,
+)
 
 console.log(
   `\nMost zombies on screen at once: median ${median(results.map(r => r.maxAlive))}, worst ${Math.max(...results.map(r => r.maxAlive))}`,
