@@ -17,6 +17,7 @@ import {
 import {
   BreakClock,
   DebutCard,
+  DifficultyCard,
   Lesson,
   Loading,
   type Model,
@@ -32,7 +33,9 @@ import {
   decodeSave,
   encodeSave,
   readSave,
+  restoreSave,
   saveOf,
+  unpickedDifficulty,
   writeSave,
 } from './save'
 import { ZOMBIE_KIND_ORDER } from './zombies'
@@ -40,7 +43,7 @@ import { ZOMBIE_KIND_ORDER } from './zombies'
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 
 const learnedSave: PlayerSave = {
-  version: 1,
+  version: 2,
   onboarding: {
     lessons: {
       move: 'Learned',
@@ -64,6 +67,7 @@ const learnedSave: PlayerSave = {
     skinTone: 'Deep',
     shirtColor: 'Teal',
   },
+  difficulty: { chosen: 'Hard', card: 'Seen', nightmare: 'Unlocked' },
 }
 
 const loading: Model = modifyFields(initialModel, {
@@ -95,16 +99,30 @@ describe('the schema', () => {
     expect(decodeSave(json)).toEqual(Option.some(learnedSave))
   })
 
+  test('the difficulty round trips through the model', () => {
+    expect(saveOf(restoreSave(initialModel, learnedSave)).difficulty).toEqual(
+      learnedSave.difficulty,
+    )
+  })
+
   test('the save of a fresh model round trips too', () => {
     const fresh = saveOf(initialModel)
     const json = Option.getOrThrow(encodeSave(fresh))
     expect(decodeSave(json)).toEqual(Option.some(fresh))
   })
 
+  test('a version 1 save still loads, as Normal with the card still to come', () => {
+    const { difficulty: _, ...withoutDifficulty } = learnedSave
+    const json = JSON.stringify({ ...withoutDifficulty, version: 1 })
+    expect(decodeSave(json)).toEqual(
+      Option.some({ ...learnedSave, difficulty: unpickedDifficulty }),
+    )
+  })
+
   test('corrupted JSON, a wrong version, and a missing field read as no save', () => {
     const json = Option.getOrThrow(encodeSave(learnedSave))
-    expect(decodeSave('{"version":1,')).toEqual(Option.none())
-    expect(decodeSave(json.replace('"version":1', '"version":0'))).toEqual(
+    expect(decodeSave('{"version":2,')).toEqual(Option.none())
+    expect(decodeSave(json.replace('"version":2', '"version":0'))).toEqual(
       Option.none(),
     )
     expect(
@@ -145,6 +163,11 @@ describe('loading the save', () => {
         expect(current.appearance).toEqual(learnedSave.appearance)
         expect(current.homeScreenTip).toBe('Dismissed')
         expect(TrapHint.guards.Seen(current.trapHint)).toBe(true)
+        expect(current.difficulty).toEqual({
+          chosen: 'Hard',
+          nightmare: 'Unlocked',
+        })
+        expect(current.difficultyCard).toEqual(DifficultyCard.Seen())
       }),
       message(Message.ClickedCampaignButton()),
       tick,
@@ -168,6 +191,12 @@ describe('loading the save', () => {
       message(Message.CompletedLoadSave({ maybeSave: Option.none() })),
       ...finishSplash,
       message(Message.ClickedCampaignButton()),
+      showDialog(),
+      message(Message.ClickedDifficultyCardButton({ difficulty: 'Normal' })),
+      Command.resolve(
+        Dialog.CloseDialog,
+        Dialog.Message.CompletedCloseDialog(),
+      ),
       Command.resolve(WriteSave, Message.CompletedWriteSave()),
       tick,
       model(current => {
@@ -223,6 +252,51 @@ describe('writing the save', () => {
       message(Message.ClickedMuteButton()),
       Command.expectExact(WriteSave({ save: saveOf(muted) })),
       Command.resolve(WriteSave, Message.CompletedWriteSave()),
+    )
+  })
+
+  test('choosing a difficulty in SETTINGS writes the new save', () => {
+    const settings = modifyFields(read, {
+      panel: () => 'Settings',
+      difficultyCard: () => DifficultyCard.Seen(),
+    })
+    story(
+      update,
+      given(settings),
+      message(Message.ClickedDifficultySettingButton({ difficulty: 'Easy' })),
+      Command.expectExact(
+        WriteSave({
+          save: saveOf(
+            modifyFields(settings, {
+              difficulty: setting =>
+                modifyFields(setting, { chosen: () => 'Easy' }),
+            }),
+          ),
+        }),
+      ),
+      Command.resolve(WriteSave, Message.CompletedWriteSave()),
+    )
+  })
+
+  test('answering the first-time card saves the pick and that it was seen', () => {
+    story(
+      update,
+      given(read),
+      message(Message.ClickedCampaignButton()),
+      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      message(Message.ClickedDifficultyCardButton({ difficulty: 'Hard' })),
+      Command.resolve(
+        Dialog.CloseDialog,
+        Dialog.Message.CompletedCloseDialog(),
+      ),
+      Command.resolve(WriteSave, Message.CompletedWriteSave()),
+      model(current => {
+        expect(saveOf(current).difficulty).toEqual({
+          chosen: 'Hard',
+          card: 'Seen',
+          nightmare: 'Locked',
+        })
+      }),
     )
   })
 

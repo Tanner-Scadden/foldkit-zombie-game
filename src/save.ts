@@ -4,6 +4,8 @@ import { modifyFields } from 'foldkit/struct'
 import {
   Appearance,
   DebutCard,
+  Difficulty,
+  DifficultyCard,
   HomeScreenTip,
   Lesson,
   type Lessons,
@@ -24,7 +26,7 @@ import {
 // into that scope and this key is retired. A new field goes in here with a
 // version bump, and decodeSave migrates or drops the older version.
 export const SAVE_KEY = 'munch-manor:save'
-export const SAVE_VERSION = 1
+export const SAVE_VERSION = 2
 
 export const SavedLesson = Schema.Literals(['Pending', 'Learned'])
 export type SavedLesson = typeof SavedLesson.Type
@@ -58,21 +60,66 @@ export const SavedSettings = Schema.Struct({
 })
 export type SavedSettings = typeof SavedSettings.Type
 
-// NOTE: difficulty joins this record as a `difficulty` field under a version
-// bump to 2. Only the chosen difficulty for the session stays out of it.
+export const SavedCard = Schema.Literals(['Unseen', 'Seen'])
+export type SavedCard = typeof SavedCard.Type
+
+export const SavedNightmare = Schema.Literals(['Locked', 'Unlocked'])
+export type SavedNightmare = typeof SavedNightmare.Type
+
+// NOTE: version 2 added the difficulty: the chosen level, whether the
+// first-time card was answered, and the Nightmare unlock.
+export const SavedDifficulty = Schema.Struct({
+  chosen: Difficulty,
+  card: SavedCard,
+  nightmare: SavedNightmare,
+})
+export type SavedDifficulty = typeof SavedDifficulty.Type
+
+const PlayerSaveV1 = Schema.Struct({
+  version: Schema.Literal(1),
+  onboarding: SavedOnboarding,
+  homeScreenTip: HomeScreenTip,
+  settings: SavedSettings,
+  appearance: Appearance,
+})
+type PlayerSaveV1 = typeof PlayerSaveV1.Type
+
 export const PlayerSave = Schema.Struct({
   version: Schema.Literal(SAVE_VERSION),
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
   settings: SavedSettings,
   appearance: Appearance,
+  difficulty: SavedDifficulty,
 })
 export type PlayerSave = typeof PlayerSave.Type
 
 const PlayerSaveJson = Schema.fromJsonString(PlayerSave)
 
+const PlayerSaveV1Json = Schema.fromJsonString(PlayerSaveV1)
+
+export const unpickedDifficulty: SavedDifficulty = {
+  chosen: 'Normal',
+  card: 'Unseen',
+  nightmare: 'Locked',
+}
+
+const migrateV1 = (save: PlayerSaveV1): PlayerSave => ({
+  version: SAVE_VERSION,
+  onboarding: save.onboarding,
+  homeScreenTip: save.homeScreenTip,
+  settings: save.settings,
+  appearance: save.appearance,
+  difficulty: unpickedDifficulty,
+})
+
 export const decodeSave = (raw: string): Option.Option<PlayerSave> =>
-  Schema.decodeOption(PlayerSaveJson)(raw)
+  pipe(
+    Schema.decodeOption(PlayerSaveJson)(raw),
+    Option.orElse(() =>
+      Option.map(Schema.decodeOption(PlayerSaveV1Json)(raw), migrateV1),
+    ),
+  )
 
 export const encodeSave = (save: PlayerSave): Option.Option<string> =>
   Schema.encodeOption(PlayerSaveJson)(save)
@@ -110,6 +157,13 @@ export const saveOf = (model: Model): PlayerSave => ({
     shake: model.shakeSetting,
   },
   appearance: model.appearance,
+  difficulty: {
+    chosen: model.difficulty.chosen,
+    card: DifficultyCard.isAnyOf(['Seen'])(model.difficultyCard)
+      ? 'Seen'
+      : 'Unseen',
+    nightmare: model.difficulty.nightmare === 'Locked' ? 'Locked' : 'Unlocked',
+  },
 })
 
 // INTO THE MODEL
@@ -153,6 +207,16 @@ export const restoreSave = (model: Model, save: PlayerSave): Model =>
     musicSetting: () => save.settings.music,
     shakeSetting: () => save.settings.shake,
     appearance: () => save.appearance,
+    difficulty: setting =>
+      modifyFields(setting, {
+        chosen: () => save.difficulty.chosen,
+        nightmare: nightmare =>
+          save.difficulty.nightmare === 'Unlocked' && nightmare === 'Locked'
+            ? 'Unlocked'
+            : nightmare,
+      }),
+    difficultyCard: card =>
+      save.difficulty.card === 'Seen' ? DifficultyCard.Seen() : card,
   })
 
 // RESET

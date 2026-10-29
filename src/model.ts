@@ -601,9 +601,9 @@ export const NightmareLock = Schema.Literals([
 ])
 export type NightmareLock = typeof NightmareLock.Type
 
-// NOTE: the chosen difficulty and the Nightmare unlock live in memory for the
-// page session only. They are plain data on purpose: they move into the
-// SQLite player scope from PLATFORM.md beside the look and the bests.
+// NOTE: the chosen difficulty and the Nightmare unlock are kept in the
+// on-device save (src/save.ts). They are plain data on purpose: they move
+// into the SQLite player scope from PLATFORM.md beside the look.
 export const DifficultySetting = Schema.Struct({
   chosen: Difficulty,
   nightmare: NightmareLock,
