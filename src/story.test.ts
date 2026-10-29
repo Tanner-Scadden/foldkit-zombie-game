@@ -67,6 +67,7 @@ import {
   SURFACE,
   bulletInto,
   holdFire,
+  openFloorSpot,
   releaseFire,
   scoring,
   tick,
@@ -738,12 +739,9 @@ describe('particles and decals', () => {
     const floodSize = 40
     const victims = Array.makeBy(floodSize, index =>
       modifyFields(
-        zombieAt(
-          200 + index,
-          20 + (index % 10) * 30,
-          25 + Math.floor(index / 10) * 40,
-          { speed: 0 },
-        ),
+        zombieAt(200 + index, openFloorSpot(index).x, openFloorSpot(index).y, {
+          speed: 0,
+        }),
         { hp: () => 1 },
       ),
     )
@@ -863,11 +861,7 @@ const doomedZombieAt = (id: number, x: number, y: number): Zombie =>
 
 const massacreModel = (count: number): Model => {
   const victims = Array.makeBy(count, index =>
-    doomedZombieAt(
-      300 + index,
-      20 + (index % 10) * 30,
-      25 + Math.floor(index / 10) * 40,
-    ),
+    doomedZombieAt(300 + index, openFloorSpot(index).x, openFloorSpot(index).y),
   )
   return modifyFields(withZombies(playingModel, victims), {
     bullets: () =>

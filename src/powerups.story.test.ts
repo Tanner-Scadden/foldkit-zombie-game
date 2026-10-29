@@ -112,7 +112,7 @@ const withLoot = (base: Model, loot: Partial<Loot>): Model =>
 
 const victimsOf = (kind: ZombieKind, count: number): ReadonlyArray<Zombie> =>
   Array.makeBy(count, index =>
-    zombieOf(kind, 100 + index, 30 + index * 22, 62, { hp: 1 }),
+    zombieOf(kind, 100 + index, 30 + index * 22, 85, { hp: 1 }),
   )
 
 const withKills = (base: Model, victims: ReadonlyArray<Zombie>): Model =>
@@ -278,7 +278,7 @@ describe('drops', () => {
     const crowd = Array.makeBy(5, index =>
       zombieOf('Tank', 300 + index, 40 + index * 20, 150, { hp: 30 }),
     )
-    const target = zombieOf('Shambler', 400, 120, 40, { hp: 1 })
+    const target = zombieOf('Shambler', 400, 120, 85, { hp: 1 })
     const incoming = modifyFields(
       bulletInto(target.id + 500, target, { knockback: 0 }),
       {

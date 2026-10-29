@@ -237,7 +237,7 @@ describe('caps', () => {
       'Tank',
       200 + index,
       40 + (index % 9) * 28,
-      64 + Math.floor(index / 9) * 12,
+      82 + Math.floor(index / 9) * 14,
       { hp: 36 },
     ),
   )

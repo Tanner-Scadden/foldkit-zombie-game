@@ -843,13 +843,13 @@ describe('turrets', () => {
   })
 
   test('does not shoot through cover or past its range', () => {
-    const hidden = tough(72, { x: 170, y: 22 })
-    const visible = tough(73, { x: 240, y: 75 })
-    const behindCrate = [turret(1, 17, 7)]
+    const hidden = tough(72, { x: 165, y: 100 })
+    const visible = tough(73, { x: 230, y: 145 })
+    const behindCouch = [turret(1, 16, 14)]
 
     story(
       update,
-      given(fightingWith(behindCrate, [hidden, visible], { x: 40, y: 160 })),
+      given(fightingWith(behindCouch, [hidden, visible], { x: 40, y: 160 })),
       tick(FRAME_MS),
       model(current => {
         const shot = Option.getOrThrow(Array.head(firedPeas(current)))
@@ -861,7 +861,7 @@ describe('turrets', () => {
 
     story(
       update,
-      given(fightingWith(behindCrate, [hidden], { x: 40, y: 160 })),
+      given(fightingWith(behindCouch, [hidden], { x: 40, y: 160 })),
       ...ticks(10, FRAME_MS),
       model(current => {
         expect(firedPeas(current)).toEqual([])

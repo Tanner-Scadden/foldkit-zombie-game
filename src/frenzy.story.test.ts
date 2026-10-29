@@ -165,8 +165,8 @@ describe('horde frenzy', () => {
 
   test('wiping out the whole pack pays its bonus once', () => {
     const pack = Frenzy.Frenzied({ pack: 3, apartMs: 0 })
-    const first = zombieAt(1, 60, 60, { frenzy: pack, hp: 1, maxHp: 3 })
-    const second = zombieAt(2, 66, 60, {
+    const first = zombieAt(1, 60, 85, { frenzy: pack, hp: 1, maxHp: 3 })
+    const second = zombieAt(2, 66, 85, {
       frenzy: Frenzy.Spent({ pack: 3 }),
       hp: 1,
       maxHp: 3,

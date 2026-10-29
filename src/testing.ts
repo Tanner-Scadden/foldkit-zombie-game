@@ -129,6 +129,22 @@ export const zombieOf = (
   frenzy,
 })
 
+// NOTE: a grid of up to forty spots on open floor, ten across each of four
+// rows that no furniture in the parlour touches, for tests that fill the
+// room with zombies.
+const OPEN_FLOOR_ROWS_Y: Array.NonEmptyReadonlyArray<number> = [
+  74, 89, 104, 135,
+]
+
+export const openFloorSpot = (
+  index: number,
+): Readonly<{ x: number; y: number }> => ({
+  x: 20 + (index % 10) * 30,
+  y:
+    OPEN_FLOOR_ROWS_Y[Math.floor(index / 10) % OPEN_FLOOR_ROWS_Y.length] ??
+    OPEN_FLOOR_ROWS_Y[0],
+})
+
 export const zombieAt = (
   id: number,
   x: number,

@@ -48,13 +48,13 @@ const withPlayerAt = (base: Model, x: number, y: number): Model =>
     player: player => modifyFields(player, { x: () => x, y: () => y }),
   })
 
-const PIANO_RIGHT = 70
-const PIANO_BOTTOM = 50
+const PIANO_RIGHT = 40
+const PIANO_BOTTOM = 40
 const TOP_WALL_BOTTOM = 20
-const CRATE_LEFT = 110
-const CRATE_ROW_Y = 160
-const CRATE_STACK_X = 170
-const CRATE_STACK_BOTTOM = 50
+const ARMCHAIR_LEFT = 110
+const ARMCHAIR_ROW_Y = 50
+const COUCH_X = 160
+const COUCH_BOTTOM = 130
 
 const isCircleClear = ({ x, y }: { x: number; y: number }, radius: number) =>
   Array.every(
@@ -109,23 +109,23 @@ describe('player collision', () => {
   test('the player stops at the top wall and at the underside of the piano', () => {
     story(
       update,
-      given(withPlayerAt(fightingModel, 120, 40)),
+      given(withPlayerAt(fightingModel, 125, 40)),
       press('KeyW'),
       ...ticks(40, MAX_FRAME_DELTA_MS),
       model(({ player }) => {
         expect(player.y).toBeCloseTo(TOP_WALL_BOTTOM + PLAYER_RADIUS)
-        expect(player.x).toBeCloseTo(120)
+        expect(player.x).toBeCloseTo(125)
       }),
     )
 
     story(
       update,
-      given(withPlayerAt(fightingModel, 55, 70)),
+      given(withPlayerAt(fightingModel, 25, 70)),
       press('KeyW'),
       ...ticks(20, MAX_FRAME_DELTA_MS),
       model(({ player }) => {
         expect(player.y).toBeCloseTo(PIANO_BOTTOM + PLAYER_RADIUS)
-        expect(player.x).toBeCloseTo(55)
+        expect(player.x).toBeCloseTo(25)
       }),
     )
   })
@@ -133,7 +133,7 @@ describe('player collision', () => {
   test('the player slides along cover when pushing into it at an angle', () => {
     story(
       update,
-      given(withPlayerAt(fightingModel, 50, 60)),
+      given(withPlayerAt(fightingModel, 20, 50)),
       press('KeyW'),
       press('KeyD'),
       ...ticks(5, MAX_FRAME_DELTA_MS),
@@ -141,7 +141,7 @@ describe('player collision', () => {
         expect(player.y).toBeGreaterThanOrEqual(
           PIANO_BOTTOM + PLAYER_RADIUS - 0.01,
         )
-        expect(player.x).toBeGreaterThan(60)
+        expect(player.x).toBeGreaterThan(30)
       }),
       ...ticks(20, MAX_FRAME_DELTA_MS),
       model(({ player }) => {
@@ -151,18 +151,18 @@ describe('player collision', () => {
     )
   })
 
-  test('a hard knockback in a long frame does not tunnel through a one-tile crate', () => {
+  test('a hard knockback in a long frame does not tunnel through a one-tile armchair', () => {
     story(
       update,
       given(
-        modifyFields(withPlayerAt(fightingModel, 100, CRATE_ROW_Y), {
+        modifyFields(withPlayerAt(fightingModel, 100, ARMCHAIR_ROW_Y), {
           player: player =>
             modifyFields(player, { knockback: () => ({ x: 600, y: 0 }) }),
         }),
       ),
       tick(5000),
       model(({ player }) => {
-        expect(player.x).toBeCloseTo(CRATE_LEFT - PLAYER_RADIUS)
+        expect(player.x).toBeCloseTo(ARMCHAIR_LEFT - PLAYER_RADIUS)
       }),
     )
   })
@@ -183,8 +183,8 @@ describe('player collision', () => {
 describe('bullets and cover', () => {
   const upwardBullet: Bullet = {
     id: 900,
-    x: CRATE_STACK_X,
-    y: 70,
+    x: COUCH_X,
+    y: 150,
     velocityX: 0,
     velocityY: -240,
     remainingMs: 900,
@@ -194,7 +194,7 @@ describe('bullets and cover', () => {
     glaze: 'Plain',
     pierce: Pierce.Stops(),
   }
-  const hiddenZombie = zombieAt(901, CRATE_STACK_X, 25)
+  const hiddenZombie = zombieAt(901, COUCH_X, 105, { speed: 0 })
 
   test('a bullet stops on cover, chips it, and never reaches the zombie behind', () => {
     story(
@@ -210,8 +210,8 @@ describe('bullets and cover', () => {
         expect(bullets).toEqual([])
         const strike = Option.getOrThrow(Array.head(frameEvents))
         expect(strike._tag).toBe('BulletStruck')
-        expect(strike.y).toBeGreaterThanOrEqual(CRATE_STACK_BOTTOM)
-        expect(strike.y).toBeLessThan(CRATE_STACK_BOTTOM + 3)
+        expect(strike.y).toBeGreaterThanOrEqual(COUCH_BOTTOM)
+        expect(strike.y).toBeLessThan(COUCH_BOTTOM + 3)
         expect(Array.some(particles, ({ kind }) => kind === 'Chip')).toBe(true)
         expect(Array.map(zombies, ({ hp }) => hp)).toEqual([ZOMBIE_MAX_HP])
       }),
@@ -222,7 +222,7 @@ describe('bullets and cover', () => {
     )
   })
 
-  test('a bullet that crosses a crate in one long frame still stops on it', () => {
+  test('a bullet that crosses an armchair in one long frame still stops on it', () => {
     story(
       update,
       given(
@@ -230,8 +230,8 @@ describe('bullets and cover', () => {
           bullets: () => [
             {
               id: 902,
-              x: CRATE_LEFT - 1,
-              y: CRATE_ROW_Y,
+              x: ARMCHAIR_LEFT - 1,
+              y: ARMCHAIR_ROW_Y,
               velocityX: 240,
               velocityY: 0,
               remainingMs: 900,
@@ -275,7 +275,7 @@ describe('particles and walls', () => {
         modifyFields(fightingModel, {
           particles: () => [
             fallingDrop(5, 50),
-            fallingDrop(55, 40),
+            fallingDrop(25, 30),
             fallingDrop(100, 100),
           ],
         }),
@@ -291,8 +291,8 @@ describe('particles and walls', () => {
 })
 
 describe('pathing', () => {
-  const COUCH_TOP = 130
-  const behindCouch = { x: 170, y: 147 }
+  const COUCH_TOP = 120
+  const behindCouch = { x: 160, y: 137 }
 
   const doorRun = (seconds: number) =>
     Array.makeBy((seconds * 1000) / MAX_FRAME_DELTA_MS, () =>

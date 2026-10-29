@@ -1,4 +1,5 @@
 import { Array, Option } from 'effect'
+import { Canvas } from 'foldkit'
 import { given, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
@@ -26,10 +27,12 @@ import {
 } from './pathing'
 import { roomShapes } from './room'
 import { freshRun } from './runReset'
+import { imageColors } from './testPng'
 import { ticks } from './testing'
 
-// NOTE: a made-up map with one boarded exit, since the parlour has none yet.
-// The kitchen below the boards has its own door, shut until the exit opens.
+// NOTE: a made-up map with one boarded exit that holds a door shut, since
+// the parlour's exit has no room behind it yet. The kitchen below the boards
+// has its own door, shut until the exit opens.
 const HALL: LevelSpec = {
   id: 'TestHall',
   tiles: [
@@ -47,11 +50,19 @@ const HALL: LevelSpec = {
 }
 
 const BOARDS = { column: 3, row: 5 }
+const KITCHEN_BOARDS = { column: 6, row: 1 }
 const HALLWAY = { x: 35, y: 25 }
 const BOARD_GAP_COLOR = '#140e0b'
 
-const drawsBoards = (shapes: ReadonlyArray<unknown>): boolean =>
-  JSON.stringify(shapes).includes(BOARD_GAP_COLOR)
+// NOTE: the room is baked into one image, so the boards are found among the
+// image's pixels.
+const drawsBoards = (shapes: ReadonlyArray<Canvas.Shape>): boolean =>
+  Array.some(
+    shapes,
+    shape =>
+      shape._tag === 'Image' &&
+      Array.contains(imageColors(shape.src), BOARD_GAP_COLOR),
+  )
 
 const distanceTo = (
   distances: ReadonlyArray<number>,
@@ -126,17 +137,30 @@ describe('opening an exit', () => {
     expect(roomShapes(opened)).not.toBe(roomShapes(hall))
     expect(drawsBoards(roomShapes(hall))).toBe(true)
     expect(drawsBoards(roomShapes(opened))).toBe(false)
-    expect(drawsBoards(roomShapes(PARLOUR))).toBe(false)
   })
 })
 
 describe('the parlour', () => {
-  test('is where every run starts, with no exit to buy yet', () => {
+  test('is where every run starts, with the way to the kitchen boarded shut', () => {
     expect(initialModel.level).toEqual(startingLevel)
     expect(levelOf(initialModel)).toBe(PARLOUR)
-    expect(PARLOUR.exits).toEqual([])
-    expect(openExitIn(startingLevel, 'Kitchen')).toBe(startingLevel)
     expect(freshRun(initialModel).level).toEqual(startingLevel)
+    expect(Array.map(closedExits(PARLOUR), ({ id }) => id)).toEqual(['Kitchen'])
+    expect(PARLOUR.doorIds).toEqual(['North', 'West', 'East', 'South'])
+    expect(
+      isWalkableTile(PARLOUR, KITCHEN_BOARDS.column, KITCHEN_BOARDS.row),
+    ).toBe(false)
+    expect(drawsBoards(roomShapes(PARLOUR))).toBe(true)
+  })
+
+  test('opens the kitchen exit into floor without adding a spawn door', () => {
+    const opened = levelOf({ level: openExitIn(startingLevel, 'Kitchen') })
+    expect(closedExits(opened)).toEqual([])
+    expect(opened.doorIds).toEqual(PARLOUR.doorIds)
+    expect(
+      isWalkableTile(opened, KITCHEN_BOARDS.column, KITCHEN_BOARDS.row),
+    ).toBe(true)
+    expect(drawsBoards(roomShapes(opened))).toBe(false)
   })
 
   test('keeps its level and its flow field through a wave', () => {

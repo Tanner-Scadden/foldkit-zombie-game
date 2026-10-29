@@ -28,6 +28,7 @@ import {
   pickupFootY,
   pickupShapes,
 } from './powerupView'
+import { hearthFireShapes } from './room'
 import { isShopOpenFor, stallPrompt } from './shop'
 import { group } from './sprite'
 import {
@@ -83,6 +84,7 @@ const groundShapes = (
   model: Model,
   look: StallLook,
 ): ReadonlyArray<Canvas.Shape> => [
+  ...hearthFireShapes(levelOf(model), model.elapsedMs),
   ...stallGroundShapes(look, model.elapsedMs),
   playerShadow(model.player),
   ...zombieGroundShapes(model.zombies, model.elapsedMs),
@@ -161,6 +163,7 @@ const overheadShapes = (
 // WORLD
 
 const titleWorldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
+  ...hearthFireShapes(levelOf(model), model.screenMs),
   ...stallGroundShapes('Closed', model.screenMs),
   ...stallShapes('Closed', model.screenMs),
 ]

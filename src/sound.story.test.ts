@@ -26,7 +26,7 @@ import {
   type Zombie,
   initialModel,
 } from './model'
-import { SURFACE, holdFire, tick, zombieAt } from './testing'
+import { SURFACE, holdFire, openFloorSpot, tick, zombieAt } from './testing'
 
 const FRAME_MS = 16
 const MID_GAME_MS = 30_000
@@ -261,8 +261,8 @@ describe('frame sounds', () => {
     const victims = Array.makeBy(floodSize, index =>
       oneHitZombieAt(
         200 + index,
-        20 + (index % 10) * 30,
-        25 + Math.floor(index / 10) * 40,
+        openFloorSpot(index).x,
+        openFloorSpot(index).y,
       ),
     )
     const killingBullets = Array.map(victims, ({ id, x, y }): Bullet => ({

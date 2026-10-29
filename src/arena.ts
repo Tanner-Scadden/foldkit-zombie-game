@@ -13,39 +13,54 @@ import type { DoorId, ExitId, LevelId, LevelState, Vector } from './model'
 // MAP
 
 export const ROOM_MAP: ReadonlyArray<string> = [
-  '#####################NN#########',
-  '#####################NN#########',
-  '#..............................#',
-  '#...PPP.........XX.............#',
-  '#...PPP.........XX.......TTT...#',
-  '#........................TTT...#',
-  '#..............................#',
+  '######KK#############NN#########',
+  '######KK#############NN#########',
+  '#PPP..........FFFF........BBBBB#',
+  '#PPP...........................#',
+  '#..........A........A..........#',
+  '#...TT.....A........A......TT..#',
+  '#...TT.....................TT..#',
   '#..............................#',
   'W..............................E',
   'W..............................E',
   '#..............................#',
-  '#....O.....................XX..#',
-  '#....O...XX................XX..#',
-  '#........X.....CCCC............#',
+  '#...O......................VV..#',
+  '#...O........CCCCCC........VV..#',
   '#..............................#',
-  '#..........X..............$$...#',
-  '#..........X..............$$...#',
+  '#.........UU...................#',
+  '#.........................$$...#',
+  '#...................XX....$$...#',
   '########SS######################',
 ]
 
 // SYMBOLS
 
-export type CoverKind = 'Piano' | 'Couch' | 'Crate' | 'Table' | 'Coffin'
+export type CoverKind =
+  | 'Piano'
+  | 'Hearth'
+  | 'Bookshelf'
+  | 'Armchair'
+  | 'Couch'
+  | 'TeaTable'
+  | 'Fern'
+  | 'Coffin'
+  | 'Trunk'
+  | 'Crate'
 
 export const WALL_SYMBOL = '#'
 export const SHOP_STALL_SYMBOL = '$'
 
 export const COVER_SYMBOLS: Readonly<Record<string, CoverKind>> = {
   P: 'Piano',
+  F: 'Hearth',
+  B: 'Bookshelf',
+  A: 'Armchair',
   C: 'Couch',
-  X: 'Crate',
-  T: 'Table',
+  T: 'TeaTable',
+  V: 'Fern',
   O: 'Coffin',
+  U: 'Trunk',
+  X: 'Crate',
 }
 
 export const DOOR_SYMBOLS: Readonly<Record<DoorId, string>> = {
@@ -95,10 +110,13 @@ export type LevelSpec = Readonly<{
   exits: ReadonlyArray<ExitSpec>
 }>
 
+// NOTE: the parlour's one exit is the boarded double door in the north wall,
+// the way to the kitchen. No room stands behind it yet, so it holds no door
+// shut, and nothing in the shop opens it.
 export const PARLOUR_SPEC: LevelSpec = {
   id: 'Parlour',
   tiles: ROOM_MAP,
-  exits: [],
+  exits: [{ id: 'Kitchen', symbol: 'K', doors: [] }],
 }
 
 export const LEVEL_SPECS: Readonly<Record<LevelId, LevelSpec>> = {

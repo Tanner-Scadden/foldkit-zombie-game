@@ -468,7 +468,7 @@ describe('exploders', () => {
 
   test('a long chain bursts at most the cap in one frame and queues the rest', () => {
     const cluster = Array.makeBy(6, index =>
-      zombieOf('Exploder', index + 1, 200 + (index % 3) * 3, 60 + index),
+      zombieOf('Exploder', index + 1, 200 + (index % 3) * 3, 80 + index),
     )
     const frames: Array<Model> = []
 
@@ -717,7 +717,7 @@ describe('spawn tables', () => {
 describe('tank pathing', () => {
   const TANK_TEST_SPEED = 40
   const TANK_REACH = ZOMBIE_KINDS.Tank.radius + PLAYER_RADIUS + 1
-  const behindThePiano = { x: 30, y: 25 }
+  const underThePiano = { x: 20, y: 48 }
   const roomCenter = { x: CENTER_X, y: CENTER_Y }
 
   const tankRun = (
@@ -786,7 +786,7 @@ describe('tank pathing', () => {
     const room = DOOR_HALF_WIDTH_PX - ZOMBIE_KINDS.Tank.radius
     Array.forEach(DOOR_IDS, door => {
       Array.forEach([-room, room], offset => {
-        Array.forEach([behindThePiano, roomCenter], target => {
+        Array.forEach([underThePiano, roomCenter], target => {
           const frames = tankRun(door, offset, target)
           const label = `${door} ${offset} ${target.x},${target.y}`
           expect(closestApproach(frames), label).toBeLessThanOrEqual(TANK_REACH)
