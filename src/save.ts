@@ -172,22 +172,43 @@ const migrateV3 = (save: PlayerSaveV3): PlayerSave => ({
   bests: save.bests,
 })
 
-export const decodeSave = (raw: string): Option.Option<PlayerSave> =>
-  pipe(
-    Schema.decodeOption(PlayerSaveJson)(raw),
-    Option.orElse(() =>
+// NOTE: the one list of save versions this build reads, newest first, each
+// with its way to the current save. A new version goes at the top, with its
+// number in SAVE_VERSION (src/playerData.ts). Renumbering versions after a
+// merge happens here and there only. The sync scope's SeededPlayer carries
+// the current PlayerSave, so a new version also bumps its mutation version
+// in src/playerScope.ts.
+const SAVE_VERSIONS: ReadonlyArray<
+  Readonly<{
+    version: number
+    read: (raw: string) => Option.Option<PlayerSave>
+  }>
+> = [
+  { version: SAVE_VERSION, read: Schema.decodeOption(PlayerSaveJson) },
+  {
+    version: 3,
+    read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV3Json)(raw), migrateV3),
-    ),
-    Option.orElse(() =>
+  },
+  {
+    version: 2,
+    read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV2Json)(raw), save =>
         migrateV3(migrateV2(save)),
       ),
-    ),
-    Option.orElse(() =>
+  },
+  {
+    version: 1,
+    read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV1Json)(raw), save =>
         migrateV3(migrateV2(migrateV1(save))),
       ),
-    ),
+  },
+]
+
+export const decodeSave = (raw: string): Option.Option<PlayerSave> =>
+  Array.reduce(SAVE_VERSIONS, Option.none<PlayerSave>(), (found, { read }) =>
+    Option.orElse(found, () => read(raw)),
   )
 
 export const encodeSave = (save: PlayerSave): Option.Option<string> =>
