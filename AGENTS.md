@@ -23,6 +23,9 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 | `bun run test`                                      | Run the Story and Scene tests                                              |
 | `bun run build`                                     | Build for production                                                       |
 | `bun run perf:check`                                | Compare frame time to `tools/audit/frame-baseline.json` in headless Chrome |
+| `cd infra && bun alchemy plan --stage prod`         | Show what a production deploy to Cloudflare would change                   |
+| `cd infra && bun alchemy deploy --stage prod`       | Deploy production to Cloudflare by hand (see Deploying)                    |
+| `cd tools/audit && bun live-check.ts [url]`         | Load a deployed copy in headless Chrome and check that it boots            |
 | `bun tools/balance/simulate.ts [runs]`              | Play many seeded runs with a bot and print the balance report              |
 | `MODE=endless bun tools/balance/simulate.ts [runs]` | The same bot in endless mode. `SWAP=1` makes it swap back to its spare gun |
 
@@ -83,10 +86,22 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 
 `bun run build` writes a static site to `dist/`. Vite's `base` is `'./'`, so every asset path is relative and `dist/` works from any sub-path. Check it with `bunx vite preview` before publishing. It needs an HTTP server: opening `dist/index.html` straight from disk does not load the module script.
 
-- **GitHub Pages.** `.github/workflows/pages.yml` builds with Bun and publishes `dist/` on every push to `main`. The game lives at https://tanner-scadden.github.io/foldkit-zombie-game/.
+- **Cloudflare.** The game lives at https://munch-manor.tanner-scadden.workers.dev, an assets-only Worker named `munch-manor`. It is declared with [Alchemy](https://alchemy.run/) in `infra/alchemy.run.ts`, a separate package with its own Effect version. See [`infra/README.md`](./infra/README.md).
 - **itch.io.** Zip the contents of `dist/` with `index.html` at the top of the zip, upload it as an HTML game, and set the viewport to 16:9 with fullscreen allowed.
 
-Pushing to `main` publishes the game. The workflow only builds, so run `typecheck`, `lint`, and `test` before you push.
+`.github/workflows/deploy.yml` deploys on its own:
+
+- **Push to `main`.** The check job runs `typecheck`, `lint`, `test`, and `build`, and typechecks `infra/`. Only if all pass does the deploy job run `alchemy deploy --stage prod`, then wait for the URL to answer 200. A failing check publishes nothing.
+- **Pull request.** The same checks, then a preview at `https://munch-manor-pr-<number>.tanner-scadden.workers.dev`, with its URL in a comment on the pull request. Closing the pull request destroys the preview.
+- **By hand.** Run the workflow from the Actions tab on `main` to redeploy production.
+
+Alchemy skips the build and the upload when none of `src/`, `public/`, `index.html`, `vite.config.ts`, `package.json`, or `bun.lock` changed. Deploy state lives in Alchemy's Cloudflare state store, so local and CI deploys share it.
+
+To deploy or destroy from this machine, run from `infra/` after `bun install`, with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` exported (the commands are in `infra/README.md`): `bun alchemy deploy --stage prod`, or `bun alchemy destroy --stage pr-<number>`. A local deploy ships the working tree as it is, uncommitted changes included. Add `--force` to put the declared version back if something else overwrote the Worker, since `alchemy drift` does not notice that.
+
+Credentials: locally, the Cloudflare API token is in the macOS keychain under `cloudflare-api-token`. CI uses the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` Actions secrets, which `infra/github.ts` writes from a narrow account token named `munch-manor-ci`. Never put a token in the repo or in a `VITE_` variable.
+
+GitHub Pages is gone: its workflow is deleted and the site is disabled. Cloudflare Workers Builds is not connected either; the Deploy workflow is the only deploy path, so do not connect the repo in the Cloudflare dashboard.
 
 ### Rules
 

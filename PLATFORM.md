@@ -6,7 +6,9 @@
 
 All on 2026-10-28.
 
-- **Everything moves to Cloudflare.** GitHub Pages was only for testing on other devices. It is removed (the site and `.github/workflows/pages.yml`) once the Cloudflare deploy is live.
+- **Everything moves to Cloudflare.** GitHub Pages was only for testing on other devices. It was removed (the site and `.github/workflows/pages.yml`) on 2026-10-28, once the Cloudflare deploy was live.
+- **The game is hosted at https://munch-manor.tanner-scadden.workers.dev**, the free `workers.dev` address, with no custom domain yet. The account's `workers.dev` subdomain is `tanner-scadden`.
+- **GitHub Actions is the only deploy path.** Cloudflare Workers Builds (the dashboard's git integration) stays disconnected, so one push never fires two deploys.
 - **Free plan first.** Upgrade to Workers Paid only if the game takes off.
 - **Our own mini sync engine over scopes**, for personal and shared state. See "Sync engine".
 - **Browser SQLite uses the `opfs-sahpool` VFS.** It needs no COOP/COEP headers, works on Safari 16.4 and later, and allows one connection, which matches one leader tab.
@@ -44,11 +46,20 @@ Package names and APIs need checking against the Effect version the game uses (E
 
 ## Phases
 
-1. **Hosting.** An `infra/` package with one `Cloudflare.Website.Vite` resource. Deploy once by hand, then switch CI to Alchemy's GitHub Action: `main` deploys production, every pull request gets a preview URL that is torn down when it closes. GitHub Pages keeps running until Cloudflare has proven itself.
+1. **Hosting. Done 2026-10-28.** The game is live at https://munch-manor.tanner-scadden.workers.dev. `infra/` declares one `Cloudflare.Website.Foldkit` resource (Alchemy's Foldkit flavor of `Website.Vite`). `.github/workflows/deploy.yml` gates every deploy on typecheck, lint, test, and build, deploys `prod` from `main`, and gives each pull request a `pr-<number>` preview with a comment that is destroyed when it closes. GitHub Pages is gone. See "What Phase 1 taught us" below.
 2. **Analytics.** At the end of a run the game sends one anonymous summary (mode, wave reached, cause of death, run length, purchases, goodies grabbed, device type, average frame rate) with `navigator.sendBeacon`. A Worker decodes it with the shared Schema, rate limits it, and writes a row to D1. A small dashboard query or page shows the real win rate and where real players die, which today we only guess at with the balance bot.
 3. **Local SQLite.** Move settings and personal bests into SQLite in the browser. This is the first client mutation path and proves out the wasm build, OPFS, and migrations before sync depends on them.
 4. **Sync.** Client mutations and server mutations over SQLite on both sides, with a Durable Object as the authority for each player (or each room). See "Sync engine" below.
 5. **Multiplayer rooms.** Durable Objects as rooms with room codes, as sketched in `MULTIPLAYER.md`, reusing the sync transport and the shared Schemas.
+
+### What Phase 1 taught us
+
+- **Versions.** `infra/` pins `alchemy`, `@alchemy.run/cloudflare`, and `@alchemy.run/github` at 2.0.0-beta.84, with `effect` 4.0.7. Alchemy no longer needs an Effect release candidate, only `effect` ^4.0.5, but that is still past Foldkit's 4.0.0, so `infra/` keeps its own `package.json` and lockfile. The Foldkit resource builds with the game's own Vite and Foldkit plugin from the repo root.
+- **State store.** `Cloudflare.state()`, Alchemy's store on the same account: an `alchemy-state-store` Worker with a SQLite Durable Object, its token and encryption key in the account's Secrets Store. It is shared by local and CI deploys. The first local deploy created it; in CI a missing store fails the run instead.
+- **Token permissions.** CI deploys with an account-owned token, `munch-manor-ci`, minted by `infra/github.ts`: Workers Scripts Write, Secrets Store Write, Account Settings Read, Workers Tail Read. Secrets Store Write is needed even to read, because Alchemy reads the state store's token by binding the secret to a short-lived preview Worker. The keychain token used by hand is much broader (it can mint tokens) and never goes to CI. Cloudflare's Workers Builds API rejected that account-owned token, so whether Workers Builds is connected can only be seen in the dashboard or in a Worker's deployment history (a `wrangler` source).
+- **The account had no `workers.dev` subdomain.** Alchemy's state store needs one, so `tanner-scadden` was claimed through the API before the first deploy.
+- **Two deploy paths collide quietly.** While Workers Builds was still connected, one push ran `wrangler deploy` and overwrote the Worker with a single page fallback. Alchemy's next deploy saw no changed inputs, and `alchemy drift` saw no drift, so both reported success. `alchemy deploy --force` put the declared version back.
+- **Routing and caching.** The game has no routes, so unknown paths answer 404 (`notFoundHandling: 'none'`). The default single page fallback served `index.html` at nested paths, where its relative asset paths missed. `public/_headers` makes the hashed files in `/assets` immutable for a year, and `index.html` revalidates on every load.
 
 ## Sync engine
 
@@ -179,7 +190,7 @@ Each change gets recorded as a dated decision when we make it.
 
 ## Open questions
 
-1. Which Cloudflare account, and the free `workers.dev` address or a real domain?
+1. ~~Which Cloudflare account, and the free `workers.dev` address or a real domain?~~ The owner's one account and `workers.dev` for now. A real domain is still open.
 2. ~~Keep GitHub Pages running in parallel?~~ No. It is removed once Cloudflare is live.
 3. Which analytics fields earn their place, and how long are rows kept?
 4. Do we store full runs (seed plus inputs) for replays?
