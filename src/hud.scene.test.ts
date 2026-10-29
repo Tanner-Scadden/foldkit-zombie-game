@@ -6,7 +6,7 @@ import { describe, expect, test } from 'vitest'
 import { PARLOUR } from './arena'
 import { cameraFor } from './camera'
 import { VIEW_HEIGHT } from './constants'
-import { hudShapes } from './hud'
+import { hudShapes, hudStripShapes } from './hud'
 import {
   BoostTimer,
   type Model,
@@ -15,7 +15,7 @@ import {
   initialModel,
 } from './model'
 import { BOOSTS } from './powerups'
-import { LANDSCAPE_SCREEN } from './screen'
+import { DEFAULT_PORTRAIT_SCREEN, LANDSCAPE_SCREEN } from './screen'
 
 type Box = Readonly<{ x: number; y: number; width: number; height: number }>
 
@@ -117,5 +117,20 @@ describe('the boost chips', () => {
     expect(
       chipFrames(modifyFields(twoBoosts, { boosts: () => idleBoosts })),
     ).toEqual([])
+  })
+})
+
+describe('the top HUD strip', () => {
+  test('backs the landscape HUD rows over the wall, and only in landscape', () => {
+    const [strip, ...rest] = hudStripShapes(twoBoosts, LANDSCAPE_SCREEN)
+    expect(rest).toEqual([])
+    expect(strip).toMatchObject({
+      _tag: 'Rect',
+      x: 0,
+      y: 0,
+      width: LANDSCAPE_SCREEN.width,
+    })
+    expect(hudStripShapes(twoBoosts, DEFAULT_PORTRAIT_SCREEN)).toEqual([])
+    expect(hudStripShapes(initialModel, LANDSCAPE_SCREEN)).toEqual([])
   })
 })

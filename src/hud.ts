@@ -583,6 +583,29 @@ const playHudShapes = (
     : []),
 ]
 
+const HUD_STRIP_HEIGHT = 20
+const HUD_STRIP_COLOR = 'rgba(20, 15, 24, 0.75)'
+
+// NOTE: in landscape the top HUD sits over the north wall, whose pictures,
+// candles, and shelves made the hearts and the wave hard to read. A slim
+// dark strip behind the HUD rows backs them. Portrait has its own band
+// above the world, so it needs none.
+export const hudStripShapes = (
+  model: Model,
+  screen: Screen,
+): ReadonlyArray<Canvas.Shape> =>
+  screen.layout === 'Landscape' && isHudShown(model.phase)
+    ? [
+        Canvas.Rect({
+          x: 0,
+          y: 0,
+          width: screen.width,
+          height: HUD_STRIP_HEIGHT,
+          fill: HUD_STRIP_COLOR,
+        }),
+      ]
+    : []
+
 export const hudShapes = (
   model: Model,
   screen: Screen,

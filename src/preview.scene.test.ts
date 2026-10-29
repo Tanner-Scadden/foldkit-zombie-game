@@ -4,8 +4,10 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { cameraOf } from './camera'
+import { hudStripShapes } from './hud'
 import { sceneShapes } from './layers'
 import { type Model, Phase, RunMode, initialModel } from './model'
+import { screenOf } from './screen'
 import { wavePreviewShapes } from './wavePreview'
 import { rollSpawns, startOrResume } from './waves'
 
@@ -57,7 +59,10 @@ describe('Door preview', () => {
     const [shakingWorld, ...shakingOverlay] = sceneShapes(shaking)
     expect(shakingWorld).not.toEqual(stillWorld)
     expect(shakingOverlay).toEqual(stillOverlay)
-    expect(stillOverlay.slice(0, preview.length)).toEqual(preview)
+    const strip = hudStripShapes(still, screenOf(still))
+    expect(
+      stillOverlay.slice(strip.length, strip.length + preview.length),
+    ).toEqual(preview)
   })
 
   test('holds its letters still: no scaling, only the frame pulses', () => {

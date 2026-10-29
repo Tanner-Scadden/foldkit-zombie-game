@@ -7,7 +7,7 @@ import { type Level, levelOf } from './arena'
 import { bossBandShapes } from './bossView'
 import { type Camera, toScreenCamera, worldCameraFor } from './camera'
 import { decalShapes } from './effectsView'
-import { hudShapes } from './hud'
+import { hudShapes, hudStripShapes } from './hud'
 import type { Message } from './message'
 import {
   type Decal,
@@ -40,6 +40,7 @@ const overlayLayerShapes = (
   screen: Screen,
   camera: Camera,
 ): ReadonlyArray<Canvas.Shape> => [
+  ...hudStripShapes(model, screen),
   ...wavePreviewShapes(model, camera),
   ...hudShapes(model, screen, camera),
   ...calloutLayerShapes(model, camera),
