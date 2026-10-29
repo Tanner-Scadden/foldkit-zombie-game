@@ -15,7 +15,9 @@ import {
   type Sprite,
   TOP_LEFT,
   TRANSPARENT,
+  bakeShapes,
   group,
+  placeAt,
   spriteShapes,
 } from './sprite'
 
@@ -105,7 +107,7 @@ const coinRect = (
 export const COIN_WIDTH = 7
 const COIN_LIFT = 1
 
-export const COIN_SPRITE: Sprite = [
+export const COIN_SPRITE: Sprite = bakeShapes([
   coinRect(0, 2, 7, 3, COIN_OUTLINE_COLOR),
   coinRect(1, 1, 5, 5, COIN_OUTLINE_COLOR),
   coinRect(2, 0, 3, 7, COIN_OUTLINE_COLOR),
@@ -116,7 +118,7 @@ export const COIN_SPRITE: Sprite = [
   coinRect(5, 2, 1, 3, COIN_SHADE_COLOR),
   coinRect(2, 5, 3, 1, COIN_SHADE_COLOR),
   coinRect(3, 2, 1, 3, COIN_MARK_COLOR),
-]
+])
 
 export const glyphPixels = (glyph: Glyph): ReadonlyArray<string> =>
   GLYPH_PIXELS[glyph]
@@ -193,7 +195,7 @@ const placeCells = (
   ).shapes
 
 const coinAt = (x: number, top: number): Canvas.Shape =>
-  group({ translate: { x, y: top - COIN_LIFT }, shapes: COIN_SPRITE })
+  placeAt(x, top - COIN_LIFT, COIN_SPRITE)
 
 const coinShapes = (text: string): ReadonlyArray<Canvas.Shape> =>
   String.includes(COIN_SYMBOL)(text)
@@ -311,12 +313,7 @@ export const textShapes = (
     alignedLeft(x, textWidth(text), align),
     (mark, cellX) => {
       if (mark.kind === 'Glyph') {
-        return [
-          group({
-            translate: { x: cellX, y: top },
-            shapes: GLYPH_SPRITES[tone][mark.glyph],
-          }),
-        ]
+        return [placeAt(cellX, top, GLYPH_SPRITES[tone][mark.glyph])]
       } else if (mark.kind === 'Coin') {
         return [coinAt(cellX, top)]
       } else {
@@ -351,13 +348,17 @@ export type Placement = Readonly<{
 export const placeBaked = (
   { width, sprite }: BakedText,
   { x, y, align, scale = 1, opacity }: Placement,
-): Canvas.Shape =>
-  group({
-    translate: { x: alignedLeft(x, width * scale, align), y: Math.round(y) },
-    scale: scale === 1 ? undefined : { x: scale, y: scale },
-    opacity,
-    shapes: sprite,
-  })
+): Canvas.Shape => {
+  const left = alignedLeft(x, width * scale, align)
+  return scale === 1 && opacity === undefined
+    ? placeAt(left, Math.round(y), sprite)
+    : group({
+        translate: { x: left, y: Math.round(y) },
+        scale: scale === 1 ? undefined : { x: scale, y: scale },
+        opacity,
+        shapes: sprite,
+      })
+}
 
 export const scaledTextShapes = (
   text: string,

@@ -773,6 +773,15 @@ const harnessUpdate = (model: Model, incoming: Message) => {
   const isFreezing = Number.isFinite(freezeAfter)
   if (isFrozenFrame) return { model }
   if (isFreezing && incoming._tag === 'CompletedGenerateSeed') return { model }
+  // NOTE: a frozen run starts counting frames once the surface is measured,
+  // so how long the first render takes cannot change which frame the
+  // measurement lands on, and two builds freeze on the same picture.
+  if (
+    isFreezing &&
+    incoming._tag === 'TickedFrame' &&
+    Option.isNone(model.maybeSurface)
+  )
+    return { model }
   if (params.has('fit') && incoming._tag === 'CompletedDetectScreenFit')
     return {
       model: modifyFields(model, {
@@ -785,6 +794,7 @@ const harnessUpdate = (model: Model, incoming: Message) => {
       ? Message.TickedFrame({ deltaTime: FIXED_FRAME_MS })
       : incoming
   if (message._tag === 'TickedFrame') framesRun++
+  w.__isFrozen = framesRun >= freezeAfter
   const t0 = performance.now()
   const result = update(model, message)
   if (instrument && message._tag === 'TickedFrame')

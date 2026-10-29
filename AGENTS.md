@@ -89,12 +89,22 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/room.ts`          | The room's static floor, walls, doors, and cover shapes                |
 | `src/screens.ts`       | Title, banners, hints, pause, and the run stats panels                 |
 | `src/font.ts`          | The pixel font, the money coin, and text layout                        |
-| `src/sprite.ts`        | Pixel maps turned into canvas shapes                                   |
+| `src/sprite.ts`        | Pixel maps turned into sprite images, baking, and placing them         |
+| `src/png.ts`           | Colors, rasters, and the PNG data URL encoder for sprite images        |
+| `src/testPng.ts`       | Reads those PNG data URLs back into pixels, for tests                  |
 | `src/icons.ts`         | Pixel maps turned into SVG icons for the HTML buttons                  |
 | `src/prng.ts`          | The seeded random number generator                                     |
 | `src/version.ts`       | The running build id, the `version.json` check, and reloading          |
 | `src/updateChip.ts`    | The "New version ready" chip shown on the home menu                    |
 | `src/constants.ts`     | The view size, speeds, and other tuning numbers                        |
+
+### The Foldkit patch
+
+The game draws every fixed sprite with `Canvas.Image`, which Foldkit 0.169.0 does not ship. It is ported from the upstream pull request [foldkit/foldkit#1846](https://github.com/foldkit/foldkit/pull/1846) (commit `a9009a20`) as a Bun patch: `patches/foldkit@0.169.0.patch`, listed under `patchedDependencies` in `package.json` and `bun.lock`. `bun install`, including `bun install --frozen-lockfile` in CI, applies it to `node_modules/foldkit`. It adds the `Image` shape (with `ImageCrop` and `ImageRendering`) to the Shape union and its declarations, the painter's `drawImage` path with a per-shape `imageSmoothingEnabled`, the page-wide image cache keyed by `src`, and the repaint of each canvas's latest scene when an image it drew finishes loading. Upstream keeps the cache in `canvas/imageCache.ts`. The patch puts it in `canvas/paint.js`, because Bun failed to apply a patch that adds a file.
+
+- **Changing it.** Run `bun patch foldkit`, edit the files under `node_modules/foldkit/dist/canvas/`, then `bun patch --commit node_modules/foldkit`. Delete the `.bun-tag-*` hunk Bun writes at the top of the patch, and check that no hunk creates a new file.
+- **Dropping it.** Once a Foldkit release ships `Canvas.Image`, upgrade `foldkit`, delete `patches/`, remove `patchedDependencies` from `package.json`, and run `bun install`. The game uses only the upstream API, so no game code changes.
+- **Upgrading Foldkit before then.** The patch is pinned to `foldkit@0.169.0`. A new version needs the patch redone against its `dist`.
 
 ### Deploying
 
@@ -134,6 +144,7 @@ iOS keeps a Home Screen app alive in the background, so players can keep an old 
 - **Follow the design doc.** Choices under "Decided" in `GAME_DESIGN.md` are settled. The "Reference notes" are ideas, not decisions. If a change goes against a decision, say so before making it.
 - **Use original art and names.** Do not copy art, names, or item lists from Zombie Estate 2.
 - **Keep the Effect plugin in `tsconfig.json`.** The `@effect/language-service` entry is what turns on the Effect diagnostics in `typecheck`. Without it, `typecheck` still passes but reports no Effect problems.
+- **Draw fixed art as sprite images.** A pixel map goes through `spriteShapes`, which builds one `Canvas.Image` from a PNG data URL, and a fixed list of whole pixel rectangles goes through `bakeShapes`. Build them once at module scope or in a cache, never per frame: Foldkit keeps every image for the life of the page, and the warm-up canvases in `src/layers.ts` decode the ones built as the game loads. Shapes that change every frame, such as particles, bars, and decals, stay `Rect` shapes.
 - **Keep the frame cheap.** `src/perf.scene.test.ts` budgets the canvas shapes and paint operations of a full room, and `bun run perf:check` gates frame time against a recorded baseline (see `tools/audit/README.md`). In code that runs every frame, check a union's tag with `isAnyOf`, not `guards`: a guard validates the whole value through Schema, and `Phase` carries the wave's spawn list.
 - **Write tests for game logic** as Story tests that replay Messages. Break the code once to see the test fail before you trust it.
 

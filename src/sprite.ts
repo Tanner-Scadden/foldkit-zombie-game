@@ -2,11 +2,12 @@ import { Array, Option, Record, String, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
 import type { PickupKind, TrapKind, WeaponKind, ZombieKind } from './model'
+import { type Fill, parseColor, pngDataUrl } from './png'
 import type { TrapStage } from './traps'
 
 export type Palette = Readonly<Record<string, string>>
 
-type PixelRun = Readonly<{
+export type PixelRun = Readonly<{
   x: number
   y: number
   width: number
@@ -80,6 +81,14 @@ const mergeVertically = (
     },
   )
 
+// NOTE: an image needs no vertical merging, which costs more than the image,
+// so sprite images are painted from each row's runs.
+const rowRunsOf = (
+  pixels: ReadonlyArray<string>,
+  palette: Palette,
+): ReadonlyArray<PixelRun> =>
+  Array.flatMap(pixels, (row, y) => rowRuns(row, y, palette))
+
 export const pixelRuns = (
   pixels: ReadonlyArray<string>,
   palette: Palette,
@@ -106,11 +115,11 @@ const centerAnchor = (pixels: ReadonlyArray<string>): Anchor => ({
   y: Math.floor(pixels.length / 2),
 })
 
-export const spriteShapes = (
+export const spriteRects = (
   pixels: ReadonlyArray<string>,
   palette: Palette,
   anchor: Anchor = centerAnchor(pixels),
-): ReadonlyArray<Canvas.Shape> =>
+): ReadonlyArray<Canvas.Rect> =>
   Array.map(pixelRuns(pixels, palette), run =>
     Canvas.Rect({
       x: run.x - anchor.x,
@@ -120,6 +129,204 @@ export const spriteShapes = (
       fill: run.color,
     }),
   )
+
+// SPRITE IMAGES
+
+const fillsOf = (
+  runs: ReadonlyArray<PixelRun>,
+): Option.Option<ReadonlyArray<Fill>> =>
+  Option.all(
+    Array.map(runs, run =>
+      Option.map(parseColor(run.color), color => ({
+        x: run.x,
+        y: run.y,
+        width: run.width,
+        height: run.height,
+        color,
+      })),
+    ),
+  )
+
+// NOTE: a sprite image is a PNG data URL built here from its pixel runs, not
+// an SVG. The browser makes a whole SVG document for every SVG image and
+// redraws its shapes each time a canvas draws it, which cost seconds at load
+// and nothing saved per frame over the Rect shapes. A PNG decodes once into a
+// bitmap that drawImage copies.
+export const runsDataUrl = (
+  width: number,
+  height: number,
+  runs: ReadonlyArray<PixelRun>,
+): Option.Option<string> =>
+  Option.map(fillsOf(runs), fills => pngDataUrl(width, height, fills))
+
+export const spriteDataUrl = (
+  pixels: ReadonlyArray<string>,
+  palette: Palette,
+): Option.Option<string> =>
+  runsDataUrl(spriteWidth(pixels), pixels.length, rowRunsOf(pixels, palette))
+
+const builtSpriteSources = new Set<string>()
+
+// NOTE: a sprite image draws nothing until the browser has decoded it, so
+// every sprite image is recorded here as it is built. The sprites the game
+// builds as it loads are all recorded before the first frame, and the warm-up
+// canvas in layers.ts draws them once so none blinks when it first appears.
+export const recordedSpriteSources = (): ReadonlyArray<string> =>
+  Array.fromIterable(builtSpriteSources)
+
+const imageAt = (
+  src: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): Canvas.Image => {
+  builtSpriteSources.add(src)
+  return Canvas.Image({ src, x, y, width, height, rendering: 'Pixelated' })
+}
+
+// NOTE: a sprite is one image of its pixel map, drawn with a single
+// drawImage, instead of a rectangle for each run of same colored pixels. A
+// palette color that is not a hex or rgb() color keeps the rectangles.
+export const spriteShapes = (
+  pixels: ReadonlyArray<string>,
+  palette: Palette,
+  anchor: Anchor = centerAnchor(pixels),
+): ReadonlyArray<Canvas.Shape> => {
+  const runs = rowRunsOf(pixels, palette)
+  const width = spriteWidth(pixels)
+  if (Array.isReadonlyArrayEmpty(runs)) {
+    return []
+  }
+
+  return Option.match(runsDataUrl(width, pixels.length, runs), {
+    onNone: () => spriteRects(pixels, palette, anchor),
+    onSome: src => [imageAt(src, -anchor.x, -anchor.y, width, pixels.length)],
+  })
+}
+
+type Box = Readonly<{
+  left: number
+  top: number
+  right: number
+  bottom: number
+}>
+
+const isWhole = (value: number | undefined): boolean =>
+  value === undefined || Number.isInteger(value)
+
+const isPlainTranslate = (group: Canvas.Group): boolean =>
+  group.rotate === undefined &&
+  group.scale === undefined &&
+  group.opacity === undefined &&
+  isWhole(group.translate?.x) &&
+  isWhole(group.translate?.y)
+
+const shapeRuns = (
+  shape: Canvas.Shape,
+  offsetX: number,
+  offsetY: number,
+): Option.Option<ReadonlyArray<PixelRun>> => {
+  if (
+    shape._tag === 'Rect' &&
+    shape.stroke === undefined &&
+    shape.fill !== undefined &&
+    Array.every([shape.x, shape.y, shape.width, shape.height], isWhole)
+  ) {
+    return Option.some([
+      {
+        x: shape.x + offsetX,
+        y: shape.y + offsetY,
+        width: shape.width,
+        height: shape.height,
+        color: shape.fill,
+      },
+    ])
+  } else if (shape._tag === 'Group' && isPlainTranslate(shape)) {
+    return flattenRects(
+      shape.shapes,
+      offsetX + (shape.translate?.x ?? 0),
+      offsetY + (shape.translate?.y ?? 0),
+    )
+  } else {
+    return Option.none()
+  }
+}
+
+const flattenRects = (
+  shapes: ReadonlyArray<Canvas.Shape>,
+  offsetX: number,
+  offsetY: number,
+): Option.Option<ReadonlyArray<PixelRun>> =>
+  Option.map(
+    Option.all(Array.map(shapes, shape => shapeRuns(shape, offsetX, offsetY))),
+    Array.flatten,
+  )
+
+const boxOf = (runs: Array.NonEmptyReadonlyArray<PixelRun>): Box =>
+  Array.reduce(
+    runs,
+    { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity },
+    (box: Box, run): Box => ({
+      left: Math.min(box.left, run.x),
+      top: Math.min(box.top, run.y),
+      right: Math.max(box.right, run.x + run.width),
+      bottom: Math.max(box.bottom, run.y + run.height),
+    }),
+  )
+
+// NOTE: bakes a fixed list of whole pixel rectangles, such as a stall part
+// drawn with Rect shapes, into one sprite image that paints the same pixels
+// in the same order. Anything else, such as a circle or a scaled group, keeps
+// its shapes as they are.
+export const bakeShapes = (
+  shapes: ReadonlyArray<Canvas.Shape>,
+): ReadonlyArray<Canvas.Shape> => {
+  const runs = Option.getOrElse(flattenRects(shapes, 0, 0), () => [])
+  if (!Array.isReadonlyArrayNonEmpty(runs)) {
+    return shapes
+  }
+
+  const box = boxOf(runs)
+  const width = box.right - box.left
+  const height = box.bottom - box.top
+  const shifted = Array.map(runs, run => ({
+    x: run.x - box.left,
+    y: run.y - box.top,
+    width: run.width,
+    height: run.height,
+    color: run.color,
+  }))
+  return Option.match(runsDataUrl(width, height, shifted), {
+    onNone: () => shapes,
+    onSome: src => [imageAt(src, box.left, box.top, width, height)],
+  })
+}
+
+// NOTE: draws a sprite at a whole pixel offset. A one image sprite moves the
+// image itself, which saves the painter a Group's save, restore, and
+// translate for every sprite in the scene.
+export const placeAt = (
+  x: number,
+  y: number,
+  sprite: ReadonlyArray<Canvas.Shape>,
+): Canvas.Shape => {
+  const only = sprite.length === 1 ? sprite[0] : undefined
+  if (only !== undefined && only._tag === 'Image') {
+    return {
+      _tag: 'Image',
+      src: only.src,
+      x: only.x + x,
+      y: only.y + y,
+      width: only.width,
+      height: only.height,
+      crop: only.crop,
+      rendering: only.rendering,
+    }
+  }
+
+  return group({ translate: { x, y }, shapes: sprite })
+}
 
 const mirrorRows = (pixels: ReadonlyArray<string>): ReadonlyArray<string> =>
   Array.map(pixels, row =>

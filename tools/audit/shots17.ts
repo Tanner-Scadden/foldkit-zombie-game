@@ -69,6 +69,22 @@ const SCENES: ReadonlyArray<Scene> = [
       'wave=3&seen=all&prep=12000&barricades=2&turrets=1&money=40&freeze=30',
   },
   { name: 'gameover', query: 'wave=5&phase=gameover&stats&freeze=120' },
+  {
+    name: 'wear',
+    query:
+      'wave=8&start=wave&elapsed=3000&lineup=wear&god&seen=all&px=40&py=160&freeze=110',
+  },
+  {
+    name: 'boss',
+    query:
+      'wave=8&start=wave&elapsed=3000&lineup=boss&god&seen=all&px=40&py=160&freeze=110',
+  },
+  {
+    name: 'gasbags',
+    query:
+      'wave=6&start=wave&god&gun=smg&fill&gasbags=16&aim=160,40&freeze=150',
+  },
+  { name: 'looks', query: 'looksheet&freeze=10' },
 ]
 
 const openPage = async (browser: Browser, viewport: Viewport) => {
@@ -96,6 +112,12 @@ for (const viewport of VIEWPORTS) {
     const device = viewport.isPhone ? '&device=touch' : ''
     await page.goto(`${BASE}?${scene.query}${device}`)
     await wait(2500)
+    await page
+      .waitForFunction(() => (window as any).__isFrozen === true, null, {
+        timeout: 15000,
+      })
+      .catch(() => undefined)
+    await wait(300)
     await shot(page, shotName(TAG, viewport, scene))
     await page.context().close()
   }

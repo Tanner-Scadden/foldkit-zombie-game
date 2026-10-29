@@ -1272,6 +1272,13 @@ describe('victory', () => {
 })
 
 describe('the door preview', () => {
+  const isSameImage =
+    (shape: Canvas.Shape) =>
+    (wanted: Canvas.Shape): boolean =>
+      shape._tag === 'Image' &&
+      wanted._tag === 'Image' &&
+      shape.src === wanted.src
+
   const containsShapes = (
     shapes: ReadonlyArray<Canvas.Shape>,
     wanted: ReadonlyArray<Canvas.Shape>,
@@ -1279,8 +1286,9 @@ describe('the door preview', () => {
     Array.some(
       shapes,
       shape =>
-        shape._tag === 'Group' &&
-        (shape.shapes === wanted || containsShapes(shape.shapes, wanted)),
+        Array.some(wanted, isSameImage(shape)) ||
+        (shape._tag === 'Group' &&
+          (shape.shapes === wanted || containsShapes(shape.shapes, wanted))),
     )
 
   const preparing = (wave: number, boss: Boss): Model => {

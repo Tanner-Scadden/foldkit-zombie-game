@@ -15,7 +15,7 @@ import {
   POPUP_MAX,
   ZOMBIE_ALIVE_MAX,
 } from './constants'
-import { sceneShapes } from './layers'
+import { WARM_UP_CLASS, sceneShapes } from './layers'
 import { Message, update } from './main'
 import {
   Alarm,
@@ -376,12 +376,14 @@ type PaintCounts = {
   paintOps: number
   fillStyleChanges: number
   shapesPainted: number
+  imagesDrawn: number
 }
 
 const emptyCounts = (): PaintCounts => ({
   paintOps: 0,
   fillStyleChanges: 0,
   shapesPainted: 0,
+  imagesDrawn: 0,
 })
 
 const countingContext = (counts: PaintCounts) => {
@@ -391,6 +393,10 @@ const countingContext = (counts: PaintCounts) => {
     counts.paintOps += 1
   }
   const ignore = () => undefined
+  const drawImage = () => {
+    counts.paintOps += 1
+    counts.imagesDrawn += 1
+  }
   return {
     get fillStyle() {
       return state.fill
@@ -409,6 +415,7 @@ const countingContext = (counts: PaintCounts) => {
     font: '',
     textAlign: 'left',
     textBaseline: 'alphabetic',
+    imageSmoothingEnabled: true,
     save: () => {
       counts.shapesPainted += 1
       savedFills.push(state.fill)
@@ -422,6 +429,7 @@ const countingContext = (counts: PaintCounts) => {
     stroke: paint,
     fillText: paint,
     strokeText: paint,
+    drawImage,
     clearRect: ignore,
     beginPath: ignore,
     closePath: ignore,
@@ -438,11 +446,13 @@ const countingContext = (counts: PaintCounts) => {
 
 type CanvasNode = NonNullable<Html>
 
+// NOTE: the sprite warm-up canvases paint once as the game loads and never
+// again, so they are not part of a frame's cost.
 const canvasNodes = (node: Html | string): ReadonlyArray<CanvasNode> => {
   if (node === null || typeof node === 'string') {
     return []
   } else if (node.sel?.startsWith('canvas') === true) {
-    return [node]
+    return node.data?.class?.[WARM_UP_CLASS] === true ? [] : [node]
   } else {
     return Array.flatMap(node.children ?? [], canvasNodes)
   }
@@ -487,7 +497,9 @@ type FrameCost = Readonly<{
   fullRepaintPaintOps: number
 }>
 
-const measureFrames = (model: Model): FrameCost => {
+type Measured = FrameCost & Readonly<{ steadyImagesDrawn: number }>
+
+const measureFrames = (model: Model): Measured => {
   const renders: Array<ReadonlyArray<CanvasNode>> = []
   const recordingView = (current: Model, h: HtmlBuilder<Message>) => {
     const rendered = view(current, h)
@@ -512,6 +524,7 @@ const measureFrames = (model: Model): FrameCost => {
     steadyFillStyleChanges: steady.fillStyleChanges,
     steadyShapesPainted: steady.shapesPainted,
     fullRepaintPaintOps: paintCanvases([], last).paintOps,
+    steadyImagesDrawn: steady.imagesDrawn,
   }
 }
 
@@ -544,13 +557,23 @@ const measureFrames = (model: Model): FrameCost => {
 // valve spark add 3. The room measured 2656 shapes, 1577 steady paint
 // operations, 1564 fill changes, 1659 shapes painted, and 2986 on a full
 // repaint.
+// Then drawing every fixed sprite, glyph, and baked text as one Canvas.Image
+// instead of a Rect per pixel run cut the room from 2656 shapes, 1577 steady
+// paint operations, and 2986 on a full repaint to 687, 543, and 1120,
+// with 458 fill changes and 581 shapes painted. What is left is mostly
+// particles, decals, bars, and shadows, which change every frame.
 const BUDGET: FrameCost = {
-  shapesBuilt: 2665,
-  steadyPaintOps: 1585,
-  steadyFillStyleChanges: 1570,
-  steadyShapesPainted: 1665,
-  fullRepaintPaintOps: 2995,
+  shapesBuilt: 740,
+  steadyPaintOps: 590,
+  steadyFillStyleChanges: 500,
+  steadyShapesPainted: 630,
+  fullRepaintPaintOps: 1200,
 }
+
+// NOTE: happy-dom loads a data URL image as soon as its src is set, so every
+// sprite image here is drawn. If none were, the paint budgets above would pass
+// without measuring the sprites at all.
+const IMAGES_DRAWN_MIN = ZOMBIE_ALIVE_MAX + 1
 
 const BUDGET_KEYS: ReadonlyArray<keyof FrameCost> = [
   'shapesBuilt',
@@ -585,4 +608,10 @@ describe('Frame cost', () => {
       })
     },
   )
+
+  test.each(SCENARIOS)('$name draws its sprites as images', ({ model }) => {
+    expect(measureFrames(model).steadyImagesDrawn).toBeGreaterThanOrEqual(
+      IMAGES_DRAWN_MIN,
+    )
+  })
 })

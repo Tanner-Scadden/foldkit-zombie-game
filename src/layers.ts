@@ -2,6 +2,7 @@ import { Array, Equal } from 'effect'
 import { Canvas } from 'foldkit'
 import { type Html, type HtmlBuilder, createLazy } from 'foldkit/html'
 
+import { playerSprites } from './appearance'
 import { ARENA_LEVEL, type Level } from './arena'
 import { bossBandShapes } from './bossView'
 import { type Camera, cameraOf } from './camera'
@@ -9,10 +10,17 @@ import { VIEW_HEIGHT, VIEW_WIDTH } from './constants'
 import { decalShapes } from './effectsView'
 import { hudShapes } from './hud'
 import type { Message } from './main'
-import { type Decal, type Model, Phase, type Vector } from './model'
+import {
+  type Decal,
+  type Model,
+  Phase,
+  type Vector,
+  defaultAppearance,
+} from './model'
 import { calloutShapes } from './powerupView'
 import { FLOOR_COLOR, ROOM_SHAPES } from './room'
 import { overlayShapes } from './screens'
+import { recordedSpriteSources } from './sprite'
 import { wavePreviewShapes } from './wavePreview'
 import { isRoundActive } from './waves'
 import { worldLayerShapes, worldOffset } from './worldView'
@@ -146,6 +154,45 @@ const overlayLayerView = (
 
 const lazyOverlayLayer = createLazy()
 
+// SPRITE WARM-UP
+
+const WARM_UP_CHUNK = 64
+
+// NOTE: an Image shape draws nothing until the browser has decoded its
+// source, so a sprite drawn for the first time mid-fight would be missing
+// for a frame. The first render draws every sprite built as the game loaded,
+// and the classic look's frames, once on hidden canvases. Each canvas repaints
+// as its images load, so they are split into small chunks to keep those
+// repaints cheap. The lazy view hands back the same VNodes after that, so
+// they cost nothing per frame. The list is read at the first render, not when
+// this module loads, so it includes the sprites of modules loaded after it.
+const warmUpSources = (): ReadonlyArray<string> => {
+  playerSprites(defaultAppearance)
+  return recordedSpriteSources()
+}
+
+export const WARM_UP_CLASS = 'sprite-warm-up'
+
+const warmUpView = (h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [h.AriaHidden(true), h.Style({ display: 'none' })],
+    Array.map(Array.chunksOf(warmUpSources(), WARM_UP_CHUNK), sources =>
+      Canvas.view(
+        {
+          width: 1,
+          height: 1,
+          className: WARM_UP_CLASS,
+          shapes: Array.map(sources, src =>
+            Canvas.Image({ src, x: 0, y: 0, width: 1, height: 1 }),
+          ),
+        },
+        h,
+      ),
+    ),
+  )
+
+const lazyWarmUp = createLazy()
+
 // STAGE
 
 export const gameStageView = (model: Model, h: HtmlBuilder<Message>): Html => {
@@ -179,6 +226,7 @@ export const gameStageView = (model: Model, h: HtmlBuilder<Message>): Html => {
           ]),
         ],
       ),
+      lazyWarmUp(warmUpView, [h]),
     ],
   )
 }

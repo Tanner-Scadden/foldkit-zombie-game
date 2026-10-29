@@ -17,7 +17,10 @@ import {
   type Palette,
   type Sprite,
   TOP_LEFT,
+  bakeShapes,
   group,
+  placeAt,
+  spriteRects,
   spriteShapes,
 } from './sprite'
 
@@ -182,15 +185,6 @@ const WAVING_HANDS: ReadonlyArray<ReadonlyArray<Canvas.Shape>> = [
   ],
 ]
 
-const wavingHands = (elapsedMs: number): ReadonlyArray<Canvas.Shape> =>
-  Option.getOrElse(
-    Array.get(
-      WAVING_HANDS,
-      Math.floor(elapsedMs / WAVE_FRAME_MS) % WAVING_HANDS.length,
-    ),
-    () => BONY_HANDS,
-  )
-
 // ENTRANCE
 
 const ZONE_SIDE_GAP = 8
@@ -247,7 +241,7 @@ const signShapes = (
     rect(boardLeft, SIGN_TOP, boardWidth, boardHeight, board),
     group({
       translate: { x: boardLeft + SIGN_PADDING, y: SIGN_TOP + SIGN_PADDING },
-      shapes: spriteShapes(pixels, { '#': letters }, TOP_LEFT),
+      shapes: spriteRects(pixels, { '#': letters }, TOP_LEFT),
     }),
   ]
 }
@@ -268,16 +262,42 @@ const CLOSED_SIGN = signShapes(
 
 // SCENE
 
+// NOTE: the stall's back, and its counter, hands, sign, and awning in front
+// of the shopkeeper, never move, so each look's front is baked into one
+// image. Only the waving hand changes, so it has a front for each wave frame.
+const STALL_BACK_IMAGE = bakeShapes(STALL_BACK)
+
+const OPEN_FRONT = bakeShapes([
+  ...COUNTER,
+  ...BONY_HANDS,
+  ...OPEN_SIGN,
+  ...AWNING,
+])
+
+const CLOSED_FRONT = bakeShapes([...COUNTER, ...CLOSED_SIGN, ...AWNING])
+
+const BECKONING_FRONTS: ReadonlyArray<ReadonlyArray<Canvas.Shape>> = Array.map(
+  WAVING_HANDS,
+  hands => bakeShapes([...COUNTER, ...hands, ...OPEN_SIGN, ...AWNING]),
+)
+
+const beckoningFront = (elapsedMs: number): ReadonlyArray<Canvas.Shape> =>
+  Option.getOrElse(
+    Array.get(
+      BECKONING_FRONTS,
+      Math.floor(elapsedMs / WAVE_FRAME_MS) % BECKONING_FRONTS.length,
+    ),
+    () => OPEN_FRONT,
+  )
+
 const awakeShopkeeper = (elapsedMs: number): ReadonlyArray<Canvas.Shape> => {
   const frame = Math.floor(elapsedMs / AWAKE_FRAME_MS) % AWAKE_FRAMES
   return [
-    group({
-      translate: {
-        x: SHOPKEEPER_LEFT,
-        y: SHOPKEEPER_TOP + (frame < AWAKE_FRAMES / 2 ? 0 : 1),
-      },
-      shapes: frame === BLINK_FRAME ? SHOPKEEPER_BLINK : SHOPKEEPER_AWAKE,
-    }),
+    placeAt(
+      SHOPKEEPER_LEFT,
+      SHOPKEEPER_TOP + (frame < AWAKE_FRAMES / 2 ? 0 : 1),
+      frame === BLINK_FRAME ? SHOPKEEPER_BLINK : SHOPKEEPER_AWAKE,
+    ),
   ]
 }
 
@@ -287,13 +307,11 @@ const sleepingShopkeeper = (elapsedMs: number): ReadonlyArray<Canvas.Shape> => {
   const breath = Math.floor(elapsedMs / SLEEP_FRAME_MS) % 2
   const snore = (elapsedMs % SNORE_CYCLE_MS) / SNORE_CYCLE_MS
   return [
-    group({
-      translate: {
-        x: SHOPKEEPER_LEFT,
-        y: SHOPKEEPER_TOP + SLEEP_SINK_PX + breath,
-      },
-      shapes: SHOPKEEPER_BLINK,
-    }),
+    placeAt(
+      SHOPKEEPER_LEFT,
+      SHOPKEEPER_TOP + SLEEP_SINK_PX + breath,
+      SHOPKEEPER_BLINK,
+    ),
     group({
       translate: {
         x: SHOPKEEPER_LEFT + SHOPKEEPER_WIDTH + 1,
@@ -320,14 +338,8 @@ const beaconShapes = (elapsedMs: number): ReadonlyArray<Canvas.Shape> => {
     Math.sin((Math.PI * 2 * elapsedMs) / (BEACON_BOB_MS * 2)) * 2,
   )
   return [
-    group({
-      translate: { x: BEACON_LEFT, y: BEACON_COIN_TOP + bob },
-      shapes: COIN_SPRITE,
-    }),
-    group({
-      translate: { x: BEACON_LEFT, y: ARROW_TOP + bob },
-      shapes: ARROW,
-    }),
+    placeAt(BEACON_LEFT, BEACON_COIN_TOP + bob, COIN_SPRITE),
+    placeAt(BEACON_LEFT, ARROW_TOP + bob, ARROW),
   ]
 }
 
@@ -377,21 +389,16 @@ export const stallShapes = (
 ): ReadonlyArray<Canvas.Shape> => {
   if (look === 'Closed') {
     return [
-      ...STALL_BACK,
+      ...STALL_BACK_IMAGE,
       ...sleepingShopkeeper(elapsedMs),
-      ...COUNTER,
-      ...CLOSED_SIGN,
-      ...AWNING,
+      ...CLOSED_FRONT,
     ]
   } else {
     const isBeckoning = look === 'Beckoning'
     return [
-      ...STALL_BACK,
+      ...STALL_BACK_IMAGE,
       ...awakeShopkeeper(elapsedMs),
-      ...COUNTER,
-      ...(isBeckoning ? wavingHands(elapsedMs) : BONY_HANDS),
-      ...OPEN_SIGN,
-      ...AWNING,
+      ...(isBeckoning ? beckoningFront(elapsedMs) : OPEN_FRONT),
       ...(isBeckoning ? beaconShapes(elapsedMs) : []),
     ]
   }

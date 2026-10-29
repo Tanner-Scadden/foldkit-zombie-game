@@ -32,6 +32,7 @@ import {
   initialModel,
 } from './model'
 import { playerShapes } from './playerView'
+import { imageColors } from './testPng'
 import { asVeteran } from './veteran'
 
 const onTitle: Model = asVeteran(initialModel)
@@ -85,6 +86,8 @@ const fills = (shapes: ReadonlyArray<Canvas.Shape>): ReadonlyArray<string> =>
       return fills(shape.shapes)
     } else if (shape._tag === 'Rect') {
       return Option.toArray(Option.fromNullishOr(shape.fill))
+    } else if (shape._tag === 'Image') {
+      return imageColors(shape.src)
     } else {
       return []
     }

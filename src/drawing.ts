@@ -4,7 +4,7 @@ import { SHADOW_HEIGHT } from './constants'
 import { GLYPH_HEIGHT, type TextTone, textShapes } from './font'
 import { clamp } from './geometry'
 import type { Vector } from './model'
-import { type Facing, group } from './sprite'
+import { type Facing, placeAt } from './sprite'
 
 // SHARED SHAPE HELPERS
 
@@ -17,11 +17,7 @@ export const placeSprite = (
   x: number,
   y: number,
   sprite: ReadonlyArray<Canvas.Shape>,
-): Canvas.Shape =>
-  group({
-    translate: { x: Math.round(x), y: Math.round(y) },
-    shapes: sprite,
-  })
+): Canvas.Shape => placeAt(Math.round(x), Math.round(y), sprite)
 
 export const centeredRect = (
   x: number,
