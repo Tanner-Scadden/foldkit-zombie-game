@@ -18,7 +18,7 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | `bun install`                                    | Install dependencies                                                                                                       |
 | `bun dev`                                        | Start the dev server                                                                                                       |
-| `bun run typecheck`                              | Typecheck with `tsrs`, including the Effect rules                                                                          |
+| `bun run typecheck`                              | Typecheck with `tsrs`, including the Effect rules. It covers `tools/audit`, so run `bun install` there once too            |
 | `bun run lint`                                   | Lint with oxlint and the Effect rules                                                                                      |
 | `bun run test`                                   | Run the Story and Scene tests                                                                                              |
 | `bun run build`                                  | Build for production                                                                                                       |

@@ -12,27 +12,32 @@
 // in the same box in both modes. Exits with 1 on a problem.
 //   TAG=after BASE=http://localhost:4174/ bun shots33.ts
 // ONLY picks scenes, such as `ONLY=home,munchopedia`.
-import type { Browser, Page } from 'playwright-core'
+import type { Page } from 'playwright-core'
 
-import { HARNESS, launch, shot, wait } from './lib'
+import {
+  DESKTOP_1280,
+  DESKTOP_1920,
+  PHONE_667,
+  PHONE_844,
+  type Viewport,
+  deviceQuery,
+  finish,
+  harnessUrl,
+  isPickedScene,
+  launch,
+  openPage,
+  shot,
+  tagOr,
+  wait,
+} from './lib'
 
-const TAG = process.env.TAG ?? 'after'
-const BASE = process.env.BASE ?? HARNESS
-const ONLY = process.env.ONLY?.split(',')
-
-type Viewport = Readonly<{
-  name: string
-  width: number
-  height: number
-  scale: number
-  isPhone: boolean
-}>
+const TAG = tagOr('after')
 
 const VIEWPORTS: ReadonlyArray<Viewport> = [
-  { name: 'p667', width: 667, height: 375, scale: 2, isPhone: true },
-  { name: 'p844', width: 844, height: 390, scale: 2, isPhone: true },
-  { name: 'd1280', width: 1280, height: 720, scale: 1, isPhone: false },
-  { name: 'd1920', width: 1920, height: 1080, scale: 1, isPhone: false },
+  PHONE_667,
+  { ...PHONE_844, scale: 2 },
+  DESKTOP_1280,
+  DESKTOP_1920,
 ]
 
 const FOUND =
@@ -84,15 +89,6 @@ const SCENES: ReadonlyArray<Scene> = [
 const MIN_SIDE = 48
 
 const problems: Array<string> = []
-
-const openPage = async (browser: Browser, viewport: Viewport) => {
-  const context = await browser.newContext({
-    viewport: { width: viewport.width, height: viewport.height },
-    deviceScaleFactor: viewport.scale,
-    ...(viewport.isPhone ? { isMobile: true, hasTouch: true } : {}),
-  })
-  return context.newPage()
-}
 
 const press = async (page: Page, viewport: Viewport, selector: string) => {
   const box = await page.locator(selector).first().boundingBox()
@@ -175,12 +171,11 @@ const browser = await launch()
 for (const viewport of VIEWPORTS) {
   const playBoxes = new Map<string, string>()
   for (const scene of SCENES) {
-    if (ONLY && !ONLY.includes(scene.name)) {
+    if (!isPickedScene(scene.name)) {
       continue
     }
     const page = await openPage(browser, viewport)
-    const device = viewport.isPhone ? '&device=touch' : ''
-    await page.goto(`${BASE}?${scene.query}${device}`)
+    await page.goto(harnessUrl(scene.query, deviceQuery(viewport)))
     await wait(1200)
     for (const selector of scene.open ?? []) {
       await press(page, viewport, selector)
@@ -218,9 +213,9 @@ for (const viewport of VIEWPORTS) {
       problems.push(`${viewport.name}: PLAY moves when the mode switches`)
     }
   }
-  if (!viewport.isPhone && (!ONLY || ONLY.includes('focus'))) {
+  if (!viewport.isPhone && isPickedScene('focus')) {
     const page = await openPage(browser, viewport)
-    await page.goto(`${BASE}?${FOUND}&newsseen`)
+    await page.goto(harnessUrl(FOUND, 'newsseen'))
     await wait(1200)
     const order: Array<string> = []
     for (let step = 1; step <= 8; step++) {
@@ -252,9 +247,4 @@ for (const viewport of VIEWPORTS) {
 }
 await browser.close()
 
-if (problems.length > 0) {
-  console.log(`\n${problems.length} problems:\n${problems.join('\n')}`)
-  process.exit(1)
-} else {
-  console.log('\nThe home layout is clean.')
-}
+finish(problems, 'The home layout is clean.')

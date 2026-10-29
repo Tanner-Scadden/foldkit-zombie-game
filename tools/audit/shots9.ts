@@ -1,9 +1,19 @@
 import { readdirSync } from 'node:fs'
 
-import { desktop, launch, mobile, model, shot, wait } from './lib'
+import {
+  BASE,
+  SHOTS_DIR,
+  comparePngs,
+  desktop,
+  launch,
+  mobile,
+  model,
+  shot,
+  tagOr,
+  wait,
+} from './lib'
 
-const BASE = process.env.BASE ?? 'http://localhost:4174/'
-const TAG = process.env.TAG ?? 'now'
+const TAG = tagOr('now')
 
 const scenes: ReadonlyArray<
   Readonly<{ name: string; q: string; isMobile?: boolean }>
@@ -55,47 +65,15 @@ for (const scene of scenes) {
 
 if (process.env.COMPARE) {
   const page = await desktop(browser)
-  const dir = `${import.meta.dir}/shots`
-  const files = readdirSync(dir)
+  const files = readdirSync(SHOTS_DIR)
   for (const scene of scenes) {
     const before = `s9-${process.env.COMPARE}-${scene.name}.png`
     const after = `s9-${TAG}-${scene.name}.png`
     if (!files.includes(before) || !files.includes(after)) continue
-    const toDataUrl = async (file: string) =>
-      `data:image/png;base64,${Buffer.from(await Bun.file(`${dir}/${file}`).arrayBuffer()).toString('base64')}`
-    const result = await page.evaluate(
-      async ([first, second]) => {
-        const load = (src: string) =>
-          new Promise<HTMLImageElement>(resolve => {
-            const image = new Image()
-            image.onload = () => resolve(image)
-            image.src = src
-          })
-        const pixels = async (src: string) => {
-          const image = await load(src)
-          const canvas = document.createElement('canvas')
-          canvas.width = image.width
-          canvas.height = image.height
-          const context = canvas.getContext('2d')!
-          context.drawImage(image, 0, 0)
-          return context.getImageData(0, 0, image.width, image.height).data
-        }
-        const a = await pixels(first!)
-        const b = await pixels(second!)
-        let differing = 0
-        let maxDelta = 0
-        for (let i = 0; i < a.length; i += 4) {
-          const delta = Math.max(
-            Math.abs(a[i]! - b[i]!),
-            Math.abs(a[i + 1]! - b[i + 1]!),
-            Math.abs(a[i + 2]! - b[i + 2]!),
-          )
-          if (delta > 0) differing++
-          maxDelta = Math.max(maxDelta, delta)
-        }
-        return { differing, total: a.length / 4, maxDelta }
-      },
-      [await toDataUrl(before), await toDataUrl(after)],
+    const result = await comparePngs(
+      page,
+      `${SHOTS_DIR}/${before}`,
+      `${SHOTS_DIR}/${after}`,
     )
     console.log(
       `${scene.name}: ${result.differing} of ${result.total} pixels differ, max channel delta ${result.maxDelta}`,

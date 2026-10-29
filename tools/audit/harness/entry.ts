@@ -1,6 +1,6 @@
 import './harness.css'
 import { Option } from 'effect'
-import { Canvas, Runtime } from 'foldkit'
+import { Canvas, ManagedResource, Runtime } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import {
@@ -11,9 +11,9 @@ import {
   SKIN_TONES,
   playerSprites,
 } from '@game/appearance'
+import { DOORS } from '@game/arena'
 import { BOSS_RULES, hasBoss, planBoss } from '@game/boss'
-import { SHADOW_COLOR } from '@game/constants'
-import { DECAL_MAX, PLAYER_MAX_HP } from '@game/constants'
+import { DECAL_MAX, PLAYER_MAX_HP, SHADOW_COLOR } from '@game/constants'
 import { withBests } from '@game/difficulty'
 import { sceneShapes } from '@game/layers'
 import {
@@ -26,9 +26,6 @@ import {
 import {
   DifficultyCard,
   Trap,
-  type Difficulty,
-  type DoorId,
-  type NightmareLock,
   Model,
   Phase,
   Arsenal,
@@ -39,24 +36,43 @@ import {
   type Appearance,
   type Decal,
   type DecalKind,
+  type PickupKind,
 } from '@game/model'
 import { raiseDebutCard } from '@game/onboarding'
 import { advanceParticles } from '@game/particles'
 import { FLOOR_COLOR } from '@game/room'
+import { STALL_BOX } from '@game/shop'
 import { shedParts } from '@game/simulation'
 import { frameAt, group, gunSprite } from '@game/sprite'
+import { type PlayerStore, layer as PlayerStoreLayer } from '@game/store'
 import { view } from '@game/view'
 import { pause, planFor, rollSpawns, startOrResume } from '@game/waves'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
 
-const params = new URLSearchParams(location.search)
+import { decodeHarnessConfig } from './config'
+
+const readConfig = () => {
+  try {
+    return decodeHarnessConfig(location.search)
+  } catch (error) {
+    const root = document.getElementById('root')
+    if (root !== null) {
+      root.textContent = `Bad harness query: ${String(error)}`
+      root.className = 'harness-error'
+    }
+    throw error
+  }
+}
+const config = readConfig()
 const ROAMING = { _tag: 'Roaming' as const }
 const CALM = { _tag: 'Calm' as const }
-const num = (key: string, fallback: number) =>
-  params.has(key) ? Number(params.get(key)) : fallback
-const gasbagRoom = num('gasroom', 0)
+const gasbagRoom = config.gasroom
+const PLAYER_X = 160
+const PLAYER_Y = 90
+const px = config.px ?? PLAYER_X
+const py = config.py ?? PLAYER_Y
 
-const KINDS: Array<DecalKind> = [
+const KINDS: ReadonlyArray<DecalKind> = [
   'Blood',
   'Meat',
   'Rot',
@@ -74,7 +90,7 @@ const makeDecals = (count: number): Array<Decal> => {
   const r = () => (s = (s * 1103515245 + 12345) >>> 0) / 0xffffffff
   for (let i = 0; i < count; i++) {
     out.push({
-      kind: KINDS[i % KINDS.length],
+      kind: KINDS[i % KINDS.length]!,
       x: Math.round(24 + r() * 272),
       y: Math.round(24 + r() * 132),
       width: 2 + Math.round(r() * 5),
@@ -85,38 +101,40 @@ const makeDecals = (count: number): Array<Decal> => {
 }
 
 const roomModel = (): Model => {
-  const wave = num('wave', 0)
+  const wave = config.wave
   if (wave === 0) return initialModel
   const mode =
-    params.get('mode') === 'endless' ? RunMode.Endless() : RunMode.Campaign()
+    config.mode === 'endless' ? RunMode.Endless() : RunMode.Campaign()
   const started = startOrResume(initialModel, mode)
   const [rngState, spawns] = rollSpawns(started.rngState, wave)
-  const gun = params.get('gun')
-  let model = modifyFields(started, {
+  const gun = config.gun
+  const smgRounds = config.rounds ?? 360
+  const shotgunRounds = config.rounds ?? 48
+  let model: Model = modifyFields(started, {
     rngState: () => rngState,
     phase: () =>
-      params.get('start') === 'wave'
-        ? Phase.Wave({ wave, elapsedMs: num('elapsed', 0), spawns })
+      config.start === 'wave'
+        ? Phase.Wave({ wave, elapsedMs: config.elapsed, spawns })
         : Phase.Preparation({
             wave,
-            remainingMs: num('prep', 20000),
+            remainingMs: config.prep,
             durationMs: 20000,
             spawns,
             clock:
-              params.get('break') === 'open'
-                ? BreakClock.Waiting({ elapsedMs: num('breakMs', 0) })
+              config.break === 'open'
+                ? BreakClock.Waiting({ elapsedMs: config.breakMs })
                 : BreakClock.Counting(),
           }),
     wallet: w => ({
       ...w,
-      balance: num('money', 0),
-      shown: num('money', 0),
-      earned: num('money', 0),
+      balance: config.money,
+      shown: config.money,
+      earned: config.money,
     }),
-    decals: () => (params.has('fill') ? makeDecals(DECAL_MAX) : []),
+    decals: () => (config.fill ? makeDecals(DECAL_MAX) : []),
     trapStock: () => ({
-      Barricade: num('barricades', 0),
-      Turret: num('turrets', 0),
+      Barricade: config.barricades,
+      Turret: config.turrets,
     }),
     player: p =>
       gun === 'smg'
@@ -125,9 +143,9 @@ const roomModel = (): Model => {
             arsenal: Arsenal.HoldingSpare({
               spare: {
                 kind: 'Smg',
-                rounds: num('rounds', 360),
-                loaded: Math.min(num('loaded', 30), num('rounds', 360)),
-                tier: num('tier', 0),
+                rounds: smgRounds,
+                loaded: Math.min(config.loaded, smgRounds),
+                tier: config.tier,
               },
             }),
           }
@@ -137,16 +155,16 @@ const roomModel = (): Model => {
               arsenal: Arsenal.HoldingSpare({
                 spare: {
                   kind: 'Shotgun',
-                  rounds: num('rounds', 48),
-                  loaded: Math.min(6, num('rounds', 48)),
-                  tier: num('tier', 0),
+                  rounds: shotgunRounds,
+                  loaded: Math.min(6, shotgunRounds),
+                  tier: config.tier,
                 },
               }),
             }
           : p,
   })
-  const crowd = num('crowd', gasbagRoom)
-  const toughness = params.has('tough') ? 40 : 1
+  const crowd = config.crowd ?? gasbagRoom
+  const toughness = config.tough ? 40 : 1
   if (crowd > 0) {
     const kinds = [
       'Shambler',
@@ -157,7 +175,7 @@ const roomModel = (): Model => {
       'Runner',
       'Shambler',
     ] as const
-    const spots = [
+    const spots: ReadonlyArray<readonly [number, number]> = [
       [40, 40],
       [280, 40],
       [40, 140],
@@ -169,8 +187,8 @@ const roomModel = (): Model => {
     ]
     const zombies = Array.from({ length: crowd }, (_, i) => {
       const kind =
-        gasbagRoom > 0 ? 'Exploder' : i < 4 ? 'Tank' : kinds[i % kinds.length]
-      const [sx, sy] = spots[i % spots.length]
+        gasbagRoom > 0 ? 'Exploder' : i < 4 ? 'Tank' : kinds[i % kinds.length]!
+      const [sx, sy] = spots[i % spots.length]!
       return {
         id: 1000 + i,
         kind,
@@ -191,7 +209,7 @@ const roomModel = (): Model => {
       nextEntityId: () => 2000,
     })
   }
-  const lineup = params.get('lineup')
+  const lineup = config.lineup
   const stageHp = (kind: LineupKind, maxHp: number, stage: number) =>
     stage === 0
       ? maxHp
@@ -296,41 +314,30 @@ const roomModel = (): Model => {
       nextEntityId: () => 2000,
     })
   }
-  const bossParam = params.get('boss')
-  if (bossParam !== null) {
+  const bossParam = config.boss
+  if (bossParam !== undefined) {
     const bossMaxHp = scaledHp(ZOMBIE_KINDS.Boss.hp, planFor(8).hpScale)
-    const bossHp = Math.round(bossMaxHp * num('bosshp', 1))
-    const bx = num('bx', 200)
-    const by = num('by', 80)
+    const bossHp = Math.round(bossMaxHp * config.bosshp)
+    const { bx, by } = config
     const bossZombie = {
       ...standing(1500, 'Boss', bx, by, bossMaxHp, 0),
       hp: bossHp,
       speed: 10,
     }
-    const door = (params.get('door') ?? 'East') as
-      | 'North'
-      | 'West'
-      | 'East'
-      | 'South'
-    const target = { x: num('tx', 120), y: num('ty', 120) }
+    const door = config.door ?? 'East'
+    const target = { x: config.tx, y: config.ty }
     const toTarget = Math.hypot(target.x - bx, target.y - by) || 1
     const direction = {
       x: (target.x - bx) / toTarget,
       y: (target.y - by) / toTarget,
     }
-    const windMs = num('windMs', 1000)
-    const puddles = (params.get('puddles') ?? '')
-      .split(';')
-      .filter(spot => spot.length > 0)
-      .map(spot => {
-        const [x, y] = spot.split(',').map(Number)
-        return {
-          _tag: 'Pooled' as const,
-          at: { x: x!, y: y! },
-          remainingMs: num('puddleMs', 3000),
-          durationMs: BOSS_RULES.puddleMs,
-        }
-      })
+    const windMs = config.windMs
+    const puddles = (config.puddles ?? []).map(([x, y]) => ({
+      _tag: 'Pooled' as const,
+      at: { x, y },
+      remainingMs: config.puddleMs,
+      durationMs: BOSS_RULES.puddleMs,
+    }))
     const flying =
       bossParam === 'spit'
         ? [
@@ -338,7 +345,7 @@ const roomModel = (): Model => {
               _tag: 'Flying' as const,
               from: { x: bx, y: by },
               to: target,
-              remainingMs: num('globMs', 450),
+              remainingMs: config.globMs,
               durationMs: BOSS_RULES.spitFlightMs,
             },
           ]
@@ -376,7 +383,7 @@ const roomModel = (): Model => {
     const moveFor = () =>
       (
         moves[bossParam] ??
-        (() => ({ _tag: 'Stalking', cooldownMs: num('cooldownMs', 60_000) }))
+        (() => ({ _tag: 'Stalking', cooldownMs: config.cooldownMs }))
       )()
     const bossState =
       bossParam === 'arriving'
@@ -384,7 +391,7 @@ const roomModel = (): Model => {
             _tag: 'Arriving' as const,
             door,
             hp: bossMaxHp,
-            remainingMs: num('arriveMs', 2600),
+            remainingMs: config.arriveMs,
             durationMs: 2600,
           }
         : {
@@ -392,7 +399,7 @@ const roomModel = (): Model => {
             id: 1500,
             standingMs: 4000,
             move: moveFor(),
-            mood: params.has('enraged') ? 'Enraged' : 'Calm',
+            mood: config.enraged ? 'Enraged' : 'Calm',
             nextFar: 'Charge',
             belchMs: 60_000,
             globs: [...puddles, ...flying],
@@ -414,7 +421,7 @@ const roomModel = (): Model => {
       rngState: () => bossRng,
     })
   }
-  const staged: Array<any> = []
+  const staged: Array<unknown> = []
   const stagedZombie = (
     id: number,
     kind: LineupKind,
@@ -426,20 +433,19 @@ const roomModel = (): Model => {
     speed: 20,
     ...extra,
   })
-  const gasbags = params.get('gasbags')
-  if (gasbags !== null) {
+  if (config.gasbags) {
     staged.push(
       stagedZombie(1700, 'Exploder', 70, 60),
-      stagedZombie(1701, 'Exploder', num('px', 160) + 22, num('py', 90) - 4, {
+      stagedZombie(1701, 'Exploder', px + 22, py - 4, {
         hp: 1,
       }),
       stagedZombie(1702, 'Exploder', 240, 120, {
         hp: 0,
-        state: { _tag: 'Fusing', remainingMs: num('fuseMs', 150) },
+        state: { _tag: 'Fusing', remainingMs: config.fuseMs },
       }),
     )
   }
-  if (params.has('frenzy')) {
+  if (config.frenzy) {
     const pack = 4242
     const kinds: Array<LineupKind> = [
       'Shambler',
@@ -469,14 +475,14 @@ const roomModel = (): Model => {
     model = modifyFields(model, {
       popups: () => [
         {
-          kind: 'Horde',
+          kind: 'Horde' as const,
           value: 0,
           x: 40,
           y: 72,
           velocityX: 0,
-          ageMs: num('hordeAge', 300),
+          ageMs: config.hordeAge,
         },
-        ...(params.has('wipe')
+        ...(config.wipe
           ? [
               {
                 kind: 'Wipe' as const,
@@ -491,27 +497,27 @@ const roomModel = (): Model => {
       ],
     })
   }
-  const chucker = params.get('chucker')
+  const chucker = config.chucker
   if (chucker === 'heft') {
     staged.push(
-      stagedZombie(1740, 'Thrower', num('cx', 230), num('cy', 70), {
+      stagedZombie(1740, 'Thrower', config.cx ?? 230, config.cy ?? 70, {
         action: {
           _tag: 'Hefting',
           victimId: 1741,
-          remainingMs: num('heftMs', 450),
+          remainingMs: config.heftMs,
           durationMs: 900,
         },
       }),
-      stagedZombie(1741, 'Shambler', num('cx', 230), num('cy', 70), {
+      stagedZombie(1741, 'Shambler', config.cx ?? 230, config.cy ?? 70, {
         action: { _tag: 'Carried', byId: 1740 },
       }),
     )
   }
   if (chucker === 'throw') {
-    const from = { x: num('cx', 240), y: num('cy', 60) }
-    const to = { x: num('px', 160), y: num('py', 90) }
+    const from = { x: config.cx ?? 240, y: config.cy ?? 60 }
+    const to = { x: px, y: py }
     const durationMs = 900
-    const remainingMs = num('flyMs', 400)
+    const remainingMs = config.flyMs
     const progress = 1 - remainingMs / durationMs
     staged.push(
       stagedZombie(1750, 'Thrower', from.x, from.y, {
@@ -530,20 +536,20 @@ const roomModel = (): Model => {
   }
   if (chucker === 'taunt') {
     staged.push(
-      stagedZombie(1755, 'Thrower', num('cx', 230), num('cy', 70), {
+      stagedZombie(1755, 'Thrower', config.cx ?? 230, config.cy ?? 70, {
         action: { _tag: 'Winded', remainingMs: 3100 },
       }),
     )
   }
   if (chucker === 'shield') {
-    const at = { x: num('cx', 200), y: num('cy', 80) }
-    const aim = Math.atan2(num('py', 90) - at.y, num('px', 160) - at.x)
+    const at = { x: config.cx ?? 200, y: config.cy ?? 80 }
+    const aim = Math.atan2(py - at.y, px - at.x)
     staged.push(
       stagedZombie(1790, 'Thrower', at.x, at.y, {
         action: {
           _tag: 'Shielding',
           victimId: 1791,
-          remainingMs: num('shieldMs', 3000),
+          remainingMs: config.shieldMs,
           aim,
         },
       }),
@@ -560,18 +566,18 @@ const roomModel = (): Model => {
   }
   if (chucker === 'dazed') {
     staged.push(
-      stagedZombie(1760, 'Shambler', num('px', 160) + 14, num('py', 90) + 4, {
+      stagedZombie(1760, 'Shambler', px + 14, py + 4, {
         action: { _tag: 'Dazed', remainingMs: 700, durationMs: 1000 },
       }),
     )
   }
-  const crawler = params.get('crawler')
+  const crawler = config.crawler
   if (crawler === 'surfacing') {
     staged.push(
-      stagedZombie(1770, 'Crawler', num('wx', 100), num('wy', 125), {
+      stagedZombie(1770, 'Crawler', config.wx, config.wy, {
         action: {
           _tag: 'Burrowed',
-          remainingMs: num('surfMs', 400),
+          remainingMs: config.surfMs,
           durationMs: 1500,
         },
       }),
@@ -582,10 +588,10 @@ const roomModel = (): Model => {
   }
   if (crawler === 'cling') {
     staged.push(
-      stagedZombie(1780, 'Crawler', num('px', 160), num('py', 90) + 2, {
+      stagedZombie(1780, 'Crawler', px, py + 2, {
         action: { _tag: 'Clinging', remainingMs: 800 },
       }),
-      stagedZombie(1781, 'Crawler', num('px', 160) + 40, num('py', 90) + 20),
+      stagedZombie(1781, 'Crawler', px + 40, py + 20),
     )
   }
   if (staged.length > 0)
@@ -610,27 +616,28 @@ const roomModel = (): Model => {
     trapsPlaced: 3,
     runMs: 371_000,
   }
-  if (params.has('stats'))
+  if (config.stats)
     model = modifyFields(model, {
-      stats: () => sampleStats,
+      stats: s => ({ ...s, ...sampleStats }),
       wallet: w => ({ ...w, earned: 615 }),
     })
-  if (params.has('py'))
+  if (config.py !== undefined)
     model = modifyFields(model, {
-      player: p => ({ ...p, x: num('px', p.x), y: num('py', p.y) }),
-      hintBand: () => (num('py', 90) < 70 ? 'Bottom' : 'Top'),
+      player: p => ({ ...p, x: config.px ?? p.x, y: py }),
+      hintBand: () => (py < 70 ? 'Bottom' : 'Top'),
     })
-  if (params.has('best'))
+  const { best, pistol, aim, card } = config
+  if (best !== undefined)
     model = withBests(model, bests => ({
       ...bests,
-      maybeBestEndlessWave: Option.some(num('best', 0)),
+      maybeBestEndlessWave: Option.some(best),
     }))
-  if (params.has('pistol'))
+  if (pistol !== undefined)
     model = modifyFields(model, {
-      player: p => ({ ...p, pistolTier: num('pistol', 0) }),
+      player: p => ({ ...p, pistolTier: pistol }),
     })
-  if (params.has('aim')) {
-    const [aimX, aimY] = (params.get('aim') ?? '160,90').split(',').map(Number)
+  if (aim !== undefined) {
+    const [aimX, aimY] = aim
     model = modifyFields(model, {
       input: input => ({
         ...input,
@@ -639,41 +646,35 @@ const roomModel = (): Model => {
       }),
     })
   }
-  if (params.get('device') === 'touch')
+  if (config.device === 'touch')
     model = modifyFields(model, { lastDevice: () => 'Touch' as const })
-  const seen = params.get('seen')
-  if (seen !== null)
+  const seen = config.seen
+  if (seen !== undefined)
     model = raiseDebutCard(
       modifyFields(model, {
-        introducedKinds: () =>
-          seen === 'all'
-            ? ZOMBIE_KIND_ORDER
-            : (seen.split(',') as Array<(typeof ZOMBIE_KIND_ORDER)[number]>),
+        introducedKinds: () => (seen === 'all' ? ZOMBIE_KIND_ORDER : seen),
       }),
     )
-  if (params.has('card') && model.debutCard._tag === 'Showing')
+  const debutCard = model.debutCard
+  if (card !== undefined && debutCard._tag === 'Showing')
     model = modifyFields(model, {
-      debutCard: () => ({ ...model.debutCard, ageMs: num('card', 0) }),
+      debutCard: () => ({ ...debutCard, ageMs: card }),
     })
-  const PICKUP_KINDS = [
+  const PICKUP_KINDS: ReadonlyArray<PickupKind> = [
     'RapidFire',
     'Damage',
     'Speed',
     'Pierce',
     'Burp',
     'Heart',
-  ] as const
-  type PickupKindName = (typeof PICKUP_KINDS)[number]
-  const kindsParam = (key: string): Array<PickupKindName> => {
-    const raw = params.get(key)
-    if (raw === null) return []
-    return raw === 'all'
-      ? [...PICKUP_KINDS]
-      : (raw.split(',') as Array<PickupKindName>)
-  }
-  const pickupKinds = kindsParam('pickups')
+  ]
+  const kindsOf = (
+    picked: 'all' | ReadonlyArray<PickupKind> | undefined,
+  ): ReadonlyArray<PickupKind> =>
+    picked === undefined ? [] : picked === 'all' ? PICKUP_KINDS : picked
+  const pickupKinds = kindsOf(config.pickups)
   if (pickupKinds.length > 0) {
-    const pickupY = num('pickupY', 128)
+    const pickupY = config.pickupY
     model = modifyFields(model, {
       pickups: () =>
         pickupKinds.map((kind, index) => ({
@@ -681,15 +682,15 @@ const roomModel = (): Model => {
           kind,
           x: Math.round(160 + (index - (pickupKinds.length - 1) / 2) * 26),
           y: pickupY,
-          ageMs: num('pickupAge', 2000) + index * 170,
+          ageMs: config.pickupAge + index * 170,
         })),
     })
   }
-  const boostKinds = kindsParam('boosts').filter(
+  const boostKinds = kindsOf(config.boosts).filter(
     kind => kind !== 'Burp' && kind !== 'Heart',
   )
   if (boostKinds.length > 0) {
-    const boostMs = num('boostMs', 5000)
+    const boostMs = config.boostMs
     model = modifyFields(model, {
       boosts: boosts => {
         const next: Record<string, unknown> = { ...boosts }
@@ -704,27 +705,48 @@ const roomModel = (): Model => {
       },
     })
   }
-  const calloutKind = params.get('callout')
-  if (calloutKind !== null)
+  const calloutKind = config.callout
+  if (calloutKind !== undefined)
     model = modifyFields(model, {
       callouts: () => [
         {
-          kind: calloutKind as PickupKindName,
+          kind: calloutKind,
           x: model.player.x,
           y: model.player.y,
-          ageMs: num('calloutAge', 400),
+          ageMs: config.calloutAge,
         },
       ],
     })
-  if (params.has('bounty'))
+  if (config.bounty)
     model = modifyFields(model, {
       popups: () => [
-        { kind: 'Kill', value: 3, x: 90, y: 80, velocityX: 0, ageMs: 50 },
-        { kind: 'Kill', value: 20, x: 150, y: 80, velocityX: 0, ageMs: 400 },
-        { kind: 'Payday', value: 35, x: 225, y: 80, velocityX: 0, ageMs: 600 },
+        {
+          kind: 'Kill' as const,
+          value: 3,
+          x: 90,
+          y: 80,
+          velocityX: 0,
+          ageMs: 50,
+        },
+        {
+          kind: 'Kill' as const,
+          value: 20,
+          x: 150,
+          y: 80,
+          velocityX: 0,
+          ageMs: 400,
+        },
+        {
+          kind: 'Payday' as const,
+          value: 35,
+          x: 225,
+          y: 80,
+          velocityX: 0,
+          ageMs: 600,
+        },
       ],
     })
-  const phase = params.get('phase')
+  const phase = config.phase
   if (phase === 'victory')
     model = modifyFields(model, {
       phase: () => Phase.Victory(),
@@ -742,11 +764,12 @@ const roomModel = (): Model => {
 
 const scenarioModel = (): Model => {
   let model = roomModel()
-  if (params.has('newer'))
+  const newer = config.newer
+  if (newer !== undefined)
     model = modifyFields(model, {
-      maybeNewerBuild: () => Option.some(params.get('newer') || 'next'),
+      maybeNewerBuild: () => Option.some(newer || 'next'),
     })
-  if (params.has('bests'))
+  if (config.bests)
     model = modifyFields(
       withBests(model, () => ({
         maybeBestEndlessWave: Option.some(12),
@@ -754,70 +777,58 @@ const scenarioModel = (): Model => {
       })),
       { bests: bests => ({ ...bests, totalKills: 341 }) },
     )
-  const kills = params.get('kills')
-  if (kills !== null) {
-    const counts = Object.fromEntries(
-      kills
-        .split(',')
-        .filter(Boolean)
-        .map(pair => {
-          const [kind, count] = pair.split(':')
-          return [kind, Number(count)]
-        }),
-    )
+  const kills = config.kills
+  if (kills !== undefined) {
+    const counts = Object.fromEntries(kills)
     model = modifyFields(model, {
-      bests: bests => ({
-        ...bests,
-        killsByKind: { ...bests.killsByKind, ...counts },
-        totalKills: Object.values({ ...bests.killsByKind, ...counts }).reduce(
-          (sum: number, count) => sum + Number(count),
-          0,
-        ),
-      }),
+      bests: bests => {
+        const killsByKind = { ...bests.killsByKind, ...counts }
+        return {
+          ...bests,
+          killsByKind,
+          totalKills: Object.values(killsByKind).reduce(
+            (sum, count) => sum + count,
+            0,
+          ),
+        }
+      },
     })
   }
-  const listOf = (key: string) =>
-    (params.get(key) ?? '').split(',').filter(Boolean) as any
   model = modifyFields(model, {
     home: home => ({
       ...home,
-      mode: params.get('homemode') === 'endless' ? 'Endless' : home.mode,
-      maybeSeenNewsDay: params.has('newsseen')
+      mode: config.homemode === 'endless' ? 'Endless' : home.mode,
+      maybeSeenNewsDay: config.newsseen
         ? Option.some('October 29, 2026')
         : home.maybeSeenNewsDay,
-      openedEntries: params.has('opened')
-        ? listOf('opened')
-        : home.openedEntries,
-      newEntries: params.has('newentries')
-        ? listOf('newentries')
-        : home.newEntries,
+      openedEntries: config.opened ?? home.openedEntries,
+      newEntries: config.newentries ?? home.newEntries,
     }),
   })
   model = modifyFields(model, {
     difficultyCard: () =>
-      params.has('ask') ? DifficultyCard.Unseen() : DifficultyCard.Seen(),
+      config.ask ? DifficultyCard.Unseen() : DifficultyCard.Seen(),
     difficulty: setting => ({
-      chosen: (params.get('difficulty') ?? setting.chosen) as Difficulty,
-      nightmare: (params.get('nightmare') ??
-        setting.nightmare) as NightmareLock,
+      chosen: config.difficulty ?? setting.chosen,
+      nightmare: config.nightmare ?? setting.nightmare,
     }),
   })
-  const planks = params.get('planks')
-  if (planks !== null)
+  const planks = config.planks
+  if (planks !== undefined)
     model = modifyFields(model, {
       traps: traps => [
         ...traps,
-        ...planks.split(',').map((door, index) =>
+        ...planks.map((door, index) =>
           Trap.Barricade({
             id: 9000 + index,
-            door: door as DoorId,
-            hp: num('plankhp', 30),
+            door,
+            hp: config.plankhp,
             hitRemainingMs: 0,
           }),
         ),
       ],
     })
-  const chewers = num('chewers', 0)
+  const chewers = config.chewers
   if (chewers > 0) {
     const spots = [
       { x: 16, y: 84 },
@@ -846,28 +857,28 @@ const scenarioModel = (): Model => {
       ],
     })
   }
-  const look = params.get('look')
-  if (look !== null) {
-    const [body, hairStyle, hairColor, skinTone, shirtColor] = look.split(',')
+  const look = config.look
+  if (look !== undefined) {
+    const [body, hairStyle, hairColor, skinTone, shirtColor] = look
     model = modifyFields(model, {
       appearance: a => ({
-        body: (body || a.body) as typeof a.body,
-        hairStyle: (hairStyle || a.hairStyle) as typeof a.hairStyle,
-        hairColor: (hairColor || a.hairColor) as typeof a.hairColor,
-        skinTone: (skinTone || a.skinTone) as typeof a.skinTone,
-        shirtColor: (shirtColor || a.shirtColor) as typeof a.shirtColor,
+        body: body || a.body,
+        hairStyle: hairStyle || a.hairStyle,
+        hairColor: hairColor || a.hairColor,
+        skinTone: skinTone || a.skinTone,
+        shirtColor: shirtColor || a.shirtColor,
       }),
     })
   }
   return model
 }
 
-const god = params.has('god')
+const god = config.god
 
 // NOTE: `gasroom=N` keeps N Kaboomers in the room: when shots and chain bursts
 // pop them, new ones walk in at the doors, so a measurement window stays full
 // of fusing, bursting, and spawning Kaboomers.
-const GASBAG_DOORS = [
+const GASBAG_DOORS: ReadonlyArray<readonly [number, number]> = [
   [160, 8],
   [312, 90],
   [160, 172],
@@ -880,7 +891,7 @@ const topUpGasbags = (model: Model): Model => {
   const missing = Math.max(0, Math.min(4, gasbagRoom - alive))
   if (missing === 0 || model.phase._tag !== 'Wave') return model
   const fresh = Array.from({ length: missing }, (_, i) => {
-    const [x, y] = GASBAG_DOORS[(model.nextEntityId + i) % GASBAG_DOORS.length]
+    const [x, y] = GASBAG_DOORS[(model.nextEntityId + i) % GASBAG_DOORS.length]!
     return {
       id: model.nextEntityId + i,
       kind: 'Exploder' as const,
@@ -912,8 +923,8 @@ const countShapes = (shapes: ReadonlyArray<any>): number =>
 w.__countShapes = () => countShapes(sceneShapes(w.__model))
 
 w.__timings = { update: [] as Array<number>, view: [] as Array<number> }
-const instrument = params.has('instrument')
-const freezeAfter = params.has('freeze') ? num('freeze', 0) : Infinity
+const instrument = config.instrument
+const freezeAfter = config.freeze ?? Infinity
 const FIXED_FRAME_MS = 1000 / 60
 let framesRun = 0
 const QUIET_MESSAGES = new Set([
@@ -948,11 +959,10 @@ const harnessUpdate = (model: Model, incoming: Message) => {
     Option.isNone(model.maybeSurface)
   )
     return { model }
-  if (params.has('fit') && incoming._tag === 'CompletedDetectScreenFit')
+  if (config.fit !== undefined && incoming._tag === 'CompletedDetectScreenFit')
     return {
       model: modifyFields(model, {
-        screenFit: () =>
-          params.get('fit') === 'home' ? 'HomeScreen' : 'Fullscreen',
+        screenFit: () => (config.fit === 'home' ? 'HomeScreen' : 'Fullscreen'),
       }),
     }
   const message =
@@ -981,15 +991,23 @@ const harnessUpdate = (model: Model, incoming: Message) => {
   return next
 }
 
-const harnessInit: typeof init = (...args) => {
-  const base = init(...args)
+// NOTE: init needs only the player store, but opening the picker runs update,
+// whose Commands also need the managed audio engine.
+const harnessInit: Runtime.ApplicationInit<
+  Model,
+  Message,
+  void,
+  PlayerStore,
+  ManagedResource.ServicesOf<typeof managedResources>
+> = () => {
+  const base = init()
   const model = scenarioModel()
   w.__model = model
   const seeded =
-    params.has('seed') || Number.isFinite(freezeAfter)
-      ? modifyFields(model, { rngState: () => num('seed', 1) })
+    config.seed !== undefined || Number.isFinite(freezeAfter)
+      ? modifyFields(model, { rngState: () => config.seed ?? 1 })
       : model
-  if (params.has('picker')) {
+  if (config.picker) {
     const opened = update(
       modifyFields(seeded, { screenMs: () => 99999 }),
       Message.ClickedCharacterButton(),
@@ -1050,7 +1068,7 @@ const lookSheetShapes = (): Array<Canvas.Shape> => {
               hairStyle,
               hairColor,
               skinTone,
-              shirtColor: SHIRT_COLORS[col % SHIRT_COLORS.length],
+              shirtColor: SHIRT_COLORS[col % SHIRT_COLORS.length]!,
             },
             col * CELL_W + 8,
             row * CELL_H + 15,
@@ -1131,7 +1149,7 @@ const application = Runtime.makeApplication({
   init: harnessInit,
   update: harnessUpdate,
   view: (model: Model, h: any) => {
-    if (params.has('looksheet')) return lookSheetView(h)
+    if (config.looksheet) return lookSheetView(h)
     const t0 = performance.now()
     const out = view(model, h)
     if (instrument) w.__timings.view.push(performance.now() - t0)
@@ -1141,13 +1159,9 @@ const application = Runtime.makeApplication({
   managedResources,
   resources: PlayerStoreLayer,
   container: document.getElementById('root'),
-  devTools: params.has('nodev') ? false : undefined,
+  ...(config.nodev ? { devTools: false as const } : {}),
 })
 
 Runtime.run(application)
-void Option
-import { DOORS } from '@game/arena'
-import { STALL_BOX } from '@game/shop'
-import { layer as PlayerStoreLayer } from '@game/store'
 w.__stall = STALL_BOX
 w.__doors = DOORS

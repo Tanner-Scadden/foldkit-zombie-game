@@ -6,3 +6,11 @@
   height: 880px;
   image-rendering: pixelated;
 }
+
+.harness-error {
+  padding: 16px;
+  color: #fff;
+  background: #a00;
+  font: 14px/1.4 monospace;
+  white-space: pre-wrap;
+}

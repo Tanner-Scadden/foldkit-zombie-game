@@ -8,28 +8,32 @@
 // with 1 on any problem.
 //   TAG=after BASE=http://localhost:4174/ bun shots31.ts
 // ONLY picks scenes, such as `ONLY=wave,break`.
-import type { Browser } from 'playwright-core'
+import {
+  ANDROID_915,
+  DESKTOP_1280,
+  PHONE_667,
+  PHONE_844,
+  PHONE_932,
+  type Viewport,
+  deviceQuery,
+  finish,
+  harnessUrl,
+  isPickedScene,
+  launch,
+  openPage,
+  shot,
+  tagOr,
+  wait,
+} from './lib'
 
-import { HARNESS, launch, shot, wait } from './lib'
-
-const TAG = process.env.TAG ?? 'after'
-const BASE = process.env.BASE ?? HARNESS
-const ONLY = process.env.ONLY?.split(',')
-
-type Viewport = Readonly<{
-  name: string
-  width: number
-  height: number
-  scale: number
-  isPhone: boolean
-}>
+const TAG = tagOr('after')
 
 const VIEWPORTS: ReadonlyArray<Viewport> = [
-  { name: 'p667', width: 667, height: 375, scale: 2, isPhone: true },
-  { name: 'p844', width: 844, height: 390, scale: 3, isPhone: true },
-  { name: 'p932', width: 932, height: 430, scale: 3, isPhone: true },
-  { name: 'a915', width: 915, height: 412, scale: 2.625, isPhone: true },
-  { name: 'd1280', width: 1280, height: 720, scale: 1, isPhone: false },
+  PHONE_667,
+  PHONE_844,
+  PHONE_932,
+  ANDROID_915,
+  DESKTOP_1280,
 ]
 
 type Scene = Readonly<{ name: string; query: string }>
@@ -79,25 +83,15 @@ const overlaps = (a: Box, b: Box) =>
   a.y < b.y + b.height &&
   b.y < a.y + a.height
 
-const openPage = async (browser: Browser, viewport: Viewport) => {
-  const context = await browser.newContext({
-    viewport: { width: viewport.width, height: viewport.height },
-    deviceScaleFactor: viewport.scale,
-    ...(viewport.isPhone ? { isMobile: true, hasTouch: true } : {}),
-  })
-  return context.newPage()
-}
-
 const problems: Array<string> = []
 const browser = await launch()
 for (const viewport of VIEWPORTS) {
   for (const scene of SCENES) {
-    if (ONLY && !ONLY.includes(scene.name)) {
+    if (!isPickedScene(scene.name)) {
       continue
     }
     const page = await openPage(browser, viewport)
-    const device = viewport.isPhone ? '&device=touch' : ''
-    await page.goto(`${BASE}?${scene.query}${device}`)
+    await page.goto(harnessUrl(scene.query, deviceQuery(viewport)))
     await wait(1200)
     const report = await page.evaluate(inset => {
       const stage = document.querySelector('.game-stage')!
@@ -212,11 +206,7 @@ for (const viewport of VIEWPORTS) {
 }
 await browser.close()
 
-if (problems.length > 0) {
-  console.log(`\n${problems.length} problems`)
-  process.exit(1)
-} else {
-  console.log(
-    '\nEvery button hits itself and keeps clear of the doors and the stall.',
-  )
-}
+finish(
+  problems,
+  'Every button hits itself and keeps clear of the doors and the stall.',
+)

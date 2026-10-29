@@ -8,29 +8,34 @@
 //   TAG=after BASE=http://localhost:4174/ bun shots34.ts
 // ONLY picks scenes, such as `ONLY=wave,break`, and VIEWPORTS picks phones,
 // such as `VIEWPORTS=p390,l844`.
-import type { Browser, Page } from 'playwright-core'
+import type { Page } from 'playwright-core'
 
-import { HARNESS, launch, shot, wait } from './lib'
+import {
+  PHONE_844,
+  UPRIGHT_360,
+  UPRIGHT_375,
+  UPRIGHT_390,
+  UPRIGHT_430,
+  finish,
+  harnessUrl,
+  isPickedScene,
+  launch,
+  openPage,
+  pickViewports,
+  shot,
+  tagOr,
+  wait,
+} from './lib'
 
-const TAG = process.env.TAG ?? 'after'
-const BASE = process.env.BASE ?? HARNESS
-const ONLY = process.env.ONLY?.split(',')
-const PICKED = process.env.VIEWPORTS?.split(',')
+const TAG = tagOr('after')
 
-type Viewport = Readonly<{
-  name: string
-  width: number
-  height: number
-  scale: number
-}>
-
-const VIEWPORTS: ReadonlyArray<Viewport> = [
-  { name: 'p390', width: 390, height: 844, scale: 3 },
-  { name: 'p430', width: 430, height: 932, scale: 3 },
-  { name: 'p360', width: 360, height: 800, scale: 3 },
-  { name: 'p375', width: 375, height: 667, scale: 2 },
-  { name: 'l844', width: 844, height: 390, scale: 3 },
-]
+const VIEWPORTS = pickViewports([
+  { ...UPRIGHT_390, name: 'p390' },
+  { ...UPRIGHT_430, name: 'p430' },
+  { ...UPRIGHT_360, name: 'p360' },
+  { ...UPRIGHT_375, name: 'p375' },
+  { ...PHONE_844, name: 'l844' },
+])
 
 type Scene = Readonly<{
   name: string
@@ -99,29 +104,15 @@ const SCENES: ReadonlyArray<Scene> = [
 
 const MIN_SIDE = 48
 
-const openPage = async (browser: Browser, viewport: Viewport) => {
-  const context = await browser.newContext({
-    viewport: { width: viewport.width, height: viewport.height },
-    deviceScaleFactor: viewport.scale,
-    isMobile: true,
-    hasTouch: true,
-  })
-  return context.newPage()
-}
-
 const problems: Array<string> = []
 const browser = await launch()
 for (const viewport of VIEWPORTS) {
-  if (PICKED && !PICKED.includes(viewport.name)) {
-    continue
-  }
   for (const scene of SCENES) {
-    if (ONLY && !ONLY.includes(scene.name)) {
+    if (!isPickedScene(scene.name)) {
       continue
     }
     const page = await openPage(browser, viewport)
-    const separator = scene.query === '' ? '' : '&'
-    await page.goto(`${BASE}?${scene.query}${separator}device=touch&nodev`)
+    await page.goto(harnessUrl(scene.query, 'device=touch', 'nodev'))
     await wait(1200)
     if (scene.act) {
       await scene.act(page)
@@ -225,11 +216,4 @@ for (const viewport of VIEWPORTS) {
 }
 await browser.close()
 
-if (problems.length > 0) {
-  console.log(`\n${problems.length} problems:`)
-  for (const problem of problems) {
-    console.log(`  ${problem}`)
-  }
-  process.exit(1)
-}
-console.log('\nno problems')
+finish(problems, 'no problems')

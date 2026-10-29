@@ -14,29 +14,28 @@
 //   PART=e2e bun shots26.ts
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
 import { resolve } from 'node:path'
-import type { Browser, Page } from 'playwright-core'
+import type { Page } from 'playwright-core'
 
-import { HARNESS, launch, shot, wait } from './lib'
+import {
+  DESKTOP_1280,
+  PHONE_667,
+  PHONE_844,
+  type Viewport,
+  deviceQuery,
+  harnessUrl,
+  isPickedScene,
+  launch,
+  openPage,
+  shot,
+  tagOr,
+  wait,
+} from './lib'
 
-const TAG = process.env.TAG ?? 'after'
-const BASE = process.env.BASE ?? HARNESS
+const TAG = tagOr('after')
 const PART = process.env.PART ?? 'layout'
-const ONLY = process.env.ONLY?.split(',')
 const ROOT = resolve(import.meta.dir, '../..')
 
-type Viewport = Readonly<{
-  name: string
-  width: number
-  height: number
-  scale: number
-  isPhone: boolean
-}>
-
-const VIEWPORTS: ReadonlyArray<Viewport> = [
-  { name: 'p667', width: 667, height: 375, scale: 2, isPhone: true },
-  { name: 'p844', width: 844, height: 390, scale: 3, isPhone: true },
-  { name: 'd1280', width: 1280, height: 720, scale: 1, isPhone: false },
-]
+const VIEWPORTS: ReadonlyArray<Viewport> = [PHONE_667, PHONE_844, DESKTOP_1280]
 
 type Scene = Readonly<{ name: string; query: string; hasChip: boolean }>
 
@@ -71,15 +70,6 @@ const SCENES: ReadonlyArray<Scene> = [
     hasChip: false,
   },
 ]
-
-const openPage = async (browser: Browser, viewport: Viewport) => {
-  const context = await browser.newContext({
-    viewport: { width: viewport.width, height: viewport.height },
-    deviceScaleFactor: viewport.scale,
-    ...(viewport.isPhone ? { isMobile: true, hasTouch: true } : {}),
-  })
-  return context.newPage()
-}
 
 const chipReport = (page: Page) =>
   page.evaluate(() => {
@@ -130,12 +120,13 @@ const layout = async () => {
   const browser = await launch()
   for (const viewport of VIEWPORTS) {
     for (const scene of SCENES) {
-      if (ONLY && !ONLY.includes(scene.name)) {
+      if (!isPickedScene(scene.name)) {
         continue
       }
       const page = await openPage(browser, viewport)
-      const device = viewport.isPhone ? '&device=touch' : ''
-      await page.goto(`${BASE}?${scene.query}&newer=next${device}`)
+      await page.goto(
+        harnessUrl(scene.query, 'newer=next', deviceQuery(viewport)),
+      )
       await wait(1500)
       const report = await chipReport(page)
       const isRight = (report.chip !== undefined) === scene.hasChip
@@ -198,7 +189,7 @@ const e2e = async () => {
   await wait(2500)
   const browser = await launch()
   try {
-    const page = await openPage(browser, VIEWPORTS[0]!)
+    const page = await openPage(browser, PHONE_667)
     const versionRequests: Array<string> = []
     page.on('request', request => {
       if (request.url().includes('version.json')) {

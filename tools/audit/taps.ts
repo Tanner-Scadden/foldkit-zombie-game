@@ -15,29 +15,38 @@
 // ONLY picks scenes, such as `ONLY=home,munchopedia`.
 import type { Page } from 'playwright-core'
 
-import { HARNESS, launch, wait } from './lib'
+import {
+  PHONE_667,
+  PHONE_844,
+  UPRIGHT_360,
+  UPRIGHT_390,
+  UPRIGHT_430,
+  type Viewport,
+  finish,
+  harnessUrl,
+  isPickedScene,
+  launch,
+  openPage,
+  pickViewports,
+  wait,
+} from './lib'
 
-const BASE = process.env.BASE ?? HARNESS
-const ONLY = process.env.ONLY?.split(',')
-
-type Viewport = Readonly<{ name: string; width: number; height: number }>
-
+// NOTE: a 2x pixel ratio on every phone keeps the many reloads quick. The hit
+// tests read CSS pixels, so the ratio does not change them.
 const LANDSCAPE: ReadonlyArray<Viewport> = [
-  { name: 'p667', width: 667, height: 375 },
-  { name: 'p844', width: 844, height: 390 },
+  { ...PHONE_667, scale: 2 },
+  { ...PHONE_844, scale: 2 },
 ]
 
 const PORTRAIT: ReadonlyArray<Viewport> = [
-  { name: 'u390', width: 390, height: 844 },
-  { name: 'u430', width: 430, height: 932 },
-  { name: 'u360', width: 360, height: 800 },
+  { ...UPRIGHT_390, scale: 2 },
+  { ...UPRIGHT_430, scale: 2 },
+  { ...UPRIGHT_360, scale: 2 },
 ]
 
-const PICKED = process.env.VIEWPORTS?.split(',')
-
-const VIEWPORTS = (
-  process.env.PORTRAIT === undefined ? LANDSCAPE : PORTRAIT
-).filter(viewport => PICKED === undefined || PICKED.includes(viewport.name))
+const VIEWPORTS = pickViewports(
+  process.env.PORTRAIT === undefined ? LANDSCAPE : PORTRAIT,
+)
 
 type Scene = Readonly<{
   name: string
@@ -116,7 +125,7 @@ const TAP_LEAVES =
 const isTapMessage = (tag: string): boolean => TAP_LEAVES.test(tag)
 
 const openScene = async (page: Page, scene: Scene) => {
-  await page.goto(`${BASE}?${scene.query}&device=touch&nodev`)
+  await page.goto(harnessUrl(scene.query, 'device=touch', 'nodev'))
   await wait(SETTLE_MS)
   if (scene.openWith !== undefined) {
     const box = await page.locator(scene.openWith).boundingBox()
@@ -206,19 +215,13 @@ const failures: Array<string> = []
 const browser = await launch()
 for (const viewport of VIEWPORTS) {
   for (const scene of SCENES) {
-    if (ONLY && !ONLY.includes(scene.name)) {
+    if (!isPickedScene(scene.name)) {
       continue
     }
-    const context = await browser.newContext({
-      viewport: { width: viewport.width, height: viewport.height },
-      deviceScaleFactor: 2,
-      isMobile: true,
-      hasTouch: true,
-    })
+    const page = await openPage(browser, viewport)
     // NOTE: a tap can write the save, such as PLAY dismissing the iPhone
     // tip, so every reopen starts from no save and shows the same scene.
-    await context.addInitScript(() => localStorage.clear())
-    const page = await context.newPage()
+    await page.addInitScript(() => localStorage.clear())
     await openScene(page, scene)
     const hasDialog = scene.openWith !== undefined
     const targets = await visibleTargets(page)
@@ -264,14 +267,9 @@ for (const viewport of VIEWPORTS) {
         }
       }
     }
-    await context.close()
+    await page.context().close()
   }
 }
 await browser.close()
 
-if (failures.length > 0) {
-  console.log(`\n${failures.length} problems:\n${failures.join('\n')}`)
-  process.exit(1)
-} else {
-  console.log('\nEvery tap landed on its button and sent one Message.')
-}
+finish(failures, 'Every tap landed on its button and sent one Message.')

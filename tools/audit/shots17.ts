@@ -8,25 +8,26 @@
 // ONLY picks scenes by name, BASE points it at another harness port, and
 // COMPARE_ONLY=1 compares the sets already on disk without taking new shots.
 import { readdirSync } from 'node:fs'
-import type { Browser } from 'playwright-core'
 
-import { HARNESS, launch, shot, wait } from './lib'
+import {
+  DESKTOP_1280,
+  PHONE_667,
+  SHOTS_DIR,
+  type Viewport,
+  comparePngs,
+  deviceQuery,
+  harnessUrl,
+  isPickedScene,
+  launch,
+  openPage,
+  shot,
+  tagOr,
+  wait,
+} from './lib'
 
-const TAG = process.env.TAG ?? 'after'
-const BASE = process.env.BASE ?? HARNESS
-const ONLY = process.env.ONLY?.split(',')
+const TAG = tagOr('after')
 
-type Viewport = Readonly<{
-  name: string
-  width: number
-  height: number
-  isPhone: boolean
-}>
-
-const VIEWPORTS: ReadonlyArray<Viewport> = [
-  { name: 'd1280', width: 1280, height: 720, isPhone: false },
-  { name: 'p667', width: 667, height: 375, isPhone: true },
-]
+const VIEWPORTS: ReadonlyArray<Viewport> = [DESKTOP_1280, PHONE_667]
 
 type Scene = Readonly<{ name: string; query: string }>
 
@@ -87,30 +88,17 @@ const SCENES: ReadonlyArray<Scene> = [
   { name: 'looks', query: 'looksheet&freeze=10' },
 ]
 
-const openPage = async (browser: Browser, viewport: Viewport) => {
-  const context = await browser.newContext({
-    viewport: { width: viewport.width, height: viewport.height },
-    ...(viewport.isPhone
-      ? { deviceScaleFactor: 2, isMobile: true, hasTouch: true }
-      : {}),
-  })
-  return context.newPage()
-}
-
 const shotName = (tag: string, viewport: Viewport, scene: Scene) =>
   `s17-${tag}-${viewport.name}-${scene.name}`
-
-const isPicked = (scene: Scene) => !ONLY || ONLY.includes(scene.name)
 
 const isComparingOnly = process.env.COMPARE_ONLY === '1'
 
 const browser = await launch()
 for (const viewport of VIEWPORTS) {
   for (const scene of SCENES) {
-    if (!isPicked(scene) || isComparingOnly) continue
+    if (!isPickedScene(scene.name) || isComparingOnly) continue
     const page = await openPage(browser, viewport)
-    const device = viewport.isPhone ? '&device=touch' : ''
-    await page.goto(`${BASE}?${scene.query}${device}`)
+    await page.goto(harnessUrl(scene.query, deviceQuery(viewport)))
     await wait(2500)
     await page
       .waitForFunction(() => (window as any).__isFrozen === true, null, {
@@ -128,86 +116,17 @@ if (process.env.COMPARE) {
   const page = await (
     await browser.newContext({ viewport: { width: 400, height: 300 } })
   ).newPage()
-  const dir = `${import.meta.dir}/shots`
-  const files = readdirSync(dir)
-  const toDataUrl = async (file: string) =>
-    `data:image/png;base64,${Buffer.from(await Bun.file(`${dir}/${file}`).arrayBuffer()).toString('base64')}`
+  const files = readdirSync(SHOTS_DIR)
   for (const viewport of VIEWPORTS) {
     for (const scene of SCENES) {
-      if (!isPicked(scene)) continue
+      if (!isPickedScene(scene.name)) continue
       const before = `${shotName(compareTag, viewport, scene)}.png`
       const after = `${shotName(TAG, viewport, scene)}.png`
       if (!files.includes(before) || !files.includes(after)) continue
-      const result = await page.evaluate(
-        async ([first, second]) => {
-          const load = (src: string) =>
-            new Promise<HTMLImageElement>(resolve => {
-              const image = new Image()
-              image.onload = () => resolve(image)
-              image.src = src
-            })
-          const pixels = async (src: string) => {
-            const image = await load(src)
-            const canvas = document.createElement('canvas')
-            canvas.width = image.width
-            canvas.height = image.height
-            const context = canvas.getContext('2d')!
-            context.drawImage(image, 0, 0)
-            return {
-              width: image.width,
-              height: image.height,
-              data: context.getImageData(0, 0, image.width, image.height),
-            }
-          }
-          const a = await pixels(first!)
-          const b = await pixels(second!)
-          const diff = document.createElement('canvas')
-          diff.width = a.width
-          diff.height = a.height
-          const diffContext = diff.getContext('2d')!
-          const out = diffContext.createImageData(a.width, a.height)
-          let differing = 0
-          let maxDelta = 0
-          let left = Infinity
-          let top = Infinity
-          let right = -Infinity
-          let bottom = -Infinity
-          for (let i = 0; i < a.data.data.length; i += 4) {
-            const delta = Math.max(
-              Math.abs(a.data.data[i]! - b.data.data[i]!),
-              Math.abs(a.data.data[i + 1]! - b.data.data[i + 1]!),
-              Math.abs(a.data.data[i + 2]! - b.data.data[i + 2]!),
-            )
-            const gray = Math.round(
-              (b.data.data[i]! + b.data.data[i + 1]! + b.data.data[i + 2]!) /
-                12,
-            )
-            out.data[i] = delta > 0 ? 255 : gray
-            out.data[i + 1] = delta > 0 ? 0 : gray
-            out.data[i + 2] = delta > 0 ? 255 : gray
-            out.data[i + 3] = 255
-            if (delta > 0) {
-              differing++
-              const pixel = i / 4
-              const x = pixel % a.width
-              const y = Math.floor(pixel / a.width)
-              left = Math.min(left, x)
-              top = Math.min(top, y)
-              right = Math.max(right, x)
-              bottom = Math.max(bottom, y)
-            }
-            maxDelta = Math.max(maxDelta, delta)
-          }
-          diffContext.putImageData(out, 0, 0)
-          return {
-            differing,
-            total: a.data.data.length / 4,
-            maxDelta,
-            box: differing > 0 ? { left, top, right, bottom } : null,
-            diffUrl: differing > 0 ? diff.toDataURL('image/png') : null,
-          }
-        },
-        [await toDataUrl(before), await toDataUrl(after)],
+      const result = await comparePngs(
+        page,
+        `${SHOTS_DIR}/${before}`,
+        `${SHOTS_DIR}/${after}`,
       )
       const label = `${viewport.name}-${scene.name}`
       console.log(
@@ -215,7 +134,7 @@ if (process.env.COMPARE) {
       )
       if (result.diffUrl) {
         await Bun.write(
-          `${dir}/s17-diff-${label}.png`,
+          `${SHOTS_DIR}/s17-diff-${label}.png`,
           Buffer.from(result.diffUrl.split(',')[1]!, 'base64'),
         )
       }
