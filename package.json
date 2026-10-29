@@ -7,13 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "effect-tsgo tsrs --noEmit && effect-tsgo tsrs --noEmit -p tools/heavy",
+    "typecheck": "effect-tsgo tsrs --noEmit && effect-tsgo tsrs --noEmit -p tools/heavy && effect-tsgo tsrs --noEmit -p tools/balance",
     "format": "oxfmt",
     "test": "vitest run",
     "perf:check": "bun tools/heavy/main.ts -- bun tools/audit/perf-check.ts",
     "heavy": "bun tools/heavy/main.ts --",
     "balance": "bun tools/heavy/main.ts -- bun tools/balance/simulate.ts",
-    "lint": "oxlint src tools/heavy && effect-tsgo oxlint --config .oxlintrc.effect.json --deny-warnings src tools/heavy"
+    "balance:nightly": "bun tools/heavy/main.ts -- bun tools/balance/nightly.ts",
+    "balance:model": "bun tools/balance/model.ts",
+    "lint": "oxlint src tools/heavy tools/balance --ignore-pattern tools/balance/bot.ts --ignore-pattern tools/balance/simulate.ts && effect-tsgo oxlint --config .oxlintrc.effect.json --deny-warnings src tools/heavy tools/balance"
   },
   "dependencies": {
     "@effect/platform-browser": "4.0.0",

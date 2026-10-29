@@ -1212,7 +1212,7 @@ const breakClockFor = (wave: number): BreakClock =>
     ? BreakClock.Waiting({ elapsedMs: 0 })
     : BreakClock.Counting()
 
-const beginPreparation = (
+export const beginPreparation = (
   model: Model,
   wave: number,
   durationMs: number,
