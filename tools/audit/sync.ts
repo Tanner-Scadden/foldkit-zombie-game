@@ -1,14 +1,18 @@
 // Checks player sync end to end against a deployed copy, in headless Chrome,
 // with two browser contexts as two devices:
-// 1. Device A starts from an older save (57 zombies splatted), syncs,
-//    changes its shirt, and finishes a run (leaving it from the pause MENU).
+// 1. Device A starts from the live game's version 4 localStorage save (57
+//    zombies splatted, What's New seen, no sharing setting yet), syncs with
+//    sharing turned on and What's New still seen, changes its shirt, and
+//    finishes a run (leaving it from the pause MENU).
 // 2. A shows a link code; device B types it under "Use a code".
-// 3. B then shows A's shirt and kills, and says it is linked to 2 devices.
+// 3. B then shows A's shirt, kills, and seen What's New, and says it is
+//    linked to 2 devices.
 // 4. B turns the music off; A sees it after a reload (a new connection).
 // 5. A goes offline, turns screen shake off, says "Offline, will sync",
 //    comes back online, catches up, and B sees screen shake off.
 // Run it through the heavy guard:
 //   bun run heavy -- bun tools/audit/sync.ts https://munch-manor-pr-2.tanner-scadden.workers.dev/
+import { readFileSync } from 'node:fs'
 import type { BrowserContext, Page } from 'playwright-core'
 
 import { launch, wait } from './lib'
@@ -22,6 +26,18 @@ if (BASE === undefined) {
 const SAVE_KEY = 'munch-manor:save'
 const STARTING_KILLS = 57
 
+// NOTE: the newest What's New day, as the build reads it from CHANGELOG.md,
+// so a save that has seen it shows no dot on the What's New button.
+const NEWEST_NEWS_DAY = (
+  readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')
+    .split('\n')
+    .find(line => line.startsWith('## ')) ?? ''
+)
+  .slice(3)
+  .split(': ')[0]
+  ?.trim()
+
+// NOTE: the live game's save, as it keeps it in localStorage today.
 const olderSave = {
   version: 4,
   onboarding: {
@@ -39,7 +55,7 @@ const olderSave = {
     introducedKinds: ['Shambler'],
   },
   homeScreenTip: 'Dismissed',
-  settings: { sound: 'Muted', music: 'On', shake: 'On', shareStats: 'Off' },
+  settings: { sound: 'Muted', music: 'On', shake: 'On' },
   appearance: {
     body: 'Female',
     hairStyle: 'Ponytail',
@@ -59,6 +75,7 @@ const olderSave = {
       Nightmare: { fastestWinMs: null, bestEndlessWave: null },
     },
   },
+  home: { seenNewsDay: NEWEST_NEWS_DAY, openedEntries: ['Shambler'] },
 }
 
 const failures: Array<string> = []
@@ -84,7 +101,7 @@ const toggleSelector = (label: string) =>
 
 const openSettings = async (page: Page) => {
   if ((await page.locator('.setting-toggle').count()) === 0) {
-    await page.click('.home-settings')
+    await page.click('#home-settings')
     await page.waitForSelector('.setting-toggle')
   }
 }
@@ -123,6 +140,13 @@ const waitForLine = async (page: Page, expected: RegExp, timeoutMs: number) => {
   return line
 }
 
+const hasNewsDot = async (page: Page) => {
+  await closePanel(page)
+  const label =
+    (await page.locator('#home-whats-new').getAttribute('aria-label')) ?? ''
+  return label.endsWith('Something new')
+}
+
 const splatted = async (page: Page) => {
   await closePanel(page)
   const best = page.locator(
@@ -133,7 +157,7 @@ const splatted = async (page: Page) => {
 
 const look = async (page: Page) => {
   await closePanel(page)
-  await page.click('.home-character')
+  await page.click('#home-character')
   const preview = page.locator('[aria-label^="Preview:"]')
   await preview.waitFor()
   const label = (await preview.getAttribute('aria-label')) ?? ''
@@ -204,6 +228,14 @@ check(
   (await splatted(a.page)) === `${STARTING_KILLS}`,
   `device A shows ${STARTING_KILLS} zombies splatted`,
 )
+check(
+  !(await hasNewsDot(a.page)),
+  `device A keeps What's New seen (${NEWEST_NEWS_DAY})`,
+)
+check(
+  (await setting(a.page, 'Share anonymous play stats')) === 'true',
+  'device A has stats sharing turned on by the migration',
+)
 
 await pickShirt(a.page, 'Purple')
 check(
@@ -230,6 +262,7 @@ check(
   'device B syncs its own new player',
 )
 check((await splatted(b.page)) === '', 'device B starts with no kills')
+check(await hasNewsDot(b.page), "device B starts with What's New unseen")
 await openSettings(b.page)
 await b.page.getByRole('button', { name: 'Use a code' }).click()
 await b.page.locator('.setting-link-input').fill(code.toLowerCase())
@@ -249,6 +282,7 @@ check(
   "device B shows A's purple shirt",
 )
 await closeLook(b.page)
+check(!(await hasNewsDot(b.page)), "device B shows A's What's New as seen")
 const aLine = await waitForLine(a.page, /Linked to 2 devices/, SYNC_TIMEOUT)
 check(
   /Linked to 2 devices/.test(aLine),

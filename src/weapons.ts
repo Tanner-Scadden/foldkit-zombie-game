@@ -299,7 +299,7 @@ export const UPGRADE_TIERS: Readonly<
     },
     {
       name: 'Blabbermouth 3000',
-      price: 400,
+      price: 350,
       boost: {
         damage: 1,
         fireIntervalMs: 0,

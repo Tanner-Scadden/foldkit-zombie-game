@@ -5,8 +5,7 @@ import { type Html, type HtmlBuilder, createLazy } from 'foldkit/html'
 import { spriteWarmUpSources } from './appearance'
 import { ARENA_LEVEL, type Level } from './arena'
 import { bossBandShapes } from './bossView'
-import { type Camera, cameraOf } from './camera'
-import { VIEW_HEIGHT, VIEW_WIDTH } from './constants'
+import { type Camera, toScreenCamera, worldCameraFor } from './camera'
 import { decalShapes } from './effectsView'
 import { hudShapes } from './hud'
 import type { Message } from './main'
@@ -19,6 +18,7 @@ import {
 } from './model'
 import { calloutShapes } from './powerupView'
 import { FLOOR_COLOR, ROOM_SHAPES } from './room'
+import { type Screen, inLandscapeFrame, screenOf } from './screen'
 import { overlayShapes } from './screens'
 import { wavePreviewShapes } from './wavePreview'
 import { isRoundActive } from './waves'
@@ -36,20 +36,24 @@ const calloutLayerShapes = (
 
 const overlayLayerShapes = (
   model: Model,
+  screen: Screen,
   camera: Camera,
 ): ReadonlyArray<Canvas.Shape> => [
   ...wavePreviewShapes(model, camera),
-  ...hudShapes(model, camera),
+  ...hudShapes(model, screen, camera),
   ...calloutLayerShapes(model, camera),
-  ...overlayShapes(model),
-  ...(Phase.isAnyOf(['Wave'])(model.phase) ? bossBandShapes(model) : []),
+  ...inLandscapeFrame(screen, overlayShapes(model, screen)),
+  ...(Phase.isAnyOf(['Wave'])(model.phase)
+    ? inLandscapeFrame(screen, bossBandShapes(model))
+    : []),
 ]
 
 export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
-  const camera = cameraOf(model)
+  const screen = screenOf(model)
+  const camera = worldCameraFor(model, screen)
   return [
     ...worldLayerShapes(model, camera),
-    ...overlayLayerShapes(model, camera),
+    ...overlayLayerShapes(model, screen, toScreenCamera(camera, screen)),
   ]
 }
 
@@ -99,6 +103,7 @@ const layerDecals = (model: Model): ReadonlyArray<Decal> =>
 // the floor color, so the strip a shake uncovers matches the floor.
 const floorLayersView = (
   model: Model,
+  camera: Camera,
   offset: Vector,
   h: HtmlBuilder<Message>,
 ): Html =>
@@ -107,8 +112,8 @@ const floorLayersView = (
       h.Class('floor-layers'),
       h.AriaHidden(true),
       h.Style({
-        width: percentOf(ARENA_LEVEL.width, VIEW_WIDTH),
-        height: percentOf(ARENA_LEVEL.height, VIEW_HEIGHT),
+        width: percentOf(ARENA_LEVEL.width, camera.width),
+        height: percentOf(ARENA_LEVEL.height, camera.height),
         transform: `translate(${percentOf(offset.x, ARENA_LEVEL.width)}, ${percentOf(offset.y, ARENA_LEVEL.height)})`,
       }),
     ],
@@ -138,13 +143,15 @@ const keepWhileEqual =
 const stableOverlayShapes = keepWhileEqual({ current: [] })
 
 const overlayLayerView = (
+  width: number,
+  height: number,
   shapes: ReadonlyArray<Canvas.Shape>,
   h: HtmlBuilder<Message>,
 ): Html =>
   Canvas.view(
     {
-      width: VIEW_WIDTH,
-      height: VIEW_HEIGHT,
+      width,
+      height,
       shapes,
       className: 'overlay-layer-canvas',
     },
@@ -191,33 +198,57 @@ const lazyWarmUp = createLazy()
 
 // STAGE
 
+const STAGE_BACKDROP = '#140c10'
+
 export const gameStageView = (model: Model, h: HtmlBuilder<Message>): Html => {
-  const camera = cameraOf(model)
+  const screen = screenOf(model)
+  const camera = worldCameraFor(model, screen)
+  const { world } = screen
   return h.div(
     [h.Class('game-frame')],
     [
       h.div(
         [
           h.Class('game-stage'),
+          h.DataAttribute('layout', screen.layout),
           h.Style({
-            width: `min(100cqw, 100cqh * ${VIEW_WIDTH} / ${VIEW_HEIGHT})`,
-            height: `min(100cqh, 100cqw * ${VIEW_HEIGHT} / ${VIEW_WIDTH})`,
-            backgroundColor: FLOOR_COLOR,
+            width: `min(100cqw, 100cqh * ${screen.width} / ${screen.height})`,
+            height: `min(100cqh, 100cqw * ${screen.height} / ${screen.width})`,
+            backgroundColor:
+              screen.layout === 'Landscape' ? FLOOR_COLOR : STAGE_BACKDROP,
           }),
         ],
         [
-          floorLayersView(model, worldOffset(model, camera), h),
-          Canvas.view(
-            {
-              width: VIEW_WIDTH,
-              height: VIEW_HEIGHT,
-              shapes: worldLayerShapes(model, camera),
-              className: 'game-canvas',
-            },
-            h,
+          h.div(
+            [
+              h.Class('world-window'),
+              h.Style({
+                left: percentOf(world.x, screen.width),
+                top: percentOf(world.y, screen.height),
+                width: percentOf(world.width, screen.width),
+                height: percentOf(world.height, screen.height),
+                backgroundColor: FLOOR_COLOR,
+              }),
+            ],
+            [
+              floorLayersView(model, camera, worldOffset(model, camera), h),
+              Canvas.view(
+                {
+                  width: world.width,
+                  height: world.height,
+                  shapes: worldLayerShapes(model, camera),
+                  className: 'game-canvas',
+                },
+                h,
+              ),
+            ],
           ),
           lazyOverlayLayer(overlayLayerView, [
-            stableOverlayShapes(overlayLayerShapes(model, camera)),
+            screen.width,
+            screen.height,
+            stableOverlayShapes(
+              overlayLayerShapes(model, screen, toScreenCamera(camera, screen)),
+            ),
             h,
           ]),
         ],

@@ -49,6 +49,7 @@ import {
   msIntoPhase,
   shownHints,
 } from './onboarding'
+import { type Screen, landscapeFrameOffset } from './screen'
 import {
   type Palette,
   type Sprite,
@@ -82,8 +83,17 @@ import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
 const CENTER_X = VIEW_WIDTH / 2
 const TITLE_SCALE = 2
 
+// NOTE: a backdrop reaches well past the landscape screen, so in portrait,
+// where these screens are drawn over the world window, it still dims the
+// HUD band and the thumb area. The canvas clips what is past its edges.
 const backdrop = (fill: string): Canvas.Shape =>
-  Canvas.Rect({ x: 0, y: 0, width: VIEW_WIDTH, height: VIEW_HEIGHT, fill })
+  Canvas.Rect({
+    x: -VIEW_WIDTH,
+    y: -VIEW_HEIGHT * 2,
+    width: VIEW_WIDTH * 3,
+    height: VIEW_HEIGHT * 5,
+    fill,
+  })
 
 const DIM_BACKDROP = backdrop('rgba(8, 10, 12, 0.72)')
 const TITLE_BACKDROP = backdrop('rgba(14, 8, 20, 0.6)')
@@ -776,43 +786,40 @@ const paradeShapes = (screenMs: number): ReadonlyArray<Canvas.Shape> =>
 const TAGLINE = bakeText('SURVIVE 8 WAVES. TRY NOT TO GET EATEN.', 'Hint')
 const TAGLINE_Y = 70
 
-// NOTE: the player backpedals ahead of the bottom lane's Shamblers, facing
-// them with the pistol up, at their speed so the gap never closes.
-const RUNNER_LANE_Y = 167
-const RUNNER_SPEED = 16
-const RUNNER_OFFSET = 60
-const RUNNER_GUN_PX = 2
+// NOTE: the player walks on the spot at center stage, twice the room's size,
+// facing the Groaners that come in from the left with the pistol up. The home
+// menu puts a button over them that opens the character picker.
+export const HERO_X = 160
+export const HERO_FEET_Y = 150
+const HERO_SCALE = 2
+const HERO_GUN_PX = 2
 
 const runnerShapes = (
   appearance: Appearance,
   screenMs: number,
-): ReadonlyArray<Canvas.Shape> => {
-  const travelled = RUNNER_OFFSET + (RUNNER_SPEED * screenMs) / MS_PER_SECOND
-  const x = Math.round((travelled % PARADE_SPAN) - PARADE_MARGIN)
-  return [
-    Canvas.Rect({
-      x: x - 3,
-      y: RUNNER_LANE_Y - 1,
-      width: 7,
-      height: 2,
-      fill: PARADE_SHADOW,
-    }),
-    group({
-      translate: { x, y: RUNNER_LANE_Y },
-      shapes: frameAt(
+): ReadonlyArray<Canvas.Shape> => [
+  Canvas.Rect({
+    x: HERO_X - 3 * HERO_SCALE,
+    y: HERO_FEET_Y - HERO_SCALE,
+    width: 7 * HERO_SCALE,
+    height: 2 * HERO_SCALE,
+    fill: PARADE_SHADOW,
+  }),
+  group({
+    translate: { x: HERO_X, y: HERO_FEET_Y },
+    scale: { x: HERO_SCALE, y: HERO_SCALE },
+    shapes: [
+      ...frameAt(
         playerSprites(appearance).walk,
         Math.floor(screenMs / PLAYER_WALK_FRAME_MS),
       ).Normal.Left,
-    }),
-    group({
-      translate: {
-        x: x - RUNNER_GUN_PX,
-        y: RUNNER_LANE_Y - PLAYER_FOOT_OFFSET,
-      },
-      shapes: gunSprite('Pistol', 0, Math.PI),
-    }),
-  ]
-}
+      group({
+        translate: { x: -HERO_GUN_PX, y: -PLAYER_FOOT_OFFSET },
+        shapes: gunSprite('Pistol', 0, Math.PI),
+      }),
+    ],
+  }),
+]
 
 const readyShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   TITLE_BACKDROP,
@@ -833,6 +840,7 @@ const RESUME_Y = 164
 const pausedShapes = (
   model: Model,
   wave: number,
+  resumeY: number,
 ): ReadonlyArray<Canvas.Shape> => [
   DIM_BACKDROP,
   centered(PAUSED, PAUSED_Y, TITLE_SCALE),
@@ -843,7 +851,7 @@ const pausedShapes = (
     PAUSED_WAVE_Y,
     'Center',
   ),
-  centered(RESUME_PROMPT[model.lastDevice], RESUME_Y),
+  centered(RESUME_PROMPT[model.lastDevice], resumeY),
 ]
 
 // RUN STATS
@@ -1057,7 +1065,19 @@ const endShapes = (
 
 // OVERLAY
 
-export const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+const PORTRAIT_RESUME_LIFT = 34
+
+// NOTE: in portrait the pause panel fills the world window, so the resume
+// prompt drops to the thumb area, just above the gun slots.
+const resumeYFor = (screen: Screen): number =>
+  screen.layout === 'Landscape'
+    ? RESUME_Y
+    : screen.height - landscapeFrameOffset(screen).y - PORTRAIT_RESUME_LIFT
+
+export const overlayShapes = (
+  model: Model,
+  screen: Screen,
+): ReadonlyArray<Canvas.Shape> =>
   Phase.match(model.phase, {
     Ready: () => readyShapes(model),
     Preparation: ({ wave }) => [
@@ -1068,7 +1088,7 @@ export const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
       isDebutCardUp(model)
         ? debutCardOverlay(model)
         : [...waveBanner(model, wave, elapsedMs), ...hintShapes(model)],
-    Paused: ({ round }) => pausedShapes(model, round.wave),
+    Paused: ({ round }) => pausedShapes(model, round.wave, resumeYFor(screen)),
     Victory: () => endShapes(model, YOU_SURVIVED, victoryVerdict(model.stats)),
     GameOver: ({ wave }) =>
       endShapes(model, GAME_OVER, defeatVerdict(wave, model.stats)),

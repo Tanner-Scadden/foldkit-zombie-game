@@ -129,6 +129,7 @@ const TOLERANCE: Readonly<Record<string, number>> = {
   snapshotShare: 0.08,
   snapshotSeconds: 4,
   emptySeconds: 2,
+  quietSeconds: 0.5,
   modelRatio: 0.05,
   modelSeconds: 2,
   modelDps: 0.1,
@@ -295,6 +296,13 @@ export const wavePassMetrics = (
         'Seconds',
       ),
       metric(
+        `${key}.medianLength`,
+        `${title}: median length (seconds)`,
+        wave.medianLengthSeconds,
+        'snapshotSeconds',
+        'Seconds',
+      ),
+      metric(
         `${key}.p90Length`,
         `${title}: slowest tenth length (seconds)`,
         wave.p90LengthSeconds,
@@ -306,6 +314,20 @@ export const wavePassMetrics = (
         `${title}: empty room (seconds)`,
         wave.meanEmptySeconds,
         'emptySeconds',
+        'Seconds',
+      ),
+      metric(
+        `${key}.quiet`,
+        `${title}: quiet empty room mid-wave (seconds)`,
+        wave.meanQuietSeconds,
+        'quietSeconds',
+        'Seconds',
+      ),
+      metric(
+        `${key}.worstQuiet`,
+        `${title}: longest quiet empty room in any run (seconds)`,
+        wave.worstQuietSeconds,
+        'quietSeconds',
         'Seconds',
       ),
     ]
@@ -616,12 +638,12 @@ const wavePassTable = (pass: WavePassSummary): string =>
     [
       `${pass.runsPerWave} runs a wave from ${pass.slots} snapshot slots, ${pass.wallSeconds.toFixed(0)} s.`,
       '',
-      '| Wave | Runs | Snapshots | Cleared | Hearts lost | Length s | Slowest tenth s | Empty s | Pressure s | Deaths by kind |',
-      '| ---- | ---- | --------- | ------- | ----------- | -------- | --------------- | ------- | ---------- | -------------- |',
+      '| Wave | Runs | Snapshots | Cleared | Hearts lost | Length s | Median s | Slowest tenth s | Empty s | Quiet s | Worst quiet s | Pressure s | Deaths by kind |',
+      '| ---- | ---- | --------- | ------- | ----------- | -------- | -------- | --------------- | ------- | ------- | ------------- | ---------- | -------------- |',
       ...Array.map(
         pass.waves,
         wave =>
-          `| ${wave.wave} | ${wave.runs} | ${wave.snapshots} | ${percent(wave.clearedShare)} | ${wave.meanHeartsLost.toFixed(2)} | ${wave.meanLengthSeconds.toFixed(0)} | ${wave.p90LengthSeconds.toFixed(0)} | ${wave.meanEmptySeconds.toFixed(1)} | ${wave.meanPressureSeconds.toFixed(1)} | ${kindShares(wave.deathShareByKind)} |`,
+          `| ${wave.wave} | ${wave.runs} | ${wave.snapshots} | ${percent(wave.clearedShare)} | ${wave.meanHeartsLost.toFixed(2)} | ${wave.meanLengthSeconds.toFixed(0)} | ${wave.medianLengthSeconds.toFixed(0)} | ${wave.p90LengthSeconds.toFixed(0)} | ${wave.meanEmptySeconds.toFixed(1)} | ${wave.meanQuietSeconds.toFixed(1)} | ${wave.worstQuietSeconds.toFixed(2)} | ${wave.meanPressureSeconds.toFixed(1)} | ${kindShares(wave.deathShareByKind)} |`,
       ),
     ],
     '\n',

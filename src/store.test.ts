@@ -10,7 +10,7 @@ import {
   pipe,
 } from 'effect'
 import { SqlClient } from 'effect/sql'
-import { describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test } from 'vitest'
 
 import { SqliteClient } from '@munch/sqlite-wasm-effect'
 import { type Hub, makeHub } from '@munch/sqlite-wasm-effect/in-process'
@@ -31,9 +31,12 @@ import { LinkedDevices, PlayerScope } from './playerScope'
 import { PlayerChange, changesBetween } from './playerSync'
 import {
   type PlayerSave,
+  SAVE_KEY,
   SAVE_VERSION,
   noSavedBests,
+  readLegacySave,
   unpickedDifficulty,
+  writeLegacySave,
 } from './save'
 import {
   type LegacySave,
@@ -72,6 +75,7 @@ const legacySave: PlayerSave = {
       Normal: { fastestWinMs: 402_000, bestEndlessWave: 12 },
     },
   },
+  home: { seenNewsDay: 'October 28, 2026', openedEntries: ['Shambler'] },
 }
 
 interface FakeLegacy {
@@ -214,6 +218,32 @@ describe('the save in the player scope', () => {
         ])
         yield* write(first, legacySave, after)
         expect(yield* first.load).toEqual(Option.some(after))
+      }),
+    ))
+
+  test('a player row from before the home menu gains it, unvisited', () =>
+    run(
+      Effect.gen(function* () {
+        const hub = yield* makeHub()
+        const fake = yield* makeLegacy(Option.some(legacySave))
+        const first = yield* openOn(hub, fake.legacy)
+        yield* first.load
+        const sql = yield* sqlOn(hub)
+        yield* pipe(
+          Effect.all([
+            sql`ALTER TABLE player DROP COLUMN home`,
+            sql`ALTER TABLE sync_confirmed_player DROP COLUMN home`,
+            sql`DELETE FROM sync_migrations WHERE id = '0003_add_home'`,
+          ]),
+          Effect.orDie,
+        )
+        const second = yield* openOn(hub, fake.legacy)
+        expect(yield* second.load).toEqual(
+          Option.some({
+            ...legacySave,
+            home: { seenNewsDay: null, openedEntries: [] },
+          }),
+        )
       }),
     ))
 
@@ -380,6 +410,7 @@ describe('two devices syncing one player', () => {
         const quiet: PlayerSave = {
           ...restyled,
           settings: { ...restyled.settings, music: 'Off' },
+          home: { ...restyled.home, openedEntries: ['Shambler', 'Runner'] },
         }
         yield* write(laptop, restyled, quiet)
         const onPhone = yield* until(phone.load, maybeSave =>
@@ -390,6 +421,137 @@ describe('two devices syncing one player', () => {
           events.includes('Off'),
         )
         expect(heard).toContain('Synced')
+      }),
+    ))
+})
+
+// THE LIVE SAVE
+
+// NOTE: the save the live game keeps today, exactly as it writes it to
+// localStorage: version 4, with the home menu and no shareStats.
+const LIVE_VERSION_4_SAVE = JSON.stringify({
+  version: 4,
+  onboarding: {
+    lessons: {
+      move: 'Learned',
+      fire: 'Learned',
+      startWave: 'Learned',
+      shop: 'Learned',
+      swap: 'Pending',
+      pickup: 'Learned',
+      timedBreaks: 'Pending',
+      openBreak: 'Pending',
+    },
+    trapHint: 'Seen',
+    introducedKinds: ['Shambler', 'Runner', 'Tank'],
+  },
+  homeScreenTip: 'Dismissed',
+  settings: { sound: 'On', music: 'Off', shake: 'Off' },
+  appearance: {
+    body: 'Male',
+    hairStyle: 'Curls',
+    hairColor: 'Blonde',
+    skinTone: 'Tan',
+    shirtColor: 'Red',
+  },
+  difficulty: { chosen: 'Hard', card: 'Seen', nightmare: 'Unlocked' },
+  bests: {
+    runsPlayed: 9,
+    totalKills: 412,
+    killsByKind: { Shambler: 300, Runner: 100, Tank: 12 },
+    byDifficulty: {
+      Easy: { fastestWinMs: null, bestEndlessWave: null },
+      Normal: { fastestWinMs: 398_000, bestEndlessWave: 14 },
+      Hard: { fastestWinMs: 455_000, bestEndlessWave: 8 },
+      Nightmare: { fastestWinMs: null, bestEndlessWave: null },
+    },
+  },
+  home: {
+    seenNewsDay: 'October 28, 2026',
+    openedEntries: ['Shambler', 'Runner'],
+  },
+})
+
+const migratedLiveSave: PlayerSave = {
+  version: SAVE_VERSION,
+  onboarding: {
+    lessons: {
+      move: 'Learned',
+      fire: 'Learned',
+      startWave: 'Learned',
+      shop: 'Learned',
+      swap: 'Pending',
+      pickup: 'Learned',
+      timedBreaks: 'Pending',
+      openBreak: 'Pending',
+    },
+    trapHint: 'Seen',
+    introducedKinds: ['Shambler', 'Runner', 'Tank'],
+  },
+  homeScreenTip: 'Dismissed',
+  settings: { sound: 'On', music: 'Off', shake: 'Off', shareStats: 'On' },
+  appearance: {
+    body: 'Male',
+    hairStyle: 'Curls',
+    hairColor: 'Blonde',
+    skinTone: 'Tan',
+    shirtColor: 'Red',
+  },
+  difficulty: { chosen: 'Hard', card: 'Seen', nightmare: 'Unlocked' },
+  bests: {
+    runsPlayed: 9,
+    totalKills: 412,
+    killsByKind: { Shambler: 300, Runner: 100, Tank: 12 },
+    byDifficulty: {
+      Easy: { fastestWinMs: null, bestEndlessWave: null },
+      Normal: { fastestWinMs: 398_000, bestEndlessWave: 14 },
+      Hard: { fastestWinMs: 455_000, bestEndlessWave: 8 },
+      Nightmare: { fastestWinMs: null, bestEndlessWave: null },
+    },
+  },
+  home: {
+    seenNewsDay: 'October 28, 2026',
+    openedEntries: ['Shambler', 'Runner'],
+  },
+}
+
+const realLegacy: LegacySave = {
+  read: readLegacySave,
+  write: writeLegacySave,
+}
+
+describe("the live game's version 4 save", () => {
+  afterEach(() => localStorage.clear())
+
+  test('moves from localStorage into SQLite and the server with nothing lost', () =>
+    run(
+      Effect.gen(function* () {
+        localStorage.setItem(SAVE_KEY, LIVE_VERSION_4_SAVE)
+        const server = yield* makeServer()
+        const network = yield* server.host.network()
+        const setup = Option.some<SyncSetup>({
+          identityApi: server.api,
+          transports: [network.transport],
+        })
+        const phoneHub = yield* makeHub()
+
+        const phone = yield* openOn(phoneHub, realLegacy, setup)
+        expect(yield* phone.load).toEqual(Option.some(migratedLiveSave))
+
+        localStorage.removeItem(SAVE_KEY)
+        const reloaded = yield* openOn(phoneHub, realLegacy, setup)
+        expect(yield* reloaded.load).toEqual(Option.some(migratedLiveSave))
+
+        const laptopLegacy = yield* makeLegacy(Option.none())
+        const laptop = yield* openOn(
+          yield* makeHub(),
+          laptopLegacy.legacy,
+          setup,
+        )
+        const code = yield* reloaded.requestLinkCode
+        yield* laptop.redeemLinkCode(code)
+        const onLaptop = yield* until(laptop.load, Option.isSome)
+        expect(onLaptop).toEqual(Option.some(migratedLiveSave))
       }),
     ))
 })

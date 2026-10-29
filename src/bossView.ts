@@ -402,12 +402,13 @@ const RAGE_BLINK_MS = 400
 
 export const bossBarShapes = (
   bar: BossBar,
+  centerX: number,
   y: number,
   elapsedMs: number,
 ): ReadonlyArray<Canvas.Shape> => {
   const label = bar.isEnraged ? ENRAGED : BAR_NAME
   const total = label.width + BAR_GAP + BAR_WIDTH
-  const left = Math.round(VIEW_WIDTH / 2 - total / 2)
+  const left = Math.round(centerX - total / 2)
   const barLeft = left + label.width + BAR_GAP
   const filled = Math.max(
     bar.hp > 0 ? 1 : 0,

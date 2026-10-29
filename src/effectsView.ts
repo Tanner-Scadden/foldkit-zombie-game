@@ -60,7 +60,6 @@ import {
   SHELL_TUMBLE_MS,
   SPARK_COLOR,
   SPLINTER_COLOR,
-  VIEW_WIDTH,
   WOOD_DECAL_COLOR,
   WOOD_DECAL_FADED_COLOR,
 } from './constants'
@@ -732,7 +731,7 @@ export const popupShape =
           clamp(
             popup.x,
             camera.x + halfWidth,
-            camera.x + Math.max(halfWidth, VIEW_WIDTH - halfWidth),
+            camera.x + Math.max(halfWidth, camera.width - halfWidth),
           ),
         ),
         y: Math.round(popup.y - hop - look.risePx * progress),

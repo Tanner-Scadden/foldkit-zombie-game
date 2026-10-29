@@ -77,9 +77,7 @@ describe('Character picker', () => {
       given(onTitle),
       measureSurface(),
       expect(characterButton).toHaveAttr('aria-keyshortcuts', 'C'),
-      expect(within(characterButton, selector('.home-button-key'))).toHaveText(
-        'C',
-      ),
+      expect(within(characterButton, selector('.home-key'))).toHaveText('C'),
       expect(pickerDialog).toBeAbsent(),
     )
   })

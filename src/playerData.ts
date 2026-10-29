@@ -83,7 +83,7 @@ export type Appearance = typeof Appearance.Type
 
 // SAVED
 
-export const SAVE_VERSION = 4
+export const SAVE_VERSION = 5
 
 export const SavedLesson = Schema.Literals(['Pending', 'Learned'])
 export type SavedLesson = typeof SavedLesson.Type
@@ -110,7 +110,7 @@ export const SavedOnboarding = Schema.Struct({
 })
 export type SavedOnboarding = typeof SavedOnboarding.Type
 
-// NOTE: version 4 added shareStats, the "Share anonymous play stats" toggle.
+// NOTE: version 5 added shareStats, the "Share anonymous play stats" toggle.
 export const SavedSettings = Schema.Struct({
   sound: SoundSetting,
   music: MusicSetting,
@@ -160,6 +160,14 @@ export const SavedBests = Schema.Struct({
 })
 export type SavedBests = typeof SavedBests.Type
 
+// NOTE: version 4 added the home menu: the newest What's New day seen, by
+// its date, and the Munchopedia entries opened, by kind id.
+export const SavedHome = Schema.Struct({
+  seenNewsDay: Schema.NullOr(Schema.String),
+  openedEntries: Schema.Array(Schema.String),
+})
+export type SavedHome = typeof SavedHome.Type
+
 export const PlayerSave = Schema.Struct({
   version: Schema.Literal(SAVE_VERSION),
   onboarding: SavedOnboarding,
@@ -168,5 +176,6 @@ export const PlayerSave = Schema.Struct({
   appearance: Appearance,
   difficulty: SavedDifficulty,
   bests: SavedBests,
+  home: SavedHome,
 })
 export type PlayerSave = typeof PlayerSave.Type

@@ -92,11 +92,16 @@ describe('the first-time difficulty card', () => {
     )
   })
 
-  test('E asks too, and the pick starts endless', () => {
+  test('E switches the mode, then Enter asks too, and the pick starts endless', () => {
     story(
       update,
       given(firstVisit),
       press('KeyE'),
+      model(current => {
+        expect(current.panelDialog.isOpen).toBe(false)
+        expect(current.home.mode).toBe('Endless')
+      }),
+      press('Enter'),
       showDialog(),
       model(current => {
         expect(Phase.guards.Ready(current.phase)).toBe(true)
@@ -277,12 +282,12 @@ describe('the multipliers', () => {
       Array.map(normal, ({ kind, door }) => [kind, door]),
     )
     Array.forEach(Array.zip(normal, easy), ([base, scaled]) => {
-      expect(scaled.hpScale).toBeCloseTo((base.hpScale * 0.85) / 1.05)
-      expect(scaled.speedScale).toBeCloseTo((base.speedScale * 0.95) / 1.02)
+      expect(scaled.hpScale).toBeCloseTo(base.hpScale * 0.85)
+      expect(scaled.speedScale).toBeCloseTo(base.speedScale * 0.9)
     })
     Array.forEach(Array.zip(normal, nightmare), ([base, scaled]) => {
-      expect(scaled.hpScale).toBeCloseTo((base.hpScale * 1.18) / 1.05)
-      expect(scaled.speedScale).toBeCloseTo((base.speedScale * 1.06) / 1.02)
+      expect(scaled.hpScale).toBeCloseTo(base.hpScale * 1.18)
+      expect(scaled.speedScale).toBeCloseTo(base.speedScale * 1.04)
     })
   })
 

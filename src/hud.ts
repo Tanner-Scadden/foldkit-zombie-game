@@ -19,8 +19,6 @@ import {
   STREAK_PULSE_SCALE,
   STREAK_SCALE,
   STREAK_WINDOW_MS,
-  VIEW_HEIGHT,
-  VIEW_WIDTH,
 } from './constants'
 import { FULL_TURN, centeredGlyphs, placeSprite } from './drawing'
 import {
@@ -44,6 +42,7 @@ import {
 import { isOpenBreak, isPracticeGateHeld } from './onboarding'
 import { maybeMsSinceHurt } from './playerView'
 import { boostChipShapes } from './powerupView'
+import { type Box, type Screen, thumbAreaTop } from './screen'
 import { waveLabel } from './screens'
 import {
   EMPTY_HEART_SPRITE,
@@ -70,6 +69,72 @@ const HUD_MARGIN = 5
 
 const STREAK_X = HUD_MARGIN + 8
 const STREAK_Y = HUD_MARGIN + 30
+
+const SLOT_WIDTH = 40
+const SLOT_HEIGHT = 12
+const SLOT_GAP = 3
+const CLUSTER_WIDTH = 2 * SLOT_WIDTH + SLOT_GAP
+const TRAP_SLOT_WIDTH = 24
+
+const BOOST_CHIPS_LEFT = HUD_MARGIN + PLAYER_MAX_HP * HEART_SPACING + 2
+const BOOST_CHIP_STRIDE = 16
+const BOOST_CHIPS = 4
+
+const PAUSE_BUTTON_CLEARANCE = 34
+const PORTRAIT_PAUSE_CLEARANCE = 24
+const PORTRAIT_SLOT_NUDGE = 8
+
+type HudLayout = Readonly<{
+  centerX: number
+  titleY: number
+  subtitleY: number
+  scoreRight: number
+  boostLeft: number
+  boostTop: number
+  boostColumns: number
+  slotLeft: number
+  slotTop: number
+  trapTop: number
+}>
+
+// NOTE: the guns sit at the bottom middle, nudged a little left in landscape
+// so the buttons beside them stop short of the stall's outline. In portrait
+// they sit at the bottom of the thumb area and the HUD is a band on top.
+export const hudLayoutFor = (screen: Screen): HudLayout => {
+  const slotTop = screen.height - HUD_MARGIN - SLOT_HEIGHT
+  if (screen.layout === 'Landscape') {
+    return {
+      centerX: screen.width / 2,
+      titleY: HUD_MARGIN - 2,
+      subtitleY: 11,
+      scoreRight: screen.width - HUD_MARGIN - PAUSE_BUTTON_CLEARANCE,
+      boostLeft: BOOST_CHIPS_LEFT,
+      boostTop: HUD_MARGIN - 3,
+      boostColumns: 2,
+      slotLeft: 115,
+      slotTop,
+      trapTop: slotTop,
+    }
+  } else {
+    const scoreRight = screen.width - HUD_MARGIN - PORTRAIT_PAUSE_CLEARANCE
+    return {
+      centerX: screen.width / 2,
+      titleY: screen.world.y - 17,
+      subtitleY: screen.world.y - 9,
+      scoreRight,
+      boostLeft: scoreRight - BOOST_CHIPS * BOOST_CHIP_STRIDE + 3,
+      boostTop: HUD_MARGIN + 7,
+      boostColumns: BOOST_CHIPS,
+      slotLeft:
+        Math.round((screen.width - CLUSTER_WIDTH) / 2) - PORTRAIT_SLOT_NUDGE,
+      slotTop,
+      trapTop: Math.max(
+        thumbAreaTop(screen) + HUD_MARGIN,
+        slotTop - SLOT_HEIGHT - SLOT_GAP * 2,
+      ),
+    }
+  }
+}
 
 const streakShapes = (streak: Streak): ReadonlyArray<Canvas.Shape> =>
   Streak.match(streak, {
@@ -149,75 +214,90 @@ const heartShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
   return Array.makeBy(PLAYER_MAX_HP, heartShape(player.hp, maybeHeartPulseMs))
 }
 
-const HUD_TITLE_Y = HUD_MARGIN - 2
-const HUD_SUBTITLE_Y = 11
-
 export const secondsLeft = (remainingMs: number): number =>
   Math.ceil(remainingMs / MS_PER_SECOND)
 
 const hudText = (
+  layout: HudLayout,
   y: number,
   content: string,
   tone: TextTone,
 ): ReadonlyArray<Canvas.Shape> =>
-  textShapes(content, tone, VIEW_WIDTH / 2, y, 'Center')
+  textShapes(content, tone, layout.centerX, y, 'Center')
 
 const TRY_CONTROLS = bakeText('TRY THE CONTROLS FIRST', 'Prompt')
 const NO_TIMER = bakeText('NO TIMER', 'Prompt')
 
 const breakSubtitleShapes = (
   model: Model,
+  layout: HudLayout,
   remainingMs: number,
 ): ReadonlyArray<Canvas.Shape> => {
   if (isPracticeGateHeld(model)) {
     return [
       placeBaked(TRY_CONTROLS, {
-        x: VIEW_WIDTH / 2,
-        y: HUD_SUBTITLE_Y,
+        x: layout.centerX,
+        y: layout.subtitleY,
         align: 'Center',
       }),
     ]
   } else if (isOpenBreak(model)) {
     return [
       placeBaked(NO_TIMER, {
-        x: VIEW_WIDTH / 2,
-        y: HUD_SUBTITLE_Y,
+        x: layout.centerX,
+        y: layout.subtitleY,
         align: 'Center',
       }),
     ]
   } else {
     return hudText(
-      HUD_SUBTITLE_Y,
+      layout,
+      layout.subtitleY,
       `STARTS IN ${secondsLeft(remainingMs)}`,
       'Prompt',
     )
   }
 }
 
-const roundHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+const roundHudShapes = (
+  model: Model,
+  layout: HudLayout,
+): ReadonlyArray<Canvas.Shape> =>
   Phase.match(model.phase, {
     Ready: () => [],
     Preparation: ({ wave, remainingMs }) => [
-      ...hudText(HUD_TITLE_Y, waveLabel(model.mode, wave), 'Plain'),
-      ...breakSubtitleShapes(model, remainingMs),
+      ...hudText(layout, layout.titleY, waveLabel(model.mode, wave), 'Plain'),
+      ...breakSubtitleShapes(model, layout, remainingMs),
     ],
     Wave: ({ wave, spawns }) =>
       Option.match(maybeBossBar(model), {
         onNone: () => [
-          ...hudText(HUD_TITLE_Y, waveLabel(model.mode, wave), 'Plain'),
           ...hudText(
-            HUD_SUBTITLE_Y,
+            layout,
+            layout.titleY,
+            waveLabel(model.mode, wave),
+            'Plain',
+          ),
+          ...hudText(
+            layout,
+            layout.subtitleY,
             `ZOMBIES ${zombiesRemaining(model, spawns)}`,
             'Hint',
           ),
         ],
         onSome: bar => [
           ...hudText(
-            HUD_TITLE_Y,
+            layout,
+            layout.titleY,
             `${waveLabel(model.mode, wave)}  ZOMBIES ${zombiesRemaining(model, spawns)}`,
             'Plain',
           ),
-          ...bossBarShapes(bar, HUD_SUBTITLE_Y + 1, model.elapsedMs),
+          ...bossBarShapes(
+            bar,
+            layout.centerX,
+            layout.subtitleY + 1,
+            model.elapsedMs,
+          ),
         ],
       }),
     Paused: () => [],
@@ -239,13 +319,6 @@ const moneyShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   )
 }
 
-const SLOT_WIDTH = 40
-const SLOT_HEIGHT = 12
-const SLOT_GAP = 3
-const SLOT_TOP = VIEW_HEIGHT - HUD_MARGIN - SLOT_HEIGHT
-// NOTE: the guns sit at the bottom middle, nudged a little left so the
-// buttons beside them stop short of the stall's outline.
-const SLOT_LEFT = 115
 const SLOT_DIM_OPACITY = 0.5
 const SLOT_FILL = 'rgba(8, 10, 12, 0.6)'
 const SLOT_BORDER = 'rgba(244, 241, 222, 0.25)'
@@ -279,51 +352,58 @@ const AMMO_TONES: Readonly<Record<AmmoLook, TextTone>> = {
 
 const tierPipShapes = (
   x: number,
+  top: number,
   { weapon, tier }: SlotGun,
 ): ReadonlyArray<Canvas.Shape> =>
   Array.makeBy(maxTier(weapon), index =>
     Canvas.Rect({
       x: x + PIP_LEFT + index * (PIP_WIDTH + PIP_GAP),
-      y: SLOT_TOP + SLOT_HEIGHT - PIP_DROP,
+      y: top + SLOT_HEIGHT - PIP_DROP,
       width: PIP_WIDTH,
       height: 1,
       fill: index < tier ? PIP_ON_COLOR : PIP_OFF_COLOR,
     }),
   )
 
-export const gunSlotBox = (
-  index: number,
-): Readonly<{ x: number; y: number; width: number; height: number }> => ({
-  x: SLOT_LEFT + index * (SLOT_WIDTH + SLOT_GAP),
-  y: SLOT_TOP,
-  width: SLOT_WIDTH,
-  height: SLOT_HEIGHT,
-})
+export const gunSlotBox = (screen: Screen, index: number): Box => {
+  const layout = hudLayoutFor(screen)
+  return {
+    x: layout.slotLeft + index * (SLOT_WIDTH + SLOT_GAP),
+    y: layout.slotTop,
+    width: SLOT_WIDTH,
+    height: SLOT_HEIGHT,
+  }
+}
 
-export const GUN_CLUSTER_BOX = {
-  x: SLOT_LEFT,
-  y: SLOT_TOP,
-  width: 2 * SLOT_WIDTH + SLOT_GAP,
-  height: SLOT_HEIGHT,
+export const gunClusterBox = (screen: Screen): Box => {
+  const layout = hudLayoutFor(screen)
+  return {
+    x: layout.slotLeft,
+    y: layout.slotTop,
+    width: CLUSTER_WIDTH,
+    height: SLOT_HEIGHT,
+  }
 }
 
 const slotShapes = (
+  layout: HudLayout,
   index: number,
   { maybeGun, ammo, isHeld, ammoLook }: SlotLook,
 ): ReadonlyArray<Canvas.Shape> => {
-  const { x } = gunSlotBox(index)
+  const x = layout.slotLeft + index * (SLOT_WIDTH + SLOT_GAP)
+  const top = layout.slotTop
   const border = isHeld ? SLOT_HELD_BORDER : SLOT_BORDER
   const shapes = [
     Canvas.Rect({
       x,
-      y: SLOT_TOP,
+      y: top,
       width: SLOT_WIDTH,
       height: SLOT_HEIGHT,
       fill: border,
     }),
     Canvas.Rect({
       x: x + 1,
-      y: SLOT_TOP + 1,
+      y: top + 1,
       width: SLOT_WIDTH - 2,
       height: SLOT_HEIGHT - 2,
       fill: SLOT_FILL,
@@ -331,15 +411,15 @@ const slotShapes = (
     ...Option.match(maybeGun, {
       onNone: () => [],
       onSome: slotGun => [
-        placeSprite(x + 8, SLOT_TOP + 5, gunIcon(slotGun.weapon, slotGun.tier)),
-        ...tierPipShapes(x, slotGun),
+        placeSprite(x + 8, top + 5, gunIcon(slotGun.weapon, slotGun.tier)),
+        ...tierPipShapes(x, top, slotGun),
       ],
     }),
     ...textShapes(
       ammo,
       AMMO_TONES[ammoLook],
       x + SLOT_WIDTH - 3,
-      SLOT_TOP + SLOT_TEXT_TOP,
+      top + SLOT_TEXT_TOP,
       'Right',
     ),
   ]
@@ -360,7 +440,10 @@ const ammoLook = (
   }
 }
 
-const loadoutShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
+const loadoutShapes = (
+  player: Player,
+  layout: HudLayout,
+): ReadonlyArray<Canvas.Shape> => {
   const { arsenal } = player
   const isHoldingSpare = Arsenal.isAnyOf(['HoldingSpare'])(arsenal)
   const pistolSlot: SlotLook = {
@@ -383,13 +466,14 @@ const loadoutShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
       ammoLook: ammoLook(player, isHoldingSpare, spare.loaded),
     }),
   })
-  return [...slotShapes(0, pistolSlot), ...slotShapes(1, spareSlot)]
+  return [
+    ...slotShapes(layout, 0, pistolSlot),
+    ...slotShapes(layout, 1, spareSlot),
+  ]
 }
 
-const TRAP_SLOT_WIDTH = 24
-const TRAP_SLOT_TOP = SLOT_TOP
-
 const trapSlotShapes = (
+  top: number,
   kind: TrapKind,
   count: number,
   index: number,
@@ -399,36 +483,40 @@ const trapSlotShapes = (
   return [
     Canvas.Rect({
       x,
-      y: TRAP_SLOT_TOP,
+      y: top,
       width: TRAP_SLOT_WIDTH,
       height: SLOT_HEIGHT,
       fill: isSelected ? SLOT_HELD_BORDER : SLOT_BORDER,
     }),
     Canvas.Rect({
       x: x + 1,
-      y: TRAP_SLOT_TOP + 1,
+      y: top + 1,
       width: TRAP_SLOT_WIDTH - 2,
       height: SLOT_HEIGHT - 2,
       fill: SLOT_FILL,
     }),
-    placeSprite(x + 6, TRAP_SLOT_TOP + 6, TRAP_ICONS[kind]),
+    placeSprite(x + 6, top + 6, TRAP_ICONS[kind]),
     ...textShapes(
       `x${count}`,
       'Plain',
       x + TRAP_SLOT_WIDTH - 3,
-      TRAP_SLOT_TOP + SLOT_TEXT_TOP,
+      top + SLOT_TEXT_TOP,
       'Right',
     ),
   ]
 }
 
-const trapStockShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
+const trapStockShapes = (
+  model: Model,
+  layout: HudLayout,
+): ReadonlyArray<Canvas.Shape> => {
   const maybeSelected = maybeSelectedKind(model)
   return pipe(
     TRAP_KIND_ORDER,
     Array.filter(kind => model.trapStock[kind] > 0),
     Array.flatMap((kind, index) =>
       trapSlotShapes(
+        layout.trapTop,
         kind,
         model.trapStock[kind],
         index,
@@ -451,44 +539,44 @@ const trapNoticeShapes = (
       const content = String.toUpperCase(reason)
       const halfWidth = Math.ceil(textWidth(content) / 2) + NOTICE_MARGIN_PX
       const player = worldToView(camera, model.player)
-      const x = clamp(Math.round(player.x), halfWidth, VIEW_WIDTH - halfWidth)
-      const y = Math.max(4, Math.round(player.y) - NOTICE_LIFT_PX)
+      const left = -camera.x
+      const top = -camera.y
+      const x = clamp(
+        Math.round(player.x),
+        left + halfWidth,
+        left + camera.width - halfWidth,
+      )
+      const y = Math.max(top + 4, Math.round(player.y) - NOTICE_LIFT_PX)
       return textShapes(content, 'Alert', x, y, 'Center')
     },
   })
-
-const BOOST_CHIPS_LEFT = HUD_MARGIN + PLAYER_MAX_HP * HEART_SPACING + 2
-const BOOST_CHIPS_TOP = HUD_MARGIN - 3
-const BOOST_CHIP_COLUMNS = 2
-
-const MUTE_BUTTON_CLEARANCE = 34
-const SCORE_RIGHT = VIEW_WIDTH - HUD_MARGIN - MUTE_BUTTON_CLEARANCE
 
 const isHudShown = (phase: Phase): boolean =>
   isRoundActive(phase) || Phase.isAnyOf(['Paused'])(phase)
 
 const playHudShapes = (
   model: Model,
+  layout: HudLayout,
   camera: Camera,
 ): ReadonlyArray<Canvas.Shape> => [
   ...heartShapes(model.player),
   ...moneyShapes(model),
   ...streakShapes(model.streak),
-  ...loadoutShapes(model.player),
+  ...loadoutShapes(model.player, layout),
   ...boostChipShapes(
     model.boosts,
-    BOOST_CHIPS_LEFT,
-    BOOST_CHIPS_TOP,
-    BOOST_CHIP_COLUMNS,
+    layout.boostLeft,
+    layout.boostTop,
+    layout.boostColumns,
   ),
-  ...trapStockShapes(model),
+  ...trapStockShapes(model, layout),
   ...trapNoticeShapes(model, camera),
-  ...roundHudShapes(model),
+  ...roundHudShapes(model, layout),
   ...(isRoundActive(model.phase)
     ? textShapes(
         `SCORE ${model.score}`,
         'Plain',
-        SCORE_RIGHT,
+        layout.scoreRight,
         HUD_MARGIN,
         'Right',
       )
@@ -497,6 +585,9 @@ const playHudShapes = (
 
 export const hudShapes = (
   model: Model,
+  screen: Screen,
   camera: Camera,
 ): ReadonlyArray<Canvas.Shape> =>
-  isHudShown(model.phase) ? playHudShapes(model, camera) : []
+  isHudShown(model.phase)
+    ? playHudShapes(model, hudLayoutFor(screen), camera)
+    : []

@@ -33,10 +33,11 @@ import {
   SavedBests,
   SavedDifficulty,
   type SavedDifficultyBests,
+  SavedHome,
   type SavedLesson,
   type SavedLessons,
   SavedOnboarding,
-  type SavedSettings,
+  SavedSettings,
   type SavedTrapHint,
   ShakeSetting,
   SoundSetting,
@@ -50,6 +51,7 @@ export {
   SavedCard,
   SavedDifficulty,
   SavedDifficultyBests,
+  SavedHome,
   SavedLesson,
   SavedLessons,
   SavedNightmare,
@@ -105,7 +107,40 @@ const PlayerSaveV3 = Schema.Struct({
 })
 type PlayerSaveV3 = typeof PlayerSaveV3.Type
 
+// NOTE: version 4 is the save the live game keeps in localStorage: the home
+// menu's fields, and no shareStats yet.
+const PlayerSaveV4 = Schema.Struct({
+  version: Schema.Literal(4),
+  onboarding: SavedOnboarding,
+  homeScreenTip: HomeScreenTip,
+  settings: SavedSettingsV2,
+  appearance: Appearance,
+  difficulty: SavedDifficulty,
+  bests: SavedBests,
+  home: SavedHome,
+})
+type PlayerSaveV4 = typeof PlayerSaveV4.Type
+
+// NOTE: the pull request preview of local SQLite numbered its save 4 too,
+// before the home menu: shareStats and no home. Only the preview ever wrote
+// it, to localStorage in a private window. It reads as version 4 with the
+// home menu unvisited.
+const PlayerSavePreviewV4 = Schema.Struct({
+  version: Schema.Literal(4),
+  onboarding: SavedOnboarding,
+  homeScreenTip: HomeScreenTip,
+  settings: SavedSettings,
+  appearance: Appearance,
+  difficulty: SavedDifficulty,
+  bests: SavedBests,
+})
+type PlayerSavePreviewV4 = typeof PlayerSavePreviewV4.Type
+
 const PlayerSaveJson = Schema.fromJsonString(PlayerSave)
+
+const PlayerSaveV4Json = Schema.fromJsonString(PlayerSaveV4)
+
+const PlayerSavePreviewV4Json = Schema.fromJsonString(PlayerSavePreviewV4)
 
 const PlayerSaveV3Json = Schema.fromJsonString(PlayerSaveV3)
 
@@ -136,6 +171,11 @@ export const noSavedBests: SavedBests = {
   },
 }
 
+export const unvisitedHome: SavedHome = {
+  seenNewsDay: null,
+  openedEntries: [],
+}
+
 const sharingSettings = (settings: SavedSettingsV2): SavedSettings => ({
   sound: settings.sound,
   music: settings.music,
@@ -162,7 +202,18 @@ const migrateV2 = (save: PlayerSaveV2): PlayerSaveV3 => ({
   bests: noSavedBests,
 })
 
-const migrateV3 = (save: PlayerSaveV3): PlayerSave => ({
+const migrateV3 = (save: PlayerSaveV3): PlayerSaveV4 => ({
+  version: 4,
+  onboarding: save.onboarding,
+  homeScreenTip: save.homeScreenTip,
+  settings: save.settings,
+  appearance: save.appearance,
+  difficulty: save.difficulty,
+  bests: save.bests,
+  home: unvisitedHome,
+})
+
+const migrateV4 = (save: PlayerSaveV4): PlayerSave => ({
   version: SAVE_VERSION,
   onboarding: save.onboarding,
   homeScreenTip: save.homeScreenTip,
@@ -170,6 +221,18 @@ const migrateV3 = (save: PlayerSaveV3): PlayerSave => ({
   appearance: save.appearance,
   difficulty: save.difficulty,
   bests: save.bests,
+  home: save.home,
+})
+
+const migratePreviewV4 = (save: PlayerSavePreviewV4): PlayerSave => ({
+  version: SAVE_VERSION,
+  onboarding: save.onboarding,
+  homeScreenTip: save.homeScreenTip,
+  settings: save.settings,
+  appearance: save.appearance,
+  difficulty: save.difficulty,
+  bests: save.bests,
+  home: unvisitedHome,
 })
 
 // NOTE: the one list of save versions this build reads, newest first, each
@@ -186,22 +249,37 @@ const SAVE_VERSIONS: ReadonlyArray<
 > = [
   { version: SAVE_VERSION, read: Schema.decodeOption(PlayerSaveJson) },
   {
+    version: 4,
+    read: raw =>
+      Option.map(Schema.decodeOption(PlayerSaveV4Json)(raw), migrateV4),
+  },
+  {
+    version: 4,
+    read: raw =>
+      Option.map(
+        Schema.decodeOption(PlayerSavePreviewV4Json)(raw),
+        migratePreviewV4,
+      ),
+  },
+  {
     version: 3,
     read: raw =>
-      Option.map(Schema.decodeOption(PlayerSaveV3Json)(raw), migrateV3),
+      Option.map(Schema.decodeOption(PlayerSaveV3Json)(raw), save =>
+        migrateV4(migrateV3(save)),
+      ),
   },
   {
     version: 2,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV2Json)(raw), save =>
-        migrateV3(migrateV2(save)),
+        migrateV4(migrateV3(migrateV2(save))),
       ),
   },
   {
     version: 1,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV1Json)(raw), save =>
-        migrateV3(migrateV2(migrateV1(save))),
+        migrateV4(migrateV3(migrateV2(migrateV1(save)))),
       ),
   },
 ]
@@ -275,6 +353,10 @@ export const saveOf = (model: Model): PlayerSave => ({
     nightmare: model.difficulty.nightmare === 'Locked' ? 'Locked' : 'Unlocked',
   },
   bests: savedBests(model.bests),
+  home: {
+    seenNewsDay: Option.getOrNull(model.home.maybeSeenNewsDay),
+    openedEntries: model.home.openedEntries,
+  },
 })
 
 // INTO THE MODEL
@@ -371,6 +453,12 @@ export const restoreSave = (model: Model, save: PlayerSave): Model =>
     difficultyCard: card =>
       save.difficulty.card === 'Seen' ? DifficultyCard.Seen() : card,
     bests: () => restoreBests(save.bests),
+    home: home =>
+      modifyFields(home, {
+        maybeSeenNewsDay: () => Option.fromNullishOr(save.home.seenNewsDay),
+        openedEntries: opened =>
+          Array.union(opened, knownKinds(save.home.openedEntries)),
+      }),
   })
 
 // RESET

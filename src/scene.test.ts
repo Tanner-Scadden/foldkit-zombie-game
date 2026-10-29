@@ -395,8 +395,8 @@ describe('Shop', () => {
       click(trapsTab),
       resolveFocusTab,
       expect(text('0 ready to place, 0 placed, up to 2')).toExist(),
-      click(role('button', { name: 'Buy Plank Pile for $20' })),
-      expect(text('You have $80')).toExist(),
+      click(role('button', { name: 'Buy Plank Pile for $40' })),
+      expect(text('You have $60')).toExist(),
       expect(text('1 ready to place, 0 placed, up to 2')).toExist(),
       expect(role('button', { name: 'Buy Glue and Nails for $0' })).toHaveAttr(
         'aria-disabled',
@@ -422,8 +422,8 @@ describe('Shop', () => {
       ...openShop(),
       expect(role('tab', { name: 'Guns, 1 you can buy' })).toExist(),
       expect(role('tab', { name: 'Health, 1 you can buy' })).toExist(),
-      expect(role('tab', { name: 'Traps, 1 you can buy' })).toExist(),
-      expect(text('3 things you can buy now')).toExist(),
+      expect(role('tab', { name: 'Traps, nothing you can buy' })).toExist(),
+      expect(text('2 things you can buy now')).toExist(),
       expect(
         selector('[data-verdict="available"] #shop-item-Shotgun'),
       ).toExist(),
@@ -563,99 +563,6 @@ describe('Place button', () => {
       ),
       measureSurface,
       expect(role('button', { name: 'Place a Plank Pile' })).toBeAbsent(),
-    )
-  })
-})
-
-describe('Turning the phone', () => {
-  const fightingOnTouch: Model = modifyFields(initialModel, {
-    lastDevice: () => 'Touch',
-    phase: () =>
-      Phase.Wave({
-        wave: 3,
-        elapsedMs: 4000,
-        spawns: [
-          {
-            atMs: 1e9,
-            kind: 'Shambler',
-            door: 'North',
-            offset: 0,
-            speedScale: 1,
-            hpScale: 1,
-            pack: 0,
-            formation: 'Squad',
-          },
-        ],
-      }),
-  })
-  const sideways = role('dialog', { name: 'Turn your phone sideways' })
-
-  test('portrait pauses behind a turn-sideways notice, and landscape lifts it', () => {
-    scene(
-      { update, view },
-      given(fightingOnTouch),
-      Mount.resolve(
-        MeasureGameSurface,
-        Message.MeasuredGameSurface({
-          left: 0,
-          top: 0,
-          width: 844,
-          height: 390,
-        }),
-      ),
-      expect(sideways).toBeAbsent(),
-      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
-      Subscription.emit(
-        Message.MeasuredGameSurface({
-          left: 0,
-          top: 0,
-          width: 390,
-          height: 844,
-        }),
-      ),
-      expect(sideways).toExist(),
-      expect(role('status')).toHaveText(
-        'Paused. Turn your phone sideways to play.',
-      ),
-      Subscription.emit(
-        Message.MeasuredGameSurface({
-          left: 0,
-          top: 0,
-          width: 844,
-          height: 390,
-        }),
-      ),
-      expect(sideways).toBeAbsent(),
-      expect(role('status')).toHaveText(
-        'Paused during wave 3 of 8. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.',
-      ),
-      pointerDown(role('application', { name: 'Game surface' }), {
-        pointerType: 'touch',
-        pointerId: 5,
-        clientX: 700,
-        clientY: 200,
-      }),
-      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
-    )
-  })
-
-  test('a keyboard and mouse never see the notice in portrait', () => {
-    scene(
-      { update, view },
-      given(
-        modifyFields(fightingOnTouch, { lastDevice: () => 'KeyboardMouse' }),
-      ),
-      Mount.resolve(
-        MeasureGameSurface,
-        Message.MeasuredGameSurface({
-          left: 0,
-          top: 0,
-          width: 390,
-          height: 844,
-        }),
-      ),
-      expect(sideways).toBeAbsent(),
-      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
     )
   })
 })

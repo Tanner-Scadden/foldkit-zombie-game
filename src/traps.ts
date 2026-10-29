@@ -79,7 +79,7 @@ export const TRAPS: Readonly<Record<TrapKind, TrapStats>> = {
     name: 'Plank Pile',
     blurb:
       'Nail it across a doorway, two at most. Slow zombies stop to chew it. Your bullets fly through.',
-    price: 20,
+    price: 40,
     hp: 30,
     limit: 2,
     placeLimitNote: 'Two plank piles max',

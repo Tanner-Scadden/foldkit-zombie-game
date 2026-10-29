@@ -78,7 +78,7 @@ const toggleSelector = (label: string) =>
 // with aria-pressed. It is opened once per page load.
 const openSettings = async (page: Page) => {
   if ((await page.locator('.setting-toggle').count()) === 0) {
-    await page.click('.home-settings')
+    await page.click('#home-settings')
     await page.waitForSelector('.setting-toggle')
   }
 }

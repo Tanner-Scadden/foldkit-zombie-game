@@ -12,15 +12,19 @@ Three layers of balance checks, cheapest first. Run the heavy ones through the g
 | `bun run balance:nightly`                      | Everything      | About 15 minutes           |
 | `bun run balance:nightly -- --update-baseline` | Everything      | Also rewrites the baseline |
 
+## Portrait view
+
+`VIEW=portrait` (for example `VIEW=portrait bun run balance -- --wave all --runs 100`) makes the bot see only the zombies inside the portrait camera's window, the 180 by 180 window that follows it and leans toward its aim, the way a phone held upright shows the room. It does not shoot or flee what it cannot see. See "Portrait play" in `GAME_DESIGN.md` for the comparison.
+
 ## The analytical model
 
 `model.ts` reads the real tables: wave plans rolled for six seeds, the level's health scale, bounties and the clear bonus, shop prices and upgrade tiers. It buys the bot's loadout wave by wave, works out its sustained damage a second (magazine and reload included), and plays each wave as a flow of health through the holds, rests, quiet hurries, the alive cap, and the boss's entrance. `ASSUMPTIONS` holds the guesses: how much of each gun's fire lands, the upkeep a visit, and when hearts start costing money. They are calibration knobs, not measurements.
 
-`model.test.ts` tests the math on hand-made tables and holds the guardrails from `GAME_DESIGN.md`. A guardrail not met yet is a `test.todo` that prints today's value.
+`model.test.ts` tests the math on hand-made tables and holds the guardrails from `GAME_DESIGN.md`, wave length ceilings included. A guardrail not met yet is a `test.todo` that prints today's value.
 
 ## Wave snapshots
 
-`simulate.ts --wave n|all` plays single waves. A snapshot is the model on the first frame of a wave's Preparation in a campaign run the bot played. Slot k of `--slots` (10) uses the first of the seeds k, k + 10, k + 20, and so on whose run reached the wave. Run i of a wave starts from slot i mod 10, rolls the wave again from its own seed, and plays it to the next Preparation or the end.
+`simulate.ts --wave n|all` plays single waves. A snapshot is the model on the first frame of a wave's Preparation in a campaign run the bot played. Slot k of `--slots` (10) uses the first of the seeds k, k + 10, k + 20, and so on whose run reached the wave. Run i of a wave starts from slot i mod 10, rolls the wave again from its own seed, and plays it to the next Preparation or the end. Besides cleared and hearts it reports the median length (held to `WAVE_LENGTH_TARGETS`) and the quiet seconds: no zombie alive, nothing at a door or the boss's door, and spawns still to come (held to `QUIET_TARGET`).
 
 Snapshots are derived by playing, not saved as fixtures. A fixture would be a whole Model, which changes shape whenever the game does, so it would go stale with every new field or zombie kind. Playing to the wave start costs one partial run per slot, a few seconds, and is cached for the life of the process, so `--wave all` derives each slot's run once. Workers split a pass by slot, so no two derive the same run.
 

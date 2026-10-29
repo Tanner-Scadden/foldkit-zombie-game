@@ -37,6 +37,15 @@ const playButton = role('button', {
 const endlessButton = role('button', {
   name: 'Endless: waves keep coming until you fall',
 })
+const modeButton = role('button', {
+  name: 'Mode: Campaign. Switch to Endless',
+})
+const endlessModeButton = role('button', {
+  name: 'Mode: Endless. Switch to Campaign',
+})
+const playEndlessButton = role('button', {
+  name: 'Play endless: waves keep coming until you fall',
+})
 const keepGoingButton = role('button', {
   name: 'Keep going: carry on into endless from wave 9 with your money, guns, and traps',
 })
@@ -45,20 +54,22 @@ const START_PROMPT =
   'Press Enter, or use the Start wave button, to start it now.'
 
 describe('Mode choice', () => {
-  test('the title offers Campaign and Endless, and the Endless button starts endless', () => {
+  test('the home menu offers PLAY with a mode toggle, and PLAY in Endless starts endless', () => {
     scene(
       { update, view },
       given(asVeteran(initialModel)),
       measureSurface,
       expect(playButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
-      expect(endlessButton).toHaveAttr('aria-keyshortcuts', 'E'),
-      expect(selector('.home-button-key')).toExist(),
+      expect(modeButton).toHaveAttr('aria-keyshortcuts', 'E'),
+      expect(selector('.home-key')).toExist(),
       expect(keepGoingButton).toBeAbsent(),
-      click(endlessButton),
+      click(modeButton),
+      expect(endlessModeButton).toExist(),
+      click(playEndlessButton),
       expect(role('status')).toHaveText(
         `Get ready for endless wave 1. ${START_PROMPT}`,
       ),
-      expect(endlessButton).toBeAbsent(),
+      expect(playEndlessButton).toBeAbsent(),
     )
   })
 
@@ -84,7 +95,7 @@ describe('Mode choice', () => {
       given(modifyFields(initialModel, { lastDevice: () => 'Touch' })),
       measureSurface,
       expect(playButton).toExist(),
-      expect(selector('.home-button-key')).toBeAbsent(),
+      expect(selector('.home-key')).toBeAbsent(),
     )
   })
 

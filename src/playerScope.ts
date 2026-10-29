@@ -18,6 +18,7 @@ import {
   SavedBestsByDifficulty,
   SavedCard,
   type SavedDifficultyBests,
+  SavedHome,
   SavedNightmare,
   SavedOnboarding,
   SavedSettings,
@@ -27,7 +28,7 @@ import {
 } from './playerData'
 
 // NOTE: the player scope, `player:<playerId>`: one player's settings, look,
-// difficulty, onboarding, and bests, synced between that player's devices.
+// difficulty, onboarding, bests, and home menu, synced between that player's devices.
 // Shared with the sync Worker in infra/worker, so it imports only `effect`,
 // the sync engine, and src/playerData.ts. The tables are the ones the game
 // already kept on the device (src/storeSqlite.ts made `player` and
@@ -55,6 +56,7 @@ export const PlayerRow = Schema.Struct({
   runs_played: Schema.Number,
   total_kills: Schema.Number,
   difficulty_bests: Schema.fromJsonString(SavedBestsByDifficulty),
+  home: Schema.fromJsonString(SavedHome),
 })
 export type PlayerRow = typeof PlayerRow.Type
 
@@ -78,6 +80,7 @@ export const PLAYER_COLUMNS = Array.make(
   'runs_played',
   'total_kills',
   'difficulty_bests',
+  'home',
 )
 
 export const rowOfSave = (save: PlayerSave): PlayerRow => ({
@@ -94,6 +97,7 @@ export const rowOfSave = (save: PlayerSave): PlayerRow => ({
   runs_played: save.bests.runsPlayed,
   total_kills: save.bests.totalKills,
   difficulty_bests: save.bests.byDifficulty,
+  home: save.home,
 })
 
 export const killsRowsOfSave = (save: PlayerSave): ReadonlyArray<KillsRow> =>
@@ -131,10 +135,11 @@ const updatePlayer = (
 // NOTE: the first thing a device writes to its scope: its whole save, from
 // before sync. It only seeds an empty scope. On a scope that already has a
 // player (a device that linked to another device's player) it does nothing,
-// so linking never overwrites the player it joined.
+// so linking never overwrites the player it joined. Version 2 is the save
+// with the home menu (save version 5).
 export const SeededPlayer = defineMutation({
   name: 'SeededPlayer',
-  version: 1,
+  version: 2,
   args: Schema.Struct({ save: PlayerSave }),
   scopes: [PLAYER_SCOPE_KIND],
   writer: 'Owner',
@@ -256,6 +261,24 @@ export const ChangedOnboarding = defineMutation({
           onboarding: json,
           home_screen_tip: homeScreenTip,
         }),
+    ),
+})
+
+// NOTE: the home menu's newest What's New day seen and the Munchopedia
+// entries opened, written whole like the onboarding.
+export const ChangedHome = defineMutation({
+  name: 'ChangedHome',
+  version: 1,
+  args: Schema.Struct({ home: SavedHome }),
+  scopes: [PLAYER_SCOPE_KIND],
+  writer: 'Owner',
+  apply: ({ home }, context) =>
+    Effect.flatMap(
+      Effect.mapError(
+        Schema.encodeEffect(Schema.fromJsonString(SavedHome))(home),
+        toRejected,
+      ),
+      json => updatePlayer(context, { home: json }),
     ),
 })
 
@@ -388,6 +411,7 @@ export const PlayerScope = defineScope({
     ChangedDifficulty,
     UnlockedNightmare,
     ChangedOnboarding,
+    ChangedHome,
     RecordedRun,
     LinkedDevices,
   ],
@@ -423,6 +447,15 @@ export const PlayerScope = defineScope({
           id INTEGER PRIMARY KEY CHECK (id = 1),
           count INTEGER NOT NULL
         )`
+      }),
+    // NOTE: the home menu came from main after the player table shipped to
+    // the preview, so it is added here with an unvisited default.
+    '0003_add_home': table =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        yield* sql`ALTER TABLE ${sql(table('player'))}
+          ADD COLUMN home TEXT NOT NULL
+          DEFAULT '{"seenNewsDay":null,"openedEntries":[]}'`
       }),
   },
 })

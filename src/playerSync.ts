@@ -8,6 +8,7 @@ import {
   PlayerSave,
   SavedBestsByDifficulty,
   SavedCard,
+  SavedHome,
   SavedOnboarding,
   SavedSettings,
 } from './playerData'
@@ -27,6 +28,7 @@ export const PlayerChange = defineTaggedUnion({
     onboarding: SavedOnboarding,
     homeScreenTip: HomeScreenTip,
   },
+  ChangedHome: { home: SavedHome },
   RecordedRun: {
     runs: Schema.Number,
     totalKills: Schema.Number,
@@ -40,6 +42,7 @@ const sameSettings = Schema.toEquivalence(SavedSettings)
 const sameAppearance = Schema.toEquivalence(Appearance)
 const sameOnboarding = Schema.toEquivalence(SavedOnboarding)
 const sameBests = Schema.toEquivalence(SavedBestsByDifficulty)
+const sameHome = Schema.toEquivalence(SavedHome)
 
 const killsAdded = (
   before: Readonly<Record<string, number>>,
@@ -101,6 +104,9 @@ export const changesBetween = (
             onboarding: after.onboarding,
             homeScreenTip: after.homeScreenTip,
           }),
+      ),
+      changeWhen(!sameHome(before.home, after.home), () =>
+        PlayerChange.ChangedHome({ home: after.home }),
       ),
       changeWhen(isRunRecorded, () =>
         PlayerChange.RecordedRun({

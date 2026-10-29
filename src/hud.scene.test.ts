@@ -14,6 +14,7 @@ import {
   initialModel,
 } from './model'
 import { BOOSTS } from './powerups'
+import { LANDSCAPE_SCREEN } from './screen'
 
 type Box = Readonly<{ x: number; y: number; width: number; height: number }>
 
@@ -51,7 +52,10 @@ const twoBoosts: Model = modifyFields(initialModel, {
 
 const chipFrames = (model: Model): ReadonlyArray<Box> =>
   Array.filterMap(
-    rectsOf(hudShapes(model, arenaCamera(model.player)), { x: 0, y: 0 }),
+    rectsOf(hudShapes(model, LANDSCAPE_SCREEN, arenaCamera(model.player)), {
+      x: 0,
+      y: 0,
+    }),
     rect =>
       rect.width === 13 &&
       rect.height === 12 &&
@@ -85,10 +89,13 @@ describe('the boost chips', () => {
       }),
     })
     const frames = Array.filter(
-      rectsOf(hudShapes(allFour, arenaCamera(allFour.player)), {
-        x: 0,
-        y: 0,
-      }),
+      rectsOf(
+        hudShapes(allFour, LANDSCAPE_SCREEN, arenaCamera(allFour.player)),
+        {
+          x: 0,
+          y: 0,
+        },
+      ),
       rect => rect.width === 13 && rect.height === 12,
     )
     expect(frames).toHaveLength(4)

@@ -17,6 +17,7 @@ import {
   QUIET_HURRY_MS,
   RELAX_EXTEND_MAX_MS,
   RELAX_QUIET_MAX_MS,
+  RELAX_TRICKLE_MAX,
   RESTLESS_QUIET_MAX_MS,
 } from './constants'
 import { isFrenzyPack } from './frenzy'
@@ -30,6 +31,7 @@ import {
   type PlannedSpawn,
   type Vector,
   type Zombie,
+  type ZombieKind,
 } from './model'
 import { isFloorKind, isFree, isFusing, isWalking } from './zombies'
 
@@ -48,9 +50,15 @@ const isDue = (clockMs: number) => (spawn: PlannedSpawn) =>
 
 // BEATS
 
-export type Paced = Readonly<{ pacing: Pacing; clockMs: number }>
+export type Paced = Readonly<{
+  pacing: Pacing
+  clockMs: number
+  spawns: ReadonlyArray<PlannedSpawn>
+}>
 
-const flow = (pacing: Pacing, clockMs: number, worldMs: number): Paced =>
+type Clocked = Readonly<{ pacing: Pacing; clockMs: number }>
+
+const flow = (pacing: Pacing, clockMs: number, worldMs: number): Clocked =>
   Option.match(Array.head(pacing.holds), {
     onNone: () => ({ pacing, clockMs: clockMs + worldMs }),
     onSome: hold =>
@@ -76,22 +84,24 @@ const withBeat = (pacing: Pacing, beat: Beat): Pacing =>
 const quietCapMs = (intensity: number): number =>
   intensity >= INTENSITY_RESTLESS ? RESTLESS_QUIET_MAX_MS : RELAX_QUIET_MAX_MS
 
-const rest = (
-  remainingMs: number,
-  extendedMs: number,
-  worldMs: number,
-  intensity: number,
-  quietMs: number,
-): Beat => {
-  if (quietMs >= quietCapMs(intensity)) {
-    return Beat.Flowing()
-  } else if (remainingMs > worldMs) {
-    return Beat.Resting({ remainingMs: remainingMs - worldMs, extendedMs })
+type Rest = Readonly<{
+  remainingMs: number
+  extendedMs: number
+  trickled: number
+}>
+
+const count = (rest: Rest, worldMs: number, intensity: number): Beat => {
+  if (rest.remainingMs > worldMs) {
+    return Beat.Resting({ ...rest, remainingMs: rest.remainingMs - worldMs })
   } else if (
     intensity >= INTENSITY_RESTLESS &&
-    extendedMs < RELAX_EXTEND_MAX_MS
+    rest.extendedMs < RELAX_EXTEND_MAX_MS
   ) {
-    return Beat.Resting({ remainingMs: 0, extendedMs: extendedMs + worldMs })
+    return Beat.Resting({
+      ...rest,
+      remainingMs: 0,
+      extendedMs: rest.extendedMs + worldMs,
+    })
   } else {
     return Beat.Flowing()
   }
@@ -109,7 +119,7 @@ const fade = (
   crowd: Crowd,
 ): Beat =>
   hasThinned(crowd, releaseBelow) || waitedMs >= FADE_MAX_MS
-    ? Beat.Resting({ remainingMs: relaxMs, extendedMs: 0 })
+    ? Beat.Resting({ remainingMs: relaxMs, extendedMs: 0, trickled: 0 })
     : Beat.Fading({ releaseBelow, relaxMs, waitedMs })
 
 const isAnnounced = (
@@ -126,16 +136,21 @@ const isRoomQuiet = (
 ): boolean =>
   crowd.alive === 0 && crowd.waiting === 0 && !isAnnounced(pacing, spawns)
 
-const nextSpawnMs = (
+// NOTE: a pack through a door rattles it PACK_WARNING_MS before it walks
+// in, and an Ankle Biter has no door, so the hurry leads each by its own tell.
+const leadMs = (spawn: PlannedSpawn): number =>
+  isThroughDoor(spawn) ? spawn.atMs - PACK_WARNING_MS : spawn.atMs
+
+const nextLeadMs = (
   spawns: ReadonlyArray<PlannedSpawn>,
   clockMs: number,
 ): Option.Option<number> =>
-  Array.reduce(spawns, Option.none<number>(), (maybeSoonest, { atMs }) =>
-    atMs > clockMs
+  Array.reduce(spawns, Option.none<number>(), (maybeSoonest, spawn) =>
+    spawn.atMs > clockMs
       ? Option.some(
           Option.match(maybeSoonest, {
-            onNone: () => atMs,
-            onSome: soonest => Math.min(soonest, atMs),
+            onNone: () => leadMs(spawn),
+            onSome: soonest => Math.min(soonest, leadMs(spawn)),
           }),
         )
       : maybeSoonest,
@@ -146,35 +161,118 @@ const hurryTargetMs = (
   clockMs: number,
   spawns: ReadonlyArray<PlannedSpawn>,
 ): number =>
-  Option.match(nextSpawnMs(spawns, clockMs), {
+  Option.match(nextLeadMs(spawns, clockMs), {
     onNone: () => clockMs,
-    onSome: atMs =>
+    onSome: lead =>
       Math.max(
         clockMs,
         Option.match(Array.head(pacing.holds), {
-          onNone: () => atMs - PACK_WARNING_MS,
-          onSome: hold => Math.min(hold.atMs, atMs - PACK_WARNING_MS),
+          onNone: () => lead,
+          onSome: hold => Math.min(hold.atMs, lead),
         }),
       ),
   })
 
-const hurry = (paced: Paced, spawns: ReadonlyArray<PlannedSpawn>): Paced =>
-  Beat.isAnyOf(['Flowing'])(paced.pacing.beat) &&
-  paced.pacing.quietMs >= QUIET_HURRY_MS
+const hurry = (clocked: Clocked, spawns: ReadonlyArray<PlannedSpawn>): Paced =>
+  Beat.isAnyOf(['Flowing'])(clocked.pacing.beat) &&
+  clocked.pacing.quietMs >= QUIET_HURRY_MS
     ? {
-        pacing: paced.pacing,
-        clockMs: hurryTargetMs(paced.pacing, paced.clockMs, spawns),
+        pacing: clocked.pacing,
+        clockMs: hurryTargetMs(clocked.pacing, clocked.clockMs, spawns),
+        spawns,
       }
-    : paced
+    : { ...clocked, spawns }
+
+// TRICKLE
+
+const STRAGGLER_KINDS: ReadonlyArray<ZombieKind> = [
+  'Shambler',
+  'Runner',
+  'Exploder',
+]
+
+const isStraggler =
+  (spawns: ReadonlyArray<PlannedSpawn>) =>
+  (spawn: PlannedSpawn): boolean =>
+    Array.contains(STRAGGLER_KINDS, spawn.kind) &&
+    Array.filter(spawns, ({ pack }) => pack === spawn.pack).length === 1
+
+const soonestStraggler = (
+  spawns: ReadonlyArray<PlannedSpawn>,
+): Option.Option<PlannedSpawn> =>
+  Array.reduce(
+    Array.filter(spawns, isStraggler(spawns)),
+    Option.none<PlannedSpawn>(),
+    (maybeSoonest, spawn) =>
+      Option.match(maybeSoonest, {
+        onNone: () => Option.some(spawn),
+        onSome: soonest =>
+          spawn.atMs < soonest.atMs ? Option.some(spawn) : maybeSoonest,
+      }),
+  )
+
+const pulledTo =
+  (straggler: PlannedSpawn, clockMs: number) =>
+  (spawn: PlannedSpawn): PlannedSpawn =>
+    spawn.pack === straggler.pack
+      ? modifyFields(spawn, { atMs: () => clockMs })
+      : spawn
+
+// NOTE: a relax in an empty room lets in a straggler or two instead of
+// sitting silent: the soonest lone Shambler, Runner, or Kaboomer of the plan
+// walks in now. Once RELAX_TRICKLE_MAX have come, or none is left, a quiet
+// room ends the relax instead.
+const trickle = (
+  pacing: Pacing,
+  rest: Rest,
+  clockMs: number,
+  spawns: ReadonlyArray<PlannedSpawn>,
+): Paced =>
+  pipe(
+    soonestStraggler(spawns),
+    Option.filter(() => rest.trickled < RELAX_TRICKLE_MAX),
+    Option.match({
+      onNone: () => ({
+        pacing: withBeat(pacing, Beat.Flowing()),
+        clockMs,
+        spawns,
+      }),
+      onSome: straggler => ({
+        pacing: modifyFields(pacing, {
+          beat: () => Beat.Resting({ ...rest, trickled: rest.trickled + 1 }),
+          quietMs: () => 0,
+        }),
+        clockMs,
+        spawns: Array.map(spawns, pulledTo(straggler, clockMs)),
+      }),
+    }),
+  )
+
+const rest = (
+  pacing: Pacing,
+  restBeat: Rest,
+  clockMs: number,
+  worldMs: number,
+  intensity: number,
+  spawns: ReadonlyArray<PlannedSpawn>,
+): Paced =>
+  pacing.quietMs >= quietCapMs(intensity)
+    ? trickle(pacing, restBeat, clockMs, spawns)
+    : {
+        pacing: withBeat(pacing, count(restBeat, worldMs, intensity)),
+        clockMs,
+        spawns,
+      }
 
 // NOTE: The wave clock only runs while the beat is Flowing. Fading and
 // Resting stop it, so every planned spawn after a hold waits out the fade and
 // the relax on top of its planned time. A fade gives up after FADE_MAX_MS so
 // a zombie stuck out of reach cannot stall the wave. An empty room with no
-// pack at a door is quiet: a relax ends after RELAX_QUIET_MAX_MS of quiet,
-// and once the clock flows again after QUIET_HURRY_MS of quiet it skips ahead
-// to the next pack's warning, never past a hold. Only timing changes, never
-// a door or a kind, so the preview stays exact.
+// pack at a door is quiet. A relax that turns quiet for RELAX_QUIET_MAX_MS
+// trickles in a straggler, then ends, and once the clock flows after
+// QUIET_HURRY_MS of quiet it skips ahead to the next pack's warning, never
+// past a hold. Only timing changes, never a door or a kind, so the preview
+// stays exact.
 export const stepBeat = (
   pacing: Pacing,
   clockMs: number,
@@ -195,14 +293,17 @@ export const stepBeat = (
         fade(releaseBelow, relaxMs, waitedMs + worldMs, crowd),
       ),
       clockMs,
+      spawns,
     }),
-    Resting: ({ remainingMs, extendedMs }) => ({
-      pacing: withBeat(
+    Resting: ({ remainingMs, extendedMs, trickled }) =>
+      rest(
         quieted,
-        rest(remainingMs, extendedMs, worldMs, intensity, quieted.quietMs),
+        { remainingMs, extendedMs, trickled },
+        clockMs,
+        worldMs,
+        intensity,
+        spawns,
       ),
-      clockMs,
-    }),
   })
 }
 

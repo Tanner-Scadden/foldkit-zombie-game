@@ -754,6 +754,45 @@ const scenarioModel = (): Model => {
       })),
       { bests: bests => ({ ...bests, totalKills: 341 }) },
     )
+  const kills = params.get('kills')
+  if (kills !== null) {
+    const counts = Object.fromEntries(
+      kills
+        .split(',')
+        .filter(Boolean)
+        .map(pair => {
+          const [kind, count] = pair.split(':')
+          return [kind, Number(count)]
+        }),
+    )
+    model = modifyFields(model, {
+      bests: bests => ({
+        ...bests,
+        killsByKind: { ...bests.killsByKind, ...counts },
+        totalKills: Object.values({ ...bests.killsByKind, ...counts }).reduce(
+          (sum: number, count) => sum + Number(count),
+          0,
+        ),
+      }),
+    })
+  }
+  const listOf = (key: string) =>
+    (params.get(key) ?? '').split(',').filter(Boolean) as any
+  model = modifyFields(model, {
+    home: home => ({
+      ...home,
+      mode: params.get('homemode') === 'endless' ? 'Endless' : home.mode,
+      maybeSeenNewsDay: params.has('newsseen')
+        ? Option.some('October 29, 2026')
+        : home.maybeSeenNewsDay,
+      openedEntries: params.has('opened')
+        ? listOf('opened')
+        : home.openedEntries,
+      newEntries: params.has('newentries')
+        ? listOf('newentries')
+        : home.newEntries,
+    }),
+  })
   model = modifyFields(model, {
     difficultyCard: () =>
       params.has('ask') ? DifficultyCard.Unseen() : DifficultyCard.Seen(),
@@ -1102,6 +1141,7 @@ const application = Runtime.makeApplication({
   managedResources,
   resources: PlayerStoreLayer,
   container: document.getElementById('root'),
+  devTools: params.has('nodev') ? false : undefined,
 })
 
 Runtime.run(application)

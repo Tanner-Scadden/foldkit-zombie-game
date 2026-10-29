@@ -76,20 +76,28 @@ export const closestPointOnSegment = (
   return { x: from.x + segmentX * along, y: from.y + segmentY * along }
 }
 
-export const viewScale = (surface: SurfaceRectangle): number =>
-  Math.min(surface.width / VIEW_WIDTH, surface.height / VIEW_HEIGHT)
+export type ScreenSize = Readonly<{ width: number; height: number }>
+
+const LANDSCAPE_SIZE: ScreenSize = { width: VIEW_WIDTH, height: VIEW_HEIGHT }
+
+export const viewScale = (
+  surface: SurfaceRectangle,
+  screen: ScreenSize = LANDSCAPE_SIZE,
+): number =>
+  Math.min(surface.width / screen.width, surface.height / screen.height)
 
 export const clientToView = (
   surface: SurfaceRectangle,
   client: Vector,
+  screen: ScreenSize = LANDSCAPE_SIZE,
 ): Option.Option<Vector> => {
-  const scale = viewScale(surface)
+  const scale = viewScale(surface, screen)
   if (scale <= 0) {
     return Option.none()
   }
 
-  const viewLeft = surface.left + (surface.width - VIEW_WIDTH * scale) / 2
-  const viewTop = surface.top + (surface.height - VIEW_HEIGHT * scale) / 2
+  const viewLeft = surface.left + (surface.width - screen.width * scale) / 2
+  const viewTop = surface.top + (surface.height - screen.height * scale) / 2
   return Option.some({
     x: (client.x - viewLeft) / scale,
     y: (client.y - viewTop) / scale,

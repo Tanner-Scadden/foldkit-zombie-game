@@ -38,6 +38,7 @@ import {
   releaseAudioEngine,
   resumeAudio,
 } from './audio'
+import { NEWS_DAYS } from './changelog'
 import * as Character from './character'
 import {
   RESTART_GRACE_MS,
@@ -55,12 +56,21 @@ import {
   END_MENU_BUTTON_ID,
   KEEP_TUTORIAL_BUTTON_ID,
   RESET_TUTORIAL_BUTTON_ID,
+  type RailButton,
   countRunFrom,
   endOffer,
+  forgetNewEntriesFrom,
   homeButtonId,
+  isModeKey,
   isOnHome,
+  maybeRailButtonOfKey,
   returnHome,
+  runModeOf,
+  seeNews,
+  showMunchopediaPage,
   steppedHomeFocus,
+  switchMode,
+  turnNewsPage,
 } from './home'
 import {
   type PointerPress,
@@ -102,6 +112,7 @@ import {
   Loading,
   type MenuPanel,
   Model,
+  MunchopediaPage,
   type Orientation,
   PageVisibility,
   Phase,
@@ -114,6 +125,7 @@ import {
   ShopState,
   TouchControls,
   type TutorialReset,
+  ZombieKind,
   defaultAppearance,
   initialModel,
 } from './model'
@@ -326,6 +338,16 @@ export const Message = defineMessageUnion({
   SucceededRedeemLinkCode: {},
   FailedRedeemLinkCode: { problem: LinkProblem },
   ClickedCancelLinkButton: {},
+  ClickedPlayButton: {},
+  ClickedModeButton: {},
+  ClickedWhatsNewButton: {},
+  ClickedOlderNewsButton: {},
+  ClickedNewerNewsButton: {},
+  ClickedMunchopediaButton: {},
+  ClickedMunchopediaEntryButton: { kind: ZombieKind },
+  ClickedMunchopediaListButton: {},
+  ClickedNewEntryButton: { kind: ZombieKind },
+  ClickedDifficultyBadge: {},
 })
 export type Message = typeof Message.Type
 
@@ -777,9 +799,6 @@ const MUSIC_KEY = 'KeyN'
 const withInput = (model: Model, toNextInput: (input: Input) => Input) =>
   refreshIntent(modifyFields(model, { input: toNextInput }))
 
-export const isSideways = (model: Model): boolean =>
-  model.lastDevice === 'Touch' && model.orientation === 'Portrait'
-
 const useDevice = (model: Model, device: InputDevice): Model =>
   model.lastDevice === device
     ? model
@@ -797,7 +816,6 @@ const isPastRestartGrace = (model: Model): boolean =>
   model.screenMs >= RESTART_GRACE_MS
 
 const canStart = (model: Model): boolean =>
-  !isSideways(model) &&
   Phase.match(model.phase, {
     Ready: () => true,
     Preparation: () => false,
@@ -820,8 +838,7 @@ const isScreenAnimated = (phase: Phase): boolean =>
   Phase.isAnyOf(['Ready', 'Victory', 'GameOver'])(phase)
 
 const isFrameActive = (model: Model): boolean =>
-  !isSideways(model) &&
-  (isRoundActive(model.phase) || isScreenAnimated(model.phase))
+  isRoundActive(model.phase) || isScreenAnimated(model.phase)
 
 const hasStartedWave = (before: Model, after: Model): boolean =>
   Phase.isAnyOf(['Preparation'])(before.phase) &&
@@ -906,7 +923,7 @@ const debutCardFromKey = (model: Model, code: string): Model => {
 const phaseFromKey = (model: Model, code: string): Model =>
   Phase.match(model.phase, {
     Ready: () =>
-      isAskingDifficultyFirst(model) ? model : startFromKey(model, code),
+      isAskingDifficultyFirst(model) ? model : homeStartFromKey(model, code),
     Preparation: () => preparationFromKey(model, code),
     Wave: () => (isPauseKey(code) ? pause(model) : model),
     Paused: () => resumeFromKey(model, code),
@@ -1165,7 +1182,6 @@ const focusShopItem = (model: Model, item: ShopItemId): Model =>
 // CHARACTER
 
 const canPickCharacter = (model: Model): boolean =>
-  !isSideways(model) &&
   Phase.match(model.phase, {
     Ready: () => true,
     Preparation: () => false,
@@ -1262,11 +1278,7 @@ const foldPanelDialogClose = Update.foldChildStep({
 })
 
 const isPanelAllowed = (model: Model, panel: MenuPanel): boolean => {
-  if (
-    isSideways(model) ||
-    model.panelDialog.isOpen ||
-    model.character.dialog.isOpen
-  ) {
+  if (model.panelDialog.isOpen || model.character.dialog.isOpen) {
     return false
   } else if (panel === 'LeaveRun') {
     return isPaused(model.phase)
@@ -1304,11 +1316,7 @@ const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
 const leaveFromMenu: UpdateStep = stepModel => {
   if (isPaused(stepModel.phase)) {
     return openPanel('LeaveRun')(stepModel)
-  } else if (
-    isEndScreen(stepModel.phase) &&
-    isPastRestartGrace(stepModel) &&
-    !isSideways(stepModel)
-  ) {
+  } else if (isEndScreen(stepModel.phase) && isPastRestartGrace(stepModel)) {
     return goHome(stepModel)
   } else {
     return { model: stepModel }
@@ -1330,7 +1338,6 @@ const menuFromKey: (code: string) => UpdateStep = code => stepModel =>
 
 const canMoveHomeFocus = (model: Model): boolean =>
   isOnHome(model.phase) &&
-  !isSideways(model) &&
   !model.panelDialog.isOpen &&
   !model.character.dialog.isOpen
 
@@ -1351,6 +1358,67 @@ const homeFocusFromKey: (code: string) => UpdateStep = code => stepModel =>
       }
     },
   })
+
+// HOME MENU
+
+const isPanelOpen = (model: Model, panel: MenuPanel): boolean =>
+  model.panelDialog.isOpen && model.panel === panel
+
+const homeStartFromKey = (model: Model, code: string): Model =>
+  isStartKey(code) ? startWhenAllowed(model, runModeOf(model.home.mode)) : model
+
+const openWhatsNew: UpdateStep = stepModel =>
+  isPanelAllowed(stepModel, 'WhatsNew')
+    ? openPanel('WhatsNew')(seeNews(stepModel))
+    : { model: stepModel }
+
+const openMunchopedia =
+  (page: MunchopediaPage): UpdateStep =>
+  stepModel =>
+    isPanelAllowed(stepModel, 'Munchopedia')
+      ? openPanel('Munchopedia')(showMunchopediaPage(stepModel, page))
+      : { model: stepModel }
+
+const turnMunchopediaPage = (
+  model: Model,
+  page: MunchopediaPage,
+): UpdateReturn => ({
+  model: isPanelOpen(model, 'Munchopedia')
+    ? showMunchopediaPage(model, page)
+    : model,
+})
+
+const turnNews = (model: Model, step: number): UpdateReturn => ({
+  model: isPanelOpen(model, 'WhatsNew')
+    ? turnNewsPage(model, step, NEWS_DAYS.length)
+    : model,
+})
+
+const RAIL_OPENERS: Readonly<Record<RailButton, UpdateStep>> = {
+  WhatsNew: openWhatsNew,
+  Munchopedia: openMunchopedia(MunchopediaPage.List()),
+  Character: openCharacterPicker,
+  HowToPlay: openPanel('HowToPlay'),
+  Settings: openPanel('Settings'),
+}
+
+// NOTE: C opens the character picker on every screen that offers it, so it
+// stays with characterFromKey and is left out here.
+const homeFromKey: (code: string) => UpdateStep = code => stepModel => {
+  if (!canMoveHomeFocus(stepModel)) {
+    return { model: stepModel }
+  } else if (isModeKey(code)) {
+    return { model: switchMode(stepModel) }
+  } else {
+    return Option.match(maybeRailButtonOfKey(code), {
+      onNone: () => ({ model: stepModel }),
+      onSome: button =>
+        button === 'Character'
+          ? { model: stepModel }
+          : RAIL_OPENERS[button](stepModel),
+    })
+  }
+}
 
 // DIFFICULTY
 
@@ -1376,30 +1444,30 @@ const startOrAsk =
       ? Update.combine(stepModel, [unlockAudio, askDifficulty(mode)])
       : startFromButton(stepModel, startWhenAllowed(stepModel, mode))
 
-const maybeKeyMode = (code: string): Option.Option<RunMode> => {
-  if (isStartKey(code)) {
-    return Option.some(RunMode.Campaign())
-  } else if (isEndlessKey(code)) {
-    return Option.some(RunMode.Endless())
-  } else {
-    return Option.none()
-  }
-}
-
 const difficultyCardFromKey: (code: string) => UpdateStep = code => stepModel =>
-  isAskingDifficultyFirst(stepModel)
-    ? Option.match(maybeKeyMode(code), {
-        onNone: () => ({ model: stepModel }),
-        onSome: mode => askDifficulty(mode)(stepModel),
-      })
+  isAskingDifficultyFirst(stepModel) && isStartKey(code)
+    ? askDifficulty(runModeOf(stepModel.home.mode))(stepModel)
     : { model: stepModel }
+
+const pickFromBadge =
+  (difficulty: Difficulty): UpdateStep =>
+  stepModel =>
+    isPanelOpen(stepModel, 'Difficulty') &&
+    isOnHome(stepModel.phase) &&
+    !isLocked(stepModel.difficulty, difficulty)
+      ? closePanel(
+          modifyFields(chooseDifficulty(stepModel, difficulty), {
+            difficultyCard: () => DifficultyCard.Seen(),
+          }),
+        )
+      : { model: stepModel }
 
 const pickFromCard =
   (difficulty: Difficulty): UpdateStep =>
   stepModel =>
     DifficultyCard.match(stepModel.difficultyCard, {
-      Unseen: () => ({ model: stepModel }),
-      Seen: () => ({ model: stepModel }),
+      Unseen: () => pickFromBadge(difficulty)(stepModel),
+      Seen: () => pickFromBadge(difficulty)(stepModel),
       Asking: ({ mode }) =>
         isLocked(stepModel.difficulty, difficulty)
           ? { model: stepModel }
@@ -1697,11 +1765,6 @@ const pauseRound: UpdateStep = stepModel =>
     }),
   ])
 
-const pauseWhenSideways: UpdateStep = stepModel =>
-  isSideways(stepModel) && isRoundActive(stepModel.phase)
-    ? pauseRound(stepModel)
-    : { model: stepModel }
-
 const pauseWhenAway: UpdateStep = stepModel =>
   isRoundActive(stepModel.phase)
     ? pauseRound(stepModel)
@@ -1907,6 +1970,7 @@ const updateGame = (model: Model, message: Message) =>
         difficultyCardFromKey(code),
         menuFromKey(code),
         homeFocusFromKey(code),
+        homeFromKey(code),
         trapFromKey(code),
         reloadFromKey(code),
         playStartSoundWhen(startsRun(model, pressed)),
@@ -1942,7 +2006,6 @@ const updateGame = (model: Model, message: Message) =>
       return Update.combine(pressed, [
         unlockAudio,
         playStartSoundWhen(startsRun(model, pressed)),
-        pauseWhenSideways,
       ])
     },
 
@@ -1971,25 +2034,23 @@ const updateGame = (model: Model, message: Message) =>
 
     SuppressedContextMenu: () => ({ model }),
 
-    MeasuredGameSurface: surface =>
-      pauseWhenSideways(
-        modifyFields(model, {
-          maybeSurface: () => Option.some(surface),
-          orientation: () => orientationOf(surface.width, surface.height),
-        }),
-      ),
+    MeasuredGameSurface: surface => ({
+      model: modifyFields(model, {
+        maybeSurface: () => Option.some(surface),
+        orientation: () => orientationOf(surface.width, surface.height),
+      }),
+    }),
 
     CompletedGenerateSeed: ({ seed }) => ({
       model: modifyFields(model, { rngState: () => seed }),
     }),
 
-    CompletedDetectInputDevice: ({ touchControls }) =>
-      pauseWhenSideways(
-        useDevice(
-          modifyFields(model, { touchControls: () => touchControls }),
-          touchControls === 'Allowed' ? 'Touch' : 'KeyboardMouse',
-        ),
+    CompletedDetectInputDevice: ({ touchControls }) => ({
+      model: useDevice(
+        modifyFields(model, { touchControls: () => touchControls }),
+        touchControls === 'Allowed' ? 'Touch' : 'KeyboardMouse',
       ),
+    }),
 
     ClickedMuteButton: () => unlockAudio(toggleSound(model)),
 
@@ -2322,6 +2383,40 @@ const updateGame = (model: Model, message: Message) =>
     ClickedCancelLinkButton: () => ({
       model: modifyFields(model, { linkFlow: () => LinkFlow.Idle() }),
     }),
+
+    ClickedPlayButton: () => startOrAsk(runModeOf(model.home.mode))(model),
+
+    ClickedModeButton: () => ({
+      model: canMoveHomeFocus(model) ? switchMode(model) : model,
+    }),
+
+    ClickedWhatsNewButton: () =>
+      Update.combine(model, [unlockAudio, openWhatsNew]),
+
+    ClickedOlderNewsButton: () => turnNews(model, 1),
+
+    ClickedNewerNewsButton: () => turnNews(model, -1),
+
+    ClickedMunchopediaButton: () =>
+      Update.combine(model, [
+        unlockAudio,
+        openMunchopedia(MunchopediaPage.List()),
+      ]),
+
+    ClickedMunchopediaEntryButton: ({ kind }) =>
+      turnMunchopediaPage(model, MunchopediaPage.Entry({ kind })),
+
+    ClickedMunchopediaListButton: () =>
+      turnMunchopediaPage(model, MunchopediaPage.List()),
+
+    ClickedNewEntryButton: ({ kind }) =>
+      Update.combine(model, [
+        unlockAudio,
+        openMunchopedia(MunchopediaPage.Entry({ kind })),
+      ]),
+
+    ClickedDifficultyBadge: () =>
+      Update.combine(model, [unlockAudio, openPanel('Difficulty')]),
   })
 
 const dismissHomeScreenTip = (model: Model): Model =>
@@ -2375,7 +2470,7 @@ const dismissHomeScreenTipFrom =
   })
 
 const isOfferingOnlyMenu = (model: Model): boolean =>
-  endOffer(model) === 'MenuOnly' && !isSideways(model)
+  endOffer(model) === 'MenuOnly'
 
 const focusEndMenuFrom =
   (before: Model): UpdateStep =>
@@ -2394,6 +2489,7 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     unlockNightmareFrom(model),
     stepModel => ({ model: countRunFrom(model, stepModel) }),
     sendRunSummaryFrom(model),
+    stepModel => ({ model: forgetNewEntriesFrom(model, stepModel) }),
     writeSaveFrom(model, message),
   ])
 

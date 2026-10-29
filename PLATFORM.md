@@ -62,9 +62,9 @@ Package names and APIs need checking against the Effect version the game uses (E
 
 ### The on-device save
 
-Added on 2026-10-28, ahead of local SQLite. `PlayerSave` in `src/save.ts` is one versioned record per player, plain data: the onboarding lessons, the zombie cards seen, the trap hint, the Home Screen tip, sound, music, screen shake, the stats sharing setting, the look, the difficulty, and the bests. It is shaped like the player scope on purpose.
+Added on 2026-10-28, ahead of local SQLite. `PlayerSave` in `src/save.ts` is one versioned record per player, plain data: the onboarding lessons, the zombie cards seen, the trap hint, the Home Screen tip, sound, music, screen shake, the stats sharing setting, the look, the difficulty, the bests, and the home menu's seen news and opened Munchopedia entries. It is shaped like the player scope on purpose.
 
-Since 2026-10-29 (on the `infra` branch) it lives in on-device SQLite as the one row of the `player` table: settings, the difficulty, runs played, and total kills as columns, the look, the onboarding, and the bests per difficulty as JSON, each decoded by its Schema. Kills per kind are the `kills_by_kind` table, one row per kind id, for the Munchopedia to read. `PlayerStore` in `src/store.ts` loads and writes it behind the same `LoadSave` and `WriteSave` Commands, so `update` did not change.
+Since 2026-10-29 (on the `infra` branch) it lives in on-device SQLite as the one row of the `player` table: settings, the difficulty, runs played, and total kills as columns, the look, the onboarding, the bests per difficulty, and the home menu as JSON, each decoded by its Schema. The `home` column came with the merge of `main`'s home menu, added by the player scope's migration `0003_add_home` with an unvisited default, so a device or a Durable Object that already had a row keeps it. Kills per kind are the `kills_by_kind` table, one row per kind id, for the Munchopedia to read. `PlayerStore` in `src/store.ts` loads and writes it behind the same `LoadSave` and `WriteSave` Commands, so `update` did not change.
 
 - **The import.** The first load on a device with no player row reads the old localStorage save (`munch-manor:save`), writes it as the row, and marks the import done in `store_meta`, in one transaction. Later loads never read localStorage again, even if the row is gone.
 - **The fallback, for one release.** The localStorage key is not removed. It is read when SQLite fails to open within 12 seconds or fails a load, and written (alongside SQLite) when SQLite had to open in memory, so private windows and browsers without OPFS keep their settings as before. With OPFS it is never written. Remove the fallback and the key in the release after this one ships.
@@ -74,7 +74,8 @@ What the save holds, by version:
 
 - **Difficulty (version 2).** The chosen level, whether the first-time card was answered, and the Nightmare unlock.
 - **Bests (version 3, 2026-10-29).** Runs played, total kills, kills per kind by kind id, and the bests per difficulty. Reset tutorial keeps them.
-- **Stats sharing (version 4, 2026-10-29, on the `infra` branch).** The "Share anonymous play stats" setting. Older saves load with it on.
+- **Home menu (version 4, 2026-10-29).** The newest What's New day seen and the Munchopedia entries opened. This is the save the live game keeps in localStorage today.
+- **Stats sharing (version 5, 2026-10-29, on the `infra` branch).** The "Share anonymous play stats" setting. Older saves load with it on. It was numbered 4 on the preview before the home menu reached `main`; the merge renumbered it 5 so the live version 4 save migrates on its own path. The preview's own version 4 shape (sharing, no home menu) still reads, with the home menu unvisited. `src/store.test.ts` checks that a live version 4 localStorage save lands in SQLite and on a linked device with nothing lost.
 - **Session only.** The run itself and full screen.
 
 ### What Phase 1 taught us
@@ -111,7 +112,7 @@ Built on 2026-10-29 for phase 2. It runs on pull request previews. Production ge
 - **When.** A run ends at Game Over, at Victory, or when the player leaves it from the pause MENU. Keeping going after a win reports again, as Endless, when that run ends.
 - **How.** The `SendRunSummary` Command posts the JSON as `text/plain` with `navigator.sendBeacon`, falling back to `fetch` with `keepalive`. `text/plain` keeps it a simple request, so there is no CORS preflight. A failed send is ignored.
 - **Where.** The Worker's origin is baked into the build as `VITE_API_ORIGIN`, which `infra/alchemy.run.ts` sets from each stage's API Worker URL. A build without it (`bun dev`, the tests, an itch.io zip) sends nothing.
-- **Opting out.** SETTINGS has "Share anonymous play stats", on by default, with the line "Sends the wave, kills, and run time when a run ends. Nothing personal." It is saved in `PlayerSave` (save version 3; versions 1 and 2 load with sharing on). When it is off, nothing is sent.
+- **Opting out.** SETTINGS has "Share anonymous play stats", on by default, with the line "Sends the wave, kills, and run time when a run ends. Nothing personal." It is saved in `PlayerSave` (save version 5; versions 1 to 4 load with sharing on). When it is off, nothing is sent.
 
 ### The Worker
 
@@ -214,16 +215,17 @@ Built on 2026-10-29. The engine's design, API, protocol, and limits are in [`pac
 
 **The player scope** (`src/playerScope.ts`, shared with the Worker, imports only `effect`, the engine, and `src/playerData.ts`):
 
-| Mutation            | Writer     | What it does                                                                                          |
-| ------------------- | ---------- | ----------------------------------------------------------------------------------------------------- |
-| `SeededPlayer`      | Owner      | The device's save from before sync. Only fills an empty scope, so linking never overwrites the player |
-| `ChangedSettings`   | Owner      | Sound, music, screen shake, and stats sharing                                                         |
-| `ChangedAppearance` | Owner      | The whole look                                                                                        |
-| `UnlockedNightmare` | Owner      | Trusted for now; becomes a server mutation once runs are verified                                     |
-| `ChangedDifficulty` | Owner      | The chosen level and the first-time card. Refused if it picks Nightmare while the scope has it locked |
-| `ChangedOnboarding` | Owner      | Lessons, the trap hint, the zombie cards seen, and the Home Screen tip                                |
-| `RecordedRun`       | Owner      | Adds a run's runs and kills, merges its bests. Refused past 3 runs or 5,000 kills a run               |
-| `LinkedDevices`     | ServerOnly | The number of devices on this player, written by the server when one links                            |
+| Mutation            | Writer     | What it does                                                                                                                            |
+| ------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `SeededPlayer`      | Owner      | The device's save from before sync. Only fills an empty scope, so linking never overwrites the player. Version 2 carries save version 5 |
+| `ChangedSettings`   | Owner      | Sound, music, screen shake, and stats sharing                                                                                           |
+| `ChangedAppearance` | Owner      | The whole look                                                                                                                          |
+| `UnlockedNightmare` | Owner      | Trusted for now; becomes a server mutation once runs are verified                                                                       |
+| `ChangedDifficulty` | Owner      | The chosen level and the first-time card. Refused if it picks Nightmare while the scope has it locked                                   |
+| `ChangedOnboarding` | Owner      | Lessons, the trap hint, the zombie cards seen, and the Home Screen tip                                                                  |
+| `ChangedHome`       | Owner      | The newest What's New day seen and the Munchopedia entries opened, written whole                                                        |
+| `RecordedRun`       | Owner      | Adds a run's runs and kills, merges its bests. Refused past 3 runs or 5,000 kills a run                                                 |
+| `LinkedDevices`     | ServerOnly | The number of devices on this player, written by the server when one links                                                              |
 
 **In the game.** SETTINGS has a Devices row with the status line ("Synced", "Offline, will sync", "Synced. Linked to 2 devices", or "Saved on this device" in a build without a sync server) and the two link buttons. Offline play is unchanged: mutations wait in the outbox and go out when the leader tab reconnects. A build without `VITE_API_ORIGIN` (`bun dev`, the tests, an itch.io zip) keeps everything local.
 
@@ -284,7 +286,7 @@ Checked against Cloudflare's pricing pages on 2026-10-28.
 - Strangers, possibly children, open the game from a link. Collecting anything personal changes the legal picture, so the default is to collect nothing personal.
 - Every endpoint decodes with Schema, caps the body size, and rate limits.
 - Secrets (the Cloudflare API token, any signing keys) live in CI secrets and Alchemy's secret handling, never in the client or the repo. The sync token secret is an `Alchemy.Random` per stage.
-- Sync stores nothing personal. The directory keeps each device's public key coordinates, its player id, and when it was created and last seen; a player scope keeps the save (settings, look, difficulty, onboarding, and bests). Neither keeps an address. Link codes are deleted when used and replaced when a new one is asked for, and expire after ten minutes. A device's private key never leaves it.
+- Sync stores nothing personal. The directory keeps each device's public key coordinates, its player id, and when it was created and last seen; a player scope keeps the save (settings, look, difficulty, onboarding, bests, and the home menu's seen news and opened entries). Neither keeps an address. Link codes are deleted when used and replaced when a new one is asked for, and expire after ten minutes. A device's private key never leaves it.
 
 ## Conflicts with the design doc
 

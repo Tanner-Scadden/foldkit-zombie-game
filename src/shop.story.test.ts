@@ -1029,12 +1029,12 @@ describe('shop categories', () => {
     const firstVisit = browsing(withMoney(readyModel, WAVE_ONE_PAY))
     expect(affordableCount(firstVisit, 'Guns')).toBe(1)
     expect(affordableCount(firstVisit, 'Health')).toBe(0)
-    expect(affordableCount(firstVisit, 'Traps')).toBe(1)
-    expect(totalAffordable(firstVisit)).toBe(2)
+    expect(affordableCount(firstVisit, 'Traps')).toBe(0)
+    expect(totalAffordable(firstVisit)).toBe(1)
 
     const hurt = withHp(firstVisit, PLAYER_MAX_HP - 2)
     expect(affordableCount(hurt, 'Health')).toBe(1)
-    expect(totalAffordable(hurt)).toBe(3)
+    expect(totalAffordable(hurt)).toBe(2)
 
     const armed = withArsenal(withMoney(firstVisit, 50), holdingSpare(20))
     expect(affordableCount(armed, 'Guns')).toBe(2)

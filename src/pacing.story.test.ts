@@ -16,7 +16,6 @@ import {
   PLAYER_INVULNERABLE_MS,
   QUIET_HURRY_MS,
   RELAX_EXTEND_MAX_MS,
-  RELAX_QUIET_MAX_MS,
 } from './constants'
 import { Message, update } from './main'
 import {
@@ -379,7 +378,8 @@ describe('sawtooth', () => {
 
   test('high intensity lengthens a relax by up to its cap, and low intensity does not', () => {
     const resting = modifyFields(calmPacing, {
-      beat: () => Beat.Resting({ remainingMs: 500, extendedMs: 0 }),
+      beat: () =>
+        Beat.Resting({ remainingMs: 500, extendedMs: 0, trickled: 0 }),
     })
     const restLength = (intensity: number): number => {
       const clocks: Array<number> = []
@@ -525,7 +525,9 @@ const playKillingEverything = (wave: number, seed: number): Played => {
         }
       })
       if (Phase.guards.Wave(next.phase)) {
-        quietFrames.push(!isAnnounced(next))
+        quietFrames.push(
+          Array.isReadonlyArrayEmpty(next.zombies) && !isAnnounced(next),
+        )
       }
       return modifyFields(next, { zombies: () => [] })
     },
@@ -546,6 +548,34 @@ const longestQuietMs = (quietFrames: ReadonlyArray<boolean>): number =>
       return { run: next, longest: Math.max(longest, next) }
     },
   ).longest
+
+type Frame = Readonly<{
+  clockMs: number
+  beat: Beat['_tag']
+  arrived: ReadonlyArray<DoorId>
+}>
+
+// NOTE: plays frames as a player who kills each zombie the frame it walks
+// in, and notes the doors the new ones came through.
+const playEmptied = (start: Model, ms: number): ReadonlyArray<Frame> =>
+  Array.mapAccum(
+    Array.makeBy(Math.round(ms / FRAME_MS), index => index),
+    start,
+    (current): readonly [Model, Frame] => {
+      const next = update(
+        current,
+        Message.TickedFrame({ deltaTime: FRAME_MS }),
+      ).model
+      return [
+        modifyFields(next, { zombies: () => [] }),
+        {
+          clockMs: waveClock(next),
+          beat: next.pacing.beat._tag,
+          arrived: Array.map(next.zombies, zombie => nearestDoor(zombie).id),
+        },
+      ]
+    },
+  )[1]
 
 describe('determinism and the preview', () => {
   test('the same seed rolls the same packs, doors, and holds', () => {
@@ -585,7 +615,7 @@ describe('determinism and the preview', () => {
 })
 
 describe('dead air', () => {
-  const DEAD_AIR_MAX_MS = 3000
+  const DEAD_AIR_MAX_MS = 1000
   const SEEDS = Array.makeBy(12, index => 1 + index * 7919)
 
   test("wave 2's first pack walks in within 2 seconds of the wave starting", () => {
@@ -596,7 +626,7 @@ describe('dead air', () => {
     })
   })
 
-  test('no wave leaves the room empty and unannounced for longer than a short relax', () => {
+  test('no wave leaves the room empty and unannounced for more than a second', () => {
     Array.forEach(
       Array.makeBy(FINAL_WAVE + 2, index => index + 1),
       wave => {
@@ -649,26 +679,95 @@ describe('dead air', () => {
     )
   })
 
-  test('a relax in an empty, quiet room ends early, and one with a zombie left runs its course', () => {
+  test('an empty room warns its next pack within half a second', () => {
+    story(
+      update,
+      given(waveModel([spawnAt(30_000, 'West', 3)])),
+      ...ticksFor(500 - FRAME_MS),
+      model(current => {
+        expect(current.pacing.warnedPacks).toEqual([])
+      }),
+      ...ticksFor(2 * FRAME_MS),
+      model(current => {
+        expect(current.pacing.warnedPacks).toEqual([3])
+      }),
+    )
+  })
+
+  test('a relax with a zombie left runs its course', () => {
     const resting = modifyFields(calmPacing, {
-      beat: () => Beat.Resting({ remainingMs: 10_000, extendedMs: 0 }),
+      beat: () =>
+        Beat.Resting({ remainingMs: 2500, extendedMs: 0, trickled: 0 }),
     })
-    const restLength = (zombies: ReadonlyArray<Zombie>): number => {
-      const clocks: Array<number> = []
-      story(
-        update,
-        given(waveModel([spawnAt(100_000, 'North', 9)], resting, zombies)),
-        ...Array.flatMap(ticksFor(12_000), frame => [
-          frame,
-          model((current: Model) => {
-            clocks.push(waveClock(current))
-          }),
-        ]),
-      )
-      return Array.filter(clocks, clock => clock === 0).length * FRAME_MS
-    }
-    expect(restLength([])).toBeLessThanOrEqual(RELAX_QUIET_MAX_MS + FRAME_MS)
-    expect(restLength([lingerer])).toBeGreaterThanOrEqual(10_000 - FRAME_MS)
+    story(
+      update,
+      given(waveModel([spawnAt(100_000, 'North', 9)], resting, [lingerer])),
+      ...ticksFor(2500 - 2 * FRAME_MS),
+      model(current => {
+        expect(waveClock(current)).toBe(0)
+        expect(Beat.guards.Resting(current.pacing.beat)).toBe(true)
+      }),
+      ...ticksFor(3 * FRAME_MS),
+      model(current => {
+        expect(Beat.guards.Flowing(current.pacing.beat)).toBe(true)
+      }),
+    )
+  })
+
+  test('a relax in an empty room trickles in two stragglers, then ends', () => {
+    const resting = modifyFields(calmPacing, {
+      beat: () =>
+        Beat.Resting({ remainingMs: 10_000, extendedMs: 0, trickled: 0 }),
+    })
+    const squad = [spawnAt(40_000, 'East', 7), spawnAt(40_200, 'East', 7)]
+    const spawns = [
+      ...squad,
+      spawnAt(50_000, 'South', 8, 'Trickle'),
+      spawnAt(60_000, 'West', 9, 'Trickle'),
+    ]
+    const frames = playEmptied(waveModel(spawns, resting), 3000)
+    const arrivalsBy = (ms: number) =>
+      Array.flatMap(Array.take(frames, ms / FRAME_MS), ({ arrived }) => arrived)
+    expect(arrivalsBy(500 - FRAME_MS)).toEqual([])
+    expect(arrivalsBy(500 + FRAME_MS)).toEqual(['South'])
+    expect(arrivalsBy(1000 + 2 * FRAME_MS)).toEqual(['South', 'West'])
+    expect(arrivalsBy(1500)).toEqual(['South', 'West'])
+    expect(arrivalsBy(3000)).toContain('East')
+    const clocks = Array.map(frames, ({ clockMs }) => clockMs)
+    expect(Array.take(clocks, 1000 / FRAME_MS)).toEqual(
+      Array.makeBy(1000 / FRAME_MS, () => 0),
+    )
+  })
+})
+
+describe('fades', () => {
+  const holding: Pacing = modifyFields(calmPacing, {
+    holds: () => [
+      { atMs: 500, releaseBelow: FADE_RELEASE_BELOW, relaxMs: 2500 },
+    ],
+  })
+  const later = [spawnAt(5000, 'South', 4)]
+
+  test('a fade holds while six are alive', () => {
+    story(
+      update,
+      given(waveModel(later, holding, crowdOf(6))),
+      ...ticksFor(3000),
+      model(current => {
+        expect(Beat.guards.Fading(current.pacing.beat)).toBe(true)
+      }),
+    )
+  })
+
+  test('a fade lets go once five are left', () => {
+    story(
+      update,
+      given(waveModel(later, holding, crowdOf(5))),
+      ...ticksFor(500 + 2 * FRAME_MS),
+      model(current => {
+        expect(Beat.guards.Resting(current.pacing.beat)).toBe(true)
+      }),
+    )
   })
 })
 

@@ -25,7 +25,7 @@ const status = () =>
 
 // NOTE: the Sound toggle in the home menu's settings shows the setting.
 const isMutedOnHome = async () => {
-  await page.click('.home-settings')
+  await page.click('#home-settings')
   const sound = page.locator(
     '.setting-toggle:has(.setting-label:text-is("Sound"))',
   )

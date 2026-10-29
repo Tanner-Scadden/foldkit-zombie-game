@@ -39,6 +39,7 @@ import {
 import {
   ChangedAppearance,
   ChangedDifficulty,
+  ChangedHome,
   ChangedOnboarding,
   ChangedSettings,
   KillsRow,
@@ -139,6 +140,7 @@ export const saveOfRow = (
     ),
     byDifficulty: row.difficulty_bests,
   },
+  home: row.home,
 })
 
 // LEGACY
@@ -368,6 +370,8 @@ const runChange = (replica: Replica, change: PlayerChange) => {
       onboarding: change.onboarding,
       homeScreenTip: change.homeScreenTip,
     })
+  } else if (change._tag === 'ChangedHome') {
+    return replica.run(ChangedHome, { home: change.home })
   } else {
     return replica.run(RecordedRun, {
       runs: change.runs,

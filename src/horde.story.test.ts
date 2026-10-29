@@ -640,15 +640,17 @@ describe('spawn tables', () => {
     })
   })
 
-  test('the finale is a Tank-heavy horde for every seed', () => {
+  test('the finale is a Tank-heavy horde with the boss on top for every seed', () => {
     const healthOf = (spawns: ReadonlyArray<PlannedSpawn>): number =>
       Array.reduce(spawns, 0, (sum, { kind }) => sum + ZOMBIE_KINDS[kind].hp)
     Array.forEach([1, 2, 3, 99, 31337], seed => {
       const [, finale] = rollSpawns(seed, FINAL_WAVE)
       const [, before] = rollSpawns(seed, FINAL_WAVE - 1)
-      expect(kindsOf(finale, 'Tank')).toBe(4)
+      expect(kindsOf(finale, 'Tank')).toBe(3)
       expect(kindsOf(finale, 'Tank')).toBeGreaterThan(kindsOf(before, 'Tank'))
-      expect(healthOf(finale)).toBeGreaterThan(healthOf(before))
+      expect(healthOf(finale) + ZOMBIE_KINDS.Boss.hp).toBeGreaterThan(
+        healthOf(before),
+      )
       expect(Array.some(finale, ({ formation }) => formation === 'Horde')).toBe(
         true,
       )

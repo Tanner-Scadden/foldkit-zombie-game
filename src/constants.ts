@@ -1,6 +1,9 @@
 export const VIEW_WIDTH = 320
 export const VIEW_HEIGHT = 180
 
+export const CAMERA_LEAN_PX = 28
+export const CAMERA_LEAN_EASE_MS = 240
+
 export const MS_PER_SECOND = 1000
 export const MAX_FRAME_DELTA_MS = 50
 
@@ -369,7 +372,7 @@ export const ZOMBIE_ALIVE_MAX = 20
 export const PACK_WARNING_MS = 1000
 export const PACK_GAP_MS = 180
 export const HORDE_GAP_MS = 220
-export const FADE_RELEASE_BELOW = 4
+export const FADE_RELEASE_BELOW = 6
 export const FADE_MAX_MS = 20000
 export const PINCER_LAG_MIN_MS = 1500
 export const PINCER_LAG_MAX_MS = 3000
@@ -382,10 +385,11 @@ export const INTENSITY_CLOSE_PX = 24
 export const INTENSITY_PER_CLOSE_ZOMBIE_PER_SECOND = 0.12
 export const INTENSITY_DECAY_PER_SECOND = 0.12
 export const INTENSITY_RESTLESS = 0.4
-export const RELAX_EXTEND_MAX_MS = 4000
-export const QUIET_HURRY_MS = 1500
-export const RELAX_QUIET_MAX_MS = 2500
-export const RESTLESS_QUIET_MAX_MS = 4000
+export const RELAX_EXTEND_MAX_MS = 2000
+export const QUIET_HURRY_MS = 500
+export const RELAX_QUIET_MAX_MS = 500
+export const RESTLESS_QUIET_MAX_MS = 1000
+export const RELAX_TRICKLE_MAX = 2
 export const ENDLESS_HP_PER_WAVE = 0.12
 export const ENDLESS_SPEED_PER_WAVE = 0.01
 export const ENDLESS_SPEED_MAX = 1.6

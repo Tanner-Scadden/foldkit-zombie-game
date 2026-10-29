@@ -41,6 +41,7 @@ import {
   restoreSave,
   saveOf,
   unpickedDifficulty,
+  unvisitedHome,
   writeLegacySave,
 } from './save'
 import { ZOMBIE_KIND_ORDER } from './zombies'
@@ -48,7 +49,7 @@ import { ZOMBIE_KIND_ORDER } from './zombies'
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 
 const learnedSave: PlayerSave = {
-  version: 4,
+  version: 5,
   onboarding: {
     lessons: {
       move: 'Learned',
@@ -84,9 +85,15 @@ const learnedSave: PlayerSave = {
       Nightmare: { fastestWinMs: null, bestEndlessWave: null },
     },
   },
+  home: {
+    seenNewsDay: 'October 28, 2026',
+    openedEntries: ['Shambler', 'Runner'],
+  },
 }
 
-const { bests: _bests, ...versionTwoSave } = learnedSave
+const { home: _home, ...versionThreeSave } = learnedSave
+
+const { bests: _bests, ...versionTwoSave } = versionThreeSave
 
 const loading: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some(SURFACE),
@@ -171,6 +178,7 @@ describe('the schema', () => {
         ...sharingLearnedSave,
         difficulty: unpickedDifficulty,
         bests: noSavedBests,
+        home: unvisitedHome,
       }),
     )
   })
@@ -182,7 +190,11 @@ describe('the schema', () => {
       settings: SETTINGS_BEFORE_SHARING,
     })
     expect(decodeSave(json)).toEqual(
-      Option.some({ ...sharingLearnedSave, bests: noSavedBests }),
+      Option.some({
+        ...sharingLearnedSave,
+        bests: noSavedBests,
+        home: unvisitedHome,
+      }),
     )
     const restored = restoreSave(
       initialModel,
@@ -192,19 +204,59 @@ describe('the schema', () => {
     expect(restored.difficulty.chosen).toBe('Hard')
   })
 
-  test('a version 3 save keeps its bests and turns sharing on', () => {
+  test("a version 3 save keeps its bests and turns sharing on, with What's New unseen and no Munchopedia entry opened", () => {
+    const json = JSON.stringify({
+      ...versionThreeSave,
+      version: 3,
+      settings: SETTINGS_BEFORE_SHARING,
+    })
+    expect(decodeSave(json)).toEqual(
+      Option.some({ ...sharingLearnedSave, home: unvisitedHome }),
+    )
+    const restored = restoreSave(
+      initialModel,
+      Option.getOrThrow(decodeSave(json)),
+    )
+    expect(restored.bests.killsByKind.Runner).toBe(90)
+    expect(restored.home.maybeSeenNewsDay).toEqual(Option.none())
+    expect(restored.home.openedEntries).toEqual([])
+  })
+
+  test("a version 4 save, the live game's, keeps its home menu and turns sharing on", () => {
     const json = JSON.stringify({
       ...learnedSave,
-      version: 3,
+      version: 4,
       settings: SETTINGS_BEFORE_SHARING,
     })
     expect(decodeSave(json)).toEqual(Option.some(sharingLearnedSave))
   })
 
+  test("the preview's version 4 save keeps its sharing, with the home menu unvisited", () => {
+    const json = JSON.stringify({ ...versionThreeSave, version: 4 })
+    expect(decodeSave(json)).toEqual(
+      Option.some({ ...learnedSave, home: unvisitedHome }),
+    )
+  })
+
+  test('the home menu round trips through the model, dropping an unknown kind', () => {
+    const withStranger: PlayerSave = {
+      ...learnedSave,
+      home: { ...learnedSave.home, openedEntries: ['Shambler', 'Gloop'] },
+    }
+    const restored = restoreSave(initialModel, withStranger)
+    expect(restored.home.maybeSeenNewsDay).toEqual(
+      Option.some('October 28, 2026'),
+    )
+    expect(restored.home.openedEntries).toEqual(['Shambler'])
+    expect(saveOf(restoreSave(initialModel, learnedSave)).home).toEqual(
+      learnedSave.home,
+    )
+  })
+
   test('corrupted JSON, a wrong version, and a missing field read as no save', () => {
     const json = Option.getOrThrow(encodeSave(learnedSave))
-    expect(decodeSave('{"version":4,')).toEqual(Option.none())
-    expect(decodeSave(json.replace('"version":4', '"version":0'))).toEqual(
+    expect(decodeSave('{"version":5,')).toEqual(Option.none())
+    expect(decodeSave(json.replace('"version":5', '"version":0'))).toEqual(
       Option.none(),
     )
     expect(

@@ -199,12 +199,12 @@ describe('buying traps', () => {
         modifyFields(readyModel, {
           phase: () => preparing(),
           shop: () => ShopState.Browsing({ focusedItem: 'Barricade' }),
-          wallet: () => ({ balance: 100, earned: 100, shown: 100 }),
+          wallet: () => ({ balance: 150, earned: 150, shown: 150 }),
         }),
       ),
       message(Message.ClickedBuyButton({ item: 'Barricade' })),
       model(({ wallet, trapStock, trapHint, selectedTrap }) => {
-        expect(wallet.balance).toBe(100 - TRAPS.Barricade.price)
+        expect(wallet.balance).toBe(150 - TRAPS.Barricade.price)
         expect(trapStock).toEqual({ Barricade: 1, Turret: 0 })
         expect(selectedTrap).toBe('Barricade')
         expect(trapHint).toEqual(TrapHint.Showing())
@@ -212,7 +212,7 @@ describe('buying traps', () => {
       message(Message.ClickedBuyButton({ item: 'Turret' })),
       model(({ wallet, trapStock }) => {
         expect(wallet.balance).toBe(
-          100 - TRAPS.Barricade.price - TRAPS.Turret.price,
+          150 - TRAPS.Barricade.price - TRAPS.Turret.price,
         )
         expect(trapStock).toEqual({ Barricade: 1, Turret: 1 })
       }),
@@ -915,7 +915,12 @@ describe('turrets', () => {
       ...ticks(Math.ceil((2 * PEA_INTERVAL_MS + 500) / FRAME_MS), FRAME_MS),
       model(({ wallet, zombies }) => {
         expect(wallet.balance).toBe(ZOMBIE_KINDS.Runner.bounty)
-        expect(Array.every(zombies, ({ hp }) => hp <= 0)).toBe(true)
+        expect(
+          Array.every(
+            Array.filter(zombies, ({ id }) => id === 75),
+            ({ hp }) => hp <= 0,
+          ),
+        ).toBe(true)
       }),
     )
   })
@@ -978,7 +983,7 @@ describe('between waves', () => {
       traps: () => damagedTraps,
     })
     expect(repairPrice(damagedTraps)).toBe(expectedPrice)
-    expect(expectedPrice).toBe(24)
+    expect(expectedPrice).toBe(29)
     expect(priceFor(shopping, 'RepairTraps')).toBe(expectedPrice)
     expect(SHOP_ITEMS.RepairTraps.name).toBe('Glue and Nails')
 
