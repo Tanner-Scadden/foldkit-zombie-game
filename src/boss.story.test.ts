@@ -19,6 +19,7 @@ import {
   PLAYER_MAX_HP,
   ZOMBIE_ALIVE_MAX,
 } from './constants'
+import { DIFFICULTIES } from './difficulty'
 import { Message, update } from './main'
 import {
   Boss,
@@ -202,7 +203,10 @@ describe('planning the boss', () => {
           Math.round(preparation.spawns.length / 3),
         )
         expect(waiting.hp).toBe(
-          scaledHp(ZOMBIE_KINDS.Boss.hp, WAVE_PLANS[7]?.hpScale ?? 1),
+          scaledHp(
+            ZOMBIE_KINDS.Boss.hp,
+            (WAVE_PLANS[7]?.hpScale ?? 1) * DIFFICULTIES.Normal.healthScale,
+          ),
         )
       }),
     )
@@ -218,7 +222,12 @@ describe('planning the boss', () => {
         const waiting = Option.getOrThrow(
           Option.liftPredicate(current.boss, Boss.guards.Waiting),
         )
-        expect(waiting.hp).toBe(scaledHp(ZOMBIE_KINDS.Boss.hp, hpScaleFor(16)))
+        expect(waiting.hp).toBe(
+          scaledHp(
+            ZOMBIE_KINDS.Boss.hp,
+            hpScaleFor(16) * DIFFICULTIES.Normal.healthScale,
+          ),
+        )
         expect(waiting.hp).toBeGreaterThan(BOSS_HP)
       }),
     )

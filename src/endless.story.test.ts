@@ -10,7 +10,7 @@ import {
   ZOMBIE_ALIVE_MAX,
   ZOMBIE_MAX_HP,
 } from './constants'
-import { bestsFor, withBests } from './difficulty'
+import { DIFFICULTIES, bestsFor, withBests } from './difficulty'
 import { Message, update } from './main'
 import {
   Arsenal,
@@ -228,7 +228,9 @@ describe('campaign and endless after wave 8', () => {
         expect(
           Array.every(
             preparation.spawns,
-            ({ hpScale }) => hpScale === hpScaleFor(FINAL_WAVE + 1),
+            ({ hpScale }) =>
+              hpScale ===
+              hpScaleFor(FINAL_WAVE + 1) * DIFFICULTIES.Normal.healthScale,
           ),
         ).toBe(true)
       }),

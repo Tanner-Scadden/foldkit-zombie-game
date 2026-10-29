@@ -41,6 +41,9 @@ Decided on 2026-10-27. The first playable is a fun one-screen arena that a stran
 - **Ammo.** The pistol never runs out. Other guns have limited ammo that costs money.
 - **Zombies.** Shambler, Runner, Tank, and Exploder. Changed on 2026-10-28 at the owner's request: the roster grows to six with the Thrower (the Chucker) and the Crawler (the Ankle Biter, working name Gravecrawler). The Ankle Biter comes up through the floor instead of a door, which bends "doors are the chokepoints" on purpose. It stays rare (three on wave 7, two on wave 8, one or more an endless wave), it telegraphs for 1.5 s, it never comes up near the player, and the door preview counts it as FLOOR, so the doors are still where the waves come from. See "New kinds, frenzy, and the Gasbag pass".
 - **Traps.** One or two simple kinds, likely a barricade for doorways and a turret.
+  - **The plank cap.** Decided on 2026-10-28, owner-approved: at most two Plank Piles at a time, placed or in the pack. A third is refused with "Two plank piles max".
+  - **Plank chewing.** Decided on 2026-10-28, owner-approved: Groaners and Big Lugs in the room walk over and chew a nearby standing Plank Pile instead of chasing the player. Fast kinds and frenzied packs ignore planks. Added on 2026-10-29 at the owner's request: a boarded doorway is no spawn point, so its packs come through the next open door.
+- **Difficulty levels.** Decided on 2026-10-28, owner-approved: Easy, Normal (the default), Hard, and Nightmare scale zombie health, speed, and bites, the boss and endless too. The first PLAY or ENDLESS asks once, SETTINGS changes it after, and Nightmare is locked until a Hard campaign win. Since 2026-10-29 the choice and the unlock are kept in the on-device save. See "Difficulty levels and planks as bait".
 - **Health.** A few hearts. A hit knocks the player back and gives a short invulnerable blink. Hearts are bought in the shop and rarely dropped.
 - **Onboarding.** Wave 1 is the tutorial. Control hints for the current device fade in, and the first zombies are a few slow Shamblers. No walls of text. See "Onboarding" below for the practice gate and the new zombie card.
 - **Working title.** Munch Manor. It lives in `GAME_TITLE` in `src/constants.ts`, which builds the title screen logo, the document title, and the page heading. `index.html` repeats it for the first paint, and a Scene test checks the two agree.
@@ -186,14 +189,14 @@ Proposed on 2026-10-28 for step 6, traps. These are starting numbers to play aga
 
 | Trap      | Name           | Price  | Health | Most at once | What it does                                                                                                          |
 | --------- | -------------- | ------ | ------ | ------------ | --------------------------------------------------------------------------------------------------------------------- |
-| Barricade | Plank Pile     | $20    | 30     | 4            | Boards up one doorway. Blocks zombies and the player. The player's shots and the gnome's peas fly through the gaps    |
+| Barricade | Plank Pile     | $20    | 30     | 2            | Boards up one doorway. Blocks zombies and the player. The player's shots and the gnome's peas fly through the gaps    |
 | Turret    | Grumpy Gnome   | $75    | 10     | 2            | Sits on a floor tile and shoots a pea (1 damage, 1200 ms apart) at the nearest walking zombie it can see within 84 px |
 | Repair    | Glue and Nails | Varies | -      | -            | Restores every damaged trap. Costs half of each trap's price, scaled by the share of health it is missing             |
 
 - **Buying and placing.** Traps are bought at the stall and go into a trap pack shown in the HUD. The shop refuses a kind once the player owns its most at once, placed or not. During Preparation, T or the PLACE button (a round trap icon on touch) puts the selected trap down, and G or the NEXT button (a round arrows icon on touch) switches kinds when both are owned. A Plank Pile goes in the doorway the player stands in or next to (within 16 px). A Grumpy Gnome goes on the tile in front of the player, never on a wall, cover, the stall or the tile in front of it, a doorway, another trap, the player, or a zombie. A ghost shows where it would go, green or red, and a refused placement says why on the button and above the player. The first trap bought turns on a hint, PRESS T / TAP PLACE IN A DOORWAY, until the first one is placed.
-- **Chewing.** A walking zombie that touches a trap chews it: a Groaner 3 health a second, a Hotfoot 2, a Big Lug 12. A Gasbag that touches a trap fuses as if it had touched the player. A Plank Pile cracks at two thirds and one third of its health, shedding planks, and breaks with a crash. A Grumpy Gnome breaks with a pop.
+- **Chewing.** Groaners and Big Lugs in the room also go after a nearby Plank Pile (see "Difficulty levels and planks as bait"). A walking zombie that touches a trap chews it: a Groaner 3 health a second, a Hotfoot 2, a Big Lug 12. A Gasbag that touches a trap fuses as if it had touched the player. A Plank Pile cracks at two thirds and one third of its health, shedding planks, and breaks with a crash. A Grumpy Gnome breaks with a pop.
 - **Bursts.** A Gasbag burst deals 15 damage to every trap it reaches, so one burst breaks a Grumpy Gnome (10 health).
-- **Pathing.** A barricaded doorway stays in the flow field at a toll of 25 extra tiles, and a gnome's tile at 6. A zombie outside a boarded door compares walking around the outside of the room to another door against chewing through, and takes the cheaper. The flow fields are recomputed when the player changes tile or a trap is placed or breaks.
+- **Pathing.** Since 2026-10-29 no pack spawns at a boarded doorway (see "Boarded doors are not spawn points"), so only the boss still starts outside one. A barricaded doorway stays in the flow field at a toll of 25 extra tiles, and a gnome's tile at 6. A zombie outside a boarded door compares walking around the outside of the room to another door against chewing through, and takes the cheaper. The flow fields are recomputed when the player changes tile or a trap is placed or breaks.
 - **Between waves.** Traps stay where they were placed and keep their damage. Broken traps are gone. A new run clears every trap and the trap pack. The wave preview stays exact: spawns are rolled when Preparation begins, and traps change only a zombie's path, never its door.
 
 #### Balance pass
@@ -840,6 +843,92 @@ Tuning log, 200 runs per row from seed 1, `WORKERS` split.
 #### Performance
 
 `src/perf.scene.test.ts` now stages a Chucker heaving a Groaner, another Groaner in the air over its mark, an Ankle Biter about to come up, a Gasbag shot twice and pulsing beside the player, and a frenzied pack of seven in its worst case, with one HORDE! callout and a pack bonus among the popups. The room measured 2656 shapes, 1577 steady paint operations, 1564 fill changes, 1659 shapes painted, and 2986 on a full repaint, against 2628, 1554, 1557, 1641, and 2952 before. The steady paint budget rose from 1560 to 1585: the HORDE! callout is 14 operations and the red glow and steam of seven frenzied zombies another 14. The Gasbag was redrawn so its glowing belly costs no more runs than the old sprite, and the staged sights cost nothing net, since a buried Ankle Biter is cheaper to draw than the zombie it replaced. Every new sprite is built once at module scope, including a red-eyed frame set per kind and stage for frenzy.
+
+### Difficulty levels and planks as bait
+
+Added on 2026-10-28 from owner feedback, all approved: at most two Plank Piles, slow zombies that go after barricades, and four difficulty levels with a locked Nightmare. Built, not yet playtested. The code is in `src/difficulty.ts`, `maybeBaitDoor` in `src/simulation.ts`, the bait fields in `src/pathing.ts`, `BAIT_RULES` and the trap table in `src/traps.ts`, the card and SETTINGS row in `src/homeView.ts` and `src/menu.css`, and the end screen row in `src/screens.ts`. `tools/audit/shots29.ts` takes the screenshots.
+
+#### The plank cap
+
+- **Two at most.** The Plank Pile's limit went from 4 to 2. The shop refuses a third with "Two plank piles max", counting placed piles and the ones in the pack, and placing a third says the same in the trap notice, over the player and on the PLACE button. The Grumpy Gnome keeps its own limit of 2 and its old wording.
+- **Why.** With planks that cheap, boarding up every door was the answer to everything. Two piles still close the two busiest doors.
+
+#### Boarded doors are not spawn points
+
+Added on 2026-10-29 from owner feedback: "zombies are spawning behind the windows that are boarded up. Should block those spawn points."
+
+- **The rule.** A doorway with a standing Plank Pile is no spawn point. A pack or straggler due there comes through the next open door clockwise (North, East, South, West). With two piles at most and four doors, at least two doors are always open. The code is `src/doorRoute.ts`.
+- **Pincers.** The two packs of a pincer keep to two different open doors: the earlier pack picks first, the later one avoids its door, and neither takes the door its mate keeps. A horde's pack from a boarded door joins the next open door's pack.
+- **Live and honest.** Spawns keep their planned doors and are rerouted wherever they are read: the door preview, the rattle, doorway camping, and the arrival. Placing a plank in Preparation moves that door's counts in the preview at once, and a plank that breaks moves them back. Once a pack has rattled its door, its door is kept (`packDoors` in `Pacing`), so a plank breaking after the warning cannot move it. A plank that breaks mid-wave makes its door a spawn point again for the packs that have not been warned.
+- **Not rerouted.** Ankle Biters already come up only on open floor inside the room, clear of the doorways and the traps, so never behind a boarded door. Uncle Chunk keeps his drawn door and smashes through a pile on it.
+- **The bot** boards the door with the most spawns after the planks already up, so its second pile goes where the first one sent the zombies.
+
+#### Slow zombies chew planks
+
+- **Who.** Groaners and Big Lugs, the two slow walkers. A Groaner is the shambling baseline, so stopping to gnaw wood fits it. The Big Lug is as slow and as dim, and it is the zombie planks are meant to buy time against: a Big Lug that chews a pile for 2.5 s (12 a second against 30 health) is a Big Lug that is not chasing the player. Hotfoots, Gasbags, Chuckers, and Ankle Biters ignore planks, and so does the boss: the fast ones are hungry for the player, a Gasbag is a bomb that wants the player, the Chucker is busy throwing, and the Ankle Biter is down in the floor.
+- **Frenzy wins.** A frenzied zombie only has eyes for the player, so a frenzied Groaner pack walks past a plank. Once its frenzy fades or is spent, the pull works again.
+- **The rule.** A Drawn zombie inside the room goes for the nearest standing Plank Pile when its walk to that pile's inner face is at most `BAIT_RULES.pullPx` (60 px, six tiles) and shorter than its walk to the player. Walking distance, not a straight line, so a plank behind a wall does not pull. It chews the plank from inside like any zombie that touches it (a Groaner 3 a second, a Big Lug 12), and when the plank breaks the doorway is open again. Outside the room nothing changed: a zombie at a boarded door still compares chewing with walking around.
+- **Cheap.** Each doorway's field toward its inner face is built once when the module loads, four doorways for two clearances, and never again, since a barricade never moves. A frame costs each slow zombie two array lookups per standing plank. No zombie ever searches for a path.
+- **Bait, not a win.** A plank near where Groaners come in buys a few seconds per zombie and costs the plank, and a plank chewed through opens its door again for the packs not yet warned. Before boarded doors stopped spawning, the pull cost the default bot about 4 points of wins (25.5% to 21%). Since then the pull radius barely moves the bot (try 4 below).
+
+#### Difficulty levels
+
+- **Four levels.** Easy, Normal (the default, today's game), Hard, and Nightmare. Each scales every zombie's base health and speed on top of the wave's own scales, the boss and his belched Groaners too, and scales bites. A bite is whole hearts, so it rounds and never drops below one. Endless uses the same multipliers. The wave's kinds, doors, and timing are the same on every level for a seed; only health, speed, and bites change, so the door preview stays exact.
+
+| Level     | Health | Speed | Bite  | Groaner bite | Big Lug and boss bite |
+| --------- | ------ | ----- | ----- | ------------ | --------------------- |
+| Easy      | ×0.85  | ×0.95 | ×0.5  | 1 heart      | 1 heart               |
+| Normal    | ×1.05  | ×1.02 | ×1    | 1 heart      | 2 hearts              |
+| Hard      | ×1.12  | ×1.04 | ×1    | 1 heart      | 2 hearts              |
+| Nightmare | ×1.18  | ×1.06 | ×1.25 | 1 heart      | 3 hearts              |
+
+Normal is not ×1: boarding doors made planks stronger (see "Boarded doors are not spawn points"), and ×1.05 health and ×1.02 speed brought the bot back to its targets without touching the wave tables. Health rounds per zombie, so a Groaner has 3 on Easy, Normal, and Hard and 4 on Nightmare only from wave 6 on, while a Big Lug's 30 becomes 26, 32, 34, and 35.
+
+- **The first-time card.** The first PLAY or ENDLESS of the page session (button, Enter, or E) shows HOW TOUGH ARE YOU? with four choices and a blurb each: Easy "Just here for the vibes", Normal "The way it's meant to be played", Hard "They bite back", and Nightmare "No mercy. Bring snacks". It is the menu panel dialog, so Tab, Esc, and touch work as in SETTINGS, Normal has the first focus, and it fits 667x375 without scrolling (a 2 by 2 grid of 48 px buttons). Picking one starts the mode that was pressed. Closing it starts nothing and the next PLAY asks again. After the first pick the difficulty changes in SETTINGS, where a row of four buttons sits above the toggles, with the chosen one pressed.
+- **Nightmare.** Shown from the start with a padlock, dashed and dimmed, with "Beat Hard to unlock". Winning a Hard campaign unlocks it with a small fanfare: the power-up chime, NIGHTMARE UNLOCKED! PICK IT IN SETTINGS blinking under the Victory stats in place of the feedback line, a screen reader line, and a NEW! badge on Nightmare in the card and SETTINGS. The badge goes when the next run starts.
+- **Shown.** Game Over and Victory show DIFFICULTY as the first stats row (Hard in red, Nightmare in dark red), and the screen reader line starts with it. The session bests are kept per difficulty, and the home strip is titled THIS SESSION, NORMAL (or the chosen level) and shows that level's bests.
+- **Saved.** Since 2026-10-29 the chosen level, whether the card was answered, and the Nightmare unlock are in the on-device save (`PlayerSave` version 2 in `src/save.ts`). A version 1 save loads as Normal with the card still to come. The bests per level still last for the page session. See `PLATFORM.md`.
+
+#### Balance
+
+`DIFFICULTY=easy|normal|hard|nightmare bun tools/balance/simulate.ts` plays the bot on a level, and `TUNE` files can edit `DIFFICULTIES` and `BAIT_RULES`. Targets: Easy 55 to 70% for the default bot, Normal unchanged (15 to 25% default, 30 to 45% `SWAP=1`), Hard about 5 to 12%, Nightmare about 1 to 4%.
+
+Tuning log, 200 runs per row from seed 1. Scales are health, speed, bite. Wins are the default bot's unless the column says `SWAP=1`.
+
+| Try | Change                                                                             | Easy  | Normal     | `SWAP=1` | Hard     | Nightmare | Note                                                         |
+| --- | ---------------------------------------------------------------------------------- | ----- | ---------- | -------- | -------- | --------- | ------------------------------------------------------------ |
+| 0   | Before this pass, no bait, Normal ×1                                               |       | 25.5%      |          |          |           | The baseline                                                 |
+| 1   | Bait 60 px. Easy 0.75/0.9/0.5, Hard 1.2/1.08/1.25, Nightmare 1.4/1.15/1.5          | 82%   | 21%        | 28%      | 0.5%     | 0%        | Bait costs the bot a few points. The levels are far too wide |
+| 2   | Hard 1.1/1.03/1 and 1.05/1.05/1.25, Nightmare 1.2/1.06/1.25 and 1.15/1.08/1.5      |       |            |          | 6.5%, 8% | 0%, 0%    | Speed is the sharpest lever: Nightmare dies on wave 3        |
+| 3   | Boarded doors stop spawning (Normal ×1)                                            |       | 32.5%      | 40%      | 13.5%    |           | Fewer doors to watch helps the bot a lot                     |
+| 4   | Try 3 with pull 90 or 120 px, plank health 20 or 24                                |       | 33 to 35%  |          |          |           | Plank levers barely move it                                  |
+| 5   | Try 3 with plank price $45, or Normal health ×1.06                                 |       | 31%, 27.5% |          |          |           |                                                              |
+| 6   | Normal ×1.05 health, ×1.02 speed (kept)                                            |       | 20.5%      |          |          |           |                                                              |
+| 7   | Easy 0.85/0.95/0.5, Hard 1.12/1.04/1, Nightmare 1.18/1.06/1.25 (kept, `WORKERS=4`) | 61.5% |            | 32%      | 15.5%    | 1.5%      | Baked into `src`                                             |
+
+- **The kept numbers.** "Died" is the share of all runs that died on that wave.
+
+  | Wave | Easy | Normal | `SWAP=1` | Hard | Nightmare |
+  | ---- | ---- | ------ | -------- | ---- | --------- |
+  | 1    | 0%   | 0%     | 0%       | 0%   | 0%        |
+  | 2    | 0%   | 0%     | 0%       | 0%   | 1%        |
+  | 3    | 1%   | 2%     | 3%       | 0%   | 23%       |
+  | 4    | 0%   | 1%     | 1%       | 2%   | 9%        |
+  | 5    | 1%   | 5%     | 4%       | 11%  | 12%       |
+  | 6    | 3%   | 12%    | 10%      | 14%  | 17%       |
+  | 7    | 4%   | 10%    | 8%       | 11%  | 18%       |
+  | 8    | 30%  | 51%    | 43%      | 48%  | 19%       |
+
+  | Level     | Wins               | Close calls     | Median win |
+  | --------- | ------------------ | --------------- | ---------- |
+  | Easy      | 123 of 200 (61.5%) | 24 of 123 (20%) | 8.2 min    |
+  | Normal    | 41 of 200 (20.5%)  | 13 of 41 (32%)  |            |
+  | `SWAP=1`  | 64 of 200 (32%)    | 15 of 64 (23%)  | 7.8 min    |
+  | Hard      | 31 of 200 (15.5%)  | 10 of 31 (32%)  | 8.3 min    |
+  | Nightmare | 3 of 200 (1.5%)    | 2 of 3          | 8.3 min    |
+
+- **Against the targets.** Easy (61.5%), Normal (20.5% default, 32% `SWAP=1`), and Nightmare (1.5%) land in their ranges. Hard's 15.5% is 3.5 points over its 5 to 12%: only one batch per level fitted the time, and a follow-up should try Hard health ×1.15 or a ×1.25 bite (a Big Lug biting 3). Nightmare is brutal early, losing 23% of runs on wave 3's first frenzied pincer, where the bot meets fast packs before it has the SMG; a run that gets past wave 5 often wins. Easy's close calls (20%) sit under the 30 to 50% target, which suits a level for the vibes.
+- **Caveats.** The bot does not change how it plays on a harder level, and it never uses a plank as bait on purpose. A person on Easy will feel the slower zombies more than the bot does, and a person who learns to lure Groaners onto a plank will get more from it.
 
 ## Core loop
 

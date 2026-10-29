@@ -277,12 +277,12 @@ describe('the multipliers', () => {
       Array.map(normal, ({ kind, door }) => [kind, door]),
     )
     Array.forEach(Array.zip(normal, easy), ([base, scaled]) => {
-      expect(scaled.hpScale).toBeCloseTo(base.hpScale * 0.75)
-      expect(scaled.speedScale).toBeCloseTo(base.speedScale * 0.9)
+      expect(scaled.hpScale).toBeCloseTo((base.hpScale * 0.85) / 1.05)
+      expect(scaled.speedScale).toBeCloseTo((base.speedScale * 0.95) / 1.02)
     })
     Array.forEach(Array.zip(normal, nightmare), ([base, scaled]) => {
-      expect(scaled.hpScale).toBeCloseTo(base.hpScale * 1.4)
-      expect(scaled.speedScale).toBeCloseTo(base.speedScale * 1.15)
+      expect(scaled.hpScale).toBeCloseTo((base.hpScale * 1.18) / 1.05)
+      expect(scaled.speedScale).toBeCloseTo((base.speedScale * 1.06) / 1.02)
     })
   })
 
@@ -290,12 +290,12 @@ describe('the multipliers', () => {
     expect(biteDamage('Easy', 1)).toBe(1)
     expect(biteDamage('Easy', 2)).toBe(1)
     expect(biteDamage('Normal', 2)).toBe(2)
-    expect(biteDamage('Hard', 1)).toBe(1)
-    expect(biteDamage('Hard', 2)).toBe(3)
-    expect(biteDamage('Nightmare', 1)).toBe(2)
+    expect(biteDamage('Hard', 2)).toBe(2)
+    expect(biteDamage('Nightmare', 1)).toBe(1)
+    expect(biteDamage('Nightmare', 2)).toBe(3)
   })
 
-  test('a Big Lug bites three hearts on Hard and one on Easy', () => {
+  test('a Big Lug bites one heart on Easy, two on Normal, and three on Nightmare', () => {
     const lug: Zombie = {
       id: 900,
       kind: 'Tank',
@@ -327,7 +327,7 @@ describe('the multipliers', () => {
     const full = veteran.player.hp
     expect(full - bitten('Easy')).toBe(1)
     expect(full - bitten('Normal')).toBe(2)
-    expect(full - bitten('Hard')).toBe(3)
+    expect(full - bitten('Nightmare')).toBe(3)
   })
 
   test('the same seed on the same difficulty plays out the same', () => {
@@ -356,8 +356,8 @@ describe('the multipliers', () => {
       expect(second.player).toEqual(first.player)
       expect(second.rngState).toBe(first.rngState)
     })
-    const easyHp = Array.map(playFor('Easy').zombies, ({ maxHp }) => maxHp)
-    const hardHp = Array.map(playFor('Hard').zombies, ({ maxHp }) => maxHp)
-    expect(easyHp).not.toEqual(hardHp)
+    const easySpeeds = Array.map(playFor('Easy').zombies, ({ speed }) => speed)
+    const hardSpeeds = Array.map(playFor('Hard').zombies, ({ speed }) => speed)
+    expect(easySpeeds).not.toEqual(hardSpeeds)
   })
 })
