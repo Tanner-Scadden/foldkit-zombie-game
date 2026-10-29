@@ -1,4 +1,4 @@
-import { Array, pipe } from 'effect'
+import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { MS_PER_SECOND } from './constants'
@@ -35,6 +35,19 @@ const killedKinds = (
 const clearedWaves = (events: ReadonlyArray<GameEvent>): number =>
   Array.filter(events, GameEvent.isAnyOf(['WaveCleared'])).length
 
+const grabbedPickups = (events: ReadonlyArray<GameEvent>): number =>
+  Array.filter(events, GameEvent.isAnyOf(['PickupGrabbed'])).length
+
+const lastHurtBy = (
+  events: ReadonlyArray<GameEvent>,
+): Option.Option<ZombieKind> =>
+  pipe(
+    events,
+    Array.filter(GameEvent.isAnyOf(['PlayerHurt'])),
+    Array.last,
+    Option.map(({ source }) => source),
+  )
+
 export const tallyFrame = (
   before: Model,
   after: Model,
@@ -48,6 +61,11 @@ export const tallyFrame = (
         wavesCleared: count => count + clearedWaves(after.frameEvents),
         heartsLost: count =>
           count + Math.max(0, before.player.hp - after.player.hp),
+        powerUpsGrabbed: count => count + grabbedPickups(after.frameEvents),
+        maybeLastHurtBy: maybeKind =>
+          Option.orElse(lastHurtBy(after.frameEvents), () => maybeKind),
+        activeFrames: count => count + 1,
+        activeFrameMs: frameMs => frameMs + deltaMs,
         runMs: runMs => runMs + deltaMs,
       }),
   })
@@ -60,6 +78,9 @@ export const countHits = (stats: RunStats, hits: number): RunStats =>
 
 export const countTrapPlaced = (stats: RunStats): RunStats =>
   modifyFields(stats, { trapsPlaced: placed => placed + 1 })
+
+export const countPurchase = (stats: RunStats): RunStats =>
+  modifyFields(stats, { purchases: bought => bought + 1 })
 
 // READING
 

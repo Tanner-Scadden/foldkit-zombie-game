@@ -29,6 +29,7 @@ import {
   type Wallet,
   WeaponKind,
 } from './model'
+import { countPurchase } from './stats'
 import {
   TRAPS,
   isDamaged,
@@ -710,7 +711,10 @@ export const purchase = (
     Available: () =>
       Option.some(
         grant(
-          modifyFields(model, { wallet: wallet => spend(wallet, price) }),
+          modifyFields(model, {
+            wallet: wallet => spend(wallet, price),
+            stats: countPurchase,
+          }),
           item.good,
         ),
       ),

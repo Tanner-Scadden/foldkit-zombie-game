@@ -79,7 +79,15 @@ const loadStylesBehindSplash = (): Plugin => ({
 export default defineConfig({
   base: './',
   plugins: [tailwindcss(), foldkit(), buildId(), loadStylesBehindSplash()],
+  // NOTE: sqlite-wasm finds sqlite3.wasm next to its own module with
+  // `new URL(..., import.meta.url)`. Pre-bundling would move the module and
+  // break that, so it is left out. The SQLite worker is an ES module worker,
+  // since it shares chunks with the game.
   optimizeDeps: {
     entries: ['src/entry.ts'],
+    exclude: ['@sqlite.org/sqlite-wasm'],
+  },
+  worker: {
+    format: 'es',
   },
 })

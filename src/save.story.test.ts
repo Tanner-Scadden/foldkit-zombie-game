@@ -30,25 +30,26 @@ import {
   noKills,
 } from './model'
 import { isPracticeGateHeld, shownHints } from './onboarding'
+import { PlayerChange } from './playerSync'
 import {
   type PlayerSave,
   SAVE_KEY,
   decodeSave,
   encodeSave,
   noSavedBests,
-  readSave,
+  readLegacySave,
   restoreSave,
   saveOf,
   unpickedDifficulty,
   unvisitedHome,
-  writeSave,
+  writeLegacySave,
 } from './save'
 import { ZOMBIE_KIND_ORDER } from './zombies'
 
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 
 const learnedSave: PlayerSave = {
-  version: 4,
+  version: 5,
   onboarding: {
     lessons: {
       move: 'Learned',
@@ -64,7 +65,7 @@ const learnedSave: PlayerSave = {
     introducedKinds: ZOMBIE_KIND_ORDER,
   },
   homeScreenTip: 'Dismissed',
-  settings: { sound: 'Muted', music: 'Off', shake: 'Off' },
+  settings: { sound: 'Muted', music: 'Off', shake: 'Off', shareStats: 'Off' },
   appearance: {
     body: 'Female',
     hairStyle: 'Ponytail',
@@ -146,18 +147,35 @@ describe('the schema', () => {
     expect(decodeSave(json)).toEqual(Option.some(fresh))
   })
 
+  const SETTINGS_BEFORE_SHARING = { sound: 'Muted', music: 'Off', shake: 'Off' }
+
+  const sharingLearnedSave: PlayerSave = {
+    ...learnedSave,
+    settings: { ...learnedSave.settings, shareStats: 'On' },
+  }
+
   test('the bests round trip through the model', () => {
     expect(saveOf(restoreSave(initialModel, learnedSave)).bests).toEqual(
       learnedSave.bests,
     )
   })
 
-  test('a version 1 save still loads, as Normal with the card still to come', () => {
+  test('the sharing setting round trips through the model', () => {
+    const restored = restoreSave(initialModel, learnedSave)
+    expect(restored.shareStats).toBe('Off')
+    expect(saveOf(restored).settings.shareStats).toBe('Off')
+  })
+
+  test('a version 1 save still loads, as Normal with the card still to come, sharing on, and no bests', () => {
     const { difficulty: _, ...withoutDifficulty } = versionTwoSave
-    const json = JSON.stringify({ ...withoutDifficulty, version: 1 })
+    const json = JSON.stringify({
+      ...withoutDifficulty,
+      version: 1,
+      settings: SETTINGS_BEFORE_SHARING,
+    })
     expect(decodeSave(json)).toEqual(
       Option.some({
-        ...learnedSave,
+        ...sharingLearnedSave,
         difficulty: unpickedDifficulty,
         bests: noSavedBests,
         home: unvisitedHome,
@@ -165,10 +183,18 @@ describe('the schema', () => {
     )
   })
 
-  test('a version 2 save keeps every field and starts the bests at zero', () => {
-    const json = JSON.stringify({ ...versionTwoSave, version: 2 })
+  test('a version 2 save keeps every field, starts the bests at zero, and turns sharing on', () => {
+    const json = JSON.stringify({
+      ...versionTwoSave,
+      version: 2,
+      settings: SETTINGS_BEFORE_SHARING,
+    })
     expect(decodeSave(json)).toEqual(
-      Option.some({ ...learnedSave, bests: noSavedBests, home: unvisitedHome }),
+      Option.some({
+        ...sharingLearnedSave,
+        bests: noSavedBests,
+        home: unvisitedHome,
+      }),
     )
     const restored = restoreSave(
       initialModel,
@@ -178,10 +204,14 @@ describe('the schema', () => {
     expect(restored.difficulty.chosen).toBe('Hard')
   })
 
-  test("a version 3 save keeps its bests, with What's New unseen and no Munchopedia entry opened", () => {
-    const json = JSON.stringify({ ...versionThreeSave, version: 3 })
+  test("a version 3 save keeps its bests and turns sharing on, with What's New unseen and no Munchopedia entry opened", () => {
+    const json = JSON.stringify({
+      ...versionThreeSave,
+      version: 3,
+      settings: SETTINGS_BEFORE_SHARING,
+    })
     expect(decodeSave(json)).toEqual(
-      Option.some({ ...learnedSave, home: unvisitedHome }),
+      Option.some({ ...sharingLearnedSave, home: unvisitedHome }),
     )
     const restored = restoreSave(
       initialModel,
@@ -190,6 +220,22 @@ describe('the schema', () => {
     expect(restored.bests.killsByKind.Runner).toBe(90)
     expect(restored.home.maybeSeenNewsDay).toEqual(Option.none())
     expect(restored.home.openedEntries).toEqual([])
+  })
+
+  test("a version 4 save, the live game's, keeps its home menu and turns sharing on", () => {
+    const json = JSON.stringify({
+      ...learnedSave,
+      version: 4,
+      settings: SETTINGS_BEFORE_SHARING,
+    })
+    expect(decodeSave(json)).toEqual(Option.some(sharingLearnedSave))
+  })
+
+  test("the preview's version 4 save keeps its sharing, with the home menu unvisited", () => {
+    const json = JSON.stringify({ ...versionThreeSave, version: 4 })
+    expect(decodeSave(json)).toEqual(
+      Option.some({ ...learnedSave, home: unvisitedHome }),
+    )
   })
 
   test('the home menu round trips through the model, dropping an unknown kind', () => {
@@ -209,8 +255,8 @@ describe('the schema', () => {
 
   test('corrupted JSON, a wrong version, and a missing field read as no save', () => {
     const json = Option.getOrThrow(encodeSave(learnedSave))
-    expect(decodeSave('{"version":4,')).toEqual(Option.none())
-    expect(decodeSave(json.replace('"version":4', '"version":0'))).toEqual(
+    expect(decodeSave('{"version":5,')).toEqual(Option.none())
+    expect(decodeSave(json.replace('"version":5', '"version":0'))).toEqual(
       Option.none(),
     )
     expect(
@@ -219,19 +265,19 @@ describe('the schema', () => {
   })
 })
 
-describe('the storage', () => {
+describe('the legacy localStorage copy', () => {
   afterEach(() => localStorage.clear())
 
   test('writes and reads back under one key', () => {
-    Effect.runSync(writeSave(learnedSave))
+    Effect.runSync(writeLegacySave(learnedSave))
     expect(localStorage.getItem(SAVE_KEY)).not.toBeNull()
-    expect(Effect.runSync(readSave)).toEqual(Option.some(learnedSave))
+    expect(Effect.runSync(readLegacySave)).toEqual(Option.some(learnedSave))
   })
 
   test('a missing or corrupted save reads as no save', () => {
-    expect(Effect.runSync(readSave)).toEqual(Option.none())
+    expect(Effect.runSync(readLegacySave)).toEqual(Option.none())
     localStorage.setItem(SAVE_KEY, 'not json at all')
-    expect(Effect.runSync(readSave)).toEqual(Option.none())
+    expect(Effect.runSync(readLegacySave)).toEqual(Option.none())
   })
 })
 
@@ -355,7 +401,14 @@ describe('writing the save', () => {
       update,
       given(read),
       message(Message.ClickedMuteButton()),
-      Command.expectExact(WriteSave({ save: saveOf(muted) })),
+      Command.expectExact(
+        WriteSave({
+          save: saveOf(muted),
+          changes: [
+            PlayerChange.ChangedSettings({ settings: saveOf(muted).settings }),
+          ],
+        }),
+      ),
       Command.resolve(WriteSave, Message.CompletedWriteSave()),
     )
   })
@@ -377,6 +430,9 @@ describe('writing the save', () => {
                 modifyFields(setting, { chosen: () => 'Easy' }),
             }),
           ),
+          changes: [
+            PlayerChange.ChangedDifficulty({ chosen: 'Easy', card: 'Seen' }),
+          ],
         }),
       ),
       Command.resolve(WriteSave, Message.CompletedWriteSave()),

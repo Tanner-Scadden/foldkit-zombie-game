@@ -6,17 +6,22 @@
     "deploy": "alchemy deploy",
     "plan": "alchemy plan",
     "destroy": "alchemy destroy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@alchemy.run/cloudflare": "2.0.0-beta.84",
     "@alchemy.run/github": "2.0.0-beta.84",
     "@effect/platform-bun": "4.0.7",
     "@effect/platform-node": "4.0.7",
+    "@effect/sql-d1": "4.0.7",
+    "@effect/sql-sqlite-do": "4.0.7",
     "alchemy": "2.0.0-beta.84",
     "effect": "4.0.7"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20261029.1",
+    "@effect/sql-sqlite-bun": "4.0.7",
     "@types/bun": "1.4.4",
     "typescript": "7.0.2"
   }

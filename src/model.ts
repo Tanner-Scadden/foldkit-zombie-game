@@ -6,6 +6,31 @@ import { Dialog, RadioGroup, Tabs } from '@foldkit/ui'
 import { ARENA_LEVEL } from './arena'
 import { DEFAULT_SEED, PISTOL_MAGAZINE, PLAYER_MAX_HP } from './constants'
 import { flowFieldToward } from './pathing'
+import {
+  Appearance,
+  Difficulty,
+  HomeScreenTip,
+  MusicSetting,
+  ShakeSetting,
+  ShareStatsSetting,
+  SoundSetting,
+} from './playerData'
+import { LinkFlow, SyncState } from './playerSync'
+
+export {
+  Appearance,
+  Body,
+  Difficulty,
+  HairColor,
+  HairStyle,
+  HomeScreenTip,
+  MusicSetting,
+  ShakeSetting,
+  ShareStatsSetting,
+  ShirtColor,
+  SkinTone,
+  SoundSetting,
+} from './playerData'
 
 export const Vector = Schema.Struct({ x: Schema.Number, y: Schema.Number })
 export type Vector = typeof Vector.Type
@@ -457,7 +482,12 @@ export const GameEvent = defineTaggedUnion({
     kind: ZombieKind,
     nearness: Schema.Number,
   },
-  PlayerHurt: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  PlayerHurt: {
+    x: Schema.Number,
+    y: Schema.Number,
+    direction: Vector,
+    source: ZombieKind,
+  },
   BulletStruck: { x: Schema.Number, y: Schema.Number, direction: Vector },
   RanDry: { x: Schema.Number, y: Schema.Number },
   DryFired: { x: Schema.Number, y: Schema.Number },
@@ -558,12 +588,6 @@ export const AudioState = defineTaggedUnion({
 })
 export type AudioState = typeof AudioState.Type
 
-export const SoundSetting = Schema.Literals(['On', 'Muted'])
-export type SoundSetting = typeof SoundSetting.Type
-
-export const MusicSetting = Schema.Literals(['On', 'Off'])
-export type MusicSetting = typeof MusicSetting.Type
-
 export const GunSlot = Schema.Literals(['Sidearm', 'Spare'])
 export type GunSlot = typeof GunSlot.Type
 
@@ -578,12 +602,6 @@ export type ScreenFit = typeof ScreenFit.Type
 
 export const FullscreenSetting = Schema.Literals(['Off', 'On'])
 export type FullscreenSetting = typeof FullscreenSetting.Type
-
-export const HomeScreenTip = Schema.Literals(['Unseen', 'Dismissed'])
-export type HomeScreenTip = typeof HomeScreenTip.Type
-
-export const ShakeSetting = Schema.Literals(['On', 'Off'])
-export type ShakeSetting = typeof ShakeSetting.Type
 
 export const HomeButton = Schema.Literals([
   'Play',
@@ -605,14 +623,6 @@ export const MenuPanel = Schema.Literals([
   'Munchopedia',
 ])
 export type MenuPanel = typeof MenuPanel.Type
-
-export const Difficulty = Schema.Literals([
-  'Easy',
-  'Normal',
-  'Hard',
-  'Nightmare',
-])
-export type Difficulty = typeof Difficulty.Type
 
 // NOTE: JustUnlocked is the run that won Hard and its end screen. It
 // settles to Unlocked when the next run starts.
@@ -729,58 +739,17 @@ export type Loading = typeof Loading.Type
 export const SaveStatus = Schema.Literals(['Unread', 'Read'])
 export type SaveStatus = typeof SaveStatus.Type
 
+// NOTE: a save from sync that arrived while this device was still writing
+// its own change is Stale: taking it would undo that change for a moment.
+// The store's view is read again once the writes land.
+export const SyncedSaveState = Schema.Literals(['Current', 'Stale'])
+export type SyncedSaveState = typeof SyncedSaveState.Type
+
 export const TutorialReset = Schema.Literals(['Idle', 'Asking', 'Done'])
 export type TutorialReset = typeof TutorialReset.Type
 
 export const PageVisibility = Schema.Literals(['Visible', 'Hidden'])
 export type PageVisibility = typeof PageVisibility.Type
-
-export const Body = Schema.Literals(['Female', 'Male'])
-export type Body = typeof Body.Type
-
-export const HairStyle = Schema.Literals(['Crop', 'Long', 'Ponytail', 'Curls'])
-export type HairStyle = typeof HairStyle.Type
-
-export const HairColor = Schema.Literals([
-  'Black',
-  'Brown',
-  'Ginger',
-  'Blonde',
-  'Pink',
-])
-export type HairColor = typeof HairColor.Type
-
-export const SkinTone = Schema.Literals([
-  'Fair',
-  'Light',
-  'Medium',
-  'Tan',
-  'Brown',
-  'Deep',
-])
-export type SkinTone = typeof SkinTone.Type
-
-export const ShirtColor = Schema.Literals([
-  'Blue',
-  'Red',
-  'Yellow',
-  'Teal',
-  'Pink',
-  'Purple',
-])
-export type ShirtColor = typeof ShirtColor.Type
-
-// NOTE: the appearance is saved on the device in the PlayerSave from
-// src/save.ts. It is plain data on purpose: it moves into the SQLite player
-// scope from PLATFORM.md, stored whole by a ChangedAppearance mutation.
-export const Appearance = Schema.Struct({
-  body: Body,
-  hairStyle: HairStyle,
-  hairColor: HairColor,
-  skinTone: SkinTone,
-  shirtColor: ShirtColor,
-})
-export type Appearance = typeof Appearance.Type
 
 export const LookPart = Schema.Literals([
   'Body',
@@ -1090,6 +1059,11 @@ export const RunStats = Schema.Struct({
   shotsHit: Schema.Number,
   heartsLost: Schema.Number,
   trapsPlaced: Schema.Number,
+  purchases: Schema.Number,
+  powerUpsGrabbed: Schema.Number,
+  maybeLastHurtBy: Schema.Option(ZombieKind),
+  activeFrames: Schema.Number,
+  activeFrameMs: Schema.Number,
   runMs: Schema.Number,
 })
 export type RunStats = typeof RunStats.Type
@@ -1161,6 +1135,8 @@ export const Model = Schema.Struct({
   appearance: Appearance,
   character: CharacterPicker,
   shakeSetting: ShakeSetting,
+  shareStats: ShareStatsSetting,
+  maybeVisitId: Schema.Option(Schema.String),
   maybeHomeFocus: Schema.Option(HomeButton),
   panel: MenuPanel,
   panelDialog: Dialog.Model,
@@ -1169,6 +1145,10 @@ export const Model = Schema.Struct({
   loading: Loading,
   saveStatus: SaveStatus,
   tutorialReset: TutorialReset,
+  syncState: SyncState,
+  writesInFlight: Schema.Number,
+  syncedSave: SyncedSaveState,
+  linkFlow: LinkFlow,
   home: HomeMenu,
 })
 export type Model = typeof Model.Type
@@ -1244,6 +1224,11 @@ export const freshStats: RunStats = {
   shotsHit: 0,
   heartsLost: 0,
   trapsPlaced: 0,
+  purchases: 0,
+  powerUpsGrabbed: 0,
+  maybeLastHurtBy: Option.none(),
+  activeFrames: 0,
+  activeFrameMs: 0,
   runMs: 0,
 }
 
@@ -1388,6 +1373,8 @@ export const initialModel: Model = {
   appearance: defaultAppearance,
   character: closedCharacterPicker,
   shakeSetting: 'On',
+  shareStats: 'On',
+  maybeVisitId: Option.none(),
   maybeHomeFocus: Option.none(),
   panel: 'HowToPlay',
   panelDialog: Dialog.init({ id: PANEL_DIALOG_ID }),
@@ -1396,5 +1383,9 @@ export const initialModel: Model = {
   loading: Loading.Loaded(),
   saveStatus: 'Unread',
   tutorialReset: 'Idle',
+  syncState: SyncState.LocalOnly(),
+  writesInFlight: 0,
+  syncedSave: 'Current',
+  linkFlow: LinkFlow.Idle(),
   home: freshHomeMenu,
 }

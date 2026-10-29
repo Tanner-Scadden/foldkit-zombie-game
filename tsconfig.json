@@ -14,7 +14,8 @@
     "plugins": [
       {
         "name": "@effect/language-service",
-        "includeSuggestionsInTsc": false
+        "includeSuggestionsInTsc": false,
+        "diagnosticSeverity": { "unstableApiUsage": "off" }
       }
     ]
   },

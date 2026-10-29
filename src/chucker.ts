@@ -433,7 +433,12 @@ const land = (model: Model, landing: Landing): Model => {
   return modifyFields(landed, {
     player: () => woundPlayer(player, CHUCKER_RULES.landDamage, direction),
     frameEvents: Array.append(
-      GameEvent.PlayerHurt({ x: player.x, y: player.y, direction }),
+      GameEvent.PlayerHurt({
+        x: player.x,
+        y: player.y,
+        direction,
+        source: 'Thrower',
+      }),
     ),
   })
 }

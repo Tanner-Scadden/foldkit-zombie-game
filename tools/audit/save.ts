@@ -1,11 +1,11 @@
 // Plays past the wave 1 practice gate in headless Chrome, reloads, and checks
-// that the on-device save brought the player back with the gate open, the
-// sound still muted, and the save in localStorage.
+// that the on-device save brought the player back with the gate open and
+// the sound still muted. The save lives in SQLite now (see sqlite.ts for the
+// storage itself), so this reads it back only through the game.
 //   BASE=http://localhost:4173/ bun save.ts
 import { GAME, desktop, launch, wait } from './lib'
 
 const BASE = process.env.BASE ?? GAME
-const SAVE_KEY = 'munch-manor:save'
 const GATE_NOTE = 'The wave waits until you try moving, aiming, and firing.'
 
 const browser = await launch()
@@ -23,11 +23,14 @@ const status = () =>
     () => document.querySelector('[role="status"].sr-only')?.textContent ?? '',
   )
 
-const savedLessons = () =>
-  page.evaluate(key => {
-    const raw = localStorage.getItem(key)
-    return raw === null ? null : JSON.parse(raw)
-  }, SAVE_KEY)
+// NOTE: the Sound toggle in the home menu's settings shows the setting.
+const isMutedOnHome = async () => {
+  await page.click('#home-settings')
+  const sound = page.locator(
+    '.setting-toggle:has(.setting-label:text-is("Sound"))',
+  )
+  return (await sound.getAttribute('aria-pressed')) === 'false'
+}
 
 const awaitSplashGone = () =>
   page.waitForFunction(() => document.getElementById('splash') === null, {
@@ -35,13 +38,15 @@ const awaitSplashGone = () =>
   })
 
 await page.goto(BASE)
-await page.evaluate(key => localStorage.removeItem(key), SAVE_KEY)
+await awaitSplashGone()
 await page.reload()
 await awaitSplashGone()
-check((await savedLessons()) === null, 'a first visit has no save')
 
+await page.click('.home-play')
+await wait(300)
+// NOTE: a first visit asks for a difficulty before the first run.
+await page.getByRole('button', { name: /^normal/i }).click()
 await page.keyboard.press('KeyM')
-await page.keyboard.press('Enter')
 await wait(300)
 check(
   (await status()).includes(GATE_NOTE),
@@ -67,30 +72,19 @@ if (canvas !== null) {
 }
 await wait(400)
 check(!(await status()).includes(GATE_NOTE), 'moving and firing opens the gate')
-const save = await savedLessons()
-check(save?.onboarding?.lessons?.move === 'Learned', 'the move lesson is saved')
-check(save?.onboarding?.lessons?.fire === 'Learned', 'the fire lesson is saved')
-check(save?.settings?.sound === 'Muted', 'muting is saved')
+await wait(500)
 
 await page.reload()
 await awaitSplashGone()
-await page.keyboard.press('Enter')
+await page.click('.home-play')
 await wait(300)
 check(
   !(await status()).includes(GATE_NOTE),
   'after a reload the gate stays open',
 )
-check(
-  (await savedLessons())?.settings?.sound === 'Muted',
-  'after a reload the sound is still muted',
-)
-
-await page.evaluate(key => localStorage.setItem(key, '{broken'), SAVE_KEY)
 await page.reload()
 await awaitSplashGone()
-await page.keyboard.press('Enter')
-await wait(300)
-check((await status()).includes(GATE_NOTE), 'a corrupted save starts fresh')
+check(await isMutedOnHome(), 'after a reload the sound is still muted')
 
 await browser.close()
 if (failures.length > 0) {

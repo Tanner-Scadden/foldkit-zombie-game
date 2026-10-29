@@ -21,6 +21,9 @@ import { modifyFields } from 'foldkit/struct'
 
 import { Dialog, Tabs } from '@foldkit/ui'
 
+import { RunSummary } from './analytics'
+import { generateVisitId, sendRunSummary } from './analyticsBeacon'
+import { maybeRunOutcome, runSummaryOf } from './analyticsRun'
 import { randomAppearance, spriteWarmUpSources } from './appearance'
 import {
   type AudioEngineError,
@@ -138,15 +141,20 @@ import {
   skipDebutCard,
 } from './onboarding'
 import { burstCoins, dropClip, puffDust } from './particles'
+import {
+  LinkFlow,
+  LinkProblem,
+  PlayerChange,
+  SyncState,
+  changesBetween,
+} from './playerSync'
 import { PICKUPS } from './powerups'
 import {
   PlayerSave,
   forgetTutorial,
   isSameSave,
-  readSave,
   restoreSave,
   saveOf,
-  writeSave,
 } from './save'
 import {
   SHOP_ITEMS,
@@ -168,6 +176,7 @@ import {
   showSplashProgress,
 } from './splash'
 import { tallyFrame } from './stats'
+import { PlayerStore } from './store'
 import {
   TRAPS,
   cycleTrap,
@@ -309,10 +318,26 @@ export const Message = defineMessageUnion({
   FailedLoadSave: { reason: Schema.String },
   CompletedWriteSave: {},
   FailedWriteSave: { reason: Schema.String },
+  ClickedShareStatsButton: {},
+  CompletedGenerateVisitId: { visitId: Schema.String },
+  CompletedSendRunSummary: {},
+  FailedSendRunSummary: { reason: Schema.String },
   ClickedResetTutorialButton: {},
   ClickedConfirmResetTutorialButton: {},
   ClickedCancelResetTutorialButton: {},
   CompletedFocusTutorialReset: {},
+  UpdatedSyncedSave: { save: PlayerSave },
+  CompletedReloadSyncedSave: { maybeSave: Schema.Option(PlayerSave) },
+  UpdatedSyncStatus: { state: SyncState },
+  ClickedLinkDeviceButton: {},
+  SucceededRequestLinkCode: { code: Schema.String },
+  FailedRequestLinkCode: { problem: LinkProblem },
+  ClickedUseCodeButton: {},
+  UpdatedLinkCode: { value: Schema.String },
+  SubmittedLinkCode: {},
+  SucceededRedeemLinkCode: {},
+  FailedRedeemLinkCode: { problem: LinkProblem },
+  ClickedCancelLinkButton: {},
   ClickedPlayButton: {},
   ClickedModeButton: {},
   ClickedWhatsNewButton: {},
@@ -354,6 +379,8 @@ export const managedResources = ManagedResource.make<Model, Message>()(
 )
 
 type AudioServices = ManagedResource.ServicesOf<typeof managedResources>
+
+type AppServices = AudioServices | PlayerStore
 
 // COMMAND
 
@@ -637,7 +664,7 @@ export const HideSplash = Command.define('HideSplash', {
 export const LoadSave = Command.define('LoadSave', {
   messages: [Message.CompletedLoadSave, Message.FailedLoadSave],
   execute: pipe(
-    readSave,
+    PlayerStore.use(store => store.load),
     Effect.map(maybeSave => Message.CompletedLoadSave({ maybeSave })),
     Effect.catch(error =>
       Effect.succeed(Message.FailedLoadSave({ reason: error.reason })),
@@ -645,15 +672,79 @@ export const LoadSave = Command.define('LoadSave', {
   ),
 })
 
+// NOTE: the whole save goes along with what changed in it: the store runs
+// the changes as player scope mutations, and keeps the whole save only
+// where it still writes the localStorage copy.
 export const WriteSave = Command.define('WriteSave', {
-  args: { save: PlayerSave },
+  args: { save: PlayerSave, changes: Schema.Array(PlayerChange) },
   messages: [Message.CompletedWriteSave, Message.FailedWriteSave],
-  execute: ({ save }) =>
+  execute: ({ save, changes }) =>
     pipe(
-      writeSave(save),
+      PlayerStore.use(store => store.write(save, changes)),
       Effect.as(Message.CompletedWriteSave()),
       Effect.catch(error =>
         Effect.succeed(Message.FailedWriteSave({ reason: error.reason })),
+      ),
+    ),
+})
+
+// SYNC
+
+export const ReloadSyncedSave = Command.define('ReloadSyncedSave', {
+  messages: [Message.CompletedReloadSyncedSave],
+  execute: pipe(
+    PlayerStore.use(store => store.load),
+    Effect.map(maybeSave => Message.CompletedReloadSyncedSave({ maybeSave })),
+    Effect.orElseSucceed(() =>
+      Message.CompletedReloadSyncedSave({ maybeSave: Option.none() }),
+    ),
+  ),
+})
+
+export const RequestLinkCode = Command.define('RequestLinkCode', {
+  messages: [Message.SucceededRequestLinkCode, Message.FailedRequestLinkCode],
+  execute: pipe(
+    PlayerStore.use(store => store.requestLinkCode),
+    Effect.map(code => Message.SucceededRequestLinkCode({ code })),
+    Effect.catch(error =>
+      Effect.succeed(Message.FailedRequestLinkCode({ problem: error.problem })),
+    ),
+  ),
+})
+
+export const RedeemLinkCode = Command.define('RedeemLinkCode', {
+  args: { code: Schema.String },
+  messages: [Message.SucceededRedeemLinkCode, Message.FailedRedeemLinkCode],
+  execute: ({ code }) =>
+    pipe(
+      PlayerStore.use(store => store.redeemLinkCode(code)),
+      Effect.as(Message.SucceededRedeemLinkCode()),
+      Effect.catch(error =>
+        Effect.succeed(
+          Message.FailedRedeemLinkCode({ problem: error.problem }),
+        ),
+      ),
+    ),
+})
+
+// ANALYTICS
+
+export const GenerateVisitId = Command.define('GenerateVisitId', {
+  messages: [Message.CompletedGenerateVisitId],
+  execute: Effect.map(generateVisitId, visitId =>
+    Message.CompletedGenerateVisitId({ visitId }),
+  ),
+})
+
+export const SendRunSummary = Command.define('SendRunSummary', {
+  args: { summary: RunSummary },
+  messages: [Message.CompletedSendRunSummary, Message.FailedSendRunSummary],
+  execute: ({ summary }) =>
+    pipe(
+      sendRunSummary(summary),
+      Effect.as(Message.CompletedSendRunSummary()),
+      Effect.catch(error =>
+        Effect.succeed(Message.FailedSendRunSummary({ reason: error.reason })),
       ),
     ),
 })
@@ -674,13 +765,19 @@ export const FocusTutorialReset = Command.define('FocusTutorialReset', {
 // fails still counts as finished, so a missing font never holds the game.
 // New assets, such as images for Canvas.Image, join LOAD_STEPS with a
 // Command that loads them.
-export const init: Runtime.ApplicationInit<Model, Message> = () => ({
+export const init: Runtime.ApplicationInit<
+  Model,
+  Message,
+  void,
+  PlayerStore
+> = () => ({
   model: modifyFields(initialModel, {
     loading: () => Loading.Loading({ pending: LOAD_STEPS }),
   }),
   commands: [
     LoadSave(),
     GenerateSeed(),
+    GenerateVisitId(),
     DetectInputDevice(),
     DetectScreenFit(),
     LoadStyles(),
@@ -692,8 +789,8 @@ export const init: Runtime.ApplicationInit<Model, Message> = () => ({
 
 // UPDATE
 
-type UpdateReturn = Update.Return<Model, Message, AudioServices>
-type UpdateStep = Update.Step<Model, Message, AudioServices>
+type UpdateReturn = Update.Return<Model, Message, AppServices>
+type UpdateStep = Update.Step<Model, Message, AppServices>
 
 const START_SOUND_GRACE_MS = 1000
 const MUTE_KEY = 'KeyM'
@@ -1411,6 +1508,42 @@ const toggleShake = (model: Model): Model =>
     shakeSetting: setting => (setting === 'On' ? 'Off' : 'On'),
   })
 
+const toggleShareStats = (model: Model): Model =>
+  modifyFields(model, {
+    shareStats: setting => (setting === 'On' ? 'Off' : 'On'),
+  })
+
+// NOTE: the summary is built here from the Model, so update stays pure. The
+// visit id comes from GenerateVisitId and the build id is a build constant.
+const sendRunSummaryFrom =
+  (before: Model): UpdateStep =>
+  stepModel => {
+    if (stepModel.shareStats === 'Off') {
+      return { model: stepModel }
+    }
+
+    return Option.match(
+      Option.all([maybeRunOutcome(before, stepModel), stepModel.maybeVisitId]),
+      {
+        onNone: () => ({ model: stepModel }),
+        onSome: ([outcome, visitId]) => ({
+          model: stepModel,
+          commands: [
+            SendRunSummary({
+              summary: runSummaryOf(
+                before,
+                stepModel,
+                outcome,
+                visitId,
+                RUNNING_BUILD,
+              ),
+            }),
+          ],
+        }),
+      },
+    )
+  }
+
 // SPLASH
 
 const finishLoadStep = (model: Model, step: LoadStep): UpdateReturn =>
@@ -1455,18 +1588,98 @@ const loadSave = (
     'Save',
   )
 
+// NOTE: a save that arrived from sync is already in the store, so taking
+// it into the Model writes nothing back. Every other change to the save is
+// written with the mutations that describe it.
 const writeSaveFrom =
-  (before: Model): UpdateStep =>
+  (before: Model, message: Message): UpdateStep =>
   stepModel => {
-    if (before.saveStatus === 'Unread' || stepModel.saveStatus === 'Unread') {
+    if (
+      before.saveStatus === 'Unread' ||
+      stepModel.saveStatus === 'Unread' ||
+      message._tag === 'UpdatedSyncedSave' ||
+      message._tag === 'CompletedReloadSyncedSave'
+    ) {
       return { model: stepModel }
     }
 
+    const beforeSave = saveOf(before)
     const save = saveOf(stepModel)
-    return isSameSave(saveOf(before), save)
+    return isSameSave(beforeSave, save)
       ? { model: stepModel }
-      : { model: stepModel, commands: [WriteSave({ save })] }
+      : {
+          model: modifyFields(stepModel, {
+            writesInFlight: count => count + 1,
+          }),
+          commands: [
+            WriteSave({ save, changes: changesBetween(beforeSave, save) }),
+          ],
+        }
   }
+
+// NOTE: a save from another device, or from the server, replaces what this
+// device shows: its look, settings, difficulty, and bests. Lessons and
+// unlocks only ever move forward, as on load.
+const takeSyncedSave = (model: Model, save: PlayerSave): UpdateReturn =>
+  model.writesInFlight > 0
+    ? { model: modifyFields(model, { syncedSave: () => 'Stale' }) }
+    : { model: restoreSave(model, save) }
+
+// NOTE: once this device's own writes have landed, a save from sync that
+// was held back is read again from the store, which by then has both.
+const finishWrite = (model: Model): UpdateReturn => {
+  const next = modifyFields(model, {
+    writesInFlight: count => Math.max(count - 1, 0),
+  })
+  return next.writesInFlight === 0 && next.syncedSave === 'Stale'
+    ? {
+        model: modifyFields(next, { syncedSave: () => 'Current' }),
+        commands: [ReloadSyncedSave()],
+      }
+    : { model: next }
+}
+
+const startLinking = (model: Model): UpdateReturn =>
+  LinkFlow.match(model.linkFlow, {
+    Requesting: () => ({ model }),
+    Redeeming: () => ({ model }),
+    Idle: () => requestLinkCode(model),
+    Showing: () => requestLinkCode(model),
+    Entering: () => requestLinkCode(model),
+    Linked: () => requestLinkCode(model),
+    Failed: () => requestLinkCode(model),
+  })
+
+const requestLinkCode = (model: Model): UpdateReturn => ({
+  model: modifyFields(model, { linkFlow: () => LinkFlow.Requesting() }),
+  commands: [RequestLinkCode()],
+})
+
+const typeLinkCode = (model: Model, value: string): UpdateReturn =>
+  LinkFlow.isAnyOf(['Entering', 'Failed'])(model.linkFlow)
+    ? {
+        model: modifyFields(model, {
+          linkFlow: () =>
+            LinkFlow.Entering({ code: value.toUpperCase().slice(0, 7) }),
+        }),
+      }
+    : { model }
+
+const submitLinkCode = (model: Model): UpdateReturn =>
+  LinkFlow.match(model.linkFlow, {
+    Entering: ({ code }) => ({
+      model: modifyFields(model, {
+        linkFlow: () => LinkFlow.Redeeming({ code }),
+      }),
+      commands: [RedeemLinkCode({ code })],
+    }),
+    Idle: () => ({ model }),
+    Requesting: () => ({ model }),
+    Showing: () => ({ model }),
+    Redeeming: () => ({ model }),
+    Linked: () => ({ model }),
+    Failed: () => ({ model }),
+  })
 
 const isSettingsOpen = (model: Model): boolean =>
   model.panelDialog.isOpen && model.panel === 'Settings'
@@ -2097,9 +2310,19 @@ const updateGame = (model: Model, message: Message) =>
 
     FailedLoadSave: () => loadSave(model, Option.none()),
 
-    CompletedWriteSave: () => ({ model }),
+    CompletedWriteSave: () => finishWrite(model),
 
-    FailedWriteSave: () => ({ model }),
+    FailedWriteSave: () => finishWrite(model),
+
+    ClickedShareStatsButton: () => ({ model: toggleShareStats(model) }),
+
+    CompletedGenerateVisitId: ({ visitId }) => ({
+      model: modifyFields(model, { maybeVisitId: () => Option.some(visitId) }),
+    }),
+
+    CompletedSendRunSummary: () => ({ model }),
+
+    FailedSendRunSummary: () => ({ model }),
 
     ClickedResetTutorialButton: () => askToResetTutorial(model),
 
@@ -2110,6 +2333,56 @@ const updateGame = (model: Model, message: Message) =>
       answerTutorialReset(model, unchanged => unchanged, 'Idle'),
 
     CompletedFocusTutorialReset: () => ({ model }),
+
+    UpdatedSyncedSave: ({ save }) => takeSyncedSave(model, save),
+
+    CompletedReloadSyncedSave: ({ maybeSave }) =>
+      Option.match(maybeSave, {
+        onNone: () => ({ model }),
+        onSome: save => takeSyncedSave(model, save),
+      }),
+
+    UpdatedSyncStatus: ({ state }) => ({
+      model: modifyFields(model, { syncState: () => state }),
+    }),
+
+    ClickedLinkDeviceButton: () => startLinking(model),
+
+    SucceededRequestLinkCode: ({ code }) => ({
+      model: modifyFields(model, {
+        linkFlow: () => LinkFlow.Showing({ code }),
+      }),
+    }),
+
+    FailedRequestLinkCode: ({ problem }) => ({
+      model: modifyFields(model, {
+        linkFlow: () => LinkFlow.Failed({ problem }),
+      }),
+    }),
+
+    ClickedUseCodeButton: () => ({
+      model: modifyFields(model, {
+        linkFlow: () => LinkFlow.Entering({ code: '' }),
+      }),
+    }),
+
+    UpdatedLinkCode: ({ value }) => typeLinkCode(model, value),
+
+    SubmittedLinkCode: () => submitLinkCode(model),
+
+    SucceededRedeemLinkCode: () => ({
+      model: modifyFields(model, { linkFlow: () => LinkFlow.Linked() }),
+    }),
+
+    FailedRedeemLinkCode: ({ problem }) => ({
+      model: modifyFields(model, {
+        linkFlow: () => LinkFlow.Failed({ problem }),
+      }),
+    }),
+
+    ClickedCancelLinkButton: () => ({
+      model: modifyFields(model, { linkFlow: () => LinkFlow.Idle() }),
+    }),
 
     ClickedPlayButton: () => startOrAsk(runModeOf(model.home.mode))(model),
 
@@ -2215,8 +2488,9 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     settleNightmareFrom(model),
     unlockNightmareFrom(model),
     stepModel => ({ model: countRunFrom(model, stepModel) }),
+    sendRunSummaryFrom(model),
     stepModel => ({ model: forgetNewEntriesFrom(model, stepModel) }),
-    writeSaveFrom(model),
+    writeSaveFrom(model, message),
   ])
 
 // SUBSCRIPTION
@@ -2372,96 +2646,114 @@ const mouseMessages = Dom.streamFromEventFilterMap({
       : Option.none(),
 })
 
-export const subscriptions = Subscription.make<Model, Message>()(entry => ({
-  frame: Subscription.animationFrameEntry({
-    isActive: isFrameActive,
-    toMessage: deltaTime => Message.TickedFrame({ deltaTime }),
-  }),
-
-  keyboard: Subscription.persistentEntry(keyboardMessages),
-
-  windowBlur: Subscription.persistentEntry(
-    Dom.streamFromEventFilterMap({
-      target: window,
-      type: 'blur',
-      filterMapEvent: maybeWindowBlurMessage,
-    }),
+// NOTE: what the store hears from sync: a save another device or the
+// server changed, and the status line for SETTINGS.
+const syncMessages: Stream.Stream<Message, never, PlayerStore> = Stream.unwrap(
+  PlayerStore.use(store =>
+    Effect.succeed(
+      Stream.map(store.events, (event): Message =>
+        event._tag === 'SyncedSave'
+          ? Message.UpdatedSyncedSave({ save: event.save })
+          : Message.UpdatedSyncStatus({ state: event.state }),
+      ),
+    ),
   ),
+)
 
-  pageVisibility: Subscription.persistentEntry(
-    Dom.streamFromEvent({
-      target: document,
-      type: 'visibilitychange',
-      mapEvent: () => pageVisibilityMessage(document.visibilityState),
+export const subscriptions = Subscription.make<Model, Message, PlayerStore>()(
+  entry => ({
+    playerSync: Subscription.persistentEntry(syncMessages),
+
+    frame: Subscription.animationFrameEntry({
+      isActive: isFrameActive,
+      toMessage: deltaTime => Message.TickedFrame({ deltaTime }),
     }),
-  ),
 
-  windowFocus: Subscription.persistentEntry(
-    Dom.streamFromEventFilterMap({
-      target: window,
-      type: 'focus',
-      filterMapEvent: maybeWindowFocusMessage,
-    }),
-  ),
+    keyboard: Subscription.persistentEntry(keyboardMessages),
 
-  pageRestores: Subscription.persistentEntry(
-    Dom.streamFromEventFilterMap({
-      target: window,
-      type: 'pageshow',
-      filterMapEvent: maybePageShowMessage,
-    }),
-  ),
-
-  updateCheck: entry(
-    { activity: Activity },
-    {
-      modelToDependencies: model => ({
-        activity: updateCheckActivity(model),
+    windowBlur: Subscription.persistentEntry(
+      Dom.streamFromEventFilterMap({
+        target: window,
+        type: 'blur',
+        filterMapEvent: maybeWindowBlurMessage,
       }),
-      dependenciesToStream: ({ activity }) =>
-        Stream.when(
-          updateCheckMessages,
-          Effect.sync(() => activity === 'Active'),
-        ),
-    },
-  ),
+    ),
 
-  mouseAim: entry(
-    { activity: Activity },
-    {
-      modelToDependencies: model => ({ activity: playingActivity(model) }),
-      dependenciesToStream: ({ activity }) =>
-        Stream.when(
-          mouseMessages,
-          Effect.sync(() => activity === 'Active'),
-        ),
-    },
-  ),
+    pageVisibility: Subscription.persistentEntry(
+      Dom.streamFromEvent({
+        target: document,
+        type: 'visibilitychange',
+        mapEvent: () => pageVisibilityMessage(document.visibilityState),
+      }),
+    ),
 
-  pointerReleases: Subscription.persistentEntry(pointerReleaseMessages),
+    windowFocus: Subscription.persistentEntry(
+      Dom.streamFromEventFilterMap({
+        target: window,
+        type: 'focus',
+        filterMapEvent: maybeWindowFocusMessage,
+      }),
+    ),
 
-  fullscreenChanges: Subscription.persistentEntry(
-    Dom.streamFromEvent({
-      target: document,
-      type: 'fullscreenchange',
-      mapEvent: () =>
-        Message.ChangedFullscreen({
-          fullscreen: document.fullscreenElement === null ? 'Off' : 'On',
+    pageRestores: Subscription.persistentEntry(
+      Dom.streamFromEventFilterMap({
+        target: window,
+        type: 'pageshow',
+        filterMapEvent: maybePageShowMessage,
+      }),
+    ),
+
+    updateCheck: entry(
+      { activity: Activity },
+      {
+        modelToDependencies: model => ({
+          activity: updateCheckActivity(model),
         }),
-    }),
-  ),
+        dependenciesToStream: ({ activity }) =>
+          Stream.when(
+            updateCheckMessages,
+            Effect.sync(() => activity === 'Active'),
+          ),
+      },
+    ),
 
-  trackedPointers: entry(
-    { activity: Activity },
-    {
-      modelToDependencies: model => ({
-        activity: pointerTrackingActivity(model),
+    mouseAim: entry(
+      { activity: Activity },
+      {
+        modelToDependencies: model => ({ activity: playingActivity(model) }),
+        dependenciesToStream: ({ activity }) =>
+          Stream.when(
+            mouseMessages,
+            Effect.sync(() => activity === 'Active'),
+          ),
+      },
+    ),
+
+    pointerReleases: Subscription.persistentEntry(pointerReleaseMessages),
+
+    fullscreenChanges: Subscription.persistentEntry(
+      Dom.streamFromEvent({
+        target: document,
+        type: 'fullscreenchange',
+        mapEvent: () =>
+          Message.ChangedFullscreen({
+            fullscreen: document.fullscreenElement === null ? 'Off' : 'On',
+          }),
       }),
-      dependenciesToStream: ({ activity }) =>
-        Stream.when(
-          pointerMoveMessages,
-          Effect.sync(() => activity === 'Active'),
-        ),
-    },
-  ),
-}))
+    ),
+
+    trackedPointers: entry(
+      { activity: Activity },
+      {
+        modelToDependencies: model => ({
+          activity: pointerTrackingActivity(model),
+        }),
+        dependenciesToStream: ({ activity }) =>
+          Stream.when(
+            pointerMoveMessages,
+            Effect.sync(() => activity === 'Active'),
+          ),
+      },
+    ),
+  }),
+)

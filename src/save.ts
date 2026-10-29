@@ -11,118 +11,77 @@ import {
 import { modifyFields } from 'foldkit/struct'
 
 import {
-  Appearance,
   DebutCard,
-  Difficulty,
   type DifficultyBests,
   DifficultyCard,
-  HomeScreenTip,
   type KillCounts,
   Lesson,
   type Lessons,
   type Model,
-  MusicSetting,
   type PlayerBests,
-  ShakeSetting,
-  SoundSetting,
   TrapHint,
   ZombieKind,
   freshLessons,
   noPractice,
 } from './model'
+import {
+  Appearance,
+  HomeScreenTip,
+  MusicSetting,
+  PlayerSave,
+  SAVE_VERSION,
+  SavedBests,
+  SavedDifficulty,
+  type SavedDifficultyBests,
+  SavedHome,
+  type SavedLesson,
+  type SavedLessons,
+  SavedOnboarding,
+  SavedSettings,
+  type SavedTrapHint,
+  ShakeSetting,
+  SoundSetting,
+} from './playerData'
+
+export {
+  PlayerSave,
+  SAVE_VERSION,
+  SavedBests,
+  SavedBestsByDifficulty,
+  SavedCard,
+  SavedDifficulty,
+  SavedDifficultyBests,
+  SavedHome,
+  SavedLesson,
+  SavedLessons,
+  SavedNightmare,
+  SavedOnboarding,
+  SavedSettings,
+  SavedTrapHint,
+} from './playerData'
 
 // SAVE
 
 // NOTE: the PlayerSave is one record per player, plain data, shaped like the
-// player scope in PLATFORM.md. When local SQLite lands it is imported once
-// into that scope and this key is retired. A new field goes in here with a
-// version bump, and decodeSave migrates or drops the older version.
+// player scope in PLATFORM.md. It is stored as the player row in on-device
+// SQLite (see src/store.ts). SAVE_KEY is the localStorage copy it used to
+// live in: imported into SQLite once, then kept read-only as a fallback for
+// one release. A new field goes in here with a version bump, and decodeSave
+// migrates or drops the older version.
 export const SAVE_KEY = 'munch-manor:save'
-export const SAVE_VERSION = 4
 
-export const SavedLesson = Schema.Literals(['Pending', 'Learned'])
-export type SavedLesson = typeof SavedLesson.Type
-
-export const SavedLessons = Schema.Struct({
-  move: SavedLesson,
-  fire: SavedLesson,
-  startWave: SavedLesson,
-  shop: SavedLesson,
-  swap: SavedLesson,
-  pickup: SavedLesson,
-  timedBreaks: SavedLesson,
-  openBreak: SavedLesson,
-})
-export type SavedLessons = typeof SavedLessons.Type
-
-export const SavedTrapHint = Schema.Literals(['Unseen', 'Seen'])
-export type SavedTrapHint = typeof SavedTrapHint.Type
-
-export const SavedOnboarding = Schema.Struct({
-  lessons: SavedLessons,
-  trapHint: SavedTrapHint,
-  introducedKinds: Schema.Array(Schema.String),
-})
-export type SavedOnboarding = typeof SavedOnboarding.Type
-
-export const SavedSettings = Schema.Struct({
+const SavedSettingsV2 = Schema.Struct({
   sound: SoundSetting,
   music: MusicSetting,
   shake: ShakeSetting,
 })
-export type SavedSettings = typeof SavedSettings.Type
-
-export const SavedCard = Schema.Literals(['Unseen', 'Seen'])
-export type SavedCard = typeof SavedCard.Type
-
-export const SavedNightmare = Schema.Literals(['Locked', 'Unlocked'])
-export type SavedNightmare = typeof SavedNightmare.Type
-
-// NOTE: version 2 added the difficulty: the chosen level, whether the
-// first-time card was answered, and the Nightmare unlock.
-export const SavedDifficulty = Schema.Struct({
-  chosen: Difficulty,
-  card: SavedCard,
-  nightmare: SavedNightmare,
-})
-export type SavedDifficulty = typeof SavedDifficulty.Type
-
-// NOTE: version 3 added the bests: runs played, zombies splatted in all and
-// per kind, and the fastest win and best endless wave for each difficulty.
-// Kills per kind are keyed by kind id, ready for the Munchopedia. A win or a
-// wave not reached yet is null.
-export const SavedDifficultyBests = Schema.Struct({
-  fastestWinMs: Schema.NullOr(Schema.Number),
-  bestEndlessWave: Schema.NullOr(Schema.Number),
-})
-export type SavedDifficultyBests = typeof SavedDifficultyBests.Type
-
-export const SavedBests = Schema.Struct({
-  runsPlayed: Schema.Number,
-  totalKills: Schema.Number,
-  killsByKind: Schema.Record(Schema.String, Schema.Number),
-  byDifficulty: Schema.Struct({
-    Easy: SavedDifficultyBests,
-    Normal: SavedDifficultyBests,
-    Hard: SavedDifficultyBests,
-    Nightmare: SavedDifficultyBests,
-  }),
-})
-export type SavedBests = typeof SavedBests.Type
-
-// NOTE: version 4 added the home menu: the newest What's New day seen, by
-// its date, and the Munchopedia entries opened, by kind id.
-export const SavedHome = Schema.Struct({
-  seenNewsDay: Schema.NullOr(Schema.String),
-  openedEntries: Schema.Array(Schema.String),
-})
-export type SavedHome = typeof SavedHome.Type
+type SavedSettingsV2 = typeof SavedSettingsV2.Type
 
 const PlayerSaveV1 = Schema.Struct({
   version: Schema.Literal(1),
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
-  settings: SavedSettings,
+  settings: SavedSettingsV2,
   appearance: Appearance,
 })
 type PlayerSaveV1 = typeof PlayerSaveV1.Type
@@ -131,7 +90,7 @@ const PlayerSaveV2 = Schema.Struct({
   version: Schema.Literal(2),
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
-  settings: SavedSettings,
+  settings: SavedSettingsV2,
   appearance: Appearance,
   difficulty: SavedDifficulty,
 })
@@ -141,26 +100,47 @@ const PlayerSaveV3 = Schema.Struct({
   version: Schema.Literal(3),
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
-  settings: SavedSettings,
+  settings: SavedSettingsV2,
   appearance: Appearance,
   difficulty: SavedDifficulty,
   bests: SavedBests,
 })
 type PlayerSaveV3 = typeof PlayerSaveV3.Type
 
-export const PlayerSave = Schema.Struct({
-  version: Schema.Literal(SAVE_VERSION),
+// NOTE: version 4 is the save the live game keeps in localStorage: the home
+// menu's fields, and no shareStats yet.
+const PlayerSaveV4 = Schema.Struct({
+  version: Schema.Literal(4),
+  onboarding: SavedOnboarding,
+  homeScreenTip: HomeScreenTip,
+  settings: SavedSettingsV2,
+  appearance: Appearance,
+  difficulty: SavedDifficulty,
+  bests: SavedBests,
+  home: SavedHome,
+})
+type PlayerSaveV4 = typeof PlayerSaveV4.Type
+
+// NOTE: the pull request preview of local SQLite numbered its save 4 too,
+// before the home menu: shareStats and no home. Only the preview ever wrote
+// it, to localStorage in a private window. It reads as version 4 with the
+// home menu unvisited.
+const PlayerSavePreviewV4 = Schema.Struct({
+  version: Schema.Literal(4),
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
   settings: SavedSettings,
   appearance: Appearance,
   difficulty: SavedDifficulty,
   bests: SavedBests,
-  home: SavedHome,
 })
-export type PlayerSave = typeof PlayerSave.Type
+type PlayerSavePreviewV4 = typeof PlayerSavePreviewV4.Type
 
 const PlayerSaveJson = Schema.fromJsonString(PlayerSave)
+
+const PlayerSaveV4Json = Schema.fromJsonString(PlayerSaveV4)
+
+const PlayerSavePreviewV4Json = Schema.fromJsonString(PlayerSavePreviewV4)
 
 const PlayerSaveV3Json = Schema.fromJsonString(PlayerSaveV3)
 
@@ -191,6 +171,18 @@ export const noSavedBests: SavedBests = {
   },
 }
 
+export const unvisitedHome: SavedHome = {
+  seenNewsDay: null,
+  openedEntries: [],
+}
+
+const sharingSettings = (settings: SavedSettingsV2): SavedSettings => ({
+  sound: settings.sound,
+  music: settings.music,
+  shake: settings.shake,
+  shareStats: 'On',
+})
+
 const migrateV1 = (save: PlayerSaveV1): PlayerSaveV2 => ({
   version: 2,
   onboarding: save.onboarding,
@@ -199,11 +191,6 @@ const migrateV1 = (save: PlayerSaveV1): PlayerSaveV2 => ({
   appearance: save.appearance,
   difficulty: unpickedDifficulty,
 })
-
-export const unvisitedHome: SavedHome = {
-  seenNewsDay: null,
-  openedEntries: [],
-}
 
 const migrateV2 = (save: PlayerSaveV2): PlayerSaveV3 => ({
   version: 3,
@@ -215,7 +202,29 @@ const migrateV2 = (save: PlayerSaveV2): PlayerSaveV3 => ({
   bests: noSavedBests,
 })
 
-const migrateV3 = (save: PlayerSaveV3): PlayerSave => ({
+const migrateV3 = (save: PlayerSaveV3): PlayerSaveV4 => ({
+  version: 4,
+  onboarding: save.onboarding,
+  homeScreenTip: save.homeScreenTip,
+  settings: save.settings,
+  appearance: save.appearance,
+  difficulty: save.difficulty,
+  bests: save.bests,
+  home: unvisitedHome,
+})
+
+const migrateV4 = (save: PlayerSaveV4): PlayerSave => ({
+  version: SAVE_VERSION,
+  onboarding: save.onboarding,
+  homeScreenTip: save.homeScreenTip,
+  settings: sharingSettings(save.settings),
+  appearance: save.appearance,
+  difficulty: save.difficulty,
+  bests: save.bests,
+  home: save.home,
+})
+
+const migratePreviewV4 = (save: PlayerSavePreviewV4): PlayerSave => ({
   version: SAVE_VERSION,
   onboarding: save.onboarding,
   homeScreenTip: save.homeScreenTip,
@@ -226,22 +235,58 @@ const migrateV3 = (save: PlayerSaveV3): PlayerSave => ({
   home: unvisitedHome,
 })
 
-export const decodeSave = (raw: string): Option.Option<PlayerSave> =>
-  pipe(
-    Schema.decodeOption(PlayerSaveJson)(raw),
-    Option.orElse(() =>
-      Option.map(Schema.decodeOption(PlayerSaveV3Json)(raw), migrateV3),
-    ),
-    Option.orElse(() =>
+// NOTE: the one list of save versions this build reads, newest first, each
+// with its way to the current save. A new version goes at the top, with its
+// number in SAVE_VERSION (src/playerData.ts). Renumbering versions after a
+// merge happens here and there only. The sync scope's SeededPlayer carries
+// the current PlayerSave, so a new version also bumps its mutation version
+// in src/playerScope.ts.
+const SAVE_VERSIONS: ReadonlyArray<
+  Readonly<{
+    version: number
+    read: (raw: string) => Option.Option<PlayerSave>
+  }>
+> = [
+  { version: SAVE_VERSION, read: Schema.decodeOption(PlayerSaveJson) },
+  {
+    version: 4,
+    read: raw =>
+      Option.map(Schema.decodeOption(PlayerSaveV4Json)(raw), migrateV4),
+  },
+  {
+    version: 4,
+    read: raw =>
+      Option.map(
+        Schema.decodeOption(PlayerSavePreviewV4Json)(raw),
+        migratePreviewV4,
+      ),
+  },
+  {
+    version: 3,
+    read: raw =>
+      Option.map(Schema.decodeOption(PlayerSaveV3Json)(raw), save =>
+        migrateV4(migrateV3(save)),
+      ),
+  },
+  {
+    version: 2,
+    read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV2Json)(raw), save =>
-        migrateV3(migrateV2(save)),
+        migrateV4(migrateV3(migrateV2(save))),
       ),
-    ),
-    Option.orElse(() =>
+  },
+  {
+    version: 1,
+    read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV1Json)(raw), save =>
-        migrateV3(migrateV2(migrateV1(save))),
+        migrateV4(migrateV3(migrateV2(migrateV1(save)))),
       ),
-    ),
+  },
+]
+
+export const decodeSave = (raw: string): Option.Option<PlayerSave> =>
+  Array.reduce(SAVE_VERSIONS, Option.none<PlayerSave>(), (found, { read }) =>
+    Option.orElse(found, () => read(raw)),
   )
 
 export const encodeSave = (save: PlayerSave): Option.Option<string> =>
@@ -297,6 +342,7 @@ export const saveOf = (model: Model): PlayerSave => ({
     sound: model.soundSetting,
     music: model.musicSetting,
     shake: model.shakeSetting,
+    shareStats: model.shareStats,
   },
   appearance: model.appearance,
   difficulty: {
@@ -394,6 +440,7 @@ export const restoreSave = (model: Model, save: PlayerSave): Model =>
     soundSetting: () => save.settings.sound,
     musicSetting: () => save.settings.music,
     shakeSetting: () => save.settings.shake,
+    shareStats: () => save.settings.shareStats,
     appearance: () => save.appearance,
     difficulty: setting =>
       modifyFields(setting, {
@@ -427,7 +474,7 @@ export const forgetTutorial = (model: Model): Model =>
     debutCard: () => DebutCard.Hidden(),
   })
 
-// STORAGE
+// LEGACY STORAGE
 
 export class SaveStorageError extends Data.TaggedError('SaveStorageError')<{
   readonly reason: string
@@ -436,10 +483,11 @@ export class SaveStorageError extends Data.TaggedError('SaveStorageError')<{
 const toStorageError = (error: unknown): SaveStorageError =>
   new SaveStorageError({ reason: String(error) })
 
-// NOTE: storage that is missing, blocked, or full fails here, and the
-// Commands that run these turn the failure into a Message. A save that is
-// absent, corrupted, or from another version reads as no save.
-export const readSave: Effect.Effect<
+// NOTE: the localStorage copy of the save, from before SQLite. Only
+// src/store.ts calls these: once to import it, and as the fallback when
+// SQLite cannot keep the save. A save that is absent, corrupted, or from
+// another version reads as no save.
+export const readLegacySave: Effect.Effect<
   Option.Option<PlayerSave>,
   SaveStorageError
 > = pipe(
@@ -450,7 +498,7 @@ export const readSave: Effect.Effect<
   Effect.map(Option.flatMap(decodeSave)),
 )
 
-export const writeSave = (
+export const writeLegacySave = (
   save: PlayerSave,
 ): Effect.Effect<void, SaveStorageError> =>
   pipe(

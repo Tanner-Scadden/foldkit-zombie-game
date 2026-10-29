@@ -10,7 +10,17 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "effect": ["./node_modules/effect/dist/index"],
+      "effect/*": ["./node_modules/effect/dist/*"]
+    }
   },
-  "include": ["*.ts"]
+  "include": [
+    "*.ts",
+    "worker/**/*.ts",
+    "../src/analytics.ts",
+    "../src/playerData.ts",
+    "../src/playerScope.ts"
+  ]
 }

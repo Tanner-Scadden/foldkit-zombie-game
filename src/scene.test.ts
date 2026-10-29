@@ -588,6 +588,11 @@ describe('Run stats', () => {
         shotsHit: 532,
         heartsLost: 7,
         trapsPlaced: 3,
+        purchases: 4,
+        powerUpsGrabbed: 2,
+        maybeLastHurtBy: Option.some('Runner'),
+        activeFrames: 22_260,
+        activeFrameMs: 371_000,
         runMs: 371_000,
       }),
     })
