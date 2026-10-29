@@ -3,9 +3,8 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
+import { ARENA_LEVEL } from './arena'
 import {
-  ARENA_HEIGHT,
-  ARENA_WIDTH,
   PREPARATION_MS,
   RESTART_GRACE_MS,
   ZOMBIE_ALIVE_MAX,
@@ -37,7 +36,7 @@ import { ZOMBIE_KINDS } from './zombies'
 const FRAME_MS = 50
 const GRACE_TICK_MS = 50
 const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
-const MUZZLE_X = ARENA_WIDTH / 2 + 10
+const MUZZLE_X = ARENA_LEVEL.width / 2 + 10
 
 const readyModel: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
@@ -86,7 +85,7 @@ const bulletInto = (id: number, zombie: Zombie): Bullet => ({
   pierce: Pierce.Stops(),
 })
 
-const doomed = zombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2, 1)
+const doomed = zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 1)
 
 const clearingFinalWave = (mode: RunMode): Model =>
   modifyFields(readyModel, {
@@ -321,7 +320,7 @@ describe('campaign and endless after wave 8', () => {
     const full = Array.makeBy(ZOMBIE_ALIVE_MAX, index =>
       zombieAt(index + 1, 30 + (index % 6) * 8, 30 + index, ZOMBIE_MAX_HP),
     )
-    const victim = zombieAt(999, MUZZLE_X, ARENA_HEIGHT / 2, 1)
+    const victim = zombieAt(999, MUZZLE_X, ARENA_LEVEL.height / 2, 1)
     story(
       update,
       given(

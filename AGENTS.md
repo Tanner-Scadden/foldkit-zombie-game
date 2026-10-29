@@ -30,38 +30,51 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 
 ### Where things are
 
-| File                 | What it holds                                                 |
-| -------------------- | ------------------------------------------------------------- |
-| `src/model.ts`       | The Model and its Schema types                                |
-| `src/main.ts`        | Messages, `init`, `update`, Commands, and Subscriptions       |
-| `src/onboarding.ts`  | Lessons, the practice gate, the new zombie card, and hints    |
-| `src/veteran.ts`     | A returning player's Model for tests and the balance bot      |
-| `src/stats.ts`       | Run stats: kills, accuracy, run time, and the verdicts        |
-| `src/simulation.ts`  | The pure step that advances the game one frame                |
-| `src/arena.ts`       | The room's tile map, doorways, collision, and line of sight   |
-| `src/pathing.ts`     | The flow field toward the player and zombie steering          |
-| `src/waves.ts`       | Spawn tables, packs, the wave arc, spawning, and run phases   |
-| `src/pacing.ts`      | Sawtooth beats, pack telegraphs, door camping, and intensity  |
-| `src/zombies.ts`     | The zombie kind table: stats, behavior, deaths, and sounds    |
-| `src/combat.ts`      | Strikes, wounds, and bursts applied to any list of targets    |
-| `src/traps.ts`       | The trap table, placement, chewing, turrets, and repair       |
-| `src/weapons.ts`     | The weapon table, the two-slot arsenal, magazines, and reload |
-| `src/powerups.ts`    | Power-up tables, drops, grabbing, boost timers, boosted stats |
-| `src/powerupView.ts` | Pickups, callouts, the boost aura, and HUD timers on canvas   |
-| `src/shop.ts`        | Money, shop categories, items, prices, purchases, the stall   |
-| `src/shopView.ts`    | The shop dialog and its category tabs, HTML over the canvas   |
-| `src/stall.ts`       | The stall, its shopkeeper, entrance outline, and prompt       |
-| `src/room.ts`        | The room's static floor, walls, doors, and cover shapes       |
-| `src/particles.ts`   | Particles and floor decals spawned from each frame's events   |
-| `src/juice.ts`       | Screen shake, hit-stop, damage numbers, and the kill streak   |
-| `src/input.ts`       | Keyboard, mouse, and touch input turned into movement and aim |
-| `src/music.ts`       | The music's tunes as data, its instruments, and its scheduler |
-| `src/view.ts`        | The canvas scene and the on-screen touch sticks               |
-| `src/screens.ts`     | Title, banners, hints, pause, and the run stats panels        |
-| `src/font.ts`        | The pixel font, the money coin, and text layout               |
-| `src/sprite.ts`      | Pixel maps turned into canvas shapes                          |
-| `src/prng.ts`        | The seeded random number generator                            |
-| `src/constants.ts`   | Sizes, speeds, and other tuning numbers                       |
+| File                   | What it holds                                                          |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `src/model.ts`         | The Model and its Schema types                                         |
+| `src/main.ts`          | Messages, `init`, `update`, Commands, and Subscriptions                |
+| `src/onboarding.ts`    | Lessons, the practice gate, the new zombie card, and hints             |
+| `src/veteran.ts`       | A returning player's Model for tests and the balance bot               |
+| `src/stats.ts`         | Run stats: kills, accuracy, run time, and the verdicts                 |
+| `src/simulation.ts`    | The pure step that advances the game one frame                         |
+| `src/arena.ts`         | The level record, the tile map, doorways, collision, and line of sight |
+| `src/camera.ts`        | The camera derived from the player and the level, and world to view    |
+| `src/pathing.ts`       | The flow field toward the player and zombie steering                   |
+| `src/waves.ts`         | Spawn tables, packs, the wave arc, spawning, and run phases            |
+| `src/pacing.ts`        | Sawtooth beats, pack telegraphs, door camping, and intensity           |
+| `src/zombies.ts`       | The zombie kind table: stats, behavior, deaths, and sounds             |
+| `src/combat.ts`        | Strikes, wounds, and bursts applied to any list of targets             |
+| `src/traps.ts`         | The trap table, placement, chewing, turrets, and repair                |
+| `src/weapons.ts`       | The weapon table, the two-slot arsenal, magazines, and reload          |
+| `src/powerups.ts`      | Power-up tables, drops, grabbing, boost timers, boosted stats          |
+| `src/shop.ts`          | Money, shop categories, items, prices, purchases, the stall            |
+| `src/particles.ts`     | Particles and floor decals spawned from each frame's events            |
+| `src/juice.ts`         | Screen shake, hit-stop, damage numbers, and the kill streak            |
+| `src/input.ts`         | Keyboard, mouse, and touch input turned into movement and aim          |
+| `src/music.ts`         | The music's tunes as data, its instruments, and its scheduler          |
+| `src/view.ts`          | The root view: the page layout, the status text, the surface           |
+| `src/layers.ts`        | The floor, scene, and overlay canvases and the stage                   |
+| `src/worldView.ts`     | The world scene: ground, depth-sorted actors, overhead effects         |
+| `src/depth.ts`         | The drawable type and the foot-depth sort order                        |
+| `src/drawing.ts`       | Shape helpers shared by the world views: sprites, feet, pulses         |
+| `src/zombieView.ts`    | Zombies walking, fusing, and dying, their shadows and health bars      |
+| `src/playerView.ts`    | The player, the gun, muzzle flashes, and the reload bar                |
+| `src/trapView.ts`      | Barricades, turrets, and the trap placement ghost                      |
+| `src/effectsView.ts`   | Bullets, decals, particles, blasts, popups, and rattling doors         |
+| `src/hud.ts`           | Hearts, money, the streak, gun and trap slots, and the round text      |
+| `src/wavePreview.ts`   | The door markers that preview a wave, and their spoken text            |
+| `src/touchControls.ts` | Touch sticks, ghost sticks, gun buttons, and preparation buttons       |
+| `src/menus.ts`         | Mode buttons, the new zombie card, audio toggles, rotate notice        |
+| `src/powerupView.ts`   | Pickups, callouts, the boost aura, and HUD timers on canvas            |
+| `src/shopView.ts`      | The shop dialog and its category tabs, HTML over the canvas            |
+| `src/stall.ts`         | The stall, its shopkeeper, entrance outline, and prompt                |
+| `src/room.ts`          | The room's static floor, walls, doors, and cover shapes                |
+| `src/screens.ts`       | Title, banners, hints, pause, and the run stats panels                 |
+| `src/font.ts`          | The pixel font, the money coin, and text layout                        |
+| `src/sprite.ts`        | Pixel maps turned into canvas shapes                                   |
+| `src/prng.ts`          | The seeded random number generator                                     |
+| `src/constants.ts`     | The view size, speeds, and other tuning numbers                        |
 
 ### Deploying
 

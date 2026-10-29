@@ -2,11 +2,11 @@ import { Array, Option, Record, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
 import {
+  ARENA_LEVEL,
   COVER_SYMBOLS,
   type CoverKind,
   DOOR_IDS,
   DOOR_SYMBOLS,
-  ROOM_MAP,
   type Tile,
   WALL_SYMBOL,
   isInsideRoom,
@@ -14,7 +14,7 @@ import {
   symbolAt,
   tilesWithSymbol,
 } from './arena'
-import { ARENA_HEIGHT, ARENA_WIDTH, SHAKE_MAX_PX, TILE_SIZE } from './constants'
+import { SHAKE_MAX_PX, TILE_SIZE } from './constants'
 import { nextRandom } from './prng'
 import { pixelRuns } from './sprite'
 
@@ -52,7 +52,7 @@ const rect = (
 const plankJoint = (row: number): Canvas.Shape => {
   const draw = nextRandom(PLANK_JOINT_SEED ^ Math.imul(row, PLANK_JOINT_MIXER))
   return rect(
-    Math.floor(draw.value * ARENA_WIDTH),
+    Math.floor(draw.value * ARENA_LEVEL.width),
     row * PLANK_HEIGHT + 1,
     1,
     PLANK_HEIGHT - 1,
@@ -60,18 +60,18 @@ const plankJoint = (row: number): Canvas.Shape => {
   )
 }
 
-const PLANK_ROWS = Math.ceil(ARENA_HEIGHT / PLANK_HEIGHT)
+const PLANK_ROWS = Math.ceil(ARENA_LEVEL.height / PLANK_HEIGHT)
 
 const FLOOR: ReadonlyArray<Canvas.Shape> = [
   rect(
     -SHAKE_MAX_PX,
     -SHAKE_MAX_PX,
-    ARENA_WIDTH + SHAKE_MAX_PX * 2,
-    ARENA_HEIGHT + SHAKE_MAX_PX * 2,
+    ARENA_LEVEL.width + SHAKE_MAX_PX * 2,
+    ARENA_LEVEL.height + SHAKE_MAX_PX * 2,
     FLOOR_COLOR,
   ),
   ...Array.makeBy(PLANK_ROWS, row =>
-    rect(0, row * PLANK_HEIGHT, ARENA_WIDTH, 1, PLANK_SEAM_COLOR),
+    rect(0, row * PLANK_HEIGHT, ARENA_LEVEL.width, 1, PLANK_SEAM_COLOR),
   ),
   ...Array.makeBy(PLANK_ROWS, plankJoint),
 ]
@@ -87,7 +87,7 @@ const BLANK = '.'
 const markedGrid = (
   isMarked: (column: number, row: number) => boolean,
 ): ReadonlyArray<string> =>
-  Array.map(ROOM_MAP, (line, row) =>
+  Array.map(ARENA_LEVEL.tiles, (line, row) =>
     pipe(
       Array.makeBy(line.length, column =>
         isMarked(column, row) ? MARK : BLANK,

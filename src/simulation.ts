@@ -1,7 +1,8 @@
 import { Array, Option, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { type Box, findStrike, moveCircle } from './arena'
+import { ARENA_LEVEL, type Box, findStrike, moveCircle } from './arena'
+import { cameraOf } from './camera'
 import {
   hitEvent,
   killEvent,
@@ -10,8 +11,6 @@ import {
   woundPlayer,
 } from './combat'
 import {
-  ARENA_HEIGHT,
-  ARENA_WIDTH,
   BULLET_MAX,
   BULLET_RADIUS,
   DRY_FIRE_DELAY_MS,
@@ -103,7 +102,7 @@ export const refreshIntent = (model: Model): Model =>
     intent: () =>
       ShopState.isAnyOf(['Browsing'])(model.shop)
         ? idleIntent
-        : deriveIntent(model.input, model.player),
+        : deriveIntent(model.input, model.player, cameraOf(model)),
   })
 
 // TIMERS
@@ -157,8 +156,8 @@ const movePlayer = (
     blockers,
   )
   return modifyFields(player, {
-    x: () => clamp(moved.x, PLAYER_RADIUS, ARENA_WIDTH - PLAYER_RADIUS),
-    y: () => clamp(moved.y, PLAYER_RADIUS, ARENA_HEIGHT - PLAYER_RADIUS),
+    x: () => clamp(moved.x, PLAYER_RADIUS, ARENA_LEVEL.width - PLAYER_RADIUS),
+    y: () => clamp(moved.y, PLAYER_RADIUS, ARENA_LEVEL.height - PLAYER_RADIUS),
     knockback: knockback =>
       decayKnockback(knockback, PLAYER_KNOCKBACK_DECAY_PER_SECOND, seconds),
     invulnerability: invulnerability =>
@@ -430,7 +429,7 @@ const tickReload = (model: Model, deltaMs: number): Model => {
 // BULLETS
 
 const isInsideArena = ({ x, y }: Vector): boolean =>
-  x >= 0 && x <= ARENA_WIDTH && y >= 0 && y <= ARENA_HEIGHT
+  x >= 0 && x <= ARENA_LEVEL.width && y >= 0 && y <= ARENA_LEVEL.height
 
 const advanceBullet =
   (seconds: number, deltaMs: number) =>

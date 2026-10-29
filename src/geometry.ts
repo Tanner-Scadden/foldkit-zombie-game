@@ -1,6 +1,6 @@
 import { Option } from 'effect'
 
-import { ARENA_HEIGHT, ARENA_WIDTH } from './constants'
+import { VIEW_HEIGHT, VIEW_WIDTH } from './constants'
 import type { SurfaceRectangle, Vector } from './model'
 
 export const ZERO_VECTOR: Vector = { x: 0, y: 0 }
@@ -76,23 +76,23 @@ export const closestPointOnSegment = (
   return { x: from.x + segmentX * along, y: from.y + segmentY * along }
 }
 
-export const arenaScale = (surface: SurfaceRectangle): number =>
-  Math.min(surface.width / ARENA_WIDTH, surface.height / ARENA_HEIGHT)
+export const viewScale = (surface: SurfaceRectangle): number =>
+  Math.min(surface.width / VIEW_WIDTH, surface.height / VIEW_HEIGHT)
 
-export const clientToArena = (
+export const clientToView = (
   surface: SurfaceRectangle,
   client: Vector,
 ): Option.Option<Vector> => {
-  const scale = arenaScale(surface)
+  const scale = viewScale(surface)
   if (scale <= 0) {
     return Option.none()
   }
 
-  const arenaLeft = surface.left + (surface.width - ARENA_WIDTH * scale) / 2
-  const arenaTop = surface.top + (surface.height - ARENA_HEIGHT * scale) / 2
+  const viewLeft = surface.left + (surface.width - VIEW_WIDTH * scale) / 2
+  const viewTop = surface.top + (surface.height - VIEW_HEIGHT * scale) / 2
   return Option.some({
-    x: (client.x - arenaLeft) / scale,
-    y: (client.y - arenaTop) / scale,
+    x: (client.x - viewLeft) / scale,
+    y: (client.y - viewTop) / scale,
   })
 }
 

@@ -1,0 +1,482 @@
+import { Array, Result } from 'effect'
+import { Canvas } from 'foldkit'
+
+import { DOORS } from './arena'
+import type { Camera } from './camera'
+import {
+  BLAST_FLASH_MS,
+  BLOOD_DECAL_COLOR,
+  BLOOD_DECAL_FADED_COLOR,
+  BLOOD_PARTICLE_COLOR,
+  BONE_DECAL_COLOR,
+  BONE_DECAL_FADED_COLOR,
+  BONE_GIB_COLOR,
+  BULLET_TRAIL_COLOR,
+  BULLET_TRAIL_PX,
+  CHIP_COLOR,
+  CLIP_COLOR,
+  CLIP_DECAL_COLOR,
+  CLIP_DECAL_FADED_COLOR,
+  COIN_COLOR,
+  DAMAGE_POPUP_HOP_PX,
+  DAMAGE_POPUP_RISE_PX,
+  DECAL_FADE_COUNT,
+  DECAL_MAX,
+  DUST_COLOR,
+  DUST_FADED_COLOR,
+  DUST_FADE_MS,
+  GIB_SHADOW_COLOR,
+  GIB_SHADOW_WIDTH,
+  GOO_COLOR,
+  GOO_DECAL_COLOR,
+  GOO_DECAL_FADED_COLOR,
+  HIDE_DECAL_COLOR,
+  HIDE_DECAL_FADED_COLOR,
+  HIDE_GIB_COLOR,
+  HULL_COLOR,
+  HULL_DECAL_COLOR,
+  HULL_DECAL_FADED_COLOR,
+  KILL_POPUP_BIG_SCALE,
+  KILL_POPUP_FLASH_MS,
+  KILL_POPUP_HOP_PX,
+  KILL_POPUP_RISE_PX,
+  KILL_POPUP_SCALE,
+  LINK_COLOR,
+  MEAT_DECAL_COLOR,
+  MEAT_DECAL_FADED_COLOR,
+  MEAT_GIB_COLOR,
+  PLANK_COLOR,
+  POPUP_FADE_START,
+  POPUP_HOP_MS,
+  ROT_DECAL_COLOR,
+  ROT_DECAL_FADED_COLOR,
+  ROT_GIB_COLOR,
+  SCORCH_DECAL_COLOR,
+  SCORCH_DECAL_FADED_COLOR,
+  SHELL_COLOR,
+  SHELL_DECAL_COLOR,
+  SHELL_DECAL_FADED_COLOR,
+  SHELL_TUMBLE_MS,
+  SPARK_COLOR,
+  SPLINTER_COLOR,
+  VIEW_WIDTH,
+  WOOD_DECAL_COLOR,
+  WOOD_DECAL_FADED_COLOR,
+} from './constants'
+import { centeredGlyphs, centeredRect, progressBetween } from './drawing'
+import { type TextTone, textWidth } from './font'
+import { clamp } from './geometry'
+import { POPUP_LIFETIME_MS } from './juice'
+import {
+  type Blast,
+  type Bullet,
+  type BulletGlaze,
+  type Decal,
+  type DecalKind,
+  type DoorId,
+  type Model,
+  type Particle,
+  type ParticleKind,
+  Phase,
+  type Popup,
+} from './model'
+import { rattlingDoors } from './pacing'
+import { group } from './sprite'
+
+// BULLETS
+
+const BULLET_SIZE = 2
+const BULLET_COLOR = '#ffe066'
+
+type BulletLook = Readonly<{
+  size: number
+  color: string
+  trail: string
+  trailPx: number
+}>
+
+const BULLET_LOOKS: Readonly<Record<BulletGlaze, BulletLook>> = {
+  Plain: {
+    size: BULLET_SIZE,
+    color: BULLET_COLOR,
+    trail: BULLET_TRAIL_COLOR,
+    trailPx: BULLET_TRAIL_PX,
+  },
+  Spicy: {
+    size: BULLET_SIZE,
+    color: '#ff9a3d',
+    trail: 'rgba(255, 74, 46, 0.6)',
+    trailPx: BULLET_TRAIL_PX + 1,
+  },
+  Mean: {
+    size: BULLET_SIZE + 1,
+    color: '#e6b3ff',
+    trail: 'rgba(156, 74, 224, 0.6)',
+    trailPx: BULLET_TRAIL_PX,
+  },
+  Skewer: {
+    size: BULLET_SIZE,
+    color: '#d8ff9a',
+    trail: 'rgba(127, 208, 75, 0.6)',
+    trailPx: BULLET_TRAIL_PX + 3,
+  },
+}
+
+export const bulletShapes = ({
+  x,
+  y,
+  velocityX,
+  velocityY,
+  glaze,
+}: Bullet): ReadonlyArray<Canvas.Shape> => {
+  const look = BULLET_LOOKS[glaze]
+  const speed = Math.max(1, Math.hypot(velocityX, velocityY))
+  const half = Math.floor(look.size / 2)
+  return [
+    Canvas.Rect({
+      x: Math.round(x - (velocityX / speed) * look.trailPx) - half,
+      y: Math.round(y - (velocityY / speed) * look.trailPx) - half,
+      width: look.size,
+      height: look.size,
+      fill: look.trail,
+    }),
+    Canvas.Rect({
+      x: Math.round(x) - half,
+      y: Math.round(y) - half,
+      width: look.size,
+      height: look.size,
+      fill: look.color,
+    }),
+  ]
+}
+
+// DECALS AND PARTICLES
+
+const DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
+  Blood: BLOOD_DECAL_COLOR,
+  Meat: MEAT_DECAL_COLOR,
+  Rot: ROT_DECAL_COLOR,
+  Shell: SHELL_DECAL_COLOR,
+  Hull: HULL_DECAL_COLOR,
+  Bone: BONE_DECAL_COLOR,
+  Hide: HIDE_DECAL_COLOR,
+  Goo: GOO_DECAL_COLOR,
+  Scorch: SCORCH_DECAL_COLOR,
+  Wood: WOOD_DECAL_COLOR,
+  Clip: CLIP_DECAL_COLOR,
+}
+
+const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
+  Blood: BLOOD_DECAL_FADED_COLOR,
+  Meat: MEAT_DECAL_FADED_COLOR,
+  Rot: ROT_DECAL_FADED_COLOR,
+  Shell: SHELL_DECAL_FADED_COLOR,
+  Hull: HULL_DECAL_FADED_COLOR,
+  Bone: BONE_DECAL_FADED_COLOR,
+  Hide: HIDE_DECAL_FADED_COLOR,
+  Goo: GOO_DECAL_FADED_COLOR,
+  Scorch: SCORCH_DECAL_FADED_COLOR,
+  Wood: WOOD_DECAL_FADED_COLOR,
+  Clip: CLIP_DECAL_FADED_COLOR,
+}
+
+const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
+  Blood: BLOOD_PARTICLE_COLOR,
+  MeatGib: MEAT_GIB_COLOR,
+  RotGib: ROT_GIB_COLOR,
+  Shell: SHELL_COLOR,
+  Hull: HULL_COLOR,
+  Link: LINK_COLOR,
+  Dust: DUST_COLOR,
+  Chip: CHIP_COLOR,
+  Coin: COIN_COLOR,
+  BoneGib: BONE_GIB_COLOR,
+  HideGib: HIDE_GIB_COLOR,
+  Goo: GOO_COLOR,
+  Spark: SPARK_COLOR,
+  Splinter: SPLINTER_COLOR,
+  Plank: PLANK_COLOR,
+  Clip: CLIP_COLOR,
+}
+
+const CASINGS: ReadonlyArray<ParticleKind> = [
+  'Shell',
+  'Hull',
+  'Link',
+  'Plank',
+  'Clip',
+]
+
+const THICK_CASINGS: ReadonlyArray<ParticleKind> = ['Hull', 'Clip']
+
+const isCasing = (particle: Particle): boolean =>
+  Array.contains(CASINGS, particle.kind)
+
+export const decalShapes = (
+  decals: ReadonlyArray<Decal>,
+): ReadonlyArray<Canvas.Shape> => {
+  const fadedCount = decals.length - (DECAL_MAX - DECAL_FADE_COUNT)
+  return Array.map(decals, (decal, index) =>
+    centeredRect(
+      decal.x,
+      decal.y,
+      decal.width,
+      decal.height,
+      index < fadedCount
+        ? FADED_DECAL_COLORS[decal.kind]
+        : DECAL_COLORS[decal.kind],
+    ),
+  )
+}
+
+const isGround = (particle: Particle): boolean => particle.kind === 'Dust'
+
+const GIBS: ReadonlyArray<ParticleKind> = [
+  'MeatGib',
+  'RotGib',
+  'BoneGib',
+  'HideGib',
+]
+
+const isGib = (particle: Particle): boolean =>
+  Array.contains(GIBS, particle.kind)
+
+export const gibShadow = (
+  particle: Particle,
+): Result.Result<Canvas.Shape, void> =>
+  isGib(particle)
+    ? Result.succeed(
+        centeredRect(
+          Math.round(particle.x),
+          Math.round(particle.y),
+          GIB_SHADOW_WIDTH,
+          1,
+          GIB_SHADOW_COLOR,
+        ),
+      )
+    : Result.failVoid
+
+const isCasingUpright = (particle: Particle): boolean =>
+  isCasing(particle) &&
+  Math.floor(particle.remainingMs / SHELL_TUMBLE_MS) % 2 === 1
+
+const particleColor = (particle: Particle): string =>
+  particle.kind === 'Dust' && particle.remainingMs < DUST_FADE_MS
+    ? DUST_FADED_COLOR
+    : PARTICLE_COLORS[particle.kind]
+
+const particleShape = (particle: Particle): Canvas.Shape => {
+  const isUpright = isCasingUpright(particle)
+  const thickness = Array.contains(THICK_CASINGS, particle.kind) ? 2 : 1
+  const width = isUpright ? thickness : particle.size
+  const height = isCasing(particle)
+    ? isUpright
+      ? particle.size
+      : thickness
+    : particle.size
+  return centeredRect(
+    Math.round(particle.x),
+    Math.round(particle.y - particle.z),
+    width,
+    height,
+    particleColor(particle),
+  )
+}
+
+const particleShapesWhere =
+  (isInLayer: (particle: Particle) => boolean) =>
+  (particles: ReadonlyArray<Particle>): ReadonlyArray<Canvas.Shape> =>
+    Array.filterMap(particles, particle =>
+      isInLayer(particle)
+        ? Result.succeed(particleShape(particle))
+        : Result.failVoid,
+    )
+
+export const groundParticleShapes = particleShapesWhere(isGround)
+
+export const airborneParticleShapes = particleShapesWhere(
+  particle => !isGround(particle),
+)
+
+// BLASTS
+
+const BLAST_FLASH_END_MS = 50
+const BLAST_CORE_COLOR = '#fffbe6'
+const BLAST_FLASH_COLOR = '#ffd23f'
+const BLAST_FIRE_COLOR = '#ff7a2e'
+const BLAST_RING_COLOR = '#ffe066'
+const BLAST_SMOKE_COLOR = 'rgba(40, 30, 28, 0.45)'
+
+export const blastShapes = (blast: Blast): ReadonlyArray<Canvas.Shape> => {
+  const x = Math.round(blast.x)
+  const y = Math.round(blast.y)
+  if (blast.ageMs < BLAST_FLASH_END_MS) {
+    return [
+      Canvas.Circle({ x, y, radius: blast.radius, fill: BLAST_FLASH_COLOR }),
+      Canvas.Circle({
+        x,
+        y,
+        radius: blast.radius * 0.6,
+        fill: BLAST_CORE_COLOR,
+      }),
+    ]
+  }
+
+  const progress = clamp(blast.ageMs / BLAST_FLASH_MS, 0, 1)
+  return [
+    group({
+      opacity: 1 - progress,
+      shapes: [
+        Canvas.Circle({
+          x,
+          y: y - Math.round(6 * progress),
+          radius: blast.radius * (0.5 + 0.4 * progress),
+          fill: BLAST_SMOKE_COLOR,
+        }),
+        Canvas.Circle({
+          x,
+          y,
+          radius: Math.max(1, blast.radius * 0.7 * (1 - progress)),
+          fill: BLAST_FIRE_COLOR,
+        }),
+        Canvas.Circle({
+          x,
+          y,
+          radius: blast.radius * (0.7 + 0.45 * progress),
+          stroke: BLAST_RING_COLOR,
+          lineWidth: 2,
+        }),
+      ],
+    }),
+  ]
+}
+
+// POPUPS
+
+type PopupLook = Readonly<{
+  text: string
+  tone: TextTone
+  scale: number
+  hopPx: number
+  risePx: number
+}>
+
+const payoutLook = (
+  popup: Popup,
+  bigScale: number,
+  scale: number,
+): PopupLook => ({
+  text: `+$${popup.value}`,
+  tone: popup.ageMs < KILL_POPUP_FLASH_MS ? 'Damage' : 'Coin',
+  scale: popup.ageMs < KILL_POPUP_FLASH_MS ? bigScale : scale,
+  hopPx: KILL_POPUP_HOP_PX,
+  risePx: KILL_POPUP_RISE_PX,
+})
+
+const PAYDAY_POPUP_SCALE = 3
+const PAYDAY_POPUP_BIG_SCALE = 4
+
+const popupLook = (popup: Popup): PopupLook => {
+  if (popup.kind === 'Damage') {
+    return {
+      text: `${popup.value}`,
+      tone: 'Damage',
+      scale: 1,
+      hopPx: DAMAGE_POPUP_HOP_PX,
+      risePx: DAMAGE_POPUP_RISE_PX,
+    }
+  } else if (popup.kind === 'Empty') {
+    return {
+      text: 'EMPTY',
+      tone: 'Alert',
+      scale: 1,
+      hopPx: DAMAGE_POPUP_HOP_PX,
+      risePx: DAMAGE_POPUP_RISE_PX,
+    }
+  } else if (popup.kind === 'Payday') {
+    return payoutLook(popup, PAYDAY_POPUP_BIG_SCALE, PAYDAY_POPUP_SCALE)
+  } else {
+    return payoutLook(popup, KILL_POPUP_BIG_SCALE, KILL_POPUP_SCALE)
+  }
+}
+
+export const popupShape =
+  (camera: Camera) =>
+  (popup: Popup): Canvas.Shape => {
+    const look = popupLook(popup)
+    const progress = clamp(popup.ageMs / POPUP_LIFETIME_MS[popup.kind], 0, 1)
+    const hop =
+      popup.ageMs < POPUP_HOP_MS
+        ? look.hopPx * Math.sin((Math.PI * popup.ageMs) / POPUP_HOP_MS)
+        : 0
+    const halfWidth = Math.ceil((textWidth(look.text) * look.scale) / 2)
+    return group({
+      translate: {
+        x: Math.round(
+          clamp(
+            popup.x,
+            camera.x + halfWidth,
+            camera.x + Math.max(halfWidth, VIEW_WIDTH - halfWidth),
+          ),
+        ),
+        y: Math.round(popup.y - hop - look.risePx * progress),
+      },
+      scale: { x: look.scale, y: look.scale },
+      opacity: 1 - progressBetween(progress, POPUP_FADE_START, 1),
+      shapes: centeredGlyphs(look.text, look.tone),
+    })
+  }
+
+// DOOR RATTLE
+
+const RATTLE_EYE_COLOR = '#ff4a4f'
+const RATTLE_SLAT_COLOR = '#8a5a2b'
+const RATTLE_SHAKE_MS = 45
+const RATTLE_BLINK_MS = 260
+const RATTLE_EYE_DEPTH_PX = 4
+const RATTLE_EYE_GAP_PX = 2
+const RATTLE_SLAT_SPAN_PX = 7
+
+const rattleShapes =
+  (elapsedMs: number) =>
+  (door: DoorId): ReadonlyArray<Canvas.Shape> => {
+    const { center, outward } = DOORS[door]
+    const across = { x: -outward.y, y: outward.x }
+    const shake = Math.round(Math.sin(elapsedMs / RATTLE_SHAKE_MS))
+    const eyes = {
+      x: center.x + outward.x * RATTLE_EYE_DEPTH_PX,
+      y: center.y + outward.y * RATTLE_EYE_DEPTH_PX,
+    }
+    const isBlinking = Math.floor(elapsedMs / RATTLE_BLINK_MS) % 4 === 3
+    const slat = (side: number): Canvas.Shape =>
+      Canvas.Rect({
+        x:
+          Math.round(
+            center.x + across.x * side * RATTLE_SLAT_SPAN_PX + across.x * shake,
+          ) - 1,
+        y:
+          Math.round(
+            center.y + across.y * side * RATTLE_SLAT_SPAN_PX + across.y * shake,
+          ) - 1,
+        width: 2,
+        height: 2,
+        fill: RATTLE_SLAT_COLOR,
+      })
+    const eye = (side: number): Canvas.Shape =>
+      Canvas.Rect({
+        x: Math.round(eyes.x + across.x * side * RATTLE_EYE_GAP_PX),
+        y: Math.round(eyes.y + across.y * side * RATTLE_EYE_GAP_PX),
+        width: 1,
+        height: 1,
+        fill: RATTLE_EYE_COLOR,
+      })
+    return [slat(-1), slat(1), ...(isBlinking ? [] : [eye(-1), eye(1)])]
+  }
+
+export const doorRattleShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+  Phase.isAnyOf(['Wave'])(model.phase)
+    ? Array.flatMap(
+        rattlingDoors(model.phase.spawns, model.pacing.warnedPacks),
+        rattleShapes(model.elapsedMs),
+      )
+    : []

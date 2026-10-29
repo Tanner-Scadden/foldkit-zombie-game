@@ -10,8 +10,9 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
+import { ARENA_LEVEL } from './arena'
 import { type SoundEffect, positionVariation } from './audio'
-import { ARENA_HEIGHT, ARENA_WIDTH, ZOMBIE_MAX_HP } from './constants'
+import { ZOMBIE_MAX_HP } from './constants'
 import {
   Message,
   PlaySound,
@@ -34,9 +35,9 @@ import {
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 const FRAME_MS = 16
 const MID_GAME_MS = 30_000
-const MUZZLE_X = ARENA_WIDTH / 2 + 10
-const SHOT_X = ARENA_WIDTH / 2 + 6
-const SHOT_Y = ARENA_HEIGHT / 2
+const MUZZLE_X = ARENA_LEVEL.width / 2 + 10
+const SHOT_X = ARENA_LEVEL.width / 2 + 6
+const SHOT_Y = ARENA_LEVEL.height / 2
 
 const readyScreen: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some(SURFACE),
@@ -82,7 +83,7 @@ const oneHitZombieAt = (id: number, x: number, y: number): Zombie =>
 
 const withOneHitZombieInFront = (base: Model): Model =>
   modifyFields(base, {
-    zombies: () => [oneHitZombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2)],
+    zombies: () => [oneHitZombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2)],
   })
 
 const tick = message(Message.TickedFrame({ deltaTime: FRAME_MS }))
@@ -263,7 +264,9 @@ describe('frame sounds', () => {
       update,
       given(
         modifyFields(playing(AudioState.Ready()), {
-          zombies: () => [zombieAt(100, ARENA_WIDTH / 2 + 2, ARENA_HEIGHT / 2)],
+          zombies: () => [
+            zombieAt(100, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2),
+          ],
         }),
       ),
       tick,
@@ -324,7 +327,7 @@ describe('frame sounds', () => {
     const bulletAtZombie: Bullet = {
       id: 1,
       x: MUZZLE_X,
-      y: ARENA_HEIGHT / 2,
+      y: ARENA_LEVEL.height / 2,
       velocityX: 1,
       velocityY: 0,
       remainingMs: 900,

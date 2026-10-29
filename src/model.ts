@@ -3,13 +3,8 @@ import { defineTaggedUnion } from 'foldkit/schema'
 
 import { Dialog, Tabs } from '@foldkit/ui'
 
-import {
-  ARENA_HEIGHT,
-  ARENA_WIDTH,
-  DEFAULT_SEED,
-  PISTOL_MAGAZINE,
-  PLAYER_MAX_HP,
-} from './constants'
+import { ARENA_LEVEL } from './arena'
+import { DEFAULT_SEED, PISTOL_MAGAZINE, PLAYER_MAX_HP } from './constants'
 import { flowFieldToward } from './pathing'
 
 export const Vector = Schema.Struct({ x: Schema.Number, y: Schema.Number })
@@ -58,7 +53,7 @@ export type Trigger = typeof Trigger.Type
 
 export const Input = Schema.Struct({
   pressedKeys: Schema.Array(Schema.String),
-  maybeMousePosition: Schema.Option(Vector),
+  maybeMouseInView: Schema.Option(Vector),
   mouseButton: MouseButton,
   moveStick: Stick,
   aimStick: Stick,
@@ -700,8 +695,8 @@ export const Model = Schema.Struct({
 export type Model = typeof Model.Type
 
 export const initialPlayer: Player = {
-  x: ARENA_WIDTH / 2,
-  y: ARENA_HEIGHT / 2,
+  x: ARENA_LEVEL.width / 2,
+  y: ARENA_LEVEL.height / 2,
   hp: PLAYER_MAX_HP,
   facing: { x: 1, y: 0 },
   fireCooldownMs: 0,
@@ -724,7 +719,7 @@ export const FIRST_SHOP_CATEGORY: ShopCategory = 'Guns'
 
 export const idleInput: Input = {
   pressedKeys: [],
-  maybeMousePosition: Option.none(),
+  maybeMouseInView: Option.none(),
   mouseButton: MouseButton.Released(),
   moveStick: Stick.Idle(),
   aimStick: Stick.Idle(),

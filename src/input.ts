@@ -1,12 +1,13 @@
 import { Array, Option, Schema, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { type Camera, viewToWorld } from './camera'
 import { STICK_DEAD_ZONE, STICK_RADIUS_PX } from './constants'
 import {
   ZERO_VECTOR,
   addVectors,
   clampLength,
-  clientToArena,
+  clientToView,
   directionBetween,
   isLeftHalf,
   normalize,
@@ -184,8 +185,8 @@ const pressMouse = (
 ): Input =>
   modifyFields(input, {
     mouseButton: () => MouseButton.Held({ pointerId: press.pointerId }),
-    maybeMousePosition: () =>
-      clientToArena(surface, { x: press.clientX, y: press.clientY }),
+    maybeMouseInView: () =>
+      clientToView(surface, { x: press.clientX, y: press.clientY }),
   })
 
 export const pressPointer = (
@@ -269,7 +270,7 @@ export const moveMouse = (
     onNone: () => input,
     onSome: surface =>
       modifyFields(input, {
-        maybeMousePosition: () => clientToArena(surface, client),
+        maybeMouseInView: () => clientToView(surface, client),
       }),
   })
 
@@ -299,9 +300,13 @@ const withDeadZone = (deflection: Vector): Vector =>
 const stickAim = (stick: Stick): Option.Option<Vector> =>
   pipe(stick, stickDeflection, withDeadZone, normalize)
 
-const mouseAim = (input: Input, player: Player): Option.Option<Vector> =>
-  Option.flatMap(input.maybeMousePosition, mousePosition =>
-    directionBetween(player, mousePosition),
+const mouseAim = (
+  input: Input,
+  player: Player,
+  camera: Camera,
+): Option.Option<Vector> =>
+  Option.flatMap(input.maybeMouseInView, mouseInView =>
+    directionBetween(player, viewToWorld(camera, mouseInView)),
   )
 
 const triggerOf = (input: Input): Trigger =>
@@ -311,7 +316,11 @@ const triggerOf = (input: Input): Trigger =>
     ? 'Held'
     : 'Released'
 
-export const deriveIntent = (input: Input, player: Player): Intent => ({
+export const deriveIntent = (
+  input: Input,
+  player: Player,
+  camera: Camera,
+): Intent => ({
   move: clampLength(
     addVectors(
       keyboardMove(input.pressedKeys),
@@ -320,7 +329,7 @@ export const deriveIntent = (input: Input, player: Player): Intent => ({
     1,
   ),
   maybeAim: Option.orElse(stickAim(input.aimStick), () =>
-    mouseAim(input, player),
+    mouseAim(input, player, camera),
   ),
   trigger: triggerOf(input),
 })

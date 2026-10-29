@@ -3,8 +3,10 @@ import type { Canvas } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
+import { cameraOf } from './camera'
+import { sceneShapes } from './layers'
 import { type Model, Phase, RunMode, initialModel } from './model'
-import { sceneShapes, wavePreviewShapes } from './view'
+import { wavePreviewShapes } from './wavePreview'
 import { rollSpawns, startOrResume } from './waves'
 
 const preparing = (wave: number): Model => {
@@ -47,9 +49,9 @@ describe('Door preview', () => {
   test('sits on the overlay, so a screen shake never moves it', () => {
     const still = preparing(4)
     const shaking = shaken(still)
-    const preview = wavePreviewShapes(still)
+    const preview = wavePreviewShapes(still, cameraOf(still))
     expect(preview).not.toEqual([])
-    expect(wavePreviewShapes(shaking)).toEqual(preview)
+    expect(wavePreviewShapes(shaking, cameraOf(shaking))).toEqual(preview)
 
     const [stillWorld, ...stillOverlay] = sceneShapes(still)
     const [shakingWorld, ...shakingOverlay] = sceneShapes(shaking)
@@ -61,7 +63,7 @@ describe('Door preview', () => {
   test('holds its letters still: no scaling, only the frame pulses', () => {
     const base = preparing(4)
     const frames = Array.makeBy(15, index =>
-      wavePreviewShapes(atTime(base, index * 100)),
+      wavePreviewShapes(atTime(base, index * 100), cameraOf(base)),
     )
     expect(Array.some(Array.flatten(frames), isScaled)).toBe(false)
     const [first, ...rest] = Array.map(frames, frame =>

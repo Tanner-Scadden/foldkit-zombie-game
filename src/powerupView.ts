@@ -1,7 +1,8 @@
 import { Array, Option, Record, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
-import { ARENA_WIDTH, SHADOW_COLOR, SHADOW_HEIGHT } from './constants'
+import { type Camera, worldToView } from './camera'
+import { SHADOW_COLOR, SHADOW_HEIGHT, VIEW_WIDTH } from './constants'
 import { type BakedText, bakeText, placeBaked } from './font'
 import { clamp } from './geometry'
 import {
@@ -82,6 +83,9 @@ const popScale = (ageMs: number): number => {
   return progress + PICKUP_POP_OVERSHOOT * Math.sin(Math.PI * progress)
 }
 
+export const pickupFootY = (pickup: Pickup): number =>
+  pickup.y + PICKUP_SHADOW_DROP
+
 export const pickupShapes = (pickup: Pickup): ReadonlyArray<Canvas.Shape> => {
   const turn = (pickup.ageMs / PICKUP_BOB_MS) * FULL_TURN
   const x = Math.round(pickup.x)
@@ -150,27 +154,28 @@ const calloutOpacity = (progress: number): number | undefined => {
 // NOTE: callouts live on the overlay canvas, which repaints only when what it
 // shows changes. So a callout holds still after its pop and fades in a few
 // whole steps instead of drifting every frame.
-export const calloutShapes = (
-  callout: Callout,
-): ReadonlyArray<Canvas.Shape> => {
-  const { title, blurb } = CALLOUT_TEXTS[callout.kind]
-  const progress = clamp(callout.ageMs / CALLOUT_LIFETIME_MS, 0, 1)
-  const scale =
-    callout.ageMs < CALLOUT_POP_MS ? CALLOUT_POP_SCALE : CALLOUT_SCALE
-  const halfWidth = Math.ceil((title.width * scale) / 2) + CALLOUT_MARGIN
-  const x = clamp(Math.round(callout.x), halfWidth, ARENA_WIDTH - halfWidth)
-  const y = Math.max(CALLOUT_MARGIN, Math.round(callout.y - CALLOUT_LIFT_PX))
-  const opacity = calloutOpacity(progress)
-  return [
-    placeBaked(title, { x, y, align: 'Center', scale, opacity }),
-    placeBaked(blurb, {
-      x,
-      y: y + CALLOUT_BLURB_GAP,
-      align: 'Center',
-      opacity,
-    }),
-  ]
-}
+export const calloutShapes =
+  (camera: Camera) =>
+  (callout: Callout): ReadonlyArray<Canvas.Shape> => {
+    const { title, blurb } = CALLOUT_TEXTS[callout.kind]
+    const anchor = worldToView(camera, callout)
+    const progress = clamp(callout.ageMs / CALLOUT_LIFETIME_MS, 0, 1)
+    const scale =
+      callout.ageMs < CALLOUT_POP_MS ? CALLOUT_POP_SCALE : CALLOUT_SCALE
+    const halfWidth = Math.ceil((title.width * scale) / 2) + CALLOUT_MARGIN
+    const x = clamp(Math.round(anchor.x), halfWidth, VIEW_WIDTH - halfWidth)
+    const y = Math.max(CALLOUT_MARGIN, Math.round(anchor.y - CALLOUT_LIFT_PX))
+    const opacity = calloutOpacity(progress)
+    return [
+      placeBaked(title, { x, y, align: 'Center', scale, opacity }),
+      placeBaked(blurb, {
+        x,
+        y: y + CALLOUT_BLURB_GAP,
+        align: 'Center',
+        opacity,
+      }),
+    ]
+  }
 
 const BURP_RING_MS = 420
 const BURP_RING_COLOR = '#d6f25c'

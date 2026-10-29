@@ -2,11 +2,11 @@ import { Array, Option, Record, String, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
 import {
-  ARENA_HEIGHT,
-  ARENA_WIDTH,
   FEEDBACK_LINE,
   GAME_TITLE,
   MS_PER_SECOND,
+  VIEW_HEIGHT,
+  VIEW_WIDTH,
   WAVE_BANNER_MS,
   WAVE_CLEARED_BANNER_MS,
 } from './constants'
@@ -70,11 +70,11 @@ import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
 
 // SHARED
 
-const CENTER_X = ARENA_WIDTH / 2
+const CENTER_X = VIEW_WIDTH / 2
 const TITLE_SCALE = 2
 
 const backdrop = (fill: string): Canvas.Shape =>
-  Canvas.Rect({ x: 0, y: 0, width: ARENA_WIDTH, height: ARENA_HEIGHT, fill })
+  Canvas.Rect({ x: 0, y: 0, width: VIEW_WIDTH, height: VIEW_HEIGHT, fill })
 
 const DIM_BACKDROP = backdrop('rgba(8, 10, 12, 0.72)')
 const TITLE_BACKDROP = backdrop('rgba(14, 8, 20, 0.6)')
@@ -384,11 +384,9 @@ const easeOut = (progress: number): number => 1 - (1 - progress) ** 3
 const cardSlideX = (ageMs: number): number => {
   const leftMs = DEBUT_CARD_MS - ageMs
   if (ageMs < CARD_SLIDE_IN_MS) {
-    return Math.round(-ARENA_WIDTH * (1 - easeOut(ageMs / CARD_SLIDE_IN_MS)))
+    return Math.round(-VIEW_WIDTH * (1 - easeOut(ageMs / CARD_SLIDE_IN_MS)))
   } else if (leftMs < CARD_SLIDE_OUT_MS) {
-    return Math.round(
-      ARENA_WIDTH * easeOut(1 - leftMs / CARD_SLIDE_OUT_MS) ** 2,
-    )
+    return Math.round(VIEW_WIDTH * easeOut(1 - leftMs / CARD_SLIDE_OUT_MS) ** 2)
   } else {
     return 0
   }
@@ -432,14 +430,14 @@ const debutCardShapes = (
         Canvas.Rect({
           x: 0,
           y: CARD_TOP - 1,
-          width: ARENA_WIDTH,
+          width: VIEW_WIDTH,
           height: CARD_BOTTOM - CARD_TOP + 2,
           fill: CARD_EDGE,
         }),
         Canvas.Rect({
           x: 0,
           y: CARD_TOP,
-          width: ARENA_WIDTH,
+          width: VIEW_WIDTH,
           height: CARD_BOTTOM - CARD_TOP,
           fill: CARD_FILL,
         }),
@@ -738,7 +736,7 @@ const PARADE: ReadonlyArray<Marcher> = [
 ]
 
 const PARADE_MARGIN = 24
-const PARADE_SPAN = ARENA_WIDTH + PARADE_MARGIN * 2
+const PARADE_SPAN = VIEW_WIDTH + PARADE_MARGIN * 2
 const PARADE_SHADOW = 'rgba(0, 0, 0, 0.35)'
 
 const marcherShapes =
@@ -747,7 +745,7 @@ const marcherShapes =
     const travelled =
       marcher.offset + (marcher.speed * screenMs) / MS_PER_SECOND
     const along = (travelled % PARADE_SPAN) - PARADE_MARGIN
-    const x = Math.round(marcher.direction === 1 ? along : ARENA_WIDTH - along)
+    const x = Math.round(marcher.direction === 1 ? along : VIEW_WIDTH - along)
     const stats = ZOMBIE_KINDS[marcher.kind]
     const stride = Math.floor(travelled / stats.stridePx)
     const facing = marcher.direction === 1 ? 'Right' : 'Left'
@@ -808,7 +806,7 @@ const GAME_OVER = bakeText('GAME OVER', 'Defeat')
 const YOU_SURVIVED = bakeText('YOU SURVIVED!', 'Victory')
 
 const PANEL_LEFT = 76
-const PANEL_RIGHT = ARENA_WIDTH - PANEL_LEFT
+const PANEL_RIGHT = VIEW_WIDTH - PANEL_LEFT
 const PANEL_TOP = 37
 const PANEL_ROW_PX = 8
 const PANEL_PAD = 5

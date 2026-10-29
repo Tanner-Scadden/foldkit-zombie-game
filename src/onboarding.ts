@@ -1,6 +1,7 @@
 import { Array, Option, Result, Schema, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { cameraOf, worldToView } from './camera'
 import { WAVE_CLEARED_BANNER_MS } from './constants'
 import { vectorLength } from './geometry'
 import {
@@ -213,7 +214,8 @@ export const followPlayer = (band: HintBand, playerY: number): HintBand => {
 
 export const moveHintBand = (model: Model): Model =>
   modifyFields(model, {
-    hintBand: band => followPlayer(band, model.player.y),
+    hintBand: band =>
+      followPlayer(band, worldToView(cameraOf(model), model.player).y),
   })
 
 // HINTS

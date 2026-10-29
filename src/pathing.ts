@@ -1,6 +1,7 @@
 import { Array, Option, Order, Result, pipe } from 'effect'
 
 import {
+  ARENA_LEVEL,
   DOORS,
   DOOR_IDS,
   DOOR_TILE_INDICES,
@@ -18,8 +19,6 @@ import {
   tileOfIndex,
 } from './arena'
 import {
-  ARENA_HEIGHT,
-  ARENA_WIDTH,
   DIRECT_CHASE_FULL_PX,
   DIRECT_CHASE_RANGE_PX,
   DOOR_HALF_WIDTH_PX,
@@ -306,8 +305,8 @@ const insideSteering = (
 
 const LOOP_LEFT = -ZOMBIE_SPAWN_MARGIN
 const LOOP_TOP = -ZOMBIE_SPAWN_MARGIN
-const LOOP_RIGHT = ARENA_WIDTH + ZOMBIE_SPAWN_MARGIN
-const LOOP_BOTTOM = ARENA_HEIGHT + ZOMBIE_SPAWN_MARGIN
+const LOOP_RIGHT = ARENA_LEVEL.width + ZOMBIE_SPAWN_MARGIN
+const LOOP_BOTTOM = ARENA_LEVEL.height + ZOMBIE_SPAWN_MARGIN
 const LOOP_WIDTH = LOOP_RIGHT - LOOP_LEFT
 const LOOP_HEIGHT = LOOP_BOTTOM - LOOP_TOP
 const LOOP_LENGTH = (LOOP_WIDTH + LOOP_HEIGHT) * 2

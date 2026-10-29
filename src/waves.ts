@@ -2,6 +2,7 @@ import { Array, Option, Order, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { DOOR_IDS, doorSpawnPoint } from './arena'
+import { arenaCamera } from './camera'
 import {
   DOOR_HALF_WIDTH_PX,
   DOOR_SPAWN_SPREAD_PX,
@@ -1165,7 +1166,8 @@ const startRun = (model: Model, mode: RunMode): Model =>
       trapNotice: () => TrapNotice.Quiet(),
       flowField: () => flowFieldToward(initialPlayer, 'Narrow', []),
       wideFlowField: () => flowFieldToward(initialPlayer, 'Wide', []),
-      intent: () => deriveIntent(model.input, initialPlayer),
+      intent: () =>
+        deriveIntent(model.input, initialPlayer, arenaCamera(initialPlayer)),
       stats: () => freshStats,
       lessons: settleLessons,
       hintBand: () => 'Top',

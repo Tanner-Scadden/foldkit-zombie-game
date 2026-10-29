@@ -1,7 +1,7 @@
 import { Array, Option } from 'effect'
 import { Canvas } from 'foldkit'
 
-import { ARENA_WIDTH } from './constants'
+import { ARENA_LEVEL } from './arena'
 import {
   COIN_SPRITE,
   COIN_WIDTH,
@@ -95,8 +95,15 @@ const AWNING: ReadonlyArray<Canvas.Shape> = [
   rect(left - AWNING_OVERHANG, AWNING_TOP, AWNING_WIDTH, 1, AWNING_RED),
 ]
 
+const STALL_SHADOW = rect(
+  left + 2,
+  top + height,
+  width - 2,
+  2,
+  STALL_SHADOW_COLOR,
+)
+
 const STALL_BACK: ReadonlyArray<Canvas.Shape> = [
-  rect(left + 2, top + height, width - 2, 2, STALL_SHADOW_COLOR),
   rect(left, POST_TOP, 2, height + 6, POST_COLOR),
   rect(left + width - 2, POST_TOP, 2, height + 6, POST_COLOR),
 ]
@@ -335,7 +342,7 @@ const bakePrompt = (text: string, tone: TextTone) => {
   return placeBaked(baked, {
     x: Math.min(
       centerX,
-      ARENA_WIDTH - PROMPT_EDGE - Math.ceil(baked.width / 2),
+      ARENA_LEVEL.width - PROMPT_EDGE - Math.ceil(baked.width / 2),
     ),
     y: PROMPT_Y,
     align: 'Center',
@@ -354,6 +361,16 @@ export const stallPromptShapes = (
 
 export type StallLook = 'Open' | 'Beckoning' | 'Closed'
 
+export const STALL_FOOT_Y = STALL_BOX.bottom
+
+export const stallGroundShapes = (
+  look: StallLook,
+  elapsedMs: number,
+): ReadonlyArray<Canvas.Shape> =>
+  look === 'Beckoning'
+    ? [...glowShapes(elapsedMs), STALL_SHADOW]
+    : [STALL_SHADOW]
+
 export const stallShapes = (
   look: StallLook,
   elapsedMs: number,
@@ -369,7 +386,6 @@ export const stallShapes = (
   } else {
     const isBeckoning = look === 'Beckoning'
     return [
-      ...(isBeckoning ? glowShapes(elapsedMs) : []),
       ...STALL_BACK,
       ...awakeShopkeeper(elapsedMs),
       ...COUNTER,

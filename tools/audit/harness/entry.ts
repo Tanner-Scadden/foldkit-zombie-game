@@ -4,6 +4,7 @@ import { Runtime } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import { DECAL_MAX, PLAYER_MAX_HP } from '@game/constants'
+import { sceneShapes } from '@game/layers'
 import {
   Message,
   init,
@@ -22,7 +23,7 @@ import {
   type DecalKind,
 } from '@game/model'
 import { raiseDebutCard } from '@game/onboarding'
-import { view, sceneShapes } from '@game/view'
+import { view } from '@game/view'
 import { rollSpawns, startOrResume } from '@game/waves'
 import { ZOMBIE_KIND_ORDER } from '@game/zombies'
 
@@ -191,7 +192,7 @@ const scenarioModel = (): Model => {
       input: input => ({
         ...input,
         mouseButton: MouseButton.Held({ pointerId: 1 }),
-        maybeMousePosition: Option.some({ x: aimX, y: aimY }),
+        maybeMouseInView: Option.some({ x: aimX, y: aimY }),
       }),
     })
   }

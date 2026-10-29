@@ -3,9 +3,8 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
+import { ARENA_LEVEL } from './arena'
 import {
-  ARENA_HEIGHT,
-  ARENA_WIDTH,
   BLOOD_PER_HIT,
   BLOOD_PER_KILL,
   DAMAGE_POPUP_LIFETIME_MS,
@@ -118,7 +117,7 @@ const dyingZombieAt = (id: number, x: number, y: number): Zombie =>
       }),
   })
 
-const MUZZLE_X = ARENA_WIDTH / 2 + 10
+const MUZZLE_X = ARENA_LEVEL.width / 2 + 10
 const FRAME_MS = 16
 const RIGHT = { x: 1, y: 0 }
 
@@ -154,8 +153,10 @@ describe('movement', () => {
       message(Message.PressedKey({ code: 'KeyD' })),
       tick(20),
       model(({ player }) => {
-        expect(player.x).toBeCloseTo(ARENA_WIDTH / 2 + PLAYER_SPEED * 0.02)
-        expect(player.y).toBe(ARENA_HEIGHT / 2)
+        expect(player.x).toBeCloseTo(
+          ARENA_LEVEL.width / 2 + PLAYER_SPEED * 0.02,
+        )
+        expect(player.y).toBe(ARENA_LEVEL.height / 2)
       }),
     )
   })
@@ -167,7 +168,9 @@ describe('movement', () => {
       message(Message.PressedKey({ code: 'ArrowLeft' })),
       tick(5000),
       model(({ player, elapsedMs }) => {
-        expect(player.x).toBeCloseTo(ARENA_WIDTH / 2 - PLAYER_SPEED * 0.05)
+        expect(player.x).toBeCloseTo(
+          ARENA_LEVEL.width / 2 - PLAYER_SPEED * 0.05,
+        )
         expect(elapsedMs).toBe(50)
       }),
     )
@@ -180,7 +183,7 @@ describe('movement', () => {
       message(Message.PressedKey({ code: 'KeyD' })),
       tick(16),
       model(nextModel => {
-        expect(nextModel.player.x).toBe(ARENA_WIDTH / 2)
+        expect(nextModel.player.x).toBe(ARENA_LEVEL.width / 2)
         expect(nextModel.elapsedMs).toBe(0)
       }),
     )
@@ -293,10 +296,12 @@ describe('zombies', () => {
   test('chase a nearby player in a straight line', () => {
     story(
       update,
-      given(withZombies(playingModel, [zombieAt(100, 100, ARENA_HEIGHT / 2)])),
+      given(
+        withZombies(playingModel, [zombieAt(100, 100, ARENA_LEVEL.height / 2)]),
+      ),
       tick(50),
       model(({ zombies }) => {
-        expect(zombies).toEqual([zombieAt(100, 101, ARENA_HEIGHT / 2)])
+        expect(zombies).toEqual([zombieAt(100, 101, ARENA_LEVEL.height / 2)])
       }),
     )
   })
@@ -306,7 +311,7 @@ describe('zombies', () => {
       update,
       given(
         withZombies(playingModel, [
-          zombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2, 0),
+          zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 0),
           zombieAt(101, 20, 20, 0),
         ]),
       ),
@@ -339,7 +344,7 @@ describe('zombies', () => {
       update,
       given(
         withZombies(playingModel, [
-          zombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2, 0),
+          zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 0),
         ]),
       ),
       message(Message.PressedKey({ code: 'Space' })),
@@ -347,7 +352,7 @@ describe('zombies', () => {
       message(Message.ReleasedKey({ code: 'Space' })),
       model(({ zombies }) => {
         expect(zombies).toEqual([
-          modifyFields(zombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2, 0), {
+          modifyFields(zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 0), {
             hp: () => ZOMBIE_MAX_HP - 1,
             knockback: () => ({ x: ZOMBIE_KNOCKBACK_SPEED, y: 0 }),
             hitRemainingMs: () => ZOMBIE_HIT_PULSE_MS,
@@ -378,7 +383,7 @@ describe('zombies', () => {
       update,
       given(
         withZombies(playingModel, [
-          dyingZombieAt(100, ARENA_WIDTH / 2 + 2, ARENA_HEIGHT / 2),
+          dyingZombieAt(100, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2),
         ]),
       ),
       ...ticks(frameCount - 1, FRAME_MS),
@@ -400,7 +405,7 @@ describe('zombies', () => {
       update,
       given(
         withZombies(playingModel, [
-          dyingZombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2),
+          dyingZombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2),
         ]),
       ),
       message(Message.PressedKey({ code: 'Space' })),
@@ -417,7 +422,7 @@ describe('zombies', () => {
       update,
       given(
         withZombies(playingModel, [
-          zombieAt(100, ARENA_WIDTH / 2 + 2, ARENA_HEIGHT / 2, 0),
+          zombieAt(100, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2, 0),
         ]),
       ),
       tick(FRAME_MS),
@@ -436,7 +441,7 @@ describe('zombies', () => {
       ...waitOutFreeze(HIT_STOP_HURT_MS),
       tick(FRAME_MS),
       model(({ player }) => {
-        expect(player.x).toBeLessThan(ARENA_WIDTH / 2)
+        expect(player.x).toBeLessThan(ARENA_LEVEL.width / 2)
       }),
     )
   })
@@ -448,8 +453,8 @@ describe('zombies', () => {
       update,
       given(
         withZombies(playingModel, [
-          zombieAt(100, ARENA_WIDTH / 2 + 2, ARENA_HEIGHT / 2, 60),
-          zombieAt(101, ARENA_WIDTH / 2 - 2, ARENA_HEIGHT / 2, 60),
+          zombieAt(100, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2, 60),
+          zombieAt(101, ARENA_LEVEL.width / 2 - 2, ARENA_LEVEL.height / 2, 60),
         ]),
       ),
       tick(FRAME_MS),
@@ -477,7 +482,7 @@ describe('zombies', () => {
         player: player => modifyFields(player, { hp: () => 1 }),
         score: () => 120,
       }),
-      [zombieAt(100, ARENA_WIDTH / 2, ARENA_HEIGHT / 2 + 3)],
+      [zombieAt(100, ARENA_LEVEL.width / 2, ARENA_LEVEL.height / 2 + 3)],
     )
 
     story(
@@ -507,14 +512,14 @@ describe('zombies', () => {
 
 describe('game events', () => {
   test('a frame records what happened in it and the next frame clears them', () => {
-    const shot = { x: ARENA_WIDTH / 2 + 6, y: ARENA_HEIGHT / 2 }
+    const shot = { x: ARENA_LEVEL.width / 2 + 6, y: ARENA_LEVEL.height / 2 }
     const zombieX = MUZZLE_X
 
     story(
       update,
       given(
         withZombies(playingModel, [
-          modifyFields(zombieAt(100, zombieX, ARENA_HEIGHT / 2, 0), {
+          modifyFields(zombieAt(100, zombieX, ARENA_LEVEL.height / 2, 0), {
             hp: () => 1,
           }),
         ]),
@@ -537,7 +542,7 @@ describe('game events', () => {
           Option.some(
             GameEvent.ZombieKilled({
               x: zombieX,
-              y: ARENA_HEIGHT / 2,
+              y: ARENA_LEVEL.height / 2,
               direction: RIGHT,
               bounty: SHAMBLER_BOUNTY,
               kind: 'Shambler',
@@ -557,15 +562,15 @@ describe('game events', () => {
       update,
       given(
         withZombies(playingModel, [
-          zombieAt(100, ARENA_WIDTH / 2 + 2, ARENA_HEIGHT / 2, 0),
+          zombieAt(100, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2, 0),
         ]),
       ),
       tick(FRAME_MS),
       model(({ frameEvents }) => {
         expect(frameEvents).toEqual([
           GameEvent.PlayerHurt({
-            x: ARENA_WIDTH / 2,
-            y: ARENA_HEIGHT / 2,
+            x: ARENA_LEVEL.width / 2,
+            y: ARENA_LEVEL.height / 2,
             direction: { x: -1, y: 0 },
           }),
         ])
@@ -623,7 +628,7 @@ describe('particles and decals', () => {
 
   const shotZombieModel = (hp: number): Model =>
     withZombies(playingModel, [
-      modifyFields(zombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2, 0), {
+      modifyFields(zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 0), {
         hp: () => hp,
       }),
     ])
@@ -804,9 +809,9 @@ describe('particles and decals', () => {
       update,
       given(
         withZombies(modifyFields(playingModel, { rngState: () => seed }), [
-          zombieAt(100, 200, ARENA_HEIGHT / 2, 0),
-          zombieAt(101, 230, ARENA_HEIGHT / 2, 0),
-          zombieAt(102, 260, ARENA_HEIGHT / 2, 0),
+          zombieAt(100, 200, ARENA_LEVEL.height / 2, 0),
+          zombieAt(101, 230, ARENA_LEVEL.height / 2, 0),
+          zombieAt(102, 260, ARENA_LEVEL.height / 2, 0),
         ]),
       ),
       message(Message.PressedKey({ code: 'Space' })),
@@ -870,7 +875,7 @@ const massacreModel = (count: number): Model => {
 }
 
 const contactZombie = (id: number): Zombie =>
-  zombieAt(id, ARENA_WIDTH / 2 + 2, ARENA_HEIGHT / 2, 0)
+  zombieAt(id, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2, 0)
 
 const BYSTANDER_ID = 401
 const BYSTANDER_X = 100
@@ -894,7 +899,12 @@ const freezeVictim = doomedZombieAt(400, 250, 30)
 const freezeModel: Model = modifyFields(
   withZombies(playingModel, [
     freezeVictim,
-    zombieAt(BYSTANDER_ID, BYSTANDER_X, ARENA_HEIGHT / 2, BYSTANDER_SPEED),
+    zombieAt(
+      BYSTANDER_ID,
+      BYSTANDER_X,
+      ARENA_LEVEL.height / 2,
+      BYSTANDER_SPEED,
+    ),
   ]),
   { bullets: () => [bulletInto(500, freezeVictim), STRAY_BULLET] },
 )
@@ -1174,16 +1184,16 @@ describe('hit-stop', () => {
       model(({ player, intent, input }) => {
         expect(input.pressedKeys).toEqual(['KeyD'])
         expect(intent.move).toEqual({ x: 1, y: 0 })
-        expect(player.x).toBe(ARENA_WIDTH / 2)
+        expect(player.x).toBe(ARENA_LEVEL.width / 2)
       }),
       ...waitOutFreeze(HIT_STOP_KILL_MS - FRAME_MS),
       model(({ player }) => {
-        expect(player.x).toBe(ARENA_WIDTH / 2)
+        expect(player.x).toBe(ARENA_LEVEL.width / 2)
       }),
       tick(FRAME_MS),
       model(({ player }) => {
         expect(player.x).toBeCloseTo(
-          ARENA_WIDTH / 2 + (PLAYER_SPEED * FRAME_MS) / 1000,
+          ARENA_LEVEL.width / 2 + (PLAYER_SPEED * FRAME_MS) / 1000,
         )
       }),
     )
@@ -1326,7 +1336,7 @@ describe('kill streak', () => {
 
 describe('juice determinism', () => {
   const bigKillAt = (id: number, x: number): Zombie =>
-    modifyFields(zombieAt(id, x, ARENA_HEIGHT / 2, 0), {
+    modifyFields(zombieAt(id, x, ARENA_LEVEL.height / 2, 0), {
       kind: () => 'Tank',
     })
 
@@ -1525,7 +1535,7 @@ describe('mouse', () => {
       given(letterboxedModel),
       message(Message.MovedMouse({ clientX: 320, clientY: 60 })),
       model(({ input, intent }) => {
-        expect(input.maybeMousePosition).toEqual(Option.some({ x: 160, y: 0 }))
+        expect(input.maybeMouseInView).toEqual(Option.some({ x: 160, y: 0 }))
         expect(intent.maybeAim).toEqual(Option.some({ x: 0, y: -1 }))
         expect(intent.trigger).toBe('Released')
       }),

@@ -3,10 +3,14 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { DOOR_IDS, doorSpawnPoint, isSolidAt, nearestDoor } from './arena'
 import {
-  ARENA_HEIGHT,
-  ARENA_WIDTH,
+  ARENA_LEVEL,
+  DOOR_IDS,
+  doorSpawnPoint,
+  isSolidAt,
+  nearestDoor,
+} from './arena'
+import {
   DOOR_HALF_WIDTH_PX,
   MAX_BLASTS_PER_FRAME,
   PLAYER_MAX_HP,
@@ -43,8 +47,8 @@ import { Behavior, ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
 
 const FRAME_MS = 16
 const LONG_FRAME_MS = 50
-const CENTER_X = ARENA_WIDTH / 2
-const CENTER_Y = ARENA_HEIGHT / 2
+const CENTER_X = ARENA_LEVEL.width / 2
+const CENTER_Y = ARENA_LEVEL.height / 2
 
 const DISTANT_SPAWN: PlannedSpawn = {
   atMs: 1e9,

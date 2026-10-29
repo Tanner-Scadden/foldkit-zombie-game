@@ -2,7 +2,7 @@ import { Array, Option, Record, Result, Schema, pipe } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
-import { type Box, circleTouchesBox, isSolidAt } from './arena'
+import { ARENA_LEVEL, type Box, circleTouchesBox, isSolidAt } from './arena'
 import type { SoundEffect } from './audio'
 import {
   type BlastSpec,
@@ -12,8 +12,6 @@ import {
   killCount,
 } from './combat'
 import {
-  ARENA_HEIGHT,
-  ARENA_WIDTH,
   PLAYER_MAX_HP,
   PLAYER_RADIUS,
   PLAYER_SPEED,
@@ -488,10 +486,13 @@ const grabPickups = (model: Model): Model => {
 
 const SPOT_LEFT = 16
 const SPOT_TOP = 26
-const SPOT_BOTTOM = ARENA_HEIGHT - 16
-const SPOT_RIGHT = ARENA_WIDTH - 16
+const SPOT_BOTTOM = ARENA_LEVEL.height - 16
+const SPOT_RIGHT = ARENA_LEVEL.width - 16
 const SPOT_STEPS = 24
-const ROOM_MIDDLE: Vector = { x: ARENA_WIDTH / 2, y: ARENA_HEIGHT / 2 + 5 }
+const ROOM_MIDDLE: Vector = {
+  x: ARENA_LEVEL.width / 2,
+  y: ARENA_LEVEL.height / 2 + 5,
+}
 
 const isClearSpot =
   (blockers: ReadonlyArray<Box>) =>

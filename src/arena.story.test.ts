@@ -4,6 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import {
+  ARENA_LEVEL,
   DOORS,
   ROOM_COLUMNS,
   ROOM_MAP,
@@ -12,8 +13,6 @@ import {
   isWalkableTile,
 } from './arena'
 import {
-  ARENA_HEIGHT,
-  ARENA_WIDTH,
   MAX_FRAME_DELTA_MS,
   PLAYER_MAX_HP,
   PLAYER_RADIUS,
@@ -103,15 +102,15 @@ describe('the room', () => {
     expect(Array.every(ROOM_MAP, line => line.length === ROOM_COLUMNS)).toBe(
       true,
     )
-    expect(ROOM_COLUMNS * TILE_SIZE).toBe(ARENA_WIDTH)
-    expect(ROOM_ROWS * TILE_SIZE).toBe(ARENA_HEIGHT)
+    expect(ROOM_COLUMNS * TILE_SIZE).toBe(ARENA_LEVEL.width)
+    expect(ROOM_ROWS * TILE_SIZE).toBe(ARENA_LEVEL.height)
     expect(
       Array.map(Object.values(DOORS), ({ center }) => ({
         isOnEdge:
           center.x < TILE_SIZE ||
-          center.x > ARENA_WIDTH - TILE_SIZE ||
+          center.x > ARENA_LEVEL.width - TILE_SIZE ||
           center.y < TILE_SIZE * 2 ||
-          center.y > ARENA_HEIGHT - TILE_SIZE,
+          center.y > ARENA_LEVEL.height - TILE_SIZE,
       })),
     ).toEqual(Array.makeBy(4, () => ({ isOnEdge: true })))
   })

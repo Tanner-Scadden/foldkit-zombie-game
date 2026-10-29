@@ -3,9 +3,8 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
+import { ARENA_LEVEL } from './arena'
 import {
-  ARENA_HEIGHT,
-  ARENA_WIDTH,
   FIRST_PREPARATION_MS,
   PLAYER_MAX_HP,
   PREPARATION_MS,
@@ -34,7 +33,7 @@ import {
 import { ZOMBIE_KINDS } from './zombies'
 
 const FRAME_MS = 50
-const MUZZLE_X = ARENA_WIDTH / 2 + 10
+const MUZZLE_X = ARENA_LEVEL.width / 2 + 10
 
 const readyModel: Model = modifyFields(asVeteran(initialModel), {
   maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
@@ -107,7 +106,7 @@ const inWave = (
 const killShot = (base: Model, zombie: Zombie): Model =>
   modifyFields(base, { bullets: () => [bulletInto(500, zombie)] })
 
-const doomed = zombieAt(100, MUZZLE_X, ARENA_HEIGHT / 2, 1)
+const doomed = zombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2, 1)
 const farAway = zombieAt(101, 40, 150)
 
 describe('preparation', () => {
@@ -169,7 +168,7 @@ describe('preparation', () => {
       ...ticks(4, FRAME_MS),
       model(({ phase, player, bullets }) => {
         expect(Phase.guards.Preparation(phase)).toBe(true)
-        expect(player.x).toBeGreaterThan(ARENA_WIDTH / 2)
+        expect(player.x).toBeGreaterThan(ARENA_LEVEL.width / 2)
         expect(Array.isReadonlyArrayNonEmpty(bullets)).toBe(true)
       }),
     )
@@ -312,7 +311,9 @@ describe('waves', () => {
               spawns: [plannedSpawn(0)],
             }),
           player: player => modifyFields(player, { hp: () => 1 }),
-          zombies: () => [zombieAt(100, ARENA_WIDTH / 2 + 2, ARENA_HEIGHT / 2)],
+          zombies: () => [
+            zombieAt(100, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2),
+          ],
         }),
       ),
       tick(FRAME_MS),
@@ -331,7 +332,7 @@ describe('waves', () => {
           player: player => modifyFields(player, { hp: () => 1 }),
           zombies: zombies => [
             ...zombies,
-            zombieAt(102, ARENA_WIDTH / 2 - 2, ARENA_HEIGHT / 2),
+            zombieAt(102, ARENA_LEVEL.width / 2 - 2, ARENA_LEVEL.height / 2),
           ],
         }),
       ),

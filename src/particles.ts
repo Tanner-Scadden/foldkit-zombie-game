@@ -1,10 +1,8 @@
 import { Array, Option, Result } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { isSolidAt } from './arena'
+import { ARENA_LEVEL, isSolidAt } from './arena'
 import {
-  ARENA_HEIGHT,
-  ARENA_WIDTH,
   BLOOD_DRAG_PER_SECOND,
   BLOOD_GRAVITY,
   BLOOD_LIFETIME_MS,
@@ -279,9 +277,9 @@ const leftDecal = (decal: Decal): ParticleStep =>
 
 const isOnFloor = (x: number, y: number): boolean =>
   x >= 0 &&
-  x < ARENA_WIDTH &&
+  x < ARENA_LEVEL.width &&
   y >= 0 &&
-  y < ARENA_HEIGHT &&
+  y < ARENA_LEVEL.height &&
   !isSolidAt({ x, y })
 
 const land = (particle: Particle, x: number, y: number): ParticleStep => {

@@ -14,6 +14,7 @@ import {
   POPUP_MAX,
   ZOMBIE_ALIVE_MAX,
 } from './constants'
+import { sceneShapes } from './layers'
 import { Message, update } from './main'
 import {
   Alarm,
@@ -46,7 +47,7 @@ import {
 } from './model'
 import { DROP_RULES } from './powerups'
 import { asVeteran } from './veteran'
-import { MeasureGameSurface, sceneShapes, view } from './view'
+import { MeasureGameSurface, view } from './view'
 import { rollSpawns, startOrResume } from './waves'
 import { ZOMBIE_KINDS } from './zombies'
 

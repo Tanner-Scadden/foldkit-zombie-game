@@ -1,8 +1,6 @@
 import { Array, Option, Record, Result, String, pipe } from 'effect'
 
 import {
-  ARENA_HEIGHT,
-  ARENA_WIDTH,
   BULLET_STEP_PX,
   COLLISION_STEP_PX,
   LINE_OF_SIGHT_STEP_PX,
@@ -35,8 +33,34 @@ export const ROOM_MAP: ReadonlyArray<string> = [
   '########SS######################',
 ]
 
-export const ROOM_COLUMNS = ARENA_WIDTH / TILE_SIZE
-export const ROOM_ROWS = ARENA_HEIGHT / TILE_SIZE
+// LEVEL
+
+export type Level = Readonly<{
+  tiles: ReadonlyArray<string>
+  columns: number
+  rows: number
+  width: number
+  height: number
+}>
+
+export const makeLevel = (tiles: ReadonlyArray<string>): Level => {
+  const columns = pipe(
+    Array.head(tiles),
+    Option.match({ onNone: () => 0, onSome: String.length }),
+  )
+  return {
+    tiles,
+    columns,
+    rows: tiles.length,
+    width: columns * TILE_SIZE,
+    height: tiles.length * TILE_SIZE,
+  }
+}
+
+export const ARENA_LEVEL: Level = makeLevel(ROOM_MAP)
+
+export const ROOM_COLUMNS = ARENA_LEVEL.columns
+export const ROOM_ROWS = ARENA_LEVEL.rows
 export const TILE_COUNT = ROOM_COLUMNS * ROOM_ROWS
 
 export type CoverKind = 'Piano' | 'Couch' | 'Crate' | 'Table' | 'Coffin'
@@ -79,7 +103,7 @@ export type Tile = Readonly<{ column: number; row: number }>
 
 export const symbolAt = (column: number, row: number): Option.Option<string> =>
   pipe(
-    ROOM_MAP,
+    ARENA_LEVEL.tiles,
     Array.get(row),
     Option.flatMap(line => String.at(line, column)),
   )
@@ -155,7 +179,7 @@ export const tileCenter = ({ column, row }: Tile): Vector => ({
 })
 
 export const tilesWithSymbol = (symbol: string): ReadonlyArray<Tile> =>
-  Array.flatMap(ROOM_MAP, (line, row) =>
+  Array.flatMap(ARENA_LEVEL.tiles, (line, row) =>
     Array.filterMap(String.split(line, ''), (lineSymbol, column) =>
       lineSymbol === symbol ? Result.succeed({ column, row }) : Result.failVoid,
     ),
@@ -302,8 +326,8 @@ const edgeCoordinate = (
 export const doorSpawnPoint = (id: DoorId, offset: number): Vector => {
   const { center, outward } = DOORS[id]
   const edge = {
-    x: edgeCoordinate(outward.x, center.x, ARENA_WIDTH),
-    y: edgeCoordinate(outward.y, center.y, ARENA_HEIGHT),
+    x: edgeCoordinate(outward.x, center.x, ARENA_LEVEL.width),
+    y: edgeCoordinate(outward.y, center.y, ARENA_LEVEL.height),
   }
   return {
     x: edge.x + outward.x * ZOMBIE_SPAWN_MARGIN - outward.y * offset,

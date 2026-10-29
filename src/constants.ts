@@ -1,5 +1,5 @@
-export const ARENA_WIDTH = 320
-export const ARENA_HEIGHT = 180
+export const VIEW_WIDTH = 320
+export const VIEW_HEIGHT = 180
 
 export const MS_PER_SECOND = 1000
 export const MAX_FRAME_DELTA_MS = 50

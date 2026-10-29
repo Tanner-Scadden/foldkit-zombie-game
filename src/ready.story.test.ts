@@ -4,7 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { RESTART_GRACE_MS } from './constants'
-import { clientToArena } from './geometry'
+import { clientToView } from './geometry'
 import { Message, update } from './main'
 import {
   type Model,
@@ -31,8 +31,8 @@ const MOVE_TICKS = 10
 const SHOWN_TICKS = Math.ceil(LESSON_MIN_SHOWN_MS / TICK_MS)
 const FIRE_TICKS = 30
 
-const SURFACE_ARENA_X = (clientX: number): number =>
-  Option.getOrThrow(clientToArena(SURFACE, { x: clientX, y: 200 })).x
+const SURFACE_VIEW_X = (clientX: number): number =>
+  Option.getOrThrow(clientToView(SURFACE, { x: clientX, y: 200 })).x
 
 const readyModel: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some(SURFACE),
@@ -106,18 +106,18 @@ describe('input device', () => {
         expect(lastDevice).toBe('KeyboardMouse')
         expect(input.moveStick._tag).toBe('Idle')
         expect(input.mouseButton._tag).toBe('Held')
-        expect(
-          Option.map(input.maybeMousePosition, ({ x }) => x),
-        ).toStrictEqual(Option.some(SURFACE_ARENA_X(100)))
+        expect(Option.map(input.maybeMouseInView, ({ x }) => x)).toStrictEqual(
+          Option.some(SURFACE_VIEW_X(100)),
+        )
       }),
       message(
         Message.MovedPointer({ pointerId: 3, clientX: 400, clientY: 200 }),
       ),
       model(({ input }) => {
         expect(input.moveStick._tag).toBe('Idle')
-        expect(
-          Option.map(input.maybeMousePosition, ({ x }) => x),
-        ).toStrictEqual(Option.some(SURFACE_ARENA_X(400)))
+        expect(Option.map(input.maybeMouseInView, ({ x }) => x)).toStrictEqual(
+          Option.some(SURFACE_VIEW_X(400)),
+        )
       }),
       message(Message.ReleasedPointer({ pointerId: 3 })),
       model(({ input }) => {
