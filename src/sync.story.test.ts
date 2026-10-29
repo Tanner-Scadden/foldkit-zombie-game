@@ -4,6 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import {
+  AwaitRunSettled,
   RedeemLinkCode,
   ReloadSyncedSave,
   RequestLinkCode,
@@ -13,10 +14,14 @@ import { update } from './main'
 import { Message } from './message'
 import { Loading, type Model, initialModel } from './model'
 import {
+  LastRunSync,
   LinkFlow,
   PlayerChange,
+  PlayerScopeStatus,
+  RunSettled,
   SyncState,
   changesBetween,
+  devicesStatusText,
   syncStateText,
 } from './playerSync'
 import { type PlayerSave, saveOf } from './save'
@@ -160,6 +165,129 @@ describe('the sync status line', () => {
     )
     expect(syncStateText(SyncState.Synced({ devices: 1 }))).toBe('Synced')
     expect(syncStateText(SyncState.LocalOnly())).toBe('Saved on this device')
+  })
+})
+
+describe('the player scope status', () => {
+  test('cached progress shows while connecting, and a refused scope says so', () => {
+    const cached = PlayerScopeStatus.Ready({ seq: 7, fresh: false })
+    story(
+      update,
+      given(read),
+      message(Message.UpdatedSyncStatus({ state: SyncState.Connecting() })),
+      message(Message.UpdatedPlayerScopeStatus({ status: cached })),
+      model(current => {
+        expect(current.playerScopeStatus).toEqual(cached)
+        expect(
+          devicesStatusText(current.syncState, current.playerScopeStatus),
+        ).toBe('Connecting. Showing saved progress')
+      }),
+      message(
+        Message.UpdatedPlayerScopeStatus({
+          status: PlayerScopeStatus.Ready({ seq: 8, fresh: true }),
+        }),
+      ),
+      message(
+        Message.UpdatedSyncStatus({ state: SyncState.Synced({ devices: 1 }) }),
+      ),
+      model(current => {
+        expect(
+          devicesStatusText(current.syncState, current.playerScopeStatus),
+        ).toBe('Synced')
+      }),
+      Command.expectNone(),
+    )
+    expect(
+      devicesStatusText(
+        SyncState.Offline({ devices: 1 }),
+        PlayerScopeStatus.Failed({ reason: 'Forbidden: no' }),
+      ),
+    ).toBe('Sync is not working on this device')
+    expect(
+      devicesStatusText(SyncState.LocalOnly(), PlayerScopeStatus.Idle()),
+    ).toBe('Saved on this device')
+  })
+})
+
+describe('a recorded run reaching the server', () => {
+  test('waits on the run the write recorded, then knows it was confirmed', () => {
+    story(
+      update,
+      given(read),
+      message(Message.ClickedMuteButton()),
+      Command.resolve(
+        WriteSave,
+        Message.CompletedWriteSaveWithRun({ runId: 'run-0001' }),
+      ),
+      model(current => {
+        expect(current.writesInFlight).toBe(0)
+        expect(current.lastRunSync).toEqual(
+          LastRunSync.Waiting({ id: 'run-0001' }),
+        )
+      }),
+      Command.expectHas(AwaitRunSettled({ runId: 'run-0001' })),
+      Command.resolve(
+        AwaitRunSettled,
+        Message.SettledRecordedRun({
+          runId: 'run-0001',
+          settled: RunSettled.Confirmed({ seq: 12 }),
+        }),
+      ),
+      model(current => {
+        expect(current.lastRunSync).toEqual(LastRunSync.Confirmed({ seq: 12 }))
+      }),
+    )
+  })
+
+  test('a rejected run says why, and an older run never overwrites a newer one', () => {
+    story(
+      update,
+      given(
+        modifyFields(read, {
+          lastRunSync: () => LastRunSync.Waiting({ id: 'run-0002' }),
+        }),
+      ),
+      message(
+        Message.SettledRecordedRun({
+          runId: 'run-0001',
+          settled: RunSettled.Confirmed({ seq: 3 }),
+        }),
+      ),
+      model(current => {
+        expect(current.lastRunSync).toEqual(
+          LastRunSync.Waiting({ id: 'run-0002' }),
+        )
+      }),
+      message(
+        Message.SettledRecordedRun({
+          runId: 'run-0002',
+          settled: RunSettled.Rejected({ reason: 'Precondition: too many' }),
+        }),
+      ),
+      model(current => {
+        expect(current.lastRunSync).toEqual(
+          LastRunSync.Rejected({ reason: 'Precondition: too many' }),
+        )
+      }),
+      Command.expectNone(),
+    )
+  })
+
+  test('a wait the store could not finish stops claiming to know', () => {
+    story(
+      update,
+      given(
+        modifyFields(read, {
+          lastRunSync: () => LastRunSync.Waiting({ id: 'run-0003' }),
+        }),
+      ),
+      message(
+        Message.FailedAwaitRunSettled({ runId: 'run-0003', reason: 'closed' }),
+      ),
+      model(current => {
+        expect(current.lastRunSync).toEqual(LastRunSync.NoRun())
+      }),
+    )
   })
 })
 

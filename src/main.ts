@@ -127,7 +127,10 @@ import {
   failWrite,
   finishLoadStep,
   finishWrite,
+  finishWriteWithRun,
+  forgetRunWait,
   loadSave,
+  settleRun,
   startLinking,
   submitLinkCode,
   takeSyncedSave,
@@ -785,6 +788,8 @@ const updateGame = (model: Model, message: Message) =>
 
     CompletedWriteSave: () => finishWrite(model),
 
+    CompletedWriteSaveWithRun: ({ runId }) => finishWriteWithRun(model, runId),
+
     FailedWriteSave: ({ changes }) => failWrite(model, changes),
 
     ClickedShareStatsButton: () => ({ model: toggleShareStats(model) }),
@@ -818,6 +823,15 @@ const updateGame = (model: Model, message: Message) =>
     UpdatedSyncStatus: ({ state }) => ({
       model: modifyFields(model, { syncState: () => state }),
     }),
+
+    UpdatedPlayerScopeStatus: ({ status }) => ({
+      model: modifyFields(model, { playerScopeStatus: () => status }),
+    }),
+
+    SettledRecordedRun: ({ runId, settled }) =>
+      settleRun(model, runId, settled),
+
+    FailedAwaitRunSettled: ({ runId }) => forgetRunWait(model, runId),
 
     ClickedLinkDeviceButton: () => startLinking(model),
 

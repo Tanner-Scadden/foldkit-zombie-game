@@ -366,11 +366,20 @@ export const LoadSave = Command.define('LoadSave', {
 // where it still writes the localStorage copy.
 export const WriteSave = Command.define('WriteSave', {
   args: { save: PlayerSave, changes: Schema.Array(PlayerChange) },
-  messages: [Message.CompletedWriteSave, Message.FailedWriteSave],
+  messages: [
+    Message.CompletedWriteSave,
+    Message.CompletedWriteSaveWithRun,
+    Message.FailedWriteSave,
+  ],
   execute: ({ save, changes }) =>
     pipe(
       PlayerStore.use(store => store.write(save, changes)),
-      Effect.as(Message.CompletedWriteSave()),
+      Effect.map(maybeRunId =>
+        Option.match(maybeRunId, {
+          onNone: () => Message.CompletedWriteSave(),
+          onSome: runId => Message.CompletedWriteSaveWithRun({ runId }),
+        }),
+      ),
       Effect.catch(error =>
         Effect.succeed(
           Message.FailedWriteSave({ reason: error.reason, changes }),
@@ -380,6 +389,23 @@ export const WriteSave = Command.define('WriteSave', {
 })
 
 // SYNC
+
+// NOTE: waits for the server to confirm or reject a recorded run. Offline,
+// it waits until the device is back and the run goes out.
+export const AwaitRunSettled = Command.define('AwaitRunSettled', {
+  args: { runId: Schema.String },
+  messages: [Message.SettledRecordedRun, Message.FailedAwaitRunSettled],
+  execute: ({ runId }) =>
+    pipe(
+      PlayerStore.use(store => store.awaitSettled(runId)),
+      Effect.map(settled => Message.SettledRecordedRun({ runId, settled })),
+      Effect.catch(error =>
+        Effect.succeed(
+          Message.FailedAwaitRunSettled({ runId, reason: error.reason }),
+        ),
+      ),
+    ),
+})
 
 export const ReloadSyncedSave = Command.define('ReloadSyncedSave', {
   messages: [Message.CompletedReloadSyncedSave],

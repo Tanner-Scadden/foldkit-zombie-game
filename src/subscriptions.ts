@@ -169,15 +169,20 @@ const mouseMessages = Dom.streamFromEventFilterMap({
 })
 
 // NOTE: what the store hears from sync: a save another device or the
-// server changed, and the status line for SETTINGS.
+// server changed, the status line for SETTINGS, and how far the player
+// scope has loaded.
 const syncMessages: Stream.Stream<Message, never, PlayerStore> = Stream.unwrap(
   PlayerStore.use(store =>
     Effect.succeed(
-      Stream.map(store.events, (event): Message =>
-        event._tag === 'SyncedSave'
-          ? Message.UpdatedSyncedSave({ save: event.save })
-          : Message.UpdatedSyncStatus({ state: event.state }),
-      ),
+      Stream.map(store.events, (event): Message => {
+        if (event._tag === 'SyncedSave') {
+          return Message.UpdatedSyncedSave({ save: event.save })
+        } else if (event._tag === 'SyncStatus') {
+          return Message.UpdatedSyncStatus({ state: event.state })
+        } else {
+          return Message.UpdatedPlayerScopeStatus({ status: event.status })
+        }
+      }),
     ),
   ),
 )
