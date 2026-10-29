@@ -40,7 +40,9 @@ bun alchemy plan --stage prod               # what would change
 bun alchemy deploy --stage prod             # deploy production by hand
 bun alchemy deploy --stage prod --force     # redeploy even when nothing changed
 bun alchemy destroy --stage pr-12           # tear down a preview
-bun run typecheck
+bun run typecheck                           # types and the Effect diagnostics
+bun run lint                                # oxlint, then the Effect rules
+bun test
 ```
 
 Alchemy skips the build when no input changed, and `alchemy drift` does not notice a Worker that something else overwrote. Use `--force` to put the declared version back.

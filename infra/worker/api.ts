@@ -1,4 +1,5 @@
 import * as Clock from 'effect/Clock'
+import type * as Config from 'effect/Config'
 import * as Context from 'effect/Context'
 import * as Effect from 'effect/Effect'
 import * as Layer from 'effect/Layer'
@@ -12,6 +13,7 @@ import * as HttpApiSchema from 'effect/http-api/HttpApiSchema'
 import * as HttpRouter from 'effect/http/HttpRouter'
 import * as HttpServer from 'effect/http/HttpServer'
 import * as SqlClient from 'effect/sql/SqlClient'
+import type * as SqlError from 'effect/sql/SqlError'
 
 import { HEALTH_PATH, RUNS_PATH } from '../../src/analytics.ts'
 import {
@@ -40,7 +42,10 @@ export type RateLimiter = Readonly<{
 // D1 database as an Effect SQL layer, the two rate limit bindings, and the
 // address salt. Tests build it over SQLite and counting fakes.
 export type WorkerServices = Readonly<{
-  database: Layer.Layer<SqlClient.SqlClient, unknown>
+  database: Layer.Layer<
+    SqlClient.SqlClient,
+    Config.ConfigError | SqlError.SqlError
+  >
   visitLimiter: RateLimiter
   addressLimiter: RateLimiter
   addressSalt: string
@@ -52,29 +57,29 @@ export class WorkerEnv extends Context.Service<WorkerEnv, WorkerServices>()(
 
 // ERRORS
 
-export class SummaryTooLarge extends Schema.TaggedError<SummaryTooLarge>()(
-  'SummaryTooLarge',
-  {},
-  { httpApiStatus: 413 },
-) {}
+export class SummaryTooLarge extends Schema.TaggedError<
+  SummaryTooLarge,
+  { readonly brand: unique symbol }
+>()('SummaryTooLarge', {}, { httpApiStatus: 413 }) {}
 
-export class SummaryRejected extends Schema.TaggedError<SummaryRejected>()(
-  'SummaryRejected',
-  {},
-  { httpApiStatus: 400 },
-) {}
+export class SummaryRejected extends Schema.TaggedError<
+  SummaryRejected,
+  { readonly brand: unique symbol }
+>()('SummaryRejected', {}, { httpApiStatus: 400 }) {}
 
-export class RateLimited extends Schema.TaggedError<RateLimited>()(
+export class RateLimited extends Schema.TaggedError<
+  RateLimited,
+  { readonly brand: unique symbol }
+>()(
   'RateLimited',
   { by: Schema.Literals(['Visit', 'Address']) },
   { httpApiStatus: 429 },
 ) {}
 
-export class StoreUnavailable extends Schema.TaggedError<StoreUnavailable>()(
-  'StoreUnavailable',
-  {},
-  { httpApiStatus: 503 },
-) {}
+export class StoreUnavailable extends Schema.TaggedError<
+  StoreUnavailable,
+  { readonly brand: unique symbol }
+>()('StoreUnavailable', {}, { httpApiStatus: 503 }) {}
 
 // API
 

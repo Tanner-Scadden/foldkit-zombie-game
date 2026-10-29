@@ -11,6 +11,13 @@
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "noEmit": true,
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "includeSuggestionsInTsc": false,
+        "diagnosticSeverity": { "unstableApiUsage": "off" }
+      }
+    ],
     "paths": {
       "effect": ["./node_modules/effect/dist/index"],
       "effect/*": ["./node_modules/effect/dist/*"]

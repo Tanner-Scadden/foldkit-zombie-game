@@ -38,6 +38,8 @@ jobs:
       - run: bun run build
       - run: bun run typecheck
         working-directory: infra
+      - run: bun run lint
+        working-directory: infra
       - run: bun run test
         working-directory: infra
 
