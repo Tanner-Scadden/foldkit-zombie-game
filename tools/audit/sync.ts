@@ -265,12 +265,12 @@ check((await splatted(b.page)) === '', 'device B starts with no kills')
 check(await hasNewsDot(b.page), "device B starts with What's New unseen")
 await openSettings(b.page)
 await b.page.getByRole('button', { name: 'Use a code' }).click()
+const codeForm = b.page.locator('label[for="link-code-input"]')
+await codeForm.waitFor({ timeout: SYNC_TIMEOUT })
 check(
-  (await b.page
-    .getByText("This device will use the other device's progress.", {
-      exact: false,
-    })
-    .count()) > 0,
+  ((await codeForm.textContent()) ?? '').includes(
+    "This device will use the other device's progress.",
+  ),
   "device B's code form says it will use the other device's progress",
 )
 await b.page.locator('.setting-link-input').fill(code.toLowerCase())
