@@ -41,5 +41,5 @@ The baseline is written when it is missing or with `--update-baseline`. The tole
 | `targets.ts`    | The targets from `GAME_DESIGN.md`, as data                                         |
 | `suite.ts`      | The nightly's jobs, metrics, target verdicts, baseline drift, and report           |
 | `nightly.ts`    | The nightly's shell: runs the jobs and writes the files                            |
-| `baseline.json` | The stored numbers the nightly compares against                                    |
+| `baseline.json` | The stored numbers the nightly compares against, written by the first nightly run  |
 | `*.test.ts`     | The model, suite, and snapshot tests, run by `bun run test`                        |
