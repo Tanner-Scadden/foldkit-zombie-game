@@ -44,6 +44,7 @@ import {
   initialModel,
   noKills,
 } from './model'
+import { PlayerChange } from './playerSync'
 import { saveOf } from './save'
 import { asVeteran } from './veteran'
 import { pause } from './waves'
@@ -301,7 +302,14 @@ describe('the sharing setting', () => {
       model(({ shareStats }) => {
         expect(shareStats).toBe('Off')
       }),
-      Command.expectExact(WriteSave({ save: saveOf(off) })),
+      Command.expectExact(
+        WriteSave({
+          save: saveOf(off),
+          changes: [
+            PlayerChange.ChangedSettings({ settings: saveOf(off).settings }),
+          ],
+        }),
+      ),
       Command.resolve(WriteSave, Message.CompletedWriteSave()),
     )
   })

@@ -11,26 +11,52 @@ import {
 import { modifyFields } from 'foldkit/struct'
 
 import {
-  Appearance,
   DebutCard,
-  Difficulty,
   type DifficultyBests,
   DifficultyCard,
-  HomeScreenTip,
   type KillCounts,
   Lesson,
   type Lessons,
   type Model,
-  MusicSetting,
   type PlayerBests,
-  ShakeSetting,
-  ShareStatsSetting,
-  SoundSetting,
   TrapHint,
   ZombieKind,
   freshLessons,
   noPractice,
 } from './model'
+import {
+  Appearance,
+  HomeScreenTip,
+  MusicSetting,
+  PlayerSave,
+  SAVE_VERSION,
+  SavedBests,
+  SavedDifficulty,
+  type SavedDifficultyBests,
+  type SavedLesson,
+  type SavedLessons,
+  SavedOnboarding,
+  type SavedSettings,
+  type SavedTrapHint,
+  ShakeSetting,
+  SoundSetting,
+} from './playerData'
+
+export {
+  PlayerSave,
+  SAVE_VERSION,
+  SavedBests,
+  SavedBestsByDifficulty,
+  SavedCard,
+  SavedDifficulty,
+  SavedDifficultyBests,
+  SavedLesson,
+  SavedLessons,
+  SavedNightmare,
+  SavedOnboarding,
+  SavedSettings,
+  SavedTrapHint,
+} from './playerData'
 
 // SAVE
 
@@ -41,32 +67,6 @@ import {
 // one release. A new field goes in here with a version bump, and decodeSave
 // migrates or drops the older version.
 export const SAVE_KEY = 'munch-manor:save'
-export const SAVE_VERSION = 4
-
-export const SavedLesson = Schema.Literals(['Pending', 'Learned'])
-export type SavedLesson = typeof SavedLesson.Type
-
-export const SavedLessons = Schema.Struct({
-  move: SavedLesson,
-  fire: SavedLesson,
-  startWave: SavedLesson,
-  shop: SavedLesson,
-  swap: SavedLesson,
-  pickup: SavedLesson,
-  timedBreaks: SavedLesson,
-  openBreak: SavedLesson,
-})
-export type SavedLessons = typeof SavedLessons.Type
-
-export const SavedTrapHint = Schema.Literals(['Unseen', 'Seen'])
-export type SavedTrapHint = typeof SavedTrapHint.Type
-
-export const SavedOnboarding = Schema.Struct({
-  lessons: SavedLessons,
-  trapHint: SavedTrapHint,
-  introducedKinds: Schema.Array(Schema.String),
-})
-export type SavedOnboarding = typeof SavedOnboarding.Type
 
 const SavedSettingsV2 = Schema.Struct({
   sound: SoundSetting,
@@ -74,53 +74,6 @@ const SavedSettingsV2 = Schema.Struct({
   shake: ShakeSetting,
 })
 type SavedSettingsV2 = typeof SavedSettingsV2.Type
-
-// NOTE: version 4 added shareStats, the "Share anonymous play stats" toggle.
-export const SavedSettings = Schema.Struct({
-  sound: SoundSetting,
-  music: MusicSetting,
-  shake: ShakeSetting,
-  shareStats: ShareStatsSetting,
-})
-export type SavedSettings = typeof SavedSettings.Type
-
-export const SavedCard = Schema.Literals(['Unseen', 'Seen'])
-export type SavedCard = typeof SavedCard.Type
-
-export const SavedNightmare = Schema.Literals(['Locked', 'Unlocked'])
-export type SavedNightmare = typeof SavedNightmare.Type
-
-// NOTE: version 2 added the difficulty: the chosen level, whether the
-// first-time card was answered, and the Nightmare unlock.
-export const SavedDifficulty = Schema.Struct({
-  chosen: Difficulty,
-  card: SavedCard,
-  nightmare: SavedNightmare,
-})
-export type SavedDifficulty = typeof SavedDifficulty.Type
-
-// NOTE: version 3 added the bests: runs played, zombies splatted in all and
-// per kind, and the fastest win and best endless wave for each difficulty.
-// Kills per kind are keyed by kind id, ready for the Munchopedia. A win or a
-// wave not reached yet is null.
-export const SavedDifficultyBests = Schema.Struct({
-  fastestWinMs: Schema.NullOr(Schema.Number),
-  bestEndlessWave: Schema.NullOr(Schema.Number),
-})
-export type SavedDifficultyBests = typeof SavedDifficultyBests.Type
-
-export const SavedBests = Schema.Struct({
-  runsPlayed: Schema.Number,
-  totalKills: Schema.Number,
-  killsByKind: Schema.Record(Schema.String, Schema.Number),
-  byDifficulty: Schema.Struct({
-    Easy: SavedDifficultyBests,
-    Normal: SavedDifficultyBests,
-    Hard: SavedDifficultyBests,
-    Nightmare: SavedDifficultyBests,
-  }),
-})
-export type SavedBests = typeof SavedBests.Type
 
 const PlayerSaveV1 = Schema.Struct({
   version: Schema.Literal(1),
@@ -151,17 +104,6 @@ const PlayerSaveV3 = Schema.Struct({
   bests: SavedBests,
 })
 type PlayerSaveV3 = typeof PlayerSaveV3.Type
-
-export const PlayerSave = Schema.Struct({
-  version: Schema.Literal(SAVE_VERSION),
-  onboarding: SavedOnboarding,
-  homeScreenTip: HomeScreenTip,
-  settings: SavedSettings,
-  appearance: Appearance,
-  difficulty: SavedDifficulty,
-  bests: SavedBests,
-})
-export type PlayerSave = typeof PlayerSave.Type
 
 const PlayerSaveJson = Schema.fromJsonString(PlayerSave)
 

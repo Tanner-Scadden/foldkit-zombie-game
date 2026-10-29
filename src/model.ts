@@ -6,6 +6,31 @@ import { Dialog, RadioGroup, Tabs } from '@foldkit/ui'
 import { ARENA_LEVEL } from './arena'
 import { DEFAULT_SEED, PISTOL_MAGAZINE, PLAYER_MAX_HP } from './constants'
 import { flowFieldToward } from './pathing'
+import {
+  Appearance,
+  Difficulty,
+  HomeScreenTip,
+  MusicSetting,
+  ShakeSetting,
+  ShareStatsSetting,
+  SoundSetting,
+} from './playerData'
+import { LinkFlow, SyncState } from './playerSync'
+
+export {
+  Appearance,
+  Body,
+  Difficulty,
+  HairColor,
+  HairStyle,
+  HomeScreenTip,
+  MusicSetting,
+  ShakeSetting,
+  ShareStatsSetting,
+  ShirtColor,
+  SkinTone,
+  SoundSetting,
+} from './playerData'
 
 export const Vector = Schema.Struct({ x: Schema.Number, y: Schema.Number })
 export type Vector = typeof Vector.Type
@@ -563,12 +588,6 @@ export const AudioState = defineTaggedUnion({
 })
 export type AudioState = typeof AudioState.Type
 
-export const SoundSetting = Schema.Literals(['On', 'Muted'])
-export type SoundSetting = typeof SoundSetting.Type
-
-export const MusicSetting = Schema.Literals(['On', 'Off'])
-export type MusicSetting = typeof MusicSetting.Type
-
 export const GunSlot = Schema.Literals(['Sidearm', 'Spare'])
 export type GunSlot = typeof GunSlot.Type
 
@@ -583,17 +602,6 @@ export type ScreenFit = typeof ScreenFit.Type
 
 export const FullscreenSetting = Schema.Literals(['Off', 'On'])
 export type FullscreenSetting = typeof FullscreenSetting.Type
-
-export const HomeScreenTip = Schema.Literals(['Unseen', 'Dismissed'])
-export type HomeScreenTip = typeof HomeScreenTip.Type
-
-export const ShakeSetting = Schema.Literals(['On', 'Off'])
-export type ShakeSetting = typeof ShakeSetting.Type
-
-// NOTE: whether the game sends an anonymous run summary at the end of each
-// run (src/analytics.ts). On by default, kept in the on-device save.
-export const ShareStatsSetting = Schema.Literals(['On', 'Off'])
-export type ShareStatsSetting = typeof ShareStatsSetting.Type
 
 export const HomeButton = Schema.Literals([
   'Play',
@@ -611,14 +619,6 @@ export const MenuPanel = Schema.Literals([
   'Difficulty',
 ])
 export type MenuPanel = typeof MenuPanel.Type
-
-export const Difficulty = Schema.Literals([
-  'Easy',
-  'Normal',
-  'Hard',
-  'Nightmare',
-])
-export type Difficulty = typeof Difficulty.Type
 
 // NOTE: JustUnlocked is the run that won Hard and its end screen. It
 // settles to Unlocked when the next run starts.
@@ -706,53 +706,6 @@ export type TutorialReset = typeof TutorialReset.Type
 
 export const PageVisibility = Schema.Literals(['Visible', 'Hidden'])
 export type PageVisibility = typeof PageVisibility.Type
-
-export const Body = Schema.Literals(['Female', 'Male'])
-export type Body = typeof Body.Type
-
-export const HairStyle = Schema.Literals(['Crop', 'Long', 'Ponytail', 'Curls'])
-export type HairStyle = typeof HairStyle.Type
-
-export const HairColor = Schema.Literals([
-  'Black',
-  'Brown',
-  'Ginger',
-  'Blonde',
-  'Pink',
-])
-export type HairColor = typeof HairColor.Type
-
-export const SkinTone = Schema.Literals([
-  'Fair',
-  'Light',
-  'Medium',
-  'Tan',
-  'Brown',
-  'Deep',
-])
-export type SkinTone = typeof SkinTone.Type
-
-export const ShirtColor = Schema.Literals([
-  'Blue',
-  'Red',
-  'Yellow',
-  'Teal',
-  'Pink',
-  'Purple',
-])
-export type ShirtColor = typeof ShirtColor.Type
-
-// NOTE: the appearance is saved on the device in the PlayerSave from
-// src/save.ts. It is plain data on purpose: it moves into the SQLite player
-// scope from PLATFORM.md, stored whole by a ChangedAppearance mutation.
-export const Appearance = Schema.Struct({
-  body: Body,
-  hairStyle: HairStyle,
-  hairColor: HairColor,
-  skinTone: SkinTone,
-  shirtColor: ShirtColor,
-})
-export type Appearance = typeof Appearance.Type
 
 export const LookPart = Schema.Literals([
   'Body',
@@ -1143,6 +1096,8 @@ export const Model = Schema.Struct({
   loading: Loading,
   saveStatus: SaveStatus,
   tutorialReset: TutorialReset,
+  syncState: SyncState,
+  linkFlow: LinkFlow,
 })
 export type Model = typeof Model.Type
 
@@ -1375,4 +1330,6 @@ export const initialModel: Model = {
   loading: Loading.Loaded(),
   saveStatus: 'Unread',
   tutorialReset: 'Idle',
+  syncState: SyncState.LocalOnly(),
+  linkFlow: LinkFlow.Idle(),
 }

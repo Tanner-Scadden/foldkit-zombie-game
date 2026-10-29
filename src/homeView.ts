@@ -27,6 +27,12 @@ import {
   Phase,
 } from './model'
 import { helpLabel, howToPlayView } from './pauseHelp'
+import {
+  LinkFlow,
+  SyncState,
+  linkProblemText,
+  syncStateText,
+} from './playerSync'
 import { durationLabel } from './stats'
 import { FINAL_WAVE } from './waves'
 
@@ -507,6 +513,154 @@ const tutorialResetView = (model: Model, h: HtmlBuilder<Message>): Html =>
         ],
   )
 
+// DEVICES
+
+export const LINK_CODE_INPUT_ID = 'link-code-input'
+
+const panelButton = (
+  label: string,
+  message: Message,
+  h: HtmlBuilder<Message>,
+  tone: 'Stay' | 'Leave' = 'Stay',
+): Html =>
+  h.button(
+    [
+      h.Type('button'),
+      h.Class(
+        tone === 'Stay'
+          ? 'panel-button panel-stay'
+          : 'panel-button panel-leave',
+      ),
+      h.OnClick(message, { propagation: 'Stop' }),
+    ],
+    [label],
+  )
+
+const linkNote = (text: string, h: HtmlBuilder<Message>): Html =>
+  h.p([h.Class('setting-note'), h.Role('status')], [text])
+
+const linkActions = (
+  buttons: ReadonlyArray<Html>,
+  h: HtmlBuilder<Message>,
+): Html => h.div([h.Class('panel-actions')], buttons)
+
+const codeEntryView = (code: string, h: HtmlBuilder<Message>): Html =>
+  h.form(
+    [h.Class('setting-link-form'), h.OnSubmit(Message.SubmittedLinkCode())],
+    [
+      h.label(
+        [h.For(LINK_CODE_INPUT_ID), h.Class('setting-note')],
+        [
+          'Type the code from your other device. This device then plays as that one.',
+        ],
+      ),
+      h.input([
+        h.Id(LINK_CODE_INPUT_ID),
+        h.Class('setting-link-input'),
+        h.Type('text'),
+        h.Name('code'),
+        h.Value(code),
+        h.Maxlength(7),
+        h.Autocomplete('off'),
+        h.Autocapitalize('characters'),
+        h.Spellcheck(false),
+        h.OnInput(value => Message.UpdatedLinkCode({ value })),
+      ]),
+      linkActions(
+        [
+          h.button(
+            [h.Type('submit'), h.Class('panel-button panel-stay')],
+            ['Link'],
+          ),
+          panelButton('Cancel', Message.ClickedCancelLinkButton(), h, 'Leave'),
+        ],
+        h,
+      ),
+    ],
+  )
+
+const linkFlowView = (
+  model: Model,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> =>
+  LinkFlow.match(model.linkFlow, {
+    Idle: () => [
+      linkActions(
+        [
+          panelButton(
+            'Link another device',
+            Message.ClickedLinkDeviceButton(),
+            h,
+          ),
+          panelButton('Use a code', Message.ClickedUseCodeButton(), h),
+        ],
+        h,
+      ),
+    ],
+    Requesting: () => [linkNote('Getting a code', h)],
+    Showing: ({ code }) => [
+      linkNote(
+        'On your other device, open SETTINGS, choose Use a code, and type:',
+        h,
+      ),
+      h.p(
+        [
+          h.Class('setting-link-code'),
+          h.AriaLabel(`Link code ${Array.join(code.split(''), ' ')}`),
+        ],
+        [code],
+      ),
+      linkNote('The code works once, for 10 minutes.', h),
+      linkActions(
+        [panelButton('Done', Message.ClickedCancelLinkButton(), h)],
+        h,
+      ),
+    ],
+    Entering: ({ code }) => [codeEntryView(code, h)],
+    Redeeming: () => [linkNote('Linking', h)],
+    Linked: () => [
+      linkNote('Linked. This device now plays as your other device.', h),
+      linkActions(
+        [panelButton('Done', Message.ClickedCancelLinkButton(), h)],
+        h,
+      ),
+    ],
+    Failed: ({ problem }) => [
+      linkNote(linkProblemText(problem), h),
+      linkActions(
+        [
+          panelButton('Use a code', Message.ClickedUseCodeButton(), h),
+          panelButton('Cancel', Message.ClickedCancelLinkButton(), h, 'Leave'),
+        ],
+        h,
+      ),
+    ],
+  })
+
+const devicesView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.li(
+    [h.Class('setting-row setting-devices')],
+    [
+      h.div(
+        [h.Class('setting-sync')],
+        [
+          h.span([h.Class('setting-label')], ['Devices']),
+          h.span(
+            [
+              h.Class('setting-sync-state'),
+              h.Role('status'),
+              h.DataAttribute('sync', model.syncState._tag),
+            ],
+            [syncStateText(model.syncState)],
+          ),
+        ],
+      ),
+      ...(SyncState.isAnyOf(['LocalOnly'])(model.syncState)
+        ? []
+        : linkFlowView(model, h)),
+    ],
+  )
+
 type PanelText = Readonly<{ title: string; blurb: string }>
 
 const panelText = (model: Model, panel: MenuPanel): PanelText => {
@@ -569,6 +723,7 @@ const panelBodyView = (
         [
           ...Array.map(settingToggles(model), toggle => toggleView(toggle, h)),
           tutorialResetView(model, h),
+          devicesView(model, h),
         ],
       ),
       h.div([h.Class('panel-actions')], [doneButtonView(renderInfo, h)]),

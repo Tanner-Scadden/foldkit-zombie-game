@@ -30,6 +30,7 @@ import {
   noKills,
 } from './model'
 import { isPracticeGateHeld, shownHints } from './onboarding'
+import { PlayerChange } from './playerSync'
 import {
   type PlayerSave,
   SAVE_KEY,
@@ -348,7 +349,14 @@ describe('writing the save', () => {
       update,
       given(read),
       message(Message.ClickedMuteButton()),
-      Command.expectExact(WriteSave({ save: saveOf(muted) })),
+      Command.expectExact(
+        WriteSave({
+          save: saveOf(muted),
+          changes: [
+            PlayerChange.ChangedSettings({ settings: saveOf(muted).settings }),
+          ],
+        }),
+      ),
       Command.resolve(WriteSave, Message.CompletedWriteSave()),
     )
   })
@@ -370,6 +378,9 @@ describe('writing the save', () => {
                 modifyFields(setting, { chosen: () => 'Easy' }),
             }),
           ),
+          changes: [
+            PlayerChange.ChangedDifficulty({ chosen: 'Easy', card: 'Seen' }),
+          ],
         }),
       ),
       Command.resolve(WriteSave, Message.CompletedWriteSave()),

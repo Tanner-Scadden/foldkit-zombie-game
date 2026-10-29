@@ -129,6 +129,13 @@ import {
   skipDebutCard,
 } from './onboarding'
 import { burstCoins, dropClip, puffDust } from './particles'
+import {
+  LinkFlow,
+  LinkProblem,
+  PlayerChange,
+  SyncState,
+  changesBetween,
+} from './playerSync'
 import { PICKUPS } from './powerups'
 import {
   PlayerSave,
@@ -307,6 +314,17 @@ export const Message = defineMessageUnion({
   ClickedConfirmResetTutorialButton: {},
   ClickedCancelResetTutorialButton: {},
   CompletedFocusTutorialReset: {},
+  UpdatedSyncedSave: { save: PlayerSave },
+  UpdatedSyncStatus: { state: SyncState },
+  ClickedLinkDeviceButton: {},
+  SucceededRequestLinkCode: { code: Schema.String },
+  FailedRequestLinkCode: { problem: LinkProblem },
+  ClickedUseCodeButton: {},
+  UpdatedLinkCode: { value: Schema.String },
+  SubmittedLinkCode: {},
+  SucceededRedeemLinkCode: {},
+  FailedRedeemLinkCode: { problem: LinkProblem },
+  ClickedCancelLinkButton: {},
 })
 export type Message = typeof Message.Type
 
@@ -631,15 +649,46 @@ export const LoadSave = Command.define('LoadSave', {
   ),
 })
 
+// NOTE: the whole save goes along with what changed in it: the store runs
+// the changes as player scope mutations, and keeps the whole save only
+// where it still writes the localStorage copy.
 export const WriteSave = Command.define('WriteSave', {
-  args: { save: PlayerSave },
+  args: { save: PlayerSave, changes: Schema.Array(PlayerChange) },
   messages: [Message.CompletedWriteSave, Message.FailedWriteSave],
-  execute: ({ save }) =>
+  execute: ({ save, changes }) =>
     pipe(
-      PlayerStore.use(store => store.write(save)),
+      PlayerStore.use(store => store.write(save, changes)),
       Effect.as(Message.CompletedWriteSave()),
       Effect.catch(error =>
         Effect.succeed(Message.FailedWriteSave({ reason: error.reason })),
+      ),
+    ),
+})
+
+// SYNC
+
+export const RequestLinkCode = Command.define('RequestLinkCode', {
+  messages: [Message.SucceededRequestLinkCode, Message.FailedRequestLinkCode],
+  execute: pipe(
+    PlayerStore.use(store => store.requestLinkCode),
+    Effect.map(code => Message.SucceededRequestLinkCode({ code })),
+    Effect.catch(error =>
+      Effect.succeed(Message.FailedRequestLinkCode({ problem: error.problem })),
+    ),
+  ),
+})
+
+export const RedeemLinkCode = Command.define('RedeemLinkCode', {
+  args: { code: Schema.String },
+  messages: [Message.SucceededRedeemLinkCode, Message.FailedRedeemLinkCode],
+  execute: ({ code }) =>
+    pipe(
+      PlayerStore.use(store => store.redeemLinkCode(code)),
+      Effect.as(Message.SucceededRedeemLinkCode()),
+      Effect.catch(error =>
+        Effect.succeed(
+          Message.FailedRedeemLinkCode({ problem: error.problem }),
+        ),
       ),
     ),
 })
@@ -1459,18 +1508,80 @@ const loadSave = (
     'Save',
   )
 
+// NOTE: a save that arrived from sync is already in the store, so taking
+// it into the Model writes nothing back. Every other change to the save is
+// written with the mutations that describe it.
 const writeSaveFrom =
-  (before: Model): UpdateStep =>
+  (before: Model, message: Message): UpdateStep =>
   stepModel => {
-    if (before.saveStatus === 'Unread' || stepModel.saveStatus === 'Unread') {
+    if (
+      before.saveStatus === 'Unread' ||
+      stepModel.saveStatus === 'Unread' ||
+      message._tag === 'UpdatedSyncedSave'
+    ) {
       return { model: stepModel }
     }
 
+    const beforeSave = saveOf(before)
     const save = saveOf(stepModel)
-    return isSameSave(saveOf(before), save)
+    return isSameSave(beforeSave, save)
       ? { model: stepModel }
-      : { model: stepModel, commands: [WriteSave({ save })] }
+      : {
+          model: stepModel,
+          commands: [
+            WriteSave({ save, changes: changesBetween(beforeSave, save) }),
+          ],
+        }
   }
+
+// NOTE: a save from another device, or from the server, replaces what this
+// device shows: its look, settings, difficulty, and bests. Lessons and
+// unlocks only ever move forward, as on load.
+const takeSyncedSave = (model: Model, save: PlayerSave): UpdateReturn => ({
+  model: restoreSave(model, save),
+})
+
+const startLinking = (model: Model): UpdateReturn =>
+  LinkFlow.match(model.linkFlow, {
+    Requesting: () => ({ model }),
+    Redeeming: () => ({ model }),
+    Idle: () => requestLinkCode(model),
+    Showing: () => requestLinkCode(model),
+    Entering: () => requestLinkCode(model),
+    Linked: () => requestLinkCode(model),
+    Failed: () => requestLinkCode(model),
+  })
+
+const requestLinkCode = (model: Model): UpdateReturn => ({
+  model: modifyFields(model, { linkFlow: () => LinkFlow.Requesting() }),
+  commands: [RequestLinkCode()],
+})
+
+const typeLinkCode = (model: Model, value: string): UpdateReturn =>
+  LinkFlow.isAnyOf(['Entering', 'Failed'])(model.linkFlow)
+    ? {
+        model: modifyFields(model, {
+          linkFlow: () =>
+            LinkFlow.Entering({ code: value.toUpperCase().slice(0, 7) }),
+        }),
+      }
+    : { model }
+
+const submitLinkCode = (model: Model): UpdateReturn =>
+  LinkFlow.match(model.linkFlow, {
+    Entering: ({ code }) => ({
+      model: modifyFields(model, {
+        linkFlow: () => LinkFlow.Redeeming({ code }),
+      }),
+      commands: [RedeemLinkCode({ code })],
+    }),
+    Idle: () => ({ model }),
+    Requesting: () => ({ model }),
+    Showing: () => ({ model }),
+    Redeeming: () => ({ model }),
+    Linked: () => ({ model }),
+    Failed: () => ({ model }),
+  })
 
 const isSettingsOpen = (model: Model): boolean =>
   model.panelDialog.isOpen && model.panel === 'Settings'
@@ -2131,6 +2242,50 @@ const updateGame = (model: Model, message: Message) =>
       answerTutorialReset(model, unchanged => unchanged, 'Idle'),
 
     CompletedFocusTutorialReset: () => ({ model }),
+
+    UpdatedSyncedSave: ({ save }) => takeSyncedSave(model, save),
+
+    UpdatedSyncStatus: ({ state }) => ({
+      model: modifyFields(model, { syncState: () => state }),
+    }),
+
+    ClickedLinkDeviceButton: () => startLinking(model),
+
+    SucceededRequestLinkCode: ({ code }) => ({
+      model: modifyFields(model, {
+        linkFlow: () => LinkFlow.Showing({ code }),
+      }),
+    }),
+
+    FailedRequestLinkCode: ({ problem }) => ({
+      model: modifyFields(model, {
+        linkFlow: () => LinkFlow.Failed({ problem }),
+      }),
+    }),
+
+    ClickedUseCodeButton: () => ({
+      model: modifyFields(model, {
+        linkFlow: () => LinkFlow.Entering({ code: '' }),
+      }),
+    }),
+
+    UpdatedLinkCode: ({ value }) => typeLinkCode(model, value),
+
+    SubmittedLinkCode: () => submitLinkCode(model),
+
+    SucceededRedeemLinkCode: () => ({
+      model: modifyFields(model, { linkFlow: () => LinkFlow.Linked() }),
+    }),
+
+    FailedRedeemLinkCode: ({ problem }) => ({
+      model: modifyFields(model, {
+        linkFlow: () => LinkFlow.Failed({ problem }),
+      }),
+    }),
+
+    ClickedCancelLinkButton: () => ({
+      model: modifyFields(model, { linkFlow: () => LinkFlow.Idle() }),
+    }),
   })
 
 const dismissHomeScreenTip = (model: Model): Model =>
@@ -2203,7 +2358,7 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     unlockNightmareFrom(model),
     stepModel => ({ model: countRunFrom(model, stepModel) }),
     sendRunSummaryFrom(model),
-    writeSaveFrom(model),
+    writeSaveFrom(model, message),
   ])
 
 // SUBSCRIPTION
@@ -2359,96 +2514,114 @@ const mouseMessages = Dom.streamFromEventFilterMap({
       : Option.none(),
 })
 
-export const subscriptions = Subscription.make<Model, Message>()(entry => ({
-  frame: Subscription.animationFrameEntry({
-    isActive: isFrameActive,
-    toMessage: deltaTime => Message.TickedFrame({ deltaTime }),
-  }),
-
-  keyboard: Subscription.persistentEntry(keyboardMessages),
-
-  windowBlur: Subscription.persistentEntry(
-    Dom.streamFromEventFilterMap({
-      target: window,
-      type: 'blur',
-      filterMapEvent: maybeWindowBlurMessage,
-    }),
+// NOTE: what the store hears from sync: a save another device or the
+// server changed, and the status line for SETTINGS.
+const syncMessages: Stream.Stream<Message, never, PlayerStore> = Stream.unwrap(
+  PlayerStore.use(store =>
+    Effect.succeed(
+      Stream.map(store.events, (event): Message =>
+        event._tag === 'SyncedSave'
+          ? Message.UpdatedSyncedSave({ save: event.save })
+          : Message.UpdatedSyncStatus({ state: event.state }),
+      ),
+    ),
   ),
+)
 
-  pageVisibility: Subscription.persistentEntry(
-    Dom.streamFromEvent({
-      target: document,
-      type: 'visibilitychange',
-      mapEvent: () => pageVisibilityMessage(document.visibilityState),
+export const subscriptions = Subscription.make<Model, Message, PlayerStore>()(
+  entry => ({
+    playerSync: Subscription.persistentEntry(syncMessages),
+
+    frame: Subscription.animationFrameEntry({
+      isActive: isFrameActive,
+      toMessage: deltaTime => Message.TickedFrame({ deltaTime }),
     }),
-  ),
 
-  windowFocus: Subscription.persistentEntry(
-    Dom.streamFromEventFilterMap({
-      target: window,
-      type: 'focus',
-      filterMapEvent: maybeWindowFocusMessage,
-    }),
-  ),
+    keyboard: Subscription.persistentEntry(keyboardMessages),
 
-  pageRestores: Subscription.persistentEntry(
-    Dom.streamFromEventFilterMap({
-      target: window,
-      type: 'pageshow',
-      filterMapEvent: maybePageShowMessage,
-    }),
-  ),
-
-  updateCheck: entry(
-    { activity: Activity },
-    {
-      modelToDependencies: model => ({
-        activity: updateCheckActivity(model),
+    windowBlur: Subscription.persistentEntry(
+      Dom.streamFromEventFilterMap({
+        target: window,
+        type: 'blur',
+        filterMapEvent: maybeWindowBlurMessage,
       }),
-      dependenciesToStream: ({ activity }) =>
-        Stream.when(
-          updateCheckMessages,
-          Effect.sync(() => activity === 'Active'),
-        ),
-    },
-  ),
+    ),
 
-  mouseAim: entry(
-    { activity: Activity },
-    {
-      modelToDependencies: model => ({ activity: playingActivity(model) }),
-      dependenciesToStream: ({ activity }) =>
-        Stream.when(
-          mouseMessages,
-          Effect.sync(() => activity === 'Active'),
-        ),
-    },
-  ),
+    pageVisibility: Subscription.persistentEntry(
+      Dom.streamFromEvent({
+        target: document,
+        type: 'visibilitychange',
+        mapEvent: () => pageVisibilityMessage(document.visibilityState),
+      }),
+    ),
 
-  pointerReleases: Subscription.persistentEntry(pointerReleaseMessages),
+    windowFocus: Subscription.persistentEntry(
+      Dom.streamFromEventFilterMap({
+        target: window,
+        type: 'focus',
+        filterMapEvent: maybeWindowFocusMessage,
+      }),
+    ),
 
-  fullscreenChanges: Subscription.persistentEntry(
-    Dom.streamFromEvent({
-      target: document,
-      type: 'fullscreenchange',
-      mapEvent: () =>
-        Message.ChangedFullscreen({
-          fullscreen: document.fullscreenElement === null ? 'Off' : 'On',
+    pageRestores: Subscription.persistentEntry(
+      Dom.streamFromEventFilterMap({
+        target: window,
+        type: 'pageshow',
+        filterMapEvent: maybePageShowMessage,
+      }),
+    ),
+
+    updateCheck: entry(
+      { activity: Activity },
+      {
+        modelToDependencies: model => ({
+          activity: updateCheckActivity(model),
         }),
-    }),
-  ),
+        dependenciesToStream: ({ activity }) =>
+          Stream.when(
+            updateCheckMessages,
+            Effect.sync(() => activity === 'Active'),
+          ),
+      },
+    ),
 
-  trackedPointers: entry(
-    { activity: Activity },
-    {
-      modelToDependencies: model => ({
-        activity: pointerTrackingActivity(model),
+    mouseAim: entry(
+      { activity: Activity },
+      {
+        modelToDependencies: model => ({ activity: playingActivity(model) }),
+        dependenciesToStream: ({ activity }) =>
+          Stream.when(
+            mouseMessages,
+            Effect.sync(() => activity === 'Active'),
+          ),
+      },
+    ),
+
+    pointerReleases: Subscription.persistentEntry(pointerReleaseMessages),
+
+    fullscreenChanges: Subscription.persistentEntry(
+      Dom.streamFromEvent({
+        target: document,
+        type: 'fullscreenchange',
+        mapEvent: () =>
+          Message.ChangedFullscreen({
+            fullscreen: document.fullscreenElement === null ? 'Off' : 'On',
+          }),
       }),
-      dependenciesToStream: ({ activity }) =>
-        Stream.when(
-          pointerMoveMessages,
-          Effect.sync(() => activity === 'Active'),
-        ),
-    },
-  ),
-}))
+    ),
+
+    trackedPointers: entry(
+      { activity: Activity },
+      {
+        modelToDependencies: model => ({
+          activity: pointerTrackingActivity(model),
+        }),
+        dependenciesToStream: ({ activity }) =>
+          Stream.when(
+            pointerMoveMessages,
+            Effect.sync(() => activity === 'Active'),
+          ),
+      },
+    ),
+  }),
+)
