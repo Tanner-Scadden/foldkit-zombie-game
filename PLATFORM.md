@@ -48,7 +48,7 @@ Package names and APIs need checking against the Effect version the game uses (E
 ## Phases
 
 1. **Hosting. Done 2026-10-28.** The game is live at https://munch-manor.tanner-scadden.workers.dev. `infra/` declares one `Cloudflare.Website.Foldkit` resource (Alchemy's Foldkit flavor of `Website.Vite`). `.github/workflows/deploy.yml` gates every deploy on typecheck, lint, test, and build, deploys `prod` from `main`, and gives each pull request a `pr-<number>` preview with a comment that is destroyed when it closes. GitHub Pages is gone. See "What Phase 1 taught us" below.
-2. **Analytics.** At the end of a run the game sends one anonymous summary (mode, wave reached, cause of death, run length, purchases, goodies grabbed, device type, average frame rate) with `navigator.sendBeacon`. A Worker decodes it with the shared Schema, rate limits it, and writes a row to D1. A small dashboard query or page shows the real win rate and where real players die, which today we only guess at with the balance bot.
+2. **Analytics. On preview since 2026-10-29, not yet in production.** At the end of a run the game sends one anonymous summary with `navigator.sendBeacon`. A Worker decodes it with the shared Schema, rate limits it, and writes a row to D1. `bun tools/analytics/report.ts --stage <stage>` prints the real win rate and where real players die, which until now we only guessed at with the balance bot. See "Analytics" below.
 3. **Local SQLite.** Move settings and personal bests into SQLite in the browser. This is the first client mutation path and proves out the wasm build, OPFS, and migrations before sync depends on them. The character's look (`Appearance` in `src/model.ts`) is the first setting to move: it is already plain Schema data, so a `ChangedAppearance` mutation can store it whole. Until then the on-device save bridges the gap (see "The on-device save").
    - **The difficulty** (`SavedDifficulty` in `src/save.ts`, save version 2): the chosen level, whether the first-time card was answered, and the Nightmare unlock. A version 1 save migrates as Normal with the card still to come. A Hard campaign win unlocks Nightmare, so the server will want to check that win before it trusts the unlock.
    - **The session bests** (`SessionBests`): kills, and the fastest win and best endless wave for each difficulty. They still reset with the page.
@@ -70,6 +70,52 @@ Added on 2026-10-28, ahead of local SQLite. `PlayerSave` in `src/save.ts` is one
 - **The account had no `workers.dev` subdomain.** Alchemy's state store needs one, so `tanner-scadden` was claimed through the API before the first deploy.
 - **Two deploy paths collide quietly.** While Workers Builds was still connected, one push ran `wrangler deploy` and overwrote the Worker with a single page fallback. Alchemy's next deploy saw no changed inputs, and `alchemy drift` saw no drift, so both reported success. `alchemy deploy --force` put the declared version back.
 - **Routing and caching.** The game has no routes, so unknown paths answer 404 (`notFoundHandling: 'none'`). The default single page fallback served `index.html` at nested paths, where its relative asset paths missed. `public/_headers` makes the hashed files in `/assets` immutable for a year, `index.html` and `/` are `no-cache` so every load revalidates, and `version.json` is `no-store`.
+
+## Analytics
+
+Built on 2026-10-29 for phase 2. It runs on pull request previews. Production gets it when the pull request merges.
+
+### What is sent
+
+`RunSummary` in `src/analytics.ts` is the one Schema for the summary. The game builds it in `update` and the Worker decodes it, so both sides agree on every field. The file imports only `effect`, so the Worker can bundle it against its own Effect.
+
+| Field                                                       | What                                                                                  |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `version`                                                   | The summary's own version, 1 for now                                                  |
+| `visitId`                                                   | 16 random hex digits made once per page visit by a Command, never saved               |
+| `build`                                                     | The build id from `version.json`                                                      |
+| `mode`, `difficulty`                                        | Campaign or Endless, Easy to Nightmare                                                |
+| `wave`                                                      | The wave the run ended on                                                             |
+| `outcome`                                                   | `Victory`, `GameOver` with `killedBy` (the kind that landed the last bite), or `Quit` |
+| `runMs`                                                     | The run's length                                                                      |
+| `kills`                                                     | Kills per zombie kind                                                                 |
+| `heartsLost`, `purchases`, `powerUpsGrabbed`, `trapsPlaced` | Counts for the run                                                                    |
+| `device`, `screenFit`                                       | `KeyboardMouse` or `Touch`, `Browser` or `Installed`                                  |
+| `frameTime`                                                 | The average frame time in a bucket (`Under10Ms` to `Over34Ms`, or `Unmeasured`)       |
+
+- **When.** A run ends at Game Over, at Victory, or when the player leaves it from the pause MENU. Keeping going after a win reports again, as Endless, when that run ends.
+- **How.** The `SendRunSummary` Command posts the JSON as `text/plain` with `navigator.sendBeacon`, falling back to `fetch` with `keepalive`. `text/plain` keeps it a simple request, so there is no CORS preflight. A failed send is ignored.
+- **Where.** The Worker's origin is baked into the build as `VITE_API_ORIGIN`, which `infra/alchemy.run.ts` sets from each stage's API Worker URL. A build without it (`bun dev`, the tests, an itch.io zip) sends nothing.
+- **Opting out.** SETTINGS has "Share anonymous play stats", on by default, with the line "Sends the wave, kills, and run time when a run ends. Nothing personal." It is saved in `PlayerSave` (save version 3; versions 1 and 2 load with sharing on). When it is off, nothing is sent.
+
+### The Worker
+
+Each stage has its own API Worker, `munch-manor-api` in production and `munch-manor-api-<stage>` elsewhere, beside the game's Worker. It is an Effect `HttpApi` (`infra/worker/api.ts`) on `effect` 4.0.7, writing to D1 through `@effect/sql-d1`.
+
+| Endpoint          | Answers                                                                                                   |
+| ----------------- | --------------------------------------------------------------------------------------------------------- |
+| `POST /api/runs`  | 202 when stored, 400 when the body does not decode, 413 over 8 KB, 429 when rate limited, 503 if D1 fails |
+| `GET /api/health` | 200 with `{"status":"Ok","database":"Ok"}`, or `"Unavailable"` when D1 does not answer                    |
+
+- **Size cap.** 8 KB (`MAX_SUMMARY_BYTES`), checked against `Content-Length` and again against the bytes read. A summary is about 500 bytes.
+- **Rate limits.** Two Cloudflare Rate Limiting bindings: 6 runs a minute per visit id and 60 a minute per address bucket. The bucket is a SHA-256 of a per-stage secret salt (`Alchemy.Random`), the UTC day, and the IP, so it changes every day. It is only a rate limit key: it is never stored or logged.
+- **D1.** One database per stage, `munch-manor-analytics` or `munch-manor-analytics-<stage>`, with migrations in `infra/migrations` applied on deploy. One table, `runs`: one row per summary, the fields above as columns (`outcome` and `killed_by` split out), `kills` as a JSON object, plus `received_at` and `received_day` from the server clock. No column holds an address.
+- **Free plan.** One run is one Worker request and one D1 row written. The free plan allows 100,000 of each a day.
+
+### Not decided yet
+
+- How long rows are kept. Nothing deletes them yet.
+- Whether to store full runs (seed plus inputs) for replays.
 
 ## Sync engine
 
@@ -183,7 +229,8 @@ Checked against Cloudflare's pricing pages on 2026-10-28.
 
 ## Privacy and safety
 
-- No accounts, no cookies, no names, and no IP addresses stored. A random id per page visit groups one visit's runs.
+- No accounts, no cookies, no names, and no IP addresses stored. A random id per page visit groups one visit's runs. The analytics Worker hashes the IP with a secret salt and the day for rate limiting only, and never stores the hash.
+- Players can turn analytics off in SETTINGS ("Share anonymous play stats"). It is on by default because nothing in a summary is personal.
 - Analytics are run summaries, not keystrokes. A run's seed and inputs could replay a death exactly, which is useful, but store them only if we decide that is worth it, and never with anything that identifies a person.
 - Strangers, possibly children, open the game from a link. Collecting anything personal changes the legal picture, so the default is to collect nothing personal.
 - Every endpoint decodes with Schema, caps the body size, and rate limits.
@@ -202,7 +249,7 @@ Each change gets recorded as a dated decision when we make it.
 
 1. ~~Which Cloudflare account, and the free `workers.dev` address or a real domain?~~ The owner's one account and `workers.dev` for now. A real domain is still open.
 2. ~~Keep GitHub Pages running in parallel?~~ No. It is removed once Cloudflare is live.
-3. Which analytics fields earn their place, and how long are rows kept?
+3. ~~Which analytics fields earn their place?~~ The `RunSummary` fields above, chosen 2026-10-29. How long rows are kept is still open.
 4. Do we store full runs (seed plus inputs) for replays?
 5. ~~LiveStore, or our own sync on Effect SQL?~~ Our own mini sync engine, chosen 2026-10-28. LiveStore is revisited at 1.0.
 6. What identity, if any, does sync need: a device key, a passkey, a magic link?
