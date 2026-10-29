@@ -494,6 +494,11 @@ const phaseFromKey = (model: Model, code: string): Model =>
     GameOver: () => startFromKey(model, code),
   })
 
+const isPaused = Phase.isAnyOf(['Paused'])
+
+const hasResumed = (before: Model, after: Model): boolean =>
+  isPaused(before.phase) && !isPaused(after.phase)
+
 const startsRun = (before: Model, after: Model): boolean =>
   !isRoundActive(before.phase) &&
   !Phase.isAnyOf(['Paused'])(before.phase) &&
@@ -762,15 +767,23 @@ const trapFromKey: (code: string) => UpdateStep = code => stepModel =>
     onSome: choice => TRAP_CHOICES[choice](stepModel),
   })
 
+const pauseRound: UpdateStep = stepModel =>
+  Update.combine(stepModel, [
+    closeShop,
+    shopClosedModel => ({
+      model: withInput(pause(shopClosedModel), releaseAll),
+    }),
+  ])
+
 const pauseWhenSideways: UpdateStep = stepModel =>
   isSideways(stepModel) && isRoundActive(stepModel.phase)
-    ? Update.combine(stepModel, [
-        closeShop,
-        sidewaysModel => ({
-          model: withInput(pause(sidewaysModel), releaseAll),
-        }),
-      ])
+    ? pauseRound(stepModel)
     : { model: stepModel }
+
+const pauseWhenAway: UpdateStep = stepModel =>
+  isRoundActive(stepModel.phase)
+    ? pauseRound(stepModel)
+    : { model: withInput(stepModel, releaseAll) }
 
 const unlockAudio: UpdateStep = stepModel =>
   AudioState.match(stepModel.audio, {
@@ -947,16 +960,15 @@ const updateGame = (model: Model, message: Message) =>
         )
       }
 
+      const phased = phaseFromKey(keyed, code)
       const pressed = learnSwapWhen(
         model,
         learnStartWaveWhen(
           model,
           withInput(
-            weaponFromKey(
-              toggleAudioFromKey(phaseFromKey(keyed, code), code),
-              code,
-            ),
-            input => pressKey(input, code),
+            weaponFromKey(toggleAudioFromKey(phased, code), code),
+            input =>
+              hasResumed(model, phased) ? input : pressKey(input, code),
           ),
         ),
       )
@@ -973,15 +985,12 @@ const updateGame = (model: Model, message: Message) =>
       model: withInput(model, input => releaseKey(input, code)),
     }),
 
-    BlurredWindow: () => ({ model: withInput(model, releaseAll) }),
+    BlurredWindow: () => pauseWhenAway(model),
 
     ChangedPageVisibility: ({ visibility }) => {
       const noted = modifyFields(model, { pageVisibility: () => visibility })
       if (visibility === 'Hidden') {
-        return Update.combine(noted, [
-          closeShop,
-          stepModel => ({ model: withInput(pause(stepModel), releaseAll) }),
-        ])
+        return pauseWhenAway(noted)
       } else {
         return { model: noted }
       }
@@ -989,17 +998,14 @@ const updateGame = (model: Model, message: Message) =>
 
     PressedPointer: rawPress => {
       const press = asAllowedPress(model, rawPress)
-      const started = skipDebutCardWhenUp(
-        startFromPointer(
-          useDevice(
-            model,
-            press.device === 'Touch' ? 'Touch' : 'KeyboardMouse',
-          ),
-        ),
+      const started = startFromPointer(
+        useDevice(model, press.device === 'Touch' ? 'Touch' : 'KeyboardMouse'),
       )
-      const pressed = withInput(started, input =>
-        pressPointer(input, started.maybeSurface, press),
-      )
+      const pressed = isPaused(model.phase)
+        ? refreshIntent(started)
+        : withInput(skipDebutCardWhenUp(started), input =>
+            pressPointer(input, started.maybeSurface, press),
+          )
       return Update.combine(pressed, [
         unlockAudio,
         playStartSoundWhen(startsRun(model, pressed)),
@@ -1191,14 +1197,43 @@ const pointerTrackingActivity = (model: Model): Activity =>
 const isInsideDialog = (target: EventTarget | null): boolean =>
   target instanceof Element && target.closest('dialog') !== null
 
+const BUTTON_ACTIVATION_KEYS: ReadonlyArray<string> = ['Enter', 'Space']
+
+const isActivatingButton = (
+  target: EventTarget | null,
+  code: string,
+): boolean =>
+  Array.contains(BUTTON_ACTIVATION_KEYS, code) &&
+  target instanceof Element &&
+  target.closest('button') !== null
+
+export type KeyDown = Readonly<{
+  code: string
+  repeat: boolean
+  target: EventTarget | null
+}>
+
+export const maybeKeyDownMessage = ({
+  code,
+  repeat,
+  target,
+}: KeyDown): Option.Option<Message> =>
+  repeat || isInsideDialog(target) || isActivatingButton(target, code)
+    ? Option.none()
+    : Option.some(Message.PressedKey({ code }))
+
+export const maybeWindowBlurMessage = ({
+  target,
+}: Readonly<{ target: EventTarget | null }>): Option.Option<Message> =>
+  target instanceof Window
+    ? Option.some(Message.BlurredWindow())
+    : Option.none()
+
 const keyboardMessages = Stream.merge(
   Dom.streamFromEventFilterMap({
     target: document,
     type: 'keydown',
-    filterMapEvent: event =>
-      event.repeat || isInsideDialog(event.target)
-        ? Option.none()
-        : Option.some(Message.PressedKey({ code: event.code })),
+    filterMapEvent: maybeKeyDownMessage,
   }),
   Dom.streamFromEvent({
     target: document,
@@ -1262,10 +1297,10 @@ export const subscriptions = Subscription.make<Model, Message>()(entry => ({
   keyboard: Subscription.persistentEntry(keyboardMessages),
 
   windowBlur: Subscription.persistentEntry(
-    Dom.streamFromEvent({
+    Dom.streamFromEventFilterMap({
       target: window,
       type: 'blur',
-      mapEvent: () => Message.BlurredWindow(),
+      filterMapEvent: maybeWindowBlurMessage,
     }),
   ),
 

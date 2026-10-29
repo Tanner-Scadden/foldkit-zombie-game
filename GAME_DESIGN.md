@@ -483,6 +483,15 @@ The run mode is a tagged union, `Campaign` or `Endless`, chosen per run and kept
 - **What stays the same.** Preparation, the shop, traps, the wave preview, and the music (wave 9 onward plays Stampede) work as in the campaign. Endless waves bring no NEW banner, since every kind has already appeared. A THEY GOT BEEFIER banner with the health bonus shows instead, and the screen-reader preview reads it out. The HUD shows WAVE 12 without "/ 8".
 - **Game Over in endless** shows the wave reached and the best wave this session. The best lives in the Model and is not saved anywhere.
 
+#### Pausing, focus, and the end screens
+
+Added on 2026-10-28 before sharing the game more widely. Proposed, not decided. The rules live in `src/main.ts`.
+
+- **Leaving the window pauses.** During Preparation or a wave, a hidden tab or a blur of the window itself (clicking into another app on desktop) pauses the game, closes the shop, and lets go of every held key, button, and thumb. Focus moving between elements on the page, such as into the shop dialog, its tabs, or GOT IT, is not a window blur and pauses nothing. The title, Game Over, Victory, and the pause screen ignore it. Coming back does not resume on its own: the pause screen waits for a click, a tap, or Enter.
+- **The resume press does only that.** The click, tap, Space, or Enter that resumes is not also a shot or a stick. A movement key held through the pause still moves the player after it.
+- **One key press, one action.** Space or Enter on a focused HTML button belongs to the button: the game ignores it and the button's own click does the work, once. Other keys on a focused button, and Space and Enter on the game itself, reach the game as usual. A clicked button hands focus back to the game surface, so the next Space fires.
+- **Feedback line.** Game Over and Victory show TELL WHOEVER SENT YOU THIS WHAT YOU THINK! centered under the stats panel, and the screen reader status line ends with it. To keep it clear of the mode buttons on 844x390 and 667x375 phones, the panel's rows are 8 px apart instead of 9 and the panel sits 3 px higher. Checked with `tools/audit/shots16.ts`.
+
 #### Balance with upgrades
 
 Superseded on 2026-10-28 by the measurements under "Balance pass" above,, which were taken with upgrades on.

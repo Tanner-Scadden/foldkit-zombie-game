@@ -38,6 +38,7 @@ import {
   DUST_COLOR,
   DUST_FADED_COLOR,
   DUST_FADE_MS,
+  FEEDBACK_LINE,
   GAME_TITLE,
   GIB_SHADOW_COLOR,
   GIB_SHADOW_WIDTH,
@@ -2457,9 +2458,9 @@ export const statusText = (model: Model): string => {
     Paused: ({ round }) =>
       `Paused during ${statusWave(model, round.wave)}. Tap, click, or press Enter to resume.`,
     Victory: () =>
-      `Victory. ${victoryVerdict(model.stats)}. ${statsLabel(model)} ${KEEP_GOING} ${PLAY_AGAIN}`,
+      `Victory. ${victoryVerdict(model.stats)}. ${statsLabel(model)} ${KEEP_GOING} ${PLAY_AGAIN} ${FEEDBACK_LINE}`,
     GameOver: ({ wave }) =>
-      `Game over. ${defeatVerdict(wave, model.stats)}. ${statsLabel(model)} ${PLAY_AGAIN}`,
+      `Game over. ${defeatVerdict(wave, model.stats)}. ${statsLabel(model)} ${PLAY_AGAIN} ${FEEDBACK_LINE}`,
   })
 }
 

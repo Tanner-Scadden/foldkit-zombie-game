@@ -357,6 +357,7 @@ export const WOOD_DECAL_COLOR = '#6b4423'
 export const WOOD_DECAL_FADED_COLOR = '#3f2c1c'
 
 export const GAME_TITLE = 'Munch Manor'
+export const FEEDBACK_LINE = 'Tell whoever sent you this what you think!'
 
 export const RESTART_GRACE_MS = 900
 

@@ -67,10 +67,10 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 
 `bun run build` writes a static site to `dist/`. Vite's `base` is `'./'`, so every asset path is relative and `dist/` works from any sub-path. Check it with `bunx vite preview` before publishing. It needs an HTTP server: opening `dist/index.html` straight from disk does not load the module script.
 
-- **GitHub Pages.** Publish the contents of `dist/` to a `gh-pages` branch, or upload `dist/` as the Pages artifact, and point Pages at it. The game then lives at `https://<user>.github.io/<repo>/`.
+- **GitHub Pages.** `.github/workflows/pages.yml` builds with Bun and publishes `dist/` on every push to `main`. The game lives at https://tanner-scadden.github.io/foldkit-zombie-game/.
 - **itch.io.** Zip the contents of `dist/` with `index.html` at the top of the zip, upload it as an HTML game, and set the viewport to 16:9 with fullscreen allowed.
 
-Nothing here publishes on its own. There is no CI workflow.
+Pushing to `main` publishes the game. The workflow only builds, so run `typecheck`, `lint`, and `test` before you push.
 
 ### Rules
 

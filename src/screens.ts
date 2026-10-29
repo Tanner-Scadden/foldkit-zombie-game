@@ -4,6 +4,7 @@ import { Canvas } from 'foldkit'
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
+  FEEDBACK_LINE,
   GAME_TITLE,
   MS_PER_SECOND,
   WAVE_BANNER_MS,
@@ -771,9 +772,9 @@ const YOU_SURVIVED = bakeText('YOU SURVIVED!', 'Victory')
 
 const PANEL_LEFT = 76
 const PANEL_RIGHT = ARENA_WIDTH - PANEL_LEFT
-const PANEL_TOP = 40
-const PANEL_ROW_PX = 9
-const PANEL_PAD = 6
+const PANEL_TOP = 37
+const PANEL_ROW_PX = 8
+const PANEL_PAD = 5
 const PANEL_FILL = 'rgba(24, 14, 22, 0.92)'
 const PANEL_EDGE = '#5a3a4a'
 
@@ -890,10 +891,13 @@ const killShapes = (
   })
 }
 
+const panelBottom = (model: Model): number =>
+  PANEL_TOP + PANEL_PAD * 2 + (statRows(model).length + 1) * PANEL_ROW_PX + 1
+
 const panelShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   const rows = statRows(model)
   const killsY = PANEL_TOP + PANEL_PAD + rows.length * PANEL_ROW_PX + 3
-  const bottom = killsY + PANEL_ROW_PX + PANEL_PAD - 2
+  const bottom = panelBottom(model)
   return [
     Canvas.Rect({
       x: PANEL_LEFT - 1,
@@ -921,7 +925,9 @@ const panelShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   ]
 }
 
-const VERDICT_Y = 29
+const VERDICT_Y = 27
+const FEEDBACK = bakeText(String.toUpperCase(FEEDBACK_LINE), 'Hint')
+const FEEDBACK_GAP = 5
 
 const endShapes = (
   model: Model,
@@ -938,6 +944,7 @@ const endShapes = (
     'Center',
   ),
   ...panelShapes(model),
+  centered(FEEDBACK, panelBottom(model) + FEEDBACK_GAP),
 ]
 
 // OVERLAY

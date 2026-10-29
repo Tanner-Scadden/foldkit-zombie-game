@@ -119,6 +119,24 @@ describe('Mode choice', () => {
     )
   })
 
+  test('Game Over and Victory ask the player to tell whoever sent the game what they think', () => {
+    const FEEDBACK = 'Tell whoever sent you this what you think!'
+    Array.forEach([Phase.GameOver({ wave: 4 }), Phase.Victory()], phase => {
+      scene(
+        { update, view },
+        given(modifyFields(initialModel, { phase: () => phase })),
+        measureSurface,
+        expect(role('status')).toContainText(FEEDBACK),
+      )
+    })
+    scene(
+      { update, view },
+      given(initialModel),
+      measureSurface,
+      expect(role('status')).not.toContainText(FEEDBACK),
+    )
+  })
+
   test('an endless Game Over reads out the wave reached and the best this session', () => {
     scene(
       { update, view },

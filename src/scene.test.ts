@@ -39,6 +39,7 @@ const PLAY_AGAIN =
 const KEEP_GOING =
   'Press K or choose Keep going to carry on into endless from wave 9 with your money, guns, and traps.'
 
+const FEEDBACK = 'Tell whoever sent you this what you think!'
 const READY_STATUS = `${GAME_TITLE}. ${PLAY_AGAIN}`
 
 const PREPARING_WAVE_ONE =
@@ -620,7 +621,7 @@ describe('Run stats', () => {
       given(finished(Phase.GameOver({ wave: 4 }))),
       measureSurface,
       expect(role('status')).toHaveText(
-        `Game over. Eaten on wave 4. ${STATS} ${PLAY_AGAIN}`,
+        `Game over. Eaten on wave 4. ${STATS} ${PLAY_AGAIN} ${FEEDBACK}`,
       ),
     )
   })
@@ -631,7 +632,7 @@ describe('Run stats', () => {
       given(finished(Phase.Victory())),
       measureSurface,
       expect(role('status')).toHaveText(
-        `Victory. The house is yours. For now. ${STATS} ${KEEP_GOING} ${PLAY_AGAIN}`,
+        `Victory. The house is yours. For now. ${STATS} ${KEEP_GOING} ${PLAY_AGAIN} ${FEEDBACK}`,
       ),
     )
   })
