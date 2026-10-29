@@ -75,6 +75,26 @@ A scope is any piece of shared state with one authority. Each scope is one Durab
 - **Conflicts.** Real in rooms, where several people write at once. Mutations check their preconditions when the server applies them and can be rejected. The server's order is final.
 - **Hot scopes.** Shard by mode and period (one leaderboard per mode per week), not one forever.
 
+### Derived scopes
+
+Subscribing and writing are separate. A client can subscribe to scopes it never writes to and still see every change as it happens, because other players and the server change them.
+
+A derived scope is a projection: a reducer that only the server runs, turning mutations from other scopes into its own rows. The leaderboard is the first one:
+
+1. A run ends. The client writes `SubmittedRun` to its own player scope and shows it as pending at once.
+2. The player's Durable Object accepts it (sanity checks on the free plan, replay verification if we upgrade) and sends a server mutation to the leaderboard scope through its outbox, with an idempotency key.
+3. The leaderboard's Durable Object applies it. No client may write to this scope.
+4. It broadcasts the delta to every subscriber, including players who only have the board open. Their local SQLite updates, the reactive query fires, and a Message reaches their Foldkit `update`.
+
+What this means for the engine:
+
+- **Subscriptions are their own concept:** a scope plus an optional slice, such as `leaderboard:campaign:2026-w44` top 100. A client gets a snapshot, then deltas.
+- **Read-only scopes have no pending mutations,** so applying deltas is all that ever happens there.
+- **Slices are kept, not fetched once.** When an entry falls out of the top 100 the delta removes it, and when one enters, it adds it. A subscriber can also ask for its own rank.
+- **Fan-out is cheap:** outgoing WebSocket messages are free and hibernating sockets are not billed for duration. Busy scopes coalesce deltas, for example once every one to two seconds, so a hot board does not flood clients.
+- **The writer sees the loop close:** the run goes from pending to confirmed in the player scope, then appears in the leaderboard when its delta lands ("submitted", then "ranked #12").
+- **The same pattern** covers the daily challenge board, counters such as runs played today, and room lobbies.
+
 ### The mini sync engine
 
 1. **Mutations.** A name, Schema-typed arguments, and a pure function that applies them to SQLite, in the same spirit as the game's `update`. Each carries a client-made id, so applying one twice does nothing.
