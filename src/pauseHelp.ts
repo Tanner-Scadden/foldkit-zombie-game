@@ -79,8 +79,8 @@ const TOUCH_HELP: DeviceHelp = {
       controls: [
         control('Left thumb', 'Move'),
         control('Right thumb', 'Aim and fire'),
-        control('Tap your ammo', 'Reload'),
-        control('Tap your guns', 'Swap guns'),
+        control('Tap your gun', 'Reload'),
+        control('Tap the other gun', 'Swap guns'),
       ],
     },
     {

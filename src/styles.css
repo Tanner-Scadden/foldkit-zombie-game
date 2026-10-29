@@ -177,32 +177,16 @@ body {
   height: 14px;
 }
 
-.action-arc {
-  position: fixed;
-  right: calc(env(safe-area-inset-right, 0px) + 8px);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: center;
-  gap: 6px;
-}
-
-.arc-button {
-  border-color: rgba(255, 224, 102, 0.7);
-}
-
-.place-icon-button {
-  width: 52px;
-  height: 52px;
+.cluster-button.place-icon-button {
   border-color: rgba(155, 227, 106, 0.8);
 }
 
 .place-icon-button .icon-button-glyph {
-  width: 26px;
-  height: 22px;
+  width: 24px;
+  height: 20px;
 }
 
-.place-icon-button[aria-disabled='true'] {
+.cluster-button.place-icon-button[aria-disabled='true'] {
   border-color: rgba(255, 107, 94, 0.8);
   cursor: not-allowed;
 }
@@ -239,8 +223,20 @@ body {
   pointer-events: none;
 }
 
+.gun-cluster {
+  position: absolute;
+  pointer-events: none;
+}
+
+.gun-slots {
+  position: absolute;
+  inset: 0;
+}
+
 .gun-slot-button {
   position: absolute;
+  top: 0;
+  bottom: 0;
   padding: 0;
   border: 0;
   border-radius: 6px;
@@ -258,72 +254,64 @@ body {
   outline: 2px solid #9be36a;
 }
 
-.preparation-controls {
-  position: fixed;
+.gun-cluster-side {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap-reverse;
+  align-items: flex-end;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.cluster-button {
+  pointer-events: auto;
+  border-color: rgba(255, 224, 102, 0.7);
+}
+
+.gun-cluster-top {
+  position: absolute;
+  bottom: calc(100% + 6px);
   left: 50%;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
   transform: translateX(-50%);
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  pointer-events: none;
 }
 
-.trap-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.trap-buttons {
-  display: flex;
-  gap: 6px;
-}
-
-.place-button,
-.next-trap-button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-width: 64px;
-  min-height: 52px;
-  padding: 0 12px;
-  border: 2px solid rgba(155, 227, 106, 0.8);
-  border-radius: 6px;
-  background: rgba(8, 10, 12, 0.7);
-  color: #9be36a;
-  font: bold 14px monospace;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.place-button-stock {
-  font-size: 10px;
-  color: #f4f1de;
-}
-
-.place-button[aria-disabled='true'] {
-  border-color: rgba(255, 107, 94, 0.7);
-  color: #b8c2b0;
-  cursor: not-allowed;
-}
-
-.place-button:focus-visible,
-.next-trap-button:focus-visible {
-  outline: 2px solid #ffe066;
-  outline-offset: 2px;
-}
-
-.place-reason {
-  margin: 0;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(8, 10, 12, 0.7);
-  color: #ff6b5e;
-  font: bold 11px monospace;
+.gun-cluster-top > button {
+  position: relative;
+  pointer-events: auto;
   white-space: nowrap;
+}
+
+.key-badge {
+  position: absolute;
+  top: -9px;
+  right: 4px;
+  padding: 0 4px;
+  border: 1px solid rgba(244, 241, 222, 0.6);
+  border-radius: 3px;
+  background: #140c10;
+  color: #f4f1de;
+  font: bold 10px/12px monospace;
+  pointer-events: none;
+}
+
+.gun-slot-button .key-badge {
+  top: auto;
+  bottom: calc(100% - 2px);
+  right: 50%;
+  transform: translateX(50%);
+}
+
+.gun-slot-button[data-held='true'] .key-badge {
+  border-color: #ffe066;
+  color: #ffe066;
+}
+
+.start-wave-button .key-badge {
+  color: #ffe066;
+  border-color: currentColor;
 }
 
 .start-wave-button {
@@ -440,43 +428,6 @@ body {
 
 .mode-button:focus-visible {
   outline: 2px solid #9be36a;
-  outline-offset: 2px;
-}
-
-.gun-buttons {
-  --arena-px: min(100vw / 320, 100dvh / 180);
-  --east-door-top: calc(
-    (100dvh - 180 * var(--arena-px)) / 2 + 80 * var(--arena-px)
-  );
-  position: fixed;
-  top: max(
-    calc(env(safe-area-inset-top, 0px) + 118px),
-    calc(var(--east-door-top) - 52px)
-  );
-  right: calc(env(safe-area-inset-right, 0px) + 12px);
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  pointer-events: none;
-}
-
-.swap-button {
-  pointer-events: auto;
-  min-width: 64px;
-  min-height: 48px;
-  padding: 0 14px;
-  border: 2px solid rgba(155, 227, 106, 0.8);
-  border-radius: 6px;
-  background: rgba(8, 10, 12, 0.7);
-  color: #9be36a;
-  font: bold 14px monospace;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.swap-button:focus-visible {
-  outline: 2px solid #ffe066;
   outline-offset: 2px;
 }
 

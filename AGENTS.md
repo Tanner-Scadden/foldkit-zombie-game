@@ -93,7 +93,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/effectsView.ts`   | Bullets, decals, particles, blasts, popups, and rattling doors         |
 | `src/hud.ts`           | Hearts, money, the streak, gun and trap slots, and the round text      |
 | `src/wavePreview.ts`   | The door markers that preview a wave, and their spoken text            |
-| `src/touchControls.ts` | Sticks, ghost sticks, icon buttons, gun slots, and the thumb corner    |
+| `src/touchControls.ts` | Sticks, ghost sticks, icon buttons, and the gun cluster with its icons |
 | `src/menus.ts`         | Mode buttons, the new zombie card, corner icons, tips, rotate notice   |
 | `src/pauseHelp.ts`     | The pause screen's panel of controls and tips for each device          |
 | `src/powerupView.ts`   | Pickups, callouts, the boost aura, and HUD timers on canvas            |

@@ -123,7 +123,7 @@ const RESUME_PROMPT = deviceText(
 
 // BANDS
 
-const BAND_TOP: Readonly<Record<HintBand, number>> = { Top: 21, Bottom: 100 }
+const BAND_TOP: Readonly<Record<HintBand, number>> = { Top: 21, Bottom: 84 }
 const SUBTITLE_OFFSET = 15
 const HINT_OFFSET = 24
 const HINT_ROW_PX = 9

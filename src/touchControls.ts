@@ -1,14 +1,8 @@
-import { Array, Option, String } from 'effect'
+import { Array, Option } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
-import { DOORS } from './arena'
-import {
-  DOOR_HALF_WIDTH_PX,
-  STICK_RADIUS_PX,
-  VIEW_HEIGHT,
-  VIEW_WIDTH,
-} from './constants'
-import { gunSlotBox, secondsLeft } from './hud'
+import { STICK_RADIUS_PX, VIEW_HEIGHT, VIEW_WIDTH } from './constants'
+import { GUN_CLUSTER_BOX, gunSlotBox, secondsLeft } from './hud'
 import { NEXT_TRAP_ICON, RELOAD_ICON, TRAP_BUTTON_ICONS } from './icons'
 import { thumbOffset } from './input'
 import { Message, isSideways } from './main'
@@ -21,7 +15,7 @@ import {
   Stick,
 } from './model'
 import { type GhostStick, isDebutCardUp, shownGhostSticks } from './onboarding'
-import { gunName } from './shop'
+import { STALL_BOX, gunName } from './shop'
 import {
   PlaceVerdict,
   type Placement,
@@ -78,50 +72,22 @@ export const iconButtonView = (
     ],
   )
 
-const isTouchHudUp = (model: Model): boolean =>
-  model.lastDevice === 'Touch' &&
-  isRoundActive(model.phase) &&
-  !isDebutCardUp(model) &&
-  !isSideways(model)
+const isOnTouch = (model: Model): boolean => model.lastDevice === 'Touch'
 
-// GUN BUTTONS
+const isClusterUp = (model: Model): boolean =>
+  isRoundActive(model.phase) && !isDebutCardUp(model) && !isSideways(model)
 
-const swapTarget = (model: Model): Option.Option<string> =>
-  Option.map(maybeSpare(model.player.arsenal), spare =>
-    Arsenal.isAnyOf(['HoldingSpare'])(model.player.arsenal)
-      ? gunName(model, SIDEARM)
-      : gunName(model, spare.kind),
-  )
+const keyBadgeView = (
+  model: Model,
+  key: string,
+  h: HtmlBuilder<Message>,
+): Html =>
+  isOnTouch(model)
+    ? h.empty
+    : h.span([h.Class('key-badge'), h.AriaHidden(true)], [key])
 
-const swapButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
-  if (
-    !isRoundActive(model.phase) ||
-    isDebutCardUp(model) ||
-    model.lastDevice === 'Touch'
-  ) {
-    return h.empty
-  }
-
-  return Option.match(swapTarget(model), {
-    onNone: () => h.empty,
-    onSome: target =>
-      h.button(
-        [
-          h.Type('button'),
-          h.Class('swap-button'),
-          h.AriaLabel(`Swap to the ${target}`),
-          h.AriaKeyshortcuts('Q'),
-          h.OnClick(Message.ClickedSwapButton(), {
-            focusSelector: '.game-surface',
-          }),
-        ],
-        ['SWAP'],
-      ),
-  })
-}
-
-export const gunButtonsView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.div([h.Class('gun-buttons')], [swapButtonView(model, h)])
+const percentOf = (part: number, whole: number): string =>
+  `${(part * 100) / whole}%`
 
 // GUN SLOTS
 
@@ -145,16 +111,6 @@ const heldSlot = (model: Model): GunSlot =>
 
 const SLOT_INDEX: Readonly<Record<GunSlot, number>> = { Sidearm: 0, Spare: 1 }
 
-// NOTE: the second slot's drawing reaches over the south doorway. Its tap
-// area stops at the doorway so a thumb there still reaches the room.
-const SOUTH_DOOR_LEFT = DOORS.South.center.x - DOOR_HALF_WIDTH_PX
-
-const percentOfWidth = (arenaPx: number): string =>
-  `${(arenaPx * 100) / VIEW_WIDTH}%`
-
-const percentOfHeight = (arenaPx: number): string =>
-  `${(arenaPx * 100) / VIEW_HEIGHT}%`
-
 const gunSlotButtonView = (
   model: Model,
   { slot, name }: SlotGun,
@@ -162,38 +118,214 @@ const gunSlotButtonView = (
 ): Html => {
   const isHeld = slot === heldSlot(model)
   const box = gunSlotBox(SLOT_INDEX[slot])
-  const width = Math.min(box.width, SOUTH_DOOR_LEFT - box.x)
-  return h.keyed('button')(slot, [
-    h.Type('button'),
-    h.Class('gun-slot-button'),
-    h.DataAttribute('held', isHeld ? 'true' : 'false'),
-    h.AriaLabel(isHeld ? `Reload the ${name}` : `Switch to the ${name}`),
-    h.AriaKeyshortcuts(isHeld ? 'R' : 'Q'),
-    ...(isHeld && !canReload(model.player) ? [h.AriaDisabled(true)] : []),
-    h.Style({
-      left: percentOfWidth(box.x),
-      bottom: percentOfHeight(VIEW_HEIGHT - box.y - box.height),
-      width: percentOfWidth(width),
-      height: `max(44px, ${percentOfHeight(box.height)})`,
-    }),
-    h.OnClick(Message.ClickedGunSlot({ slot }), {
-      focusSelector: '.game-surface',
-    }),
-  ])
+  return h.keyed('button')(
+    slot,
+    [
+      h.Type('button'),
+      h.Class('gun-slot-button'),
+      h.DataAttribute('held', isHeld ? 'true' : 'false'),
+      h.AriaLabel(isHeld ? `Reload the ${name}` : `Switch to the ${name}`),
+      h.AriaKeyshortcuts(isHeld ? 'R' : 'Q'),
+      ...(isHeld && !canReload(model.player) ? [h.AriaDisabled(true)] : []),
+      h.Style({
+        left: percentOf(box.x - GUN_CLUSTER_BOX.x, GUN_CLUSTER_BOX.width),
+        width: percentOf(box.width, GUN_CLUSTER_BOX.width),
+      }),
+      h.OnClick(Message.ClickedGunSlot({ slot }), {
+        focusSelector: '.game-surface',
+      }),
+    ],
+    [keyBadgeView(model, isHeld ? 'R' : 'Q', h)],
+  )
 }
 
-export const gunSlotsView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  isTouchHudUp(model)
+const gunSlotsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [h.Class('gun-slots'), h.Role('group'), h.AriaLabel('Your guns')],
+    Array.map(slotGuns(model), gun => gunSlotButtonView(model, gun, h)),
+  )
+
+// UTILITY ICONS
+
+const isMagazineLow = (model: Model): boolean =>
+  heldLoaded(model.player) * 2 < heldStats(model.player).magazine
+
+const reloadIconView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isOnTouch(model) && isMagazineLow(model) && canReload(model.player)
+    ? iconButtonView(
+        {
+          className: 'cluster-button reload-icon-button',
+          label: `Reload the ${gunName(model, heldWeapon(model.player.arsenal))}`,
+          icon: RELOAD_ICON,
+          keys: 'R',
+          message: Message.ClickedReloadButton(),
+        },
+        h,
+      )
+    : h.empty
+
+const PLACE_REASON_ID = 'place-trap-reason'
+
+const placeReasonView = (
+  { verdict }: Placement,
+  h: HtmlBuilder<Message>,
+): Html =>
+  PlaceVerdict.match(verdict, {
+    Placeable: () => h.empty,
+    Blocked: ({ reason }) =>
+      h.span([h.Id(PLACE_REASON_ID), h.Class('sr-only')], [reason]),
+  })
+
+const placeIconView = (
+  model: Model,
+  placement: Placement,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const { kind, verdict } = placement
+  const isBlocked = PlaceVerdict.isAnyOf(['Blocked'])(verdict)
+  return h.button(
+    [
+      h.Type('button'),
+      h.Class('icon-button cluster-button place-icon-button'),
+      h.AriaLabel(`Place a ${TRAPS[kind].name}`),
+      h.AriaKeyshortcuts('T'),
+      ...(isBlocked
+        ? [h.AriaDisabled(true), h.AriaDescribedBy(PLACE_REASON_ID)]
+        : []),
+      h.OnClick(Message.ClickedPlaceTrapButton(), {
+        focusSelector: '.game-surface',
+      }),
+    ],
+    [
+      h.span([
+        h.Class('icon-button-glyph'),
+        h.AriaHidden(true),
+        h.Style({ backgroundImage: TRAP_BUTTON_ICONS[kind] }),
+      ]),
+      h.span(
+        [h.Class('icon-button-badge'), h.AriaHidden(true)],
+        [`x${model.trapStock[kind]}`],
+      ),
+      keyBadgeView(model, 'T', h),
+      placeReasonView(placement, h),
+    ],
+  )
+}
+
+const nextTrapIconView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  Option.match(maybeNextKind(model), {
+    onNone: () => h.empty,
+    onSome: kind =>
+      iconButtonView(
+        {
+          className: 'cluster-button next-trap-icon-button',
+          label: `Switch to the ${TRAPS[kind].name}`,
+          icon: NEXT_TRAP_ICON,
+          keys: 'G',
+          message: Message.ClickedNextTrapButton(),
+        },
+        h,
+        [keyBadgeView(model, 'G', h)],
+      ),
+  })
+
+const trapIconsView = (
+  model: Model,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> =>
+  Phase.isAnyOf(['Preparation'])(model.phase)
+    ? Option.match(maybePlacement(model), {
+        onNone: () => [],
+        onSome: placement => [
+          placeIconView(model, placement, h),
+          nextTrapIconView(model, h),
+        ],
+      })
+    : []
+
+// NOTE: the icons beside the guns wrap upward before they reach the stall's
+// outline, so a narrow phone stacks them instead of covering the stall.
+const SIDE_GAP = 2
+const SIDE_RIGHT = STALL_BOX.left - 10
+const SIDE_ROOM = SIDE_RIGHT - GUN_CLUSTER_BOX.x - GUN_CLUSTER_BOX.width
+
+const clusterSideView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [
+      h.Class('gun-cluster-side'),
+      h.Style({
+        left: percentOf(
+          GUN_CLUSTER_BOX.width + SIDE_GAP,
+          GUN_CLUSTER_BOX.width,
+        ),
+        width: percentOf(SIDE_ROOM - SIDE_GAP, GUN_CLUSTER_BOX.width),
+      }),
+    ],
+    [reloadIconView(model, h), ...trapIconsView(model, h)],
+  )
+
+// START WAVE
+
+const startWaveButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  Phase.match(model.phase, {
+    Ready: () => h.empty,
+    Preparation: ({ wave }) =>
+      h.div(
+        [h.Class('gun-cluster-top')],
+        [
+          h.button(
+            [
+              h.Type('button'),
+              h.Class(
+                isOnTouch(model) ? 'start-wave-pill' : 'start-wave-button',
+              ),
+              h.AriaLabel(`Start wave ${wave} now`),
+              h.AriaKeyshortcuts('Enter'),
+              h.OnClick(Message.ClickedStartWaveButton(), {
+                focusSelector: '.game-surface',
+              }),
+            ],
+            ['START WAVE', keyBadgeView(model, 'ENTER', h)],
+          ),
+        ],
+      ),
+    Wave: () => h.empty,
+    Paused: () => h.empty,
+    Victory: () => h.empty,
+    GameOver: () => h.empty,
+  })
+
+// GUN CLUSTER
+
+export const gunClusterView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isClusterUp(model)
     ? h.div(
         [h.Class('hud-tap-frame')],
         [
           h.div(
+            [h.Class('hud-tap-stage')],
             [
-              h.Class('hud-tap-stage'),
-              h.Role('group'),
-              h.AriaLabel('Your guns'),
+              h.div(
+                [
+                  h.Class('gun-cluster'),
+                  h.DataAttribute('device', model.lastDevice),
+                  h.Style({
+                    left: percentOf(GUN_CLUSTER_BOX.x, VIEW_WIDTH),
+                    width: percentOf(GUN_CLUSTER_BOX.width, VIEW_WIDTH),
+                    bottom: percentOf(
+                      VIEW_HEIGHT - GUN_CLUSTER_BOX.y - GUN_CLUSTER_BOX.height,
+                      VIEW_HEIGHT,
+                    ),
+                    height: `max(48px, ${percentOf(GUN_CLUSTER_BOX.height, VIEW_HEIGHT)})`,
+                  }),
+                ],
+                [
+                  gunSlotsView(model, h),
+                  clusterSideView(model, h),
+                  startWaveButtonView(model, h),
+                ],
+              ),
             ],
-            Array.map(slotGuns(model), gun => gunSlotButtonView(model, gun, h)),
           ),
         ],
       )
@@ -253,106 +385,6 @@ const preparationTimerView = (
     ],
   )
 
-const startWaveButtonView = (
-  model: Model,
-  wave: number,
-  h: HtmlBuilder<Message>,
-): Html =>
-  h.button(
-    [
-      h.Type('button'),
-      h.Class(
-        model.lastDevice === 'Touch' ? 'start-wave-pill' : 'start-wave-button',
-      ),
-      h.AriaLabel(`Start wave ${wave} now`),
-      h.AriaKeyshortcuts('Enter'),
-      h.OnClick(Message.ClickedStartWaveButton(), {
-        focusSelector: '.game-surface',
-      }),
-    ],
-    ['START WAVE'],
-  )
-
-const PLACE_REASON_ID = 'place-trap-reason'
-
-const placeButtonView = (
-  model: Model,
-  { kind, verdict }: Placement,
-  h: HtmlBuilder<Message>,
-): Html => {
-  const { name } = TRAPS[kind]
-  const isBlocked = PlaceVerdict.isAnyOf(['Blocked'])(verdict)
-  return h.button(
-    [
-      h.Type('button'),
-      h.Class('place-button'),
-      h.AriaLabel(`Place a ${name}`),
-      h.AriaKeyshortcuts('T'),
-      ...(isBlocked
-        ? [h.AriaDisabled(true), h.AriaDescribedBy(PLACE_REASON_ID)]
-        : []),
-      h.OnClick(Message.ClickedPlaceTrapButton(), {
-        focusSelector: '.game-surface',
-      }),
-    ],
-    [
-      h.span([h.Class('place-button-label')], ['PLACE']),
-      h.span(
-        [h.Class('place-button-stock')],
-        [`${String.toUpperCase(name)} x${model.trapStock[kind]}`],
-      ),
-    ],
-  )
-}
-
-const placeReasonView = (
-  { verdict }: Placement,
-  className: string,
-  h: HtmlBuilder<Message>,
-): Html =>
-  PlaceVerdict.match(verdict, {
-    Placeable: () => h.empty,
-    Blocked: ({ reason }) =>
-      h.p([h.Id(PLACE_REASON_ID), h.Class(className)], [reason]),
-  })
-
-const nextTrapButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  Option.match(maybeNextKind(model), {
-    onNone: () => h.empty,
-    onSome: kind =>
-      h.button(
-        [
-          h.Type('button'),
-          h.Class('next-trap-button'),
-          h.AriaLabel(`Switch to the ${TRAPS[kind].name}`),
-          h.AriaKeyshortcuts('G'),
-          h.OnClick(Message.ClickedNextTrapButton(), {
-            focusSelector: '.game-surface',
-          }),
-        ],
-        ['NEXT'],
-      ),
-  })
-
-const trapControlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  Option.match(maybePlacement(model), {
-    onNone: () => h.empty,
-    onSome: placement =>
-      h.div(
-        [h.Class('trap-controls')],
-        [
-          placeReasonView(placement, 'place-reason', h),
-          h.div(
-            [h.Class('trap-buttons')],
-            [
-              placeButtonView(model, placement, h),
-              nextTrapButtonView(model, h),
-            ],
-          ),
-        ],
-      ),
-  })
-
 export const preparationControlsView = (
   model: Model,
   h: HtmlBuilder<Message>,
@@ -361,15 +393,10 @@ export const preparationControlsView = (
     Ready: () => h.empty,
     Preparation: ({ wave, remainingMs, spawns, clock }) =>
       h.div(
-        [
-          h.Class('preparation-controls'),
-          h.DataAttribute('device', model.lastDevice),
-        ],
+        [],
         [
           preparationTimerView(wave, remainingMs, clock, h),
           wavePreviewView(wave, spawns, model.traps, model.boss, h),
-          model.lastDevice === 'Touch' ? h.empty : trapControlsView(model, h),
-          startWaveButtonView(model, wave, h),
         ],
       ),
     Wave: () => h.empty,
@@ -377,98 +404,6 @@ export const preparationControlsView = (
     Victory: () => h.empty,
     GameOver: () => h.empty,
   })
-
-// ACTION ARC
-
-const isMagazineLow = (model: Model): boolean =>
-  heldLoaded(model.player) * 2 < heldStats(model.player).magazine
-
-const reloadIconView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  isMagazineLow(model) && canReload(model.player)
-    ? iconButtonView(
-        {
-          className: 'arc-button reload-icon-button',
-          label: `Reload the ${gunName(model, heldWeapon(model.player.arsenal))}`,
-          icon: RELOAD_ICON,
-          keys: 'R',
-          message: Message.ClickedReloadButton(),
-        },
-        h,
-      )
-    : h.empty
-
-const placeIconView = (
-  model: Model,
-  placement: Placement,
-  h: HtmlBuilder<Message>,
-): Html => {
-  const { kind, verdict } = placement
-  const isBlocked = PlaceVerdict.isAnyOf(['Blocked'])(verdict)
-  return h.button(
-    [
-      h.Type('button'),
-      h.Class('icon-button arc-button place-icon-button'),
-      h.AriaLabel(`Place a ${TRAPS[kind].name}`),
-      h.AriaKeyshortcuts('T'),
-      ...(isBlocked
-        ? [h.AriaDisabled(true), h.AriaDescribedBy(PLACE_REASON_ID)]
-        : []),
-      h.OnClick(Message.ClickedPlaceTrapButton(), {
-        focusSelector: '.game-surface',
-      }),
-    ],
-    [
-      h.span([
-        h.Class('icon-button-glyph'),
-        h.AriaHidden(true),
-        h.Style({ backgroundImage: TRAP_BUTTON_ICONS[kind] }),
-      ]),
-      h.span(
-        [h.Class('icon-button-badge'), h.AriaHidden(true)],
-        [`x${model.trapStock[kind]}`],
-      ),
-      placeReasonView(placement, 'sr-only', h),
-    ],
-  )
-}
-
-const nextTrapIconView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  Option.match(maybeNextKind(model), {
-    onNone: () => h.empty,
-    onSome: kind =>
-      iconButtonView(
-        {
-          className: 'arc-button next-trap-icon-button',
-          label: `Switch to the ${TRAPS[kind].name}`,
-          icon: NEXT_TRAP_ICON,
-          keys: 'G',
-          message: Message.ClickedNextTrapButton(),
-        },
-        h,
-      ),
-  })
-
-const trapIconsView = (
-  model: Model,
-  h: HtmlBuilder<Message>,
-): ReadonlyArray<Html> =>
-  Phase.isAnyOf(['Preparation'])(model.phase)
-    ? Option.match(maybePlacement(model), {
-        onNone: () => [],
-        onSome: placement => [
-          placeIconView(model, placement, h),
-          nextTrapIconView(model, h),
-        ],
-      })
-    : []
-
-export const actionArcView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  isTouchHudUp(model)
-    ? h.div(
-        [h.Class('action-arc')],
-        [...trapIconsView(model, h), reloadIconView(model, h)],
-      )
-    : h.empty
 
 // GHOST STICKS
 

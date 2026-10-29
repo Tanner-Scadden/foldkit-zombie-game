@@ -243,6 +243,10 @@ const SLOT_WIDTH = 40
 const SLOT_HEIGHT = 12
 const SLOT_GAP = 3
 const SLOT_TOP = VIEW_HEIGHT - HUD_MARGIN - SLOT_HEIGHT
+// NOTE: the guns sit at the bottom middle, nudged a little left so the
+// buttons beside them stop short of the stall's outline.
+const SLOT_LEFT = 115
+const SLOT_DIM_OPACITY = 0.5
 const SLOT_FILL = 'rgba(8, 10, 12, 0.6)'
 const SLOT_BORDER = 'rgba(244, 241, 222, 0.25)'
 const SLOT_HELD_BORDER = '#ffe066'
@@ -290,11 +294,18 @@ const tierPipShapes = (
 export const gunSlotBox = (
   index: number,
 ): Readonly<{ x: number; y: number; width: number; height: number }> => ({
-  x: HUD_MARGIN + index * (SLOT_WIDTH + SLOT_GAP),
+  x: SLOT_LEFT + index * (SLOT_WIDTH + SLOT_GAP),
   y: SLOT_TOP,
   width: SLOT_WIDTH,
   height: SLOT_HEIGHT,
 })
+
+export const GUN_CLUSTER_BOX = {
+  x: SLOT_LEFT,
+  y: SLOT_TOP,
+  width: 2 * SLOT_WIDTH + SLOT_GAP,
+  height: SLOT_HEIGHT,
+}
 
 const slotShapes = (
   index: number,
@@ -302,7 +313,7 @@ const slotShapes = (
 ): ReadonlyArray<Canvas.Shape> => {
   const { x } = gunSlotBox(index)
   const border = isHeld ? SLOT_HELD_BORDER : SLOT_BORDER
-  return [
+  const shapes = [
     Canvas.Rect({
       x,
       y: SLOT_TOP,
@@ -332,6 +343,7 @@ const slotShapes = (
       'Right',
     ),
   ]
+  return isHeld ? shapes : [group({ opacity: SLOT_DIM_OPACITY, shapes })]
 }
 
 const ammoLook = (
@@ -375,7 +387,7 @@ const loadoutShapes = (player: Player): ReadonlyArray<Canvas.Shape> => {
 }
 
 const TRAP_SLOT_WIDTH = 24
-const TRAP_SLOT_TOP = SLOT_TOP - SLOT_HEIGHT - SLOT_GAP
+const TRAP_SLOT_TOP = SLOT_TOP
 
 const trapSlotShapes = (
   kind: TrapKind,
@@ -445,7 +457,7 @@ const trapNoticeShapes = (
     },
   })
 
-const BOOST_CHIPS_LEFT = HUD_MARGIN + 2 * (SLOT_WIDTH + SLOT_GAP)
+const BOOST_CHIPS_TOP = SLOT_TOP - SLOT_HEIGHT - SLOT_GAP
 
 const MUTE_BUTTON_CLEARANCE = 34
 const SCORE_RIGHT = VIEW_WIDTH - HUD_MARGIN - MUTE_BUTTON_CLEARANCE
@@ -461,7 +473,7 @@ const playHudShapes = (
   ...moneyShapes(model),
   ...streakShapes(model.streak),
   ...loadoutShapes(model.player),
-  ...boostChipShapes(model.boosts, BOOST_CHIPS_LEFT, SLOT_TOP),
+  ...boostChipShapes(model.boosts, HUD_MARGIN, BOOST_CHIPS_TOP),
   ...trapStockShapes(model),
   ...trapNoticeShapes(model, camera),
   ...roundHudShapes(model),

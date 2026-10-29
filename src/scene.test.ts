@@ -184,7 +184,7 @@ describe('Shop', () => {
     name: 'Barn Buster Plus, upgrade for Barn Buster, $40',
   })
   const heartButton = role('button', { name: 'Buy Pickled Heart for $25' })
-  const swapButton = role('button', { name: 'Swap to the Pop Pistol' })
+  const swapButton = role('button', { name: 'Switch to the Pop Pistol' })
   const gunsTab = role('tab', { name: /^Guns,/ })
   const healthTab = role('tab', { name: /^Health,/ })
   const trapsTab = role('tab', { name: /^Traps,/ })
@@ -436,7 +436,7 @@ describe('Shop', () => {
     )
   })
 
-  test('the swap button appears with a second gun and names the gun it swaps to', () => {
+  test('with a second gun, a click on the other slot swaps to it', () => {
     scene(
       { update, view },
       given(
@@ -451,8 +451,9 @@ describe('Shop', () => {
         }),
       ),
       measureSurface,
-      click(role('button', { name: 'Swap to the Pop Pistol' })),
-      expect(role('button', { name: 'Swap to the Chatterbox' })).toExist(),
+      click(role('button', { name: 'Switch to the Pop Pistol' })),
+      expect(role('button', { name: 'Switch to the Chatterbox' })).toExist(),
+      expect(role('button', { name: 'Reload the Pop Pistol' })).toExist(),
     )
   })
 })
@@ -479,12 +480,13 @@ describe('Reload button', () => {
     )
   })
 
-  test('stays hidden on a keyboard, where R reloads', () => {
+  test('stays hidden on a keyboard, where the held gun shows R', () => {
     scene(
       { update, view },
       given(fighting),
       measureSurface,
-      expect(reloadButton).toBeAbsent(),
+      expect(selector('.reload-icon-button')).toBeAbsent(),
+      expect(within(reloadButton, selector('.key-badge'))).toHaveText('R'),
     )
   })
 })
@@ -523,7 +525,10 @@ describe('Place button', () => {
       given(atNorthDoor),
       measureSurface,
       expect(plankButton).not.toHaveAttr('aria-disabled', 'true'),
-      expect(text('PLANK PILE x1')).toExist(),
+      expect(within(plankButton, selector('.icon-button-badge'))).toHaveText(
+        'x1',
+      ),
+      expect(within(plankButton, selector('.key-badge'))).toHaveText('T'),
       click(role('button', { name: 'Switch to the Grumpy Gnome' })),
       expect(gnomeButton).toExist(),
       expect(plankButton).toBeAbsent(),

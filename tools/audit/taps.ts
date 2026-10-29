@@ -1,5 +1,6 @@
 // Taps every visible button on the home menu, its panels, the pause screen,
-// the character picker, the leave question, Game Over, and Victory on
+// the character picker, the leave question, the gun cluster in a wave and a
+// break, Game Over, and Victory on
 // 667x375 and 844x390 phones
 // with touch. For each button it checks that the center and four points just
 // inside its edges hit that button (document.elementFromPoint), then taps the
@@ -37,6 +38,14 @@ const SCENES: ReadonlyArray<Scene> = [
     name: 'leave',
     query: 'wave=3&seen=all&start=wave&phase=paused',
     openWith: '.pause-menu-button',
+  },
+  {
+    name: 'wave-lowammo',
+    query: 'wave=3&seen=all&start=wave&gun=smg&elapsed=6000&loaded=9',
+  },
+  {
+    name: 'break-lowammo',
+    query: 'wave=3&seen=all&gun=smg&loaded=9&barricades=1&turrets=1',
   },
   { name: 'gameover', query: 'wave=4&phase=gameover&stats' },
   { name: 'victory', query: 'wave=8&phase=victory&stats' },

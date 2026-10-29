@@ -39,10 +39,8 @@ import {
   victoryVerdict,
 } from './stats'
 import {
-  actionArcView,
   ghostSticksView,
-  gunButtonsView,
-  gunSlotsView,
+  gunClusterView,
   preparationControlsView,
   stickView,
 } from './touchControls'
@@ -285,9 +283,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       pauseHelpView(model, h.OnPointerDown(toPressedPointer), h),
       homeMenuView(model, h),
       preparationControlsView(model, h),
-      gunButtonsView(model, h),
-      gunSlotsView(model, h),
-      actionArcView(model, h),
+      gunClusterView(model, h),
       debutCardView(model, h),
       modeChoiceView(model, h),
       cornerButtonsView(model, h),

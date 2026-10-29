@@ -120,8 +120,8 @@ describe('Pause screen controls', () => {
         role('table', { name: 'Move and fight' }),
         expect(row('Left thumb', 'Move')).toExist(),
         expect(row('Right thumb', 'Aim and fire')).toExist(),
-        expect(row('Tap your ammo', 'Reload')).toExist(),
-        expect(row('Tap your guns', 'Swap guns')).toExist(),
+        expect(row('Tap your gun', 'Reload')).toExist(),
+        expect(row('Tap the other gun', 'Swap guns')).toExist(),
       ),
       inside(
         role('table', { name: 'Traps and stuff' }),

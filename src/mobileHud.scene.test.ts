@@ -10,6 +10,7 @@ import {
   role,
   scene,
   selector,
+  within,
 } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
@@ -81,7 +82,7 @@ describe('the reload icon', () => {
   test('shows only below half a magazine and hides while reloading', () => {
     scene(
       { update, view },
-      given(fightingWith(16)),
+      given(fightingWith(15)),
       measureSurface,
       expect(reloadIcon).toBeAbsent(),
       expect(role('button', { name: `Reload the ${SMG_NAME}` })).toExist(),
@@ -111,20 +112,75 @@ describe('the reload icon', () => {
   })
 })
 
-describe('the gun slots', () => {
-  test('the second slot stops at the south doorway', () => {
+describe('the gun cluster', () => {
+  const cluster = selector('.gun-cluster')
+  const smgSlot = role('button', { name: `Reload the ${SMG_NAME}` })
+  const pistolSlot = role('button', { name: 'Switch to the Pop Pistol' })
+
+  test('sits at the bottom middle with the held gun marked', () => {
     scene(
       { update, view },
       given(fightingWith(30)),
       measureSurface,
-      expect(role('button', { name: 'Switch to the Pop Pistol' })).toHaveStyle(
-        'width',
-        '12.5%',
+      expect(cluster).toHaveStyle('left', '35.9375%'),
+      expect(cluster).toHaveStyle('width', '25.9375%'),
+      expect(within(cluster, role('group', { name: 'Your guns' }))).toExist(),
+      expect(pistolSlot).toHaveAttr('data-held', 'false'),
+      expect(pistolSlot).toHaveStyle('left', '0%'),
+      expect(smgSlot).toHaveAttr('data-held', 'true'),
+      expect(smgSlot).toHaveStyle('left', '51.80722891566265%'),
+      expect(selector('.key-badge')).toBeAbsent(),
+    )
+  })
+
+  test('a tap on the other gun swaps, a tap on the held gun reloads', () => {
+    scene(
+      { update, view },
+      given(fightingWith(20)),
+      measureSurface,
+      click(smgSlot),
+      expect(smgSlot).toHaveAttr('aria-disabled', 'true'),
+      click(pistolSlot),
+      expect(role('button', { name: 'Reload the Pop Pistol' })).toHaveAttr(
+        'data-held',
+        'true',
       ),
-      expect(role('button', { name: `Reload the ${SMG_NAME}` })).toHaveStyle(
-        'width',
-        '10%',
+      expect(role('button', { name: `Switch to the ${SMG_NAME}` })).toHaveAttr(
+        'data-held',
+        'false',
       ),
+    )
+  })
+
+  test('the reload icon sits right beside the guns', () => {
+    scene(
+      { update, view },
+      given(fightingWith(9)),
+      measureSurface,
+      expect(within(selector('.gun-cluster-side'), reloadIcon)).toExist(),
+    )
+  })
+
+  test('works with keys on a keyboard, and shows them on the slots', () => {
+    const onKeyboard = modifyFields(fightingWith(20), {
+      lastDevice: () => 'KeyboardMouse',
+    })
+    scene(
+      { update, view },
+      given(onKeyboard),
+      measureSurface,
+      expect(within(smgSlot, selector('.key-badge'))).toHaveText('R'),
+      expect(within(pistolSlot, selector('.key-badge'))).toHaveText('Q'),
+      expect(reloadIcon).toBeAbsent(),
+      Subscription.emit(Message.PressedKey({ code: 'KeyR' })),
+      expect(smgSlot).toHaveAttr('aria-disabled', 'true'),
+      Subscription.emit(Message.PressedKey({ code: 'KeyQ' })),
+      expect(role('button', { name: 'Reload the Pop Pistol' })).toHaveAttr(
+        'data-held',
+        'true',
+      ),
+      click(role('button', { name: `Switch to the ${SMG_NAME}` })),
+      expect(smgSlot).toHaveAttr('data-held', 'true'),
     )
   })
 })
@@ -136,13 +192,33 @@ describe('trap icons and START WAVE', () => {
       given(breakWithTraps),
       measureSurface,
       expect(placeTrap).toHaveClass('place-icon-button'),
+      expect(within(selector('.gun-cluster-side'), placeTrap)).toExist(),
+      expect(within(selector('.gun-cluster-side'), nextTrap)).toExist(),
       expect(nextTrap).toHaveAttr('aria-keyshortcuts', 'G'),
       expect(startWave).toHaveClass('start-wave-pill'),
-      expect(selector('.place-button')).toBeAbsent(),
+      expect(within(selector('.gun-cluster-top'), startWave)).toExist(),
       click(startWave),
       expect(placeTrap).toBeAbsent(),
       expect(nextTrap).toBeAbsent(),
       expect(startWave).toBeAbsent(),
+      expect(selector('.gun-cluster-top')).toBeAbsent(),
+      expect(role('group', { name: 'Your guns' })).toExist(),
+    )
+  })
+
+  test('are the same icons on a keyboard, with their keys', () => {
+    scene(
+      { update, view },
+      given(
+        modifyFields(breakWithTraps, { lastDevice: () => 'KeyboardMouse' }),
+      ),
+      measureSurface,
+      expect(within(placeTrap, selector('.key-badge'))).toHaveText('T'),
+      expect(within(nextTrap, selector('.key-badge'))).toHaveText('G'),
+      expect(within(startWave, selector('.key-badge'))).toHaveText('ENTER'),
+      expect(within(selector('.gun-cluster-top'), startWave)).toExist(),
+      Subscription.emit(Message.PressedKey({ code: 'KeyG' })),
+      expect(role('button', { name: 'Place a Grumpy Gnome' })).toExist(),
     )
   })
 })
