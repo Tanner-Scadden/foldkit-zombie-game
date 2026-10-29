@@ -1,8 +1,9 @@
 import { Array, Option, Record, String, pipe } from 'effect'
-import type { Canvas } from 'foldkit'
+import { Canvas } from 'foldkit'
 
 import {
   ALERT_GLYPH_COLOR,
+  COIN_COLOR,
   COIN_GLYPH_COLOR,
   DAMAGE_GLYPH_COLOR,
   GLYPH_SHADOW_COLOR,
@@ -59,7 +60,6 @@ const GLYPH_PIXELS = {
   Z: ['###', '..#', '.#.', '#..', '###'],
   '+': ['...', '.#.', '###', '.#.', '...'],
   x: ['...', '#.#', '.#.', '#.#', '...'],
-  $: ['.##', '##.', '.#.', '.##', '##.'],
   '.': ['.', '.', '.', '.', '#'],
   ',': ['.', '.', '.', '#', '#'],
   '!': ['#', '#', '#', '.', '#'],
@@ -84,6 +84,39 @@ const GLYPH_SHADOW = 'S'
 
 const GLYPHS: ReadonlyArray<Glyph> = Record.keys(GLYPH_PIXELS)
 
+// COIN
+
+export const COIN_SYMBOL = '$'
+
+const COIN_OUTLINE_COLOR = '#5a3510'
+const COIN_SHINE_COLOR = '#fff3b0'
+const COIN_SHADE_COLOR = '#d9962a'
+const COIN_MARK_COLOR = '#c98a1a'
+
+const coinRect = (
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  fill: string,
+): Canvas.Shape => Canvas.Rect({ x, y, width, height, fill })
+
+export const COIN_WIDTH = 7
+const COIN_LIFT = 1
+
+export const COIN_SPRITE: Sprite = [
+  coinRect(0, 2, 7, 3, COIN_OUTLINE_COLOR),
+  coinRect(1, 1, 5, 5, COIN_OUTLINE_COLOR),
+  coinRect(2, 0, 3, 7, COIN_OUTLINE_COLOR),
+  coinRect(1, 2, 5, 3, COIN_COLOR),
+  coinRect(2, 1, 3, 5, COIN_COLOR),
+  coinRect(2, 1, 2, 1, COIN_SHINE_COLOR),
+  coinRect(1, 2, 1, 2, COIN_SHINE_COLOR),
+  coinRect(5, 2, 1, 3, COIN_SHADE_COLOR),
+  coinRect(2, 5, 3, 1, COIN_SHADE_COLOR),
+  coinRect(3, 2, 1, 3, COIN_MARK_COLOR),
+]
+
 export const glyphPixels = (glyph: Glyph): ReadonlyArray<string> =>
   GLYPH_PIXELS[glyph]
 
@@ -99,16 +132,28 @@ const rowWidth = (pixels: ReadonlyArray<string>): number =>
 
 const glyphWidth = (glyph: Glyph): number => rowWidth(GLYPH_PIXELS[glyph])
 
-type Cell = Readonly<{ maybeGlyph: Option.Option<Glyph>; width: number }>
+type Mark =
+  | Readonly<{ kind: 'Glyph'; glyph: Glyph }>
+  | Readonly<{ kind: 'Coin' }>
+  | Readonly<{ kind: 'Space' }>
 
-const cellOf = (symbol: string): Cell =>
-  Option.match(toGlyph(symbol), {
-    onNone: () => ({ maybeGlyph: Option.none(), width: SPACE_WIDTH }),
+type Cell = Readonly<{ mark: Mark; width: number }>
+
+const COIN_CELL: Cell = { mark: { kind: 'Coin' }, width: COIN_WIDTH }
+
+const cellOf = (symbol: string): Cell => {
+  if (symbol === COIN_SYMBOL) {
+    return COIN_CELL
+  }
+
+  return Option.match(toGlyph(symbol), {
+    onNone: () => ({ mark: { kind: 'Space' }, width: SPACE_WIDTH }),
     onSome: glyph => ({
-      maybeGlyph: Option.some(glyph),
+      mark: { kind: 'Glyph', glyph },
       width: glyphWidth(glyph),
     }),
   })
+}
 
 const cellsOf = (text: string): ReadonlyArray<Cell> =>
   Array.map(String.split(text, ''), cellOf)
@@ -123,14 +168,38 @@ export const textWidth = (text: string): number =>
     ) - GLYPH_GAP,
   )
 
-const cellRow = ({ maybeGlyph, width }: Cell, row: number): string =>
-  Option.match(maybeGlyph, {
-    onNone: () => TRANSPARENT.repeat(width),
-    onSome: glyph =>
-      Option.getOrElse(Array.get(GLYPH_PIXELS[glyph], row), () =>
+const cellRow = ({ mark, width }: Cell, row: number): string =>
+  mark.kind === 'Glyph'
+    ? Option.getOrElse(Array.get(GLYPH_PIXELS[mark.glyph], row), () =>
         TRANSPARENT.repeat(width),
-      ),
-  })
+      )
+    : TRANSPARENT.repeat(width)
+
+type Placed = Readonly<{ x: number; shapes: ReadonlyArray<Canvas.Shape> }>
+
+const placeCells = (
+  cells: ReadonlyArray<Cell>,
+  left: number,
+  toShapes: (mark: Mark, x: number) => ReadonlyArray<Canvas.Shape>,
+): ReadonlyArray<Canvas.Shape> =>
+  Array.reduce(
+    cells,
+    { x: left, shapes: [] },
+    (current: Placed, { mark, width }): Placed => ({
+      x: current.x + width + GLYPH_GAP,
+      shapes: Array.appendAll(current.shapes, toShapes(mark, current.x)),
+    }),
+  ).shapes
+
+const coinAt = (x: number, top: number): Canvas.Shape =>
+  group({ translate: { x, y: top - COIN_LIFT }, shapes: COIN_SPRITE })
+
+const coinShapes = (text: string): ReadonlyArray<Canvas.Shape> =>
+  String.includes(COIN_SYMBOL)(text)
+    ? placeCells(cellsOf(text), 0, (mark, x) =>
+        mark.kind === 'Coin' ? [coinAt(x, 0)] : [],
+      )
+    : []
 
 export const textPixels = (text: string): ReadonlyArray<string> => {
   const cells = cellsOf(text)
@@ -228,8 +297,6 @@ const alignedLeft = (x: number, width: number, align: Align): number => {
   }
 }
 
-type Placed = Readonly<{ x: number; shapes: ReadonlyArray<Canvas.Shape> }>
-
 export const textShapes = (
   text: string,
   tone: TextTone,
@@ -237,39 +304,39 @@ export const textShapes = (
   y: number,
   align: Align,
 ): ReadonlyArray<Canvas.Shape> => {
-  const cells = cellsOf(text)
-  const left = alignedLeft(x, textWidth(text), align)
   const top = Math.round(y)
-  const placed = Array.reduce(
-    cells,
-    { x: left, shapes: [] },
-    (current: Placed, { maybeGlyph, width }): Placed => ({
-      x: current.x + width + GLYPH_GAP,
-      shapes: Option.match(maybeGlyph, {
-        onNone: () => current.shapes,
-        onSome: glyph =>
-          Array.append(
-            current.shapes,
-            group({
-              translate: { x: current.x, y: top },
-              shapes: GLYPH_SPRITES[tone][glyph],
-            }),
-          ),
-      }),
-    }),
+  return placeCells(
+    cellsOf(text),
+    alignedLeft(x, textWidth(text), align),
+    (mark, cellX) => {
+      if (mark.kind === 'Glyph') {
+        return [
+          group({
+            translate: { x: cellX, y: top },
+            shapes: GLYPH_SPRITES[tone][mark.glyph],
+          }),
+        ]
+      } else if (mark.kind === 'Coin') {
+        return [coinAt(cellX, top)]
+      } else {
+        return []
+      }
+    },
   )
-  return placed.shapes
 }
 
 export type BakedText = Readonly<{ width: number; sprite: Sprite }>
 
 export const bakeText = (text: string, tone: TextTone): BakedText => ({
   width: textWidth(text),
-  sprite: spriteShapes(
-    withDropShadow(textPixels(text)),
-    tonePalette(tone),
-    TOP_LEFT,
-  ),
+  sprite: [
+    ...spriteShapes(
+      withDropShadow(textPixels(text)),
+      tonePalette(tone),
+      TOP_LEFT,
+    ),
+    ...coinShapes(text),
+  ],
 })
 
 export type Placement = Readonly<{

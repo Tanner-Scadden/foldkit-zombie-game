@@ -242,6 +242,8 @@ export const MONEY_TICK_PER_SECOND = 10
 
 export const SHOP_FIRST_WAVE = 2
 export const SHOP_REACH_PX = 12
+export const SHOP_LEAVE_PX = 22
+export const SHOP_NEAR_PX = 44
 export const COINS_PER_PURCHASE = 10
 export const COIN_SPEED_MIN = 25
 export const COIN_SPEED_MAX = 60

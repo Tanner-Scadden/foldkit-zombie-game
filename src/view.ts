@@ -190,7 +190,7 @@ import {
 import { BOOST_KIND_ORDER, PICKUPS, isBoosted } from './powerups'
 import { FLOOR_COLOR, ROOM_SHAPES } from './room'
 import { overlayShapes, waveLabel } from './screens'
-import { isShopOpenFor } from './shop'
+import { isShopOpenFor, stallPrompt } from './shop'
 import { shopDialogView } from './shopView'
 import {
   BARRICADE_SPRITES,
@@ -214,7 +214,7 @@ import {
   gunIcon,
   gunSprite,
 } from './sprite'
-import { type StallLook, stallShapes } from './stall'
+import { type StallLook, stallPromptShapes, stallShapes } from './stall'
 import {
   accuracyPercent,
   defeatVerdict,
@@ -2218,6 +2218,7 @@ const playWorldShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   ...airborneParticleShapes(model.particles),
   ...Array.map(model.popups, popupShape),
   ...reloadBarShapes(model.player),
+  ...stallPromptShapes(stallPrompt(model)),
 ]
 
 const worldShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
@@ -2380,7 +2381,7 @@ const statusWave = (model: Model, wave: number): string =>
 
 const shopHint = (model: Model): string =>
   isShopOpenFor(model.phase)
-    ? ' The shop stall in the bottom right corner is open. Walk up to its sign to browse.'
+    ? ' The shop stall in the bottom right corner is open. Walk up to it from any side to browse.'
     : ''
 
 const PLAY_AGAIN =

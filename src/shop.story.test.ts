@@ -40,6 +40,7 @@ import {
   SHOP_ITEMS,
   affordableCount,
   itemsIn,
+  stallPrompt,
   totalAffordable,
 } from './shop'
 import { asVeteran } from './veteran'
@@ -55,7 +56,7 @@ import {
 const FRAME_MS = 50
 const SHORT_FRAME_MS = 16
 const PLAYER_Y = 90
-const BESIDE_STALL = { x: 252, y: 142 }
+const BESIDE_STALL = { x: 241, y: 142 }
 const FRAMES_TO_STALL = 3
 
 const readyModel: Model = modifyFields(asVeteran(initialModel), {
@@ -442,12 +443,18 @@ describe('the shop stall', () => {
       Command.expectNone(),
       press('KeyA'),
       ...ticks(4, FRAME_MS),
+      model(({ shop }) => {
+        expect(shop).toEqual(ShopState.Dismissed())
+      }),
+      ...ticks(2, FRAME_MS),
       release('KeyA'),
       model(({ shop }) => {
         expect(shop).toEqual(ShopState.Away())
       }),
       press('KeyD'),
-      ...ticks(2, FRAME_MS),
+      ...ticks(3, FRAME_MS),
+      Command.expectNone(),
+      tick(FRAME_MS),
       Command.expectExact(Dialog.ShowDialog),
       resolveShowShop,
       model(({ shop }) => {
@@ -779,6 +786,132 @@ describe('zombies still need two pistol shots', () => {
       model(({ zombies, wallet }) => {
         expect(Array.map(zombies, ({ hp }) => hp)).toEqual([ZOMBIE_MAX_HP - 1])
         expect(wallet.balance).toBe(0)
+      }),
+    )
+  })
+})
+
+describe('the stall entrance', () => {
+  const walkInFrom = (start: Readonly<{ x: number; y: number }>, key: string) =>
+    story(
+      update,
+      given(
+        at(
+          modifyFields(readyModel, { phase: () => preparing(2) }),
+          start.x,
+          start.y,
+        ),
+      ),
+      press(key),
+      ...ticks(2, FRAME_MS),
+      Command.expectNone(),
+      model(({ shop }) => {
+        expect(shop).toEqual(ShopState.Away())
+      }),
+      tick(FRAME_MS),
+      Command.expectExact(Dialog.ShowDialog),
+      resolveShowShop,
+      model(({ shop }) => {
+        expect(ShopState.guards.Browsing(shop)).toBe(true)
+      }),
+    )
+
+  test('walking down onto the front of the stall opens the shop', () => {
+    walkInFrom({ x: 265, y: 128 }, 'KeyS')
+  })
+
+  test('walking into the left or right side of the stall opens the shop', () => {
+    walkInFrom({ x: 240, y: 160 }, 'KeyD')
+    walkInFrom({ x: 300, y: 160 }, 'KeyA')
+  })
+
+  test('after leaving the shop at the side, it stays shut until the player steps well away', () => {
+    story(
+      update,
+      given(
+        at(modifyFields(readyModel, { phase: () => preparing(2) }), 251, 160),
+      ),
+      tick(FRAME_MS),
+      Command.expectExact(Dialog.ShowDialog),
+      resolveShowShop,
+      message(
+        Message.GotShopDialogMessage({
+          message: Dialog.Message.RequestedClose(),
+        }),
+      ),
+      resolveCloseShop,
+      ...ticks(10, FRAME_MS),
+      Command.expectNone(),
+      press('KeyA'),
+      ...ticks(3, FRAME_MS),
+      release('KeyA'),
+      press('KeyD'),
+      ...ticks(3, FRAME_MS),
+      release('KeyD'),
+      Command.expectNone(),
+      model(({ shop }) => {
+        expect(shop).toEqual(ShopState.Dismissed())
+      }),
+      press('KeyA'),
+      ...ticks(8, FRAME_MS),
+      release('KeyA'),
+      model(({ shop }) => {
+        expect(shop).toEqual(ShopState.Away())
+      }),
+    )
+  })
+
+  test('touching the side of the stall mid-wave does not open it', () => {
+    story(
+      update,
+      given(
+        at(modifyFields(readyModel, { phase: () => fighting(3) }), 240, 160),
+      ),
+      press('KeyD'),
+      ...ticks(6, FRAME_MS),
+      Command.expectNone(),
+      model(current => {
+        expect(current.shop).toEqual(ShopState.Away())
+        expect(current.shopDialog.isOpen).toBe(false)
+        expect(stallPrompt(current)).toBe('ClosedDuringWave')
+      }),
+    )
+  })
+
+  test('a prompt asks the player to walk up only while they are near an open stall', () => {
+    const prepared = modifyFields(readyModel, { phase: () => preparing(2) })
+    story(
+      update,
+      given(at(prepared, 160, 90)),
+      tick(FRAME_MS),
+      model(current => {
+        expect(stallPrompt(current)).toBe('None')
+      }),
+    )
+    story(
+      update,
+      given(at(prepared, 225, 160)),
+      tick(FRAME_MS),
+      model(current => {
+        expect(stallPrompt(current)).toBe('WalkUp')
+      }),
+      press('KeyD'),
+      ...ticks(6, FRAME_MS),
+      tick(FRAME_MS),
+      resolveShowShop,
+      model(current => {
+        expect(ShopState.guards.Browsing(current.shop)).toBe(true)
+        expect(stallPrompt(current)).toBe('None')
+      }),
+    )
+    story(
+      update,
+      given(
+        at(modifyFields(readyModel, { phase: () => preparing(1) }), 225, 160),
+      ),
+      tick(FRAME_MS),
+      model(current => {
+        expect(stallPrompt(current)).toBe('ClosedUntilFirstClear')
       }),
     )
   })

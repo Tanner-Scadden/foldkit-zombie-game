@@ -1,9 +1,25 @@
-import { Array } from 'effect'
+import { Array, Option } from 'effect'
 import { Canvas } from 'foldkit'
 
-import { GLYPH_SPRITES, textPixels } from './font'
-import { STALL_BOX } from './shop'
-import { type Palette, type Sprite, group, spriteShapes } from './sprite'
+import { ARENA_WIDTH } from './constants'
+import {
+  COIN_SPRITE,
+  COIN_WIDTH,
+  GLYPH_HEIGHT,
+  GLYPH_SPRITES,
+  type TextTone,
+  bakeText,
+  placeBaked,
+  textPixels,
+} from './font'
+import { STALL_BOX, type StallPrompt } from './shop'
+import {
+  type Palette,
+  type Sprite,
+  TOP_LEFT,
+  group,
+  spriteShapes,
+} from './sprite'
 
 // PALETTE
 
@@ -29,7 +45,13 @@ const SLEEP_FRAME_MS = 900
 const SNORE_RISE_PX = 5
 const SNORE_CYCLE_MS = 1800
 const BEACON_BOB_MS = 500
-const BEACON_SCALE = 2
+const WAVE_FRAME_MS = 220
+const GLOW_CYCLE_MS = 1400
+const GLOW_MIN_OPACITY = 0.3
+const GLOW_MAX_OPACITY = 0.9
+const GLOW_COLOR = '#ffe066'
+const BONE_COLOR = '#f4f1de'
+const ARROW_PALETTE: Palette = { o: '#5a3510', y: '#ffd23f' }
 
 const rect = (
   x: number,
@@ -121,7 +143,6 @@ const shopkeeperPixels = (
 const SHOPKEEPER_WIDTH = 9
 const SHOPKEEPER_LEFT = centerX - Math.floor(SHOPKEEPER_WIDTH / 2)
 const SHOPKEEPER_TOP = top - 8
-const TOP_LEFT = { x: 0, y: 0 }
 
 const SHOPKEEPER_AWAKE: Sprite = spriteShapes(
   shopkeeperPixels(AWAKE_EYES),
@@ -135,10 +156,61 @@ const SHOPKEEPER_BLINK: Sprite = spriteShapes(
   TOP_LEFT,
 )
 
-const BONY_HANDS: ReadonlyArray<Canvas.Shape> = [
-  rect(left + 3, top + 5, 3, 2, '#f4f1de'),
-  rect(left + width - 6, top + 5, 3, 2, '#f4f1de'),
+const LEFT_HAND = rect(left + 3, top + 5, 3, 2, BONE_COLOR)
+const RIGHT_HAND = rect(left + width - 6, top + 5, 3, 2, BONE_COLOR)
+const BONY_HANDS: ReadonlyArray<Canvas.Shape> = [LEFT_HAND, RIGHT_HAND]
+
+const WAVE_ARM_X = SHOPKEEPER_LEFT + SHOPKEEPER_WIDTH + 1
+
+const WAVING_HANDS: ReadonlyArray<ReadonlyArray<Canvas.Shape>> = [
+  [
+    LEFT_HAND,
+    rect(WAVE_ARM_X, top - 3, 1, 5, BONE_COLOR),
+    rect(WAVE_ARM_X - 1, top - 6, 3, 3, BONE_COLOR),
+  ],
+  [
+    LEFT_HAND,
+    rect(WAVE_ARM_X, top - 3, 1, 5, BONE_COLOR),
+    rect(WAVE_ARM_X + 1, top - 7, 3, 3, BONE_COLOR),
+  ],
 ]
+
+const wavingHands = (elapsedMs: number): ReadonlyArray<Canvas.Shape> =>
+  Option.getOrElse(
+    Array.get(
+      WAVING_HANDS,
+      Math.floor(elapsedMs / WAVE_FRAME_MS) % WAVING_HANDS.length,
+    ),
+    () => BONY_HANDS,
+  )
+
+// ENTRANCE
+
+const ZONE_SIDE_GAP = 8
+const ZONE_TOP = AWNING_TOP - 3
+const ZONE_LEFT = left - ZONE_SIDE_GAP
+const ZONE_RIGHT = STALL_BOX.right + ZONE_SIDE_GAP - 1
+const ZONE_BOTTOM = STALL_BOX.bottom
+
+const ENTRANCE_GLOW: ReadonlyArray<Canvas.Shape> = [
+  rect(ZONE_LEFT, ZONE_TOP, 1, ZONE_BOTTOM - ZONE_TOP, GLOW_COLOR),
+  rect(ZONE_RIGHT, ZONE_TOP, 1, ZONE_BOTTOM - ZONE_TOP, GLOW_COLOR),
+  rect(ZONE_LEFT, ZONE_TOP, ZONE_RIGHT - ZONE_LEFT + 1, 1, GLOW_COLOR),
+]
+
+const glowShapes = (elapsedMs: number): ReadonlyArray<Canvas.Shape> => {
+  const pulse = (1 - Math.cos((Math.PI * 2 * elapsedMs) / GLOW_CYCLE_MS)) / 2
+  return [
+    group({
+      opacity:
+        Math.round(
+          (GLOW_MIN_OPACITY + (GLOW_MAX_OPACITY - GLOW_MIN_OPACITY) * pulse) *
+            20,
+        ) / 20,
+      shapes: ENTRANCE_GLOW,
+    }),
+  ]
+}
 
 // COUNTER
 
@@ -226,20 +298,59 @@ const sleepingShopkeeper = (elapsedMs: number): ReadonlyArray<Canvas.Shape> => {
   ]
 }
 
-const beaconShapes = (elapsedMs: number): ReadonlyArray<Canvas.Shape> => [
-  group({
-    translate: {
-      x: centerX - Math.floor(BEACON_SCALE * 1.5),
-      y: Math.round(
-        AWNING_TOP -
-          13 +
-          Math.sin((Math.PI * 2 * elapsedMs) / (BEACON_BOB_MS * 2)) * 2,
-      ),
-    },
-    scale: { x: BEACON_SCALE, y: BEACON_SCALE },
-    shapes: GLYPH_SPRITES.Coin.$,
-  }),
-]
+const ARROW: Sprite = spriteShapes(
+  ['.ooooo.', '.oyyyo.', 'ooyyyoo', 'oyyyyyo', '.oyyyo.', '..oyo..', '...o...'],
+  ARROW_PALETTE,
+  TOP_LEFT,
+)
+
+const ARROW_TOP = AWNING_TOP - 9
+const BEACON_COIN_TOP = ARROW_TOP - 9
+const BEACON_LEFT = centerX - Math.floor(COIN_WIDTH / 2)
+
+const beaconShapes = (elapsedMs: number): ReadonlyArray<Canvas.Shape> => {
+  const bob = Math.round(
+    Math.sin((Math.PI * 2 * elapsedMs) / (BEACON_BOB_MS * 2)) * 2,
+  )
+  return [
+    group({
+      translate: { x: BEACON_LEFT, y: BEACON_COIN_TOP + bob },
+      shapes: COIN_SPRITE,
+    }),
+    group({
+      translate: { x: BEACON_LEFT, y: ARROW_TOP + bob },
+      shapes: ARROW,
+    }),
+  ]
+}
+
+// PROMPT
+
+const PROMPT_GAP = 3
+const PROMPT_Y = BEACON_COIN_TOP - PROMPT_GAP - GLYPH_HEIGHT
+const PROMPT_EDGE = 3
+
+const bakePrompt = (text: string, tone: TextTone) => {
+  const baked = bakeText(text, tone)
+  return placeBaked(baked, {
+    x: Math.min(
+      centerX,
+      ARENA_WIDTH - PROMPT_EDGE - Math.ceil(baked.width / 2),
+    ),
+    y: PROMPT_Y,
+    align: 'Center',
+  })
+}
+
+const PROMPTS: Readonly<Record<Exclude<StallPrompt, 'None'>, Canvas.Shape>> = {
+  WalkUp: bakePrompt('BUMP THE STALL TO SHOP', 'Prompt'),
+  ClosedDuringWave: bakePrompt('CLOSED DURING WAVES', 'Hint'),
+  ClosedUntilFirstClear: bakePrompt('OPENS AFTER WAVE 1', 'Hint'),
+}
+
+export const stallPromptShapes = (
+  prompt: StallPrompt,
+): ReadonlyArray<Canvas.Shape> => (prompt === 'None' ? [] : [PROMPTS[prompt]])
 
 export type StallLook = 'Open' | 'Beckoning' | 'Closed'
 
@@ -256,14 +367,16 @@ export const stallShapes = (
       ...AWNING,
     ]
   } else {
+    const isBeckoning = look === 'Beckoning'
     return [
+      ...(isBeckoning ? glowShapes(elapsedMs) : []),
       ...STALL_BACK,
       ...awakeShopkeeper(elapsedMs),
       ...COUNTER,
-      ...BONY_HANDS,
+      ...(isBeckoning ? wavingHands(elapsedMs) : BONY_HANDS),
       ...OPEN_SIGN,
       ...AWNING,
-      ...(look === 'Beckoning' ? beaconShapes(elapsedMs) : []),
+      ...(isBeckoning ? beaconShapes(elapsedMs) : []),
     ]
   }
 }

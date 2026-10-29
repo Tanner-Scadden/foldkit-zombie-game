@@ -3,6 +3,7 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Button, Dialog, Tabs } from '@foldkit/ui'
 
+import { COIN_SYMBOL } from './font'
 import { Message } from './main'
 import {
   type Model,
@@ -74,6 +75,43 @@ const keyMessage = (
   }
 }
 
+// MONEY
+
+const coinIconView = (h: HtmlBuilder<Message>): Html =>
+  h.span([h.Class('coin-icon'), h.AriaHidden(true)])
+
+const NOT_DIGIT = /\D/
+
+const moneyView = (amount: string, h: HtmlBuilder<Message>): Html =>
+  h.span(
+    [h.Class('money')],
+    [coinIconView(h), h.span([h.Class('sr-only')], [COIN_SYMBOL]), amount],
+  )
+
+const afterCoin = (
+  part: string,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html | string> => {
+  const amountLength = Option.getOrElse(
+    String.search(part, NOT_DIGIT),
+    () => part.length,
+  )
+  return [
+    moneyView(String.slice(0, amountLength)(part), h),
+    String.slice(amountLength)(part),
+  ]
+}
+
+const withCoins = (
+  text: string,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html | string> =>
+  pipe(
+    String.split(text, COIN_SYMBOL),
+    Array.flatMap((part, index) => (index === 0 ? [part] : afterCoin(part, h))),
+    Array.filter(child => child !== ''),
+  )
+
 // ITEMS
 
 const detailsId = (item: ShopItemId): string =>
@@ -111,7 +149,10 @@ const rowView = (
   const reasonView = Verdict.match(verdict, {
     Available: () => h.empty,
     Refused: ({ reason }) =>
-      h.span([h.Id(reasonId(item)), h.Class('shop-item-reason')], [reason]),
+      h.span(
+        [h.Id(reasonId(item)), h.Class('shop-item-reason')],
+        withCoins(reason, h),
+      ),
   })
   const describedBy = Array.join(
     isRefused ? [...shape.describedBy, reasonId(item)] : shape.describedBy,
@@ -153,7 +194,7 @@ const rowView = (
                     ),
                     h.span(
                       [h.Class('shop-item-price')],
-                      [priceLabel(model, item)],
+                      withCoins(priceLabel(model, item), h),
                     ),
                   ],
                 ),
@@ -415,7 +456,7 @@ const panelView = (
         [
           h.span(
             [h.Class('shop-balance')],
-            [`You have $${model.wallet.balance}`],
+            withCoins(`You have $${model.wallet.balance}`, h),
           ),
           h.span([h.Class('shop-summary')], [affordSummary(model)]),
         ],

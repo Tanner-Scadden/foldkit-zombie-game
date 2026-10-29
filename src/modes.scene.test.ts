@@ -109,7 +109,7 @@ describe('Mode choice', () => {
       expect(endlessButton).toExist(),
       click(keepGoingButton),
       expect(role('status')).toHaveText(
-        `Get ready for endless wave 9. ${START_PROMPT} The shop stall in the bottom right corner is open. Walk up to its sign to browse.`,
+        `Get ready for endless wave 9. ${START_PROMPT} The shop stall in the bottom right corner is open. Walk up to it from any side to browse.`,
       ),
       expect(
         text(

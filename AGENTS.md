@@ -50,7 +50,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/powerupView.ts` | Pickups, callouts, the boost aura, and HUD timers on canvas   |
 | `src/shop.ts`        | Money, shop categories, items, prices, purchases, the stall   |
 | `src/shopView.ts`    | The shop dialog and its category tabs, HTML over the canvas   |
-| `src/stall.ts`       | The shop stall and its shopkeeper drawn on the canvas         |
+| `src/stall.ts`       | The stall, its shopkeeper, entrance outline, and prompt       |
 | `src/room.ts`        | The room's static floor, walls, doors, and cover shapes       |
 | `src/particles.ts`   | Particles and floor decals spawned from each frame's events   |
 | `src/juice.ts`       | Screen shake, hit-stop, damage numbers, and the kill streak   |
@@ -58,7 +58,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/music.ts`       | The music's tunes as data, its instruments, and its scheduler |
 | `src/view.ts`        | The canvas scene and the on-screen touch sticks               |
 | `src/screens.ts`     | Title, banners, hints, pause, and the run stats panels        |
-| `src/font.ts`        | The pixel font, its glyph sprites, and text layout            |
+| `src/font.ts`        | The pixel font, the money coin, and text layout               |
 | `src/sprite.ts`      | Pixel maps turned into canvas shapes                          |
 | `src/prng.ts`        | The seeded random number generator                            |
 | `src/constants.ts`   | Sizes, speeds, and other tuning numbers                       |

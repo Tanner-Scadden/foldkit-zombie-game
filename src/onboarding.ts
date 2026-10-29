@@ -251,8 +251,8 @@ export const HINT_TEXT: Readonly<
     Touch: 'TAP PLACE TO PLONK THE GNOME DOWN',
   },
   Shop: {
-    KeyboardMouse: 'WALK INTO THE $ STALL TO SHOP',
-    Touch: 'STEER INTO THE $ STALL TO SHOP',
+    KeyboardMouse: 'WALK UP TO THE $ STALL TO SHOP',
+    Touch: 'STEER UP TO THE $ STALL TO SHOP',
   },
   Swap: {
     KeyboardMouse: 'Q SWAPS GUNS',

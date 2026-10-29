@@ -10,6 +10,8 @@ import {
   MS_PER_SECOND,
   PLAYER_MAX_HP,
   SHOP_FIRST_WAVE,
+  SHOP_LEAVE_PX,
+  SHOP_NEAR_PX,
   SHOP_REACH_PX,
   TILE_SIZE,
 } from './constants'
@@ -736,11 +738,20 @@ const stallBox = (): StallBox => {
 
 export const STALL_BOX: StallBox = stallBox()
 
-export const isAtStallFront = ({ x, y }: Vector): boolean =>
-  x >= STALL_BOX.left &&
-  x <= STALL_BOX.right &&
-  y >= STALL_BOX.top - SHOP_REACH_PX &&
-  y <= STALL_BOX.top
+const distanceToStall = ({ x, y }: Vector): number =>
+  Math.hypot(
+    Math.max(STALL_BOX.left - x, 0, x - STALL_BOX.right),
+    Math.max(STALL_BOX.top - y, 0, y - STALL_BOX.bottom),
+  )
+
+export const isAtStall = (position: Vector): boolean =>
+  distanceToStall(position) <= SHOP_REACH_PX
+
+const hasLeftStall = (position: Vector): boolean =>
+  distanceToStall(position) > SHOP_LEAVE_PX
+
+const isNearStall = (position: Vector): boolean =>
+  distanceToStall(position) <= SHOP_NEAR_PX
 
 export const isShopOpenFor = (phase: Phase): boolean =>
   Phase.isAnyOf(['Preparation'])(phase) && phase.wave >= SHOP_FIRST_WAVE
@@ -772,14 +783,34 @@ export const selectShopCategory = (
       }),
   })
 
-export const refreshShopPresence = (model: Model): Model => {
-  const isHere = isAtStallFront(model.player)
-  return modifyFields(model, {
+export const refreshShopPresence = (model: Model): Model =>
+  modifyFields(model, {
     shop: shop =>
       ShopState.match(shop, {
-        Away: () => (isHere ? arriveAtStall(model) : shop),
+        Away: () => (isAtStall(model.player) ? arriveAtStall(model) : shop),
         Browsing: () => shop,
-        Dismissed: () => (isHere ? shop : ShopState.Away()),
+        Dismissed: () => (hasLeftStall(model.player) ? ShopState.Away() : shop),
       }),
   })
+
+export type StallPrompt =
+  | 'None'
+  | 'WalkUp'
+  | 'ClosedDuringWave'
+  | 'ClosedUntilFirstClear'
+
+const closedPrompt = (phase: Phase): StallPrompt =>
+  Phase.isAnyOf(['Wave'])(phase) ? 'ClosedDuringWave' : 'ClosedUntilFirstClear'
+
+export const stallPrompt = (model: Model): StallPrompt => {
+  const { phase, player, shop } = model
+  if (!Phase.isAnyOf(['Preparation', 'Wave'])(phase) || !isNearStall(player)) {
+    return 'None'
+  } else if (!isShopOpenFor(phase)) {
+    return closedPrompt(phase)
+  } else if (ShopState.isAnyOf(['Away'])(shop) && !isAtStall(player)) {
+    return 'WalkUp'
+  } else {
+    return 'None'
+  }
 }

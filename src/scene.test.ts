@@ -13,6 +13,7 @@ import {
   scene,
   selector,
   text,
+  within,
 } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test, expect as vitestExpect } from 'vitest'
@@ -185,6 +186,33 @@ describe('Shop', () => {
     Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()),
     Mount.expectEnded(Dialog.AcquireResources),
   ]
+
+  test('prices and the balance show a coin and read as plain dollars', () => {
+    const shotgunPrice = within(shotgunButton, selector('.shop-item-price'))
+    const smgReason = within(smgButton, selector('.shop-item-reason'))
+    scene(
+      { update, view },
+      given(
+        modifyFields(atStall, {
+          wallet: () => ({ balance: 70, earned: 70, shown: 70 }),
+        }),
+      ),
+      measureSurface,
+      ...openShop(),
+      expect(selector('.shop-balance')).toHaveText('You have $70'),
+      expect(
+        within(selector('.shop-balance'), selector('.coin-icon')),
+      ).toHaveAttr('aria-hidden', 'true'),
+      expect(shotgunPrice).toHaveText('$35'),
+      expect(within(shotgunPrice, selector('.coin-icon'))).toHaveAttr(
+        'aria-hidden',
+        'true',
+      ),
+      expect(within(shotgunPrice, selector('.sr-only'))).toHaveText('$'),
+      expect(smgReason).toHaveText('Need $30 more'),
+      expect(within(smgReason, selector('.coin-icon'))).toExist(),
+    )
+  })
 
   test('opens on the Guns tab, buys with the keyboard and a click, switches tabs, and closes', () => {
     scene(

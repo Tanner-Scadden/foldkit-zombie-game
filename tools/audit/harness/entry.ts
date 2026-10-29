@@ -268,6 +268,14 @@ const scenarioModel = (): Model => {
         },
       ],
     })
+  if (params.has('bounty'))
+    model = modifyFields(model, {
+      popups: () => [
+        { kind: 'Kill', value: 3, x: 90, y: 80, velocityX: 0, ageMs: 50 },
+        { kind: 'Kill', value: 20, x: 150, y: 80, velocityX: 0, ageMs: 400 },
+        { kind: 'Payday', value: 35, x: 225, y: 80, velocityX: 0, ageMs: 600 },
+      ],
+    })
   const phase = params.get('phase')
   if (phase === 'victory')
     model = modifyFields(model, {
