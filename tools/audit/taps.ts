@@ -1,4 +1,6 @@
-// Taps every visible button on the home menu, its panels, the pause screen,
+// Taps every visible button on the home menu (with the full screen icon, the
+// update chip, and a NEW ENTRY pop too), What's New, the Munchopedia list and
+// an entry, the difficulty picker, its other panels, the pause screen,
 // the character picker, the leave question, the gun cluster in a wave and a
 // break, Game Over, and Victory on
 // 667x375 and 844x390 phones
@@ -8,11 +10,13 @@
 // tap, and that it is not a press on the game surface. Exits with 1 on any
 // miss.
 //   BASE=http://localhost:4174/ bun taps.ts
+// ONLY picks scenes, such as `ONLY=home,munchopedia`.
 import type { Page } from 'playwright-core'
 
 import { HARNESS, launch, wait } from './lib'
 
 const BASE = process.env.BASE ?? HARNESS
+const ONLY = process.env.ONLY?.split(',')
 
 type Viewport = Readonly<{ name: string; width: number; height: number }>
 
@@ -25,11 +29,35 @@ type Scene = Readonly<{
   name: string
   query: string
   openWith?: string
+  thenOpen?: string
 }>
 
 const SCENES: ReadonlyArray<Scene> = [
   { name: 'home', query: '' },
+  {
+    name: 'home-full',
+    query: 'fit=full&kills=Runner:3&newentries=Runner',
+  },
   { name: 'home-iphone', query: 'fit=home' },
+  { name: 'whats-new', query: '', openWith: '#home-whats-new' },
+  {
+    name: 'whats-new-older',
+    query: '',
+    openWith: '#home-whats-new',
+    thenOpen: '.news-page',
+  },
+  {
+    name: 'munchopedia',
+    query: 'kills=Shambler:40,Runner:3',
+    openWith: '#home-munchopedia',
+  },
+  {
+    name: 'munchopedia-entry',
+    query: 'kills=Shambler:40,Runner:3',
+    openWith: '#home-munchopedia',
+    thenOpen: '.munch-tile',
+  },
+  { name: 'difficulty', query: '', openWith: '.home-difficulty' },
   { name: 'how-to-play', query: '', openWith: '#home-how-to-play' },
   { name: 'settings', query: 'fit=full', openWith: '#home-settings' },
   { name: 'character', query: '', openWith: '#home-character' },
@@ -83,6 +111,14 @@ const openScene = async (page: Page, scene: Scene) => {
     }
     await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
     await wait(500)
+  }
+  if (scene.thenOpen !== undefined) {
+    const box = await page.locator(scene.thenOpen).first().boundingBox()
+    if (box === null) {
+      throw new Error(`${scene.name}: nothing to open with ${scene.thenOpen}`)
+    }
+    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
+    await wait(400)
   }
 }
 
@@ -156,12 +192,18 @@ const failures: Array<string> = []
 const browser = await launch()
 for (const viewport of VIEWPORTS) {
   for (const scene of SCENES) {
+    if (ONLY && !ONLY.includes(scene.name)) {
+      continue
+    }
     const context = await browser.newContext({
       viewport: { width: viewport.width, height: viewport.height },
       deviceScaleFactor: 2,
       isMobile: true,
       hasTouch: true,
     })
+    // NOTE: a tap can write the save, such as PLAY dismissing the iPhone
+    // tip, so every reopen starts from no save and shows the same scene.
+    await context.addInitScript(() => localStorage.clear())
     const page = await context.newPage()
     await openScene(page, scene)
     const hasDialog = scene.openWith !== undefined

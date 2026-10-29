@@ -38,7 +38,7 @@ import {
 // into that scope and this key is retired. A new field goes in here with a
 // version bump, and decodeSave migrates or drops the older version.
 export const SAVE_KEY = 'munch-manor:save'
-export const SAVE_VERSION = 3
+export const SAVE_VERSION = 4
 
 export const SavedLesson = Schema.Literals(['Pending', 'Learned'])
 export type SavedLesson = typeof SavedLesson.Type
@@ -110,6 +110,14 @@ export const SavedBests = Schema.Struct({
 })
 export type SavedBests = typeof SavedBests.Type
 
+// NOTE: version 4 added the home menu: the newest What's New day seen, by
+// its date, and the Munchopedia entries opened, by kind id.
+export const SavedHome = Schema.Struct({
+  seenNewsDay: Schema.NullOr(Schema.String),
+  openedEntries: Schema.Array(Schema.String),
+})
+export type SavedHome = typeof SavedHome.Type
+
 const PlayerSaveV1 = Schema.Struct({
   version: Schema.Literal(1),
   onboarding: SavedOnboarding,
@@ -129,6 +137,17 @@ const PlayerSaveV2 = Schema.Struct({
 })
 type PlayerSaveV2 = typeof PlayerSaveV2.Type
 
+const PlayerSaveV3 = Schema.Struct({
+  version: Schema.Literal(3),
+  onboarding: SavedOnboarding,
+  homeScreenTip: HomeScreenTip,
+  settings: SavedSettings,
+  appearance: Appearance,
+  difficulty: SavedDifficulty,
+  bests: SavedBests,
+})
+type PlayerSaveV3 = typeof PlayerSaveV3.Type
+
 export const PlayerSave = Schema.Struct({
   version: Schema.Literal(SAVE_VERSION),
   onboarding: SavedOnboarding,
@@ -137,10 +156,13 @@ export const PlayerSave = Schema.Struct({
   appearance: Appearance,
   difficulty: SavedDifficulty,
   bests: SavedBests,
+  home: SavedHome,
 })
 export type PlayerSave = typeof PlayerSave.Type
 
 const PlayerSaveJson = Schema.fromJsonString(PlayerSave)
+
+const PlayerSaveV3Json = Schema.fromJsonString(PlayerSaveV3)
 
 const PlayerSaveV2Json = Schema.fromJsonString(PlayerSaveV2)
 
@@ -178,8 +200,13 @@ const migrateV1 = (save: PlayerSaveV1): PlayerSaveV2 => ({
   difficulty: unpickedDifficulty,
 })
 
-const migrateV2 = (save: PlayerSaveV2): PlayerSave => ({
-  version: SAVE_VERSION,
+export const unvisitedHome: SavedHome = {
+  seenNewsDay: null,
+  openedEntries: [],
+}
+
+const migrateV2 = (save: PlayerSaveV2): PlayerSaveV3 => ({
+  version: 3,
   onboarding: save.onboarding,
   homeScreenTip: save.homeScreenTip,
   settings: save.settings,
@@ -188,15 +215,31 @@ const migrateV2 = (save: PlayerSaveV2): PlayerSave => ({
   bests: noSavedBests,
 })
 
+const migrateV3 = (save: PlayerSaveV3): PlayerSave => ({
+  version: SAVE_VERSION,
+  onboarding: save.onboarding,
+  homeScreenTip: save.homeScreenTip,
+  settings: save.settings,
+  appearance: save.appearance,
+  difficulty: save.difficulty,
+  bests: save.bests,
+  home: unvisitedHome,
+})
+
 export const decodeSave = (raw: string): Option.Option<PlayerSave> =>
   pipe(
     Schema.decodeOption(PlayerSaveJson)(raw),
     Option.orElse(() =>
-      Option.map(Schema.decodeOption(PlayerSaveV2Json)(raw), migrateV2),
+      Option.map(Schema.decodeOption(PlayerSaveV3Json)(raw), migrateV3),
+    ),
+    Option.orElse(() =>
+      Option.map(Schema.decodeOption(PlayerSaveV2Json)(raw), save =>
+        migrateV3(migrateV2(save)),
+      ),
     ),
     Option.orElse(() =>
       Option.map(Schema.decodeOption(PlayerSaveV1Json)(raw), save =>
-        migrateV2(migrateV1(save)),
+        migrateV3(migrateV2(migrateV1(save))),
       ),
     ),
   )
@@ -264,6 +307,10 @@ export const saveOf = (model: Model): PlayerSave => ({
     nightmare: model.difficulty.nightmare === 'Locked' ? 'Locked' : 'Unlocked',
   },
   bests: savedBests(model.bests),
+  home: {
+    seenNewsDay: Option.getOrNull(model.home.maybeSeenNewsDay),
+    openedEntries: model.home.openedEntries,
+  },
 })
 
 // INTO THE MODEL
@@ -359,6 +406,12 @@ export const restoreSave = (model: Model, save: PlayerSave): Model =>
     difficultyCard: card =>
       save.difficulty.card === 'Seen' ? DifficultyCard.Seen() : card,
     bests: () => restoreBests(save.bests),
+    home: home =>
+      modifyFields(home, {
+        maybeSeenNewsDay: () => Option.fromNullishOr(save.home.seenNewsDay),
+        openedEntries: opened =>
+          Array.union(opened, knownKinds(save.home.openedEntries)),
+      }),
   })
 
 // RESET

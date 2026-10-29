@@ -59,9 +59,18 @@ const press = (code: string) => Subscription.emit(Message.PressedKey({ code }))
 const playButton = role('button', {
   name: 'Play the campaign: 8 waves, then victory',
 })
-const endlessButton = role('button', {
-  name: 'Endless: waves keep coming until you fall',
+const playEndlessButton = role('button', {
+  name: 'Play endless: waves keep coming until you fall',
 })
+const modeButton = role('button', {
+  name: 'Mode: Campaign. Switch to Endless',
+})
+const whatsNewButton = role('button', { name: /^What's new/ })
+const munchopediaButton = role('button', { name: /^Munchopedia/ })
+const difficultyBadge = role('button', {
+  name: 'Difficulty: Normal. Change it',
+})
+const playCluster = role('group', { name: 'Play' })
 const characterButton = role('button', {
   name: 'Character: change how you look',
 })
@@ -102,33 +111,63 @@ const afterGrace = (phase: Phase): Model =>
   })
 
 describe('Home menu', () => {
-  test('offers Play, Endless, Character, How to play, and Settings, with key badges on a keyboard', () => {
+  test('fills the fixed slots: status, the play cluster, the rail, and the hero, with a key badge on every button on a keyboard', () => {
     scene(
       { update, view },
       given(home),
       measureSurface,
       inside(
+        playCluster,
+        expectAll(all.role('button')).toHaveCount(2),
+        expect(playButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
+        expect(modeButton).toHaveAttr('aria-keyshortcuts', 'E'),
+      ),
+      inside(
         mainMenu,
         expectAll(all.role('button')).toHaveCount(5),
-        expect(playButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
-        expect(endlessButton).toHaveAttr('aria-keyshortcuts', 'E'),
+        expect(whatsNewButton).toHaveAttr('aria-keyshortcuts', 'L'),
+        expect(munchopediaButton).toHaveAttr('aria-keyshortcuts', 'Z'),
         expect(characterButton).toHaveAttr('aria-keyshortcuts', 'C'),
-        expect(howToPlayButton).toHaveAttr('aria-haspopup', 'dialog'),
+        expect(howToPlayButton).toHaveAttr('aria-keyshortcuts', 'I'),
+        expect(settingsButton).toHaveAttr('aria-keyshortcuts', 'O'),
         expect(settingsButton).toHaveAttr('aria-haspopup', 'dialog'),
-        expectAll(all.selector('.home-button-key')).toHaveCount(3),
       ),
+      expectAll(all.selector('.home-key')).toHaveCount(7),
+      inside(
+        selector('.home-status'),
+        expect(difficultyBadge).toHaveAttr('aria-haspopup', 'dialog'),
+        expect(bests).toExist(),
+      ),
+      expect(
+        role('button', { name: 'Your character: change how you look' }),
+      ).toHaveAttr('aria-haspopup', 'dialog'),
       expect(role('button', { name: 'Mute sound' })).toBeAbsent(),
       inside(bests, expect(text('No bests yet. Go get chewed on.')).toExist()),
     )
   })
 
-  test('touch shows the same buttons without key badges', () => {
+  test('the difficulty badge opens the picker, and a pick changes it without starting a run', () => {
+    scene(
+      { update, view },
+      given(home),
+      measureSurface,
+      click(difficultyBadge),
+      ...showDialog(),
+      click(role('button', { name: /^Hard:/ })),
+      ...closeDialog(),
+      expect(role('button', { name: 'Difficulty: Hard. Change it' })).toExist(),
+      expect(mainMenu).toExist(),
+    )
+  })
+
+  test('touch shows the same buttons in the same slots without key badges', () => {
     scene(
       { update, view },
       given(modifyFields(home, { lastDevice: () => 'Touch' })),
       measureSurface,
-      expect(playButton).toExist(),
-      expect(selector('.home-button-key')).toBeAbsent(),
+      inside(playCluster, expectAll(all.role('button')).toHaveCount(2)),
+      inside(mainMenu, expectAll(all.role('button')).toHaveCount(5)),
+      expect(selector('.home-key')).toBeAbsent(),
     )
   })
 
@@ -185,7 +224,7 @@ describe('Home menu', () => {
     )
   })
 
-  test('Enter plays the campaign and E plays endless', () => {
+  test('Enter plays the chosen mode, and E switches the mode without moving PLAY', () => {
     scene(
       { update, view },
       given(home),
@@ -198,7 +237,21 @@ describe('Home menu', () => {
       { update, view },
       given(home),
       measureSurface,
+      inside(
+        playCluster,
+        expect(selector('.home-play')).toHaveAttr('id', 'home-play'),
+      ),
       press('KeyE'),
+      expect(
+        role('button', { name: 'Mode: Endless. Switch to Campaign' }),
+      ).toExist(),
+      inside(
+        playCluster,
+        expect(selector('.home-play')).toHaveAttr('id', 'home-play'),
+        expect(playEndlessButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
+      ),
+      expect(mainMenu).toExist(),
+      press('Enter'),
       expect(role('status')).toContainText('Get ready for endless wave 1.'),
     )
   })
@@ -232,15 +285,23 @@ describe('Home menu', () => {
         FocusHomeButton({ button: 'Play' }),
         Message.CompletedFocusHomeButton(),
       ),
-      press('ArrowDown'),
-      Command.resolve(
-        FocusHomeButton({ button: 'Endless' }),
-        Message.CompletedFocusHomeButton(),
-      ),
-      press('ArrowLeft'),
-      Command.resolve(
-        FocusHomeButton({ button: 'Play' }),
-        Message.CompletedFocusHomeButton(),
+      ...Array.flatMap(
+        [
+          'Mode',
+          'WhatsNew',
+          'Munchopedia',
+          'Character',
+          'HowToPlay',
+          'Settings',
+          'Play',
+        ] as const,
+        button => [
+          press('ArrowDown'),
+          Command.resolve(
+            FocusHomeButton({ button }),
+            Message.CompletedFocusHomeButton(),
+          ),
+        ],
       ),
       press('ArrowUp'),
       Command.resolve(
@@ -329,7 +390,9 @@ describe('Home menu', () => {
     Array.forEach(
       [
         playButton,
-        endlessButton,
+        modeButton,
+        whatsNewButton,
+        munchopediaButton,
         characterButton,
         howToPlayButton,
         settingsButton,

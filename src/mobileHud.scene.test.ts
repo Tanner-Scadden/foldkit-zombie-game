@@ -7,6 +7,7 @@ import {
   expect,
   expectAll,
   given,
+  inside,
   role,
   scene,
   selector,
@@ -261,14 +262,14 @@ describe('the corner', () => {
     )
   })
 
-  test('full screen shows in Settings and on the pause screen, never mid-wave', () => {
+  test('full screen shows in the home corner, in Settings, and on the pause screen, never mid-wave', () => {
     const canFill = (base: Model): Model =>
       modifyFields(base, { screenFit: () => 'Fullscreen' })
     scene(
       { update, view },
       given(canFill(initialModel)),
       measureSurface,
-      expect(fullscreenButton).toBeAbsent(),
+      inside(selector('.home-corner'), expect(fullscreenButton).toExist()),
       click(
         role('button', {
           name: 'Settings: sound, music, shake, and full screen',
@@ -279,7 +280,10 @@ describe('the corner', () => {
         Dialog.AcquireResources,
         Dialog.Message.SucceededAcquireResources(),
       ),
-      expect(fullscreenButton).toHaveAttr('aria-pressed', 'false'),
+      inside(
+        role('dialog', { name: 'Settings' }),
+        expect(fullscreenButton).toHaveAttr('aria-pressed', 'false'),
+      ),
     )
     scene(
       { update, view },
@@ -347,7 +351,7 @@ describe('the Add to Home Screen tip', () => {
       expect(steps).toContainText('Choose Add to Home Screen'),
       expect(steps).toContainText('Tap Add.'),
       expect(steps).toContainText('Open Munch Manor from your Home Screen.'),
-      expectAll(all.role('listitem')).toHaveCount(4),
+      inside(steps, expectAll(all.role('listitem')).toHaveCount(4)),
       click(role('button', { name: 'Got it' })),
       Command.resolve(
         Dialog.CloseDialog,

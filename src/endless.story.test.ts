@@ -133,7 +133,7 @@ const preparationWave = (phase: Phase): Option.Option<number> =>
   )
 
 describe('choosing a mode', () => {
-  test('Enter on the title starts a campaign, E starts endless', () => {
+  test('Enter on the title plays the chosen mode, and E switches it', () => {
     story(
       update,
       given(readyModel),
@@ -147,6 +147,11 @@ describe('choosing a mode', () => {
       update,
       given(readyModel),
       press('KeyE'),
+      model(({ home, phase }) => {
+        expect(home.mode).toBe('Endless')
+        expect(Phase.guards.Ready(phase)).toBe(true)
+      }),
+      press('Enter'),
       model(({ mode, phase, player }) => {
         expect(mode).toEqual(RunMode.Endless())
         expect(preparationWave(phase)).toEqual(Option.some(1))

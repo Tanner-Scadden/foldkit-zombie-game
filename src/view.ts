@@ -5,7 +5,7 @@ import { Document, Html, HtmlBuilder } from 'foldkit/html'
 import * as CharacterView from './characterView'
 import { FEEDBACK_LINE, GAME_TITLE } from './constants'
 import { DIFFICULTIES, bestsFor } from './difficulty'
-import { homeMenuView, menuPanelView } from './homeView'
+import { homeMenuView, menuPanelView, newEntryNoticeView } from './homeView'
 import { gameStageView } from './layers'
 import { Message, isSideways } from './main'
 import {
@@ -286,6 +286,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       gunClusterView(model, h),
       debutCardView(model, h),
       modeChoiceView(model, h),
+      newEntryNoticeView(model, h),
       cornerButtonsView(model, h),
       homeScreenTipView(model, h),
       updateChipView(model, h),

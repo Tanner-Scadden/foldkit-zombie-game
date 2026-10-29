@@ -1511,6 +1511,18 @@ body {
   border-collapse: collapse;
 }
 
+.pause-help-column {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.pause-help-column .pause-help-table {
+  flex: none;
+  width: 100%;
+}
+
 .pause-help-caption {
   padding-bottom: 0.15em;
   color: #ffe066;
@@ -1582,7 +1594,7 @@ body {
 .home-screen-tip {
   position: fixed;
   top: calc(env(safe-area-inset-top, 0px) + 8px);
-  left: calc(env(safe-area-inset-left, 0px) + 8px);
+  right: calc(env(safe-area-inset-right, 0px) + 8px);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1776,11 +1788,13 @@ body {
 
 .update-chip {
   --arena-px: min(100cqw / 320, 100cqh / 180);
-  --chip-arena-x: 4;
-  --chip-arena-y: 28;
+  --chip-arena-right: 4;
+  --chip-arena-y: 4;
+  --chip-corner-px: 0px;
   position: absolute;
-  left: calc(
-    (100cqw - 320 * var(--arena-px)) / 2 + var(--chip-arena-x) * var(--arena-px)
+  right: calc(
+    (100cqw - 320 * var(--arena-px)) / 2 + var(--chip-arena-right) *
+      var(--arena-px) + var(--chip-corner-px)
   );
   top: calc(
     (100cqh - 180 * var(--arena-px)) / 2 + var(--chip-arena-y) * var(--arena-px)
@@ -1788,7 +1802,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  min-height: 40px;
+  justify-content: center;
+  min-height: 48px;
   padding: 4px 12px;
   border: 2px solid rgba(155, 227, 106, 0.7);
   border-radius: 12px;
@@ -1800,6 +1815,18 @@ body {
   cursor: pointer;
   pointer-events: auto;
   touch-action: manipulation;
+}
+
+.home-frame[data-fit='Fullscreen'] ~ .update-chip-frame .update-chip {
+  --chip-corner-px: calc(max(48px, 13 * var(--arena-px)) + 6px);
+}
+
+.home-screen-tip ~ .update-chip-frame .update-chip {
+  --chip-corner-px: 0px;
+  top: calc(
+    (100cqh - 180 * var(--arena-px)) / 2 + var(--chip-arena-y) *
+      var(--arena-px) + 56px
+  );
 }
 
 .update-chip-action {

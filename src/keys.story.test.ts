@@ -290,11 +290,16 @@ describe('one key per action: the kept keys work', () => {
     )
   })
 
-  test('E starts endless from the title', () => {
+  test('E switches the home mode to endless, and Enter plays it', () => {
     story(
       update,
       given(readyModel),
       ...tap('KeyE'),
+      model(({ phase, home }) => {
+        expect(Phase.isAnyOf(['Ready'])(phase)).toBe(true)
+        expect(home.mode).toBe('Endless')
+      }),
+      ...tap('Enter'),
       model(({ phase, mode }) => {
         expect(Phase.isAnyOf(['Preparation'])(phase)).toBe(true)
         expect(mode).toEqual(RunMode.Endless())

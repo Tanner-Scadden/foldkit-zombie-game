@@ -60,9 +60,13 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/model.ts`         | The Model and its Schema types                                         |
 | `src/main.ts`          | Messages, `init`, `update`, Commands, and Subscriptions                |
 | `src/onboarding.ts`    | Lessons, the practice gate, the new zombie card, and hints             |
-| `src/home.ts`          | The home menu's buttons, going home, and counting runs into the bests  |
+| `src/home.ts`          | The home layout's buttons and keys, the mode, going home, the bests    |
 | `src/homeView.ts`      | The home menu, its panels, the pause MENU pill, and the bests strip    |
 | `src/menu.css`         | Styles for the home menu, its panels, and the MENU pill                |
+| `src/changelog.ts`     | `CHANGELOG.md` read at build time and decoded into What's New days     |
+| `src/whatsNewView.ts`  | The What's New panel: a day's intro and bullets, Older and Newer       |
+| `src/munchopedia.ts`   | The Munchopedia's entries, unlocks, badges, and walking pictures       |
+| `src/guideView.ts`     | The Munchopedia panel: the list of tiles and an entry                  |
 | `src/splash.ts`        | The loading splash's effects: load steps, progress, and hiding it      |
 | `src/save.ts`          | The on-device PlayerSave: its Schema, reading, writing, and the reset  |
 | `src/veteran.ts`       | A returning player's Model for tests and the balance bot               |

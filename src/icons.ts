@@ -156,3 +156,86 @@ export const TRAP_BUTTON_ICONS: Readonly<Record<TrapKind, string>> = Record.map(
   TRAP_ICON_PIXELS,
   ({ pixels, palette }) => pixelIconUrl(pixels, palette),
 )
+
+// HOME RAIL
+
+const RAIL_PALETTE: Palette = {
+  X: LIGHT,
+  O: SHADE,
+  G: '#8fdc5a',
+  Y: '#ffe066',
+  P: '#ff9df0',
+}
+
+export const NEWS_ICON = pixelIconUrl(
+  [
+    'YYYYYYYY..',
+    'Y......Y..',
+    'Y.XXXX.YYY',
+    'Y......Y.Y',
+    'Y.XX.X.Y.Y',
+    'Y......Y.Y',
+    'Y.XXXX.Y.Y',
+    'Y......Y.Y',
+    'YYYYYYYYYY',
+  ],
+  RAIL_PALETTE,
+)
+
+export const MUNCHOPEDIA_ICON = pixelIconUrl(
+  [
+    'XXXXXXXXX.',
+    'XGGGGGGGXX',
+    'XGOGGGOGXX',
+    'XGGGGGGGXX',
+    'XGOOOOOGXX',
+    'XGGOGOGGXX',
+    'XGGGGGGGXX',
+    'XXXXXXXXXX',
+    '.XXXXXXXXX',
+  ],
+  RAIL_PALETTE,
+)
+
+export const CHARACTER_ICON = pixelIconUrl(
+  [
+    '...PPP...',
+    '..PPPPP..',
+    '..PPPPP..',
+    '...PPP...',
+    '.........',
+    '.PPPPPPP.',
+    'PPPPPPPPP',
+    'PPPPPPPPP',
+  ],
+  RAIL_PALETTE,
+)
+
+export const HELP_ICON = pixelIconUrl(
+  [
+    '.XXXXX.',
+    'XX...XX',
+    '.....XX',
+    '...XXX.',
+    '...XX..',
+    '.......',
+    '...XX..',
+    '...XX..',
+  ],
+  RAIL_PALETTE,
+)
+
+export const SETTINGS_ICON = pixelIconUrl(
+  [
+    '...X.X...',
+    '.X.XXX.X.',
+    '..XXXXX..',
+    'XXXX.XXXX',
+    '.XX...XX.',
+    'XXXX.XXXX',
+    '..XXXXX..',
+    '.X.XXX.X.',
+    '...X.X...',
+  ],
+  RAIL_PALETTE,
+)

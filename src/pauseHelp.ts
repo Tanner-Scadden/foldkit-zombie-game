@@ -1,4 +1,4 @@
-import { Array } from 'effect'
+import { Array, Option } from 'effect'
 import type { Attribute, Html, HtmlBuilder } from 'foldkit/html'
 
 import { NEXT_TRAP_ICON, PAUSE_ICON, TRAP_BUTTON_ICONS } from './icons'
@@ -192,15 +192,28 @@ const tipView = ({ topic, text }: Tip, h: HtmlBuilder<Message>): Html =>
 export const helpLabel = (device: InputDevice): string =>
   DEVICE_HELP[device].label
 
+// NOTE: the home menu's HOW TO PLAY puts its own keys under the first
+// table, where the first column has room to spare.
 export const howToPlayView = (
   device: InputDevice,
   h: HtmlBuilder<Message>,
+  maybeUnderFirst: Option.Option<Html> = Option.none(),
 ): ReadonlyArray<Html> => {
   const help = DEVICE_HELP[device]
+  const [first, ...rest] = help.groups
   return [
     h.div(
       [h.Class('pause-help-groups')],
-      Array.map(help.groups, group => controlGroupView(help, group, h)),
+      [
+        h.div(
+          [h.Class('pause-help-column')],
+          [
+            controlGroupView(help, first, h),
+            ...Option.toArray(maybeUnderFirst),
+          ],
+        ),
+        ...Array.map(rest, group => controlGroupView(help, group, h)),
+      ],
     ),
     h.ul(
       [h.Class('pause-help-tips'), h.AriaLabel('Tips')],

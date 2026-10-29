@@ -92,11 +92,16 @@ describe('the first-time difficulty card', () => {
     )
   })
 
-  test('E asks too, and the pick starts endless', () => {
+  test('E switches the mode, then Enter asks too, and the pick starts endless', () => {
     story(
       update,
       given(firstVisit),
       press('KeyE'),
+      model(current => {
+        expect(current.panelDialog.isOpen).toBe(false)
+        expect(current.home.mode).toBe('Endless')
+      }),
+      press('Enter'),
       showDialog(),
       model(current => {
         expect(Phase.guards.Ready(current.phase)).toBe(true)

@@ -1,24 +1,45 @@
 import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { maybeNewestNewsDay } from './changelog'
 import { RESTART_GRACE_MS } from './constants'
 import { hasJustWon, withBests } from './difficulty'
 import type { FocusStep } from './input'
 import {
   type HomeButton,
+  type HomeMode,
   type KillCounts,
   type Model,
+  MunchopediaPage,
   Phase,
+  RunMode,
   RunTally,
+  type ZombieKind,
   initialModel,
 } from './model'
+import { isDiscovered, newlyDiscovered } from './munchopedia'
 import { addKills, killTotal, killsSince } from './stats'
 
 // BUTTONS
 
+// NOTE: the fixed home layout. Arrow keys walk PLAY, the mode toggle, then
+// the rail top to bottom. A new feature joins the rail or the mode toggle,
+// so PLAY never moves.
 export const HOME_BUTTONS: Array.NonEmptyReadonlyArray<HomeButton> = [
   'Play',
-  'Endless',
+  'Mode',
+  'WhatsNew',
+  'Munchopedia',
+  'Character',
+  'HowToPlay',
+  'Settings',
+]
+
+export type RailButton = Exclude<HomeButton, 'Play' | 'Mode'>
+
+export const RAIL_BUTTONS: Array.NonEmptyReadonlyArray<RailButton> = [
+  'WhatsNew',
+  'Munchopedia',
   'Character',
   'HowToPlay',
   'Settings',
@@ -26,11 +47,34 @@ export const HOME_BUTTONS: Array.NonEmptyReadonlyArray<HomeButton> = [
 
 const HOME_BUTTON_IDS: Readonly<Record<HomeButton, string>> = {
   Play: 'home-play',
-  Endless: 'home-endless',
+  Mode: 'home-mode',
+  WhatsNew: 'home-whats-new',
+  Munchopedia: 'home-munchopedia',
   Character: 'home-character',
   HowToPlay: 'home-how-to-play',
   Settings: 'home-settings',
 }
+
+export type HomeKey = Readonly<{ code: string; cap: string; name: string }>
+
+// NOTE: one key per button. Enter, E, and C were already the home keys. The
+// rail's other keys are letters no other screen uses, so WASD, R, Q, T, G,
+// H, K, M, and N keep their one meaning: L for the latest news, Z for
+// zombies, I for info, and O for options.
+export const HOME_KEYS: Readonly<Record<HomeButton, HomeKey>> = {
+  Play: { code: 'Enter', cap: 'ENTER', name: 'Enter' },
+  Mode: { code: 'KeyE', cap: 'E', name: 'E' },
+  WhatsNew: { code: 'KeyL', cap: 'L', name: 'L' },
+  Munchopedia: { code: 'KeyZ', cap: 'Z', name: 'Z' },
+  Character: { code: 'KeyC', cap: 'C', name: 'C' },
+  HowToPlay: { code: 'KeyI', cap: 'I', name: 'I' },
+  Settings: { code: 'KeyO', cap: 'O', name: 'O' },
+}
+
+export const maybeRailButtonOfKey = (code: string): Option.Option<RailButton> =>
+  Array.findFirst(RAIL_BUTTONS, button => HOME_KEYS[button].code === code)
+
+export const isModeKey = (code: string): boolean => code === HOME_KEYS.Mode.code
 
 export const homeButtonId = (button: HomeButton): string =>
   HOME_BUTTON_IDS[button]
@@ -65,6 +109,80 @@ export const steppedHomeFocus = (
 // HOME
 
 export const isOnHome = Phase.isAnyOf(['Ready'])
+
+// MODE
+
+export const runModeOf = (mode: HomeMode): RunMode =>
+  mode === 'Campaign' ? RunMode.Campaign() : RunMode.Endless()
+
+export const switchMode = (model: Model): Model =>
+  modifyFields(model, {
+    home: home =>
+      modifyFields(home, {
+        mode: mode => (mode === 'Campaign' ? 'Endless' : 'Campaign'),
+      }),
+  })
+
+// WHAT'S NEW
+
+export const isNewsUnseen = (model: Model): boolean =>
+  Option.match(maybeNewestNewsDay, {
+    onNone: () => false,
+    onSome: ({ date }) => !Option.contains(model.home.maybeSeenNewsDay, date),
+  })
+
+export const seeNews = (model: Model): Model =>
+  modifyFields(model, {
+    home: home =>
+      modifyFields(home, {
+        newsPage: () => 0,
+        maybeSeenNewsDay: seen =>
+          Option.match(maybeNewestNewsDay, {
+            onNone: () => seen,
+            onSome: ({ date }) => Option.some(date),
+          }),
+      }),
+  })
+
+export const turnNewsPage = (
+  model: Model,
+  step: number,
+  dayCount: number,
+): Model =>
+  modifyFields(model, {
+    home: home =>
+      modifyFields(home, {
+        newsPage: page => Math.max(0, Math.min(dayCount - 1, page + step)),
+      }),
+  })
+
+// MUNCHOPEDIA
+
+const openEntry = (model: Model, kind: ZombieKind): Model =>
+  modifyFields(model, {
+    home: home =>
+      modifyFields(home, {
+        munchopediaPage: () => MunchopediaPage.Entry({ kind }),
+        newEntries: Array.filter(fresh => fresh !== kind),
+        openedEntries: opened =>
+          isDiscovered(model.bests.killsByKind, kind)
+            ? Array.union(opened, [kind])
+            : opened,
+      }),
+  })
+
+export const showMunchopediaPage = (
+  model: Model,
+  page: MunchopediaPage,
+): Model =>
+  MunchopediaPage.match(page, {
+    List: () =>
+      modifyFields(model, {
+        home: home =>
+          modifyFields(home, { munchopediaPage: () => MunchopediaPage.List() }),
+      }),
+    Entry: ({ kind }) => openEntry(model, kind),
+  })
 
 // END SCREENS
 
@@ -146,14 +264,23 @@ const countRun = (
     Uncounted: () => kills,
     Counted: ({ kills: countedKills }) => killsSince(kills, countedKills),
   })
+  const killsByKind = addKills(model.bests.killsByKind, newKills)
   const counted = modifyFields(model, {
     bests: bests =>
       modifyFields(bests, {
         runsPlayed: runs => (isFirstCount ? runs + 1 : runs),
         totalKills: total => total + killTotal(newKills),
-        killsByKind: byKind => addKills(byKind, newKills),
+        killsByKind: () => killsByKind,
       }),
     runTally: () => RunTally.Counted({ kills }),
+    home: home =>
+      modifyFields(home, {
+        newEntries: fresh =>
+          Array.union(
+            fresh,
+            newlyDiscovered(model.bests.killsByKind, killsByKind),
+          ),
+      }),
   })
   return isWin
     ? withBests(counted, bests =>
@@ -185,3 +312,15 @@ export const countRunFrom = (before: Model, after: Model): Model => {
     return after
   }
 }
+
+// NOTE: the NEW ENTRY pop stays up on the end screen and the menu until the
+// entry is opened or another run starts. The dot on the rail stays until the
+// entry is opened.
+export const forgetNewEntriesFrom = (before: Model, after: Model): Model =>
+  !isInRun(before.phase) &&
+  Phase.isAnyOf(['Preparation'])(after.phase) &&
+  Array.isReadonlyArrayNonEmpty(after.home.newEntries)
+    ? modifyFields(after, {
+        home: home => modifyFields(home, { newEntries: () => [] }),
+      })
+    : after

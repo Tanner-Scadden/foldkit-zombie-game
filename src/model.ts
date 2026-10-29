@@ -587,7 +587,9 @@ export type ShakeSetting = typeof ShakeSetting.Type
 
 export const HomeButton = Schema.Literals([
   'Play',
-  'Endless',
+  'Mode',
+  'WhatsNew',
+  'Munchopedia',
   'Character',
   'HowToPlay',
   'Settings',
@@ -599,6 +601,8 @@ export const MenuPanel = Schema.Literals([
   'Settings',
   'LeaveRun',
   'Difficulty',
+  'WhatsNew',
+  'Munchopedia',
 ])
 export type MenuPanel = typeof MenuPanel.Type
 
@@ -670,6 +674,40 @@ export const RunTally = defineTaggedUnion({
   Counted: { kills: KillCounts },
 })
 export type RunTally = typeof RunTally.Type
+
+// HOME MENU
+
+export const HomeMode = Schema.Literals(['Campaign', 'Endless'])
+export type HomeMode = typeof HomeMode.Type
+
+export const MunchopediaPage = defineTaggedUnion({
+  List: {},
+  Entry: { kind: ZombieKind },
+})
+export type MunchopediaPage = typeof MunchopediaPage.Type
+
+// NOTE: the home menu's own state. The mode toggle and the open pages last
+// for the page session. The newest What's New day seen and the Munchopedia
+// entries opened are kept in the on-device save (src/save.ts). newEntries are
+// the kinds unlocked by the last counted run, for the NEW ENTRY pop.
+export const HomeMenu = Schema.Struct({
+  mode: HomeMode,
+  maybeSeenNewsDay: Schema.Option(Schema.String),
+  newsPage: Schema.Number,
+  munchopediaPage: MunchopediaPage,
+  openedEntries: Schema.Array(ZombieKind),
+  newEntries: Schema.Array(ZombieKind),
+})
+export type HomeMenu = typeof HomeMenu.Type
+
+export const freshHomeMenu: HomeMenu = {
+  mode: 'Campaign',
+  maybeSeenNewsDay: Option.none(),
+  newsPage: 0,
+  munchopediaPage: MunchopediaPage.List(),
+  openedEntries: [],
+  newEntries: [],
+}
 
 export const LoadStep = Schema.Literals([
   'Save',
@@ -1130,6 +1168,7 @@ export const Model = Schema.Struct({
   loading: Loading,
   saveStatus: SaveStatus,
   tutorialReset: TutorialReset,
+  home: HomeMenu,
 })
 export type Model = typeof Model.Type
 
@@ -1355,4 +1394,5 @@ export const initialModel: Model = {
   loading: Loading.Loaded(),
   saveStatus: 'Unread',
   tutorialReset: 'Idle',
+  home: freshHomeMenu,
 }

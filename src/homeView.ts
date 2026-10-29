@@ -10,121 +10,252 @@ import {
   bestsFor,
   isLocked,
 } from './difficulty'
+import { munchopediaBodyView, munchopediaText } from './guideView'
 import {
   HOME_BUTTONS,
+  HOME_KEYS,
   KEEP_TUTORIAL_BUTTON_ID,
+  RAIL_BUTTONS,
   RESET_TUTORIAL_BUTTON_ID,
+  type RailButton,
   homeButtonId,
+  isNewsUnseen,
   isOnHome,
 } from './home'
-import { PADLOCK_ICON } from './icons'
+import {
+  CHARACTER_ICON,
+  FULLSCREEN_ICON,
+  HELP_ICON,
+  MUNCHOPEDIA_ICON,
+  NEWS_ICON,
+  PADLOCK_ICON,
+  SETTINGS_ICON,
+} from './icons'
 import { Message, isSideways } from './main'
 import {
   type Difficulty,
+  DifficultyCard,
   type HomeButton,
+  type HomeMode,
   type MenuPanel,
   type Model,
   Phase,
 } from './model'
+import { entryName, hasUnopenedEntry } from './munchopedia'
 import { helpLabel, howToPlayView } from './pauseHelp'
 import { durationLabel } from './stats'
 import { FINAL_WAVE } from './waves'
+import { whatsNewBodyView, whatsNewText } from './whatsNewView'
 
-// HOME BUTTONS
+// KEY BADGES
 
-type HomeButtonLook = Readonly<{
+const isKeyboard = (model: Model): boolean =>
+  model.lastDevice === 'KeyboardMouse'
+
+const keyBadgeView = (
+  model: Model,
+  button: HomeButton,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> =>
+  isKeyboard(model)
+    ? [
+        h.span(
+          [h.Class('home-key'), h.AriaHidden(true)],
+          [HOME_KEYS[button].cap],
+        ),
+      ]
+    : []
+
+const homeButtonAttributes = (button: HomeButton, h: HtmlBuilder<Message>) => [
+  h.Type('button'),
+  h.Id(homeButtonId(button)),
+  h.AriaKeyshortcuts(HOME_KEYS[button].name),
+  h.OnFocus(Message.FocusedHomeButton({ button })),
+  h.OnBlur(Message.BlurredHomeButton()),
+]
+
+// PLAY
+
+type ModeLook = Readonly<{
   label: string
   detail: string
-  maybeKey: Option.Option<Readonly<{ cap: string; name: string }>>
-  ariaLabel: string
-  className: string
-  message: Message
-  hasPopup: boolean
+  playLabel: string
 }>
 
-const HOME_BUTTON_LOOKS: Readonly<Record<HomeButton, HomeButtonLook>> = {
-  Play: {
-    label: 'PLAY',
-    detail: `CAMPAIGN · ${FINAL_WAVE} WAVES`,
-    maybeKey: Option.some({ cap: 'ENTER', name: 'Enter' }),
-    ariaLabel: `Play the campaign: ${FINAL_WAVE} waves, then victory`,
-    className: 'home-button home-button-big home-play',
-    message: Message.ClickedCampaignButton(),
-    hasPopup: false,
+const MODE_LOOKS: Readonly<Record<HomeMode, ModeLook>> = {
+  Campaign: {
+    label: 'CAMPAIGN',
+    detail: `${FINAL_WAVE} WAVES`,
+    playLabel: `Play the campaign: ${FINAL_WAVE} waves, then victory`,
   },
   Endless: {
     label: 'ENDLESS',
     detail: 'UNTIL YOU DROP',
-    maybeKey: Option.some({ cap: 'E', name: 'E' }),
-    ariaLabel: 'Endless: waves keep coming until you fall',
-    className: 'home-button home-button-big home-endless',
-    message: Message.ClickedEndlessButton(),
-    hasPopup: false,
-  },
-  Character: {
-    label: 'CHARACTER',
-    detail: 'YOUR LOOK',
-    maybeKey: Option.some({ cap: 'C', name: 'C' }),
-    ariaLabel: 'Character: change how you look',
-    className: 'home-button home-character',
-    message: Message.ClickedCharacterButton(),
-    hasPopup: true,
-  },
-  HowToPlay: {
-    label: 'HOW TO PLAY',
-    detail: 'KEYS AND TIPS',
-    maybeKey: Option.none(),
-    ariaLabel: 'How to play: the controls and some tips',
-    className: 'home-button home-how-to-play',
-    message: Message.ClickedHowToPlayButton(),
-    hasPopup: true,
-  },
-  Settings: {
-    label: 'SETTINGS',
-    detail: 'SOUND AND STUFF',
-    maybeKey: Option.none(),
-    ariaLabel: 'Settings: sound, music, shake, and full screen',
-    className: 'home-button home-settings',
-    message: Message.ClickedSettingsButton(),
-    hasPopup: true,
+    playLabel: 'Play endless: waves keep coming until you fall',
   },
 }
 
-const homeButtonView = (
-  model: Model,
-  button: HomeButton,
-  h: HtmlBuilder<Message>,
-): Html => {
-  const look = HOME_BUTTON_LOOKS[button]
+const otherMode = (mode: HomeMode): HomeMode =>
+  mode === 'Campaign' ? 'Endless' : 'Campaign'
+
+const modeName = (mode: HomeMode): string =>
+  mode === 'Campaign' ? 'Campaign' : 'Endless'
+
+const playButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
+  const look = MODE_LOOKS[model.home.mode]
   return h.button(
     [
-      h.Type('button'),
-      h.Id(homeButtonId(button)),
-      h.Class(look.className),
-      h.AriaLabel(look.ariaLabel),
-      ...Option.match(look.maybeKey, {
-        onNone: () => [],
-        onSome: ({ name }) => [h.AriaKeyshortcuts(name)],
-      }),
-      ...(look.hasPopup ? [h.AriaHasPopup('dialog')] : []),
-      h.OnFocus(Message.FocusedHomeButton({ button })),
-      h.OnBlur(Message.BlurredHomeButton()),
-      h.OnClick(look.message, { propagation: 'Stop' }),
+      ...homeButtonAttributes('Play', h),
+      h.Class('home-play'),
+      h.DataAttribute('mode', model.home.mode),
+      h.AriaLabel(look.playLabel),
+      h.OnClick(Message.ClickedPlayButton(), { propagation: 'Stop' }),
     ],
     [
-      h.span([h.Class('home-button-label')], [look.label]),
-      h.span([h.Class('home-button-detail')], [look.detail]),
-      ...(model.lastDevice === 'KeyboardMouse'
-        ? Option.match(look.maybeKey, {
-            onNone: () => [],
-            onSome: ({ cap }) => [
-              h.span([h.Class('home-button-key'), h.AriaHidden(true)], [cap]),
-            ],
-          })
-        : []),
+      h.span([h.Class('home-play-label')], ['PLAY']),
+      h.span([h.Class('home-play-detail')], [`${look.label} · ${look.detail}`]),
+      ...keyBadgeView(model, 'Play', h),
     ],
   )
 }
+
+const modeOptionView = (
+  model: Model,
+  mode: HomeMode,
+  h: HtmlBuilder<Message>,
+): Html =>
+  h.span(
+    [
+      h.Class('home-mode-option'),
+      h.DataAttribute('state', model.home.mode === mode ? 'Chosen' : 'Other'),
+    ],
+    [MODE_LOOKS[mode].label],
+  )
+
+const modeButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.button(
+    [
+      ...homeButtonAttributes('Mode', h),
+      h.Class('home-mode'),
+      h.AriaLabel(
+        `Mode: ${modeName(model.home.mode)}. Switch to ${modeName(otherMode(model.home.mode))}`,
+      ),
+      h.OnClick(Message.ClickedModeButton(), { propagation: 'Stop' }),
+    ],
+    [
+      h.span([h.Class('home-mode-title')], ['MODE']),
+      modeOptionView(model, 'Campaign', h),
+      modeOptionView(model, 'Endless', h),
+      ...keyBadgeView(model, 'Mode', h),
+    ],
+  )
+
+const playClusterView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [h.Class('home-play-cluster'), h.Role('group'), h.AriaLabel('Play')],
+    [playButtonView(model, h), modeButtonView(model, h)],
+  )
+
+// RAIL
+
+type RailLook = Readonly<{
+  label: string
+  ariaLabel: string
+  icon: string
+  message: Message
+}>
+
+const RAIL_LOOKS: Readonly<Record<RailButton, RailLook>> = {
+  WhatsNew: {
+    label: "WHAT'S NEW",
+    ariaLabel: "What's new: the latest changes",
+    icon: NEWS_ICON,
+    message: Message.ClickedWhatsNewButton(),
+  },
+  Munchopedia: {
+    label: 'MUNCHOPEDIA',
+    ariaLabel: 'Munchopedia: every zombie you have splatted',
+    icon: MUNCHOPEDIA_ICON,
+    message: Message.ClickedMunchopediaButton(),
+  },
+  Character: {
+    label: 'CHARACTER',
+    ariaLabel: 'Character: change how you look',
+    icon: CHARACTER_ICON,
+    message: Message.ClickedCharacterButton(),
+  },
+  HowToPlay: {
+    label: 'HOW TO PLAY',
+    ariaLabel: 'How to play: the controls and some tips',
+    icon: HELP_ICON,
+    message: Message.ClickedHowToPlayButton(),
+  },
+  Settings: {
+    label: 'SETTINGS',
+    ariaLabel: 'Settings: sound, music, shake, and full screen',
+    icon: SETTINGS_ICON,
+    message: Message.ClickedSettingsButton(),
+  },
+}
+
+const hasRailDot = (model: Model, button: RailButton): boolean => {
+  if (button === 'WhatsNew') {
+    return isNewsUnseen(model)
+  } else if (button === 'Munchopedia') {
+    return hasUnopenedEntry(model)
+  } else {
+    return false
+  }
+}
+
+const railButtonView = (
+  model: Model,
+  button: RailButton,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const look = RAIL_LOOKS[button]
+  const hasDot = hasRailDot(model, button)
+  return h.li(
+    [h.Class('home-rail-item')],
+    [
+      h.button(
+        [
+          ...homeButtonAttributes(button, h),
+          h.Class('home-rail-button'),
+          h.DataAttribute('rail', button),
+          h.AriaLabel(
+            hasDot ? `${look.ariaLabel}. Something new` : look.ariaLabel,
+          ),
+          h.AriaHasPopup('dialog'),
+          h.OnClick(look.message, { propagation: 'Stop' }),
+        ],
+        [
+          h.span([
+            h.Class('home-rail-icon'),
+            h.AriaHidden(true),
+            h.Style({ backgroundImage: look.icon }),
+          ]),
+          h.span([h.Class('home-rail-label')], [look.label]),
+          ...(hasDot
+            ? [h.span([h.Class('home-rail-dot'), h.AriaHidden(true)])]
+            : []),
+          ...keyBadgeView(model, button, h),
+        ],
+      ),
+    ],
+  )
+}
+
+const railView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.nav(
+    [h.Class('home-rail'), h.AriaLabel('Main menu')],
+    [
+      h.ul(
+        [h.Class('home-rail-list')],
+        Array.map(RAIL_BUTTONS, button => railButtonView(model, button, h)),
+      ),
+    ],
+  )
 
 // BESTS
 
@@ -161,7 +292,13 @@ const bestsView = (model: Model, h: HtmlBuilder<Message>): Html =>
     [
       h.h2(
         [h.Id(BESTS_TITLE_ID), h.Class('home-bests-title')],
-        [`Your bests, ${DIFFICULTIES[model.difficulty.chosen].name}`],
+        [
+          'Your bests',
+          h.span(
+            [h.Class('sr-only')],
+            [`, ${DIFFICULTIES[model.difficulty.chosen].name}`],
+          ),
+        ],
       ),
       Array.match(shownBests(model), {
         onEmpty: () =>
@@ -178,36 +315,149 @@ const bestsView = (model: Model, h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-// HOME MENU
+// STATUS
 
-const [PLAY_ROW, MORE_ROW] = Array.splitAt(HOME_BUTTONS, 2)
+const difficultyBadgeView = (model: Model, h: HtmlBuilder<Message>): Html => {
+  const name = DIFFICULTIES[model.difficulty.chosen].name
+  return h.button(
+    [
+      h.Type('button'),
+      h.Class('home-difficulty'),
+      h.DataAttribute('difficulty', model.difficulty.chosen),
+      h.AriaLabel(`Difficulty: ${name}. Change it`),
+      h.AriaHasPopup('dialog'),
+      h.OnClick(Message.ClickedDifficultyBadge(), { propagation: 'Stop' }),
+    ],
+    [
+      h.span([h.Class('home-difficulty-title')], ['DIFFICULTY']),
+      h.span([h.Class('home-difficulty-name')], [name]),
+    ],
+  )
+}
+
+const statusView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [h.Class('home-status')],
+    [difficultyBadgeView(model, h), bestsView(model, h)],
+  )
+
+// STAGE
+
+// NOTE: the player walks on the spot in the middle of the stage, drawn on
+// the canvas by screens.ts. This button sits over them, so a tap on your
+// character opens the picker. The rail's Character button is the one a
+// keyboard or a screen reader reaches.
+const heroButtonView = (h: HtmlBuilder<Message>): Html =>
+  h.button([
+    h.Type('button'),
+    h.Class('home-hero'),
+    h.Tabindex(-1),
+    h.AriaLabel('Your character: change how you look'),
+    h.AriaHasPopup('dialog'),
+    h.OnClick(Message.ClickedCharacterButton(), { propagation: 'Stop' }),
+  ])
+
+// CORNER
+
+const fullscreenButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  model.screenFit === 'Fullscreen'
+    ? h.button(
+        [
+          h.Type('button'),
+          h.Class('home-fullscreen'),
+          h.AriaLabel('Full screen'),
+          h.AriaPressed(model.fullscreen === 'On' ? 'true' : 'false'),
+          h.OnClick(Message.ClickedFullscreenButton(), { propagation: 'Stop' }),
+        ],
+        [
+          h.span([
+            h.Class('home-fullscreen-icon'),
+            h.AriaHidden(true),
+            h.Style({ backgroundImage: FULLSCREEN_ICON }),
+          ]),
+        ],
+      )
+    : h.empty
+
+// NEW ENTRY
+
+const newEntryText = (model: Model): Option.Option<string> =>
+  Option.map(Array.head(model.home.newEntries), kind =>
+    model.home.newEntries.length > 1
+      ? `${entryName(kind)} and ${model.home.newEntries.length - 1} more`
+      : entryName(kind),
+  )
+
+const newEntryButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  Option.match(Array.head(model.home.newEntries), {
+    onNone: () => h.empty,
+    onSome: kind =>
+      h.button(
+        [
+          h.Type('button'),
+          h.Class('new-entry'),
+          h.AriaLabel(
+            `New Munchopedia entry: ${Option.getOrElse(newEntryText(model), () => '')}. Open it`,
+          ),
+          h.OnClick(Message.ClickedNewEntryButton({ kind }), {
+            propagation: 'Stop',
+          }),
+        ],
+        [
+          h.span([h.Class('new-entry-flag')], ['NEW ENTRY!']),
+          h.span(
+            [h.Class('new-entry-name')],
+            [Option.getOrElse(newEntryText(model), () => '')],
+          ),
+        ],
+      ),
+  })
+
+const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
+
+// NOTE: the end screens only tell. The entry opens from the menu's rail.
+export const newEntryNoticeView = (
+  model: Model,
+  h: HtmlBuilder<Message>,
+): Html =>
+  isEndScreen(model.phase) && !isSideways(model)
+    ? Option.match(newEntryText(model), {
+        onNone: () => h.empty,
+        onSome: text =>
+          h.div(
+            [h.Class('new-entry new-entry-notice'), h.Role('status')],
+            [
+              h.span([h.Class('new-entry-flag')], ['NEW ENTRY!']),
+              h.span([h.Class('new-entry-name')], [text]),
+              h.span(
+                [h.Class('new-entry-where')],
+                ['In the Munchopedia on the menu'],
+              ),
+            ],
+          ),
+      })
+    : h.empty
+
+// HOME MENU
 
 export const homeMenuView = (model: Model, h: HtmlBuilder<Message>): Html =>
   isOnHome(model.phase) && !isSideways(model)
     ? h.div(
-        [h.Class('home-frame')],
+        [
+          h.Class('home-frame'),
+          h.DataAttribute('device', model.lastDevice),
+          h.DataAttribute('fit', model.screenFit),
+        ],
         [
           h.div(
-            [h.Class('home-column')],
+            [h.Class('home-stage')],
             [
-              h.nav(
-                [h.Class('home-menu'), h.AriaLabel('Main menu')],
-                [
-                  h.div(
-                    [h.Class('home-row home-row-play')],
-                    Array.map(PLAY_ROW, button =>
-                      homeButtonView(model, button, h),
-                    ),
-                  ),
-                  h.div(
-                    [h.Class('home-row home-row-more')],
-                    Array.map(MORE_ROW, button =>
-                      homeButtonView(model, button, h),
-                    ),
-                  ),
-                ],
-              ),
-              bestsView(model, h),
+              playClusterView(model, h),
+              railView(model, h),
+              statusView(model, h),
+              heroButtonView(h),
+              newEntryButtonView(model, h),
+              h.div([h.Class('home-corner')], [fullscreenButtonView(model, h)]),
             ],
           ),
         ],
@@ -240,6 +490,41 @@ export const pauseMenuButtonView = (
     : h.empty
 
 // PANELS
+
+const MENU_KEYS_TITLE_ID = 'menu-keys-title'
+
+const MENU_KEY_ACTIONS: Readonly<Record<HomeButton, string>> = {
+  Play: 'Play',
+  Mode: 'Switch mode',
+  WhatsNew: "What's new",
+  Munchopedia: 'Munchopedia',
+  Character: 'Character',
+  HowToPlay: 'How to play',
+  Settings: 'Settings',
+}
+
+const menuKeysView = (h: HtmlBuilder<Message>): Html =>
+  h.section(
+    [h.Class('menu-keys'), h.AriaLabelledBy(MENU_KEYS_TITLE_ID)],
+    [
+      h.h3(
+        [h.Id(MENU_KEYS_TITLE_ID), h.Class('menu-keys-title')],
+        ['On the menu'],
+      ),
+      h.ul(
+        [h.Class('menu-keys-list')],
+        Array.map(HOME_BUTTONS, button =>
+          h.li(
+            [h.Class('menu-keys-item')],
+            [
+              h.kbd([h.Class('pause-help-key')], [HOME_KEYS[button].name]),
+              ` ${MENU_KEY_ACTIONS[button]}`,
+            ],
+          ),
+        ),
+      ),
+    ],
+  )
 
 type Toggle = Readonly<{
   label: string
@@ -380,6 +665,9 @@ const difficultyLabel = (model: Model, difficulty: Difficulty): string =>
     ? `${DIFFICULTIES[difficulty].name}, locked. ${NIGHTMARE_LOCK_NOTE}`
     : `${DIFFICULTIES[difficulty].name}: ${DIFFICULTIES[difficulty].blurb}`
 
+const isAskingFirst = (model: Model): boolean =>
+  DifficultyCard.isAnyOf(['Asking'])(model.difficultyCard)
+
 const difficultyChoiceView = (
   model: Model,
   difficulty: Difficulty,
@@ -387,12 +675,16 @@ const difficultyChoiceView = (
   h: HtmlBuilder<Message>,
 ): Html => {
   const locked = isLocked(model.difficulty, difficulty)
+  const isChosen = difficulty === model.difficulty.chosen
   return h.button(
     [
-      ...(difficulty === 'Normal' ? renderInfo.initialFocus : []),
+      ...(isChosen ? renderInfo.initialFocus : []),
       h.Type('button'),
       h.Class('difficulty-choice'),
       h.DataAttribute('difficulty', difficulty),
+      ...(isChosen && !isAskingFirst(model)
+        ? [h.DataAttribute('chosen', 'Chosen')]
+        : []),
       h.AriaLabel(difficultyLabel(model, difficulty)),
       ...(locked ? [h.AriaDisabled(true)] : []),
       h.OnClick(Message.ClickedDifficultyCardButton({ difficulty }), {
@@ -506,6 +798,10 @@ const panelText = (model: Model, panel: MenuPanel): PanelText => {
       title: 'How tough are you?',
       blurb: 'Pick a difficulty. You can change it later in Settings.',
     }
+  } else if (panel === 'WhatsNew') {
+    return whatsNewText(model)
+  } else if (panel === 'Munchopedia') {
+    return munchopediaText(model)
   } else {
     return {
       title: 'Leave this run?',
@@ -538,7 +834,11 @@ const panelBodyView = (
     return [
       h.div(
         [h.Class('panel-help'), h.DataAttribute('device', model.lastDevice)],
-        howToPlayView(model.lastDevice, h),
+        howToPlayView(
+          model.lastDevice,
+          h,
+          isKeyboard(model) ? Option.some(menuKeysView(h)) : Option.none(),
+        ),
       ),
       h.div([h.Class('panel-actions')], [doneButtonView(renderInfo, h)]),
     ]
@@ -554,6 +854,10 @@ const panelBodyView = (
       ),
       h.div([h.Class('panel-actions')], [doneButtonView(renderInfo, h)]),
     ]
+  } else if (model.panel === 'WhatsNew') {
+    return whatsNewBodyView(model, doneButtonView(renderInfo, h), h)
+  } else if (model.panel === 'Munchopedia') {
+    return munchopediaBodyView(model, doneButtonView(renderInfo, h), h)
   } else if (model.panel === 'Difficulty') {
     return [
       h.div(
@@ -562,6 +866,9 @@ const panelBodyView = (
           difficultyChoiceView(model, difficulty, renderInfo, h),
         ),
       ),
+      ...(isAskingFirst(model)
+        ? []
+        : [h.div([h.Class('panel-actions')], [doneButtonView(renderInfo, h)])]),
     ]
   } else {
     return [
