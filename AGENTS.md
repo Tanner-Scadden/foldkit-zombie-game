@@ -152,6 +152,10 @@ Paths are under `src/`. The API Worker is in `infra/worker/` (analytics, and syn
 - Goofy and plain, like the game's own copy. No version numbers, commit hashes, or file names.
 - When a change ships something players will notice, add or update today's bullet in the same push.
 
+### Show, don't explain
+
+Fewer words, more visuals. Prefer icons, art, motion, and sound to text, keep copy short, and stop explaining what the player has already seen. See "Show, don't explain" in `GAME_DESIGN.md`.
+
 ### Waiting on the owner
 
 `TANNER_TODO.md` lists what is blocked on the owner: accounts to set up, decisions, and reviews. When work stops on the owner, add an item there with the exact steps. Remove it once it is done.
