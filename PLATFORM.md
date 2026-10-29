@@ -1,6 +1,6 @@
 # Platform
 
-**Status: thinking. One direction chosen: our own mini sync engine (2026-10-28). Everything else is undecided.** This file collects the plan for running Munch Manor on Cloudflare with an Effect-native stack: hosting, analytics, local data, sync, and the server side of multiplayer. None of it is on the roadmap yet. When a piece is chosen it moves into the "Decided" section of [`GAME_DESIGN.md`](./GAME_DESIGN.md) with a date. The multiplayer ideas live in [`MULTIPLAYER.md`](./MULTIPLAYER.md); this file is the ground they would stand on.
+**Status: thinking. One direction chosen: our own mini sync engine over scopes, for personal and shared state (2026-10-28). Everything else is undecided.** This file collects the plan for running Munch Manor on Cloudflare with an Effect-native stack: hosting, analytics, local data, sync, and the server side of multiplayer. None of it is on the roadmap yet. When a piece is chosen it moves into the "Decided" section of [`GAME_DESIGN.md`](./GAME_DESIGN.md) with a date. The multiplayer ideas live in [`MULTIPLAYER.md`](./MULTIPLAYER.md); this file is the ground they would stand on.
 
 ## The idea
 
@@ -42,19 +42,39 @@ The shape: every change is a mutation, a named, Schema-typed event such as `Reco
 
 This is event sourcing, and it fits the game unusually well: the game is already a pure fold over Messages, and a run is already fully described by its seed and its inputs.
 
-We will build our own mini sync engine for this, on Effect SQL. Our data is small and mostly append-only (settings, personal bests, run history, later rooms), usually written by one player, so conflicts are rare and a small engine covers it. It will also be fun.
+We will build our own mini sync engine for this, on Effect SQL. It syncs scopes, not just one player's data: a player's settings and bests, but also shared state such as leaderboards, the daily challenge, and multiplayer rooms. It will also be fun.
+
+### Scopes
+
+A scope is any piece of shared state with one authority. Each scope is one Durable Object that owns the scope's log and its SQLite database.
+
+| Scope                         | Who writes                               | Who reads               |
+| ----------------------------- | ---------------------------------------- | ----------------------- |
+| `player:<id>`                 | That player, plus the server             | That player's devices   |
+| `leaderboard:<mode>:<period>` | Only the server, after a run verifies    | Everyone                |
+| `daily:<date>`                | The server (the seed, the board)         | Everyone                |
+| `room:<code>`                 | The players in the room, plus the server | The players in the room |
+
+- **Subscriptions.** A client subscribes to the scopes it needs and keeps a local mirror of each in browser SQLite. Rebase happens per scope.
+- **Permissions per mutation.** Each mutation declares which scopes it may target and who may write it. Some are server-only, such as `RecordedLeaderboardEntry`, so a client can never forge them.
+- **Across scopes.** There are no transactions that span scopes. A mutation in one scope makes the server create a mutation in another: `SubmittedRun` in a player scope is verified by replaying it, then the server adds `RecordedLeaderboardEntry` to the leaderboard scope.
+- **Big scopes.** Joining sends a snapshot plus the recent tail, and possibly only a slice such as the top 100, never the whole history.
+- **Conflicts.** Real in rooms, where several people write at once. Mutations check their preconditions when the server applies them and can be rejected. The server's order is final.
+- **Hot scopes.** Shard by mode and period (one leaderboard per mode per week), not one forever.
 
 ### The mini sync engine
 
 1. **Mutations.** A name, Schema-typed arguments, and a pure function that applies them to SQLite, in the same spirit as the game's `update`. Each carries a client-made id, so applying one twice does nothing.
 2. **Client.** SQLite in a Web Worker (OPFS needs one), migrations, and an outbox table. A mutation is written to the outbox and applied in the same transaction.
-3. **Server.** A Durable Object per player through `@effect/sql-sqlite-do`. It takes mutations in order, decodes and validates each with the shared Schemas, applies it, assigns a sequence number, and can reject a mutation or create its own.
+3. **Server.** A Durable Object per scope through `@effect/sql-sqlite-do`. It takes mutations in order, checks the writer's permission, decodes and validates each with the shared Schemas, applies it, assigns a sequence number, and can reject a mutation or create its own, in its own scope or another.
 4. **Catch-up.** Confirmed state is kept apart from the optimistic view. When confirmed mutations arrive, apply them, then replay the still-pending ones on top. The game's determinism makes this easy to test with the same Story test style.
 5. **Transport.** A WebSocket to the Durable Object, hibernating while idle, with HTTP as the fallback.
 
-The hard parts, in the order we expect to meet them: one tab at a time owning the database (a leader chosen with the Web Locks API), schema migrations on both ends and versioned mutations, long offline queues, linking devices (a pairing code or similar), and eventually compacting old history. Keeping the data small lets us dodge most of these for a long time.
+The hard parts, in the order we expect to meet them: one tab at a time owning the database (a leader chosen with the Web Locks API), schema migrations on both ends and versioned mutations, long offline queues, identity for writing to shared scopes (a device key, then pairing devices), compaction with snapshots (needed early for shared scopes), and real conflicts in rooms.
 
-Rough size: a solid first version in two to four weeks. A hardened general-purpose engine is a multi-year effort, which is not what we are building.
+Rough size: two to four weeks for player scopes, plus about two to three weeks for shared scopes, permissions, snapshots, and sharding. A hardened general-purpose engine is a multi-year effort, which is not what we are building.
+
+Leaderboards rely on verifying runs by replay, which needs a fixed timestep, deterministic trig across browsers and the Workers runtime, and replays pinned to the build that recorded them. Replay CPU needs the Workers Paid plan and a queue. Those are shared with multiplayer.
 
 What we borrow from LiveStore's design: an append-only event log as the source of truth, one total order chosen by the server, a leader per client, and rebase by replay.
 
@@ -81,7 +101,7 @@ What blocks it for us today:
 
 Revisit LiveStore when it reaches 1.0, or when Foldkit moves to Effect 4.0.3 or later and server-side validation is settled.
 
-The first spike builds settings and personal bests on the mini engine.
+The first spike builds settings and personal bests (a player scope), then the daily challenge with an initials leaderboard (the first shared scope).
 
 ## Costs and limits
 
