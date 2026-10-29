@@ -891,7 +891,7 @@ Normal is not ×1: boarding doors made planks stronger (see "Boarded doors are n
 
 #### Balance
 
-`DIFFICULTY=easy|normal|hard|nightmare bun tools/balance/simulate.ts` plays the bot on a level, and `TUNE` files can edit `DIFFICULTIES` and `BAIT_RULES`. Targets: Easy 55 to 70% for the default bot, Normal unchanged (15 to 25% default, 30 to 45% `SWAP=1`), Hard about 5 to 12%, Nightmare about 1 to 4%.
+`DIFFICULTY=easy|normal|hard|nightmare bun run balance` plays the bot on a level, and `TUNE` files can edit `DIFFICULTIES` and `BAIT_RULES`. Targets: Easy 55 to 70% for the default bot, Normal unchanged (15 to 25% default, 30 to 45% `SWAP=1`), Hard about 5 to 12%, Nightmare about 1 to 4%.
 
 Tuning log, 200 runs per row from seed 1. Scales are health, speed, bite. Wins are the default bot's unless the column says `SWAP=1`.
 
