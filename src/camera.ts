@@ -9,15 +9,24 @@ import {
 } from './constants'
 import { ZERO_VECTOR, clamp, scaleVector } from './geometry'
 import type { Model, Vector } from './model'
-import { type Screen, screenOf } from './screen'
+import { type Box, type Screen, screenOf } from './screen'
 
 // CAMERA
 
+// NOTE: x, y, width, and height are the part of the world the camera sees,
+// in world pixels. scale, left, and top place it on a canvas: a world point
+// lands at (point - x) * scale + left. The world canvas is the camera's own
+// size, so there scale is 1 and left and top are 0. The overlay canvas holds
+// the whole screen, where the world window sits below the HUD band and, in
+// portrait, is zoomed in.
 export type Camera = Readonly<{
   x: number
   y: number
   width: number
   height: number
+  scale: number
+  left: number
+  top: number
 }>
 
 export type WindowSize = Readonly<{ width: number; height: number }>
@@ -42,6 +51,9 @@ export const cameraFor = (
   y: followAxis(focus.y, level.height, window.height),
   width: window.width,
   height: window.height,
+  scale: 1,
+  left: 0,
+  top: 0,
 })
 
 export const arenaCamera = (
@@ -54,14 +66,22 @@ export const cameraFocus = (model: Model): Vector => ({
   y: model.player.y + model.cameraLean.y,
 })
 
+// NOTE: the part of the world the window shows, in world pixels. A zoomed
+// portrait window is taller on the screen than the room's height, and shows
+// that full height across fewer of the room's pixels.
+export const worldWindowOf = (screen: Screen): WindowSize => ({
+  width: Math.round(screen.world.width / screen.zoom),
+  height: Math.round(screen.world.height / screen.zoom),
+})
+
 export const worldCameraFor = (model: Model, screen: Screen): Camera =>
-  arenaCamera(cameraFocus(model), screen.world)
+  arenaCamera(cameraFocus(model), worldWindowOf(screen))
 
 export const toScreenCamera = (camera: Camera, screen: Screen): Camera => ({
-  x: camera.x - screen.world.x,
-  y: camera.y - screen.world.y,
-  width: camera.width,
-  height: camera.height,
+  ...camera,
+  scale: screen.zoom,
+  left: screen.world.x,
+  top: screen.world.y,
 })
 
 // NOTE: the world camera places the world inside the world window, which is
@@ -76,13 +96,21 @@ export const screenCameraOf = (model: Model): Camera => {
 }
 
 export const worldToView = (camera: Camera, point: Vector): Vector => ({
-  x: point.x - camera.x,
-  y: point.y - camera.y,
+  x: (point.x - camera.x) * camera.scale + camera.left,
+  y: (point.y - camera.y) * camera.scale + camera.top,
 })
 
 export const viewToWorld = (camera: Camera, point: Vector): Vector => ({
-  x: point.x + camera.x,
-  y: point.y + camera.y,
+  x: (point.x - camera.left) / camera.scale + camera.x,
+  y: (point.y - camera.top) / camera.scale + camera.y,
+})
+
+// NOTE: where the camera's view sits on its canvas, in that canvas's pixels.
+export const viewBoxOf = (camera: Camera): Box => ({
+  x: camera.left,
+  y: camera.top,
+  width: camera.width * camera.scale,
+  height: camera.height * camera.scale,
 })
 
 export const sceneOffset = (camera: Camera, shake: Vector): Vector =>

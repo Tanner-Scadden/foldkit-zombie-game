@@ -20,6 +20,7 @@ import { calloutShapes } from './powerupView'
 import { FLOOR_COLOR, ROOM_SHAPES } from './room'
 import { type Screen, inLandscapeFrame, screenOf } from './screen'
 import { overlayShapes } from './screens'
+import { thumbAreaView } from './thumbArea'
 import { wavePreviewShapes } from './wavePreview'
 import { isRoundActive } from './waves'
 import { worldLayerShapes, worldOffset } from './worldView'
@@ -234,8 +235,8 @@ export const gameStageView = (model: Model, h: HtmlBuilder<Message>): Html => {
               floorLayersView(model, camera, worldOffset(model, camera), h),
               Canvas.view(
                 {
-                  width: world.width,
-                  height: world.height,
+                  width: camera.width,
+                  height: camera.height,
                   shapes: worldLayerShapes(model, camera),
                   className: 'game-canvas',
                 },
@@ -243,6 +244,7 @@ export const gameStageView = (model: Model, h: HtmlBuilder<Message>): Html => {
               ),
             ],
           ),
+          thumbAreaView(screen, h),
           lazyOverlayLayer(overlayLayerView, [
             screen.width,
             screen.height,

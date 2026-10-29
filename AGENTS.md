@@ -110,6 +110,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/music.ts`           | The music's tunes as data, its instruments, and its scheduler                                                          |
 | `src/view.ts`            | The root view: the page layout, the status text, the surface                                                           |
 | `src/layers.ts`          | The floor, scene, and overlay canvases and the stage                                                                   |
+| `src/thumbArea.ts`       | The portrait thumb area's wainscot tiles and its view                                                                  |
 | `src/worldView.ts`       | The world scene: ground, depth-sorted actors, overhead effects                                                         |
 | `src/depth.ts`           | The drawable type and the foot-depth sort order                                                                        |
 | `src/drawing.ts`         | Shape helpers shared by the world views: sprites, feet, pulses                                                         |
@@ -186,7 +187,7 @@ iOS keeps a Home Screen app alive in the background, so players can keep an old 
 
 - **Keep the game deterministic.** `update` is pure. It never calls `Math.random` and never reads the clock. Randomness comes from the seeded generator whose state lives in the Model, so the same seed and the same Messages give the same game.
 - **Support desktop and touch.** Every input must work with a keyboard and mouse and with touch. Touch tracks each finger by its `pointerId`, so two thumbs work at once.
-- **Support portrait and landscape on phones.** A touch phone held upright plays in the portrait layout (see "Portrait play" in `GAME_DESIGN.md`). Overlay code reads the screen from `screenOf(model)`, never `VIEW_WIDTH` and `VIEW_HEIGHT`, and CSS reads `--screen-w`, `--screen-h`, and `--world-top` from `.game-root`, with `[data-layout='Portrait']` rules for portrait. Check a layout change with `tools/audit/shots34.ts` and `PORTRAIT=1 bun taps.ts`. The installed Android app still locks to landscape in `public/manifest.webmanifest`.
+- **Support portrait and landscape on phones.** A touch phone held upright plays in the portrait layout (see "Portrait play" in `GAME_DESIGN.md`). Overlay code reads the screen from `screenOf(model)`, never `VIEW_WIDTH` and `VIEW_HEIGHT`, and CSS reads `--screen-w`, `--screen-h`, `--world-top`, and `--frame-top` (the top of the banners' frame) from `.game-root`, with `[data-layout='Portrait']` rules for portrait. Check a layout change with `tools/audit/shots34.ts` and `PORTRAIT=1 bun taps.ts`. The installed Android app still locks to landscape in `public/manifest.webmanifest`.
 - **Follow the design doc.** Choices under "Decided" in `GAME_DESIGN.md` are settled. The "Reference notes" are ideas, not decisions. If a change goes against a decision, say so before making it.
 - **Use original art and names.** Do not copy art, names, or item lists from Zombie Estate 2.
 - **Keep the Effect plugin in `tsconfig.json`.** The `@effect/language-service` entry is what turns on the Effect diagnostics in `typecheck`. Without it, `typecheck` still passes but reports no Effect problems.

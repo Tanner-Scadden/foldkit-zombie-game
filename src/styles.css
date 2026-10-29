@@ -60,6 +60,15 @@ body {
   overflow: hidden;
 }
 
+.thumb-area {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
 .floor-layers,
 .overlay-layer-canvas {
   position: absolute;
@@ -1842,13 +1851,13 @@ body {
 
 .game-root[data-layout='Portrait'] .pause-help {
   top: calc(
-    (100cqh - var(--screen-h) * var(--arena-px)) / 2 + (var(--world-top) + 38) *
+    (100cqh - var(--screen-h) * var(--arena-px)) / 2 + (var(--frame-top) + 38) *
       var(--arena-px)
   );
   transform: translateX(-50%);
   width: calc(100cqw - 16px);
   max-height: calc(
-    (var(--screen-h) - var(--world-top) - 38 - 44) * var(--arena-px)
+    (var(--screen-h) - var(--frame-top) - 38 - 44) * var(--arena-px)
   );
   font-size: 13px;
 }

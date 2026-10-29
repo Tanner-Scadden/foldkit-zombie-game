@@ -16,13 +16,13 @@ import { Dialog } from '@foldkit/ui'
 
 import { THRESHOLDS, boxCenter, hasLineOfSight } from '../../src/arena'
 import { BOSS_RULES } from '../../src/boss'
-import { arenaCamera, cameraFocus } from '../../src/camera'
+import { arenaCamera, cameraFocus, worldWindowOf } from '../../src/camera'
 import { CHUCKER_RULES, maybeShieldFor } from '../../src/chucker'
 import { CRAWLER_RULES } from '../../src/crawler'
 import { FRENZY_RULES } from '../../src/frenzy'
 import { Message, update } from '../../src/main'
 import { type Difficulty, ZombieKind, initialModel } from '../../src/model'
-import { PORTRAIT_WORLD } from '../../src/screen'
+import { DEFAULT_PORTRAIT_SCREEN } from '../../src/screen'
 import { STALL_BOX, isShopOpenFor, priceFor, verdictFor } from '../../src/shop'
 import { asVeteran } from '../../src/veteran'
 import { beginPreparation, doorCounts } from '../../src/waves'
@@ -313,7 +313,10 @@ const isInView = (model: Model, zombie: Model['zombies'][number]) => {
   if (!SEES_PORTRAIT_ONLY) {
     return true
   }
-  const camera = arenaCamera(cameraFocus(model), PORTRAIT_WORLD)
+  const camera = arenaCamera(
+    cameraFocus(model),
+    worldWindowOf(DEFAULT_PORTRAIT_SCREEN),
+  )
   return (
     zombie.x >= camera.x &&
     zombie.x <= camera.x + camera.width &&

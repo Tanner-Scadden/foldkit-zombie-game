@@ -28,7 +28,7 @@ import {
 import { isOpenBreak, isPracticeGateHeld } from './onboarding'
 import { pauseHelpView } from './pauseHelp'
 import { BOOST_KIND_ORDER, PICKUPS, isBoosted } from './powerups'
-import { screenOf } from './screen'
+import { landscapeFrameOffset, screenOf } from './screen'
 import { isShopOpenFor } from './shop'
 import { shopDialogView } from './shopView'
 import {
@@ -263,6 +263,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
           '--screen-w': `${screen.width}`,
           '--screen-h': `${screen.height}`,
           '--world-top': `${screen.world.y}`,
+          '--frame-top': `${landscapeFrameOffset(screen).y}`,
         }),
       ],
       [
