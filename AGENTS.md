@@ -29,6 +29,7 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 | `cd infra && bun run test`                    | Test the analytics Worker: the size cap, rate limits, decoding, and D1 rows                                                |
 | `bun tools/analytics/report.ts --stage <s>`   | Print a stage's analytics: win rate, wave of death, deadliest kinds, run length, devices, runs per day                     |
 | `bun tools/analytics/smoke.ts <api url>`      | Post one fake run summary to a stage's API Worker and check its health                                                     |
+| `bun run heavy -- bun tools/audit/sqlite.ts`  | Check the save in SQLite on OPFS in headless Chrome: the import, reloads, and two tabs. `BASE` points it at a server       |
 | `bun run balance [runs]`                      | The balance bot through the heavy guard. Env vars such as `MODE=endless` and `SWAP=1` pass through                         |
 | `bun run heavy -- <command...>`               | Run any CPU-heavy command through the guard: one at a time across the machine, after the load drops, with `WORKERS` capped |
 | `bun run heavy -- --reset-budget`             | Reset this branch's balance batch count                                                                                    |
@@ -57,7 +58,11 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/homeView.ts`        | The home menu, its panels, the pause MENU pill, and the bests strip    |
 | `src/menu.css`           | Styles for the home menu, its panels, and the MENU pill                |
 | `src/splash.ts`          | The loading splash's effects: load steps, progress, and hiding it      |
-| `src/save.ts`            | The on-device PlayerSave: its Schema, reading, writing, and the reset  |
+| `src/save.ts`            | `PlayerSave`: its Schema, versions, the Model mapping, and the reset   |
+| `src/store.ts`           | `PlayerStore`: the save in SQLite, or the localStorage fallback        |
+| `src/storeSqlite.ts`     | The `player` table, its migrations, and the one-time import            |
+| `src/store.worker.ts`    | The SQLite worker entry                                                |
+| `packages/`              | `sqlite-wasm-effect`, an Effect `SqlClient` over sqlite-wasm           |
 | `src/analytics.ts`       | The RunSummary Schema shared with the analytics Worker (only `effect`) |
 | `src/analyticsRun.ts`    | When a run ends, and the RunSummary built from the Model               |
 | `src/analyticsBeacon.ts` | The visit id, the API origin, and the beacon that posts a summary      |
@@ -167,7 +172,7 @@ iOS keeps a Home Screen app alive in the background, so players can keep an old 
 - **Keep the Effect plugin in `tsconfig.json`.** The `@effect/language-service` entry is what turns on the Effect diagnostics in `typecheck`. Without it, `typecheck` still passes but reports no Effect problems.
 - **Draw fixed art as sprite images.** A pixel map goes through `spriteShapes`, which builds one `Canvas.Image` from a PNG data URL, and a fixed list of whole pixel rectangles goes through `bakeShapes`. Build them once at module scope or in a cache, never per frame: Foldkit keeps every image for the life of the page, and the warm-up canvases in `src/layers.ts` decode the ones built as the game loads. Shapes that change every frame, such as particles, bars, and decals, stay `Rect` shapes.
 - **Keep the frame cheap.** `src/perf.scene.test.ts` budgets the canvas shapes and paint operations of a full room, and `bun run perf:check` gates frame time against a recorded baseline (see `tools/audit/README.md`). In code that runs every frame, check a union's tag with `isAnyOf`, not `guards`: a guard validates the whole value through Schema, and `Phase` carries the wave's spawn list.
-- **Save through PlayerSave.** Anything that must last across reloads goes in `PlayerSave` in `src/save.ts`, with a bump of `SAVE_VERSION` and a migration or a fallback to no save for the older version. Add it to `saveOf` and `restoreSave`; `update` then writes it on change through the `WriteSave` Command. Never touch `localStorage` anywhere else.
+- **Persistent data goes through the store.** Anything that must last across reloads goes in `PlayerSave` in `src/save.ts`, with a bump of `SAVE_VERSION` and a migration or a fallback to no save for the older version. Add it to `saveOf` and `restoreSave`, and give it a column (or a table) in `src/storeSqlite.ts` with a new numbered migration in `PLAYER_MIGRATIONS`; never edit a migration that has shipped. `update` then writes it on change through the `WriteSave` Command, which goes through `PlayerStore` in `src/store.ts`. Never touch SQLite, OPFS, or `localStorage` anywhere else. Other SQLite code goes through `@munch/sqlite-wasm-effect` (see its README).
 - **Send analytics only through SendRunSummary.** The summary is built in `update` from the Model (`src/analyticsRun.ts`), the network call lives in the Command, and nothing is sent when "Share anonymous play stats" is off. A new field goes in `RunSummary` in `src/analytics.ts` with a bump of `RUN_SUMMARY_VERSION`, and a new D1 migration in `infra/migrations`. Nothing personal goes in a summary.
 - **Write tests for game logic** as Story tests that replay Messages. Break the code once to see the test fail before you trust it.
 
