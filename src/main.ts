@@ -315,6 +315,7 @@ export const Message = defineMessageUnion({
   ClickedCancelResetTutorialButton: {},
   CompletedFocusTutorialReset: {},
   UpdatedSyncedSave: { save: PlayerSave },
+  CompletedReloadSyncedSave: { maybeSave: Schema.Option(PlayerSave) },
   UpdatedSyncStatus: { state: SyncState },
   ClickedLinkDeviceButton: {},
   SucceededRequestLinkCode: { code: Schema.String },
@@ -666,6 +667,17 @@ export const WriteSave = Command.define('WriteSave', {
 })
 
 // SYNC
+
+export const ReloadSyncedSave = Command.define('ReloadSyncedSave', {
+  messages: [Message.CompletedReloadSyncedSave],
+  execute: pipe(
+    PlayerStore.use(store => store.load),
+    Effect.map(maybeSave => Message.CompletedReloadSyncedSave({ maybeSave })),
+    Effect.orElseSucceed(() =>
+      Message.CompletedReloadSyncedSave({ maybeSave: Option.none() }),
+    ),
+  ),
+})
 
 export const RequestLinkCode = Command.define('RequestLinkCode', {
   messages: [Message.SucceededRequestLinkCode, Message.FailedRequestLinkCode],
@@ -1517,7 +1529,8 @@ const writeSaveFrom =
     if (
       before.saveStatus === 'Unread' ||
       stepModel.saveStatus === 'Unread' ||
-      message._tag === 'UpdatedSyncedSave'
+      message._tag === 'UpdatedSyncedSave' ||
+      message._tag === 'CompletedReloadSyncedSave'
     ) {
       return { model: stepModel }
     }
@@ -1527,7 +1540,9 @@ const writeSaveFrom =
     return isSameSave(beforeSave, save)
       ? { model: stepModel }
       : {
-          model: stepModel,
+          model: modifyFields(stepModel, {
+            writesInFlight: count => count + 1,
+          }),
           commands: [
             WriteSave({ save, changes: changesBetween(beforeSave, save) }),
           ],
@@ -1537,9 +1552,24 @@ const writeSaveFrom =
 // NOTE: a save from another device, or from the server, replaces what this
 // device shows: its look, settings, difficulty, and bests. Lessons and
 // unlocks only ever move forward, as on load.
-const takeSyncedSave = (model: Model, save: PlayerSave): UpdateReturn => ({
-  model: restoreSave(model, save),
-})
+const takeSyncedSave = (model: Model, save: PlayerSave): UpdateReturn =>
+  model.writesInFlight > 0
+    ? { model: modifyFields(model, { syncedSave: () => 'Stale' }) }
+    : { model: restoreSave(model, save) }
+
+// NOTE: once this device's own writes have landed, a save from sync that
+// was held back is read again from the store, which by then has both.
+const finishWrite = (model: Model): UpdateReturn => {
+  const next = modifyFields(model, {
+    writesInFlight: count => Math.max(count - 1, 0),
+  })
+  return next.writesInFlight === 0 && next.syncedSave === 'Stale'
+    ? {
+        model: modifyFields(next, { syncedSave: () => 'Current' }),
+        commands: [ReloadSyncedSave()],
+      }
+    : { model: next }
+}
 
 const startLinking = (model: Model): UpdateReturn =>
   LinkFlow.match(model.linkFlow, {
@@ -2219,9 +2249,9 @@ const updateGame = (model: Model, message: Message) =>
 
     FailedLoadSave: () => loadSave(model, Option.none()),
 
-    CompletedWriteSave: () => ({ model }),
+    CompletedWriteSave: () => finishWrite(model),
 
-    FailedWriteSave: () => ({ model }),
+    FailedWriteSave: () => finishWrite(model),
 
     ClickedShareStatsButton: () => ({ model: toggleShareStats(model) }),
 
@@ -2244,6 +2274,12 @@ const updateGame = (model: Model, message: Message) =>
     CompletedFocusTutorialReset: () => ({ model }),
 
     UpdatedSyncedSave: ({ save }) => takeSyncedSave(model, save),
+
+    CompletedReloadSyncedSave: ({ maybeSave }) =>
+      Option.match(maybeSave, {
+        onNone: () => ({ model }),
+        onSome: save => takeSyncedSave(model, save),
+      }),
 
     UpdatedSyncStatus: ({ state }) => ({
       model: modifyFields(model, { syncState: () => state }),

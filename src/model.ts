@@ -701,6 +701,12 @@ export type Loading = typeof Loading.Type
 export const SaveStatus = Schema.Literals(['Unread', 'Read'])
 export type SaveStatus = typeof SaveStatus.Type
 
+// NOTE: a save from sync that arrived while this device was still writing
+// its own change is Stale: taking it would undo that change for a moment.
+// The store's view is read again once the writes land.
+export const SyncedSaveState = Schema.Literals(['Current', 'Stale'])
+export type SyncedSaveState = typeof SyncedSaveState.Type
+
 export const TutorialReset = Schema.Literals(['Idle', 'Asking', 'Done'])
 export type TutorialReset = typeof TutorialReset.Type
 
@@ -1097,6 +1103,8 @@ export const Model = Schema.Struct({
   saveStatus: SaveStatus,
   tutorialReset: TutorialReset,
   syncState: SyncState,
+  writesInFlight: Schema.Number,
+  syncedSave: SyncedSaveState,
   linkFlow: LinkFlow,
 })
 export type Model = typeof Model.Type
@@ -1331,5 +1339,7 @@ export const initialModel: Model = {
   saveStatus: 'Unread',
   tutorialReset: 'Idle',
   syncState: SyncState.LocalOnly(),
+  writesInFlight: 0,
+  syncedSave: 'Current',
   linkFlow: LinkFlow.Idle(),
 }

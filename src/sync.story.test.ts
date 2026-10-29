@@ -6,6 +6,7 @@ import { describe, expect, test } from 'vitest'
 import {
   Message,
   RedeemLinkCode,
+  ReloadSyncedSave,
   RequestLinkCode,
   WriteSave,
   update,
@@ -94,6 +95,45 @@ describe('a save from another device', () => {
         }),
       ),
       Command.resolve(WriteSave, Message.CompletedWriteSave()),
+    )
+  })
+})
+
+describe('a save from sync during a write', () => {
+  test('waits for the write, then reads the store again', () => {
+    const synced = fromAnotherDevice(read)
+    story(
+      update,
+      given(
+        modifyFields(read, {
+          soundSetting: () => 'Muted',
+          writesInFlight: () => 1,
+        }),
+      ),
+      message(Message.UpdatedSyncedSave({ save: synced })),
+      model(current => {
+        expect(current.soundSetting).toBe('Muted')
+        expect(current.musicSetting).toBe('On')
+        expect(current.syncedSave).toBe('Stale')
+      }),
+      message(Message.CompletedWriteSave()),
+      model(current => {
+        expect(current.writesInFlight).toBe(0)
+        expect(current.syncedSave).toBe('Current')
+      }),
+      Command.resolve(
+        ReloadSyncedSave,
+        Message.CompletedReloadSyncedSave({
+          maybeSave: Option.some({
+            ...synced,
+            settings: { ...synced.settings, sound: 'Muted' },
+          }),
+        }),
+      ),
+      model(current => {
+        expect(current.soundSetting).toBe('Muted')
+        expect(current.musicSetting).toBe('Off')
+      }),
     )
   })
 })
