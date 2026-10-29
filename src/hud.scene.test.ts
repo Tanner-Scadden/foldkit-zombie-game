@@ -1,0 +1,106 @@
+import { Array, Result } from 'effect'
+import { Canvas } from 'foldkit'
+import { modifyFields } from 'foldkit/struct'
+import { describe, expect, test } from 'vitest'
+
+import { arenaCamera } from './camera'
+import { VIEW_HEIGHT } from './constants'
+import { hudShapes } from './hud'
+import {
+  BoostTimer,
+  type Model,
+  Phase,
+  idleBoosts,
+  initialModel,
+} from './model'
+import { BOOSTS } from './powerups'
+
+type Box = Readonly<{ x: number; y: number; width: number; height: number }>
+
+const rectsOf = (
+  shapes: ReadonlyArray<Canvas.Shape>,
+  offset: Readonly<{ x: number; y: number }>,
+): ReadonlyArray<Canvas.Rect & Box> =>
+  Array.flatMap(shapes, shape => {
+    if (shape._tag === 'Group') {
+      return rectsOf(shape.shapes, {
+        x: offset.x + (shape.translate?.x ?? 0),
+        y: offset.y + (shape.translate?.y ?? 0),
+      })
+    } else if (shape._tag === 'Rect') {
+      return [
+        Canvas.Rect({
+          ...shape,
+          x: shape.x + offset.x,
+          y: shape.y + offset.y,
+        }),
+      ]
+    } else {
+      return []
+    }
+  })
+
+const twoBoosts: Model = modifyFields(initialModel, {
+  phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),
+  boosts: () => ({
+    ...idleBoosts,
+    RapidFire: BoostTimer.On({ remainingMs: 6000, durationMs: 8000 }),
+    Speed: BoostTimer.On({ remainingMs: 3000, durationMs: 10000 }),
+  }),
+})
+
+const chipFrames = (model: Model): ReadonlyArray<Box> =>
+  Array.filterMap(
+    rectsOf(hudShapes(model, arenaCamera(model.player)), { x: 0, y: 0 }),
+    rect =>
+      rect.width === 13 &&
+      rect.height === 12 &&
+      (rect.fill === BOOSTS.RapidFire.color || rect.fill === BOOSTS.Speed.color)
+        ? Result.succeed(rect)
+        : Result.failVoid,
+  )
+
+const HEARTS_RIGHT = 48
+const WAVE_LABEL_LEFT = 120
+const BOSS_NAME_LEFT = 94
+
+describe('the boost chips', () => {
+  test('two running boosts show as chips on the hearts row at the top left', () => {
+    const chips = chipFrames(twoBoosts)
+    expect(chips).toHaveLength(2)
+    Array.forEach(chips, chip => {
+      expect(chip.y + chip.height).toBeLessThan(VIEW_HEIGHT / 4)
+      expect(chip.x).toBeGreaterThan(HEARTS_RIGHT)
+      expect(chip.x + chip.width).toBeLessThan(WAVE_LABEL_LEFT)
+    })
+  })
+
+  test('all four boosts stack in two rows, clear of the boss name under the wave label', () => {
+    const allFour = modifyFields(twoBoosts, {
+      boosts: () => ({
+        RapidFire: BoostTimer.On({ remainingMs: 6000, durationMs: 8000 }),
+        Damage: BoostTimer.On({ remainingMs: 5000, durationMs: 8000 }),
+        Speed: BoostTimer.On({ remainingMs: 3000, durationMs: 10000 }),
+        Pierce: BoostTimer.On({ remainingMs: 4000, durationMs: 9000 }),
+      }),
+    })
+    const frames = Array.filter(
+      rectsOf(hudShapes(allFour, arenaCamera(allFour.player)), {
+        x: 0,
+        y: 0,
+      }),
+      rect => rect.width === 13 && rect.height === 12,
+    )
+    expect(frames).toHaveLength(4)
+    expect(new Set(Array.map(frames, ({ y }) => y)).size).toBe(2)
+    Array.forEach(frames, chip => {
+      expect(chip.x + chip.width).toBeLessThan(BOSS_NAME_LEFT)
+    })
+  })
+
+  test('no boost running shows no chip', () => {
+    expect(
+      chipFrames(modifyFields(twoBoosts, { boosts: () => idleBoosts })),
+    ).toEqual([])
+  })
+})

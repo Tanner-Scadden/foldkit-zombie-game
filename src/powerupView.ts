@@ -302,12 +302,13 @@ const CHIP_BAR_HEIGHT = 2
 const CHIP_DIM_OPACITY = 0.35
 
 const chipShapes =
-  (left: number, top: number) =>
+  (left: number, gridTop: number, columns: number) =>
   (
     { kind, remainingMs, durationMs }: ActiveBoost,
     index: number,
   ): ReadonlyArray<Canvas.Shape> => {
-    const x = left + index * (CHIP_WIDTH + CHIP_GAP)
+    const x = left + (index % columns) * (CHIP_WIDTH + CHIP_GAP)
+    const top = gridTop + Math.floor(index / columns) * (CHIP_HEIGHT + CHIP_GAP)
     const share = durationMs > 0 ? clamp(remainingMs / durationMs, 0, 1) : 0
     return [
       group({
@@ -347,5 +348,6 @@ export const boostChipShapes = (
   boosts: Boosts,
   left: number,
   top: number,
+  columns: number,
 ): ReadonlyArray<Canvas.Shape> =>
-  Array.flatMap(activeBoosts(boosts), chipShapes(left, top))
+  Array.flatMap(activeBoosts(boosts), chipShapes(left, top, columns))
