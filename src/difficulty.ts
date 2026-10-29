@@ -30,7 +30,7 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyStats>> = {
     name: 'Easy',
     blurb: 'Just here for the vibes',
     healthScale: 0.85,
-    speedScale: 0.95,
+    speedScale: 0.9,
     biteScale: 0.5,
   },
   Normal: {
@@ -44,14 +44,14 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyStats>> = {
     name: 'Hard',
     blurb: 'They bite back',
     healthScale: 1.12,
-    speedScale: 1.04,
+    speedScale: 1.02,
     biteScale: 1,
   },
   Nightmare: {
     name: 'Nightmare',
     blurb: 'No mercy. Bring snacks',
     healthScale: 1.18,
-    speedScale: 1.06,
+    speedScale: 1.04,
     biteScale: 1.25,
   },
 }
