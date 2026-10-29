@@ -16,5 +16,11 @@
       "effect/*": ["./node_modules/effect/dist/*"]
     }
   },
-  "include": ["*.ts", "worker/**/*.ts", "../src/analytics.ts"]
+  "include": [
+    "*.ts",
+    "worker/**/*.ts",
+    "../src/analytics.ts",
+    "../src/playerData.ts",
+    "../src/playerScope.ts"
+  ]
 }

@@ -10,6 +10,7 @@
         "@effect/platform-bun": "4.0.7",
         "@effect/platform-node": "4.0.7",
         "@effect/sql-d1": "4.0.7",
+        "@effect/sql-sqlite-do": "4.0.7",
         "alchemy": "2.0.0-beta.84",
         "effect": "4.0.7",
       },
@@ -71,6 +72,8 @@
     "@effect/sql-d1": ["@effect/sql-d1@4.0.7", "", { "dependencies": { "@cloudflare/workers-types": "^5.20261016.1" }, "peerDependencies": { "effect": "^4.0.7" } }, "sha512-LHF6vItApeUt+FkyxXKYdMhi//HyRQeyYaeTjHHFvSdSnhcb+44pcoo8ClbvH13ps7OFVPPJ9yL3/7oBSnYBKQ=="],
 
     "@effect/sql-sqlite-bun": ["@effect/sql-sqlite-bun@4.0.7", "", { "peerDependencies": { "effect": "^4.0.7" } }, "sha512-XchBQdHrGlEtYaViF1jOynOwxUI6byEssLuu52bBtvNMOxyego7ll060MJy5CBzK5qRryQWP4hDAljakzIxCog=="],
+
+    "@effect/sql-sqlite-do": ["@effect/sql-sqlite-do@4.0.7", "", { "peerDependencies": { "effect": "^4.0.7" } }, "sha512-1CKW0SEMks+xPCsnoCu1gjv84zHT6SpZ/Ey5YV19GBnqG6mSx6kaqF92ZwAHa0bUy22hvzMX006OJgjwbNkVlQ=="],
 
     "@emnapi/runtime": ["@emnapi/runtime@1.11.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA=="],
 

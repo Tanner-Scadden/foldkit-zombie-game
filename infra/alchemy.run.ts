@@ -32,10 +32,14 @@ const INFRA_EFFECT = Path.join(
 // address hash, and its own rate limit namespaces. The free plan allows
 // 100,000 Worker requests and 100,000 D1 rows written a day; one run writes
 // one row.
-const RATE_LIMIT_NAMESPACES = { visit: 7101, address: 7102 }
+const RATE_LIMIT_NAMESPACES = { visit: 7101, address: 7102, sync: 7103 }
 
 const RUNS_PER_VISIT_PER_MINUTE = 6
 const RUNS_PER_ADDRESS_PER_MINUTE = 60
+
+// NOTE: identity requests (challenges, sessions, link codes) per address.
+// Sync messages themselves need a token and go to the scope's object.
+const SYNC_REQUESTS_PER_ADDRESS_PER_MINUTE = 30
 
 const Analytics = Effect.gen(function* () {
   const stage = yield* Alchemy.Stage
@@ -46,6 +50,9 @@ const Analytics = Effect.gen(function* () {
   })
 
   const addressSalt = yield* Alchemy.makeRandom('AddressSalt')
+
+  // NOTE: signs sync session tokens and challenges. Made once per stage.
+  const syncSecret = yield* Alchemy.makeRandom('SyncSecret')
 
   return yield* Cloudflare.Worker('Api', {
     name: apiWorkerName(stage),
@@ -60,6 +67,16 @@ const Analytics = Effect.gen(function* () {
       RUNS_BY_ADDRESS: Cloudflare.RateLimit('RUNS_BY_ADDRESS', {
         namespaceId: RATE_LIMIT_NAMESPACES.address,
         simple: { limit: RUNS_PER_ADDRESS_PER_MINUTE, period: 60 },
+      }),
+      // NOTE: the sync engine (worker/sync.ts): one SQLite-backed Durable
+      // Object per player scope, and one directory of devices and link codes.
+      // Both are hosted by this Worker, so the game keeps one API origin.
+      SYNC_SCOPES: Cloudflare.DurableObject('SyncScope'),
+      SYNC_DIRECTORY: Cloudflare.DurableObject('SyncDirectory'),
+      SYNC_SECRET: syncSecret,
+      SYNC_BY_ADDRESS: Cloudflare.RateLimit('SYNC_BY_ADDRESS', {
+        namespaceId: RATE_LIMIT_NAMESPACES.sync,
+        simple: { limit: SYNC_REQUESTS_PER_ADDRESS_PER_MINUTE, period: 60 },
       }),
     },
     build: {
@@ -85,6 +102,8 @@ const Website = (apiUrl: Output.Output<string | undefined>) =>
       memo: {
         include: [
           'src/**',
+          'packages/*/src/**',
+          'packages/*/package.json',
           'public/**',
           'index.html',
           'vite.config.ts',
