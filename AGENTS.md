@@ -151,6 +151,10 @@ Paths are under `src/`. The API Worker is in `infra/worker/` (analytics, and syn
 - Goofy and plain, like the game's own copy. No version numbers, commit hashes, or file names.
 - When a change ships something players will notice, add or update today's bullet in the same push.
 
+### Waiting on the owner
+
+`TANNER_TODO.md` lists what is blocked on the owner: accounts to set up, decisions, and reviews. When work stops on the owner, add an item there with the exact steps. Remove it once it is done.
+
 ### Prose
 
 Do not use em dashes in documentation, comments, or commit messages. Use a period, a comma, or a colon.
