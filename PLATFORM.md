@@ -1,6 +1,6 @@
 # Platform
 
-**Status: thinking, nothing decided.** This file collects the plan for running Munch Manor on Cloudflare with an Effect-native stack: hosting, analytics, local data, sync, and the server side of multiplayer. None of it is on the roadmap yet. When a piece is chosen it moves into the "Decided" section of [`GAME_DESIGN.md`](./GAME_DESIGN.md) with a date. The multiplayer ideas live in [`MULTIPLAYER.md`](./MULTIPLAYER.md); this file is the ground they would stand on.
+**Status: thinking. One direction chosen: our own mini sync engine (2026-10-28). Everything else is undecided.** This file collects the plan for running Munch Manor on Cloudflare with an Effect-native stack: hosting, analytics, local data, sync, and the server side of multiplayer. None of it is on the roadmap yet. When a piece is chosen it moves into the "Decided" section of [`GAME_DESIGN.md`](./GAME_DESIGN.md) with a date. The multiplayer ideas live in [`MULTIPLAYER.md`](./MULTIPLAYER.md); this file is the ground they would stand on.
 
 ## The idea
 
@@ -42,12 +42,46 @@ The shape: every change is a mutation, a named, Schema-typed event such as `Reco
 
 This is event sourcing, and it fits the game unusually well: the game is already a pure fold over Messages, and a run is already fully described by its seed and its inputs.
 
-Two ways to get there:
+We will build our own mini sync engine for this, on Effect SQL. Our data is small and mostly append-only (settings, personal bests, run history, later rooms), usually written by one player, so conflicts are rare and a small engine covers it. It will also be fun.
 
-- **LiveStore.** As far as we know it is built on Effect, keeps a reactive SQLite database on the client, syncs events, and has a Cloudflare backend on Durable Objects and D1. Alchemy has a guide for running its sync backend. It is the shortest path, but it is young: check its current version, its Effect version, its bundle size, and whether its event model fits ours before betting on it.
-- **Our own on Effect SQL.** A small outbox, a server log in a Durable Object through `@effect/sql-sqlite-do`, and the rebase loop above. More work, but every piece is code we own, on the same Effect version as the game.
+### The mini sync engine
 
-The first spike should build the same tiny feature (settings and personal bests) both ways and compare.
+1. **Mutations.** A name, Schema-typed arguments, and a pure function that applies them to SQLite, in the same spirit as the game's `update`. Each carries a client-made id, so applying one twice does nothing.
+2. **Client.** SQLite in a Web Worker (OPFS needs one), migrations, and an outbox table. A mutation is written to the outbox and applied in the same transaction.
+3. **Server.** A Durable Object per player through `@effect/sql-sqlite-do`. It takes mutations in order, decodes and validates each with the shared Schemas, applies it, assigns a sequence number, and can reject a mutation or create its own.
+4. **Catch-up.** Confirmed state is kept apart from the optimistic view. When confirmed mutations arrive, apply them, then replay the still-pending ones on top. The game's determinism makes this easy to test with the same Story test style.
+5. **Transport.** A WebSocket to the Durable Object, hibernating while idle, with HTTP as the fallback.
+
+The hard parts, in the order we expect to meet them: one tab at a time owning the database (a leader chosen with the Web Locks API), schema migrations on both ends and versioned mutations, long offline queues, linking devices (a pairing code or similar), and eventually compacting old history. Keeping the data small lets us dodge most of these for a long time.
+
+Rough size: a solid first version in two to four weeks. A hardened general-purpose engine is a multi-year effort, which is not what we are building.
+
+What we borrow from LiveStore's design: an append-only event log as the source of truth, one total order chosen by the server, a leader per client, and rebase by replay.
+
+### Why not LiveStore, for now
+
+Researched on 2026-10-28.
+
+|                  |                                                                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Version          | 0.5.0, released 2026-10-15. 0.3 (May 2025), 0.4 (June 2026), 0.5 (October 2026)                                              |
+| Status           | Beta. Its docs say it is "not yet ready for all production scenarios", with no 1.0 date                                      |
+| Breaking changes | Minor releases may change APIs and client or sync storage formats, resetting local data. Patches do not                      |
+| Activity         | About 3.7k stars, about 300 open issues, in development since 2021, used in production by apps such as Overtone              |
+| Effect           | Built on Effect 4, with a peer dependency on `effect ^4.0.3`                                                                 |
+| Frameworks       | React, Solid, Svelte, Vue. None for Foldkit                                                                                  |
+| Model            | Append-only event log, SQLite read model, one leader per client, conflicts settled by a server-chosen total order and replay |
+| Cloudflare       | A Durable Object and D1 sync provider, and an Alchemy guide                                                                  |
+
+What blocks it for us today:
+
+- **Effect version.** Foldkit 0.169.0 pins `effect` to exactly 4.0.0, and LiveStore needs 4.0.3 or later.
+- **Server authority.** The backend sets the order, but the docs do not say it can validate or reject events. Game data such as analytics, personal bests, and multiplayer needs the server to be able to say no. Their command replay RFC is still open.
+- **Beta churn.** A minor bump can reset local storage, which is fine for a cache but not for saved progress.
+
+Revisit LiveStore when it reaches 1.0, or when Foldkit moves to Effect 4.0.3 or later and server-side validation is settled.
+
+The first spike builds settings and personal bests on the mini engine.
 
 ## Costs and limits
 
@@ -79,7 +113,7 @@ Each change gets recorded as a dated decision when we make it.
 2. Keep GitHub Pages running in parallel, and for how long?
 3. Which analytics fields earn their place, and how long are rows kept?
 4. Do we store full runs (seed plus inputs) for replays?
-5. LiveStore, or our own sync on Effect SQL?
+5. ~~LiveStore, or our own sync on Effect SQL?~~ Our own mini sync engine, chosen 2026-10-28. LiveStore is revisited at 1.0.
 6. What identity, if any, does sync need: a device key, a passkey, a magic link?
 7. Does local SQLite load on the title screen or only when it is first needed?
 
@@ -90,3 +124,5 @@ Each change gets recorded as a dated decision when we make it.
 - [Effect v4 `@effect/sql-sqlite-do` SqliteClient](https://effect.website/docs/v4/api/sql-sqlite-do/SqliteClient) and [SqliteMigrator](https://effect.website/docs/v4/api/sql-sqlite-do/SqliteMigrator)
 - [`@effect/sql-d1`](https://packages.ecosyste.ms/registries/npmjs.org/packages/@effect%2Fsql-d1)
 - [LiveStore docs](https://docsearch.algolia.com/mcp/docs/repo/livestorejs/livestore) and [`@livestore/sync-cf` README](https://cdn.jsdelivr.net/npm/@livestore/sync-cf@0.4.0/README.md)
+- [LiveStore on GitHub](https://github.com/livestorejs/livestore), [State of the project](https://docs.livestore.dev/misc/state-of-the-project/), and [Design decisions](https://docs.livestore.dev/understanding-livestore/design-decisions/)
+- npm registry data for `@livestore/*` and `foldkit` (versions, release dates, peer dependencies), checked 2026-10-28
