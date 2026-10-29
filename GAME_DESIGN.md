@@ -39,7 +39,7 @@ Decided on 2026-10-27. The first playable is a fun one-screen arena that a stran
 - **Shop.** A stall in the room. The player walks onto it to open the shop overlay.
 - **Weapons.** The player starts with a pistol, buys more in the shop, carries two, and swaps between them.
 - **Ammo.** The pistol never runs out. Other guns have limited ammo that costs money.
-- **Zombies.** Shambler, Runner, Tank, and Exploder.
+- **Zombies.** Shambler, Runner, Tank, and Exploder. Changed on 2026-10-28 at the owner's request: the roster grows to six with the Thrower (the Chucker) and the Crawler (the Ankle Biter, working name Gravecrawler). The Ankle Biter comes up through the floor instead of a door, which bends "doors are the chokepoints" on purpose. It stays rare (three on wave 7, two on wave 8, one or more an endless wave), it telegraphs for 1.5 s, it never comes up near the player, and the door preview counts it as FLOOR, so the doors are still where the waves come from. See "New kinds, frenzy, and the Gasbag pass".
 - **Traps.** One or two simple kinds, likely a barricade for doorways and a turret.
 - **Health.** A few hearts. A hit knocks the player back and gives a short invulnerable blink. Hearts are bought in the shop and rarely dropped.
 - **Onboarding.** Wave 1 is the tutorial. Control hints for the current device fade in, and the first zombies are a few slow Shamblers. No walls of text. See "Onboarding" below for the practice gate and the new zombie card.
@@ -59,8 +59,10 @@ Built on 2026-10-28 after a first-time phone player said the right stick was nev
 | ------- | -------------------------------------------- |
 | Groaner | HE'S SLOW. BACK UP AND KEEP SHOOTING.        |
 | Hotfoot | ZOOMS RIGHT AT YOU. ONE SHOT DROPS IT.       |
-| Gasbag  | BLOWS UP WHEN IT DIES. POP IT NEAR ITS PALS. |
-| Big Lug | TAKES A TON OF BULLETS. DON'T GET CORNERED.  |
+| Gasbag      | BLOWS UP WHEN IT DIES. POP IT NEAR ITS PALS.         |
+| Big Lug     | TAKES A TON OF BULLETS. DON'T GET CORNERED.          |
+| Chucker     | HE HURLS GROANERS AT YOU. GET OFF THE MARK!          |
+| Ankle Biter | IT CLAWS UP THROUGH THE FLOOR AND GRABS YOUR ANKLES. |
 
 - **The door preview.** It is drawn on the overlay canvas, which never shakes, and it holds still: only the orange frame around each door's box pulses. Each box lists the kinds coming through that door with an icon and a count, on a dark backing. The North door's box hangs to the right of the doorway, so the centered banners and hints never cover it.
 
@@ -126,7 +128,9 @@ Proposed on 2026-10-28 for step 5, the horde. These are starting numbers to play
 | Shambler | Groaner | 16 to 28     | 3      | 1 heart  | 4      | $2     | The baseline                                                                           |
 | Runner   | Hotfoot | 44 to 52     | 2      | 1 heart  | 3.5    | $3     | Light, so it is shoved around and knocked back further                                 |
 | Tank     | Big Lug | 11 to 14     | 30     | 2 hearts | 6.5    | $20    | Takes 12% of knockback, shoves the crowd aside, shows a health bar once hurt           |
-| Exploder | Gasbag  | 20 to 25     | 3      | none     | 4.5    | $3     | Bursts 140 ms after it dies, or 220 ms after it touches the player, which pays nothing |
+| Exploder | Gasbag  | 20 to 25     | 3      | none     | 4.5    | $3     | Bursts 200 ms after it dies, or 340 ms after it touches the player, which pays nothing. Before 2026-10-28 these were 140 ms and 220 ms, too short to read its blast ring |
+| Thrower  | Chucker | 17 to 21     | 8      | 1 heart  | 4.5    | $8     | Hangs back and lobs Groaners. Shows a health bar once hurt. See "New kinds, frenzy, and the Gasbag pass" |
+| Crawler  | Ankle Biter | 26 to 32 | 2      | none     | 3.5    | $3     | Comes up through the floor and grabs the player's ankles, halving their speed for 1.1 s |
 
 - **The burst.** Radius 28 px. It costs the player 1 heart unless they are blinking, and deals 6 damage to every zombie it reaches. A Gasbag caught in a burst bursts 150 ms later, so chains ripple instead of going off at once. At most 2 bursts go off in one frame and the rest wait their turn.
 - **Speed.** Each wave scales every spawn's speed, from ×1 on wave 1 to ×1.49 on wave 8. By wave 8 the fastest Hotfoots outrun the player (72 px/s).
@@ -139,13 +143,13 @@ Rewritten again on 2026-10-28 for the gnome pass ("wave 2 feels meh", "mix up th
 | Wave | Zombies | Health | Cycles | What is new or special                                                                                                                                                          |
 | ---- | ------- | ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1    | 6       | 18     | 1      | The tutorial. Four slow Groaners from the north door, 3 seconds apart, then the last two as a pair                                                                              |
-| 2    | 31      | 83     | 2      | Groaner packs of 1 to 4 from two doors drawn per run, the first within 1.5 s. After a short relax, NEW: Hotfoot, in ones and twos from one drawn door, then mixed Groaner packs |
+| 2    | 31      | 83     | 2      | Groaner packs of 1 to 3 from two doors drawn per run, the first within 1.5 s. After a short relax, NEW: Hotfoot, in ones and twos from one drawn door, then mixed Groaner packs. No pack of four, so the first frenzy waits for wave 3 |
 | 3    | 49      | 130    | 2      | Stragglers and mixed Groaner squads from two drawn doors, then the first pincer, Groaner packs of 3 to 5. After a relax, a Hotfoot rush from one drawn door and more stragglers |
 | 4    | 74      | 207    | 2      | NEW: Gasbag, alone from one drawn door, while Groaner packs of 2 to 5 come from two others. A pincer peak, a relax, Gasbags in mixed squads with stragglers, then a big pincer  |
 | 5    | 62      | 221    | 2      | NEW: Big Lug, alone from the north, with escorts in packs of 2 to 4 behind it. Mixed squads of 2 to 6, then a second Big Lug from a drawn door leads a pincer                   |
-| 6    | 62      | 222    | 2      | Stragglers and squads, a Big Lug and a pincer peak, a relax, then squads, stragglers, a third Big Lug, and a horde of packs of 3 to 5 from every door                           |
-| 7    | 65      | 223    | 3      | A Big Lug with a pincer and a Hotfoot pack from one drawn door, then squads, a stream of stragglers, and a Hotfoot pair rush, then a pincer led by a third Big Lug              |
-| 8    | 60      | 268    | 3      | The finale. Mixed squads and a pincer, then squads with a pincer of two Big Lugs and a pincer, Hotfoot stragglers, then two more Big Lugs and a horde in two volleys            |
+| 6    | 63      | 235    | 2      | NEW: Chucker, two of them 16 s apart from one drawn door, hanging back to throw the Groaners in the squads. Stragglers and squads, a Big Lug and a frenzied pincer peak, a relax, then squads, stragglers, a third Big Lug, and a horde of packs of 3 to 5 from every door |
+| 7    | 69      | 237    | 3      | NEW: Ankle Biter, three up through the floor 9 s apart. A Big Lug with a pincer and a Hotfoot pack from one drawn door, then squads, a Chucker, a stream of stragglers, and a Hotfoot pair rush, then a pincer led by a third Big Lug |
+| 8    | 58      | 267    | 3      | The finale. Mixed squads and a pincer, two Ankle Biters and a Chucker, then squads with a pincer of two Big Lugs and a pincer, Hotfoot stragglers, then two more Big Lugs and a horde in two volleys |
 
 Each wave is a list of groups and a list of holds. A group has a list of pack sizes, the gap inside a pack, a door pattern (One, Pincer, or All), the doors it may use and how many of them to draw for the run, a start time, the gap between volleys, the timing jitter, and weights for each kind. When Preparation begins the seeded generator shuffles each group's pack sizes, draws its doors, and then draws the door of every pack, the pincer's order and lag, the jitter, and every spawn's kind and offset, so the door preview shows exactly what will come and the same seed rolls the same wave. A kind's first wave uses a group of only that kind, from one door, so the "NEW" card never promises a zombie the roll left out. A straggler is a pack of one from any door with up to 1.5 s of jitter, so it wanders in between packs.
 
@@ -583,7 +587,9 @@ Added on 2026-10-28 from owner feedback: "Would love for us to have parts of the
   | Groaner     | 2/3, 1/3           | One reaching arm, leaving a red stump, then the top of its skull, showing pink brain and an empty eye |
   | Hotfoot     | 1/2                | Its hair and scalp, showing pink brain                                                                |
   | Big Lug     | 3/4, 1/2, 1/4      | One arm, the other arm, then its jaw                                                                  |
-  | Gasbag      | 2/3, 1/3           | A patch of skin, then another. Each hole leaks gas puffs, and the bag shrinks 7% a stage              |
+  | Gasbag      | 2/3, 1/3           | A hole tears in the side of its belly, then its brass valve cracks and a second hole opens. Each hole leaks gas, and the bag shrinks 7% a stage. Redone on 2026-10-28 for its new look |
+  | Chucker     | 2/3, 1/3           | The top of its head, showing pink brain, then one long arm, leaving a red stump |
+  | Ankle Biter | 1/2                | The top of its head, showing pink brain |
   | Uncle Chunk | 4/5, 3/5, 2/5, 1/5 | One arm, his party hat with his scalp, the other arm, then his belly bursts open                      |
 
   With 3 health a Groaner and a Gasbag lose a part to each of the first two hits. With 4 (wave 7) the first hit takes nothing off and the next two do. A Hotfoot with 2 health loses its scalp to the first hit. A Big Lug of 36 loses parts at 27, 18, and 9.
@@ -778,7 +784,7 @@ Ideas to try first:
 
 Zombie types are a table of speed, health, and damage, plus a behavior tag. Each wave draws from a weighted spawn table using the seeded generator, so waves are reproducible.
 
-The first four are built, and so is the boss. Their numbers are under "Proposed balance" above, and the boss's under "Wear and the boss".
+The first four are built, and so is the boss. The Chucker and the Ankle Biter joined them on 2026-10-28. Their numbers are under "Proposed balance" above, and the boss's under "Wear and the boss".
 
 | Type     | Name shown to players | Idea                                                     |
 | -------- | --------------------- | -------------------------------------------------------- |
@@ -787,6 +793,8 @@ The first four are built, and so is the boss. Their numbers are under "Proposed 
 | Tank     | Big Lug               | Slow and very tough. Rewards traps and strong guns.      |
 | Spitter  | Not built yet         | Attacks from range, so a closed door alone is not safe.  |
 | Exploder | Gasbag                | Bursts when killed, damaging nearby traps and players.   |
+| Thrower  | Chucker               | Hangs back and lobs Groaners at the player.              |
+| Crawler  | Ankle Biter           | Comes up through the floor and grabs the ankles.         |
 | Boss     | Uncle Chunk           | The wave 8 finale. Stomps, charges, spits, burps, sheds. |
 
 - **Data, not logic.** A kind is a row in a table: speed, health, bite, radius, mass, knockback, bounty, a behavior tag (`Brawler` bites, `Bomber` fuses and bursts), how it dies, its gibs, its sounds, and its footfalls. Its sprites are a row in a second table keyed by the same kind. Both tables are exhaustive records, so a new kind will not compile until it has both rows.
