@@ -49,7 +49,6 @@ export const DIRECT_CHASE_RANGE_PX = 104
 export const LINE_OF_SIGHT_STEP_PX = 3
 export const SEPARATION_SPEED = 40
 
-export const FINAL_WAVE = 8
 export const FIRST_PREPARATION_MS = 6000
 export const PREPARATION_MS = 20000
 // NOTE: the break before this wave waits for START WAVE. Later ones are timed.
