@@ -28,6 +28,20 @@ Every Worker lives at `https://<worker>.tanner-scadden.workers.dev`. A stage suc
 
 State lives in Alchemy's Cloudflare state store (the `alchemy-state-store` Worker on the same account), so local and CI deploys share it.
 
+## Deploying
+
+`.github/workflows/deploy.yml` is the only deploy path. Cloudflare Workers Builds stays disconnected, so do not connect the repo in the Cloudflare dashboard: two deploy paths overwrite each other quietly (see "What Phase 1 taught us" in `PLATFORM.md`). GitHub Pages is gone, its workflow deleted and the site disabled.
+
+- **Push to `main`.** The check job runs `typecheck`, `lint`, `test`, and `build`, and typechecks `infra/`. Only if all pass does the deploy job run `alchemy deploy --stage prod`, then wait for the URL to answer 200. A failing check publishes nothing.
+- **Pull request.** The same checks, then a preview at `https://munch-manor-pr-<number>.tanner-scadden.workers.dev`, with its URL in a comment on the pull request. Closing the pull request destroys the preview.
+- **By hand.** Run the workflow from the Actions tab on `main` to redeploy production, or deploy from this machine with the commands below.
+
+Alchemy skips the build and the upload when none of `src/`, `packages/*/src/`, `packages/*/package.json`, `public/`, `patches/`, `index.html`, `CHANGELOG.md`, `vite.config.ts`, `tsconfig.json`, `package.json`, or `bun.lock` changed (`memo` in `alchemy.run.ts`).
+
+**The static build.** `bun run build` writes a static site to `dist/`. Vite's `base` is `'./'`, so every asset path is relative and `dist/` works from any sub-path. Check it with `bunx vite preview` before publishing. It needs an HTTP server: opening `dist/index.html` straight from disk does not load the module script.
+
+**itch.io.** Zip the contents of `dist/` with `index.html` at the top of the zip, upload it as an HTML game, and set the viewport to 16:9 with fullscreen allowed. A build without `VITE_API_ORIGIN` sends no analytics and keeps the save on the device.
+
 ## Commands
 
 Run from `infra/` after `bun install`. A local deploy builds the working tree as it is, uncommitted changes included.
@@ -85,6 +99,8 @@ The report and the smoke test use `CLOUDFLARE_API_TOKEN` (or the keychain token)
 
 ## Credentials
 
+Never put a token in the repo or in a `VITE_` variable, which Vite inlines into the game.
+
 - **Local:** the API token in the macOS keychain under `cloudflare-api-token`. It is broad: it can also create API tokens, which `github.ts` needs.
 - **CI:** the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` Actions secrets, written by `github.ts`. That token is the account-owned `munch-manor-ci` token with Workers Scripts Write, Secrets Store Write, Account Settings Read, Workers Tail Read, and D1 Write (for the analytics databases). Secrets Store Write is needed because Alchemy reads the state store's token by binding it to a short-lived preview Worker.
 
@@ -98,7 +114,7 @@ If the repository is renamed, change `REPOSITORY` and deploy twice, the second t
 
 ## Updates on installed apps
 
-The Vite build stamps the bundle and `version.json` with `GITHUB_SHA`, which the Alchemy build child inherits in CI. A local deploy stamps the local commit, plus a timestamp when the tree is dirty. Alchemy skips the build when no input changed, so `version.json` only changes when the game does. See "How updates reach installed apps" in `AGENTS.md`.
+The Vite build stamps the bundle and `version.json` with `GITHUB_SHA`, which the Alchemy build child inherits in CI. A local deploy stamps the local commit, plus a timestamp when the tree is dirty. Alchemy skips the build when no input changed, so `version.json` only changes when the game does. See "How updates reach installed apps" in `PLATFORM.md`.
 
 ## Check a deploy
 

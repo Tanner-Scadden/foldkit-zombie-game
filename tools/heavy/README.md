@@ -12,6 +12,14 @@ A small Effect program that every CPU-heavy job goes through, so several agents 
 
 Env vars on the command line, such as `MODE=endless bun run balance 100`, pass through to the child.
 
+## Why, and the rules
+
+The game is developed on one laptop (12 cores), often with several agents at once. Two agents running 8-process balance batches together pushed the load average to 30 and made every step about three times slower.
+
+- **Everything heavy goes through the guard:** the balance bot, `perf:check`, headless Chrome audits such as `tools/audit/perf.ts`, `sqlite.ts`, and `sync.ts`, and the shots scripts. Never call `tools/balance/simulate.ts` or a heavy audit directly. The lock only protects jobs that take it.
+- **Headless Chrome audits and `perf:check` run alone,** never while the balance bot runs, since load skews frame times. The lock enforces this when they all go through the guard.
+- **Cap tuning at about three batches per change.** Use 100 runs to sort ideas and 200 runs only to confirm the final numbers. Results within a few points of a target are fine: list misses as follow-ups instead of running more batches. The budget below backs this up.
+
 ## What it does
 
 1. **Lock.** One lock file for the whole machine, `munch-manor-heavy.lock` in the temp directory, holding `{pid, command, cwd, startedAt}`. It is written to a draft and hard linked into place, so taking it is atomic. While a live process holds it, the guard waits. A lock whose pid is gone, or a file that does not decode, is stale: the guard says so and takes it over. The lock is released when the child exits, when it fails, and on `SIGINT` or `SIGTERM`, which also stops the child.

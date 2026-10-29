@@ -8,7 +8,7 @@ All on 2026-10-28.
 
 - **Everything moves to Cloudflare.** GitHub Pages was only for testing on other devices. It was removed (the site and `.github/workflows/pages.yml`) on 2026-10-28, once the Cloudflare deploy was live.
 - **The game is hosted at https://munch-manor.tanner-scadden.workers.dev**, the free `workers.dev` address, with no custom domain yet. The account's `workers.dev` subdomain is `tanner-scadden`.
-- **Installed apps find new builds with `version.json`, not a service worker.** Each build stamps its commit into the bundle and into `version.json`, which is never cached. The game fetches it when it comes back into view, on focus, and every five minutes on quiet screens, and offers a tap to reload when the build differs. See "Deploying" in `AGENTS.md`.
+- **Installed apps find new builds with `version.json`, not a service worker.** Each build stamps its commit into the bundle and into `version.json`, which is never cached. The game fetches it when it comes back into view, on focus, and every five minutes on quiet screens, and offers a tap to reload when the build differs. See "How updates reach installed apps" below.
 - **GitHub Actions is the only deploy path.** Cloudflare Workers Builds (the dashboard's git integration) stays disconnected, so one push never fires two deploys.
 - **Free plan first.** Upgrade to Workers Paid only if the game takes off.
 - **Our own mini sync engine over scopes**, for personal and shared state. See "Sync engine".
@@ -28,7 +28,9 @@ All on 2026-10-28.
 - **SQLite loads behind the splash, lazily.** The save is the first thing the game reads, so the splash waits for it as it waited for localStorage, but the SQLite code, worker, and wasm are their own chunks fetched only then, alongside the fonts and sprites. A 12 second limit falls back to localStorage for the session. Decided 2026-10-29, which settles open question 7.
 - **Analytics run rows are kept for 90 days.** A Cron Trigger on the production API Worker runs once a day at 04:17 UTC and deletes every `runs` row whose `received_day` is more than 90 days back. Previews get no trigger, since the free plan allows five per account and a preview's database goes with its pull request. Decided 2026-10-29, which settles the rest of open question 3. See "Retention".
 - **Linking takes on the other device's progress, with no merge.** The device that types a link code becomes the other device's player and uses its progress; what it had saved is left behind. The code entry form says so before Link: "This device will use the other device's progress." Merging two players stays out of scope. Decided 2026-10-29.
-- **The engine and the SQLite wrapper live in `packages/` in this repo** while the API settles, then move to their own repo and npm packages. The name is still open. This file collects the plan for running Munch Manor on Cloudflare with an Effect-native stack: hosting, analytics, local data, sync, and the server side of multiplayer. None of it is on the roadmap yet. When a piece is chosen it moves into the "Decided" section of [`GAME_DESIGN.md`](./GAME_DESIGN.md) with a date. The multiplayer ideas live in [`MULTIPLAYER.md`](./MULTIPLAYER.md); this file is the ground they would stand on.
+- **The engine and the SQLite wrapper live in `packages/` in this repo** while the API settles, then move to their own repo and npm packages. The name is still open.
+
+This file collects the plan for running Munch Manor on Cloudflare with an Effect-native stack: hosting, analytics, local data, sync, and the server side of multiplayer. Hosting, analytics, the on-device SQLite save, and player sync are built and live in production; the rest is a plan. When a piece is chosen it moves into the "Decided" section of [`GAME_DESIGN.md`](./GAME_DESIGN.md) with a date. The multiplayer ideas live in [`MULTIPLAYER.md`](./MULTIPLAYER.md); this file is the ground they would stand on.
 
 ## The idea
 
@@ -55,29 +57,29 @@ Package names and APIs need checking against the Effect version the game uses (E
 ## Phases
 
 1. **Hosting. Done 2026-10-28.** The game is live at https://munch-manor.tanner-scadden.workers.dev. `infra/` declares one `Cloudflare.Website.Foldkit` resource (Alchemy's Foldkit flavor of `Website.Vite`). `.github/workflows/deploy.yml` gates every deploy on typecheck, lint, test, and build, deploys `prod` from `main`, and gives each pull request a `pr-<number>` preview with a comment that is destroyed when it closes. GitHub Pages is gone. See "What Phase 1 taught us" below.
-2. **Analytics. On preview since 2026-10-29, not yet in production.** At the end of a run the game sends one anonymous summary with `navigator.sendBeacon`. A Worker decodes it with the shared Schema, rate limits it, and writes a row to D1. `bun tools/analytics/report.ts --stage <stage>` prints the real win rate and where real players die, which until now we only guessed at with the balance bot. See "Analytics" below.
-3. **Local SQLite. Built 2026-10-29, on the `infra` branch.** `packages/sqlite-wasm-effect` (published name still open, `@munch/sqlite-wasm-effect` for now) is the Effect wrapper: sqlite-wasm 3.54.1-build1 in a worker on `opfs-sahpool`, behind an `effect/sql` `SqlClient`, with the leader tab chosen by Web Locks. See its README. The on-device save moved into it as the `player` row (`src/store.ts`, `src/storeSqlite.ts`); see "The on-device save". `tools/audit/sqlite.ts` checks it in headless Chrome. The plan as first written: move settings and personal bests into SQLite in the browser. This is the first client mutation path and proves out the wasm build, OPFS, and migrations before sync depends on them. The character's look (`Appearance` in `src/model.ts`) is the first setting to move: it is already plain Schema data, so a `ChangedAppearance` mutation can store it whole. Until then the on-device save bridges the gap (see "The on-device save").
+2. **Analytics. Live in production since 2026-10-29**, when pull request #2 merged. At the end of a run the game sends one anonymous summary with `navigator.sendBeacon`. A Worker decodes it with the shared Schema, rate limits it, and writes a row to D1. `bun tools/analytics/report.ts --stage <stage>` prints the real win rate and where real players die, which until now we only guessed at with the balance bot. See "Analytics" below.
+3. **Local SQLite. Built and in production since 2026-10-29.** `packages/sqlite-wasm-effect` (published name still open, `@munch/sqlite-wasm-effect` for now) is the Effect wrapper: sqlite-wasm 3.54.1-build1 in a worker on `opfs-sahpool`, behind an `effect/sql` `SqlClient`, with the leader tab chosen by Web Locks. See its README. The on-device save moved into it as the `player` row (`src/store.ts`, `src/storeSqlite.ts`); see "The on-device save". `tools/audit/sqlite.ts` checks it in headless Chrome. The plan as first written: move settings and personal bests into SQLite in the browser. This is the first client mutation path and proves out the wasm build, OPFS, and migrations before sync depends on them. The character's look (`Appearance` in `src/model.ts`) is stored whole by the `ChangedAppearance` mutation.
    - **The difficulty** (`SavedDifficulty` in `src/save.ts`, save version 2): the chosen level, whether the first-time card was answered, and the Nightmare unlock. A version 1 save migrates as Normal with the card still to come. A Hard campaign win unlocks Nightmare, so the server will want to check that win before it trusts the unlock.
    - **The bests** (`SavedBests` in `src/save.ts`, save version 3, added 2026-10-29): runs played, the zombies splatted in all, the kills per zombie kind keyed by kind id, and the fastest win and best endless wave for each difficulty (null until reached). They are on the device now, in the SQLite `player` row and the `kills_by_kind` table. A version 2 save migrates with every field kept and the bests at zero, and unknown kind ids are dropped on load. They change once a run, when it ends, so they map to one `RecordedRun` style mutation a run. The server will want to check them like the Nightmare unlock before a leaderboard trusts them.
-4. **Sync. Built 2026-10-29, on the `infra` branch and the `pr-2` preview, not yet in production.** `packages/sync-engine` (`@munch/sync-engine` for now) is the engine; the player scope (`src/playerScope.ts`) is its first user; the API Worker hosts one SQLite Durable Object per player scope and one directory of devices. Two devices can be linked with a code from SETTINGS. See "What phase 4 built" below and the package README.
+4. **Sync. Built and in production since 2026-10-29.** `packages/sync-engine` (`@munch/sync-engine` for now) is the engine; the player scope (`src/playerScope.ts`) is its first user; the API Worker hosts one SQLite Durable Object per player scope and one directory of devices. Two devices can be linked with a code from SETTINGS. See "What phase 4 built" below and the package README.
 5. **Multiplayer rooms.** Durable Objects as rooms with room codes, as sketched in `MULTIPLAYER.md`, reusing the sync transport and the shared Schemas.
 
 ### The on-device save
 
 Added on 2026-10-28, ahead of local SQLite. `PlayerSave` in `src/save.ts` is one versioned record per player, plain data: the onboarding lessons, the zombie cards seen, the trap hint, the Home Screen tip, sound, music, screen shake, the stats sharing setting, the look, the difficulty, the bests, and the home menu's seen news and opened Munchopedia entries. It is shaped like the player scope on purpose.
 
-Since 2026-10-29 (on the `infra` branch) it lives in on-device SQLite as the one row of the `player` table: settings, the difficulty, runs played, and total kills as columns, the look, the onboarding, the bests per difficulty, and the home menu as JSON, each decoded by its Schema. The `home` column came with the merge of `main`'s home menu, added by the player scope's migration `0003_add_home` with an unvisited default, so a device or a Durable Object that already had a row keeps it. Kills per kind are the `kills_by_kind` table, one row per kind id, for the Munchopedia to read. `PlayerStore` in `src/store.ts` loads and writes it behind the same `LoadSave` and `WriteSave` Commands, so `update` did not change.
+Since 2026-10-29 it lives in on-device SQLite as the one row of the `player` table: settings, the difficulty, runs played, and total kills as columns, the look, the onboarding, the bests per difficulty, and the home menu as JSON, each decoded by its Schema. The `home` column came with the merge of `main`'s home menu, added by the player scope's migration `0003_add_home` with an unvisited default, so a device or a Durable Object that already had a row keeps it. Kills per kind are the `kills_by_kind` table, one row per kind id, for the Munchopedia to read. `PlayerStore` in `src/store.ts` loads and writes it behind the same `LoadSave` and `WriteSave` Commands, so `update` did not change.
 
 - **The import.** The first load on a device with no player row reads the old localStorage save (`munch-manor:save`), writes it as the row, and marks the import done in `store_meta`, in one transaction. Later loads never read localStorage again, even if the row is gone.
-- **The fallback, for one release.** The localStorage key is not removed. It is read when SQLite fails to open within 12 seconds or fails a load, and written (alongside SQLite) when SQLite had to open in memory, so private windows and browsers without OPFS keep their settings as before. With OPFS it is never written. Remove the fallback and the key in the release after this one ships.
+- **The fallback, for one release.** The localStorage key is not removed. It is read when SQLite fails to open within 12 seconds or fails a load, and written (alongside SQLite) when SQLite had to open in memory, so private windows and browsers without OPFS keep their settings as before. With OPFS it is never written. The SQLite save reached production on 2026-10-29; remove the fallback and the key in a later release.
 - **A mutation log since phase 4.** The row is no longer overwritten whole: each change is a player scope mutation in the outbox, applied to the same `player` and `kills_by_kind` tables, which are now the scope's view. The old row (or the old localStorage save before it) seeds the scope once. See "What phase 4 built".
 
 What the save holds, by version:
 
 - **Difficulty (version 2).** The chosen level, whether the first-time card was answered, and the Nightmare unlock.
 - **Bests (version 3, 2026-10-29).** Runs played, total kills, kills per kind by kind id, and the bests per difficulty. Reset tutorial keeps them.
-- **Home menu (version 4, 2026-10-29).** The newest What's New day seen and the Munchopedia entries opened. This is the save the live game keeps in localStorage today.
-- **Stats sharing (version 5, 2026-10-29, on the `infra` branch).** The "Share anonymous play stats" setting. Older saves load with it on. It was numbered 4 on the preview before the home menu reached `main`; the merge renumbered it 5 so the live version 4 save migrates on its own path. The preview's own version 4 shape (sharing, no home menu) still reads, with the home menu unvisited. `src/store.test.ts` checks that a live version 4 localStorage save lands in SQLite and on a linked device with nothing lost.
+- **Home menu (version 4, 2026-10-29).** The newest What's New day seen and the Munchopedia entries opened. The last version written only to localStorage, before SQLite.
+- **Stats sharing (version 5, 2026-10-29).** The "Share anonymous play stats" setting. Older saves load with it on. It was numbered 4 on the preview before the home menu reached `main`; the merge renumbered it 5 so a version 4 save from before SQLite migrates on its own path. The preview's own version 4 shape (sharing, no home menu) still reads, with the home menu unvisited. `src/store.test.ts` checks that a version 4 localStorage save lands in SQLite and on a linked device with nothing lost.
 - **Session only.** The run itself and full screen.
 
 ### What Phase 1 taught us
@@ -89,9 +91,19 @@ What the save holds, by version:
 - **Two deploy paths collide quietly.** While Workers Builds was still connected, one push ran `wrangler deploy` and overwrote the Worker with a single page fallback. Alchemy's next deploy saw no changed inputs, and `alchemy drift` saw no drift, so both reported success. `alchemy deploy --force` put the declared version back.
 - **Routing and caching.** The game has no routes, so unknown paths answer 404 (`notFoundHandling: 'none'`). The default single page fallback served `index.html` at nested paths, where its relative asset paths missed. `public/_headers` makes the hashed files in `/assets` immutable for a year, `index.html` and `/` are `no-cache` so every load revalidates, and `version.json` is `no-store`.
 
+## How updates reach installed apps
+
+iOS keeps a Home Screen app alive in the background, so players can keep an old build for days after a deploy. There is no service worker, on purpose. Instead:
+
+- **Build id.** A small plugin in `vite.config.ts` stamps every production build with an id: `BUILD_ID` if set, else `GITHUB_SHA` (CI and the Alchemy deploy in CI), else the local commit (with `-dirty-<timestamp>` when the tree has uncommitted changes, since a local deploy ships them), else a timestamp. The id is the compile-time constant `__BUILD_ID__` and is also written to `dist/version.json` as `{ "build": "<id>" }`. `bun dev` uses `dev` and never checks; the tests use `test`.
+- **Never cached.** `public/_headers` serves `/version.json` with `no-store` and `/` and `/index.html` with `no-cache`, and the game fetches `version.json` with `cache: 'no-store'` and a time query.
+- **When it checks.** When the page becomes visible again, on a back forward cache restore, on window focus, and every five minutes on the title, pause, Game Over, Victory, and the break between waves. Never on a timer mid-wave. A failed or offline check is ignored.
+- **The prompt.** If the live build differs from the running one, a "New version ready" chip shows on the home menu only, so a reload never costs a run. Tapping it reloads the page. Pause, breaks, and the end screens only record the newer build. Game Over and Victory then offer only MENU (Enter or H) with the line "A new version is waiting on the menu.", so the player lands where the chip is. Its place lives in `.update-chip` in `src/styles.css`, as arena pixels (`--chip-arena-right`, `--chip-arena-y`), so it is easy to move.
+- **Check it.** `PART=e2e bun shots26.ts` in `tools/audit` builds, serves, rebuilds under an open page, and checks that the chip appears and the reload lands on the new build.
+
 ## Analytics
 
-Built on 2026-10-29 for phase 2. It runs on pull request previews. Production gets it when the pull request merges.
+Built on 2026-10-29 for phase 2. It runs in production and on every pull request preview.
 
 ### What is sent
 
@@ -239,7 +251,7 @@ Built on 2026-10-29. The engine's design, API, protocol, and limits are in [`pac
 
 **In the game.** SETTINGS has a Devices row with the status line ("Synced", "Offline, will sync", "Synced. Linked to 2 devices", or "Saved on this device" in a build without a sync server) and the two link buttons. Offline play is unchanged: mutations wait in the outbox and go out when the leader tab reconnects. A build without `VITE_API_ORIGIN` (`bun dev`, the tests, an itch.io zip) keeps everything local.
 
-**Checked on the preview** with `bun run heavy -- bun tools/audit/sync.ts https://munch-manor-pr-2.tanner-scadden.workers.dev/`: two browser contexts as two devices, an older save syncing up, a shirt change and a finished run on A, linking B with A's code, B showing A's shirt and kills, B's setting reaching A after a reload, and A going offline, changing a setting, and catching up when back online.
+**Checked on a deployed copy** with `bun run heavy -- bun tools/audit/sync.ts <url>` (first on the pull request #2 preview, before the merge): two browser contexts as two devices, an older save syncing up, a shirt change and a finished run on A, linking B with A's code, B showing A's shirt and kills, B's setting reaching A after a reload, and A going offline, changing a setting, and catching up when back online.
 
 **Not done yet:** the daily challenge and leaderboard scopes (the first shared and read-only scopes), a cross-scope outbox for server mutations (the device count is sent by hand), verifying runs before trusting the Nightmare unlock and bests, merging two players on link, unlinking a device, and coalescing deltas on busy scopes.
 
@@ -305,7 +317,7 @@ Checked against Cloudflare's pricing pages on 2026-10-28.
 - **Server-side anything.** Analytics and sync both change this.
 - **Accounts, leaderboards, or saved progress.** Local SQLite starts saved progress on one device. Sync carries it across devices and needs some idea of identity, which edges toward accounts.
 
-Each change gets recorded as a dated decision when we make it.
+Each change gets recorded as a dated decision when we make it. "Not now" records both as relaxed on 2026-10-29, when analytics, the SQLite save, and sync reached production: server-side code for analytics and sync, and saved progress on the device and across linked devices. Accounts and leaderboards are still out.
 
 ## Open questions
 
@@ -315,7 +327,7 @@ Each change gets recorded as a dated decision when we make it.
 4. Do we store full runs (seed plus inputs) for replays?
 5. ~~LiveStore, or our own sync on Effect SQL?~~ Our own mini sync engine, chosen 2026-10-28. LiveStore is revisited at 1.0.
 6. ~~What identity, if any, does sync need: a device key, a passkey, a magic link?~~ A device key with a signed challenge, and a link code between devices, chosen 2026-10-29. A passkey or magic link for recovering a lost device is still open.
-7. Does local SQLite load on the title screen or only when it is first needed?
+7. ~~Does local SQLite load on the title screen or only when it is first needed?~~ Behind the splash, lazily, when the save is first read, chosen 2026-10-29.
 
 ## Sources
 

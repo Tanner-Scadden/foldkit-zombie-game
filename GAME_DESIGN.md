@@ -220,32 +220,10 @@ Proposed on 2026-10-28 for step 6, traps. These are starting numbers to play aga
 Proposed on 2026-10-28 for step 7. Still proposed, not decided. A headless bot played the game's own `update` many times to find numbers where a decent player usually falls in the second half and a full win takes about 8 minutes. Real players have not tested them yet.
 
 - **The bot.** `bun run balance [runs] [firstSeed]` runs `tools/balance/simulate.ts` through the heavy guard. It plays at 30 frames a second. It keeps away from the nearest zombie once one is within 36 px, otherwise drifts to the middle of the room. It re-aims every 5 frames at the nearest zombie it can see, with up to 0.22 radians of hand shake, and holds the trigger while it has a target. From wave 2 it walks to the stall and shops (see "The bot's shopping" under "Shop categories and the price ramp"), nails its Plank Piles into the door with the most spawns, and sets its Grumpy Gnomes down a little off the middle of the room, where it fights. Then it starts the wave at once, so Preparation costs only the walking. Every run is deterministic for its seed. `WORKERS=n` splits the runs over processes, `TIMELINE=1` adds the wave timeline audit (see "The gnome pass and spawn variety"), `NO_GNOME=1` keeps it from buying gnomes, `NO_PLANKS=1` from buying Plank Piles, and `TUNE=path/to/tune.ts` edits the tables in place before the runs so an idea can be tried without touching `src`.
-- **History.** The step 7 pass (drizzle waves, the pre-reload pistol) had the bot win 11 of 40 runs. After the first reload numbers it won 0 of 20 and died on wave 3. After the packs and the pistol retune, with the old prices and a bot that never bought a gnome, it won 22% (default) and 34% (`SWAP=1`). Those figures are superseded by the measurements below.
+- **History.** The step 7 pass (drizzle waves, the pre-reload pistol) had the bot win 11 of 40 runs. After the first reload numbers it won 0 of 20 and died on wave 3. After the packs and the pistol retune, with the old prices and a bot that never bought a gnome, it won 22% (default) and 34% (`SWAP=1`).
 - **The metrics.** Besides survival, money, and hearts by kind, the bot reports for each wave the hearts lost, pressure (seconds with 6 or more zombies within 48 px), relax (seconds with none alive), the wave's length, and the most alive at once, plus close calls: the share of wins that fell to 1 heart. It also reports the money it has on arriving at each shop visit and what it buys there.
 - **The targets.** The default bot wins 15 to 25% of runs and the `SWAP=1` bot 35 to 45%. Under 3% of runs die in waves 1 and 2, under 10% in 3 and 4, about 25 to 35% in 5 and 6, and the most in 7 and 8, with wave 8 the single biggest. A median win takes 7 to 9 minutes. 30 to 50% of wins are close calls.
-- **Measured** on 2026-10-28 after the shop categories, the price ramp, the shopping bot, and the wave 5 to 8 health scales: 200 runs per bot from seed 1, upgrades and gnomes on. "Died" is the share of all runs that died on that wave. The other columns are means over the runs that played the wave.
-
-  | Wave | Died (default) | Died (`SWAP=1`) | Hearts lost (default) | Pressure s | Relax s | Length s | Peak alive |
-  | ---- | -------------- | --------------- | --------------------- | ---------- | ------- | -------- | ---------- |
-  | 1    | 0%             | 0%              | 0.00                  | 0.0        | 6.3     | 18       | 2.0        |
-  | 2    | 0%             | 0%              | 0.04                  | 0.0        | 5.6     | 43       | 7.4        |
-  | 3    | 0%             | 0%              | 0.17                  | 0.3        | 6.9     | 50       | 11.0       |
-  | 4    | 2%             | 1%              | 0.86                  | 0.7        | 8.3     | 73       | 15.3       |
-  | 5    | 6%             | 3%              | 1.32                  | 0.7        | 11.2    | 79       | 14.5       |
-  | 6    | 18%            | 10%             | 2.20                  | 1.3        | 10.9    | 68       | 18.0       |
-  | 7    | 26%            | 12%             | 2.33                  | 0.9        | 9.4     | 72       | 13.7       |
-  | 8    | 28%            | 35%             | 3.52                  | 0.4        | 16.2    | 86       | 17.4       |
-
-  | Bot                    | Wins            | Close calls    | Median run | Median win | Money by the end of wave 8 |
-  | ---------------------- | --------------- | -------------- | ---------- | ---------- | -------------------------- |
-  | Default                | 43 of 200 (22%) | 12 of 43 (28%) | 7.9 min    | 8.9 min    | $1,485                     |
-  | `SWAP=1`               | 81 of 200 (41%) | 20 of 81 (25%) | 8.7 min    | 8.8 min    | $1,487                     |
-  | `NO_GNOME=1` (default) | 2 of 200 (1%)   | 1 of 2         | 6.1 min    | 9.4 min    | $1,478                     |
-
-  Both bots end with spare gun tier 2 and pistol tier 1 (about $440 on upgrades) and place a median of 3 gnomes a run, replacing broken ones. For the default bot, Big Lugs cost about 29% of lost hearts, Kaboomers 28%, Hotfoots 27%, and Groaners the rest.
-
-- **Against the targets.** Both bots win inside their ranges, deaths in waves 1 to 4 stay under 3%, and wave 8 is the single biggest wall for both. Waves 5 and 6 together take 24% of default runs, at the bottom of the 25 to 35% target. Close calls are 25 to 28% of wins, a little under the 30 to 50% target. A median win takes 8.8 to 8.9 minutes. These numbers predate the power-ups. See "Power-up balance" under "Power-ups" for the bots with them.
-- **The gnome carries the balance.** The bot that never buys a gnome wins 1% of runs at these numbers, and with the old prices a bot that bought gnomes won 62% (default) and 68% (`SWAP=1`) instead of 22% and 34%. Two gnomes in the middle of the room nearly double the bot's damage a second for $100. A player who skips traps will find the campaign much harder than these numbers say. Superseded by "The gnome pass and spawn variety" below. If playtests agree, the next lever is a weaker gnome (pea every 800 ms and 12 health took the bot from 74% to 54% at the ramp prices) with gentler wave health scales.
+- **Measured** on 2026-10-28 after the shop categories, the price ramp, the shopping bot, and the wave 5 to 8 health scales (200 runs a bot): the default bot won 22%, `SWAP=1` 41%, and `NO_GNOME=1` 1%, with a median win of 8.9 minutes, about $1,485 earned by the end of wave 8, and wave 8 the biggest wall. Two gnomes nearly doubled the bot's damage a second for $100, so the gnome carried the balance until "The gnome pass and spawn variety" below. Superseded by the later passes and by the nightly baseline in `tools/balance/baseline.json`.
 - **Caveats.** The bot never stands in a doorway, plays Preparation in a few seconds, does not dodge Kaboomers, and never reacts to a telegraph. Pressure stays low because it backs away from anything within 36 px. A person who does not will feel the peaks far more than these numbers say. Playtest it before trusting any of this.
 
 #### The stall entrance and the coin
@@ -257,7 +235,7 @@ Added on 2026-10-28 after a playtest ("The way to enter the shop could be cleare
 - **Signposts.** While the shop is open and the player is not in it, a gold outline pulses on the floor around the stall's three open sides, a coin and a down arrow bob over the awning, and Rattles waves a bony hand. Within 44 px a prompt says BUMP THE STALL TO SHOP. Mid-wave the stall sleeps behind its CLOSED sign, and within 44 px it says CLOSED DURING WAVES (OPENS AFTER WAVE 1 in the wave 1 preparation). The first-visit hint reads WALK UP TO THE (coin) STALL TO SHOP, or STEER UP on touch.
 - **The coin.** Money shows as a chunky gold coin, 7 by 7 pixels with a dark outline, a shine on the top left, a shaded rim, and a stamped bar, drawn before the number. In canvas text the `$` character draws the coin, so the HUD balance, kill and wave bonus popups, the wave cleared banner, the stats panel, and the hint all use it, and its width counts in text layout so centered text stays centered. It stands one pixel above and below the letters. The shop dialog draws the same coin in CSS before each price, each "Need ... more", and the balance.
 - **Dollars.** The money is called dollars. Screen readers hear "$70" ("70 dollars") because a hidden `$`sits behind each coin, and the aria labels, the reasons, and this document keep writing`$`. The coin is a picture of a gold dollar coin, so nothing gets renamed and nobody has to learn a new word.
-- **Touch buttons.** Superseded on 2026-10-28 by "Breaks and the mobile HUD". RELOAD and SWAP sat side by side on the right edge, just above the east door and below MUTE and MUSIC, so nothing covers the stall or its sides on a 1280x720 screen or on 844x390 and 667x375 phones. PLACE, NEXT, and START WAVE stay at the bottom middle, left of the stall's outline. `tools/audit/shots31.ts` now checks that no button covers a door or the stall.
+- **Touch buttons.** Superseded on 2026-10-28 by "Breaks and the mobile HUD". `tools/audit/shots31.ts` checks that no button covers a door or the stall.
 
 #### Shop categories and the price ramp
 
@@ -297,42 +275,11 @@ The ramp gives the first visit a real choice, makes mid-game items attainable, a
 
 Glue and Nails keeps its formula (half of each trap's price, scaled by the share of health it is missing), so it gets cheaper with the traps. The bounties and the clear bonus are unchanged.
 
-- **Money at each visit.** Measured with the default bot, 200 runs from seed 1: the median money on arriving at the stall, and what the bot bought there (a share over 100% means more than one per visit).
-
-  | Visit         | Money (median) | What it can afford                                    | What the bot bought                               |
-  | ------------- | -------------- | ----------------------------------------------------- | ------------------------------------------------- |
-  | Before wave 2 | $37            | A gun ($35), a plank, or a heart                      | Barn Buster (all runs). Before the ramp: nothing  |
-  | Before wave 3 | $104           | The Chatterbox ($100), or shotgun tier 1 and supplies | Chatterbox (all runs)                             |
-  | Before wave 4 | $149           | Ammo, two planks, a gnome                             | Two drums, two planks, a gnome in a third of runs |
-  | Before wave 5 | $284           | Chatterbox tier 1 ($60), a gnome, hearts              | Chatterbox tier 1, a heart, a gnome               |
-  | Before wave 6 | $383           | Chatterbox tier 2 ($180), a second gnome              | Chatterbox tier 2, gnomes, hearts                 |
-  | Before wave 7 | $317           | Pistol tier 1 ($200), repairs, hearts                 | Hearts, a gnome, pistol tier 1 in 60% of runs     |
-  | Before wave 8 | $346           | Saving toward Chatterbox tier 3 ($400)                | Hearts, a replacement gnome, repairs              |
-
-  Before the ramp the first visit bought nothing, the spare gun came before wave 3, and the bot carried $420 to $480 unspent into waves 7 and 8. With the ramp a typical run has a spare gun before wave 2, the Chatterbox before wave 3, and two spare gun tiers by wave 6.
-
+- **Money at each visit.** Measured on 2026-10-28 with the default bot (200 runs, the ramp prices of that day): a median $37 before wave 2, always spent on the Barn Buster, $104 before wave 3 for the Chatterbox, and $284 to $383 before waves 5 to 8, spent on SMG tiers, gnomes, hearts, and repairs. Before the ramp the first visit bought nothing and the bot carried $420 to $480 unspent into waves 7 and 8.
 - **The pistol line.** Only the first pistol tier got cheaper ($300 to $200). It adds 3 rounds to the magazine and a bigger shove, about 5% more sustained fire. The rate tier stays at $500 and the damage tier at $750, because a cheap pistol damage tier broke the balance before (see "Upgrade tiers").
 - **Wave pressure.** Cheaper items and a bot that spends its money made the campaign far easier, so waves 5 to 8 got tougher instead of the shop getting expensive again: every spawn's health is scaled by ×1.12, ×1.22, ×1.32, and ×1.45 on waves 5, 6, 7, and 8 (`hpScale` in `WAVE_PLANS`, rounded per zombie). At ×1.12 only a Big Lug changes (34 health instead of 30). On wave 8 a Groaner has 4, a Hotfoot 3, and a Big Lug 44. The scaling is invisible: the campaign shows no BEEFIER banner. The gnome pass softened these to ×1.03, ×1.08, ×1.17, and ×1.21.
 - **The bot's shopping.** It buys a heart at 3 hearts or fewer, the Chatterbox when it can afford it (else the Barn Buster), the Chatterbox over a tier 0 Barn Buster, ammo below half, two Plank Piles, a heart at 4 or fewer, Glue and Nails when it costs $25 or less, then spare gun tier 1, one gnome, the remaining spare gun tiers, pistol tiers once the spare gun is at its top tier (at tier 2 before 2026-10-29, when it spent its wave 8 money on the pistol and never reached the top SMG tier), and a second gnome. It keeps $30 back after an upgrade or a gnome.
-- **Tuning log.** 200 runs unless noted. The first two lines use the old prices.
-
-  | Try | Change                                                               | Default | `SWAP=1` |
-  | --- | -------------------------------------------------------------------- | ------- | -------- |
-  | 0   | Old bot, old prices (the baseline)                                   | 22%     | 34%      |
-  | 1   | Shopping bot with gnomes, old prices                                 | 62%     | 68%      |
-  | 2   | Shopping bot, ramp prices                                            | 74%     | 85%      |
-  | 3   | Ramp, no gnomes (100 runs)                                           | 29%     |          |
-  | 4   | Ramp, wave health ×1.15 to ×1.4 on waves 4 to 8 (100 runs)           | 16%     |          |
-  | 5   | Ramp, gnome pea every 800 ms and 12 health (100 runs)                | 54%     |          |
-  | 6   | Try 5 with wave health ×1.1 to ×1.3 on waves 4 to 8 (100 runs)       | 12%     | 25%      |
-  | 7   | Ramp, health ×1.1, 1.2, 1.3, 1.45 on waves 5 to 8 (100 runs)         | 33%     | 42%      |
-  | 8   | Ramp, health ×1.05 to ×1.5 on waves 4 to 8 (100 runs)                | 17%     | 32%      |
-  | 9   | Ramp, health ×1.05 to ×1.55, wave 7 lower (200 runs)                 | 13%     | 29%      |
-  | 10  | Ramp, health ×1.05, 1.15, 1.22, 1.28, 1.5 on waves 4 to 8 (100 runs) | 19%     | 28%      |
-  | 11  | Ramp, health ×1.12, 1.22, 1.32, 1.45 on waves 5 to 8 (kept)          | 22%     | 41%      |
-  | 12  | Ramp, health ×1.12, 1.22, 1.3, 1.42                                  | 27%     | 41%      |
-
-  Try 11 is the only one with both bots inside their targets and wave 8 the biggest wall for both. Try 12 shows how sensitive the default bot is: two hundredths less health on waves 7 and 8 is 5 points of wins.
+- **Tuning log.** On 2026-10-28, 12 tries over the prices, the gnome, and the wave health scales moved the default bot between 12% and 74%. Try 11 (health ×1.12, 1.22, 1.32, and 1.45 on waves 5 to 8) was kept at 22% default and 41% `SWAP=1`, the only try with both bots in target and wave 8 the biggest wall. Two hundredths less health on waves 7 and 8 was 5 points of wins.
 
 #### Power-ups
 
@@ -370,39 +317,11 @@ Every drop is decided by its own seeded generator, `loot.rngState` in the Model,
 
 Measured on 2026-10-28, 200 runs per bot from seed 1. The bot walks over a pickup within 90 px when nothing is inside its comfort radius and no zombie stands within 28 px of the pickup. `NO_PICKUPS=1` makes it ignore them, though it still walks over about 2 a run by accident. The bot reports pickups dropped and grabbed by kind and the share of wave time with a boost running.
 
-| Bot                       | Wins            | Close calls    | Median run | Median win | Dropped a run | Grabbed a run | Boosted |
-| ------------------------- | --------------- | -------------- | ---------- | ---------- | ------------- | ------------- | ------- |
-| Default                   | 49 of 200 (25%) | 12 of 49 (24%) | 8.4 min    | 8.8 min    | 15.7          | 11.9          | 19%     |
-| `SWAP=1`                  | 85 of 200 (43%) | 18 of 85 (21%) | 8.7 min    | 8.8 min    | 17.0          | 12.0          | 18%     |
-| `NO_GNOME=1`              | 2 of 200 (1%)   | 1 of 2         | 6.6 min    | 9.1 min    | 13.3          | 10.4          | 19%     |
-| `NO_GNOME=1 NO_PICKUPS=1` | 1 of 200 (0.5%) | 1 of 1         | 6.4 min    | 9.0 min    | 13.0          | 2.1           | 4%      |
-
-| Wave | Died (default) | Died (`SWAP=1`) | Hearts lost (default) |
-| ---- | -------------- | --------------- | --------------------- |
-| 1    | 0%             | 0%              | 0.00                  |
-| 2    | 0%             | 0%              | 0.10                  |
-| 3    | 1%             | 1%              | 0.17                  |
-| 4    | 0%             | 0%              | 0.89                  |
-| 5    | 6%             | 3%              | 1.04                  |
-| 6    | 15%            | 7%              | 1.95                  |
-| 7    | 25%            | 10%             | 2.27                  |
-| 8    | 30%            | 38%             | 3.30                  |
-
-Of 3,134 drops over the default runs, 30% were Hot Sauce (the wave 1 drop is one per run), 22% Mean Beans, 20% Shish Kebullets, 16% Zoomy Socks, 11% Big Burp, and 1.6% hearts, about one dropped heart every four runs. Endless (`MODE=endless`): median wave 8, best 16, worst 3, against median 8, best 17, worst 4 for the bot that ignores pickups.
+Measured then: the default bot won 25%, `SWAP=1` 43%, and `NO_GNOME=1` 1% (0.5% when it ignored pickups). A run dropped about 16 goodies and the bot grabbed 12, with a boost running for 19% of wave time. Of the drops, 30% were Hot Sauce (counting the wave 1 drop), 22% Mean Beans, 20% Shish Kebullets, 16% Zoomy Socks, 11% Big Burp, and 1.6% hearts, about one heart every four runs. Wave 8 was the biggest wall, and endless reached a median wave 8 with or without pickups.
 
 - **Against the targets.** Both bots win inside their ranges, deaths in waves 1 to 4 stay at or under 1%, and wave 8 is the biggest wall for both. Close calls fell to 21 to 24% of wins, further under the 30 to 50% target: a boost often turns a near death into a clean finish.
 - **Traps still carry the balance.** Power-ups barely move the bot that never buys a gnome: 1% wins against 0.5% when it ignores them. That bot dies in waves 5 to 7 with too little damage a second, and 8 to 10 seconds of a boost every 30 seconds or so does not close that gap. Power-ups add highlight moments for every player, but they do not replace the gnome. Giving non-trap players a real path means a weaker gnome with stronger drops: a gnome firing every 700 ms with 14 health, with the first-guess drops below, took the bots to 14.5% and 26.5%, too hard, so the right mix needs its own pass. That pass is "The gnome pass and spawn variety" below.
-- **Tuning log.** 200 runs per bot.
-
-  | Try | Change                                                                          | Default | `SWAP=1` | `NO_GNOME=1` |
-  | --- | ------------------------------------------------------------------------------- | ------- | -------- | ------------ |
-  | 0   | Before power-ups                                                                | 22%     | 41%      | 1%           |
-  | 1   | First guess: chance 3, 3, 4, and 40%, a prize at every peak, gap 6 s, pity 30 s | 31%     | 46.5%    | 2.5%         |
-  | 2   | Chance 2, 2, 3, and 30%, prize 50%, gap 8 s, pity 35 s (kept)                   | 24.5%   | 42.5%    | 1%           |
-  | 3   | Chance 1.5, 1.5, 2, and 25%, prize 35%, gap 10 s, pity 40 s                     | 27.5%   | 41.5%    |              |
-  | 4   | Try 1 drops with a gnome firing every 700 ms and 14 health                      | 14.5%   | 26.5%    |              |
-
-  Try 3 drops fewer pickups than try 2 and still wins more often, so a few points either way at 200 runs is noise. With try 1 the no-gnome bot won 2.5% whether or not it went for the pickups. `TUNE` files can now also edit `DROP_CHANCE`, `DROP_RULES`, `BOOSTS`, and `PICKUPS`.
+- **Tuning log.** On 2026-10-28, drop chances from 1.5% to 4% (25% to 40% for a Big Lug) and peak prizes from 35% to every peak moved the default bot between 24.5% and 31%. Try 2 (2, 2, 3, and 30%, a 50% prize, an 8 s gap, 35 s pity) was kept; a few points either way at 200 runs is noise. `TUNE` files can also edit `DROP_CHANCE`, `DROP_RULES`, `BOOSTS`, and `PICKUPS`.
 
 #### The gnome pass and spawn variety
 
@@ -414,60 +333,12 @@ Added on 2026-10-28 after a playtest: "Do the pass for Grumpy Gnome", "Wave 2 fe
 - **Variety rules.** Every group's pack sizes are a list, shuffled per run, so a wave mixes singles, pairs, trios, and squads of up to 6 in a new order each time while its zombie count stays fixed. Most groups draw one, two, or three doors per run from all four, so a seed decides which doors a wave favors. Stragglers (packs of one from any door with up to 1.5 s of jitter) wander in between packs from wave 3. Many groups from wave 2 on mix kinds inside a pack. A kind's debut group is only that kind and comes from one drawn door. Wave 1 keeps its fixed tutorial at the north door, and the Big Lug's debut keeps the north door with its escorts behind it. Endless build squads, pincers, and hordes vary their pack sizes around the endless pack size the same way. All of it is drawn from the seeded generator when Preparation begins, so the same seed gives the same wave and the preview stays exact.
 - **The timeline audit.** `TIMELINE=1 bun run balance [runs]` prints the first run's waves in wall seconds (each pack as it walks in: time, door initial, size, P for pincer and H for horde, * for mixed kinds), every stretch of at least a second with no zombie alive, and how much of it was quiet (nothing warned at a door). It then prints, per wave over all runs, the first pack's arrival, the packs, the pack sizes, the empty seconds, the longest empty stretch, and the longest quiet stretch. `WORKERS=n` splits the runs over n processes and gives the same report. Measured with the default bot, 40 runs before and 100 after:
 
-  | Wave | First pack (before, after) | Packs (before, after) | Sizes (before, after) | Longest quiet s, mean (before, after) | Longest quiet s, worst (before, after) |
-  | ---- | -------------------------- | --------------------- | --------------------- | ------------------------------------- | -------------------------------------- |
-  | 1    | 1.7 s, 1.7 s               | 5, 5                  | 1 to 2, 1 to 2        | 1.4, 1.3                              | 2.1, 1.5                               |
-  | 2    | 1.2 s, 1.4 s               | 12, 14                | 2 to 3, 1 to 4        | 3.6, 1.8                              | 6.8, 2.6                               |
-  | 3    | 1.0 s, 1.7 s               | 22, 23                | 1 to 4, 1 to 5        | 4.1, 2.5                              | 7.4, 4.1                               |
-  | 4    | 0.8 s, 0.8 s               | 20, 27                | 1 to 5, 1 to 6        | 4.4, 2.4                              | 7.2, 4.1                               |
-  | 5    | 1.7 s, 1.4 s               | 15, 21                | 1 to 5, 1 to 6        | 5.2, 2.3                              | 10.2, 4.1                              |
-  | 6    | 0.7 s, 1.3 s               | 18, 22                | 1 to 5, 1 to 6        | 5.3, 2.3                              | 7.7, 4.1                               |
-  | 7    | 1.2 s, 1.2 s               | 25, 29                | 1 to 4, 1 to 5        | 4.2, 2.0                              | 9.8, 4.1                               |
-  | 8    | 0.6 s, 0.8 s               | 23, 27                | 1 to 4, 1 to 3        | 6.2, 2.4                              | 9.0, 4.1                               |
+  Before, the longest quiet stretch averaged 3.6 to 6.2 s on waves 2 to 8, with worst cases of 7 to 10 s; after, 1.8 to 2.5 s, with the 4 s restless relax as the worst. Wave 2 had been five Groaner trios 3.8 s apart and a 10.4 s gap across its relax. Superseded by the 2026-10-29 dead air numbers under "Difficulty levels and planks as bait".
 
-  The worst quiet stretch after is the 4 s restless relax, right after the bot lost hearts. Wave 2 before was five Groaner trios 3.8 s apart from the north and west, a 10.4 s gap across its relax with 3.7 s of a silent, empty room, then Hotfoot pairs always from the east. Now its first pack comes in 1.5 s, packs of 1 to 4 come every 2.8 s from two drawn doors, the relax is 4 s, and the Hotfoots come in ones and twos from a drawn door, followed by mixed packs. Wave 8 before had two silent, empty stretches of 7 to 9 s in a typical run. The longest stretch with no zombie alive is now 2.9 to 3.6 s on average, including the door's 1 s warning.
-
-- **Measured** on 2026-10-28, 400 runs per bot from seed 1, the default bot's endless run 200. "Died" is the share of all runs that died on that wave.
-
-  | Wave | Died (default) | Died (`SWAP=1`) | Died (`NO_GNOME=1`) | Hearts lost (default) | Length s (default) | Peak alive (default) |
-  | ---- | -------------- | --------------- | ------------------- | --------------------- | ------------------ | -------------------- |
-  | 1    | 0%             | 0%              | 0%                  | 0.00                  | 17                 | 2.0                  |
-  | 2    | 0%             | 0%              | 0%                  | 0.11                  | 40                 | 8.0                  |
-  | 3    | 1%             | 1%              | 1%                  | 0.23                  | 49                 | 10.9                 |
-  | 4    | 0%             | 0%              | 0%                  | 0.79                  | 68                 | 13.0                 |
-  | 5    | 6%             | 5%              | 10%                 | 1.17                  | 77                 | 14.3                 |
-  | 6    | 16%            | 8%              | 14%                 | 2.19                  | 64                 | 18.4                 |
-  | 7    | 16%            | 9%              | 16%                 | 2.34                  | 73                 | 13.4                 |
-  | 8    | 40%            | 48%             | 44%                 | 3.96                  | 83                 | 17.5                 |
-
-  | Bot          | Wins before     | Wins after        | Close calls after | Median run | Median win |
-  | ------------ | --------------- | ----------------- | ----------------- | ---------- | ---------- |
-  | Default      | 49 of 200 (25%) | 90 of 400 (22.5%) | 35 of 90 (39%)    | 8.2 min    | 8.6 min    |
-  | `SWAP=1`     | 85 of 200 (43%) | 117 of 400 (29%)  | 39 of 117 (33%)   | 8.2 min    | 8.5 min    |
-  | `NO_GNOME=1` | 2 of 200 (1%)   | 60 of 400 (15%)   | 27 of 60 (45%)    | 8.0 min    | 8.6 min    |
-
-  Endless (`MODE=endless`, 200 runs): median wave 8, best 12, worst 3, against median 8, best 16, worst 3 before. Fewer runs go deep, since a gnome no longer carries a run past wave 10.
+- **Measured** on 2026-10-28, 400 runs a bot: the default bot won 22.5% (was 25%), `SWAP=1` 29% (was 43%), and `NO_GNOME=1` 15% (was 1%), with 33 to 45% of wins close calls and a median win of 8.5 to 8.6 minutes. Wave 8 killed 40 to 48% of runs, waves 1 to 4 at most 1%. Endless reached a median wave 8, best 12.
 
 - **Against the targets.** The default bot wins inside 15 to 25%, the bot that never buys a gnome wins 15% instead of 1%, and close calls are 33 to 45% of wins, inside 30 to 50% for the first time. Deaths fall in waves 5 to 8 with wave 8 the biggest for every bot, and waves 1 to 4 stay at or under 1%. A gnome is now worth about 7 points of wins, not 24. The `SWAP=1` bot misses its 35 to 45% target at 29%: its edge over the default bot shrank from 18 points to 7 at every setting tried, and no setting in this pass's files put both bots in range. A real player who swaps back to a refilled spare is still likely to beat the default bot.
-- **Tuning log.** Tries 1 to 9 used a `TUNE` file that edited `TRAPS.Turret.price`, which the shop copies into `SHOP_ITEMS` when it loads, so those runs still sold the gnome at $50. A `TUNE` file must edit `SHOP_ITEMS.Turret.price` to change the price.
-
-  | Try | Change                                                                 | Runs | Default | `SWAP=1` | `NO_GNOME=1` |
-  | --- | ---------------------------------------------------------------------- | ---- | ------- | -------- | ------------ |
-  | 0   | Before: old waves, gnome 520 ms, 16 health, $50, health ×1.12 to ×1.45 | 200  | 25%     | 43%      | 1%           |
-  | 1   | New waves and the quiet rule, old gnome and health                     | 200  | 17.5%   | 24.5%    | 2%           |
-  | 2   | Gnome 750 ms, 12 health, health ×1.06, 1.12, 1.2, 1.3                  | 200  | 16%     | 24%      | 3%           |
-  | 3   | Try 2 with health ×1, 1.05, 1.1, 1.15                                  | 200  | 39.5%   | 52.5%    | 18.5%        |
-  | 4   | Try 3 with drops 3, 3, 4, and 40% and pity 25 s                        | 200  | 51%     | 55%      | 23%          |
-  | 5   | Gnome 950 ms, 10 health, health ×1.02, 1.07, 1.12, 1.18, try 4 drops   | 200  | 26.5%   | 45%      | 14.5%        |
-  | 6   | Gnome 950 ms, 10 health, health ×1, 1.05, 1.1, 1.15, old drops         | 200  | 33.5%   | 41%      | 18.5%        |
-  | 7   | Try 5 with health ×1.03, 1.08, 1.14, 1.21                              | 200  | 26.5%   | 38.5%    | 13.5%        |
-  | 8   | Try 7 with drops 2.5, 2.5, 3.5, and 35% and pity 30 s                  | 200  | 32.5%   | 36%      | 13%          |
-  | 9   | Gnome 1000 ms, try 7 health and drops                                  | 400  | 31.5%   | 40%      | 14%          |
-  | 10  | Try 9 with wave 7 at ×1.17                                             | 400  | 27.75%  | 34%      | 15%          |
-  | 11  | Try 10 with the gnome at 1200 ms                                       | 400  | 24.75%  | 31%      | 15%          |
-  | 12  | Try 11 baked into `src` with the gnome really at $75 (kept)            | 400  | 22.5%   | 29%      | 15%          |
-
-  Runs of 200 swing by about 5 points from noise alone: tries 5 and 7 differ only by one Big Lug health point on wave 8, and the `SWAP=1` bot moved 6.5 points between them.
+- **Tuning log.** On 2026-10-28, 12 tries over the gnome's rate, health, and price, the wave health scales, and the drops; the kept try 12 is the numbers above. Tries 1 to 9 used a `TUNE` file that edited `TRAPS.Turret.price`, which the shop copies into `SHOP_ITEMS` when it loads, so those runs still sold the gnome at $50. A `TUNE` file must edit `SHOP_ITEMS.Turret.price` to change the price. Runs of 200 swing by about 5 points from noise alone.
 
 ### Upgrade tiers and endless mode
 
@@ -546,14 +417,12 @@ Added on 2026-10-28 before sharing the game more widely. Proposed, not decided. 
 
   Removed: the arrow keys, Space as fire and as start, E as swap, 1 and 2 to pick a gun, P as pause, and Enter as resume. Space now does nothing outside a focused button. Picking a gun by number is gone with no replacement: Q swaps, and with two guns that reaches either one. The shop dialog keeps its own list keys (arrows, Home, End, Enter, and Esc to leave), since those move around a menu, not the game.
 
-- **The PAUSE button.** Superseded on 2026-10-28 by the round pause icon in "Breaks and the mobile HUD". During Preparation and a wave, on every device, a PAUSE button sits left of MUSIC and below MUTE, in the same style as MUTE and MUSIC. It pauses, closes the shop, and lets go of every held key and thumb, like Esc. It hides on the pause screen, where a tap anywhere resumes, so it never covers the HOW TO PLAY panel. It clears RELOAD and SWAP on 1280x720, 1920x1080, 844x390, and 667x375. `tools/audit/shots31.ts` now checks that no two buttons overlap.
+- **The PAUSE button.** Superseded on 2026-10-28 by the round pause icon in "Breaks and the mobile HUD". `tools/audit/shots31.ts` checks that no two buttons overlap.
 - **Feedback line.** Game Over and Victory show TELL WHOEVER SENT YOU THIS WHAT YOU THINK! centered under the stats panel, and the screen reader status line ends with it. To keep it clear of the mode buttons on 844x390 and 667x375 phones, the panel's rows are 8 px apart instead of 9 and the panel sits 3 px higher. Checked with `tools/audit/taps.ts`, which fails when anything covers a button on Game Over or Victory.
 
 #### Balance with upgrades
 
-Superseded on 2026-10-28 by the measurements under "Balance pass" above,, which were taken with upgrades on.
-
-- **Endless.** `MODE=endless`, 200 runs from seed 1, after the price ramp: the median run reaches wave 7, the best wave 16, and the worst wave 4. Of the 44 runs that reach wave 9, about 8 die there, 22 on wave 10, and 10 on wave 11, and the rest go further. Before the ramp the same 44 runs reached wave 9, 32 died there, and none passed wave 10: cheaper top tiers and gnomes carry a run deeper once it survives the campaign.
+Superseded on 2026-10-28 by the measurements under "Balance pass" above, which were taken with upgrades on. Endless after the price ramp (200 runs): median wave 7, best 16, worst 4, where before the ramp no run passed wave 10.
 
 ### Breaks and the mobile HUD
 
@@ -626,7 +495,7 @@ Added on 2026-10-28 from owner feedback: "Would also love to have a menu page fo
   - The panel fits 667x375 without scrolling; checked with `tools/audit/shots33.ts`.
 - **HOW TO PLAY.** A dialog with the same controls and tips as the pause screen, for the last device used.
 - **SETTINGS.** A dialog of toggles: sound (M), music (N), screen shake, and full screen where the browser can do it. Screen shake off keeps the camera still; hit-stop and the rest of the juice stay. Sound, music, and screen shake are saved on the device; full screen is not. RESET TUTORIAL, under the toggles, asks SHOW THE TIPS AND ZOMBIE CARDS AGAIN? with RESET and KEEP, KEEP focused.
-- **Your bests.** Renamed from THIS SESSION on 2026-10-29 at the owner's request ("zombies killed this session resets between updates"). A strip under the buttons shows the best endless wave, the fastest campaign win, and the zombies splatted on this device, or NO BESTS YET. GO GET CHEWED ON. A run is counted when it ends: on Game Over, on Victory, or when the player leaves it for the menu, so leaving a run keeps its kills. A win that goes on into endless adds only its new kills when it ends again. The bests are in the on-device save and move into the SQLite player scope later (see `PLATFORM.md`).
+- **Your bests.** Renamed from THIS SESSION on 2026-10-29 at the owner's request ("zombies killed this session resets between updates"). A strip under the buttons shows the best endless wave, the fastest campaign win, and the zombies splatted on this device, or NO BESTS YET. GO GET CHEWED ON. A run is counted when it ends: on Game Over, on Victory, or when the player leaves it for the menu, so leaving a run keeps its kills. A win that goes on into endless adds only its new kills when it ends again. The bests are in the on-device save, which since 2026-10-29 is the SQLite player scope, so linked devices share them (see `PLATFORM.md`).
 - **MENU.** The pause screen has a MENU pill beside its corner icons, and H does the same. It asks LEAVE THIS RUN? with LEAVE and STAY, STAY focused, and Esc means stay. Game Over and Victory show MENU (H) in place of CHARACTER after the restart grace and go home at once. Going home clears the room and the run, and keeps the look, the settings, the lessons, and the bests.
 - **Updates wait on the home menu.** Added on 2026-10-28 from owner feedback: "Wait to say there's an update until you're in the main menu, so you don't lose progress. When you die, make sure you go back to that!" The "New version ready" chip shows only on the home menu. The checks still run on every quiet screen and only record the newer build, so the chip is up the moment the player gets home. Game Over and Victory put MENU first and draw it filled, as the main button. When a newer build is waiting they offer only MENU, focused, with ENTER on its badge and the line A NEW VERSION IS WAITING ON THE MENU., and hide Play again, Endless, and Keep going, after the same restart grace. Checked with `tools/audit/shots26.ts`.
 - **No tap to start.** A tap on the game itself starts nothing on the home menu or Game Over and grabs no stick. Before, a tap that missed a button by a few pixels started a campaign.
@@ -649,9 +518,9 @@ Added on 2026-10-28 from owner feedback: "Would also love to have a menu page fo
 
 ### Saved on the device
 
-Added on 2026-10-28 from owner feedback: "We should also save if they've already done the tutorial so it stops showing every launch." This relaxes "saved progress" under "Not now" for preferences and onboarding only, approved by the owner. The record is `PlayerSave` in `src/save.ts`, kept in `localStorage` under `munch-manor:save`.
+Added on 2026-10-28 from owner feedback: "We should also save if they've already done the tutorial so it stops showing every launch." This relaxes "saved progress" under "Not now" for preferences and onboarding only, approved by the owner. The record is `PlayerSave` in `src/save.ts`. It was kept in `localStorage` under `munch-manor:save`. Since 2026-10-29 it lives in SQLite in the browser, on OPFS, as the player sync scope, so linked devices share it; the localStorage copy is imported once and stays as a fallback for one release. See "The on-device save" in `PLATFORM.md`.
 
-- **What is saved.** The lessons that gate the hints (move, aim and fire, start wave, shop, swap, the first pickup, the first break, and BREAKS ARE TIMED), so the wave 1 practice gate stays open for a returning player. The zombie kinds whose new zombie card was seen, and whether a trap hint was seen. The iPhone Home Screen tip once dismissed. Sound, music, and screen shake. The character's look. The difficulty (version 2). Since 2026-10-29 (version 3) the bests: runs played, the zombies splatted in all and per kind (by kind id, read by the Munchopedia), and the best endless wave and fastest win for each difficulty. They are written once a run, when it ends. Since 2026-10-29 (version 4) the home menu: the newest What's New day seen and the Munchopedia entries opened. An older save loads with those empty, so its player sees both dots once.
+- **What is saved.** The lessons that gate the hints (move, aim and fire, start wave, shop, swap, the first pickup, the first break, and BREAKS ARE TIMED), so the wave 1 practice gate stays open for a returning player. The zombie kinds whose new zombie card was seen, and whether a trap hint was seen. The iPhone Home Screen tip once dismissed. Sound, music, and screen shake. The character's look. The difficulty (version 2). Since 2026-10-29 (version 3) the bests: runs played, the zombies splatted in all and per kind (by kind id, read by the Munchopedia), and the best endless wave and fastest win for each difficulty. They are written once a run, when it ends. Since 2026-10-29 (version 4) the home menu: the newest What's New day seen and the Munchopedia entries opened. An older save loads with those empty, so its player sees both dots once. Since 2026-10-29 (version 5) the "Share anonymous play stats" setting, on for older saves.
 - **What is not.** The run itself and full screen stay in the page session.
 - **Loading.** The splash waits for the save as one of its load steps, so the first frame already knows the player and no hint flashes. A missing, corrupted, or older save reads as no save, and storage the browser blocks reads as no save too. Nothing is written until the save has been read.
 - **Writing.** Whenever a saved field changes, never on a plain frame. A failed write is ignored.
@@ -711,38 +580,7 @@ Reworked on 2026-10-28 from owner feedback: "Have him spawn with other enemies j
 
 The bot now steps straight out of a stomp ring once a stomp starts winding up and it is within 10 px of the ring, and it keeps 16 px more distance from the boss than from the horde. Hearts lost to a stomp are blamed on the boss, and the report prints each boss wave's fights: how often he arrived and fell, the median fight, the runs that died with him standing, and his stomps and belches. `BOSS_RULES` joins the `TUNE` hook.
 
-Tuning log, 200 runs per bot (`WORKERS` split). "Felled" is the share of the fights where he arrived that ended with him dead.
-
-| Try | Change                                                         | Default wins | `SWAP=1` wins | Felled (default) | Note                                                     |
-| --- | -------------------------------------------------------------- | ------------ | ------------- | ---------------- | -------------------------------------------------------- |
-| 0   | No boss (before this change)                                   | 24.5%        | 33%           |                  | The baseline                                             |
-| 1   | Health 220, belch 2 every 4.2 s                                | 8%           |               | 15%              | A wall: 6 belches a fight, 12 extra Groaners             |
-| 2   | Health 150, belch every 6.5 s                                  | 8.5%         | 9%            | 16%              |                                                          |
-| 3   | Try 2 with wave 8 health ×1.15                                 | 13%          | 10.5%         | 22%              |                                                          |
-| 4   | Health 120, belch 1 every 6.5 s                                | 12%          | 16.5%         | 23%              |                                                          |
-| 5   | Try 4 with the bot's berth fixed                               | 9%           | 12.5%         | 17%              | The bot used to flee the boss straight into the horde    |
-| 6   | Health 1 and no belches: a boss that does nothing              | 20%          | 29.5%         | 48%              | The cost of the entrance and the bot's distraction alone |
-| 7   | Health 160, wave 8 without its Hotfoot stragglers, horde of 15 | 11.5%        | 10%           | 18%              |                                                          |
-| 8   | Health 120, belch 2, wave 8 trimmed by 10                      | 12%          | 17.5%         | 18%              |                                                          |
-| 9   | The 15 s hold added, health 120, belch 2 every 6.5 s           | 11.5%        | 18.5%         | 21%              |                                                          |
-| 10  | Hold 20 s, health 160                                          | 12%          | 10%           | 22%              |                                                          |
-| 11  | Health 120, belches that bring no one                          | 22%          | 25.5%         | 42%              | The belched Groaners are most of his cost                |
-| 12  | Health 100, belch 2 every 12 s                                 | 16%          | 21.5%         | 31%              |                                                          |
-| 13  | Health 100, belch 1 every 9 s                                  | 17%          | 26%           | 33%              |                                                          |
-| 14  | Try 13 with wave 8 without its Hotfoot stragglers              | 20%          | 24.5%         | 38%              |                                                          |
-| 15  | Health 80, belch 1 every 9 s (kept)                            | 23%          | 30.5%         | 45%              | Both bots inside their targets                           |
-| 16  | Try 13 with a horde of 15                                      | 15%          | 22.5%         | 28%              | Trimming the horde did less than trimming the boss       |
-| 17  | Try 15 baked into `src`                                        | 23%          | 30.5%         | 45%              | Matches try 15, so the run is deterministic              |
-
-- **The kept numbers.** 200 runs per bot, `WORKERS=6`:
-
-  | Bot          | Wins  | Wave 8 deaths | Close calls | Median win | Boss arrived | Boss fell | Died with him standing | Median fight |
-  | ------------ | ----- | ------------- | ----------- | ---------- | ------------ | --------- | ---------------------- | ------------ |
-  | Default      | 23%   | 44%           | 18 of 46    | 9.2 min    | 107 of 133   | 48        | 59 of 87 wave 8 deaths | 33 s         |
-  | `SWAP=1`     | 30.5% | 49%           | 14 of 61    | 9.0 min    | 134 of 158   | 62        | 71 of 98               | 38 s         |
-  | `NO_GNOME=1` | 12%   | 48%           | 14 of 24    | 9.2 min    | 89 of 119    | 26        | 63 of 95               | 32 s         |
-
-  Wave 8 is still the biggest killer for every bot, and deaths in waves 1 to 4 stay at or under 1%. A fight sees about 3.5 belches and 0.2 to 0.3 stomps, and the bot steps out of most stomps: stomps cost 2 to 3% of all hearts lost. Most of what he costs is the Groaners he burps up and the ammo his body soaks, so his health and his belch rate were the levers, not his stomp. The bot that never buys a gnome won 15% before the boss and 12% now. Endless (`MODE=endless`): median wave 8, best 12, worst 2, against median 8, best 12, worst 3 before. No endless run in 200 reached wave 16, so his endless return is untested by the bot.
+Tuning log, 2026-10-28, 17 tries at 200 runs a bot. Health 220 with two belches every 4.2 s took the default bot from 24.5% to 8%. A boss of 1 health with no belch still cost 4.5 points, the cost of the entrance alone, and belches that bring no one gave 22%, so the belched Groaners were most of his cost. Kept: health 80 and one belch every 9 s, at 23% default and 30.5% `SWAP=1`, with 44% of default runs dying on wave 8, the boss felled in 45% of the fights he reached, and a median fight of 33 s. Superseded by "Boss far attacks" below.
 
 - **Caveats.** The bot keeps its distance and shoots the nearest zombie, so it almost never stands in a stomp ring and rarely fights him up close. A person who stands their ground will see far more stomps. The 15 s hold was kept from try 9 on for pacing, not for the bot: it gave the bot only a point or two.
 
@@ -764,7 +602,7 @@ Added on 2026-10-28 from a playtester: "She wants to be able to select a female/
 - **The art.** The player stays 8 pixels wide with the same walk cycle, idle breath, gun hold, hit flash, and reload bar. The female body has taller eyes, a mouth, and a scoop neck; the male body has the collar stripe the player always had. A ponytail is tied with a band in the shirt color. Pink hair is the one silly option. There is no green skin: the zombies are green, and the player has to stand out from them at a glance.
 - **The default.** Male, Crop, Brown, Light, Blue: the look the player had before.
 - **Randomize.** Draws every row from the Model's seeded generator, so it is deterministic, and never hands back the look you already have.
-- **How long it lasts.** Saved on the device since 2026-10-28 (see "Saved on the device"), so it survives runs, restarts, and reloads. It moves into the player scope of local SQLite later (see `PLATFORM.md`), stored whole by a `ChangedAppearance` mutation.
+- **How long it lasts.** Saved on the device since 2026-10-28 (see "Saved on the device"), so it survives runs, restarts, and reloads. Since 2026-10-29 it lives in the SQLite player scope, stored whole by a `ChangedAppearance` mutation (see `PLATFORM.md`).
 - **Sprites.** A look's frames are composed from parts (a face and torso for each body, a hair overlay for each style) and a palette, built the first time that look is drawn and kept in a small cache, never rebuilt each frame.
 - **Later.** Hats stay a later unlockable, on top of this.
 
@@ -778,46 +616,8 @@ The balance pass for the rework above. 200 runs per row from seed 1, the same se
 - **`ENGAGE=1`** holds 58 px from him, between his stomp trigger and his charge range. It walks into the horde to get there, so it does worse than the default.
 - **The report** prints each fight's charges, how many hit and how many bonked, spits and how many hit, belches, how often he enraged, the hearts lost while he stood by cause (stomp, charge, glob, his bite, the crowd), his health taken a second, and his kill time in runs that cleared his wave. `BOSS_TRACE=1` prints where he and the player stand every 5 s of a fight.
 
-Tuning log. "Default" and "`SWAP=1`" are wins. "Kill" is his median kill time in runs that cleared wave 8. Rows of 32, 64, or 96 runs sorted ideas quickly; one seed swings a row of 96 by up to 4 points. The bot's dodge, its aim at the boss, and the pathing fix landed during tries 2 to 13, so compare rows near each other.
+Tuning log, 2026-10-28, 21 tries of 32 to 200 runs. The far attacks were the cost, not the hold: the new boss without them won 26% of 96 runs, and a first cut with them 0%. Holding spawns or slowing the wave clock while he stood did not help. His health was a weak lever, since he soaks the horde's time, not his own. Trimming the horde from 20 to 15 and wave 8's health scale from ×1.21 to ×1.1 brought the bots back. Kept (try 21, health 90), 200 runs a bot: default 24%, `SWAP=1` 28%, `NO_GNOME=1` 15%, `KITE=1` 1%, and `ENGAGE=1` 8.5%. The median kill in winning runs was 40 s (33 to 46), the top of the 25 to 40 s target. While he stood the default bot lost 55% of wave 8's hearts, most of them to the crowd. His health went back up from 80 to 90, not as far as the owner asked: a boss of 100 (121 on wave 8) took 53 s to kill.
 
-| Try | Change                                                                    | Runs | Default | `SWAP=1` | `KITE=1` | Kill   | Note                                                                   |
-| --- | ------------------------------------------------------------------------- | ---- | ------- | -------- | -------- | ------ | ---------------------------------------------------------------------- |
-| 0   | Before this pass: 97 health, stomp and belch, 15 s hold                   | 200  | 23%     | 30.5%    |          | 33 s\* | The baseline. \*Median fight, deaths included                          |
-| 1   | The old boss with a 5 s hold                                              | 96   | 21%     |          |          |        | The 5 s rejoin alone costs little                                      |
-| 2   | First cut: charge and spit every 1.5 s far and mid, belch ×2.5 far        | 32   | 0%      |          |          |        | Far attacks every 2 s, 3.3 belches in 19 s                             |
-| 3   | Spit only beyond 70 px, belch every 12 s                                  | 64   | 6%      |          | 0%       |        | The bot fights from the middle, which is far from him most of the time |
-| 4   | Try 3 with a boss of 1 health and no belch                                | 64   | 22%     |          |          |        | The fight costs nothing when he dies at once                           |
-| 5   | Try 3 with the old 15 s hold                                              | 64   | 11%     |          |          | 46 s   |                                                                        |
-| 6   | The new boss with no far attacks (as the old one)                         | 96   | 26%     |          |          | 46 s   | The far attacks are the cost, not the hold                             |
-| 7   | The wave clock at half speed while he stands, belch 12 s                  | 64   | 11%     |          |          | 50 s   | Dropped: the crowd still comes, only later                             |
-| 8   | Spawns held at 10, 12, or 14 alive while he stands                        | 96   | 5%      |          |          | 41 s   | Dropped: no better                                                     |
-| 9   | Spit wait 3 s, charge wait 2.5 s, belch 12 s ×2 far                       | 96   | 12.5%   |          |          | 52 s   |                                                                        |
-| 10  | Try 9 with health 70                                                      | 96   | 14.5%   |          |          | 47 s   | Health is a weak lever: he soaks the horde's time, not his own         |
-| 11  | Try 9 with a 60 px overshoot and double damage while dazed                | 96   | 14.5%   |          | 0%       | 48 s   | More bonks, and a reason to bait one                                   |
-| 12  | Try 11, health 100, belch 15 s                                            | 200  | 10%     |          |          | 53 s   |                                                                        |
-| 13  | Try 12 with the horde trimmed from 20 to 15                               | 200  | 15%     |          |          | 59 s   |                                                                        |
-| 14  | Try 13 with spit and puddle radius 10, belch ×1.5 far, first belch at 6 s | 200  | 14%     | 20%      |          | 55 s   | Baked into `src`                                                       |
-| 15  | Try 14 with health 80                                                     | 200  | 12.5%   | 20%      |          | 48 s   |                                                                        |
-| 16  | Try 14 with a horde of 10                                                 | 200  | 7.5%    | 11.5%    |          | 64 s   | He walks in earlier, before the last Big Lugs, so the fight is longer  |
-| 17  | Try 14 without his far attacks                                            | 200  | 19%     |          |          | 50 s   |                                                                        |
-| 18  | Try 14 without the enrage                                                 | 200  | 14%     |          |          | 53 s   | The enrage costs almost nothing                                        |
-| 19  | Try 14, ×1.6 speed while far, spit wait 4.5 s, charge wait 3 s            | 200  | 14.5%   |          |          | 49 s   |                                                                        |
-| 20  | Try 19 with wave 8's health scale ×1.1                                    | 200  | 23%     | 24.5%    | 0.5%     | 44 s   | Groaners and Kaboomers drop from 4 health to 3 on wave 8               |
-| 21  | Try 20 with his health 90 (kept)                                          | 200  | 24%     | 28%      | 1%       | 40 s   |                                                                        |
-
-- **The kept numbers.** 200 runs per bot, `WORKERS=8`:
-
-  | Bot          | Wins | Wave 8 deaths | Close calls | Boss arrived | Boss fell | Died with him standing | Kill time (p25 to p75) |
-  | ------------ | ---- | ------------- | ----------- | ------------ | --------- | ---------------------- | ---------------------- |
-  | Default      | 24%  | 44%           | 15 of 48    | 119 of 135   | 50        | 68 of 88 wave 8 deaths | 40 s (33 to 46)        |
-  | `SWAP=1`     | 28%  | 52%           | 17 of 56    | 151 of 160   | 58        | 93 of 104              | 43 s (38 to 50)        |
-  | `NO_GNOME=1` | 15%  | 42%           | 16 of 30    | 97 of 114    | 31        | 66 of 84               | 48 s (43 to 58)        |
-  | `KITE=1`     | 1%   | 67%           | 1 of 2      | 119 of 135   | 2         | 117 of 134             |                        |
-  | `ENGAGE=1`   | 8.5% | 60%           |             | 119 of 135   | 19        | 97 of 119              | 31 s                   |
-
-  A default fight sees 0.9 stomps (20% hit), 0.4 charges (8% hit, 18% bonked), 2.3 spits (10% hit), and 2.1 belches, and he enrages in about half of them. While he stands the default bot loses 292 hearts over 119 fights, 55% of wave 8's hearts: 22 to his stomp, 6 to his charge, 29 to his globs, 10 to his bite, and the rest to the crowd. The kiting bot stands still in a corner once it gets there, so it is hit by 62% of his globs and 22% of his charges, and loses 198 hearts to globs alone. Wave 8 is the biggest killer for every bot, and deaths in waves 1 to 4 stay at or under 1%. Endless (`MODE=endless`): median wave 8, best 12, worst 2, the same as before. No endless run in 200 reached wave 16.
-
-- **Against the targets.** Default 24% (target 15 to 25%) and `KITE=1` 1% against 24% are in. `SWAP=1` at 28% is 2 points under its target of 30 to 45%. The median kill time in winning runs is 40 s, the top of the 25 to 40 s target. His health went back up from 80 to 90, but not as far as the owner asked: in try 12 a boss of 100 (121 on wave 8) took 53 s to kill.
 - **Kill time.** The bot spends only a third of each fight shooting him: a horde is in the room from 5 s in. While it shoots him it takes 5 to 5.5 health a second with a Chatterbox at tier 1 or 2, so a player who shoots only him needs about 18 to 20 s of fire for his 99 health. Health is a weak lever on the win rate, since most of what he costs is the time the horde has while he stands, and a long fight lets more of it in.
 - **Caveats.** The bot still holds the middle of the room, which is far from him while he walks in. A person who stays near him should see more stomps and fewer far attacks. Try 20 lowers wave 8's health scale, which makes wave 8's Groaners and Kaboomers as tough as wave 6's. That is the trade that let the boss stay a real fight inside the win targets: the boss is now the step up on wave 8, not the crowd's health.
 
@@ -831,13 +631,7 @@ Added on 2026-10-28 from owner feedback, all approved: lighter, more cartoony gr
 
 #### The Kaboomer (the Gasbag pass)
 
-Superseded on 2026-10-29 by "The Kaboomer and the Big Leaguer". It was shown as the Gasbag then.
-
-- **The look.** A sickly yellow sack with a glowing lime belly that has a bright core, two bubbles rising through it, and a brass valve on its head. A lime glow pools under it.
-- **The pulse.** Its belly and valve flare white on each beat. The beat runs from 700 ms when it is far to 150 ms when it is close, in five steps so the tempo jumps rather than jitters, and each wear stage (each time it is shot) adds 0.35 to its urgency. From about halfway, its valve throws sparks.
-- **The tell.** Once it starts to blow, a red ring the size of its 28 px burst fills on the floor with a yellow sweep, while it swells and flickers. The fuses grew so the ring can be read: 200 ms after it is shot (was 140) and 340 ms after it touches the player or a trap (was 220). A Kaboomer caught in a burst still bursts 150 ms later, so chains still ripple.
-- **The pop.** The flash, then a shockwave ring, a toxic green cloud instead of grey smoke, six rising puffs of gas, four drops of goo, two scraps of its skin, the meat gibs and sparks, and the boom.
-- **Wear.** At 2/3 a hole tears in the side of its belly and leaks gas; at 1/3 its valve cracks and a second hole opens. It still shrinks 7% a stage.
+Superseded on 2026-10-29 by "The Kaboomer and the Big Leaguer". It was shown as the Gasbag then: a sickly yellow sack with a glowing, pulsing lime belly and a brass valve, whose pulse quickened as he got close or was shot. What stayed: the red floor ring the size of his 28 px burst, and the longer fuses that make it readable, 200 ms after he is shot (was 140) and 340 ms after he touches the player or a trap (was 220).
 
 #### Horde frenzy
 
@@ -876,40 +670,8 @@ Look and stats superseded on 2026-10-29 by "The Kaboomer and the Big Leaguer". I
 
 The bot changed with the kinds. It steps off a thrown Groaner's landing mark (the mark's radius, its body, and 6 px) and keeps 8 px more than the hold radius from an Ankle Biter's cracks. It backs off from a frenzied zombie 5 px sooner, in proportion to the extra speed. It never shoots at a zombie under the floor or in the air, never boards a door for Ankle Biters, and blames a landing on the Big Leaguer. The report adds Big Leaguer throws and how many landed, Ankle Biters surfaced and grabs, and frenzied packs and bonuses. `TUNE` files can edit `CHUCKER_RULES`, `CRAWLER_RULES`, and `FRENZY_RULES`. `NO_DODGE=1` ignores every floor tell.
 
-Tuning log, 200 runs per row from seed 1, `WORKERS` split.
+Tuning log, 2026-10-28, five tries at 200 runs. Frenzy was the cost, and the Big Leaguer and the Ankle Biter barely touched the bot. A pack bonus of $3 a zombie paid $412 a run, so it became $1. Kept (frenzy ×1.15, health ×1, ×1.03, and ×1.1 on waves 5 to 7): default 25.5%, `SWAP=1` 29.5%, `NO_GNOME=1` 11%, and `KITE=1` 0.5%, with 49% and 39% of wins close calls and wave 8 the biggest killer. A default run met about 33 frenzied packs (wiping 30 for $137), 1.4 throws, and 3.4 Ankle Biters; Kaboomers cost 30% of lost hearts. Endless reached a median wave 8, best 13.
 
-| Try | Change                                                               | Default | `SWAP=1` | Close calls (default) | Note                                                                         |
-| --- | -------------------------------------------------------------------- | ------- | -------- | --------------------- | ---------------------------------------------------------------------------- |
-| 0   | Before this pass                                                     | 24%     | 28%      | 15 of 48              | The baseline                                                                 |
-| 1   | New kinds, frenzy ×1.18, pack bonus $3 a zombie (32 runs)            | 12.5%   |          | 1 of 4                | $412 of bonus a run                                                          |
-| 2   | Try 1 with a bonus of $1 a zombie                                    | 16.5%   | 23.5%    | 16 of 33              | Frenzy is the cost; the Big Leaguer and the Ankle Biter barely touch the bot |
-| 3   | Try 2, frenzy ×1.15, Big Leaguer grab reach 10 px and speed 17 to 21 | 18%     | 22%      | 20 of 36              |                                                                              |
-| 4   | Try 3 with health ×1.03 on wave 6 and ×1.1 on wave 7                 | 22.5%   | 28.5%    | 12 of 45              |                                                                              |
-| 5   | Try 4 with health ×1 on wave 5 (kept)                                | 25.5%   | 29.5%    | 25 of 51              | Baked into `src`; the baked runs match                                       |
-
-- **The kept numbers.** "Died" is the share of all runs that died on that wave.
-
-  | Wave | Died (default) | Died (`SWAP=1`) | Died (`NO_GNOME=1`) |
-  | ---- | -------------- | --------------- | ------------------- |
-  | 1    | 0%             | 0%              | 0%                  |
-  | 2    | 0%             | 0%              | 0%                  |
-  | 3    | 1%             | 3%              | 1%                  |
-  | 4    | 4%             | 2%              | 4%                  |
-  | 5    | 7%             | 6%              | 12%                 |
-  | 6    | 18%            | 9%              | 12%                 |
-  | 7    | 7%             | 6%              | 15%                 |
-  | 8    | 39%            | 46%             | 47%                 |
-
-  | Bot          | Wins              | Close calls    | Median win |
-  | ------------ | ----------------- | -------------- | ---------- |
-  | Default      | 51 of 200 (25.5%) | 25 of 51 (49%) | 8.8 min    |
-  | `SWAP=1`     | 59 of 200 (29.5%) | 23 of 59 (39%) | 8.7 min    |
-  | `NO_GNOME=1` | 22 of 200 (11%)   | 13 of 22       |            |
-  | `KITE=1`     | 1 of 200 (0.5%)   | 1 of 1         |            |
-
-  Endless (`MODE=endless`): median wave 8, best 13, worst 3, against median 8, best 12, worst 2 before. A default run sees about 33 frenzied packs and wipes 30 of them for $137, 1.4 Big Leaguer throws, and 3.4 Ankle Biters. For the default bot, Kaboomers cost 30% of lost hearts, Hotfoots 25%, Groaners and Big Lugs 20% each, the boss 4%, the Big Leaguer 1%, and the Ankle Biter none.
-
-- **Against the targets.** Wave 8 is the biggest killer for every bot. Waves 1 and 2 lose no runs and waves 3 and 4 lose 5% together (target under 3% and under 10%). Close calls are 49% and 39% of wins (target 30 to 50%). The default bot's 25.5% is half a point over its 15 to 25% target and the `SWAP=1` bot's 29.5% half a point under its 30 to 45%; runs of 200 swing by about 5 points from noise, and as in the gnome pass no setting tried put the two bots further apart.
 - **Caveats.** The bot steps off every landing mark at once and shoots each Ankle Biter as it comes up, so the Big Leaguer lands about 1 throw in 15 on it and no Ankle Biter has grabbed it yet. A person who is busy shooting will be hit and grabbed far more, and the new kinds will cost more than these numbers say. Playtest them before trusting this.
 
 #### Performance
@@ -983,28 +745,7 @@ Tuning log, 200 runs per row from seed 1. Scales are health, speed, bite. Wins a
 | 11  | Try 9 with one late Big Lug and a straggler, three Big Lugs in all (kept)                                                 | 49%   | 16%         | 37%      | 4%       | 0.5%      | Planks off (`NO_PLANKS=1`): 4.5%                                       |
 | 12  | Speed: Easy ×0.95 to ×0.9, Hard ×1.04 to ×1.02, Nightmare ×1.06 to ×1.04 (kept)                                           | 67%   | 16%         | 37%      | 7%       | 0%        | Before this try, the same build gave Easy 49%, Hard 4%, Nightmare 0.5% |
 
-- **The kept numbers.** "Died" is the share of all runs that died on that wave.
-
-  | Wave | Easy | Normal | `SWAP=1` | Hard | Nightmare |
-  | ---- | ---- | ------ | -------- | ---- | --------- |
-  | 1    | 0%   | 0%     | 0%       | 0%   | 0%        |
-  | 2    | 0%   | 0%     | 0%       | 0%   | 1%        |
-  | 3    | 1%   | 2%     | 3%       | 0%   | 23%       |
-  | 4    | 0%   | 1%     | 1%       | 2%   | 9%        |
-  | 5    | 1%   | 5%     | 4%       | 11%  | 12%       |
-  | 6    | 3%   | 12%    | 10%      | 14%  | 17%       |
-  | 7    | 4%   | 10%    | 8%       | 11%  | 18%       |
-  | 8    | 30%  | 51%    | 43%      | 48%  | 19%       |
-
-  | Level     | Wins               | Close calls     | Median win |
-  | --------- | ------------------ | --------------- | ---------- |
-  | Easy      | 123 of 200 (61.5%) | 24 of 123 (20%) | 8.2 min    |
-  | Normal    | 41 of 200 (20.5%)  | 13 of 41 (32%)  |            |
-  | `SWAP=1`  | 64 of 200 (32%)    | 15 of 64 (23%)  | 7.8 min    |
-  | Hard      | 31 of 200 (15.5%)  | 10 of 31 (32%)  | 8.3 min    |
-  | Nightmare | 3 of 200 (1.5%)    | 2 of 3          | 8.3 min    |
-
-- **Against the targets.** Easy (61.5%), Normal (20.5% default, 32% `SWAP=1`), and Nightmare (1.5%) land in their ranges. Hard's 15.5% is 3.5 points over its 5 to 12%: only one batch per level fitted the time, and a follow-up should try Hard health ×1.15 or a ×1.25 bite (a Big Lug biting 3). Nightmare is brutal early, losing 23% of runs on wave 3's first frenzied pincer, where the bot meets fast packs before it has the SMG; a run that gets past wave 5 often wins. Easy's close calls (20%) sit under the 30 to 50% target, which suits a level for the vibes.
+- **Before the tighter pacing (try 7, 2026-10-28).** Easy 61.5%, Normal 20.5% (`SWAP=1` 32%), Hard 15.5%, and Nightmare 1.5%, all in range but Hard, 3.5 points over its 5 to 12%. Nightmare lost 23% of its runs on wave 3's first frenzied pincer, where the bot meets fast packs before it has the SMG. Easy's close calls (20%) sat under the 30 to 50% target, which suits a level for the vibes.
 - **After the tighter pacing (2026-10-29).** Tries 8 to 12 above, 200 runs per row from seed 1, `WORKERS=4`, measured by the nightly suite (`tools/balance/baseline.json`). Scales now: Easy ×0.85/×0.9/×0.5, Normal ×1/×1/×1, Hard ×1.12/×1.02/×1, Nightmare ×1.18/×1.04/×1.25.
 
   | Wave | Easy | Normal | `SWAP=1` | Hard | Nightmare |
@@ -1110,7 +851,7 @@ The first four are built, and so is the boss. The Big Leaguer and the Ankle Bite
 
 ## Technical notes
 
-- The world is drawn with Foldkit's `Canvas` module. It has `Rect`, `Circle`, `Path`, `Text`, and `Group`, and no image shape yet. Sprites and tiles are built from rectangles, merged into runs to keep the shape count down. A tile map makes an image shape much more valuable. See [foldkit/foldkit#1831](https://github.com/foldkit/foldkit/issues/1831).
+- The world is drawn with Foldkit's `Canvas` module. Foldkit 0.169.0 ships `Rect`, `Circle`, `Path`, `Text`, and `Group`; the game adds the upstream `Canvas.Image` through a patch (see `patches/README.md`). Every fixed sprite is one image from a PNG data URL, and shapes that change every frame stay rectangles. See [foldkit/foldkit#1831](https://github.com/foldkit/foldkit/issues/1831).
 - The canvas repaints the whole scene on every frame. Frame time on a mid-range phone was the main risk. It was measured on 2026-10-28 with a throttled desktop Chrome, not yet on a real phone. See "Performance" under Risks.
 - Scene code builds Groups with the `group` helper in `src/sprite.ts`, not `Canvas.Group`. Foldkit's `Canvas.Group` parses every nested shape through Schema on each call, because its `shapes` field is recursive, and that cost more than everything else in the view.
 - Frame ticks and pointer moves are kept out of DevTools history so it stays readable.
@@ -1146,14 +887,9 @@ Added on 2026-10-29 at the owner's request. Built, not yet playtested. The kind 
 
 Measured on 2026-10-29 with 200 runs per bot from seed 1, on the code before the save on the device and the difficulty levels. Earlier, the new kinds pass measured 25.5% (default) and 29.5% (`SWAP=1`).
 
-| Try | Change                                                         | Default wins | `SWAP=1` wins | Kaboomer share of hearts lost (default) |
-| --- | -------------------------------------------------------------- | ------------ | ------------- | --------------------------------------- |
-| 1   | Kaboomer at 14 to 17 and health 6, Chucker unchanged           | 31 (15.5%)   |               | 29%                                     |
-| 2   | Try 1 with the Big Leaguer, the shield, and 3 lone Kaboomers   | 31 (15.5%)   | 37 (18.5%)    | 30%                                     |
-| 3   | Try 2 with Kaboomers at weight 1 instead of 1.5 in mixed packs | 20 (10%)     | 29 (14.5%)    | 22%                                     |
-| 4   | Try 2 with a $6 Kaboomer bounty and more drops from both kinds | 29 (14.5%)   | 37 (18.5%)    | 27%                                     |
+Four tries. A slower, tougher Kaboomer alone, and then with the Big Leaguer, his shield, and 3 lone Kaboomers on wave 4 (try 2, shipped), gave the default bot 15.5% and `SWAP=1` 18.5%. Fewer Kaboomers in mixed packs made it harder (10%), since his chains clear packs for the bot, and a $6 bounty with more drops changed little (14.5%).
 
-Try 2 shipped. In it, deaths by wave (default) are 0, 0, 1, 3, 10, 24, 11, and 37%, so wave 8 is still the biggest killer. The Big Leaguer costs about 1% of lost hearts and raises about 1.3 shields a run. Fewer Kaboomers made it harder, not easier: his chains clear packs for the bot. The default bot sits at the bottom of its 15 to 25% range and the `SWAP=1` bot is well under its 30 to 45%. That needs another pass, measured against the current main, likely with the other difficulty work.
+In try 2, deaths by wave (default) are 0, 0, 1, 3, 10, 24, 11, and 37%, so wave 8 is still the biggest killer. The Big Leaguer costs about 1% of lost hearts and raises about 1.3 shields a run. The default bot sits at the bottom of its 15 to 25% range and the `SWAP=1` bot is well under its 30 to 45%.
 
 Then measured again on Normal after the difficulty levels, the plank cap, and plank chewing landed, with `bun run balance 200`: the default bot won 23 of 200 (11.5%) with 9 close calls, and the `SWAP=1` bot 50 of 200 (25%) with 11. Deaths by wave (default) are 0, 0, 2, 1, 4, 18, 15, and 50%, so wave 8 is the biggest killer. Kaboomers cost 32% of lost hearts (31% for `SWAP=1`) and the Big Leaguer 1%, with 2.2 throws and 1.4 shields a run. Both bots are under their ranges; the pacing pass that follows rebalances every difficulty.
 
@@ -1229,7 +965,7 @@ Approved ideas that are not built yet. Each moves into the roadmap above when it
   - **Remeasured for step 7.** The pixel font draws every HUD and overlay string from cached glyph sprites, so text costs more shapes than `Canvas.Text` did (idle went from 515 to 1,055 shapes) but is crisp at every scale. Same method, built harness: worst case p95 9.4 ms at 1×, 10.2 ms at 4×, and 16.7 ms at 6× (23 long frames). `view` means 0.8, 1.9, and 2.9 ms. Busy at 4× has p95 10.1 ms. p95 stays under 16.7 ms at 4×.
   - **Endless and the alive cap.** Measured on 2026-10-28, same method, built harness, at 4×. Two new scenarios: endless wave 15 after 15 seconds of spawning with a tier 3 SMG and full decals, and the worst endless case, where the room is held at the alive cap (as many zombies as the cap, with 40 times their health, full decals, constant fire). Endless wave 15 at 4×: p95 10.2 and 10.3 ms in two runs. The at-cap case was measured at four caps, two runs each at 4×: 36 gave p95 16.7 ms, 30 gave 16.4 and 16.4 ms, 24 gave 10.3 and 14.8 ms, and 20 gave 10.2 and 10.3 ms with 6 long frames, `update` 1.65 ms and `view` 2.3 ms a frame. The cap is 20, which leaves real headroom under the 16.7 ms budget for a phone. At 30 the capped room at 6× dropped frames (p95 about 25 ms); 20 was not measured at 6×. The cap is what bounds the cost: an endless wave spawns 100 to 150 zombies, and without it they would all be in the room at once.
 - **Packs and the frame budget.** Measured on 2026-10-28 with `src/perf.scene.test.ts`. The worst case now also has every door rattling and the DINNER BELL! banner up. That built 2,209 shapes, over the old 2,200 budget, so the shapes-built budget is 2,250. Steady paint went from 1,376 to 1,392 operations, inside the unchanged 1,500 budget. The banner has no subtitle to keep it cheap.
-- **The Kaboomer lag and sprite images.** Measured on 2026-10-28, same method, with a new `gasbags` scenario that keeps 16 Kaboomers in the room while the bot pops them. At 6x the CPU profile showed update frames of 13 to 17 ms against a mean near 3 ms. The cause was not the Kaboomers: the flow field copied the whole tile grid once per distance ring every time the player crossed a tile, and every frame rebuilt the wave phase with its Schema constructor, which parses the whole spawn list. The flow field now settles tiles from distance buckets (same distances, about six times cheaper) and the phase is copied with `modifyFields`, and the worst update frame at 6x fell to about 6.5 ms. Then every fixed sprite, glyph, and baked text became one `Canvas.Image` from a PNG data URL (Foldkit is patched with the upstream `Canvas.Image`, see `AGENTS.md`). The worst room went from 2,656 shapes, 1,577 steady paint operations, and 2,986 on a full repaint to 687, 543, and 1,120. In a 3 second CPU profile of the Kaboomer room at 4x, Foldkit's paint fell from 252 to 128 ms and garbage collection from 47 to 17 ms; update and building the scene are now most of the frame. The host was loaded (load average near 10) during the frame time runs, so FPS and p95 sat at the 60 Hz pacing for both builds and the main thread time per frame fell only a little (Kaboomers at 6x: 13.1 to 11.1 ms). SVG data URLs were tried first and dropped: Chrome builds a document for each SVG image and replays it on every draw, which cost seconds at load and saved nothing per frame. Sprites drawn under a squash, a lean, or a fractional offset are now crisp where the Rects were anti-aliased. All sprite images decode behind the loading splash as its Sprites step.
+- **The Kaboomer lag and sprite images.** Measured on 2026-10-28, same method, with a new `gasbags` scenario that keeps 16 Kaboomers in the room while the bot pops them. At 6x the CPU profile showed update frames of 13 to 17 ms against a mean near 3 ms. The cause was not the Kaboomers: the flow field copied the whole tile grid once per distance ring every time the player crossed a tile, and every frame rebuilt the wave phase with its Schema constructor, which parses the whole spawn list. The flow field now settles tiles from distance buckets (same distances, about six times cheaper) and the phase is copied with `modifyFields`, and the worst update frame at 6x fell to about 6.5 ms. Then every fixed sprite, glyph, and baked text became one `Canvas.Image` from a PNG data URL (Foldkit is patched with the upstream `Canvas.Image`, see `patches/README.md`). The worst room went from 2,656 shapes, 1,577 steady paint operations, and 2,986 on a full repaint to 687, 543, and 1,120. In a 3 second CPU profile of the Kaboomer room at 4x, Foldkit's paint fell from 252 to 128 ms and garbage collection from 47 to 17 ms; update and building the scene are now most of the frame. The host was loaded (load average near 10) during the frame time runs, so FPS and p95 sat at the 60 Hz pacing for both builds and the main thread time per frame fell only a little (Kaboomers at 6x: 13.1 to 11.1 ms). SVG data URLs were tried first and dropped: Chrome builds a document for each SVG image and replays it on every draw, which cost seconds at load and saved nothing per frame. Sprites drawn under a squash, a lean, or a fractional offset are now crisp where the Rects were anti-aliased. All sprite images decode behind the loading splash as its Sprites step.
 - **Determinism and juice.** Animation, particles, and shake live in the Model and use the seeded generator, so they stay reproducible. Sound and music play through Commands and never feed back into the game.
 
 ## Open questions
@@ -1313,8 +1049,8 @@ These are ideas to weigh, not decisions.
 ## Not now
 
 - Procedurally generated estates. The first estate is hand-made.
-- Server-side anything.
-- Accounts, leaderboards, or saved progress. Relaxed on 2026-10-28 (owner-approved): preferences and onboarding are saved on the device (see "Saved on the device"). Runs, bests, kills, and unlocks are still not saved.
+- Server-side anything. Relaxed on 2026-10-29: run analytics and device sync run on Cloudflare. See `PLATFORM.md`.
+- Accounts, leaderboards, or saved progress. Relaxed on 2026-10-28 (owner-approved): preferences and onboarding are saved on the device (see "Saved on the device"). Since 2026-10-29 the bests, the kills per kind, and the Nightmare unlock are saved too, and linked devices share them. The run itself is still not saved, and there are no accounts or leaderboards.
 
 ### Junk armor and smaller Kaboomers
 

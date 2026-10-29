@@ -10,7 +10,7 @@ subtree_prompted: true
 
 ## Project Notes
 
-A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the decided choices, and the roadmap are in [`GAME_DESIGN.md`](./GAME_DESIGN.md). Read it before changing how the game plays.
+A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the decided choices, and the roadmap are in [`GAME_DESIGN.md`](./GAME_DESIGN.md). Read it before changing how the game plays. The Cloudflare side (hosting, analytics, the on-device SQLite save, and sync) is in [`PLATFORM.md`](./PLATFORM.md).
 
 ### Commands
 
@@ -24,7 +24,7 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 | `bun run build`                                  | Build for production                                                                                                       |
 | `bun run perf:check`                             | Compare frame time to `tools/audit/frame-baseline.json` in headless Chrome                                                 |
 | `cd infra && bun alchemy plan --stage prod`      | Show what a production deploy to Cloudflare would change                                                                   |
-| `cd infra && bun alchemy deploy --stage prod`    | Deploy production to Cloudflare by hand (see Deploying)                                                                    |
+| `cd infra && bun alchemy deploy --stage prod`    | Deploy production to Cloudflare by hand (see `infra/README.md`)                                                            |
 | `cd tools/audit && bun live-check.ts [url]`      | Load a deployed copy in headless Chrome and check that it boots                                                            |
 | `cd infra && bun run test`                       | Test the analytics Worker: the size cap, rate limits, decoding, and D1 rows                                                |
 | `bun tools/analytics/report.ts --stage <s>`      | Print a stage's analytics: win rate, wave of death, deadliest kinds, run length, devices, runs per day                     |
@@ -41,16 +41,11 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 
 Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All four must pass.
 
-**Go easy on the laptop.** This is developed on one laptop (12 cores), often with several agents at once. Two agents running 8-process balance batches together pushed the load average to 30 and made every step about three times slower.
+**Go easy on the laptop.** One 12-core laptop often runs several agents at once. Two agents running 8-process balance batches together pushed the load average to 30 and made every step about three times slower.
 
-- Always run heavy jobs through the guard: `bun run balance [runs]` for the balance bot, `bun run perf:check` for the frame time gate, and `bun run heavy -- <command...>` for anything else heavy, such as `bun run heavy -- bun tools/audit/perf.ts` or a shots script. Never call `tools/balance/simulate.ts` or a heavy audit directly. See `tools/heavy/README.md`.
-- The guard holds one machine-wide lock in the temp directory, so only one heavy job runs at a time across all agents and worktrees. A lock left by a dead process is taken over.
-- It waits, checking every 10 seconds for up to 30 minutes, while the 1 minute load average is above the core count, and prints why at most every 30 seconds.
-- It caps `WORKERS` at 4 and lowers it further when the load is above half the cores, and says when it does.
-- It counts balance batches per worktree and branch: the third warns, and the sixth is refused unless you pass `--allow-more` (`bun run heavy -- --allow-more bun tools/balance/simulate.ts 200`).
-- Cap tuning at about three batches per change. Results within a few points of a target are fine; list misses as follow-ups instead of running more batches.
-- Prefer 100 runs to sort ideas and 200 runs only to confirm the final numbers.
-- The same goes for headless Chrome audits and `perf:check`: one at a time, and not while the balance bot is running, since load skews frame times. The guard's lock enforces this when they all go through it.
+- Run every heavy job through the guard: `bun run balance`, `bun run perf:check`, or `bun run heavy -- <command...>` for anything else heavy, such as an audit or a shots script. Never call `tools/balance/simulate.ts` or a heavy audit directly.
+- The guard runs one heavy job at a time across all agents and worktrees, waits while the load is above the core count, caps `WORKERS` at 4, and refuses a sixth balance batch per branch without `--allow-more`. How it works is in [`tools/heavy/README.md`](./tools/heavy/README.md).
+- Cap tuning at about three batches per change. Use 100 runs to sort ideas and 200 only to confirm the final numbers. Results within a few points of a target are fine: list misses as follow-ups instead of running more batches.
 
 **Check balance in tiers.** Prefer these over ad hoc batches. See `tools/balance/README.md` and "How balance is checked" in `GAME_DESIGN.md`.
 
@@ -60,147 +55,69 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 
 ### Where things are
 
-| File                      | What it holds                                                                                                          |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `src/model.ts`            | The Model and its Schema types                                                                                         |
-| `src/entry.ts`            | The page entry: the runtime built from `init`, `update`, the view, and the store                                       |
-| `src/main.ts`             | `init`, `update`, and `updateGame`, which handles each Message                                                         |
-| `src/message.ts`          | The Message union                                                                                                      |
-| `src/commands.ts`         | Commands: device checks, full screen, audio, focus, splash, save, sync, analytics, and the audio resource              |
-| `src/subscriptions.ts`    | Subscriptions: frames, keys, pointers, window and page events, sync, and the update check                              |
-| `src/musicPlan.ts`        | Which tune and level play for the phase, and the stingers between phases                                               |
-| `src/dialogs.ts`          | `dialogFolds` (fold, open, and close for a Dialog field) and `dialogShell` (the dialog's view)                         |
-| `src/update/step.ts`      | The update's Return and Step types, and `withInput`                                                                    |
-| `src/update/sound.ts`     | Sound cues for each frame's events, UI sounds, unlocking audio, and the mute keys                                      |
-| `src/update/run.ts`       | Starting, resuming, and keeping going in a run                                                                         |
-| `src/update/shop.ts`      | The shop dialog and tabs, entering and leaving the shop, buying, and focus                                             |
-| `src/update/character.ts` | Opening the character picker and folding its Messages and OutMessages                                                  |
-| `src/update/home.ts`      | Menu panels, home focus and keys, difficulty, settings, the home screen tip, end screen focus                          |
-| `src/update/save.ts`      | Load steps, loading and writing the save, synced saves, the link flow, and the tutorial reset                          |
-| `src/update/traps.ts`     | Placing and cycling traps                                                                                              |
-| `src/onboarding.ts`       | Lessons, the practice gate, the new zombie card, and hints                                                             |
-| `src/home.ts`             | The home layout's buttons and keys, the mode, going home, the bests                                                    |
-| `src/homeView.ts`         | The home menu, its panels, the pause MENU pill, and the bests strip                                                    |
-| `src/menu.css`            | Styles for the home menu, its panels, and the MENU pill                                                                |
-| `src/changelog.ts`        | `CHANGELOG.md` read at build time and decoded into What's New days                                                     |
-| `src/whatsNewView.ts`     | The What's New panel: a day's intro and bullets, Older and Newer                                                       |
-| `src/munchopedia.ts`      | The Munchopedia's entries, unlocks, badges, and walking pictures                                                       |
-| `src/guideView.ts`        | The Munchopedia panel: the list of tiles and an entry                                                                  |
-| `src/splash.ts`           | The loading splash's effects: load steps, progress, and hiding it                                                      |
-| `src/save.ts`             | `PlayerSave`: its Schema, versions, the Model mapping, and the reset                                                   |
-| `src/store.ts`            | `PlayerStore`: the save in SQLite, or the localStorage fallback                                                        |
-| `src/storeSqlite.ts`      | The `player` table, its migrations, and the one-time import                                                            |
-| `src/store.worker.ts`     | The SQLite worker entry                                                                                                |
-| `src/playerData.ts`       | The save's Schemas, shared with the sync Worker (only `effect`)                                                        |
-| `src/playerScope.ts`      | The player sync scope: its tables and mutations, shared with the Worker                                                |
-| `src/playerSync.ts`       | Save changes as mutations, the sync status line, and the link flow                                                     |
-| `packages/`               | `sqlite-wasm-effect` (an Effect `SqlClient` over sqlite-wasm) and `sync-engine` (scopes, mutations, outbox, authority) |
-| `src/analytics.ts`        | The RunSummary Schema shared with the analytics Worker (only `effect`)                                                 |
-| `src/analyticsRun.ts`     | When a run ends, and the RunSummary built from the Model                                                               |
-| `src/analyticsBeacon.ts`  | The visit id, the API origin, and the beacon that posts a summary                                                      |
-| `src/veteran.ts`          | A returning player's Model for tests and the balance bot                                                               |
-| `src/runReset.ts`         | Every field of one run, reset when a run starts and on going home                                                      |
-| `src/stats.ts`            | Run stats: kills, accuracy, run time, and the verdicts                                                                 |
-| `src/simulation.ts`       | The pure step that advances the game one frame                                                                         |
-| `src/arena.ts`            | The level record, the tile map, doorways, collision, and line of sight                                                 |
-| `src/screen.ts`           | Landscape and portrait screens: sizes, the world window, the HUD band                                                  |
-| `src/camera.ts`           | The camera derived from the player and the level, the aim lean                                                         |
-| `src/pathing.ts`          | The flow field toward the player and zombie steering                                                                   |
-| `src/geometry.ts`         | Vectors, clamping, circle and segment checks, and screen to view coordinates                                           |
-| `src/waves.ts`            | Spawn tables, packs, the wave arc, spawning, and run phases                                                            |
-| `src/doorRoute.ts`        | Which door each pack comes through, around Plank Piles and a pincer's mate                                             |
-| `src/difficulty.ts`       | The difficulty table and scales, choosing, the Nightmare unlock, and the bests                                         |
-| `src/pacing.ts`           | Sawtooth beats, pack telegraphs, door camping, and intensity                                                           |
-| `src/zombies.ts`          | The zombie kind table: stats, behavior, deaths, sounds, and wear                                                       |
-| `src/actions.ts`          | Winded and dazed zombies getting back on their feet                                                                    |
-| `src/frenzy.ts`           | Horde frenzy: which packs frenzy, fading stragglers, the pack bonus                                                    |
-| `src/chucker.ts`          | The Big Leaguer: hanging back, heaving, throwing, and his shield                                                       |
-| `src/crawler.ts`          | The Ankle Biter: where it comes up, surfacing, and clinging                                                            |
-| `src/boss.ts`             | The boss: its rules, its entrance, its attacks, and its health bar                                                     |
-| `src/combat.ts`           | Strikes, wounds, and bursts applied to any list of targets                                                             |
-| `src/traps.ts`            | The trap table, placement, chewing, turrets, and repair                                                                |
-| `src/weapons.ts`          | The weapon table, the two-slot arsenal, magazines, and reload                                                          |
-| `src/powerups.ts`         | Power-up tables, drops, grabbing, boost timers, boosted stats                                                          |
-| `src/shop.ts`             | Money, shop categories, items, prices, purchases, the stall                                                            |
-| `src/particles.ts`        | Particles and floor decals spawned from each frame's events                                                            |
-| `src/juice.ts`            | Screen shake, hit-stop, damage numbers, and the kill streak                                                            |
-| `src/input.ts`            | Keyboard, mouse, and touch input turned into movement and aim                                                          |
-| `src/audio.ts`            | Sound effects: the audio engine resource, the synth recipes, and playing sounds and music                              |
-| `src/music.ts`            | The music's tunes as data, its instruments, and its scheduler                                                          |
-| `src/view.ts`             | The root view: the page layout, the status text, the surface                                                           |
-| `src/layers.ts`           | The floor, scene, and overlay canvases and the stage                                                                   |
-| `src/thumbArea.ts`        | The portrait thumb area's wainscot tiles and its view                                                                  |
-| `src/worldView.ts`        | The world scene: ground, depth-sorted actors, overhead effects                                                         |
-| `src/depth.ts`            | The drawable type and the foot-depth sort order                                                                        |
-| `src/drawing.ts`          | Shape helpers shared by the world views: sprites, feet, pulses                                                         |
-| `src/zombieView.ts`       | Zombies walking, fusing, and dying, worn parts, shadows, health bars                                                   |
-| `src/bossView.ts`         | The boss's floor tells, globs, stars, steam, health bar, and band                                                      |
-| `src/playerView.ts`       | The player, the gun, muzzle flashes, and the reload bar                                                                |
-| `src/appearance.ts`       | Character looks: options, palettes, pixel parts, the sprite cache                                                      |
-| `src/character.ts`        | The character picker: its Messages, update, and OutMessages                                                            |
-| `src/characterView.ts`    | The character picker dialog and its walking preview                                                                    |
-| `src/trapView.ts`         | Barricades, turrets, and the trap placement ghost                                                                      |
-| `src/effectsView.ts`      | Bullets, decals, particles, blasts, popups, and rattling doors                                                         |
-| `src/hud.ts`              | Hearts, money, the streak, gun and trap slots, and the round text                                                      |
-| `src/wavePreview.ts`      | The door markers that preview a wave, and their spoken text                                                            |
-| `src/touchControls.ts`    | Sticks, ghost sticks, icon buttons, and the gun cluster with its icons                                                 |
-| `src/menus.ts`            | Mode buttons, the new zombie card, corner icons, tips, rotate notice                                                   |
-| `src/pauseHelp.ts`        | The pause screen's panel of controls and tips for each device                                                          |
-| `src/powerupView.ts`      | Pickups, callouts, the boost aura, and HUD timers on canvas                                                            |
-| `src/shopView.ts`         | The shop dialog and its category tabs, HTML over the canvas                                                            |
-| `src/stall.ts`            | The stall, its shopkeeper, entrance outline, and prompt                                                                |
-| `src/room.ts`             | The room's static floor, walls, doors, and cover shapes                                                                |
-| `src/screens.ts`          | Title, banners, hints, pause, and the run stats panels                                                                 |
-| `src/font.ts`             | The pixel font, the money coin, and text layout                                                                        |
-| `src/sprite.ts`           | Pixel maps turned into sprite images, baking, and placing them                                                         |
-| `src/png.ts`              | Colors, rasters, and the PNG data URL encoder for sprite images                                                        |
-| `src/testPng.ts`          | Reads those PNG data URLs back into pixels, for tests                                                                  |
-| `src/icons.ts`            | Pixel maps turned into SVG icons for the HTML buttons                                                                  |
-| `src/prng.ts`             | The seeded random number generator                                                                                     |
-| `src/version.ts`          | The running build id, the `version.json` check, and reloading                                                          |
-| `src/updateChip.ts`       | The "New version ready" chip shown on the home menu                                                                    |
-| `src/constants.ts`        | The view size, speeds, and other tuning numbers                                                                        |
-| `infra/worker/`           | The API Worker: analytics (its HttpApi and rules), sync (its Durable Objects in `sync.ts`), and their tests            |
-| `tools/analytics/`        | The analytics report and smoke test, through the Cloudflare API                                                        |
+Paths are under `src/`. The API Worker is in `infra/worker/` (analytics, and sync's Durable Objects in `sync.ts`), the analytics report and smoke test in `tools/analytics/`, and the SQLite wrapper and sync engine in `packages/`.
 
-### The Foldkit patch
+| File                                                | What it holds                                                                                                   |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `model.ts`                                          | The Model and its Schema types                                                                                  |
+| `entry.ts`                                          | The page entry: the runtime built from `init`, `update`, the view, and the store                                |
+| `main.ts`, `message.ts`                             | `init`, `update`, and `updateGame`, which handles each Message; the Message union                               |
+| `commands.ts`                                       | Commands: device checks, full screen, audio, focus, splash, save, sync, analytics, and the audio resource       |
+| `subscriptions.ts`                                  | Subscriptions: frames, keys, pointers, window and page events, sync, and the update check                       |
+| `runReset.ts`                                       | Every field of one run, reset when a run starts and on going home                                               |
+| `dialogs.ts`                                        | `dialogFolds` (fold, open, and close for a Dialog field) and `dialogShell` (the dialog's view)                  |
+| `update/step.ts`                                    | The update's Return and Step types, and `withInput`                                                             |
+| `update/run.ts`                                     | Starting, resuming, and keeping going in a run                                                                  |
+| `update/shop.ts`                                    | The shop dialog and tabs, entering and leaving the shop, buying, and focus                                      |
+| `update/traps.ts`                                   | Placing and cycling traps                                                                                       |
+| `update/character.ts`                               | Opening the character picker and folding its Messages and OutMessages                                           |
+| `update/home.ts`                                    | Menu panels, home focus and keys, difficulty, settings, the home screen tip, end screen focus                   |
+| `update/save.ts`                                    | Load steps, loading and writing the save, synced saves, the link flow, and the tutorial reset                   |
+| `update/sound.ts`                                   | Sound cues for each frame's events, UI sounds, unlocking audio, and the mute keys                               |
+| `onboarding.ts`                                     | Lessons, the practice gate, the new zombie card, and hints                                                      |
+| `home.ts`, `homeView.ts`, `menu.css`                | The home layout's buttons, keys, mode, and bests; the menu, its panels, and the pause MENU pill; their styles   |
+| `changelog.ts`, `whatsNewView.ts`                   | `CHANGELOG.md` decoded at build time into What's New days, and the What's New panel                             |
+| `munchopedia.ts`, `guideView.ts`                    | The Munchopedia's entries, unlocks, badges, and walking pictures, and its panel                                 |
+| `splash.ts`                                         | The loading splash's effects: load steps, progress, and hiding it                                               |
+| `save.ts`, `playerData.ts`                          | `PlayerSave`: versions, the Model mapping, and the reset; its Schemas, shared with the sync Worker              |
+| `store.ts`, `storeSqlite.ts`                        | `PlayerStore`: the save in SQLite, or the localStorage fallback; the `player` table, migrations, and import     |
+| `store.worker.ts`                                   | The SQLite worker entry                                                                                         |
+| `playerScope.ts`, `playerSync.ts`                   | The player sync scope's tables and mutations (shared with the Worker); save changes as mutations, the link flow |
+| `analytics.ts`, `analyticsRun.ts`                   | The RunSummary Schema (shared with the Worker, only `effect`); when a run ends and its summary                  |
+| `analyticsBeacon.ts`                                | The visit id, the API origin, and the beacon that posts a summary                                               |
+| `veteran.ts`, `testing.ts`                          | A returning player's Model for tests and the balance bot; the shared Story and Scene test helpers               |
+| `stats.ts`, `simulation.ts`                         | Run stats: kills, accuracy, run time, and the verdicts; the pure step that advances the game one frame          |
+| `arena.ts`, `room.ts`                               | The level record, tile map, doorways, collision, and line of sight; the room's static floor, walls, and cover   |
+| `screen.ts`, `camera.ts`                            | Landscape and portrait screens and the HUD band; the camera from the player and the level, the aim lean         |
+| `pathing.ts`, `geometry.ts`                         | The flow field and zombie steering; vectors, clamping, circle and segment checks, screen to view                |
+| `waves.ts`, `doorRoute.ts`                          | Spawn tables, packs, the wave arc, and run phases; which door each pack comes through around planks             |
+| `pacing.ts`, `difficulty.ts`                        | Sawtooth beats, telegraphs, door camping, intensity; the difficulty table, the Nightmare unlock, the bests      |
+| `zombies.ts`, `actions.ts`                          | The zombie kind table (stats, behavior, deaths, sounds, wear); winded and dazed zombies getting up              |
+| `frenzy.ts`, `chucker.ts`, `crawler.ts`             | Horde frenzy and the pack bonus; the Big Leaguer's throws and shield; the Ankle Biter surfacing and clinging    |
+| `boss.ts`, `combat.ts`                              | The boss's rules, entrance, attacks, and health bar; strikes, wounds, and bursts on any list of targets         |
+| `traps.ts`, `weapons.ts`, `powerups.ts`             | The trap table, placement, chewing, and repair; the weapon table, magazines, and reload; drops and boosts       |
+| `shop.ts`, `shopView.ts`, `stall.ts`                | Money, categories, items, prices, and purchases; the shop dialog; the stall, its shopkeeper, and prompt         |
+| `particles.ts`, `juice.ts`                          | Particles and decals from each frame's events; shake, hit-stop, damage numbers, and the kill streak             |
+| `input.ts`                                          | Keyboard, mouse, and touch input turned into movement and aim                                                   |
+| `audio.ts`, `music.ts`, `musicPlan.ts`              | The audio engine resource and synth recipes; the tunes and scheduler; which tune plays for the phase            |
+| `view.ts`, `layers.ts`, `styles.css`                | The root view and status text; the floor, scene, and overlay canvases; the page styles                          |
+| `worldView.ts`, `depth.ts`, `drawing.ts`            | The world scene, the foot-depth sort, and the shape helpers shared by the world views                           |
+| `zombieView.ts`, `bossView.ts`, `playerView.ts`     | Zombies walking, fusing, dying, and worn; the boss's tells and band; the player, gun, and reload bar            |
+| `appearance.ts`, `character.ts`, `characterView.ts` | Character looks and the sprite cache; the picker's Messages and update; its dialog and preview                  |
+| `trapView.ts`, `effectsView.ts`, `powerupView.ts`   | Traps and the placement ghost; bullets, decals, particles, popups; pickups, callouts, and boost timers          |
+| `hud.ts`, `wavePreview.ts`                          | Hearts, money, the streak, gun and trap slots, the round text; the door markers that preview a wave             |
+| `touchControls.ts`, `thumbArea.ts`                  | Sticks, ghost sticks, icon buttons, and the gun cluster; the portrait thumb area's wainscot                     |
+| `menus.ts`, `pauseHelp.ts`, `screens.ts`            | Mode buttons, the zombie card, corner icons; the pause panel; title, banners, pause, and stats panels           |
+| `font.ts`, `sprite.ts`, `png.ts`                    | The pixel font and coin; pixel maps baked into sprite images; colors, rasters, and the PNG encoder              |
+| `testPng.ts`, `icons.ts`                            | PNG data URLs read back into pixels for tests; pixel maps turned into SVG icons for HTML buttons                |
+| `version.ts`, `updateChip.ts`                       | The build id, the `version.json` check, and reloading; the "New version ready" chip                             |
+| `prng.ts`, `constants.ts`                           | The seeded random number generator; the view size, speeds, and other tuning numbers                             |
 
-The game draws every fixed sprite with `Canvas.Image`, which Foldkit 0.169.0 does not ship. It is ported from the upstream pull request [foldkit/foldkit#1846](https://github.com/foldkit/foldkit/pull/1846) (commit `a9009a20`) as a Bun patch: `patches/foldkit@0.169.0.patch`, listed under `patchedDependencies` in `package.json` and `bun.lock`. `bun install`, including `bun install --frozen-lockfile` in CI, applies it to `node_modules/foldkit`. It adds the `Image` shape (with `ImageCrop` and `ImageRendering`) to the Shape union and its declarations, the painter's `drawImage` path with a per-shape `imageSmoothingEnabled`, the page-wide image cache keyed by `src`, and the repaint of each canvas's latest scene when an image it drew finishes loading. Upstream keeps the cache in `canvas/imageCache.ts`. The patch puts it in `canvas/paint.js`, because Bun failed to apply a patch that adds a file.
+### Elsewhere
 
-- **Changing it.** Run `bun patch foldkit`, edit the files under `node_modules/foldkit/dist/canvas/`, then `bun patch --commit node_modules/foldkit`. Delete the `.bun-tag-*` hunk Bun writes at the top of the patch, and check that no hunk creates a new file.
-- **Dropping it.** Once a Foldkit release ships `Canvas.Image`, upgrade `foldkit`, delete `patches/`, remove `patchedDependencies` from `package.json`, and run `bun install`. The game uses only the upstream API, so no game code changes.
-- **Upgrading Foldkit before then.** The patch is pinned to `foldkit@0.169.0`. A new version needs the patch redone against its `dist`.
-
-### Deploying
-
-`bun run build` writes a static site to `dist/`. Vite's `base` is `'./'`, so every asset path is relative and `dist/` works from any sub-path. Check it with `bunx vite preview` before publishing. It needs an HTTP server: opening `dist/index.html` straight from disk does not load the module script.
-
-- **Cloudflare.** The game lives at https://munch-manor.tanner-scadden.workers.dev, an assets-only Worker named `munch-manor`. Beside it, each stage has an API Worker (`munch-manor-api`) with its D1 analytics database and the sync Durable Objects (one per player scope, plus a directory of devices). They are declared with [Alchemy](https://alchemy.run/) in `infra/alchemy.run.ts`, a separate package with its own Effect version. See [`infra/README.md`](./infra/README.md) and "Analytics" in [`PLATFORM.md`](./PLATFORM.md).
-- **itch.io.** Zip the contents of `dist/` with `index.html` at the top of the zip, upload it as an HTML game, and set the viewport to 16:9 with fullscreen allowed.
-
-`.github/workflows/deploy.yml` deploys on its own:
-
-- **Push to `main`.** The check job runs `typecheck`, `lint`, `test`, and `build`, and typechecks `infra/`. Only if all pass does the deploy job run `alchemy deploy --stage prod`, then wait for the URL to answer 200. A failing check publishes nothing.
-- **Pull request.** The same checks, then a preview at `https://munch-manor-pr-<number>.tanner-scadden.workers.dev`, with its URL in a comment on the pull request. Closing the pull request destroys the preview.
-- **By hand.** Run the workflow from the Actions tab on `main` to redeploy production.
-
-Alchemy skips the build and the upload when none of `src/`, `packages/*/src/`, `packages/*/package.json`, `public/`, `patches/`, `index.html`, `CHANGELOG.md`, `vite.config.ts`, `tsconfig.json`, `package.json`, or `bun.lock` changed. Deploy state lives in Alchemy's Cloudflare state store, so local and CI deploys share it.
-
-To deploy or destroy from this machine, run from `infra/` after `bun install`, with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` exported (the commands are in `infra/README.md`): `bun alchemy deploy --stage prod`, or `bun alchemy destroy --stage pr-<number>`. A local deploy ships the working tree as it is, uncommitted changes included. Add `--force` to put the declared version back if something else overwrote the Worker, since `alchemy drift` does not notice that.
-
-Credentials: locally, the Cloudflare API token is in the macOS keychain under `cloudflare-api-token`. CI uses the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` Actions secrets, which `infra/github.ts` writes from a narrow account token named `munch-manor-ci`. Never put a token in the repo or in a `VITE_` variable.
-
-GitHub Pages is gone: its workflow is deleted and the site is disabled. Cloudflare Workers Builds is not connected either; the Deploy workflow is the only deploy path, so do not connect the repo in the Cloudflare dashboard.
-
-#### How updates reach installed apps
-
-iOS keeps a Home Screen app alive in the background, so players can keep an old build for days after a deploy. There is no service worker, on purpose. Instead:
-
-- **Build id.** A small plugin in `vite.config.ts` stamps every production build with an id: `BUILD_ID` if set, else `GITHUB_SHA` (CI and the Alchemy deploy in CI), else the local commit (with `-dirty-<timestamp>` when the tree has uncommitted changes, since a local deploy ships them), else a timestamp. The id is the compile-time constant `__BUILD_ID__` and is also written to `dist/version.json` as `{ "build": "<id>" }`. `bun dev` uses `dev` and never checks; the tests use `test`.
-- **Never cached.** `public/_headers` serves `/version.json` with `no-store` and `/` and `/index.html` with `no-cache`, and the game fetches `version.json` with `cache: 'no-store'` and a time query.
-- **When it checks.** When the page becomes visible again, on a back forward cache restore, on window focus, and every five minutes on the title, pause, Game Over, Victory, and the break between waves. Never on a timer mid-wave. A failed or offline check is ignored.
-- **The prompt.** If the live build differs from the running one, a "New version ready" chip shows on the home menu only, so a reload never costs a run. Tapping it reloads the page. Pause, breaks, and the end screens only record the newer build. Game Over and Victory then offer only MENU (Enter or H) with the line "A new version is waiting on the menu.", so the player lands where the chip is. Its place lives in `.update-chip` in `src/styles.css`, as arena pixels (`--chip-arena-x`, `--chip-arena-y`), so it is easy to move.
-- **Check it.** `PART=e2e bun shots26.ts` in `tools/audit` builds, serves, rebuilds under an open page, and checks that the chip appears and the reload lands on the new build.
+- **The Foldkit patch.** Every fixed sprite is a `Canvas.Image`, which Foldkit 0.169.0 has only through the Bun patch `patches/foldkit@0.169.0.patch`. Read [`patches/README.md`](./patches/README.md) before changing it, dropping it, or upgrading Foldkit.
+- **Deploying.** A push to `main` deploys production through `.github/workflows/deploy.yml` once `typecheck`, `lint`, `test`, and `build` pass, and a pull request gets a preview. Stages, local deploys, itch.io, and credentials are in [`infra/README.md`](./infra/README.md). The workflow is the only deploy path: never connect Cloudflare Workers Builds, and never put a token in the repo or in a `VITE_` variable.
+- **How updates reach installed apps.** There is no service worker: each build is stamped into `version.json`, and a "New version ready" chip waits on the home menu. See "How updates reach installed apps" in [`PLATFORM.md`](./PLATFORM.md).
 
 ### Rules
 
