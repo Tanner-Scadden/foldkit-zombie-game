@@ -351,7 +351,12 @@ const hurtPlayer = (
         knockback: knockback => scaleVector(knockback, knockbackScale),
       }),
     frameEvents: Array.append(
-      GameEvent.PlayerHurt({ x: player.x, y: player.y, direction }),
+      GameEvent.PlayerHurt({
+        x: player.x,
+        y: player.y,
+        direction,
+        source: 'Boss',
+      }),
     ),
   })
 }

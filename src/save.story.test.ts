@@ -43,7 +43,7 @@ import { ZOMBIE_KIND_ORDER } from './zombies'
 const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 
 const learnedSave: PlayerSave = {
-  version: 2,
+  version: 3,
   onboarding: {
     lessons: {
       move: 'Learned',
@@ -59,7 +59,7 @@ const learnedSave: PlayerSave = {
     introducedKinds: ZOMBIE_KIND_ORDER,
   },
   homeScreenTip: 'Dismissed',
-  settings: { sound: 'Muted', music: 'Off', shake: 'Off' },
+  settings: { sound: 'Muted', music: 'Off', shake: 'Off', shareStats: 'Off' },
   appearance: {
     body: 'Female',
     hairStyle: 'Ponytail',
@@ -111,18 +111,44 @@ describe('the schema', () => {
     expect(decodeSave(json)).toEqual(Option.some(fresh))
   })
 
-  test('a version 1 save still loads, as Normal with the card still to come', () => {
+  const SETTINGS_BEFORE_SHARING = { sound: 'Muted', music: 'Off', shake: 'Off' }
+
+  const sharingLearnedSave: PlayerSave = {
+    ...learnedSave,
+    settings: { ...learnedSave.settings, shareStats: 'On' },
+  }
+
+  test('a version 1 save still loads, as Normal with the card still to come and sharing on', () => {
     const { difficulty: _, ...withoutDifficulty } = learnedSave
-    const json = JSON.stringify({ ...withoutDifficulty, version: 1 })
+    const json = JSON.stringify({
+      ...withoutDifficulty,
+      version: 1,
+      settings: SETTINGS_BEFORE_SHARING,
+    })
     expect(decodeSave(json)).toEqual(
-      Option.some({ ...learnedSave, difficulty: unpickedDifficulty }),
+      Option.some({ ...sharingLearnedSave, difficulty: unpickedDifficulty }),
     )
+  })
+
+  test('a version 2 save still loads, keeping its difficulty, with sharing on', () => {
+    const json = JSON.stringify({
+      ...learnedSave,
+      version: 2,
+      settings: SETTINGS_BEFORE_SHARING,
+    })
+    expect(decodeSave(json)).toEqual(Option.some(sharingLearnedSave))
+  })
+
+  test('the sharing setting round trips through the model', () => {
+    const restored = restoreSave(initialModel, learnedSave)
+    expect(restored.shareStats).toBe('Off')
+    expect(saveOf(restored).settings.shareStats).toBe('Off')
   })
 
   test('corrupted JSON, a wrong version, and a missing field read as no save', () => {
     const json = Option.getOrThrow(encodeSave(learnedSave))
-    expect(decodeSave('{"version":2,')).toEqual(Option.none())
-    expect(decodeSave(json.replace('"version":2', '"version":0'))).toEqual(
+    expect(decodeSave('{"version":3,')).toEqual(Option.none())
+    expect(decodeSave(json.replace('"version":3', '"version":0'))).toEqual(
       Option.none(),
     )
     expect(

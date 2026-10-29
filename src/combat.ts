@@ -177,6 +177,8 @@ export const ZOMBIE_BLAST_TARGET: BlastTarget<Zombie> = {
   },
 }
 
+// NOTE: only an Exploder's blast reaches the player, so its hurt names the
+// Exploder as the source.
 export const PLAYER_BLAST_TARGET: BlastTarget<Player> = {
   center: player => player,
   radius: () => PLAYER_RADIUS,
@@ -185,7 +187,14 @@ export const PLAYER_BLAST_TARGET: BlastTarget<Player> = {
   damageFrom: ({ playerDamage }) => playerDamage,
   hurt: (player, { damage, direction }) => ({
     target: woundPlayer(player, damage, direction),
-    events: [GameEvent.PlayerHurt({ x: player.x, y: player.y, direction })],
+    events: [
+      GameEvent.PlayerHurt({
+        x: player.x,
+        y: player.y,
+        direction,
+        source: 'Exploder',
+      }),
+    ],
   }),
 }
 

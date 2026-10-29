@@ -12,6 +12,7 @@ import {
   type Model,
   MusicSetting,
   ShakeSetting,
+  ShareStatsSetting,
   SoundSetting,
   TrapHint,
   ZombieKind,
@@ -26,7 +27,7 @@ import {
 // into that scope and this key is retired. A new field goes in here with a
 // version bump, and decodeSave migrates or drops the older version.
 export const SAVE_KEY = 'munch-manor:save'
-export const SAVE_VERSION = 2
+export const SAVE_VERSION = 3
 
 export const SavedLesson = Schema.Literals(['Pending', 'Learned'])
 export type SavedLesson = typeof SavedLesson.Type
@@ -53,10 +54,19 @@ export const SavedOnboarding = Schema.Struct({
 })
 export type SavedOnboarding = typeof SavedOnboarding.Type
 
+const SavedSettingsV2 = Schema.Struct({
+  sound: SoundSetting,
+  music: MusicSetting,
+  shake: ShakeSetting,
+})
+type SavedSettingsV2 = typeof SavedSettingsV2.Type
+
+// NOTE: version 3 added shareStats, the "Share anonymous play stats" toggle.
 export const SavedSettings = Schema.Struct({
   sound: SoundSetting,
   music: MusicSetting,
   shake: ShakeSetting,
+  shareStats: ShareStatsSetting,
 })
 export type SavedSettings = typeof SavedSettings.Type
 
@@ -79,10 +89,20 @@ const PlayerSaveV1 = Schema.Struct({
   version: Schema.Literal(1),
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
-  settings: SavedSettings,
+  settings: SavedSettingsV2,
   appearance: Appearance,
 })
 type PlayerSaveV1 = typeof PlayerSaveV1.Type
+
+const PlayerSaveV2 = Schema.Struct({
+  version: Schema.Literal(2),
+  onboarding: SavedOnboarding,
+  homeScreenTip: HomeScreenTip,
+  settings: SavedSettingsV2,
+  appearance: Appearance,
+  difficulty: SavedDifficulty,
+})
+type PlayerSaveV2 = typeof PlayerSaveV2.Type
 
 export const PlayerSave = Schema.Struct({
   version: Schema.Literal(SAVE_VERSION),
@@ -98,24 +118,46 @@ const PlayerSaveJson = Schema.fromJsonString(PlayerSave)
 
 const PlayerSaveV1Json = Schema.fromJsonString(PlayerSaveV1)
 
+const PlayerSaveV2Json = Schema.fromJsonString(PlayerSaveV2)
+
 export const unpickedDifficulty: SavedDifficulty = {
   chosen: 'Normal',
   card: 'Unseen',
   nightmare: 'Locked',
 }
 
-const migrateV1 = (save: PlayerSaveV1): PlayerSave => ({
+const sharingSettings = (settings: SavedSettingsV2): SavedSettings => ({
+  sound: settings.sound,
+  music: settings.music,
+  shake: settings.shake,
+  shareStats: 'On',
+})
+
+const migrateV2 = (save: PlayerSaveV2): PlayerSave => ({
   version: SAVE_VERSION,
   onboarding: save.onboarding,
   homeScreenTip: save.homeScreenTip,
-  settings: save.settings,
+  settings: sharingSettings(save.settings),
   appearance: save.appearance,
-  difficulty: unpickedDifficulty,
+  difficulty: save.difficulty,
 })
+
+const migrateV1 = (save: PlayerSaveV1): PlayerSave =>
+  migrateV2({
+    version: 2,
+    onboarding: save.onboarding,
+    homeScreenTip: save.homeScreenTip,
+    settings: save.settings,
+    appearance: save.appearance,
+    difficulty: unpickedDifficulty,
+  })
 
 export const decodeSave = (raw: string): Option.Option<PlayerSave> =>
   pipe(
     Schema.decodeOption(PlayerSaveJson)(raw),
+    Option.orElse(() =>
+      Option.map(Schema.decodeOption(PlayerSaveV2Json)(raw), migrateV2),
+    ),
     Option.orElse(() =>
       Option.map(Schema.decodeOption(PlayerSaveV1Json)(raw), migrateV1),
     ),
@@ -155,6 +197,7 @@ export const saveOf = (model: Model): PlayerSave => ({
     sound: model.soundSetting,
     music: model.musicSetting,
     shake: model.shakeSetting,
+    shareStats: model.shareStats,
   },
   appearance: model.appearance,
   difficulty: {
@@ -206,6 +249,7 @@ export const restoreSave = (model: Model, save: PlayerSave): Model =>
     soundSetting: () => save.settings.sound,
     musicSetting: () => save.settings.music,
     shakeSetting: () => save.settings.shake,
+    shareStats: () => save.settings.shareStats,
     appearance: () => save.appearance,
     difficulty: setting =>
       modifyFields(setting, {

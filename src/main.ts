@@ -21,6 +21,9 @@ import { modifyFields } from 'foldkit/struct'
 
 import { Dialog, Tabs } from '@foldkit/ui'
 
+import { RunSummary } from './analytics'
+import { generateVisitId, sendRunSummary } from './analyticsBeacon'
+import { maybeRunOutcome, runSummaryOf } from './analyticsRun'
 import { randomAppearance, spriteWarmUpSources } from './appearance'
 import {
   type AudioEngineError,
@@ -297,6 +300,10 @@ export const Message = defineMessageUnion({
   FailedLoadSave: { reason: Schema.String },
   CompletedWriteSave: {},
   FailedWriteSave: { reason: Schema.String },
+  ClickedShareStatsButton: {},
+  CompletedGenerateVisitId: { visitId: Schema.String },
+  CompletedSendRunSummary: {},
+  FailedSendRunSummary: { reason: Schema.String },
   ClickedResetTutorialButton: {},
   ClickedConfirmResetTutorialButton: {},
   ClickedCancelResetTutorialButton: {},
@@ -636,6 +643,28 @@ export const WriteSave = Command.define('WriteSave', {
     ),
 })
 
+// ANALYTICS
+
+export const GenerateVisitId = Command.define('GenerateVisitId', {
+  messages: [Message.CompletedGenerateVisitId],
+  execute: Effect.map(generateVisitId, visitId =>
+    Message.CompletedGenerateVisitId({ visitId }),
+  ),
+})
+
+export const SendRunSummary = Command.define('SendRunSummary', {
+  args: { summary: RunSummary },
+  messages: [Message.CompletedSendRunSummary, Message.FailedSendRunSummary],
+  execute: ({ summary }) =>
+    pipe(
+      sendRunSummary(summary),
+      Effect.as(Message.CompletedSendRunSummary()),
+      Effect.catch(error =>
+        Effect.succeed(Message.FailedSendRunSummary({ reason: error.reason })),
+      ),
+    ),
+})
+
 export const FocusTutorialReset = Command.define('FocusTutorialReset', {
   args: { id: Schema.String },
   messages: [Message.CompletedFocusTutorialReset],
@@ -659,6 +688,7 @@ export const init: Runtime.ApplicationInit<Model, Message> = () => ({
   commands: [
     LoadSave(),
     GenerateSeed(),
+    GenerateVisitId(),
     DetectInputDevice(),
     DetectScreenFit(),
     LoadStyles(),
@@ -1339,6 +1369,42 @@ const toggleShake = (model: Model): Model =>
   modifyFields(model, {
     shakeSetting: setting => (setting === 'On' ? 'Off' : 'On'),
   })
+
+const toggleShareStats = (model: Model): Model =>
+  modifyFields(model, {
+    shareStats: setting => (setting === 'On' ? 'Off' : 'On'),
+  })
+
+// NOTE: the summary is built here from the Model, so update stays pure. The
+// visit id comes from GenerateVisitId and the build id is a build constant.
+const sendRunSummaryFrom =
+  (before: Model): UpdateStep =>
+  stepModel => {
+    if (stepModel.shareStats === 'Off') {
+      return { model: stepModel }
+    }
+
+    return Option.match(
+      Option.all([maybeRunOutcome(before, stepModel), stepModel.maybeVisitId]),
+      {
+        onNone: () => ({ model: stepModel }),
+        onSome: ([outcome, visitId]) => ({
+          model: stepModel,
+          commands: [
+            SendRunSummary({
+              summary: runSummaryOf(
+                before,
+                stepModel,
+                outcome,
+                visitId,
+                RUNNING_BUILD,
+              ),
+            }),
+          ],
+        }),
+      },
+    )
+  }
 
 // SPLASH
 
@@ -2037,6 +2103,16 @@ const updateGame = (model: Model, message: Message) =>
 
     FailedWriteSave: () => ({ model }),
 
+    ClickedShareStatsButton: () => ({ model: toggleShareStats(model) }),
+
+    CompletedGenerateVisitId: ({ visitId }) => ({
+      model: modifyFields(model, { maybeVisitId: () => Option.some(visitId) }),
+    }),
+
+    CompletedSendRunSummary: () => ({ model }),
+
+    FailedSendRunSummary: () => ({ model }),
+
     ClickedResetTutorialButton: () => askToResetTutorial(model),
 
     ClickedConfirmResetTutorialButton: () =>
@@ -2117,6 +2193,7 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     settleNightmareFrom(model),
     unlockNightmareFrom(model),
     stepModel => ({ model: recordSessionBests(model, stepModel) }),
+    sendRunSummaryFrom(model),
     writeSaveFrom(model),
   ])
 

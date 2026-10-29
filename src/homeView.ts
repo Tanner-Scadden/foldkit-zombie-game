@@ -245,27 +245,41 @@ type Toggle = Readonly<{
   label: string
   isOn: boolean
   maybeKey: Option.Option<string>
+  maybeNote: Option.Option<string>
   message: Message
 }>
+
+export const SHARE_STATS_NOTE =
+  'Sends the wave, kills, and run time when a run ends. Nothing personal.'
 
 const settingToggles = (model: Model): ReadonlyArray<Toggle> => [
   {
     label: 'Sound',
     isOn: model.soundSetting === 'On',
     maybeKey: Option.some('M'),
+    maybeNote: Option.none(),
     message: Message.ClickedMuteButton(),
   },
   {
     label: 'Music',
     isOn: model.musicSetting === 'On',
     maybeKey: Option.some('N'),
+    maybeNote: Option.none(),
     message: Message.ClickedMusicButton(),
   },
   {
     label: 'Screen shake',
     isOn: model.shakeSetting === 'On',
     maybeKey: Option.none(),
+    maybeNote: Option.none(),
     message: Message.ClickedShakeButton(),
+  },
+  {
+    label: 'Share anonymous play stats',
+    isOn: model.shareStats === 'On',
+    maybeKey: Option.none(),
+    maybeNote: Option.some(SHARE_STATS_NOTE),
+    message: Message.ClickedShareStatsButton(),
   },
   ...(model.screenFit === 'Fullscreen'
     ? [
@@ -273,6 +287,7 @@ const settingToggles = (model: Model): ReadonlyArray<Toggle> => [
           label: 'Full screen',
           isOn: model.fullscreen === 'On',
           maybeKey: Option.none(),
+          maybeNote: Option.none(),
           message: Message.ClickedFullscreenButton(),
         },
       ]
@@ -302,6 +317,10 @@ const toggleView = (toggle: Toggle, h: HtmlBuilder<Message>): Html =>
           ),
         ],
       ),
+      ...Option.match(toggle.maybeNote, {
+        onNone: () => [],
+        onSome: note => [h.p([h.Class('setting-note')], [note])],
+      }),
     ],
   )
 

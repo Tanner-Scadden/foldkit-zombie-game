@@ -23,6 +23,7 @@ import { Dialog } from '@foldkit/ui'
 import { RESTART_GRACE_MS } from './constants'
 import { withBests } from './difficulty'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
+import { SHARE_STATS_NOTE } from './homeView'
 import {
   FocusHomeButton,
   FocusTutorialReset,
@@ -264,6 +265,21 @@ describe('Home menu', () => {
       expect(musicToggle).toHaveAttr('aria-pressed', 'false'),
       click(shakeToggle),
       expect(shakeToggle).toHaveAttr('aria-pressed', 'false'),
+    )
+  })
+
+  test('Settings shares anonymous play stats by default and says what it sends', () => {
+    const shareToggle = role('button', { name: 'Share anonymous play stats' })
+    scene(
+      { update, view },
+      given(home),
+      measureSurface,
+      click(settingsButton),
+      ...showDialog(),
+      expect(shareToggle).toHaveAttr('aria-pressed', 'true'),
+      expect(text(SHARE_STATS_NOTE)).toExist(),
+      click(shareToggle),
+      expect(shareToggle).toHaveAttr('aria-pressed', 'false'),
     )
   })
 

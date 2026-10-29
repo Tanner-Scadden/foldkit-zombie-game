@@ -577,6 +577,7 @@ describe('game events', () => {
             x: ARENA_LEVEL.width / 2,
             y: ARENA_LEVEL.height / 2,
             direction: { x: -1, y: 0 },
+            source: 'Shambler',
           }),
         ])
       }),

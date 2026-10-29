@@ -1042,7 +1042,12 @@ const bitePlayer = (model: Model, attacker: Zombie): Model => {
       ),
     zombies: Array.map(bumpAttacker(attacker, direction)),
     frameEvents: Array.append(
-      GameEvent.PlayerHurt({ x: player.x, y: player.y, direction }),
+      GameEvent.PlayerHurt({
+        x: player.x,
+        y: player.y,
+        direction,
+        source: attacker.kind,
+      }),
     ),
   })
 }

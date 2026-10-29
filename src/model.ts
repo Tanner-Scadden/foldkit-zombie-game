@@ -451,7 +451,12 @@ export const GameEvent = defineTaggedUnion({
     kind: ZombieKind,
     nearness: Schema.Number,
   },
-  PlayerHurt: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  PlayerHurt: {
+    x: Schema.Number,
+    y: Schema.Number,
+    direction: Vector,
+    source: ZombieKind,
+  },
   BulletStruck: { x: Schema.Number, y: Schema.Number, direction: Vector },
   RanDry: { x: Schema.Number, y: Schema.Number },
   DryFired: { x: Schema.Number, y: Schema.Number },
@@ -578,6 +583,11 @@ export type HomeScreenTip = typeof HomeScreenTip.Type
 
 export const ShakeSetting = Schema.Literals(['On', 'Off'])
 export type ShakeSetting = typeof ShakeSetting.Type
+
+// NOTE: whether the game sends an anonymous run summary at the end of each
+// run (src/analytics.ts). On by default, kept in the on-device save.
+export const ShareStatsSetting = Schema.Literals(['On', 'Off'])
+export type ShareStatsSetting = typeof ShareStatsSetting.Type
 
 export const HomeButton = Schema.Literals([
   'Play',
@@ -1030,6 +1040,11 @@ export const RunStats = Schema.Struct({
   shotsHit: Schema.Number,
   heartsLost: Schema.Number,
   trapsPlaced: Schema.Number,
+  purchases: Schema.Number,
+  powerUpsGrabbed: Schema.Number,
+  maybeLastHurtBy: Schema.Option(ZombieKind),
+  activeFrames: Schema.Number,
+  activeFrameMs: Schema.Number,
   runMs: Schema.Number,
 })
 export type RunStats = typeof RunStats.Type
@@ -1100,6 +1115,8 @@ export const Model = Schema.Struct({
   appearance: Appearance,
   character: CharacterPicker,
   shakeSetting: ShakeSetting,
+  shareStats: ShareStatsSetting,
+  maybeVisitId: Schema.Option(Schema.String),
   maybeHomeFocus: Schema.Option(HomeButton),
   panel: MenuPanel,
   panelDialog: Dialog.Model,
@@ -1181,6 +1198,11 @@ export const freshStats: RunStats = {
   shotsHit: 0,
   heartsLost: 0,
   trapsPlaced: 0,
+  purchases: 0,
+  powerUpsGrabbed: 0,
+  maybeLastHurtBy: Option.none(),
+  activeFrames: 0,
+  activeFrameMs: 0,
   runMs: 0,
 }
 
@@ -1322,6 +1344,8 @@ export const initialModel: Model = {
   appearance: defaultAppearance,
   character: closedCharacterPicker,
   shakeSetting: 'On',
+  shareStats: 'On',
+  maybeVisitId: Option.none(),
   maybeHomeFocus: Option.none(),
   panel: 'HowToPlay',
   panelDialog: Dialog.init({ id: PANEL_DIALOG_ID }),
