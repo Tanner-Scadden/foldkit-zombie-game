@@ -1052,6 +1052,8 @@ Measured on 2026-10-29 with 200 runs per bot from seed 1, on the code before the
 
 Try 2 shipped. In it, deaths by wave (default) are 0, 0, 1, 3, 10, 24, 11, and 37%, so wave 8 is still the biggest killer. The Big Leaguer costs about 1% of lost hearts and raises about 1.3 shields a run. Fewer Kaboomers made it harder, not easier: his chains clear packs for the bot. The default bot sits at the bottom of its 15 to 25% range and the `SWAP=1` bot is well under its 30 to 45%. That needs another pass, measured against the current main, likely with the other difficulty work.
 
+Then measured again on Normal after the difficulty levels, the plank cap, and plank chewing landed, with `bun run balance 200`: the default bot won 23 of 200 (11.5%) with 9 close calls, and the `SWAP=1` bot 50 of 200 (25%) with 11. Deaths by wave (default) are 0, 0, 2, 1, 4, 18, 15, and 50%, so wave 8 is the biggest killer. Kaboomers cost 32% of lost hearts (31% for `SWAP=1`) and the Big Leaguer 1%, with 2.2 throws and 1.4 shields a run. Both bots are under their ranges; the pacing pass that follows rebalances every difficulty.
+
 ### Rendering for bigger maps
 
 Set up on 2026-10-28, ahead of the estate. Nothing on screen moved, because today's one room is exactly one view.
