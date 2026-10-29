@@ -26,7 +26,7 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 | `cd infra && bun alchemy plan --stage prod`    | Show what a production deploy to Cloudflare would change                                                                   |
 | `cd infra && bun alchemy deploy --stage prod`  | Deploy production to Cloudflare by hand (see Deploying)                                                                    |
 | `cd tools/audit && bun live-check.ts [url]`    | Load a deployed copy in headless Chrome and check that it boots                                                            |
-| `bun run balance [runs]`                       | The balance bot through the heavy guard. Env vars such as `MODE=endless` and `SWAP=1` pass through                         |
+| `bun run balance [runs]`                       | The balance bot through the heavy guard. Env vars such as `MODE=endless`, `SWAP=1`, and `VIEW=portrait` pass through       |
 | `bun run balance:model`                        | The analytical balance model: every wave and level from the tables, in under a second                                      |
 | `bun run balance -- --wave 4 --runs 200`       | The wave snapshot pass through the guard: one wave from typical run states. `--wave all` plays every wave                  |
 | `bun run balance:nightly`                      | The nightly balance suite through the guard, reported in `tools/balance/reports/<date>.md`                                 |
@@ -73,7 +73,8 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/stats.ts`         | Run stats: kills, accuracy, run time, and the verdicts                 |
 | `src/simulation.ts`    | The pure step that advances the game one frame                         |
 | `src/arena.ts`         | The level record, the tile map, doorways, collision, and line of sight |
-| `src/camera.ts`        | The camera derived from the player and the level, and world to view    |
+| `src/screen.ts`        | Landscape and portrait screens: sizes, the world window, the HUD band  |
+| `src/camera.ts`        | The camera derived from the player and the level, the aim lean         |
 | `src/pathing.ts`       | The flow field toward the player and zombie steering                   |
 | `src/waves.ts`         | Spawn tables, packs, the wave arc, spawning, and run phases            |
 | `src/pacing.ts`        | Sawtooth beats, pack telegraphs, door camping, and intensity           |
@@ -168,6 +169,7 @@ iOS keeps a Home Screen app alive in the background, so players can keep an old 
 
 - **Keep the game deterministic.** `update` is pure. It never calls `Math.random` and never reads the clock. Randomness comes from the seeded generator whose state lives in the Model, so the same seed and the same Messages give the same game.
 - **Support desktop and touch.** Every input must work with a keyboard and mouse and with touch. Touch tracks each finger by its `pointerId`, so two thumbs work at once.
+- **Support portrait and landscape on phones.** A touch phone held upright plays in the portrait layout (see "Portrait play" in `GAME_DESIGN.md`). Overlay code reads the screen from `screenOf(model)`, never `VIEW_WIDTH` and `VIEW_HEIGHT`, and CSS reads `--screen-w`, `--screen-h`, and `--world-top` from `.game-root`, with `[data-layout='Portrait']` rules for portrait. Check a layout change with `tools/audit/shots34.ts` and `PORTRAIT=1 bun taps.ts`. The installed Android app still locks to landscape in `public/manifest.webmanifest`.
 - **Follow the design doc.** Choices under "Decided" in `GAME_DESIGN.md` are settled. The "Reference notes" are ideas, not decisions. If a change goes against a decision, say so before making it.
 - **Use original art and names.** Do not copy art, names, or item lists from Zombie Estate 2.
 - **Keep the Effect plugin in `tsconfig.json`.** The `@effect/language-service` entry is what turns on the Effect diagnostics in `typecheck`. Without it, `typecheck` still passes but reports no Effect problems.
