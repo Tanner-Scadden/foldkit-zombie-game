@@ -15,6 +15,7 @@ const browserWindow = new Window()
 Object.assign(globalThis, {
   window: browserWindow,
   document: browserWindow.document,
+  __BUILD_ID__: 'dev',
 })
 
 const { Message, update } = await import('../../src/main')

@@ -55,10 +55,10 @@ Built on 2026-10-28 after a first-time phone player said the right stick was nev
 - **The practice gate.** Wave 1's 6 second countdown does not start until the player has learned to move and to aim and fire. The HUD says TRY THE CONTROLS FIRST, and START WAVE (Enter) skips the gate. R stays reload. A returning player who learned both earlier in the session never sees it.
 - **The new zombie card.** Timing superseded on 2026-10-28 by "Breaks and the mobile HUD" (5.5 s, skippable after 1.5 s, with a prompt). Changed on 2026-10-28 after a playtest: the card used to come up at the start of Preparation and freeze the game until GOT IT, which felt like a modal interruption. Now it comes up the moment the wave starts, when the countdown runs out or START WAVE is pressed, for the first kind in that wave not yet introduced this session. It is a band across the middle of the screen that slides in with the kind's walk cycle large, its name, a one-line pitch, and a bar that drains over 2.6 seconds. The world holds still while it is up, so no zombie spawns and the wave clock does not run, and then it slides away on its own and the wave begins. After 0.5 seconds, Enter, a click or tap anywhere, or the GOT IT button skip the rest. Movement keys and held thumbs are kept, so the player moves the moment it goes. Escape pauses it, and it carries on after resuming. Preparation is never held up by it. The HTML behind it is a labelled group with the name and pitch and the GOT IT button, and the screen reader status line reads the name and pitch. Each kind is introduced once per page session, in campaign or endless, and nothing is saved. During Preparation the door preview tags a door with NEW, colors the new kind's count orange, and the NEW: banner names the kind, so the card is never the first warning.
 
-| Kind    | Card pitch                                   |
-| ------- | -------------------------------------------- |
-| Groaner | HE'S SLOW. BACK UP AND KEEP SHOOTING.        |
-| Hotfoot | ZOOMS RIGHT AT YOU. ONE SHOT DROPS IT.       |
+| Kind        | Card pitch                                           |
+| ----------- | ---------------------------------------------------- |
+| Groaner     | HE'S SLOW. BACK UP AND KEEP SHOOTING.                |
+| Hotfoot     | ZOOMS RIGHT AT YOU. ONE SHOT DROPS IT.               |
 | Gasbag      | BLOWS UP WHEN IT DIES. POP IT NEAR ITS PALS.         |
 | Big Lug     | TAKES A TON OF BULLETS. DON'T GET CORNERED.          |
 | Chucker     | HE HURLS GROANERS AT YOU. GET OFF THE MARK!          |
@@ -123,33 +123,33 @@ Proposed on 2026-10-28 after the first playtest ("the pistol should have to relo
 
 Proposed on 2026-10-28 for step 5, the horde. These are starting numbers to play against, not decisions. The kind stats live in `src/zombies.ts` and the wave arc in `src/waves.ts`.
 
-| Kind     | Name    | Speed (px/s) | Health | Bite     | Radius | Bounty | Notes                                                                                  |
-| -------- | ------- | ------------ | ------ | -------- | ------ | ------ | -------------------------------------------------------------------------------------- |
-| Shambler | Groaner | 16 to 28     | 3      | 1 heart  | 4      | $2     | The baseline                                                                           |
-| Runner   | Hotfoot | 44 to 52     | 2      | 1 heart  | 3.5    | $3     | Light, so it is shoved around and knocked back further                                 |
-| Tank     | Big Lug | 11 to 14     | 30     | 2 hearts | 6.5    | $20    | Takes 12% of knockback, shoves the crowd aside, shows a health bar once hurt           |
-| Exploder | Gasbag  | 20 to 25     | 3      | none     | 4.5    | $3     | Bursts 200 ms after it dies, or 340 ms after it touches the player, which pays nothing. Before 2026-10-28 these were 140 ms and 220 ms, too short to read its blast ring |
-| Thrower  | Chucker | 17 to 21     | 8      | 1 heart  | 4.5    | $8     | Hangs back and lobs Groaners. Shows a health bar once hurt. See "New kinds, frenzy, and the Gasbag pass" |
-| Crawler  | Ankle Biter | 26 to 32 | 2      | none     | 3.5    | $3     | Comes up through the floor and grabs the player's ankles, halving their speed for 1.1 s |
+| Kind     | Name        | Speed (px/s) | Health | Bite     | Radius | Bounty | Notes                                                                                                                                                                    |
+| -------- | ----------- | ------------ | ------ | -------- | ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Shambler | Groaner     | 16 to 28     | 3      | 1 heart  | 4      | $2     | The baseline                                                                                                                                                             |
+| Runner   | Hotfoot     | 44 to 52     | 2      | 1 heart  | 3.5    | $3     | Light, so it is shoved around and knocked back further                                                                                                                   |
+| Tank     | Big Lug     | 11 to 14     | 30     | 2 hearts | 6.5    | $20    | Takes 12% of knockback, shoves the crowd aside, shows a health bar once hurt                                                                                             |
+| Exploder | Gasbag      | 20 to 25     | 3      | none     | 4.5    | $3     | Bursts 200 ms after it dies, or 340 ms after it touches the player, which pays nothing. Before 2026-10-28 these were 140 ms and 220 ms, too short to read its blast ring |
+| Thrower  | Chucker     | 17 to 21     | 8      | 1 heart  | 4.5    | $8     | Hangs back and lobs Groaners. Shows a health bar once hurt. See "New kinds, frenzy, and the Gasbag pass"                                                                 |
+| Crawler  | Ankle Biter | 26 to 32     | 2      | none     | 3.5    | $3     | Comes up through the floor and grabs the player's ankles, halving their speed for 1.1 s                                                                                  |
 
 - **The burst.** Radius 28 px. It costs the player 1 heart unless they are blinking, and deals 6 damage to every zombie it reaches. A Gasbag caught in a burst bursts 150 ms later, so chains ripple instead of going off at once. At most 2 bursts go off in one frame and the rest wait their turn.
 - **Speed.** Each wave scales every spawn's speed, from ×1 on wave 1 to ×1.49 on wave 8. By wave 8 the fastest Hotfoots outrun the player (72 px/s).
-- **Health.** Waves 5 to 8 scale every spawn's health by ×1.03, ×1.08, ×1.17, and ×1.1, rounded per zombie: a Big Lug has 31, 32, 35, and 33, and a Groaner and a Gasbag have 4 on wave 7 only. Wave 8 was ×1.21 until the boss's far attacks made him the step up on wave 8 (see "Boss far attacks"). Before the gnome pass they were ×1.12, ×1.22, ×1.32, and ×1.45. See "The gnome pass and spawn variety".
+- **Health.** Changed again on 2026-10-28 with the new kinds: waves 5 to 7 now scale by ×1, ×1.03, and ×1.1 (see "New kinds, frenzy, and the Gasbag pass"). Before that, waves 5 to 8 scaled every spawn's health by ×1.03, ×1.08, ×1.17, and ×1.1, rounded per zombie: a Big Lug has 31, 32, 35, and 33, and a Groaner and a Gasbag have 4 on wave 7 only. Wave 8 was ×1.21 until the boss's far attacks made him the step up on wave 8 (see "Boss far attacks"). Before the gnome pass they were ×1.12, ×1.22, ×1.32, and ×1.45. See "The gnome pass and spawn variety".
 
 Rewritten on 2026-10-28 after a playtest ("zombies should come out more in groups, and it is a bit too easy"). Each wave is learn, test, combine, or twist, built from the packs and the sawtooth described under "Packs and pacing" below. Health is the expected total, Groaner 3, Hotfoot 2, Gasbag 3, Big Lug 30.
 
 Rewritten again on 2026-10-28 for the gnome pass ("wave 2 feels meh", "mix up the spawns"). Pack sizes are lists, so a wave mixes singles, pairs, trios, and bigger squads. Most groups draw their doors per run, and stragglers wander in from any door between packs. Health here is before the wave's scale.
 
-| Wave | Zombies | Health | Cycles | What is new or special                                                                                                                                                          |
-| ---- | ------- | ------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | 6       | 18     | 1      | The tutorial. Four slow Groaners from the north door, 3 seconds apart, then the last two as a pair                                                                              |
-| 2    | 31      | 83     | 2      | Groaner packs of 1 to 3 from two doors drawn per run, the first within 1.5 s. After a short relax, NEW: Hotfoot, in ones and twos from one drawn door, then mixed Groaner packs. No pack of four, so the first frenzy waits for wave 3 |
-| 3    | 49      | 130    | 2      | Stragglers and mixed Groaner squads from two drawn doors, then the first pincer, Groaner packs of 3 to 5. After a relax, a Hotfoot rush from one drawn door and more stragglers |
-| 4    | 74      | 207    | 2      | NEW: Gasbag, alone from one drawn door, while Groaner packs of 2 to 5 come from two others. A pincer peak, a relax, Gasbags in mixed squads with stragglers, then a big pincer  |
-| 5    | 62      | 221    | 2      | NEW: Big Lug, alone from the north, with escorts in packs of 2 to 4 behind it. Mixed squads of 2 to 6, then a second Big Lug from a drawn door leads a pincer                   |
+| Wave | Zombies | Health | Cycles | What is new or special                                                                                                                                                                                                                                                     |
+| ---- | ------- | ------ | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | 6       | 18     | 1      | The tutorial. Four slow Groaners from the north door, 3 seconds apart, then the last two as a pair                                                                                                                                                                         |
+| 2    | 31      | 83     | 2      | Groaner packs of 1 to 3 from two doors drawn per run, the first within 1.5 s. After a short relax, NEW: Hotfoot, in ones and twos from one drawn door, then mixed Groaner packs. No pack of four, so the first frenzy waits for wave 3                                     |
+| 3    | 49      | 130    | 2      | Stragglers and mixed Groaner squads from two drawn doors, then the first pincer, Groaner packs of 3 to 5. After a relax, a Hotfoot rush from one drawn door and more stragglers                                                                                            |
+| 4    | 74      | 207    | 2      | NEW: Gasbag, alone from one drawn door, while Groaner packs of 2 to 5 come from two others. A pincer peak, a relax, Gasbags in mixed squads with stragglers, then a big pincer                                                                                             |
+| 5    | 62      | 221    | 2      | NEW: Big Lug, alone from the north, with escorts in packs of 2 to 4 behind it. Mixed squads of 2 to 6, then a second Big Lug from a drawn door leads a pincer                                                                                                              |
 | 6    | 63      | 235    | 2      | NEW: Chucker, two of them 16 s apart from one drawn door, hanging back to throw the Groaners in the squads. Stragglers and squads, a Big Lug and a frenzied pincer peak, a relax, then squads, stragglers, a third Big Lug, and a horde of packs of 3 to 5 from every door |
-| 7    | 69      | 237    | 3      | NEW: Ankle Biter, three up through the floor 9 s apart. A Big Lug with a pincer and a Hotfoot pack from one drawn door, then squads, a Chucker, a stream of stragglers, and a Hotfoot pair rush, then a pincer led by a third Big Lug |
-| 8    | 58      | 267    | 3      | The finale. Mixed squads and a pincer, two Ankle Biters and a Chucker, then squads with a pincer of two Big Lugs and a pincer, Hotfoot stragglers, then two more Big Lugs and a horde in two volleys |
+| 7    | 69      | 237    | 3      | NEW: Ankle Biter, three up through the floor 9 s apart. A Big Lug with a pincer and a Hotfoot pack from one drawn door, then squads, a Chucker, a stream of stragglers, and a Hotfoot pair rush, then a pincer led by a third Big Lug                                      |
+| 8    | 58      | 267    | 3      | The finale. Mixed squads and a pincer, two Ankle Biters and a Chucker, then squads with a pincer of two Big Lugs and a pincer, Hotfoot stragglers, then two more Big Lugs and a horde in two volleys                                                                       |
 
 Each wave is a list of groups and a list of holds. A group has a list of pack sizes, the gap inside a pack, a door pattern (One, Pincer, or All), the doors it may use and how many of them to draw for the run, a start time, the gap between volleys, the timing jitter, and weights for each kind. When Preparation begins the seeded generator shuffles each group's pack sizes, draws its doors, and then draws the door of every pack, the pincer's order and lag, the jitter, and every spawn's kind and offset, so the door preview shows exactly what will come and the same seed rolls the same wave. A kind's first wave uses a group of only that kind, from one door, so the "NEW" card never promises a zombie the roll left out. A straggler is a pack of one from any door with up to 1.5 s of jitter, so it wanders in between packs.
 
@@ -582,15 +582,15 @@ Added on 2026-10-28 from owner feedback: "Would love for us to have parts of the
 - **The rule.** Each kind's row in `ZOMBIE_KINDS` lists its wear stages. A stage comes off once health falls to its share of the zombie's most health, so wear is read from `hp` and `maxHp` alone, with no randomness and no extra state (`wearOf` in `src/zombies.ts`). Each frame compares every zombie's wear at the start and the end of the frame and records a `PartShed` event for each stage it crossed, so a part comes off exactly once, and one big hit past two thresholds sheds both in order. A killing hit sheds nothing: the death gibs cover it, and the falling body uses the fully worn sprite.
 - **What comes off.**
 
-  | Kind        | Comes off at       | What comes off                                                                                        |
-  | ----------- | ------------------ | ----------------------------------------------------------------------------------------------------- |
-  | Groaner     | 2/3, 1/3           | One reaching arm, leaving a red stump, then the top of its skull, showing pink brain and an empty eye |
-  | Hotfoot     | 1/2                | Its hair and scalp, showing pink brain                                                                |
-  | Big Lug     | 3/4, 1/2, 1/4      | One arm, the other arm, then its jaw                                                                  |
+  | Kind        | Comes off at       | What comes off                                                                                                                                                                         |
+  | ----------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Groaner     | 2/3, 1/3           | One reaching arm, leaving a red stump, then the top of its skull, showing pink brain and an empty eye                                                                                  |
+  | Hotfoot     | 1/2                | Its hair and scalp, showing pink brain                                                                                                                                                 |
+  | Big Lug     | 3/4, 1/2, 1/4      | One arm, the other arm, then its jaw                                                                                                                                                   |
   | Gasbag      | 2/3, 1/3           | A hole tears in the side of its belly, then its brass valve cracks and a second hole opens. Each hole leaks gas, and the bag shrinks 7% a stage. Redone on 2026-10-28 for its new look |
-  | Chucker     | 2/3, 1/3           | The top of its head, showing pink brain, then one long arm, leaving a red stump |
-  | Ankle Biter | 1/2                | The top of its head, showing pink brain |
-  | Uncle Chunk | 4/5, 3/5, 2/5, 1/5 | One arm, his party hat with his scalp, the other arm, then his belly bursts open                      |
+  | Chucker     | 2/3, 1/3           | The top of its head, showing pink brain, then one long arm, leaving a red stump                                                                                                        |
+  | Ankle Biter | 1/2                | The top of its head, showing pink brain                                                                                                                                                |
+  | Uncle Chunk | 4/5, 3/5, 2/5, 1/5 | One arm, his party hat with his scalp, the other arm, then his belly bursts open                                                                                                       |
 
   With 3 health a Groaner and a Gasbag lose a part to each of the first two hits. With 4 (wave 7) the first hit takes nothing off and the next two do. A Hotfoot with 2 health loses its scalp to the first hit. A Big Lug of 36 loses parts at 27, 18, and 9.
 
@@ -735,6 +735,97 @@ Tuning log. "Default" and "`SWAP=1`" are wins. "Kill" is his median kill time in
 - **Against the targets.** Default 24% (target 15 to 25%) and `KITE=1` 1% against 24% are in. `SWAP=1` at 28% is 2 points under its target of 30 to 45%. The median kill time in winning runs is 40 s, the top of the 25 to 40 s target. His health went back up from 80 to 90, but not as far as the owner asked: in try 12 a boss of 100 (121 on wave 8) took 53 s to kill.
 - **Kill time.** The bot spends only a third of each fight shooting him: a horde is in the room from 5 s in. While it shoots him it takes 5 to 5.5 health a second with a Chatterbox at tier 1 or 2, so a player who shoots only him needs about 18 to 20 s of fire for his 99 health. Health is a weak lever on the win rate, since most of what he costs is the time the horde has while he stands, and a long fight lets more of it in.
 - **Caveats.** The bot still holds the middle of the room, which is far from him while he walks in. A person who stays near him should see more stomps and fewer far attacks. Try 20 lowers wave 8's health scale, which makes wave 8's Groaners and Gasbags as tough as wave 6's. That is the trade that let the boss stay a real fight inside the win targets: the boss is now the step up on wave 8, not the crowd's health.
+
+### New kinds, frenzy, and the Gasbag pass
+
+Added on 2026-10-28 from owner feedback, all approved: lighter, more cartoony greens; a Gasbag that is "a great idea, but not that cool"; a reason to fear big packs; a zombie that throws zombies; and one that crawls out of the floor. Built, not yet playtested. The code is in `src/frenzy.ts`, `src/chucker.ts`, `src/crawler.ts`, `src/actions.ts`, the kind rows in `src/zombies.ts`, and the art in `src/sprite.ts` and `src/zombieView.ts`. `tools/audit/shots27.ts` takes the screenshots.
+
+- **Greens.** The Groaner's skin went from `#6fae4f` to `#8ed65e` and its shade from `#4d8a35` to `#5fa83f`, the Hotfoot's from `#c9d660` to `#dcee7a`, and their limb and scalp bits to match. The Groaner's eyes went from red to pale yellow, so red eyes now mean frenzy. Each kind keeps its own look: the Groaner is leaf green in a purple shirt, the Hotfoot yellow-green in orange, the Gasbag a yellow sack around a lime glow, the Big Lug blue-grey, the Chucker mint teal in a striped vest, and the Ankle Biter pale sage and low to the floor. None is a skin tone the player can pick.
+- **Names.** The Thrower is shown as the Chucker. The Crawler is shown as the Ankle Biter, not Gravecrawler, which is already the name of a published trading card.
+- **A zombie's action.** Every zombie now carries an action apart from whether it is alive: Roaming, Winded (walks but cannot grab), Hefting (a Chucker winding up), Carried, Flying, Dazed, Burrowed, or Clinging. Only Roaming and Winded zombies steer and bite. A Burrowed, Carried, or Flying zombie is out of reach of bullets, bursts, traps, the crowd, and the bot.
+
+#### The Gasbag
+
+- **The look.** A sickly yellow sack with a glowing lime belly that has a bright core, two bubbles rising through it, and a brass valve on its head. A lime glow pools under it.
+- **The pulse.** Its belly and valve flare white on each beat. The beat runs from 700 ms when it is far to 150 ms when it is close, in five steps so the tempo jumps rather than jitters, and each wear stage (each time it is shot) adds 0.35 to its urgency. From about halfway, its valve throws sparks.
+- **The tell.** Once it starts to blow, a red ring the size of its 28 px burst fills on the floor with a yellow sweep, while it swells and flickers. The fuses grew so the ring can be read: 200 ms after it is shot (was 140) and 340 ms after it touches the player or a trap (was 220). A Gasbag caught in a burst still bursts 150 ms later, so chains still ripple.
+- **The pop.** The flash, then a shockwave ring, a toxic green cloud instead of grey smoke, six rising puffs of gas, four drops of goo, two scraps of its skin, the meat gibs and sparks, and the boom.
+- **Wear.** At 2/3 a hole tears in the side of its belly and leaks gas; at 1/3 its valve cracks and a second hole opens. It still shrinks 7% a stage.
+
+#### Horde frenzy
+
+- **Who.** Every pack of four or more that walks in through a door together, of any kind: a squad, a pincer pack, or a horde pack. Packs from the floor never frenzy. Wave 2 no longer has a pack of four, so the first frenzy comes in wave 3's first pincer.
+- **The look.** Red eyes with a red glow around the head and a puff of steam. The pack's door warning shows a HORDE! callout over the doorway with a howl. Only the newest HORDE! callout stays up, so a horde from every door shows one.
+- **The speed.** 15% faster while frenzied (`FRENZY_RULES.paceScale`).
+- **Staying together.** A frenzied zombie with no frenzied packmate within 40 px for 0.9 s fades: its glow blinks off and its speed falls back over 1 s, and then it is spent for good. The last of a pack fades the same way.
+- **The bonus.** Killing every zombie of a frenzy pack pays $1 a zombie on top of the bounties, with a coin popup and a chime. A Gasbag of the pack that blows on the player was not killed, so that pack pays nothing. The bot earns about $137 a campaign from it, over about 33 frenzied packs.
+
+#### The Chucker
+
+- **Who.** A lanky zombie with long arms and big hands, in a red striped vest. Health 8, speed 17 to 21, bite 1 heart, bounty $8, drops a goodie 12% of the time, shows a health bar once hurt.
+- **What it does.** It arrives winded for 1.5 s. Then, while a Groaner is in the room, it hangs back once it is within 64 px of the player, and walks to fetch a Groaner it can see within 70 px. When a free Groaner is within 10 px of its body and the player is 28 to 150 px away in its line of sight, it grabs the Groaner, heaves it overhead upside down, and flashes faster and faster for 0.9 s. Then it lobs the Groaner at where the player stands, and is winded for 3.2 s. With no Groaner in the room it walks in and bites like anyone else.
+- **The throw.** A red mark of 12 px fills on the floor with a yellow sweep for the 0.9 s flight while the Groaner spins through the air with its shadow under it. A player on the mark when it lands loses a heart. The Groaner lands with a thud and dust and lies dazed with stars for 1 s, open to fire, then gets up. If the Chucker is shot down mid-heave, its Groaner drops dazed.
+
+#### The Ankle Biter
+
+- **Who.** A half-buried crawler that drags itself on its arms. Health 2, speed 26 to 32, no bite, bounty $3.
+- **Coming up.** It never uses a door. When it is due, the seeded generator draws a spot on open floor at least 56 px from the player, clear of the doorways, the stall, and the traps (up to 12 draws, then the open spot farthest from the player). For 1.5 s a dust ring spreads, pale cracks split the boards, a hole opens, and a claw pokes through, with a rumble. It stays down while the player stands within 40 px of its cracks, so it never comes up near the player. Then it bursts out with splinters and dust.
+- **The grab.** One that reaches the player clings to their ankles for 1.1 s, halving their speed, then lets go and is winded for 2.6 s.
+- **The preview.** The door preview counts it in a FLOOR box in the middle of the room, not at a door, and the screen reader says "Up through the floor". Its packs never rattle a door, ring the DINNER BELL, or wait for a camper.
+
+#### The wave plan
+
+- **Wave 2** has packs of 1 to 3 instead of up to 4 (`[2, 3, 1, 3, 3, 3]` and `[3, 2, 3]`), so it stays a Hotfoot lesson.
+- **Wave 3** learns frenzy: its first pincer's packs of 4 and 5 frenzy.
+- **Wave 6** debuts the Chucker: two from one drawn door, 16 s apart, among Groaner-heavy squads. One straggler fewer.
+- **Wave 7** debuts the Ankle Biter: three, 9 s apart, from 7 s in. A Chucker joins the second cycle.
+- **Wave 8** adds two Ankle Biters and a Chucker under the boss's last third.
+- **Endless** adds 1 Chucker plus one for every 4 waves past 8, and 1 Ankle Biter plus one for every 3.
+- **Health.** Waves 5 to 7 scale health by ×1, ×1.03, and ×1.1 instead of ×1.03, ×1.08, and ×1.17. Wave 8 stays ×1.1.
+
+#### Balance
+
+The bot changed with the kinds. It steps off a thrown Groaner's landing mark (the mark's radius, its body, and 6 px) and keeps 8 px more than the hold radius from an Ankle Biter's cracks. It backs off from a frenzied zombie 5 px sooner, in proportion to the extra speed. It never shoots at a zombie under the floor or in the air, never boards a door for Ankle Biters, and blames a landing on the Chucker. The report adds Chucker throws and how many landed, Ankle Biters surfaced and grabs, and frenzied packs and bonuses. `TUNE` files can edit `CHUCKER_RULES`, `CRAWLER_RULES`, and `FRENZY_RULES`. `NO_DODGE=1` ignores every floor tell.
+
+Tuning log, 200 runs per row from seed 1, `WORKERS` split.
+
+| Try | Change                                                           | Default | `SWAP=1` | Close calls (default) | Note                                                                     |
+| --- | ---------------------------------------------------------------- | ------- | -------- | --------------------- | ------------------------------------------------------------------------ |
+| 0   | Before this pass                                                 | 24%     | 28%      | 15 of 48              | The baseline                                                             |
+| 1   | New kinds, frenzy ×1.18, pack bonus $3 a zombie (32 runs)        | 12.5%   |          | 1 of 4                | $412 of bonus a run                                                      |
+| 2   | Try 1 with a bonus of $1 a zombie                                | 16.5%   | 23.5%    | 16 of 33              | Frenzy is the cost; the Chucker and the Ankle Biter barely touch the bot |
+| 3   | Try 2, frenzy ×1.15, Chucker grab reach 10 px and speed 17 to 21 | 18%     | 22%      | 20 of 36              |                                                                          |
+| 4   | Try 3 with health ×1.03 on wave 6 and ×1.1 on wave 7             | 22.5%   | 28.5%    | 12 of 45              |                                                                          |
+| 5   | Try 4 with health ×1 on wave 5 (kept)                            | 25.5%   | 29.5%    | 25 of 51              | Baked into `src`; the baked runs match                                   |
+
+- **The kept numbers.** "Died" is the share of all runs that died on that wave.
+
+  | Wave | Died (default) | Died (`SWAP=1`) | Died (`NO_GNOME=1`) |
+  | ---- | -------------- | --------------- | ------------------- |
+  | 1    | 0%             | 0%              | 0%                  |
+  | 2    | 0%             | 0%              | 0%                  |
+  | 3    | 1%             | 3%              | 1%                  |
+  | 4    | 4%             | 2%              | 4%                  |
+  | 5    | 7%             | 6%              | 12%                 |
+  | 6    | 18%            | 9%              | 12%                 |
+  | 7    | 7%             | 6%              | 15%                 |
+  | 8    | 39%            | 46%             | 47%                 |
+
+  | Bot          | Wins              | Close calls    | Median win |
+  | ------------ | ----------------- | -------------- | ---------- |
+  | Default      | 51 of 200 (25.5%) | 25 of 51 (49%) | 8.8 min    |
+  | `SWAP=1`     | 59 of 200 (29.5%) | 23 of 59 (39%) | 8.7 min    |
+  | `NO_GNOME=1` | 22 of 200 (11%)   | 13 of 22       |            |
+  | `KITE=1`     | 1 of 200 (0.5%)   | 1 of 1         |            |
+
+  Endless (`MODE=endless`): median wave 8, best 13, worst 3, against median 8, best 12, worst 2 before. A default run sees about 33 frenzied packs and wipes 30 of them for $137, 1.4 Chucker throws, and 3.4 Ankle Biters. For the default bot, Gasbags cost 30% of lost hearts, Hotfoots 25%, Groaners and Big Lugs 20% each, the boss 4%, the Chucker 1%, and the Ankle Biter none.
+
+- **Against the targets.** Wave 8 is the biggest killer for every bot. Waves 1 and 2 lose no runs and waves 3 and 4 lose 5% together (target under 3% and under 10%). Close calls are 49% and 39% of wins (target 30 to 50%). The default bot's 25.5% is half a point over its 15 to 25% target and the `SWAP=1` bot's 29.5% half a point under its 30 to 45%; runs of 200 swing by about 5 points from noise, and as in the gnome pass no setting tried put the two bots further apart.
+- **Caveats.** The bot steps off every landing mark at once and shoots each Ankle Biter as it comes up, so the Chucker lands about 1 throw in 15 on it and no Ankle Biter has grabbed it yet. A person who is busy shooting will be hit and grabbed far more, and the new kinds will cost more than these numbers say. Playtest them before trusting this.
+
+#### Performance
+
+`src/perf.scene.test.ts` now stages a Chucker heaving a Groaner, another Groaner in the air over its mark, an Ankle Biter about to come up, a Gasbag shot twice and pulsing beside the player, and a frenzied pack of seven in its worst case, with one HORDE! callout and a pack bonus among the popups. The room measured 2656 shapes, 1577 steady paint operations, 1564 fill changes, 1659 shapes painted, and 2986 on a full repaint, against 2628, 1554, 1557, 1641, and 2952 before. The steady paint budget rose from 1560 to 1585: the HORDE! callout is 14 operations and the red glow and steam of seven frenzied zombies another 14. The Gasbag was redrawn so its glowing belly costs no more runs than the old sprite, and the staged sights cost nothing net, since a buried Ankle Biter is cheaper to draw than the zombie it replaced. Every new sprite is built once at module scope, including a red-eyed frame set per kind and stage for frenzy.
 
 ## Core loop
 
