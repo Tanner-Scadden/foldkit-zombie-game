@@ -502,26 +502,26 @@ Added on 2026-10-28 before sharing the game more widely. Proposed, not decided. 
 - **One key press, one action.** Space or Enter on a focused HTML button belongs to the button: the game ignores it and the button's own click does the work, once. Other keys on a focused button, and Space and Enter on the game itself, reach the game as usual. A clicked button hands focus back to the game surface, so the next key reaches the game.
 - **One key per action.** Changed on 2026-10-28 at the owner's request ("Only one key per action, to avoid multiple keys doing the same thing and being confusing."). Keys are read by `event.code`, so they sit in the same place on any layout.
 
-  | Action                      | Key   |
-  | --------------------------- | ----- |
-  | Move                        | WASD  |
-  | Fire                        | Click |
-  | Reload                      | R     |
-  | Swap guns                   | Q     |
-  | Place a trap                | T     |
-  | Next trap                   | G     |
-  | Start the wave, skip a card | Enter |
-  | Pause and resume            | Esc   |
-  | Mute                        | M     |
-  | Music on or off             | N     |
-  | Campaign (home, end)        | Enter |
-  | Endless (home, end)         | E     |
-  | Keep going (Victory)        | K     |
-  | Character (home)            | C     |
-  | Back to the menu            | H     |
-  | Menu, update waiting (end)  | Enter |
+  | Action                      | Key           |
+  | --------------------------- | ------------- |
+  | Move                        | WASD          |
+  | Fire                        | Click         |
+  | Reload                      | R             |
+  | Swap guns                   | Q             |
+  | Place a trap                | T             |
+  | Next trap                   | G             |
+  | Start the wave, skip a card | Enter         |
+  | Pause and resume            | Esc           |
+  | Mute                        | M             |
+  | Music on or off             | N             |
+  | Campaign (home, end)        | Enter         |
+  | Endless (home, end)         | E             |
+  | Keep going (Victory)        | K             |
+  | Character (home)            | C             |
+  | Back to the menu            | H             |
+  | Menu, update waiting (end)  | Enter         |
   | Move between menu buttons   | Arrows or Tab |
-  | Close a panel or dialog     | Esc   |
+  | Close a panel or dialog     | Esc           |
 
   Changed on 2026-10-28 with "Updates wait on the home menu": when a newer build is waiting, Game Over and Victory show only MENU, so Enter, the end screens' main key, means MENU there. H still works, since it means MENU everywhere. E and K do nothing until the player is home.
 
@@ -945,6 +945,19 @@ After the first playable, roughly in this order:
 - Music. Done on 2026-10-28: see "Music" under the first playable.
 - Dropped power-ups. Done on 2026-10-28: see "Power-ups" under the first playable.
 - Co-op.
+
+### Future vision
+
+Approved ideas that are not built yet. Each moves into the roadmap above when it starts.
+
+- **The Munchopedia.** A field guide to every zombie, opened from the home menu's left rail. Added on 2026-10-28.
+  - Every kind, Uncle Chunk included, starts as a dark silhouette marked "???". The first kill of a kind unlocks its entry with a NEW ENTRY pop, and the rail icon shows a dot until the player looks. Uncle Chunk unlocks when he is beaten.
+  - An entry shows the zombie animated through its wear stages, its name, a goofy one line bio, how it behaves and how to beat it (short tips in the voice of the new zombie cards), and the player's total kills of that kind, with badges at 10, 100, and 1,000. Uncle Chunk's entry counts how many times he has been beaten.
+  - A header tallies discovery and kills, such as "6 of 7 discovered, 4,213 zombies splatted".
+  - Kills per kind and unlocks are kept for the page session at first, then move into the SQLite player scope (see `PLATFORM.md`) so they last and later sync across devices. They feed achievements and leaderboards later.
+- **The home menu layout.** One fixed layout for phone and computer, built from slots so new features never move PLAY: status top left (difficulty badge, bests), the logo and the player's character center stage, a big PLAY with a mode toggle bottom right, a left rail of icons (What's New, Munchopedia, Character, How to play, Settings), and the update chip top right. The computer adds key badges, hover, and labels beside the rail icons. Approved on 2026-10-28.
+- **What's New.** A rail icon that shows the latest day from `CHANGELOG.md`, with a dot until seen. Approved on 2026-10-28.
+- **Portrait play.** A zoomed camera that follows the player with a thumb area below, no hints for off-screen zombies. Approved on 2026-10-28.
 
 ### Risks
 
