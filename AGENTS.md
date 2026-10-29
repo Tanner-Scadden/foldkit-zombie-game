@@ -66,7 +66,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/zombies.ts`       | The zombie kind table: stats, behavior, deaths, sounds, and wear       |
 | `src/actions.ts`       | Winded and dazed zombies getting back on their feet                    |
 | `src/frenzy.ts`        | Horde frenzy: which packs frenzy, fading stragglers, the pack bonus    |
-| `src/chucker.ts`       | The Chucker: hanging back, grabbing, heaving, and the thrown Groaner   |
+| `src/chucker.ts`       | The Big Leaguer: hanging back, heaving, throwing, and his shield       |
 | `src/crawler.ts`       | The Ankle Biter: where it comes up, surfacing, and clinging            |
 | `src/boss.ts`          | The boss: its rules, its entrance, its attacks, and its health bar     |
 | `src/combat.ts`        | Strikes, wounds, and bursts applied to any list of targets             |

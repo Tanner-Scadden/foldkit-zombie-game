@@ -6,6 +6,8 @@ One entry per day, newest first. Only things a player would notice, a handful of
 
 - 💀 Pick Easy, Normal, or Hard. Beat Hard and Nightmare unlocks. Good luck.
 - 🪵 Board up two doors and nothing climbs through them, but slow zombies love a snack of fresh planks.
+- 💣 Meet the Kaboomer. He brought a bomb. He wants to share.
+- ⚾ The Chucker is now the Big Leaguer: better arm, and he uses his buddies as shields.
 
 ## October 28, 2026: Opening night
 
