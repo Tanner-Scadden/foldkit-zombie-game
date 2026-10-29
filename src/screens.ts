@@ -57,6 +57,7 @@ import {
   frameAt,
   group,
   gunSprite,
+  showcaseWalk,
   spriteShapes,
 } from './sprite'
 import {
@@ -455,7 +456,7 @@ const debutCardShapes = (
         group({
           translate: { x: CENTER_X, y: CARD_FEET_Y - cardHop(ageMs) },
           scale: { x: scale, y: scale },
-          shapes: frameAt(ZOMBIE_SPRITES[kind].walk, stride).Normal.Right,
+          shapes: showcaseWalk(kind, stride, 'Right'),
         }),
         centered(name, CARD_NAME_Y, TITLE_SCALE),
         centered(pitch, CARD_PITCH_Y),
@@ -762,9 +763,7 @@ const marcherShapes =
       }),
       group({
         translate: { x, y: marcher.y + 1 },
-        shapes: frameAt(ZOMBIE_SPRITES[marcher.kind].walk, stride).Normal[
-          facing
-        ],
+        shapes: showcaseWalk(marcher.kind, stride, facing),
       }),
     ]
   }

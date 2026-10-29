@@ -1902,3 +1902,16 @@ export const PICKUP_SPRITES: Readonly<Record<PickupKind, Sprite>> = Record.map(
   PICKUP_PIXELS,
   ({ pixels, palette }) => spriteShapes(pixels, palette),
 )
+
+// NOTE: a zombie walking outside the room, on the new zombie card or in the
+// title parade, with its props: the Kaboomer carries his fuse at full length.
+export const showcaseWalk = (
+  kind: ZombieKind,
+  stride: number,
+  facing: Facing,
+): Sprite => [
+  ...frameAt(ZOMBIE_SPRITES[kind].walk, stride).Normal[facing],
+  ...(kind === 'Exploder'
+    ? kaboomerFuseSprite(KABOOMER_FUSE_MAX, stride, facing)
+    : []),
+]
