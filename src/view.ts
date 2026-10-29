@@ -45,6 +45,7 @@ import {
   stickView,
 } from './touchControls'
 import { TRAPS, TRAP_KIND_ORDER } from './traps'
+import { updateChipView } from './updateChip'
 import { FINAL_WAVE, isRoundActive, roundWave } from './waves'
 import {
   SIDEARM,
@@ -283,6 +284,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       modeChoiceView(model, h),
       cornerButtonsView(model, h),
       homeScreenTipView(model, h),
+      updateChipView(model, h),
       homeScreenStepsView(model, h),
       shopDialogView(model, h),
       h.submodel({

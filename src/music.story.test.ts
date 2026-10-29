@@ -6,7 +6,14 @@ import { describe, expect, test } from 'vitest'
 import { ARENA_LEVEL } from './arena'
 import type { SoundEffect } from './audio'
 import { ZOMBIE_MAX_HP } from './constants'
-import { CueMusic, Message, PlaySound, ResumeAudio, update } from './main'
+import {
+  CueMusic,
+  FetchBuild,
+  Message,
+  PlaySound,
+  ResumeAudio,
+  update,
+} from './main'
 import {
   AudioState,
   type Model,
@@ -342,8 +349,13 @@ describe('music only plays when it can be heard', () => {
       message(Message.ChangedPageVisibility({ visibility: 'Visible' })),
       Command.expectExact(
         CueMusic({ mood: 'Creep', level: 'Full', stinger: 'None' }),
+        FetchBuild,
       ),
       resolveCue('Creep'),
+      Command.resolve(
+        FetchBuild,
+        Message.FailedFetchBuild({ reason: 'offline' }),
+      ),
     )
   })
 

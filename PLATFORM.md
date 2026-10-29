@@ -8,6 +8,7 @@ All on 2026-10-28.
 
 - **Everything moves to Cloudflare.** GitHub Pages was only for testing on other devices. It was removed (the site and `.github/workflows/pages.yml`) on 2026-10-28, once the Cloudflare deploy was live.
 - **The game is hosted at https://munch-manor.tanner-scadden.workers.dev**, the free `workers.dev` address, with no custom domain yet. The account's `workers.dev` subdomain is `tanner-scadden`.
+- **Installed apps find new builds with `version.json`, not a service worker.** Each build stamps its commit into the bundle and into `version.json`, which is never cached. The game fetches it when it comes back into view, on focus, and every five minutes on quiet screens, and offers a tap to reload when the build differs. See "Deploying" in `AGENTS.md`.
 - **GitHub Actions is the only deploy path.** Cloudflare Workers Builds (the dashboard's git integration) stays disconnected, so one push never fires two deploys.
 - **Free plan first.** Upgrade to Workers Paid only if the game takes off.
 - **Our own mini sync engine over scopes**, for personal and shared state. See "Sync engine".
@@ -59,7 +60,7 @@ Package names and APIs need checking against the Effect version the game uses (E
 - **Token permissions.** CI deploys with an account-owned token, `munch-manor-ci`, minted by `infra/github.ts`: Workers Scripts Write, Secrets Store Write, Account Settings Read, Workers Tail Read. Secrets Store Write is needed even to read, because Alchemy reads the state store's token by binding the secret to a short-lived preview Worker. The keychain token used by hand is much broader (it can mint tokens) and never goes to CI. Cloudflare's Workers Builds API rejected that account-owned token, so whether Workers Builds is connected can only be seen in the dashboard or in a Worker's deployment history (a `wrangler` source).
 - **The account had no `workers.dev` subdomain.** Alchemy's state store needs one, so `tanner-scadden` was claimed through the API before the first deploy.
 - **Two deploy paths collide quietly.** While Workers Builds was still connected, one push ran `wrangler deploy` and overwrote the Worker with a single page fallback. Alchemy's next deploy saw no changed inputs, and `alchemy drift` saw no drift, so both reported success. `alchemy deploy --force` put the declared version back.
-- **Routing and caching.** The game has no routes, so unknown paths answer 404 (`notFoundHandling: 'none'`). The default single page fallback served `index.html` at nested paths, where its relative asset paths missed. `public/_headers` makes the hashed files in `/assets` immutable for a year, and `index.html` revalidates on every load.
+- **Routing and caching.** The game has no routes, so unknown paths answer 404 (`notFoundHandling: 'none'`). The default single page fallback served `index.html` at nested paths, where its relative asset paths missed. `public/_headers` makes the hashed files in `/assets` immutable for a year, `index.html` and `/` are `no-cache` so every load revalidates, and `version.json` is `no-store`.
 
 ## Sync engine
 

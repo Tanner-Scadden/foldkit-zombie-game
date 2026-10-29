@@ -496,6 +496,10 @@ const roomModel = (): Model => {
 
 const scenarioModel = (): Model => {
   let model = roomModel()
+  if (params.has('newer'))
+    model = modifyFields(model, {
+      maybeNewerBuild: () => Option.some(params.get('newer') || 'next'),
+    })
   const look = params.get('look')
   if (look !== null) {
     const [body, hairStyle, hairColor, skinTone, shirtColor] = look.split(',')

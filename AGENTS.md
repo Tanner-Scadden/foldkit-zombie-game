@@ -72,7 +72,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/effectsView.ts`   | Bullets, decals, particles, blasts, popups, and rattling doors         |
 | `src/hud.ts`           | Hearts, money, the streak, gun and trap slots, and the round text      |
 | `src/wavePreview.ts`   | The door markers that preview a wave, and their spoken text            |
-| `src/touchControls.ts` | Sticks, ghost sticks, icon buttons, gun slots, and the thumb corner   |
+| `src/touchControls.ts` | Sticks, ghost sticks, icon buttons, gun slots, and the thumb corner    |
 | `src/menus.ts`         | Mode buttons, the new zombie card, corner icons, tips, rotate notice   |
 | `src/pauseHelp.ts`     | The pause screen's panel of controls and tips for each device          |
 | `src/powerupView.ts`   | Pickups, callouts, the boost aura, and HUD timers on canvas            |
@@ -84,6 +84,8 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/sprite.ts`        | Pixel maps turned into canvas shapes                                   |
 | `src/icons.ts`         | Pixel maps turned into SVG icons for the HTML buttons                  |
 | `src/prng.ts`          | The seeded random number generator                                     |
+| `src/version.ts`       | The running build id, the `version.json` check, and reloading          |
+| `src/updateChip.ts`    | The "New version ready" chip shown on quiet screens                    |
 | `src/constants.ts`     | The view size, speeds, and other tuning numbers                        |
 
 ### Deploying
@@ -106,6 +108,16 @@ To deploy or destroy from this machine, run from `infra/` after `bun install`, w
 Credentials: locally, the Cloudflare API token is in the macOS keychain under `cloudflare-api-token`. CI uses the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` Actions secrets, which `infra/github.ts` writes from a narrow account token named `munch-manor-ci`. Never put a token in the repo or in a `VITE_` variable.
 
 GitHub Pages is gone: its workflow is deleted and the site is disabled. Cloudflare Workers Builds is not connected either; the Deploy workflow is the only deploy path, so do not connect the repo in the Cloudflare dashboard.
+
+#### How updates reach installed apps
+
+iOS keeps a Home Screen app alive in the background, so players can keep an old build for days after a deploy. There is no service worker, on purpose. Instead:
+
+- **Build id.** A small plugin in `vite.config.ts` stamps every production build with an id: `BUILD_ID` if set, else `GITHUB_SHA` (CI and the Alchemy deploy in CI), else the local commit (with `-dirty-<timestamp>` when the tree has uncommitted changes, since a local deploy ships them), else a timestamp. The id is the compile-time constant `__BUILD_ID__` and is also written to `dist/version.json` as `{ "build": "<id>" }`. `bun dev` uses `dev` and never checks; the tests use `test`.
+- **Never cached.** `public/_headers` serves `/version.json` with `no-store` and `/` and `/index.html` with `no-cache`, and the game fetches `version.json` with `cache: 'no-store'` and a time query.
+- **When it checks.** When the page becomes visible again, on a back forward cache restore, on window focus, and every five minutes on the title, pause, Game Over, Victory, and the break between waves. Never on a timer mid-wave. A failed or offline check is ignored.
+- **The prompt.** If the live build differs from the running one, a "New version ready" chip shows on those same quiet screens, never during a wave. Tapping it reloads the page. Its place lives in `.update-chip` in `src/styles.css`, as arena pixels (`--chip-arena-x`, `--chip-arena-y`), so it is easy to move.
+- **Check it.** `PART=e2e bun shots26.ts` in `tools/audit` builds, serves, rebuilds under an open page, and checks that the chip appears and the reload lands on the new build.
 
 ### Rules
 

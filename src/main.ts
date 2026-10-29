@@ -119,6 +119,15 @@ import {
   trapCenter,
 } from './traps'
 import {
+  RUNNING_BUILD,
+  UPDATE_CHECK_INTERVAL,
+  fetchRemoteBuild,
+  isCheckingForUpdates,
+  isUpdateWindow,
+  maybeNewerBuild,
+  reloadPage,
+} from './version'
+import {
   FINAL_WAVE,
   isRoundActive,
   keepGoing,
@@ -210,6 +219,14 @@ export const Message = defineMessageUnion({
   FailedPlaySound: { sound: SoundEffect, reason: Schema.String },
   CompletedCueMusic: { mood: MusicMood },
   FailedCueMusic: { mood: MusicMood, reason: Schema.String },
+  FocusedWindow: {},
+  RestoredPageFromCache: {},
+  TickedUpdateCheck: {},
+  CompletedFetchBuild: { build: Schema.String },
+  FailedFetchBuild: { reason: Schema.String },
+  ClickedUpdateButton: {},
+  CompletedReloadPage: {},
+  FailedReloadPage: { reason: Schema.String },
 })
 export type Message = typeof Message.Type
 
@@ -414,6 +431,28 @@ export const FocusShopItem = Command.define('FocusShopItem', {
       Effect.ignore,
       Effect.as(Message.CompletedFocusShopItem()),
     ),
+})
+
+export const FetchBuild = Command.define('FetchBuild', {
+  messages: [Message.CompletedFetchBuild, Message.FailedFetchBuild],
+  execute: pipe(
+    fetchRemoteBuild,
+    Effect.map(build => Message.CompletedFetchBuild({ build })),
+    Effect.catch(error =>
+      Effect.succeed(Message.FailedFetchBuild({ reason: error.reason })),
+    ),
+  ),
+})
+
+export const ReloadPage = Command.define('ReloadPage', {
+  messages: [Message.CompletedReloadPage, Message.FailedReloadPage],
+  execute: pipe(
+    reloadPage,
+    Effect.as(Message.CompletedReloadPage()),
+    Effect.catch(error =>
+      Effect.succeed(Message.FailedReloadPage({ reason: error.reason })),
+    ),
+  ),
 })
 
 // INIT
@@ -1060,6 +1099,13 @@ const isFreshRun = (model: Model): boolean =>
   Phase.isAnyOf(['Preparation'])(model.phase) &&
   model.elapsedMs < START_SOUND_GRACE_MS
 
+// VERSION
+
+const checkForUpdate = (model: Model): UpdateReturn =>
+  isCheckingForUpdates(RUNNING_BUILD)
+    ? { model, commands: [FetchBuild()] }
+    : { model }
+
 const updateGame = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
     TickedFrame: ({ deltaTime }) => {
@@ -1146,7 +1192,7 @@ const updateGame = (model: Model, message: Message) =>
       if (visibility === 'Hidden') {
         return pauseWhenAway(noted)
       } else {
-        return { model: noted }
+        return checkForUpdate(noted)
       }
     },
 
@@ -1396,6 +1442,26 @@ const updateGame = (model: Model, message: Message) =>
     CompletedCueMusic: () => ({ model }),
 
     FailedCueMusic: () => ({ model }),
+
+    FocusedWindow: () => checkForUpdate(model),
+
+    RestoredPageFromCache: () => checkForUpdate(model),
+
+    TickedUpdateCheck: () => checkForUpdate(model),
+
+    CompletedFetchBuild: ({ build }) => ({
+      model: modifyFields(model, {
+        maybeNewerBuild: () => maybeNewerBuild(RUNNING_BUILD, build),
+      }),
+    }),
+
+    FailedFetchBuild: () => ({ model }),
+
+    ClickedUpdateButton: () => ({ model, commands: [ReloadPage()] }),
+
+    CompletedReloadPage: () => ({ model }),
+
+    FailedReloadPage: () => ({ model }),
   })
 
 const dismissHomeScreenTip = (model: Model): Model =>
@@ -1501,6 +1567,32 @@ export const maybeWindowBlurMessage = ({
     ? Option.some(Message.BlurredWindow())
     : Option.none()
 
+export const maybeWindowFocusMessage = ({
+  target,
+}: Readonly<{ target: EventTarget | null }>): Option.Option<Message> =>
+  target === window ? Option.some(Message.FocusedWindow()) : Option.none()
+
+export const maybePageShowMessage = ({
+  persisted,
+}: Readonly<{ persisted: boolean }>): Option.Option<Message> =>
+  persisted ? Option.some(Message.RestoredPageFromCache()) : Option.none()
+
+export const pageVisibilityMessage = (
+  visibilityState: DocumentVisibilityState,
+): Message =>
+  Message.ChangedPageVisibility({
+    visibility: visibilityState === 'hidden' ? 'Hidden' : 'Visible',
+  })
+
+export const updateCheckActivity = (model: Model): Activity =>
+  isCheckingForUpdates(RUNNING_BUILD) && isUpdateWindow(model.phase)
+    ? 'Active'
+    : 'Idle'
+
+const updateCheckMessages = Stream.map(Stream.tick(UPDATE_CHECK_INTERVAL), () =>
+  Message.TickedUpdateCheck(),
+)
+
 const keyboardMessages = Stream.merge(
   Dom.streamFromEventFilterMap({
     target: document,
@@ -1602,12 +1694,38 @@ export const subscriptions = Subscription.make<Model, Message>()(entry => ({
     Dom.streamFromEvent({
       target: document,
       type: 'visibilitychange',
-      mapEvent: () =>
-        Message.ChangedPageVisibility({
-          visibility:
-            document.visibilityState === 'hidden' ? 'Hidden' : 'Visible',
-        }),
+      mapEvent: () => pageVisibilityMessage(document.visibilityState),
     }),
+  ),
+
+  windowFocus: Subscription.persistentEntry(
+    Dom.streamFromEventFilterMap({
+      target: window,
+      type: 'focus',
+      filterMapEvent: maybeWindowFocusMessage,
+    }),
+  ),
+
+  pageRestores: Subscription.persistentEntry(
+    Dom.streamFromEventFilterMap({
+      target: window,
+      type: 'pageshow',
+      filterMapEvent: maybePageShowMessage,
+    }),
+  ),
+
+  updateCheck: entry(
+    { activity: Activity },
+    {
+      modelToDependencies: model => ({
+        activity: updateCheckActivity(model),
+      }),
+      dependenciesToStream: ({ activity }) =>
+        Stream.when(
+          updateCheckMessages,
+          Effect.sync(() => activity === 'Active'),
+        ),
+    },
   ),
 
   mouseAim: entry(

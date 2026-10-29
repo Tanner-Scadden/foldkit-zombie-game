@@ -46,6 +46,10 @@ bun alchemy deploy github.ts --stage prod
 
 If the repository is renamed, change `REPOSITORY` and deploy twice, the second time with `--force`. The rename makes Alchemy replace each secret: it writes the new one, then deletes the old one, and GitHub redirects the old name to the same repository, so the delete removes the secret just written. The forced deploy writes it again. Check with `gh secret list`.
 
+## Updates on installed apps
+
+The Vite build stamps the bundle and `version.json` with `GITHUB_SHA`, which the Alchemy build child inherits in CI. A local deploy stamps the local commit, plus a timestamp when the tree is dirty. Alchemy skips the build when no input changed, so `version.json` only changes when the game does. See "How updates reach installed apps" in `AGENTS.md`.
+
 ## Check a deploy
 
 ```sh

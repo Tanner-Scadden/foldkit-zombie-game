@@ -1796,3 +1796,57 @@ body {
     animation: none;
   }
 }
+
+.update-chip-frame {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: env(safe-area-inset-left, 0px);
+  container-type: size;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.update-chip {
+  --arena-px: min(100cqw / 320, 100cqh / 180);
+  --chip-arena-x: 4;
+  --chip-arena-y: 28;
+  position: absolute;
+  left: calc(
+    (100cqw - 320 * var(--arena-px)) / 2 + var(--chip-arena-x) * var(--arena-px)
+  );
+  top: calc(
+    (100cqh - 180 * var(--arena-px)) / 2 + var(--chip-arena-y) * var(--arena-px)
+  );
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 40px;
+  padding: 4px 12px;
+  border: 2px solid rgba(155, 227, 106, 0.7);
+  border-radius: 12px;
+  background: rgba(8, 10, 12, 0.85);
+  color: #f4f1de;
+  font: bold 11px/1.25 monospace;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.update-chip-action {
+  color: #9be36a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.update-chip:hover {
+  border-color: #9be36a;
+}
+
+.update-chip:focus-visible {
+  outline: 2px solid #ffe066;
+  outline-offset: 2px;
+}

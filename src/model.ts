@@ -898,6 +898,7 @@ export const Model = Schema.Struct({
   homeScreenTip: HomeScreenTip,
   homeScreenSteps: Dialog.Model,
   pageVisibility: PageVisibility,
+  maybeNewerBuild: Schema.Option(Schema.String),
   appearance: Appearance,
   character: CharacterPicker,
 })
@@ -1080,6 +1081,7 @@ export const initialModel: Model = {
   homeScreenTip: 'Unseen',
   homeScreenSteps: Dialog.init({ id: HOME_SCREEN_STEPS_ID }),
   pageVisibility: 'Visible',
+  maybeNewerBuild: Option.none(),
   appearance: defaultAppearance,
   character: closedCharacterPicker,
 }
