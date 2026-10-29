@@ -19,12 +19,14 @@ const REPOSITORY = 'munch-manor'
 // Workers Scripts Write deploys the site. Secrets Store Write lets CI read
 // the Cloudflare state store's token, which Alchemy reads back by binding
 // the secret to a short-lived preview Worker. Account Settings Read and
-// Workers Tail Read cover account lookups and `alchemy logs`.
+// Workers Tail Read cover account lookups and `alchemy logs`. D1 Write
+// creates each stage's analytics database and applies its migrations.
 const CI_PERMISSIONS = [
   'Workers Scripts Write',
   'Secrets Store Write',
   'Account Settings Read',
   'Workers Tail Read',
+  'D1 Write',
 ] as const
 
 export default Alchemy.Stack(

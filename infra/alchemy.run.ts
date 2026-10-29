@@ -2,6 +2,7 @@ import * as Alchemy from 'alchemy'
 import * as Output from 'alchemy/Output'
 import * as Effect from 'effect/Effect'
 import * as Layer from 'effect/Layer'
+import { createRequire } from 'node:module'
 import * as Path from 'node:path'
 
 import * as Cloudflare from '@alchemy.run/cloudflare'
@@ -9,33 +10,95 @@ import * as GitHub from '@alchemy.run/github'
 
 const PRODUCTION_STAGE = 'prod'
 
-const workerName = (stage: string): string =>
-  stage === PRODUCTION_STAGE ? 'munch-manor' : `munch-manor-${stage}`
+const stageName = (base: string, stage: string): string =>
+  stage === PRODUCTION_STAGE ? base : `${base}-${stage}`
 
-const Website = Effect.gen(function* () {
+const workerName = (stage: string): string => stageName('munch-manor', stage)
+
+const apiWorkerName = (stage: string): string =>
+  stageName('munch-manor-api', stage)
+
+// NOTE: the Worker imports src/analytics.ts, which the game shares, so its
+// `effect` import would resolve from the game's node_modules (Foldkit pins an
+// older Effect). The alias bundles infra's one copy of Effect for the shared
+// Schema and the HttpApi alike. It points at the built files, since an alias
+// skips the package's exports map: `effect/Schema` becomes `dist/Schema`.
+const INFRA_EFFECT = Path.join(
+  Path.dirname(createRequire(import.meta.url).resolve('effect/package.json')),
+  'dist',
+)
+
+// NOTE: each stage gets its own D1 database, its own salt for the daily
+// address hash, and its own rate limit namespaces. The free plan allows
+// 100,000 Worker requests and 100,000 D1 rows written a day; one run writes
+// one row.
+const RATE_LIMIT_NAMESPACES = { visit: 7101, address: 7102 }
+
+const RUNS_PER_VISIT_PER_MINUTE = 6
+const RUNS_PER_ADDRESS_PER_MINUTE = 60
+
+const Analytics = Effect.gen(function* () {
   const stage = yield* Alchemy.Stage
 
-  return yield* Cloudflare.Website.Foldkit('Website', {
-    name: workerName(stage),
-    rootDir: Path.resolve(import.meta.dirname, '..'),
-    // The game has no routes. With the default single page fallback a
-    // nested path such as /a/b served index.html, whose relative asset
-    // paths then missed, so unknown paths answer 404 instead.
-    assets: { notFoundHandling: 'none' },
-    memo: {
-      include: [
-        'src/**',
-        'public/**',
-        'index.html',
-        'vite.config.ts',
-        'package.json',
-      ],
-      lockfile: true,
+  const database = yield* Cloudflare.D1.Database('Analytics', {
+    name: stageName('munch-manor-analytics', stage),
+    migrations: Path.resolve(import.meta.dirname, 'migrations'),
+  })
+
+  const addressSalt = yield* Alchemy.makeRandom('AddressSalt')
+
+  return yield* Cloudflare.Worker('Api', {
+    name: apiWorkerName(stage),
+    main: Path.resolve(import.meta.dirname, 'worker/main.ts'),
+    env: {
+      DB: database,
+      ADDRESS_SALT: addressSalt,
+      RUNS_BY_VISIT: Cloudflare.RateLimit('RUNS_BY_VISIT', {
+        namespaceId: RATE_LIMIT_NAMESPACES.visit,
+        simple: { limit: RUNS_PER_VISIT_PER_MINUTE, period: 60 },
+      }),
+      RUNS_BY_ADDRESS: Cloudflare.RateLimit('RUNS_BY_ADDRESS', {
+        namespaceId: RATE_LIMIT_NAMESPACES.address,
+        simple: { limit: RUNS_PER_ADDRESS_PER_MINUTE, period: 60 },
+      }),
+    },
+    build: {
+      input: { resolve: { alias: { effect: INFRA_EFFECT } } },
     },
   })
 })
 
-const PreviewComment = (url: Output.Output<string | undefined>) =>
+const Website = (apiUrl: Output.Output<string | undefined>) =>
+  Effect.gen(function* () {
+    const stage = yield* Alchemy.Stage
+
+    return yield* Cloudflare.Website.Foldkit('Website', {
+      name: workerName(stage),
+      rootDir: Path.resolve(import.meta.dirname, '..'),
+      // The game has no routes. With the default single page fallback a
+      // nested path such as /a/b served index.html, whose relative asset
+      // paths then missed, so unknown paths answer 404 instead.
+      assets: { notFoundHandling: 'none' },
+      // NOTE: VITE_ variables are inlined into the game's bundle. This one
+      // tells the game where to post run summaries (src/analyticsBeacon.ts).
+      env: { VITE_API_ORIGIN: Output.map(apiUrl, url => url ?? '') },
+      memo: {
+        include: [
+          'src/**',
+          'public/**',
+          'index.html',
+          'vite.config.ts',
+          'package.json',
+        ],
+        lockfile: true,
+      },
+    })
+  })
+
+const PreviewComment = (
+  url: Output.Output<string | undefined>,
+  apiUrl: Output.Output<string | undefined>,
+) =>
   Effect.gen(function* () {
     const github = yield* GitHub.GitHubEnv
 
@@ -50,6 +113,8 @@ const PreviewComment = (url: Output.Output<string | undefined>) =>
 
             **URL:** ${url}
 
+            **Analytics API:** ${apiUrl}/api/health
+
             Built from commit ${github.sha.slice(0, 7)}. This comment updates on every push, and the preview is destroyed when the pull request closes.
           `,
         })
@@ -62,9 +127,10 @@ export default Alchemy.Stack(
     state: Cloudflare.state(),
   },
   Effect.gen(function* () {
-    const website = yield* Website
-    yield* PreviewComment(website.url)
+    const api = yield* Analytics
+    const website = yield* Website(api.url)
+    yield* PreviewComment(website.url, api.url)
 
-    return { url: website.url }
+    return { url: website.url, apiUrl: api.url }
   }),
 )

@@ -38,6 +38,8 @@ jobs:
       - run: bun run build
       - run: bun run typecheck
         working-directory: infra
+      - run: bun run test
+        working-directory: infra
 
   deploy:
     needs: check
@@ -68,8 +70,12 @@ jobs:
         run: |
           set -o pipefail
           bun alchemy deploy --stage "$STAGE" --yes --no-input | tee "$RUNNER_TEMP/deploy.log"
-          url=$(grep -o "https://[a-z0-9.-]*\.workers\.dev" "$RUNNER_TEMP/deploy.log" | tail -n 1)
-          echo "url=$url" >> "$GITHUB_OUTPUT"
+          output_url() {
+            grep -oE "(^|[^A-Za-z])$1: 'https://[a-z0-9.-]+\.workers\.dev'" "$RUNNER_TEMP/deploy.log" |
+              tail -n 1 | grep -oE "https://[a-z0-9.-]+\.workers\.dev"
+          }
+          echo "url=$(output_url url)" >> "$GITHUB_OUTPUT"
+          echo "api_url=$(output_url apiUrl)" >> "$GITHUB_OUTPUT"
       - name: Check the site answers
         env:
           URL: ${{ steps.deploy.outputs.url }}
@@ -81,6 +87,18 @@ jobs:
             sleep 5
           done
           echo "$URL answered $status"
+          exit 1
+      - name: Check the analytics API answers
+        env:
+          API_URL: ${{ steps.deploy.outputs.api_url }}
+        run: |
+          test -n "$API_URL"
+          for attempt in 1 2 3 4 5 6; do
+            body=$(curl -s "$API_URL/api/health" || true)
+            if [ "$body" = '{"status":"Ok","database":"Ok"}' ]; then echo "$API_URL/api/health answered $body"; exit 0; fi
+            sleep 5
+          done
+          echo "$API_URL/api/health answered $body"
           exit 1
 
   cleanup:

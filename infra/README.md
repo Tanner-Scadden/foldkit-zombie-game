@@ -2,17 +2,26 @@
 
 The Cloudflare side of Munch Manor, declared with [Alchemy](https://alchemy.run/). It has its own `package.json` because Alchemy needs a newer Effect (4.0.7) than the game, which Foldkit pins to 4.0.0. Versions are pinned exactly, since Alchemy v2 is still in beta.
 
-| File             | What it holds                                                                    |
-| ---------------- | -------------------------------------------------------------------------------- |
-| `alchemy.run.ts` | The game as a `Cloudflare.Website.Foldkit` Worker, plus the pull request comment |
-| `github.ts`      | The narrow CI token and the two GitHub Actions secrets it is written to          |
+| File               | What it holds                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `alchemy.run.ts`   | The game as a `Cloudflare.Website.Foldkit` Worker, the analytics API Worker and its D1, and the comment |
+| `github.ts`        | The narrow CI token and the two GitHub Actions secrets it is written to                                 |
+| `worker/api.ts`    | The analytics `HttpApi`: `POST /api/runs` and `GET /api/health`, its errors, and the handlers           |
+| `worker/rules.ts`  | The pure rules: the size cap, the rate limit decision, the daily address hash input, and the D1 row     |
+| `worker/main.ts`   | The Worker entry: Cloudflare bindings turned into the handlers' services                                |
+| `worker/*.test.ts` | `bun test` for the rules and the handler, over in-memory SQLite with the real migration                 |
+| `migrations/`      | The analytics D1 migrations, applied in order on deploy                                                 |
+| `oneEffect.ts`     | The `bun test` preload that loads the shared `src/analytics.ts` against infra's Effect                  |
 
 ## Stages
 
-| Stage         | Worker                    | URL                                                          |
-| ------------- | ------------------------- | ------------------------------------------------------------ |
-| `prod`        | `munch-manor`             | https://munch-manor.tanner-scadden.workers.dev               |
-| `pr-<number>` | `munch-manor-pr-<number>` | `https://munch-manor-pr-<number>.tanner-scadden.workers.dev` |
+| Stage         | Game Worker               | API Worker                    | D1 database                         |
+| ------------- | ------------------------- | ----------------------------- | ----------------------------------- |
+| `prod`        | `munch-manor`             | `munch-manor-api`             | `munch-manor-analytics`             |
+| `pr-<number>` | `munch-manor-pr-<number>` | `munch-manor-api-pr-<number>` | `munch-manor-analytics-pr-<number>` |
+| any other     | `munch-manor-<stage>`     | `munch-manor-api-<stage>`     | `munch-manor-analytics-<stage>`     |
+
+Every Worker lives at `https://<worker>.tanner-scadden.workers.dev`. A stage such as `dev-infra` is a scratch copy deployed from this machine; destroy it when done. Destroying a stage deletes its D1 database and its rows.
 
 State lives in Alchemy's Cloudflare state store (the `alchemy-state-store` Worker on the same account), so local and CI deploys share it.
 
@@ -33,10 +42,28 @@ bun run typecheck
 
 Alchemy skips the build when no input changed, and `alchemy drift` does not notice a Worker that something else overwrote. Use `--force` to put the declared version back.
 
+## Analytics
+
+The game posts one run summary per run to its stage's API Worker (see "Analytics" in `PLATFORM.md`). The Website gets the API Worker's URL as `VITE_API_ORIGIN`, which Vite inlines into the game.
+
+- **Two Effects.** The Worker imports `src/analytics.ts`, which the game shares. Its `effect` import would otherwise resolve from the game's `node_modules` (Effect 4.0.0, pinned by Foldkit), so three things point it at infra's Effect 4.0.7: the Worker bundle's `resolve.alias` in `alchemy.run.ts`, `paths` in `tsconfig.json`, and the `oneEffect.ts` preload for `bun test`. Keep `src/analytics.ts` importing only `effect`.
+- **Migrations.** Add a new numbered file to `migrations/`, such as `0002_add_column.sql`. Never edit one that has shipped: Alchemy records each file's hash in the database's `__alchemy_migrations` table and applies new files in order on the next deploy.
+- **Secrets.** The address salt is an `Alchemy.Random`, made once per stage and kept in Alchemy's state. It reaches the Worker as a `secret_text` binding.
+- **Rate limits.** Cloudflare Rate Limiting bindings, namespaces 7101 (per visit) and 7102 (per address bucket), shared by every stage.
+
+```sh
+bun test                                                     # the Worker's tests
+bun tools/analytics/smoke.ts https://munch-manor-api-pr-12.tanner-scadden.workers.dev   # post one fake run (from the repo root)
+bun tools/analytics/report.ts --stage pr-12                  # the report for a stage (from the repo root)
+bun run heavy -- bun tools/audit/beacon-check.ts https://munch-manor-pr-12.tanner-scadden.workers.dev/   # a real run end in headless Chrome
+```
+
+The report and the smoke test use `CLOUDFLARE_API_TOKEN` (or the keychain token) and `CLOUDFLARE_ACCOUNT_ID` (or the token's only account). The smoke test marks its rows with the build `smoke-test`.
+
 ## Credentials
 
 - **Local:** the API token in the macOS keychain under `cloudflare-api-token`. It is broad: it can also create API tokens, which `github.ts` needs.
-- **CI:** the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` Actions secrets, written by `github.ts`. That token is the account-owned `munch-manor-ci` token with Workers Scripts Write, Secrets Store Write, Account Settings Read, and Workers Tail Read. Secrets Store Write is needed because Alchemy reads the state store's token by binding it to a short-lived preview Worker.
+- **CI:** the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` Actions secrets, written by `github.ts`. That token is the account-owned `munch-manor-ci` token with Workers Scripts Write, Secrets Store Write, Account Settings Read, Workers Tail Read, and D1 Write (for the analytics databases). Secrets Store Write is needed because Alchemy reads the state store's token by binding it to a short-lived preview Worker.
 
 To rotate the CI token or change its permissions, edit `github.ts` and run, with the keychain token and `GITHUB_TOKEN=$(gh auth token)` exported:
 
