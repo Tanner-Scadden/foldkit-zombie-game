@@ -42,6 +42,8 @@ import {
   TRAP_PLACE_TRAUMA,
 } from './constants'
 import {
+  END_MENU_BUTTON_ID,
+  endOffer,
   homeButtonId,
   isOnHome,
   recordSessionBests,
@@ -144,7 +146,7 @@ import {
   UPDATE_CHECK_INTERVAL,
   fetchRemoteBuild,
   isCheckingForUpdates,
-  isUpdateWindow,
+  isUpdateCheckWindow,
   maybeNewerBuild,
   reloadPage,
 } from './version'
@@ -258,6 +260,7 @@ export const Message = defineMessageUnion({
   FocusedHomeButton: { button: HomeButton },
   BlurredHomeButton: {},
   CompletedFocusHomeButton: {},
+  CompletedFocusEndMenuButton: {},
   CompletedLoadStyles: {},
   CompletedLoadFonts: {},
   FailedLoadFonts: { reason: Schema.String },
@@ -502,6 +505,14 @@ export const FocusHomeButton = Command.define('FocusHomeButton', {
     ),
 })
 
+export const FocusEndMenuButton = Command.define('FocusEndMenuButton', {
+  messages: [Message.CompletedFocusEndMenuButton],
+  execute: Dom.focus(`#${END_MENU_BUTTON_ID}`).pipe(
+    Effect.ignore,
+    Effect.as(Message.CompletedFocusEndMenuButton()),
+  ),
+})
+
 // SPLASH
 
 export const LoadStyles = Command.define('LoadStyles', {
@@ -607,8 +618,8 @@ const canStart = (model: Model): boolean =>
     Preparation: () => false,
     Wave: () => false,
     Paused: () => true,
-    Victory: () => isPastRestartGrace(model),
-    GameOver: () => isPastRestartGrace(model),
+    Victory: () => endOffer(model) === 'MenuAndModes',
+    GameOver: () => endOffer(model) === 'MenuAndModes',
   })
 
 const startWhenAllowed = (model: Model, mode: RunMode): Model =>
@@ -1111,8 +1122,13 @@ const leaveRun: UpdateStep = stepModel =>
     ? Update.combine(stepModel, [closePanel, goHome])
     : { model: stepModel }
 
+const isEndMenuKey = (model: Model, code: string): boolean =>
+  isMenuKey(code) || (isStartKey(code) && endOffer(model) === 'MenuOnly')
+
 const menuFromKey: (code: string) => UpdateStep = code => stepModel =>
-  isMenuKey(code) ? leaveFromMenu(stepModel) : { model: stepModel }
+  isEndMenuKey(stepModel, code)
+    ? leaveFromMenu(stepModel)
+    : { model: stepModel }
 
 const canMoveHomeFocus = (model: Model): boolean =>
   isOnHome(model.phase) &&
@@ -1755,6 +1771,8 @@ const updateGame = (model: Model, message: Message) =>
 
     CompletedFocusHomeButton: () => ({ model }),
 
+    CompletedFocusEndMenuButton: () => ({ model }),
+
     CompletedLoadStyles: () => finishLoadStep(model, 'Styles'),
 
     CompletedLoadFonts: () => finishLoadStep(model, 'Fonts'),
@@ -1818,10 +1836,21 @@ const dismissHomeScreenTipFrom =
         : stepModel,
   })
 
+const isOfferingOnlyMenu = (model: Model): boolean =>
+  endOffer(model) === 'MenuOnly' && !isSideways(model)
+
+const focusEndMenuFrom =
+  (before: Model): UpdateStep =>
+  stepModel =>
+    !isOfferingOnlyMenu(before) && isOfferingOnlyMenu(stepModel)
+      ? { model: stepModel, commands: [FocusEndMenuButton()] }
+      : { model: stepModel }
+
 export const update = (model: Model, message: Message): UpdateReturn =>
   Update.combine(model, [
     stepModel => updateGame(stepModel, message),
     cueMusicFrom(model),
+    focusEndMenuFrom(model),
     dismissHomeScreenTipFrom(model),
     stepModel => ({ model: recordSessionBests(model, stepModel) }),
   ])
@@ -1890,7 +1919,7 @@ export const pageVisibilityMessage = (
   })
 
 export const updateCheckActivity = (model: Model): Activity =>
-  isCheckingForUpdates(RUNNING_BUILD) && isUpdateWindow(model.phase)
+  isCheckingForUpdates(RUNNING_BUILD) && isUpdateCheckWindow(model.phase)
     ? 'Active'
     : 'Idle'
 

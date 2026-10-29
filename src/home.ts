@@ -1,6 +1,7 @@
 import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { RESTART_GRACE_MS } from './constants'
 import type { FocusStep } from './input'
 import { type HomeButton, type Model, Phase, initialModel } from './model'
 import { totalKills } from './stats'
@@ -53,6 +54,26 @@ export const steppedHomeFocus = (
 // HOME
 
 export const isOnHome = Phase.isAnyOf(['Ready'])
+
+// END SCREENS
+
+export type EndOffer = 'Nothing' | 'MenuOnly' | 'MenuAndModes'
+
+export const END_MENU_BUTTON_ID = 'end-menu-button'
+
+const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
+
+// NOTE: a newer build waits on the home menu, so the end screens offer only
+// MENU then. Starting another run here would keep the old build running.
+export const endOffer = (model: Model): EndOffer => {
+  if (!isEndScreen(model.phase) || model.screenMs < RESTART_GRACE_MS) {
+    return 'Nothing'
+  } else if (Option.isSome(model.maybeNewerBuild)) {
+    return 'MenuOnly'
+  } else {
+    return 'MenuAndModes'
+  }
+}
 
 export const returnHome = (model: Model): Model =>
   modifyFields(model, {

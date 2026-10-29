@@ -3,9 +3,10 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { PREPARATION_MS } from './constants'
+import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import {
   FetchBuild,
+  FocusEndMenuButton,
   Message,
   ReloadPage,
   maybePageShowMessage,
@@ -176,5 +177,72 @@ describe('the update check subscriptions', () => {
   test('the dev server never checks', () => {
     expect(isCheckingForUpdates('dev')).toBe(false)
     expect(isCheckingForUpdates(RUNNING_BUILD)).toBe(true)
+  })
+})
+
+describe('the end screens with a new version waiting', () => {
+  const waiting = (phase: Phase, screenMs: number): Model =>
+    modifyFields(onPhase(phase), {
+      screenMs: () => screenMs,
+      maybeNewerBuild: () => Option.some(NEWER_BUILD),
+    })
+
+  test.each([
+    ['Game Over', Phase.GameOver({ wave: 3 })],
+    ['Victory', Phase.Victory()],
+  ])('%s turns Enter into MENU and ignores E and K', (_name, phase) => {
+    story(
+      update,
+      given(waiting(phase, RESTART_GRACE_MS)),
+      message(Message.PressedKey({ code: 'KeyE' })),
+      message(Message.PressedKey({ code: 'KeyK' })),
+      message(Message.ClickedCampaignButton()),
+      message(Message.ClickedKeepGoingButton()),
+      model(current => {
+        expect(current.phase).toStrictEqual(phase)
+      }),
+      message(Message.PressedKey({ code: 'Enter' })),
+      model(current => {
+        expect(Phase.guards.Ready(current.phase)).toBe(true)
+        expect(current.maybeNewerBuild).toStrictEqual(Option.some(NEWER_BUILD))
+      }),
+    )
+  })
+
+  test('Enter waits out the restart grace', () => {
+    const phase = Phase.GameOver({ wave: 3 })
+    story(
+      update,
+      given(waiting(phase, RESTART_GRACE_MS - 1)),
+      message(Message.PressedKey({ code: 'Enter' })),
+      model(current => {
+        expect(current.phase).toStrictEqual(phase)
+      }),
+      message(Message.TickedFrame({ deltaTime: 1 })),
+      Command.expectExact(FocusEndMenuButton),
+      Command.resolve(
+        FocusEndMenuButton,
+        Message.CompletedFocusEndMenuButton(),
+      ),
+      message(Message.PressedKey({ code: 'Enter' })),
+      model(current => {
+        expect(Phase.guards.Ready(current.phase)).toBe(true)
+      }),
+    )
+  })
+
+  test('without a new version, Enter still starts a campaign from Game Over', () => {
+    story(
+      update,
+      given(
+        modifyFields(onPhase(Phase.GameOver({ wave: 3 })), {
+          screenMs: () => RESTART_GRACE_MS,
+        }),
+      ),
+      message(Message.PressedKey({ code: 'Enter' })),
+      model(current => {
+        expect(Phase.guards.Preparation(current.phase)).toBe(true)
+      }),
+    )
   })
 })

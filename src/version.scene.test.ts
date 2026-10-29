@@ -12,7 +12,7 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { PREPARATION_MS } from './constants'
+import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { Message, ReloadPage, update } from './main'
 import { type Model, Phase, initialModel } from './model'
 import { MeasureGameSurface, view } from './view'
@@ -24,6 +24,7 @@ const measureSurface = Mount.resolve(
 )
 
 const updateChip = role('button', { name: /New version ready/ })
+const mainMenu = role('navigation', { name: 'Main menu' })
 
 const withNewerBuild = (model: Model): Model =>
   modifyFields(model, { maybeNewerBuild: () => Option.some('newer-build') })
@@ -35,31 +36,43 @@ const fighting: Model = modifyFields(initialModel, {
   phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),
 })
 
-const QUIET_SCREENS: ReadonlyArray<readonly [string, Model]> = [
-  ['the title', withNewerBuild(initialModel)],
+const breakBetweenWaves = Phase.Preparation({
+  wave: 3,
+  remainingMs: 15_000,
+  durationMs: PREPARATION_MS,
+  spawns: [],
+})
+
+const SCREENS_WITHOUT_THE_CHIP: ReadonlyArray<readonly [string, Model]> = [
   ['the pause screen', withNewerBuild(pause(fighting))],
   ['Game Over', onPhase(Phase.GameOver({ wave: 3 }))],
-  ['Victory', onPhase(Phase.Victory())],
   [
-    'the break between waves',
-    onPhase(
-      Phase.Preparation({
-        wave: 3,
-        remainingMs: 15_000,
-        durationMs: PREPARATION_MS,
-        spawns: [],
-      }),
-    ),
+    'Game Over after the grace',
+    modifyFields(onPhase(Phase.GameOver({ wave: 3 })), {
+      screenMs: () => RESTART_GRACE_MS,
+    }),
   ],
+  ['Victory', onPhase(Phase.Victory())],
+  ['the break between waves', onPhase(breakBetweenWaves)],
+  ['a wave', withNewerBuild(fighting)],
 ]
 
 describe('the update chip', () => {
-  test.each(QUIET_SCREENS)('shows on %s', (_name, quiet) => {
+  test('shows on the home menu', () => {
+    scene(
+      { update, view },
+      given(withNewerBuild(initialModel)),
+      measureSurface,
+      expect(updateChip).toExist(),
+    )
+  })
+
+  test.each(SCREENS_WITHOUT_THE_CHIP)('waits off %s', (_name, quiet) => {
     scene(
       { update, view },
       given(quiet),
       measureSurface,
-      expect(updateChip).toExist(),
+      expect(updateChip).toBeAbsent(),
     )
   })
 
@@ -72,7 +85,7 @@ describe('the update chip', () => {
     )
   })
 
-  test('never shows mid-wave, then shows once the wave pauses', () => {
+  test('a build found mid-wave waits through pause and shows on the home menu', () => {
     scene(
       { update, view },
       given(fighting),
@@ -80,7 +93,8 @@ describe('the update chip', () => {
       Subscription.emit(Message.CompletedFetchBuild({ build: 'newer-build' })),
       expect(updateChip).toBeAbsent(),
       Subscription.emit(Message.PressedKey({ code: 'Escape' })),
-      expect(updateChip).toExist(),
+      expect(updateChip).toBeAbsent(),
+      expect(mainMenu).toBeAbsent(),
     )
   })
 

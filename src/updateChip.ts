@@ -1,16 +1,16 @@
 import { Option } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
+import { isOnHome } from './home'
 import { Message, isSideways } from './main'
 import type { InputDevice, Model } from './model'
-import { isUpdateWindow } from './version'
 
 const actionLabel = (device: InputDevice): string =>
   device === 'Touch' ? 'Tap to update' : 'Click to update'
 
 export const isUpdateChipShown = (model: Model): boolean =>
   Option.isSome(model.maybeNewerBuild) &&
-  isUpdateWindow(model.phase) &&
+  isOnHome(model.phase) &&
   !isSideways(model)
 
 export const updateChipView = (model: Model, h: HtmlBuilder<Message>): Html =>

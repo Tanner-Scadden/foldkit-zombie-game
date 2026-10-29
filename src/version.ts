@@ -17,9 +17,9 @@ export const maybeNewerBuild = (
 ): Option.Option<string> =>
   remoteBuild === runningBuild ? Option.none() : Option.some(remoteBuild)
 
-// NOTE: the update chip waits for a quiet screen. It never shows during a
-// wave, so a build that lands mid-wave shows at the next break.
-export const isUpdateWindow = Phase.isAnyOf([
+// NOTE: checks run on any quiet screen so a newer build is already known
+// when the player reaches the home menu, the only screen with the chip.
+export const isUpdateCheckWindow = Phase.isAnyOf([
   'Ready',
   'Preparation',
   'Paused',

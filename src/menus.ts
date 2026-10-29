@@ -3,7 +3,8 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Dialog } from '@foldkit/ui'
 
-import { GAME_TITLE, RESTART_GRACE_MS } from './constants'
+import { GAME_TITLE } from './constants'
+import { END_MENU_BUTTON_ID, endOffer } from './home'
 import { pauseMenuButtonView } from './homeView'
 import {
   ADD_TO_HOME_SCREEN_ICON,
@@ -246,6 +247,7 @@ export const homeScreenStepsView = (
 // MODE BUTTONS
 
 type ModeButton = Readonly<{
+  id: string
   className: string
   label: string
   detail: string
@@ -256,6 +258,7 @@ type ModeButton = Readonly<{
 }>
 
 const CAMPAIGN_BUTTON: ModeButton = {
+  id: 'end-campaign-button',
   className: 'mode-button',
   label: 'CAMPAIGN',
   detail: `${FINAL_WAVE} WAVES`,
@@ -266,6 +269,7 @@ const CAMPAIGN_BUTTON: ModeButton = {
 }
 
 const ENDLESS_BUTTON: ModeButton = {
+  id: 'end-endless-button',
   className: 'mode-button',
   label: 'ENDLESS',
   detail: 'UNTIL YOU DROP',
@@ -276,6 +280,7 @@ const ENDLESS_BUTTON: ModeButton = {
 }
 
 const KEEP_GOING_BUTTON: ModeButton = {
+  id: 'end-keep-going-button',
   className: 'mode-button keep-going-button',
   label: 'KEEP GOING',
   detail: `ON TO WAVE ${FINAL_WAVE + 1}`,
@@ -286,7 +291,8 @@ const KEEP_GOING_BUTTON: ModeButton = {
 }
 
 const MENU_BUTTON: ModeButton = {
-  className: 'mode-button menu-button',
+  id: END_MENU_BUTTON_ID,
+  className: 'mode-button menu-button is-primary',
   label: 'MENU',
   detail: 'BACK HOME',
   key: 'H',
@@ -294,6 +300,14 @@ const MENU_BUTTON: ModeButton = {
   ariaLabel: 'Menu: back to the home screen',
   message: Message.ClickedMenuButton(),
 }
+
+const UPDATE_MENU_BUTTON: ModeButton = {
+  ...MENU_BUTTON,
+  key: 'ENTER',
+  keyName: 'Enter H',
+}
+
+const UPDATE_NOTE = 'A new version is waiting on the menu.'
 
 const modeButtonView = (
   model: Model,
@@ -303,6 +317,7 @@ const modeButtonView = (
   h.button(
     [
       h.Type('button'),
+      h.Id(button.id),
       h.Class(button.className),
       h.AriaLabel(button.ariaLabel),
       h.AriaKeyshortcuts(button.keyName),
@@ -326,42 +341,47 @@ const modeButtonView = (
   )
 
 const modeButtons = (model: Model): ReadonlyArray<ModeButton> =>
-  Phase.match(model.phase, {
-    Ready: () => [],
-    Preparation: () => [],
-    Wave: () => [],
-    Paused: () => [],
-    Victory: () =>
-      model.screenMs >= RESTART_GRACE_MS
-        ? [KEEP_GOING_BUTTON, CAMPAIGN_BUTTON, ENDLESS_BUTTON]
-        : [],
-    GameOver: () =>
-      model.screenMs >= RESTART_GRACE_MS
-        ? [CAMPAIGN_BUTTON, ENDLESS_BUTTON]
-        : [],
-  })
+  Phase.isAnyOf(['Victory'])(model.phase)
+    ? [KEEP_GOING_BUTTON, CAMPAIGN_BUTTON, ENDLESS_BUTTON]
+    : [CAMPAIGN_BUTTON, ENDLESS_BUTTON]
 
-export const modeChoiceView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  isSideways(model)
-    ? h.empty
-    : Array.match(modeButtons(model), {
-        onEmpty: () => h.empty,
-        onNonEmpty: buttons =>
-          h.div(
-            [h.Class('mode-choice')],
-            [
-              h.div(
-                [
-                  h.Class('mode-group'),
-                  h.Role('group'),
-                  h.AriaLabel('Choose a mode'),
-                ],
-                Array.map(buttons, button => modeButtonView(model, button, h)),
-              ),
-              modeButtonView(model, MENU_BUTTON, h),
-            ],
-          ),
-      })
+const menuOnlyView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [h.Class('mode-choice is-update-waiting')],
+    [
+      h.p([h.Class('mode-choice-note')], [UPDATE_NOTE]),
+      modeButtonView(model, UPDATE_MENU_BUTTON, h),
+    ],
+  )
+
+const menuAndModesView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [h.Class('mode-choice')],
+    [
+      modeButtonView(model, MENU_BUTTON, h),
+      h.div(
+        [h.Class('mode-group'), h.Role('group'), h.AriaLabel('Choose a mode')],
+        Array.map(modeButtons(model), button =>
+          modeButtonView(model, button, h),
+        ),
+      ),
+    ],
+  )
+
+export const modeChoiceView = (model: Model, h: HtmlBuilder<Message>): Html => {
+  if (isSideways(model)) {
+    return h.empty
+  }
+
+  const offer = endOffer(model)
+  if (offer === 'MenuOnly') {
+    return menuOnlyView(model, h)
+  } else if (offer === 'MenuAndModes') {
+    return menuAndModesView(model, h)
+  } else {
+    return h.empty
+  }
+}
 
 // DEBUT CARD
 
