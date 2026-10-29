@@ -1,0 +1,24 @@
+{
+  "name": "@munch/sqlite-wasm-effect",
+  "version": "0.1.0",
+  "description": "SQLite in the browser for Effect: @sqlite.org/sqlite-wasm in a Web Worker on the opfs-sahpool VFS, behind an Effect SqlClient.",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./worker": "./src/worker.ts",
+    "./in-process": "./src/inProcess.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "effect-tsgo tsrs --noEmit"
+  },
+  "dependencies": {
+    "@sqlite.org/sqlite-wasm": "3.54.1-build1"
+  },
+  "peerDependencies": {
+    "effect": "4.0.0"
+  }
+}
