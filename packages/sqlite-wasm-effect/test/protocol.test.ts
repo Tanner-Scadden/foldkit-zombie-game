@@ -1,4 +1,4 @@
-import { Effect, Exit } from 'effect'
+import { Effect, Exit, type Schema } from 'effect'
 import { describe, expect, test } from 'vitest'
 
 import {
@@ -13,8 +13,8 @@ import {
 } from '../src/Protocol'
 
 const roundTrip = <A>(
-  encode: (value: A) => Effect.Effect<unknown, unknown>,
-  decode: (value: unknown) => Effect.Effect<A, unknown>,
+  encode: (value: A) => Effect.Effect<unknown, Schema.SchemaError>,
+  decode: (value: unknown) => Effect.Effect<A, Schema.SchemaError>,
   value: A,
 ): A =>
   Effect.runSync(

@@ -1065,6 +1065,7 @@ const application = Runtime.makeApplication({
   },
   subscriptions,
   managedResources,
+  resources: PlayerStoreLayer,
   container: document.getElementById('root'),
 })
 
@@ -1072,5 +1073,6 @@ Runtime.run(application)
 void Option
 import { DOORS } from '@game/arena'
 import { STALL_BOX } from '@game/shop'
+import { layer as PlayerStoreLayer } from '@game/store'
 w.__stall = STALL_BOX
 w.__doors = DOORS

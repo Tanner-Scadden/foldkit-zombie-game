@@ -134,10 +134,8 @@ import {
   PlayerSave,
   forgetTutorial,
   isSameSave,
-  readSave,
   restoreSave,
   saveOf,
-  writeSave,
 } from './save'
 import {
   SHOP_ITEMS,
@@ -159,6 +157,7 @@ import {
   showSplashProgress,
 } from './splash'
 import { tallyFrame } from './stats'
+import { PlayerStore } from './store'
 import {
   TRAPS,
   cycleTrap,
@@ -339,6 +338,8 @@ export const managedResources = ManagedResource.make<Model, Message>()(
 )
 
 type AudioServices = ManagedResource.ServicesOf<typeof managedResources>
+
+type AppServices = AudioServices | PlayerStore
 
 // COMMAND
 
@@ -622,7 +623,7 @@ export const HideSplash = Command.define('HideSplash', {
 export const LoadSave = Command.define('LoadSave', {
   messages: [Message.CompletedLoadSave, Message.FailedLoadSave],
   execute: pipe(
-    readSave,
+    PlayerStore.use(store => store.load),
     Effect.map(maybeSave => Message.CompletedLoadSave({ maybeSave })),
     Effect.catch(error =>
       Effect.succeed(Message.FailedLoadSave({ reason: error.reason })),
@@ -635,7 +636,7 @@ export const WriteSave = Command.define('WriteSave', {
   messages: [Message.CompletedWriteSave, Message.FailedWriteSave],
   execute: ({ save }) =>
     pipe(
-      writeSave(save),
+      PlayerStore.use(store => store.write(save)),
       Effect.as(Message.CompletedWriteSave()),
       Effect.catch(error =>
         Effect.succeed(Message.FailedWriteSave({ reason: error.reason })),
@@ -681,7 +682,12 @@ export const FocusTutorialReset = Command.define('FocusTutorialReset', {
 // fails still counts as finished, so a missing font never holds the game.
 // New assets, such as images for Canvas.Image, join LOAD_STEPS with a
 // Command that loads them.
-export const init: Runtime.ApplicationInit<Model, Message> = () => ({
+export const init: Runtime.ApplicationInit<
+  Model,
+  Message,
+  void,
+  PlayerStore
+> = () => ({
   model: modifyFields(initialModel, {
     loading: () => Loading.Loading({ pending: LOAD_STEPS }),
   }),
@@ -700,8 +706,8 @@ export const init: Runtime.ApplicationInit<Model, Message> = () => ({
 
 // UPDATE
 
-type UpdateReturn = Update.Return<Model, Message, AudioServices>
-type UpdateStep = Update.Step<Model, Message, AudioServices>
+type UpdateReturn = Update.Return<Model, Message, AppServices>
+type UpdateStep = Update.Step<Model, Message, AppServices>
 
 const START_SOUND_GRACE_MS = 1000
 const MUTE_KEY = 'KeyM'

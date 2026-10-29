@@ -8,6 +8,7 @@ import {
   subscriptions,
   update,
 } from './main'
+import { layer as PlayerStoreLayer } from './store'
 import { view } from './view'
 
 const application = Runtime.makeApplication({
@@ -17,6 +18,7 @@ const application = Runtime.makeApplication({
   view,
   subscriptions,
   managedResources,
+  resources: PlayerStoreLayer,
   container: document.getElementById('root'),
   devTools: {
     Message,

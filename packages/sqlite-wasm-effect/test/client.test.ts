@@ -206,6 +206,7 @@ describe('SqliteClient over the in-process hub', () => {
           const client = yield* SqliteClient
           const sql = yield* SqlClient.SqlClient
           yield* createPeople
+          yield* sql`INSERT INTO people (id, name) VALUES (1, 'Ada')`
           const seen = yield* pipe(
             client.changes,
             Stream.take(1),
@@ -222,9 +223,9 @@ describe('SqliteClient over the in-process hub', () => {
             ),
           )
           yield* sql`UPDATE people SET name = 'none' WHERE id = 0`
-          yield* sql`INSERT INTO people (id, name) VALUES (1, 'Ada')`
+          yield* sql`UPDATE people SET name = 'Ada B' WHERE id = 1`
           const changes = yield* Fiber.join(seen)
-          expect(changes).toEqual([[{ table: 'people', operation: 'Insert' }]])
+          expect(changes).toEqual([[{ table: 'people', operation: 'Update' }]])
         }),
       ),
     ))

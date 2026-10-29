@@ -23,9 +23,11 @@ import {
 // SAVE
 
 // NOTE: the PlayerSave is one record per player, plain data, shaped like the
-// player scope in PLATFORM.md. When local SQLite lands it is imported once
-// into that scope and this key is retired. A new field goes in here with a
-// version bump, and decodeSave migrates or drops the older version.
+// player scope in PLATFORM.md. It is stored as the player row in on-device
+// SQLite (see src/store.ts). SAVE_KEY is the localStorage copy it used to
+// live in: imported into SQLite once, then kept read-only as a fallback for
+// one release. A new field goes in here with a version bump, and decodeSave
+// migrates or drops the older version.
 export const SAVE_KEY = 'munch-manor:save'
 export const SAVE_VERSION = 3
 
@@ -274,7 +276,7 @@ export const forgetTutorial = (model: Model): Model =>
     debutCard: () => DebutCard.Hidden(),
   })
 
-// STORAGE
+// LEGACY STORAGE
 
 export class SaveStorageError extends Data.TaggedError('SaveStorageError')<{
   readonly reason: string
@@ -283,10 +285,11 @@ export class SaveStorageError extends Data.TaggedError('SaveStorageError')<{
 const toStorageError = (error: unknown): SaveStorageError =>
   new SaveStorageError({ reason: String(error) })
 
-// NOTE: storage that is missing, blocked, or full fails here, and the
-// Commands that run these turn the failure into a Message. A save that is
-// absent, corrupted, or from another version reads as no save.
-export const readSave: Effect.Effect<
+// NOTE: the localStorage copy of the save, from before SQLite. Only
+// src/store.ts calls these: once to import it, and as the fallback when
+// SQLite cannot keep the save. A save that is absent, corrupted, or from
+// another version reads as no save.
+export const readLegacySave: Effect.Effect<
   Option.Option<PlayerSave>,
   SaveStorageError
 > = pipe(
@@ -297,7 +300,7 @@ export const readSave: Effect.Effect<
   Effect.map(Option.flatMap(decodeSave)),
 )
 
-export const writeSave = (
+export const writeLegacySave = (
   save: PlayerSave,
 ): Effect.Effect<void, SaveStorageError> =>
   pipe(

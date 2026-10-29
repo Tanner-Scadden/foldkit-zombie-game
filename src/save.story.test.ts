@@ -32,11 +32,11 @@ import {
   SAVE_KEY,
   decodeSave,
   encodeSave,
-  readSave,
+  readLegacySave,
   restoreSave,
   saveOf,
   unpickedDifficulty,
-  writeSave,
+  writeLegacySave,
 } from './save'
 import { ZOMBIE_KIND_ORDER } from './zombies'
 
@@ -157,19 +157,19 @@ describe('the schema', () => {
   })
 })
 
-describe('the storage', () => {
+describe('the legacy localStorage copy', () => {
   afterEach(() => localStorage.clear())
 
   test('writes and reads back under one key', () => {
-    Effect.runSync(writeSave(learnedSave))
+    Effect.runSync(writeLegacySave(learnedSave))
     expect(localStorage.getItem(SAVE_KEY)).not.toBeNull()
-    expect(Effect.runSync(readSave)).toEqual(Option.some(learnedSave))
+    expect(Effect.runSync(readLegacySave)).toEqual(Option.some(learnedSave))
   })
 
   test('a missing or corrupted save reads as no save', () => {
-    expect(Effect.runSync(readSave)).toEqual(Option.none())
+    expect(Effect.runSync(readLegacySave)).toEqual(Option.none())
     localStorage.setItem(SAVE_KEY, 'not json at all')
-    expect(Effect.runSync(readSave)).toEqual(Option.none())
+    expect(Effect.runSync(readLegacySave)).toEqual(Option.none())
   })
 })
 

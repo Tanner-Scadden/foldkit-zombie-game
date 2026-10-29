@@ -13,7 +13,11 @@ export default defineConfig({
   define: { __BUILD_ID__: JSON.stringify('dev') },
   resolve: { alias: { '@game': `${GAME}/src` } },
   server: { fs: { allow: [GAME, __dirname] } },
-  optimizeDeps: { entries: ['entry.ts'] },
+  optimizeDeps: {
+    entries: ['entry.ts'],
+    exclude: ['@sqlite.org/sqlite-wasm'],
+  },
+  worker: { format: 'es' },
   build: {
     outDir: process.env.PROFILE
       ? `${__dirname}/dist-profile`

@@ -1,4 +1,13 @@
-import { Array, Duration, Effect, Layer, Ref, type Scope, pipe } from 'effect'
+import {
+  Array,
+  type Duration,
+  Effect,
+  type Layer,
+  Ref,
+  type Schema,
+  type Scope,
+  pipe,
+} from 'effect'
 import type { SqlClient } from 'effect/sql'
 
 import { openEngine } from './Engine'
@@ -42,8 +51,8 @@ export interface HubOptions {
 }
 
 const cross = <A>(
-  encode: (value: A) => Effect.Effect<unknown, unknown>,
-  decode: (value: unknown) => Effect.Effect<A, unknown>,
+  encode: (value: A) => Effect.Effect<unknown, Schema.SchemaError>,
+  decode: (value: unknown) => Effect.Effect<A, Schema.SchemaError>,
   value: A,
 ): Effect.Effect<A> =>
   pipe(
