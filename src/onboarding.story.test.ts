@@ -132,7 +132,12 @@ describe('new zombie card', () => {
   test('does not hold up the Preparation countdown, and comes up when it runs out', () => {
     story(
       update,
-      given(clearingWave(1, introduced(asVeteran(freshModel), ['Shambler']))),
+      given(
+        clearingWave(
+          3,
+          introduced(asVeteran(freshModel), ['Shambler', 'Runner']),
+        ),
+      ),
       tick,
       model(current => {
         expect(cardKind(current)).toStrictEqual(Option.none())
@@ -145,7 +150,7 @@ describe('new zombie card', () => {
       ...ticks(Math.ceil(PREPARATION_MS / TICK_MS)),
       model(current => {
         expect(Phase.guards.Wave(current.phase)).toBe(true)
-        expect(cardKind(current)).toStrictEqual(Option.some('Runner'))
+        expect(cardKind(current)).toStrictEqual(Option.some('Exploder'))
       }),
     )
   })

@@ -1134,7 +1134,7 @@ export const BARRICADE_SPRITES: Readonly<
   ),
 )
 
-const TRAP_ICON_PIXELS: Readonly<
+export const TRAP_ICON_PIXELS: Readonly<
   Record<
     TrapKind,
     Readonly<{ pixels: ReadonlyArray<string>; palette: Palette }>

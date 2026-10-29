@@ -2,9 +2,19 @@ import { Array } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { GAME_TITLE, RESTART_GRACE_MS } from './constants'
+import {
+  FULLSCREEN_ICON,
+  MUSIC_OFF_ICON,
+  MUSIC_ON_ICON,
+  PAUSE_ICON,
+  SOUND_OFF_ICON,
+  SOUND_ON_ICON,
+} from './icons'
 import { Message, isSideways } from './main'
 import { DebutCard, type Model, Phase, type ZombieKind } from './model'
-import { FINAL_WAVE, isRoundActive } from './waves'
+import { canSkipDebutCard } from './onboarding'
+import { iconButtonView } from './touchControls'
+import { FINAL_WAVE } from './waves'
 import { ZOMBIE_KINDS } from './zombies'
 
 // TEXT
@@ -24,64 +34,118 @@ export const debutPitch = (kind: ZombieKind): string =>
 
 const muteButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
   const isMuted = model.soundSetting === 'Muted'
-  return h.button(
-    [
-      h.Type('button'),
-      h.Class('mute-button'),
-      h.AriaLabel('Mute sound'),
-      h.AriaPressed(isMuted ? 'true' : 'false'),
-      h.AriaKeyshortcuts('M'),
-      h.OnClick(Message.ClickedMuteButton(), {
-        focusSelector: '.game-surface',
-      }),
-    ],
-    ['MUTE'],
+  return iconButtonView(
+    {
+      className: 'corner-button mute-button',
+      label: 'Mute sound',
+      icon: isMuted ? SOUND_OFF_ICON : SOUND_ON_ICON,
+      keys: 'M',
+      message: Message.ClickedMuteButton(),
+      maybePressed: isMuted,
+    },
+    h,
   )
 }
 
-const musicButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.button(
-    [
-      h.Type('button'),
-      h.Class('music-button'),
-      h.AriaLabel('Music'),
-      h.AriaPressed(model.musicSetting === 'On' ? 'true' : 'false'),
-      h.AriaKeyshortcuts('N'),
-      h.OnClick(Message.ClickedMusicButton(), {
-        focusSelector: '.game-surface',
-      }),
-    ],
-    ['MUSIC'],
+const musicButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
+  const isOn = model.musicSetting === 'On'
+  return iconButtonView(
+    {
+      className: 'corner-button music-button',
+      label: 'Music',
+      icon: isOn ? MUSIC_ON_ICON : MUSIC_OFF_ICON,
+      keys: 'N',
+      message: Message.ClickedMusicButton(),
+      maybePressed: isOn,
+    },
+    h,
+  )
+}
+
+const pauseButtonView = (h: HtmlBuilder<Message>): Html =>
+  iconButtonView(
+    {
+      className: 'corner-button pause-button',
+      label: 'Pause',
+      icon: PAUSE_ICON,
+      keys: 'Escape',
+      message: Message.ClickedPauseButton(),
+    },
+    h,
   )
 
-const pauseButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  isRoundActive(model.phase) && !isSideways(model)
-    ? h.button(
-        [
-          h.Type('button'),
-          h.Class('pause-button'),
-          h.AriaLabel('Pause'),
-          h.AriaKeyshortcuts('Escape'),
-          h.OnClick(Message.ClickedPauseButton(), {
-            focusSelector: '.game-surface',
-          }),
-        ],
-        ['PAUSE'],
+const fullscreenButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  model.screenFit === 'Fullscreen'
+    ? iconButtonView(
+        {
+          className: 'corner-button fullscreen-button',
+          label: 'Full screen',
+          icon: FULLSCREEN_ICON,
+          message: Message.ClickedFullscreenButton(),
+          maybePressed: model.fullscreen === 'On',
+        },
+        h,
       )
     : h.empty
+
+const cornerButtons = (
+  model: Model,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> => {
+  const audioButtons = [musicButtonView(model, h), muteButtonView(model, h)]
+  return Phase.match(model.phase, {
+    Ready: () => [fullscreenButtonView(model, h), ...audioButtons],
+    Preparation: () => [pauseButtonView(h)],
+    Wave: () => [pauseButtonView(h)],
+    Paused: () => [fullscreenButtonView(model, h), ...audioButtons],
+    Victory: () => audioButtons,
+    GameOver: () => audioButtons,
+  })
+}
+
+const isPickingCharacter = (model: Model): boolean =>
+  model.character.dialog.isOpen
 
 export const cornerButtonsView = (
   model: Model,
   h: HtmlBuilder<Message>,
 ): Html =>
-  h.div(
-    [h.Class('corner-buttons')],
-    [
-      muteButtonView(model, h),
-      musicButtonView(model, h),
-      pauseButtonView(model, h),
-    ],
-  )
+  isSideways(model) || isPickingCharacter(model)
+    ? h.empty
+    : h.div([h.Class('corner-buttons')], cornerButtons(model, h))
+
+// HOME SCREEN TIP
+
+export const homeScreenTipView = (
+  model: Model,
+  h: HtmlBuilder<Message>,
+): Html =>
+  model.screenFit === 'HomeScreen' &&
+  model.homeScreenTip === 'Unseen' &&
+  Phase.isAnyOf(['Ready'])(model.phase) &&
+  !isSideways(model) &&
+  !isPickingCharacter(model)
+    ? h.div(
+        [h.Class('home-screen-tip'), h.Role('note')],
+        [
+          h.p(
+            [h.Class('home-screen-tip-text')],
+            ['Add to Home Screen to play full screen'],
+          ),
+          h.button(
+            [
+              h.Type('button'),
+              h.Class('home-screen-tip-close'),
+              h.AriaLabel('Dismiss the tip'),
+              h.OnClick(Message.ClickedDismissHomeScreenTip(), {
+                focusSelector: '.game-surface',
+              }),
+            ],
+            ['×'],
+          ),
+        ],
+      )
+    : h.empty
 
 // MODE BUTTONS
 
@@ -206,22 +270,25 @@ const DEBUT_TITLE_ID = 'debut-title'
 const DEBUT_BODY_ID = 'debut-body'
 
 const debutCardButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.button(
-    [
-      h.Type('button'),
-      h.Class('debut-card-button'),
-      h.AriaKeyshortcuts('Enter'),
-      h.OnClick(Message.ClickedDebutCardButton(), {
-        focusSelector: '.game-surface',
-      }),
-    ],
-    [
-      'GOT IT',
-      ...(model.lastDevice === 'KeyboardMouse'
-        ? [h.span([h.Class('debut-card-key'), h.AriaHidden(true)], ['ENTER'])]
-        : []),
-    ],
-  )
+  canSkipDebutCard(model)
+    ? h.button(
+        [
+          h.Type('button'),
+          h.Class('debut-card-button'),
+          h.DataAttribute('device', model.lastDevice),
+          h.AriaKeyshortcuts('Enter'),
+          h.OnClick(Message.ClickedDebutCardButton(), {
+            focusSelector: '.game-surface',
+          }),
+        ],
+        model.lastDevice === 'Touch'
+          ? ['TAP TO CONTINUE']
+          : [
+              'CONTINUE',
+              h.kbd([h.Class('debut-card-key'), h.AriaHidden(true)], ['ENTER']),
+            ],
+      )
+    : h.empty
 
 export const debutCardView = (model: Model, h: HtmlBuilder<Message>): Html =>
   isSideways(model) || !Phase.isAnyOf(['Wave'])(model.phase)

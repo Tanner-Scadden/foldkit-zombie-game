@@ -26,6 +26,7 @@ import {
   Model,
   Phase,
   Arsenal,
+  BreakClock,
   MouseButton,
   RunMode,
   initialModel,
@@ -90,6 +91,10 @@ const roomModel = (): Model => {
             remainingMs: num('prep', 20000),
             durationMs: 20000,
             spawns,
+            clock:
+              params.get('break') === 'open'
+                ? BreakClock.Waiting({ elapsedMs: num('breakMs', 0) })
+                : BreakClock.Counting(),
           }),
     wallet: w => ({
       ...w,
@@ -110,7 +115,7 @@ const roomModel = (): Model => {
               spare: {
                 kind: 'Smg',
                 rounds: num('rounds', 360),
-                loaded: Math.min(30, num('rounds', 360)),
+                loaded: Math.min(num('loaded', 30), num('rounds', 360)),
                 tier: num('tier', 0),
               },
             }),
@@ -345,6 +350,10 @@ const roomModel = (): Model => {
             : (seen.split(',') as Array<(typeof ZOMBIE_KIND_ORDER)[number]>),
       }),
     )
+  if (params.has('card') && model.debutCard._tag === 'Showing')
+    model = modifyFields(model, {
+      debutCard: () => ({ ...model.debutCard, ageMs: num('card', 0) }),
+    })
   const PICKUP_KINDS = [
     'RapidFire',
     'Damage',
@@ -470,6 +479,13 @@ const harnessUpdate = (model: Model, incoming: Message) => {
   const isFreezing = Number.isFinite(freezeAfter)
   if (isFrozenFrame) return { model }
   if (isFreezing && incoming._tag === 'CompletedGenerateSeed') return { model }
+  if (params.has('fit') && incoming._tag === 'CompletedDetectScreenFit')
+    return {
+      model: modifyFields(model, {
+        screenFit: () =>
+          params.get('fit') === 'home' ? 'HomeScreen' : 'Fullscreen',
+      }),
+    }
   const message =
     incoming._tag === 'TickedFrame' && isFreezing
       ? Message.TickedFrame({ deltaTime: FIXED_FRAME_MS })

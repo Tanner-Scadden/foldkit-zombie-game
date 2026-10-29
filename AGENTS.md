@@ -72,8 +72,8 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/effectsView.ts`   | Bullets, decals, particles, blasts, popups, and rattling doors         |
 | `src/hud.ts`           | Hearts, money, the streak, gun and trap slots, and the round text      |
 | `src/wavePreview.ts`   | The door markers that preview a wave, and their spoken text            |
-| `src/touchControls.ts` | Touch sticks, ghost sticks, gun buttons, and preparation buttons       |
-| `src/menus.ts`         | Mode buttons, the new zombie card, audio toggles, rotate notice        |
+| `src/touchControls.ts` | Sticks, ghost sticks, icon buttons, gun slots, and the thumb corner   |
+| `src/menus.ts`         | Mode buttons, the new zombie card, corner icons, tips, rotate notice   |
 | `src/pauseHelp.ts`     | The pause screen's panel of controls and tips for each device          |
 | `src/powerupView.ts`   | Pickups, callouts, the boost aura, and HUD timers on canvas            |
 | `src/shopView.ts`      | The shop dialog and its category tabs, HTML over the canvas            |
@@ -82,6 +82,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/screens.ts`       | Title, banners, hints, pause, and the run stats panels                 |
 | `src/font.ts`          | The pixel font, the money coin, and text layout                        |
 | `src/sprite.ts`        | Pixel maps turned into canvas shapes                                   |
+| `src/icons.ts`         | Pixel maps turned into SVG icons for the HTML buttons                  |
 | `src/prng.ts`          | The seeded random number generator                                     |
 | `src/constants.ts`     | The view size, speeds, and other tuning numbers                        |
 

@@ -95,7 +95,6 @@ describe('Music button', () => {
       measureSurface,
       expect(musicButton).toHaveAttr('aria-pressed', 'true'),
       expect(musicButton).toHaveAttr('aria-keyshortcuts', 'N'),
-      expect(musicButton).toHaveText('MUSIC'),
       click(musicButton),
       expect(musicButton).toHaveAttr('aria-pressed', 'false'),
       expect(muteButton).toHaveAttr('aria-pressed', 'false'),
@@ -705,7 +704,7 @@ const CARD_TICKS = Math.ceil(DEBUT_CARD_MIN_MS / 50)
 
 describe('New zombie card', () => {
   test('stays out of Preparation, then reads out the new kind when the wave starts', () => {
-    const gotIt = role('button', { name: 'GOT IT' })
+    const tapToContinue = role('button', { name: 'TAP TO CONTINUE' })
     const card = role('group', { name: 'New zombie: Groaner' })
     scene(
       { update, view },
@@ -718,16 +717,38 @@ describe('New zombie card', () => {
       click(role('button', { name: 'Start wave 1 now' })),
       expect(card).toExist(),
       expect(text("He's slow. Back up and keep shooting.")).toExist(),
-      expect(gotIt).toHaveAttr('aria-keyshortcuts', 'Enter'),
+      expect(tapToContinue).toBeAbsent(),
       expect(role('status')).toHaveText(
-        "New zombie: Groaner. He's slow. Back up and keep shooting. The wave starts in a moment. Press Enter or choose Got it to start now.",
+        "New zombie: Groaner. He's slow. Back up and keep shooting. The wave starts in a moment. Once Continue shows, press Enter or choose it to start now.",
       ),
+      ...Array.makeBy(CARD_TICKS - 1, () =>
+        Subscription.emit(Message.TickedFrame({ deltaTime: 50 })),
+      ),
+      expect(tapToContinue).toBeAbsent(),
+      Subscription.emit(Message.TickedFrame({ deltaTime: 50 })),
+      expect(tapToContinue).toHaveAttr('aria-keyshortcuts', 'Enter'),
+      click(tapToContinue),
+      expect(card).toBeAbsent(),
+      expect(role('status')).toHaveText('Fighting wave 1 of 8.'),
+    )
+  })
+
+  test('shows CONTINUE with an ENTER key on a keyboard once it can be skipped', () => {
+    const continueButton = role('button', { name: 'CONTINUE' })
+    scene(
+      { update, view },
+      given(
+        modifyFields(asVeteran(initialModel), { introducedKinds: () => [] }),
+      ),
+      measureSurface,
+      click(role('button', { name: 'Campaign: 8 waves, then victory' })),
+      click(role('button', { name: 'Start wave 1 now' })),
+      expect(continueButton).toBeAbsent(),
       ...Array.makeBy(CARD_TICKS, () =>
         Subscription.emit(Message.TickedFrame({ deltaTime: 50 })),
       ),
-      click(gotIt),
-      expect(card).toBeAbsent(),
-      expect(role('status')).toHaveText('Fighting wave 1 of 8.'),
+      expect(continueButton).toExist(),
+      expect(text('ENTER')).toExist(),
     )
   })
 })

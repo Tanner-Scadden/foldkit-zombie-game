@@ -2,9 +2,10 @@ import { Array, Option, Result, Schema, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { cameraOf, worldToView } from './camera'
-import { WAVE_CLEARED_BANNER_MS } from './constants'
+import { OPEN_BREAK_WAVE, WAVE_CLEARED_BANNER_MS } from './constants'
 import { vectorLength } from './geometry'
 import {
+  BreakClock,
   DebutCard,
   GameEvent,
   type HintBand,
@@ -108,8 +109,8 @@ export const isPracticeGateHeld = (model: Model): boolean =>
 
 // DEBUT CARD
 
-export const DEBUT_CARD_MIN_MS = 500
-export const DEBUT_CARD_MS = 2600
+export const DEBUT_CARD_MIN_MS = 1500
+export const DEBUT_CARD_MS = 5500
 
 const maybeDebutKind = (model: Model): Option.Option<ZombieKind> =>
   Phase.match(model.phase, {
@@ -154,6 +155,12 @@ export const ageDebutCard = (model: Model, deltaMs: number): Model =>
           }),
   })
 
+export const canSkipDebutCard = (model: Model): boolean =>
+  DebutCard.match(model.debutCard, {
+    Hidden: () => false,
+    Showing: ({ ageMs }) => ageMs >= DEBUT_CARD_MIN_MS,
+  })
+
 export const skipDebutCard = (model: Model): Model =>
   DebutCard.match(model.debutCard, {
     Hidden: () => model,
@@ -171,6 +178,14 @@ export const learnSwap = (model: Model): Model =>
   modifyFields(model, {
     lessons: lessons =>
       modifyFields(lessons, { swap: lesson => learn(lesson, model.elapsedMs) }),
+  })
+
+export const learnTimedBreaks = (model: Model): Model =>
+  modifyFields(model, {
+    lessons: lessons =>
+      modifyFields(lessons, {
+        timedBreaks: lesson => learn(lesson, model.elapsedMs),
+      }),
   })
 
 export const learnStartWave = (model: Model): Model =>
@@ -195,6 +210,7 @@ export const settleLessons = (lessons: Lessons): Lessons =>
     shop: settle,
     swap: settle,
     pickup: settle,
+    timedBreaks: settle,
   })
 
 // BAND
@@ -229,6 +245,8 @@ export const HintId = Schema.Literals([
   'Shop',
   'Swap',
   'StartWave',
+  'OpenBreak',
+  'TimedBreaks',
 ])
 export type HintId = typeof HintId.Type
 
@@ -246,11 +264,11 @@ export const HINT_TEXT: Readonly<
   },
   Barricade: {
     KeyboardMouse: 'STAND IN A DOORWAY AND PRESS T',
-    Touch: 'STAND IN A DOORWAY AND TAP PLACE',
+    Touch: 'STAND IN A DOORWAY, TAP THE PLANKS',
   },
   Turret: {
     KeyboardMouse: 'PRESS T TO PLONK THE GNOME DOWN',
-    Touch: 'TAP PLACE TO PLONK THE GNOME DOWN',
+    Touch: 'TAP THE GNOME TO PLONK IT DOWN',
   },
   Shop: {
     KeyboardMouse: 'WALK UP TO THE $ STALL TO SHOP',
@@ -258,11 +276,19 @@ export const HINT_TEXT: Readonly<
   },
   Swap: {
     KeyboardMouse: 'Q SWAPS GUNS',
-    Touch: 'TAP SWAP TO CHANGE GUNS',
+    Touch: 'TAP YOUR GUNS TO SWAP',
   },
   StartWave: {
     KeyboardMouse: 'PRESS ENTER WHEN YOU ARE READY',
     Touch: 'TAP START WAVE WHEN YOU ARE READY',
+  },
+  OpenBreak: {
+    KeyboardMouse: 'PLANKS BLOCK DOORS. GNOMES SHOOT.',
+    Touch: 'PLANKS BLOCK DOORS. GNOMES SHOOT.',
+  },
+  TimedBreaks: {
+    KeyboardMouse: 'BREAKS ARE TIMED FROM NOW ON',
+    Touch: 'BREAKS ARE TIMED FROM NOW ON',
   },
 }
 
@@ -273,7 +299,11 @@ export const MAX_HINTS = 2
 export const msIntoPhase = (phase: Phase): number =>
   Phase.match(phase, {
     Ready: () => 0,
-    Preparation: ({ remainingMs, durationMs }) => durationMs - remainingMs,
+    Preparation: ({ remainingMs, durationMs, clock }) =>
+      BreakClock.match(clock, {
+        Counting: () => durationMs - remainingMs,
+        Waiting: ({ elapsedMs }) => elapsedMs,
+      }),
     Wave: ({ elapsedMs }) => elapsedMs,
     Paused: () => 0,
     Victory: () => 0,
@@ -309,6 +339,28 @@ const isPreparation = (model: Model): boolean =>
 
 const isRoundActive = (model: Model): boolean =>
   Phase.isAnyOf(['Preparation', 'Wave'])(model.phase)
+
+const isBreakWith = (
+  model: Model,
+  isWanted: (wave: number, clock: BreakClock) => boolean,
+): boolean =>
+  Phase.match(model.phase, {
+    Ready: () => false,
+    Preparation: ({ wave, clock }) => isWanted(wave, clock),
+    Wave: () => false,
+    Paused: () => false,
+    Victory: () => false,
+    GameOver: () => false,
+  })
+
+export const isOpenBreak = (model: Model): boolean =>
+  isBreakWith(model, (_wave, clock) => BreakClock.isAnyOf(['Waiting'])(clock))
+
+export const isTimedBreak = (wave: number, clock: BreakClock): boolean =>
+  wave > OPEN_BREAK_WAVE && BreakClock.isAnyOf(['Counting'])(clock)
+
+const isLaterTimedBreak = (model: Model): boolean =>
+  isBreakWith(model, isTimedBreak)
 
 const isTrapHintFor = (model: Model, kind: 'Barricade' | 'Turret'): boolean =>
   isPreparation(model) &&
@@ -359,6 +411,23 @@ const HINT_RULES: ReadonlyArray<HintRule> = [
       ageWhen(
         isShopOpenFor(model.phase) &&
           isPending(model.lessons.shop) &&
+          msIntoPhase(model.phase) >= WAVE_CLEARED_BANNER_MS,
+        msIntoPhase(model.phase) - WAVE_CLEARED_BANNER_MS,
+      ),
+  },
+  {
+    id: 'TimedBreaks',
+    maybeAgeMs: model =>
+      ageWhen(
+        isLaterTimedBreak(model) && isPending(model.lessons.timedBreaks),
+        msIntoPhase(model.phase),
+      ),
+  },
+  {
+    id: 'OpenBreak',
+    maybeAgeMs: model =>
+      ageWhen(
+        isOpenBreak(model) &&
           msIntoPhase(model.phase) >= WAVE_CLEARED_BANNER_MS,
         msIntoPhase(model.phase) - WAVE_CLEARED_BANNER_MS,
       ),

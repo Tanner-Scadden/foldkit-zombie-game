@@ -16,6 +16,7 @@ import {
   RunMode,
   initialModel,
 } from './model'
+import { DEBUT_CARD_MIN_MS } from './onboarding'
 import { asVeteran } from './veteran'
 
 const FRAME_MS = 50
@@ -70,7 +71,8 @@ const ROUNDS: ReadonlyArray<
 ]
 
 const withDebutCard: Model = modifyFields(fighting, {
-  debutCard: () => DebutCard.Showing({ kind: 'Runner', ageMs: 1000 }),
+  debutCard: () =>
+    DebutCard.Showing({ kind: 'Runner', ageMs: DEBUT_CARD_MIN_MS }),
 })
 
 const isPaused = (current: Model): boolean =>

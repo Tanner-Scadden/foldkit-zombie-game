@@ -105,60 +105,151 @@ body {
 
 .corner-buttons {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 8px);
-  right: calc(env(safe-area-inset-right, 0px) + 8px);
-  display: grid;
-  grid-template-columns: auto auto;
-  gap: 6px;
+  top: calc(env(safe-area-inset-top, 0px) + 6px);
+  right: calc(env(safe-area-inset-right, 0px) + 6px);
+  display: flex;
+  gap: 8px;
 }
 
-.mute-button {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.music-button {
-  grid-column: 2;
-  grid-row: 2;
-}
-
-.pause-button {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-.mute-button,
-.music-button,
-.pause-button {
-  min-width: 48px;
-  min-height: 48px;
-  padding: 0 12px;
-  border: 2px solid rgba(244, 241, 222, 0.55);
-  border-radius: 6px;
-  background: rgba(8, 10, 12, 0.6);
-  color: #f4f1de;
-  font: bold 12px monospace;
-  letter-spacing: 0.05em;
+.icon-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid rgba(244, 241, 222, 0.5);
+  border-radius: 9999px;
+  background: rgba(8, 10, 12, 0.55);
+  opacity: 0.6;
   cursor: pointer;
   touch-action: manipulation;
+  transition: opacity 80ms linear;
+}
+
+.icon-button:hover,
+.icon-button:active,
+.icon-button:focus-visible {
+  opacity: 1;
+}
+
+.icon-button:active {
+  transform: scale(0.94);
+  background: rgba(40, 30, 20, 0.85);
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid #9be36a;
+  outline-offset: 2px;
+}
+
+.icon-button-glyph {
+  display: block;
+  width: 20px;
+  height: 20px;
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+  pointer-events: none;
 }
 
 .mute-button[aria-pressed='true'] {
-  border-color: rgba(255, 224, 102, 0.75);
-  color: #ffe066;
+  border-color: rgba(255, 107, 94, 0.75);
 }
 
 .music-button[aria-pressed='false'] {
-  border-color: rgba(244, 241, 222, 0.3);
-  color: rgba(244, 241, 222, 0.55);
-  text-decoration: line-through;
+  border-color: rgba(255, 107, 94, 0.75);
 }
 
-.mute-button:focus-visible,
-.music-button:focus-visible,
-.pause-button:focus-visible {
+.fullscreen-button[aria-pressed='true'] {
+  border-color: rgba(255, 224, 102, 0.75);
+}
+
+.pause-button .icon-button-glyph {
+  width: 12px;
+  height: 14px;
+}
+
+.action-arc {
+  position: fixed;
+  right: calc(env(safe-area-inset-right, 0px) + 8px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 6px;
+}
+
+.arc-button {
+  border-color: rgba(255, 224, 102, 0.7);
+}
+
+.place-icon-button {
+  width: 52px;
+  height: 52px;
+  border-color: rgba(155, 227, 106, 0.8);
+}
+
+.place-icon-button .icon-button-glyph {
+  width: 26px;
+  height: 22px;
+}
+
+.place-icon-button[aria-disabled='true'] {
+  border-color: rgba(255, 107, 94, 0.8);
+  cursor: not-allowed;
+}
+
+.icon-button-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  min-width: 18px;
+  padding: 0 3px;
+  border-radius: 9px;
+  background: #140c10;
+  color: #f4f1de;
+  font: bold 11px/16px monospace;
+  text-align: center;
+}
+
+.hud-tap-frame {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: env(safe-area-inset-left, 0px);
+  container-type: size;
+  pointer-events: none;
+}
+
+.hud-tap-stage {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(100cqw, 100cqh * 320 / 180);
+  height: min(100cqh, 100cqw * 180 / 320);
+  pointer-events: none;
+}
+
+.gun-slot-button {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.gun-slot-button:active {
+  background: rgba(255, 224, 102, 0.2);
+}
+
+.gun-slot-button:focus-visible {
   outline: 2px solid #9be36a;
-  outline-offset: 2px;
 }
 
 .preparation-controls {
@@ -243,6 +334,27 @@ body {
   touch-action: manipulation;
 }
 
+.start-wave-pill {
+  min-width: 112px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 2px solid rgba(255, 224, 102, 0.8);
+  border-radius: 9999px;
+  background: rgba(8, 10, 12, 0.6);
+  color: #ffe066;
+  font: bold 12px monospace;
+  letter-spacing: 0.06em;
+  opacity: 0.8;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.start-wave-pill:active {
+  opacity: 1;
+  background: rgba(40, 30, 20, 0.85);
+}
+
+.start-wave-pill:focus-visible,
 .start-wave-button:focus-visible {
   outline: 2px solid #9be36a;
   outline-offset: 2px;
@@ -333,26 +445,6 @@ body {
   align-items: flex-end;
   gap: 8px;
   pointer-events: none;
-}
-
-.reload-button {
-  min-width: 64px;
-  min-height: 48px;
-  padding: 0 12px;
-  border: 2px solid rgba(255, 224, 102, 0.8);
-  border-radius: 6px;
-  background: rgba(8, 10, 12, 0.7);
-  color: #ffe066;
-  font: bold 12px monospace;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-  touch-action: manipulation;
-  pointer-events: auto;
-}
-
-.reload-button:focus-visible {
-  outline: 2px solid #9be36a;
-  outline-offset: 2px;
 }
 
 .swap-button {
@@ -1515,4 +1607,91 @@ body {
 
 .pause-help-topic {
   color: #9be36a;
+}
+
+.preparation-controls[data-device='Touch'] {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+}
+
+.home-screen-tip {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  left: calc(env(safe-area-inset-left, 0px) + 8px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 196px;
+  padding: 2px 2px 2px 10px;
+  border: 2px solid rgba(155, 227, 106, 0.7);
+  border-radius: 9999px;
+  background: rgba(8, 10, 12, 0.8);
+  color: #f4f1de;
+  font: bold 11px/1.25 monospace;
+}
+
+.home-screen-tip-text {
+  margin: 0;
+}
+
+.home-screen-tip-close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: #9be36a;
+  font: bold 20px monospace;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.home-screen-tip-close:focus-visible {
+  outline: 2px solid #ffe066;
+}
+
+.pause-help-touch {
+  color: #f4f1de;
+  font-weight: bold;
+}
+
+.pause-help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7em;
+  height: 1.7em;
+  border: 2px solid rgba(244, 241, 222, 0.6);
+  border-radius: 9999px;
+  background: rgba(8, 10, 12, 0.6);
+  vertical-align: middle;
+}
+
+.pause-help-icon-glyph {
+  display: block;
+  width: 0.95em;
+  height: 0.95em;
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+}
+
+.debut-card-button {
+  animation: debut-prompt-in 220ms ease-out;
+}
+
+@keyframes debut-prompt-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .debut-card-button {
+    animation: none;
+  }
 }

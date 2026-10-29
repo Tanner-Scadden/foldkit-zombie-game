@@ -10,6 +10,7 @@ import {
   cornerButtonsView,
   debutCardView,
   debutPitch,
+  homeScreenTipView,
   modeChoiceView,
   sidewaysView,
   toSentenceCase,
@@ -22,7 +23,7 @@ import {
   RunMode,
   type RunStats,
 } from './model'
-import { isPracticeGateHeld } from './onboarding'
+import { isOpenBreak, isPracticeGateHeld } from './onboarding'
 import { pauseHelpView } from './pauseHelp'
 import { BOOST_KIND_ORDER, PICKUPS, isBoosted } from './powerups'
 import { isShopOpenFor } from './shop'
@@ -35,8 +36,10 @@ import {
   victoryVerdict,
 } from './stats'
 import {
+  actionArcView,
   ghostSticksView,
   gunButtonsView,
+  gunSlotsView,
   preparationControlsView,
   stickView,
 } from './touchControls'
@@ -74,12 +77,17 @@ export const MeasureGameSurface = Mount.defineStream('MeasureGameSurface', {
           const resizeObserver = new ResizeObserver(emitMeasurement)
           resizeObserver.observe(element)
           window.addEventListener('resize', emitMeasurement)
+          window.visualViewport?.addEventListener('resize', emitMeasurement)
           return { resizeObserver, emitMeasurement }
         }),
         ({ resizeObserver, emitMeasurement }) =>
           Effect.sync(() => {
             resizeObserver.disconnect()
             window.removeEventListener('resize', emitMeasurement)
+            window.visualViewport?.removeEventListener(
+              'resize',
+              emitMeasurement,
+            )
           }),
       ).pipe(Effect.flatMap(() => Effect.never)),
     ),
@@ -136,7 +144,7 @@ const debutCardStatus = (model: Model): Option.Option<string> =>
     Hidden: () => Option.none(),
     Showing: ({ kind }) =>
       Option.some(
-        `New zombie: ${ZOMBIE_KINDS[kind].name}. ${debutPitch(kind)} The wave starts in a moment. Press Enter or choose Got it to start now.`,
+        `New zombie: ${ZOMBIE_KINDS[kind].name}. ${debutPitch(kind)} The wave starts in a moment. Once Continue shows, press Enter or choose it to start now.`,
       ),
   })
 
@@ -154,7 +162,7 @@ export const statusText = (model: Model): string => {
     Ready: () =>
       `${GAME_TITLE}, an early alpha. ${PLAY_AGAIN} ${PICK_CHARACTER}`,
     Preparation: ({ wave }) =>
-      `Get ready for ${statusWave(model, wave)}. Press Enter, or use the Start wave button, to start it now.${practiceGateNote(model)}${shopHint(model)}`,
+      `Get ready for ${statusWave(model, wave)}. ${isOpenBreak(model) ? 'There is no timer this break. ' : ''}Press Enter, or use the Start wave button, to start it now.${practiceGateNote(model)}${shopHint(model)}`,
     Wave: ({ wave }) =>
       Option.getOrElse(
         debutCardStatus(model),
@@ -268,9 +276,12 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       pauseHelpView(model, h.OnPointerDown(toPressedPointer), h),
       preparationControlsView(model, h),
       gunButtonsView(model, h),
+      gunSlotsView(model, h),
+      actionArcView(model, h),
       debutCardView(model, h),
       modeChoiceView(model, h),
       cornerButtonsView(model, h),
+      homeScreenTipView(model, h),
       shopDialogView(model, h),
       h.submodel({
         slotId: 'character-picker',

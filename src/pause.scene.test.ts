@@ -107,7 +107,7 @@ describe('Pause screen controls', () => {
     )
   })
 
-  test('lists the touch buttons, PLACE and NEXT included, and no keys', () => {
+  test('lists the touch controls, the trap buttons included, and no keys', () => {
     scene(
       { update, view },
       given(pausedOn('Touch')),
@@ -119,17 +119,15 @@ describe('Pause screen controls', () => {
         role('table', { name: 'Move and fight' }),
         expect(row('Left thumb', 'Move')).toExist(),
         expect(row('Right thumb', 'Aim and fire')).toExist(),
-        expect(row('RELOAD', 'Reload')).toExist(),
-        expect(row('SWAP', 'Swap guns')).toExist(),
+        expect(row('Tap your ammo', 'Reload')).toExist(),
+        expect(row('Tap your guns', 'Swap guns')).toExist(),
       ),
       inside(
         role('table', { name: 'Traps and stuff' }),
-        expect(row('PLACE', 'Place a trap')).toExist(),
-        expect(row('NEXT', 'Next trap')).toExist(),
+        expect(row('Trap button', 'Place a trap')).toExist(),
+        expect(row('Next button', 'Next trap')).toExist(),
         expect(row('START WAVE', 'Start the wave')).toExist(),
-        expect(row('PAUSE', 'Pause')).toExist(),
-        expect(row('MUTE', 'Mute')).toExist(),
-        expect(row('MUSIC', 'Music on or off')).toExist(),
+        expect(row('Pause button', 'Pause')).toExist(),
       ),
     )
   })
@@ -241,8 +239,8 @@ describe('The PAUSE button', () => {
   })
 })
 
-describe('Touch gun buttons', () => {
-  test('name the gun by its upgrade tier', () => {
+describe('Touch gun slots', () => {
+  test('are buttons named by the upgrade tier: a tap swaps, the held one reloads', () => {
     const pistolName = tierName('Pistol', 1)
     const shotgunName = tierName('Shotgun', 1)
     vitestExpect(pistolName).not.toBe(WEAPONS.Pistol.name)
@@ -267,13 +265,13 @@ describe('Touch gun buttons', () => {
         'aria-keyshortcuts',
         'R',
       ),
-      expect(role('button', { name: `Swap to the ${shotgunName}` })).toHaveAttr(
-        'aria-keyshortcuts',
-        'Q',
-      ),
-      click(role('button', { name: `Swap to the ${shotgunName}` })),
+      expect(
+        role('button', { name: `Switch to the ${shotgunName}` }),
+      ).toHaveAttr('aria-keyshortcuts', 'Q'),
+      expect(role('button', { name: /^Swap to/ })).toBeAbsent(),
+      click(role('button', { name: `Switch to the ${shotgunName}` })),
       expect(role('button', { name: `Reload the ${shotgunName}` })).toExist(),
-      expect(role('button', { name: `Swap to the ${pistolName}` })).toExist(),
+      expect(role('button', { name: `Switch to the ${pistolName}` })).toExist(),
     )
   })
 })

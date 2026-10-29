@@ -1,13 +1,21 @@
 import { Array } from 'effect'
 import type { Attribute, Html, HtmlBuilder } from 'foldkit/html'
 
+import { NEXT_TRAP_ICON, PAUSE_ICON, TRAP_BUTTON_ICONS } from './icons'
 import { Message, isSideways } from './main'
 import { type InputDevice, type Model, Phase } from './model'
 import { TRAPS } from './traps'
 
 // CONTROLS
 
-type Control = Readonly<{ input: string; action: string }>
+type ControlLook = 'Words' | 'Pill'
+
+type Control = Readonly<{
+  input: string
+  action: string
+  look?: ControlLook
+  maybeIcon?: string
+}>
 
 type ControlGroup = Readonly<{
   title: string
@@ -25,6 +33,12 @@ type DeviceHelp = Readonly<{
 const control = (input: string, action: string): Control => ({
   input,
   action,
+})
+
+const iconControl = (icon: string, input: string, action: string): Control => ({
+  input,
+  action,
+  maybeIcon: icon,
 })
 
 const KEYBOARD_HELP: DeviceHelp = {
@@ -64,19 +78,17 @@ const TOUCH_HELP: DeviceHelp = {
       controls: [
         control('Left thumb', 'Move'),
         control('Right thumb', 'Aim and fire'),
-        control('RELOAD', 'Reload'),
-        control('SWAP', 'Swap guns'),
+        control('Tap your ammo', 'Reload'),
+        control('Tap your guns', 'Swap guns'),
       ],
     },
     {
       title: 'Traps and stuff',
       controls: [
-        control('PLACE', 'Place a trap'),
-        control('NEXT', 'Next trap'),
-        control('START WAVE', 'Start the wave'),
-        control('PAUSE', 'Pause'),
-        control('MUTE', 'Mute'),
-        control('MUSIC', 'Music on or off'),
+        iconControl(TRAP_BUTTON_ICONS.Barricade, 'Trap button', 'Place a trap'),
+        iconControl(NEXT_TRAP_ICON, 'Next button', 'Next trap'),
+        { input: 'START WAVE', action: 'Start the wave', look: 'Pill' },
+        iconControl(PAUSE_ICON, 'Pause button', 'Pause'),
       ],
     },
   ],
@@ -108,18 +120,39 @@ const TIPS: Array.NonEmptyReadonlyArray<Tip> = [
 
 const HELP_TITLE_ID = 'pause-help-title'
 
+const touchInputView = (
+  { input, look, maybeIcon }: Control,
+  h: HtmlBuilder<Message>,
+): Html =>
+  maybeIcon === undefined
+    ? h.span(
+        [h.Class(look === 'Pill' ? 'pause-help-button' : 'pause-help-touch')],
+        [input],
+      )
+    : h.span(
+        [h.Class('pause-help-icon')],
+        [
+          h.span([
+            h.Class('pause-help-icon-glyph'),
+            h.AriaHidden(true),
+            h.Style({ backgroundImage: maybeIcon }),
+          ]),
+          h.span([h.Class('sr-only')], [input]),
+        ],
+      )
+
 const inputView = (
   help: DeviceHelp,
-  input: string,
+  item: Control,
   h: HtmlBuilder<Message>,
 ): Html =>
   help.inputStyle === 'Keycap'
-    ? h.kbd([h.Class('pause-help-key')], [input])
-    : h.span([h.Class('pause-help-button')], [input])
+    ? h.kbd([h.Class('pause-help-key')], [item.input])
+    : touchInputView(item, h)
 
 const controlRowView = (
   help: DeviceHelp,
-  { input, action }: Control,
+  item: Control,
   h: HtmlBuilder<Message>,
 ): Html =>
   h.tr(
@@ -127,9 +160,9 @@ const controlRowView = (
     [
       h.th(
         [h.Scope('row'), h.Class('pause-help-inputs')],
-        [inputView(help, input, h)],
+        [inputView(help, item, h)],
       ),
-      h.td([h.Class('pause-help-action')], [action]),
+      h.td([h.Class('pause-help-action')], [item.action]),
     ],
   )
 

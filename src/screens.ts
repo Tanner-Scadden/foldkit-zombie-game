@@ -40,6 +40,7 @@ import {
   type HintId,
   type ShownHint,
   isDebutCardUp,
+  msIntoPhase,
   shownHints,
 } from './onboarding'
 import {
@@ -996,8 +997,8 @@ const endShapes = (
 export const overlayShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   Phase.match(model.phase, {
     Ready: () => readyShapes(model),
-    Preparation: ({ wave, remainingMs, durationMs }) => [
-      ...preparationBanner(model, wave, durationMs - remainingMs),
+    Preparation: ({ wave }) => [
+      ...preparationBanner(model, wave, msIntoPhase(model.phase)),
       ...hintShapes(model),
     ],
     Wave: ({ wave, elapsedMs }) =>

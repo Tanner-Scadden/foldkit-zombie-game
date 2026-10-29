@@ -64,8 +64,11 @@ import {
   releaseSticks,
 } from './input'
 import {
+  Arsenal,
   AudioState,
+  FullscreenSetting,
   GameEvent,
+  GunSlot,
   type Input,
   InputDevice,
   Model,
@@ -75,6 +78,7 @@ import {
   PointerDevice,
   Round,
   RunMode,
+  ScreenFit,
   type ShopCategory,
   ShopItemId,
   ShopState,
@@ -177,7 +181,14 @@ export const Message = defineMessageUnion({
   ClickedStartWaveButton: {},
   ClickedDebutCardButton: {},
   ClickedSwapButton: {},
+  ClickedGunSlot: { slot: GunSlot },
   ClickedReloadButton: {},
+  ClickedFullscreenButton: {},
+  CompletedSetFullscreen: { fullscreen: FullscreenSetting },
+  FailedSetFullscreen: { reason: Schema.String },
+  ChangedFullscreen: { fullscreen: FullscreenSetting },
+  CompletedDetectScreenFit: { screenFit: ScreenFit },
+  ClickedDismissHomeScreenTip: {},
   ClickedPlaceTrapButton: {},
   ClickedNextTrapButton: {},
   GotShopDialogMessage: { message: Dialog.Message },
@@ -264,6 +275,68 @@ export const DetectInputDevice = Command.define('DetectInputDevice', {
   ),
 })
 
+const isInstalledApp = (): boolean =>
+  window.matchMedia('(display-mode: fullscreen)').matches ||
+  window.matchMedia('(display-mode: standalone)').matches
+
+// NOTE: feature checks, not the user agent. A phone browser that cannot put
+// an element full screen (iPhone Safari) can still go full screen as a Home
+// Screen app, so it gets the Add to Home Screen tip instead of the button.
+const detectScreenFit = (): ScreenFit => {
+  if (isInstalledApp()) {
+    return 'Unavailable'
+  } else if (document.fullscreenEnabled) {
+    return 'Fullscreen'
+  } else if (window.matchMedia(COARSE_POINTER_QUERY).matches) {
+    return 'HomeScreen'
+  } else {
+    return 'Unavailable'
+  }
+}
+
+export const DetectScreenFit = Command.define('DetectScreenFit', {
+  messages: [Message.CompletedDetectScreenFit],
+  execute: pipe(
+    Effect.try(detectScreenFit),
+    Effect.map(screenFit => Message.CompletedDetectScreenFit({ screenFit })),
+    Effect.catch(() =>
+      Effect.succeed(
+        Message.CompletedDetectScreenFit({ screenFit: 'Unavailable' }),
+      ),
+    ),
+  ),
+})
+
+const lockLandscape = Effect.tryPromise(() =>
+  screen.orientation.lock('landscape'),
+).pipe(Effect.ignore)
+
+const enterFullscreen = pipe(
+  Effect.tryPromise(() =>
+    document.documentElement.requestFullscreen({ navigationUI: 'hide' }),
+  ),
+  Effect.andThen(lockLandscape),
+)
+
+const exitFullscreen = Effect.tryPromise(() =>
+  document.fullscreenElement === null
+    ? Promise.resolve()
+    : document.exitFullscreen(),
+)
+
+export const SetFullscreen = Command.define('SetFullscreen', {
+  args: { fullscreen: FullscreenSetting },
+  messages: [Message.CompletedSetFullscreen, Message.FailedSetFullscreen],
+  execute: ({ fullscreen }) =>
+    pipe(
+      fullscreen === 'On' ? enterFullscreen : exitFullscreen,
+      Effect.as(Message.CompletedSetFullscreen({ fullscreen })),
+      Effect.catch(error =>
+        Effect.succeed(Message.FailedSetFullscreen({ reason: String(error) })),
+      ),
+    ),
+})
+
 const audioFailureReason = (
   error: AudioEngineError | ManagedResource.ResourceNotAvailable,
 ): string =>
@@ -337,7 +410,7 @@ export const FocusShopItem = Command.define('FocusShopItem', {
 
 export const init: Runtime.ApplicationInit<Model, Message> = () => ({
   model: initialModel,
-  commands: [GenerateSeed(), DetectInputDevice()],
+  commands: [GenerateSeed(), DetectInputDevice(), DetectScreenFit()],
 })
 
 // UPDATE
@@ -452,6 +525,9 @@ const swapGun = (model: Model): Model => {
     ? modifyFields(swapped, { player: cancelReload })
     : swapped
 }
+
+const heldSlot = (model: Model): GunSlot =>
+  Arsenal.isAnyOf(['HoldingSpare'])(model.player.arsenal) ? 'Spare' : 'Sidearm'
 
 const swapFromKey = (model: Model, code: string): Model =>
   isSwapKey(code) ? swapGun(model) : model
@@ -1154,6 +1230,47 @@ const updateGame = (model: Model, message: Message) =>
       ])
     },
 
+    ClickedGunSlot: ({ slot }) => {
+      if (isDebutCardBlocking(model)) {
+        return { model }
+      } else if (slot === heldSlot(model)) {
+        return Update.combine(model, [unlockAudio, reloadHeldGun])
+      } else {
+        const swapped = learnSwapWhen(model, refreshIntent(swapGun(model)))
+        return Update.combine(swapped, [
+          unlockAudio,
+          playSwapSoundWhen(changedWeapon(model, swapped)),
+        ])
+      }
+    },
+
+    ClickedFullscreenButton: () => ({
+      model,
+      commands: [
+        SetFullscreen({
+          fullscreen: model.fullscreen === 'On' ? 'Off' : 'On',
+        }),
+      ],
+    }),
+
+    CompletedSetFullscreen: ({ fullscreen }) => ({
+      model: modifyFields(model, { fullscreen: () => fullscreen }),
+    }),
+
+    FailedSetFullscreen: () => ({ model }),
+
+    ChangedFullscreen: ({ fullscreen }) => ({
+      model: modifyFields(model, { fullscreen: () => fullscreen }),
+    }),
+
+    CompletedDetectScreenFit: ({ screenFit }) => ({
+      model: modifyFields(model, { screenFit: () => screenFit }),
+    }),
+
+    ClickedDismissHomeScreenTip: () => ({
+      model: dismissHomeScreenTip(model),
+    }),
+
     ClickedReloadButton: () =>
       isDebutCardBlocking(model)
         ? { model }
@@ -1248,10 +1365,27 @@ const updateGame = (model: Model, message: Message) =>
     FailedCueMusic: () => ({ model }),
   })
 
+const dismissHomeScreenTip = (model: Model): Model =>
+  model.homeScreenTip === 'Dismissed'
+    ? model
+    : modifyFields(model, { homeScreenTip: () => 'Dismissed' })
+
+const isOnTitle = Phase.isAnyOf(['Ready'])
+
+const dismissHomeScreenTipFrom =
+  (before: Model): UpdateStep =>
+  stepModel => ({
+    model:
+      isOnTitle(before.phase) && !isOnTitle(stepModel.phase)
+        ? dismissHomeScreenTip(stepModel)
+        : stepModel,
+  })
+
 export const update = (model: Model, message: Message): UpdateReturn =>
   Update.combine(model, [
     stepModel => updateGame(stepModel, message),
     cueMusicFrom(model),
+    dismissHomeScreenTipFrom(model),
   ])
 
 // SUBSCRIPTION
@@ -1422,6 +1556,17 @@ export const subscriptions = Subscription.make<Model, Message>()(entry => ({
   ),
 
   pointerReleases: Subscription.persistentEntry(pointerReleaseMessages),
+
+  fullscreenChanges: Subscription.persistentEntry(
+    Dom.streamFromEvent({
+      target: document,
+      type: 'fullscreenchange',
+      mapEvent: () =>
+        Message.ChangedFullscreen({
+          fullscreen: document.fullscreenElement === null ? 'Off' : 'On',
+        }),
+    }),
+  ),
 
   trackedPointers: entry(
     { activity: Activity },

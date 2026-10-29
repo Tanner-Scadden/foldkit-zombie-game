@@ -23,6 +23,7 @@ import {
   FADE_RELEASE_BELOW,
   FIRST_PREPARATION_MS,
   HORDE_GAP_MS,
+  OPEN_BREAK_WAVE,
   PACK_GAP_MS,
   PINCER_LAG_MAX_MS,
   PINCER_LAG_MIN_MS,
@@ -38,6 +39,7 @@ import { deriveIntent } from './input'
 import {
   Alarm,
   Beat,
+  BreakClock,
   type DoorId,
   FIRST_SHOP_CATEGORY,
   type Formation,
@@ -61,7 +63,13 @@ import {
   initialPlayer,
   stillShake,
 } from './model'
-import { isPracticeGateHeld, raiseDebutCard, settleLessons } from './onboarding'
+import {
+  isPracticeGateHeld,
+  isTimedBreak,
+  learnTimedBreaks,
+  raiseDebutCard,
+  settleLessons,
+} from './onboarding'
 import {
   aliveCount,
   delayCampedPacks,
@@ -1120,10 +1128,16 @@ export const doorCounts = (
 export const isRoundActive = (phase: Phase): boolean =>
   Phase.isAnyOf(['Preparation', 'Wave'])(phase)
 
+const breakClockFor = (wave: number): BreakClock =>
+  wave === OPEN_BREAK_WAVE
+    ? BreakClock.Waiting({ elapsedMs: 0 })
+    : BreakClock.Counting()
+
 const beginPreparation = (
   model: Model,
   wave: number,
   durationMs: number,
+  clock: BreakClock = BreakClock.Counting(),
 ): Model => {
   const [waveState, { spawns, holds }] = rollWave(model.rngState, wave)
   const [rngState, boss] = planBoss(waveState, wave, spawns)
@@ -1135,6 +1149,7 @@ const beginPreparation = (
         remainingMs: durationMs,
         durationMs,
         spawns,
+        clock,
       }),
     pacing: () => ({
       holds,
@@ -1242,11 +1257,14 @@ export const pause = (model: Model): Model =>
 export const startWaveEarly = (model: Model): Model =>
   Phase.match(model.phase, {
     Ready: () => model,
-    Preparation: ({ wave, spawns }) =>
+    Preparation: ({ wave, spawns, clock }) =>
       raiseDebutCard(
-        modifyFields(model, {
-          phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns }),
-        }),
+        modifyFields(
+          isTimedBreak(wave, clock) ? learnTimedBreaks(model) : model,
+          {
+            phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns }),
+          },
+        ),
       ),
     Wave: () => model,
     Paused: () => model,
@@ -1301,7 +1319,12 @@ const clearWave = (model: Model, wave: number): Model => {
       screenMs: () => 0,
     })
   } else {
-    return beginPreparation(paid, wave + 1, PREPARATION_MS)
+    return beginPreparation(
+      paid,
+      wave + 1,
+      PREPARATION_MS,
+      breakClockFor(wave + 1),
+    )
   }
 }
 
@@ -1372,23 +1395,45 @@ const advanceWave = (
   }
 }
 
+const countDownBreak = (
+  model: Model,
+  preparation: Round & { readonly _tag: 'Preparation' },
+  worldMs: number,
+): Model =>
+  BreakClock.match(preparation.clock, {
+    Counting: () =>
+      preparation.remainingMs > worldMs
+        ? modifyFields(model, {
+            phase: () =>
+              Phase.Preparation({
+                wave: preparation.wave,
+                remainingMs: preparation.remainingMs - worldMs,
+                durationMs: preparation.durationMs,
+                spawns: preparation.spawns,
+                clock: preparation.clock,
+              }),
+          })
+        : startWaveEarly(model),
+    Waiting: ({ elapsedMs }) =>
+      modifyFields(model, {
+        phase: () =>
+          Phase.Preparation({
+            wave: preparation.wave,
+            remainingMs: preparation.remainingMs,
+            durationMs: preparation.durationMs,
+            spawns: preparation.spawns,
+            clock: BreakClock.Waiting({ elapsedMs: elapsedMs + worldMs }),
+          }),
+      }),
+  })
+
 export const advanceRound = (model: Model, worldMs: number): Model =>
   Phase.match(model.phase, {
     Ready: () => model,
     Preparation: preparation =>
       ShopState.isAnyOf(['Browsing'])(model.shop) || isPracticeGateHeld(model)
         ? model
-        : preparation.remainingMs > worldMs
-          ? modifyFields(model, {
-              phase: () =>
-                Phase.Preparation({
-                  wave: preparation.wave,
-                  remainingMs: preparation.remainingMs - worldMs,
-                  durationMs: preparation.durationMs,
-                  spawns: preparation.spawns,
-                }),
-            })
-          : startWaveEarly(model),
+        : countDownBreak(model, preparation, worldMs),
     Wave: ({ wave, elapsedMs, spawns }) =>
       advanceWave(model, wave, elapsedMs, spawns, worldMs),
     Paused: () => model,

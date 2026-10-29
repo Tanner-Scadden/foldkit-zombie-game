@@ -41,7 +41,7 @@ import {
   TrapNotice,
   type WeaponKind,
 } from './model'
-import { isPracticeGateHeld } from './onboarding'
+import { isOpenBreak, isPracticeGateHeld } from './onboarding'
 import { maybeMsSinceHurt } from './playerView'
 import { boostChipShapes } from './powerupView'
 import { waveLabel } from './screens'
@@ -163,25 +163,43 @@ const hudText = (
   textShapes(content, tone, VIEW_WIDTH / 2, y, 'Center')
 
 const TRY_CONTROLS = bakeText('TRY THE CONTROLS FIRST', 'Prompt')
+const NO_TIMER = bakeText('NO TIMER', 'Prompt')
+
+const breakSubtitleShapes = (
+  model: Model,
+  remainingMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  if (isPracticeGateHeld(model)) {
+    return [
+      placeBaked(TRY_CONTROLS, {
+        x: VIEW_WIDTH / 2,
+        y: HUD_SUBTITLE_Y,
+        align: 'Center',
+      }),
+    ]
+  } else if (isOpenBreak(model)) {
+    return [
+      placeBaked(NO_TIMER, {
+        x: VIEW_WIDTH / 2,
+        y: HUD_SUBTITLE_Y,
+        align: 'Center',
+      }),
+    ]
+  } else {
+    return hudText(
+      HUD_SUBTITLE_Y,
+      `STARTS IN ${secondsLeft(remainingMs)}`,
+      'Prompt',
+    )
+  }
+}
 
 const roundHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   Phase.match(model.phase, {
     Ready: () => [],
     Preparation: ({ wave, remainingMs }) => [
       ...hudText(HUD_TITLE_Y, waveLabel(model.mode, wave), 'Plain'),
-      ...(isPracticeGateHeld(model)
-        ? [
-            placeBaked(TRY_CONTROLS, {
-              x: VIEW_WIDTH / 2,
-              y: HUD_SUBTITLE_Y,
-              align: 'Center',
-            }),
-          ]
-        : hudText(
-            HUD_SUBTITLE_Y,
-            `STARTS IN ${secondsLeft(remainingMs)}`,
-            'Prompt',
-          )),
+      ...breakSubtitleShapes(model, remainingMs),
     ],
     Wave: ({ wave, spawns }) =>
       Option.match(maybeBossBar(model), {
@@ -269,11 +287,20 @@ const tierPipShapes = (
     }),
   )
 
+export const gunSlotBox = (
+  index: number,
+): Readonly<{ x: number; y: number; width: number; height: number }> => ({
+  x: HUD_MARGIN + index * (SLOT_WIDTH + SLOT_GAP),
+  y: SLOT_TOP,
+  width: SLOT_WIDTH,
+  height: SLOT_HEIGHT,
+})
+
 const slotShapes = (
   index: number,
   { maybeGun, ammo, isHeld, ammoLook }: SlotLook,
 ): ReadonlyArray<Canvas.Shape> => {
-  const x = HUD_MARGIN + index * (SLOT_WIDTH + SLOT_GAP)
+  const { x } = gunSlotBox(index)
   const border = isHeld ? SLOT_HELD_BORDER : SLOT_BORDER
   return [
     Canvas.Rect({

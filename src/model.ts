@@ -1,4 +1,4 @@
-import { Option, Schema } from 'effect'
+import { Effect, Option, Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
 import { Dialog, RadioGroup, Tabs } from '@foldkit/ui'
@@ -447,6 +447,23 @@ export type SoundSetting = typeof SoundSetting.Type
 export const MusicSetting = Schema.Literals(['On', 'Off'])
 export type MusicSetting = typeof MusicSetting.Type
 
+export const GunSlot = Schema.Literals(['Sidearm', 'Spare'])
+export type GunSlot = typeof GunSlot.Type
+
+export const ScreenFit = Schema.Literals([
+  'Unknown',
+  'Fullscreen',
+  'HomeScreen',
+  'Unavailable',
+])
+export type ScreenFit = typeof ScreenFit.Type
+
+export const FullscreenSetting = Schema.Literals(['Off', 'On'])
+export type FullscreenSetting = typeof FullscreenSetting.Type
+
+export const HomeScreenTip = Schema.Literals(['Unseen', 'Dismissed'])
+export type HomeScreenTip = typeof HomeScreenTip.Type
+
 export const PageVisibility = Schema.Literals(['Visible', 'Hidden'])
 export type PageVisibility = typeof PageVisibility.Type
 
@@ -528,11 +545,23 @@ export const PlannedSpawn = Schema.Struct({
 })
 export type PlannedSpawn = typeof PlannedSpawn.Type
 
+// NOTE: a Counting break starts the wave when remainingMs runs out. A
+// Waiting break has no timer: it waits for START WAVE, and its elapsedMs only
+// ages the hints and banners. remainingMs and durationMs stay put meanwhile.
+export const BreakClock = defineTaggedUnion({
+  Counting: {},
+  Waiting: { elapsedMs: Schema.Number },
+})
+export type BreakClock = typeof BreakClock.Type
+
 const preparationFields = {
   wave: Schema.Number,
   remainingMs: Schema.Number,
   durationMs: Schema.Number,
   spawns: Schema.Array(PlannedSpawn),
+  clock: BreakClock.pipe(
+    Schema.withConstructorDefault(Effect.succeed(BreakClock.Counting())),
+  ),
 }
 
 // NOTE: A wave's elapsedMs is its spawn clock, not wall time. It stops while
@@ -725,6 +754,7 @@ export const Lessons = Schema.Struct({
   shop: Lesson,
   swap: Lesson,
   pickup: Lesson,
+  timedBreaks: Lesson,
 })
 export type Lessons = typeof Lessons.Type
 
@@ -818,6 +848,9 @@ export const Model = Schema.Struct({
   audio: AudioState,
   soundSetting: SoundSetting,
   musicSetting: MusicSetting,
+  screenFit: ScreenFit,
+  fullscreen: FullscreenSetting,
+  homeScreenTip: HomeScreenTip,
   pageVisibility: PageVisibility,
   appearance: Appearance,
   character: CharacterPicker,
@@ -870,6 +903,7 @@ export const freshLessons: Lessons = {
   shop: Lesson.Pending(),
   swap: Lesson.Pending(),
   pickup: Lesson.Pending(),
+  timedBreaks: Lesson.Pending(),
 }
 
 export const noPractice: Practice = { movedPx: 0, aimedShots: 0 }
@@ -993,6 +1027,9 @@ export const initialModel: Model = {
   audio: AudioState.Locked(),
   soundSetting: 'On',
   musicSetting: 'On',
+  screenFit: 'Unknown',
+  fullscreen: 'Off',
+  homeScreenTip: 'Unseen',
   pageVisibility: 'Visible',
   appearance: defaultAppearance,
   character: closedCharacterPicker,

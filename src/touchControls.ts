@@ -1,11 +1,25 @@
 import { Array, Option, String } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
-import { STICK_RADIUS_PX } from './constants'
-import { secondsLeft } from './hud'
+import { DOORS } from './arena'
+import {
+  DOOR_HALF_WIDTH_PX,
+  STICK_RADIUS_PX,
+  VIEW_HEIGHT,
+  VIEW_WIDTH,
+} from './constants'
+import { gunSlotBox, secondsLeft } from './hud'
+import { NEXT_TRAP_ICON, RELOAD_ICON, TRAP_BUTTON_ICONS } from './icons'
 import { thumbOffset } from './input'
-import { Message } from './main'
-import { Arsenal, type Model, Phase, Stick } from './model'
+import { Message, isSideways } from './main'
+import {
+  Arsenal,
+  BreakClock,
+  type GunSlot,
+  type Model,
+  Phase,
+  Stick,
+} from './model'
 import { type GhostStick, isDebutCardUp, shownGhostSticks } from './onboarding'
 import { gunName } from './shop'
 import {
@@ -17,7 +31,58 @@ import {
 } from './traps'
 import { wavePreviewView } from './wavePreview'
 import { isRoundActive } from './waves'
-import { SIDEARM, heldWeapon, maybeSpare } from './weapons'
+import {
+  SIDEARM,
+  canReload,
+  heldLoaded,
+  heldStats,
+  heldWeapon,
+  maybeSpare,
+  tierName,
+} from './weapons'
+
+// ICON BUTTONS
+
+export type IconButton = Readonly<{
+  className: string
+  label: string
+  icon: string
+  keys?: string
+  message: Message
+  maybePressed?: boolean
+}>
+
+export const iconButtonView = (
+  button: IconButton,
+  h: HtmlBuilder<Message>,
+  children: ReadonlyArray<Html> = [],
+): Html =>
+  h.button(
+    [
+      h.Type('button'),
+      h.Class(`icon-button ${button.className}`),
+      h.AriaLabel(button.label),
+      ...(button.keys === undefined ? [] : [h.AriaKeyshortcuts(button.keys)]),
+      ...(button.maybePressed === undefined
+        ? []
+        : [h.AriaPressed(button.maybePressed ? 'true' : 'false')]),
+      h.OnClick(button.message, { focusSelector: '.game-surface' }),
+    ],
+    [
+      h.span([
+        h.Class('icon-button-glyph'),
+        h.AriaHidden(true),
+        h.Style({ backgroundImage: button.icon }),
+      ]),
+      ...children,
+    ],
+  )
+
+const isTouchHudUp = (model: Model): boolean =>
+  model.lastDevice === 'Touch' &&
+  isRoundActive(model.phase) &&
+  !isDebutCardUp(model) &&
+  !isSideways(model)
 
 // GUN BUTTONS
 
@@ -29,7 +94,11 @@ const swapTarget = (model: Model): Option.Option<string> =>
   )
 
 const swapButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
-  if (!isRoundActive(model.phase) || isDebutCardUp(model)) {
+  if (
+    !isRoundActive(model.phase) ||
+    isDebutCardUp(model) ||
+    model.lastDevice === 'Touch'
+  ) {
     return h.empty
   }
 
@@ -51,31 +120,84 @@ const swapButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
   })
 }
 
-const reloadButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  isRoundActive(model.phase) &&
-  model.lastDevice === 'Touch' &&
-  !isDebutCardUp(model)
-    ? h.button(
+export const gunButtonsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.div([h.Class('gun-buttons')], [swapButtonView(model, h)])
+
+// GUN SLOTS
+
+type SlotGun = Readonly<{ slot: GunSlot; name: string }>
+
+const slotGuns = (model: Model): ReadonlyArray<SlotGun> => {
+  const { player } = model
+  return [
+    { slot: 'Sidearm', name: tierName(SIDEARM, player.pistolTier) },
+    ...Option.match(maybeSpare(player.arsenal), {
+      onNone: () => [],
+      onSome: spare => [
+        { slot: 'Spare' as const, name: tierName(spare.kind, spare.tier) },
+      ],
+    }),
+  ]
+}
+
+const heldSlot = (model: Model): GunSlot =>
+  Arsenal.isAnyOf(['HoldingSpare'])(model.player.arsenal) ? 'Spare' : 'Sidearm'
+
+const SLOT_INDEX: Readonly<Record<GunSlot, number>> = { Sidearm: 0, Spare: 1 }
+
+// NOTE: the second slot's drawing reaches over the south doorway. Its tap
+// area stops at the doorway so a thumb there still reaches the room.
+const SOUTH_DOOR_LEFT = DOORS.South.center.x - DOOR_HALF_WIDTH_PX
+
+const percentOfWidth = (arenaPx: number): string =>
+  `${(arenaPx * 100) / VIEW_WIDTH}%`
+
+const percentOfHeight = (arenaPx: number): string =>
+  `${(arenaPx * 100) / VIEW_HEIGHT}%`
+
+const gunSlotButtonView = (
+  model: Model,
+  { slot, name }: SlotGun,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const isHeld = slot === heldSlot(model)
+  const box = gunSlotBox(SLOT_INDEX[slot])
+  const width = Math.min(box.width, SOUTH_DOOR_LEFT - box.x)
+  return h.keyed('button')(slot, [
+    h.Type('button'),
+    h.Class('gun-slot-button'),
+    h.DataAttribute('held', isHeld ? 'true' : 'false'),
+    h.AriaLabel(isHeld ? `Reload the ${name}` : `Switch to the ${name}`),
+    h.AriaKeyshortcuts(isHeld ? 'R' : 'Q'),
+    ...(isHeld && !canReload(model.player) ? [h.AriaDisabled(true)] : []),
+    h.Style({
+      left: percentOfWidth(box.x),
+      bottom: percentOfHeight(VIEW_HEIGHT - box.y - box.height),
+      width: percentOfWidth(width),
+      height: `max(44px, ${percentOfHeight(box.height)})`,
+    }),
+    h.OnClick(Message.ClickedGunSlot({ slot }), {
+      focusSelector: '.game-surface',
+    }),
+  ])
+}
+
+export const gunSlotsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isTouchHudUp(model)
+    ? h.div(
+        [h.Class('hud-tap-frame')],
         [
-          h.Type('button'),
-          h.Class('reload-button'),
-          h.AriaLabel(
-            `Reload the ${gunName(model, heldWeapon(model.player.arsenal))}`,
+          h.div(
+            [
+              h.Class('hud-tap-stage'),
+              h.Role('group'),
+              h.AriaLabel('Your guns'),
+            ],
+            Array.map(slotGuns(model), gun => gunSlotButtonView(model, gun, h)),
           ),
-          h.AriaKeyshortcuts('R'),
-          h.OnClick(Message.ClickedReloadButton(), {
-            focusSelector: '.game-surface',
-          }),
         ],
-        ['RELOAD'],
       )
     : h.empty
-
-export const gunButtonsView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.div(
-    [h.Class('gun-buttons')],
-    [reloadButtonView(model, h), swapButtonView(model, h)],
-  )
 
 // STICKS
 
@@ -117,18 +239,31 @@ export const stickView = (
 const preparationTimerView = (
   wave: number,
   remainingMs: number,
+  clock: BreakClock,
   h: HtmlBuilder<Message>,
 ): Html =>
   h.p(
     [h.Class('sr-only'), h.Role('timer')],
-    [`${secondsLeft(remainingMs)} seconds until wave ${wave}.`],
+    [
+      BreakClock.match(clock, {
+        Counting: () =>
+          `${secondsLeft(remainingMs)} seconds until wave ${wave}.`,
+        Waiting: () => `Wave ${wave} starts when you are ready.`,
+      }),
+    ],
   )
 
-const startWaveButtonView = (wave: number, h: HtmlBuilder<Message>): Html =>
+const startWaveButtonView = (
+  model: Model,
+  wave: number,
+  h: HtmlBuilder<Message>,
+): Html =>
   h.button(
     [
       h.Type('button'),
-      h.Class('start-wave-button'),
+      h.Class(
+        model.lastDevice === 'Touch' ? 'start-wave-pill' : 'start-wave-button',
+      ),
       h.AriaLabel(`Start wave ${wave} now`),
       h.AriaKeyshortcuts('Enter'),
       h.OnClick(Message.ClickedStartWaveButton(), {
@@ -172,12 +307,13 @@ const placeButtonView = (
 
 const placeReasonView = (
   { verdict }: Placement,
+  className: string,
   h: HtmlBuilder<Message>,
 ): Html =>
   PlaceVerdict.match(verdict, {
     Placeable: () => h.empty,
     Blocked: ({ reason }) =>
-      h.p([h.Id(PLACE_REASON_ID), h.Class('place-reason')], [reason]),
+      h.p([h.Id(PLACE_REASON_ID), h.Class(className)], [reason]),
   })
 
 const nextTrapButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
@@ -205,7 +341,7 @@ const trapControlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
       h.div(
         [h.Class('trap-controls')],
         [
-          placeReasonView(placement, h),
+          placeReasonView(placement, 'place-reason', h),
           h.div(
             [h.Class('trap-buttons')],
             [
@@ -223,14 +359,17 @@ export const preparationControlsView = (
 ): Html =>
   Phase.match(model.phase, {
     Ready: () => h.empty,
-    Preparation: ({ wave, remainingMs, spawns }) =>
+    Preparation: ({ wave, remainingMs, spawns, clock }) =>
       h.div(
-        [h.Class('preparation-controls')],
         [
-          preparationTimerView(wave, remainingMs, h),
+          h.Class('preparation-controls'),
+          h.DataAttribute('device', model.lastDevice),
+        ],
+        [
+          preparationTimerView(wave, remainingMs, clock, h),
           wavePreviewView(wave, spawns, model.boss, h),
-          trapControlsView(model, h),
-          startWaveButtonView(wave, h),
+          model.lastDevice === 'Touch' ? h.empty : trapControlsView(model, h),
+          startWaveButtonView(model, wave, h),
         ],
       ),
     Wave: () => h.empty,
@@ -238,6 +377,98 @@ export const preparationControlsView = (
     Victory: () => h.empty,
     GameOver: () => h.empty,
   })
+
+// ACTION ARC
+
+const isMagazineLow = (model: Model): boolean =>
+  heldLoaded(model.player) * 2 < heldStats(model.player).magazine
+
+const reloadIconView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isMagazineLow(model) && canReload(model.player)
+    ? iconButtonView(
+        {
+          className: 'arc-button reload-icon-button',
+          label: `Reload the ${gunName(model, heldWeapon(model.player.arsenal))}`,
+          icon: RELOAD_ICON,
+          keys: 'R',
+          message: Message.ClickedReloadButton(),
+        },
+        h,
+      )
+    : h.empty
+
+const placeIconView = (
+  model: Model,
+  placement: Placement,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const { kind, verdict } = placement
+  const isBlocked = PlaceVerdict.isAnyOf(['Blocked'])(verdict)
+  return h.button(
+    [
+      h.Type('button'),
+      h.Class('icon-button arc-button place-icon-button'),
+      h.AriaLabel(`Place a ${TRAPS[kind].name}`),
+      h.AriaKeyshortcuts('T'),
+      ...(isBlocked
+        ? [h.AriaDisabled(true), h.AriaDescribedBy(PLACE_REASON_ID)]
+        : []),
+      h.OnClick(Message.ClickedPlaceTrapButton(), {
+        focusSelector: '.game-surface',
+      }),
+    ],
+    [
+      h.span([
+        h.Class('icon-button-glyph'),
+        h.AriaHidden(true),
+        h.Style({ backgroundImage: TRAP_BUTTON_ICONS[kind] }),
+      ]),
+      h.span(
+        [h.Class('icon-button-badge'), h.AriaHidden(true)],
+        [`x${model.trapStock[kind]}`],
+      ),
+      placeReasonView(placement, 'sr-only', h),
+    ],
+  )
+}
+
+const nextTrapIconView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  Option.match(maybeNextKind(model), {
+    onNone: () => h.empty,
+    onSome: kind =>
+      iconButtonView(
+        {
+          className: 'arc-button next-trap-icon-button',
+          label: `Switch to the ${TRAPS[kind].name}`,
+          icon: NEXT_TRAP_ICON,
+          keys: 'G',
+          message: Message.ClickedNextTrapButton(),
+        },
+        h,
+      ),
+  })
+
+const trapIconsView = (
+  model: Model,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> =>
+  Phase.isAnyOf(['Preparation'])(model.phase)
+    ? Option.match(maybePlacement(model), {
+        onNone: () => [],
+        onSome: placement => [
+          placeIconView(model, placement, h),
+          nextTrapIconView(model, h),
+        ],
+      })
+    : []
+
+export const actionArcView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isTouchHudUp(model)
+    ? h.div(
+        [h.Class('action-arc')],
+        [...trapIconsView(model, h), reloadIconView(model, h)],
+      )
+    : h.empty
 
 // GHOST STICKS
 
