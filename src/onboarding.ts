@@ -188,6 +188,14 @@ export const learnTimedBreaks = (model: Model): Model =>
       }),
   })
 
+export const learnOpenBreak = (model: Model): Model =>
+  modifyFields(model, {
+    lessons: lessons =>
+      modifyFields(lessons, {
+        openBreak: lesson => learn(lesson, model.elapsedMs),
+      }),
+  })
+
 export const learnStartWave = (model: Model): Model =>
   modifyFields(model, {
     lessons: lessons =>
@@ -211,6 +219,7 @@ export const settleLessons = (lessons: Lessons): Lessons =>
     swap: settle,
     pickup: settle,
     timedBreaks: settle,
+    openBreak: settle,
   })
 
 // BAND
@@ -428,6 +437,7 @@ const HINT_RULES: ReadonlyArray<HintRule> = [
     maybeAgeMs: model =>
       ageWhen(
         isOpenBreak(model) &&
+          isPending(model.lessons.openBreak) &&
           msIntoPhase(model.phase) >= WAVE_CLEARED_BANNER_MS,
         msIntoPhase(model.phase) - WAVE_CLEARED_BANNER_MS,
       ),

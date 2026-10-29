@@ -21,7 +21,14 @@ import { describe, test, expect as vitestExpect } from 'vitest'
 import { Dialog } from '@foldkit/ui'
 
 import { RESTART_GRACE_MS } from './constants'
-import { FocusHomeButton, Message, update } from './main'
+import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
+import {
+  FocusHomeButton,
+  FocusTutorialReset,
+  Message,
+  WriteSave,
+  update,
+} from './main'
 import { type Model, Phase, initialModel } from './model'
 import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
@@ -254,6 +261,37 @@ describe('Home menu', () => {
       expect(musicToggle).toHaveAttr('aria-pressed', 'false'),
       click(shakeToggle),
       expect(shakeToggle).toHaveAttr('aria-pressed', 'false'),
+    )
+  })
+
+  test('Reset tutorial asks first, then says the tips will show again', () => {
+    const resetButton = role('button', { name: 'Reset tutorial' })
+    const keepButton = role('button', { name: 'Keep' })
+    const confirmButton = role('button', { name: 'Reset' })
+    const focusReset = (id: string) =>
+      Command.resolve(
+        FocusTutorialReset({ id }),
+        Message.CompletedFocusTutorialReset(),
+      )
+    scene(
+      { update, view },
+      given(modifyFields(home, { saveStatus: () => 'Read' })),
+      measureSurface,
+      click(settingsButton),
+      ...showDialog(),
+      expect(text('Saved on this device.')).toExist(),
+      click(resetButton),
+      focusReset(KEEP_TUTORIAL_BUTTON_ID),
+      expect(text('Show the tips and zombie cards again?')).toExist(),
+      click(keepButton),
+      focusReset(RESET_TUTORIAL_BUTTON_ID),
+      expect(keepButton).toBeAbsent(),
+      click(resetButton),
+      focusReset(KEEP_TUTORIAL_BUTTON_ID),
+      click(confirmButton),
+      focusReset(RESET_TUTORIAL_BUTTON_ID),
+      Command.resolve(WriteSave, Message.CompletedWriteSave()),
+      expect(text('Tips will show again.')).toExist(),
     )
   })
 

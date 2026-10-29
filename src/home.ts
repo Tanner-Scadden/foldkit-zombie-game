@@ -27,6 +27,9 @@ const HOME_BUTTON_IDS: Readonly<Record<HomeButton, string>> = {
 export const homeButtonId = (button: HomeButton): string =>
   HOME_BUTTON_IDS[button]
 
+export const RESET_TUTORIAL_BUTTON_ID = 'reset-tutorial'
+export const KEEP_TUTORIAL_BUTTON_ID = 'keep-tutorial'
+
 const STEP_OFFSET: Readonly<Record<FocusStep, number>> = {
   Previous: -1,
   Next: 1,

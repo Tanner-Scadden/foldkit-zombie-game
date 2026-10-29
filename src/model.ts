@@ -589,6 +589,7 @@ export const SessionBests = Schema.Struct({
 export type SessionBests = typeof SessionBests.Type
 
 export const LoadStep = Schema.Literals([
+  'Save',
   'Styles',
   'Fonts',
   'FirstFrame',
@@ -601,6 +602,14 @@ export const Loading = defineTaggedUnion({
   Loaded: {},
 })
 export type Loading = typeof Loading.Type
+
+// NOTE: nothing is written until the save has been read, so the defaults
+// from before the load never overwrite a player's save.
+export const SaveStatus = Schema.Literals(['Unread', 'Read'])
+export type SaveStatus = typeof SaveStatus.Type
+
+export const TutorialReset = Schema.Literals(['Idle', 'Asking', 'Done'])
+export type TutorialReset = typeof TutorialReset.Type
 
 export const PageVisibility = Schema.Literals(['Visible', 'Hidden'])
 export type PageVisibility = typeof PageVisibility.Type
@@ -640,9 +649,9 @@ export const ShirtColor = Schema.Literals([
 ])
 export type ShirtColor = typeof ShirtColor.Type
 
-// NOTE: the appearance lives in memory for the page session only. It is
-// plain data on purpose: it is the first setting to move into the SQLite
-// player scope from PLATFORM.md, stored whole by a ChangedAppearance mutation.
+// NOTE: the appearance is saved on the device in the PlayerSave from
+// src/save.ts. It is plain data on purpose: it moves into the SQLite player
+// scope from PLATFORM.md, stored whole by a ChangedAppearance mutation.
 export const Appearance = Schema.Struct({
   body: Body,
   hairStyle: HairStyle,
@@ -911,6 +920,7 @@ export const Lessons = Schema.Struct({
   swap: Lesson,
   pickup: Lesson,
   timedBreaks: Lesson,
+  openBreak: Lesson,
 })
 export type Lessons = typeof Lessons.Type
 
@@ -1021,6 +1031,8 @@ export const Model = Schema.Struct({
   panelDialog: Dialog.Model,
   sessionBests: SessionBests,
   loading: Loading,
+  saveStatus: SaveStatus,
+  tutorialReset: TutorialReset,
 })
 export type Model = typeof Model.Type
 
@@ -1073,6 +1085,7 @@ export const freshLessons: Lessons = {
   swap: Lesson.Pending(),
   pickup: Lesson.Pending(),
   timedBreaks: Lesson.Pending(),
+  openBreak: Lesson.Pending(),
 }
 
 export const noPractice: Practice = { movedPx: 0, aimedShots: 0 }
@@ -1146,6 +1159,7 @@ export const closedCharacterPicker: CharacterPicker = {
 export const PANEL_DIALOG_ID = 'menu-panel'
 
 export const LOAD_STEPS: ReadonlyArray<LoadStep> = [
+  'Save',
   'Styles',
   'Fonts',
   'FirstFrame',
@@ -1227,4 +1241,6 @@ export const initialModel: Model = {
   panelDialog: Dialog.init({ id: PANEL_DIALOG_ID }),
   sessionBests: noSessionBests,
   loading: Loading.Loaded(),
+  saveStatus: 'Unread',
+  tutorialReset: 'Idle',
 }

@@ -3,7 +3,13 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Dialog } from '@foldkit/ui'
 
-import { HOME_BUTTONS, homeButtonId, isOnHome } from './home'
+import {
+  HOME_BUTTONS,
+  KEEP_TUTORIAL_BUTTON_ID,
+  RESET_TUTORIAL_BUTTON_ID,
+  homeButtonId,
+  isOnHome,
+} from './home'
 import { Message, isSideways } from './main'
 import { type HomeButton, type MenuPanel, type Model, Phase } from './model'
 import { helpLabel, howToPlayView } from './pauseHelp'
@@ -285,6 +291,72 @@ const toggleView = (toggle: Toggle, h: HtmlBuilder<Message>): Html =>
     ],
   )
 
+const resetTutorialButtonView = (h: HtmlBuilder<Message>): Html =>
+  h.button(
+    [
+      h.Type('button'),
+      h.Id(RESET_TUTORIAL_BUTTON_ID),
+      h.Class('setting-toggle setting-reset'),
+      h.OnClick(Message.ClickedResetTutorialButton(), { propagation: 'Stop' }),
+    ],
+    [
+      h.span([h.Class('setting-label')], ['Reset tutorial']),
+      h.span([h.Class('setting-state'), h.AriaHidden(true)], ['RESET']),
+    ],
+  )
+
+const askResetTutorialView = (h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [
+      h.Class('setting-confirm'),
+      h.Role('group'),
+      h.AriaLabel('Reset tutorial'),
+    ],
+    [
+      h.p([h.Class('setting-note')], ['Show the tips and zombie cards again?']),
+      h.div(
+        [h.Class('panel-actions')],
+        [
+          h.button(
+            [
+              h.Type('button'),
+              h.Class('panel-button panel-leave'),
+              h.OnClick(Message.ClickedConfirmResetTutorialButton(), {
+                propagation: 'Stop',
+              }),
+            ],
+            ['Reset'],
+          ),
+          h.button(
+            [
+              h.Type('button'),
+              h.Id(KEEP_TUTORIAL_BUTTON_ID),
+              h.Class('panel-button panel-stay'),
+              h.OnClick(Message.ClickedCancelResetTutorialButton(), {
+                propagation: 'Stop',
+              }),
+            ],
+            ['Keep'],
+          ),
+        ],
+      ),
+    ],
+  )
+
+const tutorialResetView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.li(
+    [h.Class('setting-row')],
+    model.tutorialReset === 'Asking'
+      ? [askResetTutorialView(h)]
+      : [
+          resetTutorialButtonView(h),
+          h.p(
+            [h.Class('setting-note'), h.Role('status')],
+            model.tutorialReset === 'Done' ? ['Tips will show again.'] : [],
+          ),
+        ],
+  )
+
 type PanelText = Readonly<{ title: string; blurb: string }>
 
 const panelText = (model: Model, panel: MenuPanel): PanelText => {
@@ -296,7 +368,7 @@ const panelText = (model: Model, panel: MenuPanel): PanelText => {
   } else if (panel === 'Settings') {
     return {
       title: 'Settings',
-      blurb: 'They last until you close the game.',
+      blurb: 'Saved on this device.',
     }
   } else {
     return {
@@ -338,7 +410,10 @@ const panelBodyView = (
     return [
       h.ul(
         [h.Class('setting-list')],
-        Array.map(settingToggles(model), toggle => toggleView(toggle, h)),
+        [
+          ...Array.map(settingToggles(model), toggle => toggleView(toggle, h)),
+          tutorialResetView(model, h),
+        ],
       ),
       h.div([h.Class('panel-actions')], [doneButtonView(renderInfo, h)]),
     ]

@@ -371,6 +371,27 @@
   outline-offset: 2px;
 }
 
+.setting-reset .setting-state {
+  background: #3a2f1a;
+  color: #ffe066;
+}
+
+.setting-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setting-note {
+  margin: 0;
+  color: #b8c2b0;
+  font-size: 12px;
+}
+
+.setting-note:empty {
+  display: none;
+}
+
 .panel-actions {
   display: flex;
   gap: 10px;

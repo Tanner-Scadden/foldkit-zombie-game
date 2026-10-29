@@ -42,6 +42,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/homeView.ts`      | The home menu, its panels, the pause MENU pill, and the bests strip    |
 | `src/menu.css`         | Styles for the home menu, its panels, and the MENU pill                |
 | `src/splash.ts`        | The loading splash's effects: load steps, progress, and hiding it      |
+| `src/save.ts`          | The on-device PlayerSave: its Schema, reading, writing, and the reset  |
 | `src/veteran.ts`       | A returning player's Model for tests and the balance bot               |
 | `src/stats.ts`         | Run stats: kills, accuracy, run time, and the verdicts                 |
 | `src/simulation.ts`    | The pure step that advances the game one frame                         |
@@ -146,6 +147,7 @@ iOS keeps a Home Screen app alive in the background, so players can keep an old 
 - **Keep the Effect plugin in `tsconfig.json`.** The `@effect/language-service` entry is what turns on the Effect diagnostics in `typecheck`. Without it, `typecheck` still passes but reports no Effect problems.
 - **Draw fixed art as sprite images.** A pixel map goes through `spriteShapes`, which builds one `Canvas.Image` from a PNG data URL, and a fixed list of whole pixel rectangles goes through `bakeShapes`. Build them once at module scope or in a cache, never per frame: Foldkit keeps every image for the life of the page, and the warm-up canvases in `src/layers.ts` decode the ones built as the game loads. Shapes that change every frame, such as particles, bars, and decals, stay `Rect` shapes.
 - **Keep the frame cheap.** `src/perf.scene.test.ts` budgets the canvas shapes and paint operations of a full room, and `bun run perf:check` gates frame time against a recorded baseline (see `tools/audit/README.md`). In code that runs every frame, check a union's tag with `isAnyOf`, not `guards`: a guard validates the whole value through Schema, and `Phase` carries the wave's spawn list.
+- **Save through PlayerSave.** Anything that must last across reloads goes in `PlayerSave` in `src/save.ts`, with a bump of `SAVE_VERSION` and a migration or a fallback to no save for the older version. Add it to `saveOf` and `restoreSave`; `update` then writes it on change through the `WriteSave` Command. Never touch `localStorage` anywhere else.
 - **Write tests for game logic** as Story tests that replay Messages. Break the code once to see the test fail before you trust it.
 
 ### Git

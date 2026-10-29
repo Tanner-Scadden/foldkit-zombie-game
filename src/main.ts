@@ -43,6 +43,8 @@ import {
 } from './constants'
 import {
   END_MENU_BUTTON_ID,
+  KEEP_TUTORIAL_BUTTON_ID,
+  RESET_TUTORIAL_BUTTON_ID,
   endOffer,
   homeButtonId,
   isOnHome,
@@ -99,6 +101,7 @@ import {
   ShopItemId,
   ShopState,
   TouchControls,
+  type TutorialReset,
   defaultAppearance,
   initialModel,
 } from './model'
@@ -115,6 +118,15 @@ import {
 } from './onboarding'
 import { burstCoins, dropClip, puffDust } from './particles'
 import { PICKUPS } from './powerups'
+import {
+  PlayerSave,
+  forgetTutorial,
+  isSameSave,
+  readSave,
+  restoreSave,
+  saveOf,
+  writeSave,
+} from './save'
 import {
   SHOP_ITEMS,
   ShopGood,
@@ -270,6 +282,14 @@ export const Message = defineMessageUnion({
   CompletedDecodeSprites: {},
   CompletedShowLoadProgress: {},
   CompletedHideSplash: {},
+  CompletedLoadSave: { maybeSave: Schema.Option(PlayerSave) },
+  FailedLoadSave: { reason: Schema.String },
+  CompletedWriteSave: {},
+  FailedWriteSave: { reason: Schema.String },
+  ClickedResetTutorialButton: {},
+  ClickedConfirmResetTutorialButton: {},
+  ClickedCancelResetTutorialButton: {},
+  CompletedFocusTutorialReset: {},
 })
 export type Message = typeof Message.Type
 
@@ -579,6 +599,42 @@ export const HideSplash = Command.define('HideSplash', {
   ),
 })
 
+// SAVE
+
+export const LoadSave = Command.define('LoadSave', {
+  messages: [Message.CompletedLoadSave, Message.FailedLoadSave],
+  execute: pipe(
+    readSave,
+    Effect.map(maybeSave => Message.CompletedLoadSave({ maybeSave })),
+    Effect.catch(error =>
+      Effect.succeed(Message.FailedLoadSave({ reason: error.reason })),
+    ),
+  ),
+})
+
+export const WriteSave = Command.define('WriteSave', {
+  args: { save: PlayerSave },
+  messages: [Message.CompletedWriteSave, Message.FailedWriteSave],
+  execute: ({ save }) =>
+    pipe(
+      writeSave(save),
+      Effect.as(Message.CompletedWriteSave()),
+      Effect.catch(error =>
+        Effect.succeed(Message.FailedWriteSave({ reason: error.reason })),
+      ),
+    ),
+})
+
+export const FocusTutorialReset = Command.define('FocusTutorialReset', {
+  args: { id: Schema.String },
+  messages: [Message.CompletedFocusTutorialReset],
+  execute: ({ id }) =>
+    Dom.focus(`#${id}`).pipe(
+      Effect.ignore,
+      Effect.as(Message.CompletedFocusTutorialReset()),
+    ),
+})
+
 // INIT
 
 // NOTE: every LoadStep must finish before the splash goes. A step that
@@ -590,6 +646,7 @@ export const init: Runtime.ApplicationInit<Model, Message> = () => ({
     loading: () => Loading.Loading({ pending: LOAD_STEPS }),
   }),
   commands: [
+    LoadSave(),
     GenerateSeed(),
     DetectInputDevice(),
     DetectScreenFit(),
@@ -1106,7 +1163,10 @@ const openPanel =
     isPanelAllowed(stepModel, panel)
       ? foldPanelDialogOpen(
           withInput(
-            modifyFields(stepModel, { panel: () => panel }),
+            modifyFields(stepModel, {
+              panel: () => panel,
+              tutorialReset: () => 'Idle',
+            }),
             releaseAll,
           ),
         )
@@ -1205,6 +1265,61 @@ const finishLoadStep = (model: Model, step: LoadStep): UpdateReturn =>
       }
     },
   })
+
+// SAVE
+
+const loadSave = (
+  model: Model,
+  maybeSave: Option.Option<PlayerSave>,
+): UpdateReturn =>
+  finishLoadStep(
+    modifyFields(
+      Option.match(maybeSave, {
+        onNone: () => model,
+        onSome: save => restoreSave(model, save),
+      }),
+      { saveStatus: () => 'Read' },
+    ),
+    'Save',
+  )
+
+const writeSaveFrom =
+  (before: Model): UpdateStep =>
+  stepModel => {
+    if (before.saveStatus === 'Unread' || stepModel.saveStatus === 'Unread') {
+      return { model: stepModel }
+    }
+
+    const save = saveOf(stepModel)
+    return isSameSave(saveOf(before), save)
+      ? { model: stepModel }
+      : { model: stepModel, commands: [WriteSave({ save })] }
+  }
+
+const isSettingsOpen = (model: Model): boolean =>
+  model.panelDialog.isOpen && model.panel === 'Settings'
+
+const askToResetTutorial = (model: Model): UpdateReturn =>
+  isSettingsOpen(model)
+    ? {
+        model: modifyFields(model, { tutorialReset: () => 'Asking' }),
+        commands: [FocusTutorialReset({ id: KEEP_TUTORIAL_BUTTON_ID })],
+      }
+    : { model }
+
+const answerTutorialReset = (
+  model: Model,
+  forget: (model: Model) => Model,
+  tutorialReset: TutorialReset,
+): UpdateReturn =>
+  model.tutorialReset === 'Asking'
+    ? {
+        model: modifyFields(forget(model), {
+          tutorialReset: () => tutorialReset,
+        }),
+        commands: [FocusTutorialReset({ id: RESET_TUTORIAL_BUTTON_ID })],
+      }
+    : { model }
 
 // TRAPS
 
@@ -1806,6 +1921,24 @@ const updateGame = (model: Model, message: Message) =>
     CompletedShowLoadProgress: () => ({ model }),
 
     CompletedHideSplash: () => ({ model }),
+
+    CompletedLoadSave: ({ maybeSave }) => loadSave(model, maybeSave),
+
+    FailedLoadSave: () => loadSave(model, Option.none()),
+
+    CompletedWriteSave: () => ({ model }),
+
+    FailedWriteSave: () => ({ model }),
+
+    ClickedResetTutorialButton: () => askToResetTutorial(model),
+
+    ClickedConfirmResetTutorialButton: () =>
+      answerTutorialReset(model, forgetTutorial, 'Done'),
+
+    ClickedCancelResetTutorialButton: () =>
+      answerTutorialReset(model, unchanged => unchanged, 'Idle'),
+
+    CompletedFocusTutorialReset: () => ({ model }),
   })
 
 const dismissHomeScreenTip = (model: Model): Model =>
@@ -1875,6 +2008,7 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     focusEndMenuFrom(model),
     dismissHomeScreenTipFrom(model),
     stepModel => ({ model: recordSessionBests(model, stepModel) }),
+    writeSaveFrom(model),
   ])
 
 // SUBSCRIPTION

@@ -71,6 +71,7 @@ import {
 import {
   isPracticeGateHeld,
   isTimedBreak,
+  learnOpenBreak,
   learnTimedBreaks,
   raiseDebutCard,
   settleLessons,
@@ -1327,17 +1328,21 @@ export const pause = (model: Model): Model =>
     GameOver: () => model,
   })
 
+const learnFromBreak = (model: Model, wave: number, clock: BreakClock) =>
+  BreakClock.match(clock, {
+    Waiting: () => learnOpenBreak(model),
+    Counting: () =>
+      isTimedBreak(wave, clock) ? learnTimedBreaks(model) : model,
+  })
+
 export const startWaveEarly = (model: Model): Model =>
   Phase.match(model.phase, {
     Ready: () => model,
     Preparation: ({ wave, spawns, clock }) =>
       raiseDebutCard(
-        modifyFields(
-          isTimedBreak(wave, clock) ? learnTimedBreaks(model) : model,
-          {
-            phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns }),
-          },
-        ),
+        modifyFields(learnFromBreak(model, wave, clock), {
+          phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns }),
+        }),
       ),
     Wave: () => model,
     Paused: () => model,

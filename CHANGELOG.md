@@ -11,3 +11,4 @@ The doors are open. Bring snacks. Do not become the snack.
 - 📱 Plays on your phone too. Add it to your Home Screen for full screen.
 - 🔁 New versions show up on the menu, so you never lose a run to an update.
 - 💨 Smoother frames when a crowd of Gasbags goes pop, and crisper zombies mid-wobble.
+- 💾 The game remembers you now. No more tutorial every time.
