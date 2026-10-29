@@ -2,6 +2,7 @@ import { Array, Option } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import {
+  AwaitRunSettled,
   FocusTutorialReset,
   HideSplash,
   RedeemLinkCode,
@@ -20,8 +21,10 @@ import {
   type TutorialReset,
 } from '../model'
 import {
+  LastRunSync,
   LinkFlow,
   type PlayerChange,
+  RunSettled,
   changesBetween,
   withUnsavedChanges,
 } from '../playerSync'
@@ -137,6 +140,47 @@ export const finishWrite = (model: Model): UpdateReturn => {
       }
     : { model: next }
 }
+
+// NOTE: a write that recorded a run, on a build with a sync server, waits
+// for the server to settle it, so the Model knows the run reached it.
+export const finishWriteWithRun = (
+  model: Model,
+  runId: string,
+): UpdateReturn => {
+  const finished = finishWrite(model)
+  return {
+    model: modifyFields(finished.model, {
+      lastRunSync: () => LastRunSync.Waiting({ id: runId }),
+    }),
+    commands: [...(finished.commands ?? []), AwaitRunSettled({ runId })],
+  }
+}
+
+const isWaitingFor = (model: Model, runId: string): boolean =>
+  model.lastRunSync._tag === 'Waiting' && model.lastRunSync.id === runId
+
+export const settleRun = (
+  model: Model,
+  runId: string,
+  settled: RunSettled,
+): UpdateReturn =>
+  isWaitingFor(model, runId)
+    ? {
+        model: modifyFields(model, {
+          lastRunSync: () =>
+            RunSettled.match(settled, {
+              Confirmed: ({ seq }) => LastRunSync.Confirmed({ seq }),
+              Rejected: ({ reason }) => LastRunSync.Rejected({ reason }),
+            }),
+        }),
+      }
+    : { model }
+
+// NOTE: the store could not tell, so the Model stops claiming to know.
+export const forgetRunWait = (model: Model, runId: string): UpdateReturn =>
+  isWaitingFor(model, runId)
+    ? { model: modifyFields(model, { lastRunSync: () => LastRunSync.NoRun() }) }
+    : { model }
 
 // NOTE: the store logged why. The changes it could not write wait in the
 // Model and go out again with the next change to the save, so a run that

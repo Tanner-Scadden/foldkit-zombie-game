@@ -48,8 +48,8 @@ import { helpLabel, howToPlayView } from './pauseHelp'
 import {
   LinkFlow,
   SyncState,
+  devicesStatusText,
   linkProblemText,
-  syncStateText,
 } from './playerSync'
 import { isPortrait } from './screen'
 import { durationLabel } from './stats'
@@ -985,8 +985,10 @@ const devicesView = (model: Model, h: HtmlBuilder<Message>): Html =>
               h.Class('setting-sync-state'),
               h.Role('status'),
               h.DataAttribute('sync', model.syncState._tag),
+              h.DataAttribute('scope', model.playerScopeStatus._tag),
+              h.DataAttribute('last-run', model.lastRunSync._tag),
             ],
-            [syncStateText(model.syncState)],
+            [devicesStatusText(model.syncState, model.playerScopeStatus)],
           ),
         ],
       ),

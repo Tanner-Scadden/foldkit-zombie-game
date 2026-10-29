@@ -26,6 +26,8 @@ import {
   IdentityRefused,
   type LocalDatabase,
   type Replica,
+  type ScopeStatus,
+  type Settled,
   type Sync,
   type SyncStatus,
   type Transport,
@@ -53,7 +55,13 @@ import {
   playerScopeId,
   rowOfSave,
 } from './playerScope'
-import { type LinkProblem, type PlayerChange, SyncState } from './playerSync'
+import {
+  type LinkProblem,
+  type PlayerChange,
+  PlayerScopeStatus,
+  RunSettled,
+  SyncState,
+} from './playerSync'
 import { type PlayerSave, SAVE_VERSION, type SaveStorageError } from './save'
 
 // NOTE: this module, the SQLite package, and the sync engine load lazily,
@@ -153,10 +161,12 @@ export interface LegacySave {
 // DATABASE
 
 // NOTE: what the store hears from the sync engine: a save that changed
-// because of another device or the server, and the sync status line.
+// because of another device or the server, the sync status line, and how
+// far the player scope has loaded.
 export type StoreEvent = Data.TaggedEnum<{
   SyncedSave: { readonly save: PlayerSave }
   SyncStatus: { readonly state: SyncState }
+  ScopeStatus: { readonly status: PlayerScopeStatus }
 }>
 export const StoreEvent = Data.taggedEnum<StoreEvent>()
 
@@ -166,7 +176,10 @@ export interface PlayerDatabase {
   readonly write: (
     save: PlayerSave,
     changes: ReadonlyArray<PlayerChange>,
-  ) => Effect.Effect<void, PlayerDatabaseError>
+  ) => Effect.Effect<Option.Option<string>, PlayerDatabaseError>
+  readonly awaitSettled: (
+    id: string,
+  ) => Effect.Effect<RunSettled, PlayerDatabaseError>
   readonly events: Stream.Stream<StoreEvent>
   readonly requestLinkCode: Effect.Effect<string, PlayerDatabaseError>
   readonly redeemLinkCode: (
@@ -396,6 +409,23 @@ const runChange = (replica: Replica, change: PlayerChange) => {
 
 const sameSyncState = Schema.toEquivalence(SyncState)
 
+const scopeStatusOf = (status: ScopeStatus): PlayerScopeStatus => {
+  if (status._tag === 'Ready') {
+    return PlayerScopeStatus.Ready({ seq: status.seq, fresh: status.fresh })
+  } else if (status._tag === 'Failed') {
+    return PlayerScopeStatus.Failed({ reason: status.reason })
+  } else if (status._tag === 'Loading') {
+    return PlayerScopeStatus.Loading()
+  } else {
+    return PlayerScopeStatus.Idle()
+  }
+}
+
+const runSettledOf = (settled: Settled): RunSettled =>
+  settled._tag === 'Confirmed'
+    ? RunSettled.Confirmed({ seq: settled.seq })
+    : RunSettled.Rejected({ reason: `${settled.code}: ${settled.reason}` })
+
 const stateOf = (status: SyncStatus, devices: number): SyncState => {
   if (status._tag === 'Online' || status._tag === 'Following') {
     return SyncState.Synced({ devices })
@@ -474,29 +504,38 @@ export const makePlayerDatabase = (
     // NOTE: the changes go in one transaction, so a write that fails leaves
     // nothing behind and the game can send the same changes again. A change
     // the scope's own rules reject would be rejected on every retry, so it is
-    // logged and dropped on its own, and the rest still go in.
+    // logged and dropped on its own, and the rest still go in. A recorded
+    // run's mutation id comes back when there is a server to confirm it.
     const write = (save: PlayerSave, changes: ReadonlyArray<PlayerChange>) =>
       pipe(
         Effect.gen(function* () {
           const current = yield* readView(client)
           if (Option.isNone(current)) {
             yield* replica.run(SeededPlayer, { save })
-            return
+            return Option.none<string>()
           }
-          yield* Effect.forEach(
-            changes,
-            change =>
-              pipe(
-                runChange(replica, change),
-                Effect.catchTag('MutationRejected', error =>
+          const ran = yield* Effect.forEach(changes, change =>
+            pipe(
+              runChange(replica, change),
+              Effect.map(id =>
+                change._tag === 'RecordedRun'
+                  ? Option.some(id)
+                  : Option.none<string>(),
+              ),
+              Effect.catchTag('MutationRejected', error =>
+                Effect.as(
                   Effect.logWarning(
                     `Dropped ${change._tag}, which the player scope rejects`,
                     error.reason,
                   ),
+                  Option.none<string>(),
                 ),
               ),
-            { discard: true },
+            ),
           )
+          return Option.isSome(maybeSetup)
+            ? Array.last(Array.getSomes(ran))
+            : Option.none<string>()
         }),
         client.transaction,
         Effect.mapError(toDatabaseError),
@@ -584,11 +623,24 @@ export const makePlayerDatabase = (
         })
       })
 
+    const scopeChanges: Stream.Stream<StoreEvent> = Stream.map(
+      replica.status,
+      next => StoreEvent.ScopeStatus({ status: scopeStatusOf(next) }),
+    )
+
     return {
       persistence: status.persistence,
       load: readView(client).pipe(Effect.mapError(toDatabaseError)),
       write,
-      events: Stream.merge(savedChanges, statusChanges),
+      awaitSettled: id =>
+        pipe(
+          replica.awaitSettled(id),
+          Effect.map(runSettledOf),
+          Effect.mapError(toDatabaseError),
+        ),
+      events: Stream.mergeAll([savedChanges, statusChanges, scopeChanges], {
+        concurrency: 'unbounded',
+      }),
       requestLinkCode: Effect.map(
         Effect.mapError(identity.createLinkCode, fromRefused),
         response => response.code,

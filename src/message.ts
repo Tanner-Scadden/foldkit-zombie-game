@@ -18,7 +18,13 @@ import {
   ZombieKind,
 } from './model'
 import { MusicMood } from './music'
-import { LinkProblem, PlayerChange, SyncState } from './playerSync'
+import {
+  LinkProblem,
+  PlayerChange,
+  PlayerScopeStatus,
+  RunSettled,
+  SyncState,
+} from './playerSync'
 import { PlayerSave } from './save'
 
 export const Message = defineMessageUnion({
@@ -122,6 +128,7 @@ export const Message = defineMessageUnion({
   CompletedLoadSave: { maybeSave: Schema.Option(PlayerSave) },
   FailedLoadSave: { reason: Schema.String },
   CompletedWriteSave: {},
+  CompletedWriteSaveWithRun: { runId: Schema.String },
   FailedWriteSave: {
     reason: Schema.String,
     changes: Schema.Array(PlayerChange),
@@ -137,6 +144,9 @@ export const Message = defineMessageUnion({
   UpdatedSyncedSave: { save: PlayerSave },
   CompletedReloadSyncedSave: { maybeSave: Schema.Option(PlayerSave) },
   UpdatedSyncStatus: { state: SyncState },
+  UpdatedPlayerScopeStatus: { status: PlayerScopeStatus },
+  SettledRecordedRun: { runId: Schema.String, settled: RunSettled },
+  FailedAwaitRunSettled: { runId: Schema.String, reason: Schema.String },
   ClickedLinkDeviceButton: {},
   SucceededRequestLinkCode: { code: Schema.String },
   FailedRequestLinkCode: { problem: LinkProblem },

@@ -453,7 +453,9 @@ describe('two devices syncing one player', () => {
               ...all,
               event._tag === 'SyncStatus'
                 ? event.state._tag
-                : event.save.settings.music,
+                : event._tag === 'ScopeStatus'
+                  ? `Scope${event.status._tag}`
+                  : event.save.settings.music,
             ]),
           ),
           Effect.forkScoped,
@@ -495,6 +497,71 @@ describe('two devices syncing one player', () => {
           events.includes('Off'),
         )
         expect(heard).toContain('Synced')
+      }),
+    ))
+
+  test('a finished run settles once the server confirms it, and the scope is fresh', () =>
+    run(
+      Effect.gen(function* () {
+        const server = yield* makeServer()
+        const network = yield* server.host.network()
+        const setup = Option.some<SyncSetup>({
+          identityApi: server.api,
+          transports: [network.transport],
+        })
+        const legacy = yield* makeLegacy(Option.some(legacySave))
+        const phone = yield* openOn(yield* makeHub(), legacy.legacy, setup)
+        const scopeStatuses = yield* Ref.make<ReadonlyArray<string>>([])
+        yield* pipe(
+          phone.events,
+          Stream.runForEach(event =>
+            event._tag === 'ScopeStatus'
+              ? Ref.update(scopeStatuses, all => [
+                  ...all,
+                  event.status._tag === 'Ready'
+                    ? `Ready ${event.status.fresh ? 'fresh' : 'cached'}`
+                    : event.status._tag,
+                ])
+              : Effect.void,
+          ),
+          Effect.forkScoped,
+        )
+        const played: PlayerSave = {
+          ...legacySave,
+          bests: {
+            ...legacySave.bests,
+            runsPlayed: 4,
+            totalKills: 70,
+            killsByKind: { Shambler: 63, Runner: 7 },
+          },
+        }
+        const maybeRunId = yield* write(phone, legacySave, played)
+        expect(Option.isSome(maybeRunId)).toBe(true)
+        const settled = yield* Effect.timeout(
+          phone.awaitSettled(Option.getOrElse(maybeRunId, () => '')),
+          '15 seconds',
+        )
+        expect(settled._tag).toBe('Confirmed')
+        const seen = yield* until(Ref.get(scopeStatuses), all =>
+          all.includes('Ready fresh'),
+        )
+        expect(seen).toContain('Loading')
+        expect(yield* write(phone, played, muted(played))).toEqual(
+          Option.none(),
+        )
+      }),
+    ))
+
+  test('a build without a sync server returns no run id to wait on', () =>
+    run(
+      Effect.gen(function* () {
+        const legacy = yield* makeLegacy(Option.some(legacySave))
+        const local = yield* openOn(yield* makeHub(), legacy.legacy)
+        const played: PlayerSave = {
+          ...legacySave,
+          bests: { ...legacySave.bests, runsPlayed: 4 },
+        }
+        expect(yield* write(local, legacySave, played)).toEqual(Option.none())
       }),
     ))
 })

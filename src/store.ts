@@ -13,7 +13,12 @@ import {
 } from 'effect'
 
 import { API_ORIGIN } from './analyticsBeacon'
-import { type LinkProblem, type PlayerChange, SyncState } from './playerSync'
+import {
+  type LinkProblem,
+  type PlayerChange,
+  type RunSettled,
+  SyncState,
+} from './playerSync'
 import { type PlayerSave, readLegacySave, writeLegacySave } from './save'
 import type { LegacySave, PlayerDatabase, StoreEvent } from './storeSqlite'
 
@@ -57,7 +62,8 @@ export class PlayerStore extends Context.Service<
     readonly write: (
       save: PlayerSave,
       changes: ReadonlyArray<PlayerChange>,
-    ) => Effect.Effect<void, StoreError>
+    ) => Effect.Effect<Option.Option<string>, StoreError>
+    readonly awaitSettled: (id: string) => Effect.Effect<RunSettled, StoreError>
     readonly events: Stream.Stream<StoreEvent>
     readonly requestLinkCode: Effect.Effect<string, LinkError>
     readonly redeemLinkCode: (code: string) => Effect.Effect<void, LinkError>
@@ -119,12 +125,13 @@ const loadFrom = (backend: Backend) =>
 
 // NOTE: in memory, the localStorage copy is the one that outlives the tab,
 // so it is written even when the SQLite write fails. Either failure fails
-// the write, so the game sends the changes again with the next one.
+// the write, so the game sends the changes again with the next one. What
+// comes back is a recorded run's mutation id, when a server will confirm it.
 const writeTo = (
   backend: Backend,
   save: PlayerSave,
   changes: ReadonlyArray<PlayerChange>,
-): Effect.Effect<void, StoreError> =>
+): Effect.Effect<Option.Option<string>, StoreError> =>
   Backend.$match(backend, {
     Sqlite: ({ database }) => {
       const written = pipe(
@@ -135,11 +142,12 @@ const writeTo = (
         ? written
         : Effect.gen(function* () {
             const legacyWritten = yield* Effect.exit(writeLegacy(save))
-            yield* written
+            const maybeRunId = yield* written
             yield* legacyWritten
+            return maybeRunId
           })
     },
-    LocalStorage: () => writeLegacy(save),
+    LocalStorage: () => Effect.as(writeLegacy(save), Option.none<string>()),
   })
 
 const localOnly: Stream.Stream<StoreEvent> = Stream.make({
@@ -200,6 +208,11 @@ export const layer: Layer.Layer<PlayerStore> = Layer.effect(
               Effect.logError('The save was not written', error.reason),
             ),
           ),
+        ),
+      awaitSettled: id =>
+        Effect.flatMap(
+          Effect.mapError(database, error => new StoreError({ reason: error.problem })),
+          opened => Effect.mapError(opened.awaitSettled(id), toStoreError),
         ),
       events: Stream.unwrap(
         Effect.map(backend, current =>

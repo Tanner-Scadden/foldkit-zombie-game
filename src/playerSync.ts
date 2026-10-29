@@ -186,6 +186,56 @@ export const syncStateText = (state: SyncState): string =>
     Offline: () => 'Offline, will sync',
   })
 
+// NOTE: how far this device has got with the player scope, as the sync
+// engine's ScopeStatus says it (the engine loads lazily, so the game keeps
+// its own copy of the shape). SyncState is the connection; this is the
+// data. Ready and not fresh is progress cached from an earlier session,
+// shown while the device connects or stays offline.
+export const PlayerScopeStatus = defineTaggedUnion({
+  Idle: {},
+  Loading: {},
+  Ready: { seq: Schema.Number, fresh: Schema.Boolean },
+  Failed: { reason: Schema.String },
+})
+export type PlayerScopeStatus = typeof PlayerScopeStatus.Type
+
+// NOTE: SETTINGS' Devices line, from the connection and the scope together.
+export const devicesStatusText = (
+  state: SyncState,
+  scope: PlayerScopeStatus,
+): string => {
+  if (state._tag === 'LocalOnly') {
+    return syncStateText(state)
+  } else if (scope._tag === 'Failed') {
+    return 'Sync is not working on this device'
+  } else if (
+    state._tag === 'Connecting' &&
+    scope._tag === 'Ready' &&
+    !scope.fresh
+  ) {
+    return 'Connecting. Showing saved progress'
+  } else {
+    return syncStateText(state)
+  }
+}
+
+// NOTE: whether the last run this device finished has reached the server.
+// Waiting holds the RecordedRun's mutation id, so a settlement for an older
+// run never overwrites a newer one.
+export const RunSettled = defineTaggedUnion({
+  Confirmed: { seq: Schema.Number },
+  Rejected: { reason: Schema.String },
+})
+export type RunSettled = typeof RunSettled.Type
+
+export const LastRunSync = defineTaggedUnion({
+  NoRun: {},
+  Waiting: { id: Schema.String },
+  Confirmed: { seq: Schema.Number },
+  Rejected: { reason: Schema.String },
+})
+export type LastRunSync = typeof LastRunSync.Type
+
 // LINKING
 
 export const LinkProblem = Schema.Literals([
