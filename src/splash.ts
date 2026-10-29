@@ -77,6 +77,23 @@ export const loadStyles = pipe(
   Effect.asVoid,
 )
 
+const decodeImage = (src: string) =>
+  Effect.tryPromise(() => {
+    const image = new Image()
+    image.src = src
+    return image.decode()
+  })
+
+// NOTE: an image that fails to decode still counts as done, so one bad
+// sprite never holds the game behind the splash.
+export const decodeImages = (
+  sources: ReadonlyArray<string>,
+): Effect.Effect<void> =>
+  Effect.forEach(sources, source => Effect.ignore(decodeImage(source)), {
+    concurrency: 'unbounded',
+    discard: true,
+  })
+
 export const loadFonts = Effect.asVoid(
   Effect.tryPromise(() => document.fonts.ready),
 )

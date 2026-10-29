@@ -166,7 +166,7 @@ const WARM_UP_CHUNK = 64
 // repaints cheap. The lazy view hands back the same VNodes after that, so
 // they cost nothing per frame. The list is read at the first render, not when
 // this module loads, so it includes the sprites of modules loaded after it.
-const warmUpSources = (): ReadonlyArray<string> => {
+export const warmUpSources = (): ReadonlyArray<string> => {
   playerSprites(defaultAppearance)
   return recordedSpriteSources()
 }

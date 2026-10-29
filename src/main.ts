@@ -74,6 +74,7 @@ import {
   releasePointer,
   releaseSticks,
 } from './input'
+import { warmUpSources } from './layers'
 import {
   Arsenal,
   AudioState,
@@ -127,6 +128,7 @@ import {
 import { advanceGame, clampFrameDelta, refreshIntent } from './simulation'
 import {
   awaitFirstFrame,
+  decodeImages,
   hideSplash,
   loadFonts,
   loadStyles,
@@ -265,6 +267,7 @@ export const Message = defineMessageUnion({
   CompletedLoadFonts: {},
   FailedLoadFonts: { reason: Schema.String },
   CompletedAwaitFirstFrame: {},
+  CompletedDecodeSprites: {},
   CompletedShowLoadProgress: {},
   CompletedHideSplash: {},
 })
@@ -540,6 +543,18 @@ export const AwaitFirstFrame = Command.define('AwaitFirstFrame', {
   execute: Effect.as(awaitFirstFrame, Message.CompletedAwaitFirstFrame()),
 })
 
+// NOTE: the warm-up canvases start Foldkit loading every sprite image on the
+// first frame. This waits for that frame, then decodes the same sources, so
+// the splash stays up until the sprites are ready to draw.
+export const DecodeSprites = Command.define('DecodeSprites', {
+  messages: [Message.CompletedDecodeSprites],
+  execute: pipe(
+    awaitFirstFrame,
+    Effect.andThen(Effect.suspend(() => decodeImages(warmUpSources()))),
+    Effect.as(Message.CompletedDecodeSprites()),
+  ),
+})
+
 export const ShowLoadProgress = Command.define('ShowLoadProgress', {
   args: { loaded: Schema.Number, total: Schema.Number },
   messages: [Message.CompletedShowLoadProgress],
@@ -577,6 +592,7 @@ export const init: Runtime.ApplicationInit<Model, Message> = () => ({
     LoadStyles(),
     LoadFonts(),
     AwaitFirstFrame(),
+    DecodeSprites(),
   ],
 })
 
@@ -1780,6 +1796,8 @@ const updateGame = (model: Model, message: Message) =>
     FailedLoadFonts: () => finishLoadStep(model, 'Fonts'),
 
     CompletedAwaitFirstFrame: () => finishLoadStep(model, 'FirstFrame'),
+
+    CompletedDecodeSprites: () => finishLoadStep(model, 'Sprites'),
 
     CompletedShowLoadProgress: () => ({ model }),
 

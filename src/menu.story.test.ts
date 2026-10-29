@@ -9,6 +9,7 @@ import { RESTART_GRACE_MS } from './constants'
 import { recordSessionBests, returnHome } from './home'
 import {
   AwaitFirstFrame,
+  DecodeSprites,
   HideSplash,
   LoadFonts,
   LoadStyles,
@@ -182,33 +183,40 @@ describe('leaving a run', () => {
 describe('the loading splash', () => {
   const resolveProgress = (loaded: number) =>
     Command.resolve(
-      ShowLoadProgress({ loaded, total: 3 }),
+      ShowLoadProgress({ loaded, total: 4 }),
       Message.CompletedShowLoadProgress(),
     )
 
-  test('waits for the styles, the fonts, and the first frame, shows progress, then hides once', () => {
+  test('waits for the styles, the fonts, the first frame, and the sprites, shows progress, then hides once', () => {
     const init_ = init()
     expect(init_.model.loading).toEqual(
-      Loading.Loading({ pending: ['Styles', 'Fonts', 'FirstFrame'] }),
+      Loading.Loading({
+        pending: ['Styles', 'Fonts', 'FirstFrame', 'Sprites'],
+      }),
     )
     story(
       update,
       given(init_.model),
       message(Message.CompletedLoadStyles()),
-      Command.expectExact(ShowLoadProgress({ loaded: 1, total: 3 })),
+      Command.expectExact(ShowLoadProgress({ loaded: 1, total: 4 })),
       resolveProgress(1),
       message(Message.CompletedLoadFonts()),
-      Command.expectExact(ShowLoadProgress({ loaded: 2, total: 3 })),
+      Command.expectExact(ShowLoadProgress({ loaded: 2, total: 4 })),
       resolveProgress(2),
       model(({ loading }) => {
-        expect(loading).toEqual(Loading.Loading({ pending: ['FirstFrame'] }))
+        expect(loading).toEqual(
+          Loading.Loading({ pending: ['FirstFrame', 'Sprites'] }),
+        )
       }),
       message(Message.CompletedAwaitFirstFrame()),
+      Command.expectExact(ShowLoadProgress({ loaded: 3, total: 4 })),
+      resolveProgress(3),
+      message(Message.CompletedDecodeSprites()),
       Command.expectExact(
-        ShowLoadProgress({ loaded: 3, total: 3 }),
+        ShowLoadProgress({ loaded: 4, total: 4 }),
         HideSplash(),
       ),
-      resolveProgress(3),
+      resolveProgress(4),
       Command.resolve(HideSplash(), Message.CompletedHideSplash()),
       model(({ loading }) => {
         expect(loading).toEqual(Loading.Loaded())
@@ -228,10 +236,10 @@ describe('the loading splash', () => {
       ),
       message(Message.FailedLoadFonts({ reason: 'offline' })),
       Command.expectExact(
-        ShowLoadProgress({ loaded: 3, total: 3 }),
+        ShowLoadProgress({ loaded: 4, total: 4 }),
         HideSplash(),
       ),
-      resolveProgress(3),
+      resolveProgress(4),
       Command.resolve(HideSplash(), Message.CompletedHideSplash()),
     )
   })
@@ -243,6 +251,7 @@ describe('the loading splash', () => {
         LoadStyles().name,
         LoadFonts().name,
         AwaitFirstFrame().name,
+        DecodeSprites().name,
       ]),
     )
   })

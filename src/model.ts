@@ -588,7 +588,12 @@ export const SessionBests = Schema.Struct({
 })
 export type SessionBests = typeof SessionBests.Type
 
-export const LoadStep = Schema.Literals(['Styles', 'Fonts', 'FirstFrame'])
+export const LoadStep = Schema.Literals([
+  'Styles',
+  'Fonts',
+  'FirstFrame',
+  'Sprites',
+])
 export type LoadStep = typeof LoadStep.Type
 
 export const Loading = defineTaggedUnion({
@@ -1144,6 +1149,7 @@ export const LOAD_STEPS: ReadonlyArray<LoadStep> = [
   'Styles',
   'Fonts',
   'FirstFrame',
+  'Sprites',
 ]
 
 export const noSessionBests: SessionBests = {
