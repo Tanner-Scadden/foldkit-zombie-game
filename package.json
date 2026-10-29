@@ -19,6 +19,9 @@
     "effect": "4.0.0",
     "foldkit": "0.169.0"
   },
+  "patchedDependencies": {
+    "foldkit@0.169.0": "patches/foldkit@0.169.0.patch"
+  },
   "devDependencies": {
     "@effect/tsgo": "0.62.0",
     "@foldkit/devtools": "0.169.0",

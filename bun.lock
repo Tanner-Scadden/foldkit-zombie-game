@@ -29,6 +29,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "foldkit@0.169.0": "patches/foldkit@0.169.0.patch",
+  },
   "packages": {
     "@effect/platform-browser": ["@effect/platform-browser@4.0.0", "", { "peerDependencies": { "effect": "^4.0.0" } }, "sha512-OHo7EPpF3RVPiI+mjoU9yd05LdCdKPjzDXqs5wRgF9CsdVvwN76B0zgt54DxPUcvMYri1tVJOtLCVnK0tRkNQQ=="],
 

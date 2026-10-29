@@ -1,0 +1,425 @@
+diff --git a/dist/canvas/index.d.ts b/dist/canvas/index.d.ts
+index c0804b185ff86c9d5aa570eaadbe85cace4b40a8..d1258e62545dad679b12c05d1d4128d675f8579d 100644
+--- a/dist/canvas/index.d.ts
++++ b/dist/canvas/index.d.ts
+@@ -1,4 +1,4 @@
+-export { BezierTo, Circle, Close, Group, LineCap, LineJoin, LineTo, MoveTo, Path, PathInstruction, Point, QuadTo, Rect, Text, TextAlign, TextBaseline, } from './shape.js';
++export { BezierTo, Circle, Close, Group, Image, ImageCrop, ImageRendering, LineCap, LineJoin, LineTo, MoveTo, Path, PathInstruction, Point, QuadTo, Rect, Text, TextAlign, TextBaseline, } from './shape.js';
+ export type { Shape } from './shape.js';
+ export { view } from './view.js';
+ export type { ViewConfig } from './view.js';
+diff --git a/dist/canvas/index.js b/dist/canvas/index.js
+index 694551d155943c18c724decb79c660e56c05e157..76f0db510c48673ba449d83954f2f8d0cf63c81f 100644
+--- a/dist/canvas/index.js
++++ b/dist/canvas/index.js
+@@ -1,2 +1,2 @@
+-export { BezierTo, Circle, Close, Group, LineCap, LineJoin, LineTo, MoveTo, Path, PathInstruction, Point, QuadTo, Rect, Text, TextAlign, TextBaseline, } from './shape.js';
++export { BezierTo, Circle, Close, Group, Image, ImageCrop, ImageRendering, LineCap, LineJoin, LineTo, MoveTo, Path, PathInstruction, Point, QuadTo, Rect, Text, TextAlign, TextBaseline, } from './shape.js';
+ export { view } from './view.js';
+diff --git a/dist/canvas/paint.d.ts b/dist/canvas/paint.d.ts
+index 2a47bd191d355b39633751bc900c9f1669913f46..185c3a42bfe6ca95a33dccfdf6036dc2b81708e0 100644
+--- a/dist/canvas/paint.d.ts
++++ b/dist/canvas/paint.d.ts
+@@ -1,14 +1,24 @@
+ import type { Shape } from './shape.js';
++import { Option } from 'effect';
++/**
++ * Return the decoded image for `src` when it has loaded. Otherwise start
++ * loading it if no load has started, and register `onLoad` to be called once
++ * when it loads. Passing the same `onLoad` for many shapes registers it once.
++ */
++export declare const requestImage: (src: string, onLoad: () => void) => Option.Option<HTMLImageElement>;
+ /**
+  * Paint a single `Shape` to the 2D context. Each call is bracketed by
+  * `ctx.save` / `ctx.restore` so per-shape state mutations (fillStyle,
+  * lineWidth, font, transforms applied by `Group`, etc.) cannot leak to
+  * sibling shapes. Recurses into `Group` children inside the saved scope.
++ * An `Image` whose source has not loaded draws nothing and calls
++ * `onImageLoad` once the source loads.
+  */
+-export declare const paintShape: (ctx: CanvasRenderingContext2D) => (shape: Shape) => void;
++export declare const paintShape: (ctx: CanvasRenderingContext2D, onImageLoad: () => void) => (shape: Shape) => void;
+ /**
+  * Clear the canvas and paint every shape in `shapes` against the given
+- * 2D context. Called by `Canvas.view` on insert and on every postpatch.
++ * 2D context. Called by `Canvas.view` on insert, on every postpatch, and
++ * through `onImageLoad` when an `Image` source the scene uses finishes loading.
+  */
+-export declare const paintScene: (ctx: CanvasRenderingContext2D, width: number, height: number, shapes: ReadonlyArray<Shape>) => void;
++export declare const paintScene: (ctx: CanvasRenderingContext2D, width: number, height: number, shapes: ReadonlyArray<Shape>, onImageLoad: () => void) => void;
+ //# sourceMappingURL=paint.d.ts.map
+\ No newline at end of file
+diff --git a/dist/canvas/paint.js b/dist/canvas/paint.js
+index e31d0d92cecd61a44eea969ad2e054920c8a87d4..c82834458bc66c72161f20b2644873742b22d1cf 100644
+--- a/dist/canvas/paint.js
++++ b/dist/canvas/paint.js
+@@ -1,4 +1,46 @@
+-import { Array, Match } from 'effect';
++// NOTE: Munch Manor patch: Canvas.Image from foldkit/foldkit#1846 (a9009a20).
++// Upstream keeps the image cache in its own module, canvas/imageCache.ts. It
++// lives in this file here because `bun patch` cannot add a new file to a
++// package. Drop the patch once a Foldkit release ships Canvas.Image.
++import { Array, Match, Option } from 'effect';
++/**
++ * Decoded images keyed by `src`, shared by every canvas on the page. An entry
++ * is never evicted, so a `src` loads at most once and a sprite that leaves the
++ * scene for a frame draws immediately when it returns.
++ */
++const imageLoadsBySrc = new Map();
++const startLoading = (src) => {
++    const element = document.createElement('img');
++    const onLoadCallbacks = new Set();
++    const loading = { _tag: 'Loading', onLoadCallbacks };
++    imageLoadsBySrc.set(src, loading);
++    element.addEventListener('load', () => {
++        imageLoadsBySrc.set(src, { _tag: 'Loaded', element });
++        onLoadCallbacks.forEach(onLoad => onLoad());
++    }, { once: true });
++    element.addEventListener('error', () => {
++        imageLoadsBySrc.set(src, { _tag: 'Failed' });
++    }, { once: true });
++    element.src = src;
++    // NOTE: browsers fire `load` in a later task, but happy-dom, which app
++    // tests run in, fires it synchronously while a data URL `src` is assigned.
++    // That happens before the caller can register its callback, so the caller
++    // reads the entry again here and draws the image at once.
++    return imageLoadsBySrc.get(src) ?? loading;
++};
++/**
++ * Return the decoded image for `src` when it has loaded. Otherwise start
++ * loading it if no load has started, and register `onLoad` to be called once
++ * when it loads. Passing the same `onLoad` for many shapes registers it once.
++ */
++export const requestImage = (src, onLoad) => Match.value(imageLoadsBySrc.get(src) ?? startLoading(src)).pipe(Match.tagsExhaustive({
++    Loading: ({ onLoadCallbacks }) => {
++        onLoadCallbacks.add(onLoad);
++        return Option.none();
++    },
++    Loaded: ({ element }) => Option.some(element),
++    Failed: () => Option.none(),
++}));
+ const lineCapForCanvas = {
+     Butt: 'butt',
+     Round: 'round',
+@@ -24,6 +66,10 @@ const textBaselineForCanvas = {
+     Hanging: 'hanging',
+     Ideographic: 'ideographic',
+ };
++const imageSmoothingForCanvas = {
++    Smooth: true,
++    Pixelated: false,
++};
+ const paintRect = (ctx) => (rect) => {
+     if (rect.fill !== undefined) {
+         ctx.fillStyle = rect.fill;
+@@ -102,7 +148,22 @@ const paintText = (ctx) => (text) => {
+         ctx.strokeText(text.content, text.x, text.y);
+     }
+ };
+-const paintGroup = (ctx) => (group) => {
++const paintImage = (ctx, onImageLoad) => (image) => {
++    const maybeElement = requestImage(image.src, onImageLoad);
++    if (Option.isNone(maybeElement)) {
++        return;
++    }
++    if (image.rendering !== undefined) {
++        ctx.imageSmoothingEnabled = imageSmoothingForCanvas[image.rendering];
++    }
++    if (image.crop === undefined) {
++        ctx.drawImage(maybeElement.value, image.x, image.y, image.width, image.height);
++    }
++    else {
++        ctx.drawImage(maybeElement.value, image.crop.x, image.crop.y, image.crop.width, image.crop.height, image.x, image.y, image.width, image.height);
++    }
++};
++const paintGroup = (ctx, onImageLoad) => (group) => {
+     if (group.opacity !== undefined) {
+         ctx.globalAlpha *= group.opacity;
+     }
+@@ -115,30 +176,34 @@ const paintGroup = (ctx) => (group) => {
+     if (group.scale !== undefined) {
+         ctx.scale(group.scale.x, group.scale.y);
+     }
+-    Array.forEach(group.shapes, paintShape(ctx));
++    Array.forEach(group.shapes, paintShape(ctx, onImageLoad));
+ };
+ /**
+  * Paint a single `Shape` to the 2D context. Each call is bracketed by
+  * `ctx.save` / `ctx.restore` so per-shape state mutations (fillStyle,
+  * lineWidth, font, transforms applied by `Group`, etc.) cannot leak to
+  * sibling shapes. Recurses into `Group` children inside the saved scope.
++ * An `Image` whose source has not loaded draws nothing and calls
++ * `onImageLoad` once the source loads.
+  */
+-export const paintShape = (ctx) => (shape) => {
++export const paintShape = (ctx, onImageLoad) => (shape) => {
+     ctx.save();
+     Match.value(shape).pipe(Match.tagsExhaustive({
+         Rect: paintRect(ctx),
+         Circle: paintCircle(ctx),
+         Path: paintPath(ctx),
+         Text: paintText(ctx),
+-        Group: paintGroup(ctx),
++        Image: paintImage(ctx, onImageLoad),
++        Group: paintGroup(ctx, onImageLoad),
+     }));
+     ctx.restore();
+ };
+ /**
+  * Clear the canvas and paint every shape in `shapes` against the given
+- * 2D context. Called by `Canvas.view` on insert and on every postpatch.
++ * 2D context. Called by `Canvas.view` on insert, on every postpatch, and
++ * through `onImageLoad` when an `Image` source the scene uses finishes loading.
+  */
+-export const paintScene = (ctx, width, height, shapes) => {
++export const paintScene = (ctx, width, height, shapes, onImageLoad) => {
+     ctx.clearRect(0, 0, width, height);
+-    Array.forEach(shapes, paintShape(ctx));
++    Array.forEach(shapes, paintShape(ctx, onImageLoad));
+ };
+diff --git a/dist/canvas/public.d.ts b/dist/canvas/public.d.ts
+index f7470ae5766b15a20bfd87d266677482b881a7bb..1b7d16f8279fdc3eb149ce547ca7a1159e022697 100644
+--- a/dist/canvas/public.d.ts
++++ b/dist/canvas/public.d.ts
+@@ -1,3 +1,3 @@
+-export { BezierTo, Circle, Close, Group, LineCap, LineJoin, LineTo, MoveTo, Path, PathInstruction, Point, QuadTo, Rect, Text, TextAlign, TextBaseline, view, } from './index.js';
++export { BezierTo, Circle, Close, Group, Image, ImageCrop, ImageRendering, LineCap, LineJoin, LineTo, MoveTo, Path, PathInstruction, Point, QuadTo, Rect, Text, TextAlign, TextBaseline, view, } from './index.js';
+ export type { Shape, ViewConfig } from './index.js';
+ //# sourceMappingURL=public.d.ts.map
+\ No newline at end of file
+diff --git a/dist/canvas/public.js b/dist/canvas/public.js
+index 5bf857be1bd8635bf06ca9df1e23ed7a0fe9a866..f19b8a2e5c3e0744689b962d72934a308fb479e3 100644
+--- a/dist/canvas/public.js
++++ b/dist/canvas/public.js
+@@ -1 +1 @@
+-export { BezierTo, Circle, Close, Group, LineCap, LineJoin, LineTo, MoveTo, Path, PathInstruction, Point, QuadTo, Rect, Text, TextAlign, TextBaseline, view, } from './index.js';
++export { BezierTo, Circle, Close, Group, Image, ImageCrop, ImageRendering, LineCap, LineJoin, LineTo, MoveTo, Path, PathInstruction, Point, QuadTo, Rect, Text, TextAlign, TextBaseline, view, } from './index.js';
+diff --git a/dist/canvas/shape.d.ts b/dist/canvas/shape.d.ts
+index 6b0087ab87b34e9963b9c88e020c5cfc5771d768..484d745907db381a541b287c199be300f7ae7025 100644
+--- a/dist/canvas/shape.d.ts
++++ b/dist/canvas/shape.d.ts
+@@ -148,6 +148,68 @@ export declare const Text: import("../schema/index.js").CallableTaggedStruct<"Te
+ }>;
+ /** A single line of text drawn with a font, fill, and optional stroke. */
+ export type Text = typeof Text.Type;
++/**
++ * The region of an `Image` shape's source to draw, in the source image's own
++ * pixels. Use it to draw one frame of a sprite sheet.
++ */
++export declare const ImageCrop: Schema.Struct<{
++    readonly x: Schema.Number;
++    readonly y: Schema.Number;
++    readonly width: Schema.Number;
++    readonly height: Schema.Number;
++}>;
++/**
++ * The region of an `Image` shape's source to draw, in the source image's own
++ * pixels. Use it to draw one frame of a sprite sheet.
++ */
++export type ImageCrop = typeof ImageCrop.Type;
++/**
++ * How an `Image` shape samples its source when drawn at a different size.
++ * `Smooth` interpolates between source pixels, the canvas default.
++ * `Pixelated` keeps hard pixel edges, for scaling up pixel art.
++ */
++export declare const ImageRendering: Schema.Literals<readonly ["Smooth", "Pixelated"]>;
++/**
++ * How an `Image` shape samples its source when drawn at a different size.
++ * `Smooth` interpolates between source pixels, the canvas default.
++ * `Pixelated` keeps hard pixel edges, for scaling up pixel art.
++ */
++export type ImageRendering = typeof ImageRendering.Type;
++/**
++ * A bitmap drawn from a URL into a `width` by `height` box at `x`, `y`.
++ * `src` accepts anything an `<img>` element does, including data URLs.
++ * `crop` draws one region of the source, such as a frame of a sprite sheet.
++ *
++ * The painter loads each `src` once and keeps the decoded image for the life
++ * of the page. Until it has loaded, the shape draws nothing; when it loads,
++ * every canvas that drew it repaints its latest scene. A `src` that
++ * fails to load draws nothing.
++ */
++export declare const Image: import("../schema/index.js").CallableTaggedStruct<"Image", {
++    src: Schema.String;
++    x: Schema.Number;
++    y: Schema.Number;
++    width: Schema.Number;
++    height: Schema.Number;
++    crop: Schema.optional<Schema.Struct<{
++        readonly x: Schema.Number;
++        readonly y: Schema.Number;
++        readonly width: Schema.Number;
++        readonly height: Schema.Number;
++    }>>;
++    rendering: Schema.optional<Schema.Literals<readonly ["Smooth", "Pixelated"]>>;
++}>;
++/**
++ * A bitmap drawn from a URL into a `width` by `height` box at `x`, `y`.
++ * `src` accepts anything an `<img>` element does, including data URLs.
++ * `crop` draws one region of the source, such as a frame of a sprite sheet.
++ *
++ * The painter loads each `src` once and keeps the decoded image for the life
++ * of the page. Until it has loaded, the shape draws nothing; when it loads,
++ * every canvas that drew it repaints its latest scene. A `src` that
++ * fails to load draws nothing.
++ */
++export type Image = typeof Image.Type;
+ /**
+  * A scene-graph node that applies a 2D transform and global alpha to a list of
+  * child shapes. Transforms compose multiplicatively when groups are nested.
+@@ -170,7 +232,7 @@ export interface Group extends Readonly<{
+  * the painter walks the tree depth-first, applying transforms via
+  * `ctx.save` / `ctx.restore`.
+  */
+-export type Shape = typeof Rect.Type | typeof Circle.Type | typeof Path.Type | typeof Text.Type | Group;
++export type Shape = typeof Rect.Type | typeof Circle.Type | typeof Path.Type | typeof Text.Type | typeof Image.Type | Group;
+ /** Construct a `Group` shape that wraps its children in a transformed scope. */
+ export declare const Group: import("../schema/index.js").CallableTaggedStruct<"Group", {
+     shapes: Schema.$Array<Schema.Schema<Shape>>;
+diff --git a/dist/canvas/shape.js b/dist/canvas/shape.js
+index cd32f90de3c6c054f5e859ceadb44e619be541f5..82b0d7d9c7539c2366b4e755a9db0fcd07f07589 100644
+--- a/dist/canvas/shape.js
++++ b/dist/canvas/shape.js
+@@ -1,3 +1,4 @@
++// NOTE: Munch Manor patch: Canvas.Image from foldkit/foldkit#1846 (a9009a20).
+ import { Schema } from 'effect';
+ import { taggedStruct } from '../schema/index.js';
+ /** A 2D point in canvas-local coordinates. */
+@@ -99,12 +100,47 @@ export const Text = taggedStruct('Text', {
+     align: Schema.optional(TextAlign),
+     baseline: Schema.optional(TextBaseline),
+ });
++/**
++ * The region of an `Image` shape's source to draw, in the source image's own
++ * pixels. Use it to draw one frame of a sprite sheet.
++ */
++export const ImageCrop = Schema.Struct({
++    x: Schema.Number,
++    y: Schema.Number,
++    width: Schema.Number,
++    height: Schema.Number,
++});
++/**
++ * How an `Image` shape samples its source when drawn at a different size.
++ * `Smooth` interpolates between source pixels, the canvas default.
++ * `Pixelated` keeps hard pixel edges, for scaling up pixel art.
++ */
++export const ImageRendering = Schema.Literals(['Smooth', 'Pixelated']);
++/**
++ * A bitmap drawn from a URL into a `width` by `height` box at `x`, `y`.
++ * `src` accepts anything an `<img>` element does, including data URLs.
++ * `crop` draws one region of the source, such as a frame of a sprite sheet.
++ *
++ * The painter loads each `src` once and keeps the decoded image for the life
++ * of the page. Until it has loaded, the shape draws nothing; when it loads,
++ * every canvas that drew it repaints its latest scene. A `src` that
++ * fails to load draws nothing.
++ */
++export const Image = taggedStruct('Image', {
++    src: Schema.String,
++    x: Schema.Number,
++    y: Schema.Number,
++    width: Schema.Number,
++    height: Schema.Number,
++    crop: Schema.optional(ImageCrop),
++    rendering: Schema.optional(ImageRendering),
++});
+ /**
+  * Lazy reference to the full `Shape` union. Used inside `Group`'s `shapes`
+  * field so the schema can describe its own children without a forward
+  * declaration cycle.
+  */
+-const Shape = Schema.suspend(() => Schema.Union([Rect, Circle, Path, Text, Group]));
++const Shape = Schema.suspend(() => Schema.Union([Rect, Circle, Path, Text, Image, Group]));
+ /** Construct a `Group` shape that wraps its children in a transformed scope. */
+ export const Group = taggedStruct('Group', {
+     shapes: Schema.Array(Shape),
+diff --git a/dist/canvas/view.d.ts b/dist/canvas/view.d.ts
+index 1ca895e1a1fe57a1bd610b956a1a74755b476d34..e4ff9d8e82f2ff1edd8e263fcfbc4c9b0e8ad7f3 100644
+--- a/dist/canvas/view.d.ts
++++ b/dist/canvas/view.d.ts
+@@ -19,7 +19,9 @@ export type ViewConfig<Message> = Readonly<{
+  * A virtual DOM `<canvas>` element backed by a declarative scene description.
+  * The insert hook captures the 2D context and paints the initial scene; the
+  * postpatch hook re-paints on every render. The canvas is a pure function of
+- * `shapes`. Same shapes produce the same pixels.
++ * `shapes` and of which `Image` sources have loaded. Same shapes produce the
++ * same pixels once their images have loaded, and a canvas repaints its current
++ * scene when an image it drew finishes loading.
+  *
+  * The trailing `h` fixes `Message` to the calling view's frame; the pointer
+  * handlers dispatch through that frame at fire time, so passing the builder
+diff --git a/dist/canvas/view.js b/dist/canvas/view.js
+index f8ee4870de83702ddef4fc1d393012043b1fbfb9..5a66b83c18026665f63c1be81bebe5602e1d00a6 100644
+--- a/dist/canvas/view.js
++++ b/dist/canvas/view.js
+@@ -1,13 +1,16 @@
++// NOTE: Munch Manor patch: Canvas.Image from foldkit/foldkit#1846 (a9009a20).
+ import { Array, Predicate, Record, String, pipe } from 'effect';
+ import { __requireDispatch, } from '../html/index.js';
+ import { h } from '../snabbdom/index.js';
+ import { paintScene } from './paint.js';
+ /**
+- * Per-element 2D context cache. Keyed by the live `<canvas>` element so the
+- * postpatch hook reads the same context the insert hook captured. `WeakMap`
+- * lets the entry be reclaimed if the element is removed.
++ * Per-element paint state. Keyed by the live `<canvas>` element so the
++ * postpatch hook reads the same context the insert hook captured, and so an
++ * `Image` that finishes loading repaints the scene the canvas last rendered.
++ * `WeakMap` lets the entry be reclaimed if the element is removed.
+  */
+-const contextStore = new WeakMap();
++const paintedCanvasStore = new WeakMap();
++const paintCanvas = ({ context, width, height, shapes, repaint, }) => paintScene(context, width, height, shapes, repaint);
+ const toCanvasPoint = (canvas, event) => {
+     const rect = canvas.getBoundingClientRect();
+     const scaleX = rect.width === 0 ? 1 : canvas.width / rect.width;
+@@ -22,7 +25,9 @@ const classesFromClassName = (className) => pipe(className, String.split(/\s+/),
+  * A virtual DOM `<canvas>` element backed by a declarative scene description.
+  * The insert hook captures the 2D context and paints the initial scene; the
+  * postpatch hook re-paints on every render. The canvas is a pure function of
+- * `shapes`. Same shapes produce the same pixels.
++ * `shapes` and of which `Image` sources have loaded. Same shapes produce the
++ * same pixels once their images have loaded, and a canvas repaints its current
++ * scene when an image it drew finishes loading.
+  *
+  * The trailing `h` fixes `Message` to the calling view's frame; the pointer
+  * handlers dispatch through that frame at fire time, so passing the builder
+@@ -80,22 +85,31 @@ export const view = (config, _h) => {
+                 if (Predicate.isNull(context)) {
+                     return;
+                 }
+-                contextStore.set(canvas, context);
+-                paintScene(context, width, height, shapes);
++                const repaint = () => {
++                    const latestPaint = paintedCanvasStore.get(canvas);
++                    if (latestPaint !== undefined) {
++                        paintCanvas(latestPaint);
++                    }
++                };
++                const paintedCanvas = { context, width, height, shapes, repaint };
++                paintedCanvasStore.set(canvas, paintedCanvas);
++                paintCanvas(paintedCanvas);
+             },
+             postpatch: (_oldVnode, vnode) => {
+                 if (!(vnode.elm instanceof HTMLCanvasElement)) {
+                     return;
+                 }
+-                const context = contextStore.get(vnode.elm);
+-                if (context === undefined) {
++                const previousPaint = paintedCanvasStore.get(vnode.elm);
++                if (previousPaint === undefined) {
+                     return;
+                 }
+-                paintScene(context, width, height, shapes);
++                const paintedCanvas = { ...previousPaint, width, height, shapes };
++                paintedCanvasStore.set(vnode.elm, paintedCanvas);
++                paintCanvas(paintedCanvas);
+             },
+             destroy: vnode => {
+                 if (vnode.elm instanceof HTMLCanvasElement) {
+-                    contextStore.delete(vnode.elm);
++                    paintedCanvasStore.delete(vnode.elm);
+                 }
+             },
+         },
