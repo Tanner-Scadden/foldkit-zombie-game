@@ -394,7 +394,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.28,
-    hpScale: 1.03,
+    hpScale: 1,
     groups: [
       squads({
         packs: [3, 4, 2, 3],
@@ -436,7 +436,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.35,
-    hpScale: 1.08,
+    hpScale: 1.03,
     groups: [
       stragglers({ count: 2, mix: MIXED, startMs: 500, everyMs: 1600 }),
       chuckers(anyDoors(1), 2, 4500, 16000),
@@ -474,7 +474,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.42,
-    hpScale: 1.17,
+    hpScale: 1.1,
     groups: [
       crawlers({ count: 3, startMs: 7000, everyMs: 9000 }),
       chuckers(anyDoors(1), 1, 30000, 0),

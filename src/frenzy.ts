@@ -25,7 +25,7 @@ export type FrenzyRules = {
 
 export const FRENZY_RULES: FrenzyRules = {
   packMin: 4,
-  paceScale: 1.18,
+  paceScale: 1.15,
   togetherPx: 40,
   apartMs: 900,
   fadeMs: 1000,
