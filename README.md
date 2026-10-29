@@ -1,6 +1,6 @@
-# foldkit-zombie-game
+# Munch Manor
 
-A pixel-art zombie shooter built with [Foldkit](https://foldkit.dev).
+A pixel-art zombie shooter built with [Foldkit](https://foldkit.dev). Play it at https://munch-manor.tanner-scadden.workers.dev.
 
 The game state lives in one Foldkit Model. Keyboard, mouse, touch, and animation frames arrive as Messages, and a pure `update` advances the game. Zombie spawns come from a seeded random number generator whose state lives in the Model, so the same seed and the same Messages always produce the same game. The scene is drawn with Foldkit's `Canvas` module at 320x180 and scaled up with pixelated rendering.
 

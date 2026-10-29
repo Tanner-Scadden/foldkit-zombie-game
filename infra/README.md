@@ -44,6 +44,8 @@ To rotate the CI token or change its permissions, edit `github.ts` and run, with
 bun alchemy deploy github.ts --stage prod
 ```
 
+If the repository is renamed, change `REPOSITORY` and deploy twice, the second time with `--force`. The rename makes Alchemy replace each secret: it writes the new one, then deletes the old one, and GitHub redirects the old name to the same repository, so the delete removes the secret just written. The forced deploy writes it again. Check with `gh secret list`.
+
 ## Check a deploy
 
 ```sh

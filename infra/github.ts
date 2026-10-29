@@ -14,7 +14,7 @@ import * as GitHub from '@alchemy.run/github'
 //   bun alchemy deploy github.ts --stage prod
 
 const OWNER = 'Tanner-Scadden'
-const REPOSITORY = 'foldkit-zombie-game'
+const REPOSITORY = 'munch-manor'
 
 // Workers Scripts Write deploys the site. Secrets Store Write lets CI read
 // the Cloudflare state store's token, which Alchemy reads back by binding
