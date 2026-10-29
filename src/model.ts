@@ -247,11 +247,11 @@ export const BossMove = defineTaggedUnion({
 })
 export type BossMove = typeof BossMove.Type
 
-export const BossMood = Schema.Literals(['Calm', 'Enraged'])
-export type BossMood = typeof BossMood.Type
+const BossMood = Schema.Literals(['Calm', 'Enraged'])
+type BossMood = typeof BossMood.Type
 
-export const FarAttack = Schema.Literals(['Charge', 'Spit'])
-export type FarAttack = typeof FarAttack.Type
+const FarAttack = Schema.Literals(['Charge', 'Spit'])
+type FarAttack = typeof FarAttack.Type
 
 export const Glob = defineTaggedUnion({
   Flying: {
@@ -700,7 +700,7 @@ export type MunchopediaPage = typeof MunchopediaPage.Type
 // for the page session. The newest What's New day seen and the Munchopedia
 // entries opened are kept in the on-device save (src/save.ts). newEntries are
 // the kinds unlocked by the last counted run, for the NEW ENTRY pop.
-export const HomeMenu = Schema.Struct({
+const HomeMenu = Schema.Struct({
   mode: HomeMode,
   maybeSeenNewsDay: Schema.Option(Schema.String),
   newsPage: Schema.Number,
@@ -708,9 +708,9 @@ export const HomeMenu = Schema.Struct({
   openedEntries: Schema.Array(ZombieKind),
   newEntries: Schema.Array(ZombieKind),
 })
-export type HomeMenu = typeof HomeMenu.Type
+type HomeMenu = typeof HomeMenu.Type
 
-export const freshHomeMenu: HomeMenu = {
+const freshHomeMenu: HomeMenu = {
   mode: 'Campaign',
   maybeSeenNewsDay: Option.none(),
   newsPage: 0,
@@ -736,14 +736,14 @@ export type Loading = typeof Loading.Type
 
 // NOTE: nothing is written until the save has been read, so the defaults
 // from before the load never overwrite a player's save.
-export const SaveStatus = Schema.Literals(['Unread', 'Read'])
-export type SaveStatus = typeof SaveStatus.Type
+const SaveStatus = Schema.Literals(['Unread', 'Read'])
+type SaveStatus = typeof SaveStatus.Type
 
 // NOTE: a save from sync that arrived while this device was still writing
 // its own change is Stale: taking it would undo that change for a moment.
 // The store's view is read again once the writes land.
-export const SyncedSaveState = Schema.Literals(['Current', 'Stale'])
-export type SyncedSaveState = typeof SyncedSaveState.Type
+const SyncedSaveState = Schema.Literals(['Current', 'Stale'])
+type SyncedSaveState = typeof SyncedSaveState.Type
 
 export const TutorialReset = Schema.Literals(['Idle', 'Asking', 'Done'])
 export type TutorialReset = typeof TutorialReset.Type
@@ -1170,15 +1170,15 @@ export const initialPlayer: Player = {
 
 export const emptyWallet: Wallet = { balance: 0, earned: 0, shown: 0 }
 
-export const SHOP_DIALOG_ID = 'shop'
+const SHOP_DIALOG_ID = 'shop'
 
-export const HOME_SCREEN_STEPS_ID = 'home-screen-steps'
+const HOME_SCREEN_STEPS_ID = 'home-screen-steps'
 
-export const SHOP_TABS_ID = 'shop-tabs'
+const SHOP_TABS_ID = 'shop-tabs'
 
 export const FIRST_SHOP_CATEGORY: ShopCategory = 'Guns'
 
-export const idleInput: Input = {
+const idleInput: Input = {
   pressedKeys: [],
   maybeMouseInView: Option.none(),
   mouseButton: MouseButton.Released(),
@@ -1268,9 +1268,9 @@ export const defaultAppearance: Appearance = {
   shirtColor: 'Blue',
 }
 
-export const CHARACTER_DIALOG_ID = 'character'
+const CHARACTER_DIALOG_ID = 'character'
 
-export const closedCharacterPicker: CharacterPicker = {
+const closedCharacterPicker: CharacterPicker = {
   dialog: Dialog.init({ id: CHARACTER_DIALOG_ID }),
   body: RadioGroup.init({ id: 'look-body' }),
   hairStyle: RadioGroup.init({ id: 'look-hair-style' }),
@@ -1279,7 +1279,7 @@ export const closedCharacterPicker: CharacterPicker = {
   shirtColor: RadioGroup.init({ id: 'look-shirt-color' }),
 }
 
-export const PANEL_DIALOG_ID = 'menu-panel'
+const PANEL_DIALOG_ID = 'menu-panel'
 
 export const LOAD_STEPS: ReadonlyArray<LoadStep> = [
   'Save',
@@ -1289,7 +1289,7 @@ export const LOAD_STEPS: ReadonlyArray<LoadStep> = [
   'Sprites',
 ]
 
-export const noDifficultyBests: DifficultyBests = {
+const noDifficultyBests: DifficultyBests = {
   maybeFastestWinMs: Option.none(),
   maybeBestEndlessWave: Option.none(),
 }

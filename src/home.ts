@@ -55,7 +55,7 @@ const HOME_BUTTON_IDS: Readonly<Record<HomeButton, string>> = {
   Settings: 'home-settings',
 }
 
-export type HomeKey = Readonly<{ code: string; cap: string; name: string }>
+type HomeKey = Readonly<{ code: string; cap: string; name: string }>
 
 // NOTE: one key per button. Enter, E, and C were already the home keys. The
 // rail's other keys are letters no other screen uses, so WASD, R, Q, T, G,
@@ -186,7 +186,7 @@ export const showMunchopediaPage = (
 
 // END SCREENS
 
-export type EndOffer = 'Nothing' | 'MenuOnly' | 'MenuAndModes'
+type EndOffer = 'Nothing' | 'MenuOnly' | 'MenuAndModes'
 
 export const END_MENU_BUTTON_ID = 'end-menu-button'
 

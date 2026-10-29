@@ -109,7 +109,7 @@ export const waveBonus = (wave: number): number =>
 
 export type KindWeight = Readonly<{ kind: ZombieKind; weight: number }>
 
-export type DoorPattern = 'One' | 'Pincer' | 'All'
+type DoorPattern = 'One' | 'Pincer' | 'All'
 
 // NOTE: A group's packs are its pack sizes. Their order is shuffled per run,
 // so a wave mixes singles, pairs, and squads differently every time while its
@@ -128,7 +128,7 @@ export type SpawnGroup = Readonly<{
   jitterMs: number
 }>
 
-export type WavePlan = Readonly<{
+type WavePlan = Readonly<{
   speedScale: number
   hpScale: number
   groups: Array.NonEmptyReadonlyArray<SpawnGroup>
@@ -641,7 +641,7 @@ export const pickKind = (
 
 // PACKS
 
-export const DOOR_PAIRS: Array.NonEmptyReadonlyArray<
+const DOOR_PAIRS: Array.NonEmptyReadonlyArray<
   Array.NonEmptyReadonlyArray<DoorId>
 > = [
   ['North', 'South'],
@@ -920,11 +920,11 @@ const ENDLESS_CHUCKER_START_MS = ENDLESS_CYCLE_MS + 3000
 const ENDLESS_CRAWLER_START_MS = 6000
 const ENDLESS_CRAWLER_EVERY_MS = 19000
 
-export const endlessChuckerCount = (wave: number): number =>
+const endlessChuckerCount = (wave: number): number =>
   ENDLESS_CHUCKERS_BASE +
   Math.floor(endlessDepth(wave) / ENDLESS_WAVES_PER_EXTRA_CHUCKER)
 
-export const endlessCrawlerCount = (wave: number): number =>
+const endlessCrawlerCount = (wave: number): number =>
   ENDLESS_CRAWLERS_BASE +
   Math.floor(endlessDepth(wave) / ENDLESS_WAVES_PER_EXTRA_CRAWLER)
 
@@ -1129,7 +1129,7 @@ const endlessPlan = (state: number, wave: number): Seeded<WavePlan> => {
   ]
 }
 
-export const rollPlan = (state: number, wave: number): Seeded<WavePlan> =>
+const rollPlan = (state: number, wave: number): Seeded<WavePlan> =>
   wave > FINAL_WAVE ? endlessPlan(state, wave) : [state, planFor(wave)]
 
 export type RolledWave = Readonly<{
@@ -1324,7 +1324,7 @@ export const keepGoing = (model: Model): Model =>
       )
     : model
 
-export const isEndless = (model: Model): boolean =>
+const isEndless = (model: Model): boolean =>
   RunMode.isAnyOf(['Endless'])(model.mode)
 
 export const pause = (model: Model): Model =>
