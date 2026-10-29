@@ -89,6 +89,7 @@ import {
   SHELL_LIFT_MIN,
   SHELL_RESTITUTION,
   SPARKS_PER_BLAST,
+  SPARKS_PER_CLANG,
   SPARKS_PER_DROP,
   SPARKS_PER_GRAB,
   SPARKS_PER_TURRET_BREAK,
@@ -124,7 +125,7 @@ import {
 } from './model'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
 import { WEAPONS, heldWeapon } from './weapons'
-import { type WearStage, ZOMBIE_KINDS } from './zombies'
+import { type WearStage, ZOMBIE_KINDS, isArmorPart } from './zombies'
 
 // PHYSICS
 
@@ -254,6 +255,9 @@ const PHYSICS: Readonly<Record<ParticleKind, ParticlePhysics>> = {
   TealLimb: partPhysics('TealLimb'),
   TealScalp: partPhysics('TealScalp'),
   PaleScalp: partPhysics('PaleScalp'),
+  PotLid: partPhysics('PotLid'),
+  StopSign: partPhysics('StopSign'),
+  Bucket: partPhysics('Bucket'),
   Smoke: {
     gravity: -SMOKE_RISE,
     dragPerSecond: DUST_DRAG_PER_SECOND,
@@ -292,6 +296,9 @@ const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
   TealLimb: 6,
   TealScalp: 3,
   PaleScalp: 3,
+  PotLid: 6,
+  StopSign: 6,
+  Bucket: 5,
   Smoke: 3,
 }
 
@@ -320,6 +327,9 @@ const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
   TealLimb: () => 2,
   TealScalp: () => 2,
   PaleScalp: () => 2,
+  PotLid: () => 3,
+  StopSign: () => 5,
+  Bucket: () => 4,
 }
 
 type ParticleStep = Result.Result<Particle, Option.Option<Decal>>
@@ -482,7 +492,7 @@ const droplet =
   }
 
 const spark =
-  (ground: Vector) =>
+  (ground: Vector, height = ZOMBIE_FOOT_OFFSET) =>
   (state: number): Seeded<Particle> => {
     const angleDraw = nextRandom(state)
     const speedDraw = nextRandom(angleDraw.nextState)
@@ -492,7 +502,7 @@ const spark =
       launch({
         kind: 'Spark',
         ground,
-        height: ZOMBIE_FOOT_OFFSET,
+        height,
         angle: angleDraw.value * Math.PI * 2,
         speed: between(speedDraw.value, SPARK_SPEED_MIN, SPARK_SPEED_MAX),
         lift: between(liftDraw.value, SPARK_LIFT_MIN, SPARK_LIFT_MAX),
@@ -814,6 +824,18 @@ const shedParticles = (
     onSome: ({ part, heightPx }) => {
       const ground = zombieGround(x, y, kind)
       const heading = angleOf(direction)
+      if (isArmorPart(part)) {
+        return chain(state, [
+          drawState =>
+            generateMany(
+              drawState,
+              1,
+              flyingPart(part, ground, heading, heightPx),
+            ),
+          drawState =>
+            generateMany(drawState, SPARKS_PER_CLANG, spark(ground, heightPx)),
+        ])
+      }
       return chain(state, [
         drawState =>
           generateMany(

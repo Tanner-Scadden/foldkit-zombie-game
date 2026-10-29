@@ -63,7 +63,7 @@ Built on 2026-10-28 after a first-time phone player said the right stick was nev
 | Groaner     | HE'S SLOW. BACK UP AND KEEP SHOOTING.                  |
 | Hotfoot     | ZOOMS RIGHT AT YOU. ONE SHOT DROPS IT.                 |
 | Kaboomer    | HE WANTS A HUG. POP HIM FROM FAR AWAY.                 |
-| Big Lug     | TAKES A TON OF BULLETS. DON'T GET CORNERED.            |
+| Big Lug     | HE'S WEARING A KITCHEN. KNOCK IT OFF.                  |
 | Big Leaguer | HE PITCHES ZOMBIES. GET CLOSE AND HE HIDES BEHIND ONE. |
 | Ankle Biter | IT CLAWS UP THROUGH THE FLOOR AND GRABS YOUR ANKLES.   |
 
@@ -611,7 +611,7 @@ Added on 2026-10-28 from owner feedback: "Would love for us to have parts of the
   | ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
   | Groaner     | 2/3, 1/3           | One reaching arm, leaving a red stump, then the top of its skull, showing pink brain and an empty eye                                                              |
   | Hotfoot     | 1/2                | Its hair and scalp, showing pink brain                                                                                                                             |
-  | Big Lug     | 3/4, 1/2, 1/4      | One arm, the other arm, then its jaw                                                                                                                               |
+  | Big Lug     | 3/4, 1/2, 1/4      | His junk armor, with a clang: the pot lid off his shoulder, the stop sign chained to his chest, then the bucket on his head, leaving the scrawny zombie underneath. Redone on 2026-10-29 |
   | Kaboomer    | 2/3, 1/3           | His hugging arm comes off and he holds the bomb one-armed, then the bomb casing cracks with a hot glow and his head is scorched. Redone on 2026-10-29 for the bomb |
   | Big Leaguer | 2/3, 1/3           | His cap flies off, showing a gash, then his throwing arm hangs limp and his wind-up takes half as long again. Redone on 2026-10-29                                 |
   | Ankle Biter | 1/2                | The top of its head, showing pink brain                                                                                                                            |
@@ -620,6 +620,7 @@ Added on 2026-10-28 from owner feedback: "Would love for us to have parts of the
   With 3 health a Groaner and a Kaboomer lose a part to each of the first two hits. With 4 (wave 7) the first hit takes nothing off and the next two do. A Hotfoot with 2 health loses its scalp to the first hit. A Big Lug of 36 loses parts at 27, 18, and 9.
 
 - **The pop.** A part flies off along the hit as a particle shaped like it and tumbles, with 6 drops of blood and a meat gib, and a short wet pop sound (`LimbPop`). It bounces and lands as a decal that stays like the gibs, and a limb keeps a red stump pixel at one end. The caps are unchanged: 160 particles and 220 decals, newest kept.
+- **The clang.** Since 2026-10-29 a Big Lug's pieces are armor (`isArmorPart` in `src/zombies.ts`): each flies off with 8 metal sparks instead of blood and a gib, plays a synthesized `Clang` instead of `LimbPop`, and lands as a pot lid, stop sign, or bucket decal that stays under the same caps.
 - **Movement and balance.** Unchanged. A worn Groaner, Hotfoot, or Big Lug only waddles a little more, and that is drawing, not movement.
 - **Sprites.** Every stage of every kind is built once at module scope from the base pixel art plus pixel patches (`applyPatches` in `src/sprite.ts`). A Story test checks each kind has one sprite per stage plus its fresh one, each different from the last.
 
@@ -1226,3 +1227,11 @@ These are ideas to weigh, not decisions.
 - Procedurally generated estates. The first estate is hand-made.
 - Server-side anything.
 - Accounts, leaderboards, or saved progress. Relaxed on 2026-10-28 (owner-approved): preferences and onboarding are saved on the device (see "Saved on the device"). Runs, bests, kills, and unlocks are still not saved.
+
+### Junk armor and smaller Kaboomers
+
+Added on 2026-10-29 from owner feedback, approved: "Kaboomer is a bit too big", "Big Lug is a bit too small and should look like an ARMORED zombie whose armor falls off as he is hit". Visual only: no stats, radius, or pathing changed. `tools/audit/shots32.ts` takes the screenshots.
+
+- **The Big Lug.** Redrawn from 14 by 14 pixels to 18 by 19, a scrawny blue-grey zombie in junk armor: a bucket helmet with eye holes, a pot lid on his left shoulder, and a stop sign chained to his chest. His collision radius stays 6.5, so the armor sticks out a little past it, the way a shoulder pad would. His wear stages knock off the pot lid at 3/4 health, the stop sign at 1/2, and the bucket at 1/4 (see "Wear"). Frenzy still turns his eyes red, through the bucket's eye holes while he wears it. His debut card reads HE'S WEARING A KITCHEN. KNOCK IT OFF., with the tagline ARMORED IN JUNK.
+- **The Kaboomer.** Shrunk from 18 by 17 pixels to 13 by 12 (15 by 12 with his walk sway), bomb and all, so he reads beside a Groaner without towering over the Big Leaguer. The fuse and its sparks keep their size. His collision radius (4.5, body 5.5) is unchanged and now matches the drawing better than before.
+- **The Kaboomer's health bar.** With 6 health he now shows a health bar like the Big Lug's once he is hurt, lifted clear of his fuse and sparks.

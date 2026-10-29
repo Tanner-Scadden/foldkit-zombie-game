@@ -194,8 +194,8 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
   },
   Tank: {
     name: 'Big Lug',
-    tagline: 'BIG AND VERY TOUGH',
-    pitch: "TAKES A TON OF BULLETS. DON'T GET CORNERED.",
+    tagline: 'ARMORED IN JUNK',
+    pitch: "HE'S WEARING A KITCHEN. KNOCK IT OFF.",
     speedMin: 11,
     speedMax: 14,
     hp: 30,
@@ -230,9 +230,9 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
       maybeSound: Option.some('Stomp'),
     }),
     wear: [
-      { below: 3 / 4, part: 'BlueLimb', heightPx: 7 },
-      { below: 1 / 2, part: 'BlueLimb', heightPx: 7 },
-      { below: 1 / 4, part: 'BlueChunk', heightPx: 11 },
+      { below: 3 / 4, part: 'PotLid', heightPx: 12 },
+      { below: 1 / 2, part: 'StopSign', heightPx: 9 },
+      { below: 1 / 4, part: 'Bucket', heightPx: 16 },
     ],
     arrival: 'Door',
     bait: 'Drawn',
@@ -267,7 +267,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     deathStyle: 'Burst',
     dyingMs: 0,
     stridePx: 2,
-    healthBar: 'Hidden',
+    healthBar: 'Shown',
     hitSpray: 'Spark',
     bloodPerKill: 0,
     gibs: [
@@ -278,8 +278,8 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     deathSound: 'ExploderFuse',
     maybeFootfall: Option.none(),
     wear: [
-      { below: 2 / 3, part: 'LimeLimb', heightPx: 9 },
-      { below: 1 / 3, part: 'BombShard', heightPx: 6 },
+      { below: 2 / 3, part: 'LimeLimb', heightPx: 6 },
+      { below: 1 / 3, part: 'BombShard', heightPx: 5 },
     ],
     arrival: 'Door',
     bait: 'Ignores',
@@ -434,6 +434,21 @@ export const wearAt = (kind: ZombieKind, hp: number, maxHp: number): number =>
     ZOMBIE_KINDS[kind].wear,
     ({ below }) => hp <= maxHp * below + WEAR_TOLERANCE,
   ).length
+
+const ARMOR_PARTS: ReadonlyArray<ParticleKind> = [
+  'PotLid',
+  'StopSign',
+  'Bucket',
+]
+
+export const isArmorPart = (part: ParticleKind): boolean =>
+  Array.contains(ARMOR_PARTS, part)
+
+export const isArmorShedAt = (kind: ZombieKind, stage: number): boolean =>
+  Option.match(Array.get(ZOMBIE_KINDS[kind].wear, stage), {
+    onNone: () => false,
+    onSome: ({ part }) => isArmorPart(part),
+  })
 
 export const wearOf = (zombie: Zombie): number =>
   wearAt(zombie.kind, zombie.hp, zombie.maxHp)

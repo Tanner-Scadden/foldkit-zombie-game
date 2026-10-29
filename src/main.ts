@@ -189,7 +189,7 @@ import {
   heldWeapon,
   swapWeapon,
 } from './weapons'
-import { ZOMBIE_KINDS } from './zombies'
+import { ZOMBIE_KINDS, isArmorShedAt } from './zombies'
 
 export { Model, PageVisibility } from './model'
 
@@ -862,7 +862,10 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     PickupFizzled: () => Option.none<SoundEffect>(),
     BoostFaded: () => Option.some<SoundEffect>('PowerDown'),
     Burped: () => Option.none<SoundEffect>(),
-    PartShed: () => Option.some<SoundEffect>('LimbPop'),
+    PartShed: ({ kind, stage }) =>
+      Option.some<SoundEffect>(
+        isArmorShedAt(kind, stage) ? 'Clang' : 'LimbPop',
+      ),
     BossRoared: () => Option.some<SoundEffect>('BossRoar'),
     BossWoundUp: ({ attack }) =>
       Option.some<SoundEffect>(

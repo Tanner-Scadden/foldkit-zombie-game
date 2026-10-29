@@ -293,6 +293,9 @@ export const ParticleKind = Schema.Literals([
   'TealLimb',
   'TealScalp',
   'PaleScalp',
+  'PotLid',
+  'StopSign',
+  'Bucket',
   'Smoke',
 ])
 export type ParticleKind = typeof ParticleKind.Type
@@ -335,6 +338,9 @@ export const DecalKind = Schema.Literals([
   'TealLimb',
   'TealScalp',
   'PaleScalp',
+  'PotLid',
+  'StopSign',
+  'Bucket',
 ])
 export type DecalKind = typeof DecalKind.Type
 

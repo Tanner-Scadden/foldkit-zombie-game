@@ -562,6 +562,12 @@ const runnerWalkPixels = (stage: number): FramePixels =>
     applyPatches(RUNNER_HEAD, wornThrough(RUNNER_HEAD_WEAR, stage)),
   )
 
+// NOTE: the Big Lug is a scrawny zombie in junk armor: a bucket helmet with
+// eye holes, a pot lid on one shoulder, and a stop sign chained to his chest.
+// His wear stages knock the armor off one piece at a time, pot lid, stop
+// sign, then bucket, until only the bony zombie underneath is left. The
+// armor is laid over his bare frames, so each walk frame keeps its arms and
+// legs.
 const TANK_PALETTE: Palette = {
   G: '#8a9bb5',
   F: '#5f6f8a',
@@ -569,89 +575,158 @@ const TANK_PALETTE: Palette = {
   E: '#ffd23f',
   M: '#5a1418',
   O: '#8a5a2b',
-  P: '#5c3a1a',
   Y: '#f2c14e',
+  P: '#5c3a1a',
   K: '#26262e',
   D: '#a8262c',
+  A: '#c3ccd6',
+  a: '#7e8895',
+  H: '#59616c',
+  L: '#b4bcc6',
+  l: '#6c7480',
+  n: '#2a2a32',
+  R: '#d43c3a',
+  W: '#f4f1de',
+  C: '#9aa3ad',
 }
 
-const TANK_UPPER: ReadonlyArray<string> = [
-  '.....GGGG.....',
-  '....GSGGSG....',
-  '....GEGGEG....',
-  '....GGMMGG....',
-  '..GGGGGGGGGG..',
-  '.GGGOOGGOOGGG.',
-  'GGFOOOOOOOOFGG',
-  'GG.OOYOOYOO.GG',
-  'GG.OOOOOOOO.GG',
+const TANK_HEAD: ReadonlyArray<string> = [
+  '..................',
+  '..................',
+  '.......GGGG.......',
+  '......GSGGSG......',
+  '......GEGGEG......',
+  '......GGMMGG......',
+  '.......GDGG.......',
+  '.....GGGGGGGG.....',
 ]
 
-const TANK_FISTS_LOW: ReadonlyArray<string> = [
-  'FF.OOOOOOOO.FF',
-  'FF.PPPPPPPP.FF',
+const TANK_ARMS_LOW: ReadonlyArray<string> = [
+  '....GG.OOOO.GG....',
+  '....G..OYOO..G....',
+  '....G..OODO..G....',
+  '....G..OOOO..G....',
+  '...FF..OOOO..FF...',
+  '...FF..PPPP..FF...',
 ]
 
-const TANK_FISTS_SWING: ReadonlyArray<string> = [
-  'FF.OOOOOOOO.GG',
-  '...PPPPPPPP.FF',
+const TANK_ARMS_SWING: ReadonlyArray<string> = [
+  '....GG.OOOO.GG....',
+  '....G..OYOO..G....',
+  '...FF..OODO..G....',
+  '...FF..OOOO..G....',
+  '.......OOOO..FF...',
+  '.......PPPP..FF...',
 ]
 
-const TANK_FISTS_SWING_BACK: ReadonlyArray<string> = [
-  'GG.OOOOOOOO.FF',
-  'FF.PPPPPPPP...',
+const TANK_ARMS_SWING_BACK: ReadonlyArray<string> = [
+  '....GG.OOOO.GG....',
+  '....G..OYOO..G....',
+  '....G..OODO..FF...',
+  '....G..OOOO..FF...',
+  '...FF..OOOO.......',
+  '...FF..PPPP.......',
 ]
 
 const TANK_LEGS_PLANTED: ReadonlyArray<string> = [
-  '...PPP..PPP...',
-  '...PPP..PPP...',
-  '..KKKK..KKKK..',
+  '.......PPPP.......',
+  '......PP..PP......',
+  '......PP..PP......',
+  '......PP..PP......',
+  '.....KKK..KKK.....',
 ]
 
 const TANK_LEGS_LEFT_UP: ReadonlyArray<string> = [
-  '...PPP..PPP...',
-  '..KKKK..PPP...',
-  '........KKKK..',
+  '.......PPPP.......',
+  '......PP..PP......',
+  '......PP..PP......',
+  '.....KKK..PP......',
+  '..........KKK.....',
 ]
 
 const TANK_LEGS_RIGHT_UP: ReadonlyArray<string> = [
-  '...PPP..PPP...',
-  '...PPP..KKKK..',
-  '..KKKK........',
+  '.......PPPP.......',
+  '......PP..PP......',
+  '......PP..PP......',
+  '......PP..KKK.....',
+  '.....KKK..........',
 ]
 
-const TANK_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
-  [patch(0, 6, TRANSPARENT, 2, 5), patch(1, 6, 'D'), patch(2, 7, 'D')],
-  [patch(12, 6, TRANSPARENT, 2, 5), patch(12, 6, 'D'), patch(11, 7, 'D')],
-  [
-    patch(5, 2, 'S'),
-    patch(5, 3, 'D', 4),
-    patch(6, 4, 'D', 2),
-    patch(7, 5, 'D'),
-  ],
+const TANK_STOP_SIGN: ReadonlyArray<string> = [
+  '',
+  '',
+  '',
+  '',
+  '',
+  '',
+  '',
+  '....CRRRRRRRRC....',
+  '....RRRRRRRRRR....',
+  '....RWWWWWWWWR....',
+  '....RRRRRRRRRR....',
+  '....RRRRRRRRRR....',
+  '.....RRRRRRRR.....',
 ]
 
-const tankWalkPixels = (stage: number): FramePixels => {
-  const wear = wornThrough(TANK_WEAR, stage)
-  return [
-    applyPatches(
-      [...TANK_UPPER, ...TANK_FISTS_LOW, ...TANK_LEGS_PLANTED],
-      wear,
-    ),
-    applyPatches(
-      [...TANK_UPPER, ...TANK_FISTS_SWING, ...TANK_LEGS_LEFT_UP],
-      wear,
-    ),
-    applyPatches(
-      [...TANK_UPPER, ...TANK_FISTS_LOW, ...TANK_LEGS_PLANTED],
-      wear,
-    ),
-    applyPatches(
-      [...TANK_UPPER, ...TANK_FISTS_SWING_BACK, ...TANK_LEGS_RIGHT_UP],
-      wear,
-    ),
-  ]
-}
+const TANK_POT_LID: ReadonlyArray<string> = [
+  '',
+  '',
+  '',
+  '',
+  '',
+  '...n..............',
+  '.lLLLLl...........',
+  'lLLLLLLLl.........',
+  '.lllllll..........',
+]
+
+const TANK_BUCKET: ReadonlyArray<string> = [
+  '.....aAAAAAAa.....',
+  '....aAAAAAAAAa....',
+  '....aAAAAAAAAa....',
+  '....aAEaAAaEAa....',
+  '...HHHHHHHHHHHH...',
+]
+
+const TANK_ARMOR: ReadonlyArray<ReadonlyArray<string>> = [
+  TANK_POT_LID,
+  TANK_STOP_SIGN,
+  TANK_BUCKET,
+]
+
+const overlayRows = (
+  rows: ReadonlyArray<string>,
+  cover: ReadonlyArray<string>,
+): ReadonlyArray<string> =>
+  Array.map(rows, (row, y) =>
+    Option.match(Array.get(cover, y), {
+      onNone: () => row,
+      onSome: coverRow =>
+        Array.join(
+          Array.map(Array.fromIterable(row), (pixel, x) => {
+            const top = coverRow.charAt(x)
+            return top === '' || top === TRANSPARENT ? pixel : top
+          }),
+          '',
+        ),
+    }),
+  )
+
+const armored = (
+  rows: ReadonlyArray<string>,
+  stage: number,
+): ReadonlyArray<string> =>
+  Array.reduce(Array.reverse(Array.drop(TANK_ARMOR, stage)), rows, overlayRows)
+
+const tankWalkPixels = (stage: number): FramePixels => [
+  armored([...TANK_HEAD, ...TANK_ARMS_LOW, ...TANK_LEGS_PLANTED], stage),
+  armored([...TANK_HEAD, ...TANK_ARMS_SWING, ...TANK_LEGS_LEFT_UP], stage),
+  armored([...TANK_HEAD, ...TANK_ARMS_LOW, ...TANK_LEGS_PLANTED], stage),
+  armored(
+    [...TANK_HEAD, ...TANK_ARMS_SWING_BACK, ...TANK_LEGS_RIGHT_UP],
+    stage,
+  ),
+]
 
 // NOTE: the Kaboomer is a hunched, grinning zombie hugging a big round
 // cartoon bomb. The fuse and its sparks are drawn over the sprite each frame
@@ -688,55 +763,49 @@ const EXPLODER_LIT_PALETTE: Palette = {
 }
 
 const EXPLODER_BODY: ReadonlyArray<string> = [
-  '..gGGGGg..........',
-  '.gGGGGGGg.........',
-  '.GWWGGWWG.nnn.....',
-  '.GWEGGWEG.NNN.....',
-  '.GTTTTTMgKKKKK....',
-  '..gMMMMgKhhKKKK...',
-  '..UggggKhHHKKKKK..',
-  'gGUUUUKKhHKKKKKGG.',
-  'GGUUUUKKhKKKKKKgGG',
-  'GGUUUUKKKKKKKKKgG.',
-  'GGUUUUKKKKKKKKKKk.',
-  '.GGGGGGGGGGGGGKKk.',
-  '..UUUUUKKKKKgGKk..',
-  '...uuuuuKKKKKkk...',
-  '...uuuuu.kkkkk....',
+  '.gGGGg.......',
+  'gGGGGGg......',
+  'GWEGWEg.nn...',
+  'GTTTTMgKNNK..',
+  '.gMMMgKhHKKK.',
+  'gUUUUKhHKKKKG',
+  'GUUUUKKKKKKgG',
+  'GGGGGGGGGGKk.',
+  '.UUUUKKKKKKk.',
+  '..uuu.kkkkk..',
 ]
 
 const EXPLODER_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
   [
-    patch(0, 7, TRANSPARENT, 1, 4),
-    patch(1, 7, 'R'),
-    patch(1, 8, 'U', 1, 4),
-    patch(2, 11, 'U', 4),
-    patch(6, 11, 'K', 10),
-    patch(12, 12, 'K', 2),
+    patch(0, 5, TRANSPARENT, 1, 3),
+    patch(1, 5, 'R'),
+    patch(1, 7, 'U', 4),
+    patch(5, 7, 'K', 5),
+    patch(12, 5, TRANSPARENT, 1, 2),
+    patch(11, 6, 'k'),
   ],
   [
-    patch(13, 6, 'c'),
-    patch(14, 7, 'O'),
-    patch(13, 8, 'c'),
-    patch(14, 9, 'O'),
-    patch(13, 10, 'c'),
-    patch(3, 0, 'S', 3),
-    patch(2, 1, 'S', 2),
-    patch(4, 4, 'M'),
+    patch(10, 4, 'c'),
+    patch(11, 5, 'O'),
+    patch(10, 6, 'c'),
+    patch(10, 8, 'O'),
+    patch(2, 0, 'S', 3),
+    patch(1, 1, 'S', 2),
+    patch(4, 3, 'M'),
   ],
 ]
 
 const exploderWalkPixels = (stage: number): FramePixels => {
   const body = applyPatches(EXPLODER_BODY, wornThrough(EXPLODER_WEAR, stage))
   return [
-    [...swayRows(body, 0), '.....LL...LL........', '....FFF...FFF.......'],
-    [...swayRows(body, 1), '......LL...LL.......', '.....FFF....FFF.....'],
-    [...swayRows(body, 0), '.....LL...LL........', '....FFF...FFF.......'],
-    [...swayRows(body, -1), '....LL...LL.........', '...FFF...FFF........'],
+    [...swayRows(body, 0), '....LL..LL.....', '...FFF..FFF....'],
+    [...swayRows(body, 1), '.....LL..LL....', '....FFF..FFF...'],
+    [...swayRows(body, 0), '....LL..LL.....', '...FFF..FFF....'],
+    [...swayRows(body, -1), '...LL..LL......', '..FFF..FFF.....'],
   ]
 }
 
-const EXPLODER_FUSE_BASE = { x: 11, y: 1 }
+const EXPLODER_FUSE_BASE = { x: 8, y: 1 }
 
 // BIG LEAGUER
 
@@ -1133,12 +1202,12 @@ const RUNNER_ICON_PIXELS: ReadonlyArray<string> = [
 ]
 
 const TANK_ICON_PIXELS: ReadonlyArray<string> = [
-  '.GGGGG.',
-  'GSGGGSG',
-  'GEGGGEG',
-  'GGMMMGG',
-  'GGGGGGG',
-  'OOYOYOO',
+  '.aAAAa.',
+  'aAAAAAa',
+  'aEaAaEa',
+  'HHHHHHH',
+  'lLGMMRR',
+  'LLlRWWR',
 ]
 
 const EXPLODER_ICON_PIXELS: ReadonlyArray<string> = [
@@ -1242,7 +1311,7 @@ export const frameAt = (frames: SpriteFrames, frameIndex: number): SpriteSet =>
 
 const GROANER_ANCHOR_X = ZOMBIE_SWAY_ROOM + ZOMBIE_BODY_WIDTH / 2
 
-const EXPLODER_ANCHOR_X = ZOMBIE_SWAY_ROOM + 7
+const EXPLODER_ANCHOR_X = ZOMBIE_SWAY_ROOM + 6
 
 const BOSS_ANCHOR_X = BOSS_WIDTH / 2
 
@@ -1349,13 +1418,13 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     maybeTauntAt: Option.none(),
   }),
   Tank: zombieSprites({
-    stageCount: TANK_WEAR.length,
+    stageCount: TANK_ARMOR.length,
     pixelsAt: tankWalkPixels,
     gapeAt: stage => firstFrame(stage, tankWalkPixels),
     palette: TANK_PALETTE,
     litPalette: TANK_PALETTE,
     ragePalette: withRedEyes(TANK_PALETTE, 'E'),
-    anchorX: 7,
+    anchorX: 9,
     icon: TANK_ICON_PIXELS,
     maybeTauntAt: Option.none(),
   }),
