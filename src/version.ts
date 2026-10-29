@@ -1,4 +1,5 @@
 import { Clock, Data, Duration, Effect, Option, Schema, pipe } from 'effect'
+import { FetchHttpClient, HttpClient, HttpClientResponse } from 'effect/http'
 
 import { Phase } from './model'
 
@@ -49,31 +50,23 @@ const versionUrl = (stamp: number): string => {
   return url.href
 }
 
+// NOTE: no-store and the time query both keep a stale copy from answering,
+// whatever the browser or a proxy in between would cache. Trace headers stay
+// off so the request is the same plain GET it always was.
 const fetchVersionFile = (stamp: number) =>
-  Effect.tryPromise({
-    try: async signal => {
-      const response = await fetch(versionUrl(stamp), {
-        cache: 'no-store',
-        signal,
-      })
-      if (!response.ok) {
-        throw new Error(`version.json answered ${response.status}`)
-      }
-      return response.json()
-    },
-    catch: error => new VersionCheckError({ reason: describeError(error) }),
-  })
+  pipe(
+    HttpClient.get(versionUrl(stamp)),
+    Effect.flatMap(HttpClientResponse.filterStatusOk),
+    Effect.flatMap(HttpClientResponse.schemaBodyJson(VersionFile)),
+    Effect.provideService(FetchHttpClient.RequestInit, { cache: 'no-store' }),
+    Effect.provideService(HttpClient.TracerPropagationEnabled, false),
+    Effect.provide(FetchHttpClient.layer),
+    Effect.mapError(error => new VersionCheckError({ reason: error.message })),
+  )
 
 export const fetchRemoteBuild: Effect.Effect<string, VersionCheckError> = pipe(
   Clock.currentTimeMillis,
   Effect.flatMap(fetchVersionFile),
-  Effect.flatMap(json =>
-    Schema.decodeUnknownEffect(VersionFile)(json).pipe(
-      Effect.mapError(
-        error => new VersionCheckError({ reason: error.message }),
-      ),
-    ),
-  ),
   Effect.map(({ build }) => build),
   Effect.timeoutOrElse({
     duration: FETCH_TIMEOUT,

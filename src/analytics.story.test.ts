@@ -1,4 +1,5 @@
 import { Effect, Option, Schema } from 'effect'
+import { FetchHttpClient } from 'effect/http'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -349,16 +350,45 @@ describe('the beacon', () => {
   })
 
   test('a refused beacon falls back to a keepalive fetch', async () => {
-    const fetch = vi.fn(() => Promise.resolve(new Response(null)))
+    const requests: Array<{ url: string; init: RequestInit | undefined }> = []
+    const fetch: typeof globalThis.fetch = (input, init) => {
+      requests.push({ url: String(input), init })
+      return Promise.resolve(new Response(null))
+    }
     vi.stubGlobal('navigator', { sendBeacon: () => false })
-    vi.stubGlobal('fetch', fetch)
     const transport = await Effect.runPromise(
-      sendRunSummary(summary, 'https://api.example.test'),
+      sendRunSummary(summary, 'https://api.example.test').pipe(
+        Effect.provideService(FetchHttpClient.Fetch, fetch),
+      ),
     )
     expect(transport).toBe('Fetch')
-    expect(fetch).toHaveBeenCalledWith(
-      'https://api.example.test/api/runs',
-      expect.objectContaining({ keepalive: true, method: 'POST' }),
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.url).toBe('https://api.example.test/api/runs')
+    expect(requests[0]?.init).toEqual(
+      expect.objectContaining({
+        keepalive: true,
+        method: 'POST',
+        mode: 'no-cors',
+        credentials: 'omit',
+      }),
     )
+    expect(new Headers(requests[0]?.init?.headers).get('content-type')).toBe(
+      'text/plain;charset=UTF-8',
+    )
+    expect(new Headers(requests[0]?.init?.headers).has('traceparent')).toBe(
+      false,
+    )
+  })
+
+  test('a keepalive fetch that never goes out is a failed send', async () => {
+    const fetch: typeof globalThis.fetch = () =>
+      Promise.reject(new TypeError('Failed to fetch'))
+    vi.stubGlobal('navigator', { sendBeacon: () => false })
+    const exit = await Effect.runPromiseExit(
+      sendRunSummary(summary, 'https://api.example.test').pipe(
+        Effect.provideService(FetchHttpClient.Fetch, fetch),
+      ),
+    )
+    expect(exit._tag).toBe('Failure')
   })
 })

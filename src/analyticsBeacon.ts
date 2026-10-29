@@ -1,4 +1,5 @@
 import { Array, Data, Effect, Option, Random, Schema, pipe } from 'effect'
+import { FetchHttpClient, HttpClient, HttpClientRequest } from 'effect/http'
 
 import {
   MAX_SUMMARY_BYTES,
@@ -66,19 +67,27 @@ const queueBeacon = (url: string, body: string) =>
     catch: toSendError,
   })
 
+// NOTE: the fallback when the browser will not queue a beacon. no-cors
+// answers with an opaque response, so only a request that never went out
+// counts as a failure. Trace headers stay off: they are not CORS-safelisted.
 const postKeepalive = (url: string, body: string) =>
-  Effect.tryPromise({
-    try: () =>
-      fetch(url, {
-        method: 'POST',
+  pipe(
+    HttpClient.execute(
+      HttpClientRequest.bodyText(
+        HttpClientRequest.post(url),
         body,
-        headers: { 'Content-Type': SUMMARY_CONTENT_TYPE },
-        keepalive: true,
-        mode: 'no-cors',
-        credentials: 'omit',
-      }),
-    catch: toSendError,
-  })
+        SUMMARY_CONTENT_TYPE,
+      ),
+    ),
+    Effect.provideService(FetchHttpClient.RequestInit, {
+      keepalive: true,
+      mode: 'no-cors',
+      credentials: 'omit',
+    }),
+    Effect.provideService(HttpClient.TracerPropagationEnabled, false),
+    Effect.provide(FetchHttpClient.layer),
+    Effect.mapError(toSendError),
+  )
 
 const sendTo = (
   url: string,
@@ -86,7 +95,7 @@ const sendTo = (
 ): Effect.Effect<SummaryTransport, SummarySendError> =>
   pipe(
     queueBeacon(url, body),
-    Effect.catch(() => Effect.succeed(false)),
+    Effect.orElseSucceed(() => false),
     Effect.flatMap(isQueued =>
       isQueued
         ? Effect.succeed<SummaryTransport>('Beacon')

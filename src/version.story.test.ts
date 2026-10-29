@@ -1,4 +1,5 @@
-import { Option } from 'effect'
+import { Effect, Option } from 'effect'
+import { FetchHttpClient } from 'effect/http'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
@@ -15,7 +16,11 @@ import {
   updateCheckActivity,
 } from './subscriptions'
 import { fighting } from './testing'
-import { RUNNING_BUILD, isCheckingForUpdates } from './version'
+import {
+  RUNNING_BUILD,
+  fetchRemoteBuild,
+  isCheckingForUpdates,
+} from './version'
 import { pause } from './waves'
 
 const NEWER_BUILD = 'newer-build'
@@ -239,5 +244,51 @@ describe('the end screens with a new version waiting', () => {
         expect(Phase.guards.Preparation(current.phase)).toBe(true)
       }),
     )
+  })
+})
+
+describe('fetching version.json', () => {
+  interface Seen {
+    readonly url: URL
+    readonly init: RequestInit | undefined
+  }
+
+  const fetchWith = (response: () => Response) => {
+    const seen: Array<Seen> = []
+    const fetch: typeof globalThis.fetch = (input, init) => {
+      seen.push({ url: new URL(String(input)), init })
+      return Promise.resolve(response())
+    }
+    const run = Effect.runPromiseExit(
+      fetchRemoteBuild.pipe(
+        Effect.provideService(FetchHttpClient.Fetch, fetch),
+      ),
+    )
+    return { seen, run }
+  }
+
+  test('asks past every cache and reads the build', async () => {
+    const { seen, run } = fetchWith(() => Response.json({ build: NEWER_BUILD }))
+    const exit = await run
+    expect(exit).toEqual(
+      expect.objectContaining({ _tag: 'Success', value: NEWER_BUILD }),
+    )
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.url.pathname).toMatch(/version\.json$/)
+    expect(seen[0]?.url.searchParams.get('at')).toMatch(/^\d+$/)
+    expect(seen[0]?.init?.cache).toBe('no-store')
+    expect(new Headers(seen[0]?.init?.headers).has('traceparent')).toBe(false)
+  })
+
+  test('a missing file fails the check', async () => {
+    const { run } = fetchWith(() =>
+      Response.json({ build: NEWER_BUILD }, { status: 404 }),
+    )
+    expect((await run)._tag).toBe('Failure')
+  })
+
+  test('a file without a build fails the check', async () => {
+    const { run } = fetchWith(() => Response.json({ commit: 'abc' }))
+    expect((await run)._tag).toBe('Failure')
   })
 })

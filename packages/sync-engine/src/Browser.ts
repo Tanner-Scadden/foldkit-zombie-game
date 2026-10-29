@@ -11,6 +11,12 @@ import {
   Stream,
   pipe,
 } from 'effect'
+import {
+  FetchHttpClient,
+  HttpClient,
+  HttpClientRequest,
+  HttpClientResponse,
+} from 'effect/http'
 
 import type { IdentityApi } from './Device'
 import {
@@ -23,8 +29,8 @@ import {
 } from './Identity'
 import {
   type ClientMessage,
+  ExchangeReply,
   type ServerMessage,
-  decodeExchangeReply,
   decodeServerMessage,
   encodeClientMessage,
   encodeExchange,
@@ -49,6 +55,28 @@ const exchangeUrl = (origin: string, scope: string): string => {
   url.searchParams.set('scope', scope)
   return url.toString()
 }
+
+// NOTE: every request goes through Effect's fetch client. Trace headers
+// stay off: the Worker's CORS rules allow only content-type and
+// authorization, so a traceparent header would fail the preflight.
+const withFetch = <A, E>(
+  effect: Effect.Effect<A, E, HttpClient.HttpClient>,
+): Effect.Effect<A, E> =>
+  pipe(
+    effect,
+    Effect.provideService(HttpClient.TracerPropagationEnabled, false),
+    Effect.provide(FetchHttpClient.layer),
+  )
+
+const jsonPost = (url: string, body: string, token?: string) =>
+  pipe(
+    HttpClientRequest.post(url),
+    HttpClientRequest.bodyText(body, 'application/json'),
+    request =>
+      token === undefined
+        ? request
+        : HttpClientRequest.bearerToken(request, token),
+  )
 
 const closeQuietly = (socket: WebSocket) =>
   Effect.sync(() => {
@@ -195,27 +223,23 @@ export const httpTransport = (origin: string): Transport => ({
                 encodeExchange([maybeHello.value, ...extra]),
                 error => new TransportError({ reason: error.message }),
               )
-              const response = yield* Effect.tryPromise({
-                try: () =>
-                  fetch(exchangeUrl(origin, scope), {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/json' },
-                    body,
-                  }),
-                catch: error => new TransportError({ reason: String(error) }),
-              })
-              if (!response.ok) {
-                return yield* new TransportError({
-                  reason: `HTTP ${response.status}`,
-                })
-              }
-              const text = yield* Effect.tryPromise({
-                try: () => response.text(),
-                catch: error => new TransportError({ reason: String(error) }),
-              })
-              const reply = yield* Effect.mapError(
-                decodeExchangeReply(text),
-                error => new TransportError({ reason: error.message }),
+              const reply = yield* pipe(
+                HttpClient.execute(jsonPost(exchangeUrl(origin, scope), body)),
+                Effect.flatMap(HttpClientResponse.filterStatusOk),
+                Effect.flatMap(
+                  HttpClientResponse.schemaBodyJson(ExchangeReply),
+                ),
+                withFetch,
+                Effect.mapError(
+                  error =>
+                    new TransportError({
+                      reason:
+                        error._tag === 'HttpClientError' &&
+                        error.reason._tag === 'StatusCodeError'
+                          ? `HTTP ${error.reason.response.status}`
+                          : error.message,
+                    }),
+                ),
               )
               yield* seen(reply)
               yield* Queue.offerAll(inbox, reply)
@@ -241,82 +265,59 @@ export const httpTransport = (origin: string): Transport => ({
 
 // IDENTITY
 
-const refusedFrom = (response: Response) =>
-  Effect.flatMap(
-    Effect.tryPromise({
-      try: () => response.text(),
-      catch: () =>
-        new IdentityRefused({
-          failure: IdentityFailure.cases.Unavailable.make({}),
-        }),
-    }),
-    text =>
-      Effect.flatMap(
-        Effect.orElseSucceed(
-          Schema.decodeEffect(Schema.fromJsonString(IdentityFailure))(text),
-          () => IdentityFailure.cases.Unavailable.make({}),
-        ),
-        failure => Effect.fail(new IdentityRefused({ failure })),
-      ),
+const unavailable = (): IdentityRefused =>
+  new IdentityRefused({
+    failure: IdentityFailure.cases.Unavailable.make({}),
+  })
+
+// NOTE: a refusal carries an IdentityFailure as its body. A body that does
+// not decode, like a proxy's error page, reads as Unavailable.
+const refusedFrom = (response: HttpClientResponse.HttpClientResponse) =>
+  pipe(
+    HttpClientResponse.schemaBodyJson(IdentityFailure)(response),
+    Effect.orElseSucceed(() => IdentityFailure.cases.Unavailable.make({})),
+    Effect.flatMap(failure => Effect.fail(new IdentityRefused({ failure }))),
   )
 
 const call = <A, I>(
   schema: Schema.Codec<A, I>,
-  url: string,
-  init: RequestInit,
+  request: HttpClientRequest.HttpClientRequest,
 ): Effect.Effect<A, IdentityRefused> =>
-  Effect.gen(function* () {
-    const unavailable = new IdentityRefused({
-      failure: IdentityFailure.cases.Unavailable.make({}),
-    })
-    const response = yield* Effect.tryPromise({
-      try: () => fetch(url, init),
-      catch: () => unavailable,
-    })
-    if (!response.ok) {
-      return yield* refusedFrom(response)
-    }
-    const text = yield* Effect.tryPromise({
-      try: () => response.text(),
-      catch: () => unavailable,
-    })
-    return yield* Effect.mapError(
-      Schema.decodeEffect(Schema.fromJsonString(schema))(text),
-      () => unavailable,
-    )
-  })
+  pipe(
+    HttpClient.execute(request),
+    Effect.mapError(unavailable),
+    Effect.flatMap(response =>
+      response.status >= 200 && response.status < 300
+        ? Effect.mapError(
+            HttpClientResponse.schemaBodyJson(schema)(response),
+            unavailable,
+          )
+        : refusedFrom(response),
+    ),
+    withFetch,
+  )
 
-const post = (body: unknown, token?: string): RequestInit => ({
-  method: 'POST',
-  headers: {
-    'content-type': 'application/json',
-    ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
-  },
-  body: JSON.stringify(body),
-})
+const post = (url: string, body: unknown, token?: string) =>
+  jsonPost(url, JSON.stringify(body), token)
 
 export const httpIdentityApi = (origin: string): IdentityApi => ({
   challenge: call(
     ChallengeResponse,
-    new URL(IDENTITY_PATHS.challenge, origin).toString(),
-    post({}),
+    post(new URL(IDENTITY_PATHS.challenge, origin).toString(), {}),
   ),
   session: request =>
     call(
       SessionResponse,
-      new URL(IDENTITY_PATHS.session, origin).toString(),
-      post(request),
+      post(new URL(IDENTITY_PATHS.session, origin).toString(), request),
     ),
   link: token =>
     call(
       LinkCodeResponse,
-      new URL(IDENTITY_PATHS.link, origin).toString(),
-      post({}, token),
+      post(new URL(IDENTITY_PATHS.link, origin).toString(), {}, token),
     ),
   redeem: (token, code) =>
     call(
       SessionResponse,
-      new URL(IDENTITY_PATHS.redeem, origin).toString(),
-      post({ code }, token),
+      post(new URL(IDENTITY_PATHS.redeem, origin).toString(), { code }, token),
     ),
 })
