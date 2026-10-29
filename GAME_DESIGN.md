@@ -1101,6 +1101,12 @@ Approved ideas that are not built yet. Each moves into the roadmap above when it
 - **The home menu layout.** One fixed layout for phone and computer, built from slots so new features never move PLAY: status top left (difficulty badge, bests), the logo and the player's character center stage, a big PLAY with a mode toggle bottom right, a left rail of icons (What's New, Munchopedia, Character, How to play, Settings), and the update chip top right. The computer adds key badges, hover, and labels beside the rail icons. Approved on 2026-10-28.
 - **What's New.** A rail icon that shows the latest day from `CHANGELOG.md`, with a dot until seen. Approved on 2026-10-28.
 - **Portrait play.** A zoomed camera that follows the player with a thumb area below, no hints for off-screen zombies. Approved on 2026-10-28.
+- **Exploring the manor.** Raised on 2026-10-29, to design once the current queue lands. Not decided.
+  - **Shape.** The parlour stays a tight killer intro room for the first waves. Its exits are boarded or locked, and the player buys them open with money, so every dollar is a choice between a gun and a room. Opening a room adds space, loot, and options, but also new spawn points.
+  - **Rooms with one signature twist each.** Kitchen (ovens to trip, slippery soup), library (bookshelf passages, a rare-gun stash), ballroom (open floor for hordes, a chandelier to shoot down), cellar (dark, lit only near the player), graveyard outside (floor spawns, Uncle Chunk's arena), attic (one entrance, a risky stash).
+  - **A goal beyond surviving.** For example restoring the manor's power or finding keys to Uncle Chunk's cellar. Interactive pieces such as a fireplace trap, a mystery box, or a dumbwaiter between floors.
+  - **Variety.** The layout stays hand-made (see "Not now"), while secrets, loot spots, and locked doors shift with the seed. Rooms get Munchopedia pages when discovered.
+  - **Open questions.** Does every run start in the parlour and expand, or does the player pick a wing? Do waves keep coming while exploring? One big manor or several maps as chapters? How does a full-manor run fit the 5 to 10 minute run length, perhaps as a longer mode with the parlour as the quick mode?
 
 ### Risks
 
