@@ -8,6 +8,7 @@ import {
   role,
   scene,
   selector,
+  text,
   within,
 } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
@@ -26,6 +27,7 @@ import {
 } from './model'
 import { screenOf, thumbAreaTop } from './screen'
 import { asVeteran } from './veteran'
+import { TURN_HINT_TEXT } from './homeView'
 import { MeasureGameSurface, view } from './view'
 import { wavePreviewShapes } from './wavePreview'
 
@@ -231,6 +233,59 @@ describe('the portrait home menu', () => {
       expect(role('button', { name: /^Play/ })).toExist(),
       expect(role('button', { name: /^Difficulty/ })).toExist(),
       expect(selector('.home-hero')).toExist(),
+    )
+  })
+})
+
+describe('the turn hint', () => {
+  const turnHint = text(TURN_HINT_TEXT)
+
+  test('shows on the portrait home menu and goes when the phone turns', () => {
+    scene(
+      { update, view },
+      given(onTouch(Phase.Ready())),
+      measure(PORTRAIT),
+      expect(turnHint).toExist(),
+      expect(selector('.home-turn-hint')).toExist(),
+      Subscription.emit(Message.MeasuredGameSurface(LANDSCAPE)),
+      expect(root).toHaveAttr('data-layout', 'Landscape'),
+      expect(turnHint).toBeAbsent(),
+      Subscription.emit(Message.MeasuredGameSurface(PORTRAIT)),
+      expect(turnHint).toExist(),
+    )
+  })
+
+  test('is not on the landscape home menu', () => {
+    scene(
+      { update, view },
+      given(onTouch(Phase.Ready())),
+      measure(LANDSCAPE),
+      expect(role('group', { name: 'Play' })).toExist(),
+      expect(turnHint).toBeAbsent(),
+    )
+  })
+
+  test('is not shown mid-run in portrait', () => {
+    scene(
+      { update, view },
+      given(fighting),
+      measure(PORTRAIT),
+      expect(root).toHaveAttr('data-layout', 'Portrait'),
+      expect(turnHint).toBeAbsent(),
+    )
+  })
+
+  test('is not shown on a keyboard and mouse in a tall window', () => {
+    scene(
+      { update, view },
+      given(
+        modifyFields(onTouch(Phase.Ready()), {
+          lastDevice: () => 'KeyboardMouse',
+        }),
+      ),
+      measure(PORTRAIT),
+      expect(role('group', { name: 'Play' })).toExist(),
+      expect(turnHint).toBeAbsent(),
     )
   })
 })

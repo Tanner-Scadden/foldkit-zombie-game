@@ -1344,3 +1344,78 @@
 .game-root[data-layout='Portrait'] .home-stage .new-entry {
   top: calc((80 + var(--frame-top)) * var(--a));
 }
+
+/* NOTE: the turn hint is only drawn in portrait, so it has no landscape rule.
+   It sits just above the rail row and takes no taps. */
+.game-root[data-layout='Portrait'] .home-turn-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(
+    7 * var(--a) + max(56px, 28 * var(--a)) + 56px + max(6px, 3 * var(--a))
+  );
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  max-width: calc(100% - 8 * var(--a));
+  margin: 0;
+  padding: 4px 12px 4px 8px;
+  border: 1px solid rgba(255, 224, 102, 0.45);
+  border-radius: 9999px;
+  background: rgba(8, 10, 12, 0.82);
+  color: #f4f1de;
+  font: clamp(10px, 2.9 * var(--a), 14px) / 1.2 monospace;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: turn-hint-in 0.6s ease-out 0.8s both;
+}
+
+.home-turn-icon {
+  flex: none;
+  width: 14px;
+  height: 18px;
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+  animation: turn-phone 3s steps(1, end) infinite;
+}
+
+.home-turn-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@keyframes turn-hint-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes turn-phone {
+  0% {
+    rotate: 0deg;
+  }
+  45% {
+    rotate: -45deg;
+  }
+  52% {
+    rotate: -90deg;
+  }
+  90% {
+    rotate: -45deg;
+  }
+  97% {
+    rotate: 0deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-root[data-layout='Portrait'] .home-turn-hint,
+  .home-turn-icon {
+    animation: none;
+  }
+}

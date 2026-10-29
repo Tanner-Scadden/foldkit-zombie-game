@@ -239,3 +239,22 @@ export const SETTINGS_ICON = pixelIconUrl(
   ],
   RAIL_PALETTE,
 )
+
+// NOTE: an upright phone with a little Groaner on its screen. The portrait
+// home menu's turn hint tips it on its side with CSS.
+export const TURN_PHONE_ICON = pixelIconUrl(
+  [
+    '.XXXXXXX.',
+    'XOOOOOOOX',
+    'XOGGGGGOX',
+    'XOGOGOGOX',
+    'XOGGGGGOX',
+    'XOGOOOGOX',
+    'XOGGGGGOX',
+    'XOOOOOOOX',
+    'XOOOOOOOX',
+    'XOOOXOOOX',
+    '.XXXXXXX.',
+  ],
+  RAIL_PALETTE,
+)

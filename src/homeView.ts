@@ -31,6 +31,7 @@ import {
   NEWS_ICON,
   PADLOCK_ICON,
   SETTINGS_ICON,
+  TURN_PHONE_ICON,
 } from './icons'
 import { Message } from './message'
 import {
@@ -50,6 +51,7 @@ import {
   linkProblemText,
   syncStateText,
 } from './playerSync'
+import { isPortrait } from './screen'
 import { durationLabel } from './stats'
 import { FINAL_WAVE } from './waves'
 import { whatsNewBodyView, whatsNewText } from './whatsNewView'
@@ -445,6 +447,28 @@ export const newEntryNoticeView = (
       })
     : h.empty
 
+// TURN HINT
+
+export const TURN_HINT_TEXT = 'Turn your phone sideways to see the whole room'
+
+// NOTE: portrait zooms in on part of the room, so a phone held upright gets a
+// small nudge to turn. It sits above the rail, takes no taps, and is gone the
+// moment the phone turns. isPortrait is false on a keyboard and mouse.
+const turnHintView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isPortrait(model)
+    ? h.p(
+        [h.Class('home-turn-hint')],
+        [
+          h.span([
+            h.Class('home-turn-icon'),
+            h.AriaHidden(true),
+            h.Style({ backgroundImage: TURN_PHONE_ICON }),
+          ]),
+          h.span([h.Class('home-turn-text')], [TURN_HINT_TEXT]),
+        ],
+      )
+    : h.empty
+
 // HOME MENU
 
 export const homeMenuView = (model: Model, h: HtmlBuilder<Message>): Html =>
@@ -464,6 +488,7 @@ export const homeMenuView = (model: Model, h: HtmlBuilder<Message>): Html =>
               statusView(model, h),
               heroButtonView(h),
               newEntryButtonView(model, h),
+              turnHintView(model, h),
               h.div([h.Class('home-corner')], [fullscreenButtonView(model, h)]),
             ],
           ),
