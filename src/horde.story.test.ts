@@ -721,7 +721,7 @@ describe('spawn tables', () => {
         : Result.succeed({ door, kinds })
     })
     expect(arrivedCounts).toEqual(
-      Array.map(doorCounts(spawns), ({ door, kinds }) => ({ door, kinds })),
+      Array.map(doorCounts(spawns, []), ({ door, kinds }) => ({ door, kinds })),
     )
     const fromTheFloor = Array.filterMap(ZOMBIE_KIND_ORDER, kind => {
       const count = Array.filter(

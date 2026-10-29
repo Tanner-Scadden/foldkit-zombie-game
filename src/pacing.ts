@@ -243,14 +243,29 @@ const ringFor = (alarm: Alarm, warned: ReadonlyArray<PlannedSpawn>): Alarm =>
     ? Alarm.Ringing({ remainingMs: DINNER_BELL_MS })
     : alarm
 
+const plannedDoorOf = (
+  spawns: ReadonlyArray<PlannedSpawn>,
+  routed: ReadonlyArray<PlannedSpawn>,
+  pack: number,
+): DoorId =>
+  pipe(
+    Array.zip(spawns, routed),
+    Array.findFirst(([, routedSpawn]) => routedSpawn.pack === pack),
+    Option.match({
+      onNone: () => 'North',
+      onSome: ([spawn]) => spawn.door,
+    }),
+  )
+
 export const warnPacks = (
   model: Model,
   spawns: ReadonlyArray<PlannedSpawn>,
+  routed: ReadonlyArray<PlannedSpawn>,
   clockMs: number,
 ): Model => {
   const warnedPacks = model.pacing.warnedPacks
   const fresh = pipe(
-    spawns,
+    routed,
     Array.filter(
       spawn =>
         spawn.atMs <= clockMs + PACK_WARNING_MS &&
@@ -273,6 +288,14 @@ export const warnPacks = (
           ...warnedPacks,
           ...Array.map(fresh, ({ pack }) => pack),
         ],
+        packDoors: packDoors => [
+          ...packDoors,
+          ...Array.map(fresh, ({ pack, door }) => ({
+            pack,
+            planned: plannedDoorOf(spawns, routed, pack),
+            door,
+          })),
+        ],
         alarm: alarm => ringFor(alarm, fresh),
       }),
     frameEvents: frameEvents => [
@@ -293,11 +316,11 @@ export const quietAlarm = (alarm: Alarm, worldMs: number): Alarm =>
   })
 
 export const rattlingDoors = (
-  spawns: ReadonlyArray<PlannedSpawn>,
+  routed: ReadonlyArray<PlannedSpawn>,
   warnedPacks: ReadonlyArray<number>,
 ): ReadonlyArray<DoorId> =>
   pipe(
-    spawns,
+    routed,
     Array.filter(
       spawn => isThroughDoor(spawn) && Array.contains(warnedPacks, spawn.pack),
     ),
@@ -312,12 +335,13 @@ export const isCampingDoor = (player: Vector, door: DoorId): boolean =>
 
 export const delayCampedPacks = (
   spawns: ReadonlyArray<PlannedSpawn>,
+  routed: ReadonlyArray<PlannedSpawn>,
   clockMs: number,
   worldMs: number,
   player: Vector,
 ): ReadonlyArray<PlannedSpawn> => {
   const campedPacks = pipe(
-    spawns,
+    routed,
     Array.filter(
       spawn =>
         isDue(clockMs)(spawn) &&

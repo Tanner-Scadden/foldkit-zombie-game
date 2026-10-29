@@ -277,7 +277,7 @@ describe('the Ankle Biter', () => {
       expect(floorCounts(spawns)).toEqual([
         { kind: 'Crawler', count: crawlers.length },
       ])
-      Array.forEach(doorCounts(spawns), ({ kinds }) =>
+      Array.forEach(doorCounts(spawns, []), ({ kinds }) =>
         Array.forEach(kinds, ({ kind }) => expect(kind).not.toBe('Crawler')),
       )
     })

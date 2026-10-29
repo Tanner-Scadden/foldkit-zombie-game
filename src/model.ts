@@ -851,10 +851,20 @@ export const Alarm = defineTaggedUnion({
 })
 export type Alarm = typeof Alarm.Type
 
+// NOTE: the door a warned pack will come through, kept from its warning on
+// so a plank breaking after the rattle cannot move it.
+export const PackDoor = Schema.Struct({
+  pack: Schema.Number,
+  planned: DoorId,
+  door: DoorId,
+})
+export type PackDoor = typeof PackDoor.Type
+
 export const Pacing = Schema.Struct({
   holds: Schema.Array(Hold),
   beat: Beat,
   warnedPacks: Schema.Array(Schema.Number),
+  packDoors: Schema.Array(PackDoor),
   alarm: Alarm,
   quietMs: Schema.Number,
 })
@@ -1166,6 +1176,7 @@ export const calmPacing: Pacing = {
   holds: [],
   beat: Beat.Flowing(),
   warnedPacks: [],
+  packDoors: [],
   alarm: Alarm.Quiet(),
   quietMs: 0,
 }

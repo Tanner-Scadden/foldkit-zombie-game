@@ -37,6 +37,7 @@ import {
 } from './constants'
 import { burrowed, drawSurfacingSpot } from './crawler'
 import { toughenSpawns, withBests } from './difficulty'
+import { routeSpawns } from './doorRoute'
 import { frenzyOnArrival, frenzyPacksOf } from './frenzy'
 import { clamp } from './geometry'
 import { deriveIntent } from './input'
@@ -56,6 +57,7 @@ import {
   RunMode,
   ShopState,
   Streak,
+  type Trap,
   TrapNotice,
   type Vector,
   ZombieAction,
@@ -1183,9 +1185,11 @@ export const floorCounts = (
   kindCounts(Array.filter(spawns, spawn => !isThroughDoor(spawn)))
 
 export const doorCounts = (
-  spawns: ReadonlyArray<PlannedSpawn>,
-): ReadonlyArray<DoorCount> =>
-  Array.filterMap(DOOR_IDS, door => {
+  plannedSpawns: ReadonlyArray<PlannedSpawn>,
+  traps: ReadonlyArray<Trap>,
+): ReadonlyArray<DoorCount> => {
+  const spawns = routeSpawns(plannedSpawns, traps, [])
+  return Array.filterMap(DOOR_IDS, door => {
     const atDoor = Array.filter(
       spawns,
       spawn => isThroughDoor(spawn) && spawn.door === door,
@@ -1196,6 +1200,7 @@ export const doorCounts = (
         Result.succeed({ door, count: atDoor.length, kinds }),
     })
   })
+}
 
 // PHASES
 
@@ -1232,6 +1237,7 @@ const beginPreparation = (
       holds,
       beat: Beat.Flowing(),
       warnedPacks: [],
+      packDoors: [],
       alarm: Alarm.Quiet(),
       quietMs: 0,
     }),
@@ -1451,22 +1457,41 @@ const clearWave = (model: Model, wave: number): Model => {
   }
 }
 
+// NOTE: spawns stay with their planned doors, so a door whose plank breaks
+// is a spawn point again. routed is the same list with each door rerouted
+// around the boarded ones, index for index.
 const releaseDue = (
   model: Model,
   spawns: ReadonlyArray<PlannedSpawn>,
+  routed: ReadonlyArray<PlannedSpawn>,
   clockMs: number,
 ): Readonly<{ model: Model; pending: ReadonlyArray<PlannedSpawn> }> => {
-  const due = Array.filter(spawns, spawn => spawn.atMs <= clockMs)
+  const paired = Array.zip(spawns, routed)
+  const due = Array.filter(paired, ([spawn]) => spawn.atMs <= clockMs)
   if (Array.isReadonlyArrayEmpty(due)) {
     return { model, pending: spawns }
   }
 
   const later = Array.filter(spawns, spawn => spawn.atMs > clockMs)
   const room = Math.max(0, ZOMBIE_ALIVE_MAX - model.zombies.length)
-  const [arriving, held] = Array.splitAt(Array.sort(due, bySpawnTime), room)
+  const [arriving, held] = Array.splitAt(
+    Array.sort(
+      due,
+      Order.mapInput(
+        bySpawnTime,
+        ([spawn]: readonly [PlannedSpawn, PlannedSpawn]) => spawn,
+      ),
+    ),
+    room,
+  )
   return {
-    model: Array.reduce(arriving, model, spawnZombie),
-    pending: Array.appendAll(held, later),
+    model: Array.reduce(arriving, model, (current, [, routedSpawn]) =>
+      spawnZombie(current, routedSpawn),
+    ),
+    pending: Array.appendAll(
+      Array.map(held, ([spawn]) => spawn),
+      later,
+    ),
   }
 }
 
@@ -1491,7 +1516,8 @@ const advanceWave = (
     spawns,
   )
   const clockMs = paced.clockMs
-  const camped = delayCampedPacks(spawns, clockMs, pacedMs, model.player)
+  const route = routeSpawns(spawns, model.traps, model.pacing.packDoors)
+  const camped = delayCampedPacks(spawns, route, clockMs, pacedMs, model.player)
   const warned = warnPacks(
     modifyFields(model, {
       pacing: () =>
@@ -1500,9 +1526,15 @@ const advanceWave = (
         }),
     }),
     camped,
+    routeSpawns(camped, model.traps, model.pacing.packDoors),
     clockMs,
   )
-  const released = releaseDue(warned, camped, clockMs)
+  const released = releaseDue(
+    warned,
+    camped,
+    routeSpawns(camped, warned.traps, warned.pacing.packDoors),
+    clockMs,
+  )
   const entered = advanceBossEntrance(
     released.model,
     released.pending.length,

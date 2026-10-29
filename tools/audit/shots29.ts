@@ -2,7 +2,8 @@
 //
 // Shoots the first-time difficulty card with Nightmare locked and unlocked,
 // SETTINGS with the difficulty row, Groaners and a Big Lug chewing a Plank
-// Pile, the two-plank cap notice, and Game Over and Victory naming the
+// Pile, the two-plank cap notice, the door preview before and after two
+// doors are boarded, and Game Over and Victory naming the
 // difficulty, on 667x375, 844x390, and 1280x720. It prints any panel that
 // has to scroll.
 //   TAG=after BASE=http://localhost:4174/ bun shots29.ts
@@ -66,6 +67,11 @@ const SCENES: ReadonlyArray<Scene> = [
       await page.keyboard.press('KeyT')
       await wait(250)
     },
+  },
+  { name: 'preview-open', query: 'wave=4&px=160&py=110' },
+  {
+    name: 'preview-boarded',
+    query: 'wave=4&planks=North,West&px=160&py=110',
   },
   {
     name: 'gameover-hard',

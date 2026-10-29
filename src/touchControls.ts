@@ -367,7 +367,7 @@ export const preparationControlsView = (
         ],
         [
           preparationTimerView(wave, remainingMs, clock, h),
-          wavePreviewView(wave, spawns, model.boss, h),
+          wavePreviewView(wave, spawns, model.traps, model.boss, h),
           model.lastDevice === 'Touch' ? h.empty : trapControlsView(model, h),
           startWaveButtonView(model, wave, h),
         ],

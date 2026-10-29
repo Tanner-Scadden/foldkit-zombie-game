@@ -141,12 +141,12 @@ const addArrival = (buckets: Buckets, depth: number, index: number): void => {
 // the whole grid once per ring made a refresh cost a frame on a slow phone
 // every time the player crossed a tile.
 const spread = (
-  originIndex: number,
+  origins: ReadonlyArray<number>,
   clearance: Clearance,
   tolls: TollMap,
 ): ReadonlyArray<number> => {
   const distances = Array.makeBy(TILE_COUNT, () => UNREACHED_DISTANCE)
-  const buckets: Buckets = new Map([[0, [originIndex]]])
+  const buckets: Buckets = new Map([[0, Array.copy(origins)]])
   const settleRing = (depth: number): void => {
     const ring = Option.getOrElse(
       Option.fromNullishOr(buckets.get(depth)),
@@ -181,7 +181,7 @@ export const computeFlowField = (
   originIndex,
   tolls,
   distances: spread(
-    originIndex,
+    [originIndex],
     clearance,
     new Map(Array.map(tolls, ({ index, cost }) => [index, cost])),
   ),
@@ -193,12 +193,7 @@ const fieldFrom = (
 ): FlowField => ({
   originIndex: Array.headNonEmpty(origins),
   tolls: [],
-  distances: spread(
-    Array.makeBy(TILE_COUNT, () => UNREACHED_DISTANCE),
-    Array.map(origins, index => ({ index, distance: 0 })),
-    clearance,
-    new Map(),
-  ),
+  distances: spread(origins, clearance, new Map()),
 })
 
 export const flowFieldToward = (

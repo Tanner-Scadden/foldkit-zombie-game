@@ -2,6 +2,11 @@
 
 One entry per day, newest first. Only things a player would notice, a handful of bullets at most, written for players and not for us.
 
+## October 29, 2026: How tough are you?
+
+- 💀 Pick Easy, Normal, or Hard. Beat Hard and Nightmare unlocks. Good luck.
+- 🪵 Board up two doors and nothing climbs through them, but slow zombies love a snack of fresh planks.
+
 ## October 28, 2026: Opening night
 
 The doors are open. Bring snacks. Do not become the snack.

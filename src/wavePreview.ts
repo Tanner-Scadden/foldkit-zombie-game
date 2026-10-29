@@ -20,6 +20,7 @@ import {
   type Model,
   Phase,
   type PlannedSpawn,
+  type Trap,
   type ZombieKind,
 } from './model'
 import { BOSS_ICON, ZOMBIE_SPRITES, group } from './sprite'
@@ -316,7 +317,7 @@ export const wavePreviewShapes = (
   Phase.match(model.phase, {
     Ready: () => [],
     Preparation: ({ wave, spawns }) => {
-      const counts = doorCounts(spawns)
+      const counts = doorCounts(spawns, model.traps)
       return [
         ...Array.flatMap(
           counts,
@@ -362,6 +363,7 @@ const bossLabel = (boss: Boss): string =>
 const previewLabel = (
   wave: number,
   spawns: ReadonlyArray<PlannedSpawn>,
+  traps: ReadonlyArray<Trap>,
   boss: Boss,
 ): string => {
   const debuts = Array.map(debutKinds(wave), kind => ZOMBIE_KINDS[kind].name)
@@ -372,12 +374,13 @@ const previewLabel = (
     endlessDepth(wave) > 0
       ? ` Zombies have ${Math.round((hpScaleFor(wave) - 1) * 100)} percent more health.`
       : ''
-  return `Coming in wave ${wave}. ${Array.join(Array.map(doorCounts(spawns), doorPreviewLabel), '. ')}.${floorLabel(spawns)}${debutText}${healthText}${bossLabel(boss)}`
+  return `Coming in wave ${wave}. ${Array.join(Array.map(doorCounts(spawns, traps), doorPreviewLabel), '. ')}.${floorLabel(spawns)}${debutText}${healthText}${bossLabel(boss)}`
 }
 
 export const wavePreviewView = (
   wave: number,
   spawns: ReadonlyArray<PlannedSpawn>,
+  traps: ReadonlyArray<Trap>,
   boss: Boss,
   h: HtmlBuilder<Message>,
-): Html => h.p([h.Class('sr-only')], [previewLabel(wave, spawns, boss)])
+): Html => h.p([h.Class('sr-only')], [previewLabel(wave, spawns, traps, boss)])

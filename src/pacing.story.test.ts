@@ -564,7 +564,7 @@ describe('determinism and the preview', () => {
     Array.forEach([4, 6, FINAL_WAVE, FINAL_WAVE + 2], wave => {
       const { spawns, arrivals } = playKillingEverything(wave, 2468)
       expect(arrivals).toHaveLength(spawns.length)
-      Array.forEach(doorCounts(spawns), ({ door, kinds }) => {
+      Array.forEach(doorCounts(spawns, []), ({ door, kinds }) => {
         const atDoor = Array.filter(arrivals, arrival => arrival.door === door)
         expect(
           Array.map(kinds, ({ kind }) => ({
@@ -755,7 +755,7 @@ describe('spawn variety', () => {
         Array.forEach([11, 4242], seed => {
           const { spawns, arrivals } = playKillingEverything(wave, seed)
           expect(arrivals).toHaveLength(spawns.length)
-          Array.forEach(doorCounts(spawns), ({ door, kinds }) => {
+          Array.forEach(doorCounts(spawns, []), ({ door, kinds }) => {
             const atDoor = Array.filter(
               arrivals,
               arrival => arrival.door === door,

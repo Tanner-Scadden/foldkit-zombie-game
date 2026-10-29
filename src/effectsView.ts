@@ -64,6 +64,7 @@ import {
   WOOD_DECAL_COLOR,
   WOOD_DECAL_FADED_COLOR,
 } from './constants'
+import { routeSpawns } from './doorRoute'
 import { centeredGlyphs, centeredRect, progressBetween } from './drawing'
 import { type TextTone, textWidth } from './font'
 import { clamp } from './geometry'
@@ -698,7 +699,14 @@ export const doorRattleShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   Phase.isAnyOf(['Wave'])(model.phase)
     ? Array.flatMap(
         Array.dedupe([
-          ...rattlingDoors(model.phase.spawns, model.pacing.warnedPacks),
+          ...rattlingDoors(
+            routeSpawns(
+              model.phase.spawns,
+              model.traps,
+              model.pacing.packDoors,
+            ),
+            model.pacing.warnedPacks,
+          ),
           ...bossRattleDoors(model.boss),
         ]),
         rattleShapes(model.elapsedMs),

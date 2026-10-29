@@ -27,7 +27,7 @@ const { THRESHOLDS, boxCenter, hasLineOfSight } =
   await import('../../src/arena')
 const { STALL_BOX, isShopOpenFor, priceFor, verdictFor } =
   await import('../../src/shop')
-const { FINAL_WAVE } = await import('../../src/waves')
+const { FINAL_WAVE, doorCounts } = await import('../../src/waves')
 const { BOSS_RULES } = await import('../../src/boss')
 const { CHUCKER_RULES } = await import('../../src/chucker')
 const { CRAWLER_RULES } = await import('../../src/crawler')
@@ -799,10 +799,11 @@ const shop = (model: Model): Model => {
 
 const busiestDoor = (model: Model) => {
   if (model.phase._tag !== 'Preparation') return undefined
+  // Counts follow the planks already up: a boarded door's packs come through
+  // the next open door, so the second pile goes where they pile up.
   const counts = new Map<string, number>()
-  model.phase.spawns.forEach(spawn => {
-    if (spawn.kind === 'Crawler') return
-    counts.set(spawn.door, (counts.get(spawn.door) ?? 0) + 1)
+  doorCounts(model.phase.spawns, model.traps).forEach(({ door, count }) => {
+    counts.set(door, count)
   })
   const boarded = new Set(
     model.traps.flatMap(trap => (trap._tag === 'Barricade' ? [trap.door] : [])),

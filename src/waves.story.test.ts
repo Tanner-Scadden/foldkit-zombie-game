@@ -471,7 +471,7 @@ describe('wave plans', () => {
         expect(other).not.toEqual(first)
         expect(first).toHaveLength(totalOf(wave))
         expect(
-          Array.every(doorCounts(first), ({ door }) =>
+          Array.every(doorCounts(first, []), ({ door }) =>
             Array.contains(plannedDoors, door),
           ),
         ).toBe(true)
