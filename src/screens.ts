@@ -12,6 +12,7 @@ import {
 } from './constants'
 import {
   type BakedText,
+  GLYPH_HEIGHT,
   type Glyph,
   type TextTone,
   bakeText,
@@ -682,6 +683,41 @@ const logoLineShapes =
 const logoShapes = (screenMs: number): ReadonlyArray<Canvas.Shape> =>
   Array.flatMap(LOGO_LINES, logoLineShapes(screenMs))
 
+// ALPHA CHIP
+
+const ALPHA = bakeText('ALPHA', 'Plain')
+const ALPHA_PAD_X = 3
+const ALPHA_PAD_Y = 2
+const ALPHA_GAP = 4
+const ALPHA_DROP = 9
+const ALPHA_FILL = '#c4232b'
+const ALPHA_EDGE = '#140c10'
+
+const alphaChipShapes = (): ReadonlyArray<Canvas.Shape> => {
+  const lastLine = Option.getOrElse(Array.last(LOGO_LINES), () => [])
+  const width = ALPHA.width + ALPHA_PAD_X * 2
+  const height = GLYPH_HEIGHT + ALPHA_PAD_Y * 2
+  const left = Math.round(CENTER_X + lineWidth(lastLine) / 2 + ALPHA_GAP)
+  const top = LOGO_TOP + (LOGO_LINES.length - 1) * LOGO_LINE_PX + ALPHA_DROP
+  return [
+    Canvas.Rect({
+      x: left - 1,
+      y: top - 1,
+      width: width + 2,
+      height: height + 2,
+      fill: ALPHA_EDGE,
+    }),
+    Canvas.Rect({ x: left, y: top, width, height, fill: ALPHA_FILL }),
+    placeBaked(ALPHA, {
+      x: left + ALPHA_PAD_X,
+      y: top + ALPHA_PAD_Y,
+      align: 'Left',
+    }),
+  ]
+}
+
+const ALPHA_CHIP: ReadonlyArray<Canvas.Shape> = alphaChipShapes()
+
 // PARADE
 
 type Marcher = Readonly<{
@@ -745,6 +781,7 @@ const readyShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   TITLE_BACKDROP,
   ...paradeShapes(model.screenMs),
   ...logoShapes(model.screenMs),
+  ...ALPHA_CHIP,
   centered(TAGLINE, TAGLINE_Y),
   ...(isBlinkOn(model.screenMs)
     ? [centered(START_PROMPT[model.lastDevice], START_PROMPT_Y, TITLE_SCALE)]

@@ -2447,7 +2447,7 @@ export const statusText = (model: Model): string => {
   }
 
   return Phase.match(model.phase, {
-    Ready: () => `${GAME_TITLE}. ${PLAY_AGAIN}`,
+    Ready: () => `${GAME_TITLE}, an early alpha. ${PLAY_AGAIN}`,
     Preparation: ({ wave }) =>
       `Get ready for ${statusWave(model, wave)}. Press Enter, or use the Start wave button, to start it now.${practiceGateNote(model)}${shopHint(model)}`,
     Wave: ({ wave }) =>

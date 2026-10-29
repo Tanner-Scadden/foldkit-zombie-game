@@ -40,7 +40,7 @@ const KEEP_GOING =
   'Press K or choose Keep going to carry on into endless from wave 9 with your money, guns, and traps.'
 
 const FEEDBACK = 'Tell whoever sent you this what you think!'
-const READY_STATUS = `${GAME_TITLE}. ${PLAY_AGAIN}`
+const READY_STATUS = `${GAME_TITLE}, an early alpha. ${PLAY_AGAIN}`
 
 const PREPARING_WAVE_ONE =
   'Get ready for wave 1 of 8. Press Enter, or use the Start wave button, to start it now.'
