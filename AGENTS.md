@@ -165,7 +165,7 @@ The game draws every fixed sprite with `Canvas.Image`, which Foldkit 0.169.0 doe
 - **Pull request.** The same checks, then a preview at `https://munch-manor-pr-<number>.tanner-scadden.workers.dev`, with its URL in a comment on the pull request. Closing the pull request destroys the preview.
 - **By hand.** Run the workflow from the Actions tab on `main` to redeploy production.
 
-Alchemy skips the build and the upload when none of `src/`, `public/`, `index.html`, `vite.config.ts`, `package.json`, or `bun.lock` changed. Deploy state lives in Alchemy's Cloudflare state store, so local and CI deploys share it.
+Alchemy skips the build and the upload when none of `src/`, `packages/*/src/`, `packages/*/package.json`, `public/`, `patches/`, `index.html`, `CHANGELOG.md`, `vite.config.ts`, `tsconfig.json`, `package.json`, or `bun.lock` changed. Deploy state lives in Alchemy's Cloudflare state store, so local and CI deploys share it.
 
 To deploy or destroy from this machine, run from `infra/` after `bun install`, with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` exported (the commands are in `infra/README.md`): `bun alchemy deploy --stage prod`, or `bun alchemy destroy --stage pr-<number>`. A local deploy ships the working tree as it is, uncommitted changes included. Add `--force` to put the declared version back if something else overwrote the Worker, since `alchemy drift` does not notice that.
 

@@ -106,14 +106,20 @@ const Website = (apiUrl: Output.Output<string | undefined>) =>
       // NOTE: VITE_ variables are inlined into the game's bundle. This one
       // tells the game where to post run summaries (src/analyticsBeacon.ts).
       env: { VITE_API_ORIGIN: Output.map(apiUrl, url => url ?? '') },
+      // NOTE: every input of the game's build. src/changelog.ts reads
+      // CHANGELOG.md at build time, and patches/ holds the Foldkit patch
+      // that `bun install` applies.
       memo: {
         include: [
           'src/**',
           'packages/*/src/**',
           'packages/*/package.json',
           'public/**',
+          'patches/**',
           'index.html',
+          'CHANGELOG.md',
           'vite.config.ts',
+          'tsconfig.json',
           'package.json',
         ],
         lockfile: true,
