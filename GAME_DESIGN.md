@@ -934,7 +934,13 @@ Approved ideas that are not built yet. Each moves into the roadmap above when it
 
 - **The Munchopedia, the home menu layout, and What's New.** Built on 2026-10-29: see "The fixed home layout", "What's New", and "The Munchopedia" under "The home menu, the loading splash, and taps".
 - **Portrait play.** Built on 2026-10-29: see "Portrait play" under the first playable.
-- **Exploring the manor.** Raised on 2026-10-29, to design once the current queue lands. Not decided.
+- **Exploring the manor.** Raised on 2026-10-29. The shape, the run length, exploring, and the first room were decided with the owner on 2026-10-29; the rest below is still a sketch.
+  - **Decided on 2026-10-29.**
+    - **Buy rooms open.** One manor per run. Every run starts in the parlour, whose exits are boarded. The player buys an exit open with money, so every dollar is a choice between a gun and a room. An opened room adds space, loot, and options, and its doors join the spawn doors.
+    - **The campaign grows.** The campaign itself becomes the manor run, so a campaign run gets longer than today's 5 to 10 minutes. There is no separate quick mode. The wave count and length are set when the second room lands, with the balance tools.
+    - **Explore in breaks.** Rooms are bought and explored between waves. Waves still arrive on the sawtooth, so the pacing rules and the balance tools stay valid.
+    - **The kitchen first.** After the groundwork that makes a level data in the Model, the first room built is the kitchen, next to the parlour: ovens to trip and slippery soup.
+    - **No off-screen hints.** The owner's earlier rule holds on a bigger map: nothing on screen points at zombies or doors out of view.
   - **Shape.** The parlour stays a tight killer intro room for the first waves. Its exits are boarded or locked, and the player buys them open with money, so every dollar is a choice between a gun and a room. Opening a room adds space, loot, and options, but also new spawn points.
   - **Rooms with one signature twist each.** Kitchen (ovens to trip, slippery soup), library (bookshelf passages, a rare-gun stash), ballroom (open floor for hordes, a chandelier to shoot down), cellar (dark, lit only near the player), graveyard outside (floor spawns, Uncle Chunk's arena), attic (one entrance, a risky stash).
   - **A goal beyond surviving.** For example restoring the manor's power or finding keys to Uncle Chunk's cellar. Interactive pieces such as a fireplace trap, a mystery box, or a dumbwaiter between floors.
