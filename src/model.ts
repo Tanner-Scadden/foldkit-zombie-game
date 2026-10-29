@@ -148,19 +148,49 @@ export const Zombie = Schema.Struct({
 })
 export type Zombie = typeof Zombie.Type
 
-export const BossAttack = Schema.Literals(['Stomp', 'Belch'])
+export const BossAttack = Schema.Literals(['Stomp', 'Belch', 'Spit', 'Charge'])
 export type BossAttack = typeof BossAttack.Type
 
+export const PlantedAttack = Schema.Literals(['Stomp', 'Belch', 'Spit'])
+export type PlantedAttack = typeof PlantedAttack.Type
+
+// NOTE: a charge locks its target when the brace starts, so the line on the
+// floor never follows the player. The rush runs past the target by the
+// overshoot, and remainingPx counts down what is left of it.
 export const BossMove = defineTaggedUnion({
   Stalking: { cooldownMs: Schema.Number },
   WindingUp: {
-    attack: BossAttack,
+    attack: PlantedAttack,
     remainingMs: Schema.Number,
     durationMs: Schema.Number,
   },
+  Bracing: {
+    target: Vector,
+    remainingMs: Schema.Number,
+    durationMs: Schema.Number,
+  },
+  Rushing: { direction: Vector, remainingPx: Schema.Number },
+  Dazed: { remainingMs: Schema.Number, durationMs: Schema.Number },
   Recovering: { remainingMs: Schema.Number, cooldownMs: Schema.Number },
 })
 export type BossMove = typeof BossMove.Type
+
+export const BossMood = Schema.Literals(['Calm', 'Enraged'])
+export type BossMood = typeof BossMood.Type
+
+export const FarAttack = Schema.Literals(['Charge', 'Spit'])
+export type FarAttack = typeof FarAttack.Type
+
+export const Glob = defineTaggedUnion({
+  Flying: {
+    from: Vector,
+    to: Vector,
+    remainingMs: Schema.Number,
+    durationMs: Schema.Number,
+  },
+  Pooled: { at: Vector, remainingMs: Schema.Number, durationMs: Schema.Number },
+})
+export type Glob = typeof Glob.Type
 
 export const BulletGlaze = Schema.Literals(['Plain', 'Spicy', 'Mean', 'Skewer'])
 export type BulletGlaze = typeof BulletGlaze.Type
@@ -400,6 +430,12 @@ export const GameEvent = defineTaggedUnion({
   BossWoundUp: { x: Schema.Number, y: Schema.Number, attack: BossAttack },
   BossStomped: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
   BossBelched: { x: Schema.Number, y: Schema.Number },
+  BossRushed: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  BossRammed: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  BossBonked: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  BossSpat: { x: Schema.Number, y: Schema.Number },
+  GlobLanded: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
+  BossEnraged: { x: Schema.Number, y: Schema.Number },
 })
 export type GameEvent = typeof GameEvent.Type
 
@@ -608,7 +644,15 @@ export const Boss = defineTaggedUnion({
     remainingMs: Schema.Number,
     durationMs: Schema.Number,
   },
-  Fighting: { id: Schema.Number, move: BossMove, standingMs: Schema.Number },
+  Fighting: {
+    id: Schema.Number,
+    move: BossMove,
+    standingMs: Schema.Number,
+    mood: BossMood,
+    nextFar: FarAttack,
+    belchMs: Schema.Number,
+    globs: Schema.Array(Glob),
+  },
 })
 export type Boss = typeof Boss.Type
 

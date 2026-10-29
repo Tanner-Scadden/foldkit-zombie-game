@@ -1,7 +1,7 @@
 import { Array } from 'effect'
 import type { Canvas } from 'foldkit'
 
-import { bossGroundShapes } from './bossView'
+import { bossGroundShapes, bossOverheadShapes } from './bossView'
 import { type Camera, sceneOffset } from './camera'
 import { type Drawable, depthSortedShapes } from './depth'
 import {
@@ -142,6 +142,7 @@ const overheadShapes = (
   ...Array.flatMap(model.zombies, zombieHealthBarShapes),
   ...Array.flatMap(model.blasts, blastShapes),
   ...Array.flatMap(model.callouts, burpRingShapes),
+  ...bossOverheadShapes(model),
   ...airborneParticleShapes(model.particles),
   ...Array.map(model.popups, popupShape(camera)),
   ...reloadBarShapes(model.player),

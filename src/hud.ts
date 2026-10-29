@@ -217,7 +217,7 @@ const roundHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
             `${waveLabel(model.mode, wave)}  ZOMBIES ${zombiesRemaining(model, spawns)}`,
             'Plain',
           ),
-          ...bossBarShapes(bar, HUD_SUBTITLE_Y + 1),
+          ...bossBarShapes(bar, HUD_SUBTITLE_Y + 1, model.elapsedMs),
         ],
       }),
     Paused: () => [],

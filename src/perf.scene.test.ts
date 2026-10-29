@@ -6,6 +6,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { DOOR_IDS } from './arena'
+import { BOSS_RULES } from './boss'
 import {
   BLAST_MAX,
   BULLET_MAX,
@@ -28,6 +29,7 @@ import {
   BulletGlaze,
   type Decal,
   DecalKind,
+  Glob,
   Lesson,
   type Model,
   type Particle,
@@ -193,6 +195,25 @@ const ALL_BOOSTED: Boosts = {
   Pierce: BoostTimer.On({ remainingMs: 4000, durationMs: 9000 }),
 }
 
+// NOTE: the game never shows a glob in the air while he braces, since he waits
+// for a glob to land before he winds up again. The worst case draws both
+// anyway, with the most puddles, so the budget covers any frame he can make.
+const WORST_GLOBS: ReadonlyArray<Glob> = [
+  ...Array.makeBy(BOSS_RULES.globMax - 1, index =>
+    Glob.Pooled({
+      at: { x: 80 + index * 40, y: 150 },
+      remainingMs: 2000,
+      durationMs: BOSS_RULES.puddleMs,
+    }),
+  ),
+  Glob.Flying({
+    from: { x: 170, y: 70 },
+    to: { x: 120, y: 120 },
+    remainingMs: 400,
+    durationMs: BOSS_RULES.spitFlightMs,
+  }),
+]
+
 // NOTE: the room is played by a veteran who has learned every lesson, so no
 // tutorial hint is drawn. The budgets were recorded without hints.
 const fullRoom = (mode: RunMode, wave: number, tier: number): Model => {
@@ -223,12 +244,16 @@ const fullRoom = (mode: RunMode, wave: number, tier: number): Model => {
     boss: () =>
       Boss.Fighting({
         id: BOSS_ID,
-        move: BossMove.WindingUp({
-          attack: 'Stomp',
+        move: BossMove.Bracing({
+          target: { x: 60, y: 140 },
           remainingMs: 400,
-          durationMs: 1000,
+          durationMs: 800,
         }),
         standingMs: 4000,
+        mood: 'Enraged',
+        nextFar: 'Spit',
+        belchMs: 0,
+        globs: WORST_GLOBS,
       }),
     particles: () => Array.makeBy(PARTICLE_MAX, particleAt),
     decals: () => Array.makeBy(DECAL_MAX, decalAt),
@@ -410,6 +435,11 @@ const measureFrames = (model: Model): FrameCost => {
 // decal add about 30 shapes and 40 paint operations. Uncle Chunk adds about
 // 150 shapes: his sprite is about 65 rectangles, his stomp ring 3 circles, and
 // his bar about 70 more on the overlay, most of them the letters of his name.
+// His far attacks did not raise them. The worst case now has him enraged and
+// bracing for a charge, with a glob in the air and four puddles, instead of
+// mid-stomp: 2614 shapes, 1527 steady paint operations, and 2935 on a full
+// repaint before, 2628, 1554, and 2952 after. ENRAGED replaces his name on
+// the bar instead of joining it, which keeps the overlay the same size.
 const BUDGET: FrameCost = {
   shapesBuilt: 2650,
   steadyPaintOps: 1560,
@@ -428,7 +458,7 @@ const BUDGET_KEYS: ReadonlyArray<keyof FrameCost> = [
 
 const SCENARIOS: ReadonlyArray<Readonly<{ name: string; model: Model }>> = [
   {
-    name: 'campaign wave 8 at the alive cap with the boss mid-stomp',
+    name: 'campaign wave 8 at the alive cap with the boss enraged mid-charge',
     model: fullRoom(RunMode.Campaign(), 8, 0),
   },
   {

@@ -11,7 +11,7 @@ import {
   SKIN_TONES,
   playerSprites,
 } from '@game/appearance'
-import { hasBoss, planBoss } from '@game/boss'
+import { BOSS_RULES, hasBoss, planBoss } from '@game/boss'
 import { SHADOW_COLOR } from '@game/constants'
 import { DECAL_MAX, PLAYER_MAX_HP } from '@game/constants'
 import { sceneShapes } from '@game/layers'
@@ -38,8 +38,8 @@ import { raiseDebutCard } from '@game/onboarding'
 import { FLOOR_COLOR } from '@game/room'
 import { frameAt, group, gunSprite } from '@game/sprite'
 import { view } from '@game/view'
-import { pause, rollSpawns, startOrResume } from '@game/waves'
-import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from '@game/zombies'
+import { pause, planFor, rollSpawns, startOrResume } from '@game/waves'
+import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
 
 const params = new URLSearchParams(location.search)
 const num = (key: string, fallback: number) =>
@@ -231,7 +231,7 @@ const roomModel = (): Model => {
   }
   if (lineup === 'boss') {
     const zombies = Array.from({ length: 5 }, (_, stage) =>
-      standing(1100 + stage, 'Boss', 48 + stage * 56, 80, 97, stage),
+      standing(1100 + stage, 'Boss', 48 + stage * 56, 80, 99, stage),
     )
     model = modifyFields(model, {
       zombies: () => zombies as any,
@@ -240,9 +240,12 @@ const roomModel = (): Model => {
   }
   const bossParam = params.get('boss')
   if (bossParam !== null) {
-    const bossHp = Math.round(97 * num('bosshp', 1))
+    const bossMaxHp = scaledHp(ZOMBIE_KINDS.Boss.hp, planFor(8).hpScale)
+    const bossHp = Math.round(bossMaxHp * num('bosshp', 1))
+    const bx = num('bx', 200)
+    const by = num('by', 80)
     const bossZombie = {
-      ...standing(1500, 'Boss', num('bx', 200), num('by', 80), 97, 0),
+      ...standing(1500, 'Boss', bx, by, bossMaxHp, 0),
       hp: bossHp,
       speed: 10,
     }
@@ -251,39 +254,91 @@ const roomModel = (): Model => {
       | 'West'
       | 'East'
       | 'South'
-    const windUp = (attack: 'Stomp' | 'Belch') => ({
-      _tag: 'Fighting' as const,
-      id: 1500,
-      standingMs: 4000,
-      move: {
-        _tag: 'WindingUp' as const,
-        attack,
-        remainingMs: num('windMs', 1000),
+    const target = { x: num('tx', 120), y: num('ty', 120) }
+    const toTarget = Math.hypot(target.x - bx, target.y - by) || 1
+    const direction = {
+      x: (target.x - bx) / toTarget,
+      y: (target.y - by) / toTarget,
+    }
+    const windMs = num('windMs', 1000)
+    const puddles = (params.get('puddles') ?? '')
+      .split(';')
+      .filter(spot => spot.length > 0)
+      .map(spot => {
+        const [x, y] = spot.split(',').map(Number)
+        return {
+          _tag: 'Pooled' as const,
+          at: { x: x!, y: y! },
+          remainingMs: num('puddleMs', 3000),
+          durationMs: BOSS_RULES.puddleMs,
+        }
+      })
+    const flying =
+      bossParam === 'spit'
+        ? [
+            {
+              _tag: 'Flying' as const,
+              from: { x: bx, y: by },
+              to: target,
+              remainingMs: num('globMs', 450),
+              durationMs: BOSS_RULES.spitFlightMs,
+            },
+          ]
+        : []
+    const moves: Record<string, () => unknown> = {
+      stomp: () => ({
+        _tag: 'WindingUp',
+        attack: 'Stomp',
+        remainingMs: windMs,
         durationMs: 1000,
-      },
-    })
+      }),
+      belch: () => ({
+        _tag: 'WindingUp',
+        attack: 'Belch',
+        remainingMs: windMs,
+        durationMs: 1000,
+      }),
+      charge: () => ({
+        _tag: 'Bracing',
+        target,
+        remainingMs: windMs,
+        durationMs: BOSS_RULES.windUpMs.Charge,
+      }),
+      rush: () => ({
+        _tag: 'Rushing',
+        direction,
+        remainingPx: toTarget + BOSS_RULES.chargeOvershootPx,
+      }),
+      dazed: () => ({
+        _tag: 'Dazed',
+        remainingMs: windMs,
+        durationMs: BOSS_RULES.dazedMs,
+      }),
+    }
+    const moveFor = () =>
+      (
+        moves[bossParam] ??
+        (() => ({ _tag: 'Stalking', cooldownMs: num('cooldownMs', 60_000) }))
+      )()
     const bossState =
       bossParam === 'arriving'
         ? {
             _tag: 'Arriving' as const,
             door,
-            hp: 97,
+            hp: bossMaxHp,
             remainingMs: num('arriveMs', 2600),
             durationMs: 2600,
           }
-        : bossParam === 'stomp'
-          ? windUp('Stomp')
-          : bossParam === 'belch'
-            ? windUp('Belch')
-            : {
-                _tag: 'Fighting' as const,
-                id: 1500,
-                standingMs: 4000,
-                move: {
-                  _tag: 'Stalking' as const,
-                  cooldownMs: num('cooldownMs', 60_000),
-                },
-              }
+        : {
+            _tag: 'Fighting' as const,
+            id: 1500,
+            standingMs: 4000,
+            move: moveFor(),
+            mood: params.has('enraged') ? 'Enraged' : 'Calm',
+            nextFar: 'Charge',
+            belchMs: 60_000,
+            globs: [...puddles, ...flying],
+          }
     model = modifyFields(model, {
       boss: () => bossState as any,
       zombies: zombies =>

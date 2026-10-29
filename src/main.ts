@@ -620,9 +620,18 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     Burped: () => Option.none<SoundEffect>(),
     PartShed: () => Option.some<SoundEffect>('LimbPop'),
     BossRoared: () => Option.some<SoundEffect>('BossRoar'),
-    BossWoundUp: () => Option.some<SoundEffect>('BossWindUp'),
+    BossWoundUp: ({ attack }) =>
+      Option.some<SoundEffect>(
+        attack === 'Charge' ? 'BossChargeUp' : 'BossWindUp',
+      ),
     BossStomped: () => Option.some<SoundEffect>('BossStomp'),
     BossBelched: () => Option.some<SoundEffect>('BossBelch'),
+    BossRushed: () => Option.some<SoundEffect>('BossRush'),
+    BossRammed: () => Option.none<SoundEffect>(),
+    BossBonked: () => Option.some<SoundEffect>('BossBonk'),
+    BossSpat: () => Option.some<SoundEffect>('BossSpit'),
+    GlobLanded: () => Option.some<SoundEffect>('BossSplat'),
+    BossEnraged: () => Option.some<SoundEffect>('BossRoar'),
   })
 
 const maybeEventSoundCue = (event: GameEvent): Option.Option<SoundCue> =>

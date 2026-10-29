@@ -121,6 +121,10 @@ const triggerHitStop = (
 const BOSS_PART_TRAUMA = 0.35
 const BOSS_ROAR_TRAUMA = 0.6
 const BOSS_BELCH_TRAUMA = 0.3
+const BOSS_RUSH_TRAUMA = 0.2
+const BOSS_RAM_TRAUMA = 0.8
+const BOSS_SPIT_TRAUMA = 0.08
+const GLOB_LANDED_TRAUMA = 0.15
 
 const firingTrauma = (event: GameEvent): number =>
   GameEvent.isAnyOf(['Fired'])(event) ? WEAPONS[event.weapon].shakeTrauma : 0
@@ -157,6 +161,12 @@ const eventTrauma = (event: GameEvent): number =>
     BossWoundUp: () => 0,
     BossStomped: () => SHAKE_TRAUMA_MAX,
     BossBelched: () => BOSS_BELCH_TRAUMA,
+    BossRushed: () => BOSS_RUSH_TRAUMA,
+    BossRammed: () => BOSS_RAM_TRAUMA,
+    BossBonked: () => SHAKE_TRAUMA_MAX,
+    BossSpat: () => BOSS_SPIT_TRAUMA,
+    GlobLanded: () => GLOB_LANDED_TRAUMA,
+    BossEnraged: () => BOSS_ROAR_TRAUMA,
   })
 
 const shakeAxis = (roll: number, trauma: number): number => {
@@ -271,6 +281,12 @@ const eventPopups = (
     BossWoundUp: () => noPopups(state),
     BossStomped: () => noPopups(state),
     BossBelched: () => noPopups(state),
+    BossRushed: () => noPopups(state),
+    BossRammed: () => noPopups(state),
+    BossBonked: () => noPopups(state),
+    BossSpat: () => noPopups(state),
+    GlobLanded: () => noPopups(state),
+    BossEnraged: () => noPopups(state),
   })
 
 const agePopups = (

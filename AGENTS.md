@@ -63,7 +63,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/depth.ts`         | The drawable type and the foot-depth sort order                        |
 | `src/drawing.ts`       | Shape helpers shared by the world views: sprites, feet, pulses         |
 | `src/zombieView.ts`    | Zombies walking, fusing, and dying, worn parts, shadows, health bars   |
-| `src/bossView.ts`      | The boss's stomp ring, its health bar, and its entrance band           |
+| `src/bossView.ts`      | The boss's floor tells, globs, stars, steam, health bar, and band      |
 | `src/playerView.ts`    | The player, the gun, muzzle flashes, and the reload bar                |
 | `src/appearance.ts`    | Character looks: options, palettes, pixel parts, the sprite cache      |
 | `src/character.ts`     | The character picker: its Messages, update, and OutMessages            |

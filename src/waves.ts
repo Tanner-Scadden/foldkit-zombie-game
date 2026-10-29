@@ -501,7 +501,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.49,
-    hpScale: 1.21,
+    hpScale: 1.1,
     groups: [
       squads({
         packs: [3, 1, 2, 2],
@@ -533,7 +533,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
       }),
       lugPincer(45000),
       hordes({
-        packs: [3, 2, 3, 2, 3, 2, 3, 2],
+        packs: [3, 2, 3, 2, 3, 2],
         mix: MIXED,
         startMs: 46000,
         everyMs: 2500,

@@ -3,6 +3,7 @@
 //   MODE=endless bun tools/balance/simulate.ts [runs] [firstSeed]
 //   WORKERS=6 bun tools/balance/simulate.ts 200   (splits the runs over processes)
 //   TIMELINE=1 bun tools/balance/simulate.ts 40   (adds the wave timeline audit)
+//   KITE=1 bun tools/balance/simulate.ts 200   (runs from the boss, never dodges)
 // It drives the game's own init model and update with a simple bot and
 // prints survival per wave, run length, the money curve, and which zombie
 // kinds cost the bot the most hearts. Nothing here ships with the game.
@@ -105,7 +106,26 @@ type BossFight = {
   stomps: number
   stompHits: number
   belches: number
+  charges: number
+  chargeHits: number
+  bonks: number
+  spits: number
+  spitHits: number
+  enraged: boolean
+  heartsLost: number
+  heartsByAttack: Record<BossBlame, number>
+  damageTaken: number
+  aimedMs: number
 }
+
+type BossBlame = 'Stomp' | 'Charge' | 'Glob' | 'Bite'
+
+const emptyBossBlame = (): Record<BossBlame, number> => ({
+  Stomp: 0,
+  Charge: 0,
+  Glob: 0,
+  Bite: 0,
+})
 
 type BossLog = Array<BossFight>
 
@@ -268,11 +288,16 @@ const safePickup = (model: Model): Vector | undefined => {
     .sort((a, b) => distance(model.player, a) - distance(model.player, b))[0]
 }
 
-// It steps out of a stomp ring the way a player who has seen one does:
-// straight away from the boss once the wind-up starts. It keeps a wider
-// berth from the boss than from the horde, since the boss is wider.
+// It dodges the boss the way a player who has seen his tells does: out of a
+// stomp ring once it winds up, sideways off a charge lane, and out of a glob
+// marker or a puddle. It keeps a wider berth from the boss than from the
+// horde, since the boss is wider. KITE=1 is the player who never learns the
+// tells: it only runs to the far side of the room from the boss and shoots.
 const DODGE_MARGIN_PX = Number(process.env.DODGE_MARGIN ?? 10)
 const NO_DODGE = process.env.NO_DODGE !== undefined
+const KITES = process.env.KITE !== undefined
+const BOSS_BODY_PX = 12
+const PLAYER_BODY_PX = 4
 
 const bossOf = (model: Model) => {
   const { boss } = model
@@ -281,31 +306,170 @@ const bossOf = (model: Model) => {
     : undefined
 }
 
-const stompDodge = (model: Model): Vector | undefined => {
-  if (NO_DODGE || model.boss._tag !== 'Fighting') return undefined
-  const move = model.boss.move
-  if (move._tag !== 'WindingUp' || move.attack !== 'Stomp') return undefined
+const awayFromLine = (from: Vector, direction: Vector, point: Vector) => {
+  const side =
+    direction.x * (point.y - from.y) - direction.y * (point.x - from.x) >= 0
+      ? 1
+      : -1
+  return { x: -direction.y * side, y: direction.x * side }
+}
+
+const distanceToLane = (
+  point: Vector,
+  from: Vector,
+  direction: Vector,
+  length: number,
+) => {
+  const along = Math.max(
+    0,
+    Math.min(
+      length,
+      (point.x - from.x) * direction.x + (point.y - from.y) * direction.y,
+    ),
+  )
+  return distance(point, {
+    x: from.x + direction.x * along,
+    y: from.y + direction.y * along,
+  })
+}
+
+const laneDodge = (
+  model: Model,
+  from: Vector,
+  direction: Vector,
+  length: number,
+): Vector | undefined =>
+  distanceToLane(model.player, from, direction, length) <
+  BOSS_BODY_PX + PLAYER_BODY_PX + DODGE_MARGIN_PX
+    ? awayFromLine(from, direction, model.player)
+    : undefined
+
+// Standing on a glob's mark, it steps across the boss's line of fire, to the
+// side with more room from the nearest other zombie.
+const clearSide = (model: Model, boss: Vector): Vector => {
+  const toward = steerToward(boss, model.player)
+  const across = { x: -toward.y, y: toward.x }
+  const crowd = walking(model)
+    .filter(zombie => zombie.kind !== 'Boss')
+    .sort((a, b) => distance(model.player, a) - distance(model.player, b))[0]
+  if (crowd === undefined) return across
+  const left = {
+    x: model.player.x + across.x * 10,
+    y: model.player.y + across.y * 10,
+  }
+  const right = {
+    x: model.player.x - across.x * 10,
+    y: model.player.y - across.y * 10,
+  }
+  return distance(left, crowd) >= distance(right, crowd)
+    ? across
+    : { x: -across.x, y: -across.y }
+}
+
+const telegraphDodge = (model: Model): Vector | undefined => {
+  if (NO_DODGE || KITES || model.boss._tag !== 'Fighting') return undefined
   const boss = bossOf(model)
+  const marker = model.boss.globs.find(
+    glob =>
+      (glob._tag === 'Flying' &&
+        distance(model.player, glob.to) <
+          BOSS_RULES.spitRadius + PLAYER_BODY_PX + DODGE_MARGIN_PX) ||
+      (glob._tag === 'Pooled' &&
+        distance(model.player, glob.at) < BOSS_RULES.puddleRadius + 2),
+  )
+  if (marker !== undefined) {
+    const center = marker._tag === 'Flying' ? marker.to : marker.at
+    return distance(model.player, center) < 3
+      ? clearSide(model, boss ?? { x: center.x, y: center.y - 1 })
+      : steerToward(center, model.player)
+  }
   if (boss === undefined) return undefined
-  return distance(model.player, boss) < BOSS_RULES.stompRadius + DODGE_MARGIN_PX
-    ? steerToward(boss, model.player)
-    : { x: 0, y: 0 }
+  const move = model.boss.move
+  if (move._tag === 'WindingUp' && move.attack === 'Stomp') {
+    return distance(model.player, boss) <
+      BOSS_RULES.stompRadius + DODGE_MARGIN_PX
+      ? steerToward(boss, model.player)
+      : { x: 0, y: 0 }
+  }
+  if (move._tag === 'Bracing') {
+    const length = distance(boss, move.target)
+    const direction = steerToward(boss, move.target)
+    return laneDodge(
+      model,
+      boss,
+      direction,
+      length + BOSS_RULES.chargeOvershootPx,
+    )
+  }
+  if (move._tag === 'Rushing') {
+    return laneDodge(model, boss, move.direction, move.remainingPx)
+  }
+  return undefined
 }
 
 const BOSS_BERTH_PX = Number(process.env.BOSS_BERTH ?? 16)
 
+// The spots a kiting player runs between: the four corners and the middle
+// of each wall, a little in from the walls.
+const KITE_SPOTS: Array<Vector> = [
+  { x: 40, y: 40 },
+  { x: 160, y: 36 },
+  { x: 280, y: 40 },
+  { x: 36, y: 95 },
+  { x: 284, y: 95 },
+  { x: 40, y: 150 },
+  { x: 160, y: 154 },
+  { x: 280, y: 150 },
+]
+
+const kiteAway = (model: Model, boss: Vector): Vector => {
+  const spot = [...KITE_SPOTS].sort(
+    (a, b) => distance(b, boss) - distance(a, boss),
+  )[0]!
+  return distance(model.player, spot) > 6
+    ? steerToward(model.player, spot)
+    : { x: 0, y: 0 }
+}
+
+// ENGAGE=1 holds the middle distance from the boss: outside his stomp
+// trigger, inside his charge range. It walks into the horde to get there,
+// so it does worse than the default, which holds the middle of the room.
+const ENGAGES = process.env.ENGAGE !== undefined
+const ENGAGE_PX = Number(process.env.ENGAGE_PX ?? 58)
+
+const engage = (model: Model, boss: Vector): Vector => {
+  const away = steerToward(boss, model.player)
+  const spot = {
+    x: boss.x + (away.x === 0 && away.y === 0 ? 1 : away.x) * ENGAGE_PX,
+    y: boss.y + away.y * ENGAGE_PX,
+  }
+  return distance(model.player, spot) > 6
+    ? steerToward(model.player, spot)
+    : { x: 0, y: 0 }
+}
+
 const kite = (model: Model): Vector => {
   const { player } = model
-  const dodge = stompDodge(model)
+  const dodge = telegraphDodge(model)
   if (dodge !== undefined) {
     return dodge
   }
   const reach = (zombie: Model['zombies'][number]) =>
     distance(player, zombie) - (zombie.kind === 'Boss' ? BOSS_BERTH_PX : 0)
-  const nearest = walking(model).sort((a, b) => reach(a) - reach(b))[0]
+  const nearest = walking(model)
+    .filter(zombie => !KITES || zombie.kind !== 'Boss')
+    .sort((a, b) => reach(a) - reach(b))[0]
   if (nearest !== undefined && reach(nearest) < FLEE_PX) {
     return steerToward(nearest, player)
   }
+  const boss = bossOf(model)
+  if (boss !== undefined && KITES) {
+    return kiteAway(model, boss)
+  }
+  if (boss !== undefined && ENGAGES) {
+    return engage(model, boss)
+  }
+
   const pickup = safePickup(model)
   if (pickup !== undefined) {
     return steerToward(player, pickup)
@@ -361,10 +525,30 @@ const nextBotRandom = () => {
   return botRandom / 0xffffffff
 }
 
-const nearestVisible = (model: Model) =>
-  walking(model)
+// It shoots the nearest zombie it can see, but while the boss stands it
+// shoots him unless something else is within FOCUS_PX, and it always shoots
+// him while he is dazed.
+// NO_FOCUS=1 always shoots the nearest.
+const FOCUSES_BOSS = process.env.NO_FOCUS === undefined
+const FOCUS_PX = Number(process.env.FOCUS_PX ?? 60)
+const nearestVisible = (model: Model) => {
+  const visible = walking(model)
     .filter(zombie => hasLineOfSight(model.player, zombie))
-    .sort((a, b) => distance(model.player, a) - distance(model.player, b))[0]
+    .sort((a, b) => distance(model.player, a) - distance(model.player, b))
+  const nearest = visible[0]
+  const boss = FOCUSES_BOSS
+    ? visible.find(zombie => zombie.kind === 'Boss')
+    : undefined
+  const isDazed =
+    model.boss._tag === 'Fighting' && model.boss.move._tag === 'Dazed'
+  return boss !== undefined &&
+    nearest !== undefined &&
+    (isDazed ||
+      nearest.kind === 'Boss' ||
+      distance(model.player, nearest) > FOCUS_PX)
+    ? boss
+    : nearest
+}
 
 // Reloads when nothing is in sight and the magazine is under half, or when
 // the room is empty, the way a player tops off between fights instead of
@@ -576,6 +760,14 @@ const emptyHurt = (): Record<Kind, number> => ({
   Boss: 0,
 })
 
+const bossBlameOf = (after: Model): BossBlame | undefined => {
+  const tags = after.frameEvents.map(event => event._tag)
+  if (tags.includes('BossRammed')) return 'Charge'
+  if (tags.includes('BossStomped')) return 'Stomp'
+  if (tags.includes('GlobLanded')) return 'Glob'
+  return undefined
+}
+
 const blame = (before: Model, after: Model, hurtBy: Record<Kind, number>) => {
   const lost = before.player.hp - after.player.hp
   if (lost <= 0) return
@@ -588,7 +780,7 @@ const blame = (before: Model, after: Model, hurtBy: Record<Kind, number>) => {
     hurtBy.Exploder += lost
     return
   }
-  if (after.frameEvents.some(event => event._tag === 'BossStomped')) {
+  if (bossBlameOf(after) !== undefined) {
     hurtBy.Boss += lost
     return
   }
@@ -736,6 +928,16 @@ const runOnce = (seed: number): RunResult => {
               stomps: 0,
               stompHits: 0,
               belches: 0,
+              charges: 0,
+              chargeHits: 0,
+              bonks: 0,
+              spits: 0,
+              spitHits: 0,
+              enraged: false,
+              heartsLost: 0,
+              heartsByAttack: emptyBossBlame(),
+              damageTaken: 0,
+              aimedMs: 0,
             }),
             bossLog[bossLog.length - 1]!)
           : undefined)
@@ -750,7 +952,39 @@ const runOnce = (seed: number): RunResult => {
           }
           if (event._tag === 'BossStomped') fight.stomps += 1
           if (event._tag === 'BossBelched') fight.belches += 1
+          if (event._tag === 'BossRushed') fight.charges += 1
+          if (event._tag === 'BossRammed') fight.chargeHits += 1
+          if (event._tag === 'BossBonked') fight.bonks += 1
+          if (event._tag === 'BossSpat') fight.spits += 1
+          if (event._tag === 'BossEnraged') fight.enraged = true
+          if (
+            (event._tag === 'ZombieHit' || event._tag === 'ZombieKilled') &&
+            event.kind === 'Boss' &&
+            event._tag === 'ZombieHit'
+          ) {
+            fight.damageTaken += event.damage
+          }
         })
+        if (
+          model.boss._tag === 'Fighting' &&
+          nearestVisible(before)?.kind === 'Boss'
+        ) {
+          fight.aimedMs += FRAME_MS
+        }
+        const lost = before.player.hp - model.player.hp
+        if (lost > 0 && model.boss._tag === 'Fighting') {
+          fight.heartsLost += lost
+          const cause = bossBlameOf(model)
+          const nearest = walking(before).sort(
+            (a, b) => distance(before.player, a) - distance(before.player, b),
+          )[0]
+          if (cause !== undefined) {
+            fight.heartsByAttack[cause] += lost
+            if (cause === 'Glob') fight.spitHits += 1
+          } else if (nearest?.kind === 'Boss') {
+            fight.heartsByAttack.Bite += lost
+          }
+        }
         if (
           model.frameEvents.some(event => event._tag === 'BossStomped') &&
           model.player.hp < before.player.hp
@@ -783,6 +1017,24 @@ const runOnce = (seed: number): RunResult => {
       log.pressureMs += crowd >= PRESSURE_CROWD ? FRAME_MS : 0
       log.relaxMs += alive.length === 0 ? FRAME_MS : 0
       log.peakAlive = Math.max(log.peakAlive, alive.length)
+    }
+    if (
+      process.env.BOSS_TRACE &&
+      frame % 150 === 0 &&
+      model.boss._tag === 'Fighting'
+    ) {
+      const boss = bossOf(model)
+      console.log(
+        'boss',
+        boss?.x.toFixed(0),
+        boss?.y.toFixed(0),
+        model.boss.move._tag,
+        'player',
+        model.player.x.toFixed(0),
+        model.player.y.toFixed(0),
+        'alive',
+        walking(model).length,
+      )
     }
     if (process.env.DEBUG && frame % 150 === 0) {
       const near = walking(model).map(z => distance(model.player, z))
@@ -900,7 +1152,7 @@ const lastWave = IS_ENDLESS
   ? Math.max(...results.map(result => result.cleared + 1))
   : FINAL_WAVE
 console.log(
-  `${runs} ${IS_ENDLESS ? 'endless' : 'campaign'} runs in ${elapsed.toFixed(1)} s${NO_UPGRADES ? ', no upgrades' : ''}${SWAPS_BACK ? ', swaps back to the spare' : ''}`,
+  `${runs} ${IS_ENDLESS ? 'endless' : 'campaign'} runs in ${elapsed.toFixed(1)} s${NO_UPGRADES ? ', no upgrades' : ''}${SWAPS_BACK ? ', swaps back to the spare' : ''}${KITES ? ', kites the boss' : ''}`,
 )
 console.log('\nWave  reached  cleared')
 for (let wave = 1; wave <= lastWave; wave++) {
@@ -1060,10 +1312,54 @@ fightWaves.forEach(bossWave => {
   const diedAtWave = results.filter(
     r => !r.victory && r.cleared + 1 === bossWave,
   ).length
-  const stomps = arrived.reduce((sum, fight) => sum + fight.stomps, 0)
-  const stompHits = arrived.reduce((sum, fight) => sum + fight.stompHits, 0)
+  const perFight = (pick: (fight: BossFight) => number) =>
+    (
+      arrived.reduce((sum, fight) => sum + pick(fight), 0) /
+      Math.max(1, arrived.length)
+    ).toFixed(1)
+  const share = (part: number, whole: number) =>
+    `${((100 * part) / Math.max(1, whole)).toFixed(0)}%`
+  const sum = (pick: (fight: BossFight) => number) =>
+    arrived.reduce((total, fight) => total + pick(fight), 0)
+  const wonKills = results
+    .filter(r => r.victory || r.cleared >= bossWave)
+    .flatMap(r => r.boss)
+    .filter(fight => fight.wave === bossWave && fight.felled)
+    .map(fight => fight.fightMs)
+  const lostToBoss = sum(fight => fight.heartsLost)
+  const waveHearts = results.reduce(
+    (total, r) => total + (r.waves[bossWave - 1]?.heartsLost ?? 0),
+    0,
+  )
   console.log(
-    `  wave ${bossWave}: reached ${atWave.length}, boss arrived ${arrived.length}, felled ${felled.length}, runs that died with it standing ${diedTo.length} of ${diedAtWave} deaths on the wave, median fight ${(median(arrived.map(fight => fight.fightMs)) / 1000).toFixed(1)} s, stomps ${(stomps / Math.max(1, arrived.length)).toFixed(1)} a fight (${((100 * stompHits) / Math.max(1, stomps)).toFixed(0)}% hit), belches ${(arrived.reduce((sum, fight) => sum + fight.belches, 0) / Math.max(1, arrived.length)).toFixed(1)} a fight`,
+    `  wave ${bossWave}: reached ${atWave.length}, boss arrived ${arrived.length}, felled ${felled.length}, runs that died with it standing ${diedTo.length} of ${diedAtWave} deaths on the wave`,
+  )
+  console.log(
+    `    fight: median ${(median(arrived.map(fight => fight.fightMs)) / 1000).toFixed(1)} s, kill time in runs that cleared the wave median ${(median(wonKills) / 1000).toFixed(1)} s (p25 ${(quantile(wonKills, 0.25) / 1000).toFixed(1)}, p75 ${(quantile(wonKills, 0.75) / 1000).toFixed(1)}, n=${wonKills.length}), enraged in ${share(arrived.filter(fight => fight.enraged).length, arrived.length)}`,
+  )
+  console.log(
+    `    a fight: stomps ${perFight(fight => fight.stomps)} (${share(
+      sum(fight => fight.stompHits),
+      sum(fight => fight.stomps),
+    )} hit), charges ${perFight(fight => fight.charges)} (${share(
+      sum(fight => fight.chargeHits),
+      sum(fight => fight.charges),
+    )} hit, ${share(
+      sum(fight => fight.bonks),
+      sum(fight => fight.charges),
+    )} bonked), spits ${perFight(fight => fight.spits)} (${share(
+      sum(fight => fight.spitHits),
+      sum(fight => fight.spits),
+    )} hit), belches ${perFight(fight => fight.belches)}`,
+  )
+  console.log(
+    `    his health taken a second of fight ${(sum(fight => fight.damageTaken) / Math.max(1, sum(fight => fight.fightMs) / 1000)).toFixed(2)}, a second aimed at him ${(sum(fight => fight.damageTaken) / Math.max(1, sum(fight => fight.aimedMs) / 1000)).toFixed(2)}, aimed at him ${share(
+      sum(fight => fight.aimedMs),
+      sum(fight => fight.fightMs),
+    )} of the fight`,
+  )
+  console.log(
+    `    hearts lost while he stood ${lostToBoss} (${share(lostToBoss, waveHearts)} of the wave's ${waveHearts}): stomp ${sum(fight => fight.heartsByAttack.Stomp)}, charge ${sum(fight => fight.heartsByAttack.Charge)}, glob ${sum(fight => fight.heartsByAttack.Glob)}, his bite ${sum(fight => fight.heartsByAttack.Bite)}, the rest to the crowd`,
   )
 })
 

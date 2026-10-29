@@ -519,6 +519,15 @@ const BOSS_PALETTE: Palette = {
   V: '#9be36a',
 }
 
+// NOTE: an enraged boss draws as his "lit" frames: flushed red skin and a
+// hot yellow stare.
+const BOSS_ENRAGED_PALETTE: Palette = {
+  ...BOSS_PALETTE,
+  P: '#d9707a',
+  Q: '#a8464f',
+  E: '#fff27a',
+}
+
 const BOSS_WIDTH = 26
 
 const BOSS_UPPER: ReadonlyArray<string> = [
@@ -743,6 +752,7 @@ export type WornFrames = Readonly<{
   walk: SpriteFrames
   lit: SpriteFrames
   gape: SpriteSet
+  litGape: SpriteSet
 }>
 
 export type ZombieSprites = Readonly<{
@@ -771,13 +781,15 @@ const wornFrames =
   (stage: number): WornFrames => {
     const pixels = art.pixelsAt(stage)
     const walk = spriteFrames(pixels, art.palette, art.anchorX)
+    const gape = spriteSet(art.palette, art.anchorX)(art.gapeAt(stage))
+    const isLitSame = art.litPalette === art.palette
     return {
       walk,
-      lit:
-        art.litPalette === art.palette
-          ? walk
-          : spriteFrames(pixels, art.litPalette, art.anchorX),
-      gape: spriteSet(art.palette, art.anchorX)(art.gapeAt(stage)),
+      lit: isLitSame ? walk : spriteFrames(pixels, art.litPalette, art.anchorX),
+      gape,
+      litGape: isLitSame
+        ? gape
+        : spriteSet(art.litPalette, art.anchorX)(art.gapeAt(stage)),
     }
   }
 
@@ -835,7 +847,7 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     pixelsAt: bossWalkPixels,
     gapeAt: stage => bossPixels(BOSS_LEGS_PLANTED, stage, true),
     palette: BOSS_PALETTE,
-    litPalette: BOSS_PALETTE,
+    litPalette: BOSS_ENRAGED_PALETTE,
     anchorX: BOSS_ANCHOR_X,
     icon: BOSS_ICON_PIXELS,
   }),

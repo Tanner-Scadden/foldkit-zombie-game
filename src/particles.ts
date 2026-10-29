@@ -799,6 +799,32 @@ const stompParticles = (
   ])
 }
 
+const RUSH_DUST = 6
+const BONK_CHIPS = 8
+const SPIT_GOO = 4
+const SPLAT_GOO = 10
+
+const bonkParticles = (
+  state: number,
+  { x, y }: Readonly<{ x: number; y: number }>,
+): Seeded<ReadonlyArray<Particle>> => {
+  const ground = zombieGround(x, y, 'Boss')
+  return chain(state, [
+    dustRing(ground, STOMP_DUST),
+    drawState => generateMany(drawState, BONK_CHIPS, chip(ground, 0)),
+  ])
+}
+
+const splatParticles = (
+  state: number,
+  { x, y }: Readonly<{ x: number; y: number }>,
+): Seeded<ReadonlyArray<Particle>> =>
+  generateMany(
+    state,
+    SPLAT_GOO,
+    droplet('Goo', { x, y }, 0, Math.PI * 2, GOO_BURST_SPEED),
+  )
+
 const belchParticles = (
   state: number,
   { x, y }: Readonly<{ x: number; y: number }>,
@@ -996,6 +1022,19 @@ const eventParticles = (
     BossWoundUp: () => noParticles(state),
     BossStomped: stomped => stompParticles(state, stomped),
     BossBelched: belched => belchParticles(state, belched),
+    BossRushed: ({ x, y }) =>
+      dustRing(zombieGround(x, y, 'Boss'), RUSH_DUST)(state),
+    BossRammed: () => noParticles(state),
+    BossBonked: bonked => bonkParticles(state, bonked),
+    BossSpat: ({ x, y }) =>
+      generateMany(
+        state,
+        SPIT_GOO,
+        droplet('Goo', { x, y }, Math.PI / 2, Math.PI, GOO_BURST_SPEED),
+      ),
+    GlobLanded: landed => splatParticles(state, landed),
+    BossEnraged: ({ x, y }) =>
+      dustRing(zombieGround(x, y, 'Boss'), STOMP_DUST)(state),
   })
 
 type Spawn = Readonly<{

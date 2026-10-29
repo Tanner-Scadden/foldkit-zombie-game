@@ -2,7 +2,13 @@ import { Array, Option, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { ARENA_LEVEL, type Box, findStrike, moveCircle } from './arena'
-import { advanceBossMoves, isRooted } from './boss'
+import {
+  advanceBossMoves,
+  isRooted,
+  paceOf,
+  puddleSlowAt,
+  woundScaleOf,
+} from './boss'
 import { cameraOf } from './camera'
 import {
   hitEvent,
@@ -550,6 +556,7 @@ const steeringVelocity = (
   target: Vector,
   barricaded: ReadonlyArray<DoorId>,
   isHeld: boolean,
+  pace: number,
 ): Vector => {
   const stats = statsOf(zombie)
   return ZombieState.match(zombie.state, {
@@ -565,7 +572,7 @@ const steeringVelocity = (
               stats.clearance,
               barricaded,
             ),
-            zombie.speed,
+            zombie.speed * pace,
           ),
     Fusing: () => ZERO_VECTOR,
     Dying: () => ZERO_VECTOR,
@@ -598,6 +605,7 @@ const advanceZombie = (
         target,
         obstacles.barricaded,
         isRooted(obstacles.boss, zombie),
+        paceOf(obstacles.boss, zombie, target),
       ),
       zombie.knockback,
     ),
@@ -760,6 +768,7 @@ const targetsFor = (
 const findBulletHits = (
   bullets: ReadonlyArray<Bullet>,
   zombies: ReadonlyArray<Zombie>,
+  boss: Boss,
   seconds: number,
 ): ReadonlyArray<BulletHit> => {
   const targets = Array.filter(zombies, isWalking)
@@ -781,7 +790,7 @@ const findBulletHits = (
           y: point.y,
           direction: bulletDirection(bullet),
           weapon: bullet.weapon,
-          damage: bullet.damage,
+          damage: bullet.damage * woundScaleOf(boss, zombie),
           knockback: bullet.knockback,
         })),
       )
@@ -867,7 +876,7 @@ const skewer =
     )
 
 const resolveBulletHits = (model: Model, seconds: number): Model => {
-  const hits = findBulletHits(model.bullets, model.zombies, seconds)
+  const hits = findBulletHits(model.bullets, model.zombies, model.boss, seconds)
   if (Array.isReadonlyArrayEmpty(hits)) {
     return model
   }
@@ -1056,7 +1065,7 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
         movePlayer(
           player,
           model.intent.move,
-          playerSpeed(model.boosts),
+          playerSpeed(model.boosts) * puddleSlowAt(model.boss, model.player),
           blockers,
           seconds,
           deltaMs,

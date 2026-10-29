@@ -66,6 +66,11 @@ export const SoundEffect = Schema.Literals([
   'BossStomp',
   'BossBelch',
   'BossDeath',
+  'BossChargeUp',
+  'BossRush',
+  'BossBonk',
+  'BossSpit',
+  'BossSplat',
 ])
 export type SoundEffect = typeof SoundEffect.Type
 
@@ -1245,6 +1250,125 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
         quality: 5,
         cutoff: [at(0, 1600), at(0.4, 400)],
         envelope: envelope(0.5, 0.01, 0.4),
+      },
+    ],
+  },
+  BossChargeUp: {
+    variationCents: 40,
+    tones: [
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 52), at(0.7, 112)],
+        envelope: envelope(0.3, 0.25, 0.55),
+      },
+    ],
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 1,
+        cutoff: [at(0, 900), at(0.1, 160)],
+        envelope: envelope(0.6, 0.004, 0.12),
+      },
+      {
+        filter: 'lowpass',
+        quality: 1,
+        cutoff: [at(0, 900), at(0.1, 160)],
+        envelope: envelope(0.6, 0.004, 0.12, 0.27),
+      },
+      {
+        filter: 'lowpass',
+        quality: 1,
+        cutoff: [at(0, 900), at(0.1, 160)],
+        envelope: envelope(0.6, 0.004, 0.12, 0.54),
+      },
+      {
+        filter: 'bandpass',
+        quality: 6,
+        cutoff: [at(0, 700), at(0.15, 1400)],
+        envelope: envelope(0.28, 0.02, 0.18, 0.6),
+      },
+    ],
+  },
+  BossRush: {
+    variationCents: 60,
+    tones: [
+      {
+        wave: 'sine',
+        pitch: [at(0, 70), at(0.5, 44)],
+        envelope: envelope(0.55, 0.02, 0.5),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 2,
+        cutoff: [at(0, 300), at(0.25, 1500), at(0.55, 500)],
+        envelope: envelope(0.5, 0.06, 0.5),
+      },
+    ],
+  },
+  BossBonk: {
+    variationCents: 30,
+    tones: [
+      {
+        wave: 'sine',
+        pitch: [at(0, 260), at(0.12, 70)],
+        envelope: envelope(1, 0.002, 0.3),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 540), at(0.08, 300), at(0.16, 420), at(0.3, 260)],
+        envelope: envelope(0.14, 0.004, 0.35, 0.03),
+      },
+    ],
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 0.8,
+        cutoff: [at(0, 3000), at(0.3, 120)],
+        envelope: envelope(0.8, 0.002, 0.3),
+      },
+    ],
+  },
+  BossSpit: {
+    variationCents: 120,
+    tones: [
+      {
+        wave: 'sine',
+        pitch: [at(0, 420), at(0.1, 180)],
+        envelope: envelope(0.35, 0.004, 0.12, 0.08),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 3,
+        cutoff: [at(0, 600), at(0.08, 1300)],
+        envelope: envelope(0.3, 0.03, 0.08),
+      },
+      {
+        filter: 'bandpass',
+        quality: 4,
+        cutoff: [at(0, 1800), at(0.12, 700)],
+        envelope: envelope(0.45, 0.003, 0.12, 0.08),
+      },
+    ],
+  },
+  BossSplat: {
+    variationCents: 140,
+    tones: [
+      {
+        wave: 'sine',
+        pitch: [at(0, 170), at(0.18, 55)],
+        envelope: envelope(0.6, 0.003, 0.2),
+      },
+    ],
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 1.5,
+        cutoff: [at(0, 2200), at(0.25, 220)],
+        envelope: envelope(0.7, 0.002, 0.28),
       },
     ],
   },

@@ -13,6 +13,7 @@ import {
   isOpenBlock,
   isWalkableTile,
   nearestDoor,
+  resolveCircle,
   tileCenter,
   tileIndex,
   tileIndexAt,
@@ -251,13 +252,26 @@ const downhillStep = (
   )
 }
 
+// NOTE: a wide walker cannot reach the middle of a tile beside a wall, so it
+// aims at the nearest spot its body fits. Aiming at the tile's middle pins it
+// on the corner of a crate it is trying to round.
+const waypointFor = (
+  index: number,
+  halfWidth: number,
+  clearance: Clearance,
+): Vector => {
+  const center = tileCenter(tileOfIndex(index))
+  return clearance === 'Wide' ? resolveCircle(center, halfWidth + 1) : center
+}
+
 const flowDirection = (
   flowField: FlowField,
   position: Vector,
+  halfWidth: number,
   clearance: Clearance,
 ): Option.Option<Vector> =>
   Option.flatMap(downhillStep(flowField, position, clearance), ({ index }) =>
-    directionBetween(position, tileCenter(tileOfIndex(index))),
+    directionBetween(position, waypointFor(index, halfWidth, clearance)),
   )
 
 const directWeight = (distance: number): number =>
@@ -280,25 +294,28 @@ const insideSteering = (
     () => ZERO_VECTOR,
   )
   const distance = Math.hypot(target.x - position.x, target.y - position.y)
-  return Option.match(flowDirection(flowField, position, clearance), {
-    onNone: () => direct,
-    onSome: flow => {
-      const weight =
-        distance < DIRECT_CHASE_RANGE_PX &&
-        hasClearPath(position, target, halfWidth)
-          ? directWeight(distance)
-          : 0
-      return Option.getOrElse(
-        normalize(
-          addVectors(
-            scaleVector(flow, 1 - weight),
-            scaleVector(direct, weight),
+  return Option.match(
+    flowDirection(flowField, position, halfWidth, clearance),
+    {
+      onNone: () => direct,
+      onSome: flow => {
+        const weight =
+          distance < DIRECT_CHASE_RANGE_PX &&
+          hasClearPath(position, target, halfWidth)
+            ? directWeight(distance)
+            : 0
+        return Option.getOrElse(
+          normalize(
+            addVectors(
+              scaleVector(flow, 1 - weight),
+              scaleVector(direct, weight),
+            ),
           ),
-        ),
-        () => direct,
-      )
+          () => direct,
+        )
+      },
     },
-  })
+  )
 }
 
 // OUTSIDE
