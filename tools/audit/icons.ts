@@ -1,14 +1,17 @@
 // Draws every icon in public/ from the pixel maps below: the 16 pixel
 // favicon.svg for browser tabs, the 192 and 512 manifest icons, the 512
 // maskable icon with the head inside the safe circle, and the 180 Apple touch
-// icon. It also writes a contact sheet of every size to shots/icons.png.
+// icon. It also writes the same head into the loading splash in index.html,
+// between the splash-zombie markers, and a contact sheet of every size to
+// shots/icons.png.
 //   bun icons.ts
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { launch } from './lib'
 
 const PUBLIC = resolve(import.meta.dir, '../../public')
+const INDEX_HTML = resolve(import.meta.dir, '../../index.html')
 const SHOTS = resolve(import.meta.dir, 'shots')
 
 // PALETTE
@@ -209,6 +212,51 @@ const dataUrl = (svg: string): string =>
 
 writeFileSync(`${PUBLIC}/favicon.svg`, FAVICON_SVG)
 console.log('wrote public/favicon.svg')
+
+// SPLASH
+
+// The loading splash shows the app icon's head on its own, without the glow,
+// inline in index.html so it paints before any request. One path per color
+// keeps it small.
+const SPLASH_HEAD = BIG_HEAD.filter(row => [...row].some(cell => cell !== '.'))
+const SPLASH_START = '<!-- splash-zombie: written by tools/audit/icons.ts -->'
+const SPLASH_END = '<!-- /splash-zombie -->'
+
+const splashSvg = (rows: ReadonlyArray<string>): string => {
+  const width = rows[0]?.length ?? 0
+  const pathsByColor = new Map<string, Array<string>>()
+  rows.forEach((row, y) => {
+    let start = 0
+    for (let x = 1; x <= row.length; x++) {
+      if (x === row.length || row[x] !== row[start]) {
+        const cell = row[start] ?? '.'
+        if (cell !== '.') {
+          const fill = PALETTE[cell]
+          if (fill === undefined) throw new Error(`no color for ${cell}`)
+          const runs = pathsByColor.get(fill) ?? []
+          runs.push(`M${start} ${y}h${x - start}v1h-${x - start}z`)
+          pathsByColor.set(fill, runs)
+        }
+        start = x
+      }
+    }
+  })
+  const paths = [...pathsByColor.entries()].map(
+    ([fill, runs]) => `        <path fill="${fill}" d="${runs.join('')}" />`,
+  )
+  return `<svg class="splash-zombie" viewBox="0 0 ${width} ${rows.length}" aria-hidden="true">\n${paths.join('\n')}\n      </svg>`
+}
+
+const indexHtml = readFileSync(INDEX_HTML, 'utf8')
+const splashStart = indexHtml.indexOf(SPLASH_START)
+const splashEnd = indexHtml.indexOf(SPLASH_END)
+if (splashStart < 0 || splashEnd < splashStart)
+  throw new Error('index.html is missing the splash-zombie markers')
+writeFileSync(
+  INDEX_HTML,
+  `${indexHtml.slice(0, splashStart + SPLASH_START.length)}\n      ${splashSvg(SPLASH_HEAD)}\n      ${indexHtml.slice(splashEnd)}`,
+)
+console.log('wrote the splash head in index.html')
 
 // PNG ICONS
 
