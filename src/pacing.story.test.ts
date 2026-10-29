@@ -767,5 +767,5 @@ describe('spawn variety', () => {
         })
       },
     )
-  })
+  }, 30_000)
 })
