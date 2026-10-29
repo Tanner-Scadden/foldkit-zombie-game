@@ -253,7 +253,7 @@ Zombies sometimes drop a goodie. Walking over it grabs it. Four are timed boosts
 
 - **Stacking.** Different boosts run side by side. Grabbing a running boost adds its time, up to 1.5 times one pickup. `firingStats` and `playerSpeed` in `src/powerups.ts` are the one place boosts turn into stats.
 - **Time.** Boosts and pickups stand still with the world: paused, in the shop, in hit-stop, or under the new zombie card.
-- **Feel.** A pickup bobs in a glow for 10 s and blinks out over its last 3. A grab plays its own sound, throws sparks, and shows its name. While a boost runs the player wears an aura of its color, shots take its glaze, and a chip beside the hearts drains.
+- **Feel.** A pickup bobs in a glow for 10 s and blinks out over its last 3. A grab plays its own sound, throws sparks, and shows its name. Only the first grab of each kind, ever, adds its one-line blurb; later grabs pop just its icon and name (2026-10-29, owner request, "Show, don't explain"). While a boost runs the player wears an aura of its color, shots take its glaze, and a chip beside the hearts drains.
 
 ##### Drops
 
@@ -389,10 +389,10 @@ From owner feedback on 2026-10-28: a home base, a loading page, and taps that la
 
 From owner feedback on 2026-10-28 ("save if they've already done the tutorial"). The record is `PlayerSave` in `src/save.ts`, kept in SQLite on OPFS as the player sync scope, so linked devices share it. See "The on-device save" in `PLATFORM.md`.
 
-- **What is saved.** The lessons, the zombie cards seen, the Home Screen tip, sound, music, screen shake, the look, the difficulty and the Nightmare unlock, the bests and kills per kind, the What's New day seen, the Munchopedia entries opened, and the play stats setting.
+- **What is saved.** The lessons, the zombie cards seen, the Home Screen tip, sound, music, screen shake, the look, the difficulty and the Nightmare unlock, the bests and kills per kind, the What's New day seen, the Munchopedia entries opened, the play stats setting, and the power-up kinds grabbed (version 6, merged across linked devices as a union).
 - **What is not.** The run itself and full screen.
 - **Loading and writing.** The splash waits for the save, so no hint flashes. A missing, corrupt, or unreadable save reads as no save. It is written only when a saved field changes.
-- **Reset tutorial** clears the lessons and cards and keeps everything else.
+- **Reset tutorial** clears the lessons, the cards, and the power-ups seen, and keeps everything else.
 
 ### Wear and the boss
 

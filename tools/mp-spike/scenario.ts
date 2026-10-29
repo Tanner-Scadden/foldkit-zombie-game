@@ -82,6 +82,7 @@ export const LOCAL_ONLY: ReadonlySet<string> = new Set([
   'practice',
   'debutCard',
   'introducedKinds',
+  'seenPowerUps',
   'hintBand',
   'screenMs',
   'audio',

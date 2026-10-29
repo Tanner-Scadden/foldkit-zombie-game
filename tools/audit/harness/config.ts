@@ -151,6 +151,8 @@ export const HarnessConfig = Schema.Struct({
   boostMs: Num(5000),
   callout: Schema.optionalKey(PickupKind),
   calloutAge: Num(400),
+  calloutLook: Choice(['Explained', 'Named']),
+  seenpowerups: AllOr(PickupKind),
   bounty: Flag,
   // The boss
   boss: Choice([

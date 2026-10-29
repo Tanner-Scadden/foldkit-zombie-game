@@ -24,6 +24,7 @@ import {
   type Boosts,
   type BulletGlaze,
   type Callout,
+  type CalloutLook,
   GameEvent,
   type Loot,
   type Model,
@@ -202,7 +203,10 @@ export const PICKUP_LIFETIME_MS = 10000
 export const PICKUP_BLINK_MS = 3000
 const PICKUP_RADIUS = 4
 const PICKUP_GRAB_PX = PLAYER_RADIUS + 4
-export const CALLOUT_LIFETIME_MS = 1600
+export const CALLOUT_LIFETIME_MS: Readonly<Record<CalloutLook, number>> = {
+  Explained: 1600,
+  Named: 1000,
+}
 const CALLOUT_MAX = 1
 
 export const BURP_RADIUS = 110
@@ -388,7 +392,7 @@ const ageCallouts = (model: Model, deltaMs: number): Model =>
     : modifyFields(model, {
         callouts: callouts =>
           Array.filterMap(callouts, callout =>
-            callout.ageMs + deltaMs < CALLOUT_LIFETIME_MS
+            callout.ageMs + deltaMs < CALLOUT_LIFETIME_MS[callout.look]
               ? Result.succeed(
                   modifyFields(callout, { ageMs: ageMs => ageMs + deltaMs }),
                 )
@@ -446,14 +450,20 @@ const applyEffect = (model: Model, effect: PickupEffect): Model =>
       }),
   })
 
+// NOTE: a kind is explained once, ever: the save keeps the kinds seen, so a
+// returning player only sees the name pop. The list keeps its reference
+// when nothing new is seen, so the save check sees nothing changed.
 const grab = (model: Model, pickup: Pickup): Model => {
+  const isSeen = Array.contains(model.seenPowerUps, pickup.kind)
   const callout: Callout = {
     kind: pickup.kind,
+    look: isSeen ? 'Named' : 'Explained',
     x: model.player.x,
     y: model.player.y,
     ageMs: 0,
   }
   return modifyFields(applyEffect(model, PICKUPS[pickup.kind].effect), {
+    seenPowerUps: seen => (isSeen ? seen : Array.append(seen, pickup.kind)),
     callouts: callouts => Array.takeRight([...callouts, callout], CALLOUT_MAX),
     frameEvents: Array.append(
       GameEvent.PickupGrabbed({ x: pickup.x, y: pickup.y, kind: pickup.kind }),

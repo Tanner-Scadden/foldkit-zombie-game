@@ -44,11 +44,13 @@ import {
   ChangedHome,
   ChangedOnboarding,
   ChangedSettings,
+  ForgotPowerUps,
   KillsRow,
   PLAYER_COLUMNS,
   PlayerRow,
   PlayerScope,
   RecordedRun,
+  SawPowerUps,
   SeededPlayer,
   UnlockedNightmare,
   killsRowsOfSave,
@@ -149,6 +151,7 @@ const saveOfRow = (
     byDifficulty: row.difficulty_bests,
   },
   home: row.home,
+  seenPowerUps: row.seen_power_ups,
 })
 
 // LEGACY
@@ -397,6 +400,10 @@ const runChange = (replica: Replica, change: PlayerChange) => {
     })
   } else if (change._tag === 'ChangedHome') {
     return replica.run(ChangedHome, { home: change.home })
+  } else if (change._tag === 'SawPowerUps') {
+    return replica.run(SawPowerUps, { kinds: change.kinds })
+  } else if (change._tag === 'ForgotPowerUps') {
+    return replica.run(ForgotPowerUps, {})
   } else {
     return replica.run(RecordedRun, {
       runs: change.runs,

@@ -23,6 +23,7 @@ import {
   changesBetween,
   devicesStatusText,
   syncStateText,
+  withUnsavedChanges,
 } from './playerSync'
 import { type PlayerSave, saveOf } from './save'
 
@@ -391,6 +392,57 @@ describe('changes as mutations', () => {
     ])
     expect(changesBetween(before, before)).toEqual([])
     expect(Option.isNone(Option.none())).toBe(true)
+  })
+})
+
+describe('the power-ups seen across devices', () => {
+  test('a new kind is sent as an addition, never the whole list', () => {
+    const before: PlayerSave = { ...saveOf(read), seenPowerUps: ['RapidFire'] }
+    const after: PlayerSave = {
+      ...before,
+      seenPowerUps: ['RapidFire', 'Burp'],
+    }
+    expect(changesBetween(before, after)).toEqual([
+      PlayerChange.SawPowerUps({ kinds: ['Burp'] }),
+    ])
+    expect(changesBetween(after, after)).toEqual([])
+    expect(changesBetween(after, { ...after, seenPowerUps: [] })).toEqual([
+      PlayerChange.ForgotPowerUps(),
+    ])
+  })
+
+  test('a save from another device adds its kinds to the ones seen here', () => {
+    const here = modifyFields(read, { seenPowerUps: () => ['Speed'] })
+    story(
+      update,
+      given(here),
+      message(
+        Message.UpdatedSyncedSave({
+          save: { ...saveOf(here), seenPowerUps: ['Damage', 'Heart'] },
+        }),
+      ),
+      model(current => {
+        expect(current.seenPowerUps).toEqual(['Speed', 'Damage', 'Heart'])
+      }),
+      Command.expectNone(),
+    )
+  })
+
+  test('a failed write keeps the kinds seen and the reset in order', () => {
+    const seen = PlayerChange.SawPowerUps({ kinds: ['Pierce'] })
+    const forgot = PlayerChange.ForgotPowerUps()
+    const save: PlayerSave = { ...saveOf(read), seenPowerUps: ['Speed'] }
+    expect(
+      withUnsavedChanges(
+        [seen],
+        [forgot, PlayerChange.SawPowerUps({ kinds: ['Speed'] })],
+        save,
+      ),
+    ).toEqual([
+      PlayerChange.SawPowerUps({ kinds: ['Speed'] }),
+      forgot,
+      PlayerChange.SawPowerUps({ kinds: ['Speed'] }),
+    ])
   })
 })
 

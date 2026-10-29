@@ -1,4 +1,4 @@
-import { Effect, Option } from 'effect'
+import { Array, Effect, Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { afterEach, describe, expect, test } from 'vitest'
@@ -31,11 +31,12 @@ import {
   noKills,
 } from './model'
 import { isPracticeGateHeld, shownHints } from './onboarding'
-import { PlayerChange } from './playerSync'
+import { PlayerChange, changesBetween } from './playerSync'
 import {
   type PlayerSave,
   SAVED_FIELDS,
   SAVE_KEY,
+  SAVE_VERSION,
   decodeSave,
   encodeSave,
   hasSaveFieldsChanged,
@@ -51,7 +52,7 @@ import { SURFACE, showDialog, tick } from './testing'
 import { ZOMBIE_KIND_ORDER } from './zombies'
 
 const learnedSave: PlayerSave = {
-  version: 5,
+  version: SAVE_VERSION,
   onboarding: {
     lessons: {
       move: 'Learned',
@@ -91,9 +92,14 @@ const learnedSave: PlayerSave = {
     seenNewsDay: 'October 28, 2026',
     openedEntries: ['Shambler', 'Runner'],
   },
+  seenPowerUps: ['RapidFire', 'Burp'],
 }
 
-const { home: _home, ...versionThreeSave } = learnedSave
+const neverSeenSave: PlayerSave = { ...learnedSave, seenPowerUps: [] }
+
+const { seenPowerUps: _seenPowerUps, ...versionFiveSave } = learnedSave
+
+const { home: _home, ...versionThreeSave } = versionFiveSave
 
 const { bests: _bests, ...versionTwoSave } = versionThreeSave
 
@@ -147,7 +153,7 @@ describe('the schema', () => {
   const SETTINGS_BEFORE_SHARING = { sound: 'Muted', music: 'Off', shake: 'Off' }
 
   const sharingLearnedSave: PlayerSave = {
-    ...learnedSave,
+    ...neverSeenSave,
     settings: { ...learnedSave.settings, shareStats: 'On' },
   }
 
@@ -221,17 +227,44 @@ describe('the schema', () => {
 
   test("a version 4 save, the live game's, keeps its home menu and turns sharing on", () => {
     const json = JSON.stringify({
-      ...learnedSave,
+      ...versionFiveSave,
       version: 4,
       settings: SETTINGS_BEFORE_SHARING,
     })
     expect(decodeSave(json)).toEqual(Option.some(sharingLearnedSave))
   })
 
+  test('a version 5 save keeps everything, with no power-up seen yet', () => {
+    const json = JSON.stringify({ ...versionFiveSave, version: 5 })
+    expect(decodeSave(json)).toEqual(Option.some(neverSeenSave))
+    const restored = restoreSave(
+      initialModel,
+      Option.getOrThrow(decodeSave(json)),
+    )
+    expect(restored.seenPowerUps).toEqual([])
+  })
+
+  test('the power-ups seen round trip through JSON and the model, dropping an unknown kind', () => {
+    const json = Option.getOrThrow(encodeSave(learnedSave))
+    const reloaded = restoreSave(
+      initialModel,
+      Option.getOrThrow(decodeSave(json)),
+    )
+    expect(reloaded.seenPowerUps).toEqual(['RapidFire', 'Burp'])
+    expect(saveOf(reloaded).seenPowerUps).toEqual(['RapidFire', 'Burp'])
+    const withStranger: PlayerSave = {
+      ...learnedSave,
+      seenPowerUps: ['Speed', 'Jetpack'],
+    }
+    expect(restoreSave(initialModel, withStranger).seenPowerUps).toEqual([
+      'Speed',
+    ])
+  })
+
   test("the preview's version 4 save keeps its sharing, with the home menu unvisited", () => {
     const json = JSON.stringify({ ...versionThreeSave, version: 4 })
     expect(decodeSave(json)).toEqual(
-      Option.some({ ...learnedSave, home: unvisitedHome }),
+      Option.some({ ...neverSeenSave, home: unvisitedHome }),
     )
   })
 
@@ -252,8 +285,8 @@ describe('the schema', () => {
 
   test('corrupted JSON, a wrong version, and a missing field read as no save', () => {
     const json = Option.getOrThrow(encodeSave(learnedSave))
-    expect(decodeSave('{"version":5,')).toEqual(Option.none())
-    expect(decodeSave(json.replace('"version":5', '"version":0'))).toEqual(
+    expect(decodeSave('{"version":6,')).toEqual(Option.none())
+    expect(decodeSave(json.replace('"version":6', '"version":0'))).toEqual(
       Option.none(),
     )
     expect(
@@ -555,6 +588,63 @@ describe('writing the save', () => {
     story(update, given(fighting), tick(50), Command.expectNone())
   })
 
+  test('the first grab of a power-up kind writes it, and a second grab writes nothing', () => {
+    const fighting = modifyFields(restoreSave(read, neverSeenSave), {
+      phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [farSpawn] }),
+    })
+    const hotSauceUnder = (base: Model): Model =>
+      modifyFields(base, {
+        pickups: () => [
+          {
+            id: 900,
+            kind: 'RapidFire',
+            x: base.player.x,
+            y: base.player.y,
+            ageMs: 0,
+          },
+        ],
+      })
+    const seen = modifyFields(fighting, { seenPowerUps: () => ['RapidFire'] })
+    story(
+      update,
+      given(hotSauceUnder(fighting)),
+      tick(16),
+      Command.expectExact(
+        WriteSave({
+          save: { ...saveOf(fighting), seenPowerUps: ['RapidFire'] },
+          changes: [PlayerChange.SawPowerUps({ kinds: ['RapidFire'] })],
+        }),
+      ),
+      Command.resolve(WriteSave, Message.CompletedWriteSave()),
+    )
+    story(
+      update,
+      given(hotSauceUnder(seen)),
+      tick(16),
+      model(current => {
+        expect(current.pickups).toEqual([])
+        expect(current.callouts[0]?.look).toBe('Named')
+      }),
+      Command.expectNone(),
+    )
+  })
+
+  test('the power-ups seen last across a reload', () => {
+    const grabbed = modifyFields(read, {
+      seenPowerUps: () => ['Damage', 'Heart'],
+    })
+    const json = Option.getOrThrow(encodeSave(saveOf(grabbed)))
+    story(
+      update,
+      given(loading),
+      message(Message.CompletedLoadSave({ maybeSave: decodeSave(json) })),
+      ...finishSplash,
+      model(current => {
+        expect(current.seenPowerUps).toEqual(['Damage', 'Heart'])
+      }),
+    )
+  })
+
   test('a frame that changes nothing saved writes nothing', () => {
     story(update, given(read), tick(50), Command.expectNone())
   })
@@ -624,6 +714,7 @@ describe('reset tutorial', () => {
     }),
     trapHint: () => TrapHint.Seen(),
     introducedKinds: () => ZOMBIE_KIND_ORDER,
+    seenPowerUps: () => ['RapidFire', 'Pierce'],
     homeScreenTip: () => 'Dismissed',
     soundSetting: () => 'Muted',
     shakeSetting: () => 'Off',
@@ -653,6 +744,13 @@ describe('reset tutorial', () => {
         expect(current.tutorialReset).toBe('Done')
         expect(current.lessons).toEqual(freshLessons)
         expect(current.introducedKinds).toEqual([])
+        expect(current.seenPowerUps).toEqual([])
+        expect(
+          Array.map(
+            changesBetween(saveOf(veteranHome), saveOf(current)),
+            ({ _tag }) => _tag,
+          ),
+        ).toEqual(['ChangedOnboarding', 'ForgotPowerUps'])
         expect(TrapHint.guards.Unseen(current.trapHint)).toBe(true)
         expect(current.soundSetting).toBe('Muted')
         expect(current.shakeSetting).toBe('Off')

@@ -76,6 +76,7 @@ const legacySave: PlayerSave = {
     },
   },
   home: { seenNewsDay: 'October 28, 2026', openedEntries: ['Shambler'] },
+  seenPowerUps: ['RapidFire'],
 }
 
 interface FakeLegacy {
@@ -243,6 +244,29 @@ describe('the save in the player scope', () => {
             ...legacySave,
             home: { seenNewsDay: null, openedEntries: [] },
           }),
+        )
+      }),
+    ))
+
+  test('a player row from before the power-ups seen gains them, none seen', () =>
+    run(
+      Effect.gen(function* () {
+        const hub = yield* makeHub()
+        const fake = yield* makeLegacy(Option.some(legacySave))
+        const first = yield* openOn(hub, fake.legacy)
+        yield* first.load
+        const sql = yield* sqlOn(hub)
+        yield* pipe(
+          Effect.all([
+            sql`ALTER TABLE player DROP COLUMN seen_power_ups`,
+            sql`ALTER TABLE sync_confirmed_player DROP COLUMN seen_power_ups`,
+            sql`DELETE FROM sync_migrations WHERE id = '0004_add_seen_power_ups'`,
+          ]),
+          Effect.orDie,
+        )
+        const second = yield* openOn(hub, fake.legacy)
+        expect(yield* second.load).toEqual(
+          Option.some({ ...legacySave, seenPowerUps: [] }),
         )
       }),
     ))
@@ -500,6 +524,64 @@ describe('two devices syncing one player', () => {
       }),
     ))
 
+  test('power-ups seen on two devices at once are all kept', () =>
+    run(
+      Effect.gen(function* () {
+        const server = yield* makeServer()
+        const network = yield* server.host.network()
+        const setup = Option.some<SyncSetup>({
+          identityApi: server.api,
+          transports: [network.transport],
+        })
+        const phone = yield* openOn(
+          yield* makeHub(),
+          (yield* makeLegacy(Option.some(legacySave))).legacy,
+          setup,
+        )
+        const laptop = yield* openOn(
+          yield* makeHub(),
+          (yield* makeLegacy(Option.none())).legacy,
+          setup,
+        )
+        yield* phone.load
+        const code = yield* phone.requestLinkCode
+        yield* laptop.redeemLinkCode(code)
+        yield* until(laptop.load, maybeSave =>
+          Option.exists(
+            maybeSave,
+            save => save.appearance.hairColor === 'Ginger',
+          ),
+        )
+
+        const onPhone: PlayerSave = {
+          ...legacySave,
+          seenPowerUps: ['RapidFire', 'Burp'],
+        }
+        const onLaptop: PlayerSave = {
+          ...legacySave,
+          seenPowerUps: ['RapidFire', 'Speed'],
+        }
+        yield* Effect.all(
+          [
+            write(phone, legacySave, onPhone),
+            write(laptop, legacySave, onLaptop),
+          ],
+          { concurrency: 'unbounded' },
+        )
+        const isEverySeen = (maybeSave: Option.Option<PlayerSave>) =>
+          Option.exists(
+            maybeSave,
+            save =>
+              save.seenPowerUps.length === 3 &&
+              ['RapidFire', 'Burp', 'Speed'].every(kind =>
+                save.seenPowerUps.includes(kind),
+              ),
+          )
+        expect(isEverySeen(yield* until(phone.load, isEverySeen))).toBe(true)
+        expect(isEverySeen(yield* until(laptop.load, isEverySeen))).toBe(true)
+      }),
+    ))
+
   test('a finished run settles once the server confirms it, and the scope is fresh', () =>
     run(
       Effect.gen(function* () {
@@ -654,6 +736,7 @@ const migratedLiveSave: PlayerSave = {
     seenNewsDay: 'October 28, 2026',
     openedEntries: ['Shambler', 'Runner'],
   },
+  seenPowerUps: [],
 }
 
 const realLegacy: LegacySave = {

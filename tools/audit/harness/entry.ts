@@ -688,6 +688,9 @@ const roomModel = (): Model => {
         })),
     })
   }
+  const seenPowerUps = kindsOf(config.seenpowerups)
+  if (seenPowerUps.length > 0)
+    model = modifyFields(model, { seenPowerUps: () => seenPowerUps })
   const boostKinds = kindsOf(config.boosts).filter(
     kind => kind !== 'Burp' && kind !== 'Heart',
   )
@@ -713,6 +716,7 @@ const roomModel = (): Model => {
       callouts: () => [
         {
           kind: calloutKind,
+          look: config.calloutLook ?? 'Explained',
           x: model.player.x,
           y: model.player.y,
           ageMs: config.calloutAge,

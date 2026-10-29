@@ -10,6 +10,7 @@ import {
   SavedCard,
   SavedHome,
   SavedOnboarding,
+  SavedPowerUps,
   SavedSettings,
 } from './playerData'
 
@@ -17,7 +18,9 @@ import {
 // (src/playerScope.ts) will record it. `update` computes these from the
 // save before and after a Message, so it stays pure; the store runs them
 // through the sync engine. A finished run is an increment, not the new
-// totals, so runs recorded on two devices both count.
+// totals, so runs recorded on two devices both count. The power-ups seen
+// are added, never written whole, so a kind seen on any device stays seen;
+// only the tutorial reset forgets them.
 
 export const PlayerChange = defineTaggedUnion({
   ChangedSettings: { settings: SavedSettings },
@@ -29,6 +32,8 @@ export const PlayerChange = defineTaggedUnion({
     homeScreenTip: HomeScreenTip,
   },
   ChangedHome: { home: SavedHome },
+  SawPowerUps: { kinds: SavedPowerUps },
+  ForgotPowerUps: {},
   RecordedRun: {
     runs: Schema.Number,
     totalKills: Schema.Number,
@@ -56,6 +61,22 @@ const killsAdded = (
     ),
     added => added > 0,
   )
+
+const powerUpChanges = (
+  before: SavedPowerUps,
+  after: SavedPowerUps,
+): ReadonlyArray<PlayerChange> => {
+  const isForgotten = Array.some(before, kind => !Array.contains(after, kind))
+  const seen = isForgotten
+    ? after
+    : Array.filter(after, kind => !Array.contains(before, kind))
+  return [
+    ...(isForgotten ? [PlayerChange.ForgotPowerUps()] : []),
+    ...(Array.isReadonlyArrayNonEmpty(seen)
+      ? [PlayerChange.SawPowerUps({ kinds: seen })]
+      : []),
+  ]
+}
 
 const changeWhen = (
   isChanged: boolean,
@@ -108,6 +129,7 @@ export const changesBetween = (
       changeWhen(!sameHome(before.home, after.home), () =>
         PlayerChange.ChangedHome({ home: after.home }),
       ),
+      powerUpChanges(before.seenPowerUps, after.seenPowerUps),
       changeWhen(isRunRecorded, () =>
         PlayerChange.RecordedRun({
           runs: Math.max(runs, 0),
@@ -143,9 +165,19 @@ const refreshed = (change: PlayerChange, save: PlayerSave): PlayerChange =>
         homeScreenTip: save.homeScreenTip,
       }),
     ChangedHome: () => PlayerChange.ChangedHome({ home: save.home }),
+    SawPowerUps: () => PlayerChange.SawPowerUps({ kinds: save.seenPowerUps }),
+    ForgotPowerUps: () => change,
     RecordedRun: run =>
       PlayerChange.RecordedRun({ ...run, bests: save.bests.byDifficulty }),
   })
+
+// NOTE: a finished run counts each time it is sent, and the power-ups seen
+// and forgotten must keep their order, so those are all kept. Every other
+// change sets its field to what it holds now, so one of each is enough.
+const isSetOnce = (change: PlayerChange): boolean =>
+  !PlayerChange.isAnyOf(['RecordedRun', 'SawPowerUps', 'ForgotPowerUps'])(
+    change,
+  )
 
 export const withUnsavedChanges = (
   unsaved: ReadonlyArray<PlayerChange>,
@@ -158,7 +190,7 @@ export const withUnsavedChanges = (
         [...Array.map(unsaved, change => refreshed(change, save)), ...changes],
         Array.empty<PlayerChange>(),
         (kept, change) =>
-          change._tag !== 'RecordedRun' &&
+          isSetOnce(change) &&
           Array.some(kept, other => other._tag === change._tag)
             ? kept
             : Array.append(kept, change),

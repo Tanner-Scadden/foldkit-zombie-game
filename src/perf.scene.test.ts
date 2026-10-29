@@ -356,7 +356,9 @@ const fullRoom = (mode: RunMode, wave: number, tier: number): Model => {
     traps: () => TRAPS,
     pickups: () => Array.makeBy(DROP_RULES.floorMax, pickupAt),
     boosts: () => ALL_BOOSTED,
-    callouts: () => [{ kind: 'Pierce', x: 160, y: 90, ageMs: 600 }],
+    callouts: () => [
+      { kind: 'Pierce', look: 'Explained', x: 160, y: 90, ageMs: 600 },
+    ],
     streak: () => Streak.Hot({ count: 12, remainingMs: 900 }),
     stats: scoring(98_760),
     trapStock: () => ({ Barricade: 2, Turret: 1 }),

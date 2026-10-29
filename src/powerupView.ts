@@ -150,38 +150,107 @@ const calloutOpacity = (progress: number): number | undefined => {
   return Math.ceil(left * CALLOUT_FADE_STEPS) / CALLOUT_FADE_STEPS
 }
 
+const CALLOUT_ICON_WIDTH = 7
+const CALLOUT_ICON_GAP = 3
+const CALLOUT_ICON_DROP = 3
+
+type CalloutFrame = Readonly<{
+  view: Readonly<{ x: number; y: number; width: number }>
+  anchor: Readonly<{ x: number; y: number }>
+  scale: number
+  opacity: number | undefined
+}>
+
+const calloutFrameOf = (camera: Camera, callout: Callout): CalloutFrame => {
+  const progress = clamp(
+    callout.ageMs / CALLOUT_LIFETIME_MS[callout.look],
+    0,
+    1,
+  )
+  return {
+    view: viewBoxOf(camera),
+    anchor: worldToView(camera, callout),
+    scale: callout.ageMs < CALLOUT_POP_MS ? CALLOUT_POP_SCALE : CALLOUT_SCALE,
+    opacity: calloutOpacity(progress),
+  }
+}
+
+const centerWithin = (
+  { view, anchor }: CalloutFrame,
+  halfWidth: number,
+): Readonly<{ x: number; y: number }> => ({
+  x: clamp(
+    Math.round(anchor.x),
+    view.x + halfWidth,
+    view.x + view.width - halfWidth,
+  ),
+  y: Math.max(view.y + CALLOUT_MARGIN, Math.round(anchor.y - CALLOUT_LIFT_PX)),
+})
+
+const explainedShapes = (
+  frame: CalloutFrame,
+  { title, blurb }: CalloutText,
+): ReadonlyArray<Canvas.Shape> => {
+  const { scale, opacity } = frame
+  const { x, y } = centerWithin(
+    frame,
+    Math.ceil((title.width * scale) / 2) + CALLOUT_MARGIN,
+  )
+  return [
+    placeBaked(title, { x, y, align: 'Center', scale, opacity }),
+    placeBaked(blurb, {
+      x,
+      y: y + CALLOUT_BLURB_GAP,
+      align: 'Center',
+      opacity,
+    }),
+  ]
+}
+
+// NOTE: a kind the player has grabbed before pops its icon and its name
+// only, a beat quicker. The sound, sparks, shake, aura, and HUD chip are the
+// same as the first time.
+const namedShapes = (
+  frame: CalloutFrame,
+  kind: PickupKind,
+  { title }: CalloutText,
+): ReadonlyArray<Canvas.Shape> => {
+  const { scale, opacity } = frame
+  const iconWidth = CALLOUT_ICON_WIDTH * scale
+  const width = iconWidth + CALLOUT_ICON_GAP * scale + title.width * scale
+  const { x, y } = centerWithin(frame, Math.ceil(width / 2) + CALLOUT_MARGIN)
+  const left = x - Math.round(width / 2)
+  return [
+    group({
+      translate: {
+        x: left + Math.round(iconWidth / 2),
+        y: y + CALLOUT_ICON_DROP * scale,
+      },
+      scale: { x: scale, y: scale },
+      opacity,
+      shapes: PICKUP_SPRITES[kind],
+    }),
+    placeBaked(title, {
+      x: left + iconWidth + CALLOUT_ICON_GAP * scale,
+      y,
+      align: 'Left',
+      scale,
+      opacity,
+    }),
+  ]
+}
+
 // NOTE: callouts live on the overlay canvas, which repaints only when what it
 // shows changes. So a callout holds still after its pop and fades in a few
 // whole steps instead of drifting every frame.
 export const calloutShapes =
   (camera: Camera) =>
   (callout: Callout): ReadonlyArray<Canvas.Shape> => {
-    const { title, blurb } = CALLOUT_TEXTS[callout.kind]
-    const anchor = worldToView(camera, callout)
-    const progress = clamp(callout.ageMs / CALLOUT_LIFETIME_MS, 0, 1)
-    const scale =
-      callout.ageMs < CALLOUT_POP_MS ? CALLOUT_POP_SCALE : CALLOUT_SCALE
-    const halfWidth = Math.ceil((title.width * scale) / 2) + CALLOUT_MARGIN
-    const view = viewBoxOf(camera)
-    const x = clamp(
-      Math.round(anchor.x),
-      view.x + halfWidth,
-      view.x + view.width - halfWidth,
-    )
-    const y = Math.max(
-      view.y + CALLOUT_MARGIN,
-      Math.round(anchor.y - CALLOUT_LIFT_PX),
-    )
-    const opacity = calloutOpacity(progress)
-    return [
-      placeBaked(title, { x, y, align: 'Center', scale, opacity }),
-      placeBaked(blurb, {
-        x,
-        y: y + CALLOUT_BLURB_GAP,
-        align: 'Center',
-        opacity,
-      }),
-    ]
+    const frame = calloutFrameOf(camera, callout)
+    const texts = CALLOUT_TEXTS[callout.kind]
+    return callout.look === 'Named'
+      ? namedShapes(frame, callout.kind, texts)
+      : explainedShapes(frame, texts)
   }
 
 const BURP_RING_MS = 420

@@ -18,6 +18,7 @@ import {
   Lesson,
   type Lessons,
   type Model,
+  PickupKind,
   type PlayerBests,
   TrapHint,
   ZombieKind,
@@ -56,6 +57,7 @@ export {
   SavedLessons,
   SavedNightmare,
   SavedOnboarding,
+  SavedPowerUps,
   SavedSettings,
   SavedTrapHint,
 } from './playerData'
@@ -136,7 +138,23 @@ const PlayerSavePreviewV4 = Schema.Struct({
 })
 type PlayerSavePreviewV4 = typeof PlayerSavePreviewV4.Type
 
+// NOTE: version 5 is the save before the power-ups seen: the home menu and
+// shareStats.
+const PlayerSaveV5 = Schema.Struct({
+  version: Schema.Literal(5),
+  onboarding: SavedOnboarding,
+  homeScreenTip: HomeScreenTip,
+  settings: SavedSettings,
+  appearance: Appearance,
+  difficulty: SavedDifficulty,
+  bests: SavedBests,
+  home: SavedHome,
+})
+type PlayerSaveV5 = typeof PlayerSaveV5.Type
+
 const PlayerSaveJson = Schema.fromJsonString(PlayerSave)
+
+const PlayerSaveV5Json = Schema.fromJsonString(PlayerSaveV5)
 
 const PlayerSaveV4Json = Schema.fromJsonString(PlayerSaveV4)
 
@@ -213,8 +231,8 @@ const migrateV3 = (save: PlayerSaveV3): PlayerSaveV4 => ({
   home: unvisitedHome,
 })
 
-const migrateV4 = (save: PlayerSaveV4): PlayerSave => ({
-  version: SAVE_VERSION,
+const migrateV4 = (save: PlayerSaveV4): PlayerSaveV5 => ({
+  version: 5,
   onboarding: save.onboarding,
   homeScreenTip: save.homeScreenTip,
   settings: sharingSettings(save.settings),
@@ -224,8 +242,8 @@ const migrateV4 = (save: PlayerSaveV4): PlayerSave => ({
   home: save.home,
 })
 
-const migratePreviewV4 = (save: PlayerSavePreviewV4): PlayerSave => ({
-  version: SAVE_VERSION,
+const migratePreviewV4 = (save: PlayerSavePreviewV4): PlayerSaveV5 => ({
+  version: 5,
   onboarding: save.onboarding,
   homeScreenTip: save.homeScreenTip,
   settings: save.settings,
@@ -233,6 +251,18 @@ const migratePreviewV4 = (save: PlayerSavePreviewV4): PlayerSave => ({
   difficulty: save.difficulty,
   bests: save.bests,
   home: unvisitedHome,
+})
+
+const migrateV5 = (save: PlayerSaveV5): PlayerSave => ({
+  version: SAVE_VERSION,
+  onboarding: save.onboarding,
+  homeScreenTip: save.homeScreenTip,
+  settings: save.settings,
+  appearance: save.appearance,
+  difficulty: save.difficulty,
+  bests: save.bests,
+  home: save.home,
+  seenPowerUps: [],
 })
 
 // NOTE: the one list of save versions this build reads, newest first, each
@@ -249,37 +279,43 @@ const SAVE_VERSIONS: ReadonlyArray<
 > = [
   { version: SAVE_VERSION, read: Schema.decodeOption(PlayerSaveJson) },
   {
-    version: 4,
+    version: 5,
     read: raw =>
-      Option.map(Schema.decodeOption(PlayerSaveV4Json)(raw), migrateV4),
+      Option.map(Schema.decodeOption(PlayerSaveV5Json)(raw), migrateV5),
   },
   {
     version: 4,
     read: raw =>
-      Option.map(
-        Schema.decodeOption(PlayerSavePreviewV4Json)(raw),
-        migratePreviewV4,
+      Option.map(Schema.decodeOption(PlayerSaveV4Json)(raw), save =>
+        migrateV5(migrateV4(save)),
+      ),
+  },
+  {
+    version: 4,
+    read: raw =>
+      Option.map(Schema.decodeOption(PlayerSavePreviewV4Json)(raw), save =>
+        migrateV5(migratePreviewV4(save)),
       ),
   },
   {
     version: 3,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV3Json)(raw), save =>
-        migrateV4(migrateV3(save)),
+        migrateV5(migrateV4(migrateV3(save))),
       ),
   },
   {
     version: 2,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV2Json)(raw), save =>
-        migrateV4(migrateV3(migrateV2(save))),
+        migrateV5(migrateV4(migrateV3(migrateV2(save)))),
       ),
   },
   {
     version: 1,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV1Json)(raw), save =>
-        migrateV4(migrateV3(migrateV2(migrateV1(save)))),
+        migrateV5(migrateV4(migrateV3(migrateV2(migrateV1(save))))),
       ),
   },
 ]
@@ -338,6 +374,7 @@ export const SAVED_FIELDS = [
   'difficultyCard',
   'bests',
   'home',
+  'seenPowerUps',
 ] as const satisfies ReadonlyArray<keyof Model>
 
 export const hasSaveFieldsChanged = (before: Model, after: Model): boolean =>
@@ -379,6 +416,7 @@ export const saveOf = (model: Model): PlayerSave => ({
     seenNewsDay: Option.getOrNull(model.home.maybeSeenNewsDay),
     openedEntries: model.home.openedEntries,
   },
+  seenPowerUps: model.seenPowerUps,
 })
 
 // INTO THE MODEL
@@ -407,6 +445,15 @@ const isZombieKind = Schema.is(ZombieKind)
 const knownKinds = (kinds: ReadonlyArray<string>): ReadonlyArray<ZombieKind> =>
   Array.filterMap(kinds, kind =>
     isZombieKind(kind) ? Result.succeed(kind) : Result.failVoid,
+  )
+
+const isPickupKind = Schema.is(PickupKind)
+
+const knownPowerUps = (
+  kinds: ReadonlyArray<string>,
+): ReadonlyArray<PickupKind> =>
+  Array.filterMap(kinds, kind =>
+    isPickupKind(kind) ? Result.succeed(kind) : Result.failVoid,
   )
 
 const restoreDifficultyBests = (
@@ -481,12 +528,14 @@ export const restoreSave = (model: Model, save: PlayerSave): Model =>
         openedEntries: opened =>
           Array.union(opened, knownKinds(save.home.openedEntries)),
       }),
+    seenPowerUps: seen => Array.union(seen, knownPowerUps(save.seenPowerUps)),
   })
 
 // RESET
 
-// NOTE: the reset forgets only the tutorial. The look, the settings, the
-// difficulty, and the bests and kills are kept.
+// NOTE: the reset forgets only the tutorial: the lessons, the zombie cards,
+// and the power-ups explained. The look, the settings, the difficulty, and
+// the bests and kills are kept.
 export const forgetTutorial = (model: Model): Model =>
   modifyFields(model, {
     lessons: () => freshLessons,
@@ -494,6 +543,7 @@ export const forgetTutorial = (model: Model): Model =>
     trapHint: () => TrapHint.Unseen(),
     introducedKinds: () => [],
     debutCard: () => DebutCard.Hidden(),
+    seenPowerUps: () => [],
   })
 
 // LEGACY STORAGE

@@ -83,6 +83,7 @@ What the save holds, by version:
 - **Bests (version 3, 2026-10-29).** Runs played, total kills, kills per kind by kind id, and the bests per difficulty. Reset tutorial keeps them.
 - **Home menu (version 4, 2026-10-29).** The newest What's New day seen and the Munchopedia entries opened. The last version written only to localStorage, before SQLite.
 - **Stats sharing (version 5, 2026-10-29).** The "Share anonymous play stats" setting. Older saves load with it on. It was numbered 4 on the preview before the home menu reached `main`; the merge renumbered it 5 so a version 4 save from before SQLite migrates on its own path. The preview's own version 4 shape (sharing, no home menu) still reads, with the home menu unvisited. `src/store.test.ts` checks that a version 4 localStorage save lands in SQLite and on a linked device with nothing lost.
+- **Power-ups seen (version 6, 2026-10-29).** The power-up kinds the player has grabbed, by kind id, so only the first grab of each kind explains it. Older saves load with none seen. A `seen_power_ups` JSON column, added by the player scope's migration `0004_add_seen_power_ups` with an empty default. It syncs as additions (`SawPowerUps`), so linked devices merge it as a union and never lose a kind. Reset tutorial clears it (`ForgotPowerUps`).
 - **Session only.** The run itself and full screen.
 
 ### What Phase 1 taught us
@@ -242,13 +243,15 @@ Built on 2026-10-29. The engine's design, API, protocol, and limits are in [`pac
 
 | Mutation            | Writer     | What it does                                                                                                                            |
 | ------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `SeededPlayer`      | Owner      | The device's save from before sync. Only fills an empty scope, so linking never overwrites the player. Version 2 carries save version 5 |
+| `SeededPlayer`      | Owner      | The device's save from before sync. Only fills an empty scope, so linking never overwrites the player. Version 3 carries save version 6 |
 | `ChangedSettings`   | Owner      | Sound, music, screen shake, and stats sharing                                                                                           |
 | `ChangedAppearance` | Owner      | The whole look                                                                                                                          |
 | `UnlockedNightmare` | Owner      | Trusted for now; becomes a server mutation once runs are verified                                                                       |
 | `ChangedDifficulty` | Owner      | The chosen level and the first-time card. Refused if it picks Nightmare while the scope has it locked                                   |
 | `ChangedOnboarding` | Owner      | Lessons, the trap hint, the zombie cards seen, and the Home Screen tip                                                                  |
 | `ChangedHome`       | Owner      | The newest What's New day seen and the Munchopedia entries opened, written whole                                                        |
+| `SawPowerUps`       | Owner      | Adds the power-up kinds a device saw to the ones seen, as a union, so two devices offline both keep theirs                             |
+| `ForgotPowerUps`    | Owner      | Clears the power-ups seen, for the tutorial reset                                                                                       |
 | `RecordedRun`       | Owner      | Adds a run's runs and kills, merges its bests. Refused past 3 runs or 5,000 kills a run                                                 |
 | `LinkedDevices`     | ServerOnly | The number of devices on this player, written by the server when one links                                                              |
 

@@ -443,6 +443,84 @@ describe('grabbing', () => {
   })
 })
 
+describe('explaining a power-up once', () => {
+  const afterGrabbing = (base: Model, kind: PickupKind): Model => {
+    const reached: Array<Model> = []
+    story(
+      update,
+      given(underPlayer(base, kind)),
+      tick(FRAME_MS),
+      model(current => {
+        reached.push(current)
+      }),
+    )
+    return Option.getOrThrow(Array.last(reached))
+  }
+
+  const looksOf = (current: Model) =>
+    Array.map(current.callouts, ({ kind, look }) => ({ kind, look }))
+
+  test('the first grab explains a kind, the next only names it, and a new kind is explained', () => {
+    const first = afterGrabbing(fighting, 'RapidFire')
+    expect(looksOf(first)).toEqual([{ kind: 'RapidFire', look: 'Explained' }])
+    expect(first.seenPowerUps).toEqual(['RapidFire'])
+
+    const again = afterGrabbing(first, 'RapidFire')
+    expect(looksOf(again)).toEqual([{ kind: 'RapidFire', look: 'Named' }])
+    expect(again.seenPowerUps).toBe(first.seenPowerUps)
+    expect(remainingOf(again.boosts, 'RapidFire')).toBeGreaterThan(
+      remainingOf(first.boosts, 'RapidFire'),
+    )
+
+    const other = afterGrabbing(again, 'Burp')
+    expect(looksOf(other)).toEqual([{ kind: 'Burp', look: 'Explained' }])
+    expect(other.seenPowerUps).toEqual(['RapidFire', 'Burp'])
+  })
+
+  test('a name pop goes sooner than an explanation', () => {
+    const named = modifyFields(afterGrabbing(fighting, 'Speed'), {
+      callouts: callouts =>
+        Array.map(callouts, callout => ({
+          ...callout,
+          look: 'Named' as const,
+        })),
+    })
+    const explained = afterGrabbing(fighting, 'Speed')
+    story(
+      update,
+      given(named),
+      ...ticksFor(1100),
+      model(({ callouts }) => {
+        expect(callouts).toEqual([])
+      }),
+    )
+    story(
+      update,
+      given(explained),
+      ...ticksFor(1100),
+      model(({ callouts }) => {
+        expect(Array.map(callouts, ({ look }) => look)).toEqual(['Explained'])
+      }),
+    )
+  })
+
+  test('a new run keeps the kinds seen', () => {
+    const seen = modifyFields(afterGrabbing(fighting, 'Pierce'), {
+      phase: () => Phase.GameOver({ wave: 3 }),
+      screenMs: () => 5000,
+    })
+    story(
+      update,
+      given(seen),
+      press('Enter'),
+      model(({ seenPowerUps, callouts }) => {
+        expect(seenPowerUps).toEqual(['Pierce'])
+        expect(callouts).toEqual([])
+      }),
+    )
+  })
+})
+
 // EFFECTS
 
 describe('effects', () => {
@@ -652,7 +730,9 @@ describe('timers', () => {
         pickupAt(901, 'Damage', 40, 150, 2000),
       ]),
       {
-        callouts: () => [{ kind: 'RapidFire', x: 100, y: 100, ageMs: 300 }],
+        callouts: () => [
+          { kind: 'RapidFire', look: 'Explained', x: 100, y: 100, ageMs: 300 },
+        ],
       },
     )
 
@@ -805,7 +885,9 @@ describe('the floor', () => {
       {
         phase: () => Phase.GameOver({ wave: 3 }),
         screenMs: () => 5000,
-        callouts: () => [{ kind: 'Damage', x: 10, y: 10, ageMs: 0 }],
+        callouts: () => [
+          { kind: 'Damage', look: 'Explained', x: 10, y: 10, ageMs: 0 },
+        ],
       },
     )
     story(

@@ -467,8 +467,14 @@ export const Loot = Schema.Struct({
 })
 export type Loot = typeof Loot.Type
 
+// NOTE: the first grab of a kind explains it with its blurb. Every later
+// grab only names it, in a shorter pop.
+export const CalloutLook = Schema.Literals(['Explained', 'Named'])
+export type CalloutLook = typeof CalloutLook.Type
+
 export const Callout = Schema.Struct({
   kind: PickupKind,
+  look: CalloutLook,
   x: Schema.Number,
   y: Schema.Number,
   ageMs: Schema.Number,
@@ -1142,6 +1148,7 @@ export const Model = Schema.Struct({
   practice: Practice,
   debutCard: DebutCard,
   introducedKinds: Schema.Array(ZombieKind),
+  seenPowerUps: Schema.Array(PickupKind),
   hintBand: HintBand,
   stats: RunStats,
   screenMs: Schema.Number,
@@ -1384,6 +1391,7 @@ export const initialModel: Model = {
   practice: noPractice,
   debutCard: DebutCard.Hidden(),
   introducedKinds: [],
+  seenPowerUps: [],
   hintBand: 'Top',
   stats: freshStats,
   screenMs: 0,

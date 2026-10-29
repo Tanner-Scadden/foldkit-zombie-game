@@ -83,7 +83,7 @@ export type Appearance = typeof Appearance.Type
 
 // SAVED
 
-export const SAVE_VERSION = 5
+export const SAVE_VERSION = 6
 
 export const SavedLesson = Schema.Literals(['Pending', 'Learned'])
 export type SavedLesson = typeof SavedLesson.Type
@@ -168,6 +168,12 @@ export const SavedHome = Schema.Struct({
 })
 export type SavedHome = typeof SavedHome.Type
 
+// NOTE: version 6 added the power-up kinds the player has grabbed, by kind
+// id. The first grab of a kind explains it, and later grabs only name it.
+// Kept apart from the onboarding, since linked devices merge it as a union.
+export const SavedPowerUps = Schema.Array(Schema.String)
+export type SavedPowerUps = typeof SavedPowerUps.Type
+
 export const PlayerSave = Schema.Struct({
   version: Schema.Literal(SAVE_VERSION),
   onboarding: SavedOnboarding,
@@ -177,5 +183,6 @@ export const PlayerSave = Schema.Struct({
   difficulty: SavedDifficulty,
   bests: SavedBests,
   home: SavedHome,
+  seenPowerUps: SavedPowerUps,
 })
 export type PlayerSave = typeof PlayerSave.Type

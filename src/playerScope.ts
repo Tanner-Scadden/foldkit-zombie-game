@@ -21,6 +21,7 @@ import {
   SavedHome,
   SavedNightmare,
   SavedOnboarding,
+  SavedPowerUps,
   SavedSettings,
   ShakeSetting,
   ShareStatsSetting,
@@ -28,7 +29,8 @@ import {
 } from './playerData'
 
 // NOTE: the player scope, `player:<playerId>`: one player's settings, look,
-// difficulty, onboarding, bests, and home menu, synced between that player's devices.
+// difficulty, onboarding, bests, home menu, and power-ups seen, synced
+// between that player's devices.
 // Shared with the sync Worker in infra/worker, so it imports only `effect`,
 // the sync engine, and src/playerData.ts. The tables are the ones the game
 // already kept on the device (src/storeSqlite.ts made `player` and
@@ -57,6 +59,7 @@ export const PlayerRow = Schema.Struct({
   total_kills: Schema.Number,
   difficulty_bests: Schema.fromJsonString(SavedBestsByDifficulty),
   home: Schema.fromJsonString(SavedHome),
+  seen_power_ups: Schema.fromJsonString(SavedPowerUps),
 })
 export type PlayerRow = typeof PlayerRow.Type
 
@@ -81,6 +84,7 @@ export const PLAYER_COLUMNS = Array.make(
   'total_kills',
   'difficulty_bests',
   'home',
+  'seen_power_ups',
 )
 
 export const rowOfSave = (save: PlayerSave): PlayerRow => ({
@@ -98,6 +102,7 @@ export const rowOfSave = (save: PlayerSave): PlayerRow => ({
   total_kills: save.bests.totalKills,
   difficulty_bests: save.bests.byDifficulty,
   home: save.home,
+  seen_power_ups: save.seenPowerUps,
 })
 
 export const killsRowsOfSave = (save: PlayerSave): ReadonlyArray<KillsRow> =>
@@ -135,11 +140,11 @@ const updatePlayer = (
 // NOTE: the first thing a device writes to its scope: its whole save, from
 // before sync. It only seeds an empty scope. On a scope that already has a
 // player (a device that linked to another device's player) it does nothing,
-// so linking never overwrites the player it joined. Version 2 is the save
-// with the home menu (save version 5).
+// so linking never overwrites the player it joined. Version 3 is the save
+// with the power-ups seen (save version 6).
 export const SeededPlayer = defineMutation({
   name: 'SeededPlayer',
-  version: 2,
+  version: 3,
   args: Schema.Struct({ save: PlayerSave }),
   scopes: [PLAYER_SCOPE_KIND],
   writer: 'Owner',
@@ -282,6 +287,52 @@ export const ChangedHome = defineMutation({
     ),
 })
 
+const PowerUpsRow = Schema.Struct({
+  seen_power_ups: Schema.fromJsonString(SavedPowerUps),
+})
+
+const encodePowerUps = Schema.encodeEffect(Schema.fromJsonString(SavedPowerUps))
+
+// NOTE: the power-up kinds a device saw, added to the ones the player has
+// seen on any device. A union, so two devices offline at once both keep
+// what they saw, in whatever order the server gets them.
+export const SawPowerUps = defineMutation({
+  name: 'SawPowerUps',
+  version: 1,
+  args: Schema.Struct({ kinds: SavedPowerUps }),
+  scopes: [PLAYER_SCOPE_KIND],
+  writer: 'Owner',
+  apply: ({ kinds }, context) =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient
+      const rows =
+        yield* sql`SELECT seen_power_ups FROM ${context.table('player')} WHERE id = 1`
+      const maybeSeen = pipe(
+        Array.head(rows),
+        Option.flatMap(Schema.decodeUnknownOption(PowerUpsRow)),
+        Option.map(row => row.seen_power_ups),
+      )
+      if (Option.isNone(maybeSeen)) {
+        return
+      }
+      const json = yield* Effect.mapError(
+        encodePowerUps(Array.union(maybeSeen.value, kinds)),
+        toRejected,
+      )
+      yield* updatePlayer(context, { seen_power_ups: json })
+    }),
+})
+
+// NOTE: the tutorial reset, which explains every power-up again.
+export const ForgotPowerUps = defineMutation({
+  name: 'ForgotPowerUps',
+  version: 1,
+  args: Schema.Struct({}),
+  scopes: [PLAYER_SCOPE_KIND],
+  writer: 'Owner',
+  apply: (_, context) => updatePlayer(context, { seen_power_ups: '[]' }),
+})
+
 const MAX_RUNS_PER_RECORD = 3
 const MAX_KILLS_PER_RUN = 5000
 
@@ -412,6 +463,8 @@ export const PlayerScope = defineScope({
     UnlockedNightmare,
     ChangedOnboarding,
     ChangedHome,
+    SawPowerUps,
+    ForgotPowerUps,
     RecordedRun,
     LinkedDevices,
   ],
@@ -456,6 +509,14 @@ export const PlayerScope = defineScope({
         yield* sql`ALTER TABLE ${sql(table('player'))}
           ADD COLUMN home TEXT NOT NULL
           DEFAULT '{"seenNewsDay":null,"openedEntries":[]}'`
+      }),
+    // NOTE: the power-ups seen came after the home menu, so they are added
+    // the same way, with none seen.
+    '0004_add_seen_power_ups': table =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        yield* sql`ALTER TABLE ${sql(table('player'))}
+          ADD COLUMN seen_power_ups TEXT NOT NULL DEFAULT '[]'`
       }),
   },
 })
