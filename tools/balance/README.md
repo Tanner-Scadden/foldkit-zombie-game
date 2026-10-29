@@ -12,6 +12,10 @@ Three layers of balance checks, cheapest first. Run the heavy ones through the g
 | `bun run balance:nightly`                      | Everything      | About 15 minutes           |
 | `bun run balance:nightly -- --update-baseline` | Everything      | Also rewrites the baseline |
 
+## Portrait view
+
+`VIEW=portrait` (for example `VIEW=portrait bun run balance -- --wave all --runs 100`) makes the bot see only the zombies inside the portrait camera's window, the 180 by 180 window that follows it and leans toward its aim, the way a phone held upright shows the room. It does not shoot or flee what it cannot see. See "Portrait play" in `GAME_DESIGN.md` for the comparison.
+
 ## The analytical model
 
 `model.ts` reads the real tables: wave plans rolled for six seeds, the level's health scale, bounties and the clear bonus, shop prices and upgrade tiers. It buys the bot's loadout wave by wave, works out its sustained damage a second (magazine and reload included), and plays each wave as a flow of health through the holds, rests, quiet hurries, the alive cap, and the boss's entrance. `ASSUMPTIONS` holds the guesses: how much of each gun's fire lands, the upkeep a visit, and when hearts start costing money. They are calibration knobs, not measurements.

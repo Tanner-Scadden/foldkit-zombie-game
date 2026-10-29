@@ -16,11 +16,13 @@ import { Dialog } from '@foldkit/ui'
 
 import { THRESHOLDS, boxCenter, hasLineOfSight } from '../../src/arena'
 import { BOSS_RULES } from '../../src/boss'
+import { arenaCamera, cameraFocus } from '../../src/camera'
 import { CHUCKER_RULES, maybeShieldFor } from '../../src/chucker'
 import { CRAWLER_RULES } from '../../src/crawler'
 import { FRENZY_RULES } from '../../src/frenzy'
 import { Message, update } from '../../src/main'
 import { type Difficulty, ZombieKind, initialModel } from '../../src/model'
+import { PORTRAIT_WORLD } from '../../src/screen'
 import { STALL_BOX, isShopOpenFor, priceFor, verdictFor } from '../../src/shop'
 import { asVeteran } from '../../src/veteran'
 import { beginPreparation, doorCounts } from '../../src/waves'
@@ -302,10 +304,30 @@ const send = (model: Model, message: GameMessage): Model =>
 // overhead, or in the air, so the bot can see, shoot, and flee them.
 const OUT_OF_REACH = new Set(['Burrowed', 'Carried', 'Flying'])
 
+// VIEW=portrait plays as a phone held upright would: it sees only the
+// zombies inside the portrait camera's window, which follows it and leans
+// toward its aim like the game's. Zombies out of view are not shot or fled.
+const SEES_PORTRAIT_ONLY = process.env.VIEW === 'portrait'
+
+const isInView = (model: Model, zombie: Model['zombies'][number]) => {
+  if (!SEES_PORTRAIT_ONLY) {
+    return true
+  }
+  const camera = arenaCamera(cameraFocus(model), PORTRAIT_WORLD)
+  return (
+    zombie.x >= camera.x &&
+    zombie.x <= camera.x + camera.width &&
+    zombie.y >= camera.y &&
+    zombie.y <= camera.y + camera.height
+  )
+}
+
 const walking = (model: Model) =>
   model.zombies.filter(
     zombie =>
-      zombie.state._tag === 'Walking' && !OUT_OF_REACH.has(zombie.action._tag),
+      zombie.state._tag === 'Walking' &&
+      !OUT_OF_REACH.has(zombie.action._tag) &&
+      isInView(model, zombie),
   )
 
 const distance = (a: Vector, b: Vector) => Math.hypot(a.x - b.x, a.y - b.y)

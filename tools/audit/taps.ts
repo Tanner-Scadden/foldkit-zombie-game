@@ -3,13 +3,14 @@
 // an entry, the difficulty picker, its other panels, the pause screen,
 // the character picker, the leave question, the gun cluster in a wave and a
 // break, Game Over, and Victory on
-// 667x375 and 844x390 phones
-// with touch. For each button it checks that the center and four points just
+// 667x375 and 844x390 phones, or with PORTRAIT=1 on 390x844, 430x932, and
+// 360x800 phones held upright, with touch. For each button it checks that the center and four points just
 // inside its edges hit that button (document.elementFromPoint), then taps the
 // center and a corner for real and checks that exactly one Message names the
 // tap, and that it is not a press on the game surface. Exits with 1 on any
 // miss.
 //   BASE=http://localhost:4174/ bun taps.ts
+//   PORTRAIT=1 BASE=http://localhost:4174/ bun taps.ts
 // ONLY picks scenes, such as `ONLY=home,munchopedia`.
 import type { Page } from 'playwright-core'
 
@@ -20,10 +21,18 @@ const ONLY = process.env.ONLY?.split(',')
 
 type Viewport = Readonly<{ name: string; width: number; height: number }>
 
-const VIEWPORTS: ReadonlyArray<Viewport> = [
+const LANDSCAPE: ReadonlyArray<Viewport> = [
   { name: 'p667', width: 667, height: 375 },
   { name: 'p844', width: 844, height: 390 },
 ]
+
+const PORTRAIT: ReadonlyArray<Viewport> = [
+  { name: 'u390', width: 390, height: 844 },
+  { name: 'u430', width: 430, height: 932 },
+  { name: 'u360', width: 360, height: 800 },
+]
+
+const VIEWPORTS = process.env.PORTRAIT === undefined ? LANDSCAPE : PORTRAIT
 
 type Scene = Readonly<{
   name: string
