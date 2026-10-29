@@ -344,16 +344,23 @@ const FLOOR_MARKER_EDGE_COLOR = '#c08a4a'
 const FLOOR_MARKER_WIDTH = 30
 const FLOOR_TAG_GAP = 2
 
+// NOTE: the floor is everywhere, so its marker sits in the middle of the
+// window, which is the middle of the room in landscape. In portrait that
+// keeps it clear of door markers pinned to the window's edges.
 const floorMarkerShapes = (
   kinds: ReadonlyArray<KindCount>,
   camera: Camera,
+  window: Box,
   elapsedMs: number,
   debuts: ReadonlyArray<ZombieKind>,
 ): ReadonlyArray<Canvas.Shape> =>
   Array.match(kinds, {
     onEmpty: () => [],
     onNonEmpty: rows => {
-      const anchor = worldToView(camera, FLOOR_ANCHOR)
+      const anchor = {
+        x: Math.round(window.x + window.width / 2),
+        y: worldToView(camera, FLOOR_ANCHOR).y,
+      }
       const tagTop = -DOOR_MARKER_ROW_PX / 2 - DOOR_MARKER_PAD - GLYPH_HEIGHT
       const top = tagTop - FLOOR_TAG_GAP - DOOR_MARKER_PAD
       const height =
@@ -417,6 +424,7 @@ export const wavePreviewShapes = (
         ...floorMarkerShapes(
           floorCounts(spawns),
           camera,
+          window,
           model.elapsedMs,
           debutKinds(wave),
         ),
