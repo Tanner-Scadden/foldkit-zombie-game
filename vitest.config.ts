@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   define: { __BUILD_ID__: JSON.stringify('test') },
   test: {
-    include: ['src/**/*.{test,spec}.ts'],
+    include: ['src/**/*.{test,spec}.ts', 'tools/heavy/**/*.test.ts'],
     environment: 'happy-dom',
     // Some Story tests replay whole waves for many seeds. They take a few
     // seconds locally and passed 5 seconds on a busy CI runner.

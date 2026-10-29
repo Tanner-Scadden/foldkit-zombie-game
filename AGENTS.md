@@ -14,29 +14,34 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 
 ### Commands
 
-| Command                                             | What it does                                                               |
-| --------------------------------------------------- | -------------------------------------------------------------------------- |
-| `bun install`                                       | Install dependencies                                                       |
-| `bun dev`                                           | Start the dev server                                                       |
-| `bun run typecheck`                                 | Typecheck with `tsrs`, including the Effect rules                          |
-| `bun run lint`                                      | Lint with oxlint and the Effect rules                                      |
-| `bun run test`                                      | Run the Story and Scene tests                                              |
-| `bun run build`                                     | Build for production                                                       |
-| `bun run perf:check`                                | Compare frame time to `tools/audit/frame-baseline.json` in headless Chrome |
-| `cd infra && bun alchemy plan --stage prod`         | Show what a production deploy to Cloudflare would change                   |
-| `cd infra && bun alchemy deploy --stage prod`       | Deploy production to Cloudflare by hand (see Deploying)                    |
-| `cd tools/audit && bun live-check.ts [url]`         | Load a deployed copy in headless Chrome and check that it boots            |
-| `bun tools/balance/simulate.ts [runs]`              | Play many seeded runs with a bot and print the balance report              |
-| `MODE=endless bun tools/balance/simulate.ts [runs]` | The same bot in endless mode. `SWAP=1` makes it swap back to its spare gun |
+| Command                                       | What it does                                                                                                               |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `bun install`                                 | Install dependencies                                                                                                       |
+| `bun dev`                                     | Start the dev server                                                                                                       |
+| `bun run typecheck`                           | Typecheck with `tsrs`, including the Effect rules                                                                          |
+| `bun run lint`                                | Lint with oxlint and the Effect rules                                                                                      |
+| `bun run test`                                | Run the Story and Scene tests                                                                                              |
+| `bun run build`                               | Build for production                                                                                                       |
+| `bun run perf:check`                          | Compare frame time to `tools/audit/frame-baseline.json` in headless Chrome                                                 |
+| `cd infra && bun alchemy plan --stage prod`   | Show what a production deploy to Cloudflare would change                                                                   |
+| `cd infra && bun alchemy deploy --stage prod` | Deploy production to Cloudflare by hand (see Deploying)                                                                    |
+| `cd tools/audit && bun live-check.ts [url]`   | Load a deployed copy in headless Chrome and check that it boots                                                            |
+| `bun run balance [runs]`                      | The balance bot through the heavy guard. Env vars such as `MODE=endless` and `SWAP=1` pass through                         |
+| `bun run heavy -- <command...>`               | Run any CPU-heavy command through the guard: one at a time across the machine, after the load drops, with `WORKERS` capped |
+| `bun run heavy -- --reset-budget`             | Reset this branch's balance batch count                                                                                    |
 
 Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All four must pass.
 
 **Go easy on the laptop.** This is developed on one laptop (12 cores), often with several agents at once. Two agents running 8-process balance batches together pushed the load average to 30 and made every step about three times slower.
 
-- Run the balance bot with `WORKERS=4` at most, and never two balance runs at the same time, across all agents. Check `uptime` first; if the load average is above the core count, wait or use fewer workers.
+- Always run heavy jobs through the guard: `bun run balance [runs]` for the balance bot, `bun run perf:check` for the frame time gate, and `bun run heavy -- <command...>` for anything else heavy, such as `bun run heavy -- bun tools/audit/perf.ts` or a shots script. Never call `tools/balance/simulate.ts` or a heavy audit directly. See `tools/heavy/README.md`.
+- The guard holds one machine-wide lock in the temp directory, so only one heavy job runs at a time across all agents and worktrees. A lock left by a dead process is taken over.
+- It waits, checking every 10 seconds for up to 30 minutes, while the 1 minute load average is above the core count, and prints why at most every 30 seconds.
+- It caps `WORKERS` at 4 and lowers it further when the load is above half the cores, and says when it does.
+- It counts balance batches per worktree and branch: the third warns, and the sixth is refused unless you pass `--allow-more` (`bun run heavy -- --allow-more bun tools/balance/simulate.ts 200`).
 - Cap tuning at about three batches per change. Results within a few points of a target are fine; list misses as follow-ups instead of running more batches.
 - Prefer 100 runs to sort ideas and 200 runs only to confirm the final numbers.
-- The same goes for headless Chrome audits and `perf:check`: one at a time, and not while the balance bot is running, since load skews frame times.
+- The same goes for headless Chrome audits and `perf:check`: one at a time, and not while the balance bot is running, since load skews frame times. The guard's lock enforces this when they all go through it.
 
 ### Where things are
 

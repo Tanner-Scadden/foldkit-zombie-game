@@ -1,10 +1,11 @@
-// Headless balance simulation. Run from the repo root:
-//   bun tools/balance/simulate.ts [runs] [firstSeed]
-//   MODE=endless bun tools/balance/simulate.ts [runs] [firstSeed]
-//   WORKERS=6 bun tools/balance/simulate.ts 200   (splits the runs over processes)
-//   TIMELINE=1 bun tools/balance/simulate.ts 40   (adds the wave timeline audit)
-//   KITE=1 bun tools/balance/simulate.ts 200   (runs from the boss, never dodges)
-//   NO_DODGE=1 bun tools/balance/simulate.ts 200   (ignores every floor tell)
+// Headless balance simulation. Run it from the repo root through the heavy
+// guard (tools/heavy), never directly:
+//   bun run balance [runs] [firstSeed]
+//   MODE=endless bun run balance [runs] [firstSeed]
+//   WORKERS=4 bun run balance 200   (splits the runs over processes, capped)
+//   TIMELINE=1 bun run balance 40   (adds the wave timeline audit)
+//   KITE=1 bun run balance 200   (runs from the boss, never dodges)
+//   NO_DODGE=1 bun run balance 200   (ignores every floor tell)
 // It drives the game's own init model and update with a simple bot and
 // prints survival per wave, run length, the money curve, and which zombie
 // kinds cost the bot the most hearts. Nothing here ships with the game.

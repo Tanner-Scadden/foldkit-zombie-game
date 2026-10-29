@@ -7,11 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "effect-tsgo tsrs --noEmit",
+    "typecheck": "effect-tsgo tsrs --noEmit && effect-tsgo tsrs --noEmit -p tools/heavy",
     "format": "oxfmt",
     "test": "vitest run",
-    "perf:check": "cd tools/audit && bun perf-check.ts",
-    "lint": "oxlint src && effect-tsgo oxlint --config .oxlintrc.effect.json --deny-warnings src"
+    "perf:check": "bun tools/heavy/main.ts -- bun tools/audit/perf-check.ts",
+    "heavy": "bun tools/heavy/main.ts --",
+    "balance": "bun tools/heavy/main.ts -- bun tools/balance/simulate.ts",
+    "lint": "oxlint src tools/heavy && effect-tsgo oxlint --config .oxlintrc.effect.json --deny-warnings src tools/heavy"
   },
   "dependencies": {
     "@effect/platform-browser": "4.0.0",
@@ -23,12 +25,14 @@
     "foldkit@0.169.0": "patches/foldkit@0.169.0.patch"
   },
   "devDependencies": {
+    "@effect/platform-node": "4.0.0",
     "@effect/tsgo": "0.62.0",
     "@foldkit/devtools": "0.169.0",
     "@foldkit/devtools-mcp": "0.25.0",
     "@foldkit/oxlint-plugin": "0.15.3",
     "@foldkit/vite-plugin": "0.28.0",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "26.6.5",
     "happy-dom": "^20.14.5",
     "oxfmt": "^0.66.0",
     "oxlint": "1.89.0",

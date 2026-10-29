@@ -27,9 +27,11 @@ Measure frame time on a built harness, not the dev server on 4174. The dev serve
 
 ## Scripts
 
-- `bun perf.ts` records `requestAnimationFrame` deltas for the idle, busy, and worst campaign scenarios, two endless ones, `endless15` (endless wave 15) and `endlessCap` (the room held at the alive cap), and `gasbags` (wave 6 with 16 Gasbags kept in the room while the bot pops them). It runs at 1x, 4x, and 6x CPU throttle and writes `perf-<TAG>.json`. `BASE` points it at a server, `ONLY` picks scenarios, and `RATES` picks throttle rates. The scenarios live in `scenarios.ts` and the measuring in `measure.ts`.
-- `bun perf-check.ts`, or `bun run perf:check` from the repo root, is the frame time gate. See below.
-- `bun profile.ts` profiles the worst case at 4x throttle against the profiling build on 4175. It prints the main thread trace by event kind, the top self times, and a CPU profile bucketed into update, scene build, paint, snabbdom, GC, and native time. `SCENARIO`, `RATE`, and `MS` change what it profiles, `FOCUS=fnName` lists the stacks through a function, and `DUMP=path` saves the raw profile.
+Run every heavy script here through the heavy guard from the repo root, never directly: `bun run heavy -- bun tools/audit/perf.ts`, `bun run heavy -- bun tools/audit/profile.ts`, or `TAG=after bun run heavy -- bun tools/audit/shots17.ts`. The guard runs one heavy job at a time across the machine and waits for the load to drop, so frame times are not skewed by a balance run in another worktree. See `tools/heavy/README.md`. The scripts find their files from their own folder, so they work from the root. The commands below are shown by script name.
+
+- `bun run heavy -- bun tools/audit/perf.ts` records `requestAnimationFrame` deltas for the idle, busy, and worst campaign scenarios, two endless ones, `endless15` (endless wave 15) and `endlessCap` (the room held at the alive cap), and `gasbags` (wave 6 with 16 Gasbags kept in the room while the bot pops them). It runs at 1x, 4x, and 6x CPU throttle and writes `perf-<TAG>.json`. `BASE` points it at a server, `ONLY` picks scenarios, and `RATES` picks throttle rates. The scenarios live in `scenarios.ts` and the measuring in `measure.ts`.
+- `bun run perf:check` from the repo root is the frame time gate. It runs `perf-check.ts` through the heavy guard. See below.
+- `bun run heavy -- bun tools/audit/profile.ts` profiles the worst case at 4x throttle against the profiling build on 4175. It prints the main thread trace by event kind, the top self times, and a CPU profile bucketed into update, scene build, paint, snabbdom, GC, and native time. `SCENARIO`, `RATE`, and `MS` change what it profiles, `FOCUS=fnName` lists the stacks through a function, and `DUMP=path` saves the raw profile.
 - `bun shots1.ts` to `bun shots7.ts` take the screenshots into `shots/`. `shots5.ts` to `shots7.ts` cover step 7: the title, the device hints, the portrait notice, the bands, and the run stats panels.
 - `bun shots9.ts` takes frozen, deterministic shots of the title, the preparation phase, two worst-case fights (one mid-shake), endless wave 15, Game Over, Victory, and two phone scenes, as `s9-<TAG>-<scene>.png`. With `COMPARE=<other tag>` it also counts the pixels that differ from that set, which is how a rendering change is checked to look the same.
 - `TAG=after bun shots10.ts` takes the shop at the stall on the first visit ($37) and mid-run ($180 with a tier 1 SMG), on desktop and on a landscape phone, once per category tab, as `s10-<TAG>-<device>-<scene>[-<tab>].png`. `BASE` points it at another harness port, so a `TAG=before` set can come from an older checkout.
@@ -60,7 +62,7 @@ Measure frame time on a built harness, not the dev server on 4174. The dev serve
 
 ## Frame time gate
 
-`bun run perf:check` builds the harness for production, serves it on port 4179 (it refuses to start if the port is taken), and plays the `worst` and `endlessCap` scenarios at 1x, 4x, and 6x CPU throttle in headless Chrome, best of two trials each. It compares the results to `frame-baseline.json` and exits with 1 when a gated number regresses past its tolerance.
+`bun run perf:check` waits for the heavy guard, then builds the harness for production, serves it on port 4179 (it refuses to start if the port is taken), and plays the `worst` and `endlessCap` scenarios at 1x, 4x, and 6x CPU throttle in headless Chrome, best of two trials each. It compares the results to `frame-baseline.json` and exits with 1 when a gated number regresses past its tolerance.
 
 | Number                   | What it is                                                     | Gate                  |
 | ------------------------ | -------------------------------------------------------------- | --------------------- |
