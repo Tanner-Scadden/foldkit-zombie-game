@@ -6,11 +6,9 @@ One entry per day, newest first. Only things a player would notice, a handful of
 
 - 💀 Pick Easy, Normal, or Hard. Beat Hard and Nightmare unlocks. Good luck.
 - 🪵 Board up two doors and nothing climbs through them, but slow zombies love a snack of fresh planks.
-- 💣 Meet the Kaboomer. He brought a bomb. He wants to share.
-- ⚾ The Chucker is now the Big Leaguer: better arm, and he uses his buddies as shields.
-- 🎯 Your guns moved to the bottom center, right under your thumbs.
+- 💣 Meet the Kaboomer, who brought a bomb to share, and the Big Leaguer, who pitches zombies and hides behind his buddies.
 - 🛡️ Big Lugs wear junk armor now. Knock it off, one clang at a time.
-- 🏆 Your kills and bests stick around after updates.
+- 🎯 Your guns sit right under your thumbs, and your kills and bests stick around after updates.
 
 ## October 28, 2026: Opening night
 
