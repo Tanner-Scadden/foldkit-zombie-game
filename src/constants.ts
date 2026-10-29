@@ -217,8 +217,8 @@ export const KILL_POPUP_LIFT_PX = 12
 export const POPUP_DRIFT_SPEED_MAX = 14
 export const POPUP_FADE_START = 0.6
 export const KILL_POPUP_FLASH_MS = 70
-export const KILL_POPUP_BIG_SCALE = 3
-export const KILL_POPUP_SCALE = 2
+export const KILL_POPUP_BIG_SCALE = 1
+export const KILL_POPUP_SCALE = 1
 
 export const STREAK_WINDOW_MS = 1600
 export const STREAK_MIN_SHOWN = 2
