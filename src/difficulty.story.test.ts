@@ -277,12 +277,12 @@ describe('the multipliers', () => {
       Array.map(normal, ({ kind, door }) => [kind, door]),
     )
     Array.forEach(Array.zip(normal, easy), ([base, scaled]) => {
-      expect(scaled.hpScale).toBeCloseTo((base.hpScale * 0.85) / 1.05)
-      expect(scaled.speedScale).toBeCloseTo((base.speedScale * 0.95) / 1.02)
+      expect(scaled.hpScale).toBeCloseTo(base.hpScale * 0.85)
+      expect(scaled.speedScale).toBeCloseTo(base.speedScale * 0.95)
     })
     Array.forEach(Array.zip(normal, nightmare), ([base, scaled]) => {
-      expect(scaled.hpScale).toBeCloseTo((base.hpScale * 1.18) / 1.05)
-      expect(scaled.speedScale).toBeCloseTo((base.speedScale * 1.06) / 1.02)
+      expect(scaled.hpScale).toBeCloseTo(base.hpScale * 1.18)
+      expect(scaled.speedScale).toBeCloseTo(base.speedScale * 1.06)
     })
   })
 

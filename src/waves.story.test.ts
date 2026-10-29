@@ -4,6 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { ARENA_LEVEL } from './arena'
+import { hasBoss } from './boss'
 import {
   FIRST_PREPARATION_MS,
   PLAYER_MAX_HP,
@@ -222,13 +223,13 @@ describe('waves', () => {
     story(
       update,
       given(inWave(2, [plannedSpawn(5000)], [])),
-      ...ticks(20, FRAME_MS),
+      ...ticks(8, FRAME_MS),
       model(({ phase, zombies }) => {
         expect(zombies).toEqual([])
         expect(phase).toEqual(
           Phase.Wave({
             wave: 2,
-            elapsedMs: 20 * FRAME_MS,
+            elapsedMs: 8 * FRAME_MS,
             spawns: [plannedSpawn(5000)],
           }),
         )
@@ -435,11 +436,12 @@ describe('wave plans', () => {
     const plan = Option.getOrThrow(Array.get(WAVE_PLANS, wave - 1))
     return (
       plan.hpScale *
-      Array.reduce(
+      (Array.reduce(
         plan.groups,
         0,
         (sum, group) => sum + group.count * mixHealth(group),
-      )
+      ) +
+        (hasBoss(wave) ? ZOMBIE_KINDS.Boss.hp : 0))
     )
   }
 

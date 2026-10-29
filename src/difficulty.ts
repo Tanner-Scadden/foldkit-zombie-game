@@ -22,9 +22,9 @@ export type DifficultyStats = Readonly<{
 
 // NOTE: the scales multiply every zombie's base health and speed, the boss
 // and his belched Groaners too, on top of the wave's own scales. A bite is
-// whole hearts, so it rounds and never drops below one. Normal is not 1:
-// boarded doors made planks strong, and its 1.05 and 1.02 bring the bot
-// back to its targets without touching the wave tables.
+// whole hearts, so it rounds and never drops below one. Normal is 1: the
+// Plank Pile's price, not Normal's scales, pays for how strong boarded doors
+// are.
 export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyStats>> = {
   Easy: {
     name: 'Easy',
@@ -36,8 +36,8 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyStats>> = {
   Normal: {
     name: 'Normal',
     blurb: "The way it's meant to be played",
-    healthScale: 1.05,
-    speedScale: 1.02,
+    healthScale: 1,
+    speedScale: 1,
     biteScale: 1,
   },
   Hard: {

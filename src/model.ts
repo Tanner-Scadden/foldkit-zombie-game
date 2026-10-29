@@ -882,7 +882,11 @@ export const Beat = defineTaggedUnion({
     relaxMs: Schema.Number,
     waitedMs: Schema.Number,
   },
-  Resting: { remainingMs: Schema.Number, extendedMs: Schema.Number },
+  Resting: {
+    remainingMs: Schema.Number,
+    extendedMs: Schema.Number,
+    trickled: Schema.Number,
+  },
 })
 export type Beat = typeof Beat.Type
 

@@ -395,8 +395,8 @@ describe('Shop', () => {
       click(trapsTab),
       resolveFocusTab,
       expect(text('0 ready to place, 0 placed, up to 2')).toExist(),
-      click(role('button', { name: 'Buy Plank Pile for $20' })),
-      expect(text('You have $80')).toExist(),
+      click(role('button', { name: 'Buy Plank Pile for $40' })),
+      expect(text('You have $60')).toExist(),
       expect(text('1 ready to place, 0 placed, up to 2')).toExist(),
       expect(role('button', { name: 'Buy Glue and Nails for $0' })).toHaveAttr(
         'aria-disabled',
@@ -422,8 +422,8 @@ describe('Shop', () => {
       ...openShop(),
       expect(role('tab', { name: 'Guns, 1 you can buy' })).toExist(),
       expect(role('tab', { name: 'Health, 1 you can buy' })).toExist(),
-      expect(role('tab', { name: 'Traps, 1 you can buy' })).toExist(),
-      expect(text('3 things you can buy now')).toExist(),
+      expect(role('tab', { name: 'Traps, nothing you can buy' })).toExist(),
+      expect(text('2 things you can buy now')).toExist(),
       expect(
         selector('[data-verdict="available"] #shop-item-Shotgun'),
       ).toExist(),

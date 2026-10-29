@@ -45,8 +45,11 @@ export const WaveSummary = Schema.Struct({
   diedShare: Schema.Number,
   meanHeartsLost: Schema.Number,
   meanLengthSeconds: Schema.Number,
+  medianLengthSeconds: Schema.Number,
   p90LengthSeconds: Schema.Number,
   meanEmptySeconds: Schema.Number,
+  meanQuietSeconds: Schema.Number,
+  worstQuietSeconds: Schema.Number,
   meanPressureSeconds: Schema.Number,
   meanPeakAlive: Schema.Number,
   deathShareByKind: Shares,
@@ -195,8 +198,14 @@ export const summarizeWave = (
     diedShare: shareOf(died.length, runs.length),
     meanHeartsLost: mean(Array.map(runs, ({ heartsLost }) => heartsLost)),
     meanLengthSeconds: mean(lengths),
+    medianLengthSeconds: median(lengths),
     p90LengthSeconds: quantile(lengths, 0.9),
     meanEmptySeconds: mean(Array.map(runs, ({ emptyMs }) => emptyMs / 1000)),
+    meanQuietSeconds: mean(Array.map(runs, ({ quietMs }) => quietMs / 1000)),
+    worstQuietSeconds:
+      Array.reduce(runs, 0, (most, { longestQuietMs }) =>
+        Math.max(most, longestQuietMs),
+      ) / 1000,
     meanPressureSeconds: mean(
       Array.map(runs, ({ pressureMs }) => pressureMs / 1000),
     ),
@@ -252,11 +261,11 @@ export const formatWavePass = (summary: WavePassSummary): string =>
     [
       `Wave snapshots on ${summary.difficulty}${summary.style === 'SwapsBack' ? ', swaps back to the spare' : ''}: ${summary.runsPerWave} runs a wave from ${summary.slots} snapshot slots, in ${summary.wallSeconds.toFixed(1)} s`,
       '',
-      'Wave  runs  snaps  cleared  died  hearts lost  length s  p90 s  empty s  pressure s  peak alive  deaths by kind',
+      'Wave  runs  snaps  cleared  died  hearts lost  length s  median s  p90 s  empty s  quiet s  worst quiet s  pressure s  peak alive  deaths by kind',
       ...Array.map(
         summary.waves,
         wave =>
-          `${String(wave.wave).padStart(4)}  ${String(wave.runs).padStart(4)}  ${String(wave.snapshots).padStart(5)}  ${percent(wave.clearedShare).padStart(7)}  ${percent(wave.diedShare).padStart(4)}  ${wave.meanHeartsLost.toFixed(2).padStart(11)}  ${wave.meanLengthSeconds.toFixed(0).padStart(8)}  ${wave.p90LengthSeconds.toFixed(0).padStart(5)}  ${wave.meanEmptySeconds.toFixed(1).padStart(7)}  ${wave.meanPressureSeconds.toFixed(1).padStart(10)}  ${wave.meanPeakAlive.toFixed(1).padStart(10)}  ${kindShares(wave.deathShareByKind)}`,
+          `${String(wave.wave).padStart(4)}  ${String(wave.runs).padStart(4)}  ${String(wave.snapshots).padStart(5)}  ${percent(wave.clearedShare).padStart(7)}  ${percent(wave.diedShare).padStart(4)}  ${wave.meanHeartsLost.toFixed(2).padStart(11)}  ${wave.meanLengthSeconds.toFixed(0).padStart(8)}  ${wave.medianLengthSeconds.toFixed(0).padStart(8)}  ${wave.p90LengthSeconds.toFixed(0).padStart(5)}  ${wave.meanEmptySeconds.toFixed(1).padStart(7)}  ${wave.meanQuietSeconds.toFixed(1).padStart(7)}  ${wave.worstQuietSeconds.toFixed(2).padStart(13)}  ${wave.meanPressureSeconds.toFixed(1).padStart(10)}  ${wave.meanPeakAlive.toFixed(1).padStart(10)}  ${kindShares(wave.deathShareByKind)}`,
       ),
     ],
     '\n',

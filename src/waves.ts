@@ -310,7 +310,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
         everyMs: 4000,
       }),
     ],
-    holds: [fadeThenRelax(17500, 4000)],
+    holds: [fadeThenRelax(17500, 2000)],
   },
   {
     speedScale: 1.14,
@@ -349,7 +349,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
         everyMs: 2800,
       }),
     ],
-    holds: [fadeThenRelax(26500, 4500)],
+    holds: [fadeThenRelax(26500, 2500)],
   },
   {
     speedScale: 1.21,
@@ -360,7 +360,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
         mix: mixOf(3, 1, 0),
         from: anyDoors(2),
         startMs: 600,
-        everyMs: 3400,
+        everyMs: 3000,
       }),
       trickle({
         count: 3,
@@ -372,30 +372,30 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
       pincers({
         packs: [4, 3, 5, 4],
         mix: mixOf(2, 1, 0),
-        startMs: 18000,
-        everyMs: 4500,
+        startMs: 15500,
+        everyMs: 4000,
       }),
       squads({
-        packs: [4, 2, 5, 1, 3],
+        packs: [4, 2, 4, 3],
         mix: mixOf(2, 0, 1),
         from: anyDoors(3),
-        startMs: 30200,
-        everyMs: 3200,
+        startMs: 26200,
+        everyMs: 3000,
       }),
       stragglers({
-        count: 4,
+        count: 3,
         mix: mixOf(2, 1, 1),
-        startMs: 31000,
+        startMs: 27000,
         everyMs: 3500,
       }),
       pincers({
-        packs: [5, 4, 6, 3],
+        packs: [4, 4, 4, 3],
         mix: mixOf(2, 1, 1),
-        startMs: 47000,
-        everyMs: 4000,
+        startMs: 38000,
+        everyMs: 3000,
       }),
     ],
-    holds: [fadeThenRelax(29000, 5000)],
+    holds: [fadeThenRelax(25000, 2500)],
   },
   {
     speedScale: 1.28,
@@ -429,7 +429,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
         startMs: 27700,
         everyMs: 3300,
       }),
-      lug(anyDoors(1), 42000),
+      lug(anyDoors(1), 37000),
       pincers({
         packs: [4, 3, 5, 4],
         mix: MIXED,
@@ -437,7 +437,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
         everyMs: 4000,
       }),
     ],
-    holds: [fadeThenRelax(26500, 5000)],
+    holds: [fadeThenRelax(26500, 2500)],
   },
   {
     speedScale: 1.35,
@@ -454,7 +454,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
       }),
       lug(anyDoors(1), 14000),
       pincers({
-        packs: [5, 4, 6, 5],
+        packs: [5, 5, 6, 5],
         mix: MIXED,
         startMs: 15500,
         everyMs: 3500,
@@ -475,10 +475,10 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
         everyMs: 0,
       }),
     ],
-    holds: [fadeThenRelax(26000, 5500)],
+    holds: [fadeThenRelax(26000, 3000)],
   },
   {
-    speedScale: 1.42,
+    speedScale: 1.39,
     hpScale: 1.1,
     groups: [
       crawlers({ count: 3, startMs: 7000, everyMs: 9000 }),
@@ -507,14 +507,14 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
         everyMs: 3000,
       }),
       stragglers({
-        count: 9,
+        count: 11,
         mix: mixOf(3, 1, 0),
         startMs: 33000,
         everyMs: 1300,
       }),
       squads({
         packs: [2, 2],
-        mix: only('Runner'),
+        mix: mixOf(3, 1, 0),
         from: anyDoors(1),
         startMs: 38000,
         everyMs: 1500,
@@ -527,10 +527,10 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
         everyMs: 3500,
       }),
     ],
-    holds: [fadeThenRelax(28000, 5500), fadeThenRelax(45000, 5000)],
+    holds: [fadeThenRelax(28000, 3000), fadeThenRelax(45000, 2500)],
   },
   {
-    speedScale: 1.49,
+    speedScale: 1.45,
     hpScale: 1.1,
     groups: [
       crawlers({ count: 2, startMs: 9000, everyMs: 16000 }),
@@ -563,15 +563,16 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
         startMs: 39700,
         everyMs: 1500,
       }),
-      lugPincer(45000),
+      lug(anyDoors(1), 45000),
+      stragglers({ count: 1, mix: MIXED, startMs: 45000, everyMs: 0 }),
       hordes({
-        packs: [3, 2, 3, 2, 3, 2],
+        packs: [3, 2, 3, 2],
         mix: MIXED,
         startMs: 46000,
         everyMs: 2500,
       }),
     ],
-    holds: [fadeThenRelax(18500, 5000), fadeThenRelax(38500, 5500)],
+    holds: [fadeThenRelax(18500, 2500), fadeThenRelax(38500, 3000)],
   },
 ]
 
@@ -896,9 +897,9 @@ const ENDLESS_PEAK_EVERY_MAX_MS = 3000
 const ENDLESS_CYCLE_LEAD_MS = 1500
 const ENDLESS_CYCLE_MS =
   ENDLESS_BUILD_MS + ENDLESS_PEAK_MS + ENDLESS_CYCLE_LEAD_MS
-const ENDLESS_RELAX_MS = 6000
-const ENDLESS_RELAX_MIN_MS = 4000
-const ENDLESS_RELAX_DROP_PER_WAVE_MS = 200
+const ENDLESS_RELAX_MS = 3000
+const ENDLESS_RELAX_MIN_MS = 2000
+const ENDLESS_RELAX_DROP_PER_WAVE_MS = 100
 const ENDLESS_PACK_SIZE_BASE = 4
 const ENDLESS_PACK_SIZE_MAX = 7
 const ENDLESS_WAVES_PER_PACK_GROWTH = 3
@@ -1518,8 +1519,14 @@ const advanceWave = (
     spawns,
   )
   const clockMs = paced.clockMs
-  const route = routeSpawns(spawns, model.traps, model.pacing.packDoors)
-  const camped = delayCampedPacks(spawns, route, clockMs, pacedMs, model.player)
+  const route = routeSpawns(paced.spawns, model.traps, model.pacing.packDoors)
+  const camped = delayCampedPacks(
+    paced.spawns,
+    route,
+    clockMs,
+    pacedMs,
+    model.player,
+  )
   const warned = warnPacks(
     modifyFields(model, {
       pacing: () =>

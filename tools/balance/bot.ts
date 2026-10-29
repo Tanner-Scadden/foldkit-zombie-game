@@ -187,12 +187,17 @@ export type WaveTimeline = {
 }
 
 // Per wave: hearts lost, seconds with 6 or more zombies within 48 px
-// (pressure), seconds with none alive (relax), its length, and the most
-// alive at once.
+// (pressure), seconds with none alive (relax), seconds with none alive,
+// none announced, and spawns still to come (quiet, the dead air the pacing
+// rules forbid) and its longest stretch, its length, and the most alive at
+// once.
 export type WaveLog = {
   heartsLost: number
   pressureMs: number
   relaxMs: number
+  quietMs: number
+  quietRunMs: number
+  longestQuietMs: number
   lengthMs: number
   peakAlive: number
 }
@@ -204,6 +209,9 @@ const emptyWaveLog = (): WaveLog => ({
   heartsLost: 0,
   pressureMs: 0,
   relaxMs: 0,
+  quietMs: 0,
+  quietRunMs: 0,
+  longestQuietMs: 0,
   lengthMs: 0,
   peakAlive: 0,
 })
@@ -223,6 +231,7 @@ const isAnnounced = (model: Model): boolean => {
   const warned = new Set(model.pacing.warnedPacks)
   return (
     model.pacing.alarm._tag === 'Ringing' ||
+    model.boss._tag === 'Arriving' ||
     pendingSpawns(model).some(spawn => warned.has(spawn.pack))
   )
 }
@@ -711,9 +720,12 @@ const STALL_FRONT: Vector = {
 // The bot shops the way a careful player would: a heart when low, the
 // first gun it can afford (the cheap shotgun right after the tutorial, the
 // SMG once it can), ammo below half, two Plank Piles, then upgrades and a
-// Grumpy Gnome while it keeps a small reserve for a refill and a heart.
-// NO_GNOME=1 keeps the old bot that never buys a gnome.
+// Grumpy Gnome while it keeps a small reserve for a refill and a heart. It
+// takes the spare to its top tier before it upgrades the pistol.
+// NO_GNOME=1 keeps the old bot that never buys a gnome, and NO_PLANKS=1 a
+// bot that never buys a Plank Pile, to check planks help without carrying.
 const NO_GNOME = process.env.NO_GNOME !== undefined
+const NO_PLANKS = process.env.NO_PLANKS !== undefined
 const RESERVE = Number(process.env.RESERVE ?? 30)
 
 type ItemId = Parameters<typeof priceFor>[1]
@@ -741,7 +753,9 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
   const barricades =
     model.trapStock.Barricade +
     model.traps.filter(trap => trap._tag === 'Barricade').length
-  if (barricades < 2 && isAvailable('Barricade')) return 'Barricade'
+  if (!NO_PLANKS && barricades < 2 && isAvailable('Barricade')) {
+    return 'Barricade'
+  }
   if (model.player.hp <= 4 && isAvailable('Heart')) return 'Heart'
   if (isAvailable('RepairTraps') && priceFor(model, 'RepairTraps') <= 25) {
     return 'RepairTraps'
@@ -756,7 +770,9 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
   if (spare.tier < maxTier(spare.kind) && canSpare(spareUpgrade)) {
     return spareUpgrade
   }
-  if (spare.tier >= 2 && canSpare('PistolUpgrade')) return 'PistolUpgrade'
+  if (spare.tier >= maxTier(spare.kind) && canSpare('PistolUpgrade')) {
+    return 'PistolUpgrade'
+  }
   if (!NO_GNOME && turrets < 2 && spare.tier >= 2 && canSpare('Turret')) {
     return 'Turret'
   }
@@ -1189,6 +1205,15 @@ export const play = (
       log.lengthMs += FRAME_MS
       log.pressureMs += crowd >= PRESSURE_CROWD ? FRAME_MS : 0
       log.relaxMs += alive.length === 0 ? FRAME_MS : 0
+      const isQuiet =
+        model.phase._tag === 'Wave' &&
+        alive.length === 0 &&
+        model.boss._tag !== 'Fighting' &&
+        pendingSpawns(model).length > 0 &&
+        !isAnnounced(model)
+      log.quietMs += isQuiet ? FRAME_MS : 0
+      log.quietRunMs = isQuiet ? log.quietRunMs + FRAME_MS : 0
+      log.longestQuietMs = Math.max(log.longestQuietMs, log.quietRunMs)
       log.peakAlive = Math.max(log.peakAlive, alive.length)
     }
     if (
@@ -1361,6 +1386,8 @@ export type WaveRun = {
   heartsLost: number
   lengthMs: number
   emptyMs: number
+  quietMs: number
+  longestQuietMs: number
   pressureMs: number
   peakAlive: number
   killedBy: Kind | undefined
@@ -1393,6 +1420,8 @@ export const playSnapshot = (
     heartsLost: log.heartsLost,
     lengthMs: log.lengthMs,
     emptyMs: log.relaxMs,
+    quietMs: log.quietMs,
+    longestQuietMs: log.longestQuietMs,
     pressureMs: log.pressureMs,
     peakAlive: log.peakAlive,
     killedBy: result.killedBy,

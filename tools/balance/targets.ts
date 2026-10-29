@@ -51,12 +51,34 @@ export const PEAK_RATIO_TARGET: Readonly<{ min: number; max: number }> = {
 }
 export const PEAK_RATIO_WAVES: ReadonlyArray<number> = [5, 6, 7, 8]
 
-// NOTE: the longest a wave should run, in seconds of wall time, once the
-// pacing pass sets it. Empty until then: the model's test and the nightly
-// report the current lengths without judging them.
+// NOTE: the longest a wave should run, in seconds of the bot's median time
+// in the snapshot pass. The model plays faster than the bot, so its own
+// wave lengths are held to the same ceilings.
 export type WaveLengthTarget = Readonly<{ wave: number; maxSeconds: number }>
 
-export const WAVE_LENGTH_TARGETS: ReadonlyArray<WaveLengthTarget> = []
+export const WAVE_LENGTH_TARGETS: ReadonlyArray<WaveLengthTarget> = [
+  { wave: 1, maxSeconds: 40 },
+  { wave: 2, maxSeconds: 75 },
+  { wave: 3, maxSeconds: 75 },
+  { wave: 4, maxSeconds: 75 },
+  { wave: 5, maxSeconds: 90 },
+  { wave: 6, maxSeconds: 90 },
+  { wave: 7, maxSeconds: 90 },
+  { wave: 8, maxSeconds: 120 },
+]
+
+// NOTE: dead air: the seconds a wave leaves the room empty with nothing at
+// a door while spawns are still to come, on the mean run, and the longest
+// such stretch in any snapshot run.
+export const QUIET_TARGET: Readonly<{
+  meanMaxSeconds: number
+  longestMaxSeconds: number
+}> = {
+  meanMaxSeconds: 3,
+  longestMaxSeconds: 1.2,
+}
+
+const PACING = 'Packs and pacing: no dead air'
 
 export const TARGETS: ReadonlyArray<Target> = [
   between('normal.wins', 'Normal wins (default bot)', 0.15, 0.25, LEVELS),
@@ -113,12 +135,24 @@ export const TARGETS: ReadonlyArray<Target> = [
       PRINCIPLES,
     ),
   ),
-  ...WAVE_LENGTH_TARGETS.map(({ wave, maxSeconds }) =>
+  ...WAVE_LENGTH_TARGETS.flatMap(({ wave, maxSeconds }) => [
     atMost(
-      `waves.w${wave}.p90Length`,
-      `Wave ${wave} length, slowest tenth of snapshot runs (seconds)`,
+      `waves.w${wave}.medianLength`,
+      `Wave ${wave} median length in the snapshot pass (seconds)`,
       maxSeconds,
-      'Wave length targets from the pacing pass',
+      PACING,
     ),
-  ),
+    atMost(
+      `waves.w${wave}.quiet`,
+      `Wave ${wave} quiet empty room mid-wave, mean (seconds)`,
+      QUIET_TARGET.meanMaxSeconds,
+      PACING,
+    ),
+    atMost(
+      `waves.w${wave}.worstQuiet`,
+      `Wave ${wave} longest quiet empty room in any run (seconds)`,
+      QUIET_TARGET.longestMaxSeconds,
+      PACING,
+    ),
+  ]),
 ]

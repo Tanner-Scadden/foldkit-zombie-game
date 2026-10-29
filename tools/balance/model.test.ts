@@ -49,6 +49,7 @@ const PLAIN_RULES: FlowRules = {
   fadeMaxMs: 20000,
   quietHurryMs: 1_000_000,
   relaxQuietMaxMs: 1_000_000,
+  trickleMax: 0,
   packWarningMs: 1000,
   bossEntranceMs: 2000,
   bossHoldMs: 5000,
@@ -124,8 +125,8 @@ describe('a wave as a flow of health', () => {
   test('two zombies drain at the damage a second', () => {
     const flow = flowWave(
       [
-        { atMs: 0, hp: 10 },
-        { atMs: 0, hp: 10 },
+        { atMs: 0, hp: 10, arrival: 'Pack' },
+        { atMs: 0, hp: 10, arrival: 'Pack' },
       ],
       [],
       { _tag: 'Absent' },
@@ -142,8 +143,8 @@ describe('a wave as a flow of health', () => {
   test('a hold waits for the room to thin, then rests', () => {
     const flow = flowWave(
       [
-        { atMs: 0, hp: 5 },
-        { atMs: 1500, hp: 5 },
+        { atMs: 0, hp: 5, arrival: 'Pack' },
+        { atMs: 1500, hp: 5, arrival: 'Pack' },
       ],
       [{ atMs: 1000, releaseBelow: 1, relaxMs: 3000 }],
       { _tag: 'Absent' },
@@ -159,8 +160,8 @@ describe('a wave as a flow of health', () => {
     const waves = (quietHurryMs: number) =>
       flowWave(
         [
-          { atMs: 0, hp: 5 },
-          { atMs: 20000, hp: 5 },
+          { atMs: 0, hp: 5, arrival: 'Pack' },
+          { atMs: 20000, hp: 5, arrival: 'Pack' },
         ],
         [],
         { _tag: 'Absent' },
@@ -174,7 +175,7 @@ describe('a wave as a flow of health', () => {
 
   test('the alive cap keeps zombies at the door', () => {
     const flow = flowWave(
-      Array.makeBy(3, () => ({ atMs: 0, hp: 10 })),
+      Array.makeBy(3, () => ({ atMs: 0, hp: 10, arrival: 'Pack' })),
       [],
       { _tag: 'Absent' },
       1,
@@ -278,7 +279,7 @@ describe('guardrails from GAME_DESIGN.md', () => {
     )
   guardrail(
     'the peak never drops more than 0.05 from one wave to the next',
-    'NotYet',
+    'Met',
     drops.length === 0 ? 'no drops' : drops.join(', '),
     () => drops.length === 0,
   )
@@ -286,7 +287,7 @@ describe('guardrails from GAME_DESIGN.md', () => {
   DIFFICULTY_ORDER.forEach(difficulty =>
     guardrail(
       `total zombie health never falls from one wave to the next on ${difficulty}`,
-      'NotYet',
+      'Met',
       MODEL[difficulty].map(({ totalHp }) => totalHp.toFixed(0)).join(', '),
       () =>
         MODEL[difficulty].every(

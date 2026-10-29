@@ -13,6 +13,7 @@ import {
   PACK_WARNING_MS,
   QUIET_HURRY_MS,
   RELAX_QUIET_MAX_MS,
+  RELAX_TRICKLE_MAX,
   ZOMBIE_ALIVE_MAX,
 } from '../../src/constants'
 import {
@@ -220,7 +221,8 @@ const withPurchase = (loadout: Loadout, purchase: Purchase): Loadout => {
 
 // NOTE: the bot's shopping list in tools/balance/bot.ts, without hearts:
 // the SMG once it can, else the shotgun; one refill a visit; two planks;
-// upkeep for repairs; then upgrades and gnomes while a reserve stays.
+// upkeep for repairs; then upgrades and gnomes while a reserve stays, the
+// spare to its top tier before the pistol.
 const wantedNext = (
   catalog: Catalog,
   basket: Basket,
@@ -265,7 +267,7 @@ const wantedNext = (
         ],
         [
           'PistolUpgrade',
-          spare.tier >= 2 &&
+          spare.tier >= maxTier &&
             loadout.pistolTier < catalog.upgradePrices.Pistol.length &&
             affords('PistolUpgrade', reserve),
         ],
@@ -363,6 +365,7 @@ export type FlowRules = Readonly<{
   fadeMaxMs: number
   quietHurryMs: number
   relaxQuietMaxMs: number
+  trickleMax: number
   packWarningMs: number
   bossEntranceMs: number
   bossHoldMs: number
@@ -375,13 +378,18 @@ export const flowRules = (assumptions: Assumptions): FlowRules => ({
   fadeMaxMs: FADE_MAX_MS,
   quietHurryMs: QUIET_HURRY_MS,
   relaxQuietMaxMs: RELAX_QUIET_MAX_MS,
+  trickleMax: RELAX_TRICKLE_MAX,
   packWarningMs: PACK_WARNING_MS,
   bossEntranceMs: BOSS_RULES.entranceMs,
   bossHoldMs: BOSS_RULES.holdMs,
   maxWaveMs: assumptions.maxWaveMs,
 })
 
-export type Incoming = Readonly<{ atMs: number; hp: number }>
+// NOTE: a Straggler is a lone Shambler, Runner, or Kaboomer, the kind a
+// quiet relax may pull in early, as the trickle in src/pacing.ts does.
+export type Arrival = 'Straggler' | 'Pack'
+
+export type Incoming = Readonly<{ atMs: number; hp: number; arrival: Arrival }>
 
 export type FlowBoss =
   | Readonly<{ _tag: 'Absent' }>
@@ -401,7 +409,7 @@ type Beat =
       relaxMs: number
       waitedMs: number
     }>
-  | Readonly<{ _tag: 'Resting'; remainingMs: number }>
+  | Readonly<{ _tag: 'Resting'; remainingMs: number; trickled: number }>
 
 type Flow = Readonly<{
   wallMs: number
@@ -479,42 +487,84 @@ const advanceBoss = (
   }
 }
 
-const advanceClock = (
+type Clock = Readonly<{
+  clockMs: number
+  beat: Beat
+  holds: ReadonlyArray<Hold>
+  pending: ReadonlyArray<Incoming>
+}>
+
+// NOTE: a quiet relax pulls the soonest straggler in now, up to trickleMax,
+// then ends, as the trickle in src/pacing.ts does.
+const trickled = (
   flow: Flow,
-  waiting: number,
+  beat: Readonly<{ _tag: 'Resting'; remainingMs: number; trickled: number }>,
   rules: FlowRules,
-): Readonly<{ clockMs: number; beat: Beat; holds: ReadonlyArray<Hold> }> => {
-  const { beat, clockMs, holds } = flow
+): Clock => {
+  const { clockMs, holds, pending } = flow
+  const at = Array.findFirstIndex(
+    pending,
+    ({ arrival }) => arrival === 'Straggler',
+  )
+  return pipe(
+    at,
+    Option.filter(() => beat.trickled < rules.trickleMax),
+    Option.flatMap(index =>
+      Option.map(Array.get(pending, index), straggler => ({
+        index,
+        straggler,
+      })),
+    ),
+    Option.match({
+      onNone: () => ({ clockMs, holds, pending, beat: FLOWING }),
+      onSome: ({ index, straggler }) => ({
+        clockMs,
+        holds,
+        pending: Array.prepend(Array.remove(pending, index), {
+          ...straggler,
+          atMs: clockMs,
+        }),
+        beat: { ...beat, trickled: beat.trickled + 1 },
+      }),
+    }),
+  )
+}
+
+const advanceClock = (flow: Flow, waiting: number, rules: FlowRules): Clock => {
+  const { beat, clockMs, holds, pending } = flow
   if (beat._tag === 'Fading') {
     const waitedMs = beat.waitedMs + rules.stepMs
     const isThin = waiting === 0 && flow.alive.length < beat.releaseBelow
     return {
       clockMs,
       holds,
+      pending,
       beat:
         isThin || waitedMs >= rules.fadeMaxMs
-          ? { _tag: 'Resting', remainingMs: beat.relaxMs }
+          ? { _tag: 'Resting', remainingMs: beat.relaxMs, trickled: 0 }
           : { ...beat, waitedMs },
     }
   } else if (beat._tag === 'Resting') {
     const remainingMs = beat.remainingMs - rules.stepMs
+    if (flow.quietMs >= rules.relaxQuietMaxMs) {
+      return trickled(flow, beat, rules)
+    }
     return {
       clockMs,
       holds,
-      beat:
-        flow.quietMs >= rules.relaxQuietMaxMs || remainingMs <= 0
-          ? FLOWING
-          : { ...beat, remainingMs },
+      pending,
+      beat: remainingMs <= 0 ? FLOWING : { ...beat, remainingMs },
     }
   } else {
     const worldMs = isHeldByBoss(flow.boss, rules) ? 0 : rules.stepMs
     return Option.match(Array.head(holds), {
-      onNone: () => ({ clockMs: clockMs + worldMs, beat, holds }),
+      onNone: () => ({ clockMs: clockMs + worldMs, beat, holds, pending }),
       onSome: hold =>
         hold.atMs <= clockMs + worldMs
           ? {
               clockMs: Math.max(clockMs, hold.atMs),
               holds: Array.drop(holds, 1),
+              pending,
               beat: {
                 _tag: 'Fading',
                 releaseBelow: hold.releaseBelow,
@@ -522,7 +572,7 @@ const advanceClock = (
                 waitedMs: 0,
               },
             }
-          : { clockMs: clockMs + worldMs, beat, holds },
+          : { clockMs: clockMs + worldMs, beat, holds, pending },
     })
   }
 }
@@ -571,7 +621,7 @@ const stepFlow = (flow: Flow, dps: number, rules: FlowRules): Flow => {
     rules,
   )
   const clockMs = hurried({ ...flow, ...clock, alive: withBoss }, rules)
-  const [due, later] = Array.span(flow.pending, ({ atMs }) => atMs <= clockMs)
+  const [due, later] = Array.span(clock.pending, ({ atMs }) => atMs <= clockMs)
   const room = Math.max(0, rules.aliveCap - withBoss.length)
   const [admitted, waiting] = Array.splitAt(due, room)
   const arrivedHp =
@@ -720,8 +770,27 @@ export const rolledWave = (
 export const spawnHp = (spawn: PlannedSpawn): number =>
   scaledHp(ZOMBIE_KINDS[spawn.kind].hp, spawn.hpScale)
 
+const STRAGGLER_KINDS: ReadonlyArray<ZombieKind> = [
+  'Shambler',
+  'Runner',
+  'Exploder',
+]
+
+const arrivalOf = (
+  spawn: PlannedSpawn,
+  spawns: ReadonlyArray<PlannedSpawn>,
+): Arrival =>
+  Array.contains(STRAGGLER_KINDS, spawn.kind) &&
+  Array.filter(spawns, ({ pack }) => pack === spawn.pack).length === 1
+    ? 'Straggler'
+    : 'Pack'
+
 const incomingOf = (rolled: RolledWave): ReadonlyArray<Incoming> =>
-  Array.map(rolled.spawns, spawn => ({ atMs: spawn.atMs, hp: spawnHp(spawn) }))
+  Array.map(rolled.spawns, spawn => ({
+    atMs: spawn.atMs,
+    hp: spawnHp(spawn),
+    arrival: arrivalOf(spawn, rolled.spawns),
+  }))
 
 // The money a wave pays when the bot kills everything and wipes every
 // frenzied pack: bounties, the boss's bounty, the pack bonus, and the clear.
