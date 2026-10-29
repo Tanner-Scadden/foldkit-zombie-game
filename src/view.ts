@@ -10,6 +10,7 @@ import {
   cornerButtonsView,
   debutCardView,
   debutPitch,
+  homeScreenStepsView,
   homeScreenTipView,
   modeChoiceView,
   sidewaysView,
@@ -282,6 +283,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       modeChoiceView(model, h),
       cornerButtonsView(model, h),
       homeScreenTipView(model, h),
+      homeScreenStepsView(model, h),
       shopDialogView(model, h),
       h.submodel({
         slotId: 'character-picker',

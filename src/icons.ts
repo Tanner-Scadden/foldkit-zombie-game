@@ -96,6 +96,31 @@ export const FULLSCREEN_ICON = icon([
   'XXX...XXX',
 ])
 
+export const SHARE_ICON = icon([
+  '....X....',
+  '...XXX...',
+  '..X.X.X..',
+  '....X....',
+  'XX..X..XX',
+  'X...X...X',
+  'X.......X',
+  'X.......X',
+  'X.......X',
+  'XXXXXXXXX',
+])
+
+export const ADD_TO_HOME_SCREEN_ICON = icon([
+  'XXXXXXXXX',
+  'X.......X',
+  'X...X...X',
+  'X...X...X',
+  'X.XXXXX.X',
+  'X...X...X',
+  'X...X...X',
+  'X.......X',
+  'XXXXXXXXX',
+])
+
 export const RELOAD_ICON = icon([
   '..XXXX.X.',
   '.X....XX.',

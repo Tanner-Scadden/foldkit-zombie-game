@@ -454,6 +454,7 @@ export const ScreenFit = Schema.Literals([
   'Unknown',
   'Fullscreen',
   'HomeScreen',
+  'Installed',
   'Unavailable',
 ])
 export type ScreenFit = typeof ScreenFit.Type
@@ -851,6 +852,7 @@ export const Model = Schema.Struct({
   screenFit: ScreenFit,
   fullscreen: FullscreenSetting,
   homeScreenTip: HomeScreenTip,
+  homeScreenSteps: Dialog.Model,
   pageVisibility: PageVisibility,
   appearance: Appearance,
   character: CharacterPicker,
@@ -875,6 +877,8 @@ export const initialPlayer: Player = {
 export const emptyWallet: Wallet = { balance: 0, earned: 0, shown: 0 }
 
 export const SHOP_DIALOG_ID = 'shop'
+
+export const HOME_SCREEN_STEPS_ID = 'home-screen-steps'
 
 export const SHOP_TABS_ID = 'shop-tabs'
 
@@ -1030,6 +1034,7 @@ export const initialModel: Model = {
   screenFit: 'Unknown',
   fullscreen: 'Off',
   homeScreenTip: 'Unseen',
+  homeScreenSteps: Dialog.init({ id: HOME_SCREEN_STEPS_ID }),
   pageVisibility: 'Visible',
   appearance: defaultAppearance,
   character: closedCharacterPicker,

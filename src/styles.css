@@ -1620,8 +1620,7 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  max-width: 196px;
-  padding: 2px 2px 2px 10px;
+  padding: 0 0 0 2px;
   border: 2px solid rgba(155, 227, 106, 0.7);
   border-radius: 9999px;
   background: rgba(8, 10, 12, 0.8);
@@ -1629,8 +1628,23 @@ body {
   font: bold 11px/1.25 monospace;
 }
 
-.home-screen-tip-text {
-  margin: 0;
+.home-screen-tip-open {
+  min-height: 44px;
+  padding: 0 4px 0 10px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: #f4f1de;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(155, 227, 106, 0.7);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.home-screen-tip-open:focus-visible {
+  outline: 2px solid #ffe066;
 }
 
 .home-screen-tip-close {
@@ -1648,6 +1662,93 @@ body {
 
 .home-screen-tip-close:focus-visible {
   outline: 2px solid #ffe066;
+}
+
+.home-screen-steps-dialog[open] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-screen-steps-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 12, 0.6);
+}
+
+.home-screen-steps-panel {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 12px 16px;
+  border: 3px solid #9be36a;
+  border-radius: 8px;
+  background: #1f1826;
+  color: #f4f1de;
+  font: 14px/1.35 monospace;
+  user-select: none;
+}
+
+.home-screen-steps-title {
+  margin: 0;
+  color: #9be36a;
+  font: bold 18px monospace;
+}
+
+.home-screen-steps-blurb {
+  margin: 0;
+  color: #b8c2b0;
+  font-size: 12px;
+}
+
+.home-screen-steps-list {
+  margin: 0;
+  padding-left: 1.6em;
+  list-style: decimal;
+}
+
+.home-screen-steps-list li + li {
+  margin-top: 6px;
+}
+
+.home-screen-steps-list li::marker {
+  color: #ffe066;
+  font-weight: bold;
+}
+
+.home-screen-step-glyph {
+  display: inline-block;
+  width: 1.3em;
+  height: 1.3em;
+  margin: 0 0.1em;
+  vertical-align: -0.3em;
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+}
+
+.home-screen-steps-done {
+  min-height: 44px;
+  border: 2px solid rgba(255, 224, 102, 0.8);
+  border-radius: 6px;
+  background: rgba(8, 10, 12, 0.7);
+  color: #ffe066;
+  font: bold 14px monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.home-screen-steps-done:focus-visible {
+  outline: 2px solid #9be36a;
+  outline-offset: 2px;
 }
 
 .pause-help-touch {

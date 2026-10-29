@@ -263,4 +263,15 @@ describe('the Add to Home Screen tip', () => {
       }),
     )
   })
+
+  test('the installed Home Screen app is told apart from the browser', () => {
+    story(
+      update,
+      given(initialModel),
+      message(Message.CompletedDetectScreenFit({ screenFit: 'Installed' })),
+      model(current => {
+        expect(current.screenFit).toBe('Installed')
+      }),
+    )
+  })
 })

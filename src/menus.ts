@@ -1,12 +1,16 @@
 import { Array } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
+import { Dialog } from '@foldkit/ui'
+
 import { GAME_TITLE, RESTART_GRACE_MS } from './constants'
 import {
+  ADD_TO_HOME_SCREEN_ICON,
   FULLSCREEN_ICON,
   MUSIC_OFF_ICON,
   MUSIC_ON_ICON,
   PAUSE_ICON,
+  SHARE_ICON,
   SOUND_OFF_ICON,
   SOUND_ON_ICON,
 } from './icons'
@@ -126,11 +130,16 @@ export const homeScreenTipView = (
   !isSideways(model) &&
   !isPickingCharacter(model)
     ? h.div(
-        [h.Class('home-screen-tip'), h.Role('note')],
+        [h.Class('home-screen-tip')],
         [
-          h.p(
-            [h.Class('home-screen-tip-text')],
-            ['Add to Home Screen to play full screen'],
+          h.button(
+            [
+              h.Type('button'),
+              h.Class('home-screen-tip-open'),
+              h.AriaHasPopup('dialog'),
+              h.OnClick(Message.ClickedHomeScreenTip()),
+            ],
+            ['Play full screen: how?'],
           ),
           h.button(
             [
@@ -146,6 +155,88 @@ export const homeScreenTipView = (
         ],
       )
     : h.empty
+
+const stepGlyphView = (icon: string, h: HtmlBuilder<Message>): Html =>
+  h.span([
+    h.Class('home-screen-step-glyph'),
+    h.AriaHidden(true),
+    h.Style({ backgroundImage: icon }),
+  ])
+
+const homeScreenStepsPanelView = (
+  { title, description, initialFocus }: Dialog.RenderInfo,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> => [
+  h.h2([...title, h.Class('home-screen-steps-title')], ['Play full screen']),
+  h.p(
+    [...description, h.Class('home-screen-steps-blurb')],
+    ['Put Munch Manor on your Home Screen:'],
+  ),
+  h.ol(
+    [h.Class('home-screen-steps-list')],
+    [
+      h.li(
+        [],
+        [
+          'Tap Share ',
+          stepGlyphView(SHARE_ICON, h),
+          '. No Share? Tap ••• by the address bar first.',
+        ],
+      ),
+      h.li(
+        [],
+        [
+          'Choose Add to Home Screen ',
+          stepGlyphView(ADD_TO_HOME_SCREEN_ICON, h),
+          '.',
+        ],
+      ),
+      h.li([], ['Tap Add.']),
+      h.li([], ['Open Munch Manor from your Home Screen.']),
+    ],
+  ),
+  h.button(
+    [
+      ...initialFocus,
+      h.Type('button'),
+      h.Class('home-screen-steps-done'),
+      h.OnClick(Message.ClickedHomeScreenStepsDoneButton(), {
+        focusSelector: '.game-surface',
+      }),
+    ],
+    ['Got it'],
+  ),
+]
+
+export const homeScreenStepsView = (
+  model: Model,
+  h: HtmlBuilder<Message>,
+): Html =>
+  h.submodel({
+    slotId: model.homeScreenSteps.id,
+    model: model.homeScreenSteps,
+    view: Dialog.view,
+    viewInputs: {
+      hasDescription: true,
+      toView: renderInfo =>
+        h.dialog(
+          [...renderInfo.dialog, h.Class('home-screen-steps-dialog')],
+          renderInfo.isVisible
+            ? [
+                h.div([
+                  ...renderInfo.backdrop,
+                  h.Class('home-screen-steps-backdrop'),
+                ]),
+                h.div(
+                  [...renderInfo.panel, h.Class('home-screen-steps-panel')],
+                  homeScreenStepsPanelView(renderInfo, h),
+                ),
+              ]
+            : [],
+        ),
+    },
+    toParentMessage: message => Message.GotHomeScreenStepsMessage({ message }),
+  })
 
 // MODE BUTTONS
 

@@ -189,6 +189,9 @@ export const Message = defineMessageUnion({
   ChangedFullscreen: { fullscreen: FullscreenSetting },
   CompletedDetectScreenFit: { screenFit: ScreenFit },
   ClickedDismissHomeScreenTip: {},
+  ClickedHomeScreenTip: {},
+  ClickedHomeScreenStepsDoneButton: {},
+  GotHomeScreenStepsMessage: { message: Dialog.Message },
   ClickedPlaceTrapButton: {},
   ClickedNextTrapButton: {},
   GotShopDialogMessage: { message: Dialog.Message },
@@ -277,17 +280,24 @@ export const DetectInputDevice = Command.define('DetectInputDevice', {
 
 const isInstalledApp = (): boolean =>
   window.matchMedia('(display-mode: fullscreen)').matches ||
-  window.matchMedia('(display-mode: standalone)').matches
+  window.matchMedia('(display-mode: standalone)').matches ||
+  Reflect.get(navigator, 'standalone') === true
 
-// NOTE: feature checks, not the user agent. A phone browser that cannot put
-// an element full screen (iPhone Safari) can still go full screen as a Home
-// Screen app, so it gets the Add to Home Screen tip instead of the button.
+// NOTE: no feature check tells whether a browser offers Add to Home Screen.
+// `navigator.standalone` exists only in Apple's WebKit, and every iPhone
+// browser runs on it and can add to the Home Screen from iOS 16.4, so its
+// presence is the narrowest honest check. Element full screen comes first, so
+// an iPad or an Android phone gets the full screen button instead.
+const canAddToHomeScreen = (): boolean =>
+  Reflect.has(navigator, 'standalone') &&
+  window.matchMedia(COARSE_POINTER_QUERY).matches
+
 const detectScreenFit = (): ScreenFit => {
   if (isInstalledApp()) {
-    return 'Unavailable'
+    return 'Installed'
   } else if (document.fullscreenEnabled) {
     return 'Fullscreen'
-  } else if (window.matchMedia(COARSE_POINTER_QUERY).matches) {
+  } else if (canAddToHomeScreen()) {
     return 'HomeScreen'
   } else {
     return 'Unavailable'
@@ -1271,6 +1281,20 @@ const updateGame = (model: Model, message: Message) =>
       model: dismissHomeScreenTip(model),
     }),
 
+    ClickedHomeScreenTip: () =>
+      isOnTitle(model.phase) && !model.homeScreenSteps.isOpen
+        ? foldHomeScreenStepsOpen(withInput(model, releaseAll))
+        : { model },
+
+    ClickedHomeScreenStepsDoneButton: () =>
+      Update.combine(model, [
+        foldHomeScreenStepsClose,
+        stepModel => ({ model: dismissHomeScreenTip(stepModel) }),
+      ]),
+
+    GotHomeScreenStepsMessage: ({ message: dialogMessage }) =>
+      foldHomeScreenSteps(model, dialogMessage),
+
     ClickedReloadButton: () =>
       isDebutCardBlocking(model)
         ? { model }
@@ -1371,6 +1395,40 @@ const dismissHomeScreenTip = (model: Model): Model =>
     : modifyFields(model, { homeScreenTip: () => 'Dismissed' })
 
 const isOnTitle = Phase.isAnyOf(['Ready'])
+
+const ignoreHomeScreenStepsOutMessage = Dialog.OutMessage.match<UpdateStep>({
+  Opened: () => stepModel => ({ model: stepModel }),
+  Closed: () => stepModel => ({ model: stepModel }),
+})
+
+const writeHomeScreenSteps = (
+  model: Model,
+  nextHomeScreenSteps: Dialog.Model,
+): Model => modifyFields(model, { homeScreenSteps: () => nextHomeScreenSteps })
+
+const foldHomeScreenSteps = Update.foldChild({
+  update: Dialog.update,
+  read: (model: Model) => Option.some(model.homeScreenSteps),
+  write: writeHomeScreenSteps,
+  toParentMessage: message => Message.GotHomeScreenStepsMessage({ message }),
+  foldOutMessage: ignoreHomeScreenStepsOutMessage,
+})
+
+const foldHomeScreenStepsOpen = Update.foldChildStep({
+  update: Dialog.open,
+  read: (model: Model) => Option.some(model.homeScreenSteps),
+  write: writeHomeScreenSteps,
+  toParentMessage: message => Message.GotHomeScreenStepsMessage({ message }),
+  foldOutMessage: ignoreHomeScreenStepsOutMessage,
+})
+
+const foldHomeScreenStepsClose = Update.foldChildStep({
+  update: Dialog.close,
+  read: (model: Model) => Option.some(model.homeScreenSteps),
+  write: writeHomeScreenSteps,
+  toParentMessage: message => Message.GotHomeScreenStepsMessage({ message }),
+  foldOutMessage: ignoreHomeScreenStepsOutMessage,
+})
 
 const dismissHomeScreenTipFrom =
   (before: Model): UpdateStep =>

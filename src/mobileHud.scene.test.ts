@@ -2,8 +2,10 @@ import {
   Command,
   Mount,
   Subscription,
+  all,
   click,
   expect,
+  expectAll,
   given,
   role,
   scene,
@@ -71,7 +73,7 @@ const fullscreenButton = role('button', { name: 'Full screen' })
 const placeTrap = role('button', { name: 'Place a Plank Pile' })
 const nextTrap = role('button', { name: 'Switch to the Grumpy Gnome' })
 const startWave = role('button', { name: 'Start wave 3 now' })
-const homeScreenTip = role('note')
+const homeScreenTip = role('button', { name: 'Play full screen: how?' })
 const frame = (deltaTime: number) =>
   Subscription.emit(Message.TickedFrame({ deltaTime }))
 
@@ -207,15 +209,23 @@ describe('the Add to Home Screen tip', () => {
   const onIphone: Model = modifyFields(onTouch(initialModel), {
     screenFit: () => 'HomeScreen',
   })
+  const showSteps = [
+    Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+    Mount.resolve(
+      Dialog.AcquireResources,
+      Dialog.Message.SucceededAcquireResources(),
+    ),
+  ]
+  const steps = role('dialog', { name: 'Play full screen' })
+  const dismissTip = role('button', { name: 'Dismiss the tip' })
 
   test('shows on the first title only', () => {
     scene(
       { update, view },
       given(onIphone),
       measureSurface,
-      expect(homeScreenTip).toHaveText(
-        'Add to Home Screen to play full screen×',
-      ),
+      expect(homeScreenTip).toExist(),
+      expect(dismissTip).toExist(),
       expect(fullscreenButton).toBeAbsent(),
       click(role('button', { name: 'Campaign: 8 waves, then victory' })),
       expect(homeScreenTip).toBeAbsent(),
@@ -234,13 +244,68 @@ describe('the Add to Home Screen tip', () => {
     )
   })
 
+  test('tapping it shows the steps, and Got it closes them for good', () => {
+    scene(
+      { update, view },
+      given(onIphone),
+      measureSurface,
+      expect(steps).toBeAbsent(),
+      click(homeScreenTip),
+      ...showSteps,
+      expect(steps).toExist(),
+      expect(steps).toContainText('Tap Share'),
+      expect(steps).toContainText('Tap ••• by the address bar first'),
+      expect(steps).toContainText('Choose Add to Home Screen'),
+      expect(steps).toContainText('Tap Add.'),
+      expect(steps).toContainText('Open Munch Manor from your Home Screen.'),
+      expectAll(all.role('listitem')).toHaveCount(4),
+      click(role('button', { name: 'Got it' })),
+      Command.resolve(
+        Dialog.CloseDialog,
+        Dialog.Message.CompletedCloseDialog(),
+      ),
+      Mount.expectEnded(Dialog.AcquireResources),
+      expect(steps).toBeAbsent(),
+      expect(homeScreenTip).toBeAbsent(),
+    )
+  })
+
+  test('closing the steps another way keeps the tip', () => {
+    scene(
+      { update, view },
+      given(onIphone),
+      measureSurface,
+      click(homeScreenTip),
+      ...showSteps,
+      click(selector('.home-screen-steps-backdrop')),
+      Command.resolve(
+        Dialog.CloseDialog,
+        Dialog.Message.CompletedCloseDialog(),
+      ),
+      Mount.expectEnded(Dialog.AcquireResources),
+      expect(steps).toBeAbsent(),
+      expect(homeScreenTip).toExist(),
+    )
+  })
+
   test('can be dismissed', () => {
     scene(
       { update, view },
       given(onIphone),
       measureSurface,
-      click(role('button', { name: 'Dismiss the tip' })),
+      click(dismissTip),
       expect(homeScreenTip).toBeAbsent(),
+      expect(dismissTip).toBeAbsent(),
+    )
+  })
+
+  test('never shows in the installed Home Screen app', () => {
+    scene(
+      { update, view },
+      given(modifyFields(onIphone, { screenFit: () => 'Installed' })),
+      measureSurface,
+      expect(homeScreenTip).toBeAbsent(),
+      expect(fullscreenButton).toBeAbsent(),
     )
   })
 })
