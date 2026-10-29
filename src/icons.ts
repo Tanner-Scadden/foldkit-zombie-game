@@ -240,6 +240,29 @@ export const SETTINGS_ICON = pixelIconUrl(
   RAIL_PALETTE,
 )
 
+const COFFEE_PALETTE: Palette = {
+  X: LIGHT,
+  B: '#7a4a24',
+  S: '#b8c2b0',
+}
+
+// NOTE: a steaming mug for the tip jar's coffee button.
+export const COFFEE_ICON = pixelIconUrl(
+  [
+    '..S..S...',
+    '.S..S....',
+    '..S..S...',
+    '.........',
+    'XXXXXXX..',
+    'XBBBBBXXX',
+    'XBBBBBX.X',
+    'XBBBBBX.X',
+    'XBBBBBXXX',
+    '.XXXXX...',
+  ],
+  COFFEE_PALETTE,
+)
+
 // NOTE: an upright phone with a little Groaner on its screen. The portrait
 // home menu's turn hint tips it on its side with CSS.
 export const TURN_PHONE_ICON = pixelIconUrl(

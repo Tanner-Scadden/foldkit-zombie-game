@@ -53,6 +53,7 @@ import {
 } from './playerSync'
 import { isPortrait } from './screen'
 import { durationLabel } from './stats'
+import { homeSupportView } from './supportView'
 import { FINAL_WAVE } from './waves'
 import { whatsNewBodyView, whatsNewText } from './whatsNewView'
 
@@ -347,7 +348,11 @@ const difficultyBadgeView = (model: Model, h: HtmlBuilder<Message>): Html => {
 const statusView = (model: Model, h: HtmlBuilder<Message>): Html =>
   h.div(
     [h.Class('home-status')],
-    [difficultyBadgeView(model, h), bestsView(model, h)],
+    [
+      difficultyBadgeView(model, h),
+      bestsView(model, h),
+      homeSupportView(model, h),
+    ],
   )
 
 // STAGE

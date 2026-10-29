@@ -31,13 +31,14 @@ const isInsideDialog = (target: EventTarget | null): boolean =>
 
 const BUTTON_ACTIVATION_KEYS: ReadonlyArray<string> = ['Enter', 'Space']
 
+// NOTE: Enter on a focused link opens it, so it is no game key either.
 const isActivatingButton = (
   target: EventTarget | null,
   code: string,
 ): boolean =>
   Array.contains(BUTTON_ACTIVATION_KEYS, code) &&
   target instanceof Element &&
-  target.closest('button') !== null
+  target.closest('button, a[href]') !== null
 
 export type KeyDown = Readonly<{
   code: string

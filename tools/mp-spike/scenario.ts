@@ -93,6 +93,7 @@ export const LOCAL_ONLY: ReadonlySet<string> = new Set([
   'homeScreenSteps',
   'pageVisibility',
   'maybeNewerBuild',
+  'maybeSupportUrl',
   'appearance',
   'character',
   'shakeSetting',

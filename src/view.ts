@@ -39,6 +39,7 @@ import {
   totalKills,
   victoryVerdict,
 } from './stats'
+import { victorySupportView } from './supportView'
 import {
   ghostSticksView,
   gunClusterView,
@@ -294,6 +295,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
         gunClusterView(model, h),
         debutCardView(model, h),
         modeChoiceView(model, h),
+        victorySupportView(model, h),
         newEntryNoticeView(model, h),
         cornerButtonsView(model, h),
         homeScreenTipView(model, h),

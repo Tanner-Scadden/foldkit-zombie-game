@@ -26,7 +26,7 @@ Those four things are the pillars. Everything else serves them. The art, names, 
 - **How the code is organized.** One Foldkit Model. A pure, deterministic `update` driven by animation-frame Messages. Randomness comes from a seeded generator whose state lives in the Model, so the same seed and the same inputs give the same game.
 - **Making money.** Decided with the owner on 2026-10-29. The game stays free to play.
   - **Cosmetics and a supporter pack.** One-time purchases of looks, hats, gun skins, and a founder's hat. Nothing bought changes how the game plays. Bought on the web through Stripe Checkout confirmed by a Worker, and kept in the player's synced scope so it follows linked devices. Not built yet.
-  - **A tip jar.** A small "buy the shopkeeper a coffee" link. Not built yet.
+  - **A tip jar.** A small "buy the shopkeeper a coffee" link. Built on 2026-10-29: a pill with a pixel mug under the difficulty badge on the home menu and in the top left corner of Victory, never in a run, on pause, or on Game Over. It opens a Stripe Payment Link in a new tab and stays hidden until `SUPPORT_URL` in `src/support.ts` holds that link.
   - **Never.** No ads of any kind, no pay-to-win, and no real-money loot boxes. The mystery box uses in-game money only.
 
 ### The first playable

@@ -111,6 +111,7 @@ Paths are under `src/`. The API Worker is in `infra/worker/` (analytics, and syn
 | `font.ts`, `sprite.ts`, `png.ts`                    | The pixel font and coin; pixel maps baked into sprite images; colors, rasters, and the PNG encoder              |
 | `testPng.ts`, `icons.ts`                            | PNG data URLs read back into pixels for tests; pixel maps turned into SVG icons for HTML buttons                |
 | `version.ts`, `updateChip.ts`                       | The build id, the `version.json` check, and reloading; the "New version ready" chip                             |
+| `support.ts`, `supportView.ts`                      | The tip jar's `SUPPORT_URL` (empty hides it) and its check; the coffee button on home and Victory               |
 | `prng.ts`, `constants.ts`                           | The seeded random number generator; the view size, speeds, and other tuning numbers                             |
 
 ### Elsewhere

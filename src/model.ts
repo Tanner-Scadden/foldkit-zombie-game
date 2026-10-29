@@ -22,6 +22,7 @@ import {
   PlayerScopeStatus,
   SyncState,
 } from './playerSync'
+import { SUPPORT_URL, maybeSupportUrlOf } from './support'
 
 export {
   Appearance,
@@ -1153,6 +1154,7 @@ export const Model = Schema.Struct({
   homeScreenSteps: Dialog.Model,
   pageVisibility: PageVisibility,
   maybeNewerBuild: Schema.Option(Schema.String),
+  maybeSupportUrl: Schema.Option(Schema.String),
   appearance: Appearance,
   character: CharacterPicker,
   shakeSetting: ShakeSetting,
@@ -1394,6 +1396,7 @@ export const initialModel: Model = {
   homeScreenSteps: Dialog.init({ id: HOME_SCREEN_STEPS_ID }),
   pageVisibility: 'Visible',
   maybeNewerBuild: Option.none(),
+  maybeSupportUrl: maybeSupportUrlOf(SUPPORT_URL),
   appearance: defaultAppearance,
   character: closedCharacterPicker,
   shakeSetting: 'On',

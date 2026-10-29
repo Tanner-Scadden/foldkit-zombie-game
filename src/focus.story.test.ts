@@ -296,6 +296,22 @@ describe('keys on a focused button', () => {
     ).toEqual(Option.none())
   })
 
+  test('Enter on a focused link opens it and never reaches the game', () => {
+    const link = document.createElement('a')
+    link.href = 'https://buy.stripe.com/test_coffee'
+    link.append(document.createElement('span'))
+    expect(
+      maybeKeyDownMessage({ code: 'Enter', repeat: false, target: link }),
+    ).toEqual(Option.none())
+    expect(
+      maybeKeyDownMessage({
+        code: 'Enter',
+        repeat: false,
+        target: link.firstChild,
+      }),
+    ).toEqual(Option.none())
+  })
+
   test('Space and Enter on the game surface reach the game, and other keys on a button do too', () => {
     const surface = gameSurfaceElement()
     const button = buttonElement()
