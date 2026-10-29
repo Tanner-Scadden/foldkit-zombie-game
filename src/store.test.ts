@@ -5,7 +5,12 @@ import { SqliteClient } from '@munch/sqlite-wasm-effect'
 import { type Hub, makeHub } from '@munch/sqlite-wasm-effect/in-process'
 
 import { defaultAppearance } from './model'
-import { type PlayerSave, SAVE_VERSION, unpickedDifficulty } from './save'
+import {
+  type PlayerSave,
+  SAVE_VERSION,
+  noSavedBests,
+  unpickedDifficulty,
+} from './save'
 import { type LegacySave, makePlayerDatabase } from './storeSqlite'
 
 const legacySave: PlayerSave = {
@@ -28,6 +33,16 @@ const legacySave: PlayerSave = {
   settings: { sound: 'Muted', music: 'On', shake: 'Off', shareStats: 'On' },
   appearance: { ...defaultAppearance, hairColor: 'Ginger' },
   difficulty: { ...unpickedDifficulty, chosen: 'Hard', card: 'Seen' },
+  bests: {
+    ...noSavedBests,
+    runsPlayed: 3,
+    totalKills: 57,
+    killsByKind: { Shambler: 50, Runner: 7 },
+    byDifficulty: {
+      ...noSavedBests.byDifficulty,
+      Normal: { fastestWinMs: 402_000, bestEndlessWave: 12 },
+    },
+  },
 }
 
 interface FakeLegacy {
@@ -113,6 +128,29 @@ describe('the player row in SQLite', () => {
         yield* first.write(legacySave)
         yield* first.write(legacySave)
         expect(yield* first.load).toEqual(Option.some(legacySave))
+      }),
+    ))
+
+  test('kills per kind live in their own table, one row per kind', () =>
+    run(
+      Effect.gen(function* () {
+        const hub = yield* makeHub()
+        const fake = yield* makeLegacy(Option.none())
+        const first = yield* openOn(hub, fake.legacy)
+        yield* first.write(legacySave)
+        const fewer: PlayerSave = {
+          ...legacySave,
+          bests: { ...legacySave.bests, killsByKind: { Tank: 1 } },
+        }
+        yield* first.write(fewer)
+        const context = yield* Layer.build(hub.layer())
+        const client = Context.get(context, SqliteClient)
+        const rows = yield* pipe(
+          client.sql`SELECT kind, kills FROM kills_by_kind ORDER BY kind`,
+          Effect.orDie,
+        )
+        expect(rows).toEqual([{ kind: 'Tank', kills: 1 }])
+        expect(yield* first.load).toEqual(Option.some(fewer))
       }),
     ))
 

@@ -457,7 +457,9 @@ const trapNoticeShapes = (
     },
   })
 
-const BOOST_CHIPS_TOP = SLOT_TOP - SLOT_HEIGHT - SLOT_GAP
+const BOOST_CHIPS_LEFT = HUD_MARGIN + PLAYER_MAX_HP * HEART_SPACING + 2
+const BOOST_CHIPS_TOP = HUD_MARGIN - 3
+const BOOST_CHIP_COLUMNS = 2
 
 const MUTE_BUTTON_CLEARANCE = 34
 const SCORE_RIGHT = VIEW_WIDTH - HUD_MARGIN - MUTE_BUTTON_CLEARANCE
@@ -473,7 +475,12 @@ const playHudShapes = (
   ...moneyShapes(model),
   ...streakShapes(model.streak),
   ...loadoutShapes(model.player),
-  ...boostChipShapes(model.boosts, HUD_MARGIN, BOOST_CHIPS_TOP),
+  ...boostChipShapes(
+    model.boosts,
+    BOOST_CHIPS_LEFT,
+    BOOST_CHIPS_TOP,
+    BOOST_CHIP_COLUMNS,
+  ),
   ...trapStockShapes(model),
   ...trapNoticeShapes(model, camera),
   ...roundHudShapes(model),

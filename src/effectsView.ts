@@ -175,7 +175,10 @@ const PART_LOOKS: Readonly<
     | 'PinkChunk'
     | 'TealLimb'
     | 'TealScalp'
-    | 'PaleScalp',
+    | 'PaleScalp'
+    | 'PotLid'
+    | 'StopSign'
+    | 'Bucket',
     PartLook
   >
 > = {
@@ -257,6 +260,24 @@ const PART_LOOKS: Readonly<
     faded: '#5e3240',
     hasStump: false,
   },
+  PotLid: {
+    particle: '#b4bcc6',
+    decal: '#9aa3ad',
+    faded: '#5a6068',
+    hasStump: false,
+  },
+  StopSign: {
+    particle: '#d43c3a',
+    decal: '#b83432',
+    faded: '#5e2a28',
+    hasStump: false,
+  },
+  Bucket: {
+    particle: '#c3ccd6',
+    decal: '#a2abb6',
+    faded: '#5c626b',
+    hasStump: false,
+  },
 }
 
 const SMOKE_COLOR = 'rgba(214, 208, 200, 0.7)'
@@ -291,6 +312,9 @@ const DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   TealLimb: PART_LOOKS.TealLimb.decal,
   TealScalp: PART_LOOKS.TealScalp.decal,
   PaleScalp: PART_LOOKS.PaleScalp.decal,
+  PotLid: PART_LOOKS.PotLid.decal,
+  StopSign: PART_LOOKS.StopSign.decal,
+  Bucket: PART_LOOKS.Bucket.decal,
 }
 
 const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
@@ -318,6 +342,9 @@ const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   TealLimb: PART_LOOKS.TealLimb.faded,
   TealScalp: PART_LOOKS.TealScalp.faded,
   PaleScalp: PART_LOOKS.PaleScalp.faded,
+  PotLid: PART_LOOKS.PotLid.faded,
+  StopSign: PART_LOOKS.StopSign.faded,
+  Bucket: PART_LOOKS.Bucket.faded,
 }
 
 const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
@@ -350,6 +377,9 @@ const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
   TealLimb: PART_LOOKS.TealLimb.particle,
   TealScalp: PART_LOOKS.TealScalp.particle,
   PaleScalp: PART_LOOKS.PaleScalp.particle,
+  PotLid: PART_LOOKS.PotLid.particle,
+  StopSign: PART_LOOKS.StopSign.particle,
+  Bucket: PART_LOOKS.Bucket.particle,
   Smoke: SMOKE_COLOR,
 }
 
@@ -375,6 +405,9 @@ const PARTS: ReadonlyArray<ParticleKind> = [
   'PinkChunk',
   'TealScalp',
   'PaleScalp',
+  'PotLid',
+  'StopSign',
+  'Bucket',
 ]
 
 const CASINGS: ReadonlyArray<ParticleKind> = [

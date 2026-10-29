@@ -7,7 +7,7 @@ import { Dialog } from '@foldkit/ui'
 
 import { RESTART_GRACE_MS } from './constants'
 import { bestsFor, withBests } from './difficulty'
-import { recordSessionBests, returnHome } from './home'
+import { returnHome } from './home'
 import {
   AwaitFirstFrame,
   DecodeSprites,
@@ -21,7 +21,15 @@ import {
   maybeKeyDownMessage,
   update,
 } from './main'
-import { Loading, type Model, Phase, initialModel, noKills } from './model'
+import {
+  Loading,
+  type Model,
+  Phase,
+  type PlannedSpawn,
+  RunTally,
+  initialModel,
+  noKills,
+} from './model'
 import { asVeteran } from './veteran'
 import { pause } from './waves'
 
@@ -48,25 +56,108 @@ const withKills = (base: Model, shamblers: number, runMs: number): Model =>
 const showDialog = () =>
   Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog())
 
-describe('session bests', () => {
-  test('kills add up across runs, and a new run does not take any back', () => {
-    const early = withKills(fighting, 3, 0)
-    const later = withKills(fighting, 7, 0)
-    expect(recordSessionBests(early, later).sessionBests.kills).toBe(4)
+const farSpawn: PlannedSpawn = {
+  atMs: 1e9,
+  kind: 'Shambler',
+  door: 'North',
+  offset: 0,
+  speedScale: 1,
+  hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
+}
 
-    const overAfterSeven = modifyFields(later, {
+const dying = (base: Model): Model =>
+  modifyFields(base, {
+    phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [farSpawn] }),
+    player: player => modifyFields(player, { hp: () => 0 }),
+  })
+
+describe('the bests', () => {
+  test('kills count when the run ends, not as they happen', () => {
+    story(
+      update,
+      given(withKills(fighting, 3, 0)),
+      message(Message.TickedFrame({ deltaTime: 16 })),
+      model(({ bests, runTally }) => {
+        expect(bests.totalKills).toBe(0)
+        expect(bests.runsPlayed).toBe(0)
+        expect(RunTally.guards.Uncounted(runTally)).toBe(true)
+      }),
+    )
+    story(
+      update,
+      given(dying(withKills(fighting, 3, 0))),
+      message(Message.TickedFrame({ deltaTime: 16 })),
+      model(({ phase, bests }) => {
+        expect(Phase.guards.GameOver(phase)).toBe(true)
+        expect(bests.totalKills).toBe(3)
+        expect(bests.killsByKind.Shambler).toBe(3)
+        expect(bests.runsPlayed).toBe(1)
+      }),
+    )
+  })
+
+  test('a new run starts a fresh tally and keeps the bests', () => {
+    const over = modifyFields(withKills(fighting, 7, 0), {
       phase: () => Phase.GameOver({ wave: 3 }),
       screenMs: () => RESTART_GRACE_MS,
-      sessionBests: bests => modifyFields(bests, { kills: () => 7 }),
+      runTally: () =>
+        RunTally.Counted({
+          kills: modifyFields(noKills, { Shambler: () => 7 }),
+        }),
+      bests: bests =>
+        modifyFields(bests, { totalKills: () => 7, runsPlayed: () => 1 }),
     })
     story(
       update,
-      given(overAfterSeven),
+      given(over),
       message(Message.ClickedEndlessButton()),
-      model(({ phase, stats, sessionBests }) => {
+      model(({ phase, stats, bests, runTally }) => {
         expect(Phase.guards.Preparation(phase)).toBe(true)
         expect(stats.kills.Shambler).toBe(0)
-        expect(sessionBests.kills).toBe(7)
+        expect(bests.totalKills).toBe(7)
+        expect(bests.runsPlayed).toBe(1)
+        expect(RunTally.guards.Uncounted(runTally)).toBe(true)
+      }),
+    )
+  })
+
+  test('leaving a paused run for the menu counts it', () => {
+    const leaving = modifyFields(pause(withKills(fighting, 5, 0)), {
+      panel: () => 'LeaveRun',
+    })
+    story(
+      update,
+      given(leaving),
+      message(Message.ClickedLeaveRunButton()),
+      model(({ phase, bests, runTally }) => {
+        expect(Phase.guards.Ready(phase)).toBe(true)
+        expect(bests.totalKills).toBe(5)
+        expect(bests.killsByKind.Shambler).toBe(5)
+        expect(bests.runsPlayed).toBe(1)
+        expect(RunTally.guards.Uncounted(runTally)).toBe(true)
+      }),
+    )
+  })
+
+  test('a win that goes on into endless adds only its new kills when it ends again', () => {
+    const goneOn = modifyFields(dying(withKills(fighting, 6, 0)), {
+      runTally: () =>
+        RunTally.Counted({
+          kills: modifyFields(noKills, { Shambler: () => 4 }),
+        }),
+      bests: bests =>
+        modifyFields(bests, { totalKills: () => 4, runsPlayed: () => 1 }),
+    })
+    story(
+      update,
+      given(goneOn),
+      message(Message.TickedFrame({ deltaTime: 16 })),
+      model(({ bests }) => {
+        expect(bests.totalKills).toBe(6)
+        expect(bests.killsByKind.Shambler).toBe(2)
+        expect(bests.runsPlayed).toBe(1)
       }),
     )
   })
@@ -84,11 +175,12 @@ describe('session bests', () => {
       update,
       given(winning(500_000)),
       message(Message.TickedFrame({ deltaTime: 16 })),
-      model(({ phase, sessionBests }) => {
+      model(({ phase, bests }) => {
         expect(Phase.guards.Victory(phase)).toBe(true)
-        expect(sessionBests.byDifficulty.Normal.maybeFastestWinMs).toEqual(
+        expect(bests.byDifficulty.Normal.maybeFastestWinMs).toEqual(
           Option.some(500_000 + 16),
         )
+        expect(bests.runsPlayed).toBe(1)
       }),
     )
     story(
@@ -101,8 +193,8 @@ describe('session bests', () => {
         ),
       ),
       message(Message.TickedFrame({ deltaTime: 16 })),
-      model(({ sessionBests }) => {
-        expect(sessionBests.byDifficulty.Normal.maybeFastestWinMs).toEqual(
+      model(({ bests }) => {
+        expect(bests.byDifficulty.Normal.maybeFastestWinMs).toEqual(
           Option.some(400_000),
         )
       }),

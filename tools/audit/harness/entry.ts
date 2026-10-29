@@ -41,7 +41,9 @@ import {
   type DecalKind,
 } from '@game/model'
 import { raiseDebutCard } from '@game/onboarding'
+import { advanceParticles } from '@game/particles'
 import { FLOOR_COLOR } from '@game/room'
+import { shedParts } from '@game/simulation'
 import { frameAt, group, gunSprite } from '@game/sprite'
 import { view } from '@game/view'
 import { pause, planFor, rollSpawns, startOrResume } from '@game/waves'
@@ -251,6 +253,39 @@ const roomModel = (): Model => {
       zombies: () => zombies as any,
       nextEntityId: () => 2000,
     })
+  }
+  if (lineup === 'sizes') {
+    const kinds: Array<[LineupKind, number]> = [
+      ['Crawler', 2],
+      ['Runner', 2],
+      ['Shambler', 4],
+      ['Exploder', 7],
+      ['Thrower', 15],
+      ['Tank', 36],
+    ]
+    const zombies = kinds.map(([kind, maxHp], index) =>
+      standing(1000 + index, kind, 70 + index * 24, 100, maxHp, 0),
+    )
+    model = modifyFields(model, {
+      zombies: () => zombies as any,
+      nextEntityId: () => 2000,
+    })
+  }
+  if (lineup === 'armor') {
+    const stages = ZOMBIE_KINDS.Tank.wear.length + 1
+    const at = (stage: number) => ({ x: 70 + stage * 50, y: 90 })
+    const fresh = Array.from({ length: stages }, (_, stage) =>
+      standing(1000 + stage, 'Tank', at(stage).x, at(stage).y, 36, 0),
+    )
+    const worn = Array.from({ length: stages }, (_, stage) =>
+      standing(1000 + stage, 'Tank', at(stage).x, at(stage).y, 36, stage),
+    )
+    const before = modifyFields(model, { zombies: () => fresh as any })
+    const after = modifyFields(model, { zombies: () => worn as any })
+    model = modifyFields(
+      advanceParticles(shedParts(before, after), 1 / 60, 1000 / 60),
+      { nextEntityId: () => 2000 },
+    )
   }
   if (lineup === 'boss') {
     const zombies = Array.from({ length: 5 }, (_, stage) =>
@@ -717,7 +752,7 @@ const scenarioModel = (): Model => {
         maybeBestEndlessWave: Option.some(12),
         maybeFastestWinMs: Option.some(402_000),
       })),
-      { sessionBests: bests => ({ ...bests, kills: 341 }) },
+      { bests: bests => ({ ...bests, totalKills: 341 }) },
     )
   model = modifyFields(model, {
     difficultyCard: () =>

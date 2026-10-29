@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "includeSuggestionsInTsc": false,
+        "diagnosticSeverity": { "unstableApiUsage": "off" }
+      }
+    ]
+  },
+  "include": ["./**/*", "../../src/vite-env.d.ts"]
+}

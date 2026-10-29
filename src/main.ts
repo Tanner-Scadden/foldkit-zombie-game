@@ -55,10 +55,10 @@ import {
   END_MENU_BUTTON_ID,
   KEEP_TUTORIAL_BUTTON_ID,
   RESET_TUTORIAL_BUTTON_ID,
+  countRunFrom,
   endOffer,
   homeButtonId,
   isOnHome,
-  recordSessionBests,
   returnHome,
   steppedHomeFocus,
 } from './home'
@@ -191,7 +191,7 @@ import {
   heldWeapon,
   swapWeapon,
 } from './weapons'
-import { ZOMBIE_KINDS } from './zombies'
+import { ZOMBIE_KINDS, isArmorShedAt } from './zombies'
 
 export { Model, PageVisibility } from './model'
 
@@ -898,7 +898,10 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     PickupFizzled: () => Option.none<SoundEffect>(),
     BoostFaded: () => Option.some<SoundEffect>('PowerDown'),
     Burped: () => Option.none<SoundEffect>(),
-    PartShed: () => Option.some<SoundEffect>('LimbPop'),
+    PartShed: ({ kind, stage }) =>
+      Option.some<SoundEffect>(
+        isArmorShedAt(kind, stage) ? 'Clang' : 'LimbPop',
+      ),
     BossRoared: () => Option.some<SoundEffect>('BossRoar'),
     BossWoundUp: ({ attack }) =>
       Option.some<SoundEffect>(
@@ -2198,7 +2201,7 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     dismissHomeScreenTipFrom(model),
     settleNightmareFrom(model),
     unlockNightmareFrom(model),
-    stepModel => ({ model: recordSessionBests(model, stepModel) }),
+    stepModel => ({ model: countRunFrom(model, stepModel) }),
     sendRunSummaryFrom(model),
     writeSaveFrom(model),
   ])

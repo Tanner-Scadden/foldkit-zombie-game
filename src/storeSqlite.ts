@@ -5,6 +5,7 @@ import {
   Effect,
   Layer,
   Option,
+  Record,
   Schema,
   type Scope,
   pipe,
@@ -31,6 +32,7 @@ import {
   type PlayerSave,
   SAVE_VERSION,
   type SaveStorageError,
+  SavedBests,
   SavedCard,
   SavedNightmare,
   SavedOnboarding,
@@ -55,7 +57,14 @@ export const PLAYER_MIGRATIONS = {
       difficulty_card TEXT NOT NULL,
       nightmare TEXT NOT NULL,
       onboarding TEXT NOT NULL,
-      home_screen_tip TEXT NOT NULL
+      home_screen_tip TEXT NOT NULL,
+      runs_played INTEGER NOT NULL,
+      total_kills INTEGER NOT NULL,
+      difficulty_bests TEXT NOT NULL
+    )`
+    yield* sql`CREATE TABLE kills_by_kind (
+      kind TEXT PRIMARY KEY,
+      kills INTEGER NOT NULL
     )`
     yield* sql`CREATE TABLE store_meta (
       key TEXT PRIMARY KEY,
@@ -64,8 +73,10 @@ export const PLAYER_MIGRATIONS = {
   }),
 }
 
-// NOTE: one row, id 1. Settings and the difficulty are columns; the look
-// and the onboarding are JSON, decoded through their own Schemas.
+// NOTE: one row, id 1. Settings, the difficulty, and the run totals are
+// columns; the look, the onboarding, and the bests per difficulty are JSON,
+// decoded through their own Schemas. Kills per kind are their own table,
+// one row per kind id, for the Munchopedia to read.
 export const PlayerRow = Schema.Struct({
   sound: SoundSetting,
   music: MusicSetting,
@@ -77,8 +88,17 @@ export const PlayerRow = Schema.Struct({
   nightmare: SavedNightmare,
   onboarding: Schema.fromJsonString(SavedOnboarding),
   home_screen_tip: HomeScreenTip,
+  runs_played: Schema.Number,
+  total_kills: Schema.Number,
+  difficulty_bests: Schema.fromJsonString(SavedBests.fields.byDifficulty),
 })
 export type PlayerRow = typeof PlayerRow.Type
+
+export const KillsRow = Schema.Struct({
+  kind: Schema.String,
+  kills: Schema.Number,
+})
+export type KillsRow = typeof KillsRow.Type
 
 export const LEGACY_IMPORT_KEY = 'legacy-local-storage-import'
 
@@ -98,9 +118,21 @@ export const rowOfSave = (save: PlayerSave): PlayerRow => ({
   nightmare: save.difficulty.nightmare,
   onboarding: save.onboarding,
   home_screen_tip: save.homeScreenTip,
+  runs_played: save.bests.runsPlayed,
+  total_kills: save.bests.totalKills,
+  difficulty_bests: save.bests.byDifficulty,
 })
 
-export const saveOfRow = (row: PlayerRow): PlayerSave => ({
+export const killsRowsOfSave = (save: PlayerSave): ReadonlyArray<KillsRow> =>
+  Array.map(Record.toEntries(save.bests.killsByKind), ([kind, kills]) => ({
+    kind,
+    kills,
+  }))
+
+export const saveOfRow = (
+  row: PlayerRow,
+  kills: ReadonlyArray<KillsRow>,
+): PlayerSave => ({
   version: SAVE_VERSION,
   onboarding: row.onboarding,
   homeScreenTip: row.home_screen_tip,
@@ -115,6 +147,17 @@ export const saveOfRow = (row: PlayerRow): PlayerSave => ({
     chosen: row.difficulty,
     card: row.difficulty_card,
     nightmare: row.nightmare,
+  },
+  bests: {
+    runsPlayed: row.runs_played,
+    totalKills: row.total_kills,
+    killsByKind: Record.fromEntries(
+      Array.map(kills, ({ kind, kills }): readonly [string, number] => [
+        kind,
+        kills,
+      ]),
+    ),
+    byDifficulty: row.difficulty_bests,
   },
 })
 
@@ -151,24 +194,40 @@ const PLAYER_COLUMNS = Array.make(
   'nightmare',
   'onboarding',
   'home_screen_tip',
+  'runs_played',
+  'total_kills',
+  'difficulty_bests',
 )
 
+// NOTE: the row is overwritten whole, and the kills per kind replaced, in
+// one transaction, so a reader never sees half a save.
 const writeRow = (
   sql: SqlClient.SqlClient,
   save: PlayerSave,
 ): Effect.Effect<void, PlayerDatabaseError> =>
   pipe(
     Schema.encodeEffect(PlayerRow)(rowOfSave(save)),
-    Effect.flatMap(
-      encoded =>
+    Effect.flatMap(encoded =>
+      Effect.all([
         sql`INSERT INTO player ${sql.insert({ id: 1, ...encoded })}
         ON CONFLICT (id) DO UPDATE SET ${sql.literal(
-          Array.map(
-            PLAYER_COLUMNS,
-            column => `${column} = excluded.${column}`,
-          ).join(', '),
+          Array.join(
+            Array.map(
+              PLAYER_COLUMNS,
+              column => `${column} = excluded.${column}`,
+            ),
+            ', ',
+          ),
         )}`,
+        sql`DELETE FROM kills_by_kind`,
+        Array.match(killsRowsOfSave(save), {
+          onEmpty: () => Effect.void,
+          onNonEmpty: rows =>
+            sql`INSERT INTO kills_by_kind ${sql.insert(rows)}`,
+        }),
+      ]),
     ),
+    sql.withTransaction,
     Effect.asVoid,
     Effect.mapError(toDatabaseError),
   )
@@ -188,13 +247,17 @@ const loadRow = (
       const rows = yield* pipe(
         client.query(
           PlayerRow,
-          sql`SELECT ${sql.literal(PLAYER_COLUMNS.join(', '))} FROM player WHERE id = 1`,
+          sql`SELECT ${sql.literal(Array.join(PLAYER_COLUMNS, ', '))} FROM player WHERE id = 1`,
         ),
         Effect.catchTag('SchemaError', () => Effect.succeed([])),
       )
       const maybeRow = Array.head(rows)
       if (Option.isSome(maybeRow)) {
-        return Option.some(saveOfRow(maybeRow.value))
+        const kills = yield* pipe(
+          client.query(KillsRow, sql`SELECT kind, kills FROM kills_by_kind`),
+          Effect.catchTag('SchemaError', () => Effect.succeed([])),
+        )
+        return Option.some(saveOfRow(maybeRow.value, kills))
       }
       const marks = yield* client.query(
         MetaRow,

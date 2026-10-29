@@ -4,8 +4,15 @@ import { modifyFields } from 'foldkit/struct'
 import { RESTART_GRACE_MS } from './constants'
 import { hasJustWon, withBests } from './difficulty'
 import type { FocusStep } from './input'
-import { type HomeButton, type Model, Phase, initialModel } from './model'
-import { totalKills } from './stats'
+import {
+  type HomeButton,
+  type KillCounts,
+  type Model,
+  Phase,
+  RunTally,
+  initialModel,
+} from './model'
+import { addKills, killTotal, killsSince } from './stats'
 
 // BUTTONS
 
@@ -108,11 +115,12 @@ export const returnHome = (model: Model): Model =>
     wideFlowField: () => initialModel.wideFlowField,
     debutCard: () => initialModel.debutCard,
     stats: () => initialModel.stats,
+    runTally: () => RunTally.Uncounted(),
     screenMs: () => 0,
     maybeHomeFocus: () => Option.none(),
   })
 
-// SESSION BESTS
+// BESTS
 
 const fasterWin = (
   maybeFastestMs: Option.Option<number>,
@@ -125,26 +133,55 @@ const fasterWin = (
     }),
   )
 
-export const recordSessionBests = (before: Model, after: Model): Model => {
-  const newKills = Math.max(
-    0,
-    totalKills(after.stats) - totalKills(before.stats),
-  )
-  const isWin = hasJustWon(before, after)
-  if (newKills === 0 && !isWin) {
-    return after
-  }
+const isInRun = Phase.isAnyOf(['Preparation', 'Wave', 'Paused'])
 
-  const counted = modifyFields(after, {
-    sessionBests: bests =>
-      modifyFields(bests, { kills: kills => kills + newKills }),
+const countRun = (
+  model: Model,
+  tally: RunTally,
+  kills: KillCounts,
+  isWin: boolean,
+): Model => {
+  const isFirstCount = RunTally.isAnyOf(['Uncounted'])(tally)
+  const newKills = RunTally.match(tally, {
+    Uncounted: () => kills,
+    Counted: ({ kills: countedKills }) => killsSince(kills, countedKills),
+  })
+  const counted = modifyFields(model, {
+    bests: bests =>
+      modifyFields(bests, {
+        runsPlayed: runs => (isFirstCount ? runs + 1 : runs),
+        totalKills: total => total + killTotal(newKills),
+        killsByKind: byKind => addKills(byKind, newKills),
+      }),
+    runTally: () => RunTally.Counted({ kills }),
   })
   return isWin
     ? withBests(counted, bests =>
         modifyFields(bests, {
           maybeFastestWinMs: maybeFastestMs =>
-            fasterWin(maybeFastestMs, after.stats.runMs),
+            fasterWin(maybeFastestMs, model.stats.runMs),
         }),
       )
     : counted
+}
+
+// NOTE: a run is counted when it ends: on Game Over, on Victory, and when
+// the player leaves it for the menu. Counting then and not every frame means
+// the save is written once a run.
+export const countRunFrom = (before: Model, after: Model): Model => {
+  if (!isEndScreen(before.phase) && isEndScreen(after.phase)) {
+    return countRun(
+      after,
+      after.runTally,
+      after.stats.kills,
+      hasJustWon(before, after),
+    )
+  } else if (isInRun(before.phase) && isOnHome(after.phase)) {
+    return modifyFields(
+      countRun(after, before.runTally, before.stats.kills, false),
+      { runTally: () => RunTally.Uncounted() },
+    )
+  } else {
+    return after
+  }
 }

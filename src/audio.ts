@@ -61,6 +61,7 @@ export const SoundEffect = Schema.Literals([
   'GrabHeart',
   'PowerDown',
   'LimbPop',
+  'Clang',
   'BossRoar',
   'BossWindUp',
   'BossStomp',
@@ -1131,6 +1132,34 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
         quality: 2,
         cutoff: [at(0, 3600), at(0.2, 700)],
         envelope: envelope(0.6, 0.001, 0.2),
+      },
+    ],
+  },
+  Clang: {
+    variationCents: 160,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 620), at(0.25, 590)],
+        envelope: envelope(0.16, 0.001, 0.3),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 1530), at(0.3, 1490)],
+        envelope: envelope(0.22, 0.001, 0.38),
+      },
+      {
+        wave: 'sine',
+        pitch: [at(0, 2470), at(0.2, 2400)],
+        envelope: envelope(0.14, 0.001, 0.22),
+      },
+    ],
+    noises: [
+      {
+        filter: 'highpass',
+        quality: 1,
+        cutoff: [at(0, 3800), at(0.05, 2600)],
+        envelope: envelope(0.45, 0.001, 0.05),
       },
     ],
   },

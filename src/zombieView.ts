@@ -208,6 +208,7 @@ const fuseShapes = (
 }
 
 const HEALTH_BAR_WIDTH = 12
+const FUSE_CLEARANCE_PX = 5
 const HEALTH_BAR_COLOR = '#ff3b3f'
 
 export const zombieHealthBarShapes = (
@@ -223,7 +224,10 @@ export const zombieHealthBarShapes = (
   }
 
   const foot = footPosition(zombie, stats.footOffset)
-  const top = foot.y - ZOMBIE_SPRITES[zombie.kind].height - HEALTH_BAR_GAP
+  const fuseClearance =
+    GAITS[zombie.kind].fuseTellPx > 0 ? FUSE_CLEARANCE_PX : 0
+  const top =
+    foot.y - ZOMBIE_SPRITES[zombie.kind].height - HEALTH_BAR_GAP - fuseClearance
   const left = foot.x - HEALTH_BAR_WIDTH / 2
   return [
     Canvas.Rect({

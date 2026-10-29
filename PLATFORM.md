@@ -55,22 +55,26 @@ Package names and APIs need checking against the Effect version the game uses (E
 2. **Analytics. On preview since 2026-10-29, not yet in production.** At the end of a run the game sends one anonymous summary with `navigator.sendBeacon`. A Worker decodes it with the shared Schema, rate limits it, and writes a row to D1. `bun tools/analytics/report.ts --stage <stage>` prints the real win rate and where real players die, which until now we only guessed at with the balance bot. See "Analytics" below.
 3. **Local SQLite. Built 2026-10-29, on the `infra` branch.** `packages/sqlite-wasm-effect` (published name still open, `@munch/sqlite-wasm-effect` for now) is the Effect wrapper: sqlite-wasm 3.54.1-build1 in a worker on `opfs-sahpool`, behind an `effect/sql` `SqlClient`, with the leader tab chosen by Web Locks. See its README. The on-device save moved into it as the `player` row (`src/store.ts`, `src/storeSqlite.ts`); see "The on-device save". `tools/audit/sqlite.ts` checks it in headless Chrome. The plan as first written: move settings and personal bests into SQLite in the browser. This is the first client mutation path and proves out the wasm build, OPFS, and migrations before sync depends on them. The character's look (`Appearance` in `src/model.ts`) is the first setting to move: it is already plain Schema data, so a `ChangedAppearance` mutation can store it whole. Until then the on-device save bridges the gap (see "The on-device save").
    - **The difficulty** (`SavedDifficulty` in `src/save.ts`, save version 2): the chosen level, whether the first-time card was answered, and the Nightmare unlock. A version 1 save migrates as Normal with the card still to come. A Hard campaign win unlocks Nightmare, so the server will want to check that win before it trusts the unlock.
-   - **The session bests** (`SessionBests`): kills, and the fastest win and best endless wave for each difficulty. They still reset with the page.
+   - **The bests** (`SavedBests` in `src/save.ts`, save version 3, added 2026-10-29): runs played, the zombies splatted in all, the kills per zombie kind keyed by kind id, and the fastest win and best endless wave for each difficulty (null until reached). They are on the device now, in the SQLite `player` row and the `kills_by_kind` table. A version 2 save migrates with every field kept and the bests at zero, and unknown kind ids are dropped on load. They change once a run, when it ends, so they map to one `RecordedRun` style mutation a run. The server will want to check them like the Nightmare unlock before a leaderboard trusts them.
 4. **Sync.** Client mutations and server mutations over SQLite on both sides, with a Durable Object as the authority for each player (or each room). See "Sync engine" below.
 5. **Multiplayer rooms.** Durable Objects as rooms with room codes, as sketched in `MULTIPLAYER.md`, reusing the sync transport and the shared Schemas.
 
 ### The on-device save
 
-Added on 2026-10-28, ahead of local SQLite. `PlayerSave` in `src/save.ts` is one versioned record per player, plain data: the onboarding lessons, the zombie cards seen, the trap hint, the Home Screen tip, sound, music, screen shake, the look, and the difficulty. It is shaped like the player scope on purpose.
+Added on 2026-10-28, ahead of local SQLite. `PlayerSave` in `src/save.ts` is one versioned record per player, plain data: the onboarding lessons, the zombie cards seen, the trap hint, the Home Screen tip, sound, music, screen shake, the stats sharing setting, the look, the difficulty, and the bests. It is shaped like the player scope on purpose.
 
-Since 2026-10-29 (on the `infra` branch) it lives in on-device SQLite as the one row of the `player` table: settings and the difficulty as columns, the look and the onboarding as JSON, each decoded by its Schema. `PlayerStore` in `src/store.ts` loads and writes it behind the same `LoadSave` and `WriteSave` Commands, so `update` did not change.
+Since 2026-10-29 (on the `infra` branch) it lives in on-device SQLite as the one row of the `player` table: settings, the difficulty, runs played, and total kills as columns, the look, the onboarding, and the bests per difficulty as JSON, each decoded by its Schema. Kills per kind are the `kills_by_kind` table, one row per kind id, for the Munchopedia to read. `PlayerStore` in `src/store.ts` loads and writes it behind the same `LoadSave` and `WriteSave` Commands, so `update` did not change.
 
 - **The import.** The first load on a device with no player row reads the old localStorage save (`munch-manor:save`), writes it as the row, and marks the import done in `store_meta`, in one transaction. Later loads never read localStorage again, even if the row is gone.
 - **The fallback, for one release.** The localStorage key is not removed. It is read when SQLite fails to open within 12 seconds or fails a load, and written (alongside SQLite) when SQLite had to open in memory, so private windows and browsers without OPFS keep their settings as before. With OPFS it is never written. Remove the fallback and the key in the release after this one ships.
 - **Not a mutation log yet.** The row is overwritten whole on each change. Sync turns these writes into mutations with an outbox.
 
-- **Session only for now.** The session bests, kills per kind, the best endless wave, and unlocks such as Nightmare stay in the Model for the page session. They join the save, under a version bump, or go straight into the SQLite player scope later.
-- **Difficulty.** The unlocked difficulties join the save as a new field under a version bump. The difficulty chosen for a session stays out of it.
+What the save holds, by version:
+
+- **Difficulty (version 2).** The chosen level, whether the first-time card was answered, and the Nightmare unlock.
+- **Bests (version 3, 2026-10-29).** Runs played, total kills, kills per kind by kind id, and the bests per difficulty. Reset tutorial keeps them.
+- **Stats sharing (version 4, 2026-10-29, on the `infra` branch).** The "Share anonymous play stats" setting. Older saves load with it on.
+- **Session only.** The run itself and full screen.
 
 ### What Phase 1 taught us
 

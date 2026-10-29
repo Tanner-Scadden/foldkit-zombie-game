@@ -1,18 +1,27 @@
-import { Array, Option, Result } from 'effect'
-import { given, message, model, story } from 'foldkit/story'
+import { Array, Option, Result, pipe } from 'effect'
+import {
+  Command,
+  type StorySimulation,
+  given,
+  message,
+  model,
+  story,
+} from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { ARENA_LEVEL } from './arena'
 import { DECAL_MAX, PARTICLE_MAX } from './constants'
-import { Message, update } from './main'
+import { Message, PlaySound, update } from './main'
 import {
+  AudioState,
   type Bullet,
   type Decal,
   Frenzy,
   GameEvent,
   type Model,
   type Particle,
+  type ParticleKind,
   Phase,
   Pierce,
   type PlannedSpawn,
@@ -22,8 +31,14 @@ import {
   ZombieState,
   initialModel,
 } from './model'
-import { ZOMBIE_SPRITES, frameAt } from './sprite'
-import { ZOMBIE_KINDS, wearAt } from './zombies'
+import {
+  KABOOMER_FUSE_MAX,
+  ZOMBIE_SPRITES,
+  frameAt,
+  kaboomerFuseTip,
+} from './sprite'
+import { zombieHealthBarShapes } from './zombieView'
+import { ZOMBIE_KINDS, isArmorPart, isArmorShedAt, wearAt } from './zombies'
 
 const FRAME_MS = 16
 const FAR_X = ARENA_LEVEL.width / 2 + 60
@@ -313,10 +328,136 @@ describe('caps', () => {
         expect(current.particles.length).toBeLessThanOrEqual(PARTICLE_MAX)
         expect(current.decals.length).toBe(DECAL_MAX)
         expect(
-          Array.some(current.decals, ({ kind }) => kind === 'BlueLimb'),
+          Array.some(current.decals, ({ kind }) => kind === 'PotLid'),
         ).toBe(true)
       }),
     )
     expect(shedCounts).toEqual([crowd.length])
+  })
+})
+
+describe('the Big Lug armor', () => {
+  const ARMOR: ReadonlyArray<
+    Readonly<{ stage: number; hp: number; part: ParticleKind }>
+  > = [
+    { stage: 0, hp: 36, part: 'PotLid' },
+    { stage: 1, hp: 27, part: 'StopSign' },
+    { stage: 2, hp: 18, part: 'Bucket' },
+  ]
+
+  const lugAt = (hp: number): Zombie =>
+    modifyFields(zombieOf('Tank', 100, FAR_X, ROW_Y, 36), { hp: () => hp })
+
+  const soundsOf = (
+    commands: StorySimulation<Model, Message>['commands'],
+  ): ReadonlyArray<unknown> =>
+    pipe(
+      commands,
+      Array.filter(command => command.name === PlaySound.name),
+      Array.map(command => command.args?.['sound']),
+    )
+
+  type PlaySoundResolver = readonly [
+    typeof PlaySound,
+    typeof Message.CompletedPlaySound.Type,
+  ]
+
+  const playedResolver = (): PlaySoundResolver => [
+    PlaySound,
+    Message.CompletedPlaySound({ sound: 'Clang', outcome: 'Played' }),
+  ]
+
+  const heardSounds: Array<ReadonlyArray<unknown>> = []
+  const hear = <StoryModel, StoryMessage, OutMessage>(
+    simulation: StorySimulation<StoryModel, StoryMessage, OutMessage>,
+  ): StorySimulation<StoryModel, StoryMessage, OutMessage> => {
+    heardSounds.push(soundsOf(simulation.commands))
+    return simulation
+  }
+
+  const countOf = (
+    items: ReadonlyArray<Readonly<{ kind: string }>>,
+    kind: string,
+  ): number => Array.filter(items, item => item.kind === kind).length
+
+  test.each(ARMOR)(
+    'stage $stage knocks off the $part once, with a clang, sparks, and a plate on the floor',
+    ({ stage, hp, part }) => {
+      heardSounds.length = 0
+      const lug = lugAt(hp)
+      const scene = withScene([lug], [bulletInto(500, lug, 9)])
+      story(
+        update,
+        given(modifyFields(scene, { audio: () => AudioState.Ready() })),
+        tick(FRAME_MS),
+        hear,
+        Command.resolveAll(...Array.makeBy(12, playedResolver)),
+      )
+      const landed: Array<Model> = []
+      story(
+        update,
+        given(scene),
+        tick(FRAME_MS),
+        model(({ frameEvents, particles, zombies }) => {
+          expect(zombies[0]?.hp).toBe(hp - 9)
+          expect(shedIn(frameEvents)).toEqual([{ kind: 'Tank', stage }])
+          expect(countOf(particles, part)).toBe(1)
+          expect(countOf(particles, 'Spark')).toBeGreaterThan(0)
+        }),
+        tick(FRAME_MS),
+        model(({ frameEvents }) => {
+          expect(shedIn(frameEvents)).toEqual([])
+        }),
+        ...Array.makeBy(150, () => tick(FRAME_MS)),
+        model(current => {
+          landed.push(current)
+        }),
+      )
+      expect(heardSounds[0]).toContain('Clang')
+      expect(heardSounds[0]).not.toContain('LimbPop')
+      const after = landed[0]
+      expect(after).toBeDefined()
+      expect(countOf(after?.decals ?? [], part)).toBe(1)
+      expect(countOf(after?.particles ?? [], part)).toBe(0)
+    },
+  )
+
+  test('the last stage leaves the bare zombie, without any armor in his frames', () => {
+    const { stages } = ZOMBIE_SPRITES.Tank
+    expect(stages).toHaveLength(ZOMBIE_KINDS.Tank.wear.length + 1)
+    const lookAt = (stage: number) =>
+      Option.map(Array.get(stages, stage), ({ walk }) => frameAt(walk, 0))
+    expect(lookAt(3)).not.toEqual(lookAt(0))
+    expect(
+      Array.every(ZOMBIE_KINDS.Tank.wear, ({ part }) => isArmorPart(part)),
+    ).toBe(true)
+  })
+
+  test('a Groaner part is not armor, and every Big Lug stage is', () => {
+    expect(isArmorShedAt('Shambler', 0)).toBe(false)
+    expect(isArmorShedAt('Tank', 0)).toBe(true)
+    expect(isArmorShedAt('Tank', 2)).toBe(true)
+  })
+})
+
+describe('the Kaboomer health bar', () => {
+  const SPARK_REACH_PX = 2
+
+  test('shows once he is hurt, over his fuse, and not before', () => {
+    const kaboomer = zombieOf('Exploder', 100, FAR_X, ROW_Y, 6)
+    expect(zombieHealthBarShapes(kaboomer)).toEqual([])
+    const hurt = modifyFields(kaboomer, { hp: () => 3 })
+    const bar = zombieHealthBarShapes(hurt)
+    expect(bar).toHaveLength(2)
+    const fill = bar[1]
+    expect(fill?._tag).toBe('Rect')
+    expect(fill?._tag === 'Rect' ? fill.width : 0).toBe(6)
+    const back = bar[0]
+    const fuseTipY =
+      Math.round(hurt.y) +
+      ZOMBIE_KINDS.Exploder.footOffset +
+      kaboomerFuseTip(KABOOMER_FUSE_MAX, 0, 'Right').y
+    const barBottom = back?._tag === 'Rect' ? back.y + back.height : 0
+    expect(barBottom).toBeLessThan(fuseTipY - SPARK_REACH_PX)
   })
 })

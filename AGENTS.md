@@ -14,25 +14,29 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 
 ### Commands
 
-| Command                                       | What it does                                                                                                               |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `bun install`                                 | Install dependencies                                                                                                       |
-| `bun dev`                                     | Start the dev server                                                                                                       |
-| `bun run typecheck`                           | Typecheck with `tsrs`, including the Effect rules                                                                          |
-| `bun run lint`                                | Lint with oxlint and the Effect rules                                                                                      |
-| `bun run test`                                | Run the Story and Scene tests                                                                                              |
-| `bun run build`                               | Build for production                                                                                                       |
-| `bun run perf:check`                          | Compare frame time to `tools/audit/frame-baseline.json` in headless Chrome                                                 |
-| `cd infra && bun alchemy plan --stage prod`   | Show what a production deploy to Cloudflare would change                                                                   |
-| `cd infra && bun alchemy deploy --stage prod` | Deploy production to Cloudflare by hand (see Deploying)                                                                    |
-| `cd tools/audit && bun live-check.ts [url]`   | Load a deployed copy in headless Chrome and check that it boots                                                            |
-| `cd infra && bun run test`                    | Test the analytics Worker: the size cap, rate limits, decoding, and D1 rows                                                |
-| `bun tools/analytics/report.ts --stage <s>`   | Print a stage's analytics: win rate, wave of death, deadliest kinds, run length, devices, runs per day                     |
-| `bun tools/analytics/smoke.ts <api url>`      | Post one fake run summary to a stage's API Worker and check its health                                                     |
-| `bun run heavy -- bun tools/audit/sqlite.ts`  | Check the save in SQLite on OPFS in headless Chrome: the import, reloads, and two tabs. `BASE` points it at a server       |
-| `bun run balance [runs]`                      | The balance bot through the heavy guard. Env vars such as `MODE=endless` and `SWAP=1` pass through                         |
-| `bun run heavy -- <command...>`               | Run any CPU-heavy command through the guard: one at a time across the machine, after the load drops, with `WORKERS` capped |
-| `bun run heavy -- --reset-budget`             | Reset this branch's balance batch count                                                                                    |
+| Command                                        | What it does                                                                                                               |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `bun install`                                  | Install dependencies                                                                                                       |
+| `bun dev`                                      | Start the dev server                                                                                                       |
+| `bun run typecheck`                            | Typecheck with `tsrs`, including the Effect rules                                                                          |
+| `bun run lint`                                 | Lint with oxlint and the Effect rules                                                                                      |
+| `bun run test`                                 | Run the Story and Scene tests                                                                                              |
+| `bun run build`                                | Build for production                                                                                                       |
+| `bun run perf:check`                           | Compare frame time to `tools/audit/frame-baseline.json` in headless Chrome                                                 |
+| `cd infra && bun alchemy plan --stage prod`    | Show what a production deploy to Cloudflare would change                                                                   |
+| `cd infra && bun alchemy deploy --stage prod`  | Deploy production to Cloudflare by hand (see Deploying)                                                                    |
+| `cd tools/audit && bun live-check.ts [url]`    | Load a deployed copy in headless Chrome and check that it boots                                                            |
+| `cd infra && bun run test`                     | Test the analytics Worker: the size cap, rate limits, decoding, and D1 rows                                                |
+| `bun tools/analytics/report.ts --stage <s>`    | Print a stage's analytics: win rate, wave of death, deadliest kinds, run length, devices, runs per day                     |
+| `bun tools/analytics/smoke.ts <api url>`       | Post one fake run summary to a stage's API Worker and check its health                                                     |
+| `bun run heavy -- bun tools/audit/sqlite.ts`   | Check the save in SQLite on OPFS in headless Chrome: the import, reloads, and two tabs. `BASE` points it at a server       |
+| `bun run balance [runs]`                       | The balance bot through the heavy guard. Env vars such as `MODE=endless` and `SWAP=1` pass through                         |
+| `bun run balance:model`                        | The analytical balance model: every wave and level from the tables, in under a second                                      |
+| `bun run balance -- --wave 4 --runs 200`       | The wave snapshot pass through the guard: one wave from typical run states. `--wave all` plays every wave                  |
+| `bun run balance:nightly`                      | The nightly balance suite through the guard, reported in `tools/balance/reports/<date>.md`                                 |
+| `bun run balance:nightly -- --update-baseline` | The same, and rewrite `tools/balance/baseline.json` from this run                                                          |
+| `bun run heavy -- <command...>`                | Run any CPU-heavy command through the guard: one at a time across the machine, after the load drops, with `WORKERS` capped |
+| `bun run heavy -- --reset-budget`              | Reset this branch's balance batch count                                                                                    |
 
 Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All four must pass.
 
@@ -47,6 +51,12 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 - Prefer 100 runs to sort ideas and 200 runs only to confirm the final numbers.
 - The same goes for headless Chrome audits and `perf:check`: one at a time, and not while the balance bot is running, since load skews frame times. The guard's lock enforces this when they all go through it.
 
+**Check balance in tiers.** Prefer these over ad hoc batches. See `tools/balance/README.md` and "How balance is checked" in `GAME_DESIGN.md`.
+
+- **On every change.** `bun run test` runs the analytical model's guardrails and a wave 2 snapshot smoke pass in a few seconds. `bun run balance:model` prints the model's table. A guardrail the game does not meet yet is a `test.todo` with today's value in its name; flip it to `Met` in `tools/balance/model.test.ts` once a change brings it in.
+- **While tuning a wave.** `bun run balance -- --wave 4 --runs 100` plays only that wave from snapshots of typical runs, in seconds instead of minutes. It counts as a balance batch.
+- **Once a change is done, and nightly.** `bun run balance:nightly` runs every campaign bot, endless, and every wave's snapshots, and reports what is in target, what drifted from `tools/balance/baseline.json`, and what is out of target. Rewrite the baseline (`--update-baseline`) only in a change that means to move the numbers, and say so in the commit body.
+
 ### Where things are
 
 | File                     | What it holds                                                          |
@@ -54,7 +64,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/model.ts`           | The Model and its Schema types                                         |
 | `src/main.ts`            | Messages, `init`, `update`, Commands, and Subscriptions                |
 | `src/onboarding.ts`      | Lessons, the practice gate, the new zombie card, and hints             |
-| `src/home.ts`            | The home menu's buttons, going home, and the session bests             |
+| `src/home.ts`            | The home menu's buttons, going home, and counting runs into the bests  |
 | `src/homeView.ts`        | The home menu, its panels, the pause MENU pill, and the bests strip    |
 | `src/menu.css`           | Styles for the home menu, its panels, and the MENU pill                |
 | `src/splash.ts`          | The loading splash's effects: load steps, progress, and hiding it      |

@@ -293,6 +293,7 @@ export const BLOOD_PER_BLAST = 8
 export const BOMB_SHARDS_PER_BLAST = 4
 export const SPARKS_PER_BLAST = 10
 export const SPARKS_PER_DROP = 6
+export const SPARKS_PER_CLANG = 8
 export const SPARKS_PER_GRAB = 10
 export const COINS_PER_GRAB = 4
 export const DUST_PER_FIZZLE = 4

@@ -55,6 +55,7 @@ import {
   type PlannedSpawn,
   Round,
   RunMode,
+  RunTally,
   ShopState,
   Streak,
   type Trap,
@@ -1212,7 +1213,7 @@ const breakClockFor = (wave: number): BreakClock =>
     ? BreakClock.Waiting({ elapsedMs: 0 })
     : BreakClock.Counting()
 
-const beginPreparation = (
+export const beginPreparation = (
   model: Model,
   wave: number,
   durationMs: number,
@@ -1280,6 +1281,7 @@ const startRun = (model: Model, mode: RunMode): Model =>
       intent: () =>
         deriveIntent(model.input, initialPlayer, arenaCamera(initialPlayer)),
       stats: () => freshStats,
+      runTally: () => RunTally.Uncounted(),
       lessons: settleLessons,
       hintBand: () => 'Top',
       screenMs: () => 0,
