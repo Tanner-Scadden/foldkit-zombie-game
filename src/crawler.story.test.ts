@@ -283,7 +283,7 @@ describe('the Ankle Biter', () => {
     })
   })
 
-  test('a wave with Ankle Biters, a Chucker, and frenzied packs replays the same from the same seed', () => {
+  test('a wave with Ankle Biters, a Big Leaguer, and frenzied packs replays the same from the same seed', () => {
     const play = (seed: number): Model => {
       const [rngState, spawns] = rollSpawns(seed, 7)
       const start = modifyFields(asVeteran(initialModel), {

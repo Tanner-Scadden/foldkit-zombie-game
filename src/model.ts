@@ -137,7 +137,7 @@ export const ZombieState = defineTaggedUnion({
 export type ZombieState = typeof ZombieState.Type
 
 // NOTE: an action is what a living zombie is busy with, apart from whether it
-// is alive. A Chucker heaves a Groaner, which is Carried, then Flying, then
+// is alive. A Big Leaguer heaves a Groaner, which is Carried, then Flying, then
 // Dazed where it lands. An Ankle Biter waits Burrowed under the floor, then
 // clings to the player's ankles. Winded walks like Roaming but cannot grab.
 export const ZombieAction = defineTaggedUnion({
@@ -149,6 +149,12 @@ export const ZombieAction = defineTaggedUnion({
     durationMs: Schema.Number,
   },
   Carried: { byId: Schema.Number },
+  Shielding: {
+    victimId: Schema.Number,
+    remainingMs: Schema.Number,
+    aim: Schema.Number,
+  },
+  Shielded: { byId: Schema.Number },
   Flying: {
     from: Vector,
     to: Vector,
@@ -279,13 +285,15 @@ export const ParticleKind = Schema.Literals([
   'HairScalp',
   'BlueLimb',
   'BlueChunk',
-  'GasPatch',
+  'BombShard',
+  'LimeLimb',
+  'RedCap',
   'PinkLimb',
   'PinkChunk',
   'TealLimb',
   'TealScalp',
   'PaleScalp',
-  'Gas',
+  'Smoke',
 ])
 export type ParticleKind = typeof ParticleKind.Type
 
@@ -319,7 +327,9 @@ export const DecalKind = Schema.Literals([
   'HairScalp',
   'BlueLimb',
   'BlueChunk',
-  'GasPatch',
+  'BombShard',
+  'LimeLimb',
+  'RedCap',
   'PinkLimb',
   'PinkChunk',
   'TealLimb',
@@ -485,6 +495,7 @@ export const GameEvent = defineTaggedUnion({
   GlobLanded: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
   BossEnraged: { x: Schema.Number, y: Schema.Number },
   ZombieGrabbed: { x: Schema.Number, y: Schema.Number },
+  ShieldRaised: { x: Schema.Number, y: Schema.Number },
   ZombieThrown: { x: Schema.Number, y: Schema.Number },
   ZombieLanded: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
   CrawlerStirred: { x: Schema.Number, y: Schema.Number },
@@ -512,6 +523,7 @@ export const PopupKind = Schema.Literals([
   'Empty',
   'Horde',
   'Wipe',
+  'Kaboom',
 ])
 export type PopupKind = typeof PopupKind.Type
 

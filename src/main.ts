@@ -877,6 +877,7 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     GlobLanded: () => Option.some<SoundEffect>('BossSplat'),
     BossEnraged: () => Option.some<SoundEffect>('BossRoar'),
     ZombieGrabbed: () => Option.some<SoundEffect>('Heave'),
+    ShieldRaised: () => Option.some<SoundEffect>('Yank'),
     ZombieThrown: () => Option.some<SoundEffect>('Whoosh'),
     ZombieLanded: () => Option.some<SoundEffect>('Thud'),
     CrawlerStirred: () => Option.some<SoundEffect>('Rumble'),

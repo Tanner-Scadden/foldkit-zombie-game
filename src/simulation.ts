@@ -17,7 +17,7 @@ import {
   woundScaleOf,
 } from './boss'
 import { cameraOf } from './camera'
-import { advanceChuckers, maybeChuckerHeading } from './chucker'
+import { advanceChuckers, maybeChuckerHeading, maybeShieldFor } from './chucker'
 import {
   hitEvent,
   killEvent,
@@ -859,6 +859,14 @@ const targetsFor = (
     : Array.filter(targets, ({ id }) => !Array.contains(struck, id))
 }
 
+const shieldedTarget = (bullet: Bullet, zombie: Zombie): number =>
+  Pierce.isAnyOf(['Stops'])(bullet.pierce)
+    ? Option.getOrElse(
+        maybeShieldFor(zombie, bulletDirection(bullet)),
+        () => zombie.id,
+      )
+    : zombie.id
+
 const findBulletHits = (
   bullets: ReadonlyArray<Bullet>,
   zombies: ReadonlyArray<Zombie>,
@@ -879,7 +887,7 @@ const findBulletHits = (
         Array.reduce(Option.none<Contact>(), nearerContact),
         Option.map(({ zombie, point }) => ({
           bulletId: bullet.id,
-          zombieId: zombie.id,
+          zombieId: shieldedTarget(bullet, zombie),
           x: point.x,
           y: point.y,
           direction: bulletDirection(bullet),

@@ -168,7 +168,9 @@ const PART_LOOKS: Readonly<
     | 'HairScalp'
     | 'BlueLimb'
     | 'BlueChunk'
-    | 'GasPatch'
+    | 'BombShard'
+    | 'LimeLimb'
+    | 'RedCap'
     | 'PinkLimb'
     | 'PinkChunk'
     | 'TealLimb'
@@ -225,11 +227,23 @@ const PART_LOOKS: Readonly<
     faded: '#3c4352',
     hasStump: false,
   },
-  GasPatch: {
-    particle: '#d7e65a',
-    decal: '#a9b83a',
-    faded: '#5c6630',
+  BombShard: {
+    particle: '#1d1b26',
+    decal: '#2c2a36',
+    faded: '#3a3640',
     hasStump: false,
+  },
+  RedCap: {
+    particle: '#d8463e',
+    decal: '#b43a34',
+    faded: '#5e2a28',
+    hasStump: false,
+  },
+  LimeLimb: {
+    particle: '#c4f08a',
+    decal: '#a6d872',
+    faded: '#5a6e44',
+    hasStump: true,
   },
   PinkLimb: {
     particle: '#b49ab0',
@@ -245,9 +259,9 @@ const PART_LOOKS: Readonly<
   },
 }
 
-const GAS_COLOR = 'rgba(206, 246, 96, 0.6)'
-const GAS_FADED_COLOR = 'rgba(206, 246, 96, 0.25)'
-const GAS_FADE_MS = 220
+const SMOKE_COLOR = 'rgba(214, 208, 200, 0.7)'
+const SMOKE_FADED_COLOR = 'rgba(150, 144, 140, 0.35)'
+const SMOKE_FADE_MS = 220
 
 const STUMP_COLOR = '#a8262c'
 const STUMP_FADED_COLOR = '#4a1c20'
@@ -269,7 +283,9 @@ const DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   HairScalp: PART_LOOKS.HairScalp.decal,
   BlueLimb: PART_LOOKS.BlueLimb.decal,
   BlueChunk: PART_LOOKS.BlueChunk.decal,
-  GasPatch: PART_LOOKS.GasPatch.decal,
+  BombShard: PART_LOOKS.BombShard.decal,
+  LimeLimb: PART_LOOKS.LimeLimb.decal,
+  RedCap: PART_LOOKS.RedCap.decal,
   PinkLimb: PART_LOOKS.PinkLimb.decal,
   PinkChunk: PART_LOOKS.PinkChunk.decal,
   TealLimb: PART_LOOKS.TealLimb.decal,
@@ -294,7 +310,9 @@ const FADED_DECAL_COLORS: Readonly<Record<DecalKind, string>> = {
   HairScalp: PART_LOOKS.HairScalp.faded,
   BlueLimb: PART_LOOKS.BlueLimb.faded,
   BlueChunk: PART_LOOKS.BlueChunk.faded,
-  GasPatch: PART_LOOKS.GasPatch.faded,
+  BombShard: PART_LOOKS.BombShard.faded,
+  LimeLimb: PART_LOOKS.LimeLimb.faded,
+  RedCap: PART_LOOKS.RedCap.faded,
   PinkLimb: PART_LOOKS.PinkLimb.faded,
   PinkChunk: PART_LOOKS.PinkChunk.faded,
   TealLimb: PART_LOOKS.TealLimb.faded,
@@ -324,13 +342,15 @@ const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
   HairScalp: PART_LOOKS.HairScalp.particle,
   BlueLimb: PART_LOOKS.BlueLimb.particle,
   BlueChunk: PART_LOOKS.BlueChunk.particle,
-  GasPatch: PART_LOOKS.GasPatch.particle,
+  BombShard: PART_LOOKS.BombShard.particle,
+  LimeLimb: PART_LOOKS.LimeLimb.particle,
+  RedCap: PART_LOOKS.RedCap.particle,
   PinkLimb: PART_LOOKS.PinkLimb.particle,
   PinkChunk: PART_LOOKS.PinkChunk.particle,
   TealLimb: PART_LOOKS.TealLimb.particle,
   TealScalp: PART_LOOKS.TealScalp.particle,
   PaleScalp: PART_LOOKS.PaleScalp.particle,
-  Gas: GAS_COLOR,
+  Smoke: SMOKE_COLOR,
 }
 
 const LIMBS: ReadonlyArray<ParticleKind | DecalKind> = [
@@ -338,6 +358,7 @@ const LIMBS: ReadonlyArray<ParticleKind | DecalKind> = [
   'BlueLimb',
   'PinkLimb',
   'TealLimb',
+  'LimeLimb',
 ]
 
 const PARTS: ReadonlyArray<ParticleKind> = [
@@ -345,10 +366,12 @@ const PARTS: ReadonlyArray<ParticleKind> = [
   'BlueLimb',
   'PinkLimb',
   'TealLimb',
+  'LimeLimb',
   'GreenScalp',
   'HairScalp',
   'BlueChunk',
-  'GasPatch',
+  'BombShard',
+  'RedCap',
   'PinkChunk',
   'TealScalp',
   'PaleScalp',
@@ -437,8 +460,11 @@ const isCasingUpright = (particle: Particle): boolean =>
 const particleColor = (particle: Particle): string => {
   if (particle.kind === 'Dust' && particle.remainingMs < DUST_FADE_MS) {
     return DUST_FADED_COLOR
-  } else if (particle.kind === 'Gas' && particle.remainingMs < GAS_FADE_MS) {
-    return GAS_FADED_COLOR
+  } else if (
+    particle.kind === 'Smoke' &&
+    particle.remainingMs < SMOKE_FADE_MS
+  ) {
+    return SMOKE_FADED_COLOR
   } else {
     return PARTICLE_COLORS[particle.kind]
   }
@@ -504,13 +530,25 @@ export const airborneParticleShapes = particleShapesWhere(
 
 // BLASTS
 
-const BLAST_FLASH_END_MS = 50
-const BLAST_CORE_COLOR = '#fffbe6'
-const BLAST_FLASH_COLOR = '#ffd23f'
+const BLAST_FLASH_END_MS = 60
+const BLAST_FLASH_COLOR = '#ffffff'
+const BLAST_CORE_COLOR = '#ffe066'
 const BLAST_FIRE_COLOR = '#ff7a2e'
-const BLAST_RING_COLOR = '#ffe066'
-const BLAST_SMOKE_COLOR = 'rgba(126, 178, 54, 0.45)'
+const BLAST_RING_COLOR = '#fffbe6'
+const BLAST_SMOKE_COLOR = 'rgba(70, 64, 66, 0.6)'
+const BLAST_SMOKE_RISE_PX = 10
 
+type Puff = Readonly<{ dx: number; dy: number; size: number }>
+
+const SMOKE_PUFFS: ReadonlyArray<Puff> = [
+  { dx: 0, dy: -0.2, size: 0.45 },
+  { dx: -0.35, dy: 0, size: 0.35 },
+  { dx: 0.35, dy: 0.05, size: 0.35 },
+]
+
+// NOTE: a cartoon KABOOM: a white flash with a hot core, then a fireball
+// that shrinks inside a growing shockwave ring while a puffy cloud of smoke
+// rises and fades.
 export const blastShapes = (blast: Blast): ReadonlyArray<Canvas.Shape> => {
   const x = Math.round(blast.x)
   const y = Math.round(blast.y)
@@ -520,33 +558,48 @@ export const blastShapes = (blast: Blast): ReadonlyArray<Canvas.Shape> => {
       Canvas.Circle({
         x,
         y,
-        radius: blast.radius * 0.6,
+        radius: Math.round(blast.radius * 0.55),
         fill: BLAST_CORE_COLOR,
       }),
     ]
   }
 
   const progress = clamp(blast.ageMs / BLAST_FLASH_MS, 0, 1)
+  const rise = Math.round(BLAST_SMOKE_RISE_PX * progress)
   return [
     group({
       opacity: 1 - progress,
       shapes: [
-        Canvas.Circle({
-          x,
-          y: y - Math.round(6 * progress),
-          radius: blast.radius * (0.5 + 0.4 * progress),
-          fill: BLAST_SMOKE_COLOR,
-        }),
+        ...Array.map(SMOKE_PUFFS, puff =>
+          Canvas.Circle({
+            x: x + Math.round(puff.dx * blast.radius * (0.6 + progress)),
+            y: y - rise + Math.round(puff.dy * blast.radius),
+            radius: Math.max(
+              1,
+              Math.round(blast.radius * puff.size * (0.7 + 0.6 * progress)),
+            ),
+            fill: BLAST_SMOKE_COLOR,
+          }),
+        ),
         Canvas.Circle({
           x,
           y,
-          radius: Math.max(1, blast.radius * 0.7 * (1 - progress)),
+          radius: Math.max(1, Math.round(blast.radius * 0.6 * (1 - progress))),
           fill: BLAST_FIRE_COLOR,
         }),
         Canvas.Circle({
           x,
           y,
-          radius: blast.radius * (0.7 + 0.45 * progress),
+          radius: Math.max(
+            1,
+            Math.round(blast.radius * 0.3 * (1 - progress * 1.5)),
+          ),
+          fill: BLAST_CORE_COLOR,
+        }),
+        Canvas.Circle({
+          x,
+          y,
+          radius: Math.round(blast.radius * (0.8 + 0.5 * progress)),
           stroke: BLAST_RING_COLOR,
           lineWidth: 2,
         }),
@@ -590,6 +643,14 @@ const popupLook = (popup: Popup): PopupLook => {
       scale: HORDE_POPUP_SCALE,
       hopPx: KILL_POPUP_HOP_PX,
       risePx: DAMAGE_POPUP_RISE_PX,
+    }
+  } else if (popup.kind === 'Kaboom') {
+    return {
+      text: 'KABOOM!',
+      tone: popup.ageMs < KILL_POPUP_FLASH_MS ? 'Damage' : 'Alert',
+      scale: popup.ageMs < KILL_POPUP_FLASH_MS ? 3 : HORDE_POPUP_SCALE,
+      hopPx: KILL_POPUP_HOP_PX,
+      risePx: KILL_POPUP_RISE_PX,
     }
   } else if (popup.kind === 'Wipe') {
     return {

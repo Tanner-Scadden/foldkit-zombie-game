@@ -29,7 +29,7 @@ const { STALL_BOX, isShopOpenFor, priceFor, verdictFor } =
   await import('../../src/shop')
 const { FINAL_WAVE, doorCounts } = await import('../../src/waves')
 const { BOSS_RULES } = await import('../../src/boss')
-const { CHUCKER_RULES } = await import('../../src/chucker')
+const { CHUCKER_RULES, maybeShieldFor } = await import('../../src/chucker')
 const { CRAWLER_RULES } = await import('../../src/crawler')
 const { FRENZY_RULES } = await import('../../src/frenzy')
 const { canReload, heldLoaded, heldStats, maxRounds, maxTier, maybeSpare } =
@@ -125,9 +125,10 @@ type RunResult = {
   newKinds: NewKindLog
 }
 
-// What the Chucker, the Ankle Biter, and frenzied packs did in a run.
+// What the Big Leaguer, the Ankle Biter, and frenzied packs did in a run.
 type NewKindLog = {
   throws: number
+  shields: number
   throwHits: number
   grabs: number
   surfaced: number
@@ -139,6 +140,7 @@ type NewKindLog = {
 
 const emptyNewKinds = (): NewKindLog => ({
   throws: 0,
+  shields: 0,
   throwHits: 0,
   grabs: 0,
   surfaced: 0,
@@ -630,10 +632,27 @@ const nextBotRandom = () => {
 // NO_FOCUS=1 always shoots the nearest.
 const FOCUSES_BOSS = process.env.NO_FOCUS === undefined
 const FOCUS_PX = Number(process.env.FOCUS_PX ?? 60)
+// A Big Leaguer holding his shield toward the bot, and the zombie he holds,
+// only soak up shots, so the bot shoots something else while there is
+// anything else to shoot.
+const isBehindShield = (model: Model, zombie: Model['zombies'][number]) => {
+  if (zombie.action._tag === 'Shielded') {
+    return true
+  }
+  const length = Math.max(1, distance(model.player, zombie))
+  const toward = {
+    x: (zombie.x - model.player.x) / length,
+    y: (zombie.y - model.player.y) / length,
+  }
+  return Option.isSome(maybeShieldFor(zombie, toward))
+}
+
 const nearestVisible = (model: Model) => {
-  const visible = walking(model)
+  const inSight = walking(model)
     .filter(zombie => hasLineOfSight(model.player, zombie))
     .sort((a, b) => distance(model.player, a) - distance(model.player, b))
+  const open = inSight.filter(zombie => !isBehindShield(model, zombie))
+  const visible = open.length > 0 ? open : inSight
   const nearest = visible[0]
   const boss = FOCUSES_BOSS
     ? visible.find(zombie => zombie.kind === 'Boss')
@@ -1012,6 +1031,7 @@ const runOnce = (seed: number): RunResult => {
     blame(before, model, hurtBy)
     model.frameEvents.forEach(event => {
       if (event._tag === 'ZombieThrown') newKinds.throws += 1
+      if (event._tag === 'ShieldRaised') newKinds.shields += 1
       if (event._tag === 'AnklesGrabbed') newKinds.grabs += 1
       if (event._tag === 'CrawlerSurfaced') newKinds.surfaced += 1
       if (event._tag === 'PackFrenzied') newKinds.frenzies += 1
@@ -1503,7 +1523,7 @@ const perRun = (pick: (log: NewKindLog) => number) =>
   (newKindTotal(pick) / Math.max(1, runs)).toFixed(1)
 console.log('\nNew kinds and frenzy (per run)')
 console.log(
-  `  Chucker throws ${perRun(log => log.throws)}, landed on the bot ${perRun(log => log.throwHits)} (${(
+  `  Big Leaguer throws ${perRun(log => log.throws)}, shields ${perRun(log => log.shields)}, landed on the bot ${perRun(log => log.throwHits)} (${(
     (100 * newKindTotal(log => log.throwHits)) /
     Math.max(
       1,

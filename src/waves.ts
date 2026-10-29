@@ -362,7 +362,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
         everyMs: 3400,
       }),
       trickle({
-        count: 5,
+        count: 3,
         mix: only('Exploder'),
         from: anyDoors(1),
         startMs: 3500,

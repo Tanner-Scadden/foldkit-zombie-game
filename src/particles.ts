@@ -8,10 +8,12 @@ import {
   BLOOD_LIFETIME_MS,
   BLOOD_LIFT_MAX,
   BLOOD_LIFT_MIN,
+  BLOOD_PER_BLAST,
   BLOOD_PER_HIT,
   BLOOD_SPEED_MAX,
   BLOOD_SPEED_MIN,
   BLOOD_SPRAY_SPREAD,
+  BOMB_SHARDS_PER_BLAST,
   CHIPS_PER_STRIKE,
   CHIP_DRAG_PER_SECOND,
   CHIP_GRAVITY,
@@ -61,7 +63,6 @@ import {
   GIB_RESTITUTION,
   GIB_SPEED_MAX,
   GIB_SPEED_MIN,
-  GOO_PER_BLAST,
   GOO_SPEED_MAX,
   GOO_SPEED_MIN,
   MEAT_GIBS_PER_BLAST,
@@ -127,7 +128,7 @@ import { type WearStage, ZOMBIE_KINDS } from './zombies'
 
 // PHYSICS
 
-const GAS_RISE = 30
+const SMOKE_RISE = 30
 
 const partPhysics = (decalKind: DecalKind): ParticlePhysics => ({
   gravity: GIB_GRAVITY,
@@ -245,14 +246,16 @@ const PHYSICS: Readonly<Record<ParticleKind, ParticlePhysics>> = {
   HairScalp: partPhysics('HairScalp'),
   BlueLimb: partPhysics('BlueLimb'),
   BlueChunk: partPhysics('BlueChunk'),
-  GasPatch: partPhysics('GasPatch'),
+  BombShard: partPhysics('BombShard'),
+  LimeLimb: partPhysics('LimeLimb'),
+  RedCap: partPhysics('RedCap'),
   PinkLimb: partPhysics('PinkLimb'),
   PinkChunk: partPhysics('PinkChunk'),
   TealLimb: partPhysics('TealLimb'),
   TealScalp: partPhysics('TealScalp'),
   PaleScalp: partPhysics('PaleScalp'),
-  Gas: {
-    gravity: -GAS_RISE,
+  Smoke: {
+    gravity: -SMOKE_RISE,
     dragPerSecond: DUST_DRAG_PER_SECOND,
     restitution: 0,
     maybeDecalKind: Option.none(),
@@ -281,13 +284,15 @@ const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
   HairScalp: 3,
   BlueLimb: 5,
   BlueChunk: 4,
-  GasPatch: 3,
+  BombShard: 3,
+  LimeLimb: 4,
+  RedCap: 3,
   PinkLimb: 7,
   PinkChunk: 5,
   TealLimb: 6,
   TealScalp: 3,
   PaleScalp: 3,
-  Gas: 3,
+  Smoke: 3,
 }
 
 const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
@@ -307,7 +312,9 @@ const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
   HairScalp: () => 2,
   BlueLimb: () => 2,
   BlueChunk: () => 3,
-  GasPatch: () => 2,
+  BombShard: () => 2,
+  LimeLimb: () => 2,
+  RedCap: () => 2,
   PinkLimb: () => 3,
   PinkChunk: () => 4,
   TealLimb: () => 2,
@@ -603,12 +610,12 @@ const dustPuff =
     ]
   }
 
-const GAS_SPEED_MIN = 10
-const GAS_SPEED_MAX = 34
-const GAS_LIFETIME_MIN_MS = 420
-const GAS_LIFETIME_MAX_MS = 760
+const SMOKE_SPEED_MIN = 10
+const SMOKE_SPEED_MAX = 34
+const SMOKE_LIFETIME_MIN_MS = 420
+const SMOKE_LIFETIME_MAX_MS = 760
 
-const gasPuff =
+const smokePuff =
   (ground: Vector) =>
   (state: number): Seeded<Particle> => {
     const angleDraw = nextRandom(state)
@@ -617,17 +624,17 @@ const gasPuff =
     return [
       lifetimeDraw.nextState,
       launch({
-        kind: 'Gas',
+        kind: 'Smoke',
         ground,
         height: ZOMBIE_FOOT_OFFSET,
         angle: angleDraw.value * Math.PI * 2,
-        speed: between(speedDraw.value, GAS_SPEED_MIN, GAS_SPEED_MAX),
+        speed: between(speedDraw.value, SMOKE_SPEED_MIN, SMOKE_SPEED_MAX),
         lift: 4,
-        size: LAUNCH_SIZE.Gas,
+        size: LAUNCH_SIZE.Smoke,
         lifetimeMs: between(
           lifetimeDraw.value,
-          GAS_LIFETIME_MIN_MS,
-          GAS_LIFETIME_MAX_MS,
+          SMOKE_LIFETIME_MIN_MS,
+          SMOKE_LIFETIME_MAX_MS,
         ),
       }),
     ]
@@ -893,7 +900,7 @@ const belchParticles = (
     droplet('Goo', { x, y }, Math.PI / 2, Math.PI * 2, GOO_BURST_SPEED),
   )
 
-const GAS_PER_BLAST = 6
+const SMOKE_PER_BLAST = 6
 
 const blastParticles = (
   state: number,
@@ -901,12 +908,12 @@ const blastParticles = (
 ): Seeded<ReadonlyArray<Particle>> => {
   const ground = { x, y: y + ZOMBIE_FOOT_OFFSET }
   return chain(state, [
-    drawState => generateMany(drawState, GAS_PER_BLAST, gasPuff(ground)),
+    drawState => generateMany(drawState, SMOKE_PER_BLAST, smokePuff(ground)),
     drawState =>
       generateMany(
         drawState,
-        GOO_PER_BLAST,
-        droplet('Goo', ground, 0, Math.PI * 2, GOO_BURST_SPEED),
+        BLOOD_PER_BLAST,
+        droplet('Blood', ground, 0, Math.PI * 2, GOO_BURST_SPEED),
       ),
     drawState => generateMany(drawState, SPARKS_PER_BLAST, spark(ground)),
     drawState =>
@@ -914,6 +921,12 @@ const blastParticles = (
         drawState,
         MEAT_GIBS_PER_BLAST,
         gib('MeatGib', ground, NO_PUSH),
+      ),
+    drawState =>
+      generateMany(
+        drawState,
+        BOMB_SHARDS_PER_BLAST,
+        gib('BombShard', ground, NO_PUSH),
       ),
   ])
 }
@@ -1097,6 +1110,7 @@ const eventParticles = (
     BossEnraged: ({ x, y }) =>
       dustRing(zombieGround(x, y, 'Boss'), STOMP_DUST)(state),
     ZombieGrabbed: () => noParticles(state),
+    ShieldRaised: () => noParticles(state),
     ZombieThrown: ({ x, y }) =>
       dustRing(zombieGround(x, y, 'Thrower'), THROW_DUST)(state),
     ZombieLanded: ({ x, y }) =>

@@ -7,6 +7,7 @@ import { describe, expect, test } from 'vitest'
 import { ARENA_LEVEL } from './arena'
 import { HIT_STOP_KILL_MAX_MS } from './constants'
 import { Message, update } from './main'
+import { debutPitch } from './menus'
 import {
   type Bullet,
   Frenzy,
@@ -20,7 +21,14 @@ import {
   ZombieState,
   initialModel,
 } from './model'
-import { gasbagPulseMs, zombieGroundShapes } from './zombieView'
+import { KABOOMER_FUSE_MAX } from './sprite'
+import { wavePreviewLabel } from './wavePreview'
+import { rollSpawns } from './waves'
+import {
+  kaboomerFuseLength,
+  kaboomerSparkMs,
+  zombieGroundShapes,
+} from './zombieView'
 import { Behavior, ZOMBIE_KINDS } from './zombies'
 
 const FRAME_MS = 10
@@ -49,14 +57,21 @@ const DISTANT_SPAWN: PlannedSpawn = {
   formation: 'Squad',
 }
 
-const gasbagAt = (id: number, x: number, y: number, hp = 3): Zombie => ({
+const FULL_HP = ZOMBIE_KINDS.Exploder.hp
+
+const kaboomerAt = (
+  id: number,
+  x: number,
+  y: number,
+  hp = FULL_HP,
+): Zombie => ({
   id,
   kind: 'Exploder',
   x,
   y,
   speed: 0,
   hp,
-  maxHp: 3,
+  maxHp: FULL_HP,
   knockback: { x: 0, y: 0 },
   hitRemainingMs: 0,
   state: ZombieState.Walking(),
@@ -98,20 +113,20 @@ const circleRadii = (shapes: ReadonlyArray<Canvas.Shape>) =>
     shape._tag === 'Circle' ? Result.succeed(shape.radius) : Result.failVoid,
   )
 
-describe('the Gasbag', () => {
-  test('a Gasbag that reaches the player swells with its blast ring on the floor before it pops', () => {
+describe('the Kaboomer', () => {
+  test('a Kaboomer that reaches the player lights up with its blast ring on the floor before he pops', () => {
     expect(BOMBER?.contactFuseMs).toBe(340)
     const contactMs = BOMBER?.contactFuseMs ?? 0
     const radius = BOMBER?.blastRadius ?? 0
-    const touching = gasbagAt(1, CENTER_X + 6, CENTER_Y)
+    const touching = kaboomerAt(1, CENTER_X + 6, CENTER_Y)
 
     story(
       update,
       given(sceneWith([touching])),
       tick(FRAME_MS),
       model(current => {
-        const [gasbag] = current.zombies
-        expect(gasbag?.state).toEqual(
+        const [kaboomer] = current.zombies
+        expect(kaboomer?.state).toEqual(
           ZombieState.Fusing({ remainingMs: contactMs }),
         )
         expect(
@@ -130,9 +145,9 @@ describe('the Gasbag', () => {
     )
   })
 
-  test('a shot Gasbag pops a fifth of a second later', () => {
+  test('a shot Kaboomer pops a fifth of a second later', () => {
     expect(BOMBER?.shotFuseMs).toBe(200)
-    const gasbag = gasbagAt(1, CENTER_X + 60, CENTER_Y)
+    const gasbag = kaboomerAt(1, CENTER_X + 60, CENTER_Y, 3)
     const shotMs = BOMBER?.shotFuseMs ?? 0
 
     story(
@@ -157,10 +172,11 @@ describe('the Gasbag', () => {
     )
   })
 
-  test('chains still ripple, each caught Gasbag a chain fuse after the last', () => {
+  test('chains still ripple, each caught Kaboomer a chain fuse after the last, whatever his health', () => {
     expect(BOMBER?.chainFuseMs).toBe(150)
-    const first = gasbagAt(1, 220, 60)
-    const second = gasbagAt(2, 236, 60)
+    const tough = (BOMBER?.zombieDamage ?? 0) + 4
+    const first = kaboomerAt(1, 220, 60, 3)
+    const second = { ...kaboomerAt(2, 236, 60, tough), maxHp: tough }
     const blastFrames: Array<number> = []
     const recorded = Array.flatMap(
       Array.makeBy(80, index => index),
@@ -187,17 +203,54 @@ describe('the Gasbag', () => {
     ).toBeGreaterThanOrEqual((BOMBER?.chainFuseMs ?? 0) - FRAME_MS)
   })
 
-  test('its pulse quickens as it closes in and each time it is shot', () => {
+  test('his fuse burns shorter in a few steps as he closes in and each time he is shot', () => {
     const player = modifyFields(initialModel.player, {
       x: () => CENTER_X,
       y: () => CENTER_Y,
     })
-    const far = gasbagAt(1, CENTER_X + 120, CENTER_Y)
-    const near = gasbagAt(2, CENTER_X + 20, CENTER_Y)
-    const farShot = gasbagAt(3, CENTER_X + 120, CENTER_Y, 1)
-    expect(gasbagPulseMs(near, player)).toBeLessThan(gasbagPulseMs(far, player))
-    expect(gasbagPulseMs(farShot, player)).toBeLessThan(
-      gasbagPulseMs(far, player),
+    const lengths = Array.makeBy(121, distance =>
+      kaboomerFuseLength(kaboomerAt(1, CENTER_X + distance, CENTER_Y), player),
     )
+    expect(Array.dedupe(lengths).length).toBeLessThanOrEqual(KABOOMER_FUSE_MAX)
+    expect(lengths[120]).toBe(KABOOMER_FUSE_MAX)
+    expect(lengths[0]).toBe(1)
+    Array.forEach(Array.range(1, 120), distance =>
+      expect(lengths[distance] ?? 0).toBeGreaterThanOrEqual(
+        lengths[distance - 1] ?? 0,
+      ),
+    )
+
+    const far = kaboomerAt(1, CENTER_X + 120, CENTER_Y)
+    const near = kaboomerAt(2, CENTER_X + 20, CENTER_Y)
+    const farOnceShot = kaboomerAt(3, CENTER_X + 120, CENTER_Y, FULL_HP - 3)
+    const farTwiceShot = kaboomerAt(4, CENTER_X + 120, CENTER_Y, 1)
+    expect(kaboomerFuseLength(near, player)).toBeLessThan(
+      kaboomerFuseLength(far, player),
+    )
+    expect(kaboomerFuseLength(farOnceShot, player)).toBeLessThan(
+      kaboomerFuseLength(far, player),
+    )
+    expect(kaboomerFuseLength(farTwiceShot, player)).toBeLessThan(
+      kaboomerFuseLength(farOnceShot, player),
+    )
+    expect(kaboomerSparkMs(near, player)).toBeLessThan(
+      kaboomerSparkMs(far, player),
+    )
+    expect(kaboomerSparkMs(farTwiceShot, player)).toBeLessThan(
+      kaboomerSparkMs(far, player),
+    )
+  })
+
+  test('the debut card and the door preview call him the Kaboomer', () => {
+    expect(ZOMBIE_KINDS.Exploder.name).toBe('Kaboomer')
+    expect(debutPitch('Exploder')).toBe(
+      'He wants a hug. Pop him from far away.',
+    )
+    const [, spawns] = rollSpawns(7, 4)
+    expect(Array.some(spawns, ({ kind }) => kind === 'Exploder')).toBe(true)
+    const label = wavePreviewLabel(4, spawns, [], initialModel.boss)
+    expect(label).toContain('Kaboomer')
+    expect(label).toContain('New this wave: Kaboomer.')
+    expect(label).not.toContain('Gasbag')
   })
 })

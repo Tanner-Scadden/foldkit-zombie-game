@@ -77,6 +77,7 @@ export const SoundEffect = Schema.Literals([
   'Rumble',
   'Burrow',
   'Clutch',
+  'Yank',
   'Howl',
   'PackBonus',
 ])
@@ -506,20 +507,25 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
     ],
   },
   ExploderHit: {
-    variationCents: 180,
+    variationCents: 140,
     tones: [
       {
-        wave: 'sine',
-        pitch: [at(0, 420), at(0.06, 160)],
-        envelope: envelope(0.35, 0.002, 0.07),
+        wave: 'triangle',
+        pitch: [at(0, 760), at(0.12, 690)],
+        envelope: envelope(0.32, 0.002, 0.14),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 1130), at(0.08, 1040)],
+        envelope: envelope(0.08, 0.002, 0.08),
       },
     ],
     noises: [
       {
         filter: 'bandpass',
-        quality: 9,
-        cutoff: [at(0, 900), at(0.07, 2400)],
-        envelope: envelope(0.5, 0.002, 0.08),
+        quality: 5,
+        cutoff: [at(0, 3200), at(0.04, 1800)],
+        envelope: envelope(0.4, 0.001, 0.04),
       },
     ],
   },
@@ -528,16 +534,22 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
     tones: [
       {
         wave: 'square',
-        pitch: [at(0, 520), at(0.14, 1500)],
-        envelope: envelope(0.1, 0.004, 0.15),
+        pitch: [at(0, 1800), at(0.3, 2600)],
+        envelope: envelope(0.04, 0.01, 0.3),
       },
     ],
     noises: [
       {
         filter: 'highpass',
-        quality: 2,
-        cutoff: [at(0, 2400), at(0.14, 6200)],
-        envelope: envelope(0.3, 0.01, 0.14),
+        quality: 1,
+        cutoff: [at(0, 3800), at(0.3, 6800)],
+        envelope: envelope(0.4, 0.008, 0.32),
+      },
+      {
+        filter: 'bandpass',
+        quality: 12,
+        cutoff: [at(0, 5200), at(0.06, 2400), at(0.12, 5600), at(0.2, 2800)],
+        envelope: envelope(0.25, 0.002, 0.26, 0.03),
       },
     ],
   },
@@ -546,27 +558,38 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
     tones: [
       {
         wave: 'sine',
-        pitch: [at(0, 150), at(0.45, 32)],
-        envelope: envelope(0.9, 0.003, 0.5),
+        pitch: [at(0, 130), at(0.6, 28)],
+        envelope: envelope(1, 0.003, 0.65),
       },
       {
         wave: 'square',
-        pitch: [at(0, 220), at(0.12, 50)],
-        envelope: envelope(0.25, 0.002, 0.14),
+        pitch: [at(0, 200), at(0.16, 42)],
+        envelope: envelope(0.3, 0.002, 0.18),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 60), at(0.3, 30)],
+        envelope: envelope(0.6, 0.004, 0.4, 0.02),
       },
     ],
     noises: [
       {
         filter: 'lowpass',
         quality: 0.7,
-        cutoff: [at(0, 5200), at(0.55, 150)],
-        envelope: envelope(1, 0.002, 0.6),
+        cutoff: [at(0, 6000), at(0.75, 120)],
+        envelope: envelope(1, 0.002, 0.8),
       },
       {
         filter: 'bandpass',
         quality: 6,
         cutoff: [at(0, 1800), at(0.2, 500)],
         envelope: envelope(0.45, 0.01, 0.22, 0.04),
+      },
+      {
+        filter: 'lowpass',
+        quality: 1,
+        cutoff: [at(0, 900), at(0.5, 200)],
+        envelope: envelope(0.4, 0.05, 0.5, 0.12),
       },
     ],
   },
@@ -1490,6 +1513,24 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
         quality: 6,
         cutoff: [at(0, 1400), at(0.15, 600)],
         envelope: envelope(0.35, 0.003, 0.16),
+      },
+    ],
+  },
+  Yank: {
+    variationCents: 120,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 180), at(0.06, 420), at(0.12, 240)],
+        envelope: envelope(0.18, 0.003, 0.13),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 3,
+        cutoff: [at(0, 600), at(0.08, 2600)],
+        envelope: envelope(0.45, 0.004, 0.1),
       },
     ],
   },

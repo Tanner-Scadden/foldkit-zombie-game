@@ -112,9 +112,9 @@ const GLOWING_INDEX = 2
 const FRENZIED_INDICES: ReadonlyArray<number> = [4, 9, 12, 13, 16, 17, 19]
 const FRENZY_PACK = 77
 
-// NOTE: the worst case stages one of each new sight: a Chucker heaving a
+// NOTE: the worst case stages one of each new sight: a Big Leaguer heaving a
 // Groaner overhead while another Groaner is in the air over its landing mark,
-// an Ankle Biter about to break through the floor, a Gasbag shot twice and
+// an Ankle Biter about to break through the floor, a Kaboomer shot twice and
 // pulsing hard beside the player, and a frenzied pack with its steam.
 const stagedZombie = (zombie: Zombie, index: number): Zombie => {
   if (index === CHUCKER_INDEX) {

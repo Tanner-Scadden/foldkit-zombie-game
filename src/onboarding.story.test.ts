@@ -112,7 +112,7 @@ const atWaveStart = (kinds: ReadonlyArray<ZombieKind>): Model => {
 }
 
 describe('new zombie card', () => {
-  test('wave 6 brings the Chucker card and wave 7 the Ankle Biter card', () => {
+  test('wave 6 brings the Big Leaguer card and wave 7 the Ankle Biter card', () => {
     const startOf = (wave: number, kinds: ReadonlyArray<ZombieKind>) => {
       const [, spawns] = rollSpawns(1, wave)
       return modifyFields(introduced(asVeteran(freshModel), kinds), {

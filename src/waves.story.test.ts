@@ -431,12 +431,17 @@ describe('wave plans', () => {
     )
   }
 
-  const healthOf = (wave: number) =>
-    Array.reduce(
-      Option.getOrThrow(Array.get(WAVE_PLANS, wave - 1)).groups,
-      0,
-      (sum, group) => sum + group.count * mixHealth(group),
+  const healthOf = (wave: number) => {
+    const plan = Option.getOrThrow(Array.get(WAVE_PLANS, wave - 1))
+    return (
+      plan.hpScale *
+      Array.reduce(
+        plan.groups,
+        0,
+        (sum, group) => sum + group.count * mixHealth(group),
+      )
     )
+  }
 
   test('there are eight waves that grow in health and speed with the wave number', () => {
     expect(FINAL_WAVE).toBe(8)

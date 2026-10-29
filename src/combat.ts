@@ -162,7 +162,10 @@ export const ZOMBIE_BLAST_TARGET: BlastTarget<Zombie> = {
   radius: bodyRadiusOf,
   isExposed: isGrounded,
   damageFrom: ({ zombieDamage }) => zombieDamage,
-  hurt: (zombie, strike) => {
+  hurt: (zombie, blastStrike) => {
+    const strike = Behavior.isAnyOf(['Bomber'])(statsOf(zombie).behavior)
+      ? { ...blastStrike, damage: Math.max(blastStrike.damage, zombie.hp) }
+      : blastStrike
     const struck = strikeZombie(zombie, strike, 'Blast')
     return {
       target: struck,

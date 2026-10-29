@@ -653,190 +653,273 @@ const tankWalkPixels = (stage: number): FramePixels => {
   ]
 }
 
-// NOTE: the Gasbag is a sickly yellow sack around a glowing belly of gas.
-// Its lit frames are the pulse: the belly and the brass valve on its head
-// flare white-hot, faster and faster as it nears the player or gets shot.
+// NOTE: the Kaboomer is a hunched, grinning zombie hugging a big round
+// cartoon bomb. The fuse and its sparks are drawn over the sprite each frame
+// in zombieView.ts, since they shorten as he closes in. His lit frames turn
+// the bomb red-hot for the last moments before it goes off.
 const EXPLODER_PALETTE: Palette = {
-  Y: '#e4d860',
-  D: '#a99a34',
-  B: '#9df03a',
-  b: '#dcff8a',
-  V: '#d9a441',
-  v: '#7a5a22',
-  E: '#2a1418',
-  M: '#8c1f24',
-  L: '#6e6a2c',
-  H: '#2a2410',
+  G: '#c4f08a',
+  g: '#8cc85e',
+  W: '#fffbe6',
+  E: '#1a1014',
+  T: '#fff3c8',
+  M: '#5a1a20',
+  U: '#d26a3c',
+  u: '#9a4426',
+  K: '#22203a',
+  k: '#55508a',
+  H: '#ffffff',
+  h: '#9a96cc',
+  N: '#aaa6bc',
+  n: '#6c6884',
+  L: '#4a3a5a',
+  F: '#2a2026',
   R: '#a8262c',
+  c: '#6e6a84',
+  O: '#ff9d2e',
+  S: '#3a3430',
 }
 
 const EXPLODER_LIT_PALETTE: Palette = {
   ...EXPLODER_PALETTE,
-  B: '#e8ff9c',
-  b: '#ffffff',
-  V: '#ffe066',
-  Y: '#f2ea8a',
+  K: '#c8323a',
+  k: '#ff6a4a',
+  h: '#ffb0a0',
 }
 
 const EXPLODER_BODY: ReadonlyArray<string> = [
-  '....VV.....',
-  '...YVVYY...',
-  '..YYYYYYY..',
-  '.YYEYYYEYY.',
-  '.YYYYMMYYY.',
-  'YYDBBBBBDYY',
-  'YDBBbbBBBDY',
-  'YDBBbbBBBDY',
-  'YDBBBBBBBDY',
-  '.YDBBBBBDY.',
-  '..YYDDDYY..',
-]
-
-type GasHole = Readonly<{ x: number; y: number }>
-
-const EXPLODER_HOLES: ReadonlyArray<GasHole> = [
-  { x: 1, y: 6 },
-  { x: 8, y: 3 },
+  '..gGGGGg..........',
+  '.gGGGGGGg.........',
+  '.GWWGGWWG.nnn.....',
+  '.GWEGGWEG.NNN.....',
+  '.GTTTTTMgKKKKK....',
+  '..gMMMMgKhhKKKK...',
+  '..UggggKhHHKKKKK..',
+  'gGUUUUKKhHKKKKKGG.',
+  'GGUUUUKKhKKKKKKgGG',
+  'GGUUUUKKKKKKKKKgG.',
+  'GGUUUUKKKKKKKKKKk.',
+  '.GGGGGGGGGGGGGKKk.',
+  '..UUUUUKKKKKgGKk..',
+  '...uuuuuKKKKKkk...',
+  '...uuuuu.kkkkk....',
 ]
 
 const EXPLODER_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
-  [patch(1, 6, 'R', 2, 3), patch(1, 7, 'H', 2)],
   [
-    patch(4, 0, 'v', 2),
-    patch(4, 1, 'H', 2),
-    patch(8, 3, 'R', 2, 2),
-    patch(8, 4, 'H', 2),
+    patch(0, 7, TRANSPARENT, 1, 4),
+    patch(1, 7, 'R'),
+    patch(1, 8, 'U', 1, 4),
+    patch(2, 11, 'U', 4),
+    patch(6, 11, 'K', 10),
+    patch(12, 12, 'K', 2),
+  ],
+  [
+    patch(13, 6, 'c'),
+    patch(14, 7, 'O'),
+    patch(13, 8, 'c'),
+    patch(14, 9, 'O'),
+    patch(13, 10, 'c'),
+    patch(3, 0, 'S', 3),
+    patch(2, 1, 'S', 2),
+    patch(4, 4, 'M'),
   ],
 ]
-
-export const GASBAG_BELLY = { left: 3, top: 6, width: 5, height: 4 }
 
 const exploderWalkPixels = (stage: number): FramePixels => {
   const body = applyPatches(EXPLODER_BODY, wornThrough(EXPLODER_WEAR, stage))
   return [
-    [...swayRows(body, 0), '....LL.LL....', '....LL.LL....'],
-    [...swayRows(body, 1), '.....LL.LL...', '....LL...LL..'],
-    [...swayRows(body, 0), '....LL.LL....', '....LL.LL....'],
-    [...swayRows(body, -1), '...LL.LL.....', '..LL...LL....'],
+    [...swayRows(body, 0), '.....LL...LL........', '....FFF...FFF.......'],
+    [...swayRows(body, 1), '......LL...LL.......', '.....FFF....FFF.....'],
+    [...swayRows(body, 0), '.....LL...LL........', '....FFF...FFF.......'],
+    [...swayRows(body, -1), '....LL...LL.........', '...FFF...FFF........'],
   ]
 }
 
-// CHUCKER
+const EXPLODER_FUSE_BASE = { x: 11, y: 1 }
 
+// BIG LEAGUER
+
+// NOTE: the Big Leaguer is a lanky zombie pitcher in a torn pinstripe jersey
+// and a backwards cap. His long arms drag his knuckles along the floor. His
+// wind-up holds a Groaner overhead with a high leg kick, and after a throw he
+// pumps his fist.
 const CHUCKER_PALETTE: Palette = {
   C: '#80dcb4',
   c: '#4fae8c',
   E: '#fff3a6',
   M: '#2a1418',
-  S: '#ece4cc',
-  r: '#d0484a',
-  P: '#7a5232',
+  T: '#fff3c8',
+  R: '#d8463e',
+  r: '#9a2a26',
+  S: '#f2ecd8',
+  s: '#c8bea4',
+  b: '#a9b8e6',
+  B: '#3a5ab0',
+  n: '#d8463e',
+  P: '#b0aca0',
+  W: '#3a5ab0',
   K: '#26262e',
-  N: '#f28fb0',
-  J: '#c0587a',
   D: '#a8262c',
 }
 
 const CHUCKER_HEAD: ReadonlyArray<string> = [
-  '....cccc....',
-  '...cCCCCc...',
-  '...CECCEC...',
-  '...CCMMCC...',
-  '....cCCc....',
+  '....RRRR....',
+  '.rrrRRRRRR..',
+  '...cCCCCCc..',
+  '...CCECCEC..',
+  '...CCCMMTC..',
+  '....cCCCc...',
 ]
 
 const CHUCKER_FRAMES: Array.NonEmptyReadonlyArray<ReadonlyArray<string>> = [
   [
     ...CHUCKER_HEAD,
-    '..CCSSSSCC..',
-    '.CC.SrrS.CC.',
-    '.CC.SSSS.CC.',
-    '.C..SrrS..C.',
-    '.C..SSSS..C.',
+    '..cBSSSSBc..',
+    '.cCSnnnbSCc.',
+    '.CCSbSnbSCC.',
+    '.CCSbnSbSCC.',
+    '.C.sSsSSs.C.',
     '.C..PPPP..C.',
-    'cCc.PPPP.cCc',
+    '.C..PPPP..C.',
     'cCc.P..P.cCc',
-    '....P..P....',
-    '....P..P....',
+    'cCc.P..P.cCc',
+    '....W..W....',
     '...KK..KK...',
   ],
   [
     ...CHUCKER_HEAD,
-    '..CCSSSSCC..',
-    '.CC.SrrS.CC.',
-    '.C..SSSS.CC.',
-    '.C..SrrS..C.',
-    '.C..SSSS..C.',
+    '..cBSSSSBc..',
+    '.cCSnnnbSCc.',
+    '.CCSbSnbSCC.',
+    '.CCSbnSbS.C.',
+    '.C.sSsSSs.C.',
     'cCc.PPPP..C.',
-    'cCc.PPPP.cCc',
-    '....P..P.cCc',
-    '....P..P....',
-    '...PP...P...',
+    'cCc.PPPP..C.',
+    '....P..P..C.',
+    '...PP...PcCc',
+    '...W....WcCc',
     '..KK....KK..',
   ],
   [
     ...CHUCKER_HEAD,
-    '..CCSSSSCC..',
-    '.CC.SrrS.CC.',
-    '.CC.SSSS.CC.',
-    '.C..SrrS..C.',
-    '.C..SSSS..C.',
+    '..cBSSSSBc..',
+    '.cCSnnnbSCc.',
+    '.CCSbSnbSCC.',
+    '.CCSbnSbSCC.',
+    '.C.sSsSSs.C.',
     '.C..PPPP..C.',
-    'cCc.PPPP.cCc',
+    '.C..PPPP..C.',
     'cCc.P..P.cCc',
-    '....P..P....',
-    '....P..P....',
+    'cCc.P..P.cCc',
+    '....W..W....',
     '...KK..KK...',
   ],
   [
     ...CHUCKER_HEAD,
-    '..CCSSSSCC..',
-    '.CC.SrrS.CC.',
-    '.CC.SSSS..C.',
-    '.C..SrrS..C.',
-    '.C..SSSS..C.',
+    '..cBSSSSBc..',
+    '.cCSnnnbSCc.',
+    '.CCSbSnbSCC.',
+    '.C.SbnSbSCC.',
+    '.C.sSsSSs.C.',
     '.C..PPPP.cCc',
-    'cCc.PPPP.cCc',
-    'cCc.P..P....',
-    '....P..P....',
-    '...P...PP...',
-    '..KK....KK..',
+    '.C..PPPP.cCc',
+    '.C..P..P....',
+    'cCc.P...PP..',
+    'cCc.W....W..',
+    '...KK....KK.',
   ],
 ]
 
 const CHUCKER_HEFT: ReadonlyArray<string> = [
   'cCc......cCc',
-  '.C..cccc..C.',
-  '.C.cCCCCc.C.',
-  '.C.CECCEC.C.',
-  '.CC.CMMC.CC.',
-  '..CSSSSSSC..',
-  '...SrrrrS...',
-  '...SSSSSS...',
-  '...SrrrrS...',
-  '...SSSSSS...',
-  '....PPPP....',
-  '....PPPP....',
-  '....P..P....',
-  '...PP..PP...',
-  '...P....P...',
-  '..KK....KK..',
+  '.C..RRRR..C.',
+  'rrrRRRRRRrC.',
+  '.C.cCCCCCcC.',
+  '.CCCCECCECC.',
+  '...CCCMMMC..',
+  '....cCCCc...',
+  '...BSSSSB...',
+  '...SnnnbS...',
+  '...SbSnbS...',
+  '...SbnSbS...',
+  '...sSsSSsPP.',
+  '...PPPPPPP..',
+  '...PP...WK..',
+  '...PP.......',
+  '...WW.......',
+  '..KK........',
 ]
 
-const CHUCKER_SCALP: ReadonlyArray<Patch> = [
-  patch(4, 0, 'N', 4),
-  patch(4, 1, 'J', 4),
-  patch(6, 2, 'M'),
+const CHUCKER_TAUNT: ReadonlyArray<string> = [
+  '....RRRR.cCc',
+  '.rrrRRRRRRC.',
+  '...cCCCCCcC.',
+  '...CCECCECC.',
+  '...CCMMMTC..',
+  '....cCCCcC..',
+  '..cBSSSSBC..',
+  '.cCSnnnbS...',
+  '.CCSbSnbS...',
+  '.CCSbnSbS...',
+  '.C.sSsSSs...',
+  '.C..PPPP....',
+  '.C..PPPP....',
+  'cCc.P..P....',
+  'cCc.P..P....',
+  '....W..W....',
+  '...KK..KK...',
+]
+
+const CAP_OFF: ReadonlyArray<Patch> = [
+  patch(2, 0, TRANSPARENT, 8),
+  patch(4, 0, 'c', 4),
+  patch(1, 1, TRANSPARENT, 3),
+  patch(4, 1, 'C', 5),
+  patch(9, 1, 'c'),
+  patch(6, 1, 'D'),
+]
+
+const LIMP_ARM: ReadonlyArray<Patch> = [
+  patch(9, 7, TRANSPARENT, 1, 7),
+  patch(10, 7, TRANSPARENT, 2, 9),
+  patch(9, 6, 'D'),
+  patch(10, 7, 'c', 1, 8),
+  patch(10, 15, 'C'),
 ]
 
 const CHUCKER_WALK_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
-  CHUCKER_SCALP,
-  [patch(9, 5, TRANSPARENT, 3, 9), patch(9, 5, 'D')],
+  CAP_OFF,
+  LIMP_ARM,
 ]
 
 const CHUCKER_HEFT_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
-  [patch(4, 1, 'N', 4), patch(4, 2, 'J', 4), patch(6, 3, 'M')],
-  [patch(9, 0, TRANSPARENT, 3, 5), patch(9, 5, 'D')],
+  [
+    patch(4, 1, 'c', 4),
+    patch(0, 2, TRANSPARENT, 1),
+    patch(1, 2, 'C'),
+    patch(2, 2, TRANSPARENT, 2),
+    patch(4, 2, 'C', 5),
+    patch(9, 2, 'c'),
+    patch(6, 2, 'D'),
+  ],
+  [
+    patch(9, 0, TRANSPARENT, 3),
+    patch(10, 1, TRANSPARENT, 2, 4),
+    patch(9, 7, 'D'),
+    patch(9, 8, 'c', 1, 4),
+    patch(9, 12, 'C'),
+  ],
+]
+
+const CHUCKER_TAUNT_WEAR: ReadonlyArray<ReadonlyArray<Patch>> = [
+  [
+    patch(4, 0, 'c', 4),
+    patch(1, 1, TRANSPARENT, 3),
+    patch(4, 1, 'C', 5),
+    patch(9, 1, 'c'),
+    patch(6, 1, 'D'),
+  ],
 ]
 
 const chuckerWalkPixels = (stage: number): FramePixels =>
@@ -846,6 +929,13 @@ const chuckerWalkPixels = (stage: number): FramePixels =>
 
 const chuckerHeftPixels = (stage: number): ReadonlyArray<string> =>
   applyPatches(CHUCKER_HEFT, wornThrough(CHUCKER_HEFT_WEAR, stage))
+
+// NOTE: with his throwing arm hanging limp he cannot pump his fist, so his
+// taunt is just his standing frame.
+const chuckerTauntPixels = (stage: number): ReadonlyArray<string> =>
+  stage >= CHUCKER_WALK_WEAR.length
+    ? firstFrame(stage, chuckerWalkPixels)
+    : applyPatches(CHUCKER_TAUNT, wornThrough(CHUCKER_TAUNT_WEAR, stage))
 
 // ANKLE BITER
 
@@ -1052,21 +1142,21 @@ const TANK_ICON_PIXELS: ReadonlyArray<string> = [
 ]
 
 const EXPLODER_ICON_PIXELS: ReadonlyArray<string> = [
-  '...V...',
-  '.YYYYY.',
-  'YEYMYEY',
-  'YBBbBBY',
-  'YBbbbBY',
-  '.YDDDY.',
+  '.....O.',
+  '....n..',
+  '.GKKKG.',
+  'GKHKKKG',
+  '.KKKKK.',
+  '..KKK..',
 ]
 
 const CHUCKER_ICON_PIXELS: ReadonlyArray<string> = [
-  'C.ccc.C',
-  'CcCCCcC',
-  '.CECEC.',
-  '.CCMCC.',
-  '..SrS..',
-  '.SSSSS.',
+  '..RRRR.',
+  'rrRRRRR',
+  '.CECCE.',
+  '.CCMMC.',
+  '.SbnbS.',
+  'CSbSnSC',
 ]
 
 const CRAWLER_ICON_PIXELS: ReadonlyArray<string> = [
@@ -1152,7 +1242,7 @@ export const frameAt = (frames: SpriteFrames, frameIndex: number): SpriteSet =>
 
 const GROANER_ANCHOR_X = ZOMBIE_SWAY_ROOM + ZOMBIE_BODY_WIDTH / 2
 
-const EXPLODER_ANCHOR_X = ZOMBIE_SWAY_ROOM + 5
+const EXPLODER_ANCHOR_X = ZOMBIE_SWAY_ROOM + 7
 
 const BOSS_ANCHOR_X = BOSS_WIDTH / 2
 
@@ -1167,6 +1257,7 @@ export type WornFrames = Readonly<{
   litGape: SpriteSet
   rage: SpriteFrames
   rageGape: SpriteSet
+  taunt: SpriteSet
 }>
 
 export type ZombieSprites = Readonly<{
@@ -1186,6 +1277,7 @@ type WearArt = Readonly<{
   ragePalette: Palette
   anchorX: number
   icon: ReadonlyArray<string>
+  maybeTauntAt: Option.Option<(stage: number) => ReadonlyArray<string>>
 }>
 
 // NOTE: a frenzied zombie's eyes glow red, so its rage frames are its walk
@@ -1214,6 +1306,10 @@ const wornFrames =
         : spriteSet(art.litPalette, art.anchorX)(art.gapeAt(stage)),
       rage: spriteFrames(pixels, art.ragePalette, art.anchorX),
       rageGape: spriteSet(art.ragePalette, art.anchorX)(art.gapeAt(stage)),
+      taunt: Option.match(art.maybeTauntAt, {
+        onNone: () => gape,
+        onSome: tauntAt => spriteSet(art.palette, art.anchorX)(tauntAt(stage)),
+      }),
     }
   }
 
@@ -1239,6 +1335,7 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     ragePalette: withRedEyes(ZOMBIE_PALETTE, 'R'),
     anchorX: GROANER_ANCHOR_X,
     icon: SHAMBLER_ICON_PIXELS,
+    maybeTauntAt: Option.none(),
   }),
   Runner: zombieSprites({
     stageCount: RUNNER_HEAD_WEAR.length,
@@ -1249,6 +1346,7 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     ragePalette: withRedEyes(RUNNER_PALETTE, 'W'),
     anchorX: 5,
     icon: RUNNER_ICON_PIXELS,
+    maybeTauntAt: Option.none(),
   }),
   Tank: zombieSprites({
     stageCount: TANK_WEAR.length,
@@ -1259,6 +1357,7 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     ragePalette: withRedEyes(TANK_PALETTE, 'E'),
     anchorX: 7,
     icon: TANK_ICON_PIXELS,
+    maybeTauntAt: Option.none(),
   }),
   Exploder: zombieSprites({
     stageCount: EXPLODER_WEAR.length,
@@ -1269,6 +1368,7 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     ragePalette: withRedEyes(EXPLODER_PALETTE, 'E'),
     anchorX: EXPLODER_ANCHOR_X,
     icon: EXPLODER_ICON_PIXELS,
+    maybeTauntAt: Option.none(),
   }),
   Thrower: zombieSprites({
     stageCount: CHUCKER_WALK_WEAR.length,
@@ -1279,6 +1379,7 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     ragePalette: withRedEyes(CHUCKER_PALETTE, 'E'),
     anchorX: CHUCKER_ANCHOR_X,
     icon: CHUCKER_ICON_PIXELS,
+    maybeTauntAt: Option.some(chuckerTauntPixels),
   }),
   Crawler: zombieSprites({
     stageCount: CRAWLER_WEAR.length,
@@ -1289,6 +1390,7 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     ragePalette: withRedEyes(CRAWLER_PALETTE, 'E'),
     anchorX: CRAWLER_ANCHOR_X,
     icon: CRAWLER_ICON_PIXELS,
+    maybeTauntAt: Option.none(),
   }),
   Boss: zombieSprites({
     stageCount: BOSS_WEAR.length,
@@ -1299,6 +1401,7 @@ export const ZOMBIE_SPRITES: Readonly<Record<ZombieKind, ZombieSprites>> = {
     ragePalette: BOSS_ENRAGED_PALETTE,
     anchorX: BOSS_ANCHOR_X,
     icon: BOSS_ICON_PIXELS,
+    maybeTauntAt: Option.none(),
   }),
 }
 
@@ -1312,24 +1415,104 @@ export const wornFramesAt = (kind: ZombieKind, stage: number): WornFrames => {
 
 export const BOSS_ICON = ZOMBIE_SPRITES.Boss.icon
 
+// KABOOMER FUSE
+
 const EXPLODER_FRAME_HEIGHT = firstFrame(0, exploderWalkPixels).length
+const EXPLODER_FRAME_WIDTH = spriteWidth(firstFrame(0, exploderWalkPixels))
+const FUSE_HEADROOM = 3
+const WALK_SWAYS: ReadonlyArray<number> = [0, 1, 0, -1]
 
-export const GAS_LEAKS: ReadonlyArray<Readonly<{ x: number; y: number }>> =
-  Array.map(EXPLODER_HOLES, ({ x, y }) => ({
-    x: x + ZOMBIE_SWAY_ROOM + 1 - EXPLODER_ANCHOR_X,
-    y: y + 1 - EXPLODER_FRAME_HEIGHT,
-  }))
+const FUSE_PATH: Array.NonEmptyReadonlyArray<
+  Readonly<{ x: number; y: number }>
+> = [
+  { x: 0, y: 0 },
+  { x: 0, y: -1 },
+  { x: 1, y: -2 },
+  { x: 1, y: -3 },
+  { x: 2, y: -4 },
+  { x: 3, y: -4 },
+]
 
-export const GASBAG_BELLY_BOX = {
-  left: GASBAG_BELLY.left + ZOMBIE_SWAY_ROOM - EXPLODER_ANCHOR_X,
-  top: GASBAG_BELLY.top - EXPLODER_FRAME_HEIGHT,
-  width: GASBAG_BELLY.width,
-  height: GASBAG_BELLY.height,
+export const KABOOMER_FUSE_MAX = FUSE_PATH.length
+
+const FUSE_PALETTE: Palette = { f: '#ecd59a', d: '#b08a52' }
+
+const swayAt = (frameIndex: number): number =>
+  Option.getOrElse(
+    Array.get(WALK_SWAYS, frameIndex % WALK_SWAYS.length),
+    () => 0,
+  )
+
+const fuseCell = (frameIndex: number, step: number) => {
+  const point = Option.getOrElse(Array.get(FUSE_PATH, step), () =>
+    Array.headNonEmpty(FUSE_PATH),
+  )
+  return {
+    x: EXPLODER_FUSE_BASE.x + point.x + ZOMBIE_SWAY_ROOM + swayAt(frameIndex),
+    y: EXPLODER_FUSE_BASE.y + point.y + FUSE_HEADROOM,
+  }
 }
 
-export const GASBAG_VALVE = {
-  x: 4 + ZOMBIE_SWAY_ROOM - EXPLODER_ANCHOR_X,
-  y: -EXPLODER_FRAME_HEIGHT - 1,
+const fusePixels = (
+  length: number,
+  frameIndex: number,
+): ReadonlyArray<string> => {
+  const cells = Array.makeBy(length, step => fuseCell(frameIndex, step))
+  return Array.makeBy(EXPLODER_FRAME_HEIGHT + FUSE_HEADROOM, y =>
+    Array.join(
+      Array.makeBy(EXPLODER_FRAME_WIDTH, x =>
+        Option.match(
+          Array.findFirstIndex(cells, cell => cell.x === x && cell.y === y),
+          {
+            onNone: () => TRANSPARENT,
+            onSome: step => (step % 2 === 0 ? 'f' : 'd'),
+          },
+        ),
+      ),
+      '',
+    ),
+  )
+}
+
+const FUSE_SPRITES: ReadonlyArray<
+  ReadonlyArray<Readonly<Record<Facing, Sprite>>>
+> = Array.makeBy(KABOOMER_FUSE_MAX + 1, length =>
+  Array.makeBy(WALK_SWAYS.length, frameIndex =>
+    facingSprites(
+      fusePixels(length, frameIndex),
+      FUSE_PALETTE,
+      EXPLODER_ANCHOR_X,
+    ),
+  ),
+)
+
+const NO_FUSE: Readonly<Record<Facing, Sprite>> = { Left: [], Right: [] }
+
+// NOTE: the fuse is one prebuilt image for each length and walk frame, laid
+// over the Kaboomer's sprite in the same frame of reference, so it sways and
+// mirrors with him.
+export const kaboomerFuseSprite = (
+  length: number,
+  frameIndex: number,
+  facing: Facing,
+): Sprite =>
+  pipe(
+    Array.get(FUSE_SPRITES, length),
+    Option.flatMap(frames => Array.get(frames, frameIndex % WALK_SWAYS.length)),
+    Option.getOrElse(() => NO_FUSE),
+  )[facing]
+
+export const kaboomerFuseTip = (
+  length: number,
+  frameIndex: number,
+  facing: Facing,
+): Readonly<{ x: number; y: number }> => {
+  const cell = fuseCell(frameIndex, Math.max(0, length - 1))
+  const x = cell.x - EXPLODER_ANCHOR_X
+  return {
+    x: facing === 'Right' ? x : -x - 1,
+    y: cell.y - EXPLODER_FRAME_HEIGHT - FUSE_HEADROOM,
+  }
 }
 
 export const HEART_SPRITE = spriteShapes(HEART_PIXELS, HEART_PALETTE)

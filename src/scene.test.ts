@@ -680,7 +680,7 @@ describe('Run stats', () => {
       }),
     })
   const STATS =
-    'Waves cleared: 3 of 8. Zombies splatted: 69 (41 Groaner, 17 Hotfoot, 9 Gasbag, 2 Big Lug, 0 Chucker, 0 Ankle Biter). Run time 6:11. Accuracy 43 percent. Money earned $615. Hearts lost 7. Traps placed 3. Score 690.'
+    'Waves cleared: 3 of 8. Zombies splatted: 69 (41 Groaner, 17 Hotfoot, 9 Kaboomer, 2 Big Lug, 0 Big Leaguer, 0 Ankle Biter). Run time 6:11. Accuracy 43 percent. Money earned $615. Hearts lost 7. Traps placed 3. Score 690.'
 
   test('Game Over reads out the verdict and the whole run', () => {
     scene(

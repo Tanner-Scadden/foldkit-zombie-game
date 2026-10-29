@@ -2,7 +2,7 @@ import { Array, Option, Result } from 'effect'
 import { Canvas } from 'foldkit'
 
 import { isEnraged } from './boss'
-import { CHUCKER_RULES } from './chucker'
+import { CHUCKER_RULES, THROWER_KIND, shieldAim } from './chucker'
 import {
   SHADOW_COLOR,
   SHADOW_FADED_COLOR,
@@ -48,15 +48,15 @@ import {
 } from './model'
 import {
   type Facing,
-  GASBAG_BELLY_BOX,
-  GASBAG_VALVE,
-  GAS_LEAKS,
+  KABOOMER_FUSE_MAX,
   type SpriteFrames,
   type SpriteSet,
   type Tone,
   ZOMBIE_SPRITES,
   frameAt,
   group,
+  kaboomerFuseSprite,
+  kaboomerFuseTip,
   wornFramesAt,
 } from './sprite'
 import {
@@ -80,150 +80,130 @@ type Gait = Readonly<{
   leanRadians: number
   waddleRadians: number
   stompSquash: number
-  pulse: number
   fuseTellPx: number
-  glowRadius: number
 }>
 
 const STILL_GAIT: Gait = {
   leanRadians: 0,
   waddleRadians: 0,
   stompSquash: 0,
-  pulse: 0,
   fuseTellPx: 0,
-  glowRadius: 0,
 }
 
 const GAITS: Readonly<Record<ZombieKind, Gait>> = {
   Shambler: STILL_GAIT,
   Runner: { ...STILL_GAIT, leanRadians: 0.3 },
   Tank: { ...STILL_GAIT, stompSquash: 0.08 },
-  Exploder: {
-    ...STILL_GAIT,
-    waddleRadians: 0.14,
-    pulse: 0.08,
-    fuseTellPx: 80,
-    glowRadius: 8,
-  },
+  Exploder: { ...STILL_GAIT, waddleRadians: 0.16, fuseTellPx: 80 },
   Thrower: { ...STILL_GAIT, waddleRadians: 0.08 },
   Crawler: { ...STILL_GAIT, waddleRadians: 0.04 },
   Boss: { ...STILL_GAIT, stompSquash: 0.06, waddleRadians: 0.05 },
 }
 
 const WEAR_WOBBLE_RADIANS = 0.05
-const LEAK_DEFLATE_PER_STAGE = 0.07
 
-const deflation = (zombie: Zombie, stage: number): number =>
-  zombie.kind === 'Exploder' ? 1 - LEAK_DEFLATE_PER_STAGE * stage : 1
-
-const FUSE_BLINK_SLOW_MS = 700
-const FUSE_BLINK_FAST_MS = 150
 const URGENCY_STEPS = 5
 const WEAR_URGENCY = 0.35
-const GLOW_COLOR = 'rgba(170, 240, 70, 0.22)'
-const GLOW_LIT_COLOR = 'rgba(230, 255, 150, 0.45)'
 
 const distanceBetween = (first: Vector, second: Vector): number =>
   Math.hypot(first.x - second.x, first.y - second.y)
 
-// NOTE: a Gasbag's pulse quickens as it closes in and each time it is shot.
-// Urgency is stepped so the beat changes tempo in a few clean jumps instead
-// of jittering every frame as the distance changes.
-const fuseUrgency = (
-  zombie: Zombie,
-  player: Player,
-  gait: Gait,
-  stage: number,
-): number => {
-  if (gait.fuseTellPx <= 0) {
+// NOTE: a Kaboomer's fuse burns shorter and sparks faster as he closes in and
+// each time he is shot. Urgency is stepped so the fuse drops in a few clean
+// jumps instead of jittering every frame as the distance changes.
+const fuseUrgency = (zombie: Zombie, player: Player, stage: number): number => {
+  const tellPx = GAITS[zombie.kind].fuseTellPx
+  if (tellPx <= 0) {
     return 0
   }
 
-  const nearness = clamp(
-    1 - distanceBetween(zombie, player) / gait.fuseTellPx,
-    0,
-    1,
-  )
+  const nearness = clamp(1 - distanceBetween(zombie, player) / tellPx, 0, 1)
   const urgency = clamp(nearness + WEAR_URGENCY * stage, 0, 1)
   return Math.round(urgency * URGENCY_STEPS) / URGENCY_STEPS
 }
 
-const fusePeriodMs = (urgency: number): number =>
-  FUSE_BLINK_SLOW_MS + (FUSE_BLINK_FAST_MS - FUSE_BLINK_SLOW_MS) * urgency
+// KABOOMER FUSE
 
-export const gasbagPulseMs = (zombie: Zombie, player: Player): number =>
-  fusePeriodMs(fuseUrgency(zombie, player, GAITS[zombie.kind], wearOf(zombie)))
+const SPARK_SLOW_MS = 180
+const SPARK_FAST_MS = 50
+const SPARK_FUSING_MS = 35
+const SPARK_CORE_COLOR = '#fffbe6'
+const SPARK_COLORS: Array.NonEmptyReadonlyArray<string> = [
+  '#ffe066',
+  '#ff9d2e',
+  '#ffffff',
+]
+const SPARK_RAYS: Array.NonEmptyReadonlyArray<Vector> = [
+  { x: 0, y: -1 },
+  { x: 1, y: -1 },
+  { x: -1, y: -1 },
+  { x: 1, y: 0 },
+  { x: -1, y: 0 },
+  { x: 0, y: -2 },
+  { x: 2, y: -1 },
+  { x: -1, y: -2 },
+]
 
-const pulsePhase = (zombie: Zombie, elapsedMs: number, urgency: number) =>
-  ((elapsedMs + zombie.id * 137) % fusePeriodMs(urgency)) /
-  fusePeriodMs(urgency)
+const fuseLengthAt = (urgency: number): number =>
+  1 + Math.round((1 - urgency) * (KABOOMER_FUSE_MAX - 1))
 
-const LIT_SHARE = 0.3
+const sparkMsAt = (urgency: number): number =>
+  Math.round(SPARK_SLOW_MS + (SPARK_FAST_MS - SPARK_SLOW_MS) * urgency)
 
-const glowShapes = (
-  zombie: Zombie,
-  gait: Gait,
-  scale: number,
-  isLit: boolean,
-): ReadonlyArray<Canvas.Shape> =>
-  gait.glowRadius > 0
-    ? [
-        Canvas.Circle({
-          x: Math.round(zombie.x),
-          y: Math.round(zombie.y) + 1,
-          radius: Math.round(gait.glowRadius * scale),
-          fill: isLit ? GLOW_LIT_COLOR : GLOW_COLOR,
-        }),
-      ]
-    : []
+export const kaboomerFuseLength = (zombie: Zombie, player: Player): number =>
+  fuseLengthAt(fuseUrgency(zombie, player, wearOf(zombie)))
 
-// GASBAG BELLY
+export const kaboomerSparkMs = (zombie: Zombie, player: Player): number =>
+  sparkMsAt(fuseUrgency(zombie, player, wearOf(zombie)))
 
-const BUBBLE_COLOR = '#f6ffd2'
-const BUBBLES = 2
-const SPARK_COLORS: ReadonlyArray<string> = ['#ffe066', '#ffffff', '#ff9d2e']
-const SPARK_MS = 70
-
-const bubbleShapes = (
-  zombie: Zombie,
-  elapsedMs: number,
-  urgency: number,
-): ReadonlyArray<Canvas.Shape> => {
-  const box = GASBAG_BELLY_BOX
-  const riseMs = 520 - 300 * urgency
-  return Array.makeBy(BUBBLES, index => {
-    const phase =
-      ((elapsedMs + zombie.id * 211 + index * riseMs * 0.5) % riseMs) / riseMs
+const sparkShapes = (
+  tip: Vector,
+  flick: number,
+  count: number,
+): ReadonlyArray<Canvas.Shape> => [
+  Canvas.Rect({
+    x: tip.x,
+    y: tip.y,
+    width: 1,
+    height: 1,
+    fill: SPARK_CORE_COLOR,
+  }),
+  ...Array.makeBy(count, index => {
+    const ray = Option.getOrElse(
+      Array.get(SPARK_RAYS, (flick * 3 + index * 5) % SPARK_RAYS.length),
+      () => Array.headNonEmpty(SPARK_RAYS),
+    )
     return Canvas.Rect({
-      x: box.left + ((zombie.id + index * 3) % box.width),
-      y: box.top + box.height - 1 - Math.floor(phase * box.height),
-      width: 1,
-      height: 1,
-      fill: BUBBLE_COLOR,
-    })
-  })
-}
-
-const valveShapes = (
-  zombie: Zombie,
-  elapsedMs: number,
-  urgency: number,
-): ReadonlyArray<Canvas.Shape> => {
-  if (urgency < 0.4) {
-    return []
-  }
-  const flick = Math.floor((elapsedMs + zombie.id * 31) / SPARK_MS)
-  return [
-    Canvas.Rect({
-      x: GASBAG_VALVE.x + (flick % 2),
-      y: GASBAG_VALVE.y - (flick % 3 === 0 ? 1 : 0),
+      x: tip.x + ray.x,
+      y: tip.y + ray.y,
       width: 1,
       height: 1,
       fill: Option.getOrElse(
-        Array.get(SPARK_COLORS, flick % SPARK_COLORS.length),
-        () => BUBBLE_COLOR,
+        Array.get(SPARK_COLORS, (flick + index) % SPARK_COLORS.length),
+        () => Array.headNonEmpty(SPARK_COLORS),
       ),
-    }),
+    })
+  }),
+]
+
+const fuseShapes = (
+  zombie: Zombie,
+  player: Player,
+  stage: number,
+  stride: number,
+  facing: Facing,
+  elapsedMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const urgency = fuseUrgency(zombie, player, stage)
+  const length = fuseLengthAt(urgency)
+  const flick = Math.floor((elapsedMs + zombie.id * 31) / sparkMsAt(urgency))
+  return [
+    ...kaboomerFuseSprite(length, stride, facing),
+    ...sparkShapes(
+      kaboomerFuseTip(length, stride, facing),
+      flick,
+      urgency < 0.5 ? 2 : 3,
+    ),
   ]
 }
 
@@ -264,44 +244,6 @@ export const zombieHealthBarShapes = (
       fill: HEALTH_BAR_COLOR,
     }),
   ]
-}
-
-// GAS LEAKS
-
-const LEAK_CYCLE_MS = 700
-const LEAK_RISE_PX = 7
-const LEAK_COLOR = 'rgba(230, 250, 140, 0.9)'
-const LEAK_FADED_COLOR = 'rgba(214, 242, 92, 0.45)'
-
-const leakShapes = (
-  zombie: Zombie,
-  stage: number,
-  facing: Facing,
-  elapsedMs: number,
-): ReadonlyArray<Canvas.Shape> => {
-  if (zombie.kind !== 'Exploder' || stage === 0) {
-    return []
-  }
-
-  const foot = footPosition(zombie, statsOf(zombie).footOffset)
-  const mirror = facing === 'Right' ? 1 : -1
-  return Array.flatMap(Array.take(GAS_LEAKS, stage), (hole, index) => {
-    const phase =
-      ((elapsedMs + zombie.id * 97 + index * 311) % LEAK_CYCLE_MS) /
-      LEAK_CYCLE_MS
-    const rise = Math.round(LEAK_RISE_PX * phase)
-    const drift = Math.round(mirror * (1 + 2 * phase))
-    const size = phase < 0.4 ? 2 : 3
-    return [
-      Canvas.Rect({
-        x: foot.x + mirror * hole.x + drift - 1,
-        y: foot.y + hole.y - rise - 1,
-        width: size,
-        height: size,
-        fill: phase < 0.6 ? LEAK_COLOR : LEAK_FADED_COLOR,
-      }),
-    ]
-  })
 }
 
 // BOSS POSES
@@ -486,7 +428,7 @@ const steamShapes = (
 
 const HEFT_TELL_SLOW_MS = 200
 const HEFT_TELL_FAST_MS = 60
-const CARRY_LIFT_PX = 25
+const CARRY_LIFT_PX = 28
 const CARRY_WIGGLE_MS = 90
 const FLIGHT_PEAK_PX = 34
 const FLIGHT_LIFT_PX = 15
@@ -494,6 +436,20 @@ const FLIGHT_SPIN_MS = 260
 const DAZE_STAR_MS = 700
 const DAZE_STAR_COLOR = '#ffe066'
 const CLING_SHAKE_MS = 60
+const SHIELD_LIFT_PX = 2
+const SQUIRM_MS = 110
+const SQUIRM_RADIANS = 0.18
+
+const TAUNT_MS = 500
+const TAUNT_PUMP_MS = 120
+
+// NOTE: right after a throw the Big Leaguer pumps his fist. His wind after a
+// throw is the only one long enough to start inside the taunt, so arriving
+// winded or cooling down from a shield never shows it.
+const isTauntingAt = (zombie: Zombie): boolean =>
+  zombie.kind === THROWER_KIND &&
+  ZombieAction.isAnyOf(['Winded'])(zombie.action) &&
+  zombie.action.remainingMs > CHUCKER_RULES.windedMs - TAUNT_MS
 
 const heftTone = (zombie: Zombie): Tone => {
   if (!ZombieAction.isAnyOf(['Hefting'])(zombie.action)) {
@@ -516,8 +472,8 @@ type Placement = Readonly<{
 const ON_FEET: Placement = { lift: 0, rotate: 0, nudgeX: 0, isStill: false }
 
 // NOTE: a Groaner held overhead hangs upside down by its ankles in the
-// Chucker's raised hands, kicking. A half turn hangs its body below its feet,
-// so its feet are lifted above the Chucker's head by its own height.
+// Big Leaguer's raised hands, kicking. A half turn hangs its body below its feet,
+// so its feet are lifted above the Big Leaguer's head by its own height.
 
 const placementOf = (zombie: Zombie, elapsedMs: number): Placement =>
   ZombieAction.match(zombie.action, {
@@ -555,6 +511,16 @@ const placementOf = (zombie: Zombie, elapsedMs: number): Placement =>
       isStill: true,
     }),
     Burrowed: () => ON_FEET,
+    Shielding: () => ({ lift: 0, rotate: 0, nudgeX: 0, isStill: true }),
+    Shielded: () => ({
+      lift: SHIELD_LIFT_PX,
+      rotate:
+        Math.floor(elapsedMs / SQUIRM_MS) % 2 === 0
+          ? SQUIRM_RADIANS
+          : -SQUIRM_RADIANS,
+      nudgeX: 0,
+      isStill: false,
+    }),
     Clinging: () => ({
       lift: 0,
       rotate: 0,
@@ -601,24 +567,20 @@ const walkingZombieShapes = (
   const placement = placementOf(zombie, elapsedMs)
   const isStill = pose !== STANDING_POSE || placement.isStill
   const stride = isStill ? 0 : strideAt(zombie, elapsedMs)
-  const facing = facingToward(zombie.x, player.x)
+  const facing = Option.match(shieldAim(zombie), {
+    onNone: () => facingToward(zombie.x, player.x),
+    onSome: (aim): Facing => (Math.cos(aim) >= 0 ? 'Right' : 'Left'),
+  })
   const isPlanted = stride % 2 === 0
   const stomp = isPlanted && !isStill ? gait.stompSquash : 0
-  const urgency = fuseUrgency(zombie, player, gait, stage)
-  const phase = pulsePhase(zombie, elapsedMs, urgency)
-  const isLit = gait.fuseTellPx > 0 && phase < LIT_SHARE
-  const pulse =
-    (1 + gait.pulse * (1 + urgency) * Math.cos(FULL_TURN * phase)) *
-    deflation(zombie, stage)
   const isBossRaging = zombie.kind === 'Boss' && isEnraged(boss)
   const isFrenzied = isRaging(zombie)
   const isHefting = ZombieAction.isAnyOf(['Hefting'])(zombie.action)
-  const frames: SpriteFrames =
-    isLit || isBossRaging
-      ? sprites.lit
-      : isFrenzied
-        ? sprites.rage
-        : sprites.walk
+  const frames: SpriteFrames = isBossRaging
+    ? sprites.lit
+    : isFrenzied
+      ? sprites.rage
+      : sprites.walk
   const wobble =
     zombie.kind === 'Boss' ? 0 : WEAR_WOBBLE_RADIANS * Math.min(stage, 2)
   const foot = footPosition(zombie, stats.footOffset)
@@ -630,17 +592,22 @@ const walkingZombieShapes = (
     : isFrenzied
       ? sprites.rageGape
       : sprites.gape
-  const sprite = pose.isGaping || isHefting ? gape : frameAt(frames, stride)
+  const isTaunting = isTauntingAt(zombie)
+  const sprite =
+    pose.isGaping || isHefting
+      ? gape
+      : isTaunting
+        ? sprites.taunt
+        : frameAt(frames, stride)
   const shake =
     pose.shakePx * (Math.floor(elapsedMs / 50) % 2 === 0 ? 1 : -1) +
     placement.nudgeX
-  const top = Math.round(foot.y - placement.lift)
-  const isExploder = gait.fuseTellPx > 0
+  const pump =
+    isTaunting && Math.floor(elapsedMs / TAUNT_PUMP_MS) % 2 === 0 ? 1 : 0
+  const top = Math.round(foot.y - placement.lift - pump)
   const headTop = top - ZOMBIE_SPRITES[zombie.kind].height
   return [
-    ...glowShapes(zombie, gait, pulse, isLit),
     ...haloShapes(zombie, headTop),
-    ...leakShapes(zombie, stage, facing, elapsedMs),
     group({
       translate: { x: foot.x + shake, y: top },
       rotate:
@@ -654,18 +621,15 @@ const walkingZombieShapes = (
           ZOMBIE_HIT_PULSE_MS,
           ZOMBIE_HIT_SQUASH,
         ),
-        multiplyScales(pose.scale, {
-          x: (1 + stomp) * pulse,
-          y: (1 - stomp) * pulse,
-        }),
+        multiplyScales(pose.scale, { x: 1 + stomp, y: 1 - stomp }),
       ),
-      shapes: isExploder
-        ? [
-            ...sprite[tone][facing],
-            ...bubbleShapes(zombie, elapsedMs, urgency),
-            ...valveShapes(zombie, elapsedMs, urgency),
-          ]
-        : sprite[tone][facing],
+      shapes:
+        gait.fuseTellPx > 0
+          ? [
+              ...sprite[tone][facing],
+              ...fuseShapes(zombie, player, stage, stride, facing, elapsedMs),
+            ]
+          : sprite[tone][facing],
     }),
     ...steamShapes(zombie, elapsedMs, headTop),
     ...dazeStarShapes(zombie, elapsedMs),
@@ -673,8 +637,9 @@ const walkingZombieShapes = (
 }
 
 const FUSE_SWELL_MS = 300
-const FUSE_SWELL = 0.6
+const FUSE_SWELL = 0.35
 const FUSE_FLASH_MS = 40
+const FUSING_SPARKS = 4
 
 const fusingZombieShapes = (
   zombie: Zombie,
@@ -686,13 +651,18 @@ const fusingZombieShapes = (
   const swell = 1 + FUSE_SWELL * (1 - clamp(remainingMs / FUSE_SWELL_MS, 0, 1))
   const flicker = Math.floor(remainingMs / FUSE_FLASH_MS) % 2 === 0
   const foot = footPosition(zombie, stats.footOffset)
+  const facing = facingToward(zombie.x, player.x)
   return [
-    ...glowShapes(zombie, GAITS[zombie.kind], swell * 1.4, true),
     group({
       translate: { x: foot.x + (flicker ? 1 : -1), y: foot.y },
       scale: { x: swell * (flicker ? 1.08 : 1), y: swell },
-      shapes: frameAt(sprites.lit, 0)[flicker ? 'Flash' : 'Normal'][
-        facingToward(zombie.x, player.x)
+      shapes: [
+        ...frameAt(sprites.lit, 0)[flicker ? 'Flash' : 'Normal'][facing],
+        ...sparkShapes(
+          kaboomerFuseTip(0, 0, facing),
+          Math.floor(remainingMs / SPARK_FUSING_MS),
+          FUSING_SPARKS,
+        ),
       ],
     }),
   ]
@@ -854,7 +824,7 @@ export const zombieShapes =
 const CARRIED_DEPTH_PX = 2
 const FLYING_DEPTH_PX = 1000
 
-// NOTE: a Groaner held overhead draws just after its Chucker, and one in the
+// NOTE: a Groaner held overhead draws just after its Big Leaguer, and one in the
 // air draws after everything standing, since it flies over their heads.
 export const zombieFootY = (zombie: Zombie): number =>
   zombie.y +
@@ -866,6 +836,8 @@ export const zombieFootY = (zombie: Zombie): number =>
     Carried: () => CARRIED_DEPTH_PX,
     Flying: () => FLYING_DEPTH_PX,
     Dazed: () => 0,
+    Shielding: () => 0,
+    Shielded: () => 0,
     Burrowed: () => 0,
     Clinging: () => 0,
   })
@@ -882,6 +854,7 @@ const zombieFootShadow = (zombie: Zombie, fill: string): Canvas.Shape => {
 
 const hasShadow = ZombieAction.isAnyOf([
   'Roaming',
+  'Shielding',
   'Winded',
   'Hefting',
   'Flying',

@@ -568,7 +568,7 @@ describe('exploders', () => {
           }),
         ),
         holdFire,
-        ...recordTicks(150, FRAME_MS, frames),
+        ...recordTicks(300, FRAME_MS, frames),
       )
       return frames
     }

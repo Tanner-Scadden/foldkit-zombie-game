@@ -760,7 +760,7 @@ describe('barricade damage', () => {
 })
 
 describe('bursts and traps', () => {
-  test('a Gasbag burst damages a barricade and breaks a turret in reach', () => {
+  test('a Kaboomer burst damages a barricade and breaks a turret in reach', () => {
     const blast = {
       ...zombieOf('Exploder', 60, { x: 222, y: 25 }),
       hp: 0,
@@ -793,7 +793,7 @@ describe('bursts and traps', () => {
     )
   })
 
-  test('a Gasbag that walks into a barricade fuses and blows it apart', () => {
+  test('a Kaboomer that walks into a barricade fuses and blows it apart', () => {
     const frames: Array<Model> = []
     story(
       update,

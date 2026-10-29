@@ -3,7 +3,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import { hasLineOfSight } from './arena'
 import { woundPlayer } from './combat'
-import { PLAYER_RADIUS } from './constants'
+import { MS_PER_SECOND, PLAYER_RADIUS, ZOMBIE_HIT_PULSE_MS } from './constants'
 import { directionBetween, normalize } from './geometry'
 import {
   GameEvent,
@@ -13,8 +13,15 @@ import {
   type Vector,
   type Zombie,
   ZombieAction,
+  type ZombieKind,
 } from './model'
-import { bodyRadiusOf, isFree, isWalking } from './zombies'
+import {
+  ZOMBIE_KINDS,
+  bodyRadiusOf,
+  isFree,
+  isWalking,
+  wearOf,
+} from './zombies'
 
 // RULES
 
@@ -31,6 +38,15 @@ export type ChuckerRules = {
   dazedMs: number
   windedMs: number
   arrivalWindedMs: number
+  limpHeftScale: number
+  shieldTriggerPx: number
+  shieldReachPx: number
+  shieldMs: number
+  shieldCooldownMs: number
+  shieldTurnPerSecond: number
+  shieldArcCos: number
+  shieldHoldPx: number
+  shieldDropDazedMs: number
 }
 
 export const CHUCKER_RULES: ChuckerRules = {
@@ -46,9 +62,20 @@ export const CHUCKER_RULES: ChuckerRules = {
   dazedMs: 1000,
   windedMs: 3200,
   arrivalWindedMs: 1500,
+  limpHeftScale: 1.5,
+  shieldTriggerPx: 50,
+  shieldReachPx: 20,
+  shieldMs: 4000,
+  shieldCooldownMs: 2600,
+  shieldTurnPerSecond: 1.4,
+  shieldArcCos: 0.5,
+  shieldHoldPx: 7,
+  shieldDropDazedMs: 600,
 }
 
 export const THROWER_KIND = 'Thrower'
+
+const LIMP_ARM_STAGE = ZOMBIE_KINDS.Thrower.wear.length
 
 const distanceBetween = (from: Vector, to: Vector): number =>
   Math.hypot(to.x - from.x, to.y - from.y)
@@ -78,7 +105,7 @@ const nearestThrowable = (
 
 const HOLD: Vector = { x: 0, y: 0 }
 
-// NOTE: a Chucker hangs back once it is close enough to throw and waits for
+// NOTE: a Big Leaguer hangs back once it is close enough to throw and waits for
 // a Groaner to wander past. It walks to fetch a Groaner it can see nearby,
 // and walks in to bite like any other zombie when there is none to throw.
 // None means it follows the flow field like the rest; Some is its own
@@ -126,6 +153,13 @@ const setAction =
   (zombie: Zombie): Zombie =>
     zombie.id === id ? modifyFields(zombie, { action: () => action }) : zombie
 
+// NOTE: once his throwing arm hangs limp (his last wear stage), he winds up
+// one-handed and slower.
+const heftMsOf = (chucker: Zombie): number =>
+  wearOf(chucker) >= LIMP_ARM_STAGE
+    ? CHUCKER_RULES.heftMs * CHUCKER_RULES.limpHeftScale
+    : CHUCKER_RULES.heftMs
+
 const tryGrab = (model: Model, chucker: Zombie): Model => {
   if (
     !ZombieAction.isAnyOf(['Roaming'])(chucker.action) ||
@@ -155,8 +189,8 @@ const tryGrab = (model: Model, chucker: Zombie): Model => {
                   chucker.id,
                   ZombieAction.Hefting({
                     victimId: victim.id,
-                    remainingMs: CHUCKER_RULES.heftMs,
-                    durationMs: CHUCKER_RULES.heftMs,
+                    remainingMs: heftMsOf(chucker),
+                    durationMs: heftMsOf(chucker),
                   }),
                 ),
                 setAction(
@@ -271,9 +305,48 @@ const dazed = (): ZombieAction =>
     durationMs: CHUCKER_RULES.dazedMs,
   })
 
-// NOTE: a Groaner whose Chucker is shot down mid-heave drops where it is,
+const isShielding = (zombies: ReadonlyArray<Zombie>, victim: Zombie) =>
+  ZombieAction.isAnyOf(['Shielded'])(victim.action) &&
+  Option.exists(
+    findZombie(zombies, victim.action.byId),
+    carrier =>
+      isWalking(carrier) &&
+      ZombieAction.isAnyOf(['Shielding'])(carrier.action) &&
+      carrier.action.victimId === victim.id,
+  )
+
+const holdUp = (zombies: ReadonlyArray<Zombie>, victim: Zombie): Zombie => {
+  if (!ZombieAction.isAnyOf(['Shielded'])(victim.action)) {
+    return victim
+  }
+
+  const byId = victim.action.byId
+  return Option.match(
+    Option.filter(findZombie(zombies, byId), () =>
+      isShielding(zombies, victim),
+    ),
+    {
+      onNone: () => modifyFields(victim, { action: dazed }),
+      onSome: carrier =>
+        Option.match(shieldAim(carrier), {
+          onNone: () => victim,
+          onSome: aim =>
+            modifyFields(victim, {
+              x: () => carrier.x + Math.cos(aim) * CHUCKER_RULES.shieldHoldPx,
+              y: () => carrier.y + Math.sin(aim) * CHUCKER_RULES.shieldHoldPx,
+              knockback: () => ({ x: 0, y: 0 }),
+            }),
+        }),
+    },
+  )
+}
+
+// NOTE: a Groaner whose Big Leaguer is shot down mid-heave drops where it is,
 // dazed, as if it had landed there.
 const carry = (zombies: ReadonlyArray<Zombie>) => (zombie: Zombie) => {
+  if (ZombieAction.isAnyOf(['Shielded'])(zombie.action)) {
+    return isWalking(zombie) ? holdUp(zombies, zombie) : zombie
+  }
   if (!ZombieAction.isAnyOf(['Carried'])(zombie.action)) {
     return zombie
   }
@@ -365,10 +438,188 @@ const land = (model: Model, landing: Landing): Model => {
   })
 }
 
+// SHIELDING
+
+const SHIELD_KINDS: ReadonlyArray<ZombieKind> = [
+  'Shambler',
+  'Runner',
+  'Crawler',
+]
+
+const isShieldable = (zombie: Zombie): boolean =>
+  Array.contains(SHIELD_KINDS, zombie.kind) && isFree(zombie)
+
+const byShieldPreference = (from: Vector) =>
+  Order.combine(
+    Order.mapInput(Order.Number, (zombie: Zombie) =>
+      zombie.kind === 'Shambler' ? 0 : 1,
+    ),
+    byDistanceFrom(from),
+  )
+
+const angleBetween = (from: Vector, to: Vector): number =>
+  Math.atan2(to.y - from.y, to.x - from.x)
+
+const isUnderThreat = (chucker: Zombie, player: Player): boolean =>
+  distanceBetween(chucker, player) <= CHUCKER_RULES.shieldTriggerPx ||
+  chucker.hitRemainingMs > 0
+
+// NOTE: a Big Leaguer the player crowds, or one taking hits, yanks the
+// nearest small zombie in front of him as a shield: a Groaner if one is in
+// reach, otherwise a Hotfoot or an Ankle Biter, never a Kaboomer, a Big Lug,
+// or the boss.
+const tryShield = (model: Model, chucker: Zombie): Model => {
+  if (
+    !ZombieAction.isAnyOf(['Roaming'])(chucker.action) ||
+    !isWalking(chucker) ||
+    !isUnderThreat(chucker, model.player)
+  ) {
+    return model
+  }
+
+  return Option.match(
+    pipe(
+      model.zombies,
+      Array.filter(isShieldable),
+      Array.filter(
+        zombie =>
+          distanceBetween(chucker, zombie) <=
+          bodyRadiusOf(chucker) + CHUCKER_RULES.shieldReachPx,
+      ),
+      Array.sort(byShieldPreference(chucker)),
+      Array.head,
+    ),
+    {
+      onNone: () => model,
+      onSome: victim =>
+        modifyFields(model, {
+          zombies: zombies =>
+            Array.map(zombies, zombie =>
+              pipe(
+                zombie,
+                setAction(
+                  chucker.id,
+                  ZombieAction.Shielding({
+                    victimId: victim.id,
+                    remainingMs: CHUCKER_RULES.shieldMs,
+                    aim: angleBetween(chucker, model.player),
+                  }),
+                ),
+                setAction(
+                  victim.id,
+                  ZombieAction.Shielded({ byId: chucker.id }),
+                ),
+                yanked =>
+                  yanked.id === victim.id
+                    ? modifyFields(yanked, {
+                        hitRemainingMs: () => ZOMBIE_HIT_PULSE_MS,
+                      })
+                    : yanked,
+              ),
+            ),
+          frameEvents: Array.append(
+            GameEvent.ShieldRaised({ x: chucker.x, y: chucker.y }),
+          ),
+        }),
+    },
+  )
+}
+
+const isShieldedBy = (chucker: Zombie) => (victim: Zombie) =>
+  isWalking(victim) &&
+  ZombieAction.isAnyOf(['Shielded'])(victim.action) &&
+  victim.action.byId === chucker.id
+
+const dropShield = (model: Model, chucker: Zombie): Model =>
+  modifyFields(model, {
+    zombies: Array.map(zombie =>
+      zombie.id === chucker.id
+        ? modifyFields(zombie, {
+            action: () =>
+              ZombieAction.Winded({
+                remainingMs: CHUCKER_RULES.shieldCooldownMs,
+              }),
+          })
+        : isShieldedBy(chucker)(zombie)
+          ? modifyFields(zombie, {
+              action: () =>
+                ZombieAction.Dazed({
+                  remainingMs: CHUCKER_RULES.shieldDropDazedMs,
+                  durationMs: CHUCKER_RULES.shieldDropDazedMs,
+                }),
+            })
+          : zombie,
+    ),
+  })
+
+const turnToward = (aim: number, target: number, maxTurn: number): number => {
+  const gap = Math.atan2(Math.sin(target - aim), Math.cos(target - aim))
+  return aim + Math.max(-maxTurn, Math.min(maxTurn, gap))
+}
+
+// NOTE: he turns slowly to keep the shield toward the player, so a player
+// who circles around him can shoot him from the side.
+const stepShield = (model: Model, chucker: Zombie, deltaMs: number): Model => {
+  if (!ZombieAction.isAnyOf(['Shielding'])(chucker.action)) {
+    return model
+  }
+
+  const { victimId, remainingMs, aim } = chucker.action
+  const isHeld = Option.isSome(
+    Option.filter(findZombie(model.zombies, victimId), isShieldedBy(chucker)),
+  )
+  if (!isHeld || remainingMs <= deltaMs) {
+    return dropShield(model, chucker)
+  }
+
+  const turned = turnToward(
+    aim,
+    angleBetween(chucker, model.player),
+    (CHUCKER_RULES.shieldTurnPerSecond * deltaMs) / MS_PER_SECOND,
+  )
+  return modifyFields(model, {
+    zombies: Array.map(
+      setAction(
+        chucker.id,
+        ZombieAction.Shielding({
+          victimId,
+          remainingMs: remainingMs - deltaMs,
+          aim: turned,
+        }),
+      ),
+    ),
+  })
+}
+
+export const shieldAim = (zombie: Zombie): Option.Option<number> =>
+  ZombieAction.isAnyOf(['Shielding'])(zombie.action)
+    ? Option.some(zombie.action.aim)
+    : Option.none()
+
+// NOTE: a shot that comes at a shielding Big Leaguer from inside his front
+// arc hits the zombie he holds instead. Shots from the side or behind reach
+// him, and piercing shots and bursts are never blocked.
+export const maybeShieldFor = (
+  zombie: Zombie,
+  direction: Vector,
+): Option.Option<number> =>
+  ZombieAction.isAnyOf(['Shielding'])(zombie.action) &&
+  direction.x * Math.cos(zombie.action.aim) +
+    direction.y * Math.sin(zombie.action.aim) <
+    -CHUCKER_RULES.shieldArcCos
+    ? Option.some(zombie.action.victimId)
+    : Option.none()
+
 // FRAME
 
 const isBusy = (zombie: Zombie): boolean =>
-  ZombieAction.isAnyOf(['Hefting', 'Carried', 'Flying'])(zombie.action)
+  ZombieAction.isAnyOf([
+    'Hefting',
+    'Carried',
+    'Flying',
+    'Shielding',
+    'Shielded',
+  ])(zombie.action)
 
 export const advanceChuckers = (model: Model, deltaMs: number): Model => {
   const hasWork = Array.some(
@@ -385,7 +636,8 @@ export const advanceChuckers = (model: Model, deltaMs: number): Model => {
     (current, chucker) =>
       Option.match(findZombie(current.zombies, chucker.id), {
         onNone: () => current,
-        onSome: latest => stepHeft(current, latest, deltaMs),
+        onSome: latest =>
+          stepShield(stepHeft(current, latest, deltaMs), latest, deltaMs),
       }),
   )
   const thrownAt = landings(heaved.zombies, deltaMs)
@@ -402,7 +654,13 @@ export const advanceChuckers = (model: Model, deltaMs: number): Model => {
     (current, chucker) =>
       Option.match(findZombie(current.zombies, chucker.id), {
         onNone: () => current,
-        onSome: latest => tryGrab(current, latest),
+        onSome: latest => {
+          const shielded = tryShield(current, latest)
+          return Option.match(findZombie(shielded.zombies, latest.id), {
+            onNone: () => shielded,
+            onSome: after => tryGrab(shielded, after),
+          })
+        },
       }),
   )
 }

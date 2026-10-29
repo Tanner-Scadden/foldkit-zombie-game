@@ -289,7 +289,8 @@ export const BLAST_MAX = 8
 export const SHAKE_TRAUMA_BLAST = 1
 export const HIT_STOP_BLAST_MS = 70
 
-export const GOO_PER_BLAST = 14
+export const BLOOD_PER_BLAST = 8
+export const BOMB_SHARDS_PER_BLAST = 4
 export const SPARKS_PER_BLAST = 10
 export const SPARKS_PER_DROP = 6
 export const SPARKS_PER_GRAB = 10

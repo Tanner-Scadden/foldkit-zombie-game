@@ -360,7 +360,7 @@ const bossLabel = (boss: Boss): string =>
       ` Boss: ${ZOMBIE_KINDS.Boss.name} comes through the ${door} door late in the wave.`,
   })
 
-const previewLabel = (
+export const wavePreviewLabel = (
   wave: number,
   spawns: ReadonlyArray<PlannedSpawn>,
   traps: ReadonlyArray<Trap>,
@@ -383,4 +383,5 @@ export const wavePreviewView = (
   traps: ReadonlyArray<Trap>,
   boss: Boss,
   h: HtmlBuilder<Message>,
-): Html => h.p([h.Class('sr-only')], [previewLabel(wave, spawns, traps, boss)])
+): Html =>
+  h.p([h.Class('sr-only')], [wavePreviewLabel(wave, spawns, traps, boss)])

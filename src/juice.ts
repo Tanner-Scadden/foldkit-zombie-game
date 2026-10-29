@@ -175,6 +175,7 @@ const eventTrauma = (event: GameEvent): number =>
     GlobLanded: () => GLOB_LANDED_TRAUMA,
     BossEnraged: () => BOSS_ROAR_TRAUMA,
     ZombieGrabbed: () => 0,
+    ShieldRaised: () => 0,
     ZombieThrown: () => THROW_TRAUMA,
     ZombieLanded: () => LANDING_TRAUMA,
     CrawlerStirred: () => STIR_TRAUMA,
@@ -225,6 +226,7 @@ const advanceShake = (
 
 const HORDE_POPUP_LIFETIME_MS = 1400
 const HORDE_POPUP_INSET_PX = 22
+const KABOOM_POPUP_LIFETIME_MS = 600
 
 export const POPUP_LIFETIME_MS: Readonly<Record<PopupKind, number>> = {
   Damage: DAMAGE_POPUP_LIFETIME_MS,
@@ -233,6 +235,7 @@ export const POPUP_LIFETIME_MS: Readonly<Record<PopupKind, number>> = {
   Empty: EMPTY_POPUP_LIFETIME_MS,
   Horde: HORDE_POPUP_LIFETIME_MS,
   Wipe: PAYDAY_POPUP_LIFETIME_MS,
+  Kaboom: KABOOM_POPUP_LIFETIME_MS,
 }
 
 const popup =
@@ -272,7 +275,8 @@ const eventPopups = (
       ),
     ZombieKilled: ({ x, y, bounty }) =>
       generateMany(state, 1, popup('Kill', bounty, x, y - KILL_POPUP_LIFT_PX)),
-    Exploded: () => noPopups(state),
+    Exploded: ({ x, y, radius }) =>
+      generateMany(state, 1, popup('Kaboom', 0, x, y - radius * 0.6)),
     Footfall: () => noPopups(state),
     PlayerHurt: () => noPopups(state),
     BulletStruck: () => noPopups(state),
@@ -308,6 +312,7 @@ const eventPopups = (
     GlobLanded: () => noPopups(state),
     BossEnraged: () => noPopups(state),
     ZombieGrabbed: () => noPopups(state),
+    ShieldRaised: () => noPopups(state),
     ZombieThrown: () => noPopups(state),
     ZombieLanded: () => noPopups(state),
     CrawlerStirred: () => noPopups(state),

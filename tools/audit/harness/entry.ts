@@ -230,9 +230,9 @@ const roomModel = (): Model => {
     const rows: Array<[LineupKind, number, number, number]> = [
       ['Shambler', 4, 50, 50],
       ['Runner', 2, 50, 72],
-      ['Exploder', 4, 50, 96],
+      ['Exploder', 7, 50, 96],
       ['Tank', 36, 180, 64],
-      ['Thrower', 9, 180, 100],
+      ['Thrower', 15, 180, 100],
       ['Crawler', 2, 50, 118],
     ]
     const zombies = rows.flatMap(([kind, maxHp, left, y], row) =>
@@ -489,6 +489,36 @@ const roomModel = (): Model => {
         from.y + (to.y - from.y) * progress,
         {
           action: { _tag: 'Flying', from, to, remainingMs, durationMs },
+        },
+      ),
+    )
+  }
+  if (chucker === 'taunt') {
+    staged.push(
+      stagedZombie(1755, 'Thrower', num('cx', 230), num('cy', 70), {
+        action: { _tag: 'Winded', remainingMs: 3100 },
+      }),
+    )
+  }
+  if (chucker === 'shield') {
+    const at = { x: num('cx', 200), y: num('cy', 80) }
+    const aim = Math.atan2(num('py', 90) - at.y, num('px', 160) - at.x)
+    staged.push(
+      stagedZombie(1790, 'Thrower', at.x, at.y, {
+        action: {
+          _tag: 'Shielding',
+          victimId: 1791,
+          remainingMs: num('shieldMs', 3000),
+          aim,
+        },
+      }),
+      stagedZombie(
+        1791,
+        'Shambler',
+        at.x + Math.cos(aim) * 7,
+        at.y + Math.sin(aim) * 7,
+        {
+          action: { _tag: 'Shielded', byId: 1790 },
         },
       ),
     )
@@ -760,9 +790,9 @@ const scenarioModel = (): Model => {
 
 const god = params.has('god')
 
-// NOTE: `gasroom=N` keeps N Gasbags in the room: when shots and chain bursts
+// NOTE: `gasroom=N` keeps N Kaboomers in the room: when shots and chain bursts
 // pop them, new ones walk in at the doors, so a measurement window stays full
-// of fusing, bursting, and spawning Gasbags.
+// of fusing, bursting, and spawning Kaboomers.
 const GASBAG_DOORS = [
   [160, 8],
   [312, 90],
