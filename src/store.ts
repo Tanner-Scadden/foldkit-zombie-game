@@ -36,17 +36,17 @@ import type { LegacySave, PlayerDatabase, StoreEvent } from './storeSqlite'
 // - LocalStorage: SQLite did not open in time, or not at all. The legacy
 //   localStorage copy is read and written for this page session, and
 //   nothing syncs.
-export type Backend = Data.TaggedEnum<{
+type Backend = Data.TaggedEnum<{
   Sqlite: { readonly database: PlayerDatabase }
   LocalStorage: { readonly reason: string }
 }>
-export const Backend = Data.taggedEnum<Backend>()
+const Backend = Data.taggedEnum<Backend>()
 
-export class StoreError extends Data.TaggedError('StoreError')<{
+class StoreError extends Data.TaggedError('StoreError')<{
   readonly reason: string
 }> {}
 
-export class LinkError extends Data.TaggedError('LinkError')<{
+class LinkError extends Data.TaggedError('LinkError')<{
   readonly problem: LinkProblem
 }> {}
 
@@ -66,7 +66,7 @@ export class PlayerStore extends Context.Service<
 
 // NOTE: long enough for the wasm on a slow phone network, short enough that
 // a stuck worker never holds the splash for good.
-export const SQLITE_OPEN_TIMEOUT: Duration.Input = '12 seconds'
+const SQLITE_OPEN_TIMEOUT: Duration.Input = '12 seconds'
 
 const legacy: LegacySave = { read: readLegacySave, write: writeLegacySave }
 

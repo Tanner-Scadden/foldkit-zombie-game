@@ -7,7 +7,7 @@ import type { Rgba } from './png'
 // only knows that writer's shape: one IDAT chunk of stored deflate blocks and
 // unfiltered RGBA scanlines.
 
-export type DecodedPng = Readonly<{
+type DecodedPng = Readonly<{
   width: number
   height: number
   pixels: ReadonlyArray<Rgba>

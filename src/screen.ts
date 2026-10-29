@@ -56,7 +56,7 @@ const PORTRAIT_VIEW_WIDTHS: ReadonlyArray<number> = [
   180, 162, 150, 144, 135, 120,
 ]
 
-export type WorldWindow = Readonly<{ viewWidth: number; height: number }>
+type WorldWindow = Readonly<{ viewWidth: number; height: number }>
 
 const windowFor = (viewWidth: number): WorldWindow => ({
   viewWidth,
@@ -71,7 +71,7 @@ const fitsThumbs = (screenHeight: number, window: WorldWindow): boolean =>
 // and keeps the world window under two thirds of the screen. A 390 or 400
 // pixel screen (390x844, 430x932, 360x800) shows 135 of the room's 320
 // pixel width at 4/3 zoom, and a 320 pixel one (375x667) shows 162 at 10/9.
-export const portraitWindowFor = (screenHeight: number): WorldWindow =>
+const portraitWindowFor = (screenHeight: number): WorldWindow =>
   Array.reduce(PORTRAIT_VIEW_WIDTHS, windowFor(VIEW_HEIGHT), (best, width) =>
     fitsThumbs(screenHeight, windowFor(width)) ? windowFor(width) : best,
   )
@@ -103,7 +103,7 @@ export const portraitScreen = (height: number): Screen => {
 
 export const DEFAULT_PORTRAIT_SCREEN = portraitScreen(PORTRAIT_DEFAULT_HEIGHT)
 
-export const layoutOf = (model: Model): Layout =>
+const layoutOf = (model: Model): Layout =>
   model.lastDevice === 'Touch' && model.orientation === 'Portrait'
     ? 'Portrait'
     : 'Landscape'

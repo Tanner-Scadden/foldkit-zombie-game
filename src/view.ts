@@ -161,7 +161,7 @@ const practiceGateNote = (model: Model): string =>
     ? ' The wave waits until you try moving, aiming, and firing.'
     : ''
 
-export const statusText = (model: Model): string => {
+const statusText = (model: Model): string => {
   return Phase.match(model.phase, {
     Ready: () => `${GAME_TITLE}, an early alpha. ${HOME_MENU}`,
     Preparation: ({ wave }) =>

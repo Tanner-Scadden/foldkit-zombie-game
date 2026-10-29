@@ -52,13 +52,13 @@ export type DeathStyle = 'Topple' | 'Tumble' | 'Slump' | 'Burst'
 
 export type Arrival = 'Door' | 'Floor'
 
-export type HealthBar = 'Shown' | 'Hidden'
+type HealthBar = 'Shown' | 'Hidden'
 
 // NOTE: a Drawn kind near a standing Plank Pile walks over and chews it
 // instead of chasing the player. Only the slow kinds are that dim.
-export type BaitPull = 'Drawn' | 'Ignores'
+type BaitPull = 'Drawn' | 'Ignores'
 
-export type Gibs = Readonly<{ kind: ParticleKind; count: number }>
+type Gibs = Readonly<{ kind: ParticleKind; count: number }>
 
 export type Footfall = Readonly<{
   everyStrides: number
@@ -77,7 +77,7 @@ export type WearStage = Readonly<{
   heightPx: number
 }>
 
-export type ZombieKindStats = Readonly<{
+type ZombieKindStats = Readonly<{
   name: string
   tagline: string
   pitch: string

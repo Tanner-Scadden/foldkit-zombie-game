@@ -76,7 +76,7 @@ const GLYPH_PIXELS = {
 
 export type Glyph = keyof typeof GLYPH_PIXELS
 
-export const GLYPH_ROWS = 5
+const GLYPH_ROWS = 5
 export const GLYPH_HEIGHT = GLYPH_ROWS + 1
 const GLYPH_GAP = 1
 const SPACE_WIDTH = 2
@@ -288,7 +288,7 @@ export const GLYPH_SPRITES: Readonly<
 
 // TEXT
 
-export type Align = 'Left' | 'Center' | 'Right'
+type Align = 'Left' | 'Center' | 'Right'
 
 const alignedLeft = (x: number, width: number, align: Align): number => {
   if (align === 'Center') {
@@ -360,24 +360,9 @@ export const placeBaked = (
       })
 }
 
-export const scaledTextShapes = (
-  text: string,
-  tone: TextTone,
-  { x, y, align, scale = 1, opacity }: Placement,
-): Canvas.Shape =>
-  group({
-    translate: {
-      x: alignedLeft(x, textWidth(text) * scale, align),
-      y: Math.round(y),
-    },
-    scale: scale === 1 ? undefined : { x: scale, y: scale },
-    opacity,
-    shapes: textShapes(text, tone, 0, 0, 'Left'),
-  })
-
 // COUNTS
 
-export const COUNT_SPRITE_MAX = 40
+const COUNT_SPRITE_MAX = 40
 
 const COUNT_ANCHOR: Anchor = { x: 0, y: Math.floor(GLYPH_ROWS / 2) }
 

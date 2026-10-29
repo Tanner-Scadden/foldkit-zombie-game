@@ -14,7 +14,7 @@ import { isFloorKind, isWalking } from './zombies'
 
 // RULES
 
-export type FrenzyRules = {
+type FrenzyRules = {
   packMin: number
   paceScale: number
   togetherPx: number

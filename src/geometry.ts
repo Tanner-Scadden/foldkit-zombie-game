@@ -76,11 +76,11 @@ export const closestPointOnSegment = (
   return { x: from.x + segmentX * along, y: from.y + segmentY * along }
 }
 
-export type ScreenSize = Readonly<{ width: number; height: number }>
+type ScreenSize = Readonly<{ width: number; height: number }>
 
 const LANDSCAPE_SIZE: ScreenSize = { width: VIEW_WIDTH, height: VIEW_HEIGHT }
 
-export const viewScale = (
+const viewScale = (
   surface: SurfaceRectangle,
   screen: ScreenSize = LANDSCAPE_SIZE,
 ): number =>

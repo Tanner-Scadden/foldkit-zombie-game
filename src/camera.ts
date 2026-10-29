@@ -29,7 +29,7 @@ export type Camera = Readonly<{
   top: number
 }>
 
-export type WindowSize = Readonly<{ width: number; height: number }>
+type WindowSize = Readonly<{ width: number; height: number }>
 
 const LANDSCAPE_WINDOW: WindowSize = { width: VIEW_WIDTH, height: VIEW_HEIGHT }
 

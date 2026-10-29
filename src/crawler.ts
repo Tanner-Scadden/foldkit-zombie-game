@@ -19,7 +19,7 @@ import { bodyRadiusOf, isFree, isWalking } from './zombies'
 
 // RULES
 
-export type CrawlerRules = {
+type CrawlerRules = {
   surfaceMs: number
   clearPx: number
   holdPx: number
@@ -45,7 +45,7 @@ export const CRAWLER_RULES: CrawlerRules = {
   propClearPx: 8,
 }
 
-export const CRAWLER_KIND = 'Crawler'
+const CRAWLER_KIND = 'Crawler'
 
 const distanceBetween = (from: Vector, to: Vector): number =>
   Math.hypot(to.x - from.x, to.y - from.y)
@@ -97,7 +97,7 @@ const isClearOfProps = (point: Vector, traps: ReadonlyArray<Trap>): boolean =>
     box => distanceToBox(point, box) > CRAWLER_RULES.propClearPx,
   )
 
-export const isFairSurfacing = (
+const isFairSurfacing = (
   point: Vector,
   player: Vector,
   traps: ReadonlyArray<Trap>,

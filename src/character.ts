@@ -30,14 +30,14 @@ export const Message = defineMessageUnion({
 })
 export type Message = typeof Message.Type
 
-export const LookChoice = defineTaggedUnion({
+const LookChoice = defineTaggedUnion({
   Body: { body: Body },
   HairStyle: { hairStyle: HairStyle },
   HairColor: { hairColor: HairColor },
   SkinTone: { skinTone: SkinTone },
   ShirtColor: { shirtColor: ShirtColor },
 })
-export type LookChoice = typeof LookChoice.Type
+type LookChoice = typeof LookChoice.Type
 
 export const OutMessage = defineMessageUnion({
   ChoseLook: { choice: LookChoice },

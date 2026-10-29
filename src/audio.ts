@@ -12,6 +12,7 @@ import { ManagedResource } from 'foldkit'
 import {
   type MusicCue,
   type MusicDeck,
+  SILENCE,
   cueMusic,
   makeMusicDeck,
   runMusicScheduler,
@@ -96,7 +97,7 @@ export type PlayOutcome = typeof PlayOutcome.Type
 
 // ENGINE
 
-export type AudioEngine = Readonly<{
+type AudioEngine = Readonly<{
   context: AudioContext
   output: GainNode
   noise: AudioBuffer
@@ -115,7 +116,6 @@ const MASTER_VOLUME = 0.55
 const NOISE_SECONDS = 0.5
 const NOISE_SEED = 0x2f6b9d13
 const MAX_VOICES = 10
-const SILENCE = 0.0001
 const STOP_PADDING_SECONDS = 0.02
 const RESUME_TIMEOUT = '600 millis'
 

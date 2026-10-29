@@ -3,6 +3,7 @@ import { Canvas } from 'foldkit'
 
 import { type Camera, viewBoxOf, worldToView } from './camera'
 import { SHADOW_COLOR, SHADOW_HEIGHT } from './constants'
+import { FULL_TURN } from './drawing'
 import { type BakedText, bakeText, placeBaked } from './font'
 import { clamp } from './geometry'
 import {
@@ -39,8 +40,6 @@ const channel = (hex: string, start: number): number =>
 
 const translucent = (hex: string, alpha: number): string =>
   `rgba(${channel(hex, HEX_RED)}, ${channel(hex, HEX_GREEN)}, ${channel(hex, HEX_BLUE)}, ${alpha})`
-
-const FULL_TURN = Math.PI * 2
 
 // FLOOR
 

@@ -235,7 +235,7 @@ export const playerPixels = (appearance: Appearance): PlayerPixels => {
 
 // SPRITES
 
-export type PlayerSprites = Readonly<{
+type PlayerSprites = Readonly<{
   walk: SpriteFrames
   idle: SpriteFrames
 }>

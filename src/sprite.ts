@@ -7,7 +7,7 @@ import type { TrapStage } from './traps'
 
 export type Palette = Readonly<Record<string, string>>
 
-export type PixelRun = Readonly<{
+type PixelRun = Readonly<{
   x: number
   y: number
   width: number
@@ -152,7 +152,7 @@ const fillsOf = (
 // redraws its shapes each time a canvas draws it, which cost seconds at load
 // and nothing saved per frame over the Rect shapes. A PNG decodes once into a
 // bitmap that drawImage copies.
-export const runsDataUrl = (
+const runsDataUrl = (
   width: number,
   height: number,
   runs: ReadonlyArray<PixelRun>,
@@ -1258,7 +1258,7 @@ export type Sprite = ReadonlyArray<Canvas.Shape>
 export type SpriteSet = Readonly<Record<Tone, Readonly<Record<Facing, Sprite>>>>
 export type SpriteFrames = Array.NonEmptyReadonlyArray<SpriteSet>
 
-export type GroupFields = Omit<Canvas.Group, '_tag'>
+type GroupFields = Omit<Canvas.Group, '_tag'>
 
 // NOTE: Canvas.Group re-parses every nested shape through Schema on each call,
 // because its shapes field is recursive. The scene builds hundreds of Groups a
@@ -1329,7 +1329,7 @@ export type WornFrames = Readonly<{
   taunt: SpriteSet
 }>
 
-export type ZombieSprites = Readonly<{
+type ZombieSprites = Readonly<{
   walk: SpriteFrames
   lit: SpriteFrames
   icon: Sprite
@@ -1629,7 +1629,7 @@ const GUN_PIXELS: Readonly<Record<WeaponKind, GunPixels>> = {
   },
 }
 
-export const GUN_DIRECTIONS = 16
+const GUN_DIRECTIONS = 16
 const STRAIGHT_UP_TOLERANCE = 1e-9
 
 const symbolOf = (
@@ -1702,13 +1702,13 @@ const GUN_TIERS: ReadonlyArray<number> = Array.makeBy(
   tier => tier,
 )
 
-export const GUN_SPRITES: Readonly<
+const GUN_SPRITES: Readonly<
   Record<WeaponKind, ReadonlyArray<Array.NonEmptyReadonlyArray<Sprite>>>
 > = Record.map(GUN_PIXELS, gun =>
   Array.map(GUN_TIERS, tier => gunTurns(gun, gunPalette(tier))),
 )
 
-export const GUN_ICONS: Readonly<Record<WeaponKind, ReadonlyArray<Sprite>>> =
+const GUN_ICONS: Readonly<Record<WeaponKind, ReadonlyArray<Sprite>>> =
   Record.map(GUN_PIXELS, ({ pixels }) =>
     Array.map(GUN_TIERS, tier => spriteShapes(pixels, gunPalette(tier))),
   )
@@ -1841,7 +1841,7 @@ const LAID_ROWS: Readonly<
   Upright: transposeRows,
 }
 
-export type ToneSprites = Readonly<Record<Tone, Sprite>>
+type ToneSprites = Readonly<Record<Tone, Sprite>>
 
 const toneSprites = (
   pixels: ReadonlyArray<string>,

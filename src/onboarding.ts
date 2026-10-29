@@ -48,8 +48,8 @@ const hasPlayerFired = (events: ReadonlyArray<GameEvent>): boolean =>
       GameEvent.isAnyOf(['Fired'])(event) && event.weapon !== TURRET_WEAPON,
   )
 
-export const MOVE_LESSON_PX = 24
-export const AIM_LESSON_SHOTS = 3
+const MOVE_LESSON_PX = 24
+const AIM_LESSON_SHOTS = 3
 export const LESSON_MIN_SHOWN_MS = 2500
 
 const distanceWalked = (before: Model, after: Model): number =>
@@ -227,7 +227,7 @@ export const settleLessons = (lessons: Lessons): Lessons =>
 const TOP_BAND_LEAVE_Y = 70
 const BOTTOM_BAND_LEAVE_Y = 86
 
-export const followPlayer = (band: HintBand, playerY: number): HintBand => {
+const followPlayer = (band: HintBand, playerY: number): HintBand => {
   if (band === 'Top' && playerY < TOP_BAND_LEAVE_Y) {
     return 'Bottom'
   } else if (band === 'Bottom' && playerY > BOTTOM_BAND_LEAVE_Y) {
@@ -303,7 +303,7 @@ export const HINT_TEXT: Readonly<
 
 export type ShownHint = Readonly<{ id: HintId; ageMs: number }>
 
-export const MAX_HINTS = 2
+const MAX_HINTS = 2
 
 export const msIntoPhase = (phase: Phase): number =>
   Phase.match(phase, {

@@ -52,10 +52,10 @@ import { ZOMBIE_KINDS } from './zombies'
 
 // HIT-STOP
 
-export type Thaw = Readonly<{ hitStop: HitStop; worldMs: number }>
+type Thaw = Readonly<{ hitStop: HitStop; worldMs: number }>
 
-export const BOSS_SLOW_MOTION_MS = 1400
-export const BOSS_SLOW_MOTION_RATE = 0.25
+const BOSS_SLOW_MOTION_MS = 1400
+const BOSS_SLOW_MOTION_RATE = 0.25
 
 export const thawHitStop = (hitStop: HitStop, deltaMs: number): Thaw =>
   HitStop.match(hitStop, {

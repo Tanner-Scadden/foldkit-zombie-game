@@ -177,7 +177,7 @@ const hintRowShapes =
     ]
   }
 
-export const hintShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+const hintShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   Array.flatMap(shownHints(model), hintRowShapes(model))
 
 // BANNERS
@@ -789,8 +789,8 @@ const TAGLINE_Y = 70
 // NOTE: the player walks on the spot at center stage, twice the room's size,
 // facing the Groaners that come in from the left with the pistol up. The home
 // menu puts a button over them that opens the character picker.
-export const HERO_X = 160
-export const HERO_FEET_Y = 150
+const HERO_X = 160
+const HERO_FEET_Y = 150
 const HERO_SCALE = 2
 const HERO_GUN_PX = 2
 

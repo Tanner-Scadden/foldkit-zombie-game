@@ -60,7 +60,7 @@ import { Behavior, isFree, isGrounded, radiusOf, statsOf } from './zombies'
 
 // TABLE
 
-export type TrapStats = Readonly<{
+type TrapStats = Readonly<{
   name: string
   blurb: string
   price: number
@@ -192,11 +192,7 @@ const setHealth = (trap: Trap, hp: number, hitRemainingMs: number): Trap =>
 
 type Damaged = Readonly<{ target: Trap; events: ReadonlyArray<GameEvent> }>
 
-export const damageTrap = (
-  trap: Trap,
-  damage: number,
-  isHeavy: boolean,
-): Damaged => {
+const damageTrap = (trap: Trap, damage: number, isHeavy: boolean): Damaged => {
   const kind = trap._tag
   const hp = Math.max(0, trap.hp - damage)
   const { x, y } = trapCenter(trap)
@@ -223,7 +219,7 @@ export const TRAP_BLAST_TARGET: BlastTarget<Trap> = {
   hurt: (trap, { damage }) => damageTrap(trap, damage, true),
 }
 
-export const isBroken = (trap: Trap): boolean => trap.hp <= 0
+const isBroken = (trap: Trap): boolean => trap.hp <= 0
 
 export const clearBrokenTraps = (model: Model): Model => {
   const broken = Array.filter(model.traps, isBroken)
@@ -299,7 +295,7 @@ const tickHit =
       ? setHealth(trap, trap.hp, countDown(trap.hitRemainingMs, deltaMs))
       : trap
 
-export const chewTraps = (model: Model, seconds: number): Model => {
+const chewTraps = (model: Model, seconds: number): Model => {
   if (Array.isReadonlyArrayEmpty(model.traps)) {
     return model
   }
@@ -324,7 +320,7 @@ const byDistance = Order.mapInput(
   ({ distance }: Sighting) => distance,
 )
 
-export const maybeTurretTarget = (
+const maybeTurretTarget = (
   from: Vector,
   zombies: ReadonlyArray<Zombie>,
 ): Option.Option<Zombie> =>
@@ -438,7 +434,7 @@ const operateTurret = (
   })
 }
 
-export const runTurrets = (model: Model, deltaMs: number): Model => {
+const runTurrets = (model: Model, deltaMs: number): Model => {
   if (Array.isReadonlyArrayEmpty(model.traps)) {
     return model
   }
@@ -511,7 +507,7 @@ export const maybeSelectedKind = (model: Model): Option.Option<TrapKind> => {
   }
 }
 
-export const hasBothKinds = (model: Model): boolean =>
+const hasBothKinds = (model: Model): boolean =>
   Array.every(TRAP_KIND_ORDER, kind => model.trapStock[kind] > 0)
 
 export const maybeNextKind = (model: Model): Option.Option<TrapKind> =>

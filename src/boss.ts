@@ -41,7 +41,7 @@ import {
 
 // RULES
 
-export type BossRules = {
+type BossRules = {
   everyWaves: number
   arriveAfterShare: number
   entranceMs: number
@@ -125,7 +125,7 @@ export const BOSS_RULES: BossRules = {
   cooldownMs: { Stomp: 1600, Belch: 1200, Spit: 4500, Charge: 3000 },
 }
 
-export const BOSS_KIND = 'Boss'
+const BOSS_KIND = 'Boss'
 
 export const hasBoss = (wave: number): boolean =>
   wave % BOSS_RULES.everyWaves === 0

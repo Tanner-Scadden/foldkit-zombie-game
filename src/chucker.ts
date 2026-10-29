@@ -25,7 +25,7 @@ import {
 
 // RULES
 
-export type ChuckerRules = {
+type ChuckerRules = {
   grabReachPx: number
   fetchPx: number
   hangPx: number
@@ -669,15 +669,3 @@ export const advanceChuckers = (model: Model, deltaMs: number): Model => {
       }),
   )
 }
-
-// DRAWING HELPERS
-
-export const heftProgress = (zombie: Zombie): number =>
-  ZombieAction.isAnyOf(['Hefting'])(zombie.action)
-    ? 1 - zombie.action.remainingMs / Math.max(1, zombie.action.durationMs)
-    : 0
-
-export const flightProgress = (zombie: Zombie): number =>
-  ZombieAction.isAnyOf(['Flying'])(zombie.action)
-    ? 1 - zombie.action.remainingMs / Math.max(1, zombie.action.durationMs)
-    : 0

@@ -35,7 +35,7 @@ const clockwiseAfter = (door: DoorId): ReadonlyArray<DoorId> => {
 // NOTE: a doorway with a standing Plank Pile is no spawn point. A pack due
 // there comes through the next open door clockwise, skipping the doors in
 // avoid when it can. Two piles at most leave two doors open.
-export const openDoorFrom = (
+const openDoorFrom = (
   door: DoorId,
   boarded: ReadonlyArray<DoorId>,
   avoid: ReadonlyArray<DoorId>,
@@ -117,7 +117,7 @@ const mateDoors = (
   ]
 }
 
-export const routedDoor = (
+const routedDoor = (
   spawn: PlannedSpawn,
   spawns: ReadonlyArray<PlannedSpawn>,
   boarded: ReadonlyArray<DoorId>,

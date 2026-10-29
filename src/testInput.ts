@@ -2,7 +2,7 @@ import { message } from 'foldkit/story'
 
 import { Message } from './main'
 
-export const FIRE_THUMB = 70
+const FIRE_THUMB = 70
 
 export const holdFire = message(
   Message.PressedPointer({

@@ -67,7 +67,7 @@ export { KillsRow, PlayerRow, killsRowsOfSave, rowOfSave }
 // NOTE: the tables the game made before sync. The player scope's view
 // tables are these same `player` and `kills_by_kind` (see
 // src/playerScope.ts), so a device that already had a save keeps it.
-export const PLAYER_MIGRATIONS = {
+const PLAYER_MIGRATIONS = {
   '0001_create_player': Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
     yield* sql`CREATE TABLE player (
@@ -97,20 +97,20 @@ export const PLAYER_MIGRATIONS = {
   }),
 }
 
-export const LEGACY_IMPORT_KEY = 'legacy-local-storage-import'
-export const SYNC_SEED_KEY = 'sync-seed'
+const LEGACY_IMPORT_KEY = 'legacy-local-storage-import'
+const SYNC_SEED_KEY = 'sync-seed'
 
-export const LegacyImport = Schema.Literals(['Imported', 'Absent'])
-export type LegacyImport = typeof LegacyImport.Type
+const LegacyImport = Schema.Literals(['Imported', 'Absent'])
+type LegacyImport = typeof LegacyImport.Type
 
-export const SyncSeed = Schema.Literals(['Seeded', 'Absent'])
-export type SyncSeed = typeof SyncSeed.Type
+const SyncSeed = Schema.Literals(['Seeded', 'Absent'])
+type SyncSeed = typeof SyncSeed.Type
 
 const MetaRow = Schema.Struct({ value: Schema.String })
 
 const DevicesRow = Schema.Struct({ count: Schema.Number })
 
-export const saveOfRow = (
+const saveOfRow = (
   row: PlayerRow,
   kills: ReadonlyArray<KillsRow>,
 ): PlayerSave => ({
@@ -174,9 +174,10 @@ export interface PlayerDatabase {
   ) => Effect.Effect<void, PlayerDatabaseError>
 }
 
-export class PlayerDatabaseError extends Data.TaggedError(
-  'PlayerDatabaseError',
-)<{ readonly reason: string; readonly problem: LinkProblem }> {}
+class PlayerDatabaseError extends Data.TaggedError('PlayerDatabaseError')<{
+  readonly reason: string
+  readonly problem: LinkProblem
+}> {}
 
 const toDatabaseError = (error: { readonly message: string }) =>
   new PlayerDatabaseError({ reason: error.message, problem: 'Unavailable' })

@@ -93,7 +93,7 @@ export const isSwapKey = (code: string): boolean => code === SWAP_KEY
 const axis = (isNegative: boolean, isPositive: boolean): number =>
   (isPositive ? 1 : 0) - (isNegative ? 1 : 0)
 
-export const keyboardMove = (pressedKeys: ReadonlyArray<string>): Vector =>
+const keyboardMove = (pressedKeys: ReadonlyArray<string>): Vector =>
   pipe(
     {
       x: axis(
@@ -145,7 +145,7 @@ export type PointerPress = Readonly<{
   clientY: number
 }>
 
-export type PointerPosition = Readonly<{
+type PointerPosition = Readonly<{
   pointerId: number
   clientX: number
   clientY: number
@@ -283,7 +283,7 @@ export const isTrackingPointer = (input: Input): boolean =>
 
 // INTENT
 
-export const stickDeflection = (stick: Stick): Vector =>
+const stickDeflection = (stick: Stick): Vector =>
   Stick.match(stick, {
     Idle: () => ZERO_VECTOR,
     Active: ({ originX, originY, currentX, currentY }) =>

@@ -12,7 +12,7 @@ import {
 
 // TABLE
 
-export type DifficultyStats = Readonly<{
+type DifficultyStats = Readonly<{
   name: string
   blurb: string
   healthScale: number

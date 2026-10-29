@@ -115,7 +115,7 @@ const paintFill =
 // fill after another, the way a canvas paints the same rectangles. Every
 // scanline starts with PNG's "no filter" byte, which a new buffer already
 // holds as zero.
-export const scanlinesOf = (
+const scanlinesOf = (
   width: number,
   height: number,
   fills: ReadonlyArray<Fill>,
@@ -222,7 +222,7 @@ const PNG_SIGNATURE: ReadonlyArray<number> = [
 const BIT_DEPTH = 8
 const COLOR_TYPE_RGBA = 6
 
-export const pngBytes = (
+const pngBytes = (
   width: number,
   height: number,
   fills: ReadonlyArray<Fill>,

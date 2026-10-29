@@ -34,9 +34,9 @@ export const UPDATE_CHECK_INTERVAL = Duration.minutes(5)
 const VERSION_FILE = 'version.json'
 const FETCH_TIMEOUT = Duration.seconds(10)
 
-export const VersionFile = Schema.Struct({ build: Schema.String })
+const VersionFile = Schema.Struct({ build: Schema.String })
 
-export class VersionCheckError extends Data.TaggedError('VersionCheckError')<{
+class VersionCheckError extends Data.TaggedError('VersionCheckError')<{
   readonly reason: string
 }> {}
 

@@ -8,7 +8,7 @@ import type { InputDevice, Model } from './model'
 const actionLabel = (device: InputDevice): string =>
   device === 'Touch' ? 'Tap to update' : 'Click to update'
 
-export const isUpdateChipShown = (model: Model): boolean =>
+const isUpdateChipShown = (model: Model): boolean =>
   Option.isSome(model.maybeNewerBuild) && isOnHome(model.phase)
 
 export const updateChipView = (model: Model, h: HtmlBuilder<Message>): Html =>

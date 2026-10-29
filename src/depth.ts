@@ -3,7 +3,7 @@ import type { Canvas } from 'foldkit'
 
 // DRAWABLE
 
-export type DepthRank = 'Prop' | 'Trap' | 'Pickup' | 'Zombie' | 'Player'
+type DepthRank = 'Prop' | 'Trap' | 'Pickup' | 'Zombie' | 'Player'
 
 const RANK_ORDER: Readonly<Record<DepthRank, number>> = {
   Prop: 0,
@@ -22,7 +22,7 @@ export type Drawable = Readonly<{
 // NOTE: whatever stands nearer the bottom of the screen is nearer the viewer,
 // so it draws later. Two drawables at the same foot draw by rank, and two of
 // the same rank keep the order they came in, since the sort is stable.
-export const byDepth: Order.Order<Drawable> = Order.combine(
+const byDepth: Order.Order<Drawable> = Order.combine(
   Order.mapInput(Order.Number, ({ footY }: Drawable) => footY),
   Order.mapInput(Order.Number, ({ rank }: Drawable) => RANK_ORDER[rank]),
 )

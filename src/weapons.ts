@@ -28,7 +28,7 @@ import {
 
 export type MuzzleFlash = 'Flicker' | 'Pop' | 'Blast'
 
-export type RoundLimit = Readonly<{ starting: number; max: number }>
+type RoundLimit = Readonly<{ starting: number; max: number }>
 
 export type WeaponStats = Readonly<{
   name: string
@@ -160,7 +160,7 @@ export const SIDEARM: WeaponKind = 'Pistol'
 
 // UPGRADE TIERS
 
-export type TierBoost = Readonly<{
+type TierBoost = Readonly<{
   damage: number
   fireIntervalMs: number
   magazine: number
@@ -317,7 +317,7 @@ export const UPGRADE_TIERS: Readonly<
 
 export const maxTier = (kind: WeaponKind): number => UPGRADE_TIERS[kind].length
 
-export const clampTier = (kind: WeaponKind, tier: number): number =>
+const clampTier = (kind: WeaponKind, tier: number): number =>
   Math.max(0, Math.min(maxTier(kind), Math.floor(tier)))
 
 const boostsUpTo = (kind: WeaponKind, tier: number): ReadonlyArray<TierBoost> =>

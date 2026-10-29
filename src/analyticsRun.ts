@@ -49,7 +49,7 @@ export const frameTimeBucket = ({
   }
 }
 
-export const summaryScreenFit = (screenFit: ScreenFit): SummaryScreenFit =>
+const summaryScreenFit = (screenFit: ScreenFit): SummaryScreenFit =>
   screenFit === 'Installed' ? 'Installed' : 'Browser'
 
 // RUN END

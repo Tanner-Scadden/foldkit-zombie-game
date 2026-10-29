@@ -282,8 +282,8 @@ export const ChangedHome = defineMutation({
     ),
 })
 
-export const MAX_RUNS_PER_RECORD = 3
-export const MAX_KILLS_PER_RUN = 5000
+const MAX_RUNS_PER_RECORD = 3
+const MAX_KILLS_PER_RUN = 5000
 
 const Count = Schema.Number.check(
   Schema.isInt(),
@@ -308,7 +308,7 @@ const mergeBests = (
   bestEndlessWave: larger(kept.bestEndlessWave, reached.bestEndlessWave),
 })
 
-export const mergeBestsByDifficulty = (
+const mergeBestsByDifficulty = (
   kept: SavedBestsByDifficulty,
   reached: SavedBestsByDifficulty,
 ): SavedBestsByDifficulty => ({

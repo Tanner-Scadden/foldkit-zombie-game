@@ -173,7 +173,7 @@ const spread = (
   return distances
 }
 
-export const computeFlowField = (
+const computeFlowField = (
   originIndex: number,
   clearance: Clearance,
   tolls: ReadonlyArray<Toll>,
@@ -368,9 +368,9 @@ const BAIT_FIELDS: Readonly<
   South: baitFieldsFor('South'),
 }
 
-export type Bait = Readonly<{ door: DoorId; distancePx: number }>
+type Bait = Readonly<{ door: DoorId; distancePx: number }>
 
-export const baitDistancePx = (
+const baitDistancePx = (
   door: DoorId,
   position: Vector,
   clearance: Clearance,
@@ -517,7 +517,7 @@ const isAtDoor = (position: Vector, id: DoorId): boolean => {
   return outwardness > 0 && sideways <= DOOR_HALF_WIDTH_PX
 }
 
-export const doorEntryDistance = (flowField: FlowField, id: DoorId): number =>
+const doorEntryDistance = (flowField: FlowField, id: DoorId): number =>
   Array.reduce(DOOR_TILE_INDICES[id], UNREACHED_DISTANCE, (nearest, index) =>
     Math.min(nearest, distanceAt(flowField.distances, index)),
   )
@@ -528,7 +528,7 @@ const entryCost = (flowField: FlowField, from: number, door: DoorId): number =>
   loopLeg(from, DOOR_LOOP_MARKS[door].at).distance / TILE_SIZE +
   doorEntryDistance(flowField, door)
 
-export const bestEntry = (flowField: FlowField, position: Vector): DoorId => {
+const bestEntry = (flowField: FlowField, position: Vector): DoorId => {
   const here = loopPositionOf(position)
   return pipe(
     DOOR_IDS,

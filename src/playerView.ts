@@ -201,7 +201,7 @@ const muzzleFlashShapes = (
   }
 }
 
-const GUN_HOLD_PX = 2
+export const GUN_HOLD_PX = 2
 
 type PlayerPose = Readonly<{
   weapon: WeaponKind

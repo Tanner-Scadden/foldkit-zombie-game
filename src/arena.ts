@@ -134,7 +134,7 @@ const SOLID_TILES: ReadonlySet<number> = new Set(
   ),
 )
 
-export const isSolidTile = (column: number, row: number): boolean =>
+const isSolidTile = (column: number, row: number): boolean =>
   isInsideRoom(column, row) && SOLID_TILES.has(tileIndex(column, row))
 
 export const isWalkableTile = (column: number, row: number): boolean =>
@@ -251,7 +251,7 @@ export const isDoorTile = (column: number, row: number): boolean =>
     Array.contains(DOOR_TILE_SYMBOLS, symbol),
   )
 
-export type Threshold = Readonly<{
+type Threshold = Readonly<{
   tiles: ReadonlyArray<Tile>
   indices: ReadonlyArray<number>
   box: Box

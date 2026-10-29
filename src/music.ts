@@ -324,7 +324,7 @@ const START_DELAY_SECONDS = 0.05
 const STOP_TIME_CONSTANT = 0.03
 const TRACK_RELEASE_SECONDS = 0.3
 const SCHEDULER_INTERVAL = '40 millis'
-const SILENCE = 0.0001
+export const SILENCE = 0.0001
 const TAIL_SECONDS = 0.03
 
 const LEVEL_GAIN: Readonly<Record<MusicLevel, number>> = {

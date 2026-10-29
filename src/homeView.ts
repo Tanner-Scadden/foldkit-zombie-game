@@ -807,7 +807,7 @@ const tutorialResetView = (model: Model, h: HtmlBuilder<Message>): Html =>
 
 // DEVICES
 
-export const LINK_CODE_INPUT_ID = 'link-code-input'
+const LINK_CODE_INPUT_ID = 'link-code-input'
 
 // NOTE: linking never merges. The device that types the code takes on the
 // other device's player, and what it had saved is left behind (see

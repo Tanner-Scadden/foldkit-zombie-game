@@ -100,7 +100,7 @@ type HudLayout = Readonly<{
 // NOTE: the guns sit at the bottom middle, nudged a little left in landscape
 // so the buttons beside them stop short of the stall's outline. In portrait
 // they sit at the bottom of the thumb area and the HUD is a band on top.
-export const hudLayoutFor = (screen: Screen): HudLayout => {
+const hudLayoutFor = (screen: Screen): HudLayout => {
   const slotTop = screen.height - HUD_MARGIN - SLOT_HEIGHT
   if (screen.layout === 'Landscape') {
     return {

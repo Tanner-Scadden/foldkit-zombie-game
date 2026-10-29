@@ -50,7 +50,7 @@ const isDue = (clockMs: number) => (spawn: PlannedSpawn) =>
 
 // BEATS
 
-export type Paced = Readonly<{
+type Paced = Readonly<{
   pacing: Pacing
   clockMs: number
   spawns: ReadonlyArray<PlannedSpawn>
@@ -107,7 +107,7 @@ const count = (rest: Rest, worldMs: number, intensity: number): Beat => {
   }
 }
 
-export type Crowd = Readonly<{ alive: number; waiting: number }>
+type Crowd = Readonly<{ alive: number; waiting: number }>
 
 const hasThinned = (crowd: Crowd, releaseBelow: number): boolean =>
   crowd.waiting === 0 && crowd.alive < releaseBelow
@@ -431,7 +431,7 @@ export const rattlingDoors = (
 
 // DOORWAY CAMPING
 
-export const isCampingDoor = (player: Vector, door: DoorId): boolean =>
+const isCampingDoor = (player: Vector, door: DoorId): boolean =>
   distanceToBox(player, THRESHOLDS[door].box) <= DOOR_CAMP_REACH_PX
 
 export const delayCampedPacks = (

@@ -34,7 +34,7 @@ import {
 
 // STRIKES
 
-export type Strike = Readonly<{
+type Strike = Readonly<{
   damage: number
   direction: Vector
   knockbackSpeed: number
@@ -79,7 +79,7 @@ export const killEvent = (zombie: Zombie, direction: Vector): GameEvent =>
     kind: zombie.kind,
   })
 
-export const invulnerableMsAt = (hp: number): number =>
+const invulnerableMsAt = (hp: number): number =>
   hp === 1 ? LAST_HEART_INVULNERABLE_MS : PLAYER_INVULNERABLE_MS
 
 export const woundPlayer = (
@@ -121,7 +121,7 @@ export type BlastTarget<A> = Readonly<{
 
 const OUTWARD: Vector = { x: 1, y: 0 }
 
-export const blastOne =
+const blastOne =
   <A>(blast: BlastSpec, kind: BlastTarget<A>) =>
   (target: A): Blasted<A> => {
     const center = kind.center(target)
@@ -179,7 +179,7 @@ export const ZOMBIE_BLAST_TARGET: BlastTarget<Zombie> = {
 
 // NOTE: only an Exploder's blast reaches the player, so its hurt names the
 // Exploder as the source.
-export const PLAYER_BLAST_TARGET: BlastTarget<Player> = {
+const PLAYER_BLAST_TARGET: BlastTarget<Player> = {
   center: player => player,
   radius: () => PLAYER_RADIUS,
   isExposed: player =>

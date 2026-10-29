@@ -37,6 +37,7 @@ import type {
   ShirtColor,
   SkinTone,
 } from './model'
+import { GUN_HOLD_PX } from './playerView'
 import { type Facing, frameAt, group, gunSprite } from './sprite'
 
 // LABELS
@@ -79,7 +80,7 @@ const SHIRT_COLOR_LABELS: Readonly<Record<ShirtColor, string>> = {
   Purple: 'Purple',
 }
 
-export const lookDescription = (appearance: Appearance): string =>
+const lookDescription = (appearance: Appearance): string =>
   `${BODY_LABELS[appearance.body]} body, ${String.toLowerCase(HAIR_STYLE_LABELS[appearance.hairStyle])} ${String.toLowerCase(HAIR_COLOR_LABELS[appearance.hairColor])} hair, ${String.toLowerCase(SKIN_TONE_LABELS[appearance.skinTone])} skin, ${String.toLowerCase(SHIRT_COLOR_LABELS[appearance.shirtColor])} shirt`
 
 // PREVIEW
@@ -87,12 +88,11 @@ export const lookDescription = (appearance: Appearance): string =>
 const PREVIEW_SIZE = 20
 const PREVIEW_FOOT_Y = 18
 const PREVIEW_TURN_MS = 2400
-const GUN_HOLD_PX = 2
 
 const previewFacing = (screenMs: number): Facing =>
   Math.floor(screenMs / PREVIEW_TURN_MS) % 2 === 0 ? 'Right' : 'Left'
 
-export const previewShapes = (
+const previewShapes = (
   appearance: Appearance,
   screenMs: number,
 ): ReadonlyArray<Canvas.Shape> => {

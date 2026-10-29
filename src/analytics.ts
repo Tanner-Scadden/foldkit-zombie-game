@@ -23,8 +23,8 @@ export const SummaryKind = Schema.Literals([
 ])
 export type SummaryKind = typeof SummaryKind.Type
 
-export const SummaryMode = Schema.Literals(['Campaign', 'Endless'])
-export type SummaryMode = typeof SummaryMode.Type
+const SummaryMode = Schema.Literals(['Campaign', 'Endless'])
+type SummaryMode = typeof SummaryMode.Type
 
 export const SummaryDifficulty = Schema.Literals([
   'Easy',
@@ -98,11 +98,11 @@ export type SummaryKills = typeof SummaryKills.Type
 
 export const VISIT_ID_LENGTH = 16
 
-export const VisitId = Schema.String.check(Schema.isPattern(/^[0-9a-f]{16}$/))
+const VisitId = Schema.String.check(Schema.isPattern(/^[0-9a-f]{16}$/))
 
 const MAX_BUILD_LENGTH = 96
 
-export const BuildId = Schema.String.check(
+const BuildId = Schema.String.check(
   Schema.isMinLength(1),
   Schema.isMaxLength(MAX_BUILD_LENGTH),
 )

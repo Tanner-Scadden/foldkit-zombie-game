@@ -103,7 +103,7 @@ export const hasUnopenedEntry = (model: Model): boolean =>
 
 // BADGES
 
-export type Badge = Readonly<{ threshold: number; name: string }>
+type Badge = Readonly<{ threshold: number; name: string }>
 
 export const BADGES: Array.NonEmptyReadonlyArray<Badge> = [
   { threshold: 10, name: 'Bronze' },

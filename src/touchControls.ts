@@ -38,7 +38,7 @@ import {
 
 // ICON BUTTONS
 
-export type IconButton = Readonly<{
+type IconButton = Readonly<{
   className: string
   label: string
   icon: string

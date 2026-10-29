@@ -39,14 +39,10 @@ export const generateVisitId: Effect.Effect<string> = pipe(
 
 // SEND
 
-export const SummaryTransport = Schema.Literals([
-  'Beacon',
-  'Fetch',
-  'Unconfigured',
-])
-export type SummaryTransport = typeof SummaryTransport.Type
+const SummaryTransport = Schema.Literals(['Beacon', 'Fetch', 'Unconfigured'])
+type SummaryTransport = typeof SummaryTransport.Type
 
-export class SummarySendError extends Data.TaggedError('SummarySendError')<{
+class SummarySendError extends Data.TaggedError('SummarySendError')<{
   readonly reason: string
 }> {}
 

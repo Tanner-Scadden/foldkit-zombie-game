@@ -117,7 +117,7 @@ const changeText = (
 const roundTo = (value: number, places: number): number =>
   Math.round(value * 10 ** places) / 10 ** places
 
-export const upgradeChanges = (weapon: WeaponKind, tier: number): string => {
+const upgradeChanges = (weapon: WeaponKind, tier: number): string => {
   const before = statsAt(weapon, tier)
   const after = statsAt(weapon, tier + 1)
   const roundsLabel = WEAPONS[weapon].roundsLabel
@@ -166,7 +166,7 @@ export const upgradeChanges = (weapon: WeaponKind, tier: number): string => {
   )
 }
 
-export type ShopItem = Readonly<{
+type ShopItem = Readonly<{
   id: ShopItemId
   name: string
   blurb: string
@@ -259,7 +259,7 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
 
 // CATEGORIES
 
-export type ShopCategoryInfo = Readonly<{
+type ShopCategoryInfo = Readonly<{
   label: string
   blurb: (model: Model) => string
 }>
@@ -429,7 +429,7 @@ export const priceFor = (model: Model, id: ShopItemId): number =>
     Repair: () => repairPrice(model.traps),
   })
 
-export const isMaxedUpgrade = (model: Model, id: ShopItemId): boolean =>
+const isMaxedUpgrade = (model: Model, id: ShopItemId): boolean =>
   ShopGood.match(SHOP_ITEMS[id].good, {
     Gun: () => false,
     Ammo: () => false,
@@ -751,7 +751,7 @@ const distanceToStall = ({ x, y }: Vector): number =>
     Math.max(STALL_BOX.top - y, 0, y - STALL_BOX.bottom),
   )
 
-export const isAtStall = (position: Vector): boolean =>
+const isAtStall = (position: Vector): boolean =>
   distanceToStall(position) <= SHOP_REACH_PX
 
 const hasLeftStall = (position: Vector): boolean =>

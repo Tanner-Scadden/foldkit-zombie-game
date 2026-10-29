@@ -54,7 +54,7 @@ import {
 
 export type Ammo = 'Spent' | 'Free'
 
-export type BoostStats = Readonly<{
+type BoostStats = Readonly<{
   durationMs: number
   fireIntervalScale: number
   damageScale: number
@@ -122,14 +122,14 @@ export const BOOST_WARNING_MS = 2000
 
 // PICKUPS
 
-export const PickupEffect = defineTaggedUnion({
+const PickupEffect = defineTaggedUnion({
   Boost: { boost: BoostKind },
   Burp: {},
   Heal: { hearts: Schema.Number },
 })
-export type PickupEffect = typeof PickupEffect.Type
+type PickupEffect = typeof PickupEffect.Type
 
-export type PickupStats = Readonly<{
+type PickupStats = Readonly<{
   name: string
   blurb: string
   weight: number
@@ -189,7 +189,7 @@ export const PICKUPS: Readonly<Record<PickupKind, PickupStats>> = {
   },
 }
 
-export const PICKUP_KIND_ORDER: ReadonlyArray<PickupKind> = [
+const PICKUP_KIND_ORDER: ReadonlyArray<PickupKind> = [
   'RapidFire',
   'Damage',
   'Speed',
@@ -200,8 +200,8 @@ export const PICKUP_KIND_ORDER: ReadonlyArray<PickupKind> = [
 
 export const PICKUP_LIFETIME_MS = 10000
 export const PICKUP_BLINK_MS = 3000
-export const PICKUP_RADIUS = 4
-export const PICKUP_GRAB_PX = PLAYER_RADIUS + 4
+const PICKUP_RADIUS = 4
+const PICKUP_GRAB_PX = PLAYER_RADIUS + 4
 export const CALLOUT_LIFETIME_MS = 1600
 const CALLOUT_MAX = 1
 
@@ -221,7 +221,7 @@ export const DROP_CHANCE: Readonly<Record<ZombieKind, number>> = {
   Boss: 1,
 }
 
-export type DropRules = Readonly<{
+type DropRules = Readonly<{
   floorMax: number
   gapMs: number
   pityMs: number
@@ -234,7 +234,7 @@ export const DROP_RULES: DropRules = {
   pityMs: 25000,
   prizeChance: 0.5,
 }
-export const TUTORIAL_WAVE = 1
+const TUTORIAL_WAVE = 1
 export const TUTORIAL_DROP_KILL = 3
 export const TUTORIAL_DROP: PickupKind = 'RapidFire'
 
@@ -258,7 +258,7 @@ const productOf = (
     Math.max(0, product * scaleOf(stats)),
   )
 
-export const boostWeapon = (stats: WeaponStats, boosts: Boosts): WeaponStats =>
+const boostWeapon = (stats: WeaponStats, boosts: Boosts): WeaponStats =>
   modifyFields(stats, {
     fireIntervalMs: interval =>
       Math.max(
@@ -503,10 +503,7 @@ const isClearSpot =
     !isSolidAt(spot) &&
     !Array.some(blockers, box => circleTouchesBox(spot, PICKUP_RADIUS, box))
 
-export const settleSpot = (
-  point: Vector,
-  blockers: ReadonlyArray<Box>,
-): Vector => {
+const settleSpot = (point: Vector, blockers: ReadonlyArray<Box>): Vector => {
   const start = {
     x: Math.round(Math.min(SPOT_RIGHT, Math.max(SPOT_LEFT, point.x))),
     y: Math.round(Math.min(SPOT_BOTTOM, Math.max(SPOT_TOP, point.y))),
@@ -529,7 +526,7 @@ const eligibleKinds = (player: Player): ReadonlyArray<PickupKind> =>
       player.hp < PLAYER_MAX_HP,
   )
 
-export const pickKindAt = (
+const pickKindAt = (
   roll: number,
   kinds: ReadonlyArray<PickupKind>,
 ): PickupKind => {
@@ -681,7 +678,7 @@ const settleLoot = (model: Model): Model =>
       })
     : model
 
-export const dropLoot = (before: Model, model: Model, worldMs: number): Model =>
+const dropLoot = (before: Model, model: Model, worldMs: number): Model =>
   Phase.match(before.phase, {
     Ready: () => settleLoot(model),
     Preparation: () => settleLoot(model),
