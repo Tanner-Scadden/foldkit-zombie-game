@@ -54,7 +54,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/actions.ts`       | Winded and dazed zombies getting back on their feet                    |
 | `src/frenzy.ts`        | Horde frenzy: which packs frenzy, fading stragglers, the pack bonus    |
 | `src/chucker.ts`       | The Chucker: hanging back, grabbing, heaving, and the thrown Groaner   |
-| `src/crawler.ts`       | The Ankle Biter: where it comes up, surfacing, and clinging           |
+| `src/crawler.ts`       | The Ankle Biter: where it comes up, surfacing, and clinging            |
 | `src/boss.ts`          | The boss: its rules, its entrance, its attacks, and its health bar     |
 | `src/combat.ts`        | Strikes, wounds, and bursts applied to any list of targets             |
 | `src/traps.ts`         | The trap table, placement, chewing, turrets, and repair                |
@@ -143,6 +143,15 @@ iOS keeps a Home Screen app alive in the background, so players can keep an old 
 - Give a commit a body that says what was wrong or missing and what changed.
 - Do not add `Co-Authored-By` lines or any AI attribution to a commit message.
 - Do not commit or push unless asked.
+
+### Changelog
+
+`CHANGELOG.md` is for players, not developers. Keep it fun and short so it never feels spammy.
+
+- One entry per day that shipped something a player would notice, newest first, headed `## <Month D, YYYY>: <short fun title>`. Add to today's entry instead of starting a second one.
+- At most about five bullets a day, each one line with one emoji, saying what changed for the player. Skip refactors, tests, tooling, and anything invisible.
+- Goofy and plain, like the game's own copy. No version numbers, commit hashes, or file names.
+- When a change ships something players will notice, add or update today's bullet in the same push.
 
 ### Prose
 
