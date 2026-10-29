@@ -555,7 +555,7 @@ const blockedReason = (model: Model, good: ShopGood): Option.Option<string> => {
         : Option.none(),
     Trap: ({ kind }) =>
       ownedCount(model, kind) >= TRAPS[kind].limit
-        ? Option.some(`You can only own ${TRAPS[kind].limit}`)
+        ? Option.some(TRAPS[kind].buyLimitNote)
         : Option.none(),
     Repair: () =>
       Array.some(model.traps, isDamaged)

@@ -36,6 +36,7 @@ import {
   ZOMBIE_ALIVE_MAX,
 } from './constants'
 import { burrowed, drawSurfacingSpot } from './crawler'
+import { toughenSpawns, withBests } from './difficulty'
 import { frenzyOnArrival, frenzyPacksOf } from './frenzy'
 import { clamp } from './geometry'
 import { deriveIntent } from './input'
@@ -1212,7 +1213,9 @@ const beginPreparation = (
   durationMs: number,
   clock: BreakClock = BreakClock.Counting(),
 ): Model => {
-  const [waveState, { spawns, holds }] = rollWave(model.rngState, wave)
+  const [waveState, rolled] = rollWave(model.rngState, wave)
+  const { holds } = rolled
+  const spawns = toughenSpawns(model.difficulty.chosen, rolled.spawns)
   const [rngState, boss] = planBoss(waveState, wave, spawns)
   return modifyFields(model, {
     boss: () => boss,
@@ -1568,15 +1571,17 @@ export const roundWave = (phase: Phase): number =>
 
 const recordBestWave = (model: Model, wave: number): Model =>
   isEndless(model)
-    ? modifyFields(model, {
-        maybeBestEndlessWave: maybeBest =>
-          Option.some(
-            Option.match(maybeBest, {
-              onNone: () => wave,
-              onSome: best => Math.max(best, wave),
-            }),
-          ),
-      })
+    ? withBests(model, bests =>
+        modifyFields(bests, {
+          maybeBestEndlessWave: maybeBest =>
+            Option.some(
+              Option.match(maybeBest, {
+                onNone: () => wave,
+                onSome: best => Math.max(best, wave),
+              }),
+            ),
+        }),
+      )
     : model
 
 export const endWhenDefeated = (model: Model): Model => {

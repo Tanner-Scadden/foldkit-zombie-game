@@ -2,7 +2,13 @@ import { Array, Option, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { recoverActions } from './actions'
-import { ARENA_LEVEL, type Box, findStrike, moveCircle } from './arena'
+import {
+  ARENA_LEVEL,
+  type Box,
+  findStrike,
+  isInsideRoomAt,
+  moveCircle,
+} from './arena'
 import {
   advanceBossMoves,
   isRooted,
@@ -34,7 +40,8 @@ import {
   ZOMBIE_KNOCKBACK_DECAY_PER_SECOND,
 } from './constants'
 import { advanceCrawlers, ankleSlowAt } from './crawler'
-import { advanceFrenzy, frenzyPace, payWipedPacks } from './frenzy'
+import { biteDamage } from './difficulty'
+import { advanceFrenzy, frenzyPace, isFrenzied, payWipedPacks } from './frenzy'
 import {
   ZERO_VECTOR,
   addVectors,
@@ -71,7 +78,14 @@ import {
 } from './model'
 import { advanceIntensity } from './pacing'
 import { advanceParticles } from './particles'
-import { type Clearance, refreshFlowField, steerToward } from './pathing'
+import {
+  type Clearance,
+  maybeNearestBait,
+  playerDistancePx,
+  refreshFlowField,
+  steerToBait,
+  steerToward,
+} from './pathing'
 import {
   advancePowerUps,
   bulletGlaze,
@@ -85,6 +99,7 @@ import { type Seeded, between, generateMany, nextRandom } from './prng'
 import { earn, refreshShopPresence } from './shop'
 import { countHits, countShots } from './stats'
 import {
+  BAIT_RULES,
   TURRET_WEAPON,
   advanceTraps,
   barricadedDoors,
@@ -573,7 +588,7 @@ const flowHeading = (
   )
 }
 
-const heading = (
+const chaseHeading = (
   zombie: Zombie,
   flowFields: FlowFields,
   target: Vector,
@@ -585,6 +600,57 @@ const heading = (
         () => flowHeading(zombie, flowFields, target, obstacles.barricaded),
       )
     : flowHeading(zombie, flowFields, target, obstacles.barricaded)
+
+// NOTE: a slow zombie in the room goes for a standing Plank Pile within
+// BAIT_RULES.pullPx of walking when the plank is nearer than the player. A
+// frenzied one only has eyes for the player.
+export const maybeBaitDoor = (
+  zombie: Zombie,
+  playerField: FlowField,
+  barricaded: ReadonlyArray<DoorId>,
+): Option.Option<DoorId> => {
+  const stats = statsOf(zombie)
+  if (
+    stats.bait === 'Ignores' ||
+    Array.isReadonlyArrayEmpty(barricaded) ||
+    isFrenzied(zombie) ||
+    !isInsideRoomAt(zombie)
+  ) {
+    return Option.none()
+  }
+
+  return pipe(
+    maybeNearestBait(zombie, barricaded, stats.clearance, BAIT_RULES.pullPx),
+    Option.filter(
+      ({ distancePx }) => distancePx < playerDistancePx(playerField, zombie),
+    ),
+    Option.map(({ door }) => door),
+  )
+}
+
+const heading = (
+  zombie: Zombie,
+  flowFields: FlowFields,
+  target: Vector,
+  obstacles: Obstacles,
+): Vector =>
+  Option.match(
+    maybeBaitDoor(
+      zombie,
+      flowFields[statsOf(zombie).clearance],
+      obstacles.barricaded,
+    ),
+    {
+      onSome: door =>
+        steerToBait(
+          door,
+          zombie,
+          statsOf(zombie).radius - 1,
+          statsOf(zombie).clearance,
+        ),
+      onNone: () => chaseHeading(zombie, flowFields, target, obstacles),
+    },
+  )
 
 const steeringVelocity = (
   zombie: Zombie,
@@ -961,7 +1027,11 @@ const bitePlayer = (model: Model, attacker: Zombie): Model => {
   )
   return modifyFields(model, {
     player: () =>
-      woundPlayer(player, statsOf(attacker).contactDamage, direction),
+      woundPlayer(
+        player,
+        biteDamage(model.difficulty.chosen, statsOf(attacker).contactDamage),
+        direction,
+      ),
     zombies: Array.map(bumpAttacker(attacker, direction)),
     frameEvents: Array.append(
       GameEvent.PlayerHurt({ x: player.x, y: player.y, direction }),

@@ -21,6 +21,7 @@ import { describe, test, expect as vitestExpect } from 'vitest'
 import { Dialog } from '@foldkit/ui'
 
 import { RESTART_GRACE_MS } from './constants'
+import { withBests } from './difficulty'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
 import {
   FocusHomeButton,
@@ -73,7 +74,7 @@ const pauseMenuButton = role('button', { name: 'Menu: leave this run' })
 const endMenuButton = role('button', { name: 'Menu: back to the home screen' })
 const leaveQuestion = role('dialog', { name: 'Leave this run?' })
 const mainMenu = role('navigation', { name: 'Main menu' })
-const bests = role('region', { name: 'This session' })
+const bests = role('region', { name: 'This session, Normal' })
 
 // NOTE: Scene refuses a pointerdown that no handler on the element or its
 // ancestors would receive. That refusal is the check: a press on these
@@ -134,13 +135,15 @@ describe('Home menu', () => {
     scene(
       { update, view },
       given(
-        modifyFields(home, {
-          maybeBestEndlessWave: () => Option.some(12),
-          sessionBests: () => ({
+        modifyFields(
+          withBests(home, () => ({
+            maybeBestEndlessWave: Option.some(12),
             maybeFastestWinMs: Option.some(402_000),
-            kills: 341,
-          }),
-        }),
+          })),
+          {
+            sessionBests: bests => modifyFields(bests, { kills: () => 341 }),
+          },
+        ),
       ),
       measureSurface,
       inside(

@@ -23,7 +23,14 @@ import { Dialog, Tabs } from '@foldkit/ui'
 import indexHtml from '../index.html?raw'
 import { GAME_TITLE, PREPARATION_MS } from './constants'
 import { FocusShopItem, Message, update } from './main'
-import { Arsenal, type Model, Phase, Reload, initialModel } from './model'
+import {
+  Arsenal,
+  DifficultyCard,
+  type Model,
+  Phase,
+  Reload,
+  initialModel,
+} from './model'
 import { DEBUT_CARD_MIN_MS } from './onboarding'
 import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
@@ -387,10 +394,10 @@ describe('Shop', () => {
       ...openShop(),
       click(trapsTab),
       resolveFocusTab,
-      expect(text('0 ready to place, 0 placed, up to 4')).toExist(),
+      expect(text('0 ready to place, 0 placed, up to 2')).toExist(),
       click(role('button', { name: 'Buy Plank Pile for $20' })),
       expect(text('You have $80')).toExist(),
-      expect(text('1 ready to place, 0 placed, up to 4')).toExist(),
+      expect(text('1 ready to place, 0 placed, up to 2')).toExist(),
       expect(role('button', { name: 'Buy Glue and Nails for $0' })).toHaveAttr(
         'aria-disabled',
         'true',
@@ -681,7 +688,7 @@ describe('Run stats', () => {
       given(finished(Phase.GameOver({ wave: 4 }))),
       measureSurface,
       expect(role('status')).toHaveText(
-        `Game over. Eaten on wave 4. ${STATS} ${PLAY_AGAIN} ${BACK_HOME} ${FEEDBACK}`,
+        `Game over. Eaten on wave 4. Difficulty: Normal. ${STATS} ${PLAY_AGAIN} ${BACK_HOME} ${FEEDBACK}`,
       ),
     )
   })
@@ -692,7 +699,7 @@ describe('Run stats', () => {
       given(finished(Phase.Victory())),
       measureSurface,
       expect(role('status')).toHaveText(
-        `Victory. The house is yours. For now. ${STATS} ${KEEP_GOING} ${PLAY_AGAIN} ${BACK_HOME} ${FEEDBACK}`,
+        `Victory. The house is yours. For now. Difficulty: Normal. ${STATS} ${KEEP_GOING} ${PLAY_AGAIN} ${BACK_HOME} ${FEEDBACK}`,
       ),
     )
   })
@@ -727,7 +734,12 @@ describe('New zombie card', () => {
     const card = role('group', { name: 'New zombie: Groaner' })
     scene(
       { update, view },
-      given(modifyFields(initialModel, { lastDevice: () => 'Touch' })),
+      given(
+        modifyFields(initialModel, {
+          lastDevice: () => 'Touch',
+          difficultyCard: () => DifficultyCard.Seen(),
+        }),
+      ),
       measureSurface,
       click(playButton),
       expect(card).toBeAbsent(),

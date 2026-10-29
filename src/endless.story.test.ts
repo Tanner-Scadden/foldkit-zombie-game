@@ -10,10 +10,12 @@ import {
   ZOMBIE_ALIVE_MAX,
   ZOMBIE_MAX_HP,
 } from './constants'
+import { bestsFor, withBests } from './difficulty'
 import { Message, update } from './main'
 import {
   Arsenal,
   type Bullet,
+  DifficultyCard,
   Frenzy,
   type Model,
   Phase,
@@ -41,6 +43,7 @@ const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
 const MUZZLE_X = ARENA_LEVEL.width / 2 + 10
 
 const readyModel: Model = modifyFields(initialModel, {
+  difficultyCard: () => DifficultyCard.Seen(),
   maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
 })
 
@@ -517,30 +520,32 @@ describe('best wave this session', () => {
       update,
       given(dyingIn(readyModel, 12)),
       tick(FRAME_MS),
-      model(({ phase, maybeBestEndlessWave }) => {
-        expect(phase).toEqual(Phase.GameOver({ wave: 12 }))
-        expect(maybeBestEndlessWave).toEqual(Option.some(12))
+      model(current => {
+        expect(current.phase).toEqual(Phase.GameOver({ wave: 12 }))
+        expect(bestsFor(current).maybeBestEndlessWave).toEqual(Option.some(12))
       }),
     )
     story(
       update,
       given(
         dyingIn(
-          modifyFields(readyModel, {
-            maybeBestEndlessWave: () => Option.some(14),
-          }),
+          withBests(readyModel, bests =>
+            modifyFields(bests, {
+              maybeBestEndlessWave: () => Option.some(14),
+            }),
+          ),
           10,
         ),
       ),
       tick(FRAME_MS),
-      model(({ maybeBestEndlessWave }) => {
-        expect(maybeBestEndlessWave).toEqual(Option.some(14))
+      model(current => {
+        expect(bestsFor(current).maybeBestEndlessWave).toEqual(Option.some(14))
       }),
       ...waitOutGrace(),
       press('KeyE'),
-      model(({ maybeBestEndlessWave, mode }) => {
-        expect(mode).toEqual(RunMode.Endless())
-        expect(maybeBestEndlessWave).toEqual(Option.some(14))
+      model(current => {
+        expect(current.mode).toEqual(RunMode.Endless())
+        expect(bestsFor(current).maybeBestEndlessWave).toEqual(Option.some(14))
       }),
     )
   })
@@ -554,8 +559,8 @@ describe('best wave this session', () => {
         }),
       ),
       tick(FRAME_MS),
-      model(({ maybeBestEndlessWave }) => {
-        expect(maybeBestEndlessWave).toEqual(Option.none())
+      model(current => {
+        expect(bestsFor(current).maybeBestEndlessWave).toEqual(Option.none())
       }),
     )
   })

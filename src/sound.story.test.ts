@@ -23,6 +23,7 @@ import {
 import {
   AudioState,
   type Bullet,
+  DifficultyCard,
   Frenzy,
   type Model,
   Phase,
@@ -43,6 +44,7 @@ const SHOT_X = ARENA_LEVEL.width / 2 + 6
 const SHOT_Y = ARENA_LEVEL.height / 2
 
 const readyScreen: Model = modifyFields(initialModel, {
+  difficultyCard: () => DifficultyCard.Seen(),
   maybeSurface: () => Option.some(SURFACE),
   musicSetting: () => 'Off',
 })

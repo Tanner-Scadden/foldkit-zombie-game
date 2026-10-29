@@ -108,7 +108,7 @@ const TIPS: Array.NonEmptyReadonlyArray<Tip> = [
   { topic: 'Shop', text: 'Open between waves. Walk into the stall.' },
   {
     topic: TRAPS.Barricade.name,
-    text: 'Nail it in a doorway between waves. Zombies chew through.',
+    text: 'Two at most, in doorways between waves. Slow zombies stop to chew.',
   },
   {
     topic: TRAPS.Turret.name,

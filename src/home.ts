@@ -2,6 +2,7 @@ import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { RESTART_GRACE_MS } from './constants'
+import { hasJustWon, withBests } from './difficulty'
 import type { FocusStep } from './input'
 import { type HomeButton, type Model, Phase, initialModel } from './model'
 import { totalKills } from './stats'
@@ -124,26 +125,26 @@ const fasterWin = (
     }),
   )
 
-const hasWon = (before: Model, after: Model): boolean =>
-  !Phase.isAnyOf(['Victory'])(before.phase) &&
-  Phase.isAnyOf(['Victory'])(after.phase)
-
 export const recordSessionBests = (before: Model, after: Model): Model => {
   const newKills = Math.max(
     0,
     totalKills(after.stats) - totalKills(before.stats),
   )
-  const isWin = hasWon(before, after)
+  const isWin = hasJustWon(before, after)
   if (newKills === 0 && !isWin) {
     return after
   }
 
-  return modifyFields(after, {
-    sessionBests: bests => ({
-      kills: bests.kills + newKills,
-      maybeFastestWinMs: isWin
-        ? fasterWin(bests.maybeFastestWinMs, after.stats.runMs)
-        : bests.maybeFastestWinMs,
-    }),
+  const counted = modifyFields(after, {
+    sessionBests: bests =>
+      modifyFields(bests, { kills: kills => kills + newKills }),
   })
+  return isWin
+    ? withBests(counted, bests =>
+        modifyFields(bests, {
+          maybeFastestWinMs: maybeFastestMs =>
+            fasterWin(maybeFastestMs, after.stats.runMs),
+        }),
+      )
+    : counted
 }

@@ -5,6 +5,7 @@ import {
   DOORS,
   DOOR_IDS,
   DOOR_TILE_INDICES,
+  THRESHOLDS,
   TILE_COUNT,
   type Tile,
   doorSpawnPoint,
@@ -186,6 +187,20 @@ export const computeFlowField = (
   ),
 })
 
+const fieldFrom = (
+  origins: Array.NonEmptyReadonlyArray<number>,
+  clearance: Clearance,
+): FlowField => ({
+  originIndex: Array.headNonEmpty(origins),
+  tolls: [],
+  distances: spread(
+    Array.makeBy(TILE_COUNT, () => UNREACHED_DISTANCE),
+    Array.map(origins, index => ({ index, distance: 0 })),
+    clearance,
+    new Map(),
+  ),
+})
+
 export const flowFieldToward = (
   target: Vector,
   clearance: Clearance,
@@ -331,6 +346,81 @@ const insideSteering = (
     },
   )
 }
+
+// BAIT
+
+// NOTE: a barricade never moves, so each doorway's field toward its inner
+// face is built once here. A zombie drawn to a Plank Pile reads the field of
+// that doorway, and nothing is recomputed when planks go up or break.
+const baitFieldsFor = (door: DoorId): Readonly<Record<Clearance, FlowField>> =>
+  Array.match(THRESHOLDS[door].indices, {
+    onEmpty: () => ({
+      Narrow: computeFlowField(0, 'Narrow', []),
+      Wide: computeFlowField(0, 'Wide', []),
+    }),
+    onNonEmpty: origins => ({
+      Narrow: fieldFrom(origins, 'Narrow'),
+      Wide: fieldFrom(origins, 'Wide'),
+    }),
+  })
+
+const BAIT_FIELDS: Readonly<
+  Record<DoorId, Readonly<Record<Clearance, FlowField>>>
+> = {
+  North: baitFieldsFor('North'),
+  West: baitFieldsFor('West'),
+  East: baitFieldsFor('East'),
+  South: baitFieldsFor('South'),
+}
+
+export type Bait = Readonly<{ door: DoorId; distancePx: number }>
+
+export const baitDistancePx = (
+  door: DoorId,
+  position: Vector,
+  clearance: Clearance,
+): number =>
+  distanceAt(BAIT_FIELDS[door][clearance].distances, tileIndexAt(position)) *
+  TILE_SIZE
+
+export const playerDistancePx = (
+  flowField: FlowField,
+  position: Vector,
+): number => distanceAt(flowField.distances, tileIndexAt(position)) * TILE_SIZE
+
+export const maybeNearestBait = (
+  position: Vector,
+  doors: ReadonlyArray<DoorId>,
+  clearance: Clearance,
+  pullPx: number,
+): Option.Option<Bait> =>
+  pipe(
+    doors,
+    Array.map(door => ({
+      door,
+      distancePx: baitDistancePx(door, position, clearance),
+    })),
+    Array.filter(({ distancePx }) => distancePx <= pullPx),
+    Array.sort(
+      Order.mapInput(Order.Number, ({ distancePx }: Bait) => distancePx),
+    ),
+    Array.head,
+  )
+
+export const steerToBait = (
+  door: DoorId,
+  position: Vector,
+  halfWidth: number,
+  clearance: Clearance,
+): Vector =>
+  Option.getOrElse(
+    flowDirection(BAIT_FIELDS[door][clearance], position, halfWidth, clearance),
+    () =>
+      Option.getOrElse(
+        directionBetween(position, DOORS[door].center),
+        () => ZERO_VECTOR,
+      ),
+  )
 
 // OUTSIDE
 

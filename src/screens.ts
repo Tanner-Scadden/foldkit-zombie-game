@@ -13,6 +13,7 @@ import {
   WAVE_BANNER_MS,
   WAVE_CLEARED_BANNER_MS,
 } from './constants'
+import { DIFFICULTIES, bestsFor } from './difficulty'
 import {
   type BakedText,
   GLYPH_HEIGHT,
@@ -30,6 +31,7 @@ import {
   Alarm,
   type Appearance,
   DebutCard,
+  type Difficulty,
   type HintBand,
   type InputDevice,
   type Model,
@@ -860,7 +862,15 @@ const PANEL_EDGE = '#5a3a4a'
 
 type StatRow = Readonly<{ label: BakedText; value: string; tone: TextTone }>
 
+const DIFFICULTY_TONES: Readonly<Record<Difficulty, TextTone>> = {
+  Easy: 'Plain',
+  Normal: 'Plain',
+  Hard: 'Alert',
+  Nightmare: 'Defeat',
+}
+
 const STAT_LABELS = {
+  difficulty: bakeText('DIFFICULTY', 'Hint'),
   waves: bakeText('WAVES CLEARED', 'Hint'),
   reached: bakeText('WAVE REACHED', 'Hint'),
   best: bakeText('BEST THIS SESSION', 'Hint'),
@@ -890,7 +900,7 @@ const waveRows = (model: Model): ReadonlyArray<StatRow> =>
       },
       {
         label: STAT_LABELS.best,
-        value: Option.match(model.maybeBestEndlessWave, {
+        value: Option.match(bestsFor(model).maybeBestEndlessWave, {
           onNone: () => '--',
           onSome: best => `WAVE ${best}`,
         }),
@@ -902,6 +912,11 @@ const waveRows = (model: Model): ReadonlyArray<StatRow> =>
 const statRows = (model: Model): ReadonlyArray<StatRow> => {
   const { stats } = model
   return [
+    {
+      label: STAT_LABELS.difficulty,
+      value: String.toUpperCase(DIFFICULTIES[model.difficulty.chosen].name),
+      tone: DIFFICULTY_TONES[model.difficulty.chosen],
+    },
     ...waveRows(model),
     {
       label: STAT_LABELS.kills,
@@ -1008,6 +1023,15 @@ const panelShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
 const VERDICT_Y = 27
 const FEEDBACK = bakeText(String.toUpperCase(FEEDBACK_LINE), 'Hint')
 const FEEDBACK_GAP = 5
+const UNLOCK_BLINK_MS = 400
+const NIGHTMARE_UNLOCKED = bakeText(
+  'NIGHTMARE UNLOCKED! PICK IT IN SETTINGS',
+  'Victory',
+)
+const NIGHTMARE_UNLOCKED_DIM = bakeText(
+  'NIGHTMARE UNLOCKED! PICK IT IN SETTINGS',
+  'Alert',
+)
 
 const endShapes = (
   model: Model,
@@ -1024,7 +1048,12 @@ const endShapes = (
     'Center',
   ),
   ...panelShapes(model),
-  centered(FEEDBACK, panelBottom(model) + FEEDBACK_GAP),
+  model.difficulty.nightmare === 'JustUnlocked' &&
+  Math.floor(model.screenMs / UNLOCK_BLINK_MS) % 2 === 0
+    ? centered(NIGHTMARE_UNLOCKED, panelBottom(model) + FEEDBACK_GAP)
+    : model.difficulty.nightmare === 'JustUnlocked'
+      ? centered(NIGHTMARE_UNLOCKED_DIM, panelBottom(model) + FEEDBACK_GAP)
+      : centered(FEEDBACK, panelBottom(model) + FEEDBACK_GAP),
 ]
 
 // OVERLAY

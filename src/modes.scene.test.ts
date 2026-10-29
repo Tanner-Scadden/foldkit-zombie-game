@@ -17,6 +17,7 @@ import { describe, test } from 'vitest'
 import { Dialog } from '@foldkit/ui'
 
 import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
+import { withBests } from './difficulty'
 import { Message, update } from './main'
 import { Arsenal, type Model, Phase, RunMode, initialModel } from './model'
 import { asVeteran } from './veteran'
@@ -144,11 +145,17 @@ describe('Mode choice', () => {
     scene(
       { update, view },
       given(
-        modifyFields(initialModel, {
-          mode: () => RunMode.Endless(),
-          phase: () => Phase.GameOver({ wave: 12 }),
-          maybeBestEndlessWave: () => Option.some(14),
-        }),
+        modifyFields(
+          withBests(initialModel, bests =>
+            modifyFields(bests, {
+              maybeBestEndlessWave: () => Option.some(14),
+            }),
+          ),
+          {
+            mode: () => RunMode.Endless(),
+            phase: () => Phase.GameOver({ wave: 12 }),
+          },
+        ),
       ),
       measureSurface,
       expect(role('status')).toContainText(

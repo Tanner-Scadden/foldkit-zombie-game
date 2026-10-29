@@ -10,6 +10,7 @@ import {
 } from './arena'
 import { woundPlayer } from './combat'
 import { MS_PER_SECOND, PLAYER_RADIUS, ZOMBIE_ALIVE_MAX } from './constants'
+import { difficultySpeedScale } from './difficulty'
 import { circlesOverlap, directionBetween, scaleVector } from './geometry'
 import {
   Boss,
@@ -222,7 +223,7 @@ const enter = (model: Model, door: DoorId, hp: number): Model => {
     kind: BOSS_KIND,
     at: doorSpawnPoint(door, 0),
     speedRoll: speedDraw.value,
-    speedScale: 1,
+    speedScale: difficultySpeedScale(model.difficulty.chosen),
     hp,
   })
   return modifyFields(model, {
@@ -623,7 +624,7 @@ const belchOne =
           kind: 'Shambler',
           at: belchPoint(boss, toward, index),
           speedRoll: speedDraw.value,
-          speedScale: 1,
+          speedScale: difficultySpeedScale(model.difficulty.chosen),
           hp: belchedHp(boss),
         }),
       ),

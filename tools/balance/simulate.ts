@@ -6,6 +6,7 @@
 //   TIMELINE=1 bun run balance 40   (adds the wave timeline audit)
 //   KITE=1 bun run balance 200   (runs from the boss, never dodges)
 //   NO_DODGE=1 bun run balance 200   (ignores every floor tell)
+//   DIFFICULTY=hard bun run balance 200   (easy, normal, hard, or nightmare)
 // It drives the game's own init model and update with a simple bot and
 // prints survival per wave, run length, the money curve, and which zombie
 // kinds cost the bot the most hearts. Nothing here ships with the game.
@@ -60,6 +61,8 @@ if (process.env.TUNE !== undefined) {
     CHUCKER_RULES: (await import('../../src/chucker')).CHUCKER_RULES,
     CRAWLER_RULES: (await import('../../src/crawler')).CRAWLER_RULES,
     FRENZY_RULES: (await import('../../src/frenzy')).FRENZY_RULES,
+    BAIT_RULES: (await import('../../src/traps')).BAIT_RULES,
+    DIFFICULTIES: (await import('../../src/difficulty')).DIFFICULTIES,
   })
 }
 
@@ -76,6 +79,16 @@ type Kind =
   | 'Boss'
 
 const IS_ENDLESS = process.env.MODE === 'endless'
+const DIFFICULTY = (() => {
+  const name = (process.env.DIFFICULTY ?? 'normal').toLowerCase()
+  if (name === 'easy') return 'Easy'
+  if (name === 'hard') return 'Hard'
+  if (name === 'nightmare') return 'Nightmare'
+  if (name === 'normal') return 'Normal'
+  throw new Error(
+    `DIFFICULTY must be easy, normal, hard, or nightmare, not ${name}`,
+  )
+})()
 const NO_UPGRADES = process.env.NO_UPGRADES !== undefined
 // SWAP=1 re-arms the spare gun before each wave while it has rounds, the
 // way a player swaps back after a refill. The default bot never swaps, so
@@ -889,7 +902,10 @@ const runOnce = (seed: number): RunResult => {
   const hurtBy = emptyHurt()
   const moneyAfterWave: Array<number> = []
   const ready = send(
-    modifyFields(asVeteran(initialModel), { rngState: () => seed }),
+    modifyFields(asVeteran(initialModel), {
+      rngState: () => seed,
+      difficulty: () => ({ chosen: DIFFICULTY, nightmare: 'Unlocked' }),
+    }),
     Message.MeasuredGameSurface(SURFACE),
   )
   let model = tapKey(ready, IS_ENDLESS ? 'KeyE' : 'Enter')
@@ -1269,7 +1285,7 @@ const lastWave = IS_ENDLESS
   ? Math.max(...results.map(result => result.cleared + 1))
   : FINAL_WAVE
 console.log(
-  `${runs} ${IS_ENDLESS ? 'endless' : 'campaign'} runs in ${elapsed.toFixed(1)} s${NO_UPGRADES ? ', no upgrades' : ''}${SWAPS_BACK ? ', swaps back to the spare' : ''}${KITES ? ', kites the boss' : ''}`,
+  `${runs} ${IS_ENDLESS ? 'endless' : 'campaign'} runs on ${DIFFICULTY} in ${elapsed.toFixed(1)} s${NO_UPGRADES ? ', no upgrades' : ''}${SWAPS_BACK ? ', swaps back to the spare' : ''}${KITES ? ', kites the boss' : ''}`,
 )
 console.log('\nWave  reached  cleared')
 for (let wave = 1; wave <= lastWave; wave++) {

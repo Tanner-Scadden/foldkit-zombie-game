@@ -14,6 +14,7 @@ import {
 import { BOSS_RULES, hasBoss, planBoss } from '@game/boss'
 import { SHADOW_COLOR } from '@game/constants'
 import { DECAL_MAX, PLAYER_MAX_HP } from '@game/constants'
+import { withBests } from '@game/difficulty'
 import { sceneShapes } from '@game/layers'
 import {
   Message,
@@ -23,6 +24,11 @@ import {
   update,
 } from '@game/main'
 import {
+  DifficultyCard,
+  Trap,
+  type Difficulty,
+  type DoorId,
+  type NightmareLock,
   Model,
   Phase,
   Arsenal,
@@ -550,9 +556,10 @@ const roomModel = (): Model => {
       hintBand: () => (num('py', 90) < 70 ? 'Bottom' : 'Top'),
     })
   if (params.has('best'))
-    model = modifyFields(model, {
-      maybeBestEndlessWave: () => Option.some(num('best', 0)),
-    })
+    model = withBests(model, bests => ({
+      ...bests,
+      maybeBestEndlessWave: Option.some(num('best', 0)),
+    }))
   if (params.has('pistol'))
     model = modifyFields(model, {
       player: p => ({ ...p, pistolTier: num('pistol', 0) }),
@@ -675,13 +682,66 @@ const scenarioModel = (): Model => {
       maybeNewerBuild: () => Option.some(params.get('newer') || 'next'),
     })
   if (params.has('bests'))
-    model = modifyFields(model, {
-      maybeBestEndlessWave: () => Option.some(12),
-      sessionBests: () => ({
+    model = modifyFields(
+      withBests(model, () => ({
+        maybeBestEndlessWave: Option.some(12),
         maybeFastestWinMs: Option.some(402_000),
-        kills: 341,
-      }),
+      })),
+      { sessionBests: bests => ({ ...bests, kills: 341 }) },
+    )
+  model = modifyFields(model, {
+    difficultyCard: () =>
+      params.has('ask') ? DifficultyCard.Unseen() : DifficultyCard.Seen(),
+    difficulty: setting => ({
+      chosen: (params.get('difficulty') ?? setting.chosen) as Difficulty,
+      nightmare: (params.get('nightmare') ??
+        setting.nightmare) as NightmareLock,
+    }),
+  })
+  const planks = params.get('planks')
+  if (planks !== null)
+    model = modifyFields(model, {
+      traps: traps => [
+        ...traps,
+        ...planks.split(',').map((door, index) =>
+          Trap.Barricade({
+            id: 9000 + index,
+            door: door as DoorId,
+            hp: num('plankhp', 30),
+            hitRemainingMs: 0,
+          }),
+        ),
+      ],
     })
+  const chewers = num('chewers', 0)
+  if (chewers > 0) {
+    const spots = [
+      { x: 16, y: 84 },
+      { x: 16, y: 96 },
+      { x: 30, y: 88 },
+      { x: 34, y: 100 },
+      { x: 44, y: 80 },
+    ]
+    model = modifyFields(model, {
+      zombies: zombies => [
+        ...zombies,
+        ...spots.slice(0, chewers).map((at, index) => ({
+          id: 9100 + index,
+          kind: index === 4 ? ('Tank' as const) : ('Shambler' as const),
+          x: at.x,
+          y: at.y,
+          speed: 18,
+          hp: index === 4 ? 30 : 3,
+          maxHp: index === 4 ? 30 : 3,
+          knockback: { x: 0, y: 0 },
+          hitRemainingMs: 0,
+          state: { _tag: 'Walking' as const },
+          action: ROAMING,
+          frenzy: CALM,
+        })),
+      ],
+    })
+  }
   const look = params.get('look')
   if (look !== null) {
     const [body, hairStyle, hairColor, skinTone, shirtColor] = look.split(',')

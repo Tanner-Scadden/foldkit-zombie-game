@@ -1,6 +1,6 @@
 import { modifyFields } from 'foldkit/struct'
 
-import { Lesson, type Model } from './model'
+import { DifficultyCard, Lesson, type Model } from './model'
 import { ZOMBIE_KIND_ORDER } from './zombies'
 
 export const asVeteran = (model: Model): Model =>
@@ -11,4 +11,5 @@ export const asVeteran = (model: Model): Model =>
         fire: () => Lesson.Learned({ atMs: 0 }),
       }),
     introducedKinds: () => ZOMBIE_KIND_ORDER,
+    difficultyCard: () => DifficultyCard.Seen(),
   })

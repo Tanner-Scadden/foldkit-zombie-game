@@ -54,6 +54,10 @@ export type Arrival = 'Door' | 'Floor'
 
 export type HealthBar = 'Shown' | 'Hidden'
 
+// NOTE: a Drawn kind near a standing Plank Pile walks over and chews it
+// instead of chasing the player. Only the slow kinds are that dim.
+export type BaitPull = 'Drawn' | 'Ignores'
+
 export type Gibs = Readonly<{ kind: ParticleKind; count: number }>
 
 export type Footfall = Readonly<{
@@ -103,6 +107,7 @@ export type ZombieKindStats = Readonly<{
   maybeFootfall: Option.Option<Footfall>
   wear: ReadonlyArray<WearStage>
   arrival: Arrival
+  bait: BaitPull
 }>
 
 // KINDS
@@ -144,6 +149,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
       { below: 1 / 3, part: 'GreenScalp', heightPx: 9 },
     ],
     arrival: 'Door',
+    bait: 'Drawn',
   },
   Runner: {
     name: 'Hotfoot',
@@ -184,6 +190,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     }),
     wear: [{ below: 1 / 2, part: 'HairScalp', heightPx: 10 }],
     arrival: 'Door',
+    bait: 'Ignores',
   },
   Tank: {
     name: 'Big Lug',
@@ -228,6 +235,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
       { below: 1 / 4, part: 'BlueChunk', heightPx: 11 },
     ],
     arrival: 'Door',
+    bait: 'Drawn',
   },
   Exploder: {
     name: 'Gasbag',
@@ -274,6 +282,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
       { below: 1 / 3, part: 'GasPatch', heightPx: 8 },
     ],
     arrival: 'Door',
+    bait: 'Ignores',
   },
   Thrower: {
     name: 'Chucker',
@@ -311,6 +320,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
       { below: 1 / 3, part: 'TealLimb', heightPx: 10 },
     ],
     arrival: 'Door',
+    bait: 'Ignores',
   },
   Crawler: {
     name: 'Ankle Biter',
@@ -345,6 +355,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     maybeFootfall: Option.none(),
     wear: [{ below: 1 / 2, part: 'PaleScalp', heightPx: 4 }],
     arrival: 'Floor',
+    bait: 'Ignores',
   },
   Boss: {
     name: 'Uncle Chunk',
@@ -391,6 +402,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
       { below: 0.2, part: 'PinkChunk', heightPx: 12 },
     ],
     arrival: 'Door',
+    bait: 'Ignores',
   },
 }
 

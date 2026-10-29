@@ -4,14 +4,28 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 import { Dialog } from '@foldkit/ui'
 
 import {
+  DIFFICULTIES,
+  DIFFICULTY_ORDER,
+  NIGHTMARE_LOCK_NOTE,
+  bestsFor,
+  isLocked,
+} from './difficulty'
+import {
   HOME_BUTTONS,
   KEEP_TUTORIAL_BUTTON_ID,
   RESET_TUTORIAL_BUTTON_ID,
   homeButtonId,
   isOnHome,
 } from './home'
+import { PADLOCK_ICON } from './icons'
 import { Message, isSideways } from './main'
-import { type HomeButton, type MenuPanel, type Model, Phase } from './model'
+import {
+  type Difficulty,
+  type HomeButton,
+  type MenuPanel,
+  type Model,
+  Phase,
+} from './model'
 import { helpLabel, howToPlayView } from './pauseHelp'
 import { durationLabel } from './stats'
 import { FINAL_WAVE } from './waves'
@@ -117,11 +131,11 @@ const homeButtonView = (
 type Best = Readonly<{ label: string; value: string }>
 
 const sessionBests = (model: Model): ReadonlyArray<Best> => [
-  ...Option.match(model.maybeBestEndlessWave, {
+  ...Option.match(bestsFor(model).maybeBestEndlessWave, {
     onNone: () => [],
     onSome: wave => [{ label: 'Best endless', value: `Wave ${wave}` }],
   }),
-  ...Option.match(model.sessionBests.maybeFastestWinMs, {
+  ...Option.match(bestsFor(model).maybeFastestWinMs, {
     onNone: () => [],
     onSome: runMs => [{ label: 'Fastest win', value: durationLabel(runMs) }],
   }),
@@ -147,7 +161,7 @@ const bestsView = (model: Model, h: HtmlBuilder<Message>): Html =>
     [
       h.h2(
         [h.Id(BESTS_TITLE_ID), h.Class('home-bests-title')],
-        ['This session'],
+        [`This session, ${DIFFICULTIES[model.difficulty.chosen].name}`],
       ),
       Array.match(sessionBests(model), {
         onEmpty: () =>
@@ -343,6 +357,123 @@ const askResetTutorialView = (h: HtmlBuilder<Message>): Html =>
     ],
   )
 
+// DIFFICULTY
+
+const padlockView = (h: HtmlBuilder<Message>): Html =>
+  h.span([
+    h.Class('difficulty-padlock'),
+    h.AriaHidden(true),
+    h.Style({ backgroundImage: PADLOCK_ICON }),
+  ])
+
+const freshBadgeView = (
+  model: Model,
+  difficulty: Difficulty,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> =>
+  difficulty === 'Nightmare' && model.difficulty.nightmare === 'JustUnlocked'
+    ? [h.span([h.Class('difficulty-new'), h.AriaHidden(true)], ['NEW!'])]
+    : []
+
+const difficultyLabel = (model: Model, difficulty: Difficulty): string =>
+  isLocked(model.difficulty, difficulty)
+    ? `${DIFFICULTIES[difficulty].name}, locked. ${NIGHTMARE_LOCK_NOTE}`
+    : `${DIFFICULTIES[difficulty].name}: ${DIFFICULTIES[difficulty].blurb}`
+
+const difficultyChoiceView = (
+  model: Model,
+  difficulty: Difficulty,
+  renderInfo: Dialog.RenderInfo,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const locked = isLocked(model.difficulty, difficulty)
+  return h.button(
+    [
+      ...(difficulty === 'Normal' ? renderInfo.initialFocus : []),
+      h.Type('button'),
+      h.Class('difficulty-choice'),
+      h.DataAttribute('difficulty', difficulty),
+      h.AriaLabel(difficultyLabel(model, difficulty)),
+      ...(locked ? [h.AriaDisabled(true)] : []),
+      h.OnClick(Message.ClickedDifficultyCardButton({ difficulty }), {
+        focusSelector: '.game-surface',
+        propagation: 'Stop',
+      }),
+    ],
+    [
+      h.span(
+        [h.Class('difficulty-name')],
+        [
+          ...(locked ? [padlockView(h)] : []),
+          DIFFICULTIES[difficulty].name,
+          ...freshBadgeView(model, difficulty, h),
+        ],
+      ),
+      h.span(
+        [h.Class('difficulty-blurb')],
+        [locked ? NIGHTMARE_LOCK_NOTE : DIFFICULTIES[difficulty].blurb],
+      ),
+    ],
+  )
+}
+
+const difficultySettingView = (
+  model: Model,
+  difficulty: Difficulty,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const locked = isLocked(model.difficulty, difficulty)
+  return h.button(
+    [
+      h.Type('button'),
+      h.Class('difficulty-option'),
+      h.DataAttribute('difficulty', difficulty),
+      h.AriaLabel(difficultyLabel(model, difficulty)),
+      h.AriaPressed(model.difficulty.chosen === difficulty ? 'true' : 'false'),
+      ...(locked ? [h.AriaDisabled(true)] : []),
+      h.OnClick(Message.ClickedDifficultySettingButton({ difficulty }), {
+        propagation: 'Stop',
+      }),
+    ],
+    [
+      ...(locked ? [padlockView(h)] : []),
+      DIFFICULTIES[difficulty].name,
+      ...freshBadgeView(model, difficulty, h),
+    ],
+  )
+}
+
+const DIFFICULTY_ROW_ID = 'setting-difficulty'
+
+const difficultyRowView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [h.Class('difficulty-setting')],
+    [
+      h.span(
+        [h.Id(DIFFICULTY_ROW_ID), h.Class('difficulty-setting-label')],
+        ['Difficulty'],
+      ),
+      h.div(
+        [
+          h.Class('difficulty-options'),
+          h.Role('group'),
+          h.AriaLabelledBy(DIFFICULTY_ROW_ID),
+        ],
+        Array.map(DIFFICULTY_ORDER, difficulty =>
+          difficultySettingView(model, difficulty, h),
+        ),
+      ),
+      h.p(
+        [h.Class('difficulty-setting-note')],
+        [
+          isLocked(model.difficulty, 'Nightmare')
+            ? `${DIFFICULTIES[model.difficulty.chosen].blurb}. ${NIGHTMARE_LOCK_NOTE} Nightmare.`
+            : `${DIFFICULTIES[model.difficulty.chosen].blurb}.`,
+        ],
+      ),
+    ],
+  )
+
 const tutorialResetView = (model: Model, h: HtmlBuilder<Message>): Html =>
   h.li(
     [h.Class('setting-row')],
@@ -369,6 +500,11 @@ const panelText = (model: Model, panel: MenuPanel): PanelText => {
     return {
       title: 'Settings',
       blurb: 'Saved on this device.',
+    }
+  } else if (panel === 'Difficulty') {
+    return {
+      title: 'How tough are you?',
+      blurb: 'Pick a difficulty. You can change it later in Settings.',
     }
   } else {
     return {
@@ -408,6 +544,7 @@ const panelBodyView = (
     ]
   } else if (model.panel === 'Settings') {
     return [
+      difficultyRowView(model, h),
       h.ul(
         [h.Class('setting-list')],
         [
@@ -416,6 +553,15 @@ const panelBodyView = (
         ],
       ),
       h.div([h.Class('panel-actions')], [doneButtonView(renderInfo, h)]),
+    ]
+  } else if (model.panel === 'Difficulty') {
+    return [
+      h.div(
+        [h.Class('difficulty-choices')],
+        Array.map(DIFFICULTY_ORDER, difficulty =>
+          difficultyChoiceView(model, difficulty, renderInfo, h),
+        ),
+      ),
     ]
   } else {
     return [

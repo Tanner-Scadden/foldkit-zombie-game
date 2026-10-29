@@ -42,6 +42,13 @@ import {
   TRAP_PLACE_TRAUMA,
 } from './constants'
 import {
+  chooseDifficulty,
+  isLocked,
+  isNightmareUnlockedBy,
+  settleNightmare,
+  unlockNightmare,
+} from './difficulty'
+import {
   END_MENU_BUTTON_ID,
   KEEP_TUTORIAL_BUTTON_ID,
   RESET_TUTORIAL_BUTTON_ID,
@@ -79,6 +86,8 @@ import {
 import {
   Arsenal,
   AudioState,
+  Difficulty,
+  DifficultyCard,
   FullscreenSetting,
   GameEvent,
   GunSlot,
@@ -271,6 +280,8 @@ export const Message = defineMessageUnion({
   ClickedStayButton: {},
   GotPanelDialogMessage: { message: Dialog.Message },
   ClickedShakeButton: {},
+  ClickedDifficultyCardButton: { difficulty: Difficulty },
+  ClickedDifficultySettingButton: { difficulty: Difficulty },
   FocusedHomeButton: { button: HomeButton },
   BlurredHomeButton: {},
   CompletedFocusHomeButton: {},
@@ -797,7 +808,8 @@ const debutCardFromKey = (model: Model, code: string): Model => {
 
 const phaseFromKey = (model: Model, code: string): Model =>
   Phase.match(model.phase, {
-    Ready: () => startFromKey(model, code),
+    Ready: () =>
+      isAskingDifficultyFirst(model) ? model : startFromKey(model, code),
     Preparation: () => preparationFromKey(model, code),
     Wave: () => (isPauseKey(code) ? pause(model) : model),
     Paused: () => resumeFromKey(model, code),
@@ -1114,9 +1126,14 @@ const characterFromKey: (code: string) => UpdateStep = code => stepModel =>
 const writePanelDialog = (model: Model, nextPanelDialog: Dialog.Model): Model =>
   modifyFields(model, { panelDialog: () => nextPanelDialog })
 
+const forgetAskedMode = (model: Model): Model =>
+  DifficultyCard.isAnyOf(['Asking'])(model.difficultyCard)
+    ? modifyFields(model, { difficultyCard: () => DifficultyCard.Unseen() })
+    : model
+
 const foldPanelDialogOutMessage = Dialog.OutMessage.match<UpdateStep>({
   Opened: () => stepModel => ({ model: stepModel }),
-  Closed: () => stepModel => ({ model: stepModel }),
+  Closed: () => stepModel => ({ model: forgetAskedMode(stepModel) }),
 })
 
 const foldPanelDialog = Update.foldChild({
@@ -1233,6 +1250,89 @@ const homeFocusFromKey: (code: string) => UpdateStep = code => stepModel =>
       }
     },
   })
+
+// DIFFICULTY
+
+const isAskingDifficultyFirst = (model: Model): boolean =>
+  DifficultyCard.isAnyOf(['Unseen'])(model.difficultyCard) &&
+  isOnHome(model.phase)
+
+const askDifficulty =
+  (mode: RunMode): UpdateStep =>
+  stepModel =>
+    isPanelAllowed(stepModel, 'Difficulty')
+      ? openPanel('Difficulty')(
+          modifyFields(stepModel, {
+            difficultyCard: () => DifficultyCard.Asking({ mode }),
+          }),
+        )
+      : { model: stepModel }
+
+const startOrAsk =
+  (mode: RunMode): UpdateStep =>
+  stepModel =>
+    isAskingDifficultyFirst(stepModel)
+      ? Update.combine(stepModel, [unlockAudio, askDifficulty(mode)])
+      : startFromButton(stepModel, startWhenAllowed(stepModel, mode))
+
+const maybeKeyMode = (code: string): Option.Option<RunMode> => {
+  if (isStartKey(code)) {
+    return Option.some(RunMode.Campaign())
+  } else if (isEndlessKey(code)) {
+    return Option.some(RunMode.Endless())
+  } else {
+    return Option.none()
+  }
+}
+
+const difficultyCardFromKey: (code: string) => UpdateStep = code => stepModel =>
+  isAskingDifficultyFirst(stepModel)
+    ? Option.match(maybeKeyMode(code), {
+        onNone: () => ({ model: stepModel }),
+        onSome: mode => askDifficulty(mode)(stepModel),
+      })
+    : { model: stepModel }
+
+const pickFromCard =
+  (difficulty: Difficulty): UpdateStep =>
+  stepModel =>
+    DifficultyCard.match(stepModel.difficultyCard, {
+      Unseen: () => ({ model: stepModel }),
+      Seen: () => ({ model: stepModel }),
+      Asking: ({ mode }) =>
+        isLocked(stepModel.difficulty, difficulty)
+          ? { model: stepModel }
+          : Update.combine(
+              modifyFields(chooseDifficulty(stepModel, difficulty), {
+                difficultyCard: () => DifficultyCard.Seen(),
+              }),
+              [
+                closePanel,
+                nextModel =>
+                  startFromButton(nextModel, startWhenAllowed(nextModel, mode)),
+              ],
+            ),
+    })
+
+const pickFromSettings = (model: Model, difficulty: Difficulty): Model =>
+  isOnHome(model.phase) && model.panel === 'Settings'
+    ? chooseDifficulty(model, difficulty)
+    : model
+
+const settleNightmareFrom =
+  (before: Model): UpdateStep =>
+  stepModel => ({
+    model: startsRun(before, stepModel)
+      ? settleNightmare(stepModel)
+      : stepModel,
+  })
+
+const unlockNightmareFrom =
+  (before: Model): UpdateStep =>
+  stepModel =>
+    isNightmareUnlockedBy(before, stepModel)
+      ? playSounds([uiCue('PowerUp')])(unlockNightmare(stepModel))
+      : { model: stepModel }
 
 const toggleShake = (model: Model): Model =>
   modifyFields(model, {
@@ -1587,6 +1687,7 @@ const updateGame = (model: Model, message: Message) =>
       return Update.combine(pressed, [
         unlockAudio,
         characterFromKey(code),
+        difficultyCardFromKey(code),
         menuFromKey(code),
         homeFocusFromKey(code),
         trapFromKey(code),
@@ -1682,11 +1783,9 @@ const updateGame = (model: Model, message: Message) =>
 
     ClickedMusicButton: () => unlockAudio(toggleMusic(model)),
 
-    ClickedCampaignButton: () =>
-      startFromButton(model, startWhenAllowed(model, RunMode.Campaign())),
+    ClickedCampaignButton: () => startOrAsk(RunMode.Campaign())(model),
 
-    ClickedEndlessButton: () =>
-      startFromButton(model, startWhenAllowed(model, RunMode.Endless())),
+    ClickedEndlessButton: () => startOrAsk(RunMode.Endless())(model),
 
     ClickedKeepGoingButton: () =>
       startFromButton(model, keepGoingWhenAllowed(model)),
@@ -1896,6 +1995,13 @@ const updateGame = (model: Model, message: Message) =>
 
     ClickedShakeButton: () => ({ model: toggleShake(model) }),
 
+    ClickedDifficultyCardButton: ({ difficulty }) =>
+      pickFromCard(difficulty)(model),
+
+    ClickedDifficultySettingButton: ({ difficulty }) => ({
+      model: pickFromSettings(model, difficulty),
+    }),
+
     FocusedHomeButton: ({ button }) => ({
       model: modifyFields(model, { maybeHomeFocus: () => Option.some(button) }),
     }),
@@ -2007,6 +2113,8 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     cueMusicFrom(model),
     focusEndMenuFrom(model),
     dismissHomeScreenTipFrom(model),
+    settleNightmareFrom(model),
+    unlockNightmareFrom(model),
     stepModel => ({ model: recordSessionBests(model, stepModel) }),
     writeSaveFrom(model),
   ])

@@ -66,6 +66,8 @@ export type TrapStats = Readonly<{
   price: number
   hp: number
   limit: number
+  placeLimitNote: string
+  buyLimitNote: string
   pathCost: number
   breakTrauma: number
   crackSound: SoundEffect
@@ -76,10 +78,12 @@ export const TRAPS: Readonly<Record<TrapKind, TrapStats>> = {
   Barricade: {
     name: 'Plank Pile',
     blurb:
-      "Nail it across a doorway. Zombies have to chew through. Your bullets don't.",
+      'Nail it across a doorway, two at most. Slow zombies stop to chew it. Your bullets fly through.',
     price: 20,
     hp: 30,
-    limit: 4,
+    limit: 2,
+    placeLimitNote: 'Two plank piles max',
+    buyLimitNote: 'Two plank piles max',
     pathCost: 25,
     breakTrauma: 0.6,
     crackSound: 'Crack',
@@ -92,11 +96,19 @@ export const TRAPS: Readonly<Record<TrapKind, TrapStats>> = {
     price: 75,
     hp: 10,
     limit: 2,
+    placeLimitNote: 'All 2 Grumpy Gnomes are out',
+    buyLimitNote: 'You can only own 2',
     pathCost: 6,
     breakTrauma: 0.5,
     crackSound: 'Crack',
     breakSound: 'Pop',
   },
+}
+
+// NOTE: how far a slow zombie in the room will walk to chew a standing
+// Plank Pile, measured along its path. See maybeBaitDoor in simulation.ts.
+export const BAIT_RULES = {
+  pullPx: 60,
 }
 
 export const TRAP_KIND_ORDER: Array.NonEmptyReadonlyArray<TrapKind> = [
@@ -582,9 +594,6 @@ const firstReason = (
     }),
   )
 
-const limitReason = (kind: TrapKind): string =>
-  `All ${TRAPS[kind].limit} ${TRAPS[kind].name}s are out`
-
 const isAtLimit = (model: Model, kind: TrapKind): boolean =>
   placedCount(model.traps, kind) >= TRAPS[kind].limit
 
@@ -618,7 +627,7 @@ const barricadePlacement = (model: Model, isBetweenWaves: boolean) =>
       maybeSpot: Option.some(TrapSpot.Doorway({ door })),
       verdict: firstReason([
         [!isBetweenWaves, 'Traps go down between waves'],
-        [isAtLimit(model, 'Barricade'), limitReason('Barricade')],
+        [isAtLimit(model, 'Barricade'), TRAPS.Barricade.placeLimitNote],
         [
           Array.contains(barricadedDoors(model.traps), door),
           'This doorway is already boarded up',
@@ -718,7 +727,7 @@ const turretPlacement = (model: Model, isBetweenWaves: boolean): Placement => {
   }
   const roundVerdict = firstReason([
     [!isBetweenWaves, 'Traps go down between waves'],
-    [isAtLimit(model, 'Turret'), limitReason('Turret')],
+    [isAtLimit(model, 'Turret'), TRAPS.Turret.placeLimitNote],
   ])
   if (PlaceVerdict.isAnyOf(['Blocked'])(roundVerdict)) {
     return floorPlacement(frontTile, roundVerdict)

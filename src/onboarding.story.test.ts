@@ -7,6 +7,7 @@ import { FIRST_PREPARATION_MS, PREPARATION_MS } from './constants'
 import { Message, update } from './main'
 import {
   DebutCard,
+  DifficultyCard,
   type Model,
   Phase,
   type ZombieKind,
@@ -32,6 +33,7 @@ const AUTO_TICKS = Math.ceil(DEBUT_CARD_MS / TICK_MS)
 const SHOWN_TICKS = Math.ceil(LESSON_MIN_SHOWN_MS / TICK_MS)
 
 const freshModel: Model = modifyFields(initialModel, {
+  difficultyCard: () => DifficultyCard.Seen(),
   maybeSurface: () => Option.some(SURFACE),
 })
 

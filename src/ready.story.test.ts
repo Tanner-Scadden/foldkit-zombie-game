@@ -7,6 +7,7 @@ import { RESTART_GRACE_MS } from './constants'
 import { clientToView } from './geometry'
 import { Message, update } from './main'
 import {
+  DifficultyCard,
   Frenzy,
   type Model,
   Phase,
@@ -38,6 +39,7 @@ const SURFACE_VIEW_X = (clientX: number): number =>
   Option.getOrThrow(clientToView(SURFACE, { x: clientX, y: 200 })).x
 
 const readyModel: Model = modifyFields(initialModel, {
+  difficultyCard: () => DifficultyCard.Seen(),
   maybeSurface: () => Option.some(SURFACE),
 })
 

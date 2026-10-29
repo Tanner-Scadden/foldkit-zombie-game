@@ -83,7 +83,7 @@ describe('Pause screen controls', () => {
         role('list', { name: 'Tips' }),
         expect(
           role('listitem', {
-            name: 'Plank Pile: Nail it in a doorway between waves. Zombies chew through.',
+            name: 'Plank Pile: Two at most, in doorways between waves. Slow zombies stop to chew.',
           }),
         ).toExist(),
         expect(

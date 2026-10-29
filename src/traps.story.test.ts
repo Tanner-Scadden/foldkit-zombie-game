@@ -31,7 +31,7 @@ import {
   ZombieState,
   initialModel,
 } from './model'
-import { SHOP_ITEMS, priceFor } from './shop'
+import { SHOP_ITEMS, Verdict, priceFor, verdictFor } from './shop'
 import { holdFire } from './testInput'
 import { TRAPS, repairPrice, stageOf, tollsOf } from './traps'
 import { WEAPONS } from './weapons'
@@ -238,6 +238,31 @@ describe('buying traps', () => {
       }),
     )
   })
+
+  test('the shop stops at two Plank Piles, placed or in the pack', () => {
+    story(
+      update,
+      given(
+        modifyFields(readyModel, {
+          phase: () => preparing(),
+          shop: () => ShopState.Browsing({ focusedItem: 'Barricade' }),
+          wallet: () => ({ balance: 500, earned: 500, shown: 500 }),
+          traps: () => [barricade(1, 'West')],
+          trapStock: () => ({ Barricade: 1, Turret: 0 }),
+        }),
+      ),
+      model(current => {
+        expect(verdictFor(current, 'Barricade')).toEqual(
+          Verdict.Refused({ reason: 'Two plank piles max' }),
+        )
+      }),
+      message(Message.ClickedBuyButton({ item: 'Barricade' })),
+      model(({ wallet, trapStock }) => {
+        expect(wallet.balance).toBe(500)
+        expect(trapStock.Barricade).toBe(1)
+      }),
+    )
+  })
 })
 
 describe('placing a barricade', () => {
@@ -320,20 +345,14 @@ describe('placing a barricade', () => {
       update,
       given(
         modifyFields(stocked(1, 0), {
-          traps: () => [
-            barricade(1, 'North'),
-            barricade(2, 'West'),
-            barricade(3, 'East'),
-            barricade(4, 'South'),
-          ],
+          traps: () => [barricade(1, 'West'), barricade(2, 'East')],
         }),
       ),
       press('KeyT'),
       model(current => {
-        expect(current.traps).toHaveLength(4)
-        expect(refusal(current)).toEqual(
-          Option.some('All 4 Plank Piles are out'),
-        )
+        expect(current.traps).toHaveLength(2)
+        expect(current.trapStock.Barricade).toBe(1)
+        expect(refusal(current)).toEqual(Option.some('Two plank piles max'))
       }),
     )
 

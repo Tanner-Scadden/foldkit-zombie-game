@@ -132,6 +132,16 @@ export const RELOAD_ICON = icon([
   '..XXXXX..',
 ])
 
+export const PADLOCK_ICON = icon([
+  '..XXX..',
+  '.X...X.',
+  '.X...X.',
+  'XXXXXXX',
+  'XXXOXXX',
+  'XXXOXXX',
+  'XXXXXXX',
+])
+
 export const NEXT_TRAP_ICON = icon([
   '.....X..',
   'XXXXXXX.',

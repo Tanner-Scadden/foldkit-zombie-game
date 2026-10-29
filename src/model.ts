@@ -576,15 +576,57 @@ export const HomeButton = Schema.Literals([
 ])
 export type HomeButton = typeof HomeButton.Type
 
-export const MenuPanel = Schema.Literals(['HowToPlay', 'Settings', 'LeaveRun'])
+export const MenuPanel = Schema.Literals([
+  'HowToPlay',
+  'Settings',
+  'LeaveRun',
+  'Difficulty',
+])
 export type MenuPanel = typeof MenuPanel.Type
 
-// NOTE: the bests live in memory for the page session only, beside
-// maybeBestEndlessWave. They are plain data on purpose: they move into the
-// SQLite player scope from PLATFORM.md as personal bests.
-export const SessionBests = Schema.Struct({
+export const Difficulty = Schema.Literals([
+  'Easy',
+  'Normal',
+  'Hard',
+  'Nightmare',
+])
+export type Difficulty = typeof Difficulty.Type
+
+// NOTE: JustUnlocked is the run that won Hard and its end screen. It
+// settles to Unlocked when the next run starts.
+export const NightmareLock = Schema.Literals([
+  'Locked',
+  'JustUnlocked',
+  'Unlocked',
+])
+export type NightmareLock = typeof NightmareLock.Type
+
+// NOTE: the chosen difficulty and the Nightmare unlock live in memory for the
+// page session only. They are plain data on purpose: they move into the
+// SQLite player scope from PLATFORM.md beside the look and the bests.
+export const DifficultySetting = Schema.Struct({
+  chosen: Difficulty,
+  nightmare: NightmareLock,
+})
+export type DifficultySetting = typeof DifficultySetting.Type
+
+export const DifficultyBests = Schema.Struct({
   maybeFastestWinMs: Schema.Option(Schema.Number),
+  maybeBestEndlessWave: Schema.Option(Schema.Number),
+})
+export type DifficultyBests = typeof DifficultyBests.Type
+
+// NOTE: the bests live in memory for the page session only, one set for each
+// difficulty. They are plain data on purpose: they move into the SQLite
+// player scope from PLATFORM.md as personal bests.
+export const SessionBests = Schema.Struct({
   kills: Schema.Number,
+  byDifficulty: Schema.Struct({
+    Easy: DifficultyBests,
+    Normal: DifficultyBests,
+    Hard: DifficultyBests,
+    Nightmare: DifficultyBests,
+  }),
 })
 export type SessionBests = typeof SessionBests.Type
 
@@ -730,6 +772,15 @@ export const RunMode = defineTaggedUnion({
   Endless: {},
 })
 export type RunMode = typeof RunMode.Type
+
+// NOTE: the first PLAY or ENDLESS of the session asks for a difficulty.
+// Asking holds the mode to start once one is picked.
+export const DifficultyCard = defineTaggedUnion({
+  Unseen: {},
+  Asking: { mode: RunMode },
+  Seen: {},
+})
+export type DifficultyCard = typeof DifficultyCard.Type
 
 export const Phase = defineTaggedUnion({
   Ready: {},
@@ -968,7 +1019,8 @@ export const Model = Schema.Struct({
   frenzyPacks: Schema.Array(FrenzyPack),
   intensity: Schema.Number,
   mode: RunMode,
-  maybeBestEndlessWave: Schema.Option(Schema.Number),
+  difficulty: DifficultySetting,
+  difficultyCard: DifficultyCard,
   player: Player,
   zombies: Schema.Array(Zombie),
   bullets: Schema.Array(Bullet),
@@ -1166,9 +1218,19 @@ export const LOAD_STEPS: ReadonlyArray<LoadStep> = [
   'Sprites',
 ]
 
-export const noSessionBests: SessionBests = {
+export const noDifficultyBests: DifficultyBests = {
   maybeFastestWinMs: Option.none(),
+  maybeBestEndlessWave: Option.none(),
+}
+
+export const noSessionBests: SessionBests = {
   kills: 0,
+  byDifficulty: {
+    Easy: noDifficultyBests,
+    Normal: noDifficultyBests,
+    Hard: noDifficultyBests,
+    Nightmare: noDifficultyBests,
+  },
 }
 
 export const initialModel: Model = {
@@ -1178,7 +1240,8 @@ export const initialModel: Model = {
   frenzyPacks: [],
   intensity: 0,
   mode: RunMode.Campaign(),
-  maybeBestEndlessWave: Option.none(),
+  difficulty: { chosen: 'Normal', nightmare: 'Locked' },
+  difficultyCard: DifficultyCard.Unseen(),
   player: initialPlayer,
   zombies: [],
   bullets: [],

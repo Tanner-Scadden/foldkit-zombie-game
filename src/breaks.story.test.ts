@@ -9,6 +9,7 @@ import {
   Arsenal,
   BreakClock,
   DebutCard,
+  DifficultyCard,
   Lesson,
   type Model,
   Phase,
@@ -253,7 +254,12 @@ describe('the Add to Home Screen tip', () => {
   test('is used up once the first run starts', () => {
     story(
       update,
-      given(modifyFields(initialModel, { screenFit: () => 'HomeScreen' })),
+      given(
+        modifyFields(initialModel, {
+          screenFit: () => 'HomeScreen',
+          difficultyCard: () => DifficultyCard.Seen(),
+        }),
+      ),
       model(current => {
         expect(current.homeScreenTip).toBe('Unseen')
       }),

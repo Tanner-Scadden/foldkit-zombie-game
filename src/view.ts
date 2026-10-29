@@ -4,6 +4,7 @@ import { Document, Html, HtmlBuilder } from 'foldkit/html'
 
 import * as CharacterView from './characterView'
 import { FEEDBACK_LINE, GAME_TITLE } from './constants'
+import { DIFFICULTIES, bestsFor } from './difficulty'
 import { homeMenuView, menuPanelView } from './homeView'
 import { gameStageView } from './layers'
 import { Message, isSideways } from './main'
@@ -132,7 +133,7 @@ const waveStatsLabel = (model: Model): string =>
       `Waves cleared: ${model.stats.wavesCleared} of ${FINAL_WAVE}.`,
     Endless: () =>
       `Wave reached: ${roundWave(model.phase)}. ${Option.match(
-        model.maybeBestEndlessWave,
+        bestsFor(model).maybeBestEndlessWave,
         {
           onNone: () => '',
           onSome: best => `Best this session: wave ${best}.`,
@@ -140,9 +141,12 @@ const waveStatsLabel = (model: Model): string =>
       )}`,
   })
 
+const nightmareNews = (model: Model): string =>
+  model.difficulty.nightmare === 'JustUnlocked' ? ' Nightmare unlocked!' : ''
+
 const statsLabel = (model: Model): string => {
   const { stats } = model
-  return `${waveStatsLabel(model)} Zombies splatted: ${totalKills(stats)} (${killLabel(stats)}). Run time ${runTimeLabel(stats)}. Accuracy ${accuracyPercent(stats)} percent. Money earned $${model.wallet.earned}. Hearts lost ${stats.heartsLost}. Traps placed ${stats.trapsPlaced}. Score ${model.score}.`
+  return `Difficulty: ${DIFFICULTIES[model.difficulty.chosen].name}.${nightmareNews(model)} ${waveStatsLabel(model)} Zombies splatted: ${totalKills(stats)} (${killLabel(stats)}). Run time ${runTimeLabel(stats)}. Accuracy ${accuracyPercent(stats)} percent. Money earned $${model.wallet.earned}. Hearts lost ${stats.heartsLost}. Traps placed ${stats.trapsPlaced}. Score ${model.score}.`
 }
 
 const debutCardStatus = (model: Model): Option.Option<string> =>

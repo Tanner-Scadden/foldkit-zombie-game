@@ -6,6 +6,7 @@ import { describe, expect, test } from 'vitest'
 import { Dialog } from '@foldkit/ui'
 
 import { RESTART_GRACE_MS } from './constants'
+import { bestsFor, withBests } from './difficulty'
 import { recordSessionBests, returnHome } from './home'
 import {
   AwaitFirstFrame,
@@ -23,6 +24,11 @@ import {
 import { Loading, type Model, Phase, initialModel, noKills } from './model'
 import { asVeteran } from './veteran'
 import { pause } from './waves'
+
+const withEndlessBest = (base: Model, wave: number): Model =>
+  withBests(base, bests =>
+    modifyFields(bests, { maybeBestEndlessWave: () => Option.some(wave) }),
+  )
 
 const home: Model = asVeteran(initialModel)
 
@@ -51,7 +57,7 @@ describe('session bests', () => {
     const overAfterSeven = modifyFields(later, {
       phase: () => Phase.GameOver({ wave: 3 }),
       screenMs: () => RESTART_GRACE_MS,
-      sessionBests: () => ({ maybeFastestWinMs: Option.none(), kills: 7 }),
+      sessionBests: bests => modifyFields(bests, { kills: () => 7 }),
     })
     story(
       update,
@@ -80,7 +86,7 @@ describe('session bests', () => {
       message(Message.TickedFrame({ deltaTime: 16 })),
       model(({ phase, sessionBests }) => {
         expect(Phase.guards.Victory(phase)).toBe(true)
-        expect(sessionBests.maybeFastestWinMs).toEqual(
+        expect(sessionBests.byDifficulty.Normal.maybeFastestWinMs).toEqual(
           Option.some(500_000 + 16),
         )
       }),
@@ -88,16 +94,17 @@ describe('session bests', () => {
     story(
       update,
       given(
-        modifyFields(winning(700_000), {
-          sessionBests: () => ({
-            maybeFastestWinMs: Option.some(400_000),
-            kills: 0,
+        withBests(winning(700_000), bests =>
+          modifyFields(bests, {
+            maybeFastestWinMs: () => Option.some(400_000),
           }),
-        }),
+        ),
       ),
       message(Message.TickedFrame({ deltaTime: 16 })),
       model(({ sessionBests }) => {
-        expect(sessionBests.maybeFastestWinMs).toEqual(Option.some(400_000))
+        expect(sessionBests.byDifficulty.Normal.maybeFastestWinMs).toEqual(
+          Option.some(400_000),
+        )
       }),
     )
   })
@@ -161,11 +168,10 @@ describe('leaving a run', () => {
   })
 
   test('going home clears the room but keeps the look, the settings, and the bests', () => {
-    const messy = modifyFields(fighting, {
+    const messy = modifyFields(withEndlessBest(fighting, 11), {
       score: () => 900,
       soundSetting: () => 'Muted',
       shakeSetting: () => 'Off',
-      maybeBestEndlessWave: () => Option.some(11),
       appearance: appearance =>
         modifyFields(appearance, { hairColor: () => 'Pink' }),
     })
@@ -176,7 +182,7 @@ describe('leaving a run', () => {
     expect(cleared.player).toEqual(initialModel.player)
     expect(cleared.soundSetting).toBe('Muted')
     expect(cleared.shakeSetting).toBe('Off')
-    expect(cleared.maybeBestEndlessWave).toEqual(Option.some(11))
+    expect(bestsFor(cleared).maybeBestEndlessWave).toEqual(Option.some(11))
     expect(cleared.appearance.hairColor).toBe('Pink')
   })
 })
