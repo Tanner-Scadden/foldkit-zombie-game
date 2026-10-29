@@ -3,7 +3,7 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { ARENA_LEVEL, isSolidAt } from './arena'
+import { PARLOUR, isSolidAt } from './arena'
 import { PREPARATION_MS } from './constants'
 import { CRAWLER_RULES, drawSurfacingSpot } from './crawler'
 import { frenzyPacksOf } from './frenzy'
@@ -25,8 +25,8 @@ import { asVeteran } from './veteran'
 import { doorCounts, floorCounts, rollSpawns } from './waves'
 
 const FRAME_MS = 16
-const CENTER_X = ARENA_LEVEL.width / 2
-const CENTER_Y = ARENA_LEVEL.height / 2
+const CENTER_X = PARLOUR.width / 2
+const CENTER_Y = PARLOUR.height / 2
 const CRAWLER_ID = 20
 
 const framesFor = (ms: number): number => Math.ceil(ms / FRAME_MS)
@@ -155,7 +155,7 @@ describe('the Ankle Biter', () => {
           ],
           player => ({
             player,
-            spot: drawSurfacingSpot(seed, player, [])[1],
+            spot: drawSurfacingSpot(PARLOUR, seed, player, [])[1],
           }),
         ),
     )
@@ -163,7 +163,7 @@ describe('the Ankle Biter', () => {
       expect(
         Math.hypot(spot.x - player.x, spot.y - player.y),
       ).toBeGreaterThanOrEqual(40)
-      expect(isSolidAt(spot)).toBe(false)
+      expect(isSolidAt(PARLOUR, spot)).toBe(false)
     })
   })
 

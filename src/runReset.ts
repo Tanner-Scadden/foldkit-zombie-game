@@ -1,4 +1,5 @@
-import { arenaCamera } from './camera'
+import { PARLOUR, startingLevel } from './arena'
+import { cameraFor } from './camera'
 import { ZERO_VECTOR } from './geometry'
 import { deriveIntent } from './input'
 import {
@@ -56,6 +57,7 @@ export type RunFields = Pick<
   | 'trapStock'
   | 'selectedTrap'
   | 'trapNotice'
+  | 'level'
   | 'flowField'
   | 'wideFlowField'
   | 'intent'
@@ -96,9 +98,14 @@ export const freshRun = (model: Model): RunFields => ({
   trapStock: emptyTrapStock,
   selectedTrap: 'Barricade',
   trapNotice: TrapNotice.Quiet(),
-  flowField: flowFieldToward(initialPlayer, 'Narrow', []),
-  wideFlowField: flowFieldToward(initialPlayer, 'Wide', []),
-  intent: deriveIntent(model.input, initialPlayer, arenaCamera(initialPlayer)),
+  level: startingLevel,
+  flowField: flowFieldToward(PARLOUR, initialPlayer, 'Narrow', []),
+  wideFlowField: flowFieldToward(PARLOUR, initialPlayer, 'Wide', []),
+  intent: deriveIntent(
+    model.input,
+    initialPlayer,
+    cameraFor(PARLOUR, initialPlayer),
+  ),
   debutCard: DebutCard.Hidden(),
   hintBand: 'Top',
   stats: freshStats,

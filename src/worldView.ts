@@ -1,6 +1,7 @@
 import { Array } from 'effect'
 import type { Canvas } from 'foldkit'
 
+import { levelOf } from './arena'
 import { bossGroundShapes, bossOverheadShapes } from './bossView'
 import { type Camera, sceneOffset } from './camera'
 import { type Drawable, depthSortedShapes } from './depth'
@@ -87,7 +88,7 @@ const groundShapes = (
   ...zombieGroundShapes(model.zombies, model.elapsedMs),
   ...Array.filterMap(model.zombies, zombieShadow),
   ...bossGroundShapes(model),
-  ...Array.filterMap(model.traps, trapShadow),
+  ...Array.filterMap(model.traps, trapShadow(levelOf(model))),
   ...Array.filterMap(model.particles, gibShadow),
   ...groundParticleShapes(model.particles),
   ...ghostShapes(model),
@@ -102,7 +103,8 @@ const standingDrawables = (
   look: StallLook,
 ): ReadonlyArray<Drawable> => {
   const drawZombie = zombieShapes(model.player, model.elapsedMs, model.boss)
-  const drawTrap = trapShapes(model.elapsedMs)
+  const level = levelOf(model)
+  const drawTrap = trapShapes(level, model.elapsedMs)
   return [
     {
       footY: STALL_FOOT_Y,
@@ -110,7 +112,7 @@ const standingDrawables = (
       shapes: stallShapes(look, model.elapsedMs),
     },
     ...Array.map(model.traps, (trap): Drawable => ({
-      footY: trapFootY(trap),
+      footY: trapFootY(level, trap),
       rank: 'Trap',
       shapes: drawTrap(trap),
     })),
@@ -142,7 +144,10 @@ const overheadShapes = (
   camera: Camera,
 ): ReadonlyArray<Canvas.Shape> => [
   ...playerFlashShapes(model.player),
-  ...Array.flatMap(model.traps, trapOverheadShapes(model.elapsedMs)),
+  ...Array.flatMap(
+    model.traps,
+    trapOverheadShapes(levelOf(model), model.elapsedMs),
+  ),
   ...Array.flatMap(model.zombies, zombieHealthBarShapes),
   ...Array.flatMap(model.blasts, blastShapes),
   ...Array.flatMap(model.callouts, burpRingShapes),

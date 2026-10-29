@@ -3,7 +3,7 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { ARENA_LEVEL, ROOM_MAP, makeLevel } from './arena'
+import { PARLOUR, ROOM_MAP, makeLevel } from './arena'
 import { cameraFor, cameraOf, viewToWorld, worldToView } from './camera'
 import { VIEW_HEIGHT, VIEW_WIDTH } from './constants'
 import { clientToView } from './geometry'
@@ -34,8 +34,8 @@ const mouseInputAt = (mouseInView: { x: number; y: number }): Input => ({
 
 describe('camera', () => {
   test('stands still on the one-screen arena wherever the player goes', () => {
-    expect(ARENA_LEVEL.width).toBe(VIEW_WIDTH)
-    expect(ARENA_LEVEL.height).toBe(VIEW_HEIGHT)
+    expect(PARLOUR.width).toBe(VIEW_WIDTH)
+    expect(PARLOUR.height).toBe(VIEW_HEIGHT)
     Array.forEach(
       [
         { x: 10, y: 10 },
@@ -43,7 +43,7 @@ describe('camera', () => {
         { x: 310, y: 170 },
       ],
       focus => {
-        expect(cameraFor(ARENA_LEVEL, focus)).toMatchObject({ x: 0, y: 0 })
+        expect(cameraFor(PARLOUR, focus)).toMatchObject({ x: 0, y: 0 })
       },
     )
   })
@@ -112,7 +112,7 @@ describe('camera', () => {
     const unscrolledAim = deriveIntent(
       mouseInputAt(leftOfPlayer),
       player,
-      cameraFor(ARENA_LEVEL, player),
+      cameraFor(PARLOUR, player),
     )
     expect(unscrolledAim.maybeAim).toEqual(Option.some({ x: -1, y: 0 }))
     const followedAim = deriveIntent(mouseInputAt(leftOfPlayer), player, camera)

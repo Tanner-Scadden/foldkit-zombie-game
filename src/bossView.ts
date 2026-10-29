@@ -1,7 +1,7 @@
 import { Array, Option, String } from 'effect'
 import { Canvas } from 'foldkit'
 
-import { findStrike } from './arena'
+import { type Level, findStrike, levelOf } from './arena'
 import { BOSS_RULES, type BossBar, isEnraged, maybeStandingBoss } from './boss'
 import { VIEW_WIDTH } from './constants'
 import { FULL_TURN, HEALTH_BAR_BACK_COLOR } from './drawing'
@@ -144,7 +144,12 @@ const chargeLaneShapes = (
 
 // NOTE: the lane stops where he would slam into a wall or a crate, so the
 // arrow shows where he will stop.
-const clippedLane = (from: Vector, direction: Vector, length: number): Lane => {
+const clippedLane = (
+  level: Level,
+  from: Vector,
+  direction: Vector,
+  length: number,
+): Lane => {
   const end = {
     x: from.x + direction.x * length,
     y: from.y + direction.y * length,
@@ -152,7 +157,7 @@ const clippedLane = (from: Vector, direction: Vector, length: number): Lane => {
   return {
     from,
     direction,
-    length: Option.match(findStrike(from, end), {
+    length: Option.match(findStrike(level, from, end), {
       onNone: () => length,
       onSome: strike =>
         Math.max(
@@ -163,9 +168,10 @@ const clippedLane = (from: Vector, direction: Vector, length: number): Lane => {
   }
 }
 
-const bracingLane = (boss: Zombie, target: Vector): Lane => {
+const bracingLane = (level: Level, boss: Zombie, target: Vector): Lane => {
   const length = Math.hypot(target.x - boss.x, target.y - boss.y)
   return clippedLane(
+    level,
     { x: boss.x, y: boss.y },
     length > 0
       ? { x: (target.x - boss.x) / length, y: (target.y - boss.y) / length }
@@ -275,6 +281,7 @@ const flyingGlobShapes = (glob: Glob): ReadonlyArray<Canvas.Shape> => {
 // GROUND
 
 const moveGroundShapes = (
+  level: Level,
   move: BossMove,
   boss: Zombie,
 ): ReadonlyArray<Canvas.Shape> =>
@@ -288,12 +295,12 @@ const moveGroundShapes = (
         : [],
     Bracing: ({ target, remainingMs, durationMs }) =>
       chargeLaneShapes(
-        bracingLane(boss, target),
+        bracingLane(level, boss, target),
         progressOf(remainingMs, durationMs),
       ),
     Rushing: ({ direction, remainingPx }) =>
       chargeLaneShapes(
-        clippedLane({ x: boss.x, y: boss.y }, direction, remainingPx),
+        clippedLane(level, { x: boss.x, y: boss.y }, direction, remainingPx),
         1,
       ),
   })
@@ -306,7 +313,7 @@ export const bossGroundShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
           onNone: () => [],
           onSome: boss =>
             Boss.isAnyOf(['Fighting'])(model.boss)
-              ? moveGroundShapes(model.boss.move, boss)
+              ? moveGroundShapes(levelOf(model), model.boss.move, boss)
               : [],
         }),
       ]

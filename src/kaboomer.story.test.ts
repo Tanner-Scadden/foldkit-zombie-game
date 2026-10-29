@@ -4,7 +4,7 @@ import { given, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { ARENA_LEVEL } from './arena'
+import { PARLOUR } from './arena'
 import { HIT_STOP_KILL_MAX_MS } from './constants'
 import { update } from './main'
 import { debutPitch } from './menus'
@@ -32,8 +32,8 @@ import {
 import { Behavior, ZOMBIE_KINDS } from './zombies'
 
 const FRAME_MS = 10
-const CENTER_X = ARENA_LEVEL.width / 2
-const CENTER_Y = ARENA_LEVEL.height / 2
+const CENTER_X = PARLOUR.width / 2
+const CENTER_Y = PARLOUR.height / 2
 
 const BOMBER = Behavior.match(ZOMBIE_KINDS.Exploder.behavior, {
   Brawler: () => undefined,

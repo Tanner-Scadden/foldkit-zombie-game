@@ -2,7 +2,13 @@ import { Array, Option, Record, Result, Schema, pipe } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
-import { ARENA_LEVEL, type Box, circleTouchesBox, isSolidAt } from './arena'
+import {
+  type Box,
+  type Level,
+  circleTouchesBox,
+  isSolidAt,
+  levelOf,
+} from './arena'
 import type { SoundEffect } from './audio'
 import {
   type BlastSpec,
@@ -10,11 +16,7 @@ import {
   blastAll,
   bountyOf,
 } from './combat'
-import {
-  PLAYER_MAX_HP,
-  PLAYER_RADIUS,
-  PLAYER_SPEED,
-} from './constants'
+import { PLAYER_MAX_HP, PLAYER_RADIUS, PLAYER_SPEED } from './constants'
 import {
   Beat,
   BoostKind,
@@ -486,32 +488,41 @@ const grabPickups = (model: Model): Model => {
 
 const SPOT_LEFT = 16
 const SPOT_TOP = 26
-const SPOT_BOTTOM = ARENA_LEVEL.height - 16
-const SPOT_RIGHT = ARENA_LEVEL.width - 16
+const SPOT_EDGE = 16
 const SPOT_STEPS = 24
-const ROOM_MIDDLE: Vector = {
-  x: ARENA_LEVEL.width / 2,
-  y: ARENA_LEVEL.height / 2 + 5,
-}
+
+const roomMiddleOf = (level: Level): Vector => ({
+  x: level.width / 2,
+  y: level.height / 2 + 5,
+})
 
 const isClearSpot =
-  (blockers: ReadonlyArray<Box>) =>
+  (level: Level, blockers: ReadonlyArray<Box>) =>
   (spot: Vector): boolean =>
-    !isSolidAt(spot) &&
+    !isSolidAt(level, spot) &&
     !Array.some(blockers, box => circleTouchesBox(spot, PICKUP_RADIUS, box))
 
-const settleSpot = (point: Vector, blockers: ReadonlyArray<Box>): Vector => {
+const settleSpot = (
+  level: Level,
+  point: Vector,
+  blockers: ReadonlyArray<Box>,
+): Vector => {
+  const middle = roomMiddleOf(level)
   const start = {
-    x: Math.round(Math.min(SPOT_RIGHT, Math.max(SPOT_LEFT, point.x))),
-    y: Math.round(Math.min(SPOT_BOTTOM, Math.max(SPOT_TOP, point.y))),
+    x: Math.round(
+      Math.min(level.width - SPOT_EDGE, Math.max(SPOT_LEFT, point.x)),
+    ),
+    y: Math.round(
+      Math.min(level.height - SPOT_EDGE, Math.max(SPOT_TOP, point.y)),
+    ),
   }
   return pipe(
     Array.makeBy(SPOT_STEPS + 1, step => ({
-      x: Math.round(start.x + ((ROOM_MIDDLE.x - start.x) * step) / SPOT_STEPS),
-      y: Math.round(start.y + ((ROOM_MIDDLE.y - start.y) * step) / SPOT_STEPS),
+      x: Math.round(start.x + ((middle.x - start.x) * step) / SPOT_STEPS),
+      y: Math.round(start.y + ((middle.y - start.y) * step) / SPOT_STEPS),
     })),
-    Array.findFirst(isClearSpot(blockers)),
-    Option.getOrElse(() => ROOM_MIDDLE),
+    Array.findFirst(isClearSpot(level, blockers)),
+    Option.getOrElse(() => middle),
   )
 }
 
@@ -560,7 +571,8 @@ const killsIn = (events: ReadonlyArray<GameEvent>): ReadonlyArray<Kill> =>
   )
 
 const placePickup = (model: Model, kind: PickupKind, at: Vector): Model => {
-  const spot = settleSpot(at, trapBlockers(model.traps))
+  const level = levelOf(model)
+  const spot = settleSpot(level, at, trapBlockers(level, model.traps))
   const pickup: Pickup = {
     id: model.nextEntityId,
     kind,

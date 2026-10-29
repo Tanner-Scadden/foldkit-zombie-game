@@ -3,7 +3,7 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { ARENA_LEVEL } from './arena'
+import { PARLOUR } from './arena'
 import type { SoundEffect } from './audio'
 import { CueMusic, FetchBuild, PlaySound, ResumeAudio } from './commands'
 import { ZOMBIE_MAX_HP } from './constants'
@@ -170,8 +170,8 @@ describe('music follows the phase', () => {
             {
               id: 100,
               kind: 'Shambler',
-              x: ARENA_LEVEL.width / 2 + 2,
-              y: ARENA_LEVEL.height / 2,
+              x: PARLOUR.width / 2 + 2,
+              y: PARLOUR.height / 2,
               speed: 0,
               hp: ZOMBIE_MAX_HP,
               maxHp: ZOMBIE_MAX_HP,

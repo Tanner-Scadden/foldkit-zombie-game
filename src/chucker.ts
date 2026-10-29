@@ -1,7 +1,7 @@
 import { Array, Option, Order, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { hasLineOfSight } from './arena'
+import { type Level, hasLineOfSight, levelOf } from './arena'
 import { woundPlayer } from './combat'
 import { MS_PER_SECOND, PLAYER_RADIUS, ZOMBIE_HIT_PULSE_MS } from './constants'
 import { directionBetween, normalize } from './geometry'
@@ -111,6 +111,7 @@ const HOLD: Vector = { x: 0, y: 0 }
 // None means it follows the flow field like the rest; Some is its own
 // heading, which is still while it holds its ground.
 export const maybeChuckerHeading = (
+  level: Level,
   chucker: Zombie,
   zombies: ReadonlyArray<Zombie>,
   player: Vector,
@@ -120,7 +121,7 @@ export const maybeChuckerHeading = (
     if (
       isRested &&
       distanceBetween(chucker, groaner) <= CHUCKER_RULES.fetchPx &&
-      hasLineOfSight(chucker, groaner)
+      hasLineOfSight(level, chucker, groaner)
     ) {
       return Option.orElse(
         normalize({ x: groaner.x - chucker.x, y: groaner.y - chucker.y }),
@@ -135,12 +136,16 @@ export const maybeChuckerHeading = (
 
 // GRABBING
 
-const isInThrowRange = (chucker: Zombie, player: Player): boolean => {
+const isInThrowRange = (
+  level: Level,
+  chucker: Zombie,
+  player: Player,
+): boolean => {
   const distance = distanceBetween(chucker, player)
   return (
     distance >= CHUCKER_RULES.throwMinPx &&
     distance <= CHUCKER_RULES.throwMaxPx &&
-    hasLineOfSight(chucker, player)
+    hasLineOfSight(level, chucker, player)
   )
 }
 
@@ -164,7 +169,7 @@ const tryGrab = (model: Model, chucker: Zombie): Model => {
   if (
     !ZombieAction.isAnyOf(['Roaming'])(chucker.action) ||
     !isWalking(chucker) ||
-    !isInThrowRange(chucker, model.player)
+    !isInThrowRange(levelOf(model), chucker, model.player)
   ) {
     return model
   }

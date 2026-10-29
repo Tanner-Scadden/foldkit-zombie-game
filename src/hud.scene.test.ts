@@ -3,7 +3,8 @@ import { Canvas } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { arenaCamera } from './camera'
+import { PARLOUR } from './arena'
+import { cameraFor } from './camera'
 import { VIEW_HEIGHT } from './constants'
 import { hudShapes } from './hud'
 import {
@@ -52,10 +53,13 @@ const twoBoosts: Model = modifyFields(initialModel, {
 
 const chipFrames = (model: Model): ReadonlyArray<Box> =>
   Array.filterMap(
-    rectsOf(hudShapes(model, LANDSCAPE_SCREEN, arenaCamera(model.player)), {
-      x: 0,
-      y: 0,
-    }),
+    rectsOf(
+      hudShapes(model, LANDSCAPE_SCREEN, cameraFor(PARLOUR, model.player)),
+      {
+        x: 0,
+        y: 0,
+      },
+    ),
     rect =>
       rect.width === 13 &&
       rect.height === 12 &&
@@ -90,7 +94,11 @@ describe('the boost chips', () => {
     })
     const frames = Array.filter(
       rectsOf(
-        hudShapes(allFour, LANDSCAPE_SCREEN, arenaCamera(allFour.player)),
+        hudShapes(
+          allFour,
+          LANDSCAPE_SCREEN,
+          cameraFor(PARLOUR, allFour.player),
+        ),
         {
           x: 0,
           y: 0,

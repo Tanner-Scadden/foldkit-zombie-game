@@ -47,6 +47,7 @@ const RUN_FIELDS = [
   'trapStock',
   'selectedTrap',
   'trapNotice',
+  'level',
   'flowField',
   'wideFlowField',
   'intent',

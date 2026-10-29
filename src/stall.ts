@@ -1,7 +1,7 @@
 import { Array, Option } from 'effect'
 import { Canvas } from 'foldkit'
 
-import { ARENA_LEVEL } from './arena'
+import { PARLOUR } from './arena'
 import {
   COIN_SPRITE,
   COIN_WIDTH,
@@ -354,7 +354,7 @@ const bakePrompt = (text: string, tone: TextTone) => {
   return placeBaked(baked, {
     x: Math.min(
       centerX,
-      ARENA_LEVEL.width - PROMPT_EDGE - Math.ceil(baked.width / 2),
+      PARLOUR.width - PROMPT_EDGE - Math.ceil(baked.width / 2),
     ),
     y: PROMPT_Y,
     align: 'Center',

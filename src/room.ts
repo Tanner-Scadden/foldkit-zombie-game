@@ -2,13 +2,13 @@ import { Array, Option, Record, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
 import {
-  ARENA_LEVEL,
   COVER_SYMBOLS,
   type CoverKind,
-  DOOR_IDS,
   DOOR_SYMBOLS,
+  type Level,
   type Tile,
   WALL_SYMBOL,
+  closedExits,
   isInsideRoom,
   isWalkableTile,
   symbolAt,
@@ -49,10 +49,10 @@ const rect = (
 
 // FLOOR
 
-const plankJoint = (row: number): Canvas.Shape => {
+const plankJoint = (level: Level, row: number): Canvas.Shape => {
   const draw = nextRandom(PLANK_JOINT_SEED ^ Math.imul(row, PLANK_JOINT_MIXER))
   return rect(
-    Math.floor(draw.value * ARENA_LEVEL.width),
+    Math.floor(draw.value * level.width),
     row * PLANK_HEIGHT + 1,
     1,
     PLANK_HEIGHT - 1,
@@ -60,34 +60,36 @@ const plankJoint = (row: number): Canvas.Shape => {
   )
 }
 
-const PLANK_ROWS = Math.ceil(ARENA_LEVEL.height / PLANK_HEIGHT)
-
-const FLOOR: ReadonlyArray<Canvas.Shape> = [
-  rect(
-    -SHAKE_MAX_PX,
-    -SHAKE_MAX_PX,
-    ARENA_LEVEL.width + SHAKE_MAX_PX * 2,
-    ARENA_LEVEL.height + SHAKE_MAX_PX * 2,
-    FLOOR_COLOR,
-  ),
-  ...Array.makeBy(PLANK_ROWS, row =>
-    rect(0, row * PLANK_HEIGHT, ARENA_LEVEL.width, 1, PLANK_SEAM_COLOR),
-  ),
-  ...Array.makeBy(PLANK_ROWS, plankJoint),
-]
+const floorShapes = (level: Level): ReadonlyArray<Canvas.Shape> => {
+  const plankRows = Math.ceil(level.height / PLANK_HEIGHT)
+  return [
+    rect(
+      -SHAKE_MAX_PX,
+      -SHAKE_MAX_PX,
+      level.width + SHAKE_MAX_PX * 2,
+      level.height + SHAKE_MAX_PX * 2,
+      FLOOR_COLOR,
+    ),
+    ...Array.makeBy(plankRows, row =>
+      rect(0, row * PLANK_HEIGHT, level.width, 1, PLANK_SEAM_COLOR),
+    ),
+    ...Array.makeBy(plankRows, row => plankJoint(level, row)),
+  ]
+}
 
 // WALLS
 
-const isWall = (column: number, row: number): boolean =>
-  Option.exists(symbolAt(column, row), symbol => symbol === WALL_SYMBOL)
+const isWall = (level: Level, column: number, row: number): boolean =>
+  Option.exists(symbolAt(level, column, row), symbol => symbol === WALL_SYMBOL)
 
 const MARK = 'M'
 const BLANK = '.'
 
 const markedGrid = (
+  level: Level,
   isMarked: (column: number, row: number) => boolean,
 ): ReadonlyArray<string> =>
-  Array.map(ARENA_LEVEL.tiles, (line, row) =>
+  Array.map(level.tiles, (line, row) =>
     pipe(
       Array.makeBy(line.length, column =>
         isMarked(column, row) ? MARK : BLANK,
@@ -126,37 +128,42 @@ const FULL_TILE: Inset = {
 }
 
 const isWallFacing =
-  (stepColumn: number, stepRow: number) =>
+  (level: Level, stepColumn: number, stepRow: number) =>
   (column: number, row: number): boolean =>
-    isWall(column, row) && isWalkableTile(column + stepColumn, row + stepRow)
+    isWall(level, column, row) &&
+    isWalkableTile(level, column + stepColumn, row + stepRow)
 
-const WALLS: ReadonlyArray<Canvas.Shape> = [
-  ...runShapes(markedGrid(isWall), WALL_COLOR, FULL_TILE),
-  ...runShapes(markedGrid(isWallFacing(0, 1)), WALL_FACE_COLOR, {
+const wallShapes = (level: Level): ReadonlyArray<Canvas.Shape> => [
+  ...runShapes(
+    markedGrid(level, (column, row) => isWall(level, column, row)),
+    WALL_COLOR,
+    FULL_TILE,
+  ),
+  ...runShapes(markedGrid(level, isWallFacing(level, 0, 1)), WALL_FACE_COLOR, {
     dx: 0,
     dy: TILE_SIZE - WALL_FACE_PX,
     width: width => width,
     height: () => WALL_FACE_PX,
   }),
-  ...runShapes(markedGrid(isWallFacing(0, 1)), WALL_TRIM_COLOR, {
+  ...runShapes(markedGrid(level, isWallFacing(level, 0, 1)), WALL_TRIM_COLOR, {
     dx: 0,
     dy: TILE_SIZE - WALL_FACE_PX,
     width: width => width,
     height: () => 1,
   }),
-  ...runShapes(markedGrid(isWallFacing(1, 0)), WALL_EDGE_COLOR, {
+  ...runShapes(markedGrid(level, isWallFacing(level, 1, 0)), WALL_EDGE_COLOR, {
     dx: TILE_SIZE - WALL_EDGE_PX,
     dy: 0,
     width: () => WALL_EDGE_PX,
     height: height => height,
   }),
-  ...runShapes(markedGrid(isWallFacing(-1, 0)), WALL_EDGE_COLOR, {
+  ...runShapes(markedGrid(level, isWallFacing(level, -1, 0)), WALL_EDGE_COLOR, {
     dx: 0,
     dy: 0,
     width: () => WALL_EDGE_PX,
     height: height => height,
   }),
-  ...runShapes(markedGrid(isWallFacing(0, -1)), WALL_TRIM_COLOR, {
+  ...runShapes(markedGrid(level, isWallFacing(level, 0, -1)), WALL_TRIM_COLOR, {
     dx: 0,
     dy: 0,
     width: width => width,
@@ -181,14 +188,17 @@ const boundingBox = (tiles: ReadonlyArray<Tile>): Box => {
   }
 }
 
-const isOnRoomEdge = ({ column, row }: Tile): boolean =>
-  !isInsideRoom(column - 1, row) ||
-  !isInsideRoom(column + 1, row) ||
-  !isInsideRoom(column, row - 1) ||
-  !isInsideRoom(column, row + 1)
+const isOnRoomEdge = (level: Level, { column, row }: Tile): boolean =>
+  !isInsideRoom(level, column - 1, row) ||
+  !isInsideRoom(level, column + 1, row) ||
+  !isInsideRoom(level, column, row - 1) ||
+  !isInsideRoom(level, column, row + 1)
 
-const doorShapes = (symbol: string): ReadonlyArray<Canvas.Shape> => {
-  const tiles = tilesWithSymbol(symbol)
+const doorShapes = (
+  level: Level,
+  symbol: string,
+): ReadonlyArray<Canvas.Shape> => {
+  const tiles = tilesWithSymbol(level, symbol)
   const box = boundingBox(tiles)
   const isVertical = box.width <= box.height
   const posts = isVertical
@@ -231,42 +241,133 @@ const doorShapes = (symbol: string): ReadonlyArray<Canvas.Shape> => {
         tile.row * TILE_SIZE,
         TILE_SIZE,
         TILE_SIZE,
-        isOnRoomEdge(tile) ? DOOR_DARK_COLOR : DOOR_DIM_COLOR,
+        isOnRoomEdge(level, tile) ? DOOR_DARK_COLOR : DOOR_DIM_COLOR,
       ),
     ),
     ...posts,
   ]
 }
 
-const DOORWAYS: ReadonlyArray<Canvas.Shape> = Array.flatMap(DOOR_IDS, id =>
-  doorShapes(DOOR_SYMBOLS[id]),
-)
+const doorwayShapes = (level: Level): ReadonlyArray<Canvas.Shape> =>
+  Array.flatMap(level.doorIds, id => doorShapes(level, DOOR_SYMBOLS[id]))
+
+// EXITS
+
+const EXIT_GAP_COLOR = '#140e0b'
+const EXIT_BOARD_COLOR = '#8a5a2b'
+const EXIT_BOARD_EDGE_COLOR = '#5c3a1a'
+const EXIT_BOARD_PX = 3
+const EXIT_BOARD_STEP_PX = 5
+
+// NOTE: a closed exit is a doorway nailed shut: the dark gap with boards
+// across it the long way. An open exit draws nothing, so the floor shows.
+const boardedShapes = (
+  tiles: ReadonlyArray<Tile>,
+): ReadonlyArray<Canvas.Shape> => {
+  const box = boundingBox(tiles)
+  const isAcross = box.width >= box.height
+  const span = isAcross ? box.height : box.width
+  const boards = Math.max(1, Math.floor(span / EXIT_BOARD_STEP_PX))
+  return [
+    ...Array.map(tiles, tile =>
+      rect(
+        tile.column * TILE_SIZE,
+        tile.row * TILE_SIZE,
+        TILE_SIZE,
+        TILE_SIZE,
+        EXIT_GAP_COLOR,
+      ),
+    ),
+    ...Array.flatMap(
+      Array.makeBy(boards, index => index),
+      index => {
+        const offset = 1 + index * EXIT_BOARD_STEP_PX
+        return isAcross
+          ? [
+              rect(
+                box.x,
+                box.y + offset,
+                box.width,
+                EXIT_BOARD_PX,
+                EXIT_BOARD_COLOR,
+              ),
+              rect(
+                box.x,
+                box.y + offset + EXIT_BOARD_PX - 1,
+                box.width,
+                1,
+                EXIT_BOARD_EDGE_COLOR,
+              ),
+            ]
+          : [
+              rect(
+                box.x + offset,
+                box.y,
+                EXIT_BOARD_PX,
+                box.height,
+                EXIT_BOARD_COLOR,
+              ),
+              rect(
+                box.x + offset + EXIT_BOARD_PX - 1,
+                box.y,
+                1,
+                box.height,
+                EXIT_BOARD_EDGE_COLOR,
+              ),
+            ]
+      },
+    ),
+  ]
+}
+
+const exitShapes = (level: Level): ReadonlyArray<Canvas.Shape> =>
+  Array.flatMap(closedExits(level), ({ tiles }) =>
+    Array.isReadonlyArrayNonEmpty(tiles) ? boardedShapes(tiles) : [],
+  )
 
 // COVER
 
-const isSymbolAt = (symbol: string, column: number, row: number): boolean =>
-  Option.exists(symbolAt(column, row), found => found === symbol)
+const isSymbolAt = (
+  level: Level,
+  symbol: string,
+  column: number,
+  row: number,
+): boolean =>
+  Option.exists(symbolAt(level, column, row), found => found === symbol)
 
 const runLength = (
+  level: Level,
   symbol: string,
   column: number,
   row: number,
   stepColumn: number,
   stepRow: number,
 ): number =>
-  isSymbolAt(symbol, column, row)
+  isSymbolAt(level, symbol, column, row)
     ? 1 +
-      runLength(symbol, column + stepColumn, row + stepRow, stepColumn, stepRow)
+      runLength(
+        level,
+        symbol,
+        column + stepColumn,
+        row + stepRow,
+        stepColumn,
+        stepRow,
+      )
     : 0
 
-const isBlockCorner = (symbol: string, { column, row }: Tile): boolean =>
-  !isSymbolAt(symbol, column - 1, row) && !isSymbolAt(symbol, column, row - 1)
+const isBlockCorner = (
+  level: Level,
+  symbol: string,
+  { column, row }: Tile,
+): boolean =>
+  !isSymbolAt(level, symbol, column - 1, row) &&
+  !isSymbolAt(level, symbol, column, row - 1)
 
-const blockAt = (symbol: string, { column, row }: Tile): Box => ({
+const blockAt = (level: Level, symbol: string, { column, row }: Tile): Box => ({
   x: column * TILE_SIZE,
   y: row * TILE_SIZE,
-  width: runLength(symbol, column, row, 1, 0) * TILE_SIZE,
-  height: runLength(symbol, column, row, 0, 1) * TILE_SIZE,
+  width: runLength(level, symbol, column, row, 1, 0) * TILE_SIZE,
+  height: runLength(level, symbol, column, row, 0, 1) * TILE_SIZE,
 })
 
 const coverShadow = ({ x, y, width, height }: Box): Canvas.Shape =>
@@ -380,28 +481,42 @@ const COVER_DRAWINGS: Readonly<
 }
 
 const coverShapes = (
+  level: Level,
   symbol: string,
   kind: CoverKind,
 ): ReadonlyArray<Canvas.Shape> =>
   pipe(
-    tilesWithSymbol(symbol),
-    Array.filter(tile => isBlockCorner(symbol, tile)),
+    tilesWithSymbol(level, symbol),
+    Array.filter(tile => isBlockCorner(level, symbol, tile)),
     Array.flatMap(tile => {
-      const box = blockAt(symbol, tile)
+      const box = blockAt(level, symbol, tile)
       return [coverShadow(box), ...COVER_DRAWINGS[kind](box)]
     }),
   )
 
-const COVER: ReadonlyArray<Canvas.Shape> = Array.flatMap(
-  Record.toEntries(COVER_SYMBOLS),
-  ([symbol, kind]) => coverShapes(symbol, kind),
-)
+const allCoverShapes = (level: Level): ReadonlyArray<Canvas.Shape> =>
+  Array.flatMap(Record.toEntries(COVER_SYMBOLS), ([symbol, kind]) =>
+    coverShapes(level, symbol, kind),
+  )
 
 // ROOM
 
-export const ROOM_SHAPES: ReadonlyArray<Canvas.Shape> = [
-  ...FLOOR,
-  ...DOORWAYS,
-  ...WALLS,
-  ...COVER,
-]
+const builtRooms = new WeakMap<Level, ReadonlyArray<Canvas.Shape>>()
+
+// NOTE: the room is built once for each level and kept, so the floor canvas
+// gets the same array back until an exit opens and the level changes.
+export const roomShapes = (level: Level): ReadonlyArray<Canvas.Shape> => {
+  const cached = builtRooms.get(level)
+  if (cached !== undefined) {
+    return cached
+  }
+  const shapes = [
+    ...floorShapes(level),
+    ...doorwayShapes(level),
+    ...exitShapes(level),
+    ...wallShapes(level),
+    ...allCoverShapes(level),
+  ]
+  builtRooms.set(level, shapes)
+  return shapes
+}

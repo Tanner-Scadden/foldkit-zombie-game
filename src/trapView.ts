@@ -1,7 +1,7 @@
 import { Array, Option, Result } from 'effect'
 import { Canvas } from 'foldkit'
 
-import { type Box, DOOR_IDS, THRESHOLDS, boxCenter } from './arena'
+import { type Box, type Level, boxCenter, levelOf } from './arena'
 import {
   MUZZLE_FLASH_BIG_MS,
   MUZZLE_FLASH_MS,
@@ -166,11 +166,12 @@ const gnomeShapes = (
 }
 
 const turretShapes = (
+  level: Level,
   turret: Extract<Trap, Readonly<{ _tag: 'Turret' }>>,
   elapsedMs: number,
 ): ReadonlyArray<Canvas.Shape> =>
   gnomeShapes(
-    trapCenter(turret),
+    trapCenter(level, turret),
     turret.facing,
     turretAngle(turret.facing, turret.gun, turret.id, elapsedMs),
     trapTone(turret.hitRemainingMs),
@@ -178,10 +179,11 @@ const turretShapes = (
   )
 
 const turretOverheadShapes = (
+  level: Level,
   turret: Extract<Trap, Readonly<{ _tag: 'Turret' }>>,
   elapsedMs: number,
 ): ReadonlyArray<Canvas.Shape> => {
-  const center = trapCenter(turret)
+  const center = trapCenter(level, turret)
   const angle = turretAngle(turret.facing, turret.gun, turret.id, elapsedMs)
   const reach = WEAPONS[TURRET_WEAPON].muzzleReach + 1
   const flash = Option.match(msSinceTurretShot(turret.gun), {
@@ -199,19 +201,19 @@ const turretOverheadShapes = (
 }
 
 export const trapOverheadShapes =
-  (elapsedMs: number) =>
+  (level: Level, elapsedMs: number) =>
   (trap: Trap): ReadonlyArray<Canvas.Shape> =>
     Trap.match(trap, {
       Barricade: () => [],
-      Turret: turret => turretOverheadShapes(turret, elapsedMs),
+      Turret: turret => turretOverheadShapes(level, turret, elapsedMs),
     })
 
 export const trapShapes =
-  (elapsedMs: number) =>
+  (level: Level, elapsedMs: number) =>
   (trap: Trap): ReadonlyArray<Canvas.Shape> =>
     Trap.match(trap, {
       Barricade: ({ door, hp, hitRemainingMs }) => {
-        const center = trapCenter(trap)
+        const center = trapCenter(level, trap)
         return [
           placeSprite(
             center.x + trapJolt(hitRemainingMs),
@@ -220,30 +222,32 @@ export const trapShapes =
           ),
         ]
       },
-      Turret: turret => turretShapes(turret, elapsedMs),
+      Turret: turret => turretShapes(level, turret, elapsedMs),
     })
 
-export const trapFootY = (trap: Trap): number =>
+export const trapFootY = (level: Level, trap: Trap): number =>
   Trap.match(trap, {
-    Barricade: () => trapBox(trap).bottom,
-    Turret: () => trapCenter(trap).y + TURRET_FOOT_DROP,
+    Barricade: () => trapBox(level, trap).bottom,
+    Turret: () => trapCenter(level, trap).y + TURRET_FOOT_DROP,
   })
 
 const TURRET_SHADOW_WIDTH = 8
 
-export const trapShadow = (trap: Trap): Result.Result<Canvas.Shape, void> =>
-  Trap.match(trap, {
-    Barricade: (): Result.Result<Canvas.Shape, void> => Result.failVoid,
-    Turret: (): Result.Result<Canvas.Shape, void> =>
-      Result.succeed(
-        footShadow(
-          trapCenter(trap),
-          TURRET_FOOT_DROP,
-          TURRET_SHADOW_WIDTH,
-          SHADOW_COLOR,
+export const trapShadow =
+  (level: Level) =>
+  (trap: Trap): Result.Result<Canvas.Shape, void> =>
+    Trap.match(trap, {
+      Barricade: (): Result.Result<Canvas.Shape, void> => Result.failVoid,
+      Turret: (): Result.Result<Canvas.Shape, void> =>
+        Result.succeed(
+          footShadow(
+            trapCenter(level, trap),
+            TURRET_FOOT_DROP,
+            TURRET_SHADOW_WIDTH,
+            SHADOW_COLOR,
+          ),
         ),
-      ),
-  })
+    })
 
 const GHOST_OPACITY = 0.5
 const GHOST_OK_COLOR = '#9be36a'
@@ -257,7 +261,7 @@ const ghostSprite = (
 ): ReadonlyArray<Canvas.Shape> =>
   TrapSpot.match(spot, {
     Doorway: ({ door }) => {
-      const center = boxCenter(spotBox(spot))
+      const center = boxCenter(spotBox(levelOf(model), spot))
       return [
         placeSprite(
           center.x,
@@ -268,7 +272,7 @@ const ghostSprite = (
     },
     Floor: () =>
       gnomeShapes(
-        boxCenter(spotBox(spot)),
+        boxCenter(spotBox(levelOf(model), spot)),
         model.player.facing,
         Math.atan2(model.player.facing.y, model.player.facing.x),
         'Normal',
@@ -288,13 +292,14 @@ const outlineShape = (box: Box, color: string): Canvas.Shape =>
 
 const openDoorwayHints = (model: Model): ReadonlyArray<Canvas.Shape> => {
   const boarded = barricadedDoors(model.traps)
+  const level = levelOf(model)
   const isLit = Math.floor(model.elapsedMs / DOORWAY_HINT_PULSE_MS) % 2 === 0
   return isLit
-    ? Array.filterMap(DOOR_IDS, door =>
+    ? Array.filterMap(level.doorIds, door =>
         Array.contains(boarded, door)
           ? Result.failVoid
           : Result.succeed(
-              outlineShape(THRESHOLDS[door].box, DOORWAY_HINT_COLOR),
+              outlineShape(level.thresholds[door].box, DOORWAY_HINT_COLOR),
             ),
       )
     : []
@@ -320,7 +325,7 @@ export const ghostShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
             shapes: ghostSprite(spot, model),
           }),
           outlineShape(
-            spotBox(spot),
+            spotBox(levelOf(model), spot),
             PlaceVerdict.isAnyOf(['Placeable'])(verdict)
               ? GHOST_OK_COLOR
               : GHOST_BLOCKED_COLOR,

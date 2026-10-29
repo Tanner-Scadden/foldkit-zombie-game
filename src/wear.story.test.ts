@@ -9,7 +9,7 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { ARENA_LEVEL } from './arena'
+import { PARLOUR } from './arena'
 import { PlaySound } from './commands'
 import { DECAL_MAX, PARTICLE_MAX } from './constants'
 import { update } from './main'
@@ -39,8 +39,8 @@ import { zombieHealthBarShapes } from './zombieView'
 import { ZOMBIE_KINDS, isArmorPart, isArmorShedAt, wearAt } from './zombies'
 
 const FRAME_MS = 16
-const FAR_X = ARENA_LEVEL.width / 2 + 60
-const ROW_Y = ARENA_LEVEL.height / 2
+const FAR_X = PARLOUR.width / 2 + 60
+const ROW_Y = PARLOUR.height / 2
 
 const DISTANT_SPAWN: PlannedSpawn = {
   atMs: 1e9,

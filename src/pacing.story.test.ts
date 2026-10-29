@@ -3,7 +3,7 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { nearestDoor } from './arena'
+import { PARLOUR, nearestDoor } from './arena'
 import {
   DINNER_BELL_MS,
   FADE_RELEASE_BELOW,
@@ -107,7 +107,7 @@ const arrivedDoors = (current: Model): ReadonlyArray<DoorId> =>
   pipe(
     current.zombies,
     Array.filter(({ id }) => id !== LINGERER_ID),
-    Array.map(zombie => nearestDoor(zombie).id),
+    Array.map(zombie => nearestDoor(PARLOUR, zombie).id),
   )
 
 const waveClock = (current: Model): number =>
@@ -517,7 +517,7 @@ const playKillingEverything = (wave: number, seed: number): Played => {
         if (!seen.has(zombie.id)) {
           seen.set(zombie.id, {
             kind: zombie.kind,
-            door: nearestDoor(zombie).id,
+            door: nearestDoor(PARLOUR, zombie).id,
             atMs: frame * FRAME_MS,
           })
         }
@@ -569,7 +569,10 @@ const playEmptied = (start: Model, ms: number): ReadonlyArray<Frame> =>
         {
           clockMs: waveClock(next),
           beat: next.pacing.beat._tag,
-          arrived: Array.map(next.zombies, zombie => nearestDoor(zombie).id),
+          arrived: Array.map(
+            next.zombies,
+            zombie => nearestDoor(PARLOUR, zombie).id,
+          ),
         },
       ]
     },

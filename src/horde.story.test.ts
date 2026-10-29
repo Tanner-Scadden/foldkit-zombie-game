@@ -4,8 +4,8 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import {
-  ARENA_LEVEL,
   DOOR_IDS,
+  PARLOUR,
   doorSpawnPoint,
   isSolidAt,
   nearestDoor,
@@ -56,8 +56,8 @@ import {
 
 const FRAME_MS = 16
 const LONG_FRAME_MS = 50
-const CENTER_X = ARENA_LEVEL.width / 2
-const CENTER_Y = ARENA_LEVEL.height / 2
+const CENTER_X = PARLOUR.width / 2
+const CENTER_Y = PARLOUR.height / 2
 
 const DISTANT_SPAWN: PlannedSpawn = {
   atMs: 1e9,
@@ -180,13 +180,14 @@ describe('the kind table', () => {
           const spawn = Option.getOrThrow(Array.get(spawns, index))
           const room = DOOR_HALF_WIDTH_PX - stats.radius
           const nearestPoint = doorSpawnPoint(
+            PARLOUR,
             spawn.door,
             Math.min(spawn.offset, room),
           )
           expect(zombie.hp).toBe(stats.hp)
           expect(zombie.speed).toBeGreaterThanOrEqual(stats.speedMin * 1.1)
           expect(zombie.speed).toBeLessThanOrEqual(stats.speedMax * 1.1)
-          expect(nearestDoor(zombie).id).toBe(spawn.door)
+          expect(nearestDoor(PARLOUR, zombie).id).toBe(spawn.door)
           expect(
             Math.hypot(zombie.x - nearestPoint.x, zombie.y - nearestPoint.y),
           ).toBeLessThan(2)
@@ -675,7 +676,7 @@ describe('spawn tables', () => {
                 kind: zombie.kind,
                 door: ZombieAction.isAnyOf(['Burrowed'])(zombie.action)
                   ? 'Floor'
-                  : nearestDoor(zombie).id,
+                  : nearestDoor(PARLOUR, zombie).id,
               })
             }
           })
@@ -724,7 +725,7 @@ describe('tank pathing', () => {
     offset: number,
     target: Readonly<{ x: number; y: number }>,
   ): ReadonlyArray<Model> => {
-    const start = doorSpawnPoint(door, offset)
+    const start = doorSpawnPoint(PARLOUR, door, offset)
     const frames: Array<Model> = []
     story(
       update,
@@ -776,7 +777,7 @@ describe('tank pathing', () => {
             { x, y: y - inset },
             { x, y: y + inset },
           ],
-          isSolidAt,
+          point => isSolidAt(PARLOUR, point),
         )
       }),
     )

@@ -4,7 +4,7 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { ARENA_LEVEL, DOOR_IDS, doorSpawnPoint } from './arena'
+import { DOOR_IDS, PARLOUR, doorSpawnPoint } from './arena'
 import {
   BOSS_RULES,
   freshFight,
@@ -45,8 +45,8 @@ import { FINAL_WAVE, WAVE_PLANS, hpScaleFor, rollSpawns } from './waves'
 import { ZOMBIE_KINDS, scaledHp } from './zombies'
 
 const FRAME_MS = 16
-const CENTER_X = ARENA_LEVEL.width / 2
-const CENTER_Y = ARENA_LEVEL.height / 2
+const CENTER_X = PARLOUR.width / 2
+const CENTER_Y = PARLOUR.height / 2
 const BOSS_ID = 777
 const WAVE_8_HP_SCALE = WAVE_PLANS[FINAL_WAVE - 1]?.hpScale ?? 1
 const BOSS_HP = scaledHp(ZOMBIE_KINDS.Boss.hp, WAVE_8_HP_SCALE)
@@ -207,7 +207,7 @@ describe('planning the boss', () => {
   test('the same seed draws the same boss door, and seeds differ across doors', () => {
     const doorFor = (seed: number): DoorId => {
       const [state, spawns] = rollSpawns(seed, FINAL_WAVE)
-      const [, boss] = planBoss(state, FINAL_WAVE, spawns)
+      const [, boss] = planBoss(PARLOUR.doorIds, state, FINAL_WAVE, spawns)
       return Option.getOrThrow(maybeBossDoor(boss))
     }
     expect(doorFor(42)).toBe(doorFor(42))
@@ -286,7 +286,7 @@ describe('the entrance', () => {
         )
         expect(boss.hp).toBe(BOSS_HP)
         expect(boss.maxHp).toBe(BOSS_HP)
-        const door = doorSpawnPoint('West', 0)
+        const door = doorSpawnPoint(PARLOUR, 'West', 0)
         expect(Math.hypot(boss.x - door.x, boss.y - door.y)).toBeLessThan(4)
         expect(current.boss).toEqual(
           freshFight(

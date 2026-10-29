@@ -1,6 +1,7 @@
 import { Option, Result } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { levelOf } from '../arena'
 import { SHAKE_TRAUMA_MAX, TRAP_PLACE_TRAUMA } from '../constants'
 import { type TrapChoice, maybeTrapChoice } from '../input'
 import type { Model } from '../model'
@@ -33,7 +34,7 @@ export const placeSelectedTrap = (model: Model): UpdateReturn => {
     onFailure: reason =>
       playSounds([uiCue('Denied')])(refusePlacement(model, reason)),
     onSuccess: ({ model: placed, trap }) => {
-      const { x, y } = trapCenter(trap)
+      const { x, y } = trapCenter(levelOf(placed), trap)
       return playSounds([{ sound: 'Thunk', variation: 0 }])(
         shakeBy(puffDust(placed, x, y), TRAP_PLACE_TRAUMA),
       )

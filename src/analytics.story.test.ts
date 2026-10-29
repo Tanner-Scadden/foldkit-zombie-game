@@ -21,7 +21,7 @@ import {
   sendRunSummary,
 } from './analyticsBeacon'
 import { frameTimeBucket } from './analyticsRun'
-import { ARENA_LEVEL } from './arena'
+import { PARLOUR } from './arena'
 import { GenerateVisitId, SendRunSummary, WriteSave } from './commands'
 import { ZOMBIE_MAX_HP } from './constants'
 import { init, update } from './main'
@@ -89,7 +89,7 @@ const midRun: Model = modifyFields(home, {
 
 const lastHeart: Model = modifyFields(midRun, {
   player: player => modifyFields(player, { hp: () => 1 }),
-  zombies: () => [runnerAt(ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2)],
+  zombies: () => [runnerAt(PARLOUR.width / 2 + 2, PARLOUR.height / 2)],
 })
 
 const finalWave: Model = modifyFields(midRun, {

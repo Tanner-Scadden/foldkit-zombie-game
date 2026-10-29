@@ -3,10 +3,11 @@ import { modifyFields } from 'foldkit/struct'
 
 import { recoverActions } from './actions'
 import {
-  ARENA_LEVEL,
   type Box,
+  type Level,
   findStrike,
   isInsideRoomAt,
+  levelOf,
   moveCircle,
 } from './arena'
 import {
@@ -176,6 +177,7 @@ const tickInvulnerability = (
   })
 
 const movePlayer = (
+  level: Level,
   player: Player,
   move: Vector,
   speed: number,
@@ -185,14 +187,15 @@ const movePlayer = (
 ): Player => {
   const velocity = addVectors(scaleVector(move, speed), player.knockback)
   const moved = moveCircle(
+    level,
     player,
     scaleVector(velocity, seconds),
     PLAYER_RADIUS,
     blockers,
   )
   return modifyFields(player, {
-    x: () => clamp(moved.x, PLAYER_RADIUS, ARENA_LEVEL.width - PLAYER_RADIUS),
-    y: () => clamp(moved.y, PLAYER_RADIUS, ARENA_LEVEL.height - PLAYER_RADIUS),
+    x: () => clamp(moved.x, PLAYER_RADIUS, level.width - PLAYER_RADIUS),
+    y: () => clamp(moved.y, PLAYER_RADIUS, level.height - PLAYER_RADIUS),
     knockback: knockback =>
       decayKnockback(knockback, PLAYER_KNOCKBACK_DECAY_PER_SECOND, seconds),
     invulnerability: invulnerability =>
@@ -463,8 +466,8 @@ const tickReload = (model: Model, deltaMs: number): Model => {
 
 // BULLETS
 
-const isInsideArena = ({ x, y }: Vector): boolean =>
-  x >= 0 && x <= ARENA_LEVEL.width && y >= 0 && y <= ARENA_LEVEL.height
+const isInsideArena = (level: Level, { x, y }: Vector): boolean =>
+  x >= 0 && x <= level.width && y >= 0 && y <= level.height
 
 const advanceBullet =
   (seconds: number, deltaMs: number) =>
@@ -478,10 +481,10 @@ const advanceBullet =
 type BulletFlight = Result.Result<Bullet, Option.Option<GameEvent>>
 
 const flyBullet =
-  (seconds: number, deltaMs: number) =>
+  (level: Level, seconds: number, deltaMs: number) =>
   (bullet: Bullet): BulletFlight => {
     const advanced = advanceBullet(seconds, deltaMs)(bullet)
-    return Option.match(findStrike(bullet, advanced), {
+    return Option.match(findStrike(level, bullet, advanced), {
       onSome: point =>
         Result.fail(
           Option.some(
@@ -493,7 +496,7 @@ const flyBullet =
           ),
         ),
       onNone: () =>
-        advanced.remainingMs > 0 && isInsideArena(advanced)
+        advanced.remainingMs > 0 && isInsideArena(level, advanced)
           ? Result.succeed(advanced)
           : Result.fail(Option.none()),
     })
@@ -506,7 +509,7 @@ const advanceBullets = (
 ): Model => {
   const [flying, stopped] = Array.partition(
     model.bullets,
-    flyBullet(seconds, deltaMs),
+    flyBullet(levelOf(model), seconds, deltaMs),
   )
   return modifyFields(model, {
     bullets: () => flying,
@@ -564,6 +567,7 @@ const separationPushes = (
 type FlowFields = Readonly<Record<Clearance, FlowField>>
 
 type Obstacles = Readonly<{
+  level: Level
   blockers: ReadonlyArray<Box>
   barricaded: ReadonlyArray<DoorId>
   boss: Boss
@@ -574,16 +578,17 @@ const flowHeading = (
   zombie: Zombie,
   flowFields: FlowFields,
   target: Vector,
-  barricaded: ReadonlyArray<DoorId>,
+  obstacles: Obstacles,
 ): Vector => {
   const stats = statsOf(zombie)
   return steerToward(
+    obstacles.level,
     flowFields[stats.clearance],
     zombie,
     target,
     stats.radius - 1,
     stats.clearance,
-    barricaded,
+    obstacles.barricaded,
   )
 }
 
@@ -595,15 +600,16 @@ const chaseHeading = (
 ): Vector =>
   zombie.kind === 'Thrower'
     ? Option.getOrElse(
-        maybeChuckerHeading(zombie, obstacles.zombies, target),
-        () => flowHeading(zombie, flowFields, target, obstacles.barricaded),
+        maybeChuckerHeading(obstacles.level, zombie, obstacles.zombies, target),
+        () => flowHeading(zombie, flowFields, target, obstacles),
       )
-    : flowHeading(zombie, flowFields, target, obstacles.barricaded)
+    : flowHeading(zombie, flowFields, target, obstacles)
 
 // NOTE: a slow zombie in the room goes for a standing Plank Pile within
 // BAIT_RULES.pullPx of walking when the plank is nearer than the player. A
 // frenzied one only has eyes for the player.
 export const maybeBaitDoor = (
+  level: Level,
   zombie: Zombie,
   playerField: FlowField,
   barricaded: ReadonlyArray<DoorId>,
@@ -613,15 +619,22 @@ export const maybeBaitDoor = (
     stats.bait === 'Ignores' ||
     Array.isReadonlyArrayEmpty(barricaded) ||
     isFrenzied(zombie) ||
-    !isInsideRoomAt(zombie)
+    !isInsideRoomAt(level, zombie)
   ) {
     return Option.none()
   }
 
   return pipe(
-    maybeNearestBait(zombie, barricaded, stats.clearance, BAIT_RULES.pullPx),
+    maybeNearestBait(
+      level,
+      zombie,
+      barricaded,
+      stats.clearance,
+      BAIT_RULES.pullPx,
+    ),
     Option.filter(
-      ({ distancePx }) => distancePx < playerDistancePx(playerField, zombie),
+      ({ distancePx }) =>
+        distancePx < playerDistancePx(level, playerField, zombie),
     ),
     Option.map(({ door }) => door),
   )
@@ -635,6 +648,7 @@ const heading = (
 ): Vector =>
   Option.match(
     maybeBaitDoor(
+      obstacles.level,
       zombie,
       flowFields[statsOf(zombie).clearance],
       obstacles.barricaded,
@@ -642,6 +656,7 @@ const heading = (
     {
       onSome: door =>
         steerToBait(
+          obstacles.level,
           door,
           zombie,
           statsOf(zombie).radius - 1,
@@ -704,6 +719,7 @@ const advanceZombie = (
     scaleVector(separation, SEPARATION_SPEED),
   )
   const moved = moveCircle(
+    obstacles.level,
     zombie,
     scaleVector(velocity, seconds),
     radiusOf(zombie),
@@ -724,13 +740,15 @@ const advanceZombies = (
   seconds: number,
   deltaMs: number,
 ): ReadonlyArray<Zombie> => {
+  const level = levelOf(model)
   const separations = separationPushes(model.zombies)
   const flowFields: FlowFields = {
     Narrow: model.flowField,
     Wide: model.wideFlowField,
   }
   const obstacles: Obstacles = {
-    blockers: trapBlockers(model.traps),
+    level,
+    blockers: trapBlockers(level, model.traps),
     barricaded: barricadedDoors(model.traps),
     boss: model.boss,
     zombies: model.zombies,
@@ -1168,12 +1186,14 @@ export const clampFrameDelta = (deltaTime: number): number =>
 const advanceWorld = (model: Model, deltaMs: number): Model => {
   const seconds = deltaMs / MS_PER_SECOND
 
-  const blockers = trapBlockers(model.traps)
-  const tolls = tollsOf(model.traps)
+  const level = levelOf(model)
+  const blockers = trapBlockers(level, model.traps)
+  const tolls = tollsOf(level, model.traps)
   const moved = refreshIntent(
     modifyFields(model, {
       player: player =>
         movePlayer(
+          level,
           player,
           model.intent.move,
           playerSpeed(model.boosts) *
@@ -1191,9 +1211,9 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
     refreshShopPresence(
       modifyFields(moved, {
         flowField: flowField =>
-          refreshFlowField(flowField, moved.player, 'Narrow', tolls),
+          refreshFlowField(level, flowField, moved.player, 'Narrow', tolls),
         wideFlowField: flowField =>
-          refreshFlowField(flowField, moved.player, 'Wide', tolls),
+          refreshFlowField(level, flowField, moved.player, 'Wide', tolls),
       }),
     ),
   )

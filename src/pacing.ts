@@ -1,7 +1,7 @@
 import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { THRESHOLDS, boxCenter, distanceToBox } from './arena'
+import { type Level, boxCenter, distanceToBox, levelOf } from './arena'
 import {
   DINNER_BELL_MS,
   DOOR_CAMP_REACH_PX,
@@ -314,28 +314,32 @@ export const waitingCount = (
 
 // TELEGRAPHS
 
-export const warningPoint = (door: DoorId): Vector =>
-  boxCenter(THRESHOLDS[door].box)
+export const warningPoint = (level: Level, door: DoorId): Vector =>
+  boxCenter(level.thresholds[door].box)
 
 const firstOfEachPack = (
   spawns: ReadonlyArray<PlannedSpawn>,
 ): ReadonlyArray<PlannedSpawn> =>
   Array.dedupeWith(spawns, (first, second) => first.pack === second.pack)
 
-const warnedEvent = (spawn: PlannedSpawn): GameEvent => {
-  const { x, y } = warningPoint(spawn.door)
-  return GameEvent.PackWarned({
-    x,
-    y,
-    door: spawn.door,
-    formation: spawn.formation,
-  })
-}
+const warnedEvent =
+  (level: Level) =>
+  (spawn: PlannedSpawn): GameEvent => {
+    const { x, y } = warningPoint(level, spawn.door)
+    return GameEvent.PackWarned({
+      x,
+      y,
+      door: spawn.door,
+      formation: spawn.formation,
+    })
+  }
 
-const frenziedEvent = (spawn: PlannedSpawn): GameEvent => {
-  const { x, y } = warningPoint(spawn.door)
-  return GameEvent.PackFrenzied({ x, y, door: spawn.door })
-}
+const frenziedEvent =
+  (level: Level) =>
+  (spawn: PlannedSpawn): GameEvent => {
+    const { x, y } = warningPoint(level, spawn.door)
+    return GameEvent.PackFrenzied({ x, y, door: spawn.door })
+  }
 
 const isThroughDoor = (spawn: PlannedSpawn): boolean => !isFloorKind(spawn.kind)
 
@@ -401,8 +405,8 @@ export const warnPacks = (
       }),
     frameEvents: frameEvents => [
       ...frameEvents,
-      ...Array.map(fresh, warnedEvent),
-      ...Array.map(frenzied, frenziedEvent),
+      ...Array.map(fresh, warnedEvent(levelOf(model))),
+      ...Array.map(frenzied, frenziedEvent(levelOf(model))),
     ],
   })
 }
@@ -431,10 +435,11 @@ export const rattlingDoors = (
 
 // DOORWAY CAMPING
 
-const isCampingDoor = (player: Vector, door: DoorId): boolean =>
-  distanceToBox(player, THRESHOLDS[door].box) <= DOOR_CAMP_REACH_PX
+const isCampingDoor = (level: Level, player: Vector, door: DoorId): boolean =>
+  distanceToBox(player, level.thresholds[door].box) <= DOOR_CAMP_REACH_PX
 
 export const delayCampedPacks = (
+  level: Level,
   spawns: ReadonlyArray<PlannedSpawn>,
   routed: ReadonlyArray<PlannedSpawn>,
   clockMs: number,
@@ -447,7 +452,7 @@ export const delayCampedPacks = (
       spawn =>
         isDue(clockMs)(spawn) &&
         isThroughDoor(spawn) &&
-        isCampingDoor(player, spawn.door),
+        isCampingDoor(level, player, spawn.door),
     ),
     Array.map(({ pack }) => pack),
     Array.dedupe,

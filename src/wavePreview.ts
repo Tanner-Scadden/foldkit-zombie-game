@@ -2,7 +2,7 @@ import { Array, Option } from 'effect'
 import { Canvas } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
-import { DOORS } from './arena'
+import { DOOR_OUTWARD, type Level, levelOf } from './arena'
 import { maybeBossDoor } from './boss'
 import { type Camera, worldToView } from './camera'
 import { FULL_TURN, placeSprite } from './drawing'
@@ -57,8 +57,11 @@ const NEW_TAG_PAD = 1
 
 const NORTH_MARKER_SIDE_PX = 24
 
-const markerAnchor = (door: DoorId): Readonly<{ x: number; y: number }> => {
-  const { center, outward } = DOORS[door]
+const markerAnchor = (
+  level: Level,
+  door: DoorId,
+): Readonly<{ x: number; y: number }> => {
+  const { center, outward } = level.doors[door]
   const inside = {
     x: Math.round(center.x - outward.x * DOOR_MARKER_INSET),
     y: Math.round(center.y - outward.y * DOOR_MARKER_INSET),
@@ -197,16 +200,17 @@ const markerEdgeOpacity = (elapsedMs: number): number =>
 
 const doorMarkerShapes =
   (
+    level: Level,
     camera: Camera,
     window: Box,
     elapsedMs: number,
     debuts: ReadonlyArray<ZombieKind>,
   ) =>
   ({ door, kinds }: DoorCount): ReadonlyArray<Canvas.Shape> => {
-    const { outward } = DOORS[door]
+    const outward = DOOR_OUTWARD[door]
     const pinned = pinToWindow(
       window,
-      worldToView(camera, markerAnchor(door)),
+      worldToView(camera, markerAnchor(level, door)),
       DOOR_MARKER_BACK_WIDTH / 2,
     )
     const top = markerTop(outward.y, kinds.length)
@@ -267,7 +271,7 @@ const bossMarkerOffset = (
   door: DoorId,
   counts: ReadonlyArray<DoorCount>,
 ): Readonly<{ x: number; y: number }> => {
-  const { outward } = DOORS[door]
+  const outward = DOOR_OUTWARD[door]
   const rows = Option.match(
     Array.findFirst(counts, count => count.door === door),
     { onNone: () => 0, onSome: ({ kinds }) => kinds.length },
@@ -284,6 +288,7 @@ const bossMarkerOffset = (
 }
 
 const bossMarkerShapes = (
+  level: Level,
   boss: Boss,
   camera: Camera,
   window: Box,
@@ -293,7 +298,7 @@ const bossMarkerShapes = (
   Option.match(maybeBossDoor(boss), {
     onNone: () => [],
     onSome: door => {
-      const anchor = worldToView(camera, markerAnchor(door))
+      const anchor = worldToView(camera, markerAnchor(level, door))
       const offset = bossMarkerOffset(door, counts)
       const pinned = pinToWindow(
         window,
@@ -412,12 +417,20 @@ export const wavePreviewShapes = (
     Preparation: ({ wave, spawns }) => {
       const counts = doorCounts(spawns, model.traps)
       const window = screenOf(model).world
+      const level = levelOf(model)
       return [
         ...Array.flatMap(
           counts,
-          doorMarkerShapes(camera, window, model.elapsedMs, debutKinds(wave)),
+          doorMarkerShapes(
+            level,
+            camera,
+            window,
+            model.elapsedMs,
+            debutKinds(wave),
+          ),
         ),
         ...bossMarkerShapes(
+          level,
           model.boss,
           camera,
           window,

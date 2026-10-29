@@ -4,7 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import { Tabs } from '@foldkit/ui'
 
-import { SHOP_STALL_SYMBOL, tilesWithSymbol } from './arena'
+import { PARLOUR, SHOP_STALL_SYMBOL, tilesWithSymbol } from './arena'
 import {
   MONEY_TICK_PER_SECOND,
   MS_PER_SECOND,
@@ -731,8 +731,11 @@ type StallBox = Readonly<{
   bottom: number
 }>
 
+// NOTE: the stall stands in the parlour, where every run starts, and its
+// sprites are baked once for that spot. Opening an exit adds rooms around
+// the parlour without moving it.
 const stallBox = (): StallBox => {
-  const tiles = tilesWithSymbol(SHOP_STALL_SYMBOL)
+  const tiles = tilesWithSymbol(PARLOUR, SHOP_STALL_SYMBOL)
   const columns = Array.map(tiles, ({ column }) => column)
   const rows = Array.map(tiles, ({ row }) => row)
   return {

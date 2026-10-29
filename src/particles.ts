@@ -1,7 +1,7 @@
 import { Array, Option, Result } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { ARENA_LEVEL, isSolidAt } from './arena'
+import { type Level, isSolidAt, levelOf } from './arena'
 import {
   BLOOD_DRAG_PER_SECOND,
   BLOOD_GRAVITY,
@@ -341,20 +341,25 @@ const LEFT_NOTHING: ParticleStep = Result.fail(Option.none())
 const leftDecal = (decal: Decal): ParticleStep =>
   Result.fail(Option.some(decal))
 
-const isOnFloor = (x: number, y: number): boolean =>
+const isOnFloor = (level: Level, x: number, y: number): boolean =>
   x >= 0 &&
-  x < ARENA_LEVEL.width &&
+  x < level.width &&
   y >= 0 &&
-  y < ARENA_LEVEL.height &&
-  !isSolidAt({ x, y })
+  y < level.height &&
+  !isSolidAt(level, { x, y })
 
-const land = (particle: Particle, x: number, y: number): ParticleStep => {
+const land = (
+  level: Level,
+  particle: Particle,
+  x: number,
+  y: number,
+): ParticleStep => {
   const floorX = Math.round(x)
   const floorY = Math.round(y)
   return Option.match(PHYSICS[particle.kind].maybeDecalKind, {
     onNone: () => LEFT_NOTHING,
     onSome: kind =>
-      isOnFloor(floorX, floorY)
+      isOnFloor(level, floorX, floorY)
         ? leftDecal({
             kind,
             x: floorX,
@@ -367,7 +372,7 @@ const land = (particle: Particle, x: number, y: number): ParticleStep => {
 }
 
 const stepParticle =
-  (seconds: number, deltaMs: number) =>
+  (level: Level, seconds: number, deltaMs: number) =>
   (particle: Particle): ParticleStep => {
     const physics = PHYSICS[particle.kind]
     const remainingMs = particle.remainingMs - deltaMs
@@ -408,7 +413,7 @@ const stepParticle =
         }),
       )
     } else {
-      return land(particle, x, y)
+      return land(level, particle, x, y)
     }
   }
 
@@ -1232,7 +1237,7 @@ export const advanceParticles = (
 ): Model => {
   const [stillFlying, leftBehind] = Array.partition(
     model.particles,
-    stepParticle(seconds, deltaMs),
+    stepParticle(levelOf(model), seconds, deltaMs),
   )
   const landed = [
     ...Array.flatMap(model.frameEvents, scorchDecals),

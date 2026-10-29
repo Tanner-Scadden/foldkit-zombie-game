@@ -11,7 +11,7 @@ import {
   SKIN_TONES,
   playerSprites,
 } from '@game/appearance'
-import { DOORS } from '@game/arena'
+import { PARLOUR, levelOf } from '@game/arena'
 import { BOSS_RULES, hasBoss, planBoss } from '@game/boss'
 import { managedResources } from '@game/commands'
 import { DECAL_MAX, PLAYER_MAX_HP, SHADOW_COLOR } from '@game/constants'
@@ -412,7 +412,12 @@ const roomModel = (): Model => {
       model.phase._tag === 'Preparation' || model.phase._tag === 'Wave'
         ? model.phase.spawns
         : []
-    const [bossRng, planned] = planBoss(model.rngState, wave, spawns)
+    const [bossRng, planned] = planBoss(
+      levelOf(model).doorIds,
+      model.rngState,
+      wave,
+      spawns,
+    )
     model = modifyFields(model, {
       boss: () => planned,
       rngState: () => bossRng,
@@ -1167,4 +1172,4 @@ const application = Runtime.makeApplication({
 
 Runtime.run(application)
 w.__stall = STALL_BOX
-w.__doors = DOORS
+w.__doors = PARLOUR.doors

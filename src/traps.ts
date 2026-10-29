@@ -4,10 +4,9 @@ import { modifyFields } from 'foldkit/struct'
 
 import {
   type Box,
-  DOORS,
-  DOOR_IDS,
+  DOOR_OUTWARD,
+  type Level,
   SHOP_STALL_SYMBOL,
-  THRESHOLDS,
   boxCenter,
   circleTouchesBox,
   distanceToBox,
@@ -15,6 +14,7 @@ import {
   isDoorTile,
   isInsideRoomAt,
   isWalkableTile,
+  levelOf,
   tileBox,
   tileIndex,
   tilesWithSymbol,
@@ -120,27 +120,31 @@ export const TURRET_WEAPON: WeaponKind = 'Peashooter'
 
 // GEOMETRY
 
-export const trapBox = (trap: Trap): Box =>
+export const trapBox = (level: Level, trap: Trap): Box =>
   Trap.match(trap, {
-    Barricade: ({ door }) => THRESHOLDS[door].box,
+    Barricade: ({ door }) => level.thresholds[door].box,
     Turret: ({ column, row }) => tileBox({ column, row }),
   })
 
-export const trapCenter = (trap: Trap): Vector => boxCenter(trapBox(trap))
+export const trapCenter = (level: Level, trap: Trap): Vector =>
+  boxCenter(trapBox(level, trap))
 
-const trapTileIndices = (trap: Trap): ReadonlyArray<number> =>
+const trapTileIndices = (level: Level, trap: Trap): ReadonlyArray<number> =>
   Trap.match(trap, {
-    Barricade: ({ door }) => THRESHOLDS[door].indices,
-    Turret: ({ column, row }) => [tileIndex(column, row)],
+    Barricade: ({ door }) => level.thresholds[door].indices,
+    Turret: ({ column, row }) => [tileIndex(level, column, row)],
   })
 
 const byTileIndex = Order.mapInput(Order.Number, ({ index }: Toll) => index)
 
-export const tollsOf = (traps: ReadonlyArray<Trap>): ReadonlyArray<Toll> =>
+export const tollsOf = (
+  level: Level,
+  traps: ReadonlyArray<Trap>,
+): ReadonlyArray<Toll> =>
   pipe(
     traps,
     Array.flatMap(trap =>
-      Array.map(trapTileIndices(trap), index => ({
+      Array.map(trapTileIndices(level, trap), index => ({
         index,
         cost: TRAPS[trap._tag].pathCost,
       })),
@@ -158,8 +162,10 @@ export const barricadedDoors = (
     }),
   )
 
-export const trapBlockers = (traps: ReadonlyArray<Trap>): ReadonlyArray<Box> =>
-  Array.map(traps, trapBox)
+export const trapBlockers = (
+  level: Level,
+  traps: ReadonlyArray<Trap>,
+): ReadonlyArray<Box> => Array.map(traps, trap => trapBox(level, trap))
 
 // HEALTH
 
@@ -192,10 +198,15 @@ const setHealth = (trap: Trap, hp: number, hitRemainingMs: number): Trap =>
 
 type Damaged = Readonly<{ target: Trap; events: ReadonlyArray<GameEvent> }>
 
-const damageTrap = (trap: Trap, damage: number, isHeavy: boolean): Damaged => {
+const damageTrap = (
+  level: Level,
+  trap: Trap,
+  damage: number,
+  isHeavy: boolean,
+): Damaged => {
   const kind = trap._tag
   const hp = Math.max(0, trap.hp - damage)
-  const { x, y } = trapCenter(trap)
+  const { x, y } = trapCenter(level, trap)
   const isHit = isHeavy || Math.floor(hp) < Math.floor(trap.hp)
   const isCracked = hp > 0 && stageOf(kind, hp) !== stageOf(kind, trap.hp)
   return {
@@ -211,13 +222,13 @@ const damageTrap = (trap: Trap, damage: number, isHeavy: boolean): Damaged => {
   }
 }
 
-export const TRAP_BLAST_TARGET: BlastTarget<Trap> = {
-  center: trapCenter,
+export const trapBlastTarget = (level: Level): BlastTarget<Trap> => ({
+  center: trap => trapCenter(level, trap),
   radius: () => TRAP_BLAST_RADIUS,
   isExposed: () => true,
   damageFrom: ({ trapDamage }) => trapDamage,
-  hurt: (trap, { damage }) => damageTrap(trap, damage, true),
-}
+  hurt: (trap, { damage }) => damageTrap(level, trap, damage, true),
+})
 
 const isBroken = (trap: Trap): boolean => trap.hp <= 0
 
@@ -232,7 +243,7 @@ export const clearBrokenTraps = (model: Model): Model => {
     frameEvents: frameEvents => [
       ...frameEvents,
       ...Array.map(broken, trap => {
-        const { x, y } = trapCenter(trap)
+        const { x, y } = trapCenter(levelOf(model), trap)
         return GameEvent.TrapBroken({ x, y, kind: trap._tag })
       }),
     ],
@@ -262,11 +273,11 @@ const chewDamage = (
   )
 
 const chewTrap =
-  (zombies: ReadonlyArray<Zombie>, seconds: number) =>
+  (level: Level, zombies: ReadonlyArray<Zombie>, seconds: number) =>
   (trap: Trap): Damaged => {
-    const damage = chewDamage(zombies, trapBox(trap), seconds)
+    const damage = chewDamage(zombies, trapBox(level, trap), seconds)
     return damage > 0
-      ? damageTrap(trap, damage, false)
+      ? damageTrap(level, trap, damage, false)
       : { target: trap, events: [] }
   }
 
@@ -300,10 +311,14 @@ const chewTraps = (model: Model, seconds: number): Model => {
     return model
   }
 
-  const outcomes = Array.map(model.traps, chewTrap(model.zombies, seconds))
+  const level = levelOf(model)
+  const outcomes = Array.map(
+    model.traps,
+    chewTrap(level, model.zombies, seconds),
+  )
   return modifyFields(model, {
     traps: () => Array.map(outcomes, ({ target }) => target),
-    zombies: Array.map(fuseAgainst(trapBlockers(model.traps))),
+    zombies: Array.map(fuseAgainst(trapBlockers(level, model.traps))),
     frameEvents: frameEvents => [
       ...frameEvents,
       ...Array.flatMap(outcomes, ({ events }) => events),
@@ -321,6 +336,7 @@ const byDistance = Order.mapInput(
 )
 
 const maybeTurretTarget = (
+  level: Level,
   from: Vector,
   zombies: ReadonlyArray<Zombie>,
 ): Option.Option<Zombie> =>
@@ -329,13 +345,13 @@ const maybeTurretTarget = (
     Array.filterMap(zombie => {
       const distance = Math.hypot(zombie.x - from.x, zombie.y - from.y)
       return isGrounded(zombie) &&
-        isInsideRoomAt(zombie) &&
+        isInsideRoomAt(level, zombie) &&
         distance <= TURRET_RANGE_PX
         ? Result.succeed({ zombie, distance })
         : Result.failVoid
     }),
     Array.sort(byDistance),
-    Array.findFirst(({ zombie }) => hasLineOfSight(from, zombie)),
+    Array.findFirst(({ zombie }) => hasLineOfSight(level, from, zombie)),
     Option.map(({ zombie }) => zombie),
   )
 
@@ -374,15 +390,17 @@ const peaFrom = (id: number, muzzle: Vector, direction: Vector): Bullet => {
 type TurretFields = Extract<Trap, Readonly<{ _tag: 'Turret' }>>
 
 const operateTurret = (
+  level: Level,
   volley: Volley,
   turret: TurretFields,
   zombies: ReadonlyArray<Zombie>,
   deltaMs: number,
 ): readonly [Volley, Trap] => {
-  const center = trapCenter(turret)
+  const center = trapCenter(level, turret)
   const remainingMs = remainingCooldown(turret.gun, deltaMs)
-  const maybeAim = Option.flatMap(maybeTurretTarget(center, zombies), target =>
-    directionBetween(center, target),
+  const maybeAim = Option.flatMap(
+    maybeTurretTarget(level, center, zombies),
+    target => directionBetween(center, target),
   )
   return Option.match(maybeAim, {
     onNone: () => [
@@ -446,7 +464,13 @@ const runTurrets = (model: Model, deltaMs: number): Model => {
       Trap.match(trap, {
         Barricade: (): readonly [Volley, Trap] => [current, trap],
         Turret: turret =>
-          operateTurret(current, turret, model.zombies, deltaMs),
+          operateTurret(
+            levelOf(model),
+            current,
+            turret,
+            model.zombies,
+            deltaMs,
+          ),
       }),
   )
   return modifyFields(model, {
@@ -559,16 +583,17 @@ export type Placement = Readonly<{
   verdict: PlaceVerdict
 }>
 
-export const spotBox = (spot: TrapSpot): Box =>
+export const spotBox = (level: Level, spot: TrapSpot): Box =>
   TrapSpot.match(spot, {
-    Doorway: ({ door }) => THRESHOLDS[door].box,
+    Doorway: ({ door }) => level.thresholds[door].box,
     Floor: ({ column, row }) => tileBox({ column, row }),
   })
 
-const STALL_FRONT: ReadonlyArray<number> = pipe(
-  tilesWithSymbol(SHOP_STALL_SYMBOL),
-  Array.map(({ column, row }) => tileIndex(column, row - 1)),
-)
+const stallFrontOf = (level: Level): ReadonlyArray<number> =>
+  pipe(
+    tilesWithSymbol(level, SHOP_STALL_SYMBOL),
+    Array.map(({ column, row }) => tileIndex(level, column, row - 1)),
+  )
 
 const isZombieInBox = (zombies: ReadonlyArray<Zombie>, box: Box): boolean =>
   Array.some(
@@ -593,22 +618,26 @@ const firstReason = (
 const isAtLimit = (model: Model, kind: TrapKind): boolean =>
   placedCount(model.traps, kind) >= TRAPS[kind].limit
 
-const maybeDoorInReach = (player: Player): Option.Option<DoorId> =>
+const maybeDoorInReach = (
+  level: Level,
+  player: Player,
+): Option.Option<DoorId> =>
   pipe(
-    DOOR_IDS,
+    level.doorIds,
     Array.filter(
-      door => distanceToBox(player, THRESHOLDS[door].box) <= BARRICADE_REACH_PX,
+      door =>
+        distanceToBox(player, level.thresholds[door].box) <= BARRICADE_REACH_PX,
     ),
     Array.sort(
       Order.mapInput(Order.Number, (door: DoorId) =>
-        distanceToBox(player, THRESHOLDS[door].box),
+        distanceToBox(player, level.thresholds[door].box),
       ),
     ),
     Array.head,
   )
 
 const barricadePlacement = (model: Model, isBetweenWaves: boolean) =>
-  Option.match(maybeDoorInReach(model.player), {
+  Option.match(maybeDoorInReach(levelOf(model), model.player), {
     onNone: (): Placement => ({
       kind: 'Barricade',
       maybeSpot: Option.none(),
@@ -629,7 +658,7 @@ const barricadePlacement = (model: Model, isBetweenWaves: boolean) =>
           'This doorway is already boarded up',
         ],
         [
-          isZombieInBox(model.zombies, THRESHOLDS[door].box),
+          isZombieInBox(model.zombies, levelOf(model).thresholds[door].box),
           'A zombie is in the way',
         ],
       ]),
@@ -647,16 +676,17 @@ const floorVerdict = (
   model: Model,
   { column, row }: FloorTile,
 ): PlaceVerdict => {
-  const index = tileIndex(column, row)
+  const level = levelOf(model)
+  const index = tileIndex(level, column, row)
   const box = tileBox({ column, row })
   const isOccupied = Array.some(model.traps, trap =>
-    Array.contains(trapTileIndices(trap), index),
+    Array.contains(trapTileIndices(level, trap), index),
   )
   return firstReason([
-    [!isWalkableTile(column, row), 'Something is in the way'],
-    [isDoorTile(column, row), 'Doorways are for Plank Piles'],
+    [!isWalkableTile(level, column, row), 'Something is in the way'],
+    [isDoorTile(level, column, row), 'Doorways are for Plank Piles'],
     [isOccupied, 'A trap is already there'],
-    [Array.contains(STALL_FRONT, index), 'Keep the shop stall clear'],
+    [Array.contains(stallFrontOf(level), index), 'Keep the shop stall clear'],
     [
       circleTouchesBox(model.player, PLAYER_RADIUS, box),
       'Too close. Step back',
@@ -782,11 +812,15 @@ const inwardOf = (outward: number, low: number, high: number) =>
       ? (position: number) => Math.min(position, low - PLAYER_RADIUS)
       : (position: number) => position
 
-const stepOutOfDoorway = (player: Player, spot: TrapSpot): Player =>
+const stepOutOfDoorway = (
+  level: Level,
+  player: Player,
+  spot: TrapSpot,
+): Player =>
   TrapSpot.match(spot, {
     Doorway: ({ door }) => {
-      const { outward } = DOORS[door]
-      const { left, top, right, bottom } = THRESHOLDS[door].box
+      const outward = DOOR_OUTWARD[door]
+      const { left, top, right, bottom } = level.thresholds[door].box
       return modifyFields(player, {
         x: inwardOf(outward.x, left, right),
         y: inwardOf(outward.y, top, bottom),
@@ -814,7 +848,8 @@ export const placeTrap = (model: Model): Result.Result<Placed, string> =>
                   traps: Array.append(trap),
                   nextEntityId: id => id + 1,
                   trapStock: stock => addStock(stock, kind, -1),
-                  player: player => stepOutOfDoorway(player, spot),
+                  player: player =>
+                    stepOutOfDoorway(levelOf(model), player, spot),
                   trapHint: () => TrapHint.Seen(),
                   trapNotice: () => TrapNotice.Quiet(),
                   stats: countTrapPlaced,

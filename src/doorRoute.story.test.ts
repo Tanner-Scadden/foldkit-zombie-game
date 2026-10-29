@@ -3,7 +3,7 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { distanceToBox, isInsideRoomAt, nearestDoor } from './arena'
+import { PARLOUR, distanceToBox, isInsideRoomAt, nearestDoor } from './arena'
 import { PREPARATION_MS } from './constants'
 import { drawSurfacingSpot } from './crawler'
 import { update } from './main'
@@ -68,7 +68,7 @@ const fighting = (
   })
 
 const doorsOf = (current: Model): ReadonlyArray<DoorId> =>
-  Array.map(current.zombies, zombie => nearestDoor(zombie).id)
+  Array.map(current.zombies, zombie => nearestDoor(PARLOUR, zombie).id)
 
 const previewDoors = (current: Model): ReadonlyArray<DoorId> =>
   Phase.match(current.phase, {
@@ -239,10 +239,15 @@ describe('Ankle Biters and boarded doors', () => {
     Array.forEach(
       Array.makeBy(60, index => index * 7919 + 1),
       state => {
-        const [, spot] = drawSurfacingSpot(state, { x: 160, y: 95 }, traps)
-        expect(isInsideRoomAt(spot)).toBe(true)
+        const [, spot] = drawSurfacingSpot(
+          PARLOUR,
+          state,
+          { x: 160, y: 95 },
+          traps,
+        )
+        expect(isInsideRoomAt(PARLOUR, spot)).toBe(true)
         Array.forEach(traps, trap => {
-          expect(distanceToBox(spot, trapBox(trap))).toBeGreaterThan(0)
+          expect(distanceToBox(spot, trapBox(PARLOUR, trap))).toBeGreaterThan(0)
         })
       },
     )

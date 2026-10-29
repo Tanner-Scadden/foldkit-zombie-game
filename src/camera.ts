@@ -1,6 +1,6 @@
 import { Option } from 'effect'
 
-import { ARENA_LEVEL, type Level } from './arena'
+import { type Level, levelOf } from './arena'
 import {
   CAMERA_LEAN_EASE_MS,
   CAMERA_LEAN_PX,
@@ -56,11 +56,6 @@ export const cameraFor = (
   top: 0,
 })
 
-export const arenaCamera = (
-  focus: Vector,
-  window: WindowSize = LANDSCAPE_WINDOW,
-): Camera => cameraFor(ARENA_LEVEL, focus, window)
-
 export const cameraFocus = (model: Model): Vector => ({
   x: model.player.x + model.cameraLean.x,
   y: model.player.y + model.cameraLean.y,
@@ -75,7 +70,7 @@ export const worldWindowOf = (screen: Screen): WindowSize => ({
 })
 
 export const worldCameraFor = (model: Model, screen: Screen): Camera =>
-  arenaCamera(cameraFocus(model), worldWindowOf(screen))
+  cameraFor(levelOf(model), cameraFocus(model), worldWindowOf(screen))
 
 export const toScreenCamera = (camera: Camera, screen: Screen): Camera => ({
   ...camera,

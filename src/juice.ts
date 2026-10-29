@@ -1,7 +1,7 @@
 import { Array, Option, Result } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { DOORS } from './arena'
+import { DOOR_OUTWARD } from './arena'
 import {
   BLAST_FLASH_MS,
   DAMAGE_POPUP_LIFETIME_MS,
@@ -325,8 +325,8 @@ const eventPopups = (
         popup(
           'Horde',
           0,
-          x - DOORS[door].outward.x * HORDE_POPUP_INSET_PX,
-          y - DOORS[door].outward.y * HORDE_POPUP_INSET_PX,
+          x - DOOR_OUTWARD[door].x * HORDE_POPUP_INSET_PX,
+          y - DOOR_OUTWARD[door].y * HORDE_POPUP_INSET_PX,
         ),
       ),
     PackWiped: ({ x, y, bonus }) =>

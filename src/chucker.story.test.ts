@@ -3,7 +3,7 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { ARENA_LEVEL } from './arena'
+import { PARLOUR } from './arena'
 import { CHUCKER_RULES } from './chucker'
 import { HIT_STOP_HURT_MS, PLAYER_MAX_HP } from './constants'
 import { update } from './main'
@@ -25,8 +25,8 @@ import { bulletInto, tick, ticks, zombieOf } from './testing'
 import { ZOMBIE_KINDS } from './zombies'
 
 const FRAME_MS = 16
-const CENTER_X = ARENA_LEVEL.width / 2
-const CENTER_Y = ARENA_LEVEL.height / 2
+const CENTER_X = PARLOUR.width / 2
+const CENTER_Y = PARLOUR.height / 2
 const CHUCKER_ID = 10
 const GROANER_ID = 11
 

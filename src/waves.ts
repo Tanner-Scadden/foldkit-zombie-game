@@ -1,7 +1,7 @@
 import { Array, Option, Order, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { DOOR_IDS, doorSpawnPoint } from './arena'
+import { DOOR_IDS, doorSpawnPoint, levelOf } from './arena'
 import {
   advanceBossEntrance,
   isBossOutside,
@@ -1209,7 +1209,12 @@ export const beginPreparation = (
   const [waveState, rolled] = rollWave(model.rngState, wave)
   const { holds } = rolled
   const spawns = toughenSpawns(model.difficulty.chosen, rolled.spawns)
-  const [rngState, boss] = planBoss(waveState, wave, spawns)
+  const [rngState, boss] = planBoss(
+    levelOf(model).doorIds,
+    waveState,
+    wave,
+    spawns,
+  )
   return modifyFields(model, {
     boss: () => boss,
     frenzyPacks: () => frenzyPacksOf(spawns),
@@ -1333,6 +1338,7 @@ const arrivalAction = (spawn: PlannedSpawn): ZombieAction =>
 const arriveAt = (model: Model, spawn: PlannedSpawn): Arrival => {
   if (isFloorKind(spawn.kind)) {
     const [rngState, at] = drawSurfacingSpot(
+      levelOf(model),
       model.rngState,
       model.player,
       model.traps,
@@ -1350,7 +1356,11 @@ const arriveAt = (model: Model, spawn: PlannedSpawn): Arrival => {
     DOOR_HALF_WIDTH_PX - ZOMBIE_KINDS[spawn.kind].radius,
   )
   return {
-    at: doorSpawnPoint(spawn.door, clamp(spawn.offset, -doorRoom, doorRoom)),
+    at: doorSpawnPoint(
+      levelOf(model),
+      spawn.door,
+      clamp(spawn.offset, -doorRoom, doorRoom),
+    ),
     action: arrivalAction(spawn),
     rngState: model.rngState,
     events: [],
@@ -1475,6 +1485,7 @@ const advanceWave = (
   const clockMs = paced.clockMs
   const route = routeSpawns(paced.spawns, model.traps, model.pacing.packDoors)
   const camped = delayCampedPacks(
+    levelOf(model),
     paced.spawns,
     route,
     clockMs,

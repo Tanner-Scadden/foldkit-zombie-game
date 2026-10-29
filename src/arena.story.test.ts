@@ -3,15 +3,7 @@ import { given, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import {
-  ARENA_LEVEL,
-  DOORS,
-  ROOM_COLUMNS,
-  ROOM_MAP,
-  ROOM_ROWS,
-  isSolidAt,
-  isWalkableTile,
-} from './arena'
+import { PARLOUR, ROOM_MAP, isSolidAt, isWalkableTile } from './arena'
 import {
   MAX_FRAME_DELTA_MS,
   PLAYER_MAX_HP,
@@ -72,24 +64,25 @@ const isCircleClear = ({ x, y }: { x: number; y: number }, radius: number) =>
       { x, y: y - radius + 0.5 },
       { x, y: y + radius - 0.5 },
     ],
-    point => !isSolidAt(point),
+    point => !isSolidAt(PARLOUR, point),
   )
 
 describe('the room', () => {
   test('is one screen of tiles with four doorways on the outer walls', () => {
-    expect(ROOM_MAP).toHaveLength(ROOM_ROWS)
-    expect(Array.every(ROOM_MAP, line => line.length === ROOM_COLUMNS)).toBe(
+    expect(ROOM_MAP).toHaveLength(PARLOUR.rows)
+    expect(Array.every(ROOM_MAP, line => line.length === PARLOUR.columns)).toBe(
       true,
     )
-    expect(ROOM_COLUMNS * TILE_SIZE).toBe(ARENA_LEVEL.width)
-    expect(ROOM_ROWS * TILE_SIZE).toBe(ARENA_LEVEL.height)
+    expect(PARLOUR.columns * TILE_SIZE).toBe(PARLOUR.width)
+    expect(PARLOUR.rows * TILE_SIZE).toBe(PARLOUR.height)
+    expect(PARLOUR.doorIds).toEqual(['North', 'West', 'East', 'South'])
     expect(
-      Array.map(Object.values(DOORS), ({ center }) => ({
+      Array.map(Object.values(PARLOUR.doors), ({ center }) => ({
         isOnEdge:
           center.x < TILE_SIZE ||
-          center.x > ARENA_LEVEL.width - TILE_SIZE ||
+          center.x > PARLOUR.width - TILE_SIZE ||
           center.y < TILE_SIZE * 2 ||
-          center.y > ARENA_LEVEL.height - TILE_SIZE,
+          center.y > PARLOUR.height - TILE_SIZE,
       })),
     ).toEqual(Array.makeBy(4, () => ({ isOnEdge: true })))
   })
@@ -99,7 +92,11 @@ describe('the room', () => {
     const walkableDistances = Array.filter(
       flowField.distances,
       (_distance, index) =>
-        isWalkableTile(index % ROOM_COLUMNS, Math.floor(index / ROOM_COLUMNS)),
+        isWalkableTile(
+          PARLOUR,
+          index % PARLOUR.columns,
+          Math.floor(index / PARLOUR.columns),
+        ),
     )
     expect(Array.isReadonlyArrayNonEmpty(walkableDistances)).toBe(true)
     expect(
@@ -173,7 +170,7 @@ describe('player collision', () => {
   test('the player cannot leave the screen through a doorway', () => {
     story(
       update,
-      given(withPlayerAt(fightingModel, 30, DOORS.West.center.y)),
+      given(withPlayerAt(fightingModel, 30, PARLOUR.doors.West.center.y)),
       press('KeyA'),
       ...ticks(40, MAX_FRAME_DELTA_MS),
       model(({ player }) => {

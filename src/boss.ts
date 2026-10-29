@@ -2,10 +2,10 @@ import { Array, Option, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import {
-  DOOR_IDS,
   doorSpawnPoint,
   hasClearPath,
   isSolidAt,
+  levelOf,
   moveCircle,
 } from './arena'
 import { woundPlayer } from './combat'
@@ -132,9 +132,9 @@ export const hasBoss = (wave: number): boolean =>
 
 // PLANNING
 
-const pickDoor = (roll: number): DoorId =>
+const pickDoor = (doors: ReadonlyArray<DoorId>, roll: number): DoorId =>
   Option.getOrElse(
-    Array.get(DOOR_IDS, Math.floor(roll * DOOR_IDS.length)),
+    Array.get(doors, Math.floor(roll * doors.length)),
     () => 'North',
   )
 
@@ -142,6 +142,7 @@ const wavePlanHpScale = (spawns: ReadonlyArray<PlannedSpawn>): number =>
   Array.reduce(spawns, 1, (largest, { hpScale }) => Math.max(largest, hpScale))
 
 export const planBoss = (
+  doors: ReadonlyArray<DoorId>,
   state: number,
   wave: number,
   spawns: ReadonlyArray<PlannedSpawn>,
@@ -154,7 +155,7 @@ export const planBoss = (
   return [
     doorDraw.nextState,
     Boss.Waiting({
-      door: pickDoor(doorDraw.value),
+      door: pickDoor(doors, doorDraw.value),
       waitBelow: Math.round(spawns.length * (1 - BOSS_RULES.arriveAfterShare)),
       hp: scaledHp(ZOMBIE_KINDS.Boss.hp, wavePlanHpScale(spawns)),
     }),
@@ -192,7 +193,7 @@ export const maybeStandingBoss = (model: Model): Option.Option<Zombie> =>
   })
 
 const announce = (model: Model, door: DoorId, hp: number): Model => {
-  const { x, y } = warningPoint(door)
+  const { x, y } = warningPoint(levelOf(model), door)
   return modifyFields(model, {
     boss: () =>
       Boss.Arriving({
@@ -221,7 +222,7 @@ const enter = (model: Model, door: DoorId, hp: number): Model => {
   const boss = arrivingZombie({
     id: model.nextEntityId,
     kind: BOSS_KIND,
-    at: doorSpawnPoint(door, 0),
+    at: doorSpawnPoint(levelOf(model), door, 0),
     speedRoll: speedDraw.value,
     speedScale: difficultySpeedScale(model.difficulty.chosen),
     hp,
@@ -518,7 +519,12 @@ const aliveCount = (zombies: ReadonlyArray<Zombie>): number =>
   Array.filter(zombies, isWalking).length
 
 const canCharge = (model: Model, boss: Zombie): boolean =>
-  hasClearPath(boss, model.player, BOSS_RULES.chargeLaneHalfWidth)
+  hasClearPath(
+    levelOf(model),
+    boss,
+    model.player,
+    BOSS_RULES.chargeLaneHalfWidth,
+  )
 
 // NOTE: a glob in the air is still a telegraph on the floor, so he waits for
 // it to land before he winds up anything else. That keeps one tell at a time.
@@ -599,7 +605,12 @@ const stomp = (model: Model, fight: Fight, boss: Zombie): Model =>
 
 // BELCH
 
-const belchPoint = (boss: Zombie, toward: Vector, index: number): Vector => {
+const belchPoint = (
+  model: Model,
+  boss: Zombie,
+  toward: Vector,
+  index: number,
+): Vector => {
   const across = { x: -toward.y, y: toward.x }
   const side = index - (BOSS_RULES.belchCount - 1) / 2
   const point = {
@@ -612,7 +623,7 @@ const belchPoint = (boss: Zombie, toward: Vector, index: number): Vector => {
       toward.y * BOSS_RULES.belchReachPx +
       across.y * side * BOSS_RULES.belchSpreadPx,
   }
-  return isSolidAt(point) ? { x: boss.x, y: boss.y } : point
+  return isSolidAt(levelOf(model), point) ? { x: boss.x, y: boss.y } : point
 }
 
 const belchedHp = (boss: Zombie): number =>
@@ -627,7 +638,7 @@ const belchOne =
         arrivingZombie({
           id: model.nextEntityId,
           kind: 'Shambler',
-          at: belchPoint(boss, toward, index),
+          at: belchPoint(model, boss, toward, index),
           speedRoll: speedDraw.value,
           speedScale: difficultySpeedScale(model.difficulty.chosen),
           hp: belchedHp(boss),
@@ -797,10 +808,11 @@ const stepRush = (
     (BOSS_RULES.chargeSpeed * deltaMs) / MS_PER_SECOND,
   )
   const moved = moveCircle(
+    levelOf(model),
     boss,
     scaleVector(direction, stepPx),
     radiusOf(boss),
-    trapBlockers(model.traps),
+    trapBlockers(levelOf(model), model.traps),
   )
   const progress =
     (moved.x - boss.x) * direction.x + (moved.y - boss.y) * direction.y

@@ -1,6 +1,7 @@
 import { Array, Option, Order, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { levelOf } from './arena'
 import {
   BLAST_MAX,
   LAST_HEART_INVULNERABLE_MS,
@@ -21,7 +22,7 @@ import {
   ZombieState,
 } from './model'
 import { earn } from './shop'
-import { TRAP_BLAST_TARGET } from './traps'
+import { trapBlastTarget } from './traps'
 import {
   Behavior,
   type DeathCause,
@@ -237,7 +238,11 @@ const detonate = (model: Model, bomberId: number): Model => {
     onSome: blast => {
       const zombieOutcome = blastAll(blast, rest, ZOMBIE_BLAST_TARGET)
       const playerOutcome = blastOne(blast, PLAYER_BLAST_TARGET)(model.player)
-      const trapOutcome = blastAll(blast, model.traps, TRAP_BLAST_TARGET)
+      const trapOutcome = blastAll(
+        blast,
+        model.traps,
+        trapBlastTarget(levelOf(model)),
+      )
       return modifyFields(model, {
         zombies: () => zombieOutcome.targets,
         player: () => playerOutcome.target,

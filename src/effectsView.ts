@@ -1,7 +1,7 @@
 import { Array, Result } from 'effect'
 import { Canvas } from 'foldkit'
 
-import { DOORS } from './arena'
+import { type Level, levelOf } from './arena'
 import { bossRattleDoors } from './boss'
 import type { Camera } from './camera'
 import {
@@ -753,9 +753,9 @@ const RATTLE_EYE_GAP_PX = 2
 const RATTLE_SLAT_SPAN_PX = 7
 
 const rattleShapes =
-  (elapsedMs: number) =>
+  (level: Level, elapsedMs: number) =>
   (door: DoorId): ReadonlyArray<Canvas.Shape> => {
-    const { center, outward } = DOORS[door]
+    const { center, outward } = level.doors[door]
     const across = { x: -outward.y, y: outward.x }
     const shake = Math.round(Math.sin(elapsedMs / RATTLE_SHAKE_MS))
     const eyes = {
@@ -802,6 +802,6 @@ export const doorRattleShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
           ),
           ...bossRattleDoors(model.boss),
         ]),
-        rattleShapes(model.elapsedMs),
+        rattleShapes(levelOf(model), model.elapsedMs),
       )
     : []

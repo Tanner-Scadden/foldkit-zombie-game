@@ -14,9 +14,9 @@ import { modifyFields } from 'foldkit/struct'
 
 import { Dialog } from '@foldkit/ui'
 
-import { THRESHOLDS, boxCenter, hasLineOfSight } from '../../src/arena'
+import { boxCenter, hasLineOfSight, levelOf } from '../../src/arena'
 import { BOSS_RULES } from '../../src/boss'
-import { arenaCamera, cameraFocus, worldWindowOf } from '../../src/camera'
+import { cameraFocus, cameraFor, worldWindowOf } from '../../src/camera'
 import { CHUCKER_RULES, maybeShieldFor } from '../../src/chucker'
 import { CRAWLER_RULES } from '../../src/crawler'
 import { FRENZY_RULES } from '../../src/frenzy'
@@ -314,7 +314,8 @@ const isInView = (model: Model, zombie: Model['zombies'][number]) => {
   if (!SEES_PORTRAIT_ONLY) {
     return true
   }
-  const camera = arenaCamera(
+  const camera = cameraFor(
+    levelOf(model),
     cameraFocus(model),
     worldWindowOf(DEFAULT_PORTRAIT_SCREEN),
   )
@@ -666,7 +667,7 @@ const isBehindShield = (model: Model, zombie: Model['zombies'][number]) => {
 
 const nearestVisible = (model: Model) => {
   const inSight = walking(model)
-    .filter(zombie => hasLineOfSight(model.player, zombie))
+    .filter(zombie => hasLineOfSight(levelOf(model), model.player, zombie))
     .sort((a, b) => distance(model.player, a) - distance(model.player, b))
   const open = inSight.filter(zombie => !isBehindShield(model, zombie))
   const visible = open.length > 0 ? open : inSight
@@ -1054,7 +1055,9 @@ export const play = (
           ? STALL_FRONT
           : plan === 'Gnome'
             ? gnomeSpot(model)
-            : boxCenter(THRESHOLDS[busiestDoor(model) ?? 'North'].box)
+            : boxCenter(
+                levelOf(model).thresholds[busiestDoor(model) ?? 'North'].box,
+              )
       if (plan === 'Gnome' && distance(model.player, target) < 6) {
         gnomeTries += 1
         const selected =

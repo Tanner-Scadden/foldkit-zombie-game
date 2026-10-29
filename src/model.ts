@@ -3,7 +3,7 @@ import { defineTaggedUnion } from 'foldkit/schema'
 
 import { Dialog, RadioGroup, Tabs } from '@foldkit/ui'
 
-import { ARENA_LEVEL } from './arena'
+import { PARLOUR, startingLevel } from './arena'
 import { DEFAULT_SEED, PISTOL_MAGAZINE, PLAYER_MAX_HP } from './constants'
 import { flowFieldToward } from './pathing'
 import {
@@ -383,6 +383,20 @@ export type TrapKind = typeof TrapKind.Type
 
 export const DoorId = Schema.Literals(['North', 'West', 'East', 'South'])
 export type DoorId = typeof DoorId.Type
+
+export const LevelId = Schema.Literals(['Parlour'])
+export type LevelId = typeof LevelId.Type
+
+export const ExitId = Schema.String
+export type ExitId = typeof ExitId.Type
+
+// NOTE: which level the run is in and which of its boarded exits are open.
+// The built Level, with its tile lookups and doors, comes from levelOf.
+export const LevelState = Schema.Struct({
+  id: LevelId,
+  openExits: Schema.Array(ExitId),
+})
+export type LevelState = typeof LevelState.Type
 
 export const Formation = Schema.Literals([
   'Trickle',
@@ -929,6 +943,7 @@ export const Toll = Schema.Struct({
 export type Toll = typeof Toll.Type
 
 export const FlowField = Schema.Struct({
+  levelKey: Schema.String,
   originIndex: Schema.Number,
   tolls: Schema.Array(Toll),
   distances: Schema.Array(Schema.Number),
@@ -1105,6 +1120,7 @@ export const Model = Schema.Struct({
   selectedTrap: TrapKind,
   trapHint: TrapHint,
   trapNotice: TrapNotice,
+  level: LevelState,
   flowField: FlowField,
   wideFlowField: FlowField,
   rngState: Schema.Number,
@@ -1154,8 +1170,8 @@ export const Model = Schema.Struct({
 export type Model = typeof Model.Type
 
 export const initialPlayer: Player = {
-  x: ARENA_LEVEL.width / 2,
-  y: ARENA_LEVEL.height / 2,
+  x: PARLOUR.width / 2,
+  y: PARLOUR.height / 2,
   hp: PLAYER_MAX_HP,
   facing: { x: 1, y: 0 },
   fireCooldownMs: 0,
@@ -1343,8 +1359,9 @@ export const initialModel: Model = {
   selectedTrap: 'Barricade',
   trapHint: TrapHint.Unseen(),
   trapNotice: TrapNotice.Quiet(),
-  flowField: flowFieldToward(initialPlayer, 'Narrow', []),
-  wideFlowField: flowFieldToward(initialPlayer, 'Wide', []),
+  level: startingLevel,
+  flowField: flowFieldToward(PARLOUR, initialPlayer, 'Narrow', []),
+  wideFlowField: flowFieldToward(PARLOUR, initialPlayer, 'Wide', []),
   rngState: DEFAULT_SEED,
   input: idleInput,
   intent: idleIntent,

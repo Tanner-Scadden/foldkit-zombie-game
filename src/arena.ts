@@ -8,7 +8,7 @@ import {
   ZOMBIE_SPAWN_MARGIN,
 } from './constants'
 import { addVectors, clamp, scaleVector, vectorLength } from './geometry'
-import type { DoorId, Vector } from './model'
+import type { DoorId, ExitId, LevelId, LevelState, Vector } from './model'
 
 // MAP
 
@@ -33,35 +33,7 @@ export const ROOM_MAP: ReadonlyArray<string> = [
   '########SS######################',
 ]
 
-// LEVEL
-
-export type Level = Readonly<{
-  tiles: ReadonlyArray<string>
-  columns: number
-  rows: number
-  width: number
-  height: number
-}>
-
-export const makeLevel = (tiles: ReadonlyArray<string>): Level => {
-  const columns = pipe(
-    Array.head(tiles),
-    Option.match({ onNone: () => 0, onSome: String.length }),
-  )
-  return {
-    tiles,
-    columns,
-    rows: tiles.length,
-    width: columns * TILE_SIZE,
-    height: tiles.length * TILE_SIZE,
-  }
-}
-
-export const ARENA_LEVEL: Level = makeLevel(ROOM_MAP)
-
-export const ROOM_COLUMNS = ARENA_LEVEL.columns
-export const ROOM_ROWS = ARENA_LEVEL.rows
-export const TILE_COUNT = ROOM_COLUMNS * ROOM_ROWS
+// SYMBOLS
 
 export type CoverKind = 'Piano' | 'Couch' | 'Crate' | 'Table' | 'Coffin'
 
@@ -83,13 +55,15 @@ export const DOOR_SYMBOLS: Readonly<Record<DoorId, string>> = {
   South: 'S',
 }
 
-const DOOR_OUTWARD: Readonly<Record<DoorId, Vector>> = {
+export const DOOR_OUTWARD: Readonly<Record<DoorId, Vector>> = {
   North: { x: 0, y: -1 },
   West: { x: -1, y: 0 },
   East: { x: 1, y: 0 },
   South: { x: 0, y: 1 },
 }
 
+// NOTE: every door a map can name. A level's own spawn doors are its
+// `doorIds`, the ones on its map that no closed exit still holds shut.
 export const DOOR_IDS: ReadonlyArray<DoorId> = [
   'North',
   'West',
@@ -97,93 +71,104 @@ export const DOOR_IDS: ReadonlyArray<DoorId> = [
   'South',
 ]
 
-// TILES
+const byDoor = <A>(make: (id: DoorId) => A): Readonly<Record<DoorId, A>> => ({
+  North: make('North'),
+  West: make('West'),
+  East: make('East'),
+  South: make('South'),
+})
+
+// SPECS
+
+// NOTE: an exit is a boarded doorway drawn on the map with its own symbol.
+// While it is closed its tiles are solid and the doors behind it stay shut.
+// Opening it makes its tiles floor and adds its doors to the spawn doors.
+export type ExitSpec = Readonly<{
+  id: ExitId
+  symbol: string
+  doors: ReadonlyArray<DoorId>
+}>
+
+export type LevelSpec = Readonly<{
+  id: string
+  tiles: ReadonlyArray<string>
+  exits: ReadonlyArray<ExitSpec>
+}>
+
+export const PARLOUR_SPEC: LevelSpec = {
+  id: 'Parlour',
+  tiles: ROOM_MAP,
+  exits: [],
+}
+
+export const LEVEL_SPECS: Readonly<Record<LevelId, LevelSpec>> = {
+  Parlour: PARLOUR_SPEC,
+}
+
+// GRID
 
 export type Tile = Readonly<{ column: number; row: number }>
 
-export const symbolAt = (column: number, row: number): Option.Option<string> =>
+type Grid = Readonly<{
+  tiles: ReadonlyArray<string>
+  columns: number
+  rows: number
+}>
+
+export const symbolAt = (
+  grid: Grid,
+  column: number,
+  row: number,
+): Option.Option<string> =>
   pipe(
-    ARENA_LEVEL.tiles,
+    grid.tiles,
     Array.get(row),
     Option.flatMap(line => String.at(line, column)),
   )
 
-const isSolidSymbol = (symbol: string): boolean =>
-  symbol === WALL_SYMBOL ||
-  symbol === SHOP_STALL_SYMBOL ||
-  Record.has(COVER_SYMBOLS, symbol)
+export const tileIndex = (grid: Grid, column: number, row: number): number =>
+  row * grid.columns + column
 
-export const tileIndex = (column: number, row: number): number =>
-  row * ROOM_COLUMNS + column
-
-export const tileOfIndex = (index: number): Tile => ({
-  column: index % ROOM_COLUMNS,
-  row: Math.floor(index / ROOM_COLUMNS),
+export const tileOfIndex = (grid: Grid, index: number): Tile => ({
+  column: index % grid.columns,
+  row: Math.floor(index / grid.columns),
 })
 
-export const isInsideRoom = (column: number, row: number): boolean =>
-  column >= 0 && column < ROOM_COLUMNS && row >= 0 && row < ROOM_ROWS
+export const isInsideRoom = (
+  grid: Grid,
+  column: number,
+  row: number,
+): boolean =>
+  column >= 0 && column < grid.columns && row >= 0 && row < grid.rows
 
-const SOLID_TILES: ReadonlySet<number> = new Set(
-  Array.filter(
-    Array.makeBy(TILE_COUNT, index => index),
-    index => {
-      const { column, row } = tileOfIndex(index)
-      return Option.exists(symbolAt(column, row), isSolidSymbol)
-    },
-  ),
-)
+export const tilesWithSymbol = (
+  grid: Grid,
+  symbol: string,
+): ReadonlyArray<Tile> =>
+  Array.flatMap(grid.tiles, (line, row) =>
+    Array.filterMap(String.split(line, ''), (lineSymbol, column) =>
+      lineSymbol === symbol ? Result.succeed({ column, row }) : Result.failVoid,
+    ),
+  )
 
-const isSolidTile = (column: number, row: number): boolean =>
-  isInsideRoom(column, row) && SOLID_TILES.has(tileIndex(column, row))
-
-export const isWalkableTile = (column: number, row: number): boolean =>
-  isInsideRoom(column, row) && !SOLID_TILES.has(tileIndex(column, row))
-
-const OPEN_BLOCKS: ReadonlySet<number> = new Set(
-  Array.filter(
-    Array.makeBy(TILE_COUNT, index => index),
-    index => {
-      const { column, row } = tileOfIndex(index)
-      return (
-        isWalkableTile(column, row) &&
-        isWalkableTile(column + 1, row) &&
-        isWalkableTile(column, row + 1) &&
-        isWalkableTile(column + 1, row + 1)
-      )
-    },
-  ),
-)
-
-export const isOpenBlock = (column: number, row: number): boolean =>
-  isInsideRoom(column, row) && OPEN_BLOCKS.has(tileIndex(column, row))
-
-const tileCoordinate = (position: number): number =>
-  Math.floor(position / TILE_SIZE)
-
-export const isSolidAt = ({ x, y }: Vector): boolean =>
-  isSolidTile(tileCoordinate(x), tileCoordinate(y))
-
-export const isInsideRoomAt = ({ x, y }: Vector): boolean =>
-  isInsideRoom(tileCoordinate(x), tileCoordinate(y))
-
-export const tileIndexAt = ({ x, y }: Vector): number =>
-  tileIndex(
-    clamp(tileCoordinate(x), 0, ROOM_COLUMNS - 1),
-    clamp(tileCoordinate(y), 0, ROOM_ROWS - 1),
+const indicesWhere = (
+  grid: Grid,
+  isMarked: (column: number, row: number) => boolean,
+): ReadonlySet<number> =>
+  new Set(
+    Array.filter(
+      Array.makeBy(grid.columns * grid.rows, index => index),
+      index => {
+        const { column, row } = tileOfIndex(grid, index)
+        return isMarked(column, row)
+      },
+    ),
   )
 
 export const tileCenter = ({ column, row }: Tile): Vector => ({
   x: column * TILE_SIZE + TILE_SIZE / 2,
   y: row * TILE_SIZE + TILE_SIZE / 2,
 })
-
-export const tilesWithSymbol = (symbol: string): ReadonlyArray<Tile> =>
-  Array.flatMap(ARENA_LEVEL.tiles, (line, row) =>
-    Array.filterMap(String.split(line, ''), (lineSymbol, column) =>
-      lineSymbol === symbol ? Result.succeed({ column, row }) : Result.failVoid,
-    ),
-  )
 
 export type Box = Readonly<{
   left: number
@@ -216,47 +201,6 @@ export const circleTouchesBox = (
   box: Box,
 ): boolean => distanceToBox(position, box) < radius
 
-// DOORS
-
-export type Door = Readonly<{ id: DoorId; center: Vector; outward: Vector }>
-
-const averagePoint = (points: ReadonlyArray<Vector>): Vector =>
-  scaleVector(
-    Array.reduce(points, { x: 0, y: 0 }, addVectors),
-    1 / Math.max(1, points.length),
-  )
-
-const makeDoor = (id: DoorId): Door => ({
-  id,
-  center: averagePoint(
-    Array.map(tilesWithSymbol(DOOR_SYMBOLS[id]), tileCenter),
-  ),
-  outward: DOOR_OUTWARD[id],
-})
-
-export const DOORS: Readonly<Record<DoorId, Door>> = {
-  North: makeDoor('North'),
-  West: makeDoor('West'),
-  East: makeDoor('East'),
-  South: makeDoor('South'),
-}
-
-const DOOR_TILE_SYMBOLS: ReadonlyArray<string> = Array.map(
-  DOOR_IDS,
-  id => DOOR_SYMBOLS[id],
-)
-
-export const isDoorTile = (column: number, row: number): boolean =>
-  Option.exists(symbolAt(column, row), symbol =>
-    Array.contains(DOOR_TILE_SYMBOLS, symbol),
-  )
-
-type Threshold = Readonly<{
-  tiles: ReadonlyArray<Tile>
-  indices: ReadonlyArray<number>
-  box: Box
-}>
-
 const boundingBox = (tiles: ReadonlyArray<Tile>): Box =>
   Array.reduce(
     Array.map(tiles, tileBox),
@@ -274,40 +218,288 @@ const boundingBox = (tiles: ReadonlyArray<Tile>): Box =>
     }),
   )
 
-const makeThreshold = (id: DoorId): Threshold => {
-  const outward = DOOR_OUTWARD[id]
-  const tiles = Array.filter(
-    tilesWithSymbol(DOOR_SYMBOLS[id]),
-    ({ column, row }) => {
-      const innerColumn = column - outward.x
-      const innerRow = row - outward.y
-      return (
-        isWalkableTile(innerColumn, innerRow) &&
-        !isDoorTile(innerColumn, innerRow)
-      )
-    },
+const averagePoint = (points: ReadonlyArray<Vector>): Vector =>
+  scaleVector(
+    Array.reduce(points, { x: 0, y: 0 }, addVectors),
+    1 / Math.max(1, points.length),
   )
+
+// LEVEL
+
+export type Door = Readonly<{ id: DoorId; center: Vector; outward: Vector }>
+
+export type Threshold = Readonly<{
+  tiles: ReadonlyArray<Tile>
+  indices: ReadonlyArray<number>
+  box: Box
+}>
+
+export type Exit = Readonly<{
+  id: ExitId
+  symbol: string
+  doors: ReadonlyArray<DoorId>
+  tiles: ReadonlyArray<Tile>
+  isOpen: boolean
+}>
+
+// NOTE: a level is built once for each set of open exits and kept, so every
+// lookup a frame makes is a plain read. `key` names the spec and its open
+// exits, and the flow field and the floor canvases rebuild when it changes.
+export type Level = Readonly<{
+  key: string
+  spec: LevelSpec
+  tiles: ReadonlyArray<string>
+  columns: number
+  rows: number
+  width: number
+  height: number
+  tileCount: number
+  openExits: ReadonlyArray<ExitId>
+  exits: ReadonlyArray<Exit>
+  doorIds: ReadonlyArray<DoorId>
+  doors: Readonly<Record<DoorId, Door>>
+  thresholds: Readonly<Record<DoorId, Threshold>>
+  doorTileIndices: Readonly<Record<DoorId, ReadonlyArray<number>>>
+  solidTiles: ReadonlySet<number>
+  openBlocks: ReadonlySet<number>
+  doorTiles: ReadonlySet<number>
+}>
+
+const openExitIdsOf = (
+  spec: LevelSpec,
+  openExits: ReadonlyArray<ExitId>,
+): ReadonlyArray<ExitId> =>
+  Array.filterMap(spec.exits, ({ id }) =>
+    Array.contains(openExits, id) ? Result.succeed(id) : Result.failVoid,
+  )
+
+const keyOf = (spec: LevelSpec, openExits: ReadonlyArray<ExitId>): string =>
+  `${spec.id}:${Array.join(openExits, '+')}`
+
+const buildLevel = (
+  spec: LevelSpec,
+  requestedExits: ReadonlyArray<ExitId>,
+): Level => {
+  const columns = pipe(
+    Array.head(spec.tiles),
+    Option.match({ onNone: () => 0, onSome: String.length }),
+  )
+  const grid: Grid = { tiles: spec.tiles, columns, rows: spec.tiles.length }
+  const openExits = openExitIdsOf(spec, requestedExits)
+  const exits: ReadonlyArray<Exit> = Array.map(spec.exits, exit => ({
+    ...exit,
+    tiles: tilesWithSymbol(grid, exit.symbol),
+    isOpen: Array.contains(openExits, exit.id),
+  }))
+  const closed = Array.filter(exits, ({ isOpen }) => !isOpen)
+  const heldDoors = Array.flatMap(closed, ({ doors }) => doors)
+  const doorIds = Array.filter(
+    DOOR_IDS,
+    id =>
+      !Array.contains(heldDoors, id) &&
+      Array.isReadonlyArrayNonEmpty(tilesWithSymbol(grid, DOOR_SYMBOLS[id])),
+  )
+
+  const solidSymbols: ReadonlySet<string> = new Set([
+    WALL_SYMBOL,
+    SHOP_STALL_SYMBOL,
+    ...Record.keys(COVER_SYMBOLS),
+    ...Array.map(closed, ({ symbol }) => symbol),
+    ...Array.map(heldDoors, id => DOOR_SYMBOLS[id]),
+  ])
+  const solidTiles = indicesWhere(grid, (column, row) =>
+    Option.exists(symbolAt(grid, column, row), symbol =>
+      solidSymbols.has(symbol),
+    ),
+  )
+  const isWalkable = (column: number, row: number): boolean =>
+    isInsideRoom(grid, column, row) &&
+    !solidTiles.has(tileIndex(grid, column, row))
+  const openBlocks = indicesWhere(
+    grid,
+    (column, row) =>
+      isWalkable(column, row) &&
+      isWalkable(column + 1, row) &&
+      isWalkable(column, row + 1) &&
+      isWalkable(column + 1, row + 1),
+  )
+
+  const doorSymbols = Array.map(doorIds, id => DOOR_SYMBOLS[id])
+  const doorTiles = indicesWhere(grid, (column, row) =>
+    Option.exists(symbolAt(grid, column, row), symbol =>
+      Array.contains(doorSymbols, symbol),
+    ),
+  )
+
+  const doors = byDoor((id): Door => ({
+    id,
+    center: averagePoint(
+      Array.map(tilesWithSymbol(grid, DOOR_SYMBOLS[id]), tileCenter),
+    ),
+    outward: DOOR_OUTWARD[id],
+  }))
+
+  const thresholds = byDoor((id): Threshold => {
+    const outward = DOOR_OUTWARD[id]
+    const tiles = Array.filter(
+      tilesWithSymbol(grid, DOOR_SYMBOLS[id]),
+      ({ column, row }) => {
+        const innerColumn = column - outward.x
+        const innerRow = row - outward.y
+        return (
+          isWalkable(innerColumn, innerRow) &&
+          !doorTiles.has(tileIndex(grid, innerColumn, innerRow))
+        )
+      },
+    )
+    return {
+      tiles,
+      indices: Array.map(tiles, ({ column, row }) =>
+        tileIndex(grid, column, row),
+      ),
+      box: boundingBox(tiles),
+    }
+  })
+
+  const doorTileIndices = byDoor(id =>
+    Array.map(tilesWithSymbol(grid, DOOR_SYMBOLS[id]), ({ column, row }) =>
+      tileIndex(grid, column, row),
+    ),
+  )
+
   return {
-    tiles,
-    indices: Array.map(tiles, ({ column, row }) => tileIndex(column, row)),
-    box: boundingBox(tiles),
+    key: keyOf(spec, openExits),
+    spec,
+    tiles: spec.tiles,
+    columns,
+    rows: grid.rows,
+    width: columns * TILE_SIZE,
+    height: grid.rows * TILE_SIZE,
+    tileCount: columns * grid.rows,
+    openExits,
+    exits,
+    doorIds,
+    doors,
+    thresholds,
+    doorTileIndices,
+    solidTiles,
+    openBlocks,
+    doorTiles,
   }
 }
 
-export const THRESHOLDS: Readonly<Record<DoorId, Threshold>> = {
-  North: makeThreshold('North'),
-  West: makeThreshold('West'),
-  East: makeThreshold('East'),
-  South: makeThreshold('South'),
+const levelsBySpec = new WeakMap<LevelSpec, Map<string, Level>>()
+
+export const levelFor = (
+  spec: LevelSpec,
+  openExits: ReadonlyArray<ExitId> = [],
+): Level => {
+  const key = keyOf(spec, openExitIdsOf(spec, openExits))
+  const built = levelsBySpec.get(spec) ?? new Map<string, Level>()
+  levelsBySpec.set(spec, built)
+  const cached = built.get(key)
+  if (cached !== undefined) {
+    return cached
+  }
+  const level = buildLevel(spec, openExits)
+  built.set(key, level)
+  return level
 }
 
-export const DOOR_TILE_INDICES: Readonly<
-  Record<DoorId, ReadonlyArray<number>>
-> = Record.map(DOOR_SYMBOLS, symbol =>
-  Array.map(tilesWithSymbol(symbol), ({ column, row }) =>
-    tileIndex(column, row),
-  ),
-)
+// NOTE: a map with no exits, for tests and tools that need a level of a
+// different shape. It is built fresh, not kept.
+export const makeLevel = (
+  tiles: ReadonlyArray<string>,
+  id: string = 'Custom',
+): Level => buildLevel({ id, tiles, exits: [] }, [])
+
+export const PARLOUR: Level = levelFor(PARLOUR_SPEC)
+
+export const startingLevel: LevelState = { id: 'Parlour', openExits: [] }
+
+const levelsByState = new WeakMap<LevelState, Level>()
+
+// NOTE: the Model holds only which level and which exits are open. The
+// built level is looked up by that record, so a frame that has not opened
+// anything reads the same Level without building a key.
+export const levelOf = ({ level }: Readonly<{ level: LevelState }>): Level => {
+  const cached = levelsByState.get(level)
+  if (cached !== undefined) {
+    return cached
+  }
+  const found = levelFor(LEVEL_SPECS[level.id], level.openExits)
+  levelsByState.set(level, found)
+  return found
+}
+
+// EXITS
+
+export const maybeExit = (level: Level, id: ExitId): Option.Option<Exit> =>
+  Array.findFirst(level.exits, exit => exit.id === id)
+
+export const closedExits = (level: Level): ReadonlyArray<Exit> =>
+  Array.filter(level.exits, ({ isOpen }) => !isOpen)
+
+const isClosedExit = (level: Level, id: ExitId): boolean =>
+  Option.exists(maybeExit(level, id), ({ isOpen }) => !isOpen)
+
+export const openExit = (level: Level, id: ExitId): Level =>
+  isClosedExit(level, id)
+    ? levelFor(level.spec, Array.append(level.openExits, id))
+    : level
+
+export const openExitIn = (state: LevelState, id: ExitId): LevelState =>
+  isClosedExit(levelOf({ level: state }), id)
+    ? { id: state.id, openExits: Array.append(state.openExits, id) }
+    : state
+
+// TILES
+
+export const isWalkableTile = (
+  level: Level,
+  column: number,
+  row: number,
+): boolean =>
+  isInsideRoom(level, column, row) &&
+  !level.solidTiles.has(tileIndex(level, column, row))
+
+const isSolidTile = (level: Level, column: number, row: number): boolean =>
+  isInsideRoom(level, column, row) &&
+  level.solidTiles.has(tileIndex(level, column, row))
+
+export const isOpenBlock = (
+  level: Level,
+  column: number,
+  row: number,
+): boolean =>
+  isInsideRoom(level, column, row) &&
+  level.openBlocks.has(tileIndex(level, column, row))
+
+const tileCoordinate = (position: number): number =>
+  Math.floor(position / TILE_SIZE)
+
+export const isSolidAt = (level: Level, { x, y }: Vector): boolean =>
+  isSolidTile(level, tileCoordinate(x), tileCoordinate(y))
+
+export const isInsideRoomAt = (level: Level, { x, y }: Vector): boolean =>
+  isInsideRoom(level, tileCoordinate(x), tileCoordinate(y))
+
+export const tileIndexAt = (level: Level, { x, y }: Vector): number =>
+  tileIndex(
+    level,
+    clamp(tileCoordinate(x), 0, level.columns - 1),
+    clamp(tileCoordinate(y), 0, level.rows - 1),
+  )
+
+// DOORS
+
+export const isDoorTile = (
+  level: Level,
+  column: number,
+  row: number,
+): boolean =>
+  isInsideRoom(level, column, row) &&
+  level.doorTiles.has(tileIndex(level, column, row))
 
 const edgeCoordinate = (
   outward: number,
@@ -323,11 +515,15 @@ const edgeCoordinate = (
   }
 }
 
-export const doorSpawnPoint = (id: DoorId, offset: number): Vector => {
-  const { center, outward } = DOORS[id]
+export const doorSpawnPoint = (
+  level: Level,
+  id: DoorId,
+  offset: number,
+): Vector => {
+  const { center, outward } = level.doors[id]
   const edge = {
-    x: edgeCoordinate(outward.x, center.x, ARENA_LEVEL.width),
-    y: edgeCoordinate(outward.y, center.y, ARENA_LEVEL.height),
+    x: edgeCoordinate(outward.x, center.x, level.width),
+    y: edgeCoordinate(outward.y, center.y, level.height),
   }
   return {
     x: edge.x + outward.x * ZOMBIE_SPAWN_MARGIN - outward.y * offset,
@@ -338,10 +534,12 @@ export const doorSpawnPoint = (id: DoorId, offset: number): Vector => {
 const distanceSquared = (first: Vector, second: Vector): number =>
   (first.x - second.x) ** 2 + (first.y - second.y) ** 2
 
-export const nearestDoor = (position: Vector): Door =>
+export const nearestDoor = (level: Level, position: Vector): Door =>
   Array.reduce(
-    Array.map(DOOR_IDS, id => DOORS[id]),
-    DOORS.North,
+    Array.map(level.doorIds, id => level.doors[id]),
+    level.doors[
+      Option.getOrElse(Array.head(level.doorIds), (): DoorId => 'North')
+    ],
     (nearest, door) =>
       distanceSquared(door.center, position) <
       distanceSquared(nearest.center, position)
@@ -381,6 +579,7 @@ const pushOutOfBox = (position: Vector, radius: number, box: Box): Vector => {
 }
 
 const solidTilesNear = (
+  level: Level,
   position: Vector,
   radius: number,
 ): ReadonlyArray<Tile> =>
@@ -396,26 +595,30 @@ const solidTilesNear = (
           tileCoordinate(position.x + radius),
         ),
         column =>
-          isSolidTile(column, row)
+          isSolidTile(level, column, row)
             ? Result.succeed({ column, row })
             : Result.failVoid,
       ),
   )
 
 export const resolveCircle = (
+  level: Level,
   position: Vector,
   radius: number,
   blockers: ReadonlyArray<Box> = [],
 ): Vector =>
   Array.reduce(
     blockers,
-    Array.reduce(solidTilesNear(position, radius), position, (resolved, tile) =>
-      pushOutOfBox(resolved, radius, tileBox(tile)),
+    Array.reduce(
+      solidTilesNear(level, position, radius),
+      position,
+      (resolved, tile) => pushOutOfBox(resolved, radius, tileBox(tile)),
     ),
     (resolved, box) => pushOutOfBox(resolved, radius, box),
   )
 
 export const moveCircle = (
+  level: Level,
   position: Vector,
   delta: Vector,
   radius: number,
@@ -426,7 +629,8 @@ export const moveCircle = (
   return Array.reduce(
     Array.makeBy(steps, () => step),
     position,
-    (moved, part) => resolveCircle(addVectors(moved, part), radius, blockers),
+    (moved, part) =>
+      resolveCircle(level, addVectors(moved, part), radius, blockers),
   )
 }
 
@@ -447,30 +651,37 @@ const pointsAlong = (
   }))
 }
 
-export const findStrike = (from: Vector, to: Vector): Option.Option<Vector> => {
+export const findStrike = (
+  level: Level,
+  from: Vector,
+  to: Vector,
+): Option.Option<Vector> => {
   const points = pointsAlong(from, to, BULLET_STEP_PX)
   return pipe(
     points,
-    Array.findFirstIndex(isSolidAt),
+    Array.findFirstIndex(point => isSolidAt(level, point)),
     Option.map(index =>
       Option.getOrElse(Array.get(points, Math.max(0, index - 1)), () => from),
     ),
   )
 }
 
-const isLaneClear = (from: Vector, to: Vector): boolean =>
-  !Array.some(pointsAlong(from, to, LINE_OF_SIGHT_STEP_PX), isSolidAt)
+const isLaneClear = (level: Level, from: Vector, to: Vector): boolean =>
+  !Array.some(pointsAlong(from, to, LINE_OF_SIGHT_STEP_PX), point =>
+    isSolidAt(level, point),
+  )
 
 export const hasLineOfSight = isLaneClear
 
 export const hasClearPath = (
+  level: Level,
   from: Vector,
   to: Vector,
   halfWidth: number,
 ): boolean => {
   const length = Math.hypot(to.x - from.x, to.y - from.y)
   if (length <= 0) {
-    return !isSolidAt(from)
+    return !isSolidAt(level, from)
   }
 
   const side = {
@@ -478,9 +689,10 @@ export const hasClearPath = (
     y: ((to.x - from.x) / length) * halfWidth,
   }
   return (
-    isLaneClear(from, to) &&
-    isLaneClear(addVectors(from, side), addVectors(to, side)) &&
+    isLaneClear(level, from, to) &&
+    isLaneClear(level, addVectors(from, side), addVectors(to, side)) &&
     isLaneClear(
+      level,
       addVectors(from, scaleVector(side, -1)),
       addVectors(to, scaleVector(side, -1)),
     )

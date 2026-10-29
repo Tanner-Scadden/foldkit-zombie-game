@@ -1,7 +1,7 @@
 import { Array, Order, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { DOOR_IDS, THRESHOLDS, distanceToBox, isSolidAt } from './arena'
+import { type Level, distanceToBox, isSolidAt } from './arena'
 import { PLAYER_RADIUS } from './constants'
 import { circlesOverlap } from './geometry'
 import {
@@ -71,7 +71,7 @@ const FALLBACK_SPOTS: Array.NonEmptyReadonlyArray<Vector> = [
   { x: 30, y: 125 },
 ]
 
-const hasFooting = (point: Vector): boolean =>
+const hasFooting = (level: Level, point: Vector): boolean =>
   Array.every(
     [
       point,
@@ -80,32 +80,38 @@ const hasFooting = (point: Vector): boolean =>
       { x: point.x, y: point.y - CRAWLER_RULES.footingPx },
       { x: point.x, y: point.y + CRAWLER_RULES.footingPx },
     ],
-    corner => !isSolidAt(corner),
+    corner => !isSolidAt(level, corner),
   )
 
-const isClearOfDoors = (point: Vector): boolean =>
+const isClearOfDoors = (level: Level, point: Vector): boolean =>
   Array.every(
-    DOOR_IDS,
+    level.doorIds,
     door =>
-      distanceToBox(point, THRESHOLDS[door].box) > CRAWLER_RULES.doorClearPx,
+      distanceToBox(point, level.thresholds[door].box) >
+      CRAWLER_RULES.doorClearPx,
   )
 
-const isClearOfProps = (point: Vector, traps: ReadonlyArray<Trap>): boolean =>
+const isClearOfProps = (
+  level: Level,
+  point: Vector,
+  traps: ReadonlyArray<Trap>,
+): boolean =>
   distanceToBox(point, STALL_BOX) > CRAWLER_RULES.propClearPx &&
   Array.every(
-    trapBlockers(traps),
+    trapBlockers(level, traps),
     box => distanceToBox(point, box) > CRAWLER_RULES.propClearPx,
   )
 
 const isFairSurfacing = (
+  level: Level,
   point: Vector,
   player: Vector,
   traps: ReadonlyArray<Trap>,
 ): boolean =>
   distanceBetween(point, player) >= CRAWLER_RULES.clearPx &&
-  hasFooting(point) &&
-  isClearOfDoors(point) &&
-  isClearOfProps(point, traps)
+  hasFooting(level, point) &&
+  isClearOfDoors(level, point) &&
+  isClearOfProps(level, point, traps)
 
 const byFarthestFrom = (player: Vector) =>
   Order.flip(
@@ -118,6 +124,7 @@ const fallbackSpot = (player: Vector): Vector =>
   pipe(FALLBACK_SPOTS, Array.sort(byFarthestFrom(player)), Array.headNonEmpty)
 
 const searchSpot = (
+  level: Level,
   state: number,
   player: Vector,
   traps: ReadonlyArray<Trap>,
@@ -133,19 +140,21 @@ const searchSpot = (
     x: Math.round(between(xDraw.value, FLOOR_LEFT, FLOOR_RIGHT)),
     y: Math.round(between(yDraw.value, FLOOR_TOP, FLOOR_BOTTOM)),
   }
-  return isFairSurfacing(point, player, traps)
+  return isFairSurfacing(level, point, player, traps)
     ? [yDraw.nextState, point]
-    : searchSpot(yDraw.nextState, player, traps, drawsLeft - 1)
+    : searchSpot(level, yDraw.nextState, player, traps, drawsLeft - 1)
 }
 
 // NOTE: the spot is drawn from the seeded generator when the Ankle Biter is
 // due, never planned in Preparation, since it must stay clear of wherever
 // the player stands by then. The door preview counts it as FLOOR.
 export const drawSurfacingSpot = (
+  level: Level,
   state: number,
   player: Vector,
   traps: ReadonlyArray<Trap>,
-): Seeded<Vector> => searchSpot(state, player, traps, CRAWLER_RULES.draws)
+): Seeded<Vector> =>
+  searchSpot(level, state, player, traps, CRAWLER_RULES.draws)
 
 export const burrowed = (): ZombieAction =>
   ZombieAction.Burrowed({

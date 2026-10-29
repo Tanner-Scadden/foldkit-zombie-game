@@ -3,7 +3,7 @@ import { Canvas } from 'foldkit'
 import { type Html, type HtmlBuilder, createLazy } from 'foldkit/html'
 
 import { spriteWarmUpSources } from './appearance'
-import { ARENA_LEVEL, type Level } from './arena'
+import { type Level, levelOf } from './arena'
 import { bossBandShapes } from './bossView'
 import { type Camera, toScreenCamera, worldCameraFor } from './camera'
 import { decalShapes } from './effectsView'
@@ -17,7 +17,7 @@ import {
   defaultAppearance,
 } from './model'
 import { calloutShapes } from './powerupView'
-import { FLOOR_COLOR, ROOM_SHAPES } from './room'
+import { FLOOR_COLOR, roomShapes } from './room'
 import { type Screen, inLandscapeFrame, screenOf } from './screen'
 import { overlayShapes } from './screens'
 import { thumbAreaView } from './thumbArea'
@@ -81,7 +81,7 @@ const layerCanvasView = (
   )
 
 const roomLayerView = (level: Level, h: HtmlBuilder<Message>): Html =>
-  layerCanvasView(level, ROOM_SHAPES, h)
+  layerCanvasView(level, roomShapes(level), h)
 
 const decalLayerView = (
   level: Level,
@@ -101,28 +101,32 @@ const layerDecals = (model: Model): ReadonlyArray<Decal> =>
 // repaint. These canvases are the size of the whole level, not the view. The
 // camera and the screen shake move them with a CSS transform of the same
 // whole pixels the scene canvas translates by, and the stage behind them is
-// the floor color, so the strip a shake uncovers matches the floor.
+// the floor color, so the strip a shake uncovers matches the floor. Both lazy
+// views are keyed on the Level, which is a new record whenever an exit opens,
+// so the room and its decal canvas redraw then and only then.
 const floorLayersView = (
   model: Model,
   camera: Camera,
   offset: Vector,
   h: HtmlBuilder<Message>,
-): Html =>
-  h.div(
+): Html => {
+  const level = levelOf(model)
+  return h.div(
     [
       h.Class('floor-layers'),
       h.AriaHidden(true),
       h.Style({
-        width: percentOf(ARENA_LEVEL.width, camera.width),
-        height: percentOf(ARENA_LEVEL.height, camera.height),
-        transform: `translate(${percentOf(offset.x, ARENA_LEVEL.width)}, ${percentOf(offset.y, ARENA_LEVEL.height)})`,
+        width: percentOf(level.width, camera.width),
+        height: percentOf(level.height, camera.height),
+        transform: `translate(${percentOf(offset.x, level.width)}, ${percentOf(offset.y, level.height)})`,
       }),
     ],
     [
-      lazyRoomLayer(roomLayerView, [ARENA_LEVEL, h]),
-      lazyDecalLayer(decalLayerView, [ARENA_LEVEL, layerDecals(model), h]),
+      lazyRoomLayer(roomLayerView, [level, h]),
+      lazyDecalLayer(decalLayerView, [level, layerDecals(model), h]),
     ],
   )
+}
 
 // OVERLAY LAYER
 

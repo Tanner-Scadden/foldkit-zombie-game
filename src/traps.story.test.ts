@@ -3,7 +3,7 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { THRESHOLDS, doorSpawnPoint, isInsideRoomAt } from './arena'
+import { PARLOUR, doorSpawnPoint, isInsideRoomAt } from './arena'
 import {
   FIRE_INTERVAL_MS,
   PLAYER_RADIUS,
@@ -274,13 +274,13 @@ describe('placing a barricade', () => {
       model(({ traps, player }) => {
         expect(traps).toHaveLength(1)
         expect(player.x).toBeGreaterThanOrEqual(
-          THRESHOLDS.West.box.right + PLAYER_RADIUS,
+          PARLOUR.thresholds.West.box.right + PLAYER_RADIUS,
         )
       }),
       ...ticks(5, FRAME_MS),
       model(({ player }) => {
         expect(player.x).toBeGreaterThanOrEqual(
-          THRESHOLDS.West.box.right + PLAYER_RADIUS,
+          PARLOUR.thresholds.West.box.right + PLAYER_RADIUS,
         )
       }),
     )
@@ -494,7 +494,7 @@ describe('placing a turret', () => {
 })
 
 describe('barricades and pathing', () => {
-  const northSpawn = doorSpawnPoint('North', 0)
+  const northSpawn = doorSpawnPoint(PARLOUR, 'North', 0)
   const isNearNorthDoor = ({ x, y }: Vector) =>
     y >= 0 && y < 30 && x > 205 && x < 235
 
@@ -507,10 +507,10 @@ describe('barricades and pathing', () => {
       tick(FRAME_MS),
       model(({ flowField, wideFlowField }) => {
         expect(flowField).not.toBe(start.flowField)
-        expect(flowField.tolls).toEqual(tollsOf(start.traps))
-        expect(wideFlowField.tolls).toEqual(tollsOf(start.traps))
+        expect(flowField.tolls).toEqual(tollsOf(PARLOUR, start.traps))
+        expect(wideFlowField.tolls).toEqual(tollsOf(PARLOUR, start.traps))
         const innerDistance = pipe(
-          Array.head(THRESHOLDS.North.indices),
+          Array.head(PARLOUR.thresholds.North.indices),
           Option.flatMap(index => Array.get(flowField.distances, index)),
           Option.getOrThrow,
         )
@@ -543,7 +543,10 @@ describe('barricades and pathing', () => {
     const positions = Array.flatMap(frames, ({ zombies }) => zombies)
     expect(Array.some(positions, isNearNorthDoor)).toBe(false)
     expect(
-      Array.some(positions, zombie => isInsideRoomAt(zombie) && zombie.x > 290),
+      Array.some(
+        positions,
+        zombie => isInsideRoomAt(PARLOUR, zombie) && zombie.x > 290,
+      ),
     ).toBe(true)
     expect(
       Array.every(frames, ({ traps }) =>
@@ -582,7 +585,7 @@ describe('barricades and pathing', () => {
     expect(eventsOf(frames, GameEvent.guards.TrapBroken)).toHaveLength(1)
     const last = Option.getOrThrow(Array.last(frames))
     expect(last.traps).toHaveLength(3)
-    expect(last.flowField.tolls).toEqual(tollsOf(last.traps))
+    expect(last.flowField.tolls).toEqual(tollsOf(PARLOUR, last.traps))
     expect(
       Array.some(last.zombies, zombie => zombie.y > 40 && zombie.y < 170),
     ).toBe(true)
@@ -724,14 +727,14 @@ describe('barricade damage', () => {
       ...ticks(Math.ceil(FIRE_INTERVAL_MS / FRAME_MS) + 2, FRAME_MS),
       model(({ player, frameEvents, bullets }) => {
         expect(player.x).toBeCloseTo(
-          THRESHOLDS.West.box.right + PLAYER_RADIUS,
+          PARLOUR.thresholds.West.box.right + PLAYER_RADIUS,
           1,
         )
         expect(frameEvents).not.toContainEqual(
           expect.objectContaining({ _tag: 'BulletStruck' }),
         )
         expect(
-          Array.some(bullets, ({ x }) => x < THRESHOLDS.West.box.right),
+          Array.some(bullets, ({ x }) => x < PARLOUR.thresholds.West.box.right),
         ).toBe(true)
       }),
     )

@@ -10,7 +10,7 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { ARENA_LEVEL } from './arena'
+import { PARLOUR } from './arena'
 import { type SoundEffect, positionVariation } from './audio'
 import { PlaySound, ResumeAudio, managedResources } from './commands'
 import { update } from './main'
@@ -30,9 +30,9 @@ import { SURFACE, holdFire, tick, zombieAt } from './testing'
 
 const FRAME_MS = 16
 const MID_GAME_MS = 30_000
-const MUZZLE_X = ARENA_LEVEL.width / 2 + 10
-const SHOT_X = ARENA_LEVEL.width / 2 + 6
-const SHOT_Y = ARENA_LEVEL.height / 2
+const MUZZLE_X = PARLOUR.width / 2 + 10
+const SHOT_X = PARLOUR.width / 2 + 6
+const SHOT_Y = PARLOUR.height / 2
 
 const readyScreen: Model = modifyFields(initialModel, {
   difficultyCard: () => DifficultyCard.Seen(),
@@ -66,7 +66,7 @@ const oneHitZombieAt = (id: number, x: number, y: number): Zombie =>
 
 const withOneHitZombieInFront = (base: Model): Model =>
   modifyFields(base, {
-    zombies: () => [oneHitZombieAt(100, MUZZLE_X, ARENA_LEVEL.height / 2)],
+    zombies: () => [oneHitZombieAt(100, MUZZLE_X, PARLOUR.height / 2)],
   })
 
 const pressFire = holdFire
@@ -246,7 +246,7 @@ describe('frame sounds', () => {
       given(
         modifyFields(playing(AudioState.Ready()), {
           zombies: () => [
-            zombieAt(100, ARENA_LEVEL.width / 2 + 2, ARENA_LEVEL.height / 2),
+            zombieAt(100, PARLOUR.width / 2 + 2, PARLOUR.height / 2),
           ],
         }),
       ),
@@ -308,7 +308,7 @@ describe('frame sounds', () => {
     const bulletAtZombie: Bullet = {
       id: 1,
       x: MUZZLE_X,
-      y: ARENA_LEVEL.height / 2,
+      y: PARLOUR.height / 2,
       velocityX: 1,
       velocityY: 0,
       remainingMs: 900,
