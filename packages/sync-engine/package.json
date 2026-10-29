@@ -1,0 +1,25 @@
+{
+  "name": "@munch/sync-engine",
+  "version": "0.1.0",
+  "description": "A small sync engine for Effect: scopes, Schema-typed mutations applied as plain SQL, a client outbox with rebuild plus replay, and one authority per scope on the server.",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts",
+    "./browser": "./src/Browser.ts",
+    "./in-process": "./src/InProcess.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "effect-tsgo tsrs --noEmit"
+  },
+  "devDependencies": {
+    "@munch/sqlite-wasm-effect": "workspace:*"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0"
+  }
+}

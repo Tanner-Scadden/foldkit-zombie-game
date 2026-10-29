@@ -10,20 +10,21 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "effect-tsgo tsrs --noEmit && effect-tsgo tsrs --noEmit -p tools/heavy && effect-tsgo tsrs --noEmit -p tools/balance && effect-tsgo tsrs --noEmit -p tools/analytics && effect-tsgo tsrs --noEmit -p packages/sqlite-wasm-effect",
+    "typecheck": "effect-tsgo tsrs --noEmit && effect-tsgo tsrs --noEmit -p tools/heavy && effect-tsgo tsrs --noEmit -p tools/balance && effect-tsgo tsrs --noEmit -p tools/analytics && effect-tsgo tsrs --noEmit -p packages/sqlite-wasm-effect && effect-tsgo tsrs --noEmit -p packages/sync-engine",
     "format": "oxfmt",
-    "test": "vitest run && vitest run --root packages/sqlite-wasm-effect",
+    "test": "vitest run && vitest run --root packages/sqlite-wasm-effect && vitest run --root packages/sync-engine",
     "perf:check": "bun tools/heavy/main.ts -- bun tools/audit/perf-check.ts",
     "heavy": "bun tools/heavy/main.ts --",
     "balance": "bun tools/heavy/main.ts -- bun tools/balance/simulate.ts",
     "balance:nightly": "bun tools/heavy/main.ts -- bun tools/balance/nightly.ts",
     "balance:model": "bun tools/balance/model.ts",
-    "lint": "oxlint src tools/heavy tools/balance tools/analytics packages/sqlite-wasm-effect --ignore-pattern tools/balance/bot.ts --ignore-pattern tools/balance/simulate.ts && effect-tsgo oxlint --config .oxlintrc.effect.json --deny-warnings src tools/heavy tools/balance tools/analytics packages/sqlite-wasm-effect"
+    "lint": "oxlint src tools/heavy tools/balance tools/analytics packages/sqlite-wasm-effect packages/sync-engine --ignore-pattern tools/balance/bot.ts --ignore-pattern tools/balance/simulate.ts && effect-tsgo oxlint --config .oxlintrc.effect.json --deny-warnings src tools/heavy tools/balance tools/analytics packages/sqlite-wasm-effect packages/sync-engine"
   },
   "dependencies": {
     "@effect/platform-browser": "4.0.0",
     "@foldkit/ui": "0.169.0",
     "@munch/sqlite-wasm-effect": "workspace:*",
+    "@munch/sync-engine": "workspace:*",
     "effect": "4.0.0",
     "foldkit": "0.169.0"
   },
