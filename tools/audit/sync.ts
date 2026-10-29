@@ -255,10 +255,16 @@ check(
   `device A says "${aLine}" without a reload`,
 )
 
+const musicBefore = await setting(b.page, 'Music')
 await flip(b.page, 'Music')
+const musicSeen: Array<string | null> = []
+for (const _ of [1, 2, 3, 4, 5, 6]) {
+  await wait(500)
+  musicSeen.push(await setting(b.page, 'Music'))
+}
 check(
-  (await setting(b.page, 'Music')) === 'false',
-  'device B turns the music off',
+  musicSeen.every(value => value === 'false'),
+  `device B turns the music off and it stays off (${musicBefore} then ${musicSeen.join(', ')})`,
 )
 await wait(2000)
 await a.page.reload()
