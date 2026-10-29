@@ -29,3 +29,6 @@ Thumbs.db
 
 # Balance nightly reports
 tools/balance/reports/
+
+# Multiplayer spike bundles
+tools/mp-spike/out/
