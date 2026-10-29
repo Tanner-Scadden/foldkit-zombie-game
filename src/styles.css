@@ -961,3 +961,125 @@ body {
     animation: none;
   }
 }
+
+.pause-help-frame {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: env(safe-area-inset-left, 0px);
+  container-type: size;
+  pointer-events: none;
+}
+
+.pause-help {
+  --arena-px: min(100cqw / 320, 100cqh / 180);
+  position: absolute;
+  left: 50%;
+  top: calc((100cqh - 180 * var(--arena-px)) / 2 + 97 * var(--arena-px));
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  width: min(232 * var(--arena-px), 48em);
+  max-height: calc(118 * var(--arena-px));
+  overflow: hidden;
+  padding: 0.6em 1em 0.7em;
+  border: 2px solid #5a3a4a;
+  border-radius: 6px;
+  background: rgba(24, 14, 22, 0.94);
+  color: #f4f1de;
+  font: clamp(10px, 4.8 * var(--arena-px), 28px) / 1.35 monospace;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.pause-help-title {
+  margin: 0 0 0.3em;
+  color: #9be36a;
+  font-size: 1.1em;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.pause-help-groups {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.4em;
+  justify-content: space-between;
+}
+
+.pause-help-table {
+  flex: 1;
+  border-collapse: collapse;
+}
+
+.pause-help-caption {
+  padding-bottom: 0.15em;
+  color: #ffe066;
+  font-weight: bold;
+  text-align: left;
+}
+
+.pause-help-inputs {
+  width: 1%;
+  padding: 0.12em 0.8em 0.12em 0;
+  font-weight: normal;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.pause-help-action {
+  padding: 0.12em 0;
+  color: #d9dccf;
+}
+
+.pause-help-key,
+.pause-help-button {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0 0.35em;
+  border-radius: 4px;
+  font: inherit;
+  font-weight: bold;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.pause-help-key {
+  border: 1px solid rgba(244, 241, 222, 0.7);
+  border-bottom-width: 3px;
+  background: #2e2434;
+  color: #f4f1de;
+}
+
+.pause-help-button {
+  border: 2px solid rgba(255, 224, 102, 0.8);
+  background: rgba(8, 10, 12, 0.7);
+  color: #ffe066;
+  letter-spacing: 0.04em;
+}
+
+.pause-help-or {
+  color: #9a948a;
+  font-size: 0.85em;
+}
+
+.pause-help-tips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.2em 1.4em;
+  margin: 0.5em 0 0;
+  padding: 0.45em 0 0;
+  border-top: 1px solid #5a3a4a;
+  list-style: none;
+}
+
+.pause-help-tip {
+  color: #d9dccf;
+}
+
+.pause-help-topic {
+  color: #9be36a;
+}

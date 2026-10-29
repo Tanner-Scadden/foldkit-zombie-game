@@ -98,6 +98,9 @@ export type ShopGood = typeof ShopGood.Type
 
 // UPGRADES
 
+export const gunName = (model: Model, weapon: WeaponKind): string =>
+  tierName(weapon, tierOf(model.player, weapon))
+
 const nextTierFor = (
   model: Model,
   weapon: WeaponKind,
@@ -257,22 +260,24 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
 
 export type ShopCategoryInfo = Readonly<{
   label: string
-  blurb: string
+  blurb: (model: Model) => string
 }>
 
 export const SHOP_CATEGORIES: Readonly<Record<ShopCategory, ShopCategoryInfo>> =
   {
     Guns: {
       label: 'Guns',
-      blurb: `You always keep the ${WEAPONS[SIDEARM].name}. A new gun takes your second slot, and whatever was there goes, upgrades and all.`,
+      blurb: model =>
+        `You always keep the ${gunName(model, SIDEARM)}. A new gun takes your second slot, and whatever was there goes, upgrades and all.`,
     },
     Health: {
       label: 'Health',
-      blurb: `One heart at a time, up to ${PLAYER_MAX_HP}.`,
+      blurb: () => `One heart at a time, up to ${PLAYER_MAX_HP}.`,
     },
     Traps: {
       label: 'Traps',
-      blurb: 'Set them down between waves. Damage stays until you fix it.',
+      blurb: () =>
+        'Set them down between waves. Damage stays until you fix it.',
     },
   }
 
@@ -467,17 +472,15 @@ const ammoGain = (model: Model, weapon: WeaponKind, rounds: number): string => {
 
 export const itemAriaLabel = (model: Model, id: ShopItemId): string => {
   const price = `$${priceFor(model, id)}`
-  const gunName = (weapon: WeaponKind): string =>
-    tierName(weapon, tierOf(model.player, weapon))
   return ShopGood.match(SHOP_ITEMS[id].good, {
     Gun: () => `Buy ${itemName(model, id)} for ${price}`,
     Ammo: ({ weapon, rounds }) =>
-      `${itemName(model, id)}, ammo for ${gunName(weapon)}, ${price}, ${ammoGain(model, weapon, rounds)}`,
+      `${itemName(model, id)}, ammo for ${gunName(model, weapon)}, ${price}, ${ammoGain(model, weapon, rounds)}`,
     Upgrade: ({ weapon }) =>
       Option.match(nextTierFor(model, weapon), {
         onNone: () => itemName(model, id),
         onSome: ({ name }) =>
-          `${name}, upgrade for ${gunName(weapon)}, ${price}`,
+          `${name}, upgrade for ${gunName(model, weapon)}, ${price}`,
       }),
     Heart: () => `Buy ${itemName(model, id)} for ${price}`,
     Trap: () => `Buy ${itemName(model, id)} for ${price}`,
@@ -497,7 +500,7 @@ export const itemBlurb = (model: Model, id: ShopItemId): string =>
     Upgrade: ({ weapon }) => {
       const tier = tierOf(model.player, weapon)
       return Option.match(nextTierFor(model, weapon), {
-        onNone: () => `Your ${WEAPONS[weapon].name} cannot get any fancier.`,
+        onNone: () => `Your ${gunName(model, weapon)} cannot get any fancier.`,
         onSome: () => upgradeChanges(weapon, tier),
       })
     },
@@ -530,16 +533,16 @@ const blockedReason = (model: Model, good: ShopGood): Option.Option<string> => {
           spare => spare.kind === weapon,
         ),
         {
-          onNone: () => Option.some(`Needs the ${WEAPONS[weapon].name}`),
+          onNone: () => Option.some(`Needs the ${gunName(model, weapon)}`),
           onSome: spare =>
             spare.rounds >= maxRounds(weapon, spare.tier)
-              ? Option.some(`Your ${WEAPONS[weapon].name} is full`)
+              ? Option.some(`Your ${tierName(weapon, spare.tier)} is full`)
               : Option.none(),
         },
       ),
     Upgrade: ({ weapon }) => {
       if (weapon !== SIDEARM && !isCarrying(player, weapon)) {
-        return Option.some(`Needs the ${WEAPONS[weapon].name}`)
+        return Option.some(`Needs the ${gunName(model, weapon)}`)
       } else if (Option.isNone(nextTierFor(model, weapon))) {
         return Option.some('Fully upgraded')
       } else {
@@ -603,20 +606,20 @@ export const ownedNote = (model: Model, id: ShopItemId): string => {
             ? `In your hands, ${spare.rounds} ${WEAPONS[weapon].roundsLabel} left`
             : spare.tier > 0
               ? `Replaces your ${tierName(spare.kind, spare.tier)}, and its upgrades are lost`
-              : `Replaces your ${WEAPONS[spare.kind].name}`,
+              : `Replaces your ${tierName(spare.kind, spare.tier)}`,
       }),
     Ammo: ({ weapon }) =>
       Option.match(
         Option.filter(maybeCarried, spare => spare.kind === weapon),
         {
-          onNone: () => `You do not carry the ${WEAPONS[weapon].name}`,
+          onNone: () => `You do not carry the ${gunName(model, weapon)}`,
           onSome: spare =>
             `You have ${spare.rounds} of ${maxRounds(weapon, spare.tier)} ${WEAPONS[weapon].roundsLabel}`,
         },
       ),
     Upgrade: ({ weapon }) =>
       weapon !== SIDEARM && !isCarrying(player, weapon)
-        ? `Buy the ${WEAPONS[weapon].name} first`
+        ? `Buy the ${gunName(model, weapon)} first`
         : `Tier ${tierOf(player, weapon)} of ${maxTier(weapon)}`,
     Heart: () => `Hearts ${player.hp} of ${PLAYER_MAX_HP}`,
     Trap: ({ kind }) =>

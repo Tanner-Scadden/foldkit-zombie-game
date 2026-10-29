@@ -1,0 +1,209 @@
+import { Array } from 'effect'
+import type { Attribute, Html, HtmlBuilder } from 'foldkit/html'
+
+import { Message, isSideways } from './main'
+import { type InputDevice, type Model, Phase } from './model'
+import { TRAPS } from './traps'
+
+// CONTROLS
+
+type Control = Readonly<{
+  inputs: Array.NonEmptyReadonlyArray<string>
+  action: string
+}>
+
+type ControlGroup = Readonly<{
+  title: string
+  controls: Array.NonEmptyReadonlyArray<Control>
+}>
+
+type InputStyle = 'Keycap' | 'TouchButton'
+
+type DeviceHelp = Readonly<{
+  label: string
+  inputStyle: InputStyle
+  groups: Array.NonEmptyReadonlyArray<ControlGroup>
+}>
+
+const control = (
+  inputs: Array.NonEmptyReadonlyArray<string>,
+  action: string,
+): Control => ({ inputs, action })
+
+const KEYBOARD_HELP: DeviceHelp = {
+  label: 'keyboard and mouse',
+  inputStyle: 'Keycap',
+  groups: [
+    {
+      title: 'Move and fight',
+      controls: [
+        control(['WASD', 'Arrows'], 'Move'),
+        control(['Mouse'], 'Aim'),
+        control(['Click', 'Space'], 'Fire'),
+        control(['R'], 'Reload'),
+        control(['Q', 'E'], 'Swap guns'),
+        control(['1', '2'], 'Pick a gun'),
+      ],
+    },
+    {
+      title: 'Traps and stuff',
+      controls: [
+        control(['T'], 'Place a trap'),
+        control(['G'], 'Next trap'),
+        control(['Enter'], 'Start the wave'),
+        control(['Esc', 'P'], 'Pause'),
+        control(['M'], 'Mute'),
+        control(['N'], 'Music on or off'),
+      ],
+    },
+  ],
+}
+
+const TOUCH_HELP: DeviceHelp = {
+  label: 'touch',
+  inputStyle: 'TouchButton',
+  groups: [
+    {
+      title: 'Move and fight',
+      controls: [
+        control(['Left thumb'], 'Move'),
+        control(['Right thumb'], 'Aim and fire'),
+        control(['RELOAD'], 'Reload'),
+        control(['SWAP'], 'Swap guns'),
+      ],
+    },
+    {
+      title: 'Traps and stuff',
+      controls: [
+        control(['PLACE'], 'Place a trap'),
+        control(['NEXT'], 'Next trap'),
+        control(['START WAVE'], 'Start the wave'),
+        control(['MUTE'], 'Mute'),
+        control(['MUSIC'], 'Music on or off'),
+      ],
+    },
+  ],
+}
+
+const DEVICE_HELP: Readonly<Record<InputDevice, DeviceHelp>> = {
+  KeyboardMouse: KEYBOARD_HELP,
+  Touch: TOUCH_HELP,
+}
+
+// TIPS
+
+type Tip = Readonly<{ topic: string; text: string }>
+
+const TIPS: Array.NonEmptyReadonlyArray<Tip> = [
+  { topic: 'Shop', text: 'Open between waves. Walk into the stall.' },
+  {
+    topic: TRAPS.Barricade.name,
+    text: 'Nail it in a doorway between waves. Zombies chew through.',
+  },
+  {
+    topic: TRAPS.Turret.name,
+    text: 'Plonk it in front of you. It shoots anything close.',
+  },
+  { topic: 'Goodies', text: 'Zombies drop them. Walk over one to grab it.' },
+]
+
+// VIEW
+
+const HELP_TITLE_ID = 'pause-help-title'
+
+const inputsView = (
+  help: DeviceHelp,
+  inputs: Array.NonEmptyReadonlyArray<string>,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html | string> =>
+  Array.intersperse(
+    Array.map(inputs, input =>
+      help.inputStyle === 'Keycap'
+        ? h.kbd([h.Class('pause-help-key')], [input])
+        : h.span([h.Class('pause-help-button')], [input]),
+    ),
+    h.span([h.Class('pause-help-or')], [' or ']),
+  )
+
+const controlRowView = (
+  help: DeviceHelp,
+  { inputs, action }: Control,
+  h: HtmlBuilder<Message>,
+): Html =>
+  h.tr(
+    [],
+    [
+      h.th(
+        [h.Scope('row'), h.Class('pause-help-inputs')],
+        inputsView(help, inputs, h),
+      ),
+      h.td([h.Class('pause-help-action')], [action]),
+    ],
+  )
+
+const controlGroupView = (
+  help: DeviceHelp,
+  group: ControlGroup,
+  h: HtmlBuilder<Message>,
+): Html =>
+  h.table(
+    [h.Class('pause-help-table')],
+    [
+      h.caption([h.Class('pause-help-caption')], [group.title]),
+      h.tbody(
+        [],
+        Array.map(group.controls, item => controlRowView(help, item, h)),
+      ),
+    ],
+  )
+
+const tipView = ({ topic, text }: Tip, h: HtmlBuilder<Message>): Html =>
+  h.li(
+    [h.Class('pause-help-tip')],
+    [h.strong([h.Class('pause-help-topic')], [`${topic}:`]), ` ${text}`],
+  )
+
+const isPauseHelpUp = (model: Model): boolean =>
+  Phase.isAnyOf(['Paused'])(model.phase) && !isSideways(model)
+
+export const pauseHelpView = (
+  model: Model,
+  pressSurface: Attribute<Message>,
+  h: HtmlBuilder<Message>,
+): Html => {
+  if (!isPauseHelpUp(model)) {
+    return h.empty
+  }
+
+  const help = DEVICE_HELP[model.lastDevice]
+  return h.div(
+    [h.Class('pause-help-frame')],
+    [
+      h.section(
+        [
+          h.Class('pause-help'),
+          h.DataAttribute('device', model.lastDevice),
+          h.AriaLabelledBy(HELP_TITLE_ID),
+          pressSurface,
+        ],
+        [
+          h.h2(
+            [h.Id(HELP_TITLE_ID), h.Class('pause-help-title')],
+            [
+              'How to play',
+              h.span([h.Class('sr-only')], [` with ${help.label}`]),
+            ],
+          ),
+          h.div(
+            [h.Class('pause-help-groups')],
+            Array.map(help.groups, group => controlGroupView(help, group, h)),
+          ),
+          h.ul(
+            [h.Class('pause-help-tips'), h.AriaLabel('Tips')],
+            Array.map(TIPS, tip => tipView(tip, h)),
+          ),
+        ],
+      ),
+    ],
+  )
+}

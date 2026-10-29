@@ -66,6 +66,7 @@ Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All fo
 | `src/wavePreview.ts`   | The door markers that preview a wave, and their spoken text            |
 | `src/touchControls.ts` | Touch sticks, ghost sticks, gun buttons, and preparation buttons       |
 | `src/menus.ts`         | Mode buttons, the new zombie card, audio toggles, rotate notice        |
+| `src/pauseHelp.ts`     | The pause screen's panel of controls and tips for each device          |
 | `src/powerupView.ts`   | Pickups, callouts, the boost aura, and HUD timers on canvas            |
 | `src/shopView.ts`      | The shop dialog and its category tabs, HTML over the canvas            |
 | `src/stall.ts`         | The stall, its shopkeeper, entrance outline, and prompt                |

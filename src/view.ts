@@ -22,6 +22,7 @@ import {
   type RunStats,
 } from './model'
 import { isPracticeGateHeld } from './onboarding'
+import { pauseHelpView } from './pauseHelp'
 import { BOOST_KIND_ORDER, PICKUPS, isBoosted } from './powerups'
 import { isShopOpenFor } from './shop'
 import { shopDialogView } from './shopView'
@@ -260,6 +261,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
         ],
       ),
       loadoutView(model, h),
+      pauseHelpView(model, h.OnPointerDown(toPressedPointer), h),
       preparationControlsView(model, h),
       gunButtonsView(model, h),
       debutCardView(model, h),

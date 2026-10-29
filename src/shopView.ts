@@ -393,7 +393,7 @@ const categoryPanelView = (
   h.div(
     [...tab.panel, h.Class('shop-tabpanel')],
     [
-      h.p([h.Class('shop-rule')], [SHOP_CATEGORIES[tab.value].blurb]),
+      h.p([h.Class('shop-rule')], [SHOP_CATEGORIES[tab.value].blurb(model)]),
       h.ul(
         [
           h.Class(`shop-items shop-items-${String.toLowerCase(tab.value)}`),

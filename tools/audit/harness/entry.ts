@@ -24,7 +24,7 @@ import {
 } from '@game/model'
 import { raiseDebutCard } from '@game/onboarding'
 import { view } from '@game/view'
-import { rollSpawns, startOrResume } from '@game/waves'
+import { pause, rollSpawns, startOrResume } from '@game/waves'
 import { ZOMBIE_KIND_ORDER } from '@game/zombies'
 
 const params = new URLSearchParams(location.search)
@@ -284,6 +284,7 @@ const scenarioModel = (): Model => {
       stats: s => ({ ...s, wavesCleared: 8 }),
       score: () => 4321,
     })
+  if (phase === 'paused') model = pause(model)
   if (phase === 'gameover')
     model = modifyFields(model, {
       phase: () => Phase.GameOver({ wave }),

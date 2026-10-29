@@ -789,15 +789,24 @@ const readyShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
 // PAUSED
 
 const PAUSED = bakeText('PAUSED', 'Title')
+const PAUSED_Y = 9
+const PAUSED_WAVE_Y = 28
+const RESUME_Y = 164
 
 const pausedShapes = (
   model: Model,
   wave: number,
 ): ReadonlyArray<Canvas.Shape> => [
   DIM_BACKDROP,
-  centered(PAUSED, 56, TITLE_SCALE),
-  ...textShapes(waveLabel(model.mode, wave), 'Plain', CENTER_X, 78, 'Center'),
-  centered(RESUME_PROMPT[model.lastDevice], 96),
+  centered(PAUSED, PAUSED_Y, TITLE_SCALE),
+  ...textShapes(
+    waveLabel(model.mode, wave),
+    'Plain',
+    CENTER_X,
+    PAUSED_WAVE_Y,
+    'Center',
+  ),
+  centered(RESUME_PROMPT[model.lastDevice], RESUME_Y),
 ]
 
 // RUN STATS

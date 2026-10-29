@@ -27,6 +27,7 @@ import { Arsenal, type Model, Phase, Reload, initialModel } from './model'
 import { DEBUT_CARD_MIN_MS } from './onboarding'
 import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
+import { maxRounds } from './weapons'
 
 const measureSurface = Mount.resolve(
   MeasureGameSurface,
@@ -322,6 +323,47 @@ describe('Shop', () => {
       ).toHaveAttr('aria-disabled', 'true'),
       expect(text('Your Barn Buster is full')).toExist(),
       expect(text('6 loaded, 42 spare')).toExist(),
+    )
+  })
+
+  test('an upgraded gun goes by its tier name everywhere in the shop', () => {
+    const fullDrum = role('button', {
+      name: 'Chatter Drum, ammo for Gossip Box, $15, adds up to 120 rounds',
+    })
+    scene(
+      { update, view },
+      given(
+        modifyFields(atStall, {
+          player: player =>
+            modifyFields(player, {
+              pistolTier: () => 1,
+              arsenal: () =>
+                Arsenal.HoldingSpare({
+                  spare: {
+                    kind: 'Smg',
+                    rounds: maxRounds('Smg', 1),
+                    loaded: 30,
+                    tier: 1,
+                  },
+                }),
+            }),
+        }),
+      ),
+      measureSurface,
+      ...openShop(),
+      expect(role('heading', { name: 'Gossip Box' })).toExist(),
+      expect(role('list', { name: 'For your Gossip Box' })).toExist(),
+      expect(fullDrum).toHaveAttr('aria-disabled', 'true'),
+      expect(within(fullDrum, text('Your Gossip Box is full'))).toExist(),
+      expect(text('Your Chatterbox is full')).toBeAbsent(),
+      expect(
+        text(
+          'You always keep the Shovey Popper. A new gun takes your second slot, and whatever was there goes, upgrades and all.',
+        ),
+      ).toExist(),
+      expect(
+        text('Replaces your Gossip Box, and its upgrades are lost'),
+      ).toExist(),
     )
   })
 
