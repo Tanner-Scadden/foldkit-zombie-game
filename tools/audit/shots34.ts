@@ -1,6 +1,6 @@
 // The portrait pass: a wave, a break with the door preview, the shop, the
 // home menu, the boss fight, pause, Game Over, and the menu panels, on three
-// portrait phones (390x844, 430x932, 360x800) and a landscape one (844x390),
+// portrait phones (390x844, 430x932, 360x800, 375x667) and a landscape one (844x390),
 // all with touch, as `s34-<TAG>-<viewport>-<scene>.png`. For every visible
 // button it checks that it is at least 48 px and that its center hits it, and
 // it checks that the page and the open dialog do not scroll. Exits with 1 on
@@ -28,6 +28,7 @@ const VIEWPORTS: ReadonlyArray<Viewport> = [
   { name: 'p390', width: 390, height: 844, scale: 3 },
   { name: 'p430', width: 430, height: 932, scale: 3 },
   { name: 'p360', width: 360, height: 800, scale: 3 },
+  { name: 'p375', width: 375, height: 667, scale: 2 },
   { name: 'l844', width: 844, height: 390, scale: 3 },
 ]
 

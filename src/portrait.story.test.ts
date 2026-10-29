@@ -25,7 +25,9 @@ import {
   PORTRAIT_WIDTH,
   isPortrait,
   portraitHeightFor,
+  portraitScreen,
   screenOf,
+  thumbAreaTop,
 } from './screen'
 import { asVeteran } from './veteran'
 
@@ -93,8 +95,9 @@ describe('the portrait screen', () => {
       x: 0,
       y: PORTRAIT_HUD_PX,
       width: PORTRAIT_WIDTH,
-      height: 180,
+      height: 240,
     })
+    expect(screen.zoom).toBeCloseTo(4 / 3)
     expect(
       portraitHeightFor({ left: 0, top: 0, width: 430, height: 932 }),
     ).toBe(390)
@@ -102,15 +105,48 @@ describe('the portrait screen', () => {
       portraitHeightFor({ left: 0, top: 0, width: 360, height: 800 }),
     ).toBe(400)
   })
+
+  test('zooms in as far as the shape of the phone leaves room for both thumbs', () => {
+    const phones = [
+      { width: 390, height: 844, world: 240, viewWidth: 135 },
+      { width: 430, height: 932, world: 240, viewWidth: 135 },
+      { width: 360, height: 800, world: 240, viewWidth: 135 },
+      { width: 375, height: 667, world: 200, viewWidth: 162 },
+    ]
+    Array.forEach(phones, phone => {
+      const screen = portraitScreen(
+        portraitHeightFor({ left: 0, top: 0, ...phone }),
+      )
+      expect(screen.world.height).toBe(phone.world)
+      expect(PORTRAIT_WIDTH / screen.zoom).toBeCloseTo(phone.viewWidth)
+      expect(screen.world.height / screen.zoom).toBeCloseTo(180)
+      expect(screen.height - thumbAreaTop(screen)).toBeGreaterThanOrEqual(76)
+      expect(screen.world.height).toBeLessThan(screen.height * 0.64)
+    })
+    const widest = portraitScreen(
+      portraitHeightFor({ left: 0, top: 0, width: 768, height: 1024 }),
+    )
+    expect(widest.zoom).toBe(1)
+    expect(widest.world.height).toBe(180)
+    expect(screenOf(fightingInLandscape).zoom).toBe(1)
+  })
 })
 
 describe('the portrait camera', () => {
   test('follows the player across the room and stops at its walls', () => {
     const cameraAt = (x: number) =>
       cameraOf(standingAt(fightingInPortrait, x, 120))
-    expect(cameraAt(20)).toEqual({ x: 0, y: 0, width: 180, height: 180 })
-    expect(cameraAt(160)).toMatchObject({ x: 70, y: 0 })
-    expect(cameraAt(300)).toMatchObject({ x: 140, y: 0 })
+    expect(cameraAt(20)).toEqual({
+      x: 0,
+      y: 0,
+      width: 135,
+      height: 180,
+      scale: 1,
+      left: 0,
+      top: 0,
+    })
+    expect(cameraAt(160)).toMatchObject({ x: 93, y: 0 })
+    expect(cameraAt(300)).toMatchObject({ x: 185, y: 0 })
     Array.forEach([0, 40, 90, 200, 260, 320], x => {
       const camera = cameraAt(x)
       expect(camera.x).toBeGreaterThanOrEqual(0)
@@ -121,9 +157,10 @@ describe('the portrait camera', () => {
   test('keeps the player in the middle of the window between the walls', () => {
     const fighting = standingAt(fightingInPortrait, 151, 60)
     const onWindow = worldToView(cameraOf(fighting), fighting.player)
-    expect(onWindow.x).toBeCloseTo(90, 0)
+    expect(Math.abs(onWindow.x - 135 / 2)).toBeLessThanOrEqual(0.5)
     const onScreen = worldToView(screenCameraOf(fighting), fighting.player)
-    expect(onScreen.y).toBe(60 + PORTRAIT_HUD_PX)
+    expect(onScreen.x).toBeCloseTo((onWindow.x * 4) / 3)
+    expect(onScreen.y).toBeCloseTo((60 * 4) / 3 + PORTRAIT_HUD_PX)
   })
 
   test('stands still in landscape, where the room is the whole view', () => {
@@ -133,7 +170,13 @@ describe('the portrait camera', () => {
         y: 0,
         width: 320,
         height: 180,
+        scale: 1,
+        left: 0,
+        top: 0,
       })
+      expect(
+        screenCameraOf(standingAt(fightingInLandscape, x, 90)),
+      ).toMatchObject({ x: 0, y: 0, scale: 1, left: 0, top: 0 })
     })
   })
 })
@@ -176,8 +219,8 @@ describe('the aim lean', () => {
         expect(current.cameraLean.x).toBeLessThanOrEqual(CAMERA_LEAN_PX)
         expect(Math.abs(current.cameraLean.y)).toBeLessThan(0.5)
         const camera = cameraOf(current)
-        expect(camera.x).toBeGreaterThan(70)
-        expect(current.player.x - camera.x).toBeLessThan(90)
+        expect(camera.x).toBeGreaterThan(93)
+        expect(current.player.x - camera.x).toBeLessThan(135 / 2)
       }),
       message(Message.ReleasedPointer({ pointerId: RIGHT_THUMB })),
       ...ticks(120),
@@ -274,8 +317,11 @@ describe('portrait input', () => {
       (422 - (PORTRAIT_SURFACE.height - screen.height * scale) / 2) / scale,
     )
     const world = viewToWorld(screenCameraOf(fighting), onScreen)
-    expect(world.x).toBeCloseTo(90 + cameraOf(fighting).x)
-    expect(world.y).toBeCloseTo(onScreen.y - PORTRAIT_HUD_PX)
+    expect(world.x).toBeCloseTo(90 / screen.zoom + cameraOf(fighting).x)
+    expect(world.y).toBeCloseTo((onScreen.y - PORTRAIT_HUD_PX) / screen.zoom)
+    const back = worldToView(screenCameraOf(fighting), world)
+    expect(back.x).toBeCloseTo(onScreen.x)
+    expect(back.y).toBeCloseTo(onScreen.y)
   })
 })
 

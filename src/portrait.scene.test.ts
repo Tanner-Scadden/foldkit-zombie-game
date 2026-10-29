@@ -197,8 +197,12 @@ describe('turning the phone', () => {
       expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
       expect(role('dialog', { name: 'Turn your phone sideways' })).toBeAbsent(),
       expect(role('group', { name: 'Your guns' })).toExist(),
+      expect(root).toHaveStyle('--frame-top', '74'),
+      expect(selector('.thumb-area')).toExist(),
       Subscription.emit(Message.MeasuredGameSurface(LANDSCAPE)),
       expect(root).toHaveAttr('data-layout', 'Landscape'),
+      expect(root).toHaveStyle('--frame-top', '0'),
+      expect(selector('.thumb-area')).toBeAbsent(),
       expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
     )
   })

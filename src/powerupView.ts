@@ -1,8 +1,8 @@
 import { Array, Option, Record, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
-import { type Camera, worldToView } from './camera'
-import { SHADOW_COLOR, SHADOW_HEIGHT, VIEW_WIDTH } from './constants'
+import { type Camera, viewBoxOf, worldToView } from './camera'
+import { SHADOW_COLOR, SHADOW_HEIGHT } from './constants'
 import { type BakedText, bakeText, placeBaked } from './font'
 import { clamp } from './geometry'
 import {
@@ -163,8 +163,16 @@ export const calloutShapes =
     const scale =
       callout.ageMs < CALLOUT_POP_MS ? CALLOUT_POP_SCALE : CALLOUT_SCALE
     const halfWidth = Math.ceil((title.width * scale) / 2) + CALLOUT_MARGIN
-    const x = clamp(Math.round(anchor.x), halfWidth, VIEW_WIDTH - halfWidth)
-    const y = Math.max(CALLOUT_MARGIN, Math.round(anchor.y - CALLOUT_LIFT_PX))
+    const view = viewBoxOf(camera)
+    const x = clamp(
+      Math.round(anchor.x),
+      view.x + halfWidth,
+      view.x + view.width - halfWidth,
+    )
+    const y = Math.max(
+      view.y + CALLOUT_MARGIN,
+      Math.round(anchor.y - CALLOUT_LIFT_PX),
+    )
     const opacity = calloutOpacity(progress)
     return [
       placeBaked(title, { x, y, align: 'Center', scale, opacity }),

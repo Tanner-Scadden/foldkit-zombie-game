@@ -135,11 +135,14 @@ const EDGE_MARGIN_PX = 5
 const ARROW_GAP_PX = 2
 const ARROW_LENGTH_PX = 3
 
+// NOTE: a zoomed portrait window puts world points between screen pixels,
+// so the anchor is rounded to keep the marker's edges crisp.
 const pinToWindow = (
   window: Box,
-  anchor: Vector,
+  { x: anchorX, y: anchorY }: Vector,
   halfWidth: number,
 ): Pinned => {
+  const anchor = { x: Math.round(anchorX), y: Math.round(anchorY) }
   const reach = halfWidth + EDGE_MARGIN_PX + ARROW_LENGTH_PX
   const left = window.x + reach
   const right = window.x + window.width - reach
@@ -359,7 +362,7 @@ const floorMarkerShapes = (
     onNonEmpty: rows => {
       const anchor = {
         x: Math.round(window.x + window.width / 2),
-        y: worldToView(camera, FLOOR_ANCHOR).y,
+        y: Math.round(worldToView(camera, FLOOR_ANCHOR).y),
       }
       const tagTop = -DOOR_MARKER_ROW_PX / 2 - DOOR_MARKER_PAD - GLYPH_HEIGHT
       const top = tagTop - FLOOR_TAG_GAP - DOOR_MARKER_PAD

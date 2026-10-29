@@ -3,7 +3,7 @@ import { Canvas } from 'foldkit'
 
 import { maybeBossBar } from './boss'
 import { bossBarShapes } from './bossView'
-import { type Camera, worldToView } from './camera'
+import { type Camera, viewBoxOf, worldToView } from './camera'
 import {
   HEART_FLASH_MS,
   HEART_PULSE_GROWTH,
@@ -539,14 +539,13 @@ const trapNoticeShapes = (
       const content = String.toUpperCase(reason)
       const halfWidth = Math.ceil(textWidth(content) / 2) + NOTICE_MARGIN_PX
       const player = worldToView(camera, model.player)
-      const left = -camera.x
-      const top = -camera.y
+      const view = viewBoxOf(camera)
       const x = clamp(
         Math.round(player.x),
-        left + halfWidth,
-        left + camera.width - halfWidth,
+        view.x + halfWidth,
+        view.x + view.width - halfWidth,
       )
-      const y = Math.max(top + 4, Math.round(player.y) - NOTICE_LIFT_PX)
+      const y = Math.max(view.y + 4, Math.round(player.y) - NOTICE_LIFT_PX)
       return textShapes(content, 'Alert', x, y, 'Center')
     },
   })

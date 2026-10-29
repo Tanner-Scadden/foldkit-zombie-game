@@ -1277,9 +1277,9 @@
 
 .game-root[data-layout='Portrait'] .home-hero {
   left: calc(70 * var(--a));
-  top: calc((112 + var(--world-top)) * var(--a));
+  top: calc((112 + var(--frame-top)) * var(--a));
 }
 
 .game-root[data-layout='Portrait'] .home-stage .new-entry {
-  top: calc((80 + var(--world-top)) * var(--a));
+  top: calc((80 + var(--frame-top)) * var(--a));
 }
