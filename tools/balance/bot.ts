@@ -945,7 +945,10 @@ export const startedRun = (seed: number, options: BotOptions): Model => {
     }),
     Message.MeasuredGameSurface(SURFACE),
   )
-  return tapKey(ready, options.mode === 'Endless' ? 'KeyE' : 'Enter')
+  return tapKey(
+    options.mode === 'Endless' ? tapKey(ready, 'KeyE') : ready,
+    'Enter',
+  )
 }
 
 // How far play goes: to the end of the run, to the end of the wave it
