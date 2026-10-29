@@ -2,12 +2,15 @@ import {
   Array,
   Clock,
   Data,
+  Duration,
   Effect,
   Option,
   Order,
   Record,
+  Result,
   Schema,
   Stream,
+  SubscriptionRef,
   pipe,
 } from 'effect'
 import { SqlClient, type SqlError } from 'effect/sql'
@@ -53,7 +56,7 @@ export interface LocalDatabase {
 export const Receipt = Schema.TaggedUnion({
   Applied: { seq: Schema.Number },
   Resync: { mode: HelloMode },
-  Confirmed: { id: Schema.String },
+  Confirmed: { id: Schema.String, seq: Schema.Number },
   Rejected: {
     id: Schema.String,
     code: RejectCode,
@@ -67,6 +70,105 @@ export type Receipt = typeof Receipt.Type
 const applied = (seq: number): Receipt => Receipt.cases.Applied.make({ seq })
 const resync = (mode: HelloMode): Receipt => Receipt.cases.Resync.make({ mode })
 const ignored: Receipt = Receipt.cases.Ignored.make({})
+
+// STATUS
+
+// NOTE: how far a replica has got with its scope, apart from how the
+// connection is doing (that is SyncStatus). Idle has nothing from the server
+// and is not loading; Loading is joining for the first time; Ready holds
+// confirmed rows up to `seq`, `fresh` once this session has applied a
+// snapshot or deltas from the server, and not fresh when the rows are cached
+// from an earlier session. Failed is a scope the server refused before it
+// was ever ready. Once ready, a replica stays ready: a dropped connection or
+// a refusal shows in SyncStatus, not here.
+export const ScopeStatus = Schema.TaggedUnion({
+  Idle: {},
+  Loading: {},
+  Ready: { seq: Schema.Number, fresh: Schema.Boolean },
+  Failed: { reason: Schema.String },
+})
+export type ScopeStatus = typeof ScopeStatus.Type
+
+// NOTE: Leading is the first session since this tab took the lead, and
+// Reconnecting every later one.
+export const SessionStart = Schema.Literals(['Leading', 'Reconnecting'])
+export type SessionStart = typeof SessionStart.Type
+
+const idle: ScopeStatus = ScopeStatus.cases.Idle.make({})
+const loading: ScopeStatus = ScopeStatus.cases.Loading.make({})
+
+const sameStatus = Schema.toEquivalence(ScopeStatus)
+
+// NOTE: these refusals do not go away by retrying with the same device.
+// Unauthorized refreshes the token, and NotReady and Unavailable pass.
+const TERMINAL_FAILURES: ReadonlyArray<FailCode> = [
+  'Forbidden',
+  'VersionMismatch',
+  'BadMessage',
+]
+
+export const statusAfterReceipt = (
+  status: ScopeStatus,
+  receipt: Receipt,
+): ScopeStatus => {
+  if (receipt._tag === 'Applied') {
+    return ScopeStatus.cases.Ready.make({ seq: receipt.seq, fresh: true })
+  } else if (
+    receipt._tag === 'Failed' &&
+    Array.contains(TERMINAL_FAILURES, receipt.code) &&
+    ScopeStatus.isAnyOf(['Idle', 'Loading'])(status)
+  ) {
+    return ScopeStatus.cases.Failed.make({
+      reason: `${receipt.code}: ${receipt.reason}`,
+    })
+  } else {
+    return status
+  }
+}
+
+export const statusAtSessionStart = (
+  status: ScopeStatus,
+  start: SessionStart,
+): ScopeStatus =>
+  ScopeStatus.match(status, {
+    Idle: () => loading,
+    Loading: () => loading,
+    Failed: () => (start === 'Leading' ? loading : status),
+    Ready: ({ seq }) =>
+      start === 'Leading'
+        ? ScopeStatus.cases.Ready.make({ seq, fresh: false })
+        : status,
+  })
+
+// NOTE: what a tab that opens the replica starts from. Rows the confirmed
+// tables already hold are ready, though not fresh, before any connection.
+const statusOnOpen = (
+  stored: Option.Option<ScopeStatus>,
+  confirmed: number,
+): ScopeStatus =>
+  Option.isSome(stored) && stored.value._tag === 'Ready'
+    ? ScopeStatus.cases.Ready.make({ seq: stored.value.seq, fresh: false })
+    : confirmed > 0
+      ? ScopeStatus.cases.Ready.make({ seq: confirmed, fresh: false })
+      : idle
+
+// SETTLED
+
+// NOTE: how a mutation this device made ended: confirmed at a seq of the
+// scope's log, or rejected by the server.
+export const Settled = Schema.TaggedUnion({
+  Confirmed: { seq: Schema.Number },
+  Rejected: { code: RejectCode, reason: Schema.String },
+})
+export type Settled = typeof Settled.Type
+
+// NOTE: how many settled ids a kind remembers, so a tab that asks after the
+// fact still hears a rejection. An id older than these reads as confirmed.
+const SETTLED_KEPT = 200
+
+// NOTE: a tab that waits on a settlement also checks this often, in case
+// the outbox changed between its first look and its subscription.
+const SETTLED_RECHECK: Duration.Input = '5 seconds'
 
 export class ReplicaError extends Data.TaggedError('ReplicaError')<{
   readonly reason: string
@@ -95,10 +197,20 @@ export interface Replica {
   readonly remoteChanges: Stream.Stream<void>
   readonly localChanges: Stream.Stream<void>
   readonly role: Effect.Effect<Role>
+  readonly status: Stream.Stream<ScopeStatus>
+  readonly currentStatus: Effect.Effect<ScopeStatus, SqlError.SqlError>
+  readonly startSession: (
+    start: SessionStart,
+  ) => Effect.Effect<void, SqlError.SqlError>
+  readonly awaitSettled: (
+    id: string,
+  ) => Effect.Effect<Settled, SqlError.SqlError>
 }
 
 export const REPLICAS_TABLE = 'sync_replicas'
 export const OUTBOX_TABLE = 'sync_outbox'
+export const STATUS_TABLE = 'sync_status'
+export const SETTLED_TABLE = 'sync_settled'
 
 const createEngineTables = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
@@ -117,6 +229,15 @@ const createEngineTables = Effect.gen(function* () {
     args TEXT NOT NULL,
     created_ms INTEGER NOT NULL
   )`
+  yield* sql`CREATE TABLE IF NOT EXISTS sync_status (
+    kind TEXT PRIMARY KEY,
+    status TEXT NOT NULL
+  )`
+  yield* sql`CREATE TABLE IF NOT EXISTS sync_settled (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    outcome TEXT NOT NULL
+  )`
 })
 
 const ReplicaRow = Schema.Struct({
@@ -132,6 +253,17 @@ const OutboxRow = Schema.Struct({
   created_ms: Schema.Number,
 })
 type OutboxRow = typeof OutboxRow.Type
+
+const StatusRow = Schema.Struct({
+  status: Schema.fromJsonString(ScopeStatus),
+})
+
+const SettledRow = Schema.Struct({
+  outcome: Schema.fromJsonString(Settled),
+})
+
+const encodeStatus = Schema.encodeSync(Schema.fromJsonString(ScopeStatus))
+const encodeSettled = Schema.encodeSync(Schema.fromJsonString(Settled))
 
 // NOTE: 16 random bytes from the platform's cryptographic source, so ids
 // made on two devices never meet. Only the replica draws them, never an
@@ -181,6 +313,32 @@ export const makeReplica = (
       WHERE kind = ${definition.kind} ORDER BY local_seq`,
     rows => decodeRows(OutboxRow, rows),
   )
+
+  // NOTE: a mutation leaving the outbox is remembered with how it ended, so
+  // awaitSettled can answer in any tab, and even after the fact. Only the
+  // newest SETTLED_KEPT per kind are kept.
+  const recordSettled = (id: string, settled: Settled) =>
+    Effect.andThen(
+      sql`INSERT INTO sync_settled ${sql.insert({
+        id,
+        kind: definition.kind,
+        outcome: encodeSettled(settled),
+      })} ON CONFLICT (id) DO NOTHING`,
+      sql`DELETE FROM sync_settled WHERE kind = ${definition.kind}
+        AND rowid NOT IN (SELECT rowid FROM sync_settled
+          WHERE kind = ${definition.kind} ORDER BY rowid DESC LIMIT ${SETTLED_KEPT})`,
+    )
+
+  const removeFromOutbox = (id: string, settled: Settled) =>
+    Effect.flatMap(
+      sql<{
+        readonly id: string
+      }>`DELETE FROM sync_outbox WHERE id = ${id} RETURNING id`,
+      removed =>
+        Array.isReadonlyArrayNonEmpty(removed)
+          ? Effect.as(recordSettled(id, settled), true)
+          : Effect.succeed(false),
+    )
 
   const applyRow = (
     scope: string,
@@ -302,7 +460,12 @@ export const makeReplica = (
         sql.withTransaction(
           applyRow(scope, delta, delta.timestampMs, deltaTarget),
         ),
-        Effect.andThen(sql`DELETE FROM sync_outbox WHERE id = ${delta.id}`),
+        Effect.andThen(
+          removeFromOutbox(
+            delta.id,
+            Settled.cases.Confirmed.make({ seq: delta.seq }),
+          ),
+        ),
         Effect.as<DeltaStep>({ confirmed: delta.seq, receipt: Option.none() }),
         Effect.catchTags({
           MutationRejected: () =>
@@ -364,13 +527,17 @@ export const makeReplica = (
         if (message.seq > replica.confirmed_seq) {
           return resync('Catchup')
         }
-        const removed = yield* sql<{
-          readonly id: string
-        }>`DELETE FROM sync_outbox WHERE id = ${message.id} RETURNING id`
-        if (Array.isReadonlyArrayNonEmpty(removed)) {
+        const removed = yield* removeFromOutbox(
+          message.id,
+          Settled.cases.Confirmed.make({ seq: message.seq }),
+        )
+        if (removed) {
           yield* settle(replica.scope, replica.confirmed_seq)
         }
-        return Receipt.cases.Confirmed.make({ id: message.id })
+        return Receipt.cases.Confirmed.make({
+          id: message.id,
+          seq: message.seq,
+        })
       }),
     )
 
@@ -380,10 +547,14 @@ export const makeReplica = (
     sql.withTransaction(
       Effect.gen(function* () {
         const replica = yield* readReplica
-        const removed = yield* sql<{
-          readonly id: string
-        }>`DELETE FROM sync_outbox WHERE id = ${message.id} RETURNING id`
-        if (Array.isReadonlyArrayNonEmpty(removed)) {
+        const removed = yield* removeFromOutbox(
+          message.id,
+          Settled.cases.Rejected.make({
+            code: message.code,
+            reason: message.reason,
+          }),
+        )
+        if (removed) {
           yield* settle(replica.scope, replica.confirmed_seq)
         }
         return Receipt.cases.Rejected.make({
@@ -394,7 +565,7 @@ export const makeReplica = (
       }),
     )
 
-  const receive = (
+  const receiveMessage = (
     message: ServerMessage,
   ): Effect.Effect<Receipt, SqlError.SqlError> => {
     if (message._tag === 'Snapshot') {
@@ -471,13 +642,28 @@ export const makeReplica = (
   const switchScope = (scope: string) =>
     sql.withTransaction(
       Effect.gen(function* () {
-        yield* sql`DELETE FROM sync_outbox WHERE kind = ${definition.kind}`
+        const dropped = yield* sql<{
+          readonly id: string
+        }>`DELETE FROM sync_outbox WHERE kind = ${definition.kind} RETURNING id`
+        yield* Effect.forEach(
+          dropped,
+          row =>
+            recordSettled(
+              row.id,
+              Settled.cases.Rejected.make({
+                code: 'Unavailable',
+                reason: 'Dropped when this device switched scopes',
+              }),
+            ),
+          { discard: true },
+        )
         yield* replaceTables(deltaTarget, {})
         if (!isReadOnly) {
           yield* replaceTables('View', {})
         }
         yield* sql`UPDATE sync_replicas SET scope = ${scope}, confirmed_seq = 0,
           revision = revision + 1 WHERE kind = ${definition.kind}`
+        yield* storeStatus(idle)
       }),
     )
 
@@ -488,6 +674,52 @@ export const makeReplica = (
         Array.some(changes, change => change.table === table),
       ),
       Stream.as<void>(undefined),
+    )
+
+  // STATUS
+
+  // NOTE: the status lives in sync_status, so every tab reads the one the
+  // leader writes. The leader also holds it in a SubscriptionRef, so its own
+  // stream moves without waiting for the commit to come back.
+  const readStatus = Effect.flatMap(
+    sql`SELECT status FROM sync_status WHERE kind = ${definition.kind}`,
+    rows =>
+      Effect.map(decodeRows(StatusRow, rows), decoded =>
+        Option.map(Array.head(decoded), row => row.status),
+      ),
+  )
+
+  const storeStatus = (status: ScopeStatus) =>
+    sql`INSERT INTO sync_status ${sql.insert({
+      kind: definition.kind,
+      status: encodeStatus(status),
+    })} ON CONFLICT (kind) DO UPDATE SET status = excluded.status`
+
+  // NOTE: settled ids and the outbox, read together: still pending is none.
+  // An id the outbox and the record have both forgotten was confirmed long
+  // ago, so it reads as confirmed at the seq the confirmed tables hold.
+  const settledOf = (id: string) =>
+    sql.withTransaction(
+      Effect.gen(function* () {
+        const waiting =
+          yield* sql`SELECT id FROM sync_outbox WHERE id = ${id}`
+        if (Array.isReadonlyArrayNonEmpty(waiting)) {
+          return Option.none<Settled>()
+        }
+        const rows = yield* Effect.flatMap(
+          sql`SELECT outcome FROM sync_settled WHERE id = ${id}`,
+          found => decodeRows(SettledRow, found),
+        )
+        return yield* Option.match(Array.head(rows), {
+          onSome: row => Effect.succeedSome(row.outcome),
+          onNone: () =>
+            Effect.map(readReplica, replica =>
+              Option.some<Settled>(
+                Settled.cases.Confirmed.make({ seq: replica.confirmed_seq }),
+              ),
+            ),
+        })
+      }),
     )
 
   return Effect.gen(function* () {
@@ -506,6 +738,71 @@ export const makeReplica = (
         })} ON CONFLICT (kind) DO NOTHING`
       }),
     )
+    const role = yield* database.role
+    const opened = statusOnOpen(
+      yield* readStatus,
+      (yield* readReplica).confirmed_seq,
+    )
+    const statusRef = yield* SubscriptionRef.make(
+      role === 'Leader'
+        ? opened
+        : Option.getOrElse(yield* readStatus, () => opened),
+    )
+    if (role === 'Leader') {
+      yield* storeStatus(opened)
+    }
+
+    const currentStatus = Effect.flatMap(readStatus, stored =>
+      Option.match(stored, {
+        onSome: Effect.succeed,
+        onNone: () => SubscriptionRef.get(statusRef),
+      }),
+    )
+
+    const moveStatus = (next: (status: ScopeStatus) => ScopeStatus) =>
+      Effect.gen(function* () {
+        const current = yield* currentStatus
+        const moved = next(current)
+        if (!sameStatus(current, moved)) {
+          yield* storeStatus(moved)
+        }
+        yield* SubscriptionRef.set(statusRef, moved)
+      })
+
+    const status: Stream.Stream<ScopeStatus> = pipe(
+      Stream.merge(
+        SubscriptionRef.changes(statusRef),
+        Stream.mapEffect(touchedTable(STATUS_TABLE), () =>
+          Effect.orElseSucceed(currentStatus, () => idle),
+        ),
+      ),
+      Stream.changesWith(sameStatus),
+    )
+
+    const receive = (message: ServerMessage) =>
+      Effect.tap(receiveMessage(message), receipt =>
+        moveStatus(current => statusAfterReceipt(current, receipt)),
+      )
+
+    const awaitSettled = (id: string) =>
+      pipe(
+        Stream.merge(touchedTable(OUTBOX_TABLE), Stream.tick(SETTLED_RECHECK)),
+        Stream.mapEffect(() => settledOf(id)),
+        Stream.filterMap(maybeSettled =>
+          Option.match(maybeSettled, {
+            onNone: () => Result.failVoid,
+            onSome: settled => Result.succeed(settled),
+          }),
+        ),
+        Stream.runHead,
+        Effect.flatMap(maybeSettled =>
+          Option.match(maybeSettled, {
+            onSome: Effect.succeed,
+            onNone: () => Effect.never,
+          }),
+        ),
+      )
+
     return {
       definition,
       scope: Effect.map(readReplica, replica => replica.scope),
@@ -520,10 +817,16 @@ export const makeReplica = (
         })),
       ),
       receive,
-      switchScope,
+      switchScope: scope =>
+        Effect.andThen(switchScope(scope), SubscriptionRef.set(statusRef, idle)),
       remoteChanges: touchedTable(REPLICAS_TABLE),
       localChanges: touchedTable(OUTBOX_TABLE),
       role: database.role,
+      status,
+      currentStatus,
+      startSession: start =>
+        moveStatus(current => statusAtSessionStart(current, start)),
+      awaitSettled,
     }
   })
 }

@@ -134,6 +134,7 @@ export const startSync = (
     )
     const receipts = yield* PubSub.unbounded<Receipt>()
     const failures = yield* Ref.make(0)
+    const leading = yield* Ref.make(false)
     const kicks = yield* PubSub.unbounded<void>()
 
     const setStatus = (next: SyncStatus) => SubscriptionRef.set(status, next)
@@ -216,6 +217,7 @@ export const startSync = (
                 yield* hello(receipt.mode)
               } else if (receipt._tag === 'Confirmed') {
                 yield* settle(receipt.id)
+                yield* PubSub.publish(receipts, receipt)
               } else if (receipt._tag === 'Rejected') {
                 yield* settle(receipt.id)
                 yield* PubSub.publish(receipts, receipt)
@@ -299,9 +301,15 @@ export const startSync = (
       function* () {
         const role = yield* replica.role
         if (role === 'Follower') {
+          yield* Ref.set(leading, false)
           yield* setStatus(SyncStatus.cases.Following.make({}))
           return yield* Effect.sleep(followerPoll)
         }
+        const wasLeading = yield* Ref.getAndSet(leading, true)
+        yield* Effect.mapError(
+          replica.startSession(wasLeading ? 'Reconnecting' : 'Leading'),
+          fromSql,
+        )
         const failed = yield* Ref.get(failures)
         const transport =
           failed >= fallbackAfter && options.transports.length > 1
