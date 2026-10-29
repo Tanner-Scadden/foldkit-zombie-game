@@ -509,6 +509,12 @@ const toStorageError = (error: unknown): SaveStorageError =>
 // src/store.ts calls these: once to import it, and as the fallback when
 // SQLite cannot keep the save. A save that is absent, corrupted, or from
 // another version reads as no save.
+//
+// NOTE: kept for one release only. SQLite on OPFS shipped to production on
+// 2026-10-29, so any release from 2026-10-30 on may remove these two, the
+// SAVE_KEY import, and the localStorage backend in src/store.ts. Without
+// them a browser that opens SQLite in memory keeps the save for the tab
+// only. PLATFORM.md ("The fallback, for one release") says the same.
 export const readLegacySave: Effect.Effect<
   Option.Option<PlayerSave>,
   SaveStorageError

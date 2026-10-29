@@ -121,6 +121,49 @@ export const changesBetween = (
   )
 }
 
+// NOTE: a write the store could not make is sent again with the next one.
+// A change that sets a field is resent with what the field holds now, so a
+// retry never puts back an older value. A finished run is an increment, so
+// it is resent as it was, once. One change per field is enough.
+const refreshed = (change: PlayerChange, save: PlayerSave): PlayerChange =>
+  PlayerChange.match(change, {
+    ChangedSettings: () =>
+      PlayerChange.ChangedSettings({ settings: save.settings }),
+    ChangedAppearance: () =>
+      PlayerChange.ChangedAppearance({ appearance: save.appearance }),
+    UnlockedNightmare: () => change,
+    ChangedDifficulty: () =>
+      PlayerChange.ChangedDifficulty({
+        chosen: save.difficulty.chosen,
+        card: save.difficulty.card,
+      }),
+    ChangedOnboarding: () =>
+      PlayerChange.ChangedOnboarding({
+        onboarding: save.onboarding,
+        homeScreenTip: save.homeScreenTip,
+      }),
+    ChangedHome: () => PlayerChange.ChangedHome({ home: save.home }),
+    RecordedRun: run =>
+      PlayerChange.RecordedRun({ ...run, bests: save.bests.byDifficulty }),
+  })
+
+export const withUnsavedChanges = (
+  unsaved: ReadonlyArray<PlayerChange>,
+  changes: ReadonlyArray<PlayerChange>,
+  save: PlayerSave,
+): ReadonlyArray<PlayerChange> =>
+  Array.isReadonlyArrayEmpty(unsaved)
+    ? changes
+    : Array.reduce(
+        [...Array.map(unsaved, change => refreshed(change, save)), ...changes],
+        Array.empty<PlayerChange>(),
+        (kept, change) =>
+          change._tag !== 'RecordedRun' &&
+          Array.some(kept, other => other._tag === change._tag)
+            ? kept
+            : Array.append(kept, change),
+      )
+
 // STATUS
 
 // NOTE: what SETTINGS says about sync. LocalOnly is a build with no sync

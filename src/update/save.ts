@@ -19,7 +19,12 @@ import {
   type Model,
   type TutorialReset,
 } from '../model'
-import { LinkFlow, changesBetween } from '../playerSync'
+import {
+  LinkFlow,
+  type PlayerChange,
+  changesBetween,
+  withUnsavedChanges,
+} from '../playerSync'
 import {
   type PlayerSave,
   hasSaveFieldsChanged,
@@ -96,9 +101,17 @@ export const writeSaveFrom =
       : {
           model: modifyFields(stepModel, {
             writesInFlight: count => count + 1,
+            unsavedChanges: () => [],
           }),
           commands: [
-            WriteSave({ save, changes: changesBetween(beforeSave, save) }),
+            WriteSave({
+              save,
+              changes: withUnsavedChanges(
+                stepModel.unsavedChanges,
+                changesBetween(beforeSave, save),
+                save,
+              ),
+            }),
           ],
         }
   }
@@ -124,6 +137,19 @@ export const finishWrite = (model: Model): UpdateReturn => {
       }
     : { model: next }
 }
+
+// NOTE: the store logged why. The changes it could not write wait in the
+// Model and go out again with the next change to the save, so a run that
+// finished during a failed write still counts once.
+export const failWrite = (
+  model: Model,
+  changes: ReadonlyArray<PlayerChange>,
+): UpdateReturn =>
+  finishWrite(
+    modifyFields(model, {
+      unsavedChanges: unsaved => [...changes, ...unsaved],
+    }),
+  )
 
 // LINKING
 

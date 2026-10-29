@@ -264,6 +264,80 @@ describe('the save in the player scope', () => {
     ))
 })
 
+describe('a write the database refuses', () => {
+  const afterRun = (save: PlayerSave): PlayerSave => ({
+    ...muted(save),
+    bests: {
+      ...save.bests,
+      runsPlayed: save.bests.runsPlayed + 1,
+      totalKills: save.bests.totalKills + 4,
+      killsByKind: {
+        ...save.bests.killsByKind,
+        Shambler: (save.bests.killsByKind.Shambler ?? 0) + 4,
+      },
+    },
+  })
+
+  test('fails, leaves nothing behind, and goes in whole on the retry', () =>
+    run(
+      Effect.gen(function* () {
+        const hub = yield* makeHub()
+        const fake = yield* makeLegacy(Option.some(legacySave))
+        const database = yield* openOn(hub, fake.legacy)
+        yield* database.load
+        const sql = yield* sqlOn(hub)
+        const outboxCount = Effect.map(
+          Effect.orDie(sql`SELECT COUNT(*) AS count FROM sync_outbox`),
+          rows => rows[0]?.['count'],
+        )
+        const before = yield* outboxCount
+        // NOTE: the outbox insert fails as a full disk would, after the
+        // first change of the two has already gone in.
+        yield* Effect.orDie(
+          sql`CREATE TRIGGER refuse_runs BEFORE INSERT ON sync_outbox
+            WHEN NEW.name = 'RecordedRun'
+            BEGIN SELECT RAISE(ABORT, 'disk full'); END`,
+        )
+        const after = afterRun(legacySave)
+        const changes = changesBetween(legacySave, after)
+        expect(Array.from(changes, change => change._tag)).toEqual([
+          'ChangedSettings',
+          'RecordedRun',
+        ])
+
+        const failed = yield* Effect.flip(database.write(after, changes))
+        expect(failed._tag).toBe('PlayerDatabaseError')
+        expect(yield* database.load).toEqual(Option.some(legacySave))
+        expect(yield* outboxCount).toBe(before)
+
+        yield* Effect.orDie(sql`DROP TRIGGER refuse_runs`)
+        yield* database.write(after, changes)
+        expect(yield* database.load).toEqual(Option.some(after))
+      }),
+    ))
+
+  test('a change the scope rejects is dropped, and the rest go in', () =>
+    run(
+      Effect.gen(function* () {
+        const hub = yield* makeHub()
+        const fake = yield* makeLegacy(Option.some(legacySave))
+        const database = yield* openOn(hub, fake.legacy)
+        yield* database.load
+        const changed = muted(legacySave)
+        yield* database.write(changed, [
+          PlayerChange.RecordedRun({
+            runs: 1_000,
+            totalKills: 0,
+            kills: {},
+            bests: legacySave.bests.byDifficulty,
+          }),
+          ...changesBetween(legacySave, changed),
+        ])
+        expect(yield* database.load).toEqual(Option.some(changed))
+      }),
+    ))
+})
+
 // SYNC
 
 const SECRET = 'store-test-secret'

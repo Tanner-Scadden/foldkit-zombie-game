@@ -265,3 +265,72 @@ describe('changes as mutations', () => {
     expect(Option.isNone(Option.none())).toBe(true)
   })
 })
+
+describe('a write the store could not make', () => {
+  const ranOne: PlayerChange = PlayerChange.RecordedRun({
+    runs: 1,
+    totalKills: 12,
+    kills: { Shambler: 12 },
+    bests: saveOf(read).bests.byDifficulty,
+  })
+  const muted = modifyFields(read, { soundSetting: () => 'Muted' })
+  const quiet = modifyFields(muted, { musicSetting: () => 'Off' })
+
+  test('goes out again with the next change, with what the fields hold now', () => {
+    story(
+      update,
+      given(read),
+      message(Message.ClickedMuteButton()),
+      Command.resolve(
+        WriteSave,
+        Message.FailedWriteSave({
+          reason: 'disk full',
+          changes: [
+            PlayerChange.ChangedSettings({ settings: saveOf(muted).settings }),
+            ranOne,
+          ],
+        }),
+      ),
+      model(current => {
+        expect(current.writesInFlight).toBe(0)
+        expect(current.unsavedChanges).toHaveLength(2)
+      }),
+      message(Message.ClickedMusicButton()),
+      Command.expectHas(
+        WriteSave({
+          save: saveOf(quiet),
+          changes: [
+            PlayerChange.ChangedSettings({ settings: saveOf(quiet).settings }),
+            ranOne,
+          ],
+        }),
+      ),
+      model(current => {
+        expect(current.unsavedChanges).toEqual([])
+        expect(current.writesInFlight).toBe(1)
+      }),
+      Command.resolve(WriteSave, Message.CompletedWriteSave()),
+      model(current => {
+        expect(current.unsavedChanges).toEqual([])
+        expect(current.writesInFlight).toBe(0)
+      }),
+    )
+  })
+
+  test('a write that worked leaves nothing to send again', () => {
+    story(
+      update,
+      given(read),
+      message(Message.ClickedMuteButton()),
+      Command.resolve(WriteSave, Message.CompletedWriteSave()),
+      message(Message.ClickedMusicButton()),
+      Command.expectHas(
+        WriteSave({
+          save: saveOf(quiet),
+          changes: changesBetween(saveOf(muted), saveOf(quiet)),
+        }),
+      ),
+      Command.resolve(WriteSave, Message.CompletedWriteSave()),
+    )
+  })
+})

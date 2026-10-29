@@ -372,7 +372,9 @@ export const WriteSave = Command.define('WriteSave', {
       PlayerStore.use(store => store.write(save, changes)),
       Effect.as(Message.CompletedWriteSave()),
       Effect.catch(error =>
-        Effect.succeed(Message.FailedWriteSave({ reason: error.reason })),
+        Effect.succeed(
+          Message.FailedWriteSave({ reason: error.reason, changes }),
+        ),
       ),
     ),
 })

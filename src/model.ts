@@ -15,7 +15,7 @@ import {
   ShareStatsSetting,
   SoundSetting,
 } from './playerData'
-import { LinkFlow, SyncState } from './playerSync'
+import { LinkFlow, PlayerChange, SyncState } from './playerSync'
 
 export {
   Appearance,
@@ -1146,6 +1146,7 @@ export const Model = Schema.Struct({
   tutorialReset: TutorialReset,
   syncState: SyncState,
   writesInFlight: Schema.Number,
+  unsavedChanges: Schema.Array(PlayerChange),
   syncedSave: SyncedSaveState,
   linkFlow: LinkFlow,
   home: HomeMenu,
@@ -1383,6 +1384,7 @@ export const initialModel: Model = {
   tutorialReset: 'Idle',
   syncState: SyncState.LocalOnly(),
   writesInFlight: 0,
+  unsavedChanges: [],
   syncedSave: 'Current',
   linkFlow: LinkFlow.Idle(),
   home: freshHomeMenu,

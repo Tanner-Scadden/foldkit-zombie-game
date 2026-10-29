@@ -235,6 +235,9 @@ const readDevices = (client: SqliteClientService) =>
         onSome: row => row.count,
       }),
     ),
+    Effect.tapError(error =>
+      Effect.logWarning('Could not read the linked device count', error),
+    ),
     Effect.orElseSucceed(() => 1),
   )
 
@@ -302,7 +305,15 @@ const importLegacy = (client: SqliteClientService, legacy: LegacySave) =>
       }
       const maybeLegacy = yield* pipe(
         legacy.read,
-        Effect.catch(() => Effect.succeedNone),
+        Effect.catch(error =>
+          Effect.as(
+            Effect.logWarning(
+              'Could not read the localStorage save to import',
+              error.reason,
+            ),
+            Option.none<PlayerSave>(),
+          ),
+        ),
       )
       yield* Option.match(maybeLegacy, {
         onNone: () => Effect.void,
@@ -460,6 +471,10 @@ export const makePlayerDatabase = (
       ),
     )
 
+    // NOTE: the changes go in one transaction, so a write that fails leaves
+    // nothing behind and the game can send the same changes again. A change
+    // the scope's own rules reject would be rejected on every retry, so it is
+    // logged and dropped on its own, and the rest still go in.
     const write = (save: PlayerSave, changes: ReadonlyArray<PlayerChange>) =>
       pipe(
         Effect.gen(function* () {
@@ -470,10 +485,17 @@ export const makePlayerDatabase = (
           }
           yield* Effect.forEach(
             changes,
-            change => Effect.ignore(runChange(replica, change)),
-            {
-              discard: true,
-            },
+            change =>
+              pipe(
+                runChange(replica, change),
+                Effect.catchTag('MutationRejected', error =>
+                  Effect.logWarning(
+                    `Dropped ${change._tag}, which the player scope rejects`,
+                    error.reason,
+                  ),
+                ),
+              ),
+            { discard: true },
           )
         }),
         client.transaction,
@@ -504,7 +526,13 @@ export const makePlayerDatabase = (
     const savedChanges: Stream.Stream<StoreEvent> = pipe(
       replica.remoteChanges,
       Stream.mapEffect(() =>
-        Effect.orElseSucceed(readView(client), () => Option.none()),
+        pipe(
+          readView(client),
+          Effect.tapError(error =>
+            Effect.logError('Could not read the save sync changed', error),
+          ),
+          Effect.orElseSucceed(() => Option.none<PlayerSave>()),
+        ),
       ),
       Stream.filterMap(maybeSave =>
         Option.match(maybeSave, {

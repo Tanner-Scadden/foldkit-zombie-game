@@ -104,24 +104,41 @@ const loadFrom = (backend: Backend) =>
       pipe(
         database.load,
         Effect.mapError(toStoreError),
-        Effect.catch(() => readLegacy),
+        Effect.catch(error =>
+          Effect.andThen(
+            Effect.logError(
+              'SQLite could not read the save, so it reads localStorage',
+              error.reason,
+            ),
+            readLegacy,
+          ),
+        ),
       ),
     LocalStorage: () => readLegacy,
   })
 
+// NOTE: in memory, the localStorage copy is the one that outlives the tab,
+// so it is written even when the SQLite write fails. Either failure fails
+// the write, so the game sends the changes again with the next one.
 const writeTo = (
   backend: Backend,
   save: PlayerSave,
   changes: ReadonlyArray<PlayerChange>,
-) =>
+): Effect.Effect<void, StoreError> =>
   Backend.$match(backend, {
-    Sqlite: ({ database }) =>
-      database.persistence._tag === 'Opfs'
-        ? pipe(database.write(save, changes), Effect.mapError(toStoreError))
-        : Effect.andThen(
-            Effect.ignore(database.write(save, changes)),
-            writeLegacy(save),
-          ),
+    Sqlite: ({ database }) => {
+      const written = pipe(
+        database.write(save, changes),
+        Effect.mapError(toStoreError),
+      )
+      return database.persistence._tag === 'Opfs'
+        ? written
+        : Effect.gen(function* () {
+            const legacyWritten = yield* Effect.exit(writeLegacy(save))
+            yield* written
+            yield* legacyWritten
+          })
+    },
     LocalStorage: () => writeLegacy(save),
   })
 
@@ -152,6 +169,16 @@ export const layer: Layer.Layer<PlayerStore> = Layer.effect(
           Effect.catch(error =>
             Effect.succeed(Backend.LocalStorage({ reason: error.reason })),
           ),
+          Effect.tap(opened =>
+            Backend.$match(opened, {
+              Sqlite: () => Effect.void,
+              LocalStorage: ({ reason }) =>
+                Effect.logWarning(
+                  'The save falls back to localStorage for this page',
+                  reason,
+                ),
+            }),
+          ),
         )
       }),
     )
@@ -167,7 +194,12 @@ export const layer: Layer.Layer<PlayerStore> = Layer.effect(
       load: Effect.flatMap(backend, loadFrom),
       write: (save, changes) =>
         writes.withPermit(
-          Effect.flatMap(backend, next => writeTo(next, save, changes)),
+          pipe(
+            Effect.flatMap(backend, next => writeTo(next, save, changes)),
+            Effect.tapError(error =>
+              Effect.logError('The save was not written', error.reason),
+            ),
+          ),
         ),
       events: Stream.unwrap(
         Effect.map(backend, current =>

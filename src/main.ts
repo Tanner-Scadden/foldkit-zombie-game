@@ -124,6 +124,7 @@ import {
 import {
   answerTutorialReset,
   askToResetTutorial,
+  failWrite,
   finishLoadStep,
   finishWrite,
   loadSave,
@@ -784,7 +785,7 @@ const updateGame = (model: Model, message: Message) =>
 
     CompletedWriteSave: () => finishWrite(model),
 
-    FailedWriteSave: () => finishWrite(model),
+    FailedWriteSave: ({ changes }) => failWrite(model, changes),
 
     ClickedShareStatsButton: () => ({ model: toggleShareStats(model) }),
 
