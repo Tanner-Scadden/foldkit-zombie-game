@@ -809,6 +809,12 @@ const tutorialResetView = (model: Model, h: HtmlBuilder<Message>): Html =>
 
 export const LINK_CODE_INPUT_ID = 'link-code-input'
 
+// NOTE: linking never merges. The device that types the code takes on the
+// other device's player, and what it had saved is left behind (see
+// "Device linking" in PLATFORM.md), so the form says so before Link.
+export const LINK_TAKES_PROGRESS_NOTE =
+  "Type the code from your other device. This device will use the other device's progress. What was saved on this device is replaced, not merged."
+
 const panelButton = (
   label: string,
   message: Message,
@@ -842,9 +848,7 @@ const codeEntryView = (code: string, h: HtmlBuilder<Message>): Html =>
     [
       h.label(
         [h.For(LINK_CODE_INPUT_ID), h.Class('setting-note')],
-        [
-          'Type the code from your other device. This device then plays as that one.',
-        ],
+        [LINK_TAKES_PROGRESS_NOTE],
       ),
       h.input([
         h.Id(LINK_CODE_INPUT_ID),
@@ -902,7 +906,10 @@ const linkFlowView = (
         ],
         [code],
       ),
-      linkNote('The code works once, for 10 minutes.', h),
+      linkNote(
+        "The code works once, for 10 minutes. The device that types it in will use this device's progress.",
+        h,
+      ),
       linkActions(
         [panelButton('Done', Message.ClickedCancelLinkButton(), h)],
         h,
@@ -911,7 +918,7 @@ const linkFlowView = (
     Entering: ({ code }) => [codeEntryView(code, h)],
     Redeeming: () => [linkNote('Linking', h)],
     Linked: () => [
-      linkNote('Linked. This device now plays as your other device.', h),
+      linkNote("Linked. This device now uses your other device's progress.", h),
       linkActions(
         [panelButton('Done', Message.ClickedCancelLinkButton(), h)],
         h,

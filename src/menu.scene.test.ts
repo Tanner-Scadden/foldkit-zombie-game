@@ -23,7 +23,7 @@ import { Dialog } from '@foldkit/ui'
 import { RESTART_GRACE_MS } from './constants'
 import { withBests } from './difficulty'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
-import { SHARE_STATS_NOTE } from './homeView'
+import { LINK_TAKES_PROGRESS_NOTE, SHARE_STATS_NOTE } from './homeView'
 import {
   FocusHomeButton,
   FocusTutorialReset,
@@ -32,6 +32,7 @@ import {
   update,
 } from './main'
 import { type Model, Phase, initialModel } from './model'
+import { SyncState } from './playerSync'
 import { noSavedBests, restoreSave, saveOf } from './save'
 import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
@@ -368,6 +369,23 @@ describe('Home menu', () => {
       expect(text(SHARE_STATS_NOTE)).toExist(),
       click(shareToggle),
       expect(shareToggle).toHaveAttr('aria-pressed', 'false'),
+    )
+  })
+
+  test("Use a code says this device will take the other device's progress before Link", () => {
+    const synced = modifyFields(home, {
+      syncState: () => SyncState.Synced({ devices: 1 }),
+    })
+    scene(
+      { update, view },
+      given(synced),
+      measureSurface,
+      click(settingsButton),
+      ...showDialog(),
+      expect(text(LINK_TAKES_PROGRESS_NOTE)).toBeAbsent(),
+      click(role('button', { name: 'Use a code' })),
+      expect(text(LINK_TAKES_PROGRESS_NOTE)).toExist(),
+      expect(role('button', { name: 'Link' })).toExist(),
     )
   })
 

@@ -265,10 +265,18 @@ check((await splatted(b.page)) === '', 'device B starts with no kills')
 check(await hasNewsDot(b.page), "device B starts with What's New unseen")
 await openSettings(b.page)
 await b.page.getByRole('button', { name: 'Use a code' }).click()
+check(
+  (await b.page
+    .getByText("This device will use the other device's progress.", {
+      exact: false,
+    })
+    .count()) > 0,
+  "device B's code form says it will use the other device's progress",
+)
 await b.page.locator('.setting-link-input').fill(code.toLowerCase())
 await b.page.getByRole('button', { name: 'Link', exact: true }).click()
 await b.page
-  .getByText('Linked. This device now plays as your other device.')
+  .getByText("Linked. This device now uses your other device's progress.")
   .waitFor({ timeout: SYNC_TIMEOUT })
 check(true, 'device B links with the code')
 const bLine = await waitForLine(b.page, /Linked to 2 devices/, SYNC_TIMEOUT)
