@@ -5,6 +5,7 @@ import { HINT_ICON_SPRITES, type HintIconSprites, keyIcon } from './hintIcons'
 import { PAUSE_ICON } from './icons'
 import { Message } from './message'
 import { type InputDevice, type Model, Phase } from './model'
+import { standaloneSource } from './sprite'
 
 // CONTROLS
 
@@ -114,14 +115,16 @@ type Frame = Readonly<{
 }>
 
 // NOTE: each frame of a hint icon is one baked image. Where none was baked
-// (a test without a canvas) the card shows no picture.
+// (a test without a canvas) the card shows no picture. A built game draws it
+// from a region of the sprite atlas, which an <img> cannot crop, so each
+// frame takes an image of its own.
 const framesOf = (sprites: HintIconSprites): ReadonlyArray<Frame> =>
   Array.flatMap(sprites.frames, frame =>
     Array.flatMap(frame, (shape): ReadonlyArray<Frame> =>
       shape._tag === 'Image'
         ? [
             {
-              src: shape.src,
+              src: standaloneSource(shape),
               x: shape.x,
               y: shape.y,
               width: shape.width,

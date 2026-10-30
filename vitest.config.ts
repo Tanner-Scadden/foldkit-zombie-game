@@ -6,6 +6,7 @@ import { defineConfig } from 'vitest/config'
 //   (it builds elements, dispatches window events, or uses localStorage)
 //   says so with `// @vitest-environment happy-dom` on its first line.
 // - `page`: Scene tests, `scene.test.ts` and `*.scene.test.ts`, in happy-dom.
+// - `atlas`: sprites in HTML with a stand-in atlas (src/atlasHtml.setup.ts).
 // - `sim`: whole-wave replays, seed sweeps, and the balance smoke pass,
 //   `*.sim.test.ts`. Only `bun run test:full` (and CI) runs them.
 // - the two packages, each with its own config.
@@ -17,6 +18,10 @@ import { defineConfig } from 'vitest/config'
 // nightly run shuffles the file order to catch a test that leaks.
 const SIM = '**/*.sim.test.ts'
 const SCENE = 'src/**/{*.,}scene.test.ts'
+// NOTE: HTML that shows sprites, checked with every sprite in a stand-in
+// atlas, as a production build draws them. Its own project, isolated, since
+// the atlas must be set before any module loads and no other file may see it.
+const ATLAS_HTML = 'src/atlasHtml.scene.test.ts'
 
 export default defineConfig({
   define: { __BUILD_ID__: JSON.stringify('test') },
@@ -55,7 +60,17 @@ export default defineConfig({
           name: 'page',
           environment: 'happy-dom',
           include: [SCENE],
-          exclude: [SIM],
+          exclude: [SIM, ATLAS_HTML],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'atlas',
+          environment: 'happy-dom',
+          include: [ATLAS_HTML],
+          isolate: true,
+          setupFiles: ['./src/vitest-setup.ts', './src/atlasHtml.setup.ts'],
         },
       },
       {

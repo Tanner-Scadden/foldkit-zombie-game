@@ -1,0 +1,149 @@
+import { Array, Predicate, Result } from 'effect'
+import {
+  Subscription,
+  all,
+  expectAll,
+  given,
+  inside,
+  role,
+  scene,
+  tap,
+} from 'foldkit/scene'
+import { modifyFields } from 'foldkit/struct'
+import { describe, test, expect as vitestExpect } from 'vitest'
+
+import { ATLAS_SHEET } from './atlasHtml.setup'
+import { update } from './main'
+import { Message } from './message'
+import { type Model, Phase, initialModel } from './model'
+import {
+  fighting,
+  measureSurface,
+  openHandInScene,
+  pickCardInScene,
+} from './testing'
+import { asVeteran } from './veteran'
+import { view } from './view'
+
+// NOTE: a production build draws every sprite as a cropped region of the
+// atlas sheet (src/atlasHtml.setup.ts stands one in). A canvas crops it, but
+// an <img> or a CSS background cannot, so HTML that shows a sprite by its
+// own source shows the whole sheet squashed into the box. HTML must take
+// `standaloneSource(image)` instead.
+type Node = Readonly<{
+  sel?: string | undefined
+  data?: Readonly<Record<string, unknown>> | undefined
+  children?: ReadonlyArray<Node | string> | undefined
+}>
+
+const BAGS = ['attrs', 'props', 'style'] as const
+
+// NOTE: every attribute, property, and style of the page (an <img> src, a
+// CSS background) that names the atlas sheet.
+const sheetUsesIn = (node: Node): ReadonlyArray<string> => [
+  ...Array.flatMap(BAGS, bag => {
+    const values = node.data?.[bag]
+    return Predicate.isObject(values)
+      ? Array.filterMap(Object.entries(values), ([name, value]) =>
+          Predicate.isString(value) && value.includes(ATLAS_SHEET)
+            ? Result.succeed(`${node.sel ?? '?'} ${name}`)
+            : Result.failVoid,
+        )
+      : []
+  }),
+  ...Array.flatMap(node.children ?? [], child =>
+    Predicate.isString(child) ? [] : sheetUsesIn(child),
+  ),
+]
+
+const noSheetInHtml = () => [
+  tap(({ html }) => {
+    vitestExpect(sheetUsesIn(html)).toEqual([])
+  }),
+]
+
+// NOTE: an image of its own, encoded from the sprite's pixels.
+const ownImages = (selected: string, count: number) => [
+  expectAll(all.selector(selected)).toHaveCount(count),
+  expectAll(all.selector(`${selected}[src^="data:image/png"]`)).toHaveCount(
+    count,
+  ),
+]
+
+const home: Model = asVeteran(initialModel)
+
+const pausedOn = (device: Model['lastDevice']): Model =>
+  modifyFields(fighting, {
+    lastDevice: () => device,
+    phase: () =>
+      Phase.Paused({
+        round: { _tag: 'Wave', wave: 3, elapsedMs: 4000, spawns: [] },
+      }),
+  })
+
+const HELP_FRAMES = '.help-card-frame'
+
+// NOTE: every frame of the eight control cards' moving pictures.
+const FRAMES_BY_DEVICE: Readonly<Record<Model['lastDevice'], number>> = {
+  KeyboardMouse: 22,
+  Touch: 19,
+}
+
+describe('sprites in HTML', () => {
+  test('How to play shows each card its own frames, not the atlas sheet', () => {
+    scene(
+      { update, view },
+      given(home),
+      measureSurface,
+      ...noSheetInHtml(),
+      ...openHandInScene(),
+      ...noSheetInHtml(),
+      ...pickCardInScene(/^How to play:/),
+      inside(
+        role('dialog', { name: 'How to play' }),
+        ...ownImages(HELP_FRAMES, FRAMES_BY_DEVICE.KeyboardMouse),
+      ),
+      ...noSheetInHtml(),
+    )
+  })
+
+  test.each(['KeyboardMouse', 'Touch'] as const)(
+    'the pause screen shows the %s cards without the atlas sheet',
+    device => {
+      scene(
+        { update, view },
+        given(pausedOn(device)),
+        measureSurface,
+        ...noSheetInHtml(),
+        ...ownImages(HELP_FRAMES, FRAMES_BY_DEVICE[device]),
+      )
+    },
+  )
+
+  test('the Munchopedia list shows each zombie its own image', () => {
+    scene(
+      { update, view },
+      given(home),
+      measureSurface,
+      ...openHandInScene(),
+      ...pickCardInScene(/^Munchopedia:/),
+      inside(
+        role('dialog', { name: 'Munchopedia' }),
+        ...ownImages('img', 7),
+      ),
+      ...noSheetInHtml(),
+    )
+  })
+
+  test('the character picker shows no atlas sheet', () => {
+    scene(
+      { update, view },
+      given(home),
+      measureSurface,
+      ...openHandInScene(),
+      ...pickCardInScene(/^Character:/),
+      ...noSheetInHtml(),
+      Subscription.emit(Message.PressedKey({ code: 'Escape' })),
+    )
+  })
+})
