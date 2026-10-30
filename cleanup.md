@@ -52,7 +52,7 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
 6. [ ] **Shared drawing and menu helpers.** (S)
    - `rect` x5 (`fridgeView.ts:39`, `kitchenView.ts:33`, `purchaseView.ts:39`, `room.ts:129`, `stall.ts:65`); `pixelArt`, `roll` (`room.ts:139-155`, `kitchenView.ts:41-52`); `isKitchenShown` (`fridgeView.ts:141`, `kitchenView.ts:845`); `percentOf` x3 (`layers.ts:71`, `touchControls.ts:92`, `thumbArea.ts:84`); `iconView`, `keyCapView` x3 (`homeView.ts:84/107`, `profileView.ts:55/69`, `coop/view.ts:81/92`). Move to `drawing.ts` and one shared menu module.
    - Lock in: a duplicate-function check (for example `jscpd` with a low threshold in `bun run lint`), if it is quiet enough.
-7. [x] **Wire and JSON through Schema.** (M) (#PR)
+7. [x] **Wire and JSON through Schema.** (M) (#21)
    - `src/worldCodec.ts:44-74` picks each number's packing by field name (`x`, `y`, `offset`, `*Ms`, `*Scale`), so a new field with one of those names is rounded silently. Mark it on the Schema instead: `Schema.Number.annotate({ wire: 'Position' })`.
    - `worldWire.ts:10-17` should be `Schema.fromJsonString(World)`; raw `JSON.stringify` at `infra/worker/gameRoom.ts:346` (encodeTicket) and `roomCalls.ts:113`.
    - `describeError` x4 (`serviceWorker.ts:32`, `audio.ts:62`, `version.ts:45`, `analyticsBeacon.ts:49`): one helper.
