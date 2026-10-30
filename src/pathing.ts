@@ -6,6 +6,7 @@ import {
   byDoor,
   doorSpawnPoint,
   hasClearPath,
+  isInYardAt,
   isInsideRoomAt,
   isOpenBlock,
   isWalkableTile,
@@ -104,21 +105,22 @@ const STEP_RULES: Readonly<Record<Clearance, StepRule>> = {
   Wide: isWideStepOpen,
 }
 
-// NOTE: the flow field covers the house only. A zombie out in the yard, or
-// past the map's edge, walks straight to its door instead of reading it.
+// NOTE: the flow field covers every walkable tile on the map, the yard too,
+// so a zombie in the yard reads it on the way to the door the yard leads to.
+// The yard meets the house only at its doors, so the house's own distances
+// are the same as a field over the house alone. A zombie past the map's edge
+// has no tile, and walks around the house instead (see OUTSIDE).
 const openNeighbors = (
   level: Level,
   index: number,
   clearance: Clearance,
 ): ReadonlyArray<number> => {
   const { column, row } = tileOfIndex(level, index)
-  return Array.filterMap(ORTHOGONAL_STEPS, step => {
-    const neighbor = tileIndex(level, column + step.column, row + step.row)
-    return STEP_RULES[clearance](level, column, row, step) &&
-      !level.outsideTiles.has(neighbor)
-      ? Result.succeed(neighbor)
-      : Result.failVoid
-  })
+  return Array.filterMap(ORTHOGONAL_STEPS, step =>
+    STEP_RULES[clearance](level, column, row, step)
+      ? Result.succeed(tileIndex(level, column + step.column, row + step.row))
+      : Result.failVoid,
+  )
 }
 
 type Neighbors = Readonly<
@@ -767,16 +769,17 @@ const routeAround = (
   )
 }
 
+// NOTE: outside the house, a zombie at a door that is not boarded walks in;
+// anywhere else it walks the loop around the house to its best way in. It
+// used to head straight for the nearest door when nothing was boarded,
+// which, knocked past the map's edge (by the Clang Pan, say), walked it into
+// the house's corner and stuck it there.
 const outsideSteering = (
   level: Level,
   flowField: FlowField,
   position: Vector,
   barricaded: ReadonlyArray<DoorId>,
 ): Vector => {
-  if (Array.isReadonlyArrayEmpty(barricaded)) {
-    return towardDoor(level, position, nearestDoor(level, position).id)
-  }
-
   const maybeHere = Array.findFirst(level.doorIds, id =>
     isAtDoor(level, position, id),
   )
@@ -789,6 +792,32 @@ const outsideSteering = (
   })
 }
 
+// NOTE: the doors the yard leads to: those whose spawn point stands in the
+// yard, like the parlour's north door in the manor.
+const yardDoorsOf = perLevel((level): ReadonlyArray<DoorId> =>
+  Array.filter(level.doorIds, id =>
+    isInYardAt(level, doorSpawnPoint(level, id, 0)),
+  ),
+)
+
+// NOTE: a zombie in the yard follows the flow field to the yard's door when
+// that is its way in: always while no door is boarded, or when its best
+// entry is a yard door. Otherwise it leaves the yard and walks around. The
+// yard used to be steered by the outside rules alone, which walk straight
+// lines and leave the yard's walls out: a zombie whose way in was the north
+// door was sent out of the yard, then back toward the door, forever.
+const takesTheYard = (
+  level: Level,
+  flowField: FlowField,
+  position: Vector,
+  barricaded: ReadonlyArray<DoorId>,
+): boolean =>
+  isInYardAt(level, position) &&
+  distanceAt(flowField.distances, tileIndexAt(level, position)) <
+    UNREACHED_DISTANCE &&
+  (Array.isReadonlyArrayEmpty(barricaded) ||
+    Array.contains(yardDoorsOf(level), bestEntry(level, flowField, position)))
+
 export const steerToward = (
   level: Level,
   flowField: FlowField,
@@ -798,7 +827,10 @@ export const steerToward = (
   clearance: Clearance,
   barricaded: ReadonlyArray<DoorId>,
 ): Vector => {
-  if (isInsideRoomAt(level, position)) {
+  if (
+    isInsideRoomAt(level, position) ||
+    takesTheYard(level, flowField, position, barricaded)
+  ) {
     return insideSteering(
       level,
       flowField,
