@@ -336,8 +336,18 @@ const drive = async (
       await page.mouse.up()
       held.firing = false
     }
-    const zombie = nearestOf(readout.zombies, own)
-    return holdKeys(page, held, keysToward(own, zombie ?? PARLOUR_MIDDLE, 2))
+    // NOTE: the feeder walks unarmed into the nearest zombie already in the
+    // room, never out into a doorway's crowd, so they go down where the
+    // others fight and the team stays close.
+    const inside = readout.zombies.filter(
+      zombie =>
+        zombie.x > 24 && zombie.x < 296 && zombie.y > 36 && zombie.y < 168,
+    )
+    return holdKeys(
+      page,
+      held,
+      keysToward(own, nearestOf(inside, own) ?? PARLOUR_MIDDLE, 2),
+    )
   }
   if (role === 'Revive') {
     const downed = readout.players.find(seat => seat.slot === partner)
@@ -484,6 +494,14 @@ await shot(host, 'countdown')
 const startNet = await Promise.all(everyone.map(netOf))
 const startedMs = Date.now()
 
+// NOTE: the link is measured over the fight, while the room still sends,
+// or until now on a phone, which only fights for its pictures.
+const linkNow = async () => ({
+  nets: await Promise.all(everyone.map(netOf)),
+  atMs: Date.now(),
+})
+let linkAtEnd: Awaited<ReturnType<typeof linkNow>> | undefined
+
 // WALKING
 
 const positionsOn = async (page: Page) =>
@@ -575,10 +593,12 @@ if (isPhone) {
 
   const feeder = everyone.length - 1
   const feederSlot = await slotOf(everyone[feeder]!)
+  // NOTE: the others hold their fire meanwhile, or they shoot the zombies
+  // before any reaches the feeder.
   const downed = await playFor(
     everyone,
     helds,
-    index => (index === feeder ? 'Feed' : 'Fight'),
+    index => (index === feeder ? 'Feed' : 'Idle'),
     feederSlot,
     async () =>
       (await readoutOf(host))?.players.find(seat => seat.slot === feederSlot)
@@ -601,6 +621,8 @@ if (isPhone) {
     check(revived, 'a teammate standing still beside them revives them')
     await shot(host, 'revived')
   }
+
+  linkAtEnd = await linkNow()
 
   // THE BREAK, THE STALL, AND READY
 
@@ -685,9 +707,9 @@ if (isPhone) {
 
 // THE LINK
 
-const endNet = await Promise.all(everyone.map(netOf))
-const seconds = (Date.now() - startedMs) / 1000
-for (const [index, net] of endNet.entries()) {
+const endNet = linkAtEnd ?? (await linkNow())
+const seconds = (endNet.atMs - startedMs) / 1000
+for (const [index, net] of endNet.nets.entries()) {
   const start = startNet[index]
   if (net === undefined || start === undefined) {
     continue
