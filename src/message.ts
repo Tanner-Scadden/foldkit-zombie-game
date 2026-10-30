@@ -60,6 +60,7 @@ export const Message = defineMessageUnion({
   ClickedMuteButton: {},
   ClickedPauseButton: {},
   ClickedMusicButton: {},
+  ClickedCursorButton: {},
   ClickedCampaignButton: {},
   ClickedEndlessButton: {},
   ClickedKeepGoingButton: {},

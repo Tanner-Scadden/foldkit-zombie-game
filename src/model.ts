@@ -8,6 +8,7 @@ import { DEFAULT_SEED, PISTOL_MAGAZINE, PLAYER_MAX_HP } from './constants'
 import { flowFieldToward } from './pathing'
 import {
   Appearance,
+  CursorSetting,
   Difficulty,
   HomeScreenTip,
   MusicSetting,
@@ -29,6 +30,7 @@ export {
   Body,
   Difficulty,
   HairColor,
+  CursorSetting,
   HairStyle,
   HomeScreenTip,
   MusicSetting,
@@ -984,12 +986,18 @@ export const ShopItemId = Schema.Literals([
   'SmgRounds',
   'SmgUpgrade',
   'PistolUpgrade',
+  'LaserSight',
   'Heart',
   'Barricade',
   'Turret',
   'RepairTraps',
 ])
 export type ShopItemId = typeof ShopItemId.Type
+
+// NOTE: the laser sight is bought in the shop for one run: a line or a
+// spread fan on the floor showing where the held gun's shot goes.
+export const LaserSight = Schema.Literals(['None', 'Fitted'])
+export type LaserSight = typeof LaserSight.Type
 
 export const ShopCategory = Schema.Literals(['Guns', 'Health', 'Traps'])
 export type ShopCategory = typeof ShopCategory.Type
@@ -1136,6 +1144,7 @@ export const Model = Schema.Struct({
   callouts: Schema.Array(Callout),
   trapStock: TrapCounts,
   selectedTrap: TrapKind,
+  laserSight: LaserSight,
   trapHint: TrapHint,
   trapNotice: TrapNotice,
   level: LevelState,
@@ -1171,6 +1180,7 @@ export const Model = Schema.Struct({
   character: CharacterPicker,
   shakeSetting: ShakeSetting,
   shareStats: ShareStatsSetting,
+  cursorSetting: CursorSetting,
   maybeVisitId: Schema.Option(Schema.String),
   maybeHomeFocus: Schema.Option(HomeButton),
   panel: MenuPanel,
@@ -1381,6 +1391,7 @@ export const initialModel: Model = {
   callouts: [],
   trapStock: emptyTrapStock,
   selectedTrap: 'Barricade',
+  laserSight: 'None',
   trapHint: TrapHint.Unseen(),
   trapNotice: TrapNotice.Quiet(),
   level: startingLevel,
@@ -1416,6 +1427,7 @@ export const initialModel: Model = {
   character: closedCharacterPicker,
   shakeSetting: 'On',
   shareStats: 'On',
+  cursorSetting: 'Bold',
   maybeVisitId: Option.none(),
   maybeHomeFocus: Option.none(),
   panel: 'HowToPlay',

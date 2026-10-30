@@ -8,17 +8,16 @@ import type { Model, Vector } from './model'
 import { firingStats } from './powerups'
 import { type WeaponStats, heldTier, heldWeapon } from './weapons'
 
-// NOTE: the sight shows only while the arrow keys aim, since the mouse
-// pointer is its own sight. A gun that shoots straight gets a laser line, and
-// one that scatters gets a fan as wide as its spread. Both stop at the first
-// wall or doorway, as the shots would, and both reach as far as a shot flies.
+// NOTE: the sight is a shop upgrade for the run, and it shows for any aim,
+// keys or pointer. A gun that shoots straight gets a laser line, and one that
+// scatters gets a fan as wide as its spread. Both stop at the first wall or
+// doorway, as the shots would, and both reach as far as a shot flies.
 
 const LASER_COLOR = 'rgba(255, 58, 63, 0.55)'
 const FAN_FILL = 'rgba(255, 58, 63, 0.12)'
 const FAN_EDGE_COLOR = 'rgba(255, 58, 63, 0.35)'
 
-const isAimingWithKeys = (model: Model): boolean =>
-  model.input.aimSource === 'Keys'
+const hasSight = (model: Model): boolean => model.laserSight === 'Fitted'
 
 const rangeOf = (stats: WeaponStats): number =>
   (stats.bulletSpeed * stats.bulletLifetimeMs) / MS_PER_SECOND
@@ -66,7 +65,7 @@ const fanShapes = (
 ]
 
 export const aimSightShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
-  if (!isAimingWithKeys(model)) {
+  if (!hasSight(model)) {
     return []
   }
 

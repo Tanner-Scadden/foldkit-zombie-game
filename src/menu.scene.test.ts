@@ -314,10 +314,11 @@ describe('Home menu', () => {
     )
   })
 
-  test('Settings toggles sound, music, and screen shake', () => {
+  test('Settings toggles sound, music, screen shake, and the big cursor', () => {
     const soundToggle = role('button', { name: 'Sound' })
     const musicToggle = role('button', { name: 'Music' })
     const shakeToggle = role('button', { name: 'Screen shake' })
+    const cursorToggle = role('button', { name: 'Big cursor' })
     scene(
       { update, view },
       given(home),
@@ -335,6 +336,11 @@ describe('Home menu', () => {
       expect(musicToggle).toHaveAttr('aria-pressed', 'false'),
       click(shakeToggle),
       expect(shakeToggle).toHaveAttr('aria-pressed', 'false'),
+      expect(cursorToggle).toHaveAttr('aria-pressed', 'true'),
+      expect(selector('.game-root')).toHaveAttr('data-cursor', 'Bold'),
+      click(cursorToggle),
+      expect(cursorToggle).toHaveAttr('aria-pressed', 'false'),
+      expect(selector('.game-root')).toHaveAttr('data-cursor', 'Thin'),
     )
   })
 

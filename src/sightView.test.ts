@@ -30,7 +30,10 @@ const fighting: Model = modifyFields(asVeteran(initialModel), {
       y: () => 70,
       arsenal: () => Arsenal.HoldingPistol({ spare: SHOTGUN }),
     }),
+  laserSight: () => 'Fitted',
 })
+
+const unfitted: Model = modifyFields(fighting, { laserSight: () => 'None' })
 
 const onlyPath = (current: Model) => {
   const shapes = aimSightShapes(current)
@@ -50,14 +53,30 @@ const pointOf = (instruction: Canvas.PathInstruction): Vector => {
   }
 }
 
-describe('the keyboard aim sight', () => {
-  test('shows nothing while the mouse aims', () => {
+describe('the laser sight', () => {
+  test('shows nothing until it is bought, whichever device aims', () => {
+    story(
+      update,
+      given(unfitted),
+      message(Message.MovedMouse({ clientX: 700, clientY: 200 })),
+      model(current => {
+        expect(aimSightShapes(current)).toEqual([])
+      }),
+      press('ArrowRight'),
+      release('ArrowRight'),
+      model(current => {
+        expect(aimSightShapes(current)).toEqual([])
+      }),
+    )
+  })
+
+  test('once fitted it shows for the mouse too', () => {
     story(
       update,
       given(fighting),
       message(Message.MovedMouse({ clientX: 700, clientY: 200 })),
       model(current => {
-        expect(aimSightShapes(current)).toEqual([])
+        expect(aimSightShapes(current)).toHaveLength(1)
       }),
     )
   })
@@ -139,18 +158,26 @@ describe('the keyboard aim sight', () => {
     )
   })
 
-  test('goes away once the mouse moves again', () => {
+  test('follows whichever device aimed last', () => {
     story(
       update,
       given(fighting),
       press('ArrowUp'),
       release('ArrowUp'),
       model(current => {
-        expect(aimSightShapes(current)).toHaveLength(1)
+        const [, to] = Array.map(onlyPath(current).instructions, pointOf)
+        expect(to).toBeDefined()
+        if (to !== undefined) {
+          expect(to.y).toBeLessThan(current.player.y)
+        }
       }),
       message(Message.MovedMouse({ clientX: 700, clientY: 200 })),
       model(current => {
-        expect(aimSightShapes(current)).toEqual([])
+        const [, to] = Array.map(onlyPath(current).instructions, pointOf)
+        expect(to).toBeDefined()
+        if (to !== undefined) {
+          expect(to.x).toBeGreaterThan(current.player.x)
+        }
       }),
     )
   })

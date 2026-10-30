@@ -21,7 +21,7 @@ bun dev
 | Keyboard only      | WASD                   | Arrow keys (see below)  | Hold Space                          |
 | Touch              | Thumb on the left half | Thumb on the right half | Fires while the right thumb is down |
 
-Without a mouse, Up or Down snaps the aim that way, or onto a diagonal with Left or Right held too, and Left or Right alone turns it a little at a time. The aim stays where you leave it until the mouse moves again, and while the keys aim a sight shows where the shot goes: a laser line, or a fan as wide as the shotgun's spread.
+Without a mouse, Up or Down snaps the aim that way, or onto a diagonal with Left or Right held too, and Left or Right alone turns it a little at a time. The aim stays where you leave it until the mouse moves again. The shop sells a Laser Sight for the run that shows where the shot goes: a laser line, or a fan as wide as the shotgun's spread. SETTINGS has a big cursor toggle if the thin crosshair is hard to see.
 
 Tap, click, or press Enter to start or retry. Esc pauses and resumes, and so does the PAUSE button in the top right corner. A tap or click on the pause screen also resumes. The game pauses when the page is hidden. R reloads, Q swaps guns, T places a trap, G picks the next trap, Enter starts the wave, M mutes, and N toggles the music. Each action has one key.
 

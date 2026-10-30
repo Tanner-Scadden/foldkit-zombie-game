@@ -212,13 +212,14 @@ describe('the sync Worker', () => {
           music: 'On',
           shake: 'On',
           shareStats: 'On',
+          cursor: 'Bold',
         },
       }),
     )
     const push = JSON.stringify({
       _tag: 'Push',
       mutations: [
-        { id: 'mutation-0001', name: 'ChangedSettings', version: 1, args },
+        { id: 'mutation-0001', name: 'ChangedSettings', version: 2, args },
       ],
     })
     await Effect.runPromise(host.onMessage(phone, push, everyone))

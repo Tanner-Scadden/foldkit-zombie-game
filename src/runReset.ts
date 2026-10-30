@@ -56,6 +56,7 @@ export type RunFields = Pick<
   | 'callouts'
   | 'trapStock'
   | 'selectedTrap'
+  | 'laserSight'
   | 'trapNotice'
   | 'level'
   | 'flowField'
@@ -97,6 +98,7 @@ export const freshRun = (model: Model): RunFields => ({
   callouts: [],
   trapStock: emptyTrapStock,
   selectedTrap: 'Barricade',
+  laserSight: 'None',
   trapNotice: TrapNotice.Quiet(),
   level: startingLevel,
   flowField: flowFieldToward(PARLOUR, initialPlayer, 'Narrow', []),

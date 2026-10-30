@@ -11,6 +11,7 @@ import {
 
 import {
   Appearance,
+  CursorSetting,
   Difficulty,
   HomeScreenTip,
   MusicSetting,
@@ -60,6 +61,7 @@ export const PlayerRow = Schema.Struct({
   difficulty_bests: Schema.fromJsonString(SavedBestsByDifficulty),
   home: Schema.fromJsonString(SavedHome),
   seen_power_ups: Schema.fromJsonString(SavedPowerUps),
+  cursor: CursorSetting,
 })
 export type PlayerRow = typeof PlayerRow.Type
 
@@ -85,6 +87,7 @@ export const PLAYER_COLUMNS = Array.make(
   'difficulty_bests',
   'home',
   'seen_power_ups',
+  'cursor',
 )
 
 export const rowOfSave = (save: PlayerSave): PlayerRow => ({
@@ -103,6 +106,7 @@ export const rowOfSave = (save: PlayerSave): PlayerRow => ({
   difficulty_bests: save.bests.byDifficulty,
   home: save.home,
   seen_power_ups: save.seenPowerUps,
+  cursor: save.settings.cursor,
 })
 
 export const killsRowsOfSave = (save: PlayerSave): ReadonlyArray<KillsRow> =>
@@ -140,11 +144,11 @@ const updatePlayer = (
 // NOTE: the first thing a device writes to its scope: its whole save, from
 // before sync. It only seeds an empty scope. On a scope that already has a
 // player (a device that linked to another device's player) it does nothing,
-// so linking never overwrites the player it joined. Version 3 is the save
-// with the power-ups seen (save version 6).
+// so linking never overwrites the player it joined. Version 4 is the save
+// with the cursor setting (save version 7).
 export const SeededPlayer = defineMutation({
   name: 'SeededPlayer',
-  version: 3,
+  version: 4,
   args: Schema.Struct({ save: PlayerSave }),
   scopes: [PLAYER_SCOPE_KIND],
   writer: 'Owner',
@@ -170,9 +174,10 @@ export const SeededPlayer = defineMutation({
     }),
 })
 
+// NOTE: version 2 carries the cursor setting.
 export const ChangedSettings = defineMutation({
   name: 'ChangedSettings',
-  version: 1,
+  version: 2,
   args: Schema.Struct({ settings: SavedSettings }),
   scopes: [PLAYER_SCOPE_KIND],
   writer: 'Owner',
@@ -182,6 +187,7 @@ export const ChangedSettings = defineMutation({
       music: settings.music,
       shake: settings.shake,
       share_stats: settings.shareStats,
+      cursor: settings.cursor,
     }),
 })
 
@@ -517,6 +523,14 @@ export const PlayerScope = defineScope({
         const sql = yield* SqlClient.SqlClient
         yield* sql`ALTER TABLE ${sql(table('player'))}
           ADD COLUMN seen_power_ups TEXT NOT NULL DEFAULT '[]'`
+      }),
+    // NOTE: the cursor setting came after the power-ups seen. A player from
+    // before it gets the bold cursor, as a new player does.
+    '0005_add_cursor': table =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        yield* sql`ALTER TABLE ${sql(table('player'))}
+          ADD COLUMN cursor TEXT NOT NULL DEFAULT 'Bold'`
       }),
   },
 })
