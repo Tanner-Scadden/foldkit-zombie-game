@@ -8,7 +8,13 @@ import {
   type TrapKind,
   type WeaponKind,
 } from './model'
-import type { Mood } from './shopkeeper'
+import {
+  MOOD_FACES,
+  type Mood,
+  RATTLES_BUST_ROWS,
+  RATTLES_PALETTE,
+  rattlesPixels,
+} from './shopkeeper'
 import type { Palette } from './sprite'
 
 // NOTE: the shop's pictures are pixel maps turned into SVG once, at module
@@ -337,75 +343,12 @@ export const TAB_ART: Readonly<Record<ShopCategory, ShopArt>> = {
 
 // RATTLES
 
-const RATTLES_PALETTE: Palette = {
-  P: '#5b3f8c',
-  Q: '#8a6ac0',
-  W: '#f4f1de',
-  S: '#c9c3b0',
-  E: '#2a1418',
-  G: '#9be36a',
-  Y: '#ffd23f',
-  R: '#e8333a',
-  C: '#2f4a6b',
-  D: '#223650',
-  T: '#6fc3ff',
-}
-
-const RATTLES_HAT: ReadonlyArray<string> = [
-  '.....PPPPPP.....',
-  '....PQQPPPPP....',
-  '....PPPPPPPP....',
-  '..PPPPPPPPPPPP..',
-  '...WWWWWWWWWW...',
-  '..WWWWWWWWWWWW..',
-]
-
-const RATTLES_NOSE = '..WWWWWEEWWWWW..'
-
-const RATTLES_COLLAR: ReadonlyArray<string> = [
-  '...SWWWWWWWWS...',
-  '....SWSWSWSW....',
-  '..CCCCRWWRCCCC..',
-  '.CCDCCRRRRCCDCC.',
-  'CCCDCCCWWCCCDCCC',
-]
-
-type Face = Readonly<{
-  eyes: ReadonlyArray<string>
-  cheeks: string
-  mouth: ReadonlyArray<string>
-}>
-
-const FACES: Readonly<Record<Mood, Face>> = {
-  Grinning: {
-    eyes: ['..WWEEEWWEEEWW..', '..WWEGEWWEGEWW..'],
-    cheeks: RATTLES_NOSE,
-    mouth: ['..WWEWEWEWEWWW..', '...WWEWEWEWWW...'],
-  },
-  Delighted: {
-    eyes: ['..WWEYEWWEYEWW..', '..WWYYYWWYYYWW..'],
-    cheeks: RATTLES_NOSE,
-    mouth: ['..WEEEEEEEEEEW..', '...WERRRRRREW...'],
-  },
-  Sad: {
-    eyes: ['..WEEWWWWWWEEW..', '..WWEGEWWEGEWW..'],
-    cheeks: '..WTWWWEEWWWWW..',
-    mouth: ['..WTWWEEEEWWWW..', '...WEWWWWWWEW...'],
-  },
-  Shrugging: {
-    eyes: ['..WWEEEWWWWWWW..', '..WWEGEWWEEEWW..'],
-    cheeks: RATTLES_NOSE,
-    mouth: ['..WWWWWWWWWWWW..', '...WWEEEEEEWW...'],
-  },
-}
-
+// NOTE: his portrait is his own sprite from the stall, scaled up by the CSS
+// and cropped at his bow tie (see src/shopkeeper.ts).
 export const RATTLES_ART: Readonly<Record<Mood, ShopArt>> = Record.map(
-  FACES,
-  ({ eyes, cheeks, mouth }) =>
-    artOf(
-      [...RATTLES_HAT, ...eyes, cheeks, ...mouth, ...RATTLES_COLLAR],
-      RATTLES_PALETTE,
-    ),
+  MOOD_FACES,
+  face =>
+    artOf(rattlesPixels(face).slice(0, RATTLES_BUST_ROWS), RATTLES_PALETTE),
 )
 
 // THE KITCHEN

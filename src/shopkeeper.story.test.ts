@@ -1,0 +1,36 @@
+import { Record } from 'effect'
+import { describe, expect, test } from 'vitest'
+
+import {
+  AWAKE_FACE,
+  MOOD_FACES,
+  RATTLES_BUST_ROWS,
+  rattlesPixels,
+} from './shopkeeper'
+
+describe('Rattles', () => {
+  const stall = rattlesPixels(AWAKE_FACE)
+
+  test('his portrait is his stall sprite down to his bow tie', () => {
+    const portrait = rattlesPixels(MOOD_FACES.Grinning).slice(
+      0,
+      RATTLES_BUST_ROWS,
+    )
+    expect(portrait).toEqual(stall.slice(0, RATTLES_BUST_ROWS))
+    expect(portrait.some(row => row.includes('R'))).toBe(true)
+  })
+
+  test('a mood changes only his eyes and mouth', () => {
+    const faceRows = new Set([4, 5, 6, 7])
+    Record.toEntries(MOOD_FACES).forEach(([, face]) => {
+      const moody = rattlesPixels(face)
+      expect(moody.length).toBe(stall.length)
+      moody.forEach((row, index) => {
+        expect(row.length).toBe(stall[index]?.length)
+        if (!faceRows.has(index)) {
+          expect(row).toBe(stall[index])
+        }
+      })
+    })
+  })
+})

@@ -33,7 +33,7 @@
   --shop-big: calc(26 * var(--shop-u));
   --shop-art-px: calc(3 * var(--shop-u));
   --shop-sub-art-px: calc(2 * var(--shop-u));
-  --shop-keeper-px: calc(3 * var(--shop-u));
+  --shop-keeper-px: calc(5 * var(--shop-u));
 }
 
 .shop-dialog[open] {
@@ -931,7 +931,7 @@
     --shop-small: 10px;
     --shop-big: 22px;
     --shop-art-px: 2px;
-    --shop-keeper-px: 2px;
+    --shop-keeper-px: 3px;
   }
 
   .shop-panel {

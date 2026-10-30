@@ -14,6 +14,12 @@ import {
 } from './font'
 import { STALL_BOX, type StallPrompt } from './shop'
 import {
+  AWAKE_FACE,
+  BLINK_FACE,
+  RATTLES_PALETTE,
+  rattlesPixels,
+} from './shopkeeper'
+import {
   type Palette,
   type Sprite,
   TOP_LEFT,
@@ -113,56 +119,19 @@ const STALL_BACK: ReadonlyArray<Canvas.Shape> = [
 
 // SHOPKEEPER
 
-const SHOPKEEPER_PALETTE: Palette = {
-  P: '#5b3f8c',
-  Q: '#7a5ab0',
-  W: '#f4f1de',
-  S: '#c9c3b0',
-  E: '#2a1418',
-  G: '#9be36a',
-  R: '#e8333a',
-  C: '#2f4a6b',
-  D: '#223650',
-}
-
-const SHOPKEEPER_HAT: ReadonlyArray<string> = [
-  '...PPP...',
-  '..PQPPP..',
-  '.PPPPPPP.',
-]
-
-const SHOPKEEPER_BODY: ReadonlyArray<string> = [
-  '.WSWEWSW.',
-  '..WEWEW..',
-  '...WWW...',
-  '.CCRWRCC.',
-  'CCDWDWDCC',
-  'CCWDWDWCC',
-  'CDDWDWDDC',
-  'CCCCCCCCC',
-  'CDCCCCCDC',
-]
-
-const AWAKE_EYES: ReadonlyArray<string> = ['..WWWWW..', '.WGEWGEW.']
-const SHUT_EYES: ReadonlyArray<string> = ['..WWWWW..', '.WEEWEEW.']
-
-const shopkeeperPixels = (
-  eyes: ReadonlyArray<string>,
-): ReadonlyArray<string> => [...SHOPKEEPER_HAT, ...eyes, ...SHOPKEEPER_BODY]
-
 const SHOPKEEPER_WIDTH = 9
 const SHOPKEEPER_LEFT = centerX - Math.floor(SHOPKEEPER_WIDTH / 2)
 const SHOPKEEPER_TOP = top - 8
 
 const SHOPKEEPER_AWAKE: Sprite = spriteShapes(
-  shopkeeperPixels(AWAKE_EYES),
-  SHOPKEEPER_PALETTE,
+  rattlesPixels(AWAKE_FACE),
+  RATTLES_PALETTE,
   TOP_LEFT,
 )
 
 const SHOPKEEPER_BLINK: Sprite = spriteShapes(
-  shopkeeperPixels(SHUT_EYES),
-  SHOPKEEPER_PALETTE,
+  rattlesPixels(BLINK_FACE),
+  RATTLES_PALETTE,
   TOP_LEFT,
 )
 
