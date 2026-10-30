@@ -18,11 +18,12 @@ import {
   releaseAll,
 } from '../input'
 import type { Message } from '../message'
-import { Arsenal, type GunSlot, type Model, type ShopItemId } from '../model'
+import { type GunSlot, type Model, type ShopItemId } from '../model'
 import { isInteractTaken } from '../purchase'
 import { isAtCounter, verdictFor } from '../shop'
 import { SeatAction } from '../stepWorld'
 import { isRoundActive } from '../waves'
+import { heldSlotOf } from '../weapons'
 import { pressInRoom, tickCoopRoom } from './coop'
 import { goHome } from './home'
 import { playSounds, toggleAudioFromKey, uiCue, unlockAudio } from './sound'
@@ -93,9 +94,7 @@ const keyInRun =
   }
 
 const gunSlotPress = (model: Model, slot: GunSlot): SeatAction =>
-  (Arsenal.isAnyOf(['HoldingSpare'])(model.player.arsenal)
-    ? 'Spare'
-    : 'Sidearm') === slot
+  heldSlotOf(model.player.arsenal) === slot
     ? SeatAction.Reload()
     : SeatAction.Swap()
 

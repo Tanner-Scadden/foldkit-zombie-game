@@ -1389,6 +1389,43 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
       },
     ],
   },
+  // NOTE: the knife: a quick, thin swish through the air, and a wet chop
+  // when it meets a zombie.
+  Swish: {
+    variationCents: 140,
+    tones: [],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 3,
+        cutoff: [at(0, 1800), at(0.06, 5200), at(0.12, 2400)],
+        envelope: envelope(0.32, 0.01, 0.11),
+      },
+    ],
+  },
+  Stab: {
+    variationCents: 120,
+    tones: [
+      {
+        wave: 'triangle',
+        pitch: [at(0, 520), at(0.06, 180)],
+        envelope: envelope(0.35, 0.001, 0.08),
+      },
+      {
+        wave: 'sine',
+        pitch: [at(0, 140), at(0.1, 60)],
+        envelope: envelope(0.5, 0.001, 0.1),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 1.5,
+        cutoff: [at(0, 2600), at(0.08, 500)],
+        envelope: envelope(0.45, 0.001, 0.09),
+      },
+    ],
+  },
   Whoosh: {
     variationCents: 90,
     tones: [],

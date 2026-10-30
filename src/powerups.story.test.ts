@@ -55,11 +55,13 @@ import {
   SURFACE,
   bulletInto,
   holdFire,
+  pistolOf,
   press,
   release,
   releaseFire,
   tick,
   ticks,
+  withPistol,
   zombieOf,
 } from './testing'
 import { asVeteran } from './veteran'
@@ -531,7 +533,8 @@ describe('explaining a power-up once', () => {
 describe('effects', () => {
   test('Hot Sauce tops off the magazine, fires faster, spends no rounds, and never reloads', () => {
     const loaded = modifyFields(fighting, {
-      player: player => modifyFields(player, { pistolLoaded: () => 2 }),
+      player: player =>
+        withPistol(player, pistol => ({ ...pistol, loaded: 2 })),
     })
     story(
       update,
@@ -541,7 +544,7 @@ describe('effects', () => {
       model(({ stats, player }) => {
         const plainShots = 2000 / FIRE_INTERVAL_MS
         expect(stats.shotsFired).toBeGreaterThan(plainShots * 1.6)
-        expect(player.pistolLoaded).toBe(PISTOL_MAGAZINE)
+        expect(pistolOf(player).loaded).toBe(PISTOL_MAGAZINE)
         expect(Reload.isAnyOf(['Ready'])(player.reload)).toBe(true)
       }),
     )
@@ -550,10 +553,13 @@ describe('effects', () => {
   test('grabbing Hot Sauce mid-reload fills the magazine at once', () => {
     const reloading = modifyFields(fighting, {
       player: player =>
-        modifyFields(player, {
-          pistolLoaded: () => 0,
-          reload: () => Reload.Reloading({ remainingMs: 700, durationMs: 800 }),
-        }),
+        modifyFields(
+          withPistol(player, pistol => ({ ...pistol, loaded: 0 })),
+          {
+            reload: () =>
+              Reload.Reloading({ remainingMs: 700, durationMs: 800 }),
+          },
+        ),
     })
     story(
       update,
@@ -561,7 +567,7 @@ describe('effects', () => {
       tick(FRAME_MS),
       model(({ player }) => {
         expect(Reload.isAnyOf(['Ready'])(player.reload)).toBe(true)
-        expect(player.pistolLoaded).toBeGreaterThan(0)
+        expect(pistolOf(player).loaded).toBeGreaterThan(0)
       }),
     )
   })

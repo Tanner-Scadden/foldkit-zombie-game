@@ -26,9 +26,18 @@ import {
   ZombieAction,
   initialModel,
 } from './model'
-import { holdFire, releaseFire, tick, ticks, zombieOf } from './testing'
+import {
+  holdFire,
+  holdingFirst,
+  holdingSecond,
+  maybeSpareGun,
+  releaseFire,
+  tick,
+  ticks,
+  zombieOf,
+} from './testing'
 import { asVeteran } from './veteran'
-import { WEAPONS, freshSpare, magazineOf, maybeSpare } from './weapons'
+import { WEAPONS, freshGun, magazineOf } from './weapons'
 
 // The Mystery Leftovers weapons (src/fridgeWeapons.ts), played through
 // `update` with a thumb on the aim stick: hold to charge or swing, lift to
@@ -63,7 +72,7 @@ const holding = (
         x: () => PLAYER_X,
         y: () => ROW_Y,
         facing: () => ({ x: 1, y: 0 }),
-        arsenal: () => Arsenal.HoldingSpare({ spare }),
+        arsenal: () => holdingSecond(spare),
       }),
   })
 
@@ -104,13 +113,13 @@ const press = Message.PressedPointer({
 const lift = Message.ReleasedPointer({ pointerId: 70 })
 
 const spareOf = (current: Model): CarriedGun =>
-  Option.getOrThrow(maybeSpare(current.player.arsenal))
+  Option.getOrThrow(maybeSpareGun(current.player.arsenal))
 
 describe('the Pressure Cooker', () => {
   test('holding builds pressure; lifting throws one lid along the aim', () => {
     story(
       update,
-      given(holding(freshSpare('Cooker'))),
+      given(holding(freshGun('Cooker'))),
       holdFire,
       ...ticks(ticksFor(COOKER_RULES.fullMs / 2), FRAME_MS),
       model(current => {
@@ -132,7 +141,7 @@ describe('the Pressure Cooker', () => {
 
   test('the lid bursts on the first zombie it meets, killing and paying', () => {
     const groaner = zombieOf('Shambler', 900, PLAYER_X + 30, ROW_Y)
-    const events = eventsOf(holding(freshSpare('Cooker'), [groaner]), [
+    const events = eventsOf(holding(freshGun('Cooker'), [groaner]), [
       press,
       ...frames(ticksFor(COOKER_RULES.fullMs)),
       lift,
@@ -144,7 +153,7 @@ describe('the Pressure Cooker', () => {
 
   test('more charge throws farther and blasts bigger', () => {
     const throwAfter = (ms: number) => {
-      const start = holding(freshSpare('Cooker'))
+      const start = holding(freshGun('Cooker'))
       const thrown = Array.reduce(
         [press, ...frames(ticksFor(ms)), lift, tick(FRAME_MS).message],
         start,
@@ -164,7 +173,7 @@ describe('the Pressure Cooker', () => {
   test('held past full it pops in your hands: a shove and a lost lid, but no harm below Nightmare', () => {
     story(
       update,
-      given(holding(freshSpare('Cooker'))),
+      given(holding(freshGun('Cooker'))),
       holdFire,
       ...ticks(
         ticksFor(COOKER_RULES.fullMs + COOKER_RULES.overMs) + 2,
@@ -192,7 +201,7 @@ describe('the Pressure Cooker', () => {
         press,
         ...frames(ticksFor(COOKER_RULES.fullMs + COOKER_RULES.overMs) + 2),
       ],
-      nightmare(holding(freshSpare('Cooker'))),
+      nightmare(holding(freshGun('Cooker'))),
       (current, sent) => update(current, sent).model,
     )
     expect(popped.player.hp).toBe(PLAYER_MAX_HP - COOKER_RULES.popDamage)
@@ -206,16 +215,16 @@ describe('the Pressure Cooker', () => {
         start,
         (current, sent) => update(current, sent).model,
       )
-    expect(blastAtFeet(holding(freshSpare('Cooker'), [wall])).player.hp).toBe(
+    expect(blastAtFeet(holding(freshGun('Cooker'), [wall])).player.hp).toBe(
       PLAYER_MAX_HP,
     )
     expect(
-      blastAtFeet(nightmare(holding(freshSpare('Cooker'), [wall]))).player.hp,
+      blastAtFeet(nightmare(holding(freshGun('Cooker'), [wall]))).player.hp,
     ).toBeLessThan(PLAYER_MAX_HP)
   })
 
   test('an empty pot reloads, four lids a load', () => {
-    const empty = modifyFields(freshSpare('Cooker'), { loaded: () => 0 })
+    const empty = modifyFields(freshGun('Cooker'), { loaded: () => 0 })
     story(
       update,
       given(holding(empty)),
@@ -233,7 +242,7 @@ describe('the Clang Pan', () => {
     const groaner = zombieOf('Shambler', 900, PLAYER_X + 10, ROW_Y, { hp: 99 })
     story(
       update,
-      given(holding(freshSpare('Pan'), [groaner])),
+      given(holding(freshGun('Pan'), [groaner])),
       holdFire,
       tick(FRAME_MS),
       model(current => {
@@ -250,7 +259,7 @@ describe('the Clang Pan', () => {
     const groaner = zombieOf('Shambler', 900, PLAYER_X + 10, ROW_Y, { hp: 99 })
     const swings = Array.reduce(
       [press, ...frames(ticksFor(PAN_RULES.dazeMs) + 2)],
-      holding(freshSpare('Pan'), [groaner]),
+      holding(freshGun('Pan'), [groaner]),
       (current, sent) => update(current, sent).model,
     )
     const rung = Option.getOrThrow(zombieIn(swings, 900))
@@ -278,7 +287,7 @@ describe('the Clang Pan', () => {
   test('a Big Lug takes the clang but barely budges and keeps its feet', () => {
     const lug = zombieOf('Tank', 900, PLAYER_X + 12, ROW_Y)
     const swung = update(
-      update(holding(freshSpare('Pan'), [lug]), press).model,
+      update(holding(freshGun('Pan'), [lug]), press).model,
       tick(FRAME_MS).message,
     ).model
     const hit = Option.getOrThrow(zombieIn(swung, 900))
@@ -300,7 +309,7 @@ describe('the Clang Pan', () => {
           }),
       },
     )
-    const events = eventsOf(holding(freshSpare('Pan'), [flying]), [
+    const events = eventsOf(holding(freshGun('Pan'), [flying]), [
       press,
       ...frames(2),
     ])
@@ -309,16 +318,14 @@ describe('the Clang Pan', () => {
   })
 
   test('each swing that lands dents it; fully dented it swings slower; the break bangs it flat', () => {
-    const dented = modifyFields(freshSpare('Pan'), { loaded: () => 0 })
+    const dented = modifyFields(freshGun('Pan'), { loaded: () => 0 })
     const target = zombieOf('Tank', 900, PLAYER_X + 12, ROW_Y, { hp: 999 })
     const swingsIn = (spare: CarriedGun, ms: number): number =>
       Array.filter(
         eventsOf(holding(spare, [target]), [press, ...frames(ticksFor(ms))]),
         GameEvent.isAnyOf(['PanSwung']),
       ).length
-    expect(swingsIn(dented, 3000)).toBeLessThan(
-      swingsIn(freshSpare('Pan'), 3000),
-    )
+    expect(swingsIn(dented, 3000)).toBeLessThan(swingsIn(freshGun('Pan'), 3000))
     const breakStarts = modifyFields(holding(dented), {
       phase: () => Phase.Wave({ wave: 4, elapsedMs: 0, spawns: [] }),
     })
@@ -334,7 +341,7 @@ describe('the Clang Pan', () => {
   test('the 3000 turns a long hold into a ground smash all round', () => {
     const behind = zombieOf('Shambler', 900, PLAYER_X - 14, ROW_Y, { hp: 99 })
     const events = eventsOf(
-      holding(modifyFields(freshSpare('Pan'), { tier: () => 3 }), [behind]),
+      holding(modifyFields(freshGun('Pan'), { tier: () => 3 }), [behind]),
       [press, ...frames(ticksFor(PAN_RULES.smashHoldMs) + 30)],
     )
     expect(Array.some(events, GameEvent.isAnyOf(['PanSmashed']))).toBe(true)
@@ -347,7 +354,7 @@ describe('Brain Freeze', () => {
     const lug = zombieOf('Tank', 901, PLAYER_X + 30, ROW_Y + 6)
     story(
       update,
-      given(holding(freshSpare('Freeze'), [groaner, lug])),
+      given(holding(freshGun('Freeze'), [groaner, lug])),
       holdFire,
       tick(FRAME_MS),
       model(current => {
@@ -377,10 +384,10 @@ describe('Brain Freeze', () => {
           }),
       },
     )
-    const pistol = modifyFields(holding(freshSpare('Freeze'), [frozen]), {
+    const pistol = modifyFields(holding(freshGun('Freeze'), [frozen]), {
       player: player =>
         modifyFields(player, {
-          arsenal: () => Arsenal.HoldingPistol({ spare: freshSpare('Freeze') }),
+          arsenal: () => holdingFirst(freshGun('Freeze')),
         }),
     })
     const events = eventsOf(pistol, [press, ...frames(20)])
@@ -402,7 +409,7 @@ describe('Brain Freeze', () => {
   })
 
   test('twelve charges, never refilled: empty, it clicks and swaps to the pistol', () => {
-    const empty = modifyFields(freshSpare('Freeze'), {
+    const empty = modifyFields(freshGun('Freeze'), {
       loaded: () => 0,
       rounds: () => 0,
     })
@@ -413,7 +420,7 @@ describe('Brain Freeze', () => {
       tick(FRAME_MS),
       model(current => {
         expect(current.player.reload._tag).toBe('Ready')
-        expect(Arsenal.isAnyOf(['HoldingPistol'])(current.player.arsenal)).toBe(
+        expect(Arsenal.isAnyOf(['HoldingFirst'])(current.player.arsenal)).toBe(
           true,
         )
       }),

@@ -64,6 +64,7 @@ import {
 } from './geometry'
 import { stopForHits, thawTick } from './juice'
 import { advanceKitchen, soupSkid } from './kitchen'
+import { stabWithKnife } from './knife'
 import { advanceFridge } from './leftovers'
 import { advanceIntensity } from './pacing'
 import {
@@ -117,20 +118,19 @@ import {
 } from './traps'
 import { advanceRound, endWhenDefeated } from './waves'
 import {
-  SIDEARM,
   type WeaponStats,
   beginReload,
   canReload,
   finishReload,
+  handOverWhenDry,
+  heldGun,
   heldLoaded,
   heldWeapon,
-  holdPistol,
   isReloading,
   spendRound,
 } from './weapons'
 import type { World } from './world'
 import {
-  Arsenal,
   type Boss,
   type Bullet,
   type BulletGlaze,
@@ -388,23 +388,19 @@ const runDry = (model: World): World =>
     player: player =>
       modifyFields(player, {
         fireCooldownMs: () => DRY_FIRE_DELAY_MS,
-        arsenal: holdPistol,
+        arsenal: handOverWhenDry,
       }),
     frameEvents: Array.append(
       GameEvent.RanDry({ x: model.player.x, y: model.player.y }),
     ),
   })
 
-const pullTrigger = (model: World, deltaMs: number): World =>
-  Arsenal.match(model.player.arsenal, {
-    PistolOnly: () => shoot(model, SIDEARM, model.player.pistolTier, deltaMs),
-    HoldingPistol: () =>
-      shoot(model, SIDEARM, model.player.pistolTier, deltaMs),
-    HoldingSpare: ({ spare }) =>
-      spare.loaded > 0
-        ? shoot(model, spare.kind, spare.tier, deltaMs)
-        : runDry(model),
-  })
+const pullTrigger = (model: World, deltaMs: number): World => {
+  const gun = heldGun(model.player.arsenal)
+  return gun.loaded > 0
+    ? shoot(model, gun.kind, gun.tier, deltaMs)
+    : runDry(model)
+}
 
 const coolTrigger = (
   model: World,
@@ -640,20 +636,13 @@ export const catchUpShots = (
 // the pellets the gun it holds would fire from where it stands, aimed as
 // it aims, with the client's cosmetic stream for the spread. They hurt
 // nothing; the room's own copy of the shot decides every hit.
-const heldGunOf = (player: World['player']): readonly [WeaponKind, number] =>
-  Arsenal.match(player.arsenal, {
-    PistolOnly: () => [SIDEARM, player.pistolTier] as const,
-    HoldingPistol: () => [SIDEARM, player.pistolTier] as const,
-    HoldingSpare: ({ spare }) => [spare.kind, spare.tier] as const,
-  })
-
 export const aimTracers = (
   model: World,
   seed: number,
   firstId: number,
 ): Seeded<ReadonlyArray<Bullet>> => {
   const { player, boosts } = model
-  const [weapon, tier] = heldGunOf(player)
+  const { kind: weapon, tier } = heldGun(player.arsenal)
   const stats = firingStats(boosts, weapon, tier)
   const load: Load = {
     stats,
@@ -1583,12 +1572,15 @@ export const walkLeadSeat = (model: World, deltaMs: number): World => {
 export const predictLeadSeat = (model: World, deltaMs: number): World =>
   armSeat(deltaMs)(walkLeadSeat(model, deltaMs))
 
-// NOTE: only a standing player shops, reloads, and fires.
+// NOTE: only a standing player shops, reloads, fires, and stabs.
 const armSeat =
   (deltaMs: number) =>
   (model: World): World =>
     isStanding(leadSeatOf(model))
-      ? fire(tickReload(faceTowardIntent(model), deltaMs), deltaMs)
+      ? stabWithKnife(
+          fire(tickReload(faceTowardIntent(model), deltaMs), deltaMs),
+          deltaMs,
+        )
       : faceTowardIntent(model)
 
 // NOTE: only a standing player shops at the stall or holds to buy.

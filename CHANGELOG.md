@@ -8,6 +8,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 - 🏳️‍🌈 Dress up however you like: mohawks, beards, glasses, hoodies, dresses, overalls, and a rainbow shirt, on any body.
 - 🎁 New versions arrive as a rattling gift on the menu: unwrap it for a little party. A phone tile by the gear puts the game on your Home Screen.
 - 🥡 Mystery Leftovers: hold Enter (or the hand button) at the grimy kitchen fridge to pull a Pressure Cooker that lobs exploding lids, a Clang Pan for home runs, or the rare Brain Freeze that turns zombies into popsicles. Take it or leave it! Or a moldy sandwich. Rattles will soup them up.
+- 🔪 You always pack a knife now: press F (or the knife button) to stab whatever gets too close. Trade your pistol for a second real gun, and Rattles hands it back for free whenever you miss it.
 - 🧹 Playtest fixes: PLAY is one big arrow, guns keep their names as they upgrade (the SMG is the Chatterbox), the kitchen boards open with a hold instead of a pop-up, How to play's cards move again, Rattles looks like himself in his shop, key hints read the right way round, sprites stay crisp, color pickers line up neatly, we tell you when a browser extension eats your keys, big hordes run smoother on slower phones, upright phones aim a touch truer, the shop takes your money again in co-op, and Hard and Nightmare ease off a hair.
 
 ## October 29, 2026: How tough are you?

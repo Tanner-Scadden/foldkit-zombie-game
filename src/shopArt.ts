@@ -326,6 +326,7 @@ export const ITEM_ART: Readonly<Record<FixedShopItemId, ShopArt>> = {
   Smg: gunArt('Smg', 0),
   SmgRounds: DRUM_ART,
   SmgUpgrade: gunArt('Smg', 1),
+  Pistol: gunArt('Pistol', 0),
   PistolUpgrade: gunArt('Pistol', 1),
   LaserSight: SIGHT_ART,
   Heart: JAR_ART,

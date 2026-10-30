@@ -8,7 +8,6 @@ import { FIXED_STEP_MS, PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
-  Arsenal,
   BreakClock,
   DebutCard,
   DifficultyCard,
@@ -25,9 +24,10 @@ import {
   hintWords,
   shownHints,
 } from './onboarding'
-import { showDialog, tick, ticks } from './testing'
+import { holdingFirst, showDialog, tick, ticks } from './testing'
 import { asVeteran } from './veteran'
 import { keepGoing } from './waves'
+import { STARTING_PISTOL } from './weapons'
 
 const TICK_MS = 50
 // NOTE: a 50 ms frame is three 60 Hz ticks; the moment a wave clears is
@@ -189,11 +189,11 @@ describe('gun slots on touch', () => {
     phase: () => Phase.Wave({ wave: 3, elapsedMs: 0, spawns: [] }),
     player: player =>
       modifyFields(player, {
-        pistolLoaded: () => 2,
         arsenal: () =>
-          Arsenal.HoldingPistol({
-            spare: { kind: 'Smg', rounds: 90, loaded: 30, tier: 0 },
-          }),
+          holdingFirst(
+            { kind: 'Smg', rounds: 90, loaded: 30, tier: 0 },
+            { ...STARTING_PISTOL, loaded: 2 },
+          ),
       }),
   })
 
@@ -201,14 +201,14 @@ describe('gun slots on touch', () => {
     story(
       update,
       given(carrying),
-      message(Message.ClickedGunSlot({ slot: 'Sidearm' })),
+      message(Message.ClickedGunSlot({ slot: 'First' })),
       model(current => {
         expect(Reload.isAnyOf(['Reloading'])(current.player.reload)).toBe(true)
-        expect(current.player.arsenal._tag).toBe('HoldingPistol')
+        expect(current.player.arsenal._tag).toBe('HoldingFirst')
       }),
-      message(Message.ClickedGunSlot({ slot: 'Spare' })),
+      message(Message.ClickedGunSlot({ slot: 'Second' })),
       model(current => {
-        expect(current.player.arsenal._tag).toBe('HoldingSpare')
+        expect(current.player.arsenal._tag).toBe('HoldingSecond')
         expect(Reload.isAnyOf(['Ready'])(current.player.reload)).toBe(true)
       }),
     )

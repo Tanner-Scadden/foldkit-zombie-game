@@ -296,10 +296,12 @@ describe('inputs and presses', () => {
       maybeAim: Option.some({ x: 0, y: 1 }),
       trigger: 'Held' as const,
       interact: 'Released' as const,
+      stab: 'Released' as const,
     }
     const back = intentOfInput(inputOfIntent(intent, 0))
     expect(back.trigger).toBe('Held')
     expect(back.interact).toBe('Released')
+    expect(back.stab).toBe('Released')
     expect(back.move.x).toBeCloseTo(0.6, 2)
     expect(back.move.y).toBeCloseTo(-0.8, 2)
     expect(back.maybeAim).toEqual(Option.some({ x: 0, y: 1 }))

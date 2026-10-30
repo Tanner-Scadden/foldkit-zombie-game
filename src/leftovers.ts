@@ -17,10 +17,9 @@ import { isKitchenOpen } from './kitchen'
 import { leadSeatOf, maybePlayerAt } from './party'
 import { nextRandom } from './prng'
 import type { Offer } from './purchase'
-import { cancelReload, freshSpare, maybeSpare } from './weapons'
+import { cancelReload, freshGun, isCarrying, takeGun } from './weapons'
 import type { World } from './world'
 import {
-  Arsenal,
   type Fridge,
   FridgeDoor,
   type FridgePrize,
@@ -103,9 +102,7 @@ const weaponOf = (prize: FridgePrize): Option.Option<WeaponKind> =>
     : Option.none()
 
 const isCarried = (player: Player, prize: FridgePrize): boolean =>
-  Option.exists(weaponOf(prize), kind =>
-    Option.exists(maybeSpare(player.arsenal), spare => spare.kind === kind),
-  )
+  Option.exists(weaponOf(prize), kind => isCarrying(player, kind))
 
 export const prizeWeights = (
   fridge: Fridge,
@@ -224,7 +221,7 @@ export const fridgeOffers = (world: World): ReadonlyArray<Offer> =>
 
 const giveWeapon = (player: Player, kind: WeaponKind): Player =>
   modifyFields(dropCharge(cancelReload(player)), {
-    arsenal: () => Arsenal.HoldingSpare({ spare: freshSpare(kind) }),
+    arsenal: arsenal => takeGun(arsenal, freshGun(kind)),
     fireCooldownMs: () => 0,
   })
 

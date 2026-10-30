@@ -22,8 +22,8 @@ import { ShowInstallPrompt } from './commands'
 import { PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
-import { Arsenal, BreakClock, type Model, Phase, initialModel } from './model'
-import { measureSurface } from './testing'
+import { BreakClock, type Model, Phase, initialModel } from './model'
+import { holdingSecond, measureSurface } from './testing'
 import { asVeteran } from './veteran'
 import { view } from './view'
 import { tierName } from './weapons'
@@ -35,10 +35,7 @@ const onTouch = (base: Model): Model =>
 
 const withSmg = (loaded: number): Model['player'] =>
   modifyFields(initialModel.player, {
-    arsenal: () =>
-      Arsenal.HoldingSpare({
-        spare: { kind: 'Smg', rounds: 120, loaded, tier: 0 },
-      }),
+    arsenal: () => holdingSecond({ kind: 'Smg', rounds: 120, loaded, tier: 0 }),
   })
 
 const fightingWith = (loaded: number): Model =>

@@ -132,6 +132,19 @@ export const RELOAD_ICON = icon([
   '..XXXXX..',
 ])
 
+// NOTE: the knife, blade up to the right, on the touch knife button.
+export const KNIFE_ICON = icon([
+  '.......XX',
+  '......XXX',
+  '.....XXX.',
+  '....XXX..',
+  '...XXX...',
+  '.RXXX....',
+  '..RR.....',
+  '.RRR.....',
+  'RR.R.....',
+])
+
 export const PADLOCK_ICON = icon([
   '..XXX..',
   '.X...X.',

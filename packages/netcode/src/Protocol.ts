@@ -34,8 +34,12 @@ import {
 // new zombie actions; the shop sells the fridge weapons' upgrades and
 // lids, whose codes follow the old ones. Version 6: take it or leave it,
 // the fridge's door can hold a weapon on Offering, taken with a hold.
-export const PROTOCOL_VERSION = 6
-export const MIN_PROTOCOL_VERSION = 6
+// Version 7: the knife and two gun slots. Each player's guns are two
+// slots with the pistol a gun like any other, the player carries the
+// knife's cooldown, the knife rides as button bit 4, and the shop sells
+// the pistol back, whose code follows the old ones.
+export const PROTOCOL_VERSION = 7
+export const MIN_PROTOCOL_VERSION = 7
 
 // NOTE: a round trip as the wire carries it, in whole ms.
 export const MAX_RTT_MS = 60_000

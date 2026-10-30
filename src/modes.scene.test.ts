@@ -20,8 +20,8 @@ import { FIXED_STEP_MS, PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { withBests } from './difficulty'
 import { update } from './main'
 import { Message } from './message'
-import { Arsenal, type Model, Phase, RunMode, initialModel } from './model'
-import { measureSurface } from './testing'
+import { type Model, Phase, RunMode, initialModel } from './model'
+import { holdingSecond, measureSurface } from './testing'
 import { asVeteran } from './veteran'
 import { view } from './view'
 
@@ -103,9 +103,7 @@ describe('Mode choice', () => {
       player: player =>
         modifyFields(player, {
           arsenal: () =>
-            Arsenal.HoldingSpare({
-              spare: { kind: 'Smg', rounds: 99, loaded: 40, tier: 2 },
-            }),
+            holdingSecond({ kind: 'Smg', rounds: 99, loaded: 40, tier: 2 }),
         }),
     })
     scene(
@@ -125,7 +123,7 @@ describe('Mode choice', () => {
       ),
       expect(
         text(
-          'You have $321. Holding the Chatterbox DELUXE. Second slot: Chatterbox DELUXE, upgrade tier 2 of 3, with 99 rounds. Pistol upgrade tier 0 of 3.',
+          'You have $321. Holding the Chatterbox DELUXE. Other slot: Pop Pistol, upgrade tier 0 of 3.',
         ),
       ).toExist(),
     )
@@ -200,9 +198,7 @@ describe('Upgrades in the shop', () => {
         x: () => 270,
         y: () => 142,
         arsenal: () =>
-          Arsenal.HoldingSpare({
-            spare: { kind: 'Shotgun', rounds: 16, loaded: 6, tier: 2 },
-          }),
+          holdingSecond({ kind: 'Shotgun', rounds: 16, loaded: 6, tier: 2 }),
       }),
     wallet: () => ({ balance: 400, earned: 400, shown: 400 }),
   })
@@ -257,7 +253,7 @@ describe('Upgrades in the shop', () => {
       expect(text('Need $120 more')).toExist(),
       expect(
         text(
-          'You always keep the Pop Pistol. A new gun takes your second slot, and whatever was there goes, upgrades and all.',
+          'Two guns. A new one replaces the one in your hands, upgrades and all.',
         ),
       ).toExist(),
       expect(

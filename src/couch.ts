@@ -33,6 +33,7 @@ type CouchKeys = Readonly<{
   left: string
   right: string
   fire: string
+  stab: string
   swap: string
   reload: string
   placeTrap: string
@@ -49,6 +50,7 @@ export const COUCH_KEYS: ReadonlyMap<PlayerSlot, CouchKeys> = new Map([
       left: 'KeyJ',
       right: 'KeyL',
       fire: 'KeyU',
+      stab: 'KeyB',
       swap: 'KeyO',
       reload: 'KeyP',
       placeTrap: 'KeyM',
@@ -64,6 +66,7 @@ export const COUCH_KEYS: ReadonlyMap<PlayerSlot, CouchKeys> = new Map([
       left: 'Numpad4',
       right: 'Numpad6',
       fire: 'Numpad7',
+      stab: 'Numpad3',
       swap: 'Numpad9',
       reload: 'NumpadAdd',
       placeTrap: 'Numpad1',
@@ -79,6 +82,7 @@ export const COUCH_KEYS: ReadonlyMap<PlayerSlot, CouchKeys> = new Map([
       left: 'ArrowLeft',
       right: 'ArrowRight',
       fire: 'ShiftRight',
+      stab: 'Backslash',
       swap: 'Slash',
       reload: 'Period',
       placeTrap: 'Comma',
@@ -129,6 +133,7 @@ const intentOf = (model: Model, slot: PlayerSlot, couch: CouchKeys): Intent => {
         maybeAim: Option.none(),
         trigger: Array.contains(keys, couch.fire) ? 'Held' : 'Released',
         interact: Array.contains(keys, couch.ready) ? 'Held' : 'Released',
+        stab: Array.contains(keys, couch.stab) ? 'Held' : 'Released',
       }
 }
 

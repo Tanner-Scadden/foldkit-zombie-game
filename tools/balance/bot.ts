@@ -42,11 +42,12 @@ import {
   isFridgeWeapon,
   isSmallKind,
 } from '../../src/fridgeWeapons'
+import { KNIFE_RULES } from '../../src/knife'
 import { FRIDGE_RULES, fridgeBoxOf } from '../../src/leftovers'
-import { leadSeatOf } from '../../src/party'
 import { update } from '../../src/main'
 import { Message } from '../../src/message'
 import { type Difficulty, ZombieKind, initialModel } from '../../src/model'
+import { leadSeatOf } from '../../src/party'
 import { maybeOfferInReach } from '../../src/purchase'
 import { DEFAULT_PORTRAIT_SCREEN } from '../../src/screen'
 import {
@@ -60,11 +61,15 @@ import { asVeteran } from '../../src/veteran'
 import { beginPreparation, doorCounts } from '../../src/waves'
 import {
   canReload,
+  freshGun,
+  gunsOf,
+  heldGun,
   heldLoaded,
   heldStats,
+  isReloading,
   maxRounds,
   maxTier,
-  maybeSpare,
+  maybeOtherGun,
 } from '../../src/weapons'
 import { withWorld } from '../../src/world'
 import { ZOMBIE_KINDS, bodyRadiusOf } from '../../src/zombies'
@@ -116,6 +121,7 @@ const KEYS = {
   left: 'KeyA',
   right: 'KeyD',
   interact: 'Enter',
+  stab: 'KeyF',
 }
 
 // The options of the run being played. play sets it before every run.
@@ -165,9 +171,16 @@ export type FridgeLog = {
   shatters: number
   // The fridge weapon carried when the run ended, or 'None'.
   endedWith: string
+  // Weapons taken from the fridge, and the knife's stabs and hits.
+  taken: number
+  stabs: number
+  stabHits: number
 }
 
 const emptyFridgeLog = (): FridgeLog => ({
+  taken: 0,
+  stabs: 0,
+  stabHits: 0,
   pulls: 0,
   firstPullWave: 0,
   prizes: {},
@@ -731,6 +744,31 @@ const panStance = (model: Model): Vector | undefined => {
   return { x: 0, y: 0 }
 }
 
+// THE KNIFE
+
+// The bot stabs a zombie within the knife's reach while its gun cannot
+// shoot: mid-reload, empty with nothing to load, or a spent fridge weapon.
+const STAB_SLACK_PX = 1
+
+const isGunIdle = (model: Model): boolean => {
+  const { player } = model
+  const held = heldGun(player.arsenal)
+  return (
+    isReloading(player) ||
+    isSpent(held) ||
+    (held.kind !== 'Pan' && heldLoaded(player) <= 0 && !canReload(player))
+  )
+}
+
+const stabbing = (model: Model, keys: Set<string>): Set<string> => {
+  const isInReach = walking(model).some(
+    zombie =>
+      distance(model.player, zombie) - bodyRadiusOf(zombie) - PLAYER_RADIUS <=
+      KNIFE_RULES.reachPx - STAB_SLACK_PX,
+  )
+  return isInReach && isGunIdle(model) ? new Set([...keys, KEYS.stab]) : keys
+}
+
 const kite = (model: Model): Vector => {
   const { player } = model
   const dodge = telegraphDodge(model)
@@ -974,14 +1012,61 @@ const aimAndFire = (
 
 // FIGHTING WITH A FRIDGE WEAPON
 
-const fridgeSpareOf = (model: Model) =>
-  Option.getOrUndefined(
-    Option.filter(maybeSpare(model.player.arsenal), spare =>
-      isFridgeWeapon(spare.kind),
-    ),
-  )
+type Gun = ReturnType<typeof heldGun>
 
-type FridgeSpare = NonNullable<ReturnType<typeof fridgeSpareOf>>
+const gunsOfBot = (model: Model): ReadonlyArray<Gun> =>
+  gunsOf(model.player.arsenal)
+
+// The fridge weapon the bot carries, in either slot.
+const fridgeSpareOf = (model: Model): Gun | undefined =>
+  gunsOfBot(model).find(gun => isFridgeWeapon(gun.kind))
+
+type FridgeSpare = Gun
+
+// The gun the bot bought from Rattles (the Barn Buster or the Chatterbox).
+const firearmOf = (model: Model): Gun | undefined =>
+  gunsOfBot(model).find(gun => gun.kind === 'Smg' || gun.kind === 'Shotgun')
+
+const pistolOf = (model: Model): Gun | undefined =>
+  gunsOfBot(model).find(gun => gun.kind === 'Pistol')
+
+// What the bot used to call its spare: the gun it bought, else its fridge
+// weapon. The pistol is never the spare.
+const spareOf = (model: Model): Gun | undefined =>
+  firearmOf(model) ?? fridgeSpareOf(model)
+
+// A fridge weapon with nothing left to throw or spray.
+const isSpent = (gun: Gun): boolean =>
+  (gun.kind === 'Freeze' || gun.kind === 'Cooker') && gun.rounds <= 0
+
+// How much the bot values a gun in a slot, to choose which one a new gun
+// replaces: a spent fridge weapon is worth nothing, the pistol little, and
+// an upgraded Chatterbox the most.
+const gunValue = (gun: Gun): number => {
+  if (isSpent(gun)) return 0
+  if (gun.kind === 'Pistol') return 1 + gun.tier
+  if (gun.kind === 'Shotgun') return 2 + gun.tier
+  if (gun.kind === 'Smg') return 3 + gun.tier * 1.5
+  if (gun.kind === 'Pan') return 2.5 + gun.tier
+  if (gun.kind === 'Freeze') return 3
+  return 4 + gun.tier
+}
+
+// The gun a new one would replace: none while a slot is free, else the
+// weakest of the two.
+const weakerGun = (model: Model): Gun | undefined => {
+  const guns = gunsOfBot(model)
+  return guns.length < 2
+    ? undefined
+    : [...guns].sort((a, b) => gunValue(a) - gunValue(b))[0]
+}
+
+// A new gun replaces the one in the player's hands, so before it buys or
+// takes one the bot holds the gun it means to give up.
+const holdToReplace = (model: Model, gun: Gun | undefined): Model =>
+  gun !== undefined && heldGun(model.player.arsenal).kind !== gun.kind
+    ? tapKey(model, 'KeyQ')
+    : model
 
 const visibleZombies = (model: Model) =>
   walking(model).filter(zombie =>
@@ -1132,7 +1217,7 @@ const planFor = (model: Model, spare: FridgeSpare): FridgePlan => {
 }
 
 const isHoldingSpare = (model: Model) =>
-  model.player.arsenal._tag === 'HoldingSpare'
+  isFridgeWeapon(heldGun(model.player.arsenal).kind)
 
 // The Cooker's trigger, every frame: let go once the charge reaches the
 // planned hold, and never hold past full.
@@ -1211,29 +1296,63 @@ const UPGRADES: Partial<Record<SpareKind, ItemId>> = {
   Pan: 'PanUpgrade',
 }
 
+// The gun a purchase would replace, if it is a gun.
+const replacedBy = (model: Model, item: ItemId): Gun | undefined => {
+  if (item === 'Pistol') {
+    return gunsOfBot(model).find(isSpent) ?? weakerGun(model)
+  }
+  if (item !== 'Smg' && item !== 'Shotgun') return undefined
+  const guns = gunsOfBot(model)
+  if (guns.length < 2) return undefined
+  return (
+    guns.find(gun => gun.kind === 'Shotgun') ??
+    guns.find(isSpent) ??
+    weakerGun(model)
+  )
+}
+
 const wantedPurchase = (model: Model): ItemId | undefined => {
-  const spare = Option.getOrUndefined(maybeSpare(model.player.arsenal))
+  const firearm = firearmOf(model)
+  const fridge = fridgeSpareOf(model)
+  const spare = spareOf(model)
   const isAvailable = (item: ItemId) =>
     verdictFor(model, item)._tag === 'Available'
   const canSpare = (item: ItemId) =>
     isAvailable(item) && model.wallet.balance - priceFor(model, item) >= RESERVE
   if (model.player.hp <= 3 && isAvailable('Heart')) return 'Heart'
-  // A Brain Freeze with no charges left is as good as no spare at all.
+  // Traded the pistol for a fridge weapon that is now spent: Rattles gives
+  // the pistol back for nothing, in place of the spent one.
   if (
-    spare === undefined ||
-    (spare.kind === 'Freeze' && spare.rounds <= 0 && isAvailable('Smg'))
+    pistolOf(model) === undefined &&
+    fridge !== undefined &&
+    isSpent(fridge) &&
+    isAvailable('Pistol')
+  ) {
+    return 'Pistol'
+  }
+  // A spent fridge weapon is as good as no spare at all.
+  if (
+    firearm === undefined &&
+    (fridge === undefined || (isSpent(fridge) && isAvailable('Smg')))
   ) {
     if (isAvailable('Smg')) return 'Smg'
     if (isAvailable('Shotgun')) return 'Shotgun'
     return undefined
   }
+  if (spare === undefined) return undefined
   if (spare.kind === 'Shotgun' && spare.tier === 0 && isAvailable('Smg')) {
     return 'Smg'
   }
-  const refill = REFILLS[spare.kind]
-  const cap = maxRounds(spare.kind, spare.tier)
-  if (refill !== undefined && spare.rounds < cap / 2 && isAvailable(refill)) {
-    return refill
+  const refills = [firearm, fridge].flatMap(gun => {
+    if (gun === undefined) return []
+    const refill = REFILLS[gun.kind]
+    const cap = maxRounds(gun.kind, gun.tier)
+    return refill !== undefined && gun.rounds < cap / 2 && isAvailable(refill)
+      ? [refill]
+      : []
+  })
+  if (refills[0] !== undefined) {
+    return refills[0]
   }
   const barricades =
     model.trapStock.Barricade +
@@ -1277,6 +1396,18 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
   ) {
     return spareUpgrade
   }
+  // With a gun and a fridge weapon, the fridge weapon's tiers come next.
+  const fridgeUpgrade =
+    fridge !== undefined && fridge !== spare ? UPGRADES[fridge.kind] : undefined
+  if (
+    spare.tier >= maxTier(spare.kind) &&
+    fridge !== undefined &&
+    fridgeUpgrade !== undefined &&
+    fridge.tier < maxTier(fridge.kind) &&
+    canSpare(fridgeUpgrade)
+  ) {
+    return fridgeUpgrade
+  }
   if (spare.tier >= maxTier(spare.kind) && canSpare('PistolUpgrade')) {
     return 'PistolUpgrade'
   }
@@ -1307,7 +1438,7 @@ const plankCount = (model: Model) =>
   model.traps.filter(trap => trap._tag === 'Barricade').length
 
 const wantsKitchen = (model: Model): boolean => {
-  const spare = Option.getOrUndefined(maybeSpare(model.player.arsenal))
+  const spare = firearmOf(model)
   return (
     !NO_KITCHEN &&
     !isKitchenOpen(model) &&
@@ -1356,17 +1487,37 @@ const isFridgeInReach = (model: Model): boolean =>
     box => distanceToBox(model.player, box) <= FRIDGE_RULES.reachPx - 2,
   )
 
-// NOTE: take it or leave it: the bot takes a weapon on offer only when its
-// spare is not an upgraded gun (a tier 0 gun or an empty Brain Freeze),
-// so it never throws away a tier it paid for. Otherwise it walks off.
-const wouldTake = (model: Model): boolean => {
-  const spare = Option.getOrUndefined(maybeSpare(model.player.arsenal))
-  return (
-    spare === undefined ||
-    (spare.kind !== 'Freeze' && spare.tier === 0) ||
-    (spare.kind === 'Freeze' && spare.rounds <= 0)
-  )
+// NOTE: take it or leave it: the bot takes a weapon on offer when it beats
+// the weaker of its two guns (or a slot is free), and gives that gun up for
+// it. With an upgraded Chatterbox and a plain pistol, the pistol goes, and
+// Rattles sells it back for $0 once the fridge weapon is spent.
+const FRIDGE_PRIZES = ['Cooker', 'Pan', 'Freeze'] as const
+
+const beatsWeaker = (model: Model, kind: Gun['kind']): boolean => {
+  const weaker = weakerGun(model)
+  return weaker === undefined || gunValue(freshGun(kind)) > gunValue(weaker)
 }
+
+const offeredWeapon = (model: Model): Gun['kind'] | undefined => {
+  const { door } = model.fridge
+  return door._tag === 'Offering' &&
+    (door.prize === 'Cooker' || door.prize === 'Pan' || door.prize === 'Freeze')
+    ? door.prize
+    : undefined
+}
+
+const wouldTake = (model: Model): boolean => {
+  const prize = offeredWeapon(model)
+  return prize !== undefined && beatsWeaker(model, prize)
+}
+
+// It pulls only when it would take whatever weapon came out: the worst of
+// the weapons the fridge can still give it (never the one it carries) must
+// beat its weaker gun. Otherwise the $75 buys a prize it walks away from.
+const wouldTakeAnyPrize = (model: Model): boolean =>
+  FRIDGE_PRIZES.filter(
+    kind => !gunsOfBot(model).some(gun => gun.kind === kind),
+  ).every(kind => beatsWeaker(model, kind))
 
 const isOfferedToBot = (model: Model): boolean =>
   model.fridge.door._tag === 'Offering' &&
@@ -1389,13 +1540,15 @@ const wantsFridge = (model: Model): boolean =>
   (model.fridge.door._tag === 'Open' ||
     (isOfferedToBot(model) && wouldTake(model)) ||
     (model.fridge.door._tag === 'Shut' &&
+      wouldTakeAnyPrize(model) &&
       model.wallet.balance - FRIDGE_RULES.price >= fridgeReserve(model)))
 
 // At the fridge it holds the interact key while the door is shut, lets go
 // once a pull is done so the next hold starts fresh, and waits while the
 // door stands open.
 const fridgeKeys = (model: Model): Set<string> =>
-  (model.fridge.door._tag === 'Shut' || isOfferedToBot(model)) &&
+  (model.fridge.door._tag === 'Shut' ||
+    (isOfferedToBot(model) && wouldTake(model))) &&
   model.purchase._tag !== 'Done'
     ? new Set([KEYS.interact])
     : new Set()
@@ -1659,12 +1812,12 @@ export const play = (
       if (plan === 'Go') {
         gnomeTries = 0
         model = pressKeys(model, new Set())
-        const spare = Option.getOrUndefined(maybeSpare(model.player.arsenal))
+        const other = Option.getOrUndefined(maybeOtherGun(model.player.arsenal))
         if (
           current.swapsBack &&
-          model.player.arsenal._tag === 'HoldingPistol' &&
-          spare !== undefined &&
-          spare.rounds > 0
+          heldGun(model.player.arsenal).kind === 'Pistol' &&
+          other !== undefined &&
+          other.rounds > 0
         ) {
           model = tapKey(model, 'KeyQ')
         }
@@ -1686,6 +1839,16 @@ export const play = (
                       levelOf(model).thresholds[busiestDoor(model) ?? 'North']
                         .box,
                     )
+      if (plan === 'Shop') {
+        const item = wantedPurchase(model)
+        model = holdToReplace(
+          model,
+          item === undefined ? undefined : replacedBy(model, item),
+        )
+      }
+      if (plan === 'Fridge' && isOfferedToBot(model) && wouldTake(model)) {
+        model = holdToReplace(model, weakerGun(model))
+      }
       if (plan === 'Fridge' && isFridgeInReach(model)) {
         model = pressKeys(model, fridgeKeys(model))
       } else if (plan === 'Gnome' && distance(model.player, target) < 6) {
@@ -1722,7 +1885,7 @@ export const play = (
       if (frame % MOVE_EVERY_FRAMES === 0) {
         model = pressKeys(
           model,
-          holdingAtKitchen(model, desiredKeys(kite(model))),
+          stabbing(model, holdingAtKitchen(model, desiredKeys(kite(model)))),
         )
       }
       const fridgeSpare = fridgeSpareOf(model)
@@ -1759,6 +1922,9 @@ export const play = (
       if (event._tag === 'CookerPopped') fridgeLog.pops += 1
       if (event._tag === 'PanSwung') fridgeLog.swings += 1
       if (event._tag === 'PanClanged') fridgeLog.clangs += 1
+      if (event._tag === 'KnifeStabbed') fridgeLog.stabs += 1
+      if (event._tag === 'KnifeHit') fridgeLog.stabHits += 1
+      if (event._tag === 'PrizeTaken') fridgeLog.taken += 1
       if (event._tag === 'FreezeSprayed') fridgeLog.sprays += 1
       if (event._tag === 'ZombieShattered') fridgeLog.shatters += 1
     })
@@ -1944,7 +2110,8 @@ export const play = (
       moneyAfterWave.push(model.wallet.earned)
     }
   }
-  const finalSpare = Option.getOrUndefined(maybeSpare(model.player.arsenal))
+  const finalSpare = spareOf(model)
+  const finalFridge = fridgeSpareOf(model)
   return {
     seed,
     cleared: model.stats.wavesCleared,
@@ -1954,7 +2121,7 @@ export const play = (
     moneyAfterWave,
     hurtBy,
     maxAlive,
-    pistolTier: model.player.pistolTier,
+    pistolTier: pistolOf(model)?.tier ?? 0,
     spareTier: finalSpare?.tier ?? 0,
     upgradeSpend: spentOnUpgrades,
     minHp,
@@ -1972,10 +2139,7 @@ export const play = (
     kitchenWave,
     fridge: {
       ...fridgeLog,
-      endedWith:
-        finalSpare !== undefined && isFridgeWeapon(finalSpare.kind)
-          ? finalSpare.kind
-          : 'None',
+      endedWith: finalFridge?.kind ?? 'None',
     },
   }
 }

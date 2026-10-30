@@ -23,7 +23,7 @@ import {
   maybeKeyDownMessage,
   maybeWindowBlurMessage,
 } from './subscriptions'
-import { SURFACE, tick } from './testing'
+import { SURFACE, holdingFirst, tick } from './testing'
 import { asVeteran } from './veteran'
 
 const FRAME_MS = FIXED_STEP_MS
@@ -249,13 +249,11 @@ describe('keys on a focused button', () => {
           player: player =>
             modifyFields(player, {
               arsenal: () =>
-                Arsenal.HoldingPistol({
-                  spare: {
-                    kind: 'Shotgun',
-                    rounds: 20,
-                    loaded: 6,
-                    tier: 0,
-                  },
+                holdingFirst({
+                  kind: 'Shotgun',
+                  rounds: 20,
+                  loaded: 6,
+                  tier: 0,
                 }),
             }),
         }),
@@ -263,7 +261,7 @@ describe('keys on a focused button', () => {
       ...keyDownOn(swapButton, 'Space'),
       message(Message.ClickedSwapButton()),
       model(({ player, input, intent }) => {
-        expect(Arsenal.guards.HoldingSpare(player.arsenal)).toBe(true)
+        expect(Arsenal.guards.HoldingSecond(player.arsenal)).toBe(true)
         expect(input.pressedKeys).toEqual([])
         expect(intent.trigger).toBe('Released')
       }),

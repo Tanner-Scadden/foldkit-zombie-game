@@ -27,7 +27,6 @@ import { FEEDBACK_RUNS } from './home'
 import { update } from './main'
 import { Message } from './message'
 import {
-  Arsenal,
   DifficultyCard,
   type Model,
   Phase,
@@ -35,11 +34,11 @@ import {
   initialModel,
 } from './model'
 import { DEBUT_CARD_MIN_MS } from './onboarding'
-import { measureSurface } from './testing'
+import { holdingSecond, measureSurface, withPistol } from './testing'
 import { asVeteran } from './veteran'
 import { view } from './view'
 import { pause } from './waves'
-import { maxRounds } from './weapons'
+import { STARTING_PISTOL, maxRounds } from './weapons'
 
 const PLAY_AGAIN =
   'Press Enter or choose Campaign for 10 waves, or press E or choose Endless to fight until you fall.'
@@ -317,8 +316,11 @@ describe('Shop', () => {
           player: player =>
             modifyFields(player, {
               arsenal: () =>
-                Arsenal.HoldingSpare({
-                  spare: { kind: 'Shotgun', rounds: 44, loaded: 6, tier: 0 },
+                holdingSecond({
+                  kind: 'Shotgun',
+                  rounds: 44,
+                  loaded: 6,
+                  tier: 0,
                 }),
             }),
         }),
@@ -355,16 +357,16 @@ describe('Shop', () => {
         modifyFields(atStall, {
           player: player =>
             modifyFields(player, {
-              pistolTier: () => 1,
               arsenal: () =>
-                Arsenal.HoldingSpare({
-                  spare: {
+                holdingSecond(
+                  {
                     kind: 'Smg',
                     rounds: maxRounds('Smg', 1),
                     loaded: 30,
                     tier: 1,
                   },
-                }),
+                  { ...STARTING_PISTOL, tier: 1 },
+                ),
             }),
         }),
       ),
@@ -377,7 +379,7 @@ describe('Shop', () => {
       expect(text('Your Chatterbox is full')).toBeAbsent(),
       expect(
         text(
-          'You always keep the Beefy Pop Pistol. A new gun takes your second slot, and whatever was there goes, upgrades and all.',
+          'Two guns. A new one replaces the one in your hands, upgrades and all.',
         ),
       ).toExist(),
       expect(
@@ -442,9 +444,7 @@ describe('Shop', () => {
           player: player =>
             modifyFields(player, {
               arsenal: () =>
-                Arsenal.HoldingSpare({
-                  spare: { kind: 'Smg', rounds: 30, loaded: 30, tier: 0 },
-                }),
+                holdingSecond({ kind: 'Smg', rounds: 30, loaded: 30, tier: 0 }),
             }),
         }),
       ),
@@ -459,7 +459,7 @@ describe('Shop', () => {
 describe('Reload button', () => {
   const fighting: Model = modifyFields(initialModel, {
     phase: () => Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [] }),
-    player: player => modifyFields(player, { pistolLoaded: () => 2 }),
+    player: player => withPistol(player, pistol => ({ ...pistol, loaded: 2 })),
   })
   const reloadButton = role('button', { name: 'Reload the Pop Pistol' })
 

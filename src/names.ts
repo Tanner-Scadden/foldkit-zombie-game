@@ -44,6 +44,10 @@ export const gunTierName = (kind: WeaponKind, tier: number): string =>
     onSome: name => name(GUN_NAMES[kind]),
   })
 
+// NOTE: the knife every player carries (src/knife.ts). It has no tiers and
+// is never sold, so it has one name and nothing else.
+export const KNIFE_NAME = 'Knife'
+
 // ZOMBIES
 
 export const ZOMBIE_NAMES: Readonly<Record<ZombieKind, string>> = {
@@ -88,6 +92,7 @@ export const GAG_NAMES = {
 
 type OwnShopGood = Exclude<
   FixedShopItemId,
+  | 'Pistol'
   | 'Shotgun'
   | 'Smg'
   | 'ShotgunUpgrade'

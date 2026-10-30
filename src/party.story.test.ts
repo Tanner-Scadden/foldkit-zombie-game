@@ -692,6 +692,6 @@ describe('single player', () => {
     expect(
       Invulnerability.isAnyOf(['Vulnerable'])(crewOf(1).player.invulnerability),
     ).toBe(true)
-    expect(Arsenal.isAnyOf(['PistolOnly'])(crewOf(1).player.arsenal)).toBe(true)
+    expect(Arsenal.isAnyOf(['OneGun'])(crewOf(1).player.arsenal)).toBe(true)
   })
 })

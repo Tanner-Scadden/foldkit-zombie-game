@@ -65,7 +65,13 @@ import {
 import { ShopTabs } from './shopTabs'
 import { type Mood, chatterLine, moodOf } from './shopkeeper'
 import { TRAPS, healthShare, ownedCount } from './traps'
-import { maxTier, maybeNextTier, maybeSpare, tierName, tierOf } from './weapons'
+import {
+  maxTier,
+  maybeNextTier,
+  maybeReplacedGun,
+  tierName,
+  tierOf,
+} from './weapons'
 
 // FOCUS
 
@@ -316,7 +322,7 @@ const gaugeView = (
 }
 
 const swapBadgeView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  Option.match(maybeSpare(model.player.arsenal), {
+  Option.match(maybeReplacedGun(model.player.arsenal), {
     onNone: () => h.empty,
     onSome: spare =>
       h.span(

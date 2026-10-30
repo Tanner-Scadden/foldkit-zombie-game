@@ -89,16 +89,19 @@ export const Input = Schema.Struct({
   moveStick: Stick,
   aimStick: Stick,
   holdButton: HoldButton,
+  knifeButton: HoldButton,
 })
 export type Input = typeof Input.Type
 
 // NOTE: `interact` is the interact key or the touch hold button, held to
-// buy what the player stands at (src/purchase.ts).
+// buy what the player stands at (src/purchase.ts). `stab` is the knife key
+// or the touch knife button, held to stab on repeat (src/knife.ts).
 export const Intent = Schema.Struct({
   move: Vector,
   maybeAim: Schema.Option(Vector),
   trigger: Trigger,
   interact: Trigger,
+  stab: Trigger,
 })
 export type Intent = typeof Intent.Type
 
@@ -129,10 +132,15 @@ export const CarriedGun = Schema.Struct({
 })
 export type CarriedGun = typeof CarriedGun.Type
 
+// NOTE: the player's two gun slots (GAME_DESIGN.md, "The knife and two gun
+// slots"). A run starts with the Pop Pistol alone in the first slot; the
+// first gun bought or taken fills the second, and after that a new gun
+// replaces the one in the player's hands. The pistol is a gun like any
+// other: it can be traded away, and Rattles sells it back for $0.
 export const Arsenal = defineTaggedUnion({
-  PistolOnly: {},
-  HoldingPistol: { spare: CarriedGun },
-  HoldingSpare: { spare: CarriedGun },
+  OneGun: { first: CarriedGun },
+  HoldingFirst: { first: CarriedGun, second: CarriedGun },
+  HoldingSecond: { first: CarriedGun, second: CarriedGun },
 })
 export type Arsenal = typeof Arsenal.Type
 
@@ -163,10 +171,9 @@ export const Player = Schema.Struct({
   invulnerability: Invulnerability,
   recoilRemainingMs: Schema.Number,
   arsenal: Arsenal,
-  pistolTier: Schema.Number,
-  pistolLoaded: Schema.Number,
   reload: Reload,
   charge: Charge,
+  knifeCooldownMs: Schema.Number,
 })
 export type Player = typeof Player.Type
 
@@ -696,6 +703,8 @@ export const GameEvent = defineTaggedUnion({
   PanClanged: { x: Schema.Number, y: Schema.Number, direction: Vector },
   PanSmashed: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
   PanFlattened: { x: Schema.Number, y: Schema.Number },
+  KnifeStabbed: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  KnifeHit: { x: Schema.Number, y: Schema.Number, direction: Vector },
   HomeRun: { x: Schema.Number, y: Schema.Number, direction: Vector },
   FreezeSprayed: { x: Schema.Number, y: Schema.Number, direction: Vector },
   ZombieFrozen: { x: Schema.Number, y: Schema.Number },
@@ -753,7 +762,7 @@ export const AudioState = defineTaggedUnion({
 })
 export type AudioState = typeof AudioState.Type
 
-export const GunSlot = Schema.Literals(['Sidearm', 'Spare'])
+export const GunSlot = Schema.Literals(['First', 'Second'])
 export type GunSlot = typeof GunSlot.Type
 
 // NOTE: whether this device can lock how the page turns: a touch screen
@@ -1161,6 +1170,7 @@ export const FixedShopItemId = Schema.Literals([
   'CookerUpgrade',
   'LidStack',
   'PanUpgrade',
+  'Pistol',
 ])
 export type FixedShopItemId = typeof FixedShopItemId.Type
 
@@ -1463,11 +1473,12 @@ export const initialPlayer: Player = {
   knockback: { x: 0, y: 0 },
   invulnerability: Invulnerability.Vulnerable(),
   recoilRemainingMs: 0,
-  arsenal: Arsenal.PistolOnly(),
-  pistolTier: 0,
-  pistolLoaded: PISTOL_MAGAZINE,
+  arsenal: Arsenal.OneGun({
+    first: { kind: 'Pistol', rounds: 0, loaded: PISTOL_MAGAZINE, tier: 0 },
+  }),
   reload: Reload.Ready(),
   charge: Charge.Idle(),
+  knifeCooldownMs: 0,
 }
 
 export const emptyWallet: Wallet = { balance: 0, earned: 0, shown: 0 }
@@ -1489,6 +1500,7 @@ export const idleInput: Input = {
   moveStick: Stick.Idle(),
   aimStick: Stick.Idle(),
   holdButton: HoldButton.Released(),
+  knifeButton: HoldButton.Released(),
 }
 
 export const idleIntent: Intent = {
@@ -1496,6 +1508,7 @@ export const idleIntent: Intent = {
   maybeAim: Option.none(),
   trigger: 'Released',
   interact: 'Released',
+  stab: 'Released',
 }
 
 export const emptyTrapStock: TrapCounts = { Barricade: 0, Turret: 0 }

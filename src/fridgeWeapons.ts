@@ -21,28 +21,33 @@ import {
   scaleVector,
 } from './geometry'
 import {
-  creditKills,
-  isCoop,
-  leadSeatOf,
-  modifyLeadSeat,
-  payTo,
-  shooterOf,
-} from './party'
-import { earn } from './party'
+  type Blow,
+  type Struck,
+  type Swing,
+  countKills,
+  isInArc,
+  isSmallKind,
+  payStriker,
+  strikeInMelee,
+  swingAt,
+} from './melee'
+import { creditKills, leadSeatOf, payTo, shooterOf } from './party'
 import { isAmmoFree } from './powerups'
 import { trapBlastTarget } from './traps'
 import {
   beginReload,
   canReload,
+  handOverWhenDry,
+  heldGun,
   heldWeapon,
-  holdPistol,
   magazineOf,
-  maybeSpare,
+  mapGuns,
+  mapHeld,
+  maybeCarried,
   spendRound,
 } from './weapons'
 import type { World } from './world'
 import {
-  Arsenal,
   type CarriedGun,
   Charge,
   GameEvent,
@@ -52,7 +57,6 @@ import {
   type WeaponKind,
   type Zombie,
   ZombieAction,
-  type ZombieKind,
 } from './worldSchema'
 import { bodyRadiusOf, isGrounded } from './zombies'
 
@@ -90,18 +94,7 @@ export const FRIDGE_WEAPONS: ReadonlyArray<WeaponKind> = [
 export const isFridgeWeapon = (kind: WeaponKind): boolean =>
   Array.contains(FRIDGE_WEAPONS, kind)
 
-// NOTE: the kinds Brain Freeze freezes solid and the Pan dazes. The rest,
-// the Big Lug and Uncle Chunk, are too big: only slowed, only shoved.
-const SMALL_KINDS: ReadonlyArray<ZombieKind> = [
-  'Shambler',
-  'Runner',
-  'Exploder',
-  'Thrower',
-  'Crawler',
-]
-
-export const isSmallKind = (kind: ZombieKind): boolean =>
-  Array.contains(SMALL_KINDS, kind)
+export { isSmallKind }
 
 const isNightmare = (world: World): boolean =>
   world.difficulty.chosen === 'Nightmare'
@@ -231,71 +224,18 @@ const withEvents = (world: World, events: ReadonlyArray<GameEvent>): World =>
         frameEvents: frameEvents => [...frameEvents, ...events],
       })
 
-const withSpare = (
+const withHeld = (
   player: Player,
-  change: (spare: CarriedGun) => CarriedGun,
+  change: (gun: CarriedGun) => CarriedGun,
 ): Player =>
-  modifyFields(player, {
-    arsenal: arsenal =>
-      Arsenal.match(arsenal, {
-        PistolOnly: () => arsenal,
-        HoldingPistol: ({ spare }) =>
-          Arsenal.HoldingPistol({ spare: change(spare) }),
-        HoldingSpare: ({ spare }) =>
-          Arsenal.HoldingSpare({ spare: change(spare) }),
-      }),
-  })
-
-const countKills = (events: ReadonlyArray<GameEvent>): number =>
-  Array.reduce(events, 0, (sum, event) =>
-    GameEvent.isAnyOf(['ZombieKilled'])(event) ? sum + 1 : sum,
-  )
-
-// NOTE: a seat's own strike pays that seat and credits it the kills; the
-// seat stands in the World's per-player fields while it fires.
-const payStriker = (world: World, events: ReadonlyArray<GameEvent>): World => {
-  const bounty = bountyOf(events)
-  const kills = countKills(events)
-  const paid =
-    bounty > 0
-      ? modifyFields(world, { wallet: wallet => earn(wallet, bounty) })
-      : world
-  return isCoop(paid) && kills > 0
-    ? modifyLeadSeat(paid, seat =>
-        modifyFields(seat, { kills: count => count + kills }),
-      )
-    : paid
-}
-
-const angleBetween = (facing: Vector, to: Vector): number => {
-  const length = Math.hypot(to.x, to.y)
-  if (length === 0) {
-    return 0
-  }
-  const dot = (facing.x * to.x + facing.y * to.y) / length
-  return Math.acos(Math.max(-1, Math.min(1, dot)))
-}
-
-// NOTE: whether a zombie's body is within `reachPx` of the player's edge
-// and inside the arc either side of the facing.
-const isInArc =
-  (player: Player, reachPx: number, halfArc: number) =>
-  (zombie: Zombie): boolean => {
-    const offset = { x: zombie.x - player.x, y: zombie.y - player.y }
-    const distance = Math.hypot(offset.x, offset.y)
-    return (
-      distance - bodyRadiusOf(zombie) - PLAYER_RADIUS <= reachPx &&
-      (distance <= PLAYER_RADIUS + bodyRadiusOf(zombie) ||
-        angleBetween(player.facing, offset) <= halfArc)
-    )
-  }
+  modifyFields(player, { arsenal: arsenal => mapHeld(arsenal, change) })
 
 const runDry = (world: World): World =>
   withEvents(
     withPlayer(world, player =>
       modifyFields(player, {
         fireCooldownMs: () => DRY_FIRE_DELAY_MS,
-        arsenal: holdPistol,
+        arsenal: handOverWhenDry,
         charge: () => Charge.Idle(),
       }),
     ),
@@ -337,10 +277,7 @@ export const chargeOf = (player: Player): number =>
   Charge.match(player.charge, {
     Idle: () => 0,
     Building: ({ heldMs }) =>
-      Option.match(maybeSpare(player.arsenal), {
-        onNone: () => 0,
-        onSome: spare => heldMs / cookerFullMs(spare.tier),
-      }),
+      heldMs / cookerFullMs(heldGun(player.arsenal).tier),
     Spent: () => 0,
   })
 
@@ -589,63 +526,21 @@ export const advanceLobs = (world: World, deltaMs: number): World => {
 const panHalfArc = (tier: number): number =>
   tier >= 1 ? PAN_RULES.wideHalfArc : PAN_RULES.halfArc
 
-const isRoaming = ZombieAction.isAnyOf(['Roaming'])
-
 const isFlying = ZombieAction.isAnyOf(['Flying'])
 
 const isSteadied = ZombieAction.isAnyOf(['Winded', 'Reeling', 'Dazed'])
 
-type Swing = Readonly<{
-  zombies: ReadonlyArray<Zombie>
-  events: ReadonlyArray<GameEvent>
-  connected: boolean
-}>
-
-const clang = (
-  player: Player,
-  zombie: Zombie,
-  damage: number,
-  knockback: number,
-  dazes: boolean,
-): Readonly<{ zombie: Zombie; events: ReadonlyArray<GameEvent> }> => {
-  const direction = Option.getOrElse(
-    directionBetween(player, zombie),
-    () => player.facing,
-  )
-  const struck = strikeZombie(
-    zombie,
-    { damage, direction, knockbackSpeed: knockback },
-    'Shot',
-  )
-  const dazed =
-    struck.hp > 0 &&
-    dazes &&
-    isSmallKind(zombie.kind) &&
-    isRoaming(struck.action)
-      ? modifyFields(struck, {
-          action: () =>
-            ZombieAction.Reeling({
-              remainingMs: PAN_RULES.dazeMs,
-              durationMs: PAN_RULES.dazeMs,
-            }),
-        })
-      : struck
-  return {
-    zombie: dazed,
-    events: [
-      hitEvent(zombie, zombie, direction, damage),
-      GameEvent.PanClanged({ x: zombie.x, y: zombie.y, direction }),
-      ...(dazed.hp <= 0 ? [killEvent(dazed, direction)] : []),
-    ],
-  }
-}
+const panBlow = (damage: number, knockback: number): Blow => ({
+  damage,
+  knockback,
+  maybeDazeMs: Option.some(PAN_RULES.dazeMs),
+  struck: (at, direction) =>
+    GameEvent.PanClanged({ x: at.x, y: at.y, direction }),
+})
 
 // NOTE: a thrown Groaner the swing meets in the air is a home run: it is
 // knocked flying back the way the Pan swung, and that is the end of it.
-const swat = (
-  player: Player,
-  zombie: Zombie,
-): Readonly<{ zombie: Zombie; events: ReadonlyArray<GameEvent> }> => {
+const swat = (player: Player, zombie: Zombie): Struck => {
   const direction = player.facing
   const struck = modifyFields(
     strikeZombie(
@@ -667,36 +562,26 @@ const swat = (
 
 const swingArc = (world: World, spare: CarriedGun): Swing => {
   const { player } = world
-  const halfArc = panHalfArc(spare.tier)
-  const isClanged = isInArc(player, PAN_RULES.reachPx, halfArc)
-  const outcomes = Array.map(world.zombies, zombie => {
-    if (isFlying(zombie.action) && isClanged(zombie)) {
-      return Option.some(swat(player, zombie))
-    } else if (isGrounded(zombie) && isClanged(zombie)) {
-      return Option.some(
-        clang(player, zombie, PAN_RULES.damage, PAN_RULES.knockback, true),
-      )
-    } else {
-      return Option.none()
-    }
-  })
-  return {
-    zombies: Array.map(world.zombies, (zombie, index) =>
-      Option.match(Option.flatten(Option.fromNullishOr(outcomes[index])), {
-        onNone: () => zombie,
-        onSome: outcome => outcome.zombie,
-      }),
-    ),
-    events: [
-      GameEvent.PanSwung({
-        x: player.x,
-        y: player.y,
-        direction: player.facing,
-      }),
-      ...Array.flatMap(Array.getSomes(outcomes), ({ events }) => events),
-    ],
-    connected: Array.some(outcomes, Option.isSome),
-  }
+  const isClanged = isInArc(player, PAN_RULES.reachPx, panHalfArc(spare.tier))
+  return swingAt(
+    world.zombies,
+    zombie => {
+      if (isFlying(zombie.action) && isClanged(zombie)) {
+        return Option.some(swat(player, zombie))
+      } else if (isGrounded(zombie) && isClanged(zombie)) {
+        return Option.some(
+          strikeInMelee(
+            player,
+            zombie,
+            panBlow(PAN_RULES.damage, PAN_RULES.knockback),
+          ),
+        )
+      } else {
+        return Option.none()
+      }
+    },
+    GameEvent.PanSwung({ x: player.x, y: player.y, direction: player.facing }),
+  )
 }
 
 // NOTE: the 3000's overhead smash: the Pan comes down on the floor and
@@ -708,38 +593,29 @@ const smash = (world: World): Swing => {
     Math.hypot(zombie.x - player.x, zombie.y - player.y) -
       bodyRadiusOf(zombie) <=
       PAN_RULES.smashRadius
-  const outcomes = Array.map(world.zombies, zombie =>
-    isNear(zombie)
-      ? Option.some(
-          clang(
-            player,
-            isSmallKind(zombie.kind) && isSteadied(zombie.action)
-              ? modifyFields(zombie, { action: () => ZombieAction.Roaming() })
-              : zombie,
-            PAN_RULES.smashDamage,
-            PAN_RULES.smashKnockback,
-            true,
-          ),
-        )
-      : Option.none(),
+  const swing = swingAt(
+    world.zombies,
+    zombie =>
+      isNear(zombie)
+        ? Option.some(
+            strikeInMelee(
+              player,
+              isSmallKind(zombie.kind) && isSteadied(zombie.action)
+                ? modifyFields(zombie, {
+                    action: () => ZombieAction.Roaming(),
+                  })
+                : zombie,
+              panBlow(PAN_RULES.smashDamage, PAN_RULES.smashKnockback),
+            ),
+          )
+        : Option.none(),
+    GameEvent.PanSmashed({
+      x: player.x,
+      y: player.y,
+      radius: PAN_RULES.smashRadius,
+    }),
   )
-  return {
-    zombies: Array.map(world.zombies, (zombie, index) =>
-      Option.match(Option.flatten(Option.fromNullishOr(outcomes[index])), {
-        onNone: () => zombie,
-        onSome: outcome => outcome.zombie,
-      }),
-    ),
-    events: [
-      GameEvent.PanSmashed({
-        x: player.x,
-        y: player.y,
-        radius: PAN_RULES.smashRadius,
-      }),
-      ...Array.flatMap(Array.getSomes(outcomes), ({ events }) => events),
-    ],
-    connected: true,
-  }
+  return { ...swing, connected: true }
 }
 
 const holdMsOf = (player: Player): number =>
@@ -776,7 +652,7 @@ const firePan = (world: World, spare: CarriedGun, deltaMs: number): World => {
     player: current =>
       modifyFields(
         swing.connected
-          ? withSpare(current, gun =>
+          ? withHeld(current, gun =>
               modifyFields(gun, {
                 loaded: loaded => Math.max(0, loaded - 1),
               }),
@@ -801,21 +677,25 @@ const firePan = (world: World, spare: CarriedGun, deltaMs: number): World => {
 export const flattenPans = (world: World): World =>
   Option.match(
     Option.filter(
-      maybeSpare(world.player.arsenal),
-      spare =>
-        spare.kind === 'Pan' && spare.loaded < magazineOf('Pan', spare.tier),
+      maybeCarried(world.player, 'Pan'),
+      pan => pan.loaded < magazineOf('Pan', pan.tier),
     ),
     {
       onNone: () => world,
       onSome: () =>
         withEvents(
           withPlayer(world, player =>
-            withSpare(player, gun =>
-              modifyFields(gun, {
-                loaded: () => magazineOf('Pan', gun.tier),
-                rounds: () => magazineOf('Pan', gun.tier),
-              }),
-            ),
+            modifyFields(player, {
+              arsenal: arsenal =>
+                mapGuns(arsenal, gun =>
+                  gun.kind === 'Pan'
+                    ? modifyFields(gun, {
+                        loaded: () => magazineOf('Pan', gun.tier),
+                        rounds: () => magazineOf('Pan', gun.tier),
+                      })
+                    : gun,
+                ),
+            }),
           ),
           [GameEvent.PanFlattened({ x: world.player.x, y: world.player.y })],
         ),
@@ -895,12 +775,7 @@ const fireFreeze = (
 export const maybeHeldFridgeWeapon = (
   player: Player,
 ): Option.Option<CarriedGun> =>
-  Arsenal.match(player.arsenal, {
-    PistolOnly: () => Option.none(),
-    HoldingPistol: () => Option.none(),
-    HoldingSpare: ({ spare }) =>
-      isFridgeWeapon(spare.kind) ? Option.some(spare) : Option.none(),
-  })
+  Option.liftPredicate(heldGun(player.arsenal), gun => isFridgeWeapon(gun.kind))
 
 // NOTE: one tick of the trigger for a player holding a fridge weapon.
 export const fireFridgeWeapon = (

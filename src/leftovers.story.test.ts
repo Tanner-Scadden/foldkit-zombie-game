@@ -17,7 +17,6 @@ import {
 import { update } from './main'
 import { Message } from './message'
 import {
-  Arsenal,
   FridgeDoor,
   type FridgePrize,
   GameEvent,
@@ -32,9 +31,16 @@ import { nextRandom } from './prng'
 import { PURCHASE_RULES, offersOf } from './purchase'
 import { freshRun } from './runReset'
 import { stepWorld } from './stepWorld'
-import { press, release, ticks } from './testing'
+import {
+  holdingFirst,
+  holdingSecond,
+  pistolOnly,
+  press,
+  release,
+  ticks,
+} from './testing'
 import { asVeteran } from './veteran'
-import { freshSpare } from './weapons'
+import { freshGun } from './weapons'
 import { withWorld } from './world'
 import { idleIntent, shutFridge } from './worldSchema'
 
@@ -130,7 +136,7 @@ describe('pulling from Mystery Leftovers', () => {
         expect(current.stats.purchases).toBe(1)
         expect(FridgeDoor.isAnyOf(['Open'])(current.fridge.door)).toBe(true)
         expect(current.fridge.pulls).toBe(1)
-        expect(current.player.arsenal).toEqual(Arsenal.PistolOnly())
+        expect(current.player.arsenal).toEqual(pistolOnly())
         expect(
           Array.some(current.particles, ({ kind }) => kind === 'Fog'),
         ).toBe(true)
@@ -145,7 +151,7 @@ describe('pulling from Mystery Leftovers', () => {
     )
   })
 
-  test('take it: holding again takes the weapon, which replaces the spare gun', () => {
+  test('take it: holding again takes the weapon, which replaces the gun in hand', () => {
     story(
       update,
       given(
@@ -153,8 +159,7 @@ describe('pulling from Mystery Leftovers', () => {
           modifyFields(atFridge(100), {
             player: player =>
               modifyFields(player, {
-                arsenal: () =>
-                  Arsenal.HoldingPistol({ spare: freshSpare('Smg') }),
+                arsenal: () => holdingSecond(freshGun('Smg')),
               }),
           }),
           'Pan',
@@ -164,9 +169,7 @@ describe('pulling from Mystery Leftovers', () => {
       ...ticks(OPEN_TICKS, FRAME_MS),
       ...pull,
       model(current => {
-        expect(current.player.arsenal).toEqual(
-          Arsenal.HoldingSpare({ spare: freshSpare('Pan') }),
-        )
+        expect(current.player.arsenal).toEqual(holdingSecond(freshGun('Pan')))
         expect(current.wallet.balance).toBe(100 - FRIDGE_RULES.price)
         expect(isPrizeOffered(current)).toBe(false)
         expect(FridgeDoor.isAnyOf(['Shut'])(current.fridge.door)).toBe(true)
@@ -175,7 +178,7 @@ describe('pulling from Mystery Leftovers', () => {
   })
 
   test('leave it: walking off sinks the weapon back and keeps your gun, still paid', () => {
-    const smg = Arsenal.HoldingPistol({ spare: freshSpare('Smg') })
+    const smg = holdingFirst(freshGun('Smg'))
     story(
       update,
       given(
@@ -217,7 +220,7 @@ describe('pulling from Mystery Leftovers', () => {
       ...ticks(12, FRAME_MS),
       model(current => {
         expect(isPrizeOffered(current)).toBe(false)
-        expect(current.player.arsenal).toEqual(Arsenal.PistolOnly())
+        expect(current.player.arsenal).toEqual(pistolOnly())
         expect(
           Array.some(current.frameEvents, GameEvent.isAnyOf(['PrizeLeft'])) ||
             !FridgeDoor.isAnyOf(['Offering'])(current.fridge.door),
@@ -254,7 +257,7 @@ describe('pulling from Mystery Leftovers', () => {
       ...pull,
       model(current => {
         expect(current.player.hp).toBe(3)
-        expect(current.player.arsenal).toEqual(Arsenal.PistolOnly())
+        expect(current.player.arsenal).toEqual(pistolOnly())
         expect(current.player.hp).toBeLessThanOrEqual(PLAYER_MAX_HP)
       }),
     )
@@ -383,7 +386,7 @@ describe('the fridge slams shut', () => {
 })
 
 describe('the odds', () => {
-  const pistolOnly = freshRunModel().player
+  const pistolCarrier = freshRunModel().player
 
   const shareOf = (
     weights: ReadonlyArray<readonly [FridgePrize, number]>,
@@ -402,21 +405,21 @@ describe('the odds', () => {
   }
 
   test('Brain Freeze is rare, the gags are one pull in five, and every slam makes the freeze a little likelier', () => {
-    const first = prizeWeights(shutFridge, pistolOnly)
+    const first = prizeWeights(shutFridge, pistolCarrier)
     expect(shareOf(first, 'Freeze')).toBeCloseTo(0.08, 5)
     expect(shareOf(first, 'Sandwich') + shareOf(first, 'Dud')).toBeCloseTo(
       0.2,
       5,
     )
-    const lucky = prizeWeights({ ...shutFridge, luck: 2 }, pistolOnly)
+    const lucky = prizeWeights({ ...shutFridge, luck: 2 }, pistolCarrier)
     expect(shareOf(lucky, 'Freeze')).toBeGreaterThan(shareOf(first, 'Freeze'))
-    const luckiest = prizeWeights({ ...shutFridge, luck: 99 }, pistolOnly)
+    const luckiest = prizeWeights({ ...shutFridge, luck: 99 }, pistolCarrier)
     expect(shareOf(luckiest, 'Freeze')).toBeLessThan(0.2)
   })
 
   test('the weapon a player carries is never pulled again', () => {
-    const withCooker = modifyFields(pistolOnly, {
-      arsenal: () => Arsenal.HoldingSpare({ spare: freshSpare('Cooker') }),
+    const withCooker = modifyFields(pistolCarrier, {
+      arsenal: () => holdingSecond(freshGun('Cooker')),
     })
     const weights = prizeWeights(shutFridge, withCooker)
     expect(shareOf(weights, 'Cooker')).toBe(0)
@@ -429,7 +432,7 @@ describe('the odds', () => {
   })
 
   test('the draws follow the weights', () => {
-    const weights = prizeWeights(shutFridge, pistolOnly)
+    const weights = prizeWeights(shutFridge, pistolCarrier)
     const counts = Array.reduce(
       Array.makeBy(20_000, index => index),
       { state: 7, tally: new Map<FridgePrize, number>() },
@@ -489,7 +492,7 @@ describe('the fridge in co-op', () => {
       100 - FRIDGE_RULES.price + DUD_REFUND,
     )
     expect(teammate.wallet.balance).toBe(100)
-    expect(teammate.player.arsenal).toEqual(Arsenal.PistolOnly())
+    expect(teammate.player.arsenal).toEqual(pistolOnly())
     expect(bought.fridge.pulls).toBe(1)
     expect(
       FridgeDoor.isAnyOf(['Open'])(bought.fridge.door) &&
@@ -545,13 +548,13 @@ describe('the fridge in co-op', () => {
     const teammateTried = holdFor(offered, 0)
     expect(
       Option.getOrThrow(maybePlayerAt(teammateTried, 0)).player.arsenal,
-    ).toEqual(Arsenal.PistolOnly())
+    ).toEqual(pistolOnly())
     expect(FridgeDoor.isAnyOf(['Offering'])(teammateTried.fridge.door)).toBe(
       true,
     )
     const pullerTook = holdFor(offered, 1)
     expect(
       Option.getOrThrow(maybePlayerAt(pullerTook, 1)).player.arsenal,
-    ).toEqual(Arsenal.HoldingSpare({ spare: freshSpare('Pan') }))
+    ).toEqual(holdingSecond(freshGun('Pan')))
   })
 })
