@@ -99,6 +99,7 @@ export const LOCAL_ONLY: ReadonlySet<string> = new Set([
   'character',
   'shakeSetting',
   'rotationSetting',
+  'devicesRow',
   'orientationLock',
   'shareStats',
   'maybeVisitId',

@@ -1,91 +1,82 @@
 import { Array, Option } from 'effect'
 import type { Attribute, Html, HtmlBuilder } from 'foldkit/html'
 
-import {
-  AIM_ICON,
-  MOVE_ICON,
-  PAUSE_ICON,
-  RELOAD_ICON,
-  SHOOT_ICON,
-  SHOP_ICON,
-  SWAP_ICON,
-  TRAP_BUTTON_ICONS,
-} from './icons'
+import { HINT_ICON_SPRITES, type HintIconSprites, keyIcon } from './hintIcons'
+import { PAUSE_ICON } from './icons'
 import { Message } from './message'
 import { type InputDevice, type Model, Phase } from './model'
 
 // CONTROLS
 
 // NOTE: the one list of controls a new player needs. The home menu's HOW TO
-// PLAY and the pause screen both draw it, as a grid of small cards, with the
-// keys or the touch words for the last device used.
-type Input = Readonly<{
-  keys: ReadonlyArray<string>
-  words: string
-}>
+// PLAY and the pause screen both draw it as a grid of small cards: the
+// tutorial's own moving picture for the last device used and a word or two.
+// The input is spoken, not shown, since the picture already shows it.
+type Picture =
+  | Readonly<{ _tag: 'Moving'; sprites: HintIconSprites }>
+  | Readonly<{ _tag: 'Still'; icon: string }>
+
+type Input = Readonly<{ spoken: string; picture: Picture }>
 
 type ControlCard = Readonly<{
   action: string
-  icon: string
   keyboard: Input
   touch: Input
 }>
 
-const keys = (...caps: ReadonlyArray<string>): Input => ({
-  keys: caps,
-  words: '',
+const moving = (spoken: string, sprites: HintIconSprites): Input => ({
+  spoken,
+  picture: { _tag: 'Moving', sprites },
 })
 
-const words = (text: string): Input => ({ keys: [], words: text })
+const still = (spoken: string, icon: string): Input => ({
+  spoken,
+  picture: { _tag: 'Still', icon },
+})
+
+const KEY_R = keyIcon('R')
+const KEY_ESC = keyIcon('ESC')
 
 export const CONTROL_CARDS: Array.NonEmptyReadonlyArray<ControlCard> = [
   {
     action: 'Move',
-    icon: MOVE_ICON,
-    keyboard: keys('WASD'),
-    touch: words('Left thumb'),
+    keyboard: moving('WASD', HINT_ICON_SPRITES.Wasd),
+    touch: moving('Left thumb', HINT_ICON_SPRITES.MoveStick),
   },
   {
-    action: 'Aim',
-    icon: AIM_ICON,
-    keyboard: words('Mouse'),
-    touch: words('Right thumb'),
-  },
-  {
-    action: 'Shoot',
-    icon: SHOOT_ICON,
-    keyboard: words('Hold click'),
-    touch: words('Hold right thumb'),
+    action: 'Aim + shoot',
+    keyboard: moving('Mouse, hold click', HINT_ICON_SPRITES.Mouse),
+    touch: moving('Right thumb, hold', HINT_ICON_SPRITES.AimStick),
   },
   {
     action: 'Reload',
-    icon: RELOAD_ICON,
-    keyboard: keys('R'),
-    touch: words('Tap your gun'),
+    keyboard: moving('R', KEY_R),
+    touch: moving('Tap your gun', HINT_ICON_SPRITES.Tap),
   },
   {
-    action: 'Swap guns',
-    icon: SWAP_ICON,
-    keyboard: keys('Q'),
-    touch: words('Tap the other gun'),
+    action: 'Swap',
+    keyboard: moving('Q', HINT_ICON_SPRITES.KeyQ),
+    touch: moving('Tap the other gun', HINT_ICON_SPRITES.Guns),
   },
   {
     action: 'Shop',
-    icon: SHOP_ICON,
-    keyboard: words('Walk into the stall'),
-    touch: words('Walk into the stall'),
+    keyboard: moving('Walk into the stall', HINT_ICON_SPRITES.Stall),
+    touch: moving('Walk into the stall', HINT_ICON_SPRITES.Stall),
   },
   {
     action: 'Planks',
-    icon: TRAP_BUTTON_ICONS.Barricade,
-    keyboard: keys('T'),
-    touch: words('Trap button'),
+    keyboard: moving('T', HINT_ICON_SPRITES.PlankDoor),
+    touch: moving('Trap button', HINT_ICON_SPRITES.PlankDoor),
+  },
+  {
+    action: 'Goodies',
+    keyboard: moving('Walk over them', HINT_ICON_SPRITES.Goodie),
+    touch: moving('Walk over them', HINT_ICON_SPRITES.Goodie),
   },
   {
     action: 'Pause',
-    icon: PAUSE_ICON,
-    keyboard: keys('Esc'),
-    touch: words('Pause button'),
+    keyboard: moving('Esc', KEY_ESC),
+    touch: still('Pause button', PAUSE_ICON),
   },
 ]
 
@@ -94,8 +85,9 @@ type ExtraKey = Readonly<{ key: string; action: string }>
 // NOTE: the rest of the keyboard's keys, one short line under the cards, so
 // every key still has a home on the screen that teaches the controls.
 export const EXTRA_KEYS: Array.NonEmptyReadonlyArray<ExtraKey> = [
+  { key: 'T', action: 'trap' },
   { key: 'G', action: 'next trap' },
-  { key: 'Enter', action: 'start the wave' },
+  { key: 'Enter', action: 'start' },
   { key: 'H', action: 'menu' },
   { key: 'M', action: 'sound' },
   { key: 'N', action: 'music' },
@@ -113,33 +105,96 @@ const inputOf = (card: ControlCard, device: InputDevice): Input =>
 
 const HELP_TITLE_ID = 'pause-help-title'
 
-const inputView = (input: Input, h: HtmlBuilder<Message>): Html =>
-  Array.match(input.keys, {
-    onEmpty: () => h.span([h.Class('help-card-words')], [input.words]),
-    onNonEmpty: caps =>
-      h.span(
-        [h.Class('help-card-keys')],
-        Array.map(caps, cap => h.kbd([h.Class('menu-key')], [cap])),
-      ),
-  })
+type Frame = Readonly<{
+  src: string
+  x: number
+  y: number
+  width: number
+  height: number
+}>
+
+// NOTE: each frame of a hint icon is one baked image. Where none was baked
+// (a test without a canvas) the card shows no picture.
+const framesOf = (sprites: HintIconSprites): ReadonlyArray<Frame> =>
+  Array.flatMap(sprites.frames, frame =>
+    Array.flatMap(frame, (shape): ReadonlyArray<Frame> =>
+      shape._tag === 'Image'
+        ? [
+            {
+              src: shape.src,
+              x: shape.x,
+              y: shape.y,
+              width: shape.width,
+              height: shape.height,
+            },
+          ]
+        : [],
+    ),
+  )
+
+const percent = (part: number, whole: number): string =>
+  `${(part / whole) * 100}%`
+
+// NOTE: the frames stack in one box and a CSS animation shows each in
+// turn, so the picture moves with no work in the game's frame.
+const movingView = (
+  sprites: HintIconSprites,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const frames = framesOf(sprites)
+  return h.span(
+    [
+      h.Class('help-card-picture'),
+      h.AriaHidden(true),
+      h.Style({
+        '--pic-w': `${sprites.width}`,
+        '--pic-h': `${sprites.height}`,
+        '--frames': `${frames.length}`,
+        '--frame-ms': `${sprites.frameMs}ms`,
+      }),
+    ],
+    Array.map(frames, (frame, index) =>
+      h.img([
+        h.Class('help-card-frame'),
+        h.Src(frame.src),
+        h.Alt(''),
+        h.DataAttribute('frames', `${frames.length}`),
+        h.DataAttribute('frame', `${index}`),
+        h.Style({
+          left: percent(frame.x, sprites.width),
+          top: percent(frame.y, sprites.height),
+          width: percent(frame.width, sprites.width),
+          height: percent(frame.height, sprites.height),
+          '--frame': `${index}`,
+        }),
+      ]),
+    ),
+  )
+}
+
+const pictureView = (picture: Picture, h: HtmlBuilder<Message>): Html =>
+  picture._tag === 'Moving'
+    ? movingView(picture.sprites, h)
+    : h.span([
+        h.Class('help-card-icon'),
+        h.AriaHidden(true),
+        h.Style({ backgroundImage: picture.icon }),
+      ])
 
 const controlCardView = (
   card: ControlCard,
   device: InputDevice,
   h: HtmlBuilder<Message>,
-): Html =>
-  h.li(
-    [h.Class('help-card')],
+): Html => {
+  const input = inputOf(card, device)
+  return h.li(
+    [h.Class('help-card'), h.AriaLabel(`${card.action}: ${input.spoken}`)],
     [
-      h.span([
-        h.Class('help-card-icon'),
-        h.AriaHidden(true),
-        h.Style({ backgroundImage: card.icon }),
-      ]),
+      pictureView(input.picture, h),
       h.span([h.Class('help-card-action')], [card.action]),
-      inputView(inputOf(card, device), h),
     ],
   )
+}
 
 const extraKeysView = (h: HtmlBuilder<Message>): Html =>
   h.ul(

@@ -21,7 +21,7 @@ import { view } from './view'
 import { pause } from './waves'
 
 const updateChip = role('button', { name: /New version ready/ })
-const mainMenu = role('button', { name: /^Manor:/ })
+const mainMenu = role('button', { name: /^More:/ })
 
 const withNewerBuild = (model: Model): Model =>
   modifyFields(model, { maybeNewerBuild: () => Option.some('newer-build') })

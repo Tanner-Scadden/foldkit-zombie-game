@@ -102,6 +102,7 @@ export const openPanel =
             modifyFields(stepModel, {
               panel: () => panel,
               tutorialReset: () => 'Idle',
+              devicesRow: () => 'Folded',
             }),
             releaseAll,
           ),

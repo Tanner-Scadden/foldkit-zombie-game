@@ -35,7 +35,7 @@ const PAUSED_STATUS =
 const FIGHTING_STATUS = 'Fighting wave 3 of 8.'
 
 const card = (action: string, input: string) =>
-  role('listitem', { name: new RegExp(`^${action}\\s*${input}$`) })
+  role('listitem', { name: `${action}: ${input}` })
 
 describe('Pause screen controls', () => {
   test('shows the keyboard and mouse controls as cards, with the other keys in one line', () => {
@@ -51,19 +51,20 @@ describe('Pause screen controls', () => {
       inside(
         role('list', { name: 'Controls' }),
         expect(card('Move', 'WASD')).toExist(),
-        expect(card('Aim', 'Mouse')).toExist(),
-        expect(card('Shoot', 'Hold click')).toExist(),
+        expect(card('Aim + shoot', 'Mouse, hold click')).toExist(),
         expect(card('Reload', 'R')).toExist(),
-        expect(card('Swap guns', 'Q')).toExist(),
+        expect(card('Swap', 'Q')).toExist(),
         expect(card('Shop', 'Walk into the stall')).toExist(),
         expect(card('Planks', 'T')).toExist(),
+        expect(card('Goodies', 'Walk over them')).toExist(),
         expect(card('Pause', 'Esc')).toExist(),
         expectAll(all.role('listitem')).toHaveCount(8),
       ),
       inside(
         role('list', { name: 'More keys' }),
+        expect(role('listitem', { name: 'T trap' })).toExist(),
         expect(role('listitem', { name: 'G next trap' })).toExist(),
-        expect(role('listitem', { name: 'Enter start the wave' })).toExist(),
+        expect(role('listitem', { name: 'Enter start' })).toExist(),
         expect(role('listitem', { name: 'H menu' })).toExist(),
         expect(role('listitem', { name: 'M sound' })).toExist(),
         expect(role('listitem', { name: 'N music' })).toExist(),
@@ -86,10 +87,9 @@ describe('Pause screen controls', () => {
       inside(
         role('list', { name: 'Controls' }),
         expect(card('Move', 'Left thumb')).toExist(),
-        expect(card('Aim', 'Right thumb')).toExist(),
-        expect(card('Shoot', 'Hold right thumb')).toExist(),
+        expect(card('Aim + shoot', 'Right thumb, hold')).toExist(),
         expect(card('Reload', 'Tap your gun')).toExist(),
-        expect(card('Swap guns', 'Tap the other gun')).toExist(),
+        expect(card('Swap', 'Tap the other gun')).toExist(),
         expect(card('Planks', 'Trap button')).toExist(),
         expect(card('Pause', 'Pause button')).toExist(),
       ),

@@ -624,6 +624,10 @@ export type GunSlot = typeof GunSlot.Type
 
 // NOTE: whether this device can lock how the page turns: a touch screen
 // whose browser has screen.orientation.lock. Desktops and iPhones cannot.
+// NOTE: whether Settings shows the devices row's link controls.
+export const DevicesRow = Schema.Literals(['Folded', 'Unfolded'])
+export type DevicesRow = typeof DevicesRow.Type
+
 export const OrientationLock = Schema.Literals(['Supported', 'Unsupported'])
 export type OrientationLock = typeof OrientationLock.Type
 
@@ -1201,6 +1205,7 @@ export const Model = Schema.Struct({
   shakeSetting: ShakeSetting,
   rotationSetting: RotationSetting,
   orientationLock: OrientationLock,
+  devicesRow: DevicesRow,
   shareStats: ShareStatsSetting,
   cursorSetting: CursorSetting,
   maybeVisitId: Schema.Option(Schema.String),
@@ -1451,6 +1456,7 @@ export const initialModel: Model = {
   shakeSetting: 'On',
   rotationSetting: 'Landscape',
   orientationLock: 'Unsupported',
+  devicesRow: 'Folded',
   shareStats: 'On',
   cursorSetting: 'Bold',
   maybeVisitId: Option.none(),

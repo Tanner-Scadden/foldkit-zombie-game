@@ -28,22 +28,32 @@ import {
 } from './home'
 import {
   AIM_ICON,
+  CAMPAIGN_ICON,
   CHARACTER_ICON,
+  CLOCK_ICON,
+  CLOSE_ICON,
   COFFEE_ICON,
   DEVICES_ICON,
+  ENDLESS_ICON,
   FULLSCREEN_ICON,
   HAND_ICON,
   HELP_ICON,
+  KILLS_ICON,
   MUNCHOPEDIA_ICON,
   MUSIC_OFF_ICON,
   MUSIC_ON_ICON,
   NEWS_ICON,
   PADLOCK_ICON,
+  PLAY_ICON,
+  REWIND_ICON,
   SETTINGS_ICON,
   SHAKE_ICON,
+  SKULL_ICONS,
+  SKULL_OFF_ICON,
   SOUND_OFF_ICON,
   SOUND_ON_ICON,
   STATS_ICON,
+  TROPHY_ICON,
   TURN_PHONE_ICON,
 } from './icons'
 import { Message } from './message'
@@ -117,20 +127,17 @@ const iconView = (
 // PLAY
 
 type ModeLook = Readonly<{
-  label: string
-  detail: string
+  icon: string
   playLabel: string
 }>
 
 const MODE_LOOKS: Readonly<Record<HomeMode, ModeLook>> = {
   Campaign: {
-    label: 'CAMPAIGN',
-    detail: `${FINAL_WAVE} WAVES`,
+    icon: CAMPAIGN_ICON,
     playLabel: `Play the campaign: ${FINAL_WAVE} waves, then victory`,
   },
   Endless: {
-    label: 'ENDLESS',
-    detail: 'UNTIL YOU DROP',
+    icon: ENDLESS_ICON,
     playLabel: 'Play endless: waves keep coming until you fall',
   },
 }
@@ -152,8 +159,13 @@ const playButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
       h.OnClick(Message.ClickedPlayButton(), { propagation: 'Stop' }),
     ],
     [
-      h.span([h.Class('home-play-label')], ['PLAY']),
-      h.span([h.Class('home-play-detail')], [look.detail]),
+      h.span(
+        [h.Class('home-play-face')],
+        [
+          iconView('home-play-icon', PLAY_ICON, h),
+          h.span([h.Class('home-play-label')], ['PLAY']),
+        ],
+      ),
       ...keyBadgeView(model, 'Play', h),
     ],
   )
@@ -167,9 +179,10 @@ const modeOptionView = (
   h.span(
     [
       h.Class('home-mode-option'),
+      h.DataAttribute('mode', mode),
       h.DataAttribute('state', model.home.mode === mode ? 'Chosen' : 'Other'),
     ],
-    [MODE_LOOKS[mode].label],
+    [iconView('home-mode-icon', MODE_LOOKS[mode].icon, h)],
   )
 
 const modeButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
@@ -183,17 +196,38 @@ const modeButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
       h.OnClick(Message.ClickedModeButton(), { propagation: 'Stop' }),
     ],
     [
-      h.span([h.Class('home-pick-title')], ['MODE']),
-      h.span(
-        [h.Class('home-mode-options')],
-        [
-          modeOptionView(model, 'Campaign', h),
-          modeOptionView(model, 'Endless', h),
-        ],
-      ),
+      modeOptionView(model, 'Campaign', h),
+      modeOptionView(model, 'Endless', h),
       ...keyBadgeView(model, 'Mode', h),
     ],
   )
+
+// NOTE: a difficulty reads as a row of four skulls: as many lit as the
+// level, each in that level's color and face, and the fourth padlocked
+// while Nightmare is locked.
+const skullMeterView = (
+  model: Model,
+  difficulty: Difficulty,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const lit = Array.findFirstIndex(
+    DIFFICULTY_ORDER,
+    level => level === difficulty,
+  )
+  const litCount = Option.getOrElse(lit, () => 0) + 1
+  return h.span(
+    [h.Class('skull-meter'), h.AriaHidden(true)],
+    Array.map(DIFFICULTY_ORDER, (level, index) =>
+      level === 'Nightmare' && isLocked(model.difficulty, 'Nightmare')
+        ? iconView('skull skull-locked', PADLOCK_ICON, h)
+        : iconView(
+            index < litCount ? 'skull skull-lit' : 'skull',
+            index < litCount ? SKULL_ICONS[difficulty] : SKULL_OFF_ICON,
+            h,
+          ),
+    ),
+  )
+}
 
 // NOTE: the difficulty sits by PLAY, so the run is picked where it starts.
 // It opens the picker anchored just above this cluster.
@@ -209,8 +243,7 @@ const difficultyButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
       h.OnClick(Message.ClickedDifficultyBadge(), { propagation: 'Stop' }),
     ],
     [
-      h.span([h.Class('home-pick-title')], ['DIFFICULTY']),
-      h.span([h.Class('home-difficulty-name')], [name]),
+      skullMeterView(model, model.difficulty.chosen, h),
       ...keyBadgeView(model, 'Difficulty', h),
     ],
   )
@@ -309,9 +342,9 @@ const NEWS_NAMES: Readonly<Record<HandCard, string>> = {
 
 const manorAriaLabel = (model: Model): string =>
   Array.match(newsCards(model), {
-    onEmpty: () => 'Manor: character, Munchopedia, what is new, and more',
+    onEmpty: () => 'More: character, Munchopedia, what is new, and how to play',
     onNonEmpty: cards =>
-      `Manor: character, Munchopedia, what is new, and more. Something new in ${Array.join(
+      `More: character, Munchopedia, what is new, and how to play. Something new in ${Array.join(
         Array.map(cards, card => NEWS_NAMES[card]),
         ' and ',
       )}`,
@@ -346,7 +379,7 @@ const manorButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
     ],
     [
       iconView('home-manor-icon', HAND_ICON, h),
-      h.span([h.Class('home-manor-label')], ['MANOR']),
+      h.span([h.Class('home-manor-label')], ['MORE']),
       manorPipsView(model, h),
       ...keyBadgeView(model, 'Manor', h),
     ],
@@ -387,7 +420,17 @@ const cardBodyView = (
       h.span([h.Class('hand-card-title')], [CARD_LOOKS[card].title]),
       ...Option.match(maybeCardTally(model, card), {
         onNone: () => [],
-        onSome: tally => [h.span([h.Class('hand-card-tally')], [tally])],
+        onSome: tally => [
+          h.span(
+            [
+              h.Class('hand-card-tally'),
+              h.Style({
+                '--found': `${discoveredKinds(model.bests.killsByKind).length / ENTRY_COUNT}`,
+              }),
+            ],
+            [tally],
+          ),
+        ],
       }),
       ...(hasNews(model, card)
         ? [h.span([h.Class('hand-card-new'), h.AriaHidden(true)], ['NEW'])]
@@ -493,64 +536,70 @@ export const manorHandView = (model: Model, h: HtmlBuilder<Message>): Html =>
 
 // BESTS
 
-type Best = Readonly<{ label: string; value: string }>
+type Best = Readonly<{ label: string; icon: string; value: string }>
 
 const shownBests = (model: Model): ReadonlyArray<Best> => [
   ...Option.match(bestsFor(model).maybeBestEndlessWave, {
     onNone: () => [],
-    onSome: wave => [{ label: 'Best endless', value: `Wave ${wave}` }],
+    onSome: wave => [
+      { label: 'Best endless wave', icon: TROPHY_ICON, value: `${wave}` },
+    ],
   }),
   ...Option.match(bestsFor(model).maybeFastestWinMs, {
     onNone: () => [],
-    onSome: runMs => [{ label: 'Fastest win', value: durationLabel(runMs) }],
+    onSome: runMs => [
+      { label: 'Fastest win', icon: CLOCK_ICON, value: durationLabel(runMs) },
+    ],
   }),
   ...(model.bests.totalKills > 0
-    ? [{ label: 'Splatted', value: `${model.bests.totalKills}` }]
+    ? [
+        {
+          label: 'Zombies splatted',
+          icon: KILLS_ICON,
+          value: `${model.bests.totalKills}`,
+        },
+      ]
     : []),
 ]
 
-const bestView = ({ label, value }: Best, h: HtmlBuilder<Message>): Html =>
+const bestView = (best: Best, h: HtmlBuilder<Message>): Html =>
   h.div(
     [h.Class('home-best')],
     [
-      h.dt([h.Class('home-best-label')], [label]),
-      h.dd([h.Class('home-best-value')], [value]),
+      h.dt(
+        [h.Class('home-best-label')],
+        [
+          iconView('home-best-icon', best.icon, h),
+          h.span([h.Class('sr-only')], [best.label]),
+        ],
+      ),
+      h.dd([h.Class('home-best-value')], [best.value]),
     ],
   )
 
-const BESTS_TITLE_ID = 'home-bests-title'
-
+// NOTE: a badge of icons and big numbers, in the chosen level's color, and
+// nothing at all until the player has a best.
 const bestsView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.section(
-    [h.Class('home-bests'), h.AriaLabelledBy(BESTS_TITLE_ID)],
-    [
-      h.h2(
-        [h.Id(BESTS_TITLE_ID), h.Class('home-bests-title')],
+  Array.match(shownBests(model), {
+    onEmpty: () => h.empty,
+    onNonEmpty: bests =>
+      h.section(
         [
-          'Your bests',
-          h.span(
-            [
-              h.Class('home-bests-level'),
-              h.DataAttribute('difficulty', model.difficulty.chosen),
-            ],
-            [` · ${DIFFICULTIES[model.difficulty.chosen].name}`],
+          h.Class('home-bests'),
+          h.DataAttribute('difficulty', model.difficulty.chosen),
+          h.AriaLabel(
+            `Your bests, ${DIFFICULTIES[model.difficulty.chosen].name}`,
           ),
         ],
-      ),
-      Array.match(shownBests(model), {
-        onEmpty: () =>
-          h.p(
-            [h.Class('home-bests-empty')],
-            ['No bests yet. Go get chewed on.'],
-          ),
-        onNonEmpty: bests =>
+        [
+          iconView('home-bests-level', SKULL_ICONS[model.difficulty.chosen], h),
           h.dl(
             [h.Class('home-bests-list')],
             Array.map(bests, best => bestView(best, h)),
           ),
-      }),
-    ],
-  )
+        ],
+      ),
+  })
 
 // STAGE
 
@@ -866,6 +915,15 @@ const settingTiles = (model: Model): ReadonlyArray<Toggle> => [
         },
       ]
     : []),
+  {
+    label: 'Share anonymous play stats',
+    shortLabel: 'STATS',
+    isOn: model.shareStats === 'On',
+    onIcon: STATS_ICON,
+    offIcon: STATS_ICON,
+    maybeKey: Option.none(),
+    message: Message.ClickedShareStatsButton(),
+  },
   ...(model.orientationLock === 'Supported'
     ? [
         {
@@ -900,6 +958,9 @@ const tileView = (
             onNone: () => [],
             onSome: key => [h.AriaKeyshortcuts(key)],
           }),
+          ...(toggle.label === 'Share anonymous play stats'
+            ? [h.AriaDescribedBy(SHARE_STATS_NOTE_ID)]
+            : []),
           h.OnClick(toggle.message, { propagation: 'Stop' }),
         ],
         [
@@ -926,39 +987,8 @@ const tileView = (
     ],
   )
 
-const shareStatsView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.li(
-    [h.Class('setting-row')],
-    [
-      h.button(
-        [
-          h.Type('button'),
-          h.Class('setting-switch'),
-          h.AriaLabel('Share anonymous play stats'),
-          h.AriaPressed(model.shareStats === 'On' ? 'true' : 'false'),
-          h.AriaDescribedBy(SHARE_STATS_NOTE_ID),
-          h.OnClick(Message.ClickedShareStatsButton(), { propagation: 'Stop' }),
-        ],
-        [
-          iconView('setting-row-icon', STATS_ICON, h),
-          h.span(
-            [h.Class('setting-switch-text')],
-            [
-              h.span([h.Class('setting-label')], ['Share anonymous stats']),
-              h.span(
-                [h.Id(SHARE_STATS_NOTE_ID), h.Class('setting-note')],
-                [SHARE_STATS_NOTE],
-              ),
-            ],
-          ),
-          h.span(
-            [h.Class('setting-state'), h.AriaHidden(true)],
-            [model.shareStats === 'On' ? 'ON' : 'OFF'],
-          ),
-        ],
-      ),
-    ],
-  )
+const shareStatsNoteView = (h: HtmlBuilder<Message>): Html =>
+  h.p([h.Id(SHARE_STATS_NOTE_ID), h.Class('sr-only')], [SHARE_STATS_NOTE])
 
 const SHARE_STATS_NOTE_ID = 'share-stats-note'
 
@@ -967,10 +997,11 @@ const resetTutorialButtonView = (h: HtmlBuilder<Message>): Html =>
     [
       h.Type('button'),
       h.Id(RESET_TUTORIAL_BUTTON_ID),
-      h.Class('panel-button panel-quiet'),
+      h.Class('panel-icon-button'),
+      h.AriaLabel('Reset tutorial'),
       h.OnClick(Message.ClickedResetTutorialButton(), { propagation: 'Stop' }),
     ],
-    ['Reset tutorial'],
+    [iconView('panel-icon', REWIND_ICON, h)],
   )
 
 const askResetTutorialView = (h: HtmlBuilder<Message>): Html =>
@@ -1012,9 +1043,6 @@ const askResetTutorialView = (h: HtmlBuilder<Message>): Html =>
   )
 
 // DIFFICULTY
-
-const padlockView = (h: HtmlBuilder<Message>): Html =>
-  iconView('difficulty-padlock', PADLOCK_ICON, h)
 
 const freshBadgeView = (
   model: Model,
@@ -1058,33 +1086,28 @@ const difficultyChoiceView = (
       }),
     ],
     [
+      skullMeterView(model, difficulty, h),
       h.span(
         [h.Class('difficulty-name')],
         [
-          ...(locked ? [padlockView(h)] : []),
           DIFFICULTIES[difficulty].name,
           ...freshBadgeView(model, difficulty, h),
         ],
       ),
-      h.span(
-        [h.Class('difficulty-blurb')],
-        [locked ? NIGHTMARE_LOCK_NOTE : DIFFICULTIES[difficulty].blurb],
-      ),
+      ...(locked
+        ? [
+            h.span(
+              [h.Class('difficulty-unlock'), h.AriaHidden(true)],
+              [
+                iconView('difficulty-unlock-icon', TROPHY_ICON, h),
+                iconView('difficulty-unlock-icon', SKULL_ICONS.Hard, h),
+              ],
+            ),
+          ]
+        : []),
     ],
   )
 }
-
-const tutorialResetView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  model.tutorialReset === 'Asking'
-    ? askResetTutorialView(h)
-    : h.div(
-        [h.Class('setting-footer-note'), h.Role('status')],
-        [
-          ...(model.tutorialReset === 'Done'
-            ? [h.p([h.Class('setting-note')], ['Tips will show again.'])]
-            : []),
-        ],
-      )
 
 // DEVICES
 
@@ -1212,30 +1235,49 @@ const linkFlowView = (
     ],
   })
 
+const devicesTileView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.li(
+    [h.Class('setting-tile-item')],
+    [
+      h.button(
+        [
+          h.Type('button'),
+          h.Class('setting-tile setting-devices-tile'),
+          h.AriaLabel(
+            `Devices: ${devicesStatusText(model.syncState, model.playerScopeStatus)}`,
+          ),
+          h.AriaExpanded(model.devicesRow === 'Unfolded'),
+          h.OnClick(Message.ClickedDevicesButton(), { propagation: 'Stop' }),
+        ],
+        [
+          iconView('setting-tile-icon', DEVICES_ICON, h),
+          h.span([h.Class('setting-tile-label')], ['DEVICES']),
+          h.span([
+            h.Class('setting-sync-dot'),
+            h.AriaHidden(true),
+            h.DataAttribute('sync', model.syncState._tag),
+          ]),
+        ],
+      ),
+    ],
+  )
+
 const devicesView = (model: Model, h: HtmlBuilder<Message>): Html => {
   const canLink = !SyncState.isAnyOf(['LocalOnly'])(model.syncState)
-  return h.li(
-    [h.Class('setting-row setting-devices')],
-    [
-      h.div(
-        [h.Class('setting-sync')],
+  return model.devicesRow === 'Folded'
+    ? h.empty
+    : h.div(
+        [h.Class('setting-devices')],
         [
-          iconView('setting-row-icon', DEVICES_ICON, h),
-          h.span(
-            [h.Class('setting-switch-text')],
+          h.p(
             [
-              h.span([h.Class('setting-label')], ['Devices']),
-              h.span(
-                [
-                  h.Class('setting-sync-state'),
-                  h.Role('status'),
-                  h.DataAttribute('sync', model.syncState._tag),
-                  h.DataAttribute('scope', model.playerScopeStatus._tag),
-                  h.DataAttribute('last-run', model.lastRunSync._tag),
-                ],
-                [devicesStatusText(model.syncState, model.playerScopeStatus)],
-              ),
+              h.Class('setting-sync-state'),
+              h.Role('status'),
+              h.DataAttribute('sync', model.syncState._tag),
+              h.DataAttribute('scope', model.playerScopeStatus._tag),
+              h.DataAttribute('last-run', model.lastRunSync._tag),
             ],
+            [devicesStatusText(model.syncState, model.playerScopeStatus)],
           ),
           ...(canLink && isLinkIdle(model)
             ? [
@@ -1258,11 +1300,9 @@ const devicesView = (model: Model, h: HtmlBuilder<Message>): Html => {
                 ),
               ]
             : []),
+          ...(canLink ? linkFlowView(model, h) : []),
         ],
-      ),
-      ...(canLink ? linkFlowView(model, h) : []),
-    ],
-  )
+      )
 }
 
 type PanelText = Readonly<{ title: string; blurb: string }>
@@ -1310,10 +1350,11 @@ const doneButtonView = (
     [
       ...closeButton,
       ...(focus === 'TakesInitialFocus' ? initialFocus : []),
-      h.Class('panel-button panel-done'),
+      h.Class('panel-close'),
+      h.AriaLabel('Done'),
       h.AriaKeyshortcuts('Escape'),
     ],
-    ['Done'],
+    [iconView('panel-close-icon', CLOSE_ICON, h)],
   )
 
 const settingsBodyView = (
@@ -1321,23 +1362,28 @@ const settingsBodyView = (
   renderInfo: Dialog.RenderInfo,
   h: HtmlBuilder<Message>,
 ): ReadonlyArray<Html> => [
+  doneButtonView(renderInfo, h, 'LeavesInitialFocus'),
   h.ul(
-    [h.Class('setting-tiles'), h.AriaLabel('Quick toggles')],
-    Array.map(settingTiles(model), toggle => tileView(model, toggle, h)),
+    [h.Class('setting-tiles'), h.AriaLabel('Settings')],
+    [
+      ...Array.map(settingTiles(model), toggle => tileView(model, toggle, h)),
+      devicesTileView(model, h),
+    ],
   ),
-  h.ul(
-    [h.Class('setting-list')],
-    [shareStatsView(model, h), devicesView(model, h)],
-  ),
-  tutorialResetView(model, h),
-  ...(model.tutorialReset === 'Asking'
-    ? []
-    : [
-        h.div(
-          [h.Class('panel-actions')],
-          [resetTutorialButtonView(h), doneButtonView(renderInfo, h)],
-        ),
-      ]),
+  shareStatsNoteView(h),
+  devicesView(model, h),
+  model.tutorialReset === 'Asking'
+    ? askResetTutorialView(h)
+    : h.div(
+        [h.Class('setting-footer')],
+        [
+          resetTutorialButtonView(h),
+          h.p(
+            [h.Class('setting-note'), h.Role('status')],
+            model.tutorialReset === 'Done' ? ['Tips are back.'] : [],
+          ),
+        ],
+      ),
 ]
 
 const panelBodyView = (

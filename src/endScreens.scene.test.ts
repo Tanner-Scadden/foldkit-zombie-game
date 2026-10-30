@@ -40,7 +40,7 @@ const keepGoingButton = role('button', {
   name: 'Keep going: carry on into endless from wave 9 with your money, guns, and traps',
 })
 const updateChip = role('button', { name: /New version ready/ })
-const mainMenu = role('button', { name: /^Manor:/ })
+const mainMenu = role('button', { name: /^More:/ })
 const updateNote = text('A new version is waiting on the menu.')
 const endButtons = all.selector('.mode-choice .mode-button')
 

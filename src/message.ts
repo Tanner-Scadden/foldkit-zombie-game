@@ -81,6 +81,7 @@ export const Message = defineMessageUnion({
   CompletedDetectOrientationLock: { orientationLock: OrientationLock },
   CompletedApplyRotation: {},
   ClickedRotationButton: {},
+  ClickedDevicesButton: {},
   ClickedDismissHomeScreenTip: {},
   ClickedHomeScreenTip: {},
   ClickedHomeScreenStepsDoneButton: {},

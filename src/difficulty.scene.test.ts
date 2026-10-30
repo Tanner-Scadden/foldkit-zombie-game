@@ -1,5 +1,14 @@
 import { Option } from 'effect'
-import { click, expect, given, inside, role, scene, text } from 'foldkit/scene'
+import {
+  click,
+  expect,
+  given,
+  inside,
+  role,
+  scene,
+  selector,
+  text,
+} from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
@@ -48,7 +57,10 @@ describe('the difficulty card', () => {
         expect(normal).toExist(),
         expect(hard).toExist(),
         expect(lockedNightmare).toHaveAttr('aria-disabled', 'true'),
-        expect(text('Beat Hard to unlock')).toExist(),
+        expect(text('Beat Hard to unlock')).toBeAbsent(),
+        expect(
+          selector("[data-difficulty='Nightmare'] .difficulty-unlock"),
+        ).toExist(),
       ),
     )
   })

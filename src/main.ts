@@ -165,6 +165,7 @@ import {
   toggleAudioFromKey,
   toggleMusic,
   toggleSound,
+  uiCue,
   unlockAudio,
 } from './update/sound'
 import { type UpdateReturn, type UpdateStep, withInput } from './update/step'
@@ -321,6 +322,11 @@ const phaseFromKey = (model: Model, code: string): Model =>
 
 const hasResumed = (before: Model, after: Model): boolean =>
   isPaused(before.phase) && !isPaused(after.phase)
+
+// MENU TAPS
+
+// NOTE: a soft pop on the home menu's own buttons, so a tap feels pressed.
+const tapSound: UpdateStep = playSounds([uiCue('Pop')])
 
 // RELOAD
 
@@ -656,6 +662,12 @@ const updateGame = (model: Model, message: Message) =>
 
     ClickedRotationButton: () => ({ model: toggleRotation(model) }),
 
+    ClickedDevicesButton: () => ({
+      model: modifyFields(model, {
+        devicesRow: row => (row === 'Folded' ? 'Unfolded' : 'Folded'),
+      }),
+    }),
+
     CompletedApplyRotation: () => ({ model }),
 
     ClickedDismissHomeScreenTip: () => ({
@@ -782,7 +794,7 @@ const updateGame = (model: Model, message: Message) =>
       Update.combine(model, [unlockAudio, fromHand(openPanel('HowToPlay'))]),
 
     ClickedSettingsButton: () =>
-      Update.combine(model, [unlockAudio, openPanel('Settings')]),
+      Update.combine(model, [unlockAudio, tapSound, openPanel('Settings')]),
 
     ClickedMenuButton: () =>
       Update.combine(model, [unlockAudio, leaveFromMenu]),
@@ -919,9 +931,15 @@ const updateGame = (model: Model, message: Message) =>
 
     ClickedPlayButton: () => startOrAsk(runModeOf(model.home.mode))(model),
 
-    ClickedModeButton: () => ({
-      model: canMoveHomeFocus(model) ? switchMode(model) : model,
-    }),
+    ClickedModeButton: () =>
+      Update.combine(model, [
+        stepModel => ({
+          model: canMoveHomeFocus(stepModel)
+            ? switchMode(stepModel)
+            : stepModel,
+        }),
+        tapSound,
+      ]),
 
     ClickedWhatsNewButton: () =>
       Update.combine(model, [unlockAudio, fromHand(openWhatsNew)]),
@@ -949,9 +967,10 @@ const updateGame = (model: Model, message: Message) =>
       ]),
 
     ClickedDifficultyBadge: () =>
-      Update.combine(model, [unlockAudio, openPanel('Difficulty')]),
+      Update.combine(model, [unlockAudio, tapSound, openPanel('Difficulty')]),
 
-    ClickedManorButton: () => Update.combine(model, [unlockAudio, openHand]),
+    ClickedManorButton: () =>
+      Update.combine(model, [unlockAudio, tapSound, openHand]),
 
     GotHandDialogMessage: ({ message: dialogMessage }) =>
       foldHandDialog(model, dialogMessage),

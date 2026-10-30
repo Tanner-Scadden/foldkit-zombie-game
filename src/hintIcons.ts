@@ -124,7 +124,7 @@ const keyPixels = (label: string, isPressed: boolean): Pixels => {
 const KEY_HEIGHT = 8
 const KEY_FRAME_MS = 420
 
-const keyIcon = (label: string): HintIconSprites =>
+export const keyIcon = (label: string): HintIconSprites =>
   iconOf(keyWidth(label), KEY_HEIGHT, KEY_FRAME_MS, [
     [layer(keyPixels(label, false), 0, 0)],
     [layer(keyPixels(label, true), 0, 0)],

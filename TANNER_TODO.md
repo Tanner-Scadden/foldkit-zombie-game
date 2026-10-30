@@ -9,7 +9,7 @@ Things the game is blocked on until the owner does or decides them. Agents add a
   1. Sign up at stripe.com as an individual (sole proprietor). No LLC needed. Use https://munch-manor.tanner-scadden.workers.dev as the website.
   2. Payment Links, then New. Product: "Buy the shopkeeper a coffee". Turn on "Customers choose what to pay", suggested amount $3.
   3. Optional: after payment, redirect to https://munch-manor.tanner-scadden.workers.dev.
-  4. Send the `https://buy.stripe.com/...` link to an agent. It goes in `SUPPORT_URL`, and the TIP JAR card appears in the home menu's MANOR hand and a coffee pill on the Victory screen.
+  4. Send the `https://buy.stripe.com/...` link to an agent. It goes in `SUPPORT_URL`, and the TIP JAR card appears in the home menu's MORE hand and a coffee pill on the Victory screen.
   5. Call it support or a coffee, never a donation.
 - [ ] **Name the mystery box.** Ideas so far: the Lunchbox (Uncle Chunk's rattling lunchbox), the Mystery Meat Crate (moves rooms on a dumbwaiter), the Haunted Hamper (sometimes bites back).
 

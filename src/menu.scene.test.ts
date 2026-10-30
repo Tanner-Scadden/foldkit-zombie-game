@@ -88,7 +88,7 @@ const pauseMenuButton = role('button', { name: 'Menu: leave this run' })
 const endMenuButton = role('button', { name: 'Menu: back to the home screen' })
 const leaveQuestion = role('dialog', { name: 'Leave this run?' })
 const mainMenu = manorButton
-const bests = role('region', { name: 'Your bests · Normal' })
+const bests = role('region', { name: 'Your bests, Normal' })
 
 // NOTE: Scene refuses a pointerdown that no handler on the element or its
 // ancestors would receive. That refusal is the check: a press on these
@@ -115,7 +115,7 @@ const afterGrace = (phase: Phase): Model =>
   })
 
 describe('Home menu', () => {
-  test('fills the slots: bests, the gear, the MANOR deck, and PLAY with its mode and difficulty, with a key badge on every button on a keyboard', () => {
+  test('fills the slots: the gear, the MORE deck, and PLAY with its mode and difficulty, with a key badge on every button on a keyboard, and no bests badge before a best', () => {
     scene(
       { update, view },
       given(home),
@@ -140,7 +140,8 @@ describe('Home menu', () => {
         role('button', { name: 'Your character: change how you look' }),
       ).toHaveAttr('aria-haspopup', 'dialog'),
       expect(role('button', { name: 'Mute sound' })).toBeAbsent(),
-      inside(bests, expect(text('No bests yet. Go get chewed on.')).toExist()),
+      expect(bests).toBeAbsent(),
+      expect(text('No bests yet. Go get chewed on.')).toBeAbsent(),
     )
   })
 
@@ -238,14 +239,12 @@ describe('Home menu', () => {
       click(difficultyButton),
       ...showDialogInScene(),
       expect(lockedNightmare).toHaveAttr('aria-disabled', 'true'),
-      expect(
-        selector("[data-difficulty='Nightmare'] .difficulty-padlock"),
-      ).toExist(),
+      expect(selector("[data-difficulty='Nightmare'] .skull-locked")).toExist(),
       expect(role('dialog', { name: 'Difficulty' })).toExist(),
       click(role('button', { name: /^Hard:/ })),
       ...closeDialog(),
       expect(role('button', { name: 'Difficulty: Hard. Change it' })).toExist(),
-      expect(role('region', { name: 'Your bests · Hard' })).toExist(),
+      expect(bests).toBeAbsent(),
       expect(mainMenu).toExist(),
     )
   })
@@ -304,11 +303,11 @@ describe('Home menu', () => {
       measureSurface,
       inside(
         bests,
-        expect(text('Best endless')).toExist(),
-        expect(text('Wave 12')).toExist(),
+        expect(text('Best endless wave')).toExist(),
+        expect(text('12')).toExist(),
         expect(text('Fastest win')).toExist(),
         expect(text('6:42')).toExist(),
-        expect(text('Splatted')).toExist(),
+        expect(text('Zombies splatted')).toExist(),
         expect(text('341')).toExist(),
       ),
     )
@@ -332,11 +331,7 @@ describe('Home menu', () => {
       { update, view },
       given(restoreSave(home, saved)),
       measureSurface,
-      inside(
-        bests,
-        expect(text('Wave 9')).toExist(),
-        expect(text('97')).toExist(),
-      ),
+      inside(bests, expect(text('9')).toExist(), expect(text('97')).toExist()),
     )
   })
 
@@ -513,6 +508,8 @@ describe('Home menu', () => {
       measureSurface,
       click(settingsButton),
       ...showDialogInScene(),
+      expect(role('button', { name: 'Use a code' })).toBeAbsent(),
+      click(role('button', { name: /^Devices:/ })),
       expect(text(LINK_TAKES_PROGRESS_NOTE)).toBeAbsent(),
       click(role('button', { name: 'Use a code' })),
       expect(text(LINK_TAKES_PROGRESS_NOTE)).toExist(),
@@ -546,7 +543,7 @@ describe('Home menu', () => {
       click(confirmButton),
       focusReset(RESET_TUTORIAL_BUTTON_ID),
       Command.resolve(WriteSave, Message.CompletedWriteSave()),
-      expect(text('Tips will show again.')).toExist(),
+      expect(text('Tips are back.')).toExist(),
     )
   })
 

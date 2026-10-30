@@ -938,9 +938,6 @@ const paradeShapes = (screenMs: number): ReadonlyArray<Canvas.Shape> =>
 
 // READY
 
-const TAGLINE = bakeText('SURVIVE 8 WAVES. TRY NOT TO GET EATEN.', 'Hint')
-const TAGLINE_Y = 70
-
 // NOTE: the player walks on the spot at center stage, twice the room's size,
 // facing the Groaners that come in from the left with the pistol up. The home
 // menu puts a button over them that opens the character picker.
@@ -976,13 +973,13 @@ const runnerShapes = (
   }),
 ]
 
+// NOTE: the logo and the room speak for themselves, so there is no tagline.
 const readyShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   TITLE_BACKDROP,
   ...paradeShapes(model.screenMs),
   ...runnerShapes(model.appearance, model.screenMs),
   ...logoShapes(model.screenMs),
   ...ALPHA_CHIP,
-  centered(TAGLINE, TAGLINE_Y),
 ]
 
 // PAUSED

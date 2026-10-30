@@ -1,6 +1,6 @@
 import { Array, Record, pipe } from 'effect'
 
-import type { TrapKind } from './model'
+import type { Difficulty, TrapKind } from './model'
 import { type Palette, TRAP_ICON_PIXELS, pixelRuns } from './sprite'
 
 // PIXEL ICONS
@@ -265,19 +265,23 @@ export const COFFEE_ICON = pixelIconUrl(
 
 // THE MANOR HAND
 
-// NOTE: three cards fanned out, for the MANOR button that deals the hand.
+// NOTE: three cards fanned out, the character's, the Munchopedia's, and
+// What's New's, for the MORE button that deals the hand.
 export const HAND_ICON = pixelIconUrl(
   [
-    '...YYYYYYY...',
-    '...YOOOOOY...',
-    'PPPYOOOOOYGGG',
-    'POPYOOYOOYGOG',
-    'POPYOYYYOYGOG',
-    'POPYOOYOOYGOG',
-    'POPYOOOOOYGOG',
-    'POPYOOOOOYGOG',
-    'POPYYYYYYYGOG',
-    'PPP.......GGG',
+    '.....GGGGGGG.....',
+    '.....GOOOOOG.....',
+    '.....GOOOOOG.....',
+    'PPPPPGOGOGOGYYYYY',
+    'POOOOGOOOOOGOOOOY',
+    'POOPOGGOOOGGYYYOY',
+    'POPPPGOGGGOGOOOOY',
+    'POOPOGOOOOOGYYYOY',
+    'POOOOGOOOOOGOOOOY',
+    'POPPPGOOOOOGYYOOY',
+    'PPPPPGGGGGGGOOOOY',
+    'POOOOOP...YOYYYOY',
+    'PPPPPPP...YYYYYYY',
   ],
   RAIL_PALETTE,
 )
@@ -395,4 +399,146 @@ export const TURN_PHONE_ICON = pixelIconUrl(
     '.XXXXXXX.',
   ],
   RAIL_PALETTE,
+)
+
+// HOME BADGES
+
+const BADGE_PALETTE: Palette = {
+  X: LIGHT,
+  O: SHADE,
+  Y: '#ffe066',
+  D: '#a87a1e',
+  T: '#5fd4c8',
+  U: '#b98cff',
+  W: '#4a2a70',
+}
+
+export const TROPHY_ICON = pixelIconUrl(
+  [
+    'YYYYYYYYY',
+    'Y.YYYYY.Y',
+    'Y.YYYYD.Y',
+    '.YYYYYD..',
+    '..YYYD...',
+    '...YD....',
+    '....Y....',
+    '..YYYYY..',
+    '..DDDDD..',
+  ],
+  BADGE_PALETTE,
+)
+
+export const CLOCK_ICON = icon([
+  '..XXXXX..',
+  '.X..X..X.',
+  'X...X...X',
+  'X...X...X',
+  'X...XXX.X',
+  'X.......X',
+  'X.......X',
+  '.X.....X.',
+  '..XXXXX..',
+])
+
+type SkullFace = 'Sleepy' | 'Open' | 'Angry'
+
+const SKULL_EYES: Readonly<Record<SkullFace, ReadonlyArray<string>>> = {
+  Sleepy: ['XXXXXXXXX', 'XOOXXXOOX'],
+  Open: ['XOOXXXOOX', 'XOOXXXOOX'],
+  Angry: ['XOXXXXXOX', 'XOOXXXOOX'],
+}
+
+const skullPixels = (face: SkullFace): ReadonlyArray<string> => [
+  '..XXXXX..',
+  '.XXXXXXX.',
+  'XXXXXXXXX',
+  ...SKULL_EYES[face],
+  'XXXXOXXXX',
+  '.XXXXXXX.',
+  '..X.X.X..',
+  '..XXXXX..',
+]
+
+const tinted = (pixels: ReadonlyArray<string>, color: string): string =>
+  pixelIconUrl(pixels, { X: color, O: SHADE })
+
+// NOTE: one skull per difficulty, each in its level's color with its own
+// face: sleepy Easy, plain Normal, angry Hard, and Nightmare in flames.
+export const SKULL_ICONS: Readonly<Record<Difficulty, string>> = {
+  Easy: tinted(skullPixels('Sleepy'), '#9be36a'),
+  Normal: tinted(skullPixels('Open'), '#ffe066'),
+  Hard: tinted(skullPixels('Angry'), '#ffa04d'),
+  Nightmare: pixelIconUrl(
+    [
+      'Y..F.Y..F',
+      '.Y.FY.FY.',
+      '..XXXXX..',
+      '.XXXXXXX.',
+      'XOXXXXXOX',
+      'XOOXXXOOX',
+      'XXXXOXXXX',
+      '.XXXXXXX.',
+      '..X.X.X..',
+      '..XXXXX..',
+    ],
+    { X: '#ff6b5e', O: SHADE, Y: '#ffe066', F: '#ffa04d' },
+  ),
+}
+
+export const SKULL_OFF_ICON = tinted(skullPixels('Open'), '#4a3f52')
+
+export const KILLS_ICON = tinted(skullPixels('Open'), LIGHT)
+
+// NOTE: Campaign is the manor's front door, Endless the infinity loop.
+export const CAMPAIGN_ICON = pixelIconUrl(
+  [
+    '....U....',
+    '...UUU...',
+    '..UUUUU..',
+    '.UUUUUUU.',
+    'UUUUUUUUU',
+    '.UWWUWWU.',
+    '.UWWUWWU.',
+    '.UUUUUUU.',
+    '.UUWWWUU.',
+    '.UUWWYUU.',
+    '.UUWWWUU.',
+  ],
+  BADGE_PALETTE,
+)
+
+export const ENDLESS_ICON = pixelIconUrl(
+  ['.TTT...TTT.', 'T...T.T...T', 'T....T....T', 'T...T.T...T', '.TTT...TTT.'],
+  BADGE_PALETTE,
+)
+
+export const PLAY_ICON = pixelIconUrl(
+  ['X......', 'XXX....', 'XXXXX..', 'XXXXXXX', 'XXXXX..', 'XXX....', 'X......'],
+  { X: SHADE },
+)
+
+export const REWIND_ICON = icon([
+  '...X...X',
+  '..XX..XX',
+  '.XXX.XXX',
+  'XXXXXXXX',
+  '.XXX.XXX',
+  '..XX..XX',
+  '...X...X',
+])
+
+// NOTE: the shop's red pixel X, for every menu panel's close button.
+export const CLOSE_ICON = pixelIconUrl(
+  [
+    'OOO...OOO',
+    'ORRO.ORRO',
+    'ORRRORRRO',
+    '.ORRRRRO.',
+    '..ORRRO..',
+    '.ORRRRRO.',
+    'ORRRORRRO',
+    'ORRO.ORRO',
+    'OOO...OOO',
+  ],
+  { O: SHADE, R: '#ff5a4e' },
 )

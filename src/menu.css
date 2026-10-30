@@ -147,40 +147,102 @@
   height: var(--cluster-h);
 }
 
-.home-play {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
+/* NOTE: PLAY is the one focal point: a chunky green game button with a pixel
+   bevel. The button's box never moves, so a tap near an edge still lands;
+   only its face sinks when pressed. */
+.home-stage .home-play {
   width: max(132px, 66 * var(--a));
-  padding: 4px 8px;
-  border: 3px solid var(--menu-green);
+  padding: 0;
+  border: 0;
   border-radius: var(--menu-radius);
-  background: rgba(30, 52, 20, 0.94);
-  box-shadow: var(--menu-lift);
-  color: #c8f59e;
+  background: transparent;
+  color: #10240a;
 }
 
-.home-play[data-mode='Endless'] {
-  border-color: var(--menu-gold);
-  background: rgba(52, 42, 12, 0.94);
-  color: var(--menu-gold);
+.home-play-face {
+  position: absolute;
+  inset: 0 0 max(5px, 1.6 * var(--a));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: max(8px, 3 * var(--a));
+  overflow: hidden;
+  border: 3px solid #10240a;
+  border-radius: var(--menu-radius);
+  background: linear-gradient(#b8f58a, #7fd04e 55%, #5fae36);
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.18),
+    0 max(5px, 1.6 * var(--a)) 0 #2f6a1a;
+  transition: translate 70ms ease-out;
+  pointer-events: none;
+  animation: play-breathe 2.4s ease-in-out infinite;
+}
+
+.home-play-face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.45) 45%,
+    transparent 60%
+  );
+  translate: -120% 0;
+  animation: play-shine 4s ease-in-out 1s infinite;
+}
+
+.home-play[data-mode='Endless'] .home-play-face {
+  background: linear-gradient(#a6f3ea, #5fd4c8 55%, #3aa89c);
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.18),
+    0 max(5px, 1.6 * var(--a)) 0 #1d6a62;
+}
+
+.home-stage .home-play:active {
+  box-shadow: none;
+  filter: none;
+}
+
+.home-stage .home-play:active .home-play-face {
+  translate: 0 max(5px, 1.6 * var(--a));
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.3),
+    inset 0 0 0 3px rgba(255, 255, 255, 0.35);
+  animation: none;
+}
+
+.home-play-icon {
+  width: max(22px, 9 * var(--a));
+  height: max(22px, 9 * var(--a));
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
 }
 
 .home-play-label {
+  color: #10240a;
   font: bold clamp(22px, 10 * var(--a), 56px) / 1 var(--menu-font);
   letter-spacing: 0.08em;
-  pointer-events: none;
+  text-shadow: 0 2px 0 rgba(255, 255, 255, 0.4);
 }
 
-.home-play-detail {
-  color: var(--menu-ink);
-  opacity: 0.8;
-  font: clamp(9px, 2.8 * var(--a), 16px) / 1.2 var(--menu-font);
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-  pointer-events: none;
+@keyframes play-breathe {
+  50% {
+    filter: brightness(1.08);
+  }
+}
+
+@keyframes play-shine {
+  0%,
+  60% {
+    translate: -120% 0;
+  }
+
+  100% {
+    translate: 120% 0;
+  }
 }
 
 .home-loadout {
@@ -193,66 +255,110 @@
 .home-pick {
   display: flex;
   flex: 1;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: max(4px, 1.5 * var(--a));
   min-height: var(--pick-h);
-  padding: 2px max(8px, 2.5 * var(--a));
+  padding: 3px;
   border: 2px solid var(--menu-line-strong);
   border-radius: var(--menu-radius);
   background: var(--menu-glass);
-  text-align: left;
+  box-shadow: var(--menu-lift);
 }
 
-.home-pick-title {
-  color: var(--menu-ink-faint);
-  font: clamp(8px, 2.2 * var(--a), 14px) / 1.1 var(--menu-font);
-  letter-spacing: 0.12em;
-  pointer-events: none;
-}
-
-.home-mode-options {
-  display: flex;
-  gap: 2px;
-  pointer-events: none;
-}
-
+/* NOTE: the mode is two little tiles, the manor door in purple for the
+   campaign and the loop in teal for endless. The chosen one is raised and
+   glows; the other sinks back. */
 .home-mode-option {
-  padding: 1px 0.4em;
+  display: grid;
+  flex: 1;
+  align-self: stretch;
+  place-items: center;
   border-radius: var(--menu-radius-sm);
-  color: var(--menu-ink-faint);
-  font: bold clamp(10px, 3.2 * var(--a), 20px) / 1.25 var(--menu-font);
-  white-space: nowrap;
+  background: var(--menu-sunken);
+  opacity: 0.45;
+  transition:
+    opacity 120ms ease-out,
+    translate 120ms ease-out;
+  pointer-events: none;
 }
 
 .home-mode-option[data-state='Chosen'] {
-  background: var(--menu-green-deep);
-  color: #c8f59e;
+  opacity: 1;
+  translate: 0 -2px;
 }
 
-.home-difficulty-name {
-  color: var(--menu-gold);
-  font: bold clamp(11px, 3.6 * var(--a), 22px) / 1.2 var(--menu-font);
-  text-transform: uppercase;
+.home-mode-option[data-mode='Campaign'][data-state='Chosen'] {
+  background: #3b2160;
+  box-shadow:
+    0 0 0 2px #b98cff,
+    0 0 12px rgba(185, 140, 255, 0.6),
+    0 3px 0 #1e0f33;
+}
+
+.home-mode-option[data-mode='Endless'][data-state='Chosen'] {
+  background: #15403c;
+  box-shadow:
+    0 0 0 2px #5fd4c8,
+    0 0 12px rgba(95, 212, 200, 0.6),
+    0 3px 0 #0a2220;
+}
+
+.home-mode-icon {
+  width: max(20px, 7 * var(--a));
+  height: max(20px, 7 * var(--a));
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+}
+
+/* NOTE: the difficulty is a skull meter. Its border takes the level's
+   color. */
+.home-difficulty {
+  border-color: var(--menu-gold);
+}
+
+.home-difficulty[data-difficulty='Easy'] {
+  border-color: var(--menu-green);
+}
+
+.home-difficulty[data-difficulty='Hard'] {
+  border-color: var(--menu-orange);
+}
+
+.home-difficulty[data-difficulty='Nightmare'] {
+  border-color: var(--menu-red);
+  box-shadow:
+    var(--menu-lift),
+    0 0 12px rgba(255, 107, 94, 0.5);
+}
+
+.skull-meter {
+  display: flex;
+  align-items: center;
+  gap: max(2px, 0.8 * var(--a));
   pointer-events: none;
 }
 
-.home-difficulty-name::after {
-  content: ' ▾';
-  opacity: 0.7;
+.skull {
+  width: max(16px, 5.5 * var(--a));
+  height: max(16px, 5.5 * var(--a));
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
 }
 
-.home-difficulty[data-difficulty='Easy'] .home-difficulty-name {
-  color: var(--menu-green);
+.skull-lit {
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6));
 }
 
-.home-difficulty[data-difficulty='Hard'] .home-difficulty-name {
-  color: var(--menu-orange);
+.skull-locked {
+  opacity: 0.55;
 }
 
-.home-difficulty[data-difficulty='Nightmare'] .home-difficulty-name {
-  color: var(--menu-red);
+@media (prefers-reduced-motion: reduce) {
+  .home-play-face,
+  .home-play-face::after {
+    animation: none;
+  }
 }
 
 /* THE MANOR BUTTON: the deck the hand is dealt from. */
@@ -607,69 +713,77 @@
   }
 }
 
-/* BESTS */
+/* BESTS: a rank badge of icons and big numbers, in the level's color. */
 
 .home-bests {
+  --level: var(--menu-gold);
   position: absolute;
   left: calc(4 * var(--a));
   top: calc(4 * var(--a));
-  max-width: calc(110 * var(--a));
-  padding: max(4px, 1.5 * var(--a)) max(8px, 2.5 * var(--a));
+  display: flex;
+  align-items: center;
+  gap: max(6px, 2 * var(--a));
+  padding: max(4px, 1.2 * var(--a)) max(8px, 2.5 * var(--a));
+  border: 2px solid var(--level);
   border-radius: var(--menu-radius);
   background: var(--menu-glass);
-  color: var(--menu-ink-dim);
-  font: clamp(9px, 2.8 * var(--a), 16px) / 1.3 var(--menu-font);
-  text-transform: uppercase;
-  text-shadow: 0 1px 0 #000;
+  box-shadow: var(--menu-lift);
+  color: var(--menu-ink);
+  font-family: var(--menu-font);
+  text-shadow: 0 2px 0 #000;
 }
 
-.home-bests-title {
-  margin: 0;
-  color: var(--menu-green);
-  font: inherit;
-  font-weight: bold;
-  letter-spacing: 0.06em;
+.home-bests[data-difficulty='Easy'] {
+  --level: var(--menu-green);
+}
+
+.home-bests[data-difficulty='Hard'] {
+  --level: var(--menu-orange);
+}
+
+.home-bests[data-difficulty='Nightmare'] {
+  --level: var(--menu-red);
 }
 
 .home-bests-level {
-  color: var(--menu-gold);
-}
-
-.home-bests-level[data-difficulty='Easy'] {
-  color: var(--menu-green);
-}
-
-.home-bests-level[data-difficulty='Hard'] {
-  color: var(--menu-orange);
-}
-
-.home-bests-level[data-difficulty='Nightmare'] {
-  color: var(--menu-red);
+  flex: none;
+  width: max(18px, 6 * var(--a));
+  height: max(18px, 6 * var(--a));
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
 }
 
 .home-bests-list {
+  display: flex;
+  gap: max(8px, 3 * var(--a));
   margin: 0;
 }
 
 .home-best {
   display: flex;
-  justify-content: space-between;
-  gap: 0.8em;
+  align-items: center;
+  gap: max(3px, 1 * var(--a));
 }
 
 .home-best-label,
-.home-best-value,
-.home-bests-empty {
+.home-best-value {
   margin: 0;
 }
 
-.home-bests-empty {
-  max-width: 14em;
+.home-best-label {
+  display: flex;
+}
+
+.home-best-icon {
+  width: max(14px, 4.5 * var(--a));
+  height: max(14px, 4.5 * var(--a));
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
 }
 
 .home-best-value {
   color: var(--menu-gold);
-  font-weight: bold;
+  font: bold clamp(12px, 4 * var(--a), 24px) / 1 var(--menu-font);
 }
 
 /* SUPPORT: the coffee pill on Victory. On the home menu the tip jar is a
@@ -935,12 +1049,6 @@
   touch-action: manipulation;
 }
 
-.panel-actions .panel-done {
-  flex: 0 1 220px;
-  margin-left: auto;
-}
-
-.panel-done,
 .panel-stay {
   border-color: var(--menu-green);
   background: var(--menu-green-deep);
@@ -966,7 +1074,6 @@
 
 .panel-button:active,
 .setting-tile:active,
-.setting-switch:active,
 .difficulty-choice:active {
   box-shadow: var(--menu-press);
   filter: brightness(1.3);
@@ -974,7 +1081,6 @@
 
 .panel-button:focus-visible,
 .setting-tile:focus-visible,
-.setting-switch:focus-visible,
 .setting-link-input:focus-visible,
 .difficulty-choice:focus-visible {
   outline: var(--menu-focus);
@@ -984,7 +1090,6 @@
 @media (hover: hover) {
   .panel-button:hover,
   .setting-tile:hover,
-  .setting-switch:hover,
   .difficulty-choice:hover {
     filter: brightness(1.15);
   }
@@ -1009,14 +1114,16 @@
   }
 }
 
-/* SETTINGS */
+/* SETTINGS: a grid of icon tiles, the devices row folded under them, and a
+   small rewind button for the tutorial. */
 
 .panel-dialog[data-panel='Settings'] .panel {
-  width: min(460px, calc(100vw - 16px));
+  width: min(480px, calc(100vw - 16px));
 }
 
 .setting-tiles {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
   gap: var(--menu-gap);
   margin: 0;
   padding: 0;
@@ -1025,7 +1132,6 @@
 
 .setting-tile-item {
   display: flex;
-  flex: 1;
 }
 
 .setting-tile {
@@ -1041,6 +1147,7 @@
   border: 2px solid var(--menu-line);
   border-radius: var(--menu-radius);
   background: var(--menu-sunken);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
   color: var(--menu-ink-faint);
   font: bold var(--menu-small-size) var(--menu-font);
   letter-spacing: 0.06em;
@@ -1054,6 +1161,11 @@
   color: #c8f59e;
 }
 
+.setting-tile[aria-expanded='true'] {
+  border-color: var(--menu-gold);
+  color: var(--menu-gold);
+}
+
 .setting-tile-icon {
   width: var(--menu-icon);
   height: var(--menu-icon);
@@ -1063,7 +1175,8 @@
   pointer-events: none;
 }
 
-.setting-tile[aria-pressed='true'] .setting-tile-icon {
+.setting-tile[aria-pressed='true'] .setting-tile-icon,
+.setting-devices-tile .setting-tile-icon {
   opacity: 1;
 }
 
@@ -1084,105 +1197,41 @@
   font-size: 10px;
 }
 
-.setting-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--menu-gap-sm);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.setting-row {
-  border-radius: var(--menu-radius);
-  background: var(--menu-surface);
-}
-
-.setting-switch,
-.setting-sync {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  box-sizing: border-box;
-  width: 100%;
-  min-height: var(--menu-tap);
-  padding: 4px 12px;
-  border: 0;
-  border-radius: var(--menu-radius);
-  background: transparent;
-  color: var(--menu-ink);
-  font: var(--menu-text-size) var(--menu-font);
-  text-align: left;
-}
-
-.setting-switch {
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.setting-row-icon {
-  flex: none;
-  width: var(--menu-icon-sm);
-  height: var(--menu-icon-sm);
-  background: center / contain no-repeat;
-  image-rendering: pixelated;
-  opacity: 0.8;
+/* NOTE: the devices tile's dot: grey on this device only, green when
+   linked and synced, yellow while offline. */
+.setting-sync-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--menu-sunken);
+  border-radius: var(--menu-radius-pill);
+  background: var(--menu-ink-faint);
   pointer-events: none;
 }
 
-.setting-switch-text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  pointer-events: none;
+.setting-sync-dot[data-sync='Synced'] {
+  background: var(--menu-green);
 }
 
-.setting-label {
-  font-weight: bold;
-  pointer-events: none;
-}
-
-.setting-state {
-  flex: none;
-  min-width: 3em;
-  padding: 2px 6px;
-  border-radius: var(--menu-radius-sm);
-  background: #3a2a2a;
-  color: #ff8a7d;
-  font-weight: bold;
-  text-align: center;
-  pointer-events: none;
-}
-
-.setting-switch[aria-pressed='true'] .setting-state {
-  background: var(--menu-green-deep);
-  color: var(--menu-green);
-}
-
-.setting-note {
-  margin: 0;
-  color: var(--menu-ink-faint);
-  font-size: var(--menu-small-size);
-  font-weight: normal;
-}
-
-.setting-note:empty {
-  display: none;
+.setting-sync-dot[data-sync='Offline'],
+.setting-sync-dot[data-sync='Syncing'] {
+  background: var(--menu-gold);
 }
 
 .setting-devices {
   display: flex;
   flex-direction: column;
   gap: var(--menu-gap-sm);
-}
-
-.setting-devices > :not(.setting-sync) {
-  margin: 0 12px 8px;
+  padding: 8px 12px;
+  border-radius: var(--menu-radius);
+  background: var(--menu-surface);
 }
 
 .setting-sync-state {
-  color: var(--menu-ink-faint);
+  margin: 0;
+  color: var(--menu-ink-dim);
   font-size: var(--menu-small-size);
 }
 
@@ -1197,8 +1246,13 @@
 .setting-sync-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: var(--menu-gap-sm);
+}
+
+.setting-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--menu-gap);
 }
 
 .setting-confirm {
@@ -1207,11 +1261,53 @@
   gap: 6px;
 }
 
-.setting-footer-note:empty {
+.setting-note {
+  margin: 0;
+  color: var(--menu-ink-faint);
+  font-size: var(--menu-small-size);
+  font-weight: normal;
+}
+
+.setting-note:empty {
   display: none;
 }
 
-/* HOW TO PLAY: the control cards, on the home panel and the pause screen. */
+/* NOTE: a small square icon button for rare things, such as the tutorial
+   reset: there, never loud. */
+.panel-icon-button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--menu-tap);
+  height: var(--menu-tap);
+  padding: 0;
+  border: 2px solid var(--menu-line);
+  border-radius: var(--menu-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.panel-icon {
+  width: 18px;
+  height: 18px;
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.panel-icon-button:focus-visible {
+  outline: var(--menu-focus);
+  outline-offset: 2px;
+}
+
+.panel-icon-button:active {
+  box-shadow: var(--menu-press);
+}
+
+/* HOW TO PLAY: the control cards, on the home panel and the pause screen.
+   Each is the tutorial's own moving picture and a word or two. */
 
 .panel-help {
   display: flex;
@@ -1221,6 +1317,7 @@
 }
 
 .help-cards {
+  --pic-px: 2.4px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 0.5em;
@@ -1233,18 +1330,106 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 0.3em;
+  justify-content: flex-end;
+  gap: 0.45em;
   min-width: 0;
-  padding: 0.6em 0.3em 0.55em;
+  padding: 0.7em 0.3em 0.6em;
   border-radius: var(--menu-radius-sm);
   background: var(--menu-surface);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
   text-align: center;
 }
 
+.help-card-picture {
+  position: relative;
+  display: block;
+  width: calc(var(--pic-w) * var(--pic-px));
+  height: calc(var(--pic-h) * var(--pic-px));
+}
+
+.help-card-frame {
+  position: absolute;
+  image-rendering: pixelated;
+  visibility: hidden;
+  animation: help-frames-2 calc(var(--frames) * var(--frame-ms)) steps(1, end)
+    infinite;
+  animation-delay: calc((var(--frame) - var(--frames)) * var(--frame-ms));
+}
+
+.help-card-frame[data-frames='1'] {
+  visibility: visible;
+  animation: none;
+}
+
+.help-card-frame[data-frames='3'] {
+  animation-name: help-frames-3;
+}
+
+.help-card-frame[data-frames='4'] {
+  animation-name: help-frames-4;
+}
+
+.help-card-frame[data-frames='5'] {
+  animation-name: help-frames-5;
+}
+
+.help-card-frame[data-frames='6'] {
+  animation-name: help-frames-6;
+}
+
+@keyframes help-frames-2 {
+  0% {
+    visibility: visible;
+  }
+  50%,
+  100% {
+    visibility: hidden;
+  }
+}
+
+@keyframes help-frames-3 {
+  0% {
+    visibility: visible;
+  }
+  33.33%,
+  100% {
+    visibility: hidden;
+  }
+}
+
+@keyframes help-frames-4 {
+  0% {
+    visibility: visible;
+  }
+  25%,
+  100% {
+    visibility: hidden;
+  }
+}
+
+@keyframes help-frames-5 {
+  0% {
+    visibility: visible;
+  }
+  20%,
+  100% {
+    visibility: hidden;
+  }
+}
+
+@keyframes help-frames-6 {
+  0% {
+    visibility: visible;
+  }
+  16.66%,
+  100% {
+    visibility: hidden;
+  }
+}
+
 .help-card-icon {
-  width: 1.9em;
-  height: 1.9em;
+  width: 2em;
+  height: 2em;
   background: center / contain no-repeat;
   image-rendering: pixelated;
 }
@@ -1254,17 +1439,6 @@
   font-weight: bold;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-
-.help-card-keys {
-  display: flex;
-  gap: 0.3em;
-}
-
-.help-card-words {
-  color: var(--menu-gold);
-  font-size: 0.85em;
-  line-height: 1.2;
 }
 
 .help-extra {
@@ -1308,7 +1482,17 @@
   }
 }
 
-/* DIFFICULTY */
+@media (prefers-reduced-motion: reduce) {
+  .help-card-frame {
+    animation: none;
+  }
+
+  .help-card-frame[data-frame='0'] {
+    visibility: visible;
+  }
+}
+
+/* DIFFICULTY: chunky tiles, each its skulls and one word. */
 
 .panel-dialog[data-panel='Difficulty'] .panel {
   width: min(480px, calc(100vw - 16px));
@@ -1321,67 +1505,79 @@
 }
 
 .difficulty-choice {
+  --level: var(--menu-gold);
+  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   box-sizing: border-box;
-  min-height: 56px;
-  padding: 6px 10px;
+  min-height: 72px;
+  padding: 8px 10px;
   border: 2px solid var(--menu-line);
-  border-radius: var(--menu-radius-sm);
-  background: var(--menu-surface);
+  border-radius: var(--menu-radius);
+  background: var(--menu-sunken);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
   color: var(--menu-ink);
-  text-align: left;
   cursor: pointer;
   touch-action: manipulation;
+}
+
+.difficulty-choice[data-difficulty='Easy'] {
+  --level: var(--menu-green);
+}
+
+.difficulty-choice[data-difficulty='Hard'] {
+  --level: var(--menu-orange);
+}
+
+.difficulty-choice[data-difficulty='Nightmare'] {
+  --level: var(--menu-red);
+}
+
+.difficulty-choice .skull {
+  width: 18px;
+  height: 18px;
 }
 
 .difficulty-name {
   display: flex;
   align-items: center;
   gap: 6px;
+  color: var(--level);
   font: bold 14px var(--menu-font);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   pointer-events: none;
 }
 
-.difficulty-blurb {
-  color: var(--menu-ink-faint);
-  font: var(--menu-small-size) / 1.25 var(--menu-font);
-  pointer-events: none;
-}
-
-.difficulty-choice[data-difficulty='Easy'] .difficulty-name {
-  color: var(--menu-green);
-}
-
-.difficulty-choice[data-difficulty='Normal'] .difficulty-name {
-  color: var(--menu-gold);
-}
-
-.difficulty-choice[data-difficulty='Hard'] .difficulty-name {
-  color: var(--menu-orange);
-}
-
-.difficulty-choice[data-difficulty='Nightmare'] .difficulty-name {
-  color: var(--menu-red);
-}
-
 .difficulty-choice[data-chosen='Chosen'] {
-  border-color: var(--menu-green);
-  background: var(--menu-green-deep);
+  border-color: var(--level);
+  background: var(--menu-surface-hi);
+  box-shadow:
+    0 0 0 2px var(--level),
+    0 0 14px color-mix(in srgb, var(--level) 45%, transparent),
+    0 4px 0 rgba(0, 0, 0, 0.45);
 }
 
 .difficulty-choice[aria-disabled='true'] {
   border-style: dashed;
-  opacity: 0.55;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
-.difficulty-padlock {
-  display: inline-block;
+/* NOTE: a locked level shows what unlocks it: a trophy for beating Hard. */
+.difficulty-unlock {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.difficulty-unlock-icon {
   width: 14px;
   height: 14px;
   background: center / contain no-repeat;
@@ -1441,6 +1637,133 @@
   .difficulty-choice {
     min-height: 48px;
     padding: 4px 10px;
+  }
+}
+
+/* CLOSE: the shop's red pixel X in each panel's top right corner. */
+
+.panel-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: var(--menu-tap);
+  height: var(--menu-tap);
+  padding: 0;
+  border: 2px solid #8a2a24;
+  border-radius: var(--menu-radius-sm);
+  background: #3a1a1e;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.panel-close-icon {
+  width: 22px;
+  height: 22px;
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .panel-close:hover {
+    border-color: var(--menu-red);
+    background: #5a2228;
+  }
+}
+
+.panel-close:active {
+  box-shadow: var(--menu-press);
+}
+
+.panel-close:focus-visible {
+  outline: var(--menu-focus);
+  outline-offset: 2px;
+}
+
+.panel-title {
+  padding-right: calc(var(--menu-tap) + 8px);
+}
+
+/* GAME FEEL: small idle motions, all CSS, none of them on the game's
+   frame. */
+
+.home-manor-icon {
+  animation: manor-peek 3.2s ease-in-out infinite;
+}
+
+@keyframes manor-peek {
+  0%,
+  80%,
+  100% {
+    translate: 0 0;
+    rotate: 0deg;
+  }
+
+  86% {
+    translate: 0 -3px;
+    rotate: -4deg;
+  }
+
+  92% {
+    translate: 0 -1px;
+    rotate: 3deg;
+  }
+}
+
+.home-settings .home-corner-icon {
+  animation: gear-tick 8s steps(8, end) infinite;
+}
+
+@keyframes gear-tick {
+  to {
+    rotate: 45deg;
+  }
+}
+
+.manor-pip[data-card='WhatsNew'] {
+  animation: pip-bounce 1.1s ease-in-out infinite;
+}
+
+@keyframes pip-bounce {
+  0%,
+  60%,
+  100% {
+    translate: 0 0;
+  }
+
+  30% {
+    translate: 0 -5px;
+  }
+}
+
+/* NOTE: the Munchopedia card's found tally sits in a ring that fills as
+   zombies are found. */
+.hand-card-tally {
+  display: grid;
+  place-items: center;
+  width: 2.6em;
+  height: 2.6em;
+  padding: 0;
+  border-radius: var(--menu-radius-pill);
+  background:
+    radial-gradient(closest-side, var(--menu-sunken) 72%, transparent 74%),
+    conic-gradient(
+      var(--menu-green) calc(var(--found) * 360deg),
+      rgba(244, 241, 222, 0.15) 0
+    );
+  color: #c8f59e;
+  font-size: clamp(8px, 2.2 * var(--a), 13px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-manor-icon,
+  .home-settings .home-corner-icon,
+  .manor-pip[data-card='WhatsNew'] {
+    animation: none;
   }
 }
 
@@ -1984,4 +2307,8 @@
   .home-turn-icon {
     animation: none;
   }
+}
+
+.pause-help .help-cards {
+  --pic-px: 0.19em;
 }

@@ -94,7 +94,7 @@ export const showDialogInScene = () => [
   ),
 ]
 
-export const manorButton = Scene.role('button', { name: /^Manor:/ })
+export const manorButton = Scene.role('button', { name: /^More:/ })
 
 // NOTE: deals the MANOR hand on the home menu.
 export const openHandInScene = () => [
