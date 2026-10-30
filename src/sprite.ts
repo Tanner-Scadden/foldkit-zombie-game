@@ -3,6 +3,14 @@ import { Canvas } from 'foldkit'
 
 import type { PickupKind, TrapKind, WeaponKind, ZombieKind } from './model'
 import { type Fill, parseColor, pngDataUrl } from './png'
+import {
+  type AtlasHit,
+  atlasLookup,
+  spriteKeyOf,
+  spriteMode,
+  standInKeyOf,
+  standInSource,
+} from './spriteAtlas'
 import type { TrapStage } from './traps'
 
 export type Palette = Readonly<Record<string, string>>
@@ -213,23 +221,111 @@ const imageAt = (
   return Canvas.Image({ src, x, y, width, height, rendering: 'Pixelated' })
 }
 
+// NOTE: a prebuilt sprite is a cropped region of one of the atlas's files.
+const atlasImageAt = (hit: AtlasHit, x: number, y: number): Canvas.Image => {
+  builtSpriteSources.add(hit.src)
+  return Canvas.Image({
+    src: hit.src,
+    x,
+    y,
+    width: hit.width,
+    height: hit.height,
+    crop: { x: hit.x, y: hit.y, width: hit.width, height: hit.height },
+    rendering: 'Pixelated',
+  })
+}
+
+// CONTENT
+
+export type SpriteContent = Readonly<{
+  width: number
+  height: number
+  fills: ReadonlyArray<Fill>
+}>
+
+const contentsByKey = new Map<string, SpriteContent>()
+
+// NOTE: every sprite built in stand-in mode, by key, with its pixels as the
+// fills to paint. The atlas generator packs these, and tests read them.
+export const spriteContents = (): ReadonlyMap<string, SpriteContent> =>
+  contentsByKey
+
+export const spriteContentOf = (src: string): Option.Option<SpriteContent> =>
+  Option.flatMap(standInKeyOf(src), key =>
+    Option.fromNullishOr(contentsByKey.get(key)),
+  )
+
+// NOTE: the image for a sprite the atlas does not hold: a stand-in named by
+// its key in stand-in mode, else a PNG data URL encoded here. None when a
+// palette color cannot be read, so the caller keeps rectangles.
+const builtSource = (
+  key: string,
+  width: number,
+  height: number,
+  runs: ReadonlyArray<PixelRun>,
+): Option.Option<string> => {
+  if (spriteMode() === 'Encode') {
+    return runsDataUrl(width, height, runs)
+  }
+  return Option.map(fillsOf(runs), fills => {
+    contentsByKey.set(key, { width, height, fills })
+    return standInSource(key)
+  })
+}
+
+// NOTE: a pixel map's key: its size, its rows, and its palette in symbol
+// order, so the same map and colors always find the same prebuilt image.
+const pixelsKeyOf = (
+  width: number,
+  pixels: ReadonlyArray<string>,
+  palette: Palette,
+): string => {
+  let text = `p${width}x${pixels.length}`
+  for (const row of pixels) {
+    text += `\n${row}`
+  }
+  for (const symbol of Object.keys(palette).sort()) {
+    text += `\n${symbol}=${palette[symbol] ?? ''}`
+  }
+  return spriteKeyOf(text)
+}
+
+const builtSpriteShapes = (
+  key: string,
+  pixels: ReadonlyArray<string>,
+  palette: Palette,
+  anchor: Anchor,
+  width: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const runs = rowRunsOf(pixels, palette)
+  if (Array.isReadonlyArrayEmpty(runs)) {
+    return []
+  }
+
+  return Option.match(builtSource(key, width, pixels.length, runs), {
+    onNone: () => spriteRects(pixels, palette, anchor),
+    onSome: src => [imageAt(src, -anchor.x, -anchor.y, width, pixels.length)],
+  })
+}
+
 // NOTE: a sprite is one image of its pixel map, drawn with a single
 // drawImage, instead of a rectangle for each run of same colored pixels. A
-// palette color that is not a hex or rgb() color keeps the rectangles.
+// prebuilt one is found by its key with no pixel work at all. A palette color
+// that is not a hex or rgb() color keeps the rectangles.
 export const spriteShapes = (
   pixels: ReadonlyArray<string>,
   palette: Palette,
   anchor: Anchor = centerAnchor(pixels),
 ): ReadonlyArray<Canvas.Shape> => {
-  const runs = rowRunsOf(pixels, palette)
   const width = spriteWidth(pixels)
-  if (Array.isReadonlyArrayEmpty(runs)) {
-    return []
-  }
-
-  return Option.match(runsDataUrl(width, pixels.length, runs), {
-    onNone: () => spriteRects(pixels, palette, anchor),
-    onSome: src => [imageAt(src, -anchor.x, -anchor.y, width, pixels.length)],
+  const key = pixelsKeyOf(width, pixels, palette)
+  return Option.match(atlasLookup(key), {
+    onNone: () => builtSpriteShapes(key, pixels, palette, anchor, width),
+    onSome: maybeHit =>
+      Option.match(maybeHit, {
+        onNone: () => [],
+        onSome: hit => [atlasImageAt(hit, -anchor.x, -anchor.y)],
+      }),
   })
 }
 
@@ -325,9 +421,18 @@ export const bakeShapes = (
     height: run.height,
     color: run.color,
   }))
-  return Option.match(runsDataUrl(width, height, shifted), {
-    onNone: () => shapes,
-    onSome: src => [imageAt(src, box.left, box.top, width, height)],
+  const key = spriteKeyOf(`r${contentKeyOf(width, height, shifted)}`)
+  return Option.match(atlasLookup(key), {
+    onNone: () =>
+      Option.match(builtSource(key, width, height, shifted), {
+        onNone: () => shapes,
+        onSome: src => [imageAt(src, box.left, box.top, width, height)],
+      }),
+    onSome: maybeHit =>
+      Option.match(maybeHit, {
+        onNone: () => [],
+        onSome: hit => [atlasImageAt(hit, box.left, box.top)],
+      }),
   })
 }
 

@@ -2,7 +2,7 @@ import { Array, Option, Record, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 import { given, scene } from 'foldkit/scene'
-import { describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test } from 'vitest'
 
 import { playerSprites } from './appearance'
 import { COIN_SPRITE, GLYPH_SPRITES } from './font'
@@ -18,6 +18,7 @@ import {
   spriteDataUrl,
   spriteShapes,
 } from './sprite'
+import { standInKeyOf, useSpriteAtlas, useSpriteMode } from './spriteAtlas'
 import { decodePng, hexOf } from './testPng'
 
 // PIXEL MAPS
@@ -177,6 +178,88 @@ describe('sprite images', () => {
       x: 10,
       y: 20,
     })
+  })
+})
+
+// PREBUILT SPRITES
+
+const keyOf = (shapes: ReadonlyArray<Canvas.Shape>): string =>
+  Option.getOrThrow(standInKeyOf(onlyImage(shapes).src))
+
+const ATLAS_FILE = 'sprites.png'
+
+describe('prebuilt sprites', () => {
+  afterEach(() => {
+    useSpriteAtlas({ sources: [], entries: {} })
+    useSpriteMode('StandIn')
+  })
+
+  test('a stand-in holds the same pixels as the encoded PNG', () => {
+    const standIn = onlyImage(spriteShapes(PIXELS, PALETTE))
+    expect(standInKeyOf(standIn.src)).toEqual(Option.some(keyOf([standIn])))
+    expect(decodePng(standIn.src)).toEqual(
+      Option.flatMap(spriteDataUrl(PIXELS, PALETTE), decodePng),
+    )
+  })
+
+  test('the same pixel map and colors always get the same key', () => {
+    expect(keyOf(spriteShapes([...PIXELS], { ...PALETTE }))).toBe(
+      keyOf(spriteShapes(PIXELS, PALETTE)),
+    )
+    expect(keyOf(spriteShapes(PIXELS, { ...PALETTE, R: '#000000' }))).not.toBe(
+      keyOf(spriteShapes(PIXELS, PALETTE)),
+    )
+  })
+
+  test('a sprite in the atlas is a cropped region of its file, placed by its anchor', () => {
+    const key = keyOf(spriteShapes(PIXELS, PALETTE))
+    useSpriteAtlas({
+      sources: [ATLAS_FILE],
+      entries: { [key]: [0, 7, 9, 5, 6] },
+    })
+    expect(onlyImage(spriteShapes(PIXELS, PALETTE, { x: 2, y: 6 }))).toEqual(
+      Canvas.Image({
+        src: ATLAS_FILE,
+        x: -2,
+        y: -6,
+        width: 5,
+        height: 6,
+        crop: { x: 7, y: 9, width: 5, height: 6 },
+        rendering: 'Pixelated',
+      }),
+    )
+  })
+
+  test('a sprite the atlas marks empty draws nothing', () => {
+    const key = keyOf(spriteShapes(PIXELS, PALETTE))
+    useSpriteAtlas({ sources: [ATLAS_FILE], entries: { [key]: null } })
+    expect(spriteShapes(PIXELS, PALETTE)).toEqual([])
+  })
+
+  test('baked rectangles in the atlas are found by their content, wherever they stand', () => {
+    const rects = (x: number) => [
+      Canvas.Rect({ x, y: 3, width: 3, height: 2, fill: '#000000' }),
+      Canvas.Rect({ x: x + 1, y: 3, width: 1, height: 1, fill: '#ffffff' }),
+    ]
+    const key = keyOf(bakeShapes(rects(2)))
+    expect(keyOf(bakeShapes(rects(40)))).toBe(key)
+    useSpriteAtlas({
+      sources: [ATLAS_FILE],
+      entries: { [key]: [0, 1, 1, 3, 2] },
+    })
+    expect(onlyImage(bakeShapes(rects(40)))).toMatchObject({
+      src: ATLAS_FILE,
+      x: 40,
+      y: 3,
+      crop: { x: 1, y: 1, width: 3, height: 2 },
+    })
+  })
+
+  test('a sprite the atlas lacks is encoded as a PNG outside the tests', () => {
+    useSpriteMode('Encode')
+    expect(onlyImage(spriteShapes(PIXELS, PALETTE)).src).toBe(
+      Option.getOrThrow(spriteDataUrl(PIXELS, PALETTE)),
+    )
   })
 })
 

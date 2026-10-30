@@ -1,11 +1,12 @@
 import { Array, Option, Result, String, pipe } from 'effect'
 import { Base64 } from 'effect/encoding'
 
-import type { Rgba } from './png'
+import { type Rgba, rasterOf } from './png'
+import { spriteContentOf } from './sprite'
 
-// NOTE: reads back the PNG data URLs that src/png.ts writes, for tests. It
-// only knows that writer's shape: one IDAT chunk of stored deflate blocks and
-// unfiltered RGBA scanlines.
+// NOTE: reads back the PNG data URLs that src/png.ts writes, and the
+// stand-ins tests draw instead, for tests. It only knows that writer's shape:
+// one IDAT chunk of stored deflate blocks and unfiltered RGBA scanlines.
 
 type DecodedPng = Readonly<{
   width: number
@@ -47,9 +48,26 @@ const storedBlocks = (zlib: Uint8Array, at: number): ReadonlyArray<number> => {
   return isFinal ? block : [...block, ...storedBlocks(zlib, at + 5 + length)]
 }
 
+// NOTE: tests run in stand-in mode (src/vitest-setup.ts), where a sprite's
+// source names its key and its pixels are kept in src/sprite.ts.
+const standInPng = (src: string): Option.Option<DecodedPng> =>
+  Option.map(spriteContentOf(src), ({ width, height, fills }) => {
+    const raster = rasterOf(width, height, fills)
+    return {
+      width,
+      height,
+      pixels: Array.makeBy(width * height, index => ({
+        r: raster[index * 4] ?? 0,
+        g: raster[index * 4 + 1] ?? 0,
+        b: raster[index * 4 + 2] ?? 0,
+        a: raster[index * 4 + 3] ?? 0,
+      })),
+    }
+  })
+
 export const decodePng = (src: string): Option.Option<DecodedPng> => {
   if (!String.startsWith(PNG_PREFIX)(src)) {
-    return Option.none()
+    return standInPng(src)
   }
 
   return pipe(

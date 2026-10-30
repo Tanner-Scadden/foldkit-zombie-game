@@ -142,6 +142,25 @@ const scanlinesOf = (
   return lines
 }
 
+// NOTE: the RGBA pixels the PNG holds, row after row with no filter bytes,
+// for tests and the atlas generator to read without a PNG decoder.
+export const rasterOf = (
+  width: number,
+  height: number,
+  fills: ReadonlyArray<Fill>,
+): Uint8Array => {
+  const lines = scanlinesOf(width, height, fills)
+  const raster = new Uint8Array(width * height * BYTES_PER_PIXEL)
+  for (let y = 0; y < height; y++) {
+    const start = y * rowLength(width) + 1
+    raster.set(
+      lines.subarray(start, start + width * BYTES_PER_PIXEL),
+      y * width * BYTES_PER_PIXEL,
+    )
+  }
+  return raster
+}
+
 // PNG
 
 const CRC_TABLE: ReadonlyArray<number> = Array.makeBy(256, byte =>
