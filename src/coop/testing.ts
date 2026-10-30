@@ -30,6 +30,7 @@ export type FakeCall =
   | Readonly<{ _tag: 'ChangeLobby'; change: LobbyChange }>
   | Readonly<{ _tag: 'SendToRoom'; frames: ReadonlyArray<ClientFrame> }>
   | Readonly<{ _tag: 'LeaveRoom' }>
+  | Readonly<{ _tag: 'ResyncRoom' }>
 
 export type FakeCoopNet = Readonly<{
   layer: Layer.Layer<CoopNet>
@@ -63,6 +64,7 @@ export const makeFakeCoopNet = (
               Array.map(frames, () => 8),
             ),
           leaveRoom: record({ _tag: 'LeaveRoom' }),
+          resyncRoom: record({ _tag: 'ResyncRoom' }),
         }),
       ),
     }
@@ -81,6 +83,7 @@ export const quietCoopNet: Layer.Layer<CoopNet> = Layer.succeed(
     room: () => Stream.never,
     sendToRoom: () => Effect.succeed([]),
     leaveRoom: Effect.void,
+    resyncRoom: Effect.void,
   }),
 )
 

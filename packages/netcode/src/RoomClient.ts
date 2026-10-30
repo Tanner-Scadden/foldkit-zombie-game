@@ -3,7 +3,6 @@ import {
   Effect,
   Option,
   Queue,
-  Random,
   Ref,
   Result,
   Schedule,
@@ -23,6 +22,7 @@ import {
   decodeServerFrame,
   encodeClientFrame,
 } from './Protocol'
+import { type Ended, backoffUpTo, reconnecting } from './Reconnect'
 import {
   type OpenSocket,
   SocketError,
@@ -58,6 +58,9 @@ export interface RoomClient {
   readonly send: (frame: ClientFrame) => Effect.Effect<Option.Option<number>>
   // NOTE: says Leave, which frees the seat, and stops reconnecting.
   readonly leave: Effect.Effect<void>
+  // NOTE: drops the socket and connects again at once, for a Session that
+  // could not apply a message and needs the Snapshot a new link brings.
+  readonly resync: Effect.Effect<void>
 }
 
 // NOTE: the sync engine's ping, which the Durable Object answers by
@@ -65,7 +68,12 @@ export interface RoomClient {
 // round trip, for free: an auto-response is never billed. It goes every
 // 2 seconds, in the lobby and in the run alike.
 const HEARTBEAT = '2 seconds'
-const FIRST_BACKOFF_MS = 250
+// NOTE: the room sends 20 times a second in a run, and the ping is
+// answered every 2 seconds even in the lobby, so this long with nothing at
+// all is a dead link (a half-open TCP connection never closes by itself):
+// the socket is dropped and a new one connects.
+const SILENT_MS = 6000
+const WATCH_EVERY = '1 second'
 const DEFAULT_MAX_BACKOFF_MS = 5000
 
 // NOTE: refusals that another try would only repeat. An Unauthorized one
@@ -86,12 +94,13 @@ export const connectRoom = (
     const stopped = yield* Ref.make<Option.Option<string>>(Option.none())
     const heardAny = yield* Ref.make(false)
     const pinged = yield* Ref.make<Option.Option<number>>(Option.none())
-    const maxBackoffMs = options.maxBackoffMs ?? DEFAULT_MAX_BACKOFF_MS
+    const heardMs = yield* Ref.make(0)
 
     const offer = (event: RoomEvent) => Queue.offer(events, event)
 
     const onData = (data: string | Uint8Array) =>
       Effect.gen(function* () {
+        yield* Ref.set(heardMs, yield* Clock.currentTimeMillis)
         if (typeof data === 'string') {
           if (data !== PONG_JSON) {
             return
@@ -146,6 +155,21 @@ export const connectRoom = (
           const socket = yield* openSocket(options.url)
           yield* socket.send(yield* hello(token))
           yield* Ref.set(current, Option.some(socket))
+          yield* Ref.set(heardMs, yield* Clock.currentTimeMillis)
+          yield* Effect.forkScoped(
+            Effect.repeat(
+              Effect.delay(
+                Effect.gen(function* () {
+                  const nowMs = yield* Clock.currentTimeMillis
+                  if (nowMs - (yield* Ref.get(heardMs)) >= SILENT_MS) {
+                    yield* socket.drop('Silent')
+                  }
+                }),
+                WATCH_EVERY,
+              ),
+              Schedule.forever,
+            ),
+          )
           yield* Effect.forkScoped(
             Effect.repeat(
               Effect.delay(
@@ -171,23 +195,16 @@ export const connectRoom = (
         }),
       )
 
-    const backoff = (attempt: number) =>
-      Effect.flatMap(Random.next, jitter =>
-        Effect.sleep(
-          Math.min(maxBackoffMs, FIRST_BACKOFF_MS * 2 ** attempt) *
-            (0.5 + jitter / 2),
-        ),
-      )
-
-    const loop = (attempt: number): Effect.Effect<void> =>
+    const connectOnce = (attempt: number): Effect.Effect<Ended> =>
       Effect.gen(function* () {
         yield* Ref.set(heardAny, false)
         const exit = yield* Effect.exit(connection(attempt))
         const maybeStop = yield* Ref.get(stopped)
         if (Option.isSome(maybeStop)) {
-          return yield* offer(
+          yield* offer(
             RoomEvent.cases.Stopped.make({ reason: maybeStop.value }),
           )
+          return 'Stopped'
         }
         yield* offer(
           RoomEvent.cases.Dropped.make({
@@ -195,12 +212,15 @@ export const connectRoom = (
               exit._tag === 'Failure' ? String(exit.cause) : 'Socket ended',
           }),
         )
-        const next = (yield* Ref.get(heardAny)) ? 0 : Math.min(attempt + 1, 6)
-        yield* backoff(next)
-        return yield* loop(next)
+        return (yield* Ref.get(heardAny)) ? 'Heard' : 'Unheard'
       })
 
-    yield* Effect.forkScoped(loop(0))
+    yield* Effect.forkScoped(
+      reconnecting(
+        connectOnce,
+        backoffUpTo(options.maxBackoffMs ?? DEFAULT_MAX_BACKOFF_MS),
+      ),
+    )
 
     const send = (frame: ClientFrame) =>
       Effect.gen(function* () {
@@ -230,5 +250,12 @@ export const connectRoom = (
       yield* Ref.set(stopped, Option.some('Left'))
     })
 
-    return { events: Stream.fromQueue(events), send, leave }
+    const resync = Effect.flatMap(Ref.get(current), maybeSocket =>
+      Option.match(maybeSocket, {
+        onNone: () => Effect.void,
+        onSome: socket => socket.drop('Resync'),
+      }),
+    )
+
+    return { events: Stream.fromQueue(events), send, leave, resync }
   })

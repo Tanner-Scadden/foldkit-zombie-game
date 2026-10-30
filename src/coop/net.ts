@@ -73,6 +73,8 @@ export class CoopNet extends Context.Service<
       frames: ReadonlyArray<ClientFrame>,
     ) => Effect.Effect<ReadonlyArray<number>>
     readonly leaveRoom: Effect.Effect<void>
+    // NOTE: a new socket for the run, whose link brings a fresh Snapshot.
+    readonly resyncRoom: Effect.Effect<void>
   }
 >()('munch-manor/CoopNet') {}
 
@@ -312,6 +314,13 @@ const liveOf = (maybeAccess: Option.Option<RoomAccess>) =>
         }
         yield* Effect.sleep(LEAVE_SETTLE)
       }),
+
+      resyncRoom: Effect.flatMap(Ref.get(handles.room), maybeRoom =>
+        Option.match(maybeRoom, {
+          onNone: () => Effect.void,
+          onSome: client => client.resync,
+        }),
+      ),
     })
   })
 
@@ -342,6 +351,7 @@ export const layer: Layer.Layer<CoopNet, never, PlayerStore> = Layer.effect(
       room: code => useStream(net => net.room(code)),
       sendToRoom: frames => use(net => net.sendToRoom(frames)),
       leaveRoom: use(net => net.leaveRoom),
+      resyncRoom: use(net => net.resyncRoom),
     })
   }),
 )

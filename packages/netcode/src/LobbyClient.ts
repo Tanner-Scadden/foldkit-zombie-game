@@ -4,7 +4,6 @@ import {
   Effect,
   Option,
   Queue,
-  Random,
   Ref,
   Schedule,
   Schema,
@@ -52,6 +51,7 @@ import {
   roomScopeId,
 } from './Lobby'
 import * as Matchmaking from './Matchmaking'
+import { type Ended, backoffUpTo, reconnecting } from './Reconnect'
 import { SocketError, type TokenUnavailable, openSocket } from './Socket'
 
 // NOTE: the lobby from a client with no local database: the dev page, and
@@ -210,6 +210,7 @@ export const followLobby = (
       Option.Option<(text: string) => Effect.Effect<void, SocketError>>
     >(Option.none())
     const stopped = yield* Ref.make<Option.Option<string>>(Option.none())
+    const heardAny = yield* Ref.make(false)
 
     const offer = (event: LobbyEvent) => Queue.offer(events, event)
 
@@ -282,10 +283,13 @@ export const followLobby = (
             ),
             Stream.runForEach(data =>
               typeof data === 'string'
-                ? Effect.matchEffect(decodeServerMessage(data), {
-                    onFailure: () => Effect.void,
-                    onSuccess: message => onMessage(message, again),
-                  })
+                ? Effect.andThen(
+                    Ref.set(heardAny, true),
+                    Effect.matchEffect(decodeServerMessage(data), {
+                      onFailure: () => Effect.void,
+                      onSuccess: message => onMessage(message, again),
+                    }),
+                  )
                 : Effect.void,
             ),
             Effect.ensuring(Ref.set(sendRef, Option.none())),
@@ -293,14 +297,16 @@ export const followLobby = (
         }),
       )
 
-    const loop = (attempt: number): Effect.Effect<void> =>
+    const connectOnce = (attempt: number): Effect.Effect<Ended> =>
       Effect.gen(function* () {
+        yield* Ref.set(heardAny, false)
         const exit = yield* Effect.exit(connection(attempt))
         const maybeStop = yield* Ref.get(stopped)
         if (Option.isSome(maybeStop)) {
-          return yield* offer(
+          yield* offer(
             LobbyEvent.cases.Stopped.make({ reason: maybeStop.value }),
           )
+          return 'Stopped'
         }
         yield* offer(
           LobbyEvent.cases.Dropped.make({
@@ -308,14 +314,12 @@ export const followLobby = (
               exit._tag === 'Failure' ? String(exit.cause) : 'Socket ended',
           }),
         )
-        const jitter = yield* Random.next
-        yield* Effect.sleep(
-          Math.min(MAX_BACKOFF_MS, 250 * 2 ** attempt) * (0.5 + jitter / 2),
-        )
-        return yield* loop(Math.min(attempt + 1, 6))
+        return (yield* Ref.get(heardAny)) ? 'Heard' : 'Unheard'
       })
 
-    yield* Effect.forkScoped(loop(0))
+    yield* Effect.forkScoped(
+      reconnecting(connectOnce, backoffUpTo(MAX_BACKOFF_MS)),
+    )
 
     const write = <A, I>(mutation: Mutation<string, A, I>, args: NoInfer<A>) =>
       Effect.gen(function* () {
