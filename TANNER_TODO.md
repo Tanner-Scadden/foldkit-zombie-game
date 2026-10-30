@@ -13,8 +13,6 @@ Things the game is blocked on until the owner does or decides them. Agents add a
   4. Send the `https://buy.stripe.com/...` link to an agent. It goes in `SUPPORT_URL` and the button appears on the home menu and the Victory screen.
   5. Call it support or a coffee, never a donation.
 - [ ] **Name the mystery box.** Ideas so far: the Lunchbox (Uncle Chunk's rattling lunchbox), the Mystery Meat Crate (moves rooms on a dumbwaiter), the Haunted Hamper (sometimes bites back).
-- [ ] **Confirm the remaining co-op defaults** in `MULTIPLAYER.md` (the rows marked "default, not yet confirmed"), before co-op Phase 1 starts.
-- [ ] **Play on a real mid-range phone** and say if anything stutters. Frame time is only measured with CPU throttling in headless Chrome.
 
 ## Later
 

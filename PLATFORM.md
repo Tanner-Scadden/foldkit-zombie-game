@@ -15,7 +15,7 @@ All on 2026-10-28.
 - **Browser SQLite uses the `opfs-sahpool` VFS.** It needs no COOP/COEP headers, works on Safari 16.4 and later, and allows one connection, which matches one leader tab.
 - **We write our own small Effect wrapper over `@sqlite.org/sqlite-wasm`**, since no Effect SQL client for browser wasm turned up, and open source it with the sync engine.
 - **Every WebSocket uses the Durable Object WebSocket Hibernation API.** Plain `accept()` bills duration for as long as a socket is open.
-- **Multiplayer rooms batch inputs at 20 messages a second per player.** `MULTIPLAYER.md` now proposes inputs on change at most 10 a second, which halves the billed requests; not yet confirmed.
+- **Multiplayer rooms send inputs on change, at most 10 messages a second per player.** Decided 2026-10-29, replacing the earlier 20 a second; it halves the billed requests. See `MULTIPLAYER.md`.
 - **Co-op is server-authoritative.** A `GameRoom` Durable Object runs the simulation at a fixed tick and streams binary deltas about 20 times a second over WebSockets; clients interpolate and predict only their own player. Decided 2026-10-29. See `MULTIPLAYER.md`.
 - **Switch to Workers Paid before co-op is announced.** The free plan fits about 82 four-player sessions a day. Decided 2026-10-29.
 - **The leader tab is chosen with the Web Locks API.** Not separately verified, by choice.
