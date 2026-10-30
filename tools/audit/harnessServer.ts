@@ -26,6 +26,7 @@ const INPUT_DIRS = [
   'src',
   'tools/audit/harness',
   'tools/sprites',
+  'tools/vite',
   'public',
   'patches',
 ]

@@ -11,6 +11,13 @@ It adds:
 
 It also makes `modifyFields` (and `makeModifyFieldsFor`) in `struct/index.js` fast. Foldkit aliases Effect's `Struct.evolve`, which walks every key of the struct through `Reflect.ownKeys` and `propertyIsEnumerable`; on the game's large Model that was about half of a busy frame's `update`. The patch copies the struct with a spread, which keeps the same own enumerable keys in the same order, and then runs only the given transforms, on keys the struct has, as `evolve` does. The types are untouched. It is not upstream yet, so dropping the patch brings the slow path back.
 
+Two more speedups for what the view builds every frame, neither upstream yet and neither changing an API (`src/foldkitPatch.test.ts` checks both):
+
+- **Shapes skip `schema.make`.** A `taggedStruct` constructor (every Canvas shape and Message variant) already copies required keys of plain types without validating them. The patch in `schema/index.js` copies optional keys of plain types too, such as a `Rect`'s `fill`, and leaves out a key the input leaves out, as `make` does. A key with a constructor default still goes through `make`, and so does `undefined` for an exact optional key. Building `Rect`s through `make` was about 27 ms of a 2 s worst-case profile at 4x CPU throttle.
+- **Inline styles are checked once.** `assertStyleIsRepresentable` in `domReflection.js` remembers each name and value that passed (up to 4,096, then it starts over) and each declaration name, and still checks every style for two spellings of one declaration. It was about 20 ms of the same profile.
+
+The third cost of that profile, `brandViewResult` around every function return, is not in the patch: `tools/vite/viewIdentity.ts` wraps the Foldkit Vite plugin so it brands only modules that can make a vnode.
+
 Upstream keeps the cache in `canvas/imageCache.ts`. The patch puts it in `canvas/paint.js`, because Bun failed to apply a patch that adds a file.
 
 A change to the patch rebuilds the site on deploy, since `patches/` is one of the inputs Alchemy watches (see `infra/README.md`).

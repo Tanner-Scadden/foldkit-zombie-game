@@ -423,6 +423,229 @@ index f8ee4870de83702ddef4fc1d393012043b1fbfb9..5a66b83c18026665f63c1be81bebe560
                  }
              },
          },
+diff --git a/dist/domReflection.js b/dist/domReflection.js
+index fa2e6d7c12f5cd7c4539baeb32e9d2b97890cea1..6cad7a23dabce13c75a72af18f448a85e9464b3a 100644
+--- a/dist/domReflection.js
++++ b/dist/domReflection.js
+@@ -456,6 +456,24 @@ const hasUnsafeStyleSyntax = (value) => {
+     }
+     return quote !== undefined || parentheses !== 0 || isComment;
+ };
++// NOTE: Munch Manor patch (see the game's patches/README.md). Every check
++// but the duplicate one depends only on one entry's name and string value,
++// so an entry that passed is remembered and skipped the next time a view
++// builds it, which is every frame for the game's inline styles. The memo is
++// cleared once it holds STYLE_ENTRY_MEMO_LIMIT entries, since values such as
++// positions keep changing. Declaration names are memoized too.
++const STYLE_ENTRY_MEMO_LIMIT = 4096;
++const representableStyleEntries = new Set();
++const declarationNameByProperty = new Map();
++const memoizedDeclarationName = (name) => {
++    const known = declarationNameByProperty.get(name);
++    if (known !== undefined) {
++        return known;
++    }
++    const declarationName = cssDeclarationName(name);
++    declarationNameByProperty.set(name, declarationName);
++    return declarationName;
++};
+ /** Refuses style entries whose property assignment and serialized declaration
+  * can describe different CSS.
+  *
+@@ -464,28 +482,18 @@ const hasUnsafeStyleSyntax = (value) => {
+ export const assertStyleIsRepresentable = (style) => {
+     const declarationOwners = new Map();
+     for (const name of Object.keys(style)) {
+-        if (STYLE_LIFECYCLE_KEYS.has(name)) {
+-            throw new Error(`[foldkit] h.Style property ${JSON.stringify(name)} is a Snabbdom ` +
+-                'lifecycle control rather than a CSS property. Foldkit h.Style ' +
+-                'accepts only declarations applied while the element exists.');
+-        }
+-        if (name === 'cssText' ||
+-            (name.startsWith('--')
+-                ? !CUSTOM_STYLE_PROPERTY_NAME.test(name)
+-                : !STYLE_PROPERTY_NAME.test(name))) {
+-            throw new Error(`[foldkit] h.Style property ${JSON.stringify(name)} cannot be ` +
+-                'represented as one inline CSS declaration. Use a CSS property ' +
+-                'name without declaration delimiters.');
+-        }
+-        const canonicalName = canonicalStylePropertyName(name);
+-        if (!name.startsWith('--') &&
+-            !CSS_STYLE_PROPERTIES.has(canonicalName) &&
+-            !CSS_DECLARATION_PROPERTIES.has(name)) {
+-            throw new Error(`[foldkit] h.Style property ${JSON.stringify(name)} is not a ` +
+-                'CSSStyleDeclaration property supported by Foldkit. Use a known ' +
+-                'camel-case or declaration name, or a custom property beginning --.');
++        const entryValue = style[name];
++        const entryKey = typeof entryValue === 'string'
++            ? `${name}\u0000${entryValue}`
++            : undefined;
++        if (entryKey === undefined || !representableStyleEntries.has(entryKey)) {
++            assertStyleEntryIsRepresentable(name, entryValue);
++            if (representableStyleEntries.size >= STYLE_ENTRY_MEMO_LIMIT) {
++                representableStyleEntries.clear();
++            }
++            representableStyleEntries.add(entryKey);
+         }
+-        const declarationName = cssDeclarationName(name);
++        const declarationName = memoizedDeclarationName(name);
+         const existingOwner = declarationOwners.get(declarationName);
+         if (existingOwner !== undefined) {
+             throw new Error(`[foldkit] h.Style properties ${JSON.stringify(existingOwner)} and ` +
+@@ -494,19 +502,41 @@ export const assertStyleIsRepresentable = (style) => {
+                 'and hydration have one owner for it.');
+         }
+         declarationOwners.set(declarationName, name);
+-        const value = style[name];
+-        if (typeof value !== 'string') {
+-            throw new Error(`[foldkit] h.Style value for ${JSON.stringify(name)} must be a ` +
+-                'string. Browser CSSOM assignment coerces other values while server ' +
+-                'serialization cannot preserve the same authored declaration.');
+-        }
+-        if (hasUnsafeStyleSyntax(value)) {
+-            throw new Error(`[foldkit] h.Style value for ${JSON.stringify(name)} contains a ` +
+-                'unsafe CSS declaration syntax. Assigning one DOM style ' +
+-                'property rejects that value, while serializing it into a style ' +
+-                'attribute could activate additional or !important declarations. ' +
+-                'Keep the value to one declaration.');
+-        }
++    }
++};
++const assertStyleEntryIsRepresentable = (name, value) => {
++    if (STYLE_LIFECYCLE_KEYS.has(name)) {
++        throw new Error(`[foldkit] h.Style property ${JSON.stringify(name)} is a Snabbdom ` +
++            'lifecycle control rather than a CSS property. Foldkit h.Style ' +
++            'accepts only declarations applied while the element exists.');
++    }
++    if (name === 'cssText' ||
++        (name.startsWith('--')
++            ? !CUSTOM_STYLE_PROPERTY_NAME.test(name)
++            : !STYLE_PROPERTY_NAME.test(name))) {
++        throw new Error(`[foldkit] h.Style property ${JSON.stringify(name)} cannot be ` +
++            'represented as one inline CSS declaration. Use a CSS property ' +
++            'name without declaration delimiters.');
++    }
++    const canonicalName = canonicalStylePropertyName(name);
++    if (!name.startsWith('--') &&
++        !CSS_STYLE_PROPERTIES.has(canonicalName) &&
++        !CSS_DECLARATION_PROPERTIES.has(name)) {
++        throw new Error(`[foldkit] h.Style property ${JSON.stringify(name)} is not a ` +
++            'CSSStyleDeclaration property supported by Foldkit. Use a known ' +
++            'camel-case or declaration name, or a custom property beginning --.');
++    }
++    if (typeof value !== 'string') {
++        throw new Error(`[foldkit] h.Style value for ${JSON.stringify(name)} must be a ` +
++            'string. Browser CSSOM assignment coerces other values while server ' +
++            'serialization cannot preserve the same authored declaration.');
++    }
++    if (hasUnsafeStyleSyntax(value)) {
++        throw new Error(`[foldkit] h.Style value for ${JSON.stringify(name)} contains a ` +
++            'unsafe CSS declaration syntax. Assigning one DOM style ' +
++            'property rejects that value, while serializing it into a style ' +
++            'attribute could activate additional or !important declarations. ' +
++            'Keep the value to one declaration.');
+     }
+ };
+ /** The CSS declaration name corresponding to a CSSStyleDeclaration property.
+diff --git a/dist/schema/index.js b/dist/schema/index.js
+index d25261f64aadd984acd82ec41a4ae38c2d4dadb2..d8008383a5c2eb59ae66ef96eb5bcca4f8231d80 100644
+--- a/dist/schema/index.js
++++ b/dist/schema/index.js
+@@ -22,10 +22,10 @@ const runConstructorOperation = (operation) => {
+         });
+     }
+ };
+-const isDirectlyCopyable = (ast) => {
++const isDirectlyCopyable = (ast, isKeyContextAllowed = false) => {
+     if (ast.checks !== undefined ||
+         ast.encoding !== undefined ||
+-        ast.context !== undefined) {
++        (ast.context !== undefined && !isKeyContextAllowed)) {
+         return false;
+     }
+     return Match.value(ast).pipe(Match.withReturnType(), Match.tagsExhaustive({
+@@ -45,28 +45,51 @@ const isDirectlyCopyable = (ast) => {
+         UniqueSymbol: () => true,
+         ObjectKeyword: () => true,
+         Enum: () => true,
+-        TemplateLiteral: ({ parts }) => parts.every(isDirectlyCopyable),
++        TemplateLiteral: ({ parts }) => parts.every(part => isDirectlyCopyable(part)),
+         Arrays: () => false,
+         Objects: () => false,
+-        Union: ({ options, types }) => options?.mode !== 'oneOf' && types.every(isDirectlyCopyable),
++        Union: ({ options, types }) => options?.mode !== 'oneOf' &&
++            types.every(member => isDirectlyCopyable(member)),
+         Suspend: () => false,
+     }));
+ };
++// NOTE: Munch Manor patch (see the game's patches/README.md). An optional
++// key with no constructor default, such as a Canvas shape's `fill`, is
++// copied too, so building a `Rect` or a `Circle` every frame skips
++// `schema.make`. A key the input leaves out stays out, as `make` leaves it.
++// Upstream copies only required keys with no key context.
++const isOptionalCopyableKey = (type) => type.context !== undefined &&
++    type.context.isOptional &&
++    type.context.constructorDefault === undefined &&
++    isDirectlyCopyable(type, true);
++const acceptsUndefined = (type) => type._tag === 'Undefined' ||
++    (type._tag === 'Union' &&
++        type.types.some(member => member._tag === 'Undefined'));
+ const getDirectPropertyNames = (propertySignatures) => {
+     const names = [];
++    const optionalNames = new Map();
+     for (const { name, type } of propertySignatures) {
+-        if (name !== '_tag' && !isDirectlyCopyable(SchemaAST.toType(type))) {
++        const typeAst = SchemaAST.toType(type);
++        if (name === '_tag' || isDirectlyCopyable(typeAst)) {
++            names.push(name);
++        }
++        else if (isOptionalCopyableKey(typeAst)) {
++            names.push(name);
++            optionalNames.set(name, acceptsUndefined(typeAst));
++        }
++        else {
+             return undefined;
+         }
+-        names.push(name);
+     }
+-    return names;
++    return { names, optionalNames };
+ };
+ const makeCallable = (tag, fields) => {
+     const schema = Schema.TaggedStruct(tag, fields);
+-    const propertyNames = Object.hasOwn(fields, '_tag')
++    const directProperties = Object.hasOwn(fields, '_tag')
+         ? undefined
+         : getDirectPropertyNames(schema.ast.propertySignatures);
++    const propertyNames = directProperties?.names;
++    const optionalNames = directProperties?.optionalNames;
+     const make = (value) => schema.make(
+     /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+     (value ?? {}));
+@@ -79,12 +102,17 @@ const makeCallable = (tag, fields) => {
+             }
+             const output = {};
+             for (const name of propertyNames) {
+-                const inputValue = runConstructorOperation(() => {
+-                    const hasProperty = name === '__proto__'
+-                        ? Object.hasOwn(input, name)
+-                        : Reflect.has(input, name);
+-                    return hasProperty ? input[name] : undefined;
+-                });
++                const maybeAcceptsUndefined = optionalNames.get(name);
++                const hasProperty = runConstructorOperation(() => name === '__proto__'
++                    ? Object.hasOwn(input, name)
++                    : Reflect.has(input, name));
++                if (maybeAcceptsUndefined !== undefined && !hasProperty) {
++                    continue;
++                }
++                const inputValue = runConstructorOperation(() => hasProperty ? input[name] : undefined);
++                if (maybeAcceptsUndefined === false && inputValue === undefined) {
++                    return make(value);
++                }
+                 if (name === '_tag') {
+                     if (inputValue !== undefined && inputValue !== tag) {
+                         return make(value);
 diff --git a/dist/struct/index.js b/dist/struct/index.js
 index edbf519f8aa91f5d611beca06cf068ce6d037137..f0048b7e461fa0947e5ef16ea58ea630a087aff0 100644
 --- a/dist/struct/index.js

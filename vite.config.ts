@@ -3,7 +3,6 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import { type Plugin, defineConfig, transformWithOxc } from 'vite'
 
-import { foldkit } from '@foldkit/vite-plugin'
 import tailwindcss from '@tailwindcss/vite'
 
 import {
@@ -15,6 +14,7 @@ import {
   serviceWorkerSource,
 } from './src/sw/precache.ts'
 import { spriteAtlas } from './tools/sprites/vitePlugin.ts'
+import { foldkitBrandingViews } from './tools/vite/viewIdentity.ts'
 
 const WORKER_SOURCE = resolve(import.meta.dirname, 'src/sw/worker.ts')
 
@@ -199,7 +199,7 @@ export default defineConfig({
   base: './',
   plugins: [
     tailwindcss(),
-    foldkit(),
+    ...foldkitBrandingViews(),
     buildId(),
     loadStylesBehindSplash(),
     earlyEntry(),
