@@ -24,6 +24,7 @@ import {
   HORDE_GAP_MS,
   OPEN_BREAK_WAVE,
   PACK_GAP_MS,
+  PACK_WARNING_MS,
   PINCER_LAG_MAX_MS,
   PINCER_LAG_MIN_MS,
   PREPARATION_MS,
@@ -1351,6 +1352,146 @@ export const doorCounts = (
       onNonEmpty: kinds =>
         Result.succeed({ door, count: atDoor.length, kinds }),
     })
+  })
+}
+
+// JOINING DOORS
+
+// NOTE: a pack due at least this long from now may move to a door that has
+// just opened. Anything sooner keeps its door, so a door never fills the
+// moment it opens, and a pack that has already rattled keeps its door too.
+export const JOIN_LEAD_MS = PACK_WARNING_MS + 1500
+
+type DoorMove = Readonly<{ pack: number; door: DoorId }>
+
+const groupOfPack = (pack: number): number => Math.floor(pack / GROUP_ID_STRIDE)
+
+const volleyOfPack = (pack: number): number => Math.floor(pack / PACK_ID_STRIDE)
+
+// NOTE: a group that names its doors keeps them, as the roll does. Endless
+// groups all draw from the level's doors.
+const canPackMove = (wave: number, pack: number): boolean =>
+  wave > FINAL_WAVE ||
+  Option.exists(
+    Array.get(planFor(wave).groups, groupOfPack(pack)),
+    ({ isAnyDoor }) => isAnyDoor,
+  )
+
+// NOTE: the doors a pack's volley mates come through, so a pincer's two
+// packs stay at two doors when one moves.
+const mateDoorsOf = (
+  spawns: ReadonlyArray<PlannedSpawn>,
+  moves: ReadonlyArray<DoorMove>,
+  pack: number,
+): ReadonlyArray<DoorId> =>
+  pipe(
+    spawns,
+    Array.filter(
+      spawn =>
+        spawn.pack !== pack && volleyOfPack(spawn.pack) === volleyOfPack(pack),
+    ),
+    Array.map(spawn =>
+      Option.getOrElse(
+        Option.map(
+          Array.findFirst(moves, move => move.pack === spawn.pack),
+          ({ door }) => door,
+        ),
+        () => spawn.door,
+      ),
+    ),
+  )
+
+const noMoves = (state: number): Seeded<ReadonlyArray<DoorMove>> => [state, []]
+
+const drawMoves = (
+  state: number,
+  spawns: ReadonlyArray<PlannedSpawn>,
+  packs: ReadonlyArray<PlannedSpawn>,
+  newDoors: Array.NonEmptyReadonlyArray<DoorId>,
+  share: number,
+): Seeded<ReadonlyArray<DoorMove>> =>
+  Array.reduce(
+    packs,
+    noMoves(state),
+    ([drawState, moves], { pack }): Seeded<ReadonlyArray<DoorMove>> => {
+      const moveDraw = nextRandom(drawState)
+      if (moveDraw.value >= share) {
+        return [moveDraw.nextState, moves]
+      }
+      const doorDraw = nextRandom(moveDraw.nextState)
+      const mates = mateDoorsOf(spawns, moves, pack)
+      const choices = Array.match(
+        Array.filter(newDoors, door => !Array.contains(mates, door)),
+        { onEmpty: () => newDoors, onNonEmpty: doors => doors },
+      )
+      const door = Option.getOrElse(
+        Array.get(choices, Math.floor(doorDraw.value * choices.length)),
+        () => Array.headNonEmpty(choices),
+      )
+      return [doorDraw.nextState, [...moves, { pack, door }]]
+    },
+  )
+
+const movedSpawns = (
+  spawns: ReadonlyArray<PlannedSpawn>,
+  moves: ReadonlyArray<DoorMove>,
+): ReadonlyArray<PlannedSpawn> =>
+  Array.map(spawns, spawn =>
+    Option.match(
+      Array.findFirst(moves, ({ pack }) => pack === spawn.pack),
+      {
+        onNone: () => spawn,
+        onSome: ({ door }) => modifyFields(spawn, { door: () => door }),
+      },
+    ),
+  )
+
+// NOTE: doors that open while a wave is shown or under way join it at once.
+// Each pack still to come, through a door, from a group free to pick its
+// door, and due JOIN_LEAD_MS or more from now (any pack, in the break),
+// moves to one of the new doors with the share of the doors they now are,
+// drawn from the run's generator. Only doors change: every zombie, its kind,
+// and its time stay, so the wave's count and pacing hold, and the door
+// preview reads the new doors at once.
+export const joinNewDoors = (
+  model: World,
+  newDoors: ReadonlyArray<DoorId>,
+): World => {
+  if (
+    !Phase.isAnyOf(['Preparation', 'Wave'])(model.phase) ||
+    !Array.isReadonlyArrayNonEmpty(newDoors)
+  ) {
+    return model
+  }
+  const round = model.phase
+  const earliestMs = Phase.isAnyOf(['Wave'])(round)
+    ? round.elapsedMs + JOIN_LEAD_MS
+    : Number.NEGATIVE_INFINITY
+  const packs = pipe(
+    round.spawns,
+    Array.dedupeWith((first, second) => first.pack === second.pack),
+    Array.filter(
+      spawn =>
+        isThroughDoor(spawn) &&
+        spawn.atMs >= earliestMs &&
+        !Array.contains(model.pacing.warnedPacks, spawn.pack) &&
+        canPackMove(round.wave, spawn.pack),
+    ),
+  )
+  const share = newDoors.length / Math.max(1, levelOf(model).doorIds.length)
+  const [rngState, moves] = drawMoves(
+    model.rngState,
+    round.spawns,
+    packs,
+    newDoors,
+    share,
+  )
+  return modifyFields(model, {
+    phase: () =>
+      modifyFields(round, {
+        spawns: () => movedSpawns(round.spawns, moves),
+      }),
+    rngState: () => rngState,
   })
 }
 

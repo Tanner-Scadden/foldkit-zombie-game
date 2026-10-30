@@ -6,6 +6,7 @@ import { Dialog, Tabs } from '@foldkit/ui'
 
 import { FocusShopItem } from '../commands'
 import { dialogFolds } from '../dialogs'
+import { isExitOfferOpenFor } from '../exits'
 import { refreshIntent } from '../frame'
 import { releaseAll } from '../input'
 import { Message } from '../message'
@@ -95,10 +96,14 @@ export const closeShop: UpdateStep = stepModel =>
     ? Update.combine(stepModel, [shopDialog.close, leaveShopStep])
     : closeExit(stepModel)
 
+// NOTE: the stall shuts outside the break. An exit's offer stays open while
+// the exit is for sale, mid-wave too.
 export const closeShopOutsidePreparation: UpdateStep = stepModel =>
   Phase.isAnyOf(['Preparation'])(stepModel.phase)
     ? { model: stepModel }
-    : closeShop(stepModel)
+    : isBrowsing(stepModel.shop) || !isExitOfferOpenFor(stepModel.phase)
+      ? closeShop(stepModel)
+      : { model: stepModel }
 
 // BUYING
 
