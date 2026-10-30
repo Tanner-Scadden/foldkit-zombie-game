@@ -7,6 +7,7 @@ import {
   MS_PER_SECOND,
   STEP_EPSILON_MS,
 } from './constants'
+import { couchInputs, isCouchPlay } from './couch'
 import { clamp } from './geometry'
 import { deriveIntent } from './input'
 import { advanceJuice } from './juice'
@@ -64,7 +65,12 @@ const runTicks = (stepped: Stepped, count: number): Stepped => {
     return stepped
   }
   const intended = refreshIntent(stepped.model)
-  const ticked = stepWorld(intended, soloInputs(intended.intent))
+  const ticked = stepWorld(
+    intended,
+    isCouchPlay(intended)
+      ? couchInputs(intended, intended.intent)
+      : soloInputs(intended.intent),
+  )
   return runTicks(
     {
       model: withWorld(intended, () => ticked.world),

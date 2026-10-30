@@ -22,6 +22,12 @@ import {
 import { type Model, Phase, ShopState, type Vector, type Zombie } from './model'
 import { isBehindWall, occludersOf } from './occluders'
 import {
+  isLeadShown,
+  mateDrawables,
+  mateOverheadShapes,
+  mateShadowShapes,
+} from './partyView'
+import {
   playerFlashShapes,
   playerFootY,
   playerShadow,
@@ -120,7 +126,8 @@ const groundShapes = (
   ...hearthFireShapes(levelOf(model), model.elapsedMs),
   ...ovenGlowShapes(model),
   ...stallGroundShapes(look, model.elapsedMs),
-  playerShadow(model.player),
+  ...(isLeadShown(model) ? [playerShadow(model.player)] : []),
+  ...mateShadowShapes(model),
   ...zombieGroundShapes(zombies, model.elapsedMs),
   ...Array.filterMap(zombies, zombieShadow),
   ...bossGroundShapes(model),
@@ -169,14 +176,19 @@ const standingDrawables = (
       rank: 'Zombie',
       shapes: drawZombie(zombie),
     })),
-    {
-      footY: playerFootY(model.player),
-      rank: 'Player',
-      shapes: [
-        ...auraShapes(model.player, model.boosts, model.elapsedMs),
-        ...playerShapes(model),
-      ],
-    },
+    ...(isLeadShown(model)
+      ? [
+          {
+            footY: playerFootY(model.player),
+            rank: 'Player' as const,
+            shapes: [
+              ...auraShapes(model.player, model.boosts, model.elapsedMs),
+              ...playerShapes(model),
+            ],
+          },
+        ]
+      : []),
+    ...mateDrawables(model),
   ]
 }
 
@@ -210,6 +222,7 @@ const overheadShapes = (
   ...airborneParticleShapes(model.particles),
   ...Array.map(model.popups, popupShape(camera)),
   ...reloadBarShapes(model.player),
+  ...mateOverheadShapes(model),
   ...stallPromptShapes(stallPrompt(model)),
   ...exitPromptShapes(model),
 ]

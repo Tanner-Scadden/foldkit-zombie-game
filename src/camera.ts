@@ -7,6 +7,7 @@ import {
   VIEW_HEIGHT,
   VIEW_WIDTH,
 } from './constants'
+import { couchFocus } from './couch'
 import { ZERO_VECTOR, clamp, scaleVector } from './geometry'
 import type { Model, Vector } from './model'
 import { type Box, type Screen, screenOf } from './screen'
@@ -74,10 +75,13 @@ export const cameraFor = (
   top: 0,
 })
 
-export const cameraFocus = (model: Model): Vector => ({
-  x: model.player.x + model.cameraLean.x,
-  y: model.player.y + model.cameraLean.y,
-})
+// NOTE: players sharing one keyboard share one camera, on the middle of
+// them all (src/couch.ts).
+export const cameraFocus = (model: Model): Vector =>
+  Option.getOrElse(couchFocus(model), () => ({
+    x: model.player.x + model.cameraLean.x,
+    y: model.player.y + model.cameraLean.y,
+  }))
 
 // NOTE: the part of the world the window shows, in world pixels. A zoomed
 // portrait window is taller on the screen than the room's height, and shows

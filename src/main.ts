@@ -8,6 +8,7 @@ import {
   AwaitFirstFrame,
   DecodeSprites,
   DetectInputDevice,
+  DetectLocalPlayers,
   DetectOrientationLock,
   DetectScreenFit,
   FetchBuild,
@@ -23,6 +24,7 @@ import {
   SetFullscreen,
   UpdateServiceWorker,
 } from './commands'
+import { isCouchKey, pressCouchKey } from './couch'
 import { isAtExit } from './exits'
 import { advanceGame, clampFrameDelta, refreshIntent } from './frame'
 import {
@@ -77,6 +79,7 @@ import {
   skipDebutCard,
 } from './onboarding'
 import { dropClip } from './particles'
+import { isCoop } from './party'
 import { LinkFlow } from './playerSync'
 import { startWave } from './runFlow'
 import { forgetTutorial } from './save'
@@ -227,6 +230,7 @@ export const init: Runtime.ApplicationInit<
     DetectInputDevice(),
     DetectScreenFit(),
     DetectOrientationLock(),
+    DetectLocalPlayers(),
     LoadStyles(),
     LoadFonts(),
     AwaitFirstFrame(),
@@ -318,8 +322,10 @@ const changedWeapon = (before: Model, after: Model): boolean =>
 
 const isFighting = Phase.isAnyOf(['Wave'])
 
+// NOTE: in co-op the new zombie card shows without stopping the game
+// (decided row 9), so only single player waits on it.
 const isDebutCardBlocking = (model: Model): boolean =>
-  isFighting(model.phase) && isDebutCardUp(model)
+  isFighting(model.phase) && isDebutCardUp(model) && !isCoop(model)
 
 const skipDebutCardWhenUp = (model: Model): Model =>
   isDebutCardBlocking(model) ? skipDebutCard(model) : model
@@ -462,7 +468,7 @@ const updateGame = (model: Model, message: Message) =>
       if (isDebutCardBlocking(model)) {
         return { model: ageDebutCard(model, clampFrameDelta(deltaTime)) }
       } else if (isRoundActive(model.phase)) {
-        const advanced = moveHintBand(
+        const framed = moveHintBand(
           learnFromFrame(
             model,
             tallyFrame(
@@ -472,6 +478,9 @@ const updateGame = (model: Model, message: Message) =>
             ),
           ),
         )
+        const advanced = isCoop(framed)
+          ? ageDebutCard(framed, clampFrameDelta(deltaTime))
+          : framed
         const hasEnteredShop =
           !isBrowsing(model.shop) && isBrowsing(advanced.shop)
         const hasEnteredExit = !isAtExit(model.shop) && isAtExit(advanced.shop)
@@ -494,6 +503,13 @@ const updateGame = (model: Model, message: Message) =>
 
     PressedKey: ({ code }) => {
       const keyed = useDevice(model, 'KeyboardMouse')
+      if (isCouchKey(keyed, code)) {
+        return {
+          model: withInput(pressCouchKey(keyed, code), input =>
+            pressKey(input, code),
+          ),
+        }
+      }
       if (isCoopOpen(keyed)) {
         return Update.combine(keyed, [unlockAudio, pressCoopKey(code)])
       }
@@ -706,6 +722,10 @@ const updateGame = (model: Model, message: Message) =>
 
     CompletedDetectScreenFit: ({ screenFit }) => ({
       model: modifyFields(model, { screenFit: () => screenFit }),
+    }),
+
+    CompletedDetectLocalPlayers: ({ count }) => ({
+      model: modifyFields(model, { localPlayers: () => count }),
     }),
 
     CompletedDetectOrientationLock: ({ orientationLock }) => ({

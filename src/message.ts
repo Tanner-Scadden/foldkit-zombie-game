@@ -86,6 +86,7 @@ export const Message = defineMessageUnion({
   ChangedFullscreen: { fullscreen: FullscreenSetting },
   CompletedDetectScreenFit: { screenFit: ScreenFit },
   CompletedDetectOrientationLock: { orientationLock: OrientationLock },
+  CompletedDetectLocalPlayers: { count: Schema.Number },
   CompletedApplyRotation: {},
   ClickedRotationButton: {},
   ClickedDismissHomeScreenTip: {},

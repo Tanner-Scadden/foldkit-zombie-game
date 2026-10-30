@@ -20,6 +20,7 @@ import {
   STREAK_SCALE,
   STREAK_WINDOW_MS,
 } from './constants'
+import { isCouchPlay } from './couch'
 import { FULL_TURN, centeredGlyphs, placeSprite } from './drawing'
 import {
   type TextTone,
@@ -40,6 +41,8 @@ import {
   type WeaponKind,
 } from './model'
 import { isOpenBreak, isPracticeGateHeld } from './onboarding'
+import { type SeatedPlayer, leadSeatOf, playersOf } from './party'
+import { seatColorOf } from './partyView'
 import { maybeMsSinceHurt } from './playerView'
 import { boostChipShapes } from './powerupView'
 import { type Box, type Screen, thumbAreaTop } from './screen'
@@ -551,6 +554,52 @@ const trapNoticeShapes = (
     },
   })
 
+// NOTE: players sharing the keyboard each get a row under the HUD: their
+// seat's color, their hearts, and their money (MULTIPLAYER.md, Phase 1).
+const MATE_ROW_TOP = 24
+const MATE_ROW_HEIGHT = 10
+
+const mateRowShapes = (
+  mate: SeatedPlayer,
+  row: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const y = MATE_ROW_TOP + row * MATE_ROW_HEIGHT
+  return [
+    Canvas.Rect({
+      x: HUD_MARGIN,
+      y: y + 2,
+      width: 3,
+      height: 3,
+      fill: seatColorOf(mate.slot),
+    }),
+    ...Array.makeBy(PLAYER_MAX_HP, index =>
+      placeSprite(
+        HUD_MARGIN + 9 + index * HEART_SPACING,
+        y + 3,
+        index < mate.player.hp ? HEART_SPRITE : EMPTY_HEART_SPRITE,
+      ),
+    ),
+    ...textShapes(
+      `$${mate.wallet.balance}`,
+      'Coin',
+      HUD_MARGIN + 9 + PLAYER_MAX_HP * HEART_SPACING,
+      y,
+      'Left',
+    ),
+  ]
+}
+
+const mateHudShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+  isCouchPlay(model)
+    ? Array.flatMap(
+        Array.filter(
+          playersOf(model),
+          ({ slot }) => slot !== leadSeatOf(model).slot,
+        ),
+        mateRowShapes,
+      )
+    : []
+
 const isHudShown = (phase: Phase): boolean =>
   isRoundActive(phase) || Phase.isAnyOf(['Paused'])(phase)
 
@@ -561,6 +610,7 @@ const playHudShapes = (
 ): ReadonlyArray<Canvas.Shape> => [
   ...heartShapes(model.player),
   ...moneyShapes(model),
+  ...mateHudShapes(model),
   ...streakShapes(model.streak),
   ...loadoutShapes(model.player, layout),
   ...boostChipShapes(

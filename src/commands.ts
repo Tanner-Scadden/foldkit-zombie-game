@@ -168,6 +168,29 @@ const canLockOrientation = (): boolean =>
   window.matchMedia(COARSE_POINTER_QUERY).matches &&
   !Reflect.has(navigator, 'standalone')
 
+// NOTE: `?local=2` to `?local=4` seats that many players at one keyboard,
+// for testing co-op offline (MULTIPLAYER.md, Phase 1). Dev builds only: a
+// shipped build always reads 1.
+const LOCAL_PLAYERS_PARAM = 'local'
+
+export const localPlayersIn = (search: string): number => {
+  const count = Number(new URLSearchParams(search).get(LOCAL_PLAYERS_PARAM))
+  return Number.isInteger(count) && count >= 1 ? Math.min(4, count) : 1
+}
+
+export const DetectLocalPlayers = Command.define('DetectLocalPlayers', {
+  messages: [Message.CompletedDetectLocalPlayers],
+  execute: pipe(
+    Effect.try(() =>
+      import.meta.env.DEV ? localPlayersIn(location.search) : 1,
+    ),
+    Effect.map(count => Message.CompletedDetectLocalPlayers({ count })),
+    Effect.catch(() =>
+      Effect.succeed(Message.CompletedDetectLocalPlayers({ count: 1 })),
+    ),
+  ),
+})
+
 export const DetectOrientationLock = Command.define('DetectOrientationLock', {
   messages: [Message.CompletedDetectOrientationLock],
   execute: pipe(
