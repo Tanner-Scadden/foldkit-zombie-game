@@ -53,11 +53,12 @@ describe('Pause screen controls', () => {
         expect(row('WASD', 'Move')).toExist(),
         expect(row('Mouse', 'Aim')).toExist(),
         expect(row('Click', 'Fire')).toExist(),
+        expect(row('↑ ↓', 'Snap aim')).toExist(),
         expect(row('← →', 'Turn aim')).toExist(),
         expect(row('Space', 'Fire')).toExist(),
         expect(row('R', 'Reload')).toExist(),
         expect(row('Q', 'Swap guns')).toExist(),
-        expectAll(all.role('row')).toHaveCount(7),
+        expectAll(all.role('row')).toHaveCount(8),
       ),
       inside(
         role('table', { name: 'Traps and stuff' }),
@@ -71,8 +72,8 @@ describe('Pause screen controls', () => {
         expect(role('rowheader', { name: 'T' })).toExist(),
         expectAll(all.role('row')).toHaveCount(7),
       ),
-      expectAll(all.selector('.pause-help-inputs')).toHaveCount(14),
-      expectAll(all.selector('.pause-help-inputs kbd')).toHaveCount(14),
+      expectAll(all.selector('.pause-help-inputs')).toHaveCount(15),
+      expectAll(all.selector('.pause-help-inputs kbd')).toHaveCount(15),
       inside(
         role('list', { name: 'Tips' }),
         expect(

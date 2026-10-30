@@ -51,6 +51,7 @@ const KEYBOARD_HELP: DeviceHelp = {
         control('WASD', 'Move'),
         control('Mouse', 'Aim'),
         control('Click', 'Fire'),
+        control('↑ ↓', 'Snap aim'),
         control('← →', 'Turn aim'),
         control('Space', 'Fire'),
         control('R', 'Reload'),

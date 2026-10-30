@@ -233,11 +233,47 @@ describe('one key per action: the kept keys work', () => {
         expect(intent.trigger).toBe('Released')
       }),
       release('ArrowRight'),
+      ...ticks(10, FRAME_MS),
+      model(({ intent }) => {
+        expect(Option.getOrThrow(intent.maybeAim).y).toBeCloseTo(1)
+        expect(intent.trigger).toBe('Released')
+      }),
       press('Space'),
       model(({ intent }) => {
         const aim = Option.getOrThrow(intent.maybeAim)
         expect(aim.y).toBeCloseTo(1)
         expect(intent.trigger).toBe('Held')
+      }),
+    )
+  })
+
+  test('Up and Down snap the aim, with Left or Right for the diagonal, and Left then turns from there', () => {
+    story(
+      update,
+      given(fighting),
+      press('ArrowUp'),
+      model(({ input, intent }) => {
+        expect(input.aimHeading).toBeCloseTo(-Math.PI / 2)
+        expect(Option.getOrThrow(intent.maybeAim).y).toBeCloseTo(-1)
+      }),
+      press('ArrowLeft'),
+      model(({ input }) => {
+        expect(input.aimHeading).toBeCloseTo((-3 * Math.PI) / 4)
+      }),
+      ...ticks(10, FRAME_MS),
+      model(({ input }) => {
+        expect(input.aimHeading).toBeCloseTo((-3 * Math.PI) / 4)
+      }),
+      release('ArrowUp'),
+      ...ticks(2, FRAME_MS),
+      model(({ input }) => {
+        expect(input.aimHeading).toBeCloseTo((-3 * Math.PI) / 4 - Math.PI / 10)
+      }),
+      release('ArrowLeft'),
+      press('ArrowDown'),
+      press('ArrowRight'),
+      model(({ input }) => {
+        expect(input.aimHeading).toBeCloseTo(Math.PI / 4)
       }),
     )
   })
@@ -259,7 +295,7 @@ describe('one key per action: the kept keys work', () => {
     )
   })
 
-  test('the keyboard aim outranks the mouse while held, and the mouse takes over again', () => {
+  test('whichever aimed last wins: keys keep the aim after release, until the mouse moves', () => {
     story(
       update,
       given(fighting),
@@ -274,9 +310,14 @@ describe('one key per action: the kept keys work', () => {
         expect(intent.trigger).toBe('Held')
       }),
       release('Space'),
+      ...ticks(10, FRAME_MS),
+      model(({ intent }) => {
+        expect(intent.maybeAim).toEqual(Option.some({ x: 1, y: 0 }))
+        expect(intent.trigger).toBe('Released')
+      }),
+      message(Message.MovedMouse({ clientX: 0, clientY: 200 })),
       model(({ intent }) => {
         expect(Option.getOrThrow(intent.maybeAim).x).toBeLessThan(0)
-        expect(intent.trigger).toBe('Released')
       }),
     )
   })

@@ -50,9 +50,11 @@ const NEXT_TRAP_KEY = 'KeyG'
 const MENU_KEY = 'KeyH'
 const TURN_LEFT_KEY = 'ArrowLeft'
 const TURN_RIGHT_KEY = 'ArrowRight'
+const SNAP_UP_KEY = 'ArrowUp'
+const SNAP_DOWN_KEY = 'ArrowDown'
 const FIRE_KEY = 'Space'
-const PREVIOUS_BUTTON_KEYS: ReadonlyArray<string> = [TURN_LEFT_KEY, 'ArrowUp']
-const NEXT_BUTTON_KEYS: ReadonlyArray<string> = [TURN_RIGHT_KEY, 'ArrowDown']
+const PREVIOUS_BUTTON_KEYS: ReadonlyArray<string> = [TURN_LEFT_KEY, SNAP_UP_KEY]
+const NEXT_BUTTON_KEYS: ReadonlyArray<string> = [TURN_RIGHT_KEY, SNAP_DOWN_KEY]
 
 export const FocusStep = Schema.Literals(['Previous', 'Next'])
 export type FocusStep = typeof FocusStep.Type
@@ -117,10 +119,13 @@ const keyboardMove = (pressedKeys: ReadonlyArray<string>): Vector =>
     Option.getOrElse(() => ZERO_VECTOR),
   )
 
-// NOTE: a keyboard alone plays the whole game: the left and right arrows
-// turn the aim heading, which stays where it was left, and Space fires along
-// it. The heading only takes over from the mouse while one of those keys is
-// held.
+// NOTE: a keyboard alone plays the whole game. The aim heading stays where
+// it was left, and Space fires along it. Up or Down snaps the heading
+// straight that way, or onto the diagonal when Left or Right is held too;
+// Left or Right on its own turns the heading a little at a time. Whichever
+// aimed last wins: an arrow or Space makes the heading the aim until the
+// pointer moves or presses again, so letting go of the keys never swings the
+// player back toward the mouse.
 const FULL_TURN = 2 * Math.PI
 
 const AIM_TURN_RADIANS_PER_SECOND =
@@ -135,20 +140,52 @@ const turnAxis = (pressedKeys: ReadonlyArray<string>): number =>
     Array.contains(pressedKeys, TURN_RIGHT_KEY),
   )
 
-export const turnAim = (input: Input, deltaMs: number): Input =>
+const snapAxis = (pressedKeys: ReadonlyArray<string>): number =>
+  axis(
+    Array.contains(pressedKeys, SNAP_UP_KEY),
+    Array.contains(pressedKeys, SNAP_DOWN_KEY),
+  )
+
+const maybeSnappedHeading = (
+  pressedKeys: ReadonlyArray<string>,
+): Option.Option<number> => {
+  const snap = snapAxis(pressedKeys)
+  return snap === 0
+    ? Option.none()
+    : Option.some(Math.atan2(snap, turnAxis(pressedKeys)))
+}
+
+const snapAim = (input: Input): Input =>
   modifyFields(input, {
     aimHeading: heading =>
-      wrapHeading(
-        heading +
-          (turnAxis(input.pressedKeys) *
-            AIM_TURN_RADIANS_PER_SECOND *
-            deltaMs) /
-            MS_PER_SECOND,
-      ),
+      Option.getOrElse(maybeSnappedHeading(input.pressedKeys), () => heading),
   })
 
-const isKeyboardAiming = (pressedKeys: ReadonlyArray<string>): boolean =>
-  Array.contains(pressedKeys, FIRE_KEY) || turnAxis(pressedKeys) !== 0
+export const turnAim = (input: Input, deltaMs: number): Input =>
+  Option.match(maybeSnappedHeading(input.pressedKeys), {
+    onSome: snapped => modifyFields(input, { aimHeading: () => snapped }),
+    onNone: () =>
+      modifyFields(input, {
+        aimHeading: heading =>
+          wrapHeading(
+            heading +
+              (turnAxis(input.pressedKeys) *
+                AIM_TURN_RADIANS_PER_SECOND *
+                deltaMs) /
+                MS_PER_SECOND,
+          ),
+      }),
+  })
+
+const AIM_KEYS: ReadonlyArray<string> = [
+  TURN_LEFT_KEY,
+  TURN_RIGHT_KEY,
+  SNAP_UP_KEY,
+  SNAP_DOWN_KEY,
+  FIRE_KEY,
+]
+
+const isAimKey = (code: string): boolean => Array.contains(AIM_KEYS, code)
 
 export const headingVector = (heading: number): Vector => ({
   x: Math.cos(heading),
@@ -156,17 +193,20 @@ export const headingVector = (heading: number): Vector => ({
 })
 
 const keyboardAim = (input: Input): Option.Option<Vector> =>
-  isKeyboardAiming(input.pressedKeys)
+  input.aimSource === 'Keys'
     ? Option.some(headingVector(input.aimHeading))
     : Option.none()
 
 export const pressKey = (input: Input, code: string): Input =>
-  modifyFields(input, {
-    pressedKeys: pressedKeys =>
-      Array.contains(pressedKeys, code)
-        ? pressedKeys
-        : Array.append(pressedKeys, code),
-  })
+  snapAim(
+    modifyFields(input, {
+      pressedKeys: pressedKeys =>
+        Array.contains(pressedKeys, code)
+          ? pressedKeys
+          : Array.append(pressedKeys, code),
+      aimSource: aimSource => (isAimKey(code) ? 'Keys' : aimSource),
+    }),
+  )
 
 export const releaseKey = (input: Input, code: string): Input =>
   modifyFields(input, {
@@ -227,6 +267,7 @@ const pressTouch = (
   } else {
     return modifyFields(input, {
       aimStick: stick => activateIfIdle(stick, press),
+      aimSource: () => 'Pointer',
     })
   }
 }
@@ -240,6 +281,7 @@ const pressMouse = (
     mouseButton: () => MouseButton.Held({ pointerId: press.pointerId }),
     maybeMouseInView: () =>
       clientToView(surface, { x: press.clientX, y: press.clientY }),
+    aimSource: () => 'Pointer',
   })
 
 export const pressPointer = (
@@ -324,6 +366,7 @@ export const moveMouse = (
     onSome: surface =>
       modifyFields(input, {
         maybeMouseInView: () => clientToView(surface, client),
+        aimSource: () => 'Pointer',
       }),
   })
 
