@@ -29,6 +29,7 @@ import {
 import {
   BULLET_MAX,
   BULLET_RADIUS,
+  CONTACT_ALLOWANCE_PX,
   DRY_FIRE_DELAY_MS,
   KNOCKBACK_REST_SPEED,
   MAX_FRAME_DELTA_MS,
@@ -695,6 +696,42 @@ const tickZombieState = (state: ZombieState, deltaMs: number): ZombieState =>
       ZombieState.Dying({ remainingMs: remainingMs - deltaMs, direction }),
   })
 
+const OUTWARD: Vector = { x: 1, y: 0 }
+
+// NOTE: a free zombie stops at the player's body, at most
+// CONTACT_ALLOWANCE_PX deep, so it bites from the edge instead of standing on
+// the player where a shot cannot find it. Only the zombie moves, out along
+// the line from the player to where it stood before this step, so one fast
+// enough to cross the player's center lands back on the side it came from.
+// It moves through moveCircle, so walls and traps still hold it.
+const holdOffPlayer = (
+  zombie: Zombie,
+  moved: Vector,
+  player: Vector,
+  obstacles: Obstacles,
+): Vector => {
+  const reach = bodyRadiusOf(zombie) + PLAYER_RADIUS - CONTACT_ALLOWANCE_PX
+  const deltaX = moved.x - player.x
+  const deltaY = moved.y - player.y
+  if (!isFree(zombie) || deltaX * deltaX + deltaY * deltaY >= reach * reach) {
+    return moved
+  }
+
+  const away = pipe(
+    directionBetween(player, zombie),
+    Option.orElse(() => directionBetween(player, moved)),
+    Option.getOrElse(() => OUTWARD),
+  )
+  const edge = addVectors(player, scaleVector(away, reach))
+  return moveCircle(
+    obstacles.level,
+    moved,
+    { x: edge.x - moved.x, y: edge.y - moved.y },
+    radiusOf(zombie),
+    obstacles.blockers,
+  )
+}
+
 const advanceZombie = (
   zombie: Zombie,
   separation: Vector,
@@ -718,12 +755,17 @@ const advanceZombie = (
     ),
     scaleVector(separation, SEPARATION_SPEED),
   )
-  const moved = moveCircle(
-    obstacles.level,
+  const moved = holdOffPlayer(
     zombie,
-    scaleVector(velocity, seconds),
-    radiusOf(zombie),
-    obstacles.blockers,
+    moveCircle(
+      obstacles.level,
+      zombie,
+      scaleVector(velocity, seconds),
+      radiusOf(zombie),
+      obstacles.blockers,
+    ),
+    target,
+    obstacles,
   )
   return modifyFields(zombie, {
     x: () => moved.x,
@@ -884,19 +926,34 @@ const shieldedTarget = (bullet: Bullet, zombie: Zombie): number =>
       )
     : zombie.id
 
+// NOTE: the player's shots fired this frame. Their sweep starts at the
+// player's center, not the muzzle, so a zombie hugging the player, closer than
+// the muzzle, is still the first thing a point-blank shot hits.
+type FreshShots = Readonly<{ firstId: number; endId: number; from: Vector }>
+
+const sweepStart = (
+  bullet: Bullet,
+  seconds: number,
+  freshShots: FreshShots,
+): Vector =>
+  bullet.id >= freshShots.firstId && bullet.id < freshShots.endId
+    ? freshShots.from
+    : {
+        x: bullet.x - bullet.velocityX * seconds,
+        y: bullet.y - bullet.velocityY * seconds,
+      }
+
 const findBulletHits = (
   bullets: ReadonlyArray<Bullet>,
   zombies: ReadonlyArray<Zombie>,
   boss: Boss,
   seconds: number,
+  freshShots: FreshShots,
 ): ReadonlyArray<BulletHit> => {
   const targets = Array.filter(zombies, isGrounded)
   return Array.getSomes(
     Array.map(bullets, bullet => {
-      const from = {
-        x: bullet.x - bullet.velocityX * seconds,
-        y: bullet.y - bullet.velocityY * seconds,
-      }
+      const from = sweepStart(bullet, seconds, freshShots)
       return pipe(
         targetsFor(bullet, targets),
         Array.map(zombie => maybeContact(from, bullet, zombie)),
@@ -994,8 +1051,22 @@ const skewer =
       },
     )
 
-const resolveBulletHits = (model: Model, seconds: number): Model => {
-  const hits = findBulletHits(model.bullets, model.zombies, model.boss, seconds)
+const resolveBulletHits = (
+  model: Model,
+  seconds: number,
+  firstFreshId: number,
+): Model => {
+  const hits = findBulletHits(
+    model.bullets,
+    model.zombies,
+    model.boss,
+    seconds,
+    {
+      firstId: firstFreshId,
+      endId: model.nextEntityId,
+      from: model.player,
+    },
+  )
   if (Array.isReadonlyArrayEmpty(hits)) {
     return model
   }
@@ -1115,8 +1186,6 @@ const resolvePlayerContact = (model: Model): Model =>
 
 // WEAR
 
-const OUTWARD: Vector = { x: 1, y: 0 }
-
 const shedDirection = (zombie: Zombie, player: Player): Vector =>
   pipe(
     normalize(zombie.knockback),
@@ -1226,7 +1295,7 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
 
   return pipe(
     recordFootfalls(advanced, deltaMs),
-    footed => resolveBulletHits(footed, seconds),
+    footed => resolveBulletHits(footed, seconds, routed.nextEntityId),
     trapped => advanceTraps(trapped, seconds, deltaMs),
     resolvePlayerContact,
     contacted => recoverActions(contacted, deltaMs),

@@ -9,7 +9,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 - ✈️ Play on a plane: once you've visited, the game starts and saves with no internet at all, and wakes up faster with no nap at the end of the loading bar. SETTINGS can link your phone and computer to play from one save.
 - 📱 Play holding your phone upright: the manor zooms in up close, and your guns sit on the wall right under your thumbs. Turn it sideways any time to see the whole room.
 - 🔥 The parlour got cozy: a crackling fire, a comfy sofa, a big rug (something bit it), and smashed-in doors zombies now shuffle through. Rattles' shop got big pictures, chunky price tags, and a skeleton who cheers when you buy and sulks when you can't.
-- 🎯 Lost your cursor on the dark floor? It's big and yellow now (SETTINGS switches it back), and Rattles sells a pricey Laser Sight that shows every shot before you take it.
+- 🎯 Lost your cursor on the dark floor? It's big and yellow now (SETTINGS switches it back), and Rattles sells a pricey Laser Sight that shows every shot before you take it. Hotfoots can't hide inside you anymore either: point-blank shots always land.
 
 ## October 28, 2026: Opening night
 
