@@ -645,6 +645,7 @@ describe('jobClassOf', () => {
         ['bun', 'tools/audit/icons.ts'],
         ['bun', 'tools/audit/og.ts'],
         ['bun', 'tools/audit/beacon-check.ts'],
+        ['bun', 'tools/audit/mp.ts'],
         ['sh', '-c', 'cd tools/audit && PORTRAIT=1 bun taps.ts'],
       ],
       command => {

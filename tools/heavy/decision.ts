@@ -306,7 +306,7 @@ const CPU_SCRIPTS: ReadonlyArray<RegExp> = [
 
 const SHARED_SCRIPTS: ReadonlyArray<RegExp> = [
   auditScript(
-    'shots\\d+|taps|offline|sqlite|sync|save|live-check|icons|og|beacon-check',
+    'shots\\d+|taps|offline|sqlite|sync|save|live-check|icons|og|beacon-check|mp',
   ),
 ]
 
