@@ -80,6 +80,8 @@ const SCENES: ReadonlyArray<Scene> = [
     open: ['#home-munchopedia', '.munch-tile >> nth=6'],
   },
   { name: 'difficulty', query: '', open: ['.home-difficulty'] },
+  { name: 'shop', query: 'wave=5&money=180&gun=smg&tier=1&px=270&py=142' },
+  { name: 'shop-broke', query: 'wave=3&money=12&gun=shotgun&px=270&py=142' },
   {
     name: 'gameover-new-entry',
     query: 'wave=7&phase=gameover&stats&newentries=Crawler,Thrower',

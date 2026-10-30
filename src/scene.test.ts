@@ -200,7 +200,7 @@ describe('Shop', () => {
     ),
   ]
   const leaveShop = () => [
-    click(role('button', { name: 'LEAVE SHOP' })),
+    click(role('button', { name: 'Leave shop' })),
     Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()),
     Mount.expectEnded(Dialog.AcquireResources),
   ]

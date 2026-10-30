@@ -16,7 +16,7 @@ const iconWidth = (pixels: ReadonlyArray<string>): number =>
 
 // NOTE: the icons are the game's own pixel maps turned into SVG, so the HTML
 // buttons over the canvas use the same chunky pixels as the canvas HUD.
-const pixelIconUrl = (
+export const pixelIconUrl = (
   pixels: ReadonlyArray<string>,
   palette: Palette,
 ): string => {
