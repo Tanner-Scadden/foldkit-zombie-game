@@ -18,6 +18,10 @@ Things the game is blocked on until the owner does or decides them. Agents add a
 - [ ] **Confirm the remaining co-op defaults** in `MULTIPLAYER.md` (the rows marked "default, not yet confirmed"), before co-op Phase 1 starts.
 - [ ] **Play on a real mid-range phone** and say if anything stutters. Frame time is only measured with CPU throttling in headless Chrome.
 
+## Later
+
+- [ ] **Release video, once co-op lands.** See `RELEASE_VIDEO.md`. You will need: the X account to post from, a few seconds of friends playing on a couch filmed on a phone, and a decision on a custom domain.
+
 ## Coming up for review
 
 - [ ] **The kitchen.** Being built now. Screenshots, the door price, and the new campaign wave count come to you before it ships.
