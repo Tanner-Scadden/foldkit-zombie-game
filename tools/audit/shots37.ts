@@ -1,6 +1,6 @@
 // The Profile pass: each tab of the Profile (Look, Name, Account in each link
 // step, Settings and its reset question) on a desktop, a landscape phone, and
-// an upright phone, as `s37-<TAG>-<viewport>-<scene>.png`. It exits with 1 on
+// upright phones (390, 360, and 375 wide), as `s37-<TAG>-<viewport>-<scene>.png`. It exits with 1 on
 // a phone button under 48 px, a text field under 16 px (iOS zooms in on
 // those), or the Profile past the screen's edge.
 //   TAG=after bun run heavy -- bun tools/audit/shots37.ts
@@ -9,6 +9,8 @@ import type { Page } from 'playwright-core'
 import {
   DESKTOP_1280,
   PHONE_844,
+  UPRIGHT_360,
+  UPRIGHT_375,
   UPRIGHT_390,
   type Viewport,
   deviceQuery,
@@ -30,6 +32,8 @@ const VIEWPORTS = pickViewports([
   { ...DESKTOP_1280, name: 'd1280' },
   { ...PHONE_844, name: 'l844' },
   { ...UPRIGHT_390, name: 'p390' },
+  { ...UPRIGHT_360, name: 'p360' },
+  { ...UPRIGHT_375, name: 'p375' },
 ])
 
 type Scene = Readonly<{
@@ -42,6 +46,11 @@ const LOOK = 'look=Female,Ponytail,Ginger,Tan,Teal'
 
 const SCENES: ReadonlyArray<Scene> = [
   { name: 'look', query: `profile=look&${LOOK}` },
+  // NOTE: the first option of every row chosen, at the page's left edge.
+  {
+    name: 'look-first',
+    query: 'profile=look&look=Female,Crop,Black,Fair,Blue',
+  },
   { name: 'name-empty', query: 'profile=name' },
   { name: 'name', query: 'profile=name&name=Dr. Chomp' },
   { name: 'account-local', query: 'profile=account' },

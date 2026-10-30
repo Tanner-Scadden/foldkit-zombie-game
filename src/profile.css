@@ -1240,9 +1240,13 @@
   translate: 0 -6px;
 }
 
+/* NOTE: the page clips what overflows it, and a chosen look option grows by
+   8% past the page's side. A side padding with a matching negative margin
+   widens the clip box without moving or narrowing the content. */
 .game-root[data-layout='Portrait'] .profile-page {
   transform-origin: center top;
-  padding: 4px 0;
+  margin: 0 -6px;
+  padding: 4px 6px;
 }
 
 .game-root[data-layout='Portrait'] .look-tab {
