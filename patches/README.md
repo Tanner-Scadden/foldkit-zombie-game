@@ -21,6 +21,8 @@ Run `bun patch foldkit`, edit the files under `node_modules/foldkit/dist/`, then
 
 Bun 1.3 names its cached copy of the patched package by a hash that does not follow the patch's content, so after a change `bun install` can keep linking the old patched copy from `~/.bun/install/cache` (CI starts with no cache, so it is not fooled). Check `node_modules/foldkit/dist` for the change; if it is missing, move the `foldkit@0.169.0@@@1_patch_hash=*` folder out of the cache and run `bun install` again.
 
+`bun run determinism:diff` shows whether a patch change changes gameplay: the base installs the old patch on its own, and the tool stops if the working tree's `node_modules` does not match the new one.
+
 ## Dropping it
 
 Once a Foldkit release ships `Canvas.Image`, upgrade `foldkit`, delete `patches/`, remove `patchedDependencies` from `package.json`, and run `bun install`. The game uses only the upstream API, so no game code changes.

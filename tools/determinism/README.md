@@ -32,7 +32,9 @@ Frame lengths come from a pattern: `Fixed60` (every frame 1000/60 ms, the room's
 
 ## Before and after
 
-`beforeAfter.ts` checks `ref` out into a temporary git worktree, copies this harness over it so both sides hash with the same code, links the working tree's `node_modules`, plays the script on both in Bun, and reports the first frame and field that differ, with the first path inside the field and both values. Options: `--frames N` (default 7,200), `--seed`, `--mode Endless`, `--pattern Mixed`, `--every N`, `--no-hit-stop` (clear hit-stop after every frame on both sides, to compare a change to how hit-stop spends world time, such as the fixed step, on everything else). A refactor that means to change nothing must report no difference.
+`beforeAfter.ts` checks `ref` out into a temporary git worktree, copies this harness over it so both sides hash with the same code, installs the base's own dependencies from its lockfile and patches, plays the script on both in Bun, and reports the first frame and field that differ, with the first path inside the field and both values. Options: `--frames N` (default 7,200), `--seed`, `--mode Endless`, `--pattern Mixed`, `--every N`, `--no-hit-stop` (clear hit-stop after every frame on both sides, to compare a change to how hit-stop spends world time, such as the fixed step, on everything else). A refactor that means to change nothing must report no difference.
+
+Since each side has its own `node_modules`, a change to a dependency, to a patch in `patches/`, or to a workspace package in `packages/` shows up too. The base installs with its own Bun cache (`munch-determinism-bun-cache` in the temp folder, kept between runs, so only the first run downloads), whose patched packages are deleted before each install: Bun names a patched copy by a hash that does not follow the patch's content, so a shared cache could hand the base the working tree's copy. Before playing, it checks each side's patched packages against its patches with `git apply --check --reverse`, and stops if the working tree's `node_modules` holds an older patched copy (see "Changing it" in `patches/README.md`).
 
 ## Cross engine
 

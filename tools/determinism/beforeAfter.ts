@@ -4,10 +4,17 @@
 // step of the World split in MULTIPLAYER.md) must report no difference.
 //
 // It checks the base commit out into a temporary git worktree, copies this
-// harness over it (so both sides hash with the same code), links the
-// working tree's node_modules, and removes the worktree after. The
-// workspace packages resolve through that node_modules to the working
-// tree's copies, so a change inside packages/ is not compared.
+// harness over it (so both sides hash with the same code), installs the
+// base's own dependencies from its lockfile and patches, and removes the
+// worktree after. So a change to a dependency, a patch in patches/, or a
+// workspace package in packages/ shows up as a difference too.
+//
+// The base installs with its own Bun cache, kept between runs, whose
+// patched packages are deleted before each install: Bun names a patched
+// copy by a hash that does not follow the patch's content, so a shared
+// cache could hand the base the working tree's patched copy (see
+// patches/README.md). Each side's patched packages are then checked
+// against its patches before anything plays.
 //
 // Heavy (two whole runs), so run it through the guard:
 //   bun run determinism:diff -- [ref] [options]
@@ -18,7 +25,14 @@
 // It exits 1 when the two differ.
 
 import { spawnSync } from 'node:child_process'
-import { cpSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -57,9 +71,11 @@ const run = (
   command: string,
   args: ReadonlyArray<string>,
   cwd: string,
+  env: NodeJS.ProcessEnv = process.env,
 ): string => {
   const result = spawnSync(command, [...args], {
     cwd,
+    env,
     encoding: 'utf8',
     maxBuffer: 512 * 1024 * 1024,
   })
@@ -67,6 +83,69 @@ const run = (
     throw new Error(`${command} ${args.join(' ')} failed: ${result.stderr}`)
   }
   return result.stdout
+}
+
+// INSTALL
+
+// NOTE: kept between runs so only the first one downloads every package.
+const BASE_CACHE = resolve(tmpdir(), 'munch-determinism-bun-cache')
+const PATCHED_COPY = /_patch_hash=/
+
+const installBase = (cwd: string): void => {
+  mkdirSync(BASE_CACHE, { recursive: true })
+  for (const entry of readdirSync(BASE_CACHE)) {
+    if (PATCHED_COPY.test(entry)) {
+      rmSync(resolve(BASE_CACHE, entry), { recursive: true, force: true })
+    }
+  }
+  run('bun', ['install', '--frozen-lockfile', '--ignore-scripts'], cwd, {
+    ...process.env,
+    BUN_INSTALL_CACHE_DIR: BASE_CACHE,
+  })
+}
+
+// NOTE: `patchedDependencies` maps `name@version` to the patch file.
+const patchesOf = (cwd: string): ReadonlyArray<[string, string]> => {
+  const manifest: unknown = JSON.parse(
+    readFileSync(resolve(cwd, 'package.json'), 'utf8'),
+  )
+  const patched =
+    typeof manifest === 'object' &&
+    manifest !== null &&
+    'patchedDependencies' in manifest &&
+    typeof manifest.patchedDependencies === 'object' &&
+    manifest.patchedDependencies !== null
+      ? Object.entries(manifest.patchedDependencies)
+      : []
+  return patched.flatMap(([key, path]): Array<[string, string]> =>
+    typeof path === 'string'
+      ? [[key.slice(0, key.lastIndexOf('@')), path]]
+      : [],
+  )
+}
+
+// NOTE: a patch that reverses cleanly is applied in full, so the installed
+// package is the one the patch describes and not an older patched copy.
+const checkPatches = (cwd: string, side: string): void => {
+  for (const [name, path] of patchesOf(cwd)) {
+    const result = spawnSync(
+      'git',
+      [
+        'apply',
+        '--check',
+        '--reverse',
+        `--directory=node_modules/${name}`,
+        resolve(cwd, path),
+      ],
+      { cwd, encoding: 'utf8' },
+    )
+    if (result.status !== 0) {
+      throw new Error(
+        `The ${side}'s node_modules/${name} does not match ${path}. ` +
+          'Bun may have linked an older patched copy from its cache: see "Changing it" in patches/README.md.',
+      )
+    }
+  }
 }
 
 const isRun = (value: unknown): value is EngineRun =>
@@ -110,7 +189,9 @@ try {
     recursive: true,
     filter: source => !source.includes('/out'),
   })
-  symlinkSync(resolve(root, 'node_modules'), resolve(base, 'node_modules'))
+  installBase(base)
+  checkPatches(base, `base (${ref})`)
+  checkPatches(root, 'working tree')
 
   const before = askRun(base, request)
   const after = askRun(root, request)
