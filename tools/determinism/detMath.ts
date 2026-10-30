@@ -94,14 +94,22 @@ const detAtan = (x: number): number => {
 }
 
 export const detAtan2 = (y: number, x: number): number => {
-  if (x > 0) return detAtan(y / x)
-  if (x < 0) return y >= 0 ? detAtan(y / x) + Math.PI : detAtan(y / x) - Math.PI
+  if (x > 0) {
+    return detAtan(y / x)
+  }
+  if (x < 0) {
+    return y >= 0 ? detAtan(y / x) + Math.PI : detAtan(y / x) - Math.PI
+  }
   return y > 0 ? Math.PI / 2 : y < 0 ? -Math.PI / 2 : 0
 }
 
 export const detExp = (x: number): number => {
-  if (x > 709) return Infinity
-  if (x < -745) return 0
+  if (x > 709) {
+    return Infinity
+  }
+  if (x < -745) {
+    return 0
+  }
   const k = Math.round(x * INV_LN2)
   const r = x - k * LN2_HIGH - k * LN2_LOW
   let term = 1
@@ -112,7 +120,9 @@ export const detExp = (x: number): number => {
   }
   let scale = 1
   const base = k < 0 ? 0.5 : 2
-  for (let i = 0; i < Math.abs(k); i++) scale *= base
+  for (let i = 0; i < Math.abs(k); i++) {
+    scale *= base
+  }
   return sum * scale
 }
 

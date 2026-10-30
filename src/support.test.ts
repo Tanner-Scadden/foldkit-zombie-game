@@ -5,7 +5,8 @@ import { SUPPORT_URL, isSupportUrl, maybeSupportUrlOf } from './support'
 
 describe('the tip jar link', () => {
   test('SUPPORT_URL is empty or an https link on buy.stripe.com', () => {
-    expect(SUPPORT_URL === '' || isSupportUrl(SUPPORT_URL)).toBe(true)
+    const url: string = SUPPORT_URL
+    expect(url === '' || isSupportUrl(url)).toBe(true)
   })
 
   test.each([

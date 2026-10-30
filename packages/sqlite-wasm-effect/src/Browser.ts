@@ -1,7 +1,6 @@
+import type { Duration, Layer } from 'effect'
 import {
-  Duration,
   Effect,
-  Layer,
   MutableRef,
   Option,
   Predicate,
@@ -25,12 +24,12 @@ import {
   encodeRequest,
 } from './Protocol'
 import { type Remote, type Sender, makeRemote } from './Remote'
+import type { SqliteClient } from './SqliteClient'
 import {
   type ClientOptions,
   DEFAULT_OPEN_TIMEOUT,
   type DatabaseFile,
   type Role,
-  SqliteClient,
   SqliteOpenError,
   type Status,
   layerFromClient,
@@ -91,6 +90,9 @@ const acquireLock = (
           return undefined
         }
         resume(Effect.succeed('Granted'))
+        // NOTE: Web Locks holds the lock until this promise settles, so the
+        // callback must hand it a plain promise.
+        // @effect-diagnostics-next-line newPromise:off
         return new Promise<void>(settle => {
           MutableRef.set(release, settle)
         })
@@ -151,6 +153,8 @@ const post =
   (target: { postMessage: (message: unknown) => void }) =>
   (message: unknown): Effect.Effect<void> =>
     pipe(
+      // NOTE: a Worker's postMessage takes no targetOrigin.
+      // oxlint-disable-next-line unicorn/require-post-message-target-origin
       Effect.try(() => target.postMessage(message)),
       Effect.ignore,
     )
@@ -265,6 +269,9 @@ export const layer = (
         directory: `.${name}`,
       }
       const openTimeout = options.openTimeout ?? DEFAULT_OPEN_TIMEOUT
+      // NOTE: Effect's Crypto service moves between 4.0 and 4.1, and the app
+      // is moving between them, so the session id comes from Web Crypto.
+      // @effect-diagnostics-next-line cryptoRandomUUIDInEffect:off
       const session = yield* Effect.sync(() => crypto.randomUUID())
       const channel = yield* pipe(
         Effect.acquireRelease(

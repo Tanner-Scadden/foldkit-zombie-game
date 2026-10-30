@@ -41,7 +41,9 @@ describe('wave snapshots', () => {
   test('a reroll keeps the gear and rolls a new wave', () => {
     const snapshot = snapshotFor(SMOKE_WAVE, 0, 2, DEFAULT_OPTIONS, 1)
     expect(snapshot).toBeDefined()
-    if (snapshot === undefined) return
+    if (snapshot === undefined) {
+      return
+    }
     const rolled = rerolled(snapshot.model, waveSeedAt(1, 0))
     const phaseOf = (seed: number) =>
       JSON.stringify(rerolled(snapshot.model, seed).phase)
@@ -65,7 +67,9 @@ describe('wave snapshots', () => {
     expect(summary.meanLengthSeconds).toBeGreaterThan(15)
     expect(summary.meanLengthSeconds).toBeLessThan(120)
     const snapshot = snapshotFor(SMOKE_WAVE, 0, 2, DEFAULT_OPTIONS, 1)
-    if (snapshot === undefined) return
+    if (snapshot === undefined) {
+      return
+    }
     expect(playSnapshot(snapshot, waveSeedAt(1, 0), DEFAULT_OPTIONS)).toEqual(
       runs[0],
     )

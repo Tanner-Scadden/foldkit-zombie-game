@@ -1,4 +1,4 @@
-import { Update } from 'foldkit'
+import type { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import type { AppServices } from '../commands'

@@ -410,7 +410,7 @@ const findMetric = (
   metrics: ReadonlyArray<Metric>,
   key: string,
 ): Option.Option<Metric> =>
-  Array.findFirst(metrics, metric => metric.key === key)
+  Array.findFirst(metrics, candidate => candidate.key === key)
 
 export const judge = (
   metrics: ReadonlyArray<Metric>,
@@ -472,14 +472,14 @@ export const compareToBaseline = (
   metrics: ReadonlyArray<Metric>,
   baseline: Baseline,
 ): ReadonlyArray<Drift> => {
-  const compared = Array.map(metrics, (metric): Drift =>
-    Option.match(Record.get(baseline.metrics, metric.key), {
-      onNone: () => ({ _tag: 'New', metric }),
+  const compared = Array.map(metrics, (current): Drift =>
+    Option.match(Record.get(baseline.metrics, current.key), {
+      onNone: () => ({ _tag: 'New', metric: current }),
       onSome: (before): Drift => {
-        const delta = metric.value - before
-        return Math.abs(delta) > metric.tolerance + EPSILON
-          ? { _tag: 'Drifted', metric, baseline: before, delta }
-          : { _tag: 'Within', metric, baseline: before }
+        const delta = current.value - before
+        return Math.abs(delta) > current.tolerance + EPSILON
+          ? { _tag: 'Drifted', metric: current, baseline: before, delta }
+          : { _tag: 'Within', metric: current, baseline: before }
       },
     }),
   )

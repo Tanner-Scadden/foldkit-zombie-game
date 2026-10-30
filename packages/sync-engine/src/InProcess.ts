@@ -1,6 +1,6 @@
+import type { Cause } from 'effect'
 import {
   Array,
-  Cause,
   Effect,
   Option,
   Queue,
@@ -251,7 +251,8 @@ export const makeHost = (
                 }
                 if ((yield* random) < drop) {
                   yield* dropped
-                  return yield* close('Dropped by the network')
+                  yield* close('Dropped by the network')
+                  return
                 }
                 const wire = yield* Effect.orDie(encodeServerMessage(message))
                 const decoded = yield* Effect.orDie(decodeServerMessage(wire))

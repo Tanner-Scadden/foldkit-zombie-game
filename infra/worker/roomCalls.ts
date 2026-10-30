@@ -18,7 +18,7 @@ import {
 } from '@munch/netcode'
 
 import { INTERNAL_PATHS, ROOM_CODE_HEADER } from './gameRoomCore.ts'
-import { type SyncCallFailed, tryCall } from './syncCore.ts'
+import { type SyncCallFailed, encodeJson, tryCall } from './syncCore.ts'
 
 // NOTE: calls between the Worker, the GameRoom objects, and the
 // Matchmaker. Only the Worker and these objects can reach the internal
@@ -106,11 +106,14 @@ export const createRoomIn = (
 ): Effect.Effect<Called, SyncCallFailed> =>
   Effect.gen(function* () {
     const code = yield* makeRoomCode
+    const body = yield* Effect.orDie(
+      encodeJson({ playerId, name, look, code, visibility }),
+    )
     const called = yield* callRoom(
       rooms,
       code,
       INTERNAL_PATHS.create,
-      JSON.stringify({ playerId, name, look, code, visibility }),
+      body,
       region,
     )
     return called.status === 409 && attempt + 1 < CREATE_ATTEMPTS

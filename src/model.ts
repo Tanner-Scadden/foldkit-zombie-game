@@ -25,6 +25,7 @@ import {
   SyncState,
 } from './playerSync'
 import { SUPPORT_URL, maybeSupportUrlOf } from './support'
+import type { DifficultyBests, LoadStep } from './worldSchema'
 import {
   AudioState,
   Blast,
@@ -32,7 +33,6 @@ import {
   Callout,
   DebutCard,
   Decal,
-  DifficultyBests,
   DifficultyCard,
   FIRST_SHOP_CATEGORY,
   FullscreenSetting,
@@ -43,7 +43,6 @@ import {
   Input,
   InputDevice,
   InstallOffer,
-  LoadStep,
   Loading,
   LookSection,
   MenuPanel,

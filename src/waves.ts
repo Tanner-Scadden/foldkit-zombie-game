@@ -66,6 +66,7 @@ import {
 import { type Seeded, between, nextRandom } from './prng'
 import { isEveryoneReady, returnFallen } from './revive'
 import { type World, withWorld } from './world'
+import type { Round } from './worldSchema'
 import {
   Alarm,
   Beat,
@@ -78,7 +79,6 @@ import {
   Phase,
   type PlannedSpawn,
   Purchase,
-  Round,
   RunMode,
   ShopState,
   type Trap,

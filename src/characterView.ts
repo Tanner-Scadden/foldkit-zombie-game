@@ -2,7 +2,7 @@ import { Array, Option } from 'effect'
 import { Canvas, Submodel } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
-import { RadioGroup } from '@foldkit/ui'
+import type { RadioGroup } from '@foldkit/ui'
 
 import {
   BODIES,
@@ -477,7 +477,7 @@ const optionFace = (
 const optionView = (
   part: LookPart,
   appearance: Appearance,
-  option: RadioGroup.OptionInfo<string>,
+  option: RadioGroup.OptionInfo,
   h: HtmlBuilder<Message>,
 ): Html =>
   h.button(

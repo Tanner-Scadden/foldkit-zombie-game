@@ -1,6 +1,6 @@
+import type { Duration } from 'effect'
 import {
   Deferred,
-  Duration,
   Effect,
   MutableHashMap,
   MutableRef,
@@ -46,15 +46,15 @@ export const connectionError = (
   operation: string,
   cause: unknown = message,
 ): SqlError.SqlError =>
-  new SqlError.SqlError({
-    reason: new SqlError.ConnectionError({ message, operation, cause }),
+  SqlError.SqlError.make({
+    reason: SqlError.ConnectionError.make({ message, operation, cause }),
   })
 
 export const databaseError = (
   failure: DatabaseFailure,
   operation: string,
 ): SqlError.SqlError =>
-  new SqlError.SqlError({
+  SqlError.SqlError.make({
     reason: SqlError.classifySqliteError(failure, {
       message: failure.message,
       operation,
@@ -62,8 +62,8 @@ export const databaseError = (
   })
 
 const timeoutError = (operation: string): SqlError.SqlError =>
-  new SqlError.SqlError({
-    reason: new SqlError.StatementTimeoutError({
+  SqlError.SqlError.make({
+    reason: SqlError.StatementTimeoutError.make({
       message: 'The database did not answer in time',
       operation,
       cause: 'timeout',

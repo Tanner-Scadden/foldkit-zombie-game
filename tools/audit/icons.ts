@@ -115,7 +115,7 @@ const FAVICON: ReadonlyArray<string> = [
 
 const mirrorRow = (row: string): string =>
   row +
-  [...row]
+  Array.from(row)
     .reverse()
     .map(cell => (cell === 'l' ? 'd' : cell))
     .join('')
@@ -145,8 +145,12 @@ const HEAD_TOP = 4
 
 const glowAt = (x: number, y: number): string => {
   const distance = Math.hypot(x + 0.5 - ART_SIZE / 2, y + 0.5 - ART_SIZE / 2)
-  if (distance < 12.5) return 'H'
-  if (distance < 15.5) return 'h'
+  if (distance < 12.5) {
+    return 'H'
+  }
+  if (distance < 15.5) {
+    return 'h'
+  }
   return 'b'
 }
 
@@ -163,8 +167,12 @@ const BIG_ART: ReadonlyArray<string> = Array.from(
     Array.from({ length: ART_SIZE }, (_, x) => {
       const headX = x - (ART_SIZE - (BIG_HEAD[0]?.length ?? 0)) / 2
       const headCell = BIG_HEAD[y - HEAD_TOP]?.[headX]
-      if (headCell !== undefined && headCell !== '.') return headCell
-      if (SPARKLES.some(([sx, sy]) => sx === x && sy === y)) return 's'
+      if (headCell !== undefined && headCell !== '.') {
+        return headCell
+      }
+      if (SPARKLES.some(([sx, sy]) => sx === x && sy === y)) {
+        return 's'
+      }
       return glowAt(x, y)
     }).join(''),
 )
@@ -173,10 +181,11 @@ const BIG_ART: ReadonlyArray<string> = Array.from(
 
 const assertSquare = (name: string, rows: ReadonlyArray<string>): void => {
   rows.forEach((row, y) => {
-    if (row.length !== rows.length)
+    if (row.length !== rows.length) {
       throw new Error(
         `${name} row ${y} is ${row.length} wide, not ${rows.length}`,
       )
+    }
   })
 }
 
@@ -189,7 +198,9 @@ const svgFor = (rows: ReadonlyArray<string>): string => {
         const cell = row[start] ?? '.'
         if (cell !== '.') {
           const fill = PALETTE[cell]
-          if (fill === undefined) throw new Error(`no color for ${cell}`)
+          if (fill === undefined) {
+            throw new Error(`no color for ${cell}`)
+          }
           runs.push(
             `<rect x="${start}" y="${y}" width="${x - start}" height="1" fill="${fill}"/>`,
           )
@@ -218,7 +229,9 @@ console.log('wrote public/favicon.svg')
 // The loading splash shows the app icon's head on its own, without the glow,
 // inline in index.html so it paints before any request. One path per color
 // keeps it small.
-const SPLASH_HEAD = BIG_HEAD.filter(row => [...row].some(cell => cell !== '.'))
+const SPLASH_HEAD = BIG_HEAD.filter(row =>
+  Array.from(row).some(cell => cell !== '.'),
+)
 const SPLASH_START = '<!-- splash-zombie: written by tools/audit/icons.ts -->'
 const SPLASH_END = '<!-- /splash-zombie -->'
 
@@ -232,7 +245,9 @@ const splashSvg = (rows: ReadonlyArray<string>): string => {
         const cell = row[start] ?? '.'
         if (cell !== '.') {
           const fill = PALETTE[cell]
-          if (fill === undefined) throw new Error(`no color for ${cell}`)
+          if (fill === undefined) {
+            throw new Error(`no color for ${cell}`)
+          }
           const runs = pathsByColor.get(fill) ?? []
           runs.push(`M${start} ${y}h${x - start}v1h-${x - start}z`)
           pathsByColor.set(fill, runs)
@@ -250,8 +265,9 @@ const splashSvg = (rows: ReadonlyArray<string>): string => {
 const indexHtml = readFileSync(INDEX_HTML, 'utf8')
 const splashStart = indexHtml.indexOf(SPLASH_START)
 const splashEnd = indexHtml.indexOf(SPLASH_END)
-if (splashStart < 0 || splashEnd < splashStart)
+if (splashStart < 0 || splashEnd < splashStart) {
   throw new Error('index.html is missing the splash-zombie markers')
+}
 writeFileSync(
   INDEX_HTML,
   `${indexHtml.slice(0, splashStart + SPLASH_START.length)}\n      ${splashSvg(SPLASH_HEAD)}\n      ${indexHtml.slice(splashEnd)}`,

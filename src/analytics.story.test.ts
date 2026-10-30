@@ -344,7 +344,7 @@ describe('the beacon', () => {
   })
 
   test('the summary goes out as a beacon to the runs path', async () => {
-    const sendBeacon = vi.fn(() => true)
+    const sendBeacon = vi.fn<Navigator['sendBeacon']>(() => true)
     vi.stubGlobal('navigator', { sendBeacon })
     const transport = await Effect.runPromise(
       sendRunSummary(summary, 'https://api.example.test'),
@@ -358,8 +358,11 @@ describe('the beacon', () => {
 
   test('a refused beacon falls back to a keepalive fetch', async () => {
     const requests: Array<{ url: string; init: RequestInit | undefined }> = []
-    const fetch: typeof globalThis.fetch = (input, init) => {
-      requests.push({ url: String(input), init })
+    const fetch: typeof globalThis.fetch = (input, requestInit) => {
+      requests.push({
+        url: input instanceof Request ? input.url : String(input),
+        init: requestInit,
+      })
       return Promise.resolve(new Response(null))
     }
     vi.stubGlobal('navigator', { sendBeacon: () => false })

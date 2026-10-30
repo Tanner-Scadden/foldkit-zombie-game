@@ -5,7 +5,8 @@
 // a second, holds and quiet hurries included. Run it with
 // `bun tools/balance/model.ts`. It is instant, so it runs in `bun run test`.
 
-import { Array, Number, Option, Order, Record, pipe } from 'effect'
+import type { Record } from 'effect'
+import { Array, Number, Option, Order, pipe } from 'effect'
 
 import { BOSS_RULES, hasBoss } from '../../src/boss'
 import {
@@ -942,8 +943,8 @@ export const modelRows = (
     )
     const mean = (pick: (flow: WaveFlow) => number) =>
       meanOf(Array.map(flows, pick))
-    const peakIncomingHps = mean(({ peakIncomingHps }) => peakIncomingHps)
-    const meanIncomingHps = mean(({ meanIncomingHps }) => meanIncomingHps)
+    const peakIncomingHps = mean(flow => flow.peakIncomingHps)
+    const meanIncomingHps = mean(flow => flow.meanIncomingHps)
     return {
       wave,
       difficulty,
@@ -1115,6 +1116,6 @@ export const formatModel = (model: BalanceModel): string => {
   )
 }
 
-if (import.meta.main) {
+if (import.meta.main === true) {
   console.log(formatModel(balanceModel()))
 }

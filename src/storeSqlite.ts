@@ -1,9 +1,9 @@
+import type { Exit } from 'effect'
 import {
   Array,
   Context,
   Data,
   Effect,
-  Exit,
   Layer,
   Option,
   Record,
@@ -68,6 +68,7 @@ import {
   type PlayerChange,
   PlayerScopeStatus,
   RunSettled,
+  StoreEvent,
   SyncState,
 } from './playerSync'
 import {
@@ -162,9 +163,9 @@ const saveOfRow = (
     runsPlayed: row.runs_played,
     totalKills: row.total_kills,
     killsByKind: Record.fromEntries(
-      Array.map(kills, ({ kind, kills }): readonly [string, number] => [
+      Array.map(kills, ({ kind, kills: count }): readonly [string, number] => [
         kind,
-        kills,
+        count,
       ]),
     ),
     byDifficulty: row.difficulty_bests,
@@ -183,16 +184,6 @@ export interface LegacySave {
 }
 
 // DATABASE
-
-// NOTE: what the store hears from the sync engine: a save that changed
-// because of another device or the server, the sync status line, and how
-// far the player scope has loaded.
-export type StoreEvent = Data.TaggedEnum<{
-  SyncedSave: { readonly save: PlayerSave }
-  SyncStatus: { readonly state: SyncState }
-  ScopeStatus: { readonly status: PlayerScopeStatus }
-}>
-export const StoreEvent = Data.taggedEnum<StoreEvent>()
 
 export interface PlayerDatabase {
   readonly persistence: Persistence
@@ -631,12 +622,7 @@ export const makePlayerDatabase = (
               StoreEvent.SyncStatus({ state: stateOf(current, devices) }),
             ),
           ),
-          Stream.changesWith(
-            (a, b) =>
-              a._tag === 'SyncStatus' &&
-              b._tag === 'SyncStatus' &&
-              sameSyncState(a.state, b.state),
-          ),
+          Stream.changesWith((a, b) => sameSyncState(a.state, b.state)),
         ),
     })
 
@@ -661,13 +647,12 @@ export const makePlayerDatabase = (
       {
         onNone: () => Effect.succeedNone,
         onSome: setup =>
-          Effect.map(
+          Effect.asSome(
             makeRoomAccess({
               database,
               identity,
               transports: setup.transports,
             }),
-            Option.some,
           ),
       },
     )

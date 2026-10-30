@@ -98,7 +98,9 @@ await useHarness()
 const browser = await launch()
 for (const viewport of VIEWPORTS) {
   for (const scene of SCENES) {
-    if (!isPickedScene(scene.name) || isComparingOnly) continue
+    if (!isPickedScene(scene.name) || isComparingOnly) {
+      continue
+    }
     const page = await openPage(browser, viewport)
     await gotoScene(page, harnessUrl(scene.query, deviceQuery(viewport)))
     await shot(page, shotName(TAG, viewport, scene))
@@ -114,10 +116,14 @@ if (process.env.COMPARE) {
   const files = readdirSync(SHOTS_DIR)
   for (const viewport of VIEWPORTS) {
     for (const scene of SCENES) {
-      if (!isPickedScene(scene.name)) continue
+      if (!isPickedScene(scene.name)) {
+        continue
+      }
       const before = `${shotName(compareTag, viewport, scene)}.png`
       const after = `${shotName(TAG, viewport, scene)}.png`
-      if (!files.includes(before) || !files.includes(after)) continue
+      if (!files.includes(before) || !files.includes(after)) {
+        continue
+      }
       const result = await comparePngs(
         page,
         `${SHOTS_DIR}/${before}`,

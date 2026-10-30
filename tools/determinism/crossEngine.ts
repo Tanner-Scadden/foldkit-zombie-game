@@ -322,13 +322,15 @@ const divergences = await pairsOf(engines).reduce<
 // THE REPORT
 
 const shown = (value: unknown): string => {
-  const text =
+  // NOTE: JSON.stringify returns undefined for undefined and functions,
+  // though its type says string.
+  const text: unknown =
     typeof value === 'number'
       ? Object.is(value, -0)
         ? '-0'
         : String(value)
       : JSON.stringify(value)
-  return text === undefined
+  return typeof text !== 'string'
     ? 'undefined'
     : text.length > 120
       ? `${text.slice(0, 117)}...`

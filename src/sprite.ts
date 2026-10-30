@@ -47,11 +47,7 @@ const rowRuns = (
       continue
     }
     const last = runs[runs.length - 1]
-    if (
-      last !== undefined &&
-      last.color === color &&
-      last.x + last.width === x
-    ) {
+    if (last?.color === color && last.x + last.width === x) {
       last.width += 1
     } else {
       runs.push({ x, y, width: 1, height: 1, color })
@@ -480,7 +476,7 @@ export const placeAt = (
   sprite: ReadonlyArray<Canvas.Shape>,
 ): Canvas.Shape => {
   const only = sprite.length === 1 ? sprite[0] : undefined
-  if (only !== undefined && only._tag === 'Image') {
+  if (only?._tag === 'Image') {
     return {
       _tag: 'Image',
       src: only.src,

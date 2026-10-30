@@ -244,6 +244,16 @@ export const PlayerScopeStatus = defineTaggedUnion({
 })
 export type PlayerScopeStatus = typeof PlayerScopeStatus.Type
 
+// NOTE: what the store hears from the sync engine: a save that changed
+// because of another device or the server, the sync status line, and how
+// far the player scope has loaded.
+export const StoreEvent = defineTaggedUnion({
+  SyncedSave: { save: PlayerSave },
+  SyncStatus: { state: SyncState },
+  ScopeStatus: { status: PlayerScopeStatus },
+})
+export type StoreEvent = typeof StoreEvent.Type
+
 // NOTE: SETTINGS' Devices line, from the connection and the scope together.
 export const devicesStatusText = (
   state: SyncState,

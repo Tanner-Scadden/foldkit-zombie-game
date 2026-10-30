@@ -7,7 +7,9 @@ import { installDeterministicMath } from '../determinism/detMath'
 import { gameplayOf, runScenario } from './scenario'
 
 // MP_DET_MATH=1 swaps in the deterministic Math functions first.
-if (process.env['MP_DET_MATH'] === '1') installDeterministicMath()
+if (process.env['MP_DET_MATH'] === '1') {
+  installDeterministicMath()
+}
 
 const args = process.argv.slice(2)
 const frames = Number(args[0] ?? 18_000)

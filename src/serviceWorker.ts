@@ -139,6 +139,8 @@ const takeOver = (
         once: true,
         signal,
       })
+      // NOTE: a ServiceWorker's postMessage takes no targetOrigin.
+      // oxlint-disable-next-line unicorn/require-post-message-target-origin
       waiting.postMessage(SKIP_WAITING)
     }),
     Effect.timeoutOrElse({

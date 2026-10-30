@@ -10,7 +10,9 @@ const only = process.env.ONLY?.split(',')
 const browser = await launch()
 const results: Array<FrameRow> = []
 for (const name of Object.keys(SCENARIOS)) {
-  if (only && !only.includes(name)) continue
+  if (only && !only.includes(name)) {
+    continue
+  }
   for (const rate of rates) {
     const row = await measureScenario(browser, BASE, name, rate, SECONDS)
     console.log(JSON.stringify(row))

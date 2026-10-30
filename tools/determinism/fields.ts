@@ -151,7 +151,7 @@ const byField = (
 const flatEntriesOf = (
   model: object,
 ): ReadonlyArray<readonly [string, unknown]> =>
-  Object.entries(model).flatMap(([field, value]) =>
+  Object.entries(model).flatMap(([field, value]: [string, unknown]) =>
     field === 'world' && typeof value === 'object' && value !== null
       ? Object.entries(value)
       : [[field, value] as const],

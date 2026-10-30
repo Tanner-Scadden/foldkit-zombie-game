@@ -22,7 +22,9 @@ export default {
     const frames = Number(url.searchParams.get('frames') ?? 18_000)
     const seed = Number(url.searchParams.get('seed') ?? 1)
     const deterministicMath = url.searchParams.get('det') === '1'
-    if (deterministicMath) installDeterministicMath()
+    if (deterministicMath) {
+      installDeterministicMath()
+    }
     const report = runScenario({
       seed,
       frames,

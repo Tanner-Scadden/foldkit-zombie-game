@@ -210,7 +210,9 @@ const browser = await launch()
 const pages = scenePages(browser, ['nodev'])
 for (const viewport of VIEWPORTS as ReadonlyArray<Viewport>) {
   for (const scene of SCENES) {
-    if (!isPickedScene(scene.name)) continue
+    if (!isPickedScene(scene.name)) {
+      continue
+    }
     const page = await pages.open(
       viewport,
       harnessQuery(scene.query, deviceQuery(viewport)),

@@ -444,9 +444,9 @@ describe('the Munchopedia', () => {
       tick(FIXED_STEP_MS),
       model(current => {
         expect(isDiscovered(current.bests.killsByKind, 'Boss')).toBe(true)
-        expect(current.bests.killsByKind.Boss).toBe(1)
+        expect(current.bests.killsByKind['Boss']).toBe(1)
         expect(current.home.newEntries).toEqual(['Shambler', 'Boss'])
-        expect(saveOf(current).bests.killsByKind.Boss).toBe(1)
+        expect(saveOf(current).bests.killsByKind['Boss']).toBe(1)
       }),
     )
   })

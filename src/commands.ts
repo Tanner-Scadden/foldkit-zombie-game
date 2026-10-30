@@ -174,7 +174,8 @@ const enterFullscreen = Effect.tryPromise(() =>
 // a phone or tablet can turn, and iPhones have no lock at all. WebKit's
 // navigator.standalone marks an Apple browser.
 const canLockOrientation = (): boolean =>
-  typeof screen.orientation?.lock === 'function' &&
+  Reflect.has(screen, 'orientation') &&
+  typeof screen.orientation.lock === 'function' &&
   window.matchMedia(COARSE_POINTER_QUERY).matches &&
   !Reflect.has(navigator, 'standalone')
 

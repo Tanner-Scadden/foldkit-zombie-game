@@ -29,10 +29,8 @@ const stageArgument = (
   pipe(
     Array.findFirstIndex(args, arg => arg === '--stage'),
     Option.flatMap(index => Array.get(args, index + 1)),
-    Option.match({
-      onNone: () => Effect.fail(new UsageError({ reason: USAGE })),
-      onSome: stage => Effect.succeed(stage),
-    }),
+    Effect.fromOption,
+    Effect.mapError(() => new UsageError({ reason: USAGE })),
   )
 
 // QUERIES

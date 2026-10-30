@@ -95,7 +95,7 @@ const DIALOG_IDS = [
   'profile',
 ]
 
-const holdsDialogsApart = tap<Model, Message, undefined>(({ html }) => {
+const holdsDialogsApart = tap<Model, Message>(({ html }) => {
   const root: VNodeLike = html
   expectValue(duplicateIds(root)).toEqual([])
   expectValue(unkeyedDialogs(root)).toEqual([])

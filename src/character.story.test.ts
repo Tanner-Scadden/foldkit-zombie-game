@@ -146,7 +146,7 @@ const painted = (appearance: Appearance): string => {
   return JSON.stringify(
     Array.map([...walk, ...idle], rows =>
       Array.map(rows, row =>
-        Array.map([...row], symbol =>
+        Array.map(Array.fromIterable(row), symbol =>
           symbol === '.' ? '.' : (palette[symbol] ?? `missing ${symbol}`),
         ).join(' '),
       ),
@@ -474,21 +474,23 @@ describe('Character', () => {
     test.each(optionsOfEveryPart({ ...defaultAppearance, body }))(
       'every $part option draws whole and its own way',
       ({ part, looks }) => {
+        const looksOn = (base: Appearance) =>
+          Array.map(looks, look => ({ ...base, ...pickPart(part, look) }))
         Array.forEach(bases, base => {
-          const partLooks = Array.map(looks, look => ({
-            ...base,
-            ...pickPart(part, look),
-          }))
-          Array.forEach(partLooks, look => {
+          Array.forEach(looksOn(base), look => {
             expect(frameSizes(look)).toEqual(classicSizes)
             expect(painted(look)).not.toContain('missing')
           })
-          if (base.outfit === 'Tee') {
+        })
+        Array.forEach(
+          Array.filter(bases, base => base.outfit === 'Tee'),
+          base => {
+            const partLooks = looksOn(base)
             expect(Array.dedupe(Array.map(partLooks, painted)).length).toBe(
               partLooks.length,
             )
-          }
-        })
+          },
+        )
       },
     )
   })

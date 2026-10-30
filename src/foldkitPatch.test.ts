@@ -47,9 +47,9 @@ describe('a Canvas shape built every frame', () => {
     })
     expect(Exact({})).toStrictEqual({ _tag: 'Exact' })
     // NOTE: the types refuse it too, so it goes in untyped, as from JavaScript.
-    expect(() =>
+    expect((): unknown =>
       Reflect.apply(Exact, undefined, [{ label: undefined }]),
-    ).toThrow()
+    ).toThrow('Schema validation failed')
   })
 
   test('still applies a constructor default', () => {

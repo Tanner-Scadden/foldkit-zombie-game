@@ -1347,7 +1347,7 @@ const markerOf = (job: ModelJob, since: number): LockHolder => ({
 
 const runQueue = (jobs: ReadonlyArray<ModelJob>): Waits => {
   const waits = new Map<number, Array<number>>()
-  const waiting = new Map<number, number>()
+  const waitingSince = new Map<number, number>()
   const done = new Map<number, number>()
   const turns: Array<HeldTurn> = []
   let sharedRunning: ReadonlyArray<{
@@ -1367,16 +1367,20 @@ const runQueue = (jobs: ReadonlyArray<ModelJob>): Waits => {
   }
   const markers = (except: number): ReadonlyArray<LockHolder> =>
     Array.flatMap(jobs, job =>
-      job.pid !== except && waiting.has(job.pid)
-        ? [markerOf(job, waiting.get(job.pid)!)]
+      job.pid !== except && waitingSince.has(job.pid)
+        ? [markerOf(job, waitingSince.get(job.pid)!)]
         : [],
     )
   for (let now = 0; now < 6 * 60 * MINUTE; now += TICK_MS) {
     jobs.forEach(job => {
-      if (job.arriveAt === now) waiting.set(job.pid, now)
+      if (job.arriveAt === now) {
+        waitingSince.set(job.pid, now)
+      }
     })
     sharedRunning = Array.filter(sharedRunning, ({ job, endsAt }) => {
-      if (now < endsAt) return true
+      if (now < endsAt) {
+        return true
+      }
       turns.push({ cwd: job.cwd, at: now })
       return false
     })
@@ -1391,7 +1395,7 @@ const runQueue = (jobs: ReadonlyArray<ModelJob>): Waits => {
         Handover.$is('HandOver')(decideHandover(job.pid, markers(job.pid)))
       ) {
         turns.push({ cwd: job.cwd, at: now })
-        waiting.set(job.pid, now)
+        waitingSince.set(job.pid, now)
         running = undefined
       } else {
         const partMs = partOf(job)
@@ -1400,9 +1404,11 @@ const runQueue = (jobs: ReadonlyArray<ModelJob>): Waits => {
     }
     // NOTE: every waiting job asks, in an order unrelated to the queue, so
     // only `decide` picks who goes.
-    const askers = Array.filter(jobs, job => waiting.has(job.pid)).reverse()
+    const askers = Array.filter(jobs, job =>
+      waitingSince.has(job.pid),
+    ).reverse()
     askers.forEach(job => {
-      const since = waiting.get(job.pid)!
+      const since = waitingSince.get(job.pid)!
       const decision = decide({
         ...BASE,
         pid: job.pid,
@@ -1427,14 +1433,14 @@ const runQueue = (jobs: ReadonlyArray<ModelJob>): Waits => {
         ),
       })
       if (isRun(decision) && job.jobClass === 'Shared') {
-        waiting.delete(job.pid)
+        waitingSince.delete(job.pid)
         waits.set(job.pid, [...(waits.get(job.pid) ?? []), now - since])
         sharedRunning = [
           ...sharedRunning,
           { job, holder: markerOf(job, now), endsAt: now + job.workMs },
         ]
       } else if (isRun(decision) && running === undefined) {
-        waiting.delete(job.pid)
+        waitingSince.delete(job.pid)
         waits.set(job.pid, [...(waits.get(job.pid) ?? []), now - since])
         const partMs = partOf(job)
         running = {
@@ -1515,7 +1521,7 @@ describe('the max wait', () => {
 
   test('no job waits more than 15 minutes, and every job finishes', () => {
     const waits = runQueue(BUSY_HOUR)
-    expect(globalThis.Array.from(waits.keys()).sort()).toEqual([
+    expect(globalThis.Array.from(waits.keys()).sort((a, b) => a - b)).toEqual([
       1, 2, 3, 4, 5, 6,
     ])
     expect(Math.max(...allWaits(waits))).toBeLessThanOrEqual(15 * MINUTE)

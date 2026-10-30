@@ -793,7 +793,10 @@ describe('zombies still need two pistol shots', () => {
 })
 
 describe('the stall entrance', () => {
-  const walkInFrom = (start: Readonly<{ x: number; y: number }>, key: string) =>
+  const expectShopOpensWalkingFrom = (
+    start: Readonly<{ x: number; y: number }>,
+    key: string,
+  ) =>
     story(
       update,
       given(
@@ -818,12 +821,12 @@ describe('the stall entrance', () => {
     )
 
   test('walking down onto the front of the stall opens the shop', () => {
-    walkInFrom({ x: 265, y: 128 }, 'KeyS')
+    expectShopOpensWalkingFrom({ x: 265, y: 128 }, 'KeyS')
   })
 
   test('walking into the left or right side of the stall opens the shop', () => {
-    walkInFrom({ x: 240, y: 160 }, 'KeyD')
-    walkInFrom({ x: 300, y: 160 }, 'KeyA')
+    expectShopOpensWalkingFrom({ x: 240, y: 160 }, 'KeyD')
+    expectShopOpensWalkingFrom({ x: 300, y: 160 }, 'KeyA')
   })
 
   test('after leaving the shop at the side, it stays shut until the player steps well away', () => {

@@ -390,10 +390,18 @@ const keysToward = (
   near = 6,
 ): Set<string> => {
   const keys = new Set<string>()
-  if (to.x - from.x > near) keys.add(MOVE_KEYS.right)
-  if (from.x - to.x > near) keys.add(MOVE_KEYS.left)
-  if (to.y - from.y > near) keys.add(MOVE_KEYS.down)
-  if (from.y - to.y > near) keys.add(MOVE_KEYS.up)
+  if (to.x - from.x > near) {
+    keys.add(MOVE_KEYS.right)
+  }
+  if (from.x - to.x > near) {
+    keys.add(MOVE_KEYS.left)
+  }
+  if (to.y - from.y > near) {
+    keys.add(MOVE_KEYS.down)
+  }
+  if (from.y - to.y > near) {
+    keys.add(MOVE_KEYS.up)
+  }
   return keys
 }
 

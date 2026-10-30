@@ -1,4 +1,5 @@
-import { Array, Option, Result, SchemaAST, Struct } from 'effect'
+import type { SchemaAST } from 'effect'
+import { Array, Option, Result, Struct } from 'effect'
 
 import type { Reader, Writer } from '@munch/netcode'
 
@@ -656,7 +657,7 @@ const structCodec = (
     )
     writer.varint(maskOf(changed))
     Array.forEach(properties, (property, index) => {
-      if (!changed[index]) {
+      if (changed[index] !== true) {
         return
       }
       const has = property.name in after
@@ -915,13 +916,7 @@ const codecOf = (ast: SchemaAST.AST, hint: Hint): Codec => {
   } else if (ast._tag === 'Union') {
     const members = flattenUnion(ast)
     return Array.every(members, member => member._tag === 'Literal')
-      ? literalCodec(
-          Array.filterMap(members, member =>
-            member._tag === 'Literal'
-              ? Result.succeed(member.literal)
-              : Result.failVoid,
-          ),
-        )
+      ? literalCodec(Array.map(members, member => member.literal))
       : unionCodec(
           Array.map(members, member => ({
             isMember: isMemberOf(member),
@@ -981,10 +976,7 @@ export const WIRE_FIELDS: ReadonlyArray<string> = Array.filter(
 
 const worldAst = WorldSchema.ast
 
-const worldCodec =
-  worldAst._tag === 'Objects'
-    ? objectsCodec(worldAst, 'Exact', HOME_FIELDS, HOME_VALUES)
-    : fail('The World is not a struct')
+const worldCodec = objectsCodec(worldAst, 'Exact', HOME_FIELDS, HOME_VALUES)
 
 const eventsCodec = codecOf(GameEvent.ast, 'Exact')
 

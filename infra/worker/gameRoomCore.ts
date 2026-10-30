@@ -318,10 +318,10 @@ export const reactionsOf = (
   Effect.map(
     Effect.forEach(deltas, (delta): Effect.Effect<Option.Option<Reaction>> => {
       if (delta.name === 'ChangedReady') {
-        return Effect.succeed(Option.some({ _tag: 'MaybeStart' }))
+        return Effect.succeedSome({ _tag: 'MaybeStart' })
       }
       if (delta.name === 'EndedGame') {
-        return Effect.succeed(Option.some({ _tag: 'EndGame' }))
+        return Effect.succeedSome({ _tag: 'EndGame' })
       }
       if (delta.name === 'KickedPlayer') {
         return Effect.map(decodeKicked(delta), maybeArgs =>
@@ -341,7 +341,7 @@ export const reactionsOf = (
           })),
         )
       }
-      return Effect.succeed(Option.none())
+      return Effect.succeedNone
     }),
     Array.getSomes,
   )

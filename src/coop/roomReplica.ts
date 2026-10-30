@@ -1,4 +1,5 @@
-import { Array, Data, Effect, Option, Ref, Result, Stream, pipe } from 'effect'
+import type { Array } from 'effect'
+import { Data, Effect, Option, Ref, Result, Stream, pipe } from 'effect'
 
 import {
   type Lobby,

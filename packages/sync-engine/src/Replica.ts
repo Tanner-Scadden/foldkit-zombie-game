@@ -1,8 +1,8 @@
+import type { Duration } from 'effect'
 import {
   Array,
   Clock,
   Data,
-  Duration,
   Effect,
   Option,
   Order,
@@ -706,8 +706,7 @@ export const makeReplica = (
   const settledOf = (id: string) =>
     sql.withTransaction(
       Effect.gen(function* () {
-        const waiting =
-          yield* sql`SELECT id FROM sync_outbox WHERE id = ${id}`
+        const waiting = yield* sql`SELECT id FROM sync_outbox WHERE id = ${id}`
         if (Array.isReadonlyArrayNonEmpty(waiting)) {
           return Option.none<Settled>()
         }
@@ -823,7 +822,10 @@ export const makeReplica = (
       ),
       receive,
       switchScope: scope =>
-        Effect.andThen(switchScope(scope), SubscriptionRef.set(statusRef, idle)),
+        Effect.andThen(
+          switchScope(scope),
+          SubscriptionRef.set(statusRef, idle),
+        ),
       remoteChanges: touchedTable(REPLICAS_TABLE),
       localChanges: touchedTable(OUTBOX_TABLE),
       role: database.role,

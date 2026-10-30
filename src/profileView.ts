@@ -128,7 +128,7 @@ const lookTabView = (model: Model, h: HtmlBuilder<Message>): Html =>
 const nameLettersView = (name: string, h: HtmlBuilder<Message>): Html =>
   h.span(
     [h.Class('name-stone-name'), h.AriaHidden(true)],
-    Array.map([...name], (letter, index) =>
+    Array.map(Array.fromIterable(name), (letter, index) =>
       h.span(
         [h.Class('name-stone-letter'), h.Style({ '--i': `${index}` })],
         [letter === ' ' ? ' ' : letter],
@@ -400,9 +400,9 @@ const codeView = (code: string, h: HtmlBuilder<Message>): Html =>
   h.p(
     [
       h.Class('account-code'),
-      h.AriaLabel(`Link code ${Array.join([...code], ' ')}`),
+      h.AriaLabel(`Link code ${Array.join(Array.fromIterable(code), ' ')}`),
     ],
-    Array.map([...code], (letter, index) =>
+    Array.map(Array.fromIterable(code), (letter, index) =>
       h.span(
         [
           h.Class('account-code-letter'),

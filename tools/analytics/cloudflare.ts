@@ -81,7 +81,7 @@ const Envelope = <S extends Schema.Top>(result: S) =>
   })
 
 const request = <S extends Schema.Top>(
-  token: Redacted.Redacted<string>,
+  token: Redacted.Redacted,
   path: string,
   result: S,
   init: RequestInit = {},
@@ -121,7 +121,7 @@ const request = <S extends Schema.Top>(
 
 const Account = Schema.Struct({ id: Schema.String, name: Schema.String })
 
-export const accountId = (token: Redacted.Redacted<string>) =>
+export const accountId = (token: Redacted.Redacted) =>
   pipe(
     Config.option(Config.String('CLOUDFLARE_ACCOUNT_ID')),
     Effect.mapError(error => new CloudflareError({ reason: describe(error) })),
@@ -149,7 +149,7 @@ const DatabaseInfo = Schema.Struct({
 })
 
 export const databaseId = (
-  token: Redacted.Redacted<string>,
+  token: Redacted.Redacted,
   account: string,
   name: string,
 ) =>
@@ -181,7 +181,7 @@ const QueryResult = Schema.Array(
 )
 
 export const query = <S extends Schema.Top>(
-  token: Redacted.Redacted<string>,
+  token: Redacted.Redacted,
   account: string,
   database: string,
   sql: string,

@@ -237,7 +237,7 @@ await a.page.evaluate(([key, json]) => localStorage.setItem(key, json), [
 await a.page.goto(BASE)
 await awaitGame(a.page)
 check(
-  /^Synced/.test(await waitForLine(a.page, /^Synced/, SYNC_TIMEOUT)),
+  (await waitForLine(a.page, /^Synced/, SYNC_TIMEOUT)).startsWith('Synced'),
   'device A syncs its older save',
 )
 check(
@@ -274,7 +274,7 @@ const b = await newDevice('device B')
 await b.page.goto(BASE)
 await awaitGame(b.page)
 check(
-  /^Synced/.test(await waitForLine(b.page, /^Synced/, SYNC_TIMEOUT)),
+  (await waitForLine(b.page, /^Synced/, SYNC_TIMEOUT)).startsWith('Synced'),
   'device B syncs its own new player',
 )
 check((await splatted(b.page)) === '', 'device B starts with no kills')
@@ -340,7 +340,7 @@ const offline = await waitForLine(a.page, /Offline, will sync/, SYNC_TIMEOUT)
 check(offline === 'Offline, will sync', `device A offline says "${offline}"`)
 await a.context.setOffline(false)
 const back = await waitForLine(a.page, /^Synced/, 40_000)
-check(/^Synced/.test(back), `device A back online says "${back}"`)
+check(back.startsWith('Synced'), `device A back online says "${back}"`)
 await wait(2000)
 await b.page.reload()
 await awaitGame(b.page)

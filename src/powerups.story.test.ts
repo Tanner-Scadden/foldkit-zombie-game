@@ -741,7 +741,7 @@ describe('timers', () => {
       },
     )
 
-  const staysFrozen = (base: Model) => {
+  const expectStaysFrozen = (base: Model) => {
     const before = timersOf(frozenRoom(base))
     story(
       update,
@@ -754,7 +754,7 @@ describe('timers', () => {
   }
 
   test('boosts, pickups, and callouts stand still while paused', () => {
-    staysFrozen(
+    expectStaysFrozen(
       modifyFields(fighting, {
         phase: () =>
           Phase.Paused({
@@ -765,7 +765,7 @@ describe('timers', () => {
   })
 
   test('boosts, pickups, and callouts stand still while the shop is open', () => {
-    staysFrozen(
+    expectStaysFrozen(
       modifyFields(preparing, {
         shop: () => ShopState.Browsing({ focusedItem: 'Heart' }),
       }),
@@ -773,7 +773,7 @@ describe('timers', () => {
   })
 
   test('boosts, pickups, and callouts stand still during hit-stop', () => {
-    staysFrozen(
+    expectStaysFrozen(
       modifyFields(fighting, {
         hitStop: () => HitStop.Frozen({ remainingMs: 10 * FRAME_MS + 1 }),
       }),
@@ -781,7 +781,7 @@ describe('timers', () => {
   })
 
   test('boosts, pickups, and callouts stand still under the new zombie card', () => {
-    staysFrozen(
+    expectStaysFrozen(
       modifyFields(fighting, {
         debutCard: () => DebutCard.Showing({ kind: 'Tank', ageMs: 0 }),
       }),

@@ -8,6 +8,7 @@ import { InstallPrompt } from './install'
 import { KEY_WATCH_QUIET_MS, isGrabbedKeyUp, isLetterKeyCode } from './keyGrab'
 import { Message } from './message'
 import type { Model } from './model'
+import { StoreEvent } from './playerSync'
 import { PlayerStore } from './store'
 import { isScreenAnimated } from './update/run'
 import {
@@ -294,15 +295,16 @@ const mouseMessages = Dom.streamFromEventFilterMap({
 const syncMessages: Stream.Stream<Message, never, PlayerStore> = Stream.unwrap(
   PlayerStore.use(store =>
     Effect.succeed(
-      Stream.map(store.events, (event): Message => {
-        if (event._tag === 'SyncedSave') {
-          return Message.UpdatedSyncedSave({ save: event.save })
-        } else if (event._tag === 'SyncStatus') {
-          return Message.UpdatedSyncStatus({ state: event.state })
-        } else {
-          return Message.UpdatedPlayerScopeStatus({ status: event.status })
-        }
-      }),
+      Stream.map(store.events, event =>
+        StoreEvent.match(event, {
+          SyncedSave: ({ save }): Message =>
+            Message.UpdatedSyncedSave({ save }),
+          SyncStatus: ({ state }): Message =>
+            Message.UpdatedSyncStatus({ state }),
+          ScopeStatus: ({ status }): Message =>
+            Message.UpdatedPlayerScopeStatus({ status }),
+        }),
+      ),
     ),
   ),
 )

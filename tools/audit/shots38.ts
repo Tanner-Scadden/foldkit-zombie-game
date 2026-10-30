@@ -13,6 +13,7 @@ import type { Page } from 'playwright-core'
 import {
   DESKTOP_1280,
   PHONE_844,
+  SHOTS_DIR,
   UPRIGHT_390,
   type Viewport,
   deviceQuery,
@@ -23,7 +24,6 @@ import {
   launch,
   openPage,
   pickViewports,
-  SHOTS_DIR,
   settleAnimations,
   tagOr,
   useHarness,
@@ -42,16 +42,15 @@ const press = async (page: Page, viewport: Viewport, name: RegExp) => {
   await (viewport.isPhone ? button.tap() : button.click())
 }
 
-const fromHand =
-  (card: RegExp) => async (page: Page, viewport: Viewport) => {
-    await press(page, viewport, /^More:/)
-    await page.locator('dialog[open]').first().waitFor({ state: 'visible' })
-    await press(page, viewport, card)
-    await page
-      .locator('dialog[open] .panel')
-      .first()
-      .waitFor({ state: 'visible' })
-  }
+const fromHand = (card: RegExp) => async (page: Page, viewport: Viewport) => {
+  await press(page, viewport, /^More:/)
+  await page.locator('dialog[open]').first().waitFor({ state: 'visible' })
+  await press(page, viewport, card)
+  await page
+    .locator('dialog[open] .panel')
+    .first()
+    .waitFor({ state: 'visible' })
+}
 
 type Scene = Readonly<{
   name: string
@@ -78,42 +77,38 @@ const MAX_SPRITE_PX = 128
 const problems: Array<string> = []
 
 const checkSprites = async (page: Page, where: string) => {
-  const found = await page.evaluate(
-    (maxPx: number) => {
-      // NOTE: the files the canvases draw sprites from: any URL the page
-      // loaded that is not a data URL and names a sprite sheet.
-      const isSheet = (url: string) =>
-        !url.startsWith('data:') && /sprite/i.test(url)
-      const urlsIn = (value: string) =>
-        [...value.matchAll(/url\("?([^")]+)"?\)/g)].map(match => match[1] ?? '')
-      const images = [...document.querySelectorAll('img')]
-      const sheetImages = images
-        .filter(image => isSheet(image.currentSrc || image.src))
-        .map(image => `<img class="${image.className}"> ${image.src}`)
-      const sheetBackgrounds = [...document.querySelectorAll('*')].flatMap(
-        element =>
-          urlsIn(getComputedStyle(element).backgroundImage)
-            .filter(isSheet)
-            .map(url => `${element.className} background ${url}`),
+  const found = await page.evaluate((maxPx: number) => {
+    // NOTE: the files the canvases draw sprites from: any URL the page
+    // loaded that is not a data URL and names a sprite sheet.
+    const isSheet = (url: string) =>
+      !url.startsWith('data:') && /sprite/i.test(url)
+    const urlsIn = (value: string) =>
+      [...value.matchAll(/url\("?([^")]+)"?\)/g)].map(match => match[1] ?? '')
+    const images = [...document.querySelectorAll('img')]
+    const sheetImages = images
+      .filter(image => isSheet(image.currentSrc || image.src))
+      .map(image => `<img class="${image.className}"> ${image.src}`)
+    const sheetBackgrounds = [...document.querySelectorAll('*')].flatMap(
+      element =>
+        urlsIn(getComputedStyle(element).backgroundImage)
+          .filter(isSheet)
+          .map(url => `${element.className} background ${url}`),
+    )
+    const wideFrames = [...document.querySelectorAll('.help-card-frame')]
+      .filter(
+        frame =>
+          frame instanceof HTMLImageElement &&
+          (frame.naturalWidth === 0 || frame.naturalWidth > maxPx),
       )
-      const wideFrames = [...document.querySelectorAll('.help-card-frame')]
-        .filter(
-          frame =>
-            frame instanceof HTMLImageElement &&
-            (frame.naturalWidth === 0 || frame.naturalWidth > maxPx),
-        )
-        .map(
-          frame =>
-            `frame ${(frame as HTMLImageElement).naturalWidth} px wide`,
-        )
-      return {
-        bad: [...sheetImages, ...sheetBackgrounds, ...wideFrames],
-        images: images.length,
-      }
-    },
-    MAX_SPRITE_PX,
-  )
-  for (const line of found.bad) problems.push(`${where}: ${line}`)
+      .map(frame => `frame ${(frame as HTMLImageElement).naturalWidth} px wide`)
+    return {
+      bad: [...sheetImages, ...sheetBackgrounds, ...wideFrames],
+      images: images.length,
+    }
+  }, MAX_SPRITE_PX)
+  for (const line of found.bad) {
+    problems.push(`${where}: ${line}`)
+  }
   return found.images
 }
 
@@ -127,7 +122,9 @@ type Box = Readonly<{
 const checkGift = async (page: Page, viewport: Viewport, where: string) => {
   const found = await page.evaluate(() => {
     const boxOf = (element: Element | null) => {
-      if (element === null) return null
+      if (element === null) {
+        return null
+      }
       const { left, top, right, bottom } = element.getBoundingClientRect()
       return { left, top, right, bottom }
     }
@@ -186,7 +183,9 @@ await useHarness()
 const browser = await launch()
 for (const viewport of VIEWPORTS) {
   for (const scene of SCENES) {
-    if (!isPickedScene(scene.name)) continue
+    if (!isPickedScene(scene.name)) {
+      continue
+    }
     const where = `${viewport.name} ${scene.name}`
     const page = await openPage(browser, viewport)
     await gotoScene(page, harnessUrl(scene.query, deviceQuery(viewport)))

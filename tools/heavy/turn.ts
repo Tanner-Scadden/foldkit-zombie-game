@@ -117,10 +117,10 @@ export const grantTurn = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     yield* fs.remove(requestPath(directory, id), { force: true })
-    yield* writeAtomically(
-      grantPath(directory, id),
-      `${JSON.stringify({ workers } satisfies TurnGrant)}\n`,
+    const grant = yield* Schema.encodeEffect(TurnGrantJson)({ workers }).pipe(
+      Effect.orDie,
     )
+    yield* writeAtomically(grantPath(directory, id), `${grant}\n`)
   })
 
 // THE JOB'S SIDE
@@ -132,12 +132,12 @@ const awaitGrant = (
   guardPid: number,
 ): Effect.Effect<Option.Option<string>, PlatformError, FileSystem.FileSystem> =>
   readTextIfPresent(path).pipe(
-    Effect.flatMap(maybeText =>
-      Option.isSome(maybeText) || !isProcessAlive(guardPid)
-        ? Effect.succeed(maybeText)
-        : Effect.sleep(GRANT_POLL).pipe(
-            Effect.andThen(Effect.suspend(() => awaitGrant(path, guardPid))),
-          ),
+    Effect.filterOrElse(
+      maybeText => Option.isSome(maybeText) || !isProcessAlive(guardPid),
+      () =>
+        Effect.sleep(GRANT_POLL).pipe(
+          Effect.andThen(Effect.suspend(() => awaitGrant(path, guardPid))),
+        ),
     ),
   )
 
@@ -160,10 +160,11 @@ export const yieldTurn = (
     const fs = yield* FileSystem.FileSystem
     const directory = maybeDirectory.value
     const id = `${process.pid}-${yield* Clock.currentTimeNanos}`
-    yield* writeAtomically(
-      requestPath(directory, id),
-      `${JSON.stringify({ pid: process.pid, label } satisfies TurnRequest)}\n`,
-    )
+    const request = yield* Schema.encodeEffect(TurnRequestJson)({
+      pid: process.pid,
+      label,
+    }).pipe(Effect.orDie)
+    yield* writeAtomically(requestPath(directory, id), `${request}\n`)
     const maybeText = yield* awaitGrant(
       grantPath(directory, id),
       maybeGuardPid.value,

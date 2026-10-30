@@ -24,6 +24,7 @@ import {
   pipe,
 } from 'effect'
 
+import type { Matchmaking } from '@munch/netcode'
 import {
   ChangedReady,
   EndedGame,
@@ -31,7 +32,6 @@ import {
   LeftRoom,
   type Lobby,
   MOVE_SCALE,
-  Matchmaking,
   NEUTRAL_INPUT,
   type PlayerInput,
   type RoomTicket,
@@ -253,9 +253,10 @@ const quickPlay = (
   Effect.scoped(
     Effect.gen(function* () {
       const quick = yield* startQuickPlay({ origin, token, name: nameNow() })
+      const runFork = Effect.runForkWith(yield* Effect.context())
       ui.queue.hidden = false
-      ui.accept.onclick = () => Effect.runFork(quick.answer(true))
-      ui.keepWaiting.onclick = () => Effect.runFork(quick.answer(false))
+      ui.accept.onclick = () => runFork(quick.answer(true))
+      ui.keepWaiting.onclick = () => runFork(quick.answer(false))
       const cancelled = whenClicked(ui.cancel).pipe(
         Effect.andThen(quick.cancel),
         Effect.andThen(
@@ -672,8 +673,9 @@ const playRoom = (
     const samples = yield* Ref.make<ReadonlyArray<Sample>>([])
     const connection = yield* Ref.make('Connecting')
     const controls = listenToControls()
+    const runFork = Effect.runForkWith(yield* Effect.context())
     const write = <A, E>(effect: Effect.Effect<A, E>) => {
-      Effect.runFork(
+      runFork(
         effect.pipe(Effect.catch(error => say(`Not sent: ${String(error)}`))),
       )
     }
@@ -771,7 +773,7 @@ const playRoom = (
       const input = inputNow(
         controls,
         before.predicted,
-        Option.map(Array.last(before.frames), frame => frame.world),
+        Option.map(Array.last(before.frames), latest => latest.world),
         nowMs,
       )
       const ticked = Session.tickInput(GAME, before, input, nowMs)
@@ -811,7 +813,9 @@ const playRoom = (
         `round trip ${Math.round(rendered.session.rttMs)} ms   down ${rates.downKBs.toFixed(2)} KB/s   up ${rates.upPerSecond.toFixed(1)} msg/s (inputs ${rates.inputsPerSecond.toFixed(1)}/s)`,
         `drawn ${Session.INTERPOLATION_MS} ms behind, ${rendered.session.frames.length} messages held   ack ${rendered.session.ack}   corrections ${stats.corrections} (last ${stats.lastCorrectionPx.toFixed(1)} px, max ${stats.maxCorrectionPx.toFixed(1)} px)`,
       ].join('\n')
-      ui.debug.textContent = JSON.stringify({
+      ui.debug.textContent = yield* Schema.encodeEffect(
+        Schema.fromJsonString(Schema.Unknown),
+      )({
         me,
         code,
         slot: Option.getOrNull(rendered.session.slot),
@@ -856,7 +860,7 @@ const playRoom = (
           onNone: () => null,
           onSome: own => ({ x: own.player.x, y: own.player.y }),
         }),
-      })
+      }).pipe(Effect.orDie)
     })
 
     return yield* Effect.forever(frame)

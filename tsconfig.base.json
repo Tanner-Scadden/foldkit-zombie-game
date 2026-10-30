@@ -1,0 +1,145 @@
+// NOTE: the one base every project extends: the app (tsconfig.json), the
+// service worker, the packages, the tools, and infra. A project sets only its
+// lib, types, paths, and files. Silence a rule only with a one-line reason.
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    // TODO(cleanup slice 9): turn on once the netcode change lands. Its one
+    // hit is packages/netcode/src/Lobby.ts, which every project reaches.
+    "noImplicitReturns": false,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowUnreachableCode": false,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noEmit": true,
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        // NOTE: suggestions print and fail typecheck like errors.
+        "includeSuggestionsInTsc": true,
+        "ignoreEffectSuggestionsInTscExitCode": false,
+        "diagnosticSeverity": {
+          // NOTE: unstable APIs such as effect/unstable/sql are used on purpose.
+          "unstableApiUsage": "off",
+          // NOTE: Schema.Number is the house style for numbers.
+          "schemaNumber": "off",
+          // NOTE: FOLDKIT.md prescribes catch(() => succeed(...)), and it wins.
+          "catchToOrElseSucceed": "off",
+          "globalRandom": "error",
+          "globalRandomInEffect": "error",
+          "globalTimers": "error",
+          "globalTimersInEffect": "error",
+          "globalFetch": "error",
+          "globalFetchInEffect": "error",
+          "globalConsoleInEffect": "error",
+          "globalDate": "error",
+          "globalDateInEffect": "error",
+          "cryptoRandomUUID": "error",
+          "cryptoRandomUUIDInEffect": "error",
+          "anyUnknownInErrorContext": "error",
+          "extendsNativeError": "error",
+          "nestedEffectGenYield": "error",
+          "unsafeEffectTypeAssertion": "error",
+          "missingEffectServiceDependency": "error",
+          "instanceOfSchema": "error",
+          "effectDoNotation": "error",
+          "schemaUnionOfLiterals": "error",
+          "preferSchemaTypeProperty": "error",
+          "newPromise": "error",
+          "preferSchemaOverJson": "error",
+          "runEffectInsideEffect": "error",
+          "strictBooleanExpressions": "error",
+          "deterministicKeys": "error",
+          "newSchemaClass": "error"
+        },
+        // NOTE: globs are relative to this file, whichever project extends it.
+        "overrides": [
+          {
+            // NOTE: tools are host scripts: they time runs, wait on browsers
+            // and child processes, and fetch. The game's determinism rules
+            // do not apply.
+            "include": ["tools/**/*.ts"],
+            "options": {
+              "diagnosticSeverity": {
+                "globalDate": "off",
+                "globalDateInEffect": "off",
+                "globalTimers": "off",
+                "globalTimersInEffect": "off",
+                "globalFetch": "off",
+                "globalFetchInEffect": "off",
+                "globalRandom": "off",
+                "globalRandomInEffect": "off",
+                "newPromise": "off"
+              }
+            }
+          },
+          {
+            // NOTE: these drive headless Chrome, and much of their code runs
+            // in page.evaluate on untyped page globals.
+            "include": [
+              "tools/audit/**/*.ts",
+              "tools/mp-spike/**/*.ts",
+              "tools/sprites/**/*.ts"
+            ],
+            "options": {
+              "diagnosticSeverity": { "strictBooleanExpressions": "off" }
+            }
+          },
+          {
+            // NOTE: tests stamp fixtures with the wall clock.
+            "include": ["**/*.test.ts"],
+            "options": { "diagnosticSeverity": { "globalDate": "off" } }
+          },
+          {
+            // NOTE: the service worker runs outside the Effect runtime and
+            // speaks the Fetch API.
+            "include": ["src/sw/worker.ts"],
+            "options": {
+              "diagnosticSeverity": {
+                "globalFetch": "off",
+                "globalTimers": "off",
+                "newPromise": "off"
+              }
+            }
+          },
+          {
+            // TODO(cleanup slice 9): the knife and two gun slots change.
+            "include": ["tools/balance/bot.ts", "tools/balance/simulate.ts"],
+            "options": {
+              "diagnosticSeverity": { "strictBooleanExpressions": "off" }
+            }
+          },
+          {
+            // TODO(cleanup slice 9): the netcode change.
+            "include": ["packages/netcode/src/Socket.ts"],
+            "options": {
+              "diagnosticSeverity": { "runEffectInsideEffect": "off" }
+            }
+          },
+          {
+            // TODO(cleanup slice 9): the sync tests change.
+            "include": ["packages/sync-engine/test/**/*.ts"],
+            "options": {
+              "diagnosticSeverity": {
+                "preferSchemaOverJson": "off",
+                "lazyEffect": "off"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

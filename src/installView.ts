@@ -1,7 +1,7 @@
 import { Array } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
-import { Dialog } from '@foldkit/ui'
+import type { Dialog } from '@foldkit/ui'
 
 import { closeButtonView, dialogShell } from './dialogs'
 import { isInstallTileShown } from './home'

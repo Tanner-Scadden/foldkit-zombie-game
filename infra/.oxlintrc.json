@@ -1,8 +1,12 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript"],
+  // NOTE: the same baseline as the root .oxlintrc.json, without the Foldkit
+  // and game rules, which are about the app.
+  "plugins": ["eslint", "typescript", "unicorn", "oxc"],
+  "options": { "typeAware": true },
   "categories": {
-    "correctness": "off"
+    "correctness": "error",
+    "perf": "error"
   },
   "rules": {
     "no-unused-vars": [
@@ -22,7 +26,35 @@
     "sort-imports": [
       "error",
       { "ignoreDeclarationSort": true, "ignoreCase": false }
-    ]
+    ],
+    "typescript/array-type": ["error", { "default": "generic" }],
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-non-null-assertion": "error",
+    "curly": ["error", "all"],
+    "eqeqeq": ["error", "always"],
+    "no-shadow": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/no-unnecessary-condition": "error",
+    "typescript/no-misused-spread": "error",
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-return": "error",
+    "typescript/no-base-to-string": "error",
+    "typescript/prefer-optional-chain": "error",
+    "typescript/no-unnecessary-type-arguments": "error",
+    "typescript/strict-boolean-expressions": "error"
   },
+  "overrides": [
+    {
+      // NOTE: a wrong non-null assertion in a test fails the test loudly.
+      "files": ["**/*.test.ts"],
+      "rules": { "typescript/no-non-null-assertion": "off" }
+    }
+  ],
   "ignorePatterns": ["node_modules/", ".alchemy/", "**/*.d.ts"]
 }

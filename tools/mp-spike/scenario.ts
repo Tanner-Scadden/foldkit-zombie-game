@@ -160,7 +160,9 @@ export const diff = (
   path: string,
   out: Array<Change>,
 ): void => {
-  if (Object.is(before, after)) return
+  if (Object.is(before, after)) {
+    return
+  }
   const isObject = (value: unknown) =>
     typeof value === 'object' && value !== null
   if (
@@ -178,11 +180,16 @@ export const diff = (
       after.forEach(item => {
         kept.add(item.id)
         const previous = old.get(item.id)
-        if (previous === undefined) out.push([`${path}+${item.id}`, item])
-        else diff(previous, item, `${path}#${item.id}`, out)
+        if (previous === undefined) {
+          out.push([`${path}+${item.id}`, item])
+        } else {
+          diff(previous, item, `${path}#${item.id}`, out)
+        }
       })
       before.forEach(item => {
-        if (!kept.has(item.id)) out.push([`${path}-${item.id}`, null])
+        if (!kept.has(item.id)) {
+          out.push([`${path}-${item.id}`, null])
+        }
       })
       return
     }
@@ -288,16 +295,22 @@ const drive = (
       ? tapKey(released, 'Escape', count)
       : tapKey(released, 'Enter', count)
   }
-  if (model.phase._tag !== 'Wave') return model
+  if (model.phase._tag !== 'Wave') {
+    return model
+  }
   const moved = holdKeys(
     model,
     MOVE_PATTERN[Math.floor(frame / FRAMES_PER_MOVE) % MOVE_PATTERN.length] ??
       [],
     count,
   )
-  if (frame % AIM_EVERY_FRAMES !== 0) return moved
+  if (frame % AIM_EVERY_FRAMES !== 0) {
+    return moved
+  }
   const target = nearestZombie(moved)
-  if (target === undefined) return moved
+  if (target === undefined) {
+    return moved
+  }
   const aimed = send(
     moved,
     Message.MovedMouse({ clientX: target.x, clientY: target.y }),

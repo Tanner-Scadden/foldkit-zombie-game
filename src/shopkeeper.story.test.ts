@@ -27,10 +27,10 @@ describe('Rattles', () => {
       expect(moody.length).toBe(stall.length)
       moody.forEach((row, index) => {
         expect(row.length).toBe(stall[index]?.length)
-        if (!faceRows.has(index)) {
-          expect(row).toBe(stall[index])
-        }
       })
+      const outsideFace = (rows: ReadonlyArray<string>) =>
+        rows.filter((_, index) => !faceRows.has(index))
+      expect(outsideFace(moody)).toEqual(outsideFace(stall))
     })
   })
 })

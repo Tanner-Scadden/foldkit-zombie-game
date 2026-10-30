@@ -56,9 +56,10 @@ export const runScript = (
   let frame = 0
   for (; frame < options.frames && isPlaying(model); frame++) {
     const played = afterFrame(playFrame(model, frame, options.pattern))
-    model = options.noHitStop
-      ? modifyFields(played, { hitStop: () => initialHitStop })
-      : played
+    model =
+      options.noHitStop === true
+        ? modifyFields(played, { hitStop: () => initialHitStop })
+        : played
     onFrame?.(frame, model)
     if (frame % options.every === options.every - 1) {
       checkpoints.push([frame, hasher.hashModel(model)])

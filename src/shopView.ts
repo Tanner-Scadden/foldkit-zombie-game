@@ -1,7 +1,8 @@
 import { Array, Match, Option, String, pipe } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
-import { Button, Dialog, Tabs } from '@foldkit/ui'
+import type { Dialog, Tabs } from '@foldkit/ui'
+import { Button } from '@foldkit/ui'
 
 import { levelOf } from './arena'
 import { PLAYER_MAX_HP, TILE_SIZE } from './constants'
@@ -436,7 +437,7 @@ const reasonId = (item: ShopItemId): string =>
 const focusedItem = (model: Model): ShopItemId =>
   ShopState.match(model.shop, {
     Away: () => Array.headNonEmpty(itemsIn(model, model.shopCategory)),
-    Browsing: ({ focusedItem }) => focusedItem,
+    Browsing: browsing => browsing.focusedItem,
     Dismissed: () => Array.headNonEmpty(itemsIn(model, model.shopCategory)),
   })
 

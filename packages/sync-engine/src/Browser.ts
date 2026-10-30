@@ -1,11 +1,10 @@
+import type { Cause, Schema } from 'effect'
 import {
   Array,
-  Cause,
   Effect,
   Option,
   Queue,
   Ref,
-  Schema,
   type Scope,
   Semaphore,
   Stream,
@@ -107,11 +106,12 @@ export const webSocketTransport = (origin: string): Transport => ({
         }),
         closeQuietly,
       )
+      const runFork = Effect.runForkWith(yield* Effect.context())
       const fail = (reason: string) =>
-        Effect.runFork(Queue.fail(inbox, new TransportError({ reason })))
+        runFork(Queue.fail(inbox, new TransportError({ reason })))
       socket.addEventListener('message', event => {
         if (typeof event.data === 'string') {
-          Effect.runFork(
+          runFork(
             Effect.matchEffect(decodeServerMessage(event.data), {
               onFailure: () => Effect.void,
               onSuccess: message => Queue.offer(inbox, message),

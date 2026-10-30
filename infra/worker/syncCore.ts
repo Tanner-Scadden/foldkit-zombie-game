@@ -11,6 +11,7 @@ import * as Scope from 'effect/Scope'
 import * as Semaphore from 'effect/Semaphore'
 import type * as SqlClient from 'effect/sql/SqlClient'
 
+import type { Unauthorized } from '@munch/sync-engine'
 import {
   Actor,
   type Authenticate,
@@ -26,7 +27,6 @@ import {
   type ScopeServer,
   ServerMessage,
   SessionRequest,
-  Unauthorized,
   decodeExchange,
   encodeExchangeReply,
   encodeServerMessage,
@@ -63,6 +63,11 @@ export const CORS_HEADERS: Readonly<Record<string, string>> = {
   'access-control-allow-headers': 'content-type, authorization',
   'access-control-max-age': '86400',
 }
+
+// NOTE: a plain value as JSON text, for request and response bodies.
+export const encodeJson = Schema.encodeEffect(
+  Schema.fromJsonString(Schema.Unknown),
+)
 
 export const json = (status: number, body: string): Response =>
   new Response(body, {

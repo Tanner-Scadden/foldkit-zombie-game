@@ -7,6 +7,7 @@
 
 const created = new Set<HTMLImageElement>()
 
+// oxlint-disable-next-line typescript/unbound-method -- called below with .call(this)
 const nativeCreateElement = Document.prototype.createElement
 Document.prototype.createElement = function (
   this: Document,

@@ -1,6 +1,6 @@
 import { Array, Effect, Option, Queue, Result, Stream, pipe } from 'effect'
 import { Mount } from 'foldkit'
-import { Document, Html, HtmlBuilder } from 'foldkit/html'
+import type { Document, Html, HtmlBuilder } from 'foldkit/html'
 
 import { GAME_TITLE } from './constants'
 import * as CoopView from './coop/view'

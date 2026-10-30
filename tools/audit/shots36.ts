@@ -128,7 +128,9 @@ const pages = scenePages(browser, ['nodev'])
 const problems: Array<string> = []
 for (const viewport of VIEWPORTS) {
   for (const scene of SCENES) {
-    if (!isPickedScene(scene.name)) continue
+    if (!isPickedScene(scene.name)) {
+      continue
+    }
     const page = await pages.open(
       viewport,
       harnessQuery(scene.query, deviceQuery(viewport)),

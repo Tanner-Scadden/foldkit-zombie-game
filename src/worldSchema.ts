@@ -7,7 +7,8 @@ import { defineTaggedUnion } from 'foldkit/schema'
 
 import { PARLOUR } from './arena'
 import { PISTOL_MAGAZINE, PLAYER_MAX_HP } from './constants'
-import { Appearance, Difficulty } from './playerData'
+import type { Appearance } from './playerData'
+import { Difficulty } from './playerData'
 
 export {
   Appearance,

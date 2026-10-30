@@ -8,9 +8,9 @@ import { FIXED_STEP_MS } from './constants'
 import { CRAWLER_RULES, drawSurfacingSpot } from './crawler'
 import { update } from './main'
 import { Message } from './message'
+import type { GameEvent } from './model'
 import {
   Frenzy,
-  GameEvent,
   type Model,
   Phase,
   type PlannedSpawn,

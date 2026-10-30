@@ -32,13 +32,17 @@ const runNode = (script: string): MathResults => {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   })
-  if (result.status !== 0) throw new Error(result.stderr)
+  if (result.status !== 0) {
+    throw new Error(result.stderr)
+  }
   return JSON.parse(result.stdout) as MathResults
 }
 
 const runWorkerd = async (here: string): Promise<MathResults | undefined> => {
   const binary = resolve(here, '../../infra/node_modules/.bin/workerd')
-  if (!existsSync(binary)) return undefined
+  if (!existsSync(binary)) {
+    return undefined
+  }
   const server = spawn(binary, ['serve', resolve(here, 'workerd.capnp')], {
     cwd: here,
     stdio: ['ignore', 'inherit', 'inherit'],

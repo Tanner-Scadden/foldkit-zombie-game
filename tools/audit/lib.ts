@@ -1,4 +1,4 @@
-import { chromium, type Browser, type Page } from 'playwright-core'
+import { type Browser, type Page, chromium } from 'playwright-core'
 
 import { builtHarness, serveDir } from './harnessServer'
 
@@ -512,7 +512,9 @@ export const toClient = (
 
 export const nearestZombie = (m: any) => {
   const walking = m.zombies.filter((z: any) => z.state._tag !== 'Dying')
-  if (walking.length === 0) return undefined
+  if (walking.length === 0) {
+    return undefined
+  }
   return walking.reduce((best: any, z: any) =>
     Math.hypot(z.x - m.player.x, z.y - m.player.y) <
     Math.hypot(best.x - m.player.x, best.y - m.player.y)

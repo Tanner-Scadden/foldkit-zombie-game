@@ -194,14 +194,12 @@ describe('packs', () => {
         Record.values,
       )
       expect(volleys.length).toBeGreaterThan(0)
-      Array.forEach(volleys, ([first, second]) => {
-        expect(second).toBeDefined()
-        if (second !== undefined) {
-          expect(second.door).toBe(OPPOSITE[first.door])
-          const lag = second.atMs - first.atMs
-          expect(lag).toBeGreaterThanOrEqual(PINCER_LAG_MIN_MS)
-          expect(lag).toBeLessThanOrEqual(PINCER_LAG_MAX_MS)
-        }
+      Array.forEach(volleys, ([first, maybeSecond]) => {
+        const second = Option.getOrThrow(Option.fromNullishOr(maybeSecond))
+        expect(second.door).toBe(OPPOSITE[first.door])
+        const lag = second.atMs - first.atMs
+        expect(lag).toBeGreaterThanOrEqual(PINCER_LAG_MIN_MS)
+        expect(lag).toBeLessThanOrEqual(PINCER_LAG_MAX_MS)
       })
     })
   })

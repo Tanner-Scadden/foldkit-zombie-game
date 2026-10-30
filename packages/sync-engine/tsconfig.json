@@ -1,23 +1,9 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "moduleResolution": "bundler",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "exactOptionalPropertyTypes": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "plugins": [
-      {
-        "name": "@effect/language-service",
-        "includeSuggestionsInTsc": false,
-        "diagnosticSeverity": { "unstableApiUsage": "off" }
-      }
-    ]
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["src/**/*", "test/**/*"]
+  "include": ["src/**/*", "test/**/*"],
+  // NOTE: checked by tsconfig.inflight.json for now.
+  "exclude": ["test/engine.test.ts"]
 }
