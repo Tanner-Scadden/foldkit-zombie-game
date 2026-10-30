@@ -88,7 +88,12 @@ const shellView = <Message>(
       hasDescription: true,
       toView: renderInfo =>
         h.dialog(
-          [...renderInfo.dialog, h.Class(dialogClass), ...dialogAttributes],
+          [
+            h.Key(dialog.id),
+            ...renderInfo.dialog,
+            h.Class(dialogClass),
+            ...dialogAttributes,
+          ],
           renderInfo.isVisible
             ? [
                 h.div([...renderInfo.backdrop, h.Class(backdropClass)]),
@@ -138,6 +143,18 @@ const isShut = (dialog: Dialog.Model): boolean =>
 // `dialogAttributes` are left off while it is shut: they style the open
 // panel, and the open view puts them back. So `toParentMessage` must be one
 // function for the whole page, kept at module scope, or the slot misses.
+//
+// The `<dialog>` is keyed on its id, open or shut, and that is what makes
+// the cache safe. A cache hit hands snabbdom the very VNode it patched last
+// frame. Unkeyed, snabbdom pairs siblings by position, so when the page's
+// list changed at both ends (opening co-op drops the home menu from the
+// front and adds the co-op screen at the end) it built a new element for
+// each cached dialog, wrote it into that shared VNode, and then removed the
+// new element instead of the old one. The page kept the old dialogs while
+// the cache pointed at detached copies, and the shop opened as a second
+// `<dialog id="shop">` under an empty one that took every click. Keyed, a
+// cached dialog is found by its id wherever it moves. `dialogs.scene.test.ts`
+// holds every dialog to a key and every id to one element.
 export const dialogShell = <Message>(
   shell: DialogShell<Message>,
   h: HtmlBuilder<Message>,

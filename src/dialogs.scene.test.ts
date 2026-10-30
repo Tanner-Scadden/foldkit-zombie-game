@@ -1,0 +1,252 @@
+import { Array, Option, Order } from 'effect'
+import {
+  Command,
+  Mount,
+  Subscription,
+  all,
+  click,
+  expect,
+  expectAll,
+  given,
+  inside,
+  scene,
+  selector,
+  tap,
+} from 'foldkit/scene'
+import { modifyFields } from 'foldkit/struct'
+import { describe, expect as expectValue, test } from 'vitest'
+
+import { Dialog } from '@foldkit/ui'
+
+import { FIXED_STEP_MS, PREPARATION_MS } from './constants'
+import * as Coop from './coop/model'
+import { update } from './main'
+import { Message } from './message'
+import { Arsenal, type Model, Phase, ShopState, initialModel } from './model'
+import { measureSurface } from './testing'
+import { asVeteran } from './veteran'
+import { view } from './view'
+
+// NOTE: every menu dialog is in the page on every frame, and a shut one is
+// handed back from a cache (see `dialogShell`). Snabbdom pairs unkeyed
+// siblings by position, so when co-op opened (the home menu left the front
+// of the page's list and the co-op screen joined its end) it paired each
+// cached dialog with a new element, left the old one in the page, and the
+// shop then opened as a second `<dialog id="shop">` under an empty one that
+// took every click. These tests hold the two things that keep it from
+// coming back: every dialog is keyed on its id, and no id is used twice.
+
+type VNodeLike = Readonly<{
+  sel?: string | undefined
+  key?: PropertyKey | undefined
+  data?:
+    | Readonly<{
+        attrs?: Readonly<Record<string, unknown>> | undefined
+        props?: Readonly<Record<string, unknown>> | undefined
+      }>
+    | undefined
+  children?: ReadonlyArray<VNodeLike | string> | undefined
+}>
+
+const nodesOf = (root: VNodeLike): ReadonlyArray<VNodeLike> => {
+  const found: Array<VNodeLike> = []
+  const visit = (node: VNodeLike | string) => {
+    if (typeof node === 'string') {
+      return
+    }
+    found.push(node)
+    node.children?.forEach(visit)
+  }
+  visit(root)
+  return found
+}
+
+const idOf = (node: VNodeLike): string | undefined => {
+  const id = node.data?.props?.['id'] ?? node.data?.attrs?.['id']
+  return typeof id === 'string' ? id : undefined
+}
+
+const isDialog = (node: VNodeLike): boolean =>
+  node.sel?.split(/[#.]/)[0] === 'dialog'
+
+const idsOf = (nodes: ReadonlyArray<VNodeLike>): ReadonlyArray<string> =>
+  nodes.flatMap(node => {
+    const id = idOf(node)
+    return id === undefined ? [] : [id]
+  })
+
+const duplicateIds = (root: VNodeLike): ReadonlyArray<string> => {
+  const ids = idsOf(nodesOf(root))
+  return ids.filter((id, index) => ids.indexOf(id) !== index)
+}
+
+const unkeyedDialogs = (root: VNodeLike): ReadonlyArray<string> =>
+  nodesOf(root)
+    .filter(isDialog)
+    .filter(node => node.key !== idOf(node))
+    .map(node => idOf(node) ?? '(no id)')
+
+const DIALOG_IDS = [
+  'home-screen-steps',
+  'update-greeting',
+  'shop',
+  'manor-hand',
+  'menu-panel',
+  'profile',
+]
+
+const holdsDialogsApart = tap<Model, Message, undefined>(({ html }) => {
+  const root: VNodeLike = html
+  expectValue(duplicateIds(root)).toEqual([])
+  expectValue(unkeyedDialogs(root)).toEqual([])
+  expectValue(
+    Array.sort(idsOf(nodesOf(root).filter(isDialog)), Order.String),
+  ).toEqual(Array.sort(DIALOG_IDS, Order.String))
+})
+
+const atStall: Model = modifyFields(initialModel, {
+  maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
+  phase: () =>
+    Phase.Preparation({
+      wave: 4,
+      remainingMs: 15_000,
+      durationMs: PREPARATION_MS,
+      spawns: [
+        {
+          atMs: 1e9,
+          kind: 'Shambler',
+          door: 'North',
+          offset: 0,
+          speedScale: 1,
+          hpScale: 1,
+          pack: 0,
+          formation: 'Squad',
+        },
+      ],
+    }),
+  player: player =>
+    modifyFields(player, {
+      x: () => 270,
+      y: () => 142,
+      hp: () => 3,
+      arsenal: () =>
+        Arsenal.HoldingSpare({
+          spare: { kind: 'Smg', rounds: 200, loaded: 30, tier: 1 },
+        }),
+    }),
+  wallet: () => ({ balance: 180, earned: 180, shown: 180 }),
+})
+
+const walkIntoStall = [
+  Subscription.emit(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
+  Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+  Mount.resolve(
+    Dialog.AcquireResources,
+    Dialog.Message.SucceededAcquireResources(),
+  ),
+]
+
+describe('the shop dialog', () => {
+  test('walking into the stall opens one shop, keyed on its id, and its buy buttons buy', () => {
+    scene(
+      { update, view },
+      given(atStall),
+      measureSurface,
+      ...walkIntoStall,
+      expectAll(all.selector('dialog#shop')).toHaveCount(1),
+      expectAll(all.selector('dialog[open]')).toHaveCount(1),
+      holdsDialogsApart,
+      inside(
+        selector('dialog#shop'),
+        expect(selector('.shop-balance')).toHaveText('You have $180'),
+        click(selector('#shop-item-SmgRounds')),
+        expect(selector('.shop-balance')).toHaveText('You have $160'),
+      ),
+    )
+  })
+})
+
+const opened = (dialog: Dialog.Model): Dialog.Model => ({
+  ...dialog,
+  isOpen: true,
+})
+
+const home: Model = modifyFields(asVeteran(initialModel), {
+  saveStatus: () => 'Read',
+})
+
+type OpenCase = Readonly<{ name: string; model: Model; opensDialog: boolean }>
+
+const OPEN_CASES: ReadonlyArray<OpenCase> = [
+  { name: 'nothing open', model: home, opensDialog: false },
+  {
+    name: 'the shop',
+    model: modifyFields(atStall, {
+      shop: () => ShopState.Browsing({ focusedItem: 'SmgRounds' }),
+      shopDialog: opened,
+    }),
+    opensDialog: true,
+  },
+  {
+    name: 'the MORE hand',
+    model: modifyFields(home, { handDialog: opened }),
+    opensDialog: true,
+  },
+  {
+    name: 'a menu panel',
+    model: modifyFields(home, {
+      panel: () => 'HowToPlay',
+      panelDialog: opened,
+    }),
+    opensDialog: true,
+  },
+  {
+    name: 'the Profile',
+    model: modifyFields(home, {
+      profile: profile => modifyFields(profile, { dialog: opened }),
+    }),
+    opensDialog: true,
+  },
+  {
+    name: 'the Home Screen steps',
+    model: modifyFields(home, { homeScreenSteps: opened }),
+    opensDialog: true,
+  },
+  {
+    name: 'the update greeting',
+    model: modifyFields(home, { updateGreeting: opened }),
+    opensDialog: true,
+  },
+  {
+    name: 'co-op',
+    model: modifyFields(home, {
+      coop: coop =>
+        modifyFields(coop, {
+          screen: () => Coop.Screen.Hub({ maybeProblem: Option.none() }),
+        }),
+    }),
+    opensDialog: false,
+  },
+]
+
+describe('every menu dialog', () => {
+  test.each(OPEN_CASES)(
+    'with $name, each dialog is in the page once, keyed on its id, and no id repeats',
+    ({ model, opensDialog }) => {
+      scene(
+        { update, view },
+        given(model),
+        measureSurface,
+        ...(opensDialog
+          ? [
+              Mount.resolve(
+                Dialog.AcquireResources,
+                Dialog.Message.SucceededAcquireResources(),
+              ),
+            ]
+          : []),
+        holdsDialogsApart,
+      )
+    },
+  )
+})

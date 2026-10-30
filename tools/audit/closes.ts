@@ -1,5 +1,5 @@
 // The close button pass: every menu dialog's shared close X (the shop, the
-// kitchen's offer, the MORE hand, Settings, What's New, the Munchopedia and
+// MORE hand, Settings, What's New, the Munchopedia and
 // an entry, How to play, the character picker, and the difficulty picker) on an 844x390 landscape
 // phone, 390x844 and 375x667 upright phones, all with touch, and 1280x720
 // and 1920x1080 with a mouse, as `closes-<TAG>-<viewport>-<scene>.png`.
@@ -16,6 +16,10 @@
 //     and no other tap Message, reaches nothing behind it, and closes the
 //     dialog,
 //   - Escape sends one RequestedClose and closes the dialog.
+// Then it buys in the shop with a tap (a click on a desktop), opened from its
+// query and again after co-op's screen (`buy` and `buy-after-coop`): there
+// must be one `<dialog id="shop">`, one open dialog, no repeated id, a buy
+// button that its center hits, and one ClickedBuyButton that spends money.
 // Exits with 1 on any problem.
 //   TAG=after bun run heavy -- bun tools/audit/closes.ts
 // ONLY picks scenes, such as `ONLY=shop,hand`, VIEWPORTS picks screens
@@ -37,6 +41,7 @@ import {
   harnessQuery,
   isPickedScene,
   launch,
+  loadScene,
   parallelFrom,
   pickViewports,
   scenePages,
@@ -68,11 +73,6 @@ const SCENES: ReadonlyArray<Scene> = [
   {
     name: 'shop',
     query: 'wave=5&money=180&gun=smg&tier=1&px=270&py=142',
-    open: [],
-  },
-  {
-    name: 'kitchen-offer',
-    query: 'wave=3&seen=all&money=85&gun=smg&px=70&py=27',
     open: [],
   },
   { name: 'hand', query: 'support', open: [MANOR] },
@@ -483,10 +483,136 @@ const checkScene = async (
   return problems
 }
 
+// BUYING
+
+// NOTE: the shop must open as one dialog whose buy buttons take a tap. A
+// shut dialog comes from a cache, and once that cache handed snabbdom a
+// stale shell after co-op opened, so the shop opened as a second
+// `<dialog id="shop">` under an empty one that took every tap. So the shop
+// is opened straight from its query, and again after co-op's screen.
+const SHOP = SCENES.find(scene => scene.name === 'shop')!
+
+type BuyRoute = Readonly<{ name: string; before: ReadonlyArray<string> }>
+
+const BUY_ROUTES: ReadonlyArray<BuyRoute> = [
+  { name: 'buy', before: [] },
+  { name: 'buy-after-coop', before: ['', 'coop=hub'] },
+]
+
+const isBuyTap = (tag: string) => tag.endsWith('ClickedBuyButton')
+
+const shopShape = (page: Page) =>
+  page.evaluate(() => {
+    const ids = [...document.querySelectorAll('[id]')].map(
+      element => element.id,
+    )
+    return {
+      shops: document.querySelectorAll('dialog#shop').length,
+      open: document.querySelectorAll('dialog[open]').length,
+      repeated: [...new Set(ids.filter((id, i) => ids.indexOf(id) !== i))],
+    }
+  })
+
+const placeBuy = (page: Page) =>
+  page.evaluate(() => {
+    const button = document.querySelector(
+      'dialog[open] li[data-verdict="available"] button',
+    )
+    if (button === null) {
+      return null
+    }
+    const box = button.getBoundingClientRect()
+    const point = {
+      x: box.left + box.width / 2,
+      y: box.top + box.height / 2,
+    }
+    const hit = document.elementFromPoint(point.x, point.y)
+    return {
+      point,
+      isHit: hit !== null && button.contains(hit),
+      hit:
+        hit === null
+          ? 'nothing'
+          : `${hit.tagName.toLowerCase()}.${hit.className} in ${hit.closest('dialog')?.id ?? 'no dialog'}`,
+    }
+  })
+
+const balanceText = (page: Page) =>
+  page.evaluate(
+    () => document.querySelector('dialog[open] .shop-balance')?.textContent,
+  )
+
+const checkBuying = async (
+  viewport: Viewport,
+  route: BuyRoute,
+  log: Log,
+): Promise<ReadonlyArray<string>> => {
+  const where = `${viewport.name} ${route.name}`
+  const query = (part: string) => harnessQuery(part, deviceQuery(viewport))
+  const [first, ...rest] = [...route.before, SHOP.query]
+  const page = await pages.open(viewport, query(first!), { fresh: true })
+  for (const part of rest) {
+    await loadScene(page, query(part))
+  }
+  await waitForDialog(page)
+  await settleAnimations(page)
+  const problems: Array<string> = []
+  const shape = await shopShape(page)
+  if (shape.shops !== 1 || shape.open !== 1) {
+    problems.push(
+      `${where}: ${shape.shops} shop dialogs and ${shape.open} open dialogs, not one of each`,
+    )
+  }
+  if (shape.repeated.length > 0) {
+    problems.push(`${where}: repeated ids ${shape.repeated.join(', ')}`)
+  }
+  const placed = await placeBuy(page)
+  if (placed === null) {
+    await pages.discard(page)
+    return [...problems, `${where}: no buy button to press`]
+  }
+  if (!placed.isHit) {
+    problems.push(`${where}: the buy button's center hits ${placed.hit}`)
+  }
+  const before = await balanceText(page)
+  await clearMessages(page)
+  await press(page, viewport, placed.point)
+  await page
+    .waitForFunction(
+      before =>
+        document.querySelector('dialog[open] .shop-balance')?.textContent !==
+        before,
+      before,
+      { timeout: CLOSE_TIMEOUT_MS },
+    )
+    .catch(() => undefined)
+  const after = await balanceText(page)
+  const buys = (await messages(page)).filter(isBuyTap)
+  await shot(page, `closes-${TAG}-${viewport.name}-${route.name}`)
+  await pages.discard(page)
+  if (buys.length !== 1) {
+    problems.push(`${where}: the press sent ${buys.length} ClickedBuyButton`)
+  }
+  if (after === before) {
+    problems.push(`${where}: the balance stayed at "${before}"`)
+  }
+  log(
+    `${problems.length === 0 ? 'ok  ' : 'FAIL'} ${where}: ${before} -> ${after}`,
+  )
+  return problems
+}
+
 const UNITS = VIEWPORTS.flatMap(viewport =>
   SCENES.filter(scene => isPickedScene(scene.name)).map(scene => ({
     viewport,
     scene,
+  })),
+)
+
+const BUY_UNITS = VIEWPORTS.flatMap(viewport =>
+  BUY_ROUTES.filter(route => isPickedScene(route.name)).map(route => ({
+    viewport,
+    route,
   })),
 )
 
@@ -495,10 +621,15 @@ const problems = await forEachInOrder(
   parallelFrom('CLOSES_PARALLEL'),
   ({ viewport, scene }, log) => checkScene(viewport, scene, log),
 )
+const buyProblems = await forEachInOrder(
+  BUY_UNITS,
+  parallelFrom('CLOSES_PARALLEL'),
+  ({ viewport, route }, log) => checkBuying(viewport, route, log),
+)
 await pages.close()
 await browser.close()
 
 finish(
-  problems.flat(),
-  'Every close button is small, clear of its dialog, and closes on one tap and on Escape.',
+  [...problems.flat(), ...buyProblems.flat()],
+  'Every close button is small, clear of its dialog, and closes on one tap and on Escape, and the shop opens once and sells on one tap.',
 )
