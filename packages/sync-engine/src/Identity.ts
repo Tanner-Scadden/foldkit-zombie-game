@@ -101,6 +101,9 @@ export interface DeviceKey {
   readonly sign: (message: string) => Effect.Effect<string, IdentityError>
 }
 
+// NOTE: the whole private JWK is stored as Web Crypto exports it.
+const UnknownJson = Schema.fromJsonString(Schema.Unknown)
+
 export const generateKey: Effect.Effect<StoredKey, IdentityError> = Effect.gen(
   function* () {
     const pair = yield* Effect.tryPromise({
@@ -125,7 +128,11 @@ export const generateKey: Effect.Effect<StoredKey, IdentityError> = Effect.gen(
       }),
       error => new IdentityError({ reason: error.message }),
     )
-    return { privateJwk: JSON.stringify(privateJwk), publicKey }
+    const privateJwkText = yield* Effect.mapError(
+      Schema.encodeEffect(UnknownJson)(privateJwk),
+      error => new IdentityError({ reason: error.message }),
+    )
+    return { privateJwk: privateJwkText, publicKey }
   },
 )
 

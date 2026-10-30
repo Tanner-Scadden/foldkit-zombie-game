@@ -1,8 +1,8 @@
+import type { Duration } from 'effect'
 import {
   Array,
   Context,
   Data,
-  Duration,
   Effect,
   Layer,
   Predicate,
@@ -119,8 +119,8 @@ const toSqlValues = (
       onSuccess: values => Effect.succeed(values),
       onFailure: message =>
         Effect.fail(
-          new SqlError.SqlError({
-            reason: new SqlError.UnknownError({
+          SqlError.SqlError.make({
+            reason: SqlError.UnknownError.make({
               message,
               operation: 'bind',
               cause: message,

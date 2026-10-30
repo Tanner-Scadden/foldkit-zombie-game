@@ -1,4 +1,5 @@
-import { Duration, Effect, Queue, Stream, pipe } from 'effect'
+import type { Duration } from 'effect'
+import { Effect, Queue, Stream, pipe } from 'effect'
 
 import { openEngine, warmEngine } from './Engine'
 import { decodeRequest, encodeResponse } from './Protocol'
@@ -42,6 +43,8 @@ export const serveWorker = (
           pipe(
             encodeResponse(response),
             Effect.flatMap(encoded =>
+              // NOTE: a worker scope's postMessage takes no targetOrigin.
+              // oxlint-disable-next-line unicorn/require-post-message-target-origin
               Effect.sync(() => scope.postMessage(encoded)),
             ),
             Effect.ignore,
@@ -68,6 +71,8 @@ export const holdEarlyMessages = (scope: WorkerScope): WorkerScope => {
     }
   })
   return {
+    // NOTE: a worker scope's postMessage takes no targetOrigin.
+    // oxlint-disable-next-line unicorn/require-post-message-target-origin
     postMessage: message => scope.postMessage(message),
     addEventListener: (_type, listener) => {
       listeners.push(listener)

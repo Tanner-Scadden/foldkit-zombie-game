@@ -8,7 +8,8 @@ import {
   Semaphore,
   pipe,
 } from 'effect'
-import { SqlClient, type SqlError } from 'effect/sql'
+import type { SqlClient } from 'effect/sql'
+import { type SqlError } from 'effect/sql'
 
 import {
   type ChallengeResponse,
