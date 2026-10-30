@@ -4,6 +4,9 @@ Things the game is blocked on until the owner does or decides them. Agents add a
 
 ## To do
 
+- [ ] **Upgrade Cloudflare to Workers Paid, then turn co-op on.** Co-op works end to end but stays hidden in production until this (decided: switch to the paid plan before announcing co-op). It is $5 a month; at about 1,000 four-player games a day it comes to roughly $13 to $23 a month (see "Cloudflare costs" in `MULTIPLAYER.md`).
+  1. Cloudflare dashboard, Workers & Pages, Plans: choose Workers Paid ($5/month) on the account that hosts munch-manor.
+  2. Tell an agent "paid plan is on". It flips `VITE_COOP` to `On` for production in `infra/alchemy.run.ts` (one line), deploys through CI, checks a co-op room on production, and adds a changelog bullet.
 - [ ] **Turn on device emulation so agents can test on an Android emulator (and iOS Simulator).** This lets an agent check the installed app's ROTATE toggle (the item below) and test touch, portrait, and the PWA on real mobile browsers, without your phone.
   1. In T3 Code, turn on device access for this environment (the setting that lets agents use the Device panel; today agents get "Agent device access is turned off for this environment").
   2. Reply "OK to install the Android SDK" (about 6 to 8 GB). An agent then runs `brew install --cask android-commandlinetools` and installs a Pixel system image with Google Play Chrome and an emulator through `sdkmanager`, and creates the device. Nothing else on the Mac changes.
