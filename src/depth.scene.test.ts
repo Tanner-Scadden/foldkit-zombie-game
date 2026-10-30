@@ -1,16 +1,18 @@
-import { Array, Option } from 'effect'
+import { Array, Option, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
+import { type Level, PARLOUR, openExit } from './arena'
 import { type Drawable, depthSortedShapes } from './depth'
 import { sceneShapes } from './layers'
 import { type Model, Phase, type Zombie, initialModel } from './model'
+import { occludersOf } from './occluders'
 import { playerShapes } from './playerView'
 import { STALL_BOX } from './shop'
 import { stallShapes } from './stall'
 import { zombieOf } from './testing'
-import { zombieShapes } from './zombieView'
+import { zombieHealthBarShapes, zombieShapes } from './zombieView'
 
 const marker = (id: number): Canvas.Shape =>
   Canvas.Rect({ x: id, y: 0, width: 1, height: 1, fill: '#fff' })
@@ -61,6 +63,27 @@ const stallIndex = (current: Model): number =>
     Option.getOrThrow(Array.head(stallShapes('Closed', current.elapsedMs))),
   )
 
+const NORTH_DOOR_X = 220
+
+const lintelIndex = (current: Model): number =>
+  pipe(
+    occludersOf(PARLOUR),
+    Array.findFirst(
+      ({ left, right }) => NORTH_DOOR_X >= left && NORTH_DOOR_X < right,
+    ),
+    Option.flatMap(({ shapes }) => Array.head(shapes)),
+    Option.match({
+      onNone: () => -1,
+      onSome: shape => indexOf(worldShapesOf(current), shape),
+    }),
+  )
+
+const hasHealthBar = (current: Model, zombie: Zombie): boolean =>
+  Option.match(Array.head(zombieHealthBarShapes(zombie)), {
+    onNone: () => false,
+    onSome: bar => indexOf(worldShapesOf(current), bar) >= 0,
+  })
+
 describe('Depth sort', () => {
   test('draws by foot, then by rank, and keeps arrival order for a tie', () => {
     const drawables: ReadonlyArray<Drawable> = [
@@ -105,5 +128,43 @@ describe('Depth sort', () => {
     expect(stall).toBeGreaterThanOrEqual(0)
     expect(playerIndex(current)).toBeLessThan(stall)
     expect(zombieIndex(current, behindStall)).toBeLessThan(stall)
+  })
+
+  test('a zombie in the north doorway draws under the lintel and one inside draws over it', () => {
+    const inDoorway = zombieOf('Shambler', 1, NORTH_DOOR_X - 4, 8)
+    const inside = zombieOf('Shambler', 2, NORTH_DOOR_X - 16, 26)
+    const current = fightingModel({ x: 160, y: 90 }, [inDoorway, inside])
+    const lintel = lintelIndex(current)
+    expect(lintel).toBeGreaterThanOrEqual(0)
+    expect(zombieIndex(current, inDoorway)).toBeLessThan(lintel)
+    expect(zombieIndex(current, inside)).toBeGreaterThan(lintel)
+  })
+
+  test('a hurt zombie behind the lintel shows no bar until it steps in', () => {
+    const inDoorway = zombieOf('Tank', 1, NORTH_DOOR_X, 8, {
+      hp: 10,
+      maxHp: 30,
+    })
+    const inside = zombieOf('Tank', 2, NORTH_DOOR_X, 30, {
+      hp: 10,
+      maxHp: 30,
+    })
+    const current = fightingModel({ x: 160, y: 90 }, [inDoorway, inside])
+    expect(hasHealthBar(current, inDoorway)).toBe(false)
+    expect(hasHealthBar(current, inside)).toBe(true)
+  })
+
+  test('only doorways in a top wall get a lintel, an opened exit included', () => {
+    const spans = (level: Level) =>
+      Array.map(occludersOf(level), ({ floorY, left, right }) => ({
+        floorY,
+        left,
+        right,
+      }))
+    expect(spans(PARLOUR)).toEqual([{ floorY: 20, left: 190, right: 250 }])
+    expect(spans(openExit(PARLOUR, 'Kitchen'))).toEqual([
+      { floorY: 20, left: 40, right: 100 },
+      { floorY: 20, left: 190, right: 250 },
+    ])
   })
 })

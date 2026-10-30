@@ -106,7 +106,7 @@ const DECOR_SEED = 0x2c1b3a57
 const ROW_MIXER = 0x85ebca6b
 const COLUMN_MIXER = 0xc2b2ae35
 const WALL_EDGE_PX = 2
-const FACE_TOP = 3
+export const FACE_TOP = 3
 const CHAIR_RAIL_Y = 13
 const BASEBOARD_Y = 19
 
