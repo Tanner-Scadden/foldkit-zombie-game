@@ -179,6 +179,7 @@ export const ClientFrame = Schema.TaggedUnion({
   Leave: {},
 })
 export type ClientFrame = typeof ClientFrame.Type
+export type InputFrame = typeof ClientFrame.cases.Input.Type
 
 export const RefusedReason = Schema.Literals([
   'VersionMismatch',

@@ -28,10 +28,10 @@ import {
   IdentityRefused,
   type LocalDatabase,
   type Replica,
-  type ScopeStatus,
-  type Settled,
+  ScopeStatus,
+  Settled,
   type Sync,
-  type SyncStatus,
+  SyncStatus,
   type Transport,
   TransportError,
   makeDeviceIdentity,
@@ -65,7 +65,7 @@ import {
 } from './playerScope'
 import {
   type LinkProblem,
-  type PlayerChange,
+  PlayerChange,
   PlayerScopeStatus,
   RunSettled,
   StoreEvent,
@@ -394,71 +394,52 @@ const offlineApi: IdentityApi = {
     ),
 }
 
-const runChange = (replica: Replica, change: PlayerChange) => {
-  if (change._tag === 'ChangedSettings') {
-    return replica.run(ChangedSettings, { settings: change.settings })
-  } else if (change._tag === 'ChangedRotation') {
-    return replica.run(ChangedRotation, { rotation: change.rotation })
-  } else if (change._tag === 'ChangedName') {
-    return replica.run(ChangedName, { name: change.name })
-  } else if (change._tag === 'ChangedAppearance') {
-    return replica.run(ChangedAppearance, { appearance: change.appearance })
-  } else if (change._tag === 'UnlockedNightmare') {
-    return replica.run(UnlockedNightmare, {})
-  } else if (change._tag === 'ChangedDifficulty') {
-    return replica.run(ChangedDifficulty, {
-      chosen: change.chosen,
-      card: change.card,
-    })
-  } else if (change._tag === 'ChangedOnboarding') {
-    return replica.run(ChangedOnboarding, {
-      onboarding: change.onboarding,
-      homeScreenTip: change.homeScreenTip,
-    })
-  } else if (change._tag === 'ChangedHome') {
-    return replica.run(ChangedHome, { home: change.home })
-  } else if (change._tag === 'SawPowerUps') {
-    return replica.run(SawPowerUps, { kinds: change.kinds })
-  } else if (change._tag === 'ForgotPowerUps') {
-    return replica.run(ForgotPowerUps, {})
-  } else {
-    return replica.run(RecordedRun, {
-      runs: change.runs,
-      totalKills: change.totalKills,
-      kills: change.kills,
-      bests: change.bests,
-    })
-  }
-}
+const runChange = (replica: Replica, change: PlayerChange) =>
+  PlayerChange.match(change, {
+    ChangedSettings: ({ settings }) =>
+      replica.run(ChangedSettings, { settings }),
+    ChangedRotation: ({ rotation }) =>
+      replica.run(ChangedRotation, { rotation }),
+    ChangedName: ({ name }) => replica.run(ChangedName, { name }),
+    ChangedAppearance: ({ appearance }) =>
+      replica.run(ChangedAppearance, { appearance }),
+    UnlockedNightmare: () => replica.run(UnlockedNightmare, {}),
+    ChangedDifficulty: ({ chosen, card }) =>
+      replica.run(ChangedDifficulty, { chosen, card }),
+    ChangedOnboarding: ({ onboarding, homeScreenTip }) =>
+      replica.run(ChangedOnboarding, { onboarding, homeScreenTip }),
+    ChangedHome: ({ home }) => replica.run(ChangedHome, { home }),
+    SawPowerUps: ({ kinds }) => replica.run(SawPowerUps, { kinds }),
+    ForgotPowerUps: () => replica.run(ForgotPowerUps, {}),
+    RecordedRun: ({ runs, totalKills, kills, bests }) =>
+      replica.run(RecordedRun, { runs, totalKills, kills, bests }),
+  })
 
 const sameSyncState = Schema.toEquivalence(SyncState)
 
-const scopeStatusOf = (status: ScopeStatus): PlayerScopeStatus => {
-  if (status._tag === 'Ready') {
-    return PlayerScopeStatus.Ready({ seq: status.seq, fresh: status.fresh })
-  } else if (status._tag === 'Failed') {
-    return PlayerScopeStatus.Failed({ reason: status.reason })
-  } else if (status._tag === 'Loading') {
-    return PlayerScopeStatus.Loading()
-  } else {
-    return PlayerScopeStatus.Idle()
-  }
-}
+const scopeStatusOf = (status: ScopeStatus): PlayerScopeStatus =>
+  ScopeStatus.match(status, {
+    Idle: () => PlayerScopeStatus.Idle(),
+    Loading: () => PlayerScopeStatus.Loading(),
+    Ready: ({ seq, fresh }) => PlayerScopeStatus.Ready({ seq, fresh }),
+    Failed: ({ reason }) => PlayerScopeStatus.Failed({ reason }),
+  })
 
 const runSettledOf = (settled: Settled): RunSettled =>
-  settled._tag === 'Confirmed'
-    ? RunSettled.Confirmed({ seq: settled.seq })
-    : RunSettled.Rejected({ reason: `${settled.code}: ${settled.reason}` })
+  Settled.match(settled, {
+    Confirmed: ({ seq }) => RunSettled.Confirmed({ seq }),
+    Rejected: ({ code, reason }) =>
+      RunSettled.Rejected({ reason: `${code}: ${reason}` }),
+  })
 
-const stateOf = (status: SyncStatus, devices: number): SyncState => {
-  if (status._tag === 'Online' || status._tag === 'Following') {
-    return SyncState.Synced({ devices })
-  } else if (status._tag === 'Connecting' && status.attempt === 0) {
-    return SyncState.Connecting()
-  } else {
-    return SyncState.Offline({ devices })
-  }
-}
+const stateOf = (status: SyncStatus, devices: number): SyncState =>
+  SyncStatus.match(status, {
+    Online: () => SyncState.Synced({ devices }),
+    Following: () => SyncState.Synced({ devices }),
+    Connecting: ({ attempt }) =>
+      attempt === 0 ? SyncState.Connecting() : SyncState.Offline({ devices }),
+    Offline: () => SyncState.Offline({ devices }),
+  })
 
 export const makePlayerDatabase = (
   client: SqliteClientService,

@@ -6,7 +6,7 @@
 // `bun tools/balance/model.ts`. It is instant, so it runs in `bun run test`.
 
 import type { Record } from 'effect'
-import { Array, Number, Option, Order, pipe } from 'effect'
+import { Array, Match, Number, Option, Order, pipe } from 'effect'
 
 import { BOSS_RULES, hasBoss } from '../../src/boss'
 import {
@@ -472,41 +472,44 @@ const isHeldByBoss = (boss: BossStage, rules: FlowRules): boolean =>
   boss._tag === 'Arriving' ||
   (boss._tag === 'Fighting' && boss.standingMs < rules.bossHoldMs)
 
+type BossStep = Readonly<{ boss: BossStage; arrives: Option.Option<number> }>
+
 const advanceBoss = (
   boss: BossStage,
   pendingCount: number,
   rules: FlowRules,
-): Readonly<{ boss: BossStage; arrives: Option.Option<number> }> => {
-  if (boss._tag === 'Waiting') {
-    return pendingCount <= boss.waitBelow
-      ? {
-          boss: {
-            _tag: 'Arriving',
-            remainingMs: rules.bossEntranceMs,
-            hp: boss.hp,
+): BossStep =>
+  Match.valueTags(boss, {
+    Absent: (absent): BossStep => ({ boss: absent, arrives: Option.none() }),
+    Waiting: (waiting): BossStep =>
+      pendingCount <= waiting.waitBelow
+        ? {
+            boss: {
+              _tag: 'Arriving',
+              remainingMs: rules.bossEntranceMs,
+              hp: waiting.hp,
+            },
+            arrives: Option.none(),
+          }
+        : { boss: waiting, arrives: Option.none() },
+    Arriving: (arriving): BossStep =>
+      arriving.remainingMs <= rules.stepMs
+        ? {
+            boss: { _tag: 'Fighting', standingMs: 0 },
+            arrives: Option.some(arriving.hp),
+          }
+        : {
+            boss: {
+              ...arriving,
+              remainingMs: arriving.remainingMs - rules.stepMs,
+            },
+            arrives: Option.none(),
           },
-          arrives: Option.none(),
-        }
-      : { boss, arrives: Option.none() }
-  } else if (boss._tag === 'Arriving') {
-    return boss.remainingMs <= rules.stepMs
-      ? {
-          boss: { _tag: 'Fighting', standingMs: 0 },
-          arrives: Option.some(boss.hp),
-        }
-      : {
-          boss: { ...boss, remainingMs: boss.remainingMs - rules.stepMs },
-          arrives: Option.none(),
-        }
-  } else if (boss._tag === 'Fighting') {
-    return {
-      boss: { ...boss, standingMs: boss.standingMs + rules.stepMs },
+    Fighting: (fighting): BossStep => ({
+      boss: { ...fighting, standingMs: fighting.standingMs + rules.stepMs },
       arrives: Option.none(),
-    }
-  } else {
-    return { boss, arrives: Option.none() }
-  }
-}
+    }),
+  })
 
 type Clock = Readonly<{
   clockMs: number
@@ -553,49 +556,53 @@ const trickled = (
 
 const advanceClock = (flow: Flow, waiting: number, rules: FlowRules): Clock => {
   const { beat, clockMs, holds, pending } = flow
-  if (beat._tag === 'Fading') {
-    const waitedMs = beat.waitedMs + rules.stepMs
-    const isThin = waiting === 0 && flow.alive.length < beat.releaseBelow
-    return {
-      clockMs,
-      holds,
-      pending,
-      beat:
-        isThin || waitedMs >= rules.fadeMaxMs
-          ? { _tag: 'Resting', remainingMs: beat.relaxMs, trickled: 0 }
-          : { ...beat, waitedMs },
-    }
-  } else if (beat._tag === 'Resting') {
-    const remainingMs = beat.remainingMs - rules.stepMs
-    if (flow.quietMs >= rules.relaxQuietMaxMs) {
-      return trickled(flow, beat, rules)
-    }
-    return {
-      clockMs,
-      holds,
-      pending,
-      beat: remainingMs <= 0 ? FLOWING : { ...beat, remainingMs },
-    }
-  } else {
-    const worldMs = isHeldByBoss(flow.boss, rules) ? 0 : rules.stepMs
-    return Option.match(Array.head(holds), {
-      onNone: () => ({ clockMs: clockMs + worldMs, beat, holds, pending }),
-      onSome: hold =>
-        hold.atMs <= clockMs + worldMs
-          ? {
-              clockMs: Math.max(clockMs, hold.atMs),
-              holds: Array.drop(holds, 1),
-              pending,
-              beat: {
-                _tag: 'Fading',
-                releaseBelow: hold.releaseBelow,
-                relaxMs: hold.relaxMs,
-                waitedMs: 0,
-              },
-            }
-          : { clockMs: clockMs + worldMs, beat, holds, pending },
-    })
-  }
+  return Match.valueTags(beat, {
+    Fading: (fading): Clock => {
+      const waitedMs = fading.waitedMs + rules.stepMs
+      const isThin = waiting === 0 && flow.alive.length < fading.releaseBelow
+      return {
+        clockMs,
+        holds,
+        pending,
+        beat:
+          isThin || waitedMs >= rules.fadeMaxMs
+            ? { _tag: 'Resting', remainingMs: fading.relaxMs, trickled: 0 }
+            : { ...fading, waitedMs },
+      }
+    },
+    Resting: (resting): Clock => {
+      if (flow.quietMs >= rules.relaxQuietMaxMs) {
+        return trickled(flow, resting, rules)
+      }
+      const remainingMs = resting.remainingMs - rules.stepMs
+      return {
+        clockMs,
+        holds,
+        pending,
+        beat: remainingMs <= 0 ? FLOWING : { ...resting, remainingMs },
+      }
+    },
+    Flowing: (): Clock => {
+      const worldMs = isHeldByBoss(flow.boss, rules) ? 0 : rules.stepMs
+      return Option.match(Array.head(holds), {
+        onNone: () => ({ clockMs: clockMs + worldMs, beat, holds, pending }),
+        onSome: (hold): Clock =>
+          hold.atMs <= clockMs + worldMs
+            ? {
+                clockMs: Math.max(clockMs, hold.atMs),
+                holds: Array.drop(holds, 1),
+                pending,
+                beat: {
+                  _tag: 'Fading',
+                  releaseBelow: hold.releaseBelow,
+                  relaxMs: hold.relaxMs,
+                  waitedMs: 0,
+                },
+              }
+            : { clockMs: clockMs + worldMs, beat, holds, pending },
+      })
+    },
+  })
 }
 
 // NOTE: after a quiet stretch the wave clock skips to the next pack's

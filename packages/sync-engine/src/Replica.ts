@@ -26,13 +26,17 @@ import {
   tableName,
 } from './Mutation'
 import {
+  type AckedMessage,
   type Delta,
+  type DeltasMessage,
   type Envelope,
   FailCode,
   HelloMode,
   RejectCode,
+  type RejectedMessage,
   type Row,
-  type ServerMessage,
+  ServerMessage,
+  type SnapshotMessage,
 } from './Protocol'
 import { decodeRows, randomId } from './Rows'
 import { type ScopeDefinition, findMutation, runScopeMigrations } from './Scope'
@@ -110,21 +114,19 @@ const TERMINAL_FAILURES: ReadonlyArray<FailCode> = [
 export const statusAfterReceipt = (
   status: ScopeStatus,
   receipt: Receipt,
-): ScopeStatus => {
-  if (receipt._tag === 'Applied') {
-    return ScopeStatus.cases.Ready.make({ seq: receipt.seq, fresh: true })
-  } else if (
-    receipt._tag === 'Failed' &&
-    Array.contains(TERMINAL_FAILURES, receipt.code) &&
-    ScopeStatus.isAnyOf(['Idle', 'Loading'])(status)
-  ) {
-    return ScopeStatus.cases.Failed.make({
-      reason: `${receipt.code}: ${receipt.reason}`,
-    })
-  } else {
-    return status
-  }
-}
+): ScopeStatus =>
+  Receipt.matchOrElse(
+    receipt,
+    {
+      Applied: ({ seq }) => ScopeStatus.cases.Ready.make({ seq, fresh: true }),
+      Failed: ({ code, reason }) =>
+        Array.contains(TERMINAL_FAILURES, code) &&
+        ScopeStatus.isAnyOf(['Idle', 'Loading'])(status)
+          ? ScopeStatus.cases.Failed.make({ reason: `${code}: ${reason}` })
+          : status,
+    },
+    () => status,
+  )
 
 export const statusAtSessionStart = (
   status: ScopeStatus,
@@ -421,9 +423,7 @@ export const makeReplica = (
       { discard: true },
     )
 
-  const receiveSnapshot = (
-    message: Extract<ServerMessage, { _tag: 'Snapshot' }>,
-  ) =>
+  const receiveSnapshot = (message: SnapshotMessage) =>
     sql.withTransaction(
       Effect.gen(function* () {
         const replica = yield* readReplica
@@ -491,7 +491,7 @@ export const makeReplica = (
   // already applied is skipped, so duplicates do nothing. A gap stops the
   // batch and asks for a catch-up, and a delta this client cannot apply
   // (a newer mutation version, or one that fails here) asks for a snapshot.
-  const receiveDeltas = (message: Extract<ServerMessage, { _tag: 'Deltas' }>) =>
+  const receiveDeltas = (message: DeltasMessage) =>
     sql.withTransaction(
       Effect.gen(function* () {
         const replica = yield* readReplica
@@ -525,7 +525,7 @@ export const makeReplica = (
   // mutation now, as when its delta was folded into a snapshot. An ack ahead
   // of them keeps the mutation pending and asks for the missing deltas, so
   // the view never loses a change it has not yet seen confirmed.
-  const receiveAcked = (message: Extract<ServerMessage, { _tag: 'Acked' }>) =>
+  const receiveAcked = (message: AckedMessage) =>
     sql.withTransaction(
       Effect.gen(function* () {
         const replica = yield* readReplica
@@ -546,9 +546,7 @@ export const makeReplica = (
       }),
     )
 
-  const receiveRejected = (
-    message: Extract<ServerMessage, { _tag: 'Rejected' }>,
-  ) =>
+  const receiveRejected = (message: RejectedMessage) =>
     sql.withTransaction(
       Effect.gen(function* () {
         const replica = yield* readReplica
@@ -572,26 +570,16 @@ export const makeReplica = (
 
   const receiveMessage = (
     message: ServerMessage,
-  ): Effect.Effect<Receipt, SqlError.SqlError> => {
-    if (message._tag === 'Snapshot') {
-      return receiveSnapshot(message)
-    } else if (message._tag === 'Deltas') {
-      return receiveDeltas(message)
-    } else if (message._tag === 'Acked') {
-      return receiveAcked(message)
-    } else if (message._tag === 'Rejected') {
-      return receiveRejected(message)
-    } else if (message._tag === 'Failed') {
-      return Effect.succeed(
-        Receipt.cases.Failed.make({
-          code: message.code,
-          reason: message.reason,
-        }),
-      )
-    } else {
-      return Effect.succeed(ignored)
-    }
-  }
+  ): Effect.Effect<Receipt, SqlError.SqlError> =>
+    ServerMessage.match(message, {
+      Snapshot: receiveSnapshot,
+      Deltas: receiveDeltas,
+      Acked: receiveAcked,
+      Rejected: receiveRejected,
+      Failed: ({ code, reason }) =>
+        Effect.succeed(Receipt.cases.Failed.make({ code, reason })),
+      Pong: () => Effect.succeed(ignored),
+    })
 
   const run = <A, I>(
     mutation: Mutation<string, A, I>,

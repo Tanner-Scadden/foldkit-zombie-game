@@ -1,4 +1,4 @@
-import { Array, Result } from 'effect'
+import { Array, Match, Result } from 'effect'
 import { Canvas } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
@@ -23,24 +23,24 @@ const rectsOf = (
   shapes: ReadonlyArray<Canvas.Shape>,
   offset: Readonly<{ x: number; y: number }>,
 ): ReadonlyArray<Canvas.Rect & Box> =>
-  Array.flatMap(shapes, shape => {
-    if (shape._tag === 'Group') {
-      return rectsOf(shape.shapes, {
-        x: offset.x + (shape.translate?.x ?? 0),
-        y: offset.y + (shape.translate?.y ?? 0),
-      })
-    } else if (shape._tag === 'Rect') {
-      return [
-        Canvas.Rect({
-          ...shape,
-          x: shape.x + offset.x,
-          y: shape.y + offset.y,
+  Array.flatMap(shapes, shape =>
+    Match.value(shape).pipe(
+      Match.tag('Group', group =>
+        rectsOf(group.shapes, {
+          x: offset.x + (group.translate?.x ?? 0),
+          y: offset.y + (group.translate?.y ?? 0),
         }),
-      ]
-    } else {
-      return []
-    }
-  })
+      ),
+      Match.tag('Rect', rect => [
+        Canvas.Rect({
+          ...rect,
+          x: rect.x + offset.x,
+          y: rect.y + offset.y,
+        }),
+      ]),
+      Match.orElse(() => []),
+    ),
+  )
 
 const twoBoosts: Model = modifyFields(initialModel, {
   phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),

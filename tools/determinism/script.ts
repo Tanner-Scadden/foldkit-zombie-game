@@ -19,7 +19,7 @@ import { modifyFields } from 'foldkit/struct'
 import { PLAYER_MAX_HP } from '../../src/constants'
 import { update } from '../../src/main'
 import { Message } from '../../src/message'
-import { type Model, initialModel } from '../../src/model'
+import { type Model, Phase, initialModel } from '../../src/model'
 import { asVeteran } from '../../src/veteran'
 import type { ScriptMode, StepPattern } from './request'
 
@@ -90,21 +90,21 @@ const nearestZombie = (model: Model): Target | undefined =>
         : best
     }, undefined)
 
-// The input Messages for one frame, sent before the frame ticks.
-export const driveFrame = (model: Model, frame: number): Model => {
-  if (model.phase._tag === 'Preparation') {
-    const still = holdKeys(model, [])
-    const released =
-      still.input.mouseButton._tag === 'Held'
-        ? send(still, Message.ReleasedPointer({ pointerId: 1 }))
-        : still
-    return released.shop._tag === 'Browsing'
-      ? tapKey(released, 'Escape')
-      : tapKey(released, 'Enter')
-  }
-  if (model.phase._tag !== 'Wave') {
-    return model
-  }
+// Through Preparation: let go of the trigger, close the stall, and start
+// the wave.
+const prepareFrame = (model: Model): Model => {
+  const still = holdKeys(model, [])
+  const released =
+    still.input.mouseButton._tag === 'Held'
+      ? send(still, Message.ReleasedPointer({ pointerId: 1 }))
+      : still
+  return released.shop._tag === 'Browsing'
+    ? tapKey(released, 'Escape')
+    : tapKey(released, 'Enter')
+}
+
+// In a wave: walk the pattern, and aim and fire at the nearest zombie.
+const fightFrame = (model: Model, frame: number): Model => {
   const moved = holdKeys(
     model,
     MOVE_PATTERN[Math.floor(frame / FRAMES_PER_MOVE) % MOVE_PATTERN.length] ??
@@ -133,6 +133,17 @@ export const driveFrame = (model: Model, frame: number): Model => {
         }),
       )
 }
+
+// The input Messages for one frame, sent before the frame ticks.
+export const driveFrame = (model: Model, frame: number): Model =>
+  Phase.matchOrElse(
+    model.phase,
+    {
+      Preparation: () => prepareFrame(model),
+      Wave: () => fightFrame(model, frame),
+    },
+    () => model,
+  )
 
 // A returning player's Model, seeded, measured, and started into a run.
 export const startedRun = (seed: number, mode: ScriptMode): Model => {

@@ -3,7 +3,7 @@
 // and the Markdown report. tools/balance/nightly.ts runs the jobs and does
 // the file work.
 
-import { Array, Option, Order, Record, Schema, pipe } from 'effect'
+import { Array, Match, Option, Order, Record, Schema, pipe } from 'effect'
 
 import { DIFFICULTY_ORDER } from '../../src/difficulty'
 import type { Difficulty } from '../../src/model'
@@ -608,13 +608,15 @@ export const verdictLine = (
 }
 
 export const driftLine = (drift: Drift): string =>
-  drift._tag === 'Drifted'
-    ? `${drift.metric.label}: ${formatValue(drift.baseline, drift.metric.unit)} to ${formatValue(drift.metric.value, drift.metric.unit)} (${formatDelta(drift.delta, drift.metric.unit)}, tolerance ${formatValue(drift.metric.tolerance, drift.metric.unit)})`
-    : drift._tag === 'Missing'
-      ? `${drift.key}: in the baseline but not measured`
-      : drift._tag === 'New'
-        ? `${drift.metric.label}: new, ${formatValue(drift.metric.value, drift.metric.unit)}`
-        : `${drift.metric.label}: ${formatValue(drift.metric.value, drift.metric.unit)}`
+  Match.valueTags(drift, {
+    Drifted: ({ metric: measured, baseline, delta }) =>
+      `${measured.label}: ${formatValue(baseline, measured.unit)} to ${formatValue(measured.value, measured.unit)} (${formatDelta(delta, measured.unit)}, tolerance ${formatValue(measured.tolerance, measured.unit)})`,
+    Missing: ({ key }) => `${key}: in the baseline but not measured`,
+    New: ({ metric: measured }) =>
+      `${measured.label}: new, ${formatValue(measured.value, measured.unit)}`,
+    Within: ({ metric: measured }) =>
+      `${measured.label}: ${formatValue(measured.value, measured.unit)}`,
+  })
 
 const bullets = (lines: ReadonlyArray<string>): ReadonlyArray<string> =>
   Array.isReadonlyArrayEmpty(lines)

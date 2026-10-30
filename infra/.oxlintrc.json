@@ -3,6 +3,8 @@
   // NOTE: the same baseline as the root .oxlintrc.json, without the Foldkit
   // and game rules, which are about the app.
   "plugins": ["eslint", "typescript", "unicorn", "oxc"],
+  // NOTE: the project's own rules (AGENTS.md "Code shape").
+  "jsPlugins": ["../tools/lint/munchPlugin.mjs"],
   "options": { "typeAware": true },
   "categories": {
     "correctness": "error",
@@ -37,6 +39,8 @@
     "typescript/no-misused-promises": "error",
     "typescript/await-thenable": "error",
     "typescript/switch-exhaustiveness-check": "error",
+    "munch/no-tag-chain": "error",
+    "munch/no-extract-tag": "error",
     "typescript/no-unnecessary-condition": "error",
     "typescript/no-misused-spread": "error",
     "typescript/no-unsafe-argument": "error",

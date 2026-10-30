@@ -21,10 +21,11 @@ import {
   encodeArgs,
 } from './Mutation'
 import {
-  type ClientMessage,
+  ClientMessage,
   Delta,
   type Envelope,
   type FailCode,
+  type HelloMessage,
   type HelloMode,
   PROTOCOL_VERSION,
   RejectCode,
@@ -538,6 +539,7 @@ export const Connection = Schema.TaggedUnion({
   },
 })
 export type Connection = typeof Connection.Type
+export type JoinedConnection = typeof Connection.cases.Joined.Type
 
 export const OPENED: Connection = Connection.cases.Opened.make({})
 
@@ -573,7 +575,7 @@ const hello = (
   server: ScopeServer,
   authenticate: Authenticate,
   connection: Connection,
-  message: Extract<ClientMessage, { readonly _tag: 'Hello' }>,
+  message: HelloMessage,
 ): Effect.Effect<Handled, SqlError.SqlError> =>
   Effect.gen(function* () {
     if (message.protocol !== PROTOCOL_VERSION) {
@@ -610,7 +612,7 @@ const hello = (
 
 const pushed = (
   server: ScopeServer,
-  connection: Extract<Connection, { readonly _tag: 'Joined' }>,
+  connection: JoinedConnection,
   envelopes: ReadonlyArray<Envelope>,
 ): Effect.Effect<Handled, SqlError.SqlError> =>
   Effect.gen(function* () {
@@ -650,13 +652,20 @@ export const handleMessage = (
   message: ClientMessage,
 ): Effect.Effect<Handled> => {
   const handling: Effect.Effect<Handled, SqlError.SqlError> =
-    message._tag === 'Ping'
-      ? Effect.succeed(handled(connection, [ServerMessage.cases.Pong.make({})]))
-      : message._tag === 'Hello'
-        ? hello(server, authenticate, connection, message)
-        : connection._tag === 'Opened'
-          ? Effect.succeed(failed(connection, 'NotReady', 'Say Hello first'))
-          : pushed(server, connection, message.mutations)
+    ClientMessage.match(message, {
+      Ping: () =>
+        Effect.succeed(
+          handled(connection, [ServerMessage.cases.Pong.make({})]),
+        ),
+      Hello: helloMessage =>
+        hello(server, authenticate, connection, helloMessage),
+      Push: ({ mutations }) =>
+        Connection.match(connection, {
+          Opened: () =>
+            Effect.succeed(failed(connection, 'NotReady', 'Say Hello first')),
+          Joined: joined => pushed(server, joined, mutations),
+        }),
+    })
   return Effect.catchTag(handling, 'SqlError', error =>
     Effect.succeed(failed(connection, 'Unavailable', error.message)),
   )

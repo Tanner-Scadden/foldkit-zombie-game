@@ -2,6 +2,7 @@ import * as Array from 'effect/Array'
 import * as Clock from 'effect/Clock'
 import * as Effect from 'effect/Effect'
 import * as Fiber from 'effect/Fiber'
+import * as Match from 'effect/Match'
 import * as Option from 'effect/Option'
 import * as Result from 'effect/Result'
 import * as Schema from 'effect/Schema'
@@ -120,6 +121,10 @@ const Attachment = Schema.TaggedUnion({
   },
 })
 type Attachment = typeof Attachment.Type
+type SyncAttachment = typeof Attachment.cases.Sync.Type
+type GameAttachment =
+  | typeof Attachment.cases.GameOpened.Type
+  | typeof Attachment.cases.GameJoined.Type
 
 const decodeAttachment = Schema.decodeUnknownOption(Attachment)
 const encodeAttachment = Schema.encodeSync(Attachment)
@@ -250,19 +255,21 @@ export class GameRoom {
     return Array.getSomes(
       Array.map(this.ctx.getWebSockets(GAME_TAG), socket =>
         Option.flatMap(attachmentOf(socket), attachment =>
-          attachment._tag === 'GameOpened'
-            ? Option.some({
+          Attachment.match(attachment, {
+            GameOpened: opened =>
+              Option.some({
                 socket,
-                id: attachment.socket,
+                id: opened.socket,
                 playerId: Option.none<string>(),
-              })
-            : attachment._tag === 'GameJoined'
-              ? Option.some({
-                  socket,
-                  id: attachment.socket,
-                  playerId: Option.some(attachment.playerId),
-                })
-              : Option.none(),
+              }),
+            GameJoined: joined =>
+              Option.some({
+                socket,
+                id: joined.socket,
+                playerId: Option.some(joined.playerId),
+              }),
+            Sync: () => Option.none(),
+          }),
         ),
       ),
     )
@@ -290,43 +297,36 @@ export class GameRoom {
     const everyone = () => this.syncSockets()
     return Effect.forEach(
       out,
-      item => {
-        if (item._tag === 'Send') {
-          return Effect.sync(() =>
-            Option.map(byId(item.socket), entry =>
-              sendFrame(entry.socket, item.frame),
+      item =>
+        Match.valueTags(item, {
+          Send: ({ socket, frame }) =>
+            Effect.sync(() =>
+              Option.map(byId(socket), entry => sendFrame(entry.socket, frame)),
             ),
-          )
-        }
-        if (item._tag === 'Close') {
-          return Effect.sync(() =>
-            Option.map(byId(item.socket), entry =>
-              entry.socket.close(1000, 'Done'),
+          Close: ({ socket }) =>
+            Effect.sync(() =>
+              Option.map(byId(socket), entry =>
+                entry.socket.close(1000, 'Done'),
+              ),
             ),
-          )
-        }
-        if (item._tag === 'FreedSeat') {
-          return this.lock.withPermit(
-            host.freeSeat(
-              item.playerId,
-              Option.match(game, {
-                onNone: () => 0,
-                onSome: current => current.round,
-              }),
-              everyone(),
+          FreedSeat: ({ playerId }) =>
+            this.lock.withPermit(
+              host.freeSeat(
+                playerId,
+                Option.match(game, {
+                  onNone: () => 0,
+                  onSome: current => current.round,
+                }),
+                everyone(),
+              ),
             ),
-          )
-        }
-        return this.finish(item, host)
-      },
+          Ended: ended => this.finish(ended, host),
+        }),
       { discard: true },
     )
   }
 
-  private finish(
-    ended: Extract<Room.Out, { readonly _tag: 'Ended' }>,
-    host: RoomHost,
-  ): Effect.Effect<void> {
+  private finish(ended: Room.Ended, host: RoomHost): Effect.Effect<void> {
     const round = Option.match(this.game, {
       onNone: () => 0,
       onSome: game => game.round,
@@ -516,11 +516,12 @@ export class GameRoom {
         Effect.forEach(
           reactions,
           reaction =>
-            reaction._tag === 'MaybeStart'
-              ? this.startGame(host)
-              : reaction._tag === 'EndGame'
-                ? this.endGame(host, 'EndedByHost')
-                : this.dropPlayer(reaction.playerId, reaction.kicked, host),
+            Match.valueTags(reaction, {
+              MaybeStart: () => this.startGame(host),
+              EndGame: () => this.endGame(host, 'EndedByHost'),
+              DropPlayer: ({ playerId, kicked }) =>
+                this.dropPlayer(playerId, kicked, host),
+            }),
           { discard: true },
         ),
         Array.isReadonlyArrayNonEmpty(deltas) ? this.list(host) : Effect.void,
@@ -688,7 +689,7 @@ export class GameRoom {
 
   private onSync(
     socket: WorkersWebSocket,
-    attachment: Extract<Attachment, { readonly _tag: 'Sync' }>,
+    attachment: SyncAttachment,
     message: string,
   ): Effect.Effect<void, SyncSetupFailed> {
     return Effect.gen({ self: this }, function* () {
@@ -718,10 +719,7 @@ export class GameRoom {
 
   private onGame(
     socket: WorkersWebSocket,
-    attachment: Extract<
-      Attachment,
-      { readonly _tag: 'GameOpened' | 'GameJoined' }
-    >,
+    attachment: GameAttachment,
     bytes: Uint8Array,
   ): Effect.Effect<void, SyncSetupFailed> {
     return Effect.gen({ self: this }, function* () {
@@ -878,6 +876,65 @@ export class GameRoom {
 
   // ALARM
 
+  // NOTE: a game whose loop stopped advancing gets a new loop.
+  private checkLoop(
+    maybeHost: Option.Option<RoomHost>,
+    nowMs: number,
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      if (
+        Option.isSome(maybeHost) &&
+        Option.exists(
+          this.game,
+          game => nowMs - game.advancedMs > STALLED_LOOP_MS,
+        )
+      ) {
+        yield* Effect.logWarning('The room loop stalled; restarting it')
+        this.startLoop(maybeHost.value)
+      }
+    })
+  }
+
+  // NOTE: a lobby still Playing with no game running was cut off: record
+  // the round as Interrupted and tell anyone still linked.
+  private interrupted(
+    maybeHost: Option.Option<RoomHost>,
+    lobby: Option.Option<Lobby>,
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      if (Option.isSome(maybeHost) && Option.isSome(lobby)) {
+        yield* this.lock.withPermit(
+          maybeHost.value.recordResult(
+            {
+              round: lobby.value.round,
+              reason: 'Interrupted',
+              ticks: 0,
+              scores: [],
+            },
+            this.syncSockets(),
+          ),
+        )
+        Array.forEach(this.gameSockets(), entry =>
+          sendFrame(
+            entry.socket,
+            ServerFrame.cases.RoomClosed.make({ reason: 'Interrupted' }),
+          ),
+        )
+      }
+    })
+  }
+
+  // NOTE: only an empty, unchanged room gets here, or an object that never
+  // held one. A sync scope rebuilds its tables on next use.
+  private deleteRoom(): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      this.host = Option.none()
+      yield* tryCall('delete the room', () =>
+        this.ctx.storage.deleteAll(),
+      ).pipe(Effect.ignore)
+    })
+  }
+
   alarm(): Promise<void> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
@@ -895,50 +952,20 @@ export class GameRoom {
           lobby,
           socketsOpen: this.ctx.getWebSockets().length,
         })
-        if (decision._tag === 'CheckLoop') {
-          if (
-            Option.isSome(maybeHost) &&
-            Option.exists(
-              this.game,
-              game => nowMs - game.advancedMs > STALLED_LOOP_MS,
-            )
-          ) {
-            yield* Effect.logWarning('The room loop stalled; restarting it')
-            this.startLoop(maybeHost.value)
-          }
-          return yield* setAlarm(this.ctx, decision.nextMs)
-        }
-        if (decision._tag === 'Interrupted') {
-          if (Option.isSome(maybeHost) && Option.isSome(lobby)) {
-            yield* this.lock.withPermit(
-              maybeHost.value.recordResult(
-                {
-                  round: lobby.value.round,
-                  reason: 'Interrupted',
-                  ticks: 0,
-                  scores: [],
-                },
-                this.syncSockets(),
-              ),
-            )
-            Array.forEach(this.gameSockets(), entry =>
-              sendFrame(
-                entry.socket,
-                ServerFrame.cases.RoomClosed.make({ reason: 'Interrupted' }),
-              ),
-            )
-          }
-          return yield* setAlarm(this.ctx, decision.nextMs)
-        }
-        if (decision._tag === 'Later') {
-          return yield* setAlarm(this.ctx, decision.nextMs)
-        }
-        // NOTE: only an empty, unchanged room gets here, or an object that
-        // never held one. A sync scope rebuilds its tables on next use.
-        this.host = Option.none()
-        yield* tryCall('delete the room', () =>
-          this.ctx.storage.deleteAll(),
-        ).pipe(Effect.ignore)
+        return yield* Match.valueTags(decision, {
+          CheckLoop: ({ nextMs }) =>
+            Effect.andThen(
+              this.checkLoop(maybeHost, nowMs),
+              setAlarm(this.ctx, nextMs),
+            ),
+          Interrupted: ({ nextMs }) =>
+            Effect.andThen(
+              this.interrupted(maybeHost, lobby),
+              setAlarm(this.ctx, nextMs),
+            ),
+          Later: ({ nextMs }) => setAlarm(this.ctx, nextMs),
+          Delete: () => this.deleteRoom(),
+        })
       }).pipe(
         Effect.catchTag('SyncSetupFailed', error =>
           Effect.logError('Room alarm failed', error.cause),

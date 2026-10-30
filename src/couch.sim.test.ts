@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest'
 import { FIXED_STEP_MS, PLAYER_MAX_HP } from './constants'
 import { update } from './main'
 import { Message } from './message'
-import { type Model, initialModel } from './model'
+import { type Model, Phase, initialModel } from './model'
 import { forEachSeat, playersOf } from './party'
 import { asVeteran } from './veteran'
 import { withWorld } from './world'
@@ -79,16 +79,14 @@ const nearestZombie = (current: Model) =>
       undefined,
     )
 
-const drive = (current: Model, frame: number): Model => {
-  if (current.phase._tag === 'Preparation') {
-    const still = hold(current, [])
-    const leftStall =
-      still.shop._tag === 'Browsing' ? tap(still, 'Escape') : still
-    return tap(tap(tap(leftStall, 'KeyO'), 'KeyY'), 'Enter')
-  }
-  if (current.phase._tag !== 'Wave') {
-    return current
-  }
+const prepare = (current: Model): Model => {
+  const still = hold(current, [])
+  const leftStall =
+    still.shop._tag === 'Browsing' ? tap(still, 'Escape') : still
+  return tap(tap(tap(leftStall, 'KeyO'), 'KeyY'), 'Enter')
+}
+
+const fight = (current: Model, frame: number): Model => {
   const step = Math.floor(frame / FRAMES_PER_MOVE)
   const moved = hold(current, [
     ...(P1_MOVES[step % P1_MOVES.length] ?? []),
@@ -117,6 +115,16 @@ const drive = (current: Model, frame: number): Model => {
         }),
       )
 }
+
+const drive = (current: Model, frame: number): Model =>
+  Phase.matchOrElse(
+    current.phase,
+    {
+      Preparation: () => prepare(current),
+      Wave: () => fight(current, frame),
+    },
+    () => current,
+  )
 
 const refillHearts = (current: Model): Model =>
   withWorld(current, world =>

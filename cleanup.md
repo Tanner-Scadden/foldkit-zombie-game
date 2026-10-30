@@ -21,12 +21,15 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
 
 ### Queue
 
-1. [ ] **Exhaustive matches.** (S)
+1. [x] **Exhaustive matches.** (S) (#20)
    - `src/storeSqlite.ts:406-439` `runChange` is an if/else chain whose last branch runs `RecordedRun` for any other change; also `:445`, `:462`, `src/coop/update.ts:287-334`, `:676-686`, `src/playerSync.ts:252`. About 196 `._tag ===` checks in all; convert the chains (leave single checks).
    - Use the union's `.match` (`PlayerChange.match(change, {...})`) or `Match.valueTags`; `Match.whenOr` for literal unions (domains `domain/domain.ts:55-60`).
    - Move `Data.taggedEnum` (`store.ts:45`, `storeSqlite.ts:190`, `music.ts:291`) to the Schema tagged union helper.
    - Named variant aliases beside each union (`export type Turret = typeof Trap.Turret.Type`) in place of `Extract<Trap, { _tag: 'Turret' }>` (`traps.ts:400`, `trapView.ts:172,185`, `coop/update.ts:290`).
    - Lock in: type-aware `switch-exhaustiveness-check`, `no-restricted-syntax` against `Extract<…, { _tag: … }>` if expressible, and against an `else` after a `_tag` chain if not too noisy.
+   - Done: 41 chains are matches now (13 in `src`, 9 in the packages, 6 in `infra/worker`, 13 in the tools), the store's Backend is a Schema union, and 17 `Extract<…, { _tag }>` outside co-op are named aliases. oxlint has no `no-restricted-syntax`, so `tools/lint/munchPlugin.mjs` adds `munch/no-tag-chain` and `munch/no-extract-tag`, on in the root and `infra` configs. `switch-exhaustiveness-check` was already on from 0a.
+   - Waits for 0b: the chains and `Extract`s in `src/coop/` (`net.ts:84`, `update.ts:299-303`, `:689-697`, `story.test.ts:451,466`). An override in `.oxlintrc.json` marked `TODO(cleanup slice 0b)` turns the two rules off there; drop it when 0b converts them.
+   - Waits for slice 9: `tools/balance/bot.ts:575,581`, in `ignorePatterns` until the knife lands.
 2. [ ] **Derived menu state and update helpers.** (S/M)
    - "Is a menu open" lives in three places that disagree: `update/home.ts:94-106` `isPanelAllowed`, `:156-161` `canMoveHomeFocus`, `update/profile.ts:101-104` `canOpenProfile`. `update/home.ts:159` reads `model.coop.screen` instead of `isCoopOpen`. `update/save.ts:244` `isSettingsOpen` duplicates the unused `isProfileOpenOn`.
    - Replace with one derived `menuState(model)` tagged union, computed never stored, read by update and view (domains `searchViewState.ts:36`).
@@ -80,4 +83,7 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
 ## Found along the way
 
 - `storeEarly.ts` uses Promises and try/catch on purpose: it is boot code that runs before the Effect runtime. Leave it, with a comment.
+- `Data.taggedEnum` is still in `tools/heavy/decision.ts` (9 unions) and `packages/sqlite-wasm-effect/src/Server.ts` (2). Their `$match` is exhaustive, so it is style, not a hole: move them to `Schema.TaggedUnion` and widen the `no-restricted-properties` rule from `src` to everything linted.
+- `src/playerSync.ts` `devicesStatusText` is an if/else chain over two unions at once (`state` and `scope`), which `munch/no-tag-chain` cannot see. It reads fine as a priority order; leave it unless the Profile work touches it.
+- More copied test helpers for slice 4: `rectsOf` (`hud.scene.test.ts`, `portrait.scene.test.ts`) and `imagesIn` (`sprite.scene.test.ts`, `tools/sprites/atlas.test.ts`).
 - The co-op audit's "host walks into the stall" and revive steps are flaky (failed once each on production and locally, passed on rerun). Make them wait on state, not time.

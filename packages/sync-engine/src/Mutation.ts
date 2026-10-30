@@ -67,7 +67,7 @@ export type Apply<A> = (
   SqlClient.SqlClient
 >
 
-export type DeviceActor = Extract<Actor, { readonly _tag: 'Device' }>
+export type DeviceActor = typeof Actor.cases.Device.Type
 
 export interface Mutation<Name extends string, A, I> {
   readonly name: Name

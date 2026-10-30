@@ -60,6 +60,7 @@ import {
   TrapHint,
   type TrapKind,
   TrapNotice,
+  type Turret,
   TurretGun,
   type Vector,
   type WeaponKind,
@@ -397,12 +398,10 @@ const peaFrom = (id: number, muzzle: Vector, direction: Vector): Bullet => {
   }
 }
 
-type TurretFields = Extract<Trap, Readonly<{ _tag: 'Turret' }>>
-
 const operateTurret = (
   level: Level,
   volley: Volley,
-  turret: TurretFields,
+  turret: Turret,
   zombies: ReadonlyArray<Zombie>,
   deltaMs: number,
   maybeOwner: Option.Option<number>,

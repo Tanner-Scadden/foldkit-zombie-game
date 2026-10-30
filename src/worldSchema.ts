@@ -1271,6 +1271,8 @@ export const Trap = defineTaggedUnion({
   },
 })
 export type Trap = typeof Trap.Type
+export type Barricade = typeof Trap.Barricade.Type
+export type Turret = typeof Trap.Turret.Type
 
 export const TrapCounts = Schema.Struct({
   Barricade: Schema.Number,

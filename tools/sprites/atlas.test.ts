@@ -1,4 +1,4 @@
-import { Array, Option, Record } from 'effect'
+import { Array, Match, Option, Record } from 'effect'
 import type { Canvas } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 import { spawnSync } from 'node:child_process'
@@ -36,15 +36,13 @@ const generatorKeys = (): ReadonlySet<string> => {
 const imagesIn = (
   shapes: ReadonlyArray<Canvas.Shape>,
 ): ReadonlyArray<Canvas.Image> =>
-  Array.flatMap(shapes, shape => {
-    if (shape._tag === 'Image') {
-      return [shape]
-    } else if (shape._tag === 'Group') {
-      return imagesIn(shape.shapes)
-    } else {
-      return []
-    }
-  })
+  Array.flatMap(shapes, shape =>
+    Match.value(shape).pipe(
+      Match.tag('Image', image => [image]),
+      Match.tag('Group', ({ shapes: inner }) => imagesIn(inner)),
+      Match.orElse(() => []),
+    ),
+  )
 
 const keysDrawnIn = (model: Model): ReadonlyArray<string> => {
   const level = levelOf(model)

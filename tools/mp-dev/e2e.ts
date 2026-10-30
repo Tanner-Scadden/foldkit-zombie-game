@@ -15,6 +15,7 @@ import {
   type Duration,
   Effect,
   Exit,
+  Match,
   Option,
   Ref,
   Result,
@@ -136,11 +137,15 @@ const follow = (player: Player, code: string) =>
     player.lobbyClient = Option.some(client)
     yield* Effect.forkScoped(
       Stream.runForEach(client.events, event =>
-        event._tag === 'Updated'
-          ? Ref.set(player.lobby, Option.some(event.lobby))
-          : event._tag === 'Rejected'
-            ? Console.log(`  ${player.name}: rejected ${event.reason}`)
-            : Effect.void,
+        Match.value(event).pipe(
+          Match.tag('Updated', ({ lobby }) =>
+            Ref.set(player.lobby, Option.some(lobby)),
+          ),
+          Match.tag('Rejected', ({ reason }) =>
+            Console.log(`  ${player.name}: rejected ${reason}`),
+          ),
+          Match.orElse(() => Effect.void),
+        ),
       ),
     )
   })
@@ -442,19 +447,19 @@ const program = Effect.gen(function* () {
               name: player.name,
               token: Effect.succeed(player.token),
             })
-            yield* Stream.runForEach(quick.events, event => {
-              if (event._tag !== 'Heard') {
-                return Effect.void
-              }
-              const message = event.message
-              return message._tag === 'Matched'
-                ? Ref.update(quickCodes, codes => [...codes, message.code])
-                : message._tag === 'Waiting'
-                  ? Ref.update(waitingSeen, seen =>
-                      Math.max(seen, message.waiting),
-                    )
-                  : Effect.void
-            })
+            yield* Stream.runForEach(quick.events, event =>
+              event._tag === 'Heard'
+                ? Match.value(event.message).pipe(
+                    Match.tag('Matched', ({ code: matchedCode }) =>
+                      Ref.update(quickCodes, codes => [...codes, matchedCode]),
+                    ),
+                    Match.tag('Waiting', ({ waiting }) =>
+                      Ref.update(waitingSeen, seen => Math.max(seen, waiting)),
+                    ),
+                    Match.orElse(() => Effect.void),
+                  )
+                : Effect.void,
+            )
           }),
         ),
       ).pipe(Effect.andThen(Effect.sleep('150 millis'))),

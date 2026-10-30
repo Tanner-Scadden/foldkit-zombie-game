@@ -274,58 +274,69 @@ export class Matchmaker {
     const attachment = maybeAttachment.value
     const said = maybeMessage.value
     return Effect.runPromise(
-      Effect.gen({ self: this }, function* () {
-        if (said._tag === 'Hello') {
-          if (attachment._tag === 'Queued') {
-            return
-          }
-          const nowMs = yield* Clock.currentTimeMillis
-          const claims = yield* Effect.result(
-            verifyToken(this.env.SYNC_SECRET, said.token, nowMs),
-          )
-          if (Result.isFailure(claims)) {
-            socket.send(
-              encodeServer(
-                Matchmaking.QuickServer.cases.Refused.make({
-                  reason: 'Unauthorized',
-                }),
-              ),
-            )
-            return socket.close(1008, 'Unauthorized')
-          }
-          socket.serializeAttachment(
-            encodeAttachment({
-              _tag: 'Queued',
-              socket: attachment.socket,
-              playerId: claims.success.playerId,
-              name: said.name,
-              look: said.look ?? '',
-              region: attachment.region ?? '',
-            }),
-          )
-          const player: Matchmaking.Queued = {
-            socket: attachment.socket,
-            playerId: claims.success.playerId,
-            name: said.name,
-            look: said.look ?? '',
-            region: attachment.region ?? '',
-            queuedMs: nowMs,
-          }
-          return yield* this.run((matchmaker, now) =>
-            Matchmaking.arrive(matchmaker, player, now),
-          )
-        }
-        if (said._tag === 'Answer') {
-          return yield* this.run((matchmaker, now) =>
-            Matchmaking.answer(matchmaker, attachment.socket, said.accept, now),
-          )
-        }
-        yield* this.run((matchmaker, now) =>
-          Matchmaking.leave(matchmaker, attachment.socket, now),
-        )
-        socket.close(1000, 'Cancelled')
+      Matchmaking.QuickClient.match(said, {
+        Hello: hello => this.hello(socket, attachment, hello),
+        Answer: ({ accept }) =>
+          this.run((matchmaker, now) =>
+            Matchmaking.answer(matchmaker, attachment.socket, accept, now),
+          ),
+        Cancel: () =>
+          Effect.andThen(
+            this.run((matchmaker, now) =>
+              Matchmaking.leave(matchmaker, attachment.socket, now),
+            ),
+            Effect.sync(() => socket.close(1000, 'Cancelled')),
+          ),
       }),
     )
+  }
+
+  // NOTE: a player says Hello once: a socket already queued ignores another.
+  private hello(
+    socket: WorkersWebSocket,
+    attachment: Attachment,
+    said: Matchmaking.QuickHello,
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      if (attachment._tag === 'Queued') {
+        return
+      }
+      const nowMs = yield* Clock.currentTimeMillis
+      const claims = yield* Effect.result(
+        verifyToken(this.env.SYNC_SECRET, said.token, nowMs),
+      )
+      if (Result.isFailure(claims)) {
+        socket.send(
+          encodeServer(
+            Matchmaking.QuickServer.cases.Refused.make({
+              reason: 'Unauthorized',
+            }),
+          ),
+        )
+        return socket.close(1008, 'Unauthorized')
+      }
+      socket.serializeAttachment(
+        encodeAttachment({
+          _tag: 'Queued',
+          socket: attachment.socket,
+          playerId: claims.success.playerId,
+          name: said.name,
+          look: said.look ?? '',
+          region: attachment.region ?? '',
+        }),
+      )
+      const player: Matchmaking.Queued = {
+        socket: attachment.socket,
+        playerId: claims.success.playerId,
+        name: said.name,
+        look: said.look ?? '',
+        region: attachment.region ?? '',
+        queuedMs: nowMs,
+      }
+      return yield* this.run((matchmaker, now) =>
+        Matchmaking.arrive(matchmaker, player, now),
+      )
+    })
   }
 
   webSocketClose(

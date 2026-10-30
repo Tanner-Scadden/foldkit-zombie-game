@@ -1,4 +1,4 @@
-import { Array, Option, Record, pipe } from 'effect'
+import { Array, Match, Option, Record, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 import { given, scene } from 'foldkit/scene'
@@ -45,15 +45,13 @@ const colorAt = (x: number, y: number): Option.Option<string> =>
 const imagesIn = (
   shapes: ReadonlyArray<Canvas.Shape>,
 ): ReadonlyArray<Canvas.Image> =>
-  Array.flatMap(shapes, shape => {
-    if (shape._tag === 'Image') {
-      return [shape]
-    } else if (shape._tag === 'Group') {
-      return imagesIn(shape.shapes)
-    } else {
-      return []
-    }
-  })
+  Array.flatMap(shapes, shape =>
+    Match.value(shape).pipe(
+      Match.tag('Image', image => [image]),
+      Match.tag('Group', ({ shapes: inner }) => imagesIn(inner)),
+      Match.orElse(() => []),
+    ),
+  )
 
 const onlyImage = (shapes: ReadonlyArray<Canvas.Shape>): Canvas.Image => {
   expect(shapes.length).toBe(1)

@@ -1,4 +1,4 @@
-import { Array, Option, Schema, pipe } from 'effect'
+import { Array, Match, Option, Schema, pipe } from 'effect'
 import type { Canvas } from 'foldkit'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
@@ -89,17 +89,16 @@ const withLook = (base: Model, appearance: Appearance): Model =>
   modifyFields(base, { appearance: () => appearance })
 
 const fills = (shapes: ReadonlyArray<Canvas.Shape>): ReadonlyArray<string> =>
-  Array.flatMap(shapes, shape => {
-    if (shape._tag === 'Group') {
-      return fills(shape.shapes)
-    } else if (shape._tag === 'Rect') {
-      return Option.toArray(Option.fromNullishOr(shape.fill))
-    } else if (shape._tag === 'Image') {
-      return imageColors(shape.src)
-    } else {
-      return []
-    }
-  })
+  Array.flatMap(shapes, shape =>
+    Match.value(shape).pipe(
+      Match.tag('Group', group => fills(group.shapes)),
+      Match.tag('Rect', rect =>
+        Option.toArray(Option.fromNullishOr(rect.fill)),
+      ),
+      Match.tag('Image', image => imageColors(image.src)),
+      Match.orElse(() => []),
+    ),
+  )
 
 // NOTE: every option of every part as a list of looks: the classic look
 // with that one option in it.

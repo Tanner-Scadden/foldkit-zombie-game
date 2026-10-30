@@ -16,6 +16,7 @@ import {
   Clock,
   Data,
   Effect,
+  Match,
   Option,
   Ref,
   Result,
@@ -221,13 +222,12 @@ type EntryError =
   | TokenUnavailable
 
 const describeError = (error: EntryError): string =>
-  error._tag === 'RoomRequestFailed'
-    ? error.refusal._tag
-    : error._tag === 'NotARoomCode'
-      ? `${error.typed} is not a room code`
-      : error._tag === 'QuickPlayEnded'
-        ? `Quick Play ended: ${error.reason}`
-        : `could not sign in (${error.reason})`
+  Match.valueTags(error, {
+    RoomRequestFailed: ({ refusal }) => refusal._tag,
+    NotARoomCode: ({ typed }) => `${typed} is not a room code`,
+    QuickPlayEnded: ({ reason }) => `Quick Play ended: ${reason}`,
+    TokenUnavailable: ({ reason }) => `could not sign in (${reason})`,
+  })
 
 // NOTE: the name the player typed, kept for the tab. The room cleans it.
 const nameNow = (): string => {
@@ -267,29 +267,28 @@ const quickPlay = (
         quick.events,
         () => Option.none<RoomTicket>(),
         (found, event) =>
-          Effect.gen(function* () {
-            if (event._tag === 'Heard' && event.message._tag === 'Matched') {
-              return Option.some({
-                code: event.message.code,
-                slot: event.message.slot,
-              })
-            }
-            if (event._tag === 'Heard' && event.message._tag === 'Refused') {
-              return yield* new QuickPlayEnded({ reason: event.message.reason })
-            }
-            if (event._tag === 'Heard' && event.message._tag === 'Waiting') {
-              const offered = event.message.offerPlayers > 0
-              ui.queueText.textContent = queueLine(event.message)
-              ui.accept.hidden = !offered
-              ui.keepWaiting.hidden = !offered
-              if (offered && autoQuick) {
-                yield* quick.answer(true)
-              }
-            }
-            if (event._tag === 'Dropped' && Option.isNone(found)) {
-              return yield* new QuickPlayEnded({ reason: event.reason })
-            }
-            return found
+          Match.valueTags(event, {
+            Heard: ({ message }) =>
+              Match.valueTags(message, {
+                Matched: ({ code, slot }) => Effect.succeedSome({ code, slot }),
+                Refused: ({ reason }) => new QuickPlayEnded({ reason }),
+                Waiting: waiting =>
+                  Effect.gen(function* () {
+                    const offered = waiting.offerPlayers > 0
+                    ui.queueText.textContent = queueLine(waiting)
+                    ui.accept.hidden = !offered
+                    ui.keepWaiting.hidden = !offered
+                    if (offered && autoQuick) {
+                      yield* quick.answer(true)
+                    }
+                    return found
+                  }),
+              }),
+            Dropped: ({ reason }) =>
+              Option.isNone(found)
+                ? new QuickPlayEnded({ reason })
+                : Effect.succeed(found),
+            Connecting: () => Effect.succeed(found),
           }),
       ).pipe(
         Effect.flatMap(
@@ -709,59 +708,61 @@ const playRoom = (
 
     yield* Effect.forkScoped(
       Stream.runForEach(lobbyClient.events, event =>
-        Effect.gen(function* () {
-          if (event._tag === 'Updated') {
-            yield* Ref.set(lobby, Option.some(event.lobby))
-            renderLobby(event.lobby, me, write, lobbyClient)
-          }
-          if (event._tag === 'Rejected') {
-            yield* say(`The room said no: ${event.reason}`)
-          }
-          if (event._tag === 'Stopped') {
-            yield* say(`Left the lobby: ${event.reason}`)
-          }
-        }),
+        Match.value(event).pipe(
+          Match.tag('Updated', updated =>
+            Effect.andThen(
+              Ref.set(lobby, Option.some(updated.lobby)),
+              Effect.sync(() =>
+                renderLobby(updated.lobby, me, write, lobbyClient),
+              ),
+            ),
+          ),
+          Match.tag('Rejected', ({ reason }) =>
+            say(`The room said no: ${reason}`),
+          ),
+          Match.tag('Stopped', ({ reason }) =>
+            say(`Left the lobby: ${reason}`),
+          ),
+          Match.orElse(() => Effect.void),
+        ),
       ),
     )
 
     yield* Effect.forkScoped(
       Stream.runForEach(room.events, event =>
-        Effect.gen(function* () {
-          const nowMs = yield* Clock.currentTimeMillis
-          if (event._tag === 'Received') {
-            const current = yield* Ref.get(play)
-            const next = Session.receive(
-              GAME,
-              current,
-              event.frame,
-              event.bytes,
-              event.atMs,
-            )
-            if (Result.isFailure(next)) {
-              return yield* say(
-                `A message did not apply: ${next.failure.reason}`,
+        Match.valueTags(event, {
+          Received: received =>
+            Effect.gen(function* () {
+              const current = yield* Ref.get(play)
+              const next = Session.receive(
+                GAME,
+                current,
+                received.frame,
+                received.bytes,
+                received.atMs,
               )
-            }
-            yield* Ref.set(play, next.success)
-            yield* Ref.set(connection, 'Connected')
-            return
-          }
-          if (event._tag === 'Ponged') {
-            return yield* Ref.update(play, current =>
-              Session.heardPong(current, event.sentMs, event.atMs),
-            )
-          }
-          if (event._tag === 'Connecting') {
-            yield* Ref.update(play, current =>
-              Session.reconnecting(current, nowMs),
-            )
-          }
-          yield* Ref.set(
-            connection,
-            event._tag === 'Connecting'
-              ? `Connecting (try ${event.attempt + 1})`
-              : `${event._tag}: ${event.reason}`,
-          )
+              if (Result.isFailure(next)) {
+                return yield* say(
+                  `A message did not apply: ${next.failure.reason}`,
+                )
+              }
+              yield* Ref.set(play, next.success)
+              yield* Ref.set(connection, 'Connected')
+            }),
+          Ponged: ({ sentMs, atMs }) =>
+            Ref.update(play, current =>
+              Session.heardPong(current, sentMs, atMs),
+            ),
+          Connecting: ({ attempt }) =>
+            Effect.gen(function* () {
+              const nowMs = yield* Clock.currentTimeMillis
+              yield* Ref.update(play, current =>
+                Session.reconnecting(current, nowMs),
+              )
+              yield* Ref.set(connection, `Connecting (try ${attempt + 1})`)
+            }),
+          Dropped: ({ reason }) => Ref.set(connection, `Dropped: ${reason}`),
+          Stopped: ({ reason }) => Ref.set(connection, `Stopped: ${reason}`),
         }),
       ),
     )
