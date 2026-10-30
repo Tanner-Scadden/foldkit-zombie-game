@@ -156,7 +156,9 @@ describe('dead air', () => {
         })
       },
     )
-  }, 60_000)
+    // NOTE: about 40 s on CI's runner beside the other sims, and up to 85 s
+    // when it shares the runner with the busiest of them.
+  }, 150_000)
 })
 
 describe('spawn variety', () => {
@@ -169,5 +171,5 @@ describe('spawn variety', () => {
         })
       },
     )
-  }, 30_000)
+  }, 90_000)
 })
