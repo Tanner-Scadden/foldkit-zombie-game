@@ -1,7 +1,7 @@
 import { Array } from 'effect'
 import type { Canvas } from 'foldkit'
 
-import { levelOf } from './arena'
+import { type Level, levelOf } from './arena'
 import { bossGroundShapes, bossOverheadShapes } from './bossView'
 import { type Camera, sceneOffset } from './camera'
 import { type Drawable, depthSortedShapes } from './depth'
@@ -14,7 +14,8 @@ import {
   groundParticleShapes,
   popupShape,
 } from './effectsView'
-import { type Model, Phase, ShopState, type Vector } from './model'
+import { type Model, Phase, ShopState, type Vector, type Zombie } from './model'
+import { isBehindWall, occludersOf } from './occluders'
 import {
   playerFlashShapes,
   playerFootY,
@@ -110,6 +111,11 @@ const standingDrawables = (
   const level = levelOf(model)
   const drawTrap = trapShapes(level, model.elapsedMs)
   return [
+    ...Array.map(occludersOf(level), ({ floorY, shapes }): Drawable => ({
+      footY: floorY,
+      rank: 'Wall',
+      shapes,
+    })),
     {
       footY: STALL_FOOT_Y,
       rank: 'Prop',
@@ -143,6 +149,13 @@ const standingDrawables = (
 
 // OVERHEAD
 
+// NOTE: a zombie still in a doorway behind the wall's face is covered by the
+// lintel, so its bar would float over the wall. It shows once it steps in.
+const isInView =
+  (level: Level) =>
+  (zombie: Zombie): boolean =>
+    !isBehindWall(level)(zombie.x, zombieFootY(zombie))
+
 const overheadShapes = (
   model: Model,
   camera: Camera,
@@ -152,7 +165,10 @@ const overheadShapes = (
     model.traps,
     trapOverheadShapes(levelOf(model), model.elapsedMs),
   ),
-  ...Array.flatMap(model.zombies, zombieHealthBarShapes),
+  ...Array.flatMap(
+    Array.filter(model.zombies, isInView(levelOf(model))),
+    zombieHealthBarShapes,
+  ),
   ...Array.flatMap(model.blasts, blastShapes),
   ...Array.flatMap(model.callouts, burpRingShapes),
   ...bossOverheadShapes(model),

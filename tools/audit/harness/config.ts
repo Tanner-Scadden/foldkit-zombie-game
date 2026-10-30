@@ -214,6 +214,8 @@ export const HarnessConfig = Schema.Struct({
   planks: Schema.optionalKey(ListOf(DoorId)),
   plankhp: Num(30),
   chewers: Num(0),
+  doorway: Flag,
+  openexits: Schema.optionalKey(ListOf(Schema.String)),
   ask: Flag,
   difficulty: Schema.optionalKey(Difficulty),
   nightmare: Schema.optionalKey(NightmareLock),

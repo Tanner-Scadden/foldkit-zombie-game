@@ -3,14 +3,15 @@ import type { Canvas } from 'foldkit'
 
 // DRAWABLE
 
-type DepthRank = 'Prop' | 'Trap' | 'Pickup' | 'Zombie' | 'Player'
+type DepthRank = 'Wall' | 'Prop' | 'Trap' | 'Pickup' | 'Zombie' | 'Player'
 
 const RANK_ORDER: Readonly<Record<DepthRank, number>> = {
-  Prop: 0,
-  Trap: 1,
-  Pickup: 2,
-  Zombie: 3,
-  Player: 4,
+  Wall: 0,
+  Prop: 1,
+  Trap: 2,
+  Pickup: 3,
+  Zombie: 4,
+  Player: 5,
 }
 
 export type Drawable = Readonly<{

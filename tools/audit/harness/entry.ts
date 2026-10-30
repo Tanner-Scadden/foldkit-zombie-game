@@ -892,6 +892,51 @@ const scenarioModel = (): Model => {
       ],
     })
   }
+  // NOTE: zombies mid-entry at every door, hurt so their bars show: two in
+  // the north doorway behind the lintel, one just inside the north wall, and
+  // one in each other doorway, and one in the kitchen's doorway when it is
+  // open.
+  if (config.doorway) {
+    const spots: ReadonlyArray<
+      readonly ['Shambler' | 'Runner' | 'Tank', number, number]
+    > = [
+      ['Tank', 216, 6],
+      ['Runner', 226, -2],
+      ['Shambler', 200, 22],
+      ['Tank', 240, 26],
+      ['Shambler', 90, 172],
+      ['Shambler', 5, 88],
+      ['Runner', 315, 92],
+      ...(config.openexits?.includes('Kitchen') === true
+        ? ([['Shambler', 70, 8]] as const)
+        : []),
+    ]
+    model = modifyFields(model, {
+      zombies: zombies => [
+        ...zombies,
+        ...spots.map(([kind, x, y], index) => ({
+          id: 9200 + index,
+          kind,
+          x,
+          y,
+          speed: 0,
+          hp: kind === 'Tank' ? 10 : 1,
+          maxHp: kind === 'Tank' ? 30 : 3,
+          knockback: { x: 0, y: 0 },
+          hitRemainingMs: 0,
+          state: { _tag: 'Walking' as const },
+          action: ROAMING,
+          frenzy: CALM,
+        })),
+      ],
+    })
+  }
+  const openexits = config.openexits
+  if (openexits !== undefined) {
+    model = modifyFields(model, {
+      level: level => ({ ...level, openExits: openexits }),
+    })
+  }
   const look = config.look
   if (look !== undefined) {
     const [body, hairStyle, hairColor, skinTone, shirtColor] = look
