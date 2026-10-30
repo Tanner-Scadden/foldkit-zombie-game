@@ -367,7 +367,8 @@ describe('the Look tab', () => {
       given(openOn('Look')),
       message(
         Message.GotCharacterMessage({
-          message: Character.Message.GotShirtColorMessage({
+          message: Character.Message.GotPartMessage({
+            partId: 'ShirtColor',
             message: RadioGroup.Message.SelectedOption({
               index: 3,
               value: 'Teal',

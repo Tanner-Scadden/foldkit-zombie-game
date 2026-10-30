@@ -259,11 +259,16 @@ describe('the lobby', () => {
 
   test('each seat wears the look its player sent, or its seat look', () => {
     const sent: Appearance = {
-      body: 'Female',
+      body: 'Broad',
       hairStyle: 'Long',
       hairColor: 'Pink',
       skinTone: 'Fair',
       shirtColor: 'Purple',
+      outfit: 'Dress',
+      print: 'Nonbinary',
+      facialHair: 'Beard',
+      makeup: 'Lashes',
+      extra: 'Bow',
     }
     scene(
       { update, view },

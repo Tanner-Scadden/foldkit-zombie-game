@@ -45,6 +45,7 @@ import {
   InputDevice,
   LoadStep,
   Loading,
+  LookSection,
   MenuPanel,
   Orientation,
   OrientationLock,
@@ -95,12 +96,21 @@ import {
 
 export * from './worldSchema'
 
+// NOTE: the Look tab: which of its little tabs is showing, and a radio
+// group per part. Not saved: it opens on Body each time.
 export const CharacterPicker = Schema.Struct({
+  section: LookSection,
+  sections: RadioGroup.Model,
   body: RadioGroup.Model,
   hairStyle: RadioGroup.Model,
   hairColor: RadioGroup.Model,
   skinTone: RadioGroup.Model,
   shirtColor: RadioGroup.Model,
+  outfit: RadioGroup.Model,
+  print: RadioGroup.Model,
+  facialHair: RadioGroup.Model,
+  makeup: RadioGroup.Model,
+  extra: RadioGroup.Model,
 })
 export type CharacterPicker = typeof CharacterPicker.Type
 
@@ -221,11 +231,18 @@ const closedProfile: ProfilePanel = {
 }
 
 const closedCharacterPicker: CharacterPicker = {
+  section: 'Body',
+  sections: RadioGroup.init({ id: 'look-sections' }),
   body: RadioGroup.init({ id: 'look-body' }),
   hairStyle: RadioGroup.init({ id: 'look-hair-style' }),
   hairColor: RadioGroup.init({ id: 'look-hair-color' }),
   skinTone: RadioGroup.init({ id: 'look-skin-tone' }),
   shirtColor: RadioGroup.init({ id: 'look-shirt-color' }),
+  outfit: RadioGroup.init({ id: 'look-outfit' }),
+  print: RadioGroup.init({ id: 'look-print' }),
+  facialHair: RadioGroup.init({ id: 'look-facial-hair' }),
+  makeup: RadioGroup.init({ id: 'look-makeup' }),
+  extra: RadioGroup.init({ id: 'look-extra' }),
 }
 
 const PANEL_DIALOG_ID = 'menu-panel'

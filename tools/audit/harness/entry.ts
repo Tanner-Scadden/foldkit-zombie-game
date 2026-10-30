@@ -11,8 +11,13 @@ import { modifyFields } from 'foldkit/struct'
 
 import {
   BODIES,
+  EXTRAS,
+  FACIAL_HAIRS,
   HAIR_COLORS,
   HAIR_STYLES,
+  MAKEUPS,
+  OUTFITS,
+  PRINTS,
   SHIRT_COLORS,
   SKIN_TONES,
   playerSprites,
@@ -51,6 +56,7 @@ import {
   Lesson,
   TrapHint,
   type Appearance,
+  defaultAppearance,
   type Decal,
   type DecalKind,
   type PickupKind,
@@ -1255,7 +1261,18 @@ const scenarioModelOf = (): Model => {
     })
   const look = config.look
   if (look !== undefined) {
-    const [body, hairStyle, hairColor, skinTone, shirtColor] = look
+    const [
+      body,
+      hairStyle,
+      hairColor,
+      skinTone,
+      shirtColor,
+      outfit,
+      print,
+      facialHair,
+      makeup,
+      extra,
+    ] = look
     model = modifyFields(model, {
       appearance: a => ({
         body: body || a.body,
@@ -1263,6 +1280,11 @@ const scenarioModelOf = (): Model => {
         hairColor: hairColor || a.hairColor,
         skinTone: skinTone || a.skinTone,
         shirtColor: shirtColor || a.shirtColor,
+        outfit: outfit || a.outfit,
+        print: print || a.print,
+        facialHair: facialHair || a.facialHair,
+        makeup: makeup || a.makeup,
+        extra: extra || a.extra,
       }),
     })
   }
@@ -1451,7 +1473,18 @@ const sceneOf = (model: Model): HarnessReturn => {
                 : 'Look',
         )(modifyFields(seeded, { screenMs: () => 99999 }))
       : { model: seeded }
-  return config.tick === undefined ? opened : advance(opened, config.tick)
+  const lookSection = config.looksection
+  const sectioned: HarnessReturn =
+    lookSection === undefined
+      ? opened
+      : {
+          ...opened,
+          model: modifyFields(opened.model, {
+            character: picker =>
+              modifyFields(picker, { section: () => lookSection }),
+          }),
+        }
+  return config.tick === undefined ? sectioned : advance(sectioned, config.tick)
 }
 
 // THE READY SIGNAL
@@ -1616,9 +1649,22 @@ const harnessInit: Runtime.ApplicationInit<
 
 const CELL_W = 12
 const CELL_H = 16
+const SHEET_W = 168
+const SHEET_H = 282
+
+// NOTE: the look sheet: one row per part, each option of it on the classic
+// look (the bodies twice, in a tee and in a dress; the prints, every pride
+// flag among them, on every body), then walk frames, both facings, and the
+// hit flash for four mixed looks.
 const lookSheetShapes = (): Array<Canvas.Shape> => {
   const shapes: Array<Canvas.Shape> = [
-    Canvas.Rect({ x: 0, y: 0, width: 400, height: 220, fill: FLOOR_COLOR }),
+    Canvas.Rect({
+      x: 0,
+      y: 0,
+      width: SHEET_W,
+      height: SHEET_H,
+      fill: FLOOR_COLOR,
+    }),
   ]
   const draw = (
     appearance: Appearance,
@@ -1648,63 +1694,86 @@ const lookSheetShapes = (): Array<Canvas.Shape> => {
       }),
     )
   }
-  BODIES.forEach((body, b) =>
-    HAIR_STYLES.forEach((hairStyle, st) => {
-      const row = b * HAIR_STYLES.length + st
-      SKIN_TONES.forEach((skinTone, sk) =>
-        HAIR_COLORS.forEach((hairColor, hc) => {
-          const col = sk * HAIR_COLORS.length + hc
-          draw(
-            {
-              body,
-              hairStyle,
-              hairColor,
-              skinTone,
-              shirtColor: SHIRT_COLORS[col % SHIRT_COLORS.length]!,
-            },
-            col * CELL_W + 8,
-            row * CELL_H + 15,
-            'idle',
-            0,
-            'Right',
-            'Normal',
-          )
-        }),
-      )
-    }),
+  const base = defaultAppearance
+  const rows: ReadonlyArray<ReadonlyArray<Appearance>> = [
+    BODIES.map(body => ({ ...base, body })),
+    BODIES.map(body => ({ ...base, body, outfit: 'Dress', hairStyle: 'Long' })),
+    HAIR_STYLES.map(hairStyle => ({ ...base, hairStyle })),
+    HAIR_COLORS.map(hairColor => ({ ...base, hairColor, hairStyle: 'Long' })),
+    SKIN_TONES.map(skinTone => ({ ...base, skinTone })),
+    SHIRT_COLORS.map(shirtColor => ({ ...base, shirtColor })),
+    OUTFITS.map(outfit => ({ ...base, outfit })),
+    PRINTS.map(print => ({ ...base, print })),
+    PRINTS.map((print, i) => ({
+      ...base,
+      print,
+      body: BODIES[i % BODIES.length]!,
+      outfit: OUTFITS[(i * 3) % OUTFITS.length]!,
+      skinTone: SKIN_TONES[(i * 5) % SKIN_TONES.length]!,
+    })),
+    FACIAL_HAIRS.map(facialHair => ({ ...base, facialHair })),
+    MAKEUPS.map(makeup => ({ ...base, makeup, skinTone: 'Deep' })),
+    EXTRAS.map(extra => ({ ...base, extra })),
+  ]
+  rows.forEach((row, r) =>
+    row.forEach((appearance, c) =>
+      draw(
+        appearance,
+        c * CELL_W + 8,
+        r * CELL_H + 15,
+        'idle',
+        0,
+        'Right',
+        'Normal',
+      ),
+    ),
   )
   const samples: Array<Appearance> = [
     {
-      body: 'Male',
-      hairStyle: 'Crop',
-      hairColor: 'Brown',
-      skinTone: 'Light',
-      shirtColor: 'Blue',
+      ...base,
+      body: 'Slim',
+      hairStyle: 'Undercut',
+      hairColor: 'Blue',
+      skinTone: 'Bronze',
+      outfit: 'Crop',
+      print: 'Trans',
+      makeup: 'Glam',
+      extra: 'Earrings',
     },
     {
-      body: 'Female',
-      hairStyle: 'Long',
-      hairColor: 'Black',
-      skinTone: 'Deep',
-      shirtColor: 'Yellow',
+      ...base,
+      body: 'Broad',
+      hairStyle: 'Buns',
+      hairColor: 'Pastel',
+      skinTone: 'Umber',
+      outfit: 'Kilt',
+      facialHair: 'Beard',
+      extra: 'Glasses',
     },
     {
-      body: 'Female',
-      hairStyle: 'Ponytail',
-      hairColor: 'Ginger',
+      ...base,
+      body: 'Round',
+      hairStyle: 'Mohawk',
+      hairColor: 'Rainbow',
       skinTone: 'Fair',
-      shirtColor: 'Teal',
+      outfit: 'Suit',
+      shirtColor: 'Lilac',
+      print: 'Progress',
+      facialHair: 'Mustache',
     },
     {
-      body: 'Male',
-      hairStyle: 'Curls',
-      hairColor: 'Black',
-      skinTone: 'Brown',
-      shirtColor: 'Red',
+      ...base,
+      body: 'Medium',
+      hairStyle: 'Bald',
+      skinTone: 'Deep',
+      outfit: 'Skirt',
+      shirtColor: 'Orange',
+      makeup: 'Lipstick',
+      extra: 'Shades',
     },
   ]
   samples.forEach((appearance, i) => {
-    const y = 8 * CELL_H + 18 + i * CELL_H
+    const y = rows.length * CELL_H + 18 + i * CELL_H
     ;[0, 1, 2, 3].forEach(f =>
       draw(appearance, 8 + f * CELL_W, y, 'walk', f, 'Right', 'Normal'),
     )
@@ -1725,8 +1794,8 @@ const lookSheetView = (h: any) => ({
     [
       Canvas.view(
         {
-          width: 400,
-          height: 220,
+          width: SHEET_W,
+          height: SHEET_H,
           shapes: lookSheetShapes(),
           className: 'look-sheet',
         },

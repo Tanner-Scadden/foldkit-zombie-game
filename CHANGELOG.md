@@ -5,10 +5,10 @@ One entry per day, newest first. Only things a player would notice, a handful of
 ## October 30, 2026: Bring your friends
 
 - 🧟‍♂️🧟‍♀️ CO-OP is here: up to 4 of you in one manor. Share a room code, or hit QUICK PLAY and we'll find you a crew. Revive your buddies before they bleed out!
-- ▶️ PLAY is one big arrow now, every menu's close X slimmed down (still easy to tap), and a CODE card in the MORE hand shows off the game's source.
-- 👕 Your Profile fits small phones held upright: every tab stays on screen, every shirt color is in reach, and your pick never gets its edge clipped.
+- ▶️ PLAY is one big arrow now, every menu's close X slimmed down (still easy to tap), your Profile fits small phones held upright, and a CODE card in the MORE hand shows off the game's source.
 - 🔫 Upgraded guns keep their names now: Beefy, then DELUXE, then 3000. The SMG is the Chatterbox.
-- 🧹 Playtest fixes: Rattles looks like himself in his shop, key hints read the right way round, sprites stay crisp, skin colors fit one row, we tell you when a browser extension eats your keys, and big hordes run smoother on slower phones.
+- 🧹 Playtest fixes: Rattles looks like himself in his shop, key hints read the right way round, sprites stay crisp, color pickers line up neatly, we tell you when a browser extension eats your keys, and big hordes run smoother on slower phones.
+- 🏳️‍🌈 Be whoever you want: four body shapes, mohawks, buns, beards, makeup, shades, kilts, dresses, rainbow hair, more skin tones, and pride flag shirts for everyone.
 
 ## October 29, 2026: How tough are you?
 

@@ -1,4 +1,4 @@
-import { Array, Option, pipe } from 'effect'
+import { Array, Option, Schema, pipe } from 'effect'
 import type { Canvas } from 'foldkit'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
@@ -8,14 +8,20 @@ import { Dialog, RadioGroup } from '@foldkit/ui'
 
 import {
   BODIES,
+  EXTRAS,
+  FACIAL_HAIRS,
   HAIR_COLORS,
   HAIR_STYLES,
+  MAKEUPS,
+  OUTFITS,
   PLAYER_WIDTH,
+  PRINTS,
   SHIRT_COLORS,
   SHIRT_SHADES,
   SKIN_SHADES,
   SKIN_TONES,
   appearanceKey,
+  playerPalette,
   playerPixels,
   playerSprites,
   randomAppearance,
@@ -25,7 +31,7 @@ import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
-  type Appearance,
+  Appearance,
   type LookPart,
   type Model,
   Phase,
@@ -38,22 +44,13 @@ import { asVeteran } from './veteran'
 
 const onTitle: Model = asVeteran(initialModel)
 
-const PART_MESSAGES: Readonly<
-  Record<LookPart, (message: RadioGroup.Message) => Character.Message>
-> = {
-  Body: message => Character.Message.GotBodyMessage({ message }),
-  HairStyle: message => Character.Message.GotHairStyleMessage({ message }),
-  HairColor: message => Character.Message.GotHairColorMessage({ message }),
-  SkinTone: message => Character.Message.GotSkinToneMessage({ message }),
-  ShirtColor: message => Character.Message.GotShirtColorMessage({ message }),
-}
-
 const choose = (part: LookPart, index: number, value: string) =>
   message(
     Message.GotCharacterMessage({
-      message: PART_MESSAGES[part](
-        RadioGroup.Message.SelectedOption({ index, value }),
-      ),
+      message: Character.Message.GotPartMessage({
+        partId: part,
+        message: RadioGroup.Message.SelectedOption({ index, value }),
+      }),
     }),
   )
 
@@ -71,11 +68,16 @@ const rollDice = () =>
   )
 
 const PICKED: Appearance = {
-  body: 'Female',
-  hairStyle: 'Curls',
-  hairColor: 'Black',
+  body: 'Round',
+  hairStyle: 'Mohawk',
+  hairColor: 'Rainbow',
   skinTone: 'Deep',
   shirtColor: 'Teal',
+  outfit: 'Kilt',
+  print: 'Trans',
+  facialHair: 'Goatee',
+  makeup: 'Glam',
+  extra: 'Earrings',
 }
 
 const withLook = (base: Model, appearance: Appearance): Model =>
@@ -94,30 +96,78 @@ const fills = (shapes: ReadonlyArray<Canvas.Shape>): ReadonlyArray<string> =>
     }
   })
 
-const everyLook: ReadonlyArray<Appearance> = Array.flatMap(BODIES, body =>
-  Array.flatMap(HAIR_STYLES, hairStyle =>
-    Array.flatMap(HAIR_COLORS, hairColor =>
-      Array.flatMap(SKIN_TONES, skinTone =>
-        Array.map(SHIRT_COLORS, shirtColor => ({
-          body,
-          hairStyle,
-          hairColor,
-          skinTone,
-          shirtColor,
-        })),
+// NOTE: every option of every part as a list of looks: the classic look
+// with that one option in it.
+type PartOptions = Readonly<{
+  part: LookPart
+  looks: ReadonlyArray<Appearance>
+}>
+
+const optionsOfEveryPart = (base: Appearance): ReadonlyArray<PartOptions> => [
+  { part: 'Body', looks: Array.map(BODIES, body => ({ ...base, body })) },
+  {
+    part: 'HairStyle',
+    looks: Array.map(HAIR_STYLES, hairStyle => ({ ...base, hairStyle })),
+  },
+  {
+    part: 'HairColor',
+    looks: Array.map(HAIR_COLORS, hairColor => ({ ...base, hairColor })),
+  },
+  {
+    part: 'SkinTone',
+    looks: Array.map(SKIN_TONES, skinTone => ({ ...base, skinTone })),
+  },
+  {
+    part: 'ShirtColor',
+    looks: Array.map(SHIRT_COLORS, shirtColor => ({ ...base, shirtColor })),
+  },
+  {
+    part: 'Outfit',
+    looks: Array.map(OUTFITS, outfit => ({ ...base, outfit })),
+  },
+  { part: 'Print', looks: Array.map(PRINTS, print => ({ ...base, print })) },
+  {
+    part: 'FacialHair',
+    looks: Array.map(FACIAL_HAIRS, facialHair => ({ ...base, facialHair })),
+  },
+  {
+    part: 'Makeup',
+    looks: Array.map(MAKEUPS, makeup => ({ ...base, makeup })),
+  },
+  { part: 'Extra', looks: Array.map(EXTRAS, extra => ({ ...base, extra })) },
+]
+
+// NOTE: a frame as the colors it paints, so two looks compare by what the
+// player sees, not by the symbols that draw it.
+const painted = (appearance: Appearance): string => {
+  const palette = playerPalette(appearance)
+  const { walk, idle } = playerPixels(appearance)
+  return JSON.stringify(
+    Array.map([...walk, ...idle], rows =>
+      Array.map(rows, row =>
+        Array.map([...row], symbol =>
+          symbol === '.' ? '.' : (palette[symbol] ?? `missing ${symbol}`),
+        ).join(' '),
       ),
     ),
-  ),
-)
+  )
+}
+
+const isAppearance = Schema.is(Appearance)
 
 describe('Character', () => {
   test('starts as the classic look', () => {
     expect(initialModel.appearance).toEqual({
-      body: 'Male',
+      body: 'Medium',
       hairStyle: 'Crop',
       hairColor: 'Brown',
       skinTone: 'Light',
       shirtColor: 'Blue',
+      outfit: 'Tee',
+      print: 'Plain',
+      facialHair: 'None',
+      makeup: 'None',
+      extra: 'None',
     })
   })
 
@@ -125,20 +175,72 @@ describe('Character', () => {
     story(
       update,
       given(onTitle),
-      choose('Body', 0, 'Female'),
+      choose('Body', 3, 'Round'),
       resolveFocusOption(),
-      choose('HairStyle', 3, 'Curls'),
+      choose('HairStyle', 6, 'Mohawk'),
       resolveFocusOption(),
-      choose('HairColor', 0, 'Black'),
+      choose('HairColor', 9, 'Rainbow'),
       resolveFocusOption(),
-      choose('SkinTone', 5, 'Deep'),
+      choose('SkinTone', 7, 'Deep'),
       resolveFocusOption(),
       choose('ShirtColor', 3, 'Teal'),
+      resolveFocusOption(),
+      choose('Outfit', 9, 'Kilt'),
+      resolveFocusOption(),
+      choose('Print', 5, 'Trans'),
+      resolveFocusOption(),
+      choose('FacialHair', 3, 'Goatee'),
+      resolveFocusOption(),
+      choose('Makeup', 3, 'Glam'),
+      resolveFocusOption(),
+      choose('Extra', 1, 'Earrings'),
       resolveFocusOption(),
       model(({ appearance }) => {
         expect(appearance).toEqual(PICKED)
       }),
     )
+  })
+
+  test('a word that is not one of the options leaves the look alone', () => {
+    story(
+      update,
+      given(onTitle),
+      choose('Body', 0, 'Female'),
+      resolveFocusOption(),
+      choose('Print', 0, 'Plaid'),
+      resolveFocusOption(),
+      model(({ appearance }) => {
+        expect(appearance).toEqual(defaultAppearance)
+      }),
+    )
+  })
+
+  test('the little tabs switch which parts show, and keep the look', () => {
+    story(
+      update,
+      given(onTitle),
+      model(({ character }) => {
+        expect(character.section).toBe('Body')
+      }),
+      message(
+        Message.GotCharacterMessage({
+          message: Character.Message.GotSectionMessage({
+            message: RadioGroup.Message.SelectedOption({
+              index: 4,
+              value: 'Print',
+            }),
+          }),
+        }),
+      ),
+      resolveFocusOption(),
+      model(({ character, appearance }) => {
+        expect(character.section).toBe('Print')
+        expect(appearance).toEqual(onTitle.appearance)
+      }),
+    )
+    expect(Character.SECTION_PARTS.Print).toEqual(['Print'])
+    const listed = Array.flatten(Object.values(Character.SECTION_PARTS))
+    expect(Array.dedupe(listed).length).toBe(10)
   })
 
   test('C opens the Profile on Look on the title and the end screens, never mid-run', () => {
@@ -227,6 +329,30 @@ describe('Character', () => {
     })
   })
 
+  test('the dice draws only real looks, each part from its full list', () => {
+    const rolls = pipe(
+      Array.range(0, 1999),
+      Array.map(
+        seed => randomAppearance(seed * 7919 + 1, defaultAppearance)[1],
+      ),
+    )
+    Array.forEach(rolls, rolled => {
+      expect(isAppearance(rolled)).toBe(true)
+    })
+    const seen = (read: (look: Appearance) => string) =>
+      Array.dedupe(Array.map(rolls, read)).length
+    expect(seen(look => look.body)).toBe(BODIES.length)
+    expect(seen(look => look.hairStyle)).toBe(HAIR_STYLES.length)
+    expect(seen(look => look.hairColor)).toBe(HAIR_COLORS.length)
+    expect(seen(look => look.skinTone)).toBe(SKIN_TONES.length)
+    expect(seen(look => look.shirtColor)).toBe(SHIRT_COLORS.length)
+    expect(seen(look => look.outfit)).toBe(OUTFITS.length)
+    expect(seen(look => look.print)).toBe(PRINTS.length)
+    expect(seen(look => look.facialHair)).toBe(FACIAL_HAIRS.length)
+    expect(seen(look => look.makeup)).toBe(MAKEUPS.length)
+    expect(seen(look => look.extra)).toBe(EXTRAS.length)
+  })
+
   test('the look lasts through new runs, endless, keep going, and restarts', () => {
     story(
       update,
@@ -272,8 +398,9 @@ describe('Character', () => {
   })
 
   test('the player sprite wears the chosen skin and shirt', () => {
+    const plainPicked: Appearance = { ...PICKED, print: 'Plain' }
     const classic = fills(playerShapes(onTitle))
-    const picked = fills(playerShapes(withLook(onTitle, PICKED)))
+    const picked = fills(playerShapes(withLook(onTitle, plainPicked)))
     expect(classic).toContain(SKIN_SHADES.Light.skin)
     expect(classic).toContain(SHIRT_SHADES.Blue.base)
     expect(picked).toContain(SKIN_SHADES.Deep.skin)
@@ -282,37 +409,81 @@ describe('Character', () => {
     expect(picked).not.toContain(SHIRT_SHADES.Blue.base)
   })
 
-  test('the two bodies and every hair style draw differently', () => {
-    const pixelsOf = (appearance: Appearance) =>
-      JSON.stringify(playerPixels(appearance))
-    expect(pixelsOf({ ...defaultAppearance, body: 'Female' })).not.toBe(
-      pixelsOf({ ...defaultAppearance, body: 'Male' }),
+  test('each pride print wears the real colors of its flag', () => {
+    const colorsOf = (print: Appearance['print']) =>
+      fills(playerShapes(withLook(onTitle, { ...defaultAppearance, print })))
+    expect(colorsOf('Trans')).toEqual(
+      expect.arrayContaining(['#5bcefa', '#f5a9b8', '#ffffff']),
     )
-    const styles = pipe(
-      HAIR_STYLES,
-      Array.map(hairStyle => pixelsOf({ ...defaultAppearance, hairStyle })),
-      Array.dedupe,
+    expect(colorsOf('Bi')).toEqual(
+      expect.arrayContaining(['#d60270', '#9b4f96', '#0038a8']),
     )
-    expect(styles.length).toBe(HAIR_STYLES.length)
+    expect(colorsOf('Pan')).toEqual(
+      expect.arrayContaining(['#ff218c', '#ffd800', '#21b1ff']),
+    )
+    expect(colorsOf('Progress')).toEqual(
+      expect.arrayContaining([
+        '#e40303',
+        '#732982',
+        '#613915',
+        '#000000',
+        '#5bcefa',
+        '#f5a9b8',
+      ]),
+    )
+    expect(colorsOf('Intersex')).toEqual(
+      expect.arrayContaining(['#ffd800', '#7902aa']),
+    )
   })
 
-  test('every look keeps the size and walk cycle of the classic one', () => {
-    const shape = (appearance: Appearance) =>
+  // NOTE: decided with the owner on 2026-10-30: nothing is tied to a body.
+  // Every option of every part, on every body, in a tee and in the outfit
+  // with the most going on, draws whole: the same frame sizes as the
+  // classic look, every pixel a color, and each option of a part looking
+  // different from the others.
+  describe.each(BODIES)('on a %s body', body => {
+    const bases: ReadonlyArray<Appearance> = [
+      { ...defaultAppearance, body },
+      { ...defaultAppearance, body, outfit: 'Dress', hairStyle: 'Long' },
+    ]
+    const frameSizes = (appearance: Appearance) =>
       pipe(playerPixels(appearance), ({ walk, idle }) =>
         Array.map([...walk, ...idle], rows => ({
           height: rows.length,
-          widths: pipe(
-            rows,
-            Array.map(row => row.length),
-            Array.dedupe,
-          ),
+          widths: Array.dedupe(Array.map(rows, row => row.length)),
         })),
       )
-    const classic = shape(defaultAppearance)
-    Array.forEach(everyLook, appearance => {
-      expect(shape(appearance)).toEqual(classic)
-    })
-    Array.forEach(classic, ({ widths }) => {
+    const classicSizes = frameSizes(defaultAppearance)
+
+    test.each(optionsOfEveryPart({ ...defaultAppearance, body }))(
+      'every $part option draws whole and its own way',
+      ({ part, looks }) => {
+        Array.forEach(bases, base => {
+          const partLooks = Array.map(looks, look => ({
+            ...base,
+            ...pickPart(part, look),
+          }))
+          Array.forEach(partLooks, look => {
+            expect(frameSizes(look)).toEqual(classicSizes)
+            expect(painted(look)).not.toContain('missing')
+          })
+          if (base.outfit === 'Tee') {
+            expect(Array.dedupe(Array.map(partLooks, painted)).length).toBe(
+              partLooks.length,
+            )
+          }
+        })
+      },
+    )
+  })
+
+  test('every body draws its own shape', () => {
+    expect(
+      Array.dedupe(
+        Array.map(BODIES, body => painted({ ...defaultAppearance, body })),
+      ).length,
+    ).toBe(BODIES.length)
+    Array.forEach(classicFrameWidths(), widths => {
       expect(widths).toEqual([PLAYER_WIDTH])
     })
   })
@@ -331,3 +502,32 @@ describe('Character', () => {
     ).toBe(false)
   })
 })
+
+const classicFrameWidths = () =>
+  pipe(playerPixels(defaultAppearance), ({ walk, idle }) =>
+    Array.map([...walk, ...idle], rows =>
+      Array.dedupe(Array.map(rows, row => row.length)),
+    ),
+  )
+
+// NOTE: the one field a part names, taken from a look.
+const pickPart = (part: LookPart, look: Appearance): Partial<Appearance> =>
+  part === 'Body'
+    ? { body: look.body }
+    : part === 'HairStyle'
+      ? { hairStyle: look.hairStyle }
+      : part === 'HairColor'
+        ? { hairColor: look.hairColor }
+        : part === 'SkinTone'
+          ? { skinTone: look.skinTone }
+          : part === 'ShirtColor'
+            ? { shirtColor: look.shirtColor }
+            : part === 'Outfit'
+              ? { outfit: look.outfit }
+              : part === 'Print'
+                ? { print: look.print }
+                : part === 'FacialHair'
+                  ? { facialHair: look.facialHair }
+                  : part === 'Makeup'
+                    ? { makeup: look.makeup }
+                    : { extra: look.extra }

@@ -180,7 +180,14 @@ const closeLook = async (page: Page) => {
 
 const pickShirt = async (page: Page, color: string) => {
   await look(page)
-  await page.getByRole('radio', { name: color }).click()
+  await page
+    .getByRole('radiogroup', { name: 'Parts' })
+    .getByRole('radio', { name: 'Outfit' })
+    .click()
+  await page
+    .getByRole('radiogroup', { name: 'Outfit color' })
+    .getByRole('radio', { name: color })
+    .click()
   await wait(300)
   await closeLook(page)
 }
@@ -248,7 +255,7 @@ check(
 
 await pickShirt(a.page, 'Purple')
 check(
-  (await look(a.page)).includes('purple shirt'),
+  (await look(a.page)).includes('purple vee'),
   'device A changes its shirt to purple',
 )
 await closeLook(a.page)
@@ -295,7 +302,7 @@ check(
   `device B shows A's ${STARTING_KILLS} zombies splatted`,
 )
 check(
-  (await look(b.page)).includes('purple shirt'),
+  (await look(b.page)).includes('purple vee'),
   "device B shows A's purple shirt",
 )
 await closeLook(b.page)

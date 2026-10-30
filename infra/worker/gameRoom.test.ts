@@ -167,16 +167,45 @@ describe('the room host', () => {
     expect(full).toEqual(Result.fail({ _tag: 'Full' }))
     const lobby = Option.getOrThrow(await Effect.runPromise(host.lobby))
     expect(lobby.members.map(member => member.look)).toEqual([
-      'Male.Crop.Brown.Light.Blue',
+      'Medium.Crop.Brown.Light.Blue.AAAAA',
       '',
       '',
       '',
     ])
-    expect(lookOfRequest('Female.Ponytail.Pink.Tan.Teal')).toBe(
-      'Female.Ponytail.Pink.Tan.Teal',
+  })
+
+  // NOTE: the look a player sends is kept only when it is one of the game's
+  // looks (src/playerData.ts): every part of the look built from parts, or
+  // an old five word look from a build before it, read as its closest new
+  // look. Anything else seats the player with none.
+  test('a sent look is kept when it is a real look, and dropped when it is junk', () => {
+    expect(lookOfRequest('Slim.Mohawk.Rainbow.Deep.Lilac.JFEDE')).toBe(
+      'Slim.Mohawk.Rainbow.Deep.Lilac.JFEDE',
     )
-    expect(lookOfRequest('Female.Ponytail.Pink.Tan.Plaid')).toBe('')
-    expect(lookOfRequest('Robot')).toBe('')
+    expect(lookOfRequest('Round.Bald.Pastel.Umber.Black.GMBBC')).toBe(
+      'Round.Bald.Pastel.Umber.Black.GMBBC',
+    )
+    expect(lookOfRequest('Female.Ponytail.Pink.Tan.Teal')).toBe(
+      'Medium.Ponytail.Pink.Tan.Teal.BAADA',
+    )
+    expect(lookOfRequest('Male.Curls.Black.Deep.Red')).toBe(
+      'Medium.Curls.Black.Umber.Red.AAAAA',
+    )
+    const junks = [
+      'Female.Ponytail.Pink.Tan.Plaid',
+      'Robot',
+      '',
+      'Slim.Mohawk.Rainbow.Deep.Lilac',
+      'Slim.Mohawk.Rainbow.Deep.Lilac.JFEDZ',
+      'Slim.Mohawk.Rainbow.Deep.Lilac.KAAAA',
+      'Slim.Mohawk.Rainbow.Deep.Lilac.AAAA',
+      'Slim.Mohawk.Rainbow.Deep.Lilac.AAAAAA',
+      'Slim.Mohawk.Rainbow.Deep.Lilac.aaaaa',
+      'Female.Mohawk.Rainbow.Deep.Lilac.AAAAA',
+      'Slim.Mohawk.Rainbow.Deep.Lilac.AAAAA.AAAAA',
+      'Medium.Ponytail.Pink.Tan.Teal',
+    ]
+    expect(junks.map(lookOfRequest)).toEqual(junks.map(() => ''))
   })
 
   test('joining a room that does not exist says so', async () => {

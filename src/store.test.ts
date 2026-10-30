@@ -384,6 +384,37 @@ describe('the save in the player scope', () => {
         expect(yield* first.load).toEqual(Option.none())
       }),
     ))
+
+  // NOTE: rows written before 2026-10-30 keep the old look until it next
+  // changes, here and in the server's copy of the scope.
+  test('a row with a look from before the parts reads as its closest new look', () =>
+    run(
+      Effect.gen(function* () {
+        const hub = yield* makeHub()
+        const fake = yield* makeLegacy(Option.some(legacySave))
+        const first = yield* openOn(hub, fake.legacy)
+        yield* first.load
+        const sql = yield* sqlOn(hub)
+        yield* pipe(
+          sql`UPDATE player SET appearance = '{"body":"Female","hairStyle":"Long","hairColor":"Black","skinTone":"Deep","shirtColor":"Pink"}'`,
+          Effect.orDie,
+        )
+        expect(Option.map(yield* first.load, save => save.appearance)).toEqual(
+          Option.some({
+            body: 'Medium',
+            hairStyle: 'Long',
+            hairColor: 'Black',
+            skinTone: 'Umber',
+            shirtColor: 'Pink',
+            outfit: 'Vee',
+            print: 'Plain',
+            facialHair: 'None',
+            makeup: 'Glam',
+            extra: 'None',
+          }),
+        )
+      }),
+    ))
 })
 
 describe('a write the database refuses', () => {
@@ -863,11 +894,16 @@ const migratedLiveSave: PlayerSave = {
     cursor: 'Bold',
   },
   appearance: {
-    body: 'Male',
+    body: 'Medium',
     hairStyle: 'Curls',
     hairColor: 'Blonde',
     skinTone: 'Tan',
     shirtColor: 'Red',
+    outfit: 'Tee',
+    print: 'Plain',
+    facialHair: 'None',
+    makeup: 'None',
+    extra: 'None',
   },
   difficulty: { chosen: 'Hard', card: 'Seen', nightmare: 'Unlocked' },
   bests: {
