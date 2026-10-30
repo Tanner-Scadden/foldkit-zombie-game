@@ -1,10 +1,11 @@
 // NOTE: first, so the prebuilt sprite atlas is in place before any module
 // builds a sprite (see src/spriteAtlasBoot.ts).
 import './spriteAtlasBoot'
-import { Effect } from 'effect'
+import { Effect, Layer } from 'effect'
 import { Runtime } from 'foldkit'
 
 import { managedResources } from './commands'
+import { layer as CoopNetLayer } from './coop/net'
 import { init, update } from './main'
 import { Message } from './message'
 import { Model } from './model'
@@ -25,12 +26,13 @@ const application = Runtime.makeApplication({
   view,
   subscriptions,
   managedResources,
-  resources: PlayerStoreLayer,
+  resources: Layer.provideMerge(CoopNetLayer, PlayerStoreLayer),
   container: document.getElementById('root'),
   devTools: {
     Message,
     excludeFromHistory: [
       'TickedFrame',
+      'GotCoopMessage',
       'MovedPointer',
       'MovedMouse',
       'CompletedPlaySound',

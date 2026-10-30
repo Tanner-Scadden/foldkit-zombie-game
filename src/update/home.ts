@@ -6,6 +6,7 @@ import { Dialog } from '@foldkit/ui'
 
 import { NEWS_DAYS } from '../changelog'
 import { FocusEndMenuButton, FocusHandCard, FocusHomeButton } from '../commands'
+import { Screen as CoopScreen } from '../coop/model'
 import { dialogFolds } from '../dialogs'
 import {
   chooseDifficulty,
@@ -144,6 +145,7 @@ export const menuFromKey: (code: string) => UpdateStep = code => stepModel =>
 
 export const canMoveHomeFocus = (model: Model): boolean =>
   isOnHome(model.phase) &&
+  CoopScreen.isAnyOf(['Closed'])(model.coop.screen) &&
   !model.panelDialog.isOpen &&
   !model.profile.dialog.isOpen &&
   !model.handDialog.isOpen

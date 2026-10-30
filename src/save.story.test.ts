@@ -51,6 +51,7 @@ import {
   writeLegacySave,
 } from './save'
 import { SURFACE, showDialog, tick } from './testing'
+import { ReadRoomLink } from './update/coop'
 import { ZOMBIE_KIND_ORDER } from './zombies'
 
 const learnedSave: PlayerSave = {
@@ -143,6 +144,10 @@ const finishSplash = [
     Message.CompletedShowLoadProgress(),
   ),
   Command.resolve(HideSplash(), Message.CompletedHideSplash()),
+  Command.resolve(
+    ReadRoomLink,
+    Message.CompletedReadRoomLink({ maybeCode: Option.none() }),
+  ),
 ]
 
 const read: Model = modifyFields(loading, {

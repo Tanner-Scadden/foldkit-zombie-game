@@ -41,6 +41,7 @@ import {
 } from '@munch/sync-engine'
 
 import { API_ORIGIN } from './apiOrigin'
+import { type RoomAccess, makeRoomAccess } from './coop/roomReplica'
 import {
   ChangedAppearance,
   ChangedDifficulty,
@@ -208,6 +209,7 @@ export interface PlayerDatabase {
   readonly redeemLinkCode: (
     code: string,
   ) => Effect.Effect<void, PlayerDatabaseError>
+  readonly maybeRoomAccess: Option.Option<RoomAccess>
 }
 
 class PlayerDatabaseError extends Data.TaggedError('PlayerDatabaseError')<{
@@ -654,6 +656,22 @@ export const makePlayerDatabase = (
         })
       })
 
+    const maybeRoomAccess: Option.Option<RoomAccess> = yield* Option.match(
+      maybeSetup,
+      {
+        onNone: () => Effect.succeedNone,
+        onSome: setup =>
+          Effect.map(
+            makeRoomAccess({
+              database,
+              identity,
+              transports: setup.transports,
+            }),
+            Option.some,
+          ),
+      },
+    )
+
     const scopeChanges: Stream.Stream<StoreEvent> = Stream.map(
       replica.status,
       next => StoreEvent.ScopeStatus({ status: scopeStatusOf(next) }),
@@ -677,6 +695,7 @@ export const makePlayerDatabase = (
         response => response.code,
       ),
       redeemLinkCode,
+      maybeRoomAccess,
     }
   })
 

@@ -10,7 +10,10 @@ export default defineConfig({
   root: __dirname,
   publicDir: `${GAME}/public`,
   plugins: [tailwindcss(), foldkit()],
-  define: { __BUILD_ID__: JSON.stringify('dev') },
+  define: {
+    __BUILD_ID__: JSON.stringify('dev'),
+    'import.meta.env.VITE_COOP': JSON.stringify('On'),
+  },
   resolve: { alias: { '@game': `${GAME}/src` } },
   server: { fs: { allow: [GAME, __dirname] } },
   optimizeDeps: {

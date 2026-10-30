@@ -32,6 +32,7 @@ import {
 import { scoreOf } from './stats'
 import { maybeKeyDownMessage } from './subscriptions'
 import { scoring, showDialog } from './testing'
+import { ReadRoomLink } from './update/coop'
 import { asVeteran } from './veteran'
 import { FINAL_WAVE } from './waves'
 import { pause } from './waves'
@@ -324,6 +325,10 @@ describe('the loading splash', () => {
       ),
       resolveProgress(5),
       Command.resolve(HideSplash(), Message.CompletedHideSplash()),
+      Command.resolve(
+        ReadRoomLink,
+        Message.CompletedReadRoomLink({ maybeCode: Option.none() }),
+      ),
       model(({ loading }) => {
         expect(loading).toEqual(Loading.Loaded())
       }),
@@ -347,6 +352,10 @@ describe('the loading splash', () => {
       ),
       resolveProgress(5),
       Command.resolve(HideSplash(), Message.CompletedHideSplash()),
+      Command.resolve(
+        ReadRoomLink,
+        Message.CompletedReadRoomLink({ maybeCode: Option.none() }),
+      ),
     )
   })
 

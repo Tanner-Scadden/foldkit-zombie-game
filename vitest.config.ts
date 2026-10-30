@@ -25,6 +25,7 @@ export default defineConfig({
     // seconds locally and passed 5 seconds on a busy CI runner.
     testTimeout: 30_000,
     setupFiles: ['./src/vitest-setup.ts'],
+    env: { VITE_COOP: 'On' },
     isolate: false,
     server: {
       deps: {

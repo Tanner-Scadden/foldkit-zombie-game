@@ -3,6 +3,8 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Dialog } from '@foldkit/ui'
 
+import { COOP_ICON } from './coop/icons'
+import { IS_COOP_RELEASED } from './coop/release'
 import { dialogShell } from './dialogs'
 import {
   DIFFICULTIES,
@@ -25,6 +27,7 @@ import {
   steppedHandCard,
 } from './home'
 import {
+  AIM_ICON,
   CAMPAIGN_ICON,
   CHARACTER_ICON,
   CLOCK_ICON,
@@ -65,6 +68,7 @@ import {
 import { helpLabel, howToPlayView } from './pauseHelp'
 import { isPortrait } from './screen'
 import { durationLabel } from './stats'
+import { hasFinishedTutorial } from './update/coop'
 import { FINAL_WAVE } from './waves'
 import { whatsNewBodyView, whatsNewText } from './whatsNewView'
 
@@ -232,6 +236,41 @@ const difficultyButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
   )
 }
 
+// NOTE: CO-OP is two heads, pink and teal, by PLAY. Until the tutorial is
+// done it is padlocked, with the aim icon of the tutorial's own lesson.
+const coopButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
+  const isOpen = hasFinishedTutorial(model)
+  return h.button(
+    [
+      ...homeButtonAttributes('Coop', h),
+      h.Class('home-pick home-coop'),
+      h.DataAttribute('lock', isOpen ? 'Open' : 'Locked'),
+      h.AriaLabel(
+        isOpen
+          ? 'Co-op: play with friends'
+          : 'Co-op: finish the tutorial to unlock',
+      ),
+      h.AriaDisabled(!isOpen),
+      h.OnClick(Message.ClickedCoopButton(), { propagation: 'Stop' }),
+    ],
+    [
+      iconView('home-coop-icon', COOP_ICON, h),
+      ...(isOpen
+        ? []
+        : [
+            h.span(
+              [h.Class('home-coop-lock'), h.AriaHidden(true)],
+              [
+                iconView('home-coop-lock-icon', PADLOCK_ICON, h),
+                iconView('home-coop-lock-icon', AIM_ICON, h),
+              ],
+            ),
+          ]),
+      ...keyBadgeView(model, 'Coop', h),
+    ],
+  )
+}
+
 const playClusterView = (model: Model, h: HtmlBuilder<Message>): Html =>
   h.div(
     [h.Class('home-play-cluster'), h.Role('group'), h.AriaLabel('Play')],
@@ -239,7 +278,11 @@ const playClusterView = (model: Model, h: HtmlBuilder<Message>): Html =>
       playButtonView(model, h),
       h.div(
         [h.Class('home-loadout')],
-        [modeButtonView(model, h), difficultyButtonView(model, h)],
+        [
+          modeButtonView(model, h),
+          difficultyButtonView(model, h),
+          IS_COOP_RELEASED ? coopButtonView(model, h) : h.empty,
+        ],
       ),
     ],
   )
@@ -771,6 +814,7 @@ const MENU_KEY_ACTIONS: Readonly<Record<HomeButton, string>> = {
   Play: 'play',
   Mode: 'mode',
   Difficulty: 'difficulty',
+  Coop: 'co-op',
   Manor: 'manor',
   Settings: 'settings',
 }

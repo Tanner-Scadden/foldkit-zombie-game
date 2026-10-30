@@ -85,6 +85,15 @@ import { tallyFrame } from './stats'
 import { PlayerStore } from './store'
 import { foldCharacter } from './update/character'
 import {
+  ReadRoomLink,
+  coopFromKey,
+  foldCoop,
+  isCoopOpen,
+  openCoop,
+  pressCoopKey,
+  releaseCoopKey,
+} from './update/coop'
+import {
   enterExit,
   foldExitDialog,
   leaveExitWithoutDialog,
@@ -484,6 +493,10 @@ const updateGame = (model: Model, message: Message) =>
 
     PressedKey: ({ code }) => {
       const keyed = useDevice(model, 'KeyboardMouse')
+      if (isCoopOpen(keyed)) {
+        return Update.combine(keyed, [unlockAudio, pressCoopKey(code)])
+      }
+
       if (isAtCounter(keyed.shop)) {
         return unlockAudio(
           withInput(toggleAudioFromKey(keyed, code), input =>
@@ -516,6 +529,7 @@ const updateGame = (model: Model, message: Message) =>
       return Update.combine(pressed, [
         unlockAudio,
         profileFromKey(code),
+        coopFromKey(code),
         difficultyCardFromKey(code),
         menuFromKey(code),
         homeFocusFromKey(code),
@@ -527,9 +541,12 @@ const updateGame = (model: Model, message: Message) =>
       ])
     },
 
-    ReleasedKey: ({ code }) => ({
-      model: withInput(model, input => releaseKey(input, code)),
-    }),
+    ReleasedKey: ({ code }) => {
+      const released = withInput(model, input => releaseKey(input, code))
+      return isCoopOpen(released)
+        ? releaseCoopKey(code)(released)
+        : { model: released }
+    },
 
     BlurredWindow: () => pauseWhenAway(model),
 
@@ -874,7 +891,10 @@ const updateGame = (model: Model, message: Message) =>
     CompletedShowLoadProgress: () => ({ model }),
 
     CompletedHideSplash: () =>
-      registerServiceWorkerAfterSplash(model, RUNNING_BUILD),
+      Update.combine(model, [
+        stepModel => registerServiceWorkerAfterSplash(stepModel, RUNNING_BUILD),
+        stepModel => ({ model: stepModel, commands: [ReadRoomLink()] }),
+      ]),
 
     CompletedLoadSave: ({ maybeSave }) => loadSave(model, maybeSave),
 
@@ -1014,6 +1034,14 @@ const updateGame = (model: Model, message: Message) =>
     SteppedHandFocus: ({ card }) => stepHandFocus(model, card),
 
     CompletedFocusHandCard: () => ({ model }),
+
+    ClickedCoopButton: () =>
+      Update.combine(model, [unlockAudio, tapSound, openCoop(Option.none())]),
+
+    GotCoopMessage: ({ message: coopMessage }) => foldCoop(model, coopMessage),
+
+    CompletedReadRoomLink: ({ maybeCode }) =>
+      Option.isSome(maybeCode) ? openCoop(maybeCode)(model) : { model },
   })
 
 export const update = (model: Model, message: Message): UpdateReturn =>

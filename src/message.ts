@@ -5,6 +5,7 @@ import { Dialog, Tabs } from '@foldkit/ui'
 
 import { PlayOutcome, Playback, SoundEffect } from './audio'
 import * as Character from './character'
+import * as Coop from './coop/message'
 import {
   Difficulty,
   FullscreenSetting,
@@ -187,5 +188,8 @@ export const Message = defineMessageUnion({
   GotHandDialogMessage: { message: Dialog.Message },
   SteppedHandFocus: { card: HandCard },
   CompletedFocusHandCard: {},
+  ClickedCoopButton: {},
+  GotCoopMessage: { message: Coop.Message },
+  CompletedReadRoomLink: { maybeCode: Schema.Option(Schema.String) },
 })
 export type Message = typeof Message.Type

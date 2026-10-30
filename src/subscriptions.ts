@@ -1,6 +1,8 @@
 import { Array, Effect, Option, Schema, Stream } from 'effect'
 import { Dom, Subscription } from 'foldkit'
 
+import type { Message as CoopMessage } from './coop/message'
+import { subscriptions as coopSubscriptions } from './coop/subscriptions'
 import { isTrackingPointer } from './input'
 import { Message } from './message'
 import type { Model } from './model'
@@ -188,7 +190,7 @@ const syncMessages: Stream.Stream<Message, never, PlayerStore> = Stream.unwrap(
   ),
 )
 
-export const subscriptions = Subscription.make<Model, Message, PlayerStore>()(
+const gameSubscriptions = Subscription.make<Model, Message, PlayerStore>()(
   entry => ({
     playerSync: Subscription.persistentEntry(syncMessages),
 
@@ -284,4 +286,18 @@ export const subscriptions = Subscription.make<Model, Message, PlayerStore>()(
       },
     ),
   }),
+)
+
+const liftedCoopSubscriptions = Subscription.lift(coopSubscriptions)<
+  Model,
+  Message
+>({
+  read: model => Option.some(model.coop),
+  toParentMessage: (message: CoopMessage) =>
+    Message.GotCoopMessage({ message }),
+})
+
+export const subscriptions = Subscription.aggregate(
+  gameSubscriptions,
+  liftedCoopSubscriptions,
 )
