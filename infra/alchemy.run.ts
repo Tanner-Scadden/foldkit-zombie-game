@@ -117,11 +117,11 @@ const Website = (apiUrl: Output.Output<string | undefined>) =>
       assets: { notFoundHandling: 'none' },
       // NOTE: VITE_ variables are inlined into the game's bundle. This one
       // tells the game where to post run summaries (src/analyticsBeacon.ts).
-      // VITE_COOP shows the CO-OP tile, on preview stages only until co-op
-      // is announced on the Workers Paid plan (MULTIPLAYER.md, decision 8).
+      // VITE_COOP shows the CO-OP tile. It is on for every stage since the
+      // account moved to Workers Paid on 2026-10-30 (MULTIPLAYER.md, decision 8).
       env: {
         VITE_API_ORIGIN: Output.map(apiUrl, url => url ?? ''),
-        VITE_COOP: hasDevPage(stage) ? 'On' : 'Off',
+        VITE_COOP: 'On',
       },
       // NOTE: every input of the game's build. src/changelog.ts reads
       // CHANGELOG.md at build time, patches/ holds the Foldkit patch that

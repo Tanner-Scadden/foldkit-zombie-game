@@ -38,7 +38,7 @@ All on 2026-10-29, by the owner.
 5. **Money: a kill pays the killer, and the wave clear bonus is split evenly** among the players.
 6. **Revives: a downed player bleeds out over 10 seconds.** The rest of the revive rule is a default (see below).
 7. **No world pause in co-op.** Preparation ends when everyone presses READY.
-8. **Switch to the Workers Paid plan before co-op is announced.** The free plan fits about 82 four-player sessions a day at best (see "Cloudflare costs").
+8. **Switch to the Workers Paid plan before co-op is announced.** The free plan fits about 82 four-player sessions a day at best (see "Cloudflare costs"). Done on 2026-10-30: the account is on Workers Paid and co-op is on in production.
 
 ## Decided with the owner on 2026-10-29 (the former defaults)
 
@@ -293,7 +293,7 @@ On the preview, QUICK PLAY made a room of four in 1.5 s and, with three players,
 - **One seam.** `src/coop/seam.ts` names the stand-in world (`coopWorld`), and `src/coop/world.ts` turns input into a `PlayerInput` and draws it with the game's own sprites. The real `stepWorld` replaces both, and `StandIn` in `infra/worker/gameRoom.ts`.
 - **A reload rejoins.** The room's code rides in the address (`?room=CODE`), which is also the share link; a link read after the splash joins (or rejoins) that room.
 - **Display names.** Create, join, and QUICK PLAY send the Profile's saved name (`joinName` from `src/profile.ts`, in `openCoop` in `src/update/coop.ts`); with none picked the room names the seat "Player N". Each player's saved look rides with the join too (see "Looks" below).
-- **Shown on previews only.** `VITE_COOP=On` (set by `infra/alchemy.run.ts` on every stage but production, and by the tests and the harness) shows the CO-OP bar, until co-op is announced on Workers Paid (decision 8).
+- **Shown everywhere since 2026-10-30.** `VITE_COOP=On` (set by `infra/alchemy.run.ts` on every stage, and by the tests and the harness) shows the CO-OP bar. It was previews only until the account moved to Workers Paid (decision 8).
 - **Checks.** Story tests for the Submodel and the root (`src/coop/story.test.ts`, `src/coop.story.test.ts`) and Scene tests for each screen (`src/coop/scene.test.ts`), with a fake `CoopNet` (`src/coop/testing.ts`). `tools/audit/shotsCoop.ts` shoots every screen at 1280x720, 844x390, and 390x844, and `tools/audit/coop.ts` plays it end to end through the game UI with 2 or 3 browsers.
 
 **What remained for the real game** was built in Phase 0, Phase 1, and "What Phase 2 built" below, except each player's look in the lobby and Workers Paid before co-op is announced.
