@@ -11,14 +11,8 @@ import { couchInputs, isCouchPlay } from './couch'
 import { clamp } from './geometry'
 import { deriveIntent } from './input'
 import { advanceJuice } from './juice'
-import {
-  type GameEvent,
-  type Model,
-  Phase,
-  ShopState,
-  idleIntent,
-} from './model'
-import { raiseDebutCard } from './onboarding'
+import { type GameEvent, type Model, ShopState, idleIntent } from './model'
+import { raiseDebutCardFrom } from './onboarding'
 import { advanceParticles } from './particles'
 import { advanceCallouts } from './powerups'
 import { soloInputs, stepWorld } from './stepWorld'
@@ -113,13 +107,7 @@ export const leanFor = (model: Model, frameMs: number): Model =>
 // started raises the new zombie card, and a round that ended starts its
 // end screen.
 const followRound = (before: Model, after: Model): Model =>
-  endRoundOnClient(
-    before,
-    Phase.isAnyOf(['Preparation'])(before.phase) &&
-      Phase.isAnyOf(['Wave'])(after.phase)
-      ? raiseDebutCard(after)
-      : after,
-  )
+  endRoundOnClient(before, raiseDebutCardFrom(before, after))
 
 // NOTE: a frame runs the whole ticks its time owes and carries the rest,
 // then makes its cosmetics. Its `frameEvents` are every tick's events in

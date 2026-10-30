@@ -1,4 +1,4 @@
-import { Option } from 'effect'
+import { Array, Option } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
@@ -15,6 +15,7 @@ import {
 } from './frame'
 import { stopForHits, thawTick } from './juice'
 import { type Model, Phase } from './model'
+import { ageDebutCard, raiseDebutCardFrom } from './onboarding'
 import { isCoop, shopOf } from './party'
 import { inputOfIntent, ownWorldOf } from './roomWorld'
 import { freshRun } from './runReset'
@@ -22,16 +23,24 @@ import { isBrowsing } from './shop'
 import { tallyFrame } from './stats'
 import { enterExit } from './update/exit'
 import { closeShop, enterShop } from './update/shop'
-import { frameSoundCues, playSounds, playStartSoundWhen } from './update/sound'
+import {
+  frameSoundCues,
+  isOwnShot,
+  playSounds,
+  playStartSoundWhen,
+  shotSoundCue,
+} from './update/sound'
 import type { UpdateStep } from './update/step'
 import { isRoundActive } from './waves'
 import { type World, withWorld } from './world'
 import {
   type Difficulty,
-  type GameEvent,
+  GameEvent,
   HitStop,
   type ShopState,
+  type Vector,
 } from './worldSchema'
+import { footfallNearness } from './zombies'
 
 // The root's half of an online co-op run (MULTIPLAYER.md, Phase 2): the
 // game's own scene, HUD, shop, and touch controls drawn from the room's
@@ -111,6 +120,24 @@ const takeRoomWorld = (
 
 const isFrozen = HitStop.isAnyOf(['Frozen'])
 
+// NOTE: the room scores a footstep against its lead seat; this client hears
+// it, and shakes for it, by how near it is to its own player.
+const heardBy = (
+  listener: Vector,
+  events: ReadonlyArray<GameEvent>,
+): ReadonlyArray<GameEvent> =>
+  Array.map(events, event =>
+    GameEvent.isAnyOf(['Footfall'])(event)
+      ? GameEvent.Footfall({
+          ...event,
+          nearness: footfallNearness(
+            event.kind,
+            Math.hypot(event.x - listener.x, event.y - listener.y),
+          ),
+        })
+      : event,
+  )
+
 type Drawn = Readonly<{ room: CoopRoom; world: World }>
 
 const maybeDrawnOf = (model: Model): Option.Option<Drawn> =>
@@ -148,7 +175,7 @@ const drawRoom =
           ? { ...stepModel, ...freshRun(stepModel) }
           : stepModel
         const thaw = thawTick(base.hitStop, frameMs)
-        const events = room.frameEvents
+        const events = heardBy(world.player, room.frameEvents)
         if (isFrozen(thaw.hitStop)) {
           return {
             model: modifyFields(base, {
@@ -165,17 +192,28 @@ const drawRoom =
           ),
           taken => stopForHits(taken, frameMs),
         )
-        const drawn = leanFor(
-          advanceCosmetics(
-            tallyFrame(base, applied, frameMs),
-            frameMs,
-            frameMs,
+        const drawn = ageDebutCard(
+          raiseDebutCardFrom(
+            base,
+            leanFor(
+              advanceCosmetics(
+                tallyFrame(base, applied, frameMs),
+                frameMs,
+                frameMs,
+              ),
+              frameMs,
+            ),
           ),
           frameMs,
         )
         const shopNow = world.shop
         return Update.combine(drawn, [
-          playSounds(frameSoundCues(events)),
+          playSounds([
+            ...(room.predictedShots > 0 ? [shotSoundCue(world.player)] : []),
+            ...frameSoundCues(
+              Array.filter(events, event => !isOwnShot(event, room.slot)),
+            ),
+          ]),
           playStartSoundWhen(isStart),
           ...(isEntering(maybeShopBefore, shopNow, isBrowsing)
             ? [enterShop]

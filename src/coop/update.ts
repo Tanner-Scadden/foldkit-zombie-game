@@ -31,7 +31,7 @@ import {
   noPresses,
 } from './model'
 import { CoopNet } from './net'
-import { coopWorld } from './seam'
+import { type OwnPlayer, coopWorld } from './seam'
 
 // IDS
 
@@ -189,6 +189,7 @@ export const freshRoom = (code: string, slot: number): Room => ({
   maybeWorld: Option.none(),
   frameEvents: [],
   eventsTick: 0,
+  predictedShots: 0,
   presses: noPresses,
   share: 'Idle',
   departure: 'Staying',
@@ -342,6 +343,20 @@ const startOfEvents = (room: Room, frames: Room['session']['frames']) =>
         : room.eventsTick,
   })
 
+// NOTE: a shot resets the recoil to its full length, and no gun fires
+// twice in one frame's ticks, so a recoil higher than before is a shot.
+const shotsBetween = (
+  maybeBefore: Option.Option<OwnPlayer>,
+  maybeAfter: Option.Option<OwnPlayer>,
+): number =>
+  Option.exists(
+    Option.all([maybeBefore, maybeAfter]),
+    ([before, after]) =>
+      after.player.recoilRemainingMs > before.player.recoilRemainingMs,
+  )
+    ? 1
+    : 0
+
 // NOTE: one frame of the room: the parent's controls go in as this frame's
 // input with the held press, the session sends what it owes, and the World
 // to draw and the events it reached come out. The parent reads `maybeWorld`
@@ -362,6 +377,10 @@ export const tickRoom = (
       nowMs,
     )
     const rendered = Session.render(coopWorld, ticked.session, nowMs)
+    const predictedShots = shotsBetween(
+      room.session.predicted,
+      ticked.session.predicted,
+    )
     const reached = Math.max(
       0,
       Math.min(
@@ -382,6 +401,7 @@ export const tickRoom = (
           ? eventsBetween(rendered.session.frames, from, reached)
           : [],
       eventsTick: isPictureHeld ? from : Math.max(from, reached),
+      predictedShots,
       presses,
     })
     return Array.isReadonlyArrayNonEmpty(ticked.outgoing)

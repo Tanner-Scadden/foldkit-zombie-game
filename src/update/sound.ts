@@ -3,10 +3,10 @@ import { modifyFields } from 'foldkit/struct'
 
 import { type SoundEffect, positionVariation } from '../audio'
 import { PlaySound, ResumeAudio } from '../commands'
-import { AudioState, GameEvent, type Model } from '../model'
+import { AudioState, GameEvent, type Model, type Player } from '../model'
 import { PICKUPS } from '../powerups'
 import { TRAPS } from '../traps'
-import { WEAPONS } from '../weapons'
+import { WEAPONS, heldWeapon } from '../weapons'
 import { ZOMBIE_KINDS, isArmorShedAt } from '../zombies'
 import type { UpdateStep } from './step'
 
@@ -86,6 +86,18 @@ const maybeEventSoundCue = (event: GameEvent): Option.Option<SoundCue> =>
     sound,
     variation: positionVariation(event.x, event.y),
   }))
+
+// NOTE: a co-op client predicts its own shots and sounds them at once
+// (src/coopPlay.ts), so the room's own copy of each, later, stays quiet.
+export const isOwnShot = (event: GameEvent, ownSlot: number): boolean =>
+  GameEvent.isAnyOf(['Fired'])(event) &&
+  Option.exists(event.maybeShooter, shooter => shooter === ownSlot)
+
+// NOTE: the shot sound of the gun a player holds, where they stand.
+export const shotSoundCue = (player: Player): SoundCue => ({
+  sound: WEAPONS[heldWeapon(player.arsenal)].sound,
+  variation: positionVariation(player.x, player.y),
+})
 
 export const frameSoundCues = (
   events: ReadonlyArray<GameEvent>,

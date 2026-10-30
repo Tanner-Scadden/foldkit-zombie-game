@@ -552,7 +552,12 @@ describe('game events', () => {
         ])
         expect(Array.head(frameEvents)).toEqual(
           Option.some(
-            GameEvent.Fired({ ...shot, direction: RIGHT, weapon: 'Pistol' }),
+            GameEvent.Fired({
+              ...shot,
+              direction: RIGHT,
+              weapon: 'Pistol',
+              maybeShooter: Option.none(),
+            }),
           ),
         )
         expect(Array.last(frameEvents)).toEqual(

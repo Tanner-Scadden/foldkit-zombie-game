@@ -419,6 +419,15 @@ export const ZOMBIE_KIND_ORDER: ReadonlyArray<ZombieKind> = [
 export const statsOf = (zombie: Zombie): ZombieKindStats =>
   ZOMBIE_KINDS[zombie.kind]
 
+// NOTE: how near a footstep sounds to a listener, 1 underfoot to 0 at its
+// kind's range; a kind with no range is never heard.
+export const footfallNearness = (kind: ZombieKind, distance: number): number =>
+  Option.match(ZOMBIE_KINDS[kind].maybeFootfall, {
+    onNone: () => 0,
+    onSome: ({ rangePx }) =>
+      rangePx > 0 ? Math.max(0, Math.min(1, 1 - distance / rangePx)) : 0,
+  })
+
 export const radiusOf = (zombie: Zombie): number => statsOf(zombie).radius
 
 export const bodyRadiusOf = (zombie: Zombie): number =>

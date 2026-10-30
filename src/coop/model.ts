@@ -101,7 +101,9 @@ export const noPresses: Presses = {
 // NOTE: `maybeWorld` is the World to draw this frame, everyone else about
 // 100 ms behind and your own player predicted; `frameEvents` are the
 // events the drawing reached this frame, each once, and `eventsTick` the
-// room tick they reached.
+// room tick they reached. `predictedShots` counts the shots your own
+// player fired in this frame's newly predicted ticks, so the shot sounds
+// at once; a correction from the room replays ticks already counted.
 export const Room = Schema.Struct({
   code: RoomCode,
   slot: Schema.Number,
@@ -112,6 +114,7 @@ export const Room = Schema.Struct({
   maybeWorld: Schema.Option(WorldState),
   frameEvents: Schema.Array(GameEvent),
   eventsTick: Schema.Number,
+  predictedShots: Schema.Number,
   presses: Presses,
   share: Share,
   departure: Departure,

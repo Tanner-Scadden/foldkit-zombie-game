@@ -33,7 +33,7 @@ import {
   withSeat,
 } from './party'
 import { flowFieldToward } from './pathing'
-import { walkLeadSeat } from './simulation'
+import { predictLeadSeat } from './simulation'
 import { SeatAction, applySeatAction, stepWorld } from './stepWorld'
 import { FINAL_WAVE, beginPreparation } from './waves'
 import type { World } from './world'
@@ -598,14 +598,16 @@ const putOwn = (
 })
 
 // NOTE: one predicted tick of your own player from your own input, against
-// the newest World the room sent: its walls, traps, and boosts.
+// the newest World the room sent: its walls, traps, and boosts. It walks,
+// reloads, and pulls the trigger, so the shot's cooldown, recoil, and ammo
+// are predicted too; the room's answer replaces them on the next message.
 export const predictOwn = (
   own: OwnSeat,
   input: PlayerInput,
   room: RoomWorld,
 ): OwnSeat => ({
   ...own,
-  player: walkLeadSeat(
+  player: predictLeadSeat(
     modifyFields(focusSeat(room.world, own.slot), {
       player: () => own.player,
       intent: () => intentOfInput(input),

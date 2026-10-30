@@ -451,6 +451,7 @@ const operateTurret = (
               y: muzzle.y,
               direction,
               weapon: TURRET_WEAPON,
+              maybeShooter: Option.none(),
             }),
           ],
         },

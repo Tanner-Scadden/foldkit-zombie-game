@@ -5,6 +5,8 @@ import { describe, expect, test } from 'vitest'
 
 import { Dialog } from '@foldkit/ui'
 
+import { positionVariation } from './audio'
+import { PlaySound } from './commands'
 import { Message as CoopMessage } from './coop/message'
 import { Screen } from './coop/model'
 import { CODE, lobbyOf, memberOf, playingSession } from './coop/testing'
@@ -16,7 +18,7 @@ import {
 } from './coop/update'
 import { update } from './main'
 import { Message } from './message'
-import { Lesson, type Model, initialModel } from './model'
+import { AudioState, Lesson, type Model, initialModel } from './model'
 import { leadSeatOf, maybePlayerAt, withSeat } from './party'
 import {
   DEFAULT_ROOM_SETTINGS,
@@ -26,8 +28,8 @@ import {
 } from './roomWorld'
 import { SeatAction } from './stepWorld'
 import { asVeteran } from './veteran'
-import { beginPreparation } from './waves'
-import { ShopState } from './worldSchema'
+import { beginPreparation, startWaveEarly } from './waves'
+import { GameEvent, ShopState } from './worldSchema'
 
 // An online co-op run in the root (src/coopPlay.ts): the room's World drawn
 // as the game, this player's own seat as the player, presses sent to the
@@ -44,7 +46,7 @@ const OWN_SLOT = 1
 
 const roomWorld = startRoomWorld([0, OWN_SLOT], 7, DEFAULT_ROOM_SETTINGS)
 
-const inRun = (world: RoomWorld): Model =>
+const inRun = (world: RoomWorld, isAnchored = false): Model =>
   modifyFields(graduated, {
     coop: coop =>
       modifyFields(coop, {
@@ -57,7 +59,12 @@ const inRun = (world: RoomWorld): Model =>
                 lobbyOf([memberOf(0, 'Ana'), memberOf(1, 'Bo')], 'Playing'),
               ),
               link: 'Online',
-              session: playingSession(world, OWN_SLOT),
+              session: {
+                ...playingSession(world, OWN_SLOT),
+                anchor: isAnchored
+                  ? Option.some({ tick: 0, atMs: 0 })
+                  : Option.none(),
+              },
             },
           }),
       }),
@@ -90,6 +97,120 @@ describe('an online co-op run', () => {
         expect(current.lessons).toEqual(graduated.lessons)
       }),
     )
+  })
+
+  test('the room copy of your own shot stays quiet; a teammate shot sounds', () => {
+    const shot = (slot: number, x: number) =>
+      GameEvent.Fired({
+        x,
+        y: 60,
+        direction: { x: 1, y: 0 },
+        weapon: 'Shotgun',
+        maybeShooter: Option.some(slot),
+      })
+    const withShots: RoomWorld = {
+      ...roomWorld,
+      tick: 1,
+      events: [{ tick: 1, events: [shot(OWN_SLOT, 40), shot(0, 200)] }],
+    }
+    const audible = modifyFields(inRun(withShots, true), {
+      audio: () => AudioState.Ready(),
+      soundSetting: () => 'On',
+    })
+    const shotSounds = (current: Model, frame: number) =>
+      Array.filter(
+        update(current, roomFrame(frame)).commands ?? [],
+        command =>
+          command.name === PlaySound.name &&
+          command.args !== undefined &&
+          'sound' in command.args &&
+          command.args['sound'] === 'ShotgunBlast',
+      )
+    const heard = shotSounds(audible, 2000)
+    expect(Array.map(heard, command => command.args)).toEqual([
+      { sound: 'ShotgunBlast', variation: positionVariation(200, 60) },
+    ])
+  })
+
+  test('a wave with a zombie you have not met raises its card, and the run goes on', () => {
+    const waveWorld: RoomWorld = {
+      ...roomWorld,
+      world: startWaveEarly(roomWorld.world),
+    }
+    const newcomer = modifyFields(inRun(roomWorld), {
+      introducedKinds: () => [],
+    })
+    const drawWave = (current: Model): Model =>
+      modifyFields(current, {
+        coop: coop =>
+          modifyFields(coop, {
+            screen: () =>
+              Option.match(maybeRoomOf(coop), {
+                onNone: () => coop.screen,
+                onSome: room =>
+                  Screen.InRoom({
+                    room: {
+                      ...room,
+                      session: playingSession(waveWorld, OWN_SLOT),
+                    },
+                  }),
+              }),
+          }),
+      })
+    story(
+      update,
+      given(newcomer),
+      message(roomFrame(100)),
+      model(current => {
+        expect(current.debutCard._tag).toBe('Hidden')
+      }),
+      model(current => {
+        const waved = update(drawWave(current), roomFrame(200)).model
+        expect(waved.phase._tag).toBe('Wave')
+        expect(waved.debutCard._tag).toBe('Showing')
+        const later = update(waved, roomFrame(300)).model
+        expect(later.phase._tag).toBe('Wave')
+        expect(later.debutCard).toMatchObject({ _tag: 'Showing' })
+        expect(
+          update(later, Message.ClickedDebutCardButton()).model.debutCard._tag,
+        ).toBe('Showing')
+      }),
+    )
+  })
+
+  test('a footstep sounds by how near it is to this player, not the lead', () => {
+    const own = Option.getOrThrow(
+      maybePlayerAt(roomWorld.world, OWN_SLOT),
+    ).player
+    const step = (x: number, y: number) =>
+      GameEvent.Footfall({ x, y, kind: 'Tank', nearness: 0 })
+    const stomps = (x: number, y: number) =>
+      Array.filter(
+        update(
+          modifyFields(
+            inRun(
+              {
+                ...roomWorld,
+                tick: 1,
+                events: [{ tick: 1, events: [step(x, y)] }],
+              },
+              true,
+            ),
+            {
+              audio: () => AudioState.Ready(),
+              soundSetting: () => 'On',
+            },
+          ),
+          roomFrame(2000),
+        ).commands ?? [],
+        command =>
+          command.name === PlaySound.name &&
+          command.args !== undefined &&
+          'sound' in command.args &&
+          command.args['sound'] === 'Stomp',
+      ).length
+    expect(stomps(own.x + 10, own.y)).toBe(1)
+    expect(stomps(own.x + 200, own.y)).toBe(0)
   })
 
   test('presses go to the room, and there is no pause', () => {
