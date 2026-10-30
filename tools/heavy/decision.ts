@@ -4,6 +4,7 @@ import {
   Match,
   Number,
   Option,
+  Order,
   Record,
   Schema,
   String,
@@ -682,12 +683,31 @@ export const blockingWaiters = (
     }),
   )
 
+// NOTE: what a CPU job leaves free for Shared jobs that were waiting first:
+// the cost of the one at the head of the queue, at most the target. Keeping
+// the cost of every one of them free once held back 16 cores' worth on a
+// 12 core laptop and starved balance batches. The rest are not delayed long:
+// a CPU job yields at each chunk boundary, well within BACKFILL_GRACE_MS,
+// and then queues again behind them.
 export const reservedCost = (snapshot: Snapshot): number =>
   pipe(
     earlierWaiters(snapshot),
     Array.filter(waiter => JobClass.$is('Shared')(waiterClassOf(waiter))),
-    Array.map(costOf),
-    Number.sumAll,
+    Array.sort(
+      Order.make<LockHolder>((first, second) =>
+        Number.sign(
+          compareKeys(
+            queueKeyOf(snapshot, first),
+            queueKeyOf(snapshot, second),
+          ),
+        ),
+      ),
+    ),
+    Array.head,
+    Option.match({
+      onNone: () => 0,
+      onSome: head => Math.min(costOf(head), snapshot.target),
+    }),
   )
 
 // NOTE: a CPU job takes what is left of the budget, after the load, the
@@ -717,7 +737,7 @@ const maybeLoadPart = (snapshot: Snapshot): Option.Option<string> =>
             budgetPart(
               snapshot,
               reservedCost(snapshot) > 0
-                ? `1 worker (and ${reservedCost(snapshot)} kept for jobs waiting first)`
+                ? `1 worker (and ${formatLoad(reservedCost(snapshot))} kept for jobs waiting first)`
                 : '1 worker',
             ),
           )

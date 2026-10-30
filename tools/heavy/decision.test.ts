@@ -524,7 +524,41 @@ describe('fairness by arrival', () => {
     expect(decide({ ...CPU, load: 5, waiters })).toStrictEqual(
       Decision.Wait({
         reason:
-          'load 5.0 + 0.0 just started + 1 worker (and 3 kept for jobs waiting first) is over the target of 8.4 on 12 cores',
+          'load 5.0 + 0.0 just started + 1 worker (and 3.0 kept for jobs waiting first) is over the target of 8.4 on 12 cores',
+      }),
+    )
+  })
+})
+
+describe('the cost kept free for waiting Shared jobs', () => {
+  const shots34 = (pid: number, arrivedBeforeMs: number): LockHolder =>
+    waiting(
+      { ...TAPS, pid, command: 'bun tools/audit/shots34.ts' },
+      arrivedBeforeMs,
+    )
+
+  test('is only the head waiter, so a queue of them does not starve a CPU job', () => {
+    const waiters = [
+      shots34(5201, 4000),
+      shots34(5202, 3000),
+      shots34(5203, 2000),
+      shots34(5204, 1000),
+      shots34(5205, 0),
+    ]
+    expect(workersOf(decide({ ...CPU, waiters }))).toBe(3)
+  })
+
+  test('is the cost of the waiter that arrived first', () => {
+    const waiters = [waiting(TAPS, 0), waiting(SHOTS, 1000)]
+    expect(workersOf(decide({ ...CPU, waiters }))).toBe(5)
+  })
+
+  test('is at most the target', () => {
+    const waiters = [waiting({ ...TAPS, cost: 20 }, 0)]
+    expect(decide({ ...CPU, load: 0, waiters })).toStrictEqual(
+      Decision.Wait({
+        reason:
+          'load 0.0 + 0.0 just started + 1 worker (and 8.4 kept for jobs waiting first) is over the target of 8.4 on 12 cores',
       }),
     )
   })

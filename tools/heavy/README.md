@@ -54,7 +54,7 @@ headroom = target - 1 minute load - recent
 The 1 minute load lags by about a minute, so a job that just started counts at its estimated cost until the load shows it.
 
 - **A Shared job starts** when its cost fits: `cost <= headroom`.
-- **A CPU job starts** when at least one worker fits, and gets `WORKERS = min(8, the caller's WORKERS if set, floor(headroom - reserved))`, where `reserved` is the cost of Shared jobs that were waiting before it. The guard prints how it sized them, such as `WORKERS=7 fits the budget (target 8.4, load 1.1, 0.0 just started, cap 8).`
+- **A CPU job starts** when at least one worker fits, and gets `WORKERS = min(8, the caller's WORKERS if set, floor(headroom - reserved))`, where `reserved` is the cost of the Shared job at the head of the queue that was waiting before it, at most the target. Only the head counts, so a queue of screenshot audits cannot hold back more than the machine has; the others wait at most until the CPU job's next chunk boundary, when it queues again behind them. The guard prints how it sized them, such as `WORKERS=7 fits the budget (target 8.4, load 1.1, 0.0 just started, cap 8).`
 - **A Timing job** keeps the old gate, since it runs alone: it waits while the load is above the core count.
 - **Timing and Shared jobs** get `WORKERS` as before: the caller's (4 by default), at most 4, cut once the load passes half the cores.
 
