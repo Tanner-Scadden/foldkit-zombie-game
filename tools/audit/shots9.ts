@@ -1,16 +1,17 @@
 import { readdirSync } from 'node:fs'
 
 import {
-  BASE,
   SHOTS_DIR,
   comparePngs,
   desktop,
+  gotoScene,
+  harnessUrl,
   launch,
   mobile,
   model,
   shot,
   tagOr,
-  wait,
+  useHarness,
 } from './lib'
 
 const TAG = tagOr('now')
@@ -46,13 +47,13 @@ const scenes: ReadonlyArray<
   },
 ]
 
+await useHarness()
 const browser = await launch()
 for (const scene of scenes) {
   const page = scene.isMobile
     ? await mobile(browser, true)
     : await desktop(browser)
-  await page.goto(BASE + scene.q)
-  await wait(2500)
+  await gotoScene(page, harnessUrl(scene.q.replace(/^\?/, '')))
   const m = await model(page)
   await shot(page, `s9-${TAG}-${scene.name}`)
   console.log(

@@ -268,6 +268,7 @@ export const HarnessConfig = Schema.Struct({
   ]),
   // Measuring
   freeze: MaybeNum,
+  tick: MaybeNum,
   seed: MaybeNum,
   instrument: Flag,
   nodev: Flag,

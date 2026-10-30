@@ -16,13 +16,14 @@ import {
   type Viewport,
   comparePngs,
   deviceQuery,
+  gotoScene,
   harnessUrl,
   isPickedScene,
   launch,
   openPage,
   shot,
   tagOr,
-  wait,
+  useHarness,
 } from './lib'
 
 const TAG = tagOr('after')
@@ -93,19 +94,13 @@ const shotName = (tag: string, viewport: Viewport, scene: Scene) =>
 
 const isComparingOnly = process.env.COMPARE_ONLY === '1'
 
+await useHarness()
 const browser = await launch()
 for (const viewport of VIEWPORTS) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name) || isComparingOnly) continue
     const page = await openPage(browser, viewport)
-    await page.goto(harnessUrl(scene.query, deviceQuery(viewport)))
-    await wait(2500)
-    await page
-      .waitForFunction(() => (window as any).__isFrozen === true, null, {
-        timeout: 15000,
-      })
-      .catch(() => undefined)
-    await wait(300)
+    await gotoScene(page, harnessUrl(scene.query, deviceQuery(viewport)))
     await shot(page, shotName(TAG, viewport, scene))
     await page.context().close()
   }

@@ -1,5 +1,7 @@
 import { chromium, type Browser, type Page } from 'playwright-core'
 
+import { builtHarness, serveDir } from './harnessServer'
+
 export const CHROME =
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 export const GAME = 'http://localhost:4173/'
@@ -186,10 +188,145 @@ export const forEachInOrder = async <A, B>(
   return results
 }
 
+// THE HARNESS
+
+// NOTE: where the harness runs. `BASE` names a server you started, and
+// `HARNESS_DEV=1` uses the dev server on 4174 for live editing. Otherwise
+// `useHarness` builds the harness once per content hash (see
+// `harnessServer.ts`) and serves it on a free port of this script's own.
+let harnessBase = BASE
+
+export const useHarness = async (): Promise<string> => {
+  if (process.env.BASE !== undefined || process.env.HARNESS_DEV === '1') {
+    harnessBase = BASE
+    return harnessBase
+  }
+  const server = serveDir(await builtHarness())
+  server.unref()
+  harnessBase = `http://127.0.0.1:${server.port}/`
+  return harnessBase
+}
+
 // NOTE: joins the query parts that are not empty, so a scene with no query
 // and a device part make `?device=touch`, never `?&device=touch`.
+export const harnessQuery = (...parts: ReadonlyArray<string>) =>
+  parts.filter(part => part.length > 0).join('&')
+
 export const harnessUrl = (...parts: ReadonlyArray<string>) =>
-  `${BASE}?${parts.filter(part => part.length > 0).join('&')}`
+  `${harnessBase}?${harnessQuery(...parts)}`
+
+const READY_TIMEOUT_MS = 20_000
+
+// NOTE: waits for the harness's ready signal: the scene rendered with every
+// image decoded, and a frozen scene at its frame. A bad query fails here with
+// the Schema error instead of timing out.
+export const waitForReady = async (page: Page) => {
+  await page.waitForFunction(
+    () => {
+      const harness = window as any
+      return (
+        harness.__harnessReady === true ||
+        harness.__sceneError !== undefined ||
+        document.querySelector('.harness-error') !== null
+      )
+    },
+    null,
+    { timeout: READY_TIMEOUT_MS, polling: 'raf' },
+  )
+  const problem = await page.evaluate(
+    () =>
+      (window as any).__sceneError ??
+      document.querySelector('.harness-error')?.textContent ??
+      undefined,
+  )
+  if (problem !== undefined) {
+    throw new Error(problem)
+  }
+}
+
+// NOTE: after a click or a key, waits until the page has rendered what it
+// set off and every image it asked for has decoded.
+export const whenSettled = (page: Page) =>
+  page.evaluate(() => (window as any).__whenSettled())
+
+export const gotoScene = async (page: Page, url: string) => {
+  await page.goto(url)
+  await waitForReady(page)
+}
+
+// NOTE: swaps the scene in place through `window.__loadScene`, without a
+// reload, and waits for it to be ready.
+export const loadScene = async (page: Page, query: string) => {
+  await page.evaluate(query => (window as any).__loadScene(query), query)
+  await waitForReady(page)
+}
+
+// NOTE: `FRESH_PAGES=1` loads every scene in a new page, as before scenes
+// were switched in place, to check that switching changes no picture.
+const isAlwaysFresh = process.env.FRESH_PAGES === '1'
+
+export type ScenePages = Readonly<{
+  // NOTE: a page showing the scene: an idle page of this screen with the
+  // scene switched in, or a new one when there is none or `fresh` is set.
+  open: (
+    viewport: Viewport,
+    query: string,
+    options?: Readonly<{ fresh?: boolean }>,
+  ) => Promise<Page>
+  // NOTE: hands the page back for the next scene on its screen.
+  release: (page: Page) => void
+  // NOTE: closes the page's context, for a page whose state should not be
+  // reused, such as one with storage a scene depends on.
+  discard: (page: Page) => Promise<void>
+  close: () => Promise<void>
+}>
+
+// NOTE: one long-lived page per screen and worker. `pageQuery` holds the
+// query parts that belong to the page, such as `nodev`, which every scene
+// on it shares.
+export const scenePages = (
+  browser: Browser,
+  pageQuery: ReadonlyArray<string> = [],
+): ScenePages => {
+  const idle = new Map<string, Array<Page>>()
+  const viewportOf = new Map<Page, Viewport>()
+  const idleFor = (viewport: Viewport) => {
+    const pages = idle.get(viewport.name) ?? []
+    idle.set(viewport.name, pages)
+    return pages
+  }
+  const discard = async (page: Page) => {
+    viewportOf.delete(page)
+    await page.context().close()
+  }
+  return {
+    open: async (viewport, query, options) => {
+      const reusable = idleFor(viewport).pop()
+      if (reusable !== undefined && !options?.fresh && !isAlwaysFresh) {
+        await loadScene(reusable, harnessQuery(query, ...pageQuery))
+        return reusable
+      }
+      if (reusable !== undefined) {
+        await discard(reusable)
+      }
+      const page = await openPage(browser, viewport)
+      viewportOf.set(page, viewport)
+      await gotoScene(page, harnessUrl(query, ...pageQuery))
+      return page
+    },
+    release: page => {
+      const viewport = viewportOf.get(page)
+      if (viewport !== undefined) {
+        idleFor(viewport).push(page)
+      }
+    },
+    discard,
+    close: async () => {
+      await Promise.all([...viewportOf.keys()].map(discard))
+      idle.clear()
+    },
+  }
+}
 
 export const deviceQuery = (viewport: Viewport) =>
   viewport.isPhone ? 'device=touch' : ''
@@ -206,31 +343,49 @@ export const finish = (problems: ReadonlyArray<string>, allClear: string) => {
 
 export const SHOTS_DIR = `${import.meta.dir}/shots`
 
+// NOTE: CSS animations that end are shown at their end, and ones that loop
+// at their start, so a shot never catches a button mid pop in.
 export const shot = (page: Page, name: string) =>
-  page.screenshot({ path: `${SHOTS_DIR}/${name}.png` })
+  page.screenshot({
+    path: `${SHOTS_DIR}/${name}.png`,
+    animations: 'disabled',
+  })
 
 export const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-// NOTE: waits for every animation that ends, such as a button's pop in, so a
-// size check never measures a button mid scale. A blink that loops forever
-// is left running, and it gives up after `limitMs`.
-export const settleAnimations = (page: Page, limitMs = 3000) =>
-  page.evaluate(
-    limitMs =>
-      Promise.race([
-        Promise.all(
-          document
-            .getAnimations()
-            .filter(
-              animation =>
-                animation.effect?.getComputedTiming().iterations !== Infinity,
-            )
-            .map(animation => animation.finished.catch(() => undefined)),
-        ),
-        new Promise(resolve => setTimeout(resolve, limitMs)),
-      ]).then(() => undefined),
-    limitMs,
-  )
+// NOTE: jumps every animation that ends, such as a button's pop in, to its
+// end, so a size check never measures a button mid scale and never waits for
+// one. A blink that loops forever is left running. A tap often starts its
+// animation a frame or a Command later (a dialog opens once its ShowDialog
+// Command has run), and an ending animation can set off a Message, so it lets
+// the page settle around each pass, until no animation that ends is left.
+const finishAnimations = (page: Page): Promise<number> =>
+  page.evaluate(() => {
+    let finished = 0
+    for (const animation of document.getAnimations()) {
+      if (animation.effect?.getComputedTiming().iterations !== Infinity) {
+        try {
+          animation.finish()
+          finished++
+        } catch {
+          // NOTE: an animation that cannot finish, such as a paused one, stays.
+        }
+      }
+    }
+    return finished
+  })
+
+const SETTLE_PASSES = 4
+
+export const settleAnimations = async (page: Page) => {
+  await whenSettled(page)
+  for (let pass = 0; pass < SETTLE_PASSES; pass++) {
+    if ((await finishAnimations(page)) === 0) {
+      return
+    }
+    await whenSettled(page)
+  }
+}
 
 // PIXEL COMPARE
 

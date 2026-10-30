@@ -4,7 +4,7 @@
 // shoots the title, the iPhone tip, Game Over, Victory, both breaks, pause,
 // and a wave (which must show no chip) on 667x375, 844x390, and 1280x720. It
 // prints the chip's box and any button or panel it overlaps.
-//   TAG=after BASE=http://localhost:4174/ bun shots26.ts
+//   TAG=after bun shots26.ts
 //
 // PART=e2e drives the real production build end to end. It builds with
 // BUILD_ID=e2e-one, serves dist on 4186 with vite preview, opens the game,
@@ -22,12 +22,15 @@ import {
   PHONE_844,
   type Viewport,
   deviceQuery,
+  gotoScene,
   harnessUrl,
   isPickedScene,
   launch,
   openPage,
+  settleAnimations,
   shot,
   tagOr,
+  useHarness,
   wait,
 } from './lib'
 
@@ -117,6 +120,7 @@ const chipReport = (page: Page) =>
   })
 
 const layout = async () => {
+  await useHarness()
   const browser = await launch()
   for (const viewport of VIEWPORTS) {
     for (const scene of SCENES) {
@@ -124,10 +128,11 @@ const layout = async () => {
         continue
       }
       const page = await openPage(browser, viewport)
-      await page.goto(
+      await gotoScene(
+        page,
         harnessUrl(scene.query, 'newer=next', deviceQuery(viewport)),
       )
-      await wait(1500)
+      await settleAnimations(page)
       const report = await chipReport(page)
       const isRight = (report.chip !== undefined) === scene.hasChip
       console.log(

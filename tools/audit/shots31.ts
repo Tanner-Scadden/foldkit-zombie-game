@@ -6,7 +6,7 @@
 // inside its edges hit that button, that it is at least 48 px on a phone, and
 // that it covers no doorway, the stall, the player, or another button. Exits
 // with 1 on any problem.
-//   TAG=after BASE=http://localhost:4174/ bun shots31.ts
+//   TAG=after bun shots31.ts
 // ONLY picks scenes, such as `ONLY=wave,break`.
 import {
   ANDROID_915,
@@ -17,13 +17,15 @@ import {
   type Viewport,
   deviceQuery,
   finish,
+  gotoScene,
   harnessUrl,
   isPickedScene,
   launch,
   openPage,
+  settleAnimations,
   shot,
   tagOr,
-  wait,
+  useHarness,
 } from './lib'
 
 const TAG = tagOr('after')
@@ -84,6 +86,7 @@ const overlaps = (a: Box, b: Box) =>
   b.y < a.y + a.height
 
 const problems: Array<string> = []
+await useHarness()
 const browser = await launch()
 for (const viewport of VIEWPORTS) {
   for (const scene of SCENES) {
@@ -91,8 +94,8 @@ for (const viewport of VIEWPORTS) {
       continue
     }
     const page = await openPage(browser, viewport)
-    await page.goto(harnessUrl(scene.query, deviceQuery(viewport)))
-    await wait(1200)
+    await gotoScene(page, harnessUrl(scene.query, deviceQuery(viewport)))
+    await settleAnimations(page)
     const report = await page.evaluate(inset => {
       const stage = document.querySelector('.game-stage')!
       const rect = stage.getBoundingClientRect()

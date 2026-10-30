@@ -1,6 +1,12 @@
+import { settle } from './readiness'
+// NOTE: next, so the build's prebuilt sprite atlas is in place before any
+// game module builds a sprite, as in the game's own entry.
+import '@game/spriteAtlasBoot'
+
 import './harness.css'
-import { Layer, Option } from 'effect'
-import { Canvas, ManagedResource, Runtime } from 'foldkit'
+import { Effect, Layer, Option, Queue, Schema, Stream } from 'effect'
+import { Canvas, Dom, ManagedResource, Runtime, Subscription } from 'foldkit'
+import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
 import {
@@ -13,7 +19,7 @@ import {
 } from '@game/appearance'
 import { PARLOUR, levelOf, openExitIn } from '@game/arena'
 import { BOSS_RULES, hasBoss, planBoss } from '@game/boss'
-import { managedResources } from '@game/commands'
+import { LoadSave, managedResources } from '@game/commands'
 import { DECAL_MAX, PLAYER_MAX_HP, SHADOW_COLOR } from '@game/constants'
 import * as CoopModel from '@game/coop/model'
 import type { CoopNet } from '@game/coop/net'
@@ -64,7 +70,7 @@ import { pause, planFor, rollSpawns } from '@game/waves'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
 import { Session } from '@munch/netcode'
 
-import { decodeHarnessConfig } from './config'
+import { type HarnessConfig, decodeHarnessConfig } from './config'
 
 const readConfig = () => {
   try {
@@ -78,14 +84,30 @@ const readConfig = () => {
     throw error
   }
 }
-const config = readConfig()
-const ROAMING = { _tag: 'Roaming' as const }
-const CALM = { _tag: 'Calm' as const }
-const gasbagRoom = config.gasroom
 const PLAYER_X = 160
 const PLAYER_Y = 90
-const px = config.px ?? PLAYER_X
-const py = config.py ?? PLAYER_Y
+
+// NOTE: the scene's settings. They are module state, not constants, because
+// `window.__loadScene` swaps in another scene without reloading the page.
+let config: HarnessConfig = readConfig()
+let gasbagRoom = 0
+let px = PLAYER_X
+let py = PLAYER_Y
+let god = false
+let instrument = false
+let freezeAfter = Infinity
+const useConfig = (next: HarnessConfig) => {
+  config = next
+  gasbagRoom = next.gasroom
+  px = next.px ?? PLAYER_X
+  py = next.py ?? PLAYER_Y
+  god = next.god
+  instrument = next.instrument
+  freezeAfter = next.tick !== undefined ? 0 : (next.freeze ?? Infinity)
+}
+useConfig(config)
+const ROAMING = { _tag: 'Roaming' as const }
+const CALM = { _tag: 'Calm' as const }
 
 const KINDS: ReadonlyArray<DecalKind> = [
   'Blood',
@@ -1190,8 +1212,6 @@ const scenarioModelOf = (): Model => {
   return model
 }
 
-const god = config.god
-
 // NOTE: `gasroom=N` keeps N Kaboomers in the room: when shots and chain bursts
 // pop them, new ones walk in at the doors, so a measurement window stays full
 // of fusing, bursting, and spawning Kaboomers.
@@ -1240,8 +1260,6 @@ const countShapes = (shapes: ReadonlyArray<any>): number =>
 w.__countShapes = () => countShapes(sceneShapes(w.__model))
 
 w.__timings = { update: [] as Array<number>, view: [] as Array<number> }
-const instrument = config.instrument
-const freezeAfter = config.freeze ?? Infinity
 const FIXED_FRAME_MS = 1000 / 60
 let framesRun = 0
 const QUIET_MESSAGES = new Set([
@@ -1254,7 +1272,55 @@ const QUIET_MESSAGES = new Set([
   'FailedPlaySound',
 ])
 w.__messages = [] as Array<string>
-const harnessUpdate = (model: Model, incoming: Message) => {
+
+// NOTE: the one Message the harness adds to the game's. `window.__loadScene`
+// raises it, through the `harnessScenes` Subscription below, to swap in the
+// scene a query string describes without reloading the page.
+const HarnessMessage = defineMessageUnion({
+  LoadedScene: { query: Schema.String },
+})
+type HarnessMessage = typeof HarnessMessage.Type
+type AnyMessage = Message | HarnessMessage
+
+type HarnessReturn = Readonly<{
+  model: Model
+  commands?: ReadonlyArray<any>
+}>
+
+// NOTE: what the harness adds after every update: full health with `god`,
+// and fresh Kaboomers at the doors with `gasroom`.
+const keepScene = (result: HarnessReturn, message: Message): HarnessReturn => {
+  const kept = god
+    ? {
+        ...result,
+        model: modifyFields(result.model, {
+          player: p => ({ ...p, hp: PLAYER_MAX_HP }),
+        }),
+      }
+    : result
+  return gasbagRoom > 0 && message._tag === 'TickedFrame'
+    ? { ...kept, model: topUpGasbags(kept.model) }
+    : kept
+}
+
+// NOTE: `tick=N` plays N frames of a fixed 1/60 second at once, before the
+// first render, and holds the picture there. The game is deterministic, so
+// this is the picture `freeze=N` waits N real frames for, with no waiting.
+// The Commands those frames give, such as opening the shop's dialog, run
+// once the scene is in, as they would have frame by frame.
+const advance = (scene: HarnessReturn, frames: number): HarnessReturn => {
+  let current = scene.model
+  const commands = [...(scene.commands ?? [])]
+  for (let frame = 0; frame < frames; frame++) {
+    const message = Message.TickedFrame({ deltaTime: FIXED_FRAME_MS })
+    const next = keepScene(update(current, message), message)
+    current = next.model
+    commands.push(...(next.commands ?? []))
+  }
+  return { model: current, commands }
+}
+
+const gameUpdate = (model: Model, incoming: Message): HarnessReturn => {
   if (!QUIET_MESSAGES.has(incoming._tag)) {
     const chain = (message: any): Array<string> =>
       message?._tag === undefined
@@ -1302,57 +1368,195 @@ const harnessUpdate = (model: Model, incoming: Message) => {
   const result = update(model, message)
   if (instrument && message._tag === 'TickedFrame')
     w.__timings.update.push(performance.now() - t0)
-  const kept = god
-    ? {
-        ...result,
-        model: modifyFields(result.model, {
-          player: p => ({ ...p, hp: PLAYER_MAX_HP }),
-        }),
-      }
-    : result
-  const next =
-    gasbagRoom > 0 && message._tag === 'TickedFrame'
-      ? { ...kept, model: topUpGasbags(kept.model) }
-      : kept
+  const next = keepScene(result, message)
   w.__model = next.model
   return next
 }
 
-// NOTE: init needs only the player store, but opening the picker runs update,
-// whose Commands also need the managed audio engine.
-const harnessInit: Runtime.ApplicationInit<
-  Model,
-  Message,
-  void,
-  PlayerStore | CoopNet,
-  ManagedResource.ServicesOf<typeof managedResources>
-> = () => {
-  const base = init()
-  const model = scenarioModel()
-  w.__model = model
+// NOTE: the scene's Model from the current config: seeded when it is frozen
+// or given a seed, with the Profile opened by `picker` or `profile`, and played
+// `tick` frames ahead.
+const sceneOf = (model: Model): HarnessReturn => {
   const seeded =
     config.seed !== undefined || Number.isFinite(freezeAfter)
       ? modifyFields(model, { rngState: () => config.seed ?? 1 })
       : model
   const profileTab = config.profile
-  if (config.picker || profileTab !== undefined) {
-    const opened = openProfile(
-      profileTab === 'name'
-        ? 'Name'
-        : profileTab === 'account'
-          ? 'Account'
-          : profileTab === 'settings'
-            ? 'Settings'
-            : 'Look',
-    )(modifyFields(seeded, { screenMs: () => 99999 }))
-    w.__model = opened.model
-    return {
-      ...base,
-      model: opened.model,
-      commands: [...(base.commands ?? []), ...(opened.commands ?? [])],
+  const opened: HarnessReturn =
+    config.picker || profileTab !== undefined
+      ? openProfile(
+          profileTab === 'name'
+            ? 'Name'
+            : profileTab === 'account'
+              ? 'Account'
+              : profileTab === 'settings'
+                ? 'Settings'
+                : 'Look',
+        )(modifyFields(seeded, { screenMs: () => 99999 }))
+      : { model: seeded }
+  return config.tick === undefined
+    ? opened
+    : advance(opened, config.tick)
+}
+
+// THE READY SIGNAL
+
+// NOTE: `window.__harnessReady` (and `data-harness-ready` on the root
+// element, with the scene's number) is set once the scene has rendered with
+// every image decoded, once the boot has read the save (a save read later
+// could change the scene), and, with `freeze`, once the frozen frame is
+// reached.
+// Scripts wait for it instead of sleeping. Loading another scene clears it.
+let sceneNumber = 0
+const clearReady = () => {
+  w.__harnessReady = false
+  delete document.documentElement.dataset.harnessReady
+}
+const markReadyWhenSettled = (number: number) => {
+  clearReady()
+  void settle(
+    () =>
+      w.__model?.saveStatus !== 'Unread' &&
+      (!Number.isFinite(freezeAfter) || framesRun >= freezeAfter),
+  ).then(() => {
+    if (number === sceneNumber) {
+      w.__harnessReady = true
+      document.documentElement.dataset.harnessReady = String(number)
     }
+  })
+}
+
+// SCENE SWITCHING
+
+const decodeScene = (query: string): HarnessConfig | undefined => {
+  try {
+    return decodeHarnessConfig(query)
+  } catch (error) {
+    w.__sceneError = String(error)
+    return undefined
   }
-  return { ...base, model: seeded }
+}
+
+// NOTE: a fresh page's boot, minus what a page does once. The Model comes
+// from the query as in init. The surface's measurement carries over, since
+// the page and its size are the same. The save counts as read and empty, as
+// in a fresh browser context, whatever earlier scenes wrote to storage, so
+// init's Commands run again without LoadSave: the seed and the device,
+// screen fit, and orientation lock checks. The load steps they finish are
+// already done.
+const loadScene = (model: Model, query: string): HarnessReturn => {
+  const next = decodeScene(query)
+  if (next === undefined) {
+    return { model }
+  }
+  w.__sceneError = undefined
+  useConfig(next)
+  framesRun = 0
+  w.__messages.length = 0
+  w.__timings = { update: [], view: [] }
+  sceneNumber++
+  const scene = sceneOf(
+    modifyFields(scenarioModel(), {
+      maybeSurface: () => model.maybeSurface,
+      orientation: () => model.orientation,
+      saveStatus: () => 'Read' as const,
+    }),
+  )
+  w.__isFrozen = framesRun >= freezeAfter
+  w.__model = scene.model
+  markReadyWhenSettled(sceneNumber)
+  return {
+    model: scene.model,
+    commands: [
+      ...(init().commands ?? []).filter(
+        command => command.name !== LoadSave.name,
+      ),
+      ...(scene.commands ?? []),
+    ],
+  }
+}
+
+const harnessUpdate = (model: Model, incoming: AnyMessage): HarnessReturn =>
+  incoming._tag === 'LoadedScene'
+    ? loadScene(model, incoming.query)
+    : gameUpdate(model, incoming)
+
+// NOTE: the stream behind `window.__loadScene`. While the app runs, a scene
+// request goes into this queue as a LoadedScene Message.
+let maybeRequestScene: ((query: string) => void) | undefined
+const sceneRequests = Stream.callback<AnyMessage>(queue =>
+  Effect.acquireRelease(
+    Effect.sync(() => {
+      maybeRequestScene = query =>
+        Queue.offerUnsafe(queue, HarnessMessage.LoadedScene({ query }))
+    }),
+    () =>
+      Effect.sync(() => {
+        maybeRequestScene = undefined
+      }),
+  ).pipe(Effect.flatMap(() => Effect.never)),
+)
+
+// NOTE: an open dialog holds page state outside the Model: the inert,
+// hidden background, the focus trap, and the scroll lock. A dialog closed by
+// swapping the Model never runs its CloseDialog Command, so this releases
+// what every dialog holds, as that Command does, before the next scene.
+const releaseDialogs = Effect.suspend(() =>
+  Effect.forEach(
+    Array.from(document.querySelectorAll('dialog[id]')),
+    dialog =>
+      Dom.releaseDialogResources(dialog.id).pipe(
+        Effect.flatMap(isReleased =>
+          isReleased ? Dom.unlockScroll : Effect.void,
+        ),
+      ),
+    { discard: true },
+  ),
+)
+
+// NOTE: `window.__loadScene('wave=3&start=wave')` swaps the scene in place.
+// It resets what a new page would: open dialogs, focus, full screen, and
+// scroll. Wait for
+// the ready signal afterwards. `nodev` belongs to the page, not the scene.
+w.__loadScene = async (query: string) => {
+  if (maybeRequestScene === undefined) {
+    throw new Error('the harness is not running yet')
+  }
+  clearReady()
+  await Effect.runPromise(releaseDialogs)
+  if (document.fullscreenElement !== null) {
+    await document.exitFullscreen().catch(() => undefined)
+  }
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
+  window.scrollTo(0, 0)
+  maybeRequestScene(query.replace(/^\?/, ''))
+}
+
+const harnessSubscriptions = Subscription.make<Model, AnyMessage>()(() => ({
+  harnessScenes: Subscription.persistentEntry(sceneRequests),
+}))
+
+// NOTE: init needs only the player store, but opening the picker runs update,
+// whose Commands also need the managed audio engine.
+const harnessInit: Runtime.ApplicationInit<
+  Model,
+  AnyMessage,
+  void,
+  PlayerStore | CoopNet,
+  ManagedResource.ServicesOf<typeof managedResources>
+> = () => {
+  const base = init()
+  const scene = sceneOf(scenarioModel())
+  w.__isFrozen = framesRun >= freezeAfter
+  w.__model = scene.model
+  markReadyWhenSettled(sceneNumber)
+  return {
+    ...base,
+    model: scene.model,
+    commands: [...(base.commands ?? []), ...(scene.commands ?? [])],
+  }
 }
 
 const CELL_W = 12
@@ -1488,7 +1692,7 @@ const application = Runtime.makeApplication({
     if (instrument) w.__timings.view.push(performance.now() - t0)
     return out
   },
-  subscriptions,
+  subscriptions: Subscription.aggregate(subscriptions, harnessSubscriptions),
   managedResources,
   resources: Layer.merge(PlayerStoreLayer, quietCoopNet),
   container: document.getElementById('root'),
@@ -1498,3 +1702,7 @@ const application = Runtime.makeApplication({
 Runtime.run(application)
 w.__stall = STALL_BOX
 w.__doors = PARLOUR.doors
+
+// NOTE: for scripts after a click or a key: resolves once the page has
+// rendered and every image it asked for has decoded.
+w.__whenSettled = () => settle(() => true)

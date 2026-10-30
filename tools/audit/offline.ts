@@ -159,8 +159,13 @@ const runningScript = (page: Page) =>
       .join(' '),
   )
 
+// NOTE: the gear on the home menu (#home-settings) opens the Profile on its
+// Settings tab, a list named "Game settings" of toggle buttons named by
+// their setting, with aria-pressed.
 const soundToggle = (page: Page) =>
-  page.locator('.setting-toggle:has(.setting-label:text-is("Sound"))')
+  page
+    .getByRole('list', { name: 'Game settings' })
+    .getByRole('button', { name: 'Sound', exact: true })
 
 const openSettings = async (page: Page) => {
   await page.click('#home-settings')
@@ -199,7 +204,7 @@ const status = (page: Page) =>
 // NOTE: touch phone, so the run starts from the PLAY button and the first
 // visit picks a difficulty. The player then walks and fires for a while.
 const playARun = async (page: Page) => {
-  await page.locator('.home-play').tap()
+  await page.locator('#home-play').tap()
   await wait(400)
   const normal = page.getByRole('button', { name: /^normal/i })
   if ((await normal.count()) > 0) {

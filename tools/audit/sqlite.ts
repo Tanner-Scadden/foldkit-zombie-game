@@ -71,26 +71,30 @@ const awaitGame = (page: Page) =>
     timeout: 45_000,
   })
 
-const toggleSelector = (label: string) =>
-  `.setting-toggle:has(.setting-label:text-is("${label}"))`
+// NOTE: the gear on the home menu (#home-settings) opens the Profile on its
+// Settings tab, a list named "Game settings" of toggle buttons named by
+// their setting, with aria-pressed. It is opened once per page load.
+const settingsList = (page: Page) =>
+  page.getByRole('list', { name: 'Game settings' })
 
-// NOTE: the settings panel on the home menu shows each setting as a toggle
-// with aria-pressed. It is opened once per page load.
+const toggle = (page: Page, label: string) =>
+  settingsList(page).getByRole('button', { name: label, exact: true })
+
 const openSettings = async (page: Page) => {
-  if ((await page.locator('.setting-toggle').count()) === 0) {
+  if (!(await settingsList(page).isVisible())) {
     await page.click('#home-settings')
-    await page.waitForSelector('.setting-toggle')
+    await settingsList(page).waitFor()
   }
 }
 
 const setting = async (page: Page, label: string) => {
   await openSettings(page)
-  return page.locator(toggleSelector(label)).getAttribute('aria-pressed')
+  return toggle(page, label).getAttribute('aria-pressed')
 }
 
 const flip = async (page: Page, label: string) => {
   await openSettings(page)
-  await page.locator(toggleSelector(label)).click()
+  await toggle(page, label).click()
 }
 
 const isMuted = async (page: Page) =>

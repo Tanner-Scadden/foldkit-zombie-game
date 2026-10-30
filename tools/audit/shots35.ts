@@ -3,13 +3,14 @@
 // desktop, a landscape phone, and an upright phone, as
 // `s35-<TAG>-<viewport>-<scene>.png`. An upright phone sees only part of the
 // room, so it takes the room once with the player by each door.
-//   TAG=after BASE=http://localhost:4174/ bun run heavy -- bun tools/audit/shots35.ts
+//   TAG=after bun run heavy -- bun tools/audit/shots35.ts
 import {
   DESKTOP_1280,
   PHONE_844,
   UPRIGHT_390,
   type Viewport,
   deviceQuery,
+  gotoScene,
   harnessUrl,
   isPickedScene,
   launch,
@@ -17,7 +18,7 @@ import {
   pickViewports,
   shot,
   tagOr,
-  wait,
+  useHarness,
 } from './lib'
 
 const TAG = tagOr('after')
@@ -38,19 +39,13 @@ const SCENES: ReadonlyArray<Readonly<{ name: string; query: string }>> = [
   { name: 'kitchen', query: `${ROOM}&openexits=Kitchen&px=70&py=70` },
 ]
 
+await useHarness()
 const browser = await launch()
 for (const viewport of VIEWPORTS as ReadonlyArray<Viewport>) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) continue
     const page = await openPage(browser, viewport)
-    await page.goto(harnessUrl(scene.query, deviceQuery(viewport)))
-    await wait(2500)
-    await page
-      .waitForFunction(() => (window as any).__isFrozen === true, null, {
-        timeout: 15000,
-      })
-      .catch(() => undefined)
-    await wait(300)
+    await gotoScene(page, harnessUrl(scene.query, deviceQuery(viewport)))
     await shot(page, `s35-${TAG}-${viewport.name}-${scene.name}`)
     await page.context().close()
   }

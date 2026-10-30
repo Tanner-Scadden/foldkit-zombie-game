@@ -6,7 +6,7 @@
 // button it checks that it is at least 48 px and that its center hits it, and
 // it checks that the page and the open dialog do not scroll. Exits with 1 on
 // any problem.
-//   TAG=after BASE=http://localhost:4174/ bun shots34.ts
+//   TAG=after bun shots34.ts
 // ONLY picks scenes, such as `ONLY=wave,break`, and VIEWPORTS picks phones,
 // such as `VIEWPORTS=p390,l844`. SHOTS_PARALLEL sets how many scenes run at
 // once, each in its own browser context (3 by default).
@@ -22,16 +22,15 @@ import {
   type Viewport,
   finish,
   forEachInOrder,
-  harnessUrl,
   isPickedScene,
   launch,
-  openPage,
   parallelFrom,
   pickViewports,
+  scenePages,
   settleAnimations,
   shot,
   tagOr,
-  wait,
+  useHarness,
 } from './lib'
 
 const TAG = tagOr('after')
@@ -52,7 +51,7 @@ type Scene = Readonly<{
 
 const clickButton = (name: RegExp) => async (page: Page) => {
   await page.getByRole('button', { name }).first().click()
-  await wait(500)
+  await page.locator('dialog[open]').first().waitFor({ state: 'visible' })
 }
 
 const fromHand = (name: RegExp) => async (page: Page) => {
@@ -66,7 +65,7 @@ const tapTab = (name: RegExp) => async (page: Page) => {
   if (box !== null) {
     await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
   }
-  await wait(500)
+  await settleAnimations(page)
 }
 
 const SCENES: ReadonlyArray<Scene> = [
@@ -137,7 +136,13 @@ const SCENES: ReadonlyArray<Scene> = [
 
 const MIN_SIDE = 48
 
+await useHarness()
 const browser = await launch()
+
+// NOTE: every scene plays 72 frames (1.2 s) at once and holds there, so the
+// pictures are the same on every run, and a page per screen and worker
+// switches scenes in place.
+const pages = scenePages(browser, ['device=touch', 'nodev', 'tick=72'])
 
 const checkScene = async (
   viewport: Viewport,
@@ -145,9 +150,7 @@ const checkScene = async (
   log: Log,
 ): Promise<ReadonlyArray<string>> => {
   const problems: Array<string> = []
-  const page = await openPage(browser, viewport)
-  await page.goto(harnessUrl(scene.query, 'device=touch', 'nodev'))
-  await wait(1200)
+  const page = await pages.open(viewport, scene.query)
   if (scene.act) {
     await scene.act(page)
   }
@@ -245,7 +248,7 @@ const checkScene = async (
       problems.push(`${where}: "${button.name}" is off screen`)
     }
   }
-  await page.context().close()
+  pages.release(page)
   return problems
 }
 
@@ -261,6 +264,7 @@ const problems = await forEachInOrder(
   parallelFrom('SHOTS_PARALLEL'),
   ({ viewport, scene }, log) => checkScene(viewport, scene, log),
 )
+await pages.close()
 await browser.close()
 
 finish(problems.flat(), 'no problems')

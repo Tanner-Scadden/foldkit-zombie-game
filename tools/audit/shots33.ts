@@ -11,7 +11,7 @@
 // It prints any visible button smaller than 48 px on a phone, any two home
 // buttons that overlap, any panel or page that scrolls, and whether PLAY sits
 // in the same box in both modes. Exits with 1 on a problem.
-//   TAG=after BASE=http://localhost:4174/ bun shots33.ts
+//   TAG=after bun shots33.ts
 // ONLY picks scenes, such as `ONLY=home,munchopedia`. SHOTS_PARALLEL sets
 // how many screens run at once, each in its own browser contexts (3 by
 // default).
@@ -27,14 +27,16 @@ import {
   deviceQuery,
   finish,
   forEachInOrder,
-  harnessUrl,
+  harnessQuery,
   isPickedScene,
   launch,
-  openPage,
   parallelFrom,
+  scenePages,
+  settleAnimations,
   shot,
   tagOr,
-  wait,
+  useHarness,
+  whenSettled,
 } from './lib'
 
 const TAG = tagOr('after')
@@ -144,7 +146,7 @@ const press = async (
   } else {
     await page.mouse.click(x, y)
   }
-  await wait(500)
+  await settleAnimations(page)
 }
 
 const check = (page: Page, minSide: number, isPhone: boolean) =>
@@ -208,7 +210,13 @@ const check = (page: Page, minSide: number, isPhone: boolean) =>
     { minSide, isPhone },
   )
 
+await useHarness()
 const browser = await launch()
+
+// NOTE: every scene plays 72 frames (1.2 s) at once and holds there, so the
+// pictures are the same on every run, and a page per screen switches scenes
+// in place.
+const pages = scenePages(browser, ['tick=72'])
 
 // NOTE: one viewport is one unit of work, since PLAY's box is compared
 // across its scenes and the focus walk follows them.
@@ -222,9 +230,11 @@ const checkViewport = async (
     if (!isPickedScene(scene.name)) {
       continue
     }
-    const page = await openPage(browser, viewport)
-    await page.goto(harnessUrl(scene.query, deviceQuery(viewport)))
-    await wait(1200)
+    const page = await pages.open(
+      viewport,
+      harnessQuery(scene.query, deviceQuery(viewport)),
+    )
+    await settleAnimations(page)
     for (const selector of scene.open ?? []) {
       await press(page, viewport, selector, problems)
     }
@@ -248,7 +258,7 @@ const checkViewport = async (
     if (scene.name.startsWith('munchopedia') && found.panelScroll > 0) {
       problems.push(`${name}: the Munchopedia panel scrolls`)
     }
-    await page.context().close()
+    pages.release(page)
   }
   const campaignPlay = playBoxes.get('home-found')
   const endlessPlay = playBoxes.get('home-endless')
@@ -262,13 +272,11 @@ const checkViewport = async (
     }
   }
   if (!viewport.isPhone && isPickedScene('focus')) {
-    const page = await openPage(browser, viewport)
-    await page.goto(harnessUrl(FOUND, 'newsseen'))
-    await wait(1200)
+    const page = await pages.open(viewport, harnessQuery(FOUND, 'newsseen'))
     const order: Array<string> = []
     for (let step = 1; step <= 6; step++) {
       await page.keyboard.press('ArrowDown')
-      await wait(250)
+      await whenSettled(page)
       order.push(
         await page.evaluate(() => document.activeElement?.id ?? '(none)'),
       )
@@ -286,11 +294,11 @@ const checkViewport = async (
         ),
       )
       await page.keyboard.press('Tab')
-      await wait(100)
+      await whenSettled(page)
     }
     log(`${viewport.name} arrows: ${order.join(' > ')}`)
     log(`${viewport.name} tab: ${tabOrder.join(' > ')}`)
-    await page.context().close()
+    pages.release(page)
   }
   return problems
 }
@@ -300,6 +308,7 @@ const problems = await forEachInOrder(
   parallelFrom('SHOTS_PARALLEL'),
   checkViewport,
 )
+await pages.close()
 await browser.close()
 
 finish(problems.flat(), 'The home layout is clean.')

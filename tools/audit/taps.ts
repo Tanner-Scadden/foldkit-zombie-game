@@ -9,8 +9,8 @@
 // center and a corner for real and checks that exactly one Message names the
 // tap, and that it is not a press on the game surface. Exits with 1 on any
 // miss.
-//   BASE=http://localhost:4174/ bun taps.ts
-//   PORTRAIT=1 BASE=http://localhost:4174/ bun taps.ts
+//   bun taps.ts
+//   PORTRAIT=1 bun taps.ts
 // VIEWPORTS picks phones by name, such as `VIEWPORTS=u390,u360`.
 // ONLY picks scenes, such as `ONLY=home,munchopedia`.
 // TAPS_PARALLEL sets how many scenes run at once, each in its own browser
@@ -28,13 +28,13 @@ import {
   type Viewport,
   finish,
   forEachInOrder,
-  harnessUrl,
   isPickedScene,
   launch,
-  openPage,
   parallelFrom,
   pickViewports,
+  scenePages,
   settleAnimations,
+  useHarness,
   wait,
 } from './lib'
 
@@ -60,6 +60,7 @@ type Scene = Readonly<{
   query: string
   open?: ReadonlyArray<string>
   opensDialog?: boolean
+  fresh?: boolean
 }>
 
 const MANOR = '#home-manor'
@@ -70,7 +71,7 @@ const SCENES: ReadonlyArray<Scene> = [
     name: 'home-full',
     query: 'fit=full&kills=Runner:3&newentries=Runner',
   },
-  { name: 'home-iphone', query: 'fit=home' },
+  { name: 'home-iphone', query: 'fit=home', fresh: true },
   { name: 'hand', query: 'support', open: [MANOR] },
   { name: 'whats-new', query: '', open: [MANOR, '#hand-card-whatsnew'] },
   {
@@ -156,7 +157,6 @@ type Target = Readonly<{
 
 const EDGE_INSET = 2
 const MIN_SIDE = 48
-const SETTLE_MS = 1100
 const AFTER_TAP_MS = 250
 
 const surfaceTags = new Set(['PressedPointer'])
@@ -192,14 +192,15 @@ const waitForDialog = (page: Page) =>
     .catch(() => undefined)
 
 const openScene = async (page: Page, scene: Scene) => {
-  await page.goto(harnessUrl(scene.query, 'device=touch', 'nodev'))
-  await wait(SETTLE_MS)
+  if (scene.opensDialog === true) {
+    await waitForDialog(page)
+  }
+  await settleAnimations(page)
   for (const selector of scene.open ?? []) {
     await tapToOpen(page, scene, selector)
     await waitForDialog(page)
-    await wait(500)
+    await settleAnimations(page)
   }
-  await settleAnimations(page)
 }
 
 // NOTE: true once the scene shows a button at `index`, in the open dialog
@@ -310,13 +311,19 @@ const hitsButton = (
     },
   )
 
+await useHarness()
 const browser = await launch()
+const pages = scenePages(browser, ['device=touch', 'nodev'])
 
-// NOTE: a tap can write the save, such as PLAY dismissing the iPhone tip.
-// The save lives in SQLite on OPFS, which clearing localStorage does not
-// reach, so every reopen gets a new browser context with empty storage.
+// NOTE: a tap can change the scene, so every tap gets the scene again. It is
+// switched in on a page of the same screen, which starts from the query with
+// an empty save, whatever earlier taps wrote to storage. A scene marked
+// `fresh`, such as the iPhone tip, gets a new browser context instead, with
+// empty storage, as a first visit would.
 const openFreshScene = async (viewport: Viewport, scene: Scene) => {
-  const page = await openPage(browser, viewport)
+  const page = await pages.open(viewport, scene.query, {
+    fresh: scene.fresh === true,
+  })
   await openScene(page, scene)
   return page
 }
@@ -334,7 +341,7 @@ const openWithButton = async (
     if (await hasButton(page, index, hasDialog)) {
       return page
     }
-    await page.context().close()
+    await pages.discard(page)
   }
   return null
 }
@@ -373,6 +380,7 @@ const checkScene = async (
       }
     }
   }
+  pages.release(page)
   for (const target of targets) {
     for (const { name } of target.points.filter(
       ({ name }) => name === 'center' || name === 'corner',
@@ -401,7 +409,7 @@ const checkScene = async (
       const tags: ReadonlyArray<string> = await tapPage.evaluate(() => [
         ...(window as any).__messages,
       ])
-      await tapPage.context().close()
+      pages.release(tapPage)
       const tapTags = tags.filter(isTapMessage)
       const reachedSurface = tags.some(tag => surfaceTags.has(tag))
       const isOk = tapTags.length === 1 && !reachedSurface
@@ -415,7 +423,6 @@ const checkScene = async (
       }
     }
   }
-  await page.context().close()
   return failures
 }
 
@@ -433,6 +440,7 @@ const failures = await forEachInOrder(
   parallelFrom('TAPS_PARALLEL'),
   ({ viewport, scene }, log) => checkScene(viewport, scene, log),
 )
+await pages.close()
 await browser.close()
 
 finish(failures.flat(), 'Every tap landed on its button and sent one Message.')
