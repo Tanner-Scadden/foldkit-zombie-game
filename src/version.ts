@@ -1,6 +1,7 @@
 import { Clock, Data, Duration, Effect, Option, Schema, pipe } from 'effect'
 import { FetchHttpClient, HttpClient, HttpClientResponse } from 'effect/http'
 
+import { describeError } from './describeError'
 import { Phase } from './model'
 
 // BUILD
@@ -40,9 +41,6 @@ const VersionFile = Schema.Struct({ build: Schema.String })
 class VersionCheckError extends Data.TaggedError('VersionCheckError')<{
   readonly reason: string
 }> {}
-
-const describeError = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
 
 const versionUrl = (stamp: number): string => {
   const url = new URL(VERSION_FILE, document.baseURI)

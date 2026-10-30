@@ -9,6 +9,7 @@ import {
 } from 'effect'
 import { ManagedResource } from 'foldkit'
 
+import { describeError } from './describeError'
 import {
   type MusicCue,
   type MusicDeck,
@@ -57,9 +58,6 @@ const NOISE_SEED = 0x2f6b9d13
 const MAX_VOICES = 10
 const STOP_PADDING_SECONDS = 0.02
 const RESUME_TIMEOUT = '600 millis'
-
-const describeError = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
 
 const whiteNoise = (sampleCount: number): Float32Array<ArrayBuffer> => {
   const [_nextState, samples] = generateMany(

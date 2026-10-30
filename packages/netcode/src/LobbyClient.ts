@@ -96,14 +96,17 @@ export const signInDevice = (
 const unavailable = () =>
   new RoomRequestFailed({ refusal: RoomRefusal.cases.Unavailable.make({}) })
 
-const decodeRefusal = Schema.decodeUnknownEffect(RoomRefusal)
-
-const roomCall = (url: string, token: string, body: unknown) =>
+const roomCall = <A, I>(
+  url: string,
+  token: string,
+  schema: Schema.Codec<A, I>,
+  body: A,
+) =>
   pipe(
     HttpClientRequest.post(url),
-    HttpClientRequest.bodyText(JSON.stringify(body), 'application/json'),
     HttpClientRequest.bearerToken(token),
-    request => HttpClient.execute(request),
+    HttpClientRequest.schemaBodyJson(schema)(body),
+    Effect.flatMap(request => HttpClient.execute(request)),
     Effect.mapError(unavailable),
     Effect.flatMap(response =>
       response.status >= 200 && response.status < 300
@@ -112,8 +115,7 @@ const roomCall = (url: string, token: string, body: unknown) =>
             unavailable,
           )
         : pipe(
-            response.json,
-            Effect.flatMap(decodeRefusal),
+            HttpClientResponse.schemaBodyJson(RoomRefusal)(response),
             Effect.mapError(unavailable),
             Effect.flatMap(refusal =>
               Effect.fail(new RoomRequestFailed({ refusal })),
@@ -133,6 +135,7 @@ export const createRoom = (
   roomCall(
     new URL(ROOM_PATHS.create, origin).toString(),
     token,
+    CreateRequest,
     CreateRequest.make({
       name: name.slice(0, MAX_NAME_INPUT),
       look: look.slice(0, MAX_LOOK_INPUT),
@@ -149,6 +152,7 @@ export const joinRoom = (
   roomCall(
     new URL(ROOM_PATHS.join, origin).toString(),
     token,
+    JoinRequest,
     JoinRequest.make({
       code,
       name: name.slice(0, MAX_NAME_INPUT),

@@ -178,10 +178,61 @@ const noExtractTag = {
   },
 }
 
+// NOTE: `JSON.parse` and `JSON.stringify`, or the same off `globalThis`.
+// oxlint's no-restricted-properties would do, but an override replaces its
+// whole list, so the files allowed raw JSON would have to repeat every
+// other restricted property. A rule of its own is turned off file by file.
+const isJsonObject = node =>
+  (node?.type === 'Identifier' && node.name === 'JSON') ||
+  (node?.type === 'MemberExpression' &&
+    !node.computed &&
+    node.object.type === 'Identifier' &&
+    node.object.name === 'globalThis' &&
+    node.property.type === 'Identifier' &&
+    node.property.name === 'JSON')
+
+const propertyName = node =>
+  node.computed
+    ? isStringLiteral(node.property)
+      ? node.property.value
+      : undefined
+    : node.property.type === 'Identifier'
+      ? node.property.name
+      : undefined
+
+const RAW_JSON_METHODS = new Set(['parse', 'stringify'])
+
+const noRawJson = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description:
+        'Read and write JSON through a Schema (Schema.fromJsonString, schemaBodyJson) instead of raw JSON.parse or JSON.stringify.',
+    },
+  },
+  create(context) {
+    return {
+      MemberExpression(node) {
+        if (
+          isJsonObject(node.object) &&
+          RAW_JSON_METHODS.has(propertyName(node))
+        ) {
+          context.report({
+            node,
+            message:
+              'Raw JSON skips the Schema: use Schema.fromJsonString(YourSchema) or HttpClientRequest.schemaBodyJson, or add the file to the no-raw-json allowlist with a reason (AGENTS.md "Code shape").',
+          })
+        }
+      },
+    }
+  },
+}
+
 export default {
   meta: { name: 'munch' },
   rules: {
     'no-tag-chain': noTagChain,
     'no-extract-tag': noExtractTag,
+    'no-raw-json': noRawJson,
   },
 }

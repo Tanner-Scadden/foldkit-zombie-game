@@ -1,5 +1,6 @@
 import { Data, Duration, Effect, Option, pipe } from 'effect'
 
+import { describeError } from './describeError'
 import { DEV_BUILD } from './version'
 
 // The page's side of the service worker (src/sw/worker.ts): registering it,
@@ -27,9 +28,6 @@ const TAKE_OVER_TIMEOUT = Duration.seconds(5)
 export class ServiceWorkerError extends Data.TaggedError('ServiceWorkerError')<{
   readonly reason: string
 }> {}
-
-const describeError = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
 
 // NOTE: Safari's private mode, an insecure origin, and an itch.io iframe can
 // all lack the container or refuse to register. Either is only a failure.

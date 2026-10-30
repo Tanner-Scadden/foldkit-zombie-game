@@ -70,6 +70,7 @@
     "typescript/switch-exhaustiveness-check": "error",
     "munch/no-tag-chain": "error",
     "munch/no-extract-tag": "error",
+    "munch/no-raw-json": "error",
     "typescript/no-unnecessary-condition": "error",
     "typescript/no-misused-spread": "error",
     "typescript/no-unsafe-argument": "error",
@@ -293,6 +294,32 @@
         "oxc/no-map-spread": "off",
         "oxc/no-accumulating-spread": "off"
       }
+    },
+    // NOTE: the files allowed raw JSON.parse and JSON.stringify, each with
+    // its reason. Everything else reads and writes JSON through a Schema.
+    {
+      // NOTE: tests write raw and malformed payloads to feed the decoders,
+      // and compare plain values by their text.
+      "files": ["**/*.test.ts"],
+      "rules": { "munch/no-raw-json": "off" }
+    },
+    {
+      // NOTE: host scripts read and write reports, fixtures, and page
+      // results of their own (slice 9b tightens the tools).
+      "files": ["tools/**/*.ts"],
+      "rules": { "munch/no-raw-json": "off" }
+    },
+    {
+      // NOTE: writes the service worker's build id and precache list as
+      // JavaScript literals into its source, not JSON to be read back.
+      "files": ["src/sw/precache.ts"],
+      "rules": { "munch/no-raw-json": "off" }
+    },
+    {
+      // NOTE: the arena's readout for the audit harness (tools/audit/coop.ts),
+      // a plain line no Schema reads. Co-op belongs to slice 0b for now.
+      "files": ["src/coop/seam.ts"],
+      "rules": { "munch/no-raw-json": "off" }
     },
     // TODO(cleanup slice 9): the overrides below are temporary. Other changes
     // were editing these files when the strict rules landed: fix the hits and

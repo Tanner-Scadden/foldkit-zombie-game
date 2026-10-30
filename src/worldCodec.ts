@@ -3,6 +3,7 @@ import { Array, Match, Option, Result, Struct } from 'effect'
 
 import type { Reader, Writer } from '@munch/netcode'
 
+import { type WireHint, wireHintOf } from './wireNumber'
 import type { World } from './world'
 import {
   DebutCard,
@@ -21,12 +22,11 @@ import {
 // what a co-op room sends its players. The codec is read off the World's
 // own Schemas, so a new field travels without a line here:
 //
-// - Numbers by what their field holds: positions (`x`, `y`) as int16 in
-//   eighths of a pixel, velocities and knockback in eighths of a pixel a
-//   second, directions (`facing`, `direction`, `move`, aim) and scales in
-//   4096ths,
-//   timers (any field ending in `Ms`) as whole milliseconds, and the rest
-//   exactly: a small integer as a varint, anything else as a float64.
+// - Numbers by the `wire` annotation on their Schema (src/wireNumber.ts):
+//   positions as int16 in eighths of a pixel, velocities in eighths of a
+//   pixel a second, directions and scales in 4096ths, timers as whole
+//   milliseconds. A number with no annotation goes exactly: a small
+//   integer as a varint, anything else as a float64.
 // - Literals and union tags as their index, options as a flag, strings and
 //   lists with their length.
 // - The entity lists (zombies, bullets, lids, pickups, traps, and the
@@ -44,36 +44,6 @@ import {
 //
 // The Writer and Reader are the netcode package's, named by type only, so
 // a room's bundle carries nothing more of the package than the room does.
-
-type Hint = 'Exact' | 'Position' | 'Velocity' | 'Unit' | 'Millis'
-
-const UNIT_FIELDS: ReadonlySet<string> = new Set([
-  'facing',
-  'direction',
-  'move',
-  'maybeAim',
-  'intensity',
-])
-const VELOCITY_FIELDS: ReadonlySet<string> = new Set([
-  'knockback',
-  'velocityX',
-  'velocityY',
-])
-const POSITION_FIELDS: ReadonlySet<string> = new Set(['x', 'y', 'offset'])
-
-const hintOf = (name: string, inherited: Hint): Hint => {
-  if (UNIT_FIELDS.has(name) || name.endsWith('Scale')) {
-    return 'Unit'
-  } else if (VELOCITY_FIELDS.has(name)) {
-    return 'Velocity'
-  } else if (name.endsWith('Ms')) {
-    return 'Millis'
-  } else if (POSITION_FIELDS.has(name) && inherited === 'Exact') {
-    return 'Position'
-  } else {
-    return inherited
-  }
-}
 
 // NOTE: the entity lists, by the field that holds them, and what keys
 // each item.
@@ -240,7 +210,7 @@ const POSITION_SCALE = 8
 const VELOCITY_SCALE = 8
 const UNIT_SCALE = 4096
 
-const NUMBER_CODECS: Readonly<Record<Hint, Codec>> = {
+const NUMBER_CODECS: Readonly<Record<WireHint, Codec>> = {
   Exact: exactNumber,
   Position: fixedNumber(POSITION_SCALE),
   Velocity: fixedNumber(VELOCITY_SCALE),
@@ -852,20 +822,19 @@ const propertyName = (property: SchemaAST.PropertySignature): string =>
 const isOptionalProperty = (property: SchemaAST.PropertySignature): boolean =>
   property.type.context?.isOptional === true
 
-const fieldCodec = (name: string, ast: SchemaAST.AST, hint: Hint): Codec => {
-  const inner = codecOf(ast, hintOf(name, hint))
+const fieldCodec = (name: string, ast: SchemaAST.AST): Codec => {
+  const inner = codecOf(ast)
   return Option.match(Option.fromNullishOr(KEYED_LISTS.get(name)), {
     onNone: () => inner,
     onSome: keyOf =>
       ast._tag === 'Arrays' && Array.isReadonlyArrayNonEmpty(ast.rest)
-        ? keyedListCodec(codecOf(ast.rest[0], hintOf(name, hint)), keyOf)
+        ? keyedListCodec(codecOf(ast.rest[0]), keyOf)
         : inner,
   })
 }
 
 const objectsCodec = (
   ast: SchemaAST.Objects,
-  hint: Hint,
   skipped: ReadonlySet<string>,
   fills: Fields,
 ): Codec => {
@@ -887,7 +856,7 @@ const objectsCodec = (
         ? Result.failVoid
         : Result.succeed({
             name,
-            codec: fieldCodec(name, property.type, hint),
+            codec: fieldCodec(name, property.type),
             isOptional: isOptionalProperty(property),
           })
     },
@@ -897,25 +866,25 @@ const objectsCodec = (
 
 const NO_FIELDS: ReadonlySet<string> = new Set()
 
-const codecOf = (ast: SchemaAST.AST, hint: Hint): Codec =>
+const codecOf = (ast: SchemaAST.AST): Codec =>
   Match.value(ast).pipe(
-    Match.tag('Number', () => NUMBER_CODECS[hint]),
+    Match.tag('Number', number => NUMBER_CODECS[wireHintOf(number)]),
     Match.tag('String', 'TemplateLiteral', () => textCodec),
     Match.tag('Boolean', () => booleanCodec),
     Match.tag('Literal', ({ literal }) => constantCodec(literal)),
     Match.tag('Declaration', ({ typeParameters }) =>
       typeParameters.length === 1 && typeParameters[0] !== undefined
-        ? optionCodec(codecOf(typeParameters[0], hint))
+        ? optionCodec(codecOf(typeParameters[0]))
         : fail('A Schema declaration other than Option'),
     ),
     Match.tag('Arrays', ({ elements, rest }) =>
       Array.isReadonlyArrayEmpty(elements) &&
       rest.length === 1 &&
       rest[0] !== undefined
-        ? listCodec(codecOf(rest[0], hint))
+        ? listCodec(codecOf(rest[0]))
         : fail('A tuple in the World'),
     ),
-    Match.tag('Objects', objects => objectsCodec(objects, hint, NO_FIELDS, {})),
+    Match.tag('Objects', objects => objectsCodec(objects, NO_FIELDS, {})),
     Match.tag('Union', union => {
       const members = flattenUnion(union)
       return Array.every(members, member => member._tag === 'Literal')
@@ -923,11 +892,11 @@ const codecOf = (ast: SchemaAST.AST, hint: Hint): Codec =>
         : unionCodec(
             Array.map(members, member => ({
               isMember: isMemberOf(member),
-              codec: codecOf(member, hint),
+              codec: codecOf(member),
             })),
           )
     }),
-    Match.tag('Suspend', suspend => codecOf(suspend.thunk(), hint)),
+    Match.tag('Suspend', suspend => codecOf(suspend.thunk())),
     Match.orElse(({ _tag }) => fail(`No wire form for a ${_tag}`)),
   )
 
@@ -970,16 +939,14 @@ const HOME_VALUES: Fields = {
   stats: freshStats,
 }
 
-export const WIRE_FIELDS: ReadonlyArray<string> = Array.filter(
-  Struct.keys(WorldSchema.fields),
-  key => !HOME_FIELDS.has(key),
-)
+export const WIRE_FIELDS: ReadonlyArray<keyof typeof WorldSchema.fields> =
+  Array.filter(Struct.keys(WorldSchema.fields), key => !HOME_FIELDS.has(key))
 
 const worldAst = WorldSchema.ast
 
-const worldCodec = objectsCodec(worldAst, 'Exact', HOME_FIELDS, HOME_VALUES)
+const worldCodec = objectsCodec(worldAst, HOME_FIELDS, HOME_VALUES)
 
-const eventsCodec = codecOf(GameEvent.ast, 'Exact')
+const eventsCodec = codecOf(GameEvent.ast)
 
 const isWorld = (value: unknown): value is World =>
   isRecord(value) &&
@@ -1011,6 +978,18 @@ export const writeWorldDiff = (
 
 export const readWorldDiff = (reader: Reader, prev: World): World =>
   worldOf(readChange(worldCodec, reader, prev))
+
+// NOTE: the codec for any Schema, as the World's fields get theirs, for
+// tests.
+export const valueCodecOf = (
+  ast: SchemaAST.AST,
+): Readonly<{
+  write: (writer: Writer, value: unknown) => void
+  read: (reader: Reader) => unknown
+}> => {
+  const codec = codecOf(ast)
+  return { write: codec.write, read: codec.read }
+}
 
 // NOTE: whether two Worlds read back the same on a client.
 export const isSameOnWire = (a: World, b: World): boolean =>

@@ -1,10 +1,11 @@
-import type { Cause, Schema } from 'effect'
 import {
   Array,
+  type Cause,
   Effect,
   Option,
   Queue,
   Ref,
+  Schema,
   type Scope,
   Semaphore,
   Stream,
@@ -24,6 +25,8 @@ import {
   IdentityFailure,
   IdentityRefused,
   LinkCodeResponse,
+  RedeemRequest,
+  SessionRequest,
   SessionResponse,
 } from './Identity'
 import {
@@ -283,12 +286,13 @@ const refusedFrom = (response: HttpClientResponse.HttpClientResponse) =>
     Effect.flatMap(failure => Effect.fail(new IdentityRefused({ failure }))),
   )
 
-const call = <A, I>(
+const call = <A, I, E>(
   schema: Schema.Codec<A, I>,
-  request: HttpClientRequest.HttpClientRequest,
+  request: Effect.Effect<HttpClientRequest.HttpClientRequest, E>,
 ): Effect.Effect<A, IdentityRefused> =>
   pipe(
-    HttpClient.execute(request),
+    request,
+    Effect.flatMap(HttpClient.execute),
     Effect.mapError(unavailable),
     Effect.flatMap(response =>
       response.status >= 200 && response.status < 300
@@ -301,27 +305,51 @@ const call = <A, I>(
     withFetch,
   )
 
-const post = (url: string, body: unknown, token?: string) =>
-  jsonPost(url, JSON.stringify(body), token)
+// NOTE: an identity request, its body through its Schema.
+const post = <A, I>(
+  url: string,
+  schema: Schema.Codec<A, I>,
+  body: A,
+  token?: string,
+) =>
+  pipe(
+    HttpClientRequest.post(url),
+    request =>
+      token === undefined
+        ? request
+        : HttpClientRequest.bearerToken(request, token),
+    HttpClientRequest.schemaBodyJson(schema)(body),
+  )
+
+const NoBody = Schema.Struct({})
 
 export const httpIdentityApi = (origin: string): IdentityApi => ({
   challenge: call(
     ChallengeResponse,
-    post(new URL(IDENTITY_PATHS.challenge, origin).toString(), {}),
+    post(new URL(IDENTITY_PATHS.challenge, origin).toString(), NoBody, {}),
   ),
   session: request =>
     call(
       SessionResponse,
-      post(new URL(IDENTITY_PATHS.session, origin).toString(), request),
+      post(
+        new URL(IDENTITY_PATHS.session, origin).toString(),
+        SessionRequest,
+        request,
+      ),
     ),
   link: token =>
     call(
       LinkCodeResponse,
-      post(new URL(IDENTITY_PATHS.link, origin).toString(), {}, token),
+      post(new URL(IDENTITY_PATHS.link, origin).toString(), NoBody, {}, token),
     ),
   redeem: (token, code) =>
     call(
       SessionResponse,
-      post(new URL(IDENTITY_PATHS.redeem, origin).toString(), { code }, token),
+      post(
+        new URL(IDENTITY_PATHS.redeem, origin).toString(),
+        RedeemRequest,
+        { code },
+        token,
+      ),
     ),
 })
