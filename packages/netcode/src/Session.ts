@@ -54,6 +54,8 @@ export const INPUT_MARGIN_MS = 2 * TICK_MS
 export const SNAP_DISTANCE = 48
 export const EASE_MS = 80
 export const KEEP_FRAMES_MS = 1000
+// NOTE: the room sends 20 times a second, so a gap this long is a stall.
+export const STALL_MS = 200
 export const MAX_PREDICTED_TICKS = 30
 
 export type SessionPhase =
@@ -89,6 +91,15 @@ export interface Stats {
   readonly corrections: number
   readonly lastCorrectionPx: number
   readonly maxCorrectionPx: number
+  // NOTE: times a message could not be applied (a Delta with no world for
+  // its base, or one that did not decode), so the session asked the room
+  // for a fresh Snapshot.
+  readonly resyncs: number
+  // NOTE: gaps with nothing from the room for at least STALL_MS, such as
+  // a lost TCP segment's resend holding everything behind it, and the
+  // longest of them.
+  readonly stalls: number
+  readonly longestStallMs: number
   readonly sinceMs: number
 }
 
@@ -123,6 +134,11 @@ export interface Session<W, Own> {
   readonly pings: ReadonlyArray<Ping>
   readonly nextNonce: number
   readonly pingedMs: number
+  // NOTE: a message did not apply, so every Delta after it would not
+  // either. Until a Snapshot comes (the shell reconnects for one), Deltas
+  // are set aside instead of failing one by one.
+  readonly isResyncing: boolean
+  readonly heardMs: number
   readonly stats: Stats
 }
 
@@ -153,6 +169,8 @@ export const makeSession = <W, Own>(nowMs: number): Session<W, Own> => ({
   pings: [],
   nextNonce: 1,
   pingedMs: nowMs - PING_EVERY_MS,
+  isResyncing: false,
+  heardMs: nowMs,
   stats: {
     bytesIn: 0,
     framesIn: 0,
@@ -162,6 +180,9 @@ export const makeSession = <W, Own>(nowMs: number): Session<W, Own> => ({
     corrections: 0,
     lastCorrectionPx: 0,
     maxCorrectionPx: 0,
+    resyncs: 0,
+    stalls: 0,
+    longestStallMs: 0,
     sinceMs: nowMs,
   },
 })
@@ -189,8 +210,13 @@ export const roomTickAt = (
 
 // NOTE: a message with tick T arriving now says the room is at about T plus
 // half a round trip. Small differences are eased in so the clock does not
-// jitter with the network; large ones (a stall, a new socket) jump.
+// jitter with the network. A message far ahead of the clock jumps it
+// forward. One far behind is only late (a lost segment's resend held it
+// and everything behind it), so it is eased in like a small one: jumping
+// back would rewind everyone drawn and stop your own inputs until the
+// clock passed them again. Only a clock a long way ahead jumps back.
 const JUMP_TICKS = 6
+const JUMP_BACK_TICKS = 60
 const EASE_CLOCK = 0.1
 
 const reanchor = <W, Own>(
@@ -203,7 +229,7 @@ const reanchor = <W, Own>(
     onNone: () => ({ tick: heard, atMs: nowMs }),
     onSome: () => {
       const believed = roomTickAt(session, nowMs)
-      return Math.abs(heard - believed) > JUMP_TICKS
+      return heard - believed > JUMP_TICKS || believed - heard > JUMP_BACK_TICKS
         ? { tick: heard, atMs: nowMs }
         : { tick: believed + (heard - believed) * EASE_CLOCK, atMs: nowMs }
     },
@@ -287,14 +313,37 @@ const reconcile = <W, Own>(
 const counted = <W, Own>(
   session: Session<W, Own>,
   bytes: number,
-): Session<W, Own> => ({
-  ...session,
-  stats: {
-    ...session.stats,
-    bytesIn: session.stats.bytesIn + bytes,
-    framesIn: session.stats.framesIn + 1,
-  },
-})
+  nowMs: number,
+): Session<W, Own> => {
+  const gapMs = nowMs - session.heardMs
+  const isStall = session.stats.framesIn > 0 && gapMs >= STALL_MS
+  return {
+    ...session,
+    heardMs: nowMs,
+    stats: {
+      ...session.stats,
+      bytesIn: session.stats.bytesIn + bytes,
+      framesIn: session.stats.framesIn + 1,
+      stalls: session.stats.stalls + (isStall ? 1 : 0),
+      longestStallMs: isStall
+        ? Math.max(session.stats.longestStallMs, gapMs)
+        : session.stats.longestStallMs,
+    },
+  }
+}
+
+// NOTE: a message that cannot apply. Over TCP every Delta follows its
+// base, so this is a bug or a corrupt frame, not the network: the session
+// sets Deltas aside and the shell reconnects for a Snapshot, instead of
+// the picture freezing for the rest of the run.
+const needsResync = <W, Own>(session: Session<W, Own>): Session<W, Own> =>
+  session.isResyncing
+    ? session
+    : {
+        ...session,
+        isResyncing: true,
+        stats: { ...session.stats, resyncs: session.stats.resyncs + 1 },
+      }
 
 const startPlaying = <W, Own>(
   session: Session<W, Own>,
@@ -317,7 +366,7 @@ export const receive = <W, Own>(
   bytes: number,
   nowMs: number,
 ): Result.Result<Session<W, Own>, WireError> => {
-  const heard = counted(session, bytes)
+  const heard = counted(session, bytes, nowMs)
   const ok = (
     next: Session<W, Own>,
   ): Result.Result<Session<W, Own>, WireError> => Result.succeed(next)
@@ -338,45 +387,50 @@ export const receive = <W, Own>(
         phase: { _tag: 'Refused', reason: refused.reason },
       }),
     Snapshot: snapshot =>
-      Result.map(readAll(snapshot.world, world.readSnapshot), read => {
-        const received = { tick: snapshot.tick, world: read, atMs: nowMs }
-        const anchored = reanchor(
-          {
-            ...heard,
-            phase: PLAYING,
-            ack: snapshot.ack,
-            frames: [received],
-            lastArrival: Option.some({ tick: snapshot.tick, atMs: nowMs }),
-          },
-          snapshot.tick,
-          nowMs,
-        )
-        return reconcile(
-          world,
-          {
-            ...startPlaying(anchored, nowMs),
-            predicted: Option.none(),
-            shown: Option.none(),
-          },
-          received,
-        )
+      Result.match(readAll(snapshot.world, world.readSnapshot), {
+        onFailure: () => ok(needsResync(heard)),
+        onSuccess: read => {
+          const received = { tick: snapshot.tick, world: read, atMs: nowMs }
+          const anchored = reanchor(
+            {
+              ...heard,
+              phase: PLAYING,
+              ack: snapshot.ack,
+              frames: [received],
+              lastArrival: Option.some({ tick: snapshot.tick, atMs: nowMs }),
+              isResyncing: false,
+            },
+            snapshot.tick,
+            nowMs,
+          )
+          return ok(
+            reconcile(
+              world,
+              {
+                ...startPlaying(anchored, nowMs),
+                predicted: Option.none(),
+                shown: Option.none(),
+              },
+              received,
+            ),
+          )
+        },
       }),
     Delta: delta =>
-      pipe(
-        Array.findFirst(heard.frames, frame => frame.tick === delta.base),
-        Option.match({
-          onNone: () =>
-            Result.fail(
-              new WireError({
-                reason: `No world at tick ${delta.base} for a delta`,
-              }),
-            ),
-          onSome: base =>
-            Result.map(
-              readAll(delta.diff, reader =>
-                world.applyDiff(reader, base.world),
+      heard.isResyncing
+        ? ok(heard)
+        : pipe(
+            Array.findFirst(heard.frames, frame => frame.tick === delta.base),
+            Option.flatMap(base =>
+              Result.getSuccess(
+                readAll(delta.diff, reader =>
+                  world.applyDiff(reader, base.world),
+                ),
               ),
-              read => {
+            ),
+            Option.match({
+              onNone: () => ok(needsResync(heard)),
+              onSome: read => {
                 const received = { tick: delta.tick, world: read, atMs: nowMs }
                 const anchored = reanchor(
                   {
@@ -390,11 +444,10 @@ export const receive = <W, Own>(
                   delta.tick,
                   nowMs,
                 )
-                return reconcile(world, anchored, received)
+                return ok(reconcile(world, anchored, received))
               },
-            ),
-        }),
-      ),
+            }),
+          ),
     Pong: pong =>
       ok(
         Option.match(

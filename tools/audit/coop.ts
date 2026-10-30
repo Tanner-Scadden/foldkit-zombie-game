@@ -21,10 +21,12 @@
 // that mode and difficulty in the lobby (after a guest's READY, which the
 // pick takes back) and checks every page plays it. NET=200,50,2 puts each
 // page behind a bad link: a 200 ms round trip, up to 50 ms of jitter, and
-// 2% of messages held 200 ms as a lost TCP segment's resend would be,
-// order kept (the page's WebSockets are wrapped; Chrome's own throttling
-// leaves WebSockets alone). It reports hit registration: the hits each
-// page saw its own tracers make against the hits the room confirmed.
+// 2% of messages held a round trip more (at least 200 ms) as a lost TCP
+// segment's resend would be, order kept (the page's WebSockets are
+// wrapped; Chrome's own throttling leaves WebSockets alone). It reports
+// hit registration (the hits each page saw its own tracers make against
+// the hits the room confirmed), stalls (gaps of 200 ms or more with
+// nothing from the room), and resyncs (a message that would not apply).
 // Run it through the heavy guard, as a Shared job (one context per page):
 //   bun run heavy -- --shared bun tools/audit/coop.ts http://localhost:4398/ [players]
 import type { BrowserContext, Page } from 'playwright-core'
@@ -45,7 +47,13 @@ const [NET_RTT, NET_JITTER, NET_LOSS] = (process.env.NET ?? '')
 
 // NOTE: runs in the page before the game: every WebSocket's sends and
 // messages wait half the round trip, plus jitter, plus a resend's delay
-// for the lost ones, each in order behind the one before.
+// for the lost ones (a round trip, and at least the 200 ms floor of TCP's
+// retransmit timer). Each direction is one line drained by one timer, so
+// nothing passes the message before it, as TCP keeps order, and what
+// queued behind a lost one arrives in a burst once it does. A timer per
+// message is not enough: two timers due in the same millisecond can fire
+// out of order, which TCP never does, and a Delta that came before its
+// base used to freeze the picture for the rest of the run.
 const slowSockets = (link: {
   readonly rttMs: number
   readonly jitterMs: number
@@ -55,11 +63,30 @@ const slowSockets = (link: {
   const delay = () =>
     link.rttMs / 2 +
     Math.random() * link.jitterMs +
-    (Math.random() * 100 < link.lossPercent ? 200 : 0)
+    (Math.random() * 100 < link.lossPercent ? Math.max(200, link.rttMs) : 0)
+  const line = () => {
+    const queue: Array<{ readonly atMs: number; readonly run: () => void }> = []
+    let lastAtMs = 0
+    const pump = () => {
+      while (queue.length > 0 && queue[0]!.atMs <= performance.now()) {
+        queue.shift()!.run()
+      }
+      if (queue.length > 0) {
+        setTimeout(pump, queue[0]!.atMs - performance.now())
+      }
+    }
+    return (run: () => void) => {
+      lastAtMs = Math.max(lastAtMs, performance.now() + delay())
+      queue.push({ atMs: lastAtMs, run })
+      if (queue.length === 1) {
+        setTimeout(pump, lastAtMs - performance.now())
+      }
+    }
+  }
   const replayed = new WeakSet<Event>()
   class SlowSocket extends Native {
-    private outAt = 0
-    private inAt = 0
+    private readonly outgoing = line()
+    private readonly incoming = line()
     constructor(url: string | URL, protocols?: string | Array<string>) {
       super(url, protocols)
       super.addEventListener('message', event => {
@@ -67,23 +94,19 @@ const slowSockets = (link: {
           return
         }
         event.stopImmediatePropagation()
-        const atMs = Math.max(this.inAt, performance.now() + delay())
-        this.inAt = atMs
-        setTimeout(() => {
+        this.incoming(() => {
           const again = new MessageEvent('message', { data: event.data })
           replayed.add(again)
           this.dispatchEvent(again)
-        }, atMs - performance.now())
+        })
       })
     }
     override send(data: Parameters<WebSocket['send']>[0]) {
-      const atMs = Math.max(this.outAt, performance.now() + delay())
-      this.outAt = atMs
-      setTimeout(() => {
+      this.outgoing(() => {
         if (this.readyState === Native.OPEN) {
           super.send(data)
         }
-      }, atMs - performance.now())
+      })
     }
   }
   window.WebSocket = SlowSocket
@@ -267,6 +290,9 @@ type Net = Readonly<{
   nowMs: number
   corrections: number
   correctionPx: number
+  stalls: number
+  longestStallMs: number
+  resyncs: number
 }>
 
 const netOf = (page: Page): Promise<Net | undefined> =>
@@ -288,6 +314,9 @@ const netOf = (page: Page): Promise<Net | undefined> =>
       nowMs: number('now'),
       corrections: number('corrections'),
       correctionPx: number('correctionPx'),
+      stalls: number('stalls'),
+      longestStallMs: number('longestStall'),
+      resyncs: number('resyncs'),
     }
   })
 
@@ -737,6 +766,8 @@ if (isPhone) {
     60_000,
   )
   check(shotKills, 'the players shoot zombies, each kill to its shooter')
+  // NOTE: kept in case the run ends before the revive's reading below.
+  linkAtEnd = await linkNow()
   await shot(host, 'fight')
   await shot(guests[0]!, 'fight-guest')
 
@@ -771,7 +802,10 @@ if (isPhone) {
     await shot(host, 'revived')
   }
 
-  linkAtEnd = await linkNow()
+  const linkAfterRevive = await linkNow()
+  if (linkAfterRevive.nets.every(net => net !== undefined)) {
+    linkAtEnd = linkAfterRevive
+  }
 
   // THE BREAK, THE STALL, AND READY
 
@@ -862,6 +896,7 @@ const seconds = (endNet.atMs - startedMs) / 1000
 for (const [index, net] of endNet.nets.entries()) {
   const start = startNet[index]
   if (net === undefined || start === undefined) {
+    console.log(`  player ${index + 1}: no link readout (not in the run)`)
     continue
   }
   const kbps = (net.bytesIn - start.bytesIn) / 1024 / seconds
@@ -870,7 +905,7 @@ for (const [index, net] of endNet.nets.entries()) {
     `  player ${index + 1}: round trip ${net.rttMs} ms, down ${kbps.toFixed(2)} KB/s over ${net.framesIn - start.framesIn} messages (${((net.framesIn - start.framesIn) / seconds).toFixed(1)} a second), up ${inputs.toFixed(1)} inputs a second, ${net.corrections} corrections (at most ${net.correctionPx} px)`,
   )
   console.log(
-    `  player ${index + 1}: hits seen ${net.lookedHits - start.lookedHits}, confirmed ${net.confirmedHits - start.confirmedHits}; drawn ${net.delayMs} ms behind`,
+    `  player ${index + 1}: hits seen ${net.lookedHits - start.lookedHits}, confirmed ${net.confirmedHits - start.confirmedHits}; drawn ${net.delayMs} ms behind; ${net.stalls - start.stalls} stalls, ${net.resyncs - start.resyncs} resyncs (the longest gap all session ${net.longestStallMs} ms)`,
   )
   check(net.rttMs > 0, `player ${index + 1} measured a round trip`)
 }

@@ -124,6 +124,39 @@ describe('the room', () => {
     expect(dotX(next.room, 0)).toBeCloseTo(before + 150 / 60, 6)
   })
 
+  // NOTE: a click held up behind a resend: pressed and let go on ticks the
+  // room already ran. The press still lands, one tick late.
+  test('a button pressed only in late samples is pressed on the next tick', () => {
+    const fire: PlayerInput = { ...NEUTRAL_INPUT, buttons: 1 }
+    const ran = Room.advance(StandIn, start().room, T0 + 200)
+    const queuedAfter = (frame: ClientFrame) =>
+      Room.receive(StandIn, ran.room, 'socket-0', frame, T0 + 201).room.seats[0]
+        ?.queued
+    expect(
+      queuedAfter(
+        input(1, 4, [
+          { ticks: 3, input: fire },
+          { ticks: 1, input: NEUTRAL_INPUT },
+        ]),
+      ),
+    ).toEqual([
+      { tick: 13, input: fire },
+      { tick: 14, input: NEUTRAL_INPUT },
+    ])
+    expect(
+      queuedAfter(
+        input(1, 10, [
+          { ticks: 2, input: fire },
+          { ticks: 1, input: NEUTRAL_INPUT },
+          { ticks: 2, input: right },
+        ]),
+      ),
+    ).toEqual([
+      { tick: 13, input: { ...right, buttons: 1 } },
+      { tick: 14, input: right },
+    ])
+  })
+
   test('silence for 3 s makes a player Away, and any word brings them back', () => {
     const started = start()
     const talking = Room.receive(

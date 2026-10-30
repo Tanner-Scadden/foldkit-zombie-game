@@ -47,6 +47,7 @@ import {
   LeaveRoom,
   RememberRoom,
   RequestRoom,
+  ResyncRoom,
   SendRoomFrames,
   cleanCode,
   freshRoom,
@@ -599,6 +600,47 @@ describe('the room', () => {
       message(received(snapshotFrame(90), 2410)),
       model(current => {
         expect(roomOf(current).link).toBe('Online')
+      }),
+    )
+  })
+
+  test('a Delta that cannot apply asks for a new socket once, and its Snapshot brings the picture back', () => {
+    const orphan = (tick: number) =>
+      received(
+        {
+          _tag: 'Delta',
+          tick,
+          base: tick - 3,
+          ack: 0,
+          pings: [],
+          diff: new Uint8Array(),
+        },
+        1100,
+      )
+    story(
+      update,
+      given(inRoom(0)),
+      message(
+        received(
+          { _tag: 'Welcome', version: 1, slot: 0, state: 'Playing', tick: 0 },
+          1000,
+        ),
+      ),
+      message(received(snapshotFrame(10), 1010)),
+      message(orphan(40)),
+      Command.resolve(ResyncRoom, Message.CompletedResyncRoom()),
+      model(current => {
+        expect(roomOf(current).session.isResyncing).toBe(true)
+        expect(roomOf(current).session.stats.resyncs).toBe(1)
+      }),
+      message(orphan(43)),
+      Command.expectNone(),
+      message(received(snapshotFrame(60), 1300)),
+      model(current => {
+        expect(roomOf(current).session.isResyncing).toBe(false)
+        expect(roomOf(current).session.frames.map(frame => frame.tick)).toEqual(
+          [60],
+        )
       }),
     )
   })

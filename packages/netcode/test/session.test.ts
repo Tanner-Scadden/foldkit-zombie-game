@@ -8,6 +8,7 @@ import {
   NEUTRAL_INPUT,
   type PlayerInput,
   Room,
+  type ServerFrame,
   Session,
   StandIn,
   type StandInWorld,
@@ -38,6 +39,7 @@ interface Client {
   inputsSent: number
   muted: boolean
   seen: Array<StandInWorld>
+  viewTicks: Array<number>
   pongs: Array<{ readonly sentMs: number; readonly atMs: number }>
   pingedMs: number
 }
@@ -68,7 +70,12 @@ const simulate = (options: {
   readonly seconds: number
   readonly muteSlotAfterMs?: number
   readonly jitterMs?: number
+  // NOTE: every this many messages each way is held 200 ms, as a lost TCP
+  // segment's resend holds it, and everything behind it waits in order.
+  readonly holdEvery?: number
 }) => {
+  const heldMs = (count: number) =>
+    options.holdEvery !== undefined && count % options.holdEvery === 0 ? 200 : 0
   const clients: Array<Client> = Array.from(
     { length: options.players },
     (_, slot) => ({
@@ -80,6 +87,7 @@ const simulate = (options: {
       inputsSent: 0,
       muted: false,
       seen: [],
+      viewTicks: [],
       pongs: [],
       pingedMs: T0 - PING_EVERY_MS,
     }),
@@ -101,6 +109,7 @@ const simulate = (options: {
   const bytesDown = { total: 0 }
 
   const sends = { count: 0 }
+  const ups = { count: 0 }
   const deliverOut = (out: ReadonlyArray<Room.Out>, nowMs: number) =>
     out.forEach(item => {
       if (item._tag !== 'Send') {
@@ -113,7 +122,10 @@ const simulate = (options: {
       const late = ((sent * 7919) % 101) / 100
       const atMs = Math.max(
         client?.toClient.at(-1)?.atMs ?? 0,
-        nowMs + options.oneWayMs + late * (options.jitterMs ?? 0),
+        nowMs +
+          options.oneWayMs +
+          late * (options.jitterMs ?? 0) +
+          heldMs(sent),
       )
       client?.toClient.push({ atMs, bytes })
     })
@@ -201,12 +213,20 @@ const simulate = (options: {
               const bytes = Result.getOrThrow(encodeClientFrame(frame))
               client.inputsSent += frame._tag === 'Input' ? 1 : 0
               client.session = Session.countSent(client.session, bytes.length)
-              client.toRoom.push({ atMs: nowMs + options.oneWayMs, bytes })
+              const up = (ups.count += 1)
+              client.toRoom.push({
+                atMs: Math.max(
+                  client.toRoom.at(-1)?.atMs ?? 0,
+                  nowMs + options.oneWayMs + heldMs(up + 7),
+                ),
+                bytes,
+              })
             })
           }
           const rendered = Session.render(StandIn, client.session, nowMs)
           client.session = rendered.session
           Option.map(rendered.world, world => client.seen.push(world))
+          client.viewTicks.push(Session.viewTickAt(client.session, nowMs))
         })
       }
     },
@@ -323,5 +343,128 @@ describe('a player who goes quiet', () => {
     })
     expect(run.clients[0]?.session.away).toEqual([1])
     expect(run.room.seats[1]?.presence._tag).toBe('Away')
+  })
+})
+
+describe('a link that holds messages up behind a resend', () => {
+  const steady = simulate({ players: 2, oneWayMs: 100, seconds: 10 })
+  const held = simulate({
+    players: 2,
+    oneWayMs: 100,
+    seconds: 10,
+    holdEvery: 41,
+  })
+
+  test('each player still sees the other move', () => {
+    held.clients.forEach(client => {
+      held.clients
+        .filter(other => other.slot !== client.slot)
+        .forEach(other => {
+          expect(new Set(xsOf(client.seen, other.slot)).size).toBeGreaterThan(
+            20,
+          )
+        })
+    })
+  })
+
+  test('counts the stalls and never needs a resync', () => {
+    held.clients.forEach(client => {
+      expect(client.session.stats.stalls).toBeGreaterThan(3)
+      expect(client.session.stats.longestStallMs).toBeGreaterThanOrEqual(240)
+      expect(client.session.stats.resyncs).toBe(0)
+    })
+    steady.clients.forEach(client => {
+      expect(client.session.stats.stalls).toBe(0)
+    })
+  })
+
+  // NOTE: the message a resend held up arrives late, which once jumped the
+  // clock back: everyone drawn ran backwards and your own inputs stopped
+  // until the clock passed them again.
+  test('the picture never runs backwards', () => {
+    held.clients.forEach(client => {
+      const backwards = client.viewTicks.reduce(
+        (most, tick, index) =>
+          Math.max(most, (client.viewTicks[index - 1] ?? tick) - tick),
+        0,
+      )
+      expect(backwards).toBeLessThan(2)
+    })
+  })
+
+  test('the room still applies nearly every input', () => {
+    held.clients.forEach(client => {
+      expect(client.session.ack).toBeGreaterThanOrEqual(client.inputsSent - 4)
+    })
+  })
+})
+
+describe('a message that cannot apply', () => {
+  const started = Room.startRoom(
+    StandIn,
+    [{ slot: 0, playerId: 'player-0', socket: Option.some('socket-0') }],
+    11,
+    T0,
+  )
+  const framesOf = (out: ReadonlyArray<Room.Out>): Array<ServerFrame> =>
+    out.flatMap(item => (item._tag === 'Send' ? [item.frame] : []))
+  const deltas = [1, 2, 3].reduce<{
+    room: Room.Room<StandInWorld>
+    frames: ReadonlyArray<ServerFrame>
+  }>(
+    (at, step) => {
+      const advanced = Room.advance(StandIn, at.room, T0 + step * 50 + 1)
+      return {
+        room: advanced.room,
+        frames: [...at.frames, ...framesOf(advanced.out)],
+      }
+    },
+    { room: started.room, frames: [] },
+  ).frames
+  const receiveAll = (
+    session: ClientSession,
+    frames: ReadonlyArray<ServerFrame>,
+  ) =>
+    frames.reduce(
+      (current, frame, index) =>
+        Result.getOrThrow(
+          Session.receive(StandIn, current, frame, 8, T0 + index * 50),
+        ),
+      session,
+    )
+  const joined = receiveAll(
+    Session.makeSession<StandInWorld, Dot>(T0),
+    framesOf(started.out),
+  )
+
+  test('the room sends three Deltas in a row', () => {
+    expect(deltas.map(frame => frame._tag)).toEqual(['Delta', 'Delta', 'Delta'])
+  })
+
+  test('a Delta ahead of its base asks for a resync once and sets the rest aside', () => {
+    const skipped = receiveAll(joined, deltas.slice(1))
+    expect(skipped.isResyncing).toBe(true)
+    expect(skipped.stats.resyncs).toBe(1)
+    expect(skipped.frames.map(frame => frame.tick)).toEqual(
+      joined.frames.map(frame => frame.tick),
+    )
+  })
+
+  test('a Snapshot ends the resync', () => {
+    const snapshot = framesOf(started.out).find(
+      frame => frame._tag === 'Snapshot',
+    )
+    const back = receiveAll(receiveAll(joined, deltas.slice(1)), [
+      ...(snapshot === undefined ? [] : [snapshot]),
+    ])
+    expect(snapshot?._tag).toBe('Snapshot')
+    expect(back.isResyncing).toBe(false)
+    expect(back.stats.resyncs).toBe(1)
+  })
+
+  test('Deltas in order never resync', () => {
+    const inOrder = receiveAll(joined, deltas)
+    expect(inOrder.isResyncing).toBe(false)
+    expect(inOrder.frames.length).toBe(4)
   })
 })

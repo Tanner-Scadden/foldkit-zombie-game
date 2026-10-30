@@ -36,6 +36,7 @@ export const Message = defineMessageUnion({
   FailedChangeLobby: { problem: CoopProblem },
   ClickedLeaveButton: {},
   CompletedLeaveRoom: {},
+  CompletedResyncRoom: {},
   ClickedShareButton: {},
   CompletedShareRoomLink: { share: Share },
   CompletedRememberRoom: {},

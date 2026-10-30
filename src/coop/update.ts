@@ -110,6 +110,15 @@ export const LeaveRoom = Command.define('LeaveRoom', {
   ),
 })
 
+// NOTE: the session could not apply a message from the room, so it asks
+// for a new socket, whose link brings a fresh Snapshot.
+export const ResyncRoom = Command.define('ResyncRoom', {
+  messages: [Message.CompletedResyncRoom],
+  execute: CoopNet.use(net => net.resyncRoom).pipe(
+    Effect.as(Message.CompletedResyncRoom()),
+  ),
+})
+
 export const ROOM_PARAM = 'room'
 
 const linkOf = (code: string): string => {
@@ -310,6 +319,10 @@ const receiveFrame = (
         onFailure: () => ({ model }),
         onSuccess: session => ({
           model: withRoom(model, { ...room, session, link: 'Online' }),
+          commands:
+            session.isResyncing && !room.session.isResyncing
+              ? [ResyncRoom()]
+              : [],
         }),
       },
     )
@@ -621,7 +634,9 @@ const keyOnScreen = (model: Model, code: string): UpdateReturn =>
       if (code === ESCAPE) {
         return close(model)
       } else if (code === ENTER) {
-        return { model: withScreen(model, Screen.Queue({ queue: emptyQueue })) }
+        return {
+          model: withScreen(model, Screen.Queue({ queue: emptyQueue })),
+        }
       } else {
         return { model }
       }
@@ -914,6 +929,8 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     FailedChangeLobby: () => ({ model }),
 
     ClickedLeaveButton: () => inRoom(model, room => leave(model, room)),
+
+    CompletedResyncRoom: () => ({ model }),
 
     CompletedLeaveRoom: () => ({
       model: hub(model, Option.none()),

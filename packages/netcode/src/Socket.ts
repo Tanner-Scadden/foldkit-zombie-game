@@ -20,6 +20,9 @@ export type SocketData = string | Uint8Array
 export interface OpenSocket {
   readonly send: (data: SocketData) => Effect.Effect<void, SocketError>
   readonly messages: Stream.Stream<SocketData, SocketError>
+  // NOTE: ends `messages` at once with `reason`, without waiting for the
+  // closing handshake a dead link may never finish, and closes the socket.
+  readonly drop: (reason: string) => Effect.Effect<void>
 }
 
 const OPEN_TIMEOUT = '10 seconds'
@@ -102,5 +105,10 @@ export const openSocket = (
             ? error
             : new SocketError({ reason: String(error) }),
       })
-    return { send, messages: Stream.fromQueue(inbox) }
+    const drop = (reason: string) =>
+      Effect.andThen(
+        Queue.fail(inbox, new SocketError({ reason })),
+        closeQuietly(socket),
+      )
+    return { send, messages: Stream.fromQueue(inbox), drop }
   })

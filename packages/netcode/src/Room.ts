@@ -49,7 +49,10 @@ export type SeatPresence =
   | { readonly _tag: 'Away'; readonly sinceMs: number }
 
 const HERE: SeatPresence = { _tag: 'Here' }
-const awaySince = (sinceMs: number): SeatPresence => ({ _tag: 'Away', sinceMs })
+const awaySince = (sinceMs: number): SeatPresence => ({
+  _tag: 'Away',
+  sinceMs,
+})
 
 export interface Change {
   readonly tick: number
@@ -348,8 +351,9 @@ const changesOf = (
 }
 
 // NOTE: each sample keeps its own tick. Samples for ticks the room already
-// ran are late: the newest of them takes effect on the next tick and the
-// rest are dropped, so one slow message never shifts the ticks of the ones
+// ran are late: the newest of them takes effect on the next tick, with any
+// button the others pressed, and the rest are dropped, so one slow message
+// (a resend holding the socket up) never shifts the ticks of the ones
 // on time. A message claiming ticks too far ahead is pulled back whole.
 // The new change points replace queued ones at or after their first tick:
 // they are newer word about the same ticks.
@@ -363,10 +367,41 @@ const pointsOf = (
   const onTime = Array.filter(points, point => point.tick > tick)
   return Option.match(Array.last(late), {
     onNone: () => onTime,
-    onSome: newestLate =>
-      Option.exists(Array.head(onTime), first => first.tick === tick + 1)
-        ? onTime
-        : Array.prepend(onTime, { tick: tick + 1, input: newestLate.input }),
+    onSome: newestLate => {
+      const maybeNextOnTime = Option.filter(
+        Array.head(onTime),
+        first => first.tick === tick + 1,
+      )
+      const next = Option.match(maybeNextOnTime, {
+        onNone: () => newestLate.input,
+        onSome: first => first.input,
+      })
+      const rest = Option.isSome(maybeNextOnTime)
+        ? Array.drop(onTime, 1)
+        : onTime
+      // NOTE: a button pressed and let go inside the late samples (a quick
+      // click held up behind a resend) is pressed for the next tick alone,
+      // so a late shot fires late instead of not at all.
+      const extra =
+        Array.reduce(late, 0, (bits, point) => bits | point.input.buttons) &
+        ~next.buttons
+      const released = Option.exists(
+        Array.head(rest),
+        after => after.tick === tick + 2,
+      )
+        ? []
+        : [{ tick: tick + 2, input: next }]
+      return extra === 0
+        ? Array.prepend(rest, { tick: tick + 1, input: next })
+        : [
+            {
+              tick: tick + 1,
+              input: { ...next, buttons: next.buttons | extra },
+            },
+            ...released,
+            ...rest,
+          ]
+    },
   })
 }
 
