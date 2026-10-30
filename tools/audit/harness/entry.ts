@@ -22,6 +22,7 @@ import {
 } from '@game/appearance'
 import { PARLOUR, levelOf, openExitIn } from '@game/arena'
 import { BOSS_RULES, hasBoss, planBoss } from '@game/boss'
+import { cameraOf, worldToView } from '@game/camera'
 import { LoadSave, managedResources } from '@game/commands'
 import { DECAL_MAX, PLAYER_MAX_HP, SHADOW_COLOR } from '@game/constants'
 import * as CoopModel from '@game/coop/model'
@@ -50,7 +51,11 @@ import {
   Phase,
   Arsenal,
   BreakClock,
+  FridgeDoor,
   MouseButton,
+  Stick,
+  type WeaponKind,
+  ZombieAction,
   RunMode,
   initialModel,
   Lesson,
@@ -76,6 +81,7 @@ import { openProfile } from '@game/update/profile'
 import { RUNNING_BUILD } from '@game/version'
 import { view } from '@game/view'
 import { pause, planFor, rollSpawns } from '@game/waves'
+import { freshSpare } from '@game/weapons'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
 import { Session } from '@munch/netcode'
 
@@ -151,6 +157,121 @@ const makeDecals = (count: number): Array<Decal> => {
   return out
 }
 
+const FRIDGE_GUNS: Readonly<Record<'cooker' | 'pan' | 'freeze', WeaponKind>> = {
+  cooker: 'Cooker',
+  pan: 'Pan',
+  freeze: 'Freeze',
+}
+
+// NOTE: Mystery Leftovers. `fridge=open|slammed` with `fridgeMs` left sets
+// the fridge's door (`prize` names an open door's prize), `fridgeseed` sets
+// the fridge's own stream, so a real pull draws a chosen prize, `lobs` puts
+// three Pressure Cooker lids in the air ahead of the player (one landing a
+// few frames before `tick` runs out), and `iced=freeze|pan` stands zombies
+// in front of the player, frozen and chilled or reeling.
+const ICED_SPOTS: ReadonlyArray<
+  Readonly<{
+    dx: number
+    dy: number
+    kind: 'Shambler' | 'Runner' | 'Exploder' | 'Tank'
+    freeze: 'Frozen' | 'Chilled' | 'Roaming'
+    pan: 'Reeling' | 'Roaming'
+  }>
+> = [
+  { dx: 18, dy: -6, kind: 'Shambler', freeze: 'Frozen', pan: 'Reeling' },
+  { dx: 24, dy: 8, kind: 'Runner', freeze: 'Frozen', pan: 'Reeling' },
+  { dx: 44, dy: 0, kind: 'Tank', freeze: 'Chilled', pan: 'Roaming' },
+  { dx: 30, dy: -8, kind: 'Exploder', freeze: 'Frozen', pan: 'Reeling' },
+  { dx: 12, dy: 3, kind: 'Shambler', freeze: 'Roaming', pan: 'Roaming' },
+]
+
+const icedAction = (action: 'Frozen' | 'Chilled' | 'Roaming' | 'Reeling') =>
+  action === 'Frozen'
+    ? ZombieAction.Frozen({ remainingMs: 3000, durationMs: 3200 })
+    : action === 'Chilled'
+      ? ZombieAction.Chilled({ remainingMs: 3000 })
+      : action === 'Reeling'
+        ? ZombieAction.Reeling({ remainingMs: 600, durationMs: 700 })
+        : ZombieAction.Roaming()
+
+const LID_FLIGHT_MS = 520
+
+const withLeftovers = (start: Model): Model => {
+  let model = start
+  const door = config.fridge
+  if (door !== undefined)
+    model = modifyFields(model, {
+      fridge: fridge => ({
+        ...fridge,
+        door:
+          door === 'open'
+            ? FridgeDoor.Open({
+                prize: config.prize ?? 'Cooker',
+                slot: 0,
+                remainingMs: config.fridgeMs,
+                durationMs: 1100,
+              })
+            : FridgeDoor.Slammed({
+                remainingMs: config.fridgeMs,
+                durationMs: 30_000,
+              }),
+      }),
+    })
+  const fridgeSeed = config.fridgeseed
+  if (fridgeSeed !== undefined)
+    model = modifyFields(model, {
+      loot: loot => ({ ...loot, fridgeRngState: fridgeSeed >>> 0 }),
+    })
+  const iced = config.iced
+  if (iced !== undefined)
+    model = modifyFields(model, {
+      zombies: zombies => [
+        ...zombies,
+        ...ICED_SPOTS.map((spot, index) => ({
+          id: 9400 + index,
+          kind: spot.kind,
+          x: px + spot.dx,
+          y: py + spot.dy,
+          speed: spot.kind === 'Tank' ? 12 : 20,
+          hp: spot.kind === 'Tank' ? 30 : 6,
+          maxHp: spot.kind === 'Tank' ? 30 : 6,
+          knockback: { x: 0, y: 0 },
+          hitRemainingMs: 0,
+          state: { _tag: 'Walking' as const },
+          action: icedAction(iced === 'freeze' ? spot.freeze : spot.pan),
+          frenzy: CALM,
+        })),
+      ],
+    })
+  if (config.lobs) {
+    const landsInMs = Math.max(20, ((config.tick ?? 0) - 5) * (1000 / 60))
+    const flights = [
+      { to: { x: px + 70, y: py - 28 }, remainingMs: landsInMs },
+      { to: { x: px + 100, y: py - 4 }, remainingMs: landsInMs + 260 },
+      { to: { x: px + 45, y: py - 44 }, remainingMs: landsInMs + 420 },
+    ]
+    model = modifyFields(model, {
+      lobs: () =>
+        flights.map((flight, index) => {
+          const durationMs = Math.max(LID_FLIGHT_MS, flight.remainingMs + 120)
+          const progress = 1 - flight.remainingMs / durationMs
+          return {
+            id: 9500 + index,
+            x: px + (flight.to.x - px) * progress,
+            y: py + (flight.to.y - py) * progress,
+            from: { x: px, y: py },
+            to: flight.to,
+            remainingMs: flight.remainingMs,
+            durationMs,
+            charge: 0.8,
+            tier: 0,
+          }
+        }),
+    })
+  }
+  return model
+}
+
 const roomModel = (): Model => {
   const wave = config.wave
   if (wave === 0) return initialModel
@@ -209,19 +330,26 @@ const roomModel = (): Model => {
               },
             }),
           }
-        : gun === 'shotgun'
+        : gun === 'cooker' || gun === 'pan' || gun === 'freeze'
           ? {
               ...p,
               arsenal: Arsenal.HoldingSpare({
-                spare: {
-                  kind: 'Shotgun',
-                  rounds: shotgunRounds,
-                  loaded: Math.min(6, shotgunRounds),
-                  tier: config.tier,
-                },
+                spare: { ...freshSpare(FRIDGE_GUNS[gun]), tier: config.tier },
               }),
             }
-          : p,
+          : gun === 'shotgun'
+            ? {
+                ...p,
+                arsenal: Arsenal.HoldingSpare({
+                  spare: {
+                    kind: 'Shotgun',
+                    rounds: shotgunRounds,
+                    loaded: Math.min(6, shotgunRounds),
+                    tier: config.tier,
+                  },
+                }),
+              }
+            : p,
   })
   const crowd = config.crowd ?? gasbagRoom
   const toughness = config.tough ? 40 : 1
@@ -715,6 +843,37 @@ const roomModel = (): Model => {
       }),
     })
   }
+  // NOTE: `stick=dx,dy` holds the trigger aimed that way from the player:
+  // on touch with the aim stick, thumbed down at the lower right, and with
+  // a keyboard and mouse with the mouse button over that spot.
+  const stick = config.stick
+  if (stick !== undefined) {
+    const [dx, dy] = stick
+    const originX = Math.round(window.innerWidth * 0.8)
+    const originY = Math.round(window.innerHeight * 0.72)
+    const aimed = { x: model.player.x + dx, y: model.player.y + dy }
+    model = modifyFields(model, {
+      input: input =>
+        config.device === 'touch'
+          ? {
+              ...input,
+              aimStick: Stick.Active({
+                pointerId: 2,
+                originX,
+                originY,
+                currentX: originX + dx,
+                currentY: originY + dy,
+              }),
+            }
+          : {
+              ...input,
+              mouseButton: MouseButton.Held({ pointerId: 1 }),
+              maybeMouseInView: Option.some(
+                worldToView(cameraOf(model), aimed),
+              ),
+            },
+    })
+  }
   if (config.device === 'touch')
     model = modifyFields(model, { lastDevice: () => 'Touch' as const })
   const seen = config.seen
@@ -1155,6 +1314,7 @@ const scenarioModelOf = (): Model => {
         })),
       ],
     })
+  model = withLeftovers(model)
   const planks = config.planks
   if (planks !== undefined)
     model = modifyFields(model, {
@@ -1738,7 +1898,12 @@ const lookSheetShapes = (): Array<Canvas.Shape> => {
   const base = defaultAppearance
   const rows: ReadonlyArray<ReadonlyArray<Appearance>> = [
     BODIES.map(body => ({ ...base, body })),
-    BODIES.map(body => ({ ...base, body, outfit: 'Dress', hairStyle: 'Long' })),
+    BODIES.map(body => ({
+      ...base,
+      body,
+      outfit: 'Dress',
+      hairStyle: 'Long',
+    })),
     BODIES.map(body => ({
       ...base,
       body,
@@ -1754,7 +1919,12 @@ const lookSheetShapes = (): Array<Canvas.Shape> => {
     OUTFITS.map(outfit => ({ ...base, outfit })),
     PRINTS.map(print => ({ ...base, print })),
     OUTFITS.flatMap(outfit =>
-      PRINTS.map(print => ({ ...base, outfit, print, body: 'Slim' as const })),
+      PRINTS.map(print => ({
+        ...base,
+        outfit,
+        print,
+        body: 'Slim' as const,
+      })),
     ),
     ON_OFF.flatMap(beard =>
       ON_OFF.map(glasses => ({ ...base, beard, glasses })),

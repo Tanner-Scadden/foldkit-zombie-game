@@ -108,6 +108,7 @@ const preparing: Model = modifyFields(fighting, {
 const withLoot = (base: Model, loot: Partial<Loot>): Model =>
   modifyFields(base, {
     loot: current => ({
+      ...current,
       rngState: loot.rngState ?? current.rngState,
       dryMs: loot.dryMs ?? current.dryMs,
       prize: loot.prize ?? current.prize,

@@ -40,6 +40,10 @@ const GUN_BASE: Palette = {
   V: '#5c3a1a',
   M: '#4a4f5a',
   R: '#d8423a',
+  D: '#2e2e36',
+  B: '#4ab8f0',
+  C: '#c8f4ff',
+  N: '#ff7ab8',
 }
 
 const GUN_TRIMS: ReadonlyArray<Palette> = [
@@ -91,6 +95,39 @@ const GUN_PIXELS: Readonly<Record<WeaponKind, ReadonlyArray<string>>> = {
     '.......KKKK.......',
   ],
   Peashooter: ['.KKKKKKK', 'KVPPPPQK', 'KVPQQQPQ', 'KVPPPPQK', '.KKKKKKK'],
+  Cooker: [
+    '......KKKK......',
+    '.....KHHHHK.....',
+    '..KKKKKKKKKKKK..',
+    '.KGHHHHHHHHHHGK.',
+    'KKKKKKKKKKKKKKKK',
+    'RRKMMMMMMMMMMKRR',
+    'RRKMGMMMMMMGMKRR',
+    '..KMMMMMMMMMMK..',
+    '..KMMMMMMMMMMK..',
+    '...KKKKKKKKKK...',
+  ],
+  Pan: [
+    '..........KKKKKK..',
+    '........KKDDDDDDKK',
+    '.......KDDDDDDDDDK',
+    'VVWWWWWKDDDHHDDDDK',
+    'VWWWWWWKDDDHDDDDDK',
+    '.......KDDDDDDDDDK',
+    '........KKDDDDDDKK',
+    '..........KKKKKK..',
+  ],
+  Freeze: [
+    '.....NN.......',
+    '.....NN.......',
+    '...KKKKKK.....',
+    '..KCCCCCBK....',
+    '.KBBBBBBBKKKK.',
+    'KKBBCBBBBGGGNN',
+    '.KBBBBBBBKKKK.',
+    '..KBBBBBBK....',
+    '...KKKKKK.....',
+  ],
 }
 
 const PEA_COLORS: Palette = { P: '#4f9a32', Q: '#9be36a' }
@@ -267,6 +304,21 @@ const SIGHT_ART = artOf(
   { K: INK, M: '#4a4f5a', R: '#ff3a3f', L: '#ffb3b6' },
 )
 
+// NOTE: a stack of pot lids, knobs up, for the Cooker's ammo row.
+const LID_STACK_ART = artOf(
+  [
+    '.....KKKK.....',
+    '..KKKKHHKKKK..',
+    '.KGHHHHHHHHGK.',
+    'KKKKKKKKKKKKKK',
+    '.KGHHHHHHHHGK.',
+    'KKKKKKKKKKKKKK',
+    '.KGHHHHHHHHGK.',
+    'KKKKKKKKKKKKKK',
+  ],
+  GUN_BASE,
+)
+
 export const ITEM_ART: Readonly<Record<FixedShopItemId, ShopArt>> = {
   Shotgun: gunArt('Shotgun', 0),
   ShotgunShells: SACK_ART,
@@ -279,6 +331,9 @@ export const ITEM_ART: Readonly<Record<FixedShopItemId, ShopArt>> = {
   Heart: JAR_ART,
   Barricade: PLANK_ART,
   Turret: GNOME_ART,
+  CookerUpgrade: gunArt('Cooker', 1),
+  LidStack: LID_STACK_ART,
+  PanUpgrade: gunArt('Pan', 1),
 }
 
 export const itemArt = (id: ShopItemId): ShopArt =>

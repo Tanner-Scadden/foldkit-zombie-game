@@ -155,6 +155,83 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     sound: 'TurretShot',
     maybeRoundLimit: Option.none(),
   },
+  // NOTE: the fridge weapons (src/fridgeWeapons.ts) fire no bullets, so
+  // only their magazine, reload, rounds, and name are read here. The
+  // Cooker's magazine is its lids; the Pan's is its dent meter (dents left
+  // before it is fully dented, never reloaded, banged flat each break);
+  // Brain Freeze's is its charges, all of them, never refilled.
+  Cooker: {
+    name: GUN_NAMES.Cooker,
+    roundsLabel: 'lids',
+    fireIntervalMs: 250,
+    magazine: 4,
+    reloadMs: 1500,
+    damage: 0,
+    pellets: 1,
+    spread: 0,
+    speedJitter: 0,
+    bulletSpeed: 0,
+    bulletLifetimeMs: 0,
+    knockback: 0,
+    muzzleReach: 7,
+    recoilMs: 180,
+    recoilKickPx: 2,
+    recoilSquash: 0.2,
+    shakeTrauma: 0.2,
+    flash: 'Pop',
+    casing: 'Shell',
+    maybeSpentClip: Option.none(),
+    sound: 'Whoosh',
+    maybeRoundLimit: Option.some({ starting: 20, max: 28 }),
+  },
+  Pan: {
+    name: GUN_NAMES.Pan,
+    roundsLabel: 'dents',
+    fireIntervalMs: 450,
+    magazine: 24,
+    reloadMs: 0,
+    damage: 2,
+    pellets: 1,
+    spread: 0,
+    speedJitter: 0,
+    bulletSpeed: 0,
+    bulletLifetimeMs: 0,
+    knockback: 360,
+    muzzleReach: 6,
+    recoilMs: 220,
+    recoilKickPx: 0,
+    recoilSquash: 0,
+    shakeTrauma: 0.12,
+    flash: 'Flicker',
+    casing: 'Shell',
+    maybeSpentClip: Option.none(),
+    sound: 'Clang',
+    maybeRoundLimit: Option.some({ starting: 24, max: 24 }),
+  },
+  Freeze: {
+    name: GUN_NAMES.Freeze,
+    roundsLabel: 'charges',
+    fireIntervalMs: 600,
+    magazine: 12,
+    reloadMs: 0,
+    damage: 0,
+    pellets: 1,
+    spread: 0,
+    speedJitter: 0,
+    bulletSpeed: 0,
+    bulletLifetimeMs: 0,
+    knockback: 0,
+    muzzleReach: 8,
+    recoilMs: 160,
+    recoilKickPx: 1,
+    recoilSquash: 0.12,
+    shakeTrauma: 0.08,
+    flash: 'Flicker',
+    casing: 'Shell',
+    maybeSpentClip: Option.none(),
+    sound: 'PowerDown',
+    maybeRoundLimit: Option.some({ starting: 12, max: 12 }),
+  },
 }
 
 export const SIDEARM: WeaponKind = 'Pistol'
@@ -171,6 +248,17 @@ type TierBoost = Readonly<{
   knockback: number
   maxRounds: number
 }>
+
+const noBoost: TierBoost = {
+  damage: 0,
+  fireIntervalMs: 0,
+  magazine: 0,
+  reloadMs: 0,
+  spread: 0,
+  pellets: 0,
+  knockback: 0,
+  maxRounds: 0,
+}
 
 export type WeaponTier = Readonly<{
   price: number
@@ -304,6 +392,26 @@ export const UPGRADE_TIERS: Readonly<
     },
   ],
   Peashooter: [],
+  // NOTE: the Cooker's and the Pan's other tier gains (a bigger blast, a
+  // faster charge, a wider arc, the ground smash) are in
+  // src/fridgeWeapons.ts; only their magazines and rounds grow here.
+  Cooker: [
+    { price: 70, boost: noBoost },
+    { price: 160, boost: noBoost },
+    {
+      price: 300,
+      boost: { ...noBoost, magazine: 2, maxRounds: 12 },
+    },
+  ],
+  Pan: [
+    { price: 60, boost: noBoost },
+    {
+      price: 150,
+      boost: { ...noBoost, magazine: 24, maxRounds: 24 },
+    },
+    { price: 300, boost: noBoost },
+  ],
+  Freeze: [],
 }
 
 export const maxTier = (kind: WeaponKind): number => UPGRADE_TIERS[kind].length
@@ -433,7 +541,14 @@ const hasLooseRounds = (player: Player): boolean =>
 export const isReloading = (player: Player): boolean =>
   Reload.isAnyOf(['Reloading'])(player.reload)
 
+// NOTE: the Pan's dents and Brain Freeze's charges are never reloaded.
+const UNLOADED_WEAPONS: ReadonlyArray<WeaponKind> = ['Pan', 'Freeze']
+
+export const isReloadable = (kind: WeaponKind): boolean =>
+  !Array.contains(UNLOADED_WEAPONS, kind)
+
 export const canReload = (player: Player): boolean =>
+  isReloadable(heldWeapon(player.arsenal)) &&
   !isReloading(player) &&
   heldLoaded(player) < heldStats(player).magazine &&
   hasLooseRounds(player)

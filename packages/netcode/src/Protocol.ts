@@ -29,8 +29,12 @@ import {
 // the World holds each seat's hold-to-buy (src/purchase.ts), the interact
 // hold rides as button bit 2, and the BuyExit seat action is gone, which
 // moved the codes of LeaveCounter and Ready (src/roomWorld.ts pins them).
-export const PROTOCOL_VERSION = 4
-export const MIN_PROTOCOL_VERSION = 4
+// Version 5: the Mystery Leftovers fridge and its weapons. The World holds
+// the fridge, the Cooker's lids in flight, each player's charge, and the
+// new zombie actions; the shop sells the fridge weapons' upgrades and
+// lids, whose codes follow the old ones.
+export const PROTOCOL_VERSION = 5
+export const MIN_PROTOCOL_VERSION = 5
 
 // NOTE: a round trip as the wire carries it, in whole ms.
 export const MAX_RTT_MS = 60_000

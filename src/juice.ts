@@ -143,6 +143,15 @@ const STIR_TRAUMA = 0.05
 const SURFACE_TRAUMA = 0.2
 const ANKLE_TRAUMA = 0.15
 const FRENZY_TRAUMA = 0.1
+const FRIDGE_OPEN_TRAUMA = 0.08
+const FRIDGE_SLAM_TRAUMA = 0.35
+const LID_LAUNCH_TRAUMA = 0.06
+const LID_BLAST_TRAUMA = 0.4
+const COOKER_POP_TRAUMA = 0.3
+const PAN_CLANG_TRAUMA = 0.07
+const PAN_SMASH_TRAUMA = 0.5
+const HOME_RUN_TRAUMA = 0.25
+const SHATTER_TRAUMA = 0.1
 
 const firingTrauma = (event: GameEvent): number =>
   GameEvent.isAnyOf(['Fired'])(event) ? WEAPONS[event.weapon].shakeTrauma : 0
@@ -198,6 +207,20 @@ const eventTrauma = (event: GameEvent): number =>
     Purchased: () => 0,
     PurchaseRefused: () => 0,
     ExitOpened: () => EXIT_SMASH_TRAUMA,
+    FridgeOpened: () => FRIDGE_OPEN_TRAUMA,
+    FridgeSlammed: () => FRIDGE_SLAM_TRAUMA,
+    DudBurped: () => 0,
+    LidLaunched: () => LID_LAUNCH_TRAUMA,
+    LidBlasted: () => LID_BLAST_TRAUMA,
+    CookerPopped: () => COOKER_POP_TRAUMA,
+    PanSwung: () => 0,
+    PanClanged: () => PAN_CLANG_TRAUMA,
+    PanSmashed: () => PAN_SMASH_TRAUMA,
+    PanFlattened: () => 0,
+    HomeRun: () => HOME_RUN_TRAUMA,
+    FreezeSprayed: () => 0,
+    ZombieFrozen: () => 0,
+    ZombieShattered: () => SHATTER_TRAUMA,
     ZombieSlipped: () => 0,
     PlayerDowned: () => SHAKE_TRAUMA_HURT,
     PlayerRevived: () => 0,
@@ -354,6 +377,25 @@ const eventPopups = (
     Purchased: () => noPopups(state),
     PurchaseRefused: () => noPopups(state),
     ExitOpened: () => noPopups(state),
+    FridgeOpened: () => noPopups(state),
+    FridgeSlammed: () => noPopups(state),
+    DudBurped: ({ x, y, refund }) =>
+      generateMany(
+        state,
+        1,
+        popup('Payday', refund, x, y - PAYDAY_POPUP_LIFT_PX),
+      ),
+    LidLaunched: () => noPopups(state),
+    LidBlasted: () => noPopups(state),
+    CookerPopped: () => noPopups(state),
+    PanSwung: () => noPopups(state),
+    PanClanged: () => noPopups(state),
+    PanSmashed: () => noPopups(state),
+    PanFlattened: () => noPopups(state),
+    HomeRun: () => noPopups(state),
+    FreezeSprayed: () => noPopups(state),
+    ZombieFrozen: () => noPopups(state),
+    ZombieShattered: () => noPopups(state),
     ZombieSlipped: () => noPopups(state),
     PlayerDowned: () => noPopups(state),
     PlayerRevived: () => noPopups(state),
@@ -467,8 +509,10 @@ export const stopForHits = (model: World, worldMs: number): World => {
   })
 }
 
+// NOTE: a Kaboomer's burst, a Cooker lid's, and the Pan's ground smash
+// each flash a ring.
 const blastOf = (event: GameEvent): ReadonlyArray<Blast> =>
-  GameEvent.isAnyOf(['Exploded'])(event)
+  GameEvent.isAnyOf(['Exploded', 'LidBlasted', 'PanSmashed'])(event)
     ? [{ x: event.x, y: event.y, radius: event.radius, ageMs: 0 }]
     : []
 

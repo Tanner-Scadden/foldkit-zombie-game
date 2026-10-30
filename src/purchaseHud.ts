@@ -5,6 +5,7 @@ import { exitName } from './exits'
 import { HOLD_ICON } from './icons'
 import { Message } from './message'
 import { type Model, Purchasable, Purchase } from './model'
+import { FRIDGE_NAME } from './names'
 import {
   type Offer,
   PURCHASE_RULES,
@@ -23,6 +24,7 @@ import {
 const nameOf = (target: Purchasable): string =>
   Purchasable.match(target, {
     Exit: ({ exit }) => exitName(exit).toLowerCase(),
+    Fridge: () => FRIDGE_NAME.toLowerCase(),
   })
 
 // NOTE: what the player is at: the offer in reach, or the one they still

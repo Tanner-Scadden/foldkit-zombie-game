@@ -83,6 +83,7 @@ import {
   initialHitStop,
   initialPlayer,
   noPractice,
+  shutFridge,
 } from './worldSchema'
 
 // The game's World in a co-op room (MULTIPLAYER.md, Phase 2): the netcode
@@ -327,6 +328,7 @@ export const freshWorld = (seed: number, settings: RoomSettings): World => ({
   player: initialPlayer,
   zombies: [],
   bullets: [],
+  lobs: [],
   nextEntityId: 0,
   wallet: emptyWallet,
   elapsedMs: 0,
@@ -347,6 +349,7 @@ export const freshWorld = (seed: number, settings: RoomSettings): World => ({
   shop: ShopState.Away(),
   shopCategory: FIRST_SHOP_CATEGORY,
   purchase: Purchase.Idle(),
+  fridge: shutFridge,
   hitStop: initialHitStop,
   lessons: settledLessons,
   practice: noPractice,

@@ -1774,6 +1774,10 @@ const GUN_PALETTE: Palette = {
   R: '#d8423a',
   P: '#4f9a32',
   Q: '#9be36a',
+  D: '#2e2e36',
+  B: '#4ab8f0',
+  C: '#c8f4ff',
+  N: '#ff7ab8',
 }
 
 type GunPixels = Readonly<{ pixels: ReadonlyArray<string>; pivot: Anchor }>
@@ -1794,6 +1798,34 @@ const GUN_PIXELS: Readonly<Record<WeaponKind, GunPixels>> = {
   Peashooter: {
     pixels: ['.PPPPQQ', 'VPQQQPQ', 'VPPPPQQ'],
     pivot: { x: 1, y: 1 },
+  },
+  // NOTE: the fridge's prizes. The Cooker is a dented pot with its lid
+  // clamped on, held by the side handle; the Pan a black skillet on a
+  // wooden handle; Brain Freeze a slushie tank with a pink straw nozzle.
+  Cooker: {
+    pixels: ['....KHK..', '..KGGGGGK', 'RRKMMMMMK', '..KMGGGMK', '...KKKKK.'],
+    pivot: { x: 1, y: 2 },
+  },
+  Pan: {
+    pixels: [
+      '.......KKK.',
+      '......KDDDK',
+      'VWWWWKDDHDK',
+      '......KDDDK',
+      '.......KKK.',
+    ],
+    pivot: { x: 1, y: 2 },
+  },
+  Freeze: {
+    pixels: [
+      '...NN....',
+      '..KKKK...',
+      '.KCCCBKKK',
+      'KKBBBBGGN',
+      '.KBBBBK..',
+      '..KKKK...',
+    ],
+    pivot: { x: 1, y: 3 },
   },
 }
 

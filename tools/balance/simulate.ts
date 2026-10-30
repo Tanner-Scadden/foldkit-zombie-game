@@ -366,6 +366,51 @@ const kitchenWaves = results.map(r => r.kitchenWave).filter(wave => wave > 0)
 console.log(
   `Kitchen bought: ${((100 * kitchenWaves.length) / Math.max(1, results.length)).toFixed(0)}% of runs, in the break before wave ${kitchenWaves.length > 0 ? median(kitchenWaves) : '-'} (median)`,
 )
+const pullers = results.filter(r => r.fridge.pulls > 0)
+const fridgeTotals = results.reduce(
+  (totals, { fridge }) => {
+    Object.entries(fridge.prizes).forEach(([prize, count]) => {
+      totals.prizes[prize] = (totals.prizes[prize] ?? 0) + count
+    })
+    totals.ended[fridge.endedWith] = (totals.ended[fridge.endedWith] ?? 0) + 1
+    totals.lids += fridge.lids
+    totals.pops += fridge.pops
+    totals.swings += fridge.swings
+    totals.clangs += fridge.clangs
+    totals.sprays += fridge.sprays
+    totals.shatters += fridge.shatters
+    return totals
+  },
+  {
+    prizes: {} as Record<string, number>,
+    ended: {} as Record<string, number>,
+    lids: 0,
+    pops: 0,
+    swings: 0,
+    clangs: 0,
+    sprays: 0,
+    shatters: 0,
+  },
+)
+const fridgeWins = (prize: string) =>
+  results.filter(r => (r.fridge.prizes[prize] ?? 0) > 0)
+console.log(
+  `Fridge: pulled in ${((100 * pullers.length) / Math.max(1, results.length)).toFixed(0)}% of runs, ${results.reduce((sum, r) => sum + r.fridge.pulls, 0)} pulls, first in the break before wave ${pullers.length > 0 ? median(pullers.map(r => r.fridge.firstPullWave)) : '-'} (median)`,
+)
+console.log(
+  `Fridge prizes: ${JSON.stringify(fridgeTotals.prizes)}; carried at the end: ${JSON.stringify(fridgeTotals.ended)}`,
+)
+console.log(
+  `Fridge weapons: ${fridgeTotals.lids} lids, ${fridgeTotals.pops} pops, ${fridgeTotals.swings} swings (${fridgeTotals.clangs} clangs), ${fridgeTotals.sprays} sprays, ${fridgeTotals.shatters} shatters`,
+)
+console.log(
+  `Wins by fridge weapon pulled: ${['Cooker', 'Pan', 'Freeze']
+    .map(prize => {
+      const runs = fridgeWins(prize)
+      return `${prize} ${runs.filter(r => r.victory).length}/${runs.length}`
+    })
+    .join(', ')}, none ${results.filter(r => r.fridge.pulls === 0 && r.victory).length}/${results.filter(r => r.fridge.pulls === 0).length}`,
+)
 console.log(
   `Median run length: ${(median(results.map(r => r.runMs)) / 60000).toFixed(2)} min`,
 )

@@ -629,6 +629,55 @@ export const pantryShapes = ({
   ]
 }
 
+// NOTE: Mystery Leftovers: a grimy old fridge against the back wall, its
+// cream gone yellow, rust round the feet, mold creeping out of the door
+// seal, a smiley magnet, and a padlocked chain hanging loose. Its door
+// opening is drawn over it (src/fridgeView.ts).
+const FRIDGE_COLOR = '#d6cfa4'
+const FRIDGE_SHADE_COLOR = '#a89f74'
+const FRIDGE_DARK_COLOR = '#6e6648'
+const FRIDGE_CHROME_COLOR = '#c9ced6'
+const MOLD_COLOR = '#7aa04a'
+const MOLD_DARK_COLOR = '#4e6a2a'
+const RUST_COLOR = '#8a4a24'
+export const FRIDGE_RISE_PX = 18
+
+export const fridgeShapes = ({
+  x,
+  y,
+  width,
+  height,
+}: Box): ReadonlyArray<Canvas.Shape> => {
+  const bottom = y + height
+  const top = y - FRIDGE_RISE_PX
+  const freezerBottom = top + 11
+  return [
+    rect(x + 1, top - 1, width - 2, 1, FRIDGE_DARK_COLOR),
+    rect(x, top, width, bottom - top - 1, FRIDGE_COLOR),
+    rect(x, top, 1, bottom - top - 1, FRIDGE_SHADE_COLOR),
+    rect(x + width - 2, top, 2, bottom - top - 1, FRIDGE_SHADE_COLOR),
+    rect(x + 1, freezerBottom, width - 3, 1, FRIDGE_DARK_COLOR),
+    rect(x + width - 5, top + 3, 1, 6, FRIDGE_CHROME_COLOR),
+    rect(x + width - 5, freezerBottom + 3, 1, 12, FRIDGE_CHROME_COLOR),
+    rect(x + 3, top + 2, 3, 3, '#ffd23f'),
+    rect(x + 4, top + 3, 1, 1, INK_COLOR),
+    rect(x + 7, top + 5, 2, 2, '#ff7ab8'),
+    rect(x + 3, freezerBottom + 4, 5, 6, '#f4f1de'),
+    rect(x + 4, freezerBottom + 5, 3, 1, '#8a8a96'),
+    rect(x + 4, freezerBottom + 7, 2, 1, '#8a8a96'),
+    rect(x + 1, freezerBottom + 1, width - 3, 1, MOLD_COLOR),
+    rect(x + 3, freezerBottom + 2, 1, 2, MOLD_COLOR),
+    rect(x + 9, freezerBottom + 2, 1, 3, MOLD_DARK_COLOR),
+    rect(x + 13, freezerBottom + 2, 1, 1, MOLD_COLOR),
+    rect(x + 1, bottom - 4, width - 3, 1, MOLD_DARK_COLOR),
+    rect(x + 6, bottom - 3, 2, 1, MOLD_COLOR),
+    rect(x + 11, top + 6, 2, 3, 'rgba(90, 80, 30, 0.45)'),
+    rect(x + 2, bottom - 2, width - 3, 1, RUST_COLOR),
+    rect(x + 1, bottom - 1, 3, 1, RUST_COLOR),
+    rect(x + width - 4, bottom - 1, 3, 1, RUST_COLOR),
+  ]
+}
+
 export const sacksShapes = ({
   x,
   y,

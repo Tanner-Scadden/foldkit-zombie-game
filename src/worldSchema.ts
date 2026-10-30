@@ -107,11 +107,16 @@ export const Invulnerability = defineTaggedUnion({
 })
 export type Invulnerability = typeof Invulnerability.Type
 
+// NOTE: the Cooker, the Pan, and Brain Freeze come only out of the Mystery
+// Leftovers fridge (src/leftovers.ts); Rattles never sells them.
 export const WeaponKind = Schema.Literals([
   'Pistol',
   'Shotgun',
   'Smg',
   'Peashooter',
+  'Cooker',
+  'Pan',
+  'Freeze',
 ])
 export type WeaponKind = typeof WeaponKind.Type
 
@@ -136,6 +141,17 @@ export const Reload = defineTaggedUnion({
 })
 export type Reload = typeof Reload.Type
 
+// NOTE: the Pressure Cooker's trigger (src/fridgeWeapons.ts). Building
+// counts how long fire has been held and keeps the aim it was held at, so a
+// thumb lifting off the stick still throws where it pointed. Spent is a
+// lid that popped in the player's hands: nothing builds until fire is let go.
+export const Charge = defineTaggedUnion({
+  Idle: {},
+  Building: { heldMs: Schema.Number, aim: Vector },
+  Spent: {},
+})
+export type Charge = typeof Charge.Type
+
 export const Player = Schema.Struct({
   x: Schema.Number,
   y: Schema.Number,
@@ -149,6 +165,7 @@ export const Player = Schema.Struct({
   pistolTier: Schema.Number,
   pistolLoaded: Schema.Number,
   reload: Reload,
+  charge: Charge,
 })
 export type Player = typeof Player.Type
 
@@ -198,6 +215,14 @@ export const ZombieAction = defineTaggedUnion({
   Dazed: { remainingMs: Schema.Number, durationMs: Schema.Number },
   Burrowed: { remainingMs: Schema.Number, durationMs: Schema.Number },
   Clinging: { remainingMs: Schema.Number },
+  // NOTE: the fridge weapons' (src/fridgeWeapons.ts). Frozen is a small
+  // zombie iced solid by Brain Freeze: it stands still and the next hit
+  // shatters it. Chilled is a big one only slowed. Reeling is a small one
+  // the Clang Pan rang: it gets up Winded, so the Pan cannot daze it again
+  // at once.
+  Frozen: { remainingMs: Schema.Number, durationMs: Schema.Number },
+  Chilled: { remainingMs: Schema.Number },
+  Reeling: { remainingMs: Schema.Number, durationMs: Schema.Number },
 })
 export type ZombieAction = typeof ZombieAction.Type
 
@@ -334,6 +359,9 @@ export const ParticleKind = Schema.Literals([
   'StopSign',
   'Bucket',
   'Smoke',
+  'Frost',
+  'IceGib',
+  'Fog',
 ])
 export type ParticleKind = typeof ParticleKind.Type
 
@@ -472,10 +500,14 @@ export const Prize = defineTaggedUnion({
 })
 export type Prize = typeof Prize.Type
 
+// NOTE: `fridgeRngState` is the Mystery Leftovers fridge's own stream
+// (src/leftovers.ts), apart from the drops' and the waves', so a pull never
+// changes what drops or which zombies come.
 export const Loot = Schema.Struct({
   rngState: Schema.Number,
   dryMs: Schema.Number,
   prize: Prize,
+  fridgeRngState: Schema.Number,
 })
 export type Loot = typeof Loot.Type
 
@@ -483,6 +515,61 @@ export type Loot = typeof Loot.Type
 // grab only names it, in a shorter pop.
 export const CalloutLook = Schema.Literals(['Explained', 'Named'])
 export type CalloutLook = typeof CalloutLook.Type
+
+// THE FRIDGE
+
+// NOTE: what a pull of Mystery Leftovers gives: a fridge-only weapon, a
+// moldy Sandwich that heals a heart, or a Dud (a fish skeleton) that burps
+// half the price back.
+export const FridgePrize = Schema.Literals([
+  'Cooker',
+  'Pan',
+  'Freeze',
+  'Sandwich',
+  'Dud',
+])
+export type FridgePrize = typeof FridgePrize.Type
+
+// NOTE: Open is a pull: the door creaks open, fog rolls out, and the prize
+// pops up and flies to the seat that pulled. Slammed is the fridge resting
+// after its last pull of the batch; it takes no money until it is Shut.
+export const FridgeDoor = defineTaggedUnion({
+  Shut: {},
+  Open: {
+    prize: FridgePrize,
+    slot: Schema.Number,
+    remainingMs: Schema.Number,
+    durationMs: Schema.Number,
+  },
+  Slammed: { remainingMs: Schema.Number, durationMs: Schema.Number },
+})
+export type FridgeDoor = typeof FridgeDoor.Type
+
+// NOTE: `pulls` counts the pulls since the fridge last slammed; `luck`
+// counts its slams, each raising the rare prize's odds a little.
+export const Fridge = Schema.Struct({
+  door: FridgeDoor,
+  pulls: Schema.Number,
+  luck: Schema.Number,
+})
+export type Fridge = typeof Fridge.Type
+
+// NOTE: a Pressure Cooker lid in flight, from where it was thrown to where
+// it lands; `charge` (0 to 1) and `tier` size its blast. It names the seat
+// that threw it, as a bullet does, only in co-op.
+export const Lob = Schema.Struct({
+  id: Schema.Number,
+  x: Schema.Number,
+  y: Schema.Number,
+  from: Vector,
+  to: Vector,
+  remainingMs: Schema.Number,
+  durationMs: Schema.Number,
+  charge: Schema.Number,
+  tier: Schema.Number,
+  shooter: Schema.optionalKey(Schema.Number),
+})
+export type Lob = typeof Lob.Type
 
 export const Callout = Schema.Struct({
   kind: PickupKind,
@@ -587,6 +674,20 @@ export const GameEvent = defineTaggedUnion({
   Purchased: { x: Schema.Number, y: Schema.Number },
   PurchaseRefused: { x: Schema.Number, y: Schema.Number },
   ExitOpened: { x: Schema.Number, y: Schema.Number },
+  FridgeOpened: { x: Schema.Number, y: Schema.Number, prize: FridgePrize },
+  FridgeSlammed: { x: Schema.Number, y: Schema.Number },
+  DudBurped: { x: Schema.Number, y: Schema.Number, refund: Schema.Number },
+  LidLaunched: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  LidBlasted: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
+  CookerPopped: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  PanSwung: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  PanClanged: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  PanSmashed: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
+  PanFlattened: { x: Schema.Number, y: Schema.Number },
+  HomeRun: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  FreezeSprayed: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  ZombieFrozen: { x: Schema.Number, y: Schema.Number },
+  ZombieShattered: { x: Schema.Number, y: Schema.Number, kind: ZombieKind },
   ZombieSlipped: { x: Schema.Number, y: Schema.Number },
   PlayerDowned: { x: Schema.Number, y: Schema.Number },
   PlayerRevived: { x: Schema.Number, y: Schema.Number },
@@ -1045,6 +1146,9 @@ export const FixedShopItemId = Schema.Literals([
   'Heart',
   'Barricade',
   'Turret',
+  'CookerUpgrade',
+  'LidStack',
+  'PanUpgrade',
 ])
 export type FixedShopItemId = typeof FixedShopItemId.Type
 
@@ -1072,9 +1176,11 @@ export const ShopState = defineTaggedUnion({
 export type ShopState = typeof ShopState.Type
 
 // NOTE: something in the world bought by holding the interact key beside
-// it, the way a wall buy works (src/purchase.ts): a boarded exit today.
+// it, the way a wall buy works (src/purchase.ts): a boarded exit, or the
+// Mystery Leftovers fridge (src/leftovers.ts).
 export const Purchasable = defineTaggedUnion({
   Exit: { exit: ExitId },
+  Fridge: {},
 })
 export type Purchasable = typeof Purchasable.Type
 
@@ -1304,6 +1410,7 @@ export const World = Schema.Struct({
   player: Player,
   zombies: Schema.Array(Zombie),
   bullets: Schema.Array(Bullet),
+  lobs: Schema.Array(Lob),
   nextEntityId: Schema.Number,
   wallet: Wallet,
   elapsedMs: Schema.Number,
@@ -1316,6 +1423,7 @@ export const World = Schema.Struct({
   selectedTrap: TrapKind,
   level: LevelState,
   ovens: Schema.Array(Oven),
+  fridge: Fridge,
   laserSight: LaserSight,
   rngState: Schema.Number,
   intent: Intent,
@@ -1346,6 +1454,7 @@ export const initialPlayer: Player = {
   pistolTier: 0,
   pistolLoaded: PISTOL_MAGAZINE,
   reload: Reload.Ready(),
+  charge: Charge.Idle(),
 }
 
 export const emptyWallet: Wallet = { balance: 0, earned: 0, shown: 0 }
@@ -1433,12 +1542,20 @@ export const idleBoosts: Boosts = {
 }
 
 const LOOT_SEED_SALT = 0x5eed10e7
+const FRIDGE_SEED_SALT = 0x0f71d6e5
 
 export const freshLoot = (seed: number): Loot => ({
   rngState: (seed ^ LOOT_SEED_SALT) >>> 0,
   dryMs: 0,
   prize: Prize.Settled(),
+  fridgeRngState: (seed ^ FRIDGE_SEED_SALT) >>> 0,
 })
+
+export const shutFridge: Fridge = {
+  door: FridgeDoor.Shut(),
+  pulls: 0,
+  luck: 0,
+}
 
 // NOTE: particles, shake, popups, coin bursts, trap dust, and the random
 // look draw from their own stream, never from `rngState`, so how many

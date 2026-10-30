@@ -1,4 +1,4 @@
-import { Array, Option, Order, Schema, String, pipe } from 'effect'
+import { Array, Option, Order, Result, Schema, String, pipe } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
@@ -124,7 +124,27 @@ const changeText = (
 const roundTo = (value: number, places: number): number =>
   Math.round(value * 10 ** places) / 10 ** places
 
-const upgradeChanges = (weapon: WeaponKind, tier: number): string => {
+// NOTE: the fridge weapons' tiers change what their own table holds
+// (src/fridgeWeapons.ts), so each says it in a few words.
+const FRIDGE_TIER_WORDS: Readonly<
+  Partial<Record<WeaponKind, ReadonlyArray<string>>>
+> = {
+  Cooker: ['A bigger blast', 'Builds pressure faster', 'Six lids a load'],
+  Pan: ['A wider swing', 'Dents half as fast', 'Hold for a ground smash'],
+}
+
+const upgradeChanges = (weapon: WeaponKind, tier: number): string =>
+  Option.match(
+    Option.flatMap(Option.fromNullishOr(FRIDGE_TIER_WORDS[weapon]), words =>
+      Array.get(words, tier),
+    ),
+    {
+      onSome: words => `${words}.`,
+      onNone: () => gunUpgradeChanges(weapon, tier),
+    },
+  )
+
+const gunUpgradeChanges = (weapon: WeaponKind, tier: number): string => {
   const before = statsAt(weapon, tier)
   const after = statsAt(weapon, tier + 1)
   const roundsLabel = WEAPONS[weapon].roundsLabel
@@ -183,6 +203,7 @@ type ShopItem = Readonly<{
 
 const SHOTGUN_SHELLS = 16
 const SMG_ROUNDS = 120
+const LID_STACK = 8
 
 // NOTE: the sight is a luxury: it costs about as much as a gun's top
 // upgrade, so it is a late-run buy, and it is gone with the run.
@@ -266,6 +287,29 @@ export const SHOP_ITEMS: Readonly<Record<FixedShopItemId, ShopItem>> = {
     blurb: TRAPS.Turret.blurb,
     price: TRAPS.Turret.price,
     good: ShopGood.Trap({ kind: 'Turret' }),
+  },
+  // NOTE: the fridge weapons are never for sale, only their upgrades and
+  // the Cooker's lids, and only once a player has pulled one.
+  CookerUpgrade: {
+    id: 'CookerUpgrade',
+    name: `${WEAPONS.Cooker.name} upgrade`,
+    blurb: `Tightens the clamps on your ${WEAPONS.Cooker.name}.`,
+    price: 0,
+    good: ShopGood.Upgrade({ weapon: 'Cooker' }),
+  },
+  LidStack: {
+    id: 'LidStack',
+    name: SHOP_GOOD_NAMES.LidStack,
+    blurb: `${LID_STACK} more lids for the ${WEAPONS.Cooker.name}.`,
+    price: 30,
+    good: ShopGood.Ammo({ weapon: 'Cooker', rounds: LID_STACK }),
+  },
+  PanUpgrade: {
+    id: 'PanUpgrade',
+    name: `${WEAPONS.Pan.name} upgrade`,
+    blurb: `Hammers your ${WEAPONS.Pan.name} into something meaner.`,
+    price: 0,
+    good: ShopGood.Upgrade({ weapon: 'Pan' }),
   },
 }
 
@@ -387,6 +431,47 @@ const SPARE_LINES: Array.NonEmptyReadonlyArray<SpareLine> = [
   { weapon: 'Smg', gun: 'Smg', ammo: 'SmgRounds', upgrade: 'SmgUpgrade' },
 ]
 
+// NOTE: a fridge weapon has a card only while a player carries it, with
+// what Rattles sells for it. Brain Freeze has no tiers and no refills, so
+// it has none.
+type FridgeLine = Readonly<{
+  weapon: WeaponKind
+  items: Array.NonEmptyReadonlyArray<ShopItemId>
+  status: (spare: CarriedGun) => string
+}>
+
+const FRIDGE_LINES: ReadonlyArray<FridgeLine> = [
+  {
+    weapon: 'Cooker',
+    items: ['LidStack', 'CookerUpgrade'],
+    status: spare => `${spare.loaded} loaded, ${looseRounds(spare)} spare`,
+  },
+  {
+    weapon: 'Pan',
+    items: ['PanUpgrade'],
+    status: spare =>
+      spare.loaded > 0
+        ? `${spare.loaded} hits before it dents`
+        : 'Dented, Rattles flattens it each break',
+  },
+]
+
+const fridgeShelves = (player: Player): ReadonlyArray<GunShelf> =>
+  Array.filterMap(FRIDGE_LINES, line =>
+    Option.match(carried(player, line.weapon), {
+      onNone: () => Result.failVoid,
+      onSome: spare =>
+        Result.succeed(
+          GunShelf.Owned({
+            weapon: line.weapon,
+            tier: spare.tier,
+            status: line.status(spare),
+            items: line.items,
+          }),
+        ),
+    }),
+  )
+
 export const GunShelf = defineTaggedUnion({
   ForSale: { weapon: WeaponKind, item: ShopItemId },
   Owned: {
@@ -431,7 +516,10 @@ export const gunShelves = (
   model: World,
 ): Array.NonEmptyReadonlyArray<GunShelf> =>
   Array.prepend(
-    Array.map(SPARE_LINES, line => spareShelf(model.player, line)),
+    [
+      ...Array.map(SPARE_LINES, line => spareShelf(model.player, line)),
+      ...fridgeShelves(model.player),
+    ],
     sidearmShelf(model.player),
   )
 

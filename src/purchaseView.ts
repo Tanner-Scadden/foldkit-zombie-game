@@ -11,6 +11,7 @@ import {
   textShapes,
 } from './font'
 import { ZERO_VECTOR } from './geometry'
+import { FRIDGE_RULES } from './leftovers'
 import { type Model, Purchasable, Purchase } from './model'
 import {
   type Offer,
@@ -144,9 +145,12 @@ export const bakePriceTag = (price: number): PriceTag => {
 
 const EXIT_TAG = bakePriceTag(EXIT_RULES.price)
 
+const FRIDGE_TAG = bakePriceTag(FRIDGE_RULES.price)
+
 const tagOf = (target: Purchasable): PriceTag =>
   Purchasable.match(target, {
     Exit: () => EXIT_TAG,
+    Fridge: () => FRIDGE_TAG,
   })
 
 // THE PROMPT

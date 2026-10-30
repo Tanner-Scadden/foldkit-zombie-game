@@ -20,6 +20,7 @@ import {
   type Player,
   type Vector,
   type Zombie,
+  ZombieAction,
   ZombieState,
 } from './worldSchema'
 import {
@@ -39,12 +40,19 @@ type Strike = Readonly<{
   knockbackSpeed: number
 }>
 
+// NOTE: a zombie Brain Freeze iced solid shatters at the next hit of any
+// kind: it takes SHATTER_SCALE times the damage and the ice is gone.
+export const SHATTER_SCALE = 3
+
+const isIcedSolid = ZombieAction.isAnyOf(['Frozen'])
+
 export const strikeZombie = (
   zombie: Zombie,
   { damage, direction, knockbackSpeed }: Strike,
   cause: DeathCause,
 ): Zombie => {
-  const hp = Math.max(0, zombie.hp - damage)
+  const isIced = isIcedSolid(zombie.action)
+  const hp = Math.max(0, zombie.hp - (isIced ? damage * SHATTER_SCALE : damage))
   return modifyFields(zombie, {
     hp: () => hp,
     knockback: () =>
@@ -52,6 +60,7 @@ export const strikeZombie = (
     hitRemainingMs: () => ZOMBIE_HIT_PULSE_MS,
     state: state =>
       hp > 0 ? state : deathState(zombie.kind, direction, cause),
+    action: action => (isIced ? ZombieAction.Roaming() : action),
   })
 }
 
@@ -199,6 +208,16 @@ const PLAYER_BLAST_TARGET: BlastTarget<Player> = {
   }),
 }
 
+// NOTE: a blast on every standing player it reaches.
+export const blastPlayers = (model: World, blast: BlastSpec): World =>
+  forEachSeatWhere(model, isStanding, seatWorld => {
+    const playerOutcome = blastOne(blast, PLAYER_BLAST_TARGET)(seatWorld.player)
+    return modifyFields(seatWorld, {
+      player: () => playerOutcome.target,
+      frameEvents: frameEvents => [...frameEvents, ...playerOutcome.events],
+    })
+  })
+
 const maybeBlastOf = (zombie: Zombie): Option.Option<BlastSpec> =>
   Behavior.match(statsOf(zombie).behavior, {
     Brawler: () => Option.none(),
@@ -243,7 +262,7 @@ const detonate = (model: World, bomberId: number): World => {
         model.traps,
         trapBlastTarget(levelOf(model)),
       )
-      const scorched = forEachSeatWhere(
+      const scorched = blastPlayers(
         modifyFields(model, {
           frameEvents: Array.append(
             GameEvent.Exploded({
@@ -253,20 +272,7 @@ const detonate = (model: World, bomberId: number): World => {
             }),
           ),
         }),
-        isStanding,
-        seatWorld => {
-          const playerOutcome = blastOne(
-            blast,
-            PLAYER_BLAST_TARGET,
-          )(seatWorld.player)
-          return modifyFields(seatWorld, {
-            player: () => playerOutcome.target,
-            frameEvents: frameEvents => [
-              ...frameEvents,
-              ...playerOutcome.events,
-            ],
-          })
-        },
+        blast,
       )
       return payShared(
         modifyFields(scorched, {

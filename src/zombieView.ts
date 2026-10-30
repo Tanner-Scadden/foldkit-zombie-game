@@ -49,19 +49,23 @@ import {
 import {
   type Facing,
   KABOOMER_FUSE_MAX,
+  type Sprite,
   type SpriteFrames,
   type SpriteSet,
   type Tone,
   ZOMBIE_SPRITES,
+  bakeShapes,
   frameAt,
   group,
   kaboomerFuseSprite,
   kaboomerFuseTip,
+  placeAt,
   wornFramesAt,
 } from './sprite'
 import {
   Behavior,
   type DeathStyle,
+  ZOMBIE_KINDS,
   isGrounded,
   statsOf,
   strideAt,
@@ -515,6 +519,14 @@ const placementOf = (zombie: Zombie, elapsedMs: number): Placement =>
       isStill: true,
     }),
     Burrowed: () => ON_FEET,
+    Frozen: () => ({ lift: 0, rotate: 0, nudgeX: 0, isStill: true }),
+    Chilled: () => ON_FEET,
+    Reeling: () => ({
+      lift: 0,
+      rotate: QUARTER_TURN,
+      nudgeX: 0,
+      isStill: true,
+    }),
     Shielding: () => ({ lift: 0, rotate: 0, nudgeX: 0, isStill: true }),
     Shielded: () => ({
       lift: SHIELD_LIFT_PX,
@@ -533,11 +545,92 @@ const placementOf = (zombie: Zombie, elapsedMs: number): Placement =>
     }),
   })
 
+// ICE
+
+// NOTE: a zombie Brain Freeze froze solid stands in a block of ice baked
+// once per kind, which blinks as it is about to melt; a Chilled one only
+// sparkles with frost.
+const ICE_EDGE = '#e8fbff'
+const ICE_FACE = 'rgba(150, 220, 255, 0.5)'
+const ICE_SHINE = 'rgba(255, 255, 255, 0.75)'
+const ICE_MELT_BLINK_MS = 120
+const ICE_MELT_WARN_MS = 600
+const FROST_SPARKLE_MS = 160
+
+const iceBlock = (kind: ZombieKind): Sprite => {
+  const width = Math.round(ZOMBIE_KINDS[kind].bodyRadius * 2) + 4
+  const height = ZOMBIE_SPRITES[kind].height + 3
+  return bakeShapes([
+    Canvas.Rect({ x: 0, y: 0, width, height, fill: ICE_FACE }),
+    Canvas.Rect({ x: 0, y: 0, width, height: 1, fill: ICE_EDGE }),
+    Canvas.Rect({ x: 0, y: 0, width: 1, height, fill: ICE_EDGE }),
+    Canvas.Rect({ x: width - 1, y: 0, width: 1, height, fill: ICE_EDGE }),
+    Canvas.Rect({ x: 0, y: height - 1, width, height: 1, fill: ICE_EDGE }),
+    Canvas.Rect({ x: 2, y: 2, width: 1, height: 3, fill: ICE_SHINE }),
+    Canvas.Rect({ x: 3, y: 2, width: 2, height: 1, fill: ICE_SHINE }),
+  ])
+}
+
+const ICE_BLOCKS: Readonly<Record<ZombieKind, Sprite>> = {
+  Shambler: iceBlock('Shambler'),
+  Runner: iceBlock('Runner'),
+  Tank: iceBlock('Tank'),
+  Exploder: iceBlock('Exploder'),
+  Thrower: iceBlock('Thrower'),
+  Crawler: iceBlock('Crawler'),
+  Boss: iceBlock('Boss'),
+}
+
+const iceShapes = (
+  zombie: Zombie,
+  foot: Vector,
+  elapsedMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const action = zombie.action
+  if (ZombieAction.isAnyOf(['Frozen'])(action)) {
+    const isBlinking =
+      action.remainingMs < ICE_MELT_WARN_MS &&
+      Math.floor(elapsedMs / ICE_MELT_BLINK_MS) % 2 === 0
+    if (isBlinking) {
+      return []
+    }
+    const block = ICE_BLOCKS[zombie.kind]
+    const width = Math.round(statsOf(zombie).bodyRadius * 2) + 4
+    return [
+      placeAt(
+        Math.round(foot.x - width / 2),
+        Math.round(foot.y - ZOMBIE_SPRITES[zombie.kind].height - 2),
+        block,
+      ),
+    ]
+  } else if (ZombieAction.isAnyOf(['Chilled'])(action)) {
+    const phase = Math.floor(elapsedMs / FROST_SPARKLE_MS) % 4
+    return [
+      Canvas.Rect({
+        x: Math.round(foot.x - 4 + phase * 2),
+        y: Math.round(foot.y - ZOMBIE_SPRITES[zombie.kind].height + phase * 3),
+        width: 1,
+        height: 1,
+        fill: ICE_EDGE,
+      }),
+      Canvas.Rect({
+        x: Math.round(foot.x + 4 - phase * 2),
+        y: Math.round(foot.y - 4 - phase),
+        width: 1,
+        height: 1,
+        fill: ICE_EDGE,
+      }),
+    ]
+  } else {
+    return []
+  }
+}
+
 const dazeStarShapes = (
   zombie: Zombie,
   elapsedMs: number,
 ): ReadonlyArray<Canvas.Shape> => {
-  if (!ZombieAction.isAnyOf(['Dazed'])(zombie.action)) {
+  if (!ZombieAction.isAnyOf(['Dazed', 'Reeling'])(zombie.action)) {
     return []
   }
   return Array.makeBy(2, index => {
@@ -637,6 +730,7 @@ const walkingZombieShapes = (
     }),
     ...steamShapes(zombie, elapsedMs, headTop),
     ...dazeStarShapes(zombie, elapsedMs),
+    ...iceShapes(zombie, foot, elapsedMs),
   ]
 }
 
@@ -844,6 +938,9 @@ export const zombieFootY = (zombie: Zombie): number =>
     Shielded: () => 0,
     Burrowed: () => 0,
     Clinging: () => 0,
+    Frozen: () => 0,
+    Chilled: () => 0,
+    Reeling: () => 0,
   })
 
 const zombieFootShadow = (zombie: Zombie, fill: string): Canvas.Shape => {
@@ -864,6 +961,9 @@ const hasShadow = ZombieAction.isAnyOf([
   'Flying',
   'Dazed',
   'Clinging',
+  'Frozen',
+  'Chilled',
+  'Reeling',
 ])
 
 export const zombieShadow = (

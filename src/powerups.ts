@@ -703,21 +703,22 @@ const dropFromKills = (
   return Option.match(rolled.maybeKill, {
     onNone: () =>
       modifyFields(model, {
-        loot: () => ({
-          rngState: rolled.rngState,
-          dryMs: loot.dryMs,
-          prize: Prize.Settled(),
-        }),
+        loot: () =>
+          modifyFields(loot, {
+            rngState: () => rolled.rngState,
+            prize: () => Prize.Settled(),
+          }),
       }),
     onSome: kill => {
       const kindDraw = nextRandom(rolled.rngState)
       const kind = pickKindAt(kindDraw.value, eligibleKinds(model.player))
       return modifyFields(placePickup(model, kind, kill), {
-        loot: () => ({
-          rngState: kindDraw.nextState,
-          dryMs: 0,
-          prize: Prize.Settled(),
-        }),
+        loot: () =>
+          modifyFields(loot, {
+            rngState: () => kindDraw.nextState,
+            dryMs: () => 0,
+            prize: () => Prize.Settled(),
+          }),
       })
     },
   })

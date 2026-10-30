@@ -2,7 +2,7 @@ import { Array, Option } from 'effect'
 import type { Attribute, Html, HtmlBuilder } from 'foldkit/html'
 
 import { HINT_ICON_SPRITES, type HintIconSprites, keyIcon } from './hintIcons'
-import { PAUSE_ICON } from './icons'
+import { CHARGE_ICON, FRIDGE_ICON, PAUSE_ICON } from './icons'
 import { Message } from './message'
 import { type InputDevice, type Model, Phase } from './model'
 import { standaloneSource } from './sprite'
@@ -68,6 +68,16 @@ export const CONTROL_CARDS: Array.NonEmptyReadonlyArray<ControlCard> = [
     action: 'Planks',
     keyboard: moving('T', HINT_ICON_SPRITES.PlankDoor),
     touch: moving('Trap button', HINT_ICON_SPRITES.PlankDoor),
+  },
+  {
+    action: 'Leftovers',
+    keyboard: still('Hold Enter at the kitchen fridge', FRIDGE_ICON),
+    touch: still('Hold the button at the kitchen fridge', FRIDGE_ICON),
+  },
+  {
+    action: 'Charge',
+    keyboard: still('Hold click, let go to throw', CHARGE_ICON),
+    touch: still('Hold your right thumb, lift to throw', CHARGE_ICON),
   },
   {
     action: 'Goodies',

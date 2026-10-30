@@ -29,9 +29,12 @@ import {
   BossMove,
   type Bullet,
   BulletGlaze,
+  type CarriedGun,
+  Charge,
   type Decal,
   DecalKind,
   Frenzy,
+  FridgeDoor,
   Glob,
   Lesson,
   type Model,
@@ -60,6 +63,7 @@ import { WIDE_SURFACE, scoring } from './testing'
 import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
 import { FINAL_WAVE, rollSpawns } from './waves'
+import { freshSpare } from './weapons'
 import { ZOMBIE_KINDS } from './zombies'
 
 // WORST-CASE ROOMS
@@ -616,7 +620,78 @@ const kitchenRoom = (wave: number): Model => {
   })
 }
 
+// NOTE: the fridge weapons at their busiest in the open kitchen: the
+// Cooker held at full pressure with three lids in the air and a blast
+// flashing, the fridge open with a prize flying out, and a third of the
+// crowd frozen solid or reeling from the Pan.
+const fridgeFight = (
+  room: Model,
+  spare: CarriedGun,
+  charge: Charge,
+  recoilMs: number,
+): Model =>
+  modifyFields(room, {
+    player: player =>
+      modifyFields(player, {
+        arsenal: () => Arsenal.HoldingSpare({ spare }),
+        charge: () => charge,
+        recoilRemainingMs: () => recoilMs,
+      }),
+    fridge: fridge =>
+      modifyFields(fridge, {
+        door: () =>
+          FridgeDoor.Open({
+            prize: 'Freeze',
+            slot: 0,
+            remainingMs: 400,
+            durationMs: 1100,
+          }),
+      }),
+    lobs: () =>
+      Array.makeBy(3, index => ({
+        id: 8000 + index,
+        x: 110 + index * 20,
+        y: -60 - index * 10,
+        from: { x: 100, y: -40 },
+        to: { x: 150 + index * 10, y: -80 - index * 10 },
+        remainingMs: 200,
+        durationMs: 500,
+        charge: 1,
+        tier: 3,
+      })),
+    blasts: () => [{ x: 140, y: -70, radius: 34, ageMs: 60 }],
+    zombies: zombies =>
+      Array.map(zombies, (zombie, index) =>
+        index % 3 === 0 && zombie.kind !== 'Boss'
+          ? modifyFields(zombie, {
+              action: () =>
+                index % 2 === 0
+                  ? ZombieAction.Frozen({ remainingMs: 2000, durationMs: 2500 })
+                  : ZombieAction.Reeling({ remainingMs: 400, durationMs: 700 }),
+            })
+          : zombie,
+      ),
+  })
+
 const SCENARIOS: ReadonlyArray<Readonly<{ name: string; model: Model }>> = [
+  {
+    name: 'wave 9 in the kitchen with the Cooker blasting and the fridge open',
+    model: fridgeFight(
+      kitchenRoom(9),
+      { ...freshSpare('Cooker'), tier: 3 },
+      Charge.Building({ heldMs: 1200, aim: { x: 1, y: 0 } }),
+      0,
+    ),
+  },
+  {
+    name: 'wave 9 in the kitchen with the Pan swinging',
+    model: fridgeFight(
+      kitchenRoom(9),
+      { ...freshSpare('Pan'), tier: 3 },
+      Charge.Building({ heldMs: 900, aim: { x: 1, y: 0 } }),
+      120,
+    ),
+  },
   {
     name: 'campaign wave 9 in the open kitchen with both ovens belching',
     model: kitchenRoom(9),

@@ -56,9 +56,13 @@ describe('Pause screen controls', () => {
         expect(card('Swap', 'Q')).toExist(),
         expect(card('Shop', 'Walk into the stall')).toExist(),
         expect(card('Planks', 'T')).toExist(),
+        expect(
+          card('Leftovers', 'Hold Enter at the kitchen fridge'),
+        ).toExist(),
+        expect(card('Charge', 'Hold click, let go to throw')).toExist(),
         expect(card('Goodies', 'Walk over them')).toExist(),
         expect(card('Pause', 'Esc')).toExist(),
-        expectAll(all.role('listitem')).toHaveCount(8),
+        expectAll(all.role('listitem')).toHaveCount(10),
       ),
       inside(
         role('list', { name: 'More keys' }),

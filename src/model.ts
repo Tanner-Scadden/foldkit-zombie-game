@@ -94,6 +94,7 @@ import {
   initialPlayer,
   noKills,
   noPractice,
+  shutFridge,
   stillShake,
 } from './worldSchema'
 
@@ -284,6 +285,7 @@ export const initialModel: Model = {
   player: initialPlayer,
   zombies: [],
   bullets: [],
+  lobs: [],
   particles: [],
   decals: [],
   dustCooldownMs: 0,
@@ -291,6 +293,7 @@ export const initialModel: Model = {
   wallet: emptyWallet,
   shop: ShopState.Away(),
   purchase: Purchase.Idle(),
+  fridge: shutFridge,
   shopDialog: Dialog.init({ id: SHOP_DIALOG_ID }),
   shopCategory: FIRST_SHOP_CATEGORY,
   shopTabs: Tabs.init({ id: SHOP_TABS_ID }),

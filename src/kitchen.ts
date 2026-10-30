@@ -112,7 +112,7 @@ export const flameBoxOf = (oven: Box): Box => ({
   bottom: oven.bottom + OVEN_RULES.reachPx,
 })
 
-const isKitchenOpen = (level: Level): boolean =>
+export const isKitchenOpen = (level: Level): boolean =>
   Option.exists(maybeExit(level, KITCHEN_EXIT), ({ isOpen }) => isOpen)
 
 export const freshOvens = (level: Level): ReadonlyArray<Oven> =>
