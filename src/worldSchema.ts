@@ -13,12 +13,9 @@ export {
   Appearance,
   Body,
   Difficulty,
-  Extra,
-  FacialHair,
   HairColor,
   CursorSetting,
   HairStyle,
-  Makeup,
   Outfit,
   Print,
   HomeScreenTip,
@@ -831,21 +828,16 @@ export const LookPart = Schema.Literals([
   'ShirtColor',
   'Outfit',
   'Print',
-  'FacialHair',
-  'Makeup',
-  'Extra',
 ])
 export type LookPart = typeof LookPart.Type
 
-// NOTE: the Look tab's little tabs, each a few parts: the body and skin,
-// the hair, the face, the outfit, and what is printed on it.
-export const LookSection = Schema.Literals([
-  'Body',
-  'Hair',
-  'Face',
-  'Outfit',
-  'Print',
-])
+// NOTE: the look's two on and off parts, each one tap.
+export const LookToggle = Schema.Literals(['Beard', 'Glasses'])
+export type LookToggle = typeof LookToggle.Type
+
+// NOTE: the Look tab's little tabs: the body, skin, beard, and glasses; the
+// hair; and the outfit.
+export const LookSection = Schema.Literals(['Body', 'Hair', 'Outfit'])
 export type LookSection = typeof LookSection.Type
 
 export const PlannedSpawn = Schema.Struct({
@@ -1418,14 +1410,13 @@ export const initialHitStop: HitStop = HitStop.Running({ cooldownMs: 0 })
 export const stillShake: Shake = { trauma: 0, offset: { x: 0, y: 0 } }
 
 export const defaultAppearance: Appearance = {
-  body: 'Medium',
-  hairStyle: 'Crop',
+  body: 'Broad',
+  hairStyle: 'Short',
   hairColor: 'Brown',
   skinTone: 'Light',
   shirtColor: 'Blue',
   outfit: 'Tee',
   print: 'Plain',
-  facialHair: 'None',
-  makeup: 'None',
-  extra: 'None',
+  beard: false,
+  glasses: false,
 }

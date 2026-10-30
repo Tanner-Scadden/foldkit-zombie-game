@@ -255,7 +255,7 @@ check(
 
 await pickShirt(a.page, 'Purple')
 check(
-  (await look(a.page)).includes('purple vee'),
+  (await look(a.page)).includes('purple tee'),
   'device A changes its shirt to purple',
 )
 await closeLook(a.page)
@@ -302,7 +302,7 @@ check(
   `device B shows A's ${STARTING_KILLS} zombies splatted`,
 )
 check(
-  (await look(b.page)).includes('purple vee'),
+  (await look(b.page)).includes('purple tee'),
   "device B shows A's purple shirt",
 )
 await closeLook(b.page)

@@ -37,11 +37,10 @@ const PICKED_LOOK: Appearance = {
   hairColor: 'Pink',
   skinTone: 'Tan',
   shirtColor: 'Purple',
-  outfit: 'Skirt',
-  print: 'Bi',
-  facialHair: 'Stubble',
-  makeup: 'Lipstick',
-  extra: 'Shades',
+  outfit: 'Dress',
+  print: 'Rainbow',
+  beard: true,
+  glasses: false,
 }
 
 const resolveFocusCoop = () =>
@@ -127,7 +126,7 @@ describe('co-op from home', () => {
         RequestRoom({
           request: RoomRequest.Create(),
           name: 'Snackula',
-          look: 'Slim.Ponytail.Pink.Tan.Purple.IGBCD',
+          look: 'Slim.Ponytail.Pink.Tan.Purple.CCBA',
         }),
         CoopMessage.FailedRequestRoom({ problem: 'Offline' }),
       ),

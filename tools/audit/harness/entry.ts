@@ -11,11 +11,9 @@ import { modifyFields } from 'foldkit/struct'
 
 import {
   BODIES,
-  EXTRAS,
-  FACIAL_HAIRS,
   HAIR_COLORS,
   HAIR_STYLES,
-  MAKEUPS,
+  ON_OFF,
   OUTFITS,
   PRINTS,
   SHIRT_COLORS,
@@ -1275,9 +1273,8 @@ const scenarioModelOf = (): Model => {
       shirtColor,
       outfit,
       print,
-      facialHair,
-      makeup,
-      extra,
+      beard,
+      glasses,
     ] = look
     model = modifyFields(model, {
       appearance: a => ({
@@ -1288,9 +1285,8 @@ const scenarioModelOf = (): Model => {
         shirtColor: shirtColor || a.shirtColor,
         outfit: outfit || a.outfit,
         print: print || a.print,
-        facialHair: facialHair || a.facialHair,
-        makeup: makeup || a.makeup,
-        extra: extra || a.extra,
+        beard: beard === 'Beard' || a.beard,
+        glasses: glasses === 'Glasses' || a.glasses,
       }),
     })
   }
@@ -1666,12 +1662,12 @@ const harnessInit: Runtime.ApplicationInit<
 const CELL_W = 12
 const CELL_H = 16
 const SHEET_W = 168
-const SHEET_H = 282
+const SHEET_H = 268
 
 // NOTE: the look sheet: one row per part, each option of it on the classic
-// look (the bodies twice, in a tee and in a dress; the prints, every pride
-// flag among them, on every body), then walk frames, both facings, and the
-// hit flash for four mixed looks.
+// look (the bodies three times: in a tee, in a dress, and in overalls with
+// the Rainbow print, a beard, and glasses), then walk frames, both facings,
+// and the hit flash for four mixed looks.
 const lookSheetShapes = (): Array<Canvas.Shape> => {
   const shapes: Array<Canvas.Shape> = [
     Canvas.Rect({
@@ -1714,22 +1710,26 @@ const lookSheetShapes = (): Array<Canvas.Shape> => {
   const rows: ReadonlyArray<ReadonlyArray<Appearance>> = [
     BODIES.map(body => ({ ...base, body })),
     BODIES.map(body => ({ ...base, body, outfit: 'Dress', hairStyle: 'Long' })),
+    BODIES.map(body => ({
+      ...base,
+      body,
+      outfit: 'Overalls',
+      print: 'Rainbow',
+      beard: true,
+      glasses: true,
+    })),
     HAIR_STYLES.map(hairStyle => ({ ...base, hairStyle })),
     HAIR_COLORS.map(hairColor => ({ ...base, hairColor, hairStyle: 'Long' })),
     SKIN_TONES.map(skinTone => ({ ...base, skinTone })),
     SHIRT_COLORS.map(shirtColor => ({ ...base, shirtColor })),
     OUTFITS.map(outfit => ({ ...base, outfit })),
     PRINTS.map(print => ({ ...base, print })),
-    PRINTS.map((print, i) => ({
-      ...base,
-      print,
-      body: BODIES[i % BODIES.length]!,
-      outfit: OUTFITS[(i * 3) % OUTFITS.length]!,
-      skinTone: SKIN_TONES[(i * 5) % SKIN_TONES.length]!,
-    })),
-    FACIAL_HAIRS.map(facialHair => ({ ...base, facialHair })),
-    MAKEUPS.map(makeup => ({ ...base, makeup, skinTone: 'Deep' })),
-    EXTRAS.map(extra => ({ ...base, extra })),
+    OUTFITS.flatMap(outfit =>
+      PRINTS.map(print => ({ ...base, outfit, print, body: 'Slim' as const })),
+    ),
+    ON_OFF.flatMap(beard =>
+      ON_OFF.map(glasses => ({ ...base, beard, glasses })),
+    ),
   ]
   rows.forEach((row, r) =>
     row.forEach((appearance, c) =>
@@ -1748,44 +1748,42 @@ const lookSheetShapes = (): Array<Canvas.Shape> => {
     {
       ...base,
       body: 'Slim',
-      hairStyle: 'Undercut',
-      hairColor: 'Blue',
-      skinTone: 'Bronze',
-      outfit: 'Crop',
-      print: 'Trans',
-      makeup: 'Glam',
-      extra: 'Earrings',
+      hairStyle: 'Mohawk',
+      hairColor: 'Pink',
+      skinTone: 'Tan',
+      outfit: 'Hoodie',
+      print: 'Rainbow',
+      glasses: true,
     },
     {
       ...base,
       body: 'Broad',
-      hairStyle: 'Buns',
-      hairColor: 'Pastel',
-      skinTone: 'Umber',
-      outfit: 'Kilt',
-      facialHair: 'Beard',
-      extra: 'Glasses',
-    },
-    {
-      ...base,
-      body: 'Round',
-      hairStyle: 'Mohawk',
-      hairColor: 'Rainbow',
-      skinTone: 'Fair',
-      outfit: 'Suit',
-      shirtColor: 'Lilac',
-      print: 'Progress',
-      facialHair: 'Mustache',
-    },
-    {
-      ...base,
-      body: 'Medium',
-      hairStyle: 'Bald',
+      hairStyle: 'Curly',
+      hairColor: 'Black',
       skinTone: 'Deep',
-      outfit: 'Skirt',
-      shirtColor: 'Orange',
-      makeup: 'Lipstick',
-      extra: 'Shades',
+      outfit: 'Overalls',
+      shirtColor: 'Yellow',
+      beard: true,
+    },
+    {
+      ...base,
+      body: 'Slim',
+      hairStyle: 'Long',
+      hairColor: 'Blonde',
+      skinTone: 'Fair',
+      outfit: 'Dress',
+      shirtColor: 'Purple',
+      print: 'Stripes',
+    },
+    {
+      ...base,
+      body: 'Broad',
+      hairStyle: 'Bald',
+      hairColor: 'Grey',
+      skinTone: 'Brown',
+      shirtColor: 'Red',
+      beard: true,
+      glasses: true,
     },
   ]
   samples.forEach((appearance, i) => {

@@ -41,7 +41,10 @@ const optionIn = (groupName: string, name: string) =>
 const preview = (description: string) =>
   role('img', { name: `Preview: ${description}` })
 
-const DEFAULT_LOOK = 'medium build, light skin, brown crop hair, blue tee'
+const DEFAULT_LOOK = 'broad build, light skin, brown short hair, blue tee'
+
+const beardButton = role('button', { name: 'Beard' })
+const glassesButton = role('button', { name: 'Glasses' })
 
 const section = (name: string) =>
   within(group('Parts'), role('radio', { name }))
@@ -104,14 +107,14 @@ describe('Character picker', () => {
       ...showPicker(),
       expect(pickerDialog).toExist(),
       expect(role('tab', { name: 'Look' })).toHaveAttr('aria-selected', 'true'),
-      ...Array.map(['Body', 'Hair', 'Face', 'Outfit', 'Print'], name =>
+      ...Array.map(['Body', 'Hair', 'Outfit'], name =>
         expect(section(name)).toExist(),
       ),
       expect(section('Body')).toHaveAttr('aria-checked', 'true'),
       expect(group('Body shape')).toExist(),
       expect(group('Skin')).toExist(),
       expect(group('Hair')).toBeAbsent(),
-      expect(optionIn('Body shape', 'Medium')).toHaveAttr(
+      expect(optionIn('Body shape', 'Broad')).toHaveAttr(
         'aria-checked',
         'true',
       ),
@@ -120,16 +123,14 @@ describe('Character picker', () => {
         'false',
       ),
       expect(optionIn('Skin', 'Light')).toHaveAttr('aria-checked', 'true'),
+      expect(beardButton).toHaveAttr('aria-pressed', 'false'),
+      expect(glassesButton).toHaveAttr('aria-pressed', 'false'),
       ...openSection('Hair'),
       expect(group('Body shape')).toBeAbsent(),
-      expect(optionIn('Hair', 'Crop')).toHaveAttr('aria-checked', 'true'),
+      expect(optionIn('Hair', 'Short')).toHaveAttr('aria-checked', 'true'),
       expect(optionIn('Hair color', 'Brown')).toHaveAttr(
         'aria-checked',
         'true',
-      ),
-      ...openSection('Face'),
-      ...Array.map(['Facial hair', 'Makeup', 'Extras'], name =>
-        expect(optionIn(name, 'None')).toHaveAttr('aria-checked', 'true'),
       ),
       ...openSection('Outfit'),
       expect(optionIn('Outfit', 'Tee')).toHaveAttr('aria-checked', 'true'),
@@ -137,23 +138,8 @@ describe('Character picker', () => {
         'aria-checked',
         'true',
       ),
-      ...openSection('Print'),
       expect(optionIn('Print', 'Plain')).toHaveAttr('aria-checked', 'true'),
-      ...Array.map(
-        [
-          'Rainbow flag',
-          'Progress flag',
-          'Trans flag',
-          'Bi flag',
-          'Pan flag',
-          'Nonbinary flag',
-          'Lesbian flag',
-          'Ace flag',
-          'Aro flag',
-          'Intersex flag',
-        ],
-        name => expect(optionIn('Print', name)).toExist(),
-      ),
+      expect(optionIn('Print', 'Rainbow')).toExist(),
       expect(preview(DEFAULT_LOOK)).toExist(),
       expect(randomizeButton).toExist(),
       click(closeButton),
@@ -168,27 +154,22 @@ describe('Character picker', () => {
       measureSurface,
       click(characterButton),
       ...showPicker(),
-      ...pick('Body shape', 'Round'),
-      expect(optionIn('Body shape', 'Round')).toHaveAttr(
-        'aria-checked',
-        'true',
-      ),
+      ...pick('Body shape', 'Slim'),
+      expect(optionIn('Body shape', 'Slim')).toHaveAttr('aria-checked', 'true'),
       ...pick('Skin', 'Deep'),
+      click(beardButton),
+      click(glassesButton),
+      expect(beardButton).toHaveAttr('aria-pressed', 'true'),
       ...openSection('Hair'),
-      ...pick('Hair', 'Undercut'),
-      ...pick('Hair color', 'Rainbow'),
-      ...openSection('Face'),
-      ...pick('Facial hair', 'Beard'),
-      ...pick('Makeup', 'Lipstick'),
-      ...pick('Extras', 'Earrings'),
+      ...pick('Hair', 'Mohawk'),
+      ...pick('Hair color', 'Pink'),
       ...openSection('Outfit'),
       ...pick('Outfit', 'Dress'),
-      ...pick('Outfit color', 'Lilac'),
-      ...openSection('Print'),
-      ...pick('Print', 'Trans flag'),
+      ...pick('Outfit color', 'Purple'),
+      ...pick('Print', 'Rainbow'),
       expect(
         preview(
-          'round build, deep skin, rainbow undercut hair, beard, lipstick, earrings, lilac dress, trans flag',
+          'slim build, deep skin, pink mohawk hair, beard, glasses, purple dress, rainbow print',
         ),
       ).toExist(),
       click(closeButton),
@@ -227,13 +208,13 @@ describe('Character picker', () => {
       Subscription.emit(Message.PressedKey({ code: 'KeyC' })),
       ...showPicker(),
       expect(pickerDialog).toExist(),
-      keydown(optionIn('Body shape', 'Medium'), 'ArrowLeft'),
+      keydown(optionIn('Body shape', 'Broad'), 'ArrowLeft'),
       resolveFocusOption(),
       expect(optionIn('Body shape', 'Slim')).toHaveAttr('aria-checked', 'true'),
       keydown(section('Body'), 'ArrowRight'),
       resolveFocusOption(),
       expect(section('Hair')).toHaveAttr('aria-checked', 'true'),
-      keydown(optionIn('Hair', 'Crop'), 'End'),
+      keydown(optionIn('Hair', 'Short'), 'End'),
       resolveFocusOption(),
       expect(optionIn('Hair', 'Bald')).toHaveAttr('aria-checked', 'true'),
       expect(preview('slim build, light skin, bald, blue tee')).toExist(),
@@ -254,7 +235,7 @@ describe('Character picker', () => {
       ...showPicker(),
       ...openSection('Hair'),
       ...pick('Hair', 'Long'),
-      ...pick('Hair color', 'Pastel'),
+      ...pick('Hair color', 'Grey'),
       click(closeButton),
       ...closePicker(),
       expect(pickerDialog).toBeAbsent(),

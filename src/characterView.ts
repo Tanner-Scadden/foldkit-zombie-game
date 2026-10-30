@@ -6,22 +6,17 @@ import { RadioGroup } from '@foldkit/ui'
 
 import {
   BODIES,
-  EXTRAS,
-  FACIAL_HAIRS,
-  FLAG_STRIPES,
   HAIR_COLORS,
   HAIR_SHADES,
   HAIR_STYLES,
-  INTERSEX_COLORS,
-  MAKEUPS,
   OUTFITS,
   PRINTS,
-  PROGRESS_CHEVRON,
-  RAINBOW_HAIR,
+  RAINBOW_STRIPES,
   SHIRT_COLORS,
   SHIRT_SHADES,
   SKIN_SHADES,
   SKIN_TONES,
+  STRIPE_WHITE,
   appearanceKey,
   playerPalette,
   playerPixels,
@@ -31,8 +26,11 @@ import {
   Message,
   PartRadioGroup,
   SECTION_PARTS,
+  SECTION_TOGGLES,
   SectionRadioGroup,
   chooseLook,
+  flipLook,
+  isToggleOn,
   partGroupOf,
 } from './character'
 import {
@@ -46,6 +44,7 @@ import {
   type CharacterPicker,
   type LookPart,
   LookSection,
+  type LookToggle,
   type Print,
   type ProfileFx,
 } from './model'
@@ -63,45 +62,21 @@ type PartView = Readonly<{
   ariaLabel: string
   options: Array.NonEmptyReadonlyArray<string>
   selected: (appearance: Appearance) => string
-  optionLabel: (value: string) => string
   look: OptionLook
   swatch: (value: string, appearance: Appearance) => string
 }>
 
 const noSwatch = (): string => 'none'
 
-const PRINT_LABELS: Readonly<Record<Print, string>> = {
-  Plain: 'Plain',
-  Stripes: 'Stripes',
-  Candy: 'Candy',
-  Rainbow: 'Rainbow flag',
-  Progress: 'Progress flag',
-  Trans: 'Trans flag',
-  Bi: 'Bi flag',
-  Pan: 'Pan flag',
-  Nonbinary: 'Nonbinary flag',
-  Lesbian: 'Lesbian flag',
-  Ace: 'Ace flag',
-  Aro: 'Aro flag',
-  Intersex: 'Intersex flag',
-}
-
 const isPrint = (value: string): value is Print =>
   Array.some(PRINTS, print => print === value)
-
-const sameWord = (value: string): string => value
 
 const FLAG_WIDTH = 30
 const FLAG_HEIGHT = 20
 
-const svgUrl = (body: string): string =>
-  `url("data:image/svg+xml,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FLAG_WIDTH} ${FLAG_HEIGHT}" shape-rendering="crispEdges">${body}</svg>`,
-  )}")`
-
-const stripesSvg = (colors: ReadonlyArray<string>): string => {
+const stripesUrl = (colors: ReadonlyArray<string>): string => {
   const height = FLAG_HEIGHT / colors.length
-  return Array.join(
+  const rects = Array.join(
     Array.map(
       colors,
       (color, index) =>
@@ -109,78 +84,31 @@ const stripesSvg = (colors: ReadonlyArray<string>): string => {
     ),
     '',
   )
+  return `url("data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FLAG_WIDTH} ${FLAG_HEIGHT}" shape-rendering="crispEdges">${rects}</svg>`,
+  )}")`
 }
 
-// NOTE: the chevron's bands as nested triangles from the hoist, black
-// outermost and white at the heart, over the six stripes.
-const progressSvg = (): string =>
-  stripesSvg(FLAG_STRIPES.Rainbow ?? []) +
-  Array.join(
-    Array.map(
-      Array.reverse(PROGRESS_CHEVRON),
-      (color, index) =>
-        `<polygon points="0,0 ${15 - index * 2.5},10 0,20" fill="${color}" shape-rendering="geometricPrecision"/>`,
-    ),
-    '',
-  )
+const RAINBOW_SWATCH = stripesUrl(RAINBOW_STRIPES)
 
-const intersexSvg = (): string =>
-  `<rect width="${FLAG_WIDTH}" height="${FLAG_HEIGHT}" fill="${INTERSEX_COLORS.field}"/><circle cx="15" cy="10" r="5" fill="none" stroke="${INTERSEX_COLORS.ring}" stroke-width="2.2" shape-rendering="geometricPrecision"/>`
+const swatchCache = new Map<string, string>()
 
-const CANDY_STRIPES = [
-  '#f9b4d0',
-  '#ffd3a5',
-  '#fdf3a7',
-  '#b5ead7',
-  '#a7d8f5',
-  '#cdb4f5',
-]
-
-const flagCache = new Map<string, string>()
-
-// NOTE: a print as its swatch: the flags as they are flown, the patterns in
-// the shirt's own color.
+// NOTE: a print as its swatch, in the shirt's own color: plain, a white
+// band across it, or the rainbow flag as it is flown.
 const printSwatch = (print: Print, appearance: Appearance): string => {
+  if (print === 'Rainbow') {
+    return RAINBOW_SWATCH
+  }
   const shirt = SHIRT_SHADES[appearance.shirtColor].base
   const key = `${print}.${shirt}`
-  return Option.getOrElse(Option.fromNullishOr(flagCache.get(key)), () => {
-    const body =
-      print === 'Plain'
-        ? stripesSvg([shirt])
-        : print === 'Stripes'
-          ? stripesSvg([shirt, '#f4f1de', shirt, '#f4f1de', shirt])
-          : print === 'Candy'
-            ? stripesSvg(CANDY_STRIPES)
-            : print === 'Progress'
-              ? progressSvg()
-              : print === 'Intersex'
-                ? intersexSvg()
-                : stripesSvg(FLAG_STRIPES[print] ?? [shirt])
-    const url = svgUrl(body)
-    flagCache.set(key, url)
+  return Option.getOrElse(Option.fromNullishOr(swatchCache.get(key)), () => {
+    const url = stripesUrl(
+      print === 'Plain' ? [shirt] : [shirt, STRIPE_WHITE, shirt],
+    )
+    swatchCache.set(key, url)
     return url
   })
 }
-
-const hairSwatch = (value: string): string =>
-  value === 'Rainbow'
-    ? `linear-gradient(${Array.join(
-        Array.map(
-          RAINBOW_HAIR,
-          (color, index) =>
-            `${color} ${(index * 100) / RAINBOW_HAIR.length}% ${((index + 1) * 100) / RAINBOW_HAIR.length}%`,
-        ),
-        ', ',
-      )})`
-    : value === 'Pastel'
-      ? `linear-gradient(135deg, ${HAIR_SHADES.Pastel.base} 50%, ${HAIR_SHADES.Pastel.shine} 50%)`
-      : Option.getOrElse(
-          Option.map(
-            Array.findFirst(HAIR_COLORS, color => color === value),
-            color => HAIR_SHADES[color].base,
-          ),
-          () => 'none',
-        )
 
 const swatchOf =
   <A extends string>(options: ReadonlyArray<A>, color: (option: A) => string) =>
@@ -199,7 +127,6 @@ const PART_VIEWS: Readonly<Record<LookPart, PartView>> = {
     ariaLabel: 'Body shape',
     options: BODIES,
     selected: appearance => appearance.body,
-    optionLabel: sameWord,
     look: 'Figure',
     swatch: noSwatch,
   },
@@ -208,7 +135,6 @@ const PART_VIEWS: Readonly<Record<LookPart, PartView>> = {
     ariaLabel: 'Skin',
     options: SKIN_TONES,
     selected: appearance => appearance.skinTone,
-    optionLabel: sameWord,
     look: 'Swatch',
     swatch: swatchOf(SKIN_TONES, tone => SKIN_SHADES[tone].skin),
   },
@@ -217,7 +143,6 @@ const PART_VIEWS: Readonly<Record<LookPart, PartView>> = {
     ariaLabel: 'Hair',
     options: HAIR_STYLES,
     selected: appearance => appearance.hairStyle,
-    optionLabel: sameWord,
     look: 'Head',
     swatch: noSwatch,
   },
@@ -226,43 +151,14 @@ const PART_VIEWS: Readonly<Record<LookPart, PartView>> = {
     ariaLabel: 'Hair color',
     options: HAIR_COLORS,
     selected: appearance => appearance.hairColor,
-    optionLabel: sameWord,
     look: 'Swatch',
-    swatch: hairSwatch,
-  },
-  FacialHair: {
-    label: 'Fuzz',
-    ariaLabel: 'Facial hair',
-    options: FACIAL_HAIRS,
-    selected: appearance => appearance.facialHair,
-    optionLabel: sameWord,
-    look: 'Head',
-    swatch: noSwatch,
-  },
-  Makeup: {
-    label: 'Makeup',
-    ariaLabel: 'Makeup',
-    options: MAKEUPS,
-    selected: appearance => appearance.makeup,
-    optionLabel: sameWord,
-    look: 'Head',
-    swatch: noSwatch,
-  },
-  Extra: {
-    label: 'Extras',
-    ariaLabel: 'Extras',
-    options: EXTRAS,
-    selected: appearance => appearance.extra,
-    optionLabel: sameWord,
-    look: 'Head',
-    swatch: noSwatch,
+    swatch: swatchOf(HAIR_COLORS, color => HAIR_SHADES[color].base),
   },
   Outfit: {
     label: 'Outfit',
     ariaLabel: 'Outfit',
     options: OUTFITS,
     selected: appearance => appearance.outfit,
-    optionLabel: sameWord,
     look: 'Figure',
     swatch: noSwatch,
   },
@@ -271,7 +167,6 @@ const PART_VIEWS: Readonly<Record<LookPart, PartView>> = {
     ariaLabel: 'Outfit color',
     options: SHIRT_COLORS,
     selected: appearance => appearance.shirtColor,
-    optionLabel: sameWord,
     look: 'Swatch',
     swatch: swatchOf(SHIRT_COLORS, color => SHIRT_SHADES[color].base),
   },
@@ -280,7 +175,6 @@ const PART_VIEWS: Readonly<Record<LookPart, PartView>> = {
     ariaLabel: 'Print',
     options: PRINTS,
     selected: appearance => appearance.print,
-    optionLabel: value => (isPrint(value) ? PRINT_LABELS[value] : value),
     look: 'Flag',
     swatch: (value, appearance) =>
       isPrint(value) ? printSwatch(value, appearance) : 'none',
@@ -294,11 +188,10 @@ const lookDescription = (appearance: Appearance): string =>
     appearance.hairStyle === 'Bald'
       ? 'bald'
       : `${appearance.hairColor} ${appearance.hairStyle} hair`,
-    ...(appearance.facialHair === 'None' ? [] : [appearance.facialHair]),
-    ...(appearance.makeup === 'None' ? [] : [appearance.makeup]),
-    ...(appearance.extra === 'None' ? [] : [appearance.extra]),
+    ...(appearance.beard ? ['beard'] : []),
+    ...(appearance.glasses ? ['glasses'] : []),
     `${appearance.shirtColor} ${appearance.outfit}`,
-    ...(appearance.print === 'Plain' ? [] : [PRINT_LABELS[appearance.print]]),
+    ...(appearance.print === 'Plain' ? [] : [`${appearance.print} print`]),
   ]
     .join(', ')
     .toLowerCase()
@@ -480,21 +373,6 @@ const SECTION_LOOKS: Readonly<Record<LookSection, SectionLook>> = {
       SECTION_ICON_PALETTE,
     ),
   },
-  Face: {
-    word: 'Face',
-    icon: pixelIconUrl(
-      [
-        '.XXXXXXX.',
-        'X.......X',
-        'X.XX.XX.X',
-        'X.......X',
-        'X.X...X.X',
-        'X..XXX..X',
-        '.XXXXXXX.',
-      ],
-      SECTION_ICON_PALETTE,
-    ),
-  },
   Outfit: {
     word: 'Outfit',
     icon: pixelIconUrl(
@@ -506,21 +384,6 @@ const SECTION_LOOKS: Readonly<Record<LookSection, SectionLook>> = {
         '..XXXXX..',
         '..XXXXX..',
         '..XXXXX..',
-      ],
-      SECTION_ICON_PALETTE,
-    ),
-  },
-  Print: {
-    word: 'Print',
-    icon: pixelIconUrl(
-      [
-        'XXXXXXXXX',
-        'X.......X',
-        'XXXXXXXXX',
-        'X.......X',
-        'XXXXXXXXX',
-        'X........',
-        'X........',
       ],
       SECTION_ICON_PALETTE,
     ),
@@ -625,10 +488,7 @@ const optionView = (
     ],
     [
       optionFace(part, option.value, appearance, h),
-      h.span(
-        [...option.label, h.Class('sr-only')],
-        [PART_VIEWS[part].optionLabel(option.value)],
-      ),
+      h.span([...option.label, h.Class('sr-only')], [option.value]),
     ],
   )
 
@@ -648,7 +508,7 @@ const lookRowView = (
         [h.Class('look-row-heading'), h.AriaHidden(true)],
         [
           h.span([h.Class('look-row-label')], [partView.label]),
-          h.span([h.Class('look-row-value')], [partView.optionLabel(selected)]),
+          h.span([h.Class('look-row-value')], [selected]),
         ],
       ),
       h.submodel({
@@ -681,6 +541,65 @@ const lookRowView = (
   )
 }
 
+// TOGGLES
+
+const TOGGLE_LABELS: Readonly<Record<LookToggle, string>> = {
+  Beard: 'Beard',
+  Glasses: 'Glasses',
+}
+
+// NOTE: an on and off part is one button showing the head with it on,
+// pressed while it is worn.
+const toggleView = (
+  toggle: LookToggle,
+  appearance: Appearance,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const isOn = isToggleOn(appearance, toggle)
+  const shown = isOn ? appearance : flipLook(appearance, toggle)
+  return h.button(
+    [
+      h.Type('button'),
+      h.Key(toggle),
+      h.Class('look-option look-head-option look-toggle'),
+      h.AriaPressed(isOn ? 'true' : 'false'),
+      h.AriaLabel(TOGGLE_LABELS[toggle]),
+      h.OnClick(Message.ClickedToggle({ toggle })),
+    ],
+    [
+      h.span([
+        h.Class('look-head-icon'),
+        h.AriaHidden(true),
+        h.Style({ backgroundImage: partIconOf(shown, 'Head') }),
+      ]),
+    ],
+  )
+}
+
+const togglesView = (
+  toggles: ReadonlyArray<LookToggle>,
+  appearance: Appearance,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> =>
+  Array.match(toggles, {
+    onEmpty: () => [],
+    onNonEmpty: shown => [
+      h.div(
+        [h.Class('look-row'), h.Key('toggles')],
+        [
+          h.div(
+            [h.Class('look-row-heading'), h.AriaHidden(true)],
+            [h.span([h.Class('look-row-label')], ['Face'])],
+          ),
+          h.div(
+            [h.Class('look-options look-toggles')],
+            Array.map(shown, toggle => toggleView(toggle, appearance, h)),
+          ),
+        ],
+      ),
+    ],
+  })
+
 // LOOK TAB
 
 type ViewInputs = Readonly<{
@@ -706,9 +625,16 @@ export const view = Submodel.defineView<CharacterPicker, Message, ViewInputs>(
                 h.Key(picker.section),
                 h.DataAttribute('section', picker.section),
               ],
-              Array.map(SECTION_PARTS[picker.section], part =>
-                lookRowView(picker, part, inputs.appearance, h),
-              ),
+              [
+                ...Array.map(SECTION_PARTS[picker.section], part =>
+                  lookRowView(picker, part, inputs.appearance, h),
+                ),
+                ...togglesView(
+                  SECTION_TOGGLES[picker.section],
+                  inputs.appearance,
+                  h,
+                ),
+              ],
             ),
           ],
         ),

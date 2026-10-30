@@ -154,11 +154,11 @@ const updatePlayer = (
 // NOTE: the first thing a device writes to its scope: its whole save, from
 // before sync. It only seeds an empty scope. On a scope that already has a
 // player (a device that linked to another device's player) it does nothing,
-// so linking never overwrites the player it joined. Version 7 is the save
-// with the look built from parts (save version 10).
+// so linking never overwrites the player it joined. Version 8 is the save
+// with the simple look (save version 11).
 export const SeededPlayer = defineMutation({
   name: 'SeededPlayer',
-  version: 7,
+  version: 8,
   args: Schema.Struct({ save: PlayerSave }),
   scopes: [PLAYER_SCOPE_KIND],
   writer: 'Owner',
@@ -201,11 +201,12 @@ export const ChangedSettings = defineMutation({
     }),
 })
 
-// NOTE: version 2 carries the look built from parts. The row may still hold
-// an old look until the first change, so it is read as StoredAppearance.
+// NOTE: version 3 carries the simple look (version 2 the many-part one).
+// The row may still hold an older look until the first change, so it is
+// read as StoredAppearance.
 export const ChangedAppearance = defineMutation({
   name: 'ChangedAppearance',
-  version: 2,
+  version: 3,
   args: Schema.Struct({ appearance: Appearance }),
   scopes: [PLAYER_SCOPE_KIND],
   writer: 'Owner',

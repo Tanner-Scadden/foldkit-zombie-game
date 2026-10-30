@@ -265,10 +265,9 @@ describe('the lobby', () => {
       skinTone: 'Fair',
       shirtColor: 'Purple',
       outfit: 'Dress',
-      print: 'Nonbinary',
-      facialHair: 'Beard',
-      makeup: 'Lashes',
-      extra: 'Bow',
+      print: 'Stripes',
+      beard: true,
+      glasses: true,
     }
     scene(
       { update, view },

@@ -23,6 +23,17 @@ const foldCharacterOutMessage = Character.OutMessage.match<UpdateStep>({
           'Poof',
         ),
       ),
+  FlippedLook:
+    ({ toggle }) =>
+    stepModel =>
+      playSounds([uiCue('Pop')])(
+        withProfileFx(
+          modifyFields(stepModel, {
+            appearance: appearance => Character.flipLook(appearance, toggle),
+          }),
+          'Poof',
+        ),
+      ),
   RequestedRandomLook: () => stepModel => {
     const [rngState, appearance] = randomAppearance(
       stepModel.cosmeticRngState,

@@ -43,18 +43,18 @@ type Scene = Readonly<{
   click?: ReadonlyArray<string>
 }>
 
-const LOOK = 'look=Slim,Ponytail,Ginger,Tan,Teal,Hoodie,Trans,,Glam,Earrings'
+const LOOK = 'look=Slim,Ponytail,Red,Tan,Teal,Hoodie,Rainbow,,Glasses'
 
 const SCENES: ReadonlyArray<Scene> = [
   { name: 'look', query: `profile=look&${LOOK}` },
-  ...['Hair', 'Face', 'Outfit', 'Print'].map(section => ({
+  ...['Hair', 'Outfit'].map(section => ({
     name: `look-${section.toLowerCase()}`,
     query: `profile=look&looksection=${section}&${LOOK}`,
   })),
   // NOTE: the first option of every row chosen, at the page's left edge.
   {
     name: 'look-first',
-    query: 'profile=look&look=Slim,Crop,Black,Fair,Blue',
+    query: 'profile=look&look=Slim,Short,Black,Fair,Blue',
   },
   { name: 'name-empty', query: 'profile=name' },
   { name: 'name', query: 'profile=name&name=Dr. Chomp' },

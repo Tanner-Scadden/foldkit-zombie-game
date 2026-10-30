@@ -70,7 +70,7 @@ const legacySave: PlayerSave = {
     shareStats: 'On',
     cursor: 'Thin',
   },
-  appearance: { ...defaultAppearance, hairColor: 'Ginger' },
+  appearance: { ...defaultAppearance, hairColor: 'Red' },
   difficulty: { ...unpickedDifficulty, chosen: 'Hard', card: 'Seen' },
   bests: {
     ...noSavedBests,
@@ -387,7 +387,7 @@ describe('the save in the player scope', () => {
 
   // NOTE: rows written before 2026-10-30 keep the old look until it next
   // changes, here and in the server's copy of the scope.
-  test('a row with a look from before the parts reads as its closest new look', () =>
+  test('rows with an older look read as their closest current look', () =>
     run(
       Effect.gen(function* () {
         const hub = yield* makeHub()
@@ -395,22 +395,45 @@ describe('the save in the player scope', () => {
         const first = yield* openOn(hub, fake.legacy)
         yield* first.load
         const sql = yield* sqlOn(hub)
-        yield* pipe(
-          sql`UPDATE player SET appearance = '{"body":"Female","hairStyle":"Long","hairColor":"Black","skinTone":"Deep","shirtColor":"Pink"}'`,
-          Effect.orDie,
-        )
-        expect(Option.map(yield* first.load, save => save.appearance)).toEqual(
+        const lookAfter = (json: string) =>
+          Effect.gen(function* () {
+            yield* Effect.orDie(
+              sql`UPDATE player SET appearance = ${json} WHERE id = 1`,
+            )
+            return Option.map(yield* first.load, save => save.appearance)
+          })
+        expect(
+          yield* lookAfter(
+            '{"body":"Female","hairStyle":"Long","hairColor":"Black","skinTone":"Deep","shirtColor":"Pink"}',
+          ),
+        ).toEqual(
           Option.some({
-            body: 'Medium',
+            body: 'Broad',
             hairStyle: 'Long',
             hairColor: 'Black',
-            skinTone: 'Umber',
+            skinTone: 'Deep',
             shirtColor: 'Pink',
-            outfit: 'Vee',
+            outfit: 'Tee',
             print: 'Plain',
-            facialHair: 'None',
-            makeup: 'Glam',
-            extra: 'None',
+            beard: false,
+            glasses: false,
+          }),
+        )
+        expect(
+          yield* lookAfter(
+            '{"body":"Slim","hairStyle":"Bob","hairColor":"Rainbow","skinTone":"Medium","shirtColor":"Sky","outfit":"Hoodie","print":"Ace","facialHair":"Beard","makeup":"Lashes","extra":"Glasses"}',
+          ),
+        ).toEqual(
+          Option.some({
+            body: 'Slim',
+            hairStyle: 'Long',
+            hairColor: 'Pink',
+            skinTone: 'Medium',
+            shirtColor: 'Blue',
+            outfit: 'Hoodie',
+            print: 'Rainbow',
+            beard: true,
+            glasses: true,
           }),
         )
       }),
@@ -721,10 +744,7 @@ describe('two devices syncing one player', () => {
         const code = yield* phone.requestLinkCode
         yield* laptop.redeemLinkCode(code)
         yield* until(laptop.load, maybeSave =>
-          Option.exists(
-            maybeSave,
-            save => save.appearance.hairColor === 'Ginger',
-          ),
+          Option.exists(maybeSave, save => save.appearance.hairColor === 'Red'),
         )
 
         const onPhone: PlayerSave = {
@@ -894,16 +914,15 @@ const migratedLiveSave: PlayerSave = {
     cursor: 'Bold',
   },
   appearance: {
-    body: 'Medium',
-    hairStyle: 'Curls',
+    body: 'Broad',
+    hairStyle: 'Curly',
     hairColor: 'Blonde',
     skinTone: 'Tan',
     shirtColor: 'Red',
     outfit: 'Tee',
     print: 'Plain',
-    facialHair: 'None',
-    makeup: 'None',
-    extra: 'None',
+    beard: false,
+    glasses: false,
   },
   difficulty: { chosen: 'Hard', card: 'Seen', nightmare: 'Unlocked' },
   bests: {

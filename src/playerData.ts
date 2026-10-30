@@ -45,25 +45,21 @@ export type Difficulty = typeof Difficulty.Type
 
 // LOOK
 
-// NOTE: decided with the owner on 2026-10-30: a look is built from parts,
-// none tied to any other. A body is a shape, never a sex, and every hair
-// style, facial hair, makeup, extra, outfit, and print works on every body.
-// See "Character" in GAME_DESIGN.md. Each list only grows at its end: the
-// look code (lookCodeOf) carries the newer parts by their place in it.
+// NOTE: decided with the owner on 2026-10-30: a simple look built from
+// parts, none tied to another. A body is a shape, never a sex, and every
+// hair style, beard, glasses, outfit, and print works on every body. See
+// "Character" in GAME_DESIGN.md. Each list only grows at its end: the look
+// code (lookCodeOf) carries the newer parts by their place in it.
 
-export const Body = Schema.Literals(['Slim', 'Medium', 'Broad', 'Round'])
+export const Body = Schema.Literals(['Slim', 'Broad'])
 export type Body = typeof Body.Type
 
 export const HairStyle = Schema.Literals([
-  'Crop',
+  'Short',
   'Long',
   'Ponytail',
-  'Curls',
-  'Bob',
-  'Undercut',
+  'Curly',
   'Mohawk',
-  'Buns',
-  'Buzz',
   'Bald',
 ])
 export type HairStyle = typeof HairStyle.Type
@@ -71,28 +67,21 @@ export type HairStyle = typeof HairStyle.Type
 export const HairColor = Schema.Literals([
   'Black',
   'Brown',
-  'Ginger',
   'Blonde',
+  'Red',
+  'Grey',
   'Pink',
-  'Silver',
-  'Blue',
-  'Purple',
-  'Pastel',
-  'Rainbow',
 ])
 export type HairColor = typeof HairColor.Type
 
 // NOTE: lightest to deepest, evenly spaced in lightness (see SKIN_SHADES in
-// src/appearance.ts). An old save's tone reads as the nearest new one: the
-// same name, but the old Deep is Umber now, and Deep the new deepest.
+// src/appearance.ts).
 export const SkinTone = Schema.Literals([
   'Fair',
   'Light',
   'Medium',
   'Tan',
-  'Bronze',
   'Brown',
-  'Umber',
   'Deep',
 ])
 export type SkinTone = typeof SkinTone.Type
@@ -104,15 +93,149 @@ export const ShirtColor = Schema.Literals([
   'Teal',
   'Pink',
   'Purple',
+])
+export type ShirtColor = typeof ShirtColor.Type
+
+export const Outfit = Schema.Literals(['Tee', 'Hoodie', 'Dress', 'Overalls'])
+export type Outfit = typeof Outfit.Type
+
+export const Print = Schema.Literals(['Plain', 'Stripes', 'Rainbow'])
+export type Print = typeof Print.Type
+
+// NOTE: plain data on purpose: the player scope stores it whole, through
+// the ChangedAppearance mutation in src/playerScope.ts.
+export const Appearance = Schema.Struct({
+  body: Body,
+  hairStyle: HairStyle,
+  hairColor: HairColor,
+  skinTone: SkinTone,
+  shirtColor: ShirtColor,
+  outfit: Outfit,
+  print: Print,
+  beard: Schema.Boolean,
+  glasses: Schema.Boolean,
+})
+export type Appearance = typeof Appearance.Type
+
+// OLDER LOOKS
+
+const oneOf = <A extends string>(
+  options: ReadonlyArray<A>,
+  value: string,
+  fallback: A,
+): A => options.find(option => option === value) ?? fallback
+
+// NOTE: the first look, until 2026-10-30 (save versions 1 to 9, the player
+// scope's rows, ChangedAppearance version 1, and five word co-op codes): a
+// Female or Male body and five parts. Both bodies drew the same width, so
+// both read as Broad in a tee, the closest new look.
+const LEGACY_HAIR_STYLES = ['Crop', 'Long', 'Ponytail', 'Curls'] as const
+const LEGACY_HAIR_COLORS = [
+  'Black',
+  'Brown',
+  'Ginger',
+  'Blonde',
+  'Pink',
+] as const
+
+export const LegacyAppearance = Schema.Struct({
+  body: Schema.Literals(['Female', 'Male']),
+  hairStyle: Schema.Literals(LEGACY_HAIR_STYLES),
+  hairColor: Schema.Literals(LEGACY_HAIR_COLORS),
+  skinTone: SkinTone,
+  shirtColor: ShirtColor,
+})
+export type LegacyAppearance = typeof LegacyAppearance.Type
+
+const HAIR_STYLE_OF_LEGACY: Readonly<
+  Record<(typeof LEGACY_HAIR_STYLES)[number], HairStyle>
+> = { Crop: 'Short', Long: 'Long', Ponytail: 'Ponytail', Curls: 'Curly' }
+
+const HAIR_COLOR_OF_LEGACY: Readonly<
+  Record<(typeof LEGACY_HAIR_COLORS)[number], HairColor>
+> = {
+  Black: 'Black',
+  Brown: 'Brown',
+  Ginger: 'Red',
+  Blonde: 'Blonde',
+  Pink: 'Pink',
+}
+
+export const appearanceOfLegacy = (look: LegacyAppearance): Appearance => ({
+  body: 'Broad',
+  hairStyle: HAIR_STYLE_OF_LEGACY[look.hairStyle],
+  hairColor: HAIR_COLOR_OF_LEGACY[look.hairColor],
+  skinTone: look.skinTone,
+  shirtColor: look.shirtColor,
+  outfit: 'Tee',
+  print: 'Plain',
+  beard: false,
+  glasses: false,
+})
+
+const legacyOfAppearance = (look: Appearance): LegacyAppearance => ({
+  body: 'Male',
+  hairStyle: oneOf(LEGACY_HAIR_STYLES, look.hairStyle, 'Crop'),
+  hairColor: oneOf(LEGACY_HAIR_COLORS, look.hairColor, 'Brown'),
+  skinTone: look.skinTone,
+  shirtColor: look.shirtColor,
+})
+
+// NOTE: the many-part look that shipped for a few hours on 2026-10-30
+// (save version 10, ChangedAppearance version 2, six word co-op codes with
+// five letters), before the owner chose this simpler set. Each part reads
+// as its closest simple option: the Slim body stays Slim and the others
+// are Broad, a pride flag is the Rainbow print, and a beard, goatee, or
+// mustache is a beard.
+const V10_BODIES = ['Slim', 'Medium', 'Broad', 'Round'] as const
+const V10_HAIR_STYLES = [
+  'Crop',
+  'Long',
+  'Ponytail',
+  'Curls',
+  'Bob',
+  'Undercut',
+  'Mohawk',
+  'Buns',
+  'Buzz',
+  'Bald',
+] as const
+const V10_HAIR_COLORS = [
+  'Black',
+  'Brown',
+  'Ginger',
+  'Blonde',
+  'Pink',
+  'Silver',
+  'Blue',
+  'Purple',
+  'Pastel',
+  'Rainbow',
+] as const
+const V10_SKIN_TONES = [
+  'Fair',
+  'Light',
+  'Medium',
+  'Tan',
+  'Bronze',
+  'Brown',
+  'Umber',
+  'Deep',
+] as const
+const V10_SHIRT_COLORS = [
+  'Blue',
+  'Red',
+  'Yellow',
+  'Teal',
+  'Pink',
+  'Purple',
   'Orange',
   'Black',
   'White',
   'Sky',
   'Lilac',
-])
-export type ShirtColor = typeof ShirtColor.Type
-
-export const Outfit = Schema.Literals([
+] as const
+const V10_OUTFITS = [
   'Tee',
   'Vee',
   'Tank',
@@ -123,12 +246,8 @@ export const Outfit = Schema.Literals([
   'Dress',
   'Skirt',
   'Kilt',
-])
-export type Outfit = typeof Outfit.Type
-
-// NOTE: what is printed on the top: plain, two fun patterns, and pride
-// flags in their real stripe colors, all just more options.
-export const Print = Schema.Literals([
+] as const
+const V10_PRINTS = [
   'Plain',
   'Stripes',
   'Candy',
@@ -142,123 +261,140 @@ export const Print = Schema.Literals([
   'Ace',
   'Aro',
   'Intersex',
-])
-export type Print = typeof Print.Type
-
-export const FacialHair = Schema.Literals([
+] as const
+const V10_FACIAL_HAIRS = [
   'None',
   'Stubble',
   'Mustache',
   'Goatee',
   'Beard',
-])
-export type FacialHair = typeof FacialHair.Type
+] as const
+const V10_MAKEUPS = ['None', 'Lashes', 'Lipstick', 'Glam', 'Blush'] as const
+const V10_EXTRAS = ['None', 'Earrings', 'Glasses', 'Shades', 'Bow'] as const
 
-export const Makeup = Schema.Literals([
-  'None',
-  'Lashes',
-  'Lipstick',
-  'Glam',
-  'Blush',
-])
-export type Makeup = typeof Makeup.Type
-
-export const Extra = Schema.Literals([
-  'None',
-  'Earrings',
-  'Glasses',
-  'Shades',
-  'Bow',
-])
-export type Extra = typeof Extra.Type
-
-// NOTE: plain data on purpose: the player scope stores it whole, through
-// the ChangedAppearance mutation in src/playerScope.ts.
-export const Appearance = Schema.Struct({
-  body: Body,
-  hairStyle: HairStyle,
-  hairColor: HairColor,
-  skinTone: SkinTone,
-  shirtColor: ShirtColor,
-  outfit: Outfit,
-  print: Print,
-  facialHair: FacialHair,
-  makeup: Makeup,
-  extra: Extra,
+export const ManyPartAppearance = Schema.Struct({
+  body: Schema.Literals(V10_BODIES),
+  hairStyle: Schema.Literals(V10_HAIR_STYLES),
+  hairColor: Schema.Literals(V10_HAIR_COLORS),
+  skinTone: Schema.Literals(V10_SKIN_TONES),
+  shirtColor: Schema.Literals(V10_SHIRT_COLORS),
+  outfit: Schema.Literals(V10_OUTFITS),
+  print: Schema.Literals(V10_PRINTS),
+  facialHair: Schema.Literals(V10_FACIAL_HAIRS),
+  makeup: Schema.Literals(V10_MAKEUPS),
+  extra: Schema.Literals(V10_EXTRAS),
 })
-export type Appearance = typeof Appearance.Type
+export type ManyPartAppearance = typeof ManyPartAppearance.Type
 
-// NOTE: the look from before 2026-10-30 (save versions 1 to 9, the player
-// scope's rows, and ChangedAppearance version 1): a Female or Male body and
-// five parts. It reads as the closest new look, pixel for pixel: the old
-// Male was a tee, the old Female a vee neck with lashes and lips.
-const LEGACY_HAIR_STYLES = ['Crop', 'Long', 'Ponytail', 'Curls'] as const
-const LEGACY_HAIR_COLORS = [
-  'Black',
-  'Brown',
-  'Ginger',
-  'Blonde',
-  'Pink',
-] as const
-const LEGACY_SKIN_TONES = [
-  'Fair',
-  'Light',
-  'Medium',
-  'Tan',
-  'Brown',
-  'Deep',
-] as const
-const LEGACY_SHIRT_COLORS = [
-  'Blue',
-  'Red',
-  'Yellow',
-  'Teal',
-  'Pink',
-  'Purple',
-] as const
+const HAIR_STYLE_OF_V10: Readonly<
+  Record<(typeof V10_HAIR_STYLES)[number], HairStyle>
+> = {
+  Crop: 'Short',
+  Long: 'Long',
+  Ponytail: 'Ponytail',
+  Curls: 'Curly',
+  Bob: 'Long',
+  Undercut: 'Short',
+  Mohawk: 'Mohawk',
+  Buns: 'Ponytail',
+  Buzz: 'Bald',
+  Bald: 'Bald',
+}
 
-export const LegacyAppearance = Schema.Struct({
-  body: Schema.Literals(['Female', 'Male']),
-  hairStyle: Schema.Literals(LEGACY_HAIR_STYLES),
-  hairColor: Schema.Literals(LEGACY_HAIR_COLORS),
-  skinTone: Schema.Literals(LEGACY_SKIN_TONES),
-  shirtColor: Schema.Literals(LEGACY_SHIRT_COLORS),
+const HAIR_COLOR_OF_V10: Readonly<
+  Record<(typeof V10_HAIR_COLORS)[number], HairColor>
+> = {
+  Black: 'Black',
+  Brown: 'Brown',
+  Ginger: 'Red',
+  Blonde: 'Blonde',
+  Pink: 'Pink',
+  Silver: 'Grey',
+  Blue: 'Black',
+  Purple: 'Pink',
+  Pastel: 'Pink',
+  Rainbow: 'Pink',
+}
+
+// NOTE: by lightness: Bronze sat beside Tan, and Umber was the first
+// look's Deep.
+const SKIN_TONE_OF_V10: Readonly<
+  Record<(typeof V10_SKIN_TONES)[number], SkinTone>
+> = {
+  Fair: 'Fair',
+  Light: 'Light',
+  Medium: 'Medium',
+  Tan: 'Tan',
+  Bronze: 'Tan',
+  Brown: 'Brown',
+  Umber: 'Deep',
+  Deep: 'Deep',
+}
+
+const SHIRT_COLOR_OF_V10: Readonly<
+  Record<(typeof V10_SHIRT_COLORS)[number], ShirtColor>
+> = {
+  Blue: 'Blue',
+  Red: 'Red',
+  Yellow: 'Yellow',
+  Teal: 'Teal',
+  Pink: 'Pink',
+  Purple: 'Purple',
+  Orange: 'Red',
+  Black: 'Blue',
+  White: 'Yellow',
+  Sky: 'Blue',
+  Lilac: 'Purple',
+}
+
+const OUTFIT_OF_V10: Readonly<Record<(typeof V10_OUTFITS)[number], Outfit>> = {
+  Tee: 'Tee',
+  Vee: 'Tee',
+  Tank: 'Tee',
+  Hoodie: 'Hoodie',
+  Crop: 'Tee',
+  Overalls: 'Overalls',
+  Suit: 'Hoodie',
+  Dress: 'Dress',
+  Skirt: 'Dress',
+  Kilt: 'Dress',
+}
+
+const printOfV10 = (print: (typeof V10_PRINTS)[number]): Print =>
+  print === 'Plain' || print === 'Stripes' ? print : 'Rainbow'
+
+export const appearanceOfManyParts = (
+  look: ManyPartAppearance,
+): Appearance => ({
+  body: look.body === 'Slim' ? 'Slim' : 'Broad',
+  hairStyle: HAIR_STYLE_OF_V10[look.hairStyle],
+  hairColor: HAIR_COLOR_OF_V10[look.hairColor],
+  skinTone: SKIN_TONE_OF_V10[look.skinTone],
+  shirtColor: SHIRT_COLOR_OF_V10[look.shirtColor],
+  outfit: OUTFIT_OF_V10[look.outfit],
+  print: printOfV10(look.print),
+  beard:
+    look.facialHair === 'Beard' ||
+    look.facialHair === 'Goatee' ||
+    look.facialHair === 'Mustache',
+  glasses: look.extra === 'Glasses' || look.extra === 'Shades',
 })
-export type LegacyAppearance = typeof LegacyAppearance.Type
 
-export const appearanceOfLegacy = (look: LegacyAppearance): Appearance => ({
-  body: 'Medium',
-  hairStyle: look.hairStyle,
-  hairColor: look.hairColor,
-  skinTone: look.skinTone === 'Deep' ? 'Umber' : look.skinTone,
+const manyPartsOfAppearance = (look: Appearance): ManyPartAppearance => ({
+  body: look.body === 'Slim' ? 'Slim' : 'Medium',
+  hairStyle: oneOf(V10_HAIR_STYLES, look.hairStyle, 'Crop'),
+  hairColor: oneOf(V10_HAIR_COLORS, look.hairColor, 'Brown'),
+  skinTone: look.skinTone,
   shirtColor: look.shirtColor,
-  outfit: look.body === 'Female' ? 'Vee' : 'Tee',
-  print: 'Plain',
-  facialHair: 'None',
-  makeup: look.body === 'Female' ? 'Glam' : 'None',
-  extra: 'None',
+  outfit: look.outfit,
+  print: look.print,
+  facialHair: look.beard ? 'Beard' : 'None',
+  makeup: 'None',
+  extra: look.glasses ? 'Glasses' : 'None',
 })
 
-const oneOf = <A extends string>(
-  options: ReadonlyArray<A>,
-  value: string,
-  fallback: A,
-): A => options.find(option => option === value) ?? fallback
-
-// NOTE: only there so the old shape can sit in a union: a union encodes
-// through its first member that fits, which is always Appearance.
-const legacyOfAppearance = (look: Appearance): LegacyAppearance => ({
-  body: look.outfit === 'Vee' ? 'Female' : 'Male',
-  hairStyle: oneOf(LEGACY_HAIR_STYLES, look.hairStyle, 'Crop'),
-  hairColor: oneOf(LEGACY_HAIR_COLORS, look.hairColor, 'Brown'),
-  skinTone: oneOf(
-    LEGACY_SKIN_TONES,
-    look.skinTone === 'Umber' ? 'Deep' : look.skinTone,
-    'Medium',
-  ),
-  shirtColor: oneOf(LEGACY_SHIRT_COLORS, look.shirtColor, 'Blue'),
-})
-
+// NOTE: the encodings only let the older shapes sit in a union: a union
+// encodes through its first member that fits, which is always Appearance.
 const LegacyToAppearance = LegacyAppearance.pipe(
   Schema.decodeTo(Appearance, {
     decode: SchemaGetter.transform(appearanceOfLegacy),
@@ -266,26 +402,32 @@ const LegacyToAppearance = LegacyAppearance.pipe(
   }),
 )
 
-// NOTE: a look as it is stored: the new shape, or the old one read as its
-// closest new look. Rows and saves written before 2026-10-30 hold the old
-// shape; writing always gives the new one.
-export const StoredAppearance = Schema.Union([Appearance, LegacyToAppearance])
+const ManyPartsToAppearance = ManyPartAppearance.pipe(
+  Schema.decodeTo(Appearance, {
+    decode: SchemaGetter.transform(appearanceOfManyParts),
+    encode: SchemaGetter.transform(manyPartsOfAppearance),
+  }),
+)
+
+// NOTE: a look as it is stored: the current shape, or an older one read as
+// its closest current look. Rows and saves written before keep the old
+// shape until the look next changes; writing always gives the current one.
+export const StoredAppearance = Schema.Union([
+  Appearance,
+  ManyPartsToAppearance,
+  LegacyToAppearance,
+])
+
+// LOOK CODES
 
 // NOTE: a look as the co-op lobby carries it (packages/netcode, Lobby.ts,
 // LookInput): the first five parts as words, then one word with a letter
-// per newer part, the letter of its place in its list (A for the first),
-// joined by dots, such as `Slim.Bob.Pink.Tan.Teal.HDABE`. That keeps it
-// inside the lobby's eight words and 64 characters. An old five word code,
-// with a Female or Male body, reads as its closest new look. Anything else
-// is none.
-const NEWER_PARTS: ReadonlyArray<ReadonlyArray<string>> = [
-  Outfit.literals,
-  Print.literals,
-  FacialHair.literals,
-  Makeup.literals,
-  Extra.literals,
-]
-
+// per newer part, the letter of its place in its list (A for the first;
+// for beard and glasses, A without and B with), joined by dots, such as
+// `Slim.Mohawk.Pink.Tan.Teal.CCBA`. That keeps it inside the lobby's eight
+// words and 64 characters. Older codes, five words from the first look or
+// six with five letters from the many-part look, read as their closest
+// current look. Anything else is none.
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 const letterOf = (options: ReadonlyArray<string>, value: string): string =>
@@ -299,59 +441,78 @@ const partOfLetter = (
   return index < 0 ? undefined : options[index]
 }
 
+const FLAG = ['A', 'B'] as const
+
+const flagOfLetter = (letter: string): boolean | undefined =>
+  letter === 'A' ? false : letter === 'B' ? true : undefined
+
 export const lookCodeOf = (look: Appearance): string => {
-  const newer = [
-    look.outfit,
-    look.print,
-    look.facialHair,
-    look.makeup,
-    look.extra,
-  ]
-  const letters = newer
-    .map((value, index) => letterOf(NEWER_PARTS[index] ?? [], value))
-    .join('')
+  const letters = [
+    letterOf(Outfit.literals, look.outfit),
+    letterOf(Print.literals, look.print),
+    look.beard ? FLAG[1] : FLAG[0],
+    look.glasses ? FLAG[1] : FLAG[0],
+  ].join('')
   return `${look.body}.${look.hairStyle}.${look.hairColor}.${look.skinTone}.${look.shirtColor}.${letters}`
 }
 
 const decodeAppearance = Schema.decodeUnknownOption(Appearance)
+const decodeManyParts = Schema.decodeUnknownOption(ManyPartAppearance)
 const decodeLegacyAppearance = Schema.decodeUnknownOption(LegacyAppearance)
+
+const MANY_PART_LETTERS: ReadonlyArray<ReadonlyArray<string>> = [
+  V10_OUTFITS,
+  V10_PRINTS,
+  V10_FACIAL_HAIRS,
+  V10_MAKEUPS,
+  V10_EXTRAS,
+]
 
 export const lookOfCode = (code: string): Option.Option<Appearance> => {
   const words = code.split('.')
+  const firstFive = {
+    body: words[0],
+    hairStyle: words[1],
+    hairColor: words[2],
+    skinTone: words[3],
+    shirtColor: words[4],
+  }
   if (words.length === 5) {
-    return Option.map(
-      decodeLegacyAppearance({
-        body: words[0],
-        hairStyle: words[1],
-        hairColor: words[2],
-        skinTone: words[3],
-        shirtColor: words[4],
-      }),
-      appearanceOfLegacy,
-    )
+    return Option.map(decodeLegacyAppearance(firstFive), appearanceOfLegacy)
   }
   const letters = (words[5] ?? '').split('')
-  const partAt = (index: number) =>
-    partOfLetter(NEWER_PARTS[index] ?? [], letters[index] ?? '')
-  return words.length === 6 && letters.length === NEWER_PARTS.length
-    ? decodeAppearance({
-        body: words[0],
-        hairStyle: words[1],
-        hairColor: words[2],
-        skinTone: words[3],
-        shirtColor: words[4],
+  if (words.length !== 6) {
+    return Option.none()
+  }
+  if (letters.length === MANY_PART_LETTERS.length) {
+    const partAt = (index: number) =>
+      partOfLetter(MANY_PART_LETTERS[index] ?? [], letters[index] ?? '')
+    return Option.map(
+      decodeManyParts({
+        ...firstFive,
         outfit: partAt(0),
         print: partAt(1),
         facialHair: partAt(2),
         makeup: partAt(3),
         extra: partAt(4),
+      }),
+      appearanceOfManyParts,
+    )
+  }
+  return letters.length === 4
+    ? decodeAppearance({
+        ...firstFive,
+        outfit: partOfLetter(Outfit.literals, letters[0] ?? ''),
+        print: partOfLetter(Print.literals, letters[1] ?? ''),
+        beard: flagOfLetter(letters[2] ?? ''),
+        glasses: flagOfLetter(letters[3] ?? ''),
       })
     : Option.none()
 }
 
 // SAVED
 
-export const SAVE_VERSION = 10
+export const SAVE_VERSION = 11
 
 export const SavedLesson = Schema.Literals(['Pending', 'Learned'])
 export type SavedLesson = typeof SavedLesson.Type
@@ -452,7 +613,8 @@ export type PlayerName = typeof PlayerName.Type
 
 // NOTE: version 8 added the rotation, kept apart from the other settings so
 // it syncs as its own last-write-wins change. Version 9 added the display
-// name, synced the same way. Version 10 is the look built from parts.
+// name, synced the same way. Version 10 is the many-part look, and version
+// 11 the simpler look the owner chose (LOOK above).
 export const PlayerSave = Schema.Struct({
   version: Schema.Literal(SAVE_VERSION),
   onboarding: SavedOnboarding,

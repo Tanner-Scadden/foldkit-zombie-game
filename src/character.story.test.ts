@@ -8,11 +8,9 @@ import { Dialog, RadioGroup } from '@foldkit/ui'
 
 import {
   BODIES,
-  EXTRAS,
-  FACIAL_HAIRS,
   HAIR_COLORS,
   HAIR_STYLES,
-  MAKEUPS,
+  ON_OFF,
   OUTFITS,
   PLAYER_WIDTH,
   PRINTS,
@@ -33,6 +31,7 @@ import { Message } from './message'
 import {
   Appearance,
   type LookPart,
+  type LookToggle,
   type Model,
   Phase,
   defaultAppearance,
@@ -68,17 +67,23 @@ const rollDice = () =>
   )
 
 const PICKED: Appearance = {
-  body: 'Round',
+  body: 'Slim',
   hairStyle: 'Mohawk',
-  hairColor: 'Rainbow',
+  hairColor: 'Pink',
   skinTone: 'Deep',
   shirtColor: 'Teal',
-  outfit: 'Kilt',
-  print: 'Trans',
-  facialHair: 'Goatee',
-  makeup: 'Glam',
-  extra: 'Earrings',
+  outfit: 'Dress',
+  print: 'Rainbow',
+  beard: true,
+  glasses: true,
 }
+
+const flip = (toggle: 'Beard' | 'Glasses') =>
+  message(
+    Message.GotCharacterMessage({
+      message: Character.Message.ClickedToggle({ toggle }),
+    }),
+  )
 
 const withLook = (base: Model, appearance: Appearance): Model =>
   modifyFields(base, { appearance: () => appearance })
@@ -99,7 +104,7 @@ const fills = (shapes: ReadonlyArray<Canvas.Shape>): ReadonlyArray<string> =>
 // NOTE: every option of every part as a list of looks: the classic look
 // with that one option in it.
 type PartOptions = Readonly<{
-  part: LookPart
+  part: LookPart | LookToggle
   looks: ReadonlyArray<Appearance>
 }>
 
@@ -126,15 +131,11 @@ const optionsOfEveryPart = (base: Appearance): ReadonlyArray<PartOptions> => [
     looks: Array.map(OUTFITS, outfit => ({ ...base, outfit })),
   },
   { part: 'Print', looks: Array.map(PRINTS, print => ({ ...base, print })) },
+  { part: 'Beard', looks: Array.map(ON_OFF, beard => ({ ...base, beard })) },
   {
-    part: 'FacialHair',
-    looks: Array.map(FACIAL_HAIRS, facialHair => ({ ...base, facialHair })),
+    part: 'Glasses',
+    looks: Array.map(ON_OFF, glasses => ({ ...base, glasses })),
   },
-  {
-    part: 'Makeup',
-    looks: Array.map(MAKEUPS, makeup => ({ ...base, makeup })),
-  },
-  { part: 'Extra', looks: Array.map(EXTRAS, extra => ({ ...base, extra })) },
 ]
 
 // NOTE: a frame as the colors it paints, so two looks compare by what the
@@ -158,16 +159,15 @@ const isAppearance = Schema.is(Appearance)
 describe('Character', () => {
   test('starts as the classic look', () => {
     expect(initialModel.appearance).toEqual({
-      body: 'Medium',
-      hairStyle: 'Crop',
+      body: 'Broad',
+      hairStyle: 'Short',
       hairColor: 'Brown',
       skinTone: 'Light',
       shirtColor: 'Blue',
       outfit: 'Tee',
       print: 'Plain',
-      facialHair: 'None',
-      makeup: 'None',
-      extra: 'None',
+      beard: false,
+      glasses: false,
     })
   })
 
@@ -175,28 +175,41 @@ describe('Character', () => {
     story(
       update,
       given(onTitle),
-      choose('Body', 3, 'Round'),
+      choose('Body', 0, 'Slim'),
       resolveFocusOption(),
-      choose('HairStyle', 6, 'Mohawk'),
+      choose('HairStyle', 4, 'Mohawk'),
       resolveFocusOption(),
-      choose('HairColor', 9, 'Rainbow'),
+      choose('HairColor', 5, 'Pink'),
       resolveFocusOption(),
-      choose('SkinTone', 7, 'Deep'),
+      choose('SkinTone', 5, 'Deep'),
       resolveFocusOption(),
       choose('ShirtColor', 3, 'Teal'),
       resolveFocusOption(),
-      choose('Outfit', 9, 'Kilt'),
+      choose('Outfit', 2, 'Dress'),
       resolveFocusOption(),
-      choose('Print', 5, 'Trans'),
+      choose('Print', 2, 'Rainbow'),
       resolveFocusOption(),
-      choose('FacialHair', 3, 'Goatee'),
-      resolveFocusOption(),
-      choose('Makeup', 3, 'Glam'),
-      resolveFocusOption(),
-      choose('Extra', 1, 'Earrings'),
-      resolveFocusOption(),
+      flip('Beard'),
+      flip('Glasses'),
       model(({ appearance }) => {
         expect(appearance).toEqual(PICKED)
+      }),
+    )
+  })
+
+  test('the beard and the glasses each come off with a second tap', () => {
+    story(
+      update,
+      given(onTitle),
+      flip('Beard'),
+      model(({ appearance, profile }) => {
+        expect(appearance.beard).toBe(true)
+        expect(profile.fx).toBe('Poof')
+      }),
+      flip('Glasses'),
+      flip('Beard'),
+      model(({ appearance }) => {
+        expect(appearance).toEqual({ ...defaultAppearance, glasses: true })
       }),
     )
   })
@@ -226,21 +239,26 @@ describe('Character', () => {
         Message.GotCharacterMessage({
           message: Character.Message.GotSectionMessage({
             message: RadioGroup.Message.SelectedOption({
-              index: 4,
-              value: 'Print',
+              index: 2,
+              value: 'Outfit',
             }),
           }),
         }),
       ),
       resolveFocusOption(),
       model(({ character, appearance }) => {
-        expect(character.section).toBe('Print')
+        expect(character.section).toBe('Outfit')
         expect(appearance).toEqual(onTitle.appearance)
       }),
     )
-    expect(Character.SECTION_PARTS.Print).toEqual(['Print'])
+    expect(Character.SECTION_PARTS.Outfit).toEqual([
+      'Outfit',
+      'ShirtColor',
+      'Print',
+    ])
     const listed = Array.flatten(Object.values(Character.SECTION_PARTS))
-    expect(Array.dedupe(listed).length).toBe(10)
+    expect(Array.dedupe(listed).length).toBe(7)
+    expect(Character.SECTION_TOGGLES.Body).toEqual(['Beard', 'Glasses'])
   })
 
   test('C opens the Profile on Look on the title and the end screens, never mid-run', () => {
@@ -348,9 +366,8 @@ describe('Character', () => {
     expect(seen(look => look.shirtColor)).toBe(SHIRT_COLORS.length)
     expect(seen(look => look.outfit)).toBe(OUTFITS.length)
     expect(seen(look => look.print)).toBe(PRINTS.length)
-    expect(seen(look => look.facialHair)).toBe(FACIAL_HAIRS.length)
-    expect(seen(look => look.makeup)).toBe(MAKEUPS.length)
-    expect(seen(look => look.extra)).toBe(EXTRAS.length)
+    expect(seen(look => `${look.beard}`)).toBe(ON_OFF.length)
+    expect(seen(look => `${look.glasses}`)).toBe(ON_OFF.length)
   })
 
   test('the look lasts through new runs, endless, keep going, and restarts', () => {
@@ -409,30 +426,21 @@ describe('Character', () => {
     expect(picked).not.toContain(SHIRT_SHADES.Blue.base)
   })
 
-  test('each pride print wears the real colors of its flag', () => {
-    const colorsOf = (print: Appearance['print']) =>
-      fills(playerShapes(withLook(onTitle, { ...defaultAppearance, print })))
-    expect(colorsOf('Trans')).toEqual(
-      expect.arrayContaining(['#5bcefa', '#f5a9b8', '#ffffff']),
+  test('the Rainbow print wears the six real colors of the pride flag', () => {
+    const colors = fills(
+      playerShapes(
+        withLook(onTitle, { ...defaultAppearance, print: 'Rainbow' }),
+      ),
     )
-    expect(colorsOf('Bi')).toEqual(
-      expect.arrayContaining(['#d60270', '#9b4f96', '#0038a8']),
-    )
-    expect(colorsOf('Pan')).toEqual(
-      expect.arrayContaining(['#ff218c', '#ffd800', '#21b1ff']),
-    )
-    expect(colorsOf('Progress')).toEqual(
+    expect(colors).toEqual(
       expect.arrayContaining([
         '#e40303',
+        '#ff8c00',
+        '#ffed00',
+        '#008026',
+        '#004cff',
         '#732982',
-        '#613915',
-        '#000000',
-        '#5bcefa',
-        '#f5a9b8',
       ]),
-    )
-    expect(colorsOf('Intersex')).toEqual(
-      expect.arrayContaining(['#ffd800', '#7902aa']),
     )
   })
 
@@ -445,6 +453,14 @@ describe('Character', () => {
     const bases: ReadonlyArray<Appearance> = [
       { ...defaultAppearance, body },
       { ...defaultAppearance, body, outfit: 'Dress', hairStyle: 'Long' },
+      {
+        ...defaultAppearance,
+        body,
+        outfit: 'Overalls',
+        print: 'Rainbow',
+        beard: true,
+        glasses: true,
+      },
     ]
     const frameSizes = (appearance: Appearance) =>
       pipe(playerPixels(appearance), ({ walk, idle }) =>
@@ -511,7 +527,10 @@ const classicFrameWidths = () =>
   )
 
 // NOTE: the one field a part names, taken from a look.
-const pickPart = (part: LookPart, look: Appearance): Partial<Appearance> =>
+const pickPart = (
+  part: LookPart | LookToggle,
+  look: Appearance,
+): Partial<Appearance> =>
   part === 'Body'
     ? { body: look.body }
     : part === 'HairStyle'
@@ -526,8 +545,6 @@ const pickPart = (part: LookPart, look: Appearance): Partial<Appearance> =>
               ? { outfit: look.outfit }
               : part === 'Print'
                 ? { print: look.print }
-                : part === 'FacialHair'
-                  ? { facialHair: look.facialHair }
-                  : part === 'Makeup'
-                    ? { makeup: look.makeup }
-                    : { extra: look.extra }
+                : part === 'Beard'
+                  ? { beard: look.beard }
+                  : { glasses: look.glasses }

@@ -9,13 +9,11 @@ import {
   type Appearance,
   Body,
   type CharacterPicker,
-  Extra,
-  FacialHair,
   HairColor,
   HairStyle,
   LookPart,
-  LookSection,
-  Makeup,
+  type LookSection,
+  LookToggle,
   Outfit,
   Print,
   ShirtColor,
@@ -27,12 +25,14 @@ import {
 export const Message = defineMessageUnion({
   GotPartMessage: { partId: LookPart, message: RadioGroup.Message },
   GotSectionMessage: { message: RadioGroup.Message },
+  ClickedToggle: { toggle: LookToggle },
   ClickedDiceButton: {},
 })
 export type Message = typeof Message.Type
 
 export const OutMessage = defineMessageUnion({
   ChoseLook: { part: LookPart, value: Schema.String },
+  FlippedLook: { toggle: LookToggle },
   RequestedRandomLook: {},
 })
 export type OutMessage = typeof OutMessage.Type
@@ -51,10 +51,28 @@ export const SECTION_PARTS: Readonly<
 > = {
   Body: ['Body', 'SkinTone'],
   Hair: ['HairStyle', 'HairColor'],
-  Face: ['FacialHair', 'Makeup', 'Extra'],
-  Outfit: ['Outfit', 'ShirtColor'],
-  Print: ['Print'],
+  Outfit: ['Outfit', 'ShirtColor', 'Print'],
 }
+
+// NOTE: the on and off parts each little tab shows under its rows.
+export const SECTION_TOGGLES: Readonly<
+  Record<LookSection, ReadonlyArray<LookToggle>>
+> = {
+  Body: ['Beard', 'Glasses'],
+  Hair: [],
+  Outfit: [],
+}
+
+export const isToggleOn = (appearance: Appearance, toggle: LookToggle) =>
+  toggle === 'Beard' ? appearance.beard : appearance.glasses
+
+export const flipLook = (
+  appearance: Appearance,
+  toggle: LookToggle,
+): Appearance =>
+  toggle === 'Beard'
+    ? modifyFields(appearance, { beard: isOn => !isOn })
+    : modifyFields(appearance, { glasses: isOn => !isOn })
 
 const readAs =
   <A extends string>(schema: Schema.Codec<A>) =>
@@ -138,34 +156,6 @@ const PARTS: Readonly<Record<LookPart, Part>> = {
         onSome: print => modifyFields(appearance, { print: () => print }),
       }),
   },
-  FacialHair: {
-    read: picker => picker.facialHair,
-    write: (picker, next) => modifyFields(picker, { facialHair: () => next }),
-    choose: (appearance, value) =>
-      Option.match(readAs(FacialHair)(value), {
-        onNone: () => appearance,
-        onSome: facialHair =>
-          modifyFields(appearance, { facialHair: () => facialHair }),
-      }),
-  },
-  Makeup: {
-    read: picker => picker.makeup,
-    write: (picker, next) => modifyFields(picker, { makeup: () => next }),
-    choose: (appearance, value) =>
-      Option.match(readAs(Makeup)(value), {
-        onNone: () => appearance,
-        onSome: makeup => modifyFields(appearance, { makeup: () => makeup }),
-      }),
-  },
-  Extra: {
-    read: picker => picker.extra,
-    write: (picker, next) => modifyFields(picker, { extra: () => next }),
-    choose: (appearance, value) =>
-      Option.match(readAs(Extra)(value), {
-        onNone: () => appearance,
-        onSome: extra => modifyFields(appearance, { extra: () => extra }),
-      }),
-  },
 }
 
 export const partGroupOf = (
@@ -212,9 +202,6 @@ const PART_FOLDS: Readonly<Record<LookPart, ReturnType<typeof foldPart>>> = {
   ShirtColor: foldPart('ShirtColor'),
   Outfit: foldPart('Outfit'),
   Print: foldPart('Print'),
-  FacialHair: foldPart('FacialHair'),
-  Makeup: foldPart('Makeup'),
-  Extra: foldPart('Extra'),
 }
 
 // NOTE: a little tab's choice changes only which parts show. It plays no
@@ -238,6 +225,10 @@ export const update = (picker: CharacterPicker, message: Message) =>
       PART_FOLDS[partId](picker, groupMessage),
     GotSectionMessage: ({ message: groupMessage }) =>
       foldSection(picker, groupMessage),
+    ClickedToggle: ({ toggle }) => ({
+      model: picker,
+      outMessage: OutMessage.FlippedLook({ toggle }),
+    }),
     ClickedDiceButton: () => ({
       model: picker,
       outMessage: OutMessage.RequestedRandomLook(),

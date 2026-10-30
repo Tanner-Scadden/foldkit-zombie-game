@@ -1,9 +1,8 @@
-// The look sheet: every option of every part on the classic look (the
-// bodies in a tee and in a dress, every print and pride flag on the classic
-// look and again across the bodies, outfits, and skin tones), then walk
-// frames, facings, and the hit flash for four mixed looks, as
-// `slooks-<TAG>-<viewport>.png`, the whole sheet, on a desktop, a landscape phone,
-// and an upright phone.
+// The look sheet: every option of every part on the classic look (both
+// bodies in a tee, a dress, and overalls with the Rainbow print, a beard,
+// and glasses), every outfit in every print, then walk frames, facings, and
+// the hit flash for four mixed looks, as `slooks-<TAG>-<viewport>.png`, the
+// whole sheet, on a desktop, a landscape phone, and an upright phone.
 //   TAG=after bun run heavy -- bun tools/audit/shotsLooks.ts
 import {
   DESKTOP_1280,

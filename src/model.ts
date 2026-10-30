@@ -111,9 +111,6 @@ export const CharacterPicker = Schema.Struct({
   shirtColor: RadioGroup.Model,
   outfit: RadioGroup.Model,
   print: RadioGroup.Model,
-  facialHair: RadioGroup.Model,
-  makeup: RadioGroup.Model,
-  extra: RadioGroup.Model,
 })
 export type CharacterPicker = typeof CharacterPicker.Type
 
@@ -246,9 +243,6 @@ const closedCharacterPicker: CharacterPicker = {
   shirtColor: RadioGroup.init({ id: 'look-shirt-color' }),
   outfit: RadioGroup.init({ id: 'look-outfit' }),
   print: RadioGroup.init({ id: 'look-print' }),
-  facialHair: RadioGroup.init({ id: 'look-facial-hair' }),
-  makeup: RadioGroup.init({ id: 'look-makeup' }),
-  extra: RadioGroup.init({ id: 'look-extra' }),
 }
 
 const PANEL_DIALOG_ID = 'menu-panel'

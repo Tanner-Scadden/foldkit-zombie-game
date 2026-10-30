@@ -211,10 +211,12 @@ const PlayerSaveV8 = Schema.Struct({
 })
 type PlayerSaveV8 = typeof PlayerSaveV8.Type
 
-// NOTE: version 9 is the save before the look built from parts: the
-// display name, and a Female or Male body.
+// NOTE: versions 9 and 10 are the saves before the simple look, with the
+// display name: 9 with a Female or Male body, and 10 with the many-part
+// look that shipped for a few hours on 2026-10-30. Their fields are the
+// same; StoredAppearance reads either look.
 const PlayerSaveV9 = Schema.Struct({
-  version: Schema.Literal(9),
+  version: Schema.Literals([9, 10]),
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
   settings: SavedSettings,
@@ -401,9 +403,9 @@ const migrateV8 = (save: PlayerSaveV8): PlayerSaveV9 => ({
   name: '',
 })
 
-// NOTE: a save from before the look built from parts keeps its look: every
-// older version reads it through StoredAppearance (src/playerData.ts) as
-// the closest new one, so only the version number moves on.
+// NOTE: a save from before the simple look keeps its look: every older
+// version reads it through StoredAppearance (src/playerData.ts) as the
+// closest current one, so only the version number moves on.
 const migrateV9 = (save: PlayerSaveV9): PlayerSave => ({
   version: SAVE_VERSION,
   onboarding: save.onboarding,
@@ -446,7 +448,7 @@ const SAVE_VERSIONS: ReadonlyArray<
 > = [
   { version: SAVE_VERSION, read: Schema.decodeOption(PlayerSaveJson) },
   {
-    version: 9,
+    version: 10,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV9Json)(raw), migrateV9),
   },

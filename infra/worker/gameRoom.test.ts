@@ -167,7 +167,7 @@ describe('the room host', () => {
     expect(full).toEqual(Result.fail({ _tag: 'Full' }))
     const lobby = Option.getOrThrow(await Effect.runPromise(host.lobby))
     expect(lobby.members.map(member => member.look)).toEqual([
-      'Medium.Crop.Brown.Light.Blue.AAAAA',
+      'Broad.Short.Brown.Light.Blue.AAAA',
       '',
       '',
       '',
@@ -175,35 +175,43 @@ describe('the room host', () => {
   })
 
   // NOTE: the look a player sends is kept only when it is one of the game's
-  // looks (src/playerData.ts): every part of the look built from parts, or
-  // an old five word look from a build before it, read as its closest new
-  // look. Anything else seats the player with none.
+  // looks (src/playerData.ts): the simple look, or an older code (five
+  // words from the first look, or the many-part look's five letters) read
+  // as its closest simple look. Anything else seats the player with none.
   test('a sent look is kept when it is a real look, and dropped when it is junk', () => {
+    expect(lookOfRequest('Slim.Mohawk.Pink.Deep.Teal.CCBB')).toBe(
+      'Slim.Mohawk.Pink.Deep.Teal.CCBB',
+    )
+    expect(lookOfRequest('Broad.Bald.Grey.Fair.Purple.DAAA')).toBe(
+      'Broad.Bald.Grey.Fair.Purple.DAAA',
+    )
     expect(lookOfRequest('Slim.Mohawk.Rainbow.Deep.Lilac.JFEDE')).toBe(
-      'Slim.Mohawk.Rainbow.Deep.Lilac.JFEDE',
+      'Slim.Mohawk.Pink.Deep.Purple.CCBA',
     )
     expect(lookOfRequest('Round.Bald.Pastel.Umber.Black.GMBBC')).toBe(
-      'Round.Bald.Pastel.Umber.Black.GMBBC',
+      'Broad.Bald.Pink.Deep.Blue.BCAB',
     )
     expect(lookOfRequest('Female.Ponytail.Pink.Tan.Teal')).toBe(
-      'Medium.Ponytail.Pink.Tan.Teal.BAADA',
+      'Broad.Ponytail.Pink.Tan.Teal.AAAA',
     )
     expect(lookOfRequest('Male.Curls.Black.Deep.Red')).toBe(
-      'Medium.Curls.Black.Umber.Red.AAAAA',
+      'Broad.Curly.Black.Deep.Red.AAAA',
     )
     const junks = [
       'Female.Ponytail.Pink.Tan.Plaid',
       'Robot',
       '',
-      'Slim.Mohawk.Rainbow.Deep.Lilac',
+      'Slim.Mohawk.Pink.Deep.Teal',
+      'Slim.Mohawk.Pink.Deep.Teal.CCBC',
+      'Slim.Mohawk.Pink.Deep.Teal.ECAA',
+      'Slim.Mohawk.Pink.Deep.Teal.ADAA',
+      'Slim.Mohawk.Pink.Deep.Teal.AAA',
+      'Slim.Mohawk.Pink.Deep.Teal.aaaa',
+      'Medium.Short.Pink.Deep.Teal.AAAA',
       'Slim.Mohawk.Rainbow.Deep.Lilac.JFEDZ',
-      'Slim.Mohawk.Rainbow.Deep.Lilac.KAAAA',
-      'Slim.Mohawk.Rainbow.Deep.Lilac.AAAA',
       'Slim.Mohawk.Rainbow.Deep.Lilac.AAAAAA',
-      'Slim.Mohawk.Rainbow.Deep.Lilac.aaaaa',
-      'Female.Mohawk.Rainbow.Deep.Lilac.AAAAA',
-      'Slim.Mohawk.Rainbow.Deep.Lilac.AAAAA.AAAAA',
-      'Medium.Ponytail.Pink.Tan.Teal',
+      'Female.Mohawk.Pink.Deep.Teal.AAAA',
+      'Slim.Mohawk.Pink.Deep.Teal.AAAA.AAAA',
     ]
     expect(junks.map(lookOfRequest)).toEqual(junks.map(() => ''))
   })

@@ -470,9 +470,9 @@
   image-rendering: pixelated;
 }
 
-/* NOTE: the Look tab's little tabs (Body, Hair, Face, Outfit, Print) sit
-   over the parts they show, so no screen ever needs more than three rows
-   of options at once. */
+/* NOTE: the Look tab's little tabs (Body, Hair, Outfit) sit over the
+   parts they show, so no screen ever needs more than three rows of
+   options at once. */
 .look-controls {
   display: flex;
   flex-direction: column;
@@ -680,7 +680,12 @@
   }
 }
 
-.look-option[aria-checked='true'] {
+.look-options.look-toggles {
+  grid-template-columns: repeat(2, var(--menu-tap));
+}
+
+.look-option[aria-checked='true'],
+.look-toggle[aria-pressed='true'] {
   border-color: var(--profile-look);
   background: color-mix(in srgb, var(--profile-look) 22%, var(--menu-bg));
   color: var(--profile-look);

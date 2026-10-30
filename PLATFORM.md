@@ -264,7 +264,7 @@ Built on 2026-10-29. The engine's design, API, protocol, and limits are in [`pac
 
 | Mutation            | Writer     | What it does                                                                                                                            |
 | ------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `SeededPlayer`      | Owner      | The device's save from before sync. Only fills an empty scope, so linking never overwrites the player. Version 6 carries save version 9 |
+| `SeededPlayer`      | Owner      | The device's save from before sync. Only fills an empty scope, so linking never overwrites the player. Version 8 carries save version 11 |
 | `ChangedSettings`   | Owner      | Sound, music, screen shake, and stats sharing                                                                                           |
 | `ChangedName`       | Owner      | The display name, cleaned on the device; the last device to set it wins                                                                 |
 | `ChangedRotation`   | Owner      | Landscape or Auto for an installed phone app; the last device to change it wins                                                         |

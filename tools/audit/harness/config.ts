@@ -4,11 +4,8 @@ import { DoorId, NightmareLock, PickupKind, ZombieKind } from '@game/model'
 import {
   Body,
   Difficulty,
-  Extra,
-  FacialHair,
   HairColor,
   HairStyle,
-  Makeup,
   Outfit,
   Print,
   ShirtColor,
@@ -101,17 +98,16 @@ const Look = Schema.String.pipe(
       LookPart(ShirtColor),
       LookPart(Outfit),
       LookPart(Print),
-      LookPart(FacialHair),
-      LookPart(Makeup),
-      LookPart(Extra),
+      LookPart(Schema.Literal('Beard')),
+      LookPart(Schema.Literal('Glasses')),
     ]),
     {
       decode: SchemaGetter.transform(text => {
         const parts = text.split(',')
         return Array.from(
-          { length: 10 },
+          { length: 9 },
           (_, index) => parts[index] ?? '',
-        ) as unknown as readonly ['', '', '', '', '', '', '', '', '', '']
+        ) as unknown as readonly ['', '', '', '', '', '', '', '', '']
       }),
       encode: SchemaGetter.transform(parts => parts.join(',')),
     },
@@ -161,7 +157,7 @@ export const HarnessConfig = Schema.Struct({
   god: Flag,
   look: Schema.optionalKey(Look),
   picker: Flag,
-  looksection: Choice(['Body', 'Hair', 'Face', 'Outfit', 'Print']),
+  looksection: Choice(['Body', 'Hair', 'Outfit']),
   profile: Choice(['look', 'name', 'account', 'settings']),
   name: Schema.optionalKey(Schema.String),
   sync: Choice(['local', 'connecting', 'synced', 'offline', 'broken']),
