@@ -6,13 +6,14 @@ import {
   Data,
   Duration,
   Effect,
+  Exit,
   FileSystem,
   Option,
   Path,
   Ref,
   Runtime,
   Schedule,
-  type Scope,
+  Scope,
   String,
   pipe,
 } from 'effect'
@@ -23,6 +24,7 @@ import * as Os from 'node:os'
 import {
   type BudgetPolicy,
   Decision,
+  Handover,
   Hold,
   Invocation,
   JobClass,
@@ -37,10 +39,14 @@ import {
   budgetKey,
   classifyLock,
   decide,
+  decideHandover,
+  formatDuration,
   formatLoad,
+  isSameHolderValue,
   jobClassOf,
   jobKindOf,
   maybeConflictAfterTaking,
+  maybeLeaseWarning,
   parseArguments,
   recordBatch,
   resetBudget,
@@ -58,11 +64,21 @@ import {
   readSharedSlots,
   readTestRuns,
   readTextIfPresent,
+  readTurns,
   readWaiters,
+  recordTurn,
   releaseLock,
+  rewriteLock,
   sharedSlotPath,
   whileWaiting,
 } from './lock'
+import {
+  GUARD_PID_ENV,
+  type PendingRequest,
+  TURN_DIR_ENV,
+  grantTurn,
+  readRequests,
+} from './turn'
 
 export class BudgetRefused extends Data.TaggedError('BudgetRefused')<{
   readonly reason: string
@@ -108,6 +124,9 @@ const GuardConfig = Config.all({
   maybeTargetLoad: Config.Number('HEAVY_TARGET_LOAD').pipe(Config.option),
   waitMinutes: Config.Number('HEAVY_WAIT_MINUTES').pipe(Config.withDefault(30)),
   pollSeconds: Config.Number('HEAVY_POLL_SECONDS').pipe(Config.withDefault(10)),
+  leaseMinutes: Config.Number('HEAVY_LEASE_MINUTES').pipe(
+    Config.withDefault(10),
+  ),
   stateDirectory: Config.String('HEAVY_STATE_DIR').pipe(
     Config.withDefault(Os.tmpdir()),
   ),
@@ -126,6 +145,7 @@ export type Context = Readonly<{
   maybeFakeLoad: Option.Option<number>
   waitMinutes: number
   pollSeconds: number
+  leaseMs: number
 }>
 
 // NOTE: who this guard is while it waits: its pid, its command, its class
@@ -135,6 +155,7 @@ type Arrival = Readonly<{
   jobClass: JobClass
   cost: number
   budgetPolicy: BudgetPolicy
+  job: JobKind
   waiter: LockHolder
 }>
 
@@ -147,6 +168,16 @@ type Plan = Readonly<{
   hold: Hold
   workers: number
   loadBefore: number
+  holder: LockHolder
+}>
+
+// NOTE: the turn a running job holds now. Each turn holds its file in its
+// own scope, so a handover closes it and the next turn opens another.
+type CurrentTurn = Readonly<{
+  scope: Scope.Closeable
+  plan: Plan
+  maybeLastWarnedAt: Option.Option<number>
+  isReleased: boolean
 }>
 
 const say = (line: string): Effect.Effect<void> => Console.log(`heavy: ${line}`)
@@ -195,6 +226,7 @@ export const makeContext = Effect.gen(function* () {
     maybeFakeLoad: config.maybeFakeLoad,
     waitMinutes: config.waitMinutes,
     pollSeconds: config.pollSeconds,
+    leaseMs: config.leaseMinutes * 60_000,
   }
   return context
 })
@@ -247,9 +279,13 @@ const gatherSnapshot = (
   Effect.gen(function* () {
     const budget = yield* readBudget(context)
     const waiters = yield* readWaiters(context.lockDirectory)
+    const turns = yield* readTurns(context.lockDirectory)
     const ledger = yield* readLedger(context.ledgerPath)
     return {
       ...budget,
+      pid: arrival.waiter.pid,
+      cwd: arrival.waiter.cwd,
+      turns,
       jobClass: arrival.jobClass,
       cost: arrival.cost,
       maybeRequestedWorkers: context.maybeRequestedWorkers,
@@ -259,7 +295,7 @@ const gatherSnapshot = (
       ),
       arrivedAt: arrival.waiter.startedAt,
       batchesUsed: batchesUsed(ledger, context.ledgerKey),
-      job: jobKindOf(arrival.command),
+      job: arrival.job,
       budgetPolicy: arrival.budgetPolicy,
     }
   })
@@ -295,7 +331,7 @@ const takeTheLock = (
   cost: number,
   lockAction: LockAction,
 ): Effect.Effect<
-  void,
+  LockHolder,
   NotYet | PlatformError,
   FileSystem.FileSystem | Scope.Scope
 > =>
@@ -314,6 +350,7 @@ const takeTheLock = (
       startedAt,
       jobClass: arrival.jobClass._tag,
       cost,
+      ...(Hold.$is('Solo')(hold) ? { leaseMs: context.leaseMs } : {}),
     }
     yield* acquireLock(path, holder).pipe(
       Effect.catchTag('LockTaken', () =>
@@ -331,6 +368,16 @@ const takeTheLock = (
       yield* releaseLock(path, holder)
       return yield* new NotYet({ reason: maybeConflict.value })
     }
+    // NOTE: when the turn ends, the worktree's turn is recorded, so its
+    // next job goes behind other worktrees' waiting jobs for a while.
+    yield* Effect.addFinalizer(() =>
+      Clock.currentTimeMillis.pipe(
+        Effect.flatMap(at =>
+          recordTurn(context.lockDirectory, { cwd: holder.cwd, at }),
+        ),
+      ),
+    )
+    return holder
   })
 
 const execute = (
@@ -351,17 +398,28 @@ const execute = (
       ),
     Run: ({ hold, workers, cost, lockAction, notes }) =>
       Effect.gen(function* () {
-        yield* takeTheLock(context, arrival, hold, cost, lockAction)
+        const holder = yield* takeTheLock(
+          context,
+          arrival,
+          hold,
+          cost,
+          lockAction,
+        )
         yield* Effect.forEach(notes, say, { discard: true })
-        return { hold, workers, loadBefore: snapshot.load }
+        return { hold, workers, loadBefore: snapshot.load, holder }
       }),
   })
 
 // NOTE: every job marks itself as waiting, so jobs that arrive after it
-// queue behind it by the fairness rule in `blockingWaiters`.
+// queue behind it by the fairness rule in `blockingWaiters`. A first turn
+// gives up after HEAVY_WAIT_MINUTES; a job that yielded mid-run waits for
+// as long as it takes, since giving up would throw its work away.
+type WaitLimit = 'GivesUp' | 'WaitsOn'
+
 const waitForTurn = (
   context: Context,
   arrival: Arrival,
+  waitLimit: WaitLimit,
 ): Effect.Effect<
   Plan,
   BudgetRefused | WaitTimedOut | PlatformError,
@@ -388,22 +446,47 @@ const waitForTurn = (
           }),
         ),
       ),
-      Effect.timeoutOrElse({
-        duration: Duration.minutes(context.waitMinutes),
-        orElse: () =>
-          Ref.get(waitLog).pipe(
-            Effect.flatMap(({ maybeLastReason }) =>
-              Effect.fail(
-                new WaitTimedOut({
-                  minutes: context.waitMinutes,
-                  maybeLastReason,
-                }),
-              ),
-            ),
-          ),
-      }),
     )
-    return yield* whileWaiting(context.lockDirectory, arrival.waiter, poll)
+    const limited =
+      waitLimit === 'WaitsOn'
+        ? poll
+        : poll.pipe(
+            Effect.timeoutOrElse({
+              duration: Duration.minutes(context.waitMinutes),
+              orElse: () =>
+                Ref.get(waitLog).pipe(
+                  Effect.flatMap(({ maybeLastReason }) =>
+                    Effect.fail(
+                      new WaitTimedOut({
+                        minutes: context.waitMinutes,
+                        maybeLastReason,
+                      }),
+                    ),
+                  ),
+                ),
+            }),
+          )
+    return yield* whileWaiting(context.lockDirectory, arrival.waiter, limited)
+  })
+
+// NOTE: waits for a turn and holds its file in a fresh scope, which the
+// caller closes to let go of it.
+const takeTurn = (
+  context: Context,
+  arrival: Arrival,
+  waitLimit: WaitLimit,
+): Effect.Effect<
+  CurrentTurn,
+  BudgetRefused | WaitTimedOut | PlatformError,
+  FileSystem.FileSystem
+> =>
+  Effect.gen(function* () {
+    const scope = yield* Scope.make()
+    const plan = yield* waitForTurn(context, arrival, waitLimit).pipe(
+      Scope.provide(scope),
+      Effect.onError(cause => Scope.close(scope, Exit.failCause(cause))),
+    )
+    return { scope, plan, maybeLastWarnedAt: Option.none(), isReleased: false }
   })
 
 const countBatch = (
@@ -471,6 +554,160 @@ const describeHold = (hold: Hold, jobClass: JobClass): string =>
 const envValue = (key: string): Option.Option<string> =>
   Option.fromNullishOr(process.env[key])
 
+const makeArrival = (
+  command: Array.NonEmptyReadonlyArray<string>,
+  jobClass: JobClass,
+  cost: number,
+  budgetPolicy: BudgetPolicy,
+  job: JobKind,
+  arrivedAt: number,
+): Arrival => ({
+  command,
+  jobClass,
+  cost,
+  budgetPolicy,
+  job,
+  waiter: {
+    pid: process.pid,
+    command: Array.join(command, ' '),
+    cwd: process.cwd(),
+    startedAt: arrivedAt,
+    jobClass: jobClass._tag,
+    cost,
+  },
+})
+
+const REQUEST_POLL = Duration.millis(500)
+
+// NOTE: answers one yield request from the job. When another job waits,
+// the turn's file is let go and the job queues again as a new arrival (as
+// another kind of job, so its batch is not counted or refused twice), and
+// the grant waits until it holds a file again.
+const answerRequest = (
+  context: Context,
+  arrival: Arrival,
+  current: Ref.Ref<CurrentTurn>,
+  handovers: Ref.Ref<number>,
+  turnDirectory: string,
+  pending: PendingRequest,
+) =>
+  Effect.gen(function* () {
+    const waiters = yield* readWaiters(context.lockDirectory)
+    const turn = yield* Ref.get(current)
+    const queueAgain = Effect.gen(function* () {
+      yield* Scope.close(turn.scope, Exit.void)
+      yield* Ref.set(current, { ...turn, isReleased: true })
+      const queuedAt = yield* Clock.currentTimeMillis
+      const next = yield* takeTurn(
+        context,
+        makeArrival(
+          arrival.command,
+          arrival.jobClass,
+          arrival.cost,
+          arrival.budgetPolicy,
+          JobKind.Other(),
+          queuedAt,
+        ),
+        'WaitsOn',
+      )
+      yield* Ref.set(current, next)
+      yield* Ref.update(handovers, count => count + 1)
+      const backAt = yield* Clock.currentTimeMillis
+      yield* say(
+        `Back after ${formatDuration(backAt - queuedAt)}, ${describeHold(next.plan.hold, arrival.jobClass)} with WORKERS=${next.plan.workers}.`,
+      )
+    })
+    // NOTE: a job that offers to yield and keeps its turn renews its lease.
+    const renewLease = Effect.gen(function* () {
+      if (!Hold.$is('Solo')(turn.plan.hold)) {
+        return
+      }
+      const now = yield* Clock.currentTimeMillis
+      const holder: LockHolder = { ...turn.plan.holder, leaseFrom: now }
+      yield* rewriteLock(context.lockPath, holder)
+      yield* Ref.set(current, {
+        ...turn,
+        plan: { ...turn.plan, holder },
+        maybeLastWarnedAt: Option.none(),
+      })
+    })
+    // NOTE: a turn let go of by an earlier answer that then failed is
+    // queued for again, whoever waits.
+    yield* Handover.$match(decideHandover(process.pid, waiters), {
+      Keep: () => (turn.isReleased ? queueAgain : renewLease),
+      HandOver: ({ reason }) =>
+        say(`Handing over after ${pending.request.label}: ${reason}.`).pipe(
+          Effect.andThen(queueAgain),
+        ),
+    })
+    const after = yield* Ref.get(current)
+    yield* grantTurn(turnDirectory, pending.id, after.plan.workers)
+  })
+
+const serveTurns = (
+  context: Context,
+  arrival: Arrival,
+  current: Ref.Ref<CurrentTurn>,
+  handovers: Ref.Ref<number>,
+  turnDirectory: string,
+) =>
+  readRequests(turnDirectory).pipe(
+    Effect.flatMap(requests =>
+      Effect.forEach(
+        requests,
+        pending =>
+          answerRequest(
+            context,
+            arrival,
+            current,
+            handovers,
+            turnDirectory,
+            pending,
+          ),
+        { discard: true },
+      ),
+    ),
+    Effect.catch(error =>
+      say(`Could not answer a yield (${error._tag}), trying again.`),
+    ),
+    Effect.repeat(Schedule.spaced(REQUEST_POLL)),
+  )
+
+// NOTE: a solo turn past its lease is not stopped. Its guard says so on
+// stderr, once and then every few minutes, naming who waits.
+const watchLease = (context: Context, current: Ref.Ref<CurrentTurn>) =>
+  Effect.gen(function* () {
+    const turn = yield* Ref.get(current)
+    // NOTE: a turn handed over holds no file while it queues again.
+    if (!Hold.$is('Solo')(turn.plan.hold) || turn.isReleased) {
+      return
+    }
+    const now = yield* Clock.currentTimeMillis
+    const waiters = Array.filter(
+      yield* readWaiters(context.lockDirectory),
+      waiter => waiter.pid !== process.pid,
+    )
+    const maybeWarning = maybeLeaseWarning({
+      holder: turn.plan.holder,
+      now,
+      maybeLastWarnedAt: turn.maybeLastWarnedAt,
+      waiters,
+    })
+    if (Option.isSome(maybeWarning)) {
+      yield* Console.error(`heavy: ${maybeWarning.value}`)
+      yield* Ref.update(current, latest =>
+        isSameHolderValue(latest.plan.holder, turn.plan.holder)
+          ? { ...latest, maybeLastWarnedAt: Option.some(now) }
+          : latest,
+      )
+    }
+  }).pipe(
+    Effect.ignore,
+    Effect.repeat(
+      Schedule.spaced(Duration.seconds(Math.min(30, context.pollSeconds))),
+    ),
+  )
+
 const runGuarded = (
   command: Array.NonEmptyReadonlyArray<string>,
   budgetPolicy: BudgetPolicy,
@@ -485,22 +722,38 @@ const runGuarded = (
       Cpu: () => 1,
       Shared: () => sharedCostOf(command, envValue),
     })
-    const arrival: Arrival = {
+    const arrival = makeArrival(
       command,
       jobClass,
       cost,
       budgetPolicy,
-      waiter: {
-        pid: process.pid,
-        command: Array.join(command, ' '),
-        cwd: process.cwd(),
-        startedAt: arrivedAt,
-        jobClass: jobClass._tag,
-        cost,
-      },
-    }
-    const plan = yield* waitForTurn(context, arrival)
+      jobKindOf(command),
+      arrivedAt,
+    )
+    const first = yield* takeTurn(context, arrival, 'GivesUp')
+    const current = yield* Ref.make(first)
+    yield* Effect.addFinalizer(() =>
+      Ref.get(current).pipe(
+        Effect.flatMap(({ scope }) => Scope.close(scope, Exit.void)),
+      ),
+    )
+    const plan = first.plan
     yield* countBatch(context, command)
+    const fs = yield* FileSystem.FileSystem
+    const path = yield* Path.Path
+    const turnDirectory = path.join(
+      context.lockDirectory,
+      `turns-${process.pid}`,
+    )
+    yield* fs.makeDirectory(turnDirectory, { recursive: true })
+    yield* Effect.addFinalizer(() =>
+      Effect.ignore(fs.remove(turnDirectory, { recursive: true })),
+    )
+    const handovers = yield* Ref.make(0)
+    yield* Effect.forkScoped(
+      serveTurns(context, arrival, current, handovers, turnDirectory),
+    )
+    yield* Effect.forkScoped(watchLease(context, current))
     const machine = yield* readMachine(context)
     yield* say(
       `Running ${Array.join(command, ' ')} ${describeHold(plan.hold, jobClass)} with WORKERS=${plan.workers} (load ${formatLoad(machine.load)} on ${machine.cores} cores).`,
@@ -508,6 +761,8 @@ const runGuarded = (
     const startedAt = yield* Clock.currentTimeMillis
     const exitCode = yield* runChild(command, {
       WORKERS: `${plan.workers}`,
+      [TURN_DIR_ENV]: turnDirectory,
+      [GUARD_PID_ENV]: `${process.pid}`,
     })
     const endedAt = yield* Clock.currentTimeMillis
     const after = yield* readMachine(context)
@@ -520,6 +775,12 @@ const runGuarded = (
         loadAfter: after.load,
       }),
     )
+    const handedOver = yield* Ref.get(handovers)
+    if (handedOver > 0) {
+      yield* say(
+        `Handed over ${handedOver} ${handedOver === 1 ? 'time' : 'times'} at a boundary between parts.`,
+      )
+    }
     if (exitCode !== 0) {
       return yield* new GuardExit({ code: exitCode })
     }

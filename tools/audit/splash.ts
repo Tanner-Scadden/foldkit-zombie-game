@@ -9,9 +9,12 @@
 // tasks, and with PROFILE=1 the functions that took the most CPU time before
 // the splash hid, and with NETWORK=1 every request the page and its workers
 // made, with when it started and finished. ONLY=<profile> runs one profile.
+// Under the heavy guard it yields the guard's turn between profiles, so
+// other jobs go in between instead of waiting for all three.
 //   BASE=http://localhost:4173/ bun splash.ts
 import type { BrowserContext } from 'playwright-core'
 
+import { yieldTurnAsync } from '../heavy/turn'
 import { GAME, launch, wait } from './lib'
 
 const BASE = process.env.BASE ?? GAME
@@ -210,9 +213,13 @@ type Visit = Readonly<{
 }>
 
 const browser = await launch()
-for (const profile of PROFILES.filter(
+const chosen = PROFILES.filter(
   ({ name }) => ONLY === undefined || ONLY === name,
-)) {
+)
+for (const [index, profile] of chosen.entries()) {
+  if (index > 0) {
+    await yieldTurnAsync(`the ${chosen[index - 1]!.name} profile`, 1)
+  }
   const context = await browser.newContext({
     viewport: { width: 844, height: 390 },
     deviceScaleFactor: 2,

@@ -12,12 +12,16 @@ import {
 import type { PlatformError } from 'effect/PlatformError'
 
 import {
+  type HeldTurn,
   type LockHolder,
   LockState,
   type SharedSlot,
   classifyLock,
+  decodeHeldTurn,
+  encodeHeldTurn,
   encodeLockHolder,
   isSameHolder,
+  turnFileKey,
 } from './decision'
 
 export class LockTaken extends Data.TaggedError('LockTaken')<{}> {}
@@ -80,6 +84,22 @@ export const releaseLock = (
     }
   }).pipe(Effect.ignore)
 
+// NOTE: rewrites the holder in place, for a renewed lease, only while the
+// file still names this holder. The rename replaces it atomically.
+export const rewriteLock = (
+  path: string,
+  holder: LockHolder,
+): Effect.Effect<void, never, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    if (!isSameHolder(yield* readTextIfPresent(path), holder)) {
+      return
+    }
+    const draft = `${path}.${holder.pid}.draft`
+    yield* fs.writeFileString(draft, encodeLockHolder(holder))
+    yield* fs.rename(draft, path)
+  }).pipe(Effect.ignore)
+
 export const acquireLock = (
   path: string,
   holder: LockHolder,
@@ -119,6 +139,10 @@ export const clearStaleLock = (
 //   is the one the two class guard reads, so it still yields to them.
 // - `waiting-<pid>.json`, a Shared job waiting.
 // - `tests-<pid>.json`, a `bun run test` run, counted in the budget.
+// - `held-<key>.json`, when a worktree's job last let go of a file, for the
+//   round robin by worktree.
+// - `turns-<pid>/`, where a running job asks its guard to yield (turn.ts).
+const HELD_TURN_FILE = /^held-[0-9a-f]+\.json$/
 const SHARED_SLOT_FILE = /^shared-(\d+)\.lock$/
 const WAITER_FILE = /^(?:exclusive-)?waiting-\d+\.json$/
 const TEST_RUN_FILE = /^tests-\d+\.json$/
@@ -271,4 +295,42 @@ export const clearIfNotHeld = (
     if (!LockState.$is('Held')(classifyLock(maybeText, isProcessAlive))) {
       yield* clearStaleLock(path, maybeText)
     }
+  })
+
+// TURNS
+
+const heldTurnPath = (directory: string, cwd: string): string =>
+  `${directory}/held-${turnFileKey(cwd)}.json`
+
+// NOTE: written to a draft and renamed into place, so a reader never sees
+// half of it. A lost write only costs one turn of round robin.
+export const recordTurn = (
+  directory: string,
+  turn: HeldTurn,
+): Effect.Effect<void, never, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    const path = heldTurnPath(directory, turn.cwd)
+    const draft = `${path}.${process.pid}.draft`
+    yield* fs.writeFileString(draft, encodeHeldTurn(turn))
+    yield* fs.rename(draft, path)
+  }).pipe(Effect.ignore)
+
+export const readTurns = (
+  directory: string,
+): Effect.Effect<
+  ReadonlyArray<HeldTurn>,
+  PlatformError,
+  FileSystem.FileSystem
+> =>
+  Effect.gen(function* () {
+    const names = Array.filter(yield* listDirectory(directory), name =>
+      HELD_TURN_FILE.test(name),
+    )
+    const texts = yield* Effect.forEach(names, name =>
+      readTextIfPresent(`${directory}/${name}`),
+    )
+    return Array.getSomes(
+      Array.map(texts, maybeText => Option.flatMap(maybeText, decodeHeldTurn)),
+    )
   })

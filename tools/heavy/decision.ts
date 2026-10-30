@@ -27,6 +27,23 @@ export const MIN_TEST_WORKERS = 2
 export const MAX_OTHER_WORKERS = 4
 export const DEFAULT_PARALLEL = 3
 
+// NOTE: a hold of the solo lock is a lease. A job past it is not stopped,
+// but its guard says so loudly, and every waiting job names it.
+export const DEFAULT_LEASE_MS = 10 * 60_000
+export const LEASE_REMIND_MS = 5 * 60_000
+// NOTE: a worktree whose job held a file this recently goes behind waiting
+// jobs from other worktrees, so turns go round by worktree.
+export const RECENT_TURN_MS = 5 * 60_000
+// NOTE: a chunked CPU job plays about this many runs a turn, rounded up to
+// a whole number of rounds of its workers. A campaign run takes about 3.5 s
+// of one worker, so a chunk is well under 2 minutes even with 1 worker.
+export const DEFAULT_CHUNK_RUNS = 25
+// NOTE: how long a later Shared job may start ahead of an earlier Timing or
+// CPU waiter that a running CPU job holds up anyway (backfill). After this
+// the waiter is due at the CPU job's next chunk boundary, so no more Shared
+// jobs pass it, and only the ones already running stand in its way.
+export const BACKFILL_GRACE_MS = 2 * 60_000
+
 // JOB CLASS
 
 // NOTE: Timing jobs run alone, since load skews their numbers. A CPU job,
@@ -63,6 +80,10 @@ export const LockHolder = Schema.Struct({
   startedAt: Schema.Number,
   jobClass: Schema.optionalKey(ClassName),
   cost: Schema.optionalKey(Schema.Number),
+  leaseMs: Schema.optionalKey(Schema.Number),
+  // NOTE: when the lease last began: the start, or the last boundary where
+  // a chunked job offered to yield and nobody was waiting.
+  leaseFrom: Schema.optionalKey(Schema.Number),
 })
 export type LockHolder = typeof LockHolder.Type
 
@@ -112,6 +133,34 @@ export const isSameHolder = (
     maybeText,
     Option.flatMap(decodeLockHolder),
     Option.exists(current => isSameHolderValue(current, holder)),
+  )
+
+// TURNS
+
+// NOTE: when a worktree's job last let go of a file. One file a worktree,
+// named by `turnFileKey`, so two worktrees never write the same file.
+export const HeldTurn = Schema.Struct({
+  cwd: Schema.String,
+  at: Schema.Number,
+})
+export type HeldTurn = typeof HeldTurn.Type
+
+const HeldTurnJson = Schema.fromJsonString(HeldTurn)
+
+export const decodeHeldTurn = (text: string): Option.Option<HeldTurn> =>
+  Schema.decodeOption(HeldTurnJson)(text)
+
+export const encodeHeldTurn = (turn: HeldTurn): string =>
+  `${JSON.stringify(turn)}\n`
+
+// NOTE: FNV-1a over the path, so the file name is short and safe.
+export const turnFileKey = (cwd: string): string =>
+  pipe(
+    Array.fromIterable(cwd),
+    Array.reduce(0x811c9dc5, (hash, character) =>
+      Math.imul(hash ^ (character.codePointAt(0) ?? 0), 0x01000193),
+    ),
+    hash => (hash >>> 0).toString(16).padStart(8, '0'),
   )
 
 // BUDGET LEDGER
@@ -340,6 +389,9 @@ export type SharedSlot = Readonly<{
 }>
 
 export type Snapshot = Readonly<{
+  pid: number
+  cwd: string
+  turns: ReadonlyArray<HeldTurn>
   load: number
   cores: number
   target: number
@@ -449,6 +501,52 @@ const describeHolder = (holder: LockHolder): string =>
 const describeHolders = (holders: ReadonlyArray<LockHolder>): string =>
   Array.join(Array.map(holders, describeHolder), '; ')
 
+// LEASE
+
+export const leaseOf = (holder: LockHolder): number =>
+  holder.leaseMs ?? DEFAULT_LEASE_MS
+
+const leaseStartOf = (holder: LockHolder): number =>
+  holder.leaseFrom ?? holder.startedAt
+
+export const isPastLease = (holder: LockHolder, now: number): boolean =>
+  now - leaseStartOf(holder) > leaseOf(holder)
+
+const leaseMinutes = (holder: LockHolder): string =>
+  `${globalThis.Number((leaseOf(holder) / 60_000).toFixed(1))} minute`
+
+const leaseOverText = (holder: LockHolder, now: number): string =>
+  `has held the lock ${formatDuration(now - leaseStartOf(holder))}, past its ${leaseMinutes(holder)} lease`
+
+const pastLeasePart = (holder: LockHolder, now: number): string =>
+  `${describeHolder(holder)} ${leaseOverText(holder, now)}`
+
+// NOTE: what the guard holding the solo lock prints once its lease is up,
+// and again every LEASE_REMIND_MS while it runs on.
+export const maybeLeaseWarning = (
+  warning: Readonly<{
+    holder: LockHolder
+    now: number
+    maybeLastWarnedAt: Option.Option<number>
+    waiters: ReadonlyArray<LockHolder>
+  }>,
+): Option.Option<string> => {
+  const { holder, now, maybeLastWarnedAt, waiters } = warning
+  const isDue = Option.match(maybeLastWarnedAt, {
+    onNone: () => true,
+    onSome: lastWarnedAt => now - lastWarnedAt >= LEASE_REMIND_MS,
+  })
+  if (!isPastLease(holder, now) || !isDue) {
+    return Option.none()
+  }
+  const waiting = Array.isReadonlyArrayNonEmpty(waiters)
+    ? `${waiters.length} waiting: ${describeHolders(waiters)}`
+    : 'nobody is waiting yet'
+  return Option.some(
+    `LEASE UP: ${pastLeasePart(holder, now)}. It keeps running; split it so it yields between parts (see tools/heavy/turn.ts). ${String.capitalize(waiting)}.`,
+  )
+}
+
 // NOTE: a solo lock without a class came from an older guard, which ran
 // everything alone, so it counts as Timing.
 export const soloClassOf = (holder: LockHolder): JobClass =>
@@ -488,24 +586,92 @@ export const headroom = (snapshot: Snapshot): number =>
 const waiterClassOf = (waiter: LockHolder): JobClass =>
   jobClassOfName(waiter.jobClass ?? 'Timing')
 
-const earlierWaiters = (snapshot: Snapshot): ReadonlyArray<LockHolder> =>
-  Array.filter(
-    snapshot.waiters,
-    waiter => waiter.startedAt < snapshot.arrivedAt,
+// QUEUE ORDER
+
+// NOTE: when the worktree last let go of a file within RECENT_TURN_MS, or
+// 0 when it has not.
+export const lastTurnAt = (
+  turns: ReadonlyArray<HeldTurn>,
+  cwd: string,
+  now: number,
+): number =>
+  pipe(
+    turns,
+    Array.filter(turn => turn.cwd === cwd && now - turn.at < RECENT_TURN_MS),
+    Array.reduce(0, (latest, turn) => Math.max(latest, turn.at)),
   )
 
-// NOTE: queue fairness by arrival. A Timing or CPU job that started waiting
+type QueueKey = readonly [number, number, number]
+
+const queueKeyOf = (
+  snapshot: Snapshot,
+  job: Readonly<{ cwd: string; startedAt: number; pid: number }>,
+): QueueKey => [
+  lastTurnAt(snapshot.turns, job.cwd, snapshot.now),
+  job.startedAt,
+  job.pid,
+]
+
+const compareKeys = (first: QueueKey, second: QueueKey): number =>
+  first[0] - second[0] || first[1] - second[1] || first[2] - second[2]
+
+// NOTE: the queue goes round by worktree, then by arrival. A worktree that
+// let go of a file in the last RECENT_TURN_MS goes behind waiting jobs from
+// worktrees that did not, and of two that did, the one whose turn ended
+// first goes first. Within a worktree, or between worktrees with no recent
+// turn, the job that arrived first goes first. A chunked job that yields
+// arrives again, so it goes behind every job that arrived while it ran.
+export const isAheadInQueue = (
+  snapshot: Snapshot,
+  waiter: LockHolder,
+): boolean =>
+  compareKeys(
+    queueKeyOf(snapshot, waiter),
+    queueKeyOf(snapshot, {
+      cwd: snapshot.cwd,
+      startedAt: snapshot.arrivedAt,
+      pid: snapshot.pid,
+    }),
+  ) < 0
+
+const earlierWaiters = (snapshot: Snapshot): ReadonlyArray<LockHolder> =>
+  Array.filter(snapshot.waiters, waiter => isAheadInQueue(snapshot, waiter))
+
+// NOTE: queue fairness by turn and arrival (see isAheadInQueue). A Timing or CPU job that started waiting
 // first blocks every later arrival. A Shared job that started waiting first
 // blocks later Shared jobs of equal or larger cost and Timing jobs, so a
 // small job may slip into a gap a big one cannot use. A later CPU job is
 // not blocked by it, but leaves its cost free (see reservedCost).
+// NOTE: backfill. A Shared job may start ahead of an earlier Timing or CPU
+// waiter while a CPU job holds the solo lock: that waiter cannot start
+// before the CPU job lets go, and the Shared job only uses budget left
+// beside the CPU job. It stops once the waiter has waited
+// BACKFILL_GRACE_MS, and never applies when the waiter waits only for
+// Shared jobs to drain, so it cannot starve the waiter.
+export const canBackfillPast = (
+  snapshot: Snapshot,
+  waiter: LockHolder,
+): boolean =>
+  JobClass.$is('Shared')(snapshot.jobClass) &&
+  !JobClass.$is('Shared')(waiterClassOf(waiter)) &&
+  LockState.$is('Held')(snapshot.lock) &&
+  JobClass.$is('Cpu')(soloClassOf(snapshot.lock.holder)) &&
+  snapshot.now - waiter.startedAt < BACKFILL_GRACE_MS
+
+export const backfilledWaiters = (
+  snapshot: Snapshot,
+): ReadonlyArray<LockHolder> =>
+  Array.filter(earlierWaiters(snapshot), waiter =>
+    canBackfillPast(snapshot, waiter),
+  )
+
 export const blockingWaiters = (
   snapshot: Snapshot,
 ): ReadonlyArray<LockHolder> =>
   Array.filter(earlierWaiters(snapshot), waiter =>
     JobClass.$match(waiterClassOf(waiter), {
-      Timing: () => true,
-      Cpu: () => true,
+      Timing: () => !canBackfillPast(snapshot, waiter),
+      Cpu: () => !canBackfillPast(snapshot, waiter),
       Shared: () =>
         JobClass.$match(snapshot.jobClass, {
           Timing: () => true,
@@ -576,6 +742,21 @@ const maybeSoloBlocker = (snapshot: Snapshot): Option.Option<string> => {
       )
 }
 
+// NOTE: a waiting job names a solo holder past its lease, whatever else
+// keeps it waiting, and says only how long when the reason named it.
+const withLeasePart = (snapshot: Snapshot, reason: string): string => {
+  if (
+    !LockState.$is('Held')(snapshot.lock) ||
+    !isPastLease(snapshot.lock.holder, snapshot.now)
+  ) {
+    return reason
+  }
+  const holder = snapshot.lock.holder
+  return reason.includes(describeHolder(holder))
+    ? `${reason}; it ${leaseOverText(holder, snapshot.now)}`
+    : `${reason}; ${pastLeasePart(holder, snapshot.now)}`
+}
+
 const maybeSharedBlocker = (snapshot: Snapshot): Option.Option<string> => {
   const running = liveSharedHolders(snapshot.shared)
   return JobClass.$match(snapshot.jobClass, {
@@ -604,7 +785,12 @@ const maybeWaiterBlocker = (snapshot: Snapshot): Option.Option<string> => {
     : Option.none()
 }
 
-export const maybeWaitReason = (snapshot: Snapshot): Option.Option<string> => {
+export const maybeWaitReason = (snapshot: Snapshot): Option.Option<string> =>
+  Option.map(maybeBaseWaitReason(snapshot), reason =>
+    withLeasePart(snapshot, reason),
+  )
+
+const maybeBaseWaitReason = (snapshot: Snapshot): Option.Option<string> => {
   const blockers = Array.getSomes([
     maybeSoloBlocker(snapshot),
     maybeWaiterBlocker(snapshot),
@@ -713,6 +899,15 @@ const maybeWorkerNote = (
       )
     : Option.none()
 
+const maybeBackfillNote = (snapshot: Snapshot): Option.Option<string> => {
+  const passed = backfilledWaiters(snapshot)
+  return Array.isReadonlyArrayNonEmpty(passed)
+    ? Option.some(
+        `Backfill: starting beside the CPU job ahead of ${describeHolders(passed)}, which waits for that job anyway.`,
+      )
+    : Option.none()
+}
+
 export const decide = (snapshot: Snapshot): Decision =>
   Option.match(maybeBudgetRefusal(snapshot), {
     onSome: reason => Decision.Refuse({ reason }),
@@ -725,6 +920,7 @@ export const decide = (snapshot: Snapshot): Decision =>
             ...place,
             notes: Array.getSomes([
               maybeWorkerNote(snapshot, place),
+              maybeBackfillNote(snapshot),
               maybeBudgetWarning(snapshot),
             ]),
           })
@@ -765,6 +961,52 @@ export const maybeConflictAfterTaking = (
         : Option.none(),
   })
 
+// HANDOVER
+
+// NOTE: a job that yields between parts (see turn.ts) asks its guard at
+// each boundary. While any other job waits, the guard lets go of its file
+// and queues again as a new arrival; otherwise the job keeps its turn and
+// goes on at once, so a lone job loses nothing to chunking.
+export type Handover = Data.TaggedEnum<{
+  Keep: {}
+  HandOver: { readonly reason: string }
+}>
+export const Handover = Data.taggedEnum<Handover>()
+
+export const decideHandover = (
+  selfPid: number,
+  waiters: ReadonlyArray<LockHolder>,
+): Handover => {
+  const others = Array.filter(waiters, waiter => waiter.pid !== selfPid)
+  return Array.isReadonlyArrayNonEmpty(others)
+    ? Handover.HandOver({
+        reason: `${others.length === 1 ? '1 job is' : `${others.length} jobs are`} waiting (${describeHolders(others)})`,
+      })
+    : Handover.Keep()
+}
+
+// NOTE: the runs a chunk plays: HEAVY_CHUNK_RUNS when set (0 means no
+// chunks), or DEFAULT_CHUNK_RUNS rounded up to whole rounds of the workers.
+export const chunkRunsOf = (
+  workers: number,
+  maybeChunkRuns: Option.Option<number>,
+): number =>
+  Option.getOrElse(maybeChunkRuns, () => {
+    const perRound = Math.max(1, Math.floor(workers))
+    return Math.ceil(DEFAULT_CHUNK_RUNS / perRound) * perRound
+  })
+
+// NOTE: the next part of `total` to play after `done`, with `size` runs a
+// chunk. A size of 0 or less plays the rest at once.
+export const nextChunk = (
+  done: number,
+  total: number,
+  size: number,
+): readonly [number, number] => [
+  done,
+  size <= 0 ? total : Math.min(total, done + size),
+]
+
 // TEST WORKERS
 
 // NOTE: `bun run test` does not queue. It reads the budget once and runs
@@ -780,6 +1022,9 @@ export const testWorkers = (
     Math.floor(
       headroom({
         ...snapshot,
+        pid: 0,
+        cwd: '',
+        turns: [],
         jobClass: JobClass.Shared(),
         cost: 0,
         maybeRequestedWorkers: Option.none(),

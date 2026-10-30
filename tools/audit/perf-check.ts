@@ -3,6 +3,7 @@ import { connect } from 'node:net'
 import { loadavg } from 'node:os'
 import { resolve } from 'node:path'
 
+import { yieldTurnAsync } from '../heavy/turn'
 import { launch, wait } from './lib'
 import { type FrameRow, calibrationMs, measureScenario } from './measure'
 
@@ -104,7 +105,11 @@ const measureAll = async (base: string) => {
   const browser = await launch()
   const calibration = await calibrationMs(browser)
   const rows: Array<FrameRow> = []
-  for (const name of SCENARIO_NAMES) {
+  for (const [index, name] of SCENARIO_NAMES.entries()) {
+    // NOTE: under the heavy guard, other jobs may go between scenarios.
+    if (index > 0) {
+      await yieldTurnAsync(`the ${SCENARIO_NAMES[index - 1]} scenario`, 1)
+    }
     for (const rate of RATES) {
       const trials: Array<FrameRow> = []
       for (let trial = 0; trial < TRIALS; trial++) {

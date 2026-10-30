@@ -5,6 +5,8 @@
 // targets and the stored baseline, and writes
 // tools/balance/reports/<YYYY-MM-DD>.md. `--update-baseline` rewrites
 // tools/balance/baseline.json, which is also written when it is missing.
+// Each job yields the guard's turn between its chunks, and the suite
+// yields between jobs, so other agents' jobs go in between.
 // `--extend-baseline` adds only the metrics the baseline lacks. `--runs n`
 // and `--wave-runs n` shrink the jobs for a quick try.
 
@@ -18,6 +20,7 @@ import {
   FileSystem,
   Option,
   Path,
+  Ref,
   Runtime,
   Schema,
   String,
@@ -28,6 +31,7 @@ import { ChildProcess, ChildProcessSpawner } from 'effect/process'
 import * as NodeRuntime from '@effect/platform-node/NodeRuntime'
 import * as NodeServices from '@effect/platform-node/NodeServices'
 
+import { yieldTurn } from '../heavy/turn'
 import { balanceModel } from './model'
 import {
   Baseline,
@@ -86,6 +90,7 @@ const SummaryJson = Schema.fromJsonString(Summary)
 const runJob = (
   job: Job,
   outPath: string,
+  maybeWorkers: Option.Option<number>,
 ): Effect.Effect<
   Summary,
   JobFailed | BadSummary | PlatformError,
@@ -101,7 +106,10 @@ const runJob = (
           process.execPath,
           [SIMULATE, ...job.args, '--json', outPath],
           {
-            env: job.env,
+            env: Option.match(maybeWorkers, {
+              onNone: () => job.env,
+              onSome: workers => ({ ...job.env, WORKERS: `${workers}` }),
+            }),
             extendEnv: true,
             stdin: 'inherit',
             stdout: 'inherit',
@@ -212,8 +220,23 @@ const program = Effect.gen(function* () {
   const date = localDate(startedAt)
   const scratch = yield* fs.makeTempDirectoryScoped({ prefix: 'nightly-' })
   const jobs = nightlyJobs(invocation.sizes)
-  const summaries = yield* Effect.forEach(jobs, job =>
-    runJob(job, path.join(scratch, `${job.id}.json`)),
+  // NOTE: between jobs the suite yields the guard's turn, and runs the next
+  // job with the WORKERS the guard granted.
+  const grantedWorkers = yield* Ref.make(Option.none<number>())
+  const summaries = yield* Effect.forEach(jobs, (job, index) =>
+    Effect.gen(function* () {
+      if (index > 0) {
+        const maybeGranted = yield* yieldTurn(`the job before ${job.id}`)
+        if (Option.isSome(maybeGranted)) {
+          yield* Ref.set(grantedWorkers, maybeGranted)
+        }
+      }
+      return yield* runJob(
+        job,
+        path.join(scratch, `${job.id}.json`),
+        yield* Ref.get(grantedWorkers),
+      )
+    }),
   )
   const played = collect(jobs, summaries)
   const model = balanceModel()

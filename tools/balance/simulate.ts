@@ -11,7 +11,11 @@
 //   bun run balance -- --wave all --runs 100   (every campaign wave)
 // Flags: --runs n, --first-seed n, --wave n|all, --slots n (snapshot slots,
 // 10 by default), and --json path (also write the summary the nightly suite
-// reads). It drives the game's own init model and update with the bot in
+// reads). Under the guard it plays the runs in chunks of about 25 (by
+// slot groups for a wave pass) and yields the guard's turn between them, so
+// waiting jobs go in between; the report is the same as one unchunked
+// batch, since every run is seeded by its index. HEAVY_CHUNK_RUNS=n sets
+// the chunk, and 0 plays it whole. It drives the game's own init model and update with the bot in
 // tools/balance/bot.ts and prints survival per wave, run length, the money
 // curve, and which zombie kinds cost the bot the most hearts. Nothing here
 // ships with the game.
@@ -46,6 +50,8 @@ type NewKindLog = import('./bot').NewKindLog
 type BotOptions = import('./bot').BotOptions
 const { FINAL_WAVE } = await import('../../src/waves')
 const summary = await import('./summary')
+const turn = await import('../heavy/turn')
+const { nextChunk } = await import('../heavy/decision')
 
 // TUNE=path/to/tune.ts loads a module whose default export edits the
 // tables in place before the runs, so a balance idea can be tried without
@@ -106,6 +112,7 @@ const firstSeed = Number(flagValue('--first-seed') ?? positional[1] ?? 1)
 const slots = Number(flagValue('--slots') ?? 10)
 const seedAt = (index: number) => seedFrom(firstSeed, index)
 const WORKERS = Math.max(1, Number(process.env.WORKERS ?? 1))
+const IS_CHUNKED = turn.isUnderGuard()
 const started = performance.now()
 const STYLE = SWAPS_BACK ? 'SwapsBack' : 'Default'
 
@@ -125,9 +132,13 @@ const waveList = (flag: string): Array<number> => {
 // A worker plays one share of the work and writes its results as JSON, so
 // WORKERS=n gives the same report as one process, only sooner. A campaign
 // worker plays a slice of the seeds, from:to. A wave worker plays the
-// snapshot slots whose index modulo the worker count is its own, index:count.
+// snapshot slots whose index modulo the worker count is its own, index:count,
+// among the slots of its chunk, WORKER_SLOTS=from:to.
 if (process.env.WORKER_SLICE !== undefined) {
   const [from, to] = process.env.WORKER_SLICE.split(':').map(Number)
+  const [slotFrom, slotTo] = (process.env.WORKER_SLOTS ?? `0:${slots}`)
+    .split(':')
+    .map(Number)
   const output =
     WAVE_FLAG === undefined
       ? Array.from({ length: to! - from! }, (_, offset) =>
@@ -136,7 +147,7 @@ if (process.env.WORKER_SLICE !== undefined) {
       : playWavePass(
           { waves: waveList(WAVE_FLAG), runs, slots, firstSeed },
           OPTIONS,
-          slot => slot % to! === from!,
+          slot => slot >= slotFrom! && slot < slotTo! && slot % to! === from!,
         )
   writeFileSync(process.env.WORKER_OUT!, JSON.stringify(output))
   process.exit(0)
@@ -144,11 +155,20 @@ if (process.env.WORKER_SLICE !== undefined) {
 
 const SELF = fileURLToPath(import.meta.url)
 
-const runWorker = (slice: string, index: number): Promise<unknown> =>
+const runWorker = (
+  slice: string,
+  index: number,
+  slotRange?: string,
+): Promise<unknown> =>
   new Promise((resolve, reject) => {
     const out = `/tmp/simulate-${process.pid}-${index}.json`
     const child = spawn(process.execPath, [SELF, ...argv], {
-      env: { ...process.env, WORKER_SLICE: slice, WORKER_OUT: out },
+      env: {
+        ...process.env,
+        WORKER_SLICE: slice,
+        WORKER_OUT: out,
+        ...(slotRange === undefined ? {} : { WORKER_SLOTS: slotRange }),
+      },
       stdio: 'inherit',
     })
     child.on('error', reject)
@@ -159,16 +179,22 @@ const runWorker = (slice: string, index: number): Promise<unknown> =>
     )
   })
 
-const playAll = async (): Promise<Array<RunResult>> => {
-  if (WORKERS === 1) {
-    return Array.from({ length: runs }, (_, index) =>
-      runOnce(seedAt(index), OPTIONS),
+// NOTE: the guard may give a later chunk more or fewer workers.
+let workers = WORKERS
+
+const playRange = async (
+  first: number,
+  end: number,
+): Promise<Array<RunResult>> => {
+  if (workers === 1) {
+    return Array.from({ length: end - first }, (_, offset) =>
+      runOnce(seedAt(first + offset), OPTIONS),
     )
   }
-  const per = Math.ceil(runs / WORKERS)
-  const slices = Array.from({ length: WORKERS }, (_, index) => [
-    index * per,
-    Math.min(runs, (index + 1) * per),
+  const per = Math.ceil((end - first) / workers)
+  const slices = Array.from({ length: workers }, (_, index) => [
+    first + index * per,
+    Math.min(end, first + (index + 1) * per),
   ]).filter(([from, to]) => to! > from!)
   const outputs = await Promise.all(
     slices.map(([from, to], index) => runWorker(`${from}:${to}`, index)),
@@ -176,16 +202,72 @@ const playAll = async (): Promise<Array<RunResult>> => {
   return outputs.flat() as Array<RunResult>
 }
 
-const playWaves = async (waves: Array<number>): Promise<Array<WaveRun>> => {
+// NOTE: plays the runs in chunks, in seed order, yielding the guard's turn
+// between chunks. Run i is always seed i, so the results do not depend on
+// where the chunks fall.
+const playAll = async (): Promise<Array<RunResult>> => {
+  const results: Array<RunResult> = []
+  for (let done = 0; done < runs;) {
+    if (done > 0) {
+      workers = await turn.yieldTurnAsync(`${done} of ${runs} runs`, workers)
+    }
+    const [from, to] = nextChunk(
+      done,
+      runs,
+      IS_CHUNKED ? turn.chunkRuns(workers) : 0,
+    )
+    results.push(...(await playRange(from, to)))
+    done = to
+  }
+  return results
+}
+
+const playSlots = async (
+  waves: Array<number>,
+  slotFrom: number,
+  slotTo: number,
+): Promise<Array<WaveRun>> => {
   const pass = { waves, runs, slots, firstSeed }
-  const workers = Math.min(WORKERS, slots)
-  if (workers === 1) return playWavePass(pass, OPTIONS)
+  const count = Math.min(workers, slotTo - slotFrom)
+  if (count === 1) {
+    return playWavePass(
+      pass,
+      OPTIONS,
+      slot => slot >= slotFrom && slot < slotTo,
+    )
+  }
   const outputs = await Promise.all(
-    Array.from({ length: workers }, (_, index) =>
-      runWorker(`${index}:${workers}`, index),
+    Array.from({ length: count }, (_, index) =>
+      runWorker(`${index}:${count}`, index, `${slotFrom}:${slotTo}`),
     ),
   )
   return outputs.flat() as Array<WaveRun>
+}
+
+// NOTE: a wave pass chunks by snapshot slot, one slot a worker, so each
+// slot's snapshots are found once. The runs are sorted by wave and run, so
+// the order never depends on the chunks or the workers.
+const playWaves = async (waves: Array<number>): Promise<Array<WaveRun>> => {
+  const waveRuns: Array<WaveRun> = []
+  for (let done = 0; done < slots;) {
+    if (done > 0) {
+      workers = await turn.yieldTurnAsync(
+        `${done} of ${slots} snapshot slots`,
+        workers,
+      )
+    }
+    const [from, to] = nextChunk(
+      done,
+      slots,
+      IS_CHUNKED && turn.chunkRuns(workers) > 0 ? workers : 0,
+    )
+    waveRuns.push(...(await playSlots(waves, from, to)))
+    done = to
+  }
+  return waveRuns.sort(
+    (first, second) =>
+      first.wave - second.wave || first.waveSeed - second.waveSeed,
+  )
 }
 
 const writeJson = (value: unknown) => {
