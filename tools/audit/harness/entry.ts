@@ -11,16 +11,18 @@ import {
   SKIN_TONES,
   playerSprites,
 } from '@game/appearance'
-import { PARLOUR, levelOf } from '@game/arena'
+import { PARLOUR, levelOf, openExitIn } from '@game/arena'
 import { BOSS_RULES, hasBoss, planBoss } from '@game/boss'
 import { managedResources } from '@game/commands'
 import { DECAL_MAX, PLAYER_MAX_HP, SHADOW_COLOR } from '@game/constants'
 import { withBests } from '@game/difficulty'
+import { KITCHEN_EXIT } from '@game/exits'
 import { sceneShapes } from '@game/layers'
 import { init, update } from '@game/main'
 import { Message } from '@game/message'
 import {
   DifficultyCard,
+  Oven,
   Trap,
   Model,
   Phase,
@@ -104,8 +106,17 @@ const roomModel = (): Model => {
   if (wave === 0) return initialModel
   const mode =
     config.mode === 'endless' ? RunMode.Endless() : RunMode.Campaign()
-  const started = startOrResume(initialModel, mode)
-  const [rngState, spawns] = rollSpawns(started.rngState, wave)
+  const begun = startOrResume(initialModel, mode)
+  const started = config.kitchen
+    ? modifyFields(begun, {
+        level: level => openExitIn(level, KITCHEN_EXIT),
+      })
+    : begun
+  const [rngState, spawns] = rollSpawns(
+    started.rngState,
+    wave,
+    levelOf(started).doorIds,
+  )
   const gun = config.gun
   const smgRounds = config.rounds ?? 360
   const shotgunRounds = config.rounds ?? 48
@@ -852,6 +863,40 @@ const scenarioModel = (): Model => {
       nightmare: config.nightmare ?? setting.nightmare,
     }),
   })
+  const ovenState = config.ovens
+  if (ovenState !== undefined)
+    model = modifyFields(model, {
+      ovens: ovens =>
+        ovens.map(() =>
+          ovenState === 'belch'
+            ? Oven.Belching({ remainingMs: config.ovenMs, burnedTicks: 4 })
+            : Oven.Cooling({ remainingMs: config.ovenMs }),
+        ),
+    })
+  if (config.slip)
+    model = modifyFields(model, {
+      zombies: zombies => [
+        ...zombies,
+        ...[
+          { x: 152, y: -62 },
+          { x: 47, y: -92 },
+          { x: 65, y: -32 },
+        ].map((at, index) => ({
+          id: 9300 + index,
+          kind: 'Shambler' as const,
+          x: at.x,
+          y: at.y,
+          speed: 20,
+          hp: 3,
+          maxHp: 3,
+          knockback: { x: 0, y: 0 },
+          hitRemainingMs: 0,
+          state: { _tag: 'Walking' as const },
+          action: { _tag: 'Dazed' as const, remainingMs: 800, durationMs: 900 },
+          frenzy: CALM,
+        })),
+      ],
+    })
   const planks = config.planks
   if (planks !== undefined)
     model = modifyFields(model, {

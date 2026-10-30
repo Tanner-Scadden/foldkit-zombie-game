@@ -210,6 +210,11 @@ export const HarnessConfig = Schema.Struct({
   wx: Num(100),
   wy: Num(125),
   surfMs: Num(400),
+  // The kitchen
+  kitchen: Flag,
+  ovens: Choice(['belch', 'cool']),
+  ovenMs: Num(300),
+  slip: Flag,
   // Traps and difficulty
   planks: Schema.optionalKey(ListOf(DoorId)),
   plankhp: Num(30),
