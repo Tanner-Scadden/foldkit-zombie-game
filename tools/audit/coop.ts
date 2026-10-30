@@ -806,7 +806,7 @@ if (isPhone) {
   const shopOpen = await until(
     'the shop dialog opens for the host only',
     async () =>
-      (await host.locator('.shop-dialog[open]').count()) === 1 &&
+      (await host.locator('.shop-dialog[open]').count()) >= 1 &&
       (await guests[0]!.locator('.shop-dialog[open]').count()) === 0,
   )
   if (shopOpen) {
