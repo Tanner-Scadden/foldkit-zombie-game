@@ -20,9 +20,10 @@ import {
   initialModel,
 } from './model'
 import {
-  HINT_TEXT,
   type HintId,
   LESSON_MIN_SHOWN_MS,
+  hintIcons,
+  hintWords,
   shownHints,
 } from './onboarding'
 import { accuracyPercent, totalKills } from './stats'
@@ -64,7 +65,12 @@ const hintIds = (current: Model): ReadonlyArray<HintId> =>
   Array.map(shownHints(current), ({ id }) => id)
 
 const hintTexts = (current: Model): ReadonlyArray<string> =>
-  Array.map(shownHints(current), ({ id }) => HINT_TEXT[id][current.lastDevice])
+  Array.map(shownHints(current), ({ id }) =>
+    [
+      ...hintIcons(id, current.lastDevice),
+      hintWords(id, current.lastDevice),
+    ].join(' '),
+  )
 
 describe('input device', () => {
   test('switches between touch and keyboard and mouse with the last input used', () => {
@@ -133,7 +139,7 @@ describe('input device', () => {
 })
 
 describe('onboarding hints', () => {
-  test('keyboard hints teach moving and firing, then go once each is practised', () => {
+  test('keyboard hints picture the keys and the mouse, then go once each is practised', () => {
     story(
       update,
       given(readyModel),
@@ -141,10 +147,7 @@ describe('onboarding hints', () => {
       release('Enter'),
       model(current => {
         expect(hintIds(current)).toEqual(['Move', 'Fire'])
-        expect(hintTexts(current)).toEqual([
-          'WASD MOVES',
-          'MOUSE AIMS, CLICK FIRES',
-        ])
+        expect(hintTexts(current)).toEqual(['Wasd MOVE', 'Mouse AIM + SHOOT'])
       }),
       press('KeyD'),
       ...ticks(MOVE_TICKS, TICK_MS),
@@ -159,7 +162,7 @@ describe('onboarding hints', () => {
       message(Message.ReleasedPointer({ pointerId: 1 })),
       model(current => {
         expect(hintIds(current)).toEqual(['StartWave'])
-        expect(hintTexts(current)).toEqual(['PRESS ENTER WHEN YOU ARE READY'])
+        expect(hintTexts(current)).toEqual(['KeyEnter START WAVE'])
       }),
       press('Enter'),
       model(current => {
@@ -169,7 +172,7 @@ describe('onboarding hints', () => {
     )
   })
 
-  test('touch hints speak of both thumbs and the START WAVE button', () => {
+  test('touch hints picture both thumbs and a tap on START WAVE', () => {
     story(
       update,
       given(readyModel),
@@ -179,8 +182,8 @@ describe('onboarding hints', () => {
       model(current => {
         expect(current.lastDevice).toBe('Touch')
         expect(hintTexts(current)).toEqual([
-          'DRAG YOUR LEFT THUMB TO MOVE',
-          'DRAG YOUR RIGHT THUMB TO AIM AND FIRE',
+          'MoveStick MOVE',
+          'AimStick AIM + SHOOT',
         ])
       }),
       touchDown(2, 100, 200),
@@ -191,9 +194,7 @@ describe('onboarding hints', () => {
       message(Message.ReleasedPointer({ pointerId: 2 })),
       ...ticks(SHOWN_TICKS, TICK_MS),
       model(current => {
-        expect(hintTexts(current)).toEqual([
-          'DRAG YOUR RIGHT THUMB TO AIM AND FIRE',
-        ])
+        expect(hintTexts(current)).toEqual(['AimStick AIM + SHOOT'])
       }),
       touchDown(3, 700, 200),
       message(
@@ -202,9 +203,7 @@ describe('onboarding hints', () => {
       ...ticks(FIRE_TICKS, TICK_MS),
       message(Message.ReleasedPointer({ pointerId: 3 })),
       model(current => {
-        expect(hintTexts(current)).toEqual([
-          'TAP START WAVE WHEN YOU ARE READY',
-        ])
+        expect(hintTexts(current)).toEqual(['Tap START WAVE'])
       }),
       message(Message.ClickedStartWaveButton()),
       model(current => {

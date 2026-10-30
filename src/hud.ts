@@ -226,7 +226,7 @@ const hudText = (
 ): ReadonlyArray<Canvas.Shape> =>
   textShapes(content, tone, layout.centerX, y, 'Center')
 
-const TRY_CONTROLS = bakeText('TRY THE CONTROLS FIRST', 'Prompt')
+const TRY_CONTROLS = bakeText('TRY THE CONTROLS', 'Prompt')
 const NO_TIMER = bakeText('NO TIMER', 'Prompt')
 
 const breakSubtitleShapes = (

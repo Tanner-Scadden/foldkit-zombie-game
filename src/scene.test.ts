@@ -23,6 +23,7 @@ import { Dialog, Tabs } from '@foldkit/ui'
 import indexHtml from '../index.html?raw'
 import { FocusShopItem } from './commands'
 import { GAME_TITLE, PREPARATION_MS } from './constants'
+import { FEEDBACK_RUNS } from './home'
 import { update } from './main'
 import { Message } from './message'
 import {
@@ -614,6 +615,40 @@ describe('Run stats', () => {
       measureSurface,
       expect(role('status')).toHaveText(
         `Victory. The house is yours. For now. Difficulty: Normal. ${STATS} ${KEEP_GOING} ${PLAY_AGAIN} ${BACK_HOME} ${FEEDBACK}`,
+      ),
+    )
+  })
+  const afterRuns = (runs: number, phase: Phase): Model =>
+    modifyFields(finished(phase), {
+      bests: bests => modifyFields(bests, { runsPlayed: () => runs }),
+    })
+
+  test('the end screens still ask for feedback on the third run', () => {
+    scene(
+      { update, view },
+      given(afterRuns(FEEDBACK_RUNS, Phase.GameOver({ wave: 4 }))),
+      measureSurface,
+      expect(role('status')).toHaveText(
+        `Game over. Eaten on wave 4. Difficulty: Normal. ${STATS} ${PLAY_AGAIN} ${BACK_HOME} ${FEEDBACK}`,
+      ),
+    )
+  })
+
+  test('the end screens stop asking for feedback after the first few runs', () => {
+    scene(
+      { update, view },
+      given(afterRuns(FEEDBACK_RUNS + 1, Phase.GameOver({ wave: 4 }))),
+      measureSurface,
+      expect(role('status')).toHaveText(
+        `Game over. Eaten on wave 4. Difficulty: Normal. ${STATS} ${PLAY_AGAIN} ${BACK_HOME}`,
+      ),
+    )
+    scene(
+      { update, view },
+      given(afterRuns(FEEDBACK_RUNS + 1, Phase.Victory())),
+      measureSurface,
+      expect(role('status')).toHaveText(
+        `Victory. The house is yours. For now. Difficulty: Normal. ${STATS} ${KEEP_GOING} ${PLAY_AGAIN} ${BACK_HOME}`,
       ),
     )
   })

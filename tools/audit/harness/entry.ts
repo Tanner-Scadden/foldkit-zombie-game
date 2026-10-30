@@ -29,6 +29,8 @@ import {
   MouseButton,
   RunMode,
   initialModel,
+  Lesson,
+  TrapHint,
   type Appearance,
   type Decal,
   type DecalKind,
@@ -776,6 +778,27 @@ const roomModel = (): Model => {
 
 const scenarioModel = (): Model => {
   let model = roomModel()
+  const runs = config.runs
+  if (runs !== undefined)
+    model = modifyFields(model, {
+      bests: bests => ({ ...bests, runsPlayed: runs }),
+    })
+  const learned = config.learned
+  if (learned !== undefined)
+    model = modifyFields(model, {
+      lessons: lessons => ({
+        ...lessons,
+        ...Object.fromEntries(
+          learned.map(name => [name, Lesson.Learned({ atMs: 0 })]),
+        ),
+      }),
+    })
+  const traphint = config.traphint
+  if (traphint !== undefined)
+    model = modifyFields(model, {
+      trapHint: () => TrapHint.Showing(),
+      selectedTrap: () => traphint,
+    })
   const newer = config.newer
   if (newer !== undefined)
     model = modifyFields(model, {

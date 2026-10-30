@@ -42,7 +42,7 @@ Decided with the owner on 2026-10-29. This replaces the first playable's one-roo
 - **The campaign grows.** The campaign itself becomes the manor run, so a run gets longer than the first playable's 5 to 10 minutes. There is no separate quick mode. The wave count and run length are set as rooms land, with the balance tools.
 - **Explore in breaks.** Rooms are bought and explored between waves. Waves still arrive on the sawtooth, so the pacing rules and the balance tools stay valid.
 - **The kitchen first.** The first room after the parlour is the kitchen: ovens to trip and slippery soup. The level is already data in the Model, so a room is an exit in a `LevelSpec` (see "Technical notes").
-- **No off-screen hints.** Nothing on screen points at zombies or doors out of view. The door rattles and groans carry the warning.
+- **No off-screen hints.** Nothing on screen ever points at zombies. Door preview arrows may point at doors outside the view during breaks only, never during a wave (owner decision 2026-10-29). In a wave the door rattles and groans carry the warning.
   - **Teammates are the exception.** Decided on 2026-10-29 with co-op: an off-screen teammate shows as a small avatar at the screen edge. Zombies and doors still get nothing.
 - **Still a sketch.** Rooms with one signature twist each: library (bookshelf passages, a rare-gun stash), ballroom (open floor for hordes, a chandelier to shoot down), cellar (dark, lit only near the player), a graveyard outside (floor spawns, Uncle Chunk's arena), attic (one entrance, a risky stash). A goal beyond surviving, such as restoring the power or finding the keys to Uncle Chunk's cellar. Interactive pieces such as a fireplace trap, a mystery box, or a dumbwaiter. The layout stays hand-made, while secrets and loot spots shift with the seed.
 
@@ -68,6 +68,7 @@ Decided on 2026-10-27: a fun one-room arena a stranger can open from a link. It 
 
 Built on 2026-10-28 after a first-time phone player said the right stick was never taught and new zombies came in unexplained. The logic is in `src/onboarding.ts`.
 
+- **Hints are pictures.** Decided with the owner on 2026-10-29. Each hint is a small moving pixel icon for the current device plus at most three words: WASD keys pressing or a thumb on a stick for MOVE, a clicking mouse or a firing stick for AIM + SHOOT, the T key or a tapping hand before planks on a door (BLOCK DOOR) or a gnome (PLONK IT), Q or a tap on two gun slots for SWAP GUNS, ENTER or a tap for START WAVE, the stall for GO SHOP, a heart under an arrow for GRAB IT, planks and a firing gnome for BLOCK and SHOOT, and a ticking stopwatch for TIMED BREAKS. The icons are in `src/hintIcons.ts`.
 - **Hints clear on practice.** The move hint clears after 24 px of the player's own movement, the aim and fire hint after 3 aimed shots, neither before 2.5 s of play. Other input leaves them alone.
 - **Touch teaches both thumbs.** During wave 1, pulsing ghost sticks sit on each half of the screen until that thumb's lesson is learned.
 - **The practice gate.** Wave 1's countdown waits until the player has moved and aimed and fired. START WAVE (Enter) skips it. A returning player never sees it.
@@ -327,7 +328,7 @@ Proposed, not decided. The rules are in `src/main.ts` and `src/update/home.ts`.
 
   Removed for good: the arrow keys for movement, Space as fire or start, E as swap, 1 and 2 to pick a gun, and P as pause. The shop dialog keeps its own list keys.
 
-- **End screens.** Game Over and Victory put MENU first. When a newer build is waiting they offer only MENU (see "The home menu, the loading splash, and taps"). `tools/audit/taps.ts` fails when anything covers a button there.
+- **End screens.** Game Over and Victory put MENU first. The TELL WHOEVER SENT YOU THIS WHAT YOU THINK! line shows only on a player's first three runs, counted by the runs played in the bests (owner decision 2026-10-29). When a newer build is waiting they offer only MENU (see "The home menu, the loading splash, and taps"). `tools/audit/taps.ts` fails when anything covers a button there.
 
 ### Breaks and the mobile HUD
 
@@ -360,7 +361,7 @@ Built on 2026-10-29, owner-approved: "so phone players do not have to turn the p
 - **The camera.** It follows the player and stops at the walls, and leans up to 28 room pixels toward the aim, eased, kept in the Model as `cameraLean` so it stays deterministic. The door rattles and groans carry the warning for zombies out of view.
 - **Thumb area.** Dressed as the manor's wainscot (`src/thumbArea.ts`), holding the gun slots, START WAVE, the trap counts, and the floating sticks.
 - **Banners and cards** are drawn as in landscape, centered on the world window. HTML that lines up with them reads `--frame-top`.
-- **The door preview.** A marker for a door out of the window is pinned to the window's edge with a small arrow, between waves only. Whether this fits "No off-screen hints" is an open question in `TANNER_TODO.md`.
+- **The door preview.** A marker for a door out of the window is pinned to the window's edge with a small arrow, between waves only, as "No off-screen hints" allows. During a wave no marker or arrow shows.
 - **The home menu** keeps the same slots, rearranged. A pill with a tipping pixel phone suggests turning sideways to see the whole room, since portrait plays harder.
 - **Dialogs** fit a portrait phone without the page scrolling.
 - **Balance.** The bot with `VIEW=portrait` sees only the window. Nightly, 2026-10-29, 390x844: Normal default 11% against 16% in landscape, Easy 49% against 66.5% (most of the gap on wave 8). The nightly tracks the gap; nothing is retuned yet.

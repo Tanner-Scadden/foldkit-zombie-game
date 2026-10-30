@@ -122,7 +122,23 @@ export const HarnessConfig = Schema.Struct({
   barricades: Num(0),
   turrets: Num(0),
   stats: Flag,
+  runs: MaybeNum,
   device: Choice(['touch']),
+  learned: Schema.optionalKey(
+    ListOf(
+      Schema.Literals([
+        'move',
+        'fire',
+        'startWave',
+        'shop',
+        'swap',
+        'pickup',
+        'timedBreaks',
+        'openBreak',
+      ]),
+    ),
+  ),
+  traphint: Choice(['Barricade', 'Turret']),
   // The player and the guns
   px: MaybeNum,
   py: MaybeNum,

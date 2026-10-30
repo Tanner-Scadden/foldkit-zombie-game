@@ -22,7 +22,7 @@ import {
 import {
   DEBUT_CARD_MIN_MS,
   DEBUT_CARD_MS,
-  HINT_TEXT,
+  hintWords,
   shownHints,
 } from './onboarding'
 import { tick, ticks } from './testing'
@@ -60,10 +60,10 @@ const breakClock = (current: Model): Option.Option<BreakClock> =>
   })
 
 const hintTexts = (current: Model): ReadonlyArray<string> =>
-  Array.map(shownHints(current), ({ id }) => HINT_TEXT[id][current.lastDevice])
+  Array.map(shownHints(current), ({ id }) => hintWords(id, current.lastDevice))
 
-const TIMED_HEADS_UP = HINT_TEXT.TimedBreaks.KeyboardMouse
-const OPEN_BREAK_LINE = HINT_TEXT.OpenBreak.KeyboardMouse
+const TIMED_HEADS_UP = hintWords('TimedBreaks', 'KeyboardMouse')
+const OPEN_BREAK_LINE = hintWords('OpenBreak', 'KeyboardMouse')
 const BREAK_TICKS = Math.ceil(PREPARATION_MS / TICK_MS) + 10
 
 describe('the first break waits', () => {

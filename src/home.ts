@@ -2,7 +2,7 @@ import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { maybeNewestNewsDay } from './changelog'
-import { RESTART_GRACE_MS } from './constants'
+import { FEEDBACK_LINE, RESTART_GRACE_MS } from './constants'
 import { hasJustWon, withBests } from './difficulty'
 import type { FocusStep } from './input'
 import {
@@ -298,3 +298,15 @@ export const forgetNewEntriesFrom = (before: Model, after: Model): Model =>
         home: home => modifyFields(home, { newEntries: () => [] }),
       })
     : after
+
+// FEEDBACK
+
+// NOTE: the end screens ask for feedback only on a player's first few runs.
+// The run on the end screen is already counted, so a first run shows 1.
+export const FEEDBACK_RUNS = 3
+
+export const isAskingForFeedback = (model: Model): boolean =>
+  model.bests.runsPlayed <= FEEDBACK_RUNS
+
+export const feedbackSentence = (model: Model): string =>
+  isAskingForFeedback(model) ? ` ${FEEDBACK_LINE}` : ''
