@@ -1,6 +1,6 @@
 import { Duration, Effect, Queue, Stream, pipe } from 'effect'
 
-import { openEngine } from './Engine'
+import { openEngine, warmEngine } from './Engine'
 import { decodeRequest, encodeResponse } from './Protocol'
 import { makeServer } from './Server'
 
@@ -53,7 +53,34 @@ export const serveWorker = (
     }),
   )
 
-// NOTE: the one line a worker entry file needs. See the README.
+// NOTE: a request posted to a worker before its script has run is handed
+// to whatever listens when the script's first run ends. The server's own
+// listener goes on later, once its fiber gets that far, so this one goes on
+// at once and holds anything that comes first until the server listens.
+export const holdEarlyMessages = (scope: WorkerScope): WorkerScope => {
+  const held: Array<MessageEvent> = []
+  const listeners: Array<(event: MessageEvent) => void> = []
+  scope.addEventListener('message', event => {
+    if (listeners.length === 0) {
+      held.push(event)
+    } else {
+      listeners.forEach(listener => listener(event))
+    }
+  })
+  return {
+    postMessage: message => scope.postMessage(message),
+    addEventListener: (_type, listener) => {
+      listeners.push(listener)
+      held.splice(0).forEach(listener)
+    },
+  }
+}
+
+// NOTE: the one line a worker entry file needs. See the README. It starts
+// loading the wasm at once, so a worker started ahead of its first request
+// has SQLite ready when the request comes.
 export const runWorker = (options: WorkerOptions = {}): void => {
-  Effect.runFork(serveWorker(self, options))
+  const scope = holdEarlyMessages(self)
+  warmEngine()
+  Effect.runFork(serveWorker(scope, options))
 }

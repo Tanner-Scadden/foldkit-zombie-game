@@ -270,9 +270,31 @@ const makeEngine = (
   }
 }
 
+const WARM = 'warm'
+
+const warmModules = new Map<typeof WARM, Promise<Sqlite3Static>>()
+
+// NOTE: starts fetching and compiling the wasm before the first open request
+// arrives, so a worker started early has it ready. The first open takes this
+// module; any later open loads its own, as before.
+export const warmEngine = (): void => {
+  if (warmModules.has(WARM)) {
+    return
+  }
+  const loading = sqlite3InitModule()
+  loading.catch(() => undefined)
+  warmModules.set(WARM, loading)
+}
+
+const takeSqlite = (): Promise<Sqlite3Static> => {
+  const maybeWarm = warmModules.get(WARM)
+  warmModules.delete(WARM)
+  return maybeWarm ?? sqlite3InitModule()
+}
+
 const loadSqlite: Effect.Effect<Sqlite3Static, EngineOpenError> =
   Effect.tryPromise({
-    try: () => sqlite3InitModule(),
+    try: takeSqlite,
     catch: error =>
       new EngineOpenError({
         failure: { code: 'SQLITE_CANTOPEN', message: describe(error) },

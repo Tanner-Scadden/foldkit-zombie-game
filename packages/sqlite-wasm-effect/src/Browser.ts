@@ -42,6 +42,12 @@ import {
 
 export interface BrowserOptions extends ClientOptions {
   readonly worker: () => Worker
+  // NOTE: the answer to a request for the `<name>:leader` lock that the app
+  // made itself before building the layer, such as from a small script that
+  // runs ahead of the rest, holding the lock for the life of the page.
+  // Returning undefined, or leaving this out, has the layer ask as it is
+  // built.
+  readonly leaderLock?: (() => Promise<LockResult> | undefined) | undefined
   readonly name?: string | undefined
   readonly file?: string | undefined
   readonly openTimeout?: Duration.Input | undefined
@@ -58,7 +64,7 @@ const describe = (error: unknown): string =>
 
 // LOCKS
 
-type LockResult = 'Granted' | 'Held'
+export type LockResult = 'Granted' | 'Held'
 
 type LockMode = 'IfAvailable' | 'Wait'
 
@@ -99,36 +105,46 @@ const acquireLock = (
 
 // MESSAGES
 
+// NOTE: the listener goes on at once, in the caller's scope, and the stream
+// reads what it has queued. A listener added later, when a forked fiber got
+// around to running the stream, missed any message that came first, such as
+// the open reply of a worker that was started early and already warm.
+const listen = <A>(
+  target: Pick<Worker, 'addEventListener' | 'removeEventListener'>,
+  type: 'message' | 'error',
+  read: (event: Event) => A,
+): Effect.Effect<Stream.Stream<A>, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    const queue = yield* Queue.unbounded<A>()
+    yield* Effect.acquireRelease(
+      Effect.sync(() => {
+        const listener = (event: Event): void => {
+          Queue.offerUnsafe(queue, read(event))
+        }
+        target.addEventListener(type, listener)
+        return listener
+      }),
+      listener => Effect.sync(() => target.removeEventListener(type, listener)),
+    )
+    return Stream.fromQueue(queue)
+  })
+
 const messagesOf = (
   target: Pick<Worker, 'addEventListener' | 'removeEventListener'>,
-): Stream.Stream<unknown> =>
-  Stream.callback<unknown>(queue =>
-    Effect.acquireRelease(
-      Effect.sync(() => {
-        const listener = (event: MessageEvent): void => {
-          Queue.offerUnsafe(queue, event.data)
-        }
-        target.addEventListener('message', listener)
-        return listener
-      }),
-      listener =>
-        Effect.sync(() => target.removeEventListener('message', listener)),
-    ),
+): Effect.Effect<Stream.Stream<unknown>, never, Scope.Scope> =>
+  listen(target, 'message', event =>
+    Predicate.hasProperty(event, 'data') ? event.data : undefined,
   )
 
-const errorsOf = (worker: Worker): Stream.Stream<string> =>
-  Stream.callback<string>(queue =>
-    Effect.acquireRelease(
-      Effect.sync(() => {
-        const listener = (event: ErrorEvent): void => {
-          Queue.offerUnsafe(queue, event.message || 'The worker failed to load')
-        }
-        worker.addEventListener('error', listener)
-        return listener
-      }),
-      listener =>
-        Effect.sync(() => worker.removeEventListener('error', listener)),
-    ),
+const errorsOf = (
+  worker: Worker,
+): Effect.Effect<Stream.Stream<string>, never, Scope.Scope> =>
+  listen(worker, 'error', event =>
+    Predicate.hasProperty(event, 'message') &&
+    Predicate.isString(event.message) &&
+    event.message !== ''
+      ? event.message
+      : 'The worker failed to load',
   )
 
 const post =
@@ -192,8 +208,10 @@ const lead = (
       pipe(encodeRequest(request), Effect.flatMap(post(started)), Effect.ignore)
     const sender: Sender = { send: sendToWorker }
 
+    const workerMessages = yield* messagesOf(started)
+    const workerErrors = yield* errorsOf(started)
     yield* pipe(
-      messagesOf(started),
+      workerMessages,
       Stream.runForEach(data =>
         pipe(
           decodeResponse(data),
@@ -217,7 +235,7 @@ const lead = (
     )
 
     yield* pipe(
-      errorsOf(started),
+      workerErrors,
       Stream.runForEach(reason =>
         remote.useSender(sender, `The database worker failed: ${reason}`),
       ),
@@ -264,9 +282,13 @@ export const layer = (
       }
       const remote = yield* makeRemote(session, askLeader)
 
-      const firstLock: LockResult = hasLocks()
-        ? yield* acquireLock(`${name}:leader`, 'IfAvailable')
-        : 'Granted'
+      const maybeEarlyLock = options.leaderLock?.()
+      const firstLock: LockResult =
+        maybeEarlyLock !== undefined
+          ? yield* Effect.promise(() => maybeEarlyLock)
+          : hasLocks()
+            ? yield* acquireLock(`${name}:leader`, 'IfAvailable')
+            : 'Granted'
 
       const status = yield* Ref.make<Status>({
         role: 'Follower',
@@ -330,11 +352,13 @@ export const layer = (
         onSome: open =>
           pipe(
             messagesOf(open),
-            Stream.runForEach(data =>
-              pipe(
-                decodeChannelMessage(data),
-                Effect.flatMap(handleChannel),
-                Effect.ignore,
+            Effect.flatMap(
+              Stream.runForEach(data =>
+                pipe(
+                  decodeChannelMessage(data),
+                  Effect.flatMap(handleChannel),
+                  Effect.ignore,
+                ),
               ),
             ),
             Effect.forkScoped,

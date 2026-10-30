@@ -6,13 +6,11 @@ import {
   Fiber,
   Layer,
   Option,
-  Scope,
   Semaphore,
   Stream,
   pipe,
 } from 'effect'
 
-import { API_ORIGIN } from './analyticsBeacon'
 import {
   type LinkProblem,
   type PlayerChange,
@@ -20,7 +18,8 @@ import {
   SyncState,
 } from './playerSync'
 import { type PlayerSave, readLegacySave, writeLegacySave } from './save'
-import type { LegacySave, PlayerDatabase, StoreEvent } from './storeSqlite'
+import { loadStoreModule } from './storeEarly'
+import type { PlayerDatabase, StoreEvent } from './storeSqlite'
 
 // STORE
 
@@ -29,8 +28,9 @@ import type { LegacySave, PlayerDatabase, StoreEvent } from './storeSqlite'
 // on-device SQLite: every change is a mutation in the outbox, applied to the
 // view the game reads, and pushed to the player's Durable Object when the
 // build has a sync server. The SQLite code, the sync engine, its worker,
-// and its wasm load lazily on the first load, behind the splash, so the
-// first paint never waits on them.
+// and its wasm load in their own chunks, started by src/early.ts ahead of
+// the game's modules, behind the splash, so the first paint never waits on
+// them.
 //
 // Where the save lives, by backend:
 // - Opfs: SQLite in the origin private file system. localStorage is read
@@ -74,35 +74,26 @@ export class PlayerStore extends Context.Service<
 // a stuck worker never holds the splash for good.
 const SQLITE_OPEN_TIMEOUT: Duration.Input = '12 seconds'
 
-const legacy: LegacySave = { read: readLegacySave, write: writeLegacySave }
-
 const toStoreError = (error: { readonly reason: string }): StoreError =>
   new StoreError({ reason: error.reason })
 
 const toLinkError = (error: { readonly problem: LinkProblem }): LinkError =>
   new LinkError({ problem: error.problem })
 
-const readLegacy = pipe(legacy.read, Effect.mapError(toStoreError))
+const readLegacy = pipe(readLegacySave, Effect.mapError(toStoreError))
 
 const writeLegacy = (save: PlayerSave) =>
-  pipe(legacy.write(save), Effect.mapError(toStoreError))
+  pipe(writeLegacySave(save), Effect.mapError(toStoreError))
 
-const openSqlite = (
-  scope: Scope.Scope,
-): Effect.Effect<PlayerDatabase, StoreError> =>
-  pipe(
-    Effect.tryPromise({
-      try: () => import('./storeSqlite'),
-      catch: error => new StoreError({ reason: String(error) }),
-    }),
-    Effect.flatMap(module =>
-      pipe(
-        module.openPlayerDatabase(legacy, API_ORIGIN),
-        Effect.mapError(toStoreError),
-      ),
-    ),
-    Scope.provide(scope),
-  )
+// NOTE: the same open src/early.ts started, if it ran.
+const openSqlite: Effect.Effect<PlayerDatabase, StoreError> = pipe(
+  Effect.tryPromise({
+    try: () =>
+      loadStoreModule().then(module => module.openPlayerDatabaseOnce()),
+    catch: error => new StoreError({ reason: String(error) }),
+  }),
+  Effect.flatMap(opened => Effect.mapError(opened, toStoreError)),
+)
 
 const loadFrom = (backend: Backend) =>
   Backend.$match(backend, {
@@ -156,14 +147,15 @@ const localOnly: Stream.Stream<StoreEvent> = Stream.make({
 })
 
 // NOTE: SQLite opens in a fiber of the store's own scope, so a timeout here
-// only stops waiting: the database is not torn down under a later write.
+// only stops waiting: the database is not torn down under a later write. The
+// open lives in its own page long scope (see openPlayerDatabaseOnce).
 export const layer: Layer.Layer<PlayerStore> = Layer.effect(
   PlayerStore,
   Effect.gen(function* () {
     const scope = yield* Effect.scope
     const backend = yield* Effect.cached(
       Effect.gen(function* () {
-        const opening = yield* Effect.forkIn(openSqlite(scope), scope)
+        const opening = yield* Effect.forkIn(openSqlite, scope)
         return yield* pipe(
           Fiber.join(opening),
           Effect.map(database => Backend.Sqlite({ database })),
@@ -190,6 +182,9 @@ export const layer: Layer.Layer<PlayerStore> = Layer.effect(
         )
       }),
     )
+    // NOTE: the open starts as the runtime starts, not when the first
+    // Command asks for the save, so it runs alongside the first render.
+    yield* Effect.forkIn(backend, scope)
     const writes = yield* Semaphore.make(1)
     const database = Effect.flatMap(backend, current =>
       Backend.$match(current, {
@@ -211,7 +206,10 @@ export const layer: Layer.Layer<PlayerStore> = Layer.effect(
         ),
       awaitSettled: id =>
         Effect.flatMap(
-          Effect.mapError(database, error => new StoreError({ reason: error.problem })),
+          Effect.mapError(
+            database,
+            error => new StoreError({ reason: error.problem }),
+          ),
           opened => Effect.mapError(opened.awaitSettled(id), toStoreError),
         ),
       events: Stream.unwrap(

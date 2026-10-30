@@ -76,9 +76,55 @@ const loadStylesBehindSplash = (): Plugin => ({
   },
 })
 
+const EARLY_ENTRY = 'src/early.ts'
+
+// NOTE: src/early.ts starts the SQLite worker before the game's modules run
+// (see src/storeEarly.ts). Bundled into the game's entry, it would wait for
+// the whole bundle to download, and the worker would not start until the
+// bundle finished its first long task. So the build emits it as its own small
+// entry, and the page loads it ahead of the game's.
+const earlyEntry = (): Plugin => ({
+  name: 'munch-manor:early-entry',
+  buildStart() {
+    if (this.environment.mode === 'build') {
+      this.emitFile({ type: 'chunk', id: EARLY_ENTRY, name: 'early' })
+    }
+  },
+  transformIndexHtml: {
+    order: 'post',
+    handler: (_html, { bundle }) => {
+      const maybeChunk = Object.values(bundle ?? {}).find(
+        output =>
+          output.type === 'chunk' &&
+          output.facadeModuleId?.endsWith(EARLY_ENTRY) === true,
+      )
+      return [
+        {
+          tag: 'script',
+          attrs: {
+            type: 'module',
+            crossorigin: true,
+            src:
+              maybeChunk === undefined
+                ? `/${EARLY_ENTRY}`
+                : `./${maybeChunk.fileName}`,
+          },
+          injectTo: 'head-prepend',
+        },
+      ]
+    },
+  },
+})
+
 export default defineConfig({
   base: './',
-  plugins: [tailwindcss(), foldkit(), buildId(), loadStylesBehindSplash()],
+  plugins: [
+    tailwindcss(),
+    foldkit(),
+    buildId(),
+    loadStylesBehindSplash(),
+    earlyEntry(),
+  ],
   // NOTE: sqlite-wasm finds sqlite3.wasm next to its own module with
   // `new URL(..., import.meta.url)`. Pre-bundling would move the module and
   // break that, so it is left out. The SQLite worker is an ES module worker,

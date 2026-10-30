@@ -6,7 +6,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 
 - 💀 Pick Easy, Normal, or Hard, and beat Hard to unlock Nightmare. Waves are tighter, planks cost more, and nothing climbs through a boarded door.
 - 💣 Meet the Kaboomer, who brought a bomb to share, and the Big Leaguer, who pitches zombies. Big Lugs wear junk armor now.
-- 📖 A brand new menu with the Munchopedia: meet every zombie you've splatted. Your kills and bests stick around after updates, and SETTINGS can link your phone and computer to play from one save.
+- 📖 A brand new menu with the Munchopedia: meet every zombie you've splatted. Your kills and bests stick around after updates, and SETTINGS can link your phone and computer to play from one save. The manor also wakes up faster, with no nap at the end of the loading bar.
 - 📱 Play holding your phone upright: the manor zooms in up close, and your guns sit on the wall right under your thumbs. Turn it sideways any time to see the whole room.
 - 🔥 The parlour got cozy: a crackling fire, a comfy sofa, a big rug (something bit it), and smashed-in doors zombies now shuffle through. Rattles' shop got big pictures, chunky price tags, and a skeleton who cheers when you buy and sulks when you can't.
 - 🎯 Lost your cursor on the dark floor? It's big and yellow now (SETTINGS switches it back), and Rattles sells a pricey Laser Sight that shows every shot before you take it.

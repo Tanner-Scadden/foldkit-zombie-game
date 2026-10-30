@@ -3,12 +3,14 @@ import {
   Context,
   Data,
   Effect,
+  Exit,
   Layer,
   Option,
   Record,
   Result,
+  Scheduler,
   Schema,
-  type Scope,
+  Scope,
   Stream,
   pipe,
 } from 'effect'
@@ -38,6 +40,7 @@ import {
   startSync,
 } from '@munch/sync-engine'
 
+import { API_ORIGIN } from './apiOrigin'
 import {
   ChangedAppearance,
   ChangedDifficulty,
@@ -64,11 +67,23 @@ import {
   RunSettled,
   SyncState,
 } from './playerSync'
-import { type PlayerSave, SAVE_VERSION, type SaveStorageError } from './save'
+import {
+  type PlayerSave,
+  SAVE_VERSION,
+  type SaveStorageError,
+  readLegacySave,
+  writeLegacySave,
+} from './save'
+import {
+  STORE_NAME,
+  releaseEarlyStoreWorker,
+  takeLeaderLock,
+  takeStoreWorker,
+} from './storeEarly'
 
-// NOTE: this module, the SQLite package, and the sync engine load lazily,
-// behind the splash, from src/store.ts. Nothing in the first bundle imports
-// it.
+// NOTE: this module, the SQLite package, and the sync engine load in their
+// own chunk, behind the splash, from src/storeEarly.ts. Nothing in the game's
+// bundle imports it.
 
 export { KillsRow, PlayerRow, killsRowsOfSave, rowOfSave }
 
@@ -659,12 +674,6 @@ export const makePlayerDatabase = (
 
 // BROWSER
 
-const startWorker = (): Worker =>
-  new Worker(new URL('./store.worker.ts', import.meta.url), {
-    type: 'module',
-    name: 'munch-manor-sqlite',
-  })
-
 const browserSetup = (origin: string): Effect.Effect<SyncSetup> =>
   Effect.map(
     Effect.promise(() => import('@munch/sync-engine/browser')),
@@ -685,8 +694,9 @@ export const openPlayerDatabase = (
     const context = yield* pipe(
       Layer.build(
         Browser.layer({
-          worker: startWorker,
-          name: 'munch-manor',
+          worker: takeStoreWorker,
+          leaderLock: takeLeaderLock,
+          name: STORE_NAME,
           file: '/munch-manor.sqlite3',
         }),
       ),
@@ -698,6 +708,7 @@ export const openPlayerDatabase = (
           }),
       ),
     )
+    yield* Effect.sync(releaseEarlyStoreWorker)
     const maybeSetup =
       syncOrigin === ''
         ? Option.none()
@@ -708,3 +719,56 @@ export const openPlayerDatabase = (
       maybeSetup,
     )
   })
+
+// OPEN ONCE
+
+const LEGACY_SAVE: LegacySave = { read: readLegacySave, write: writeLegacySave }
+
+const OPEN = 'open'
+
+const runNextMicrotask = (callback: () => void): (() => void) => {
+  const cancelled = { current: false }
+  queueMicrotask(() => {
+    if (!cancelled.current) {
+      callback()
+    }
+  })
+  return () => {
+    cancelled.current = true
+  }
+}
+
+// NOTE: the same scheduling Foldkit gives its own fibers. Effect's default
+// yields with setTimeout, which the browser clamps to at least 4 ms, and the
+// open yields often enough that the clamps added up to a tenth of a second.
+const OPEN_SCHEDULER = new Scheduler.MixedScheduler('async', runNextMicrotask)
+
+const opens = new Map<
+  typeof OPEN,
+  Promise<Exit.Exit<PlayerDatabase, PlayerDatabaseError>>
+>()
+
+// NOTE: the page's one open of the player database. src/storeEarly.ts starts
+// it before the game's modules run, and the PlayerStore awaits the same
+// promise, so the database opens alongside the game's first render instead
+// of after it. The database lasts as long as the page, so its scope is never
+// closed.
+export const openPlayerDatabaseOnce = (): Promise<
+  Exit.Exit<PlayerDatabase, PlayerDatabaseError>
+> => {
+  const maybeOpening = opens.get(OPEN)
+  if (maybeOpening !== undefined) {
+    return maybeOpening
+  }
+  const opening = Effect.runPromiseExit(
+    pipe(
+      Scope.make(),
+      Effect.flatMap(scope =>
+        Scope.provide(openPlayerDatabase(LEGACY_SAVE, API_ORIGIN), scope),
+      ),
+      Effect.provideService(Scheduler.Scheduler, OPEN_SCHEDULER),
+    ),
+  )
+  opens.set(OPEN, opening)
+  return opening
+}

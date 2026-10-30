@@ -73,6 +73,8 @@
         border: 2px solid #140c10;
         background: #24123a;
       }
+      /* The slide moves with transform, not left, so the compositor runs it
+         and it keeps moving while the game's script holds the main thread. */
       .splash-fill {
         position: absolute;
         top: 0;
@@ -84,6 +86,7 @@
       }
       #splash[data-progress='Known'] .splash-fill {
         width: calc(var(--splash-progress, 0) * 100%);
+        transform: none;
         animation: none;
       }
       @keyframes splash-chomp {
@@ -93,10 +96,10 @@
       }
       @keyframes splash-slide {
         from {
-          left: -30%;
+          transform: translateX(-100%);
         }
         to {
-          left: 100%;
+          transform: translateX(334%);
         }
       }
       @media (prefers-reduced-motion: reduce) {

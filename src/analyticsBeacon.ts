@@ -8,13 +8,11 @@ import {
   RunSummaryJson,
   VISIT_ID_LENGTH,
 } from './analytics'
+import { API_ORIGIN } from './apiOrigin'
 
 // API ORIGIN
 
-// NOTE: the analytics Worker's origin is baked in at build time through
-// VITE_API_ORIGIN, which infra/alchemy.run.ts sets for each stage. A build
-// without it, such as `bun dev`, the tests, or an itch.io zip, sends nothing.
-export const API_ORIGIN: string = import.meta.env.VITE_API_ORIGIN ?? ''
+export { API_ORIGIN }
 
 export const maybeRunsUrl = (origin: string): Option.Option<string> =>
   origin === ''
