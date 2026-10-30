@@ -11,7 +11,7 @@ import {
   ZOMBIE_HIT_PULSE_MS,
 } from './constants'
 import { circlesOverlap, directionBetween, scaleVector } from './geometry'
-import { earn } from './shop'
+import { forEachSeatWhere, isStanding, payShared } from './party'
 import { trapBlastTarget } from './traps'
 import type { World } from './world'
 import {
@@ -236,25 +236,48 @@ const detonate = (model: World, bomberId: number): World => {
     onNone: () => modifyFields(model, { zombies: () => rest }),
     onSome: blast => {
       const zombieOutcome = blastAll(blast, rest, ZOMBIE_BLAST_TARGET)
-      const playerOutcome = blastOne(blast, PLAYER_BLAST_TARGET)(model.player)
       const trapOutcome = blastAll(
         blast,
         model.traps,
         trapBlastTarget(levelOf(model)),
       )
-      return modifyFields(model, {
-        zombies: () => zombieOutcome.targets,
-        player: () => playerOutcome.target,
-        traps: () => trapOutcome.targets,
-        wallet: wallet => earn(wallet, bountyOf(zombieOutcome.events)),
-        frameEvents: frameEvents => [
-          ...frameEvents,
-          GameEvent.Exploded({ x: blast.x, y: blast.y, radius: blast.radius }),
-          ...playerOutcome.events,
-          ...zombieOutcome.events,
-          ...trapOutcome.events,
-        ],
-      })
+      const scorched = forEachSeatWhere(
+        modifyFields(model, {
+          frameEvents: Array.append(
+            GameEvent.Exploded({
+              x: blast.x,
+              y: blast.y,
+              radius: blast.radius,
+            }),
+          ),
+        }),
+        isStanding,
+        seatWorld => {
+          const playerOutcome = blastOne(
+            blast,
+            PLAYER_BLAST_TARGET,
+          )(seatWorld.player)
+          return modifyFields(seatWorld, {
+            player: () => playerOutcome.target,
+            frameEvents: frameEvents => [
+              ...frameEvents,
+              ...playerOutcome.events,
+            ],
+          })
+        },
+      )
+      return payShared(
+        modifyFields(scorched, {
+          zombies: () => zombieOutcome.targets,
+          traps: () => trapOutcome.targets,
+          frameEvents: frameEvents => [
+            ...frameEvents,
+            ...zombieOutcome.events,
+            ...trapOutcome.events,
+          ],
+        }),
+        bountyOf(zombieOutcome.events),
+      )
     },
   })
 }

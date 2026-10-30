@@ -20,6 +20,7 @@ import {
 } from './combat'
 import { PLAYER_MAX_HP, PLAYER_RADIUS, PLAYER_SPEED } from './constants'
 import type { Model } from './model'
+import { forEachSeat, isCoop, isStanding, leadSeatOf } from './party'
 import { nextRandom } from './prng'
 import { earn } from './shop'
 import { totalKills } from './stats'
@@ -753,14 +754,34 @@ export const advancePowerUps = (
   model: World,
   worldMs: number,
 ): World => {
-  if (ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)) {
-    return model
+  if (!isCoop(model)) {
+    return isAtCounterNow(model)
+      ? model
+      : pipe(
+          tickBoosts(model, worldMs),
+          ticked => agePickups(ticked, worldMs),
+          grabPickups,
+          grabbed => dropLoot(before, grabbed, worldMs),
+        )
   }
 
   return pipe(
-    tickBoosts(model, worldMs),
+    forEachSeat(model, seatWorld =>
+      isAtCounterNow(seatWorld) ? seatWorld : tickBoosts(seatWorld, worldMs),
+    ),
     ticked => agePickups(ticked, worldMs),
-    grabPickups,
+    aged =>
+      forEachSeat(aged, seatWorld =>
+        isAtCounterNow(seatWorld) || !isStanding(leadSeatOf(seatWorld))
+          ? seatWorld
+          : grabPickups(seatWorld),
+      ),
     grabbed => dropLoot(before, grabbed, worldMs),
   )
 }
+
+// NOTE: a player at the stall's counter or an exit's offer holds still: in
+// single player the whole world does, in co-op only their own boosts and
+// grabs (decided row 8).
+const isAtCounterNow = (model: World): boolean =>
+  ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)

@@ -5,6 +5,7 @@ import { type Level, hasLineOfSight, levelOf } from './arena'
 import { woundPlayer } from './combat'
 import { MS_PER_SECOND, PLAYER_RADIUS, ZOMBIE_HIT_PULSE_MS } from './constants'
 import { directionBetween, normalize } from './geometry'
+import { facingNearest, forEachSeatWhere, isStanding } from './party'
 import type { World } from './world'
 import {
   GameEvent,
@@ -412,17 +413,25 @@ const landings = (
 
 const OUTWARD: Vector = { x: 1, y: 0 }
 
-const land = (model: World, landing: Landing): World => {
-  const { player } = model
-  const landed = modifyFields(model, {
-    frameEvents: Array.append(
-      GameEvent.ZombieLanded({
-        x: landing.at.x,
-        y: landing.at.y,
-        radius: CHUCKER_RULES.landRadius,
-      }),
-    ),
-  })
+// NOTE: a thrown zombie lands on whoever stands under it: every standing
+// player in co-op.
+const land = (model: World, landing: Landing): World =>
+  forEachSeatWhere(
+    modifyFields(model, {
+      frameEvents: Array.append(
+        GameEvent.ZombieLanded({
+          x: landing.at.x,
+          y: landing.at.y,
+          radius: CHUCKER_RULES.landRadius,
+        }),
+      ),
+    }),
+    isStanding,
+    landed => landOn(landed, landing),
+  )
+
+const landOn = (landed: World, landing: Landing): World => {
+  const { player } = landed
   const isHit =
     Invulnerability.isAnyOf(['Vulnerable'])(player.invulnerability) &&
     distanceBetween(landing.at, player) <=
@@ -647,7 +656,9 @@ export const advanceChuckers = (model: World, deltaMs: number): World => {
       Option.match(findZombie(current.zombies, chucker.id), {
         onNone: () => current,
         onSome: latest =>
-          stepShield(stepHeft(current, latest, deltaMs), latest, deltaMs),
+          facingNearest(current, latest, fight =>
+            stepShield(stepHeft(fight, latest, deltaMs), latest, deltaMs),
+          ),
       }),
   )
   const thrownAt = landings(heaved.zombies, deltaMs)
@@ -664,13 +675,14 @@ export const advanceChuckers = (model: World, deltaMs: number): World => {
     (current, chucker) =>
       Option.match(findZombie(current.zombies, chucker.id), {
         onNone: () => current,
-        onSome: latest => {
-          const shielded = tryShield(current, latest)
-          return Option.match(findZombie(shielded.zombies, latest.id), {
-            onNone: () => shielded,
-            onSome: after => tryGrab(shielded, after),
-          })
-        },
+        onSome: latest =>
+          facingNearest(current, latest, fight => {
+            const shielded = tryShield(fight, latest)
+            return Option.match(findZombie(shielded.zombies, latest.id), {
+              onNone: () => shielded,
+              onSome: after => tryGrab(shielded, after),
+            })
+          }),
       }),
   )
 }

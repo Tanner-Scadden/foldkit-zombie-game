@@ -1,7 +1,7 @@
 import { Array, Option, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { earn } from './shop'
+import { payShared } from './party'
 import type { World } from './world'
 import {
   Frenzy,
@@ -209,12 +209,12 @@ export const payWipedPacks = (before: World, after: World): World => {
     entry => (entry.left <= 0 ? Result.succeed(entry) : Result.fail(entry)),
   )
   const bonus = Array.reduce(wiped, 0, (sum, entry) => sum + entry.bonus)
-  return modifyFields(after, {
+  const tallied = modifyFields(after, {
     frenzyPacks: () => standing,
-    wallet: wallet => (bonus > 0 ? earn(wallet, bonus) : wallet),
     frameEvents: frameEvents => [
       ...frameEvents,
       ...Array.getSomes(Array.map(wiped, wipeEvent(kills))),
     ],
   })
+  return bonus > 0 ? payShared(tallied, bonus) : tallied
 }

@@ -39,7 +39,7 @@ import {
   ZOMBIE_BUMP_SPEED,
   ZOMBIE_KNOCKBACK_DECAY_PER_SECOND,
 } from './constants'
-import { advanceCrawlers, ankleSlowAt } from './crawler'
+import { advanceCrawlers, ankleSlowAt, ankleSlowNear } from './crawler'
 import { biteDamage } from './difficulty'
 import { advanceFrenzy, frenzyPace, isFrenzied, payWipedPacks } from './frenzy'
 import {
@@ -57,10 +57,26 @@ import { stopForHits, thawTick } from './juice'
 import { advanceKitchen, soupSkid } from './kitchen'
 import { advanceIntensity } from './pacing'
 import {
+  COOP_RULES,
+  creditKills,
+  facingNearest,
+  firedBy,
+  forEachSeat,
+  isCoop,
+  isStanding,
+  leadSeatOf,
+  maybePlayerAt,
+  maybeShooterOf,
+  nearestOf,
+  payTo,
+  shooterOf,
+  targetsOf,
+} from './party'
+import {
   type Clearance,
   maybeNearestBait,
   playerDistancePx,
-  refreshFlowField,
+  refreshFlowFieldToward,
   steerToBait,
   steerToward,
 } from './pathing'
@@ -74,6 +90,7 @@ import {
   playerSpeed,
 } from './powerups'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
+import { advanceParty, resolveFriendlyFire } from './revive'
 import { earn, refreshShopPresence } from './shop'
 import { countHits, countShots } from './stats'
 import {
@@ -108,6 +125,7 @@ import {
   type FlowField,
   GameEvent,
   Invulnerability,
+  Life,
   Pierce,
   type Player,
   Reload,
@@ -321,7 +339,10 @@ const shoot = (
     stats,
   )
   const pellets = Array.map(velocities, (velocity, index) =>
-    makeBullet(nextEntityId + index, muzzle, velocity, load),
+    firedBy(
+      makeBullet(nextEntityId + index, muzzle, velocity, load),
+      shooterOf(model),
+    ),
   )
   return modifyFields(model, {
     bullets: bullets => Array.takeRight([...bullets, ...pellets], BULLET_MAX),
@@ -800,6 +821,7 @@ const advanceZombies = (
     boss: model.boss,
     zombies: model.zombies,
   }
+  const targets = targetsOf(model)
   return pipe(
     model.zombies,
     Array.map((zombie, index) =>
@@ -808,7 +830,7 @@ const advanceZombies = (
         Option.getOrElse(Array.get(separations, index), () => ZERO_VECTOR),
         flowFields,
         obstacles,
-        model.player,
+        nearestOf(targets, zombie),
         seconds,
         deltaMs,
       ),
@@ -872,6 +894,7 @@ type BulletHit = Readonly<{
   weapon: WeaponKind
   damage: number
   knockback: number
+  maybeShooter: Option.Option<number>
 }>
 
 const bulletDirection = (bullet: Bullet): Vector =>
@@ -934,7 +957,11 @@ const shieldedTarget = (bullet: Bullet, zombie: Zombie): number =>
 // NOTE: the player's shots fired this frame. Their sweep starts at the
 // player's center, not the muzzle, so a zombie hugging the player, closer than
 // the muzzle, is still the first thing a point-blank shot hits.
-type FreshShots = Readonly<{ firstId: number; endId: number; from: Vector }>
+type FreshShots = Readonly<{
+  firstId: number
+  endId: number
+  from: (bullet: Bullet) => Vector
+}>
 
 const sweepStart = (
   bullet: Bullet,
@@ -942,7 +969,7 @@ const sweepStart = (
   freshShots: FreshShots,
 ): Vector =>
   bullet.id >= freshShots.firstId && bullet.id < freshShots.endId
-    ? freshShots.from
+    ? freshShots.from(bullet)
     : {
         x: bullet.x - bullet.velocityX * seconds,
         y: bullet.y - bullet.velocityY * seconds,
@@ -973,6 +1000,7 @@ const findBulletHits = (
           weapon: bullet.weapon,
           damage: bullet.damage * woundScaleOf(boss, zombie),
           knockback: bullet.knockback,
+          maybeShooter: maybeShooterOf(bullet),
         })),
       )
     }),
@@ -1061,19 +1089,16 @@ const resolveBulletHits = (
   seconds: number,
   firstFreshId: number,
 ): World => {
+  const freshShots = freshShotsOf(model, firstFreshId)
   const hits = findBulletHits(
     model.bullets,
     model.zombies,
     model.boss,
     seconds,
-    {
-      firstId: firstFreshId,
-      endId: model.nextEntityId,
-      from: model.player,
-    },
+    freshShots,
   )
   if (Array.isReadonlyArrayEmpty(hits)) {
-    return model
+    return resolveFriendlyFire(model, seconds, freshShots.from, firstFreshId)
   }
 
   const hitZombieIds = Array.dedupe(Array.map(hits, ({ zombieId }) => zombieId))
@@ -1090,7 +1115,7 @@ const resolveBulletHits = (
     0,
     (sum, zombie) => sum + statsOf(zombie).bounty,
   )
-  return modifyFields(model, {
+  const struck = modifyFields(model, {
     bullets: Array.filterMap(skewer(hits)),
     zombies: () => zombies,
     stats: stats =>
@@ -1098,14 +1123,57 @@ const resolveBulletHits = (
         stats,
         Array.filter(hits, ({ weapon }) => weapon !== TURRET_WEAPON).length,
       ),
-    wallet: wallet => earn(wallet, bounty),
     frameEvents: frameEvents => [
       ...frameEvents,
       ...Array.getSomes(Array.map(hitZombies, hitEventOn(hits))),
       ...Array.map(killedZombies, killEventOn(hits)),
     ],
   })
+  return resolveFriendlyFire(
+    isCoop(model)
+      ? payKillers(struck, hits, killedZombies)
+      : modifyFields(struck, { wallet: wallet => earn(wallet, bounty) }),
+    seconds,
+    freshShots.from,
+    firstFreshId,
+  )
 }
+
+// NOTE: in co-op a shot's sweep starts at its shooter's center, and a kill
+// pays the player whose shot landed last (decided 5).
+const freshShotsOf = (model: World, firstFreshId: number): FreshShots => ({
+  firstId: firstFreshId,
+  endId: model.nextEntityId,
+  from: isCoop(model)
+    ? bullet =>
+        Option.match(
+          Option.flatMap(maybeShooterOf(bullet), slot =>
+            maybePlayerAt(model, slot),
+          ),
+          {
+            onNone: (): Vector => model.player,
+            onSome: ({ player }): Vector => player,
+          },
+        )
+    : () => model.player,
+})
+
+const payKillers = (
+  model: World,
+  hits: ReadonlyArray<BulletHit>,
+  killed: ReadonlyArray<Zombie>,
+): World =>
+  Array.reduce(killed, model, (current, zombie) => {
+    const maybeKiller = Option.flatMap(
+      Array.last(hitsOn(hits, zombie.id)),
+      ({ maybeShooter }) => maybeShooter,
+    )
+    const paid = payTo(current, maybeKiller, statsOf(zombie).bounty)
+    return Option.match(maybeKiller, {
+      onNone: () => paid,
+      onSome: slot => creditKills(paid, slot, 1),
+    })
+  })
 
 const bumpAttacker =
   (attacker: Zombie, direction: Vector) =>
@@ -1254,42 +1322,92 @@ const feelIntensity = (before: World, after: World, deltaMs: number): World =>
 
 // FRAME
 
+// NOTE: a downed player crawls (decided row 4), and one an Ankle Biter
+// clings to drags their feet. In single player any clinging Ankle Biter is
+// on the one player's ankles.
+const speedOf = (model: World): number =>
+  playerSpeed(model.boosts) *
+  puddleSlowAt(model.boss, model.player) *
+  (isCoop(model)
+    ? ankleSlowNear(model.zombies, model.player) *
+      (isStanding(leadSeatOf(model)) ? 1 : COOP_RULES.downedCrawlScale)
+    : ankleSlowAt(model.zombies))
+
+const moveSeat =
+  (
+    level: Level,
+    blockers: ReadonlyArray<Box>,
+    seconds: number,
+    deltaMs: number,
+  ) =>
+  (model: World): World =>
+    Life.isAnyOf(['BledOut'])(leadSeatOf(model).life)
+      ? model
+      : gateIntent(
+          modifyFields(model, {
+            player: player =>
+              movePlayer(
+                level,
+                player,
+                model.intent.move,
+                speedOf(model),
+                blockers,
+                seconds,
+                deltaMs,
+              ),
+          }),
+        )
+
+// NOTE: only a standing player shops, reloads, and fires.
+const armSeat =
+  (deltaMs: number) =>
+  (model: World): World =>
+    isStanding(leadSeatOf(model))
+      ? fire(tickReload(faceTowardIntent(model), deltaMs), deltaMs)
+      : faceTowardIntent(model)
+
+const visitStall = (model: World): World =>
+  isStanding(leadSeatOf(model)) ? gateIntent(refreshShopPresence(model)) : model
+
+const standingSeats = (
+  model: World,
+  step: (seatWorld: World) => World,
+): World =>
+  forEachSeat(model, seatWorld =>
+    isStanding(leadSeatOf(seatWorld)) ? step(seatWorld) : seatWorld,
+  )
+
+const bossAt = (model: World): Vector =>
+  Option.getOrElse(
+    Array.findFirst(model.zombies, zombie => zombie.kind === 'Boss'),
+    (): Vector => model.player,
+  )
+
 const advanceWorld = (model: World, deltaMs: number): World => {
   const seconds = deltaMs / MS_PER_SECOND
 
   const level = levelOf(model)
   const blockers = trapBlockers(level, model.traps)
   const tolls = tollsOf(level, model.traps)
-  const moved = gateIntent(
+  const moved = forEachSeat(
     modifyFields(model, {
-      player: player =>
-        movePlayer(
-          level,
-          player,
-          model.intent.move,
-          playerSpeed(model.boosts) *
-            puddleSlowAt(model.boss, model.player) *
-            ankleSlowAt(model.zombies),
-          blockers,
-          seconds,
-          deltaMs,
-        ),
       elapsedMs: elapsedMs => elapsedMs + deltaMs,
       frameEvents: () => [],
     }),
+    moveSeat(level, blockers, seconds, deltaMs),
   )
-  const routed = gateIntent(
-    refreshShopPresence(
-      modifyFields(moved, {
-        flowField: flowField =>
-          refreshFlowField(level, flowField, moved.player, 'Narrow', tolls),
-        wideFlowField: flowField =>
-          refreshFlowField(level, flowField, moved.player, 'Wide', tolls),
-      }),
-    ),
+  const targets = targetsOf(moved)
+  const routed = forEachSeat(
+    modifyFields(moved, {
+      flowField: flowField =>
+        refreshFlowFieldToward(level, flowField, targets, 'Narrow', tolls),
+      wideFlowField: flowField =>
+        refreshFlowFieldToward(level, flowField, targets, 'Wide', tolls),
+    }),
+    visitStall,
   )
 
-  const armed = fire(tickReload(faceTowardIntent(routed), deltaMs), deltaMs)
+  const armed = forEachSeat(routed, armSeat(deltaMs))
 
   const advanced = modifyFields(advanceBullets(armed, seconds, deltaMs), {
     zombies: () => advanceZombies(armed, seconds, deltaMs),
@@ -1300,11 +1418,14 @@ const advanceWorld = (model: World, deltaMs: number): World => {
     footed => resolveBulletHits(footed, seconds, routed.nextEntityId),
     trapped => advanceTraps(trapped, seconds, deltaMs),
     trapped => advanceKitchen(armed, trapped, deltaMs),
-    resolvePlayerContact,
+    contacted => standingSeats(contacted, resolvePlayerContact),
     contacted => recoverActions(contacted, deltaMs),
     recovered => advanceChuckers(recovered, deltaMs),
     heaved => advanceCrawlers(heaved, deltaMs),
-    crawled => advanceBossMoves(crawled, deltaMs),
+    crawled =>
+      facingNearest(crawled, bossAt(crawled), fight =>
+        advanceBossMoves(fight, deltaMs),
+      ),
     resolveBlasts,
     blasted => advanceFrenzy(blasted, deltaMs),
     frenzied => payWipedPacks(model, frenzied),
@@ -1312,6 +1433,7 @@ const advanceWorld = (model: World, deltaMs: number): World => {
     blasted => feelIntensity(model, blasted, deltaMs),
     felt => advancePowerUps(felt, advanceRound(felt, deltaMs), deltaMs),
     rounded => shedParts(model, rounded),
+    downed => advanceParty(downed, deltaMs),
     endWhenDefeated,
   )
 }
@@ -1328,5 +1450,8 @@ export const advanceTick = (world: World): Tick => {
     frameEvents: () => [],
   })
   const stepped = thaw.worldMs > 0 ? advanceWorld(thawed, thaw.worldMs) : thawed
-  return { world: stopForHits(stepped, thaw.worldMs), worldMs: thaw.worldMs }
+  return {
+    world: isCoop(stepped) ? stepped : stopForHits(stepped, thaw.worldMs),
+    worldMs: thaw.worldMs,
+  }
 }

@@ -1,7 +1,8 @@
-import { Array } from 'effect'
+import { Array, Option } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import type { Model } from './model'
+import { COOP_RULES } from './party'
 import {
   type Difficulty,
   type DifficultyBests,
@@ -83,6 +84,46 @@ export const toughenSpawns = (
       hpScale: scale => scale * healthScale,
     }),
   )
+}
+
+// NOTE: co-op's crowd (decided 3): every planned zombie comes with copies
+// spread evenly through the wave, so the count scales by the player count's
+// waveCountScale, each a little after the one it copies, and every one is
+// tougher by its healthScale. One player keeps the wave exactly as rolled.
+const CROWD_GAP_MS = 450
+const CROWD_OFFSET_PX = 5
+
+const scaleAt = (scales: ReadonlyArray<number>, players: number): number =>
+  Option.getOrElse(
+    Option.orElse(Array.get(scales, players - 1), () => Array.last(scales)),
+    () => 1,
+  )
+
+export const crowdSpawns = (
+  players: number,
+  spawns: ReadonlyArray<PlannedSpawn>,
+): ReadonlyArray<PlannedSpawn> => {
+  if (players <= 1) {
+    return spawns
+  }
+  const countScale = scaleAt(COOP_RULES.waveCountScale, players)
+  const healthScale = scaleAt(COOP_RULES.healthScale, players)
+  return Array.flatMap(spawns, (spawn, index) => {
+    const copies =
+      Math.floor((index + 1) * countScale) - Math.floor(index * countScale)
+    const tougher = modifyFields(spawn, {
+      hpScale: scale => scale * healthScale,
+    })
+    return Array.makeBy(copies, copy =>
+      copy === 0
+        ? tougher
+        : modifyFields(tougher, {
+            atMs: atMs => atMs + copy * CROWD_GAP_MS,
+            offset: offset =>
+              offset + (copy % 2 === 1 ? 1 : -1) * CROWD_OFFSET_PX,
+          }),
+    )
+  })
 }
 
 export const difficultySpeedScale = (difficulty: Difficulty): number =>

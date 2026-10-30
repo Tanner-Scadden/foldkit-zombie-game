@@ -444,7 +444,7 @@ export const delayCampedPacks = (
   routed: ReadonlyArray<PlannedSpawn>,
   clockMs: number,
   worldMs: number,
-  player: Vector,
+  players: ReadonlyArray<Vector>,
 ): ReadonlyArray<PlannedSpawn> => {
   const campedPacks = pipe(
     routed,
@@ -452,7 +452,7 @@ export const delayCampedPacks = (
       spawn =>
         isDue(clockMs)(spawn) &&
         isThroughDoor(spawn) &&
-        isCampingDoor(level, player, spawn.door),
+        Array.some(players, player => isCampingDoor(level, player, spawn.door)),
     ),
     Array.map(({ pack }) => pack),
     Array.dedupe,

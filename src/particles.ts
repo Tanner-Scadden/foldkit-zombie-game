@@ -1175,6 +1175,29 @@ const eventParticles = (
         SLIP_SPLASH,
         droplet('Goo', { x, y }, Math.PI / 2, Math.PI * 2, GOO_BURST_SPEED),
       ),
+    PlayerDowned: ({ x, y }) =>
+      generateMany(
+        state,
+        DUST_PER_HURT,
+        dustPuff(
+          playerGround(x, y),
+          0,
+          Math.PI * 2,
+          DUST_HURT_SPEED_MIN,
+        )(DUST_HURT_SPEED_MAX),
+      ),
+    PlayerRevived: ({ x, y }) => dustRing(playerGround(x, y), GRAB_DUST)(state),
+    FriendlyFire: ({ x, y }) =>
+      generateMany(
+        state,
+        DUST_PER_HURT,
+        dustPuff(
+          playerGround(x, y),
+          0,
+          Math.PI * 2,
+          DUST_HURT_SPEED_MIN,
+        )(DUST_HURT_SPEED_MAX),
+      ),
   })
 
 type Spawn = Readonly<{

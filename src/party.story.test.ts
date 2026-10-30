@@ -1,0 +1,613 @@
+import { Array, Option } from 'effect'
+import { given, model, story } from 'foldkit/story'
+import { modifyFields } from 'foldkit/struct'
+import { describe, expect, test } from 'vitest'
+
+import { levelOf } from './arena'
+import { FIXED_STEP_MS, PLAYER_MAX_HP } from './constants'
+import { KITCHEN_EXIT } from './exits'
+import { update } from './main'
+import {
+  Arsenal,
+  type Bullet,
+  GameEvent,
+  HitStop,
+  Invulnerability,
+  Life,
+  type Model,
+  Phase,
+  Pierce,
+  type PlannedSpawn,
+  ShopState,
+  initialModel,
+} from './model'
+import {
+  COOP_RULES,
+  type SeatedPlayer,
+  maybePlayerAt,
+  playersOf,
+  seatCrew,
+  setPresence,
+  withSeat,
+} from './party'
+import { SeatAction, applySeatAction, soloInputs, stepWorld } from './stepWorld'
+import { SURFACE, ticks, zombieOf } from './testing'
+import { asVeteran } from './veteran'
+import { beginPreparation, waveBonus } from './waves'
+import { WEAPONS } from './weapons'
+import { type World, withWorld } from './world'
+import { type Seat, idleIntent } from './worldSchema'
+import { ZOMBIE_KINDS } from './zombies'
+
+// Co-op's World rules (MULTIPLAYER.md, Phase 1), played through `update`
+// with two and four players in one World.
+
+const TICK_MS = FIXED_STEP_MS
+const LEFT_X = 60
+const RIGHT_X = 240
+const ROW_Y = 104
+
+const DISTANT_SPAWN: PlannedSpawn = {
+  atMs: 1e9,
+  kind: 'Shambler',
+  door: 'North',
+  offset: 0,
+  speedScale: 1,
+  hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
+}
+
+const veteranModel = asVeteran(initialModel)
+
+const runningWave = Phase.Wave({
+  wave: 3,
+  elapsedMs: 0,
+  spawns: [DISTANT_SPAWN],
+})
+
+const crewOf = (count: number, phase: Phase = runningWave): Model =>
+  withWorld(
+    modifyFields(veteranModel, {
+      maybeSurface: () => Option.some(SURFACE),
+      phase: () => phase,
+    }),
+    world => seatCrew(world, count),
+  )
+
+const atSeat = (
+  current: Model,
+  slot: number,
+  change: (world: World) => World,
+): Model => withWorld(current, world => withSeat(world, slot, change))
+
+const placed =
+  (slot: number, x: number, y: number, hp = PLAYER_MAX_HP) =>
+  (current: Model): Model =>
+    atSeat(current, slot, world =>
+      modifyFields(world, {
+        player: player =>
+          modifyFields(player, { x: () => x, y: () => y, hp: () => hp }),
+      }),
+    )
+
+const withLife =
+  (slot: number, life: Life) =>
+  (current: Model): Model =>
+    atSeat(current, slot, world =>
+      modifyFields(world, {
+        party: party =>
+          party._tag === 'Crew'
+            ? modifyFields(party, {
+                lead: lead => modifyFields(lead, { life: () => life }),
+              })
+            : party,
+      }),
+    )
+
+const withMoney =
+  (slot: number, balance: number) =>
+  (current: Model): Model =>
+    atSeat(current, slot, world =>
+      modifyFields(world, {
+        wallet: wallet => modifyFields(wallet, { balance: () => balance }),
+      }),
+    )
+
+const act = (current: Model, slot: number, action: SeatAction): Model =>
+  withWorld(current, world => applySeatAction(world, slot, action))
+
+const seatedAt = (current: World, slot: number): SeatedPlayer =>
+  Option.getOrThrow(maybePlayerAt(current, slot))
+
+const seatOf = (current: World, slot: number): Seat =>
+  seatedAt(current, slot).seat
+
+const pipeline =
+  (...steps: ReadonlyArray<(current: Model) => Model>) =>
+  (start: Model): Model =>
+    Array.reduce(steps, start, (current, step) => step(current))
+
+const bulletAt = (
+  id: number,
+  x: number,
+  y: number,
+  velocityX: number,
+  shooter: number,
+): Bullet => ({
+  id,
+  x,
+  y,
+  velocityX,
+  velocityY: 0,
+  remainingMs: 1000,
+  weapon: 'Pistol',
+  damage: WEAPONS.Pistol.damage,
+  knockback: 0,
+  glaze: 'Plain',
+  pierce: Pierce.Stops(),
+  shooter,
+})
+
+describe('who the zombies hunt', () => {
+  test('each zombie walks to the standing player nearest it', () => {
+    story(
+      update,
+      given(
+        pipeline(placed(0, LEFT_X, ROW_Y), placed(1, RIGHT_X, ROW_Y), current =>
+          modifyFields(current, {
+            zombies: () => [
+              zombieOf('Shambler', 900, LEFT_X + 40, ROW_Y, { speed: 30 }),
+              zombieOf('Shambler', 901, RIGHT_X - 40, ROW_Y, { speed: 30 }),
+            ],
+          }),
+        )(crewOf(2)),
+      ),
+      ...ticks(30, TICK_MS),
+      model(current => {
+        const [nearLeft, nearRight] = current.zombies
+        expect(nearLeft?.x).toBeLessThan(LEFT_X + 40)
+        expect(nearRight?.x).toBeGreaterThan(RIGHT_X - 40)
+        expect(current.flowField.moreOrigins).toHaveLength(1)
+      }),
+    )
+  })
+
+  test('a downed player is not hunted', () => {
+    story(
+      update,
+      given(
+        pipeline(
+          placed(0, LEFT_X, ROW_Y),
+          placed(1, RIGHT_X, ROW_Y, 0),
+          withLife(1, Life.Downed({ bleedMs: 1e9, reviveMs: 0 })),
+          current =>
+            modifyFields(current, {
+              zombies: () => [
+                zombieOf('Shambler', 900, RIGHT_X - 30, ROW_Y, { speed: 30 }),
+              ],
+            }),
+        )(crewOf(2)),
+      ),
+      ...ticks(30, TICK_MS),
+      model(current => {
+        expect(current.zombies[0]?.x).toBeLessThan(RIGHT_X - 30)
+      }),
+    )
+  })
+})
+
+describe('downed, revived, and bled out', () => {
+  const bitten = pipeline(
+    placed(0, LEFT_X, ROW_Y),
+    placed(1, RIGHT_X, ROW_Y, 1),
+    current =>
+      modifyFields(current, {
+        zombies: () => [zombieOf('Shambler', 900, RIGHT_X + 5, ROW_Y)],
+      }),
+  )(crewOf(2))
+
+  test('a player at zero hearts goes down and the run goes on', () => {
+    story(
+      update,
+      given(bitten),
+      ...ticks(1, TICK_MS),
+      model(current => {
+        expect(seatOf(current, 1).life._tag).toBe('Downed')
+        expect(
+          Array.some(current.frameEvents, GameEvent.isAnyOf(['PlayerDowned'])),
+        ).toBe(true)
+        expect(current.phase._tag).toBe('Wave')
+      }),
+    )
+  })
+
+  const downedBeside = pipeline(
+    placed(0, RIGHT_X - 8, ROW_Y),
+    placed(1, RIGHT_X, ROW_Y, 0),
+    withLife(1, Life.Downed({ bleedMs: COOP_RULES.bleedOutMs, reviveMs: 0 })),
+  )(crewOf(2))
+
+  const reviveTicks = Math.ceil(COOP_RULES.reviveMs / TICK_MS)
+
+  test('a teammate standing still beside them for 2 s revives them with 2 hearts', () => {
+    story(
+      update,
+      given(downedBeside),
+      ...ticks(reviveTicks - 2, TICK_MS),
+      model(current => {
+        expect(seatOf(current, 1).life._tag).toBe('Downed')
+      }),
+      ...ticks(2, TICK_MS),
+      model(current => {
+        expect(seatOf(current, 1).life._tag).toBe('Standing')
+        expect(seatedAt(current, 1).player.hp).toBe(COOP_RULES.reviveHearts)
+      }),
+    )
+  })
+
+  test('a downed player alone bleeds out over 10 s', () => {
+    const bleedTicks = Math.ceil(COOP_RULES.bleedOutMs / TICK_MS)
+    story(
+      update,
+      given(placed(0, LEFT_X, ROW_Y)(downedBeside)),
+      ...ticks(bleedTicks - 2, TICK_MS),
+      model(current => {
+        expect(seatOf(current, 1).life._tag).toBe('Downed')
+      }),
+      ...ticks(4, TICK_MS),
+      model(current => {
+        expect(seatOf(current, 1).life._tag).toBe('BledOut')
+        expect(current.phase._tag).toBe('Wave')
+      }),
+    )
+  })
+
+  test('the run ends when everyone is down', () => {
+    story(
+      update,
+      given(
+        pipeline(
+          placed(0, LEFT_X, ROW_Y, 0),
+          withLife(1, Life.Downed({ bleedMs: 1e9, reviveMs: 0 })),
+        )(crewOf(2)),
+      ),
+      ...ticks(1, TICK_MS),
+      model(current => {
+        expect(current.phase._tag).toBe('GameOver')
+      }),
+    )
+  })
+
+  test('bled-out and downed players come back free at the next break', () => {
+    const clearing = Phase.Wave({ wave: 3, elapsedMs: 0, spawns: [] })
+    story(
+      update,
+      given(
+        pipeline(
+          withLife(1, Life.BledOut()),
+          placed(1, RIGHT_X, ROW_Y, 0),
+          withLife(2, Life.Downed({ bleedMs: 1e9, reviveMs: 0 })),
+          placed(2, LEFT_X, ROW_Y, 0),
+        )(crewOf(4, clearing)),
+      ),
+      ...ticks(1, TICK_MS),
+      model(current => {
+        expect(current.phase._tag).toBe('Preparation')
+        Array.forEach(playersOf(current), ({ seat }) => {
+          expect(seat.life._tag).toBe('Standing')
+        })
+        expect(seatedAt(current, 1).player.hp).toBe(COOP_RULES.reviveHearts)
+        expect(seatedAt(current, 2).player.hp).toBe(COOP_RULES.reviveHearts)
+      }),
+    )
+  })
+})
+
+describe('money', () => {
+  test('the wave clear bonus is split evenly, the odd dollars to the first seats', () => {
+    const clearing = Phase.Wave({ wave: 3, elapsedMs: 0, spawns: [] })
+    const bonus = waveBonus(3)
+    story(
+      update,
+      given(crewOf(4, clearing)),
+      ...ticks(1, TICK_MS),
+      model(current => {
+        const paid = Array.map(
+          playersOf(current),
+          ({ wallet }) => wallet.balance,
+        )
+        expect(Array.reduce(paid, 0, (sum, each) => sum + each)).toBe(bonus)
+        expect(Math.max(...paid) - Math.min(...paid)).toBeLessThanOrEqual(1)
+        expect(paid[0]).toBe(Math.ceil(bonus / 4))
+      }),
+    )
+  })
+
+  test('a kill pays the player whose shot landed', () => {
+    const bounty = ZOMBIE_KINDS.Shambler.bounty
+    story(
+      update,
+      given(
+        pipeline(
+          placed(0, LEFT_X, ROW_Y),
+          placed(1, RIGHT_X, ROW_Y + 40),
+          current =>
+            modifyFields(current, {
+              zombies: () => [zombieOf('Shambler', 900, 150, ROW_Y, { hp: 1 })],
+              bullets: () => [bulletAt(800, 140, ROW_Y, 300, 1)],
+            }),
+        )(crewOf(2)),
+      ),
+      ...ticks(2, TICK_MS),
+      model(current => {
+        expect(seatedAt(current, 1).wallet.balance).toBe(bounty)
+        expect(seatOf(current, 1).kills).toBe(1)
+        expect(seatedAt(current, 0).wallet.balance).toBe(0)
+      }),
+    )
+  })
+
+  test('a manor door is bought in full by the one player at it', () => {
+    const preparation = Phase.Preparation({
+      wave: 3,
+      remainingMs: 30_000,
+      durationMs: 30_000,
+      spawns: [],
+    })
+    const atDoor = pipeline(withMoney(0, 100), withMoney(1, 100), current =>
+      atSeat(current, 1, world =>
+        modifyFields(world, {
+          shop: () => ShopState.AtExit({ exit: KITCHEN_EXIT }),
+        }),
+      ),
+    )(crewOf(2, preparation))
+    const bought = act(atDoor, 1, SeatAction.BuyExit())
+    expect(seatedAt(bought, 1).wallet.balance).toBeLessThan(100)
+    expect(seatedAt(bought, 0).wallet.balance).toBe(100)
+    expect(levelOf(bought).key).not.toBe(levelOf(atDoor).key)
+  })
+})
+
+describe('traps per player', () => {
+  const preparation = Phase.Preparation({
+    wave: 3,
+    remainingMs: 30_000,
+    durationMs: 30_000,
+    spawns: [],
+  })
+  const shopping = pipeline(withMoney(0, 500), withMoney(1, 500), current =>
+    atSeat(current, 1, world =>
+      modifyFields(world, {
+        shop: () => ShopState.Browsing({ focusedItem: 'Barricade' }),
+      }),
+    ),
+  )(crewOf(2, preparation))
+
+  test('each player can hold one Plank Pile, and a teammate still can', () => {
+    const once = act(shopping, 1, SeatAction.Buy({ item: 'Barricade' }))
+    const twice = act(once, 1, SeatAction.Buy({ item: 'Barricade' }))
+    expect(seatedAt(once, 1).wallet.balance).toBeLessThan(500)
+    expect(seatedAt(twice, 1).wallet.balance).toBe(
+      seatedAt(once, 1).wallet.balance,
+    )
+    const lead = atSeat(twice, 0, world =>
+      modifyFields(world, {
+        shop: () => ShopState.Browsing({ focusedItem: 'Barricade' }),
+      }),
+    )
+    const leadBought = act(lead, 0, SeatAction.Buy({ item: 'Barricade' }))
+    expect(seatedAt(leadBought, 0).wallet.balance).toBeLessThan(500)
+  })
+
+  test('the trap a player places is theirs', () => {
+    const stocked = act(shopping, 1, SeatAction.Buy({ item: 'Turret' }))
+    const placedTrap = act(
+      act(placed(1, 160, 120)(stocked), 1, SeatAction.LeaveCounter()),
+      1,
+      SeatAction.PlaceTrap(),
+    )
+    expect(placedTrap.traps).toHaveLength(1)
+    expect(seatOf(placedTrap, 1).trapIds).toEqual([placedTrap.traps[0]?.id])
+    expect(seatOf(placedTrap, 0).trapIds).toEqual([])
+  })
+})
+
+describe('friendly fire', () => {
+  const inTheLine = (current: Model): Model =>
+    pipeline(placed(0, LEFT_X, ROW_Y), placed(1, 150, ROW_Y), world =>
+      modifyFields(world, {
+        bullets: () => [bulletAt(800, 140, ROW_Y, 300, 0)],
+      }),
+    )(current)
+
+  test('a teammate’s shot passes through on Normal', () => {
+    story(
+      update,
+      given(inTheLine(crewOf(2))),
+      ...ticks(2, TICK_MS),
+      model(current => {
+        expect(seatedAt(current, 1).player.hp).toBe(PLAYER_MAX_HP)
+      }),
+    )
+  })
+
+  test('a teammate’s shot hurts on Nightmare', () => {
+    const nightmare = modifyFields(crewOf(2), {
+      difficulty: difficulty =>
+        modifyFields(difficulty, { chosen: () => 'Nightmare' }),
+    })
+    story(
+      update,
+      given(inTheLine(nightmare)),
+      ...ticks(2, TICK_MS),
+      model(current => {
+        expect(seatedAt(current, 1).player.hp).toBe(
+          PLAYER_MAX_HP - COOP_RULES.friendlyFireDamage,
+        )
+      }),
+    )
+  })
+
+  test('single player never shoots itself', () => {
+    const solo = pipeline(placed(0, 150, ROW_Y), world =>
+      modifyFields(world, {
+        difficulty: difficulty =>
+          modifyFields(difficulty, { chosen: () => 'Nightmare' }),
+        bullets: () => [bulletAt(800, 140, ROW_Y, 300, 0)],
+      }),
+    )(crewOf(1))
+    story(
+      update,
+      given(solo),
+      ...ticks(2, TICK_MS),
+      model(current => {
+        expect(current.player.hp).toBe(PLAYER_MAX_HP)
+      }),
+    )
+  })
+})
+
+describe('difficulty scales with the player count', () => {
+  const rolled = (count: number) =>
+    beginPreparation(crewOf(count, Phase.Ready()), 4, 30_000)
+
+  const spawnsOf = (world: World): ReadonlyArray<PlannedSpawn> =>
+    world.phase._tag === 'Preparation' ? world.phase.spawns : []
+
+  test('wave counts scale by 1, 1.6, 2.2, and 2.8 and health by 1 to 1.3', () => {
+    const solo = spawnsOf(rolled(1))
+    Array.forEach([2, 3, 4], count => {
+      const crowd = spawnsOf(rolled(count))
+      const countScale = COOP_RULES.waveCountScale[count - 1] ?? 1
+      const healthScale = COOP_RULES.healthScale[count - 1] ?? 1
+      expect(crowd).toHaveLength(Math.floor(solo.length * countScale))
+      expect(crowd[0]?.hpScale).toBeCloseTo(
+        (solo[0]?.hpScale ?? 1) * healthScale,
+      )
+    })
+  })
+
+  test('one player rolls the wave exactly as single player always did', () => {
+    const solo = beginPreparation(
+      modifyFields(veteranModel, { phase: () => Phase.Ready() }),
+      4,
+      30_000,
+    )
+    expect(spawnsOf(rolled(1))).toEqual(spawnsOf(solo))
+  })
+})
+
+describe('the world never pauses in co-op', () => {
+  const breakOf = (wave: number) =>
+    Phase.Preparation({
+      wave,
+      remainingMs: 30_000,
+      durationMs: 30_000,
+      spawns: [],
+    })
+
+  const remainingOf = (world: World): number =>
+    world.phase._tag === 'Preparation' ? world.phase.remainingMs : -1
+
+  test('a player at the stall does not hold the break clock', () => {
+    const browsing = atSeat(crewOf(2, breakOf(3)), 0, world =>
+      modifyFields(world, {
+        shop: () => ShopState.Browsing({ focusedItem: 'Heart' }),
+      }),
+    )
+    const stepped = stepWorld(browsing, soloInputs(idleIntent)).world
+    expect(remainingOf(stepped)).toBeLessThan(30_000)
+  })
+
+  test('the break ends once everyone has pressed READY', () => {
+    const waiting = crewOf(2, breakOf(3))
+    const oneReady = stepWorld(
+      act(waiting, 0, SeatAction.Ready()),
+      soloInputs(idleIntent),
+    ).world
+    expect(oneReady.phase._tag).toBe('Preparation')
+    const bothReady = stepWorld(
+      applySeatAction(oneReady, 1, SeatAction.Ready()),
+      soloInputs(idleIntent),
+    ).world
+    expect(bothReady.phase._tag).toBe('Wave')
+  })
+
+  test('an away player never holds up READY', () => {
+    const away = setPresence(crewOf(2, breakOf(3)), 1, 'Away')
+    const stepped = stepWorld(
+      applySeatAction(away, 0, SeatAction.Ready()),
+      soloInputs(idleIntent),
+    ).world
+    expect(stepped.phase._tag).toBe('Wave')
+  })
+
+  test('a kill never freezes the World', () => {
+    story(
+      update,
+      given(
+        pipeline(placed(0, LEFT_X, ROW_Y), current =>
+          modifyFields(current, {
+            zombies: () => [zombieOf('Shambler', 900, 150, ROW_Y, { hp: 1 })],
+            bullets: () => [bulletAt(800, 140, ROW_Y, 300, 0)],
+          }),
+        )(crewOf(2)),
+      ),
+      ...ticks(2, TICK_MS),
+      model(current => {
+        expect(current.zombies[0]?.hp).toBe(0)
+        expect(HitStop.isAnyOf(['Running'])(current.hitStop)).toBe(true)
+      }),
+    )
+  })
+})
+
+describe('away and pickups', () => {
+  test('an away player stands frozen and can still be hurt', () => {
+    const away = setPresence(
+      pipeline(placed(0, LEFT_X, ROW_Y), placed(1, RIGHT_X, ROW_Y), current =>
+        modifyFields(current, {
+          zombies: () => [zombieOf('Shambler', 900, RIGHT_X + 5, ROW_Y)],
+        }),
+      )(crewOf(2)),
+      1,
+      'Away',
+    )
+    const walking = new Map([
+      [1, modifyFields(idleIntent, { move: () => ({ x: 0, y: 1 }) })],
+    ])
+    const stepped = stepWorld(away, walking).world
+    expect(seatedAt(stepped, 1).player.hp).toBeLessThan(PLAYER_MAX_HP)
+    expect(seatedAt(stepped, 1).player.y).toBeCloseTo(ROW_Y, 0)
+  })
+
+  test('a pickup goes to whoever touches it', () => {
+    const hurtMate = pipeline(
+      placed(0, LEFT_X, ROW_Y, 3),
+      placed(1, RIGHT_X, ROW_Y, 3),
+      current =>
+        modifyFields(current, {
+          pickups: () => [
+            { id: 950, kind: 'Heart', x: RIGHT_X, y: ROW_Y, ageMs: 0 },
+          ],
+        }),
+    )(crewOf(2))
+    const stepped = stepWorld(hurtMate, soloInputs(idleIntent)).world
+    expect(seatedAt(stepped, 1).player.hp).toBeGreaterThan(3)
+    expect(seatedAt(stepped, 0).player.hp).toBe(3)
+    expect(stepped.pickups).toHaveLength(0)
+  })
+})
+
+describe('single player', () => {
+  test('a single player World has no crew', () => {
+    expect(crewOf(1).party._tag).toBe('Solo')
+    expect(initialModel.party._tag).toBe('Solo')
+    expect(playersOf(crewOf(1))).toHaveLength(1)
+    expect(
+      Invulnerability.isAnyOf(['Vulnerable'])(crewOf(1).player.invulnerability),
+    ).toBe(true)
+    expect(Arsenal.isAnyOf(['PistolOnly'])(crewOf(1).player.arsenal)).toBe(true)
+  })
+})

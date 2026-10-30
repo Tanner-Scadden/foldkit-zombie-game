@@ -9,6 +9,7 @@ import {
   Boss,
   DebutCard,
   FIRST_SHOP_CATEGORY,
+  Party,
   RunTally,
   ShopState,
   Streak,
@@ -72,6 +73,7 @@ export type RunFields = Pick<
   | 'stats'
   | 'runTally'
   | 'screenMs'
+  | 'party'
 >
 
 export const freshRun = (model: Model): RunFields => ({
@@ -121,4 +123,5 @@ export const freshRun = (model: Model): RunFields => ({
   stats: freshStats,
   runTally: RunTally.Uncounted(),
   screenMs: 0,
+  party: Party.Solo(),
 })

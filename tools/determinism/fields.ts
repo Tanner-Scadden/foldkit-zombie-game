@@ -53,6 +53,7 @@ export const FIELD_CLASSES = {
   practice: 'World',
   debutCard: 'World',
   stats: 'World',
+  party: 'World',
 
   input: 'Client',
   maybeSurface: 'Client',
@@ -124,6 +125,7 @@ export const FIELD_CLASSES = {
   profile: 'Client',
   rotationSetting: 'Client',
   shopChatter: 'Client',
+  localPlayers: 'Client',
 } satisfies Partial<Record<keyof Model, FieldClass>>
 
 const CLASS_BY_FIELD: ReadonlyMap<string, FieldClass> = new Map(
@@ -153,13 +155,27 @@ const flatEntriesOf = (
       : [[field, value] as const],
   )
 
+// NOTE: fields the World gained for co-op hash only once they hold more
+// than single player's value, so a single player run hashes exactly as it
+// did before them, and before and after (beforeAfter.ts) compares a solo
+// run across the change.
+const isSoloDefault = (field: string, value: unknown): boolean =>
+  field === 'party' &&
+  typeof value === 'object' &&
+  value !== null &&
+  '_tag' in value &&
+  value._tag === 'Solo'
+
 // The hashed fields of a Model with their values, sorted by name, so the
 // order never depends on how the Model was built.
 export const gameplayEntriesOf = (
   model: Model,
 ): ReadonlyArray<readonly [string, unknown]> =>
   flatEntriesOf(model)
-    .filter(([field]) => isHashedClass(classOf(field)))
+    .filter(
+      ([field, value]) =>
+        isHashedClass(classOf(field)) && !isSoloDefault(field, value),
+    )
     .sort(byField)
 
 export const hashedFieldsOf = (model: Model): ReadonlyArray<string> =>

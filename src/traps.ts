@@ -35,9 +35,17 @@ import {
 } from './constants'
 import { addVectors, directionBetween, scaleVector } from './geometry'
 import type { Model } from './model'
+import {
+  COOP_RULES,
+  firedBy,
+  isCoop,
+  leadSeatOf,
+  modifyLeadSeat,
+  trapOwnerOf,
+} from './party'
 import { countTrapPlaced } from './stats'
 import { WEAPONS } from './weapons'
-import type { World } from './world'
+import { type World, withWorld } from './world'
 import {
   type Bullet,
   DoorId,
@@ -396,6 +404,7 @@ const operateTurret = (
   turret: TurretFields,
   zombies: ReadonlyArray<Zombie>,
   deltaMs: number,
+  maybeOwner: Option.Option<number>,
 ): readonly [Volley, Trap] => {
   const center = trapCenter(level, turret)
   const remainingMs = remainingCooldown(turret.gun, deltaMs)
@@ -429,7 +438,10 @@ const operateTurret = (
           nextEntityId: volley.nextEntityId + 1,
           bullets: [
             ...volley.bullets,
-            peaFrom(volley.nextEntityId, muzzle, direction),
+            firedBy(
+              peaFrom(volley.nextEntityId, muzzle, direction),
+              maybeOwner,
+            ),
           ],
           events: [
             ...volley.events,
@@ -471,6 +483,7 @@ const runTurrets = (model: World, deltaMs: number): World => {
             turret,
             model.zombies,
             deltaMs,
+            trapOwnerOf(model, turret.id),
           ),
       }),
   )
@@ -522,8 +535,20 @@ export const placedCount = (
   kind: TrapKind,
 ): number => Array.filter(traps, trap => trap._tag === kind).length
 
+// NOTE: in co-op each player counts only the traps they placed, against a
+// limit of their own (decided row 21). Single player counts every trap.
+const ownTraps = (model: World): ReadonlyArray<Trap> =>
+  isCoop(model)
+    ? Array.filter(model.traps, ({ id }) =>
+        Array.contains(leadSeatOf(model).trapIds, id),
+      )
+    : model.traps
+
+export const trapLimitOf = (model: World, kind: TrapKind): number =>
+  isCoop(model) ? COOP_RULES.trapLimit : TRAPS[kind].limit
+
 export const ownedCount = (model: World, kind: TrapKind): number =>
-  model.trapStock[kind] + placedCount(model.traps, kind)
+  model.trapStock[kind] + placedCount(ownTraps(model), kind)
 
 const otherKind = (kind: TrapKind): TrapKind =>
   kind === 'Barricade' ? 'Turret' : 'Barricade'
@@ -629,7 +654,7 @@ const firstReason = (
   )
 
 const isAtLimit = (model: World, kind: TrapKind): boolean =>
-  placedCount(model.traps, kind) >= TRAPS[kind].limit
+  placedCount(ownTraps(model), kind) >= trapLimitOf(model, kind)
 
 const maybeDoorInReach = (
   level: Level,
@@ -844,7 +869,13 @@ const stepOutOfDoorway = (
 
 export type Placed = Readonly<{ model: Model; trap: Trap }>
 
-export const placeTrap = (model: Model): Result.Result<Placed, string> =>
+export type PlacedInWorld = Readonly<{ world: World; trap: Trap }>
+
+// NOTE: places the selected trap for the player in the World's per-player
+// fields, who owns it in co-op.
+export const placeTrapIn = (
+  model: World,
+): Result.Result<PlacedInWorld, string> =>
   Option.match(maybePlacement(model), {
     onNone: () => Result.fail('You have no traps to place'),
     onSome: ({ kind, maybeSpot, verdict }) =>
@@ -857,21 +888,38 @@ export const placeTrap = (model: Model): Result.Result<Placed, string> =>
               const trap = newTrap(model.nextEntityId, spot, model.player)
               return Result.succeed({
                 trap,
-                model: modifyFields(model, {
-                  traps: Array.append(trap),
-                  nextEntityId: id => id + 1,
-                  trapStock: stock => addStock(stock, kind, -1),
-                  player: player =>
-                    stepOutOfDoorway(levelOf(model), player, spot),
-                  trapHint: () => TrapHint.Seen(),
-                  trapNotice: () => TrapNotice.Quiet(),
-                  stats: countTrapPlaced,
-                }),
+                world: modifyFields(
+                  modifyLeadSeat(model, seat =>
+                    modifyFields(seat, {
+                      trapIds: Array.append(trap.id),
+                    }),
+                  ),
+                  {
+                    traps: Array.append(trap),
+                    nextEntityId: id => id + 1,
+                    trapStock: stock => addStock(stock, kind, -1),
+                    player: player =>
+                      stepOutOfDoorway(levelOf(model), player, spot),
+                    stats: countTrapPlaced,
+                  },
+                ),
               })
             },
           }),
       }),
   })
+
+export const placeTrap = (model: Model): Result.Result<Placed, string> =>
+  Result.map(placeTrapIn(model), ({ world, trap }) => ({
+    trap,
+    model: modifyFields(
+      withWorld(model, () => world),
+      {
+        trapHint: () => TrapHint.Seen(),
+        trapNotice: () => TrapNotice.Quiet(),
+      },
+    ),
+  }))
 
 export const refusePlacement = (model: Model, reason: string): Model =>
   modifyFields(model, {

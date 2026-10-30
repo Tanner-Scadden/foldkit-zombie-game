@@ -34,7 +34,7 @@ import {
   ZOMBIE_ALIVE_MAX,
 } from './constants'
 import { burrowed, drawSurfacingSpot } from './crawler'
-import { toughenSpawns, withBests } from './difficulty'
+import { crowdSpawns, toughenSpawns, withBests } from './difficulty'
 import { OPPOSITE_DOOR, routeSpawns } from './doorRoute'
 import { frenzyOnArrival, frenzyPacksOf } from './frenzy'
 import { clamp } from './geometry'
@@ -54,8 +54,16 @@ import {
   waitingCount,
   warnPacks,
 } from './pacing'
+import {
+  isCoop,
+  isStanding,
+  payShared,
+  playerCountOf,
+  playersOf,
+  targetsOf,
+} from './party'
 import { type Seeded, between, nextRandom } from './prng'
-import { earn } from './shop'
+import { isEveryoneReady, returnFallen } from './revive'
 import { type World, withWorld } from './world'
 import {
   Alarm,
@@ -1367,14 +1375,17 @@ export const beginPreparation = (
     levelOf(model).doorIds,
   )
   const { holds } = rolled
-  const spawns = toughenSpawns(model.difficulty.chosen, rolled.spawns)
+  const spawns = crowdSpawns(
+    playerCountOf(model),
+    toughenSpawns(model.difficulty.chosen, rolled.spawns),
+  )
   const [rngState, boss] = planBoss(
     levelOf(model).doorIds,
     waveState,
     wave,
     spawns,
   )
-  return modifyFields(model, {
+  return modifyFields(returnFallen(model), {
     boss: () => boss,
     frenzyPacks: () => frenzyPacksOf(spawns),
     phase: () =>
@@ -1524,12 +1535,14 @@ const isWaveCleared = (
 
 const payWaveBonus = (model: World, wave: number): World => {
   const bonus = waveBonus(wave)
-  return modifyFields(model, {
-    wallet: wallet => earn(wallet, bonus),
-    frameEvents: Array.append(
-      GameEvent.WaveCleared({ x: model.player.x, y: model.player.y, bonus }),
-    ),
-  })
+  return payShared(
+    modifyFields(model, {
+      frameEvents: Array.append(
+        GameEvent.WaveCleared({ x: model.player.x, y: model.player.y, bonus }),
+      ),
+    }),
+    bonus,
+  )
 }
 
 const clearWave = (model: World, wave: number): World => {
@@ -1618,7 +1631,7 @@ const advanceWave = (
     route,
     clockMs,
     pacedMs,
-    model.player,
+    targetsOf(model),
   )
   const warned = warnPacks(
     modifyFields(model, {
@@ -1683,11 +1696,17 @@ const countDownBreak = (
 export const advanceRound = (model: World, worldMs: number): World =>
   Phase.match(model.phase, {
     Ready: () => model,
-    Preparation: preparation =>
-      ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop) ||
-      isPracticeGateHeld(model)
+    Preparation: preparation => {
+      if (isCoop(model)) {
+        return isEveryoneReady(model)
+          ? startWaveEarly(model)
+          : countDownBreak(model, preparation, worldMs)
+      }
+      return ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop) ||
+        isPracticeGateHeld(model)
         ? model
-        : countDownBreak(model, preparation, worldMs),
+        : countDownBreak(model, preparation, worldMs)
+    },
     Wave: round => advanceWave(model, round, worldMs),
     Paused: () => model,
     Victory: () => model,
@@ -1719,8 +1738,14 @@ const recordBestWave = (model: Model, wave: number): Model =>
       )
     : model
 
+// NOTE: in co-op the run ends when everyone is down (decided row 4).
+const isDefeated = (model: World): boolean =>
+  isCoop(model)
+    ? !Array.some(playersOf(model), ({ seat }) => isStanding(seat))
+    : model.player.hp <= 0
+
 export const endWhenDefeated = (model: World): World => {
-  if (model.player.hp > 0) {
+  if (!isDefeated(model)) {
     return model
   }
 

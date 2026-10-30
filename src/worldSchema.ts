@@ -280,6 +280,9 @@ export const Bullet = Schema.Struct({
   knockback: Schema.Number,
   glaze: BulletGlaze,
   pierce: Pierce,
+  // NOTE: the slot of the player or the gnome's owner who fired it, set
+  // only in co-op, so a single player World is the same record it was.
+  shooter: Schema.optionalKey(Schema.Number),
 })
 export type Bullet = typeof Bullet.Type
 
@@ -563,6 +566,9 @@ export const GameEvent = defineTaggedUnion({
   PackWiped: { x: Schema.Number, y: Schema.Number, bonus: Schema.Number },
   OvenBelched: { x: Schema.Number, y: Schema.Number },
   ZombieSlipped: { x: Schema.Number, y: Schema.Number },
+  PlayerDowned: { x: Schema.Number, y: Schema.Number },
+  PlayerRevived: { x: Schema.Number, y: Schema.Number },
+  FriendlyFire: { x: Schema.Number, y: Schema.Number, direction: Vector },
 })
 export type GameEvent = typeof GameEvent.Type
 
@@ -958,9 +964,12 @@ export const Toll = Schema.Struct({
 })
 export type Toll = typeof Toll.Type
 
+// NOTE: originIndex is the tile the field flows to. In co-op it flows to
+// every living player at once: the other players' tiles are moreOrigins.
 export const FlowField = Schema.Struct({
   levelKey: Schema.String,
   originIndex: Schema.Number,
+  moreOrigins: Schema.Array(Schema.Number),
   tolls: Schema.Array(Toll),
   distances: Schema.Array(Schema.Number),
 })
@@ -1133,6 +1142,74 @@ export const RunStats = Schema.Struct({
 })
 export type RunStats = typeof RunStats.Type
 
+// CO-OP
+
+// NOTE: a player is keyed by their seat in the room. Single player is the
+// one seat SOLO_SLOT.
+export const PlayerSlot = Schema.Number
+export type PlayerSlot = typeof PlayerSlot.Type
+
+export const SOLO_SLOT: PlayerSlot = 0
+
+// NOTE: in co-op a player at zero hearts is Downed: they crawl, cannot
+// shoot, and bleed out when bleedMs runs out, unless a teammate standing
+// still beside them fills reviveMs first. A BledOut player is out of the
+// fight until the next break (MULTIPLAYER.md, decided row 4).
+export const Life = defineTaggedUnion({
+  Standing: {},
+  Downed: { bleedMs: Schema.Number, reviveMs: Schema.Number },
+  BledOut: {},
+})
+export type Life = typeof Life.Type
+
+// NOTE: an Away player sent no input for a while (decided row 10): frozen
+// in place, and zombies can still hurt them.
+export const Presence = Schema.Literals(['Here', 'Away'])
+export type Presence = typeof Presence.Type
+
+export const Readiness = Schema.Literals(['Waiting', 'Ready'])
+export type Readiness = typeof Readiness.Type
+
+// NOTE: what co-op adds to a player: their seat, life, presence, READY for
+// the break, the traps they placed (one of each kind, decided row 21), and
+// the kills credited to them.
+export const Seat = Schema.Struct({
+  slot: PlayerSlot,
+  life: Life,
+  presence: Presence,
+  readiness: Readiness,
+  trapIds: Schema.Array(Schema.Number),
+  kills: Schema.Number,
+})
+export type Seat = typeof Seat.Type
+
+// NOTE: a teammate's own copy of every per-player World field.
+export const Mate = Schema.Struct({
+  seat: Seat,
+  player: Player,
+  intent: Intent,
+  wallet: Wallet,
+  boosts: Boosts,
+  trapStock: TrapCounts,
+  selectedTrap: TrapKind,
+  shop: ShopState,
+  shopCategory: ShopCategory,
+  laserSight: LaserSight,
+})
+export type Mate = typeof Mate.Type
+
+// NOTE: Solo is single player, exactly as it always played. A Crew holds
+// one player in the World's own per-player fields (player, intent, wallet,
+// and the rest), whose seat is lead, and every other player as a Mate. The
+// lead is whichever seat sits in those fields: the step swaps each seat in
+// to run the per-player systems on it, and a client may keep its own seat
+// there to draw it.
+export const Party = defineTaggedUnion({
+  Solo: {},
+  Crew: { lead: Seat, mates: Schema.Array(Mate) },
+})
+export type Party = typeof Party.Type
+
 // NOTE: the World is the part of the Model the step reads and writes: what
 // a co-op room owns and runs (MULTIPLAYER.md, Phase 0). The rest of the
 // Model is the client's: dialogs, menus, input, the camera, cosmetics,
@@ -1174,6 +1251,7 @@ export const World = Schema.Struct({
   practice: Practice,
   debutCard: DebutCard,
   stats: RunStats,
+  party: Party,
 })
 export type World = typeof World.Type
 

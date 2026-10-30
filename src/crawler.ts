@@ -4,6 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import { type Level, distanceToBox, isSolidAt } from './arena'
 import { PLAYER_RADIUS } from './constants'
 import { circlesOverlap } from './geometry'
+import { nearestOf, targetsOf } from './party'
 import { type Seeded, between, nextRandom } from './prng'
 import { STALL_BOX } from './shop'
 import { trapBlockers } from './traps'
@@ -251,11 +252,12 @@ const cling = (zombie: Zombie, player: Vector, deltaMs: number): Step => {
 }
 
 const stepCrawler =
-  (player: Vector, deltaMs: number) =>
+  (targetFor: (zombie: Zombie) => Vector, deltaMs: number) =>
   (zombie: Zombie): Step => {
     if (zombie.kind !== CRAWLER_KIND || !isWalking(zombie)) {
       return stay(zombie)
     }
+    const player = targetFor(zombie)
     const surfaced = surface(zombie, player, deltaMs)
     const clung = cling(surfaced.zombie, player, deltaMs)
     return {
@@ -272,7 +274,11 @@ export const advanceCrawlers = (model: World, deltaMs: number): World => {
     return model
   }
 
-  const steps = Array.map(model.zombies, stepCrawler(model.player, deltaMs))
+  const targets = targetsOf(model)
+  const steps = Array.map(
+    model.zombies,
+    stepCrawler(zombie => nearestOf(targets, zombie), deltaMs),
+  )
   return modifyFields(model, {
     zombies: () => Array.map(steps, ({ zombie }) => zombie),
     frameEvents: frameEvents => [
@@ -289,6 +295,28 @@ export const ankleSlowAt = (zombies: ReadonlyArray<Zombie>): number =>
     zombies,
     zombie =>
       isWalking(zombie) && ZombieAction.isAnyOf(['Clinging'])(zombie.action),
+  )
+    ? CRAWLER_RULES.clingSlow
+    : 1
+
+const ANKLE_REACH_PX = 4
+
+// NOTE: in co-op an Ankle Biter slows only the player whose ankles it holds.
+export const ankleSlowNear = (
+  zombies: ReadonlyArray<Zombie>,
+  player: Vector,
+): number =>
+  Array.some(
+    zombies,
+    zombie =>
+      isWalking(zombie) &&
+      ZombieAction.isAnyOf(['Clinging'])(zombie.action) &&
+      circlesOverlap(
+        zombie,
+        bodyRadiusOf(zombie) + ANKLE_REACH_PX,
+        player,
+        PLAYER_RADIUS,
+      ),
   )
     ? CRAWLER_RULES.clingSlow
     : 1

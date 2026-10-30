@@ -50,6 +50,7 @@ import {
   OrientationLock,
   PageVisibility,
   Particle,
+  Party,
   Phase,
   PickupKind,
   PlayerBests,
@@ -178,6 +179,9 @@ export const Model = Schema.Struct({
   shakeSetting: ShakeSetting,
   rotationSetting: RotationSetting,
   orientationLock: OrientationLock,
+  // NOTE: players sharing this keyboard, from a dev-only `?local=N` link
+  // (MULTIPLAYER.md, "What Phase 1 built"). 1 in every shipped build.
+  localPlayers: Schema.Number,
   shareStats: ShareStatsSetting,
   cursorSetting: CursorSetting,
   maybeVisitId: Schema.Option(Schema.String),
@@ -329,6 +333,8 @@ export const initialModel: Model = {
   shakeSetting: 'On',
   rotationSetting: 'Landscape',
   orientationLock: 'Unsupported',
+  localPlayers: 1,
+  party: Party.Solo(),
   shareStats: 'On',
   cursorSetting: 'Bold',
   maybeVisitId: Option.none(),

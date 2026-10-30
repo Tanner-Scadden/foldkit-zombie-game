@@ -216,13 +216,15 @@ const computeFlowField = (
   originIndex: number,
   clearance: Clearance,
   tolls: ReadonlyArray<Toll>,
+  moreOrigins: ReadonlyArray<number> = [],
 ): FlowField => ({
   levelKey: level.key,
   originIndex,
+  moreOrigins,
   tolls,
   distances: spread(
     level,
-    [originIndex],
+    [originIndex, ...moreOrigins],
     clearance,
     new Map(Array.map(tolls, ({ index, cost }) => [index, cost])),
   ),
@@ -235,6 +237,7 @@ const fieldFrom = (
 ): FlowField => ({
   levelKey: level.key,
   originIndex: Array.headNonEmpty(origins),
+  moreOrigins: Array.tailNonEmpty(origins),
   tolls: [],
   distances: spread(level, origins, clearance, new Map()),
 })
@@ -273,6 +276,7 @@ export const refreshFlowField = (
   if (
     flowField.levelKey === level.key &&
     originIndex === flowField.originIndex &&
+    Array.isReadonlyArrayEmpty(flowField.moreOrigins) &&
     areSameTolls(flowField.tolls, tolls)
   ) {
     return flowField
@@ -280,6 +284,51 @@ export const refreshFlowField = (
     return computeFlowField(level, originIndex, clearance, tolls)
   }
 }
+
+const areSameOrigins = (
+  first: ReadonlyArray<number>,
+  second: ReadonlyArray<number>,
+): boolean =>
+  first.length === second.length &&
+  Array.every(Array.zip(first, second), ([left, right]) => left === right)
+
+// NOTE: in co-op the field flows to every living player at once, one
+// breadth-first pass from all their tiles, so each zombie walks downhill to
+// whoever is nearest. One target is refreshFlowField exactly.
+export const refreshFlowFieldToward = (
+  level: Level,
+  flowField: FlowField,
+  targets: Array.NonEmptyReadonlyArray<Vector>,
+  clearance: Clearance,
+  tolls: ReadonlyArray<Toll>,
+): FlowField => {
+  const [first, ...rest] = Array.dedupe(
+    Array.map(targets, target => tileIndexAt(level, target)),
+  )
+  if (Array.isReadonlyArrayEmpty(rest)) {
+    return refreshFlowField(
+      level,
+      flowField,
+      Array.headNonEmpty(targets),
+      clearance,
+      tolls,
+    )
+  }
+  if (
+    flowField.levelKey === level.key &&
+    first === flowField.originIndex &&
+    areSameOrigins(rest, flowField.moreOrigins) &&
+    areSameTolls(flowField.tolls, tolls)
+  ) {
+    return flowField
+  }
+  return computeFlowField(level, first, clearance, tolls, rest)
+}
+
+const isOriginOf = (flowField: FlowField, index: number): boolean =>
+  index === flowField.originIndex ||
+  (Array.isReadonlyArrayNonEmpty(flowField.moreOrigins) &&
+    Array.contains(flowField.moreOrigins, index))
 
 // STEERING
 
@@ -294,8 +343,10 @@ const isStepOpen = (
   clearance: Clearance,
 ): boolean =>
   STEP_RULES[clearance](level, column, row, step) ||
-  (tileIndex(level, column + step.column, row + step.row) ===
-    flowField.originIndex &&
+  (isOriginOf(
+    flowField,
+    tileIndex(level, column + step.column, row + step.row),
+  ) &&
     isNarrowStepOpen(level, column, row, step))
 
 const downhillStep = (

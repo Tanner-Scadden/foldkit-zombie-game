@@ -25,6 +25,7 @@ import {
   repairPrice,
   repairTrap,
   stockTrap,
+  trapLimitOf,
 } from './traps'
 import {
   SIDEARM,
@@ -64,11 +65,7 @@ import {
 
 // MONEY
 
-export const earn = (wallet: Wallet, amount: number): Wallet =>
-  modifyFields(wallet, {
-    balance: balance => balance + amount,
-    earned: earned => earned + amount,
-  })
+export { earn } from './party'
 
 const spend = (wallet: Wallet, amount: number): Wallet =>
   modifyFields(wallet, { balance: balance => balance - amount })
@@ -664,7 +661,7 @@ const blockedBy = (model: World, good: ShopGood): Option.Option<Block> => {
         ? block('Your hearts are full', 'FULL')
         : Option.none(),
     Trap: ({ kind }) =>
-      ownedCount(model, kind) >= TRAPS[kind].limit
+      ownedCount(model, kind) >= trapLimitOf(model, kind)
         ? block(TRAPS[kind].buyLimitNote, 'MAX')
         : Option.none(),
     Repair: ({ trapId }) =>

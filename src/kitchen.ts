@@ -16,7 +16,7 @@ import {
 import { ZOMBIE_BLAST_TARGET, bountyOf } from './combat'
 import { BULLET_STEP_PX } from './constants'
 import { KITCHEN_EXIT, boxAround } from './exits'
-import { earn } from './shop'
+import { payShared } from './party'
 import type { World } from './world'
 import {
   GameEvent,
@@ -186,11 +186,13 @@ const scorch = (model: World, oven: Box): World => {
   const events = Array.flatMap(outcomes, ({ events }) => events)
   return Array.isReadonlyArrayEmpty(events)
     ? model
-    : modifyFields(model, {
-        zombies: () => Array.map(outcomes, ({ target }) => target),
-        wallet: wallet => earn(wallet, bountyOf(events)),
-        frameEvents: frameEvents => [...frameEvents, ...events],
-      })
+    : payShared(
+        modifyFields(model, {
+          zombies: () => Array.map(outcomes, ({ target }) => target),
+          frameEvents: frameEvents => [...frameEvents, ...events],
+        }),
+        bountyOf(events),
+      )
 }
 
 type Heat = Readonly<{ oven: Oven; ticksDue: number }>
