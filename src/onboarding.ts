@@ -8,7 +8,7 @@ import { isPending, isTimedBreak, learn } from './lessons'
 import type { Model } from './model'
 import { isShopOpenFor } from './shop'
 import { TURRET_WEAPON, maybeSelectedKind } from './traps'
-import { maybeSpare } from './weapons'
+import { maybeOtherGun } from './weapons'
 import {
   BreakClock,
   DebutCard,
@@ -482,7 +482,7 @@ const HINT_RULES: ReadonlyArray<HintRule> = [
       ageWhen(
         isRoundActive(model) &&
           isPending(model.lessons.swap) &&
-          Option.isSome(maybeSpare(model.player.arsenal)),
+          Option.isSome(maybeOtherGun(model.player.arsenal)),
         msIntoPhase(model.phase),
       ),
   },

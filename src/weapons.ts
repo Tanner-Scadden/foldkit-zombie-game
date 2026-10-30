@@ -19,6 +19,7 @@ import type { SoundEffect } from './soundEffect'
 import {
   Arsenal,
   type CarriedGun,
+  type GunSlot,
   type ParticleKind,
   type Player,
   Reload,
@@ -458,51 +459,10 @@ export const tierName = (kind: WeaponKind, tier: number): string =>
 
 // ARSENAL
 
-export const heldWeapon = (arsenal: Arsenal): WeaponKind =>
-  Arsenal.match(arsenal, {
-    PistolOnly: () => SIDEARM,
-    HoldingPistol: () => SIDEARM,
-    HoldingSpare: ({ spare }) => spare.kind,
-  })
-
-export const maybeSpare = (arsenal: Arsenal): Option.Option<CarriedGun> =>
-  Arsenal.match(arsenal, {
-    PistolOnly: () => Option.none(),
-    HoldingPistol: ({ spare }) => Option.some(spare),
-    HoldingSpare: ({ spare }) => Option.some(spare),
-  })
-
-export const swapWeapon = (arsenal: Arsenal): Arsenal =>
-  Arsenal.match(arsenal, {
-    PistolOnly: () => arsenal,
-    HoldingPistol: ({ spare }) => Arsenal.HoldingSpare({ spare }),
-    HoldingSpare: ({ spare }) => Arsenal.HoldingPistol({ spare }),
-  })
-
-export const holdPistol = (arsenal: Arsenal): Arsenal =>
-  Arsenal.match(arsenal, {
-    PistolOnly: () => arsenal,
-    HoldingPistol: () => arsenal,
-    HoldingSpare: ({ spare }) => Arsenal.HoldingPistol({ spare }),
-  })
-
-export const heldTier = (player: Player): number =>
-  Arsenal.match(player.arsenal, {
-    PistolOnly: () => player.pistolTier,
-    HoldingPistol: () => player.pistolTier,
-    HoldingSpare: ({ spare }) => spare.tier,
-  })
-
-export const tierOf = (player: Player, kind: WeaponKind): number =>
-  kind === SIDEARM
-    ? player.pistolTier
-    : Option.match(
-        Option.filter(maybeSpare(player.arsenal), spare => spare.kind === kind),
-        { onNone: () => 0, onSome: spare => spare.tier },
-      )
-
-export const heldStats = (player: Player): WeaponStats =>
-  statsAt(heldWeapon(player.arsenal), heldTier(player))
+// NOTE: a gun with no round limit (the Pop Pistol) never runs out: only its
+// magazine counts, and a reload always fills it.
+export const hasEndlessRounds = (kind: WeaponKind): boolean =>
+  Option.isNone(WEAPONS[kind].maybeRoundLimit)
 
 export const startingRounds = (kind: WeaponKind): number =>
   Option.match(WEAPONS[kind].maybeRoundLimit, {
@@ -516,27 +476,142 @@ export const maxRounds = (kind: WeaponKind, tier: number): number =>
     onSome: ({ max }) => max,
   })
 
-// MAGAZINES
-
 export const magazineOf = (kind: WeaponKind, tier: number): number =>
   statsAt(kind, tier).magazine
 
+export const freshGun = (kind: WeaponKind): CarriedGun => ({
+  kind,
+  rounds: startingRounds(kind),
+  loaded: hasEndlessRounds(kind)
+    ? magazineOf(kind, 0)
+    : Math.min(startingRounds(kind), magazineOf(kind, 0)),
+  tier: 0,
+})
+
+export const heldGun = (arsenal: Arsenal): CarriedGun =>
+  Arsenal.match(arsenal, {
+    OneGun: ({ first }) => first,
+    HoldingFirst: ({ first }) => first,
+    HoldingSecond: ({ second }) => second,
+  })
+
+// NOTE: the gun in the slot the player is not holding, if both are filled.
+export const maybeOtherGun = (arsenal: Arsenal): Option.Option<CarriedGun> =>
+  Arsenal.match(arsenal, {
+    OneGun: () => Option.none(),
+    HoldingFirst: ({ second }) => Option.some(second),
+    HoldingSecond: ({ first }) => Option.some(first),
+  })
+
+// NOTE: the guns in slot order, the first slot first.
+export const gunsOf = (
+  arsenal: Arsenal,
+): Array.NonEmptyReadonlyArray<CarriedGun> =>
+  Arsenal.match(arsenal, {
+    OneGun: ({ first }): Array.NonEmptyReadonlyArray<CarriedGun> => [first],
+    HoldingFirst: ({
+      first,
+      second,
+    }): Array.NonEmptyReadonlyArray<CarriedGun> => [first, second],
+    HoldingSecond: ({
+      first,
+      second,
+    }): Array.NonEmptyReadonlyArray<CarriedGun> => [first, second],
+  })
+
+export const heldSlotOf = (arsenal: Arsenal): GunSlot =>
+  Arsenal.isAnyOf(['HoldingSecond'])(arsenal) ? 'Second' : 'First'
+
+export const heldWeapon = (arsenal: Arsenal): WeaponKind =>
+  heldGun(arsenal).kind
+
+export const isCarrying = (player: Player, kind: WeaponKind): boolean =>
+  Array.some(gunsOf(player.arsenal), gun => gun.kind === kind)
+
+export const maybeCarried = (
+  player: Player,
+  kind: WeaponKind,
+): Option.Option<CarriedGun> =>
+  Array.findFirst(gunsOf(player.arsenal), gun => gun.kind === kind)
+
+export const isHolding = (player: Player, kind: WeaponKind): boolean =>
+  heldWeapon(player.arsenal) === kind
+
+export const mapGuns = (
+  arsenal: Arsenal,
+  change: (gun: CarriedGun) => CarriedGun,
+): Arsenal =>
+  Arsenal.match(arsenal, {
+    OneGun: ({ first }) => Arsenal.OneGun({ first: change(first) }),
+    HoldingFirst: ({ first, second }) =>
+      Arsenal.HoldingFirst({ first: change(first), second: change(second) }),
+    HoldingSecond: ({ first, second }) =>
+      Arsenal.HoldingSecond({ first: change(first), second: change(second) }),
+  })
+
+export const mapHeld = (
+  arsenal: Arsenal,
+  change: (gun: CarriedGun) => CarriedGun,
+): Arsenal =>
+  Arsenal.match(arsenal, {
+    OneGun: ({ first }) => Arsenal.OneGun({ first: change(first) }),
+    HoldingFirst: ({ first, second }) =>
+      Arsenal.HoldingFirst({ first: change(first), second }),
+    HoldingSecond: ({ first, second }) =>
+      Arsenal.HoldingSecond({ first, second: change(second) }),
+  })
+
+export const swapWeapon = (arsenal: Arsenal): Arsenal =>
+  Arsenal.match(arsenal, {
+    OneGun: () => arsenal,
+    HoldingFirst: ({ first, second }) =>
+      Arsenal.HoldingSecond({ first, second }),
+    HoldingSecond: ({ first, second }) =>
+      Arsenal.HoldingFirst({ first, second }),
+  })
+
+// NOTE: a new gun goes in the player's hands. It fills an empty second
+// slot; with both slots full it replaces the gun the player holds, upgrades
+// and all (GAME_DESIGN.md, "The knife and two gun slots").
+export const takeGun = (arsenal: Arsenal, gun: CarriedGun): Arsenal =>
+  Arsenal.match(arsenal, {
+    OneGun: ({ first }) => Arsenal.HoldingSecond({ first, second: gun }),
+    HoldingFirst: ({ second }) => Arsenal.HoldingFirst({ first: gun, second }),
+    HoldingSecond: ({ first }) => Arsenal.HoldingSecond({ first, second: gun }),
+  })
+
+// NOTE: the gun a new one would replace: none while the second slot is
+// empty, else the one in the player's hands.
+export const maybeReplacedGun = (
+  arsenal: Arsenal,
+): Option.Option<CarriedGun> =>
+  Arsenal.isAnyOf(['OneGun'])(arsenal)
+    ? Option.none()
+    : Option.some(heldGun(arsenal))
+
+export const heldTier = (player: Player): number => heldGun(player.arsenal).tier
+
+export const tierOf = (player: Player, kind: WeaponKind): number =>
+  Option.match(maybeCarried(player, kind), {
+    onNone: () => 0,
+    onSome: gun => gun.tier,
+  })
+
+export const heldStats = (player: Player): WeaponStats =>
+  statsAt(heldWeapon(player.arsenal), heldTier(player))
+
+// MAGAZINES
+
 export const heldLoaded = (player: Player): number =>
-  Arsenal.match(player.arsenal, {
-    PistolOnly: () => player.pistolLoaded,
-    HoldingPistol: () => player.pistolLoaded,
-    HoldingSpare: ({ spare }) => spare.loaded,
-  })
+  heldGun(player.arsenal).loaded
 
-export const looseRounds = (spare: CarriedGun): number =>
-  Math.max(0, spare.rounds - spare.loaded)
+export const looseRounds = (gun: CarriedGun): number =>
+  hasEndlessRounds(gun.kind) ? Infinity : Math.max(0, gun.rounds - gun.loaded)
 
-const hasLooseRounds = (player: Player): boolean =>
-  Arsenal.match(player.arsenal, {
-    PistolOnly: () => true,
-    HoldingPistol: () => true,
-    HoldingSpare: ({ spare }) => looseRounds(spare) > 0,
-  })
+// NOTE: whether a gun can still fire, now or after a reload. The Pan
+// always swings, dented or not.
+export const hasRoundsLeft = (gun: CarriedGun): boolean =>
+  hasEndlessRounds(gun.kind) || gun.kind === 'Pan' || gun.rounds > 0
 
 export const isReloading = (player: Player): boolean =>
   Reload.isAnyOf(['Reloading'])(player.reload)
@@ -547,11 +622,15 @@ const UNLOADED_WEAPONS: ReadonlyArray<WeaponKind> = ['Pan', 'Freeze']
 export const isReloadable = (kind: WeaponKind): boolean =>
   !Array.contains(UNLOADED_WEAPONS, kind)
 
-export const canReload = (player: Player): boolean =>
-  isReloadable(heldWeapon(player.arsenal)) &&
-  !isReloading(player) &&
-  heldLoaded(player) < heldStats(player).magazine &&
-  hasLooseRounds(player)
+export const canReload = (player: Player): boolean => {
+  const gun = heldGun(player.arsenal)
+  return (
+    isReloadable(gun.kind) &&
+    !isReloading(player) &&
+    gun.loaded < heldStats(player).magazine &&
+    looseRounds(gun) > 0
+  )
+}
 
 export const beginReload = (player: Player): Player => {
   const { reloadMs } = heldStats(player)
@@ -566,52 +645,39 @@ export const cancelReload = (player: Player): Player =>
     ? modifyFields(player, { reload: () => Reload.Ready() })
     : player
 
-const fillSpare = (spare: CarriedGun): CarriedGun =>
-  modifyFields(spare, {
-    loaded: () => Math.min(spare.rounds, magazineOf(spare.kind, spare.tier)),
+const fillGun = (gun: CarriedGun): CarriedGun =>
+  modifyFields(gun, {
+    loaded: () =>
+      hasEndlessRounds(gun.kind)
+        ? magazineOf(gun.kind, gun.tier)
+        : Math.min(gun.rounds, magazineOf(gun.kind, gun.tier)),
   })
 
 export const finishReload = (player: Player): Player =>
   modifyFields(player, {
     reload: () => Reload.Ready(),
-    pistolLoaded: loaded =>
-      Arsenal.isAnyOf(['HoldingSpare'])(player.arsenal)
-        ? loaded
-        : magazineOf(SIDEARM, player.pistolTier),
-    arsenal: arsenal =>
-      Arsenal.match(arsenal, {
-        PistolOnly: () => arsenal,
-        HoldingPistol: () => arsenal,
-        HoldingSpare: ({ spare }) =>
-          Arsenal.HoldingSpare({ spare: fillSpare(spare) }),
-      }),
+    arsenal: arsenal => mapHeld(arsenal, fillGun),
   })
 
 export const spendRound = (player: Player): Player =>
-  Arsenal.match(player.arsenal, {
-    PistolOnly: () =>
-      modifyFields(player, {
-        pistolLoaded: loaded => Math.max(0, loaded - 1),
-      }),
-    HoldingPistol: () =>
-      modifyFields(player, {
-        pistolLoaded: loaded => Math.max(0, loaded - 1),
-      }),
-    HoldingSpare: ({ spare }) =>
-      modifyFields(player, {
-        arsenal: () =>
-          Arsenal.HoldingSpare({
-            spare: modifyFields(spare, {
-              rounds: rounds => Math.max(0, rounds - 1),
-              loaded: loaded => Math.max(0, loaded - 1),
-            }),
-          }),
-      }),
+  modifyFields(player, {
+    arsenal: arsenal =>
+      mapHeld(arsenal, gun =>
+        modifyFields(gun, {
+          rounds: rounds =>
+            hasEndlessRounds(gun.kind) ? rounds : Math.max(0, rounds - 1),
+          loaded: loaded => Math.max(0, loaded - 1),
+        }),
+      ),
   })
 
-export const freshSpare = (kind: WeaponKind): CarriedGun => ({
-  kind,
-  rounds: startingRounds(kind),
-  loaded: Math.min(startingRounds(kind), magazineOf(kind, 0)),
-  tier: 0,
-})
+// NOTE: a gun that runs dry with nothing left to load hands over to the
+// other gun if that one can still fire; otherwise the player keeps it, and
+// the knife and Rattles' ammo are what is left.
+export const handOverWhenDry = (arsenal: Arsenal): Arsenal =>
+  Option.exists(maybeOtherGun(arsenal), hasRoundsLeft)
+    ? swapWeapon(arsenal)
+    : arsenal
+
+// NOTE: the Pop Pistol as a run starts with it, in the first slot.
+export const STARTING_PISTOL: CarriedGun = freshGun(SIDEARM)

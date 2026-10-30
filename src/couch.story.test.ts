@@ -169,7 +169,7 @@ describe('player 2 on IJKL', () => {
       press('KeyU'),
       release('KeyU'),
       model(current => {
-        expect(mateAt(current, 1).player.arsenal._tag).toBe('HoldingSpare')
+        expect(mateAt(current, 1).player.arsenal._tag).toBe('HoldingSecond')
         expect(mateAt(current, 1).wallet.balance).toBeLessThan(200)
         expect(current.wallet.balance).toBe(0)
       }),

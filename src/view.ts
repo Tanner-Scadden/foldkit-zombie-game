@@ -59,12 +59,12 @@ import { isCoopOpen } from './update/coop'
 import { updateGreetingView } from './updateGift'
 import { FINAL_WAVE, isRoundActive, roundWave } from './waves'
 import {
-  SIDEARM,
   WEAPONS,
+  hasEndlessRounds,
   heldTier,
   heldWeapon,
   maxTier,
-  maybeSpare,
+  maybeOtherGun,
   tierName,
 } from './weapons'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
@@ -193,10 +193,10 @@ const statusText = (model: Model): string => {
 const gunLabel = (model: Model): string => {
   const { player } = model
   const held = tierName(heldWeapon(player.arsenal), heldTier(player))
-  return Option.match(maybeSpare(player.arsenal), {
+  return Option.match(maybeOtherGun(player.arsenal), {
     onNone: () => `Holding the ${held}. Your second slot is empty.`,
-    onSome: spare =>
-      `Holding the ${held}. Second slot: ${tierName(spare.kind, spare.tier)}, upgrade tier ${spare.tier} of ${maxTier(spare.kind)}, with ${spare.rounds} ${WEAPONS[spare.kind].roundsLabel}. Pistol upgrade tier ${player.pistolTier} of ${maxTier(SIDEARM)}.`,
+    onSome: other =>
+      `Holding the ${held}. Other slot: ${tierName(other.kind, other.tier)}, upgrade tier ${other.tier} of ${maxTier(other.kind)}${hasEndlessRounds(other.kind) ? '' : `, with ${other.rounds} ${WEAPONS[other.kind].roundsLabel}`}.`,
   })
 }
 

@@ -382,6 +382,30 @@ body {
   border-color: rgba(255, 224, 102, 0.7);
 }
 
+/* THE KNIFE: a touch button held to stab, just left of the gun slots. */
+
+.gun-cluster-knife {
+  position: absolute;
+  right: calc(100% + 4px);
+  bottom: 0;
+  display: flex;
+  pointer-events: none;
+}
+
+.cluster-button.knife-button {
+  border-color: rgba(244, 241, 222, 0.75);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.cluster-button.knife-button[data-held='true'] {
+  border-color: #ffe066;
+  background: rgba(255, 224, 102, 0.25);
+  opacity: 1;
+}
+
 .gun-cluster-top {
   position: absolute;
   bottom: calc(100% + 6px);

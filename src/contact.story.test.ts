@@ -6,7 +6,6 @@ import { describe, expect, test } from 'vitest'
 import { CONTACT_ALLOWANCE_PX, FIXED_STEP_MS, PLAYER_RADIUS } from './constants'
 import { update } from './main'
 import {
-  Arsenal,
   Frenzy,
   GameEvent,
   Invulnerability,
@@ -17,7 +16,7 @@ import {
   ZombieAction,
   initialModel,
 } from './model'
-import { holdFire, ticks, zombieOf } from './testing'
+import { holdFire, holdingSecond, ticks, zombieOf } from './testing'
 import { WEAPONS } from './weapons'
 import { ZOMBIE_KINDS, bodyRadiusOf } from './zombies'
 
@@ -204,9 +203,7 @@ describe('point-blank shots', () => {
       player: player =>
         modifyFields(player, {
           arsenal: () =>
-            Arsenal.HoldingSpare({
-              spare: { kind: 'Shotgun', rounds: 16, loaded: 6, tier: 0 },
-            }),
+            holdingSecond({ kind: 'Shotgun', rounds: 16, loaded: 6, tier: 0 }),
         }),
     })
     const frames = playFrames(start, 1, FRAME_MS, [holdFire])

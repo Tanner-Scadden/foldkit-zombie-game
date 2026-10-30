@@ -738,6 +738,7 @@ const LID_DUST = 6
 const POP_STEAM = 6
 const POP_SPARKS = 4
 const CLANG_SPARKS = 3
+const KNIFE_SPARKS = 2
 const PAN_SMASH_DUST = 14
 const FLATTEN_SPARKS = 4
 const HOME_RUN_SPARKS = 6
@@ -1313,6 +1314,8 @@ const eventParticles = (
       dustRing(playerGround(x, y), PAN_SMASH_DUST)(state),
     PanFlattened: ({ x, y }) =>
       sparks(playerGround(x, y), FLATTEN_SPARKS)(state),
+    KnifeStabbed: () => noParticles(state),
+    KnifeHit: ({ x, y }) => sparks({ x, y }, KNIFE_SPARKS)(state),
     HomeRun: ({ x, y }) => sparks({ x, y }, HOME_RUN_SPARKS)(state),
     FreezeSprayed: ({ x, y, direction }) =>
       generateMany(

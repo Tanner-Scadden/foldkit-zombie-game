@@ -39,7 +39,7 @@ import {
 import { playRoomFrame } from '@game/coopPlay'
 import { withBests } from '@game/difficulty'
 import { KITCHEN_EXIT } from '@game/exits'
-import { pressHoldButton, pressKey } from '@game/input'
+import { pressHoldButton, pressKey, pressKnifeButton } from '@game/input'
 import { quietLayer as quietInstallPrompt } from '@game/install'
 import { sceneShapes } from '@game/layers'
 import { init, update } from '@game/main'
@@ -82,7 +82,7 @@ import { openProfile } from '@game/update/profile'
 import { RUNNING_BUILD } from '@game/version'
 import { view } from '@game/view'
 import { pause, planFor, rollSpawns } from '@game/waves'
-import { freshSpare } from '@game/weapons'
+import { STARTING_PISTOL, freshGun, mapGuns } from '@game/weapons'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
 import { Session } from '@munch/netcode'
 
@@ -115,6 +115,7 @@ let instrument = false
 // NOTE: `hold` holds the interact key (on touch, a finger on the hold
 // button) from the first frame, so `tick=N` shows the ring N frames in.
 const HOLD_POINTER_ID = 99
+const STAB_POINTER_ID = 98
 
 let freezeAfter = Infinity
 const useConfig = (next: HarnessConfig) => {
@@ -297,6 +298,15 @@ const roomModel = (): Model => {
   const gun = config.gun
   const smgRounds = config.rounds ?? 360
   const shotgunRounds = config.rounds ?? 48
+  const firstGun = config.first
+  const first =
+    firstGun === undefined
+      ? STARTING_PISTOL
+      : firstGun === 'smg'
+        ? { ...freshGun('Smg'), rounds: smgRounds, tier: config.tier }
+        : firstGun === 'shotgun'
+          ? { ...freshGun('Shotgun'), rounds: shotgunRounds, tier: config.tier }
+          : { ...freshGun(FRIDGE_GUNS[firstGun]), tier: config.tier }
   let model: Model = modifyFields(started, {
     rngState: () => rngState,
     phase: () =>
@@ -327,8 +337,9 @@ const roomModel = (): Model => {
       gun === 'smg'
         ? {
             ...p,
-            arsenal: Arsenal.HoldingSpare({
-              spare: {
+            arsenal: Arsenal.HoldingSecond({
+              first,
+              second: {
                 kind: 'Smg',
                 rounds: smgRounds,
                 loaded: Math.min(config.loaded, smgRounds),
@@ -339,15 +350,17 @@ const roomModel = (): Model => {
         : gun === 'cooker' || gun === 'pan' || gun === 'freeze'
           ? {
               ...p,
-              arsenal: Arsenal.HoldingSpare({
-                spare: { ...freshSpare(FRIDGE_GUNS[gun]), tier: config.tier },
+              arsenal: Arsenal.HoldingSecond({
+                first,
+                second: { ...freshGun(FRIDGE_GUNS[gun]), tier: config.tier },
               }),
             }
           : gun === 'shotgun'
             ? {
                 ...p,
-                arsenal: Arsenal.HoldingSpare({
-                  spare: {
+                arsenal: Arsenal.HoldingSecond({
+                  first,
+                  second: {
                     kind: 'Shotgun',
                     rounds: shotgunRounds,
                     loaded: Math.min(6, shotgunRounds),
@@ -841,7 +854,12 @@ const roomModel = (): Model => {
   }
   if (pistol !== undefined) {
     model = modifyFields(model, {
-      player: p => ({ ...p, pistolTier: pistol }),
+      player: p => ({
+        ...p,
+        arsenal: mapGuns(p.arsenal, held =>
+          held.kind === 'Pistol' ? { ...held, tier: pistol } : held,
+        ),
+      }),
     })
   }
   if (aim !== undefined) {
@@ -1729,7 +1747,7 @@ const sceneOf = (model: Model): HarnessReturn => {
               modifyFields(picker, { section: () => lookSection }),
           }),
         }
-  const held: HarnessReturn = config.hold
+  const holding: HarnessReturn = config.hold
     ? {
         ...sectioned,
         model: modifyFields(sectioned.model, {
@@ -1740,6 +1758,17 @@ const sceneOf = (model: Model): HarnessReturn => {
         }),
       }
     : sectioned
+  const held: HarnessReturn = config.stab
+    ? {
+        ...holding,
+        model: modifyFields(holding.model, {
+          input: input =>
+            holding.model.lastDevice === 'Touch'
+              ? pressKnifeButton(input, STAB_POINTER_ID)
+              : pressKey(input, 'KeyF'),
+        }),
+      }
+    : holding
   return config.tick === undefined ? held : advance(held, config.tick)
 }
 

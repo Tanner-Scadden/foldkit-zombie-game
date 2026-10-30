@@ -22,7 +22,7 @@ import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
-  Arsenal,
+  type Arsenal,
   type Bullet,
   type CarriedGun,
   GameEvent,
@@ -51,6 +51,10 @@ import {
 import {
   bulletInto,
   holdFire,
+  holdingFirst,
+  holdingSecond,
+  maybeSpareGun,
+  pistolOnly,
   press,
   release,
   tick,
@@ -59,13 +63,7 @@ import {
 } from './testing'
 import { asVeteran } from './veteran'
 import { FINAL_WAVE, waveBonus } from './waves'
-import {
-  UPGRADE_TIERS,
-  WEAPONS,
-  magazineOf,
-  maybeSpare,
-  startingRounds,
-} from './weapons'
+import { UPGRADE_TIERS, WEAPONS, magazineOf, startingRounds } from './weapons'
 
 const FRAME_MS = 50
 // NOTE: one 60 Hz tick.
@@ -172,7 +170,7 @@ const killShot = (base: Model): Model =>
   })
 
 const holdingSpare = (rounds: number, kind: CarriedGun['kind'] = 'Shotgun') =>
-  Arsenal.HoldingSpare({ spare: gun(kind, rounds) })
+  holdingSecond(gun(kind, rounds))
 
 const preparationRemainingMs = (phase: Phase): number =>
   Option.getOrThrow(Option.liftPredicate(phase, Phase.guards.Preparation))
@@ -263,7 +261,7 @@ describe('money', () => {
       press('Enter'),
       model(({ wallet, player }) => {
         expect(wallet).toEqual({ balance: 0, earned: 0, shown: 0 })
-        expect(player.arsenal).toEqual(Arsenal.PistolOnly())
+        expect(player.arsenal).toEqual(pistolOnly())
       }),
     )
   })
@@ -486,19 +484,19 @@ describe('buying', () => {
     )
   })
 
-  test('a new gun replaces the one in the second slot, and the pistol stays', () => {
+  test('a new gun replaces the one in hand, and the other gun stays', () => {
     story(
       update,
       given(
         withArsenal(
           browsing(withMoney(readyModel, 200)),
-          Arsenal.HoldingPistol({ spare: gun('Shotgun', 3) }),
+          holdingSecond(gun('Shotgun', 3)),
         ),
       ),
       message(Message.ClickedBuyButton({ item: 'Smg' })),
       model(({ player, wallet }) => {
         expect(player.arsenal).toEqual(
-          Arsenal.HoldingSpare({ spare: gun('Smg', startingRounds('Smg')) }),
+          holdingSecond(gun('Smg', startingRounds('Smg'))),
         )
         expect(wallet.balance).toBe(200 - SHOP_ITEMS.Smg.price)
       }),
@@ -597,16 +595,13 @@ describe('buying', () => {
 
 describe('carrying two guns', () => {
   const armed = modifyFields(
-    withArsenal(
-      readyModel,
-      Arsenal.HoldingPistol({ spare: gun('Shotgun', 16) }),
-    ),
+    withArsenal(readyModel, holdingFirst(gun('Shotgun', 16))),
     { phase: () => fighting(2) },
   )
 
   test('Q and the swap button switch guns', () => {
-    const spare = Arsenal.HoldingSpare({ spare: gun('Shotgun', 16) })
-    const pistol = Arsenal.HoldingPistol({ spare: gun('Shotgun', 16) })
+    const spare = holdingSecond(gun('Shotgun', 16))
+    const pistol = holdingFirst(gun('Shotgun', 16))
     story(
       update,
       given(armed),
@@ -632,7 +627,7 @@ describe('carrying two guns', () => {
       press('KeyQ'),
       message(Message.ClickedSwapButton()),
       model(({ player }) => {
-        expect(player.arsenal).toEqual(Arsenal.PistolOnly())
+        expect(player.arsenal).toEqual(pistolOnly())
       }),
     )
   })
@@ -650,7 +645,7 @@ describe('carrying two guns', () => {
           true,
         )
         expect(
-          Option.map(maybeSpare(player.arsenal), ({ rounds, loaded }) => ({
+          Option.map(maybeSpareGun(player.arsenal), ({ rounds, loaded }) => ({
             rounds,
             loaded,
           })),
@@ -679,9 +674,7 @@ describe('carrying two guns', () => {
         SHORT_FRAME_MS,
       ),
       model(({ player, frameEvents, popups }) => {
-        expect(player.arsenal).toEqual(
-          Arsenal.HoldingPistol({ spare: gun('Smg', 0) }),
-        )
+        expect(player.arsenal).toEqual(holdingFirst(gun('Smg', 0)))
         expect(Array.map(frameEvents, ({ _tag }) => _tag)).toContain('RanDry')
         expect(Array.map(popups, ({ kind }) => kind)).toContain('Empty')
         expect(player.fireCooldownMs).toBe(DRY_FIRE_DELAY_MS)
@@ -1093,7 +1086,7 @@ describe('shop categories', () => {
       model(({ wallet, player }) => {
         expect(wallet.balance).toBe(WAVE_ONE_PAY - SHOP_ITEMS.Shotgun.price)
         expect(
-          Option.map(maybeSpare(player.arsenal), ({ kind }) => kind),
+          Option.map(maybeSpareGun(player.arsenal), ({ kind }) => kind),
         ).toEqual(Option.some('Shotgun'))
       }),
     )
@@ -1146,7 +1139,7 @@ describe('ammo and upgrades under the gun', () => {
 
     const shotgunHolstered = withArsenal(
       unarmed,
-      Arsenal.HoldingPistol({ spare: gun('Shotgun', 20) }),
+      holdingFirst(gun('Shotgun', 20)),
     )
     expect(weaponOrder(shotgunHolstered)).toEqual(PISTOL_FIRST)
 
@@ -1160,10 +1153,7 @@ describe('ammo and upgrades under the gun', () => {
       'LaserSight',
     ])
 
-    const smgHolstered = withArsenal(
-      unarmed,
-      Arsenal.HoldingPistol({ spare: gun('Smg', 60) }),
-    )
+    const smgHolstered = withArsenal(unarmed, holdingFirst(gun('Smg', 60)))
     expect(weaponOrder(smgHolstered)).toEqual(PISTOL_FIRST)
     expect(itemsIn(unarmed, 'Health')).toEqual(['Heart'])
   })
@@ -1206,7 +1196,7 @@ describe('ammo and upgrades under the gun', () => {
       model(({ shop, player }) => {
         expect(shop).toEqual(ShopState.Browsing({ focusedItem: 'SmgRounds' }))
         expect(
-          Option.map(maybeSpare(player.arsenal), ({ kind }) => kind),
+          Option.map(maybeSpareGun(player.arsenal), ({ kind }) => kind),
         ).toEqual(Option.some('Smg'))
       }),
     )
@@ -1248,7 +1238,7 @@ describe('the row the shop opens on', () => {
   const withSmg = (balance: number, rounds: number): Model =>
     withArsenal(
       withMoney(besideStall(preparing(4)), balance),
-      Arsenal.HoldingSpare({ spare: gun('Smg', rounds, 1) }),
+      holdingSecond(gun('Smg', rounds, 1)),
     )
 
   test('with only the pistol, it opens on a gun the player can afford', () => {
@@ -1278,7 +1268,7 @@ describe('what Rattles says', () => {
         withHp(
           withArsenal(
             browsing(withMoney(readyModel, 30)),
-            Arsenal.HoldingSpare({ spare: gun('Shotgun', 48) }),
+            holdingSecond(gun('Shotgun', 48)),
           ),
           3,
         ),

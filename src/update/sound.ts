@@ -97,6 +97,8 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     PanClanged: () => Option.some<SoundEffect>('Clang'),
     PanSmashed: () => Option.some<SoundEffect>('BossStomp'),
     PanFlattened: () => Option.some<SoundEffect>('Clang'),
+    KnifeStabbed: () => Option.some<SoundEffect>('Swish'),
+    KnifeHit: () => Option.some<SoundEffect>('Stab'),
     HomeRun: () => Option.some<SoundEffect>('BossBonk'),
     FreezeSprayed: () => Option.some<SoundEffect>('PowerDown'),
     ZombieFrozen: () => Option.none<SoundEffect>(),

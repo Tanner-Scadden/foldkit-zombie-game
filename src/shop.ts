@@ -32,20 +32,25 @@ import {
   WEAPONS,
   type WeaponTier,
   cancelReload,
-  freshSpare,
+  freshGun,
+  isCarrying,
+  isHolding,
   looseRounds,
+  mapGuns,
   maxRounds,
   maxTier,
+  maybeCarried,
   maybeNextTier,
-  maybeSpare,
+  maybeReplacedGun,
   startingRounds,
   statsAt,
+  takeGun,
   tierName,
   tierOf,
 } from './weapons'
 import type { World } from './world'
 import {
-  Arsenal,
+  type Arsenal,
   type CarriedGun,
   type FixedShopItemId,
   Lesson,
@@ -210,6 +215,15 @@ const LID_STACK = 8
 export const LASER_SIGHT_PRICE = 400
 
 export const SHOP_ITEMS: Readonly<Record<FixedShopItemId, ShopItem>> = {
+  // NOTE: Rattles always sells the pistol back for nothing, so a player
+  // who traded it away is never stuck without a gun that never runs dry.
+  Pistol: {
+    id: 'Pistol',
+    name: WEAPONS.Pistol.name,
+    blurb: 'Never runs dry. Rattles gives it back for free.',
+    price: 0,
+    good: ShopGood.Gun({ weapon: 'Pistol' }),
+  },
   Shotgun: {
     id: 'Shotgun',
     name: WEAPONS.Shotgun.name,
@@ -255,7 +269,7 @@ export const SHOP_ITEMS: Readonly<Record<FixedShopItemId, ShopItem>> = {
   PistolUpgrade: {
     id: 'PistolUpgrade',
     name: `${WEAPONS.Pistol.name} upgrade`,
-    blurb: `Shines up the ${WEAPONS.Pistol.name} you never put down.`,
+    blurb: `Shines up your ${WEAPONS.Pistol.name}.`,
     price: 0,
     good: ShopGood.Upgrade({ weapon: 'Pistol' }),
   },
@@ -345,8 +359,8 @@ export const SHOP_CATEGORIES: Readonly<Record<ShopCategory, ShopCategoryInfo>> =
   {
     Guns: {
       label: 'Guns',
-      blurb: model =>
-        `You always keep the ${gunName(model, SIDEARM)}. A new gun takes your second slot, and whatever was there goes, upgrades and all.`,
+      blurb: () =>
+        'Two guns. A new one replaces the one in your hands, upgrades and all.',
     },
     Health: {
       label: 'Health',
@@ -414,21 +428,36 @@ const trapPlace = (trap: Trap): string =>
 
 // GUNS
 
-type SpareLine = Readonly<{
+type GunLine = Readonly<{
   weapon: WeaponKind
   gun: ShopItemId
-  ammo: ShopItemId
-  upgrade: ShopItemId
+  items: Array.NonEmptyReadonlyArray<ShopItemId>
+  status: (gun: CarriedGun) => string
 }>
 
-const SPARE_LINES: Array.NonEmptyReadonlyArray<SpareLine> = [
+const roundsStatus = (gun: CarriedGun): string =>
+  `${gun.loaded} loaded, ${looseRounds(gun)} spare`
+
+// NOTE: the guns Rattles sells, always in this order, pistol first.
+const GUN_LINES: Array.NonEmptyReadonlyArray<GunLine> = [
+  {
+    weapon: 'Pistol',
+    gun: 'Pistol',
+    items: ['PistolUpgrade'],
+    status: gun => `${gun.loaded} loaded, never runs dry`,
+  },
   {
     weapon: 'Shotgun',
     gun: 'Shotgun',
-    ammo: 'ShotgunShells',
-    upgrade: 'ShotgunUpgrade',
+    items: ['ShotgunShells', 'ShotgunUpgrade'],
+    status: roundsStatus,
   },
-  { weapon: 'Smg', gun: 'Smg', ammo: 'SmgRounds', upgrade: 'SmgUpgrade' },
+  {
+    weapon: 'Smg',
+    gun: 'Smg',
+    items: ['SmgRounds', 'SmgUpgrade'],
+    status: roundsStatus,
+  },
 ]
 
 // NOTE: a fridge weapon has a card only while a player carries it, with
@@ -444,7 +473,7 @@ const FRIDGE_LINES: ReadonlyArray<FridgeLine> = [
   {
     weapon: 'Cooker',
     items: ['LidStack', 'CookerUpgrade'],
-    status: spare => `${spare.loaded} loaded, ${looseRounds(spare)} spare`,
+    status: roundsStatus,
   },
   {
     weapon: 'Pan',
@@ -458,7 +487,7 @@ const FRIDGE_LINES: ReadonlyArray<FridgeLine> = [
 
 const fridgeShelves = (player: Player): ReadonlyArray<GunShelf> =>
   Array.filterMap(FRIDGE_LINES, line =>
-    Option.match(carried(player, line.weapon), {
+    Option.match(maybeCarried(player, line.weapon), {
       onNone: () => Result.failVoid,
       onSome: spare =>
         Result.succeed(
@@ -483,44 +512,24 @@ export const GunShelf = defineTaggedUnion({
 })
 export type GunShelf = typeof GunShelf.Type
 
-const carried = (
-  player: Player,
-  weapon: WeaponKind,
-): Option.Option<CarriedGun> =>
-  Option.filter(maybeSpare(player.arsenal), spare => spare.kind === weapon)
-
-const isCarrying = (player: Player, weapon: WeaponKind): boolean =>
-  Option.isSome(carried(player, weapon))
-
-const spareShelf = (player: Player, line: SpareLine): GunShelf =>
-  Option.match(carried(player, line.weapon), {
+const gunShelf = (player: Player, line: GunLine): GunShelf =>
+  Option.match(maybeCarried(player, line.weapon), {
     onNone: () => GunShelf.ForSale({ weapon: line.weapon, item: line.gun }),
-    onSome: spare =>
+    onSome: gun =>
       GunShelf.Owned({
         weapon: line.weapon,
-        tier: spare.tier,
-        status: `${spare.loaded} loaded, ${looseRounds(spare)} spare`,
-        items: [line.ammo, line.upgrade],
+        tier: gun.tier,
+        status: line.status(gun),
+        items: line.items,
       }),
-  })
-
-const sidearmShelf = (player: Player): GunShelf =>
-  GunShelf.Owned({
-    weapon: SIDEARM,
-    tier: player.pistolTier,
-    status: `${player.pistolLoaded} loaded, never runs dry`,
-    items: ['PistolUpgrade'],
   })
 
 export const gunShelves = (
   model: World,
 ): Array.NonEmptyReadonlyArray<GunShelf> =>
-  Array.prepend(
-    [
-      ...Array.map(SPARE_LINES, line => spareShelf(model.player, line)),
-      ...fridgeShelves(model.player),
-    ],
-    sidearmShelf(model.player),
+  Array.appendAll(
+    Array.map(GUN_LINES, line => gunShelf(model.player, line)),
+    fridgeShelves(model.player),
   )
 
 const shelfItems = (shelf: GunShelf): Array.NonEmptyReadonlyArray<ShopItemId> =>
@@ -642,7 +651,7 @@ export const itemName = (model: World, id: ShopItemId): string =>
 
 const ammoGain = (model: World, weapon: WeaponKind, rounds: number): string => {
   const roundsLabel = WEAPONS[weapon].roundsLabel
-  const room = Option.match(carried(model.player, weapon), {
+  const room = Option.match(maybeCarried(model.player, weapon), {
     onNone: () => rounds,
     onSome: spare => maxRounds(weapon, spare.tier) - spare.rounds,
   })
@@ -683,7 +692,7 @@ export const itemBlurb = (model: World, id: ShopItemId): string =>
   ShopGood.match(shopItem(id).good, {
     Gun: () => shopItem(id).blurb,
     Ammo: ({ weapon, rounds }) =>
-      Option.match(carried(model.player, weapon), {
+      Option.match(maybeCarried(model.player, weapon), {
         onNone: () => shopItem(id).blurb,
         onSome: spare =>
           `${String.capitalize(ammoGain(model, weapon, rounds))}. You have ${spare.rounds} of ${maxRounds(weapon, spare.tier)}.`,
@@ -724,21 +733,15 @@ const blockedBy = (model: World, good: ShopGood): Option.Option<Block> => {
         ? block('You already carry it', 'OWNED')
         : Option.none(),
     Ammo: ({ weapon }) =>
-      Option.match(
-        Option.filter(
-          maybeSpare(player.arsenal),
-          spare => spare.kind === weapon,
-        ),
-        {
-          onNone: () => block(`Needs the ${gunName(model, weapon)}`, 'NO GUN'),
-          onSome: spare =>
-            spare.rounds >= maxRounds(weapon, spare.tier)
-              ? block(`Your ${tierName(weapon, spare.tier)} is full`, 'FULL')
-              : Option.none(),
-        },
-      ),
+      Option.match(maybeCarried(player, weapon), {
+        onNone: () => block(`Needs the ${gunName(model, weapon)}`, 'NO GUN'),
+        onSome: spare =>
+          spare.rounds >= maxRounds(weapon, spare.tier)
+            ? block(`Your ${tierName(weapon, spare.tier)} is full`, 'FULL')
+            : Option.none(),
+      }),
     Upgrade: ({ weapon }) => {
-      if (weapon !== SIDEARM && !isCarrying(player, weapon)) {
+      if (!isCarrying(player, weapon)) {
         return block(`Needs the ${gunName(model, weapon)}`, 'NO GUN')
       } else if (Option.isNone(nextTierFor(model, weapon))) {
         return block('Fully upgraded', 'MAX')
@@ -826,7 +829,7 @@ export const stockTag = (model: World, id: ShopItemId): StockTag => {
 // SUGGESTION
 
 const isRunningLow = (model: World, weapon: WeaponKind): boolean =>
-  Option.match(carried(model.player, weapon), {
+  Option.match(maybeCarried(model.player, weapon), {
     onNone: () => false,
     onSome: spare => spare.rounds * 2 < maxRounds(weapon, spare.tier),
   })
@@ -835,7 +838,7 @@ const suggestionRank = (model: World, id: ShopItemId): number =>
   ShopGood.match(shopItem(id).good, {
     Ammo: ({ weapon }) => (isRunningLow(model, weapon) ? 0 : 3),
     Upgrade: ({ weapon }) => (weapon === SIDEARM ? 2 : 1),
-    Gun: () => (Option.isNone(maybeSpare(model.player.arsenal)) ? 0 : 4),
+    Gun: () => (Option.isNone(maybeReplacedGun(model.player.arsenal)) ? 0 : 4),
     Heart: () => 0,
     Repair: () => 0,
     Trap: () => 1,
@@ -911,7 +914,7 @@ export const ammoGauge = (
   weapon: WeaponKind,
   rounds: number,
 ): AmmoGauge =>
-  Option.match(carried(model.player, weapon), {
+  Option.match(maybeCarried(model.player, weapon), {
     onNone: () => ({ have: 0, gain: 0, most: 1 }),
     onSome: spare => {
       const most = maxRounds(weapon, spare.tier)
@@ -923,38 +926,32 @@ export const ammoGauge = (
     },
   })
 
-export const isHolding = (player: Player, weapon: WeaponKind): boolean =>
-  Arsenal.match(player.arsenal, {
-    PistolOnly: () => weapon === SIDEARM,
-    HoldingPistol: () => weapon === SIDEARM,
-    HoldingSpare: ({ spare }) => spare.kind === weapon,
-  })
+export { isHolding }
 
 export const ownedNote = (model: World, id: ShopItemId): string => {
   const { player } = model
-  const maybeCarried = maybeSpare(player.arsenal)
   return ShopGood.match(shopItem(id).good, {
     Gun: ({ weapon }) =>
-      Option.match(maybeCarried, {
-        onNone: () => 'Goes in your empty second slot',
-        onSome: spare =>
-          spare.kind === weapon
-            ? `In your hands, ${spare.rounds} ${WEAPONS[weapon].roundsLabel} left`
-            : spare.tier > 0
-              ? `Replaces your ${tierName(spare.kind, spare.tier)}, and its upgrades are lost`
-              : `Replaces your ${tierName(spare.kind, spare.tier)}`,
+      Option.match(maybeCarried(player, weapon), {
+        onSome: gun =>
+          `You carry it, ${gun.loaded} ${WEAPONS[weapon].roundsLabel} loaded`,
+        onNone: () =>
+          Option.match(maybeReplacedGun(player.arsenal), {
+            onNone: () => 'Goes in your empty second slot',
+            onSome: held =>
+              held.tier > 0
+                ? `Replaces your ${tierName(held.kind, held.tier)}, and its upgrades are lost`
+                : `Replaces your ${tierName(held.kind, held.tier)}`,
+          }),
       }),
     Ammo: ({ weapon }) =>
-      Option.match(
-        Option.filter(maybeCarried, spare => spare.kind === weapon),
-        {
-          onNone: () => `You do not carry the ${gunName(model, weapon)}`,
-          onSome: spare =>
-            `You have ${spare.rounds} of ${maxRounds(weapon, spare.tier)} ${WEAPONS[weapon].roundsLabel}`,
-        },
-      ),
+      Option.match(maybeCarried(player, weapon), {
+        onNone: () => `You do not carry the ${gunName(model, weapon)}`,
+        onSome: spare =>
+          `You have ${spare.rounds} of ${maxRounds(weapon, spare.tier)} ${WEAPONS[weapon].roundsLabel}`,
+      }),
     Upgrade: ({ weapon }) =>
-      weapon !== SIDEARM && !isCarrying(player, weapon)
+      !isCarrying(player, weapon)
         ? `Buy the ${gunName(model, weapon)} first`
         : `Tier ${tierOf(player, weapon)} of ${maxTier(weapon)}`,
     Heart: () => `Hearts ${player.hp} of ${PLAYER_MAX_HP}`,
@@ -974,44 +971,29 @@ export const ownedNote = (model: World, id: ShopItemId): string => {
 
 // PURCHASE
 
-const mapSpare = (
-  arsenal: Arsenal,
-  toSpare: (spare: CarriedGun) => CarriedGun,
-): Arsenal =>
-  Arsenal.match(arsenal, {
-    PistolOnly: () => arsenal,
-    HoldingPistol: ({ spare }) =>
-      Arsenal.HoldingPistol({ spare: toSpare(spare) }),
-    HoldingSpare: ({ spare }) =>
-      Arsenal.HoldingSpare({ spare: toSpare(spare) }),
-  })
-
 const refill = (
   arsenal: Arsenal,
   weapon: WeaponKind,
   rounds: number,
-): Arsenal => {
-  const topUp = (spare: CarriedGun): CarriedGun =>
-    modifyFields(spare, {
-      rounds: current =>
-        spare.kind === weapon
-          ? Math.min(maxRounds(weapon, spare.tier), current + rounds)
-          : current,
-    })
-  return mapSpare(arsenal, topUp)
-}
+): Arsenal =>
+  mapGuns(arsenal, gun =>
+    gun.kind === weapon
+      ? modifyFields(gun, {
+          rounds: current =>
+            Math.min(maxRounds(weapon, gun.tier), current + rounds),
+        })
+      : gun,
+  )
 
 const upgrade = (player: Player, weapon: WeaponKind): Player =>
-  weapon === SIDEARM
-    ? modifyFields(player, { pistolTier: tier => tier + 1 })
-    : modifyFields(player, {
-        arsenal: arsenal =>
-          mapSpare(arsenal, spare =>
-            spare.kind === weapon
-              ? modifyFields(spare, { tier: tier => tier + 1 })
-              : spare,
-          ),
-      })
+  modifyFields(player, {
+    arsenal: arsenal =>
+      mapGuns(arsenal, gun =>
+        gun.kind === weapon
+          ? modifyFields(gun, { tier: tier => tier + 1 })
+          : gun,
+      ),
+  })
 
 const equip = (model: World, toPlayer: (player: Player) => Player): World =>
   modifyFields(model, { player: toPlayer })
@@ -1021,7 +1003,7 @@ const grant = (model: World, good: ShopGood): World =>
     Gun: ({ weapon }) =>
       equip(model, player =>
         modifyFields(cancelReload(player), {
-          arsenal: () => Arsenal.HoldingSpare({ spare: freshSpare(weapon) }),
+          arsenal: arsenal => takeGun(arsenal, freshGun(weapon)),
         }),
       ),
     Ammo: ({ weapon, rounds }) =>

@@ -23,8 +23,20 @@ import {
   ShopState,
   initialModel,
 } from './model'
-import { holdFire, press, release, releaseFire, tick, ticks } from './testing'
-import { WEAPONS, maybeSpare } from './weapons'
+import {
+  holdFire,
+  holdingFirst,
+  holdingSecond,
+  maybeSpareGun,
+  pistolOf,
+  press,
+  release,
+  releaseFire,
+  tick,
+  ticks,
+  withPistol,
+} from './testing'
+import { WEAPONS } from './weapons'
 
 const FRAME_MS = FIXED_STEP_MS
 // NOTE: the ticks a countdown of `ms` takes to run out, counted the way the
@@ -69,7 +81,7 @@ const preparing: Model = modifyFields(fighting, {
 const withPistolLoaded = (base: Model, pistolLoaded: number): Model =>
   modifyFields(base, {
     player: player =>
-      modifyFields(player, { pistolLoaded: () => pistolLoaded }),
+      withPistol(player, pistol => ({ ...pistol, loaded: pistolLoaded })),
   })
 
 const withArsenal = (base: Model, arsenal: Arsenal): Model =>
@@ -96,7 +108,10 @@ const reloadingMs = (reload: Reload): Option.Option<number> =>
 const spareRounds = (
   arsenal: Arsenal,
 ): Option.Option<Readonly<{ rounds: number; loaded: number }>> =>
-  Option.map(maybeSpare(arsenal), ({ rounds, loaded }) => ({ rounds, loaded }))
+  Option.map(maybeSpareGun(arsenal), ({ rounds, loaded }) => ({
+    rounds,
+    loaded,
+  }))
 
 describe('magazines', () => {
   test('the pistol fires its magazine, then stops and reloads', () => {
@@ -107,7 +122,7 @@ describe('magazines', () => {
       ...ticks(1 + TICKS_PER_SHOT, FRAME_MS),
       model(({ player, stats }) => {
         expect(stats.shotsFired).toBe(2)
-        expect(player.pistolLoaded).toBe(0)
+        expect(pistolOf(player).loaded).toBe(0)
       }),
       ...ticks(TICKS_PER_SHOT, FRAME_MS),
       model(({ player, stats, frameEvents }) => {
@@ -140,7 +155,7 @@ describe('magazines', () => {
       ...ticks(PISTOL_RELOAD_TICKS - 1, FRAME_MS),
       model(({ player, stats }) => {
         expect(stats.shotsFired).toBe(0)
-        expect(player.pistolLoaded).toBe(0)
+        expect(pistolOf(player).loaded).toBe(0)
         expect(
           Option.exists(
             reloadingMs(player.reload),
@@ -155,7 +170,7 @@ describe('magazines', () => {
         )
         expect(Reload.isAnyOf(['Ready'])(player.reload)).toBe(true)
         expect(stats.shotsFired).toBe(1)
-        expect(player.pistolLoaded).toBe(PISTOL_MAGAZINE - 1)
+        expect(pistolOf(player).loaded).toBe(PISTOL_MAGAZINE - 1)
       }),
     )
   })
@@ -184,8 +199,9 @@ describe('magazines', () => {
       ...ticks(magazines * magazineTicks, FRAME_MS),
       model(({ player, stats }) => {
         expect(stats.shotsFired).toBeGreaterThan(magazines * PISTOL_MAGAZINE)
-        expect(player.arsenal).toEqual(Arsenal.PistolOnly())
-        expect(player.pistolLoaded).toBeGreaterThan(0)
+        expect(player.arsenal._tag).toBe('OneGun')
+        expect(pistolOf(player).rounds).toBe(0)
+        expect(pistolOf(player).loaded).toBeGreaterThan(0)
       }),
     )
   })
@@ -194,12 +210,7 @@ describe('magazines', () => {
     const magazine = WEAPONS.Smg.magazine
     story(
       update,
-      given(
-        withArsenal(
-          fighting,
-          Arsenal.HoldingSpare({ spare: smg(magazine + 10, magazine) }),
-        ),
-      ),
+      given(withArsenal(fighting, holdingSecond(smg(magazine + 10, magazine)))),
       holdFire,
       ...ticks(SMG_FIRING_TICKS, FRAME_MS),
       releaseFire,
@@ -234,12 +245,12 @@ describe('manual reload', () => {
       release('KeyR'),
       ...ticks(PISTOL_RELOAD_TICKS - 1, FRAME_MS),
       model(({ player }) => {
-        expect(player.pistolLoaded).toBe(3)
+        expect(pistolOf(player).loaded).toBe(3)
       }),
       tick(FRAME_MS),
       model(({ player, frameEvents }) => {
         expect(tagsOf(frameEvents)).toContain('Reloaded')
-        expect(player.pistolLoaded).toBe(PISTOL_MAGAZINE)
+        expect(pistolOf(player).loaded).toBe(PISTOL_MAGAZINE)
       }),
     )
   })
@@ -255,10 +266,7 @@ describe('manual reload', () => {
             }),
         }),
     })
-    const noLooseRounds = withArsenal(
-      fighting,
-      Arsenal.HoldingSpare({ spare: smg(12, 12) }),
-    )
+    const noLooseRounds = withArsenal(fighting, holdingSecond(smg(12, 12)))
     Array.forEach([fighting, midReload, noLooseRounds], start =>
       story(
         update,
@@ -317,7 +325,7 @@ describe('reload pauses', () => {
       press('Escape'),
       ...ticks(PISTOL_RELOAD_TICKS - 4, FRAME_MS),
       model(({ player }) => {
-        expect(player.pistolLoaded).toBe(PISTOL_MAGAZINE)
+        expect(pistolOf(player).loaded).toBe(PISTOL_MAGAZINE)
       }),
     )
   })
@@ -340,7 +348,7 @@ describe('reload pauses', () => {
       ...ticks(PISTOL_RELOAD_TICKS, FRAME_MS),
       model(({ player }) => {
         expect(reloadingMs(player.reload)).toEqual(Option.some(400))
-        expect(player.pistolLoaded).toBe(3)
+        expect(pistolOf(player).loaded).toBe(3)
       }),
     )
   })
@@ -351,30 +359,27 @@ describe('swapping', () => {
     story(
       update,
       given(
-        withPistolLoaded(
-          withArsenal(fighting, Arsenal.HoldingPistol({ spare: smg(90, 30) })),
-          3,
-        ),
+        withPistolLoaded(withArsenal(fighting, holdingFirst(smg(90, 30))), 3),
       ),
       press('KeyR'),
       ...ticks(PISTOL_RELOAD_TICKS - 2, FRAME_MS),
       press('KeyQ'),
       release('KeyQ'),
       model(({ player }) => {
-        expect(Arsenal.isAnyOf(['HoldingSpare'])(player.arsenal)).toBe(true)
+        expect(Arsenal.isAnyOf(['HoldingSecond'])(player.arsenal)).toBe(true)
         expect(Reload.isAnyOf(['Ready'])(player.reload)).toBe(true)
       }),
       ...ticks(PISTOL_RELOAD_TICKS, FRAME_MS),
       model(({ player }) => {
-        expect(player.pistolLoaded).toBe(3)
+        expect(pistolOf(player).loaded).toBe(3)
         expect(spareRounds(player.arsenal)).toEqual(
           Option.some({ rounds: 90, loaded: 30 }),
         )
       }),
       press('KeyQ'),
       model(({ player }) => {
-        expect(Arsenal.isAnyOf(['HoldingPistol'])(player.arsenal)).toBe(true)
-        expect(player.pistolLoaded).toBe(3)
+        expect(Arsenal.isAnyOf(['HoldingFirst'])(player.arsenal)).toBe(true)
+        expect(pistolOf(player).loaded).toBe(3)
         expect(Reload.isAnyOf(['Ready'])(player.reload)).toBe(true)
       }),
     )

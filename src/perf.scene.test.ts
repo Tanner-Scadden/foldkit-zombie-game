@@ -21,7 +21,6 @@ import { update } from './main'
 import { Message } from './message'
 import {
   Alarm,
-  Arsenal,
   type Blast,
   BoostTimer,
   type Boosts,
@@ -59,11 +58,11 @@ import {
 } from './model'
 import { DROP_RULES } from './powerups'
 import { startOrResume } from './runFlow'
-import { WIDE_SURFACE, scoring } from './testing'
+import { WIDE_SURFACE, holdingSecond, scoring } from './testing'
 import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
 import { FINAL_WAVE, rollSpawns } from './waves'
-import { freshSpare } from './weapons'
+import { freshGun } from './weapons'
 import { ZOMBIE_KINDS } from './zombies'
 
 // WORST-CASE ROOMS
@@ -372,9 +371,7 @@ const fullRoom = (mode: RunMode, wave: number, tier: number): Model => {
     wallet: wallet => ({ ...wallet, balance: 1234, shown: 1234 }),
     player: player => ({
       ...player,
-      arsenal: Arsenal.HoldingSpare({
-        spare: { kind: 'Smg', rounds: 300, loaded: 30, tier },
-      }),
+      arsenal: holdingSecond({ kind: 'Smg', rounds: 300, loaded: 30, tier }),
     }),
   })
 }
@@ -633,7 +630,7 @@ const fridgeFight = (
   modifyFields(room, {
     player: player =>
       modifyFields(player, {
-        arsenal: () => Arsenal.HoldingSpare({ spare }),
+        arsenal: () => holdingSecond(spare),
         charge: () => charge,
         recoilRemainingMs: () => recoilMs,
       }),
@@ -678,7 +675,7 @@ const SCENARIOS: ReadonlyArray<Readonly<{ name: string; model: Model }>> = [
     name: 'wave 9 in the kitchen with the Cooker blasting and the fridge open',
     model: fridgeFight(
       kitchenRoom(9),
-      { ...freshSpare('Cooker'), tier: 3 },
+      { ...freshGun('Cooker'), tier: 3 },
       Charge.Building({ heldMs: 1200, aim: { x: 1, y: 0 } }),
       0,
     ),
@@ -687,7 +684,7 @@ const SCENARIOS: ReadonlyArray<Readonly<{ name: string; model: Model }>> = [
     name: 'wave 9 in the kitchen with the Pan swinging',
     model: fridgeFight(
       kitchenRoom(9),
-      { ...freshSpare('Pan'), tier: 3 },
+      { ...freshGun('Pan'), tier: 3 },
       Charge.Building({ heldMs: 900, aim: { x: 1, y: 0 } }),
       120,
     ),

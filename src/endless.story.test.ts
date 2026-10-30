@@ -14,7 +14,6 @@ import { DIFFICULTIES, bestsFor, withBests } from './difficulty'
 import { update } from './main'
 import { Message } from './message'
 import {
-  Arsenal,
   DifficultyCard,
   type Model,
   Phase,
@@ -25,7 +24,16 @@ import {
 } from './model'
 import { endlessBannerOf } from './screens'
 import { scoreOf } from './stats'
-import { bulletInto, press, scoring, tick, zombieAt } from './testing'
+import {
+  bulletInto,
+  holdingSecond,
+  pistolOf,
+  pistolOnly,
+  press,
+  scoring,
+  tick,
+  zombieAt,
+} from './testing'
 import {
   FINAL_WAVE,
   endlessTankCount,
@@ -33,6 +41,7 @@ import {
   hpScaleFor,
   rollSpawns,
 } from './waves'
+import { STARTING_PISTOL } from './weapons'
 import { ZOMBIE_KINDS } from './zombies'
 
 const FRAME_MS = 50
@@ -85,11 +94,11 @@ const victorious: Model = modifyFields(readyModel, {
   player: player =>
     modifyFields(player, {
       hp: () => 3,
-      pistolTier: () => 1,
       arsenal: () =>
-        Arsenal.HoldingSpare({
-          spare: { kind: 'Smg', rounds: 210, loaded: 40, tier: 2 },
-        }),
+        holdingSecond(
+          { kind: 'Smg', rounds: 210, loaded: 40, tier: 2 },
+          { ...STARTING_PISTOL, tier: 1 },
+        ),
     }),
 })
 
@@ -122,7 +131,7 @@ describe('choosing a mode', () => {
       model(({ mode, phase, player }) => {
         expect(mode).toEqual(RunMode.Endless())
         expect(preparationWave(phase)).toEqual(Option.some(1))
-        expect(player.arsenal).toEqual(Arsenal.PistolOnly())
+        expect(player.arsenal).toEqual(pistolOnly())
       }),
     )
   })
@@ -369,7 +378,7 @@ describe('keep going from Victory', () => {
         expect(preparationWave(phase)).toEqual(Option.some(FINAL_WAVE + 1))
         expect(wallet).toEqual(victorious.wallet)
         expect(player.arsenal).toEqual(victorious.player.arsenal)
-        expect(player.pistolTier).toBe(1)
+        expect(pistolOf(player).tier).toBe(1)
         expect(player.hp).toBe(3)
         expect(traps).toEqual([PLANK_PILE])
         expect(trapStock).toEqual({ Barricade: 1, Turret: 1 })

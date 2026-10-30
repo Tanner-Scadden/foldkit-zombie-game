@@ -17,11 +17,11 @@ import { describe, test, expect as vitestExpect } from 'vitest'
 import { PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
-import { Arsenal, type Model, MouseButton, Phase, initialModel } from './model'
-import { fighting, measureSurface } from './testing'
+import { type Model, MouseButton, Phase, initialModel } from './model'
+import { fighting, holdingFirst, measureSurface } from './testing'
 import { view } from './view'
 import { pause } from './waves'
-import { WEAPONS, tierName } from './weapons'
+import { STARTING_PISTOL, WEAPONS, tierName } from './weapons'
 
 const pausedOn = (device: Model['lastDevice']): Model =>
   pause(modifyFields(fighting, { lastDevice: () => device }))
@@ -56,9 +56,7 @@ describe('Pause screen controls', () => {
         expect(card('Swap', 'Q')).toExist(),
         expect(card('Shop', 'Walk into the stall')).toExist(),
         expect(card('Planks', 'T')).toExist(),
-        expect(
-          card('Leftovers', 'Hold Enter at the kitchen fridge'),
-        ).toExist(),
+        expect(card('Leftovers', 'Hold Enter at the kitchen fridge')).toExist(),
         expect(card('Charge', 'Hold click, let go to throw')).toExist(),
         expect(card('Goodies', 'Walk over them')).toExist(),
         expect(card('Pause', 'Esc')).toExist(),
@@ -220,11 +218,11 @@ describe('Touch gun slots', () => {
           lastDevice: () => 'Touch',
           player: player =>
             modifyFields(player, {
-              pistolTier: () => 1,
               arsenal: () =>
-                Arsenal.HoldingPistol({
-                  spare: { kind: 'Shotgun', rounds: 16, loaded: 6, tier: 1 },
-                }),
+                holdingFirst(
+                  { kind: 'Shotgun', rounds: 16, loaded: 6, tier: 1 },
+                  { ...STARTING_PISTOL, tier: 1 },
+                ),
             }),
         }),
       ),

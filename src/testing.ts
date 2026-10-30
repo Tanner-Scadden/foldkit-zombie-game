@@ -22,6 +22,8 @@ import {
   initialModel,
 } from './model'
 import { MeasureGameSurface } from './view'
+import { STARTING_PISTOL, gunsOf, mapGuns, maybeCarried } from './weapons'
+import { Arsenal, type CarriedGun, type Player } from './worldSchema'
 import { ZOMBIE_KINDS } from './zombies'
 
 // NOTE: the score is read from the kills, so a test that wants a score
@@ -245,3 +247,38 @@ export const bulletInto = (
   glaze: 'Plain',
   pierce: Pierce.Stops(),
 })
+
+// ARSENALS
+
+// NOTE: the arsenals tests reach for most: the pistol alone, or the pistol
+// in the first slot and another gun in the second, held either way.
+export const pistolOnly = (pistol: CarriedGun = STARTING_PISTOL): Arsenal =>
+  Arsenal.OneGun({ first: pistol })
+
+export const holdingSecond = (
+  second: CarriedGun,
+  first: CarriedGun = STARTING_PISTOL,
+): Arsenal => Arsenal.HoldingSecond({ first, second })
+
+export const holdingFirst = (
+  second: CarriedGun,
+  first: CarriedGun = STARTING_PISTOL,
+): Arsenal => Arsenal.HoldingFirst({ first, second })
+
+// NOTE: changes the carried Pop Pistol, wherever it sits.
+export const withPistol = (
+  player: Player,
+  change: (pistol: CarriedGun) => CarriedGun,
+): Player =>
+  modifyFields(player, {
+    arsenal: arsenal =>
+      mapGuns(arsenal, gun => (gun.kind === 'Pistol' ? change(gun) : gun)),
+  })
+
+export const pistolOf = (player: Player): CarriedGun =>
+  Option.getOrThrow(maybeCarried(player, 'Pistol'))
+
+// NOTE: the carried gun that is not the Pop Pistol, if any: what the old
+// spare slot held.
+export const maybeSpareGun = (arsenal: Arsenal): Option.Option<CarriedGun> =>
+  Array.findFirst(gunsOf(arsenal), gun => gun.kind !== 'Pistol')

@@ -7,7 +7,6 @@ import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
-  Arsenal,
   type CarriedGun,
   DebutCard,
   type Model,
@@ -18,8 +17,9 @@ import {
   initialModel,
 } from './model'
 import { DEBUT_CARD_MIN_MS } from './onboarding'
-import { press, release, tick } from './testing'
+import { holdingFirst, holdingSecond, press, release, tick } from './testing'
 import { asVeteran } from './veteran'
+import { STARTING_PISTOL } from './weapons'
 
 const FRAME_MS = 50
 
@@ -55,8 +55,7 @@ const fighting: Model = modifyFields(readyModel, {
   phase: () => FIGHTING,
   player: player =>
     modifyFields(player, {
-      arsenal: () => Arsenal.HoldingPistol({ spare: SHOTGUN }),
-      pistolLoaded: () => 3,
+      arsenal: () => holdingFirst(SHOTGUN, { ...STARTING_PISTOL, loaded: 3 }),
     }),
 })
 
@@ -220,7 +219,9 @@ describe('one key per action: the kept keys work', () => {
       given(fighting),
       ...tap('KeyQ'),
       model(({ player }) => {
-        expect(player.arsenal).toEqual(Arsenal.HoldingSpare({ spare: SHOTGUN }))
+        expect(player.arsenal).toEqual(
+          holdingSecond(SHOTGUN, { ...STARTING_PISTOL, loaded: 3 }),
+        )
       }),
       ...tap('KeyQ'),
       model(({ player }) => {

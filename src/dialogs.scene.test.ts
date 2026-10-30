@@ -22,8 +22,8 @@ import { FIXED_STEP_MS, PREPARATION_MS } from './constants'
 import * as Coop from './coop/model'
 import { update } from './main'
 import { Message } from './message'
-import { Arsenal, type Model, Phase, ShopState, initialModel } from './model'
-import { measureSurface } from './testing'
+import { type Model, Phase, ShopState, initialModel } from './model'
+import { holdingSecond, measureSurface } from './testing'
 import { asVeteran } from './veteran'
 import { view } from './view'
 
@@ -130,9 +130,7 @@ const atStall: Model = modifyFields(initialModel, {
       y: () => 142,
       hp: () => 3,
       arsenal: () =>
-        Arsenal.HoldingSpare({
-          spare: { kind: 'Smg', rounds: 200, loaded: 30, tier: 1 },
-        }),
+        holdingSecond({ kind: 'Smg', rounds: 200, loaded: 30, tier: 1 }),
     }),
   wallet: () => ({ balance: 180, earned: 180, shown: 180 }),
 })

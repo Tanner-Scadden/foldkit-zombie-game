@@ -1,4 +1,4 @@
-import { Array, Option } from 'effect'
+import { Array, Option, Result } from 'effect'
 import { Canvas } from 'foldkit'
 
 import { playerSprites } from './appearance'
@@ -14,6 +14,7 @@ import {
   PLAYER_HURT_FLASH_MS,
   PLAYER_HURT_PULSE_MS,
   PLAYER_HURT_SQUASH,
+  PLAYER_RADIUS,
   PLAYER_SHADOW_WIDTH,
   PLAYER_WALK_FRAME_MS,
   RELOAD_BAR_BACK_COLOR,
@@ -33,6 +34,7 @@ import {
 } from './drawing'
 import { chargeOf } from './fridgeWeapons'
 import { clamp, vectorLength } from './geometry'
+import { KNIFE_RULES, maybeSlashShare } from './knife'
 import {
   Invulnerability,
   type Model,
@@ -278,18 +280,109 @@ export const playerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   return player.facing.y < AIMING_UP ? [gun, body] : [body, gun]
 }
 
+// THE KNIFE
+
+// NOTE: a stab thrusts the blade out past the body and pulls it back, and a
+// thin white crescent sweeps across the arc it reaches, fading as it goes.
+// They change every frame of the slash, so they stay plain pixels.
+const BLADE_COLOR = '#d9dde6'
+const BLADE_TIP_COLOR = '#ffffff'
+const HANDLE_COLOR = '#7a4a2a'
+const BLADE_LENGTH = 4
+const THRUST_PX = 7
+const THRUST_SHARE = 0.35
+const ARC_DOTS = 7
+
+const thrustOf = (share: number): number =>
+  share < THRUST_SHARE
+    ? share / THRUST_SHARE
+    : 1 - (share - THRUST_SHARE) / (1 - THRUST_SHARE)
+
+const pixelAt = (
+  center: Vector,
+  direction: Vector,
+  distance: number,
+  fill: string,
+): Canvas.Shape =>
+  Canvas.Rect({
+    x: Math.round(center.x + direction.x * distance),
+    y: Math.round(center.y + direction.y * distance),
+    width: 1,
+    height: 1,
+    fill,
+  })
+
+const bladeShapes = (
+  player: Player,
+  share: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const base = PLAYER_RADIUS + 1 + thrustOf(share) * THRUST_PX
+  return [
+    pixelAt(player, player.facing, base - 2, HANDLE_COLOR),
+    pixelAt(player, player.facing, base - 1, HANDLE_COLOR),
+    ...Array.makeBy(BLADE_LENGTH, index =>
+      pixelAt(
+        player,
+        player.facing,
+        base + index,
+        index === BLADE_LENGTH - 1 ? BLADE_TIP_COLOR : BLADE_COLOR,
+      ),
+    ),
+  ]
+}
+
+const slashArcShapes = (
+  player: Player,
+  share: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const radius = PLAYER_RADIUS + KNIFE_RULES.reachPx * 0.8
+  const facingAngle = Math.atan2(player.facing.y, player.facing.x)
+  const swept = Math.min(1, share * 2.5)
+  const alpha = Math.round((1 - share) * 100) / 100
+  return Array.filterMap(
+    Array.makeBy(ARC_DOTS, index => index),
+    index => {
+      const along = index / (ARC_DOTS - 1)
+      if (along > swept) {
+        return Result.failVoid
+      }
+      const angle = facingAngle + (along * 2 - 1) * KNIFE_RULES.halfArc
+      return Result.succeed(
+        pixelAt(
+          player,
+          { x: Math.cos(angle), y: Math.sin(angle) },
+          radius,
+          `rgba(255, 255, 255, ${alpha})`,
+        ),
+      )
+    },
+  )
+}
+
+export const knifeSlashShapes = (player: Player): ReadonlyArray<Canvas.Shape> =>
+  Option.match(maybeSlashShare(player), {
+    onNone: () => [],
+    onSome: share => [
+      ...bladeShapes(player, share),
+      ...slashArcShapes(player, share),
+    ],
+  })
+
 export const playerFlashShapes = (
   player: Player,
 ): ReadonlyArray<Canvas.Shape> => {
   const { tier, stats, bodyX, bodyY } = playerPose(player)
   const flashReach = stats.muzzleReach + 2
-  return muzzleFlashShapes(
-    player,
-    stats,
-    tier,
-    Math.round(bodyX + player.facing.x * flashReach),
-    Math.round(bodyY + player.facing.y * flashReach),
-  )
+  return [
+    ...muzzleFlashShapes(
+      player,
+      stats,
+      tier,
+      Math.round(bodyX + player.facing.x * flashReach),
+      Math.round(bodyY + player.facing.y * flashReach),
+    ),
+    ...knifeSlashShapes(player),
+  ]
 }
 
 export const playerFootY = (player: Player): number =>

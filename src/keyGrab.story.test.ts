@@ -52,6 +52,7 @@ describe('game keys and the browser', () => {
       'KeyD',
       'KeyT',
       'KeyR',
+      'KeyF',
       'ArrowDown',
       'Space',
       'Slash',

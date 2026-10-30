@@ -171,25 +171,28 @@ const played = Array.from({ length: 900 }).reduce(
 const intended = refreshIntent(played)
 
 // NOTE: co-op's crew joins the same World mid-wave (Phase 1): teammates who
-// walk, aim, and fire their own way, so the bundle plays every seat.
+// walk, aim, fire, and stab their own way, so the bundle plays every seat.
 const MATE_INTENTS: ReadonlyArray<Intent> = [
   {
     move: { x: -0.6, y: 0.8 },
     maybeAim: Option.some({ x: 0, y: -1 }),
     trigger: 'Held',
     interact: 'Released',
+    stab: 'Released',
   },
   {
     move: { x: 1, y: 0 },
     maybeAim: Option.none(),
     trigger: 'Held',
     interact: 'Held',
+    stab: 'Held',
   },
   {
     move: { x: 0, y: 0 },
     maybeAim: Option.some({ x: -1, y: 0 }),
     trigger: 'Released',
     interact: 'Released',
+    stab: 'Held',
   },
 ]
 

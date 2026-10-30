@@ -9,7 +9,6 @@ import { BULLET_STEP_PX, TILE_SIZE } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
-  Arsenal,
   type CarriedGun,
   type Model,
   Phase,
@@ -17,6 +16,7 @@ import {
   initialModel,
 } from './model'
 import { aimSightShapes } from './sightView'
+import { holdingFirst, holdingSecond } from './testing'
 import { asVeteran } from './veteran'
 
 const SHOTGUN: CarriedGun = { kind: 'Shotgun', rounds: 16, loaded: 6, tier: 0 }
@@ -27,7 +27,7 @@ const fighting: Model = modifyFields(asVeteran(initialModel), {
   player: player =>
     modifyFields(player, {
       y: () => 70,
-      arsenal: () => Arsenal.HoldingPistol({ spare: SHOTGUN }),
+      arsenal: () => holdingFirst(SHOTGUN),
     }),
   laserSight: () => 'Fitted',
 })
@@ -137,7 +137,7 @@ describe('the laser sight', () => {
         modifyFields(fighting, {
           player: player =>
             modifyFields(player, {
-              arsenal: () => Arsenal.HoldingSpare({ spare: SHOTGUN }),
+              arsenal: () => holdingSecond(SHOTGUN),
             }),
         }),
       ),

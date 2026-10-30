@@ -20,8 +20,8 @@ import { Dialog, Tabs } from '@foldkit/ui'
 import { FIXED_STEP_MS, PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
-import { Arsenal, type Model, Phase, Trap, initialModel } from './model'
-import { measureSurface } from './testing'
+import { type Arsenal, type Model, Phase, Trap, initialModel } from './model'
+import { holdingSecond, measureSurface } from './testing'
 import { TRAPS } from './traps'
 import { view } from './view'
 
@@ -58,7 +58,7 @@ const atStall = (balance: number, arsenal: Arsenal): Model =>
   })
 
 const holdingSmg = (rounds: number, tier: number): Arsenal =>
-  Arsenal.HoldingSpare({ spare: { kind: 'Smg', rounds, loaded: 30, tier } })
+  holdingSecond({ kind: 'Smg', rounds, loaded: 30, tier })
 
 const openShop = [
   Subscription.emit(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),

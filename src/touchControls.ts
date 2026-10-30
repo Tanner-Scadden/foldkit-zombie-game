@@ -3,17 +3,23 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { STICK_RADIUS_PX } from './constants'
 import { gunClusterBox, gunSlotBox, secondsLeft } from './hud'
-import { NEXT_TRAP_ICON, RELOAD_ICON, TRAP_BUTTON_ICONS } from './icons'
+import {
+  KNIFE_ICON,
+  NEXT_TRAP_ICON,
+  RELOAD_ICON,
+  TRAP_BUTTON_ICONS,
+} from './icons'
 import { thumbOffset } from './input'
 import { Message } from './message'
 import {
-  Arsenal,
   BreakClock,
   type GunSlot,
+  HoldButton,
   type Model,
   Phase,
   Stick,
 } from './model'
+import { KNIFE_NAME } from './names'
 import { type GhostStick, isDebutCardUp, shownGhostSticks } from './onboarding'
 import { isCoop, leadSeatOf } from './party'
 import { holdButtonView } from './purchaseHud'
@@ -29,12 +35,12 @@ import {
 import { wavePreviewView } from './wavePreview'
 import { isRoundActive } from './waves'
 import {
-  SIDEARM,
   canReload,
+  gunsOf,
   heldLoaded,
+  heldSlotOf,
   heldStats,
   heldWeapon,
-  maybeSpare,
   tierName,
 } from './weapons'
 
@@ -96,23 +102,17 @@ const percentOf = (part: number, whole: number): string =>
 
 type SlotGun = Readonly<{ slot: GunSlot; name: string }>
 
-const slotGuns = (model: Model): ReadonlyArray<SlotGun> => {
-  const { player } = model
-  return [
-    { slot: 'Sidearm', name: tierName(SIDEARM, player.pistolTier) },
-    ...Option.match(maybeSpare(player.arsenal), {
-      onNone: () => [],
-      onSome: spare => [
-        { slot: 'Spare' as const, name: tierName(spare.kind, spare.tier) },
-      ],
-    }),
-  ]
-}
+const SLOT_ORDER: ReadonlyArray<GunSlot> = ['First', 'Second']
 
-const heldSlot = (model: Model): GunSlot =>
-  Arsenal.isAnyOf(['HoldingSpare'])(model.player.arsenal) ? 'Spare' : 'Sidearm'
+const slotGuns = (model: Model): ReadonlyArray<SlotGun> =>
+  Array.zipWith(SLOT_ORDER, gunsOf(model.player.arsenal), (slot, gun) => ({
+    slot,
+    name: tierName(gun.kind, gun.tier),
+  }))
 
-const SLOT_INDEX: Readonly<Record<GunSlot, number>> = { Sidearm: 0, Spare: 1 }
+const heldSlot = (model: Model): GunSlot => heldSlotOf(model.player.arsenal)
+
+const SLOT_INDEX: Readonly<Record<GunSlot, number>> = { First: 0, Second: 1 }
 
 const gunSlotButtonView = (
   model: Model,
@@ -153,6 +153,57 @@ const gunSlotsView = (
     [h.Class('gun-slots'), h.Role('group'), h.AriaLabel('Your guns')],
     Array.map(slotGuns(model), gun => gunSlotButtonView(model, screen, gun, h)),
   )
+
+// THE KNIFE
+
+// NOTE: the knife button is held, not clicked, like the hold button: the
+// finger that lands on it stabs on repeat until it lifts (src/input.ts).
+// It sits outside the game surface, so it never takes a stick's finger.
+const toPressedKnifeButton = (
+  pointerType: string,
+  _button: number,
+  _screenX: number,
+  _screenY: number,
+  _timeStamp: number,
+  _clientX: number,
+  _clientY: number,
+  pointerId: number,
+): Option.Option<Message> =>
+  pointerType === 'mouse'
+    ? Option.none()
+    : Option.some(Message.PressedKnifeButton({ pointerId }))
+
+const knifeButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  isOnTouch(model)
+    ? h.div(
+        [h.Class('gun-cluster-knife')],
+        [
+          h.button(
+            [
+              h.Type('button'),
+              h.Class('icon-button cluster-button knife-button'),
+              h.AriaLabel(`Stab with the ${KNIFE_NAME}`),
+              h.AriaKeyshortcuts('F'),
+              h.DataAttribute(
+                'held',
+                HoldButton.isAnyOf(['Held'])(model.input.knifeButton)
+                  ? 'true'
+                  : 'false',
+              ),
+              h.OnPointerDown(toPressedKnifeButton),
+              h.OnContextMenu(Message.SuppressedContextMenu()),
+            ],
+            [
+              h.span([
+                h.Class('icon-button-glyph'),
+                h.AriaHidden(true),
+                h.Style({ backgroundImage: KNIFE_ICON }),
+              ]),
+            ],
+          ),
+        ],
+      )
+    : h.empty
 
 // UTILITY ICONS
 
@@ -366,6 +417,7 @@ const clusterView = (
               }),
             ],
             [
+              knifeButtonView(model, h),
               gunSlotsView(model, screen, h),
               clusterSideView(model, screen, h),
               startWaveButtonView(model, h),

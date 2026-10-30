@@ -31,7 +31,7 @@ import {
 } from './font'
 import { clamp } from './geometry'
 import {
-  Arsenal,
+  type CarriedGun,
   type Model,
   Phase,
   type Player,
@@ -59,13 +59,14 @@ import { scoreOf } from './stats'
 import { TRAP_KIND_ORDER, maybeSelectedKind } from './traps'
 import { isRoundActive, zombiesRemaining } from './waves'
 import {
-  SIDEARM,
+  gunsOf,
+  hasEndlessRounds,
+  heldSlotOf,
   isReloadable,
   isReloading,
   looseRounds,
   magazineOf,
   maxTier,
-  maybeSpare,
 } from './weapons'
 
 // HUD
@@ -483,41 +484,52 @@ const ammoLook = (
   }
 }
 
+const ammoText = (gun: CarriedGun): string => {
+  if (hasEndlessRounds(gun.kind)) {
+    return `${gun.loaded}/${ENDLESS_ROUNDS}`
+  } else if (isReloadable(gun.kind)) {
+    return `${gun.loaded}/${looseRounds(gun)}`
+  } else {
+    return `${gun.loaded}`
+  }
+}
+
+const gunSlotLook = (
+  player: Player,
+  gun: CarriedGun,
+  isHeld: boolean,
+): SlotLook => ({
+  maybeGun: Option.some({ weapon: gun.kind, tier: gun.tier }),
+  ammo: ammoText(gun),
+  isHeld,
+  ammoLook: ammoLook(player, isHeld, gun.loaded),
+  maybeMeter:
+    gun.kind === 'Pan'
+      ? Option.some(gun.loaded / magazineOf('Pan', gun.tier))
+      : Option.none(),
+})
+
+const EMPTY_SLOT: SlotLook = {
+  maybeGun: Option.none(),
+  ammo: '--',
+  isHeld: false,
+  ammoLook: 'Loaded',
+}
+
 const loadoutShapes = (
   player: Player,
   layout: HudLayout,
 ): ReadonlyArray<Canvas.Shape> => {
   const { arsenal } = player
-  const isHoldingSpare = Arsenal.isAnyOf(['HoldingSpare'])(arsenal)
-  const pistolSlot: SlotLook = {
-    maybeGun: Option.some({ weapon: SIDEARM, tier: player.pistolTier }),
-    ammo: `${player.pistolLoaded}/${ENDLESS_ROUNDS}`,
-    isHeld: !isHoldingSpare,
-    ammoLook: ammoLook(player, !isHoldingSpare, player.pistolLoaded),
-  }
-  const spareSlot: SlotLook = Option.match(maybeSpare(arsenal), {
-    onNone: () => ({
-      maybeGun: Option.none(),
-      ammo: '--',
-      isHeld: false,
-      ammoLook: 'Loaded',
-    }),
-    onSome: spare => ({
-      maybeGun: Option.some({ weapon: spare.kind, tier: spare.tier }),
-      ammo: isReloadable(spare.kind)
-        ? `${spare.loaded}/${looseRounds(spare)}`
-        : `${spare.loaded}`,
-      isHeld: isHoldingSpare,
-      ammoLook: ammoLook(player, isHoldingSpare, spare.loaded),
-      maybeMeter:
-        spare.kind === 'Pan'
-          ? Option.some(spare.loaded / magazineOf('Pan', spare.tier))
-          : Option.none(),
-    }),
+  const held = heldSlotOf(arsenal)
+  const [first, ...rest] = gunsOf(arsenal)
+  const secondSlot: SlotLook = Option.match(Array.head(rest), {
+    onNone: () => EMPTY_SLOT,
+    onSome: second => gunSlotLook(player, second, held === 'Second'),
   })
   return [
-    ...slotShapes(layout, 0, pistolSlot),
-    ...slotShapes(layout, 1, spareSlot),
+    ...slotShapes(layout, 0, gunSlotLook(player, first, held === 'First')),
+    ...slotShapes(layout, 1, secondSlot),
   ]
 }
 

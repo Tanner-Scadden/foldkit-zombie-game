@@ -46,6 +46,7 @@ import {
   movePointer,
   pressHoldButton,
   pressKey,
+  pressKnifeButton,
   pressPointer,
   releaseAll,
   releaseKey,
@@ -56,7 +57,6 @@ import {
 import { noteMissedKeyDown } from './keyGrab'
 import { Message } from './message'
 import {
-  Arsenal,
   AudioState,
   GunSlot,
   InputDevice,
@@ -212,6 +212,7 @@ import {
   beginReload,
   canReload,
   cancelReload,
+  heldSlotOf,
   heldWeapon,
   swapWeapon,
 } from './weapons'
@@ -322,8 +323,7 @@ const swapGun = (model: Model): Model => {
     : swapped
 }
 
-const heldSlot = (model: Model): GunSlot =>
-  Arsenal.isAnyOf(['HoldingSpare'])(model.player.arsenal) ? 'Spare' : 'Sidearm'
+const heldSlot = (model: Model): GunSlot => heldSlotOf(model.player.arsenal)
 
 const swapFromKey = (model: Model, code: string): Model =>
   isSwapKey(code) ? swapGun(model) : model
@@ -620,6 +620,13 @@ const updateGame = (model: Model, message: Message) =>
       unlockAudio(
         withInput(useDevice(model, 'Touch'), input =>
           pressHoldButton(input, pointerId),
+        ),
+      ),
+
+    PressedKnifeButton: ({ pointerId }) =>
+      unlockAudio(
+        withInput(useDevice(model, 'Touch'), input =>
+          pressKnifeButton(input, pointerId),
         ),
       ),
 

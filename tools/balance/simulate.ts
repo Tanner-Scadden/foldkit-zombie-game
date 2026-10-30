@@ -379,6 +379,9 @@ const fridgeTotals = results.reduce(
     totals.clangs += fridge.clangs
     totals.sprays += fridge.sprays
     totals.shatters += fridge.shatters
+    totals.taken += fridge.taken
+    totals.stabs += fridge.stabs
+    totals.stabHits += fridge.stabHits
     return totals
   },
   {
@@ -390,6 +393,9 @@ const fridgeTotals = results.reduce(
     clangs: 0,
     sprays: 0,
     shatters: 0,
+    taken: 0,
+    stabs: 0,
+    stabHits: 0,
   },
 )
 const fridgeWins = (prize: string) =>
@@ -399,6 +405,9 @@ console.log(
 )
 console.log(
   `Fridge prizes: ${JSON.stringify(fridgeTotals.prizes)}; carried at the end: ${JSON.stringify(fridgeTotals.ended)}`,
+)
+console.log(
+  `Fridge weapons taken: ${fridgeTotals.taken}. Knife: ${fridgeTotals.stabs} stabs, ${fridgeTotals.stabHits} hits (${(fridgeTotals.stabs / Math.max(1, results.length)).toFixed(1)} stabs a run).`,
 )
 console.log(
   `Fridge weapons: ${fridgeTotals.lids} lids, ${fridgeTotals.pops} pops, ${fridgeTotals.swings} swings (${fridgeTotals.clangs} clangs), ${fridgeTotals.sprays} sprays, ${fridgeTotals.shatters} shatters`,

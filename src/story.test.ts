@@ -45,7 +45,6 @@ import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
-  Arsenal,
   type Bullet,
   type Decal,
   GameEvent,
@@ -68,6 +67,7 @@ import {
   SURFACE,
   bulletInto,
   holdFire,
+  holdingSecond,
   openFloorSpot,
   releaseFire,
   scoring,
@@ -984,9 +984,7 @@ describe('screen shake', () => {
       player: player =>
         modifyFields(player, {
           arsenal: () =>
-            Arsenal.HoldingSpare({
-              spare: { kind: weapon, rounds: 999, loaded: 999, tier: 0 },
-            }),
+            holdingSecond({ kind: weapon, rounds: 999, loaded: 999, tier: 0 }),
         }),
     })
 

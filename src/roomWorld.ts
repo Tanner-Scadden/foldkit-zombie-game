@@ -157,12 +157,13 @@ const EVENT_TICKS = 60
 // NOTE: a PlayerInput as the room reads it (packages/netcode, Protocol.ts):
 // move as whole 127ths, aim as a direction scaled to AIM_REACH and kept to
 // eighths (the wire's precision), the trigger as button bit FIRE_BUTTON,
-// the interact hold (src/purchase.ts) as bit INTERACT_BUTTON, and a press
-// as `action`.
+// the interact hold (src/purchase.ts) as bit INTERACT_BUTTON, the knife
+// (src/knife.ts) as bit STAB_BUTTON, and a press as `action`.
 export const MOVE_SCALE = 127
 export const AIM_REACH = 1024
 export const FIRE_BUTTON = 1
 export const INTERACT_BUTTON = 2
+export const STAB_BUTTON = 4
 const AIM_PRECISION = 8
 
 const eighths = (value: number): number =>
@@ -177,7 +178,8 @@ export const inputOfIntent = (intent: Intent, action: number): PlayerInput => {
     aimY: eighths(aim.y * AIM_REACH),
     buttons:
       (intent.trigger === 'Held' ? FIRE_BUTTON : 0) |
-      (intent.interact === 'Held' ? INTERACT_BUTTON : 0),
+      (intent.interact === 'Held' ? INTERACT_BUTTON : 0) |
+      (intent.stab === 'Held' ? STAB_BUTTON : 0),
     action,
   }
 }
@@ -197,6 +199,7 @@ export const intentOfInput = (input: PlayerInput): Intent => ({
       : normalize({ x: input.aimX, y: input.aimY }),
   trigger: (input.buttons & FIRE_BUTTON) !== 0 ? 'Held' : 'Released',
   interact: (input.buttons & INTERACT_BUTTON) !== 0 ? 'Held' : 'Released',
+  stab: (input.buttons & STAB_BUTTON) !== 0 ? 'Held' : 'Released',
 })
 
 // ACTIONS
