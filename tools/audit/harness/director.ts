@@ -2,6 +2,7 @@ import { Array, Option, Schema } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { cameraOf, worldToView } from '@game/camera'
+import { CueMusic, PlaySound } from '@game/commands'
 import { STICK_RADIUS_PX } from '@game/constants'
 import * as CoopModel from '@game/coop/model'
 import { type WorldState, coopWorld } from '@game/coop/seam'
@@ -124,7 +125,7 @@ const logAudio = (
   atTick: number,
 ): ReadonlyArray<any> =>
   Array.filter(commands, command => {
-    if (command.name === 'PlaySound') {
+    if (command.name === PlaySound.name) {
       cues.push({
         tick: atTick,
         _tag: 'Sound',
@@ -132,7 +133,7 @@ const logAudio = (
         variation: command.args.variation,
       })
       return false
-    } else if (command.name === 'CueMusic') {
+    } else if (command.name === CueMusic.name) {
       cues.push({ tick: atTick, _tag: 'Music', ...command.args })
       return false
     } else {
