@@ -24,7 +24,7 @@ All on 2026-10-28.
 - **Mutation apply functions are plain SQL**, the same statements on browser SQLite and Durable Object SQLite.
 - **Scopes are built in this order:** player (settings and personal bests), then the daily challenge with an initials leaderboard, then multiplayer rooms.
 - **Identity in v1 is a device key** made on first launch, mapped to a player id by the server, with requests signed by it. No accounts. Pairing devices comes later.
-- **The SQLite wrapper implements Effect's own `SqlClient`** (`effect/sql` in Effect 4.0.0), so app code uses the standard `sql` tagged template, `withTransaction`, `Migrator`, and `SqlSchema`. A small `SqliteClient` service adds Schema-decoded `query`, `migrate`, the persistence status, and a stream of committed table changes. Decided 2026-10-29.
+- **The SQLite wrapper implements Effect's own `SqlClient`** (`effect/sql` in Effect 4.1.0), so app code uses the standard `sql` tagged template, `withTransaction`, `Migrator`, and `SqlSchema`. A small `SqliteClient` service adds Schema-decoded `query`, `migrate`, the persistence status, and a stream of committed table changes. Decided 2026-10-29.
 - **A follower tab goes through the leader** over a BroadcastChannel instead of sitting read-only, and takes over when the leader closes. The worker gives each tab a session so transactions never interleave, and rolls back one left idle for 10 seconds. Decided 2026-10-29.
 - **Sync identity is a session token after a signed challenge, and pairing is a six-symbol code** good once for ten minutes; linking replaces the joining device's progress. Sync is hosted by the API Worker, with one SQLite Durable Object per player scope and one directory. Decided 2026-10-29, which settles open question 6 for now. See "What phase 4 built".
 - **A failed write is retried.** A write runs its mutations in one transaction, so a failure leaves nothing behind. The store logs it, and the game keeps the changes in the Model and sends them again with the next change to the save: a field is resent with its value then, a finished run once. A mutation the scope rejects is logged and dropped, since it would fail every retry. Decided 2026-10-29.
@@ -92,7 +92,7 @@ What the save holds, by version:
 
 ### What Phase 1 taught us
 
-- **Versions.** `infra/` pins `alchemy`, `@alchemy.run/cloudflare`, and `@alchemy.run/github` at 2.0.0-beta.84, with `effect` 4.0.7. Alchemy no longer needs an Effect release candidate, only `effect` ^4.0.5, but that is still past Foldkit's 4.0.0, so `infra/` keeps its own `package.json` and lockfile. The Foldkit resource builds with the game's own Vite and Foldkit plugin from the repo root.
+- **Versions.** `infra/` pins `alchemy`, `@alchemy.run/cloudflare`, and `@alchemy.run/github` at 2.0.0-beta.84, with `effect` 4.1.0. Alchemy asks for `effect` ^4.0.5, so since Foldkit 0.170.0 moved to Effect 4.1 the game, `infra/`, and the packages all run `effect` 4.1.0. `infra/` still keeps its own `package.json` and lockfile for Alchemy and the Cloudflare packages. The Foldkit resource builds with the game's own Vite and Foldkit plugin from the repo root.
 - **State store.** `Cloudflare.state()`, Alchemy's store on the same account: an `alchemy-state-store` Worker with a SQLite Durable Object, its token and encryption key in the account's Secrets Store. It is shared by local and CI deploys. The first local deploy created it; in CI a missing store fails the run instead.
 - **Token permissions.** CI deploys with an account-owned token, `munch-manor-ci`, minted by `infra/github.ts`: Workers Scripts Write, Secrets Store Write, Account Settings Read, Workers Tail Read. Secrets Store Write is needed even to read, because Alchemy reads the state store's token by binding the secret to a short-lived preview Worker. The keychain token used by hand is much broader (it can mint tokens) and never goes to CI. Cloudflare's Workers Builds API rejected that account-owned token, so whether Workers Builds is connected can only be seen in the dashboard or in a Worker's deployment history (a `wrangler` source).
 - **The account had no `workers.dev` subdomain.** Alchemy's state store needs one, so `tanner-scadden` was claimed through the API before the first deploy.
@@ -153,7 +153,7 @@ Built on 2026-10-29 for phase 2. It runs in production and on every pull request
 
 ### The Worker
 
-Each stage has its own API Worker, `munch-manor-api` in production and `munch-manor-api-<stage>` elsewhere, beside the game's Worker. It is an Effect `HttpApi` (`infra/worker/api.ts`) on `effect` 4.0.7, writing to D1 through `@effect/sql-d1`.
+Each stage has its own API Worker, `munch-manor-api` in production and `munch-manor-api-<stage>` elsewhere, beside the game's Worker. It is an Effect `HttpApi` (`infra/worker/api.ts`) on `effect` 4.1.0, writing to D1 through `@effect/sql-d1`.
 
 | Endpoint          | Answers                                                                                                   |
 | ----------------- | --------------------------------------------------------------------------------------------------------- |
@@ -256,7 +256,7 @@ Built on 2026-10-29. The engine's design, API, protocol, and limits are in [`pac
 - **The device makes its own player id** (22 random characters) on first launch, so the scope is known offline from the first run. The server registers it on the first session unless another device holds it.
 - **Linking is a code, and replaces the joining device's progress.** Device A's ACCOUNT tab (SUMMON) shows six symbols (no 0, O, 1, or I), single use, good for ten minutes, with the line "The other device takes this one's progress." Device B types them under "Use a code" and becomes A's player; B's own progress is dropped, not merged. The form says so before Link, with an icon of progress pouring into the device: "Takes the other device's progress. What's saved here is replaced", read aloud as "This device will use the other device's progress. What was saved here is replaced, not merged." (decided 2026-10-29). Five wrong tries lock a device out for ten minutes, and identity requests are rate limited per address.
 - **Sync lives in the analytics API Worker** (`munch-manor-api-<stage>`), not a Worker of its own: one origin for the game (`VITE_API_ORIGIN`), one deploy, one CORS policy. Analytics routes are unchanged.
-- **One SQLite Durable Object per player scope (`SyncScope`)**, named by the scope id, and **one directory (`SyncDirectory`)** for devices and link codes. Both use `@effect/sql-sqlite-do` 4.0.7, which matches infra's Effect.
+- **One SQLite Durable Object per player scope (`SyncScope`)**, named by the scope id, and **one directory (`SyncDirectory`)** for devices and link codes. Both use `@effect/sql-sqlite-do` 4.1.0, which matches infra's Effect.
 - **A finished run is an increment** (`RecordedRun`: runs, kills per kind, and the bests it reached, merged as the faster win and the deeper wave), so runs on two devices offline both count, and a retried mutation id never counts twice.
 - **`update` stays pure.** It diffs the save before and after each Message into `PlayerChange` values (`src/playerSync.ts`), and the `WriteSave` Command carries them to the store. A save that arrived from sync (`UpdatedSyncedSave`) writes nothing back.
 
@@ -301,11 +301,10 @@ Researched on 2026-10-28.
 
 What blocks it for us today:
 
-- **Effect version.** Foldkit 0.169.0 pins `effect` to exactly 4.0.0, and LiveStore needs 4.0.3 or later.
 - **Server authority.** The backend sets the order, but the docs do not say it can validate or reject events. Game data such as analytics, personal bests, and multiplayer needs the server to be able to say no. Their command replay RFC is still open.
 - **Beta churn.** A minor bump can reset local storage, which is fine for a cache but not for saved progress.
 
-Revisit LiveStore when it reaches 1.0, or when Foldkit moves to Effect 4.0.3 or later and server-side validation is settled.
+Revisit LiveStore when it reaches 1.0, or once server-side validation is settled. The Effect version no longer blocks it: Foldkit 0.170.0 is on Effect 4.1.
 
 The first spike builds settings and personal bests (a player scope), then the daily challenge with an initials leaderboard (the first shared scope).
 
