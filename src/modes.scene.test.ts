@@ -16,7 +16,7 @@ import { describe, test } from 'vitest'
 
 import { Dialog } from '@foldkit/ui'
 
-import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
+import { FIXED_STEP_MS, PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { withBests } from './difficulty'
 import { update } from './main'
 import { Message } from './message'
@@ -215,7 +215,7 @@ describe('Upgrades in the shop', () => {
       { update, view },
       given(atStall),
       measureSurface,
-      Subscription.emit(Message.TickedFrame({ deltaTime: 16 })),
+      Subscription.emit(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
       Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
       Mount.resolve(
         Dialog.AcquireResources,

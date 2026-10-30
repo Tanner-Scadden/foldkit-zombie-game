@@ -10,6 +10,7 @@ import {
   BULLET_MAX,
   COINS_PER_PURCHASE,
   DRY_FIRE_DELAY_MS,
+  FIXED_STEP_MS,
   PLAYER_MAX_HP,
   PREPARATION_MS,
   SHAMBLER_BOUNTY,
@@ -67,7 +68,8 @@ import {
 } from './weapons'
 
 const FRAME_MS = 50
-const SHORT_FRAME_MS = 16
+// NOTE: one 60 Hz tick.
+const SHORT_FRAME_MS = FIXED_STEP_MS
 const PLAYER_Y = 90
 const BESIDE_STALL = { x: 241, y: 142 }
 const FRAMES_TO_STALL = 3
@@ -389,7 +391,7 @@ describe('the shop stall', () => {
         expect(player.x).toBe(opened.player.x)
         expect(bullets).toEqual([])
         expect(intent.trigger).toBe('Released')
-        expect(elapsedMs).toBe(opened.elapsedMs + 10 * FRAME_MS)
+        expect(elapsedMs).toBeCloseTo(opened.elapsedMs + 10 * FRAME_MS)
       }),
     )
   })

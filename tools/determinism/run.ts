@@ -1,7 +1,9 @@
 // Plays the script and records the gameplay hash every N frames. Pure apart
 // from the optional callback, so it runs in every engine the harness checks.
 
-import type { Model } from '../../src/model'
+import { modifyFields } from 'foldkit/struct'
+
+import { type Model, initialHitStop } from '../../src/model'
 import type { Checkpoint } from './diff'
 import { makeGameplayHasher } from './hash'
 import {
@@ -20,6 +22,7 @@ export type RunOptions = Readonly<{
   // Hash after every this many frames, and always after the last.
   every: number
   cached: boolean
+  noHitStop?: boolean
 }>
 
 export type RunReport = Readonly<{
@@ -52,7 +55,10 @@ export const runScript = (
   let model = start
   let frame = 0
   for (; frame < options.frames && isPlaying(model); frame++) {
-    model = afterFrame(playFrame(model, frame, options.pattern))
+    const played = afterFrame(playFrame(model, frame, options.pattern))
+    model = options.noHitStop
+      ? modifyFields(played, { hitStop: () => initialHitStop })
+      : played
     onFrame?.(frame, model)
     if (frame % options.every === options.every - 1) {
       checkpoints.push([frame, hasher.hashModel(model)])

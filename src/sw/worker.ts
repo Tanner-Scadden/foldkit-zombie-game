@@ -75,7 +75,9 @@ const precache = async (): Promise<void> => {
   if (shell !== undefined) {
     await assertShellMatches(shell[1])
   }
-  await Promise.all(responses.map(([url, response]) => cache.put(url, response)))
+  await Promise.all(
+    responses.map(([url, response]) => cache.put(url, response)),
+  )
 }
 
 self.addEventListener('install', event => {

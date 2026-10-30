@@ -7,13 +7,8 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import {
-  PARLOUR,
-  doorSpawnPoint,
-  isSolidAt,
-  nearestDoor,
-} from './arena'
-import { DOOR_HALF_WIDTH_PX, PLAYER_RADIUS } from './constants'
+import { PARLOUR, doorSpawnPoint, isSolidAt, nearestDoor } from './arena'
+import { DOOR_HALF_WIDTH_PX, FIXED_STEP_MS, PLAYER_RADIUS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
@@ -37,7 +32,7 @@ import {
 import { FINAL_WAVE, doorCounts, floorCounts, rollSpawns } from './waves'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const CENTER_X = PARLOUR.width / 2
 const CENTER_Y = PARLOUR.height / 2
 

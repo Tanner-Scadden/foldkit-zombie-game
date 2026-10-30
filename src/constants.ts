@@ -6,6 +6,12 @@ export const CAMERA_LEAN_EASE_MS = 240
 
 export const MS_PER_SECOND = 1000
 export const MAX_FRAME_DELTA_MS = 50
+// NOTE: the world steps in whole 60 Hz ticks whatever the display's rate, so
+// a 120 Hz phone, a 60 Hz laptop, and the co-op room play the same ticks.
+// A frame's time goes into a carry, and each whole tick in it is stepped.
+export const FIXED_STEP_MS = 1000 / 60
+// NOTE: float sums of frame times can land a hair under a whole tick.
+export const STEP_EPSILON_MS = 1e-6
 
 export const PLAYER_RADIUS = 4
 // NOTE: how far a zombie's body may sink into the player's. It stays above

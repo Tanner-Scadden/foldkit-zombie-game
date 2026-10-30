@@ -4,7 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { SetFullscreen } from './commands'
-import { PREPARATION_MS } from './constants'
+import { FIXED_STEP_MS, PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
@@ -30,6 +30,8 @@ import { asVeteran } from './veteran'
 import { keepGoing } from './waves'
 
 const TICK_MS = 50
+// NOTE: a 50 ms frame is three 60 Hz ticks; the moment a wave clears is
+// checked after a single tick, before the break's clock has run.
 
 const tapKey = (code: string) => [
   message(Message.PressedKey({ code })),
@@ -71,7 +73,7 @@ describe('the first break waits', () => {
     story(
       update,
       given(clearingWave(1)),
-      tick(TICK_MS),
+      tick(FIXED_STEP_MS),
       model(current => {
         expect(isBreak(current)).toBe(true)
         expect(breakClock(current)).toEqual(
@@ -127,7 +129,7 @@ describe('the first break waits', () => {
           mode: () => RunMode.Endless(),
         }),
       ),
-      tick(TICK_MS),
+      tick(FIXED_STEP_MS),
       model(current => {
         expect(breakClock(current)).toEqual(
           Option.some(BreakClock.Waiting({ elapsedMs: 0 })),

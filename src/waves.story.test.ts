@@ -5,7 +5,11 @@ import { describe, expect, test } from 'vitest'
 
 import { PARLOUR } from './arena'
 import { hasBoss } from './boss'
-import { FIRST_PREPARATION_MS, PREPARATION_MS } from './constants'
+import {
+  FIRST_PREPARATION_MS,
+  FIXED_STEP_MS,
+  PREPARATION_MS,
+} from './constants'
 import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
@@ -96,14 +100,15 @@ describe('preparation', () => {
       }),
       ...ticks(10, FRAME_MS),
       model(({ phase }) => {
-        expect(phase).toEqual(
-          Phase.Preparation({
-            wave: 1,
-            remainingMs: FIRST_PREPARATION_MS - 10 * FRAME_MS,
-            durationMs: FIRST_PREPARATION_MS,
-            spawns: Option.getOrThrow(Array.head(plans)),
-          }),
+        const preparation = Option.getOrThrow(
+          Option.liftPredicate(phase, Phase.guards.Preparation),
         )
+        expect(preparation.wave).toBe(1)
+        expect(preparation.remainingMs).toBeCloseTo(
+          FIRST_PREPARATION_MS - 10 * FRAME_MS,
+        )
+        expect(preparation.durationMs).toBe(FIRST_PREPARATION_MS)
+        expect(preparation.spawns).toEqual(Option.getOrThrow(Array.head(plans)))
       }),
       ...ticks(frames - 11, FRAME_MS),
       model(({ phase }) => {
@@ -185,13 +190,12 @@ describe('waves', () => {
       ...ticks(8, FRAME_MS),
       model(({ phase, zombies }) => {
         expect(zombies).toEqual([])
-        expect(phase).toEqual(
-          Phase.Wave({
-            wave: 2,
-            elapsedMs: 8 * FRAME_MS,
-            spawns: [plannedSpawn(5000)],
-          }),
+        const wave = Option.getOrThrow(
+          Option.liftPredicate(phase, Phase.guards.Wave),
         )
+        expect(wave.wave).toBe(2)
+        expect(wave.elapsedMs).toBeCloseTo(8 * FRAME_MS)
+        expect(wave.spawns).toEqual([plannedSpawn(5000)])
       }),
       ...ticks(80, FRAME_MS),
       model(({ phase, zombies }) => {
@@ -245,14 +249,15 @@ describe('waves', () => {
           stats: scoring(990),
         }),
       ),
-      tick(FRAME_MS),
+      // NOTE: one 60 Hz tick lands the kill; the world stops with it.
+      tick(FIXED_STEP_MS),
       model(({ phase, stats }) => {
         expect(phase).toEqual(Phase.Victory())
         expect(scoreOf(stats)).toBe(1000)
       }),
       ...ticks(5, FRAME_MS),
       model(({ elapsedMs }) => {
-        expect(elapsedMs).toBe(FRAME_MS)
+        expect(elapsedMs).toBe(FIXED_STEP_MS)
       }),
       ...ticks(RESTART_GRACE_TICKS, GRACE_TICK_MS),
       press('Enter'),

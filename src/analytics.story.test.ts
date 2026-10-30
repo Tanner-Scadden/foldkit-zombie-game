@@ -23,7 +23,7 @@ import {
 import { frameTimeBucket } from './analyticsRun'
 import { PARLOUR } from './arena'
 import { GenerateVisitId, SendRunSummary, WriteSave } from './commands'
-import { ZOMBIE_MAX_HP } from './constants'
+import { FIXED_STEP_MS, ZOMBIE_MAX_HP } from './constants'
 import { init, update } from './main'
 import { Message } from './message'
 import {
@@ -97,7 +97,7 @@ const finalWave: Model = modifyFields(midRun, {
   phase: () => Phase.Wave({ wave: FINAL_WAVE, elapsedMs: 90_000, spawns: [] }),
 })
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 
 const expectedSummary = (
   overrides: Partial<RunSummary> & Pick<RunSummary, 'outcome' | 'wave'>,
@@ -107,7 +107,7 @@ const expectedSummary = (
   build: 'test',
   mode: 'Campaign',
   difficulty: 'Hard',
-  runMs: 200_000 + FRAME_MS,
+  runMs: Math.round(200_000 + FRAME_MS),
   kills: modifyFields(noKills, { Shambler: () => 30, Runner: () => 4 }),
   heartsLost: 2,
   purchases: 3,

@@ -6,7 +6,7 @@ import { describe, expect, test } from 'vitest'
 import { PARLOUR } from './arena'
 import type { SoundEffect } from './audio'
 import { CueMusic, FetchBuild, PlaySound, ResumeAudio } from './commands'
-import { ZOMBIE_MAX_HP } from './constants'
+import { FIXED_STEP_MS, ZOMBIE_MAX_HP } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
@@ -24,7 +24,7 @@ import { SURFACE, tick } from './testing'
 import { asVeteran } from './veteran'
 import { FINAL_WAVE } from './waves'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const FAR_AWAY_SPAWN: PlannedSpawn = {
   atMs: 1e9,
   kind: 'Shambler',

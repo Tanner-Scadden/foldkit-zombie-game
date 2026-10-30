@@ -17,7 +17,7 @@ import { describe, test } from 'vitest'
 
 import { Dialog, Tabs } from '@foldkit/ui'
 
-import { PREPARATION_MS } from './constants'
+import { FIXED_STEP_MS, PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import { Arsenal, type Model, Phase, Trap, initialModel } from './model'
@@ -61,7 +61,7 @@ const holdingSmg = (rounds: number, tier: number): Arsenal =>
   Arsenal.HoldingSpare({ spare: { kind: 'Smg', rounds, loaded: 30, tier } })
 
 const openShop = [
-  Subscription.emit(Message.TickedFrame({ deltaTime: 16 })),
+  Subscription.emit(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
   Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
   Mount.resolve(
     Dialog.AcquireResources,

@@ -5,6 +5,7 @@ import { describe, expect, test } from 'vitest'
 
 import {
   FIRE_INTERVAL_MS,
+  FIXED_STEP_MS,
   PISTOL_DAMAGE,
   PISTOL_MAGAZINE,
   PLAYER_MAX_HP,
@@ -67,6 +68,9 @@ import { ZOMBIE_KINDS } from './zombies'
 // SETUP
 
 const FRAME_MS = 50
+// NOTE: a 50 ms frame is three 60 Hz ticks. A kill freezes the rest of its
+// frame's ticks, so the tests that check one moment step a single tick.
+const TICK_MS = FIXED_STEP_MS
 
 const ticksFor = (ms: number) => ticks(Math.round(ms / FRAME_MS), FRAME_MS)
 
@@ -213,13 +217,13 @@ describe('drops', () => {
     story(
       update,
       given(withLoot(withKills(fighting, victimsOf('Tank', 6)), { dryMs: 0 })),
-      tick(FRAME_MS),
+      tick(TICK_MS),
       model(({ pickups, loot, frameEvents }) => {
         expect(
           Array.filter(frameEvents, GameEvent.isAnyOf(['ZombieKilled'])),
         ).toHaveLength(6)
         expect(pickups).toEqual([])
-        expect(loot.dryMs).toBe(FRAME_MS)
+        expect(loot.dryMs).toBe(TICK_MS)
       }),
     )
   })
@@ -239,11 +243,11 @@ describe('drops', () => {
           full,
         ),
       ),
-      tick(FRAME_MS),
+      tick(TICK_MS),
       model(({ pickups, loot }) => {
         expect(pickups).toHaveLength(DROP_RULES.floorMax)
         expect(loot.prize).toEqual(Prize.Owed())
-        expect(loot.dryMs).toBe(DROP_RULES.pityMs + FRAME_MS)
+        expect(loot.dryMs).toBe(DROP_RULES.pityMs + TICK_MS)
       }),
     )
   })
@@ -254,7 +258,7 @@ describe('drops', () => {
       given(withLoot(fighting, { dryMs: 0 })),
       ...ticks(10, FRAME_MS),
       model(({ loot }) => {
-        expect(loot.dryMs).toBe(10 * FRAME_MS)
+        expect(loot.dryMs).toBeCloseTo(10 * FRAME_MS)
       }),
     )
     story(
@@ -695,13 +699,13 @@ describe('timers', () => {
     story(
       update,
       given(underPlayer(fighting, 'Damage')),
-      tick(FRAME_MS),
+      tick(TICK_MS),
       model(({ boosts }) => {
         expect(remainingOf(boosts, 'Damage')).toBe(durationMs)
       }),
       ...ticksFor(durationMs - FRAME_MS),
       model(({ boosts }) => {
-        expect(remainingOf(boosts, 'Damage')).toBe(FRAME_MS)
+        expect(remainingOf(boosts, 'Damage')).toBeCloseTo(FRAME_MS)
       }),
       tick(FRAME_MS),
       model(({ boosts, frameEvents }) => {
@@ -789,7 +793,7 @@ describe('timers', () => {
       given(withBoost(preparing, 'Speed', 4000)),
       ...ticks(10, FRAME_MS),
       model(({ boosts }) => {
-        expect(remainingOf(boosts, 'Speed')).toBe(4000 - 10 * FRAME_MS)
+        expect(remainingOf(boosts, 'Speed')).toBeCloseTo(4000 - 10 * FRAME_MS)
       }),
     )
   })
@@ -804,7 +808,7 @@ describe('timers', () => {
       given(
         secondGrab(withBoost(fighting, 'RapidFire', durationMs - elapsedMs)),
       ),
-      tick(FRAME_MS),
+      tick(TICK_MS),
       model(({ boosts }) => {
         expect(remainingOf(boosts, 'RapidFire')).toBe(
           durationMs * BOOST_STACK_MAX,
@@ -814,10 +818,10 @@ describe('timers', () => {
     story(
       update,
       given(secondGrab(withBoost(fighting, 'RapidFire', 1000))),
-      tick(FRAME_MS),
+      tick(TICK_MS),
       model(({ boosts }) => {
-        expect(remainingOf(boosts, 'RapidFire')).toBe(
-          1000 - FRAME_MS + durationMs,
+        expect(remainingOf(boosts, 'RapidFire')).toBeCloseTo(
+          1000 - TICK_MS + durationMs,
         )
       }),
     )
@@ -827,9 +831,9 @@ describe('timers', () => {
     story(
       update,
       given(underPlayer(withBoost(fighting, 'Speed', 3000), 'Damage')),
-      tick(FRAME_MS),
+      tick(TICK_MS),
       model(({ boosts }) => {
-        expect(remainingOf(boosts, 'Speed')).toBe(3000 - FRAME_MS)
+        expect(remainingOf(boosts, 'Speed')).toBeCloseTo(3000 - TICK_MS)
         expect(remainingOf(boosts, 'Damage')).toBe(BOOSTS.Damage.durationMs)
       }),
     )
@@ -863,11 +867,13 @@ describe('the floor', () => {
       given(withPickups(fighting, [pickupAt(900, 'Pierce', 40, 150)])),
       ...ticksFor(PICKUP_LIFETIME_MS - FRAME_MS),
       model(({ pickups }) => {
-        expect(Array.map(pickups, ({ ageMs }) => ageMs)).toEqual([
-          PICKUP_LIFETIME_MS - FRAME_MS,
-        ])
+        expect(pickups).toHaveLength(1)
+        expect(pickups[0]?.ageMs).toBeCloseTo(PICKUP_LIFETIME_MS - FRAME_MS)
       }),
+      // NOTE: summed 60 Hz ticks land a hair short of the lifetime, so it
+      // fizzles within one tick of it.
       tick(FRAME_MS),
+      tick(TICK_MS),
       model(({ pickups, frameEvents }) => {
         expect(pickups).toEqual([])
         expect(tagsOf(frameEvents)).toContain('PickupFizzled')

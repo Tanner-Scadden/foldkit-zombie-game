@@ -3,7 +3,7 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { RESTART_GRACE_MS } from './constants'
+import { FIXED_STEP_MS, RESTART_GRACE_MS } from './constants'
 import { clientToView } from './geometry'
 import { update } from './main'
 import { Message } from './message'
@@ -38,7 +38,7 @@ import {
 } from './testing'
 import { ZOMBIE_KINDS } from './zombies'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const TICK_MS = 50
 const MOVE_TICKS = 10
 const SHOWN_TICKS = Math.ceil(LESSON_MIN_SHOWN_MS / TICK_MS)
@@ -293,7 +293,7 @@ describe('run stats', () => {
     expect(accuracyPercent(stats)).toBe(
       Math.round((100 * stats.shotsHit) / stats.shotsFired),
     )
-    expect(stats.runMs).toBe(SHOOTING_TICKS * FRAME_MS)
+    expect(stats.runMs).toBeCloseTo(SHOOTING_TICKS * FRAME_MS, 9)
     expect(stats.heartsLost).toBe(0)
   })
 

@@ -6,6 +6,7 @@ import { describe, expect, test } from 'vitest'
 import { PARLOUR, doorSpawnPoint, nearestDoor } from './arena'
 import {
   DOOR_HALF_WIDTH_PX,
+  FIXED_STEP_MS,
   MAX_BLASTS_PER_FRAME,
   PLAYER_MAX_HP,
   ZOMBIE_BUMP_SPEED,
@@ -50,7 +51,7 @@ import {
   isFloorKind,
 } from './zombies'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const LONG_FRAME_MS = 50
 const CENTER_X = PARLOUR.width / 2
 const CENTER_Y = PARLOUR.height / 2

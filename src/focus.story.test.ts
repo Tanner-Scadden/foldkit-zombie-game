@@ -4,7 +4,7 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
+import { FIXED_STEP_MS, PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
@@ -26,7 +26,7 @@ import {
 import { SURFACE, tick } from './testing'
 import { asVeteran } from './veteran'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const MOUSE_POINTER = 1
 const RIGHT_THUMB = 12
 

@@ -31,12 +31,14 @@ import {
   BULLET_RADIUS,
   CONTACT_ALLOWANCE_PX,
   DRY_FIRE_DELAY_MS,
+  FIXED_STEP_MS,
   KNOCKBACK_REST_SPEED,
   MAX_FRAME_DELTA_MS,
   MS_PER_SECOND,
   PLAYER_KNOCKBACK_DECAY_PER_SECOND,
   PLAYER_RADIUS,
   SEPARATION_SPEED,
+  STEP_EPSILON_MS,
   ZOMBIE_BUMP_SPEED,
   ZOMBIE_KNOCKBACK_DECAY_PER_SECOND,
 } from './constants'
@@ -55,7 +57,7 @@ import {
   vectorLength,
 } from './geometry'
 import { deriveIntent } from './input'
-import { advanceJuice, thawHitStop } from './juice'
+import { advanceJuice, thawTick } from './juice'
 import { advanceKitchen, soupSkid } from './kitchen'
 import {
   Arsenal,
@@ -65,7 +67,6 @@ import {
   type DoorId,
   type FlowField,
   GameEvent,
-  HitStop,
   Invulnerability,
   type Model,
   Pierce,
@@ -109,7 +110,7 @@ import {
   tollsOf,
   trapBlockers,
 } from './traps'
-import { advanceRound, endWhenDefeated } from './waves'
+import { advanceRound, endWhenDefeated, isRoundActive } from './waves'
 import {
   SIDEARM,
   type WeaponStats,
@@ -1325,20 +1326,64 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
   )
 }
 
-export const advanceGame = (model: Model, deltaTime: number): Model => {
-  const deltaMs = clampFrameDelta(deltaTime)
-  const thaw = thawHitStop(model.hitStop, deltaMs)
+// NOTE: one 60 Hz tick: hit-stop decides whether the world steps, then the
+// camera lean and the juice follow on the tick's events.
+const advanceTick = (model: Model): Model => {
+  const thaw = thawTick(model.hitStop, FIXED_STEP_MS)
   const thawed = modifyFields(model, {
     hitStop: () => thaw.hitStop,
     frameEvents: () => [],
   })
-  const isFrozenThroughout =
-    HitStop.isAnyOf(['Frozen'])(model.hitStop) && thaw.worldMs <= 0
-  const stepped = isFrozenThroughout
-    ? thawed
-    : advanceWorld(thawed, thaw.worldMs)
+  const stepped = thaw.worldMs > 0 ? advanceWorld(thawed, thaw.worldMs) : thawed
   const leaned = modifyFields(stepped, {
-    cameraLean: lean => leanCamera(lean, stepped.intent.maybeAim, deltaMs),
+    cameraLean: lean =>
+      leanCamera(lean, stepped.intent.maybeAim, FIXED_STEP_MS),
   })
-  return advanceJuice(leaned, deltaMs, thaw.worldMs)
+  return advanceJuice(leaned, FIXED_STEP_MS, thaw.worldMs)
+}
+
+type Ticks = Readonly<{ count: number; carryMs: number }>
+
+// NOTE: a 60 Hz frame on an empty carry is exactly one tick and leaves
+// exactly zero, so a 60 Hz display steps as it did before the fixed step.
+export const ticksIn = (carryMs: number, count = 0): Ticks =>
+  carryMs >= FIXED_STEP_MS - STEP_EPSILON_MS
+    ? ticksIn(carryMs - FIXED_STEP_MS, count + 1)
+    : { count, carryMs: Math.max(0, carryMs) }
+
+type Stepped = Readonly<{
+  model: Model
+  events: ReadonlyArray<GameEvent>
+}>
+
+// NOTE: a tick that ends the round ends the frame's ticks.
+const runTicks = (stepped: Stepped, count: number): Stepped => {
+  if (count <= 0 || !isRoundActive(stepped.model.phase)) {
+    return stepped
+  }
+  const ticked = advanceTick(stepped.model)
+  return runTicks(
+    { model: ticked, events: [...stepped.events, ...ticked.frameEvents] },
+    count - 1,
+  )
+}
+
+// NOTE: a frame runs the whole ticks its time owes and carries the rest.
+// Its `frameEvents` are every tick's events in order, so sounds, stats, and
+// lessons see each one.
+export const advanceGame = (model: Model, deltaTime: number): Model => {
+  const ticks = ticksIn(model.stepCarryMs + clampFrameDelta(deltaTime))
+  const stepped = runTicks(
+    {
+      model: modifyFields(model, {
+        stepCarryMs: () => ticks.carryMs,
+        frameEvents: () => [],
+      }),
+      events: [],
+    },
+    ticks.count,
+  )
+  return ticks.count > 1
+    ? modifyFields(stepped.model, { frameEvents: () => stepped.events })
+    : stepped.model
 }

@@ -30,6 +30,7 @@ import {
   SHAKE_TRAUMA_GRAB,
   SHAKE_TRAUMA_HURT,
   SHAKE_TRAUMA_MAX,
+  STEP_EPSILON_MS,
   STREAK_WINDOW_MS,
   TRAP_CRACK_TRAUMA,
 } from './constants'
@@ -57,30 +58,37 @@ type Thaw = Readonly<{ hitStop: HitStop; worldMs: number }>
 const BOSS_SLOW_MOTION_MS = 1400
 const BOSS_SLOW_MOTION_RATE = 0.25
 
-export const thawHitStop = (hitStop: HitStop, deltaMs: number): Thaw =>
+// NOTE: hit-stop counts whole ticks. A frozen tick runs no world, and a
+// freeze lasts its length rounded to whole ticks. Slow motion runs one world
+// tick each time its scaled time adds up to a whole tick.
+export const thawTick = (hitStop: HitStop, tickMs: number): Thaw =>
   HitStop.match(hitStop, {
-    Running: () => ({ hitStop, worldMs: deltaMs }),
-    Slowed: ({ remainingMs }) =>
-      remainingMs > deltaMs
-        ? {
-            hitStop: HitStop.Slowed({ remainingMs: remainingMs - deltaMs }),
-            worldMs: deltaMs * BOSS_SLOW_MOTION_RATE,
-          }
-        : {
-            hitStop: HitStop.Running({ cooldownMs: HIT_STOP_COOLDOWN_MS }),
-            worldMs:
-              remainingMs * BOSS_SLOW_MOTION_RATE + (deltaMs - remainingMs),
-          },
-    Frozen: ({ remainingMs }) =>
-      remainingMs > deltaMs
-        ? {
-            hitStop: HitStop.Frozen({ remainingMs: remainingMs - deltaMs }),
-            worldMs: 0,
-          }
-        : {
-            hitStop: HitStop.Running({ cooldownMs: HIT_STOP_COOLDOWN_MS }),
-            worldMs: deltaMs - remainingMs,
-          },
+    Running: () => ({ hitStop, worldMs: tickMs }),
+    Slowed: ({ remainingMs, carryMs }) => {
+      const scaledMs = carryMs + tickMs * BOSS_SLOW_MOTION_RATE
+      const isStepping = scaledMs >= tickMs - STEP_EPSILON_MS
+      const leftMs = remainingMs - tickMs
+      return {
+        hitStop:
+          leftMs > tickMs / 2
+            ? HitStop.Slowed({
+                remainingMs: leftMs,
+                carryMs: isStepping ? Math.max(0, scaledMs - tickMs) : scaledMs,
+              })
+            : HitStop.Running({ cooldownMs: HIT_STOP_COOLDOWN_MS }),
+        worldMs: isStepping ? tickMs : 0,
+      }
+    },
+    Frozen: ({ remainingMs }) => {
+      const leftMs = remainingMs - tickMs
+      return {
+        hitStop:
+          leftMs > tickMs / 2
+            ? HitStop.Frozen({ remainingMs: leftMs })
+            : HitStop.Running({ cooldownMs: HIT_STOP_COOLDOWN_MS }),
+        worldMs: 0,
+      }
+    },
   })
 
 const killFreezeMs = (kills: number, cooldownMs: number): number =>
@@ -453,7 +461,7 @@ export const advanceJuice = (
   return modifyFields(model, {
     hitStop: hitStop =>
       isBossFelled
-        ? HitStop.Slowed({ remainingMs: BOSS_SLOW_MOTION_MS })
+        ? HitStop.Slowed({ remainingMs: BOSS_SLOW_MOTION_MS, carryMs: 0 })
         : triggerHitStop(hitStop, kills, hurts, blasts, worldMs),
     blasts: current =>
       Array.isReadonlyArrayEmpty(current)

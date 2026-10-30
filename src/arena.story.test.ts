@@ -14,6 +14,7 @@ import {
   tileOfIndex,
 } from './arena'
 import {
+  FIXED_STEP_MS,
   MAX_FRAME_DELTA_MS,
   PLAYER_MAX_HP,
   PLAYER_RADIUS,
@@ -34,7 +35,7 @@ import {
 import { UNREACHED_DISTANCE } from './pathing'
 import { press, tick, ticks, zombieAt } from './testing'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 
 const DISTANT_SPAWN: PlannedSpawn = {
   atMs: 1e9,

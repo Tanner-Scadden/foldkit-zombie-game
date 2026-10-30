@@ -5,7 +5,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { PARLOUR } from './arena'
-import { HIT_STOP_KILL_MAX_MS } from './constants'
+import { FIXED_STEP_MS, HIT_STOP_KILL_MAX_MS } from './constants'
 import { update } from './main'
 import { debutPitch } from './menus'
 import {
@@ -31,7 +31,7 @@ import {
 } from './zombieView'
 import { Behavior, ZOMBIE_KINDS } from './zombies'
 
-const FRAME_MS = 10
+const FRAME_MS = FIXED_STEP_MS
 const CENTER_X = PARLOUR.width / 2
 const CENTER_Y = PARLOUR.height / 2
 

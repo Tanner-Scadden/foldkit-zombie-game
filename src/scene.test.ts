@@ -22,7 +22,7 @@ import { Dialog, Tabs } from '@foldkit/ui'
 
 import indexHtml from '../index.html?raw'
 import { FocusShopItem } from './commands'
-import { GAME_TITLE, PREPARATION_MS } from './constants'
+import { FIXED_STEP_MS, GAME_TITLE, PREPARATION_MS } from './constants'
 import { FEEDBACK_RUNS } from './home'
 import { update } from './main'
 import { Message } from './message'
@@ -192,7 +192,7 @@ describe('Shop', () => {
     Tabs.Message.CompletedFocusTab(),
   )
   const openShop = () => [
-    Subscription.emit(Message.TickedFrame({ deltaTime: 16 })),
+    Subscription.emit(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
     Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
     Mount.resolve(
       Dialog.AcquireResources,

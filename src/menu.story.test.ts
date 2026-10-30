@@ -15,7 +15,7 @@ import {
   LoadStyles,
   ShowLoadProgress,
 } from './commands'
-import { RESTART_GRACE_MS } from './constants'
+import { FIXED_STEP_MS, RESTART_GRACE_MS } from './constants'
 import { bestsFor, withBests } from './difficulty'
 import { returnHome } from './home'
 import { init, update } from './main'
@@ -78,7 +78,7 @@ describe('the bests', () => {
     story(
       update,
       given(withKills(fighting, 3, 0)),
-      message(Message.TickedFrame({ deltaTime: 16 })),
+      message(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
       model(({ bests, runTally }) => {
         expect(bests.totalKills).toBe(0)
         expect(bests.runsPlayed).toBe(0)
@@ -88,7 +88,7 @@ describe('the bests', () => {
     story(
       update,
       given(dying(withKills(fighting, 3, 0))),
-      message(Message.TickedFrame({ deltaTime: 16 })),
+      message(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
       model(({ phase, bests }) => {
         expect(Phase.guards.GameOver(phase)).toBe(true)
         expect(bests.totalKills).toBe(3)
@@ -153,7 +153,7 @@ describe('the bests', () => {
     story(
       update,
       given(goneOn),
-      message(Message.TickedFrame({ deltaTime: 16 })),
+      message(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
       model(({ bests }) => {
         expect(bests.totalKills).toBe(6)
         expect(bests.killsByKind.Shambler).toBe(2)
@@ -175,11 +175,11 @@ describe('the bests', () => {
     story(
       update,
       given(winning(500_000)),
-      message(Message.TickedFrame({ deltaTime: 16 })),
+      message(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
       model(({ phase, bests }) => {
         expect(Phase.guards.Victory(phase)).toBe(true)
         expect(bests.byDifficulty.Normal.maybeFastestWinMs).toEqual(
-          Option.some(500_000 + 16),
+          Option.some(500_000 + FIXED_STEP_MS),
         )
         expect(bests.runsPlayed).toBe(1)
       }),
@@ -193,7 +193,7 @@ describe('the bests', () => {
           }),
         ),
       ),
-      message(Message.TickedFrame({ deltaTime: 16 })),
+      message(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
       model(({ bests }) => {
         expect(bests.byDifficulty.Normal.maybeFastestWinMs).toEqual(
           Option.some(400_000),

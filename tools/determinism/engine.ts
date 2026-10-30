@@ -26,6 +26,7 @@ export const answer = (engine: string, request: EngineRequest): string => {
     pattern: request.pattern,
     every: Math.max(1, request.every),
     cached: true,
+    noHitStop: request.noHitStop,
   }
   const dumpFrame = request.dump
   if (dumpFrame !== undefined) {

@@ -15,6 +15,7 @@ import {
 } from './boss'
 import { cameraOf } from './camera'
 import {
+  FIXED_STEP_MS,
   PLAYER_KNOCKBACK_SPEED,
   PLAYER_MAX_HP,
   ZOMBIE_ALIVE_MAX,
@@ -44,7 +45,7 @@ import { wavePreviewShapes } from './wavePreview'
 import { FINAL_WAVE, WAVE_PLANS, hpScaleFor, rollSpawns } from './waves'
 import { ZOMBIE_KINDS, scaledHp } from './zombies'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const CENTER_X = PARLOUR.width / 2
 const CENTER_Y = PARLOUR.height / 2
 const BOSS_ID = 777
@@ -925,9 +926,13 @@ describe('far attacks', () => {
       return Option.getOrThrow(Array.head(lefts))
     }
     const elapsed = 62 * FRAME_MS
-    expect(belchLeft(CENTER_X + 60)).toBe(BOSS_RULES.firstBelchMs - elapsed)
-    expect(belchLeft(FAR_X)).toBe(
+    expect(belchLeft(CENTER_X + 60)).toBeCloseTo(
+      BOSS_RULES.firstBelchMs - elapsed,
+      6,
+    )
+    expect(belchLeft(FAR_X)).toBeCloseTo(
       BOSS_RULES.firstBelchMs - elapsed * BOSS_RULES.belchFarRate,
+      6,
     )
   })
 })
@@ -1182,7 +1187,9 @@ describe('victory', () => {
         expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)
         expect(Boss.isAnyOf(['Arriving'])(current.boss)).toBe(true)
       }),
-      ...ticks(Math.ceil(BOSS_RULES.entranceMs / FRAME_MS), FRAME_MS),
+      // NOTE: one tick more than the entrance, as summing 1000/60 ms ticks
+      // can leave a hair of it still to run.
+      ...ticks(Math.ceil(BOSS_RULES.entranceMs / FRAME_MS) + 1, FRAME_MS),
       model(current => {
         expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)
         expect(Boss.isAnyOf(['Fighting'])(current.boss)).toBe(true)
@@ -1210,7 +1217,10 @@ describe('victory', () => {
           [{ kind: 'Boss', bounty: ZOMBIE_KINDS.Boss.bounty }],
         )
         expect(current.hitStop).toEqual(
-          HitStop.Slowed({ remainingMs: expect.any(Number) }),
+          HitStop.Slowed({
+            remainingMs: expect.any(Number),
+            carryMs: 0,
+          }),
         )
         expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)
       }),

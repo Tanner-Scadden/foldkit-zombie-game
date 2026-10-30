@@ -3,7 +3,11 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { FIRST_PREPARATION_MS, PREPARATION_MS } from './constants'
+import {
+  FIRST_PREPARATION_MS,
+  FIXED_STEP_MS,
+  PREPARATION_MS,
+} from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
@@ -176,14 +180,15 @@ describe('new zombie card', () => {
           introduced(asVeteran(freshModel), ['Shambler', 'Runner']),
         ),
       ),
-      tick(TICK_MS),
+      // NOTE: one 60 Hz tick clears the wave; a 50 ms frame is three.
+      tick(FIXED_STEP_MS),
       model(current => {
         expect(cardKind(current)).toStrictEqual(Option.none())
         expect(remainingMs(current)).toBe(PREPARATION_MS)
       }),
       ...ticks(4, TICK_MS),
       model(current => {
-        expect(remainingMs(current)).toBe(PREPARATION_MS - 4 * TICK_MS)
+        expect(remainingMs(current)).toBeCloseTo(PREPARATION_MS - 4 * TICK_MS)
       }),
       ...ticks(Math.ceil(PREPARATION_MS / TICK_MS), TICK_MS),
       model(current => {

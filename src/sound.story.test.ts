@@ -13,6 +13,7 @@ import { describe, expect, test } from 'vitest'
 import { PARLOUR } from './arena'
 import { type SoundEffect, positionVariation } from './audio'
 import { PlaySound, ResumeAudio, managedResources } from './commands'
+import { FIXED_STEP_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
@@ -28,7 +29,7 @@ import {
 } from './model'
 import { SURFACE, holdFire, openFloorSpot, tick, zombieAt } from './testing'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const MID_GAME_MS = 30_000
 const MUZZLE_X = PARLOUR.width / 2 + 10
 const SHOT_X = PARLOUR.width / 2 + 6

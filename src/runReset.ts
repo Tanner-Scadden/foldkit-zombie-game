@@ -56,6 +56,7 @@ export type RunFields = Pick<
   | 'boosts'
   | 'loot'
   | 'cosmeticRngState'
+  | 'stepCarryMs'
   | 'callouts'
   | 'trapStock'
   | 'selectedTrap'
@@ -100,6 +101,7 @@ export const freshRun = (model: Model): RunFields => ({
   boosts: idleBoosts,
   loot: freshLoot(model.rngState),
   cosmeticRngState: cosmeticSeedOf(model.rngState),
+  stepCarryMs: 0,
   callouts: [],
   trapStock: emptyTrapStock,
   selectedTrap: 'Barricade',

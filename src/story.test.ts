@@ -11,6 +11,7 @@ import {
   DECAL_MAX,
   DUST_INTERVAL_MS,
   FIRE_INTERVAL_MS,
+  FIXED_STEP_MS,
   HIT_STOP_COOLDOWN_MS,
   HIT_STOP_HURT_MS,
   HIT_STOP_KILL_MAX_MS,
@@ -117,7 +118,7 @@ const dyingZombieAt = (id: number, x: number, y: number): Zombie =>
   })
 
 const MUZZLE_X = PARLOUR.width / 2 + 10
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const RIGHT = { x: 1, y: 0 }
 
 const withZombies = (base: Model, zombies: ReadonlyArray<Zombie>): Model =>
@@ -126,10 +127,13 @@ const withZombies = (base: Model, zombies: ReadonlyArray<Zombie>): Model =>
 const GRACE_TICK_MS = 50
 const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
 
+// NOTE: hit-stop counts whole ticks: a freeze lasts its length rounded to
+// whole ticks, and the world does not step on any of them.
+const freezeTicks = (freezeMs: number): number =>
+  Math.round(freezeMs / FRAME_MS)
+
 const waitOutFreeze = (freezeMs: number) =>
-  Array.makeBy(Math.ceil(freezeMs / FRAME_MS), index =>
-    tick(Math.min(FRAME_MS, freezeMs - index * FRAME_MS)),
-  )
+  ticks(freezeTicks(freezeMs), FRAME_MS)
 
 const touchDown = (pointerId: number, clientX: number, clientY: number) =>
   message(
@@ -140,14 +144,16 @@ const touchMove = (pointerId: number, clientX: number, clientY: number) =>
   message(Message.MovedPointer({ pointerId, clientX, clientY }))
 
 describe('movement', () => {
-  test('moves the player by speed times the frame delta', () => {
+  test('moves the player by speed times the tick', () => {
     story(
       update,
       given(playingModel),
       message(Message.PressedKey({ code: 'KeyD' })),
-      tick(20),
+      tick(FRAME_MS),
       model(({ player }) => {
-        expect(player.x).toBeCloseTo(PARLOUR.width / 2 + PLAYER_SPEED * 0.02)
+        expect(player.x).toBeCloseTo(
+          PARLOUR.width / 2 + (PLAYER_SPEED * FRAME_MS) / 1000,
+        )
         expect(player.y).toBe(PARLOUR.height / 2)
       }),
     )
@@ -171,7 +177,7 @@ describe('movement', () => {
       update,
       given(readyModel),
       message(Message.PressedKey({ code: 'KeyD' })),
-      tick(16),
+      tick(FIXED_STEP_MS),
       model(nextModel => {
         expect(nextModel.player.x).toBe(PARLOUR.width / 2)
         expect(nextModel.elapsedMs).toBe(0)
@@ -272,7 +278,7 @@ describe('firing', () => {
       update,
       given(playingModel),
       holdFire,
-      tick(16),
+      tick(FIXED_STEP_MS),
       releaseFire,
       ...ticks(20, 50),
       model(({ bullets }) => {
@@ -293,9 +299,10 @@ describe('zombies', () => {
       ),
       tick(50),
       model(({ zombies }) => {
-        expect(zombies).toEqual([
-          zombieAt(100, 101, PARLOUR.height / 2, { speed: 20 }),
-        ])
+        expect(
+          Array.map(zombies, zombie => modifyFields(zombie, { x: () => 0 })),
+        ).toEqual([zombieAt(100, 0, PARLOUR.height / 2, { speed: 20 })])
+        expect(zombies[0]?.x).toBeCloseTo(101, 9)
       }),
     )
   })
@@ -446,7 +453,7 @@ describe('zombies', () => {
   })
 
   test('contact during invulnerability costs nothing, and contact after it ends hurts again', () => {
-    const invulnerableFrames = PLAYER_INVULNERABLE_MS / FRAME_MS
+    const invulnerableTicks = Math.round(PLAYER_INVULNERABLE_MS / FRAME_MS)
 
     story(
       update,
@@ -465,7 +472,7 @@ describe('zombies', () => {
         expect(player.hp).toBe(PLAYER_MAX_HP - 1)
       }),
       ...waitOutFreeze(HIT_STOP_HURT_MS),
-      ...ticks(Math.floor(invulnerableFrames) - 1, FRAME_MS),
+      ...ticks(invulnerableTicks - 1, FRAME_MS),
       model(({ player }) => {
         expect(player.hp).toBe(PLAYER_MAX_HP - 1)
         expect(
@@ -495,15 +502,15 @@ describe('zombies', () => {
     story(
       update,
       given(lastHeartModel),
-      tick(16),
+      tick(FRAME_MS),
       model(({ phase, player, stats }) => {
         expect(phase).toEqual(Phase.GameOver({ wave: 1 }))
         expect(player.hp).toBe(0)
         expect(scoreOf(stats)).toBe(120)
       }),
-      tick(16),
+      tick(FRAME_MS),
       model(({ elapsedMs }) => {
-        expect(elapsedMs).toBe(16)
+        expect(elapsedMs).toBe(FRAME_MS)
       }),
       ...ticks(RESTART_GRACE_TICKS, GRACE_TICK_MS),
       message(Message.PressedKey({ code: 'Enter' })),
@@ -821,11 +828,14 @@ describe('particles and decals', () => {
     story(
       update,
       given(
-        withZombies(modifyFields(playingModel, { cosmeticRngState: () => seed }), [
-          zombieAt(100, 200, PARLOUR.height / 2, { speed: 0 }),
-          zombieAt(101, 230, PARLOUR.height / 2, { speed: 0 }),
-          zombieAt(102, 260, PARLOUR.height / 2, { speed: 0 }),
-        ]),
+        withZombies(
+          modifyFields(playingModel, { cosmeticRngState: () => seed }),
+          [
+            zombieAt(100, 200, PARLOUR.height / 2, { speed: 0 }),
+            zombieAt(101, 230, PARLOUR.height / 2, { speed: 0 }),
+            zombieAt(102, 260, PARLOUR.height / 2, { speed: 0 }),
+          ],
+        ),
       ),
       holdFire,
       message(Message.PressedKey({ code: 'KeyD' })),
@@ -1019,9 +1029,11 @@ describe('screen shake', () => {
   })
 
   test('trauma is capped, stays on whole pixels within the max, and decays to rest', () => {
-    const decayFrames = Math.ceil(
-      SHAKE_TRAUMA_MAX / SHAKE_DECAY_PER_SECOND / (FRAME_MS / 1000),
-    )
+    // NOTE: one tick more than the exact decay, since whole ticks of
+    // 1000/60 ms sum a hair short of it.
+    const decayFrames =
+      Math.ceil(SHAKE_TRAUMA_MAX / SHAKE_DECAY_PER_SECOND / (FRAME_MS / 1000)) +
+      1
     const offsets: Array<{ x: number; y: number }> = []
     const recordOffset = model(({ shake }: Model) => {
       offsets.push(shake.offset)
@@ -1059,8 +1071,7 @@ describe('screen shake', () => {
 
 describe('hit-stop', () => {
   test('a kill freezes zombies, bullets, and time for the stop, then resumes', () => {
-    const frozenFrames = Math.floor(HIT_STOP_KILL_MS / FRAME_MS)
-    const leftoverMs = (frozenFrames + 1) * FRAME_MS - HIT_STOP_KILL_MS
+    const frozenTicks = freezeTicks(HIT_STOP_KILL_MS)
 
     story(
       update,
@@ -1077,22 +1088,23 @@ describe('hit-stop', () => {
         expectWorldAdvancedBy(nextModel, FRAME_MS)
       }),
       tick(FRAME_MS),
-      model(({ frameEvents }) => {
-        expect(frameEvents).toEqual([])
-      }),
-      ...ticks(frozenFrames - 1, FRAME_MS),
       model(nextModel => {
+        expect(nextModel.frameEvents).toEqual([])
         expect(HitStop.guards.Frozen(nextModel.hitStop)).toBe(true)
+        expectWorldAdvancedBy(nextModel, FRAME_MS)
+      }),
+      ...ticks(frozenTicks - 1, FRAME_MS),
+      model(nextModel => {
+        expect(HitStop.guards.Running(nextModel.hitStop)).toBe(true)
         expectWorldAdvancedBy(nextModel, FRAME_MS)
       }),
       tick(FRAME_MS),
       model(nextModel => {
-        expect(HitStop.guards.Running(nextModel.hitStop)).toBe(true)
-        expectWorldAdvancedBy(nextModel, FRAME_MS + leftoverMs)
+        expectWorldAdvancedBy(nextModel, 2 * FRAME_MS)
       }),
       tick(FRAME_MS),
       model(nextModel => {
-        expectWorldAdvancedBy(nextModel, 2 * FRAME_MS + leftoverMs)
+        expectWorldAdvancedBy(nextModel, 3 * FRAME_MS)
       }),
     )
   })
@@ -1178,7 +1190,7 @@ describe('hit-stop', () => {
         expect(intent.move).toEqual({ x: 1, y: 0 })
         expect(player.x).toBe(PARLOUR.width / 2)
       }),
-      ...waitOutFreeze(HIT_STOP_KILL_MS - FRAME_MS),
+      ...ticks(freezeTicks(HIT_STOP_KILL_MS) - 1, FRAME_MS),
       model(({ player }) => {
         expect(player.x).toBe(PARLOUR.width / 2)
       }),
@@ -1342,11 +1354,10 @@ describe('juice determinism', () => {
     story(
       update,
       given(
-        withZombies(modifyFields(playingModel, { cosmeticRngState: () => seed }), [
-          bigKillAt(100, 200),
-          bigKillAt(101, 230),
-          bigKillAt(102, 260),
-        ]),
+        withZombies(
+          modifyFields(playingModel, { cosmeticRngState: () => seed }),
+          [bigKillAt(100, 200), bigKillAt(101, 230), bigKillAt(102, 260)],
+        ),
       ),
       holdFire,
       ...Array.flatMap(ticks(60, FRAME_MS), frame => [frame, record]),
@@ -1570,7 +1581,7 @@ describe('page visibility', () => {
         expect(input.pressedKeys).toEqual([])
         expect(intent.move).toEqual({ x: 0, y: 0 })
       }),
-      tick(16),
+      tick(FIXED_STEP_MS),
       model(({ elapsedMs }) => {
         expect(elapsedMs).toBe(0)
       }),

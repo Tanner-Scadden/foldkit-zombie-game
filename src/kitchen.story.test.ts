@@ -7,6 +7,7 @@ import { Dialog } from '@foldkit/ui'
 
 import { MANOR, levelOf, openExitIn, startingLevel } from './arena'
 import { cameraFor } from './camera'
+import { FIXED_STEP_MS } from './constants'
 import { EXIT_RULES, KITCHEN_EXIT } from './exits'
 import { OVEN_RULES, flameBoxOf, ovenBoxesOf } from './kitchen'
 import { update } from './main'
@@ -26,7 +27,7 @@ import { tick, ticks, zombieOf } from './testing'
 import { asVeteran } from './veteran'
 import { beginPreparation, rollSpawns } from './waves'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const BELOW_KITCHEN_DOOR = { x: 70, y: 26 }
 
 const DISTANT_SPAWN: PlannedSpawn = {

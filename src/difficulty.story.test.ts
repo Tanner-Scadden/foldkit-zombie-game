@@ -5,6 +5,7 @@ import { describe, expect, test } from 'vitest'
 
 import { Dialog } from '@foldkit/ui'
 
+import { FIXED_STEP_MS } from './constants'
 import { bestsFor, biteDamage } from './difficulty'
 import { update } from './main'
 import { Message } from './message'
@@ -231,11 +232,13 @@ describe('unlocking Nightmare', () => {
     story(
       update,
       given(winning(withDifficulty(veteran, 'Hard'))),
-      tick(16),
+      tick(FIXED_STEP_MS),
       model(current => {
         expect(Phase.guards.Victory(current.phase)).toBe(true)
         expect(current.difficulty.nightmare).toBe('JustUnlocked')
-        expect(bestsFor(current).maybeFastestWinMs).toEqual(Option.some(16))
+        expect(bestsFor(current).maybeFastestWinMs).toEqual(
+          Option.some(FIXED_STEP_MS),
+        )
         expect(current.bests.byDifficulty.Normal.maybeFastestWinMs).toEqual(
           Option.none(),
         )
@@ -267,7 +270,7 @@ describe('unlocking Nightmare', () => {
     story(
       update,
       given(winning(veteran)),
-      tick(16),
+      tick(FIXED_STEP_MS),
       model(current => {
         expect(Phase.guards.Victory(current.phase)).toBe(true)
         expect(current.difficulty.nightmare).toBe('Locked')
@@ -337,7 +340,7 @@ describe('the multipliers', () => {
               invulnerability: () => Invulnerability.Vulnerable(),
             }),
         }),
-        Message.TickedFrame({ deltaTime: 16 }),
+        Message.TickedFrame({ deltaTime: FIXED_STEP_MS }),
       ).model.player.hp
     const full = veteran.player.hp
     expect(full - bitten('Easy')).toBe(1)

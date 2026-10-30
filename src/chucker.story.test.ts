@@ -5,7 +5,7 @@ import { describe, expect, test } from 'vitest'
 
 import { PARLOUR } from './arena'
 import { CHUCKER_RULES } from './chucker'
-import { HIT_STOP_HURT_MS, PLAYER_MAX_HP } from './constants'
+import { FIXED_STEP_MS, HIT_STOP_HURT_MS, PLAYER_MAX_HP } from './constants'
 import { update } from './main'
 import { debutPitch } from './menus'
 import { Message } from './message'
@@ -24,13 +24,17 @@ import {
 import { bulletInto, tick, ticks, zombieOf } from './testing'
 import { ZOMBIE_KINDS } from './zombies'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const CENTER_X = PARLOUR.width / 2
 const CENTER_Y = PARLOUR.height / 2
 const CHUCKER_ID = 10
 const GROANER_ID = 11
 
-const framesFor = (ms: number): number => Math.ceil(ms / FRAME_MS)
+// NOTE: how many ticks a countdown of `ms` takes to run out. The float sum
+// of 1000/60 ms ticks can leave a hair of a whole number of ticks, so this
+// counts down the way the game does instead of dividing.
+const framesFor = (ms: number, count = 0): number =>
+  ms > 0 ? framesFor(ms - FRAME_MS, count + 1) : count
 
 const DISTANT_SPAWN: PlannedSpawn = {
   atMs: 1e9,

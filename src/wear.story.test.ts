@@ -11,7 +11,7 @@ import { describe, expect, test } from 'vitest'
 
 import { PARLOUR } from './arena'
 import { PlaySound } from './commands'
-import { DECAL_MAX, PARTICLE_MAX } from './constants'
+import { DECAL_MAX, FIXED_STEP_MS, PARTICLE_MAX } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
@@ -38,7 +38,7 @@ import { bulletInto, tick, zombieOf } from './testing'
 import { zombieHealthBarShapes } from './zombieView'
 import { ZOMBIE_KINDS, isArmorPart, isArmorShedAt, wearAt } from './zombies'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const FAR_X = PARLOUR.width / 2 + 60
 const ROW_Y = PARLOUR.height / 2
 

@@ -10,7 +10,7 @@ import {
   viewToWorld,
   worldToView,
 } from './camera'
-import { CAMERA_LEAN_PX, STICK_RADIUS_PX } from './constants'
+import { CAMERA_LEAN_PX, FIXED_STEP_MS, STICK_RADIUS_PX } from './constants'
 import { clientToView } from './geometry'
 import { update } from './main'
 import { Message } from './message'
@@ -38,7 +38,7 @@ const PORTRAIT_SURFACE = { left: 0, top: 0, width: 390, height: 844 }
 const LANDSCAPE_SURFACE = { left: 0, top: 0, width: 844, height: 390 }
 const LEFT_THUMB = 11
 const RIGHT_THUMB = 12
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 
 const DISTANT_SPAWN: PlannedSpawn = {
   atMs: 1e9,

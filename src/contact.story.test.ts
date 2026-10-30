@@ -3,7 +3,7 @@ import { given, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { CONTACT_ALLOWANCE_PX, PLAYER_RADIUS } from './constants'
+import { CONTACT_ALLOWANCE_PX, FIXED_STEP_MS, PLAYER_RADIUS } from './constants'
 import { update } from './main'
 import {
   Arsenal,
@@ -21,7 +21,7 @@ import { holdFire, ticks, zombieOf } from './testing'
 import { WEAPONS } from './weapons'
 import { ZOMBIE_KINDS, bodyRadiusOf } from './zombies'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const LONG_FRAME_MS = 50
 const PLAYER_X = 150
 const PLAYER_Y = 104

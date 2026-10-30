@@ -79,6 +79,7 @@ export const FIELD_CLASSES = {
   introducedKinds: 'Client',
   hintBand: 'Client',
   screenMs: 'Client',
+  stepCarryMs: 'Client',
   audio: 'Client',
   soundSetting: 'Client',
   musicSetting: 'Client',

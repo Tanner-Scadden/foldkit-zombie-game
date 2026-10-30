@@ -1,4 +1,3 @@
-// @vitest-environment happy-dom
 import { Array, Effect, Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
@@ -12,6 +11,8 @@ import {
   ShowLoadProgress,
   WriteSave,
 } from './commands'
+// @vitest-environment happy-dom
+import { FIXED_STEP_MS } from './constants'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
 import { update } from './main'
 import { Message } from './message'
@@ -686,7 +687,7 @@ describe('writing the save', () => {
     story(
       update,
       given(hotSauceUnder(fighting)),
-      tick(16),
+      tick(FIXED_STEP_MS),
       Command.expectExact(
         WriteSave({
           save: { ...saveOf(fighting), seenPowerUps: ['RapidFire'] },
@@ -698,7 +699,7 @@ describe('writing the save', () => {
     story(
       update,
       given(hotSauceUnder(seen)),
-      tick(16),
+      tick(FIXED_STEP_MS),
       model(current => {
         expect(current.pickups).toEqual([])
         expect(current.callouts[0]?.look).toBe('Named')
@@ -735,8 +736,8 @@ describe('writing the save', () => {
       update,
       given(fighting),
       message(Message.PressedKey({ code: 'KeyD' })),
-      tick(16),
-      tick(16),
+      tick(FIXED_STEP_MS),
+      tick(FIXED_STEP_MS),
       Command.expectNone(),
       model(current => {
         expect(current.player.x).not.toBe(fighting.player.x)

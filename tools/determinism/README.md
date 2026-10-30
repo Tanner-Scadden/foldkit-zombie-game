@@ -14,7 +14,7 @@ The two heavy ones play whole runs, so they go through the guard like every heav
 
 `script.ts` is a returning player (`asVeteran`), seeded, playing the campaign or endless at Normal. Each frame it sends the input Messages for that frame, then `TickedFrame`. It moves in a fixed pattern, aims at the nearest walking zombie every fourth frame, holds the trigger, presses Enter through each Preparation, and closes the stall if it opens. God mode refills its hearts, so the room fills to the alive cap. It uses no trig of its own, so any difference comes from the game.
 
-Frame lengths come from a pattern: `Fixed60` (every frame 1000/60 ms, the room's tick) or `Mixed` (60, 120, 30, and 40 Hz frames in a cycle, like a real display). Once the fixed step lands (MULTIPLAYER.md, Phase 0), both patterns should give the same ticks.
+Frame lengths come from a pattern: `Fixed60` (every frame 1000/60 ms, the room's tick) or `Mixed` (60, 120, 30, and 40 Hz frames in a cycle, like a real display). The world steps in whole 60 Hz ticks with a carry (`advanceGame` in `src/simulation.ts`), so a 60 Hz frame is exactly one tick; `fixedStep.test.ts` checks that 30, 60, and 120 Hz frames play the same ticks.
 
 ## The gameplay hash
 
@@ -32,7 +32,7 @@ Frame lengths come from a pattern: `Fixed60` (every frame 1000/60 ms, the room's
 
 ## Before and after
 
-`beforeAfter.ts` checks `ref` out into a temporary git worktree, copies this harness over it so both sides hash with the same code, links the working tree's `node_modules`, plays the script on both in Bun, and reports the first frame and field that differ, with the first path inside the field and both values. Options: `--frames N` (default 7,200), `--seed`, `--mode Endless`, `--pattern Mixed`, `--every N`. A refactor that means to change nothing must report no difference.
+`beforeAfter.ts` checks `ref` out into a temporary git worktree, copies this harness over it so both sides hash with the same code, links the working tree's `node_modules`, plays the script on both in Bun, and reports the first frame and field that differ, with the first path inside the field and both values. Options: `--frames N` (default 7,200), `--seed`, `--mode Endless`, `--pattern Mixed`, `--every N`, `--no-hit-stop` (clear hit-stop after every frame on both sides, to compare a change to how hit-stop spends world time, such as the fixed step, on everything else). A refactor that means to change nothing must report no difference.
 
 ## Cross engine
 

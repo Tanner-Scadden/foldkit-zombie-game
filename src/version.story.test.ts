@@ -12,7 +12,7 @@ import {
   ReloadPage,
   UpdateServiceWorker,
 } from './commands'
-import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
+import { FIXED_STEP_MS, PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import {
   recordRemoteBuild,
   registerServiceWorkerAfterSplash,
@@ -20,13 +20,13 @@ import {
 } from './main'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
+import { isUsingServiceWorker } from './serviceWorker'
 import {
   maybePageShowMessage,
   maybeWindowFocusMessage,
   pageVisibilityMessage,
   updateCheckActivity,
 } from './subscriptions'
-import { isUsingServiceWorker } from './serviceWorker'
 import { fighting } from './testing'
 import {
   RUNNING_BUILD,
@@ -230,7 +230,7 @@ describe('the end screens with a new version waiting', () => {
       model(current => {
         expect(current.phase).toStrictEqual(phase)
       }),
-      message(Message.TickedFrame({ deltaTime: 1 })),
+      message(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
       Command.expectExact(FocusEndMenuButton),
       Command.resolve(
         FocusEndMenuButton,

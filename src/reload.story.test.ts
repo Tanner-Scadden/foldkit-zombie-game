@@ -5,6 +5,7 @@ import { describe, expect, test } from 'vitest'
 
 import {
   FIRE_INTERVAL_MS,
+  FIXED_STEP_MS,
   PISTOL_MAGAZINE,
   PISTOL_RELOAD_MS,
   PREPARATION_MS,
@@ -25,9 +26,19 @@ import {
 import { holdFire, press, release, releaseFire, tick, ticks } from './testing'
 import { WEAPONS, maybeSpare } from './weapons'
 
-const FRAME_MS = 50
-const TICKS_PER_SHOT = FIRE_INTERVAL_MS / FRAME_MS
-const PISTOL_RELOAD_TICKS = PISTOL_RELOAD_MS / FRAME_MS
+const FRAME_MS = FIXED_STEP_MS
+// NOTE: the ticks a countdown of `ms` takes to run out, counted the way the
+// game counts it down. Whole ticks of 1000/60 ms sum a hair short of a round
+// number, so 800 ms takes 49 ticks, not 48.
+const ticksOf = (ms: number): number =>
+  ms <= 0 ? 0 : 1 + ticksOf(ms - FRAME_MS)
+const TICKS_PER_SHOT = ticksOf(FIRE_INTERVAL_MS)
+const PISTOL_RELOAD_TICKS = ticksOf(PISTOL_RELOAD_MS)
+const SMG_FIRING_TICKS = ticksOf(3000)
+
+// NOTE: a countdown of whole ticks of 1000/60 ms lands a hair off the
+// round number.
+const aboutMs = (ms: number) => Option.some(expect.closeTo(ms, 6))
 
 const HELD_SPAWN: PlannedSpawn = {
   atMs: 1e9,
@@ -130,7 +141,12 @@ describe('magazines', () => {
       model(({ player, stats }) => {
         expect(stats.shotsFired).toBe(0)
         expect(player.pistolLoaded).toBe(0)
-        expect(reloadingMs(player.reload)).toEqual(Option.some(FRAME_MS))
+        expect(
+          Option.exists(
+            reloadingMs(player.reload),
+            remainingMs => remainingMs > 0 && remainingMs <= FRAME_MS,
+          ),
+        ).toBe(true)
       }),
       tick(FRAME_MS),
       model(({ player, stats, frameEvents }) => {
@@ -160,7 +176,7 @@ describe('magazines', () => {
   test('the pistol never runs out: it reloads magazine after magazine', () => {
     const magazines = 3
     const magazineTicks =
-      PISTOL_MAGAZINE * TICKS_PER_SHOT + PISTOL_RELOAD_TICKS + 2
+      PISTOL_MAGAZINE * TICKS_PER_SHOT + PISTOL_RELOAD_TICKS + ticksOf(100)
     story(
       update,
       given(fighting),
@@ -185,7 +201,7 @@ describe('magazines', () => {
         ),
       ),
       holdFire,
-      ...ticks(60, FRAME_MS),
+      ...ticks(SMG_FIRING_TICKS, FRAME_MS),
       releaseFire,
       model(({ player }) => {
         expect(spareRounds(player.arsenal)).toEqual(
@@ -193,7 +209,7 @@ describe('magazines', () => {
         )
         expect(Reload.isAnyOf(['Reloading'])(player.reload)).toBe(true)
       }),
-      ...ticks(WEAPONS.Smg.reloadMs / FRAME_MS, FRAME_MS),
+      ...ticks(ticksOf(WEAPONS.Smg.reloadMs), FRAME_MS),
       model(({ player }) => {
         expect(spareRounds(player.arsenal)).toEqual(
           Option.some({ rounds: 10, loaded: 10 }),
@@ -295,7 +311,7 @@ describe('reload pauses', () => {
       model(({ player, phase }) => {
         expect(Phase.isAnyOf(['Paused'])(phase)).toBe(true)
         expect(reloadingMs(player.reload)).toEqual(
-          Option.some(PISTOL_RELOAD_MS - 4 * FRAME_MS),
+          aboutMs(PISTOL_RELOAD_MS - 4 * FRAME_MS),
         )
       }),
       press('Escape'),

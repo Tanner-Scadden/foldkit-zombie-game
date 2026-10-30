@@ -3,7 +3,7 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
+import { FIXED_STEP_MS, PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
@@ -29,7 +29,7 @@ import {
   tierOf,
 } from './weapons'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const GRACE_TICK_MS = 50
 const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
 

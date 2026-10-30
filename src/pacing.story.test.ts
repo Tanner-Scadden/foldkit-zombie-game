@@ -7,6 +7,7 @@ import { PARLOUR, nearestDoor } from './arena'
 import {
   DINNER_BELL_MS,
   FADE_RELEASE_BELOW,
+  FIXED_STEP_MS,
   INTENSITY_PER_HEART,
   LAST_HEART_INVULNERABLE_MS,
   PACK_GAP_MS,
@@ -146,7 +147,9 @@ describe('packs', () => {
     story(
       update,
       given(waveModel(squad)),
-      ...ticksFor(1000),
+      // NOTE: a frame past the second, as sixty 1000/60 ms ticks sum to a
+      // hair under it.
+      ...ticksFor(1000 + FRAME_MS),
       model(current => {
         expect(arrivedDoors(current)).toEqual(['West'])
       }),
@@ -536,15 +539,34 @@ describe('dead air', () => {
         { atMs: holdAtMs, releaseBelow: FADE_RELEASE_BELOW, relaxMs: 20_000 },
       ],
     })
+    // NOTE: read on the tick the hold's fade begins, since a relax that
+    // starts quiet trickles its straggler in a few ticks later.
+    const fadeStarts: Array<Model> = []
     story(
       update,
       given(waveModel([spawnAt(holdAtMs + 3000, 'West', 2)], holding)),
-      ...ticksFor(QUIET_HURRY_MS + 2 * FRAME_MS),
-      model(current => {
-        expect(waveClock(current)).toBe(holdAtMs)
-        expect(current.pacing.warnedPacks).toEqual([])
-      }),
+      ...Array.flatMap(
+        ticks(
+          Math.ceil((QUIET_HURRY_MS + 2 * FRAME_MS) / FIXED_STEP_MS),
+          FIXED_STEP_MS,
+        ),
+        frame => [
+          frame,
+          model((current: Model) => {
+            expect(waveClock(current)).toBeLessThanOrEqual(holdAtMs)
+            if (
+              Beat.guards.Fading(current.pacing.beat) &&
+              Array.isReadonlyArrayEmpty(fadeStarts)
+            ) {
+              fadeStarts.push(current)
+            }
+          }),
+        ],
+      ),
     )
+    const fadeStart = Option.getOrThrow(Array.head(fadeStarts))
+    expect(waveClock(fadeStart)).toBe(holdAtMs)
+    expect(fadeStart.pacing.warnedPacks).toEqual([])
   })
 
   test('an empty room warns its next pack within half a second', () => {

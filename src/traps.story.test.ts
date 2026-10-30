@@ -6,6 +6,7 @@ import { describe, expect, test } from 'vitest'
 import { MANOR, PARLOUR, doorSpawnPoint, isInsideRoomAt } from './arena'
 import {
   FIRE_INTERVAL_MS,
+  FIXED_STEP_MS,
   PLAYER_RADIUS,
   PREPARATION_MS,
   TURRET_RANGE_PX,
@@ -45,8 +46,14 @@ import { TRAPS, repairPrice, stageOf, tollsOf } from './traps'
 import { WEAPONS } from './weapons'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const LONG_FRAME_MS = 50
+
+// NOTE: the ticks a countdown of `ms` takes to run out, counted the way the
+// game counts it down: whole ticks of 1000/60 ms sum a hair short of a
+// round number, so a countdown of a whole number of ticks takes one more.
+const countdownTicks = (ms: number): number =>
+  ms <= 0 ? 0 : 1 + countdownTicks(ms - FRAME_MS)
 const PEA_INTERVAL_MS = WEAPONS.Peashooter.fireIntervalMs
 
 const DISTANT_SPAWN: PlannedSpawn = {
@@ -811,7 +818,7 @@ describe('turrets', () => {
   test('fires at the nearest zombie in range, then waits out its cooldown', () => {
     const far = tough(70, { x: 205, y: 95 })
     const near = tough(71, { x: 140, y: 95 })
-    const cooldownTicks = Math.ceil(PEA_INTERVAL_MS / FRAME_MS)
+    const cooldownTicks = countdownTicks(PEA_INTERVAL_MS)
     const frames: Array<Model> = []
     story(
       update,

@@ -4,6 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { PARLOUR } from './arena'
+import { FIXED_STEP_MS } from './constants'
 import { FRENZY_RULES, frenzyPace, frenzyPacksOf } from './frenzy'
 import { update } from './main'
 import {
@@ -19,7 +20,7 @@ import {
 import { bulletInto, tick, ticks, zombieAt } from './testing'
 import { rollSpawns } from './waves'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const CENTER_X = PARLOUR.width / 2
 const CENTER_Y = PARLOUR.height / 2
 
@@ -137,7 +138,9 @@ describe('horde frenzy', () => {
       player: player =>
         modifyFields(player, { x: () => CENTER_X, y: () => CENTER_Y }),
     })
-    const apartFrames = Math.ceil(FRENZY_RULES.apartMs / FRAME_MS) + 1
+    // NOTE: the ticks to drift apart, one that starts the fade, and one
+    // into it, so the pace has begun to drop.
+    const apartFrames = Math.ceil(FRENZY_RULES.apartMs / FRAME_MS) + 2
     const fadeFrames = Math.ceil(FRENZY_RULES.fadeMs / FRAME_MS) + 1
 
     story(

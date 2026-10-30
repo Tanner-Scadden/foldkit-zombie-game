@@ -4,6 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { PARLOUR, isSolidAt } from './arena'
+import { FIXED_STEP_MS } from './constants'
 import { CRAWLER_RULES, drawSurfacingSpot } from './crawler'
 import { update } from './main'
 import { Message } from './message'
@@ -21,7 +22,7 @@ import {
 import { bulletInto, tick, ticks } from './testing'
 import { doorCounts, floorCounts, rollSpawns } from './waves'
 
-const FRAME_MS = 16
+const FRAME_MS = FIXED_STEP_MS
 const CENTER_X = PARLOUR.width / 2
 const CENTER_Y = PARLOUR.height / 2
 const CRAWLER_ID = 20

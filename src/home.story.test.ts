@@ -8,6 +8,7 @@ import { Dialog } from '@foldkit/ui'
 import changelogMarkdown from '../CHANGELOG.md?raw'
 import { NEWS_DAYS, parseChangelog } from './changelog'
 import { WriteSave } from './commands'
+import { FIXED_STEP_MS } from './constants'
 import { HOME_BUTTONS, HOME_KEYS, isNewsUnseen } from './home'
 import { update } from './main'
 import { Message } from './message'
@@ -334,7 +335,7 @@ describe('the Munchopedia', () => {
       given(
         withKills(dyingWith(home, { Runner: 1, Shambler: 3 }), { Shambler: 5 }),
       ),
-      tick(16),
+      tick(FIXED_STEP_MS),
       model(current => {
         expect(Phase.guards.GameOver(current.phase)).toBe(true)
         expect(current.home.newEntries).toEqual(['Runner'])
@@ -408,7 +409,7 @@ describe('the Munchopedia', () => {
     story(
       update,
       given(withKills(dyingWith(home, { Runner: 4 }), { Runner: 9 })),
-      tick(16),
+      tick(FIXED_STEP_MS),
       model(current => {
         expect(current.bests.killsByKind.Runner).toBe(13)
         expect(current.home.newEntries).toEqual([])
@@ -420,7 +421,7 @@ describe('the Munchopedia', () => {
     story(
       update,
       given(dyingWith(home, { Boss: 1, Shambler: 20 })),
-      tick(16),
+      tick(FIXED_STEP_MS),
       model(current => {
         expect(isDiscovered(current.bests.killsByKind, 'Boss')).toBe(true)
         expect(current.bests.killsByKind.Boss).toBe(1)

@@ -587,7 +587,7 @@ export type GameEvent = typeof GameEvent.Type
 export const HitStop = defineTaggedUnion({
   Running: { cooldownMs: Schema.Number },
   Frozen: { remainingMs: Schema.Number },
-  Slowed: { remainingMs: Schema.Number },
+  Slowed: { remainingMs: Schema.Number, carryMs: Schema.Number },
 })
 export type HitStop = typeof HitStop.Type
 
@@ -1231,6 +1231,7 @@ export const Model = Schema.Struct({
   wideFlowField: FlowField,
   rngState: Schema.Number,
   cosmeticRngState: Schema.Number,
+  stepCarryMs: Schema.Number,
   input: Input,
   intent: Intent,
   maybeSurface: Schema.Option(SurfaceRectangle),
@@ -1506,6 +1507,7 @@ export const initialModel: Model = {
   wideFlowField: flowFieldToward(MANOR, initialPlayer, 'Wide', []),
   rngState: DEFAULT_SEED,
   cosmeticRngState: cosmeticSeedOf(DEFAULT_SEED),
+  stepCarryMs: 0,
   input: idleInput,
   intent: idleIntent,
   maybeSurface: Option.none(),

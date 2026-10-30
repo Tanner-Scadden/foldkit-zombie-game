@@ -13,7 +13,8 @@
 //   bun run determinism:diff -- [ref] [options]
 //
 // ref defaults to origin/main. Options: --frames N (default 7200, two
-// minutes), --seed S, --mode Endless, --pattern Mixed, --every N.
+// minutes), --seed S, --mode Endless, --pattern Mixed, --every N,
+// --no-hit-stop (clear hit-stop after every frame on both sides).
 // It exits 1 when the two differ.
 
 import { spawnSync } from 'node:child_process'
@@ -39,7 +40,8 @@ const option = (name: string): string | undefined => {
   const at = argv.indexOf(name)
   return at === -1 ? undefined : argv[at + 1]
 }
-const ref = argv[0] !== undefined && !argv[0].startsWith('--') ? argv[0] : 'origin/main'
+const ref =
+  argv[0] !== undefined && !argv[0].startsWith('--') ? argv[0] : 'origin/main'
 
 const request: EngineRequest = {
   ...DEFAULT_REQUEST,
@@ -48,6 +50,7 @@ const request: EngineRequest = {
   mode: option('--mode') === 'Endless' ? 'Endless' : 'Campaign',
   pattern: option('--pattern') === 'Mixed' ? 'Mixed' : 'Fixed60',
   every: Number(option('--every') ?? DEFAULT_REQUEST.every),
+  noHitStop: argv.includes('--no-hit-stop'),
 }
 
 const run = (
@@ -100,6 +103,9 @@ rmSync(base, { recursive: true, force: true })
 run('git', ['worktree', 'add', '--detach', base, ref], root)
 
 try {
+  // NOTE: the old harness goes first: Bun's cpSync keeps a file that is
+  // already there, so a harness changed in the working tree was not copied.
+  rmSync(resolve(base, 'tools/determinism'), { recursive: true, force: true })
   cpSync(here, resolve(base, 'tools/determinism'), {
     recursive: true,
     filter: source => !source.includes('/out'),
@@ -109,7 +115,7 @@ try {
   const before = askRun(base, request)
   const after = askRun(root, request)
   console.log(
-    `Seed ${request.seed}, ${request.mode}, ${request.pattern} steps, ${request.frames} frames, hashed every ${request.every}`,
+    `Seed ${request.seed}, ${request.mode}, ${request.pattern} steps, ${request.frames} frames, hashed every ${request.every}${request.noHitStop ? ', no hit-stop' : ''}`,
   )
   console.log(
     `  before (${ref}): ${before.frames} frames, ended in ${before.endPhase} ${before.endWave}`,
@@ -148,7 +154,10 @@ try {
       console.log(
         `First differ after frame ${frame}, in ${[...fields, ...onlyAfter].join(', ')}`,
       )
-      const difference = firstDifference(revive(left.state), revive(right.state))
+      const difference = firstDifference(
+        revive(left.state),
+        revive(right.state),
+      )
       if (difference !== undefined) {
         console.log(
           `  first difference at ${difference.path}: ${JSON.stringify(difference.a)?.slice(0, 120)} vs ${JSON.stringify(difference.b)?.slice(0, 120)}`,
