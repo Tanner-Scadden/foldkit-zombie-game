@@ -182,10 +182,11 @@ const AFTER_TAP_MS = 250
 
 const surfaceTags = new Set(['PressedPointer'])
 
-// NOTE: a form's submit button names its tap with a Submitted Message, and
-// the hold-to-buy button its press with PressedHoldButton.
+// NOTE: a form's submit button names its tap with a Submitted Message, the
+// hold-to-buy button its press with PressedHoldButton, and the knife
+// button its stab with PressedKnifeButton.
 const TAP_LEAVES =
-  /(^|:)(Clicked\w*|Submitted\w*|SelectedOption|SelectedTab|RequestedClose|PressedPointer|PressedHoldButton)$/
+  /(^|:)(Clicked\w*|Submitted\w*|SelectedOption|SelectedTab|RequestedClose|PressedPointer|PressedHoldButton|PressedKnifeButton)$/
 
 const isTapMessage = (tag: string): boolean => TAP_LEAVES.test(tag)
 
