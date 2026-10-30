@@ -1,14 +1,14 @@
 import { Array } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import type { Model } from './model'
 import {
   type Difficulty,
   type DifficultyBests,
   type DifficultySetting,
-  type Model,
   Phase,
   type PlannedSpawn,
-} from './model'
+} from './worldSchema'
 
 // TABLE
 

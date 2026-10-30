@@ -11,6 +11,9 @@ import {
   ZOMBIE_HIT_PULSE_MS,
 } from './constants'
 import { circlesOverlap, directionBetween, scaleVector } from './geometry'
+import { earn } from './shop'
+import { trapBlastTarget } from './traps'
+import type { World } from './world'
 import {
   GameEvent,
   Invulnerability,
@@ -18,10 +21,7 @@ import {
   type Vector,
   type Zombie,
   ZombieState,
-} from './model'
-import { earn } from './shop'
-import { trapBlastTarget } from './traps'
-import type { World } from './world'
+} from './worldSchema'
 import {
   Behavior,
   type DeathCause,

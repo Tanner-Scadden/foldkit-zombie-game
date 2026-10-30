@@ -5,6 +5,7 @@ import { type Level, hasLineOfSight, levelOf } from './arena'
 import { woundPlayer } from './combat'
 import { MS_PER_SECOND, PLAYER_RADIUS, ZOMBIE_HIT_PULSE_MS } from './constants'
 import { directionBetween, normalize } from './geometry'
+import type { World } from './world'
 import {
   GameEvent,
   Invulnerability,
@@ -13,8 +14,7 @@ import {
   type Zombie,
   ZombieAction,
   type ZombieKind,
-} from './model'
-import type { World } from './world'
+} from './worldSchema'
 import {
   ZOMBIE_KINDS,
   bodyRadiusOf,

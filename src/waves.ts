@@ -21,7 +21,6 @@ import {
   ENDLESS_TANKS_BASE,
   ENDLESS_WAVES_PER_EXTRA_TANK,
   FADE_RELEASE_BELOW,
-  FIRST_PREPARATION_MS,
   HORDE_GAP_MS,
   OPEN_BREAK_WAVE,
   PACK_GAP_MS,
@@ -40,32 +39,12 @@ import { OPPOSITE_DOOR, routeSpawns } from './doorRoute'
 import { frenzyOnArrival, frenzyPacksOf } from './frenzy'
 import { clamp } from './geometry'
 import {
-  Alarm,
-  Beat,
-  BreakClock,
-  type DoorId,
-  type Formation,
-  GameEvent,
-  type Hold,
-  type Model,
-  Phase,
-  type PlannedSpawn,
-  Round,
-  RunMode,
-  ShopState,
-  type Trap,
-  type Vector,
-  ZombieAction,
-  type ZombieKind,
-} from './model'
-import {
   isPracticeGateHeld,
   isTimedBreak,
   learnOpenBreak,
   learnTimedBreaks,
-  raiseDebutCard,
-  settleLessons,
-} from './onboarding'
+} from './lessons'
+import type { Model } from './model'
 import {
   aliveCount,
   delayCampedPacks,
@@ -76,9 +55,26 @@ import {
   warnPacks,
 } from './pacing'
 import { type Seeded, between, nextRandom } from './prng'
-import { freshRun } from './runReset'
 import { earn } from './shop'
 import { type World, withWorld } from './world'
+import {
+  Alarm,
+  Beat,
+  BreakClock,
+  type DoorId,
+  type Formation,
+  GameEvent,
+  type Hold,
+  Phase,
+  type PlannedSpawn,
+  Round,
+  RunMode,
+  ShopState,
+  type Trap,
+  type Vector,
+  ZombieAction,
+  type ZombieKind,
+} from './worldSchema'
 import {
   ZOMBIE_KINDS,
   ZOMBIE_KIND_ORDER,
@@ -1401,36 +1397,6 @@ export const beginPreparation = (
   })
 }
 
-const startRun = (model: Model, mode: RunMode): Model =>
-  withWorld(
-    {
-      ...model,
-      ...freshRun(model),
-      mode,
-      lessons: settleLessons(model.lessons),
-    },
-    world => beginPreparation(world, 1, FIRST_PREPARATION_MS),
-  )
-
-const resume = (model: Model, round: Round): Model =>
-  modifyFields(model, {
-    phase: () =>
-      Round.match(round, {
-        Preparation: (preparation): Phase => preparation,
-        Wave: (wave): Phase => wave,
-      }),
-  })
-
-export const startOrResume = (model: Model, mode: RunMode): Model =>
-  Phase.match(model.phase, {
-    Ready: () => startRun(model, mode),
-    Preparation: () => model,
-    Wave: () => model,
-    Paused: ({ round }) => resume(model, round),
-    Victory: () => startRun(model, mode),
-    GameOver: () => startRun(model, mode),
-  })
-
 export const keepGoing = (model: Model): Model =>
   Phase.isAnyOf(['Victory'])(model.phase)
     ? withWorld(
@@ -1441,13 +1407,6 @@ export const keepGoing = (model: Model): Model =>
         }),
         world => beginPreparation(world, FINAL_WAVE + 1, PREPARATION_MS),
       )
-    : model
-
-// NOTE: START WAVE from the player: the wave starts, and a new kind in it
-// raises its card.
-export const startWave = (model: Model): Model =>
-  Phase.isAnyOf(['Preparation'])(model.phase)
-    ? raiseDebutCard(withWorld(model, startWaveEarly))
     : model
 
 const isEndless = (model: World): boolean =>

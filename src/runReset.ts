@@ -3,11 +3,12 @@ import { cameraFor } from './camera'
 import { ZERO_VECTOR } from './geometry'
 import { deriveIntent } from './input'
 import { freshOvens } from './kitchen'
+import type { Model } from './model'
+import { flowFieldToward } from './pathing'
 import {
   Boss,
   DebutCard,
   FIRST_SHOP_CATEGORY,
-  type Model,
   RunTally,
   ShopState,
   Streak,
@@ -22,8 +23,7 @@ import {
   initialHitStop,
   initialPlayer,
   stillShake,
-} from './model'
-import { flowFieldToward } from './pathing'
+} from './worldSchema'
 
 // NOTE: every field that belongs to one run, set as a new run starts. Starting
 // a run and going home both spread this record, so neither can leave a stale

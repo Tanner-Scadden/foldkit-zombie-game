@@ -24,7 +24,6 @@ import {
   SHOP_CATEGORIES,
   SHOP_CATEGORY_ORDER,
   ShopGood,
-  ShopTabs,
   StockTag,
   type TrapShelf,
   Verdict,
@@ -62,6 +61,7 @@ import {
   gunArt,
   itemArt,
 } from './shopArt'
+import { ShopTabs } from './shopTabs'
 import { type Mood, chatterLine, moodOf } from './shopkeeper'
 import { TRAPS, healthShare, ownedCount } from './traps'
 import { maxTier, maybeNextTier, maybeSpare, tierName, tierOf } from './weapons'

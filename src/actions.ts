@@ -1,8 +1,8 @@
 import { Array } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { type Zombie, ZombieAction } from './model'
 import type { World } from './world'
+import { type Zombie, ZombieAction } from './worldSchema'
 
 // RECOVERY
 

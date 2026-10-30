@@ -10,8 +10,8 @@ import {
   openExitIn,
   tileBox,
 } from './arena'
-import { type ExitId, Phase, ShopState, type Vector } from './model'
 import type { World } from './world'
+import { type ExitId, Phase, ShopState, type Vector } from './worldSchema'
 
 // THE EXIT
 

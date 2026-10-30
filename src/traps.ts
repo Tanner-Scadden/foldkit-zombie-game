@@ -34,11 +34,14 @@ import {
   TURRET_RANGE_PX,
 } from './constants'
 import { addVectors, directionBetween, scaleVector } from './geometry'
+import type { Model } from './model'
+import { countTrapPlaced } from './stats'
+import { WEAPONS } from './weapons'
+import type { World } from './world'
 import {
   type Bullet,
   DoorId,
   GameEvent,
-  type Model,
   Phase,
   Pierce,
   type Player,
@@ -53,10 +56,7 @@ import {
   type WeaponKind,
   type Zombie,
   ZombieState,
-} from './model'
-import { countTrapPlaced } from './stats'
-import { WEAPONS } from './weapons'
-import type { World } from './world'
+} from './worldSchema'
 import { Behavior, isFree, isGrounded, radiusOf, statsOf } from './zombies'
 
 // TABLE

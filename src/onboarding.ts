@@ -2,8 +2,13 @@ import { Array, Option, Result, Schema, String, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { cameraOf, worldToView } from './camera'
-import { OPEN_BREAK_WAVE, WAVE_CLEARED_BANNER_MS } from './constants'
+import { WAVE_CLEARED_BANNER_MS } from './constants'
 import { vectorLength } from './geometry'
+import { isPending, isTimedBreak, learn } from './lessons'
+import type { Model } from './model'
+import { isShopOpenFor } from './shop'
+import { TURRET_WEAPON, maybeSelectedKind } from './traps'
+import { maybeSpare } from './weapons'
 import {
   BreakClock,
   DebutCard,
@@ -12,35 +17,28 @@ import {
   type InputDevice,
   Lesson,
   type Lessons,
-  type Model,
   Phase,
   type Practice,
   Stick,
   TrapHint,
   type ZombieKind,
-} from './model'
-import { isShopOpenFor } from './shop'
-import { TURRET_WEAPON, maybeSelectedKind } from './traps'
-import { maybeSpare } from './weapons'
-import type { World } from './world'
+} from './worldSchema'
 import { ZOMBIE_KIND_ORDER } from './zombies'
 
-// LESSONS
+export {
+  isPracticeGateHeld,
+  isTimedBreak,
+  learnOpenBreak,
+  learnTimedBreaks,
+} from './lessons'
 
-const learn = (lesson: Lesson, atMs: number): Lesson =>
-  Lesson.match(lesson, {
-    Pending: () => Lesson.Learned({ atMs }),
-    Learned: () => lesson,
-  })
+// LESSONS
 
 const learnWhen = (isDone: boolean, atMs: number) => (lesson: Lesson) =>
   isDone ? learn(lesson, atMs) : lesson
 
 export const isLearned = (lesson: Lesson): boolean =>
   Lesson.isAnyOf(['Learned'])(lesson)
-
-const isPending = (lesson: Lesson): boolean =>
-  Lesson.isAnyOf(['Pending'])(lesson)
 
 const hasPlayerFired = (events: ReadonlyArray<GameEvent>): boolean =>
   Array.some(
@@ -108,20 +106,6 @@ export const learnFromFrame = (before: Model, after: Model): Model => {
 }
 
 // PRACTICE GATE
-
-const isFirstPreparation = (phase: Phase): boolean =>
-  Phase.match(phase, {
-    Ready: () => false,
-    Preparation: ({ wave }) => wave === 1,
-    Wave: () => false,
-    Paused: () => false,
-    Victory: () => false,
-    GameOver: () => false,
-  })
-
-export const isPracticeGateHeld = (model: World): boolean =>
-  isFirstPreparation(model.phase) &&
-  (isPending(model.lessons.move) || isPending(model.lessons.fire))
 
 // DEBUT CARD
 
@@ -194,22 +178,6 @@ export const learnSwap = (model: Model): Model =>
   modifyFields(model, {
     lessons: lessons =>
       modifyFields(lessons, { swap: lesson => learn(lesson, model.elapsedMs) }),
-  })
-
-export const learnTimedBreaks = (model: World): World =>
-  modifyFields(model, {
-    lessons: lessons =>
-      modifyFields(lessons, {
-        timedBreaks: lesson => learn(lesson, model.elapsedMs),
-      }),
-  })
-
-export const learnOpenBreak = (model: World): World =>
-  modifyFields(model, {
-    lessons: lessons =>
-      modifyFields(lessons, {
-        openBreak: lesson => learn(lesson, model.elapsedMs),
-      }),
   })
 
 export const learnStartWave = (model: Model): Model =>
@@ -420,9 +388,6 @@ const isBreakWith = (
 
 export const isOpenBreak = (model: Model): boolean =>
   isBreakWith(model, (_wave, clock) => BreakClock.isAnyOf(['Waiting'])(clock))
-
-export const isTimedBreak = (wave: number, clock: BreakClock): boolean =>
-  wave > OPEN_BREAK_WAVE && BreakClock.isAnyOf(['Counting'])(clock)
 
 const isLaterTimedBreak = (model: Model): boolean =>
   isBreakWith(model, isTimedBreak)

@@ -1,15 +1,15 @@
 import { Array, Option, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { earn } from './shop'
+import type { World } from './world'
 import {
   Frenzy,
   type FrenzyPack,
   GameEvent,
   type PlannedSpawn,
   type Zombie,
-} from './model'
-import { earn } from './shop'
-import type { World } from './world'
+} from './worldSchema'
 import { isFloorKind, isWalking } from './zombies'
 
 // RULES

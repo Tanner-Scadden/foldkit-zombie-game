@@ -2,13 +2,13 @@ import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { MS_PER_SECOND, SCORE_PER_ZOMBIE } from './constants'
+import type { Model } from './model'
 import {
   GameEvent,
   type KillCounts,
-  type Model,
   type RunStats,
   type ZombieKind,
-} from './model'
+} from './worldSchema'
 
 // TALLY
 

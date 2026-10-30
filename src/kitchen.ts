@@ -16,6 +16,8 @@ import {
 import { ZOMBIE_BLAST_TARGET, bountyOf } from './combat'
 import { BULLET_STEP_PX } from './constants'
 import { KITCHEN_EXIT, boxAround } from './exits'
+import { earn } from './shop'
+import type { World } from './world'
 import {
   GameEvent,
   Oven,
@@ -23,9 +25,7 @@ import {
   type Zombie,
   ZombieAction,
   type ZombieKind,
-} from './model'
-import { earn } from './shop'
-import type { World } from './world'
+} from './worldSchema'
 import { bodyRadiusOf, isFree, isGrounded, statsOf } from './zombies'
 
 // OVENS

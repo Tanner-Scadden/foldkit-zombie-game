@@ -115,6 +115,15 @@ export const FIELD_CLASSES = {
   linkFlow: 'Client',
   home: 'Client',
   seenPowerUps: 'Client',
+  coop: 'Client',
+  cursorSetting: 'Client',
+  exitDialog: 'Client',
+  handDialog: 'Client',
+  orientationLock: 'Client',
+  playerName: 'Client',
+  profile: 'Client',
+  rotationSetting: 'Client',
+  shopChatter: 'Client',
 } satisfies Partial<Record<keyof Model, FieldClass>>
 
 const CLASS_BY_FIELD: ReadonlyMap<string, FieldClass> = new Map(

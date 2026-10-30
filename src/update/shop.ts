@@ -20,7 +20,6 @@ import {
 import { burstCoins } from '../particles'
 import {
   ShopGood,
-  ShopTabs,
   StockTag,
   isBrowsing,
   maybeDisplacedFocus,
@@ -29,6 +28,7 @@ import {
   shopItem,
   stockTag,
 } from '../shop'
+import { ShopTabs } from '../shopTabs'
 import { showTrapHint } from '../traps'
 import { closeExit } from './exit'
 import { type SoundCue, playSounds, uiCue } from './sound'

@@ -35,22 +35,22 @@ import {
   STREAK_WINDOW_MS,
   TRAP_CRACK_TRAUMA,
 } from './constants'
-import {
-  type Blast,
-  GameEvent,
-  HitStop,
-  type Model,
-  type Popup,
-  type PopupKind,
-  type Shake,
-  Streak,
-  stillShake,
-} from './model'
+import type { Model } from './model'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
 import { tickShownMoney } from './shop'
 import { TRAPS } from './traps'
 import { WEAPONS } from './weapons'
 import type { World } from './world'
+import {
+  type Blast,
+  GameEvent,
+  HitStop,
+  type Popup,
+  type PopupKind,
+  type Shake,
+  Streak,
+  stillShake,
+} from './worldSchema'
 import { ZOMBIE_KINDS } from './zombies'
 
 // HIT-STOP

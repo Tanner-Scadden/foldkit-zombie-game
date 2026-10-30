@@ -12,6 +12,10 @@ import { woundPlayer } from './combat'
 import { MS_PER_SECOND, PLAYER_RADIUS, ZOMBIE_ALIVE_MAX } from './constants'
 import { difficultySpeedScale } from './difficulty'
 import { circlesOverlap, directionBetween, scaleVector } from './geometry'
+import { warningPoint } from './pacing'
+import { type Seeded, nextRandom } from './prng'
+import { trapBlockers } from './traps'
+import type { World } from './world'
 import {
   Boss,
   type BossAttack,
@@ -24,11 +28,7 @@ import {
   type PlantedAttack,
   type Vector,
   type Zombie,
-} from './model'
-import { warningPoint } from './pacing'
-import { type Seeded, nextRandom } from './prng'
-import { trapBlockers } from './traps'
-import type { World } from './world'
+} from './worldSchema'
 import {
   ZOMBIE_KINDS,
   arrivingZombie,

@@ -1,9 +1,9 @@
 import { Option } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { type GameEvent, type Intent, idleIntent } from './model'
 import { advanceTick } from './simulation'
 import type { World } from './world'
+import { type GameEvent, type Intent, idleIntent } from './worldSchema'
 
 // The pure 60 Hz tick a co-op room runs (MULTIPLAYER.md, Phase 0): the
 // World and each player's intent in, the next World and the tick's events

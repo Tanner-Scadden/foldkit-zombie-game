@@ -78,6 +78,7 @@ import {
 } from './onboarding'
 import { dropClip } from './particles'
 import { LinkFlow } from './playerSync'
+import { startWave } from './runFlow'
 import { forgetTutorial } from './save'
 import { isUsingServiceWorker } from './serviceWorker'
 import { isAtCounter, isBrowsing } from './shop'
@@ -195,7 +196,7 @@ import {
 import { type UpdateReturn, type UpdateStep, withInput } from './update/step'
 import { nextTrap, placeSelectedTrap, trapFromKey } from './update/traps'
 import { RUNNING_BUILD, isCheckingForUpdates, maybeNewerBuild } from './version'
-import { isRoundActive, pause, startWave } from './waves'
+import { isRoundActive, pause } from './waves'
 import {
   beginReload,
   canReload,

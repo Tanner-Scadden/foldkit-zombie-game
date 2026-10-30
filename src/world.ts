@@ -1,4 +1,4 @@
-import { World } from './model'
+import { World } from './worldSchema'
 
 export { World }
 

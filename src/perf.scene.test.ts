@@ -55,10 +55,11 @@ import {
   initialModel,
 } from './model'
 import { DROP_RULES } from './powerups'
+import { startOrResume } from './runFlow'
 import { WIDE_SURFACE, scoring } from './testing'
 import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
-import { FINAL_WAVE, rollSpawns, startOrResume } from './waves'
+import { FINAL_WAVE, rollSpawns } from './waves'
 import { ZOMBIE_KINDS } from './zombies'
 
 // WORST-CASE ROOMS

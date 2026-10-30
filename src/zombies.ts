@@ -18,6 +18,7 @@ import {
   ZOMBIE_SPEED_MAX,
   ZOMBIE_SPEED_MIN,
 } from './constants'
+import type { Clearance } from './pathing'
 import {
   Frenzy,
   type ParticleKind,
@@ -26,8 +27,7 @@ import {
   ZombieAction,
   type ZombieKind,
   ZombieState,
-} from './model'
-import type { Clearance } from './pathing'
+} from './worldSchema'
 
 // BEHAVIOR
 

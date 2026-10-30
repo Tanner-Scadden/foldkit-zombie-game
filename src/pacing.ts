@@ -21,6 +21,7 @@ import {
   RESTLESS_QUIET_MAX_MS,
 } from './constants'
 import { isFrenzyPack } from './frenzy'
+import type { World } from './world'
 import {
   Alarm,
   Beat,
@@ -31,8 +32,7 @@ import {
   type Vector,
   type Zombie,
   type ZombieKind,
-} from './model'
-import type { World } from './world'
+} from './worldSchema'
 import { isFloorKind, isFree, isFusing, isWalking } from './zombies'
 
 // CROWD

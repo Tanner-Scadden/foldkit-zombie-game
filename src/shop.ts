@@ -2,8 +2,6 @@ import { Array, Option, Order, Schema, String, pipe } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
-import { Tabs } from '@foldkit/ui'
-
 import { PARLOUR, SHOP_STALL_SYMBOL, tilesWithSymbol } from './arena'
 import {
   MONEY_TICK_PER_SECOND,
@@ -16,25 +14,7 @@ import {
   TILE_SIZE,
 } from './constants'
 import { arriveAtExit, hasLeftExits } from './exits'
-import {
-  Arsenal,
-  type CarriedGun,
-  type FixedShopItemId,
-  Lesson,
-  type Model,
-  Phase,
-  type Player,
-  type RepairItemId,
-  type ShopCategory,
-  ShopChatter,
-  ShopItemId,
-  ShopState,
-  Trap,
-  TrapKind,
-  type Vector,
-  type Wallet,
-  WeaponKind,
-} from './model'
+import type { Model } from './model'
 import { countPurchase } from './stats'
 import {
   TRAPS,
@@ -63,6 +43,24 @@ import {
   tierOf,
 } from './weapons'
 import type { World } from './world'
+import {
+  Arsenal,
+  type CarriedGun,
+  type FixedShopItemId,
+  Lesson,
+  Phase,
+  type Player,
+  type RepairItemId,
+  type ShopCategory,
+  ShopChatter,
+  ShopItemId,
+  ShopState,
+  Trap,
+  TrapKind,
+  type Vector,
+  type Wallet,
+  WeaponKind,
+} from './worldSchema'
 
 // MONEY
 
@@ -322,8 +320,6 @@ export const SHOP_CATEGORY_ORDER: Array.NonEmptyReadonlyArray<ShopCategory> = [
   'Health',
   'Traps',
 ]
-
-export const ShopTabs = Tabs.create<ShopCategory>()
 
 // TRAPS
 

@@ -54,18 +54,23 @@ For every pair that disagrees it finds the first frame, asks both engines for th
 
 So the game is deterministic in each engine, and across engines only the transcendental Math differs. Co-op does not need cross-engine agreement (the room is the only place the world runs); replays and verified boards would.
 
+## The World in workerd
+
+`bun run world:check` (`worldCheck.ts`, in CI) bundles `worldWorker.ts`, which holds only `stepWorld`, its wire, and `detMath.ts`, and fails if the bundle pulls in a client, UI, art, audio, camera, input, store, or sync module. Then it plays a World mid-wave 600 ticks in Bun and in a local workerd (`worldWorkerd.capnp`), both with `detMath.ts`, and fails unless the two Worlds are the same.
+
 ## Files
 
-| File                               | What it holds                                                        |
-| ---------------------------------- | -------------------------------------------------------------------- |
-| `fields.ts`                        | The Model field classes: the World and client split as data          |
-| `hash.ts`                          | The gameplay hash                                                    |
-| `script.ts`                        | The scripted player and the frame patterns                           |
-| `run.ts`                           | Plays the script and records checkpoints                             |
-| `diff.ts`                          | First divergent checkpoint, first differing path, exact JSON         |
-| `request.ts`, `engine.ts`          | What an engine is asked and what it answers                          |
-| `cli.ts`, `page.ts`, `worker.ts`   | The engine entries for Bun and Node, Chrome, and workerd             |
-| `build.ts`, `workerd.capnp`        | The bundles in `out/` and the workerd config                         |
-| `crossEngine.ts`, `beforeAfter.ts` | The two heavy checks                                                 |
-| `detMath.ts`                       | Deterministic `hypot`, `sin`, `cos`, `atan2`, and `exp`, for replays |
-| `determinism.sim.test.ts`          | The same engine check and the hash's rules                           |
+| File                                              | What it holds                                                        |
+| ------------------------------------------------- | -------------------------------------------------------------------- |
+| `fields.ts`                                       | The Model field classes: the World and client split as data          |
+| `hash.ts`                                         | The gameplay hash                                                    |
+| `script.ts`                                       | The scripted player and the frame patterns                           |
+| `run.ts`                                          | Plays the script and records checkpoints                             |
+| `diff.ts`                                         | First divergent checkpoint, first differing path, exact JSON         |
+| `request.ts`, `engine.ts`                         | What an engine is asked and what it answers                          |
+| `cli.ts`, `page.ts`, `worker.ts`                  | The engine entries for Bun and Node, Chrome, and workerd             |
+| `build.ts`, `workerd.capnp`                       | The bundles in `out/` and the workerd config                         |
+| `crossEngine.ts`, `beforeAfter.ts`                | The two heavy checks                                                 |
+| `detMath.ts`                                      | Deterministic `hypot`, `sin`, `cos`, `atan2`, and `exp`, for replays |
+| `determinism.sim.test.ts`                         | The same engine check and the hash's rules                           |
+| `worldCheck.ts`, `worldPlay.ts`, `worldWorker.ts` | The World's bundle check and its play in workerd                     |

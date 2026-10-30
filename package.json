@@ -19,6 +19,7 @@
     "determinism": "bun tools/heavy/main.ts -- bun tools/determinism/crossEngine.ts",
     "mp:e2e": "bun tools/heavy/main.ts -- --shared bun tools/mp-dev/e2e.ts",
     "determinism:diff": "bun tools/heavy/main.ts -- bun tools/determinism/beforeAfter.ts",
+    "world:check": "bun tools/determinism/worldCheck.ts",
     "balance": "bun tools/heavy/main.ts -- bun tools/balance/simulate.ts",
     "balance:nightly": "bun tools/heavy/main.ts -- bun tools/balance/nightly.ts",
     "balance:model": "bun tools/balance/model.ts",

@@ -4,17 +4,17 @@ import { modifyFields } from 'foldkit/struct'
 import { type Level, distanceToBox, isSolidAt } from './arena'
 import { PLAYER_RADIUS } from './constants'
 import { circlesOverlap } from './geometry'
+import { type Seeded, between, nextRandom } from './prng'
+import { STALL_BOX } from './shop'
+import { trapBlockers } from './traps'
+import type { World } from './world'
 import {
   GameEvent,
   type Trap,
   type Vector,
   type Zombie,
   ZombieAction,
-} from './model'
-import { type Seeded, between, nextRandom } from './prng'
-import { STALL_BOX } from './shop'
-import { trapBlockers } from './traps'
-import type { World } from './world'
+} from './worldSchema'
 import { bodyRadiusOf, isFree, isWalking } from './zombies'
 
 // RULES

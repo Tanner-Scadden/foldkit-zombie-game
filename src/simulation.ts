@@ -55,25 +55,6 @@ import {
 } from './geometry'
 import { stopForHits, thawTick } from './juice'
 import { advanceKitchen, soupSkid } from './kitchen'
-import {
-  Arsenal,
-  type Boss,
-  type Bullet,
-  type BulletGlaze,
-  type DoorId,
-  type FlowField,
-  GameEvent,
-  Invulnerability,
-  Pierce,
-  type Player,
-  Reload,
-  ShopState,
-  type Vector,
-  type WeaponKind,
-  type Zombie,
-  ZombieState,
-  idleIntent,
-} from './model'
 import { advanceIntensity } from './pacing'
 import {
   type Clearance,
@@ -118,6 +99,25 @@ import {
   spendRound,
 } from './weapons'
 import type { World } from './world'
+import {
+  Arsenal,
+  type Boss,
+  type Bullet,
+  type BulletGlaze,
+  type DoorId,
+  type FlowField,
+  GameEvent,
+  Invulnerability,
+  Pierce,
+  type Player,
+  Reload,
+  ShopState,
+  type Vector,
+  type WeaponKind,
+  type Zombie,
+  ZombieState,
+  idleIntent,
+} from './worldSchema'
 import {
   Behavior,
   bodyRadiusOf,

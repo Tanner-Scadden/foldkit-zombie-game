@@ -41,6 +41,9 @@ jobs:
       # NOTE: the full tier: the fast tests plus the sim tier (whole wave
       # replays and seed sweeps) that `bun run test` leaves out.
       - run: bun run test:full
+      # NOTE: the co-op room's step bundles with no UI, art, audio, or store
+      # module and plays in workerd exactly as in Bun (MULTIPLAYER.md, Phase 0).
+      - run: bun run world:check
       - run: bun run build
       - run: bun run typecheck
         working-directory: infra

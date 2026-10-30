@@ -51,11 +51,19 @@ const decodeField = (key: WorldKey, text: string): unknown => {
   return Schema.decodeUnknownSync(codec)(JSON.parse(text))
 }
 
+// NOTE: the World as one JSON text and back, for a snapshot and for tools
+// that carry a World between engines.
+export const worldToJson = (world: World): string =>
+  JSON.stringify(encodeWorld(world))
+
+export const worldFromJson = (text: string): World =>
+  decodeWorld(JSON.parse(text))
+
 export const snapshotWorld = (writer: TextWriter, world: World): void =>
-  writer.text(JSON.stringify(encodeWorld(world)))
+  writer.text(worldToJson(world))
 
 export const readWorldSnapshot = (reader: TextReader): World =>
-  decodeWorld(JSON.parse(reader.text(MAX_WORLD_TEXT)))
+  worldFromJson(reader.text(MAX_WORLD_TEXT))
 
 type Change = readonly [index: number, text: string]
 

@@ -22,7 +22,7 @@ import {
   type Player,
   Reload,
   type WeaponKind,
-} from './model'
+} from './worldSchema'
 
 // STATS
 

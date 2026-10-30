@@ -19,28 +19,7 @@ import {
   bountyOf,
 } from './combat'
 import { PLAYER_MAX_HP, PLAYER_RADIUS, PLAYER_SPEED } from './constants'
-import {
-  Beat,
-  BoostKind,
-  BoostTimer,
-  type Boosts,
-  type BulletGlaze,
-  type Callout,
-  type CalloutLook,
-  GameEvent,
-  type Loot,
-  type Model,
-  Phase,
-  type Pickup,
-  type PickupKind,
-  Pierce,
-  type Player,
-  Prize,
-  ShopState,
-  type Vector,
-  type WeaponKind,
-  type ZombieKind,
-} from './model'
+import type { Model } from './model'
 import { nextRandom } from './prng'
 import { earn } from './shop'
 import { totalKills } from './stats'
@@ -53,6 +32,27 @@ import {
   statsAt,
 } from './weapons'
 import type { World } from './world'
+import {
+  Beat,
+  BoostKind,
+  BoostTimer,
+  type Boosts,
+  type BulletGlaze,
+  type Callout,
+  type CalloutLook,
+  GameEvent,
+  type Loot,
+  Phase,
+  type Pickup,
+  type PickupKind,
+  Pierce,
+  type Player,
+  Prize,
+  ShopState,
+  type Vector,
+  type WeaponKind,
+  type ZombieKind,
+} from './worldSchema'
 
 // BOOSTS
 
