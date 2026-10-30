@@ -74,12 +74,14 @@ const percentOf = (part: number, whole: number): string =>
 // NOTE: a floor canvas covers the whole map, whose first row can sit above
 // the parlour's top wall, so its shapes are moved down by the map's top.
 const layerCanvasView = (
+  key: string,
   level: Level,
   shapes: ReadonlyArray<Canvas.Shape>,
   h: HtmlBuilder<Message>,
 ): Html =>
   Canvas.view(
     {
+      key,
       width: level.width,
       height: level.height,
       shapes:
@@ -92,13 +94,13 @@ const layerCanvasView = (
   )
 
 const roomLayerView = (level: Level, h: HtmlBuilder<Message>): Html =>
-  layerCanvasView(level, roomShapes(level), h)
+  layerCanvasView('room-layer', level, roomShapes(level), h)
 
 const decalLayerView = (
   level: Level,
   decals: ReadonlyArray<Decal>,
   h: HtmlBuilder<Message>,
-): Html => layerCanvasView(level, decalShapes(decals), h)
+): Html => layerCanvasView('decal-layer', level, decalShapes(decals), h)
 
 const lazyRoomLayer = createLazy()
 const lazyDecalLayer = createLazy()
@@ -115,6 +117,12 @@ const layerDecals = (model: Model): ReadonlyArray<Decal> =>
 // the floor color, so the strip a shake uncovers matches the floor. Both lazy
 // views are keyed on the Level, which is a new record whenever an exit opens,
 // so the room and its decal canvas redraw then and only then.
+//
+// Every cached VNode is keyed, and so are its siblings. A lazy view hands
+// snabbdom the very VNode it patched last frame, and paired by position in
+// an unkeyed list it can be rebuilt into a new element while the old one
+// stays in the page (the duplicate shop dialog, see `dialogShell`).
+// src/cachedNodes.scene.test.ts holds every cached VNode to a key.
 const floorLayersView = (
   model: Model,
   camera: Camera,
@@ -166,6 +174,7 @@ const overlayLayerView = (
 ): Html =>
   Canvas.view(
     {
+      key: 'overlay-layer',
       width,
       height,
       shapes,
@@ -197,7 +206,7 @@ const roomSources = (): ReadonlyArray<string> =>
 
 const warmUpView = (h: HtmlBuilder<Message>): Html =>
   h.div(
-    [h.AriaHidden(true), h.Style({ display: 'none' })],
+    [h.Key(WARM_UP_CLASS), h.AriaHidden(true), h.Style({ display: 'none' })],
     Array.map(
       Array.chunksOf(
         [...roomSources(), ...spriteWarmUpSources(defaultAppearance)],
@@ -233,6 +242,7 @@ export const gameStageView = (model: Model, h: HtmlBuilder<Message>): Html => {
     [
       h.div(
         [
+          h.Key('game-stage'),
           h.Class('game-stage'),
           h.DataAttribute('layout', screen.layout),
           h.Style({
@@ -245,6 +255,7 @@ export const gameStageView = (model: Model, h: HtmlBuilder<Message>): Html => {
         [
           h.div(
             [
+              h.Key('world-window'),
               h.Class('world-window'),
               h.Style({
                 left: percentOf(world.x, screen.width),

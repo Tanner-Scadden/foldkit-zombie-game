@@ -360,10 +360,19 @@ index cd32f90de3c6c054f5e859ceadb44e619be541f5..82b0d7d9c7539c2366b4e755a9db0fcd
  export const Group = taggedStruct('Group', {
      shapes: Schema.Array(Shape),
 diff --git a/dist/canvas/view.d.ts b/dist/canvas/view.d.ts
-index 1ca895e1a1fe57a1bd610b956a1a74755b476d34..e4ff9d8e82f2ff1edd8e263fcfbc4c9b0e8ad7f3 100644
+index 1ca895e1a1fe57a1bd610b956a1a74755b476d34..36a06d8170c76fd4abfac3560d3a5002479cdbfe 100644
 --- a/dist/canvas/view.d.ts
 +++ b/dist/canvas/view.d.ts
-@@ -19,7 +19,9 @@ export type ViewConfig<Message> = Readonly<{
+@@ -11,6 +11,8 @@ export type ViewConfig<Message> = Readonly<{
+     height: number;
+     shapes: ReadonlyArray<Shape>;
+     className?: string | undefined;
++    /** Munch Manor patch: the snabbdom key of the `<canvas>` among its siblings. */
++    key?: string | undefined;
+     onPointerDown?: ((point: Point) => Message) | undefined;
+     onPointerMove?: ((point: Point) => Message) | undefined;
+     onPointerUp?: ((point: Point) => Message) | undefined;
+@@ -19,7 +21,9 @@ export type ViewConfig<Message> = Readonly<{
   * A virtual DOM `<canvas>` element backed by a declarative scene description.
   * The insert hook captures the 2D context and paints the initial scene; the
   * postpatch hook re-paints on every render. The canvas is a pure function of
@@ -375,7 +384,7 @@ index 1ca895e1a1fe57a1bd610b956a1a74755b476d34..e4ff9d8e82f2ff1edd8e263fcfbc4c9b
   * The trailing `h` fixes `Message` to the calling view's frame; the pointer
   * handlers dispatch through that frame at fire time, so passing the builder
 diff --git a/dist/canvas/view.js b/dist/canvas/view.js
-index f8ee4870de83702ddef4fc1d393012043b1fbfb9..5a66b83c18026665f63c1be81bebe5602e1d00a6 100644
+index f8ee4870de83702ddef4fc1d393012043b1fbfb9..c5830a9bc2eed2bcb259c5a80020418cb2a90729 100644
 --- a/dist/canvas/view.js
 +++ b/dist/canvas/view.js
 @@ -1,13 +1,16 @@
@@ -410,7 +419,26 @@ index f8ee4870de83702ddef4fc1d393012043b1fbfb9..5a66b83c18026665f63c1be81bebe560
   *
   * The trailing `h` fixes `Message` to the calling view's frame; the pointer
   * handlers dispatch through that frame at fire time, so passing the builder
-@@ -80,22 +85,31 @@ export const view = (config, _h) => {
+@@ -46,7 +51,7 @@ const classesFromClassName = (className) => pipe(className, String.split(/\s+/),
+  */
+ export const view = (config, _h) => {
+     const dispatchSync = __requireDispatch();
+-    const { width, height, shapes, className, onPointerDown, onPointerMove, onPointerUp, } = config;
++    const { width, height, shapes, className, key, onPointerDown, onPointerMove, onPointerUp, } = config;
+     const pointerListener = (toMessage) => (event) => {
+         const target = event.currentTarget;
+         if (target instanceof HTMLCanvasElement) {
+@@ -67,6 +72,9 @@ export const view = (config, _h) => {
+     const data = {
+         props: { width, height },
+         on: listeners,
++        // NOTE: Munch Manor patch: a key, so a canvas handed back from a lazy
++        // view's cache is found by key among its siblings, not by position.
++        ...(key !== undefined && { key }),
+         ...(className !== undefined && {
+             class: classesFromClassName(className),
+         }),
+@@ -80,22 +88,31 @@ export const view = (config, _h) => {
                  if (Predicate.isNull(context)) {
                      return;
                  }

@@ -92,6 +92,7 @@ const thumbAreaBoxView = (
   h: HtmlBuilder<Message>,
 ): Html =>
   h.div([
+    h.Key('thumb-area'),
     h.Class('thumb-area'),
     h.AriaHidden(true),
     h.Style({

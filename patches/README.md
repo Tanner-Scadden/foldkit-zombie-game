@@ -9,6 +9,8 @@ It adds:
 - the page-wide image cache keyed by `src`,
 - and the repaint of each canvas's latest scene when an image it drew finishes loading.
 
+It also gives `Canvas.view` an optional `key`, the snabbdom key of its `<canvas>`, which upstream does not have. A canvas a lazy view hands back from its cache must be keyed among its siblings, or snabbdom can pair it by position, rebuild it into a new element, and leave the old one in the page (`src/cachedNodes.scene.test.ts` checks every cached VNode has a key). Dropping the patch needs that kept some other way, such as a keyed wrapper element.
+
 On top of the port, the painter draws a pixelated image on whole canvas pixels: it rounds the image's edges on the canvas unless the transform rotates or skews. At a half pixel position, nearest neighbour sampling meets ties that a cropped atlas region and a whole image break differently, which showed as sprites shifted by a pixel. Dropping the patch for an upstream release loses this unless upstream does the same.
 
 It also makes `modifyFields` (and `makeModifyFieldsFor`) in `struct/index.js` fast. Foldkit aliases Effect's `Struct.evolve`, which walks every key of the struct through `Reflect.ownKeys` and `propertyIsEnumerable`; on the game's large Model that was about half of a busy frame's `update`. The patch copies the struct with a spread, which keeps the same own enumerable keys in the same order, and then runs only the given transforms, on keys the struct has, as `evolve` does. The types are untouched. It is not upstream yet, so dropping the patch brings the slow path back.
