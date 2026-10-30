@@ -1,0 +1,92 @@
+{
+  "clips": [
+    {
+      "name": "rattles-mine",
+      "format": "16:9",
+      "gif": true,
+      "shots": [
+        {
+          "name": "shop",
+          "scene": "wave=5&money=900&gun=smg&tier=1&px=200&py=142&seed=5&prep=30000&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 600,
+          "segments": [{ "from": 0, "to": 60, "keys": ["KeyD"] }],
+          "clicks": [
+            { "at": 150, "selector": "dialog[open] li[data-verdict='available'] button" },
+            { "at": 290, "selector": "dialog[open] li[data-verdict='available'] button" },
+            { "at": 430, "selector": "dialog[open] li[data-verdict='available'] button" }
+          ],
+          "captions": [
+            { "from": 0, "to": 70, "text": "Rattles is open", "place": "Middle" },
+            { "from": 520, "to": 600, "text": "Spend it all", "place": "Bottom" }
+          ],
+          "holds": [{ "at": 599, "frames": 30 }],
+          "fadeIn": 12,
+          "fadeOut": 12
+        }
+      ]
+    },
+    {
+      "name": "portrait-aim",
+      "format": "9:16",
+      "gif": true,
+      "shots": [
+        {
+          "name": "thumbs",
+          "scene": "wave=4&start=wave&elapsed=12000&seed=4&god&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 600,
+          "segments": [
+            { "from": 0, "to": 150, "move": [0.6, -0.4], "aim": "nearest", "turn": 9, "fire": true },
+            { "from": 150, "to": 300, "move": [-0.6, 0.3], "aim": "nearest", "turn": -9, "fire": true },
+            { "from": 300, "to": 450, "move": [0.2, 0.6], "aim": "nearest", "turn": 9, "fire": true },
+            { "from": 450, "to": 600, "move": [-0.4, -0.5], "aim": "nearest", "turn": -9, "fire": true }
+          ],
+          "captions": [
+            { "from": 0, "to": 180, "text": "Plays on phones" },
+            { "from": 300, "to": 480, "text": "Aim assist", "place": "Middle" }
+          ],
+          "fadeIn": 12,
+          "fadeOut": 12
+        }
+      ]
+    },
+    {
+      "name": "coop-looks",
+      "format": "16:9",
+      "gif": true,
+      "shots": [
+        {
+          "name": "crew",
+          "scene": "coop=host&seed=7&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 600,
+          "coop": { "seed": 7, "preroll": 4800, "difficulty": "Hard" },
+          "captions": [{ "from": 0, "to": 200, "text": "Bring 3 friends" }],
+          "fadeIn": 12,
+          "fadeOut": 12
+        }
+      ]
+    },
+    {
+      "name": "fridge-pull",
+      "format": "16:9",
+      "gif": true,
+      "shots": [
+        {
+          "name": "pull",
+          "scene": "wave=3&seen=all&kitchen&money=200&gun=smg&prep=14000&px=180&py=-100&hold&fridgeseed=2&seed=3&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 200,
+          "slowMotion": [{ "from": 24, "to": 104, "repeat": 3 }],
+          "captions": [{ "from": 0, "to": 110, "text": "Mystery leftovers", "place": "Middle" }],
+          "fadeIn": 12
+        },
+        {
+          "name": "freeze",
+          "scene": "wave=4&seen=all&start=wave&elapsed=9000&kitchen&god&px=40&py=-12&gun=freeze&iced=freeze&seed=4&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 210,
+          "segments": [{ "from": 0, "to": 210, "aim": [60, 0], "fire": true }],
+          "captions": [{ "from": 60, "to": 210, "text": "Brain freeze!", "tone": "Plain" }],
+          "fadeOut": 12
+        }
+      ]
+    }
+  ]
+}

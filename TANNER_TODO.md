@@ -4,6 +4,10 @@ Things the game is blocked on until the owner does or decides them. Agents add a
 
 ## To do
 
+- [ ] **Install ffmpeg so the devlog clips encode.** The video tool renders the frames and the sound, and stops before the MP4 and GIF without ffmpeg.
+  1. Run `brew install ffmpeg`.
+  2. Run `bun run video -- tools/video/shots/devlog.json` (about 6 minutes). The clips land in `tools/video/out/` as `rattles-mine`, `portrait-aim`, `coop-looks`, and `fridge-pull`, each an `.mp4` and a `.gif`.
+  3. Watch them and say which to post, and any caption to change (they are in `tools/video/shots/devlog.json`).
 - [ ] **Play with Mystery Leftovers and say if the prices and odds feel right.** Open the kitchen, then hold Enter at the fridge on its back wall ($75 a pull). The proposed numbers are in "Mystery Leftovers" in `GAME_DESIGN.md`: Cooker 36, Pan 36, Brain Freeze 8 (rising 3 a slam, up to 20), Sandwich 11, Dud 9 out of 100; a slam after 3 or 4 pulls for 30 s; Rattles' upgrades $70, $160, $300 for the Cooker, $60, $150, $300 for the Pan, and $30 Lid Stacks. Reply with any you want changed.
 - [ ] **Turn on device emulation so agents can test on an Android emulator (and iOS Simulator).** This lets an agent check the installed app's ROTATE toggle (the item below) and test touch, portrait, and the PWA on real mobile browsers, without your phone.
   1. In T3 Code, turn on device access for this environment (the setting that lets agents use the Device panel; today agents get "Agent device access is turned off for this environment").

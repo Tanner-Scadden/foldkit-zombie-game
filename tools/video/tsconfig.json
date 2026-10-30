@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    // NOTE: Bun's types and Playwright come from tools/audit's install.
+    "typeRoots": ["../audit/node_modules/@types"],
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@game/*": ["../../src/*"],
+      "playwright-core": ["../audit/node_modules/playwright-core"]
+    },
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  },
+  "include": ["./**/*", "../../src/vite-env.d.ts"],
+  "exclude": ["out"]
+}

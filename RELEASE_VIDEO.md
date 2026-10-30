@@ -37,6 +37,8 @@ The plan for the launch video. It is shot once co-op works (multiplayer Phase 3,
 - **Assembled with ffmpeg** from a shot list file, so a new build can re-render the whole cut with one command (`bun run video`).
 - **Text overlays** use the game's own pixel font, so they match.
 
+The first slice is built: `tools/video` (see its README) with the director mode in `tools/audit/harness/director.ts`, and four devlog clips in `tools/video/shots/devlog.json`.
+
 ## Before the shoot
 
 - **Now, while co-op is built:** short devlog clips to build an audience. The parlour before and after, Rattles' MINE! stamp, and portrait play all make good 10 second posts. These need only the director mode, not co-op.

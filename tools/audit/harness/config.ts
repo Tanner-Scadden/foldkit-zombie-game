@@ -304,6 +304,8 @@ export const HarnessConfig = Schema.Struct({
   seed: MaybeNum,
   instrument: Flag,
   nodev: Flag,
+  // The video tool (tools/video): ticks only when it asks, logs audio
+  director: Flag,
 })
 export type HarnessConfig = typeof HarnessConfig.Type
 

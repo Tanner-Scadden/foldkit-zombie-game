@@ -269,10 +269,12 @@
       }
     },
     {
-      // NOTE: the audits and the spike drive headless Chrome: much of their
-      // code runs in page.evaluate on untyped page globals.
+      // NOTE: the audits, the video tool, and the spike drive headless
+      // Chrome: much of their code runs in page.evaluate on untyped page
+      // globals.
       "files": [
         "tools/audit/**/*.ts",
+        "tools/video/**/*.ts",
         "tools/mp-spike/**/*.ts",
         "tools/sprites/**/*.ts"
       ],

@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, Queue, Schema, Stream } from 'effect'
+import { Effect, Layer, Match, Option, Queue, Schema, Stream } from 'effect'
 
 // NOTE: next, so the build's prebuilt sprite atlas is in place before any
 // game module builds a sprite, as in the game's own entry.
@@ -87,6 +87,7 @@ import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
 import { Session } from '@munch/netcode'
 
 import { type HarnessConfig, decodeHarnessConfig } from './config'
+import * as Director from './director'
 import { settle } from './readiness'
 
 const readConfig = () => {
@@ -125,7 +126,8 @@ const useConfig = (next: HarnessConfig) => {
   py = next.py ?? PLAYER_Y
   god = next.god
   instrument = next.instrument
-  freezeAfter = next.tick !== undefined ? 0 : (next.freeze ?? Infinity)
+  freezeAfter =
+    next.tick !== undefined || next.director ? 0 : (next.freeze ?? Infinity)
 }
 useConfig(config)
 const ROAMING = { _tag: 'Roaming' as const }
@@ -1593,6 +1595,8 @@ w.__messages = [] as Array<string>
 // scene a query string describes without reloading the page.
 const HarnessMessage = defineMessageUnion({
   LoadedScene: { query: Schema.String },
+  StartedShot: { plan: Schema.String },
+  SteppedShot: { ticks: Schema.Number },
 })
 type HarnessMessage = typeof HarnessMessage.Type
 type AnyMessage = Message | HarnessMessage
@@ -1647,6 +1651,14 @@ const gameUpdate = (model: Model, incoming: Message): HarnessReturn => {
     incoming._tag === 'TickedFrame' && framesRun >= freezeAfter
   const isFreezing = Number.isFinite(freezeAfter)
   if (isFrozenFrame) {
+    return { model }
+  }
+  // NOTE: a director shot steps the co-op room itself, on the shot's clock.
+  if (
+    config.director &&
+    incoming._tag === 'GotCoopMessage' &&
+    incoming.message._tag === 'TickedRoomFrame'
+  ) {
     return { model }
   }
   if (isFreezing && incoming._tag === 'CompletedGenerateSeed') {
@@ -1849,26 +1861,60 @@ const loadScene = (model: Model, query: string): HarnessReturn => {
   }
 }
 
-const harnessUpdate = (model: Model, incoming: AnyMessage): HarnessReturn =>
-  incoming._tag === 'LoadedScene'
-    ? loadScene(model, incoming.query)
-    : gameUpdate(model, incoming)
+// NOTE: a director step is the game's own update, with what the scene adds.
+const directorStep = (model: Model, message: Message): HarnessReturn =>
+  keepScene(update(model, message), message)
 
-// NOTE: the stream behind `window.__loadScene`. While the app runs, a scene
-// request goes into this queue as a LoadedScene Message.
-let maybeRequestScene: ((query: string) => void) | undefined
+const directed = (result: HarnessReturn): HarnessReturn => {
+  w.__model = result.model
+  w.__directedTick = Director.currentTick()
+  return result
+}
+
+const harnessUpdate = (model: Model, incoming: AnyMessage): HarnessReturn =>
+  Match.value(incoming).pipe(
+    Match.tags({
+      LoadedScene: ({ query }) => loadScene(model, query),
+      StartedShot: ({ plan }) =>
+        directed(Director.startShot(model, Director.decodePlan(plan))),
+      SteppedShot: ({ ticks }) =>
+        directed(Director.stepShot(model, ticks, directorStep)),
+    }),
+    Match.orElse(message =>
+      Director.logBetweenTicks(gameUpdate(model, message)),
+    ),
+  )
+
+// NOTE: the stream behind `window.__loadScene` and `window.__director`.
+// While the app runs, a request goes into this queue as a harness Message.
+let maybeRequest: ((message: HarnessMessage) => void) | undefined
+const maybeRequestScene = (query: string) =>
+  maybeRequest?.(HarnessMessage.LoadedScene({ query }))
 const sceneRequests = Stream.callback<AnyMessage>(queue =>
   Effect.acquireRelease(
     Effect.sync(() => {
-      maybeRequestScene = query =>
-        Queue.offerUnsafe(queue, HarnessMessage.LoadedScene({ query }))
+      maybeRequest = message => Queue.offerUnsafe(queue, message)
     }),
     () =>
       Effect.sync(() => {
-        maybeRequestScene = undefined
+        maybeRequest = undefined
       }),
   ).pipe(Effect.flatMap(() => Effect.never)),
 )
+
+// NOTE: the video tool's controls (tools/video, with `director` in the
+// query). `start` takes the shot's script as JSON, `step(n)` plays n fixed
+// ticks; each sets `window.__directedTick` once the Model holds them, and
+// `audio()` is the sound and music log so far.
+w.__director = {
+  start: (plan: string) => {
+    w.__directedTick = undefined
+    maybeRequest?.(HarnessMessage.StartedShot({ plan }))
+  },
+  step: (ticks: number) =>
+    maybeRequest?.(HarnessMessage.SteppedShot({ ticks })),
+  audio: () => Director.audioLog(),
+}
 
 // NOTE: an open dialog holds page state outside the Model: the inert,
 // hidden background, the focus trap, and the scroll lock. A dialog closed by
@@ -1892,7 +1938,7 @@ const releaseDialogs = Effect.suspend(() =>
 // scroll. Wait for
 // the ready signal afterwards. `nodev` belongs to the page, not the scene.
 w.__loadScene = async (query: string) => {
-  if (maybeRequestScene === undefined) {
+  if (maybeRequest === undefined) {
     throw new Error('the harness is not running yet')
   }
   clearReady()
