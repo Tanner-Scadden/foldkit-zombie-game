@@ -27,7 +27,7 @@ export type HintIconSprites = Readonly<{
   frames: Array.NonEmptyReadonlyArray<Sprite>
 }>
 
-const ICON_PALETTE: Palette = {
+export const ICON_PALETTE: Palette = {
   o: '#140c10',
   k: '#e9e3cf',
   s: '#8f8672',
@@ -45,6 +45,8 @@ const ICON_PALETTE: Palette = {
   M: '#5d6672',
   d: '#21140c',
   f: '#6b4426',
+  K: '#463a48',
+  S: '#2a2030',
 }
 
 type Layer = Readonly<{
@@ -96,10 +98,10 @@ export const hintIconFrame = (
 
 const KEY_GLYPH = '#'
 
-const faceRow = (glyphRow: string, face: string): string =>
+const faceRow = (glyphRow: string, face: string, glyph: string): string =>
   pipe(
     String.split(glyphRow, ''),
-    Array.map(symbol => (symbol === KEY_GLYPH ? 'g' : face)),
+    Array.map(symbol => (symbol === KEY_GLYPH ? glyph : face)),
     Array.join(''),
   )
 
@@ -108,17 +110,20 @@ const keyWidth = (label: string): number =>
     Math.max(widest, row.length),
   ) + 4
 
-const keyPixels = (label: string, isPressed: boolean): Pixels => {
+// NOTE: light letters on a dark cap, and a press lights them yellow. Dark
+// letters on a light cap read backwards at this size: the eye takes the
+// light gaps between the strokes for the letters, and E turns into a 3.
+export const keyPixels = (label: string, isPressed: boolean): Pixels => {
   const width = keyWidth(label)
   const edge = `.${'o'.repeat(width - 2)}.`
-  const face = isPressed ? 'y' : 'k'
+  const glyph = isPressed ? 'y' : 'w'
   const glyphRows = Array.map(
     textPixels(label),
-    row => `o${face}${faceRow(row, face)}${face}o`,
+    row => `oK${faceRow(row, 'K', glyph)}Ko`,
   )
   return isPressed
     ? ['.'.repeat(width), edge, ...glyphRows, edge]
-    : [edge, ...glyphRows, `o${'s'.repeat(width - 2)}o`, edge]
+    : [edge, ...glyphRows, `o${'S'.repeat(width - 2)}o`, edge]
 }
 
 const KEY_HEIGHT = 8
