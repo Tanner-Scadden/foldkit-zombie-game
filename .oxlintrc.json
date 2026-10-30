@@ -328,6 +328,7 @@
         "no-shadow": "off",
         "typescript/consistent-type-imports": "off",
         "vitest/require-to-throw-message": "off",
+        "unicorn/no-useless-spread": "off",
         "typescript/no-unnecessary-condition": "off"
       }
     },

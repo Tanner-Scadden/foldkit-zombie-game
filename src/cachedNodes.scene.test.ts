@@ -72,7 +72,7 @@ const reuseAcrossAFrame = (
   unkeyed: ReadonlyArray<string>
 }> => {
   const frames: Array<VNodeLike> = []
-  const keep = tap<Model, Message, undefined>(({ html }) => {
+  const keep = tap<Model, Message>(({ html }) => {
     frames.push(html)
   })
   scene(
