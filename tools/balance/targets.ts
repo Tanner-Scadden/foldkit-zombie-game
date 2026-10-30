@@ -140,10 +140,11 @@ const WIN_TARGETS: ReadonlyArray<Target> = [
 const portraitWinTargets: ReadonlyArray<Target> = PORTRAIT_PAIRS.flatMap(
   ({ portraitId, landscapeId }) =>
     WIN_TARGETS.filter(({ key }) => key === `${landscapeId}.wins`).map(
-      (target): Target => ({
-        ...target,
+      ({ label, maybeMin, maybeMax }): Target => ({
         key: `${portraitId}.wins`,
-        label: `Portrait ${target.label}`,
+        label: `Portrait ${label}`,
+        maybeMin,
+        maybeMax,
         source: PORTRAIT,
       }),
     ),

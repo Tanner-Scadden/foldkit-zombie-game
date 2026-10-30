@@ -70,7 +70,9 @@ if (process.env.COMPARE) {
   for (const scene of scenes) {
     const before = `s9-${process.env.COMPARE}-${scene.name}.png`
     const after = `s9-${TAG}-${scene.name}.png`
-    if (!files.includes(before) || !files.includes(after)) continue
+    if (!files.includes(before) || !files.includes(after)) {
+      continue
+    }
     const result = await comparePngs(
       page,
       `${SHOTS_DIR}/${before}`,

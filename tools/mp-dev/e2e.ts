@@ -287,9 +287,6 @@ const program = Effect.gen(function* () {
     signIn('bo'),
     signIn('cy'),
   ])
-  if (ana === undefined || bo === undefined || cy === undefined) {
-    return yield* new CheckFailed({ check: 'three players signed in' })
-  }
   const created = yield* createRoom(origin, ana.token, 'Ana')
   yield* Console.log(`  ok  ana created room ${created.code}`)
   const code = created.code

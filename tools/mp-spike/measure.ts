@@ -49,7 +49,9 @@ const report = runScenario({
   now: () => performance.now(),
   onFrame: (frame, model) => {
     pendingEvents.push(...model.frameEvents)
-    if (frame % TICKS_PER_MESSAGE !== TICKS_PER_MESSAGE - 1) return
+    if (frame % TICKS_PER_MESSAGE !== TICKS_PER_MESSAGE - 1) {
+      return
+    }
     if (lastSent !== undefined) {
       const alive = model.zombies.filter(
         zombie => zombie.state._tag === 'Walking',

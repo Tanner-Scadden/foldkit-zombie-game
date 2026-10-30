@@ -303,7 +303,7 @@ export const HarnessConfig = Schema.Struct({
 export type HarnessConfig = typeof HarnessConfig.Type
 
 export const decodeHarnessConfig = (search: string): HarnessConfig =>
-  Schema.decodeUnknownSync(HarnessConfig)(
+  Schema.decodeSync(HarnessConfig)(
     Object.fromEntries(new URLSearchParams(search)),
     { onExcessProperty: 'error', errors: 'all' },
   )

@@ -241,7 +241,7 @@ try {
       )
       if (difference !== undefined) {
         console.log(
-          `  first difference at ${difference.path}: ${JSON.stringify(difference.a)?.slice(0, 120)} vs ${JSON.stringify(difference.b)?.slice(0, 120)}`,
+          `  first difference at ${difference.path}: ${String(JSON.stringify(difference.a)).slice(0, 120)} vs ${String(JSON.stringify(difference.b)).slice(0, 120)}`,
         )
       }
     }

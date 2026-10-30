@@ -237,7 +237,7 @@ const goOffline = async (
 
 // THE AUDIT
 
-const offlinePart = async (context: BrowserContext, page: Page) => {
+const offlinePart = async (page: Page) => {
   const online = await openGame(page, goto(page))
   check(online.isBooted, 'online: the first visit boots')
   await page
@@ -291,7 +291,7 @@ const main = async () => {
   })
   try {
     const page = await context.newPage()
-    const firstCaches = await offlinePart(context, page)
+    const firstCaches = await offlinePart(page)
     if (failures.length > 0) {
       throw new Error('the worker never took control, so offline is moot')
     }

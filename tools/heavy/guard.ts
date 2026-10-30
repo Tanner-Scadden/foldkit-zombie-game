@@ -101,10 +101,10 @@ export class CommandFailedToStart extends Data.TaggedError(
 export class GuardExit extends Data.TaggedError('GuardExit')<{
   readonly code: number
 }> {
-  get [Runtime.errorExitCode](): number {
+  override get [Runtime.errorExitCode](): number {
     return this.code
   }
-  readonly [Runtime.errorReported] = false
+  override readonly [Runtime.errorReported] = false
 }
 
 class NotYet extends Data.TaggedError('NotYet')<{

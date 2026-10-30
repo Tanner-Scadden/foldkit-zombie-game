@@ -209,7 +209,12 @@ const placeClose = (page: Page): Promise<Placed | null> =>
     ({ selector, inset }) => {
       const button = document.querySelector(selector)
       const face = button?.querySelector('.menu-close-face')
-      if (button === null || button === undefined || face == null) {
+      if (
+        button === null ||
+        button === undefined ||
+        face === null ||
+        face === undefined
+      ) {
         return null
       }
       const toBox = (rect: DOMRect) => ({

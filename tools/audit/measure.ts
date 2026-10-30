@@ -45,7 +45,9 @@ const aimTarget = (page: Page) =>
     let best: any
     let bestDistance = Infinity
     for (const z of m.zombies) {
-      if (z.state._tag === 'Dying') continue
+      if (z.state._tag === 'Dying') {
+        continue
+      }
       const d = Math.hypot(z.x - m.player.x, z.y - m.player.y)
       if (d < bestDistance) {
         bestDistance = d
@@ -75,7 +77,9 @@ const mainThreadBusyMs = (events: ReadonlyArray<any>): number => {
   const main = events.find(
     e => e.name === 'thread_name' && e.args?.name === 'CrRendererMain',
   )
-  if (!main) return 0
+  if (!main) {
+    return 0
+  }
   const tasks = events
     .filter(
       e =>
@@ -105,7 +109,9 @@ export const measureScenario = async (
   seconds: number,
 ): Promise<FrameRow> => {
   const scenario = SCENARIOS[name]
-  if (!scenario) throw new Error(`unknown scenario ${name}`)
+  if (!scenario) {
+    throw new Error(`unknown scenario ${name}`)
+  }
   const page = await desktop(browser)
   const cdp = await page.context().newCDPSession(page)
   await page.goto(base + scenario.q + '&instrument')
@@ -113,7 +119,9 @@ export const measureScenario = async (
   let isDone = false
   await scenario.warm()
   const bot = scenario.bot ? runBot(page, () => isDone) : Promise.resolve()
-  if (scenario.bot) await wait(1200)
+  if (scenario.bot) {
+    await wait(1200)
+  }
   await cdp.send('Emulation.setCPUThrottlingRate', { rate })
   await wait(500)
   const m0 = await model(page)
@@ -141,8 +149,11 @@ export const measureScenario = async (
       const tick = (t: number) => {
         deltas.push(t - last)
         last = t
-        if (t < end) requestAnimationFrame(tick)
-        else resolve()
+        if (t < end) {
+          requestAnimationFrame(tick)
+        } else {
+          resolve()
+        }
       }
       requestAnimationFrame(tick)
     })

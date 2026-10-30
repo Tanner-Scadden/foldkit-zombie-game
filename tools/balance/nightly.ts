@@ -68,10 +68,10 @@ class BadSummary extends Data.TaggedError('BadSummary')<{
 class NightlyExit extends Data.TaggedError('NightlyExit')<{
   readonly code: number
 }> {
-  get [Runtime.errorExitCode](): number {
+  override get [Runtime.errorExitCode](): number {
     return this.code
   }
-  readonly [Runtime.errorReported] = false
+  override readonly [Runtime.errorReported] = false
 }
 
 const failWith = (message: string): Effect.Effect<never, NightlyExit> =>
@@ -144,7 +144,7 @@ const readBaseline: Effect.Effect<
 > = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const maybeText = yield* fs.readFileString(BASELINE).pipe(
-    Effect.map(Option.some),
+    Effect.asSome,
     Effect.orElseSucceed(() => Option.none<string>()),
   )
   return yield* Option.match(maybeText, {
@@ -270,12 +270,14 @@ const program = Effect.gen(function* () {
       baselineWrite === 'Extended' && baselineState._tag === 'Compared'
         ? extendBaseline(baselineState.baseline, metrics)
         : baselineOf(metrics, date, commit)
-    const encoded = yield* Schema.encodeEffect(Baseline)(next).pipe(
+    const encoded = yield* Schema.encodeEffect(
+      Schema.fromJsonString(Baseline, { space: 2 }),
+    )(next).pipe(
       Effect.mapError(
         error => new BadSummary({ job: 'baseline', reason: error.message }),
       ),
     )
-    yield* fs.writeFileString(BASELINE, `${JSON.stringify(encoded, null, 2)}\n`)
+    yield* fs.writeFileString(BASELINE, `${encoded}\n`)
     yield* Console.log(`nightly: wrote the baseline to ${BASELINE}`)
   }
   yield* Console.log(`\nnightly: report written to ${reportPath}`)

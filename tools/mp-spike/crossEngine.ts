@@ -78,12 +78,16 @@ const runs: Array<EngineRun> = [
   ]),
 ]
 const workerd = await runWorkerd()
-if (workerd !== undefined) runs.push(workerd)
+if (workerd !== undefined) {
+  runs.push(workerd)
+}
 
 const firstDivergence = (a: EngineRun, b: EngineRun): number | null => {
   const length = Math.max(a.hashes.length, b.hashes.length)
   for (let frame = 0; frame < length; frame++) {
-    if (a.hashes[frame] !== b.hashes[frame]) return frame
+    if (a.hashes[frame] !== b.hashes[frame]) {
+      return frame
+    }
   }
   return null
 }

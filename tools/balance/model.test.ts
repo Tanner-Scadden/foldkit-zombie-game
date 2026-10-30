@@ -347,18 +347,21 @@ describe('guardrails from GAME_DESIGN.md', () => {
     (most, row) => (row.lengthSeconds > most.lengthSeconds ? row : most),
     normal[0]!,
   )
-  if (WAVE_LENGTH_TARGETS.length === 0) {
-    test.todo(
-      `no wave runs longer than its length target, once the pacing pass sets them (now the longest is wave ${longest.wave} at ${longest.lengthSeconds.toFixed(0)} s)`,
-    )
-  } else {
-    WAVE_LENGTH_TARGETS.forEach(({ wave, maxSeconds }) => {
-      const row = normal.find(candidate => candidate.wave === wave)
-      test(`wave ${wave} runs at most ${maxSeconds} s (now ${row?.lengthSeconds.toFixed(0)} s)`, () => {
-        expect(row?.lengthSeconds ?? Infinity).toBeLessThanOrEqual(maxSeconds)
+  Array.match(WAVE_LENGTH_TARGETS, {
+    onEmpty: () => {
+      test.todo(
+        `no wave runs longer than its length target, once the pacing pass sets them (now the longest is wave ${longest.wave} at ${longest.lengthSeconds.toFixed(0)} s)`,
+      )
+    },
+    onNonEmpty: targets => {
+      targets.forEach(({ wave, maxSeconds }) => {
+        const row = normal.find(candidate => candidate.wave === wave)
+        test(`wave ${wave} runs at most ${maxSeconds} s (now ${row?.lengthSeconds.toFixed(0)} s)`, () => {
+          expect(row?.lengthSeconds ?? Infinity).toBeLessThanOrEqual(maxSeconds)
+        })
       })
-    })
-  }
+    },
+  })
 
   const prices = moneyAgainstPrices()
   guardrail(

@@ -43,7 +43,9 @@ await useHarness()
 const browser = await launch()
 for (const viewport of VIEWPORTS as ReadonlyArray<Viewport>) {
   for (const scene of SCENES) {
-    if (!isPickedScene(scene.name)) continue
+    if (!isPickedScene(scene.name)) {
+      continue
+    }
     const page = await openPage(browser, viewport)
     await gotoScene(page, harnessUrl(scene.query, deviceQuery(viewport)))
     await shot(page, `s35-${TAG}-${viewport.name}-${scene.name}`)

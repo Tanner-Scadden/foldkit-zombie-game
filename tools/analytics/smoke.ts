@@ -1,13 +1,4 @@
-import {
-  Array,
-  Console,
-  Data,
-  Effect,
-  Option,
-  Random,
-  Schema,
-  pipe,
-} from 'effect'
+import { Array, Console, Data, Effect, Random, Schema, pipe } from 'effect'
 
 import * as NodeRuntime from '@effect/platform-node/NodeRuntime'
 
@@ -92,10 +83,9 @@ const expectStatus =
         )
 
 const program = Effect.gen(function* () {
-  const origin = yield* Option.match(Array.get(process.argv, 2), {
-    onNone: () => Effect.fail(new SmokeError({ reason: USAGE })),
-    onSome: Effect.succeed,
-  })
+  const origin = yield* Effect.fromOption(Array.get(process.argv, 2)).pipe(
+    Effect.mapError(() => new SmokeError({ reason: USAGE })),
+  )
   const visitId = yield* randomVisitId
   const body = yield* pipe(
     Schema.encodeEffect(RunSummaryJson)(smokeSummary(visitId)),

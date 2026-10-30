@@ -46,7 +46,7 @@ export const readTextIfPresent = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     return yield* fs.readFileString(path).pipe(
-      Effect.map(Option.some),
+      Effect.asSome,
       Effect.catchReason('PlatformError', 'NotFound', () => Effect.succeedNone),
     )
   })

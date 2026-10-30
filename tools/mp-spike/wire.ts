@@ -58,13 +58,23 @@ const varintBytes = (value: number): number => {
 
 export const valueBytes = (key: string, value: unknown): number => {
   if (typeof value === 'number') {
-    if (key === 'x' || key === 'y') return 2
-    if (key.endsWith('Ms')) return varintBytes(Math.round(value))
-    if (Number.isInteger(value)) return varintBytes(value)
+    if (key === 'x' || key === 'y') {
+      return 2
+    }
+    if (key.endsWith('Ms')) {
+      return varintBytes(Math.round(value))
+    }
+    if (Number.isInteger(value)) {
+      return varintBytes(value)
+    }
     return 2
   }
-  if (typeof value === 'string' || typeof value === 'boolean') return 1
-  if (value === null || value === undefined) return 0
+  if (typeof value === 'string' || typeof value === 'boolean') {
+    return 1
+  }
+  if (value === null || value === undefined) {
+    return 0
+  }
   if (Array.isArray(value)) {
     return value.reduce<number>(
       (bytes, item) => bytes + valueBytes(key, item),
@@ -86,7 +96,9 @@ const TOKEN = /([.#+-])([^.#+-]+)/g
 const valueAt = (root: unknown, path: string): unknown => {
   let current: unknown = root
   for (const [, sigil, name] of path.matchAll(TOKEN)) {
-    if (current === null || typeof current !== 'object') return undefined
+    if (current === null || typeof current !== 'object') {
+      return undefined
+    }
     if (sigil === '#') {
       const id = Number(name)
       current = (current as ReadonlyArray<{ id?: number }>).find(
@@ -107,9 +119,13 @@ const isPlainCountdown = (
   value: unknown,
   elapsedMs: number,
 ): boolean => {
-  if (typeof value !== 'number' || !/Ms$/.test(path)) return false
+  if (typeof value !== 'number' || !path.endsWith('Ms')) {
+    return false
+  }
   const previous = valueAt(before, path)
-  if (typeof previous !== 'number') return false
+  if (typeof previous !== 'number') {
+    return false
+  }
   const step = Math.abs(previous - value)
   return Math.abs(step - elapsedMs) < 1e-6 || (value === 0 && step < elapsedMs)
 }
@@ -142,7 +158,9 @@ export const wireSample = (
   const entitiesSeen = new Set<string>()
   changes.forEach(([path, value]) => {
     const top = path.split(/[.#+-]/)[1] ?? ''
-    if (NOT_SENT.has(top)) return
+    if (NOT_SENT.has(top)) {
+      return
+    }
     const entity = path.match(/^\.(\w+)([#+-])(\d+)/)
     const leafKey = path.split(/[.#+-]/).pop() ?? ''
     let bytes: number

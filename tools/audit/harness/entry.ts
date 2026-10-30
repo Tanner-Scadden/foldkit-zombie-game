@@ -5,7 +5,8 @@ import { Effect, Layer, Option, Queue, Schema, Stream } from 'effect'
 import '@game/spriteAtlasBoot'
 
 import './harness.css'
-import { Canvas, Dom, ManagedResource, Runtime, Subscription } from 'foldkit'
+import type { ManagedResource } from 'foldkit'
+import { Canvas, Dom, Runtime, Subscription } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
@@ -44,27 +45,27 @@ import { sceneShapes } from '@game/layers'
 import { init, update } from '@game/main'
 import { Message } from '@game/message'
 import {
-  DifficultyCard,
-  Oven,
-  Trap,
-  Model,
-  Phase,
+  type Appearance,
   Arsenal,
   BreakClock,
-  FridgeDoor,
-  MouseButton,
-  Stick,
-  type WeaponKind,
-  ZombieAction,
-  RunMode,
-  initialModel,
-  Lesson,
-  TrapHint,
-  type Appearance,
-  defaultAppearance,
   type Decal,
   type DecalKind,
+  DifficultyCard,
+  FridgeDoor,
+  Lesson,
+  Model,
+  MouseButton,
+  Oven,
+  Phase,
   type PickupKind,
+  RunMode,
+  Stick,
+  Trap,
+  TrapHint,
+  type WeaponKind,
+  ZombieAction,
+  defaultAppearance,
+  initialModel,
 } from '@game/model'
 import { raiseDebutCard } from '@game/onboarding'
 import { advanceParticles } from '@game/particles'
@@ -199,7 +200,7 @@ const LID_FLIGHT_MS = 520
 const withLeftovers = (start: Model): Model => {
   let model = start
   const door = config.fridge
-  if (door !== undefined)
+  if (door !== undefined) {
     model = modifyFields(model, {
       fridge: fridge => ({
         ...fridge,
@@ -217,13 +218,15 @@ const withLeftovers = (start: Model): Model => {
               }),
       }),
     })
+  }
   const fridgeSeed = config.fridgeseed
-  if (fridgeSeed !== undefined)
+  if (fridgeSeed !== undefined) {
     model = modifyFields(model, {
       loot: loot => ({ ...loot, fridgeRngState: fridgeSeed >>> 0 }),
     })
+  }
   const iced = config.iced
-  if (iced !== undefined)
+  if (iced !== undefined) {
     model = modifyFields(model, {
       zombies: zombies => [
         ...zombies,
@@ -243,6 +246,7 @@ const withLeftovers = (start: Model): Model => {
         })),
       ],
     })
+  }
   if (config.lobs) {
     const landsInMs = Math.max(20, ((config.tick ?? 0) - 5) * (1000 / 60))
     const flights = [
@@ -274,7 +278,9 @@ const withLeftovers = (start: Model): Model => {
 
 const roomModel = (): Model => {
   const wave = config.wave
-  if (wave === 0) return initialModel
+  if (wave === 0) {
+    return initialModel
+  }
   const mode =
     config.mode === 'endless' ? RunMode.Endless() : RunMode.Campaign()
   const begun = startOrResume(initialModel, mode)
@@ -791,11 +797,12 @@ const roomModel = (): Model => {
       stagedZombie(1781, 'Crawler', px + 40, py + 20),
     )
   }
-  if (staged.length > 0)
+  if (staged.length > 0) {
     model = modifyFields(model, {
       zombies: zombies => [...zombies, ...staged] as any,
       nextEntityId: () => 3000,
     })
+  }
   const sampleStats = {
     kills: {
       Shambler: 41,
@@ -813,26 +820,30 @@ const roomModel = (): Model => {
     trapsPlaced: 3,
     runMs: 371_000,
   }
-  if (config.stats)
+  if (config.stats) {
     model = modifyFields(model, {
       stats: s => ({ ...s, ...sampleStats }),
       wallet: w => ({ ...w, earned: 615 }),
     })
-  if (config.py !== undefined)
+  }
+  if (config.py !== undefined) {
     model = modifyFields(model, {
       player: p => ({ ...p, x: config.px ?? p.x, y: py }),
       hintBand: () => (py < 70 ? 'Bottom' : 'Top'),
     })
+  }
   const { best, pistol, aim, card } = config
-  if (best !== undefined)
+  if (best !== undefined) {
     model = withBests(model, bests => ({
       ...bests,
       maybeBestEndlessWave: Option.some(best),
     }))
-  if (pistol !== undefined)
+  }
+  if (pistol !== undefined) {
     model = modifyFields(model, {
       player: p => ({ ...p, pistolTier: pistol }),
     })
+  }
   if (aim !== undefined) {
     const [aimX, aimY] = aim
     model = modifyFields(model, {
@@ -874,20 +885,23 @@ const roomModel = (): Model => {
             },
     })
   }
-  if (config.device === 'touch')
+  if (config.device === 'touch') {
     model = modifyFields(model, { lastDevice: () => 'Touch' as const })
+  }
   const seen = config.seen
-  if (seen !== undefined)
+  if (seen !== undefined) {
     model = raiseDebutCard(
       modifyFields(model, {
         introducedKinds: () => (seen === 'all' ? ZOMBIE_KIND_ORDER : seen),
       }),
     )
+  }
   const debutCard = model.debutCard
-  if (card !== undefined && debutCard._tag === 'Showing')
+  if (card !== undefined && debutCard._tag === 'Showing') {
     model = modifyFields(model, {
       debutCard: () => ({ ...debutCard, ageMs: card }),
     })
+  }
   const PICKUP_KINDS: ReadonlyArray<PickupKind> = [
     'RapidFire',
     'Damage',
@@ -915,8 +929,9 @@ const roomModel = (): Model => {
     })
   }
   const seenPowerUps = kindsOf(config.seenpowerups)
-  if (seenPowerUps.length > 0)
+  if (seenPowerUps.length > 0) {
     model = modifyFields(model, { seenPowerUps: () => seenPowerUps })
+  }
   const boostKinds = kindsOf(config.boosts).filter(
     kind => kind !== 'Burp' && kind !== 'Heart',
   )
@@ -937,7 +952,7 @@ const roomModel = (): Model => {
     })
   }
   const calloutKind = config.callout
-  if (calloutKind !== undefined)
+  if (calloutKind !== undefined) {
     model = modifyFields(model, {
       callouts: () => [
         {
@@ -949,7 +964,8 @@ const roomModel = (): Model => {
         },
       ],
     })
-  if (config.bounty)
+  }
+  if (config.bounty) {
     model = modifyFields(model, {
       popups: () => [
         {
@@ -978,8 +994,9 @@ const roomModel = (): Model => {
         },
       ],
     })
+  }
   const phase = config.phase
-  if (phase === 'victory')
+  if (phase === 'victory') {
     model = modifyFields(model, {
       phase: () => Phase.Victory(),
       stats: s => ({
@@ -988,8 +1005,11 @@ const roomModel = (): Model => {
         kills: { ...s.kills, Shambler: s.kills.Shambler + 432 },
       }),
     })
-  if (phase === 'paused') model = pause(model)
-  if (phase === 'gameover')
+  }
+  if (phase === 'paused') {
+    model = pause(model)
+  }
+  if (phase === 'gameover') {
     model = modifyFields(model, {
       phase: () => Phase.GameOver({ wave }),
       stats: s => ({
@@ -997,6 +1017,7 @@ const roomModel = (): Model => {
         kills: { ...s.kills, Shambler: s.kills.Shambler + 123 },
       }),
     })
+  }
   return model
 }
 
@@ -1187,7 +1208,9 @@ const coopScreen = (stage: NonNullable<typeof config.coop>) => {
 // as an online run does (src/coopPlay.ts).
 const withCoop = (model: Model): Model => {
   const stage = config.coop
-  if (stage === undefined) return model
+  if (stage === undefined) {
+    return model
+  }
   const staged = modifyFields(model, {
     lessons: lessons => ({
       ...lessons,
@@ -1203,12 +1226,13 @@ const scenarioModel = (): Model => withCoop(scenarioModelOf())
 const scenarioModelOf = (): Model => {
   let model = roomModel()
   const runs = config.runs
-  if (runs !== undefined)
+  if (runs !== undefined) {
     model = modifyFields(model, {
       bests: bests => ({ ...bests, runsPlayed: runs }),
     })
+  }
   const learned = config.learned
-  if (learned !== undefined)
+  if (learned !== undefined) {
     model = modifyFields(model, {
       lessons: lessons => ({
         ...lessons,
@@ -1217,26 +1241,32 @@ const scenarioModelOf = (): Model => {
         ),
       }),
     })
+  }
   const traphint = config.traphint
-  if (traphint !== undefined)
+  if (traphint !== undefined) {
     model = modifyFields(model, {
       trapHint: () => TrapHint.Showing(),
       selectedTrap: () => traphint,
     })
+  }
   const newer = config.newer
-  if (newer !== undefined)
+  if (newer !== undefined) {
     model = modifyFields(model, {
       maybeNewerBuild: () => Option.some(newer || 'next'),
     })
-  if (config.unwrap)
+  }
+  if (config.unwrap) {
     model = modifyFields(model, { updateGift: () => 'Unwrapping' })
-  if (config.install)
+  }
+  if (config.install) {
     model = modifyFields(model, { installOffer: () => 'Ready' })
-  if (config.support)
+  }
+  if (config.support) {
     model = modifyFields(model, {
       maybeSupportUrl: () => Option.some('https://buy.stripe.com/test_harness'),
     })
-  if (config.bests)
+  }
+  if (config.bests) {
     model = modifyFields(
       withBests(model, () => ({
         maybeBestEndlessWave: Option.some(12),
@@ -1244,6 +1274,7 @@ const scenarioModelOf = (): Model => {
       })),
       { bests: bests => ({ ...bests, totalKills: 341 }) },
     )
+  }
   const kills = config.kills
   if (kills !== undefined) {
     const counts = Object.fromEntries(kills)
@@ -1281,7 +1312,7 @@ const scenarioModelOf = (): Model => {
     }),
   })
   const ovenState = config.ovens
-  if (ovenState !== undefined)
+  if (ovenState !== undefined) {
     model = modifyFields(model, {
       ovens: ovens =>
         ovens.map(() =>
@@ -1290,7 +1321,8 @@ const scenarioModelOf = (): Model => {
             : Oven.Cooling({ remainingMs: config.ovenMs }),
         ),
     })
-  if (config.slip)
+  }
+  if (config.slip) {
     model = modifyFields(model, {
       zombies: zombies => [
         ...zombies,
@@ -1314,9 +1346,10 @@ const scenarioModelOf = (): Model => {
         })),
       ],
     })
+  }
   model = withLeftovers(model)
   const planks = config.planks
-  if (planks !== undefined)
+  if (planks !== undefined) {
     model = modifyFields(model, {
       traps: traps => [
         ...traps,
@@ -1330,6 +1363,7 @@ const scenarioModelOf = (): Model => {
         ),
       ],
     })
+  }
   const chewers = config.chewers
   if (chewers > 0) {
     const spots = [
@@ -1405,8 +1439,9 @@ const scenarioModelOf = (): Model => {
     })
   }
   const name = config.name
-  if (name !== undefined)
+  if (name !== undefined) {
     model = modifyFields(model, { playerName: () => name })
+  }
   const sync = config.sync
   if (sync !== undefined) {
     const devices = config.devices
@@ -1426,7 +1461,7 @@ const scenarioModelOf = (): Model => {
     })
   }
   const link = config.link
-  if (link !== undefined)
+  if (link !== undefined) {
     model = modifyFields(model, {
       linkFlow: () =>
         link === 'requesting'
@@ -1441,6 +1476,7 @@ const scenarioModelOf = (): Model => {
                   ? LinkFlow.Linked()
                   : LinkFlow.Failed({ problem: 'WrongCode' }),
     })
+  }
   const look = config.look
   if (look !== undefined) {
     const [
@@ -1485,7 +1521,9 @@ const topUpGasbags = (model: Model): Model => {
     z => z.kind === 'Exploder' && z.state._tag === 'Walking',
   ).length
   const missing = Math.max(0, Math.min(4, gasbagRoom - alive))
-  if (missing === 0 || model.phase._tag !== 'Wave') return model
+  if (missing === 0 || model.phase._tag !== 'Wave') {
+    return model
+  }
   const fresh = Array.from({ length: missing }, (_, i) => {
     const [x, y] = GASBAG_DOORS[(model.nextEntityId + i) % GASBAG_DOORS.length]!
     return {
@@ -1590,8 +1628,12 @@ const gameUpdate = (model: Model, incoming: Message): HarnessReturn => {
   const isFrozenFrame =
     incoming._tag === 'TickedFrame' && framesRun >= freezeAfter
   const isFreezing = Number.isFinite(freezeAfter)
-  if (isFrozenFrame) return { model }
-  if (isFreezing && incoming._tag === 'CompletedGenerateSeed') return { model }
+  if (isFrozenFrame) {
+    return { model }
+  }
+  if (isFreezing && incoming._tag === 'CompletedGenerateSeed') {
+    return { model }
+  }
   // NOTE: a frozen run starts counting frames once the surface is measured,
   // so how long the first render takes cannot change which frame the
   // measurement lands on, and two builds freeze on the same picture.
@@ -1599,30 +1641,40 @@ const gameUpdate = (model: Model, incoming: Message): HarnessReturn => {
     isFreezing &&
     incoming._tag === 'TickedFrame' &&
     Option.isNone(model.maybeSurface)
-  )
+  ) {
     return { model }
-  if (config.fit !== undefined && incoming._tag === 'CompletedDetectScreenFit')
+  }
+  if (
+    config.fit !== undefined &&
+    incoming._tag === 'CompletedDetectScreenFit'
+  ) {
     return {
       model: modifyFields(model, {
         screenFit: () => (config.fit === 'home' ? 'HomeScreen' : 'Fullscreen'),
       }),
     }
+  }
   if (
     config.sync !== undefined &&
     (incoming._tag === 'UpdatedSyncStatus' ||
       incoming._tag === 'UpdatedPlayerScopeStatus')
-  )
+  ) {
     return { model }
-  if (config.rotate && incoming._tag === 'CompletedDetectOrientationLock')
+  }
+  if (config.rotate && incoming._tag === 'CompletedDetectOrientationLock') {
     return {
       model: modifyFields(model, { orientationLock: () => 'Supported' }),
     }
+  }
   // NOTE: `install` keeps Chrome's offer on, and `greet` reads as the page
   // just reloaded onto this build. The gift never reloads the harness: it
   // stays mid-unwrap, as `unwrap` shows it.
-  if (config.install && incoming._tag === 'ChangedInstallOffer')
+  if (config.install && incoming._tag === 'ChangedInstallOffer') {
     return { model }
-  if (incoming._tag === 'CompletedWaitForUnwrap') return { model }
+  }
+  if (incoming._tag === 'CompletedWaitForUnwrap') {
+    return { model }
+  }
   const message =
     incoming._tag === 'TickedFrame' && isFreezing
       ? Message.TickedFrame({ deltaTime: FIXED_FRAME_MS })
@@ -1631,12 +1683,15 @@ const gameUpdate = (model: Model, incoming: Message): HarnessReturn => {
             maybeBuild: Option.some(RUNNING_BUILD),
           })
         : incoming
-  if (message._tag === 'TickedFrame') framesRun++
+  if (message._tag === 'TickedFrame') {
+    framesRun++
+  }
   w.__isFrozen = framesRun >= freezeAfter
   const t0 = performance.now()
   const result = update(model, message)
-  if (instrument && message._tag === 'TickedFrame')
+  if (instrument && message._tag === 'TickedFrame') {
     w.__timings.update.push(performance.now() - t0)
+  }
   const next = keepScene(result, message)
   w.__model = next.model
   return next
@@ -2023,10 +2078,14 @@ const application = Runtime.makeApplication({
   init: harnessInit,
   update: harnessUpdate,
   view: (model: Model, h: any) => {
-    if (config.looksheet) return lookSheetView(h)
+    if (config.looksheet) {
+      return lookSheetView(h)
+    }
     const t0 = performance.now()
     const out = view(model, h)
-    if (instrument) w.__timings.view.push(performance.now() - t0)
+    if (instrument) {
+      w.__timings.view.push(performance.now() - t0)
+    }
     return out
   },
   subscriptions: Subscription.aggregate(subscriptions, harnessSubscriptions),

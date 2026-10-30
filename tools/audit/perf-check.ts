@@ -47,7 +47,9 @@ const waitForServer = async (url: string) => {
     const isUp = await fetch(url)
       .then(response => response.ok)
       .catch(() => false)
-    if (isUp) return
+    if (isUp) {
+      return
+    }
     await wait(100)
   }
   throw new Error(`the harness never answered at ${url}`)
@@ -59,7 +61,9 @@ const buildHarness = async () => {
     stdout: 'ignore',
     stderr: 'inherit',
   })
-  if ((await build.exited) !== 0) throw new Error('the harness build failed')
+  if ((await build.exited) !== 0) {
+    throw new Error('the harness build failed')
+  }
 }
 
 const startPreview = (): Subprocess =>
@@ -85,7 +89,9 @@ const stopPreview = (server: Subprocess) => {
 
 const bestOf = (trials: ReadonlyArray<FrameRow>): FrameRow => {
   const [first, ...rest] = trials
-  if (!first) throw new Error('no trials ran')
+  if (!first) {
+    throw new Error('no trials ran')
+  }
   return rest.reduce(
     (best, row) => ({
       ...best,
@@ -248,7 +254,9 @@ const main = async () => {
     }
     return compare(measured, await file.json())
   } finally {
-    if (server) stopPreview(server)
+    if (server) {
+      stopPreview(server)
+    }
   }
 }
 

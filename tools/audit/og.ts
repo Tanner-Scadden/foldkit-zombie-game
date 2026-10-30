@@ -33,7 +33,9 @@ export { logoLetterPixels, MUNCH_LOOK, MANOR_LOOK, TITLE_WORDS, LOGO_GAP, LOGO_L
     build.onLoad({ filter: /tools\/audit\/icons\.ts$/ }, async ({ path }) => {
       const source = await Bun.file(path).text()
       const end = source.indexOf('// SVG')
-      if (end < 0) throw new Error('icons.ts has no // SVG section')
+      if (end < 0) {
+        throw new Error('icons.ts has no // SVG section')
+      }
       return {
         contents: `${source.slice(0, end)}
 export { PALETTE, BIG_HEAD }
@@ -121,7 +123,9 @@ const paintRows = (
         const cell = row[start] ?? '.'
         if (cell !== '.') {
           const color = palette[cell]
-          if (color === undefined) throw new Error(`no color for ${cell}`)
+          if (color === undefined) {
+            throw new Error(`no color for ${cell}`)
+          }
           fill(
             left + start * scale,
             top + y * scale,
@@ -155,7 +159,7 @@ type Letter = Readonly<{ rows: Rows; palette: Palette; bob: number }>
 // frame, so the letters sit at the jaunty tilt the game opens on.
 const LOGO: ReadonlyArray<ReadonlyArray<Letter>> = screens.TITLE_WORDS.map(
   (word, line) =>
-    [...word].map((glyph, index) => ({
+    Array.from(word).map((glyph, index) => ({
       rows: screens.logoLetterPixels(glyph, line * 5 + index),
       palette: (line % 2 === 0 ? screens.MUNCH_LOOK : screens.MANOR_LOOK)
         .palette,
@@ -231,8 +235,9 @@ for (let gy = -16; gy <= 16; gy++) {
           : distance < 16
             ? COLORS.glowOuter
             : undefined
-    if (color !== undefined && y + HEAD_SCALE <= FLOOR_TOP)
+    if (color !== undefined && y + HEAD_SCALE <= FLOOR_TOP) {
       fill(Math.round(x), Math.round(y), HEAD_SCALE, HEAD_SCALE, color)
+    }
   }
 }
 
@@ -259,8 +264,9 @@ const BOARD_H = 24
 for (let row = 0; FLOOR_TOP + 5 + row * BOARD_H < HEIGHT; row++) {
   const top = FLOOR_TOP + 5 + row * BOARD_H
   fill(0, top + BOARD_H - 4, WIDTH, 4, COLORS.seam)
-  for (let x = (row % 2) * 90 - 60; x < WIDTH; x += 180)
+  for (let x = (row % 2) * 90 - 60; x < WIDTH; x += 180) {
     fill(x, top, 4, BOARD_H - 4, COLORS.seam)
+  }
 }
 
 // FOREGROUND
@@ -311,7 +317,9 @@ await page.setContent(
 await page.evaluate((list: ReadonlyArray<Rect>) => {
   const canvas = document.querySelector('canvas')
   const context2d = canvas?.getContext('2d')
-  if (context2d == null) throw new Error('no canvas')
+  if (context2d === null || context2d === undefined) {
+    throw new Error('no canvas')
+  }
   for (const rect of list) {
     context2d.fillStyle = rect.fill
     context2d.fillRect(rect.x, rect.y, rect.width, rect.height)

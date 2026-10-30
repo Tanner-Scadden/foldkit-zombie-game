@@ -115,7 +115,9 @@ const browser = await launch()
 const problems: Array<string> = []
 for (const viewport of VIEWPORTS) {
   for (const scene of SCENES) {
-    if (!isPickedScene(scene.name)) continue
+    if (!isPickedScene(scene.name)) {
+      continue
+    }
     const page = await openPage(browser, viewport)
     const label = `${viewport.name} ${scene.name}`
     page.on('pageerror', error => problems.push(`${label}: ${String(error)}`))

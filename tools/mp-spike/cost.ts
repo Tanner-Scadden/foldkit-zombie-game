@@ -91,7 +91,9 @@ const shardSecondsOfDay = (
     if (chosen === undefined) {
       shards.push({ ends: [start + roomSeconds], busySince: start })
     } else {
-      if (chosen.ends.length === 0) chosen.busySince = start
+      if (chosen.ends.length === 0) {
+        chosen.busySince = start
+      }
       chosen.ends.push(start + roomSeconds)
     }
   })
