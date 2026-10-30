@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover"
     />
     <meta name="theme-color" content="#3b2160" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -32,7 +32,11 @@
         gap: 14px;
         background: radial-gradient(circle at 50% 42%, #3b2160, #160b24 70%);
         color: #f4f1de;
-        font: bold 14px/1.2 ui-monospace, Menlo, Consolas, monospace;
+        font:
+          bold 14px/1.2 ui-monospace,
+          Menlo,
+          Consolas,
+          monospace;
         transition: opacity 0.2s linear;
       }
       #splash.is-gone {
@@ -115,7 +119,10 @@
       name="description"
       content="A goofy, gory pixel zombie shooter. Hold a haunted manor through 8 waves, then face Uncle Chunk. Free in your browser on phone or computer."
     />
-    <link rel="canonical" href="https://munch-manor.tanner-scadden.workers.dev/" />
+    <link
+      rel="canonical"
+      href="https://munch-manor.tanner-scadden.workers.dev/"
+    />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Munch Manor" />
     <meta property="og:title" content="Munch Manor" />
@@ -123,7 +130,10 @@
       property="og:description"
       content="Survive 8 waves of zombies in a haunted manor. Try not to get eaten. Free in your browser."
     />
-    <meta property="og:url" content="https://munch-manor.tanner-scadden.workers.dev/" />
+    <meta
+      property="og:url"
+      content="https://munch-manor.tanner-scadden.workers.dev/"
+    />
     <meta
       property="og:image"
       content="https://munch-manor.tanner-scadden.workers.dev/og-image.png"
@@ -153,16 +163,46 @@
     <div id="splash" role="status" aria-live="polite" aria-busy="true">
       <!-- splash-zombie: written by tools/audit/icons.ts -->
       <svg class="splash-zombie" viewBox="0 0 22 24" aria-hidden="true">
-        <path fill="#140c10" d="M7 0h8v1h-8zM5 1h2v1h-2zM4 2h1v1h-1zM17 2h1v1h-1zM3 3h1v1h-1zM18 3h1v1h-1zM2 4h1v1h-1zM19 4h1v1h-1zM2 5h1v1h-1zM19 5h1v1h-1zM1 6h1v1h-1zM20 6h1v1h-1zM1 7h1v1h-1zM20 7h1v1h-1zM1 8h1v1h-1zM20 8h1v1h-1zM1 9h1v1h-1zM20 9h1v1h-1zM1 10h1v1h-1zM20 10h1v1h-1zM0 11h1v1h-1zM21 11h1v1h-1zM0 12h1v1h-1zM21 12h1v1h-1zM0 13h1v1h-1zM21 13h1v1h-1zM0 14h1v1h-1zM21 14h1v1h-1zM0 15h1v1h-1zM21 15h1v1h-1zM0 16h1v1h-1zM21 16h1v1h-1zM0 17h1v1h-1zM21 17h1v1h-1zM1 18h1v1h-1zM20 18h1v1h-1zM2 19h1v1h-1zM19 19h1v1h-1zM3 20h1v1h-1zM18 20h1v1h-1zM5 21h1v1h-1zM16 21h2v1h-2zM6 22h10v1h-10z" />
-        <path fill="#d8f7b0" d="M7 1h4v1h-4zM5 2h3v1h-3zM4 3h2v1h-2zM3 4h1v1h-1zM3 5h1v1h-1zM2 6h1v1h-1zM2 7h1v1h-1zM2 8h1v1h-1zM2 9h1v1h-1zM2 10h1v1h-1zM1 11h1v1h-1zM1 12h1v1h-1zM1 13h1v1h-1zM1 14h1v1h-1zM1 15h1v1h-1zM1 16h1v1h-1zM1 17h1v1h-1zM2 18h1v1h-1z" />
-        <path fill="#3f7f2a" d="M11 1h2v1h-2zM17 3h1v1h-1zM18 4h1v1h-1zM18 5h1v1h-1zM4 6h4v1h-4zM14 6h4v1h-4zM19 6h1v1h-1zM19 7h1v1h-1zM19 8h1v1h-1zM19 9h1v1h-1zM10 10h2v1h-2zM19 10h1v1h-1zM20 11h1v1h-1zM20 12h1v1h-1zM20 13h1v1h-1zM20 14h1v1h-1zM20 15h1v1h-1zM20 16h1v1h-1zM20 17h1v1h-1zM19 18h1v1h-1zM3 19h1v1h-1zM18 19h1v1h-1zM5 20h1v1h-1zM16 20h2v1h-2zM6 21h10v1h-10z" />
-        <path fill="#f28fb0" d="M13 1h4v1h-4zM12 2h1v1h-1zM14 2h3v1h-3zM12 3h2v1h-2zM16 3h1v1h-1zM14 4h2v1h-2z" />
-        <path fill="#8fdc5a" d="M8 2h4v1h-4zM6 3h6v1h-6zM4 4h9v1h-9zM16 4h2v1h-2zM4 5h14v1h-14zM3 6h1v1h-1zM8 6h6v1h-6zM18 6h1v1h-1zM3 7h1v1h-1zM8 7h6v1h-6zM18 7h1v1h-1zM3 8h1v1h-1zM8 8h6v1h-6zM18 8h1v1h-1zM3 9h1v1h-1zM8 9h6v1h-6zM18 9h1v1h-1zM3 10h7v1h-7zM12 10h7v1h-7zM2 11h18v1h-18zM2 12h1v1h-1zM19 12h1v1h-1zM2 13h1v1h-1zM19 13h1v1h-1zM2 14h1v1h-1zM19 14h1v1h-1zM2 15h1v1h-1zM19 15h1v1h-1zM2 16h1v1h-1zM19 16h1v1h-1zM2 17h1v1h-1zM19 17h1v1h-1zM3 18h1v1h-1zM5 18h14v1h-14zM5 19h13v1h-13zM6 20h10v1h-10z" />
-        <path fill="#c0587a" d="M13 2h1v1h-1zM14 3h2v1h-2zM13 4h1v1h-1zM9 15h4v1h-4z" />
-        <path fill="#f4f1de" d="M4 7h4v1h-4zM4 8h2v1h-2zM4 9h2v1h-2zM3 13h3v1h-3zM7 13h3v1h-3zM12 13h3v1h-3zM16 13h3v1h-3zM4 14h1v1h-1zM8 14h1v1h-1zM13 14h1v1h-1zM17 14h1v1h-1zM6 16h1v1h-1zM10 16h2v1h-2zM15 16h1v1h-1zM5 17h3v1h-3zM9 17h4v1h-4zM14 17h3v1h-3z" />
-        <path fill="#2a1418" d="M14 7h4v1h-4zM14 8h1v1h-1zM17 8h1v1h-1zM14 9h1v1h-1zM17 9h1v1h-1zM3 12h16v1h-16zM6 13h1v1h-1zM10 13h2v1h-2zM15 13h1v1h-1zM3 14h1v1h-1zM5 14h3v1h-3zM9 14h4v1h-4zM14 14h3v1h-3zM18 14h1v1h-1zM3 15h6v1h-6zM13 15h6v1h-6zM3 16h3v1h-3zM7 16h3v1h-3zM12 16h3v1h-3zM16 16h3v1h-3zM3 17h2v1h-2zM8 17h1v1h-1zM13 17h1v1h-1zM17 17h2v1h-2z" />
-        <path fill="#e8333a" d="M6 8h2v1h-2zM15 8h2v1h-2zM6 9h2v1h-2zM15 9h2v1h-2z" />
-        <path fill="#c4232b" d="M4 18h1v1h-1zM4 19h1v1h-1zM4 20h1v1h-1zM3 21h2v1h-2zM3 22h1v1h-1zM3 23h1v1h-1z" />
+        <path
+          fill="#140c10"
+          d="M7 0h8v1h-8zM5 1h2v1h-2zM4 2h1v1h-1zM17 2h1v1h-1zM3 3h1v1h-1zM18 3h1v1h-1zM2 4h1v1h-1zM19 4h1v1h-1zM2 5h1v1h-1zM19 5h1v1h-1zM1 6h1v1h-1zM20 6h1v1h-1zM1 7h1v1h-1zM20 7h1v1h-1zM1 8h1v1h-1zM20 8h1v1h-1zM1 9h1v1h-1zM20 9h1v1h-1zM1 10h1v1h-1zM20 10h1v1h-1zM0 11h1v1h-1zM21 11h1v1h-1zM0 12h1v1h-1zM21 12h1v1h-1zM0 13h1v1h-1zM21 13h1v1h-1zM0 14h1v1h-1zM21 14h1v1h-1zM0 15h1v1h-1zM21 15h1v1h-1zM0 16h1v1h-1zM21 16h1v1h-1zM0 17h1v1h-1zM21 17h1v1h-1zM1 18h1v1h-1zM20 18h1v1h-1zM2 19h1v1h-1zM19 19h1v1h-1zM3 20h1v1h-1zM18 20h1v1h-1zM5 21h1v1h-1zM16 21h2v1h-2zM6 22h10v1h-10z"
+        />
+        <path
+          fill="#d8f7b0"
+          d="M7 1h4v1h-4zM5 2h3v1h-3zM4 3h2v1h-2zM3 4h1v1h-1zM3 5h1v1h-1zM2 6h1v1h-1zM2 7h1v1h-1zM2 8h1v1h-1zM2 9h1v1h-1zM2 10h1v1h-1zM1 11h1v1h-1zM1 12h1v1h-1zM1 13h1v1h-1zM1 14h1v1h-1zM1 15h1v1h-1zM1 16h1v1h-1zM1 17h1v1h-1zM2 18h1v1h-1z"
+        />
+        <path
+          fill="#3f7f2a"
+          d="M11 1h2v1h-2zM17 3h1v1h-1zM18 4h1v1h-1zM18 5h1v1h-1zM4 6h4v1h-4zM14 6h4v1h-4zM19 6h1v1h-1zM19 7h1v1h-1zM19 8h1v1h-1zM19 9h1v1h-1zM10 10h2v1h-2zM19 10h1v1h-1zM20 11h1v1h-1zM20 12h1v1h-1zM20 13h1v1h-1zM20 14h1v1h-1zM20 15h1v1h-1zM20 16h1v1h-1zM20 17h1v1h-1zM19 18h1v1h-1zM3 19h1v1h-1zM18 19h1v1h-1zM5 20h1v1h-1zM16 20h2v1h-2zM6 21h10v1h-10z"
+        />
+        <path
+          fill="#f28fb0"
+          d="M13 1h4v1h-4zM12 2h1v1h-1zM14 2h3v1h-3zM12 3h2v1h-2zM16 3h1v1h-1zM14 4h2v1h-2z"
+        />
+        <path
+          fill="#8fdc5a"
+          d="M8 2h4v1h-4zM6 3h6v1h-6zM4 4h9v1h-9zM16 4h2v1h-2zM4 5h14v1h-14zM3 6h1v1h-1zM8 6h6v1h-6zM18 6h1v1h-1zM3 7h1v1h-1zM8 7h6v1h-6zM18 7h1v1h-1zM3 8h1v1h-1zM8 8h6v1h-6zM18 8h1v1h-1zM3 9h1v1h-1zM8 9h6v1h-6zM18 9h1v1h-1zM3 10h7v1h-7zM12 10h7v1h-7zM2 11h18v1h-18zM2 12h1v1h-1zM19 12h1v1h-1zM2 13h1v1h-1zM19 13h1v1h-1zM2 14h1v1h-1zM19 14h1v1h-1zM2 15h1v1h-1zM19 15h1v1h-1zM2 16h1v1h-1zM19 16h1v1h-1zM2 17h1v1h-1zM19 17h1v1h-1zM3 18h1v1h-1zM5 18h14v1h-14zM5 19h13v1h-13zM6 20h10v1h-10z"
+        />
+        <path
+          fill="#c0587a"
+          d="M13 2h1v1h-1zM14 3h2v1h-2zM13 4h1v1h-1zM9 15h4v1h-4z"
+        />
+        <path
+          fill="#f4f1de"
+          d="M4 7h4v1h-4zM4 8h2v1h-2zM4 9h2v1h-2zM3 13h3v1h-3zM7 13h3v1h-3zM12 13h3v1h-3zM16 13h3v1h-3zM4 14h1v1h-1zM8 14h1v1h-1zM13 14h1v1h-1zM17 14h1v1h-1zM6 16h1v1h-1zM10 16h2v1h-2zM15 16h1v1h-1zM5 17h3v1h-3zM9 17h4v1h-4zM14 17h3v1h-3z"
+        />
+        <path
+          fill="#2a1418"
+          d="M14 7h4v1h-4zM14 8h1v1h-1zM17 8h1v1h-1zM14 9h1v1h-1zM17 9h1v1h-1zM3 12h16v1h-16zM6 13h1v1h-1zM10 13h2v1h-2zM15 13h1v1h-1zM3 14h1v1h-1zM5 14h3v1h-3zM9 14h4v1h-4zM14 14h3v1h-3zM18 14h1v1h-1zM3 15h6v1h-6zM13 15h6v1h-6zM3 16h3v1h-3zM7 16h3v1h-3zM12 16h3v1h-3zM16 16h3v1h-3zM3 17h2v1h-2zM8 17h1v1h-1zM13 17h1v1h-1zM17 17h2v1h-2z"
+        />
+        <path
+          fill="#e8333a"
+          d="M6 8h2v1h-2zM15 8h2v1h-2zM6 9h2v1h-2zM15 9h2v1h-2z"
+        />
+        <path
+          fill="#c4232b"
+          d="M4 18h1v1h-1zM4 19h1v1h-1zM4 20h1v1h-1zM3 21h2v1h-2zM3 22h1v1h-1zM3 23h1v1h-1z"
+        />
         <path fill="#8c1f24" d="M4 22h1v1h-1z" />
       </svg>
       <!-- /splash-zombie -->
@@ -174,7 +214,11 @@
       <div class="splash-bar" aria-hidden="true">
         <div class="splash-fill"></div>
       </div>
-      <noscript><p class="splash-line">Munch Manor needs JavaScript to rise.</p></noscript>
+      <noscript
+        ><p class="splash-line">
+          Munch Manor needs JavaScript to rise.
+        </p></noscript
+      >
     </div>
     <div id="root"></div>
     <script type="module" src="./src/entry.ts"></script>

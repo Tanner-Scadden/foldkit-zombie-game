@@ -8,6 +8,7 @@ body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+  touch-action: pan-x pan-y;
   background: #000;
   -webkit-text-size-adjust: 100%;
 }
