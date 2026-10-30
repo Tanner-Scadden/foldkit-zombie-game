@@ -33,7 +33,7 @@ import {
 import { SeatAction, applySeatAction, soloInputs, stepWorld } from './stepWorld'
 import { SURFACE, ticks, zombieOf } from './testing'
 import { asVeteran } from './veteran'
-import { beginPreparation, waveBonus } from './waves'
+import { beginPreparation, rollSpawns, waveBonus } from './waves'
 import { WEAPONS } from './weapons'
 import { type World, withWorld } from './world'
 import { type Seat, idleIntent } from './worldSchema'
@@ -366,6 +366,29 @@ describe('money', () => {
     expect(seatedAt(bought, 1).wallet.balance).toBeLessThan(100)
     expect(seatedAt(bought, 0).wallet.balance).toBe(100)
     expect(levelOf(bought).key).not.toBe(levelOf(atDoor).key)
+  })
+
+  test('mid-wave, one player buys the manor door and its doors join the wave', () => {
+    const [, spawns] = rollSpawns(41, 4)
+    const fighting = Phase.Wave({ wave: 4, elapsedMs: 0, spawns })
+    const atDoor = pipeline(withMoney(0, 100), withMoney(1, 100), current =>
+      atSeat(current, 1, world =>
+        modifyFields(world, {
+          shop: () => ShopState.AtExit({ exit: KITCHEN_EXIT }),
+        }),
+      ),
+    )(crewOf(2, fighting))
+    const bought = act(atDoor, 1, SeatAction.BuyExit())
+    expect(seatedAt(bought, 1).wallet.balance).toBeLessThan(100)
+    expect(seatedAt(bought, 0).wallet.balance).toBe(100)
+    expect(levelOf(bought).key).not.toBe(levelOf(atDoor).key)
+    const doors = Phase.isAnyOf(['Wave'])(bought.phase)
+      ? Array.map(bought.phase.spawns, ({ door }) => door)
+      : []
+    expect(doors).toHaveLength(spawns.length)
+    expect(
+      Array.some(doors, door => door === 'Back' || door === 'Window'),
+    ).toBe(true)
   })
 })
 

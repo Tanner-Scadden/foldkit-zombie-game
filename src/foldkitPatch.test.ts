@@ -5,7 +5,7 @@ import { inertHtml } from 'foldkit/html'
 import { taggedStruct } from 'foldkit/schema'
 import { describe, expect, test } from 'vitest'
 
-// The parts of patches/foldkit@0.169.0.patch that change no API: building a
+// The parts of patches/foldkit@0.170.0.patch that change no API: building a
 // shape skips `schema.make` for its optional keys, and a style entry that
 // passed its checks is remembered. Both must behave as before.
 

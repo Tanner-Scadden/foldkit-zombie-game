@@ -3,7 +3,6 @@ import { Array, Option, Result, pipe } from 'effect'
 import {
   type ClientFrame,
   type ClosedReason,
-  MAX_RTT_MS,
   MAX_SAMPLES_PER_INPUT,
   MAX_TICKS_PER_SAMPLE,
   NEUTRAL_INPUT,
@@ -37,16 +36,6 @@ import type { World } from './World'
 //   room's clock, between the two messages around that moment.
 
 export const INTERPOLATION_MS = 100
-// NOTE: how far behind everyone else is drawn adapts to how unevenly the
-// room's messages arrive: a steady link draws as little as MIN behind,
-// a jittery one up to MAX, so a late message rarely leaves nothing to
-// draw (MULTIPLAYER.md, "Latency").
-export const MIN_INTERPOLATION_MS = 70
-export const MAX_INTERPOLATION_MS = 200
-const SEND_INTERVAL_MS = 50
-const JITTER_SPAN = 2.5
-const JITTER_EASE = 0.1
-const DELAY_EASE = 0.05
 export const INPUT_INTERVAL_MS = 100
 export const HEARTBEAT_MS = 1000
 export const PING_EVERY_MS = 2000
@@ -107,13 +96,6 @@ export interface Session<W, Own> {
   }>
   readonly predicted: Option.Option<Own>
   readonly shown: Option.Option<Own>
-  readonly jitterMs: number
-  readonly interpolationMs: number
-  readonly lastArrival: Option.Option<Anchor>
-  readonly rtts: ReadonlyArray<{
-    readonly slot: number
-    readonly rttMs: number
-  }>
   readonly renderedMs: number
   readonly seq: number
   readonly samples: ReadonlyArray<Sample>
@@ -140,10 +122,6 @@ export const makeSession = <W, Own>(nowMs: number): Session<W, Own> => ({
   history: [],
   predicted: Option.none(),
   shown: Option.none(),
-  jitterMs: 0,
-  interpolationMs: INTERPOLATION_MS,
-  lastArrival: Option.none(),
-  rtts: [],
   renderedMs: nowMs,
   seq: 0,
   samples: [],
@@ -341,13 +319,7 @@ export const receive = <W, Own>(
       Result.map(readAll(snapshot.world, world.readSnapshot), read => {
         const received = { tick: snapshot.tick, world: read, atMs: nowMs }
         const anchored = reanchor(
-          {
-            ...heard,
-            phase: PLAYING,
-            ack: snapshot.ack,
-            frames: [received],
-            lastArrival: Option.some({ tick: snapshot.tick, atMs: nowMs }),
-          },
+          { ...heard, phase: PLAYING, ack: snapshot.ack, frames: [received] },
           snapshot.tick,
           nowMs,
         )
@@ -380,11 +352,8 @@ export const receive = <W, Own>(
                 const received = { tick: delta.tick, world: read, atMs: nowMs }
                 const anchored = reanchor(
                   {
-                    ...arrived(heard, delta.tick, nowMs),
+                    ...heard,
                     ack: delta.ack,
-                    rtts: Array.isReadonlyArrayEmpty(delta.pings)
-                      ? heard.rtts
-                      : delta.pings,
                     frames: keepRecent(Array.append(heard.frames, received)),
                   },
                   delta.tick,
@@ -517,70 +486,41 @@ export const tickInput = <W, Own>(
             _tag: 'Input',
             seq: stepped.seq + 1,
             tick: stepped.samplesFrom,
-            seen: Math.max(0, Math.floor(viewTickAt(stepped, nowMs))),
-            rttMs: Math.min(MAX_RTT_MS, Math.round(stepped.rttMs)),
             samples: stepped.samples,
           },
         ],
       }
     : { session: stepped, outgoing: [] }
-  return withInput
+  return nowMs - withInput.session.pingedMs >= PING_EVERY_MS
+    ? ping(withInput, nowMs)
+    : withInput
 }
 
-// NOTE: the round trip comes from the socket's free ping (a text ping the
-// room's Durable Object answers by itself, never billed and never waking
-// it), not from a message the room is billed for. `sentMs` is when it went.
-export const heardPong = <W, Own>(
-  session: Session<W, Own>,
-  sentMs: number,
+const ping = <W, Own>(
+  ticked: Ticked<W, Own>,
   nowMs: number,
-): Session<W, Own> => {
-  const sample = Math.max(0, nowMs - sentMs)
+): Ticked<W, Own> => {
+  const nonce = ticked.session.nextNonce
   return {
-    ...session,
-    rttMs: session.rttMs === 0 ? sample : session.rttMs * 0.75 + sample * 0.25,
+    session: {
+      ...ticked.session,
+      nextNonce: nonce + 1,
+      pingedMs: nowMs,
+      pings: Array.takeRight(
+        Array.append(ticked.session.pings, { nonce, sentMs: nowMs }),
+        8,
+      ),
+    },
+    outgoing: [
+      ...ticked.outgoing,
+      {
+        _tag: 'Ping',
+        nonce,
+        rttMs: Math.min(60_000, Math.round(ticked.session.rttMs)),
+      },
+    ],
   }
 }
-
-// NOTE: a message's arrival against when its tick says it should arrive:
-// the spread is the jitter, and the delay to draw behind eases toward it.
-const arrived = <W, Own>(
-  session: Session<W, Own>,
-  tick: number,
-  nowMs: number,
-): Session<W, Own> =>
-  Option.match(session.lastArrival, {
-    onNone: () => ({
-      ...session,
-      lastArrival: Option.some({ tick, atMs: nowMs }),
-    }),
-    onSome: last => {
-      const expected = (tick - last.tick) * TICK_MS
-      const off = Math.abs(nowMs - last.atMs - expected)
-      const jitterMs = session.jitterMs + (off - session.jitterMs) * JITTER_EASE
-      const target = Math.max(
-        MIN_INTERPOLATION_MS,
-        Math.min(
-          MAX_INTERPOLATION_MS,
-          SEND_INTERVAL_MS + JITTER_SPAN * jitterMs,
-        ),
-      )
-      return {
-        ...session,
-        jitterMs,
-        interpolationMs:
-          session.interpolationMs +
-          (target - session.interpolationMs) * DELAY_EASE,
-        lastArrival: Option.some({ tick, atMs: nowMs }),
-      }
-    },
-  })
-
-// NOTE: the room tick this client draws everyone else at now.
-export const viewTickAt = (
-  session: Session<unknown, unknown>,
-  nowMs: number,
-): number => roomTickAt(session, nowMs) - session.interpolationMs / TICK_MS
 
 export const countSent = <W, Own>(
   session: Session<W, Own>,
@@ -619,7 +559,7 @@ export const render = <W, Own>(
   session: Session<W, Own>,
   nowMs: number,
 ): Rendered<W, Own> => {
-  const renderTick = viewTickAt(session, nowMs)
+  const renderTick = roomTickAt(session, nowMs) - INTERPOLATION_MS / TICK_MS
   const others = Option.map(Array.last(session.frames), newest =>
     Option.match(bracket(session.frames, renderTick), {
       onNone: () =>

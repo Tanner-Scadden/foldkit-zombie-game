@@ -6,7 +6,7 @@ import { describe, expect, test } from 'vitest'
 import { Dialog } from '@foldkit/ui'
 
 import changelogMarkdown from '../CHANGELOG.md?raw'
-import { NEWS_DAYS, parseChangelog } from './changelog'
+import { NEWS_DAYS, newsHeadline, parseChangelog } from './changelog'
 import { WriteSave } from './commands'
 import { FIXED_STEP_MS } from './constants'
 import { HOME_BUTTONS, HOME_KEYS, isNewsUnseen } from './home'
@@ -133,6 +133,26 @@ describe('the changelog', () => {
         ],
       },
     ])
+  })
+
+  test('a headline is the first clause of a bullet, seven words at most', () => {
+    expect(newsHeadline('PLAY is one big arrow now, every menu slimmed.')).toBe(
+      'PLAY is one big arrow now',
+    )
+    expect(newsHeadline('Big hordes run smoother on slower phones.')).toBe(
+      'Big hordes run smoother on slower phones',
+    )
+    expect(
+      newsHeadline('Upgraded guns keep their names now: Beefy, then DELUXE.'),
+    ).toBe('Upgraded guns keep their names now')
+    expect(
+      newsHeadline('Your Profile fits small phones held upright: every tab.'),
+    ).toBe('Your Profile fits small phones held upright')
+    expect(
+      newsHeadline(
+        'Smash open the kitchen behind the parlour and last ten waves.',
+      ),
+    ).toBe('Smash open the kitchen behind the parlour…')
   })
 })
 

@@ -194,7 +194,6 @@ export const freshRoom = (code: string, slot: number): Room => ({
   predictedShots: 0,
   tracers: [],
   tracerCount: 0,
-  hits: { looked: 0, confirmed: 0 },
   presses: noPresses,
   share: 'Idle',
   departure: 'Staying',
@@ -323,13 +322,6 @@ const receiveFrame = (
     }
   } else if (event._tag === 'Dropped') {
     return { model: withRoom(model, { ...room, link: 'Reconnecting' }) }
-  } else if (event._tag === 'Ponged') {
-    return {
-      model: withRoom(model, {
-        ...room,
-        session: Session.heardPong(room.session, event.sentMs, event.atMs),
-      }),
-    }
   } else {
     return event.reason === 'Kicked' ? leaveFor(model, 'Kicked') : { model }
   }
@@ -437,8 +429,6 @@ export const keepTracers = (
   model: Model,
   tracers: ReadonlyArray<Bullet>,
   fired: number,
-  looked: number,
-  confirmed: number,
 ): Model =>
   Option.match(maybeRoomOf(model), {
     onNone: () => model,
@@ -447,10 +437,6 @@ export const keepTracers = (
         ...room,
         tracers,
         tracerCount: room.tracerCount + fired,
-        hits: {
-          looked: room.hits.looked + looked,
-          confirmed: room.hits.confirmed + confirmed,
-        },
       }),
   })
 
@@ -478,10 +464,7 @@ const toggleReady = (model: Model, room: Room): UpdateReturn =>
             model,
             commands: [
               ChangeLobby({
-                change: LobbyChange.ChangedReady({
-                  ready: !me.ready,
-                  pingMs: Math.round(room.session.rttMs),
-                }),
+                change: LobbyChange.ChangedReady({ ready: !me.ready }),
               }),
             ],
           }

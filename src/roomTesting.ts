@@ -107,8 +107,6 @@ export const scriptedTicks = (room: RoomWorld): ReadonlyArray<PlayerTick> =>
     slot,
     input: scriptedInput(room, slot, room.tick),
     presence: 'Here' as const,
-    viewLagTicks: 0,
-    rttMs: 0,
   }))
 
 // NOTE: the room alone, `ticks` ticks of scripted players, calling `each`

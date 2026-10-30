@@ -23,7 +23,6 @@ import {
   TROPHY_ICON,
 } from '../icons'
 import type { Appearance } from '../model'
-import { seatColorOf } from '../partyView'
 import {
   AWAY_ICON,
   BACK_ICON,
@@ -173,37 +172,6 @@ const problemView = (
         ],
       ),
   })
-
-// PING
-
-// NOTE: a player's link as three bars: green and full under 100 ms, yellow
-// and two under 200, red and one above; the number is for screen readers.
-const PING_GOOD_MS = 100
-const PING_OK_MS = 200
-
-const pingGrade = (rttMs: number): 'Good' | 'Ok' | 'Bad' =>
-  rttMs < PING_GOOD_MS ? 'Good' : rttMs < PING_OK_MS ? 'Ok' : 'Bad'
-
-const pingBarsView = (
-  rttMs: number,
-  className: string,
-  h: HtmlBuilder<Message>,
-): Html =>
-  rttMs <= 0
-    ? h.empty
-    : h.span(
-        [
-          h.Class(`coop-ping ${className}`),
-          h.Role('img'),
-          h.DataAttribute('ping', pingGrade(rttMs)),
-          h.AriaLabel(`${Math.round(rttMs)} ms`),
-        ],
-        Array.map([1, 2, 3], bar =>
-          h.span([h.Class('coop-ping-bar'), h.DataAttribute('bar', `${bar}`)]),
-        ),
-      )
-
-const ownPingOf = (room: Room): number => Math.round(room.session.rttMs)
 
 // HUB
 
@@ -586,11 +554,6 @@ const memberSeatView = (
           )
         : h.empty,
       h.span([h.Class('coop-nameplate'), h.AriaHidden(true)], [member.name]),
-      pingBarsView(
-        isMe && ownPingOf(room) > 0 ? ownPingOf(room) : member.pingMs,
-        'coop-seat-ping',
-        h,
-      ),
       canKick
         ? h.button(
             [
@@ -921,9 +884,6 @@ const netView = (room: Room, h: HtmlBuilder<Message>): Html => {
     h.DataAttribute('corrections', `${stats.corrections}`),
     h.DataAttribute('correction-px', `${stats.maxCorrectionPx.toFixed(1)}`),
     h.DataAttribute('slot', `${room.slot}`),
-    h.DataAttribute('looked-hits', `${room.hits.looked}`),
-    h.DataAttribute('confirmed-hits', `${room.hits.confirmed}`),
-    h.DataAttribute('delay', `${Math.round(room.session.interpolationMs)}`),
     h.DataAttribute(
       'world',
       Option.match(room.maybeWorld, {
@@ -938,50 +898,6 @@ const netView = (room: Room, h: HtmlBuilder<Message>): Html => {
 // (src/coopPlay.ts), drawn from the room's World with the game's views.
 // Co-op adds only what the room is: LEAVE, the countdown, Away while the
 // socket reconnects, and the trophy when the run ends.
-// NOTE: every player's bars in their seat's color, your own from your
-// own pings and the rest as the room last shared them.
-const arenaPingsView = (room: Room, h: HtmlBuilder<Message>): Html =>
-  h.div(
-    [h.Class('coop-arena-pings'), h.AriaLabel('Connections')],
-    Array.map(
-      Array.sort(
-        Array.dedupe(
-          Array.append(
-            Array.map(room.session.rtts, ping => ping.slot),
-            room.slot,
-          ),
-        ),
-        Order.Number,
-      ),
-      slot =>
-        h.keyed('span')(
-          `ping-${slot}`,
-          [
-            h.Class('coop-arena-ping'),
-            h.Style({ borderColor: seatColorOf(slot) }),
-          ],
-          [
-            pingBarsView(
-              slot === room.slot
-                ? ownPingOf(room)
-                : Option.getOrElse(
-                    Option.map(
-                      Array.findFirst(
-                        room.session.rtts,
-                        ping => ping.slot === slot,
-                      ),
-                      ping => ping.rttMs,
-                    ),
-                    () => 0,
-                  ),
-              'coop-arena-ping-bars',
-              h,
-            ),
-          ],
-        ),
-    ),
-  )
-
 const arenaView = (room: Room, h: HtmlBuilder<Message>): Html =>
   h.div(
     [h.Class('coop-arena')],
@@ -989,10 +905,7 @@ const arenaView = (room: Room, h: HtmlBuilder<Message>): Html =>
       countdownView(room, h),
       awayView(room, h),
       endedView(room, h),
-      h.div(
-        [h.Class('coop-arena-hud')],
-        [leaveButtonView(room, h), arenaPingsView(room, h)],
-      ),
+      h.div([h.Class('coop-arena-hud')], [leaveButtonView(room, h)]),
       netView(room, h),
     ],
   )

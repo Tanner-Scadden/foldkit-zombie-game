@@ -470,10 +470,138 @@
   image-rendering: pixelated;
 }
 
+/* NOTE: the Look tab's little tabs (Body, Hair, Outfit) sit over the
+   parts they show, so no screen ever needs more than three rows of
+   options at once. */
+.look-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: start;
+  min-width: 0;
+}
+
+.look-sections {
+  display: flex;
+  gap: 5px;
+}
+
+.look-section {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: var(--menu-tap);
+  min-height: var(--menu-tap);
+  margin: 0;
+  padding: 4px 2px;
+  border: 3px solid var(--menu-line-strong);
+  border-radius: 10px;
+  background: var(--menu-surface);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+  color: var(--menu-ink-dim);
+  font: bold 9px var(--menu-font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    scale 140ms cubic-bezier(0.2, 1.8, 0.4, 1),
+    translate 140ms cubic-bezier(0.2, 1.8, 0.4, 1);
+}
+
+.look-section-icon {
+  width: 18px;
+  height: 14px;
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.look-section-word {
+  pointer-events: none;
+}
+
+.look-section[aria-checked='true'] {
+  border-color: var(--profile-look);
+  background: color-mix(in srgb, var(--profile-look) 30%, var(--menu-bg));
+  color: var(--profile-look);
+  translate: 0 -2px;
+}
+
+.look-section[aria-checked='true'] .look-section-icon {
+  opacity: 1;
+  animation: look-section-hop 320ms cubic-bezier(0.2, 1.8, 0.4, 1) both;
+}
+
+@keyframes look-section-hop {
+  from {
+    scale: 0.6;
+  }
+}
+
+.look-section:active {
+  scale: 0.94;
+}
+
+.look-section:focus-visible {
+  outline: var(--menu-focus);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .look-section:hover {
+    border-color: color-mix(in srgb, var(--profile-look) 60%, transparent);
+  }
+}
+
 .look-rows {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  animation: look-rows-in 200ms ease-out both;
+}
+
+@keyframes look-rows-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+.look-figure-option,
+.look-head-option,
+.look-flag-option {
+  width: var(--menu-tap);
+  padding: 0;
+}
+
+.look-figure-icon,
+.look-head-icon {
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.look-figure-icon {
+  width: 24px;
+  height: 36px;
+}
+
+.look-head-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.look-swatch.look-flag {
+  width: 33px;
+  height: 22px;
+  border-radius: 3px;
+  background-size: cover;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5);
 }
 
 /* NOTE: the heading sits over its options, so a row of six swatches has the
@@ -503,9 +631,13 @@
   font-size: 10px;
 }
 
+/* NOTE: a part with more options than fit across takes even lines, such as
+   eight skin tones as two lines of four, so no option is ever left alone on
+   a line of its own (--look-columns, from balancedColumns in
+   src/characterView.ts). */
 .look-options {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(var(--look-columns, 6), var(--menu-tap));
   gap: 5px;
 }
 
@@ -528,10 +660,6 @@
   transition: scale 140ms cubic-bezier(0.2, 1.8, 0.4, 1);
 }
 
-.look-word-option {
-  padding: 0 9px;
-}
-
 .look-swatch-option {
   width: var(--menu-tap);
   padding: 0;
@@ -552,7 +680,12 @@
   }
 }
 
-.look-option[aria-checked='true'] {
+.look-options.look-toggles {
+  grid-template-columns: repeat(2, var(--menu-tap));
+}
+
+.look-option[aria-checked='true'],
+.look-toggle[aria-pressed='true'] {
   border-color: var(--profile-look);
   background: color-mix(in srgb, var(--profile-look) 22%, var(--menu-bg));
   color: var(--profile-look);

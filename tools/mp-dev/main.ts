@@ -744,11 +744,6 @@ const playRoom = (
             yield* Ref.set(connection, 'Connected')
             return
           }
-          if (event._tag === 'Ponged') {
-            return yield* Ref.update(play, current =>
-              Session.heardPong(current, event.sentMs, event.atMs),
-            )
-          }
           if (event._tag === 'Connecting') {
             yield* Ref.update(play, current =>
               Session.reconnecting(current, nowMs),

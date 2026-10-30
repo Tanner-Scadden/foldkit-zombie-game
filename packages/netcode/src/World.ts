@@ -17,20 +17,11 @@ export type Presence = 'Here' | 'Away'
 
 // NOTE: one player's part of a tick. An Away player is frozen in place, not
 // targeted, and not hurt (MULTIPLAYER.md, default 10); its input is neutral.
-// NOTE: `viewLagTicks` is how far behind the room's tick this player's
-// picture was when they made the input (their own lead plus how far
-// behind they draw everyone else), capped at MAX_VIEW_LAG_TICKS, so a game
-// can check their shots against what they saw. `rttMs` is their round trip.
 export interface PlayerTick {
   readonly slot: number
   readonly input: PlayerInput
   readonly presence: Presence
-  readonly viewLagTicks: number
-  readonly rttMs: number
 }
-
-// NOTE: 250 ms at 60 Hz: the furthest back a shot is ever checked.
-export const MAX_VIEW_LAG_TICKS = 15
 
 export interface Score {
   readonly slot: number

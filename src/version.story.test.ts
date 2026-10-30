@@ -11,6 +11,7 @@ import {
   RegisterServiceWorker,
   ReloadPage,
   UpdateServiceWorker,
+  WaitForUnwrap,
 } from './commands'
 import { FIXED_STEP_MS, PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import {
@@ -27,11 +28,12 @@ import {
   pageVisibilityMessage,
   updateCheckActivity,
 } from './subscriptions'
-import { fighting } from './testing'
+import { fighting, showDialog } from './testing'
 import {
   RUNNING_BUILD,
   fetchRemoteBuild,
   isCheckingForUpdates,
+  isGreetingDue,
 } from './version'
 import { pause } from './waves'
 
@@ -131,7 +133,7 @@ describe('checking for a new build', () => {
     )
   })
 
-  test('tapping the chip reloads the page', () => {
+  test('tapping the gift unwraps it once, then reloads onto the newer build', () => {
     story(
       update,
       given(
@@ -140,9 +142,63 @@ describe('checking for a new build', () => {
         }),
       ),
       message(Message.ClickedUpdateButton()),
-      Command.expectExact(ReloadPage),
+      model(current => {
+        expect(current.updateGift).toBe('Unwrapping')
+      }),
+      Command.expectExact(WaitForUnwrap),
+      Command.resolve(WaitForUnwrap, Message.CompletedWaitForUnwrap()),
+      Command.expectExact(ReloadPage({ build: NEWER_BUILD })),
       Command.resolve(ReloadPage, Message.CompletedReloadPage()),
     )
+  })
+
+  test('a second tap while it unwraps changes nothing', () => {
+    story(
+      update,
+      given(
+        modifyFields(initialModel, {
+          maybeNewerBuild: () => Option.some(NEWER_BUILD),
+          updateGift: () => 'Unwrapping',
+        }),
+      ),
+      message(Message.ClickedUpdateButton()),
+      Command.expectNone(),
+    )
+  })
+
+  test('the gift does nothing off the home menu', () => {
+    story(
+      update,
+      given(
+        modifyFields(fighting, {
+          maybeNewerBuild: () => Option.some(NEWER_BUILD),
+        }),
+      ),
+      message(Message.ClickedUpdateButton()),
+      model(current => {
+        expect(current.updateGift).toBe('Wrapped')
+      }),
+      Command.expectNone(),
+    )
+  })
+
+  test('the greeting opens only for the build the reload asked for', () => {
+    story(
+      update,
+      given(initialModel),
+      message(
+        Message.CompletedReadUpdateMarker({
+          maybeBuild: Option.some(RUNNING_BUILD),
+        }),
+      ),
+      model(current => {
+        expect(current.updateGreeting.isOpen).toBe(true)
+      }),
+      showDialog(),
+    )
+    expect(isGreetingDue(RUNNING_BUILD, Option.some(RUNNING_BUILD))).toBe(true)
+    expect(isGreetingDue(RUNNING_BUILD, Option.some('older'))).toBe(false)
+    expect(isGreetingDue(RUNNING_BUILD, Option.none())).toBe(false)
   })
 })
 

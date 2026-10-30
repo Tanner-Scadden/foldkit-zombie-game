@@ -38,13 +38,7 @@ interface Client {
   inputsSent: number
   muted: boolean
   seen: Array<StandInWorld>
-  pongs: Array<{ readonly sentMs: number; readonly atMs: number }>
-  pingedMs: number
 }
-
-// NOTE: the socket's free ping, which the room's Durable Object answers by
-// itself, every 2 s.
-const PING_EVERY_MS = 2000
 
 const T0 = 5_000_000
 
@@ -67,7 +61,6 @@ const simulate = (options: {
   readonly oneWayMs: number
   readonly seconds: number
   readonly muteSlotAfterMs?: number
-  readonly jitterMs?: number
 }) => {
   const clients: Array<Client> = Array.from(
     { length: options.players },
@@ -80,8 +73,6 @@ const simulate = (options: {
       inputsSent: 0,
       muted: false,
       seen: [],
-      pongs: [],
-      pingedMs: T0 - PING_EVERY_MS,
     }),
   )
   const started = Room.startRoom(
@@ -100,7 +91,6 @@ const simulate = (options: {
   }
   const bytesDown = { total: 0 }
 
-  const sends = { count: 0 }
   const deliverOut = (out: ReadonlyArray<Room.Out>, nowMs: number) =>
     out.forEach(item => {
       if (item._tag !== 'Send') {
@@ -109,13 +99,7 @@ const simulate = (options: {
       const client = clients.find(each => each.socket === item.socket)
       const bytes = Result.getOrThrow(encodeServerFrame(item.frame))
       bytesDown.total += webSocketBytes(bytes.length, false)
-      const sent = (sends.count += 1)
-      const late = ((sent * 7919) % 101) / 100
-      const atMs = Math.max(
-        client?.toClient.at(-1)?.atMs ?? 0,
-        nowMs + options.oneWayMs + late * (options.jitterMs ?? 0),
-      )
-      client?.toClient.push({ atMs, bytes })
+      client?.toClient.push({ atMs: nowMs + options.oneWayMs, bytes })
     })
 
   deliverOut(started.out, T0)
@@ -167,20 +151,6 @@ const simulate = (options: {
             ),
           )
         })
-      })
-      clients.forEach(client => {
-        const ponged = client.pongs.filter(pong => pong.atMs <= nowMs)
-        client.pongs = client.pongs.filter(pong => pong.atMs > nowMs)
-        ponged.forEach(pong => {
-          client.session = Session.heardPong(client.session, pong.sentMs, nowMs)
-        })
-        if (nowMs - client.pingedMs >= PING_EVERY_MS) {
-          client.pingedMs = nowMs
-          client.pongs.push({
-            sentMs: nowMs,
-            atMs: nowMs + 2 * options.oneWayMs,
-          })
-        }
       })
       if (nowMs >= frames.next) {
         frames.next += frameMs
@@ -272,43 +242,6 @@ describe('sessions and a room over a 60 ms round trip', () => {
     run.clients.forEach(client => {
       const newest = client.session.frames.at(-1)
       expect(run.room.tick - (newest?.tick ?? 0)).toBeLessThanOrEqual(6)
-    })
-  })
-})
-
-describe('the delay to draw everyone else behind', () => {
-  test('stays short on a steady link and grows with jitter', () => {
-    const steady = simulate({ players: 2, oneWayMs: 30, seconds: 8 })
-    const jittery = simulate({
-      players: 2,
-      oneWayMs: 100,
-      jitterMs: 60,
-      seconds: 8,
-    })
-    steady.clients.forEach(client => {
-      expect(client.session.interpolationMs).toBeLessThan(80)
-      expect(client.session.interpolationMs).toBeGreaterThanOrEqual(
-        Session.MIN_INTERPOLATION_MS,
-      )
-    })
-    jittery.clients.forEach(client => {
-      expect(client.session.interpolationMs).toBeGreaterThan(90)
-      expect(client.session.interpolationMs).toBeLessThanOrEqual(
-        Session.MAX_INTERPOLATION_MS,
-      )
-      expect(client.session.rttMs).toBeGreaterThan(190)
-    })
-  })
-
-  test('the room learns every view lag and round trip from inputs', () => {
-    const run = simulate({ players: 2, oneWayMs: 100, seconds: 4 })
-    run.room.seats.forEach(seat => {
-      expect(seat.rttMs).toBeGreaterThan(190)
-      expect(seat.viewLagTicks).toBeGreaterThan(8)
-      expect(seat.viewLagTicks).toBeLessThanOrEqual(15)
-    })
-    run.clients.forEach(client => {
-      expect(client.session.rtts.map(ping => ping.slot)).toEqual([0, 1])
     })
   })
 })

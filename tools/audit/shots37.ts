@@ -2,8 +2,8 @@
 // step, Settings and its reset question) on a desktop, a landscape phone, and
 // upright phones (390, 360, and 375 wide), as `s37-<TAG>-<viewport>-<scene>.png`. It exits with 1 on
 // a phone button under 48 px, a text field under 16 px (iOS zooms in on
-// those), a row of Look options that wraps, or the Profile past the
-// screen's edge.
+// those), a row of Look options that leaves one alone on a line or runs
+// past its page, or the Profile past the screen's edge.
 //   TAG=after bun run heavy -- bun tools/audit/shots37.ts
 import type { Page } from 'playwright-core'
 
@@ -43,14 +43,18 @@ type Scene = Readonly<{
   click?: ReadonlyArray<string>
 }>
 
-const LOOK = 'look=Female,Ponytail,Ginger,Tan,Teal'
+const LOOK = 'look=Slim,Ponytail,Red,Tan,Teal,Hoodie,Rainbow,,Glasses'
 
 const SCENES: ReadonlyArray<Scene> = [
   { name: 'look', query: `profile=look&${LOOK}` },
+  ...['Hair', 'Outfit'].map(section => ({
+    name: `look-${section.toLowerCase()}`,
+    query: `profile=look&looksection=${section}&${LOOK}`,
+  })),
   // NOTE: the first option of every row chosen, at the page's left edge.
   {
     name: 'look-first',
-    query: 'profile=look&look=Female,Crop,Black,Fair,Blue',
+    query: 'profile=look&look=Slim,Short,Black,Fair,Blue',
   },
   { name: 'name-empty', query: 'profile=name' },
   { name: 'name', query: 'profile=name&name=Dr. Chomp' },
@@ -115,11 +119,40 @@ const checkLayout = async (page: Page, viewport: Viewport, where: string) => {
         const tops = [...row.querySelectorAll('button')].map(
           button => button.getBoundingClientRect().top,
         )
-        return Math.max(...tops) - Math.min(...tops) > 20
+        // NOTE: a long list takes even lines (balancedColumns in
+        // src/characterView.ts); what must never happen is an option
+        // left on a line of its own, or a line not much more than half
+        // as full as the first.
+        const lines = new Map<number, number>()
+        for (const top of tops) {
+          const line = [...lines.keys()].find(
+            seen => Math.abs(seen - top) <= 20,
+          )
+          lines.set(line ?? top, (lines.get(line ?? top) ?? 0) + 1)
+        }
+        const counts = [...lines.entries()]
+          .sort(([a], [b]) => a - b)
+          .map(([, count]) => count)
+        const first = counts[0] ?? 0
+        return counts.some(
+          count => (count === 1 && first > 1) || count * 2 < first,
+        )
+      })
+      .map(row => row.querySelector('.look-row-label')?.textContent ?? '?')
+    const clippedRows = [...document.querySelectorAll('.look-row')]
+      .filter(row => {
+        const page = row.closest('.profile-page')?.getBoundingClientRect()
+        return (
+          page !== undefined &&
+          [...row.querySelectorAll('button')].some(
+            button => button.getBoundingClientRect().right > page.right + 1,
+          )
+        )
       })
       .map(row => row.querySelector('.look-row-label')?.textContent ?? '?')
     return {
       wrappedRows,
+      clippedRows,
       box: box
         ? {
             left: box.left,
@@ -147,7 +180,14 @@ const checkLayout = async (page: Page, viewport: Viewport, where: string) => {
     problems.push(`${where}: the Profile is past the screen's edge`)
   }
   for (const label of found.wrappedRows) {
-    problems.push(`${where}: the ${label} row of the Look tab wraps`)
+    problems.push(
+      `${where}: the ${label} row of the Look tab leaves an option alone`,
+    )
+  }
+  for (const label of found.clippedRows) {
+    problems.push(
+      `${where}: the ${label} row of the Look tab runs off its page`,
+    )
   }
   for (const field of found.fields) {
     if (field.size < 16) {

@@ -1,7 +1,6 @@
 import { Array, Option, Order, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { FIXED_STEP_MS } from './constants'
 import type { World } from './world'
 import {
   type Bullet,
@@ -55,19 +54,7 @@ export const soloSeat: Seat = {
   readiness: 'Waiting',
   trapIds: [],
   kills: 0,
-  graceMs: 0,
-  touchedMs: 0,
 }
-
-export const MAX_BITE_GRACE_MS = 100
-
-// NOTE: the bite grace for a round trip, in whole ticks so it only
-// changes when it matters.
-export const biteGraceFor = (rttMs: number): number =>
-  Math.min(
-    MAX_BITE_GRACE_MS,
-    Math.floor(rttMs / 2 / FIXED_STEP_MS) * FIXED_STEP_MS,
-  )
 
 export const leadSeatOf = (world: World): Seat =>
   Party.match(world.party, {

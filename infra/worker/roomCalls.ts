@@ -3,10 +3,7 @@ import * as Option from 'effect/Option'
 import * as Result from 'effect/Result'
 import * as Schema from 'effect/Schema'
 
-import type {
-  DurableObjectLocationHint,
-  DurableObjectNamespace,
-} from '@cloudflare/workers-types'
+import type { DurableObjectNamespace } from '@cloudflare/workers-types'
 import {
   type Matchmaking,
   RoomRefusal,
@@ -32,54 +29,14 @@ export interface Called {
   readonly text: string
 }
 
-// REGIONS
-
-// NOTE: the continent a request came from (Cloudflare's `request.cf`), to
-// queue QUICK PLAY by continent and to place a new room near its creator.
-export const REGION_HEADER = 'x-room-region'
-
-const CfContinent = Schema.Struct({ continent: Schema.String })
-const decodeCf = Schema.decodeUnknownOption(CfContinent)
-
-export const continentOf = (request: Request): string =>
-  Option.match(decodeCf(Reflect.get(request, 'cf')), {
-    onNone: () => '',
-    onSome: cf => (/^[A-Z]{2}$/.test(cf.continent) ? cf.continent : ''),
-  })
-
-const LOCATION_HINTS: Readonly<Record<string, DurableObjectLocationHint>> = {
-  NA: 'enam',
-  SA: 'sam',
-  EU: 'weur',
-  AF: 'afr',
-  AS: 'apac',
-  OC: 'oc',
-}
-
-// NOTE: a hint only takes effect when the object is first made, so a
-// room lives near the player who created it; its lobby and its run share
-// the one object.
-const stubFor = (
-  rooms: DurableObjectNamespace,
-  code: string,
-  region: string,
-) => {
-  const id = rooms.idFromName(roomScopeId(code))
-  const hint = LOCATION_HINTS[region]
-  return hint === undefined
-    ? rooms.get(id)
-    : rooms.get(id, { locationHint: hint })
-}
-
 export const callRoom = (
   rooms: DurableObjectNamespace,
   code: string,
   path: string,
   body: string,
-  region = '',
 ): Effect.Effect<Called, SyncCallFailed> =>
   Effect.gen(function* () {
-    const stub = stubFor(rooms, code, region)
+    const stub = rooms.get(rooms.idFromName(roomScopeId(code)))
     const response = yield* tryCall('call the room', () =>
       stub.fetch(`https://room${path}`, {
         method: 'POST',
@@ -101,7 +58,6 @@ export const createRoomIn = (
   name: string,
   look: string,
   visibility: RoomVisibility,
-  region = '',
   attempt = 0,
 ): Effect.Effect<Called, SyncCallFailed> =>
   Effect.gen(function* () {
@@ -111,7 +67,6 @@ export const createRoomIn = (
       code,
       INTERNAL_PATHS.create,
       JSON.stringify({ playerId, name, look, code, visibility }),
-      region,
     )
     return called.status === 409 && attempt + 1 < CREATE_ATTEMPTS
       ? yield* createRoomIn(
@@ -120,7 +75,6 @@ export const createRoomIn = (
           name,
           look,
           visibility,
-          region,
           attempt + 1,
         )
       : called

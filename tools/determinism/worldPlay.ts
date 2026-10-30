@@ -81,8 +81,6 @@ const playRoomTicks = (
             slot,
             input,
             presence: 'Here',
-            viewLagTicks: 0,
-            rttMs: 0,
           })),
         ),
         request,

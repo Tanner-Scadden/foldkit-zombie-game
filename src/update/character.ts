@@ -12,12 +12,24 @@ import type { UpdateStep } from './step'
 
 const foldCharacterOutMessage = Character.OutMessage.match<UpdateStep>({
   ChoseLook:
-    ({ choice }) =>
+    ({ part, value }) =>
     stepModel =>
       playSounds([uiCue('Pop')])(
         withProfileFx(
           modifyFields(stepModel, {
-            appearance: appearance => Character.chooseLook(appearance, choice),
+            appearance: appearance =>
+              Character.chooseLook(appearance, part, value),
+          }),
+          'Poof',
+        ),
+      ),
+  FlippedLook:
+    ({ toggle }) =>
+    stepModel =>
+      playSounds([uiCue('Pop')])(
+        withProfileFx(
+          modifyFields(stepModel, {
+            appearance: appearance => Character.flipLook(appearance, toggle),
           }),
           'Poof',
         ),

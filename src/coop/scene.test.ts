@@ -180,9 +180,7 @@ describe('the lobby', () => {
       expect(role('button', { name: 'Kick Bo' })).toExist(),
       click(role('button', { name: 'READY' })),
       Command.resolve(
-        ChangeLobby({
-          change: LobbyChange.ChangedReady({ ready: true, pingMs: 0 }),
-        }),
+        ChangeLobby({ change: LobbyChange.ChangedReady({ ready: true }) }),
         Message.CompletedChangeLobby(),
       ),
       click(role('button', { name: 'Kick Bo' })),
@@ -261,11 +259,15 @@ describe('the lobby', () => {
 
   test('each seat wears the look its player sent, or its seat look', () => {
     const sent: Appearance = {
-      body: 'Female',
+      body: 'Broad',
       hairStyle: 'Long',
       hairColor: 'Pink',
       skinTone: 'Fair',
       shirtColor: 'Purple',
+      outfit: 'Dress',
+      print: 'Stripes',
+      beard: true,
+      glasses: true,
     }
     scene(
       { update, view },
@@ -287,35 +289,6 @@ describe('the lobby', () => {
       expect(
         selector('[aria-label="Ana, you, host"] .coop-seat-head'),
       ).toHaveStyle('background-image', portraitOf(defaultAppearance)),
-    )
-  })
-
-  test('each seat shows its link as bars, yours from your own pings', () => {
-    const room = {
-      ...freshRoom(CODE, 0),
-      maybePlayerId: Option.some('player-0'),
-      maybeLobby: Option.some(
-        lobbyOf([
-          { ...memberOf(0, 'Ana'), pingMs: 300 },
-          { ...memberOf(1, 'Bo'), pingMs: 150 },
-          memberOf(2, 'Cy'),
-        ]),
-      ),
-      link: 'Online' as const,
-    }
-    scene(
-      { update, view },
-      given(
-        at(
-          Screen.InRoom({
-            room: { ...room, session: { ...room.session, rttMs: 42 } },
-          }),
-        ),
-      ),
-      expect(role('img', { name: '42 ms' })).toHaveAttr('data-ping', 'Good'),
-      expect(role('img', { name: '150 ms' })).toHaveAttr('data-ping', 'Ok'),
-      expect(role('img', { name: '300 ms' })).not.toExist(),
-      expect(selector('[aria-label="Cy"] .coop-ping')).not.toExist(),
     )
   })
 

@@ -13,6 +13,9 @@ import {
   BODIES,
   HAIR_COLORS,
   HAIR_STYLES,
+  ON_OFF,
+  OUTFITS,
+  PRINTS,
   SHIRT_COLORS,
   SKIN_TONES,
   playerSprites,
@@ -34,6 +37,7 @@ import {
 import { playRoomFrame } from '@game/coopPlay'
 import { withBests } from '@game/difficulty'
 import { KITCHEN_EXIT } from '@game/exits'
+import { quietLayer as quietInstallPrompt } from '@game/install'
 import { sceneShapes } from '@game/layers'
 import { init, update } from '@game/main'
 import { Message } from '@game/message'
@@ -51,6 +55,7 @@ import {
   Lesson,
   TrapHint,
   type Appearance,
+  defaultAppearance,
   type Decal,
   type DecalKind,
   type PickupKind,
@@ -67,6 +72,7 @@ import { type PlayerStore, layer as PlayerStoreLayer } from '@game/store'
 import { subscriptions } from '@game/subscriptions'
 import { tickCoopRoom } from '@game/update/coop'
 import { openProfile } from '@game/update/profile'
+import { RUNNING_BUILD } from '@game/version'
 import { view } from '@game/view'
 import { pause, planFor, rollSpawns } from '@game/waves'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
@@ -844,23 +850,14 @@ const coopRoom = (
     maybePlayerId: Option.some('player-0'),
     maybeLobby: Option.some(lobbyOf(members, status)),
     link: 'Online',
-    session: {
-      ...(status === 'Playing'
-        ? playingSession(world, 0)
-        : Session.makeSession(0)),
-      rttMs: COOP_PINGS[0] ?? 0,
-      rtts: members.map(member => ({
-        slot: member.slot,
-        rttMs: COOP_PINGS[member.slot] ?? 0,
-      })),
-    },
+    session:
+      status === 'Playing' ? playingSession(world, 0) : Session.makeSession(0),
     maybeWorld: status === 'Playing' ? Option.some(world) : Option.none(),
     frameEvents: [],
     eventsTick: 0,
     predictedShots: 0,
     tracers: [],
     tracerCount: 0,
-    hits: { looked: 0, confirmed: 0 },
     presses: CoopModel.noPresses,
     share: 'Idle',
     departure: 'Staying',
@@ -872,9 +869,6 @@ const COOP_NAMES = ['Tanner', 'Mo', 'Pip', 'Grumbles']
 
 // NOTE: the looks the staged teammates sent with their joins; the first
 // seat is the page's own player, who wears the page's own look.
-// NOTE: each staged player's round trip: good, fair, poor, good.
-const COOP_PINGS = [48, 140, 260, 90]
-
 const COOP_LOOKS = [
   '',
   'Male.Curls.Blonde.Deep.Red',
@@ -901,10 +895,9 @@ const coopScreen = (stage: NonNullable<typeof config.coop>) => {
       },
     })
   const members = (count: number, readyCount = 0) =>
-    COOP_NAMES.slice(0, count).map((name, slot) => ({
-      ...memberOf(slot, name, slot < readyCount, COOP_LOOKS[slot] ?? ''),
-      pingMs: COOP_PINGS[slot] ?? 0,
-    }))
+    COOP_NAMES.slice(0, count).map((name, slot) =>
+      memberOf(slot, name, slot < readyCount, COOP_LOOKS[slot] ?? ''),
+    )
   switch (stage) {
     case 'tile':
       return Screen.Closed()
@@ -1058,6 +1051,10 @@ const scenarioModelOf = (): Model => {
     model = modifyFields(model, {
       maybeNewerBuild: () => Option.some(newer || 'next'),
     })
+  if (config.unwrap)
+    model = modifyFields(model, { updateGift: () => 'Unwrapping' })
+  if (config.install)
+    model = modifyFields(model, { installOffer: () => 'Ready' })
   if (config.support)
     model = modifyFields(model, {
       maybeSupportUrl: () => Option.some('https://buy.stripe.com/test_harness'),
@@ -1268,7 +1265,17 @@ const scenarioModelOf = (): Model => {
     })
   const look = config.look
   if (look !== undefined) {
-    const [body, hairStyle, hairColor, skinTone, shirtColor] = look
+    const [
+      body,
+      hairStyle,
+      hairColor,
+      skinTone,
+      shirtColor,
+      outfit,
+      print,
+      beard,
+      glasses,
+    ] = look
     model = modifyFields(model, {
       appearance: a => ({
         body: body || a.body,
@@ -1276,6 +1283,10 @@ const scenarioModelOf = (): Model => {
         hairColor: hairColor || a.hairColor,
         skinTone: skinTone || a.skinTone,
         shirtColor: shirtColor || a.shirtColor,
+        outfit: outfit || a.outfit,
+        print: print || a.print,
+        beard: beard === 'Beard' || a.beard,
+        glasses: glasses === 'Glasses' || a.glasses,
       }),
     })
   }
@@ -1428,10 +1439,20 @@ const gameUpdate = (model: Model, incoming: Message): HarnessReturn => {
     return {
       model: modifyFields(model, { orientationLock: () => 'Supported' }),
     }
+  // NOTE: `install` keeps Chrome's offer on, and `greet` reads as the page
+  // just reloaded onto this build. The gift never reloads the harness: it
+  // stays mid-unwrap, as `unwrap` shows it.
+  if (config.install && incoming._tag === 'ChangedInstallOffer')
+    return { model }
+  if (incoming._tag === 'CompletedWaitForUnwrap') return { model }
   const message =
     incoming._tag === 'TickedFrame' && isFreezing
       ? Message.TickedFrame({ deltaTime: FIXED_FRAME_MS })
-      : incoming
+      : config.greet && incoming._tag === 'CompletedReadUpdateMarker'
+        ? Message.CompletedReadUpdateMarker({
+            maybeBuild: Option.some(RUNNING_BUILD),
+          })
+        : incoming
   if (message._tag === 'TickedFrame') framesRun++
   w.__isFrozen = framesRun >= freezeAfter
   const t0 = performance.now()
@@ -1464,7 +1485,18 @@ const sceneOf = (model: Model): HarnessReturn => {
                 : 'Look',
         )(modifyFields(seeded, { screenMs: () => 99999 }))
       : { model: seeded }
-  return config.tick === undefined ? opened : advance(opened, config.tick)
+  const lookSection = config.looksection
+  const sectioned: HarnessReturn =
+    lookSection === undefined
+      ? opened
+      : {
+          ...opened,
+          model: modifyFields(opened.model, {
+            character: picker =>
+              modifyFields(picker, { section: () => lookSection }),
+          }),
+        }
+  return config.tick === undefined ? sectioned : advance(sectioned, config.tick)
 }
 
 // THE READY SIGNAL
@@ -1629,9 +1661,22 @@ const harnessInit: Runtime.ApplicationInit<
 
 const CELL_W = 12
 const CELL_H = 16
+const SHEET_W = 168
+const SHEET_H = 268
+
+// NOTE: the look sheet: one row per part, each option of it on the classic
+// look (the bodies three times: in a tee, in a dress, and in overalls with
+// the Rainbow print, a beard, and glasses), then walk frames, both facings,
+// and the hit flash for four mixed looks.
 const lookSheetShapes = (): Array<Canvas.Shape> => {
   const shapes: Array<Canvas.Shape> = [
-    Canvas.Rect({ x: 0, y: 0, width: 400, height: 220, fill: FLOOR_COLOR }),
+    Canvas.Rect({
+      x: 0,
+      y: 0,
+      width: SHEET_W,
+      height: SHEET_H,
+      fill: FLOOR_COLOR,
+    }),
   ]
   const draw = (
     appearance: Appearance,
@@ -1661,63 +1706,88 @@ const lookSheetShapes = (): Array<Canvas.Shape> => {
       }),
     )
   }
-  BODIES.forEach((body, b) =>
-    HAIR_STYLES.forEach((hairStyle, st) => {
-      const row = b * HAIR_STYLES.length + st
-      SKIN_TONES.forEach((skinTone, sk) =>
-        HAIR_COLORS.forEach((hairColor, hc) => {
-          const col = sk * HAIR_COLORS.length + hc
-          draw(
-            {
-              body,
-              hairStyle,
-              hairColor,
-              skinTone,
-              shirtColor: SHIRT_COLORS[col % SHIRT_COLORS.length]!,
-            },
-            col * CELL_W + 8,
-            row * CELL_H + 15,
-            'idle',
-            0,
-            'Right',
-            'Normal',
-          )
-        }),
-      )
-    }),
+  const base = defaultAppearance
+  const rows: ReadonlyArray<ReadonlyArray<Appearance>> = [
+    BODIES.map(body => ({ ...base, body })),
+    BODIES.map(body => ({ ...base, body, outfit: 'Dress', hairStyle: 'Long' })),
+    BODIES.map(body => ({
+      ...base,
+      body,
+      outfit: 'Overalls',
+      print: 'Rainbow',
+      beard: true,
+      glasses: true,
+    })),
+    HAIR_STYLES.map(hairStyle => ({ ...base, hairStyle })),
+    HAIR_COLORS.map(hairColor => ({ ...base, hairColor, hairStyle: 'Long' })),
+    SKIN_TONES.map(skinTone => ({ ...base, skinTone })),
+    SHIRT_COLORS.map(shirtColor => ({ ...base, shirtColor })),
+    OUTFITS.map(outfit => ({ ...base, outfit })),
+    PRINTS.map(print => ({ ...base, print })),
+    OUTFITS.flatMap(outfit =>
+      PRINTS.map(print => ({ ...base, outfit, print, body: 'Slim' as const })),
+    ),
+    ON_OFF.flatMap(beard =>
+      ON_OFF.map(glasses => ({ ...base, beard, glasses })),
+    ),
+  ]
+  rows.forEach((row, r) =>
+    row.forEach((appearance, c) =>
+      draw(
+        appearance,
+        c * CELL_W + 8,
+        r * CELL_H + 15,
+        'idle',
+        0,
+        'Right',
+        'Normal',
+      ),
+    ),
   )
   const samples: Array<Appearance> = [
     {
-      body: 'Male',
-      hairStyle: 'Crop',
-      hairColor: 'Brown',
-      skinTone: 'Light',
-      shirtColor: 'Blue',
+      ...base,
+      body: 'Slim',
+      hairStyle: 'Mohawk',
+      hairColor: 'Pink',
+      skinTone: 'Tan',
+      outfit: 'Hoodie',
+      print: 'Rainbow',
+      glasses: true,
     },
     {
-      body: 'Female',
-      hairStyle: 'Long',
+      ...base,
+      body: 'Broad',
+      hairStyle: 'Curly',
       hairColor: 'Black',
       skinTone: 'Deep',
+      outfit: 'Overalls',
       shirtColor: 'Yellow',
+      beard: true,
     },
     {
-      body: 'Female',
-      hairStyle: 'Ponytail',
-      hairColor: 'Ginger',
+      ...base,
+      body: 'Slim',
+      hairStyle: 'Long',
+      hairColor: 'Blonde',
       skinTone: 'Fair',
-      shirtColor: 'Teal',
+      outfit: 'Dress',
+      shirtColor: 'Purple',
+      print: 'Stripes',
     },
     {
-      body: 'Male',
-      hairStyle: 'Curls',
-      hairColor: 'Black',
+      ...base,
+      body: 'Broad',
+      hairStyle: 'Bald',
+      hairColor: 'Grey',
       skinTone: 'Brown',
       shirtColor: 'Red',
+      beard: true,
+      glasses: true,
     },
   ]
   samples.forEach((appearance, i) => {
-    const y = 8 * CELL_H + 18 + i * CELL_H
+    const y = rows.length * CELL_H + 18 + i * CELL_H
     ;[0, 1, 2, 3].forEach(f =>
       draw(appearance, 8 + f * CELL_W, y, 'walk', f, 'Right', 'Normal'),
     )
@@ -1738,8 +1808,8 @@ const lookSheetView = (h: any) => ({
     [
       Canvas.view(
         {
-          width: 400,
-          height: 220,
+          width: SHEET_W,
+          height: SHEET_H,
           shapes: lookSheetShapes(),
           className: 'look-sheet',
         },
@@ -1762,7 +1832,7 @@ const application = Runtime.makeApplication({
   },
   subscriptions: Subscription.aggregate(subscriptions, harnessSubscriptions),
   managedResources,
-  resources: Layer.merge(PlayerStoreLayer, quietCoopNet),
+  resources: Layer.mergeAll(PlayerStoreLayer, quietCoopNet, quietInstallPrompt),
   container: document.getElementById('root'),
   ...(config.nodev ? { devTools: false as const } : {}),
 })

@@ -154,15 +154,15 @@ describe('the shop at a glance', () => {
       expect(
         within(selector('#shop-item-SmgRounds'), selector('.shop-stamp')),
       ).toExist(),
-      expect(selector('.shop-balance')).toHaveText('You have $165'),
+      expect(selector('.shop-balance')).toHaveText('You have $160'),
       keydown(selector('#shop-item-PistolUpgrade'), 'Enter'),
       expect(keeper).toHaveAttr('data-mood', 'Sad'),
-      expect(bubble).toHaveText('Need $35 more. No IOUs!'),
+      expect(bubble).toHaveText('Need $40 more. No IOUs!'),
       expect(selector('.shop-stamp')).toBeAbsent(),
       expect(
         within(selector('#shop-item-PistolUpgrade'), selector('.shop-nope')),
       ).toExist(),
-      expect(selector('.shop-balance')).toHaveText('You have $165'),
+      expect(selector('.shop-balance')).toHaveText('You have $160'),
       click(role('tab', { name: /^Traps,/ })),
       Command.resolve(Tabs.FocusTab, Tabs.Message.CompletedFocusTab()),
       expect(keeper).toHaveAttr('data-mood', 'Grinning'),

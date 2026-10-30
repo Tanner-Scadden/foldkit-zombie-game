@@ -51,6 +51,7 @@ import {
   TROPHY_ICON,
   TURN_PHONE_ICON,
 } from './icons'
+import { installTileView } from './installView'
 import { Message } from './message'
 import {
   type Difficulty,
@@ -72,6 +73,7 @@ import { helpLabel, howToPlayView } from './pauseHelp'
 import { isPortrait } from './screen'
 import { durationLabel } from './stats'
 import { hasFinishedTutorial } from './update/coop'
+import { updateGiftView } from './updateGift'
 import { whatsNewBodyView, whatsNewText } from './whatsNewView'
 
 // KEY BADGES
@@ -772,7 +774,19 @@ export const homeMenuView = (model: Model, h: HtmlBuilder<Message>): Html =>
               turnHintView(model, h),
               h.div(
                 [h.Class('home-corner')],
-                [fullscreenButtonView(model, h), settingsButtonView(model, h)],
+                [
+                  h.div(
+                    [h.Class('home-corner-row')],
+                    [
+                      fullscreenButtonView(model, h),
+                      settingsButtonView(model, h),
+                    ],
+                  ),
+                  h.div(
+                    [h.Class('home-corner-row')],
+                    [updateGiftView(model, h), installTileView(model, h)],
+                  ),
+                ],
               ),
             ],
           ),

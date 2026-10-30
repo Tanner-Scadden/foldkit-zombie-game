@@ -106,7 +106,7 @@ describe('the Profile', () => {
       ...showDialogInScene(),
       expect(tab('Look')).toHaveAttr('aria-selected', 'true'),
       expect(role('group', { name: 'Body' })).toBeAbsent(),
-      expect(role('radiogroup', { name: 'Body' })).toExist(),
+      expect(role('radiogroup', { name: 'Body shape' })).toExist(),
       keydown(tab('Look'), 'ArrowDown'),
       focusTab(1),
       expect(tab('Name')).toHaveAttr('aria-selected', 'true'),

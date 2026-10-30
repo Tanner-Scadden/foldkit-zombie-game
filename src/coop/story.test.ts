@@ -293,9 +293,7 @@ describe('the lobby', () => {
       }),
       message(Message.ClickedReadyButton()),
       Command.resolve(
-        ChangeLobby({
-          change: LobbyChange.ChangedReady({ ready: true, pingMs: 0 }),
-        }),
+        ChangeLobby({ change: LobbyChange.ChangedReady({ ready: true }) }),
         Message.CompletedChangeLobby(),
       ),
       message(
@@ -303,9 +301,7 @@ describe('the lobby', () => {
       ),
       message(Message.ClickedReadyButton()),
       Command.resolve(
-        ChangeLobby({
-          change: LobbyChange.ChangedReady({ ready: false, pingMs: 0 }),
-        }),
+        ChangeLobby({ change: LobbyChange.ChangedReady({ ready: false }) }),
         Message.CompletedChangeLobby(),
       ),
     )
@@ -345,9 +341,7 @@ describe('the lobby', () => {
       message(Message.ClickedModePick({ mode: 'Endless' })),
       message(Message.ClickedReadyButton()),
       Command.resolve(
-        ChangeLobby({
-          change: LobbyChange.ChangedReady({ ready: true, pingMs: 0 }),
-        }),
+        ChangeLobby({ change: LobbyChange.ChangedReady({ ready: true }) }),
         Message.CompletedChangeLobby(),
       ),
     )
@@ -711,7 +705,6 @@ describe('the room', () => {
             tick: later.tick,
             base: played.tick,
             ack: 0,
-            pings: [],
             diff: diff.finish(),
           },
           1500,

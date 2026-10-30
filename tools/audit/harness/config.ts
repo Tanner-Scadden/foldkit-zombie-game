@@ -6,6 +6,8 @@ import {
   Difficulty,
   HairColor,
   HairStyle,
+  Outfit,
+  Print,
   ShirtColor,
   SkinTone,
 } from '@game/playerData'
@@ -94,14 +96,18 @@ const Look = Schema.String.pipe(
       LookPart(HairColor),
       LookPart(SkinTone),
       LookPart(ShirtColor),
+      LookPart(Outfit),
+      LookPart(Print),
+      LookPart(Schema.Literal('Beard')),
+      LookPart(Schema.Literal('Glasses')),
     ]),
     {
       decode: SchemaGetter.transform(text => {
         const parts = text.split(',')
         return Array.from(
-          { length: 5 },
+          { length: 9 },
           (_, index) => parts[index] ?? '',
-        ) as unknown as readonly ['', '', '', '', '']
+        ) as unknown as readonly ['', '', '', '', '', '', '', '', '']
       }),
       encode: SchemaGetter.transform(parts => parts.join(',')),
     },
@@ -151,6 +157,7 @@ export const HarnessConfig = Schema.Struct({
   god: Flag,
   look: Schema.optionalKey(Look),
   picker: Flag,
+  looksection: Choice(['Body', 'Hair', 'Outfit']),
   profile: Choice(['look', 'name', 'account', 'settings']),
   name: Schema.optionalKey(Schema.String),
   sync: Choice(['local', 'connecting', 'synced', 'offline', 'broken']),
@@ -246,6 +253,9 @@ export const HarnessConfig = Schema.Struct({
   newsseen: Flag,
   newer: Schema.optionalKey(Schema.String),
   fit: Choice(['home', 'full']),
+  install: Flag,
+  greet: Flag,
+  unwrap: Flag,
   support: Flag,
   rotate: Flag,
   // Co-op

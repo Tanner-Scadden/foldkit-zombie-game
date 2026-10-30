@@ -3,14 +3,13 @@ import { Array, Option, pipe } from 'effect'
 import {
   type ClientFrame,
   type ClosedReason,
-  MAX_RTT_MS,
   NEUTRAL_INPUT,
   PROTOCOL_VERSION,
   type PlayerInput,
   ServerFrame,
 } from './Protocol'
 import { repeat, writeAll } from './Wire'
-import { MAX_VIEW_LAG_TICKS, type PlayerTick, type World } from './World'
+import type { PlayerTick, World } from './World'
 
 // NOTE: the GameRoom's game, as pure functions over plain data, apart from
 // the Durable Object that runs them (infra/worker/gameRoom.ts) so tests
@@ -72,7 +71,6 @@ export interface Seat {
   readonly receipts: ReadonlyArray<Receipt>
   readonly ack: number
   readonly rttMs: number
-  readonly viewLagTicks: number
 }
 
 export interface Room<W> {
@@ -191,7 +189,6 @@ export const startRoom = <W, Own>(
     receipts: [],
     ack: 0,
     rttMs: 0,
-    viewLagTicks: 0,
   }))
   const room: Room<W> = {
     seats,
@@ -387,11 +384,6 @@ const enqueue = (
   const kept = Array.filter(seat.queued, change => change.tick < firstTick)
   return {
     ...seat,
-    rttMs: frame.rttMs,
-    viewLagTicks: Math.max(
-      0,
-      Math.min(MAX_VIEW_LAG_TICKS, lastTick - frame.seen),
-    ),
     queued: Array.takeRight(Array.appendAll(kept, changes), MAX_QUEUED_CHANGES),
     receipts: Array.takeRight(
       Array.append(seat.receipts, { seq: frame.seq, lastTick }),
@@ -510,22 +502,7 @@ const tickOf = (seat: Seat): PlayerTick => ({
   slot: seat.slot,
   input: seat.presence._tag === 'Here' ? seat.input : NEUTRAL_INPUT,
   presence: seat.presence._tag,
-  viewLagTicks: seat.viewLagTicks,
-  rttMs: seat.rttMs,
 })
-
-// NOTE: everyone's round trip rides in a Delta about every 2 seconds, for
-// the ping bars; it costs nothing billed, since only what players send is.
-export const PINGS_EVERY_TICKS = 120
-
-const pingsOf = (room: Room<unknown>) =>
-  Math.floor(room.tick / PINGS_EVERY_TICKS) >
-  Math.floor(room.sentTick / PINGS_EVERY_TICKS)
-    ? Array.map(room.seats, seat => ({
-        slot: seat.slot,
-        rttMs: Math.min(MAX_RTT_MS, Math.round(seat.rttMs)),
-      }))
-    : []
 
 const runTick = <W, Own>(world: World<W, Own>, room: Room<W>): Room<W> => {
   const tick = room.tick + 1
@@ -542,7 +519,6 @@ const broadcast = <W, Own>(world: World<W, Own>, room: Room<W>): Stepped<W> => {
   const diff = writeAll(writer =>
     world.diff(writer, room.sentWorld, room.world),
   )
-  const pings = pingsOf(room)
   return {
     room: { ...room, sentWorld: room.world, sentTick: room.tick },
     out: sendToLinked(room.seats, seat =>
@@ -550,7 +526,6 @@ const broadcast = <W, Own>(world: World<W, Own>, room: Room<W>): Stepped<W> => {
         tick: room.tick,
         base: room.sentTick,
         ack: seat.ack,
-        pings,
         diff,
       }),
     ),

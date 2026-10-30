@@ -10,6 +10,7 @@ import {
   openExitIn,
   tileBox,
 } from './arena'
+import { joinNewDoors } from './waves'
 import type { World } from './world'
 import { type ExitId, Phase, ShopState, type Vector } from './worldSchema'
 
@@ -80,8 +81,11 @@ const maybeExitWithin = (
     Option.map(({ exit }) => exit),
   )
 
+// NOTE: from the kitchen's first break on, an exit is for sale any time the
+// round runs, mid-wave too (owner, 2026-10-30).
 export const isExitOfferOpenFor = (phase: Phase): boolean =>
-  Phase.isAnyOf(['Preparation'])(phase) && phase.wave >= EXIT_RULES.firstWave
+  Phase.isAnyOf(['Preparation', 'Wave'])(phase) &&
+  phase.wave >= EXIT_RULES.firstWave
 
 export const maybeExitAt = (model: World): Option.Option<ExitId> =>
   maybeExitWithin(levelOf(model), model.player, EXIT_RULES.reachPx)
@@ -91,9 +95,10 @@ export const hasLeftExits = (model: World): boolean =>
     maybeExitWithin(levelOf(model), model.player, EXIT_RULES.leavePx),
   )
 
-// NOTE: the player bumps a boarded exit between waves to see its offer, the
-// way they bump the stall to shop. Nothing opens mid-wave or before the
-// kitchen's first break.
+// NOTE: the player bumps a boarded exit to see its offer, the way they bump
+// the stall to shop, between waves or mid-wave. Mid-wave the world keeps
+// going while the offer is open. Nothing opens before the kitchen's first
+// break.
 export const arriveAtExit = (model: World): Option.Option<ShopState> =>
   isExitOfferOpenFor(model.phase)
     ? Option.map(maybeExitAt(model), exit => ShopState.AtExit({ exit }))
@@ -109,15 +114,18 @@ export type ExitPrompt =
 
 const NO_PROMPT: ExitPrompt = { _tag: 'None' }
 
-// NOTE: between waves a boarded exit wears a price tag on its boards, or a
-// padlock before the kitchen's first break. Mid-wave the boards are bare,
-// so a fight is never cluttered with signs. The tag stays up while the
-// player browses the stall, and goes while its own offer is open.
+// NOTE: a boarded exit wears a price tag on its boards whenever it is for
+// sale, or a padlock in the breaks before the kitchen's first. Before then
+// the boards are bare mid-wave. The tag stays up while the player browses
+// the stall, and goes while its own offer is open.
 export const exitPrompt = (model: World): ExitPrompt => {
   if (
-    !Phase.isAnyOf(['Preparation'])(model.phase) ||
-    ShopState.isAnyOf(['AtExit'])(model.shop)
+    !isExitOfferOpenFor(model.phase) &&
+    !Phase.isAnyOf(['Preparation'])(model.phase)
   ) {
+    return NO_PROMPT
+  }
+  if (ShopState.isAnyOf(['AtExit'])(model.shop)) {
     return NO_PROMPT
   }
   return pipe(
@@ -153,9 +161,9 @@ const spendOn = (model: World, price: number): World =>
       modifyFields(stats, { purchases: purchases => purchases + 1 }),
   })
 
-// NOTE: buying the exit opens it for the rest of the run. The wave already
-// shown on the door markers stays as rolled, so the exit's doors join from
-// the next wave's roll.
+// NOTE: buying the exit opens it for the rest of the run, and its spawn
+// doors join the wave shown or under way at once (joinNewDoors in
+// src/waves.ts), drawn from the run's generator.
 export const buyExit = (model: World, exit: ExitId): Option.Option<World> => {
   const level = levelOf(model)
   const isClosed = Option.exists(
@@ -169,9 +177,13 @@ export const buyExit = (model: World, exit: ExitId): Option.Option<World> => {
   ) {
     return Option.none()
   }
+  const opened = modifyFields(spendOn(model, EXIT_RULES.price), {
+    level: state => openExitIn(state, exit),
+  })
   return Option.some(
-    modifyFields(spendOn(model, EXIT_RULES.price), {
-      level: state => openExitIn(state, exit),
-    }),
+    joinNewDoors(
+      opened,
+      Array.difference(levelOf(opened).doorIds, level.doorIds),
+    ),
   )
 }

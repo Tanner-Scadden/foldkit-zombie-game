@@ -91,6 +91,8 @@ const SCENES: ReadonlyArray<Scene> = [
   { name: 'howto', query: '', open: [MANOR, '#hand-card-howtoplay'] },
   { name: 'character', query: '', open: [MANOR, '#hand-card-character'] },
   { name: 'difficulty', query: '', open: ['#home-difficulty'] },
+  { name: 'home-guide', query: 'fit=home', open: ['#home-install'] },
+  { name: 'greet', query: 'greet', open: [] },
 ]
 
 const MIN_SIDE = 48

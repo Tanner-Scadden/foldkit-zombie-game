@@ -24,7 +24,6 @@ import {
 } from './matchmakerCore.ts'
 import {
   LISTING_PATH,
-  REGION_HEADER,
   createRoomIn,
   joinRoomIn,
   ticketOf,
@@ -44,13 +43,12 @@ const QUICK_TAG = 'quick'
 const STATE_KEY = 'state'
 
 const Attachment = Schema.TaggedUnion({
-  Opened: { socket: Schema.String, region: Schema.optionalKey(Schema.String) },
+  Opened: { socket: Schema.String },
   Queued: {
     socket: Schema.String,
     playerId: Schema.String,
     name: Schema.String,
     look: Schema.optionalKey(Schema.String),
-    region: Schema.optionalKey(Schema.String),
   },
 })
 type Attachment = typeof Attachment.Type
@@ -108,7 +106,6 @@ export class Matchmaker {
           first.name,
           first.look ?? '',
           'Public',
-          first.region ?? '',
         ),
       )
       if (Result.isFailure(created)) {
@@ -223,11 +220,7 @@ export class Matchmaker {
       const pair = new WebSocketPair()
       this.ctx.acceptWebSocket(pair[1], [QUICK_TAG])
       pair[1].serializeAttachment(
-        encodeAttachment({
-          _tag: 'Opened',
-          socket: crypto.randomUUID(),
-          region: request.headers.get(REGION_HEADER) ?? '',
-        }),
+        encodeAttachment({ _tag: 'Opened', socket: crypto.randomUUID() }),
       )
       return Promise.resolve(
         new Response(null, { status: 101, webSocket: pair[0] }),
@@ -296,7 +289,6 @@ export class Matchmaker {
               playerId: claims.success.playerId,
               name: said.name,
               look: said.look ?? '',
-              region: attachment.region ?? '',
             }),
           )
           const player: Matchmaking.Queued = {
@@ -304,7 +296,6 @@ export class Matchmaker {
             playerId: claims.success.playerId,
             name: said.name,
             look: said.look ?? '',
-            region: attachment.region ?? '',
             queuedMs: nowMs,
           }
           return yield* this.run((matchmaker, now) =>

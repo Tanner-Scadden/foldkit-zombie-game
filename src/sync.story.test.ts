@@ -368,7 +368,7 @@ describe('changes as mutations', () => {
       ...before,
       appearance: {
         ...before.appearance,
-        body: before.appearance.body === 'Male' ? 'Female' : 'Male',
+        body: before.appearance.body === 'Slim' ? 'Broad' : 'Slim',
       },
       difficulty: { chosen: 'Nightmare', card: 'Seen', nightmare: 'Unlocked' },
       bests: {

@@ -79,11 +79,15 @@ const learnedSave: PlayerSave = {
     cursor: 'Thin',
   },
   appearance: {
-    body: 'Female',
+    body: 'Slim',
     hairStyle: 'Ponytail',
     hairColor: 'Pink',
     skinTone: 'Deep',
     shirtColor: 'Teal',
+    outfit: 'Overalls',
+    print: 'Rainbow',
+    beard: true,
+    glasses: true,
   },
   difficulty: { chosen: 'Hard', card: 'Seen', nightmare: 'Unlocked' },
   bests: {
@@ -106,12 +110,39 @@ const learnedSave: PlayerSave = {
   name: 'Snackula',
 }
 
-const { name: _name, ...versionEightSave } = learnedSave
+// NOTE: the look as saves before version 10 kept it, a Female or Male
+// body and five parts, and the closest current look it reads as: a Broad
+// body in a tee.
+const LEGACY_LOOK = {
+  body: 'Female',
+  hairStyle: 'Ponytail',
+  hairColor: 'Pink',
+  skinTone: 'Deep',
+  shirtColor: 'Teal',
+}
+
+const MIGRATED_LOOK: PlayerSave['appearance'] = {
+  body: 'Broad',
+  hairStyle: 'Ponytail',
+  hairColor: 'Pink',
+  skinTone: 'Deep',
+  shirtColor: 'Teal',
+  outfit: 'Tee',
+  print: 'Plain',
+  beard: false,
+  glasses: false,
+}
+
+const versionNineSave = { ...learnedSave, appearance: LEGACY_LOOK }
+
+const migratedSave: PlayerSave = { ...learnedSave, appearance: MIGRATED_LOOK }
+
+const { name: _name, ...versionEightSave } = versionNineSave
 
 // NOTE: a save from before the display name has none, and one from before
 // the cursor setting comes back with the bold cursor, whatever the fixture
 // above keeps for round trips.
-const unnamedSave: PlayerSave = { ...learnedSave, name: '' }
+const unnamedSave: PlayerSave = { ...migratedSave, name: '' }
 
 const boldCursorSave: PlayerSave = {
   ...unnamedSave,
@@ -276,6 +307,108 @@ describe('the schema', () => {
       Option.getOrThrow(decodeSave(json)),
     )
     expect(restored.cursorSetting).toBe('Bold')
+  })
+
+  test('a version 9 save keeps everything, its look read as the closest current one', () => {
+    const json = JSON.stringify({ ...versionNineSave, version: 9 })
+    expect(decodeSave(json)).toEqual(Option.some(migratedSave))
+    const male = JSON.stringify({
+      ...versionNineSave,
+      version: 9,
+      appearance: {
+        ...LEGACY_LOOK,
+        body: 'Male',
+        hairStyle: 'Crop',
+        hairColor: 'Ginger',
+        skinTone: 'Light',
+      },
+    })
+    expect(Option.map(decodeSave(male), save => save.appearance)).toEqual(
+      Option.some({
+        ...MIGRATED_LOOK,
+        hairStyle: 'Short',
+        hairColor: 'Red',
+        skinTone: 'Light',
+      }),
+    )
+  })
+
+  // NOTE: the many-part look shipped for a few hours on 2026-10-30 before
+  // the owner chose the simpler set; each part reads as its closest one.
+  test('a version 10 save keeps everything, its many-part look read as the closest simple one', () => {
+    const manyParts = {
+      body: 'Round',
+      hairStyle: 'Undercut',
+      hairColor: 'Silver',
+      skinTone: 'Umber',
+      shirtColor: 'Lilac',
+      outfit: 'Kilt',
+      print: 'Trans',
+      facialHair: 'Goatee',
+      makeup: 'Glam',
+      extra: 'Shades',
+    }
+    const json = JSON.stringify({
+      ...learnedSave,
+      version: 10,
+      appearance: manyParts,
+    })
+    expect(Option.map(decodeSave(json), save => save.appearance)).toEqual(
+      Option.some({
+        body: 'Broad',
+        hairStyle: 'Short',
+        hairColor: 'Grey',
+        skinTone: 'Deep',
+        shirtColor: 'Purple',
+        outfit: 'Dress',
+        print: 'Rainbow',
+        beard: true,
+        glasses: true,
+      }),
+    )
+    const plain = JSON.stringify({
+      ...learnedSave,
+      version: 10,
+      appearance: {
+        ...manyParts,
+        body: 'Slim',
+        hairStyle: 'Buzz',
+        skinTone: 'Bronze',
+        outfit: 'Vee',
+        print: 'Stripes',
+        facialHair: 'Stubble',
+        extra: 'Earrings',
+      },
+    })
+    expect(Option.map(decodeSave(plain), save => save.appearance)).toEqual(
+      Option.some({
+        body: 'Slim',
+        hairStyle: 'Bald',
+        hairColor: 'Grey',
+        skinTone: 'Tan',
+        shirtColor: 'Purple',
+        outfit: 'Tee',
+        print: 'Stripes',
+        beard: false,
+        glasses: false,
+      }),
+    )
+    const { appearance: _look, ...rest } = learnedSave
+    expect(
+      Option.map(decodeSave(json), save => {
+        const { appearance: _migrated, ...others } = save
+        return others
+      }),
+    ).toEqual(Option.some(rest))
+  })
+
+  test('a version 9 save with a look no build ever made reads as no save', () => {
+    const json = JSON.stringify({
+      ...versionNineSave,
+      version: 9,
+      appearance: { ...LEGACY_LOOK, body: 'Robot' },
+    })
+    expect(decodeSave(json)).toEqual(Option.none())
   })
 
   test('a version 8 save keeps everything, with no name yet', () => {

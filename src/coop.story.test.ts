@@ -32,11 +32,15 @@ const newcomer = asVeteran(initialModel)
 const graduated = graduate(newcomer)
 
 const PICKED_LOOK: Appearance = {
-  body: 'Female',
+  body: 'Slim',
   hairStyle: 'Ponytail',
   hairColor: 'Pink',
   skinTone: 'Tan',
   shirtColor: 'Purple',
+  outfit: 'Dress',
+  print: 'Rainbow',
+  beard: true,
+  glasses: false,
 }
 
 const resolveFocusCoop = () =>
@@ -122,7 +126,7 @@ describe('co-op from home', () => {
         RequestRoom({
           request: RoomRequest.Create(),
           name: 'Snackula',
-          look: 'Female.Ponytail.Pink.Tan.Purple',
+          look: 'Slim.Ponytail.Pink.Tan.Purple.CCBA',
         }),
         CoopMessage.FailedRequestRoom({ problem: 'Offline' }),
       ),
@@ -156,9 +160,7 @@ describe('co-op from home', () => {
         expect(current.phase._tag).toBe('Ready')
       }),
       Command.resolve(
-        ChangeLobby({
-          change: LobbyChange.ChangedReady({ ready: true, pingMs: 0 }),
-        }),
+        ChangeLobby({ change: LobbyChange.ChangedReady({ ready: true }) }),
         CoopMessage.CompletedChangeLobby(),
       ),
     )

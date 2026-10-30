@@ -101,7 +101,6 @@ export const memberOf = (
   canNightmare,
   slot,
   ready,
-  pingMs: 0,
   joinedMs: slot,
 })
 
@@ -139,8 +138,6 @@ export const stagedWorld = (slots: ReadonlyArray<number>): WorldState =>
           moveY: slot < 2 ? -60 : 60,
         },
         presence: 'Here' as const,
-        viewLagTicks: 0,
-        rttMs: 0,
       })),
     ),
   )

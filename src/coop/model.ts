@@ -31,7 +31,7 @@ export type CoopProblem = typeof CoopProblem.Type
 // NOTE: what a player writes to the room's lobby scope. The service fills
 // in who it is for (`by`), so the update never needs the player id.
 export const LobbyChange = defineTaggedUnion({
-  ChangedReady: { ready: Schema.Boolean, pingMs: Schema.Number },
+  ChangedReady: { ready: Schema.Boolean },
   ChangedPicks: { mode: PickedMode, difficulty: RoomDifficulty },
   KickedPlayer: { playerId: Schema.String },
 })
@@ -106,9 +106,7 @@ export const noPresses: Presses = {
 // player fired in this frame's newly predicted ticks, so the shot sounds
 // at once; a correction from the room replays ticks already counted.
 // `tracers` are those shots' bullets, drawn at once and hurting nothing
-// (src/simulation.ts, aimTracers), and `tracerCount` numbers them. `hits`
-// counts the tracers that stopped on a zombie (looked) beside your hits
-// the room confirmed, for the audit's hit registration.
+// (src/simulation.ts, aimTracers), and `tracerCount` numbers them.
 export const Room = Schema.Struct({
   code: RoomCode,
   slot: Schema.Number,
@@ -122,7 +120,6 @@ export const Room = Schema.Struct({
   predictedShots: Schema.Number,
   tracers: Schema.Array(Bullet),
   tracerCount: Schema.Number,
-  hits: Schema.Struct({ looked: Schema.Number, confirmed: Schema.Number }),
   presses: Presses,
   share: Share,
   departure: Departure,

@@ -97,12 +97,9 @@ describe('versions', () => {
     ).toEqual(Option.none())
     expect(
       negotiateVersion({ minVersion: 1, maxVersion: 3 }, SERVER_VERSIONS),
-    ).toEqual(Option.some(3))
+    ).toEqual(Option.some(2))
     expect(
-      negotiateVersion({ minVersion: 1, maxVersion: 2 }, SERVER_VERSIONS),
-    ).toEqual(Option.none())
-    expect(
-      negotiateVersion({ minVersion: 4, maxVersion: 5 }, SERVER_VERSIONS),
+      negotiateVersion({ minVersion: 3, maxVersion: 4 }, SERVER_VERSIONS),
     ).toEqual(Option.none())
     expect(
       negotiateVersion(
@@ -120,14 +117,12 @@ describe('client frames', () => {
       _tag: 'Input',
       seq: 41,
       tick: 1234,
-      seen: 1234,
-      rttMs: 61,
       samples: [
         { ticks: 4, input: NEUTRAL_INPUT },
         { ticks: 2, input: walking },
       ],
     },
-    { _tag: 'Input', seq: 42, tick: 1240, seen: 1228, rttMs: 61, samples: [] },
+    { _tag: 'Input', seq: 42, tick: 1240, samples: [] },
     { _tag: 'Ping', nonce: 9, rttMs: 61 },
     { _tag: 'Leave' },
   ]
@@ -143,24 +138,20 @@ describe('client frames', () => {
       _tag: 'Input',
       seq: 200,
       tick: 36_000,
-      seen: 36_000,
-      rttMs: 61,
       samples: [{ ticks: 6, input: NEUTRAL_INPUT }],
     })
     const turning = encodeClient({
       _tag: 'Input',
       seq: 200,
       tick: 36_000,
-      seen: 36_000,
-      rttMs: 61,
       samples: [
         { ticks: 3, input: walking },
         { ticks: 3, input: { ...walking, moveX: 0 } },
       ],
     })
-    expect(standing.length).toBeLessThanOrEqual(13)
-    expect(turning.length).toBeLessThanOrEqual(29)
-    expect(webSocketBytes(turning.length, true)).toBeLessThanOrEqual(35)
+    expect(standing.length).toBeLessThanOrEqual(9)
+    expect(turning.length).toBeLessThanOrEqual(25)
+    expect(webSocketBytes(turning.length, true)).toBeLessThanOrEqual(31)
   })
 
   test('the Schema refuses what a player may not claim', () => {
@@ -173,8 +164,6 @@ describe('client frames', () => {
         _tag: 'Input',
         seq: 1,
         tick: 1,
-        seen: 1,
-        rttMs: 61,
         samples: Array.from({ length: 65 }, () => ({
           ticks: 1,
           input: NEUTRAL_INPUT,
@@ -184,8 +173,6 @@ describe('client frames', () => {
         _tag: 'Input',
         seq: 1,
         tick: 1,
-        seen: 1,
-        rttMs: 61,
         samples: [{ ticks: 0, input: NEUTRAL_INPUT }],
       }),
     ]
@@ -217,18 +204,7 @@ describe('server frames', () => {
       tick: 303,
       base: 300,
       ack: 13,
-      pings: [],
       diff: new Uint8Array([4, 5]),
-    }),
-    ServerFrame.cases.Delta.make({
-      tick: 423,
-      base: 420,
-      ack: 14,
-      pings: [
-        { slot: 0, rttMs: 48 },
-        { slot: 2, rttMs: 212 },
-      ],
-      diff: new Uint8Array([6]),
     }),
     ServerFrame.cases.Pong.make({ nonce: 3, tick: 310 }),
     ServerFrame.cases.Away.make({ slot: 1 }),
@@ -249,10 +225,9 @@ describe('server frames', () => {
         tick: 108_000,
         base: 107_997,
         ack: 6000,
-        pings: [],
         diff: new Uint8Array(0),
       }),
     )
-    expect(header.length).toBeLessThanOrEqual(8)
+    expect(header.length).toBeLessThanOrEqual(7)
   })
 })

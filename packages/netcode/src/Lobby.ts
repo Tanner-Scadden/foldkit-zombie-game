@@ -200,7 +200,6 @@ export const MemberRow = Schema.Struct({
   nightmare: Schema.Number,
   slot: Schema.Number,
   ready: Schema.Number,
-  ping_ms: Schema.Number,
   joined_ms: Schema.Number,
 })
 export type MemberRow = typeof MemberRow.Type
@@ -220,9 +219,6 @@ export const LobbyMember = Schema.Struct({
   canNightmare: Schema.Boolean,
   slot: Schema.Number,
   ready: Schema.Boolean,
-  // NOTE: the round trip the player last measured, sent with their READY
-  // (so it costs no message of its own); 0 until then.
-  pingMs: Schema.Number,
   joinedMs: Schema.Number,
 })
 export type LobbyMember = typeof LobbyMember.Type
@@ -272,7 +268,6 @@ export const lobbyOfRows = (
       canNightmare: member.nightmare !== 0,
       slot: member.slot,
       ready: member.ready !== 0,
-      pingMs: member.ping_ms,
       joinedMs: member.joined_ms,
     })),
     Array.sort(bySlot),
@@ -314,7 +309,7 @@ export const readLobby = (
     )
     const members = yield* rejectBadRows(
       decodeMemberRows(
-        yield* sql`SELECT player_id, name, look, nightmare, slot, ready, ping_ms, joined_ms
+        yield* sql`SELECT player_id, name, look, nightmare, slot, ready, joined_ms
           FROM ${context.table('members')}`,
       ),
     )
@@ -515,18 +510,12 @@ export const JoinedRoom = defineMutation({
 
 export const ChangedReady = defineMutation({
   name: 'ChangedReady',
-  version: 2,
-  args: Schema.Struct({
-    by: Schema.String,
-    ready: Schema.Boolean,
-    pingMs: Schema.optionalKey(
-      Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 60_000 })),
-    ),
-  }),
+  version: 1,
+  args: Schema.Struct({ by: Schema.String, ready: Schema.Boolean }),
   scopes: [ROOM_SCOPE_KIND],
   writer: 'Members',
   authorize: (args, actor) => isSender(args, actor),
-  apply: ({ by, ready, pingMs }, context) =>
+  apply: ({ by, ready }, context) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
       const lobby = yield* requireLobby(context)
@@ -535,8 +524,7 @@ export const ChangedReady = defineMutation({
         return yield* reject('Not in the lobby')
       }
       yield* sql`UPDATE ${context.table('members')}
-        SET ready = ${ready ? 1 : 0}, ping_ms = ${pingMs ?? 0}
-        WHERE player_id = ${by}`
+        SET ready = ${ready ? 1 : 0} WHERE player_id = ${by}`
       const after = Array.map(lobby.members, member =>
         member.playerId === by ? { ...member, ready } : member,
       )
@@ -748,12 +736,6 @@ export const RoomScope = defineScope({
         const sql = yield* SqlClient.SqlClient
         yield* sql`ALTER TABLE ${sql(table('members'))}
           ADD COLUMN nightmare INTEGER NOT NULL DEFAULT 0`
-      }),
-    '0005_ping': table =>
-      Effect.gen(function* () {
-        const sql = yield* SqlClient.SqlClient
-        yield* sql`ALTER TABLE ${sql(table('members'))}
-          ADD COLUMN ping_ms INTEGER NOT NULL DEFAULT 0`
       }),
   },
 })
