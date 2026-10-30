@@ -77,6 +77,7 @@ import {
   type Hold,
   Phase,
   type PlannedSpawn,
+  Purchase,
   Round,
   RunMode,
   ShopState,
@@ -1556,6 +1557,7 @@ export const keepGoing = (model: Model): Model =>
         modifyFields(model, {
           mode: () => RunMode.Endless(),
           shop: () => ShopState.Away(),
+          purchase: () => Purchase.Idle(),
           screenMs: () => 0,
         }),
         world => beginPreparation(world, FINAL_WAVE + 1, PREPARATION_MS),
@@ -1844,7 +1846,7 @@ export const advanceRound = (model: World, worldMs: number): World =>
           ? startWaveEarly(model)
           : countDownBreak(model, preparation, worldMs)
       }
-      return ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop) ||
+      return ShopState.isAnyOf(['Browsing'])(model.shop) ||
         isPracticeGateHeld(model)
         ? model
         : countDownBreak(model, preparation, worldMs)

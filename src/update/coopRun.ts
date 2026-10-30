@@ -19,6 +19,7 @@ import {
 } from '../input'
 import type { Message } from '../message'
 import { Arsenal, type GunSlot, type Model, type ShopItemId } from '../model'
+import { isInteractTaken } from '../purchase'
 import { isAtCounter, verdictFor } from '../shop'
 import { SeatAction } from '../stepWorld'
 import { isRoundActive } from '../waves'
@@ -29,7 +30,7 @@ import { type UpdateReturn, type UpdateStep, withInput } from './step'
 
 // The Messages an online co-op run handles its own way (MULTIPLAYER.md,
 // Phase 2). The room runs the World, so nothing here steps it: a press
-// (swap, reload, a trap, READY, a buy, an exit, leaving the counter) goes
+// (swap, reload, a trap, READY, a buy, leaving the counter) goes
 // to the room as a seat action, the frame comes from the room, and there
 // is no pause (decided 7). Everything else (moving, aiming, the dialogs,
 // the menus, audio, the save) runs as it does in single player.
@@ -55,12 +56,14 @@ const buyInRoom =
       ]),
     ])
 
-const keyAction = (code: string): Option.Option<SeatAction> => {
+// NOTE: at a purchasable the interact key is held to buy, and rides in the
+// intent rather than as a press (src/purchase.ts).
+const keyAction = (model: Model, code: string): Option.Option<SeatAction> => {
   if (isSwapKey(code)) {
     return Option.some(SeatAction.Swap())
   } else if (isReloadKey(code)) {
     return Option.some(SeatAction.Reload())
-  } else if (isStartWaveKey(code)) {
+  } else if (isStartWaveKey(code) && !isInteractTaken(model)) {
     return Option.some(SeatAction.Ready())
   } else {
     return Option.map(maybeTrapChoice(code), choice =>
@@ -83,7 +86,7 @@ const keyInRun =
     if (isAtCounter(stepModel.shop)) {
       return unlockAudio(keyed)
     }
-    return Option.match(keyAction(code), {
+    return Option.match(keyAction(stepModel, code), {
       onNone: () => unlockAudio(keyed),
       onSome: action => press(action)(keyed),
     })
@@ -180,11 +183,6 @@ const matchRunInRoom = (
         ? Option.some(press(SeatAction.Ready())(model))
         : Option.none(),
     ),
-    Match.tag('ClickedOpenExitButton', () =>
-      isRunOn(model)
-        ? Option.some(press(SeatAction.BuyExit())(model))
-        : Option.none(),
-    ),
     Match.tag('ClickedBuyButton', ({ item }) =>
       isRunOn(model) ? Option.some(buyInRoom(item)(model)) : Option.none(),
     ),
@@ -199,19 +197,6 @@ const matchRunInRoom = (
               leaveCounterWhenClosed(
                 model.shopDialog.isOpen,
                 stepModel => stepModel.shopDialog.isOpen,
-              ),
-            ]),
-          )
-        : Option.none(),
-    ),
-    Match.tag('GotExitDialogMessage', () =>
-      isRunOn(model)
-        ? Option.some(
-            Update.combine(model, [
-              stepModel => otherwise(stepModel, message),
-              leaveCounterWhenClosed(
-                model.exitDialog.isOpen,
-                stepModel => stepModel.exitDialog.isOpen,
               ),
             ]),
           )

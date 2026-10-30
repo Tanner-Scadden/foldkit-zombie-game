@@ -2,7 +2,7 @@
 // update chip, and a NEW ENTRY pop too), the MANOR hand, What's New, the Munchopedia list and
 // an entry, the difficulty picker, its other panels, the pause screen,
 // the Profile's tabs, the leave question, the gun cluster in a wave and a
-// break, the shop (its cards, tabs, and the close X), Game Over, and Victory on
+// break, the hold-to-buy button at the kitchen's boards in both, the shop (its cards, tabs, and the close X), Game Over, and Victory on
 // 667x375 and 844x390 phones, or with PORTRAIT=1 on 390x844, 430x932, and
 // 360x800 phones held upright, with touch. For each button it checks that the center and four points just
 // inside its edges hit that button (document.elementFromPoint), then taps the
@@ -143,6 +143,16 @@ const SCENES: ReadonlyArray<Scene> = [
     query: 'wave=3&seen=all&gun=smg&loaded=9&barricades=1&turrets=1',
   },
   {
+    name: 'boards',
+    query:
+      'wave=3&seen=all&gun=smg&money=85&barricades=1&turrets=1&px=70&py=27',
+  },
+  {
+    name: 'boards-wave',
+    query:
+      'wave=4&seen=all&start=wave&gun=smg&elapsed=6000&loaded=9&money=85&px=70&py=27',
+  },
+  {
     name: 'shop',
     query: 'wave=5&money=180&gun=smg&tier=1&px=270&py=142',
     opensDialog: true,
@@ -172,9 +182,10 @@ const AFTER_TAP_MS = 250
 
 const surfaceTags = new Set(['PressedPointer'])
 
-// NOTE: a form's submit button names its tap with a Submitted Message.
+// NOTE: a form's submit button names its tap with a Submitted Message, and
+// the hold-to-buy button its press with PressedHoldButton.
 const TAP_LEAVES =
-  /(^|:)(Clicked\w*|Submitted\w*|SelectedOption|SelectedTab|RequestedClose|PressedPointer)$/
+  /(^|:)(Clicked\w*|Submitted\w*|SelectedOption|SelectedTab|RequestedClose|PressedPointer|PressedHoldButton)$/
 
 const isTapMessage = (tag: string): boolean => TAP_LEAVES.test(tag)
 

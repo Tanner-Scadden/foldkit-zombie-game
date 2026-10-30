@@ -92,6 +92,7 @@ import {
   playerSpeed,
 } from './powerups'
 import { type Seeded, between, generateMany, nextRandom } from './prng'
+import { advancePurchase } from './purchase'
 import { advanceParty, resolveFriendlyFire } from './revive'
 import { earn, refreshShopPresence } from './shop'
 import { countHits, countShots } from './stats'
@@ -152,9 +153,9 @@ import {
 // INTENT
 
 // NOTE: the player's intent is the step's input. A player at the stall's
-// counter or the exit's sign does nothing else, whatever they hold.
+// counter does nothing else, whatever they hold.
 const gateIntent = (model: World): World =>
-  ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)
+  ShopState.isAnyOf(['Browsing'])(model.shop)
     ? modifyFields(model, { intent: () => idleIntent })
     : model
 
@@ -428,7 +429,7 @@ const autoReload = (model: World, isTriggerHeld: boolean): World => {
 }
 
 const isShopBrowsing = (model: World): boolean =>
-  ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)
+  ShopState.isAnyOf(['Browsing'])(model.shop)
 
 const topUp = (model: World): World =>
   isShopBrowsing(model)
@@ -1567,8 +1568,13 @@ const armSeat =
       ? fire(tickReload(faceTowardIntent(model), deltaMs), deltaMs)
       : faceTowardIntent(model)
 
-const visitStall = (model: World): World =>
-  isStanding(leadSeatOf(model)) ? gateIntent(refreshShopPresence(model)) : model
+// NOTE: only a standing player shops at the stall or holds to buy.
+const visitStall =
+  (deltaMs: number) =>
+  (model: World): World =>
+    isStanding(leadSeatOf(model))
+      ? advancePurchase(gateIntent(refreshShopPresence(model)), deltaMs)
+      : model
 
 const standingSeats = (
   model: World,
@@ -1605,7 +1611,7 @@ const advanceWorld = (model: World, deltaMs: number): World => {
       wideFlowField: flowField =>
         refreshFlowFieldToward(level, flowField, targets, 'Wide', tolls),
     }),
-    visitStall,
+    visitStall(deltaMs),
   )
 
   const armed = forEachSeat(routed, armSeat(deltaMs))

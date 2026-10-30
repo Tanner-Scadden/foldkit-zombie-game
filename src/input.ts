@@ -15,6 +15,7 @@ import {
   vectorLength,
 } from './geometry'
 import {
+  HoldButton,
   type Input,
   type Intent,
   MouseButton,
@@ -38,6 +39,7 @@ const KEEP_GOING_KEY = 'KeyK'
 const CHARACTER_KEY = 'KeyC'
 const PAUSE_KEY = 'Escape'
 const START_WAVE_KEY = 'Enter'
+const INTERACT_KEY = 'Enter'
 const RELOAD_KEY = 'KeyR'
 const SWAP_KEY = 'KeyQ'
 const PLACE_TRAP_KEY = 'KeyT'
@@ -86,6 +88,11 @@ export const isPauseKey = (code: string): boolean => code === PAUSE_KEY
 
 export const isStartWaveKey = (code: string): boolean => code === START_WAVE_KEY
 
+// NOTE: the key a purchasable in the world is held with (src/purchase.ts).
+// It is START WAVE's key, the one that bought from the old offer: at a
+// purchasable it holds to buy instead.
+export const isInteractKey = (code: string): boolean => code === INTERACT_KEY
+
 export const isReloadKey = (code: string): boolean => code === RELOAD_KEY
 
 export const isSwapKey = (code: string): boolean => code === SWAP_KEY
@@ -133,6 +140,7 @@ export const releaseAll = (input: Input): Input =>
     mouseButton: () => MouseButton.Released(),
     moveStick: () => Stick.Idle(),
     aimStick: () => Stick.Idle(),
+    holdButton: () => HoldButton.Released(),
   })
 
 export const releaseSticks = (input: Input): Input =>
@@ -261,11 +269,34 @@ const releaseMouseButton = (
       held.pointerId === pointerId ? MouseButton.Released() : mouseButton,
   })
 
+const releaseHoldButton = (
+  holdButton: HoldButton,
+  pointerId: number,
+): HoldButton =>
+  HoldButton.match(holdButton, {
+    Released: () => holdButton,
+    Held: held =>
+      held.pointerId === pointerId ? HoldButton.Released() : holdButton,
+  })
+
 export const releasePointer = (input: Input, pointerId: number): Input =>
   modifyFields(input, {
     moveStick: stick => releaseStickPointer(stick, pointerId),
     aimStick: stick => releaseStickPointer(stick, pointerId),
     mouseButton: mouseButton => releaseMouseButton(mouseButton, pointerId),
+    holdButton: holdButton => releaseHoldButton(holdButton, pointerId),
+  })
+
+// NOTE: a finger on the touch HUD's hold button. The button sits outside
+// the game surface, so the finger never starts a stick, and the sticks'
+// own fingers keep their sticks.
+export const pressHoldButton = (input: Input, pointerId: number): Input =>
+  modifyFields(input, {
+    holdButton: holdButton =>
+      HoldButton.match(holdButton, {
+        Released: () => HoldButton.Held({ pointerId }),
+        Held: () => holdButton,
+      }),
   })
 
 export const moveMouse = (
@@ -322,6 +353,12 @@ const triggerOf = (input: Input): Trigger =>
     ? 'Held'
     : 'Released'
 
+const interactOf = (input: Input): Trigger =>
+  Array.contains(input.pressedKeys, INTERACT_KEY) ||
+  HoldButton.isAnyOf(['Held'])(input.holdButton)
+    ? 'Held'
+    : 'Released'
+
 export const deriveIntent = (
   input: Input,
   player: Player,
@@ -338,6 +375,7 @@ export const deriveIntent = (
     mouseAim(input, player, camera),
   ),
   trigger: triggerOf(input),
+  interact: interactOf(input),
 })
 
 export const thumbOffset = (stick: Stick): Vector =>

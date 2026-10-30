@@ -437,7 +437,6 @@ const focusedItem = (model: Model): ShopItemId =>
   ShopState.match(model.shop, {
     Away: () => Array.headNonEmpty(itemsIn(model, model.shopCategory)),
     Browsing: ({ focusedItem }) => focusedItem,
-    AtExit: () => Array.headNonEmpty(itemsIn(model, model.shopCategory)),
     Dismissed: () => Array.headNonEmpty(itemsIn(model, model.shopCategory)),
   })
 

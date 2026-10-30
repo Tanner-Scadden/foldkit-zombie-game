@@ -5,7 +5,7 @@ import { describe, expect, test } from 'vitest'
 
 import { levelOf } from './arena'
 import { FIXED_STEP_MS, PLAYER_MAX_HP } from './constants'
-import { KITCHEN_EXIT } from './exits'
+import { EXIT_RULES, KITCHEN_EXIT } from './exits'
 import { update } from './main'
 import {
   Arsenal,
@@ -24,19 +24,21 @@ import {
 import {
   COOP_RULES,
   type SeatedPlayer,
+  focusSeat,
   maybePlayerAt,
   playersOf,
   seatCrew,
   setPresence,
   withSeat,
 } from './party'
+import { PURCHASE_RULES } from './purchase'
 import { SeatAction, applySeatAction, soloInputs, stepWorld } from './stepWorld'
 import { SURFACE, ticks, zombieOf } from './testing'
 import { asVeteran } from './veteran'
 import { beginPreparation, rollSpawns, waveBonus } from './waves'
 import { WEAPONS } from './weapons'
 import { type World, withWorld } from './world'
-import { type Seat, idleIntent } from './worldSchema'
+import { Purchasable, Purchase, type Seat, idleIntent } from './worldSchema'
 import { ZOMBIE_KINDS } from './zombies'
 
 // Co-op's World rules (MULTIPLAYER.md, Phase 1), played through `update`
@@ -122,6 +124,9 @@ const seatedAt = (current: World, slot: number): SeatedPlayer =>
 
 const seatOf = (current: World, slot: number): Seat =>
   seatedAt(current, slot).seat
+
+const seatWorldOf = (current: World, slot: number): World =>
+  focusSeat(current, slot)
 
 const pipeline =
   (...steps: ReadonlyArray<(current: Model) => Model>) =>
@@ -348,38 +353,94 @@ describe('money', () => {
     )
   })
 
-  test('a manor door is bought in full by the one player at it', () => {
+  const DOOR_X = 70
+  const DOOR_Y = 26
+  const HOLD_TICKS = Math.ceil(PURCHASE_RULES.holdMs / TICK_MS) + 2
+
+  const holding = (slots: ReadonlyArray<number>) =>
+    new Map(
+      Array.map(slots, slot => [
+        slot,
+        { ...idleIntent, interact: 'Held' as const },
+      ]),
+    )
+
+  const holdFor = (
+    current: Model,
+    slots: ReadonlyArray<number>,
+    count: number,
+  ): Model =>
+    withWorld(current, world =>
+      Array.reduce(
+        Array.makeBy(count, () => slots),
+        world,
+        (stepped, holders) => stepWorld(stepped, holding(holders)).world,
+      ),
+    )
+
+  test('a manor door is bought in full by the one player holding at it', () => {
     const preparation = Phase.Preparation({
       wave: 3,
       remainingMs: 30_000,
       durationMs: 30_000,
       spawns: [],
     })
-    const atDoor = pipeline(withMoney(0, 100), withMoney(1, 100), current =>
-      atSeat(current, 1, world =>
-        modifyFields(world, {
-          shop: () => ShopState.AtExit({ exit: KITCHEN_EXIT }),
-        }),
-      ),
+    const atDoor = pipeline(
+      withMoney(0, 100),
+      withMoney(1, 100),
+      placed(0, DOOR_X - 8, DOOR_Y),
+      placed(1, DOOR_X + 8, DOOR_Y),
     )(crewOf(2, preparation))
-    const bought = act(atDoor, 1, SeatAction.BuyExit())
-    expect(seatedAt(bought, 1).wallet.balance).toBeLessThan(100)
+    const halfway = holdFor(atDoor, [1], Math.floor(HOLD_TICKS / 2))
+    expect(levelOf(halfway).key).toBe(levelOf(atDoor).key)
+    expect(
+      Purchase.isAnyOf(['Holding'])(seatWorldOf(halfway, 1).purchase),
+    ).toBe(true)
+    expect(Purchase.isAnyOf(['Idle'])(seatWorldOf(halfway, 0).purchase)).toBe(
+      true,
+    )
+    const bought = holdFor(atDoor, [1], HOLD_TICKS)
+    expect(seatedAt(bought, 1).wallet.balance).toBe(100 - EXIT_RULES.price)
     expect(seatedAt(bought, 0).wallet.balance).toBe(100)
     expect(levelOf(bought).key).not.toBe(levelOf(atDoor).key)
   })
 
-  test('mid-wave, one player buys the manor door and its doors join the wave', () => {
+  test('a teammate short of the price is refused while the one who can pay buys', () => {
+    const preparation = Phase.Preparation({
+      wave: 3,
+      remainingMs: 30_000,
+      durationMs: 30_000,
+      spawns: [],
+    })
+    const atDoor = pipeline(
+      withMoney(0, 10),
+      withMoney(1, 100),
+      placed(0, DOOR_X - 8, DOOR_Y),
+      placed(1, DOOR_X + 8, DOOR_Y),
+    )(crewOf(2, preparation))
+    const pressed = holdFor(atDoor, [0, 1], 1)
+    expect(seatWorldOf(pressed, 0).purchase).toEqual(
+      Purchase.Refused({
+        target: Purchasable.Exit({ exit: KITCHEN_EXIT }),
+        shortBy: EXIT_RULES.price - 10,
+        sinceMs: 0,
+      }),
+    )
+    const bought = holdFor(atDoor, [0, 1], HOLD_TICKS)
+    expect(seatedAt(bought, 0).wallet.balance).toBe(10)
+    expect(seatedAt(bought, 1).wallet.balance).toBe(100 - EXIT_RULES.price)
+  })
+
+  test('mid-wave, one player holds the manor door open and its doors join the wave', () => {
     const [, spawns] = rollSpawns(41, 4)
     const fighting = Phase.Wave({ wave: 4, elapsedMs: 0, spawns })
-    const atDoor = pipeline(withMoney(0, 100), withMoney(1, 100), current =>
-      atSeat(current, 1, world =>
-        modifyFields(world, {
-          shop: () => ShopState.AtExit({ exit: KITCHEN_EXIT }),
-        }),
-      ),
+    const atDoor = pipeline(
+      withMoney(0, 100),
+      withMoney(1, 100),
+      placed(1, DOOR_X, DOOR_Y),
     )(crewOf(2, fighting))
-    const bought = act(atDoor, 1, SeatAction.BuyExit())
-    expect(seatedAt(bought, 1).wallet.balance).toBeLessThan(100)
+    const bought = holdFor(atDoor, [1], HOLD_TICKS)
+    expect(seatedAt(bought, 1).wallet.balance).toBe(100 - EXIT_RULES.price)
     expect(seatedAt(bought, 0).wallet.balance).toBe(100)
     expect(levelOf(bought).key).not.toBe(levelOf(atDoor).key)
     const doors = Phase.isAnyOf(['Wave'])(bought.phase)

@@ -177,12 +177,19 @@ const MATE_INTENTS: ReadonlyArray<Intent> = [
     move: { x: -0.6, y: 0.8 },
     maybeAim: Option.some({ x: 0, y: -1 }),
     trigger: 'Held',
+    interact: 'Released',
   },
-  { move: { x: 1, y: 0 }, maybeAim: Option.none(), trigger: 'Held' },
+  {
+    move: { x: 1, y: 0 },
+    maybeAim: Option.none(),
+    trigger: 'Held',
+    interact: 'Held',
+  },
   {
     move: { x: 0, y: 0 },
     maybeAim: Option.some({ x: -1, y: 0 }),
     trigger: 'Released',
+    interact: 'Released',
   },
 ]
 

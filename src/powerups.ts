@@ -490,7 +490,7 @@ export const advanceCallouts = (model: Model, worldMs: number): Model => {
       ? calloutFor(current, event.kind)
       : current,
   )
-  return ShopState.isAnyOf(['Browsing', 'AtExit'])(called.shop)
+  return ShopState.isAnyOf(['Browsing'])(called.shop)
     ? called
     : ageCallouts(called, worldMs)
 }
@@ -785,4 +785,4 @@ export const advancePowerUps = (
 // single player the whole world does, in co-op only their own boosts and
 // grabs (decided row 8).
 const isAtCounterNow = (model: World): boolean =>
-  ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)
+  ShopState.isAnyOf(['Browsing'])(model.shop)

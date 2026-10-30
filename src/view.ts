@@ -5,7 +5,6 @@ import { Document, Html, HtmlBuilder } from 'foldkit/html'
 import { GAME_TITLE } from './constants'
 import * as CoopView from './coop/view'
 import { DIFFICULTIES, bestsFor } from './difficulty'
-import { exitDialogView } from './exitView'
 import { feedbackSentence } from './home'
 import {
   homeMenuView,
@@ -36,6 +35,7 @@ import { isOpenBreak, isPracticeGateHeld } from './onboarding'
 import { pauseHelpView } from './pauseHelp'
 import { BOOST_KIND_ORDER, PICKUPS, isBoosted } from './powerups'
 import { profileView } from './profileView'
+import { purchaseAnnouncementView } from './purchaseHud'
 import { landscapeFrameOffset, screenOf } from './screen'
 import { isShopOpenFor } from './shop'
 import { shopDialogView } from './shopView'
@@ -280,6 +280,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
       [
         h.h1([h.Class('sr-only')], [GAME_TITLE]),
         h.p([h.Class('sr-only'), h.Role('status')], [statusText(model)]),
+        purchaseAnnouncementView(model, h),
         h.div(
           [
             h.Class('game-surface'),
@@ -312,7 +313,6 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
         updateGreetingView(model, h),
         shopDialogView(model, h),
         manorHandView(model, h),
-        exitDialogView(model, h),
         menuPanelView(model, h),
         profileView(model, h),
         h.submodel({

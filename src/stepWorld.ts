@@ -2,7 +2,6 @@ import { Array, Option, Result, Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
-import { buyExit } from './exits'
 import {
   forEachSeat,
   isCoop,
@@ -106,14 +105,15 @@ export const stepWorld = (
 // NOTE: a player's presses between ticks, as inputs the room applies to
 // their own seat (MULTIPLAYER.md, Phase 1): swapping and reloading, traps,
 // the shop's buys and its leaving (decided row 8), and READY (decided 7).
-// Single player's client runs the same rules through its own Messages.
+// Single player's client runs the same rules through its own Messages. A
+// purchasable in the world is no press: it is bought by holding the
+// intent's interact (src/purchase.ts).
 export const SeatAction = defineTaggedUnion({
   Swap: {},
   Reload: {},
   PlaceTrap: {},
   NextTrap: {},
   Buy: { item: ShopItemId },
-  BuyExit: {},
   LeaveCounter: {},
   Ready: {},
 })
@@ -122,7 +122,7 @@ export type SeatAction = typeof SeatAction.Type
 const isFighting = (world: World): boolean =>
   isRoundActive(world.phase) &&
   isStanding(leadSeatOf(world)) &&
-  !ShopState.isAnyOf(['Browsing', 'AtExit'])(world.shop)
+  !ShopState.isAnyOf(['Browsing'])(world.shop)
 
 const swap = (world: World): World => {
   if (!isFighting(world)) {
@@ -155,17 +155,8 @@ const buy = (world: World, item: ShopItemId): World =>
     : world
 
 const leaveCounter = (world: World): World =>
-  ShopState.isAnyOf(['Browsing', 'AtExit'])(world.shop)
+  ShopState.isAnyOf(['Browsing'])(world.shop)
     ? modifyFields(world, { shop: () => ShopState.Dismissed() })
-    : world
-
-const buyOfferedExit = (world: World): World =>
-  ShopState.isAnyOf(['AtExit'])(world.shop)
-    ? Option.match(buyExit(world, world.shop.exit), {
-        onNone: () => world,
-        onSome: bought =>
-          modifyFields(bought, { shop: () => ShopState.Dismissed() }),
-      })
     : world
 
 // NOTE: READY in single player starts the wave at once, as START WAVE
@@ -180,7 +171,6 @@ const applyToSeat = (world: World, action: SeatAction): World =>
     PlaceTrap: () => placeTrap(world),
     NextTrap: () => (isFighting(world) ? cycleTrap(world) : world),
     Buy: ({ item }) => buy(world, item),
-    BuyExit: () => buyOfferedExit(world),
     LeaveCounter: () => leaveCounter(world),
     Ready: () => ready(world),
   })

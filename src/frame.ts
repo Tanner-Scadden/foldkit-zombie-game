@@ -56,12 +56,12 @@ const withAimAssist = (model: Model, intent: Intent): Intent =>
     : intent
 
 // NOTE: the client turns raw input into intent: aim goes through the
-// camera, which only this device knows. A player at the stall's counter or
-// the exit's sign intends nothing.
+// camera, which only this device knows. A player at the stall's counter
+// intends nothing.
 export const refreshIntent = (model: Model): Model =>
   modifyFields(model, {
     intent: () =>
-      ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)
+      ShopState.isAnyOf(['Browsing'])(model.shop)
         ? idleIntent
         : withAimAssist(
             model,

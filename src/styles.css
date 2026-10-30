@@ -221,6 +221,89 @@ body {
   cursor: not-allowed;
 }
 
+/* HOLD TO BUY: the touch button at a purchasable. A gold ring fills round
+   it while the finger holds (--hold, 0 to 1); a press the wallet cannot
+   cover shakes it red. */
+
+.cluster-button.hold-buy-button {
+  width: 56px;
+  height: 56px;
+  border-color: rgba(255, 210, 63, 0.9);
+  background: rgba(58, 36, 8, 0.85);
+  opacity: 1;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.cluster-button.hold-buy-button[data-short='true'] {
+  border-color: rgba(255, 74, 79, 0.85);
+}
+
+.hold-buy-button .icon-button-glyph {
+  width: 24px;
+  height: 24px;
+}
+
+.hold-buy-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    #ffd23f calc(var(--hold, 0) * 360deg),
+    rgba(20, 12, 16, 0.6) 0
+  );
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 5px),
+    #000 calc(100% - 4px)
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 5px),
+    #000 calc(100% - 4px)
+  );
+  pointer-events: none;
+}
+
+.hold-buy-button.is-refused {
+  border-color: #ff4a4f;
+  background: rgba(90, 20, 24, 0.9);
+  animation: hold-buy-shake 450ms linear;
+}
+
+.hold-buy-price {
+  color: #ffe066;
+}
+
+.hold-buy-button[data-short='true'] .hold-buy-price {
+  color: #ff8a7a;
+}
+
+@keyframes hold-buy-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  15%,
+  45%,
+  75% {
+    transform: translateX(-3px);
+  }
+  30%,
+  60%,
+  90% {
+    transform: translateX(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hold-buy-button.is-refused {
+    animation: none;
+  }
+}
+
 .icon-button-badge {
   position: absolute;
   right: -4px;

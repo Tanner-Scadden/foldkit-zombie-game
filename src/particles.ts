@@ -931,6 +931,18 @@ const SMASH_SPLINTERS = 14
 const SMASH_PLANKS = 6
 const SMASH_DUST = 10
 
+// NOTE: the boards over an exit bought open burst into splinters and
+// planks with a cloud of dust.
+const smashParticles = (
+  state: number,
+  ground: Vector,
+): Seeded<ReadonlyArray<Particle>> =>
+  chain(state, [
+    woodBits('Splinter', ground, SMASH_SPLINTERS),
+    woodBits('Plank', ground, SMASH_PLANKS),
+    dustRing(ground, SMASH_DUST),
+  ])
+
 const blastParticles = (
   state: number,
   { x, y }: Readonly<{ x: number; y: number }>,
@@ -1169,6 +1181,10 @@ const eventParticles = (
           generateMany(drawState, OVEN_SMOKE, smokePuff({ x, y: y + 4 })),
         sparks({ x, y: y + 6 }, OVEN_SPARKS),
       ]),
+    Purchased: ({ x, y }) =>
+      generateMany(state, COINS_PER_PURCHASE, coin(playerGround(x, y))),
+    PurchaseRefused: () => noParticles(state),
+    ExitOpened: ({ x, y }) => smashParticles(state, { x, y }),
     ZombieSlipped: ({ x, y }) =>
       generateMany(
         state,
@@ -1317,18 +1333,6 @@ export const burstCoins = (model: Model, x: number, y: number): Model => {
 
 // NOTE: the boards over an exit the player buys open burst into splinters
 // and planks with a cloud of dust.
-export const smashBoards = (model: Model, x: number, y: number): Model => {
-  const ground = { x, y }
-  const [rngState, debris] = chain(model.cosmeticRngState, [
-    woodBits('Splinter', ground, SMASH_SPLINTERS),
-    woodBits('Plank', ground, SMASH_PLANKS),
-    dustRing(ground, SMASH_DUST),
-  ])
-  return modifyFields(model, {
-    particles: particles => keepNewest([...particles, ...debris], PARTICLE_MAX),
-    cosmeticRngState: () => rngState,
-  })
-}
 
 export const puffDust = (model: Model, x: number, y: number): Model => {
   const [rngState, puffs] = dustRing(

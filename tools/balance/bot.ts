@@ -32,6 +32,7 @@ import { FRENZY_RULES } from '../../src/frenzy'
 import { update } from '../../src/main'
 import { Message } from '../../src/message'
 import { type Difficulty, ZombieKind, initialModel } from '../../src/model'
+import { maybeOfferInReach } from '../../src/purchase'
 import { DEFAULT_PORTRAIT_SCREEN } from '../../src/screen'
 import {
   STALL_BOX,
@@ -94,7 +95,13 @@ const maxRunMs = (options: BotOptions) =>
   (options.mode === 'Endless' ? 90 : 20) * 60 * 1000
 const SURFACE = { left: 0, top: 0, width: 320, height: 180 }
 const ROOM_CENTER: Vector = { x: 160, y: 95 }
-const KEYS = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD' }
+const KEYS = {
+  up: 'KeyW',
+  down: 'KeyS',
+  left: 'KeyA',
+  right: 'KeyD',
+  interact: 'Enter',
+}
 
 // The options of the run being played. play sets it before every run.
 let current: BotOptions = DEFAULT_OPTIONS
@@ -883,7 +890,7 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
 
 // The bot buys the kitchen open the way the analytical model does: once it
 // holds the SMG at its second upgrade, both Plank Piles, and a Grumpy Gnome,
-// while it keeps its reserve. It walks to the boarded door and bumps it. KITCHEN=0 is the bot
+// while it keeps its reserve. It walks to the boarded door and holds the interact key. KITCHEN=0 is the bot
 // that never opens it, to see what the kitchen does to a run.
 const NO_KITCHEN = process.env.KITCHEN === '0'
 const KITCHEN_DOOR_PUSH: Vector = { x: 70, y: 16 }
@@ -914,6 +921,14 @@ const wantsKitchen = (model: Model): boolean => {
 }
 
 let kitchenWave = 0
+
+// The bot buys the room as a player does: it holds the interact key at the
+// boards until the hold fills (src/purchase.ts), mid-wave too when it
+// happens to stand there while it wants the room.
+const holdingAtKitchen = (model: Model, keys: Set<string>): Set<string> =>
+  wantsKitchen(model) && Option.isSome(maybeOfferInReach(model))
+    ? new Set([...keys, KEYS.interact])
+    : keys
 
 let spentOnUpgrades = 0
 let gnomeTries = 0
@@ -1151,21 +1166,6 @@ export const play = (
       if (model.shop._tag !== 'Browsing') shoppedWave = wave
       continue
     }
-    if (model.shop._tag === 'AtExit') {
-      model = pressKeys(model, new Set())
-      if (wantsKitchen(model)) {
-        model = send(model, Message.ClickedOpenExitButton())
-        if (isKitchenOpen(model)) kitchenWave = wave
-      } else {
-        model = send(
-          model,
-          Message.GotExitDialogMessage({
-            message: Dialog.Message.RequestedClose(),
-          }),
-        )
-      }
-      continue
-    }
     if (model.phase._tag === 'Preparation') {
       model = holdFire(model)
       const plan = prepPlan(model, shoppedWave === wave)
@@ -1219,11 +1219,14 @@ export const play = (
           stuckFrames > 5
             ? { x: -direction.y * strafe, y: direction.x * strafe }
             : direction
-        model = pressKeys(model, desiredKeys(sidestep))
+        model = pressKeys(model, holdingAtKitchen(model, desiredKeys(sidestep)))
       }
     } else {
       if (frame % MOVE_EVERY_FRAMES === 0) {
-        model = pressKeys(model, desiredKeys(kite(model)))
+        model = pressKeys(
+          model,
+          holdingAtKitchen(model, desiredKeys(kite(model))),
+        )
       }
       model = aimAndFire(model, frame)
     }
@@ -1231,6 +1234,7 @@ export const play = (
     frame += 1
     const before = model
     model = send(model, Message.TickedFrame({ deltaTime: FRAME_MS }))
+    if (!isKitchenOpen(before) && isKitchenOpen(model)) kitchenWave = wave
     const blamed = blame(before, model, hurtBy)
     if (model.player.hp <= 0 && before.player.hp > 0) killedBy = blamed
     model.frameEvents.forEach(event => {

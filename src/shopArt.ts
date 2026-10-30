@@ -350,39 +350,3 @@ export const RATTLES_ART: Readonly<Record<Mood, ShopArt>> = Record.map(
   face =>
     artOf(rattlesPixels(face).slice(0, RATTLES_BUST_ROWS), RATTLES_PALETTE),
 )
-
-// THE KITCHEN
-
-// NOTE: the picture on the kitchen's offer: an iron stove belching fire at
-// a pot of green soup, over the checked floor.
-export const KITCHEN_ART = artOf(
-  [
-    '..........KK............',
-    '..........KK....Y.......',
-    '..KKKKKKKKKKKK.YOY......',
-    '..KIIIIIIIIIIK.YORY.....',
-    '..KIIIIIIIIIIKYORRO.....',
-    '..KKKKKKKKKKKKORRRO.....',
-    '..KIIIIIIIIIIKORRRRO....',
-    '..KIKKKKKKKKIKORRROOY...',
-    '..KIKYYYYYYKIKOROOYY.KK.',
-    '..KIKOOOOOOKIK.OYY..KGGK',
-    '..KIKKKKKKKKIK......KGgK',
-    '..KIIIIIIIIIIK......KKKK',
-    '..KKKKKKKKKKKK..........',
-    'LDLDLDLDLDLDLDLDLDLDLDLD',
-    'DLDLDLDLDLDLDLDLDLDLDLDL',
-    'LDLDLDLDLDLDLDLDLDLDLDLD',
-  ],
-  {
-    K: INK,
-    I: '#44444c',
-    Y: '#fff2a0',
-    O: '#ff9a2a',
-    R: '#e0482a',
-    G: '#7c9c3a',
-    g: '#a6c450',
-    L: '#5e5a4e',
-    D: '#37353c',
-  },
-)

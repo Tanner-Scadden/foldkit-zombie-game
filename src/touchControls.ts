@@ -16,6 +16,7 @@ import {
 } from './model'
 import { type GhostStick, isDebutCardUp, shownGhostSticks } from './onboarding'
 import { isCoop, leadSeatOf } from './party'
+import { holdButtonView } from './purchaseHud'
 import { type Screen, screenOf } from './screen'
 import { STALL_BOX, gunName } from './shop'
 import {
@@ -277,7 +278,11 @@ const clusterSideView = (
         width: percentOf(room - SIDE_GAP, cluster.width),
       }),
     ],
-    [reloadIconView(model, h), ...trapIconsView(model, h)],
+    [
+      holdButtonView(model, h),
+      reloadIconView(model, h),
+      ...trapIconsView(model, h),
+    ],
   )
 }
 

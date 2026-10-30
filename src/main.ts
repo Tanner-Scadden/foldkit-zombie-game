@@ -26,7 +26,6 @@ import {
 } from './commands'
 import { isOnlineRun, runDifficultyOf } from './coopPlay'
 import { isCouchKey, pressCouchKey } from './couch'
-import { isAtExit } from './exits'
 import { advanceGame, clampFrameDelta, refreshIntent } from './frame'
 import {
   countRunFrom,
@@ -45,6 +44,7 @@ import {
   isSwapKey,
   moveMouse,
   movePointer,
+  pressHoldButton,
   pressKey,
   pressPointer,
   releaseAll,
@@ -84,6 +84,7 @@ import {
 import { dropClip } from './particles'
 import { isCoop } from './party'
 import { LinkFlow } from './playerSync'
+import { isInteractTaken } from './purchase'
 import { startWave } from './runFlow'
 import { forgetTutorial } from './save'
 import { isUsingServiceWorker } from './serviceWorker'
@@ -101,12 +102,6 @@ import {
   releaseCoopKey,
 } from './update/coop'
 import { updateRunInRoom } from './update/coopRun'
-import {
-  enterExit,
-  foldExitDialog,
-  leaveExitWithoutDialog,
-  openOfferedExit,
-} from './update/exit'
 import {
   canMoveHomeFocus,
   closePanel,
@@ -282,10 +277,12 @@ const learnStartWaveWhen = (before: Model, after: Model): Model =>
 const learnSwapWhen = (before: Model, after: Model): Model =>
   changedWeapon(before, after) ? learnSwap(after) : after
 
+// NOTE: at a purchasable the interact key holds to buy (src/purchase.ts),
+// so the same key starts the wave only away from one.
 const preparationFromKey = (model: Model, code: string): Model => {
   if (isPauseKey(code)) {
     return pause(model)
-  } else if (isStartWaveKey(code)) {
+  } else if (isStartWaveKey(code) && !isInteractTaken(model)) {
     return startWave(model)
   } else {
     return model
@@ -499,11 +496,9 @@ const updateGame = (model: Model, message: Message) =>
           : framed
         const hasEnteredShop =
           !isBrowsing(model.shop) && isBrowsing(advanced.shop)
-        const hasEnteredExit = !isAtExit(model.shop) && isAtExit(advanced.shop)
         return Update.combine(hasEnteredShop ? learnShop(advanced) : advanced, [
           playSounds(frameSoundCues(advanced.frameEvents)),
           ...(hasEnteredShop ? [enterShop] : []),
-          ...(hasEnteredExit ? [enterExit] : []),
           closeShopOutsidePreparation,
         ])
       } else if (isScreenAnimated(model.phase)) {
@@ -620,6 +615,13 @@ const updateGame = (model: Model, message: Message) =>
 
     ReleasedPointer: ({ pointerId }) =>
       unlockAudio(withInput(model, input => releasePointer(input, pointerId))),
+
+    PressedHoldButton: ({ pointerId }) =>
+      unlockAudio(
+        withInput(useDevice(model, 'Touch'), input =>
+          pressHoldButton(input, pointerId),
+        ),
+      ),
 
     CancelledPointer: ({ pointerId }) => ({
       model: withInput(model, input => releasePointer(input, pointerId)),
@@ -795,14 +797,6 @@ const updateGame = (model: Model, message: Message) =>
         stepModel => foldShopDialog(stepModel, dialogMessage),
         leaveShopWithoutDialog,
       ]),
-
-    GotExitDialogMessage: ({ message: dialogMessage }) =>
-      Update.combine(model, [
-        stepModel => foldExitDialog(stepModel, dialogMessage),
-        leaveExitWithoutDialog,
-      ]),
-
-    ClickedOpenExitButton: () => openOfferedExit(model),
 
     GotShopTabsMessage: ({ message: tabsMessage }) =>
       isBrowsing(model.shop) ? foldShopTabs(model, tabsMessage) : { model },
