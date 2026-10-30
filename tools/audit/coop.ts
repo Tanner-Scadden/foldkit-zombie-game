@@ -905,7 +905,7 @@ for (const [index, net] of endNet.nets.entries()) {
     `  player ${index + 1}: round trip ${net.rttMs} ms, down ${kbps.toFixed(2)} KB/s over ${net.framesIn - start.framesIn} messages (${((net.framesIn - start.framesIn) / seconds).toFixed(1)} a second), up ${inputs.toFixed(1)} inputs a second, ${net.corrections} corrections (at most ${net.correctionPx} px)`,
   )
   console.log(
-    `  player ${index + 1}: hits seen ${net.lookedHits - start.lookedHits}, confirmed ${net.confirmedHits - start.confirmedHits}; drawn ${net.delayMs} ms behind; ${net.stalls - start.stalls} stalls (longest ${net.longestStallMs} ms), ${net.resyncs} resyncs`,
+    `  player ${index + 1}: hits seen ${net.lookedHits - start.lookedHits}, confirmed ${net.confirmedHits - start.confirmedHits}; drawn ${net.delayMs} ms behind; ${net.stalls - start.stalls} stalls, ${net.resyncs - start.resyncs} resyncs (the longest gap all session ${net.longestStallMs} ms)`,
   )
   check(net.rttMs > 0, `player ${index + 1} measured a round trip`)
 }
