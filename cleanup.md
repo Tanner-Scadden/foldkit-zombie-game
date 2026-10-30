@@ -17,7 +17,7 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
 ### In flight
 
 - [x] **0a. Strictness.** (#18) Restore oxlint's default plugins and correctness category, type-aware lint (`oxlint-tsgolint`), the Effect language service rules at error, the Effect oxlint `strict` preset, stricter tsconfig flags on one shared base for app, infra, and packages, and custom rules for the project rules (no `Math.random`/`Date.now`/`crypto.randomUUID`, storage only through the store, no `.guards` in per-frame code, no `Data.taggedEnum`, no `VIEW_WIDTH` in overlays, no em dashes). Files other agents were editing got scoped overrides with a TODO: clear them in slice 9.
-- [ ] **0b. Foldkit Block preview.** Move to `foldkit@0.169.0-canary.90746b32d2ca` (what foldkit-domains uses): Blocks, Definitions, and Bindings in place of Submodels, a Dialog Binding in place of `dialogFolds`, `Update.combineSteps`, Effect back to 4.0.x. Lands after 0a.
+- [x] **0b. Foldkit Block preview.** (#22) Move to `foldkit@0.169.0-canary.90746b32d2ca` (what foldkit-domains uses): Blocks, Definitions, and Bindings in place of Submodels, a Dialog Binding in place of `dialogFolds`, `Update.combineSteps`, Effect back to 4.0.x. Lands after 0a.
 
 ### Queue
 
