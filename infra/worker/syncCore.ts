@@ -64,11 +64,6 @@ export const CORS_HEADERS: Readonly<Record<string, string>> = {
   'access-control-max-age': '86400',
 }
 
-// NOTE: a plain value as JSON text, for request and response bodies.
-export const encodeJson = Schema.encodeEffect(
-  Schema.fromJsonString(Schema.Unknown),
-)
-
 export const json = (status: number, body: string): Response =>
   new Response(body, {
     status,
@@ -116,9 +111,8 @@ export const syncErrorResponse = (
     Effect.catchTags({
       BadSyncBody: error =>
         Effect.succeed(
-          json(
-            400,
-            JSON.stringify({ _tag: 'BadRequest', reason: error.reason }),
+          failureResponse(
+            IdentityFailure.cases.BadRequest.make({ reason: error.reason }),
           ),
         ),
       SyncSetupFailed: error =>

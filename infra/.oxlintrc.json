@@ -41,6 +41,7 @@
     "typescript/switch-exhaustiveness-check": "error",
     "munch/no-tag-chain": "error",
     "munch/no-extract-tag": "error",
+    "munch/no-raw-json": "error",
     "typescript/no-unnecessary-condition": "error",
     "typescript/no-misused-spread": "error",
     "typescript/no-unsafe-argument": "error",
@@ -58,6 +59,13 @@
       // NOTE: a wrong non-null assertion in a test fails the test loudly.
       "files": ["**/*.test.ts"],
       "rules": { "typescript/no-non-null-assertion": "off" }
+    },
+    {
+      // NOTE: tests write raw and malformed payloads to feed the Worker and
+      // read its answers by their text. Everything else goes through a
+      // Schema (munch/no-raw-json).
+      "files": ["**/*.test.ts"],
+      "rules": { "munch/no-raw-json": "off" }
     }
   ],
   "ignorePatterns": ["node_modules/", ".alchemy/", "**/*.d.ts"]

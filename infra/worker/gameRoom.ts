@@ -22,7 +22,7 @@ import {
   ROOM_PATHS,
   Room,
   RoomRefusal,
-  type RoomTicket,
+  RoomTicket,
   type World as RoomWorldOf,
   SERVER_VERSIONS,
   ServerFrame,
@@ -994,7 +994,7 @@ const refuseAndClose = (
 }
 
 const encodeRefusal = Schema.encodeSync(Schema.fromJsonString(RoomRefusal))
-const encodeTicket = (ticket: RoomTicket) => JSON.stringify(ticket)
+const encodeTicket = Schema.encodeSync(Schema.fromJsonString(RoomTicket))
 
 const refusalResponse = (refusal: RoomRefusal): Response =>
   json(roomRefusalStatus(refusal), encodeRefusal(refusal))

@@ -13,6 +13,7 @@ import type {
 } from '@cloudflare/workers-types'
 import * as SqliteClient from '@effect/sql-sqlite-do/SqliteClient'
 import {
+  ChallengeResponse,
   Connection,
   IDENTITY_PATHS,
   IdentityFailure,
@@ -33,7 +34,6 @@ import {
   type Socket,
   SyncCallFailed,
   type SyncSetupFailed,
-  encodeJson,
   encodeNightmareAnswer,
   failureResponse,
   json,
@@ -78,6 +78,11 @@ const decodeAttachment = Schema.decodeUnknownOption(AttachmentSchema)
 
 const LinkedDevicesBody = Schema.fromJsonString(
   Schema.Struct({ count: Schema.Number, id: Schema.String }),
+)
+const encodeLinkedDevices = Schema.encodeSync(LinkedDevicesBody)
+
+const encodeChallenge = Schema.encodeSync(
+  Schema.fromJsonString(ChallengeResponse),
 )
 
 const decodeLinkedDevices = (body: string) =>
@@ -266,7 +271,7 @@ const tellScope = (env: SyncBindings, linked: Linked) =>
       stub.fetch(`https://sync${LINKED_DEVICES_PATH}`, {
         method: 'POST',
         headers: { [SCOPE_HEADER]: scope },
-        body: JSON.stringify({
+        body: encodeLinkedDevices({
           count: linked.devices,
           id: `linked-${linked.deviceId}-${linked.devices}`,
         }),
@@ -330,7 +335,7 @@ const routeSyncPath = (request: Request, env: SyncBindings, url: URL) =>
         makeChallenge(env.SYNC_SECRET, now),
         cause => new SyncCallFailed({ step: 'make a challenge', cause }),
       )
-      return json(200, yield* Effect.orDie(encodeJson({ nonce })))
+      return json(200, encodeChallenge({ nonce }))
     }
     if (isIdentityPath(url.pathname)) {
       const stub = env.SYNC_DIRECTORY.get(

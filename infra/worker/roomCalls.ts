@@ -8,7 +8,7 @@ import type {
   DurableObjectNamespace,
 } from '@cloudflare/workers-types'
 import {
-  type Matchmaking,
+  Matchmaking,
   RoomRefusal,
   type RoomTicket,
   RoomTicket as RoomTicketSchema,
@@ -17,8 +17,13 @@ import {
   roomScopeId,
 } from '@munch/netcode'
 
-import { INTERNAL_PATHS, ROOM_CODE_HEADER } from './gameRoomCore.ts'
-import { type SyncCallFailed, encodeJson, tryCall } from './syncCore.ts'
+import {
+  INTERNAL_PATHS,
+  InternalCreate,
+  InternalJoin,
+  ROOM_CODE_HEADER,
+} from './gameRoomCore.ts'
+import { type SyncCallFailed, tryCall } from './syncCore.ts'
 
 // NOTE: calls between the Worker, the GameRoom objects, and the
 // Matchmaker. Only the Worker and these objects can reach the internal
@@ -93,6 +98,12 @@ export const callRoom = (
 
 const CREATE_ATTEMPTS = 5
 
+const encodeCreate = Schema.encodeEffect(InternalCreate)
+const encodeJoin = Schema.encodeEffect(InternalJoin)
+const encodeListing = Schema.encodeSync(
+  Schema.fromJsonString(Matchmaking.RoomListing),
+)
+
 // NOTE: a new room under a fresh code; a code already in use (409) draws
 // another, a few times.
 export const createRoomIn = (
@@ -107,7 +118,7 @@ export const createRoomIn = (
   Effect.gen(function* () {
     const code = yield* makeRoomCode
     const body = yield* Effect.orDie(
-      encodeJson({ playerId, name, look, code, visibility }),
+      encodeCreate({ playerId, name, look, code, visibility }),
     )
     const called = yield* callRoom(
       rooms,
@@ -136,11 +147,8 @@ export const joinRoomIn = (
   name: string,
   look: string,
 ): Effect.Effect<Called, SyncCallFailed> =>
-  callRoom(
-    rooms,
-    code,
-    INTERNAL_PATHS.join,
-    JSON.stringify({ playerId, name, look }),
+  Effect.flatMap(Effect.orDie(encodeJoin({ playerId, name, look })), body =>
+    callRoom(rooms, code, INTERNAL_PATHS.join, body),
   )
 
 const decodeTicket = Schema.decodeOption(
@@ -175,7 +183,7 @@ export const reportListing = (
           .get(matchmakers.idFromName(MATCHMAKER_NAME))
           .fetch(`https://matchmaker${LISTING_PATH}`, {
             method: 'POST',
-            body: JSON.stringify(listing),
+            body: encodeListing(listing),
           }),
       ).pipe(
         Effect.asVoid,
