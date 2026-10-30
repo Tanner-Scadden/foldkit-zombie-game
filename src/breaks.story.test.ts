@@ -3,7 +3,7 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { SetFullscreen } from './commands'
+import { SetFullscreen, ShowInstallPrompt } from './commands'
 import { FIXED_STEP_MS, PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
@@ -25,7 +25,7 @@ import {
   hintWords,
   shownHints,
 } from './onboarding'
-import { tick, ticks } from './testing'
+import { showDialog, tick, ticks } from './testing'
 import { asVeteran } from './veteran'
 import { keepGoing } from './waves'
 
@@ -251,8 +251,62 @@ describe('full screen', () => {
   })
 })
 
-describe('the Add to Home Screen tip', () => {
-  test('is used up once the first run starts', () => {
+describe('the install tile', () => {
+  test('on Chrome, a tap shows the browser install prompt and stops the pulse', () => {
+    story(
+      update,
+      given(modifyFields(initialModel, { screenFit: () => 'Fullscreen' })),
+      message(Message.ChangedInstallOffer({ installOffer: 'Ready' })),
+      model(current => {
+        expect(current.homeScreenTip).toBe('Unseen')
+      }),
+      message(Message.ClickedInstallButton()),
+      Command.expectExact(ShowInstallPrompt),
+      model(current => {
+        expect(current.homeScreenTip).toBe('Dismissed')
+        expect(current.homeScreenSteps.isOpen).toBe(false)
+      }),
+      Command.resolve(
+        ShowInstallPrompt,
+        Message.CompletedShowInstallPrompt({ outcome: 'Accepted' }),
+      ),
+      model(current => {
+        expect(current.installOffer).toBe('Installed')
+      }),
+    )
+  })
+
+  test('a turned down prompt is spent, and the tile goes until Chrome offers again', () => {
+    story(
+      update,
+      given(modifyFields(initialModel, { installOffer: () => 'Ready' })),
+      message(Message.ClickedInstallButton()),
+      Command.resolve(
+        ShowInstallPrompt,
+        Message.CompletedShowInstallPrompt({ outcome: 'Dismissed' }),
+      ),
+      model(current => {
+        expect(current.installOffer).toBe('None')
+      }),
+      message(Message.ClickedInstallButton()),
+      Command.expectNone(),
+    )
+  })
+
+  test('on an iPhone, a tap opens the picture guide', () => {
+    story(
+      update,
+      given(modifyFields(initialModel, { screenFit: () => 'HomeScreen' })),
+      message(Message.ClickedInstallButton()),
+      model(current => {
+        expect(current.homeScreenSteps.isOpen).toBe(true)
+        expect(current.homeScreenTip).toBe('Dismissed')
+      }),
+      showDialog(),
+    )
+  })
+
+  test('the pulse outlives a run until the tile is used', () => {
     story(
       update,
       given(
@@ -261,12 +315,9 @@ describe('the Add to Home Screen tip', () => {
           difficultyCard: () => DifficultyCard.Seen(),
         }),
       ),
-      model(current => {
-        expect(current.homeScreenTip).toBe('Unseen')
-      }),
       ...tapKey('Enter'),
       model(current => {
-        expect(current.homeScreenTip).toBe('Dismissed')
+        expect(current.homeScreenTip).toBe('Unseen')
       }),
     )
   })

@@ -39,6 +39,7 @@ import {
 import { playRoomFrame } from '@game/coopPlay'
 import { withBests } from '@game/difficulty'
 import { KITCHEN_EXIT } from '@game/exits'
+import { quietLayer as quietInstallPrompt } from '@game/install'
 import { sceneShapes } from '@game/layers'
 import { init, update } from '@game/main'
 import { Message } from '@game/message'
@@ -73,6 +74,7 @@ import { type PlayerStore, layer as PlayerStoreLayer } from '@game/store'
 import { subscriptions } from '@game/subscriptions'
 import { tickCoopRoom } from '@game/update/coop'
 import { openProfile } from '@game/update/profile'
+import { RUNNING_BUILD } from '@game/version'
 import { view } from '@game/view'
 import { pause, planFor, rollSpawns } from '@game/waves'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
@@ -1051,6 +1053,10 @@ const scenarioModelOf = (): Model => {
     model = modifyFields(model, {
       maybeNewerBuild: () => Option.some(newer || 'next'),
     })
+  if (config.unwrap)
+    model = modifyFields(model, { updateGift: () => 'Unwrapping' })
+  if (config.install)
+    model = modifyFields(model, { installOffer: () => 'Ready' })
   if (config.support)
     model = modifyFields(model, {
       maybeSupportUrl: () => Option.some('https://buy.stripe.com/test_harness'),
@@ -1437,10 +1443,20 @@ const gameUpdate = (model: Model, incoming: Message): HarnessReturn => {
     return {
       model: modifyFields(model, { orientationLock: () => 'Supported' }),
     }
+  // NOTE: `install` keeps Chrome's offer on, and `greet` reads as the page
+  // just reloaded onto this build. The gift never reloads the harness: it
+  // stays mid-unwrap, as `unwrap` shows it.
+  if (config.install && incoming._tag === 'ChangedInstallOffer')
+    return { model }
+  if (incoming._tag === 'CompletedWaitForUnwrap') return { model }
   const message =
     incoming._tag === 'TickedFrame' && isFreezing
       ? Message.TickedFrame({ deltaTime: FIXED_FRAME_MS })
-      : incoming
+      : config.greet && incoming._tag === 'CompletedReadUpdateMarker'
+        ? Message.CompletedReadUpdateMarker({
+            maybeBuild: Option.some(RUNNING_BUILD),
+          })
+        : incoming
   if (message._tag === 'TickedFrame') framesRun++
   w.__isFrozen = framesRun >= freezeAfter
   const t0 = performance.now()
@@ -1818,7 +1834,7 @@ const application = Runtime.makeApplication({
   },
   subscriptions: Subscription.aggregate(subscriptions, harnessSubscriptions),
   managedResources,
-  resources: Layer.merge(PlayerStoreLayer, quietCoopNet),
+  resources: Layer.mergeAll(PlayerStoreLayer, quietCoopNet, quietInstallPrompt),
   container: document.getElementById('root'),
   ...(config.nodev ? { devTools: false as const } : {}),
 })

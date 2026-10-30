@@ -5,7 +5,14 @@ import { modifyFields } from 'foldkit/struct'
 import { Dialog } from '@foldkit/ui'
 
 import { NEWS_DAYS } from '../changelog'
-import { FocusEndMenuButton, FocusHandCard, FocusHomeButton } from '../commands'
+import {
+  FocusEndMenuButton,
+  FocusHandCard,
+  FocusHomeButton,
+  ReloadPage,
+  ShowInstallPrompt,
+  WaitForUnwrap,
+} from '../commands'
 import { Screen as CoopScreen } from '../coop/model'
 import { runDifficultyOf } from '../coopPlay'
 import { dialogFolds } from '../dialogs'
@@ -21,10 +28,12 @@ import {
   dealtCards,
   endOffer,
   isDifficultyKey,
+  isInstallTileShown,
   isManorKey,
   isModeKey,
   isOnHome,
   isSettingsKey,
+  isUpdateGiftShown,
   maybeHandCardOfKey,
   returnHome,
   runModeOf,
@@ -40,6 +49,7 @@ import {
   type Difficulty,
   DifficultyCard,
   type HandCard,
+  type InstallOutcome,
   type MenuPanel,
   type Model,
   MunchopediaPage,
@@ -373,14 +383,12 @@ export const toggleShareStats = (model: Model): Model =>
     shareStats: setting => (setting === 'On' ? 'Off' : 'On'),
   })
 
-// HOME SCREEN TIP
+// INSTALL
 
 export const dismissHomeScreenTip = (model: Model): Model =>
   model.homeScreenTip === 'Dismissed'
     ? model
     : modifyFields(model, { homeScreenTip: () => 'Dismissed' })
-
-const isOnTitle = Phase.isAnyOf(['Ready'])
 
 const homeScreenSteps = dialogFolds({
   read: (model: Model) => model.homeScreenSteps,
@@ -391,25 +399,79 @@ const homeScreenSteps = dialogFolds({
 
 export const foldHomeScreenSteps = homeScreenSteps.fold
 
-export const openHomeScreenSteps: UpdateStep = stepModel =>
-  isOnTitle(stepModel.phase) && !stepModel.homeScreenSteps.isOpen
-    ? homeScreenSteps.open(withInput(stepModel, releaseAll))
-    : { model: stepModel }
+const openHomeScreenSteps: UpdateStep = stepModel =>
+  stepModel.homeScreenSteps.isOpen
+    ? { model: stepModel }
+    : homeScreenSteps.open(withInput(stepModel, releaseAll))
 
-export const finishHomeScreenSteps: UpdateStep = stepModel =>
-  Update.combine(stepModel, [
-    homeScreenSteps.close,
-    closedModel => ({ model: dismissHomeScreenTip(closedModel) }),
-  ])
+// NOTE: the install tile pulses until its first tap. Chrome's own prompt
+// comes first where the browser offered one; an iPhone gets the picture
+// guide, since Safari has no prompt to show.
+export const pressInstall: UpdateStep = stepModel => {
+  if (!isInstallTileShown(stepModel)) {
+    return { model: stepModel }
+  } else if (stepModel.installOffer === 'Ready') {
+    return {
+      model: dismissHomeScreenTip(stepModel),
+      commands: [ShowInstallPrompt()],
+    }
+  } else {
+    return openHomeScreenSteps(dismissHomeScreenTip(stepModel))
+  }
+}
 
-export const dismissHomeScreenTipFrom =
-  (before: Model): UpdateStep =>
-  stepModel => ({
-    model:
-      isOnTitle(before.phase) && !isOnTitle(stepModel.phase)
-        ? dismissHomeScreenTip(stepModel)
-        : stepModel,
+export const settleInstallPrompt = (
+  model: Model,
+  outcome: InstallOutcome,
+): Model =>
+  modifyFields(model, {
+    installOffer: () => (outcome === 'Accepted' ? 'Installed' : 'None'),
   })
+
+// UPDATE GIFT
+
+export const unwrapUpdateGift: UpdateStep = model =>
+  isUpdateGiftShown(model) && model.updateGift === 'Wrapped'
+    ? Update.combine(model, [
+        stepModel => ({
+          model: modifyFields(stepModel, { updateGift: () => 'Unwrapping' }),
+          commands: [WaitForUnwrap()],
+        }),
+        playSounds([uiCue('LootPop')]),
+      ])
+    : { model }
+
+export const rewrapUpdateGift = (model: Model): Model =>
+  modifyFields(model, { updateGift: () => 'Wrapped' })
+
+export const reloadOntoNewerBuild: UpdateStep = model =>
+  Option.match(model.maybeNewerBuild, {
+    onNone: () => ({ model: rewrapUpdateGift(model) }),
+    onSome: build => ({ model, commands: [ReloadPage({ build })] }),
+  })
+
+// UPDATE GREETING
+
+const updateGreeting = dialogFolds({
+  read: (model: Model) => model.updateGreeting,
+  write: (model, nextUpdateGreeting) =>
+    modifyFields(model, { updateGreeting: () => nextUpdateGreeting }),
+  toParentMessage: message => Message.GotUpdateGreetingMessage({ message }),
+})
+
+export const foldUpdateGreeting = updateGreeting.fold
+
+// NOTE: the page just reloaded from the gift onto the build it unwrapped,
+// so the home menu throws a little party, once.
+export const greetUpdate =
+  (isDue: boolean): UpdateStep =>
+  model =>
+    isDue && isOnHome(model.phase) && !model.updateGreeting.isOpen
+      ? updateGreeting.open(model)
+      : { model }
+
+export const newsFromGreeting: UpdateStep = model =>
+  Update.combine(model, [updateGreeting.close, openWhatsNew])
 
 // END SCREENS
 

@@ -257,6 +257,9 @@ export const HarnessConfig = Schema.Struct({
   newsseen: Flag,
   newer: Schema.optionalKey(Schema.String),
   fit: Choice(['home', 'full']),
+  install: Flag,
+  greet: Flag,
+  unwrap: Flag,
   support: Flag,
   rotate: Flag,
   // Co-op

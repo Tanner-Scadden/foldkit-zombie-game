@@ -80,6 +80,9 @@ const SCENES: ReadonlyArray<Scene> = [
     query: 'fit=full&kills=Runner:3&newentries=Runner',
   },
   { name: 'home-iphone', query: 'fit=home', fresh: true },
+  { name: 'home-update', query: 'fit=full&install&newer' },
+  { name: 'home-guide', query: 'fit=home', open: ['#home-install'] },
+  { name: 'greet', query: 'greet', opensDialog: true },
   { name: 'hand', query: 'support', open: [MANOR] },
   { name: 'whats-new', query: '', open: [MANOR, '#hand-card-whatsnew'] },
   {

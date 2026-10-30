@@ -707,3 +707,107 @@ export const ZAP_ICON = pixelIconUrl(
   ['...YYY', '..YYY.', '.YYY..', 'YYYYYY', '..YYY.', '.YYY..', 'YYY...'],
   PROFILE_PALETTE,
 )
+
+// UPDATE GIFT
+
+const GIFT_PALETTE: Palette = {
+  X: LIGHT,
+  O: SHADE,
+  Y: '#ffe066',
+  U: '#b98cff',
+  P: '#ff9df0',
+  W: '#4a2a70',
+  G: '#8fdc5a',
+  K: '#3f7a2a',
+}
+
+// NOTE: the update gift on the home menu comes in three layers, so CSS can
+// rattle the box, fling the lid, and pop the Groaner out of it.
+export const GIFT_LID_ICON = pixelIconUrl(
+  [
+    '..YYY.....YYY..',
+    '.Y...YY.YY...Y.',
+    '..YYYYYYYYYYY..',
+    'WWWWWWWYWWWWWWW',
+    'WPPPPPPYPPPPPPW',
+    'WXPPPPPYPPPPPPW',
+    'WWWWWWWYWWWWWWW',
+  ],
+  GIFT_PALETTE,
+)
+
+export const GIFT_BOX_ICON = pixelIconUrl(
+  [
+    'WXUUUUYUUUUUW',
+    'WXUUUUYUUUUUW',
+    'WUUUUUYUUUUUW',
+    'WYYYYYYYYYYYW',
+    'WUUUUUYUUUUUW',
+    'WUUUUUYUUUUUW',
+    'WUUUUUYUUUUUW',
+    'WWWWWWWWWWWWW',
+  ],
+  GIFT_PALETTE,
+)
+
+export const GIFT_ZOMBIE_ICON = pixelIconUrl(
+  [
+    '..GGGGG..',
+    '.GGGGGGG.',
+    'GGOGGGOGG',
+    'GGOGGGOGG',
+    'GGGGGGGGG',
+    'GOXOXOXOG',
+    '.GGGGGGG.',
+    '..KKKKK..',
+  ],
+  GIFT_PALETTE,
+)
+
+export const SPARKLE_ICON = pixelIconUrl(
+  ['..Y..', '..Y..', 'YYXYY', '..Y..', '..Y..'],
+  GIFT_PALETTE,
+)
+
+// INSTALL
+
+// NOTE: a phone with a gold arrow dropping onto its home row, for the tile
+// that puts the game on the Home Screen.
+export const INSTALL_ICON = pixelIconUrl(
+  [
+    '.TTTTTTT.',
+    'TKKKYKKKT',
+    'TKKKYKKKT',
+    'TKKKYKKKT',
+    'TKYYYYYKT',
+    'TKKYYYKKT',
+    'TKKKYKKKT',
+    'TKKKKKKKT',
+    'TKGGGGGKT',
+    'TTTTXTTTT',
+    '.TTTTTTT.',
+  ],
+  PROFILE_PALETTE,
+)
+
+// NOTE: a Home Screen with Munch Manor's Groaner as the big app in the
+// middle, for the last step of the picture guide.
+export const HOME_SCREEN_APP_ICON = pixelIconUrl(
+  [
+    '.TTTTTTTTTT.',
+    'TKKKKKKKKKKT',
+    'TKSSKKKKSSKT',
+    'TKSSKKKKSSKT',
+    'TKKKGGGGKKKT',
+    'TKKGOGGOGKKT',
+    'TKKGGGGGGKKT',
+    'TKKGOOOOGKKT',
+    'TKKKGGGGKKKT',
+    'TKSSKKKKSSKT',
+    'TKSSKKKKSSKT',
+    'TKKKKKKKKKKT',
+    'TTTTTXXTTTTT',
+    '.TTTTTTTTTT.',
+  ],
+  PROFILE_PALETTE,
+)

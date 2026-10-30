@@ -644,6 +644,23 @@ export const ScreenFit = Schema.Literals([
 ])
 export type ScreenFit = typeof ScreenFit.Type
 
+// NOTE: whether the browser offered to install the game: Chrome's
+// beforeinstallprompt, held by src/install.ts until the install tile asks.
+export const InstallOffer = Schema.Literals(['None', 'Ready', 'Installed'])
+export type InstallOffer = typeof InstallOffer.Type
+
+export const InstallOutcome = Schema.Literals([
+  'Accepted',
+  'Dismissed',
+  'Unavailable',
+])
+export type InstallOutcome = typeof InstallOutcome.Type
+
+// NOTE: the update gift on the home menu, wrapped until a tap unwraps it
+// and the page reloads onto the newer build.
+export const UpdateGift = Schema.Literals(['Wrapped', 'Unwrapping'])
+export type UpdateGift = typeof UpdateGift.Type
+
 export const FullscreenSetting = Schema.Literals(['Off', 'On'])
 export type FullscreenSetting = typeof FullscreenSetting.Type
 
@@ -1302,6 +1319,8 @@ export const SHOP_DIALOG_ID = 'shop'
 export const EXIT_DIALOG_ID = 'exit-offer'
 
 export const HOME_SCREEN_STEPS_ID = 'home-screen-steps'
+
+export const UPDATE_GREETING_ID = 'update-greeting'
 
 export const SHOP_TABS_ID = 'shop-tabs'
 

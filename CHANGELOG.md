@@ -9,6 +9,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 - 🔫 Upgraded guns keep their names now: Beefy, then DELUXE, then 3000. The SMG is the Chatterbox.
 - 🧹 Playtest fixes: Rattles looks like himself in his shop, key hints read the right way round, sprites stay crisp, color pickers line up neatly, we tell you when a browser extension eats your keys, and big hordes run smoother on slower phones.
 - 🏳️‍🌈 Be whoever you want: four body shapes, mohawks, buns, beards, makeup, shades, kilts, dresses, rainbow hair, more skin tones, and pride flag shirts for everyone.
+- 🎁 New versions arrive as a rattling gift on the menu: unwrap it for a little party. A phone tile by the gear puts the game on your Home Screen.
 
 ## October 29, 2026: How tough are you?
 

@@ -1,19 +1,16 @@
 import { Array } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
-import { Dialog } from '@foldkit/ui'
-
 import { isOpen as isCoopOpen } from './coop/update'
-import { dialogShell } from './dialogs'
 import { END_MENU_BUTTON_ID, endOffer } from './home'
 import { pauseMenuButtonView } from './homeView'
 import {
-  ADD_TO_HOME_SCREEN_ICON,
   FULLSCREEN_ICON,
+  GIFT_BOX_ICON,
+  GIFT_LID_ICON,
   MUSIC_OFF_ICON,
   MUSIC_ON_ICON,
   PAUSE_ICON,
-  SHARE_ICON,
   SOUND_OFF_ICON,
   SOUND_ON_ICON,
 } from './icons'
@@ -128,114 +125,6 @@ export const cornerButtonsView = (
     ? h.empty
     : h.div([h.Class('corner-buttons')], cornerButtons(model, h))
 
-// HOME SCREEN TIP
-
-export const homeScreenTipView = (
-  model: Model,
-  h: HtmlBuilder<Message>,
-): Html =>
-  model.screenFit === 'HomeScreen' &&
-  model.homeScreenTip === 'Unseen' &&
-  Phase.isAnyOf(['Ready'])(model.phase) &&
-  !isPickingCharacter(model)
-    ? h.div(
-        [h.Class('home-screen-tip')],
-        [
-          h.button(
-            [
-              h.Type('button'),
-              h.Class('home-screen-tip-open'),
-              h.AriaHasPopup('dialog'),
-              h.OnClick(Message.ClickedHomeScreenTip()),
-            ],
-            ['Play full screen: how?'],
-          ),
-          h.button(
-            [
-              h.Type('button'),
-              h.Class('home-screen-tip-close'),
-              h.AriaLabel('Dismiss the tip'),
-              h.OnClick(Message.ClickedDismissHomeScreenTip(), {
-                focusSelector: '.game-surface',
-              }),
-            ],
-            ['×'],
-          ),
-        ],
-      )
-    : h.empty
-
-const stepGlyphView = (icon: string, h: HtmlBuilder<Message>): Html =>
-  h.span([
-    h.Class('home-screen-step-glyph'),
-    h.AriaHidden(true),
-    h.Style({ backgroundImage: icon }),
-  ])
-
-const homeScreenStepsPanelView = (
-  { title, description, initialFocus }: Dialog.RenderInfo,
-  h: HtmlBuilder<Message>,
-): ReadonlyArray<Html> => [
-  h.h2([...title, h.Class('home-screen-steps-title')], ['Play full screen']),
-  h.p(
-    [...description, h.Class('home-screen-steps-blurb')],
-    ['Put Munch Manor on your Home Screen:'],
-  ),
-  h.ol(
-    [h.Class('home-screen-steps-list')],
-    [
-      h.li(
-        [],
-        [
-          'Tap Share ',
-          stepGlyphView(SHARE_ICON, h),
-          '. No Share? Tap ••• by the address bar first.',
-        ],
-      ),
-      h.li(
-        [],
-        [
-          'Choose Add to Home Screen ',
-          stepGlyphView(ADD_TO_HOME_SCREEN_ICON, h),
-          '.',
-        ],
-      ),
-      h.li([], ['Tap Add.']),
-      h.li([], ['Open Munch Manor from your Home Screen.']),
-    ],
-  ),
-  h.button(
-    [
-      ...initialFocus,
-      h.Type('button'),
-      h.Class('home-screen-steps-done'),
-      h.OnClick(Message.ClickedHomeScreenStepsDoneButton(), {
-        focusSelector: '.game-surface',
-      }),
-    ],
-    ['Got it'],
-  ),
-]
-
-const toHomeScreenStepsMessage = (message: Dialog.Message): Message =>
-  Message.GotHomeScreenStepsMessage({ message })
-
-export const homeScreenStepsView = (
-  model: Model,
-  h: HtmlBuilder<Message>,
-): Html =>
-  dialogShell(
-    {
-      dialog: model.homeScreenSteps,
-      dialogClass: 'home-screen-steps-dialog',
-      backdropClass: 'home-screen-steps-backdrop',
-      panelClass: 'home-screen-steps-panel',
-      panelView: renderInfo => homeScreenStepsPanelView(renderInfo, h),
-      toParentMessage: toHomeScreenStepsMessage,
-    },
-    h,
-  )
-
 // MODE BUTTONS
 
 type ModeButton = Readonly<{
@@ -297,14 +186,23 @@ const UPDATE_MENU_BUTTON: ModeButton = {
   ...MENU_BUTTON,
   key: 'ENTER',
   keyName: 'Enter H',
+  ariaLabel: 'Menu: back home, where a new version is waiting',
 }
 
-const UPDATE_NOTE = 'A new version is waiting on the menu.'
+// NOTE: a newer build waits on the menu, so the MENU button carries a
+// little gift that bobs on its corner, the same one the menu shows.
+const updateGiftBadgeView = (h: HtmlBuilder<Message>): Html =>
+  h.span([
+    h.Class('mode-button-gift'),
+    h.AriaHidden(true),
+    h.Style({ backgroundImage: `${GIFT_LID_ICON}, ${GIFT_BOX_ICON}` }),
+  ])
 
 const modeButtonView = (
   model: Model,
   button: ModeButton,
   h: HtmlBuilder<Message>,
+  badges: ReadonlyArray<Html> = [],
 ): Html =>
   h.button(
     [
@@ -321,6 +219,7 @@ const modeButtonView = (
     [
       h.span([h.Class('mode-button-label')], [button.label]),
       h.span([h.Class('mode-button-detail')], [button.detail]),
+      ...badges,
       ...(model.lastDevice === 'KeyboardMouse'
         ? [
             h.span(
@@ -340,10 +239,7 @@ const modeButtons = (model: Model): ReadonlyArray<ModeButton> =>
 const menuOnlyView = (model: Model, h: HtmlBuilder<Message>): Html =>
   h.div(
     [h.Class('mode-choice is-update-waiting')],
-    [
-      h.p([h.Class('mode-choice-note')], [UPDATE_NOTE]),
-      modeButtonView(model, UPDATE_MENU_BUTTON, h),
-    ],
+    [modeButtonView(model, UPDATE_MENU_BUTTON, h, [updateGiftBadgeView(h)])],
   )
 
 const menuAndModesView = (model: Model, h: HtmlBuilder<Message>): Html =>

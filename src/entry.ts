@@ -6,6 +6,7 @@ import { Runtime } from 'foldkit'
 
 import { managedResources } from './commands'
 import { layer as CoopNetLayer } from './coop/net'
+import { layer as InstallPromptLayer } from './install'
 import { init, update } from './main'
 import { Message } from './message'
 import { Model } from './model'
@@ -26,7 +27,10 @@ const application = Runtime.makeApplication({
   view,
   subscriptions,
   managedResources,
-  resources: Layer.provideMerge(CoopNetLayer, PlayerStoreLayer),
+  resources: Layer.merge(
+    Layer.provideMerge(CoopNetLayer, PlayerStoreLayer),
+    InstallPromptLayer,
+  ),
   container: document.getElementById('root'),
   devTools: {
     Message,

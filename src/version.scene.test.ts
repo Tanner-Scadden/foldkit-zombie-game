@@ -1,6 +1,7 @@
 import { Option } from 'effect'
 import {
   Command,
+  Mount,
   Subscription,
   click,
   expect,
@@ -11,16 +12,23 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { ReloadPage } from './commands'
+import { Dialog } from '@foldkit/ui'
+
+import { maybeNewestNewsDay, newsHeadline } from './changelog'
+import { ReloadPage, WaitForUnwrap } from './commands'
 import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
-import { fighting, measureSurface } from './testing'
+import { fighting, measureSurface, showDialogInScene } from './testing'
+import { RUNNING_BUILD } from './version'
 import { view } from './view'
 import { pause } from './waves'
 
-const updateChip = role('button', { name: /New version ready/ })
+const updateChip = role('button', { name: 'Update ready: tap to get it' })
+const greeting = role('dialog', { name: 'Updated!' })
+const newsButton = role('button', { name: "WHAT'S NEW" })
+const closeGreeting = role('button', { name: 'Close' })
 const mainMenu = role('button', { name: /^More:/ })
 
 const withNewerBuild = (model: Model): Model =>
@@ -50,7 +58,7 @@ const SCREENS_WITHOUT_THE_CHIP: ReadonlyArray<readonly [string, Model]> = [
   ['a wave', withNewerBuild(fighting)],
 ]
 
-describe('the update chip', () => {
+describe('the update gift', () => {
   test('shows on the home menu', () => {
     scene(
       { update, view },
@@ -91,33 +99,95 @@ describe('the update chip', () => {
     )
   })
 
-  test('says tap on touch and click with a mouse', () => {
-    scene(
-      { update, view },
-      given(
-        modifyFields(withNewerBuild(initialModel), {
-          lastDevice: () => 'Touch',
-        }),
-      ),
-      measureSurface,
-      expect(updateChip).toHaveText('New version ready. Tap to update'),
-    )
+  test('wears a NEW VERSION tag', () => {
     scene(
       { update, view },
       given(withNewerBuild(initialModel)),
       measureSurface,
-      expect(updateChip).toHaveText('New version ready. Click to update'),
+      expect(updateChip).toHaveText('NEWVERSION'),
     )
   })
 
-  test('tapping it reloads into the new build', () => {
+  test('tapping it unwraps the gift, then reloads onto the new build', () => {
     scene(
       { update, view },
       given(withNewerBuild(initialModel)),
       measureSurface,
       click(updateChip),
-      Command.expectExact(ReloadPage),
-      Command.resolve(ReloadPage, Message.CompletedReloadPage()),
+      expect(updateChip).toHaveAttr('data-state', 'Unwrapping'),
+      Command.expectExact(WaitForUnwrap),
+      Command.resolve(WaitForUnwrap, Message.CompletedWaitForUnwrap()),
+      Command.expectExact(ReloadPage({ build: 'newer-build' })),
+      Command.resolve(ReloadPage, Message.FailedReloadPage({ reason: 'no' })),
+      expect(updateChip).toHaveAttr('data-state', 'Wrapped'),
+    )
+  })
+})
+
+/* oxlint-disable foldkit/no-child-message-construction-in-root */
+
+const newestHeadline = Option.match(maybeNewestNewsDay, {
+  onNone: () => '',
+  onSome: day => newsHeadline(day.bullets[0].text),
+})
+
+const justUpdated = Message.CompletedReadUpdateMarker({
+  maybeBuild: Option.some(RUNNING_BUILD),
+})
+
+describe('the greeting after an update', () => {
+  test('throws a party with the news when the reload lands on the new build', () => {
+    scene(
+      { update, view },
+      given(initialModel),
+      measureSurface,
+      Subscription.emit(justUpdated),
+      ...showDialogInScene(),
+      expect(greeting).toExist(),
+      expect(greeting).toContainText(newestHeadline),
+      expect(newsButton).toExist(),
+      click(closeGreeting),
+      Command.resolve(
+        Dialog.CloseDialog,
+        Dialog.Message.CompletedCloseDialog(),
+      ),
+      Mount.expectEnded(Dialog.AcquireResources),
+      expect(greeting).toBeAbsent(),
+    )
+  })
+
+  test('the news button opens the full news', () => {
+    scene(
+      { update, view },
+      given(initialModel),
+      measureSurface,
+      Subscription.emit(justUpdated),
+      ...showDialogInScene(),
+      click(newsButton),
+      Command.resolveAll(
+        [Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()],
+        [Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()],
+      ),
+      expect(greeting).toBeAbsent(),
+      expect(role('dialog', { name: /^What's new/i })).toExist(),
+    )
+  })
+
+  test('greets nobody on a plain load or a reload that kept the old build', () => {
+    scene(
+      { update, view },
+      given(initialModel),
+      measureSurface,
+      Subscription.emit(
+        Message.CompletedReadUpdateMarker({ maybeBuild: Option.none() }),
+      ),
+      expect(greeting).toBeAbsent(),
+      Subscription.emit(
+        Message.CompletedReadUpdateMarker({
+          maybeBuild: Option.some('an-older-build'),
+        }),
+      ),
+      expect(greeting).toBeAbsent(),
     )
   })
 })

@@ -105,6 +105,16 @@ const SCENES: ReadonlyArray<Scene> = [
     query: 'bests&kills=Shambler:40,Runner:12&newentries=Runner',
   },
   {
+    name: 'home-corner',
+    query: 'bests&kills=Shambler:40,Runner:12&fit=full&install&newer',
+  },
+  {
+    name: 'home-guide',
+    query: 'fit=home',
+    act: clickButton(/add to home screen/i),
+  },
+  { name: 'greet', query: 'greet' },
+  {
     name: 'boss',
     query:
       'wave=8&seen=all&start=wave&elapsed=9000&boss=stomp&windMs=500&bx=200&by=80&px=150&py=120',
