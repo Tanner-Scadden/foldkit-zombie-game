@@ -2,12 +2,12 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Button, type Dialog } from '@foldkit/ui'
 
-import { dialogShell } from './dialogs'
+import { closeButtonView, dialogShell } from './dialogs'
 import { exitName, exitVerdict } from './exits'
 import { COIN_SYMBOL } from './font'
 import { Message } from './message'
 import { type Model, ShopState } from './model'
-import { CLOSE_ART, KITCHEN_ART, type ShopArt } from './shopArt'
+import { KITCHEN_ART, type ShopArt } from './shopArt'
 
 // NOTE: the offer a boarded exit makes between waves, in the shop's own
 // frame and tokens: a picture of the room, and one button that is the price
@@ -88,14 +88,13 @@ const panelView = (
     [h.Class('exit-header')],
     [
       h.h2([...title, h.Class('shop-title')], [exitLabel(model)]),
-      h.button(
-        [
-          ...closeButton,
-          h.Class('shop-close'),
-          h.AriaLabel('Leave it boarded'),
-          h.AriaKeyshortcuts('Escape'),
-        ],
-        [artView(CLOSE_ART, 'shop-close-icon', h)],
+      closeButtonView(
+        {
+          attributes: closeButton,
+          className: 'shop-close',
+          label: 'Leave it boarded',
+        },
+        h,
       ),
     ],
   ),

@@ -31,7 +31,7 @@ const characterCard = role('button', {
   name: 'Character: change how you look',
 })
 const pickerDialog = role('dialog', { name: 'Profile' })
-const doneButton = role('button', { name: 'Done' })
+const closeButton = role('button', { name: 'Close' })
 const randomizeButton = role('button', { name: 'Roll a random look' })
 
 const group = (name: string) => role('radiogroup', { name })
@@ -82,7 +82,7 @@ describe('Character picker', () => {
       expect(pickerDialog).toBeAbsent(),
       ...pickCardInScene('Character: change how you look'),
       expect(pickerDialog).toExist(),
-      click(doneButton),
+      click(closeButton),
       ...closePicker(),
     )
   })
@@ -110,7 +110,7 @@ describe('Character picker', () => {
       expect(optionIn('Shirt', 'Blue')).toHaveAttr('aria-checked', 'true'),
       expect(preview(DEFAULT_LOOK)).toExist(),
       expect(randomizeButton).toExist(),
-      click(doneButton),
+      click(closeButton),
       ...closePicker(),
     )
   })
@@ -131,7 +131,7 @@ describe('Character picker', () => {
       expect(
         preview('Female body, ponytail ginger hair, deep skin, teal shirt'),
       ).toExist(),
-      click(doneButton),
+      click(closeButton),
       ...closePicker(),
       expect(pickerDialog).toBeAbsent(),
     )
@@ -146,7 +146,7 @@ describe('Character picker', () => {
       ...showPicker(),
       ...pick('Skin', 'Brown'),
       ...pick('Shirt', 'Pink'),
-      click(doneButton),
+      click(closeButton),
       ...closePicker(),
     )
   })
@@ -171,7 +171,7 @@ describe('Character picker', () => {
       expect(
         preview('Female body, curls brown hair, light skin, red shirt'),
       ).toExist(),
-      click(doneButton),
+      click(closeButton),
       ...closePicker(),
     )
   })
@@ -188,7 +188,7 @@ describe('Character picker', () => {
       ...showPicker(),
       ...pick('Hair', 'Long'),
       ...pick('Hair color', 'Pink'),
-      click(doneButton),
+      click(closeButton),
       ...closePicker(),
       expect(pickerDialog).toBeAbsent(),
     )
@@ -203,7 +203,7 @@ describe('Character picker', () => {
       ...showPicker(),
       click(randomizeButton),
       expect(preview(DEFAULT_LOOK)).toBeAbsent(),
-      click(doneButton),
+      click(closeButton),
       ...closePicker(),
     )
   })

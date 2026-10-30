@@ -9,7 +9,8 @@ import {
   type RoomScore,
 } from '@munch/netcode'
 
-import { CLOCK_ICON, CLOSE_ICON, SHARE_ICON, TROPHY_ICON } from '../icons'
+import { closeButtonView } from '../dialogs'
+import { CLOCK_ICON, SHARE_ICON, TROPHY_ICON } from '../icons'
 import type { Appearance } from '../model'
 import {
   AWAY_ICON,
@@ -129,16 +130,14 @@ const portraitView = (
   h: HtmlBuilder<Message>,
 ): Html => iconView(`coop-portrait ${className}`, portraitOf(look), h)
 
-const closeButtonView = (inputs: ViewInputs, h: HtmlBuilder<Message>): Html =>
-  h.button(
-    [
-      h.Type('button'),
-      h.Class('panel-close coop-close'),
-      h.AriaLabel('Close co-op'),
-      h.AriaKeyshortcuts('Escape'),
-      h.OnClick(Message.ClickedCloseButton()),
-    ],
-    [iconView('panel-close-icon', CLOSE_ICON, h), keyCapView(inputs, 'ESC', h)],
+const coopCloseView = (h: HtmlBuilder<Message>): Html =>
+  closeButtonView(
+    {
+      attributes: [h.OnClick(Message.ClickedCloseButton())],
+      className: 'coop-close',
+      label: 'Close co-op',
+    },
+    h,
   )
 
 const backButtonView = (
@@ -217,7 +216,7 @@ const hubView = (
   h.div(
     [h.Class('coop-hub')],
     [
-      closeButtonView(inputs, h),
+      coopCloseView(h),
       h.h2(
         [h.Class('coop-title'), h.AriaLabel('Co-op')],
         [iconView('coop-title-icon', COOP_ICON, h), h.span([], ['CO-OP'])],
@@ -312,7 +311,7 @@ const codeView = (
     [h.Class('coop-code')],
     [
       backButtonView('Back', Message.ClickedBackButton(), h),
-      closeButtonView(inputs, h),
+      coopCloseView(h),
       iconView('coop-code-icon', CODE_ICON, h),
       h.form(
         [h.Class('coop-code-form'), h.OnSubmit(Message.SubmittedCode())],
@@ -459,18 +458,13 @@ const queueView = (
   h.div(
     [h.Class('coop-queue')],
     [
-      h.button(
-        [
-          h.Type('button'),
-          h.Class('panel-close coop-close'),
-          h.AriaLabel('Stop looking'),
-          h.AriaKeyshortcuts('Escape'),
-          h.OnClick(Message.ClickedCancelQueueButton()),
-        ],
-        [
-          iconView('panel-close-icon', CLOSE_ICON, h),
-          keyCapView(inputs, 'ESC', h),
-        ],
+      closeButtonView(
+        {
+          attributes: [h.OnClick(Message.ClickedCancelQueueButton())],
+          className: 'coop-close',
+          label: 'Stop looking',
+        },
+        h,
       ),
       iconView('coop-queue-icon', QUICK_ICON, h),
       h.ol(

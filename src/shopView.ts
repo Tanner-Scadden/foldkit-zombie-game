@@ -5,7 +5,7 @@ import { Button, Dialog, Tabs } from '@foldkit/ui'
 
 import { levelOf } from './arena'
 import { PLAYER_MAX_HP, TILE_SIZE } from './constants'
-import { dialogShell } from './dialogs'
+import { closeButtonView, dialogShell } from './dialogs'
 import { COIN_SYMBOL } from './font'
 import { Message } from './message'
 import {
@@ -46,7 +46,6 @@ import {
   verdictFor,
 } from './shop'
 import {
-  CLOSE_ART,
   HEART_EMPTY,
   HEART_FULL,
   HIT_ICON,
@@ -984,14 +983,13 @@ const panelView = (
           h.span([h.Class('shop-summary sr-only')], [affordSummary(model)]),
         ],
       ),
-      h.button(
-        [
-          ...closeButton,
-          h.Class('shop-close'),
-          h.AriaLabel('Leave shop'),
-          h.AriaKeyshortcuts('Escape'),
-        ],
-        [artView(CLOSE_ART, 'shop-close-icon', h)],
+      closeButtonView(
+        {
+          attributes: closeButton,
+          className: 'shop-close',
+          label: 'Leave shop',
+        },
+        h,
       ),
     ],
   ),

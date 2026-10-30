@@ -2,6 +2,10 @@
 
 One entry per day, newest first. Only things a player would notice, a handful of bullets at most, written for players and not for us.
 
+## October 30, 2026: Tap and go
+
+- ▶️ PLAY is one big arrow now, every menu's close X slimmed down (still easy to tap), and a CODE card in the MORE hand shows off the game's source.
+
 ## October 29, 2026: How tough are you?
 
 - 💀 Pick how many skulls right by PLAY, and beat Hard to unlock Nightmare. Waves are tighter, planks cost more, and nothing climbs through a boarded door.

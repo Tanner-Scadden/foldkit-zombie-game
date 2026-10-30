@@ -20,7 +20,7 @@ import { asVeteran } from './veteran'
 import { view } from './view'
 
 const playButton = role('button', {
-  name: 'Play the campaign: 10 waves, then victory',
+  name: 'Play',
 })
 const difficultyButton = role('button', {
   name: 'Difficulty: Normal. Change it',
@@ -38,7 +38,7 @@ const lockedNightmare = role('button', {
 const openNightmare = role('button', {
   name: 'Nightmare: No mercy. Bring snacks',
 })
-const done = role('button', { name: 'Done' })
+const done = role('button', { name: 'Close' })
 
 // NOTE: the attribute the Foldkit dialog focuses when it opens.
 const INITIAL_FOCUS = 'data-foldkit-dialog-initial-focus'

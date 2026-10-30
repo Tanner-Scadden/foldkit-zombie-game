@@ -4,14 +4,13 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 import type { Dialog, Tabs } from '@foldkit/ui'
 
 import * as CharacterView from './characterView'
-import { dialogShell } from './dialogs'
+import { closeButtonView, dialogShell } from './dialogs'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
 import {
   ACCOUNT_ICON,
   AIM_ICON,
   CHARACTER_ICON,
   CLOCK_ICON,
-  CLOSE_ICON,
   DICE_ICON,
   FULLSCREEN_ICON,
   KEYPAD_ICON,
@@ -922,14 +921,13 @@ const panelView = (
     [...description, h.Class('sr-only')],
     ['Your look, your name, your devices, and the settings.'],
   ),
-  h.button(
-    [
-      ...closeButton,
-      h.Class('panel-close profile-close'),
-      h.AriaLabel('Done'),
-      h.AriaKeyshortcuts('Escape'),
-    ],
-    [iconView('panel-close-icon', CLOSE_ICON, h)],
+  closeButtonView(
+    {
+      attributes: closeButton,
+      className: 'panel-close profile-close',
+      label: 'Close',
+    },
+    h,
   ),
   tabsView(model, initialFocus, h),
 ]

@@ -327,23 +327,6 @@ const HEART_PIXELS: ReadonlyArray<string> = [
 export const HEART_FULL = artOf(HEART_PIXELS, { R: '#e8333a', W: '#ff8a8f' })
 export const HEART_EMPTY = artOf(HEART_PIXELS, { R: '#4a2a33', W: '#4a2a33' })
 
-// CLOSE
-
-export const CLOSE_ART = artOf(
-  [
-    'KKK...KKK',
-    'KRRK.KRRK',
-    'KRRRKRRRK',
-    '.KRRRRRK.',
-    '..KRRRK..',
-    '.KRRRRRK.',
-    'KRRRKRRRK',
-    'KRRK.KRRK',
-    'KKK...KKK',
-  ],
-  { K: INK, R: '#ff5a4e' },
-)
-
 // TABS
 
 export const TAB_ART: Readonly<Record<ShopCategory, ShopArt>> = {

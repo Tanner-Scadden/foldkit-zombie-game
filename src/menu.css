@@ -216,17 +216,12 @@
 }
 
 .home-play-icon {
-  width: max(22px, 9 * var(--a));
-  height: max(22px, 9 * var(--a));
+  height: min(max(44px, 20 * var(--a)), 72%);
+  aspect-ratio: 1;
+  translate: 10% 0;
   background: center / contain no-repeat;
   image-rendering: pixelated;
-}
-
-.home-play-label {
-  color: #10240a;
-  font: bold clamp(22px, 10 * var(--a), 56px) / 1 var(--menu-font);
-  letter-spacing: 0.08em;
-  text-shadow: 0 2px 0 rgba(255, 255, 255, 0.4);
+  filter: drop-shadow(0 3px 0 rgba(255, 255, 255, 0.4));
 }
 
 @keyframes play-breathe {
@@ -441,8 +436,7 @@
 
 /* THE MANOR BUTTON: the deck the hand is dealt from. */
 
-.home-stage .home-manor,
-.hand-close {
+.home-stage .home-manor {
   position: absolute;
   left: calc(4 * var(--a));
   bottom: calc(4 * var(--a));
@@ -655,6 +649,16 @@
   --tint: var(--menu-coffee);
 }
 
+/* NOTE: GitHub's mark stays as GitHub draws it: white, smooth, never
+   pixelated. Only the card's frame wears the game's style, in slate. */
+.hand-card[data-card='Code'] {
+  --tint: #c9d1d9;
+}
+
+.hand-card[data-card='Code'] .hand-card-icon {
+  image-rendering: auto;
+}
+
 @media (hover: hover) {
   .hand-card:hover {
     translate: 0 calc(var(--o) * var(--o) * 5px - 8px);
@@ -736,30 +740,27 @@
   left: 6px;
 }
 
-/* NOTE: CLOSE takes the MANOR button's place, so a second tap on the same
-   spot puts the hand away. */
-.hand-close {
-  left: calc(var(--stage-x) + 4 * var(--a));
-  bottom: calc(var(--stage-y) + 4 * var(--a));
-  font-family: var(--menu-font);
-  cursor: pointer;
+/* NOTE: the MORE deck is dealt out into the hand, so it leaves the stage
+   while the hand is open and only the close X stands in its place. */
+.game-root:has(.hand-dialog[open]) .home-stage .home-manor {
+  visibility: hidden;
+}
+
+/* NOTE: the close X sits in the middle of where the MORE deck was, so a
+   second tap on the same spot puts the hand away (a tap around it lands on
+   the backdrop, which closes it too). Its button stays 48 px, so a wide fan
+   of cards never reaches into it. */
+.menu-close.hand-close {
+  --hand-deck-w: max(96px, 40 * var(--a));
+  --hand-deck-h: var(--cluster-h);
+  position: absolute;
+  left: calc(
+    var(--stage-x) + 4 * var(--a) + (var(--hand-deck-w) - var(--menu-tap)) / 2
+  );
+  bottom: calc(
+    var(--stage-y) + 4 * var(--a) + (var(--hand-deck-h) - var(--menu-tap)) / 2
+  );
   pointer-events: auto;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.hand-close:focus-visible {
-  outline: var(--menu-focus);
-  outline-offset: 2px;
-}
-
-.hand-close:active {
-  box-shadow: var(--menu-press);
-}
-
-.hand-close-x {
-  font: bold clamp(20px, 8 * var(--a), 44px) / 1 var(--menu-font);
-  pointer-events: none;
 }
 
 @keyframes hand-deal {
@@ -1655,52 +1656,87 @@
   }
 }
 
-/* CLOSE: the shop's red pixel X in each panel's top right corner. */
+/* CLOSE: the one close button every menu dialog shares (closeButtonView in
+   dialogs.ts). The red pixel X sits on a small face, about 30 px on a phone
+   and up to 40 px on a big screen, centered in a see-through button that
+   keeps the 48 px tap target. Each dialog only places the button. */
 
-.panel-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 1;
+.menu-close {
+  --close-face: clamp(30px, 4.6vmin, 40px);
   display: grid;
   place-items: center;
+  box-sizing: border-box;
   width: var(--menu-tap);
   height: var(--menu-tap);
+  margin: 0;
   padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.menu-close-face {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: var(--close-face);
+  height: var(--close-face);
   border: 2px solid #8a2a24;
   border-radius: var(--menu-radius-sm);
   background: #3a1a1e;
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
-  cursor: pointer;
-  touch-action: manipulation;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  transition:
+    transform 80ms ease-out,
+    background-color 80ms ease-out;
 }
 
-.panel-close-icon {
-  width: 22px;
-  height: 22px;
+.menu-close-icon {
+  width: 56%;
+  height: 56%;
   background: center / contain no-repeat;
   image-rendering: pixelated;
-  pointer-events: none;
 }
 
 @media (hover: hover) {
-  .panel-close:hover {
+  .menu-close:hover .menu-close-face {
     border-color: var(--menu-red);
     background: #5a2228;
   }
 }
 
-.panel-close:active {
+.menu-close:active .menu-close-face {
+  transform: translateY(1px) scale(0.92);
   box-shadow: var(--menu-press);
 }
 
-.panel-close:focus-visible {
+.menu-close:focus-visible {
+  outline: none;
+}
+
+.menu-close:focus-visible .menu-close-face {
+  border-color: var(--menu-gold);
   outline: var(--menu-focus);
   outline-offset: 2px;
 }
 
+/* NOTE: a panel's close sits in its top right corner. The title row is as
+   tall as the button and stops short of it, so the close never covers the
+   title or the first row of the panel. */
+.panel-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+}
+
 .panel-title {
-  padding-right: calc(var(--menu-tap) + 8px);
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--menu-tap) + 4px - var(--menu-pad));
+  padding-right: calc(var(--menu-tap) + 4px - var(--menu-pad));
 }
 
 /* GAME FEEL: small idle motions, all CSS, none of them on the game's
@@ -2224,8 +2260,8 @@
 }
 
 .game-root[data-layout='Portrait'] .hand-close {
-  width: var(--manor-w);
-  height: var(--deck-h);
+  --hand-deck-w: var(--manor-w);
+  --hand-deck-h: var(--deck-h);
 }
 
 .game-root[data-layout='Portrait'] .help-cards {

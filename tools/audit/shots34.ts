@@ -56,7 +56,7 @@ const clickButton = (name: RegExp) => async (page: Page) => {
 }
 
 const fromHand = (name: RegExp) => async (page: Page) => {
-  await clickButton(/^manor/i)(page)
+  await clickButton(/^more/i)(page)
   await clickButton(name)(page)
 }
 
@@ -117,7 +117,7 @@ const SCENES: ReadonlyArray<Scene> = [
   { name: 'pause', query: 'wave=3&seen=all&start=wave&phase=paused' },
   { name: 'gameover', query: 'wave=5&phase=gameover&stats' },
   { name: 'victory', query: 'wave=8&phase=victory&stats' },
-  { name: 'hand', query: 'support', act: clickButton(/^manor/i) },
+  { name: 'hand', query: 'support', act: clickButton(/^more/i) },
   { name: 'whatsnew', query: '', act: fromHand(/what's new/i) },
   {
     name: 'munchopedia',

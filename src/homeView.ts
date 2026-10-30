@@ -5,7 +5,7 @@ import { Dialog } from '@foldkit/ui'
 
 import { COOP_ICON } from './coop/icons'
 import { IS_COOP_RELEASED } from './coop/release'
-import { dialogShell } from './dialogs'
+import { closeButtonView, dialogShell } from './dialogs'
 import {
   DIFFICULTIES,
   DIFFICULTY_ORDER,
@@ -19,9 +19,12 @@ import {
   HOME_BUTTONS,
   HOME_KEYS,
   type KeyedHandCard,
+  type LinkHandCard,
+  SOURCE_URL,
   dealtCards,
   handCardId,
   homeButtonId,
+  isLinkHandCard,
   isNewsUnseen,
   isOnHome,
   steppedHandCard,
@@ -31,10 +34,10 @@ import {
   CAMPAIGN_ICON,
   CHARACTER_ICON,
   CLOCK_ICON,
-  CLOSE_ICON,
   COFFEE_ICON,
   ENDLESS_ICON,
   FULLSCREEN_ICON,
+  GITHUB_MARK_ICON,
   HAND_ICON,
   HELP_ICON,
   KILLS_ICON,
@@ -69,7 +72,6 @@ import { helpLabel, howToPlayView } from './pauseHelp'
 import { isPortrait } from './screen'
 import { durationLabel } from './stats'
 import { hasFinishedTutorial } from './update/coop'
-import { FINAL_WAVE } from './waves'
 import { whatsNewBodyView, whatsNewText } from './whatsNewView'
 
 // KEY BADGES
@@ -113,20 +115,9 @@ const iconView = (
 
 // PLAY
 
-type ModeLook = Readonly<{
-  icon: string
-  playLabel: string
-}>
-
-const MODE_LOOKS: Readonly<Record<HomeMode, ModeLook>> = {
-  Campaign: {
-    icon: CAMPAIGN_ICON,
-    playLabel: `Play the campaign: ${FINAL_WAVE} waves, then victory`,
-  },
-  Endless: {
-    icon: ENDLESS_ICON,
-    playLabel: 'Play endless: waves keep coming until you fall',
-  },
+const MODE_ICONS: Readonly<Record<HomeMode, string>> = {
+  Campaign: CAMPAIGN_ICON,
+  Endless: ENDLESS_ICON,
 }
 
 const otherMode = (mode: HomeMode): HomeMode =>
@@ -135,28 +126,25 @@ const otherMode = (mode: HomeMode): HomeMode =>
 const modeName = (mode: HomeMode): string =>
   mode === 'Campaign' ? 'Campaign' : 'Endless'
 
-const playButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
-  const look = MODE_LOOKS[model.home.mode]
-  return h.button(
+// NOTE: show, don't explain. PLAY is the big play icon alone, and the mode
+// beside it says which run it starts.
+const playButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.button(
     [
       ...homeButtonAttributes('Play', h),
       h.Class('home-play'),
       h.DataAttribute('mode', model.home.mode),
-      h.AriaLabel(look.playLabel),
+      h.AriaLabel('Play'),
       h.OnClick(Message.ClickedPlayButton(), { propagation: 'Stop' }),
     ],
     [
       h.span(
         [h.Class('home-play-face')],
-        [
-          iconView('home-play-icon', PLAY_ICON, h),
-          h.span([h.Class('home-play-label')], ['PLAY']),
-        ],
+        [iconView('home-play-icon', PLAY_ICON, h)],
       ),
       ...keyBadgeView(model, 'Play', h),
     ],
   )
-}
 
 const modeOptionView = (
   model: Model,
@@ -169,7 +157,7 @@ const modeOptionView = (
       h.DataAttribute('mode', mode),
       h.DataAttribute('state', model.home.mode === mode ? 'Chosen' : 'Other'),
     ],
-    [iconView('home-mode-icon', MODE_LOOKS[mode].icon, h)],
+    [iconView('home-mode-icon', MODE_ICONS[mode], h)],
   )
 
 const modeButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
@@ -322,6 +310,11 @@ const CARD_LOOKS: Readonly<Record<HandCard, CardLook>> = {
       'Tip jar: buy the shopkeeper a coffee to support the game. Opens in a new tab',
     icon: COFFEE_ICON,
   },
+  Code: {
+    title: 'CODE',
+    ariaLabel: "Code: the game's source on GitHub. Opens in a new tab",
+    icon: GITHUB_MARK_ICON,
+  },
 }
 
 // NOTE: show, don't explain. A card is its picture and its name. Only the
@@ -364,6 +357,7 @@ const NEWS_NAMES: Readonly<Record<HandCard, string>> = {
   WhatsNew: "What's new",
   HowToPlay: 'How to play',
   Support: 'the tip jar',
+  Code: 'the code',
 }
 
 const manorAriaLabel = (model: Model): string =>
@@ -461,10 +455,17 @@ const cardBodyView = (
       ...(hasNews(model, card)
         ? [h.span([h.Class('hand-card-new'), h.AriaHidden(true)], ['NEW'])]
         : []),
-      ...(card === 'Support' ? [] : keyCapView(model, HAND_KEYS[card].cap, h)),
+      ...(isLinkHandCard(card)
+        ? []
+        : keyCapView(model, HAND_KEYS[card].cap, h)),
     ],
   ),
 ]
+
+const linkCardUrl = (model: Model, card: LinkHandCard): string =>
+  card === 'Code'
+    ? SOURCE_URL
+    : Option.getOrElse(model.maybeSupportUrl, () => '')
 
 const handCardView = (
   model: Model,
@@ -481,17 +482,17 @@ const handCardView = (
     h.DataAttribute('card', card),
     h.Style({ '--i': `${index}`, '--n': `${count}` }),
     h.AriaLabel(cardAriaLabel(model, card)),
-    ...(card === 'Support' ? [] : [h.AriaKeyshortcuts(HAND_KEYS[card].name)]),
+    ...(isLinkHandCard(card) ? [] : [h.AriaKeyshortcuts(HAND_KEYS[card].name)]),
     h.OnKeyDownPreventDefault(key => handKeyMessage(model, card, key)),
   ]
   return h.li(
     [h.Class('hand-slot')],
     [
-      card === 'Support'
+      isLinkHandCard(card)
         ? h.a(
             [
               ...shared,
-              h.Href(Option.getOrElse(model.maybeSupportUrl, () => '')),
+              h.Href(linkCardUrl(model, card)),
               h.Target('_blank'),
               h.Rel('noopener noreferrer'),
             ],
@@ -530,18 +531,13 @@ const handView = (
         handCardView(model, card, index, cards.length, renderInfo, h),
       ),
     ),
-    h.button(
-      [
-        ...renderInfo.closeButton,
-        h.Class('hand-close'),
-        h.AriaLabel('Close the manor'),
-        h.AriaKeyshortcuts('Escape'),
-      ],
-      [
-        h.span([h.Class('hand-close-x'), h.AriaHidden(true)], ['✕']),
-        h.span([h.Class('home-manor-label')], ['CLOSE']),
-        ...keyCapView(model, 'ESC', h),
-      ],
+    closeButtonView(
+      {
+        attributes: renderInfo.closeButton,
+        className: 'hand-close',
+        label: 'Close',
+      },
+      h,
     ),
   ]
 }
@@ -970,15 +966,16 @@ const doneButtonView = (
   h: HtmlBuilder<Message>,
   focus: 'TakesInitialFocus' | 'LeavesInitialFocus' = 'TakesInitialFocus',
 ): Html =>
-  h.button(
-    [
-      ...closeButton,
-      ...(focus === 'TakesInitialFocus' ? initialFocus : []),
-      h.Class('panel-close'),
-      h.AriaLabel('Done'),
-      h.AriaKeyshortcuts('Escape'),
-    ],
-    [iconView('panel-close-icon', CLOSE_ICON, h)],
+  closeButtonView(
+    {
+      attributes: [
+        ...closeButton,
+        ...(focus === 'TakesInitialFocus' ? initialFocus : []),
+      ],
+      className: 'panel-close',
+      label: 'Close',
+    },
+    h,
   )
 
 const panelBodyView = (

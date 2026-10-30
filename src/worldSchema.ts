@@ -643,13 +643,15 @@ export const HomeButton = Schema.Literals([
 export type HomeButton = typeof HomeButton.Type
 
 // NOTE: the cards the MANOR button deals. Support is the tip jar's coffee
-// card, dealt only while a support link is set.
+// card, dealt only while a support link is set, and Code links to the game's
+// public source on GitHub.
 export const HandCard = Schema.Literals([
   'Character',
   'Munchopedia',
   'WhatsNew',
   'HowToPlay',
   'Support',
+  'Code',
 ])
 export type HandCard = typeof HandCard.Type
 

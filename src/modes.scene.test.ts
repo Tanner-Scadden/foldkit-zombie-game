@@ -29,7 +29,7 @@ const campaignButton = role('button', {
   name: 'Campaign: 10 waves, then victory',
 })
 const playButton = role('button', {
-  name: 'Play the campaign: 10 waves, then victory',
+  name: 'Play',
 })
 const endlessButton = role('button', {
   name: 'Endless: waves keep coming until you fall',
@@ -40,9 +40,7 @@ const modeButton = role('button', {
 const endlessModeButton = role('button', {
   name: 'Mode: Endless. Switch to Campaign',
 })
-const playEndlessButton = role('button', {
-  name: 'Play endless: waves keep coming until you fall',
-})
+const playEndlessButton = selector(".home-play[data-mode='Endless']")
 const keepGoingButton = role('button', {
   name: 'Keep going: carry on into endless from wave 11 with your money, guns, and traps',
 })
@@ -86,12 +84,14 @@ describe('Mode choice', () => {
     )
   })
 
-  test('touch shows the buttons without key badges', () => {
+  test('touch shows the buttons without key badges, and PLAY as its icon alone', () => {
     scene(
       { update, view },
       given(modifyFields(initialModel, { lastDevice: () => 'Touch' })),
       measureSurface,
       expect(playButton).toExist(),
+      expect(playButton).toHaveText(''),
+      expect(selector('.home-play-icon')).toExist(),
       expect(selector('.home-key')).toBeAbsent(),
     )
   })

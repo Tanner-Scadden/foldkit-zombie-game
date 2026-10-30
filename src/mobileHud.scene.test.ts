@@ -315,9 +315,7 @@ describe('the Add to Home Screen tip', () => {
       expect(homeScreenTip).toExist(),
       expect(dismissTip).toExist(),
       expect(fullscreenButton).toBeAbsent(),
-      click(
-        role('button', { name: 'Play the campaign: 10 waves, then victory' }),
-      ),
+      click(role('button', { name: 'Play' })),
       expect(homeScreenTip).toBeAbsent(),
     )
     scene(

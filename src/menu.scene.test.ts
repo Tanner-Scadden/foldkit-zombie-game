@@ -14,6 +14,7 @@ import {
   scene,
   selector,
   text,
+  within,
 } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test, expect as vitestExpect } from 'vitest'
@@ -52,11 +53,9 @@ const closeDialog = () => [
 ]
 
 const playButton = role('button', {
-  name: 'Play the campaign: 10 waves, then victory',
+  name: 'Play',
 })
-const playEndlessButton = role('button', {
-  name: 'Play endless: waves keep coming until you fall',
-})
+const playEndlessButton = selector(".home-play[data-mode='Endless']")
 const modeButton = role('button', {
   name: 'Mode: Campaign. Switch to Endless',
 })
@@ -65,7 +64,7 @@ const difficultyButton = role('button', {
 })
 const playCluster = role('group', { name: 'Play' })
 const hand = role('dialog', { name: 'The manor' })
-const closeHandButton = role('button', { name: 'Close the manor' })
+const closeHandButton = role('button', { name: 'Close' })
 const CARD_NAMES = {
   Character: 'Character: change how you look',
   Munchopedia: 'Munchopedia: every zombie you have splatted',
@@ -76,6 +75,8 @@ const characterCard = role('button', { name: CARD_NAMES.Character })
 const munchopediaCard = role('button', { name: /^Munchopedia:/ })
 const whatsNewCard = role('button', { name: /^What's new:/ })
 const howToPlayCard = role('button', { name: CARD_NAMES.HowToPlay })
+const munchopediaName = /^Munchopedia:/
+const whatsNewName = /^What's new:/
 const settingsButton = role('button', { name: 'Settings' })
 const lockedNightmare = role('button', {
   name: 'Nightmare, locked. Beat Hard to unlock',
@@ -153,7 +154,7 @@ describe('Home menu', () => {
       ...openHandInScene(),
       inside(
         hand,
-        expectAll(all.selector('.hand-card')).toHaveCount(4),
+        expectAll(all.selector('.hand-card')).toHaveCount(5),
         expect(characterCard).toHaveAttr('aria-keyshortcuts', 'C'),
         expect(munchopediaCard).toHaveAttr('aria-keyshortcuts', 'Z'),
         expect(whatsNewCard).toHaveAttr('aria-keyshortcuts', 'L'),
@@ -167,7 +168,7 @@ describe('Home menu', () => {
     )
   })
 
-  test('V deals the hand from the keyboard, and the arrow keys walk its cards and wrap', () => {
+  test('V deals the hand from the keyboard, and the arrow keys walk its cards, the Code card last, and wrap', () => {
     const focusCard = (card: HandCard) =>
       Command.resolve(FocusHandCard({ card }), Message.CompletedFocusHandCard())
     scene(
@@ -180,9 +181,11 @@ describe('Home menu', () => {
       keydown(characterCard, 'ArrowRight'),
       focusCard('Munchopedia'),
       keydown(howToPlayCard, 'ArrowDown'),
+      focusCard('Code'),
+      keydown(role('link', { name: /^Code:/ }), 'ArrowRight'),
       focusCard('Character'),
       keydown(characterCard, 'ArrowLeft'),
-      focusCard('HowToPlay'),
+      focusCard('Code'),
     )
   })
 
@@ -199,11 +202,37 @@ describe('Home menu', () => {
       ...openHandInScene(),
       inside(
         hand,
-        expectAll(all.selector('.hand-card')).toHaveCount(5),
+        expectAll(all.selector('.hand-card')).toHaveCount(6),
         expect(role('link', { name: /^Tip jar/ })).toHaveAttr(
           'href',
           'https://buy.stripe.com/test',
         ),
+      ),
+    )
+  })
+
+  test('the Code card is the last card, a plain link to the source on GitHub that opens in a new tab', () => {
+    const codeCard = role('link', { name: /^Code:/ })
+    scene(
+      { update, view },
+      given(home),
+      measureSurface,
+      expect(codeCard).toBeAbsent(),
+      ...openHandInScene(),
+      inside(
+        hand,
+        expect(codeCard).toHaveAttr(
+          'href',
+          'https://github.com/Tanner-Scadden/munch-manor',
+        ),
+        expect(codeCard).toHaveAttr('target', '_blank'),
+        expect(codeCard).toHaveAttr('rel', 'noopener noreferrer'),
+        expect(codeCard).toHaveAttr('data-card', 'Code'),
+        expect(codeCard).toHaveId('hand-card-code'),
+        expect(within(codeCard, selector('.hand-card-title'))).toHaveText(
+          'CODE',
+        ),
+        expect(within(codeCard, selector('.home-key'))).toBeAbsent(),
       ),
     )
   })
@@ -429,7 +458,56 @@ describe('Home menu', () => {
     )
   })
 
-  test('How to play shows the controls as cards for the device, and Done closes it', () => {
+  // NOTE: every menu dialog closes with the one shared button: the red X on
+  // a small face inside a 48 px see-through button, on the Escape key.
+  test.each([
+    { dialog: 'The manor', open: openHandInScene() },
+    {
+      dialog: 'Profile',
+      open: [...openHandInScene(), ...pickCardInScene(CARD_NAMES.Character)],
+    },
+    {
+      dialog: 'Munchopedia',
+      open: [...openHandInScene(), ...pickCardInScene(munchopediaName)],
+    },
+    {
+      dialog: "What's new",
+      open: [...openHandInScene(), ...pickCardInScene(whatsNewName)],
+    },
+    {
+      dialog: 'How to play',
+      open: [...openHandInScene(), ...pickCardInScene(CARD_NAMES.HowToPlay)],
+    },
+    {
+      dialog: 'Profile',
+      open: [click(settingsButton), ...showDialogInScene()],
+    },
+    {
+      dialog: 'Difficulty',
+      open: [click(difficultyButton), ...showDialogInScene()],
+    },
+  ])('$dialog (#$#) closes with the shared close X', ({ dialog, open }) => {
+    const closeButton = role('button', { name: 'Close' })
+    scene(
+      { update, view },
+      given(home),
+      measureSurface,
+      ...open,
+      inside(
+        role('dialog', { name: dialog }),
+        expect(closeButton).toHaveClass('menu-close'),
+        expect(closeButton).toHaveAttr('aria-keyshortcuts', 'Escape'),
+        expect(within(closeButton, selector('.menu-close-face'))).toExist(),
+        expect(within(closeButton, selector('.menu-close-icon'))).toExist(),
+        expect(closeButton).toHaveText(''),
+        click(closeButton),
+      ),
+      ...closeDialog(),
+      expect(role('dialog', { name: dialog })).toBeAbsent(),
+    )
+  })
+
+  test('How to play shows the controls as cards for the device, and its X closes it', () => {
     scene(
       { update, view },
       given(home),
@@ -444,7 +522,7 @@ describe('Home menu', () => {
         ),
         expect(role('list', { name: 'More keys' })).toExist(),
         expect(role('region', { name: 'On the menu' })).toExist(),
-        click(role('button', { name: 'Done' })),
+        click(role('button', { name: 'Close' })),
       ),
       ...closeDialog(),
       expect(role('dialog', { name: 'How to play' })).toBeAbsent(),

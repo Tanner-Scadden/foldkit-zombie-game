@@ -181,29 +181,10 @@
   );
 }
 
+/* NOTE: the shared close (closeButtonView) holds its own column at the end
+   of the header row, so it never covers the wallet or Rattles' bubble. */
 .shop-close {
-  display: grid;
-  place-items: center;
   align-self: start;
-  width: var(--shop-tap);
-  height: var(--shop-tap);
-  padding: 0;
-  border: calc(2 * var(--shop-u)) solid #8a2a24;
-  border-radius: var(--shop-radius);
-  background: #3a1a1e;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.shop-close-icon {
-  --px: calc(3 * var(--shop-u));
-}
-
-@media (hover: hover) {
-  .shop-close:hover {
-    border-color: var(--shop-bad);
-    background: #5a2228;
-  }
 }
 
 /* TABS */
@@ -329,12 +310,6 @@
 
 .shop-item:focus-visible,
 .shop-tab:focus-visible,
-.shop-close:focus-visible {
-  border-color: var(--shop-gold);
-  outline: max(2px, calc(2 * var(--shop-u))) solid var(--shop-focus);
-  outline-offset: max(2px, calc(2 * var(--shop-u)));
-}
-
 .shop-tabpanel:focus-visible {
   outline: max(2px, calc(2 * var(--shop-u))) solid var(--shop-focus);
   outline-offset: calc(4 * var(--shop-u));

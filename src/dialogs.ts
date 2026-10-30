@@ -1,8 +1,10 @@
 import { Option } from 'effect'
 import { Update } from 'foldkit'
-import type { Attribute, Html, HtmlBuilder } from 'foldkit/html'
+import type { Attribute, ChildAttribute, Html, HtmlBuilder } from 'foldkit/html'
 
 import { Dialog } from '@foldkit/ui'
+
+import { CLOSE_ICON } from './icons'
 
 // UPDATE
 
@@ -94,3 +96,41 @@ export const dialogShell = <Message>(
     },
     toParentMessage,
   })
+
+// CLOSE
+
+type CloseButton<Message> = Readonly<{
+  attributes: ReadonlyArray<Attribute<Message> | ChildAttribute>
+  className: string
+  label: string
+}>
+
+// NOTE: the one close button every menu dialog shares: the shop's red pixel
+// X on a small face, centered in a bigger see-through button, so it looks
+// small but a thumb still has a 48 px target. `className` only places it.
+// `attributes` carry what it does: a Dialog's `closeButton`, or an OnClick
+// for a screen that is not a Dialog, such as co-op's.
+export const closeButtonView = <Message>(
+  { attributes, className, label }: CloseButton<Message>,
+  h: HtmlBuilder<Message>,
+): Html =>
+  h.button(
+    [
+      h.Type('button'),
+      ...attributes,
+      h.Class(`menu-close ${className}`),
+      h.AriaLabel(label),
+      h.AriaKeyshortcuts('Escape'),
+    ],
+    [
+      h.span(
+        [h.Class('menu-close-face'), h.AriaHidden(true)],
+        [
+          h.span([
+            h.Class('menu-close-icon'),
+            h.Style({ backgroundImage: CLOSE_ICON }),
+          ]),
+        ],
+      ),
+    ],
+  )

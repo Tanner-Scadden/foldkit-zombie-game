@@ -44,7 +44,7 @@ const synced: Model = modifyFields(home, {
 const gear = role('button', { name: 'Settings' })
 const profile = role('dialog', { name: 'Profile' })
 const tab = (name: string) => role('tab', { name })
-const closeButton = role('button', { name: 'Done' })
+const closeButton = role('button', { name: 'Close' })
 
 const focusTab = (index: number) =>
   Command.resolve(

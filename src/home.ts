@@ -83,11 +83,21 @@ export const HAND_CARDS: Array.NonEmptyReadonlyArray<HandCard> = [
   'WhatsNew',
   'HowToPlay',
   'Support',
+  'Code',
 ]
 
-export type KeyedHandCard = Exclude<HandCard, 'Support'>
+// NOTE: the link cards open a page in a new tab, so they have no key and no
+// dialog.
+export type LinkHandCard = Extract<HandCard, 'Support' | 'Code'>
+export type KeyedHandCard = Exclude<HandCard, LinkHandCard>
 
-// NOTE: every card but the coffee keeps the key its rail button had, and the
+export const isLinkHandCard = (card: HandCard): card is LinkHandCard =>
+  card === 'Support' || card === 'Code'
+
+// NOTE: the game's public source, for the Code card.
+export const SOURCE_URL = 'https://github.com/Tanner-Scadden/munch-manor'
+
+// NOTE: every card but the links keeps the key its rail button had, and the
 // key works straight from the menu without opening the hand.
 export const HAND_KEYS: Readonly<Record<KeyedHandCard, HomeKey>> = {
   Character: { code: 'KeyC', cap: 'C', name: 'C' },
