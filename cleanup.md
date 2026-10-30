@@ -53,7 +53,7 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
    - `src/worldCodec.ts:44-74` picks each number's packing by field name (`x`, `y`, `offset`, `*Ms`, `*Scale`), so a new field with one of those names is rounded silently. Mark it on the Schema instead: `Schema.Number.annotate({ wire: 'Position' })`.
    - `worldWire.ts:10-17` should be `Schema.fromJsonString(World)`; raw `JSON.stringify` at `infra/worker/gameRoom.ts:346` (encodeTicket) and `roomCalls.ts:113`.
    - `describeError` x4 (`serviceWorker.ts:32`, `audio.ts:62`, `version.ts:45`, `analyticsBeacon.ts:49`): one helper.
-   - Netcode reconnect loops (`packages/netcode/src/RoomClient.ts:138-201`, `LobbyClient.ts:257-318`) hand-roll `2 ** attempt` backoff; use `Effect.retry` with `Schedule` as `packages/sync-engine/src/Sync.ts:87-91` does. (Offered to the packet-loss agent; do it here if it did not.)
+   - Done in PR #17: netcode reconnects go through `packages/netcode/src/Reconnect.ts` on `Schedule`.
    - Lock in: Effect `preferSchemaOverJson` at error; `no-restricted-properties` on `JSON.parse`/`JSON.stringify` outside an allowlist; a codec test that fails on an unannotated number field.
 8. [ ] **Slim update and split big files.** (M/L, mechanical)
    - `main.ts:480-570` has fat inline arms (TickedFrame, PressedKey, PressedPointer): one named step each, as `src/update/` does (domains `update.ts:42-190`).
@@ -70,4 +70,5 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
 ## Found along the way
 
 - `storeEarly.ts` uses Promises and try/catch on purpose: it is boot code that runs before the Effect runtime. Leave it, with a comment.
+- The co-op audit's "host walks into the stall" and revive steps are flaky (failed once each on production and locally, passed on rerun). Make them wait on state, not time.
 - `infra/worker/gameRoom.ts:345` logs round trips with a raw `JSON.stringify`. Harmless; fold into slice 7.
