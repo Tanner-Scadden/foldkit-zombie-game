@@ -66,12 +66,6 @@ const SCENES: ReadonlyArray<Scene> = [
     query: `${FOUND}&newentries=Thrower&fit=full&newer&newsseen`,
   },
   { name: 'home-endless', query: `${FOUND}&homemode=endless&newsseen` },
-  {
-    name: 'home-corner',
-    query: `${FOUND}&fit=full&install&newer&newsseen`,
-  },
-  { name: 'home-guide', query: 'fit=home', open: ['#home-install'] },
-  { name: 'greet', query: 'greet' },
   { name: 'hand', query: 'support', open: [MANOR] },
   { name: 'hand-found', query: `${FOUND}&newsseen`, open: [MANOR] },
   { name: 'whats-new', query: '', open: [MANOR, '#hand-card-whatsnew'] },

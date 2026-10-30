@@ -13,6 +13,7 @@ import {
   type ClientFrame,
   KickedPlayer,
   type Lobby,
+  PROTOCOL_VERSION as ROOM_PROTOCOL_VERSION,
   RoomScope,
   roomScopeId,
 } from '@munch/netcode'
@@ -122,7 +123,10 @@ const pushOf = async <A, I>(
 const lobbyOf = async (host: RoomHost): Promise<Lobby> =>
   Option.getOrThrow(await Effect.runPromise(host.lobby))
 
-const helloFrame = (token: string, maxVersion = 2): ClientFrame => ({
+const helloFrame = (
+  token: string,
+  maxVersion = ROOM_PROTOCOL_VERSION,
+): ClientFrame => ({
   _tag: 'Hello',
   minVersion: 1,
   maxVersion,
@@ -167,53 +171,16 @@ describe('the room host', () => {
     expect(full).toEqual(Result.fail({ _tag: 'Full' }))
     const lobby = Option.getOrThrow(await Effect.runPromise(host.lobby))
     expect(lobby.members.map(member => member.look)).toEqual([
-      'Broad.Short.Brown.Light.Blue.AAAA',
+      'Male.Crop.Brown.Light.Blue',
       '',
       '',
       '',
     ])
-  })
-
-  // NOTE: the look a player sends is kept only when it is one of the game's
-  // looks (src/playerData.ts): the simple look, or an older code (five
-  // words from the first look, or the many-part look's five letters) read
-  // as its closest simple look. Anything else seats the player with none.
-  test('a sent look is kept when it is a real look, and dropped when it is junk', () => {
-    expect(lookOfRequest('Slim.Mohawk.Pink.Deep.Teal.CCBB')).toBe(
-      'Slim.Mohawk.Pink.Deep.Teal.CCBB',
-    )
-    expect(lookOfRequest('Broad.Bald.Grey.Fair.Purple.DAAA')).toBe(
-      'Broad.Bald.Grey.Fair.Purple.DAAA',
-    )
-    expect(lookOfRequest('Slim.Mohawk.Rainbow.Deep.Lilac.JFEDE')).toBe(
-      'Slim.Mohawk.Pink.Deep.Purple.CCBA',
-    )
-    expect(lookOfRequest('Round.Bald.Pastel.Umber.Black.GMBBC')).toBe(
-      'Broad.Bald.Pink.Deep.Blue.BCAB',
-    )
     expect(lookOfRequest('Female.Ponytail.Pink.Tan.Teal')).toBe(
-      'Broad.Ponytail.Pink.Tan.Teal.AAAA',
+      'Female.Ponytail.Pink.Tan.Teal',
     )
-    expect(lookOfRequest('Male.Curls.Black.Deep.Red')).toBe(
-      'Broad.Curly.Black.Deep.Red.AAAA',
-    )
-    const junks = [
-      'Female.Ponytail.Pink.Tan.Plaid',
-      'Robot',
-      '',
-      'Slim.Mohawk.Pink.Deep.Teal',
-      'Slim.Mohawk.Pink.Deep.Teal.CCBC',
-      'Slim.Mohawk.Pink.Deep.Teal.ECAA',
-      'Slim.Mohawk.Pink.Deep.Teal.ADAA',
-      'Slim.Mohawk.Pink.Deep.Teal.AAA',
-      'Slim.Mohawk.Pink.Deep.Teal.aaaa',
-      'Medium.Short.Pink.Deep.Teal.AAAA',
-      'Slim.Mohawk.Rainbow.Deep.Lilac.JFEDZ',
-      'Slim.Mohawk.Rainbow.Deep.Lilac.AAAAAA',
-      'Female.Mohawk.Pink.Deep.Teal.AAAA',
-      'Slim.Mohawk.Pink.Deep.Teal.AAAA.AAAA',
-    ]
-    expect(junks.map(lookOfRequest)).toEqual(junks.map(() => ''))
+    expect(lookOfRequest('Female.Ponytail.Pink.Tan.Plaid')).toBe('')
+    expect(lookOfRequest('Robot')).toBe('')
   })
 
   test('joining a room that does not exist says so', async () => {
@@ -332,7 +299,7 @@ describe('a game socket Hello', () => {
       _tag: 'Accept',
       playerId: ANA,
       slot: 0,
-      version: 2,
+      version: ROOM_PROTOCOL_VERSION,
     })
   })
 

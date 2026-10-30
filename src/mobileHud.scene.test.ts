@@ -18,11 +18,17 @@ import { describe, test } from 'vitest'
 
 import { Dialog } from '@foldkit/ui'
 
-import { ShowInstallPrompt } from './commands'
 import { PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
-import { Arsenal, BreakClock, type Model, Phase, initialModel } from './model'
+import {
+  Arsenal,
+  BreakClock,
+  type Model,
+  Phase,
+  RunMode,
+  initialModel,
+} from './model'
 import { measureSurface } from './testing'
 import { asVeteran } from './veteran'
 import { view } from './view'
@@ -66,10 +72,7 @@ const fullscreenButton = role('button', { name: 'Full screen' })
 const placeTrap = role('button', { name: 'Place a Plank Pile' })
 const nextTrap = role('button', { name: 'Switch to the Grumpy Gnome' })
 const startWave = role('button', { name: 'Start wave 3 now' })
-const homeScreenTip = role('button', {
-  name: 'Add to Home Screen: show me how',
-})
-const installButton = role('button', { name: 'Install Munch Manor' })
+const homeScreenTip = role('button', { name: 'Play full screen: how?' })
 const frame = (deltaTime: number) =>
   Subscription.emit(Message.TickedFrame({ deltaTime }))
 
@@ -290,7 +293,7 @@ describe('the corner', () => {
   })
 })
 
-describe('the install tile', () => {
+describe('the Add to Home Screen tip', () => {
   const onIphone: Model = modifyFields(onTouch(initialModel), {
     screenFit: () => 'HomeScreen',
   })
@@ -301,28 +304,35 @@ describe('the install tile', () => {
       Dialog.Message.SucceededAcquireResources(),
     ),
   ]
-  const steps = role('dialog', { name: 'Home Screen' })
+  const steps = role('dialog', { name: 'Play full screen' })
+  const dismissTip = role('button', { name: 'Dismiss the tip' })
 
-  test('pulses by the gear on an iPhone until its first tap', () => {
+  test('shows on the first title only', () => {
     scene(
       { update, view },
       given(onIphone),
       measureSurface,
-      inside(selector('.home-corner'), expect(homeScreenTip).toExist()),
-      expect(homeScreenTip).toHaveAttr('data-tip', 'Unseen'),
+      expect(homeScreenTip).toExist(),
+      expect(dismissTip).toExist(),
       expect(fullscreenButton).toBeAbsent(),
       click(role('button', { name: 'Play' })),
       expect(homeScreenTip).toBeAbsent(),
     )
     scene(
       { update, view },
-      given(modifyFields(onIphone, { homeScreenTip: () => 'Dismissed' })),
+      given(
+        modifyFields(onIphone, {
+          homeScreenTip: () => 'Dismissed',
+          phase: () => Phase.Ready(),
+          mode: () => RunMode.Campaign(),
+        }),
+      ),
       measureSurface,
-      expect(homeScreenTip).toHaveAttr('data-tip', 'Dismissed'),
+      expect(homeScreenTip).toBeAbsent(),
     )
   })
 
-  test('opens the picture guide, three steps of a word each, and the X closes it', () => {
+  test('tapping it shows the steps, and Got it closes them for good', () => {
     scene(
       { update, view },
       given(onIphone),
@@ -331,13 +341,31 @@ describe('the install tile', () => {
       click(homeScreenTip),
       ...showSteps,
       expect(steps).toExist(),
-      inside(steps, expectAll(all.role('listitem')).toHaveCount(3)),
-      expect(steps).toContainText('Share'),
-      expect(steps).toContainText('Add'),
-      expect(steps).toContainText('Play!'),
-      expect(steps).toContainText('Add to Home Screen'),
-      expect(homeScreenTip).toHaveAttr('data-tip', 'Dismissed'),
-      click(role('button', { name: 'Close' })),
+      expect(steps).toContainText('Tap Share'),
+      expect(steps).toContainText('Tap ••• by the address bar first'),
+      expect(steps).toContainText('Choose Add to Home Screen'),
+      expect(steps).toContainText('Tap Add.'),
+      expect(steps).toContainText('Open Munch Manor from your Home Screen.'),
+      inside(steps, expectAll(all.role('listitem')).toHaveCount(4)),
+      click(role('button', { name: 'Got it' })),
+      Command.resolve(
+        Dialog.CloseDialog,
+        Dialog.Message.CompletedCloseDialog(),
+      ),
+      Mount.expectEnded(Dialog.AcquireResources),
+      expect(steps).toBeAbsent(),
+      expect(homeScreenTip).toBeAbsent(),
+    )
+  })
+
+  test('closing the steps another way keeps the tip', () => {
+    scene(
+      { update, view },
+      given(onIphone),
+      measureSurface,
+      click(homeScreenTip),
+      ...showSteps,
+      click(selector('.home-screen-steps-backdrop')),
       Command.resolve(
         Dialog.CloseDialog,
         Dialog.Message.CompletedCloseDialog(),
@@ -348,61 +376,24 @@ describe('the install tile', () => {
     )
   })
 
-  test('Escape closes the guide too', () => {
+  test('can be dismissed', () => {
     scene(
       { update, view },
       given(onIphone),
       measureSurface,
-      click(homeScreenTip),
-      ...showSteps,
-      Subscription.emit(
-        Message.GotHomeScreenStepsMessage({
-          message: Dialog.Message.RequestedClose(),
-        }),
-      ),
-      Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
-      ),
-      Mount.expectEnded(Dialog.AcquireResources),
-      expect(steps).toBeAbsent(),
+      click(dismissTip),
+      expect(homeScreenTip).toBeAbsent(),
+      expect(dismissTip).toBeAbsent(),
     )
   })
 
-  test('on Chrome, it shows only once the browser offers to install, and a tap asks for the prompt', () => {
-    scene(
-      { update, view },
-      given(
-        modifyFields(onTouch(initialModel), { screenFit: () => 'Fullscreen' }),
-      ),
-      measureSurface,
-      expect(installButton).toBeAbsent(),
-      Subscription.emit(Message.ChangedInstallOffer({ installOffer: 'Ready' })),
-      expect(installButton).toExist(),
-      click(installButton),
-      Command.expectExact(ShowInstallPrompt),
-      Command.resolve(
-        ShowInstallPrompt,
-        Message.CompletedShowInstallPrompt({ outcome: 'Accepted' }),
-      ),
-      expect(installButton).toBeAbsent(),
-    )
-  })
-
-  test('hides in the installed app and on a desktop with no way to install', () => {
+  test('never shows in the installed Home Screen app', () => {
     scene(
       { update, view },
       given(modifyFields(onIphone, { screenFit: () => 'Installed' })),
       measureSurface,
       expect(homeScreenTip).toBeAbsent(),
       expect(fullscreenButton).toBeAbsent(),
-    )
-    scene(
-      { update, view },
-      given(modifyFields(initialModel, { screenFit: () => 'Fullscreen' })),
-      measureSurface,
-      expect(homeScreenTip).toBeAbsent(),
-      expect(installButton).toBeAbsent(),
     )
   })
 })
@@ -440,7 +431,7 @@ describe('the title icons and the character picker', () => {
     ),
   ]
 
-  test('the title keeps its corner clear for the picker', () => {
+  test('the title keeps its corner clear and the tip steps aside for the picker', () => {
     scene(
       { update, view },
       given(
@@ -454,6 +445,7 @@ describe('the title icons and the character picker', () => {
       expect(role('dialog', { name: 'Profile' })).toExist(),
       expect(muteButton).toBeAbsent(),
       expect(musicButton).toBeAbsent(),
+      expect(homeScreenTip).toBeAbsent(),
     )
   })
 

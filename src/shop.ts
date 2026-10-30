@@ -222,7 +222,7 @@ export const SHOP_ITEMS: Readonly<Record<FixedShopItemId, ShopItem>> = {
     id: 'SmgRounds',
     name: SHOP_GOOD_NAMES.SmgRounds,
     blurb: `${SMG_ROUNDS} more rounds for the ${WEAPONS.Smg.name}.`,
-    price: 20,
+    price: 15,
     good: ShopGood.Ammo({ weapon: 'Smg', rounds: SMG_ROUNDS }),
   },
   SmgUpgrade: {

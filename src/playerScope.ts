@@ -29,7 +29,6 @@ import {
   ShakeSetting,
   ShareStatsSetting,
   SoundSetting,
-  StoredAppearance,
 } from './playerData'
 
 // NOTE: the player scope, `player:<playerId>`: one player's settings, look,
@@ -54,7 +53,7 @@ export const PlayerRow = Schema.Struct({
   music: MusicSetting,
   shake: ShakeSetting,
   share_stats: ShareStatsSetting,
-  appearance: Schema.fromJsonString(StoredAppearance),
+  appearance: Schema.fromJsonString(Appearance),
   difficulty: Difficulty,
   difficulty_card: SavedCard,
   nightmare: SavedNightmare,
@@ -154,11 +153,11 @@ const updatePlayer = (
 // NOTE: the first thing a device writes to its scope: its whole save, from
 // before sync. It only seeds an empty scope. On a scope that already has a
 // player (a device that linked to another device's player) it does nothing,
-// so linking never overwrites the player it joined. Version 8 is the save
-// with the simple look (save version 11).
+// so linking never overwrites the player it joined. Version 6 is the save
+// with the display name (save version 9).
 export const SeededPlayer = defineMutation({
   name: 'SeededPlayer',
-  version: 8,
+  version: 6,
   args: Schema.Struct({ save: PlayerSave }),
   scopes: [PLAYER_SCOPE_KIND],
   writer: 'Owner',
@@ -201,12 +200,9 @@ export const ChangedSettings = defineMutation({
     }),
 })
 
-// NOTE: version 3 carries the simple look (version 2 the many-part one).
-// The row may still hold an older look until the first change, so it is
-// read as StoredAppearance.
 export const ChangedAppearance = defineMutation({
   name: 'ChangedAppearance',
-  version: 3,
+  version: 1,
   args: Schema.Struct({ appearance: Appearance }),
   scopes: [PLAYER_SCOPE_KIND],
   writer: 'Owner',

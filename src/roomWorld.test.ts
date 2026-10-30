@@ -141,11 +141,19 @@ describe('inputs and presses', () => {
         atStall,
         room =>
           stepRoomWorld(room, [
-            { slot: 0, input: NEUTRAL_INPUT, presence: 'Here' },
+            {
+              slot: 0,
+              input: NEUTRAL_INPUT,
+              presence: 'Here',
+              viewLagTicks: 0,
+              rttMs: 0,
+            },
             {
               slot: 1,
               input: { ...NEUTRAL_INPUT, action: buy },
               presence: 'Here',
+              viewLagTicks: 0,
+              rttMs: 0,
             },
           ]),
       )
@@ -158,7 +166,13 @@ describe('inputs and presses', () => {
     expect(balanceOf(holdFor(1))).toBeLessThan(1000)
     expect(balanceOf(bought)).toBe(balanceOf(holdFor(1)))
     const again = stepRoomWorld(bought, [
-      { slot: 0, input: NEUTRAL_INPUT, presence: 'Here' },
+      {
+        slot: 0,
+        input: NEUTRAL_INPUT,
+        presence: 'Here',
+        viewLagTicks: 0,
+        rttMs: 0,
+      },
       {
         slot: 1,
         input: {
@@ -169,6 +183,8 @@ describe('inputs and presses', () => {
           ),
         },
         presence: 'Here',
+        viewLagTicks: 0,
+        rttMs: 0,
       },
     ])
     expect(balanceOf(again)).toBeLessThan(balanceOf(bought))
@@ -201,11 +217,15 @@ describe('inputs and presses', () => {
           slot: 0,
           input: { ...NEUTRAL_INPUT, action: actions[0] },
           presence: 'Here',
+          viewLagTicks: 0,
+          rttMs: 0,
         },
         {
           slot: 1,
           input: { ...NEUTRAL_INPUT, action: actions[1] },
           presence: 'Here',
+          viewLagTicks: 0,
+          rttMs: 0,
         },
       ])
     const oneReady = step(step(start, [ready, 0]), [ready, 0])
@@ -216,8 +236,20 @@ describe('inputs and presses', () => {
 
   test('a player gone quiet is Away in the World', () => {
     const away = stepRoomWorld(start, [
-      { slot: 0, input: NEUTRAL_INPUT, presence: 'Here' },
-      { slot: 1, input: NEUTRAL_INPUT, presence: 'Away' },
+      {
+        slot: 0,
+        input: NEUTRAL_INPUT,
+        presence: 'Here',
+        viewLagTicks: 0,
+        rttMs: 0,
+      },
+      {
+        slot: 1,
+        input: NEUTRAL_INPUT,
+        presence: 'Away',
+        viewLagTicks: 0,
+        rttMs: 0,
+      },
     ])
     expect(
       Option.map(maybePlayerAt(away.world, 1), ({ seat }) => seat.presence),
@@ -250,8 +282,14 @@ describe('own-player prediction', () => {
       start,
       current =>
         stepRoomWorld(current, [
-          { slot: 0, input: NEUTRAL_INPUT, presence: 'Here' },
-          { slot: 1, input: walk, presence: 'Here' },
+          {
+            slot: 0,
+            input: NEUTRAL_INPUT,
+            presence: 'Here',
+            viewLagTicks: 0,
+            rttMs: 0,
+          },
+          { slot: 1, input: walk, presence: 'Here', viewLagTicks: 0, rttMs: 0 },
         ]),
     )
     const own = Option.getOrThrow(ROOM_WORLD.own.of(start, 1))
@@ -274,8 +312,20 @@ describe('own-player prediction', () => {
     const ticks = Array.makeBy(40, () => 0)
     const rooms = Array.scan(ticks, start, current =>
       stepRoomWorld(current, [
-        { slot: 0, input: NEUTRAL_INPUT, presence: 'Here' },
-        { slot: 1, input: trigger, presence: 'Here' },
+        {
+          slot: 0,
+          input: NEUTRAL_INPUT,
+          presence: 'Here',
+          viewLagTicks: 0,
+          rttMs: 0,
+        },
+        {
+          slot: 1,
+          input: trigger,
+          presence: 'Here',
+          viewLagTicks: 0,
+          rttMs: 0,
+        },
       ]),
     )
     const own = Option.getOrThrow(ROOM_WORLD.own.of(start, 1))
@@ -373,12 +423,123 @@ describe('the crew in the music', () => {
           }),
         },
         [
-          { slot: 0, input: NEUTRAL_INPUT, presence: 'Here' },
-          { slot: 1, input: NEUTRAL_INPUT, presence: 'Here' },
+          {
+            slot: 0,
+            input: NEUTRAL_INPUT,
+            presence: 'Here',
+            viewLagTicks: 0,
+            rttMs: 0,
+          },
+          {
+            slot: 1,
+            input: NEUTRAL_INPUT,
+            presence: 'Here',
+            viewLagTicks: 0,
+            rttMs: 0,
+          },
         ],
       ).world.intensity
     expect(intensityWith(280, 135)).toBeGreaterThan(0)
     expect(intensityWith(160, 30)).toBe(0)
     expect(intensityWith(266, 135)).toBeGreaterThanOrEqual(INTENSITY_PER_HEART)
+  })
+})
+
+describe('latency', () => {
+  const apart = withSeat(start.world, 1, seatWorld =>
+    modifyFields(seatWorld, {
+      player: player => modifyFields(player, { x: () => 200, y: () => 120 }),
+    }),
+  )
+
+  test('a lagging shot is checked against where the zombie stood when the shooter saw it', () => {
+    const seen = { x: 230, y: 120 }
+    const zombie = zombieAt(900, 230, 60)
+    const room: RoomWorld = {
+      ...start,
+      tick: 20,
+      world: modifyFields(apart, { zombies: () => [zombie] }),
+      history: Array.makeBy(15, index => ({
+        tick: 6 + index,
+        zombies: [{ id: 900, x: seen.x, y: seen.y }],
+      })),
+    }
+    const shoot = (viewLagTicks: number) =>
+      stepRoomWorld(room, [
+        {
+          slot: 0,
+          input: NEUTRAL_INPUT,
+          presence: 'Here',
+          viewLagTicks: 0,
+          rttMs: 0,
+        },
+        {
+          slot: 1,
+          input: { ...NEUTRAL_INPUT, aimX: AIM_REACH, buttons: FIRE_BUTTON },
+          presence: 'Here',
+          viewLagTicks,
+          rttMs: 200,
+        },
+      ])
+    const hpOf = (stepped: RoomWorld) =>
+      Option.match(
+        Array.findFirst(stepped.world.zombies, ({ id }) => id === 900),
+        { onNone: () => 0, onSome: ({ hp }) => hp },
+      )
+    expect(hpOf(shoot(0))).toBe(zombie.hp)
+    const favored = shoot(12)
+    expect(hpOf(favored)).toBeLessThan(zombie.hp)
+    expect(
+      Option.map(
+        Array.findFirst(favored.world.zombies, ({ id }) => id === 900),
+        ({ x, y }) => [x, y],
+      ),
+    ).toEqual(Option.some([230, 60]))
+    expect(favored.history.length).toBe(15)
+    expect(Array.last(favored.history)).toEqual(
+      Option.some({ tick: 21, zombies: [{ id: 900, x: 230, y: 60 }] }),
+    )
+  })
+
+  test('a zombie must keep touching a lagging player for their grace to bite', () => {
+    const mate = Option.getOrThrow(maybePlayerAt(apart, 1)).player
+    const touching: RoomWorld = {
+      ...start,
+      world: modifyFields(apart, {
+        zombies: () => [zombieAt(901, mate.x + 6, mate.y)],
+      }),
+    }
+    const heartsAfter = (ticks: number, rttMs: number) =>
+      Option.getOrThrow(
+        maybePlayerAt(
+          Array.reduce(
+            Array.makeBy(ticks, () => 0),
+            touching,
+            current =>
+              stepRoomWorld(current, [
+                {
+                  slot: 0,
+                  input: NEUTRAL_INPUT,
+                  presence: 'Here',
+                  viewLagTicks: 0,
+                  rttMs: 0,
+                },
+                {
+                  slot: 1,
+                  input: NEUTRAL_INPUT,
+                  presence: 'Here',
+                  viewLagTicks: 0,
+                  rttMs,
+                },
+              ]),
+          ).world,
+          1,
+        ),
+      ).player.hp
+    expect(heartsAfter(1, 0)).toBeLessThan(mate.hp)
+    expect(heartsAfter(4, 200)).toBe(mate.hp)
+    expect(heartsAfter(8, 200)).toBeLessThan(mate.hp)
+    expect(heartsAfter(4, 2000)).toBe(mate.hp)
+    expect(heartsAfter(8, 2000)).toBeLessThan(mate.hp)
   })
 })

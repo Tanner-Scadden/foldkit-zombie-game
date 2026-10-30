@@ -17,8 +17,8 @@ import {
   LoadFonts,
   LoadSave,
   LoadStyles,
-  ReadUpdateMarker,
   RegisterServiceWorker,
+  ReloadPage,
   ResumeAudio,
   SendRunSummary,
   SetFullscreen,
@@ -111,13 +111,14 @@ import {
   canMoveHomeFocus,
   closePanel,
   difficultyCardFromKey,
+  dismissHomeScreenTip,
+  dismissHomeScreenTipFrom,
+  finishHomeScreenSteps,
   focusEndMenuFrom,
   foldHandDialog,
   foldHomeScreenSteps,
   foldPanelDialog,
-  foldUpdateGreeting,
   fromHand,
-  greetUpdate,
   homeFocusFromKey,
   homeFromKey,
   homeStartFromKey,
@@ -125,17 +126,13 @@ import {
   leaveFromMenu,
   leaveRun,
   menuFromKey,
-  newsFromGreeting,
   openHand,
+  openHomeScreenSteps,
   openMunchopedia,
   openPanel,
   openSettingsFromGear,
   openWhatsNew,
   pickFromCard,
-  pressInstall,
-  reloadOntoNewerBuild,
-  rewrapUpdateGift,
-  settleInstallPrompt,
   settleNightmareFrom,
   startOrAsk,
   stepHandFocus,
@@ -145,7 +142,6 @@ import {
   turnMunchopediaPage,
   turnNews,
   unlockNightmareFrom,
-  unwrapUpdateGift,
 } from './update/home'
 import {
   foldProfileDialog,
@@ -206,12 +202,7 @@ import {
 } from './update/sound'
 import { type UpdateReturn, type UpdateStep, withInput } from './update/step'
 import { nextTrap, placeSelectedTrap, trapFromKey } from './update/traps'
-import {
-  RUNNING_BUILD,
-  isCheckingForUpdates,
-  isGreetingDue,
-  maybeNewerBuild,
-} from './version'
+import { RUNNING_BUILD, isCheckingForUpdates, maybeNewerBuild } from './version'
 import { isRoundActive, pause } from './waves'
 import {
   beginReload,
@@ -244,7 +235,6 @@ export const init: Runtime.ApplicationInit<
     DetectScreenFit(),
     DetectOrientationLock(),
     DetectLocalPlayers(),
-    ReadUpdateMarker(),
     LoadStyles(),
     LoadFonts(),
     AwaitFirstFrame(),
@@ -756,16 +746,13 @@ const updateGame = (model: Model, message: Message) =>
 
     CompletedApplyRotation: () => ({ model }),
 
-    ClickedInstallButton: () =>
-      Update.combine(model, [unlockAudio, tapSound, pressInstall]),
-
-    ChangedInstallOffer: ({ installOffer }) => ({
-      model: modifyFields(model, { installOffer: () => installOffer }),
+    ClickedDismissHomeScreenTip: () => ({
+      model: dismissHomeScreenTip(model),
     }),
 
-    CompletedShowInstallPrompt: ({ outcome }) => ({
-      model: settleInstallPrompt(model, outcome),
-    }),
+    ClickedHomeScreenTip: () => openHomeScreenSteps(model),
+
+    ClickedHomeScreenStepsDoneButton: () => finishHomeScreenSteps(model),
 
     GotHomeScreenStepsMessage: ({ message: dialogMessage }) =>
       foldHomeScreenSteps(model, dialogMessage),
@@ -873,23 +860,11 @@ const updateGame = (model: Model, message: Message) =>
 
     FailedFetchBuild: () => ({ model }),
 
-    ClickedUpdateButton: () =>
-      Update.combine(model, [unlockAudio, unwrapUpdateGift]),
-
-    CompletedWaitForUnwrap: () => reloadOntoNewerBuild(model),
-
-    CompletedReadUpdateMarker: ({ maybeBuild }) =>
-      greetUpdate(isGreetingDue(RUNNING_BUILD, maybeBuild))(model),
-
-    GotUpdateGreetingMessage: ({ message: dialogMessage }) =>
-      foldUpdateGreeting(model, dialogMessage),
-
-    ClickedUpdateGreetingNewsButton: () =>
-      Update.combine(model, [unlockAudio, tapSound, newsFromGreeting]),
+    ClickedUpdateButton: () => ({ model, commands: [ReloadPage()] }),
 
     CompletedReloadPage: () => ({ model }),
 
-    FailedReloadPage: () => ({ model: rewrapUpdateGift(model) }),
+    FailedReloadPage: () => ({ model }),
 
     CompletedRegisterServiceWorker: () => ({ model }),
 
@@ -1109,6 +1084,7 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     cueMusicFrom(model),
     focusEndMenuFrom(model),
     applyRotationFrom(model),
+    dismissHomeScreenTipFrom(model),
     settleNightmareFrom(model),
     unlockNightmareFrom(model),
     stepModel => ({

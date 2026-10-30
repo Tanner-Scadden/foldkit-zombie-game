@@ -49,7 +49,14 @@ const input = (
   seq: number,
   tick: number,
   samples: ReadonlyArray<{ ticks: number; input: PlayerInput }>,
-): ClientFrame => ({ _tag: 'Input', seq, tick, samples })
+): ClientFrame => ({
+  _tag: 'Input',
+  seq,
+  tick,
+  seen: Math.max(0, tick - 6),
+  rttMs: 60,
+  samples,
+})
 
 const advanceTo = (stepped: Stepped, nowMs: number): Stepped => {
   const next = Room.advance(StandIn, stepped.room, nowMs)

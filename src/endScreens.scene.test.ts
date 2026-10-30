@@ -10,7 +10,7 @@ import {
   given,
   role,
   scene,
-  selector,
+  text,
 } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
@@ -29,7 +29,7 @@ const tickPastGrace = () =>
     Subscription.emit(Message.TickedFrame({ deltaTime: 50 })),
   )
 
-const menuButton = role('button', { name: /^Menu: back/ })
+const menuButton = role('button', { name: 'Menu: back to the home screen' })
 const campaignButton = role('button', {
   name: 'Campaign: 10 waves, then victory',
 })
@@ -39,9 +39,9 @@ const endlessButton = role('button', {
 const keepGoingButton = role('button', {
   name: 'Keep going: carry on into endless from wave 11 with your money, guns, and traps',
 })
-const updateChip = role('button', { name: 'Update ready: tap to get it' })
+const updateChip = role('button', { name: /New version ready/ })
 const mainMenu = role('button', { name: /^More:/ })
-const updateNote = selector('.mode-button-gift')
+const updateNote = text('A new version is waiting on the menu.')
 const endButtons = all.selector('.mode-choice .mode-button')
 
 const END_PHASES: ReadonlyArray<readonly [string, Phase]> = [
@@ -87,7 +87,7 @@ describe('the end screens', () => {
   })
 
   test.each(END_PHASES)(
-    '%s with a new version waiting offers only MENU, wearing a gift, and it lands on the gift',
+    '%s with a new version waiting offers only MENU, and it lands on the chip',
     (_name, phase) => {
       scene(
         { update, view },
@@ -95,9 +95,6 @@ describe('the end screens', () => {
         measureSurface,
         expectAll(endButtons).toHaveCount(1),
         expect(menuButton).toHaveAttr('aria-keyshortcuts', 'Enter H'),
-        expect(menuButton).toHaveAccessibleName(
-          'Menu: back home, where a new version is waiting',
-        ),
         expect(updateNote).toExist(),
         expect(campaignButton).toBeAbsent(),
         expect(endlessButton).toBeAbsent(),

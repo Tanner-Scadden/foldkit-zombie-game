@@ -1,4 +1,4 @@
-import { Duration, Effect, Option, Random, Schema, pipe } from 'effect'
+import { Effect, Option, Random, Schema, pipe } from 'effect'
 import { Command, Dom, ManagedResource } from 'foldkit'
 
 import { RunSummary } from './analytics'
@@ -16,7 +16,6 @@ import {
 } from './audio'
 import type { CoopNet } from './coop/net'
 import { END_MENU_BUTTON_ID, handCardId, homeButtonId } from './home'
-import { InstallPrompt } from './install'
 import { Message } from './message'
 import {
   AudioState,
@@ -48,7 +47,7 @@ import {
   showSplashProgress,
 } from './splash'
 import { PlayerStore } from './store'
-import { fetchRemoteBuild, readUpdateMarker, reloadOnto } from './version'
+import { fetchRemoteBuild, reloadPage } from './version'
 
 // RESOURCE
 
@@ -79,7 +78,7 @@ export const managedResources = ManagedResource.make<Model, Message>()(
 
 type AudioServices = ManagedResource.ServicesOf<typeof managedResources>
 
-export type AppServices = AudioServices | PlayerStore | CoopNet | InstallPrompt
+export type AppServices = AudioServices | PlayerStore | CoopNet
 
 // COMMAND
 
@@ -152,15 +151,6 @@ export const DetectScreenFit = Command.define('DetectScreenFit', {
       Effect.succeed(
         Message.CompletedDetectScreenFit({ screenFit: 'Unavailable' }),
       ),
-    ),
-  ),
-})
-
-export const ShowInstallPrompt = Command.define('ShowInstallPrompt', {
-  messages: [Message.CompletedShowInstallPrompt],
-  execute: InstallPrompt.use(installPrompt =>
-    Effect.map(installPrompt.prompt, outcome =>
-      Message.CompletedShowInstallPrompt({ outcome }),
     ),
   ),
 })
@@ -340,44 +330,17 @@ export const FetchBuild = Command.define('FetchBuild', {
   ),
 })
 
-// NOTE: long enough for the gift's unwrap animation (src/menu.css) to
-// play out before the page goes.
-export const UNWRAP_DURATION = Duration.millis(650)
-
-export const WaitForUnwrap = Command.define('WaitForUnwrap', {
-  messages: [Message.CompletedWaitForUnwrap],
-  execute: Effect.as(
-    Effect.sleep(UNWRAP_DURATION),
-    Message.CompletedWaitForUnwrap(),
-  ),
-})
-
 // NOTE: the new build's service worker takes over first, when there is one,
 // so the reload and any later offline start run the new build. A worker that
 // fails or is slow never stops the reload.
 export const ReloadPage = Command.define('ReloadPage', {
-  args: { build: Schema.String },
   messages: [Message.CompletedReloadPage, Message.FailedReloadPage],
-  execute: ({ build }) =>
-    pipe(
-      Effect.ignore(activateNewBuild),
-      Effect.andThen(reloadOnto(build)),
-      Effect.as(Message.CompletedReloadPage()),
-      Effect.catch(error =>
-        Effect.succeed(Message.FailedReloadPage({ reason: error.reason })),
-      ),
-    ),
-})
-
-export const ReadUpdateMarker = Command.define('ReadUpdateMarker', {
-  messages: [Message.CompletedReadUpdateMarker],
   execute: pipe(
-    readUpdateMarker,
-    Effect.map(maybeBuild => Message.CompletedReadUpdateMarker({ maybeBuild })),
-    Effect.catch(() =>
-      Effect.succeed(
-        Message.CompletedReadUpdateMarker({ maybeBuild: Option.none() }),
-      ),
+    Effect.ignore(activateNewBuild),
+    Effect.andThen(reloadPage),
+    Effect.as(Message.CompletedReloadPage()),
+    Effect.catch(error =>
+      Effect.succeed(Message.FailedReloadPage({ reason: error.reason })),
     ),
   ),
 })

@@ -176,6 +176,7 @@ const isOwnGunBullet = (bullet: Bullet, ownSlot: number): boolean =>
 type TracedShots = Readonly<{
   tracers: ReadonlyArray<Bullet>
   fired: number
+  struck: number
   cosmeticRngState: number
 }>
 
@@ -188,8 +189,9 @@ const traceOwnShots = (
   const flown = flyTracers(levelOf(world), world.zombies, room.tracers, frameMs)
   if (room.predictedShots <= 0) {
     return {
-      tracers: flown,
+      tracers: flown.tracers,
       fired: 0,
+      struck: flown.struck,
       cosmeticRngState: model.cosmeticRngState,
     }
   }
@@ -199,8 +201,9 @@ const traceOwnShots = (
     -1 - room.tracerCount,
   )
   return {
-    tracers: [...flown, ...fired],
+    tracers: [...flown.tracers, ...fired],
     fired: fired.length,
+    struck: flown.struck,
     cosmeticRngState,
   }
 }
@@ -224,7 +227,22 @@ const drawRoom =
         const shot = traceOwnShots(base, room, world, frameMs)
         const traced = modifyFields(base, {
           cosmeticRngState: () => shot.cosmeticRngState,
-          coop: coop => keepTracers(coop, shot.tracers, shot.fired),
+          coop: coop =>
+            keepTracers(
+              coop,
+              shot.tracers,
+              shot.fired,
+              shot.struck,
+              Array.filter(
+                events,
+                event =>
+                  GameEvent.isAnyOf(['ZombieHit'])(event) &&
+                  Option.exists(
+                    event.maybeShooter,
+                    shooter => shooter === room.slot,
+                  ),
+              ).length,
+            ),
         })
         if (isFrozen(thaw.hitStop)) {
           return {

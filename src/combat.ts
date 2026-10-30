@@ -60,6 +60,7 @@ export const hitEvent = (
   at: Vector,
   direction: Vector,
   damage: number,
+  maybeShooter: Option.Option<number> = Option.none(),
 ): GameEvent =>
   GameEvent.ZombieHit({
     x: at.x,
@@ -67,6 +68,7 @@ export const hitEvent = (
     direction,
     damage,
     kind: zombie.kind,
+    maybeShooter,
   })
 
 export const killEvent = (zombie: Zombie, direction: Vector): GameEvent =>

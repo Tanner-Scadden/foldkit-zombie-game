@@ -370,11 +370,11 @@ const updatePart = async (
     await page.evaluate(() =>
       document.dispatchEvent(new Event('visibilitychange')),
     )
-    await page.locator('.home-gift').waitFor({ timeout: 10_000 })
+    await page.locator('.update-chip').waitFor({ timeout: 10_000 })
     check(true, 'update: the chip appears for the new build')
     await Promise.all([
       page.waitForEvent('load', { timeout: 30_000 }),
-      page.locator('.home-gift').tap(),
+      page.locator('.update-chip').tap(),
     ])
     await awaitSplashGone(page)
     const servedScripts = readFileSync(resolve(ROOT, 'dist/index.html'), 'utf8')
@@ -393,7 +393,7 @@ const updatePart = async (
       'update: the old cache is gone, the new one is there',
     )
     check(
-      (await page.locator('.home-gift').count()) === 0,
+      (await page.locator('.update-chip').count()) === 0,
       'update: no chip after the reload',
     )
 

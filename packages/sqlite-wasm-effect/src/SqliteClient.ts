@@ -245,7 +245,6 @@ export const makeClient = (
       transactionAcquirer: acquirers.transactionAcquirer,
       onCommitFailure: acquirers.onCommitFailure,
       compiler: Statement.makeCompilerSqlite(),
-      driver: '@munch/sqlite-wasm-effect',
       spanAttributes: [['db.system.name', 'sqlite']],
     })
 

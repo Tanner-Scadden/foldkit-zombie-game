@@ -299,8 +299,8 @@ describe('the multipliers', () => {
       expect(scaled.speedScale).toBeCloseTo(base.speedScale * 0.9)
     })
     Array.forEach(Array.zip(normal, nightmare), ([base, scaled]) => {
-      expect(scaled.hpScale).toBeCloseTo(base.hpScale * 1.16)
-      expect(scaled.speedScale).toBeCloseTo(base.speedScale * 1.02)
+      expect(scaled.hpScale).toBeCloseTo(base.hpScale * 1.18)
+      expect(scaled.speedScale).toBeCloseTo(base.speedScale * 1.04)
     })
   })
 

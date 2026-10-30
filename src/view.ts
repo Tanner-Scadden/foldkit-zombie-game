@@ -13,13 +13,14 @@ import {
   menuPanelView,
   newEntryNoticeView,
 } from './homeView'
-import { homeScreenGuideView } from './installView'
 import { keyGrabToastView } from './keyGrab'
 import { gameStageView } from './layers'
 import {
   cornerButtonsView,
   debutCardView,
   debutPitch,
+  homeScreenStepsView,
+  homeScreenTipView,
   modeChoiceView,
   toSentenceCase,
 } from './menus'
@@ -56,7 +57,7 @@ import {
 } from './touchControls'
 import { TRAPS, TRAP_KIND_ORDER } from './traps'
 import { isCoopOpen } from './update/coop'
-import { updateGreetingView } from './updateGift'
+import { updateChipView } from './updateChip'
 import { FINAL_WAVE, isRoundActive, roundWave } from './waves'
 import {
   SIDEARM,
@@ -307,9 +308,10 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
         victorySupportView(model, h),
         newEntryNoticeView(model, h),
         cornerButtonsView(model, h),
+        homeScreenTipView(model, h),
+        updateChipView(model, h),
         keyGrabToastView(model, h),
-        homeScreenGuideView(model, h),
-        updateGreetingView(model, h),
+        homeScreenStepsView(model, h),
         shopDialogView(model, h),
         manorHandView(model, h),
         exitDialogView(model, h),

@@ -166,15 +166,6 @@ describe('scope status', () => {
         expect(yield* (yield* openReplica(database)).currentStatus).toEqual(
           notFresh,
         )
-        // A tab closed after a receipt committed but before its status
-        // moved: the stored seq is behind the confirmed one.
-        const behind = JSON.stringify(
-          ScopeStatus.cases.Ready.make({ seq: 0, fresh: true }),
-        )
-        yield* database.sql`UPDATE sync_status SET status = ${behind}`
-        expect(yield* (yield* openReplica(database)).currentStatus).toEqual(
-          notFresh,
-        )
         // A database synced by a build from before the status table.
         yield* database.sql`DELETE FROM sync_status`
         const reopened = yield* openReplica(database)

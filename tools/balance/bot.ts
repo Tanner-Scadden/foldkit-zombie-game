@@ -14,14 +14,12 @@ import { modifyFields } from 'foldkit/struct'
 
 import { Dialog } from '@foldkit/ui'
 
-import { assistAim } from '../../src/aimAssist'
 import { boxCenter, hasLineOfSight, levelOf } from '../../src/arena'
 import { BOSS_RULES } from '../../src/boss'
 import {
   cameraFocus,
   cameraFor,
   screenCameraOf,
-  viewToWorld,
   worldToView,
   worldWindowOf,
 } from '../../src/camera'
@@ -328,18 +326,15 @@ const OUT_OF_REACH = new Set(['Burrowed', 'Carried', 'Flying'])
 // toward its aim like the game's. Zombies out of view are not shot or fled.
 const SEES_PORTRAIT_ONLY = process.env.VIEW === 'portrait'
 
-const portraitCamera = (model: Model) =>
-  cameraFor(
-    levelOf(model),
-    cameraFocus(model),
-    worldWindowOf(DEFAULT_PORTRAIT_SCREEN),
-  )
-
 const isInView = (model: Model, zombie: Model['zombies'][number]) => {
   if (!SEES_PORTRAIT_ONLY) {
     return true
   }
-  const camera = portraitCamera(model)
+  const camera = cameraFor(
+    levelOf(model),
+    cameraFocus(model),
+    worldWindowOf(DEFAULT_PORTRAIT_SCREEN),
+  )
   return (
     zombie.x >= camera.x &&
     zombie.x <= camera.x + camera.width &&
@@ -717,50 +712,9 @@ const topOff = (model: Model): Model => {
     : model
 }
 
-// VIEW=portrait also gets the portrait layout's aim assist
-// (src/aimAssist.ts) the way the game gives it to a phone: every tick the
-// trigger is held, the aim from where the bot last pointed bends onto the
-// zombie it is almost on. NO_ASSIST=1 plays portrait without it.
-const IS_AIM_ASSISTED =
-  SEES_PORTRAIT_ONLY && process.env.NO_ASSIST === undefined
-const AIM_REACH_PX = 40
-let maybeRawAim: Vector | undefined
-
-const assistedPoint = (model: Model, rawPoint: Vector): Vector => {
-  const camera = screenCameraOf(model)
-  const raw = viewToWorld(camera, rawPoint)
-  const length = Math.max(1e-6, distance(model.player, raw))
-  const aim = assistAim(
-    levelOf(model),
-    portraitCamera(model),
-    model.player,
-    model.zombies,
-    {
-      x: (raw.x - model.player.x) / length,
-      y: (raw.y - model.player.y) / length,
-    },
-  )
-  return worldToView(camera, {
-    x: model.player.x + aim.x * AIM_REACH_PX,
-    y: model.player.y + aim.y * AIM_REACH_PX,
-  })
-}
-
-const holdAssistedAim = (model: Model): Model => {
-  if (
-    !IS_AIM_ASSISTED ||
-    maybeRawAim === undefined ||
-    model.input.mouseButton._tag !== 'Held'
-  ) {
-    return model
-  }
-  const point = assistedPoint(model, maybeRawAim)
-  return send(model, Message.MovedMouse({ clientX: point.x, clientY: point.y }))
-}
-
 const aimAndFire = (model: Model, frame: number): Model => {
   if (frame % AIM_EVERY_FRAMES !== 0) {
-    return holdAssistedAim(model)
+    return model
   }
   const target = nearestVisible(model)
   const isHeld = model.input.mouseButton._tag === 'Held'
@@ -772,14 +726,13 @@ const aimAndFire = (model: Model, frame: number): Model => {
   const angle =
     Math.atan2(target.y - model.player.y, target.x - model.player.x) +
     (nextBotRandom() + nextBotRandom() - 1) * AIM_NOISE_RADIANS
+  const reach = 40
   // The mouse lives in screen pixels, so the aim point goes through the
   // camera, which scrolls once the kitchen is open.
-  const rawPoint = worldToView(screenCameraOf(model), {
-    x: model.player.x + Math.cos(angle) * AIM_REACH_PX,
-    y: model.player.y + Math.sin(angle) * AIM_REACH_PX,
+  const aimPoint = worldToView(screenCameraOf(model), {
+    x: model.player.x + Math.cos(angle) * reach,
+    y: model.player.y + Math.sin(angle) * reach,
   })
-  maybeRawAim = rawPoint
-  const aimPoint = IS_AIM_ASSISTED ? assistedPoint(model, rawPoint) : rawPoint
   const aimed = send(
     model,
     Message.MovedMouse({ clientX: aimPoint.x, clientY: aimPoint.y }),
@@ -1118,7 +1071,6 @@ export const play = (
   const bossLog: BossLog = []
   const newKinds = emptyNewKinds()
   botRandom = seed
-  maybeRawAim = undefined
   spentOnUpgrades = 0
   kitchenWave = 0
   boughtLog = []

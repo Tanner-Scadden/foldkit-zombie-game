@@ -13,7 +13,7 @@ import {
   pipe,
 } from 'effect'
 
-import { PING_JSON } from '@munch/sync-engine'
+import { PING_JSON, PONG_JSON } from '@munch/sync-engine'
 
 import {
   type ClientFrame,
@@ -41,6 +41,8 @@ export const RoomEvent = Schema.TaggedUnion({
   Received: { frame: ServerFrame, bytes: Schema.Number, atMs: Schema.Number },
   Dropped: { reason: Schema.String },
   Stopped: { reason: Schema.String },
+  // NOTE: the socket's free ping came back: sent at `sentMs`, back at `atMs`.
+  Ponged: { sentMs: Schema.Number, atMs: Schema.Number },
 })
 export type RoomEvent = typeof RoomEvent.Type
 
@@ -59,8 +61,10 @@ export interface RoomClient {
 }
 
 // NOTE: the sync engine's ping, which the Durable Object answers by
-// auto-response without waking, keeps a waiting socket alive for free.
-const HEARTBEAT = '25 seconds'
+// auto-response without waking, keeps the socket alive and measures the
+// round trip, for free: an auto-response is never billed. It goes every
+// 2 seconds, in the lobby and in the run alike.
+const HEARTBEAT = '2 seconds'
 const FIRST_BACKOFF_MS = 250
 const DEFAULT_MAX_BACKOFF_MS = 5000
 
@@ -81,6 +85,7 @@ export const connectRoom = (
     const current = yield* Ref.make<Option.Option<OpenSocket>>(Option.none())
     const stopped = yield* Ref.make<Option.Option<string>>(Option.none())
     const heardAny = yield* Ref.make(false)
+    const pinged = yield* Ref.make<Option.Option<number>>(Option.none())
     const maxBackoffMs = options.maxBackoffMs ?? DEFAULT_MAX_BACKOFF_MS
 
     const offer = (event: RoomEvent) => Queue.offer(events, event)
@@ -88,7 +93,16 @@ export const connectRoom = (
     const onData = (data: string | Uint8Array) =>
       Effect.gen(function* () {
         if (typeof data === 'string') {
-          return
+          if (data !== PONG_JSON) {
+            return
+          }
+          const atMs = yield* Clock.currentTimeMillis
+          const maybeSent = yield* Ref.getAndSet(pinged, Option.none())
+          return yield* Option.match(maybeSent, {
+            onNone: () => Effect.void,
+            onSome: sentMs =>
+              offer(RoomEvent.cases.Ponged.make({ sentMs, atMs })),
+          })
         }
         const decoded = decodeServerFrame(data)
         if (Result.isFailure(decoded)) {
@@ -134,7 +148,15 @@ export const connectRoom = (
           yield* Ref.set(current, Option.some(socket))
           yield* Effect.forkScoped(
             Effect.repeat(
-              Effect.delay(Effect.ignore(socket.send(PING_JSON)), HEARTBEAT),
+              Effect.delay(
+                Effect.andThen(
+                  Effect.flatMap(Clock.currentTimeMillis, sentMs =>
+                    Ref.set(pinged, Option.some(sentMs)),
+                  ),
+                  Effect.ignore(socket.send(PING_JSON)),
+                ),
+                HEARTBEAT,
+              ),
               Schedule.forever,
             ),
           )

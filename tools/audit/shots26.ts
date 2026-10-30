@@ -45,34 +45,27 @@ type Scene = Readonly<{ name: string; query: string; hasChip: boolean }>
 const SCENES: ReadonlyArray<Scene> = [
   { name: 'title', query: '', hasChip: true },
   { name: 'title-iphone', query: 'fit=home', hasChip: true },
-  { name: 'title-android', query: 'fit=full&install&bests', hasChip: true },
-  { name: 'unwrap', query: 'unwrap', hasChip: true },
-  { name: 'greet', query: 'greet', hasChip: true },
   {
     name: 'gameover',
-    query: 'wave=4&phase=gameover&stats&tick=72',
-    hasChip: false,
+    query: 'wave=4&phase=gameover&stats',
+    hasChip: true,
   },
-  {
-    name: 'victory',
-    query: 'wave=8&phase=victory&stats&tick=72',
-    hasChip: false,
-  },
+  { name: 'victory', query: 'wave=8&phase=victory&stats', hasChip: true },
   {
     name: 'break1',
     query: 'wave=2&seen=all&money=45&barricades=1&break=open&px=200&py=100',
-    hasChip: false,
+    hasChip: true,
   },
   {
     name: 'break2',
     query:
       'wave=3&seen=all&gun=smg&money=120&barricades=1&turrets=1&px=200&py=100',
-    hasChip: false,
+    hasChip: true,
   },
   {
     name: 'paused',
     query: 'wave=3&seen=all&start=wave&gun=smg&phase=paused&elapsed=6000',
-    hasChip: false,
+    hasChip: true,
   },
   {
     name: 'wave',
@@ -93,14 +86,14 @@ const chipReport = (page: Page) =>
       b.x < a.x + a.width &&
       a.y < b.y + b.height &&
       b.y < a.y + a.height
-    const chip = document.querySelector('.home-gift')
+    const chip = document.querySelector('.update-chip')
     if (chip === null) {
       return { chip: undefined, overlaps: [] }
     }
     const chipBox = toBox(chip)
     const others = Array.from(
       document.querySelectorAll(
-        'button, .pause-help, .mode-choice, .preparation-controls',
+        'button, .home-screen-tip, .pause-help, .mode-choice, .preparation-controls',
       ),
     )
       .filter(element => element !== chip && !element.closest('dialog'))
@@ -212,7 +205,7 @@ const e2e = async () => {
     await wait(2500)
     console.log(`first load runs ${await runningBuild(page)}`)
     console.log(
-      `chip before the rebuild: ${await page.locator('.home-gift').count()}`,
+      `chip before the rebuild: ${await page.locator('.update-chip').count()}`,
     )
     await shot(page, `s26-${TAG}-e2e-before`)
 
@@ -220,16 +213,16 @@ const e2e = async () => {
     await page.evaluate(() =>
       document.dispatchEvent(new Event('visibilitychange')),
     )
-    await page.locator('.home-gift').waitFor({ timeout: 5000 })
+    await page.locator('.update-chip').waitFor({ timeout: 5000 })
     console.log(
-      `chip after visibilitychange: ${await page.locator('.home-gift').textContent()}`,
+      `chip after visibilitychange: ${await page.locator('.update-chip').textContent()}`,
     )
     console.log(`version.json requests: ${versionRequests.join(', ')}`)
     await shot(page, `s26-${TAG}-e2e-chip`)
 
     await Promise.all([
       page.waitForEvent('load'),
-      page.locator('.home-gift').tap(),
+      page.locator('.update-chip').tap(),
     ])
     await wait(2500)
     const reloadedBundle = await runningBuild(page)
@@ -245,29 +238,9 @@ const e2e = async () => {
       `reloaded into the new build: ${servedBundle.some(name => reloadedBundle.includes(name))}`,
     )
     console.log(
-      `chip after the reload: ${await page.locator('.home-gift').count()}`,
+      `chip after the reload: ${await page.locator('.update-chip').count()}`,
     )
-    const isGreeted = await page
-      .locator('dialog[open] .greeting-panel')
-      .waitFor({ timeout: 5000 })
-      .then(
-        () => true,
-        () => false,
-      )
-    console.log(`greeted after the reload: ${isGreeted}`)
-    console.log(`address after the reload: ${page.url()}`)
-    await wait(1600)
     await shot(page, `s26-${TAG}-e2e-after`)
-    await page.keyboard.press('Escape')
-    await wait(400)
-    console.log(
-      `greeting after Escape: ${await page.locator('dialog[open] .greeting-panel').count()}`,
-    )
-    await page.reload()
-    await wait(2500)
-    console.log(
-      `greeting after another reload: ${await page.locator('dialog[open] .greeting-panel').count()}`,
-    )
   } finally {
     await browser.close()
     server.kill()
