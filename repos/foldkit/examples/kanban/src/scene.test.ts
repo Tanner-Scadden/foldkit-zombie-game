@@ -15,7 +15,7 @@ import {
 } from 'foldkit/scene'
 import { describe, test } from 'vitest'
 
-import { DragAndDrop } from '@foldkit/ui'
+import { DragAndDropBlock } from '@foldkit/ui'
 
 import { FocusAddCardInput, GenerateCardId, SaveBoard } from './command'
 import type { Card } from './domain/card'
@@ -48,7 +48,7 @@ const testColumns: ReadonlyArray<Column> = [
 
 const testModel: Model = {
   columns: testColumns,
-  dragAndDrop: DragAndDrop.init({ id: 'kanban' }),
+  dragAndDrop: DragAndDropBlock.init({ id: 'kanban' }).model,
   maybeNewCardColumnId: Option.none(),
   newCardTitle: '',
   announcement: '',

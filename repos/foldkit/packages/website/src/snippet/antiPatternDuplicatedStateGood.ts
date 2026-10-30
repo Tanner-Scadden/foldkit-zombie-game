@@ -3,6 +3,7 @@
 import { Schema } from 'effect'
 
 const Item = Schema.Struct({ id: Schema.String, name: Schema.String })
+type Item = typeof Item.Type
 
 const Model = Schema.Struct({
   items: Schema.Array(Item),

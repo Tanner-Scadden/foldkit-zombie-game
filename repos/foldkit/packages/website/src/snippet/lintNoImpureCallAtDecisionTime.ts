@@ -1,13 +1,14 @@
 import { Crypto, Effect, Schema } from 'effect'
+import { Hex } from 'effect/encoding'
 import { Command } from 'foldkit'
-
-import { BrowserCrypto } from '@effect/platform-browser'
 
 const SaveDraftWithId = Command.define('SaveDraftWithId', {
   args: { body: Schema.String, draftId: Schema.String },
   messages: [Message.CompletedSaveDraftWithId],
-  execute: ({ draftId }) =>
-    Effect.succeed(Message.CompletedSaveDraftWithId({ draftId })),
+  handler: function* () {
+    return ({ draftId }) =>
+      Effect.succeed(Message.CompletedSaveDraftWithId({ draftId }))
+  },
 })
 
 // ❌ Bad: assigning the UUID first does not defer the call.
@@ -17,16 +18,23 @@ const saveBad = (body: string) => {
   return SaveDraftWithId({ body, draftId })
 }
 
-// ✅ Good: the runtime obtains the UUID when it executes the Command.
+// ✅ Good: the runtime obtains the ID when it executes the Command.
+const DRAFT_ID_BYTE_LENGTH = 16
 const SaveDraft = Command.define('SaveDraft', {
   args: { body: Schema.String },
   messages: [Message.CompletedSaveDraft],
-  execute: ({ body: _body }) =>
-    Effect.gen(function* () {
-      const crypto = yield* Crypto.Crypto
-      const draftId = yield* Effect.orDie(crypto.randomUUIDv4)
-      return Message.CompletedSaveDraft({ draftId })
-    }).pipe(Effect.provide(BrowserCrypto.layer)),
+  handler: function* () {
+    const crypto = yield* Crypto.Crypto
+
+    return ({ body: _body }) =>
+      Effect.gen(function* () {
+        const bytes = yield* Effect.orDie(
+          crypto.randomBytes(DRAFT_ID_BYTE_LENGTH),
+        )
+        const draftId = Hex.encode(bytes)
+        return Message.CompletedSaveDraft({ draftId })
+      })
+  },
 })
 
 const saveGood = (body: string) => SaveDraft({ body })

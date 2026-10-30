@@ -1,54 +1,59 @@
-import { Effect, Fiber, Option, Schema } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import { Schema } from 'effect'
+import { Block, Program, Runtime } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import * as Runtime from 'foldkit/runtime'
 import { modifyFields } from 'foldkit/struct'
-import * as Update from 'foldkit/update'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import * as Popover from './index.js'
+import { PopoverBlock } from './block.js'
 
 const popoverId = 'badge-popover'
 const portalRootId = 'foldkit-portal-root'
 
 const Model = Schema.Struct({
-  popover: Popover.Model,
+  popover: PopoverBlock.Model,
   isBadgeShown: Schema.Boolean,
 })
 type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
-  GotPopoverMessage: { message: Popover.Message },
   ClickedToggleBadge: {},
 })
 type Message = typeof Message.Type
 
-const foldPopoverOutMessage = Popover.OutMessage.match<
-  Update.Step<Model, Message>
->({
-  Opened: () => model => ({ model }),
-  Closed: () => model => ({ model }),
-})
+const PopoverSiblingRuntimeTestDefinition = Block.makeDefinition(
+  'PopoverSiblingRuntimeTest',
+  {
+    Model,
+    Message,
+  },
+)
 
-const foldPopover = Update.foldChild({
-  update: Popover.update,
-  read: (model: Model) => Option.some(model.popover),
-  write: (model, nextPopover) =>
-    modifyFields(model, { popover: () => nextPopover }),
-  toParentMessage: message => Message.GotPopoverMessage({ message }),
-  foldOutMessage: foldPopoverOutMessage,
-})
-
-const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
-    GotPopoverMessage: ({ message: popoverMessage }) =>
-      foldPopover(model, popoverMessage),
-    ClickedToggleBadge: () => ({
-      model: modifyFields(model, { isBadgeShown: isShown => !isShown }),
-    }),
+const foldPopoverOutMessage =
+  PopoverSiblingRuntimeTestDefinition.makeOutMessageFold(PopoverBlock, {
+    Opened: () => PopoverSiblingRuntimeTestDefinition.makeNoopStep(),
+    Closed: () => PopoverSiblingRuntimeTestDefinition.makeNoopStep(),
   })
 
-const view = (model: Model, h: HtmlBuilder<Message>): Html =>
+const PopoverBinding = PopoverSiblingRuntimeTestDefinition.makeBinding(
+  PopoverBlock,
+  {
+    field: 'popover',
+    init: false,
+  },
+).withOutMessagePolicy({ fold: foldPopoverOutMessage })
+
+const PopoverSiblingRuntimeTestComposition =
+  PopoverSiblingRuntimeTestDefinition.makeComposition({
+    bindings: [PopoverBinding],
+  })
+
+const update = PopoverSiblingRuntimeTestComposition.makeUpdate({
+  ClickedToggleBadge: model => ({
+    model: modifyFields(model, { isBadgeShown: isShown => !isShown }),
+  }),
+})
+
+const view = PopoverSiblingRuntimeTestComposition.makeView((model, h) =>
   h.main(
     [],
     [
@@ -56,26 +61,45 @@ const view = (model: Model, h: HtmlBuilder<Message>): Html =>
         [h.Id('toggle-badge'), h.OnClick(Message.ClickedToggleBadge())],
         ['Toggle badge'],
       ),
-      h.submodel({
-        slotId: popoverId,
-        model: model.popover,
-        view: Popover.view,
-        viewInputs: {
-          anchor: { placement: 'bottom-start' },
-          toView: ({ button, panel, isVisible }) =>
-            h.div(
-              [h.Id('wrapper')],
-              [
-                h.button([...button], ['Open']),
-                ...(model.isBadgeShown ? [h.span([h.Id('badge')], ['!'])] : []),
-                ...(isVisible ? [h.div([...panel], ['Panel content'])] : []),
-              ],
-            ),
-        },
-        toParentMessage: message => Message.GotPopoverMessage({ message }),
-      }),
+      h.block(
+        PopoverBinding.embedView({
+          slotId: popoverId,
+          model: model.popover,
+          viewInputs: {
+            anchor: { placement: 'bottom-start' },
+            toView: ({ button, panel, isVisible }) =>
+              h.div(
+                [h.Id('wrapper')],
+                [
+                  h.button([...button], ['Open']),
+                  ...(model.isBadgeShown
+                    ? [h.span([h.Id('badge')], ['!'])]
+                    : []),
+                  ...(isVisible ? [h.div([...panel], ['Panel content'])] : []),
+                ],
+              ),
+          },
+        }),
+      ),
     ],
-  )
+  ),
+)
+
+const prepare = () =>
+  PopoverSiblingRuntimeTestComposition.prepareBlock({
+    init: PopoverSiblingRuntimeTestComposition.makeInit(() =>
+      PopoverBinding.init({
+        args: [{ id: popoverId }],
+        toParentModel: popover => ({ popover, isBadgeShown: false }),
+      }),
+    ),
+    update,
+    view,
+  })
+const ApplicationBlock: Block.FromAssemblyWithView<
+  typeof Model,
+  typeof prepare
+> = Block.assemble(prepare)
 
 describe('Popover with a portaled panel', () => {
   afterEach(() => {
@@ -88,28 +112,15 @@ describe('Popover with a portaled panel', () => {
     const container = document.createElement('div')
     container.id = 'badge-popover-app'
     document.body.append(container)
-
-    const program = Runtime.makeElement({
-      Model,
-      init: () => ({
-        model: {
-          popover: Popover.init({ id: popoverId }),
-          isBadgeShown: false,
-        },
-      }),
-      update,
-      view,
-      container,
-    })
-    const runtime = Effect.runFork(program.start())
+    const handle = Runtime.embed(
+      Program.makeElement({ block: ApplicationBlock, container }),
+    )
 
     try {
       await vi.waitFor(() => {
-        expect(document.getElementById(Popover.buttonId(popoverId))).not.toBe(
-          null,
-        )
+        expect(document.getElementById(`${popoverId}-button`)).not.toBeNull()
       })
-      document.getElementById(Popover.buttonId(popoverId))?.click()
+      document.getElementById(`${popoverId}-button`)?.click()
 
       await vi.waitFor(() => {
         expect(
@@ -128,7 +139,7 @@ describe('Popover with a portaled panel', () => {
       ).toBe(portalRootId)
       expect(errorSpy).not.toHaveBeenCalled()
     } finally {
-      await Effect.runPromise(Fiber.interrupt(runtime))
+      handle.dispose()
     }
   })
 })

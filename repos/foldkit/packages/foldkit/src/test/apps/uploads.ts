@@ -1,11 +1,11 @@
-import { Array, Effect, Number, Schema } from 'effect'
+import { Array, Effect, Layer, Number, Schema } from 'effect'
 
 import * as Command from '../../command/index.js'
 import * as Interruptible from '../../command/interruptible/index.js'
 import type { Document, HtmlBuilder } from '../../html/index.js'
 import { defineMessageUnion } from '../../message/index.js'
 import { modifyFields } from '../../struct/index.js'
-import type * as Update from '../../update/index.js'
+import * as Update from '../../update/index.js'
 
 // MODEL
 
@@ -42,7 +42,6 @@ export const Message = defineMessageUnion({
     outcome: Interruptible.Outcome,
   },
 })
-
 export type Message = typeof Message.Type
 
 // COMMAND
@@ -57,8 +56,10 @@ export const UploadFile = Command.define('UploadFile', {
     keyFields: ['uploadId'],
     toKey: ({ uploadId }) => String(uploadId),
   },
-  execute: ({ uploadId }) =>
-    Effect.as(Effect.never, Message.SucceededUploadFile({ uploadId })),
+  handler: function* () {
+    return ({ uploadId }) =>
+      Effect.as(Effect.never, Message.SucceededUploadFile({ uploadId }))
+  },
 })
 
 export const CancelUploadFile = ({ uploadId }: UploadFileArgs) =>
@@ -79,10 +80,8 @@ const setStatusById = (uploadId: number, status: UploadStatus) =>
       : upload,
   )
 
-type UpdateReturn = Update.Return<Model, Message>
-
-export const update = (model: Model, message: Message) =>
-  Message.match<UpdateReturn>(message, {
+export const update = Update.define((model: Model, message: Message) =>
+  Message.match(message, {
     ClickedStartUpload: () => {
       const startedUpload: Upload = {
         id: model.uploadId,
@@ -115,7 +114,7 @@ export const update = (model: Model, message: Message) =>
       }),
     }),
     CompletedCancelUploadFile: ({ uploadId, outcome }) =>
-      Interruptible.Outcome.match<UpdateReturn>(outcome, {
+      Interruptible.Outcome.match(outcome, {
         Interrupted: () => ({
           model: modifyFields(model, {
             uploads: setStatusById(uploadId, 'Cancelled'),
@@ -123,7 +122,8 @@ export const update = (model: Model, message: Message) =>
         }),
         NotFound: () => ({ model }),
       }),
-  })
+  }),
+)
 
 // VIEW
 
@@ -157,3 +157,5 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
 
   return { title: 'Uploads', body }
 }
+
+export const EffectsLayer = Layer.mergeAll(UploadFile.layer)

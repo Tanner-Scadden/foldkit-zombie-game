@@ -1,10 +1,13 @@
-import { Submodel } from 'foldkit'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import { Checkbox, Fieldset, Input, Textarea } from '@foldkit/ui'
 
-import { Message as UiMessage } from '../message'
-import type { UiModel } from '../model'
+import { UiComposition } from '../composition'
+import type { UiViewBuilder } from '../composition'
+import { Message } from '../message'
+import type { Model } from '../model'
+
+type UiMessage = typeof UiComposition.Message.Type
 
 const FIELDSET_CHECKBOX_DEMO_ID = 'fieldset-checkbox-demo'
 const FIELDSET_DISABLED_CHECKBOX_ID = 'fieldset-disabled-checkbox'
@@ -40,10 +43,10 @@ const sectionHeadingClassName = 'text-lg font-semibold text-gray-900 mt-8 mb-4'
 
 // FIELDS
 
-const checkmark = (h: HtmlBuilder<UiMessage>): Html =>
+const checkmark = (h: UiViewBuilder) =>
   h.span([h.Class('text-white text-xs')], ['✓'])
 
-const nameInput = (value: string, h: HtmlBuilder<UiMessage>): Html => {
+const nameInput = (value: string, h: UiViewBuilder) => {
   const nameInputView = (attributes: Input.InputAttributes<UiMessage>): Html =>
     h.div(
       [h.Class(fieldClassName)],
@@ -63,7 +66,7 @@ const nameInput = (value: string, h: HtmlBuilder<UiMessage>): Html => {
       value,
       hasDescription: true,
       onInput: inputValue =>
-        UiMessage.UpdatedFieldsetInputValue({ value: inputValue }),
+        Message.UpdatedFieldsetInputValue({ value: inputValue }),
       placeholder: 'Enter your full name',
       toView: nameInputView,
     },
@@ -71,7 +74,7 @@ const nameInput = (value: string, h: HtmlBuilder<UiMessage>): Html => {
   )
 }
 
-const bioTextarea = (value: string, h: HtmlBuilder<UiMessage>): Html => {
+const bioTextarea = (value: string, h: UiViewBuilder) => {
   const bioTextareaView = (
     attributes: Textarea.TextareaAttributes<UiMessage>,
   ): Html =>
@@ -93,7 +96,7 @@ const bioTextarea = (value: string, h: HtmlBuilder<UiMessage>): Html => {
       value,
       hasDescription: true,
       onInput: textareaValue =>
-        UiMessage.UpdatedFieldsetTextareaValue({ value: textareaValue }),
+        Message.UpdatedFieldsetTextareaValue({ value: textareaValue }),
       placeholder: 'Tell us about yourself...',
       rows: 3,
       toView: bioTextareaView,
@@ -102,7 +105,7 @@ const bioTextarea = (value: string, h: HtmlBuilder<UiMessage>): Html => {
   )
 }
 
-const termsCheckbox = (isChecked: boolean, h: HtmlBuilder<UiMessage>): Html => {
+const termsCheckbox = (isChecked: boolean, h: UiViewBuilder) => {
   const termsCheckboxView = (
     attributes: Checkbox.CheckboxAttributes<UiMessage>,
   ): Html =>
@@ -135,7 +138,7 @@ const termsCheckbox = (isChecked: boolean, h: HtmlBuilder<UiMessage>): Html => {
       isChecked,
       hasDescription: true,
       onToggle: nextIsChecked =>
-        UiMessage.ToggledFieldsetCheckboxDemo({ isChecked: nextIsChecked }),
+        Message.ToggledFieldsetCheckboxDemo({ isChecked: nextIsChecked }),
       toView: termsCheckboxView,
     },
     h,
@@ -144,7 +147,7 @@ const termsCheckbox = (isChecked: boolean, h: HtmlBuilder<UiMessage>): Html => {
 
 // DISABLED FIELDS
 
-const disabledNameInput = (h: HtmlBuilder<UiMessage>): Html => {
+const disabledNameInput = (h: UiViewBuilder) => {
   const disabledNameInputView = (
     attributes: Input.InputAttributes<UiMessage>,
   ): Html =>
@@ -167,7 +170,7 @@ const disabledNameInput = (h: HtmlBuilder<UiMessage>): Html => {
   )
 }
 
-const disabledBioTextarea = (h: HtmlBuilder<UiMessage>): Html => {
+const disabledBioTextarea = (h: UiViewBuilder) => {
   const disabledBioTextareaView = (
     attributes: Textarea.TextareaAttributes<UiMessage>,
   ): Html =>
@@ -192,7 +195,7 @@ const disabledBioTextarea = (h: HtmlBuilder<UiMessage>): Html => {
   )
 }
 
-const disabledTermsCheckbox = (h: HtmlBuilder<UiMessage>): Html => {
+const disabledTermsCheckbox = (h: UiViewBuilder) => {
   const disabledTermsCheckboxView = (
     attributes: Checkbox.CheckboxAttributes<UiMessage>,
   ): Html =>
@@ -215,8 +218,7 @@ const disabledTermsCheckbox = (h: HtmlBuilder<UiMessage>): Html => {
       id: FIELDSET_DISABLED_CHECKBOX_ID,
       isChecked: true,
       isDisabled: true,
-      onToggle: isChecked =>
-        UiMessage.ToggledFieldsetCheckboxDemo({ isChecked }),
+      onToggle: isChecked => Message.ToggledFieldsetCheckboxDemo({ isChecked }),
       toView: disabledTermsCheckboxView,
     },
     h,
@@ -225,7 +227,7 @@ const disabledTermsCheckbox = (h: HtmlBuilder<UiMessage>): Html => {
 
 // DEMOS
 
-const basicDemo = (model: UiModel, h: HtmlBuilder<UiMessage>): Html => {
+const basicDemo = (model: Model, h: UiViewBuilder) => {
   const basicFieldsetView = (
     attributes: Fieldset.FieldsetAttributes<UiMessage>,
   ): Html =>
@@ -261,7 +263,7 @@ const basicDemo = (model: UiModel, h: HtmlBuilder<UiMessage>): Html => {
   )
 }
 
-const disabledDemo = (h: HtmlBuilder<UiMessage>): Html => {
+const disabledDemo = (h: UiViewBuilder) => {
   const disabledFieldsetView = (
     attributes: Fieldset.FieldsetAttributes<UiMessage>,
   ): Html =>
@@ -298,21 +300,17 @@ const disabledDemo = (h: HtmlBuilder<UiMessage>): Html => {
   )
 }
 
-// VIEW
+export const view = UiComposition.makeView((model, h) => {
+  return h.div(
+    [],
+    [
+      h.h2([h.Class('text-2xl font-bold text-gray-900 mb-6')], ['Fieldset']),
 
-export const view = Submodel.defineView<UiModel, UiMessage>(
-  (model, h): Html => {
-    return h.div(
-      [],
-      [
-        h.h2([h.Class('text-2xl font-bold text-gray-900 mb-6')], ['Fieldset']),
+      h.h3([h.Class(sectionHeadingClassName)], ['Basic']),
+      basicDemo(model, h),
 
-        h.h3([h.Class(sectionHeadingClassName)], ['Basic']),
-        basicDemo(model, h),
-
-        h.h3([h.Class(sectionHeadingClassName)], ['Disabled']),
-        disabledDemo(h),
-      ],
-    )
-  },
-)
+      h.h3([h.Class(sectionHeadingClassName)], ['Disabled']),
+      disabledDemo(h),
+    ],
+  )
+})

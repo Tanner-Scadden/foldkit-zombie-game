@@ -1,17 +1,17 @@
 import { Array, Option } from 'effect'
 import { AsyncData } from 'foldkit'
 import type { Html } from 'foldkit/html'
-import { HtmlBuilder } from 'foldkit/html'
 
 import { Button } from '@foldkit/ui'
 
+import type { ApplicationViewBuilder } from '../composition'
 import type { Telemetry } from '../domain'
 import { Message } from '../message'
 import type { Model } from '../model'
-import { chartPanelView } from './chart'
+import * as Chart from './chart'
 import { sidebarView } from './sidebar'
 
-export const headerView = (model: Model, h: HtmlBuilder<Message>): Html => {
+export const headerView = (model: Model, h: ApplicationViewBuilder): Html => {
   const isRefreshing = AsyncData.isRefreshing(model.telemetry)
   const isLoading = AsyncData.isLoading(model.telemetry)
 
@@ -82,7 +82,7 @@ const dashboardBanner = (
 
 export const telemetryStateView = (
   model: Model,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   AsyncData.matchData(model.telemetry, {
     onEmpty: () => loadingView(h),
@@ -91,7 +91,7 @@ export const telemetryStateView = (
       dashboardShellView(model, data, dashboardBanner(model.telemetry), h),
   })
 
-export const loadingView = (h: HtmlBuilder<Message>): Html =>
+export const loadingView = (h: ApplicationViewBuilder): Html =>
   h.section(
     [
       h.Class(
@@ -118,7 +118,7 @@ export const loadingView = (h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-export const failureView = (error: string, h: HtmlBuilder<Message>): Html =>
+export const failureView = (error: string, h: ApplicationViewBuilder): Html =>
   h.section(
     [
       h.Class(
@@ -160,7 +160,7 @@ export const dashboardShellView = (
   model: Model,
   telemetry: Telemetry,
   maybeBanner: Option.Option<string>,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.section(
     [
@@ -170,6 +170,6 @@ export const dashboardShellView = (
     ],
     [
       sidebarView(model, telemetry, maybeBanner, h),
-      chartPanelView(model, telemetry, h),
+      Chart.chartPanelView(model, telemetry, h),
     ],
   )

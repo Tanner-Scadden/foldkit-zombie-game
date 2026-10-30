@@ -2,8 +2,10 @@ import { modifyFields } from 'foldkit/struct'
 import { Lazy } from 'foldkit/test'
 import { test } from 'vitest'
 
-import { initialModel } from './main'
+import { init } from './init'
 import { view } from './view'
+
+const initialModel = init().model
 
 const cases = [
   {

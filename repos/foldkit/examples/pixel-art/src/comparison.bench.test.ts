@@ -7,11 +7,12 @@ import { Option } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 import { test } from 'vitest'
 
-import { Dialog, Listbox } from '@foldkit/ui'
+import { DialogBlock } from '@foldkit/ui'
 
 import { createEmptyGrid as createReactGrid } from '../../../comparisons/pixel-art-react/src/grid'
 import { reducer } from '../../../comparisons/pixel-art-react/src/reducer'
 import type { State } from '../../../comparisons/pixel-art-react/src/types'
+import { ThemeListboxBlock } from './components'
 import { createEmptyGrid as createFoldkitGrid } from './grid'
 import { Message } from './message'
 import type { Model } from './model'
@@ -31,12 +32,12 @@ const foldkitModel: Model = {
   mirrorMode: 'None' as const,
   isDrawing: false,
   maybeHoveredCell: Option.none(),
-  errorDialog: Dialog.init({ id: 'error-dialog' }),
+  errorDialog: DialogBlock.init({ id: 'error-dialog' }).model,
   maybeExportError: Option.none(),
   paletteThemeIndex: 0,
-  gridSizeConfirmDialog: Dialog.init({ id: 'confirm-dialog' }),
+  gridSizeConfirmDialog: DialogBlock.init({ id: 'confirm-dialog' }).model,
   maybePendingGridSize: Option.none(),
-  themeListbox: Listbox.init({ id: 'themes' }),
+  themeListbox: ThemeListboxBlock.init({ id: 'themes' }).model,
 }
 
 const reactState: State = {
@@ -162,7 +163,9 @@ test('benchmark', () => {
     {
       name: 'Flood fill (16\u00d716)',
       foldkit: () => {
-        const m: Model = modifyFields(foldkitModel, { tool: () => 'Fill' })
+        const m: Model = modifyFields(foldkitModel, {
+          tool: () => 'Fill',
+        })
         update(m, Message.PressedCell({ x: 0, y: 0 }))
       },
       react: () => {

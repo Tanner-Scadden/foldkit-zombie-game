@@ -19,17 +19,20 @@ const DEFAULT_LIST_MESSAGES_LIMIT = 50
 const RuntimeIdField = Schema.optional(
   Schema.String.annotate({ description: RUNTIME_ID_DESCRIPTION }),
 )
+type RuntimeIdField = typeof RuntimeIdField.Type
 
 const ListLimit = Schema.Int.check(
   Schema.isBetween({ minimum: 1, maximum: 500 }),
 ).annotate({
   description: `Maximum number of entries to return. Defaults to ${DEFAULT_LIST_MESSAGES_LIMIT}; max 500.`,
 })
+type ListLimit = typeof ListLimit.Type
 
 const SinceIndex = Schema.Int.annotate({
   description:
     'Absolute history index to start from. Use the maybeNextIndex returned by a prior call to paginate.',
 })
+type SinceIndex = typeof SinceIndex.Type
 
 const ChangedPathsMatchField = Schema.optional(
   Schema.Array(Schema.String).annotate({
@@ -37,6 +40,7 @@ const ChangedPathsMatchField = Schema.optional(
       "Dot-string path patterns matched against each entry's changedPaths, in the same 'root'-anchored alphabet foldkit_get_model uses. An entry matches when any pattern matches any changed path. Patterns compare segment-by-segment for the length of the shorter side, so 'root.grid' matches every change inside the grid subtree, and 'root.grid.5.3' also matches a wholesale replacement recorded at 'root.grid'. '*' matches exactly one segment: 'root.cards.*.title'. Entries that did not change the Model never match. An empty list applies no filter. Patterns not starting with 'root' or '*' are rejected.",
   }),
 )
+type ChangedPathsMatchField = typeof ChangedPathsMatchField.Type
 
 const DiffChangedPathsMatchField = Schema.optional(
   Schema.Array(Schema.String).annotate({
@@ -44,6 +48,7 @@ const DiffChangedPathsMatchField = Schema.optional(
       "Dot-string path patterns narrowing the reported changes, in the same 'root'-anchored alphabet as changedPaths. A changed path is kept when any pattern matches it: patterns compare segment-by-segment for the length of the shorter side ('root.grid' keeps everything under the grid subtree) and '*' matches exactly one segment. An empty list applies no filter. Patterns not starting with 'root' or '*' are rejected.",
   }),
 )
+type DiffChangedPathsMatchField = typeof DiffChangedPathsMatchField.Type
 
 const FromEndField = Schema.optional(
   Schema.Boolean.annotate({
@@ -51,30 +56,36 @@ const FromEndField = Schema.optional(
       "When true, return the final `limit` matching entries (the most recent) instead of the first, still in chronological order. The natural first call when live-debugging: 'what just happened'. Cannot be combined with since_index.",
   }),
 )
+type FromEndField = typeof FromEndField.Type
 
 const DiffFromIndex = Schema.Int.annotate({
   description:
     'Absolute history index of the diff baseline: the Model state right after this entry was applied. Use -1 for the initial Model.',
 })
+type DiffFromIndex = typeof DiffFromIndex.Type
 
 const DiffToIndex = Schema.Int.annotate({
   description:
     'Absolute history index of the diff target: the Model state right after this entry was applied. -1 addresses the initial Model.',
 })
+type DiffToIndex = typeof DiffToIndex.Type
 
 const MessageIndex = Schema.Int.annotate({
   description: 'Absolute history index of the entry to read.',
 })
+type MessageIndex = typeof MessageIndex.Type
 
 const KeyframeIndex = Schema.Int.annotate({
   description:
     'Index to replay to. Use -1 to jump to the initial Model (before any messages). Use a non-negative index to jump to the Model state right after that history index. Call foldkit_list_keyframes for the canonical replay points.',
 })
+type KeyframeIndex = typeof KeyframeIndex.Type
 
 const ModelIndex = Schema.Int.annotate({
   description:
     'Absolute history index. Returns the Model state right after the entry at this index was applied. To inspect the Model immediately before message N, pass index N - 1. For the initial Model, use foldkit_get_init.',
 })
+type ModelIndex = typeof ModelIndex.Type
 
 const PathField = Schema.optional(
   Schema.String.annotate({
@@ -82,6 +93,7 @@ const PathField = Schema.optional(
       "Dot-string path into the Model anchored at 'root'. Examples: 'root', 'root.route', 'root.session.user', 'root.cards.0'. Matches the alphabet used by SerializedEntry.changedPaths so paths copied from one tool's output can be passed straight into the next. Defaults to 'root' (the whole Model).",
   }),
 )
+type PathField = typeof PathField.Type
 
 const ExpandField = Schema.optional(
   Schema.Boolean.annotate({
@@ -89,12 +101,14 @@ const ExpandField = Schema.optional(
       "When false (the default), large arrays/records/strings collapse to '_summary' placeholders to keep payloads small. Set true to receive the literal value at the path. Pair with `path` to drill in: a narrow path with `expand: true` is the cheapest way to read a specific subtree at full fidelity.",
   }),
 )
+type ExpandField = typeof ExpandField.Type
 
 const GetModelInput = Schema.Struct({
   runtime_id: RuntimeIdField,
   path: PathField,
   expand: ExpandField,
 })
+type GetModelInput = typeof GetModelInput.Type
 
 const GetModelAtInput = Schema.Struct({
   runtime_id: RuntimeIdField,
@@ -102,6 +116,7 @@ const GetModelAtInput = Schema.Struct({
   path: PathField,
   expand: ExpandField,
 })
+type GetModelAtInput = typeof GetModelAtInput.Type
 
 const ListMessagesInput = Schema.Struct({
   runtime_id: RuntimeIdField,
@@ -110,12 +125,14 @@ const ListMessagesInput = Schema.Struct({
   changed_paths_match: ChangedPathsMatchField,
   from_end: FromEndField,
 })
+type ListMessagesInput = typeof ListMessagesInput.Type
 
 const CountMessagesByTagInput = Schema.Struct({
   runtime_id: RuntimeIdField,
   since_index: Schema.optional(SinceIndex),
   changed_paths_match: ChangedPathsMatchField,
 })
+type CountMessagesByTagInput = typeof CountMessagesByTagInput.Type
 
 const DiffModelsInput = Schema.Struct({
   runtime_id: RuntimeIdField,
@@ -123,32 +140,39 @@ const DiffModelsInput = Schema.Struct({
   to_index: DiffToIndex,
   changed_paths_match: DiffChangedPathsMatchField,
 })
+type DiffModelsInput = typeof DiffModelsInput.Type
 
 const GetMessageInput = Schema.Struct({
   runtime_id: RuntimeIdField,
   index: MessageIndex,
 })
+type GetMessageInput = typeof GetMessageInput.Type
 
 const ListKeyframesInput = Schema.Struct({
   runtime_id: RuntimeIdField,
 })
+type ListKeyframesInput = typeof ListKeyframesInput.Type
 
 const ReplayToKeyframeInput = Schema.Struct({
   runtime_id: RuntimeIdField,
   keyframe_index: KeyframeIndex,
 })
+type ReplayToKeyframeInput = typeof ReplayToKeyframeInput.Type
 
 const ResumeInput = Schema.Struct({
   runtime_id: RuntimeIdField,
 })
+type ResumeInput = typeof ResumeInput.Type
 
 const GetInitInput = Schema.Struct({
   runtime_id: RuntimeIdField,
 })
+type GetInitInput = typeof GetInitInput.Type
 
 const GetRuntimeStateInput = Schema.Struct({
   runtime_id: RuntimeIdField,
 })
+type GetRuntimeStateInput = typeof GetRuntimeStateInput.Type
 
 const DispatchMessageInput = Schema.Struct({
   runtime_id: RuntimeIdField,
@@ -157,6 +181,7 @@ const DispatchMessageInput = Schema.Struct({
       "A Foldkit Message object to dispatch into the runtime. Must match the runtime's Message Schema. Call `foldkit_get_message_schema` with no arguments to see the available variant tags, then `foldkit_get_message_schema { variant_tag: \"X\" }` to learn one variant's exact payload shape. At minimum it has a `_tag` field naming the variant. The runtime decodes the payload and returns a clean error if it doesn't match.",
   }),
 })
+type DispatchMessageInput = typeof DispatchMessageInput.Type
 
 const DispatchMessagesInput = Schema.Struct({
   runtime_id: RuntimeIdField,
@@ -166,18 +191,21 @@ const DispatchMessagesInput = Schema.Struct({
       description: `An ordered list of Foldkit Message objects to dispatch into the runtime, first to last. Must hold between 1 and ${MAX_DISPATCH_BATCH_SIZE} Messages. Each must match the runtime's Message Schema; call foldkit_get_message_schema to learn the shapes. The runtime decodes every entry before dispatching any of them, so one invalid entry rejects the whole batch with its zero-based position and nothing is dispatched.`,
     }),
 })
+type DispatchMessagesInput = typeof DispatchMessagesInput.Type
 
 const VariantTagField = Schema.optional(
   Schema.String.annotate({
     description:
-      'Optional dot-separated path of variant `_tag` values. When omitted, the tool returns a small variant index (tag names plus payload field names plus a tagged-union indicator) so agents can enumerate the top-level union cheaply. When provided, the tool walks the path through each variant\'s single tagged-union payload field, narrows the schema along the chain, and collapses any union deeper than the path to a `{ "_summary": "union", "variants": [...] }` placeholder. Extend the path to drill further. Examples: `"ScrolledSidebar"` (one top-level variant), `"GotMobileMenuDialogMessage.GotAnimationMessage"` (two levels of a Submodel chain).',
+      'Optional dot-separated path of variant `_tag` values. When omitted, the tool returns a small variant index (tag names plus payload field names plus a tagged-union indicator) so agents can enumerate the top-level union cheaply. When provided, the tool walks the path through each variant\'s single tagged-union payload field, narrows the schema along the chain, and collapses any union deeper than the path to a `{ "_summary": "union", "variants": [...] }` placeholder. Extend the path to drill further. Examples: `"ScrolledSidebar"` (one top-level variant), `"GotMobileMenuDialogMessage.GotAnimationMessage"` (two levels of a Block chain).',
   }),
 )
+type VariantTagField = typeof VariantTagField.Type
 
 const GetMessageSchemaInput = Schema.Struct({
   runtime_id: RuntimeIdField,
   variant_tag: VariantTagField,
 })
+type GetMessageSchemaInput = typeof GetMessageSchemaInput.Type
 
 /**
  * Extract the inner JSON Schema from Effect's `JsonSchema.Document` wrapper.
@@ -235,7 +263,7 @@ const listedRuntimeOutput = ({ runtime, maybeProjectRoot }: ListedRuntime) =>
     onSome: projectRoot => ({ ...runtime, projectRoot }),
   })
 
-const responseToToolResult = (response: typeof Response.Type): ToolResult =>
+const responseToToolResult = (response: Response): ToolResult =>
   response._tag === 'ResponseError'
     ? formatError(response.reason)
     : formatResult(response)
@@ -243,7 +271,7 @@ const responseToToolResult = (response: typeof Response.Type): ToolResult =>
 const callRuntimeRequest = (
   relayClient: RelayClient,
   explicitRuntimeId: string | undefined,
-  buildRequest: () => typeof Request.Type,
+  buildRequest: () => Request,
 ): Effect.Effect<ToolResult> =>
   Effect.gen(function* () {
     const response = yield* relayClient.sendRequest(
@@ -265,7 +293,7 @@ type RuntimeToolInput = Readonly<{ runtime_id?: string | undefined }>
 const runRuntimeTool =
   <Input extends RuntimeToolInput>(
     inputSchema: Schema.Codec<Input>,
-    buildRequest: (input: Input) => typeof Request.Type,
+    buildRequest: (input: Input) => Request,
     relayClient: RelayClient,
   ) =>
   (rawInput: unknown): Effect.Effect<ToolResult> =>
@@ -369,7 +397,7 @@ export const buildTools = (
   {
     name: 'foldkit_get_message',
     description:
-      'Read a single Message history entry by absolute index. The response carries the SerializedEntry (tag, message body, commands, mountStarts, mountEnds, timestamp, `isModelChanged`, `changedPaths` for leaf-level mutations, `affectedPaths` adding their ancestor paths). Each entry in `commands` carries the Command name, `args` (`Some(record)` when the Command declared an args schema, `None` otherwise), and `maybeSubmodelPath` (`None` before the result resolves, `Some([])` for a resolved top-level Command, or `Some(tags)` for a resolved Submodel Command). `mountStarts` lists Mounts that fired during the render after this Message; `mountEnds` lists Mounts whose elements were unmounted during that render. Each Mount carries its `name` and `args` (`Some(record)` when the Mount declared an args schema, `None` otherwise). For Submodel-routed entries (tag matches `Got*Message`), the entry also carries `submodelPath` listing wrapper tags from outer to inner and `maybeLeafTag` naming the innermost child Message. Model snapshots are not included; call foldkit_get_model_at with `index - 1` (before) and `index` (after) to inspect Model state around the entry.',
+      'Read a single Message history entry by absolute index. The response carries the SerializedEntry (tag, message body, commands, mountStarts, mountEnds, timestamp, `isModelChanged`, `changedPaths` for leaf-level mutations, `affectedPaths` adding their ancestor paths). Each entry in `commands` carries the Command name, `args` (`Some(record)` when the Command declared an args schema, `None` otherwise), and `maybeBlockPath` (`None` before the result resolves, `Some([])` for a resolved top-level Command, or `Some(tags)` for a resolved Block Command). `mountStarts` lists Mounts that fired during the render after this Message; `mountEnds` lists Mounts whose elements were unmounted during that render. Each Mount carries its `name` and `args` (`Some(record)` when the Mount declared an args schema, `None` otherwise). For Block-routed entries (tag matches `Got*Message`), the entry also carries `blockPath` listing wrapper tags from outer to inner and `maybeLeafTag` naming the innermost child Message. Model snapshots are not included; call foldkit_get_model_at with `index - 1` (before) and `index` (after) to inspect Model state around the entry.',
     inputSchema: toInputSchema(GetMessageInput),
     handle: runRuntimeTool(
       GetMessageInput,
@@ -380,7 +408,7 @@ export const buildTools = (
   {
     name: 'foldkit_get_init',
     description:
-      "Read the runtime's initial Model, the Commands returned from the application's `init` function, and the Mounts that fired during the first render. The init entry is the synthetic row at index -1 in the DevTools panel; this tool exposes the same data without time-travelling the runtime. `maybeModel` is `None` until the runtime has finished its first render and recorded init, then stays `Some` for the rest of the runtime's life. `commands` lists init-time Commands in the order they were produced, each with its name, `args` (`Some(record)` when the Command declared an args schema, `None` otherwise), and `maybeSubmodelPath` (`None` before the result resolves, `Some([])` for a resolved top-level Command, or `Some(tags)` for a resolved Submodel Command); `mountStarts` lists Mounts whose elements appeared in the initial render, each with its name and `args` (`Some(record)` when the Mount declared an args schema, `None` otherwise).",
+      "Read the runtime's initial Model, the Commands returned from the application's `init` function, and the Mounts that fired during the first render. The init entry is the synthetic row at index -1 in the DevTools panel; this tool exposes the same data without time-travelling the runtime. `maybeModel` is `None` until the runtime has finished its first render and recorded init, then stays `Some` for the rest of the runtime's life. `commands` lists init-time Commands in the order they were produced, each with its name, `args` (`Some(record)` when the Command declared an args schema, `None` otherwise), and `maybeBlockPath` (`None` before the result resolves, `Some([])` for a resolved top-level Command, or `Some(tags)` for a resolved Block Command); `mountStarts` lists Mounts whose elements appeared in the initial render, each with its name and `args` (`Some(record)` when the Mount declared an args schema, `None` otherwise).",
     inputSchema: toInputSchema(GetInitInput),
     handle: runRuntimeTool(
       GetInitInput,
@@ -436,7 +464,7 @@ export const buildTools = (
   {
     name: 'foldkit_get_message_schema',
     description:
-      'Describe the Message Schema for a Foldkit runtime so agents can construct valid payloads for `foldkit_dispatch_message`. Call with no arguments to receive a small variant index (every top-level variant\'s `_tag`, its payload field names, and which payload fields are themselves tagged-union shapes). Then call with `variant_tag: "ChosenVariant"` to drill in. The argument is a dot-separated path of variant `_tag` values: each segment names a variant, and the walker steps through the variant\'s single tagged-union payload field to reach the next. So `"GotMobileMenuDialogMessage"` narrows one level; `"GotMobileMenuDialogMessage.GotAnimationMessage"` narrows two levels of a Submodel chain. Discriminated unions deeper than the supplied path collapse to `{ "_summary": "union", "variants": [...] }` placeholders so the response stays compact even for deeply-nested apps; extend the path to drill further. `Schema.Option` fields render as `anyOf: [{_tag: "Some", value}, {_tag: "None"}]`. The full document follows the JSON Schema draft-2020-12 shape from `Schema.toJsonSchemaDocument`: `{ dialect, schema, definitions }`. Returns `maybeResult: None` when the runtime hasn\'t configured `DevToolsConfig.Message` (dispatch is also unavailable). Fields with no JSON representation, notably `Schema.instanceOf(File)` for user-uploaded files, render as `{type: "null"}`; those variants can\'t be dispatched via MCP because their values live in browser memory.',
+      'Describe the Message Schema for a Foldkit runtime so agents can construct valid payloads for `foldkit_dispatch_message`. Call with no arguments to receive a small variant index (every top-level variant\'s `_tag`, its payload field names, and which payload fields are themselves tagged-union shapes). Then call with `variant_tag: "ChosenVariant"` to drill in. The argument is a dot-separated path of variant `_tag` values: each segment names a variant, and the walker steps through the variant\'s single tagged-union payload field to reach the next. So `"GotMobileMenuDialogMessage"` narrows one level; `"GotMobileMenuDialogMessage.GotAnimationMessage"` narrows two levels of a Block chain. Discriminated unions deeper than the supplied path collapse to `{ "_summary": "union", "variants": [...] }` placeholders so the response stays compact even for deeply-nested apps; extend the path to drill further. `Schema.Option` fields render as `anyOf: [{_tag: "Some", value}, {_tag: "None"}]`. The full document follows the JSON Schema draft-2020-12 shape from `Schema.toJsonSchemaDocument`: `{ dialect, schema, definitions }`. Returns `maybeResult: None` when the Program has not enabled `devTools.dispatch` (dispatch is also unavailable). Fields with no JSON representation, notably `Schema.instanceOf(File)` for user-uploaded files, render as `{type: "null"}`; those variants can\'t be dispatched via MCP because their values live in browser memory.',
     inputSchema: toInputSchema(GetMessageSchemaInput),
     handle: runRuntimeTool(
       GetMessageSchemaInput,
@@ -450,7 +478,7 @@ export const buildTools = (
   {
     name: 'foldkit_dispatch_message',
     description:
-      "Dispatch a Message into a Foldkit runtime, as if the application itself produced it. Requires the runtime to have configured DevToolsConfig.Message; without it, dispatch is rejected. Call `foldkit_get_message_schema` with no arguments to enumerate the variants, then with `variant_tag` to learn one variant's exact payload shape, before constructing the Message object. The runtime decodes the payload and returns a clean error if it doesn't match. To dispatch several Messages in order with one call, use foldkit_dispatch_messages.",
+      "Dispatch a Message into a Foldkit runtime, as if the application itself produced it. Requires `devTools: { dispatch: true }` on the Program; without it, dispatch is rejected. Call `foldkit_get_message_schema` with no arguments to enumerate the variants, then with `variant_tag` to learn one variant's exact payload shape, before constructing the Message object. The runtime decodes the payload and returns a clean error if it doesn't match. Messages configured with excludeFromHistory are rejected before execution. A successful response identifies the confirmed recorded history entry. A child Message that becomes stale before queued execution is discarded and returns an error. To dispatch several Messages in order with one call, use foldkit_dispatch_messages.",
     inputSchema: toInputSchema(DispatchMessageInput),
     handle: runRuntimeTool(
       DispatchMessageInput,
@@ -460,7 +488,7 @@ export const buildTools = (
   },
   {
     name: 'foldkit_dispatch_messages',
-    description: `Dispatch an ordered batch of Messages into a Foldkit runtime in one call, first to last, as if the application produced them in quick succession. Prefer this over repeated foldkit_dispatch_message calls when staging state that takes several Messages: reproducing a bug, filling a form, or building a history fixture. Takes 1 to ${MAX_DISPATCH_BATCH_SIZE} Messages. Validation is all-or-nothing: the runtime decodes every payload against the Message Schema before dispatching any of them, and one invalid entry rejects the whole batch with an error naming its zero-based position, so there is never a partially applied prefix to clean up. On success the response carries acceptedAtIndices, the predicted history index for each Message in request order; the runtime may still record its own Messages between entries (for example a Command completing mid-burst), exactly as with rapid user input, and Messages excluded from history via excludeFromHistory are dispatched but never recorded, so entries after one land below their predicted index. Requires DevToolsConfig.Message, like foldkit_dispatch_message.`,
+    description: `Dispatch an ordered batch of Messages into a Foldkit runtime in one call, first to last, as if the application produced them in quick succession. Prefer this over repeated foldkit_dispatch_message calls when staging state that takes several Messages: reproducing a bug, filling a form, or building a history fixture. Takes 1 to ${MAX_DISPATCH_BATCH_SIZE} Messages. Validation is all-or-nothing: the runtime decodes every payload against the Message Schema before dispatching any of them, and one invalid entry rejects the whole batch with an error naming its zero-based position, so there is never a partially applied prefix to clean up. Messages excluded from history are rejected before dispatch. On success, acceptedAtIndices contains the exact recorded history indices in request order. A Message whose captured child occurrence becomes stale before queued execution is omitted, while unrelated Messages recorded between batch entries keep their own indices. Requires devTools: { dispatch: true }, like foldkit_dispatch_message.`,
     inputSchema: toInputSchema(DispatchMessagesInput),
     handle: runRuntimeTool(
       DispatchMessagesInput,

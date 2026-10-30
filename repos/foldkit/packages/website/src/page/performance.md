@@ -25,14 +25,14 @@ The cost model above puts the cost of a Message on your `update` logic. What the
 
 ### Child Folds and Model Updates
 
-- `Update.foldChild` adds a function call and an arity check over the wiring you would otherwise write by hand. Inside, it does exactly what the hand-written handler does: read the child out of the Model, run its update, write it back, and lift the child’s Commands through `toParentMessage`.
+- `binding.fold` adds a function call and an arity check over the wiring you would otherwise write by hand. Inside, it reads the child Model, runs its update, writes the result back, lifts its Commands through generated child delivery, and applies the Binding's OutMessage policy.
 - `modifyFields` is Effect’s `Struct.evolve` at runtime; the wrapper adds key checking at the type level only. It walks the struct’s own enumerable keys once and applies a transform only where you provided one, copying everything else by reference. The cost is proportional to the Model’s top-level field count, the same as an object spread, and that reference preservation is what lets [createLazy](/core/view-memoization) hit its `===` check.
 
 ### Exhaustive Message Matching
 
-`Message.match` is the one whose cost scales with your app. It dispatches directly on `_tag`, but the handler object and one closure per arm are still allocated on every dispatch. Because the arms close over `model`, they cannot be hoisted to module scope.
+A context-free `Composition.makeUpdate` handler record is constructed once when the module creates the update. Its handlers receive the Model as an argument, so they do not need new closures over that Model on each dispatch. The record remains exhaustive and preserves each Message handler's output contract. See [local Message handlers](/core/update#exhaustive-local-message-handlers).
 
-Keep `Message.match` anyway. Its signature requires a handler for every tag in the union, so adding a Message variant fails to compile in every update that does not handle it. It also avoids the matcher pipeline that Effect `Match` builds for more general pattern matching. An `if`/`else` chain on `_tag` gives up exhaustiveness for less allocation. If a profile ever puts a genuinely hot update at the top, that trade is available, but it is the last change to reach for rather than the first.
+A `makeUpdate` handler record is constructed during passive configuration and reused for dispatch. A `makeUpdate.withContext` factory constructs its local handler record when a local Message arrives, allowing those handlers to close over dispatch context. A domain matcher built inside a handler can also allocate case closures on dispatch; profile the actual update before attributing a delay to that allocation. Connected child routing, policy resolution, and application transitions still have their own work.
 
 ## Benchmarks
 
@@ -42,7 +42,7 @@ Foldkit ships a TodoMVC implementation for the [lustre-labs/benchmark](https://g
 
 ### Batch and Results
 
-These cover every current-version framework variant in the harness plus Foldkit’s two current development slots; the legacy Lustre 4 and older Foldkit slots are excluded. The medians come from fifteen interleaved runs in one position-balanced batch, so every implementation occupied every ordinal run position once. The batch used harness commit 03fff17 and Chromium 152.0.7977.65. The relative column divides each displayed median by the fastest median from that same batch. A parenthesized label appears only where the harness registers both a baseline and a memoized slot. Solid and Alpine drive the DOM without a diff to skip, so each registers one implementation and its row carries a bare name. Absolute times depend on hardware and browser conditions; the same-run relationships are the result to compare.
+This prior benchmark batch covers the framework variants registered in that harness batch plus Foldkit’s two development slots at the time; the legacy Lustre 4 and older Foldkit slots are excluded. These timings predate the current preview branch’s framework changes and are not measurements of this candidate. The medians come from fifteen interleaved runs in one position-balanced batch, so every implementation occupied every ordinal run position once. The batch used harness commit 03fff17 and Chromium 152.0.7977.65. The relative column divides each displayed median by the fastest median from that same batch. A parenthesized label appears only where the harness registers both a baseline and a memoized slot. Solid and Alpine drive the DOM without a diff to skip, so each registers one implementation and its row carries a bare name. Absolute times depend on hardware and browser conditions; the same-run relationships are the result to compare.
 
 | Implementation         | Median time | Relative to fastest |
 | ---------------------- | ----------- | ------------------- |
@@ -78,6 +78,14 @@ The dev server runs several systems that production builds strip entirely:
 - [DevTools](/core/devtools) records each Message with Model snapshots and diffs for time travel.
 - The [Slow Warnings](/core/slow-warnings) can time update, subscriptions, view, and patch work against phase budgets.
 - Model preservation encodes the Model so state survives development reloads.
+
+### Model Preservation
+
+Preservation uses a JSON codec derived from the Model Schema. Declare rich values with their matching Schemas when they need to survive reloads; an opaque `Schema.Unknown` snapshot cannot describe how to encode a Date or HashMap.
+
+If encoding fails, the Runtime warns once for that failure episode and clears its cached Model. The live Model and normal interactions continue unchanged; the next development reload initializes that Runtime afresh. This also lets DevTools recover from an unsupported inspected snapshot. A later encodable Model can be preserved again. Keep Foldkit and `@foldkit/vite-plugin` on the same preview snapshot so both sides support cache invalidation.
+
+Encoding is deferred until a quiet window, with a synchronous flush before Vite reloads. It is not part of every Message's synchronous dispatch work.
 
 ### Measure a Production Build
 

@@ -10,9 +10,14 @@ import {
 } from 'effect'
 import { DEVTOOLS_HOST_ID } from 'foldkit/devtools-host'
 import type { DevToolsStore, StoreState } from 'foldkit/devtools-host'
+import { Storage } from 'happy-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { CopyPayloadToClipboard, createOverlay } from './overlay.js'
+import {
+  CopyPayloadToClipboard,
+  CopyPayloadToClipboardLayer,
+  createOverlay,
+} from './overlay.js'
 
 const initialStoreState: StoreState = {
   entries: [],
@@ -37,7 +42,7 @@ const makeStore = (
   }> = {},
 ): DevToolsStore => ({
   recordInit: () => Effect.void,
-  recordMessage: () => Effect.void,
+  recordMessage: () => Effect.succeed(0),
   recordResolvedCommand: () => Effect.void,
   updateLatestModel: () => Effect.void,
   attachRenderedMounts: () => Effect.void,
@@ -84,6 +89,8 @@ const startOverlay = (store: DevToolsStore) =>
   )
 
 beforeEach(() => {
+  vi.stubGlobal('localStorage', new Storage())
+
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
     value: matchMedia,
@@ -95,6 +102,7 @@ afterEach(() => {
   document.body.innerHTML = ''
   document.head.innerHTML = ''
   localStorage.clear()
+  vi.unstubAllGlobals()
 })
 
 describe('DevTools interaction blocker', () => {
@@ -159,9 +167,9 @@ describe('DevTools payload copy', () => {
               id: 0,
               name: 'SaveProfile',
               args: { userId: 42 },
-              maybeSubmodelPath: Option.none(),
+              maybeBlockPath: Option.none(),
             },
-            { id: 1, name: 'RefreshProfile', maybeSubmodelPath: Option.none() },
+            { id: 1, name: 'RefreshProfile', maybeBlockPath: Option.none() },
           ],
           mountStarts: [{ name: 'MeasureSnippetHeight', args: { snippetId } }],
           mountEnds: [{ name: 'ReleaseProfile' }],
@@ -383,7 +391,7 @@ describe('DevTools payload copy', () => {
         targetId: 'Model:0',
         requestId: 1,
         payload: { count: 1n },
-      }).effect,
+      }).effect.pipe(Effect.provide(CopyPayloadToClipboardLayer)),
     )
 
     expect(result).toEqual({
@@ -406,7 +414,7 @@ describe('DevTools payload copy', () => {
         targetId: 'Model:0',
         requestId: 1,
         payload: { count: 1 },
-      }).effect,
+      }).effect.pipe(Effect.provide(CopyPayloadToClipboardLayer)),
     )
 
     expect(result).toEqual({

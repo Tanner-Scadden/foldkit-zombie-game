@@ -1,14 +1,17 @@
 import { Match, Option } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import type { EntryHandlers, Variant } from '@foldkit/ui/toast'
 
 import { Icon } from '../../../icon'
+import type { UiViewBuilder } from '../composition'
+import { ToastDemoBinding } from '../composition'
 import { Message } from '../message'
-import { Toast } from './toastModule'
+import { ToastBlock } from './toastModule'
 
-type Entry = typeof Toast.Entry.Type
-type Model = typeof Toast.Model.Type
+type ToastBlockModel = typeof ToastBlock.Model.Type
+
+type Entry = ToastBlockModel['entries'][number]
 
 // DEMO CONTENT
 
@@ -43,12 +46,10 @@ const entryClassName =
 const buttonClassName =
   'demo-neutral-button inline-flex items-center gap-1.5 text-sm'
 
-// VIEW
-
 export const demo = (
-  toastModel: Model,
+  toastModel: ToastBlockModel,
   maybeLastDismissedTitle: Option.Option<string>,
-  h: HtmlBuilder<Message>,
+  h: UiViewBuilder,
 ): ReadonlyArray<Html> => {
   const renderToastEntry = (entry: Entry, handlers: EntryHandlers): Html =>
     h.div(
@@ -147,16 +148,16 @@ export const demo = (
         ),
       ],
     }),
-    h.submodel({
-      slotId: toastModel.id,
-      model: toastModel,
-      view: Toast.view,
-      viewInputs: {
-        position: 'BottomRight',
-        entryToView: renderToastEntry,
-        entryClassName,
-      },
-      toParentMessage: message => Message.GotToastDemoMessage({ message }),
-    }),
+    h.block(
+      ToastDemoBinding.embedView({
+        slotId: toastModel.id,
+        model: toastModel,
+        viewInputs: {
+          position: 'BottomRight',
+          entryToView: renderToastEntry,
+          entryClassName,
+        },
+      }),
+    ),
   ]
 }

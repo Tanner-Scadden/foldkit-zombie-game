@@ -1,6 +1,6 @@
 const PostList = Schema.Array(Post)
+type PostList = typeof PostList.Type
 
-// The generated FetchPosts Command performs this Effect.
 const fetchPosts = Effect.gen(function* () {
   const response = yield* Effect.tryPromise({
     try: () => fetch('/api/posts'),
@@ -25,5 +25,8 @@ const postsQuery = Query.define({
   name: 'Posts',
   data: PostList,
   error: Schema.String,
-  execute: fetchPosts,
+  staleTime: '1 minute',
+  handler: function* () {
+    return () => fetchPosts
+  },
 })

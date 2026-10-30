@@ -27,6 +27,9 @@ export const HomeStep = defineTaggedUnion({
   EnterRoomId: { username: Schema.String, roomId: Schema.String },
 })
 export type HomeStep = typeof HomeStep.Type
+export type SelectActionHomeStep = typeof HomeStep.SelectAction.Type
+export type EnterUsernameHomeStep = typeof HomeStep.EnterUsername.Type
+export type EnterRoomIdHomeStep = typeof HomeStep.EnterRoomId.Type
 
 export const Model = Schema.Struct({
   homeStep: HomeStep,

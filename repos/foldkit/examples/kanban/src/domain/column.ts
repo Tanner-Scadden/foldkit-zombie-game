@@ -10,7 +10,6 @@ export const Column = Schema.Struct({
   name: Schema.String,
   cards: Schema.Array(CardSchema),
 })
-
 export type Column = typeof Column.Type
 
 const generateSortKeyAtIndex = (
@@ -34,7 +33,10 @@ const generateSortKeyAtIndex = (
 export const removeCard = (
   column: Column,
   cardId: string,
-): { readonly column: Column; readonly maybeCard: Option.Option<Card> } => {
+): {
+  readonly column: Column
+  readonly maybeCard: Option.Option<Card>
+} => {
   const maybeCard = Array.findFirst(column.cards, ({ id }) => id === cardId)
   return {
     column: modifyFields(column, {

@@ -1,15 +1,16 @@
-import { Array, Effect, Option } from 'effect'
-import { Scene, Story } from 'foldkit'
-import { type HtmlBuilder, inertHtml as ih } from 'foldkit/html'
+import { Array, Effect, Option, Schema, Tuple } from 'effect'
+import { Block, Scene, Story, Update } from 'foldkit'
+import { inertHtml as ih } from 'foldkit/html'
+import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
-import { expect } from 'vitest'
+import { expect, expectTypeOf } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
-import * as Animation from '../animation/index.js'
+import * as Animation from '../animation/block.js'
 import {
-  AnchorCombobox,
-  AttachComboboxPreventBlur,
+  Anchor,
+  AttachPreventBlur,
   ClickItem,
   DetectMovementOrAnimationEnd,
   FocusInput,
@@ -17,46 +18,143 @@ import {
   LockScroll,
   Message,
   OutMessage,
-  PortalComboboxBackdrop,
+  PortalBackdrop,
   RestoreInert,
-  ScrollIntoView,
+  ScrollItemIntoView,
   UnlockScroll,
   inputId,
+  makeView,
+  mounts,
 } from './shared.js'
-import { create, init, update } from './single.js'
+import { init, makeBlock, update } from './single.js'
 import type { Model, ViewInputs } from './single.js'
 
-const TestCombobox = create<string>()
-const view = TestCombobox.view
+const TestCombobox = makeBlock()
+const gotAnimationMessage = ({
+  message,
+}: Readonly<{ message: typeof Animation.AnimationBlock.Message.Type }>) =>
+  Schema.decodeSync(TestCombobox.Message)({
+    _tag: 'GotAnimationMessage',
+    placement: 'animation',
+    generation: 0,
+    message,
+  })
+const render = makeView<Model, string>({ ariaMultiSelectable: false }, Message)
+const view = (
+  model: Model,
+  { maybeSelectedValue, ...baseInputs }: ViewInputs<string>,
+  h: Parameters<typeof render>[2],
+) =>
+  render(
+    model,
+    {
+      ...baseInputs,
+      selectedValues: Option.toArray(maybeSelectedValue),
+    },
+    h,
+  )
 
-const acknowledgeAnchor = Scene.Mount.resolve(
-  AnchorCombobox,
-  Message.CompletedAnchorCombobox(),
-)
+const Fruit = Schema.Literals(['Apple', 'Pear'])
+type Fruit = typeof Fruit.Type
+
+const FruitCombobox = makeBlock(Fruit)
+const OtherFruitCombobox = makeBlock(Schema.Literals(['Orange']))
+
+const FruitParentModel = Schema.Struct({
+  combobox: FruitCombobox.Model,
+  maybeSelectedFruit: Schema.Option(Fruit),
+})
+type FruitParentModel = typeof FruitParentModel.Type
+
+const FruitParentMessage = defineMessageUnion({
+  RequestedSelectFruitAndClose: { item: Fruit },
+})
+type FruitParentMessage = typeof FruitParentMessage.Type
+
+const FruitComboboxTestDefinition = Block.makeDefinition('FruitComboboxTest', {
+  Model: FruitParentModel,
+  Message: FruitParentMessage,
+})
+
+const foldFruitComboboxOutMessage =
+  FruitComboboxTestDefinition.makeOutMessageFold(FruitCombobox, {
+    Selected:
+      ({ value }) =>
+      model => ({
+        model: modifyFields(model, {
+          maybeSelectedFruit: () => Option.some(value),
+        }),
+      }),
+    ClearedSelection: () => model => ({ model }),
+  })
+
+const FruitComboboxBinding = FruitComboboxTestDefinition.makeBinding(
+  FruitCombobox,
+  {
+    field: 'combobox',
+    init: false,
+  },
+).withOutMessagePolicy({ fold: foldFruitComboboxOutMessage })
+
+const FruitComboboxTestComposition =
+  FruitComboboxTestDefinition.makeComposition({
+    bindings: [FruitComboboxBinding],
+  })
+
+const fruitParentUpdate = FruitComboboxTestComposition.makeUpdate({
+  RequestedSelectFruitAndClose: (model, { item }) =>
+    Update.combineSteps([
+      FruitComboboxBinding.requestSelectItem(item, item),
+      FruitComboboxBinding.requestClose(''),
+    ])(model),
+})
+const requestSelectFruitAndClose = (item: Fruit) =>
+  Tuple.make(FruitParentMessage.RequestedSelectFruitAndClose({ item }))
+
+const prepare = () =>
+  FruitComboboxTestComposition.prepareBlock({
+    init: FruitComboboxTestComposition.makeInit(() => ({
+      model: {
+        combobox: FruitCombobox.init({ id: 'fruit' }).model,
+        maybeSelectedFruit: Option.none(),
+      },
+    })),
+    update: fruitParentUpdate,
+    operations: { requestSelectFruitAndClose },
+    EffectsLayer: FruitCombobox.EffectsLayer,
+  })
+const FruitComboboxTestBlock: Block.FromAssemblyWithoutViewOrOutMessage<
+  typeof FruitParentModel,
+  typeof prepare
+> = Block.assemble(prepare)
+
+type TestHtmlBuilder = Parameters<typeof view>[2]
+
+const acknowledgeAnchor = Scene.Mount.resolve(Anchor, Message.CompletedAnchor())
 const acknowledgeBackdrop = Scene.Mount.resolve(
-  PortalComboboxBackdrop,
-  Message.CompletedPortalComboboxBackdrop(),
+  PortalBackdrop,
+  Message.CompletedPortalBackdrop(),
 )
 const acknowledgePreventBlur = Scene.Mount.resolve(
-  AttachComboboxPreventBlur,
-  Message.CompletedAttachComboboxPreventBlur(),
+  AttachPreventBlur,
+  Message.CompletedAttachPreventBlur(),
 )
 
-const animationEndMessage = (generation: number) =>
-  Message.GotAnimationMessage({
-    message: Animation.Message.EndedAnimation({ generation }),
-  })
+const completedDetectMovementOrAnimationEnd = (generation: number) =>
+  Message.CompletedDetectMovementOrAnimationEnd({ generation })
 
 const STALE_ANIMATION_GENERATION = -1
 
-const givenClosed = Story.given(init({ id: 'test' }))
+const givenClosed = Story.given(init({ id: 'test' }).model)
 
 const givenOpen = Story.steps(
   givenClosed,
   Story.message(Message.Opened({ maybeActiveItemIndex: Option.some(0) })),
 )
 
-const givenClosedAnimated = Story.given(init({ id: 'test', isAnimated: true }))
+const givenClosedAnimated = Story.given(
+  init({ id: 'test', isAnimated: true }).model,
+)
 
 const givenOpenAnimated = Story.steps(
   givenClosedAnimated,
@@ -77,9 +175,99 @@ const givenOpenAnimated = Story.steps(
 )
 
 describe('Combobox', () => {
+  describe('completed Block', () => {
+    it('preserves refined Message and OutMessage payloads with shared definitions', () => {
+      expectTypeOf<typeof FruitCombobox.OutMessage.Type>().toEqualTypeOf<
+        OutMessage<Fruit>
+      >()
+      FruitCombobox.Message.SelectedItem({
+        item: 'Apple',
+        displayText: 'Apple',
+        wasSelected: false,
+      })
+      FruitCombobox.OutMessage.Selected({ value: 'Apple' })
+      FruitCombobox.Message.SelectedItem({
+        // @ts-expect-error The completed factory preserves the refined Message constructor.
+        item: 'Banana',
+        displayText: 'Banana',
+        wasSelected: false,
+      })
+      // @ts-expect-error The completed factory preserves the refined OutMessage constructor.
+      FruitCombobox.OutMessage.Selected({ value: 'Banana' })
+      expectTypeOf<
+        Update.RequirementsOf<typeof FruitCombobox.update>
+      >().toEqualTypeOf<Update.RequirementsOf<typeof update>>()
+      expect(FruitCombobox.owner).toBe(OtherFruitCombobox.owner)
+      expect(FruitCombobox.owner).toBe(TestCombobox.owner)
+      expect(FruitCombobox.mounts).toEqual(mounts)
+    })
+
+    it('routes Animation Messages for a generic Combobox', () => {
+      Story.story(
+        FruitCombobox.update,
+        Story.given(
+          FruitCombobox.init({ id: 'fruit-combobox', isAnimated: true }).model,
+        ),
+        Story.message(
+          FruitCombobox.Message.Opened({
+            maybeActiveItemIndex: Option.some(0),
+          }),
+        ),
+        Story.Command.resolveAll(
+          [
+            Animation.WaitForPaint,
+            Animation.Message.CompletedWaitForPaint({ generation: 1 }),
+          ],
+          [
+            Animation.WaitForAnimationSettled,
+            Animation.Message.EndedAnimation({ generation: 1 }),
+          ],
+        ),
+        Story.model(model => {
+          expect(model.animation.transitionState).toBe('Idle')
+        }),
+      )
+    })
+
+    it('connects registered Steps and embeds the canonical refined view', () => {
+      const parent: FruitParentModel = {
+        combobox: init({ id: 'fruit' }).model,
+        maybeSelectedFruit: Option.none(),
+      }
+      const closed =
+        FruitComboboxTestBlock.operations.requestSelectFruitAndClose(
+          parent,
+          'Apple',
+        )
+      const embedded = FruitComboboxBinding.embedView({
+        slotId: 'fruit-primary',
+        model: closed.model.combobox,
+        viewInputs: {
+          items: ['Apple', 'Pear'],
+          restingInputValue: '',
+          itemToConfig: () => ({ content: null }),
+          itemToValue: item => item,
+          itemToDisplayText: item => item,
+          maybeSelectedValue: closed.model.maybeSelectedFruit,
+        },
+      })
+      const repeatedEmbedded = FruitComboboxBinding.embedView({
+        slotId: 'fruit-secondary',
+        model: closed.model.combobox,
+        viewInputs: embedded.viewInputs,
+      })
+
+      expect(closed.model.maybeSelectedFruit).toStrictEqual(
+        Option.some('Apple'),
+      )
+      expect(embedded.view).toBe(repeatedEmbedded.view)
+      expect(embedded.slotId).toBe('fruit-primary')
+    })
+  })
+
   describe('init', () => {
     it('defaults to closed with no active item and an empty input', () => {
-      expect(init({ id: 'test' })).toStrictEqual({
+      expect(init({ id: 'test' }).model).toStrictEqual({
         id: 'test',
         isOpen: false,
         isAnimated: false,
@@ -87,7 +275,7 @@ describe('Combobox', () => {
         nullable: false,
         immediate: false,
         selectInputOnFocus: false,
-        animation: Animation.init({ id: 'test-items' }),
+        animation: Animation.init({ id: 'test-items' }).model,
         maybeActiveItemIndex: Option.none(),
         activationTrigger: 'Keyboard',
         inputValue: '',
@@ -96,43 +284,43 @@ describe('Combobox', () => {
     })
 
     it('accepts isAnimated option', () => {
-      const model = init({ id: 'test', isAnimated: true })
+      const model = init({ id: 'test', isAnimated: true }).model
       expect(model.isAnimated).toBe(true)
       expect(model.animation.transitionState).toBe('Idle')
     })
 
     it('defaults isModal to false', () => {
-      expect(init({ id: 'test' }).isModal).toBe(false)
+      expect(init({ id: 'test' }).model.isModal).toBe(false)
     })
 
     it('accepts isModal option', () => {
-      expect(init({ id: 'test', isModal: true }).isModal).toBe(true)
+      expect(init({ id: 'test', isModal: true }).model.isModal).toBe(true)
     })
 
     it('accepts nullable option', () => {
-      expect(init({ id: 'test', nullable: true }).nullable).toBe(true)
+      expect(init({ id: 'test', nullable: true }).model.nullable).toBe(true)
     })
 
     it('defaults nullable to false', () => {
-      expect(init({ id: 'test' }).nullable).toBe(false)
+      expect(init({ id: 'test' }).model.nullable).toBe(false)
     })
 
     it('accepts immediate option', () => {
-      expect(init({ id: 'test', immediate: true }).immediate).toBe(true)
+      expect(init({ id: 'test', immediate: true }).model.immediate).toBe(true)
     })
 
     it('defaults immediate to false', () => {
-      expect(init({ id: 'test' }).immediate).toBe(false)
+      expect(init({ id: 'test' }).model.immediate).toBe(false)
     })
 
     it('accepts selectInputOnFocus option', () => {
       expect(
-        init({ id: 'test', selectInputOnFocus: true }).selectInputOnFocus,
+        init({ id: 'test', selectInputOnFocus: true }).model.selectInputOnFocus,
       ).toBe(true)
     })
 
     it('defaults selectInputOnFocus to false', () => {
-      expect(init({ id: 'test' }).selectInputOnFocus).toBe(false)
+      expect(init({ id: 'test' }).model.selectInputOnFocus).toBe(false)
     })
   })
 
@@ -156,7 +344,7 @@ describe('Combobox', () => {
         Story.story(
           update,
           Story.given(
-            modifyFields(init({ id: 'test' }), {
+            modifyFields(init({ id: 'test' }).model, {
               maybeLastPointerPosition: () =>
                 Option.some({
                   screenX: 100,
@@ -206,7 +394,7 @@ describe('Combobox', () => {
         Story.story(
           update,
           Story.given(
-            modifyFields(init({ id: 'test' }), {
+            modifyFields(init({ id: 'test' }).model, {
               isOpen: () => true,
               inputValue: () => 'app',
             }),
@@ -228,7 +416,7 @@ describe('Combobox', () => {
         Story.story(
           update,
           Story.given(
-            modifyFields(init({ id: 'test' }), {
+            modifyFields(init({ id: 'test' }).model, {
               isOpen: () => true,
               nullable: () => true,
               inputValue: () => '',
@@ -261,7 +449,7 @@ describe('Combobox', () => {
       })
 
       it('is a no-op when already closed', () => {
-        const closedModel = modifyFields(init({ id: 'test' }), {
+        const closedModel = modifyFields(init({ id: 'test' }).model, {
           inputValue: () => 'Apple',
         })
 
@@ -301,7 +489,7 @@ describe('Combobox', () => {
         Story.story(
           update,
           Story.given(
-            modifyFields(init({ id: 'test' }), {
+            modifyFields(init({ id: 'test' }).model, {
               isOpen: () => true,
               inputValue: () => 'app',
             }),
@@ -322,7 +510,7 @@ describe('Combobox', () => {
         Story.story(
           update,
           Story.given(
-            modifyFields(init({ id: 'test' }), {
+            modifyFields(init({ id: 'test' }).model, {
               isOpen: () => true,
               nullable: () => true,
               inputValue: () => '',
@@ -342,7 +530,7 @@ describe('Combobox', () => {
       })
 
       it('is a no-op when already closed', () => {
-        const closedModel = modifyFields(init({ id: 'test' }), {
+        const closedModel = modifyFields(init({ id: 'test' }).model, {
           inputValue: () => 'Apple',
         })
 
@@ -367,7 +555,7 @@ describe('Combobox', () => {
       it('does not emit ClearedSelection when nullable with an empty input and already closed', () => {
         Story.story(
           update,
-          Story.given(init({ id: 'test', nullable: true })),
+          Story.given(init({ id: 'test', nullable: true }).model),
           Story.message(
             Message.BlurredInput({
               restingInputValue: 'Stale',
@@ -396,8 +584,8 @@ describe('Combobox', () => {
             }),
           ),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
           Story.model(model => {
             expect(model.maybeActiveItemIndex).toStrictEqual(Option.some(3))
@@ -417,8 +605,8 @@ describe('Combobox', () => {
             }),
           ),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
           Story.message(
             Message.ActivatedItem({
@@ -428,8 +616,8 @@ describe('Combobox', () => {
             }),
           ),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
           Story.model(model => {
             expect(model.maybeActiveItemIndex).toStrictEqual(Option.some(4))
@@ -466,8 +654,8 @@ describe('Combobox', () => {
             }),
           ),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
           Story.model(model => {
             expect(model.maybeActiveItemIndex).toStrictEqual(Option.some(2))
@@ -490,8 +678,8 @@ describe('Combobox', () => {
           ),
           Story.expectOutMessage(OutMessage.Selected({ value: 'banana' })),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
           Story.model(model => {
             expect(model.isOpen).toBe(true)
@@ -532,8 +720,8 @@ describe('Combobox', () => {
             }),
           ),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
           Story.message(Message.DeactivatedItem()),
           Story.model(model => {
@@ -643,7 +831,7 @@ describe('Combobox', () => {
         Story.story(
           update,
           Story.given(
-            modifyFields(init({ id: 'test' }), {
+            modifyFields(init({ id: 'test' }).model, {
               isOpen: () => true,
               nullable: () => true,
               inputValue: () => 'Apple',
@@ -870,6 +1058,26 @@ describe('Combobox', () => {
       })
 
       describe('leave flow', () => {
+        it('preserves ClearedSelection when an animated nullable Combobox closes', () => {
+          const opened = update(
+            init({ id: 'animated-nullable', isAnimated: true, nullable: true })
+              .model,
+            Message.Opened({ maybeActiveItemIndex: Option.some(0) }),
+          )
+          const closed = update(
+            opened.model,
+            Message.Closed({ restingInputValue: '', isClearable: true }),
+          )
+
+          expect(closed.outMessage).toEqual(OutMessage.ClearedSelection())
+          expect(closed.model.isOpen).toBe(false)
+          expect(closed.model.animation.transitionState).toBe('LeaveStart')
+          expect(closed.commands?.map(command => command.name)).toEqual([
+            'Combobox/FocusInput',
+            'animation/WaitForPaint',
+          ])
+        })
+
         it('sets LeaveStart on Closed', () => {
           Story.story(
             update,
@@ -887,7 +1095,10 @@ describe('Combobox', () => {
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 2 }),
               ],
-              [DetectMovementOrAnimationEnd, animationEndMessage(2)],
+              [
+                DetectMovementOrAnimationEnd,
+                completedDetectMovementOrAnimationEnd(2),
+              ],
             ),
           )
         })
@@ -911,7 +1122,10 @@ describe('Combobox', () => {
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 2 }),
               ],
-              [DetectMovementOrAnimationEnd, animationEndMessage(2)],
+              [
+                DetectMovementOrAnimationEnd,
+                completedDetectMovementOrAnimationEnd(2),
+              ],
             ),
           )
         })
@@ -927,6 +1141,7 @@ describe('Combobox', () => {
                 wasSelected: false,
               }),
             ),
+            Story.expectOutMessage(OutMessage.Selected({ value: 'apple' })),
             Story.model(model => {
               expect(model.isOpen).toBe(false)
               expect(model.animation.transitionState).toBe('LeaveStart')
@@ -937,7 +1152,10 @@ describe('Combobox', () => {
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 2 }),
               ],
-              [DetectMovementOrAnimationEnd, animationEndMessage(2)],
+              [
+                DetectMovementOrAnimationEnd,
+                completedDetectMovementOrAnimationEnd(2),
+              ],
             ),
           )
         })
@@ -957,11 +1175,17 @@ describe('Combobox', () => {
               expect(model.animation.transitionState).toBe('LeaveAnimating')
             }),
             Story.Command.expectHas(
-              DetectMovementOrAnimationEnd({ id: 'test', generation: 2 }),
+              DetectMovementOrAnimationEnd({
+                id: 'test',
+                generation: 2,
+              }),
             ),
             Story.Command.resolveAll(
               [FocusInput, Message.CompletedFocusInput()],
-              [DetectMovementOrAnimationEnd, animationEndMessage(2)],
+              [
+                DetectMovementOrAnimationEnd,
+                completedDetectMovementOrAnimationEnd(2),
+              ],
             ),
           )
         })
@@ -979,7 +1203,10 @@ describe('Combobox', () => {
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 2 }),
               ],
-              [DetectMovementOrAnimationEnd, animationEndMessage(2)],
+              [
+                DetectMovementOrAnimationEnd,
+                completedDetectMovementOrAnimationEnd(2),
+              ],
             ),
             Story.model(model => {
               expect(model.animation.transitionState).toBe('Idle')
@@ -1023,7 +1250,7 @@ describe('Combobox', () => {
             update,
             givenOpen,
             Story.message(
-              Message.GotAnimationMessage({
+              gotAnimationMessage({
                 message: Animation.Message.CompletedWaitForPaint({
                   generation: 0,
                 }),
@@ -1036,11 +1263,11 @@ describe('Combobox', () => {
           )
         })
 
-        it('ignores GotAnimationMessage with EndedAnimation when Idle', () => {
+        it('ignores CompletedDetectMovementOrAnimationEnd when Idle', () => {
           Story.story(
             update,
             givenOpen,
-            Story.message(animationEndMessage(0)),
+            Story.message(completedDetectMovementOrAnimationEnd(0)),
             Story.model(model => {
               expect(model.isOpen).toBe(true)
               expect(model.animation.transitionState).toBe('Idle')
@@ -1085,7 +1312,10 @@ describe('Combobox', () => {
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 2 }),
               ],
-              [DetectMovementOrAnimationEnd, animationEndMessage(2)],
+              [
+                DetectMovementOrAnimationEnd,
+                completedDetectMovementOrAnimationEnd(2),
+              ],
             ),
             Story.model(model => {
               expect(model.animation.transitionState).toBe('Idle')
@@ -1097,7 +1327,9 @@ describe('Combobox', () => {
   })
 
   describe('modal commands', () => {
-    const givenClosedModal = Story.given(init({ id: 'test', isModal: true }))
+    const givenClosedModal = Story.given(
+      init({ id: 'test', isModal: true }).model,
+    )
 
     const givenOpenModal = Story.steps(
       givenClosedModal,
@@ -1123,27 +1355,33 @@ describe('Combobox', () => {
       )
     })
 
-    it('emits no Commands on Opened when already open in modal mode', () => {
-      const openModal = modifyFields(init({ id: 'test', isModal: true }), {
-        isOpen: () => true,
-        maybeActiveItemIndex: () => Option.some(1),
-        activationTrigger: () => 'Keyboard',
-        inputValue: () => 'Ap',
-      })
-
-      Story.story(
-        update,
-        Story.given(openModal),
-        Story.message(Message.Opened({ maybeActiveItemIndex: Option.none() })),
-        Story.expectNoOutMessage(),
-        Story.Command.expectNone(),
-        Story.model(model => {
-          expect(model.isOpen).toBe(true)
-          expect(model.maybeActiveItemIndex).toStrictEqual(Option.some(1))
-          expect(model.activationTrigger).toBe('Keyboard')
-          expect(model.inputValue).toBe('Ap')
-        }),
+    it('emits no Commands when requestOpen receives an open modal Model', () => {
+      const openModal = modifyFields(
+        init({ id: 'test', isModal: true }).model,
+        {
+          isOpen: () => true,
+          maybeActiveItemIndex: () => Option.some(1),
+          activationTrigger: () => 'Keyboard',
+          inputValue: () => 'Ap',
+        },
       )
+
+      for (const reopened of [
+        TestCombobox.operations.requestOpen(openModal),
+        update(
+          openModal,
+          Message.Opened({ maybeActiveItemIndex: Option.none() }),
+        ),
+      ]) {
+        expect(reopened.commands ?? []).toEqual([])
+        expect(reopened.outMessage).toBeUndefined()
+        expect(reopened.model.isOpen).toBe(true)
+        expect(reopened.model.maybeActiveItemIndex).toStrictEqual(
+          Option.some(1),
+        )
+        expect(reopened.model.activationTrigger).toBe('Keyboard')
+        expect(reopened.model.inputValue).toBe('Ap')
+      }
     })
 
     it('emits no Commands when focus opens a modal combobox the toggle already opened', () => {
@@ -1296,7 +1534,7 @@ describe('Combobox', () => {
   })
 
   describe('view', () => {
-    const closedModel = () => init({ id: 'test' })
+    const closedModel = () => init({ id: 'test' }).model
     const openModel = (): Model => {
       let model!: Model
       Story.story(
@@ -1318,7 +1556,7 @@ describe('Combobox', () => {
           'items' | 'itemToValue' | 'itemToDisplayText'
         > = {},
       ) =>
-      (model: Model, h: HtmlBuilder<Message>) =>
+      (model: Model, h: TestHtmlBuilder) =>
         view(
           model,
           {
@@ -1340,7 +1578,7 @@ describe('Combobox', () => {
           'items' | 'itemToValue' | 'itemToDisplayText'
         > = {},
       ) =>
-      (model: Model, h: HtmlBuilder<Message>) =>
+      (model: Model, h: TestHtmlBuilder) =>
         view(
           model,
           {
@@ -1572,7 +1810,7 @@ describe('Combobox', () => {
     it('keeps the modal backdrop available after filtering removes every item', () => {
       const input = Scene.selector('#test-input')
       const backdrop = Scene.selector('[key="test-backdrop"]')
-      const filteredItemsView = (model: Model, h: HtmlBuilder<Message>) =>
+      const filteredItemsView = (model: Model, h: TestHtmlBuilder) =>
         view(
           model,
           {
@@ -1588,7 +1826,7 @@ describe('Combobox', () => {
 
       Scene.scene(
         { update, view: filteredItemsView },
-        Scene.given(init({ id: 'test', isModal: true })),
+        Scene.given(init({ id: 'test', isModal: true }).model),
         Scene.type(input, 'a'),
         Scene.Command.resolveAllExact(
           [LockScroll, Message.CompletedLockScroll()],
@@ -1597,7 +1835,7 @@ describe('Combobox', () => {
         acknowledgeAnchor,
         acknowledgeBackdrop,
         Scene.type(input, 'zzz'),
-        Scene.Mount.expectEnded(AnchorCombobox),
+        Scene.Mount.expectEnded(Anchor),
         Scene.expect(input).toHaveAttr('aria-expanded', 'false'),
         Scene.expect(input).not.toHaveAttr('aria-controls'),
         Scene.expect(input).not.toHaveAttr('aria-activedescendant'),
@@ -1612,7 +1850,7 @@ describe('Combobox', () => {
           [UnlockScroll, Message.CompletedUnlockScroll()],
           [RestoreInert, Message.CompletedRestoreInert()],
         ),
-        Scene.Mount.expectEnded(PortalComboboxBackdrop),
+        Scene.Mount.expectEnded(PortalBackdrop),
       )
     })
 
@@ -1622,7 +1860,7 @@ describe('Combobox', () => {
 
       Scene.scene(
         { update, view: emptyItemsView() },
-        Scene.given(init({ id: 'test', isModal: true })),
+        Scene.given(init({ id: 'test', isModal: true }).model),
         Scene.type(input, 'zzz'),
         Scene.Command.resolveAllExact(
           [LockScroll, Message.CompletedLockScroll()],
@@ -1637,7 +1875,7 @@ describe('Combobox', () => {
           [UnlockScroll, Message.CompletedUnlockScroll()],
           [RestoreInert, Message.CompletedRestoreInert()],
         ),
-        Scene.Mount.expectEnded(PortalComboboxBackdrop),
+        Scene.Mount.expectEnded(PortalBackdrop),
       )
     })
 
@@ -1647,7 +1885,7 @@ describe('Combobox', () => {
 
       Scene.scene(
         { update, view: emptyItemsView({ openOnFocus: true }) },
-        Scene.given(init({ id: 'test', isModal: true })),
+        Scene.given(init({ id: 'test', isModal: true }).model),
         Scene.focus(input),
         Scene.Command.resolveAllExact(
           [LockScroll, Message.CompletedLockScroll()],
@@ -1662,7 +1900,7 @@ describe('Combobox', () => {
           [UnlockScroll, Message.CompletedUnlockScroll()],
           [RestoreInert, Message.CompletedRestoreInert()],
         ),
-        Scene.Mount.expectEnded(PortalComboboxBackdrop),
+        Scene.Mount.expectEnded(PortalBackdrop),
       )
     })
 
@@ -1675,7 +1913,7 @@ describe('Combobox', () => {
           update,
           view: emptyItemsView({ buttonContent: toggleButtonContent }),
         },
-        Scene.given(init({ id: 'test', isModal: true })),
+        Scene.given(init({ id: 'test', isModal: true }).model),
         acknowledgePreventBlur,
         Scene.click(button),
         Scene.Command.resolveAllExact(
@@ -1692,7 +1930,7 @@ describe('Combobox', () => {
           [UnlockScroll, Message.CompletedUnlockScroll()],
           [RestoreInert, Message.CompletedRestoreInert()],
         ),
-        Scene.Mount.expectEnded(PortalComboboxBackdrop),
+        Scene.Mount.expectEnded(PortalBackdrop),
       )
     })
 
@@ -1712,7 +1950,7 @@ describe('Combobox', () => {
       document.body.append(background, inputWrapper, portalRoot)
 
       const openCombobox = update(
-        init({ id: 'modal-empty', isModal: true }),
+        init({ id: 'modal-empty', isModal: true }).model,
         Message.Opened({ maybeActiveItemIndex: Option.none() }),
       )
       let maybeClose = Option.none<ReturnType<typeof update>>()
@@ -1726,9 +1964,15 @@ describe('Combobox', () => {
       })
 
       try {
-        await Effect.runPromise(LockScroll().effect)
+        await Effect.runPromise(
+          LockScroll().effect.pipe(Effect.provide(TestCombobox.EffectsLayer)),
+        )
         expect(document.documentElement.style.overflow).toBe('hidden')
-        await Effect.runPromise(InertOthers({ id: 'modal-empty' }).effect)
+        await Effect.runPromise(
+          InertOthers({ id: 'modal-empty' }).effect.pipe(
+            Effect.provide(TestCombobox.EffectsLayer),
+          ),
+        )
 
         expect(inputWrapper.inert).toBe(false)
         expect(portalRoot.inert).toBe(false)
@@ -1742,7 +1986,7 @@ describe('Combobox', () => {
         await Effect.runPromise(
           Effect.all(
             Array.map(close.commands ?? [], command => command.effect),
-          ),
+          ).pipe(Effect.provide(TestCombobox.EffectsLayer)),
         )
 
         expect(close.model.isOpen).toBe(false)
@@ -1750,8 +1994,14 @@ describe('Combobox', () => {
         expect(background.getAttribute('aria-hidden')).toBeNull()
         expect(document.documentElement.style.overflow).not.toBe('hidden')
       } finally {
-        await Effect.runPromise(RestoreInert({ id: 'modal-empty' }).effect)
-        await Effect.runPromise(UnlockScroll().effect)
+        await Effect.runPromise(
+          RestoreInert({ id: 'modal-empty' }).effect.pipe(
+            Effect.provide(TestCombobox.EffectsLayer),
+          ),
+        )
+        await Effect.runPromise(
+          UnlockScroll().effect.pipe(Effect.provide(TestCombobox.EffectsLayer)),
+        )
         background.remove()
         inputWrapper.remove()
         portalRoot.remove()
@@ -1870,14 +2120,7 @@ describe('Combobox', () => {
             update,
             view: sceneView({
               maybeSelectedValue: Option.some('Apple'),
-              itemToConfig: (
-                _item: string,
-                context: Readonly<{
-                  isActive: boolean
-                  isDisabled: boolean
-                  isSelected: boolean
-                }>,
-              ) => {
+              itemToConfig: (_item, context) => {
                 contexts.push(context)
                 return { content: null }
               },
@@ -1905,14 +2148,7 @@ describe('Combobox', () => {
             update,
             view: sceneView({
               maybeSelectedValue: Option.some('Apple'),
-              itemToConfig: (
-                _item: string,
-                context: Readonly<{
-                  isActive: boolean
-                  isDisabled: boolean
-                  isSelected: boolean
-                }>,
-              ) => {
+              itemToConfig: (_item, context) => {
                 contexts.push(context)
                 return { content: null }
               },
@@ -2162,7 +2398,7 @@ describe('Combobox', () => {
           Scene.click(item(1)),
           Scene.expectOutMessage(OutMessage.Selected({ value: 'Banana' })),
           Scene.Command.resolve(FocusInput, Message.CompletedFocusInput()),
-          Scene.Mount.expectEnded(AnchorCombobox, PortalComboboxBackdrop),
+          Scene.Mount.expectEnded(Anchor, PortalBackdrop),
         )
       })
 
@@ -2210,8 +2446,8 @@ describe('Combobox', () => {
           Scene.expect(item(1)).toHaveAttr('data-active', ''),
           Scene.expectNoOutMessage(),
           Scene.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
         )
       })
@@ -2231,8 +2467,8 @@ describe('Combobox', () => {
           Scene.keydown(input, 'ArrowDown'),
           Scene.expectOutMessage(OutMessage.Selected({ value: 'Banana' })),
           Scene.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
         )
       })
@@ -2259,8 +2495,8 @@ describe('Combobox', () => {
           ),
           Scene.expectNoOutMessage(),
           Scene.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
         )
       })
@@ -2278,15 +2514,15 @@ describe('Combobox', () => {
           Scene.expect(item(1)).toHaveAttr('data-active', ''),
           Scene.expectNoOutMessage(),
           Scene.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
           Scene.keydown(input, 'Home'),
           Scene.expect(item(0)).toHaveAttr('data-active', ''),
           Scene.expectNoOutMessage(),
           Scene.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
         )
       })
@@ -2305,7 +2541,7 @@ describe('Combobox', () => {
           Scene.keydown(input, 'Escape'),
           Scene.Command.resolve(FocusInput, Message.CompletedFocusInput()),
           Scene.expect(itemsContainer).toBeAbsent(),
-          Scene.Mount.expectEnded(AnchorCombobox, PortalComboboxBackdrop),
+          Scene.Mount.expectEnded(Anchor, PortalBackdrop),
         )
       })
 
@@ -2326,7 +2562,7 @@ describe('Combobox', () => {
           Scene.keydown(input, 'Escape'),
           Scene.expectNoOutMessage(),
           Scene.Command.resolve(FocusInput, Message.CompletedFocusInput()),
-          Scene.Mount.expectEnded(AnchorCombobox, PortalComboboxBackdrop),
+          Scene.Mount.expectEnded(Anchor, PortalBackdrop),
         )
       })
 
@@ -2347,7 +2583,7 @@ describe('Combobox', () => {
           Scene.keydown(input, 'Escape'),
           Scene.expectNoOutMessage(),
           Scene.Command.resolve(FocusInput, Message.CompletedFocusInput()),
-          Scene.Mount.expectEnded(AnchorCombobox, PortalComboboxBackdrop),
+          Scene.Mount.expectEnded(Anchor, PortalBackdrop),
         )
       })
 
@@ -2367,7 +2603,7 @@ describe('Combobox', () => {
           acknowledgeBackdrop,
           Scene.blur(input),
           Scene.expectNoOutMessage(),
-          Scene.Mount.expectEnded(AnchorCombobox, PortalComboboxBackdrop),
+          Scene.Mount.expectEnded(Anchor, PortalBackdrop),
         )
       })
 
@@ -2391,7 +2627,7 @@ describe('Combobox', () => {
           Scene.keydown(input, 'Escape'),
           Scene.expectOutMessage(OutMessage.ClearedSelection()),
           Scene.Command.resolve(FocusInput, Message.CompletedFocusInput()),
-          Scene.Mount.expectEnded(AnchorCombobox, PortalComboboxBackdrop),
+          Scene.Mount.expectEnded(Anchor, PortalBackdrop),
         )
       })
 

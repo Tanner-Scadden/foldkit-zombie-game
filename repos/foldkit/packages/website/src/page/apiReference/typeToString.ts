@@ -8,7 +8,7 @@ const whenType = Match.discriminator('type')
 
 /** Map from a reflection fingerprint to the qualified type name to render in
  * its place. The fingerprint identifies a Schema-derived struct by its sorted
- * field names, so that inlined `typeof Model.Type` reflections in function
+ * field names, so that inlined `Model` reflections in function
  * signatures collapse back to the `Module.Model` name a reader recognizes.
  * TypeDoc strips source positions from inlined reflections, so the fingerprint
  * cannot rely on file/line info that's only present on the original
@@ -18,7 +18,7 @@ export type NamedSchemas = ReadonlyMap<string, string>
 const emptyNamedSchemas: NamedSchemas = new Map()
 
 /** Fingerprint a struct-like reflection by its sorted field names joined with
- * `|`. Stable across TypeScript inlining of `typeof Model.Type` aliases. */
+ * `|`. Stable across TypeScript inlining of `Model` aliases. */
 export const reflectionFingerprint = (
   children: ReadonlyArray<TypeDocItem>,
 ): string =>
@@ -153,6 +153,15 @@ const formatType = (
       'rest',
       ({ elementType }) => `...${formatType(elementType, depth, namedSchemas)}`,
     ),
+    whenType('namedTupleMember', ({ name, isOptional, element }) => {
+      const optionalSuffix = isOptional ? '?' : ''
+
+      if (element.type === 'rest') {
+        return `...${name}: ${formatType(element.elementType, depth, namedSchemas)}`
+      } else {
+        return `${name}${optionalSuffix}: ${formatType(element, depth, namedSchemas)}`
+      }
+    }),
     whenType('tuple', ({ elements }) => {
       const formatted = Array.map(elements, element =>
         formatType(element, depth, namedSchemas),

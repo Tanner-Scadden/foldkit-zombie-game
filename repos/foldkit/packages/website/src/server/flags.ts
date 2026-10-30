@@ -3,34 +3,35 @@ import { Calendar } from 'foldkit'
 import { fromString as urlFromString } from 'foldkit/url'
 
 import { deployment } from '../deployment'
-import { Flags } from '../main'
-import { ApiReference, Example } from '../page'
-import { AppRoute, urlToAppRoute } from '../route'
+import { Flags } from '../flags'
+import * as ApiReference from '../page/apiReference/domain'
+import * as ExampleDetail from '../page/example/domain'
+import { ApplicationRoute, urlToApplicationRoute } from '../route'
 
-type SourcesBySlug = Readonly<globalThis.Record<string, Example.ExampleSources>>
+type SourcesBySlug = Readonly<
+  globalThis.Record<string, ExampleDetail.ExampleSources>
+>
 
 type RenderContext = Readonly<{
   apiData: ApiReference.ApiData
   sourcesBySlug: SourcesBySlug
-  baseFlags: typeof Flags.Type
+  baseFlags: Flags
 }>
 
-const loadBaseFlags: Effect.Effect<typeof Flags.Type> = Effect.gen(
-  function* () {
-    const currentYear = yield* DateTime.now.pipe(
-      Effect.map(DateTime.getPartUtc('year')),
-    )
-    const today = yield* Calendar.today.local
+const loadBaseFlags: Effect.Effect<Flags> = Effect.gen(function* () {
+  const currentYear = yield* DateTime.now.pipe(
+    Effect.map(DateTime.getPartUtc('year')),
+  )
+  const today = yield* Calendar.today.local
 
-    return Flags.make({
-      currentYear,
-      today,
-      deployment,
-      maybeApiData: Option.none(),
-      maybeExampleSources: Option.none(),
-    })
-  },
-)
+  return Flags.make({
+    currentYear,
+    today,
+    deployment,
+    maybeApiData: Option.none(),
+    maybeExampleSources: Option.none(),
+  })
+})
 
 const loadApiData: Effect.Effect<ApiReference.ApiData> = Effect.map(
   Effect.promise(() =>
@@ -50,10 +51,12 @@ const loadApiData: Effect.Effect<ApiReference.ApiData> = Effect.map(
 const loadAllExampleSources: Effect.Effect<SourcesBySlug> = Effect.map(
   Effect.promise(() =>
     Promise.all(
-      Example.runnableExampleSlugs.map(
-        async (slug): Promise<readonly [string, Example.ExampleSources]> => [
+      ExampleDetail.runnableExampleSlugs.map(
+        async (
           slug,
-          await Example.loadSourcesForSlug(slug),
+        ): Promise<readonly [string, ExampleDetail.ExampleSources]> => [
+          slug,
+          await ExampleDetail.loadSourcesForSlug(slug),
         ],
       ),
     ),
@@ -91,15 +94,15 @@ const loadRenderContext = makeRenderContextLoader()
 const flagsForRequest = (
   { apiData, sourcesBySlug, baseFlags }: RenderContext,
   request: Request,
-): typeof Flags.Type => {
+): Flags => {
   const route = Option.match(urlFromString(request.url), {
     onNone: () => {
       throw new Error(`Cannot render the invalid URL "${request.url}".`)
     },
-    onSome: urlToAppRoute,
+    onSome: urlToApplicationRoute,
   })
 
-  return AppRoute.matchOrElse<typeof Flags.Type>(
+  return ApplicationRoute.matchOrElse<Flags>(
     route,
     {
       ApiModule: ({ moduleSlug }) =>
@@ -117,9 +120,7 @@ const flagsForRequest = (
   )
 }
 
-export const loadFlagsForRequest = async (
-  request: Request,
-): Promise<typeof Flags.Type> => {
+export const loadFlagsForRequest = async (request: Request): Promise<Flags> => {
   const context = await loadRenderContext()
 
   return flagsForRequest(context, request)

@@ -2,7 +2,7 @@
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
 import { Schema } from 'effect'
-import type { HtmlBuilder } from 'foldkit/html'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
@@ -13,30 +13,38 @@ const Model = Schema.Struct({
   isArticleOpen: Schema.Boolean,
   // ...your other fields
 })
-
-// In your init function, start it closed:
-const init = () => ({
-  model: {
-    isArticleOpen: false,
-    // ...your other fields
-  },
-})
-
+type Model = typeof Model.Type
 // A verb-first, past-tense Message carries the new open state:
 const Message = defineMessageUnion({
   ToggledArticle: { isOpen: Schema.Boolean },
 })
+type Message = typeof Message.Type
 
-// In the corresponding Message.match handler, store the value:
-ToggledArticle: ({ isOpen }) => ({
-  model: modifyFields(model, { isArticleOpen: () => isOpen }),
+const ArticlePreviewComposition = Block.makeDefinition('ArticlePreview', {
+  Model,
+  Message,
+}).makeComposition()
+
+// In your init function, start it closed:
+const init = ArticlePreviewComposition.makeInit(() => ({
+  model: {
+    isArticleOpen: false,
+    // ...your other fields
+  },
+}))
+
+// In the corresponding update handler, store the value:
+const update = ArticlePreviewComposition.makeUpdate({
+  ToggledArticle: (model, { isOpen }) => ({
+    model: modifyFields(model, { isArticleOpen: () => isOpen }),
+  }),
 })
 
 // Pass peek to animatePanel to keep that much of the panel visible while
 // closed. The preview is inert until the disclosure opens, so keep the toggle
 // outside the panel where it remains interactive. The toggle overlays the
 // collapsed preview; extra panel padding keeps it clear of the full article.
-const view = (model, h: HtmlBuilder<Message>) => {
+const view = ArticlePreviewComposition.makeView((model, h) => {
   const articleView = ({
     button,
     panel,
@@ -102,4 +110,4 @@ const view = (model, h: HtmlBuilder<Message>) => {
     },
     h,
   )
-}
+})

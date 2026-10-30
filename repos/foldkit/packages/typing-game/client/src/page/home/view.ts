@@ -1,18 +1,17 @@
 import { Array, Option } from 'effect'
-import { Submodel } from 'foldkit'
-import { Html, HtmlBuilder } from 'foldkit/html'
+import { Html } from 'foldkit/html'
 
 import { ROOM_ID_INPUT_ID, USERNAME_INPUT_ID } from '../../constant'
+import { HomeComposition, type HomeViewBuilder } from './composition'
 import { Message } from './message'
-import {
-  HOME_ACTIONS,
-  HomeAction,
-  HomeStep,
-  Model,
-  homeActionToLabel,
+import { HOME_ACTIONS, HomeAction, HomeStep, homeActionToLabel } from './model'
+import type {
+  EnterRoomIdHomeStep,
+  EnterUsernameHomeStep,
+  SelectActionHomeStep,
 } from './model'
 
-export const view = Submodel.defineView<Model, Message>((model, h): Html => {
+export const view = HomeComposition.makeView((model, h) => {
   const maybeUsername = HomeStep.match(model.homeStep, {
     EnterUsername: () => Option.none(),
     SelectAction: ({ username }) => Option.some(username),
@@ -42,8 +41,8 @@ export const view = Submodel.defineView<Model, Message>((model, h): Html => {
 })
 
 const enterUsername = (
-  { username }: typeof HomeStep.EnterUsername.Type,
-  h: HtmlBuilder<Message>,
+  { username }: EnterUsernameHomeStep,
+  h: HomeViewBuilder,
 ): Html =>
   h.form(
     [h.OnSubmit(Message.SubmittedUsernameForm())],
@@ -78,8 +77,8 @@ const enterUsername = (
   )
 
 const selectAction = (
-  { selectedAction }: typeof HomeStep.SelectAction.Type,
-  h: HtmlBuilder<Message>,
+  { selectedAction }: SelectActionHomeStep,
+  h: HomeViewBuilder,
 ): Html =>
   h.div(
     [h.Class('space-y-4')],
@@ -93,7 +92,7 @@ const selectAction = (
   )
 
 const action =
-  (selectedAction: HomeAction, h: HtmlBuilder<Message>) =>
+  (selectedAction: HomeAction, h: HomeViewBuilder) =>
   (homeAction: HomeAction): Html =>
     h.div(
       [h.Class('whitespace-pre-wrap')],
@@ -104,8 +103,8 @@ const action =
     )
 
 const enterRoomId = (
-  { roomId }: typeof HomeStep.EnterRoomId.Type,
-  h: HtmlBuilder<Message>,
+  { roomId }: EnterRoomIdHomeStep,
+  h: HomeViewBuilder,
 ): Html =>
   h.form(
     [h.OnSubmit(Message.SubmittedJoinRoomForm())],
@@ -141,7 +140,7 @@ const enterRoomId = (
 
 const maybeErrorMessage = (
   maybeRoomFormError: Option.Option<string>,
-  h: HtmlBuilder<Message>,
+  h: HomeViewBuilder,
 ): Html =>
   Option.match(maybeRoomFormError, {
     onNone: () => h.empty,

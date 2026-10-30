@@ -61,7 +61,7 @@ Pass `ssr` with the path to your server entry to render page requests through it
 plugins: [foldkit({ ssr: { serverEntry: '/src/entry.server.ts' } })]
 ```
 
-With this set, the dev server converts HTML page requests to Web `Request` values, passes them to the entry's `renderPage`, and serves the returned `Response`. The request URL retains Vite's configured `base` prefix and the browser's query string. Vite continues to serve the client entry, HMR, and assets, and the server entry runs through Vite's module graph, so edits to it apply without a restart. The client side of the handoff needs no plugin configuration: a server-rendered application's client entry calls `Runtime.hydrate` instead of `Runtime.run`. Hydration adopts matching DOM, rebuilds mismatched subtrees, and refuses an invalid or cross-deployment handoff. The option shapes only the dev server; production hosts import the built server entry themselves. See the [Server Rendering documentation](https://foldkit.dev/core/server-rendering) for the full contract.
+With this set, the dev server converts HTML page requests to Web `Request` values, passes them to the entry's `renderPage`, and serves the returned `Response`. The request URL retains Vite's configured `base` prefix and the browser's query string. Vite continues to serve the client entry, HMR, and assets, and the server entry runs through the module runner of Vite's `ssr` environment, so edits to it apply without a restart. Release what the server entry starts, such as a `ManagedRuntime`, in an `import.meta.hot.dispose` callback in the entry; see [Releasing resources when the server entry reloads](https://foldkit.dev/core/server-rendering#releasing-resources-when-the-server-entry-reloads). The client side of the handoff needs no plugin configuration: a server-rendered application's client entry calls `Runtime.hydrate` instead of `Runtime.run`. Hydration adopts matching DOM, rebuilds mismatched subtrees, and refuses an invalid or cross-deployment handoff. The option shapes only the dev server; production hosts import the built server entry themselves. See the [Server Rendering documentation](https://foldkit.dev/core/server-rendering) for the full contract.
 
 Vite retains ownership of configured proxy routes before Foldkit handles application requests. Vite's `server.cors` option applies to Vite-owned source modules, assets, and HMR. It does not add headers to application responses or answer their preflights. Preflight ownership follows `Access-Control-Request-Method`, so a preflight for an application `POST` reaches `renderPage` even when its path looks like an asset. An `OPTIONS` request without both `Origin` and `Access-Control-Request-Method` is not a preflight and also reaches `renderPage`. Define application CORS in `renderPage`, where development and the deployed host share one policy. Vite's `allowedHosts` check runs before proxy and application handling, including `OPTIONS` and methods the Web `Request` API cannot represent.
 
@@ -171,10 +171,10 @@ When one Vite app build produces the client and server artifacts, the plugin gen
 
 ```typescript
 // src/entry.server.ts
-Server.renderToString(config, { flags })
+Server.renderToString(ApplicationBlock, { Flags }, { flags })
 
 // src/entry.ts
-Runtime.hydrate(application)
+Runtime.hydrate(program)
 ```
 
 Use the `buildId` option or `FOLDKIT_BUILD_ID` as an explicit override when client and server build in separate jobs, or when the id should name a deployment in another system:

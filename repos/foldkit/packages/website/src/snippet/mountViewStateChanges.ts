@@ -7,23 +7,26 @@ import { Editor } from '@tiptap/core'
 const Message = defineMessageUnion({
   CompletedMountEditor: {},
 })
+type Message = typeof Message.Type
 
 const MountEditor = Mount.define('MountEditor', {
   messages: [Message.CompletedMountEditor],
-  execute: ({ element, viewStateChanges }) =>
-    Effect.gen(function* () {
-      const editor = yield* Effect.acquireRelease(
-        Effect.sync(() => new Editor({ element })),
-        mountedEditor => Effect.sync(() => mountedEditor.destroy()),
-      )
+  handler: function* () {
+    return ({ element, viewStateChanges }) =>
+      Effect.gen(function* () {
+        const editor = yield* Effect.acquireRelease(
+          Effect.sync(() => new Editor({ element })),
+          mountedEditor => Effect.sync(() => mountedEditor.destroy()),
+        )
 
-      yield* viewStateChanges.pipe(
-        Stream.runForEach(viewState =>
-          Effect.sync(() => editor.setEditable(viewState === 'Live')),
-        ),
-        Effect.forkScoped,
-      )
+        yield* viewStateChanges.pipe(
+          Stream.runForEach(viewState =>
+            Effect.sync(() => editor.setEditable(viewState === 'Live')),
+          ),
+          Effect.forkScoped,
+        )
 
-      return Message.CompletedMountEditor()
-    }),
+        return Message.CompletedMountEditor()
+      })
+  },
 })

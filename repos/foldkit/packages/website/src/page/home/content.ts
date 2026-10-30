@@ -1,6 +1,6 @@
 import { clsx } from 'clsx'
 import { Array, Option, Predicate } from 'effect'
-import { Html, type HtmlBuilder, inertHtml as ih } from 'foldkit/html'
+import { Html, inertHtml as ih } from 'foldkit/html'
 import { foldkitVersion } from 'virtual:landing-data'
 
 import { type ResolvedTheme } from '../../colorScheme'
@@ -11,11 +11,12 @@ import {
   aiOverviewRouter,
   comingFromReactRouter,
   coreArchitectureRouter,
+  coreBlockRouter,
   coreDevToolsRouter,
   coreEmbeddingRouter,
+  coreLayersRouter,
   coreManagedResourcesRouter,
   coreServerRenderingRouter,
-  coreSubmodelRouter,
   effectAtomComparisonRouter,
   exampleDetailRouter,
   examplesRouter,
@@ -30,9 +31,9 @@ import {
   type ExampleMeta,
   type ExampleSlug,
   examples as exampleMetas,
-} from '../example'
+} from '../example/domain'
 import { exampleAppCount } from '../examples'
-import { type Message } from './message'
+import type { HomeViewBuilder } from './composition'
 
 // CONTENT CONSTANTS
 
@@ -64,8 +65,6 @@ const glyph = (symbol: string, offsetY?: string): Html =>
     ],
   )
 
-// VIEW
-
 export const contentView = (
   renderCopyButton: CodeBlock.RenderCopyButton,
   renderSnippet: CodeBlock.RenderSnippet,
@@ -75,7 +74,7 @@ export const contentView = (
   maybeGitHubStarCount: Option.Option<number>,
   resolvedTheme: ResolvedTheme,
   isBrowserEnvironmentLoaded: boolean,
-  h: HtmlBuilder<Message>,
+  h: HomeViewBuilder,
 ): Html => {
   return h.div(
     [h.Class('isolate overflow-x-clip')],
@@ -164,7 +163,7 @@ const heroSection = (
   renderCopyButton: CodeBlock.RenderCopyButton,
   playgroundMenuView: Html,
   maybeGitHubStarCount: Option.Option<number>,
-  h: HtmlBuilder<Message>,
+  h: HomeViewBuilder,
 ): Html => {
   return h.section(
     [
@@ -197,7 +196,7 @@ const heroSection = (
               ),
             ],
             [
-              'Foldkit is a TypeScript frontend framework built on Effect. It makes state and side effects explicit, so your team and AI agents can build features faster, trace behavior, and test changes with confidence.',
+              'Foldkit is a TypeScript frontend framework built on Effect. It makes state, side effects, and the services your application needs explicit, so your team and AI agents can build features faster, trace behavior, and test changes with confidence.',
             ],
           ),
           h.div(
@@ -288,6 +287,24 @@ const poweredBySection = (): Html =>
               poweredByItem(
                 'Commands use Effect for services, interruption, resources, and concurrency',
               ),
+              poweredByItem(
+                'TypeScript checks that required handlers and services are provided',
+              ),
+            ],
+          ),
+          ih.p(
+            [
+              ih.Class(
+                'mt-6 text-base md:text-lg font-book text-gray-700 dark:text-gray-300 leading-relaxed max-w-3xl',
+              ),
+            ],
+            [
+              'Each completed Block carries its effect handlers through the application. At the root, provide the ',
+              ih.a(
+                [ih.Href(coreLayersRouter()), ih.Class('link-accent')],
+                ['Effect services'],
+              ),
+              ' they require. TypeScript checks the assembly before startup, and tests can provide controlled services while running the same handlers.',
             ],
           ),
         ],
@@ -515,13 +532,13 @@ const includedSection = (): Html =>
               ),
               includedFeature(
                 Icon.squareStack('w-6 h-6'),
-                'Submodels',
+                'Blocks',
                 [
-                  'A Submodel embeds its own Model, Messages, update, and view in a larger program. It sends domain facts to its parent as typed OutMessages. Every stateful Foldkit UI component is a Submodel.',
+                  'A Block embeds its own Model, Messages, update, and view in a larger program. It sends domain facts to its parent as typed OutMessages. Every stateful Foldkit UI component is a Block.',
                 ],
                 {
-                  href: coreSubmodelRouter(),
-                  label: 'Explore Submodels',
+                  href: coreBlockRouter(),
+                  label: 'Explore Blocks',
                 },
               ),
               includedFeature(

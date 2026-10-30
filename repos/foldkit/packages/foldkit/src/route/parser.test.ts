@@ -11,6 +11,7 @@ import {
   literal,
   mapTo,
   oneOf,
+  parsePathWithFallback,
   parseUrlWithFallback,
   query,
   rest,
@@ -136,8 +137,11 @@ describe('int', () => {
 
 describe('schemaSegment', () => {
   const UserId = Schema.String.pipe(Schema.brand('UserId'))
+  type UserId = typeof UserId.Type
   const PostId = Schema.FiniteFromString.pipe(Schema.brand('PostId'))
+  type PostId = typeof PostId.Type
   const Direction = Schema.Literals(['Horizontal', 'Vertical'])
+  type Direction = typeof Direction.Type
 
   it.effect('captures a segment decoded through the schema', () =>
     Effect.gen(function* () {
@@ -194,11 +198,12 @@ describe('schemaSegment', () => {
 
   it.effect('parse then build round-trips a branded id', () =>
     Effect.gen(function* () {
-      const AppRoute = defineRouteUnion({ Route: { userId: UserId } })
+      const ApplicationRoute = defineRouteUnion({ Route: { userId: UserId } })
+      type ApplicationRoute = typeof ApplicationRoute.Type
       const router = pipe(
         literal('users'),
         slash(schemaSegment('userId', UserId)),
-        mapTo(AppRoute.Route),
+        mapTo(ApplicationRoute.Route),
       )
       const [parsed] = yield* router.parse(['users', 'abc'])
       expect(parsed).toStrictEqual({ _tag: 'Route', userId: 'abc' })
@@ -239,14 +244,15 @@ describe('root', () => {
 })
 
 describe('rest', () => {
-  const AppRoute = defineRouteUnion({
+  const ApplicationRoute = defineRouteUnion({
     Files: { path: Schema.NonEmptyArray(Schema.String) },
   })
+  type ApplicationRoute = typeof ApplicationRoute.Type
 
   const filesRouter = pipe(
     literal('files'),
     slash(rest('path')),
-    mapTo(AppRoute.Files),
+    mapTo(ApplicationRoute.Files),
   )
 
   it.effect('captures all remaining segments as a named non-empty array', () =>
@@ -333,15 +339,16 @@ describe('rest', () => {
 })
 
 describe('restString', () => {
-  const AppRoute = defineRouteUnion({
+  const ApplicationRoute = defineRouteUnion({
     Vault: { path: Schema.String },
     NotFound: { path: Schema.String },
   })
+  type ApplicationRoute = typeof ApplicationRoute.Type
 
   const vaultRouter = pipe(
     literal('vault'),
     slash(restString('path')),
-    mapTo(AppRoute.Vault),
+    mapTo(ApplicationRoute.Vault),
   )
 
   it.effect('captures all remaining segments as one slash-joined string', () =>
@@ -466,18 +473,20 @@ describe('restString', () => {
     const parser = oneOf(vaultRouter)
     const route = parseUrlWithFallback(
       parser,
-      AppRoute.NotFound,
+      ApplicationRoute.NotFound,
     )(makeUrl('/vault/a/b/c.md'))
-    expect(route).toStrictEqual(AppRoute.Vault.make({ path: 'a/b/c.md' }))
+    expect(route).toStrictEqual(
+      ApplicationRoute.Vault.make({ path: 'a/b/c.md' }),
+    )
   })
 
   it('normalizes a trailing slash away', () => {
     const parser = oneOf(vaultRouter)
     const route = parseUrlWithFallback(
       parser,
-      AppRoute.NotFound,
+      ApplicationRoute.NotFound,
     )(makeUrl('/vault/a/b/'))
-    expect(route).toStrictEqual(AppRoute.Vault.make({ path: 'a/b' }))
+    expect(route).toStrictEqual(ApplicationRoute.Vault.make({ path: 'a/b' }))
   })
 
   it('round-trips a percent-encoded tail unchanged', () => {
@@ -485,9 +494,11 @@ describe('restString', () => {
     const encodedPath = 'a%20b/c.md'
     const route = parseUrlWithFallback(
       parser,
-      AppRoute.NotFound,
+      ApplicationRoute.NotFound,
     )(makeUrl(`/vault/${encodedPath}`))
-    expect(route).toStrictEqual(AppRoute.Vault.make({ path: encodedPath }))
+    expect(route).toStrictEqual(
+      ApplicationRoute.Vault.make({ path: encodedPath }),
+    )
     expect(vaultRouter({ path: encodedPath })).toBe(`/vault/${encodedPath}`)
   })
 })
@@ -624,13 +635,18 @@ describe('oneOf', () => {
 
   it.effect('a prefix route listed first does not shadow a rest route', () =>
     Effect.gen(function* () {
-      const AppRoute = defineRouteUnion({
+      const ApplicationRoute = defineRouteUnion({
         FilesIndex: {},
         Files: { path: Schema.NonEmptyArray(Schema.String) },
       })
+      type ApplicationRoute = typeof ApplicationRoute.Type
       const parser = oneOf(
-        pipe(literal('files'), mapTo(AppRoute.FilesIndex)),
-        pipe(literal('files'), slash(rest('path')), mapTo(AppRoute.Files)),
+        pipe(literal('files'), mapTo(ApplicationRoute.FilesIndex)),
+        pipe(
+          literal('files'),
+          slash(rest('path')),
+          mapTo(ApplicationRoute.Files),
+        ),
       )
 
       const [filesValue] = yield* parser.parse(['files', 'a', 'b'])
@@ -643,14 +659,15 @@ describe('oneOf', () => {
 })
 
 describe('mapTo', () => {
-  const AppRoute = defineRouteUnion({
+  const ApplicationRoute = defineRouteUnion({
     Home: {},
     UserProfile: { id: Schema.String },
   })
+  type ApplicationRoute = typeof ApplicationRoute.Type
 
   it.effect('wraps parsed values with a constructor', () =>
     Effect.gen(function* () {
-      const router = mapTo(AppRoute.Home)(root)
+      const router = mapTo(ApplicationRoute.Home)(root)
       const [result] = yield* router.parse([])
       expect(result).toStrictEqual({ _tag: 'Home' })
     }),
@@ -661,7 +678,7 @@ describe('mapTo', () => {
       const router = pipe(
         literal('users'),
         slash(string('id')),
-        mapTo(AppRoute.UserProfile),
+        mapTo(ApplicationRoute.UserProfile),
       )
       const [result] = yield* router.parse(['users', 'abc'])
       expect(result).toStrictEqual({ _tag: 'UserProfile', id: 'abc' })
@@ -672,7 +689,7 @@ describe('mapTo', () => {
     const router = pipe(
       literal('users'),
       slash(string('id')),
-      mapTo(AppRoute.UserProfile),
+      mapTo(ApplicationRoute.UserProfile),
     )
     const url = router({ id: 'abc' })
     expect(url).toBe('/users/abc')
@@ -680,38 +697,173 @@ describe('mapTo', () => {
 })
 
 describe('parseUrlWithFallback', () => {
-  const AppRoute = defineRouteUnion({
+  const ApplicationRoute = defineRouteUnion({
     Home: {},
     NotFound: { path: Schema.String },
   })
+  type ApplicationRoute = typeof ApplicationRoute.Type
 
-  const homeRouter = mapTo(AppRoute.Home)(root)
+  const homeRouter = mapTo(ApplicationRoute.Home)(root)
   const parser = oneOf(homeRouter)
 
   it('parses a matching URL', () => {
-    const result = parseUrlWithFallback(parser, AppRoute.NotFound)(makeUrl('/'))
+    const result = parseUrlWithFallback(
+      parser,
+      ApplicationRoute.NotFound,
+    )(makeUrl('/'))
     expect(result).toStrictEqual({ _tag: 'Home' })
   })
 
   it('returns the fallback route for non-matching URLs', () => {
     const result = parseUrlWithFallback(
       parser,
-      AppRoute.NotFound,
+      ApplicationRoute.NotFound,
     )(makeUrl('/unknown'))
     expect(result).toStrictEqual({ _tag: 'NotFound', path: '/unknown' })
   })
 })
 
+describe('parsePathWithFallback', () => {
+  const ApplicationRoute = defineRouteUnion({
+    Home: {},
+    Search: { query: Schema.String },
+    Person: { personId: Schema.String },
+    NotFound: { path: Schema.String },
+  })
+  type ApplicationRoute = typeof ApplicationRoute.Type
+
+  const homeRouter = mapTo(ApplicationRoute.Home)(root)
+  const searchRouter = pipe(
+    literal('search'),
+    query(Schema.Struct({ query: Schema.String })),
+    mapTo(ApplicationRoute.Search),
+  )
+  const personRouter = pipe(
+    literal('people'),
+    slash(string('personId')),
+    mapTo(ApplicationRoute.Person),
+  )
+  const parsePath = parsePathWithFallback(
+    oneOf(homeRouter, searchRouter, personRouter),
+    ApplicationRoute.NotFound,
+  )
+
+  it('parses the root and a parameterized path', () => {
+    expect(parsePath('/')).toStrictEqual(ApplicationRoute.Home())
+    expect(parsePath('/people/ada')).toStrictEqual(
+      ApplicationRoute.Person({ personId: 'ada' }),
+    )
+  })
+
+  it('decodes query delimiters once and ignores fragments', () => {
+    expect(
+      parsePath('/search?query=cache+%26+routes%3F%23%252F#results'),
+    ).toStrictEqual(ApplicationRoute.Search({ query: 'cache & routes?#%2F' }))
+    expect(parsePath('/people/ada#profile')).toStrictEqual(
+      ApplicationRoute.Person({ personId: 'ada' }),
+    )
+  })
+
+  it('preserves subsequent query delimiters before ignoring the fragment', () => {
+    expect(
+      parsePath('/search?query=allowed?rejected#ignored?fragment#suffix'),
+    ).toStrictEqual(ApplicationRoute.Search({ query: 'allowed?rejected' }))
+  })
+
+  it('validates the entire query value against its Schema', () => {
+    const StrictSearchRoute = defineRouteUnion({
+      Search: { query: Schema.Literals(['allowed']) },
+      NotFound: { path: Schema.String },
+    })
+    type StrictSearchRoute = typeof StrictSearchRoute.Type
+    const strictSearchRouter = pipe(
+      literal('search'),
+      query(Schema.Struct({ query: Schema.Literals(['allowed']) })),
+      mapTo(StrictSearchRoute.Search),
+    )
+    const parseSearch = parsePathWithFallback(
+      strictSearchRouter,
+      StrictSearchRoute.NotFound,
+    )
+    const path = '/search?query=allowed?rejected#ignored'
+
+    expect(parseSearch('/search?query=allowed')).toStrictEqual(
+      StrictSearchRoute.Search({ query: 'allowed' }),
+    )
+    expect(parseSearch(path)).toStrictEqual(
+      StrictSearchRoute.NotFound({ path }),
+    )
+  })
+
+  it('preserves encoded path delimiters and normalizes dot segments', () => {
+    expect(parsePath('/people/ada%2Flovelace')).toStrictEqual(
+      ApplicationRoute.Person({ personId: 'ada%2Flovelace' }),
+    )
+    expect(parsePath('/people/ada%5Clovelace')).toStrictEqual(
+      ApplicationRoute.Person({ personId: 'ada%5Clovelace' }),
+    )
+    expect(parsePath('/people/ada%09lovelace')).toStrictEqual(
+      ApplicationRoute.Person({ personId: 'ada%09lovelace' }),
+    )
+    expect(parsePath('/people/grace/../ada')).toStrictEqual(
+      ApplicationRoute.Person({ personId: 'ada' }),
+    )
+    expect(parsePath('/people/grace/%2e%2e/ada')).toStrictEqual(
+      ApplicationRoute.Person({ personId: 'ada' }),
+    )
+  })
+
+  it('requires complete consumption even when given one router', () => {
+    const path = '/people/ada/notes?sort=recent#top'
+    const parsePerson = parsePathWithFallback(
+      personRouter,
+      ApplicationRoute.NotFound,
+    )
+
+    expect(parsePerson(path)).toStrictEqual(ApplicationRoute.NotFound({ path }))
+  })
+
+  it.each([
+    '',
+    'people/ada',
+    'https://example.com/people/ada',
+    '//example.com/people/ada',
+    'https://[invalid',
+    '//[invalid',
+    '/unknown/../missing?query=value#section',
+    '/search',
+  ])('keeps the original input when falling back for %s', path => {
+    expect(parsePath(path)).toStrictEqual(ApplicationRoute.NotFound({ path }))
+  })
+
+  it.each([
+    '/\\people/ada',
+    '/people\\ada',
+    '/\t/people/ada',
+    '/\r/people/ada',
+    '/\n/people/ada',
+    '/people/\tada',
+    '/people/ada\n',
+    '/people/ada\u0000',
+    '/people/ada\u007f',
+    '/safe/..//people/ada',
+    '/..//people/ada',
+  ])('rejects noncanonical local paths without changing %j', path => {
+    expect(parsePath(path)).toStrictEqual(ApplicationRoute.NotFound({ path }))
+  })
+})
+
 describe('round-trip: parse then build', () => {
-  const AppRoute = defineRouteUnion({
+  const ApplicationRoute = defineRouteUnion({
     Route: { userId: Schema.String, postId: Schema.Number },
   })
+  type ApplicationRoute = typeof ApplicationRoute.Type
 
   const router = pipe(
     literal('users'),
     slash(string('userId')),
     slash(int('postId')),
-    mapTo(AppRoute.Route),
+    mapTo(ApplicationRoute.Route),
   )
 
   it('build produces the expected path', () => {

@@ -9,6 +9,7 @@ import type * as Update from '../../update/index.js'
 // MODEL
 
 const ContextMenuSource = Schema.Literals(['Direct', 'Inner', 'Outer'])
+type ContextMenuSource = typeof ContextMenuSource.Type
 
 const ContextMenuState = defineTaggedUnion({
   Closed: {},

@@ -6,6 +6,7 @@ import { describe, it } from '@effect/vitest'
 import { defineMessageUnion } from '../message/index.js'
 import type { MountAction } from '../mount/index.js'
 import { MountTracker } from '../mount/index.js'
+import { mountModule } from '../mountModule.js'
 import { onUnmountModule } from '../onUnmountModule.js'
 import { propsModule } from '../propsModule.js'
 import { noOpDispatch } from '../runtime/crashUI.js'
@@ -41,6 +42,7 @@ const patch = init([
   datasetModule,
   eventListenersModule,
   onUnmountModule,
+  mountModule,
   propsModule,
   styleModule,
 ])
@@ -50,6 +52,7 @@ const Message = defineMessageUnion({
   UnmountedNamed: { name: Schema.String },
   Mounted: {},
 })
+type Message = typeof Message.Type
 
 const createCapturingDispatch = () => {
   const dispatched: Array<unknown> = []
@@ -463,7 +466,7 @@ type ChildViewInputs = Readonly<{
   toView: (dialog: ReadonlyArray<ChildAttribute>) => VNode | null
 }>
 
-// A Submodel that publishes an OnUnmount attribute through its boundary,
+// A Block that publishes an OnUnmount attribute through its boundary,
 // mirroring how Ui.Dialog publishes `dialog` attributes carrying OnUnmount.
 const childView = defineView<
   Readonly<{ id: string }>,
@@ -480,7 +483,7 @@ const childView = defineView<
 })
 
 // Renders with a persistent boundary registry shared across renders and a
-// `beginRender` call each pass, matching how the runtime drives Submodel
+// `beginRender` call each pass, matching how the runtime drives Block
 // boundaries. The plain `renderView` above creates a fresh registry per call,
 // which is fine for boundary-free elements but would break boundary continuity.
 const renderViewWithRegistry = (
@@ -509,7 +512,7 @@ const renderViewWithRegistry = (
   return vnode
 }
 
-describe('OnUnmount across a Submodel boundary', () => {
+describe('OnUnmount across a Block boundary', () => {
   it('composes child and parent callbacks on the same element', () => {
     const h = __htmlBuilder<ParentMessage>()
     const { dispatch, dispatched } = createCapturingDispatch()
@@ -519,7 +522,7 @@ describe('OnUnmount across a Submodel boundary', () => {
       h.div(
         [],
         [
-          h.submodel({
+          h.block({
             slotId: 'child-dialog',
             model: { id: 'child-dialog' },
             view: childView,

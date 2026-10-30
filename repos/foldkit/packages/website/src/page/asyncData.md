@@ -10,7 +10,7 @@ Server data in a Model is never just data or nothing. Between “we have it” a
 
 ### When to Use AsyncData
 
-Use `AsyncData` directly when the request belongs to an application-specific transition and the application should own its Messages, Commands, and `AsyncData` Model field. The experimental [Query](/core/query) Submodel packages the fetch Command, completion Message, stale-response protection, and retained `AsyncData` state when the result is one resource or a collection keyed by arguments.
+Use `AsyncData` directly when the request belongs to an application-specific transition and the application should own its Messages, Commands, and `AsyncData` Model field. The experimental [Query](/core/query) Block packages the fetch Command, completion Message, stale-response protection, and retained `AsyncData` state when the result is one resource or a collection keyed by arguments.
 
 Throughout this page, the running example is a Notes app: a `Note` belongs to an optional `Notebook`, and the Model holds several `AsyncData` fields for the notebook list, the cross-notebook feed, and the per-entity caches.
 
@@ -73,7 +73,7 @@ The error Schema is simplified to `string` here; a real app usually gives each f
 
 ### Store an AsyncData Field or Cache
 
-A single field embeds `.schema` directly. A keyed cache embeds it as the value Schema of an `Schema.HashMap`, which is how `noteById` holds one independent `AsyncData` per `NoteId`. The Model type of a field is `typeof NotesAsyncData.schema.Type`, structurally equal to `AsyncData.AsyncData<ReadonlyArray<Note>, string>`.
+A single field embeds `.schema` directly. A keyed cache embeds it as the value Schema of an `Schema.HashMap`, which is how `noteById` holds one independent `AsyncData` per `NoteId`. Derive a decoded alias from `NotesAsyncData.schema` and use that alias for the Model field type; it is structurally equal to `AsyncData.AsyncData<ReadonlyArray<Note>, string>`.
 
 ### Construct State Values
 

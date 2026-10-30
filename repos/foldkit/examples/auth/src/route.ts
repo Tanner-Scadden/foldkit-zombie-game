@@ -2,35 +2,40 @@ import { Schema, pipe } from 'effect'
 import { Route } from 'foldkit'
 import { defineRouteUnion, literal } from 'foldkit/route'
 
-export const AppRoute = defineRouteUnion({
+export const ApplicationRoute = defineRouteUnion({
   Home: {},
   Login: {},
   Dashboard: {},
   Settings: {},
   NotFound: { path: Schema.String },
 })
+export type ApplicationRoute = typeof ApplicationRoute.Type
 
-export type AppRoute = typeof AppRoute.Type
-
-export const LoggedOutRoute = AppRoute.subset(['Home', 'Login', 'NotFound'])
-export const LoggedInRoute = AppRoute.subset([
+export const LoggedOutRoute = ApplicationRoute.subset([
+  'Home',
+  'Login',
+  'NotFound',
+])
+export type LoggedOutRoute = typeof LoggedOutRoute.Type
+export const LoggedInRoute = ApplicationRoute.subset([
   'Dashboard',
   'Settings',
   'NotFound',
 ])
-
-export type LoggedOutRoute = typeof LoggedOutRoute.Type
 export type LoggedInRoute = typeof LoggedInRoute.Type
 
-export const homeRouter = pipe(Route.root, Route.mapTo(AppRoute.Home))
-export const loginRouter = pipe(literal('login'), Route.mapTo(AppRoute.Login))
+export const homeRouter = pipe(Route.root, Route.mapTo(ApplicationRoute.Home))
+export const loginRouter = pipe(
+  literal('login'),
+  Route.mapTo(ApplicationRoute.Login),
+)
 export const dashboardRouter = pipe(
   literal('dashboard'),
-  Route.mapTo(AppRoute.Dashboard),
+  Route.mapTo(ApplicationRoute.Dashboard),
 )
 export const settingsRouter = pipe(
   literal('settings'),
-  Route.mapTo(AppRoute.Settings),
+  Route.mapTo(ApplicationRoute.Settings),
 )
 
 const routeParser = Route.oneOf(
@@ -40,7 +45,7 @@ const routeParser = Route.oneOf(
   homeRouter,
 )
 
-export const urlToAppRoute = Route.parseUrlWithFallback(
+export const urlToApplicationRoute = Route.parseUrlWithFallback(
   routeParser,
-  AppRoute.NotFound,
+  ApplicationRoute.NotFound,
 )

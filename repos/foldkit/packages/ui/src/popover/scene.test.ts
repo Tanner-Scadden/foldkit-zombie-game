@@ -1,10 +1,9 @@
-import type { HtmlBuilder } from 'foldkit/html'
 import * as Scene from 'foldkit/scene'
 import { expect } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
-import type { Model, ViewInputs } from './public.js'
+import type { Model, ViewInputs } from './block.js'
 import {
   AnchorPopover,
   Message,
@@ -14,7 +13,9 @@ import {
   init,
   update,
   view,
-} from './public.js'
+} from './block.js'
+
+type TestHtmlBuilder = Parameters<typeof view>[2]
 
 const acknowledgeAnchor = Scene.Mount.resolve(
   AnchorPopover,
@@ -27,7 +28,7 @@ const acknowledgeBackdrop = Scene.Mount.resolve(
 
 const sceneView =
   (overrides: Omit<Partial<ViewInputs>, 'toView' | 'anchor'> = {}) =>
-  (model: Model, h: HtmlBuilder<Message>) =>
+  (model: Model, h: TestHtmlBuilder) =>
     view(
       model,
       {
@@ -59,10 +60,10 @@ const panel = Scene.selector('[key="test-panel-container"]')
 const backdrop = Scene.selector('[key="test-backdrop"]')
 const arrow = Scene.selector('[key="test-arrow"]')
 
-const closedModel = init({ id: 'test' })
-const openPopover = update(init({ id: 'test' }), Message.RequestedOpen())
+const closedModel = init({ id: 'test' }).model
+const openPopover = update(init({ id: 'test' }).model, Message.RequestedOpen())
 const openContentFocusPopover = update(
-  init({ id: 'test', contentFocus: true }),
+  init({ id: 'test', contentFocus: true }).model,
   Message.RequestedOpen(),
 )
 

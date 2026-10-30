@@ -39,7 +39,8 @@ const REASON_HINTS: Record<LazyMissReason['_tag'], string> = {
     'Create the slot at module scope. Use a stable key for each rendered item or position.',
   FunctionChanged:
     'Pass the same view function for each slot or key. Define it outside view.',
-  FrameChanged: 'Use separate slots or keys for different Submodel boundaries.',
+  FrameChanged:
+    'Use separate slots or keys for different Block boundaries. Replaced child occurrences must render again.',
   ArgumentCountChanged:
     'Pass the same number of arguments to each slot or key.',
   ArgumentsChanged:
@@ -123,9 +124,12 @@ const toMisses = (
  *  })
  *  ```
  */
-export const expectAllReused = <Model, Message>(
+export const expectAllReused = <Model, Message, ViewRequirements = never>(
   config: Readonly<{
-    view: (model: Model, h: HtmlBuilder<Message>) => Html | Document
+    view: (
+      model: Model,
+      h: HtmlBuilder<Message, ViewRequirements>,
+    ) => Html | Document
     model: Model
   }>,
 ): void => {
@@ -136,7 +140,7 @@ export const expectAllReused = <Model, Message>(
     setHtmlRuntime(noOpDispatch.dispatchSync, lazyContext, registry)
 
     try {
-      view(model, htmlBuilderFor<Message>())
+      view(model, htmlBuilderFor<Message, ViewRequirements>())
     } finally {
       clearHtmlRuntime()
     }

@@ -1,15 +1,16 @@
 import clsx from 'clsx'
 import { Array, Option } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import { Button } from '@foldkit/ui'
 
+import type { ApplicationViewBuilder } from '../composition'
 import { THUMBNAIL_CELL_SIZE, VISIBLE_HISTORY_COUNT } from '../constant'
 import { Message } from '../message'
 import type { Grid } from '../model'
 import { type PaletteTheme, resolveColor } from '../palette'
 
-const sectionLabel = (text: string, h: HtmlBuilder<Message>): Html =>
+const sectionLabel = (text: string, h: ApplicationViewBuilder): Html =>
   h.div(
     [
       h.Class(
@@ -25,7 +26,7 @@ export const historyPanelView = (
   grid: Grid,
   gridSize: number,
   theme: PaletteTheme,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const undoCount = undoStack.length
   const redoCount = redoStack.length
@@ -156,7 +157,7 @@ const thumbnailEntry = (
   label: string,
   maybeOnClick: Option.Option<Message>,
   theme: PaletteTheme,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.div(
     [

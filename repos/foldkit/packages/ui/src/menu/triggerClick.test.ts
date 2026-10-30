@@ -1,64 +1,71 @@
-import { Option, Schema } from 'effect'
-import { Runtime, Update } from 'foldkit'
-import type { Html, HtmlBuilder } from 'foldkit/html'
-import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
+import { Schema } from 'effect'
+import { Block, Program, Runtime } from 'foldkit'
 import { afterEach, expect, vi } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
-import {
-  Message as MenuMessage,
-  Model as MenuModel,
-  OutMessage,
-  create,
-  init,
-} from './public.js'
+import { makeBlock } from './public.js'
 
-const TestMenu = create<string>()
+const TestMenu = makeBlock<string>()
 
-const Message = defineMessageUnion({
-  GotMenuMessage: { message: MenuMessage },
-})
-type Message = typeof Message.Type
-
-const Model = Schema.Struct({
-  menu: MenuModel,
-})
+const Model = Schema.Struct({ menu: TestMenu.Model })
 type Model = typeof Model.Type
-
-const foldMenuOutMessage = OutMessage.match<Update.Step<Model, Message>>({
-  Selected: () => model => ({ model }),
-})
-
-const foldMenu = Update.foldChild({
-  update: TestMenu.update,
-  read: (model: Model) => Option.some(model.menu),
-  write: (model: Model, nextMenu: MenuModel) =>
-    modifyFields(model, { menu: () => nextMenu }),
-  toParentMessage: (message: MenuMessage) =>
-    Message.GotMenuMessage({ message }),
-  foldOutMessage: foldMenuOutMessage,
-})
-
-const menuView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const MenuTriggerClickTestDefinition = Block.makeDefinition(
+  'MenuTriggerClickTest',
+  {
+    Model,
+    Message: Schema.Never,
+  },
+)
+const foldMenuOutMessage = MenuTriggerClickTestDefinition.makeOutMessageFold(
+  TestMenu,
+  {
+    Selected: () => MenuTriggerClickTestDefinition.makeNoopStep(),
+    Closed: () => MenuTriggerClickTestDefinition.makeNoopStep(),
+  },
+)
+const MenuBinding = MenuTriggerClickTestDefinition.makeBinding(TestMenu, {
+  field: 'menu',
+  init: false,
+}).withOutMessagePolicy({ fold: foldMenuOutMessage })
+const MenuTriggerClickTestComposition =
+  MenuTriggerClickTestDefinition.makeComposition({
+    bindings: [MenuBinding],
+  })
+const view = MenuTriggerClickTestComposition.makeView((model, h) =>
   h.div(
     [],
     [
-      h.submodel({
-        slotId: 'menu',
-        model: model.menu,
-        view: TestMenu.view,
-        viewInputs: {
-          items: ['Name'],
-          itemToConfig: item => ({ content: h.span([], [item]) }),
-          buttonContent: h.span([], ['Actions']),
-          anchor: { placement: 'bottom-start' },
-        },
-        toParentMessage: message => Message.GotMenuMessage({ message }),
-      }),
+      h.block(
+        MenuBinding.embedView({
+          slotId: 'menu',
+          model: model.menu,
+          viewInputs: {
+            items: ['Name'],
+            itemToConfig: item => ({ content: h.span([], [item]) }),
+            buttonContent: h.span([], ['Actions']),
+            anchor: { placement: 'bottom-start' },
+          },
+        }),
+      ),
     ],
-  )
+  ),
+)
+const prepare = () =>
+  MenuTriggerClickTestComposition.prepareBlock({
+    init: MenuTriggerClickTestComposition.makeInit(() =>
+      MenuBinding.init({
+        args: [{ id: 'actions', isModal: true }],
+        toParentModel: menu => ({ menu }),
+      }),
+    ),
+    update: MenuTriggerClickTestComposition.makeUpdate({}),
+    view,
+  })
+const ApplicationBlock: Block.FromAssemblyWithView<
+  typeof Model,
+  typeof prepare
+> = Block.assemble(prepare)
 
 const requireElement = (id: string): HTMLElement => {
   const element = document.getElementById(id)
@@ -82,29 +89,16 @@ const clickButtonInOneTask = (button: HTMLElement) => {
 describe('Menu trigger click', () => {
   afterEach(() => {
     document.body.replaceChildren()
+    document.documentElement.style.overflow = ''
   })
 
-  it('treats a same-task click as one open', async () => {
+  it('treats a same-task click as one open and releases modal resources on close', async () => {
+    const background = document.createElement('button')
     const container = document.createElement('div')
-    document.body.append(container)
     container.id = 'app'
-    const tags: Array<string> = []
+    document.body.append(background, container)
     const handle = Runtime.embed(
-      Runtime.makeElement({
-        Model,
-        init: () => ({
-          model: { menu: init({ id: 'actions', isModal: true }) },
-        }),
-        update: (model: Model, message: Message) => {
-          tags.push(message.message._tag)
-          return Message.match<Update.Return<Model, Message>>(message, {
-            GotMenuMessage: ({ message: menuMessage }) =>
-              foldMenu(model, menuMessage),
-          })
-        },
-        view: menuView,
-        container,
-      }),
+      Program.makeElement({ block: ApplicationBlock, container }),
     )
 
     try {
@@ -115,17 +109,32 @@ describe('Menu trigger click', () => {
       clickButtonInOneTask(requireElement('actions-button'))
 
       await vi.waitFor(() => {
-        expect(tags).toContain('CompletedLockScroll')
+        expect(
+          document
+            .getElementById('actions-button')
+            ?.getAttribute('aria-expanded'),
+        ).toBe('true')
+        expect(document.documentElement.style.overflow).toBe('hidden')
+        expect(background.inert).toBe(true)
       })
 
-      expect(tags).toContain('ClickedButton')
-      expect(tags.filter(tag => tag === 'CompletedLockScroll')).toHaveLength(1)
-      expect(tags.filter(tag => tag === 'CompletedInertOthers')).toHaveLength(1)
-      expect(
-        document
-          .getElementById('actions-button')
-          ?.getAttribute('aria-expanded'),
-      ).toBe('true')
+      requireElement('actions-items').dispatchEvent(
+        new KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          key: 'Escape',
+        }),
+      )
+
+      await vi.waitFor(() => {
+        expect(
+          document
+            .getElementById('actions-button')
+            ?.getAttribute('aria-expanded'),
+        ).toBe('false')
+        expect(document.documentElement.style.overflow).toBe('')
+        expect(background.inert).toBe(false)
+      })
     } finally {
       handle.dispose()
     }

@@ -1,77 +1,94 @@
-import { Option, Schema } from 'effect'
-import { Runtime, Update } from 'foldkit'
-import type { Html, HtmlBuilder } from 'foldkit/html'
-import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
+import { Schema } from 'effect'
+import { Block, Program, Runtime } from 'foldkit'
 import { afterEach, expect, vi } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
-import {
-  OutMessage,
-  Message as PopoverMessage,
-  Model as PopoverModel,
-  init,
-  update,
-  view,
-} from './public.js'
+import { PopoverBlock } from './block.js'
 
-const Message = defineMessageUnion({
-  GotPopoverMessage: { message: PopoverMessage },
-})
-type Message = typeof Message.Type
-
-const Model = Schema.Struct({
-  popover: PopoverModel,
-})
+const Model = Schema.Struct({ popover: PopoverBlock.Model })
 type Model = typeof Model.Type
-
-const foldPopoverOutMessage = OutMessage.match<Update.Step<Model, Message>>({
-  Opened: () => model => ({ model }),
-  Closed: () => model => ({ model }),
-})
-
-const foldPopover = Update.foldChild({
-  update,
-  read: (model: Model) => Option.some(model.popover),
-  write: (model: Model, nextPopover: PopoverModel) =>
-    modifyFields(model, { popover: () => nextPopover }),
-  toParentMessage: (message: PopoverMessage) =>
-    Message.GotPopoverMessage({ message }),
-  foldOutMessage: foldPopoverOutMessage,
-})
-
-const popoverView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const PopoverFocusLeaveTestDefinition = Block.makeDefinition(
+  'PopoverFocusLeaveTest',
+  {
+    Model,
+    Message: Schema.Never,
+  },
+)
+const foldPopoverOutMessage =
+  PopoverFocusLeaveTestDefinition.makeOutMessageFold(PopoverBlock, {
+    Opened: () => PopoverFocusLeaveTestDefinition.makeNoopStep(),
+    Closed: () => PopoverFocusLeaveTestDefinition.makeNoopStep(),
+  })
+const PopoverBinding = PopoverFocusLeaveTestDefinition.makeBinding(
+  PopoverBlock,
+  {
+    field: 'popover',
+    init: false,
+  },
+).withOutMessagePolicy({ fold: foldPopoverOutMessage })
+const PopoverFocusLeaveTestComposition =
+  PopoverFocusLeaveTestDefinition.makeComposition({
+    bindings: [PopoverBinding],
+  })
+const view = PopoverFocusLeaveTestComposition.makeView((model, h) =>
   h.div(
     [],
     [
-      h.submodel({
-        slotId: 'pop',
-        model: model.popover,
-        view,
-        viewInputs: {
-          anchor: { placement: 'bottom-start' },
-          toView: ({ button, panel, backdrop, isVisible }) =>
-            h.div(
-              [],
-              [
-                h.button([...button], ['Sort']),
-                ...(isVisible
-                  ? [
-                      h.div([...backdrop]),
-                      h.div(
-                        [...panel],
-                        [h.button([h.Id('item'), h.Type('button')], ['Name'])],
-                      ),
-                    ]
-                  : []),
-              ],
-            ),
-        },
-        toParentMessage: message => Message.GotPopoverMessage({ message }),
-      }),
+      h.block(
+        PopoverBinding.embedView({
+          slotId: 'popover',
+          model: model.popover,
+          viewInputs: {
+            anchor: { placement: 'bottom-start' },
+            toView: ({ button, panel, backdrop, isVisible }) =>
+              h.div(
+                [],
+                [
+                  h.button([...button], ['Sort']),
+                  ...(isVisible
+                    ? [
+                        h.div([...backdrop]),
+                        h.div(
+                          [...panel],
+                          [
+                            h.button(
+                              [h.Id('item'), h.Type('button')],
+                              ['Name'],
+                            ),
+                          ],
+                        ),
+                      ]
+                    : []),
+                ],
+              ),
+          },
+        }),
+      ),
     ],
-  )
+  ),
+)
+
+const makeProgram = (container: HTMLElement) => {
+  const prepare = () =>
+    PopoverFocusLeaveTestComposition.prepareBlock({
+      init: PopoverFocusLeaveTestComposition.makeInit(() =>
+        PopoverBinding.init({
+          args: [{ id: 'sort' }],
+          toParentModel: popover => ({ popover }),
+        }),
+      ),
+      update: PopoverFocusLeaveTestComposition.makeUpdate({}),
+      view,
+    })
+  const block: Block.FromAssemblyWithView<typeof Model, typeof prepare> =
+    Block.assemble(prepare)
+
+  return Program.makeElement({
+    block,
+    container,
+  })
+}
 
 const requireElement = (id: string): HTMLElement => {
   const element = document.getElementById(id)
@@ -79,28 +96,6 @@ const requireElement = (id: string): HTMLElement => {
     throw new Error(`Missing #${id}`)
   }
   return element
-}
-
-const mountPopover = (container: HTMLElement) => {
-  container.id = 'app'
-  const tags: Array<string> = []
-  const handle = Runtime.embed(
-    Runtime.makeElement({
-      Model,
-      init: () => ({ model: { popover: init({ id: 'sort' }) } }),
-      update: (model: Model, message: Message) => {
-        tags.push(message.message._tag)
-        return Message.match<Update.Return<Model, Message>>(message, {
-          GotPopoverMessage: ({ message: popoverMessage }) =>
-            foldPopover(model, popoverMessage),
-        })
-      },
-      view: popoverView,
-      container,
-    }),
-  )
-
-  return { tags, handle }
 }
 
 describe('Popover focus leave', () => {
@@ -111,9 +106,10 @@ describe('Popover focus leave', () => {
   it('stays open when focus moves from the panel into its content, and closes when focus leaves', async () => {
     const container = document.createElement('div')
     const outside = document.createElement('button')
+    container.id = 'app'
     outside.id = 'outside'
     document.body.append(container, outside)
-    const { tags, handle } = mountPopover(container)
+    const handle = Runtime.embed(makeProgram(container))
 
     try {
       await vi.waitFor(() => {
@@ -133,8 +129,6 @@ describe('Popover focus leave', () => {
       })
 
       requireElement('item').focus()
-
-      expect(tags).not.toContain('BlurredPanel')
       expect(document.getElementById('sort-panel')).not.toBeNull()
 
       outside.focus()
@@ -144,7 +138,6 @@ describe('Popover focus leave', () => {
           document.getElementById('sort-button')?.getAttribute('aria-expanded'),
         ).toBe('false')
       })
-      expect(tags).toContain('BlurredPanel')
       expect(document.getElementById('sort-panel')).toBeNull()
     } finally {
       handle.dispose()

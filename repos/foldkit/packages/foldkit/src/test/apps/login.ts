@@ -1,10 +1,10 @@
-import { Effect, Match, Schema } from 'effect'
+import { Effect, Layer, Match, Schema } from 'effect'
 
 import * as Command from '../../command/index.js'
 import type { Html, HtmlBuilder } from '../../html/index.js'
 import { defineMessageUnion } from '../../message/index.js'
 import { modifyFields } from '../../struct/index.js'
-import type * as Update from '../../update/index.js'
+import * as Update from '../../update/index.js'
 
 // MODEL
 
@@ -15,7 +15,6 @@ export const Model = Schema.Struct({
   username: Schema.String,
   error: Schema.String,
 })
-
 export type Model = typeof Model.Type
 
 // MESSAGE
@@ -28,16 +27,16 @@ export const Message = defineMessageUnion({
   FailedAuthenticate: { error: Schema.String },
   ClickedLogout: {},
 })
-
 export type Message = typeof Message.Type
 
 // COMMAND
 
 export const Authenticate = Command.define('Authenticate', {
   messages: [Message.SucceededAuthenticate, Message.FailedAuthenticate],
-  execute: Effect.sync(() =>
-    Message.SucceededAuthenticate({ username: 'alice' }),
-  ),
+  handler: function* () {
+    return () =>
+      Effect.sync(() => Message.SucceededAuthenticate({ username: 'alice' }))
+  },
 })
 
 // INIT
@@ -52,8 +51,8 @@ export const initialModel: Model = {
 
 // UPDATE
 
-export const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
+export const update = Update.define((model: Model, message: Message) =>
+  Message.match(message, {
     UpdatedEmail: ({ value }) => ({
       model: modifyFields(model, { email: () => value }),
     }),
@@ -81,7 +80,8 @@ export const update = (model: Model, message: Message) =>
         password: () => '',
       }),
     }),
-  })
+  }),
+)
 
 // VIEW
 
@@ -164,3 +164,5 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Html => {
     ],
   )
 }
+
+export const EffectsLayer = Layer.mergeAll(Authenticate.layer)

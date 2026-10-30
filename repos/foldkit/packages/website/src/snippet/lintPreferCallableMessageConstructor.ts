@@ -5,7 +5,6 @@ const Message = defineMessageUnion({
   ClickedSave: {},
 })
 type Message = typeof Message.Type
-
 // ❌ Bad
 const badMessage: Message = {
   _tag: 'ClickedSave',

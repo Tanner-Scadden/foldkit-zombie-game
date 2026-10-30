@@ -1,8 +1,6 @@
-import { Duration, Effect, Schema, Stream } from 'effect'
-import { Subscription } from 'foldkit'
+import { Duration, Schema, Stream } from 'effect'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-
-// MESSAGE
 
 const Message = defineMessageUnion({
   ClickedIncrement: {},
@@ -11,31 +9,29 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-// MODEL
-
 const Model = Schema.Struct({
   count: Schema.Number,
   isAutoCounting: Schema.Boolean,
 })
 type Model = typeof Model.Type
 
-// SUBSCRIPTION
+export const ApplicationDefinition = Block.makeDefinition('Application', {
+  Model,
+  Message,
+})
 
-const subscriptions = Subscription.make<Model, Message>()(entry => ({
-  tick: entry(
-    { isAutoCounting: Schema.Boolean },
-    {
-      modelToDependencies: model => ({
-        isAutoCounting: model.isAutoCounting,
-      }),
-      dependenciesToStream: ({ isAutoCounting }) =>
-        Stream.when(
-          Stream.tick(Duration.seconds(1)).pipe(
-            Stream.drop(1),
-            Stream.map(Message.Ticked),
-          ),
-          Effect.sync(() => isAutoCounting),
-        ),
+export const ApplicationComposition = ApplicationDefinition.makeComposition()
+
+export const subscriptions = ApplicationDefinition.makeSubscriptions(entry => ({
+  gameClockTicks: entry('GameClockTicks', {
+    messages: [Message.Ticked],
+    when: model => model.isAutoCounting,
+    handler: function* () {
+      return () =>
+        Stream.tick(Duration.seconds(1)).pipe(
+          Stream.drop(1),
+          Stream.map(Message.Ticked),
+        )
     },
-  ),
+  }),
 }))

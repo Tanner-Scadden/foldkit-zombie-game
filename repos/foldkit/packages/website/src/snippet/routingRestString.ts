@@ -2,15 +2,15 @@ import { Schema, pipe } from 'effect'
 import { Route } from 'foldkit'
 import { defineRouteUnion, literal, restString, slash } from 'foldkit/route'
 
-const AppRoute = defineRouteUnion({
+const ApplicationRoute = defineRouteUnion({
   VaultIndex: {},
   VaultNote: { path: Schema.String },
 })
-
+type ApplicationRoute = typeof ApplicationRoute.Type
 // Matches: /vault
 const vaultIndexRouter = pipe(
   literal('vault'),
-  Route.mapTo(AppRoute.VaultIndex),
+  Route.mapTo(ApplicationRoute.VaultIndex),
 )
 
 // Matches: /vault/20-upgrade/teach/the-elm-architecture.md
@@ -18,7 +18,7 @@ const vaultIndexRouter = pipe(
 const vaultNoteRouter = pipe(
   literal('vault'),
   slash(restString('path')),
-  Route.mapTo(AppRoute.VaultNote),
+  Route.mapTo(ApplicationRoute.VaultNote),
 )
 
 // Builds: /vault/20-upgrade/teach/the-elm-architecture.md
