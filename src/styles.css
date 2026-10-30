@@ -891,6 +891,63 @@ body {
   border-color: #9be36a;
 }
 
+/* A BROWSER EXTENSION GRABBING KEYS (src/keyGrab.ts) */
+
+.key-grab-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+  padding: 8px 14px;
+  border: 2px solid #ff6b5e;
+  border-radius: 12px;
+  background: rgba(8, 10, 12, 0.9);
+  color: #f4f1de;
+  font: bold 12px/1.3 monospace;
+  pointer-events: none;
+  z-index: 30;
+  animation: key-grab-toast 7s steps(28, end) forwards;
+}
+
+.key-grab-icons {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.key-grab-icon {
+  width: 32px;
+  height: 32px;
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+}
+
+@keyframes key-grab-toast {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -12px);
+  }
+  6%,
+  85% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+    transform: translate(-50%, -12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .key-grab-toast {
+    animation-timing-function: step-end;
+  }
+}
+
 .update-chip:focus-visible {
   outline: 2px solid #ffe066;
   outline-offset: 2px;

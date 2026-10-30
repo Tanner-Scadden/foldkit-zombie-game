@@ -49,9 +49,11 @@ import {
   pressPointer,
   releaseAll,
   releaseKey,
+  releaseKeys,
   releasePointer,
   releaseSticks,
 } from './input'
+import { noteMissedKeyDown } from './keyGrab'
 import { Message } from './message'
 import {
   Arsenal,
@@ -568,6 +570,10 @@ const updateGame = (model: Model, message: Message) =>
         ? releaseCoopKey(code)(released)
         : { model: released }
     },
+
+    PressedMetaKey: () => ({ model: withInput(model, releaseKeys) }),
+
+    MissedKeyDown: () => ({ model: noteMissedKeyDown(model) }),
 
     BlurredWindow: () => pauseWhenAway(model),
 

@@ -34,6 +34,8 @@ export const Message = defineMessageUnion({
   TickedFrame: { deltaTime: Schema.Number },
   PressedKey: { code: Schema.String },
   ReleasedKey: { code: Schema.String },
+  PressedMetaKey: {},
+  MissedKeyDown: { code: Schema.String },
   BlurredWindow: {},
   ChangedPageVisibility: { visibility: PageVisibility },
   PressedPointer: {

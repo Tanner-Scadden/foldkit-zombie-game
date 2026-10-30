@@ -13,6 +13,7 @@ import {
   menuPanelView,
   newEntryNoticeView,
 } from './homeView'
+import { keyGrabToastView } from './keyGrab'
 import { gameStageView } from './layers'
 import {
   cornerButtonsView,
@@ -309,6 +310,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
         cornerButtonsView(model, h),
         homeScreenTipView(model, h),
         updateChipView(model, h),
+        keyGrabToastView(model, h),
         homeScreenStepsView(model, h),
         shopDialogView(model, h),
         manorHandView(model, h),

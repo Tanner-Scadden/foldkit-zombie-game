@@ -122,6 +122,11 @@ export const releaseKey = (input: Input, code: string): Input =>
     pressedKeys: Array.filter(pressedCode => pressedCode !== code),
   })
 
+// NOTE: macOS sends no keyup for a key released while Command is down, so
+// Command lets go of every key rather than leave one held for good.
+export const releaseKeys = (input: Input): Input =>
+  modifyFields(input, { pressedKeys: () => [] })
+
 export const releaseAll = (input: Input): Input =>
   modifyFields(input, {
     pressedKeys: () => [],

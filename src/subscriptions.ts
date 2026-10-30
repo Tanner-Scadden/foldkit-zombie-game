@@ -4,6 +4,7 @@ import { Dom, Subscription } from 'foldkit'
 import type { Message as CoopMessage } from './coop/message'
 import { subscriptions as coopSubscriptions } from './coop/subscriptions'
 import { isTrackingPointer } from './input'
+import { KEY_WATCH_QUIET_MS, isGrabbedKeyUp, isLetterKeyCode } from './keyGrab'
 import { Message } from './message'
 import type { Model } from './model'
 import { PlayerStore } from './store'
@@ -46,16 +47,69 @@ export type KeyDown = Readonly<{
   code: string
   repeat: boolean
   target: EventTarget | null
+  ctrlKey?: boolean
+  metaKey?: boolean
+  altKey?: boolean
 }>
 
-export const maybeKeyDownMessage = ({
-  code,
-  repeat,
-  target,
-}: KeyDown): Option.Option<Message> =>
-  repeat || isInsideDialog(target) || isActivatingButton(target, code)
+// NOTE: Ctrl, Command, and Alt with a key are the browser's and the
+// system's shortcuts (Ctrl+D bookmarks, Command+R reloads), never a move.
+const isModified = ({ ctrlKey, metaKey, altKey }: KeyDown): boolean =>
+  ctrlKey === true || metaKey === true || altKey === true
+
+const isEditable = (target: EventTarget | null): boolean =>
+  target instanceof Element &&
+  target.closest('input, textarea, select, [contenteditable]') !== null
+
+const isLeftToPage = (keyDown: KeyDown): boolean =>
+  isModified(keyDown) ||
+  isInsideDialog(keyDown.target) ||
+  isEditable(keyDown.target) ||
+  isActivatingButton(keyDown.target, keyDown.code)
+
+const isMetaKeyCode = (code: string): boolean =>
+  code === 'MetaLeft' || code === 'MetaRight'
+
+export const maybeKeyDownMessage = (
+  keyDown: KeyDown,
+): Option.Option<Message> => {
+  if (isMetaKeyCode(keyDown.code)) {
+    return keyDown.repeat
+      ? Option.none()
+      : Option.some(Message.PressedMetaKey())
+  }
+  return keyDown.repeat || isLeftToPage(keyDown)
     ? Option.none()
-    : Option.some(Message.PressedKey({ code }))
+    : Option.some(Message.PressedKey({ code: keyDown.code }))
+}
+
+const BROWSER_DEFAULT_KEYS: ReadonlyArray<string> = [
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Space',
+  'Enter',
+  'Slash',
+  'Quote',
+  'Period',
+  'Comma',
+]
+
+// NOTE: a game key never does the browser's own thing as well: arrows and
+// Space scroll, and Firefox opens its quick find on / and '. Held keys
+// repeat, so a repeat is kept from the browser too.
+export const isKeptFromBrowser = (keyDown: KeyDown): boolean =>
+  (isLetterKeyCode(keyDown.code) ||
+    Array.contains(BROWSER_DEFAULT_KEYS, keyDown.code)) &&
+  !isLeftToPage(keyDown)
+
+const keyDownMessage = (event: KeyboardEvent): Option.Option<Message> => {
+  if (isKeptFromBrowser(event)) {
+    event.preventDefault()
+  }
+  return maybeKeyDownMessage(event)
+}
 
 export const maybeWindowBlurMessage = ({
   target,
@@ -94,7 +148,7 @@ const keyboardMessages = Stream.merge(
   Dom.streamFromEventFilterMap({
     target: document,
     type: 'keydown',
-    filterMapEvent: maybeKeyDownMessage,
+    filterMapEvent: keyDownMessage,
   }),
   Dom.streamFromEvent({
     target: document,
@@ -102,6 +156,68 @@ const keyboardMessages = Stream.merge(
     mapEvent: event => Message.ReleasedKey({ code: event.code }),
   }),
 )
+
+// NOTE: the watch for a browser extension that grabs keys (src/keyGrab.ts).
+// It listens on the window in the capture phase, ahead of anything in the
+// page, so only an extension, which listens there first, can hide a keydown
+// from it. Everything it sees is forgotten when the page loses focus.
+const keyWatchMessages = Stream.suspend(() => {
+  const seenKeys = new Set<string>()
+  let quietUntilMs = performance.now() + KEY_WATCH_QUIET_MS
+  const forget = (): Option.Option<never> => {
+    seenKeys.clear()
+    quietUntilMs = performance.now() + KEY_WATCH_QUIET_MS
+    return Option.none()
+  }
+  const capture = { capture: true }
+  return Stream.mergeAll<Message, never, never>(
+    [
+      Dom.streamFromEventFilterMap({
+        target: window,
+        type: 'keydown',
+        options: capture,
+        filterMapEvent: event => {
+          seenKeys.add(event.code)
+          return Option.none()
+        },
+      }),
+      Dom.streamFromEventFilterMap({
+        target: window,
+        type: 'keyup',
+        options: capture,
+        filterMapEvent: event => {
+          const wasSeen = seenKeys.delete(event.code)
+          return isGrabbedKeyUp({
+            code: event.code,
+            wasSeen,
+            isModified: event.ctrlKey || event.metaKey || event.altKey,
+            hasFocus: document.hasFocus(),
+            nowMs: performance.now(),
+            quietUntilMs,
+          })
+            ? Option.some(Message.MissedKeyDown({ code: event.code }))
+            : Option.none()
+        },
+      }),
+      Dom.streamFromEventFilterMap({
+        target: window,
+        type: 'blur',
+        filterMapEvent: forget,
+      }),
+      Dom.streamFromEventFilterMap({
+        target: window,
+        type: 'focus',
+        filterMapEvent: forget,
+      }),
+      Dom.streamFromEventFilterMap({
+        target: document,
+        type: 'visibilitychange',
+        filterMapEvent: forget,
+      }),
+    ],
+    { concurrency: 'unbounded' },
+  )
+})
 
 const pointerMoveMessages = Dom.streamFromEventFilterMap({
   target: document,
@@ -200,6 +316,8 @@ const gameSubscriptions = Subscription.make<Model, Message, PlayerStore>()(
     }),
 
     keyboard: Subscription.persistentEntry(keyboardMessages),
+
+    keyWatch: Subscription.persistentEntry(keyWatchMessages),
 
     windowBlur: Subscription.persistentEntry(
       Dom.streamFromEventFilterMap({

@@ -169,6 +169,9 @@ export const Model = Schema.Struct({
   homeScreenTip: HomeScreenTip,
   homeScreenSteps: Dialog.Model,
   pageVisibility: PageVisibility,
+  // NOTE: keys whose keyup came with no keydown: a browser extension took
+  // them first (see src/keyGrab.ts).
+  missedKeyDowns: Schema.Number,
   maybeNewerBuild: Schema.Option(Schema.String),
   maybeSupportUrl: Schema.Option(Schema.String),
   appearance: Appearance,
@@ -323,6 +326,7 @@ export const initialModel: Model = {
   homeScreenTip: 'Unseen',
   homeScreenSteps: Dialog.init({ id: HOME_SCREEN_STEPS_ID }),
   pageVisibility: 'Visible',
+  missedKeyDowns: 0,
   maybeNewerBuild: Option.none(),
   maybeSupportUrl: maybeSupportUrlOf(SUPPORT_URL),
   appearance: defaultAppearance,
