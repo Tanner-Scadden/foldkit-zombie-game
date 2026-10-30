@@ -18,7 +18,7 @@ import {
   runMusicScheduler,
 } from './music'
 import { generateMany, nextRandom } from './prng'
-import { SoundEffect } from './soundEffect'
+import type { SoundEffect } from './soundEffect'
 
 // SOUND
 

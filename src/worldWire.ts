@@ -7,11 +7,10 @@ import { World } from './world'
 // codec in src/worldCodec.ts.
 
 const worldCodec = Schema.toCodecJson(World)
-const encodeWorld = Schema.encodeSync(worldCodec)
-const decodeWorld = Schema.decodeSync(worldCodec)
+const WorldJson = Schema.fromJsonString(worldCodec)
 
-export const worldToJson = (world: World): string =>
-  JSON.stringify(encodeWorld(world))
+export const worldToJson: (world: World) => string =
+  Schema.encodeSync(WorldJson)
 
-export const worldFromJson = (text: string): World =>
-  decodeWorld(JSON.parse(text))
+export const worldFromJson: (text: string) => World =
+  Schema.decodeSync(WorldJson)

@@ -3,7 +3,7 @@ import type { Attribute, Html, HtmlBuilder } from 'foldkit/html'
 
 import { HINT_ICON_SPRITES, type HintIconSprites, keyIcon } from './hintIcons'
 import { CHARGE_ICON, FRIDGE_ICON, PAUSE_ICON } from './icons'
-import { Message } from './message'
+import type { Message } from './message'
 import { type InputDevice, type Model, Phase } from './model'
 import { standaloneSource } from './sprite'
 

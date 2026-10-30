@@ -311,7 +311,6 @@ const codeSlotsView = (typed: string, h: HtmlBuilder<Message>): Html =>
 const codeView = (
   typed: string,
   maybeProblem: Option.Option<CoopProblem>,
-  inputs: ViewInputs,
   h: HtmlBuilder<Message>,
 ): Html =>
   h.div(
@@ -712,7 +711,6 @@ const pickAttributes = (
 ) => (canPick ? [h.OnClick(message)] : [h.AriaDisabled(true)])
 
 const modePickView = (
-  model: Model,
   room: Room,
   lobby: Lobby,
   mode: PickedMode,
@@ -746,7 +744,6 @@ const skullIndexOf = (difficulty: RoomDifficulty): number =>
   )
 
 const skullPickView = (
-  model: Model,
   room: Room,
   lobby: Lobby,
   difficulty: RoomDifficulty,
@@ -791,7 +788,6 @@ const skullPickView = (
 }
 
 const picksView = (
-  model: Model,
   room: Room,
   lobby: Lobby,
   inputs: ViewInputs,
@@ -811,7 +807,7 @@ const picksView = (
         [
           ...Array.map(
             Array.filter(MODE_PICKS, mode => canPickMode(lobby, mode)),
-            mode => modePickView(model, room, lobby, mode, h),
+            mode => modePickView(room, lobby, mode, h),
           ),
           isPicking(room) ? keyCapView(inputs, 'E', h) : h.empty,
         ],
@@ -824,7 +820,7 @@ const picksView = (
         ],
         [
           ...Array.map(DIFFICULTY_PICKS, difficulty =>
-            skullPickView(model, room, lobby, difficulty, h),
+            skullPickView(room, lobby, difficulty, h),
           ),
           isPicking(room) ? keyCapView(inputs, 'X', h) : h.empty,
         ],
@@ -833,7 +829,6 @@ const picksView = (
   )
 
 const lobbyView = (
-  model: Model,
   room: Room,
   inputs: ViewInputs,
   h: HtmlBuilder<Message>,
@@ -865,7 +860,7 @@ const lobbyView = (
       }),
       Option.match(room.maybeLobby, {
         onNone: () => h.empty,
-        onSome: lobby => picksView(model, room, lobby, inputs, h),
+        onSome: lobby => picksView(room, lobby, inputs, h),
       }),
       readyButtonView(room, inputs, h),
     ],
@@ -1001,12 +996,10 @@ const arenaView = (room: Room, h: HtmlBuilder<Message>): Html =>
   )
 
 const roomView = (
-  model: Model,
   room: Room,
   inputs: ViewInputs,
   h: HtmlBuilder<Message>,
-): Html =>
-  isInLobby(room) ? lobbyView(model, room, inputs, h) : arenaView(room, h)
+): Html => (isInLobby(room) ? lobbyView(room, inputs, h) : arenaView(room, h))
 
 // VIEW
 
@@ -1035,10 +1028,10 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>(
               Closed: () => h.empty,
               Hub: ({ maybeProblem }) => hubView(maybeProblem, inputs, h),
               Code: ({ typed, maybeProblem }) =>
-                codeView(typed, maybeProblem, inputs, h),
+                codeView(typed, maybeProblem, h),
               Asking: () => askingView(h),
               Queue: ({ queue }) => queueView(queue, inputs, h),
-              InRoom: ({ room }) => roomView(model, room, inputs, h),
+              InRoom: ({ room }) => roomView(room, inputs, h),
             }),
           ],
         ),

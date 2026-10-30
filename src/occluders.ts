@@ -146,7 +146,7 @@ export const occludersOf = (level: Level): ReadonlyArray<Occluder> => {
   const room = roomShapes(level)
   const only = room.length === 1 ? room[0] : undefined
   const occluders =
-    only !== undefined && only._tag === 'Image'
+    only?._tag === 'Image'
       ? Array.map(openingsOf(level), occluderOf(level, only))
       : []
   builtOccluders.set(level, occluders)

@@ -26,7 +26,7 @@ export class InstallPrompt extends Context.Service<
     readonly offers: Stream.Stream<InstallOffer>
     readonly prompt: Effect.Effect<InstallOutcome>
   }
->()('munch-manor/InstallPrompt') {}
+>()('munch-manor/install/InstallPrompt') {}
 
 // LIVE
 

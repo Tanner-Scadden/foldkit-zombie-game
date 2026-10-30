@@ -183,7 +183,7 @@ const scorch = (model: World, oven: Box): World => {
         })
       : { target: zombie, events: [] },
   )
-  const events = Array.flatMap(outcomes, ({ events }) => events)
+  const events = Array.flatMap(outcomes, outcome => outcome.events)
   return Array.isReadonlyArrayEmpty(events)
     ? model
     : payShared(

@@ -5,7 +5,7 @@
 // which loads its wasm at once, and opens the database (see
 // openPlayerDatabaseOnce). The PlayerStore awaits that same open. A tab that
 // follows another never takes the worker, so it is let go. This module
-// imports nothing, so the early entry stays tiny.
+// imports nothing at runtime, so the early entry stays tiny.
 //
 // Everything here is asked for as early as it can be because the browser
 // answers a lock request, a worker's reply, or a second import of a loaded
@@ -13,13 +13,15 @@
 // behind the first render and every sprite image's load, for half a second
 // on a desktop.
 
+import type * as StoreSqlite from './storeSqlite'
+
 const STORE_WORKER = 'store-worker'
 
 const earlyWorkers = new Map<typeof STORE_WORKER, Worker>()
 
 const STORE_MODULE = 'store-module'
 
-type StoreModule = typeof import('./storeSqlite')
+type StoreModule = typeof StoreSqlite
 
 const storeModules = new Map<typeof STORE_MODULE, Promise<StoreModule>>()
 
@@ -47,12 +49,16 @@ const LEADER_LOCK = 'leader-lock'
 
 const leaderLocks = new Map<typeof LEADER_LOCK, Promise<LockResult>>()
 
+// NOTE: this runs at boot, before the Effect runtime exists, so it speaks
+// plain promises.
+// @effect-diagnostics-next-line newPromise:off
 const NEVER_RELEASED = new Promise<void>(() => undefined)
 
 // NOTE: the lock is held for the life of the page, as the database is. A
 // browser without Web Locks, or one that refuses the request, leads on its
 // own, as the layer does.
 const requestLeaderLock = (): Promise<LockResult> =>
+  // @effect-diagnostics-next-line newPromise:off
   new Promise(resolve => {
     if (typeof navigator === 'undefined' || !('locks' in navigator)) {
       resolve('Granted')

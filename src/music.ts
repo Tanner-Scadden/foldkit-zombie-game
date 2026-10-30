@@ -1,6 +1,5 @@
 import {
   Array,
-  Data,
   Effect,
   MutableRef,
   Option,
@@ -8,6 +7,7 @@ import {
   Schema,
   pipe,
 } from 'effect'
+import { defineTaggedUnion } from 'foldkit/schema'
 
 // CUE
 
@@ -36,8 +36,11 @@ export type MusicCue = Readonly<{
   stinger: MusicStinger
 }>
 
-type LoopMood = Exclude<MusicMood, 'Silence'>
-type Fanfare = Exclude<MusicStinger, 'None'>
+const LoopMood = MusicMood.pick(['Creep', 'Romp', 'Stampede'])
+type LoopMood = typeof LoopMood.Type
+
+const Fanfare = MusicStinger.pick(['Cleared', 'Victory', 'GameOver'])
+type Fanfare = typeof Fanfare.Type
 
 // NOTATION
 
@@ -288,19 +291,11 @@ type Request = Readonly<{
   maybeStinger: Option.Option<Fanfare>
 }>
 
-type Motion = Data.TaggedEnum<{
-  Looping: {
-    readonly mood: LoopMood
-    readonly step: number
-    readonly stepAt: number
-  }
-  Stinging: {
-    readonly stinger: Fanfare
-    readonly step: number
-    readonly stepAt: number
-  }
-}>
-const Motion = Data.taggedEnum<Motion>()
+const Motion = defineTaggedUnion({
+  Looping: { mood: LoopMood, step: Schema.Number, stepAt: Schema.Number },
+  Stinging: { stinger: Fanfare, step: Schema.Number, stepAt: Schema.Number },
+})
+type Motion = typeof Motion.Type
 
 export type MusicDeck = Readonly<{
   context: AudioContext
@@ -601,7 +596,7 @@ const startVoice = (deck: MusicDeck, voice: Voice, at: number): void => {
 type Position = readonly [Option.Option<Motion>, Request]
 
 const tuneOf = (motion: Motion): Tune =>
-  Motion.$match(motion, {
+  Motion.match(motion, {
     Looping: ({ mood }) => LOOPS[mood],
     Stinging: ({ stinger }) => STINGERS[stinger],
   })
@@ -621,7 +616,7 @@ const fromRequest = (request: Request, stepAt: number): Position =>
   })
 
 const turn = (motion: Motion, request: Request): Position =>
-  Motion.$match(motion, {
+  Motion.match(motion, {
     Looping: ({ mood, step, stepAt }): Position => {
       if (Option.isSome(request.maybeStinger) && step % STEPS_PER_BEAT === 0) {
         return fromRequest(request, stepAt)
@@ -639,7 +634,7 @@ const turn = (motion: Motion, request: Request): Position =>
 
 const stepForward = (motion: Motion, count: number): Motion => {
   const { stepSeconds, length } = tuneOf(motion)
-  return Motion.$match(motion, {
+  return Motion.match(motion, {
     Looping: ({ mood, step, stepAt }) =>
       Motion.Looping({
         mood,

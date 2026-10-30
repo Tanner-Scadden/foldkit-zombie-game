@@ -44,7 +44,8 @@ export const NAME_INPUT_ID = 'profile-name-input'
 const UNPRINTABLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu
 const SPACES = /\s+/g
 
-const codePoints = (text: string): ReadonlyArray<string> => [...text]
+const codePoints = (text: string): ReadonlyArray<string> =>
+  Array.fromIterable(text)
 
 const firstCodePoints = (text: string, count: number): string =>
   Array.join(Array.take(codePoints(text), count), '')

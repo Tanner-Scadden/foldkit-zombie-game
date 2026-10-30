@@ -43,7 +43,7 @@ export const SectionRadioGroup = RadioGroup.create<LookSection>()
 
 // NOTE: one radio group serves every part: its values are the part's own
 // words, and chooseLook reads them back through the part's Schema.
-export const PartRadioGroup = RadioGroup.create<string>()
+export const PartRadioGroup = RadioGroup.create()
 
 // NOTE: the parts on each of the Look tab's little tabs, in order.
 export const SECTION_PARTS: Readonly<

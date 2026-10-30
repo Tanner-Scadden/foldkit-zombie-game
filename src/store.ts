@@ -1,7 +1,7 @@
+import type { Duration } from 'effect'
 import {
   Context,
   Data,
-  Duration,
   Effect,
   Fiber,
   Layer,
@@ -16,11 +16,12 @@ import {
   type LinkProblem,
   type PlayerChange,
   type RunSettled,
+  StoreEvent,
   SyncState,
 } from './playerSync'
 import { type PlayerSave, readLegacySave, writeLegacySave } from './save'
 import { loadStoreModule } from './storeEarly'
-import type { PlayerDatabase, StoreEvent } from './storeSqlite'
+import type { PlayerDatabase } from './storeSqlite'
 
 // STORE
 
@@ -46,6 +47,8 @@ type Backend = Data.TaggedEnum<{
   Sqlite: { readonly database: PlayerDatabase }
   LocalStorage: { readonly reason: string }
 }>
+// NOTE: Backend holds a live database handle, which no Schema describes.
+// oxlint-disable-next-line no-restricted-properties
 const Backend = Data.taggedEnum<Backend>()
 
 class StoreError extends Data.TaggedError('StoreError')<{
@@ -70,7 +73,7 @@ export class PlayerStore extends Context.Service<
     readonly redeemLinkCode: (code: string) => Effect.Effect<void, LinkError>
     readonly roomAccess: Effect.Effect<Option.Option<RoomAccess>>
   }
->()('munch-manor/PlayerStore') {}
+>()('munch-manor/store/PlayerStore') {}
 
 // NOTE: long enough for the wasm on a slow phone network, short enough that
 // a stuck worker never holds the splash for good.
@@ -143,10 +146,9 @@ const writeTo = (
     LocalStorage: () => Effect.as(writeLegacy(save), Option.none<string>()),
   })
 
-const localOnly: Stream.Stream<StoreEvent> = Stream.make({
-  _tag: 'SyncStatus',
-  state: SyncState.LocalOnly(),
-})
+const localOnly: Stream.Stream<StoreEvent> = Stream.make(
+  StoreEvent.SyncStatus({ state: SyncState.LocalOnly() }),
+)
 
 // NOTE: SQLite opens in a fiber of the store's own scope, so a timeout here
 // only stops waiting: the database is not torn down under a later write. The

@@ -167,7 +167,7 @@ const CRC_TABLE: ReadonlyArray<number> = Array.makeBy(256, byte =>
   Array.reduce(
     Array.makeBy(8, () => 0),
     byte,
-    crc => (crc & 1 ? (0xedb88320 ^ (crc >>> 1)) >>> 0 : crc >>> 1),
+    crc => ((crc & 1) === 1 ? (0xedb88320 ^ (crc >>> 1)) >>> 0 : crc >>> 1),
   ),
 )
 

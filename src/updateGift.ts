@@ -1,7 +1,7 @@
 import { Array, Option } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
-import { Dialog } from '@foldkit/ui'
+import type { Dialog } from '@foldkit/ui'
 
 import { type NewsBullet, maybeNewestNewsDay, newsHeadline } from './changelog'
 import { closeButtonView, dialogShell } from './dialogs'

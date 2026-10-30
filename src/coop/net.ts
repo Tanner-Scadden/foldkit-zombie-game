@@ -76,7 +76,7 @@ export class CoopNet extends Context.Service<
     // NOTE: a new socket for the run, whose link brings a fresh Snapshot.
     readonly resyncRoom: Effect.Effect<void>
   }
->()('munch-manor/CoopNet') {}
+>()('munch-manor/coop/net/CoopNet') {}
 
 // LIVE
 

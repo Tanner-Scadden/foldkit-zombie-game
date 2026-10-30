@@ -374,12 +374,7 @@ const enrage = (model: World, fight: Fight, boss: Zombie): World =>
       )
     : model
 
-const tickBelch = (
-  model: World,
-  fight: Fight,
-  boss: Zombie,
-  deltaMs: number,
-): World => {
+const tickBelch = (model: World, boss: Zombie, deltaMs: number): World => {
   const rate =
     distanceBetween(boss, model.player) > BOSS_RULES.farPx
       ? BOSS_RULES.belchFarRate
@@ -701,12 +696,7 @@ const spit = (model: World, fight: Fight, boss: Zombie): World =>
 
 // CHARGE
 
-const rush = (
-  model: World,
-  fight: Fight,
-  boss: Zombie,
-  target: Vector,
-): World => {
+const rush = (model: World, boss: Zombie, target: Vector): World => {
   const direction = awayFrom(boss, target)
   return pipe(
     modifyFight(model, current =>
@@ -890,7 +880,7 @@ const stepMove = (
               durationMs,
             }),
           )
-        : rush(model, fight, boss, target),
+        : rush(model, boss, target),
     Rushing: ({ direction, remainingPx }) =>
       stepRush(model, fight, boss, direction, remainingPx, deltaMs),
     Dazed: ({ remainingMs, durationMs }) =>
@@ -941,7 +931,7 @@ export const advanceBossMoves = (model: World, deltaMs: number): World =>
         model,
         withFight((current, fight) => advanceGlobs(current, fight, deltaMs)),
         withFight((current, fight) => enrage(current, fight, boss)),
-        withFight((current, fight) => tickBelch(current, fight, boss, deltaMs)),
+        withFight(current => tickBelch(current, boss, deltaMs)),
         withFight((current, fight) => stepMove(current, fight, boss, deltaMs)),
       ),
   })
