@@ -8,6 +8,9 @@ import { layer as PlayerStoreLayer } from './store'
 import { subscriptions } from './subscriptions'
 import { view } from './view'
 
+// NOTE: every module has run by here, sprites built at module load included.
+performance.mark('load:modules')
+
 const application = Runtime.makeApplication({
   Model,
   init,

@@ -97,3 +97,8 @@ export const decodeImages = (
 export const loadFonts = Effect.asVoid(
   Effect.tryPromise(() => document.fonts.ready),
 )
+
+// NOTE: a `load:<step>` performance mark as each load step finishes, which
+// tools/audit/splash.ts reads to time the steps behind the splash.
+export const markLoadStep = (step: string): Effect.Effect<void> =>
+  Effect.ignore(Effect.try(() => performance.mark(`load:${step}`)))

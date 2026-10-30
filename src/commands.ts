@@ -35,6 +35,7 @@ import {
   hideSplash,
   loadFonts,
   loadStyles,
+  markLoadStep,
   showSplashProgress,
 } from './splash'
 import { PlayerStore } from './store'
@@ -292,6 +293,7 @@ export const LoadStyles = Command.define('LoadStyles', {
   execute: pipe(
     loadStyles,
     Effect.ignore,
+    Effect.andThen(markLoadStep('Styles')),
     Effect.as(Message.CompletedLoadStyles()),
   ),
 })
@@ -300,6 +302,7 @@ export const LoadFonts = Command.define('LoadFonts', {
   messages: [Message.CompletedLoadFonts, Message.FailedLoadFonts],
   execute: pipe(
     loadFonts,
+    Effect.ensuring(markLoadStep('Fonts')),
     Effect.as(Message.CompletedLoadFonts()),
     Effect.catch(error =>
       Effect.succeed(Message.FailedLoadFonts({ reason: String(error) })),
@@ -309,7 +312,11 @@ export const LoadFonts = Command.define('LoadFonts', {
 
 export const AwaitFirstFrame = Command.define('AwaitFirstFrame', {
   messages: [Message.CompletedAwaitFirstFrame],
-  execute: Effect.as(awaitFirstFrame, Message.CompletedAwaitFirstFrame()),
+  execute: pipe(
+    awaitFirstFrame,
+    Effect.andThen(markLoadStep('FirstFrame')),
+    Effect.as(Message.CompletedAwaitFirstFrame()),
+  ),
 })
 
 // NOTE: the warm-up canvases start Foldkit loading every sprite image on the
@@ -324,6 +331,7 @@ export const DecodeSprites = Command.define('DecodeSprites', {
         decodeImages(spriteWarmUpSources(defaultAppearance)),
       ),
     ),
+    Effect.andThen(markLoadStep('Sprites')),
     Effect.as(Message.CompletedDecodeSprites()),
   ),
 })
@@ -354,6 +362,7 @@ export const LoadSave = Command.define('LoadSave', {
   messages: [Message.CompletedLoadSave, Message.FailedLoadSave],
   execute: pipe(
     PlayerStore.use(store => store.load),
+    Effect.ensuring(markLoadStep('Save')),
     Effect.map(maybeSave => Message.CompletedLoadSave({ maybeSave })),
     Effect.catch(error =>
       Effect.succeed(Message.FailedLoadSave({ reason: error.reason })),
