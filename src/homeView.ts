@@ -542,6 +542,9 @@ const handView = (
   ]
 }
 
+const toHandDialogMessage = (message: Dialog.Message): Message =>
+  Message.GotHandDialogMessage({ message })
+
 export const manorHandView = (model: Model, h: HtmlBuilder<Message>): Html =>
   dialogShell(
     {
@@ -551,7 +554,7 @@ export const manorHandView = (model: Model, h: HtmlBuilder<Message>): Html =>
       panelClass: 'hand',
       dialogAttributes: [h.DataAttribute('device', model.lastDevice)],
       panelView: renderInfo => handView(model, renderInfo, h),
-      toParentMessage: message => Message.GotHandDialogMessage({ message }),
+      toParentMessage: toHandDialogMessage,
     },
     h,
   )
@@ -1081,6 +1084,9 @@ const panelView = (
 const panelAnchor = (model: Model): string =>
   model.panel === 'Difficulty' && !isAskingFirst(model) ? 'Play' : 'Center'
 
+const toPanelDialogMessage = (message: Dialog.Message): Message =>
+  Message.GotPanelDialogMessage({ message })
+
 export const menuPanelView = (model: Model, h: HtmlBuilder<Message>): Html =>
   dialogShell(
     {
@@ -1093,7 +1099,7 @@ export const menuPanelView = (model: Model, h: HtmlBuilder<Message>): Html =>
         h.DataAttribute('anchor', panelAnchor(model)),
       ],
       panelView: renderInfo => panelView(model, renderInfo, h),
-      toParentMessage: message => Message.GotPanelDialogMessage({ message }),
+      toParentMessage: toPanelDialogMessage,
     },
     h,
   )

@@ -932,6 +932,9 @@ const panelView = (
   tabsView(model, initialFocus, h),
 ]
 
+const toProfileDialogMessage = (message: Dialog.Message): Message =>
+  Message.GotProfileDialogMessage({ message })
+
 export const profileView = (model: Model, h: HtmlBuilder<Message>): Html =>
   dialogShell(
     {
@@ -944,7 +947,7 @@ export const profileView = (model: Model, h: HtmlBuilder<Message>): Html =>
         h.DataAttribute('device', model.lastDevice),
       ],
       panelView: renderInfo => panelView(model, renderInfo, h),
-      toParentMessage: message => Message.GotProfileDialogMessage({ message }),
+      toParentMessage: toProfileDialogMessage,
     },
     h,
   )

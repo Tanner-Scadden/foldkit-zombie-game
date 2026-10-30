@@ -108,6 +108,9 @@ const panelView = (
   buyButtonView(model, initialFocus, h),
 ]
 
+const toExitDialogMessage = (message: Dialog.Message): Message =>
+  Message.GotExitDialogMessage({ message })
+
 export const exitDialogView = (model: Model, h: HtmlBuilder<Message>): Html =>
   dialogShell(
     {
@@ -116,7 +119,7 @@ export const exitDialogView = (model: Model, h: HtmlBuilder<Message>): Html =>
       backdropClass: 'shop-backdrop',
       panelClass: 'shop-panel exit-panel',
       panelView: renderInfo => panelView(model, renderInfo, h),
-      toParentMessage: message => Message.GotExitDialogMessage({ message }),
+      toParentMessage: toExitDialogMessage,
     },
     h,
   )

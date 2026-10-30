@@ -217,6 +217,9 @@ const homeScreenStepsPanelView = (
   ),
 ]
 
+const toHomeScreenStepsMessage = (message: Dialog.Message): Message =>
+  Message.GotHomeScreenStepsMessage({ message })
+
 export const homeScreenStepsView = (
   model: Model,
   h: HtmlBuilder<Message>,
@@ -228,8 +231,7 @@ export const homeScreenStepsView = (
       backdropClass: 'home-screen-steps-backdrop',
       panelClass: 'home-screen-steps-panel',
       panelView: renderInfo => homeScreenStepsPanelView(renderInfo, h),
-      toParentMessage: message =>
-        Message.GotHomeScreenStepsMessage({ message }),
+      toParentMessage: toHomeScreenStepsMessage,
     },
     h,
   )

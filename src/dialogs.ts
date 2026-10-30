@@ -1,6 +1,12 @@
 import { Option } from 'effect'
 import { Update } from 'foldkit'
-import type { Attribute, ChildAttribute, Html, HtmlBuilder } from 'foldkit/html'
+import {
+  type Attribute,
+  type ChildAttribute,
+  type Html,
+  type HtmlBuilder,
+  createKeyedLazy,
+} from 'foldkit/html'
 
 import { Dialog } from '@foldkit/ui'
 
@@ -62,7 +68,7 @@ type DialogShell<Message> = Readonly<{
   toParentMessage: (message: Dialog.Message) => Message
 }>
 
-export const dialogShell = <Message>(
+const shellView = <Message>(
   {
     dialog,
     dialogClass,
@@ -96,6 +102,56 @@ export const dialogShell = <Message>(
     },
     toParentMessage,
   })
+
+const NO_PANEL = (): ReadonlyArray<Html> => []
+
+const closedShellView = <Message>(
+  dialog: Dialog.Model,
+  dialogClass: string,
+  backdropClass: string,
+  panelClass: string,
+  toParentMessage: (message: Dialog.Message) => Message,
+  h: HtmlBuilder<Message>,
+): Html =>
+  shellView(
+    {
+      dialog,
+      dialogClass,
+      backdropClass,
+      panelClass,
+      panelView: NO_PANEL,
+      toParentMessage,
+    },
+    h,
+  )
+
+const lazyClosedShells = createKeyedLazy()
+
+const isShut = (dialog: Dialog.Model): boolean =>
+  !dialog.isOpen && dialog.animation.transitionState === 'Idle'
+
+// NOTE: every menu dialog is in the view on every frame, and building even a
+// closed one (its submodel boundary and Dialog's attributes) cost a run about
+// a fifth of its view time. A dialog that is shut, neither open nor playing
+// its leave animation, shows nothing, so it comes from a lazy slot keyed on
+// its id and redraws only when its Dialog model changes, as opening does. Its
+// `dialogAttributes` are left off while it is shut: they style the open
+// panel, and the open view puts them back. So `toParentMessage` must be one
+// function for the whole page, kept at module scope, or the slot misses.
+export const dialogShell = <Message>(
+  shell: DialogShell<Message>,
+  h: HtmlBuilder<Message>,
+): Html =>
+  isShut(shell.dialog)
+    ? lazyClosedShells(shell.dialog.id, closedShellView<Message>, [
+        shell.dialog,
+        shell.dialogClass,
+        shell.backdropClass,
+        shell.panelClass,
+        shell.toParentMessage,
+        h,
+      ])
+    : shellView(shell, h)
 
 // CLOSE
 

@@ -996,6 +996,9 @@ const panelView = (
   categoriesView(model, initialFocus, h),
 ]
 
+const toShopDialogMessage = (message: Dialog.Message): Message =>
+  Message.GotShopDialogMessage({ message })
+
 export const shopDialogView = (model: Model, h: HtmlBuilder<Message>): Html =>
   dialogShell(
     {
@@ -1004,7 +1007,7 @@ export const shopDialogView = (model: Model, h: HtmlBuilder<Message>): Html =>
       backdropClass: 'shop-backdrop',
       panelClass: 'shop-panel',
       panelView: renderInfo => panelView(model, renderInfo, h),
-      toParentMessage: message => Message.GotShopDialogMessage({ message }),
+      toParentMessage: toShopDialogMessage,
     },
     h,
   )
