@@ -9,6 +9,7 @@ import {
   VISIT_ID_LENGTH,
 } from './analytics'
 import { API_ORIGIN } from './apiOrigin'
+import { describeError } from './describeError'
 
 // API ORIGIN
 
@@ -44,9 +45,6 @@ type SummaryTransport = typeof SummaryTransport.Type
 class SummarySendError extends Data.TaggedError('SummarySendError')<{
   readonly reason: string
 }> {}
-
-const describeError = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
 
 const toSendError = (error: unknown): SummarySendError =>
   new SummarySendError({ reason: describeError(error) })
