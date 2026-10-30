@@ -15,7 +15,7 @@ import { type ExitId, Phase, ShopState, type Vector } from './worldSchema'
 
 // THE EXIT
 
-// NOTE: the kitchen costs about two thirds of the Gossip Box. At the wave 3
+// NOTE: the kitchen costs about two thirds of the Chatterbox. At the wave 3
 // break a typical run has about $100, so it buys the gun or the kitchen and a
 // refill, not both. It opens from that break on, after the first break has
 // taught the shop.

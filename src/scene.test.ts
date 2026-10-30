@@ -175,7 +175,7 @@ describe('Shop', () => {
   })
 
   const shotgunButton = role('button', { name: 'Buy Barn Buster for $35' })
-  const smgButton = role('button', { name: 'Buy Gossip Box for $100' })
+  const smgButton = role('button', { name: 'Buy Chatterbox for $100' })
   const shellsButton = role('button', {
     name: 'Shell Sack, ammo for Barn Buster, $10, adds 16 shells',
   })
@@ -347,7 +347,7 @@ describe('Shop', () => {
 
   test('an upgraded gun goes by its tier name everywhere in the shop', () => {
     const fullDrum = role('button', {
-      name: 'Chatter Drum, ammo for Beefy Gossip Box, $15, adds up to 120 rounds',
+      name: 'Chatter Drum, ammo for Beefy Chatterbox, $15, adds up to 120 rounds',
     })
     scene(
       { update, view },
@@ -370,18 +370,18 @@ describe('Shop', () => {
       ),
       measureSurface,
       ...openShop(),
-      expect(role('heading', { name: 'Beefy Gossip Box' })).toExist(),
-      expect(role('list', { name: 'For your Beefy Gossip Box' })).toExist(),
+      expect(role('heading', { name: 'Beefy Chatterbox' })).toExist(),
+      expect(role('list', { name: 'For your Beefy Chatterbox' })).toExist(),
       expect(fullDrum).toHaveAttr('aria-disabled', 'true'),
-      expect(within(fullDrum, text('Your Beefy Gossip Box is full'))).toExist(),
-      expect(text('Your Gossip Box is full')).toBeAbsent(),
+      expect(within(fullDrum, text('Your Beefy Chatterbox is full'))).toExist(),
+      expect(text('Your Chatterbox is full')).toBeAbsent(),
       expect(
         text(
           'You always keep the Beefy Pop Pistol. A new gun takes your second slot, and whatever was there goes, upgrades and all.',
         ),
       ).toExist(),
       expect(
-        text('Replaces your Beefy Gossip Box, and its upgrades are lost'),
+        text('Replaces your Beefy Chatterbox, and its upgrades are lost'),
       ).toExist(),
     )
   })
@@ -450,7 +450,7 @@ describe('Shop', () => {
       ),
       measureSurface,
       click(role('button', { name: 'Switch to the Pop Pistol' })),
-      expect(role('button', { name: 'Switch to the Gossip Box' })).toExist(),
+      expect(role('button', { name: 'Switch to the Chatterbox' })).toExist(),
       expect(role('button', { name: 'Reload the Pop Pistol' })).toExist(),
     )
   })

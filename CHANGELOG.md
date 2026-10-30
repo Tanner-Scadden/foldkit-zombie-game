@@ -6,7 +6,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 
 - ▶️ PLAY is one big arrow now, every menu's close X slimmed down (still easy to tap), and a CODE card in the MORE hand shows off the game's source.
 - 👕 Your Profile fits small phones held upright: every tab stays on screen, every shirt color is in reach, and your pick never gets its edge clipped.
-- 🔫 Upgraded guns keep their names now: Beefy, then DELUXE, then 3000. The SMG goes by Gossip Box.
+- 🔫 Upgraded guns keep their names now: Beefy, then DELUXE, then 3000. The SMG is the Chatterbox.
 - 🏎️ Big hordes run smoother on slower phones.
 
 ## October 29, 2026: How tough are you?

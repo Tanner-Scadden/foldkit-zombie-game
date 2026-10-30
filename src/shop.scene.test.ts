@@ -123,7 +123,7 @@ describe('the shop at a glance', () => {
       measureSurface,
       ...openShop,
       expect(within(upgrade, selector('.shop-card-name'))).toHaveText(
-        'Gossip Box DELUXE',
+        'Chatterbox DELUXE',
       ),
       expect(within(upgrade, selector('.shop-upgrade-arrow'))).toExist(),
       expect(role('img', { name: 'Tier 1 of 3' })).toExist(),
@@ -136,7 +136,7 @@ describe('the shop at a glance', () => {
       click(upgrade),
       expect(role('img', { name: 'Tier 2 of 3' })).toExist(),
       expect(within(upgrade, selector('.shop-card-name'))).toHaveText(
-        'Gossip Box 3000',
+        'Chatterbox 3000',
       ),
     )
   })

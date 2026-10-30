@@ -335,10 +335,10 @@ describe('tier names', () => {
         'Barn Buster 3000',
       ],
       [
-        'Gossip Box',
-        'Beefy Gossip Box',
-        'Gossip Box DELUXE',
-        'Gossip Box 3000',
+        'Chatterbox',
+        'Beefy Chatterbox',
+        'Chatterbox DELUXE',
+        'Chatterbox 3000',
       ],
     ])
   })

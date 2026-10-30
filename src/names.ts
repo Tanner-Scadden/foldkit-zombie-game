@@ -18,7 +18,7 @@ import type {
 export const GUN_NAMES: Readonly<Record<WeaponKind, string>> = {
   Pistol: 'Pop Pistol',
   Shotgun: 'Barn Buster',
-  Smg: 'Gossip Box',
+  Smg: 'Chatterbox',
   Peashooter: 'Pea Shooter',
 }
 

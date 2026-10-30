@@ -125,7 +125,7 @@ describe('Mode choice', () => {
       ),
       expect(
         text(
-          'You have $321. Holding the Gossip Box DELUXE. Second slot: Gossip Box DELUXE, upgrade tier 2 of 3, with 99 rounds. Pistol upgrade tier 0 of 3.',
+          'You have $321. Holding the Chatterbox DELUXE. Second slot: Chatterbox DELUXE, upgrade tier 2 of 3, with 99 rounds. Pistol upgrade tier 0 of 3.',
         ),
       ).toExist(),
     )
@@ -237,7 +237,7 @@ describe('Upgrades in the shop', () => {
       ).not.toHaveAttr('aria-disabled', 'true'),
       expect(
         role('button', {
-          name: 'Beefy Gossip Box, upgrade for Gossip Box, $60',
+          name: 'Beefy Chatterbox, upgrade for Chatterbox, $60',
         }),
       ).toBeAbsent(),
       click(nextShotgunTier),
