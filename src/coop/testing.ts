@@ -93,10 +93,12 @@ export const memberOf = (
   name: string,
   ready = false,
   look = '',
+  canNightmare = false,
 ): LobbyMember => ({
   playerId: `player-${slot}`,
   name,
   look,
+  canNightmare,
   slot,
   ready,
   joinedMs: slot,

@@ -47,5 +47,6 @@ export type Message = typeof Message.Type
 
 export const OutMessage = defineMessageUnion({
   ClosedCoop: {},
+  NeededNewerBuild: {},
 })
 export type OutMessage = typeof OutMessage.Type

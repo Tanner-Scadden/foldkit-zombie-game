@@ -24,12 +24,21 @@ import {
   DEFAULT_ROOM_SETTINGS,
   type RoomWorld,
   actionCodeOf,
+  ownWorldOf,
   startRoomWorld,
 } from './roomWorld'
+import { aimTracers } from './simulation'
 import { SeatAction } from './stepWorld'
 import { asVeteran } from './veteran'
 import { beginPreparation, startWaveEarly } from './waves'
-import { GameEvent, ShopState } from './worldSchema'
+import {
+  type Bullet,
+  GameEvent,
+  Phase,
+  Pierce,
+  RunMode,
+  ShopState,
+} from './worldSchema'
 
 // An online co-op run in the root (src/coopPlay.ts): the room's World drawn
 // as the game, this player's own seat as the player, presses sent to the
@@ -211,6 +220,125 @@ describe('an online co-op run', () => {
       ).length
     expect(stomps(own.x + 10, own.y)).toBe(1)
     expect(stomps(own.x + 200, own.y)).toBe(0)
+  })
+
+  test('a lost co-op endless run records its best wave on the room difficulty', () => {
+    const endless = (phase: Phase): RoomWorld => ({
+      ...roomWorld,
+      world: modifyFields(startWaveEarly(roomWorld.world), {
+        mode: () => RunMode.Endless(),
+        difficulty: difficulty =>
+          modifyFields(difficulty, { chosen: () => 'Hard' }),
+        phase: current =>
+          Phase.isAnyOf(['GameOver'])(phase) ? phase : current,
+      }),
+    })
+    const showing = (current: Model, world: RoomWorld): Model =>
+      modifyFields(current, {
+        coop: coop =>
+          modifyFields(coop, {
+            screen: () =>
+              Option.match(maybeRoomOf(coop), {
+                onNone: () => coop.screen,
+                onSome: room =>
+                  Screen.InRoom({
+                    room: {
+                      ...room,
+                      session: playingSession(world, OWN_SLOT),
+                    },
+                  }),
+              }),
+          }),
+      })
+    const playing = update(inRun(endless(Phase.Ready())), roomFrame(100)).model
+    expect(playing.phase._tag).toBe('Wave')
+    const lost = update(
+      showing(playing, endless(Phase.GameOver({ wave: 14 }))),
+      roomFrame(200),
+    ).model
+    expect(lost.phase._tag).toBe('GameOver')
+    expect(lost.difficulty.chosen).toBe(graduated.difficulty.chosen)
+    expect(lost.bests.byDifficulty.Hard.maybeBestEndlessWave).toEqual(
+      Option.some(14),
+    )
+    expect(lost.bests.byDifficulty.Normal.maybeBestEndlessWave).toEqual(
+      graduated.bests.byDifficulty.Normal.maybeBestEndlessWave,
+    )
+  })
+
+  test('your own shots draw from your own tracers; everyone else from the room', () => {
+    const own = Option.getOrThrow(
+      maybePlayerAt(roomWorld.world, OWN_SLOT),
+    ).player
+    const bulletAt = (
+      id: number,
+      shooter: number,
+      weapon: Bullet['weapon'],
+    ): Bullet => ({
+      id,
+      x: own.x + 30,
+      y: own.y,
+      velocityX: 200,
+      velocityY: 0,
+      remainingMs: 600,
+      weapon,
+      damage: 1,
+      knockback: 0,
+      glaze: 'Plain',
+      pierce: Pierce.Stops(),
+      shooter,
+    })
+    const withBullets: RoomWorld = {
+      ...roomWorld,
+      world: modifyFields(roomWorld.world, {
+        bullets: () => [
+          bulletAt(40, OWN_SLOT, 'Pistol'),
+          bulletAt(41, 0, 'Pistol'),
+          bulletAt(42, OWN_SLOT, 'Peashooter'),
+        ],
+      }),
+    }
+    const tracer = { ...bulletAt(-1, OWN_SLOT, 'Pistol'), x: own.x + 10 }
+    const withTracer = modifyFields(inRun(withBullets), {
+      coop: coop =>
+        modifyFields(coop, {
+          screen: () =>
+            Option.match(maybeRoomOf(coop), {
+              onNone: () => coop.screen,
+              onSome: room =>
+                Screen.InRoom({
+                  room: { ...room, tracers: [tracer], tracerCount: 1 },
+                }),
+            }),
+        }),
+    })
+    const drawn = update(withTracer, roomFrame(100)).model
+    expect(Array.map(drawn.bullets, bullet => bullet.id)).toEqual([41, 42, -1])
+    const flown = Option.getOrThrow(
+      Array.findFirst(drawn.bullets, bullet => bullet.id === -1),
+    )
+    expect(flown.x).toBeGreaterThan(tracer.x)
+    const later = update(drawn, roomFrame(150)).model
+    const further = Option.getOrThrow(
+      Array.findFirst(later.bullets, bullet => bullet.id === -1),
+    )
+    expect(further.x).toBeGreaterThan(flown.x)
+    expect(later.zombies).toEqual(drawn.zombies)
+  })
+
+  test('a predicted shot fires its tracers from the muzzle on the same frame', () => {
+    const world = ownWorldOf(roomWorld, OWN_SLOT)
+    const [, tracers] = aimTracers(world, 7, -1)
+    expect(tracers.length).toBe(1)
+    const tracer = Option.getOrThrow(Array.head(tracers))
+    expect(tracer.id).toBe(-1)
+    expect(
+      Math.hypot(tracer.x - world.player.x, tracer.y - world.player.y),
+    ).toBeGreaterThan(0)
+    expect(
+      Math.sign(tracer.velocityX) === Math.sign(world.player.facing.x) ||
+        world.player.facing.x === 0,
+    ).toBe(true)
   })
 
   test('presses go to the room, and there is no pause', () => {

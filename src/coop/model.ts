@@ -3,7 +3,7 @@ import { defineTaggedUnion } from 'foldkit/schema'
 
 import { Lobby, PickedMode, RoomCode, RoomDifficulty } from '@munch/netcode'
 
-import { GameEvent } from '../worldSchema'
+import { Bullet, GameEvent } from '../worldSchema'
 import { RoomSession, WorldState } from './seam'
 
 // NOTE: co-op's own state, a Submodel the root Model holds. Nothing here is
@@ -22,6 +22,7 @@ export const CoopProblem = Schema.Literals([
   'NotACode',
   'Kicked',
   'Dropped',
+  'Outdated',
 ])
 export type CoopProblem = typeof CoopProblem.Type
 
@@ -104,6 +105,8 @@ export const noPresses: Presses = {
 // room tick they reached. `predictedShots` counts the shots your own
 // player fired in this frame's newly predicted ticks, so the shot sounds
 // at once; a correction from the room replays ticks already counted.
+// `tracers` are those shots' bullets, drawn at once and hurting nothing
+// (src/simulation.ts, aimTracers), and `tracerCount` numbers them.
 export const Room = Schema.Struct({
   code: RoomCode,
   slot: Schema.Number,
@@ -115,6 +118,8 @@ export const Room = Schema.Struct({
   frameEvents: Schema.Array(GameEvent),
   eventsTick: Schema.Number,
   predictedShots: Schema.Number,
+  tracers: Schema.Array(Bullet),
+  tracerCount: Schema.Number,
   presses: Presses,
   share: Share,
   departure: Departure,
@@ -134,13 +139,11 @@ export const Screen = defineTaggedUnion({
 export type Screen = typeof Screen.Type
 
 // NOTE: `name` and `look` are what joining sends for this player (the
-// look as src/playerData.ts writes it), and `canPickNightmare` is whether
-// they have unlocked Nightmare, so as a room's host they may pick it.
+// look as src/playerData.ts writes it).
 export const Model = Schema.Struct({
   screen: Screen,
   name: Schema.String,
   look: Schema.String,
-  canPickNightmare: Schema.Boolean,
 })
 export type Model = typeof Model.Type
 
@@ -148,7 +151,6 @@ export const initialModel: Model = {
   screen: Screen.Closed(),
   name: '',
   look: '',
-  canPickNightmare: false,
 }
 
 export const emptyQueue: Queue = {

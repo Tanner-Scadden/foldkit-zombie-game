@@ -546,6 +546,71 @@ const advanceBullets = (
   })
 }
 
+// TRACERS
+
+// NOTE: a co-op client's own shot, drawn the instant it fires (src/coopPlay.ts):
+// the pellets the gun it holds would fire from where it stands, aimed as
+// it aims, with the client's cosmetic stream for the spread. They hurt
+// nothing; the room's own copy of the shot decides every hit.
+const heldGunOf = (player: World['player']): readonly [WeaponKind, number] =>
+  Arsenal.match(player.arsenal, {
+    PistolOnly: () => [SIDEARM, player.pistolTier] as const,
+    HoldingPistol: () => [SIDEARM, player.pistolTier] as const,
+    HoldingSpare: ({ spare }) => [spare.kind, spare.tier] as const,
+  })
+
+export const aimTracers = (
+  model: World,
+  seed: number,
+  firstId: number,
+): Seeded<ReadonlyArray<Bullet>> => {
+  const { player, boosts } = model
+  const [weapon, tier] = heldGunOf(player)
+  const stats = firingStats(boosts, weapon, tier)
+  const load: Load = {
+    stats,
+    weapon,
+    glaze: bulletGlaze(boosts),
+    pierce: bulletPierce(boosts),
+  }
+  const muzzle = addVectors(
+    player,
+    scaleVector(player.facing, stats.muzzleReach),
+  )
+  const [nextSeed, velocities] = aimPellets(seed, player.facing, stats)
+  return [
+    nextSeed,
+    Array.map(velocities, (velocity, index) =>
+      makeBullet(firstId - index, muzzle, velocity, load),
+    ),
+  ]
+}
+
+// NOTE: tracers fly as bullets do and stop at a wall, the arena's edge, the
+// end of their life, or the first zombie they touch; a zombie the room says
+// was missed is simply not hurt, and nothing is rewound.
+export const flyTracers = (
+  level: Level,
+  zombies: ReadonlyArray<Zombie>,
+  tracers: ReadonlyArray<Bullet>,
+  deltaMs: number,
+): ReadonlyArray<Bullet> =>
+  Array.flatMap(tracers, tracer =>
+    Result.match(flyBullet(level, deltaMs / MS_PER_SECOND, deltaMs)(tracer), {
+      onFailure: () => [],
+      onSuccess: flown =>
+        Array.some(
+          zombies,
+          zombie =>
+            isFree(zombie) &&
+            Math.hypot(zombie.x - flown.x, zombie.y - flown.y) <=
+              radiusOf(zombie),
+        )
+          ? []
+          : [flown],
+    }),
+  )
+
 // ZOMBIES
 
 const isFinishedDying = (zombie: Zombie): boolean =>

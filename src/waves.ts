@@ -69,6 +69,7 @@ import {
   Alarm,
   Beat,
   BreakClock,
+  type Difficulty,
   type DoorId,
   type Formation,
   GameEvent,
@@ -1723,18 +1724,25 @@ export const roundWave = (phase: Phase): number =>
     GameOver: ({ wave }) => wave,
   })
 
-const recordBestWave = (model: Model, wave: number): Model =>
+const recordBestWave = (
+  model: Model,
+  wave: number,
+  played: Difficulty,
+): Model =>
   isEndless(model)
-    ? withBests(model, bests =>
-        modifyFields(bests, {
-          maybeBestEndlessWave: maybeBest =>
-            Option.some(
-              Option.match(maybeBest, {
-                onNone: () => wave,
-                onSome: best => Math.max(best, wave),
-              }),
-            ),
-        }),
+    ? withBests(
+        model,
+        bests =>
+          modifyFields(bests, {
+            maybeBestEndlessWave: maybeBest =>
+              Option.some(
+                Option.match(maybeBest, {
+                  onNone: () => wave,
+                  onSome: best => Math.max(best, wave),
+                }),
+              ),
+          }),
+        played,
       )
     : model
 
@@ -1755,8 +1763,13 @@ export const endWhenDefeated = (model: World): World => {
 }
 
 // NOTE: the client's half of a round ending on a tick: the end screen's
-// clock starts, and a lost endless run records its best wave.
-export const endRoundOnClient = (before: Model, after: Model): Model => {
+// clock starts, and a lost endless run records its best wave, under the
+// difficulty it was played on (an online co-op run's is the room's).
+export const endRoundOnClient = (
+  before: Model,
+  after: Model,
+  played: Difficulty = after.difficulty.chosen,
+): Model => {
   if (
     !isRoundActive(before.phase) ||
     !Phase.isAnyOf(['Victory', 'GameOver'])(after.phase)
@@ -1765,7 +1778,7 @@ export const endRoundOnClient = (before: Model, after: Model): Model => {
   }
   const shown = modifyFields(after, { screenMs: () => 0 })
   return Phase.isAnyOf(['GameOver'])(after.phase)
-    ? recordBestWave(shown, roundWave(after.phase))
+    ? recordBestWave(shown, roundWave(after.phase), played)
     : shown
 }
 

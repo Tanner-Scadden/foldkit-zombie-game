@@ -29,11 +29,15 @@ import {
   type Socket,
   SyncCallFailed,
   authenticateWith,
+  encodeNightmareAnswer,
   handleDirectory,
+  isNightmareUnlockedIn,
   makeDirectoryHost,
   makeScopeHost,
+  nightmareUnlockedIn,
   playerScopeId,
   playerScopeOf,
+  readNightmareUnlock,
   setupOnce,
 } from './syncCore.ts'
 
@@ -233,6 +237,39 @@ describe('the sync Worker', () => {
       await reply.text(),
     )
     expect(messages[0]).toMatchObject({ _tag: 'Deltas', head: 1 })
+
+    expect(await Effect.runPromise(nightmareUnlockedIn(host))).toBe(false)
+    expect(isNightmareUnlockedIn({ player: [{ nightmare: 'Unlocked' }] })).toBe(
+      true,
+    )
+    expect(isNightmareUnlockedIn({ player: [{ nightmare: 'Locked' }] })).toBe(
+      false,
+    )
+    expect(isNightmareUnlockedIn({})).toBe(false)
+    const asked: Array<Readonly<Record<string, string>>> = []
+    const answered = await Effect.runPromise(
+      readNightmareUnlock(async (_scope, _url, headers) => {
+        asked.push(headers)
+        return { ok: true, text: async () => encodeNightmareAnswer(true) }
+      }, PLAYER),
+    )
+    expect(answered).toBe(true)
+    expect(asked).toEqual([{ 'x-sync-scope': scope }])
+    expect(
+      await Effect.runPromise(
+        readNightmareUnlock(async () => {
+          throw new Error('down')
+        }, PLAYER),
+      ),
+    ).toBe(false)
+    expect(
+      await Effect.runPromise(
+        readNightmareUnlock(
+          async () => ({ ok: false, text: async () => '' }),
+          PLAYER,
+        ),
+      ),
+    ).toBe(false)
 
     await Effect.runPromise(host.linkedDevices(2, 'linked-x-2', everyone))
     expect(JSON.parse(phone.sent.at(-1) ?? '{}')).toMatchObject({

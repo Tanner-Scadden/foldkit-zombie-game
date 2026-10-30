@@ -850,6 +850,8 @@ const coopRoom = (
     frameEvents: [],
     eventsTick: 0,
     predictedShots: 0,
+    tracers: [],
+    tracerCount: 0,
     presses: CoopModel.noPresses,
     share: 'Idle',
     departure: 'Staying',
@@ -925,10 +927,16 @@ const coopScreen = (stage: NonNullable<typeof config.coop>) => {
       })
     }
     case 'keep': {
-      const room = coopRoom(members(2), 'Lobby', {
-        slot: 1,
-        maybePlayerId: Option.some('player-1'),
-      })
+      const room = coopRoom(
+        members(2).map(member =>
+          member.slot === 0 ? { ...member, canNightmare: true } : member,
+        ),
+        'Lobby',
+        {
+          slot: 1,
+          maybePlayerId: Option.some('player-1'),
+        },
+      )
       return Screen.InRoom({
         room: {
           ...room,

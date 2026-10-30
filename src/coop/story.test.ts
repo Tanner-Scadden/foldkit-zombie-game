@@ -375,9 +375,13 @@ describe('the lobby', () => {
       model(current => {
         expect(picked(current, 'KeyX')).toEqual(['Campaign', 'Easy'])
         expect(picked(current, 'KeyE')).toEqual(['Endless', 'Hard'])
-        const unlocked = modifyFields(current, {
-          canPickNightmare: () => true,
-        })
+        const unlocked = update(
+          current,
+          lobbyUpdate({
+            ...hard,
+            members: [memberOf(0, 'Ana', false, '', true), memberOf(1, 'Bo')],
+          }),
+        ).model
         expect(picked(unlocked, 'KeyX')).toEqual(['Campaign', 'Nightmare'])
       }),
     )
@@ -738,6 +742,31 @@ describe('the room', () => {
       model(current => {
         expect(current.screen).toEqual(
           Screen.Hub({ maybeProblem: Option.some('Kicked') }),
+        )
+      }),
+    )
+  })
+
+  test('a room on a newer protocol sends the player to update', () => {
+    story(
+      update,
+      given(inRoom(1)),
+      message(
+        received(
+          {
+            _tag: 'Refused',
+            reason: 'VersionMismatch',
+            minVersion: 3,
+            maxVersion: 3,
+          },
+          500,
+        ),
+      ),
+      expectOutMessage(OutMessage.NeededNewerBuild()),
+      resolveRemember(),
+      model(current => {
+        expect(current.screen).toEqual(
+          Screen.Hub({ maybeProblem: Option.some('Outdated') }),
         )
       }),
     )

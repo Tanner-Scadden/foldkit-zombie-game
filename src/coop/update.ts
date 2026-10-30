@@ -11,12 +11,14 @@ import {
   type PlayerInput,
   type RoomDifficulty,
   Session,
+  canHostPickNightmare,
   normalizeRoomCode,
 } from '@munch/netcode'
 import { CODE_ALPHABET } from '@munch/sync-engine'
 
 import { actionCodeOf, eventsBetween, heldAction } from '../roomWorld'
 import type { SeatAction } from '../stepWorld'
+import type { Bullet } from '../worldSchema'
 import { Message, OutMessage } from './message'
 import {
   type CoopProblem,
@@ -190,6 +192,8 @@ export const freshRoom = (code: string, slot: number): Room => ({
   frameEvents: [],
   eventsTick: 0,
   predictedShots: 0,
+  tracers: [],
+  tracerCount: 0,
   presses: noPresses,
   share: 'Idle',
   departure: 'Staying',
@@ -288,6 +292,16 @@ const receiveFrame = (
   if (event._tag === 'Received') {
     if (event.frame._tag === 'Kicked') {
       return leaveFor(model, 'Kicked')
+    }
+    if (
+      event.frame._tag === 'Refused' &&
+      event.frame.reason === 'VersionMismatch'
+    ) {
+      return {
+        model: hub(model, Option.some('Outdated')),
+        commands: [RememberRoom({ maybeCode: Option.none() })],
+        outMessage: OutMessage.NeededNewerBuild(),
+      }
     }
     return Result.match(
       Session.receive(coopWorld, room.session, event.frame, event.bytes, atMs),
@@ -409,6 +423,23 @@ export const tickRoom = (
       : { model: next }
   })
 
+// NOTE: this frame's own tracers, kept for the next, and how many were ever
+// fired, so each has its own id.
+export const keepTracers = (
+  model: Model,
+  tracers: ReadonlyArray<Bullet>,
+  fired: number,
+): Model =>
+  Option.match(maybeRoomOf(model), {
+    onNone: () => model,
+    onSome: room =>
+      withRoom(model, {
+        ...room,
+        tracers,
+        tracerCount: room.tracerCount + fired,
+      }),
+  })
+
 // NOTE: a press for the room: a swap, a buy, READY, and the rest
 // (src/stepWorld.ts, SeatAction). It goes out with the next inputs.
 export const pressAction = (model: Model, action: SeatAction): Model =>
@@ -472,18 +503,15 @@ export const pickedModeOf = (lobby: Lobby): PickedMode =>
   lobby.mode === 'StandIn' ? 'Campaign' : lobby.mode
 
 // NOTE: KeepGoing is there only while the room keeps a won run, and
-// Nightmare only for a host who unlocked it (or when it is picked already).
+// Nightmare only for a host the room found it unlocked for, on the server
+// (packages/netcode, Lobby.ts, canHostPickNightmare).
 export const canPickMode = (lobby: Lobby, mode: PickedMode): boolean =>
   mode !== 'KeepGoing' || lobby.canKeepGoing
 
 export const canPickDifficulty = (
-  model: Model,
   lobby: Lobby,
   difficulty: RoomDifficulty,
-): boolean =>
-  difficulty !== 'Nightmare' ||
-  model.canPickNightmare ||
-  lobby.difficulty === 'Nightmare'
+): boolean => difficulty !== 'Nightmare' || canHostPickNightmare(lobby)
 
 export const isPicking = (room: Room): boolean =>
   isHost(room) &&
@@ -500,7 +528,7 @@ const pick = (
     onSome: lobby =>
       isPicking(room) &&
       canPickMode(lobby, mode) &&
-      canPickDifficulty(model, lobby, difficulty) &&
+      canPickDifficulty(lobby, difficulty) &&
       (mode !== pickedModeOf(lobby) || difficulty !== lobby.difficulty)
         ? {
             model,
@@ -555,7 +583,7 @@ const pickFromKey = (model: Model, room: Room, code: string): UpdateReturn =>
           room,
           pickedModeOf(lobby),
           nextOf(DIFFICULTY_PICKS, lobby.difficulty, difficulty =>
-            canPickDifficulty(model, lobby, difficulty),
+            canPickDifficulty(lobby, difficulty),
           ),
         )
       } else {
@@ -677,13 +705,11 @@ export const open = (
   model: Model,
   name: string,
   maybeCode: Option.Option<string>,
-  canPickNightmare = false,
   look = '',
 ): UpdateReturn => {
   const named = modifyFields(model, {
     name: () => name,
     look: () => look,
-    canPickNightmare: () => canPickNightmare,
   })
   return Option.match(maybeCode, {
     onNone: () => ({

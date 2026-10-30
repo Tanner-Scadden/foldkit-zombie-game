@@ -21,8 +21,11 @@ import {
 
 // NOTE: a client says the range it speaks and the room picks the newest
 // both know, or refuses with its own range so the client can say "update".
-export const PROTOCOL_VERSION = 1
-export const MIN_PROTOCOL_VERSION = 1
+// Version 2 (2026-10-30): the room's lobby carries picks, looks, and the
+// Nightmare unlock, and a run can close as Won; a version 1 client is
+// refused rather than handed messages it cannot read.
+export const PROTOCOL_VERSION = 2
+export const MIN_PROTOCOL_VERSION = 2
 
 export interface VersionRange {
   readonly minVersion: number

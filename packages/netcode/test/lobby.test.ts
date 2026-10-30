@@ -111,29 +111,34 @@ const seat = (server: ScopeServer, playerId: string) =>
         playerId,
         name: `  ${playerId}\u0000  the   great one `,
         look: playerId === BO ? 'Female.Bun.Pink.Tan.Teal' : 'not a <look>',
+        nightmare: playerId === CY,
       },
       `joined-room-${counter}`,
     )
   })
 
-const created = Effect.gen(function* () {
-  const server = yield* openServer
-  yield* server.addMember(ANA)
-  const outcome = yield* server.runServer(
-    CreatedRoom,
-    {
-      code: CODE,
-      host: ANA,
-      hostName: 'Ana',
-      hostLook: 'Male.Crop.Brown.Light.Blue',
-      mode: 'Campaign',
-      visibility: 'Private',
-    },
-    'created-room',
-  )
-  expect(outcome._tag).toBe('Applied')
-  return server
-})
+const createdBy = (hostNightmare: boolean) =>
+  Effect.gen(function* () {
+    const server = yield* openServer
+    yield* server.addMember(ANA)
+    const outcome = yield* server.runServer(
+      CreatedRoom,
+      {
+        code: CODE,
+        host: ANA,
+        hostName: 'Ana',
+        hostLook: 'Male.Crop.Brown.Light.Blue',
+        hostNightmare,
+        mode: 'Campaign',
+        visibility: 'Private',
+      },
+      'created-room',
+    )
+    expect(outcome._tag).toBe('Applied')
+    return server
+  })
+
+const created = createdBy(false)
 
 describe('display names', () => {
   test('are cleaned, cut to 12 characters, and default by seat', () => {
@@ -330,6 +335,47 @@ describe('the room scope', () => {
       }),
     ))
 
+  test('Nightmare is for a host the room found it unlocked for', () =>
+    run(
+      Effect.gen(function* () {
+        const locked = yield* created
+        yield* seat(locked, CY)
+        const nightmare = (server: ScopeServer, by: string) =>
+          push(server, by, ChangedPicks, {
+            by,
+            mode: 'Campaign',
+            difficulty: 'Nightmare',
+          })
+        expect(yield* nightmare(locked, ANA)).toMatch(/Nightmare is locked/)
+        expect((yield* lobbyOf(locked)).difficulty).toBe('Normal')
+
+        const unlocked = yield* createdBy(true)
+        yield* seat(unlocked, BO)
+        expect(yield* nightmare(unlocked, ANA)).toBe('Acked')
+        yield* push(unlocked, ANA, ChangedReady, { by: ANA, ready: true })
+        yield* push(unlocked, BO, ChangedReady, { by: BO, ready: true })
+        expect((yield* lobbyOf(unlocked)).status).toBe('Playing')
+        yield* unlocked.runServer(
+          RecordedRoomResult,
+          { result: { round: 1, reason: 'Won', ticks: 9, scores: [] } },
+          'recorded-result-won',
+        )
+        const won = yield* lobbyOf(unlocked)
+        expect([won.mode, won.difficulty]).toEqual(['KeepGoing', 'Nightmare'])
+        yield* push(unlocked, BO, ChangedReady, { by: BO, ready: true })
+        yield* push(unlocked, ANA, LeftRoom, { by: ANA })
+        const handed = yield* lobbyOf(unlocked)
+        expect(handed.host).toBe(BO)
+        expect([handed.mode, handed.difficulty, handed.canKeepGoing]).toEqual([
+          'Endless',
+          'Hard',
+          false,
+        ])
+        expect(handed.members.map(member => member.ready)).toEqual([false])
+        expect(yield* nightmare(unlocked, BO)).toMatch(/Nightmare is locked/)
+      }),
+    ))
+
   test('a won campaign offers to keep going until the crew changes', () =>
     run(
       Effect.gen(function* () {
@@ -397,6 +443,7 @@ describe('the room scope', () => {
             host: ANA,
             hostName: 'Ana',
             hostLook: 'Male.Crop.Brown.Light.Blue',
+            hostNightmare: false,
             mode: 'Campaign',
             visibility: 'Public',
           },
@@ -457,6 +504,7 @@ describe('the room scope', () => {
             host: ANA,
             hostName: 'Ana',
             hostLook: 'Male.Crop.Brown.Light.Blue',
+            hostNightmare: false,
             mode: 'Campaign',
             visibility: 'Private',
           },

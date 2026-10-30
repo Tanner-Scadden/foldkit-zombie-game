@@ -135,6 +135,72 @@ export const tryCall = <A>(step: string, call: () => PromiseLike<A>) =>
     catch: cause => new SyncCallFailed({ step, cause }),
   })
 
+// NIGHTMARE
+
+// NOTE: whether a player has unlocked Nightmare, as their own scope holds
+// it on the server. A co-op room asks before it seats them, so the lobby
+// never takes a client's word for it (Lobby.ts, ChangedPicks). Anything
+// that goes wrong reads as locked.
+export const NIGHTMARE_PATH = '/internal/nightmare'
+export const SCOPE_HEADER = 'x-sync-scope'
+
+const NightmareRows = Schema.Array(Schema.Struct({ nightmare: Schema.String }))
+const decodeNightmareRows = Schema.decodeUnknownOption(NightmareRows)
+
+export const isNightmareUnlockedIn = (
+  tables: Readonly<Record<string, ReadonlyArray<unknown>>>,
+): boolean =>
+  Option.exists(
+    Option.flatMap(decodeNightmareRows(tables['player'] ?? []), Array.head),
+    row => row.nightmare === 'Unlocked',
+  )
+
+export const nightmareUnlockedIn = (host: ScopeHost): Effect.Effect<boolean> =>
+  Effect.map(Effect.orDie(host.server.snapshot), snapshot =>
+    snapshot._tag === 'Snapshot'
+      ? isNightmareUnlockedIn(snapshot.tables)
+      : false,
+  )
+
+const NightmareAnswer = Schema.fromJsonString(
+  Schema.Struct({ unlocked: Schema.Boolean }),
+)
+const decodeNightmareAnswer = Schema.decodeUnknownOption(NightmareAnswer)
+
+export const encodeNightmareAnswer = (unlocked: boolean): string =>
+  Schema.encodeSync(NightmareAnswer)({ unlocked })
+
+export type ScopeAnswer = Readonly<{
+  ok: boolean
+  text: () => Promise<string>
+}>
+
+export const readNightmareUnlock = (
+  fetchScope: (
+    scope: string,
+    url: string,
+    headers: Readonly<Record<string, string>>,
+  ) => Promise<ScopeAnswer>,
+  playerId: string,
+): Effect.Effect<boolean> => {
+  const scope = playerScopeId(playerId)
+  return tryCall('read the Nightmare unlock', () =>
+    fetchScope(scope, `https://sync${NIGHTMARE_PATH}`, {
+      [SCOPE_HEADER]: scope,
+    }),
+  ).pipe(
+    Effect.flatMap(response =>
+      response.ok
+        ? tryCall('read the answer', () => response.text())
+        : Effect.succeed(''),
+    ),
+    Effect.map(text =>
+      Option.exists(decodeNightmareAnswer(text), answer => answer.unlocked),
+    ),
+    Effect.catch(() => Effect.succeed(false)),
+  )
+}
+
 // SETUP
 
 // NOTE: a Durable Object builds its Effect services once, on first use, in a

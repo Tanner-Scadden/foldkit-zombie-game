@@ -138,6 +138,7 @@ const PROBLEM_WORDS: Readonly<Record<CoopProblem, string>> = {
   NotACode: 'BAD CODE',
   Kicked: 'KICKED',
   Dropped: 'LOST',
+  Outdated: 'UPDATE',
 }
 
 const PROBLEM_LINES: Readonly<Record<CoopProblem, string>> = {
@@ -149,6 +150,7 @@ const PROBLEM_LINES: Readonly<Record<CoopProblem, string>> = {
   NotACode: 'That is not a room code.',
   Kicked: 'The host kicked you.',
   Dropped: 'The connection dropped.',
+  Outdated: 'The room runs a newer game. Update to join.',
 }
 
 const problemView = (
@@ -714,7 +716,7 @@ const skullPickView = (
   h: HtmlBuilder<Message>,
 ): Html => {
   const isLit = skullIndexOf(difficulty) <= skullIndexOf(lobby.difficulty)
-  const isLocked = !canPickDifficulty(model, lobby, difficulty)
+  const isLocked = !canPickDifficulty(lobby, difficulty)
   return h.keyed('button')(
     difficulty,
     [
