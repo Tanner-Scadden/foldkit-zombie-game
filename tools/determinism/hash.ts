@@ -1,0 +1,190 @@
+// The gameplay hash: one 32 bit number for the World and Gate fields of a
+// Model (see fields.ts), equal in two runs exactly when their gameplay state
+// is equal bit for bit, in any engine.
+//
+// The canonical form, walked depth first:
+// - A number hashes its float64 bits, so 0.1 + 0.2 and 0.3 differ, as do
+//   0 and -0. Every NaN hashes the same, since engines may differ in the
+//   payload of a NaN and no game rule can tell them apart.
+// - A string hashes its length and UTF-16 code units.
+// - An array hashes its length and its items in order: the order of
+//   zombies and bullets is part of the state.
+// - An object hashes its `_tag` (Option keeps it on the prototype), then its
+//   own keys sorted by code unit with their values. A key whose value is
+//   undefined counts as absent, as in JSON. So two objects with the same
+//   fields built in a different order hash the same.
+// - A Map or Set hashes its entries in iteration order, which the language
+//   fixes as insertion order, so a change in that order is a divergence.
+//
+// Each value is mixed in as tagged 32 bit words with the MurmurHash3 block
+// step, using Math.imul, so every engine computes the same bits.
+//
+// Cheap per tick: the Model shares structure, so an object that did not
+// change since the last hash is the same reference. A hasher keeps a hash
+// for every object it has seen in a WeakMap and skips unchanged subtrees,
+// so a tick rehashes only what it touched. That cache trusts the Model to
+// be immutable; `cached: false` walks everything, and the test compares the
+// two to catch an update that mutates the Model in place.
+
+import type { Model } from '../../src/model'
+import { gameplayEntriesOf } from './fields'
+
+const C1 = 0xcc9e2d51
+const C2 = 0x1b873593
+const SEED = 0x9747b28c
+
+const TAG_UNDEFINED = 1
+const TAG_NULL = 2
+const TAG_FALSE = 3
+const TAG_TRUE = 4
+const TAG_NUMBER = 5
+const TAG_NAN = 6
+const TAG_STRING = 7
+const TAG_ARRAY = 8
+const TAG_OBJECT = 9
+const TAG_MAP = 10
+const TAG_SET = 11
+const TAG_BIGINT = 12
+const TAG_OTHER = 13
+
+const rotl = (value: number, bits: number): number =>
+  (value << bits) | (value >>> (32 - bits))
+
+const mix = (hash: number, word: number): number => {
+  const scrambled = Math.imul(rotl(Math.imul(word | 0, C1), 15), C2)
+  return (Math.imul(rotl(hash ^ scrambled, 13), 5) + 0xe6546b64) | 0
+}
+
+const finish = (hash: number, length: number): number => {
+  const a = hash ^ length
+  const b = Math.imul(a ^ (a >>> 16), 0x85ebca6b)
+  const c = Math.imul(b ^ (b >>> 13), 0xc2b2ae35)
+  return (c ^ (c >>> 16)) >>> 0
+}
+
+const isRecord = (value: object): value is Record<string, unknown> =>
+  !Array.isArray(value)
+
+export type GameplayHasher = Readonly<{
+  // The hash of any value in the canonical form.
+  hashValue: (value: unknown) => number
+  // The gameplay hash of a Model: its hashed fields by name, in sorted order.
+  hashModel: (model: Model) => number
+  // Each hashed field's own hash, to name the field that diverged.
+  fieldHashes: (model: Model) => ReadonlyArray<readonly [string, number]>
+}>
+
+export const makeGameplayHasher = (
+  options: Readonly<{ cached: boolean }> = { cached: true },
+): GameplayHasher => {
+  const cache = new WeakMap<object, number>()
+  const bits = new DataView(new ArrayBuffer(8))
+
+  const hashString = (hash: number, text: string): number => {
+    // NOTE: a plain loop, since this runs for every key of every changed
+    // object on every hashed tick.
+    let next = mix(mix(hash, TAG_STRING), text.length)
+    for (let index = 0; index < text.length; index++) {
+      next = mix(next, text.charCodeAt(index))
+    }
+    return next
+  }
+
+  const hashNumber = (hash: number, value: number): number => {
+    if (Number.isNaN(value)) {
+      return mix(hash, TAG_NAN)
+    }
+    bits.setFloat64(0, value)
+    return mix(mix(mix(hash, TAG_NUMBER), bits.getUint32(0)), bits.getUint32(4))
+  }
+
+  const hashObject = (value: object): number => {
+    if (options.cached) {
+      const known = cache.get(value)
+      if (known !== undefined) {
+        return known
+      }
+    }
+    const hashed = finish(walkObject(value), 0)
+    if (options.cached) {
+      cache.set(value, hashed)
+    }
+    return hashed
+  }
+
+  const walkObject = (value: object): number => {
+    if (Array.isArray(value)) {
+      return value.reduce<number>(
+        (hash, item) => step(hash, item),
+        mix(mix(SEED, TAG_ARRAY), value.length),
+      )
+    }
+    if (value instanceof Map) {
+      return [...value.entries()].reduce<number>(
+        (hash, [key, item]) => step(step(hash, key), item),
+        mix(mix(SEED, TAG_MAP), value.size),
+      )
+    }
+    if (value instanceof Set) {
+      return [...value.values()].reduce<number>(
+        (hash, item) => step(hash, item),
+        mix(mix(SEED, TAG_SET), value.size),
+      )
+    }
+    if (!isRecord(value)) {
+      return mix(SEED, TAG_OTHER)
+    }
+    const tag = '_tag' in value ? value['_tag'] : undefined
+    const tagged = step(mix(SEED, TAG_OBJECT), tag)
+    return Object.keys(value)
+      .filter(key => key !== '_tag' && value[key] !== undefined)
+      .sort()
+      .reduce<number>(
+        (hash, key) => step(hashString(hash, key), value[key]),
+        tagged,
+      )
+  }
+
+  const step = (hash: number, value: unknown): number => {
+    if (value === undefined) {
+      return mix(hash, TAG_UNDEFINED)
+    }
+    if (value === null) {
+      return mix(hash, TAG_NULL)
+    }
+    if (typeof value === 'boolean') {
+      return mix(hash, value ? TAG_TRUE : TAG_FALSE)
+    }
+    if (typeof value === 'number') {
+      return hashNumber(hash, value)
+    }
+    if (typeof value === 'string') {
+      return hashString(hash, value)
+    }
+    if (typeof value === 'bigint') {
+      return hashString(mix(hash, TAG_BIGINT), value.toString())
+    }
+    if (typeof value === 'object') {
+      return mix(hash, hashObject(value))
+    }
+    return mix(hash, TAG_OTHER)
+  }
+
+  const hashValue = (value: unknown): number => finish(step(SEED, value), 0)
+
+  const fieldHashes = (
+    model: Model,
+  ): ReadonlyArray<readonly [string, number]> =>
+    gameplayEntriesOf(model).map(([field, value]) => [field, hashValue(value)])
+
+  const hashModel = (model: Model): number =>
+    finish(
+      fieldHashes(model).reduce(
+        (hash, [field, fieldHash]) => mix(hashString(hash, field), fieldHash),
+        SEED,
+      ),
+      0,
+    )
+
+  return { hashValue, hashModel, fieldHashes }
+}

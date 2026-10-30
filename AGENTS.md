@@ -31,6 +31,8 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 | `bun run balance:model`                      | The analytical balance model: every wave and level from the tables, in under a second                                                                                                     |
 | `bun run balance:nightly`                    | The nightly balance suite through the guard, reported in `tools/balance/reports/<date>.md`                                                                                                |
 | `bun run heavy -- <command...>`              | Run any CPU-heavy command through the guard: one at a time across the machine, after the load drops, with `WORKERS` capped                                                                |
+| `bun run determinism`                        | One scripted run in Bun, Node, headless Chrome, and workerd, through the guard: where engines first differ                                                                                |
+| `bun run determinism:diff -- [ref]`          | Whether the working tree plays exactly like `ref` (`origin/main`), through the guard, for no-change refactors                                                                             |
 
 Before you finish a change, run `typecheck`, `lint`, `test`, and `build`. All four must pass.
 

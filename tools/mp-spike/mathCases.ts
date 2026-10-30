@@ -4,7 +4,13 @@
 // mathProbe.ts compares the results between engines; worker.ts serves them
 // from workerd.
 
-import { detAtan2, detCos, detExp, detHypot, detSin } from './detMath'
+import {
+  detAtan2,
+  detCos,
+  detExp,
+  detHypot,
+  detSin,
+} from '../determinism/detMath'
 
 const COUNT = 20_000
 

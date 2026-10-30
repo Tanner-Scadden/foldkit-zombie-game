@@ -89,7 +89,93 @@ All of this lands in single player and helps testing and replays on its own.
 3. **A `World` beside the client `Model`.** The gameplay fields (players, zombies, bullets, traps, pickups, the phase and pacing, the boss, the wallets, the level, the seeded state) become the shared `World`. The dialogs, home menu, save and sync state, audio, settings, camera lean, onboarding, and cosmetics stay in the client `Model`. `stepWorld(world, inputs, stepMs)` is the pure tick, taking each player's `PlayerInput` instead of DOM Messages, and returns the world and its frame events.
 4. **Keep UI and art out of the simulation's imports.** `src/model.ts` imports `Dialog`, `RadioGroup`, and `Tabs` from `@foldkit/ui`, `src/shop.ts` imports `Tabs`, and `src/screen.ts` imports `group` from `src/sprite.ts`, which pulls in `foldkit`'s `Canvas` and `src/png.ts`. The simulation also imports `foldkit/struct` and `foldkit/schema`, and Foldkit pins `effect` 4.0.0 while `infra/` runs 4.0.7: either the simulation drops its `foldkit` imports or the Worker carries Foldkit's own Effect copy.
 
-**Optional, for replays and verified leaderboards only:** the deterministic math in `tools/mp-spike/detMath.ts` (`hypot`, `sin`, `cos`, `atan2`, `exp` from `+`, `-`, `*`, `/`, and `Math.sqrt`), the gameplay hash, and the cross-engine harness. Co-op does not need them: the room is the only place the world runs. A replay checked in a Worker of a run played in Safari does (see `PLATFORM.md`, "Leaderboards").
+**Optional, for replays and verified leaderboards only:** the deterministic math in `tools/determinism/detMath.ts` (`hypot`, `sin`, `cos`, `atan2`, `exp` from `+`, `-`, `*`, `/`, and `Math.sqrt`) and the cross-engine run of the determinism harness. Co-op does not need them: the room is the only place the world runs. A replay checked in a Worker of a run played in Safari does (see `PLATFORM.md`, "Leaderboards").
+
+**The determinism harness** (`tools/determinism`, see its `README.md`) is the safety net for every step below. One scripted player, one gameplay hash, three checks: two runs in one engine hash the same on every frame (in `bun run test`, with the clock and `Math.random` skewed in the second run); `bun run determinism:diff -- [ref]`, which says whether the working tree plays exactly like `ref` frame by frame, or names the first frame, field, and value that differ; and `bun run determinism`, which plays in Bun, Node, headless Chrome, and workerd. Today each engine is deterministic with itself, and engines differ only through their transcendental Math (see "Determinism").
+
+#### What the split needs
+
+An inventory made on 2026-10-29, with line numbers as of `e3d4c4b1`. Other work is reshaping `src/simulation.ts`, `src/waves.ts`, and `src/model.ts`, so check the lines before acting on them. The field classes are also data in `tools/determinism/fields.ts`, which the gameplay hash reads.
+
+**Model fields** (`src/model.ts:1099-1186`):
+
+| Class    | Fields                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| World    | `phase`, `pacing`, `boss`, `frenzyPacks`, `intensity`, `mode`, `difficulty`, `player`, `zombies`, `bullets`, `nextEntityId`, `wallet`, `elapsedMs`, `frameEvents`, `traps`, `pickups`, `boosts`, `loot`, `trapStock`, `selectedTrap`, `level`, `rngState`, `intent`                                                                                                                                   |
+| Gate     | `shop`, `hitStop`, `debutCard`, `lessons`, `practice`, `stats`, `input`, `maybeSurface`, `orientation`, `cameraLean`                                                                                                                                                                                                                                                                                  |
+| Derived  | `flowField`, `wideFlowField`                                                                                                                                                                                                                                                                                                                                                                          |
+| Cosmetic | `particles`, `decals`, `dustCooldownMs`, `shake`, `popups`, `streak`, `blasts`, `callouts`                                                                                                                                                                                                                                                                                                            |
+| Client   | `difficultyCard`, `shopDialog`, `shopCategory`, `shopTabs`, `trapHint`, `trapNotice`, `lastDevice`, `touchControls`, `introducedKinds`, `hintBand`, `screenMs`, `audio` and every setting, the home screen tip, page visibility, the newer build, the support URL, `appearance`, `character`, the panels, `bests`, `runTally`, `loading`, the save and sync state, `linkFlow`, `home`, `seenPowerUps` |
+
+- **World, with notes.** `difficulty.chosen` is gameplay; its `nightmare` unlock is progression. `wallet.shown` is a cosmetic count-up (`src/shop.ts:70`) inside a World field. `frameEvents` is the step's output, not state: it becomes what `stepWorld` returns. `loot` has its own random stream (`src/model.ts:464`). `selectedTrap` and `intent` are per player. The step writes one Client field: grabbing a power-up adds its kind to the saved `seenPowerUps` (`src/powerups.ts:466`) to pick the callout's look; that moves to the client with the callouts.
+- **Gate** is client state that steers gameplay in single player today. Each one becomes a per-player input or a World field in the split:
+  - `shop`: Browsing holds the break countdown (`src/waves.ts:1559`) and blocks intent, firing, and reloads (`src/simulation.ts:139`, `402-436`) and pickups (`src/powerups.ts:725`). A per-player World flag.
+  - `hitStop`: decides how much world time a frame gets (`src/simulation.ts:1248-1263`, `src/juice.ts:60-118`). World in single player, a cosmetic freeze in co-op (default 9).
+  - `debutCard`: freezes the world while it shows (`src/main.ts:397`). A single player pause; it does not block in co-op (default 9).
+  - `lessons`, `practice`: unlearned move and fire hold wave 1 (`src/onboarding.ts:121`, `src/waves.ts:1559`), and practice feeds lessons (`src/main.ts:401`). A single player flag passed to the step.
+  - `stats`: `stats.kills` decides the tutorial drop (`src/powerups.ts:606`). That count moves into the World; the rest stays client.
+  - `input`, `maybeSurface`, `orientation`, `cameraLean`: `refreshIntent` (`src/simulation.ts:136`) derives intent from raw input inside the step, twice (`src/simulation.ts:1192`, `1210`), through `screenCameraOf`, which reads the surface, the orientation, and the lean. Intent becomes the input; the client derives it.
+
+**Randomness.** One generator (`src/prng.ts:8`, mulberry32 with `Math.imul`, exact everywhere) and one state, `rngState`, seeded at startup by `GenerateSeed` (`src/commands.ts:78-83`, `src/main.ts:536`). Drops use their own stream, derived at each run reset (`src/runReset.ts:96`).
+
+- **Gameplay draws:** bullet spread and speed (`src/simulation.ts:229-233`, `314-325`), spawn doors, packs, and volleys (`src/waves.ts:697`, `724`, `769-770`, `802-805`), endless plans (`src/waves.ts:1047`), wave rolls and the boss's plan (`src/waves.ts:1209-1237`, `src/boss.ts:154`), crawler spots (`src/waves.ts:1329-1349`, `src/crawler.ts:137-138`), zombie speeds (`src/waves.ts:1365-1387`, `src/boss.ts:221-233`, `635-648`), and drops (`src/powerups.ts:636-684`, on `loot.rngState`).
+- **Cosmetic draws on the same `rngState`:** particles inside the step (`src/particles.ts:1249-1264`, called at `src/simulation.ts:1243`), coins on a purchase (`src/particles.ts:1270`, from `src/update/shop.ts:111`), dust on placing a trap (`src/particles.ts:1282`, from `src/update/traps.ts:39`), shake and popups (`src/juice.ts:211`, `244-333`, written back at `435` and `471`), and the character picker's random look (`src/update/character.ts:32`).
+- **Fine as they are:** the room's decor (`src/room.ts:124`) and the audio noise (`src/audio.ts:126`) use fixed seeds of their own.
+- **No clock and no `Math.random`** anywhere in `src` outside tests. Time and randomness only enter through Commands (`src/commands.ts:80`, `src/analyticsBeacon.ts:35`, `src/version.ts:68`) and the frame subscription (`src/subscriptions.ts:195`). The harness's test keeps it so.
+- **Why it matters.** A frame draws in the order shoot, waves, particles, juice, so the next frame's spawns depend on how many particles and popups the last one made. A room that makes no particles, or a phone that makes fewer, plays a different game from the same seed.
+
+**Frame time.** `TickedFrame({ deltaTime })` (`src/message.ts:31`) is handled at `src/main.ts:396`:
+
+- With the new zombie card showing, only the card ages (`src/main.ts:397-398`). In a round, `advanceGame(model, deltaTime)` (`src/simulation.ts:1248`) runs, then `tallyFrame` with the clamped time (`src/stats.ts:51`), `learnFromFrame`, and the hint band (`src/main.ts:399-409`). Paused, Ready, and the end screens get no ticks.
+- `clampFrameDelta` (`src/simulation.ts:1183`) clamps to 0 to 50 ms (`MAX_FRAME_DELTA_MS`, `src/constants.ts:8`). A long frame loses time; there is no step.
+- `advanceGame` turns real time into world time with `thawHitStop` (none while Frozen, scaled while Slowed), runs `advanceWorld` on it (`src/simulation.ts:1186-1246`), then the camera lean and `advanceJuice` on real time.
+- `advanceWorld` hands `deltaMs` or seconds to every system: `movePlayer`, `tickReload`, `fire`, `advanceBullets`, `advanceZombies`, `recordFootfalls`, `resolveBulletHits`, `advanceTraps`, `recoverActions`, `advanceChuckers`, `advanceCrawlers`, `advanceBossMoves`, `advanceFrenzy`, `feelIntensity`, `advanceRound`, `advancePowerUps`, and `advanceParticles`.
+- **Tied to the frame rate today:** at most one shot per weapon per frame, with the cooldown running into debt (`src/simulation.ts:290`, `329`), and per turret (`src/traps.ts:447`); intent, flow fields, and separation once a frame (`src/simulation.ts:1221`, `554`); contacts once a frame after movement (`src/simulation.ts:1098`); walking dust (`src/particles.ts:1184`); the money count-up (`src/shop.ts:70`); `activeFrames` (`src/stats.ts:67`). So a 120 Hz phone and a 60 Hz laptop already play slightly different games.
+- **The balance bot** steps 1000/30 ms frames (`tools/balance/bot.ts:76`).
+
+How to bring in the fixed step:
+
+1. `FIXED_STEP_MS = 1000 / 60` in `src/constants.ts` and a `stepCarryMs` in the client Model.
+2. `TickedFrame` adds the clamped frame time to the carry and runs `advanceGame(model, FIXED_STEP_MS)` once for each whole step (at most 3 for a 50 ms frame), keeping the rest. `tallyFrame`, `learnFromFrame`, and the hint band stay once a frame; the camera lean and juice may stay on real time.
+3. Hit-stop in single player becomes whole ticks: Frozen skips ticks, and Slowed runs a tick when its scaled time adds up to a step, both from the same carry.
+4. The frame's `frameEvents` are the events of all its ticks, concatenated, so particles, sounds, and stats see every one.
+5. A 60 Hz display gets one tick a frame, exactly as now: 1000/60 added to a zero carry leaves exactly zero after one step. 120 Hz gets a tick every other frame and 30 Hz two a frame. Drawing positions interpolated by the carry can come later; at 60 Hz there is nothing to hide.
+
+**Transcendental Math in the simulation.** Engines disagree on the last bit of these; `+`, `-`, `*`, `/`, `Math.sqrt`, and the rounding functions are exact everywhere.
+
+- `Math.hypot`: `src/geometry.ts:8` (`vectorLength`, so `normalize` and `clampLength` everywhere), `src/arena.ts:211`, `574`, `664`, `700`, `src/pathing.ts:384`, `src/simulation.ts:534`, `788`, `848`, `src/boss.ts:324`, `331`, `src/chucker.ts:81`, `src/crawler.ts:51`, `src/frenzy.ts:112`, `src/traps.ts:346`, `708`, `src/powerups.ts:408`, `src/shop.ts:752`, `src/pacing.ts:475`, `src/onboarding.ts:57`.
+- `Math.atan2`, `Math.sin`, `Math.cos`: `src/simulation.ts:229`, `233` (pellet spread), `src/chucker.ts:340-341`, `471`, `566`, `617-618`.
+- `Math.exp`: `src/simulation.ts:154` (knockback decay, where Node 24 and Chrome 156 first differ), `src/pacing.ts:489` (intensity decay).
+- Cosmetic, inside the step: `src/particles.ts:383`, `447-448`, `454`, `536-537`.
+- View only, harmless: the `*View.ts` files, `src/hud.ts`, `src/screens.ts`, `src/stall.ts`, `src/drawing.ts`, `src/wavePreview.ts`, and `src/sprite.ts:1665-1671`.
+
+Co-op does not need these replaced. Replays would: a `src/detMath.ts` imported at these call sites (not installed over `Math`), proved by `bun run determinism -- --det-math`, which agrees in all four engines today.
+
+**Imports that pull UI, art, or browser code into the simulation.** `src/simulation.ts` reaches `actions`, `arena`, `boss`, `camera`, `chucker`, `combat`, `constants`, `crawler`, `difficulty`, `frenzy`, `geometry`, `input`, `juice`, `model`, `pacing`, `particles`, `pathing`, `powerups`, `prng`, `shop`, `stats`, `traps`, `waves`, `weapons`, and `zombies`, and through them `onboarding`, `runReset`, `doorRoute`, `screen`, `sprite`, `png`, `playerData`, `playerSync`, and `support`. The edges to cut:
+
+| Edge                                                                                                                                                                 | Fix                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `src/simulation.ts:20` to `camera.ts`, `src/camera.ts:12` to `screen.ts`, `src/screen.ts:7` to `sprite.ts` (Foldkit `Canvas` at `src/sprite.ts:2`, `png.ts` at `:5`) | Intent and the camera lean leave the step; `group` moves out of `screen.ts`        |
+| `src/simulation.ts:56` to `input.ts` (`deriveIntent`), `src/input.ts:4` to `camera.ts`                                                                               | The client derives intent                                                          |
+| `src/runReset.ts:2` and `:4` to `camera.ts` and `input.ts` (reached from `src/waves.ts:79`)                                                                          | The run reset's client half moves to the client                                    |
+| `src/model.ts:4` and `src/shop.ts:5` to `@foldkit/ui` (`Dialog`, `RadioGroup`, `Tabs`)                                                                               | The World schema gets its own module; the shop's `Tabs` helper moves to the client |
+| `src/model.ts:9-25` to `playerData`, `playerSync`, `support`                                                                                                         | They stay with the client Model                                                    |
+| `src/waves.ts:68` to `onboarding.ts`                                                                                                                                 | The lessons gate becomes a flag passed to the step                                 |
+| `src/simulation.ts:57` to `juice.ts` and `:80` to `particles.ts`; `src/update/shop.ts:18` and `src/update/traps.ts:8` to `particles.ts`                              | The step returns events; the client makes particles and juice from them            |
+
+Only `update` in `src/main.ts`, not the step, reaches `audio` and `music` (`src/main.ts:6`), `commands` with `analyticsBeacon` (`import.meta.env`) and the store with its worker URL (`import.meta.url`, `src/main.ts:22`), `home` and the changelog's `?raw` import (`src/main.ts:28`), and `version` (`src/main.ts:163`). The `SoundEffect` imports in `powerups`, `traps`, `weapons`, and `zombies` are type-only and erased. The step also imports `foldkit/struct` and `foldkit/schema` (point 4 above).
+
+#### The split, step by step
+
+Each step is one pull request that passes `typecheck`, `lint`, `test`, and `build`. Unless it says it changes behavior, it proves it does not with `bun run determinism:diff` (no difference over the default 7,200 frames, for the campaign and endless, with `--pattern Fixed60` and `Mixed`) and `bun run balance:nightly` within `tools/balance/baseline.json`. The gameplay hash reads World fields under a future `model.world` as if they were top level, so moving fields keeps the hash.
+
+1. **A cosmetic random stream.** A `cosmeticRngState` (Cosmetic, seeded from the run's seed) for particles, shake, popups, coin bursts, trap dust, and the random look. This changes behavior on purpose: cosmetics stop advancing `rngState`, so a seed spawns differently. Proof: a Story test that strips every frame's particles in one of two runs and still finds the same gameplay hash on every frame (it fails today), and the nightly within baseline, since the odds did not change.
+2. **The fixed step and hit-stop in ticks.** As above. `determinism:diff` with `Fixed60` shows no difference (one tick a frame, carry exactly zero); `Mixed` differs on purpose. The bot's 30 Hz frames become two ticks, so the nightly decides; the bot can move to 60 Hz frames in the same change, with the baseline rewritten and the commit saying so.
+3. **Cosmetics after the step.** `advanceParticles`, `advanceJuice` (apart from the hit-stop decision), blasts, callouts, popups, shake, the walking dust, and `wallet.shown` run on the frame's events after the ticks. Pure reordering for the World: `determinism:diff` shows no difference.
+4. **Intent as the step's input.** `refreshIntent` and `leanCamera` leave the step; `TickedFrame` derives intent once on the client and the step takes it. Today the second `refreshIntent` re-aims through the camera after the player moved, so mouse aim may move by a fraction of a pixel: expect `determinism:diff` to name `intent.maybeAim` first, check that nothing else moved before it, and keep the nightly within baseline. Touch and keyboard aim do not go through the camera and stay identical.
+5. **The Gates as World fields or flags.** `shop` Browsing and the `stats.kills` count move into the World; the lessons gate and the new zombie card become single player flags the step reads. `determinism:diff` shows no difference.
+6. **A `World` schema and `stepWorld`.** `src/world.ts` declares the World with no `@foldkit/ui`, camera, art, or audio imports; the Model holds `world: World`; `stepWorld(world, intent, stepMs)` returns the next World and its events, and the systems take a World instead of a Model. Large but mechanical, so it can land system by system. `determinism:diff` shows no difference.
+7. **Prove the step is UI free.** A build check that bundles `stepWorld` alone and fails on any UI, art, audio, or store module, then runs it in workerd (`bun run determinism -- --engines workerd`). This is the Phase 0 exit check, with the nightly and `perf:check`.
 
 ### Phase 1: more than one player, still offline
 
@@ -216,6 +302,8 @@ Needed now only for replays and verified leaderboards, not co-op. The cross-engi
 | Seed 7, full campaign to Victory (38,137 frames) | `detMath.ts` | None        | None           | None            |
 
 The first difference, at frame 94, is the last bit of `player.facing`, the aim direction normalized with `Math.hypot`: `0.46274222632867223` in JavaScriptCore and `0.4627422263286723` in V8. Even two V8 builds disagree, by frame 151.
+
+The permanent harness (`bun run determinism`, the same day, seed 1, 18,000 frames, with headless Chrome 156 added) finds the same picture: JavaScriptCore against every V8 first at frame 95, in `intent.maybeAim.value.x` (`0.5925329902992075` against `0.5925329902992076`); Node 24 against Chrome 156 and workerd first at frame 188, in `zombies[0].knockback.x`, which decays with `Math.exp`; Chrome and workerd never. With `--det-math`, all four agree on every frame. Small differences can heal (Bun and Node hash the same again at frame 499), so only the first divergence means anything.
 
 The math probe runs the game's Math calls on 20,000 inputs in each engine and counts results that differ:
 
@@ -388,7 +476,7 @@ Two channels, one object. A room's lobby and record are a **sync scope**; the ga
 
 ## The spike
 
-`tools/mp-spike` holds the measuring tools behind this file. They are not shipped, and `bun run typecheck` checks them. Run anything heavy through the guard.
+`tools/mp-spike` holds the measuring tools behind this file. They are not shipped, and `bun run typecheck` checks them. Run anything heavy through the guard. The deterministic Math, the scripted player, and a faster gameplay hash were promoted to `tools/determinism`, the permanent harness (see its `README.md`).
 
 | File                           | What it does                                                                                                      |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
@@ -401,7 +489,6 @@ Two channels, one object. A room's lobby and record are a **sync scope**; the ga
 | `worker.ts`, `workerd.capnp`   | The same run inside workerd, served by `infra/node_modules/.bin/workerd`                                          |
 | `crossEngine.ts`               | Bun, Node, and workerd side by side: `bun run heavy -- bun tools/mp-spike/crossEngine.ts [frames] [seed] [det]`   |
 | `mathCases.ts`, `mathProbe.ts` | The Math probe across the three engines: `bun tools/mp-spike/mathProbe.ts` after `build.ts`                       |
-| `detMath.ts`                   | The deterministic `hypot`, `sin`, `cos`, `atan2`, and `exp`                                                       |
 
 Node frame times come from `node tools/mp-spike/out/measure.js`, after `build.ts`. workerd is not used for timing: it only advances its clock on I/O, so `performance.now()` stands still inside a request.
 

@@ -7,6 +7,7 @@ export default defineConfig({
       'src/**/*.{test,spec}.ts',
       'tools/heavy/**/*.test.ts',
       'tools/balance/**/*.test.ts',
+      'tools/determinism/**/*.test.ts',
     ],
     environment: 'happy-dom',
     // Some Story tests replay whole waves for many seeds. They take a few

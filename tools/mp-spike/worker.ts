@@ -9,7 +9,7 @@
 // performance.now() stands still inside one request. Node runs the same V8.
 
 import './globals'
-import { installDeterministicMath } from './detMath'
+import { installDeterministicMath } from '../determinism/detMath'
 import { mathResults } from './mathCases'
 import { runScenario } from './scenario'
 

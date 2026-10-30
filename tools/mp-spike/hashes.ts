@@ -3,7 +3,7 @@
 // Bun and, bundled, in Node; worker.ts does the same inside workerd.
 
 import './globals'
-import { installDeterministicMath } from './detMath'
+import { installDeterministicMath } from '../determinism/detMath'
 import { gameplayOf, runScenario } from './scenario'
 
 // MP_DET_MATH=1 swaps in the deterministic Math functions first.
