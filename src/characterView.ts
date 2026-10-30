@@ -315,8 +315,7 @@ const rowsView = (
 // DIALOG
 
 const CHARACTER_TITLE = 'Character'
-const CHARACTER_BLURB =
-  'Pick your look. It sticks around until you close the game.'
+const CHARACTER_BLURB = 'Pick your look.'
 
 const panelView = (
   picker: CharacterPicker,
@@ -328,7 +327,7 @@ const panelView = (
     [h.Class('look-header')],
     [
       h.h2([...title, h.Class('look-title')], [CHARACTER_TITLE]),
-      h.p([...description, h.Class('look-blurb')], [CHARACTER_BLURB]),
+      h.p([...description, h.Class('sr-only')], [CHARACTER_BLURB]),
     ],
   ),
   h.div(

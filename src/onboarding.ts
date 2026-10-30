@@ -431,12 +431,17 @@ const isTrapHintFor = (model: Model, kind: 'Barricade' | 'Turret'): boolean =>
   TrapHint.isAnyOf(['Showing'])(model.trapHint) &&
   Option.contains(maybeSelectedKind(model), kind)
 
+// NOTE: on touch the ghost sticks, drawn where the thumbs go, teach moving
+// and shooting, so the center hints for them show only with a keyboard.
+const isFirstWaveOnKeyboard = (model: Model): boolean =>
+  isFirstWave(model.phase) && model.lastDevice === 'KeyboardMouse'
+
 const HINT_RULES: ReadonlyArray<HintRule> = [
   {
     id: 'Move',
     maybeAgeMs: model =>
       ageWhen(
-        isFirstWave(model.phase) && isPending(model.lessons.move),
+        isFirstWaveOnKeyboard(model) && isPending(model.lessons.move),
         model.elapsedMs,
       ),
   },
@@ -444,7 +449,7 @@ const HINT_RULES: ReadonlyArray<HintRule> = [
     id: 'Fire',
     maybeAgeMs: model =>
       ageWhen(
-        isFirstWave(model.phase) && isPending(model.lessons.fire),
+        isFirstWaveOnKeyboard(model) && isPending(model.lessons.fire),
         model.elapsedMs,
       ),
   },

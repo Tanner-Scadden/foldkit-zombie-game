@@ -24,6 +24,7 @@ import {
   LESSON_MIN_SHOWN_MS,
   hintIcons,
   hintWords,
+  shownGhostSticks,
   shownHints,
 } from './onboarding'
 import { accuracyPercent, totalKills } from './stats'
@@ -172,7 +173,7 @@ describe('onboarding hints', () => {
     )
   })
 
-  test('touch hints picture both thumbs and a tap on START WAVE', () => {
+  test('on touch the ghost sticks teach moving and shooting, then a tap on START WAVE', () => {
     story(
       update,
       given(readyModel),
@@ -181,10 +182,8 @@ describe('onboarding hints', () => {
       message(Message.ClickedCampaignButton()),
       model(current => {
         expect(current.lastDevice).toBe('Touch')
-        expect(hintTexts(current)).toEqual([
-          'MoveStick MOVE',
-          'AimStick AIM + SHOOT',
-        ])
+        expect(shownGhostSticks(current)).toEqual(['Move', 'Aim'])
+        expect(hintTexts(current)).toEqual([])
       }),
       touchDown(2, 100, 200),
       message(
@@ -194,7 +193,8 @@ describe('onboarding hints', () => {
       message(Message.ReleasedPointer({ pointerId: 2 })),
       ...ticks(SHOWN_TICKS, TICK_MS),
       model(current => {
-        expect(hintTexts(current)).toEqual(['AimStick AIM + SHOOT'])
+        expect(shownGhostSticks(current)).toEqual(['Aim'])
+        expect(hintTexts(current)).toEqual([])
       }),
       touchDown(3, 700, 200),
       message(

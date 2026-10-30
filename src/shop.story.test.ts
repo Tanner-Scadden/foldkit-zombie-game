@@ -25,6 +25,7 @@ import {
   type Bullet,
   type CarriedGun,
   GameEvent,
+  Lesson,
   type Model,
   Phase,
   Pierce,
@@ -909,6 +910,40 @@ describe('the stall entrance', () => {
       tick(FRAME_MS),
       model(current => {
         expect(stallPrompt(current)).toBe('ClosedUntilFirstClear')
+      }),
+    )
+  })
+
+  test('once the player has shopped, the stall shows no words, only its sign and beacon', () => {
+    const shopped = modifyFields(readyModel, {
+      lessons: lessons =>
+        modifyFields(lessons, { shop: () => Lesson.Learned({ atMs: 0 }) }),
+    })
+    const near = (phase: Phase): Model =>
+      at(modifyFields(shopped, { phase: () => phase }), 225, 160)
+    story(
+      update,
+      given(near(preparing(2))),
+      tick(FRAME_MS),
+      model(current => {
+        expect(ShopState.guards.Away(current.shop)).toBe(true)
+        expect(stallPrompt(current)).toBe('None')
+      }),
+    )
+    story(
+      update,
+      given(near(fighting(3))),
+      tick(FRAME_MS),
+      model(current => {
+        expect(stallPrompt(current)).toBe('None')
+      }),
+    )
+    story(
+      update,
+      given(near(preparing(1))),
+      tick(FRAME_MS),
+      model(current => {
+        expect(stallPrompt(current)).toBe('None')
       }),
     )
   })

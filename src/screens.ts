@@ -315,10 +315,7 @@ const BEEFIER = bakeText('THEY GOT BEEFIER', 'Fresh')
 const healthBoostText = (wave: number): string =>
   `ZOMBIES HAVE +${Math.round((hpScaleFor(wave) - 1) * 100)}% HEALTH`
 
-const HEALTH_BOOSTS: ReadonlyArray<BakedText> = Array.makeBy(
-  BAKED_WAVES + 1,
-  wave => bakeText(healthBoostText(wave), 'Prompt'),
-)
+const FIRST_ENDLESS_HEALTH = bakeText(healthBoostText(FINAL_WAVE + 1), 'Prompt')
 
 type KindBanner = Readonly<{ title: BakedText; tagline: BakedText }>
 
@@ -351,12 +348,19 @@ const bannerAt = (
   }),
 ]
 
-const newKindBanner = (
+const bakedFor = (
+  list: ReadonlyArray<BakedText>,
+  index: number,
+  fallback: () => BakedText,
+): BakedText => Option.getOrElse(Array.get(list, index), fallback)
+
+const iconBanner = (
   band: HintBand,
-  kind: ZombieKind,
+  icon: Sprite,
+  title: BakedText,
+  maybeTagline: Option.Option<BakedText>,
   shownMs: number,
 ): ReadonlyArray<Canvas.Shape> => {
-  const { title, tagline } = KIND_BANNERS[kind]
   const hop =
     shownMs < NEW_KIND_HOP_MS
       ? 1 + 0.5 * Math.sin((Math.PI * shownMs) / NEW_KIND_HOP_MS)
@@ -371,7 +375,7 @@ const newKindBanner = (
         y: BAND_TOP[band] + 5,
       },
       scale: { x: scale, y: scale },
-      shapes: ZOMBIE_SPRITES[kind].icon,
+      shapes: icon,
     }),
     placeBaked(title, {
       x: titleX,
@@ -379,26 +383,72 @@ const newKindBanner = (
       align: 'Center',
       scale: TITLE_SCALE,
     }),
-    centered(tagline, BAND_TOP[band] + SUBTITLE_OFFSET),
+    ...Option.match(maybeTagline, {
+      onNone: () => [],
+      onSome: tagline => [centered(tagline, BAND_TOP[band] + SUBTITLE_OFFSET)],
+    }),
   ]
 }
+
+const newKindBanner = (
+  band: HintBand,
+  kind: ZombieKind,
+  shownMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const { title, tagline } = KIND_BANNERS[kind]
+  return iconBanner(
+    band,
+    ZOMBIE_SPRITES[kind].icon,
+    title,
+    Option.some(tagline),
+    shownMs,
+  )
+}
+
+// NOTE: the first endless wave of a run says the zombies got tougher. Every
+// later one shows only its number beside the beefy heart.
+export type EndlessBanner = 'None' | 'Explained' | 'Pip'
+
+export const endlessBannerOf = (wave: number): EndlessBanner => {
+  const depth = endlessDepth(wave)
+  if (depth === 0) {
+    return 'None'
+  } else if (depth === 1) {
+    return 'Explained'
+  } else {
+    return 'Pip'
+  }
+}
+
+const BEEFY_HEART: Sprite = spriteShapes(
+  ['.GG.GG.', 'GWGGGGG', 'GGGYGGG', 'GGYYYGG', '.GGYGG.', '..GGG..', '...G...'],
+  { G: '#6fae3f', W: '#c4ef9a', Y: '#ffe066' },
+)
 
 const beefierBanner = (
   band: HintBand,
   wave: number,
   shownMs: number,
-): ReadonlyArray<Canvas.Shape> =>
-  endlessDepth(wave) > 0 && shownMs < NEW_KIND_BANNER_MS
-    ? bannerAt(
-        band,
-        BEEFIER,
-        Option.some(
-          Option.getOrElse(Array.get(HEALTH_BOOSTS, wave), () =>
-            bakeText(healthBoostText(wave), 'Prompt'),
-          ),
-        ),
-      )
-    : []
+): ReadonlyArray<Canvas.Shape> => {
+  if (shownMs >= NEW_KIND_BANNER_MS) {
+    return []
+  }
+
+  const banner = endlessBannerOf(wave)
+  if (banner === 'Explained') {
+    return bannerAt(band, BEEFIER, Option.some(FIRST_ENDLESS_HEALTH))
+  } else if (banner === 'Pip') {
+    return iconBanner(
+      band,
+      BEEFY_HEART,
+      bakedFor(WAVE_TITLES, wave, () => bakeText(`WAVE ${wave}`, 'Defeat')),
+      Option.none(),
+      shownMs,
+    )
+  } else {
+    return []
+  }
+}
 
 const debutBanner = (
   band: HintBand,
@@ -410,12 +460,6 @@ const debutBanner = (
     onSome: kind =>
       shownMs < NEW_KIND_BANNER_MS ? newKindBanner(band, kind, shownMs) : [],
   })
-
-const bakedFor = (
-  list: ReadonlyArray<BakedText>,
-  index: number,
-  fallback: () => BakedText,
-): BakedText => Option.getOrElse(Array.get(list, index), fallback)
 
 const preparationBanner = (
   model: Model,

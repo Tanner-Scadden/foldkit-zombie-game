@@ -18,6 +18,7 @@ import {
 import {
   Arsenal,
   type CarriedGun,
+  Lesson,
   type Model,
   Phase,
   type Player,
@@ -980,9 +981,15 @@ export type StallPrompt =
 const closedPrompt = (phase: Phase): StallPrompt =>
   Phase.isAnyOf(['Wave'])(phase) ? 'ClosedDuringWave' : 'ClosedUntilFirstClear'
 
+// NOTE: the words teach the stall once. After the player has shopped, its
+// sign and the bobbing coin over it say the same without words.
 export const stallPrompt = (model: Model): StallPrompt => {
-  const { phase, player, shop } = model
-  if (!Phase.isAnyOf(['Preparation', 'Wave'])(phase) || !isNearStall(player)) {
+  const { phase, player, shop, lessons } = model
+  if (
+    !Phase.isAnyOf(['Preparation', 'Wave'])(phase) ||
+    !isNearStall(player) ||
+    Lesson.isAnyOf(['Learned'])(lessons.shop)
+  ) {
     return 'None'
   } else if (!isShopOpenFor(phase)) {
     return closedPrompt(phase)

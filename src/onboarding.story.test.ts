@@ -449,7 +449,9 @@ describe('tutorial hints', () => {
       releaseFire,
       ...ticks(SHOWN_TICKS, TICK_MS),
       model(current => {
-        expect(hintIds(current)).toEqual(['Move', 'Fire'])
+        expect(isLearned(current.lessons.move)).toBe(false)
+        expect(isLearned(current.lessons.fire)).toBe(false)
+        expect(shownGhostSticks(current)).toEqual(['Move', 'Aim'])
       }),
     )
   })

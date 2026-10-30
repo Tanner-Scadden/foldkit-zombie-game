@@ -433,7 +433,7 @@ export const preparationControlsView = (
 
 const GHOST_LABELS: Readonly<Record<GhostStick, string>> = {
   Move: 'MOVE',
-  Aim: 'AIM + FIRE',
+  Aim: 'AIM + SHOOT',
 }
 
 export const ghostSticksView = (model: Model, h: HtmlBuilder<Message>): Html =>

@@ -23,6 +23,7 @@ import {
   Trap,
   initialModel,
 } from './model'
+import { endlessBannerOf } from './screens'
 import { scoreOf } from './stats'
 import { bulletInto, press, scoring, tick, zombieAt } from './testing'
 import {
@@ -390,6 +391,23 @@ describe('keep going from Victory', () => {
         expect(traps).toEqual([PLANK_PILE])
       }),
     )
+  })
+
+  test('only the first endless wave of a run says they got beefier, later ones show a heart pip', () => {
+    story(
+      update,
+      given(victorious),
+      ...waitOutGrace(),
+      message(Message.ClickedKeepGoingButton()),
+      model(({ phase }) => {
+        expect(Option.map(preparationWave(phase), endlessBannerOf)).toEqual(
+          Option.some('Explained'),
+        )
+      }),
+    )
+    expect(endlessBannerOf(FINAL_WAVE)).toBe('None')
+    expect(endlessBannerOf(FINAL_WAVE + 2)).toBe('Pip')
+    expect(endlessBannerOf(FINAL_WAVE + 7)).toBe('Pip')
   })
 
   test('Enter on Victory still starts a fresh campaign', () => {
