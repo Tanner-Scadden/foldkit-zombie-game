@@ -93,10 +93,13 @@ describe('the wire', () => {
 describe('versions', () => {
   test('the newest version both speak is chosen', () => {
     expect(
-      negotiateVersion({ minVersion: 1, maxVersion: 3 }, SERVER_VERSIONS),
-    ).toEqual(Option.some(1))
+      negotiateVersion({ minVersion: 1, maxVersion: 1 }, SERVER_VERSIONS),
+    ).toEqual(Option.none())
     expect(
-      negotiateVersion({ minVersion: 2, maxVersion: 3 }, SERVER_VERSIONS),
+      negotiateVersion({ minVersion: 1, maxVersion: 3 }, SERVER_VERSIONS),
+    ).toEqual(Option.some(2))
+    expect(
+      negotiateVersion({ minVersion: 3, maxVersion: 4 }, SERVER_VERSIONS),
     ).toEqual(Option.none())
     expect(
       negotiateVersion(

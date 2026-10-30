@@ -4,8 +4,9 @@ import { modifyFields } from 'foldkit/struct'
 
 import type { PlayerInput } from '@munch/netcode'
 
+import { levelOf } from './arena'
 import type { Room as CoopRoom } from './coop/model'
-import { isInLobby, maybeRoomOf } from './coop/update'
+import { isInLobby, keepTracers, maybeRoomOf } from './coop/update'
 import { isAtExit } from './exits'
 import {
   advanceCosmetics,
@@ -20,7 +21,9 @@ import { isCoop, shopOf } from './party'
 import { inputOfIntent, ownWorldOf } from './roomWorld'
 import { freshRun } from './runReset'
 import { isBrowsing } from './shop'
+import { aimTracers, flyTracers } from './simulation'
 import { tallyFrame } from './stats'
+import { TURRET_WEAPON } from './traps'
 import { enterExit } from './update/exit'
 import { closeShop, enterShop } from './update/shop'
 import {
@@ -31,9 +34,10 @@ import {
   shotSoundCue,
 } from './update/sound'
 import type { UpdateStep } from './update/step'
-import { isRoundActive } from './waves'
+import { endRoundOnClient, isRoundActive } from './waves'
 import { type World, withWorld } from './world'
 import {
+  type Bullet,
   type Difficulty,
   GameEvent,
   HitStop,
@@ -160,6 +164,47 @@ const isEntering = (
 ): boolean =>
   isThere(after) && !Option.exists(maybeBefore, before => isThere(before))
 
+// OWN TRACERS
+
+// NOTE: your own gun's bullets are drawn from your own shots, the instant
+// they fire (src/simulation.ts, aimTracers), so the room's copy of them,
+// a round trip later, is not drawn too. A gnome's peas, and everyone
+// else's bullets, come from the room.
+const isOwnGunBullet = (bullet: Bullet, ownSlot: number): boolean =>
+  bullet.shooter === ownSlot && bullet.weapon !== TURRET_WEAPON
+
+type TracedShots = Readonly<{
+  tracers: ReadonlyArray<Bullet>
+  fired: number
+  cosmeticRngState: number
+}>
+
+const traceOwnShots = (
+  model: Model,
+  room: CoopRoom,
+  world: World,
+  frameMs: number,
+): TracedShots => {
+  const flown = flyTracers(levelOf(world), world.zombies, room.tracers, frameMs)
+  if (room.predictedShots <= 0) {
+    return {
+      tracers: flown,
+      fired: 0,
+      cosmeticRngState: model.cosmeticRngState,
+    }
+  }
+  const [cosmeticRngState, fired] = aimTracers(
+    world,
+    model.cosmeticRngState,
+    -1 - room.tracerCount,
+  )
+  return {
+    tracers: [...flown, ...fired],
+    fired: fired.length,
+    cosmeticRngState,
+  }
+}
+
 // NOTE: the drawing of one frame. A run starting (or the next one after the
 // end screen) resets the client's run fields first. While the client's own
 // hit-stop holds, the picture stays, and the events wait in the session.
@@ -176,9 +221,14 @@ const drawRoom =
           : stepModel
         const thaw = thawTick(base.hitStop, frameMs)
         const events = heardBy(world.player, room.frameEvents)
+        const shot = traceOwnShots(base, room, world, frameMs)
+        const traced = modifyFields(base, {
+          cosmeticRngState: () => shot.cosmeticRngState,
+          coop: coop => keepTracers(coop, shot.tracers, shot.fired),
+        })
         if (isFrozen(thaw.hitStop)) {
           return {
-            model: modifyFields(base, {
+            model: modifyFields(traced, {
               hitStop: () => thaw.hitStop,
               frameEvents: () => [],
             }),
@@ -186,23 +236,35 @@ const drawRoom =
         }
         const applied = withWorld(
           takeRoomWorld(
-            modifyFields(base, { hitStop: () => thaw.hitStop }),
-            world,
+            modifyFields(traced, { hitStop: () => thaw.hitStop }),
+            modifyFields(world, {
+              bullets: bullets => [
+                ...Array.filter(
+                  bullets,
+                  bullet => !isOwnGunBullet(bullet, room.slot),
+                ),
+                ...shot.tracers,
+              ],
+            }),
             events,
           ),
           taken => stopForHits(taken, frameMs),
         )
         const drawn = ageDebutCard(
-          raiseDebutCardFrom(
+          endRoundOnClient(
             base,
-            leanFor(
-              advanceCosmetics(
-                tallyFrame(base, applied, frameMs),
-                frameMs,
+            raiseDebutCardFrom(
+              base,
+              leanFor(
+                advanceCosmetics(
+                  tallyFrame(base, applied, frameMs),
+                  frameMs,
+                  frameMs,
+                ),
                 frameMs,
               ),
-              frameMs,
             ),
+            runDifficultyOf(base),
           ),
           frameMs,
         )

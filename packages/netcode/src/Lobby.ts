@@ -197,6 +197,7 @@ export const MemberRow = Schema.Struct({
   player_id: Schema.String,
   name: Schema.String,
   look: Schema.String,
+  nightmare: Schema.Number,
   slot: Schema.Number,
   ready: Schema.Number,
   joined_ms: Schema.Number,
@@ -209,10 +210,13 @@ const encodeResult = Schema.encodeSync(RoomResultJson)
 
 // LOBBY
 
+// NOTE: `canNightmare` is whether the player had unlocked Nightmare when the
+// room seated them, as the room read it from their own scope on the server.
 export const LobbyMember = Schema.Struct({
   playerId: Schema.String,
   name: Schema.String,
   look: Schema.String,
+  canNightmare: Schema.Boolean,
   slot: Schema.Number,
   ready: Schema.Boolean,
   joinedMs: Schema.Number,
@@ -261,6 +265,7 @@ export const lobbyOfRows = (
       playerId: member.player_id,
       name: member.name,
       look: member.look,
+      canNightmare: member.nightmare !== 0,
       slot: member.slot,
       ready: member.ready !== 0,
       joinedMs: member.joined_ms,
@@ -304,7 +309,7 @@ export const readLobby = (
     )
     const members = yield* rejectBadRows(
       decodeMemberRows(
-        yield* sql`SELECT player_id, name, look, slot, ready, joined_ms
+        yield* sql`SELECT player_id, name, look, nightmare, slot, ready, joined_ms
           FROM ${context.table('members')}`,
       ),
     )
@@ -349,6 +354,14 @@ const requireLobby = (context: ApplyContext) =>
       onNone: () => reject('No such room'),
       onSome: lobby => Effect.succeed(lobby),
     }),
+  )
+
+// NOTE: Nightmare is the host's to pick only when the room found it
+// unlocked in their own scope.
+export const canHostPickNightmare = (lobby: Lobby): boolean =>
+  Array.some(
+    lobby.members,
+    member => member.playerId === lobby.host && member.canNightmare,
   )
 
 const requireHost = (lobby: Lobby, by: string) =>
@@ -408,18 +421,22 @@ const picksAfter = (
 
 export const CreatedRoom = defineMutation({
   name: 'CreatedRoom',
-  version: 2,
+  version: 3,
   args: Schema.Struct({
     code: RoomCode,
     host: Schema.String,
     hostName: NameInput,
     hostLook: LookInput,
+    hostNightmare: Schema.Boolean,
     mode: RoomMode,
     visibility: RoomVisibility,
   }),
   scopes: [ROOM_SCOPE_KIND],
   writer: 'ServerOnly',
-  apply: ({ code, host, hostName, hostLook, mode, visibility }, context) =>
+  apply: (
+    { code, host, hostName, hostLook, hostNightmare, mode, visibility },
+    context,
+  ) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
       if (Option.isSome(yield* readLobby(context))) {
@@ -443,6 +460,7 @@ export const CreatedRoom = defineMutation({
         player_id: host,
         name: displayName(hostName, 0),
         look: cleanLook(hostLook),
+        nightmare: hostNightmare ? 1 : 0,
         slot: 0,
         ready: 0,
         joined_ms: context.timestampMs,
@@ -452,15 +470,16 @@ export const CreatedRoom = defineMutation({
 
 export const JoinedRoom = defineMutation({
   name: 'JoinedRoom',
-  version: 2,
+  version: 3,
   args: Schema.Struct({
     playerId: Schema.String,
     name: NameInput,
     look: LookInput,
+    nightmare: Schema.Boolean,
   }),
   scopes: [ROOM_SCOPE_KIND],
   writer: 'ServerOnly',
-  apply: ({ playerId, name, look }, context) =>
+  apply: ({ playerId, name, look, nightmare }, context) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
       const lobby = yield* requireLobby(context)
@@ -480,6 +499,7 @@ export const JoinedRoom = defineMutation({
         player_id: playerId,
         name: displayName(name, slot),
         look: cleanLook(look),
+        nightmare: nightmare ? 1 : 0,
         slot,
         ready: 0,
         joined_ms: context.timestampMs,
@@ -509,6 +529,9 @@ export const ChangedReady = defineMutation({
         member.playerId === by ? { ...member, ready } : member,
       )
       if (everyoneReady({ ...lobby, members: after })) {
+        if (lobby.difficulty === 'Nightmare' && !canHostPickNightmare(lobby)) {
+          return yield* reject('Nightmare is locked')
+        }
         yield* sql`UPDATE ${context.table('members')} SET ready = 0`
         return yield* touch(context, {
           status: 'Playing',
@@ -542,6 +565,9 @@ export const ChangedPicks = defineMutation({
       }
       if (mode === 'KeepGoing' && !lobby.canKeepGoing) {
         return yield* reject('No run to keep going')
+      }
+      if (difficulty === 'Nightmare' && !canHostPickNightmare(lobby)) {
+        return yield* reject('Nightmare is locked')
       }
       if (mode === lobby.mode && difficulty === lobby.difficulty) {
         return
@@ -634,13 +660,21 @@ export const LeftRoom = defineMutation({
         onSome: next =>
           Effect.andThen(
             forgetKept(context, lobby),
-            lobby.host === by
-              ? touch(context, { host: next.playerId })
-              : Effect.void,
+            lobby.host === by ? handOver(context, lobby, next) : Effect.void,
           ),
       })
     }),
 })
+
+// NOTE: a new host who has not unlocked Nightmare cannot keep it picked:
+// the room steps down to Hard, and everyone says READY again.
+const handOver = (context: ApplyContext, lobby: Lobby, next: LobbyMember) =>
+  lobby.difficulty === 'Nightmare' && !next.canNightmare
+    ? Effect.andThen(
+        clearReady(context),
+        touch(context, { host: next.playerId, difficulty: 'Hard' }),
+      )
+    : touch(context, { host: next.playerId })
 
 // SCOPE
 
@@ -696,6 +730,12 @@ export const RoomScope = defineScope({
         const sql = yield* SqlClient.SqlClient
         yield* sql`ALTER TABLE ${sql(table('members'))}
           ADD COLUMN look TEXT NOT NULL DEFAULT ''`
+      }),
+    '0004_nightmare': table =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        yield* sql`ALTER TABLE ${sql(table('members'))}
+          ADD COLUMN nightmare INTEGER NOT NULL DEFAULT 0`
       }),
   },
 })

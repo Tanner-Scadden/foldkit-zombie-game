@@ -329,12 +329,12 @@ That is under the estimate of "The wire at 20 Hz" (5.7 mean, 7.4 crowded, 11.2 a
 
 Left for later:
 
-- **Feel (Phase 4).** The tracer of your own shot still waits for the room. Throttled 4G on real phones is not measured yet.
+- **Feel (Phase 4).** Throttled 4G on real phones is not measured yet.
 - **Co-op analytics and balance (Phase 6).** RunSummary has no co-op fields, so an online run sends none.
 
 ### The lobby picks
 
-Built on 2026-10-30. The host picks what the room plays next in the lobby: a row of mode icons (the campaign's door, endless's loop, and KEEP GOING's loop with a trophy) and the four skulls of the home menu's difficulty, with E and X stepping them on a keyboard. Everyone else sees the same icons, still. A new room plays a Normal campaign. Nightmare is padlocked unless the host has unlocked it (checked on the host's client; the scope takes any difficulty from the host).
+Built on 2026-10-30. The host picks what the room plays next in the lobby: a row of mode icons (the campaign's door, endless's loop, and KEEP GOING's loop with a trophy) and the four skulls of the home menu's difficulty, with E and X stepping them on a keyboard. Everyone else sees the same icons, still. A new room plays a Normal campaign. Nightmare is padlocked unless the host has unlocked it, which the server checks (see "The Nightmare lock" below).
 
 - **In the scope.** `ChangedPicks` (host only, lobby only) sets the room's `mode` and `difficulty` (migration `0002_picks`) and clears every READY when it changes something. The room starts its World with them (`roomSettingsOf`, `roomWorldFor` in `src/roomWorld.ts`).
 - **Keep going.** A run that ends in Victory closes with the new reason `Won` (`World.isWon`), and `RecordedRoomResult` then sets `kept` and the pick to KeepGoing. The `GameRoom` stores the won World as JSON in its own storage (`kept-world`), so it outlives hibernation. When everyone presses READY on KeepGoing, the room carries that World on into endless (`keepGoingWorld`: endless, everyone out of the shop, the break before wave 11) with the room's ticks from 0. A change of crew (a join, a leave, a kick) lets the kept run go: the pick becomes Endless and READY clears. Any other result lets it go too.
@@ -351,6 +351,18 @@ Built on 2026-10-30. Your own player's predicted tick (`predictOwn`, through `pr
 ### The run from your own seat
 
 Built on 2026-10-30. A wave that brings a zombie you have not met raises its card on your screen only, and the run goes on under it (decided 9); it ages and leaves as in single player, and the kind counts as met in your save. Footsteps sound and shake by how near they are to your own player (`heardBy` in `src/coopPlay.ts`), not the room's lead seat. The music's intensity counts hearts lost by anyone in the crew and zombies close to any player (`advanceIntensity`), so it rises for everyone when anyone is in trouble; one player counts exactly as before, which `bun run determinism:diff` confirms.
+
+### The Nightmare lock
+
+Built on 2026-10-30. The room never takes a client's word for the unlock. When it seats a player (create, join, or QUICK PLAY, all through `GameRoom`'s internal create and join), it reads the unlock from that player's own scope on the server (`readNightmareUnlock` in `infra/worker/syncCore.ts`, answered by the `SyncScope` at `/internal/nightmare`, which no public route reaches) and writes it into their member row (`nightmare`, migration `0004_nightmare`; `CreatedRoom` and `JoinedRoom` are at version 3). `ChangedPicks` refuses Nightmare unless the host's row has it, the last READY cannot start a Nightmare run without it, and a new host without it steps the room down to Hard. When a run starts, the room reads the host's scope again: a Nightmare pick or a kept Nightmare run plays only if it is still unlocked, else Hard (and a fresh run instead of the kept one). Anything that goes wrong reads as locked. The lobby draws the padlock from the host's row. The unlock in a player's own scope is still the player's own `UnlockedNightmare` mutation; the room trusts the scope, not the page.
+
+### Protocol version 2
+
+The lobby's picks, looks, and unlock, and the `Won` end reason, are version 2 of the room protocol (`PROTOCOL_VERSION` and `MIN_PROTOCOL_VERSION` in `Protocol.ts`). A version 1 client says Hello and is refused with `VersionMismatch`, a frame every version reads, instead of being sent messages it cannot decode. A client refused this way lands on the hub with UPDATE and asks for the build check at once (`NeededNewerBuild`), so the update chip offers the new build.
+
+### Your own tracers, and endless bests
+
+Your own shots' bullets are drawn the instant they fire, from your predicted position, aim, and gun (`aimTracers` in `src/simulation.ts`, with the cosmetic stream for spread). They fly as bullets do, stop at walls and at the first zombie they touch, and hurt nothing; the room's copy of your own gun's bullets is not drawn (a gnome's peas and everyone else's bullets still are). Hits, damage, kills, money, blood, and damage numbers stay the room's, and a tracer the room disagrees with simply finishes: nothing is rewound. There is no predicted hit spark: a spark on a zombie the room says was missed reads as a bug, so it waits for the room's own hit. A lost co-op endless run records its best wave in each player's bests, on the room's difficulty.
 
 ### Phase 4: feel and phones
 

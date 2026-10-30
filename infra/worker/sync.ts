@@ -28,13 +28,16 @@ import {
   CORS_HEADERS,
   type DirectoryHost,
   type Linked,
+  NIGHTMARE_PATH,
   type ScopeHost,
   type Socket,
   SyncCallFailed,
   type SyncSetupFailed,
+  encodeNightmareAnswer,
   failureResponse,
   json,
   makeDirectoryHost,
+  nightmareUnlockedIn,
   playerScopeId,
   playerScopeOf,
   scopeHostOnce,
@@ -172,6 +175,12 @@ export class SyncScope {
         const body = yield* tryCall('read the body', () => request.text())
         return yield* lock.withPermit(
           Effect.suspend(() => host.exchange(body, everyone())),
+        )
+      }
+      if (url.pathname === NIGHTMARE_PATH) {
+        return json(
+          200,
+          encodeNightmareAnswer(yield* nightmareUnlockedIn(host)),
         )
       }
       if (url.pathname === LINKED_DEVICES_PATH) {

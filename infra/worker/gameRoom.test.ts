@@ -122,7 +122,7 @@ const pushOf = async <A, I>(
 const lobbyOf = async (host: RoomHost): Promise<Lobby> =>
   Option.getOrThrow(await Effect.runPromise(host.lobby))
 
-const helloFrame = (token: string, maxVersion = 1): ClientFrame => ({
+const helloFrame = (token: string, maxVersion = 2): ClientFrame => ({
   _tag: 'Hello',
   minVersion: 1,
   maxVersion,
@@ -133,16 +133,23 @@ describe('the room host', () => {
   test('creating seats the host; joining fills slots up to 4', async () => {
     const host = await roomHost()
     const created = await Effect.runPromise(
-      host.create(ANA, 'Ana', 'Male.Crop.Brown.Light.Blue', CODE, 'Private'),
+      host.create(
+        ANA,
+        'Ana',
+        'Male.Crop.Brown.Light.Blue',
+        false,
+        CODE,
+        'Private',
+      ),
     )
     expect(created).toEqual(Result.succeed({ code: CODE, slot: 0 }))
     const again = await Effect.runPromise(
-      host.create(BO, 'Ana', '', CODE, 'Private'),
+      host.create(BO, 'Ana', '', false, CODE, 'Private'),
     )
     expect(Result.isFailure(again)).toBe(true)
     const tickets = await Promise.all(
       [BO, CY, DEE].map(playerId =>
-        Effect.runPromise(host.join(playerId, 'name', '', [])),
+        Effect.runPromise(host.join(playerId, 'name', '', false, [])),
       ),
     ).then(results =>
       results.map(result => Result.map(result, ticket => ticket.slot)),
@@ -152,9 +159,11 @@ describe('the room host', () => {
       Result.succeed(2),
       Result.succeed(3),
     ])
-    const rejoined = await Effect.runPromise(host.join(CY, 'name', '', []))
+    const rejoined = await Effect.runPromise(
+      host.join(CY, 'name', '', false, []),
+    )
     expect(rejoined).toEqual(Result.succeed({ code: CODE, slot: 2 }))
-    const full = await Effect.runPromise(host.join(EVE, 'name', '', []))
+    const full = await Effect.runPromise(host.join(EVE, 'name', '', false, []))
     expect(full).toEqual(Result.fail({ _tag: 'Full' }))
     const lobby = Option.getOrThrow(await Effect.runPromise(host.lobby))
     expect(lobby.members.map(member => member.look)).toEqual([
@@ -172,14 +181,14 @@ describe('the room host', () => {
 
   test('joining a room that does not exist says so', async () => {
     const host = await roomHost()
-    expect(await Effect.runPromise(host.join(BO, 'name', '', []))).toEqual(
-      Result.fail({ _tag: 'NoRoom' }),
-    )
+    expect(
+      await Effect.runPromise(host.join(BO, 'name', '', false, [])),
+    ).toEqual(Result.fail({ _tag: 'NoRoom' }))
   })
 
   test('members follow the scope; others may not', async () => {
     const host = await roomHost()
-    await Effect.runPromise(host.create(ANA, 'Ana', '', CODE, 'Private'))
+    await Effect.runPromise(host.create(ANA, 'Ana', '', false, CODE, 'Private'))
     const member = fakeSocket()
     const stranger = fakeSocket()
     await Effect.runPromise(
@@ -200,12 +209,12 @@ describe('the room host', () => {
 
   test('a join reaches every joined socket, and the last READY starts the run', async () => {
     const host = await roomHost()
-    await Effect.runPromise(host.create(ANA, 'Ana', '', CODE, 'Private'))
+    await Effect.runPromise(host.create(ANA, 'Ana', '', false, CODE, 'Private'))
     const ana = fakeSocket()
     await Effect.runPromise(
       host.scope.onMessage(ana, hello(await tokenOf(ANA)), [ana]),
     )
-    await Effect.runPromise(host.join(BO, 'name', '', [ana]))
+    await Effect.runPromise(host.join(BO, 'name', '', false, [ana]))
     expect(JSON.parse(ana.sent.at(-1) ?? '{}')).toMatchObject({
       _tag: 'Deltas',
     })
@@ -235,15 +244,15 @@ describe('the room host', () => {
       { _tag: 'MaybeStart' },
     ])
     expect((await lobbyOf(host)).status).toBe('Playing')
-    expect(await Effect.runPromise(host.join(CY, 'name', '', []))).toEqual(
-      Result.fail({ _tag: 'Started' }),
-    )
+    expect(
+      await Effect.runPromise(host.join(CY, 'name', '', false, [])),
+    ).toEqual(Result.fail({ _tag: 'Started' }))
   })
 
   test('a kick says who to drop, and a result ends the game', async () => {
     const host = await roomHost()
-    await Effect.runPromise(host.create(ANA, 'Ana', '', CODE, 'Private'))
-    await Effect.runPromise(host.join(BO, 'name', '', []))
+    await Effect.runPromise(host.create(ANA, 'Ana', '', false, CODE, 'Private'))
+    await Effect.runPromise(host.join(BO, 'name', '', false, []))
     const ana = fakeSocket()
     await Effect.runPromise(
       host.scope.onMessage(ana, hello(await tokenOf(ANA)), [ana]),
@@ -258,7 +267,7 @@ describe('the room host', () => {
     expect(await Effect.runPromise(reactionsOf(kicked))).toEqual([
       { _tag: 'DropPlayer', playerId: BO, kicked: true },
     ])
-    await Effect.runPromise(host.join(BO, 'name', '', []))
+    await Effect.runPromise(host.join(BO, 'name', '', false, []))
     await Effect.runPromise(host.freeSeat(BO, 1, [ana]))
     expect(
       (await lobbyOf(host)).members.map(member => member.playerId),
@@ -269,7 +278,7 @@ describe('the room host', () => {
 describe('a game socket Hello', () => {
   const lobbyWith = async () => {
     const host = await roomHost()
-    await Effect.runPromise(host.create(ANA, 'Ana', '', CODE, 'Private'))
+    await Effect.runPromise(host.create(ANA, 'Ana', '', false, CODE, 'Private'))
     return Effect.runPromise(host.lobby)
   }
 
@@ -286,7 +295,7 @@ describe('a game socket Hello', () => {
       _tag: 'Accept',
       playerId: ANA,
       slot: 0,
-      version: 1,
+      version: 2,
     })
   })
 
@@ -299,8 +308,8 @@ describe('a game socket Hello', () => {
         answerHello(
           {
             _tag: 'Hello',
-            minVersion: 2,
-            maxVersion: 3,
+            minVersion: 1,
+            maxVersion: 1,
             token: await tokenOf(ANA),
           },
           SECRET,
@@ -417,15 +426,15 @@ describe('the alarm', () => {
 describe('a public room', () => {
   test('lists itself for Quick Play while its lobby has seats', async () => {
     const host = await roomHost()
-    await Effect.runPromise(host.create(ANA, 'Ana', '', CODE, 'Public'))
-    await Effect.runPromise(host.join(BO, '  Bo\u0000  ', '', []))
+    await Effect.runPromise(host.create(ANA, 'Ana', '', false, CODE, 'Public'))
+    await Effect.runPromise(host.join(BO, '  Bo\u0000  ', '', false, []))
     const lobby = await lobbyOf(host)
     expect(lobby.members.map(member => member.name)).toEqual(['Ana', 'Bo'])
     expect(listingOf(lobby)).toEqual(
       Option.some({ code: CODE, members: 2, open: true }),
     )
-    await Effect.runPromise(host.join(CY, '', '', []))
-    await Effect.runPromise(host.join(DEE, 'Dee', '', []))
+    await Effect.runPromise(host.join(CY, '', '', false, []))
+    await Effect.runPromise(host.join(DEE, 'Dee', '', false, []))
     const full = await lobbyOf(host)
     expect(full.members.map(member => member.name)).toEqual([
       'Ana',
@@ -440,7 +449,7 @@ describe('a public room', () => {
 
   test('a private room never lists itself', async () => {
     const host = await roomHost()
-    await Effect.runPromise(host.create(ANA, 'Ana', '', CODE, 'Private'))
+    await Effect.runPromise(host.create(ANA, 'Ana', '', false, CODE, 'Private'))
     expect(listingOf(await lobbyOf(host))).toEqual(Option.none())
   })
 })

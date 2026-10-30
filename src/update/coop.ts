@@ -4,7 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import type { PlayerInput } from '@munch/netcode'
 
-import { FocusHomeButton } from '../commands'
+import { FetchBuild, FocusHomeButton } from '../commands'
 import * as CoopMessage from '../coop/message'
 import type { Model as CoopModel } from '../coop/model'
 import { IS_COOP_RELEASED } from '../coop/release'
@@ -31,10 +31,16 @@ export const isCoopOpen = (model: Model): boolean => Coop.isOpen(model.coop)
 const toParentMessage = (message: CoopMessage.Message) =>
   Message.GotCoopMessage({ message })
 
+// NOTE: a room that refuses this build's protocol asks for the build check
+// at once, so the update chip shows the newer build to install.
 const foldCoopOutMessage = CoopMessage.OutMessage.match<UpdateStep>({
   ClosedCoop: () => stepModel => ({
     model: stepModel,
     commands: [FocusHomeButton({ button: 'Coop' })],
+  }),
+  NeededNewerBuild: () => stepModel => ({
+    model: stepModel,
+    commands: [FetchBuild()],
   }),
 })
 
@@ -49,12 +55,10 @@ export const foldCoop = Update.foldChild({
 const foldCoopOpen = (
   name: string,
   maybeCode: Option.Option<string>,
-  canPickNightmare: boolean,
   look: string,
 ) =>
   Update.foldChildStep({
-    update: (coop: CoopModel) =>
-      Coop.open(coop, name, maybeCode, canPickNightmare, look),
+    update: (coop: CoopModel) => Coop.open(coop, name, maybeCode, look),
     read: (model: Model) => Option.some(model.coop),
     write: (model, nextCoop) => modifyFields(model, { coop: () => nextCoop }),
     toParentMessage,
@@ -113,7 +117,6 @@ export const openCoop =
     return foldCoopOpen(
       joinName(stepModel),
       maybeCode,
-      stepModel.difficulty.nightmare !== 'Locked',
       lookCodeOf(stepModel.appearance),
     )(withInput(stepModel, releaseAll))
   }

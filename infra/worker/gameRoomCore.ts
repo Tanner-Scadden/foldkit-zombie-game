@@ -68,6 +68,7 @@ export interface RoomHost {
     playerId: string,
     name: string,
     look: string,
+    nightmare: boolean,
     code: string,
     visibility: RoomVisibility,
   ) => Effect.Effect<Result.Result<RoomTicket, RoomRefusal>>
@@ -75,6 +76,7 @@ export interface RoomHost {
     playerId: string,
     name: string,
     look: string,
+    nightmare: boolean,
     everyone: ReadonlyArray<Socket>,
   ) => Effect.Effect<Result.Result<RoomTicket, RoomRefusal>>
   readonly recordResult: (
@@ -147,6 +149,7 @@ export const makeRoomHost = (
       playerId: string,
       name: string,
       look: string,
+      nightmare: boolean,
       code: string,
       visibility: RoomVisibility,
     ) =>
@@ -163,6 +166,7 @@ export const makeRoomHost = (
               host: playerId,
               hostName: name.slice(0, MAX_NAME_INPUT),
               hostLook: lookOfRequest(look),
+              hostNightmare: nightmare,
               mode: DEFAULT_MODE,
               visibility,
             },
@@ -179,6 +183,7 @@ export const makeRoomHost = (
       playerId: string,
       name: string,
       look: string,
+      nightmare: boolean,
       everyone: ReadonlyArray<Socket>,
     ) =>
       Effect.gen(function* () {
@@ -208,6 +213,7 @@ export const makeRoomHost = (
               playerId,
               name: name.slice(0, MAX_NAME_INPUT),
               look: lookOfRequest(look),
+              nightmare,
             },
             `joined-room-${head}-${playerId}`,
           ),

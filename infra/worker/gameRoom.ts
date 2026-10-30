@@ -76,6 +76,7 @@ import {
   SyncCallFailed,
   type SyncSetupFailed,
   json,
+  readNightmareUnlock,
   syncErrorResponse,
   tryCall,
 } from './syncCore.ts'
@@ -408,11 +409,19 @@ export class GameRoom {
       const sockets = this.gameSockets()
       const nowMs = yield* Clock.currentTimeMillis
       const seed = crypto.getRandomValues(new Uint32Array(1))[0] ?? nowMs
-      const maybeKept =
-        lobby.mode === 'KeepGoing' ? yield* this.kept : Option.none()
+      const isNightmareOpen = yield* this.nightmareOf(lobby.host)
+      const maybeKept = Option.filter(
+        lobby.mode === 'KeepGoing' ? yield* this.kept : Option.none(),
+        kept => kept.difficulty.chosen !== 'Nightmare' || isNightmareOpen,
+      )
       yield* this.forgetKept
       const world = roomWorldFor(
-        roomSettingsOf(lobby.mode, lobby.difficulty),
+        roomSettingsOf(
+          lobby.mode,
+          lobby.difficulty === 'Nightmare' && !isNightmareOpen
+            ? 'Hard'
+            : lobby.difficulty,
+        ),
         maybeKept,
       )
       const started = Room.startRoom(
@@ -525,6 +534,20 @@ export class GameRoom {
     )
   }
 
+  // NIGHTMARE
+
+  // NOTE: read from the player's own scope on the server each time it
+  // matters: when the room seats them and when a run starts, so a
+  // Nightmare run or a kept Nightmare run never rests on a client's word.
+  private nightmareOf(playerId: string): Effect.Effect<boolean> {
+    const scopes = this.env.SYNC_SCOPES
+    return readNightmareUnlock(
+      (scope, url, headers) =>
+        scopes.get(scopes.idFromName(scope)).fetch(url, { headers }),
+      playerId,
+    )
+  }
+
   // KEPT RUN
 
   private keep(world: GameState): Effect.Effect<void> {
@@ -602,11 +625,13 @@ export class GameRoom {
           Schema.decodeEffect(InternalCreate)(text),
           error => new BadSyncBody({ reason: error.message }),
         )
+        const nightmare = yield* this.nightmareOf(body.playerId)
         const created = yield* this.lock.withPermit(
           host.create(
             body.playerId,
             body.name,
             body.look ?? '',
+            nightmare,
             body.code,
             body.visibility,
           ),
@@ -626,9 +651,16 @@ export class GameRoom {
           Schema.decodeEffect(InternalJoin)(text),
           error => new BadSyncBody({ reason: error.message }),
         )
+        const nightmare = yield* this.nightmareOf(body.playerId)
         const everyone = this.syncSockets()
         const joined = yield* this.lock.withPermit(
-          host.join(body.playerId, body.name, body.look ?? '', everyone),
+          host.join(
+            body.playerId,
+            body.name,
+            body.look ?? '',
+            nightmare,
+            everyone,
+          ),
         )
         yield* this.list(host)
         return ticketResponse(joined)
