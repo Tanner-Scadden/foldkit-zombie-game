@@ -48,7 +48,10 @@ export const PEAK_RATIO_TARGET: Readonly<{ min: number; max: number }> = {
   min: 1.5,
   max: 2.5,
 }
-export const PEAK_RATIO_WAVES: ReadonlyArray<number> = [5, 6, 7, 8]
+// Since the kitchen made the campaign ten waves long, wave 8 is a breather
+// after the Ankle Biters and wave 9 a test before the finale, so the peaks
+// are held on waves 5 to 7 and the finale.
+export const PEAK_RATIO_WAVES: ReadonlyArray<number> = [5, 6, 7, 10]
 
 // NOTE: the longest a wave should run, in seconds of the bot's median time
 // in the snapshot pass. The model plays faster than the bot, so its own
@@ -63,7 +66,9 @@ export const WAVE_LENGTH_TARGETS: ReadonlyArray<WaveLengthTarget> = [
   { wave: 5, maxSeconds: 90 },
   { wave: 6, maxSeconds: 90 },
   { wave: 7, maxSeconds: 90 },
-  { wave: 8, maxSeconds: 120 },
+  { wave: 8, maxSeconds: 90 },
+  { wave: 9, maxSeconds: 90 },
+  { wave: 10, maxSeconds: 120 },
 ]
 
 // NOTE: dead air: the seconds a wave leaves the room empty with nothing at
@@ -169,15 +174,15 @@ export const TARGETS: ReadonlyArray<Target> = [
   between(
     'normal.died.peakWave',
     'Normal wave with the most deaths',
-    8,
-    8,
+    10,
+    10,
     TARGETS_SECTION,
   ),
   between(
     'normal.medianWin',
     'Normal median win (minutes)',
-    7,
     9,
+    12,
     TARGETS_SECTION,
   ),
   between(

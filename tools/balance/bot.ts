@@ -16,9 +16,16 @@ import { Dialog } from '@foldkit/ui'
 
 import { boxCenter, hasLineOfSight, levelOf } from '../../src/arena'
 import { BOSS_RULES } from '../../src/boss'
-import { cameraFocus, cameraFor, worldWindowOf } from '../../src/camera'
+import {
+  cameraFocus,
+  cameraFor,
+  screenCameraOf,
+  worldToView,
+  worldWindowOf,
+} from '../../src/camera'
 import { CHUCKER_RULES, maybeShieldFor } from '../../src/chucker'
 import { CRAWLER_RULES } from '../../src/crawler'
+import { EXIT_RULES, KITCHEN_EXIT, isExitOfferOpenFor } from '../../src/exits'
 import { FRENZY_RULES } from '../../src/frenzy'
 import { update } from '../../src/main'
 import { Message } from '../../src/message'
@@ -107,6 +114,8 @@ export type RunResult = {
   timelines: Array<WaveTimeline>
   boss: BossLog
   newKinds: NewKindLog
+  // The wave whose break the kitchen was bought in, or 0 when it never was.
+  kitchenWave: number
 }
 
 // What the Big Leaguer, the Ankle Biter, and frenzied packs did in a run.
@@ -711,10 +720,12 @@ const aimAndFire = (model: Model, frame: number): Model => {
     Math.atan2(target.y - model.player.y, target.x - model.player.x) +
     (nextBotRandom() + nextBotRandom() - 1) * AIM_NOISE_RADIANS
   const reach = 40
-  const aimPoint = {
+  // The mouse lives in screen pixels, so the aim point goes through the
+  // camera, which scrolls once the kitchen is open.
+  const aimPoint = worldToView(screenCameraOf(model), {
     x: model.player.x + Math.cos(angle) * reach,
     y: model.player.y + Math.sin(angle) * reach,
-  }
+  })
   const aimed = send(
     model,
     Message.MovedMouse({ clientX: aimPoint.x, clientY: aimPoint.y }),
@@ -794,6 +805,7 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
   const spareUpgrade = spare.kind === 'Smg' ? 'SmgUpgrade' : 'ShotgunUpgrade'
   if (spare.tier < 1 && canSpare(spareUpgrade)) return spareUpgrade
   if (!NO_GNOME && turrets < 1 && canSpare('Turret')) return 'Turret'
+  if (wantsKitchen(model)) return undefined
   if (spare.tier < maxTier(spare.kind) && canSpare(spareUpgrade)) {
     return spareUpgrade
   }
@@ -805,6 +817,42 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
   }
   return undefined
 }
+
+// THE KITCHEN
+
+// The bot buys the kitchen open the way the analytical model does: once it
+// holds the SMG at its second upgrade, both Plank Piles, and a Grumpy Gnome,
+// while it keeps its reserve. It walks to the boarded door and bumps it. KITCHEN=0 is the bot
+// that never opens it, to see what the kitchen does to a run.
+const NO_KITCHEN = process.env.KITCHEN === '0'
+const KITCHEN_DOOR_PUSH: Vector = { x: 70, y: 16 }
+
+const isKitchenOpen = (model: Model) =>
+  levelOf(model).openExits.includes(KITCHEN_EXIT)
+
+const turretCount = (model: Model) =>
+  model.trapStock.Turret +
+  model.traps.filter(trap => trap._tag === 'Turret').length
+
+const plankCount = (model: Model) =>
+  model.trapStock.Barricade +
+  model.traps.filter(trap => trap._tag === 'Barricade').length
+
+const wantsKitchen = (model: Model): boolean => {
+  const spare = Option.getOrUndefined(maybeSpare(model.player.arsenal))
+  return (
+    !NO_KITCHEN &&
+    !isKitchenOpen(model) &&
+    isExitOfferOpenFor(model.phase) &&
+    spare?.kind === 'Smg' &&
+    spare.tier >= 2 &&
+    (NO_GNOME || turretCount(model) >= 1) &&
+    (NO_PLANKS || plankCount(model) >= 2) &&
+    model.wallet.balance - EXIT_RULES.price >= RESERVE
+  )
+}
+
+let kitchenWave = 0
 
 let spentOnUpgrades = 0
 let gnomeTries = 0
@@ -841,19 +889,24 @@ const shop = (model: Model): Model => {
     : bought
 }
 
+// The bot holds the parlour, so its planks go in the parlour's doorways.
+const PARLOUR_DOOR_SET = new Set<string>(['North', 'West', 'East', 'South'])
+
 const busiestDoor = (model: Model) => {
   if (model.phase._tag !== 'Preparation') return undefined
   // Counts follow the planks already up: a boarded door's packs come through
   // the next open door, so the second pile goes where they pile up.
   const counts = new Map<string, number>()
-  doorCounts(model.phase.spawns, model.traps).forEach(({ door, count }) => {
-    counts.set(door, count)
-  })
+  doorCounts(model.phase.spawns, model.traps, levelOf(model).doorIds).forEach(
+    ({ door, count }) => {
+      counts.set(door, count)
+    },
+  )
   const boarded = new Set<string>(
     model.traps.flatMap(trap => (trap._tag === 'Barricade' ? [trap.door] : [])),
   )
   return [...counts.entries()]
-    .filter(([door]) => !boarded.has(door))
+    .filter(([door]) => !boarded.has(door) && PARLOUR_DOOR_SET.has(door))
     .sort((a, b) => b[1] - a[1])[0]?.[0] as
     | 'North'
     | 'West'
@@ -862,7 +915,7 @@ const busiestDoor = (model: Model) => {
     | undefined
 }
 
-type PrepPlan = 'Shop' | 'Barricade' | 'Gnome' | 'Go'
+type PrepPlan = 'Shop' | 'Kitchen' | 'Barricade' | 'Gnome' | 'Go'
 
 // Gnomes go a little off the middle of the room, where the bot fights.
 const GNOME_SPOTS: Array<Vector> = [
@@ -885,6 +938,9 @@ const prepPlan = (model: Model, shopped: boolean): PrepPlan => {
     wantedPurchase(model) !== undefined
   ) {
     return 'Shop'
+  }
+  if (wantsKitchen(model)) {
+    return 'Kitchen'
   }
   if (model.trapStock.Barricade > 0 && busiestDoor(model) !== undefined) {
     return 'Barricade'
@@ -1002,6 +1058,7 @@ export const play = (
   const newKinds = emptyNewKinds()
   botRandom = seed
   spentOnUpgrades = 0
+  kitchenWave = 0
   boughtLog = []
   gnomeTries = 0
   gnomesPlaced = 0
@@ -1032,6 +1089,21 @@ export const play = (
       if (model.shop._tag !== 'Browsing') shoppedWave = wave
       continue
     }
+    if (model.shop._tag === 'AtExit') {
+      model = pressKeys(model, new Set())
+      if (wantsKitchen(model)) {
+        model = send(model, Message.ClickedOpenExitButton())
+        if (isKitchenOpen(model)) kitchenWave = wave
+      } else {
+        model = send(
+          model,
+          Message.GotExitDialogMessage({
+            message: Dialog.Message.RequestedClose(),
+          }),
+        )
+      }
+      continue
+    }
     if (model.phase._tag === 'Preparation') {
       model = holdFire(model)
       const plan = prepPlan(model, shoppedWave === wave)
@@ -1053,11 +1125,13 @@ export const play = (
       const target =
         plan === 'Shop'
           ? STALL_FRONT
-          : plan === 'Gnome'
-            ? gnomeSpot(model)
-            : boxCenter(
-                levelOf(model).thresholds[busiestDoor(model) ?? 'North'].box,
-              )
+          : plan === 'Kitchen'
+            ? KITCHEN_DOOR_PUSH
+            : plan === 'Gnome'
+              ? gnomeSpot(model)
+              : boxCenter(
+                  levelOf(model).thresholds[busiestDoor(model) ?? 'North'].box,
+                )
       if (plan === 'Gnome' && distance(model.player, target) < 6) {
         gnomeTries += 1
         const selected =
@@ -1315,6 +1389,7 @@ export const play = (
     timelines,
     boss: bossLog,
     newKinds,
+    kitchenWave,
   }
 }
 

@@ -280,6 +280,10 @@ console.log(
 console.log(
   `Gnomes placed per run: median ${median(results.map(r => r.gnomesPlaced))}, most ${Math.max(...results.map(r => r.gnomesPlaced))}`,
 )
+const kitchenWaves = results.map(r => r.kitchenWave).filter(wave => wave > 0)
+console.log(
+  `Kitchen bought: ${((100 * kitchenWaves.length) / Math.max(1, results.length)).toFixed(0)}% of runs, in the break before wave ${kitchenWaves.length > 0 ? median(kitchenWaves) : '-'} (median)`,
+)
 console.log(
   `Median run length: ${(median(results.map(r => r.runMs)) / 60000).toFixed(2)} min`,
 )

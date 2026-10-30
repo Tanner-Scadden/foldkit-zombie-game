@@ -21,6 +21,7 @@ import {
   DIFFICULTY_ORDER,
   toughenSpawns,
 } from '../../src/difficulty'
+import { EXIT_RULES } from '../../src/exits'
 import { FRENZY_RULES, frenzyPacksOf } from '../../src/frenzy'
 import type {
   Difficulty,
@@ -116,6 +117,7 @@ export type Catalog = Readonly<{
   plankLimit: number
   gnomePrice: number
   gnomeLimit: number
+  kitchenPrice: number
 }>
 
 export const CATALOG: Catalog = {
@@ -133,6 +135,7 @@ export const CATALOG: Catalog = {
   plankLimit: TRAPS.Barricade.limit,
   gnomePrice: TRAPS.Turret.price,
   gnomeLimit: TRAPS.Turret.limit,
+  kitchenPrice: EXIT_RULES.price,
 }
 
 export type Spare = Readonly<{ kind: SpareGun; tier: number }>
@@ -142,6 +145,7 @@ export type Loadout = Readonly<{
   pistolTier: number
   gnomes: number
   planks: number
+  hasKitchen: boolean
 }>
 
 export const STARTING_LOADOUT: Loadout = {
@@ -149,6 +153,7 @@ export const STARTING_LOADOUT: Loadout = {
   pistolTier: 0,
   gnomes: 0,
   planks: 0,
+  hasKitchen: false,
 }
 
 export type Purchase =
@@ -160,6 +165,7 @@ export type Purchase =
   | 'Gnome'
   | 'SpareUpgrade'
   | 'PistolUpgrade'
+  | 'Kitchen'
 
 type Basket = Readonly<{
   money: number
@@ -188,6 +194,8 @@ const priceOf = (
     return Option.some(upkeep)
   } else if (purchase === 'Gnome') {
     return Option.some(catalog.gnomePrice)
+  } else if (purchase === 'Kitchen') {
+    return Option.some(catalog.kitchenPrice)
   } else if (purchase === 'SpareUpgrade') {
     return Option.flatMap(spareKind, kind =>
       Array.get(catalog.upgradePrices[kind], spareTier),
@@ -204,6 +212,8 @@ const withPurchase = (loadout: Loadout, purchase: Purchase): Loadout => {
     return { ...loadout, planks: loadout.planks + 1 }
   } else if (purchase === 'Gnome') {
     return { ...loadout, gnomes: loadout.gnomes + 1 }
+  } else if (purchase === 'Kitchen') {
+    return { ...loadout, hasKitchen: true }
   } else if (purchase === 'SpareUpgrade') {
     return {
       ...loadout,
@@ -221,8 +231,9 @@ const withPurchase = (loadout: Loadout, purchase: Purchase): Loadout => {
 
 // NOTE: the bot's shopping list in tools/balance/bot.ts, without hearts:
 // the SMG once it can, else the shotgun; one refill a visit; two planks;
-// upkeep for repairs; then upgrades and gnomes while a reserve stays, the
-// spare to its top tier before the pistol.
+// upkeep for repairs; the first spare upgrade and a gnome; the kitchen;
+// then more upgrades and gnomes while a reserve stays, the spare to its top
+// tier before the pistol.
 const wantedNext = (
   catalog: Catalog,
   basket: Basket,
@@ -261,6 +272,15 @@ const wantedNext = (
         ],
         ['SpareUpgrade', spare.tier < 1 && affords('SpareUpgrade', reserve)],
         ['Gnome', loadout.gnomes < 1 && affords('Gnome', reserve)],
+        [
+          'Kitchen',
+          !loadout.hasKitchen &&
+            spare.kind === 'Smg' &&
+            spare.tier >= 2 &&
+            loadout.gnomes >= 1 &&
+            loadout.planks >= catalog.plankLimit &&
+            affords('Kitchen', reserve),
+        ],
         [
           'SpareUpgrade',
           spare.tier < maxTier && affords('SpareUpgrade', reserve),
@@ -1010,7 +1030,8 @@ export type Prices = Readonly<{
 }>
 
 // The whole campaign's pay against the price of a full kit: the spare gun
-// and all its tiers, every pistol tier, two planks, and two gnomes.
+// and all its tiers, every pistol tier, two planks, two gnomes, and the
+// kitchen.
 export const moneyAgainstPrices = (
   catalog: Catalog = CATALOG,
   assumptions: Assumptions = ASSUMPTIONS,
@@ -1020,7 +1041,8 @@ export const moneyAgainstPrices = (
     Number.sumAll(catalog.upgradePrices[gun]) +
     Number.sumAll(catalog.upgradePrices.Pistol) +
     catalog.plankLimit * catalog.plankPrice +
-    catalog.gnomeLimit * catalog.gnomePrice
+    catalog.gnomeLimit * catalog.gnomePrice +
+    catalog.kitchenPrice
   return {
     earned: Number.sumAll(expectedPays(assumptions, FINAL_WAVE)),
     fullKit: { Shotgun: kit('Shotgun'), Smg: kit('Smg') },
@@ -1041,6 +1063,7 @@ export const loadoutLabel = (loadout: Loadout): string =>
     loadout.pistolTier > 0 ? `pistol t${loadout.pistolTier}` : '',
     loadout.gnomes > 0 ? `${loadout.gnomes} gnome` : '',
     loadout.planks > 0 ? `${loadout.planks} plank` : '',
+    loadout.hasKitchen ? 'kitchen' : '',
   ]
     .filter(part => part !== '')
     .join(', ')

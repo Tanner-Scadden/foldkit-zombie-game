@@ -126,6 +126,7 @@ describe('portrait against landscape', () => {
     heartsLostByWave: [],
     lengthSecondsByWave: [],
     hurtShareByKind: {},
+    kitchenShare: 0.5,
   })
   const resultsWith = (
     shares: Record<string, number>,
@@ -228,6 +229,7 @@ describe('campaign metrics', () => {
     heartsLostByWave: [0, 0, 0, 1, 1, 2, 2, 3],
     lengthSecondsByWave: [18, 40, 50, 70, 75, 70, 72, 85],
     hurtShareByKind: {},
+    kitchenShare: 0.5,
   }
   const metrics = campaignMetrics('normal', 'Normal', summary)
   const valueOf = (key: string) =>

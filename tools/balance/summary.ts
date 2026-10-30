@@ -34,6 +34,7 @@ export const CampaignSummary = Schema.TaggedStruct('Campaign', {
   heartsLostByWave: Schema.Array(Schema.Number),
   lengthSecondsByWave: Schema.Array(Schema.Number),
   hurtShareByKind: Shares,
+  kitchenShare: Schema.Number,
 })
 export type CampaignSummary = typeof CampaignSummary.Type
 
@@ -167,6 +168,10 @@ export const summarizeCampaign = (
       mean(Array.map(waveLogs(wave), ({ lengthMs }) => lengthMs / 1000)),
     ),
     hurtShareByKind: hurtShares(Array.map(results, ({ hurtBy }) => hurtBy)),
+    kitchenShare: shareOf(
+      Array.filter(results, ({ kitchenWave }) => kitchenWave > 0).length,
+      runs,
+    ),
   }
 }
 
