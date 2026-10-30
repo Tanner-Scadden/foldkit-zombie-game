@@ -3,7 +3,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import { type Box, distanceToBox } from './arena'
 import { buyExit, exitOffers } from './exits'
-import { fridgeOffers, pullFridge } from './leftovers'
+import { fridgeOffers, pullFridge, takePrize } from './leftovers'
 import type { World } from './world'
 import { GameEvent, Purchasable, Purchase, type Vector } from './worldSchema'
 
@@ -44,6 +44,7 @@ const buy = (world: World, target: Purchasable): Option.Option<World> =>
   Purchasable.match(target, {
     Exit: ({ exit }) => buyExit(world, exit),
     Fridge: () => pullFridge(world),
+    Prize: () => takePrize(world),
   })
 
 export const isSamePurchasable = (
@@ -53,6 +54,7 @@ export const isSamePurchasable = (
   Purchasable.match(first, {
     Exit: ({ exit }) => second._tag === 'Exit' && second.exit === exit,
     Fridge: () => second._tag === 'Fridge',
+    Prize: () => second._tag === 'Prize',
   })
 
 const reachOf = (world: World, offer: Offer): number =>

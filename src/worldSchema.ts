@@ -531,7 +531,7 @@ export const FridgePrize = Schema.Literals([
 export type FridgePrize = typeof FridgePrize.Type
 
 // NOTE: Open is a pull: the door creaks open, fog rolls out, and the prize
-// pops up and flies to the seat that pulled. Slammed is the fridge resting
+// pops up: a gag flies to the seat that pulled, a weapon goes on Offering. Slammed is the fridge resting
 // after its last pull of the batch; it takes no money until it is Shut.
 export const FridgeDoor = defineTaggedUnion({
   Shut: {},
@@ -542,6 +542,15 @@ export const FridgeDoor = defineTaggedUnion({
     durationMs: Schema.Number,
   },
   Slammed: { remainingMs: Schema.Number, durationMs: Schema.Number },
+  // NOTE: take it or leave it (owner, 2026-10-30): a weapon prize floats
+  // in the open door until the puller holds to take it, walks off, or its
+  // time runs out; left, it sinks back into the fridge.
+  Offering: {
+    prize: FridgePrize,
+    slot: Schema.Number,
+    remainingMs: Schema.Number,
+    durationMs: Schema.Number,
+  },
 })
 export type FridgeDoor = typeof FridgeDoor.Type
 
@@ -676,6 +685,8 @@ export const GameEvent = defineTaggedUnion({
   ExitOpened: { x: Schema.Number, y: Schema.Number },
   FridgeOpened: { x: Schema.Number, y: Schema.Number, prize: FridgePrize },
   FridgeSlammed: { x: Schema.Number, y: Schema.Number },
+  PrizeTaken: { x: Schema.Number, y: Schema.Number },
+  PrizeLeft: { x: Schema.Number, y: Schema.Number },
   DudBurped: { x: Schema.Number, y: Schema.Number, refund: Schema.Number },
   LidLaunched: { x: Schema.Number, y: Schema.Number, direction: Vector },
   LidBlasted: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
@@ -1181,6 +1192,7 @@ export type ShopState = typeof ShopState.Type
 export const Purchasable = defineTaggedUnion({
   Exit: { exit: ExitId },
   Fridge: {},
+  Prize: {},
 })
 export type Purchasable = typeof Purchasable.Type
 

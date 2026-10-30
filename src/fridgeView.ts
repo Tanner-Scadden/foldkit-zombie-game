@@ -144,6 +144,19 @@ const isKitchenShown = (model: Model): boolean =>
     ({ id, isOpen }) => id === 'Kitchen' && isOpen,
   )
 
+const openDoor = (model: Model, spot: FridgeSpot): ReadonlyArray<Drawable> => [
+  {
+    footY: spot.bottom,
+    rank: 'Prop',
+    shapes: [
+      placeAt(spot.left, spot.top, OPEN_DOOR),
+      ...(Math.floor(model.elapsedMs / GLOW_PULSE_MS) % 2 === 0
+        ? [placeAt(spot.left, spot.top, GLOW)]
+        : []),
+    ],
+  },
+]
+
 // NOTE: the door's state, sorted with what stands in front of the fridge.
 export const fridgeDrawables = (model: Model): ReadonlyArray<Drawable> =>
   isKitchenShown(model)
@@ -152,18 +165,8 @@ export const fridgeDrawables = (model: Model): ReadonlyArray<Drawable> =>
         onSome: spot =>
           FridgeDoor.match(model.fridge.door, {
             Shut: (): ReadonlyArray<Drawable> => [],
-            Open: (): ReadonlyArray<Drawable> => [
-              {
-                footY: spot.bottom,
-                rank: 'Prop',
-                shapes: [
-                  placeAt(spot.left, spot.top, OPEN_DOOR),
-                  ...(Math.floor(model.elapsedMs / GLOW_PULSE_MS) % 2 === 0
-                    ? [placeAt(spot.left, spot.top, GLOW)]
-                    : []),
-                ],
-              },
-            ],
+            Open: (): ReadonlyArray<Drawable> => openDoor(model, spot),
+            Offering: (): ReadonlyArray<Drawable> => openDoor(model, spot),
             Slammed: ({ remainingMs, durationMs }): ReadonlyArray<Drawable> => {
               const shake =
                 durationMs - remainingMs < SLAM_SHAKE_MS
@@ -186,10 +189,57 @@ export const fridgeDrawables = (model: Model): ReadonlyArray<Drawable> =>
 const PRIZE_LIFT_PX = 14
 
 // NOTE: the prize, drawn over everything, from the fridge to the puller.
+// NOTE: a weapon on offer bobs in the door with a ring round it that
+// empties as its time runs out, blinking near the end.
+const OFFER_BOB_MS = 300
+const OFFER_BLINK_MS = 120
+const OFFER_WARN_MS = 1500
+const OFFER_RING_LIFT_PX = 9
+
+const offerShapes = (
+  model: Model,
+  prize: FridgePrize,
+  remainingMs: number,
+  durationMs: number,
+): ReadonlyArray<Canvas.Shape> =>
+  Option.match(maybeFridgeSpot(model), {
+    onNone: () => [],
+    onSome: spot => {
+      const x = spot.left + FRIDGE_WIDTH / 2
+      const y =
+        spot.top +
+        FREEZER_PX +
+        PRIZE_DOOR_PX -
+        RISE_PX -
+        (Math.floor(model.elapsedMs / OFFER_BOB_MS) % 2)
+      const isBlinkedOut =
+        remainingMs < OFFER_WARN_MS &&
+        Math.floor(model.elapsedMs / OFFER_BLINK_MS) % 2 === 0
+      const ring = Option.getOrElse(
+        Array.get(
+          DIALS,
+          Math.ceil((remainingMs / Math.max(1, durationMs)) * DIAL_STEPS),
+        ),
+        () => DIALS[0],
+      )
+      return isBlinkedOut
+        ? []
+        : [
+            placeAt(Math.round(x), Math.round(y), prizeSprite(prize)),
+            placeAt(Math.round(x), Math.round(y) - OFFER_RING_LIFT_PX, ring),
+          ]
+    },
+  })
+
+const isWeaponPrize = (prize: FridgePrize): boolean =>
+  prize === 'Cooker' || prize === 'Pan' || prize === 'Freeze'
+
 const prizeShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   FridgeDoor.match(model.fridge.door, {
     Shut: () => [],
     Slammed: () => [],
+    Offering: ({ prize, remainingMs, durationMs }) =>
+      offerShapes(model, prize, remainingMs, durationMs),
     Open: ({ prize, slot, remainingMs, durationMs }) =>
       Option.match(maybeFridgeSpot(model), {
         onNone: () => [],
@@ -205,11 +255,10 @@ const prizeShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
               y: player.y - PRIZE_LIFT_PX,
             }),
           })
-          const at = prizeAt(
-            from,
-            to,
-            1 - remainingMs / Math.max(1, durationMs),
-          )
+          const progress = 1 - remainingMs / Math.max(1, durationMs)
+          const at = isWeaponPrize(prize)
+            ? prizeAt(from, from, Math.min(progress, RISE_SHARE - 0.001))
+            : prizeAt(from, to, progress)
           return [
             placeAt(Math.round(at.x), Math.round(at.y), prizeSprite(prize)),
           ]

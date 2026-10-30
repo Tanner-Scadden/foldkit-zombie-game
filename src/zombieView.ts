@@ -556,6 +556,7 @@ const ICE_SHINE = 'rgba(255, 255, 255, 0.75)'
 const ICE_MELT_BLINK_MS = 120
 const ICE_MELT_WARN_MS = 600
 const FROST_SPARKLE_MS = 160
+const FROST_BRIGHT = '#9fe8ff'
 
 const iceBlock = (kind: ZombieKind): Sprite => {
   const width = Math.round(ZOMBIE_KINDS[kind].bodyRadius * 2) + 4
@@ -605,22 +606,23 @@ const iceShapes = (
     ]
   } else if (ZombieAction.isAnyOf(['Chilled'])(action)) {
     const phase = Math.floor(elapsedMs / FROST_SPARKLE_MS) % 4
-    return [
-      Canvas.Rect({
-        x: Math.round(foot.x - 4 + phase * 2),
-        y: Math.round(foot.y - ZOMBIE_SPRITES[zombie.kind].height + phase * 3),
-        width: 1,
-        height: 1,
-        fill: ICE_EDGE,
-      }),
-      Canvas.Rect({
-        x: Math.round(foot.x + 4 - phase * 2),
-        y: Math.round(foot.y - 4 - phase),
-        width: 1,
-        height: 1,
-        fill: ICE_EDGE,
-      }),
-    ]
+    const top = foot.y - ZOMBIE_SPRITES[zombie.kind].height
+    return Array.map(
+      [
+        { x: -5 + phase * 2, y: top + phase * 3 },
+        { x: 5 - phase * 2, y: foot.y - 4 - phase },
+        { x: -2 + phase, y: top + 6 - phase },
+        { x: 3 - phase, y: foot.y - 2 },
+      ],
+      ({ x, y }, index) =>
+        Canvas.Rect({
+          x: Math.round(foot.x + x),
+          y: Math.round(y),
+          width: index % 2 === 0 ? 2 : 1,
+          height: index % 2 === 0 ? 2 : 1,
+          fill: index % 2 === 0 ? FROST_BRIGHT : ICE_EDGE,
+        }),
+    )
   } else {
     return []
   }
@@ -633,14 +635,20 @@ const dazeStarShapes = (
   if (!ZombieAction.isAnyOf(['Dazed', 'Reeling'])(zombie.action)) {
     return []
   }
-  return Array.makeBy(2, index => {
+  // NOTE: the Clang Pan's ring is louder: three bigger stars.
+  const isRung = ZombieAction.isAnyOf(['Reeling'])(zombie.action)
+  const stars = isRung ? 3 : 2
+  const size = isRung ? 2 : 1
+  return Array.makeBy(stars, index => {
     const angle =
-      (FULL_TURN * elapsedMs) / DAZE_STAR_MS + Math.PI * index + zombie.id
+      (FULL_TURN * elapsedMs) / DAZE_STAR_MS +
+      (FULL_TURN * index) / stars +
+      zombie.id
     return Canvas.Rect({
       x: Math.round(zombie.x + Math.cos(angle) * 5),
-      y: Math.round(zombie.y - 2 + Math.sin(angle) * 2),
-      width: 1,
-      height: 1,
+      y: Math.round(zombie.y - 3 + Math.sin(angle) * 2),
+      width: size,
+      height: size,
       fill: DAZE_STAR_COLOR,
     })
   })

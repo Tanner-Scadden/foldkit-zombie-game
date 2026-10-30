@@ -5,6 +5,7 @@ import {
   type Box,
   COVER_SYMBOLS,
   type Level,
+  distanceToBox,
   levelOf,
   tileBox,
   tilesWithSymbol,
@@ -13,7 +14,7 @@ import { PLAYER_MAX_HP } from './constants'
 import { boxAround } from './exits'
 import { dropCharge, isFridgeWeapon } from './fridgeWeapons'
 import { isKitchenOpen } from './kitchen'
-import { leadSeatOf } from './party'
+import { leadSeatOf, maybePlayerAt } from './party'
 import { nextRandom } from './prng'
 import type { Offer } from './purchase'
 import { cancelReload, freshSpare, maybeSpare } from './weapons'
@@ -55,6 +56,8 @@ type FridgeRules = Readonly<{
   slamChance: number
   luckBoost: number
   maxLuck: number
+  offerMs: number
+  leavePx: number
 }>
 
 export const FRIDGE_RULES: FridgeRules = {
@@ -68,6 +71,8 @@ export const FRIDGE_RULES: FridgeRules = {
   slamChance: 0.5,
   luckBoost: 3,
   maxLuck: 4,
+  offerMs: 6000,
+  leavePx: 40,
 }
 
 // NOTE: out of 100 on a first pull. Brain Freeze, the rare one, is 8 in
@@ -182,21 +187,38 @@ export const fridgeSpot = (box: Box) => ({
   y: box.top + FRIDGE_RULES.tagDropPx,
 })
 
+// NOTE: a weapon on offer is the puller's alone to take, for nothing: the
+// pull already paid for it.
+const isOfferedTo = (world: World): boolean =>
+  FridgeDoor.isAnyOf(['Offering'])(world.fridge.door) &&
+  world.fridge.door.slot === leadSeatOf(world).slot
+
 export const fridgeOffers = (world: World): ReadonlyArray<Offer> =>
-  isFridgeForSale(world)
-    ? Option.match(fridgeBoxOf(levelOf(world)), {
-        onNone: () => [],
-        onSome: box => [
-          {
-            target: Purchasable.Fridge(),
-            price: FRIDGE_RULES.price,
-            box,
-            reachPx: FRIDGE_RULES.reachPx,
-            spot: fridgeSpot(box),
-          },
-        ],
-      })
-    : []
+  Option.match(fridgeBoxOf(levelOf(world)), {
+    onNone: () => [],
+    onSome: box =>
+      isFridgeForSale(world)
+        ? [
+            {
+              target: Purchasable.Fridge(),
+              price: FRIDGE_RULES.price,
+              box,
+              reachPx: FRIDGE_RULES.reachPx,
+              spot: fridgeSpot(box),
+            },
+          ]
+        : isOfferedTo(world)
+          ? [
+              {
+                target: Purchasable.Prize(),
+                price: 0,
+                box,
+                reachPx: FRIDGE_RULES.reachPx,
+                spot: fridgeSpot(box),
+              },
+            ]
+          : [],
+  })
 
 // THE PULL
 
@@ -206,10 +228,10 @@ const giveWeapon = (player: Player, kind: WeaponKind): Player =>
     fireCooldownMs: () => 0,
   })
 
+// NOTE: a gag resolves at once; a weapon waits on offer in the door.
 const givePrize = (world: World, prize: FridgePrize): World =>
   Option.match(weaponOf(prize), {
-    onSome: kind =>
-      modifyFields(world, { player: player => giveWeapon(player, kind) }),
+    onSome: () => world,
     onNone: () =>
       prize === 'Sandwich'
         ? modifyFields(world, {
@@ -317,6 +339,70 @@ const shut = (world: World): World => {
   })
 }
 
+const spotOf = (world: World) =>
+  Option.match(fridgeBoxOf(levelOf(world)), {
+    onNone: () => ({ x: world.player.x, y: world.player.y }),
+    onSome: fridgeSpot,
+  })
+
+// NOTE: take it: the puller holds at the door and the weapon replaces
+// their spare gun, as a bought gun does.
+export const takePrize = (world: World): Option.Option<World> =>
+  isOfferedTo(world) && FridgeDoor.isAnyOf(['Offering'])(world.fridge.door)
+    ? Option.map(weaponOf(world.fridge.door.prize), kind => {
+        const spot = spotOf(world)
+        return shut(
+          modifyFields(world, {
+            player: player => giveWeapon(player, kind),
+            frameEvents: frameEvents => [
+              ...frameEvents,
+              GameEvent.PrizeTaken({ x: spot.x, y: spot.y }),
+            ],
+          }),
+        )
+      })
+    : Option.none()
+
+// NOTE: leave it: the puller walked off or the time ran out, and the
+// weapon sinks back into the fridge. The pull stays paid.
+const leavePrize = (world: World): World => {
+  const spot = spotOf(world)
+  return shut(
+    modifyFields(world, {
+      frameEvents: frameEvents => [
+        ...frameEvents,
+        GameEvent.PrizeLeft({ x: spot.x, y: spot.y }),
+      ],
+    }),
+  )
+}
+
+const hasWalkedOff = (world: World, slot: number): boolean =>
+  Option.match(maybePlayerAt(world, slot), {
+    onNone: () => true,
+    onSome: ({ player }) =>
+      Option.exists(
+        fridgeBoxOf(levelOf(world)),
+        box => distanceToBox(player, box) > FRIDGE_RULES.leavePx,
+      ),
+  })
+
+const afterReveal = (world: World, prize: FridgePrize, slot: number): World =>
+  Option.isSome(weaponOf(prize))
+    ? modifyFields(world, {
+        fridge: fridge =>
+          modifyFields(fridge, {
+            door: () =>
+              FridgeDoor.Offering({
+                prize,
+                slot,
+                remainingMs: FRIDGE_RULES.offerMs,
+                durationMs: FRIDGE_RULES.offerMs,
+              }),
+          }),
+      })
+    : shut(world)
+
 // NOTE: one tick of the fridge's door, while the round runs.
 export const advanceFridge = (world: World, deltaMs: number): World =>
   FridgeDoor.match(world.fridge.door, {
@@ -333,7 +419,20 @@ export const advanceFridge = (world: World, deltaMs: number): World =>
                   }),
               }),
           })
-        : shut(world),
+        : afterReveal(world, door.prize, door.slot),
+    Offering: door =>
+      door.remainingMs <= deltaMs || hasWalkedOff(world, door.slot)
+        ? leavePrize(world)
+        : modifyFields(world, {
+            fridge: fridge =>
+              modifyFields(fridge, {
+                door: () =>
+                  FridgeDoor.Offering({
+                    ...door,
+                    remainingMs: door.remainingMs - deltaMs,
+                  }),
+              }),
+          }),
     Slammed: ({ remainingMs, durationMs }) =>
       modifyFields(world, {
         fridge: fridge =>

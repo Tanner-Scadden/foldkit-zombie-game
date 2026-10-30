@@ -87,6 +87,8 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
             : 'PowerUp',
       ),
     FridgeSlammed: () => Option.some<SoundEffect>('Rumble'),
+    PrizeTaken: () => Option.some<SoundEffect>('Swap'),
+    PrizeLeft: () => Option.some<SoundEffect>('Thud'),
     DudBurped: () => Option.some<SoundEffect>('Payday'),
     LidLaunched: () => Option.some<SoundEffect>('Whoosh'),
     LidBlasted: () => Option.some<SoundEffect>('Boom'),

@@ -1283,6 +1283,9 @@ const eventParticles = (
     FridgeOpened: ({ x, y }) =>
       generateMany(state, FRIDGE_FOG, fogPuff({ x, y: y + 14 })),
     FridgeSlammed: ({ x, y }) => dustRing({ x, y: y + 16 }, SLAM_DUST)(state),
+    PrizeTaken: ({ x, y }) => sparks({ x, y: y + 14 }, LID_SPARKS)(state),
+    PrizeLeft: ({ x, y }) =>
+      generateMany(state, DUD_FOG, fogPuff({ x, y: y + 14 })),
     DudBurped: ({ x, y }) =>
       chain(state, [
         drawState =>

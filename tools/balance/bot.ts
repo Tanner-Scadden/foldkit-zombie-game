@@ -43,6 +43,7 @@ import {
   isSmallKind,
 } from '../../src/fridgeWeapons'
 import { FRIDGE_RULES, fridgeBoxOf } from '../../src/leftovers'
+import { leadSeatOf } from '../../src/party'
 import { update } from '../../src/main'
 import { Message } from '../../src/message'
 import { type Difficulty, ZombieKind, initialModel } from '../../src/model'
@@ -642,11 +643,15 @@ const engage = (model: Model, boss: Vector): Vector => {
 
 // The bot walks straight lines, so the way between the parlour and the
 // fridge goes by waypoints: the kitchen's double door, a spot inside it,
-// and the open floor east of the prep table, then straight up to the fridge.
+// the open floor east of the prep table, up the lane west of the sacks,
+// then east to the fridge.
 const KITCHEN_DOOR_X = 70
 const PARLOUR_SIDE: Vector = { x: KITCHEN_DOOR_X, y: 14 }
 const KITCHEN_SIDE: Vector = { x: KITCHEN_DOOR_X, y: -42 }
 const KITCHEN_EAST: Vector = { x: 150, y: -48 }
+// NOTE: the fridge stands in the north-east corner above a pile of sacks,
+// so the bot goes up the open lane west of the sacks, then east to it.
+const FRIDGE_LANE: Vector = { x: 150, y: -104 }
 
 const isInKitchen = (point: Vector) => point.y < -2
 
@@ -656,12 +661,13 @@ const isInDoorColumn = (point: Vector) =>
 // The next point to walk to on the way to goal.
 const routeTo = (from: Vector, goal: Vector): Vector => {
   if (isInKitchen(from) === isInKitchen(goal)) {
-    return isInKitchen(goal) &&
-      from.y > -55 &&
-      Math.abs(from.x - goal.x) > 6 &&
-      goal.y < -55
-      ? KITCHEN_EAST
-      : goal
+    if (!isInKitchen(goal) || goal.y >= -55 || Math.abs(from.x - goal.x) <= 6) {
+      return goal
+    }
+    if (from.y > -55 && Math.abs(from.x - KITCHEN_EAST.x) > 6) {
+      return KITCHEN_EAST
+    }
+    return from.y > FRIDGE_LANE.y + 2 ? FRIDGE_LANE : goal
   }
   if (!isInKitchen(from)) {
     return isInDoorColumn(from) && from.y < 22 ? KITCHEN_SIDE : PARLOUR_SIDE
@@ -1329,10 +1335,9 @@ const holdingAtKitchen = (model: Model, keys: Set<string>): Set<string> =>
 // The bot pulls from Mystery Leftovers in a break once the kitchen is open,
 // after it has shopped, placed its traps, and kept its reserve: the balance
 // after the pull must still cover RESERVE, a heart while it is down to 4
-// hearts or fewer, and whatever its shopping list still wants. A pulled
-// weapon takes the spare slot, so it pulls only while its spare is a bought
-// gun or a Brain Freeze with no charges left, and a Sandwich or a Dud lets
-// it pull again. It never pulls while the door is open or slammed.
+// hearts or fewer, and whatever its shopping list still wants. It never
+// pulls while the door is open or slammed. A weapon is offered, not given:
+// see wouldTake.
 // FRIDGE=0 is the bot that never pulls.
 const NO_FRIDGE = process.env.FRIDGE === '0'
 const FRIDGE_STAND_PX = 6
@@ -1351,14 +1356,21 @@ const isFridgeInReach = (model: Model): boolean =>
     box => distanceToBox(model.player, box) <= FRIDGE_RULES.reachPx - 2,
   )
 
-const isWorthAPull = (model: Model): boolean => {
+// NOTE: take it or leave it: the bot takes a weapon on offer only when its
+// spare is not an upgraded gun (a tier 0 gun or an empty Brain Freeze),
+// so it never throws away a tier it paid for. Otherwise it walks off.
+const wouldTake = (model: Model): boolean => {
   const spare = Option.getOrUndefined(maybeSpare(model.player.arsenal))
   return (
     spare === undefined ||
-    !isFridgeWeapon(spare.kind) ||
+    (spare.kind !== 'Freeze' && spare.tier === 0) ||
     (spare.kind === 'Freeze' && spare.rounds <= 0)
   )
 }
+
+const isOfferedToBot = (model: Model): boolean =>
+  model.fridge.door._tag === 'Offering' &&
+  model.fridge.door.slot === leadSeatOf(model).slot
 
 const fridgeReserve = (model: Model): number => {
   const heart =
@@ -1373,16 +1385,18 @@ const wantsFridge = (model: Model): boolean =>
   !NO_FRIDGE &&
   model.phase._tag === 'Preparation' &&
   isKitchenOpen(model) &&
-  model.fridge.door._tag !== 'Slammed' &&
-  isWorthAPull(model) &&
-  model.wallet.balance - FRIDGE_RULES.price >= fridgeReserve(model) &&
-  fridgeStand(model) !== undefined
+  fridgeStand(model) !== undefined &&
+  (model.fridge.door._tag === 'Open' ||
+    (isOfferedToBot(model) && wouldTake(model)) ||
+    (model.fridge.door._tag === 'Shut' &&
+      model.wallet.balance - FRIDGE_RULES.price >= fridgeReserve(model)))
 
 // At the fridge it holds the interact key while the door is shut, lets go
 // once a pull is done so the next hold starts fresh, and waits while the
 // door stands open.
 const fridgeKeys = (model: Model): Set<string> =>
-  model.fridge.door._tag === 'Shut' && model.purchase._tag !== 'Done'
+  (model.fridge.door._tag === 'Shut' || isOfferedToBot(model)) &&
+  model.purchase._tag !== 'Done'
     ? new Set([KEYS.interact])
     : new Set()
 

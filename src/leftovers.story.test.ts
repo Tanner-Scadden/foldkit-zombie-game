@@ -1,5 +1,5 @@
 import { Array, Option } from 'effect'
-import { given, model, story } from 'foldkit/story'
+import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
@@ -34,7 +34,7 @@ import { freshRun } from './runReset'
 import { stepWorld } from './stepWorld'
 import { press, release, ticks } from './testing'
 import { asVeteran } from './veteran'
-import { freshSpare, maybeSpare } from './weapons'
+import { freshSpare } from './weapons'
 import { withWorld } from './world'
 import { idleIntent, shutFridge } from './worldSchema'
 
@@ -116,8 +116,11 @@ const pull = [press('Enter'), ...ticks(HOLD_TICKS, FRAME_MS), release('Enter')]
 const isFridgeOffered = (current: Model): boolean =>
   Array.some(offersOf(current), ({ target }) => target._tag === 'Fridge')
 
+const isPrizeOffered = (current: Model): boolean =>
+  Array.some(offersOf(current), ({ target }) => target._tag === 'Prize')
+
 describe('pulling from Mystery Leftovers', () => {
-  test('holding Enter at the fridge pays, swings the door open, and hands over a weapon', () => {
+  test('holding Enter at the fridge pays, swings the door open, and offers a weapon', () => {
     story(
       update,
       given(seededFor(atFridge(100), 'Cooker')),
@@ -127,12 +130,7 @@ describe('pulling from Mystery Leftovers', () => {
         expect(current.stats.purchases).toBe(1)
         expect(FridgeDoor.isAnyOf(['Open'])(current.fridge.door)).toBe(true)
         expect(current.fridge.pulls).toBe(1)
-        expect(
-          Option.map(maybeSpare(current.player.arsenal), ({ kind }) => kind),
-        ).toEqual(Option.some('Cooker'))
-        expect(Arsenal.isAnyOf(['HoldingSpare'])(current.player.arsenal)).toBe(
-          true,
-        )
+        expect(current.player.arsenal).toEqual(Arsenal.PistolOnly())
         expect(
           Array.some(current.particles, ({ kind }) => kind === 'Fog'),
         ).toBe(true)
@@ -140,13 +138,14 @@ describe('pulling from Mystery Leftovers', () => {
       }),
       ...ticks(OPEN_TICKS, FRAME_MS),
       model(current => {
-        expect(current.fridge.door).toEqual(FridgeDoor.Shut())
-        expect(isFridgeOffered(current)).toBe(true)
+        expect(FridgeDoor.isAnyOf(['Offering'])(current.fridge.door)).toBe(true)
+        expect(isPrizeOffered(current)).toBe(true)
+        expect(isFridgeOffered(current)).toBe(false)
       }),
     )
   })
 
-  test('the prize replaces the spare gun, as a bought gun does', () => {
+  test('take it: holding again takes the weapon, which replaces the spare gun', () => {
     story(
       update,
       given(
@@ -162,10 +161,67 @@ describe('pulling from Mystery Leftovers', () => {
         ),
       ),
       ...pull,
+      ...ticks(OPEN_TICKS, FRAME_MS),
+      ...pull,
       model(current => {
         expect(current.player.arsenal).toEqual(
           Arsenal.HoldingSpare({ spare: freshSpare('Pan') }),
         )
+        expect(current.wallet.balance).toBe(100 - FRIDGE_RULES.price)
+        expect(isPrizeOffered(current)).toBe(false)
+        expect(FridgeDoor.isAnyOf(['Shut'])(current.fridge.door)).toBe(true)
+      }),
+    )
+  })
+
+  test('leave it: walking off sinks the weapon back and keeps your gun, still paid', () => {
+    const smg = Arsenal.HoldingPistol({ spare: freshSpare('Smg') })
+    story(
+      update,
+      given(
+        seededFor(
+          modifyFields(atFridge(100), {
+            player: player => modifyFields(player, { arsenal: () => smg }),
+          }),
+          'Pan',
+        ),
+      ),
+      ...pull,
+      ...ticks(OPEN_TICKS, FRAME_MS),
+      model(current => {
+        expect(isPrizeOffered(current)).toBe(true)
+      }),
+      message(Message.PressedKey({ code: 'KeyA' })),
+      ...ticks(60, FRAME_MS),
+      model(current => {
+        expect(current.player.arsenal).toEqual(smg)
+        expect(isPrizeOffered(current)).toBe(false)
+        expect(FridgeDoor.isAnyOf(['Offering'])(current.fridge.door)).toBe(
+          false,
+        )
+        expect(current.wallet.balance).toBe(100 - FRIDGE_RULES.price)
+      }),
+    )
+  })
+
+  test('leave it: when the timer runs out the weapon sinks back', () => {
+    story(
+      update,
+      given(seededFor(atFridge(100), 'Cooker')),
+      ...pull,
+      ...ticks(OPEN_TICKS, FRAME_MS),
+      ...ticks(Math.ceil(FRIDGE_RULES.offerMs / FRAME_MS) - 10, FRAME_MS),
+      model(current => {
+        expect(isPrizeOffered(current)).toBe(true)
+      }),
+      ...ticks(12, FRAME_MS),
+      model(current => {
+        expect(isPrizeOffered(current)).toBe(false)
+        expect(current.player.arsenal).toEqual(Arsenal.PistolOnly())
+        expect(
+          Array.some(current.frameEvents, GameEvent.isAnyOf(['PrizeLeft'])) ||
+            !FridgeDoor.isAnyOf(['Offering'])(current.fridge.door),
+        ).toBe(true)
       }),
     )
   })
@@ -270,8 +326,9 @@ describe('the fridge slams shut', () => {
         Message.TickedFrame({ deltaTime: FRAME_MS }),
       ),
       Message.ReleasedKey({ code: 'Enter' }),
-      ...Array.makeBy(OPEN_TICKS, () =>
-        Message.TickedFrame({ deltaTime: FRAME_MS }),
+      ...Array.makeBy(
+        OPEN_TICKS + Math.ceil(FRIDGE_RULES.offerMs / FRAME_MS) + 2,
+        () => Message.TickedFrame({ deltaTime: FRAME_MS }),
       ),
     ])
 
@@ -308,7 +365,7 @@ describe('the fridge slams shut', () => {
     const slamming = modifyFields(atFridge(100), {
       fridge: () => ({
         door: FridgeDoor.Open({
-          prize: 'Pan',
+          prize: 'Sandwich',
           slot: 0,
           remainingMs: FRAME_MS,
           durationMs: FRIDGE_RULES.openMs,
@@ -438,5 +495,63 @@ describe('the fridge in co-op', () => {
       FridgeDoor.isAnyOf(['Open'])(bought.fridge.door) &&
         bought.fridge.door.slot,
     ).toBe(1)
+  })
+
+  test('only the puller can take the weapon on offer', () => {
+    const offered = withWorld(seededFor(atFridge(0), 'Pan'), world =>
+      withSeat(
+        withSeat(seatCrew(world, 2), 1, seat =>
+          modifyFields(seat, {
+            player: player =>
+              modifyFields(player, {
+                x: () => AT_FRIDGE.x - 6,
+                y: () => AT_FRIDGE.y,
+              }),
+          }),
+        ),
+        0,
+        seat =>
+          modifyFields(seat, {
+            player: player =>
+              modifyFields(player, {
+                x: () => AT_FRIDGE.x + 6,
+                y: () => AT_FRIDGE.y,
+              }),
+            fridge: fridge =>
+              modifyFields(fridge, {
+                door: () =>
+                  FridgeDoor.Offering({
+                    prize: 'Pan',
+                    slot: 1,
+                    remainingMs: FRIDGE_RULES.offerMs,
+                    durationMs: FRIDGE_RULES.offerMs,
+                  }),
+              }),
+          }),
+      ),
+    )
+    const holdFor = (start: typeof offered, slot: number): typeof offered =>
+      withWorld(start, world =>
+        Array.reduce(
+          Array.makeBy(Math.ceil(PURCHASE_RULES.holdMs / TICK_MS) + 2, () => 0),
+          world,
+          stepped =>
+            stepWorld(
+              stepped,
+              new Map([[slot, { ...idleIntent, interact: 'Held' as const }]]),
+            ).world,
+        ),
+      )
+    const teammateTried = holdFor(offered, 0)
+    expect(
+      Option.getOrThrow(maybePlayerAt(teammateTried, 0)).player.arsenal,
+    ).toEqual(Arsenal.PistolOnly())
+    expect(FridgeDoor.isAnyOf(['Offering'])(teammateTried.fridge.door)).toBe(
+      true,
+    )
+    const pullerTook = holdFor(offered, 1)
+    expect(
+      Option.getOrThrow(maybePlayerAt(pullerTook, 1)).player.arsenal,
+    ).toEqual(Arsenal.HoldingSpare({ spare: freshSpare('Pan') }))
   })
 })

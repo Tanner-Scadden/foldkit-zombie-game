@@ -797,6 +797,14 @@ export const isInsideRoomAt = (level: Level, { x, y }: Vector): boolean => {
   return isInsideRoom(level, column, row) && !isOutsideTile(level, column, row)
 }
 
+// NOTE: out in the yard: on the map but outside the house. With the kitchen
+// boarded, its tiles count as yard too.
+export const isInYardAt = (level: Level, { x, y }: Vector): boolean => {
+  const column = tileCoordinate(x)
+  const row = tileCoordinate(y)
+  return isInsideRoom(level, column, row) && isOutsideTile(level, column, row)
+}
+
 export const isOnSoupAt = (level: Level, { x, y }: Vector): boolean => {
   const column = tileCoordinate(x)
   const row = tileCoordinate(y)

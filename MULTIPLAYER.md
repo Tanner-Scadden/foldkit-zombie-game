@@ -379,7 +379,7 @@ Built on 2026-10-30, for players around the world on round trips near 200 ms. Pr
 
 ### Mystery Leftovers in co-op
 
-Built on 2026-10-30 (GAME_DESIGN.md, "Mystery Leftovers"). Protocol version 5.
+Built on 2026-10-30 (GAME_DESIGN.md, "Mystery Leftovers"). Protocol version 5; version 6 added take it or leave it, a weapon prize waiting on `Offering` in the door, which only the seat the door names can take, with a hold, as a `Prize` purchasable.
 
 - **One fridge, each player's own pull.** The fridge is the room's (`fridge` in the World: its door, its pulls since the last slam, and its luck). Each seat holds to buy for itself, as at the kitchen boards; the first hold to finish pays from that seat's wallet and hands that seat the prize, and the door's `Open` names the seat so every client draws the prize flying to it. The pull draws from the fridge's own stream in the World's `loot`, which stays home like the rest of the seeded state.
 - **On the wire.** The Cooker's lids in flight are a keyed entity list (`lobs`, by id, with the thrower's slot as a bullet carries it), each player's `charge` rides with the player, and the new zombie actions (`Frozen`, `Chilled`, `Reeling`) are union cases the codec reads off the Schema. The shop's new rows (`CookerUpgrade`, `LidStack`, `PanUpgrade`) take the seat action codes after the old ones, pinned in `src/roomWorld.test.ts`.
