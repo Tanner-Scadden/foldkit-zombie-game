@@ -419,26 +419,28 @@ const sameSyncState = Schema.toEquivalence(SyncState)
 
 const scopeStatusOf = (status: ScopeStatus): PlayerScopeStatus =>
   ScopeStatus.match(status, {
-    Idle: () => PlayerScopeStatus.Idle(),
-    Loading: () => PlayerScopeStatus.Loading(),
-    Ready: ({ seq, fresh }) => PlayerScopeStatus.Ready({ seq, fresh }),
-    Failed: ({ reason }) => PlayerScopeStatus.Failed({ reason }),
+    Idle: (): PlayerScopeStatus => PlayerScopeStatus.Idle(),
+    Loading: (): PlayerScopeStatus => PlayerScopeStatus.Loading(),
+    Ready: ({ seq, fresh }): PlayerScopeStatus =>
+      PlayerScopeStatus.Ready({ seq, fresh }),
+    Failed: ({ reason }): PlayerScopeStatus =>
+      PlayerScopeStatus.Failed({ reason }),
   })
 
 const runSettledOf = (settled: Settled): RunSettled =>
   Settled.match(settled, {
-    Confirmed: ({ seq }) => RunSettled.Confirmed({ seq }),
-    Rejected: ({ code, reason }) =>
+    Confirmed: ({ seq }): RunSettled => RunSettled.Confirmed({ seq }),
+    Rejected: ({ code, reason }): RunSettled =>
       RunSettled.Rejected({ reason: `${code}: ${reason}` }),
   })
 
 const stateOf = (status: SyncStatus, devices: number): SyncState =>
   SyncStatus.match(status, {
-    Online: () => SyncState.Synced({ devices }),
-    Following: () => SyncState.Synced({ devices }),
-    Connecting: ({ attempt }) =>
+    Online: (): SyncState => SyncState.Synced({ devices }),
+    Following: (): SyncState => SyncState.Synced({ devices }),
+    Connecting: ({ attempt }): SyncState =>
       attempt === 0 ? SyncState.Connecting() : SyncState.Offline({ devices }),
-    Offline: () => SyncState.Offline({ devices }),
+    Offline: (): SyncState => SyncState.Offline({ devices }),
   })
 
 export const makePlayerDatabase = (
