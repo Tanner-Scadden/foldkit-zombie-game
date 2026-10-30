@@ -518,7 +518,7 @@ describe('Home menu', () => {
         role('dialog', { name: 'How to play' }),
         inside(
           role('list', { name: 'Controls' }),
-          expectAll(all.role('listitem')).toHaveCount(8),
+          expectAll(all.role('listitem')).toHaveCount(10),
         ),
         expect(role('list', { name: 'More keys' })).toExist(),
         expect(role('region', { name: 'On the menu' })).toExist(),

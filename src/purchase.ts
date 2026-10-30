@@ -3,6 +3,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import { type Box, distanceToBox } from './arena'
 import { buyExit, exitOffers } from './exits'
+import { fridgeOffers, pullFridge } from './leftovers'
 import type { World } from './world'
 import { GameEvent, Purchasable, Purchase, type Vector } from './worldSchema'
 
@@ -15,7 +16,7 @@ import { GameEvent, Purchasable, Purchase, type Vector } from './worldSchema'
 // The hold is World state, stepped from each seat's own intent, so co-op
 // works the same: each player holds for themselves and pays alone.
 //
-// A new kind of purchasable (the Mystery Leftovers fridge next) adds a case
+// A new kind of purchasable (like the Mystery Leftovers fridge) adds a case
 // to `Purchasable` in src/worldSchema.ts, its offers to `offersOf`, its buy
 // to `buy`, and its tag to the view's `tagOf` (src/purchaseView.ts).
 
@@ -36,11 +37,13 @@ export type Offer = Readonly<{
 
 export const offersOf = (world: World): ReadonlyArray<Offer> => [
   ...exitOffers(world),
+  ...fridgeOffers(world),
 ]
 
 const buy = (world: World, target: Purchasable): Option.Option<World> =>
   Purchasable.match(target, {
     Exit: ({ exit }) => buyExit(world, exit),
+    Fridge: () => pullFridge(world),
   })
 
 export const isSamePurchasable = (
@@ -49,6 +52,7 @@ export const isSamePurchasable = (
 ): boolean =>
   Purchasable.match(first, {
     Exit: ({ exit }) => second._tag === 'Exit' && second.exit === exit,
+    Fridge: () => second._tag === 'Fridge',
   })
 
 const reachOf = (world: World, offer: Offer): number =>

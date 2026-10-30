@@ -233,6 +233,9 @@ describe('inputs and presses', () => {
       [SeatAction.Buy({ item: 'Heart' }), 24],
       [SeatAction.Buy({ item: 'Barricade' }), 25],
       [SeatAction.Buy({ item: 'Turret' }), 26],
+      [SeatAction.Buy({ item: 'CookerUpgrade' }), 27],
+      [SeatAction.Buy({ item: 'LidStack' }), 28],
+      [SeatAction.Buy({ item: 'PanUpgrade' }), 29],
       [SeatAction.Buy({ item: 'Repair-3' }), 67],
     ]
     Array.forEach(pinned, ([action, code]) => {

@@ -31,6 +31,7 @@ import {
   multiplyScales,
   squashPulse,
 } from './drawing'
+import { chargeOf } from './fridgeWeapons'
 import { clamp, vectorLength } from './geometry'
 import {
   Invulnerability,
@@ -203,6 +204,27 @@ const muzzleFlashShapes = (
 
 export const GUN_HOLD_PX = 2
 
+// NOTE: the Clang Pan sweeps across the front as it swings: from one side
+// to the other over the swing, then back at rest.
+const SWING_TURN = 1.3
+
+const swingTurn = (weapon: WeaponKind, recoil: number): number =>
+  weapon === 'Pan' && recoil > 0 ? (recoil - 0.5) * 2 * SWING_TURN : 0
+
+// NOTE: the Cooker's lid rattles as the pressure builds, harder near full.
+const RATTLE_MS = 50
+
+const lidRattlePx = (player: Player, elapsedMs: number): number => {
+  const charge = chargeOf(player)
+  return charge >= 0.5 && Math.floor(elapsedMs / RATTLE_MS) % 2 === 0
+    ? charge >= 1
+      ? 1
+      : Math.floor(elapsedMs / (RATTLE_MS * 2)) % 2 === 0
+        ? 1
+        : 0
+    : 0
+}
+
 type PlayerPose = Readonly<{
   weapon: WeaponKind
   tier: number
@@ -240,16 +262,17 @@ export const playerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
     opacity: playerOpacity(player),
     shapes: playerFrames(model)[playerTone(player)][facing],
   })
+  const rattle = lidRattlePx(player, model.elapsedMs)
   const gun = group({
     translate: {
-      x: Math.round(bodyX + player.facing.x * GUN_HOLD_PX),
+      x: Math.round(bodyX + player.facing.x * GUN_HOLD_PX) + rattle,
       y: Math.round(bodyY + player.facing.y * GUN_HOLD_PX),
     },
     opacity: playerOpacity(player),
     shapes: gunSprite(
       weapon,
       tier,
-      Math.atan2(player.facing.y, player.facing.x),
+      Math.atan2(player.facing.y, player.facing.x) + swingTurn(weapon, recoil),
     ),
   })
   return player.facing.y < AIMING_UP ? [gun, body] : [body, gun]

@@ -15,7 +15,12 @@ import { modifyFields } from 'foldkit/struct'
 import { Dialog } from '@foldkit/ui'
 
 import { assistAim } from '../../src/aimAssist'
-import { boxCenter, hasLineOfSight, levelOf } from '../../src/arena'
+import {
+  boxCenter,
+  distanceToBox,
+  hasLineOfSight,
+  levelOf,
+} from '../../src/arena'
 import { BOSS_RULES } from '../../src/boss'
 import {
   cameraFocus,
@@ -26,9 +31,18 @@ import {
   worldWindowOf,
 } from '../../src/camera'
 import { CHUCKER_RULES, maybeShieldFor } from '../../src/chucker'
+import { PLAYER_MAX_HP, PLAYER_RADIUS } from '../../src/constants'
 import { CRAWLER_RULES } from '../../src/crawler'
 import { EXIT_RULES, KITCHEN_EXIT, isExitOfferOpenFor } from '../../src/exits'
 import { FRENZY_RULES } from '../../src/frenzy'
+import {
+  COOKER_RULES,
+  FREEZE_RULES,
+  cookerFullMs,
+  isFridgeWeapon,
+  isSmallKind,
+} from '../../src/fridgeWeapons'
+import { FRIDGE_RULES, fridgeBoxOf } from '../../src/leftovers'
 import { update } from '../../src/main'
 import { Message } from '../../src/message'
 import { type Difficulty, ZombieKind, initialModel } from '../../src/model'
@@ -52,7 +66,7 @@ import {
   maybeSpare,
 } from '../../src/weapons'
 import { withWorld } from '../../src/world'
-import { ZOMBIE_KINDS } from '../../src/zombies'
+import { ZOMBIE_KINDS, bodyRadiusOf } from '../../src/zombies'
 
 export type Model = typeof initialModel
 type GameMessage = Parameters<typeof update>[1]
@@ -132,7 +146,38 @@ export type RunResult = {
   newKinds: NewKindLog
   // The wave whose break the kitchen was bought in, or 0 when it never was.
   kitchenWave: number
+  fridge: FridgeLog
 }
+
+// What the bot pulled from the Mystery Leftovers fridge and what it did
+// with the fridge weapons: lids thrown and popped, Pan swings and the ones
+// that connected, sprays, and frozen zombies shattered.
+export type FridgeLog = {
+  pulls: number
+  firstPullWave: number
+  prizes: Record<string, number>
+  lids: number
+  pops: number
+  swings: number
+  clangs: number
+  sprays: number
+  shatters: number
+  // The fridge weapon carried when the run ended, or 'None'.
+  endedWith: string
+}
+
+const emptyFridgeLog = (): FridgeLog => ({
+  pulls: 0,
+  firstPullWave: 0,
+  prizes: {},
+  lids: 0,
+  pops: 0,
+  swings: 0,
+  clangs: 0,
+  sprays: 0,
+  shatters: 0,
+  endedWith: 'None',
+})
 
 // What the Big Leaguer, the Ankle Biter, and frenzied packs did in a run.
 export type NewKindLog = {
@@ -593,21 +638,117 @@ const engage = (model: Model, boss: Vector): Vector => {
     : { x: 0, y: 0 }
 }
 
+// THE KITCHEN ROUTE
+
+// The bot walks straight lines, so the way between the parlour and the
+// fridge goes by waypoints: the kitchen's double door, a spot inside it,
+// and the open floor east of the prep table, then straight up to the fridge.
+const KITCHEN_DOOR_X = 70
+const PARLOUR_SIDE: Vector = { x: KITCHEN_DOOR_X, y: 14 }
+const KITCHEN_SIDE: Vector = { x: KITCHEN_DOOR_X, y: -42 }
+const KITCHEN_EAST: Vector = { x: 150, y: -48 }
+
+const isInKitchen = (point: Vector) => point.y < -2
+
+const isInDoorColumn = (point: Vector) =>
+  Math.abs(point.x - KITCHEN_DOOR_X) <= 6
+
+// The next point to walk to on the way to goal.
+const routeTo = (from: Vector, goal: Vector): Vector => {
+  if (isInKitchen(from) === isInKitchen(goal)) {
+    return isInKitchen(goal) &&
+      from.y > -55 &&
+      Math.abs(from.x - goal.x) > 6 &&
+      goal.y < -55
+      ? KITCHEN_EAST
+      : goal
+  }
+  if (!isInKitchen(from)) {
+    return isInDoorColumn(from) && from.y < 22 ? KITCHEN_SIDE : PARLOUR_SIDE
+  }
+  if (from.y < -55 && from.x > 135) {
+    return KITCHEN_EAST
+  }
+  return isInDoorColumn(from) && from.y > -48 ? PARLOUR_SIDE : KITCHEN_SIDE
+}
+
+// THE FRIDGE WEAPONS' PLAN
+
+// How the bot fights while it carries a fridge weapon, chosen every few
+// frames: whether to hold the spare or the pistol, what to aim at, how long
+// to hold a Cooker charge, and the zombie a Pan keeps its distance to.
+type Zombie = Model['zombies'][number]
+
+type FridgePlan = {
+  useSpare: boolean
+  target: Zombie | undefined
+  lobMs: number
+  panTarget: Zombie | undefined
+}
+
+const GUN_PLAN: FridgePlan = {
+  useSpare: false,
+  target: undefined,
+  lobMs: 0,
+  panTarget: undefined,
+}
+
+let fridgePlan: FridgePlan = GUN_PLAN
+
+// The Pan dazes and knocks back the small kinds; it keeps its distance
+// from an Exploder, which would burst in its face, and from the big ones.
+const isPannable = (zombie: Zombie) =>
+  isSmallKind(zombie.kind) && zombie.kind !== 'Exploder'
+
+const PAN_NEAR_PX = 12
+const PAN_FAR_PX = 16
+
+const panStance = (model: Model): Vector | undefined => {
+  const { panTarget } = fridgePlan
+  if (panTarget === undefined) return undefined
+  const { player } = model
+  const threat = walking(model)
+    .filter(zombie => !isPannable(zombie))
+    .sort((a, b) => distance(player, a) - distance(player, b))[0]
+  if (
+    threat !== undefined &&
+    distance(player, threat) <
+      FLEE_PX + (threat.kind === 'Boss' ? BOSS_BERTH_PX : 0)
+  ) {
+    return steerToward(threat, player)
+  }
+  const target = walking(model).find(zombie => zombie.id === panTarget.id)
+  if (target === undefined) return undefined
+  const gap = distance(player, target)
+  if (gap < PAN_NEAR_PX) return steerToward(target, player)
+  if (gap > PAN_FAR_PX) return steerToward(player, target)
+  return { x: 0, y: 0 }
+}
+
 const kite = (model: Model): Vector => {
   const { player } = model
   const dodge = telegraphDodge(model)
   if (dodge !== undefined) {
     return dodge
   }
+  const stance = panStance(model)
+  if (stance !== undefined) {
+    return stance
+  }
   const reach = (zombie: Model['zombies'][number]) =>
     distance(player, zombie) -
     (zombie.kind === 'Boss' ? BOSS_BERTH_PX : 0) -
     (zombie.frenzy._tag === 'Frenzied' ? frenzyBerthPx() : 0)
+  // A zombie frozen solid by Brain Freeze cannot bite, so it is not fled.
   const nearest = walking(model)
     .filter(zombie => !KITES || zombie.kind !== 'Boss')
+    .filter(zombie => zombie.action._tag !== 'Frozen')
     .sort((a, b) => reach(a) - reach(b))[0]
   if (nearest !== undefined && reach(nearest) < FLEE_PX) {
     return steerToward(nearest, player)
+  }
+  if (isInKitchen(player)) {
+    return steerToward(player, routeTo(player, ROOM_CENTER))
   }
   const boss = bossOf(model)
   if (boss !== undefined && KITES) {
@@ -765,17 +906,12 @@ const holdAssistedAim = (model: Model): Model => {
   return send(model, Message.MovedMouse({ clientX: point.x, clientY: point.y }))
 }
 
-const aimAndFire = (model: Model, frame: number): Model => {
-  if (frame % AIM_EVERY_FRAMES !== 0) {
-    return holdAssistedAim(model)
-  }
-  const target = nearestVisible(model)
-  const isHeld = model.input.mouseButton._tag === 'Held'
-  if (target === undefined) {
-    return topOff(
-      isHeld ? send(model, Message.ReleasedPointer({ pointerId: 1 })) : model,
-    )
-  }
+// Points the mouse at target, with the hand's shake, and returns the
+// screen point it aimed at.
+const aimAt = (
+  model: Model,
+  target: Vector,
+): { model: Model; point: Vector } => {
   const angle =
     Math.atan2(target.y - model.player.y, target.x - model.player.x) +
     (nextBotRandom() + nextBotRandom() - 1) * AIM_NOISE_RADIANS
@@ -786,28 +922,252 @@ const aimAndFire = (model: Model, frame: number): Model => {
     y: model.player.y + Math.sin(angle) * AIM_REACH_PX,
   })
   maybeRawAim = rawPoint
-  const aimPoint = IS_AIM_ASSISTED ? assistedPoint(model, rawPoint) : rawPoint
-  const aimed = send(
-    model,
-    Message.MovedMouse({ clientX: aimPoint.x, clientY: aimPoint.y }),
-  )
-  return isHeld
-    ? aimed
+  const point = IS_AIM_ASSISTED ? assistedPoint(model, rawPoint) : rawPoint
+  return {
+    model: send(
+      model,
+      Message.MovedMouse({ clientX: point.x, clientY: point.y }),
+    ),
+    point,
+  }
+}
+
+const pressFire = (model: Model, point: Vector): Model =>
+  model.input.mouseButton._tag === 'Held'
+    ? model
     : send(
-        aimed,
+        model,
         Message.PressedPointer({
           pointerId: 1,
           device: 'Mouse',
-          clientX: aimPoint.x,
-          clientY: aimPoint.y,
+          clientX: point.x,
+          clientY: point.y,
         }),
       )
-}
 
 const holdFire = (model: Model): Model =>
   model.input.mouseButton._tag === 'Held'
     ? send(model, Message.ReleasedPointer({ pointerId: 1 }))
     : model
+
+const aimAndFire = (
+  model: Model,
+  frame: number,
+  maybeTarget?: Zombie,
+): Model => {
+  if (frame % AIM_EVERY_FRAMES !== 0) {
+    return holdAssistedAim(model)
+  }
+  const target = maybeTarget ?? nearestVisible(model)
+  if (target === undefined) {
+    return topOff(holdFire(model))
+  }
+  const aimed = aimAt(model, target)
+  return pressFire(aimed.model, aimed.point)
+}
+
+// FIGHTING WITH A FRIDGE WEAPON
+
+const fridgeSpareOf = (model: Model) =>
+  Option.getOrUndefined(
+    Option.filter(maybeSpare(model.player.arsenal), spare =>
+      isFridgeWeapon(spare.kind),
+    ),
+  )
+
+type FridgeSpare = NonNullable<ReturnType<typeof fridgeSpareOf>>
+
+const visibleZombies = (model: Model) =>
+  walking(model).filter(zombie =>
+    hasLineOfSight(levelOf(model), model.player, zombie),
+  )
+
+const nearestOf = (from: Vector, zombies: ReadonlyArray<Zombie>) =>
+  [...zombies].sort((a, b) => distance(from, a) - distance(from, b))[0]
+
+// The gap from the player's edge to a zombie's body, the way the Pan's and
+// Brain Freeze's reach are measured.
+const edgeGap = (model: Model, zombie: Zombie) =>
+  distance(model.player, zombie) - bodyRadiusOf(zombie) - PLAYER_RADIUS
+
+const gunPlan = (target?: Zombie): FridgePlan => ({ ...GUN_PLAN, target })
+
+// The Cooker lobs at a group at least LOB_MIN_PX away: the zombie with the
+// most others within LOB_GROUP_PX, the boss and Big Lugs counting double.
+// It holds the charge that throws the lid that far (the throw runs from
+// minThrowPx to maxThrowPx with the charge, from just past the player's
+// edge), so it lets go before the dial fills and never pops it. With
+// something closer than LOB_SAFE_PX, or no group, it uses the pistol.
+const LOB_MIN_PX = 40
+const LOB_GROUP_PX = 20
+const LOB_SAFE_PX = 22
+const LID_START_PX = COOKER_RULES.lidRadius + PLAYER_RADIUS
+const LOB_OVERSHOOT_PX = 4
+
+export const lobHoldMs = (gap: number, tier: number): number => {
+  const share =
+    (gap - LID_START_PX + LOB_OVERSHOOT_PX - COOKER_RULES.minThrowPx) /
+    (COOKER_RULES.maxThrowPx - COOKER_RULES.minThrowPx)
+  return (
+    cookerFullMs(tier) * Math.max(COOKER_RULES.minCharge, Math.min(1, share))
+  )
+}
+
+const cookerPlan = (model: Model, spare: FridgeSpare): FridgePlan => {
+  if (spare.rounds <= 0) return gunPlan()
+  const { player } = model
+  const seen = visibleZombies(model)
+  const nearest = nearestOf(player, seen)
+  if (nearest !== undefined && distance(player, nearest) < LOB_SAFE_PX) {
+    return gunPlan()
+  }
+  const farthest = COOKER_RULES.maxThrowPx + LID_START_PX
+  const weight = (zombie: Zombie) =>
+    zombie.kind === 'Boss' || zombie.kind === 'Tank' ? 2 : 1
+  const score = (zombie: Zombie) =>
+    seen
+      .filter(other => distance(other, zombie) <= LOB_GROUP_PX)
+      .reduce((total, other) => total + weight(other), 0)
+  const best = seen
+    .filter(zombie => {
+      const gap = distance(player, zombie)
+      return gap >= LOB_MIN_PX && gap <= farthest
+    })
+    .map(zombie => ({ zombie, score: score(zombie) }))
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        distance(player, a.zombie) - distance(player, b.zombie),
+    )[0]
+  if (best === undefined || best.score < 2) return gunPlan()
+  return {
+    useSpare: true,
+    target: best.zombie,
+    lobMs: lobHoldMs(distance(player, best.zombie), spare.tier),
+    panTarget: undefined,
+  }
+}
+
+// The Pan swings at the nearest small zombie within PAN_ENGAGE_PX, which
+// the bot closes to PAN_NEAR_PX to PAN_FAR_PX of (panStance), fire held.
+// With a Big Lug, the boss, or an Exploder near, it backs off and uses the
+// pistol, and it shoots with the pistol what is still far off.
+const PAN_ENGAGE_PX = 40
+const PAN_THREAT_PX = 50
+
+const panPlan = (model: Model): FridgePlan => {
+  const { player } = model
+  const seen = visibleZombies(model)
+  const isThreat = seen.some(
+    zombie =>
+      !isPannable(zombie) &&
+      distance(player, zombie) <
+        PAN_THREAT_PX + (zombie.kind === 'Boss' ? BOSS_BERTH_PX : 0),
+  )
+  if (isThreat) return gunPlan()
+  const target = nearestOf(
+    player,
+    seen.filter(
+      zombie => isPannable(zombie) && distance(player, zombie) < PAN_ENGAGE_PX,
+    ),
+  )
+  return target === undefined
+    ? gunPlan()
+    : { useSpare: true, target, lobMs: 0, panTarget: target }
+}
+
+// Brain Freeze sprays at a small zombie close by, or at a group of two or
+// more in its reach, then the bot shoots the frozen ones with the pistol,
+// where any hit does triple damage.
+const FREEZE_CLOSE_PX = 30
+const FREEZE_GROUP_PX = 20
+
+const freezePlan = (model: Model, spare: FridgeSpare): FridgePlan => {
+  const { player } = model
+  const seen = visibleZombies(model)
+  const isFrozen = (zombie: Zombie) => zombie.action._tag === 'Frozen'
+  const frozen = nearestOf(player, seen.filter(isFrozen))
+  if (spare.rounds <= 0) return gunPlan(frozen)
+  const freezable = seen.filter(
+    zombie =>
+      isSmallKind(zombie.kind) &&
+      !isFrozen(zombie) &&
+      edgeGap(model, zombie) <= FREEZE_RULES.reachPx - 4,
+  )
+  const close = nearestOf(
+    player,
+    freezable.filter(zombie => distance(player, zombie) < FREEZE_CLOSE_PX),
+  )
+  const spray = (target: Zombie): FridgePlan => ({
+    useSpare: true,
+    target,
+    lobMs: 0,
+    panTarget: undefined,
+  })
+  if (close !== undefined) return spray(close)
+  if (frozen !== undefined) return gunPlan(frozen)
+  const group = freezable
+    .map(zombie => ({
+      zombie,
+      count: freezable.filter(
+        other => distance(other, zombie) <= FREEZE_GROUP_PX,
+      ).length,
+    }))
+    .sort((a, b) => b.count - a.count)[0]
+  return group !== undefined && group.count >= 2
+    ? spray(group.zombie)
+    : gunPlan()
+}
+
+const planFor = (model: Model, spare: FridgeSpare): FridgePlan => {
+  if (spare.kind === 'Cooker') return cookerPlan(model, spare)
+  if (spare.kind === 'Pan') return panPlan(model)
+  return freezePlan(model, spare)
+}
+
+const isHoldingSpare = (model: Model) =>
+  model.player.arsenal._tag === 'HoldingSpare'
+
+// The Cooker's trigger, every frame: let go once the charge reaches the
+// planned hold, and never hold past full.
+const workCooker = (model: Model, spare: FridgeSpare): Model => {
+  const { charge } = model.player
+  if (charge._tag === 'Building') {
+    const limit = Math.min(fridgePlan.lobMs, cookerFullMs(spare.tier))
+    return charge.heldMs >= limit ? holdFire(model) : model
+  }
+  return charge._tag === 'Spent' ? holdFire(model) : model
+}
+
+// Every few frames the bot picks its plan and swaps to the weapon it wants
+// (the swap is free); in between it only times the Cooker's release.
+const fightWithFridge = (
+  model: Model,
+  frame: number,
+  spare: FridgeSpare,
+): Model => {
+  if (frame % AIM_EVERY_FRAMES !== 0) {
+    return isHoldingSpare(model) && spare.kind === 'Cooker'
+      ? workCooker(model, spare)
+      : holdAssistedAim(model)
+  }
+  fridgePlan = planFor(model, spare)
+  const swapped =
+    fridgePlan.useSpare !== isHoldingSpare(model)
+      ? tapKey(model, 'KeyQ')
+      : model
+  if (!fridgePlan.useSpare || !isHoldingSpare(swapped)) {
+    return aimAndFire(swapped, frame, fridgePlan.target)
+  }
+  const { target } = fridgePlan
+  if (target === undefined) return holdFire(swapped)
+  const aimed = aimAt(swapped, target)
+  if (spare.kind !== 'Cooker') return pressFire(aimed.model, aimed.point)
+  const { charge, fireCooldownMs } = aimed.model.player
+  return charge._tag === 'Idle' && fireCooldownMs <= 0
+    ? pressFire(aimed.model, aimed.point)
+    : workCooker(aimed.model, spare)
+}
 
 // SHOPPING
 
@@ -828,6 +1188,22 @@ const NO_PLANKS = process.env.NO_PLANKS !== undefined
 const RESERVE = Number(process.env.RESERVE ?? 30)
 
 type ItemId = Parameters<typeof priceFor>[1]
+type SpareKind = FridgeSpare['kind']
+
+// Each spare's ammo and upgrade on Rattles' shelves. The Cooker's ammo is a
+// Lid Stack; the Pan never needs any and Brain Freeze is never refilled.
+const REFILLS: Partial<Record<SpareKind, ItemId>> = {
+  Smg: 'SmgRounds',
+  Shotgun: 'ShotgunShells',
+  Cooker: 'LidStack',
+}
+
+const UPGRADES: Partial<Record<SpareKind, ItemId>> = {
+  Smg: 'SmgUpgrade',
+  Shotgun: 'ShotgunUpgrade',
+  Cooker: 'CookerUpgrade',
+  Pan: 'PanUpgrade',
+}
 
 const wantedPurchase = (model: Model): ItemId | undefined => {
   const spare = Option.getOrUndefined(maybeSpare(model.player.arsenal))
@@ -836,7 +1212,11 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
   const canSpare = (item: ItemId) =>
     isAvailable(item) && model.wallet.balance - priceFor(model, item) >= RESERVE
   if (model.player.hp <= 3 && isAvailable('Heart')) return 'Heart'
-  if (spare === undefined) {
+  // A Brain Freeze with no charges left is as good as no spare at all.
+  if (
+    spare === undefined ||
+    (spare.kind === 'Freeze' && spare.rounds <= 0 && isAvailable('Smg'))
+  ) {
     if (isAvailable('Smg')) return 'Smg'
     if (isAvailable('Shotgun')) return 'Shotgun'
     return undefined
@@ -844,9 +1224,9 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
   if (spare.kind === 'Shotgun' && spare.tier === 0 && isAvailable('Smg')) {
     return 'Smg'
   }
-  const refill = spare.kind === 'Smg' ? 'SmgRounds' : 'ShotgunShells'
+  const refill = REFILLS[spare.kind]
   const cap = maxRounds(spare.kind, spare.tier)
-  if (spare.rounds < cap / 2 && isAvailable(refill)) {
+  if (refill !== undefined && spare.rounds < cap / 2 && isAvailable(refill)) {
     return refill
   }
   const barricades =
@@ -870,11 +1250,25 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
   const turrets =
     model.trapStock.Turret +
     model.traps.filter(trap => trap._tag === 'Turret').length
-  const spareUpgrade = spare.kind === 'Smg' ? 'SmgUpgrade' : 'ShotgunUpgrade'
-  if (spare.tier < 1 && canSpare(spareUpgrade)) return spareUpgrade
+  // A fridge weapon's upgrades (Rattles' line for a carried Cooker or Pan)
+  // come after the hearts, planks, repairs, and the first gnome.
+  const spareUpgrade = UPGRADES[spare.kind]
+  const isFridgeSpare = isFridgeWeapon(spare.kind)
+  if (
+    !isFridgeSpare &&
+    spareUpgrade !== undefined &&
+    spare.tier < 1 &&
+    canSpare(spareUpgrade)
+  ) {
+    return spareUpgrade
+  }
   if (!NO_GNOME && turrets < 1 && canSpare('Turret')) return 'Turret'
   if (wantsKitchen(model)) return undefined
-  if (spare.tier < maxTier(spare.kind) && canSpare(spareUpgrade)) {
+  if (
+    spareUpgrade !== undefined &&
+    spare.tier < maxTier(spare.kind) &&
+    canSpare(spareUpgrade)
+  ) {
     return spareUpgrade
   }
   if (spare.tier >= maxTier(spare.kind) && canSpare('PistolUpgrade')) {
@@ -929,6 +1323,70 @@ const holdingAtKitchen = (model: Model, keys: Set<string>): Set<string> =>
   wantsKitchen(model) && Option.isSome(maybeOfferInReach(model))
     ? new Set([...keys, KEYS.interact])
     : keys
+
+// THE FRIDGE
+
+// The bot pulls from Mystery Leftovers in a break once the kitchen is open,
+// after it has shopped, placed its traps, and kept its reserve: the balance
+// after the pull must still cover RESERVE, a heart while it is down to 4
+// hearts or fewer, and whatever its shopping list still wants. A pulled
+// weapon takes the spare slot, so it pulls only while its spare is a bought
+// gun or a Brain Freeze with no charges left, and a Sandwich or a Dud lets
+// it pull again. It never pulls while the door is open or slammed.
+// FRIDGE=0 is the bot that never pulls.
+const NO_FRIDGE = process.env.FRIDGE === '0'
+const FRIDGE_STAND_PX = 6
+
+const fridgeStand = (model: Model): Vector | undefined =>
+  Option.getOrUndefined(
+    Option.map(fridgeBoxOf(levelOf(model)), box => ({
+      x: (box.left + box.right) / 2,
+      y: box.bottom + FRIDGE_STAND_PX,
+    })),
+  )
+
+const isFridgeInReach = (model: Model): boolean =>
+  Option.exists(
+    fridgeBoxOf(levelOf(model)),
+    box => distanceToBox(model.player, box) <= FRIDGE_RULES.reachPx - 2,
+  )
+
+const isWorthAPull = (model: Model): boolean => {
+  const spare = Option.getOrUndefined(maybeSpare(model.player.arsenal))
+  return (
+    spare === undefined ||
+    !isFridgeWeapon(spare.kind) ||
+    (spare.kind === 'Freeze' && spare.rounds <= 0)
+  )
+}
+
+const fridgeReserve = (model: Model): number => {
+  const heart =
+    model.player.hp <= 4 && model.player.hp < PLAYER_MAX_HP
+      ? priceFor(model, 'Heart')
+      : 0
+  const want = wantedPurchase(model)
+  return RESERVE + heart + (want === undefined ? 0 : priceFor(model, want))
+}
+
+const wantsFridge = (model: Model): boolean =>
+  !NO_FRIDGE &&
+  model.phase._tag === 'Preparation' &&
+  isKitchenOpen(model) &&
+  model.fridge.door._tag !== 'Slammed' &&
+  isWorthAPull(model) &&
+  model.wallet.balance - FRIDGE_RULES.price >= fridgeReserve(model) &&
+  fridgeStand(model) !== undefined
+
+// At the fridge it holds the interact key while the door is shut, lets go
+// once a pull is done so the next hold starts fresh, and waits while the
+// door stands open.
+const fridgeKeys = (model: Model): Set<string> =>
+  model.fridge.door._tag === 'Shut' && model.purchase._tag !== 'Done'
+    ? new Set([KEYS.interact])
+    : new Set()
+
+let fridgeLog: FridgeLog = emptyFridgeLog()
 
 let spentOnUpgrades = 0
 let gnomeTries = 0
@@ -991,7 +1449,14 @@ const busiestDoor = (model: Model) => {
     | undefined
 }
 
-type PrepPlan = 'Shop' | 'Kitchen' | 'Barricade' | 'Gnome' | 'Go'
+type PrepPlan =
+  | 'Shop'
+  | 'Kitchen'
+  | 'Barricade'
+  | 'Gnome'
+  | 'Fridge'
+  | 'Return'
+  | 'Go'
 
 // Gnomes go a little off the middle of the room, where the bot fights.
 const GNOME_SPOTS: Array<Vector> = [
@@ -1023,6 +1488,12 @@ const prepPlan = (model: Model, shopped: boolean): PrepPlan => {
   }
   if (model.trapStock.Turret > 0 && gnomeTries < 90) {
     return 'Gnome'
+  }
+  if (wantsFridge(model)) {
+    return 'Fridge'
+  }
+  if (isInKitchen(model.player)) {
+    return 'Return'
   }
   return 'Go'
 }
@@ -1136,6 +1607,8 @@ export const play = (
   maybeRawAim = undefined
   spentOnUpgrades = 0
   kitchenWave = 0
+  fridgeLog = emptyFridgeLog()
+  fridgePlan = GUN_PLAN
   boughtLog = []
   gnomeTries = 0
   gnomesPlaced = 0
@@ -1191,10 +1664,17 @@ export const play = (
             ? KITCHEN_DOOR_PUSH
             : plan === 'Gnome'
               ? gnomeSpot(model)
-              : boxCenter(
-                  levelOf(model).thresholds[busiestDoor(model) ?? 'North'].box,
-                )
-      if (plan === 'Gnome' && distance(model.player, target) < 6) {
+              : plan === 'Fridge'
+                ? (fridgeStand(model) ?? ROOM_CENTER)
+                : plan === 'Return'
+                  ? ROOM_CENTER
+                  : boxCenter(
+                      levelOf(model).thresholds[busiestDoor(model) ?? 'North']
+                        .box,
+                    )
+      if (plan === 'Fridge' && isFridgeInReach(model)) {
+        model = pressKeys(model, fridgeKeys(model))
+      } else if (plan === 'Gnome' && distance(model.player, target) < 6) {
         gnomeTries += 1
         const selected =
           model.selectedTrap === 'Turret' ? model : tapKey(model, 'KeyG')
@@ -1208,7 +1688,10 @@ export const play = (
             ? placed
             : pressKeys(placed, desiredKeys(steerToward(placed.player, target)))
       } else {
-        const direction = steerToward(model.player, target)
+        const direction = steerToward(
+          model.player,
+          routeTo(model.player, target),
+        )
         const moved = distance(model.player, lastPosition)
         stuckFrames = moved < 0.3 ? stuckFrames + 1 : 0
         if (stuckFrames > 20) {
@@ -1228,7 +1711,13 @@ export const play = (
           holdingAtKitchen(model, desiredKeys(kite(model))),
         )
       }
-      model = aimAndFire(model, frame)
+      const fridgeSpare = fridgeSpareOf(model)
+      if (fridgeSpare === undefined) {
+        fridgePlan = GUN_PLAN
+        model = aimAndFire(model, frame)
+      } else {
+        model = fightWithFridge(model, frame, fridgeSpare)
+      }
     }
     lastPosition = model.player
     frame += 1
@@ -1247,6 +1736,17 @@ export const play = (
         newKinds.wipes += 1
         newKinds.wipeBonus += event.bonus
       }
+      if (event._tag === 'FridgeOpened') {
+        fridgeLog.pulls += 1
+        fridgeLog.firstPullWave ||= wave
+        fridgeLog.prizes[event.prize] = (fridgeLog.prizes[event.prize] ?? 0) + 1
+      }
+      if (event._tag === 'LidLaunched') fridgeLog.lids += 1
+      if (event._tag === 'CookerPopped') fridgeLog.pops += 1
+      if (event._tag === 'PanSwung') fridgeLog.swings += 1
+      if (event._tag === 'PanClanged') fridgeLog.clangs += 1
+      if (event._tag === 'FreezeSprayed') fridgeLog.sprays += 1
+      if (event._tag === 'ZombieShattered') fridgeLog.shatters += 1
     })
     if (
       model.player.hp < before.player.hp &&
@@ -1456,6 +1956,13 @@ export const play = (
     boss: bossLog,
     newKinds,
     kitchenWave,
+    fridge: {
+      ...fridgeLog,
+      endedWith:
+        finalSpare !== undefined && isFridgeWeapon(finalSpare.kind)
+          ? finalSpare.kind
+          : 'None',
+    },
   }
 }
 

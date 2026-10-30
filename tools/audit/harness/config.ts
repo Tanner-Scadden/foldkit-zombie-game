@@ -1,6 +1,12 @@
 import { Effect, Schema, SchemaGetter } from 'effect'
 
-import { DoorId, NightmareLock, PickupKind, ZombieKind } from '@game/model'
+import {
+  DoorId,
+  FridgePrize,
+  NightmareLock,
+  PickupKind,
+  ZombieKind,
+} from '@game/model'
 import {
   Body,
   Difficulty,
@@ -148,12 +154,13 @@ export const HarnessConfig = Schema.Struct({
   // The player and the guns
   px: MaybeNum,
   py: MaybeNum,
-  gun: Choice(['smg', 'shotgun']),
+  gun: Choice(['smg', 'shotgun', 'cooker', 'pan', 'freeze']),
   rounds: MaybeNum,
   loaded: Num(30),
   tier: Num(0),
   pistol: MaybeNum,
   aim: Schema.optionalKey(PointFromString),
+  stick: Schema.optionalKey(PointFromString),
   god: Flag,
   look: Schema.optionalKey(Look),
   picker: Flag,
@@ -235,6 +242,13 @@ export const HarnessConfig = Schema.Struct({
   ovenMs: Num(300),
   slip: Flag,
   hold: Flag,
+  // Mystery Leftovers
+  fridge: Choice(['open', 'slammed']),
+  prize: Schema.optionalKey(FridgePrize),
+  fridgeMs: Num(600),
+  fridgeseed: MaybeNum,
+  lobs: Flag,
+  iced: Choice(['freeze', 'pan']),
   // Traps and difficulty
   planks: Schema.optionalKey(ListOf(DoorId)),
   plankhp: Num(30),

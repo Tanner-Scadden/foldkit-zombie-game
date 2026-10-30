@@ -20,6 +20,9 @@ export const GUN_NAMES: Readonly<Record<WeaponKind, string>> = {
   Shotgun: 'Barn Buster',
   Smg: 'Chatterbox',
   Peashooter: 'Pea Shooter',
+  Cooker: 'Pressure Cooker',
+  Pan: 'Clang Pan',
+  Freeze: 'Brain Freeze',
 }
 
 // NOTE: every gun's upgrade tiers share one ladder of tier words around its
@@ -71,6 +74,16 @@ export const PICKUP_NAMES: Readonly<Record<PickupKind, string>> = {
   Heart: 'PICKLED HEART',
 }
 
+// THE FRIDGE
+
+// NOTE: Mystery Leftovers (src/leftovers.ts) and its two gag prizes.
+export const FRIDGE_NAME = 'Mystery Leftovers'
+
+export const GAG_NAMES = {
+  Sandwich: 'Moldy Sandwich',
+  Dud: 'Fish Bones',
+} as const
+
 // SHOP GOODS
 
 type OwnShopGood = Exclude<
@@ -80,6 +93,8 @@ type OwnShopGood = Exclude<
   | 'ShotgunUpgrade'
   | 'SmgUpgrade'
   | 'PistolUpgrade'
+  | 'CookerUpgrade'
+  | 'PanUpgrade'
   | TrapKind
 >
 
@@ -87,6 +102,7 @@ export const SHOP_GOOD_NAMES: Readonly<Record<OwnShopGood | 'Repair', string>> =
   {
     ShotgunShells: 'Shell Sack',
     SmgRounds: 'Chatter Drum',
+    LidStack: 'Lid Stack',
     LaserSight: 'Laser Sight',
     Heart: 'Pickled Heart',
     Repair: 'Glue and Nails',

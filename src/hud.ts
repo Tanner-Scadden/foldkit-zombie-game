@@ -60,8 +60,10 @@ import { TRAP_KIND_ORDER, maybeSelectedKind } from './traps'
 import { isRoundActive, zombiesRemaining } from './waves'
 import {
   SIDEARM,
+  isReloadable,
   isReloading,
   looseRounds,
+  magazineOf,
   maxTier,
   maybeSpare,
 } from './weapons'
@@ -341,12 +343,45 @@ type SlotGun = Readonly<{ weapon: WeaponKind; tier: number }>
 
 type AmmoLook = 'Loaded' | 'Reloading' | 'Empty'
 
+// NOTE: `maybeMeter` is the Clang Pan's dent meter, from 1 (flat) to 0
+// (fully dented), drawn as a bar in place of a count.
 type SlotLook = Readonly<{
   maybeGun: Option.Option<SlotGun>
   ammo: string
   isHeld: boolean
   ammoLook: AmmoLook
+  maybeMeter?: Option.Option<number>
 }>
+
+const METER_WIDTH = 12
+const METER_COLOR = '#ffe066'
+const METER_DENTED_COLOR = '#ff4a4f'
+const METER_TRACK_COLOR = 'rgba(244, 241, 222, 0.25)'
+
+const meterShapes = (
+  x: number,
+  top: number,
+  share: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const left = x + SLOT_WIDTH - 3 - METER_WIDTH
+  const filled = Math.round(clamp(share, 0, 1) * METER_WIDTH)
+  return [
+    Canvas.Rect({
+      x: left,
+      y: top + SLOT_TEXT_TOP + 1,
+      width: METER_WIDTH,
+      height: 3,
+      fill: METER_TRACK_COLOR,
+    }),
+    Canvas.Rect({
+      x: left,
+      y: top + SLOT_TEXT_TOP + 1,
+      width: Math.max(1, filled),
+      height: 3,
+      fill: filled > 0 ? METER_COLOR : METER_DENTED_COLOR,
+    }),
+  ]
+}
 
 const AMMO_TONES: Readonly<Record<AmmoLook, TextTone>> = {
   Loaded: 'Plain',
@@ -392,7 +427,7 @@ export const gunClusterBox = (screen: Screen): Box => {
 const slotShapes = (
   layout: HudLayout,
   index: number,
-  { maybeGun, ammo, isHeld, ammoLook }: SlotLook,
+  { maybeGun, ammo, isHeld, ammoLook, maybeMeter = Option.none() }: SlotLook,
 ): ReadonlyArray<Canvas.Shape> => {
   const x = layout.slotLeft + index * (SLOT_WIDTH + SLOT_GAP)
   const top = layout.slotTop
@@ -419,13 +454,17 @@ const slotShapes = (
         ...tierPipShapes(x, top, slotGun),
       ],
     }),
-    ...textShapes(
-      ammo,
-      AMMO_TONES[ammoLook],
-      x + SLOT_WIDTH - 3,
-      top + SLOT_TEXT_TOP,
-      'Right',
-    ),
+    ...Option.match(maybeMeter, {
+      onNone: () =>
+        textShapes(
+          ammo,
+          AMMO_TONES[ammoLook],
+          x + SLOT_WIDTH - 3,
+          top + SLOT_TEXT_TOP,
+          'Right',
+        ),
+      onSome: share => meterShapes(x, top, share),
+    }),
   ]
   return isHeld ? shapes : [group({ opacity: SLOT_DIM_OPACITY, shapes })]
 }
@@ -465,9 +504,15 @@ const loadoutShapes = (
     }),
     onSome: spare => ({
       maybeGun: Option.some({ weapon: spare.kind, tier: spare.tier }),
-      ammo: `${spare.loaded}/${looseRounds(spare)}`,
+      ammo: isReloadable(spare.kind)
+        ? `${spare.loaded}/${looseRounds(spare)}`
+        : `${spare.loaded}`,
       isHeld: isHoldingSpare,
       ammoLook: ammoLook(player, isHoldingSpare, spare.loaded),
+      maybeMeter:
+        spare.kind === 'Pan'
+          ? Option.some(spare.loaded / magazineOf('Pan', spare.tier))
+          : Option.none(),
     }),
   })
   return [

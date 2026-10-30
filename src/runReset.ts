@@ -24,6 +24,7 @@ import {
   idleBoosts,
   initialHitStop,
   initialPlayer,
+  shutFridge,
   stillShake,
 } from './worldSchema'
 
@@ -40,6 +41,7 @@ export type RunFields = Pick<
   | 'cameraLean'
   | 'zombies'
   | 'bullets'
+  | 'lobs'
   | 'particles'
   | 'decals'
   | 'dustCooldownMs'
@@ -47,6 +49,7 @@ export type RunFields = Pick<
   | 'shop'
   | 'shopCategory'
   | 'purchase'
+  | 'fridge'
   | 'elapsedMs'
   | 'frameEvents'
   | 'hitStop'
@@ -87,6 +90,7 @@ export const freshRun = (model: Model): RunFields => ({
   cameraLean: ZERO_VECTOR,
   zombies: [],
   bullets: [],
+  lobs: [],
   particles: [],
   decals: [],
   dustCooldownMs: 0,
@@ -94,6 +98,7 @@ export const freshRun = (model: Model): RunFields => ({
   shop: ShopState.Away(),
   shopCategory: FIRST_SHOP_CATEGORY,
   purchase: Purchase.Idle(),
+  fridge: shutFridge,
   elapsedMs: 0,
   frameEvents: [],
   hitStop: initialHitStop,

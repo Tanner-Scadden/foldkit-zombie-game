@@ -41,8 +41,8 @@ export const ROOM_MAP: ReadonlyArray<string> = [
 export const KITCHEN_MAP: ReadonlyArray<string> = [
   '############DD######,,,,,,,,,,,,',
   '############DD######,,,,,,,,,,,,',
-  '#QQQ..GG..GG....III#,,,,,,,,,,,,',
-  '#QQQ..GG..GG....III#,,,,,,,,,,,,',
+  '#QQQ..GG..GG..IIIZZ#,,,,,,,,,,,,',
+  '#QQQ..GG..GG..IIIZZ#,,,,,,,,,,,,',
   '#..................#,,,,,,,,,,,,',
   '#...~~.............#,,,,,,,,,,,,',
   'Y...~~~..........RR#,,,,,,,,,,,,',
@@ -78,6 +78,7 @@ export type CoverKind =
   | 'Sink'
   | 'Pantry'
   | 'Sacks'
+  | 'Fridge'
 
 export const WALL_SYMBOL = '#'
 export const SHOP_STALL_SYMBOL = '$'
@@ -100,6 +101,7 @@ export const COVER_SYMBOLS: Readonly<Record<string, CoverKind>> = {
   I: 'Sink',
   Q: 'Pantry',
   R: 'Sacks',
+  Z: 'Fridge',
 }
 
 export const DOOR_SYMBOLS: Readonly<Record<DoorId, string>> = {

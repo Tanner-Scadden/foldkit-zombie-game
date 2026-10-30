@@ -78,6 +78,27 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     Purchased: () => Option.some<SoundEffect>('Purchase'),
     PurchaseRefused: () => Option.some<SoundEffect>('Denied'),
     ExitOpened: () => Option.some<SoundEffect>('Crash'),
+    FridgeOpened: ({ prize }) =>
+      Option.some<SoundEffect>(
+        prize === 'Freeze'
+          ? 'PackBonus'
+          : prize === 'Dud'
+            ? 'GrabBurp'
+            : 'PowerUp',
+      ),
+    FridgeSlammed: () => Option.some<SoundEffect>('Rumble'),
+    DudBurped: () => Option.some<SoundEffect>('Payday'),
+    LidLaunched: () => Option.some<SoundEffect>('Whoosh'),
+    LidBlasted: () => Option.some<SoundEffect>('Boom'),
+    CookerPopped: () => Option.some<SoundEffect>('Pop'),
+    PanSwung: () => Option.some<SoundEffect>('Whoosh'),
+    PanClanged: () => Option.some<SoundEffect>('Clang'),
+    PanSmashed: () => Option.some<SoundEffect>('BossStomp'),
+    PanFlattened: () => Option.some<SoundEffect>('Clang'),
+    HomeRun: () => Option.some<SoundEffect>('BossBonk'),
+    FreezeSprayed: () => Option.some<SoundEffect>('PowerDown'),
+    ZombieFrozen: () => Option.none<SoundEffect>(),
+    ZombieShattered: () => Option.some<SoundEffect>('Crack'),
     ZombieSlipped: () => Option.some<SoundEffect>('Thud'),
     PlayerDowned: () => Option.some<SoundEffect>('PlayerHurt'),
     PlayerRevived: () => Option.some<SoundEffect>('Clutch'),

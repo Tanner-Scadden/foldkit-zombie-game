@@ -104,6 +104,7 @@ const takeRoomWorld = (
     player: () => world.player,
     zombies: () => world.zombies,
     bullets: () => world.bullets,
+    lobs: () => world.lobs,
     wallet: wallet => modifyFields(world.wallet, { shown: () => wallet.shown }),
     elapsedMs: () => world.elapsedMs,
     frameEvents: () => events,
@@ -114,6 +115,7 @@ const takeRoomWorld = (
     selectedTrap: () => world.selectedTrap,
     level: () => world.level,
     ovens: () => world.ovens,
+    fridge: () => world.fridge,
     laserSight: () => world.laserSight,
     shop: shop =>
       isBrowsing(shop) && isBrowsing(world.shop) ? shop : world.shop,

@@ -6,7 +6,17 @@ import { type Zombie, ZombieAction } from './worldSchema'
 
 // RECOVERY
 
-const isRecovering = ZombieAction.isAnyOf(['Winded', 'Dazed'])
+// NOTE: how long a zombie the Clang Pan rang stays Winded once it is up,
+// so the Pan cannot daze it again at once (src/fridgeWeapons.ts).
+export const REELING_GUARD_MS = 1200
+
+const isRecovering = ZombieAction.isAnyOf([
+  'Winded',
+  'Dazed',
+  'Frozen',
+  'Chilled',
+  'Reeling',
+])
 
 const recover =
   (deltaMs: number) =>
@@ -28,6 +38,35 @@ const recover =
                 durationMs: action.durationMs,
               })
             : ZombieAction.Roaming(),
+      })
+    } else if (ZombieAction.isAnyOf(['Frozen'])(action)) {
+      return modifyFields(zombie, {
+        action: () =>
+          action.remainingMs > deltaMs
+            ? ZombieAction.Frozen({
+                remainingMs: action.remainingMs - deltaMs,
+                durationMs: action.durationMs,
+              })
+            : ZombieAction.Roaming(),
+      })
+    } else if (ZombieAction.isAnyOf(['Chilled'])(action)) {
+      return modifyFields(zombie, {
+        action: () =>
+          action.remainingMs > deltaMs
+            ? ZombieAction.Chilled({
+                remainingMs: action.remainingMs - deltaMs,
+              })
+            : ZombieAction.Roaming(),
+      })
+    } else if (ZombieAction.isAnyOf(['Reeling'])(action)) {
+      return modifyFields(zombie, {
+        action: () =>
+          action.remainingMs > deltaMs
+            ? ZombieAction.Reeling({
+                remainingMs: action.remainingMs - deltaMs,
+                durationMs: action.durationMs,
+              })
+            : ZombieAction.Winded({ remainingMs: REELING_GUARD_MS }),
       })
     } else {
       return zombie

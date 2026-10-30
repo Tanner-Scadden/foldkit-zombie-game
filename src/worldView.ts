@@ -15,6 +15,11 @@ import {
   groundParticleShapes,
   popupShape,
 } from './effectsView'
+import {
+  fridgeDrawables,
+  fridgeOverheadShapes,
+  lidShadowShapes,
+} from './fridgeView'
 import { ovenFlameShapes, ovenGlowShapes, padlockShapes } from './kitchenView'
 import { type Model, Phase, ShopState, type Vector, type Zombie } from './model'
 import { isBehindWall, occludersOf } from './occluders'
@@ -135,6 +140,7 @@ const groundShapes = (
   ...doorRattleShapes(model),
   ...aimSightShapes(model),
   ...Array.flatMap(model.bullets, bulletShapes),
+  ...lidShadowShapes(model),
 ]
 
 // STANDING
@@ -186,6 +192,7 @@ const standingDrawables = (
         ]
       : []),
     ...mateDrawables(model),
+    ...fridgeDrawables(model),
   ]
 }
 
@@ -219,6 +226,7 @@ const overheadShapes = (
   ...airborneParticleShapes(model.particles),
   ...Array.map(model.popups, popupShape(camera)),
   ...reloadBarShapes(model.player),
+  ...fridgeOverheadShapes(model),
   ...mateOverheadShapes(model),
   ...coopNameShapes(model),
   ...stallPromptShapes(stallPrompt(model)),

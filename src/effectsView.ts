@@ -380,6 +380,9 @@ const PARTICLE_COLORS: Readonly<Record<ParticleKind, string>> = {
   StopSign: PART_LOOKS.StopSign.particle,
   Bucket: PART_LOOKS.Bucket.particle,
   Smoke: SMOKE_COLOR,
+  Frost: '#c8f0ff',
+  IceGib: '#9fd8f0',
+  Fog: 'rgba(150, 210, 90, 0.55)',
 }
 
 const LIMBS: ReadonlyArray<ParticleKind | DecalKind> = [

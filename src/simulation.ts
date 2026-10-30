@@ -43,6 +43,15 @@ import { advanceCrawlers, ankleSlowAt, ankleSlowNear } from './crawler'
 import { biteDamage } from './difficulty'
 import { advanceFrenzy, frenzyPace, isFrenzied, payWipedPacks } from './frenzy'
 import {
+  advanceLobs,
+  chillPace,
+  dropCharge,
+  fireFridgeWeapon,
+  flattenPans,
+  maybeHeldFridgeWeapon,
+  shatterEvents,
+} from './fridgeWeapons'
+import {
   ZERO_VECTOR,
   addVectors,
   circlesOverlap,
@@ -55,6 +64,7 @@ import {
 } from './geometry'
 import { stopForHits, thawTick } from './juice'
 import { advanceKitchen, soupSkid } from './kitchen'
+import { advanceFridge } from './leftovers'
 import { advanceIntensity } from './pacing'
 import {
   COOP_RULES,
@@ -124,11 +134,13 @@ import {
   type Boss,
   type Bullet,
   type BulletGlaze,
+  Charge,
   type DoorId,
   type FlowField,
   GameEvent,
   Invulnerability,
   Life,
+  Phase,
   Pierce,
   type Player,
   Reload,
@@ -438,16 +450,27 @@ const topUp = (model: World): World =>
         player: player => keepTopped(player, model.boosts),
       })
 
+const withoutCharge = (model: World): World =>
+  Charge.isAnyOf(['Idle'])(model.player.charge)
+    ? model
+    : modifyFields(model, { player: dropCharge })
+
+// NOTE: a fridge weapon fires no bullets, so its trigger is its own
+// (src/fridgeWeapons.ts). The stall and a reload let go of a charge.
 const fire = (stocked: World, deltaMs: number): World => {
-  const model = topUp(stocked)
+  const topped = topUp(stocked)
+  const maybeFridgeWeapon = maybeHeldFridgeWeapon(topped.player)
+  const model = Option.isSome(maybeFridgeWeapon)
+    ? topped
+    : withoutCharge(topped)
   const { player, intent } = model
   const isTriggerHeld = intent.trigger === 'Held'
 
-  if (
-    isShopBrowsing(model) ||
-    isReloading(player) ||
-    player.fireCooldownMs > 0
-  ) {
+  if (isShopBrowsing(model) || isReloading(player)) {
+    return coolTrigger(withoutCharge(model), deltaMs, false)
+  } else if (Option.isSome(maybeFridgeWeapon)) {
+    return fireFridgeWeapon(model, maybeFridgeWeapon.value, deltaMs)
+  } else if (player.fireCooldownMs > 0) {
     return coolTrigger(model, deltaMs, isTriggerHeld && !isReloading(player))
   } else if (heldLoaded(player) <= 0 && canReload(player)) {
     return autoReload(model, isTriggerHeld)
@@ -849,7 +872,7 @@ const steeringVelocity = (
         ? ZERO_VECTOR
         : scaleVector(
             heading(zombie, flowFields, target, obstacles),
-            zombie.speed * pace * frenzyPace(zombie),
+            zombie.speed * pace * frenzyPace(zombie) * chillPace(zombie),
           ),
     Fusing: () => ZERO_VECTOR,
     Dying: () => ZERO_VECTOR,
@@ -1590,6 +1613,14 @@ const bossAt = (model: World): Vector =>
     (): Vector => model.player,
   )
 
+// NOTE: when a wave ends and its break begins, Rattles bangs every
+// player's Clang Pan flat.
+const flattenAtBreak = (before: World, after: World): World =>
+  Phase.isAnyOf(['Wave'])(before.phase) &&
+  Phase.isAnyOf(['Preparation'])(after.phase)
+    ? forEachSeat(after, flattenPans)
+    : after
+
 const advanceWorld = (model: World, deltaMs: number): World => {
   const seconds = deltaMs / MS_PER_SECOND
 
@@ -1620,11 +1651,13 @@ const advanceWorld = (model: World, deltaMs: number): World => {
     zombies: () => advanceZombies(armed, seconds, deltaMs),
   })
 
-  return pipe(
+  const fought = pipe(
     recordFootfalls(advanced, deltaMs),
     footed => resolveBulletHits(footed, seconds, routed.nextEntityId),
+    struck => advanceLobs(struck, deltaMs),
     trapped => advanceTraps(trapped, seconds, deltaMs),
     trapped => advanceKitchen(armed, trapped, deltaMs),
+    cooked => advanceFridge(cooked, deltaMs),
     contacted => standingSeats(contacted, resolvePlayerContact),
     contacted => recoverActions(contacted, deltaMs),
     recovered => advanceChuckers(recovered, deltaMs),
@@ -1634,12 +1667,16 @@ const advanceWorld = (model: World, deltaMs: number): World => {
         advanceBossMoves(fight, deltaMs),
       ),
     resolveBlasts,
-    blasted => advanceFrenzy(blasted, deltaMs),
+  )
+  return pipe(
+    advanceFrenzy(fought, deltaMs),
     frenzied => payWipedPacks(model, frenzied),
     clearBrokenTraps,
     blasted => feelIntensity(model, blasted, deltaMs),
     felt => advancePowerUps(felt, advanceRound(felt, deltaMs), deltaMs),
+    rounded => flattenAtBreak(model, rounded),
     rounded => shedParts(model, rounded),
+    shed => shatterEvents(model, shed),
     downed => advanceParty(downed, deltaMs),
     endWhenDefeated,
   )

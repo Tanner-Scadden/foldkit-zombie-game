@@ -264,6 +264,24 @@ const PHYSICS: Readonly<Record<ParticleKind, ParticlePhysics>> = {
     restitution: 0,
     maybeDecalKind: Option.none(),
   },
+  Frost: {
+    gravity: SPARK_GRAVITY,
+    dragPerSecond: DUST_DRAG_PER_SECOND,
+    restitution: 0,
+    maybeDecalKind: Option.none(),
+  },
+  IceGib: {
+    gravity: GIB_GRAVITY,
+    dragPerSecond: GIB_DRAG_PER_SECOND,
+    restitution: GIB_RESTITUTION,
+    maybeDecalKind: Option.none(),
+  },
+  Fog: {
+    gravity: -SMOKE_RISE / 3,
+    dragPerSecond: DUST_DRAG_PER_SECOND,
+    restitution: 0,
+    maybeDecalKind: Option.none(),
+  },
 }
 
 const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
@@ -300,6 +318,9 @@ const LAUNCH_SIZE: Readonly<Record<ParticleKind, number>> = {
   StopSign: 6,
   Bucket: 5,
   Smoke: 3,
+  Frost: 1,
+  IceGib: 2,
+  Fog: 4,
 }
 
 const DECAL_HEIGHT: Readonly<Record<DecalKind, (size: number) => number>> = {
@@ -650,6 +671,80 @@ const smokePuff =
       }),
     ]
   }
+
+// NOTE: the fridge's green fog, slow and low, and Brain Freeze's frost.
+const FOG_SPEED_MIN = 6
+const FOG_SPEED_MAX = 26
+const FOG_LIFETIME_MIN_MS = 600
+const FOG_LIFETIME_MAX_MS = 1100
+
+const fogPuff =
+  (ground: Vector) =>
+  (state: number): Seeded<Particle> => {
+    const angleDraw = nextRandom(state)
+    const speedDraw = nextRandom(angleDraw.nextState)
+    const lifetimeDraw = nextRandom(speedDraw.nextState)
+    return [
+      lifetimeDraw.nextState,
+      launch({
+        kind: 'Fog',
+        ground,
+        height: 6,
+        angle: angleDraw.value * Math.PI * 2,
+        speed: between(speedDraw.value, FOG_SPEED_MIN, FOG_SPEED_MAX),
+        lift: 2,
+        size: LAUNCH_SIZE.Fog,
+        lifetimeMs: between(
+          lifetimeDraw.value,
+          FOG_LIFETIME_MIN_MS,
+          FOG_LIFETIME_MAX_MS,
+        ),
+      }),
+    ]
+  }
+
+const FROST_SPEED_MIN = 50
+const FROST_SPEED_MAX = 110
+const FROST_LIFETIME_MS = 420
+
+const frostBit =
+  (ground: Vector, heading: number, spread: number) =>
+  (state: number): Seeded<Particle> => {
+    const angleDraw = nextRandom(state)
+    const speedDraw = nextRandom(angleDraw.nextState)
+    return [
+      speedDraw.nextState,
+      launch({
+        kind: 'Frost',
+        ground,
+        height: PLAYER_FOOT_OFFSET,
+        angle: heading + (angleDraw.value - 0.5) * spread,
+        speed: between(speedDraw.value, FROST_SPEED_MIN, FROST_SPEED_MAX),
+        lift: 6,
+        size: LAUNCH_SIZE.Frost,
+        lifetimeMs: FROST_LIFETIME_MS,
+      }),
+    ]
+  }
+
+const FRIDGE_FOG = 12
+const DUD_FOG = 4
+const DUD_COINS = 5
+const SLAM_DUST = 10
+const LAUNCH_STEAM = 3
+const LID_SMOKE = 6
+const LID_SPARKS = 8
+const LID_DUST = 6
+const POP_STEAM = 6
+const POP_SPARKS = 4
+const CLANG_SPARKS = 3
+const PAN_SMASH_DUST = 14
+const FLATTEN_SPARKS = 4
+const HOME_RUN_SPARKS = 6
+const FREEZE_FROST = 16
+const FREEZE_SPREAD = 1
+const FROZEN_FROST = 4
+const SHATTER_ICE = 9
 
 const chip =
   (ground: Vector, heading: number) =>
@@ -1185,6 +1280,47 @@ const eventParticles = (
       generateMany(state, COINS_PER_PURCHASE, coin(playerGround(x, y))),
     PurchaseRefused: () => noParticles(state),
     ExitOpened: ({ x, y }) => smashParticles(state, { x, y }),
+    FridgeOpened: ({ x, y }) =>
+      generateMany(state, FRIDGE_FOG, fogPuff({ x, y: y + 14 })),
+    FridgeSlammed: ({ x, y }) => dustRing({ x, y: y + 16 }, SLAM_DUST)(state),
+    DudBurped: ({ x, y }) =>
+      chain(state, [
+        drawState =>
+          generateMany(drawState, DUD_FOG, fogPuff(playerGround(x, y))),
+        drawState =>
+          generateMany(drawState, DUD_COINS, coin(playerGround(x, y))),
+      ]),
+    LidLaunched: ({ x, y }) =>
+      generateMany(state, LAUNCH_STEAM, smokePuff(playerGround(x, y))),
+    LidBlasted: ({ x, y }) =>
+      chain(state, [
+        drawState => generateMany(drawState, LID_SMOKE, smokePuff({ x, y })),
+        sparks({ x, y }, LID_SPARKS),
+        dustRing({ x, y }, LID_DUST),
+      ]),
+    CookerPopped: ({ x, y }) =>
+      chain(state, [
+        drawState =>
+          generateMany(drawState, POP_STEAM, smokePuff(playerGround(x, y))),
+        sparks(playerGround(x, y), POP_SPARKS),
+      ]),
+    PanSwung: () => noParticles(state),
+    PanClanged: ({ x, y }) => sparks({ x, y }, CLANG_SPARKS)(state),
+    PanSmashed: ({ x, y }) =>
+      dustRing(playerGround(x, y), PAN_SMASH_DUST)(state),
+    PanFlattened: ({ x, y }) =>
+      sparks(playerGround(x, y), FLATTEN_SPARKS)(state),
+    HomeRun: ({ x, y }) => sparks({ x, y }, HOME_RUN_SPARKS)(state),
+    FreezeSprayed: ({ x, y, direction }) =>
+      generateMany(
+        state,
+        FREEZE_FROST,
+        frostBit(playerGround(x, y), angleOf(direction), FREEZE_SPREAD),
+      ),
+    ZombieFrozen: ({ x, y }) =>
+      generateMany(state, FROZEN_FROST, frostBit({ x, y }, 0, Math.PI * 2)),
+    ZombieShattered: ({ x, y }) =>
+      generateMany(state, SHATTER_ICE, gib('IceGib', { x, y }, NO_PUSH)),
     ZombieSlipped: ({ x, y }) =>
       generateMany(
         state,
@@ -1256,7 +1392,7 @@ const walkingDust = (
 }
 
 const scorchDecals = (event: GameEvent): ReadonlyArray<Decal> =>
-  GameEvent.isAnyOf(['Exploded'])(event)
+  GameEvent.isAnyOf(['Exploded', 'LidBlasted'])(event)
     ? [
         {
           kind: 'Scorch',

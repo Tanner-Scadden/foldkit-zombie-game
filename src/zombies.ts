@@ -507,9 +507,12 @@ const isOnTheFloor = ZombieAction.isAnyOf([
   'Shielding',
   'Dazed',
   'Clinging',
+  'Frozen',
+  'Chilled',
+  'Reeling',
 ])
 
-const isOnItsFeet = ZombieAction.isAnyOf(['Roaming', 'Winded'])
+const isOnItsFeet = ZombieAction.isAnyOf(['Roaming', 'Winded', 'Chilled'])
 
 // NOTE: a grounded zombie is alive and standing in the room, so bullets,
 // bursts, traps, and the crowd can reach it. One Burrowed under the floor,

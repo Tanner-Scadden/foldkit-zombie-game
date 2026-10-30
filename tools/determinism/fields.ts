@@ -30,6 +30,7 @@ export const FIELD_CLASSES = {
   player: 'World',
   zombies: 'World',
   bullets: 'World',
+  lobs: 'World',
   nextEntityId: 'World',
   wallet: 'World',
   elapsedMs: 'World',
@@ -45,6 +46,7 @@ export const FIELD_CLASSES = {
   intent: 'World',
 
   ovens: 'World',
+  fridge: 'World',
   laserSight: 'World',
   shop: 'World',
   shopCategory: 'World',

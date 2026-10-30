@@ -23,6 +23,7 @@ import {
 import { SHAKE_MAX_PX, TILE_SIZE } from './constants'
 import {
   backDoorShapes,
+  fridgeShapes,
   kitchenFloorShapes,
   kitchenWallShapes,
   openedExitShapes,
@@ -1654,6 +1655,7 @@ const COVER_DRAWINGS: Readonly<
   Sink: sinkShapes,
   Pantry: pantryShapes,
   Sacks: sacksShapes,
+  Fridge: fridgeShapes,
 }
 
 const coverShapes = (

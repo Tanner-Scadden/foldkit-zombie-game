@@ -28,8 +28,9 @@ import {
 //   exactly: a small integer as a varint, anything else as a float64.
 // - Literals and union tags as their index, options as a flag, strings and
 //   lists with their length.
-// - The entity lists (zombies, bullets, pickups, traps, and the teammates)
-//   are keyed by id, so a diff names only what came, went, or changed.
+// - The entity lists (zombies, bullets, lids, pickups, traps, and the
+//   teammates) are keyed by id, so a diff names only what came, went, or
+//   changed.
 // - A diff is a mask of the fields that changed, nested: a zombie that
 //   only walked writes its id, a mask byte, and its new x and y.
 //
@@ -89,6 +90,7 @@ const fieldNumber =
 const KEYED_LISTS: ReadonlyMap<string, KeyOf> = new Map([
   ['zombies', fieldNumber('id')],
   ['bullets', fieldNumber('id')],
+  ['lobs', fieldNumber('id')],
   ['pickups', fieldNumber('id')],
   ['traps', fieldNumber('id')],
   ['mates', fieldNumber('seat', 'slot')],
