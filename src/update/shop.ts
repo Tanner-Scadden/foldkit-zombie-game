@@ -6,7 +6,6 @@ import { Dialog, Tabs } from '@foldkit/ui'
 
 import { FocusShopItem } from '../commands'
 import { dialogFolds } from '../dialogs'
-import { isExitOfferOpenFor } from '../exits'
 import { refreshIntent } from '../frame'
 import { releaseAll } from '../input'
 import { Message } from '../message'
@@ -31,7 +30,6 @@ import {
 } from '../shop'
 import { ShopTabs } from '../shopTabs'
 import { showTrapHint } from '../traps'
-import { closeExit } from './exit'
 import { type SoundCue, playSounds, uiCue } from './sound'
 import { type UpdateReturn, type UpdateStep, withInput } from './step'
 
@@ -94,16 +92,13 @@ export const enterShop: UpdateStep = stepModel =>
 export const closeShop: UpdateStep = stepModel =>
   isBrowsing(stepModel.shop)
     ? Update.combine(stepModel, [shopDialog.close, leaveShopStep])
-    : closeExit(stepModel)
+    : { model: stepModel }
 
-// NOTE: the stall shuts outside the break. An exit's offer stays open while
-// the exit is for sale, mid-wave too.
+// NOTE: the stall shuts outside the break.
 export const closeShopOutsidePreparation: UpdateStep = stepModel =>
   Phase.isAnyOf(['Preparation'])(stepModel.phase)
     ? { model: stepModel }
-    : isBrowsing(stepModel.shop) || !isExitOfferOpenFor(stepModel.phase)
-      ? closeShop(stepModel)
-      : { model: stepModel }
+    : closeShop(stepModel)
 
 // BUYING
 
@@ -160,7 +155,6 @@ export const focusShopItem = (model: Model, item: ShopItemId): Model =>
       modifyFields(model, {
         shop: () => ShopState.Browsing({ focusedItem: item }),
       }),
-    AtExit: () => model,
     Dismissed: () => model,
   })
 

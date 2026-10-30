@@ -10,8 +10,7 @@ import {
   tilesWithSymbol,
 } from './arena'
 import { TILE_SIZE } from './constants'
-import { EXIT_RULES, type ExitPrompt, exitPrompt } from './exits'
-import { GLYPH_HEIGHT, bakeText, placeBaked } from './font'
+import { maybePadlockedExit } from './exits'
 import { OVEN_RULES, flameBoxOf, ovenBoxesOf, ovensOf } from './kitchen'
 import { type Model, Oven } from './model'
 import { nextRandom } from './prng'
@@ -19,7 +18,6 @@ import {
   type Palette,
   type Sprite,
   TOP_LEFT,
-  bakeShapes,
   placeAt,
   spriteRects,
   spriteShapes,
@@ -758,28 +756,11 @@ export const openedExitShapes = ({
   ]
 }
 
-// PRICE TAG
+// PADLOCK
 
-// NOTE: the boards say what opening them costs without a word: a dark tag
-// with the coin and the price hangs off a nail at the foot of the boards,
-// below the HUD strip, and before the kitchen's first break a padlock hangs
-// there instead.
-const TAG_TEXT = bakeText(`$${EXIT_RULES.price}`, 'Coin')
-const TAG_PAD = 2
-const TAG_WIDTH = TAG_TEXT.width + TAG_PAD * 2 + 1
-const TAG_HEIGHT = GLYPH_HEIGHT + TAG_PAD * 2
-
-const TAG_SPRITE: Sprite = [
-  ...bakeShapes([
-    rect(Math.floor(TAG_WIDTH / 2), -4, 1, 4, '#c9c3b0'),
-    rect(Math.floor(TAG_WIDTH / 2) - 1, -5, 3, 1, '#8a8a96'),
-    rect(-1, -1, TAG_WIDTH + 2, TAG_HEIGHT + 2, '#140c10'),
-    rect(0, 0, TAG_WIDTH, TAG_HEIGHT, '#3a2408'),
-    rect(0, 0, TAG_WIDTH, 1, '#c98a1a'),
-  ]),
-  placeBaked(TAG_TEXT, { x: TAG_PAD, y: TAG_PAD, align: 'Left' }),
-]
-
+// NOTE: before the kitchen's first break a padlock hangs at the foot of the
+// boards. From then on the price tag is the purchasable's
+// (src/purchaseView.ts).
 const PADLOCK: Sprite = spriteShapes(
   [
     '...c...',
@@ -796,25 +777,19 @@ const PADLOCK: Sprite = spriteShapes(
   TOP_LEFT,
 )
 
-const TAG_BOARD_Y = 24
 const LOCK_BOARD_Y = 22
 
-export const exitPromptShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
-  const prompt: ExitPrompt = exitPrompt(model)
-  if (prompt._tag === 'None') {
-    return []
-  }
-  const middle = Math.round((prompt.box.left + prompt.box.right) / 2)
-  return prompt._tag === 'Offer'
-    ? [
-        placeAt(
-          middle - Math.floor(TAG_WIDTH / 2),
-          prompt.box.top + TAG_BOARD_Y,
-          TAG_SPRITE,
-        ),
-      ]
-    : [placeAt(middle - 3, prompt.box.top + LOCK_BOARD_Y, PADLOCK)]
-}
+export const padlockShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+  Option.match(maybePadlockedExit(model), {
+    onNone: () => [],
+    onSome: box => [
+      placeAt(
+        Math.round((box.left + box.right) / 2) - 3,
+        box.top + LOCK_BOARD_Y,
+        PADLOCK,
+      ),
+    ],
+  })
 
 // OVENS
 

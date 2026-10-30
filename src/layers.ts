@@ -18,6 +18,7 @@ import {
   defaultAppearance,
 } from './model'
 import { calloutShapes } from './powerupView'
+import { purchaseOverlayShapes } from './purchaseView'
 import { FLOOR_COLOR, manorRoomImages, roomShapes } from './room'
 import { type Screen, inLandscapeFrame, screenOf } from './screen'
 import { overlayShapes } from './screens'
@@ -44,6 +45,7 @@ const overlayLayerShapes = (
 ): ReadonlyArray<Canvas.Shape> => [
   ...hudStripShapes(model, screen),
   ...wavePreviewShapes(model, camera),
+  ...(isRoundActive(model.phase) ? purchaseOverlayShapes(model, camera) : []),
   ...hudShapes(model, screen, camera),
   ...calloutLayerShapes(model, camera),
   ...(isRoundActive(model.phase) ? coopEdgeShapes(model, camera) : []),

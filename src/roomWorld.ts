@@ -68,6 +68,7 @@ import {
   Phase,
   type Player,
   type PlayerSlot,
+  Purchase,
   RunMode,
   type Seat,
   ShopState,
@@ -155,10 +156,12 @@ const EVENT_TICKS = 60
 // NOTE: a PlayerInput as the room reads it (packages/netcode, Protocol.ts):
 // move as whole 127ths, aim as a direction scaled to AIM_REACH and kept to
 // eighths (the wire's precision), the trigger as button bit FIRE_BUTTON,
-// and a press as `action`.
+// the interact hold (src/purchase.ts) as bit INTERACT_BUTTON, and a press
+// as `action`.
 export const MOVE_SCALE = 127
 export const AIM_REACH = 1024
 export const FIRE_BUTTON = 1
+export const INTERACT_BUTTON = 2
 const AIM_PRECISION = 8
 
 const eighths = (value: number): number =>
@@ -171,7 +174,9 @@ export const inputOfIntent = (intent: Intent, action: number): PlayerInput => {
     moveY: Math.round(Math.max(-1, Math.min(1, intent.move.y)) * MOVE_SCALE),
     aimX: eighths(aim.x * AIM_REACH),
     aimY: eighths(aim.y * AIM_REACH),
-    buttons: intent.trigger === 'Held' ? FIRE_BUTTON : 0,
+    buttons:
+      (intent.trigger === 'Held' ? FIRE_BUTTON : 0) |
+      (intent.interact === 'Held' ? INTERACT_BUTTON : 0),
     action,
   }
 }
@@ -190,6 +195,7 @@ export const intentOfInput = (input: PlayerInput): Intent => ({
       ? Option.none()
       : normalize({ x: input.aimX, y: input.aimY }),
   trigger: (input.buttons & FIRE_BUTTON) !== 0 ? 'Held' : 'Released',
+  interact: (input.buttons & INTERACT_BUTTON) !== 0 ? 'Held' : 'Released',
 })
 
 // ACTIONS
@@ -212,7 +218,6 @@ const SIMPLE_ACTIONS: ReadonlyArray<SeatAction['_tag']> = [
   'Reload',
   'PlaceTrap',
   'NextTrap',
-  'BuyExit',
   'LeaveCounter',
   'Ready',
 ]
@@ -242,7 +247,6 @@ export const actionCodeOf = (action: SeatAction): number =>
     PlaceTrap: () => simpleCode('PlaceTrap'),
     NextTrap: () => simpleCode('NextTrap'),
     Buy: ({ item }) => itemCode(item),
-    BuyExit: () => simpleCode('BuyExit'),
     LeaveCounter: () => simpleCode('LeaveCounter'),
     Ready: () => simpleCode('Ready'),
   })
@@ -260,8 +264,6 @@ const simpleAction = (tag: SeatAction['_tag']): Option.Option<SeatAction> => {
     return Option.some(SeatAction.PlaceTrap())
   } else if (tag === 'NextTrap') {
     return Option.some(SeatAction.NextTrap())
-  } else if (tag === 'BuyExit') {
-    return Option.some(SeatAction.BuyExit())
   } else if (tag === 'LeaveCounter') {
     return Option.some(SeatAction.LeaveCounter())
   } else if (tag === 'Ready') {
@@ -344,6 +346,7 @@ export const freshWorld = (seed: number, settings: RoomSettings): World => ({
   wideFlowField: flowFieldToward(MANOR, initialPlayer, 'Wide', []),
   shop: ShopState.Away(),
   shopCategory: FIRST_SHOP_CATEGORY,
+  purchase: Purchase.Idle(),
   hitStop: initialHitStop,
   lessons: settledLessons,
   practice: noPractice,
@@ -406,7 +409,11 @@ export const keepGoingWorld = (world: World): World =>
   beginPreparation(
     forEachSeat(
       modifyFields(world, { mode: () => RunMode.Endless() }),
-      seatWorld => modifyFields(seatWorld, { shop: () => ShopState.Away() }),
+      seatWorld =>
+        modifyFields(seatWorld, {
+          shop: () => ShopState.Away(),
+          purchase: () => Purchase.Idle(),
+        }),
     ),
     FINAL_WAVE + 1,
     PREPARATION_MS,

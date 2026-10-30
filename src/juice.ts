@@ -130,6 +130,7 @@ const triggerHitStop = (
 // SHAKE
 
 const BOSS_PART_TRAUMA = 0.35
+const EXIT_SMASH_TRAUMA = 0.7
 const BOSS_ROAR_TRAUMA = 0.6
 const BOSS_BELCH_TRAUMA = 0.3
 const BOSS_RUSH_TRAUMA = 0.2
@@ -194,6 +195,9 @@ const eventTrauma = (event: GameEvent): number =>
     PackFrenzied: () => FRENZY_TRAUMA,
     PackWiped: () => 0,
     OvenBelched: () => SHAKE_TRAUMA_BURP,
+    Purchased: () => 0,
+    PurchaseRefused: () => 0,
+    ExitOpened: () => EXIT_SMASH_TRAUMA,
     ZombieSlipped: () => 0,
     PlayerDowned: () => SHAKE_TRAUMA_HURT,
     PlayerRevived: () => 0,
@@ -347,6 +351,9 @@ const eventPopups = (
     PackWiped: ({ x, y, bonus }) =>
       generateMany(state, 1, popup('Wipe', bonus, x, y - PAYDAY_POPUP_LIFT_PX)),
     OvenBelched: () => noPopups(state),
+    Purchased: () => noPopups(state),
+    PurchaseRefused: () => noPopups(state),
+    ExitOpened: () => noPopups(state),
     ZombieSlipped: () => noPopups(state),
     PlayerDowned: () => noPopups(state),
     PlayerRevived: () => noPopups(state),

@@ -2,7 +2,8 @@ import { Array, Option, Result, pipe } from 'effect'
 
 import { ZERO_VECTOR, normalize } from './geometry'
 import type { Model } from './model'
-import { leadSeatOf, playersOf, shopOf } from './party'
+import { focusSeat, leadSeatOf, playersOf, shopOf } from './party'
+import { isInteractTaken } from './purchase'
 import {
   type InputsByPlayer,
   SeatAction,
@@ -16,13 +17,15 @@ import {
   type PlayerSlot,
   ShopState,
   type Vector,
+  idleIntent,
 } from './worldSchema'
 
 // Local co-op for testing (MULTIPLAYER.md, Phase 1): with a dev-only
 // `?local=N` link, players 2 to 4 share the keyboard with player 1, who
 // keeps WASD, the mouse, and every usual key. Each other player has a
 // block of keys of their own; they aim where they walk. At the stall the
-// move keys step through the rows, fire buys, and swap walks away.
+// move keys step through the rows, fire buys, and swap walks away. Their
+// READY key is their interact key too: held at a purchasable, it buys.
 
 type CouchKeys = Readonly<{
   up: string
@@ -115,16 +118,17 @@ const moveOf = (keys: ReadonlyArray<string>, couch: CouchKeys): Vector =>
   )
 
 const isAtCounter = (model: Model, slot: PlayerSlot): boolean =>
-  Option.exists(shopOf(model, slot), ShopState.isAnyOf(['Browsing', 'AtExit']))
+  Option.exists(shopOf(model, slot), ShopState.isAnyOf(['Browsing']))
 
 const intentOf = (model: Model, slot: PlayerSlot, couch: CouchKeys): Intent => {
   const keys = model.input.pressedKeys
   return isAtCounter(model, slot)
-    ? { move: ZERO_VECTOR, maybeAim: Option.none(), trigger: 'Released' }
+    ? idleIntent
     : {
         move: moveOf(keys, couch),
         maybeAim: Option.none(),
         trigger: Array.contains(keys, couch.fire) ? 'Held' : 'Released',
+        interact: Array.contains(keys, couch.ready) ? 'Held' : 'Released',
       }
 }
 
@@ -193,7 +197,6 @@ const buyActionOf = (model: Model, slot: PlayerSlot): SeatAction =>
       ShopState.match(shop, {
         Away: () => SeatAction.LeaveCounter(),
         Browsing: ({ focusedItem }) => SeatAction.Buy({ item: focusedItem }),
-        AtExit: () => SeatAction.BuyExit(),
         Dismissed: () => SeatAction.LeaveCounter(),
       }),
   })
@@ -207,13 +210,19 @@ const ACTION_KEYS: ReadonlyArray<readonly [keyof CouchKeys, () => SeatAction]> =
     ['ready', () => SeatAction.Ready()],
   ]
 
+const isReadyTaken = (model: Model, slot: PlayerSlot, key: string): boolean =>
+  key === 'ready' && isInteractTaken(focusSeat(model, slot))
+
 const fieldPress = (
   model: Model,
   { slot, couch }: CouchPress,
   code: string,
 ): Model =>
   Option.match(
-    Array.findFirst(ACTION_KEYS, ([key]) => couch[key] === code),
+    Array.findFirst(
+      ACTION_KEYS,
+      ([key]) => couch[key] === code && !isReadyTaken(model, slot, key),
+    ),
     {
       onNone: () => model,
       onSome: ([, action]) =>

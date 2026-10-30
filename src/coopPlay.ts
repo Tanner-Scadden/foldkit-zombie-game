@@ -7,7 +7,6 @@ import type { PlayerInput } from '@munch/netcode'
 import { levelOf } from './arena'
 import type { Room as CoopRoom } from './coop/model'
 import { isInLobby, keepTracers, maybeRoomOf } from './coop/update'
-import { isAtExit } from './exits'
 import {
   advanceCosmetics,
   clampFrameDelta,
@@ -24,7 +23,6 @@ import { isBrowsing } from './shop'
 import { aimTracers, flyTracers } from './simulation'
 import { tallyFrame } from './stats'
 import { TURRET_WEAPON } from './traps'
-import { enterExit } from './update/exit'
 import { closeShop, enterShop } from './update/shop'
 import {
   frameSoundCues,
@@ -297,9 +295,6 @@ const drawRoom =
           playStartSoundWhen(isStart),
           ...(isEntering(maybeShopBefore, shopNow, isBrowsing)
             ? [enterShop]
-            : []),
-          ...(isEntering(maybeShopBefore, shopNow, isAtExit)
-            ? [enterExit]
             : []),
           ...(drawn.shopDialog.isOpen && !isBrowsing(shopNow)
             ? [closeShop]

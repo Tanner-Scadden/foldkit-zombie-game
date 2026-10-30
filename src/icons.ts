@@ -347,6 +347,20 @@ export const SHOOT_ICON = pixelIconUrl(
   SHOOT_PALETTE,
 )
 
+// NOTE: a finger pressing down, for the touch HUD's hold-to-buy button.
+export const HOLD_ICON = icon([
+  '...OO.....',
+  '..OXXO....',
+  '..OXXO....',
+  '..OXXOOO..',
+  '..OXXXXXOO',
+  'OOOXXXXXXO',
+  'OXOXXXXXXO',
+  'OXXXXXXXXO',
+  '.OXXXXXXO.',
+  '..OOOOOO..',
+])
+
 export const SWAP_ICON = icon([
   '......X..',
   'XXXXXXXX.',

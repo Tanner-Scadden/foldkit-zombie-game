@@ -1,16 +1,19 @@
 // The kitchen pass: the parlour break with the boarded kitchen door's
-// prompt, the offer it opens, the boards smashing open, the kitchen mid-wave
-// with an oven belching and zombies slipping in soup, and a view up the
-// kitchen with the parlour below, on a 1280x720 desktop and a 390x844 phone
-// held upright, as `s36-<TAG>-<viewport>-<scene>.png`. It checks that the
-// offer opens on a bump and that buying it opens the exit, and exits with 1
-// on any miss.
+// price tag, the in-world prompt once the player is in reach, the hold's
+// ring filling, a press short of the price, the boards smashing open after
+// a hold, the same hold mid-wave, the kitchen mid-wave with an oven
+// belching and zombies slipping in soup, and a view up the kitchen with the
+// parlour below, on a 1280x720 desktop, an 844x390 phone on its side, and a
+// 390x844 phone held upright, as `s36-<TAG>-<viewport>-<scene>.png`. It
+// checks that a hold opens the kitchen and a hold short of the price does
+// not, and exits with 1 on any miss.
 //   TAG=after bun run heavy -- bun tools/audit/shots36.ts
-// ONLY picks scenes, such as `ONLY=door,offer`, and VIEWPORTS picks screens.
+// ONLY picks scenes, such as `ONLY=prompt,ring`, and VIEWPORTS picks screens.
 import type { Page } from 'playwright-core'
 
 import {
   DESKTOP_1280,
+  PHONE_844,
   UPRIGHT_390,
   deviceQuery,
   finish,
@@ -30,6 +33,7 @@ const TAG = tagOr('after')
 
 const VIEWPORTS = pickViewports([
   { ...DESKTOP_1280, name: 'd1280' },
+  { ...PHONE_844, name: 'l844' },
   { ...UPRIGHT_390, name: 'p390' },
 ])
 
@@ -44,19 +48,12 @@ type Scene = Readonly<{
 // run.
 const BREAK = 'wave=3&seen=all&money=85&gun=smg'
 
-// NOTE: the bump opens the offer through a Command that runs once the scene
-// is in, so a scene that expects it waits for the panel.
-const OFFER_TIMEOUT_MS = 5000
-const isOfferOpen = (page: Page) =>
-  page
-    .waitForSelector('.exit-panel', { timeout: OFFER_TIMEOUT_MS })
-    .then(() => true)
-    .catch(() => false)
-
 // NOTE: the smash plays on live frames, since a held frame would hide the
 // boards flying and the wallet counting down, and the shot waits for that
-// much game time, not wall time.
+// much game time, not wall time: the hold, then a moment of debris.
+const HOLD_MS = 500
 const SMASH_MS = 120
+const WAIT_TIMEOUT_MS = 5000
 const afterGameMs = async (page: Page, ms: number) => {
   const start: number = await page.evaluate(
     () => (window as any).__model.elapsedMs,
@@ -64,9 +61,15 @@ const afterGameMs = async (page: Page, ms: number) => {
   await page.waitForFunction(
     end => (window as any).__model.elapsedMs >= end,
     start + ms,
-    { polling: 'raf', timeout: OFFER_TIMEOUT_MS },
+    { polling: 'raf', timeout: WAIT_TIMEOUT_MS },
   )
 }
+
+const isKitchenOpen = async (page: Page): Promise<boolean> =>
+  (await model(page)).level.openExits.includes('Kitchen')
+
+const AT_BOARDS = 'px=70&py=27'
+const MID_WAVE = 'wave=4&seen=all&start=wave&elapsed=6000&money=85&gun=smg'
 
 const SCENES: ReadonlyArray<Scene> = [
   {
@@ -74,26 +77,35 @@ const SCENES: ReadonlyArray<Scene> = [
     query: `${BREAK}&px=70&py=44&tick=42`,
   },
   {
-    name: 'offer',
-    query: `${BREAK}&px=70&py=27&tick=54`,
+    name: 'prompt',
+    query: `${BREAK}&${AT_BOARDS}&tick=24`,
+  },
+  {
+    name: 'ring',
+    query: `${BREAK}&${AT_BOARDS}&hold&tick=17`,
+  },
+  {
+    name: 'short',
+    query: `wave=3&seen=all&money=40&gun=smg&${AT_BOARDS}&hold&tick=7`,
     act: async (page, problems, label) => {
-      if (!(await isOfferOpen(page))) {
-        problems.push(`${label}: bumping the boarded door opened no offer`)
+      if (await isKitchenOpen(page)) {
+        problems.push(`${label}: a hold short of the price opened the kitchen`)
       }
     },
   },
   {
     name: 'smash',
-    query: `${BREAK}&px=70&py=27`,
+    query: `${BREAK}&${AT_BOARDS}&hold`,
     act: async (page, problems, label) => {
-      await isOfferOpen(page)
-      await page.getByRole('button', { name: /Open the kitchen/ }).click()
-      await afterGameMs(page, SMASH_MS)
-      const current = await model(page)
-      if (!current.level.openExits.includes('Kitchen')) {
-        problems.push(`${label}: buying the offer left the kitchen shut`)
+      await afterGameMs(page, HOLD_MS + SMASH_MS)
+      if (!(await isKitchenOpen(page))) {
+        problems.push(`${label}: holding at the boards left the kitchen shut`)
       }
     },
+  },
+  {
+    name: 'midwave',
+    query: `${MID_WAVE}&${AT_BOARDS}&hold&tick=20`,
   },
   {
     name: 'kitchen',

@@ -58,6 +58,14 @@ export const MouseButton = defineTaggedUnion({
 })
 export type MouseButton = typeof MouseButton.Type
 
+// NOTE: a finger holding the touch HUD's hold-to-buy button, by its pointer,
+// so lifting that finger lets go and no other finger does.
+export const HoldButton = defineTaggedUnion({
+  Released: {},
+  Held: { pointerId: Schema.Number },
+})
+export type HoldButton = typeof HoldButton.Type
+
 export const PointerDevice = Schema.Literals(['Mouse', 'Touch'])
 export type PointerDevice = typeof PointerDevice.Type
 
@@ -79,13 +87,17 @@ export const Input = Schema.Struct({
   mouseButton: MouseButton,
   moveStick: Stick,
   aimStick: Stick,
+  holdButton: HoldButton,
 })
 export type Input = typeof Input.Type
 
+// NOTE: `interact` is the interact key or the touch hold button, held to
+// buy what the player stands at (src/purchase.ts).
 export const Intent = Schema.Struct({
   move: Vector,
   maybeAim: Schema.Option(Vector),
   trigger: Trigger,
+  interact: Trigger,
 })
 export type Intent = typeof Intent.Type
 
@@ -572,6 +584,9 @@ export const GameEvent = defineTaggedUnion({
   PackFrenzied: { x: Schema.Number, y: Schema.Number, door: DoorId },
   PackWiped: { x: Schema.Number, y: Schema.Number, bonus: Schema.Number },
   OvenBelched: { x: Schema.Number, y: Schema.Number },
+  Purchased: { x: Schema.Number, y: Schema.Number },
+  PurchaseRefused: { x: Schema.Number, y: Schema.Number },
+  ExitOpened: { x: Schema.Number, y: Schema.Number },
   ZombieSlipped: { x: Schema.Number, y: Schema.Number },
   PlayerDowned: { x: Schema.Number, y: Schema.Number },
   PlayerRevived: { x: Schema.Number, y: Schema.Number },
@@ -1049,15 +1064,34 @@ export type LaserSight = typeof LaserSight.Type
 export const ShopCategory = Schema.Literals(['Guns', 'Health', 'Traps'])
 export type ShopCategory = typeof ShopCategory.Type
 
-// NOTE: AtExit is the player standing at a boarded exit between waves with
-// its offer open, the way Browsing is the player at the stall.
 export const ShopState = defineTaggedUnion({
   Away: {},
   Browsing: { focusedItem: ShopItemId },
-  AtExit: { exit: ExitId },
   Dismissed: {},
 })
 export type ShopState = typeof ShopState.Type
+
+// NOTE: something in the world bought by holding the interact key beside
+// it, the way a wall buy works (src/purchase.ts): a boarded exit today.
+export const Purchasable = defineTaggedUnion({
+  Exit: { exit: ExitId },
+})
+export type Purchasable = typeof Purchasable.Type
+
+// NOTE: one player's hold at a purchasable. Holding fills toward the buy;
+// Refused is a press the wallet could not cover, shaking for a moment;
+// Done waits for the key to be let go after a buy, so one hold buys once.
+export const Purchase = defineTaggedUnion({
+  Idle: {},
+  Holding: { target: Purchasable, heldMs: Schema.Number },
+  Refused: {
+    target: Purchasable,
+    shortBy: Schema.Number,
+    sinceMs: Schema.Number,
+  },
+  Done: {},
+})
+export type Purchase = typeof Purchase.Type
 
 export const ShopChatter = defineTaggedUnion({
   Greeting: {},
@@ -1237,6 +1271,7 @@ export const Mate = Schema.Struct({
   shop: ShopState,
   shopCategory: ShopCategory,
   laserSight: LaserSight,
+  purchase: Purchase,
 })
 export type Mate = typeof Mate.Type
 
@@ -1288,6 +1323,7 @@ export const World = Schema.Struct({
   wideFlowField: FlowField,
   shop: ShopState,
   shopCategory: ShopCategory,
+  purchase: Purchase,
   hitStop: HitStop,
   lessons: Lessons,
   practice: Practice,
@@ -1316,8 +1352,6 @@ export const emptyWallet: Wallet = { balance: 0, earned: 0, shown: 0 }
 
 export const SHOP_DIALOG_ID = 'shop'
 
-export const EXIT_DIALOG_ID = 'exit-offer'
-
 export const HOME_SCREEN_STEPS_ID = 'home-screen-steps'
 
 export const UPDATE_GREETING_ID = 'update-greeting'
@@ -1332,12 +1366,14 @@ export const idleInput: Input = {
   mouseButton: MouseButton.Released(),
   moveStick: Stick.Idle(),
   aimStick: Stick.Idle(),
+  holdButton: HoldButton.Released(),
 }
 
 export const idleIntent: Intent = {
   move: { x: 0, y: 0 },
   maybeAim: Option.none(),
   trigger: 'Released',
+  interact: 'Released',
 }
 
 export const emptyTrapStock: TrapCounts = { Barricade: 0, Turret: 0 }

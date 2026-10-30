@@ -92,6 +92,7 @@ const mateOfLead = (world: World, seat: Seat): Mate => ({
   shop: world.shop,
   shopCategory: world.shopCategory,
   laserSight: world.laserSight,
+  purchase: world.purchase,
 })
 
 // NOTE: puts mate `index` in the World's per-player fields and the lead in
@@ -113,6 +114,7 @@ const swapIn = (world: World, index: number): World =>
             shop: () => mate.shop,
             shopCategory: () => mate.shopCategory,
             laserSight: () => mate.laserSight,
+            purchase: () => mate.purchase,
             party: () =>
               Party.Crew({
                 lead: mate.seat,

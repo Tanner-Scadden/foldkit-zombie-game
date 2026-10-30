@@ -15,11 +15,7 @@ import {
   groundParticleShapes,
   popupShape,
 } from './effectsView'
-import {
-  exitPromptShapes,
-  ovenFlameShapes,
-  ovenGlowShapes,
-} from './kitchenView'
+import { ovenFlameShapes, ovenGlowShapes, padlockShapes } from './kitchenView'
 import { type Model, Phase, ShopState, type Vector, type Zombie } from './model'
 import { isBehindWall, occludersOf } from './occluders'
 import {
@@ -85,7 +81,7 @@ export const worldOffset = (model: Model, camera: Camera): Vector =>
 const stallLook = (model: Model): StallLook => {
   if (!isShopOpenFor(model.phase)) {
     return 'Closed'
-  } else if (ShopState.isAnyOf(['Away', 'AtExit'])(model.shop)) {
+  } else if (ShopState.isAnyOf(['Away'])(model.shop)) {
     return 'Beckoning'
   } else {
     return 'Open'
@@ -226,7 +222,7 @@ const overheadShapes = (
   ...mateOverheadShapes(model),
   ...coopNameShapes(model),
   ...stallPromptShapes(stallPrompt(model)),
-  ...exitPromptShapes(model),
+  ...padlockShapes(model),
 ]
 
 // WORLD

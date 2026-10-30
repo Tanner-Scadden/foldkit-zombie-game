@@ -1,18 +1,18 @@
-import { Array, Option, Result, pipe } from 'effect'
+import { Array, Option, Result } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import {
   type Box,
   type Level,
-  distanceToBox,
   levelOf,
   maybeExit,
   openExitIn,
   tileBox,
 } from './arena'
+import type { Offer } from './purchase'
 import { joinNewDoors } from './waves'
 import type { World } from './world'
-import { type ExitId, Phase, ShopState, type Vector } from './worldSchema'
+import { type ExitId, GameEvent, Phase, Purchasable } from './worldSchema'
 
 // THE EXIT
 
@@ -26,16 +26,17 @@ type ExitRules = Readonly<{
   price: number
   firstWave: number
   reachPx: number
-  leavePx: number
-  nearPx: number
+  tagDropPx: number
 }>
 
+// NOTE: `tagDropPx` is how far below the top of the boards the price tag
+// hangs: on the boards themselves, so a player standing at them is never
+// hidden behind it.
 export const EXIT_RULES: ExitRules = {
   price: 60,
   firstWave: 3,
-  reachPx: 12,
-  leavePx: 22,
-  nearPx: 44,
+  reachPx: 14,
+  tagDropPx: 7,
 }
 
 export const exitName = (exit: ExitId): string =>
@@ -70,88 +71,36 @@ const closedExitBoxes = (
     }),
   )
 
-const maybeExitWithin = (
-  level: Level,
-  position: Vector,
-  reachPx: number,
-): Option.Option<ExitId> =>
-  pipe(
-    closedExitBoxes(level),
-    Array.findFirst(({ box }) => distanceToBox(position, box) <= reachPx),
-    Option.map(({ exit }) => exit),
-  )
-
 // NOTE: from the kitchen's first break on, an exit is for sale any time the
 // round runs, mid-wave too (owner, 2026-10-30).
 export const isExitOfferOpenFor = (phase: Phase): boolean =>
   Phase.isAnyOf(['Preparation', 'Wave'])(phase) &&
   phase.wave >= EXIT_RULES.firstWave
 
-export const maybeExitAt = (model: World): Option.Option<ExitId> =>
-  maybeExitWithin(levelOf(model), model.player, EXIT_RULES.reachPx)
-
-export const hasLeftExits = (model: World): boolean =>
-  Option.isNone(
-    maybeExitWithin(levelOf(model), model.player, EXIT_RULES.leavePx),
-  )
-
-// NOTE: the player bumps a boarded exit to see its offer, the way they bump
-// the stall to shop, between waves or mid-wave. Mid-wave the world keeps
-// going while the offer is open. Nothing opens before the kitchen's first
-// break.
-export const arriveAtExit = (model: World): Option.Option<ShopState> =>
+// NOTE: each boarded exit for sale, as a purchasable: walk up and hold the
+// interact key beside its boards (src/purchase.ts).
+export const exitOffers = (model: World): ReadonlyArray<Offer> =>
   isExitOfferOpenFor(model.phase)
-    ? Option.map(maybeExitAt(model), exit => ShopState.AtExit({ exit }))
+    ? Array.map(closedExitBoxes(levelOf(model)), ({ exit, box }) => ({
+        target: Purchasable.Exit({ exit }),
+        price: EXIT_RULES.price,
+        box,
+        reachPx: EXIT_RULES.reachPx,
+        spot: {
+          x: Math.round((box.left + box.right) / 2),
+          y: box.top + EXIT_RULES.tagDropPx,
+        },
+      }))
+    : []
+
+// NOTE: in the breaks before the kitchen's first, a padlock hangs on the
+// boards. From then on the price tag is the purchasable's (src/purchase.ts),
+// and mid-wave before then the boards are bare.
+export const maybePadlockedExit = (model: World): Option.Option<Box> =>
+  Phase.isAnyOf(['Preparation'])(model.phase) &&
+  !isExitOfferOpenFor(model.phase)
+    ? Option.map(Array.head(closedExitBoxes(levelOf(model))), ({ box }) => box)
     : Option.none()
-
-export const isAtExit = (shop: ShopState): boolean =>
-  ShopState.isAnyOf(['AtExit'])(shop)
-
-export type ExitPrompt =
-  | Readonly<{ _tag: 'None' }>
-  | Readonly<{ _tag: 'Offer'; exit: ExitId; box: Box }>
-  | Readonly<{ _tag: 'NotYet'; box: Box }>
-
-const NO_PROMPT: ExitPrompt = { _tag: 'None' }
-
-// NOTE: a boarded exit wears a price tag on its boards whenever it is for
-// sale, or a padlock in the breaks before the kitchen's first. Before then
-// the boards are bare mid-wave. The tag stays up while the player browses
-// the stall, and goes while its own offer is open.
-export const exitPrompt = (model: World): ExitPrompt => {
-  if (
-    !isExitOfferOpenFor(model.phase) &&
-    !Phase.isAnyOf(['Preparation'])(model.phase)
-  ) {
-    return NO_PROMPT
-  }
-  if (ShopState.isAnyOf(['AtExit'])(model.shop)) {
-    return NO_PROMPT
-  }
-  return pipe(
-    closedExitBoxes(levelOf(model)),
-    Array.head,
-    Option.match({
-      onNone: () => NO_PROMPT,
-      onSome: ({ exit, box }): ExitPrompt =>
-        isExitOfferOpenFor(model.phase)
-          ? { _tag: 'Offer', exit, box }
-          : { _tag: 'NotYet', box },
-    }),
-  )
-}
-
-export type ExitVerdict =
-  | Readonly<{ _tag: 'Affordable'; price: number }>
-  | Readonly<{ _tag: 'Short'; price: number; shortBy: number }>
-
-export const exitVerdict = (model: World): ExitVerdict => {
-  const price = EXIT_RULES.price
-  const shortBy = price - model.wallet.balance
-  return shortBy > 0
-    ? { _tag: 'Short', price, shortBy }
-    : { _tag: 'Affordable', price }
-}
 
 const spendOn = (model: World, price: number): World =>
   modifyFields(model, {
@@ -163,22 +112,28 @@ const spendOn = (model: World, price: number): World =>
 
 // NOTE: buying the exit opens it for the rest of the run, and its spawn
 // doors join the wave shown or under way at once (joinNewDoors in
-// src/waves.ts), drawn from the run's generator.
+// src/waves.ts), drawn from the run's generator. The boards smash where
+// the doorway meets the parlour floor.
 export const buyExit = (model: World, exit: ExitId): Option.Option<World> => {
   const level = levelOf(model)
-  const isClosed = Option.exists(
-    maybeExit(level, exit),
-    ({ isOpen }) => !isOpen,
+  const maybeBox = Option.flatMap(
+    Option.filter(maybeExit(level, exit), ({ isOpen }) => !isOpen),
+    () => exitBoxOf(level, exit),
   )
   if (
-    !isClosed ||
+    Option.isNone(maybeBox) ||
     !isExitOfferOpenFor(model.phase) ||
-    exitVerdict(model)._tag !== 'Affordable'
+    model.wallet.balance < EXIT_RULES.price
   ) {
     return Option.none()
   }
+  const box = maybeBox.value
   const opened = modifyFields(spendOn(model, EXIT_RULES.price), {
     level: state => openExitIn(state, exit),
+    frameEvents: frameEvents => [
+      ...frameEvents,
+      GameEvent.ExitOpened({ x: (box.left + box.right) / 2, y: box.bottom }),
+    ],
   })
   return Option.some(
     joinNewDoors(

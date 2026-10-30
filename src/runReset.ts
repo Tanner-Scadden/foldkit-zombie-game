@@ -10,6 +10,7 @@ import {
   DebutCard,
   FIRST_SHOP_CATEGORY,
   Party,
+  Purchase,
   RunTally,
   ShopState,
   Streak,
@@ -45,6 +46,7 @@ export type RunFields = Pick<
   | 'wallet'
   | 'shop'
   | 'shopCategory'
+  | 'purchase'
   | 'elapsedMs'
   | 'frameEvents'
   | 'hitStop'
@@ -91,6 +93,7 @@ export const freshRun = (model: Model): RunFields => ({
   wallet: emptyWallet,
   shop: ShopState.Away(),
   shopCategory: FIRST_SHOP_CATEGORY,
+  purchase: Purchase.Idle(),
   elapsedMs: 0,
   frameEvents: [],
   hitStop: initialHitStop,

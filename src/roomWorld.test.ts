@@ -11,6 +11,7 @@ import {
   AIM_REACH,
   DEFAULT_ROOM_SETTINGS,
   FIRE_BUTTON,
+  INTERACT_BUTTON,
   type OwnSeat,
   type RoomWorld,
   actionCodeOf,
@@ -32,7 +33,7 @@ import { SeatAction } from './stepWorld'
 import { zombieAt } from './testing'
 import { FINAL_WAVE, beginPreparation } from './waves'
 import { isSameOnWire } from './worldCodec'
-import { Phase, ShopState } from './worldSchema'
+import { Phase, ShopState, idleIntent } from './worldSchema'
 
 const snapshotOf = (room: RoomWorld): Uint8Array => {
   const writer = makeWriter()
@@ -196,7 +197,6 @@ describe('inputs and presses', () => {
       SeatAction.Reload(),
       SeatAction.PlaceTrap(),
       SeatAction.NextTrap(),
-      SeatAction.BuyExit(),
       SeatAction.LeaveCounter(),
       SeatAction.Ready(),
       SeatAction.Buy({ item: 'LaserSight' }),
@@ -261,12 +261,22 @@ describe('inputs and presses', () => {
       move: { x: 0.6, y: -0.8 },
       maybeAim: Option.some({ x: 0, y: 1 }),
       trigger: 'Held' as const,
+      interact: 'Released' as const,
     }
     const back = intentOfInput(inputOfIntent(intent, 0))
     expect(back.trigger).toBe('Held')
+    expect(back.interact).toBe('Released')
     expect(back.move.x).toBeCloseTo(0.6, 2)
     expect(back.move.y).toBeCloseTo(-0.8, 2)
     expect(back.maybeAim).toEqual(Option.some({ x: 0, y: 1 }))
+  })
+
+  test('the interact hold rides as its own button, apart from the trigger', () => {
+    const holding = { ...idleIntent, interact: 'Held' as const }
+    const input = inputOfIntent(holding, 0)
+    expect(input.buttons).toBe(INTERACT_BUTTON)
+    expect(intentOfInput(input).interact).toBe('Held')
+    expect(intentOfInput(input).trigger).toBe('Released')
   })
 })
 

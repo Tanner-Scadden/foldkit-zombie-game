@@ -37,6 +37,7 @@ import {
 import { playRoomFrame } from '@game/coopPlay'
 import { withBests } from '@game/difficulty'
 import { KITCHEN_EXIT } from '@game/exits'
+import { pressHoldButton, pressKey } from '@game/input'
 import { quietLayer as quietInstallPrompt } from '@game/install'
 import { sceneShapes } from '@game/layers'
 import { init, update } from '@game/main'
@@ -104,6 +105,10 @@ let px = PLAYER_X
 let py = PLAYER_Y
 let god = false
 let instrument = false
+// NOTE: `hold` holds the interact key (on touch, a finger on the hold
+// button) from the first frame, so `tick=N` shows the ring N frames in.
+const HOLD_POINTER_ID = 99
+
 let freezeAfter = Infinity
 const useConfig = (next: HarnessConfig) => {
   config = next
@@ -1509,7 +1514,18 @@ const sceneOf = (model: Model): HarnessReturn => {
               modifyFields(picker, { section: () => lookSection }),
           }),
         }
-  return config.tick === undefined ? sectioned : advance(sectioned, config.tick)
+  const held: HarnessReturn = config.hold
+    ? {
+        ...sectioned,
+        model: modifyFields(sectioned.model, {
+          input: input =>
+            sectioned.model.lastDevice === 'Touch'
+              ? pressHoldButton(input, HOLD_POINTER_ID)
+              : pressKey(input, 'Enter'),
+        }),
+      }
+    : sectioned
+  return config.tick === undefined ? held : advance(held, config.tick)
 }
 
 // THE READY SIGNAL

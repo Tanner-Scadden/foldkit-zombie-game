@@ -234,6 +234,7 @@ export const HarnessConfig = Schema.Struct({
   ovens: Choice(['belch', 'cool']),
   ovenMs: Num(300),
   slip: Flag,
+  hold: Flag,
   // Traps and difficulty
   planks: Schema.optionalKey(ListOf(DoorId)),
   plankhp: Num(30),

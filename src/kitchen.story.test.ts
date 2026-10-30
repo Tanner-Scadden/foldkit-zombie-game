@@ -1,9 +1,7 @@
 import { Array, Option } from 'effect'
-import { Command, given, message, model, story } from 'foldkit/story'
+import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
-
-import { Dialog } from '@foldkit/ui'
 
 import { MANOR, levelOf, openExitIn, startingLevel } from './arena'
 import { cameraFor } from './camera'
@@ -18,12 +16,16 @@ import {
   Oven,
   Phase,
   type PlannedSpawn,
+  Purchasable,
+  Purchase,
   ShopState,
+  Stick,
   ZombieAction,
   initialModel,
 } from './model'
+import { PURCHASE_RULES, holdProgress } from './purchase'
 import { freshRun } from './runReset'
-import { tick, ticks, zombieOf } from './testing'
+import { press, release, tick, ticks, zombieOf } from './testing'
 import { asVeteran } from './veteran'
 import {
   JOIN_LEAD_MS,
@@ -46,16 +48,6 @@ const DISTANT_SPAWN: PlannedSpawn = {
   pack: 0,
   formation: 'Squad',
 }
-
-const resolveShowDialog = Command.resolve(
-  Dialog.ShowDialog,
-  Dialog.Message.SucceededShowDialog(),
-)
-
-const resolveCloseDialog = Command.resolve(
-  Dialog.CloseDialog,
-  Dialog.Message.CompletedCloseDialog(),
-)
 
 const base: Model = freshRunModel()
 
@@ -114,25 +106,51 @@ const fightingInKitchen = (current: Model): Model =>
 const isKitchenOpen = (current: Model): boolean =>
   Array.contains(levelOf(current).openExits, KITCHEN_EXIT)
 
-describe('buying the kitchen open', () => {
-  test('bumping the boarded door in the wave 3 break offers it, and buying smashes it open', () => {
+const HOLD_TICKS = Math.ceil(PURCHASE_RULES.holdMs / FRAME_MS) + 1
+
+const KITCHEN_TARGET = Purchasable.Exit({ exit: KITCHEN_EXIT })
+
+const holdToBuy = [press('Enter'), ...ticks(HOLD_TICKS, FRAME_MS)]
+
+const awayFromDoor = (current: Model): Model =>
+  modifyFields(current, {
+    player: player => modifyFields(player, { y: () => 120 }),
+  })
+
+const eventsOver = (
+  start: Model,
+  messages: ReadonlyArray<Message>,
+): ReadonlyArray<GameEvent> =>
+  Array.reduce(
+    messages,
+    { current: start, events: Array.empty<GameEvent>() },
+    ({ current, events }, sent) => {
+      const next = update(current, sent).model
+      return { current: next, events: [...events, ...next.frameEvents] }
+    },
+  ).events
+
+describe('holding to buy the kitchen open', () => {
+  test('holding Enter at the boards for half a second buys it and smashes it open, with no dialog', () => {
     story(
       update,
       given(inBreak(3, 85)),
-      tick(FRAME_MS),
-      resolveShowDialog,
+      press('Enter'),
+      ...ticks(HOLD_TICKS - 4, FRAME_MS),
       model(current => {
-        expect(current.shop).toEqual(ShopState.AtExit({ exit: KITCHEN_EXIT }))
-        expect(current.exitDialog.isOpen).toBe(true)
         expect(isKitchenOpen(current)).toBe(false)
+        expect(Purchase.isAnyOf(['Holding'])(current.purchase)).toBe(true)
+        expect(holdProgress(current.purchase)).toBeGreaterThan(0.8)
+        expect(current.shop).toEqual(ShopState.Away())
+        expect(current.shopDialog.isOpen).toBe(false)
+        expect(Phase.isAnyOf(['Preparation'])(current.phase)).toBe(true)
       }),
-      message(Message.ClickedOpenExitButton()),
-      resolveCloseDialog,
+      ...ticks(4, FRAME_MS),
       model(current => {
         expect(isKitchenOpen(current)).toBe(true)
         expect(current.wallet.balance).toBe(85 - EXIT_RULES.price)
         expect(current.stats.purchases).toBe(1)
-        expect(current.shop).toEqual(ShopState.Dismissed())
+        expect(current.purchase).toEqual(Purchase.Done())
         expect(levelOf(current).doorIds).toEqual([
           'North',
           'West',
@@ -144,6 +162,209 @@ describe('buying the kitchen open', () => {
         expect(
           Array.some(current.particles, ({ kind }) => kind === 'Splinter'),
         ).toBe(true)
+        expect(current.shake.trauma).toBeGreaterThan(0)
+      }),
+      release('Enter'),
+      tick(FRAME_MS),
+      model(current => {
+        expect(current.purchase).toEqual(Purchase.Idle())
+      }),
+    )
+  })
+
+  test('the smash and the coins come from the tick that buys it', () => {
+    const events = eventsOver(inBreak(3, 85), [
+      Message.PressedKey({ code: 'Enter' }),
+      ...Array.makeBy(HOLD_TICKS, () =>
+        Message.TickedFrame({ deltaTime: FRAME_MS }),
+      ),
+    ])
+    expect(
+      Array.filter(events, GameEvent.isAnyOf(['ExitOpened'])),
+    ).toHaveLength(1)
+    expect(Array.filter(events, GameEvent.isAnyOf(['Purchased']))).toHaveLength(
+      1,
+    )
+  })
+
+  test('letting go before the ring fills cancels, and the next hold starts over', () => {
+    story(
+      update,
+      given(inBreak(3, 85)),
+      press('Enter'),
+      ...ticks(HOLD_TICKS - 6, FRAME_MS),
+      release('Enter'),
+      tick(FRAME_MS),
+      model(current => {
+        expect(current.purchase).toEqual(Purchase.Idle())
+        expect(isKitchenOpen(current)).toBe(false)
+      }),
+      press('Enter'),
+      ...ticks(HOLD_TICKS - 6, FRAME_MS),
+      model(current => {
+        expect(isKitchenOpen(current)).toBe(false)
+        expect(current.wallet.balance).toBe(85)
+      }),
+    )
+  })
+
+  test('walking out of reach cancels the hold', () => {
+    story(
+      update,
+      given(inBreak(3, 85)),
+      press('Enter'),
+      ...ticks(10, FRAME_MS),
+      press('KeyS'),
+      ...ticks(HOLD_TICKS, FRAME_MS),
+      model(current => {
+        expect(current.player.y).toBeGreaterThan(BELOW_KITCHEN_DOOR.y + 10)
+        expect(Purchase.isAnyOf(['Holding'])(current.purchase)).toBe(false)
+        expect(isKitchenOpen(current)).toBe(false)
+        expect(current.wallet.balance).toBe(85)
+      }),
+    )
+  })
+
+  test('short of the price, the tag shakes red with the shortfall and nothing is bought', () => {
+    const short = inBreak(3, EXIT_RULES.price - 7)
+    expect(
+      Array.filter(
+        eventsOver(short, [
+          Message.PressedKey({ code: 'Enter' }),
+          Message.TickedFrame({ deltaTime: FRAME_MS }),
+        ]),
+        GameEvent.isAnyOf(['PurchaseRefused']),
+      ),
+    ).toHaveLength(1)
+    story(
+      update,
+      given(short),
+      press('Enter'),
+      tick(FRAME_MS),
+      model(current => {
+        expect(current.purchase).toEqual(
+          Purchase.Refused({ target: KITCHEN_TARGET, shortBy: 7, sinceMs: 0 }),
+        )
+      }),
+      ...ticks(HOLD_TICKS * 2, FRAME_MS),
+      model(current => {
+        expect(isKitchenOpen(current)).toBe(false)
+        expect(current.wallet.balance).toBe(EXIT_RULES.price - 7)
+        expect(Purchase.isAnyOf(['Refused'])(current.purchase)).toBe(true)
+      }),
+      release('Enter'),
+      tick(FRAME_MS),
+      model(current => {
+        expect(current.purchase).toEqual(Purchase.Idle())
+      }),
+    )
+  })
+
+  test('at the boards Enter holds to buy, and away from them it starts the wave', () => {
+    story(
+      update,
+      given(inBreak(3, 85)),
+      press('Enter'),
+      tick(FRAME_MS),
+      model(current => {
+        expect(Phase.isAnyOf(['Preparation'])(current.phase)).toBe(true)
+      }),
+    )
+    story(
+      update,
+      given(awayFromDoor(inBreak(3, 85))),
+      press('Enter'),
+      model(current => {
+        expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)
+      }),
+    )
+  })
+
+  test('mid-wave the hold buys it while the wave and the zombies keep going', () => {
+    const fighting = modifyFields(midWave(4, WAVE_FOUR, 85), {
+      zombies: () => [zombieOf('Shambler', 900, 150, 104, { speed: 30 })],
+    })
+    story(
+      update,
+      given(fighting),
+      ...holdToBuy,
+      model(current => {
+        expect(isKitchenOpen(current)).toBe(true)
+        expect(current.wallet.balance).toBe(85 - EXIT_RULES.price)
+        expect(waveClockOf(current)).toBeGreaterThan(
+          (HOLD_TICKS - 1) * FRAME_MS,
+        )
+        const shambler = Array.findFirst(
+          current.zombies,
+          ({ id }) => id === 900,
+        )
+        expect(
+          Option.exists(shambler, ({ x, y }) => x !== 150 || y !== 104),
+        ).toBe(true)
+        expect(current.shopDialog.isOpen).toBe(false)
+      }),
+    )
+  })
+
+  test('on touch, the hold button buys it and the move stick keeps its finger', () => {
+    const touching = modifyFields(inBreak(3, 85), {
+      lastDevice: () => 'Touch' as const,
+    })
+    story(
+      update,
+      given(touching),
+      message(
+        Message.PressedPointer({
+          pointerId: 1,
+          device: 'Touch',
+          clientX: 100,
+          clientY: 300,
+        }),
+      ),
+      message(Message.PressedHoldButton({ pointerId: 2 })),
+      ...ticks(HOLD_TICKS, FRAME_MS),
+      model(current => {
+        expect(isKitchenOpen(current)).toBe(true)
+        expect(current.wallet.balance).toBe(85 - EXIT_RULES.price)
+        expect(Stick.isAnyOf(['Active'])(current.input.moveStick)).toBe(true)
+        expect(Stick.isAnyOf(['Idle'])(current.input.aimStick)).toBe(true)
+      }),
+      message(Message.ReleasedPointer({ pointerId: 2 })),
+      tick(FRAME_MS),
+      model(current => {
+        expect(current.purchase).toEqual(Purchase.Idle())
+        expect(Stick.isAnyOf(['Active'])(current.input.moveStick)).toBe(true)
+      }),
+    )
+  })
+
+  test('on touch, lifting the holding finger cancels, and lifting a stick finger does not', () => {
+    const touching = modifyFields(inBreak(3, 85), {
+      lastDevice: () => 'Touch' as const,
+    })
+    story(
+      update,
+      given(touching),
+      message(
+        Message.PressedPointer({
+          pointerId: 1,
+          device: 'Touch',
+          clientX: 700,
+          clientY: 300,
+        }),
+      ),
+      message(Message.PressedHoldButton({ pointerId: 2 })),
+      ...ticks(10, FRAME_MS),
+      message(Message.ReleasedPointer({ pointerId: 1 })),
+      ...ticks(2, FRAME_MS),
+      model(current => {
+        expect(Purchase.isAnyOf(['Holding'])(current.purchase)).toBe(true)
+      }),
+      message(Message.ReleasedPointer({ pointerId: 2 })),
+      tick(FRAME_MS),
+      model(current => {
+        expect(current.purchase).toEqual(Purchase.Idle())
+        expect(isKitchenOpen(current)).toBe(false)
       }),
     )
   })
@@ -152,9 +373,9 @@ describe('buying the kitchen open', () => {
     story(
       update,
       given(inBreak(2, 500)),
-      ...ticks(3, FRAME_MS),
+      ...holdToBuy,
       model(current => {
-        expect(current.shop).toEqual(ShopState.Away())
+        expect(current.purchase).toEqual(Purchase.Idle())
         expect(isKitchenOpen(current)).toBe(false)
       }),
     )
@@ -166,48 +387,9 @@ describe('buying the kitchen open', () => {
             Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
         }),
       ),
-      ...ticks(3, FRAME_MS),
-      model(current => {
-        expect(current.shop).toEqual(ShopState.Away())
-      }),
-    )
-  })
-
-  test('mid-wave, bumping the boards offers the kitchen while the wave goes on, and buying smashes it open', () => {
-    story(
-      update,
-      given(midWave(4, WAVE_FOUR, 85)),
-      tick(FRAME_MS),
-      resolveShowDialog,
-      model(current => {
-        expect(current.shop).toEqual(ShopState.AtExit({ exit: KITCHEN_EXIT }))
-        expect(current.exitDialog.isOpen).toBe(true)
-      }),
-      ...ticks(3, FRAME_MS),
-      model(current => {
-        expect(current.exitDialog.isOpen).toBe(true)
-        expect(waveClockOf(current)).toBeGreaterThan(FRAME_MS)
-      }),
-      message(Message.ClickedOpenExitButton()),
-      resolveCloseDialog,
-      model(current => {
-        expect(isKitchenOpen(current)).toBe(true)
-        expect(current.wallet.balance).toBe(85 - EXIT_RULES.price)
-        expect(current.shop).toEqual(ShopState.Dismissed())
-      }),
-    )
-  })
-
-  test('without the price it stays boarded and the money stays put', () => {
-    story(
-      update,
-      given(inBreak(3, EXIT_RULES.price - 1)),
-      tick(FRAME_MS),
-      resolveShowDialog,
-      message(Message.ClickedOpenExitButton()),
+      ...holdToBuy,
       model(current => {
         expect(isKitchenOpen(current)).toBe(false)
-        expect(current.wallet.balance).toBe(EXIT_RULES.price - 1)
       }),
     )
   })
@@ -237,10 +419,7 @@ describe('the kitchen in the waves', () => {
     story(
       update,
       given(fighting),
-      tick(FRAME_MS),
-      resolveShowDialog,
-      message(Message.ClickedOpenExitButton()),
-      resolveCloseDialog,
+      ...holdToBuy,
       model(current => {
         const after = doorsOf(current)
         const clockMs = waveClockOf(current)
@@ -281,10 +460,7 @@ describe('the kitchen in the waves', () => {
     story(
       update,
       given(shopping),
-      tick(FRAME_MS),
-      resolveShowDialog,
-      message(Message.ClickedOpenExitButton()),
-      resolveCloseDialog,
+      ...holdToBuy,
       model(current => {
         const after = doorsOf(current)
         expect(after).toHaveLength(WAVE_FOUR.length)
