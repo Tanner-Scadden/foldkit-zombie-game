@@ -440,7 +440,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
   },
   {
     speedScale: 1.35,
-    hpScale: 1.03,
+    hpScale: 1,
     groups: [
       stragglers({ count: 2, mix: MIXED, startMs: 500, everyMs: 1600 }),
       chuckers(anyDoors(1), 2, 4500, 16000),
@@ -468,7 +468,7 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
       stragglers({ count: 3, mix: MIXED, startMs: 29000, everyMs: 3000 }),
       lug(anyDoors(1), 35000),
       hordes({
-        packs: [4, 3, 5, 4],
+        packs: [3, 3, 4, 3],
         mix: MIXED,
         startMs: 40000,
         everyMs: 0,

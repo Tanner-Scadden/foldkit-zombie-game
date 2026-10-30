@@ -19,6 +19,7 @@ import {
   type Palette,
   type Sprite,
   TOP_LEFT,
+  bakeShapes,
   placeAt,
   spriteRects,
   spriteShapes,
@@ -87,10 +88,8 @@ const PEA_COLOR = '#c6e070'
 const BURLAP_COLOR = '#9a8456'
 const BURLAP_DARK_COLOR = '#6e5c38'
 const FLOUR_COLOR = '#e8e2d4'
-const YARD_COLOR = '#0c110d'
+const YARD_COLOR = '#0f1813'
 const YARD_GRASS_COLOR = '#18241a'
-const YARD_PATH_COLOR = '#17130f'
-const STONE_COLOR = '#2c2e34'
 const DOOR_DARK_COLOR = '#0c090d'
 const CASING_COLOR = '#6b4a2e'
 const CASING_LIGHT_COLOR = '#8a6440'
@@ -166,23 +165,109 @@ const checkerShapes = (box: Box): ReadonlyArray<Canvas.Shape> => {
 // NOTE: the yard is outside the house, in the dark. Zombies cross it on the
 // way to the parlour's north door, and nothing out here is drawn but grass
 // and a path.
-const yardShapes = (box: Box): ReadonlyArray<Canvas.Shape> => [
-  rect(box.x, box.y, box.width, box.height, YARD_COLOR),
-  ...Array.makeBy(40, index =>
-    rect(
-      box.x + Math.floor(roll(index, 11) * box.width),
-      box.y + Math.floor(roll(index, 12) * box.height),
-      1,
-      2,
-      YARD_GRASS_COLOR,
-    ),
-  ),
-  rect(box.x + 12, box.y, 22, box.height, YARD_PATH_COLOR),
-  rect(box.x + 60, box.y + 40, 7, 9, STONE_COLOR),
-  rect(box.x + 61, box.y + 39, 5, 1, STONE_COLOR),
-  rect(box.x + 90, box.y + 92, 6, 8, STONE_COLOR),
-  rect(box.x + 91, box.y + 91, 4, 1, STONE_COLOR),
+const GRAVESTONE_PIXELS: ReadonlyArray<string> = [
+  '..sss..',
+  '.sSSSs.',
+  'sSSkSSs',
+  'sSkkkSs',
+  'sSSkSSs',
+  'sSSSSSs',
+  'sSSSSSd',
+  'ddddddd',
 ]
+
+const CROSS_PIXELS: ReadonlyArray<string> = [
+  '..s..',
+  '..S..',
+  'sSSSs',
+  '..S..',
+  '..S..',
+  '..S..',
+  '.ddd.',
+]
+
+const BUSH_PIXELS: ReadonlyArray<string> = [
+  'b...b..b.',
+  '.b.b..b..',
+  '..bbbbb.b',
+  '.b.bbb.b.',
+  'b..bbb...',
+  '...ddd...',
+]
+
+const YARD_PALETTE: Palette = {
+  s: '#5a6070',
+  S: '#3c414c',
+  k: '#22252c',
+  d: '#0a0e0b',
+  b: '#2a2018',
+}
+
+const FENCE_COLOR = '#16141a'
+const FENCE_TIP_COLOR = '#2c2a34'
+const MOON_COLOR = 'rgba(160, 190, 220, 0.035)'
+const STEP_COLOR = '#2a2a30'
+
+// NOTE: the yard is the manor's garden edge at night, outside the house:
+// moonlit grass, an iron fence along the top, gravestones, dead bushes, and
+// stepping stones to the parlour's north door. Zombies cross it on the way
+// to that door, and no actor out here is drawn.
+const yardShapes = (box: Box): ReadonlyArray<Canvas.Shape> => {
+  const right = box.x + box.width
+  const fenceY = box.y + 6
+  const doorX = box.x + 12
+  return [
+    rect(box.x, box.y, box.width, box.height, YARD_COLOR),
+    ...Array.makeBy(16, index => {
+      const width = 16 + Math.floor(roll(index, 31) * 40)
+      const height = 10 + Math.floor(roll(index, 32) * 26)
+      return rect(
+        box.x + 20 + Math.floor(roll(index, 33) * (box.width - 30 - width)),
+        box.y + 16 + Math.floor(roll(index, 34) * (box.height - 30 - height)),
+        width,
+        height,
+        MOON_COLOR,
+      )
+    }),
+    ...Array.makeBy(70, index =>
+      rect(
+        box.x + Math.floor(roll(index, 11) * box.width),
+        box.y + 10 + Math.floor(roll(index, 12) * (box.height - 10)),
+        1,
+        1 + Math.floor(roll(index, 13) * 2),
+        index % 3 === 0 ? '#22301f' : YARD_GRASS_COLOR,
+      ),
+    ),
+    ...Array.makeBy(8, index =>
+      rect(
+        doorX + 3 + (index % 2) * 7,
+        box.y + 18 + index * 16,
+        7,
+        5,
+        STEP_COLOR,
+      ),
+    ),
+    rect(box.x, fenceY, box.width, 1, FENCE_COLOR),
+    rect(box.x, fenceY + 6, box.width, 1, FENCE_COLOR),
+    ...Array.flatMap(
+      Array.makeBy(Math.floor(box.width / 4), index => index),
+      index => [
+        rect(box.x + 1 + index * 4, fenceY - 3, 1, 12, FENCE_COLOR),
+        rect(box.x + 1 + index * 4, fenceY - 4, 1, 1, FENCE_TIP_COLOR),
+      ],
+    ),
+    rect(right - 2, fenceY, 1, box.height - fenceY + box.y, FENCE_COLOR),
+    ...pixelArt(box.x + 48, box.y + 36, GRAVESTONE_PIXELS, YARD_PALETTE),
+    ...pixelArt(box.x + 78, box.y + 30, CROSS_PIXELS, YARD_PALETTE),
+    ...pixelArt(box.x + 96, box.y + 52, GRAVESTONE_PIXELS, YARD_PALETTE),
+    ...pixelArt(box.x + 62, box.y + 82, CROSS_PIXELS, YARD_PALETTE),
+    ...pixelArt(box.x + 88, box.y + 104, GRAVESTONE_PIXELS, YARD_PALETTE),
+    ...pixelArt(box.x + 40, box.y + 120, GRAVESTONE_PIXELS, YARD_PALETTE),
+    ...pixelArt(box.x + 102, box.y + 16, BUSH_PIXELS, YARD_PALETTE),
+    ...pixelArt(box.x + 34, box.y + 64, BUSH_PIXELS, YARD_PALETTE),
+    ...pixelArt(box.x + 104, box.y + 128, BUSH_PIXELS, YARD_PALETTE),
+  ]
+}
 
 const isSoup = (level: Level, column: number, row: number): boolean =>
   Option.contains(symbolAt(level, column, row), SOUP_SYMBOL)
@@ -673,42 +758,62 @@ export const openedExitShapes = ({
   ]
 }
 
-// PROMPT
+// PRICE TAG
 
-const PROMPT_LIFT = 4
+// NOTE: the boards say what opening them costs without a word: a dark tag
+// with the coin and the price hangs off a nail at the foot of the boards,
+// below the HUD strip, and before the kitchen's first break a padlock hangs
+// there instead.
+const TAG_TEXT = bakeText(`$${EXIT_RULES.price}`, 'Coin')
+const TAG_PAD = 2
+const TAG_WIDTH = TAG_TEXT.width + TAG_PAD * 2 + 1
+const TAG_HEIGHT = GLYPH_HEIGHT + TAG_PAD * 2
 
-const OFFER_TEXT = bakeText(
-  `BUMP TO OPEN THE KITCHEN $${EXIT_RULES.price}`,
-  'Prompt',
-)
-const NOT_YET_TEXT = bakeText(
-  `KITCHEN OPENS AFTER WAVE ${EXIT_RULES.firstWave - 1}`,
-  'Hint',
-)
-
-const promptAt = (
-  baked: ReturnType<typeof bakeText>,
-  box: Readonly<{ left: number; right: number; bottom: number }>,
-): ReadonlyArray<Canvas.Shape> => [
-  placeBaked(baked, {
-    x: Math.max(
-      Math.ceil(baked.width / 2) + 3,
-      Math.round((box.left + box.right) / 2),
-    ),
-    y: box.bottom + PROMPT_LIFT + GLYPH_HEIGHT,
-    align: 'Center',
-  }),
+const TAG_SPRITE: Sprite = [
+  ...bakeShapes([
+    rect(Math.floor(TAG_WIDTH / 2), -4, 1, 4, '#c9c3b0'),
+    rect(Math.floor(TAG_WIDTH / 2) - 1, -5, 3, 1, '#8a8a96'),
+    rect(-1, -1, TAG_WIDTH + 2, TAG_HEIGHT + 2, '#140c10'),
+    rect(0, 0, TAG_WIDTH, TAG_HEIGHT, '#3a2408'),
+    rect(0, 0, TAG_WIDTH, 1, '#c98a1a'),
+  ]),
+  placeBaked(TAG_TEXT, { x: TAG_PAD, y: TAG_PAD, align: 'Left' }),
 ]
+
+const PADLOCK: Sprite = spriteShapes(
+  [
+    '...c...',
+    '..kkk..',
+    '.k...k.',
+    '.k...k.',
+    'kGGGGGk',
+    'kGgDgGk',
+    'kGgDgGk',
+    'kGGGGGk',
+    '.kkkkk.',
+  ],
+  { c: '#c9c3b0', k: '#140c10', G: '#e0b040', g: '#b8862a', D: '#140c10' },
+  TOP_LEFT,
+)
+
+const TAG_BOARD_Y = 24
+const LOCK_BOARD_Y = 22
 
 export const exitPromptShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
   const prompt: ExitPrompt = exitPrompt(model)
-  if (prompt._tag === 'Offer') {
-    return promptAt(OFFER_TEXT, prompt.box)
-  } else if (prompt._tag === 'NotYet') {
-    return promptAt(NOT_YET_TEXT, prompt.box)
-  } else {
+  if (prompt._tag === 'None') {
     return []
   }
+  const middle = Math.round((prompt.box.left + prompt.box.right) / 2)
+  return prompt._tag === 'Offer'
+    ? [
+        placeAt(
+          middle - Math.floor(TAG_WIDTH / 2),
+          prompt.box.top + TAG_BOARD_Y,
+          TAG_SPRITE,
+        ),
+      ]
+    : [placeAt(middle - 3, prompt.box.top + LOCK_BOARD_Y, PADLOCK)]
 }
 
 // OVENS
@@ -735,7 +840,7 @@ const flameWidth = (row: number, rows: number, frame: number): number => {
   const along = row / rows
   const swell = Math.sin(Math.PI * Math.min(1, along * 1.25))
   const flicker = Math.floor(roll(row, frame + 60) * 3)
-  return Math.max(2, Math.round(8 + swell * 22 - along * 6) - flicker)
+  return Math.max(2, Math.round(7 + swell * 15 - along * 5) - flicker)
 }
 
 const flameRow = (
@@ -771,7 +876,7 @@ const flameRow = (
   )
 }
 
-const FLAME_SPAN = 34
+const FLAME_SPAN = 24
 
 const flamePixels = (rows: number, frame: number): ReadonlyArray<string> =>
   Array.makeBy(rows, row => flameRow(row, rows, frame, FLAME_SPAN))

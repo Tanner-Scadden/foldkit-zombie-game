@@ -1010,3 +1010,58 @@
     --shop-u: max(1px, min(100vw, 100dvh * 16 / 9) / 1100);
   }
 }
+
+/* THE KITCHEN'S OFFER
+
+   A boarded exit's offer between waves, in the shop's frame and tokens:
+   the room's name and the red X, a picture of the room, and one button
+   that is its price tag. */
+
+.shop-panel.exit-panel {
+  align-items: center;
+  width: min(calc(300 * var(--shop-u)), calc(100vw - 16px));
+}
+
+.exit-header {
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--shop-gap);
+}
+
+.exit-art {
+  --px: calc(6 * var(--shop-u));
+  margin: var(--shop-gap) 0;
+}
+
+.exit-buy {
+  display: grid;
+  place-items: center;
+  min-width: calc(140 * var(--shop-u));
+  min-height: var(--shop-tap);
+  padding: calc(6 * var(--shop-u));
+  border: calc(2 * var(--shop-u)) solid var(--shop-good);
+  border-radius: var(--shop-radius);
+  background: var(--shop-card-raised);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.exit-buy .shop-tag {
+  font-size: calc(18 * var(--shop-u));
+}
+
+.exit-buy.is-short {
+  border-color: var(--shop-line);
+  cursor: default;
+}
+
+.exit-buy:focus-visible {
+  outline: calc(2 * var(--shop-u)) solid var(--shop-focus);
+  outline-offset: calc(2 * var(--shop-u));
+}
+
+.exit-panel .shop-title {
+  font-size: calc(20 * var(--shop-u));
+}

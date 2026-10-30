@@ -55,7 +55,7 @@ const NO_OPENINGS: ReadonlyArray<Opening> = []
 
 const openingsOf = (level: Level): ReadonlyArray<Opening> =>
   Array.flatMap(
-    Array.makeBy(level.rows, row => row),
+    Array.makeBy(level.rows, index => index + level.topRow),
     row =>
       Array.reduce(
         Array.makeBy(level.columns, column => column),
@@ -103,7 +103,7 @@ const occluderOf =
   (level: Level, room: Canvas.Image) =>
   ({ row, first, last }: Opening): Occluder => {
     const floorY = (row + 1) * TILE_SIZE
-    const top = Math.max(0, floorY - FACE_HEIGHT)
+    const top = Math.max(level.top, floorY - FACE_HEIGHT)
     const openingLeft = first * TILE_SIZE
     const openingRight = (last + 1) * TILE_SIZE
     const left = Math.max(0, openingLeft - BESIDE_PX)
@@ -154,11 +154,15 @@ export const occludersOf = (level: Level): ReadonlyArray<Occluder> => {
 }
 
 // NOTE: feet above an occluder's floor line and inside its span stand in its
-// doorway, behind the wall.
+// doorway, behind the wall. Feet far above it stand in the room on the other
+// side of that wall, such as the kitchen above the parlour, not behind it.
+const BEYOND_PX = FACE_HEIGHT + TILE_SIZE
+
 export const isBehindWall =
   (level: Level) =>
   (x: number, footY: number): boolean =>
     Array.some(
       occludersOf(level),
-      ({ floorY, left, right }) => footY < floorY && x >= left && x < right,
+      ({ floorY, left, right }) =>
+        footY < floorY && footY > floorY - BEYOND_PX && x >= left && x < right,
     )

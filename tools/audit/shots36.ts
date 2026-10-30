@@ -65,7 +65,7 @@ const SCENES: ReadonlyArray<Scene> = [
     query: `${BREAK}&px=70&py=27`,
     settleMs: 900,
     act: async (page, problems, label) => {
-      await page.getByRole('button', { name: /SMASH IT OPEN/ }).click()
+      await page.getByRole('button', { name: /Open the kitchen/ }).click()
       await wait(120)
       const current = await model(page)
       if (!current.level.openExits.includes('Kitchen')) {

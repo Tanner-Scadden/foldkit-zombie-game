@@ -48,8 +48,8 @@ export const OVEN_RULES: OvenRules = {
   ticks: 4,
   damagePerTick: 3,
   cooldownMs: 8000,
-  reachPx: 45,
-  sidePx: 5,
+  reachPx: 28,
+  sidePx: 2,
   knockback: 70,
   strikePx: BULLET_STEP_PX + 1,
 }

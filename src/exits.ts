@@ -108,22 +108,20 @@ export type ExitPrompt =
 
 const NO_PROMPT: ExitPrompt = { _tag: 'None' }
 
-// NOTE: within reach of a boarded exit between waves the boards say what
-// opening it costs. Before the kitchen's first break they say when it opens.
-// Mid-wave they say nothing, so a fight is never cluttered with signs.
+// NOTE: between waves a boarded exit wears a price tag on its boards, or a
+// padlock before the kitchen's first break. Mid-wave the boards are bare,
+// so a fight is never cluttered with signs. The tag stays up while the
+// player browses the stall, and goes while its own offer is open.
 export const exitPrompt = (model: Model): ExitPrompt => {
   if (
     !Phase.isAnyOf(['Preparation'])(model.phase) ||
-    !ShopState.isAnyOf(['Away', 'Dismissed'])(model.shop)
+    ShopState.isAnyOf(['AtExit'])(model.shop)
   ) {
     return NO_PROMPT
   }
-  const level = levelOf(model)
   return pipe(
-    closedExitBoxes(level),
-    Array.findFirst(
-      ({ box }) => distanceToBox(model.player, box) <= EXIT_RULES.nearPx,
-    ),
+    closedExitBoxes(levelOf(model)),
+    Array.head,
     Option.match({
       onNone: () => NO_PROMPT,
       onSome: ({ exit, box }): ExitPrompt =>

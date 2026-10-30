@@ -3,11 +3,11 @@ import { Canvas } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { type Level, PARLOUR, openExit } from './arena'
+import { type Level, MANOR, PARLOUR, levelOf, openExit } from './arena'
 import { type Drawable, depthSortedShapes } from './depth'
 import { sceneShapes } from './layers'
 import { type Model, Phase, type Zombie, initialModel } from './model'
-import { occludersOf } from './occluders'
+import { isBehindWall, occludersOf } from './occluders'
 import { playerShapes } from './playerView'
 import { STALL_BOX } from './shop'
 import { stallShapes } from './stall'
@@ -67,7 +67,7 @@ const NORTH_DOOR_X = 220
 
 const lintelIndex = (current: Model): number =>
   pipe(
-    occludersOf(PARLOUR),
+    occludersOf(levelOf(current)),
     Array.findFirst(
       ({ left, right }) => NORTH_DOOR_X >= left && NORTH_DOOR_X < right,
     ),
@@ -166,5 +166,17 @@ describe('Depth sort', () => {
       { floorY: 20, left: 40, right: 100 },
       { floorY: 20, left: 190, right: 250 },
     ])
+    expect(spans(openExit(MANOR, 'Kitchen'))).toEqual([
+      { floorY: -130, left: 100, right: 160 },
+      { floorY: 20, left: 40, right: 100 },
+      { floorY: 20, left: 190, right: 250 },
+    ])
+  })
+
+  test('a zombie up in the open kitchen is not behind the parlour wall', () => {
+    const kitchen = openExit(MANOR, 'Kitchen')
+    expect(isBehindWall(kitchen)(70, 15)).toBe(true)
+    expect(isBehindWall(kitchen)(70, -40)).toBe(false)
+    expect(isBehindWall(kitchen)(130, -135)).toBe(true)
   })
 })
