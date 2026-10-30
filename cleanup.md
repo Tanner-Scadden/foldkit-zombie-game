@@ -70,7 +70,7 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
      - `tsconfig.base.json` Effect overrides: `tools/balance/bot.ts` and `simulate.ts` (strictBooleanExpressions); `packages/netcode/src/Socket.ts` (runEffectInsideEffect); `packages/sync-engine/test/**` (preferSchemaOverJson, lazyEffect).
      - `.oxlintrc.effect.json`: `packages/netcode/src/Socket.ts` (run-effect-inside-effect); `packages/sync-engine/test/fixtures.ts` (lazy-effect).
    - Lock in: `knip` (or an unused-exports check) in `bun run lint`.
-9b. [ ] **Tools as strict as the game.** (M) 0a left `tools/` looser.
+     9b. [ ] **Tools as strict as the game.** (M) 0a left `tools/` looser.
    - Every tool: Effect's Date, timer, fetch, random, and new-Promise rules are off.
    - `tools/audit`, `tools/mp-spike`, and `tools/sprites`: the unsafe-\*, any, assertion, and strict-boolean rules are off too.
    - Fix what is worth fixing. Scripts on the Effect platform (`Clock`, `HttpClient`, `Schedule`) where that reads simpler. Typed page results in the audits in place of `any` from `page.evaluate`.
