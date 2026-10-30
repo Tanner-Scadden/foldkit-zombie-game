@@ -11,21 +11,26 @@
 // buttons that overlap, any panel or page that scrolls, and whether PLAY sits
 // in the same box in both modes. Exits with 1 on a problem.
 //   TAG=after BASE=http://localhost:4174/ bun shots33.ts
-// ONLY picks scenes, such as `ONLY=home,munchopedia`.
+// ONLY picks scenes, such as `ONLY=home,munchopedia`. SHOTS_PARALLEL sets
+// how many screens run at once, each in its own browser contexts (3 by
+// default).
 import type { Page } from 'playwright-core'
 
 import {
   DESKTOP_1280,
   DESKTOP_1920,
+  type Log,
   PHONE_667,
   PHONE_844,
   type Viewport,
   deviceQuery,
   finish,
+  forEachInOrder,
   harnessUrl,
   isPickedScene,
   launch,
   openPage,
+  parallelFrom,
   shot,
   tagOr,
   wait,
@@ -90,9 +95,12 @@ const SCENES: ReadonlyArray<Scene> = [
 
 const MIN_SIDE = 48
 
-const problems: Array<string> = []
-
-const press = async (page: Page, viewport: Viewport, selector: string) => {
+const press = async (
+  page: Page,
+  viewport: Viewport,
+  selector: string,
+  problems: Array<string>,
+) => {
   const box = await page.locator(selector).first().boundingBox()
   if (box === null) {
     problems.push(`nothing to open with ${selector}`)
@@ -170,7 +178,14 @@ const check = (page: Page, minSide: number, isPhone: boolean) =>
   )
 
 const browser = await launch()
-for (const viewport of VIEWPORTS) {
+
+// NOTE: one viewport is one unit of work, since PLAY's box is compared
+// across its scenes and the focus walk follows them.
+const checkViewport = async (
+  viewport: Viewport,
+  log: Log,
+): Promise<ReadonlyArray<string>> => {
+  const problems: Array<string> = []
   const playBoxes = new Map<string, string>()
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
@@ -180,7 +195,7 @@ for (const viewport of VIEWPORTS) {
     await page.goto(harnessUrl(scene.query, deviceQuery(viewport)))
     await wait(1200)
     for (const selector of scene.open ?? []) {
-      await press(page, viewport, selector)
+      await press(page, viewport, selector, problems)
     }
     const found = await check(page, MIN_SIDE, viewport.isPhone)
     const name = `s33-${TAG}-${viewport.name}-${scene.name}`
@@ -192,7 +207,7 @@ for (const viewport of VIEWPORTS) {
       found.panelScroll > 0 ? `panel scrolls ${found.panelScroll}px` : '',
       found.pageScroll > 0 ? `PAGE SCROLLS ${found.pageScroll}px` : '',
     ].filter(Boolean)
-    console.log(`${name}  play ${found.play}  ${notes.join('  ')}`)
+    log(`${name}  play ${found.play}  ${notes.join('  ')}`)
     if (found.small.length > 0 || found.overlaps.length > 0) {
       problems.push(`${name}: ${notes.join('  ')}`)
     }
@@ -208,7 +223,7 @@ for (const viewport of VIEWPORTS) {
   const endlessPlay = playBoxes.get('home-endless')
   if (campaignPlay !== undefined && endlessPlay !== undefined) {
     const same = campaignPlay === endlessPlay
-    console.log(
+    log(
       `${viewport.name} PLAY campaign ${campaignPlay}, endless ${endlessPlay}: ${same ? 'same box' : 'MOVED'}`,
     )
     if (!same) {
@@ -242,11 +257,18 @@ for (const viewport of VIEWPORTS) {
       await page.keyboard.press('Tab')
       await wait(100)
     }
-    console.log(`${viewport.name} arrows: ${order.join(' > ')}`)
-    console.log(`${viewport.name} tab: ${tabOrder.join(' > ')}`)
+    log(`${viewport.name} arrows: ${order.join(' > ')}`)
+    log(`${viewport.name} tab: ${tabOrder.join(' > ')}`)
     await page.context().close()
   }
+  return problems
 }
+
+const problems = await forEachInOrder(
+  VIEWPORTS,
+  parallelFrom('SHOTS_PARALLEL'),
+  checkViewport,
+)
 await browser.close()
 
-finish(problems, 'The home layout is clean.')
+finish(problems.flat(), 'The home layout is clean.')

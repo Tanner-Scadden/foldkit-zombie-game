@@ -7,20 +7,25 @@
 // any problem.
 //   TAG=after BASE=http://localhost:4174/ bun shots34.ts
 // ONLY picks scenes, such as `ONLY=wave,break`, and VIEWPORTS picks phones,
-// such as `VIEWPORTS=p390,l844`.
+// such as `VIEWPORTS=p390,l844`. SHOTS_PARALLEL sets how many scenes run at
+// once, each in its own browser context (3 by default).
 import type { Page } from 'playwright-core'
 
 import {
+  type Log,
   PHONE_844,
   UPRIGHT_360,
   UPRIGHT_375,
   UPRIGHT_390,
   UPRIGHT_430,
+  type Viewport,
   finish,
+  forEachInOrder,
   harnessUrl,
   isPickedScene,
   launch,
   openPage,
+  parallelFrom,
   pickViewports,
   settleAnimations,
   shot,
@@ -105,117 +110,130 @@ const SCENES: ReadonlyArray<Scene> = [
 
 const MIN_SIDE = 48
 
-const problems: Array<string> = []
 const browser = await launch()
-for (const viewport of VIEWPORTS) {
-  for (const scene of SCENES) {
-    if (!isPickedScene(scene.name)) {
-      continue
-    }
-    const page = await openPage(browser, viewport)
-    await page.goto(harnessUrl(scene.query, 'device=touch', 'nodev'))
-    await wait(1200)
-    if (scene.act) {
-      await scene.act(page)
-    }
-    await settleAnimations(page)
-    const report = await page.evaluate(() => {
-      const isShown = (element: Element) => {
-        const box = element.getBoundingClientRect()
-        const style = getComputedStyle(element)
-        return (
-          box.width > 0 &&
-          style.visibility !== 'hidden' &&
-          style.display !== 'none'
-        )
-      }
-      const isInScroller = (element: Element): boolean => {
-        const parent = element.parentElement
-        if (parent === null) {
-          return false
-        }
-        const overflow = getComputedStyle(parent).overflowY
-        return (
-          ((overflow === 'auto' || overflow === 'scroll') &&
-            parent.scrollHeight > parent.clientHeight) ||
-          isInScroller(parent)
-        )
-      }
-      const openDialog = document.querySelector('dialog[open]')
-      const buttons = Array.from(document.querySelectorAll('button'))
-        .filter(isShown)
-        .filter(button =>
-          openDialog === null
-            ? button.closest('dialog') === null
-            : openDialog.contains(button),
-        )
-        .map(button => {
-          const box = button.getBoundingClientRect()
-          const hit = document.elementFromPoint(
-            box.x + box.width / 2,
-            box.y + box.height / 2,
-          )
-          return {
-            name: (button.getAttribute('aria-label') ?? button.innerText)
-              .replace(/\s+/g, ' ')
-              .slice(0, 40),
-            width: Math.round(box.width),
-            height: Math.round(box.height),
-            isHit:
-              (hit !== null && button.contains(hit)) ||
-              (isInScroller(button) && (box.bottom > innerHeight || box.y < 0)),
-            isOnScreen:
-              isInScroller(button) ||
-              (box.x >= -1 &&
-                box.y >= -1 &&
-                box.right <= innerWidth + 1 &&
-                box.bottom <= innerHeight + 1),
-          }
-        })
-      const scroller = document.scrollingElement!
-      const pageScrolls = scroller.scrollHeight > innerHeight + 1
-      const panels = Array.from(
-        document.querySelectorAll('dialog[open], dialog[open] > *'),
-      ).filter(element => {
-        const box = element.getBoundingClientRect()
-        return box.bottom > innerHeight + 1 || box.right > innerWidth + 1
-      })
-      return {
-        buttons,
-        pageScrolls,
-        offScreen: panels.length,
-        layout:
-          document.querySelector('.game-root')?.getAttribute('data-layout') ??
-          '',
-      }
-    })
-    await shot(page, `s34-${TAG}-${viewport.name}-${scene.name}`)
-    const where = `${viewport.name} ${scene.name}`
-    console.log(
-      `${where} (${report.layout}): ${report.buttons.length} buttons${report.pageScrolls ? ', PAGE SCROLLS' : ''}`,
-    )
-    if (report.pageScrolls) {
-      problems.push(`${where}: the page scrolls`)
-    }
-    if (report.offScreen > 0) {
-      problems.push(`${where}: ${report.offScreen} dialog parts off screen`)
-    }
-    for (const button of report.buttons) {
-      if (button.width < MIN_SIDE || button.height < MIN_SIDE) {
-        problems.push(
-          `${where}: "${button.name}" is ${button.width}x${button.height}`,
-        )
-      }
-      if (!button.isHit) {
-        problems.push(`${where}: "${button.name}" is covered at its center`)
-      }
-      if (!button.isOnScreen) {
-        problems.push(`${where}: "${button.name}" is off screen`)
-      }
-    }
-    await page.context().close()
+
+const checkScene = async (
+  viewport: Viewport,
+  scene: Scene,
+  log: Log,
+): Promise<ReadonlyArray<string>> => {
+  const problems: Array<string> = []
+  const page = await openPage(browser, viewport)
+  await page.goto(harnessUrl(scene.query, 'device=touch', 'nodev'))
+  await wait(1200)
+  if (scene.act) {
+    await scene.act(page)
   }
+  await settleAnimations(page)
+  const report = await page.evaluate(() => {
+    const isShown = (element: Element) => {
+      const box = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return (
+        box.width > 0 &&
+        style.visibility !== 'hidden' &&
+        style.display !== 'none'
+      )
+    }
+    const isInScroller = (element: Element): boolean => {
+      const parent = element.parentElement
+      if (parent === null) {
+        return false
+      }
+      const overflow = getComputedStyle(parent).overflowY
+      return (
+        ((overflow === 'auto' || overflow === 'scroll') &&
+          parent.scrollHeight > parent.clientHeight) ||
+        isInScroller(parent)
+      )
+    }
+    const openDialog = document.querySelector('dialog[open]')
+    const buttons = Array.from(document.querySelectorAll('button'))
+      .filter(isShown)
+      .filter(button =>
+        openDialog === null
+          ? button.closest('dialog') === null
+          : openDialog.contains(button),
+      )
+      .map(button => {
+        const box = button.getBoundingClientRect()
+        const hit = document.elementFromPoint(
+          box.x + box.width / 2,
+          box.y + box.height / 2,
+        )
+        return {
+          name: (button.getAttribute('aria-label') ?? button.innerText)
+            .replace(/\s+/g, ' ')
+            .slice(0, 40),
+          width: Math.round(box.width),
+          height: Math.round(box.height),
+          isHit:
+            (hit !== null && button.contains(hit)) ||
+            (isInScroller(button) && (box.bottom > innerHeight || box.y < 0)),
+          isOnScreen:
+            isInScroller(button) ||
+            (box.x >= -1 &&
+              box.y >= -1 &&
+              box.right <= innerWidth + 1 &&
+              box.bottom <= innerHeight + 1),
+        }
+      })
+    const scroller = document.scrollingElement!
+    const pageScrolls = scroller.scrollHeight > innerHeight + 1
+    const panels = Array.from(
+      document.querySelectorAll('dialog[open], dialog[open] > *'),
+    ).filter(element => {
+      const box = element.getBoundingClientRect()
+      return box.bottom > innerHeight + 1 || box.right > innerWidth + 1
+    })
+    return {
+      buttons,
+      pageScrolls,
+      offScreen: panels.length,
+      layout:
+        document.querySelector('.game-root')?.getAttribute('data-layout') ?? '',
+    }
+  })
+  await shot(page, `s34-${TAG}-${viewport.name}-${scene.name}`)
+  const where = `${viewport.name} ${scene.name}`
+  log(
+    `${where} (${report.layout}): ${report.buttons.length} buttons${report.pageScrolls ? ', PAGE SCROLLS' : ''}`,
+  )
+  if (report.pageScrolls) {
+    problems.push(`${where}: the page scrolls`)
+  }
+  if (report.offScreen > 0) {
+    problems.push(`${where}: ${report.offScreen} dialog parts off screen`)
+  }
+  for (const button of report.buttons) {
+    if (button.width < MIN_SIDE || button.height < MIN_SIDE) {
+      problems.push(
+        `${where}: "${button.name}" is ${button.width}x${button.height}`,
+      )
+    }
+    if (!button.isHit) {
+      problems.push(`${where}: "${button.name}" is covered at its center`)
+    }
+    if (!button.isOnScreen) {
+      problems.push(`${where}: "${button.name}" is off screen`)
+    }
+  }
+  await page.context().close()
+  return problems
 }
+
+const UNITS = VIEWPORTS.flatMap(viewport =>
+  SCENES.filter(scene => isPickedScene(scene.name)).map(scene => ({
+    viewport,
+    scene,
+  })),
+)
+
+const problems = await forEachInOrder(
+  UNITS,
+  parallelFrom('SHOTS_PARALLEL'),
+  ({ viewport, scene }, log) => checkScene(viewport, scene, log),
+)
 await browser.close()
 
-finish(problems, 'no problems')
+finish(problems.flat(), 'no problems')

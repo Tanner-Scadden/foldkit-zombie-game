@@ -134,6 +134,58 @@ export const pickViewports = (
       PICKED_VIEWPORTS.includes(viewport.name),
   )
 
+// CONCURRENCY
+
+export const DEFAULT_PARALLEL = 3
+
+// NOTE: how many browser contexts a script drives at once, read from its own
+// variable (such as TAPS_PARALLEL), 3 by default, at least 1.
+export const parallelFrom = (key: string): number => {
+  const value = Number(process.env[key] ?? DEFAULT_PARALLEL)
+  return Number.isFinite(value) ? Math.max(1, Math.floor(value)) : 1
+}
+
+export type Log = (line: string) => void
+
+// NOTE: runs `work` on every item, up to `limit` at once, each in its own
+// browser context. Each item logs through its own `log`, and the lines are
+// printed as a block in the items' order as soon as every earlier item is
+// done, so the report reads the same as a run one after another. The
+// results come back in the items' order too.
+export const forEachInOrder = async <A, B>(
+  items: ReadonlyArray<A>,
+  limit: number,
+  work: (item: A, log: Log) => Promise<B>,
+): Promise<ReadonlyArray<B>> => {
+  const lines: Array<Array<string>> = items.map(() => [])
+  const results: Array<B> = []
+  const done: Array<boolean> = items.map(() => false)
+  let printed = 0
+  const flush = () => {
+    while (printed < items.length && done[printed]) {
+      for (const line of lines[printed]!) {
+        console.log(line)
+      }
+      printed++
+    }
+  }
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++
+      results[index] = await work(items[index]!, line => {
+        lines[index]!.push(line)
+      })
+      done[index] = true
+      flush()
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, worker),
+  )
+  return results
+}
+
 // NOTE: joins the query parts that are not empty, so a scene with no query
 // and a device part make `?device=touch`, never `?&device=touch`.
 export const harnessUrl = (...parts: ReadonlyArray<string>) =>

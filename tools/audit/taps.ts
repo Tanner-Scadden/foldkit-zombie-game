@@ -13,9 +13,13 @@
 //   PORTRAIT=1 BASE=http://localhost:4174/ bun taps.ts
 // VIEWPORTS picks phones by name, such as `VIEWPORTS=u390,u360`.
 // ONLY picks scenes, such as `ONLY=home,munchopedia`.
+// TAPS_PARALLEL sets how many scenes run at once, each in its own browser
+// context (3 by default, 1 for one after another). The report keeps the
+// order of a run one after another.
 import type { Page } from 'playwright-core'
 
 import {
+  type Log,
   PHONE_667,
   PHONE_844,
   UPRIGHT_360,
@@ -23,10 +27,12 @@ import {
   UPRIGHT_430,
   type Viewport,
   finish,
+  forEachInOrder,
   harnessUrl,
   isPickedScene,
   launch,
   openPage,
+  parallelFrom,
   pickViewports,
   settleAnimations,
   wait,
@@ -136,27 +142,61 @@ const TAP_LEAVES =
 
 const isTapMessage = (tag: string): boolean => TAP_LEAVES.test(tag)
 
+const OPEN_TIMEOUT_MS = 10_000
+
+// NOTE: the fixed waits are the least a scene needs. Each step also waits
+// for what it opens, so a busy machine, or several scenes at once, slows
+// the run instead of breaking it.
+const tapToOpen = async (page: Page, scene: Scene, selector: string) => {
+  const locator = page.locator(selector).first()
+  await locator
+    .waitFor({ state: 'visible', timeout: OPEN_TIMEOUT_MS })
+    .catch(() => undefined)
+  const box = await locator.boundingBox()
+  if (box === null) {
+    throw new Error(`${scene.name}: nothing to open with ${selector}`)
+  }
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
+}
+
+const waitForDialog = (page: Page) =>
+  page
+    .locator('dialog[open]')
+    .first()
+    .waitFor({ state: 'visible', timeout: OPEN_TIMEOUT_MS })
+    .catch(() => undefined)
+
 const openScene = async (page: Page, scene: Scene) => {
   await page.goto(harnessUrl(scene.query, 'device=touch', 'nodev'))
   await wait(SETTLE_MS)
   if (scene.openWith !== undefined) {
-    const box = await page.locator(scene.openWith).boundingBox()
-    if (box === null) {
-      throw new Error(`${scene.name}: nothing to open with ${scene.openWith}`)
-    }
-    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
+    await tapToOpen(page, scene, scene.openWith)
+    await waitForDialog(page)
     await wait(500)
   }
   if (scene.thenOpen !== undefined) {
-    const box = await page.locator(scene.thenOpen).first().boundingBox()
-    if (box === null) {
-      throw new Error(`${scene.name}: nothing to open with ${scene.thenOpen}`)
-    }
-    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
+    await tapToOpen(page, scene, scene.thenOpen)
     await wait(400)
   }
   await settleAnimations(page)
 }
+
+// NOTE: true once the scene shows a button at `index`, in the open dialog
+// when there is one.
+const hasButton = (page: Page, index: number, hasDialog: boolean) =>
+  page
+    .waitForFunction(
+      ({ index, hasDialog }) => {
+        const scope: ParentNode = hasDialog
+          ? (document.querySelector('dialog[open]') ?? document)
+          : document
+        return scope.querySelectorAll('button')[index] !== undefined
+      },
+      { index, hasDialog },
+      { timeout: OPEN_TIMEOUT_MS },
+    )
+    .then(() => true)
+    .catch(() => false)
 
 const visibleTargets = (page: Page): Promise<ReadonlyArray<number>> =>
   page.evaluate(() => {
@@ -249,7 +289,6 @@ const hitsButton = (
     },
   )
 
-const failures: Array<string> = []
 const browser = await launch()
 
 // NOTE: a tap can write the save, such as PLAY dismissing the iPhone tip.
@@ -260,72 +299,119 @@ const openFreshScene = async (viewport: Viewport, scene: Scene) => {
   await openScene(page, scene)
   return page
 }
-for (const viewport of VIEWPORTS) {
-  for (const scene of SCENES) {
-    if (!isPickedScene(scene.name)) {
-      continue
-    }
+
+// NOTE: opens the scene fresh for one tap, once more if the button is not
+// there yet, and gives null when it is still missing.
+const openWithButton = async (
+  viewport: Viewport,
+  scene: Scene,
+  index: number,
+  hasDialog: boolean,
+): Promise<Page | null> => {
+  for (let attempt = 0; attempt < 2; attempt++) {
     const page = await openFreshScene(viewport, scene)
-    const hasDialog = scene.openWith !== undefined || scene.opensDialog === true
-    const indices = await visibleTargets(page)
-    const where = `${viewport.name} ${scene.name}`
-    if (indices.length === 0) {
-      failures.push(`${where}: no buttons`)
-    }
-    const openScroll = await openedScroll(page)
-    if (openScroll > 0) {
-      failures.push(
-        `${where}: the open panel starts ${openScroll} px down, hiding its top`,
-      )
-    }
-    const targets: Array<Target> = []
-    for (const index of indices) {
-      const target = await placeTarget(page, index, hasDialog)
-      targets.push(target)
-      if (target.width < MIN_SIDE || target.height < MIN_SIDE) {
-        failures.push(
-          `${where} "${target.label}": ${Math.round(target.width)}x${Math.round(target.height)} is under ${MIN_SIDE} px`,
-        )
-      }
-      for (const { name, point } of target.points) {
-        if (!(await hitsButton(page, target, point, hasDialog))) {
-          failures.push(`${where} "${target.label}": the ${name} misses it`)
-        }
-      }
-    }
-    for (const target of targets) {
-      for (const { name } of target.points.filter(
-        ({ name }) => name === 'center' || name === 'corner',
-      )) {
-        const tapPage = await openFreshScene(viewport, scene)
-        const tapPoint = (
-          await placeTarget(tapPage, target.index, hasDialog)
-        ).points.find(placed => placed.name === name)!.point
-        await tapPage.evaluate(() => {
-          ;(window as any).__messages.length = 0
-        })
-        await tapPage.touchscreen.tap(tapPoint.x, tapPoint.y)
-        await wait(AFTER_TAP_MS)
-        const tags: ReadonlyArray<string> = await tapPage.evaluate(() => [
-          ...(window as any).__messages,
-        ])
-        await tapPage.context().close()
-        const tapTags = tags.filter(isTapMessage)
-        const reachedSurface = tags.some(tag => surfaceTags.has(tag))
-        const isOk = tapTags.length === 1 && !reachedSurface
-        console.log(
-          `${isOk ? 'ok  ' : 'FAIL'} ${where} "${target.label}" ${name}: ${tapTags.join(', ') || '(nothing)'}`,
-        )
-        if (!isOk) {
-          failures.push(
-            `${where} "${target.label}" ${name} tap sent ${tags.join(', ') || 'nothing'}`,
-          )
-        }
-      }
+    if (await hasButton(page, index, hasDialog)) {
+      return page
     }
     await page.context().close()
   }
+  return null
 }
+
+const checkScene = async (
+  viewport: Viewport,
+  scene: Scene,
+  log: Log,
+): Promise<ReadonlyArray<string>> => {
+  const failures: Array<string> = []
+  const page = await openFreshScene(viewport, scene)
+  const hasDialog = scene.openWith !== undefined || scene.opensDialog === true
+  const indices = await visibleTargets(page)
+  const where = `${viewport.name} ${scene.name}`
+  if (indices.length === 0) {
+    failures.push(`${where}: no buttons`)
+  }
+  const openScroll = await openedScroll(page)
+  if (openScroll > 0) {
+    failures.push(
+      `${where}: the open panel starts ${openScroll} px down, hiding its top`,
+    )
+  }
+  const targets: Array<Target> = []
+  for (const index of indices) {
+    const target = await placeTarget(page, index, hasDialog)
+    targets.push(target)
+    if (target.width < MIN_SIDE || target.height < MIN_SIDE) {
+      failures.push(
+        `${where} "${target.label}": ${Math.round(target.width)}x${Math.round(target.height)} is under ${MIN_SIDE} px`,
+      )
+    }
+    for (const { name, point } of target.points) {
+      if (!(await hitsButton(page, target, point, hasDialog))) {
+        failures.push(`${where} "${target.label}": the ${name} misses it`)
+      }
+    }
+  }
+  for (const target of targets) {
+    for (const { name } of target.points.filter(
+      ({ name }) => name === 'center' || name === 'corner',
+    )) {
+      const tapPage = await openWithButton(
+        viewport,
+        scene,
+        target.index,
+        hasDialog,
+      )
+      if (tapPage === null) {
+        log(`FAIL ${where} "${target.label}" ${name}: gone on reopen`)
+        failures.push(
+          `${where} "${target.label}" ${name}: the button was not there when the scene was opened again`,
+        )
+        continue
+      }
+      const tapPoint = (
+        await placeTarget(tapPage, target.index, hasDialog)
+      ).points.find(placed => placed.name === name)!.point
+      await tapPage.evaluate(() => {
+        ;(window as any).__messages.length = 0
+      })
+      await tapPage.touchscreen.tap(tapPoint.x, tapPoint.y)
+      await wait(AFTER_TAP_MS)
+      const tags: ReadonlyArray<string> = await tapPage.evaluate(() => [
+        ...(window as any).__messages,
+      ])
+      await tapPage.context().close()
+      const tapTags = tags.filter(isTapMessage)
+      const reachedSurface = tags.some(tag => surfaceTags.has(tag))
+      const isOk = tapTags.length === 1 && !reachedSurface
+      log(
+        `${isOk ? 'ok  ' : 'FAIL'} ${where} "${target.label}" ${name}: ${tapTags.join(', ') || '(nothing)'}`,
+      )
+      if (!isOk) {
+        failures.push(
+          `${where} "${target.label}" ${name} tap sent ${tags.join(', ') || 'nothing'}`,
+        )
+      }
+    }
+  }
+  await page.context().close()
+  return failures
+}
+
+// NOTE: each viewport and scene pair is one unit of work, so even the two
+// landscape phones fill every context.
+const UNITS = VIEWPORTS.flatMap(viewport =>
+  SCENES.filter(scene => isPickedScene(scene.name)).map(scene => ({
+    viewport,
+    scene,
+  })),
+)
+
+const failures = await forEachInOrder(
+  UNITS,
+  parallelFrom('TAPS_PARALLEL'),
+  ({ viewport, scene }, log) => checkScene(viewport, scene, log),
+)
 await browser.close()
 
-finish(failures, 'Every tap landed on its button and sent one Message.')
+finish(failures.flat(), 'Every tap landed on its button and sent one Message.')
