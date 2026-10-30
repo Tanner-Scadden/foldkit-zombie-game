@@ -7,7 +7,15 @@
 //   bun tools/sprites/build.ts <out dir>   writes the files, or reuses them
 //   bun tools/sprites/build.ts --keys      prints every sprite key as JSON
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 
 import { rasterOf } from '../../src/png'
@@ -47,7 +55,7 @@ if (outDir === undefined) {
 }
 
 // NOTE: changing how the files are written must make every cache miss.
-const GENERATOR_VERSION = 1
+const GENERATOR_VERSION = 2
 const MANIFEST_FILE = 'manifest.json'
 const SIGNATURE_FILE = 'signature.txt'
 
@@ -145,7 +153,7 @@ const packed = packShelves(
 )
 const sheets: ReadonlyArray<Readonly<{ name: string; sheet: Sheet }>> = [
   {
-    name: 'sprites.png',
+    name: 'sprites',
     sheet: sheetOf(
       packed.width,
       packed.height,
@@ -153,7 +161,7 @@ const sheets: ReadonlyArray<Readonly<{ name: string; sheet: Sheet }>> = [
     ),
   },
   ...images.filter(isOwnFile).map((image, index) => ({
-    name: `sprite-${index}.png`,
+    name: `sprite-${index}`,
     sheet: sheetOf(image.raster.width, image.raster.height, [
       { image, x: 0, y: 0 },
     ]),
@@ -179,8 +187,14 @@ const samePixels = (sheet: Raster, { image, x, y }: Placed): boolean => {
   return true
 }
 
+// NOTE: each file's name holds a hash of its bytes, so a browser never
+// shows an old atlas from its cache under a new manifest on the dev server.
+const fileNameOf = (name: string, png: Buffer): string =>
+  `${name}-${createHash('sha256').update(png).digest('hex').slice(0, 10)}.png`
+
 mkdirSync(outDir, { recursive: true })
 const entries: Record<string, AtlasEntry> = {}
+const fileNames: Array<string> = []
 let bytes = 0
 sheets.forEach(({ name, sheet }, source) => {
   const png = encodePng(sheet.raster)
@@ -201,16 +215,32 @@ sheets.forEach(({ name, sheet }, source) => {
       ]
     }
   }
-  writeFileSync(join(outDir, name), png)
+  const fileName = fileNameOf(name, png)
+  writeFileSync(join(outDir, fileName), png)
+  fileNames.push(fileName)
   bytes += png.length
 })
 
-const manifest: SpriteAtlas = {
-  sources: sheets.map(({ name }) => name),
-  entries,
-}
-writeFileSync(join(outDir, MANIFEST_FILE), `${JSON.stringify(manifest)}\n`)
+// NOTE: the manifest lands whole, by a rename, since the dev server may read
+// it at any moment. Files the previous manifest named stay, for a page that
+// loaded it a moment ago, and older ones go.
+const manifest: SpriteAtlas = { sources: fileNames, entries }
+const manifestPath = join(outDir, MANIFEST_FILE)
+const previousFiles: ReadonlyArray<string> = existsSync(manifestPath)
+  ? JSON.parse(readFileSync(manifestPath, 'utf8')).sources
+  : []
+writeFileSync(`${manifestPath}.next`, `${JSON.stringify(manifest)}\n`)
+renameSync(`${manifestPath}.next`, manifestPath)
 writeFileSync(signaturePath, signature)
+for (const file of readdirSync(outDir)) {
+  if (
+    file.endsWith('.png') &&
+    !fileNames.includes(file) &&
+    !previousFiles.includes(file)
+  ) {
+    rmSync(join(outDir, file))
+  }
+}
 console.log(
   `sprites: ${keys.length} sprites, ${images.length} distinct, in ${sheets.length} files (atlas ${packed.width}x${packed.height}), ${Math.round(bytes / 1024)} KB, ${Math.round(performance.now() - started)} ms`,
 )
