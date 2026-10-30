@@ -146,17 +146,46 @@ const fillsOf = (
     ),
   )
 
+// NOTE: the size and every run in paint order, which is everything the PNG is
+// built from, so two equal keys always make the same image.
+const contentKeyOf = (
+  width: number,
+  height: number,
+  runs: ReadonlyArray<PixelRun>,
+): string => {
+  let key = `${width}x${height}`
+  for (const run of runs) {
+    key += `;${run.x},${run.y},${run.width},${run.height},${run.color}`
+  }
+  return key
+}
+
+const sourcesByContent = new Map<string, Option.Option<string>>()
+
 // NOTE: a sprite image is a PNG data URL built here from its pixel runs, not
 // an SVG. The browser makes a whole SVG document for every SVG image and
 // redraws its shapes each time a canvas draws it, which cost seconds at load
 // and nothing saved per frame over the Rect shapes. A PNG decodes once into a
-// bitmap that drawImage copies.
+// bitmap that drawImage copies. About a third of the sprites the game builds
+// come out the same as one built before (a flash frame of an all white
+// sprite, a wear stage with no wear yet, a glyph in two tones that match), so
+// each distinct image is encoded once and its data URL reused.
 const runsDataUrl = (
   width: number,
   height: number,
   runs: ReadonlyArray<PixelRun>,
-): Option.Option<string> =>
-  Option.map(fillsOf(runs), fills => pngDataUrl(width, height, fills))
+): Option.Option<string> => {
+  const key = contentKeyOf(width, height, runs)
+  const cached = sourcesByContent.get(key)
+  if (cached !== undefined) {
+    return cached
+  }
+  const built = Option.map(fillsOf(runs), fills =>
+    pngDataUrl(width, height, fills),
+  )
+  sourcesByContent.set(key, built)
+  return built
+}
 
 export const spriteDataUrl = (
   pixels: ReadonlyArray<string>,
