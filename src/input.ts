@@ -2,7 +2,12 @@ import { Array, Option, Schema, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { type Camera, viewToWorld } from './camera'
-import { STICK_DEAD_ZONE, STICK_RADIUS_PX } from './constants'
+import {
+  AIM_TURN_DEGREES_PER_SECOND,
+  MS_PER_SECOND,
+  STICK_DEAD_ZONE,
+  STICK_RADIUS_PX,
+} from './constants'
 import {
   ZERO_VECTOR,
   addVectors,
@@ -43,12 +48,11 @@ const SWAP_KEY = 'KeyQ'
 const PLACE_TRAP_KEY = 'KeyT'
 const NEXT_TRAP_KEY = 'KeyG'
 const MENU_KEY = 'KeyH'
-const FIRE_UP_KEY = 'ArrowUp'
-const FIRE_DOWN_KEY = 'ArrowDown'
-const FIRE_LEFT_KEY = 'ArrowLeft'
-const FIRE_RIGHT_KEY = 'ArrowRight'
-const PREVIOUS_BUTTON_KEYS: ReadonlyArray<string> = [FIRE_LEFT_KEY, FIRE_UP_KEY]
-const NEXT_BUTTON_KEYS: ReadonlyArray<string> = [FIRE_RIGHT_KEY, FIRE_DOWN_KEY]
+const TURN_LEFT_KEY = 'ArrowLeft'
+const TURN_RIGHT_KEY = 'ArrowRight'
+const FIRE_KEY = 'Space'
+const PREVIOUS_BUTTON_KEYS: ReadonlyArray<string> = [TURN_LEFT_KEY, 'ArrowUp']
+const NEXT_BUTTON_KEYS: ReadonlyArray<string> = [TURN_RIGHT_KEY, 'ArrowDown']
 
 export const FocusStep = Schema.Literals(['Previous', 'Next'])
 export type FocusStep = typeof FocusStep.Type
@@ -113,21 +117,48 @@ const keyboardMove = (pressedKeys: ReadonlyArray<string>): Vector =>
     Option.getOrElse(() => ZERO_VECTOR),
   )
 
-// NOTE: the arrow keys aim and fire in the direction held, so a keyboard
-// alone plays the whole game. Two arrows together fire on the diagonal.
-const keyboardAim = (
-  pressedKeys: ReadonlyArray<string>,
-): Option.Option<Vector> =>
-  normalize({
-    x: axis(
-      Array.contains(pressedKeys, FIRE_LEFT_KEY),
-      Array.contains(pressedKeys, FIRE_RIGHT_KEY),
-    ),
-    y: axis(
-      Array.contains(pressedKeys, FIRE_UP_KEY),
-      Array.contains(pressedKeys, FIRE_DOWN_KEY),
-    ),
+// NOTE: a keyboard alone plays the whole game: the left and right arrows
+// turn the aim heading, which stays where it was left, and Space fires along
+// it. The heading only takes over from the mouse while one of those keys is
+// held.
+const FULL_TURN = 2 * Math.PI
+
+const AIM_TURN_RADIANS_PER_SECOND =
+  (AIM_TURN_DEGREES_PER_SECOND / 360) * FULL_TURN
+
+const wrapHeading = (heading: number): number =>
+  heading - FULL_TURN * Math.floor((heading + Math.PI) / FULL_TURN)
+
+const turnAxis = (pressedKeys: ReadonlyArray<string>): number =>
+  axis(
+    Array.contains(pressedKeys, TURN_LEFT_KEY),
+    Array.contains(pressedKeys, TURN_RIGHT_KEY),
+  )
+
+export const turnAim = (input: Input, deltaMs: number): Input =>
+  modifyFields(input, {
+    aimHeading: heading =>
+      wrapHeading(
+        heading +
+          (turnAxis(input.pressedKeys) *
+            AIM_TURN_RADIANS_PER_SECOND *
+            deltaMs) /
+            MS_PER_SECOND,
+      ),
   })
+
+const isKeyboardAiming = (pressedKeys: ReadonlyArray<string>): boolean =>
+  Array.contains(pressedKeys, FIRE_KEY) || turnAxis(pressedKeys) !== 0
+
+export const headingVector = (heading: number): Vector => ({
+  x: Math.cos(heading),
+  y: Math.sin(heading),
+})
+
+const keyboardAim = (input: Input): Option.Option<Vector> =>
+  isKeyboardAiming(input.pressedKeys)
+    ? Option.some(headingVector(input.aimHeading))
+    : Option.none()
 
 export const pressKey = (input: Input, code: string): Input =>
   modifyFields(input, {
@@ -334,7 +365,7 @@ const mouseAim = (
 const triggerOf = (input: Input): Trigger =>
   Stick.isAnyOf(['Active'])(input.aimStick) ||
   MouseButton.isAnyOf(['Held'])(input.mouseButton) ||
-  Option.isSome(keyboardAim(input.pressedKeys))
+  Array.contains(input.pressedKeys, FIRE_KEY)
     ? 'Held'
     : 'Released'
 
@@ -352,7 +383,7 @@ export const deriveIntent = (
   ),
   maybeAim: pipe(
     stickAim(input.aimStick),
-    Option.orElse(() => keyboardAim(input.pressedKeys)),
+    Option.orElse(() => keyboardAim(input)),
     Option.orElse(() => mouseAim(input, player, camera)),
   ),
   trigger: triggerOf(input),

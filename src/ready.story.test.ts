@@ -143,7 +143,7 @@ describe('onboarding hints', () => {
         expect(hintIds(current)).toEqual(['Move', 'Fire'])
         expect(hintTexts(current)).toEqual([
           'WASD MOVES',
-          'CLICK OR HOLD AN ARROW TO FIRE',
+          'CLICK FIRES. OR TURN WITH ARROWS, FIRE WITH SPACE',
         ])
       }),
       press('KeyD'),

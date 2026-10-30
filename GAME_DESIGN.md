@@ -19,7 +19,7 @@ Everything else serves them. The art, names, and characters here are original. O
 - **Platform.** One game for desktop and phones, in landscape and in portrait. Every input works with a keyboard and mouse and with touch.
 - **View.** Top-down pixel art on a 320×180 canvas, scaled with crisp pixels. Portrait phones see a zoomed window that follows the player (see "Portrait play").
 - **Controls.** Twin-stick on every device.
-  - Keyboard: WASD moves, and the arrow keys aim and fire. Each action has exactly one key, read by its physical position (see "One key per action"). Since 2026-10-28 the arrow keys no longer move.
+  - Keyboard: WASD moves, Left and Right turn the aim, and Space fires. Each action has exactly one key, read by its physical position (see "One key per action"). Since 2026-10-28 the arrow keys no longer move.
   - Mouse: aim at the pointer, hold the button to fire.
   - Touch: the left thumb moves, the right thumb aims and fires while held. Two thumbs at once must work.
 - **The loop.** Preparation, then a wave, then Preparation again, until the player dies or wins.
@@ -309,7 +309,8 @@ Proposed, not decided. The rules are in `src/main.ts` and `src/update/home.ts`.
   | --------------------------------- | ------------- |
   | Move                              | WASD          |
   | Fire                              | Click         |
-  | Aim and fire without a mouse      | Arrows        |
+  | Turn the aim without a mouse      | Left, Right   |
+  | Fire without a mouse              | Space         |
   | Reload                            | R             |
   | Swap guns                         | Q             |
   | Place a trap                      | T             |
@@ -328,7 +329,7 @@ Proposed, not decided. The rules are in `src/main.ts` and `src/update/home.ts`.
 
   Removed for good: the arrow keys for movement, Space as fire or start, E as swap, 1 and 2 to pick a gun, and P as pause. The shop dialog keeps its own list keys.
 
-  Since 2026-10-29 a held arrow key aims that way and fires, so the whole game plays on a keyboard alone. Two arrows together fire on the diagonal. A held arrow outranks the mouse for aim, and the right thumb outranks both. On the home and end screens the arrows still move between buttons.
+  Proposed on 2026-10-29, not yet owner-approved: the whole game plays on a keyboard alone. Left and Right turn the aim heading at half a turn a second, the heading stays where it was left, and Space fires along it. The keyboard heading outranks the mouse only while Left, Right, or Space is held, and the right thumb outranks both. On the home and end screens the arrows still move between buttons. This brings Space back as fire, which the list above removed, so the owner decides.
 
 - **End screens.** Game Over and Victory put MENU first. When a newer build is waiting they offer only MENU (see "The home menu, the loading splash, and taps"). `tools/audit/taps.ts` fails when anything covers a button there.
 

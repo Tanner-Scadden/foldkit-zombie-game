@@ -89,6 +89,7 @@ export const Input = Schema.Struct({
   mouseButton: MouseButton,
   moveStick: Stick,
   aimStick: Stick,
+  aimHeading: Schema.Number,
 })
 export type Input = typeof Input.Type
 
@@ -1217,6 +1218,7 @@ const idleInput: Input = {
   mouseButton: MouseButton.Released(),
   moveStick: Stick.Idle(),
   aimStick: Stick.Idle(),
+  aimHeading: 0,
 }
 
 export const idleIntent: Intent = {

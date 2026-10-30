@@ -18,7 +18,7 @@ import {
   initialModel,
 } from './model'
 import { DEBUT_CARD_MIN_MS } from './onboarding'
-import { press, release, tick } from './testing'
+import { press, release, tick, ticks } from './testing'
 import { asVeteran } from './veteran'
 
 const FRAME_MS = 50
@@ -93,23 +93,6 @@ describe('one key per action: removed keys do nothing', () => {
           expect(player.y).toBe(fighting.player.y)
         }),
       ),
-    )
-  })
-
-  test('Space does not fire', () => {
-    story(
-      update,
-      given(fighting),
-      press('Space'),
-      model(({ intent }) => {
-        expect(intent.trigger).toBe('Released')
-      }),
-      tick(FRAME_MS),
-      tick(FRAME_MS),
-      model(({ stats, bullets }) => {
-        expect(stats.shotsFired).toBe(0)
-        expect(bullets).toEqual([])
-      }),
     )
   })
 
@@ -214,52 +197,69 @@ describe('one key per action: the kept keys work', () => {
     )
   })
 
-  test('a held arrow aims that way and fires, and letting go stops', () => {
-    const aims: ReadonlyArray<readonly [string, { x: number; y: number }]> = [
-      ['ArrowUp', { x: 0, y: -1 }],
-      ['ArrowLeft', { x: -1, y: 0 }],
-      ['ArrowDown', { x: 0, y: 1 }],
-      ['ArrowRight', { x: 1, y: 0 }],
-    ]
-    Array.forEach(aims, ([code, aim]) =>
-      story(
-        update,
-        given(fighting),
-        press(code),
-        model(({ intent }) => {
-          expect(intent.maybeAim).toEqual(Option.some(aim))
-          expect(intent.trigger).toBe('Held')
-          expect(intent.move).toEqual({ x: 0, y: 0 })
-        }),
-        tick(FRAME_MS),
-        tick(FRAME_MS),
-        model(({ stats }) => {
-          expect(stats.shotsFired).toBeGreaterThan(0)
-        }),
-        release(code),
-        model(({ intent }) => {
-          expect(intent.trigger).toBe('Released')
-        }),
-      ),
-    )
-  })
-
-  test('two arrows fire on the diagonal', () => {
+  test('Space fires along the aim heading, and letting go stops', () => {
     story(
       update,
       given(fighting),
-      press('ArrowUp'),
+      press('Space'),
+      model(({ intent }) => {
+        expect(intent.maybeAim).toEqual(Option.some({ x: 1, y: 0 }))
+        expect(intent.trigger).toBe('Held')
+        expect(intent.move).toEqual({ x: 0, y: 0 })
+      }),
+      tick(FRAME_MS),
+      tick(FRAME_MS),
+      model(({ stats }) => {
+        expect(stats.shotsFired).toBeGreaterThan(0)
+      }),
+      release('Space'),
+      model(({ intent }) => {
+        expect(intent.trigger).toBe('Released')
+      }),
+    )
+  })
+
+  test('Right turns the aim clockwise at half a turn a second, and it stays turned', () => {
+    story(
+      update,
+      given(fighting),
       press('ArrowRight'),
+      ...ticks(10, FRAME_MS),
+      model(({ input, intent }) => {
+        expect(input.aimHeading).toBeCloseTo(Math.PI / 2)
+        const aim = Option.getOrThrow(intent.maybeAim)
+        expect(aim.x).toBeCloseTo(0)
+        expect(aim.y).toBeCloseTo(1)
+        expect(intent.trigger).toBe('Released')
+      }),
+      release('ArrowRight'),
+      press('Space'),
       model(({ intent }) => {
         const aim = Option.getOrThrow(intent.maybeAim)
-        expect(aim.x).toBeCloseTo(Math.SQRT1_2)
-        expect(aim.y).toBeCloseTo(-Math.SQRT1_2)
+        expect(aim.y).toBeCloseTo(1)
         expect(intent.trigger).toBe('Held')
       }),
     )
   })
 
-  test('an arrow outranks the mouse for aim, and the mouse takes over again on release', () => {
+  test('Left turns the other way, and the heading wraps round a full spin', () => {
+    story(
+      update,
+      given(fighting),
+      press('ArrowLeft'),
+      ...ticks(10, FRAME_MS),
+      model(({ input }) => {
+        expect(input.aimHeading).toBeCloseTo(-Math.PI / 2)
+      }),
+      ...ticks(40, FRAME_MS),
+      model(({ input, intent }) => {
+        expect(input.aimHeading).toBeCloseTo(-Math.PI / 2)
+        expect(Option.getOrThrow(intent.maybeAim).y).toBeCloseTo(-1)
+      }),
+    )
+  })
+
+  test('the keyboard aim outranks the mouse while held, and the mouse takes over again', () => {
     story(
       update,
       given(fighting),
@@ -268,12 +268,12 @@ describe('one key per action: the kept keys work', () => {
         expect(Option.getOrThrow(intent.maybeAim).x).toBeLessThan(0)
         expect(intent.trigger).toBe('Released')
       }),
-      press('ArrowRight'),
+      press('Space'),
       model(({ intent }) => {
         expect(intent.maybeAim).toEqual(Option.some({ x: 1, y: 0 }))
         expect(intent.trigger).toBe('Held')
       }),
-      release('ArrowRight'),
+      release('Space'),
       model(({ intent }) => {
         expect(Option.getOrThrow(intent.maybeAim).x).toBeLessThan(0)
         expect(intent.trigger).toBe('Released')
