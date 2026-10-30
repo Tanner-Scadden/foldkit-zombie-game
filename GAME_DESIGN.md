@@ -113,7 +113,7 @@ Starting numbers to play against, not decisions. They live in `src/constants.ts`
 | Barn Buster (shotgun) | $35   | 5 pellets in a 0.75 radian spray, 1 damage each, short range, 620 ms between shots, 6 shells a load, 1.3 s reload |
 | Shell Sack            | $10   | 16 more shells, up to 48. The shotgun comes with 16                                                               |
 | Chatterbox (SMG)      | $100  | 1 damage, 70 ms between shots, a slight spread, a 30 round magazine, 1.2 s reload                                 |
-| Chatter Drum          | $15   | 120 more rounds, up to 360. The SMG comes with 150                                                                |
+| Chatter Drum          | $20   | 120 more rounds, up to 360. The SMG comes with 150                                                                |
 | Pickled Heart         | $25   | One heart, never past 5                                                                                           |
 
 - **Reloading.** Every gun fires from a magazine. An empty one reloads on its own; R, or a tap on the held gun's slot, reloads early. Swapping cancels a reload, and each gun keeps its own magazine. The pistol fires 6.7 shots a second while a magazine lasts and 4.75 sustained.
@@ -192,7 +192,7 @@ Added on 2026-10-29. Three layers, cheapest first. The commands are in `AGENTS.m
 - **Wave length.** The median wave in the snapshot pass: wave 1 at most 40 s, waves 2 to 4 at most 75 s, waves 5 to 7 at most 90 s, wave 8 with the boss at most 120 s.
 - **Dead air.** At most 3 quiet seconds a wave on the mean run and no stretch over 1.2 s in any run. A Story test holds a perfect killer's longest quiet stretch to 1 s.
 
-**Where it stands** (nightly, 2026-10-29, 200 runs a row): Easy 67%, Normal 16% (`SWAP=1` 37%, close calls 34%, median win 7.9 min), Hard 7%, Nightmare 0%. Out of target: Nightmare (it loses 23% of runs on wave 3's frenzied pincer; try Nightmare speed ×1.02 or a gentler wave 3 on Nightmare only) and Normal deaths in waves 5 and 6 (23%). The bot that never buys planks wins 4.5% on Normal, so planks earn their keep without carrying the game. The latest numbers are in `tools/balance/baseline.json` and each nightly report.
+**Where it stands** (nightly, 2026-10-30, 200 runs a row, after the balance pass: the portrait aim assist, an easier Hard and Nightmare, the Chatter Drum at $20, and rooms bought mid-wave): Easy 56.5%, Normal 16% (`SWAP=1` 46.5%, close calls 41%, median win 10.2 min), Hard 4.5%, Nightmare 0.5%, portrait Normal 14.5% and Easy 54%. 41 of 47 targets in target; the six misses are each within about 2.5 points: `SWAP=1`, Hard, Nightmare, both portrait passes, and Normal deaths in waves 5 and 6 (22.5%). Before that (nightly, 2026-10-29, 200 runs a row): Easy 67%, Normal 16% (`SWAP=1` 37%, close calls 34%, median win 7.9 min), Hard 7%, Nightmare 0%. Out of target: Nightmare (it loses 23% of runs on wave 3's frenzied pincer; try Nightmare speed ×1.02 or a gentler wave 3 on Nightmare only) and Normal deaths in waves 5 and 6 (23%). The bot that never buys planks wins 4.5% on Normal, so planks earn their keep without carrying the game. The latest numbers are in `tools/balance/baseline.json` and each nightly report.
 
 **The bot** (`tools/balance/simulate.ts`, always through `bun run balance`). It keeps away from the nearest zombie within 36 px, re-aims every 5 frames with some hand shake, shops from a fixed list, boards the busiest doors, sets gnomes near the middle, and starts each wave at once. It dodges every floor tell and focuses the boss unless a zombie is close. Switches such as `SWAP=1`, `NO_GNOME=1`, `NO_PLANKS=1`, `KITE=1`, `DIFFICULTY=`, `VIEW=portrait`, `TIMELINE=1`, and `TUNE=file.ts` are in `tools/balance/README.md`.
 
@@ -394,12 +394,13 @@ Built on 2026-10-29, owner-approved: "so phone players do not have to turn the p
 - **The screen.** 180 screen pixels wide, so the HUD keeps the scale of a landscape phone, and 300 to 440 tall. From the top: a 44 pixel HUD band, the world window, and the thumb area.
 - **The zoom.** Changed on 2026-10-29 at the owner's request. The window shows the room's full height and zooms in, showing 120 to 180 pixels of its width, picked from the phone's shape so the thumb area is at least 76 pixels and the window under 63% of the screen. A 390x844 phone shows 135 by 180 of the room at 4/3. The world canvas is stretched with crisp pixels, so the zoom costs nothing per frame.
 - **The camera.** It follows the player and stops at the walls, and leans up to 28 room pixels toward the aim, eased, kept in the Model as `cameraLean` so it stays deterministic. The door rattles and groans carry the warning for zombies out of view.
+- **Aim assist.** Added on 2026-10-30 in the balance pass, portrait only: a thumb on a stick in a zoomed window aims coarser than a mouse. While the trigger is held, an aim within 0.12 radians (about 7 degrees) of a zombie in view, in sight, and within 140 px lands on it, and from there to 0.2 radians the pull fades to nothing, so the aim never jumps. The client bends the aim as it builds the intent (`src/aimAssist.ts`, `refreshIntent` in `src/frame.ts`), so the World steps the same given the same intent. Landscape and the mouse get none. The `VIEW=portrait` bot gets the same bend every tick (`NO_ASSIST=1` turns it off).
 - **Thumb area.** Dressed as the manor's wainscot (`src/thumbArea.ts`), holding the gun slots, START WAVE, the trap counts, and the floating sticks.
 - **Banners and cards** are drawn as in landscape, centered on the world window. HTML that lines up with them reads `--frame-top`.
 - **The door preview.** A marker for a door out of the window is pinned to the window's edge with a small arrow, between waves only, as "No off-screen hints" allows. During a wave no marker or arrow shows.
 - **The home menu** keeps the same slots, rearranged: the MORE deck at the bottom left, beside it the mode tiles and the skull meter over a wide PLAY, and the hand deals its cards in two rows. A tipping pixel phone, no words (owner, 2026-10-29), suggests turning sideways, since portrait plays harder; a screen reader hears its line.
 - **Dialogs** fit a portrait phone without the page scrolling.
-- **Balance.** The bot with `VIEW=portrait` sees only the window. Nightly, 2026-10-29, 390x844: Normal default 11% against 16% in landscape, Easy 49% against 66.5% (most of the gap on wave 8). The nightly tracks the gap; nothing is retuned yet.
+- **Balance.** The bot with `VIEW=portrait` sees only the window. Nightly, 2026-10-29, 390x844: Normal default 11% against 16% in landscape, Easy 49% against 66.5% (most of the gap on wave 8). With the aim assist (nightly, 2026-10-30, 200 runs): Normal 14.5% against 16% in landscape, Easy 54% against 56.5%, both within 3 points of their twins and about a point under their targets.
 
 ### The home menu, the loading splash, and taps
 
@@ -555,10 +556,12 @@ Four levels scale zombie health, speed, and bites on top of the wave's scales, t
 | --------- | ------ | ----- | ----- | ------------ | --------------------- |
 | Easy      | ×0.85  | ×0.9  | ×0.5  | 1 heart      | 1 heart               |
 | Normal    | ×1     | ×1    | ×1    | 1 heart      | 2 hearts              |
-| Hard      | ×1.12  | ×1.02 | ×1    | 1 heart      | 2 hearts              |
-| Nightmare | ×1.18  | ×1.04 | ×1.25 | 1 heart      | 3 hearts              |
+| Hard      | ×1.08  | ×1.02 | ×1    | 1 heart      | 2 hearts              |
+| Nightmare | ×1.16  | ×1.02 | ×1.25 | 1 heart      | 3 hearts              |
 
 From owner feedback on 2026-10-29 ("make planks more expensive instead of tweaking Normal"): Normal stays ×1, and the Plank Pile costs $40.
+
+Eased on 2026-10-30 in the balance pass, with the owner's approval: Hard health ×1.12 to ×1.08 (Kaboomers 7 hp to 6, the same as Normal) and Nightmare health ×1.18 to ×1.16 and speed ×1.04 to ×1.02 (×1.18 rounded every Groaner from 3 hp to 4 on every wave; ×1.16 keeps 3 outside waves 7 and 8). Hard won 4.5% and Nightmare 0%; in 100 run sorts they won 10% and 1%, and in the 2026-10-30 nightly (200 runs, with the $20 Chatter Drum) 4.5% and 0.5%, still just under their targets. Fewer runs die early (Hard waves 5 and 6: 35.5% to 24%; Nightmare waves 3 and 4: 35.5% to 2%), and more now reach the later walls.
 
 - **The first pick.** The first PLAY of a session asks HOW TOUGH ARE YOU? with the four levels as big buttons. After that the badge and SETTINGS change it.
 - **Nightmare.** Shown locked until a Hard campaign win, which unlocks it with a fanfare and a NEW! badge.

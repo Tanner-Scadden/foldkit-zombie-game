@@ -347,7 +347,7 @@ describe('Shop', () => {
 
   test('an upgraded gun goes by its tier name everywhere in the shop', () => {
     const fullDrum = role('button', {
-      name: 'Chatter Drum, ammo for Beefy Chatterbox, $15, adds up to 120 rounds',
+      name: 'Chatter Drum, ammo for Beefy Chatterbox, $20, adds up to 120 rounds',
     })
     scene(
       { update, view },

@@ -9,6 +9,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 - 🎁 New versions arrive as a rattling gift on the menu: unwrap it for a little party. A phone tile by the gear puts the game on your Home Screen.
 - ▶️ PLAY is one big arrow, every close X slimmed down, your Profile fits upright phones, a CODE card shows off the game's source, and upgraded guns keep their names (the SMG is the Chatterbox).
 - 🧹 Playtest fixes: Rattles looks like himself in his shop, key hints read the right way round, sprites stay crisp, color pickers line up neatly, we tell you when a browser extension eats your keys, and big hordes run smoother on slower phones.
+- 🎯 Phones held upright aim a touch truer, the kitchen can be smashed open mid-fight (its doors join the wave at once), and Hard and Nightmare ease off a hair.
 
 ## October 29, 2026: How tough are you?
 
