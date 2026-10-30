@@ -28,7 +28,7 @@ Everything else serves them. The art, names, and characters here are original. O
 - **Making money.** Decided with the owner on 2026-10-29. The game stays free to play.
   - **Cosmetics and a supporter pack.** One-time purchases of looks, hats, gun skins, and a founder's hat. Nothing bought changes how the game plays. Bought on the web through Stripe Checkout confirmed by a Worker, and kept in the player's synced scope so it follows linked devices. Not built yet.
   - **A tip jar.** A small "buy the shopkeeper a coffee" link. Built on 2026-10-29: the TIP JAR card (a pixel mug) in the home menu's MORE hand, and a pill in the top left corner of Victory, never in a run, on pause, or on Game Over. It opens a Stripe Payment Link in a new tab and stays hidden until `SUPPORT_URL` in `src/support.ts` holds that link.
-  - **Never.** No ads of any kind, no pay-to-win, and no real-money loot boxes. The mystery box uses in-game money only.
+  - **Never.** No ads of any kind, no pay-to-win, and no real-money loot boxes. The mystery box, Mystery Leftovers, uses in-game money only.
 - **Online is Cloudflare only.** Hosting, analytics, and player sync run on Cloudflare Workers, D1, and Durable Objects, with our own sync engine. See `PLATFORM.md`.
 - **Co-op.** Decided with the owner on 2026-10-29: online co-op for up to 4 players, server-authoritative in a Durable Object. The rules (money, revives, READY, scaling) are in "Decided" in `MULTIPLAYER.md`. Since 2026-10-30 the World plays them for 2 to 4 players offline, at one keyboard through a dev-only `?local=2` link (see "What Phase 1 built" in `MULTIPLAYER.md`); online play is not built yet. In co-op each player may hold one Plank Pile and one Grumpy Gnome, the shop and the break never pause the world, and a downed player is revived by a teammate standing still beside them.
 - **Original art and names.** Nothing is copied from Zombie Estate 2: no art, names, or item lists.
@@ -46,7 +46,7 @@ Decided with the owner on 2026-10-29. This replaces the first playable's one-roo
 - **The kitchen first.** The first room after the parlour is the kitchen: ovens to trip and slippery soup. The level is already data in the Model, so a room is an exit in a `LevelSpec` (see "Technical notes").
 - **No off-screen hints.** Nothing on screen ever points at zombies. Door preview arrows may point at doors outside the view during breaks only, never during a wave (owner decision 2026-10-29). In a wave the door rattles and groans carry the warning.
   - **Teammates are the exception.** Decided on 2026-10-29 with co-op: an off-screen teammate shows as a small avatar at the screen edge. Zombies and doors still get nothing.
-- **Still a sketch.** Rooms with one signature twist each: library (bookshelf passages, a rare-gun stash), ballroom (open floor for hordes, a chandelier to shoot down), cellar (dark, lit only near the player), a graveyard outside (floor spawns, Uncle Chunk's arena), attic (one entrance, a risky stash). A goal beyond surviving, such as restoring the power or finding the keys to Uncle Chunk's cellar. Interactive pieces such as a fireplace trap, a mystery box, or a dumbwaiter. The layout stays hand-made, while secrets and loot spots shift with the seed.
+- **Still a sketch.** Rooms with one signature twist each: library (bookshelf passages, a rare-gun stash), ballroom (open floor for hordes, a chandelier to shoot down), cellar (dark, lit only near the player), a graveyard outside (floor spawns, Uncle Chunk's arena), attic (one entrance, a risky stash). A goal beyond surviving, such as restoring the power or finding the keys to Uncle Chunk's cellar. Interactive pieces such as a fireplace trap or a dumbwaiter. The mystery box is named: **Mystery Leftovers**, a grimy fridge in the kitchen; pay in-game money, open it, and grab whatever gun is growing inside (decided with the owner on 2026-10-30; how it plays is not designed yet). The layout stays hand-made, while secrets and loot spots shift with the seed.
 
 ### The first playable
 
@@ -622,7 +622,6 @@ The first playable (controls, feel, the room and the loop, the shop, the horde, 
 
 - Is there a second, permanent currency for unlocks, apart from the money spent within a run? Cosmetics are bought with real money (see "Making money"), so this is only about unlocks earned by playing.
 - Do zombies ever spawn inside rooms or corners of the manor, beyond the Ankle Biter?
-- What is the mystery box called? (In `TANNER_TODO.md`.)
 - Do we store full runs (seed plus inputs) for replays? (In `PLATFORM.md`.)
 
 ## Reference notes: Zombie Estate 2
