@@ -17,6 +17,7 @@ import {
 import { update } from './main'
 import { Message } from './message'
 import { Lesson, type Model, initialModel } from './model'
+import { type Appearance, lookCodeOf } from './playerData'
 import { asVeteran } from './veteran'
 
 const graduate = (current: Model): Model =>
@@ -29,6 +30,14 @@ const graduate = (current: Model): Model =>
 
 const newcomer = asVeteran(initialModel)
 const graduated = graduate(newcomer)
+
+const PICKED_LOOK: Appearance = {
+  body: 'Female',
+  hairStyle: 'Ponytail',
+  hairColor: 'Pink',
+  skinTone: 'Tan',
+  shirtColor: 'Purple',
+}
 
 const resolveFocusCoop = () =>
   Command.resolve(FocusCoopElement, CoopMessage.CompletedFocusCoopElement())
@@ -81,7 +90,11 @@ describe('co-op from home', () => {
         )
       }),
       Command.resolve(
-        RequestRoom({ request: RoomRequest.Join({ code: CODE }), name: '' }),
+        RequestRoom({
+          request: RoomRequest.Join({ code: CODE }),
+          name: '',
+          look: lookCodeOf(graduated.appearance),
+        }),
         CoopMessage.FailedRequestRoom({ problem: 'NoRoom' }),
       ),
       Command.resolve(RememberRoom, CoopMessage.CompletedRememberRoom()),
@@ -91,17 +104,26 @@ describe('co-op from home', () => {
     )
   })
 
-  test('the saved display name goes with the room request', () => {
+  test('the saved display name and look go with the room request', () => {
     story(
       update,
-      given(modifyFields(graduated, { playerName: () => 'Snackula' })),
+      given(
+        modifyFields(graduated, {
+          playerName: () => 'Snackula',
+          appearance: () => PICKED_LOOK,
+        }),
+      ),
       message(Message.ClickedCoopButton()),
       resolveFocusCoop(),
       message(
         Message.GotCoopMessage({ message: CoopMessage.ClickedCreateButton() }),
       ),
       Command.resolve(
-        RequestRoom({ request: RoomRequest.Create(), name: 'Snackula' }),
+        RequestRoom({
+          request: RoomRequest.Create(),
+          name: 'Snackula',
+          look: 'Female.Ponytail.Pink.Tan.Purple',
+        }),
         CoopMessage.FailedRequestRoom({ problem: 'Offline' }),
       ),
       model(current => {

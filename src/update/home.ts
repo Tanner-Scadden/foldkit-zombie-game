@@ -7,6 +7,7 @@ import { Dialog } from '@foldkit/ui'
 import { NEWS_DAYS } from '../changelog'
 import { FocusEndMenuButton, FocusHandCard, FocusHomeButton } from '../commands'
 import { Screen as CoopScreen } from '../coop/model'
+import { runDifficultyOf } from '../coopPlay'
 import { dialogFolds } from '../dialogs'
 import {
   chooseDifficulty,
@@ -351,7 +352,7 @@ export const settleNightmareFrom =
 export const unlockNightmareFrom =
   (before: Model): UpdateStep =>
   stepModel =>
-    isNightmareUnlockedBy(before, stepModel)
+    isNightmareUnlockedBy(before, stepModel, runDifficultyOf(stepModel))
       ? playSounds([uiCue('PowerUp')])(unlockNightmare(stepModel))
       : { model: stepModel }
 

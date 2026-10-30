@@ -159,9 +159,15 @@ export const hasJustWon = (before: Model, after: Model): boolean =>
   !Phase.isAnyOf(['Victory'])(before.phase) &&
   Phase.isAnyOf(['Victory'])(after.phase)
 
-export const isNightmareUnlockedBy = (before: Model, after: Model): boolean =>
+// NOTE: `played` is the run's difficulty: the player's own pick, or in an
+// online co-op run the one the room's host picked.
+export const isNightmareUnlockedBy = (
+  before: Model,
+  after: Model,
+  played: Difficulty = after.difficulty.chosen,
+): boolean =>
   hasJustWon(before, after) &&
-  after.difficulty.chosen === 'Hard' &&
+  played === 'Hard' &&
   after.difficulty.nightmare === 'Locked'
 
 export const unlockNightmare = (model: Model): Model =>
@@ -178,8 +184,8 @@ export const bestsFor = (model: Model): DifficultyBests =>
 export const withBests = (
   model: Model,
   toBests: (bests: DifficultyBests) => DifficultyBests,
+  chosen: Difficulty = model.difficulty.chosen,
 ): Model => {
-  const chosen = model.difficulty.chosen
   return modifyFields(model, {
     bests: bests =>
       modifyFields(bests, {

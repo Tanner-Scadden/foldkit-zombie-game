@@ -1,4 +1,4 @@
-import { Array, Effect, Option } from 'effect'
+import { Array, Effect, Option, Schema } from 'effect'
 import {
   Command,
   expectOutMessage,
@@ -48,6 +48,7 @@ import {
   maybeRoomOf,
   open,
   pressAction,
+  pressKey,
   tickRoom,
   update,
 } from './update'
@@ -96,6 +97,21 @@ const lobbyUpdate = (lobby: ReturnType<typeof lobbyOf>) =>
 
 const TWO = [memberOf(0, 'Ana'), memberOf(1, 'Bo')]
 
+const decodeChange = Schema.decodeUnknownOption(
+  Schema.Struct({ change: LobbyChange }),
+)
+
+const picked = (current: Model, code: string) =>
+  Array.flatMap(pressKey(current, code).commands ?? [], command =>
+    Option.match(decodeChange(command.args), {
+      onNone: () => [],
+      onSome: ({ change }) =>
+        LobbyChange.isAnyOf(['ChangedPicks'])(change)
+          ? [change.mode, change.difficulty]
+          : [],
+    }),
+  )
+
 describe('co-op hub', () => {
   test('the X on the hub closes co-op and tells the parent', () => {
     story(
@@ -131,7 +147,11 @@ describe('co-op hub', () => {
         expect(current.screen._tag).toBe('Asking')
       }),
       Command.resolve(
-        RequestRoom({ request: RoomRequest.Join({ code: CODE }), name: '' }),
+        RequestRoom({
+          request: RoomRequest.Join({ code: CODE }),
+          name: '',
+          look: '',
+        }),
         Message.FailedRequestRoom({ problem: 'NoRoom' }),
       ),
       resolveRemember(),
@@ -149,7 +169,7 @@ describe('co-op hub', () => {
       given(onHub),
       message(Message.ClickedCreateButton()),
       Command.resolve(
-        RequestRoom({ request: RoomRequest.Create(), name: '' }),
+        RequestRoom({ request: RoomRequest.Create(), name: '', look: '' }),
         Message.SucceededRequestRoom({ code: CODE, slot: 0 }),
       ),
       resolveRemember(),
@@ -306,6 +326,70 @@ describe('the lobby', () => {
         }),
         Message.CompletedChangeLobby(),
       ),
+    )
+  })
+
+  test('the host picks the mode and difficulty; the others only see them', () => {
+    const picks = (
+      mode: 'Campaign' | 'Endless' | 'KeepGoing',
+      difficulty: 'Easy' | 'Normal' | 'Hard' | 'Nightmare',
+    ) => ChangeLobby({ change: LobbyChange.ChangedPicks({ mode, difficulty }) })
+    story(
+      update,
+      given(inRoom(1)),
+      message(lobbyUpdate(lobbyOf(TWO))),
+      message(Message.ClickedModePick({ mode: 'Endless' })),
+      message(Message.ClickedReadyButton()),
+      Command.resolve(
+        ChangeLobby({ change: LobbyChange.ChangedReady({ ready: true }) }),
+        Message.CompletedChangeLobby(),
+      ),
+    )
+    story(
+      update,
+      given(inRoom(0)),
+      message(lobbyUpdate(lobbyOf(TWO))),
+      message(Message.ClickedModePick({ mode: 'Endless' })),
+      Command.resolve(
+        picks('Endless', 'Normal'),
+        Message.CompletedChangeLobby(),
+      ),
+      message(Message.ClickedDifficultyPick({ difficulty: 'Hard' })),
+      Command.resolve(
+        picks('Campaign', 'Hard'),
+        Message.CompletedChangeLobby(),
+      ),
+      message(Message.ClickedDifficultyPick({ difficulty: 'Nightmare' })),
+      message(Message.ClickedModePick({ mode: 'KeepGoing' })),
+      message(Message.ClickedModePick({ mode: 'Campaign' })),
+      Command.expectNone(),
+    )
+  })
+
+  test('E and X step the picks, past Nightmare until it is unlocked', () => {
+    const hard = { ...lobbyOf(TWO), difficulty: 'Hard' as const }
+    story(
+      update,
+      given(inRoom(0)),
+      message(lobbyUpdate(hard)),
+      model(current => {
+        expect(picked(current, 'KeyX')).toEqual(['Campaign', 'Easy'])
+        expect(picked(current, 'KeyE')).toEqual(['Endless', 'Hard'])
+        const unlocked = modifyFields(current, {
+          canPickNightmare: () => true,
+        })
+        expect(picked(unlocked, 'KeyX')).toEqual(['Campaign', 'Nightmare'])
+      }),
+    )
+    story(
+      update,
+      given(inRoom(0)),
+      message(
+        lobbyUpdate({ ...lobbyOf(TWO), mode: 'Endless', canKeepGoing: true }),
+      ),
+      model(current => {
+        expect(picked(current, 'KeyE')).toEqual(['KeepGoing', 'Normal'])
+      }),
     )
   })
 
@@ -616,6 +700,7 @@ describe('the network service', () => {
           RequestRoom({
             request: RoomRequest.Join({ code: CODE }),
             name: 'Ana',
+            look: 'Male.Curls.Black.Deep.Yellow',
           }).effect,
           fake.layer,
         )
@@ -630,6 +715,7 @@ describe('the network service', () => {
         _tag: 'RequestRoom',
         request: RoomRequest.Join({ code: CODE }),
         name: 'Ana',
+        look: 'Male.Curls.Black.Deep.Yellow',
       },
     ])
   })

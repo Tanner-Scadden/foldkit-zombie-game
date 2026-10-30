@@ -652,7 +652,15 @@ export const advance = <W, Own>(
         : broadcast(world, present.room)
     return {
       room: last.room,
-      out: [...out, ...last.out, ...endRoom(world, last.room, 'GameOver')],
+      out: [
+        ...out,
+        ...last.out,
+        ...endRoom(
+          world,
+          last.room,
+          world.isWon(last.room.world) ? 'Won' : 'GameOver',
+        ),
+      ],
     }
   }
   if (Array.isReadonlyArrayEmpty(present.room.seats)) {

@@ -21,6 +21,7 @@ import {
 import { isDiscovered, newlyDiscovered } from './munchopedia'
 import { freshRun } from './runReset'
 import { addKills, killTotal, killsSince } from './stats'
+import type { Difficulty } from './worldSchema'
 
 // BUTTONS
 
@@ -290,6 +291,7 @@ const countRun = (
   tally: RunTally,
   kills: KillCounts,
   isWin: boolean,
+  played: Difficulty,
 ): Model => {
   const isFirstCount = RunTally.isAnyOf(['Uncounted'])(tally)
   const newKills = RunTally.match(tally, {
@@ -315,11 +317,14 @@ const countRun = (
       }),
   })
   return isWin
-    ? withBests(counted, bests =>
-        modifyFields(bests, {
-          maybeFastestWinMs: maybeFastestMs =>
-            fasterWin(maybeFastestMs, model.stats.runMs),
-        }),
+    ? withBests(
+        counted,
+        bests =>
+          modifyFields(bests, {
+            maybeFastestWinMs: maybeFastestMs =>
+              fasterWin(maybeFastestMs, model.stats.runMs),
+          }),
+        played,
       )
     : counted
 }
@@ -327,17 +332,24 @@ const countRun = (
 // NOTE: a run is counted when it ends: on Game Over, on Victory, and when
 // the player leaves it for the menu. Counting then and not every frame means
 // the save is written once a run.
-export const countRunFrom = (before: Model, after: Model): Model => {
+// NOTE: `played` is the run's difficulty, which an online co-op run takes
+// from the room.
+export const countRunFrom = (
+  before: Model,
+  after: Model,
+  played: Difficulty = after.difficulty.chosen,
+): Model => {
   if (!isEndScreen(before.phase) && isEndScreen(after.phase)) {
     return countRun(
       after,
       after.runTally,
       after.stats.kills,
       hasJustWon(before, after),
+      played,
     )
   } else if (isInRun(before.phase) && isOnHome(after.phase)) {
     return modifyFields(
-      countRun(after, before.runTally, before.stats.kills, false),
+      countRun(after, before.runTally, before.stats.kills, false, played),
       { runTally: () => RunTally.Uncounted() },
     )
   } else {

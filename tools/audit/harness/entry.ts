@@ -858,6 +858,15 @@ const coopRoom = (
 
 const COOP_NAMES = ['Tanner', 'Mo', 'Pip', 'Grumbles']
 
+// NOTE: the looks the staged teammates sent with their joins; the first
+// seat is the page's own player, who wears the page's own look.
+const COOP_LOOKS = [
+  '',
+  'Male.Curls.Blonde.Deep.Red',
+  'Female.Long.Black.Fair.Yellow',
+  'Male.Crop.Pink.Medium.Purple',
+]
+
 const coopScreen = (stage: NonNullable<typeof config.coop>) => {
   const Screen = CoopModel.Screen
   const queue = (
@@ -878,7 +887,7 @@ const coopScreen = (stage: NonNullable<typeof config.coop>) => {
     })
   const members = (count: number, readyCount = 0) =>
     COOP_NAMES.slice(0, count).map((name, slot) =>
-      memberOf(slot, name, slot < readyCount),
+      memberOf(slot, name, slot < readyCount, COOP_LOOKS[slot] ?? ''),
     )
   switch (stage) {
     case 'tile':
@@ -901,6 +910,36 @@ const coopScreen = (stage: NonNullable<typeof config.coop>) => {
       return Screen.InRoom({ room: coopRoom(members(2), 'Lobby') })
     case 'host':
       return Screen.InRoom({ room: coopRoom(members(4, 1), 'Lobby') })
+    case 'picks': {
+      const room = coopRoom(members(2, 1), 'Lobby')
+      return Screen.InRoom({
+        room: {
+          ...room,
+          maybeLobby: Option.map(room.maybeLobby, lobby => ({
+            ...lobby,
+            mode: 'Endless' as const,
+            difficulty: 'Hard' as const,
+          })),
+        },
+      })
+    }
+    case 'keep': {
+      const room = coopRoom(members(2), 'Lobby', {
+        slot: 1,
+        maybePlayerId: Option.some('player-1'),
+      })
+      return Screen.InRoom({
+        room: {
+          ...room,
+          maybeLobby: Option.map(room.maybeLobby, lobby => ({
+            ...lobby,
+            mode: 'KeepGoing' as const,
+            canKeepGoing: true,
+            difficulty: 'Nightmare' as const,
+          })),
+        },
+      })
+    }
     case 'ready':
       return Screen.InRoom({
         room: coopRoom(

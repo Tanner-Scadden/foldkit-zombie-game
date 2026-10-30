@@ -31,10 +31,12 @@ import { Life, type PlayerSlot, type Seat } from './worldSchema'
 
 // NOTE: the client Model as each teammate's seat would show it, so the
 // player's own views draw them. Only co-op pays for it. Online, each
-// teammate wears their seat's look (src/coop/looks.ts).
+// teammate wears their own look from the lobby (src/coop/looks.ts).
 const mateModelsOf = (model: Model): ReadonlyArray<Model> => {
   const lead = leadSeatOf(model).slot
-  const isOnline = Option.isSome(maybeRoomOf(model.coop))
+  const maybeRoom = maybeRoomOf(model.coop)
+  const isOnline = Option.isSome(maybeRoom)
+  const maybeLobby = Option.flatMap(maybeRoom, room => room.maybeLobby)
   return Array.filterMap(playersOf(model), ({ slot, seat }) =>
     slot === lead || isBledOut(seat)
       ? Result.failVoid
@@ -43,7 +45,9 @@ const mateModelsOf = (model: Model): ReadonlyArray<Model> => {
             withWorld(model, world => focusSeat(world, slot)),
             {
               appearance: appearance =>
-                isOnline ? seatLookOf(appearance, lead, slot) : appearance,
+                isOnline
+                  ? seatLookOf(appearance, lead, slot, maybeLobby)
+                  : appearance,
             },
           ),
         ),

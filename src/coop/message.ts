@@ -1,6 +1,7 @@
 import { Schema } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
 
+import { PickedMode, RoomDifficulty } from '@munch/netcode'
 import { LobbyEvent, QuickPlayEvent, RoomEvent } from '@munch/netcode/browser'
 
 import { CoopProblem, Share } from './model'
@@ -29,6 +30,8 @@ export const Message = defineMessageUnion({
   CompletedSendRoomFrames: { bytes: Schema.Array(Schema.Number) },
   ClickedReadyButton: {},
   ClickedKickButton: { playerId: Schema.String },
+  ClickedModePick: { mode: PickedMode },
+  ClickedDifficultyPick: { difficulty: RoomDifficulty },
   CompletedChangeLobby: {},
   FailedChangeLobby: { problem: CoopProblem },
   ClickedLeaveButton: {},

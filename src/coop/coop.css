@@ -1053,6 +1053,93 @@
   animation: coop-stamp 400ms cubic-bezier(0.2, 1.6, 0.4, 1);
 }
 
+/* PICKS: what the room plays next, the host's to change. The mode is a
+   row of big icons, the difficulty four skulls as on the home menu. */
+
+.coop-picks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 3 * var(--coop-unit), 28px);
+}
+
+.coop-pick-group {
+  position: relative;
+  display: flex;
+  gap: clamp(4px, 1.2 * var(--coop-unit), 10px);
+  padding: 4px 6px;
+  border: 2px solid var(--menu-line-strong);
+  border-radius: var(--menu-radius);
+  background: rgba(20, 15, 24, 0.75);
+  box-shadow: var(--menu-lift);
+}
+
+.coop-pick {
+  display: grid;
+  place-items: center;
+  width: clamp(48px, 10 * var(--coop-unit), 60px);
+  height: clamp(48px, 9 * var(--coop-unit), 56px);
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: calc(var(--menu-radius) - 2px);
+  background: transparent;
+}
+
+.coop-pick[aria-disabled='true'] {
+  cursor: default;
+}
+
+.coop-pick-icon {
+  width: 74%;
+  height: 74%;
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+  filter: grayscale(0.85) brightness(0.6);
+}
+
+.coop-mode-pick[data-state='Chosen'] {
+  border-color: var(--coop-teal);
+  background: rgba(95, 212, 200, 0.22);
+}
+
+.coop-mode-pick[data-mode='KeepGoing'][data-state='Chosen'] {
+  border-color: #ffe066;
+  background: rgba(255, 224, 102, 0.2);
+}
+
+.coop-mode-pick[data-state='Chosen'] .coop-pick-icon,
+.coop-skull-pick:is([data-state='Chosen'], [data-state='Lit']) .coop-pick-icon {
+  filter: none;
+  animation: coop-stamp 260ms cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+
+.coop-skull-pick {
+  width: 48px;
+}
+
+.coop-skull-pick[data-state='Chosen'] {
+  translate: 0 -3px;
+}
+
+.coop-pick-badge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 42%;
+  aspect-ratio: 1;
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+}
+
+.coop-picks[data-host='Watching'] .coop-pick-group {
+  border-style: dashed;
+}
+
+.coop-picks[data-host='Watching'] .coop-mode-pick[data-state='Other'] {
+  display: none;
+}
+
 /* PORTRAIT: the hub and the lobby stack tighter, two seats a row. */
 
 [data-layout='Portrait'] .coop-queue-seats,

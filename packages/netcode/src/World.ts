@@ -47,6 +47,9 @@ export interface World<W, Own> {
   readonly step: (world: W, players: ReadonlyArray<PlayerTick>) => W
   readonly removePlayer: (world: W, slot: number) => W
   readonly isOver: (world: W) => boolean
+  // NOTE: an over world that ended in a win, so the room's result says
+  // Won and the lobby can offer to keep going.
+  readonly isWon: (world: W) => boolean
   readonly scores: (world: W) => ReadonlyArray<Score>
   // NOTE: the wire. `snapshot` writes the whole world as a client needs
   // it; `diff` writes what changed from `prev` to `next`, comparing values

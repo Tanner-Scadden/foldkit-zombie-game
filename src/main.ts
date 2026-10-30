@@ -24,7 +24,7 @@ import {
   SetFullscreen,
   UpdateServiceWorker,
 } from './commands'
-import { isOnlineRun } from './coopPlay'
+import { isOnlineRun, runDifficultyOf } from './coopPlay'
 import { isCouchKey, pressCouchKey } from './couch'
 import { isAtExit } from './exits'
 import { advanceGame, clampFrameDelta, refreshIntent } from './frame'
@@ -1081,7 +1081,9 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     dismissHomeScreenTipFrom(model),
     settleNightmareFrom(model),
     unlockNightmareFrom(model),
-    stepModel => ({ model: countRunFrom(model, stepModel) }),
+    stepModel => ({
+      model: countRunFrom(model, stepModel, runDifficultyOf(stepModel)),
+    }),
     sendRunSummaryFrom(model),
     stepModel => ({ model: forgetNewEntriesFrom(model, stepModel) }),
     writeSaveFrom(model, message),

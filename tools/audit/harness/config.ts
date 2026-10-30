@@ -260,6 +260,8 @@ export const HarnessConfig = Schema.Struct({
     'accepted',
     'lobby',
     'host',
+    'picks',
+    'keep',
     'ready',
     'result',
     'arena',

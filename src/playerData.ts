@@ -1,4 +1,4 @@
-import { Schema } from 'effect'
+import { Option, Schema } from 'effect'
 
 // NOTE: the player's lasting data as Schemas, shared with the sync Worker in
 // infra/worker, which bundles it against its own, newer Effect. It imports
@@ -90,6 +90,27 @@ export const Appearance = Schema.Struct({
   shirtColor: ShirtColor,
 })
 export type Appearance = typeof Appearance.Type
+
+// NOTE: a look as the co-op lobby carries it (packages/netcode, Lobby.ts,
+// LookInput): its five words joined by dots, in this order. Anything that
+// does not read back as a look is none.
+export const lookCodeOf = (look: Appearance): string =>
+  `${look.body}.${look.hairStyle}.${look.hairColor}.${look.skinTone}.${look.shirtColor}`
+
+const decodeAppearance = Schema.decodeUnknownOption(Appearance)
+
+export const lookOfCode = (code: string): Option.Option<Appearance> => {
+  const words = code.split('.')
+  return words.length === 5
+    ? decodeAppearance({
+        body: words[0],
+        hairStyle: words[1],
+        hairColor: words[2],
+        skinTone: words[3],
+        shirtColor: words[4],
+      })
+    : Option.none()
+}
 
 // SAVED
 

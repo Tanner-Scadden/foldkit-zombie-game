@@ -342,7 +342,9 @@ const main = async () => {
     await stop(server)
   }
   console.log(
-    errors.length === 0 ? 'no page errors' : `page errors: ${errors.join(' | ')}`,
+    errors.length === 0
+      ? 'no page errors'
+      : `page errors: ${errors.join(' | ')}`,
   )
   check(errors.length === 0, 'no page errors')
   if (failures.length > 0) {

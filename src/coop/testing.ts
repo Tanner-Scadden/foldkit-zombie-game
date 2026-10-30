@@ -19,7 +19,12 @@ import { type RoomSession, type WorldState, coopWorld } from './seam'
 // read what it asked for.
 
 export type FakeCall =
-  | Readonly<{ _tag: 'RequestRoom'; request: RoomRequest; name: string }>
+  | Readonly<{
+      _tag: 'RequestRoom'
+      request: RoomRequest
+      name: string
+      look: string
+    }>
   | Readonly<{ _tag: 'AnswerOffer'; accept: boolean }>
   | Readonly<{ _tag: 'CancelQuickPlay' }>
   | Readonly<{ _tag: 'ChangeLobby'; change: LobbyChange }>
@@ -41,9 +46,9 @@ export const makeFakeCoopNet = (
       layer: Layer.succeed(
         CoopNet,
         CoopNet.of({
-          requestRoom: (request, name) =>
+          requestRoom: (request, name, look) =>
             Effect.andThen(
-              record({ _tag: 'RequestRoom', request, name }),
+              record({ _tag: 'RequestRoom', request, name, look }),
               answer(request),
             ),
           quickPlay: () => Stream.never,
@@ -87,9 +92,11 @@ export const memberOf = (
   slot: number,
   name: string,
   ready = false,
+  look = '',
 ): LobbyMember => ({
   playerId: `player-${slot}`,
   name,
+  look,
   slot,
   ready,
   joinedMs: slot,
@@ -104,7 +111,9 @@ export const lobbyOf = (
   host,
   status,
   visibility: 'Private',
-  mode: 'StandIn',
+  mode: 'Campaign',
+  difficulty: 'Normal',
+  canKeepGoing: false,
   round: 1,
   createdMs: 0,
   updatedMs: 0,

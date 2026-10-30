@@ -68,6 +68,8 @@ export const readoutOf = (room: WorldState): string =>
   JSON.stringify({
     tick: room.tick,
     phase: room.world.phase._tag,
+    mode: room.world.mode._tag,
+    difficulty: room.world.difficulty.chosen,
     wave: 'wave' in room.world.phase ? room.world.phase.wave : 0,
     stall: STALL_BOX,
     zombies: Array.map(room.world.zombies, zombie => ({

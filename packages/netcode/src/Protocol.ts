@@ -166,6 +166,7 @@ export const ClosedReason = Schema.Literals([
   'EndedByHost',
   'Abandoned',
   'Interrupted',
+  'Won',
 ])
 export type ClosedReason = typeof ClosedReason.Type
 

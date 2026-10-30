@@ -9,10 +9,12 @@ import type * as SqlClient from 'effect/sql/SqlClient'
 import {
   type ClientFrame,
   CreatedRoom,
+  DEFAULT_MODE,
   JoinedRoom,
   KickedPlayer,
   LeftRoom,
   type Lobby,
+  LookInput,
   MAX_NAME_INPUT,
   type Matchmaking,
   NameInput,
@@ -37,6 +39,7 @@ import {
   verifyToken,
 } from '@munch/sync-engine'
 
+import { lookCodeOf, lookOfCode } from '../../src/playerData.ts'
 import {
   type ScopeHost,
   type ScopeHostFailed,
@@ -64,12 +67,14 @@ export interface RoomHost {
   readonly create: (
     playerId: string,
     name: string,
+    look: string,
     code: string,
     visibility: RoomVisibility,
   ) => Effect.Effect<Result.Result<RoomTicket, RoomRefusal>>
   readonly join: (
     playerId: string,
     name: string,
+    look: string,
     everyone: ReadonlyArray<Socket>,
   ) => Effect.Effect<Result.Result<RoomTicket, RoomRefusal>>
   readonly recordResult: (
@@ -141,6 +146,7 @@ export const makeRoomHost = (
     const create = (
       playerId: string,
       name: string,
+      look: string,
       code: string,
       visibility: RoomVisibility,
     ) =>
@@ -156,7 +162,8 @@ export const makeRoomHost = (
               code,
               host: playerId,
               hostName: name.slice(0, MAX_NAME_INPUT),
-              mode: 'StandIn',
+              hostLook: lookOfRequest(look),
+              mode: DEFAULT_MODE,
               visibility,
             },
             `created-room-${code}`,
@@ -171,6 +178,7 @@ export const makeRoomHost = (
     const join = (
       playerId: string,
       name: string,
+      look: string,
       everyone: ReadonlyArray<Socket>,
     ) =>
       Effect.gen(function* () {
@@ -196,7 +204,11 @@ export const makeRoomHost = (
         const outcome = yield* Effect.orDie(
           server.runServer(
             JoinedRoom,
-            { playerId, name: name.slice(0, MAX_NAME_INPUT) },
+            {
+              playerId,
+              name: name.slice(0, MAX_NAME_INPUT),
+              look: lookOfRequest(look),
+            },
             `joined-room-${head}-${playerId}`,
           ),
         )
@@ -265,6 +277,15 @@ export const roomHostOnce = <E>(
   secret: string,
 ): Effect.Effect<Effect.Effect<RoomHost, SyncSetupFailed>> =>
   setupOnce(buildOn(sql, makeRoomHost(scope, secret)))
+
+// NOTE: a look a player sent is kept only when it reads back as one of the
+// game's looks (src/playerData.ts); anything else seats them with none,
+// and the game draws their seat's own look.
+export const lookOfRequest = (look: string): string =>
+  Option.match(lookOfCode(look), {
+    onNone: () => '',
+    onSome: lookCodeOf,
+  })
 
 // REACTIONS
 
@@ -383,12 +404,17 @@ export const InternalCreate = Schema.fromJsonString(
   Schema.Struct({
     playerId: Schema.String,
     name: NameInput,
+    look: Schema.optionalKey(LookInput),
     code: Schema.String,
     visibility: RoomVisibilitySchema,
   }),
 )
 export const InternalJoin = Schema.fromJsonString(
-  Schema.Struct({ playerId: Schema.String, name: NameInput }),
+  Schema.Struct({
+    playerId: Schema.String,
+    name: NameInput,
+    look: Schema.optionalKey(LookInput),
+  }),
 )
 
 export const INTERNAL_PATHS = {
