@@ -1,0 +1,61 @@
+import type { Option } from 'effect'
+
+import type { PlayerInput } from './Protocol'
+import type { Reader, Writer } from './Wire'
+
+// NOTE: what the room and the client need from a game, and nothing else.
+// The room steps it, diffs it, and snapshots it; the client reads those
+// back, interpolates between two of them, and predicts its own player.
+// The stand-in world (StandIn.ts) implements it for tests and the dev page;
+// the game's `stepWorld` plugs in here once the World/Model split lands
+// (MULTIPLAYER.md, Phase 0).
+//
+// Every function is pure. `step` must be deterministic: the same world and
+// inputs give the same world, with randomness drawn from state inside it.
+
+export type Presence = 'Here' | 'Away'
+
+// NOTE: one player's part of a tick. An Away player is frozen in place, not
+// targeted, and not hurt (MULTIPLAYER.md, default 10); its input is neutral.
+export interface PlayerTick {
+  readonly slot: number
+  readonly input: PlayerInput
+  readonly presence: Presence
+}
+
+export interface Score {
+  readonly slot: number
+  readonly score: number
+}
+
+// NOTE: own-player prediction. `of` finds this player's part of a world,
+// `put` puts a predicted one back, `step` runs one tick of it from local
+// input (movement only: hits, money, and deaths stay the room's), `gap`
+// says how far apart two are in pixels, and `blend` eases a shown copy
+// toward the predicted one.
+export interface OwnPlayer<W, Own> {
+  readonly of: (world: W, slot: number) => Option.Option<Own>
+  readonly put: (world: W, slot: number, own: Own) => W
+  readonly step: (own: Own, input: PlayerInput, world: W) => Own
+  readonly gap: (a: Own, b: Own) => number
+  readonly blend: (from: Own, to: Own, t: number) => Own
+}
+
+export interface World<W, Own> {
+  readonly name: string
+  readonly start: (slots: ReadonlyArray<number>, seed: number) => W
+  readonly step: (world: W, players: ReadonlyArray<PlayerTick>) => W
+  readonly removePlayer: (world: W, slot: number) => W
+  readonly isOver: (world: W) => boolean
+  readonly scores: (world: W) => ReadonlyArray<Score>
+  // NOTE: the wire. `snapshot` writes the whole world as a client needs
+  // it; `diff` writes what changed from `prev` to `next`, comparing values
+  // as the client will read them back, so a client that applies every diff
+  // holds exactly what `readSnapshot` would give.
+  readonly snapshot: (writer: Writer, world: W) => void
+  readonly readSnapshot: (reader: Reader) => W
+  readonly diff: (writer: Writer, prev: W, next: W) => void
+  readonly applyDiff: (reader: Reader, prev: W) => W
+  readonly interpolate: (from: W, to: W, t: number) => W
+  readonly own: OwnPlayer<W, Own>
+}

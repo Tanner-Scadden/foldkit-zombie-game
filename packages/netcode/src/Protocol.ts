@@ -1,0 +1,479 @@
+import { Array, Option, Result, Schema, pipe } from 'effect'
+
+import {
+  type Reader,
+  WireError,
+  type Writer,
+  readAll,
+  repeat,
+  tryWrite,
+} from './Wire'
+
+// NOTE: the realtime channel between a player and a GameRoom, in binary
+// WebSocket frames. Every message is described by a Schema below; the
+// codec writes it compactly by hand. The room decodes what a client sends
+// in three steps: a size cap, the binary reader, then the Schema, which
+// clamps what a player may claim (move length, finite aim, known buttons,
+// how many samples). What the room sends is decoded with the reader's
+// bounds checks only: it is trusted.
+
+// VERSIONS
+
+// NOTE: a client says the range it speaks and the room picks the newest
+// both know, or refuses with its own range so the client can say "update".
+export const PROTOCOL_VERSION = 1
+export const MIN_PROTOCOL_VERSION = 1
+
+export interface VersionRange {
+  readonly minVersion: number
+  readonly maxVersion: number
+}
+
+export const SERVER_VERSIONS: VersionRange = {
+  minVersion: MIN_PROTOCOL_VERSION,
+  maxVersion: PROTOCOL_VERSION,
+}
+
+export const negotiateVersion = (
+  client: VersionRange,
+  server: VersionRange,
+): Option.Option<number> => {
+  const newest = Math.min(client.maxVersion, server.maxVersion)
+  return newest >= Math.max(client.minVersion, server.minVersion)
+    ? Option.some(newest)
+    : Option.none()
+}
+
+// LIMITS
+
+export const MAX_CLIENT_FRAME_BYTES = 1024
+export const MAX_TOKEN_LENGTH = 1024
+export const MAX_SAMPLES_PER_INPUT = 64
+export const MAX_TICKS_PER_SAMPLE = 600
+export const MAX_SLOTS = 4
+export const MAX_WORLD_BYTES = 256 * 1024
+
+// INPUT
+
+// NOTE: one player's controls for one tick, made on the client from its
+// own keys, sticks, and camera, never raw DOM events: move as a vector
+// whose components run from -127 to 127, aim as a point in world pixels,
+// held buttons as bits, and a world-defined action such as buying an item
+// (0 is none). A held state, not an event: the room sees a press as a
+// button bit that was clear on the tick before.
+export const MOVE_SCALE = 127
+
+const MoveComponent = Schema.Int.check(
+  Schema.isBetween({ minimum: -MOVE_SCALE, maximum: MOVE_SCALE }),
+)
+const AimComponent = Schema.Finite.check(
+  Schema.isBetween({ minimum: -4096, maximum: 4095 }),
+)
+const Bits16 = Schema.Int.check(
+  Schema.isBetween({ minimum: 0, maximum: 0xffff }),
+)
+
+export const PlayerInput = Schema.Struct({
+  moveX: MoveComponent,
+  moveY: MoveComponent,
+  aimX: AimComponent,
+  aimY: AimComponent,
+  buttons: Bits16,
+  action: Bits16,
+})
+export type PlayerInput = typeof PlayerInput.Type
+
+export const NEUTRAL_INPUT: PlayerInput = {
+  moveX: 0,
+  moveY: 0,
+  aimX: 0,
+  aimY: 0,
+  buttons: 0,
+  action: 0,
+}
+
+export const inputsEqual = (a: PlayerInput, b: PlayerInput): boolean =>
+  a.moveX === b.moveX &&
+  a.moveY === b.moveY &&
+  a.aimX === b.aimX &&
+  a.aimY === b.aimY &&
+  a.buttons === b.buttons &&
+  a.action === b.action
+
+// NOTE: a move vector longer than 1 is scaled back onto the unit circle,
+// so a hand-made input never walks faster than a stick.
+export const moveOf = (
+  input: PlayerInput,
+): Readonly<{ x: number; y: number }> => {
+  const x = input.moveX / MOVE_SCALE
+  const y = input.moveY / MOVE_SCALE
+  const length = Math.sqrt(x * x + y * y)
+  return length > 1 ? { x: x / length, y: y / length } : { x, y }
+}
+
+export const Sample = Schema.Struct({
+  ticks: Schema.Int.check(
+    Schema.isBetween({ minimum: 1, maximum: MAX_TICKS_PER_SAMPLE }),
+  ),
+  input: PlayerInput,
+})
+export type Sample = typeof Sample.Type
+
+// FRAMES
+
+const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
+const Slot = Schema.Int.check(
+  Schema.isBetween({ minimum: 0, maximum: MAX_SLOTS - 1 }),
+)
+const Version = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 255 }))
+
+export const ClientFrame = Schema.TaggedUnion({
+  Hello: {
+    minVersion: Version,
+    maxVersion: Version,
+    token: Schema.String.check(Schema.isMaxLength(MAX_TOKEN_LENGTH)),
+  },
+  // NOTE: the samples since the last Input, in tick order, from `tick`
+  // on. Inputs go out when they change, at most 10 a second, and at least
+  // once a second as a heartbeat.
+  Input: {
+    seq: Count,
+    tick: Count,
+    samples: Schema.Array(Sample).check(
+      Schema.isMaxLength(MAX_SAMPLES_PER_INPUT),
+    ),
+  },
+  Ping: {
+    nonce: Count,
+    rttMs: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 60_000 })),
+  },
+  Leave: {},
+})
+export type ClientFrame = typeof ClientFrame.Type
+
+export const RefusedReason = Schema.Literals([
+  'VersionMismatch',
+  'Unauthorized',
+  'NotMember',
+  'NoRoom',
+  'Started',
+  'BadMessage',
+])
+export type RefusedReason = typeof RefusedReason.Type
+
+export const ClosedReason = Schema.Literals([
+  'GameOver',
+  'EndedByHost',
+  'Abandoned',
+  'Interrupted',
+])
+export type ClosedReason = typeof ClosedReason.Type
+
+export const RoomState = Schema.Literals(['Waiting', 'Playing'])
+export type RoomState = typeof RoomState.Type
+
+export const ServerFrame = Schema.TaggedUnion({
+  Welcome: { version: Version, slot: Slot, state: RoomState, tick: Count },
+  Refused: {
+    reason: RefusedReason,
+    minVersion: Version,
+    maxVersion: Version,
+  },
+  // NOTE: the whole world, on join, on rejoin, and on game start. `ack` is
+  // the newest Input seq of this player the room has applied.
+  Snapshot: { tick: Count, ack: Count, world: Schema.Uint8Array },
+  // NOTE: the change since this player's previous message, which the
+  // ordered WebSocket guarantees it has, as of `base`.
+  Delta: { tick: Count, base: Count, ack: Count, diff: Schema.Uint8Array },
+  Pong: { nonce: Count, tick: Count },
+  Away: { slot: Slot },
+  Back: { slot: Slot },
+  Kicked: {},
+  RoomClosed: { reason: ClosedReason },
+})
+export type ServerFrame = typeof ServerFrame.Type
+
+// TAGS
+
+const CLIENT_TAGS: ReadonlyArray<ClientFrame['_tag']> = [
+  'Hello',
+  'Input',
+  'Ping',
+  'Leave',
+]
+const SERVER_TAGS: ReadonlyArray<ServerFrame['_tag']> = [
+  'Welcome',
+  'Refused',
+  'Snapshot',
+  'Delta',
+  'Pong',
+  'Away',
+  'Back',
+  'Kicked',
+  'RoomClosed',
+]
+
+const REFUSED_REASONS = RefusedReason.literals
+const CLOSED_REASONS = ClosedReason.literals
+const ROOM_STATES = RoomState.literals
+
+const indexOf = <A extends string>(list: ReadonlyArray<A>, value: A): number =>
+  list.indexOf(value) + 1
+
+const pick = <A extends string>(list: ReadonlyArray<A>, index: number): A => {
+  const value = list[index - 1]
+  if (value === undefined) {
+    throw new WireError({ reason: `Unknown tag ${index}` })
+  }
+  return value
+}
+
+// INPUT CODEC
+
+// NOTE: a mask byte says which parts are not neutral, so a player standing
+// still with nothing held is one byte.
+const MOVE_BIT = 1
+const AIM_BIT = 2
+const BUTTONS_BIT = 4
+const ACTION_BIT = 8
+const AIM_SCALE = 8
+
+const writeInput = (writer: Writer, input: PlayerInput) => {
+  const hasMove = input.moveX !== 0 || input.moveY !== 0
+  const hasAim = input.aimX !== 0 || input.aimY !== 0
+  writer.u8(
+    (hasMove ? MOVE_BIT : 0) |
+      (hasAim ? AIM_BIT : 0) |
+      (input.buttons !== 0 ? BUTTONS_BIT : 0) |
+      (input.action !== 0 ? ACTION_BIT : 0),
+  )
+  if (hasMove) {
+    writer.u8(input.moveX + MOVE_SCALE)
+    writer.u8(input.moveY + MOVE_SCALE)
+  }
+  if (hasAim) {
+    writer.fixed(input.aimX, AIM_SCALE)
+    writer.fixed(input.aimY, AIM_SCALE)
+  }
+  if (input.buttons !== 0) {
+    writer.varint(input.buttons)
+  }
+  if (input.action !== 0) {
+    writer.varint(input.action)
+  }
+}
+
+const readInput = (reader: Reader): PlayerInput => {
+  const mask = reader.u8()
+  const hasMove = (mask & MOVE_BIT) !== 0
+  const hasAim = (mask & AIM_BIT) !== 0
+  const moveX = hasMove ? reader.u8() - MOVE_SCALE : 0
+  const moveY = hasMove ? reader.u8() - MOVE_SCALE : 0
+  const aimX = hasAim ? reader.fixed(AIM_SCALE) : 0
+  const aimY = hasAim ? reader.fixed(AIM_SCALE) : 0
+  return {
+    moveX,
+    moveY,
+    aimX,
+    aimY,
+    buttons: (mask & BUTTONS_BIT) !== 0 ? reader.varint() : 0,
+    action: (mask & ACTION_BIT) !== 0 ? reader.varint() : 0,
+  }
+}
+
+// CLIENT FRAMES
+
+const writeClientFrame = (writer: Writer, frame: ClientFrame) => {
+  writer.u8(indexOf(CLIENT_TAGS, frame._tag))
+  ClientFrame.match(frame, {
+    Hello: hello => {
+      writer.u8(hello.minVersion)
+      writer.u8(hello.maxVersion)
+      writer.text(hello.token)
+    },
+    Input: input => {
+      writer.varint(input.seq)
+      writer.varint(input.tick)
+      writer.varint(input.samples.length)
+      Array.forEach(input.samples, sample => {
+        writer.varint(sample.ticks)
+        writeInput(writer, sample.input)
+      })
+    },
+    Ping: ping => {
+      writer.varint(ping.nonce)
+      writer.varint(ping.rttMs)
+    },
+    Leave: () => {},
+  })
+}
+
+// NOTE: plain objects in the frame's encoded shape, for the Schema to
+// check. Counts are read before their items so a short frame fails fast.
+const readClientFrame = (reader: Reader): unknown => {
+  const tag = pick(CLIENT_TAGS, reader.u8())
+  if (tag === 'Hello') {
+    return {
+      _tag: tag,
+      minVersion: reader.u8(),
+      maxVersion: reader.u8(),
+      token: reader.text(MAX_TOKEN_LENGTH),
+    }
+  }
+  if (tag === 'Input') {
+    const seq = reader.varint()
+    const tick = reader.varint()
+    const count = reader.varint()
+    if (count > MAX_SAMPLES_PER_INPUT) {
+      throw new WireError({ reason: `${count} samples` })
+    }
+    return {
+      _tag: tag,
+      seq,
+      tick,
+      samples: repeat(count, () => ({
+        ticks: reader.varint(),
+        input: readInput(reader),
+      })),
+    }
+  }
+  if (tag === 'Ping') {
+    return { _tag: tag, nonce: reader.varint(), rttMs: reader.varint() }
+  }
+  return { _tag: tag }
+}
+
+const decodeClientSchema = Schema.decodeUnknownResult(ClientFrame)
+
+export const encodeClientFrame = (
+  frame: ClientFrame,
+): Result.Result<Uint8Array, WireError> =>
+  tryWrite(writer => writeClientFrame(writer, frame))
+
+export const decodeClientFrame = (
+  bytes: Uint8Array,
+): Result.Result<ClientFrame, WireError> =>
+  bytes.length > MAX_CLIENT_FRAME_BYTES
+    ? Result.fail(new WireError({ reason: `${bytes.length} bytes` }))
+    : pipe(
+        readAll(bytes, readClientFrame),
+        Result.flatMap(raw =>
+          Result.mapError(
+            decodeClientSchema(raw),
+            error => new WireError({ reason: error.message }),
+          ),
+        ),
+      )
+
+// SERVER FRAMES
+
+const writeServerFrame = (writer: Writer, frame: ServerFrame) => {
+  writer.u8(indexOf(SERVER_TAGS, frame._tag))
+  ServerFrame.match(frame, {
+    Welcome: welcome => {
+      writer.u8(welcome.version)
+      writer.u8(welcome.slot)
+      writer.u8(indexOf(ROOM_STATES, welcome.state))
+      writer.varint(welcome.tick)
+    },
+    Refused: refused => {
+      writer.u8(indexOf(REFUSED_REASONS, refused.reason))
+      writer.u8(refused.minVersion)
+      writer.u8(refused.maxVersion)
+    },
+    Snapshot: snapshot => {
+      writer.varint(snapshot.tick)
+      writer.varint(snapshot.ack)
+      writer.raw(snapshot.world)
+    },
+    // NOTE: `base` goes as how far back it is, which is one byte at 20 Hz.
+    Delta: delta => {
+      writer.varint(delta.tick)
+      writer.varint(delta.tick - delta.base)
+      writer.varint(delta.ack)
+      writer.raw(delta.diff)
+    },
+    Pong: pong => {
+      writer.varint(pong.nonce)
+      writer.varint(pong.tick)
+    },
+    Away: away => writer.u8(away.slot),
+    Back: back => writer.u8(back.slot),
+    Kicked: () => {},
+    RoomClosed: closed => writer.u8(indexOf(CLOSED_REASONS, closed.reason)),
+  })
+}
+
+const readServerFrame = (reader: Reader): ServerFrame => {
+  const tag = pick(SERVER_TAGS, reader.u8())
+  if (tag === 'Welcome') {
+    return ServerFrame.cases.Welcome.make({
+      version: reader.u8(),
+      slot: reader.u8(),
+      state: pick(ROOM_STATES, reader.u8()),
+      tick: reader.varint(),
+    })
+  }
+  if (tag === 'Refused') {
+    return ServerFrame.cases.Refused.make({
+      reason: pick(REFUSED_REASONS, reader.u8()),
+      minVersion: reader.u8(),
+      maxVersion: reader.u8(),
+    })
+  }
+  if (tag === 'Snapshot') {
+    return ServerFrame.cases.Snapshot.make({
+      tick: reader.varint(),
+      ack: reader.varint(),
+      world: reader.rest(),
+    })
+  }
+  if (tag === 'Delta') {
+    const tick = reader.varint()
+    const back = reader.varint()
+    if (back > tick) {
+      throw new WireError({ reason: 'Delta base before tick 0' })
+    }
+    return ServerFrame.cases.Delta.make({
+      tick,
+      base: tick - back,
+      ack: reader.varint(),
+      diff: reader.rest(),
+    })
+  }
+  if (tag === 'Pong') {
+    return ServerFrame.cases.Pong.make({
+      nonce: reader.varint(),
+      tick: reader.varint(),
+    })
+  }
+  if (tag === 'Away') {
+    return ServerFrame.cases.Away.make({ slot: reader.u8() })
+  }
+  if (tag === 'Back') {
+    return ServerFrame.cases.Back.make({ slot: reader.u8() })
+  }
+  if (tag === 'Kicked') {
+    return ServerFrame.cases.Kicked.make({})
+  }
+  return ServerFrame.cases.RoomClosed.make({
+    reason: pick(CLOSED_REASONS, reader.u8()),
+  })
+}
+
+export const encodeServerFrame = (
+  frame: ServerFrame,
+): Result.Result<Uint8Array, WireError> =>
+  tryWrite(writer => writeServerFrame(writer, frame))
+
+export const decodeServerFrame = (
+  bytes: Uint8Array,
+): Result.Result<ServerFrame, WireError> =>
+  bytes.length > MAX_WORLD_BYTES + 64
+    ? Result.fail(new WireError({ reason: `${bytes.length} bytes` }))
+    : readAll(bytes, readServerFrame)
+
+// NOTE: a WebSocket frame adds 2 bytes of header under 126 bytes of
+// payload and 4 up to 64 KB. A client's frames are masked, 4 bytes more.
+export const webSocketBytes = (payload: number, masked: boolean): number =>
+  payload + (payload < 126 ? 2 : 4) + (masked ? 4 : 0)

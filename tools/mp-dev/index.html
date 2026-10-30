@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Munch Manor co-op dev page</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: ui-monospace, Menlo, monospace;
+        background: #14121a;
+        color: #e8e2f0;
+      }
+      body {
+        margin: 0;
+        padding: 12px;
+        display: grid;
+        gap: 10px;
+        justify-items: start;
+      }
+      h1 {
+        font-size: 15px;
+        margin: 0;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      button,
+      input {
+        font: inherit;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid #5a4f6e;
+        background: #241f30;
+        color: inherit;
+      }
+      button:disabled {
+        opacity: 0.4;
+      }
+      canvas {
+        width: min(96vw, 960px);
+        aspect-ratio: 16 / 9;
+        image-rendering: pixelated;
+        border: 1px solid #5a4f6e;
+        touch-action: none;
+      }
+      #members li {
+        list-style: none;
+      }
+      #members {
+        padding: 0;
+        margin: 0;
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      pre {
+        margin: 0;
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+      .swatch {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Munch Manor co-op dev page: the stand-in world (not the game)</h1>
+    <div class="row" id="entry">
+      <input id="name" placeholder="Your name" maxlength="24" size="12" />
+      <button id="quick">QUICK PLAY</button>
+      <button id="create">Create room</button>
+      <input id="code" placeholder="Room code" maxlength="7" size="9" />
+      <button id="join">Join</button>
+    </div>
+    <div class="row" id="queue" hidden>
+      <span id="queue-text">Looking for players...</span>
+      <button id="accept" hidden>START NOW</button>
+      <button id="keep-waiting" hidden>KEEP WAITING</button>
+      <button id="cancel">CANCEL</button>
+    </div>
+    <div class="row">
+      <strong id="room">No room</strong>
+      <span id="link"></span>
+    </div>
+    <ul id="members"></ul>
+    <div class="row">
+      <button id="ready" disabled>READY</button>
+      <button id="end" disabled>END RUN</button>
+      <button id="leave" disabled>LEAVE</button>
+    </div>
+    <canvas id="world" width="640" height="360"></canvas>
+    <pre id="stats"></pre>
+    <pre id="status"></pre>
+    <pre id="debug" hidden></pre>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

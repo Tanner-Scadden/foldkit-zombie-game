@@ -15,12 +15,14 @@ import {
   Actor,
   type Authenticate,
   Connection,
+  type Delta,
   type Directory,
   IDENTITY_PATHS,
   IdentityFailure,
   IdentityRefused,
   OPENED,
   RedeemRequest,
+  type ScopeDefinition,
   type ScopeServer,
   ServerMessage,
   SessionRequest,
@@ -157,7 +159,7 @@ export const setupOnce = <A, E>(
 // NOTE: builds the SQLite client in the setup's scope, then the services on
 // it, so the client lives as long as they do. A storage call that throws is
 // a setup failure too, so it is answered and retried like one.
-const buildOn = <A, E1, E2>(
+export const buildOn = <A, E1, E2>(
   sql: Layer.Layer<SqlClient.SqlClient, E1>,
   make: Effect.Effect<A, E2, SqlClient.SqlClient>,
 ): Effect.Effect<A, SyncSetupFailed, Scope.Scope> =>
@@ -209,17 +211,27 @@ export interface Socket {
   readonly setConnection: (connection: Connection) => void
 }
 
+// NOTE: `onMessage` and `exchangeWith` say which deltas they applied, so a
+// host with more to do on a mutation (the GameRoom starting a game on
+// StartedGame) can react after the broadcast.
 export interface ScopeHost {
   readonly server: ScopeServer
   readonly onMessage: (
     socket: Socket,
     raw: string,
     everyone: ReadonlyArray<Socket>,
-  ) => Effect.Effect<void>
+  ) => Effect.Effect<ReadonlyArray<Delta>>
   readonly exchange: (
     body: string,
     everyone: ReadonlyArray<Socket>,
   ) => Effect.Effect<Response>
+  readonly exchangeWith: (
+    body: string,
+    everyone: ReadonlyArray<Socket>,
+  ) => Effect.Effect<{
+    readonly response: Response
+    readonly applied: ReadonlyArray<Delta>
+  }>
   readonly linkedDevices: (
     count: number,
     id: string,
@@ -232,7 +244,7 @@ const encodeAll = (messages: ReadonlyArray<ServerMessage>) =>
     Effect.orDie(encodeServerMessage(message)),
   )
 
-const deliver = (
+export const deliver = (
   messages: ReadonlyArray<ServerMessage>,
   sockets: ReadonlyArray<Socket>,
 ) =>
@@ -246,16 +258,24 @@ const deliver = (
     ),
   )
 
-const joinedOf = (sockets: ReadonlyArray<Socket>) =>
+export const joinedOf = (sockets: ReadonlyArray<Socket>) =>
   Array.filter(sockets, socket => socket.connection._tag === 'Joined')
+
+export const deltasOf = (
+  messages: ReadonlyArray<ServerMessage>,
+): ReadonlyArray<Delta> =>
+  Array.flatMap(messages, message =>
+    message._tag === 'Deltas' ? message.deltas : [],
+  )
 
 export const makeScopeHost = (
   scope: string,
   authenticate: Authenticate,
+  definition: ScopeDefinition = PlayerScope,
 ): Effect.Effect<ScopeHost, ScopeHostFailed, SqlClient.SqlClient> =>
   Effect.gen(function* () {
     const server = yield* Effect.mapError(
-      makeScopeServer({ definition: PlayerScope, scope }),
+      makeScopeServer({ definition, scope }),
       cause => new ScopeHostFailed({ cause }),
     )
 
@@ -274,19 +294,20 @@ export const makeScopeHost = (
         socket.setConnection(result.connection)
         yield* deliver(result.broadcast, joinedOf(everyone))
         yield* deliver(result.reply, [socket])
+        return deltasOf(result.broadcast)
       })
 
     // NOTE: the HTTP fallback: a batch of messages on a connection that
     // lasts one request. The requester gets the broadcasts too, so it sees
     // its own deltas; sockets on the same scope get the broadcasts as usual.
-    const exchange = (body: string, everyone: ReadonlyArray<Socket>) =>
+    const exchangeWith = (body: string, everyone: ReadonlyArray<Socket>) =>
       Effect.gen(function* () {
         if (new TextEncoder().encode(body).byteLength > MAX_EXCHANGE_BYTES) {
-          return json(413, '[]')
+          return { response: json(413, '[]'), applied: [] }
         }
         const decoded = yield* Effect.result(decodeExchange(body))
         if (decoded._tag === 'Failure') {
-          return json(400, '[]')
+          return { response: json(400, '[]'), applied: [] }
         }
         const replies = yield* Effect.reduce(
           decoded.success,
@@ -309,8 +330,17 @@ export const makeScopeHost = (
               }
             }),
         )
-        return json(200, yield* Effect.orDie(encodeExchangeReply(replies.out)))
+        return {
+          response: json(
+            200,
+            yield* Effect.orDie(encodeExchangeReply(replies.out)),
+          ),
+          applied: deltasOf(replies.out),
+        }
       })
+
+    const exchange = (body: string, everyone: ReadonlyArray<Socket>) =>
+      Effect.map(exchangeWith(body, everyone), result => result.response)
 
     // NOTE: the server mutation a link makes. Its delta goes to every
     // device on the scope at once.
@@ -338,7 +368,7 @@ export const makeScopeHost = (
         }
       })
 
-    return { server, onMessage, exchange, linkedDevices }
+    return { server, onMessage, exchange, exchangeWith, linkedDevices }
   })
 
 // DIRECTORY

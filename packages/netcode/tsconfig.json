@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "exactOptionalPropertyTypes": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "includeSuggestionsInTsc": false,
+        "diagnosticSeverity": { "unstableApiUsage": "off" }
+      }
+    ]
+  },
+  "include": ["src/**/*", "test/**/*"]
+}

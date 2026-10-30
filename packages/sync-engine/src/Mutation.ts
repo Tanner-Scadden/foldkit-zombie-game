@@ -67,12 +67,21 @@ export type Apply<A> = (
   SqlClient.SqlClient
 >
 
+export type DeviceActor = Extract<Actor, { readonly _tag: 'Device' }>
+
 export interface Mutation<Name extends string, A, I> {
   readonly name: Name
   readonly version: number
   readonly args: Schema.Codec<A, I>
   readonly scopes: ReadonlyArray<string>
   readonly writer: Writer
+  // NOTE: an optional check of the decoded args against the device that
+  // sent them, run only on the server, before the apply. It is how a
+  // shared scope's mutation says "only for yourself": args name the player
+  // they act for, and this checks it is the sender. The server itself is
+  // never asked. The apply stays a function of args and rows alone, so it
+  // replays the same on every side.
+  authorize?(args: A, actor: DeviceActor): boolean
   apply(
     args: A,
     context: ApplyContext,
