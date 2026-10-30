@@ -2,7 +2,8 @@
 // step, Settings and its reset question) on a desktop, a landscape phone, and
 // upright phones (390, 360, and 375 wide), as `s37-<TAG>-<viewport>-<scene>.png`. It exits with 1 on
 // a phone button under 48 px, a text field under 16 px (iOS zooms in on
-// those), or the Profile past the screen's edge.
+// those), a row of Look options that wraps, or the Profile past the
+// screen's edge.
 //   TAG=after bun run heavy -- bun tools/audit/shots37.ts
 import type { Page } from 'playwright-core'
 
@@ -107,7 +108,18 @@ const checkLayout = async (page: Page, viewport: Viewport, where: string) => {
         size: Number.parseFloat(getComputedStyle(input).fontSize),
       }),
     )
+    const wrappedRows = [...document.querySelectorAll('.look-row')]
+      .filter(row => {
+        // NOTE: the chosen option grows a little, so only a whole line
+        // of difference is a wrap.
+        const tops = [...row.querySelectorAll('button')].map(
+          button => button.getBoundingClientRect().top,
+        )
+        return Math.max(...tops) - Math.min(...tops) > 20
+      })
+      .map(row => row.querySelector('.look-row-label')?.textContent ?? '?')
     return {
+      wrappedRows,
       box: box
         ? {
             left: box.left,
@@ -133,6 +145,9 @@ const checkLayout = async (page: Page, viewport: Viewport, where: string) => {
     found.box.bottom > found.height
   ) {
     problems.push(`${where}: the Profile is past the screen's edge`)
+  }
+  for (const label of found.wrappedRows) {
+    problems.push(`${where}: the ${label} row of the Look tab wraps`)
   }
   for (const field of found.fields) {
     if (field.size < 16) {

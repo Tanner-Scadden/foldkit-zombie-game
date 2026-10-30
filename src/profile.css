@@ -476,17 +476,18 @@
   gap: 6px;
 }
 
+/* NOTE: the heading sits over its options, so a row of six swatches has the
+   column's whole width and never wraps one swatch onto a line of its own. */
 .look-row {
   display: grid;
-  grid-template-columns: 70px 1fr;
-  align-items: center;
-  gap: 8px;
+  grid-template-columns: 1fr;
+  gap: 3px;
 }
 
 .look-row-heading {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .look-row-label {
@@ -1192,7 +1193,15 @@
   }
 
   .look-rows {
-    gap: 3px;
+    gap: 1px;
+  }
+
+  .look-row {
+    gap: 1px;
+  }
+
+  .look-row-heading {
+    line-height: 1;
   }
 
   .look-options {
@@ -1259,14 +1268,7 @@
 }
 
 .game-root[data-layout='Portrait'] .look-row {
-  grid-template-columns: 1fr;
   gap: 4px;
-}
-
-.game-root[data-layout='Portrait'] .look-row-heading {
-  flex-direction: row;
-  align-items: baseline;
-  gap: 8px;
 }
 
 .game-root[data-layout='Portrait'] .look-rows {
