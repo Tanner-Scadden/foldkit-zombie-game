@@ -14,6 +14,7 @@ import {
   type Palette,
   ZOMBIE_SPRITES,
   bakeShapes,
+  group,
   placeAt,
   spriteDataUrl,
   spriteShapes,
@@ -272,6 +273,10 @@ const recordingContext = (
   smoothing: Array<boolean>,
 ) => {
   const ignore = () => undefined
+  // NOTE: a translate and scale only transform, enough for the painter to
+  // find where an image lands on the canvas.
+  const transform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }
+  const saved: Array<typeof transform> = []
   return {
     fillStyle: '',
     strokeStyle: '',
@@ -280,13 +285,24 @@ const recordingContext = (
     set imageSmoothingEnabled(isOn: boolean) {
       smoothing.push(isOn)
     },
-    save: ignore,
-    restore: ignore,
+    save: () => {
+      saved.push({ ...transform })
+    },
+    restore: () => {
+      Object.assign(transform, saved.pop() ?? transform)
+    },
     clearRect: ignore,
     fillRect: ignore,
-    translate: ignore,
-    scale: ignore,
+    translate: (x: number, y: number) => {
+      transform.e += transform.a * x
+      transform.f += transform.d * y
+    },
+    scale: (x: number, y: number) => {
+      transform.a *= x
+      transform.d *= y
+    },
     rotate: ignore,
+    getTransform: () => ({ ...transform }),
     drawImage: (...args: DrawCall) => {
       draws.push(args)
     },
@@ -348,6 +364,33 @@ describe('the patched Foldkit painter', () => {
     )
     expect(Array.drop(draws[0] ?? [], 1)).toEqual([4, 7, 5, 6])
     expect(smoothing).toEqual([false])
+  })
+
+  test('lands a pixelated image on whole canvas pixels', () => {
+    const { draws } = paintWithFoldkit([
+      group({
+        translate: { x: 3.5, y: 2 },
+        scale: { x: 2, y: 2 },
+        shapes: [
+          Canvas.Image({
+            src,
+            x: 0.1,
+            y: 0.3,
+            width: 5,
+            height: 6,
+            crop: { x: 1, y: 1, width: 5, height: 6 },
+            rendering: 'Pixelated',
+          }),
+        ],
+      }),
+    ])
+    const [x = 0, y = 0, width = 0, height = 0] = Array.filter(
+      Array.drop(draws[0] ?? [], 5),
+      (value): value is number => typeof value === 'number',
+    )
+    // NOTE: on the canvas the box runs from 3.7 to 13.7 and 2.6 to 14.6.
+    expect([3.5 + 2 * x, 2 + 2 * y]).toEqual([4, 3])
+    expect([2 * width, 2 * height]).toEqual([10, 12])
   })
 
   test('draws a cropped region of the source', () => {

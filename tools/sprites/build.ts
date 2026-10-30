@@ -55,7 +55,7 @@ if (outDir === undefined) {
 }
 
 // NOTE: changing how the files are written must make every cache miss.
-const GENERATOR_VERSION = 2
+const GENERATOR_VERSION = 3
 const MANIFEST_FILE = 'manifest.json'
 const SIGNATURE_FILE = 'signature.txt'
 
@@ -113,29 +113,39 @@ const isOwnFile = ({ raster }: Image) =>
   raster.width * raster.height > OWN_FILE_AREA
 
 const ATLAS_WIDTH = 1024
-// NOTE: a transparent pixel between sprites, so a scaled or rotated draw of
-// one never samples its neighbor.
-const GUTTER = 1
+// NOTE: each sprite in the atlas sits in a frame of its own edge pixels, one
+// pixel wide, repeated outward. A rotated or scaled draw samples a little past
+// a sprite's edge, and a whole image drawn on its own repeats its edge there,
+// so the frame makes a cropped region draw the very same pixels. A
+// transparent gutter in its place drops those edge pixels instead, and a
+// shared one would let a sprite sample its neighbor.
+const FRAME = 1
 
 type Sheet = Readonly<{ raster: Raster; placed: ReadonlyArray<Placed> }>
 type Placed = Readonly<{ image: Image; x: number; y: number }>
+
+const clamp = (value: number, high: number): number =>
+  Math.min(Math.max(value, 0), high)
 
 const sheetOf = (
   width: number,
   height: number,
   placed: ReadonlyArray<Placed>,
+  frame: number,
 ): Sheet => {
   const pixels = new Uint8Array(width * height * 4)
   for (const { image, x, y } of placed) {
     const { raster } = image
-    for (let row = 0; row < raster.height; row++) {
-      pixels.set(
-        raster.pixels.subarray(
-          row * raster.width * 4,
-          (row + 1) * raster.width * 4,
-        ),
-        ((y + row) * width + x) * 4,
-      )
+    for (let row = -frame; row < raster.height + frame; row++) {
+      const sourceRow = clamp(row, raster.height - 1)
+      for (let column = -frame; column < raster.width + frame; column++) {
+        const from =
+          (sourceRow * raster.width + clamp(column, raster.width - 1)) * 4
+        pixels.set(
+          raster.pixels.subarray(from, from + 4),
+          ((y + row) * width + x + column) * 4,
+        )
+      }
     }
   }
   return { raster: { width, height, pixels }, placed }
@@ -145,11 +155,11 @@ const atlasImages = images.filter(image => !isOwnFile(image))
 const packed = packShelves(
   atlasImages.map(image => ({
     item: image,
-    width: image.raster.width,
-    height: image.raster.height,
+    width: image.raster.width + 2 * FRAME,
+    height: image.raster.height + 2 * FRAME,
   })),
   ATLAS_WIDTH,
-  GUTTER,
+  0,
 )
 const sheets: ReadonlyArray<Readonly<{ name: string; sheet: Sheet }>> = [
   {
@@ -157,14 +167,22 @@ const sheets: ReadonlyArray<Readonly<{ name: string; sheet: Sheet }>> = [
     sheet: sheetOf(
       packed.width,
       packed.height,
-      packed.placed.map(({ item, x, y }) => ({ image: item, x, y })),
+      packed.placed.map(({ item, x, y }) => ({
+        image: item,
+        x: x + FRAME,
+        y: y + FRAME,
+      })),
+      FRAME,
     ),
   },
   ...images.filter(isOwnFile).map((image, index) => ({
     name: `sprite-${index}`,
-    sheet: sheetOf(image.raster.width, image.raster.height, [
-      { image, x: 0, y: 0 },
-    ]),
+    sheet: sheetOf(
+      image.raster.width,
+      image.raster.height,
+      [{ image, x: 0, y: 0 }],
+      0,
+    ),
   })),
 ]
 

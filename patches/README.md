@@ -9,6 +9,8 @@ It adds:
 - the page-wide image cache keyed by `src`,
 - and the repaint of each canvas's latest scene when an image it drew finishes loading.
 
+On top of the port, the painter draws a pixelated image on whole canvas pixels: it rounds the image's edges on the canvas unless the transform rotates or skews. At a half pixel position, nearest neighbour sampling meets ties that a cropped atlas region and a whole image break differently, which showed as sprites shifted by a pixel. Dropping the patch for an upstream release loses this unless upstream does the same.
+
 It also makes `modifyFields` (and `makeModifyFieldsFor`) in `struct/index.js` fast. Foldkit aliases Effect's `Struct.evolve`, which walks every key of the struct through `Reflect.ownKeys` and `propertyIsEnumerable`; on the game's large Model that was about half of a busy frame's `update`. The patch copies the struct with a spread, which keeps the same own enumerable keys in the same order, and then runs only the given transforms, on keys the struct has, as `evolve` does. The types are untouched. It is not upstream yet, so dropping the patch brings the slow path back.
 
 Two more speedups for what the view builds every frame, neither upstream yet and neither changing an API (`src/foldkitPatch.test.ts` checks both):

@@ -1141,7 +1141,7 @@ const killShapes = (
     )
     return [
       group({
-        translate: { x: x + KILL_ICON_PX / 2, y: y + 3 },
+        translate: { x: x + Math.floor(KILL_ICON_PX / 2), y: y + 3 },
         shapes: ZOMBIE_SPRITES[kind].icon,
       }),
       ...textShapes(count, 'Kill', x + KILL_ICON_PX + KILL_ICON_GAP, y, 'Left'),

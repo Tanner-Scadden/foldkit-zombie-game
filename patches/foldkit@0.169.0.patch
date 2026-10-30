@@ -50,7 +50,7 @@ index 2a47bd191d355b39633751bc900c9f1669913f46..185c3a42bfe6ca95a33dccfdf6036dc2
  //# sourceMappingURL=paint.d.ts.map
 \ No newline at end of file
 diff --git a/dist/canvas/paint.js b/dist/canvas/paint.js
-index e31d0d92cecd61a44eea969ad2e054920c8a87d4..c82834458bc66c72161f20b2644873742b22d1cf 100644
+index e31d0d92cecd61a44eea969ad2e054920c8a87d4..7bdd634ad63b41f808fb44fdbdeb0f397738863b 100644
 --- a/dist/canvas/paint.js
 +++ b/dist/canvas/paint.js
 @@ -1,4 +1,46 @@
@@ -112,7 +112,7 @@ index e31d0d92cecd61a44eea969ad2e054920c8a87d4..c82834458bc66c72161f20b264487374
  const paintRect = (ctx) => (rect) => {
      if (rect.fill !== undefined) {
          ctx.fillStyle = rect.fill;
-@@ -102,7 +148,22 @@ const paintText = (ctx) => (text) => {
+@@ -102,7 +148,47 @@ const paintText = (ctx) => (text) => {
          ctx.strokeText(text.content, text.x, text.y);
      }
  };
@@ -125,18 +125,43 @@ index e31d0d92cecd61a44eea969ad2e054920c8a87d4..c82834458bc66c72161f20b264487374
 +    if (image.rendering !== undefined) {
 +        ctx.imageSmoothingEnabled = imageSmoothingForCanvas[image.rendering];
 +    }
++    const { x, y, width, height } = image.rendering === 'Pixelated'
++        ? wholePixelBox(ctx, image)
++        : image;
 +    if (image.crop === undefined) {
-+        ctx.drawImage(maybeElement.value, image.x, image.y, image.width, image.height);
++        ctx.drawImage(maybeElement.value, x, y, width, height);
 +    }
 +    else {
-+        ctx.drawImage(maybeElement.value, image.crop.x, image.crop.y, image.crop.width, image.crop.height, image.x, image.y, image.width, image.height);
++        ctx.drawImage(maybeElement.value, image.crop.x, image.crop.y, image.crop.width, image.crop.height, x, y, width, height);
 +    }
++};
++// NOTE: a pixelated image lands on whole canvas pixels. At a fractional
++// position or size, nearest neighbour sampling meets ties, and a cropped
++// region of an atlas breaks them differently from a whole image, so the same
++// sprite would come out shifted by a pixel in places. Rounding the box's
++// edges on the canvas keeps the art identical either way. A rotated or
++// skewed transform is left alone.
++const wholePixelBox = (ctx, image) => {
++    const { a, b, c, d, e, f } = ctx.getTransform();
++    if (b !== 0 || c !== 0 || a === 0 || d === 0) {
++        return image;
++    }
++    const left = Math.round(a * image.x + e);
++    const right = Math.round(a * (image.x + image.width) + e);
++    const top = Math.round(d * image.y + f);
++    const bottom = Math.round(d * (image.y + image.height) + f);
++    return {
++        x: (left - e) / a,
++        y: (top - f) / d,
++        width: (right - left) / a,
++        height: (bottom - top) / d,
++    };
 +};
 +const paintGroup = (ctx, onImageLoad) => (group) => {
      if (group.opacity !== undefined) {
          ctx.globalAlpha *= group.opacity;
      }
-@@ -115,30 +176,34 @@ const paintGroup = (ctx) => (group) => {
+@@ -115,30 +201,34 @@ const paintGroup = (ctx) => (group) => {
      if (group.scale !== undefined) {
          ctx.scale(group.scale.x, group.scale.y);
      }

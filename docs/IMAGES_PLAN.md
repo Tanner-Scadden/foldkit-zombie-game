@@ -131,7 +131,7 @@ An atlas, plus a separate file per room.
 - One request and one decode instead of 1,446, and 26 KB instead of 208 KB, because the per file PNG overhead is bigger than the median sprite.
 - One entry in Foldkit's page-wide image cache instead of 1,446 `HTMLImageElement`s, each with its own decoded bitmap.
 - Drawing a cropped region of one image costs the same as drawing a whole small image in Canvas 2D, and on a GPU-backed canvas it avoids switching textures between sprites, the reason Unity and PixiJS batch by atlas.
-- Crisp scaling holds. `rendering: 'Pixelated'` turns smoothing off per draw, crops are whole pixels, and the 1 pixel gutter keeps a scaled or rotated draw (the boss's tells, shed armor) from sampling a neighbor.
+- Crisp scaling holds. `rendering: 'Pixelated'` turns smoothing off per draw, crops are whole pixels, and each sprite sits in a 1 pixel frame of its own edge pixels, so a scaled or rotated draw (the boss's tells, shed armor) never samples a neighbor and draws the same pixels as the sprite's own image would.
 - 1024 pixels wide stays far under every phone's texture limit.
 
 ### Sprites that change with the player
@@ -231,6 +231,6 @@ Fixes 1 to 3 are each about a day, need no game changes, and get most of the way
 - **A sprite missing from the atlas** ships a runtime encode, not a broken picture, thanks to the fallback. The missing sprite test turns it into a failure in CI.
 - **Hash collisions** between two different sprites would draw the wrong art. 64 bits of FNV-1a over 1,446 keys makes that vanishingly unlikely, and the generator can check for it while it packs (it holds the pixels).
 - **Generator drift from the runtime.** The generator imports the same modules the game runs, so the art cannot fork. The one risk is a sprite built from state the generator never reaches, which is the `precompile()` list's job and the missing sprite test's.
-- **Bleeding at atlas edges** on scaled or rotated draws: the 1 pixel transparent gutter, checked with the `lineup=boss` and `lineup=armor` harness scenes, which scale and rotate.
+- **Bleeding at atlas edges** on scaled or rotated draws: a 1 pixel frame of each sprite's own edge pixels (a transparent gutter dropped the edge pixels of rotated sprites), checked with the `lineup=boss` and `lineup=armor` harness scenes, which scale and rotate.
 - **Foldkit upgrades.** The plan uses only `Canvas.Image` with `crop`, which is in the upstream pull request the patch ports, so it survives dropping the patch.
 - **The offline precache** must list the atlas files. Its build check already fails if the list drifts from the files written.
