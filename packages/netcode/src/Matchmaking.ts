@@ -26,6 +26,9 @@ export const OFFER_AFTER_MS = 45 * 1000
 export const MIN_OFFER_GROUP = 2
 export const OFFER_ANSWER_MS = 20 * 1000
 export const ROOM_LISTING_MS = 10 * 60 * 1000
+// NOTE: a group of four forms first from players on one continent; a
+// player who has waited this long joins anyone's group.
+export const REGION_WIDEN_MS = 15 * 1000
 
 // MESSAGES
 
@@ -69,6 +72,9 @@ export interface Queued {
   readonly playerId: string
   readonly name: string
   readonly look?: string
+  // NOTE: the continent the player connected from, as Cloudflare names it
+  // (NA, EU, AS, ...); '' when unknown.
+  readonly region?: string
   readonly queuedMs: number
 }
 
@@ -99,6 +105,7 @@ const QueuedSchema = Schema.Struct({
   playerId: Schema.String,
   name: Schema.String,
   look: Schema.optionalKey(Schema.String),
+  region: Schema.optionalKey(Schema.String),
   queuedMs: Schema.Number,
 })
 
@@ -213,20 +220,65 @@ const seatInRooms = (matchmaker: Matchmaker, nowMs: number): Stepped =>
     },
   )
 
-const formGroups = (matchmaker: Matchmaker): Stepped =>
-  matchmaker.queue.length >= QUICK_PLAY_GROUP_SIZE
-    ? (() => {
-        const players = Array.take(matchmaker.queue, QUICK_PLAY_GROUP_SIZE)
-        const next = formGroups({
+const isWidened = (player: Queued, nowMs: number): boolean =>
+  nowMs - player.queuedMs >= REGION_WIDEN_MS
+
+const fitsWith =
+  (anchor: Queued, nowMs: number) =>
+  (player: Queued): boolean =>
+    (player.region ?? '') === (anchor.region ?? '') ||
+    isWidened(anchor, nowMs) ||
+    isWidened(player, nowMs)
+
+// NOTE: the first group of four, the oldest player first: their own
+// continent's players, or anyone once either has waited REGION_WIDEN_MS.
+const groupOf = (
+  queue: ReadonlyArray<Queued>,
+  nowMs: number,
+): Option.Option<ReadonlyArray<Queued>> =>
+  Array.findFirst(
+    Array.map(queue, anchor =>
+      Array.take(
+        Array.filter(queue, fitsWith(anchor, nowMs)),
+        QUICK_PLAY_GROUP_SIZE,
+      ),
+    ),
+    group => group.length >= QUICK_PLAY_GROUP_SIZE,
+  )
+
+const formGroups = (matchmaker: Matchmaker, nowMs: number): Stepped =>
+  Option.match(groupOf(matchmaker.queue, nowMs), {
+    onNone: () => ({ matchmaker, actions: [] }),
+    onSome: players => {
+      const next = formGroups(
+        {
           ...matchmaker,
-          queue: Array.drop(matchmaker.queue, QUICK_PLAY_GROUP_SIZE),
-        })
-        return {
-          matchmaker: next.matchmaker,
-          actions: [{ _tag: 'MakeRoom', players }, ...next.actions],
-        }
-      })()
-    : { matchmaker, actions: [] }
+          queue: Array.filter(
+            matchmaker.queue,
+            queued =>
+              !Array.some(players, taken => taken.socket === queued.socket),
+          ),
+        },
+        nowMs,
+      )
+      return {
+        matchmaker: next.matchmaker,
+        actions: [{ _tag: 'MakeRoom', players }, ...next.actions],
+      }
+    },
+  })
+
+// NOTE: four or more waiting but split by continent: wake when the oldest
+// of them may join anyone.
+const widenDueMs = (matchmaker: Matchmaker, nowMs: number) =>
+  matchmaker.queue.length >= QUICK_PLAY_GROUP_SIZE
+    ? Option.map(
+        Array.head(
+          Array.filter(matchmaker.queue, player => !isWidened(player, nowMs)),
+        ),
+        oldest => oldest.queuedMs + REGION_WIDEN_MS,
+      )
+    : Option.none()
 
 const queuedSockets = (matchmaker: Matchmaker) =>
   Array.map(matchmaker.queue, player => player.socket)
@@ -334,7 +386,13 @@ const statusOf = (matchmaker: Matchmaker): ReadonlyArray<Action> =>
     )
   })
 
-const wakeOf = (matchmaker: Matchmaker): ReadonlyArray<Action> =>
+const wakeOf = (matchmaker: Matchmaker, nowMs: number): ReadonlyArray<Action> =>
+  Option.match(widenDueMs(matchmaker, nowMs), {
+    onSome: (atMs): ReadonlyArray<Action> => [{ _tag: 'WakeAt', atMs }],
+    onNone: () => offerWakeOf(matchmaker),
+  })
+
+const offerWakeOf = (matchmaker: Matchmaker): ReadonlyArray<Action> =>
   Option.match(matchmaker.offer, {
     onSome: offer => [{ _tag: 'WakeAt', atMs: offer.madeMs + OFFER_ANSWER_MS }],
     onNone: () =>
@@ -356,7 +414,7 @@ const settle = (matchmaker: Matchmaker, nowMs: number): Stepped => {
     },
     nowMs,
   )
-  const grouped = formGroups(seated.matchmaker)
+  const grouped = formGroups(seated.matchmaker, nowMs)
   const started = startAccepted(
     lapseOffer(keepOffer(grouped.matchmaker, nowMs), nowMs),
   )
@@ -368,7 +426,7 @@ const settle = (matchmaker: Matchmaker, nowMs: number): Stepped => {
       ...grouped.actions,
       ...started.actions,
       ...statusOf(offered),
-      ...wakeOf(offered),
+      ...wakeOf(offered, nowMs),
     ],
   }
 }

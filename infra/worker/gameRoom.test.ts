@@ -13,6 +13,7 @@ import {
   type ClientFrame,
   KickedPlayer,
   type Lobby,
+  PROTOCOL_VERSION as ROOM_PROTOCOL_VERSION,
   RoomScope,
   roomScopeId,
 } from '@munch/netcode'
@@ -122,7 +123,10 @@ const pushOf = async <A, I>(
 const lobbyOf = async (host: RoomHost): Promise<Lobby> =>
   Option.getOrThrow(await Effect.runPromise(host.lobby))
 
-const helloFrame = (token: string, maxVersion = 2): ClientFrame => ({
+const helloFrame = (
+  token: string,
+  maxVersion = ROOM_PROTOCOL_VERSION,
+): ClientFrame => ({
   _tag: 'Hello',
   minVersion: 1,
   maxVersion,
@@ -332,7 +336,7 @@ describe('a game socket Hello', () => {
       _tag: 'Accept',
       playerId: ANA,
       slot: 0,
-      version: 2,
+      version: ROOM_PROTOCOL_VERSION,
     })
   })
 

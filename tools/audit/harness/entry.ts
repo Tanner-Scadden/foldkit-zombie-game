@@ -850,14 +850,23 @@ const coopRoom = (
     maybePlayerId: Option.some('player-0'),
     maybeLobby: Option.some(lobbyOf(members, status)),
     link: 'Online',
-    session:
-      status === 'Playing' ? playingSession(world, 0) : Session.makeSession(0),
+    session: {
+      ...(status === 'Playing'
+        ? playingSession(world, 0)
+        : Session.makeSession(0)),
+      rttMs: COOP_PINGS[0] ?? 0,
+      rtts: members.map(member => ({
+        slot: member.slot,
+        rttMs: COOP_PINGS[member.slot] ?? 0,
+      })),
+    },
     maybeWorld: status === 'Playing' ? Option.some(world) : Option.none(),
     frameEvents: [],
     eventsTick: 0,
     predictedShots: 0,
     tracers: [],
     tracerCount: 0,
+    hits: { looked: 0, confirmed: 0 },
     presses: CoopModel.noPresses,
     share: 'Idle',
     departure: 'Staying',
@@ -869,6 +878,9 @@ const COOP_NAMES = ['Tanner', 'Mo', 'Pip', 'Grumbles']
 
 // NOTE: the looks the staged teammates sent with their joins; the first
 // seat is the page's own player, who wears the page's own look.
+// NOTE: each staged player's round trip: good, fair, poor, good.
+const COOP_PINGS = [48, 140, 260, 90]
+
 const COOP_LOOKS = [
   '',
   'Male.Curls.Blonde.Deep.Red',
@@ -895,9 +907,10 @@ const coopScreen = (stage: NonNullable<typeof config.coop>) => {
       },
     })
   const members = (count: number, readyCount = 0) =>
-    COOP_NAMES.slice(0, count).map((name, slot) =>
-      memberOf(slot, name, slot < readyCount, COOP_LOOKS[slot] ?? ''),
-    )
+    COOP_NAMES.slice(0, count).map((name, slot) => ({
+      ...memberOf(slot, name, slot < readyCount, COOP_LOOKS[slot] ?? ''),
+      pingMs: COOP_PINGS[slot] ?? 0,
+    }))
   switch (stage) {
     case 'tile':
       return Screen.Closed()

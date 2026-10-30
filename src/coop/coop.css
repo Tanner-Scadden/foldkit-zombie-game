@@ -962,7 +962,9 @@
   top: 6px;
   right: 6px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
   pointer-events: none;
 }
 
@@ -1138,6 +1140,65 @@
 
 .coop-picks[data-host='Watching'] .coop-mode-pick[data-state='Other'] {
   display: none;
+}
+
+/* PING: three bars, green, yellow, or red, in a seat's corner and by
+   LEAVE in the run. */
+
+.coop-ping {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+  padding: 2px 3px;
+  border-radius: 4px;
+  background: rgba(16, 10, 18, 0.75);
+}
+
+.coop-ping-bar {
+  width: 3px;
+  background: #4a3f52;
+}
+
+.coop-ping-bar[data-bar='1'] {
+  height: 40%;
+}
+
+.coop-ping-bar[data-bar='2'] {
+  height: 70%;
+}
+
+.coop-ping-bar[data-bar='3'] {
+  height: 100%;
+}
+
+.coop-ping[data-ping='Good'] .coop-ping-bar {
+  background: #8cff5a;
+}
+
+.coop-ping[data-ping='Ok'] .coop-ping-bar:not([data-bar='3']) {
+  background: #ffe066;
+}
+
+.coop-ping[data-ping='Bad'] .coop-ping-bar[data-bar='1'] {
+  background: #ff4a4f;
+}
+
+.coop-seat-ping {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+}
+
+.coop-arena-pings {
+  display: flex;
+  gap: 4px;
+}
+
+.coop-arena-ping {
+  display: inline-flex;
+  border-bottom: 2px solid;
+  border-radius: 4px;
 }
 
 /* PORTRAIT: the hub and the lobby stack tighter, two seats a row. */

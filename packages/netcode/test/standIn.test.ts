@@ -20,6 +20,8 @@ const here = (slot: number, input: PlayerInput): PlayerTick => ({
   slot,
   input,
   presence: 'Here',
+  viewLagTicks: 0,
+  rttMs: 0,
 })
 
 // NOTE: inputs that change every so often, from a small seeded counter, so
@@ -79,7 +81,7 @@ describe('the stand-in world', () => {
   test('an Away dot does not move', () => {
     const start = StandIn.start([0], 1)
     const next = StandIn.step(start, [
-      { slot: 0, input: right, presence: 'Away' },
+      { slot: 0, input: right, presence: 'Away', viewLagTicks: 0, rttMs: 0 },
     ])
     const dot = Option.getOrThrow(StandIn.own.of(next, 0))
     expect(dot.x).toBe(Option.getOrThrow(StandIn.own.of(start, 0)).x)

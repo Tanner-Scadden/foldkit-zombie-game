@@ -498,6 +498,7 @@ export const GameEvent = defineTaggedUnion({
     direction: Vector,
     damage: Schema.Number,
     kind: ZombieKind,
+    maybeShooter: Schema.Option(Schema.Number),
   },
   ZombieKilled: {
     x: Schema.Number,
@@ -1207,6 +1208,11 @@ export type Readiness = typeof Readiness.Type
 // NOTE: what co-op adds to a player: their seat, life, presence, READY for
 // the break, the traps they placed (one of each kind, decided row 21), and
 // the kills credited to them.
+// NOTE: `graceMs` is how long a zombie must keep touching this player
+// before its first bite lands, half their round trip and at most 100 ms
+// (MULTIPLAYER.md, "Latency"), so a dodge they made on their own screen
+// counts; `touchedMs` is how long one has touched them so far. Both stay 0
+// for a player with no lag.
 export const Seat = Schema.Struct({
   slot: PlayerSlot,
   life: Life,
@@ -1214,6 +1220,8 @@ export const Seat = Schema.Struct({
   readiness: Readiness,
   trapIds: Schema.Array(Schema.Number),
   kills: Schema.Number,
+  graceMs: Schema.Number,
+  touchedMs: Schema.Number,
 })
 export type Seat = typeof Seat.Type
 
