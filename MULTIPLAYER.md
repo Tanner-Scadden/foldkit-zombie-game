@@ -1,6 +1,6 @@
 # Multiplayer
 
-**Status: scoped on 2026-10-29. The netcode model and the main gameplay rules were decided by the owner on 2026-10-29** (see "Decided"). **The plumbing of Phases 2 and 3 is built against a stand-in world, on preview stages only** (see "What Phases 2 and 3 built"); the game itself is not in a room yet. This file is the plan for online co-op on Cloudflare Durable Objects: the recommendation, the decisions, the defaults still waiting for a yes, the phases, and the measurements behind them. Gameplay decisions are mirrored in [`GAME_DESIGN.md`](./GAME_DESIGN.md) where they bend an existing rule, and platform decisions in [`PLATFORM.md`](./PLATFORM.md). The earlier dream ideas are kept at the end, under "The dream".
+**Status: scoped on 2026-10-29. The netcode model and the main gameplay rules were decided by the owner on 2026-10-29** (see "Decided"). **The plumbing of Phases 2 and 3 is built against a stand-in world** (see "What Phases 2 and 3 built"); the game itself is not in a room yet. This file is the plan for online co-op on Cloudflare Durable Objects: the recommendation, the decisions, the defaults still waiting for a yes, the phases, and the measurements behind them. Gameplay decisions are mirrored in [`GAME_DESIGN.md`](./GAME_DESIGN.md) where they bend an existing rule, and platform decisions in [`PLATFORM.md`](./PLATFORM.md). The earlier dream ideas are kept at the end, under "The dream".
 
 ## The recommendation
 
@@ -199,7 +199,7 @@ The lobby is a `room:<code>` sync scope (see "How it fits the sync engine"). Cod
 
 ### What Phases 2 and 3 built
 
-Built on 2026-10-29, against a stand-in world, on preview stages only: production has no `GameRoom` or `Matchmaker` binding until the owner approves. Everything below is the plumbing the real `stepWorld` drops into once Phase 0 and 1 land.
+Built on 2026-10-29, against a stand-in world. The `GameRoom` and `Matchmaker` objects are bound on every stage, production included (approved 2026-10-29); the dev page deploys on preview stages only. Everything below is the plumbing the real `stepWorld` drops into once Phase 0 and 1 land.
 
 **`packages/netcode`** (no game imports; shared by the browser, the Worker, and the tests):
 
@@ -246,7 +246,7 @@ The stand-in's messages are small (about 10 bytes a moving entity, a 20 byte hea
 2. `PlayerInput` from the game's `deriveIntent` (move, aim in world space, buttons for fire, swap, reload, trap, a purchase as the action), and own-player prediction from the game's movement against the level's collision.
 3. The game's client: a Foldkit Submodel holding the `Session`, a Subscription over `connectRoom`'s events, Commands for `send`, and the lobby followed with a real `Replica` (the game already keeps SQLite); the co-op screens (QUICK PLAY queue, lobby, READY) in the game's own look.
 4. The gameplay rules decided for co-op: revives, money, doors, friendly fire on Nightmare, difficulty by player count, Away players still hurt, the end of a run when everyone is down.
-5. Results into each player's own scope with `RecordedRun`, the tutorial gate before co-op, the display name in the save, and production bindings once approved (then Workers Paid before announcing).
+5. Results into each player's own scope with `RecordedRun`, the tutorial gate before co-op, the display name in the save, and Workers Paid before co-op is announced.
 
 ### Phase 4: feel and phones
 

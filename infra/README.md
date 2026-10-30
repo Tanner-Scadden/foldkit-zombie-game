@@ -27,7 +27,7 @@ The Cloudflare side of Munch Manor, declared with [Alchemy](https://alchemy.run/
 | `prod`        | `munch-manor`             | `munch-manor-api`             | `munch-manor-analytics`             |
 | `pr-<number>` | `munch-manor-pr-<number>` | `munch-manor-api-pr-<number>` | `munch-manor-analytics-pr-<number>` |
 
-Every stage but `prod` also gets the co-op dev page, `munch-manor-mp-dev-<stage>` (a static site built by `tools/mp-dev/build.ts`, pointed at the stage's API Worker), and the API Worker's `GAME_ROOMS` and `MATCHMAKER` Durable Object bindings. Production gets neither until the owner approves co-op there.
+Every stage, production included, binds the API Worker's `GAME_ROOMS` and `MATCHMAKER` Durable Objects (approved 2026-10-29). Every stage but `prod` also gets the co-op dev page, `munch-manor-mp-dev-<stage>` (a static site built by `tools/mp-dev/build.ts`, pointed at the stage's API Worker).
 | any other | `munch-manor-<stage>` | `munch-manor-api-<stage>` | `munch-manor-analytics-<stage>` |
 
 Every Worker lives at `https://<worker>.tanner-scadden.workers.dev`. A stage such as `dev-infra` is a scratch copy deployed from this machine; destroy it when done. Destroying a stage deletes its D1 database and its rows.
@@ -86,7 +86,7 @@ The same API Worker serves `/sync` for the sync engine (see "What phase 4 built"
 
 ## Co-op rooms
 
-On every stage but production the API Worker also serves co-op rooms (see "What Phases 2 and 3 built" in `MULTIPLAYER.md`).
+On every stage the API Worker also serves co-op rooms (see "What Phases 2 and 3 built" in `MULTIPLAYER.md`).
 
 | Path                        | Goes to               | What it does                                                                   |
 | --------------------------- | --------------------- | ------------------------------------------------------------------------------ |

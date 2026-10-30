@@ -42,9 +42,9 @@ import {
   tryCall,
 } from './syncCore.ts'
 
-// NOTE: GAME_ROOMS is bound only where co-op rooms are deployed (preview
-// stages for now); without it, room scopes and /room paths answer that
-// rooms are unavailable.
+// NOTE: GAME_ROOMS and MATCHMAKER are optional so a Worker without them
+// (an older deploy, a test) answers that rooms are unavailable instead of
+// failing.
 export type SyncBindings = Readonly<{
   SYNC_SCOPES: DurableObjectNamespace
   SYNC_DIRECTORY: DurableObjectNamespace

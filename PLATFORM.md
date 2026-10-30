@@ -32,7 +32,7 @@ All on 2026-10-28.
 - **SQLite loads behind the splash, lazily.** The save is the first thing the game reads, so the splash waits for it as it waited for localStorage, but the SQLite code, worker, and wasm are their own chunks fetched only then, alongside the fonts and sprites. A 12 second limit falls back to localStorage for the session. Decided 2026-10-29, which settles open question 7.
 - **Analytics run rows are kept for 90 days.** A Cron Trigger on the production API Worker runs once a day at 04:17 UTC and deletes every `runs` row whose `received_day` is more than 90 days back. Previews get no trigger, since the free plan allows five per account and a preview's database goes with its pull request. Decided 2026-10-29, which settles the rest of open question 3. See "Retention".
 - **Linking takes on the other device's progress, with no merge.** The device that types a link code becomes the other device's player and uses its progress; what it had saved is left behind. The code entry form says so before Link: "This device will use the other device's progress." Merging two players stays out of scope. Decided 2026-10-29.
-- **Co-op rooms are built on preview stages only.** A SQLite `GameRoom` Durable Object per room (named `room:<code>`) hosts the room's `room:<code>` sync scope and, while a run is on, the run itself on a timer loop; one `Matchmaker` Durable Object runs QUICK PLAY. Both are bound to the API Worker on every stage but production, which gets them once the owner approves. Built 2026-10-29; see "What Phases 2 and 3 built" in `MULTIPLAYER.md` and "Co-op rooms" below.
+- **Co-op rooms are built, and bound on every stage.** A SQLite `GameRoom` Durable Object per room (named `room:<code>`) hosts the room's `room:<code>` sync scope and, while a run is on, the run itself on a timer loop; one `Matchmaker` Durable Object runs QUICK PLAY. Both are bound to the API Worker on every stage, production included (approved 2026-10-29): SQLite classes, which the free plan allows, and nothing ticks while idle. Built 2026-10-29; see "What Phases 2 and 3 built" in `MULTIPLAYER.md` and "Co-op rooms" below.
 - **A mutation may check its args against its sender.** The sync engine's optional `authorize(args, actor)` runs on the server only, so a shared scope's mutation can say "only for yourself" while its apply stays a function of args and rows. Added 2026-10-29 for the room scope.
 - **The engine and the SQLite wrapper live in `packages/` in this repo** while the API settles, then move to their own repo and npm packages. The name is still open.
 
@@ -200,7 +200,7 @@ A scope is any piece of shared state with one authority. Each scope is one Durab
 | `daily:<date>`                | The server (the seed, the board)         | Everyone                |
 | `room:<code>`                 | The players in the room, plus the server | The players in the room |
 
-The `room:<code>` scope is built (on preview stages): see "Co-op rooms" below.
+The `room:<code>` scope is built: see "Co-op rooms" below.
 
 - **Subscriptions.** A client subscribes to the scopes it needs and keeps a local mirror of each in browser SQLite. Rebase happens per scope.
 - **Permissions per mutation.** Each mutation declares which scopes it may target and who may write it. Some are server-only, such as `RecordedLeaderboardEntry`, so a client can never forge them.
@@ -336,7 +336,7 @@ What our engine already had: confirmed tables apart from view tables, rebuilt wi
 
 ### Co-op rooms
 
-Built on 2026-10-29 (preview stages only). The engine's side of it; the netcode is in `MULTIPLAYER.md`.
+Built on 2026-10-29, bound on every stage. The engine's side of it; the netcode is in `MULTIPLAYER.md`.
 
 - **The scope.** `room:<code>` (`packages/netcode/src/Lobby.ts`), readers `Members`. Tables `room` (code, host, status Lobby, Playing, or Closed, visibility Private or Public, mode, round, the last result) and `members` (player id, display name, slot, READY). The room writes `CreatedRoom`, `JoinedRoom`, and `RecordedRoomResult`; players write `ChangedReady` (the last READY starts the run), `EndedGame` and `KickedPlayer` (the creator only), and `LeftRoom`, each naming its player in `by`, which `authorize` checks against the sender.
 - **The object.** `GameRoom` (`infra/worker/gameRoom.ts`) serves `/sync/socket` and `/sync/exchange` for its scope, the binary game socket, and the internal create and join calls the Worker makes after checking the session token. Joining adds the player to `sync_members` before `JoinedRoom`; leaving or a kick removes them and closes their sockets.

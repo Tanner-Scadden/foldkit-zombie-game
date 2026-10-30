@@ -47,9 +47,9 @@ const SYNC_REQUESTS_PER_ADDRESS_PER_MINUTE = 30
 // database is destroyed with its pull request anyway.
 const RETENTION_CRON = '17 4 * * *'
 
-// NOTE: where co-op rooms and their dev page are deployed: every stage but
-// production, for now.
-const hasRooms = (stage: string): boolean => stage !== PRODUCTION_STAGE
+// NOTE: the co-op dev page (the stand-in world in a room) is a test tool:
+// every stage but production gets it.
+const hasDevPage = (stage: string): boolean => stage !== PRODUCTION_STAGE
 
 const Analytics = Effect.gen(function* () {
   const stage = yield* Alchemy.Stage
@@ -91,16 +91,12 @@ const Analytics = Effect.gen(function* () {
       }),
       // NOTE: co-op rooms (worker/gameRoom.ts): one SQLite-backed Durable
       // Object per room, holding its `room:<code>` lobby scope and, while a
-      // game runs, the game. Preview stages only, until the owner approves
-      // co-op for production (MULTIPLAYER.md, Phase 2).
-      // NOTE: QUICK PLAY's one Matchmaker (worker/matchmaker.ts): a queue in
-      // hibernating sockets and the open public lobbies, same stages.
-      ...(hasRooms(stage)
-        ? {
-            GAME_ROOMS: Cloudflare.DurableObject('GameRoom'),
-            MATCHMAKER: Cloudflare.DurableObject('Matchmaker'),
-          }
-        : {}),
+      // run is on, the run. QUICK PLAY's one Matchmaker (worker/matchmaker.ts)
+      // keeps its queue in hibernating sockets. Every stage, production
+      // included (approved 2026-10-29): both are SQLite classes, which the
+      // free plan allows, and neither ticks while idle.
+      GAME_ROOMS: Cloudflare.DurableObject('GameRoom'),
+      MATCHMAKER: Cloudflare.DurableObject('Matchmaker'),
     },
     build: {
       input: { resolve: { alias: { effect: INFRA_EFFECT } } },
@@ -208,7 +204,7 @@ export default Alchemy.Stack(
     const stage = yield* Alchemy.Stage
     const api = yield* Analytics
     const website = yield* Website(api.url)
-    const mpDev = hasRooms(stage) ? yield* MpDev(api.url) : undefined
+    const mpDev = hasDevPage(stage) ? yield* MpDev(api.url) : undefined
     yield* PreviewComment(
       website.url,
       api.url,
