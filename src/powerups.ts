@@ -452,25 +452,44 @@ const applyEffect = (model: Model, effect: PickupEffect): Model =>
       }),
   })
 
+const grab = (model: Model, pickup: Pickup): Model =>
+  modifyFields(applyEffect(model, PICKUPS[pickup.kind].effect), {
+    frameEvents: Array.append(
+      GameEvent.PickupGrabbed({ x: pickup.x, y: pickup.y, kind: pickup.kind }),
+    ),
+  })
+
+// CALLOUTS
+
 // NOTE: a kind is explained once, ever: the save keeps the kinds seen, so a
 // returning player only sees the name pop. The list keeps its reference
 // when nothing new is seen, so the save check sees nothing changed.
-const grab = (model: Model, pickup: Pickup): Model => {
-  const isSeen = Array.contains(model.seenPowerUps, pickup.kind)
+const calloutFor = (model: Model, kind: PickupKind): Model => {
+  const isSeen = Array.contains(model.seenPowerUps, kind)
   const callout: Callout = {
-    kind: pickup.kind,
+    kind,
     look: isSeen ? 'Named' : 'Explained',
     x: model.player.x,
     y: model.player.y,
     ageMs: 0,
   }
-  return modifyFields(applyEffect(model, PICKUPS[pickup.kind].effect), {
-    seenPowerUps: seen => (isSeen ? seen : Array.append(seen, pickup.kind)),
+  return modifyFields(model, {
+    seenPowerUps: seen => (isSeen ? seen : Array.append(seen, kind)),
     callouts: callouts => Array.takeRight([...callouts, callout], CALLOUT_MAX),
-    frameEvents: Array.append(
-      GameEvent.PickupGrabbed({ x: pickup.x, y: pickup.y, kind: pickup.kind }),
-    ),
   })
+}
+
+// NOTE: a cosmetic, made after the step from the frame's grabs. Callouts
+// hold still while the shop is open, as the pickups do.
+export const advanceCallouts = (model: Model, worldMs: number): Model => {
+  const called = Array.reduce(model.frameEvents, model, (current, event) =>
+    GameEvent.isAnyOf(['PickupGrabbed'])(event)
+      ? calloutFor(current, event.kind)
+      : current,
+  )
+  return ShopState.isAnyOf(['Browsing', 'AtExit'])(called.shop)
+    ? called
+    : ageCallouts(called, worldMs)
 }
 
 const grabPickups = (model: Model): Model => {
@@ -742,6 +761,5 @@ export const advancePowerUps = (
     ticked => agePickups(ticked, worldMs),
     grabPickups,
     grabbed => dropLoot(before, grabbed, worldMs),
-    dropped => ageCallouts(dropped, worldMs),
   )
 }

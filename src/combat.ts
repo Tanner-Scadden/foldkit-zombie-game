@@ -3,7 +3,6 @@ import { modifyFields } from 'foldkit/struct'
 
 import { levelOf } from './arena'
 import {
-  BLAST_MAX,
   LAST_HEART_INVULNERABLE_MS,
   MAX_BLASTS_PER_FRAME,
   PLAYER_INVULNERABLE_MS,
@@ -248,14 +247,6 @@ const detonate = (model: Model, bomberId: number): Model => {
         player: () => playerOutcome.target,
         traps: () => trapOutcome.targets,
         wallet: wallet => earn(wallet, bountyOf(zombieOutcome.events)),
-        blasts: blasts =>
-          Array.takeRight(
-            [
-              ...blasts,
-              { x: blast.x, y: blast.y, radius: blast.radius, ageMs: 0 },
-            ],
-            BLAST_MAX,
-          ),
         frameEvents: frameEvents => [
           ...frameEvents,
           GameEvent.Exploded({ x: blast.x, y: blast.y, radius: blast.radius }),

@@ -4,6 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import { DOOR_OUTWARD } from './arena'
 import {
   BLAST_FLASH_MS,
+  BLAST_MAX,
   DAMAGE_POPUP_LIFETIME_MS,
   DAMAGE_POPUP_LIFT_PX,
   EMPTY_POPUP_LIFETIME_MS,
@@ -429,6 +430,38 @@ const countWhere = (
   isMatch: (event: GameEvent) => boolean,
 ): number => Array.filter(events, isMatch).length
 
+// NOTE: hit-stop is decided on each tick's own events, since it decides
+// how much world time the next ticks get.
+export const stopForHits = (model: Model, worldMs: number): Model => {
+  const events = model.frameEvents
+  const isBossFelled = Array.some(
+    events,
+    event =>
+      GameEvent.isAnyOf(['ZombieKilled'])(event) && event.kind === 'Boss',
+  )
+  return modifyFields(model, {
+    hitStop: hitStop =>
+      isBossFelled
+        ? HitStop.Slowed({ remainingMs: BOSS_SLOW_MOTION_MS, carryMs: 0 })
+        : triggerHitStop(
+            hitStop,
+            countWhere(events, GameEvent.isAnyOf(['ZombieKilled'])),
+            countWhere(events, GameEvent.isAnyOf(['PlayerHurt'])),
+            countWhere(events, GameEvent.isAnyOf(['Exploded'])),
+            worldMs,
+          ),
+  })
+}
+
+const blastOf = (event: GameEvent): ReadonlyArray<Blast> =>
+  GameEvent.isAnyOf(['Exploded'])(event)
+    ? [{ x: event.x, y: event.y, radius: event.radius, ageMs: 0 }]
+    : []
+
+// NOTE: the juice runs once a frame, after the step, on the events of all
+// its ticks: shake, popups, blast flashes, the streak, and the money
+// count-up. `deltaMs` is the frame's real time and `worldMs` the world time
+// its ticks ran.
 export const advanceJuice = (
   model: Model,
   deltaMs: number,
@@ -437,8 +470,7 @@ export const advanceJuice = (
   const seconds = deltaMs / MS_PER_SECOND
   const events = model.frameEvents
   const kills = countWhere(events, GameEvent.isAnyOf(['ZombieKilled']))
-  const hurts = countWhere(events, GameEvent.isAnyOf(['PlayerHurt']))
-  const blasts = countWhere(events, GameEvent.isAnyOf(['Exploded']))
+  const newBlasts = Array.flatMap(events, blastOf)
 
   const [shakeState, shake] = advanceShake(
     model.shake,
@@ -452,21 +484,15 @@ export const advanceJuice = (
     eventPopups,
   )
 
-  const isBossFelled = Array.some(
-    events,
-    event =>
-      GameEvent.isAnyOf(['ZombieKilled'])(event) && event.kind === 'Boss',
-  )
-
   return modifyFields(model, {
-    hitStop: hitStop =>
-      isBossFelled
-        ? HitStop.Slowed({ remainingMs: BOSS_SLOW_MOTION_MS, carryMs: 0 })
-        : triggerHitStop(hitStop, kills, hurts, blasts, worldMs),
     blasts: current =>
-      Array.isReadonlyArrayEmpty(current)
+      Array.isReadonlyArrayEmpty(current) &&
+      Array.isReadonlyArrayEmpty(newBlasts)
         ? current
-        : ageBlasts(current, deltaMs),
+        : ageBlasts(
+            Array.takeRight([...current, ...newBlasts], BLAST_MAX),
+            deltaMs,
+          ),
     shake: () => shake,
     popups: popups =>
       keepNewestHorde(

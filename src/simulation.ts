@@ -57,7 +57,7 @@ import {
   vectorLength,
 } from './geometry'
 import { deriveIntent } from './input'
-import { advanceJuice, thawTick } from './juice'
+import { advanceJuice, stopForHits, thawTick } from './juice'
 import { advanceKitchen, soupSkid } from './kitchen'
 import {
   Arsenal,
@@ -90,6 +90,7 @@ import {
   steerToward,
 } from './pathing'
 import {
+  advanceCallouts,
   advancePowerUps,
   bulletGlaze,
   bulletPierce,
@@ -1321,14 +1322,15 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
     blasted => feelIntensity(model, blasted, deltaMs),
     felt => advancePowerUps(felt, advanceRound(felt, deltaMs), deltaMs),
     rounded => shedParts(model, rounded),
-    shed => advanceParticles(shed, seconds, deltaMs),
     endWhenDefeated,
   )
 }
 
-// NOTE: one 60 Hz tick: hit-stop decides whether the world steps, then the
-// camera lean and the juice follow on the tick's events.
-const advanceTick = (model: Model): Model => {
+// NOTE: one 60 Hz tick: hit-stop decides whether the world steps, then
+// the camera lean follows and the tick's events decide the next hit-stop.
+type Tick = Readonly<{ model: Model; worldMs: number }>
+
+const advanceTick = (model: Model): Tick => {
   const thaw = thawTick(model.hitStop, FIXED_STEP_MS)
   const thawed = modifyFields(model, {
     hitStop: () => thaw.hitStop,
@@ -1339,7 +1341,7 @@ const advanceTick = (model: Model): Model => {
     cameraLean: lean =>
       leanCamera(lean, stepped.intent.maybeAim, FIXED_STEP_MS),
   })
-  return advanceJuice(leaned, FIXED_STEP_MS, thaw.worldMs)
+  return { model: stopForHits(leaned, thaw.worldMs), worldMs: thaw.worldMs }
 }
 
 type Ticks = Readonly<{ count: number; carryMs: number }>
@@ -1354,6 +1356,7 @@ export const ticksIn = (carryMs: number, count = 0): Ticks =>
 type Stepped = Readonly<{
   model: Model
   events: ReadonlyArray<GameEvent>
+  worldMs: number
 }>
 
 // NOTE: a tick that ends the round ends the frame's ticks.
@@ -1363,16 +1366,40 @@ const runTicks = (stepped: Stepped, count: number): Stepped => {
   }
   const ticked = advanceTick(stepped.model)
   return runTicks(
-    { model: ticked, events: [...stepped.events, ...ticked.frameEvents] },
+    {
+      model: ticked.model,
+      events: [...stepped.events, ...ticked.model.frameEvents],
+      worldMs: stepped.worldMs + ticked.worldMs,
+    },
     count - 1,
   )
 }
 
-// NOTE: a frame runs the whole ticks its time owes and carries the rest.
-// Its `frameEvents` are every tick's events in order, so sounds, stats, and
-// lessons see each one.
+// NOTE: what the frame looks like once its ticks ran: particles, the
+// walking dust, callouts, and the juice, all from the frame's events and
+// the cosmetic stream, so they never touch the World.
+const advanceCosmetics = (
+  model: Model,
+  frameMs: number,
+  worldMs: number,
+): Model =>
+  advanceJuice(
+    advanceCallouts(
+      worldMs > 0
+        ? advanceParticles(model, worldMs / MS_PER_SECOND, worldMs)
+        : model,
+      worldMs,
+    ),
+    frameMs,
+    worldMs,
+  )
+
+// NOTE: a frame runs the whole ticks its time owes and carries the rest,
+// then makes its cosmetics. Its `frameEvents` are every tick's events in
+// order, so the cosmetics, sounds, stats, and lessons see each one.
 export const advanceGame = (model: Model, deltaTime: number): Model => {
-  const ticks = ticksIn(model.stepCarryMs + clampFrameDelta(deltaTime))
+  const frameMs = clampFrameDelta(deltaTime)
+  const ticks = ticksIn(model.stepCarryMs + frameMs)
   const stepped = runTicks(
     {
       model: modifyFields(model, {
@@ -1380,10 +1407,13 @@ export const advanceGame = (model: Model, deltaTime: number): Model => {
         frameEvents: () => [],
       }),
       events: [],
+      worldMs: 0,
     },
     ticks.count,
   )
-  return ticks.count > 1
-    ? modifyFields(stepped.model, { frameEvents: () => stepped.events })
-    : stepped.model
+  return advanceCosmetics(
+    modifyFields(stepped.model, { frameEvents: () => stepped.events }),
+    frameMs,
+    stepped.worldMs,
+  )
 }
