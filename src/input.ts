@@ -43,8 +43,12 @@ const SWAP_KEY = 'KeyQ'
 const PLACE_TRAP_KEY = 'KeyT'
 const NEXT_TRAP_KEY = 'KeyG'
 const MENU_KEY = 'KeyH'
-const PREVIOUS_BUTTON_KEYS: ReadonlyArray<string> = ['ArrowLeft', 'ArrowUp']
-const NEXT_BUTTON_KEYS: ReadonlyArray<string> = ['ArrowRight', 'ArrowDown']
+const FIRE_UP_KEY = 'ArrowUp'
+const FIRE_DOWN_KEY = 'ArrowDown'
+const FIRE_LEFT_KEY = 'ArrowLeft'
+const FIRE_RIGHT_KEY = 'ArrowRight'
+const PREVIOUS_BUTTON_KEYS: ReadonlyArray<string> = [FIRE_LEFT_KEY, FIRE_UP_KEY]
+const NEXT_BUTTON_KEYS: ReadonlyArray<string> = [FIRE_RIGHT_KEY, FIRE_DOWN_KEY]
 
 export const FocusStep = Schema.Literals(['Previous', 'Next'])
 export type FocusStep = typeof FocusStep.Type
@@ -108,6 +112,22 @@ const keyboardMove = (pressedKeys: ReadonlyArray<string>): Vector =>
     normalize,
     Option.getOrElse(() => ZERO_VECTOR),
   )
+
+// NOTE: the arrow keys aim and fire in the direction held, so a keyboard
+// alone plays the whole game. Two arrows together fire on the diagonal.
+const keyboardAim = (
+  pressedKeys: ReadonlyArray<string>,
+): Option.Option<Vector> =>
+  normalize({
+    x: axis(
+      Array.contains(pressedKeys, FIRE_LEFT_KEY),
+      Array.contains(pressedKeys, FIRE_RIGHT_KEY),
+    ),
+    y: axis(
+      Array.contains(pressedKeys, FIRE_UP_KEY),
+      Array.contains(pressedKeys, FIRE_DOWN_KEY),
+    ),
+  })
 
 export const pressKey = (input: Input, code: string): Input =>
   modifyFields(input, {
@@ -313,7 +333,8 @@ const mouseAim = (
 
 const triggerOf = (input: Input): Trigger =>
   Stick.isAnyOf(['Active'])(input.aimStick) ||
-  MouseButton.isAnyOf(['Held'])(input.mouseButton)
+  MouseButton.isAnyOf(['Held'])(input.mouseButton) ||
+  Option.isSome(keyboardAim(input.pressedKeys))
     ? 'Held'
     : 'Released'
 
@@ -329,8 +350,10 @@ export const deriveIntent = (
     ),
     1,
   ),
-  maybeAim: Option.orElse(stickAim(input.aimStick), () =>
-    mouseAim(input, player, camera),
+  maybeAim: pipe(
+    stickAim(input.aimStick),
+    Option.orElse(() => keyboardAim(input.pressedKeys)),
+    Option.orElse(() => mouseAim(input, player, camera)),
   ),
   trigger: triggerOf(input),
 })

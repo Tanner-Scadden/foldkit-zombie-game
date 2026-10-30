@@ -214,6 +214,73 @@ describe('one key per action: the kept keys work', () => {
     )
   })
 
+  test('a held arrow aims that way and fires, and letting go stops', () => {
+    const aims: ReadonlyArray<readonly [string, { x: number; y: number }]> = [
+      ['ArrowUp', { x: 0, y: -1 }],
+      ['ArrowLeft', { x: -1, y: 0 }],
+      ['ArrowDown', { x: 0, y: 1 }],
+      ['ArrowRight', { x: 1, y: 0 }],
+    ]
+    Array.forEach(aims, ([code, aim]) =>
+      story(
+        update,
+        given(fighting),
+        press(code),
+        model(({ intent }) => {
+          expect(intent.maybeAim).toEqual(Option.some(aim))
+          expect(intent.trigger).toBe('Held')
+          expect(intent.move).toEqual({ x: 0, y: 0 })
+        }),
+        tick(FRAME_MS),
+        tick(FRAME_MS),
+        model(({ stats }) => {
+          expect(stats.shotsFired).toBeGreaterThan(0)
+        }),
+        release(code),
+        model(({ intent }) => {
+          expect(intent.trigger).toBe('Released')
+        }),
+      ),
+    )
+  })
+
+  test('two arrows fire on the diagonal', () => {
+    story(
+      update,
+      given(fighting),
+      press('ArrowUp'),
+      press('ArrowRight'),
+      model(({ intent }) => {
+        const aim = Option.getOrThrow(intent.maybeAim)
+        expect(aim.x).toBeCloseTo(Math.SQRT1_2)
+        expect(aim.y).toBeCloseTo(-Math.SQRT1_2)
+        expect(intent.trigger).toBe('Held')
+      }),
+    )
+  })
+
+  test('an arrow outranks the mouse for aim, and the mouse takes over again on release', () => {
+    story(
+      update,
+      given(fighting),
+      message(Message.MovedMouse({ clientX: 0, clientY: 200 })),
+      model(({ intent }) => {
+        expect(Option.getOrThrow(intent.maybeAim).x).toBeLessThan(0)
+        expect(intent.trigger).toBe('Released')
+      }),
+      press('ArrowRight'),
+      model(({ intent }) => {
+        expect(intent.maybeAim).toEqual(Option.some({ x: 1, y: 0 }))
+        expect(intent.trigger).toBe('Held')
+      }),
+      release('ArrowRight'),
+      model(({ intent }) => {
+        expect(Option.getOrThrow(intent.maybeAim).x).toBeLessThan(0)
+        expect(intent.trigger).toBe('Released')
+      }),
+    )
+  })
+
   test('Q swaps guns both ways', () => {
     story(
       update,

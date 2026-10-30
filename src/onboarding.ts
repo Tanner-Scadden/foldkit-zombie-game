@@ -279,7 +279,7 @@ export const HINT_TEXT: Readonly<
 > = {
   Move: { KeyboardMouse: 'WASD MOVES', Touch: 'DRAG YOUR LEFT THUMB TO MOVE' },
   Fire: {
-    KeyboardMouse: 'MOUSE AIMS, CLICK FIRES',
+    KeyboardMouse: 'CLICK OR HOLD AN ARROW TO FIRE',
     Touch: 'DRAG YOUR RIGHT THUMB TO AIM AND FIRE',
   },
   Pickup: {

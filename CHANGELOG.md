@@ -9,6 +9,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 - 📖 A brand new menu with the Munchopedia: meet every zombie you've splatted. Your kills and bests stick around after updates, and SETTINGS can link your phone and computer to play from one save.
 - 📱 Play holding your phone upright: the manor zooms in up close, and your guns sit on the wall right under your thumbs. Turn it sideways any time to see the whole room.
 - 🔥 The parlour got cozy: a crackling fire, a comfy sofa, a big rug, and doors that look properly smashed in. Something bit the rug.
+- ⌨️ No mouse? No problem. Hold an arrow key to blast that way, two for the diagonal.
 
 ## October 28, 2026: Opening night
 

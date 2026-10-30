@@ -18,6 +18,7 @@ bun dev
 | Input              | Move                   | Aim                     | Fire                                |
 | ------------------ | ---------------------- | ----------------------- | ----------------------------------- |
 | Keyboard and mouse | WASD                   | Pointer position        | Hold the primary button             |
+| Keyboard only      | WASD                   | Arrow keys              | Fires while an arrow key is held    |
 | Touch              | Thumb on the left half | Thumb on the right half | Fires while the right thumb is down |
 
 Tap, click, or press Enter to start or retry. Esc pauses and resumes, and so does the PAUSE button in the top right corner. A tap or click on the pause screen also resumes. The game pauses when the page is hidden. R reloads, Q swaps guns, T places a trap, G picks the next trap, Enter starts the wave, M mutes, and N toggles the music. Each action has one key.
