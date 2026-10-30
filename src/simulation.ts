@@ -69,6 +69,7 @@ import {
   maybeShooterOf,
   nearestOf,
   payTo,
+  playersOf,
   shooterOf,
   targetsOf,
 } from './party'
@@ -362,6 +363,7 @@ const shoot = (
         y: muzzle.y,
         direction: player.facing,
         weapon,
+        maybeShooter: shooterOf(model),
       }),
     ),
   })
@@ -1308,14 +1310,22 @@ export const shedParts = (before: World, after: World): World => {
 
 // INTENSITY
 
+const heartsLostBetween = (before: World, after: World): number =>
+  Array.reduce(playersOf(after), 0, (total, { slot, player }) =>
+    Option.match(maybePlayerAt(before, slot), {
+      onNone: () => total,
+      onSome: was => total + Math.max(0, was.player.hp - player.hp),
+    }),
+  )
+
 const feelIntensity = (before: World, after: World, deltaMs: number): World =>
   modifyFields(after, {
     intensity: intensity =>
       advanceIntensity(
         intensity,
-        Math.max(0, before.player.hp - after.player.hp),
+        heartsLostBetween(before, after),
         after.zombies,
-        after.player,
+        Array.map(playersOf(after), ({ player }) => player),
         deltaMs,
       ),
   })
@@ -1373,6 +1383,13 @@ export const walkLeadSeat = (model: World, deltaMs: number): World => {
     )(model),
   )
 }
+
+// NOTE: a co-op client's guess at its own seat's next tick from its own
+// input (src/roomWorld.ts, predictOwn): the walk, the reload, and the
+// trigger, so its shots' timing, muzzle flash, and ammo show at once. The
+// caller keeps only the player; bullets, hits, and money stay the room's.
+export const predictLeadSeat = (model: World, deltaMs: number): World =>
+  armSeat(deltaMs)(walkLeadSeat(model, deltaMs))
 
 // NOTE: only a standing player shops, reloads, and fires.
 const armSeat =

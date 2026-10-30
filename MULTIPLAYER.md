@@ -329,7 +329,7 @@ That is under the estimate of "The wire at 20 Hz" (5.7 mean, 7.4 crowded, 11.2 a
 
 Left for later:
 
-- **Feel (Phase 4).** Only the own player's walk and aim are predicted: shots, muzzle flash, and the shot sound wait for the room. The new zombie card is not shown in co-op, and footfalls and intensity (the music) follow the lead seat. Throttled 4G on real phones is not measured yet.
+- **Feel (Phase 4).** The tracer of your own shot still waits for the room. Throttled 4G on real phones is not measured yet.
 - **Co-op analytics and balance (Phase 6).** RunSummary has no co-op fields, so an online run sends none.
 
 ### The lobby picks
@@ -343,6 +343,14 @@ Built on 2026-10-30. The host picks what the room plays next in the lobby: a row
 ### Looks
 
 Built on 2026-10-30. Create, join, and QUICK PLAY send the player's saved look with their name, as five words joined by dots (`lookCodeOf` in `src/playerData.ts`, such as `Female.Ponytail.Pink.Tan.Teal`). The Worker keeps it only when it reads back as one of the game's looks (`lookOfRequest` in `infra/worker/gameRoomCore.ts`), and the scope keeps only text of that shape (`cleanLook` in `Lobby.ts`), so anything else is ''. It lives in the member's row (`look`, migration `0003_looks`; `CreatedRoom` and `JoinedRoom` are at version 2). The lobby's seats, the last run's scores, and the teammates in the run wear it (`seatLookOf` in `src/coop/looks.ts`); a seat with no look wears its seat's look as before.
+
+### Predicted shots
+
+Built on 2026-10-30. Your own player's predicted tick (`predictOwn`, through `predictLeadSeat` in `src/simulation.ts`) now reloads and pulls the trigger as well as walking, keeping only the player: the fire cooldown, the recoil that draws the muzzle flash, the ammo, and the reload come at once, and the room's answer replaces them with each message, as it does the walk. Bullets, hits, and money stay the room's. A shot sounds when a newly predicted tick raises the recoil (`predictedShots` in `src/coop/update.ts`); a correction replays ticks already counted, so it never sounds twice. Every `Fired` event names its shooter (`maybeShooter`), and the client leaves the room's copy of its own shots quiet (`isOwnShot` in `src/update/sound.ts`), so a shot is heard once. A shot the room refuses (a mispredicted trigger) has still been heard, and one the room fires that the client did not predict is not heard; both are rare, since the client steps the same rules from the same state.
+
+### The run from your own seat
+
+Built on 2026-10-30. A wave that brings a zombie you have not met raises its card on your screen only, and the run goes on under it (decided 9); it ages and leaves as in single player, and the kind counts as met in your save. Footsteps sound and shake by how near they are to your own player (`heardBy` in `src/coopPlay.ts`), not the room's lead seat. The music's intensity counts hearts lost by anyone in the crew and zombies close to any player (`advanceIntensity`), so it rises for everyone when anyone is in trouble; one player counts exactly as before, which `bun run determinism:diff` confirms.
 
 ### Phase 4: feel and phones
 

@@ -477,15 +477,20 @@ const isClose =
 // NOTE: Intensity is a hidden measure of how hard the last few seconds were.
 // It never draws from the seeded generator and never changes which zombie
 // comes or from which door. It only lengthens a Relax while it is high.
+// NOTE: in co-op, `heartsLost` is the whole crew's and a zombie counts as
+// close when it is close to any player, so the music rises for everyone
+// when anyone is in trouble. One player counts exactly as before.
 export const advanceIntensity = (
   intensity: number,
   heartsLost: number,
   zombies: ReadonlyArray<Zombie>,
-  player: Vector,
+  players: ReadonlyArray<Vector>,
   deltaMs: number,
 ): number => {
   const seconds = deltaMs / MS_PER_SECOND
-  const close = Array.filter(zombies, isClose(player)).length
+  const close = Array.filter(zombies, zombie =>
+    Array.some(players, player => isClose(player)(zombie)),
+  ).length
   const decayed = intensity * Math.exp(-INTENSITY_DECAY_PER_SECOND * seconds)
   return Math.min(
     INTENSITY_MAX,

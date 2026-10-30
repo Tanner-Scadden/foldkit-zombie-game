@@ -14,7 +14,7 @@ import { type ClientFrame, NEUTRAL_INPUT, makeWriter } from '@munch/netcode'
 import { RoomEvent } from '@munch/netcode/browser'
 
 import { playRoom } from '../roomTesting'
-import { seatActionOf } from '../roomWorld'
+import { AIM_REACH, FIRE_BUTTON, seatActionOf } from '../roomWorld'
 import { SeatAction } from '../stepWorld'
 import { Message, OutMessage } from './message'
 import {
@@ -486,6 +486,59 @@ test('a second LEAVE while leaving sends nothing more', () => {
     message(Message.ClickedLeaveButton()),
     Command.expectNone(),
   )
+})
+
+describe('predicted shots', () => {
+  const live = (): Model =>
+    [
+      received(
+        { _tag: 'Welcome', version: 1, slot: 0, state: 'Playing', tick: 0 },
+        1000,
+      ),
+      received(snapshotFrame(10), 1010),
+    ].reduce((current, next) => update(current, next).model, inRoom(0))
+
+  const TRIGGER = { ...NEUTRAL_INPUT, aimX: AIM_REACH, buttons: FIRE_BUTTON }
+
+  const shotsOver = (
+    start: Model,
+    controls: typeof NEUTRAL_INPUT,
+    fromMs: number,
+    frames: number,
+  ) =>
+    Array.reduce(
+      Array.range(1, frames),
+      { current: start, shots: 0 },
+      ({ current, shots }, frame) => {
+        const ticked = tickRoom(current, controls, fromMs + frame * 16).model
+        return {
+          current: ticked,
+          shots: shots + roomOf(ticked).predictedShots,
+        }
+      },
+    )
+
+  test('holding the trigger fires at once, each shot counted once', () => {
+    const held = shotsOver(live(), TRIGGER, 1010, 30)
+    expect(held.shots).toBeGreaterThanOrEqual(3)
+    expect(held.shots).toBeLessThanOrEqual(4)
+    const ownShots = (current: Model) =>
+      Option.match(roomOf(current).session.predicted, {
+        onNone: () => -1,
+        onSome: own => own.player.recoilRemainingMs,
+      })
+    expect(ownShots(held.current)).toBeGreaterThanOrEqual(0)
+    const corrected = update(
+      held.current,
+      received(snapshotFrame(40), 1500),
+    ).model
+    const after = shotsOver(corrected, NEUTRAL_INPUT, 1500, 10)
+    expect(after.shots).toBe(0)
+  })
+
+  test('a released trigger fires nothing', () => {
+    expect(shotsOver(live(), NEUTRAL_INPUT, 1010, 30).shots).toBe(0)
+  })
 })
 
 describe('the room', () => {

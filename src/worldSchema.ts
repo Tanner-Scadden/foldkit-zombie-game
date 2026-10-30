@@ -479,12 +479,16 @@ export const Callout = Schema.Struct({
 })
 export type Callout = typeof Callout.Type
 
+// NOTE: a shot names the seat that fired it (a PlayerSlot), so a co-op
+// client can tell its own shots, which it predicts, from the room's; a
+// trap's shot names none.
 export const GameEvent = defineTaggedUnion({
   Fired: {
     x: Schema.Number,
     y: Schema.Number,
     direction: Vector,
     weapon: WeaponKind,
+    maybeShooter: Schema.Option(Schema.Number),
   },
   ZombieHit: {
     x: Schema.Number,

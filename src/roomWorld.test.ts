@@ -4,10 +4,14 @@ import { describe, expect, test } from 'vitest'
 
 import { NEUTRAL_INPUT, makeReader, makeWriter } from '@munch/netcode'
 
+import { INTENSITY_PER_HEART } from './constants'
 import { maybePlayerAt, withSeat } from './party'
 import { ROOM_WORLD, playRoom, scriptedTicks } from './roomTesting'
 import {
+  AIM_REACH,
   DEFAULT_ROOM_SETTINGS,
+  FIRE_BUTTON,
+  type OwnSeat,
   type RoomWorld,
   actionCodeOf,
   heldAction,
@@ -25,6 +29,7 @@ import {
   writeRoomSnapshot,
 } from './roomWorld'
 import { SeatAction } from './stepWorld'
+import { zombieAt } from './testing'
 import { FINAL_WAVE, beginPreparation } from './waves'
 import { isSameOnWire } from './worldCodec'
 import { Phase, ShopState } from './worldSchema'
@@ -260,6 +265,46 @@ describe('own-player prediction', () => {
     expect(ROOM_WORLD.own.gap(predicted, actual)).toBeLessThan(0.01)
   })
 
+  test('predicting your trigger fires when the room does, gun and all', () => {
+    const trigger = {
+      ...NEUTRAL_INPUT,
+      aimX: AIM_REACH,
+      buttons: FIRE_BUTTON,
+    }
+    const ticks = Array.makeBy(40, () => 0)
+    const rooms = Array.scan(ticks, start, current =>
+      stepRoomWorld(current, [
+        { slot: 0, input: NEUTRAL_INPUT, presence: 'Here' },
+        { slot: 1, input: trigger, presence: 'Here' },
+      ]),
+    )
+    const own = Option.getOrThrow(ROOM_WORLD.own.of(start, 1))
+    const predictions = Array.scan(ticks, own, current =>
+      predictOwn(current, trigger, start),
+    )
+    const gunOf = (player: OwnSeat['player']) => ({
+      recoil: player.recoilRemainingMs,
+      cooldown: player.fireCooldownMs,
+      arsenal: player.arsenal,
+    })
+    expect(
+      Array.map(predictions, predicted => gunOf(predicted.player)),
+    ).toEqual(
+      Array.map(rooms, room =>
+        gunOf(Option.getOrThrow(ROOM_WORLD.own.of(room, 1)).player),
+      ),
+    )
+    expect(
+      Array.some(
+        predictions,
+        predicted => predicted.player.recoilRemainingMs > 0,
+      ),
+    ).toBe(true)
+    expect(Option.getOrThrow(Array.last(predictions)).player.x).toBe(
+      own.player.x,
+    )
+  })
+
   test('interpolating halfway puts a moving player halfway', () => {
     const later = playRoom(start, 12)
     const halfway = ROOM_WORLD.interpolate(start, later, 0.5)
@@ -307,5 +352,33 @@ describe('the lobby picks', () => {
     const newCrew = rules.start([0, 1, 2], 99)
     expect(newCrew.world.elapsedMs).toBe(0)
     expect(newCrew.world.mode._tag).toBe('Endless')
+  })
+})
+
+describe('the crew in the music', () => {
+  test('a zombie close to any teammate, or a bitten teammate, raises the intensity', () => {
+    const apart = withSeat(start.world, 1, seatWorld =>
+      modifyFields(seatWorld, {
+        player: player => modifyFields(player, { x: () => 260, y: () => 135 }),
+      }),
+    )
+    const lead = Option.getOrThrow(maybePlayerAt(apart, 0)).player
+    expect(Math.hypot(lead.x - 260, lead.y - 135)).toBeGreaterThan(100)
+    const intensityWith = (zombieX: number, zombieY: number) =>
+      stepRoomWorld(
+        {
+          ...start,
+          world: modifyFields(apart, {
+            zombies: () => [zombieAt(900, zombieX, zombieY)],
+          }),
+        },
+        [
+          { slot: 0, input: NEUTRAL_INPUT, presence: 'Here' },
+          { slot: 1, input: NEUTRAL_INPUT, presence: 'Here' },
+        ],
+      ).world.intensity
+    expect(intensityWith(280, 135)).toBeGreaterThan(0)
+    expect(intensityWith(160, 30)).toBe(0)
+    expect(intensityWith(266, 135)).toBeGreaterThanOrEqual(INTENSITY_PER_HEART)
   })
 })

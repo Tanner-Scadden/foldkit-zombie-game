@@ -137,6 +137,14 @@ export const raiseDebutCard = (model: Model): Model =>
       }),
   })
 
+// NOTE: a wave that just started raises the card for any kind in it the
+// player has not met yet.
+export const raiseDebutCardFrom = (before: Model, after: Model): Model =>
+  Phase.isAnyOf(['Preparation'])(before.phase) &&
+  Phase.isAnyOf(['Wave'])(after.phase)
+    ? raiseDebutCard(after)
+    : after
+
 export const isDebutCardUp = (model: Model): boolean =>
   DebutCard.isAnyOf(['Showing'])(model.debutCard)
 

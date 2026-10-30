@@ -849,6 +849,7 @@ const coopRoom = (
     maybeWorld: status === 'Playing' ? Option.some(world) : Option.none(),
     frameEvents: [],
     eventsTick: 0,
+    predictedShots: 0,
     presses: CoopModel.noPresses,
     share: 'Idle',
     departure: 'Staying',
