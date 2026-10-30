@@ -85,6 +85,7 @@ const legacySave: PlayerSave = {
   home: { seenNewsDay: 'October 28, 2026', openedEntries: ['Shambler'] },
   seenPowerUps: ['RapidFire'],
   rotation: 'Landscape',
+  name: 'Lil Gnaw',
 }
 
 interface FakeLegacy {
@@ -299,6 +300,46 @@ describe('the save in the player scope', () => {
         expect(yield* second.load).toEqual(
           Option.some({ ...legacySave, rotation: 'Landscape' }),
         )
+      }),
+    ))
+
+  test('a player row from before the name gains it, empty', () =>
+    run(
+      Effect.gen(function* () {
+        const hub = yield* makeHub()
+        const fake = yield* makeLegacy(Option.some(legacySave))
+        const first = yield* openOn(hub, fake.legacy)
+        yield* first.load
+        const sql = yield* sqlOn(hub)
+        yield* pipe(
+          Effect.all([
+            sql`ALTER TABLE player DROP COLUMN name`,
+            sql`ALTER TABLE sync_confirmed_player DROP COLUMN name`,
+            sql`DELETE FROM sync_migrations WHERE id = '0007_add_name'`,
+          ]),
+          Effect.orDie,
+        )
+        const second = yield* openOn(hub, fake.legacy)
+        expect(yield* second.load).toEqual(
+          Option.some({ ...legacySave, name: '' }),
+        )
+      }),
+    ))
+
+  test('a new name is one ChangedName mutation and lasts across a reload', () =>
+    run(
+      Effect.gen(function* () {
+        const hub = yield* makeHub()
+        const fake = yield* makeLegacy(Option.some(legacySave))
+        const first = yield* openOn(hub, fake.legacy)
+        yield* first.load
+        const renamed: PlayerSave = { ...legacySave, name: 'Dr. Chomp' }
+        expect(changesBetween(legacySave, renamed)).toEqual([
+          PlayerChange.ChangedName({ name: 'Dr. Chomp' }),
+        ])
+        yield* write(first, legacySave, renamed)
+        const second = yield* openOn(hub, fake.legacy)
+        expect(yield* second.load).toEqual(Option.some(renamed))
       }),
     ))
 
@@ -582,6 +623,50 @@ describe('two devices syncing one player', () => {
       }),
     ))
 
+  test('a name set on one linked device shows on the other, and the last one set wins', () =>
+    run(
+      Effect.gen(function* () {
+        const server = yield* makeServer()
+        const network = yield* server.host.network()
+        const setup = Option.some<SyncSetup>({
+          identityApi: server.api,
+          transports: [network.transport],
+        })
+        const phone = yield* openOn(
+          yield* makeHub(),
+          (yield* makeLegacy(Option.some(legacySave))).legacy,
+          setup,
+        )
+        const laptop = yield* openOn(
+          yield* makeHub(),
+          (yield* makeLegacy(Option.none())).legacy,
+          setup,
+        )
+        yield* phone.load
+        const code = yield* phone.requestLinkCode
+        yield* laptop.redeemLinkCode(code)
+        yield* until(laptop.load, maybeSave =>
+          Option.exists(maybeSave, save => save.name === 'Lil Gnaw'),
+        )
+
+        const onPhone: PlayerSave = { ...legacySave, name: 'Snackula' }
+        yield* write(phone, legacySave, onPhone)
+        const reached = yield* until(laptop.load, maybeSave =>
+          Option.exists(maybeSave, save => save.name === 'Snackula'),
+        )
+        expect(Option.map(reached, save => save.name)).toEqual(
+          Option.some('Snackula'),
+        )
+
+        const onLaptop: PlayerSave = { ...onPhone, name: 'Baron Burp' }
+        yield* write(laptop, onPhone, onLaptop)
+        const back = yield* until(phone.load, maybeSave =>
+          Option.exists(maybeSave, save => save.name === 'Baron Burp'),
+        )
+        expect(back).toEqual(Option.some(onLaptop))
+      }),
+    ))
+
   test('power-ups seen on two devices at once are all kept', () =>
     run(
       Effect.gen(function* () {
@@ -802,6 +887,7 @@ const migratedLiveSave: PlayerSave = {
   },
   seenPowerUps: [],
   rotation: 'Landscape',
+  name: '',
 }
 
 const realLegacy: LegacySave = {

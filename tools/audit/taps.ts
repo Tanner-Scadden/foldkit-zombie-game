@@ -1,7 +1,7 @@
 // Taps every visible button on the home menu (with the full screen icon, the
 // update chip, and a NEW ENTRY pop too), the MANOR hand, What's New, the Munchopedia list and
 // an entry, the difficulty picker, its other panels, the pause screen,
-// the character picker, the leave question, the gun cluster in a wave and a
+// the Profile's tabs, the leave question, the gun cluster in a wave and a
 // break, the shop (its cards, tabs, and the close X), Game Over, and Victory on
 // 667x375 and 844x390 phones, or with PORTRAIT=1 on 390x844, 430x932, and
 // 360x800 phones held upright, with touch. For each button it checks that the center and four points just
@@ -90,8 +90,32 @@ const SCENES: ReadonlyArray<Scene> = [
   },
   { name: 'difficulty', query: '', open: ['#home-difficulty'] },
   { name: 'how-to-play', query: '', open: [MANOR, '#hand-card-howtoplay'] },
-  { name: 'settings', query: 'fit=full&rotate', open: ['#home-settings'] },
-  { name: 'character', query: '', open: [MANOR, '#hand-card-character'] },
+  {
+    name: 'profile-settings',
+    query: 'fit=full&rotate',
+    open: ['#home-settings'],
+  },
+  { name: 'profile-look', query: '', open: [MANOR, '#hand-card-character'] },
+  {
+    name: 'profile-name',
+    query: 'name=Snackula',
+    open: ['#home-settings', '.profile-tab[data-tab="Name"]'],
+  },
+  {
+    name: 'profile-account',
+    query: 'sync=synced&devices=2',
+    open: ['#home-settings', '.profile-tab[data-tab="Account"]'],
+  },
+  {
+    name: 'profile-showing',
+    query: 'sync=synced&link=showing',
+    open: ['#home-settings', '.profile-tab[data-tab="Account"]'],
+  },
+  {
+    name: 'profile-entering',
+    query: 'sync=synced&link=entering',
+    open: ['#home-settings', '.profile-tab[data-tab="Account"]'],
+  },
   { name: 'paused', query: 'wave=3&seen=all&start=wave&phase=paused' },
   {
     name: 'leave',
@@ -137,8 +161,9 @@ const AFTER_TAP_MS = 250
 
 const surfaceTags = new Set(['PressedPointer'])
 
+// NOTE: a form's submit button names its tap with a Submitted Message.
 const TAP_LEAVES =
-  /(^|:)(Clicked\w*|SelectedOption|SelectedTab|RequestedClose|PressedPointer)$/
+  /(^|:)(Clicked\w*|Submitted\w*|SelectedOption|SelectedTab|RequestedClose|PressedPointer)$/
 
 const isTapMessage = (tag: string): boolean => TAP_LEAVES.test(tag)
 

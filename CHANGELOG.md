@@ -6,7 +6,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 
 - 💀 Pick how many skulls right by PLAY, and beat Hard to unlock Nightmare. Waves are tighter, planks cost more, and nothing climbs through a boarded door.
 - 💣 Meet the Kaboomer, who brought a bomb to share, and the Big Leaguer, who pitches zombies. Big Lugs wear junk armor now, and point-blank shots always land.
-- 🃏 A brand new menu: tap MORE to deal your cards, from your look to the Munchopedia of every zombie you've splatted. Once you've visited, it even plays on a plane with no internet.
+- 🃏 A brand new menu: tap MORE to deal your cards, from the Munchopedia to your own Profile, where you strut in a spotlight, carve your name on a tombstone (Snackula, anyone?), and summon your other devices through a portal. It even plays on a plane.
 - 📱 Play holding your phone upright: the manor zooms in up close, and your guns sit on the wall right under your thumbs. Turn it sideways any time to see the whole room.
 - 🍲 Smash open the kitchen behind the parlour: shoot the ovens to toast zombies, watch them slip in spilled soup, and last ten waves. The parlour got cozy, Rattles' shop got big pictures and a pricey Laser Sight, and your cursor is big and yellow so the dark floor never swallows it.
 

@@ -4,41 +4,38 @@ import { modifyFields } from 'foldkit/struct'
 
 import { randomAppearance } from '../appearance'
 import * as Character from '../character'
-import { isCharacterKey, releaseAll } from '../input'
 import { Message } from '../message'
-import { type Model, Phase } from '../model'
-import { isPastRestartGrace } from './run'
-import { type UpdateStep, withInput } from './step'
-
-const canPickCharacter = (model: Model): boolean =>
-  Phase.match(model.phase, {
-    Ready: () => true,
-    Preparation: () => false,
-    Wave: () => false,
-    Paused: () => false,
-    Victory: () => isPastRestartGrace(model),
-    GameOver: () => isPastRestartGrace(model),
-  })
+import type { Model } from '../model'
+import { withProfileFx } from '../profile'
+import { playSounds, uiCue } from './sound'
+import type { UpdateStep } from './step'
 
 const foldCharacterOutMessage = Character.OutMessage.match<UpdateStep>({
   ChoseLook:
     ({ choice }) =>
-    stepModel => ({
-      model: modifyFields(stepModel, {
-        appearance: appearance => Character.chooseLook(appearance, choice),
-      }),
-    }),
+    stepModel =>
+      playSounds([uiCue('Pop')])(
+        withProfileFx(
+          modifyFields(stepModel, {
+            appearance: appearance => Character.chooseLook(appearance, choice),
+          }),
+          'Poof',
+        ),
+      ),
   RequestedRandomLook: () => stepModel => {
     const [rngState, appearance] = randomAppearance(
       stepModel.cosmeticRngState,
       stepModel.appearance,
     )
-    return {
-      model: modifyFields(stepModel, {
-        cosmeticRngState: () => rngState,
-        appearance: () => appearance,
-      }),
-    }
+    return playSounds([uiCue('LootPop')])(
+      withProfileFx(
+        modifyFields(stepModel, {
+          cosmeticRngState: () => rngState,
+          appearance: () => appearance,
+        }),
+        'Spin',
+      ),
+    )
   },
 })
 
@@ -50,20 +47,3 @@ export const foldCharacter = Update.foldChild({
   toParentMessage: message => Message.GotCharacterMessage({ message }),
   foldOutMessage: foldCharacterOutMessage,
 })
-
-const foldCharacterOpen = Update.foldChildStep({
-  update: Character.open,
-  read: (model: Model) => Option.some(model.character),
-  write: (model, nextCharacter) =>
-    modifyFields(model, { character: () => nextCharacter }),
-  toParentMessage: message => Message.GotCharacterMessage({ message }),
-})
-
-export const openCharacterPicker: UpdateStep = stepModel =>
-  canPickCharacter(stepModel) && !stepModel.character.dialog.isOpen
-    ? foldCharacterOpen(withInput(stepModel, releaseAll))
-    : { model: stepModel }
-
-export const characterFromKey: (code: string) => UpdateStep =
-  code => stepModel =>
-    isCharacterKey(code) ? openCharacterPicker(stepModel) : { model: stepModel }

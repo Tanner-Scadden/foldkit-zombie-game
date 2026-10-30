@@ -15,6 +15,7 @@ import {
   Difficulty,
   HomeScreenTip,
   MusicSetting,
+  PlayerName,
   PlayerSave,
   RotationSetting,
   SavedBestsByDifficulty,
@@ -31,7 +32,8 @@ import {
 } from './playerData'
 
 // NOTE: the player scope, `player:<playerId>`: one player's settings, look,
-// difficulty, onboarding, bests, home menu, power-ups seen, and rotation, synced
+// name, difficulty, onboarding, bests, home menu, power-ups seen, and
+// rotation, synced
 // between that player's devices.
 // Shared with the sync Worker in infra/worker, so it imports only `effect`,
 // the sync engine, and src/playerData.ts. The tables are the ones the game
@@ -64,6 +66,7 @@ export const PlayerRow = Schema.Struct({
   seen_power_ups: Schema.fromJsonString(SavedPowerUps),
   cursor: CursorSetting,
   rotation: RotationSetting,
+  name: PlayerName,
 })
 export type PlayerRow = typeof PlayerRow.Type
 
@@ -91,6 +94,7 @@ export const PLAYER_COLUMNS = Array.make(
   'seen_power_ups',
   'cursor',
   'rotation',
+  'name',
 )
 
 export const rowOfSave = (save: PlayerSave): PlayerRow => ({
@@ -111,6 +115,7 @@ export const rowOfSave = (save: PlayerSave): PlayerRow => ({
   seen_power_ups: save.seenPowerUps,
   cursor: save.settings.cursor,
   rotation: save.rotation,
+  name: save.name,
 })
 
 export const killsRowsOfSave = (save: PlayerSave): ReadonlyArray<KillsRow> =>
@@ -148,11 +153,11 @@ const updatePlayer = (
 // NOTE: the first thing a device writes to its scope: its whole save, from
 // before sync. It only seeds an empty scope. On a scope that already has a
 // player (a device that linked to another device's player) it does nothing,
-// so linking never overwrites the player it joined. Version 5 is the save
-// with the rotation (save version 8).
+// so linking never overwrites the player it joined. Version 6 is the save
+// with the display name (save version 9).
 export const SeededPlayer = defineMutation({
   name: 'SeededPlayer',
-  version: 5,
+  version: 6,
   args: Schema.Struct({ save: PlayerSave }),
   scopes: [PLAYER_SCOPE_KIND],
   writer: 'Owner',
@@ -306,6 +311,17 @@ export const ChangedRotation = defineMutation({
   scopes: [PLAYER_SCOPE_KIND],
   writer: 'Owner',
   apply: ({ rotation }, context) => updatePlayer(context, { rotation }),
+})
+
+// NOTE: the display name, already cleaned by the device that set it. The
+// last device to change it wins, like the settings.
+export const ChangedName = defineMutation({
+  name: 'ChangedName',
+  version: 1,
+  args: Schema.Struct({ name: PlayerName }),
+  scopes: [PLAYER_SCOPE_KIND],
+  writer: 'Owner',
+  apply: ({ name }, context) => updatePlayer(context, { name }),
 })
 
 const PowerUpsRow = Schema.Struct({
@@ -480,6 +496,7 @@ export const PlayerScope = defineScope({
     SeededPlayer,
     ChangedSettings,
     ChangedRotation,
+    ChangedName,
     ChangedAppearance,
     ChangedDifficulty,
     UnlockedNightmare,
@@ -555,6 +572,14 @@ export const PlayerScope = defineScope({
         const sql = yield* SqlClient.SqlClient
         yield* sql`ALTER TABLE ${sql(table('player'))}
           ADD COLUMN rotation TEXT NOT NULL DEFAULT 'Landscape'`
+      }),
+    // NOTE: the display name came after the rotation. A player from before
+    // it has none, and the game shows the placeholder.
+    '0007_add_name': table =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        yield* sql`ALTER TABLE ${sql(table('player'))}
+          ADD COLUMN name TEXT NOT NULL DEFAULT ''`
       }),
   },
 })

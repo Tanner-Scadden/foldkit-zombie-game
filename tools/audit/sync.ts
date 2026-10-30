@@ -97,35 +97,44 @@ const awaitGame = (page: Page) =>
   })
 
 const toggleSelector = (label: string) =>
-  `.setting-toggle:has(.setting-label:text-is("${label}"))`
+  `button[aria-label="${label}"][aria-pressed]`
 
-const openSettings = async (page: Page) => {
-  if ((await page.locator('.setting-toggle').count()) === 0) {
+// NOTE: the gear opens the Profile on Settings. Sync, linking, and stats
+// sharing live on its Account tab.
+type ProfileTab = 'Look' | 'Name' | 'Account' | 'Settings'
+
+const openTab = async (page: Page, tab: ProfileTab) => {
+  if ((await page.locator('.profile-dialog[open]').count()) === 0) {
     await page.click('#home-settings')
-    await page.waitForSelector('.setting-toggle')
+    await page.waitForSelector('.profile-dialog[open]')
   }
+  await page.getByRole('tab', { name: tab }).click()
+  await wait(300)
 }
 
 const closePanel = async (page: Page) => {
-  if ((await page.locator('.setting-toggle').count()) > 0) {
+  if ((await page.locator('dialog[open]').count()) > 0) {
     await page.keyboard.press('Escape')
     await wait(400)
   }
 }
 
+const tabOf = (label: string): ProfileTab =>
+  label === 'Share anonymous play stats' ? 'Account' : 'Settings'
+
 const setting = async (page: Page, label: string) => {
-  await openSettings(page)
+  await openTab(page, tabOf(label))
   return page.locator(toggleSelector(label)).getAttribute('aria-pressed')
 }
 
 const flip = async (page: Page, label: string) => {
-  await openSettings(page)
+  await openTab(page, tabOf(label))
   await page.locator(toggleSelector(label)).click()
 }
 
 const syncLine = async (page: Page) => {
-  await openSettings(page)
-  return (await page.locator('.setting-sync-state').textContent()) ?? ''
+  await openTab(page, 'Account')
+  return (await page.locator('.account-status').textContent()) ?? ''
 }
 
 // NOTE: waits on the status line until it says what is expected, checking
@@ -143,8 +152,8 @@ const waitForLine = async (page: Page, expected: RegExp, timeoutMs: number) => {
 const hasNewsDot = async (page: Page) => {
   await closePanel(page)
   const label =
-    (await page.locator('#home-whats-new').getAttribute('aria-label')) ?? ''
-  return label.endsWith('Something new')
+    (await page.locator('#home-manor').getAttribute('aria-label')) ?? ''
+  return label.includes("Something new in What's new")
 }
 
 const splatted = async (page: Page) => {
@@ -157,7 +166,7 @@ const splatted = async (page: Page) => {
 
 const look = async (page: Page) => {
   await closePanel(page)
-  await page.click('#home-character')
+  await page.click('.home-hero')
   const preview = page.locator('[aria-label^="Preview:"]')
   await preview.waitFor()
   const label = (await preview.getAttribute('aria-label')) ?? ''
@@ -246,11 +255,11 @@ await closeLook(a.page)
 await finishRun(a.page)
 await wait(1500)
 
-await openSettings(a.page)
+await openTab(a.page, 'Account')
 await a.page.getByRole('button', { name: 'Link another device' }).click()
-await a.page.locator('.setting-link-code').waitFor({ timeout: SYNC_TIMEOUT })
+await a.page.locator('.account-code').waitFor({ timeout: SYNC_TIMEOUT })
 const code = (
-  (await a.page.locator('.setting-link-code').textContent()) ?? ''
+  (await a.page.locator('.account-code').textContent()) ?? ''
 ).trim()
 check(/^[A-Z2-9]{6}$/.test(code), `device A shows a link code (${code})`)
 
@@ -263,7 +272,7 @@ check(
 )
 check((await splatted(b.page)) === '', 'device B starts with no kills')
 check(await hasNewsDot(b.page), "device B starts with What's New unseen")
-await openSettings(b.page)
+await openTab(b.page, 'Account')
 await b.page.getByRole('button', { name: 'Use a code' }).click()
 const codeForm = b.page.locator('label[for="link-code-input"]')
 await codeForm.waitFor({ timeout: SYNC_TIMEOUT })
@@ -273,10 +282,10 @@ check(
   ),
   "device B's code form says it will use the other device's progress",
 )
-await b.page.locator('.setting-link-input').fill(code.toLowerCase())
+await b.page.locator('.account-code-input').fill(code.toLowerCase())
 await b.page.getByRole('button', { name: 'Link', exact: true }).click()
 await b.page
-  .getByText("Linked. This device now uses your other device's progress.")
+  .getByText("Linked! This device now uses your other device's progress.")
   .waitFor({ timeout: SYNC_TIMEOUT })
 check(true, 'device B links with the code')
 const bLine = await waitForLine(b.page, /Linked to 2 devices/, SYNC_TIMEOUT)

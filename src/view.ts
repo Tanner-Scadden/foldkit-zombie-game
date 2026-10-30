@@ -2,7 +2,6 @@ import { Array, Effect, Option, Queue, Result, Stream, pipe } from 'effect'
 import { Mount } from 'foldkit'
 import { Document, Html, HtmlBuilder } from 'foldkit/html'
 
-import * as CharacterView from './characterView'
 import { GAME_TITLE } from './constants'
 import { DIFFICULTIES, bestsFor } from './difficulty'
 import { exitDialogView } from './exitView'
@@ -35,6 +34,7 @@ import {
 import { isOpenBreak, isPracticeGateHeld } from './onboarding'
 import { pauseHelpView } from './pauseHelp'
 import { BOOST_KIND_ORDER, PICKUPS, isBoosted } from './powerups'
+import { profileView } from './profileView'
 import { landscapeFrameOffset, screenOf } from './screen'
 import { isShopOpenFor } from './shop'
 import { shopDialogView } from './shopView'
@@ -312,16 +312,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
         manorHandView(model, h),
         exitDialogView(model, h),
         menuPanelView(model, h),
-        h.submodel({
-          slotId: 'character-picker',
-          model: model.character,
-          view: CharacterView.view,
-          viewInputs: {
-            appearance: model.appearance,
-            screenMs: model.screenMs,
-          },
-          toParentMessage: message => Message.GotCharacterMessage({ message }),
-        }),
+        profileView(model, h),
       ],
     ),
   }

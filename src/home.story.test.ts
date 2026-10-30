@@ -157,12 +157,11 @@ describe('the home menu keys', () => {
     Array.forEach(codes, code => expect(gameKeys).not.toContain(code))
   })
 
-  test('L, Z, I, and O open their panels, and C opens the character picker', () => {
+  test('L, Z, and I open their panels, and C and O open the Profile on Look and Settings', () => {
     const opens: ReadonlyArray<readonly [string, MenuPanel]> = [
       ['KeyL', 'WhatsNew'],
       ['KeyZ', 'Munchopedia'],
       ['KeyI', 'HowToPlay'],
-      ['KeyO', 'Settings'],
     ]
     Array.forEach(opens, ([code, panel]) =>
       story(update, given(home), press(code), showDialog(), expectPanel(panel)),
@@ -173,7 +172,19 @@ describe('the home menu keys', () => {
       press('KeyC'),
       showDialog(),
       model(current => {
-        expect(current.character.dialog.isOpen).toBe(true)
+        expect(current.profile.dialog.isOpen).toBe(true)
+        expect(current.profile.tab).toBe('Look')
+      }),
+    )
+    story(
+      update,
+      given(home),
+      press('KeyO'),
+      showDialog(),
+      model(current => {
+        expect(current.profile.dialog.isOpen).toBe(true)
+        expect(current.profile.tab).toBe('Settings')
+        expect(current.panelDialog.isOpen).toBe(false)
       }),
     )
   })
@@ -189,6 +200,7 @@ describe('the home menu keys', () => {
         press(code),
         model(current => {
           expect(current.panelDialog.isOpen).toBe(false)
+          expect(current.profile.dialog.isOpen).toBe(false)
           expect(current.home.mode).toBe('Campaign')
         }),
       ),

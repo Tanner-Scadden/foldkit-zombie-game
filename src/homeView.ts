@@ -16,9 +16,7 @@ import {
   HAND_KEYS,
   HOME_BUTTONS,
   HOME_KEYS,
-  KEEP_TUTORIAL_BUTTON_ID,
   type KeyedHandCard,
-  RESET_TUTORIAL_BUTTON_ID,
   dealtCards,
   handCardId,
   homeButtonId,
@@ -27,32 +25,23 @@ import {
   steppedHandCard,
 } from './home'
 import {
-  AIM_ICON,
   CAMPAIGN_ICON,
   CHARACTER_ICON,
   CLOCK_ICON,
   CLOSE_ICON,
   COFFEE_ICON,
-  DEVICES_ICON,
   ENDLESS_ICON,
   FULLSCREEN_ICON,
   HAND_ICON,
   HELP_ICON,
   KILLS_ICON,
   MUNCHOPEDIA_ICON,
-  MUSIC_OFF_ICON,
-  MUSIC_ON_ICON,
   NEWS_ICON,
   PADLOCK_ICON,
   PLAY_ICON,
-  REWIND_ICON,
   SETTINGS_ICON,
-  SHAKE_ICON,
   SKULL_ICONS,
   SKULL_OFF_ICON,
-  SOUND_OFF_ICON,
-  SOUND_ON_ICON,
-  STATS_ICON,
   TROPHY_ICON,
   TURN_PHONE_ICON,
 } from './icons'
@@ -74,12 +63,6 @@ import {
   hasUnopenedEntry,
 } from './munchopedia'
 import { helpLabel, howToPlayView } from './pauseHelp'
-import {
-  LinkFlow,
-  SyncState,
-  devicesStatusText,
-  linkProblemText,
-} from './playerSync'
 import { isPortrait } from './screen'
 import { durationLabel } from './stats'
 import { FINAL_WAVE } from './waves'
@@ -640,7 +623,7 @@ const settingsButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
     [
       ...homeButtonAttributes('Settings', h),
       h.Class('home-corner-button home-settings'),
-      h.AriaLabel('Settings: sound, music, shake, and devices'),
+      h.AriaLabel('Settings'),
       h.AriaHasPopup('dialog'),
       h.OnClick(Message.ClickedSettingsButton(), { propagation: 'Stop' }),
     ],
@@ -840,208 +823,6 @@ const menuKeysView = (h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-// SETTINGS
-
-type Toggle = Readonly<{
-  label: string
-  shortLabel: string
-  isOn: boolean
-  onIcon: string
-  offIcon: string
-  maybeKey: Option.Option<string>
-  states?: Readonly<{ on: string; off: string }>
-  message: Message
-}>
-
-const ON_OFF = { on: 'ON', off: 'OFF' } as const
-
-export const SHARE_STATS_NOTE = 'Wave, kills, and run time. Nothing personal.'
-
-// NOTE: the quick toggles are icon tiles in one row: sound, music, shake,
-// the big cursor on a mouse, full screen where the browser can do it, and, on a phone that can lock
-// how it turns, ROTATE: off keeps it sideways, on lets it follow the phone.
-const settingTiles = (model: Model): ReadonlyArray<Toggle> => [
-  {
-    label: 'Sound',
-    shortLabel: 'SOUND',
-    isOn: model.soundSetting === 'On',
-    onIcon: SOUND_ON_ICON,
-    offIcon: SOUND_OFF_ICON,
-    maybeKey: Option.some('M'),
-    message: Message.ClickedMuteButton(),
-  },
-  {
-    label: 'Music',
-    shortLabel: 'MUSIC',
-    isOn: model.musicSetting === 'On',
-    onIcon: MUSIC_ON_ICON,
-    offIcon: MUSIC_OFF_ICON,
-    maybeKey: Option.some('N'),
-    message: Message.ClickedMusicButton(),
-  },
-  {
-    label: 'Screen shake',
-    shortLabel: 'SHAKE',
-    isOn: model.shakeSetting === 'On',
-    onIcon: SHAKE_ICON,
-    offIcon: SHAKE_ICON,
-    maybeKey: Option.none(),
-    message: Message.ClickedShakeButton(),
-  },
-  ...(isKeyboard(model)
-    ? [
-        {
-          label: 'Big cursor',
-          shortLabel: 'CURSOR',
-          isOn: model.cursorSetting === 'Bold',
-          onIcon: AIM_ICON,
-          offIcon: AIM_ICON,
-          maybeKey: Option.none(),
-          states: { on: 'BIG', off: 'THIN' },
-          message: Message.ClickedCursorButton(),
-        },
-      ]
-    : []),
-  ...(model.screenFit === 'Fullscreen'
-    ? [
-        {
-          label: 'Full screen',
-          shortLabel: 'FULL',
-          isOn: model.fullscreen === 'On',
-          onIcon: FULLSCREEN_ICON,
-          offIcon: FULLSCREEN_ICON,
-          maybeKey: Option.none(),
-          message: Message.ClickedFullscreenButton(),
-        },
-      ]
-    : []),
-  {
-    label: 'Share anonymous play stats',
-    shortLabel: 'STATS',
-    isOn: model.shareStats === 'On',
-    onIcon: STATS_ICON,
-    offIcon: STATS_ICON,
-    maybeKey: Option.none(),
-    message: Message.ClickedShareStatsButton(),
-  },
-  ...(model.orientationLock === 'Supported'
-    ? [
-        {
-          label: 'Turn with the phone',
-          shortLabel: 'ROTATE',
-          isOn: model.rotationSetting === 'Auto',
-          onIcon: TURN_PHONE_ICON,
-          offIcon: TURN_PHONE_ICON,
-          maybeKey: Option.none(),
-          states: { on: 'AUTO', off: 'LOCKED' },
-          message: Message.ClickedRotationButton(),
-        },
-      ]
-    : []),
-]
-
-const tileView = (
-  model: Model,
-  toggle: Toggle,
-  h: HtmlBuilder<Message>,
-): Html =>
-  h.li(
-    [h.Class('setting-tile-item')],
-    [
-      h.button(
-        [
-          h.Type('button'),
-          h.Class('setting-tile'),
-          h.AriaLabel(toggle.label),
-          h.AriaPressed(toggle.isOn ? 'true' : 'false'),
-          ...Option.match(toggle.maybeKey, {
-            onNone: () => [],
-            onSome: key => [h.AriaKeyshortcuts(key)],
-          }),
-          ...(toggle.label === 'Share anonymous play stats'
-            ? [h.AriaDescribedBy(SHARE_STATS_NOTE_ID)]
-            : []),
-          h.OnClick(toggle.message, { propagation: 'Stop' }),
-        ],
-        [
-          iconView(
-            'setting-tile-icon',
-            toggle.isOn ? toggle.onIcon : toggle.offIcon,
-            h,
-          ),
-          h.span([h.Class('setting-tile-label')], [toggle.shortLabel]),
-          h.span(
-            [h.Class('setting-tile-state'), h.AriaHidden(true)],
-            [
-              toggle.isOn
-                ? (toggle.states ?? ON_OFF).on
-                : (toggle.states ?? ON_OFF).off,
-            ],
-          ),
-          ...Option.match(toggle.maybeKey, {
-            onNone: () => [],
-            onSome: key => keyCapView(model, key, h),
-          }),
-        ],
-      ),
-    ],
-  )
-
-const shareStatsNoteView = (h: HtmlBuilder<Message>): Html =>
-  h.p([h.Id(SHARE_STATS_NOTE_ID), h.Class('sr-only')], [SHARE_STATS_NOTE])
-
-const SHARE_STATS_NOTE_ID = 'share-stats-note'
-
-const resetTutorialButtonView = (h: HtmlBuilder<Message>): Html =>
-  h.button(
-    [
-      h.Type('button'),
-      h.Id(RESET_TUTORIAL_BUTTON_ID),
-      h.Class('panel-icon-button'),
-      h.AriaLabel('Reset tutorial'),
-      h.OnClick(Message.ClickedResetTutorialButton(), { propagation: 'Stop' }),
-    ],
-    [iconView('panel-icon', REWIND_ICON, h)],
-  )
-
-const askResetTutorialView = (h: HtmlBuilder<Message>): Html =>
-  h.div(
-    [
-      h.Class('setting-confirm'),
-      h.Role('group'),
-      h.AriaLabel('Reset tutorial'),
-    ],
-    [
-      h.p([h.Class('setting-note')], ['Show the tips and zombie cards again?']),
-      h.div(
-        [h.Class('panel-actions')],
-        [
-          h.button(
-            [
-              h.Type('button'),
-              h.Class('panel-button panel-leave'),
-              h.OnClick(Message.ClickedConfirmResetTutorialButton(), {
-                propagation: 'Stop',
-              }),
-            ],
-            ['Reset'],
-          ),
-          h.button(
-            [
-              h.Type('button'),
-              h.Id(KEEP_TUTORIAL_BUTTON_ID),
-              h.Class('panel-button panel-stay'),
-              h.OnClick(Message.ClickedCancelResetTutorialButton(), {
-                propagation: 'Stop',
-              }),
-            ],
-            ['Keep'],
-          ),
-        ],
-      ),
-    ],
-  )
-
 // DIFFICULTY
 
 const freshBadgeView = (
@@ -1109,202 +890,6 @@ const difficultyChoiceView = (
   )
 }
 
-// DEVICES
-
-const LINK_CODE_INPUT_ID = 'link-code-input'
-
-// NOTE: linking never merges. The device that types the code takes on the
-// other device's player, and what it had saved is left behind (see
-// "Device linking" in PLATFORM.md), so the form says so before Link.
-export const LINK_TAKES_PROGRESS_NOTE =
-  "Type the code from your other device. This device will use the other device's progress. What was saved on this device is replaced, not merged."
-
-const panelButton = (
-  label: string,
-  message: Message,
-  h: HtmlBuilder<Message>,
-  tone: 'Stay' | 'Leave' | 'Quiet' = 'Stay',
-): Html =>
-  h.button(
-    [
-      h.Type('button'),
-      h.Class(
-        tone === 'Stay'
-          ? 'panel-button panel-stay'
-          : tone === 'Leave'
-            ? 'panel-button panel-leave'
-            : 'panel-button panel-quiet',
-      ),
-      h.OnClick(message, { propagation: 'Stop' }),
-    ],
-    [label],
-  )
-
-const linkNote = (text: string, h: HtmlBuilder<Message>): Html =>
-  h.p([h.Class('setting-note'), h.Role('status')], [text])
-
-const linkActions = (
-  buttons: ReadonlyArray<Html>,
-  h: HtmlBuilder<Message>,
-): Html => h.div([h.Class('panel-actions')], buttons)
-
-const codeEntryView = (code: string, h: HtmlBuilder<Message>): Html =>
-  h.form(
-    [h.Class('setting-link-form'), h.OnSubmit(Message.SubmittedLinkCode())],
-    [
-      h.label(
-        [h.For(LINK_CODE_INPUT_ID), h.Class('setting-note')],
-        [LINK_TAKES_PROGRESS_NOTE],
-      ),
-      h.input([
-        h.Id(LINK_CODE_INPUT_ID),
-        h.Class('setting-link-input'),
-        h.Type('text'),
-        h.Name('code'),
-        h.Value(code),
-        h.Maxlength(7),
-        h.Autocomplete('off'),
-        h.Autocapitalize('characters'),
-        h.Spellcheck(false),
-        h.OnInput(value => Message.UpdatedLinkCode({ value })),
-      ]),
-      linkActions(
-        [
-          h.button(
-            [h.Type('submit'), h.Class('panel-button panel-stay')],
-            ['Link'],
-          ),
-          panelButton('Cancel', Message.ClickedCancelLinkButton(), h, 'Leave'),
-        ],
-        h,
-      ),
-    ],
-  )
-
-// NOTE: while idle, the two link buttons sit in the devices row itself, so
-// the section is one line until the player starts linking.
-const isLinkIdle = (model: Model): boolean =>
-  LinkFlow.isAnyOf(['Idle'])(model.linkFlow)
-
-const linkFlowView = (
-  model: Model,
-  h: HtmlBuilder<Message>,
-): ReadonlyArray<Html> =>
-  LinkFlow.match(model.linkFlow, {
-    Idle: () => [],
-    Requesting: () => [linkNote('Getting a code', h)],
-    Showing: ({ code }) => [
-      linkNote(
-        'On your other device, open SETTINGS, choose Use a code, and type:',
-        h,
-      ),
-      h.p(
-        [
-          h.Class('setting-link-code'),
-          h.AriaLabel(`Link code ${Array.join(code.split(''), ' ')}`),
-        ],
-        [code],
-      ),
-      linkNote(
-        "The code works once, for 10 minutes. The device that types it in will use this device's progress.",
-        h,
-      ),
-      linkActions(
-        [panelButton('Done', Message.ClickedCancelLinkButton(), h)],
-        h,
-      ),
-    ],
-    Entering: ({ code }) => [codeEntryView(code, h)],
-    Redeeming: () => [linkNote('Linking', h)],
-    Linked: () => [
-      linkNote("Linked. This device now uses your other device's progress.", h),
-      linkActions(
-        [panelButton('Done', Message.ClickedCancelLinkButton(), h)],
-        h,
-      ),
-    ],
-    Failed: ({ problem }) => [
-      linkNote(linkProblemText(problem), h),
-      linkActions(
-        [
-          panelButton('Use a code', Message.ClickedUseCodeButton(), h),
-          panelButton('Cancel', Message.ClickedCancelLinkButton(), h, 'Leave'),
-        ],
-        h,
-      ),
-    ],
-  })
-
-const devicesTileView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.li(
-    [h.Class('setting-tile-item')],
-    [
-      h.button(
-        [
-          h.Type('button'),
-          h.Class('setting-tile setting-devices-tile'),
-          h.AriaLabel(
-            `Devices: ${devicesStatusText(model.syncState, model.playerScopeStatus)}`,
-          ),
-          h.AriaExpanded(model.devicesRow === 'Unfolded'),
-          h.OnClick(Message.ClickedDevicesButton(), { propagation: 'Stop' }),
-        ],
-        [
-          iconView('setting-tile-icon', DEVICES_ICON, h),
-          h.span([h.Class('setting-tile-label')], ['DEVICES']),
-          h.span([
-            h.Class('setting-sync-dot'),
-            h.AriaHidden(true),
-            h.DataAttribute('sync', model.syncState._tag),
-          ]),
-        ],
-      ),
-    ],
-  )
-
-const devicesView = (model: Model, h: HtmlBuilder<Message>): Html => {
-  const canLink = !SyncState.isAnyOf(['LocalOnly'])(model.syncState)
-  return model.devicesRow === 'Folded'
-    ? h.empty
-    : h.div(
-        [h.Class('setting-devices')],
-        [
-          h.p(
-            [
-              h.Class('setting-sync-state'),
-              h.Role('status'),
-              h.DataAttribute('sync', model.syncState._tag),
-              h.DataAttribute('scope', model.playerScopeStatus._tag),
-              h.DataAttribute('last-run', model.lastRunSync._tag),
-            ],
-            [devicesStatusText(model.syncState, model.playerScopeStatus)],
-          ),
-          ...(canLink && isLinkIdle(model)
-            ? [
-                h.div(
-                  [h.Class('setting-sync-actions')],
-                  [
-                    panelButton(
-                      'Link another device',
-                      Message.ClickedLinkDeviceButton(),
-                      h,
-                      'Quiet',
-                    ),
-                    panelButton(
-                      'Use a code',
-                      Message.ClickedUseCodeButton(),
-                      h,
-                      'Quiet',
-                    ),
-                  ],
-                ),
-              ]
-            : []),
-          ...(canLink ? linkFlowView(model, h) : []),
-        ],
-      )
-}
-
 type PanelText = Readonly<{ title: string; blurb: string }>
 
 const panelText = (model: Model, panel: MenuPanel): PanelText => {
@@ -1312,11 +897,6 @@ const panelText = (model: Model, panel: MenuPanel): PanelText => {
     return {
       title: 'How to play',
       blurb: `Controls for ${helpLabel(model.lastDevice)}.`,
-    }
-  } else if (panel === 'Settings') {
-    return {
-      title: 'Settings',
-      blurb: 'Saved on this device.',
     }
   } else if (panel === 'Difficulty') {
     return isAskingFirst(model)
@@ -1357,35 +937,6 @@ const doneButtonView = (
     [iconView('panel-close-icon', CLOSE_ICON, h)],
   )
 
-const settingsBodyView = (
-  model: Model,
-  renderInfo: Dialog.RenderInfo,
-  h: HtmlBuilder<Message>,
-): ReadonlyArray<Html> => [
-  doneButtonView(renderInfo, h, 'LeavesInitialFocus'),
-  h.ul(
-    [h.Class('setting-tiles'), h.AriaLabel('Settings')],
-    [
-      ...Array.map(settingTiles(model), toggle => tileView(model, toggle, h)),
-      devicesTileView(model, h),
-    ],
-  ),
-  shareStatsNoteView(h),
-  devicesView(model, h),
-  model.tutorialReset === 'Asking'
-    ? askResetTutorialView(h)
-    : h.div(
-        [h.Class('setting-footer')],
-        [
-          resetTutorialButtonView(h),
-          h.p(
-            [h.Class('setting-note'), h.Role('status')],
-            model.tutorialReset === 'Done' ? ['Tips are back.'] : [],
-          ),
-        ],
-      ),
-]
-
 const panelBodyView = (
   model: Model,
   renderInfo: Dialog.RenderInfo,
@@ -1403,8 +954,6 @@ const panelBodyView = (
       ),
       h.div([h.Class('panel-actions')], [doneButtonView(renderInfo, h)]),
     ]
-  } else if (model.panel === 'Settings') {
-    return settingsBodyView(model, renderInfo, h)
   } else if (model.panel === 'WhatsNew') {
     return whatsNewBodyView(model, doneButtonView(renderInfo, h), h)
   } else if (model.panel === 'Munchopedia') {
@@ -1458,7 +1007,7 @@ const panelBodyView = (
   }
 }
 
-// NOTE: show, don't explain. Settings, How to play, and the difficulty
+// NOTE: show, don't explain. How to play and the difficulty
 // picker by PLAY speak through their icons, so their blurb is only read
 // aloud.
 const isBlurbShown = (model: Model): boolean =>

@@ -5,6 +5,7 @@ import {
   Appearance,
   Difficulty,
   HomeScreenTip,
+  PlayerName,
   PlayerSave,
   RotationSetting,
   SavedBestsByDifficulty,
@@ -26,6 +27,7 @@ import {
 export const PlayerChange = defineTaggedUnion({
   ChangedSettings: { settings: SavedSettings },
   ChangedRotation: { rotation: RotationSetting },
+  ChangedName: { name: PlayerName },
   ChangedAppearance: { appearance: Appearance },
   UnlockedNightmare: {},
   ChangedDifficulty: { chosen: Difficulty, card: SavedCard },
@@ -105,6 +107,9 @@ export const changesBetween = (
       changeWhen(before.rotation !== after.rotation, () =>
         PlayerChange.ChangedRotation({ rotation: after.rotation }),
       ),
+      changeWhen(before.name !== after.name, () =>
+        PlayerChange.ChangedName({ name: after.name }),
+      ),
       changeWhen(!sameAppearance(before.appearance, after.appearance), () =>
         PlayerChange.ChangedAppearance({ appearance: after.appearance }),
       ),
@@ -158,6 +163,7 @@ const refreshed = (change: PlayerChange, save: PlayerSave): PlayerChange =>
       PlayerChange.ChangedSettings({ settings: save.settings }),
     ChangedRotation: () =>
       PlayerChange.ChangedRotation({ rotation: save.rotation }),
+    ChangedName: () => PlayerChange.ChangedName({ name: save.name }),
     ChangedAppearance: () =>
       PlayerChange.ChangedAppearance({ appearance: save.appearance }),
     UnlockedNightmare: () => change,

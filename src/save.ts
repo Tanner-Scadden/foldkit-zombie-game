@@ -30,6 +30,7 @@ import {
   HomeScreenTip,
   MusicSetting,
   PlayerSave,
+  RotationSetting,
   SAVE_VERSION,
   SavedBests,
   SavedDifficulty,
@@ -45,6 +46,7 @@ import {
   ShareStatsSetting,
   SoundSetting,
 } from './playerData'
+import { cleanName } from './profile'
 
 export {
   PlayerSave,
@@ -192,7 +194,24 @@ const PlayerSaveV7 = Schema.Struct({
 })
 type PlayerSaveV7 = typeof PlayerSaveV7.Type
 
+// NOTE: version 8 is the save before the display name: the rotation.
+const PlayerSaveV8 = Schema.Struct({
+  version: Schema.Literal(8),
+  onboarding: SavedOnboarding,
+  homeScreenTip: HomeScreenTip,
+  settings: SavedSettings,
+  appearance: Appearance,
+  difficulty: SavedDifficulty,
+  bests: SavedBests,
+  home: SavedHome,
+  seenPowerUps: SavedPowerUps,
+  rotation: RotationSetting,
+})
+type PlayerSaveV8 = typeof PlayerSaveV8.Type
+
 const PlayerSaveJson = Schema.fromJsonString(PlayerSave)
+
+const PlayerSaveV8Json = Schema.fromJsonString(PlayerSaveV8)
 
 const PlayerSaveV7Json = Schema.fromJsonString(PlayerSaveV7)
 
@@ -332,8 +351,8 @@ const migrateV6 = (save: PlayerSaveV6): PlayerSaveV7 => ({
 })
 
 // NOTE: every save from before the rotation turns as before: landscape.
-const migrateV7 = (save: PlayerSaveV7): PlayerSave => ({
-  version: SAVE_VERSION,
+const migrateV7 = (save: PlayerSaveV7): PlayerSaveV8 => ({
+  version: 8,
   onboarding: save.onboarding,
   homeScreenTip: save.homeScreenTip,
   settings: save.settings,
@@ -344,6 +363,34 @@ const migrateV7 = (save: PlayerSaveV7): PlayerSave => ({
   seenPowerUps: save.seenPowerUps,
   rotation: 'Landscape',
 })
+
+// NOTE: a save from before the display name has no name yet, and shows the
+// placeholder until the player picks one.
+const migrateV8 = (save: PlayerSaveV8): PlayerSave => ({
+  version: SAVE_VERSION,
+  onboarding: save.onboarding,
+  homeScreenTip: save.homeScreenTip,
+  settings: save.settings,
+  appearance: save.appearance,
+  difficulty: save.difficulty,
+  bests: save.bests,
+  home: save.home,
+  seenPowerUps: save.seenPowerUps,
+  rotation: save.rotation,
+  name: '',
+})
+
+const fromV7 = (save: PlayerSaveV7): PlayerSave => migrateV8(migrateV7(save))
+
+const fromV6 = (save: PlayerSaveV6): PlayerSave => fromV7(migrateV6(save))
+
+const fromV5 = (save: PlayerSaveV5): PlayerSave => fromV6(migrateV5(save))
+
+const fromV4 = (save: PlayerSaveV4): PlayerSave => fromV5(migrateV4(save))
+
+const fromV3 = (save: PlayerSaveV3): PlayerSave => fromV4(migrateV3(save))
+
+const fromV2 = (save: PlayerSaveV2): PlayerSave => fromV3(migrateV2(save))
 
 // NOTE: the one list of save versions this build reads, newest first, each
 // with its way to the current save. A new version goes at the top, with its
@@ -359,61 +406,46 @@ const SAVE_VERSIONS: ReadonlyArray<
 > = [
   { version: SAVE_VERSION, read: Schema.decodeOption(PlayerSaveJson) },
   {
-    version: 7,
+    version: 8,
     read: raw =>
-      Option.map(Schema.decodeOption(PlayerSaveV7Json)(raw), migrateV7),
+      Option.map(Schema.decodeOption(PlayerSaveV8Json)(raw), migrateV8),
+  },
+  {
+    version: 7,
+    read: raw => Option.map(Schema.decodeOption(PlayerSaveV7Json)(raw), fromV7),
   },
   {
     version: 6,
-    read: raw =>
-      Option.map(Schema.decodeOption(PlayerSaveV6Json)(raw), save =>
-        migrateV7(migrateV6(save)),
-      ),
+    read: raw => Option.map(Schema.decodeOption(PlayerSaveV6Json)(raw), fromV6),
   },
   {
     version: 5,
-    read: raw =>
-      Option.map(Schema.decodeOption(PlayerSaveV5Json)(raw), save =>
-        migrateV7(migrateV6(migrateV5(save))),
-      ),
+    read: raw => Option.map(Schema.decodeOption(PlayerSaveV5Json)(raw), fromV5),
   },
   {
     version: 4,
-    read: raw =>
-      Option.map(Schema.decodeOption(PlayerSaveV4Json)(raw), save =>
-        migrateV7(migrateV6(migrateV5(migrateV4(save)))),
-      ),
+    read: raw => Option.map(Schema.decodeOption(PlayerSaveV4Json)(raw), fromV4),
   },
   {
     version: 4,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSavePreviewV4Json)(raw), save =>
-        migrateV7(migrateV6(migrateV5(migratePreviewV4(save)))),
+        fromV5(migratePreviewV4(save)),
       ),
   },
   {
     version: 3,
-    read: raw =>
-      Option.map(Schema.decodeOption(PlayerSaveV3Json)(raw), save =>
-        migrateV7(migrateV6(migrateV5(migrateV4(migrateV3(save))))),
-      ),
+    read: raw => Option.map(Schema.decodeOption(PlayerSaveV3Json)(raw), fromV3),
   },
   {
     version: 2,
-    read: raw =>
-      Option.map(Schema.decodeOption(PlayerSaveV2Json)(raw), save =>
-        migrateV7(migrateV6(migrateV5(migrateV4(migrateV3(migrateV2(save)))))),
-      ),
+    read: raw => Option.map(Schema.decodeOption(PlayerSaveV2Json)(raw), fromV2),
   },
   {
     version: 1,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV1Json)(raw), save =>
-        migrateV7(
-          migrateV6(
-            migrateV5(migrateV4(migrateV3(migrateV2(migrateV1(save))))),
-          ),
-        ),
+        fromV2(migrateV1(save)),
       ),
   },
 ]
@@ -475,6 +507,7 @@ export const SAVED_FIELDS = [
   'home',
   'seenPowerUps',
   'rotationSetting',
+  'playerName',
 ] as const satisfies ReadonlyArray<keyof Model>
 
 export const hasSaveFieldsChanged = (before: Model, after: Model): boolean =>
@@ -519,6 +552,7 @@ export const saveOf = (model: Model): PlayerSave => ({
   },
   seenPowerUps: model.seenPowerUps,
   rotation: model.rotationSetting,
+  name: model.playerName,
 })
 
 // INTO THE MODEL
@@ -633,6 +667,7 @@ export const restoreSave = (model: Model, save: PlayerSave): Model =>
       }),
     seenPowerUps: seen => Array.union(seen, knownPowerUps(save.seenPowerUps)),
     rotationSetting: () => save.rotation,
+    playerName: () => cleanName(save.name),
   })
 
 // RESET

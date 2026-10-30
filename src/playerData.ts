@@ -93,7 +93,7 @@ export type Appearance = typeof Appearance.Type
 
 // SAVED
 
-export const SAVE_VERSION = 8
+export const SAVE_VERSION = 9
 
 export const SavedLesson = Schema.Literals(['Pending', 'Learned'])
 export type SavedLesson = typeof SavedLesson.Type
@@ -186,8 +186,15 @@ export type SavedHome = typeof SavedHome.Type
 export const SavedPowerUps = Schema.Array(Schema.String)
 export type SavedPowerUps = typeof SavedPowerUps.Type
 
+// NOTE: a display name: up to 12 characters, not unique, shown in co-op
+// lobbies and above teammates. Kept cleaned (see cleanName in
+// src/profile.ts); empty means the player has not picked one.
+export const PlayerName = Schema.String.check(Schema.isMaxLength(64))
+export type PlayerName = typeof PlayerName.Type
+
 // NOTE: version 8 added the rotation, kept apart from the other settings so
-// it syncs as its own last-write-wins change.
+// it syncs as its own last-write-wins change. Version 9 added the display
+// name, synced the same way.
 export const PlayerSave = Schema.Struct({
   version: Schema.Literal(SAVE_VERSION),
   onboarding: SavedOnboarding,
@@ -199,5 +206,6 @@ export const PlayerSave = Schema.Struct({
   home: SavedHome,
   seenPowerUps: SavedPowerUps,
   rotation: RotationSetting,
+  name: PlayerName,
 })
 export type PlayerSave = typeof PlayerSave.Type

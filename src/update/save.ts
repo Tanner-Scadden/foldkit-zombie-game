@@ -242,7 +242,7 @@ export const submitLinkCode = (model: Model): UpdateReturn =>
 // TUTORIAL RESET
 
 const isSettingsOpen = (model: Model): boolean =>
-  model.panelDialog.isOpen && model.panel === 'Settings'
+  model.profile.dialog.isOpen && model.profile.tab === 'Settings'
 
 export const askToResetTutorial = (model: Model): UpdateReturn =>
   isSettingsOpen(model)

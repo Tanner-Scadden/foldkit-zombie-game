@@ -12,6 +12,7 @@ import {
   Difficulty,
   HomeScreenTip,
   MusicSetting,
+  PlayerName,
   RotationSetting,
   ShakeSetting,
   ShareStatsSetting,
@@ -35,6 +36,7 @@ export {
   HairStyle,
   HomeScreenTip,
   MusicSetting,
+  PlayerName,
   RotationSetting,
   ShakeSetting,
   ShareStatsSetting,
@@ -633,10 +635,6 @@ export type GunSlot = typeof GunSlot.Type
 
 // NOTE: whether this device can lock how the page turns: a touch screen
 // whose browser has screen.orientation.lock. Desktops and iPhones cannot.
-// NOTE: whether Settings shows the devices row's link controls.
-export const DevicesRow = Schema.Literals(['Folded', 'Unfolded'])
-export type DevicesRow = typeof DevicesRow.Type
-
 export const OrientationLock = Schema.Literals(['Supported', 'Unsupported'])
 export type OrientationLock = typeof OrientationLock.Type
 
@@ -674,7 +672,6 @@ export type HandCard = typeof HandCard.Type
 
 export const MenuPanel = Schema.Literals([
   'HowToPlay',
-  'Settings',
   'LeaveRun',
   'Difficulty',
   'WhatsNew',
@@ -819,7 +816,6 @@ export const LookPart = Schema.Literals([
 export type LookPart = typeof LookPart.Type
 
 export const CharacterPicker = Schema.Struct({
-  dialog: Dialog.Model,
   body: RadioGroup.Model,
   hairStyle: RadioGroup.Model,
   hairColor: RadioGroup.Model,
@@ -827,6 +823,34 @@ export const CharacterPicker = Schema.Struct({
   shirtColor: RadioGroup.Model,
 })
 export type CharacterPicker = typeof CharacterPicker.Type
+
+// NOTE: the Profile's tabs, in order. A new tab, such as Cosmetics or
+// Stats, is one more literal here and one more entry in src/profile.ts.
+export const ProfileTab = Schema.Literals([
+  'Look',
+  'Name',
+  'Account',
+  'Settings',
+])
+export type ProfileTab = typeof ProfileTab.Type
+
+// NOTE: the last bit of juice the Profile played: a poof for a new look
+// part, a slot-machine spin for a dice roll, or nothing.
+export const ProfileFx = Schema.Literals(['Still', 'Poof', 'Spin'])
+export type ProfileFx = typeof ProfileFx.Type
+
+// NOTE: the Profile dialog: the open tab, the name as it is being typed,
+// and the last effect. The view reads fxCount only for its parity, so the
+// same effect twice in a row still replays.
+export const ProfilePanel = Schema.Struct({
+  dialog: Dialog.Model,
+  tabs: Tabs.Model,
+  tab: ProfileTab,
+  nameDraft: Schema.String,
+  fx: ProfileFx,
+  fxCount: Schema.Number,
+})
+export type ProfilePanel = typeof ProfilePanel.Type
 
 export const PlannedSpawn = Schema.Struct({
   atMs: Schema.Number,
@@ -1234,10 +1258,11 @@ export const Model = Schema.Struct({
   maybeSupportUrl: Schema.Option(Schema.String),
   appearance: Appearance,
   character: CharacterPicker,
+  profile: ProfilePanel,
+  playerName: PlayerName,
   shakeSetting: ShakeSetting,
   rotationSetting: RotationSetting,
   orientationLock: OrientationLock,
-  devicesRow: DevicesRow,
   shareStats: ShareStatsSetting,
   cursorSetting: CursorSetting,
   maybeVisitId: Schema.Option(Schema.String),
@@ -1387,10 +1412,19 @@ export const defaultAppearance: Appearance = {
   shirtColor: 'Blue',
 }
 
-const CHARACTER_DIALOG_ID = 'character'
+const PROFILE_DIALOG_ID = 'profile'
+const PROFILE_TABS_ID = 'profile-tabs'
+
+const closedProfile: ProfilePanel = {
+  dialog: Dialog.init({ id: PROFILE_DIALOG_ID }),
+  tabs: Tabs.init({ id: PROFILE_TABS_ID }),
+  tab: 'Look',
+  nameDraft: '',
+  fx: 'Still',
+  fxCount: 0,
+}
 
 const closedCharacterPicker: CharacterPicker = {
-  dialog: Dialog.init({ id: CHARACTER_DIALOG_ID }),
   body: RadioGroup.init({ id: 'look-body' }),
   hairStyle: RadioGroup.init({ id: 'look-hair-style' }),
   hairColor: RadioGroup.init({ id: 'look-hair-color' }),
@@ -1499,10 +1533,11 @@ export const initialModel: Model = {
   maybeSupportUrl: maybeSupportUrlOf(SUPPORT_URL),
   appearance: defaultAppearance,
   character: closedCharacterPicker,
+  profile: closedProfile,
+  playerName: '',
   shakeSetting: 'On',
   rotationSetting: 'Landscape',
   orientationLock: 'Unsupported',
-  devicesRow: 'Folded',
   shareStats: 'On',
   cursorSetting: 'Bold',
   maybeVisitId: Option.none(),

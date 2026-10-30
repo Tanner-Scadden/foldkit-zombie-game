@@ -40,12 +40,14 @@ import {
 } from '@game/model'
 import { raiseDebutCard } from '@game/onboarding'
 import { advanceParticles } from '@game/particles'
+import { LinkFlow, PlayerScopeStatus, SyncState } from '@game/playerSync'
 import { FLOOR_COLOR } from '@game/room'
 import { STALL_BOX } from '@game/shop'
 import { shedParts } from '@game/simulation'
 import { frameAt, group, gunSprite } from '@game/sprite'
 import { type PlayerStore, layer as PlayerStoreLayer } from '@game/store'
 import { subscriptions } from '@game/subscriptions'
+import { openProfile } from '@game/update/profile'
 import { view } from '@game/view'
 import { pause, planFor, rollSpawns, startOrResume } from '@game/waves'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
@@ -986,6 +988,43 @@ const scenarioModel = (): Model => {
       level: level => ({ ...level, openExits: openexits }),
     })
   }
+  const name = config.name
+  if (name !== undefined)
+    model = modifyFields(model, { playerName: () => name })
+  const sync = config.sync
+  if (sync !== undefined) {
+    const devices = config.devices
+    model = modifyFields(model, {
+      syncState: () =>
+        sync === 'local'
+          ? SyncState.LocalOnly()
+          : sync === 'connecting'
+            ? SyncState.Connecting()
+            : sync === 'offline'
+              ? SyncState.Offline({ devices })
+              : SyncState.Synced({ devices }),
+      playerScopeStatus: () =>
+        sync === 'broken'
+          ? PlayerScopeStatus.Failed({ reason: 'harness' })
+          : PlayerScopeStatus.Ready({ seq: 1, fresh: sync === 'synced' }),
+    })
+  }
+  const link = config.link
+  if (link !== undefined)
+    model = modifyFields(model, {
+      linkFlow: () =>
+        link === 'requesting'
+          ? LinkFlow.Requesting()
+          : link === 'showing'
+            ? LinkFlow.Showing({ code: 'KZ7QWM' })
+            : link === 'entering'
+              ? LinkFlow.Entering({ code: 'KZ7' })
+              : link === 'redeeming'
+                ? LinkFlow.Redeeming({ code: 'KZ7QWM' })
+                : link === 'linked'
+                  ? LinkFlow.Linked()
+                  : LinkFlow.Failed({ problem: 'WrongCode' }),
+    })
   const look = config.look
   if (look !== undefined) {
     const [body, hairStyle, hairColor, skinTone, shirtColor] = look
@@ -1094,6 +1133,12 @@ const harnessUpdate = (model: Model, incoming: Message) => {
         screenFit: () => (config.fit === 'home' ? 'HomeScreen' : 'Fullscreen'),
       }),
     }
+  if (
+    config.sync !== undefined &&
+    (incoming._tag === 'UpdatedSyncStatus' ||
+      incoming._tag === 'UpdatedPlayerScopeStatus')
+  )
+    return { model }
   if (config.rotate && incoming._tag === 'CompletedDetectOrientationLock')
     return {
       model: modifyFields(model, { orientationLock: () => 'Supported' }),
@@ -1140,11 +1185,17 @@ const harnessInit: Runtime.ApplicationInit<
     config.seed !== undefined || Number.isFinite(freezeAfter)
       ? modifyFields(model, { rngState: () => config.seed ?? 1 })
       : model
-  if (config.picker) {
-    const opened = update(
-      modifyFields(seeded, { screenMs: () => 99999 }),
-      Message.ClickedCharacterButton(),
-    )
+  const profileTab = config.profile
+  if (config.picker || profileTab !== undefined) {
+    const opened = openProfile(
+      profileTab === 'name'
+        ? 'Name'
+        : profileTab === 'account'
+          ? 'Account'
+          : profileTab === 'settings'
+            ? 'Settings'
+            : 'Look',
+    )(modifyFields(seeded, { screenMs: () => 99999 }))
     w.__model = opened.model
     return {
       ...base,

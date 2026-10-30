@@ -101,12 +101,18 @@ const learnedSave: PlayerSave = {
   },
   seenPowerUps: ['RapidFire', 'Burp'],
   rotation: 'Landscape',
+  name: 'Snackula',
 }
 
-// NOTE: a save from before the cursor setting comes back with the bold
-// cursor, whatever the fixture above keeps for round trips.
+const { name: _name, ...versionEightSave } = learnedSave
+
+// NOTE: a save from before the display name has none, and one from before
+// the cursor setting comes back with the bold cursor, whatever the fixture
+// above keeps for round trips.
+const unnamedSave: PlayerSave = { ...learnedSave, name: '' }
+
 const boldCursorSave: PlayerSave = {
-  ...learnedSave,
+  ...unnamedSave,
   settings: { ...learnedSave.settings, cursor: 'Bold' },
 }
 
@@ -114,7 +120,10 @@ const neverSeenSave: PlayerSave = { ...boldCursorSave, seenPowerUps: [] }
 
 const { cursor: _cursor, ...SETTINGS_BEFORE_CURSOR } = learnedSave.settings
 
-const versionSixSave = { ...learnedSave, settings: SETTINGS_BEFORE_CURSOR }
+const versionSixSave = {
+  ...versionEightSave,
+  settings: SETTINGS_BEFORE_CURSOR,
+}
 
 const { seenPowerUps: _seenPowerUps, ...versionFiveSave } = versionSixSave
 
@@ -261,6 +270,31 @@ describe('the schema', () => {
       Option.getOrThrow(decodeSave(json)),
     )
     expect(restored.cursorSetting).toBe('Bold')
+  })
+
+  test('a version 8 save keeps everything, with no name yet', () => {
+    const json = JSON.stringify({ ...versionEightSave, version: 8 })
+    expect(decodeSave(json)).toEqual(Option.some(unnamedSave))
+    const restored = restoreSave(
+      initialModel,
+      Option.getOrThrow(decodeSave(json)),
+    )
+    expect(restored.playerName).toBe('')
+  })
+
+  test('the name round trips through JSON and the model, cleaned on the way in', () => {
+    const json = Option.getOrThrow(encodeSave(learnedSave))
+    const reloaded = restoreSave(
+      initialModel,
+      Option.getOrThrow(decodeSave(json)),
+    )
+    expect(reloaded.playerName).toBe('Snackula')
+    expect(saveOf(reloaded).name).toBe('Snackula')
+    const messy: PlayerSave = {
+      ...learnedSave,
+      name: '  Dr.\u0007   Chomp the Unstoppable',
+    }
+    expect(restoreSave(initialModel, messy).playerName).toBe('Dr. Chomp th')
   })
 
   test('the cursor setting round trips through JSON and the model', () => {
@@ -723,7 +757,7 @@ describe('writing the save', () => {
           kills: () => modifyFields(noKills, { Shambler: () => 4 }),
         }),
       runTally: () => RunTally.Counted({ kills: noKills }),
-      panel: () => 'Settings',
+      panel: () => 'WhatsNew',
       orientation: () => 'Portrait',
     })
     const savedFromInitial = Object.fromEntries(

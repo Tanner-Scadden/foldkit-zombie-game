@@ -30,9 +30,9 @@ const characterButton = role('button', {
 const characterCard = role('button', {
   name: 'Character: change how you look',
 })
-const pickerDialog = role('dialog', { name: 'Character' })
+const pickerDialog = role('dialog', { name: 'Profile' })
 const doneButton = role('button', { name: 'Done' })
-const randomizeButton = role('button', { name: 'Randomize' })
+const randomizeButton = role('button', { name: 'Roll a random look' })
 
 const group = (name: string) => role('radiogroup', { name })
 const optionIn = (groupName: string, name: string) =>
@@ -95,7 +95,7 @@ describe('Character picker', () => {
       click(characterButton),
       ...showPicker(),
       expect(pickerDialog).toExist(),
-      expect(role('heading', { name: 'Character' })).toExist(),
+      expect(role('tab', { name: 'Look' })).toHaveAttr('aria-selected', 'true'),
       ...Array.map(['Body', 'Hair', 'Hair color', 'Skin', 'Shirt'], name =>
         expect(group(name)).toExist(),
       ),
@@ -133,7 +133,7 @@ describe('Character picker', () => {
       ).toExist(),
       click(doneButton),
       ...closePicker(),
-      expect(role('heading', { name: 'Character' })).toBeAbsent(),
+      expect(pickerDialog).toBeAbsent(),
     )
   })
 
@@ -190,11 +190,11 @@ describe('Character picker', () => {
       ...pick('Hair color', 'Pink'),
       click(doneButton),
       ...closePicker(),
-      expect(role('heading', { name: 'Character' })).toBeAbsent(),
+      expect(pickerDialog).toBeAbsent(),
     )
   })
 
-  test('Randomize rolls a new look from the seed', () => {
+  test('the dice rolls a new look from the seed', () => {
     scene(
       { update, view },
       given(modifyFields(onTitle, { rngState: () => 7 })),

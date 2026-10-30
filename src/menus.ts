@@ -114,7 +114,7 @@ const cornerButtons = (
 }
 
 const isPickingCharacter = (model: Model): boolean =>
-  model.character.dialog.isOpen
+  model.profile.dialog.isOpen
 
 export const cornerButtonsView = (
   model: Model,

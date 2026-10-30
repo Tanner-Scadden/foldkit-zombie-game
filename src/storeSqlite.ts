@@ -45,6 +45,7 @@ import {
   ChangedAppearance,
   ChangedDifficulty,
   ChangedHome,
+  ChangedName,
   ChangedOnboarding,
   ChangedRotation,
   ChangedSettings,
@@ -170,6 +171,7 @@ const saveOfRow = (
   home: row.home,
   seenPowerUps: row.seen_power_ups,
   rotation: row.rotation,
+  name: row.name,
 })
 
 // LEGACY
@@ -404,6 +406,8 @@ const runChange = (replica: Replica, change: PlayerChange) => {
     return replica.run(ChangedSettings, { settings: change.settings })
   } else if (change._tag === 'ChangedRotation') {
     return replica.run(ChangedRotation, { rotation: change.rotation })
+  } else if (change._tag === 'ChangedName') {
+    return replica.run(ChangedName, { name: change.name })
   } else if (change._tag === 'ChangedAppearance') {
     return replica.run(ChangedAppearance, { appearance: change.appearance })
   } else if (change._tag === 'UnlockedNightmare') {

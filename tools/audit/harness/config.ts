@@ -151,6 +151,18 @@ export const HarnessConfig = Schema.Struct({
   god: Flag,
   look: Schema.optionalKey(Look),
   picker: Flag,
+  profile: Choice(['look', 'name', 'account', 'settings']),
+  name: Schema.optionalKey(Schema.String),
+  sync: Choice(['local', 'connecting', 'synced', 'offline', 'broken']),
+  devices: Num(1),
+  link: Choice([
+    'requesting',
+    'showing',
+    'entering',
+    'redeeming',
+    'linked',
+    'failed',
+  ]),
   looksheet: Flag,
   // The room
   fill: Flag,

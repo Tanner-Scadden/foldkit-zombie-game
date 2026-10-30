@@ -2,7 +2,7 @@ import { Array, Option, String } from 'effect'
 import { Canvas, Submodel } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
-import { Dialog, RadioGroup } from '@foldkit/ui'
+import { RadioGroup } from '@foldkit/ui'
 
 import {
   BODIES,
@@ -28,13 +28,14 @@ import {
   PLAYER_WALK_FRAME_MS,
   SHADOW_COLOR,
 } from './constants'
-import { dialogShell } from './dialogs'
+import { DICE_ICON } from './icons'
 import type {
   Appearance,
   Body,
   CharacterPicker,
   HairColor,
   HairStyle,
+  ProfileFx,
   ShirtColor,
   SkinTone,
 } from './model'
@@ -149,6 +150,54 @@ const previewView = (
     ],
   )
 
+// STAGE
+
+// NOTE: the character walks on the spot in a spotlight with a little idle
+// bounce, all CSS. A new part puffs a poof, and the dice spins the stage
+// like a slot machine.
+const stageChildren = (
+  inputs: ViewInputs,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> => [
+  h.span([h.Class('look-spotlight'), h.AriaHidden(true)]),
+  h.span([h.Class('look-floor'), h.AriaHidden(true)]),
+  h.div(
+    [h.Class('look-bounce')],
+    [previewView(inputs.appearance, inputs.screenMs, h)],
+  ),
+  h.span([h.Class('look-poof'), h.AriaHidden(true)]),
+  h.button(
+    [
+      h.Type('button'),
+      h.Class('profile-dice look-dice'),
+      h.AriaLabel('Roll a random look'),
+      h.OnClick(Message.ClickedDiceButton()),
+    ],
+    [
+      h.span([
+        h.Class('profile-dice-icon'),
+        h.AriaHidden(true),
+        h.Style({ backgroundImage: DICE_ICON }),
+      ]),
+    ],
+  ),
+]
+
+const evenStageView = (inputs: ViewInputs, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [h.Class('look-stage'), h.DataAttribute('fx', inputs.fx)],
+    stageChildren(inputs, h),
+  )
+
+const oddStageView = (inputs: ViewInputs, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [h.Class('look-stage'), h.DataAttribute('fx', inputs.fx)],
+    stageChildren(inputs, h),
+  )
+
+const stageView = (inputs: ViewInputs, h: HtmlBuilder<Message>): Html =>
+  inputs.fxCount % 2 === 0 ? evenStageView(inputs, h) : oddStageView(inputs, h)
+
 // ROWS
 
 type LookRow<Value extends string> = Readonly<{
@@ -165,13 +214,11 @@ type LookRow<Value extends string> = Readonly<{
 const optionView = <Value extends string>(
   row: LookRow<Value>,
   option: RadioGroup.OptionInfo<Value>,
-  initialFocus: Dialog.RenderInfo['initialFocus'],
   h: HtmlBuilder<Message>,
 ): Html =>
   h.button(
     [
       ...option.option,
-      ...(option.isSelected ? initialFocus : []),
       h.Key(option.value),
       h.Class(
         Option.isSome(row.maybeSwatch)
@@ -199,7 +246,6 @@ const optionView = <Value extends string>(
 
 const lookRowView = <Value extends string>(
   row: LookRow<Value>,
-  initialFocus: Dialog.RenderInfo['initialFocus'],
   h: HtmlBuilder<Message>,
 ): Html =>
   h.div(
@@ -224,9 +270,7 @@ const lookRowView = <Value extends string>(
           toView: ({ group: groupAttributes, options }) =>
             h.div(
               [...groupAttributes, h.Class('look-options')],
-              Array.map(options, option =>
-                optionView(row, option, initialFocus, h),
-              ),
+              Array.map(options, option => optionView(row, option, h)),
             ),
         },
         toParentMessage: row.toMessage,
@@ -237,7 +281,6 @@ const lookRowView = <Value extends string>(
 const rowsView = (
   picker: CharacterPicker,
   appearance: Appearance,
-  initialFocus: Dialog.RenderInfo['initialFocus'],
   h: HtmlBuilder<Message>,
 ): ReadonlyArray<Html> => [
   lookRowView<Body>(
@@ -251,7 +294,6 @@ const rowsView = (
       optionLabels: BODY_LABELS,
       maybeSwatch: Option.none(),
     },
-    initialFocus,
     h,
   ),
   lookRowView<HairStyle>(
@@ -265,7 +307,6 @@ const rowsView = (
       optionLabels: HAIR_STYLE_LABELS,
       maybeSwatch: Option.none(),
     },
-    [],
     h,
   ),
   lookRowView<HairColor>(
@@ -279,7 +320,6 @@ const rowsView = (
       optionLabels: HAIR_COLOR_LABELS,
       maybeSwatch: Option.some(color => HAIR_SHADES[color].base),
     },
-    [],
     h,
   ),
   lookRowView<SkinTone>(
@@ -293,7 +333,6 @@ const rowsView = (
       optionLabels: SKIN_TONE_LABELS,
       maybeSwatch: Option.some(tone => SKIN_SHADES[tone].skin),
     },
-    [],
     h,
   ),
   lookRowView<ShirtColor>(
@@ -307,71 +346,26 @@ const rowsView = (
       optionLabels: SHIRT_COLOR_LABELS,
       maybeSwatch: Option.some(color => SHIRT_SHADES[color].base),
     },
-    [],
     h,
   ),
 ]
 
-// DIALOG
+// LOOK TAB
 
-const CHARACTER_TITLE = 'Character'
-const CHARACTER_BLURB = 'Pick your look.'
-
-const panelView = (
-  picker: CharacterPicker,
-  inputs: ViewInputs,
-  { title, description, closeButton, initialFocus }: Dialog.RenderInfo,
-  h: HtmlBuilder<Message>,
-): ReadonlyArray<Html> => [
-  h.header(
-    [h.Class('look-header')],
-    [
-      h.h2([...title, h.Class('look-title')], [CHARACTER_TITLE]),
-      h.p([...description, h.Class('sr-only')], [CHARACTER_BLURB]),
-    ],
-  ),
-  h.div(
-    [h.Class('look-body')],
-    [
-      previewView(inputs.appearance, inputs.screenMs, h),
-      h.div(
-        [h.Class('look-rows')],
-        rowsView(picker, inputs.appearance, initialFocus, h),
-      ),
-    ],
-  ),
-  h.div(
-    [h.Class('look-actions')],
-    [
-      h.button(
-        [
-          h.Type('button'),
-          h.Class('look-randomize'),
-          h.OnClick(Message.ClickedRandomizeButton()),
-        ],
-        ['Randomize'],
-      ),
-      h.button(
-        [...closeButton, h.Class('look-done'), h.AriaKeyshortcuts('Escape')],
-        ['Done'],
-      ),
-    ],
-  ),
-]
-
-type ViewInputs = Readonly<{ appearance: Appearance; screenMs: number }>
+type ViewInputs = Readonly<{
+  appearance: Appearance
+  screenMs: number
+  fx: ProfileFx
+  fxCount: number
+}>
 
 export const view = Submodel.defineView<CharacterPicker, Message, ViewInputs>(
   (picker, inputs, h) =>
-    dialogShell(
-      {
-        dialog: picker.dialog,
-        dialogClass: 'look-dialog',
-        backdropClass: 'look-backdrop',
-        panelClass: 'look-panel',
-        panelView: renderInfo => panelView(picker, inputs, renderInfo, h),
-        toParentMessage: message => Message.GotDialogMessage({ message }),
-      },
-      h,
+    h.div(
+      [h.Class('look-tab')],
+      [
+        stageView(inputs, h),
+        h.div([h.Class('look-rows')], rowsView(picker, inputs.appearance, h)),
+      ],
     ),
 )

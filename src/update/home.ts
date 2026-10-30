@@ -44,7 +44,7 @@ import {
   Phase,
   type RunMode,
 } from '../model'
-import { openCharacterPicker } from './character'
+import { openProfile } from './profile'
 import {
   isPastRestartGrace,
   isPaused,
@@ -82,7 +82,7 @@ export const foldPanelDialog = panelDialog.fold
 const isPanelAllowed = (model: Model, panel: MenuPanel): boolean => {
   if (
     model.panelDialog.isOpen ||
-    model.character.dialog.isOpen ||
+    model.profile.dialog.isOpen ||
     model.handDialog.isOpen
   ) {
     return false
@@ -102,7 +102,6 @@ export const openPanel =
             modifyFields(stepModel, {
               panel: () => panel,
               tutorialReset: () => 'Idle',
-              devicesRow: () => 'Folded',
             }),
             releaseAll,
           ),
@@ -146,8 +145,15 @@ export const menuFromKey: (code: string) => UpdateStep = code => stepModel =>
 export const canMoveHomeFocus = (model: Model): boolean =>
   isOnHome(model.phase) &&
   !model.panelDialog.isOpen &&
-  !model.character.dialog.isOpen &&
+  !model.profile.dialog.isOpen &&
   !model.handDialog.isOpen
+
+// NOTE: the gear opens the Profile on its Settings tab, only from the menu
+// itself, as the gear is only there.
+export const openSettingsFromGear: UpdateStep = stepModel =>
+  canMoveHomeFocus(stepModel)
+    ? openProfile('Settings')(stepModel)
+    : { model: stepModel }
 
 // THE MANOR HAND
 
@@ -239,7 +245,7 @@ export const turnNews = (model: Model, step: number): UpdateReturn => ({
 const CARD_OPENERS: Readonly<Record<KeyedHandCard, UpdateStep>> = {
   WhatsNew: openWhatsNew,
   Munchopedia: openMunchopedia(MunchopediaPage.List()),
-  Character: openCharacterPicker,
+  Character: openProfile('Look'),
   HowToPlay: openPanel('HowToPlay'),
 }
 
@@ -256,7 +262,7 @@ export const homeFromKey: (code: string) => UpdateStep = code => stepModel => {
   } else if (isManorKey(code)) {
     return openHand(stepModel)
   } else if (isSettingsKey(code)) {
-    return openPanel('Settings')(stepModel)
+    return openProfile('Settings')(stepModel)
   } else {
     return Option.match(maybeHandCardOfKey(code), {
       onNone: () => ({ model: stepModel }),

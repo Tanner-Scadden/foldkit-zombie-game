@@ -30,11 +30,9 @@ import {
 import { RESTART_GRACE_MS } from './constants'
 import { withBests } from './difficulty'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
-import { LINK_TAKES_PROGRESS_NOTE, SHARE_STATS_NOTE } from './homeView'
 import { update } from './main'
 import { Message } from './message'
 import { type HandCard, type Model, Phase, initialModel } from './model'
-import { SyncState } from './playerSync'
 import { noSavedBests, restoreSave, saveOf } from './save'
 import {
   emitPressedKey,
@@ -78,9 +76,7 @@ const characterCard = role('button', { name: CARD_NAMES.Character })
 const munchopediaCard = role('button', { name: /^Munchopedia:/ })
 const whatsNewCard = role('button', { name: /^What's new:/ })
 const howToPlayCard = role('button', { name: CARD_NAMES.HowToPlay })
-const settingsButton = role('button', {
-  name: 'Settings: sound, music, shake, and devices',
-})
+const settingsButton = role('button', { name: 'Settings' })
 const lockedNightmare = role('button', {
   name: 'Nightmare, locked. Beat Hard to unlock',
 })
@@ -212,7 +208,7 @@ describe('Home menu', () => {
   test('each card opens its own page from the hand', () => {
     Array.forEach(
       [
-        { name: CARD_NAMES.Character, dialog: 'Character' },
+        { name: CARD_NAMES.Character, dialog: 'Profile' },
         { name: CARD_NAMES.Munchopedia, dialog: 'Munchopedia' },
         { name: `${CARD_NAMES.WhatsNew}. Something new`, dialog: "What's new" },
         { name: CARD_NAMES.HowToPlay, dialog: 'How to play' },
@@ -367,14 +363,15 @@ describe('Home menu', () => {
     )
   })
 
-  test('C opens the picker straight from the menu, without the hand', () => {
+  test('C opens the Profile straight from the menu, without the hand', () => {
     scene(
       { update, view },
       given(home),
       measureSurface,
       emitPressedKey('KeyC'),
       ...showDialogInScene(),
-      expect(role('dialog', { name: 'Character' })).toExist(),
+      expect(role('dialog', { name: 'Profile' })).toExist(),
+      expect(role('tab', { name: 'Look' })).toHaveAttr('aria-selected', 'true'),
       expect(hand).toBeAbsent(),
     )
   })
@@ -385,7 +382,7 @@ describe('Home menu', () => {
         { key: 'KeyL', dialog: "What's new" },
         { key: 'KeyZ', dialog: 'Munchopedia' },
         { key: 'KeyI', dialog: 'How to play' },
-        { key: 'KeyO', dialog: 'Settings' },
+        { key: 'KeyO', dialog: 'Profile' },
       ],
       ({ key, dialog }) => {
         scene(
@@ -452,7 +449,7 @@ describe('Home menu', () => {
     )
   })
 
-  test('the gear opens Settings, and its tiles toggle sound, music, screen shake, and the big cursor', () => {
+  test('the gear opens the Profile on Settings, and its tiles toggle sound, music, screen shake, and the big cursor', () => {
     const soundToggle = role('button', { name: 'Sound' })
     const musicToggle = role('button', { name: 'Music' })
     const shakeToggle = role('button', { name: 'Screen shake' })
@@ -463,7 +460,11 @@ describe('Home menu', () => {
       measureSurface,
       click(settingsButton),
       ...showDialogInScene(),
-      expect(role('dialog', { name: 'Settings' })).toExist(),
+      expect(role('dialog', { name: 'Profile' })).toExist(),
+      expect(role('tab', { name: 'Settings' })).toHaveAttr(
+        'aria-selected',
+        'true',
+      ),
       expect(soundToggle).toHaveAttr('aria-pressed', 'true'),
       expect(soundToggle).toHaveAttr('aria-keyshortcuts', 'M'),
       expect(musicToggle).toHaveAttr('aria-keyshortcuts', 'N'),
@@ -480,40 +481,6 @@ describe('Home menu', () => {
       click(cursorToggle),
       expect(cursorToggle).toHaveAttr('aria-pressed', 'false'),
       expect(selector('.game-root')).toHaveAttr('data-cursor', 'Thin'),
-    )
-  })
-
-  test('Settings shares anonymous play stats by default and says what it sends', () => {
-    const shareToggle = role('button', { name: 'Share anonymous play stats' })
-    scene(
-      { update, view },
-      given(home),
-      measureSurface,
-      click(settingsButton),
-      ...showDialogInScene(),
-      expect(shareToggle).toHaveAttr('aria-pressed', 'true'),
-      expect(text(SHARE_STATS_NOTE)).toExist(),
-      click(shareToggle),
-      expect(shareToggle).toHaveAttr('aria-pressed', 'false'),
-    )
-  })
-
-  test("Use a code says this device will take the other device's progress before Link", () => {
-    const synced = modifyFields(home, {
-      syncState: () => SyncState.Synced({ devices: 1 }),
-    })
-    scene(
-      { update, view },
-      given(synced),
-      measureSurface,
-      click(settingsButton),
-      ...showDialogInScene(),
-      expect(role('button', { name: 'Use a code' })).toBeAbsent(),
-      click(role('button', { name: /^Devices:/ })),
-      expect(text(LINK_TAKES_PROGRESS_NOTE)).toBeAbsent(),
-      click(role('button', { name: 'Use a code' })),
-      expect(text(LINK_TAKES_PROGRESS_NOTE)).toExist(),
-      expect(role('button', { name: 'Link' })).toExist(),
     )
   })
 
@@ -534,7 +501,7 @@ describe('Home menu', () => {
       ...showDialogInScene(),
       click(resetButton),
       focusReset(KEEP_TUTORIAL_BUTTON_ID),
-      expect(text('Show the tips and zombie cards again?')).toExist(),
+      expect(text('Show the tips again?')).toExist(),
       click(keepButton),
       focusReset(RESET_TUTORIAL_BUTTON_ID),
       expect(keepButton).toBeAbsent(),
@@ -643,7 +610,7 @@ describe('the rotation tile', () => {
       measureSurface,
       click(settingsButton),
       ...showDialogInScene(),
-      expect(role('dialog', { name: 'Settings' })).toExist(),
+      expect(role('dialog', { name: 'Profile' })).toExist(),
       expect(rotateTile).toBeAbsent(),
     )
     scene(

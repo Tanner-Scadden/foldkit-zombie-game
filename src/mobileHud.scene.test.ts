@@ -269,7 +269,7 @@ describe('the corner', () => {
       inside(selector('.home-corner'), expect(fullscreenButton).toExist()),
       click(
         role('button', {
-          name: 'Settings: sound, music, shake, and devices',
+          name: 'Settings',
         }),
       ),
       Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
@@ -278,7 +278,7 @@ describe('the corner', () => {
         Dialog.Message.SucceededAcquireResources(),
       ),
       inside(
-        role('dialog', { name: 'Settings' }),
+        role('dialog', { name: 'Profile' }),
         expect(fullscreenButton).toHaveAttr('aria-pressed', 'false'),
       ),
     )
@@ -444,21 +444,21 @@ describe('the title icons and the character picker', () => {
       expect(homeScreenTip).toExist(),
       click(role('button', { name: 'Your character: change how you look' })),
       ...showPicker,
-      expect(role('dialog', { name: 'Character' })).toExist(),
+      expect(role('dialog', { name: 'Profile' })).toExist(),
       expect(muteButton).toBeAbsent(),
       expect(musicButton).toBeAbsent(),
       expect(homeScreenTip).toBeAbsent(),
     )
   })
 
-  test('C opens the picker from the title', () => {
+  test('C opens the Profile from the title', () => {
     scene(
       { update, view },
       given(asVeteran(initialModel)),
       measureSurface,
       Subscription.emit(Message.PressedKey({ code: 'KeyC' })),
       ...showPicker,
-      expect(role('dialog', { name: 'Character' })).toExist(),
+      expect(role('dialog', { name: 'Profile' })).toExist(),
     )
   })
 })

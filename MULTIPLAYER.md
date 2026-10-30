@@ -247,7 +247,9 @@ On the preview, QUICK PLAY made a room of four in 1.5 s and, with three players,
 2. `PlayerInput` from the game's `deriveIntent` (move, aim in world space, buttons for fire, swap, reload, trap, a purchase as the action), and own-player prediction from the game's movement against the level's collision.
 3. The game's client: a Foldkit Submodel holding the `Session`, a Subscription over `connectRoom`'s events, Commands for `send`, and the lobby followed with a real `Replica` (the game already keeps SQLite); the co-op screens (QUICK PLAY queue, lobby, READY) in the game's own look.
 4. The gameplay rules decided for co-op: revives, money, doors, friendly fire on Nightmare, difficulty by player count, Away players still hurt, the end of a run when everyone is down.
-5. Results into each player's own scope with `RecordedRun`, the tutorial gate before co-op, the display name in the save, and Workers Paid before co-op is announced.
+5. Results into each player's own scope with `RecordedRun`, the tutorial gate before co-op, and Workers Paid before co-op is announced.
+
+**The display name** is picked and synced already: the Profile's NAME tab (2026-10-29) keeps it in the player scope, cleaned the same way `cleanName` in `Lobby.ts` cleans it (`cleanName` in `src/profile.ts`). When the game's client calls `createRoom` or `joinRoom` from `LobbyClient.ts`, it passes `joinName(model)` from `src/profile.ts` as the name. That is empty when the player has not picked one, so the room seats them as "Player N".
 
 ### Phase 4: feel and phones
 

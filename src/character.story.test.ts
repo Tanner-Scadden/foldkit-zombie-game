@@ -63,10 +63,10 @@ const resolveFocusOption = () =>
     RadioGroup.Message.CompletedFocusOption(),
   )
 
-const randomize = () =>
+const rollDice = () =>
   message(
     Message.GotCharacterMessage({
-      message: Character.Message.ClickedRandomizeButton(),
+      message: Character.Message.ClickedDiceButton(),
     }),
   )
 
@@ -141,7 +141,7 @@ describe('Character', () => {
     )
   })
 
-  test('C opens the picker on the title and the end screens, never mid-run', () => {
+  test('C opens the Profile on Look on the title and the end screens, never mid-run', () => {
     const pressC = (given_: Model) =>
       story(
         update,
@@ -151,8 +151,9 @@ describe('Character', () => {
           Dialog.ShowDialog,
           Dialog.Message.SucceededShowDialog(),
         ),
-        model(({ character }) => {
-          expect(character.dialog.isOpen).toBe(true)
+        model(({ profile }) => {
+          expect(profile.dialog.isOpen).toBe(true)
+          expect(profile.tab).toBe('Look')
         }),
       )
     pressC(onTitle)
@@ -171,8 +172,8 @@ describe('Character', () => {
         }),
       ),
       message(Message.PressedKey({ code: 'KeyC' })),
-      model(({ character }) => {
-        expect(character.dialog.isOpen).toBe(false)
+      model(({ profile }) => {
+        expect(profile.dialog.isOpen).toBe(false)
       }),
     )
     story(
@@ -184,19 +185,19 @@ describe('Character', () => {
         }),
       ),
       message(Message.ClickedCharacterButton()),
-      model(({ character }) => {
-        expect(character.dialog.isOpen).toBe(false)
+      model(({ profile }) => {
+        expect(profile.dialog.isOpen).toBe(false)
       }),
     )
   })
 
-  test('Randomize rolls the same look from the same seed and moves the seed on', () => {
+  test('the dice rolls the same look from the same seed and moves the seed on', () => {
     const rollFrom = (seed: number): Model => {
       const holder: { current: Model } = { current: onTitle }
       story(
         update,
         given(modifyFields(onTitle, { cosmeticRngState: () => seed })),
-        randomize(),
+        rollDice(),
         model(rolled => {
           holder.current = rolled
         }),
@@ -218,7 +219,7 @@ describe('Character', () => {
     expect(looks.length).toBeGreaterThan(20)
   })
 
-  test('Randomize never hands back the look you already have', () => {
+  test('the dice never hands back the look you already have', () => {
     Array.forEach(Array.range(0, 300), seed => {
       const [, firstRoll] = randomAppearance(seed, defaultAppearance)
       const [, reroll] = randomAppearance(seed, firstRoll)

@@ -306,16 +306,6 @@ export const STATS_ICON = icon([
   'XXXXXXXXX',
 ])
 
-export const DEVICES_ICON = icon([
-  'XXXXX....',
-  'X...X....',
-  'X...XXXXX',
-  'X...XX..X',
-  'XXXXXX..X',
-  '.X..XX..X',
-  '....XXXXX',
-])
-
 // CONTROLS
 
 export const MOVE_ICON = icon([
@@ -541,4 +531,155 @@ export const CLOSE_ICON = pixelIconUrl(
     'OOO...OOO',
   ],
   { O: SHADE, R: '#ff5a4e' },
+)
+
+// PROFILE
+
+const PROFILE_PALETTE: Palette = {
+  X: LIGHT,
+  O: SHADE,
+  Y: '#ffe066',
+  D: '#a87a1e',
+  T: '#5fd4c8',
+  K: '#1f5c58',
+  U: '#b98cff',
+  W: '#4a2a70',
+  G: '#9be36a',
+  S: '#8a8f86',
+}
+
+// NOTE: a hello-my-name-is badge for the Name tab.
+export const NAME_ICON = pixelIconUrl(
+  [
+    'YYYYYYYYYYY',
+    'YDDDDDDDDDY',
+    'YDDDDDDDDDY',
+    'YXXXXXXXXXY',
+    'YXOOXOXOOXY',
+    'YXXXXXXXXXY',
+    'YXXXXXXXXXY',
+    'YYYYYYYYYYY',
+  ],
+  PROFILE_PALETTE,
+)
+
+// NOTE: a phone and a laptop joined by a spark, for the Account tab.
+export const ACCOUNT_ICON = pixelIconUrl(
+  [
+    'TTTT........',
+    'TKKT........',
+    'TKKT..TTTTTT',
+    'TKKT..TKKKKT',
+    'TKKTYYTKKKKT',
+    'TKKT..TTTTTT',
+    'TTXT.TTTTTTTT',
+  ],
+  PROFILE_PALETTE,
+)
+
+// NOTE: a die showing five, for the dice that rolls a look or a name.
+export const DICE_ICON = pixelIconUrl(
+  [
+    '.XXXXXXX.',
+    'XOOXXXOOX',
+    'XOOXXXOOX',
+    'XXXXXXXXX',
+    'XXXXOOXXX',
+    'XXXXOOXXX',
+    'XXXXXXXXX',
+    'XOOXXXOOX',
+    'XOOXXXOOX',
+    '.XXXXXXX.',
+    '.SSSSSSS.',
+  ],
+  PROFILE_PALETTE,
+)
+
+// NOTE: the devices on the Account tab: a phone and a laptop with a little
+// Groaner on the screen.
+export const PHONE_ICON = pixelIconUrl(
+  [
+    '.TTTTT.',
+    'TKKKKKT',
+    'TKGGGKT',
+    'TKGOGKT',
+    'TKGGGKT',
+    'TKGOGKT',
+    'TKKKKKT',
+    'TTTXTTT',
+    '.TTTTT.',
+  ],
+  PROFILE_PALETTE,
+)
+
+export const LAPTOP_ICON = pixelIconUrl(
+  [
+    '..TTTTTTTTT..',
+    '..TKKKKKKKT..',
+    '..TKKGGGKKT..',
+    '..TKKGOGKKT..',
+    '..TKKGGGKKT..',
+    '..TKKGOGKKT..',
+    '..TTTTTTTTT..',
+    'TTTTTTTTTTTTT',
+    '.SSSSSSSSSSS.',
+  ],
+  PROFILE_PALETTE,
+)
+
+// NOTE: a swirling portal, for summoning your other device with a code.
+export const PORTAL_ICON = pixelIconUrl(
+  [
+    '...UUUUU...',
+    '.UUWWWWWUU.',
+    'UUWWUUUWWUU',
+    'UWWUWWWUWWU',
+    'UWUWWXWWUWU',
+    'UWUWXXXWUWU',
+    'UWWUWXWUWWU',
+    'UUWWUUUWWUU',
+    '.UUWWWWWUU.',
+    '...UUUUU...',
+  ],
+  PROFILE_PALETTE,
+)
+
+// NOTE: a keypad, for typing in a code from your other device.
+export const KEYPAD_ICON = pixelIconUrl(
+  [
+    'TTTTTTTTTT',
+    'TXXTXXTXXT',
+    'TXXTXXTXXT',
+    'TTTTTTTTTT',
+    'TXXTXXTXXT',
+    'TXXTXXTXXT',
+    'TTTTTTTTTT',
+    'TXXTXXTXXT',
+    'TXXTXXTXXT',
+    'TTTTTTTTTT',
+  ],
+  PROFILE_PALETTE,
+)
+
+// NOTE: an arrow pouring into a phone, for the device that takes the other
+// device's progress.
+export const TAKES_PROGRESS_ICON = pixelIconUrl(
+  [
+    '...YYY...',
+    '...YYY...',
+    '.YYYYYYY.',
+    '..YYYYY..',
+    '...YYY...',
+    'TTTTYTTTT',
+    'TKKKKKKKT',
+    'TKKKKKKKT',
+    'TTTTTTTTT',
+  ],
+  PROFILE_PALETTE,
+)
+
+// NOTE: the zap between two devices once they are linked.
+export const ZAP_ICON = pixelIconUrl(
+  ['...YYY', '..YYY.', '.YYY..', 'YYYYYY', '..YYY.', '.YYY..', 'YYY...'],
+  PROFILE_PALETTE,
 )

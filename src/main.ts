@@ -83,11 +83,7 @@ import { isAtCounter, isBrowsing } from './shop'
 import { advanceGame, clampFrameDelta, refreshIntent } from './simulation'
 import { tallyFrame } from './stats'
 import { PlayerStore } from './store'
-import {
-  characterFromKey,
-  foldCharacter,
-  openCharacterPicker,
-} from './update/character'
+import { foldCharacter } from './update/character'
 import {
   enterExit,
   foldExitDialog,
@@ -117,6 +113,7 @@ import {
   openHomeScreenSteps,
   openMunchopedia,
   openPanel,
+  openSettingsFromGear,
   openWhatsNew,
   pickFromCard,
   settleNightmareFrom,
@@ -129,6 +126,16 @@ import {
   turnNews,
   unlockNightmareFrom,
 } from './update/home'
+import {
+  foldProfileDialog,
+  foldProfileTabs,
+  leaveNameInput,
+  openProfile,
+  profileFromKey,
+  rollNameDice,
+  submitName,
+  typeName,
+} from './update/profile'
 import { applyRotationFrom, toggleRotation } from './update/rotation'
 import {
   isPaused,
@@ -508,7 +515,7 @@ const updateGame = (model: Model, message: Message) =>
       )
       return Update.combine(pressed, [
         unlockAudio,
-        characterFromKey(code),
+        profileFromKey(code),
         difficultyCardFromKey(code),
         menuFromKey(code),
         homeFocusFromKey(code),
@@ -614,10 +621,24 @@ const updateGame = (model: Model, message: Message) =>
       startFromButton(model, keepGoingWhenAllowed(model)),
 
     ClickedCharacterButton: () =>
-      Update.combine(model, [unlockAudio, fromHand(openCharacterPicker)]),
+      Update.combine(model, [unlockAudio, fromHand(openProfile('Look'))]),
 
     GotCharacterMessage: ({ message: characterMessage }) =>
       foldCharacter(model, characterMessage),
+
+    GotProfileDialogMessage: ({ message: dialogMessage }) =>
+      foldProfileDialog(model, dialogMessage),
+
+    GotProfileTabsMessage: ({ message: tabsMessage }) =>
+      foldProfileTabs(model, tabsMessage),
+
+    UpdatedNameDraft: ({ value }) => typeName(model, value),
+
+    SubmittedName: () => submitName(model),
+
+    BlurredNameInput: () => leaveNameInput(model),
+
+    ClickedNameDiceButton: () => rollNameDice(model),
 
     ClickedStartWaveButton: () =>
       isAtCounter(model.shop) || isDebutCardBlocking(model)
@@ -674,12 +695,6 @@ const updateGame = (model: Model, message: Message) =>
     }),
 
     ClickedRotationButton: () => ({ model: toggleRotation(model) }),
-
-    ClickedDevicesButton: () => ({
-      model: modifyFields(model, {
-        devicesRow: row => (row === 'Folded' ? 'Unfolded' : 'Folded'),
-      }),
-    }),
 
     CompletedApplyRotation: () => ({ model }),
 
@@ -815,7 +830,7 @@ const updateGame = (model: Model, message: Message) =>
       Update.combine(model, [unlockAudio, fromHand(openPanel('HowToPlay'))]),
 
     ClickedSettingsButton: () =>
-      Update.combine(model, [unlockAudio, tapSound, openPanel('Settings')]),
+      Update.combine(model, [unlockAudio, tapSound, openSettingsFromGear]),
 
     ClickedMenuButton: () =>
       Update.combine(model, [unlockAudio, leaveFromMenu]),
@@ -914,11 +929,10 @@ const updateGame = (model: Model, message: Message) =>
 
     ClickedLinkDeviceButton: () => startLinking(model),
 
-    SucceededRequestLinkCode: ({ code }) => ({
-      model: modifyFields(model, {
-        linkFlow: () => LinkFlow.Showing({ code }),
-      }),
-    }),
+    SucceededRequestLinkCode: ({ code }) =>
+      playSounds([uiCue('Whoosh')])(
+        modifyFields(model, { linkFlow: () => LinkFlow.Showing({ code }) }),
+      ),
 
     FailedRequestLinkCode: ({ problem }) => ({
       model: modifyFields(model, {
@@ -936,9 +950,10 @@ const updateGame = (model: Model, message: Message) =>
 
     SubmittedLinkCode: () => submitLinkCode(model),
 
-    SucceededRedeemLinkCode: () => ({
-      model: modifyFields(model, { linkFlow: () => LinkFlow.Linked() }),
-    }),
+    SucceededRedeemLinkCode: () =>
+      playSounds([uiCue('PowerUp')])(
+        modifyFields(model, { linkFlow: () => LinkFlow.Linked() }),
+      ),
 
     FailedRedeemLinkCode: ({ problem }) => ({
       model: modifyFields(model, {

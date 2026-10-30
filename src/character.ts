@@ -4,9 +4,8 @@ import { defineMessageUnion } from 'foldkit/message'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
-import { Dialog, RadioGroup } from '@foldkit/ui'
+import { RadioGroup } from '@foldkit/ui'
 
-import { dialogFolds } from './dialogs'
 import {
   type Appearance,
   Body,
@@ -21,13 +20,12 @@ import {
 // MESSAGE
 
 export const Message = defineMessageUnion({
-  GotDialogMessage: { message: Dialog.Message },
   GotBodyMessage: { message: RadioGroup.Message },
   GotHairStyleMessage: { message: RadioGroup.Message },
   GotHairColorMessage: { message: RadioGroup.Message },
   GotSkinToneMessage: { message: RadioGroup.Message },
   GotShirtColorMessage: { message: RadioGroup.Message },
-  ClickedRandomizeButton: {},
+  ClickedDiceButton: {},
 })
 export type Message = typeof Message.Type
 
@@ -77,17 +75,6 @@ type UpdateReturn = Update.ReturnWithOutMessage<
   Message,
   OutMessage
 >
-
-const dialog = dialogFolds({
-  read: (picker: CharacterPicker) => picker.dialog,
-  write: (picker, nextDialog) =>
-    modifyFields(picker, { dialog: () => nextDialog }),
-  toParentMessage: message => Message.GotDialogMessage({ message }),
-})
-
-export const open = dialog.open
-
-export const close = dialog.close
 
 type PartLens = Readonly<{
   read: (picker: CharacterPicker) => RadioGroup.Model
@@ -165,8 +152,6 @@ const PART_FOLDS = {
 
 export const update = (picker: CharacterPicker, message: Message) =>
   Message.match<UpdateReturn>(message, {
-    GotDialogMessage: ({ message: dialogMessage }) =>
-      dialog.fold(picker, dialogMessage),
     GotBodyMessage: ({ message: groupMessage }) =>
       PART_FOLDS.Body(picker, groupMessage),
     GotHairStyleMessage: ({ message: groupMessage }) =>
@@ -177,7 +162,7 @@ export const update = (picker: CharacterPicker, message: Message) =>
       PART_FOLDS.SkinTone(picker, groupMessage),
     GotShirtColorMessage: ({ message: groupMessage }) =>
       PART_FOLDS.ShirtColor(picker, groupMessage),
-    ClickedRandomizeButton: () => ({
+    ClickedDiceButton: () => ({
       model: picker,
       outMessage: OutMessage.RequestedRandomLook(),
     }),

@@ -1081,7 +1081,6 @@
 
 .panel-button:focus-visible,
 .setting-tile:focus-visible,
-.setting-link-input:focus-visible,
 .difficulty-choice:focus-visible {
   outline: var(--menu-focus);
   outline-offset: 2px;
@@ -1114,12 +1113,8 @@
   }
 }
 
-/* SETTINGS: a grid of icon tiles, the devices row folded under them, and a
-   small rewind button for the tutorial. */
-
-.panel-dialog[data-panel='Settings'] .panel {
-  width: min(480px, calc(100vw - 16px));
-}
+/* SETTINGS: a grid of icon tiles and a small rewind button for the
+   tutorial, on the Profile's Settings tab (src/profile.css). */
 
 .setting-tiles {
   display: grid;
@@ -1161,11 +1156,6 @@
   color: #c8f59e;
 }
 
-.setting-tile[aria-expanded='true'] {
-  border-color: var(--menu-gold);
-  color: var(--menu-gold);
-}
-
 .setting-tile-icon {
   width: var(--menu-icon);
   height: var(--menu-icon);
@@ -1175,8 +1165,7 @@
   pointer-events: none;
 }
 
-.setting-tile[aria-pressed='true'] .setting-tile-icon,
-.setting-devices-tile .setting-tile-icon {
+.setting-tile[aria-pressed='true'] .setting-tile-icon {
   opacity: 1;
 }
 
@@ -1195,58 +1184,6 @@
   top: 3px;
   right: 3px;
   font-size: 10px;
-}
-
-/* NOTE: the devices tile's dot: grey on this device only, green when
-   linked and synced, yellow while offline. */
-.setting-sync-dot {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--menu-sunken);
-  border-radius: var(--menu-radius-pill);
-  background: var(--menu-ink-faint);
-  pointer-events: none;
-}
-
-.setting-sync-dot[data-sync='Synced'] {
-  background: var(--menu-green);
-}
-
-.setting-sync-dot[data-sync='Offline'],
-.setting-sync-dot[data-sync='Syncing'] {
-  background: var(--menu-gold);
-}
-
-.setting-devices {
-  display: flex;
-  flex-direction: column;
-  gap: var(--menu-gap-sm);
-  padding: 8px 12px;
-  border-radius: var(--menu-radius);
-  background: var(--menu-surface);
-}
-
-.setting-sync-state {
-  margin: 0;
-  color: var(--menu-ink-dim);
-  font-size: var(--menu-small-size);
-}
-
-.setting-sync-state[data-sync='Synced'] {
-  color: var(--menu-green);
-}
-
-.setting-sync-state[data-sync='Offline'] {
-  color: var(--menu-gold);
-}
-
-.setting-sync-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--menu-gap-sm);
 }
 
 .setting-footer {
@@ -2115,37 +2052,6 @@
   background: rgba(8, 10, 12, 0.75);
   color: #9be36a;
   font: bold 12px/1.3 monospace;
-}
-
-/* DEVICE LINK */
-
-.setting-link-code {
-  margin: 0;
-  color: var(--menu-gold);
-  font: bold 28px monospace;
-  letter-spacing: 0.3em;
-  text-align: center;
-  user-select: all;
-}
-
-.setting-link-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.setting-link-input {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: var(--menu-tap);
-  padding: 0 14px;
-  border: 2px solid var(--menu-line-strong);
-  border-radius: 6px;
-  background: var(--menu-sunken);
-  color: #f4f1de;
-  font: bold 22px monospace;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
 }
 
 /* PORTRAIT */
