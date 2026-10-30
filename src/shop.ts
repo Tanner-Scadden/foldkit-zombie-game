@@ -15,6 +15,7 @@ import {
 } from './constants'
 import { arriveAtExit, hasLeftExits } from './exits'
 import type { Model } from './model'
+import { SHOP_GOOD_NAMES } from './names'
 import { countPurchase } from './stats'
 import {
   TRAPS,
@@ -106,6 +107,9 @@ export type ShopGood = typeof ShopGood.Type
 export const gunName = (model: World, weapon: WeaponKind): string =>
   tierName(weapon, tierOf(model.player, weapon))
 
+export const nextGunName = (model: World, weapon: WeaponKind): string =>
+  tierName(weapon, tierOf(model.player, weapon) + 1)
+
 const nextTierFor = (
   model: World,
   weapon: WeaponKind,
@@ -195,7 +199,7 @@ export const SHOP_ITEMS: Readonly<Record<FixedShopItemId, ShopItem>> = {
   },
   ShotgunShells: {
     id: 'ShotgunShells',
-    name: 'Shell Sack',
+    name: SHOP_GOOD_NAMES.ShotgunShells,
     blurb: `${SHOTGUN_SHELLS} more shells for the ${WEAPONS.Shotgun.name}.`,
     price: 10,
     good: ShopGood.Ammo({ weapon: 'Shotgun', rounds: SHOTGUN_SHELLS }),
@@ -216,7 +220,7 @@ export const SHOP_ITEMS: Readonly<Record<FixedShopItemId, ShopItem>> = {
   },
   SmgRounds: {
     id: 'SmgRounds',
-    name: 'Chatter Drum',
+    name: SHOP_GOOD_NAMES.SmgRounds,
     blurb: `${SMG_ROUNDS} more rounds for the ${WEAPONS.Smg.name}.`,
     price: 15,
     good: ShopGood.Ammo({ weapon: 'Smg', rounds: SMG_ROUNDS }),
@@ -237,7 +241,7 @@ export const SHOP_ITEMS: Readonly<Record<FixedShopItemId, ShopItem>> = {
   },
   LaserSight: {
     id: 'LaserSight',
-    name: 'Laser Sight',
+    name: SHOP_GOOD_NAMES.LaserSight,
     blurb:
       'A red line on the floor shows where your shot goes. Fans out for a scattergun. Lasts the run.',
     price: LASER_SIGHT_PRICE,
@@ -245,7 +249,7 @@ export const SHOP_ITEMS: Readonly<Record<FixedShopItemId, ShopItem>> = {
   },
   Heart: {
     id: 'Heart',
-    name: 'Pickled Heart',
+    name: SHOP_GOOD_NAMES.Heart,
     blurb: 'One spare heart, fresh from the jar.',
     price: 25,
     good: ShopGood.Heart(),
@@ -278,7 +282,7 @@ export const shopItem = (id: ShopItemId): ShopItem =>
   isRepairItem(id)
     ? {
         id,
-        name: 'Glue and Nails',
+        name: SHOP_GOOD_NAMES.Repair,
         blurb: 'Fixes this trap. Costs more the worse it looks.',
         price: 0,
         good: ShopGood.Repair({
@@ -538,7 +542,7 @@ export const itemName = (model: World, id: ShopItemId): string =>
     Upgrade: ({ weapon }) =>
       Option.match(nextTierFor(model, weapon), {
         onNone: () => `${tierName(weapon, maxTier(weapon))}, fully upgraded`,
-        onSome: ({ name }) => `Upgrade to ${name}`,
+        onSome: () => `Upgrade to ${nextGunName(model, weapon)}`,
       }),
     Heart: () => shopItem(id).name,
     Trap: () => shopItem(id).name,
@@ -574,8 +578,8 @@ export const itemAriaLabel = (model: World, id: ShopItemId): string => {
     Upgrade: ({ weapon }) =>
       Option.match(nextTierFor(model, weapon), {
         onNone: () => itemName(model, id),
-        onSome: ({ name }) =>
-          `${name}, upgrade for ${gunName(model, weapon)}, ${price}`,
+        onSome: () =>
+          `${nextGunName(model, weapon)}, upgrade for ${gunName(model, weapon)}, ${price}`,
       }),
     Heart: () => `Buy ${itemName(model, id)} for ${price}`,
     Trap: () => `Buy ${itemName(model, id)} for ${price}`,

@@ -17,6 +17,7 @@ import {
   ZOMBIE_SPEED_MAX,
   ZOMBIE_SPEED_MIN,
 } from './constants'
+import { ZOMBIE_NAMES } from './names'
 import type { Clearance } from './pathing'
 import type { SoundEffect } from './soundEffect'
 import {
@@ -114,7 +115,7 @@ type ZombieKindStats = Readonly<{
 
 export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
   Shambler: {
-    name: 'Groaner',
+    name: ZOMBIE_NAMES.Shambler,
     tagline: 'SLOW AND HUNGRY',
     pitch: "HE'S SLOW. BACK UP AND KEEP SHOOTING.",
     speedMin: ZOMBIE_SPEED_MIN,
@@ -152,7 +153,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     bait: 'Drawn',
   },
   Runner: {
-    name: 'Hotfoot',
+    name: ZOMBIE_NAMES.Runner,
     tagline: 'FAST BUT FLIMSY',
     pitch: 'ZOOMS RIGHT AT YOU. ONE SHOT DROPS IT.',
     speedMin: 44,
@@ -193,7 +194,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     bait: 'Ignores',
   },
   Tank: {
-    name: 'Big Lug',
+    name: ZOMBIE_NAMES.Tank,
     tagline: 'ARMORED IN JUNK',
     pitch: "HE'S WEARING A KITCHEN. KNOCK IT OFF.",
     speedMin: 11,
@@ -238,7 +239,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     bait: 'Drawn',
   },
   Exploder: {
-    name: 'Kaboomer',
+    name: ZOMBIE_NAMES.Exploder,
     tagline: 'HE BROUGHT A BOMB TO SHARE',
     pitch: 'HE WANTS A HUG. POP HIM FROM FAR AWAY.',
     speedMin: 14,
@@ -285,7 +286,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     bait: 'Ignores',
   },
   Thrower: {
-    name: 'Big Leaguer',
+    name: ZOMBIE_NAMES.Thrower,
     tagline: 'HE PITCHES ZOMBIES',
     pitch: 'HE PITCHES ZOMBIES. GET CLOSE AND HE HIDES BEHIND ONE.',
     speedMin: 13,
@@ -323,7 +324,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     bait: 'Ignores',
   },
   Crawler: {
-    name: 'Ankle Biter',
+    name: ZOMBIE_NAMES.Crawler,
     tagline: 'IT COMES UP THROUGH THE FLOOR',
     pitch: 'IT CLAWS UP THROUGH THE FLOOR AND GRABS YOUR ANKLES.',
     speedMin: 26,
@@ -358,7 +359,7 @@ export const ZOMBIE_KINDS: Readonly<Record<ZombieKind, ZombieKindStats>> = {
     bait: 'Ignores',
   },
   Boss: {
-    name: 'Uncle Chunk',
+    name: ZOMBIE_NAMES.Boss,
     tagline: 'STAY CLOSE. STEP OUT OF THE RED',
     pitch: 'HE STOMPS UP CLOSE. RUN FAR AND HE CHARGES AND SPITS.',
     speedMin: 10,

@@ -37,6 +37,7 @@ import {
   itemName,
   itemsIn,
   maybeRepairTrap,
+  nextGunName,
   ownedNote,
   shopItem,
   shopItemElementId,
@@ -468,7 +469,7 @@ const shortName = (model: Model, item: ShopItemId): string =>
     Upgrade: ({ weapon }) =>
       Option.match(maybeNextTier(weapon, tierOf(model.player, weapon)), {
         onNone: () => tierName(weapon, maxTier(weapon)),
-        onSome: ({ name }) => name,
+        onSome: () => nextGunName(model, weapon),
       }),
     Heart: () => itemName(model, item),
     Trap: () => itemName(model, item),

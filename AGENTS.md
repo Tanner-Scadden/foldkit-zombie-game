@@ -124,6 +124,7 @@ Paths are under `src/`. The API Worker is in `infra/worker/` (analytics, and syn
 | `party.ts`, `revive.ts`                                 | Co-op's players in the World: seats by slot, `withSeat` and `forEachSeat`, targets, money splits, trap owners; downed, revived, READY, friendly fire          |
 | `couch.ts`, `partyView.ts`                              | Players 2 to 4 at one keyboard (dev-only `?local=N`): their keys, intents, and shared camera; teammates, seat marks, and down bars in the world view          |
 | `prng.ts`, `constants.ts`                               | The seeded random number generator; the view size, speeds, and other tuning numbers                                                                           |
+| `names.ts`                                              | Every name a player reads, keyed by id: guns and the tier word ladder, zombies, traps, power-ups, and shop goods                                              |
 
 ### Elsewhere
 

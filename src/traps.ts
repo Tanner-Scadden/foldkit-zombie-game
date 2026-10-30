@@ -34,6 +34,7 @@ import {
 } from './constants'
 import { addVectors, directionBetween, scaleVector } from './geometry'
 import type { Model } from './model'
+import { TRAP_NAMES } from './names'
 import {
   COOP_RULES,
   firedBy,
@@ -85,27 +86,27 @@ type TrapStats = Readonly<{
 
 export const TRAPS: Readonly<Record<TrapKind, TrapStats>> = {
   Barricade: {
-    name: 'Plank Pile',
+    name: TRAP_NAMES.Barricade,
     blurb:
       'Nail it across a doorway, two at most. Slow zombies stop to chew it. Your bullets fly through.',
     price: 40,
     hp: 30,
     limit: 2,
-    placeLimitNote: 'Two plank piles max',
-    buyLimitNote: 'Two plank piles max',
+    placeLimitNote: `Two ${TRAP_NAMES.Barricade}s max`,
+    buyLimitNote: `Two ${TRAP_NAMES.Barricade}s max`,
     pathCost: 25,
     breakTrauma: 0.6,
     crackSound: 'Crack',
     breakSound: 'Crash',
   },
   Turret: {
-    name: 'Grumpy Gnome',
+    name: TRAP_NAMES.Turret,
     blurb:
       'A garden gnome with a pea shooter. Set him down and he shoots anything that gets close.',
     price: 75,
     hp: 10,
     limit: 2,
-    placeLimitNote: 'All 2 Grumpy Gnomes are out',
+    placeLimitNote: `All 2 ${TRAP_NAMES.Turret}s are out`,
     buyLimitNote: 'You can only own 2',
     pathCost: 6,
     breakTrauma: 0.5,
@@ -722,7 +723,10 @@ const floorVerdict = (
   )
   return firstReason([
     [!isWalkableTile(level, column, row), 'Something is in the way'],
-    [isDoorTile(level, column, row), 'Doorways are for Plank Piles'],
+    [
+      isDoorTile(level, column, row),
+      `Doorways are for ${TRAP_NAMES.Barricade}s`,
+    ],
     [isOccupied, 'A trap is already there'],
     [Array.contains(stallFrontOf(level), index), 'Keep the shop stall clear'],
     [

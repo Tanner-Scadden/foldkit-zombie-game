@@ -1006,7 +1006,7 @@ describe('screen shake', () => {
     return frames
   }
 
-  test('held fire from the pistol and the Chatterbox never moves the screen', () => {
+  test('held fire from the pistol and the Gossip Box never moves the screen', () => {
     Array.forEach([playingModel, holdingSpare('Smg')], base => {
       expect(
         Array.every(shakeWhileFiring(base), ({ x, y }) => x === 0 && y === 0),

@@ -239,7 +239,7 @@ describe('buying traps', () => {
       ),
       model(current => {
         expect(verdictFor(current, 'Barricade')).toEqual(
-          Verdict.Refused({ reason: 'Two plank piles max' }),
+          Verdict.Refused({ reason: 'Two Plank Piles max' }),
         )
       }),
       message(Message.ClickedBuyButton({ item: 'Barricade' })),
@@ -338,7 +338,7 @@ describe('placing a barricade', () => {
       model(current => {
         expect(current.traps).toHaveLength(2)
         expect(current.trapStock.Barricade).toBe(1)
-        expect(refusal(current)).toEqual(Option.some('Two plank piles max'))
+        expect(refusal(current)).toEqual(Option.some('Two Plank Piles max'))
       }),
     )
 

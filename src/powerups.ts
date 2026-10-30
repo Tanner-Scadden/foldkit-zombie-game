@@ -19,6 +19,7 @@ import {
 } from './combat'
 import { PLAYER_MAX_HP, PLAYER_RADIUS, PLAYER_SPEED } from './constants'
 import type { Model } from './model'
+import { PICKUP_NAMES } from './names'
 import { forEachSeat, isCoop, isStanding, leadSeatOf } from './party'
 import { nextRandom } from './prng'
 import { earn } from './shop'
@@ -145,7 +146,7 @@ type PickupStats = Readonly<{
 
 export const PICKUPS: Readonly<Record<PickupKind, PickupStats>> = {
   RapidFire: {
-    name: 'HOT SAUCE',
+    name: PICKUP_NAMES.RapidFire,
     blurb: 'FASTER, NO RELOADS',
     weight: 24,
     effect: PickupEffect.Boost({ boost: 'RapidFire' }),
@@ -153,7 +154,7 @@ export const PICKUPS: Readonly<Record<PickupKind, PickupStats>> = {
     color: BOOSTS.RapidFire.color,
   },
   Damage: {
-    name: 'MEAN BEANS',
+    name: PICKUP_NAMES.Damage,
     blurb: 'DOUBLE DAMAGE',
     weight: 22,
     effect: PickupEffect.Boost({ boost: 'Damage' }),
@@ -161,7 +162,7 @@ export const PICKUPS: Readonly<Record<PickupKind, PickupStats>> = {
     color: BOOSTS.Damage.color,
   },
   Speed: {
-    name: 'ZOOMY SOCKS',
+    name: PICKUP_NAMES.Speed,
     blurb: 'RUN FASTER',
     weight: 16,
     effect: PickupEffect.Boost({ boost: 'Speed' }),
@@ -169,7 +170,7 @@ export const PICKUPS: Readonly<Record<PickupKind, PickupStats>> = {
     color: BOOSTS.Speed.color,
   },
   Pierce: {
-    name: 'SHISH KEBULLETS',
+    name: PICKUP_NAMES.Pierce,
     blurb: 'SHOTS GO THROUGH',
     weight: 20,
     effect: PickupEffect.Boost({ boost: 'Pierce' }),
@@ -177,7 +178,7 @@ export const PICKUPS: Readonly<Record<PickupKind, PickupStats>> = {
     color: BOOSTS.Pierce.color,
   },
   Burp: {
-    name: 'BIG BURP',
+    name: PICKUP_NAMES.Burp,
     blurb: 'EVERYBODY BACK!',
     weight: 10,
     effect: PickupEffect.Burp(),
@@ -185,7 +186,7 @@ export const PICKUPS: Readonly<Record<PickupKind, PickupStats>> = {
     color: '#d6f25c',
   },
   Heart: {
-    name: 'PICKLED HEART',
+    name: PICKUP_NAMES.Heart,
     blurb: '+1 HEART',
     weight: 8,
     effect: PickupEffect.Heal({ hearts: 1 }),

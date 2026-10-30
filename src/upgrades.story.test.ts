@@ -17,15 +17,18 @@ import {
   type WeaponKind,
   initialModel,
 } from './model'
+import { TIER_LADDER } from './names'
 import { Verdict, verdictFor } from './shop'
 import { holdFire, press, tick } from './testing'
 import {
   UPGRADE_TIERS,
+  WEAPONS,
   magazineOf,
   maxRounds,
   maxTier,
   maybeSpare,
   statsAt,
+  tierName,
   tierOf,
 } from './weapons'
 
@@ -308,5 +311,44 @@ describe('tier resets', () => {
         expect(player.arsenal).toEqual(Arsenal.PistolOnly())
       }),
     )
+  })
+})
+
+describe('tier names', () => {
+  const GUNS: ReadonlyArray<WeaponKind> = ['Pistol', 'Shotgun', 'Smg']
+
+  const namesOf = (kind: WeaponKind): ReadonlyArray<string> =>
+    Array.makeBy(maxTier(kind) + 1, tier => tierName(kind, tier))
+
+  test('every gun climbs the same ladder of tier words around its base name', () => {
+    expect(Array.map(GUNS, namesOf)).toEqual([
+      [
+        'Pop Pistol',
+        'Beefy Pop Pistol',
+        'Pop Pistol DELUXE',
+        'Pop Pistol 3000',
+      ],
+      [
+        'Barn Buster',
+        'Beefy Barn Buster',
+        'Barn Buster DELUXE',
+        'Barn Buster 3000',
+      ],
+      [
+        'Gossip Box',
+        'Beefy Gossip Box',
+        'Gossip Box DELUXE',
+        'Gossip Box 3000',
+      ],
+    ])
+  })
+
+  test('the ladder has a word for every tier of every gun', () => {
+    Array.forEach(GUNS, kind => {
+      expect(maxTier(kind)).toBeLessThan(TIER_LADDER.length)
+      Array.forEach(namesOf(kind), (name, tier) =>
+        expect(name).toBe(TIER_LADDER[tier]?.(WEAPONS[kind].name)),
+      )
+    })
   })
 })

@@ -14,6 +14,7 @@ import {
   PLAYER_RECOIL_SQUASH,
   ZOMBIE_KNOCKBACK_SPEED,
 } from './constants'
+import { GUN_NAMES, gunTierName } from './names'
 import type { SoundEffect } from './soundEffect'
 import {
   Arsenal,
@@ -57,7 +58,7 @@ export type WeaponStats = Readonly<{
 
 export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
   Pistol: {
-    name: 'Pop Pistol',
+    name: GUN_NAMES.Pistol,
     roundsLabel: 'rounds',
     fireIntervalMs: FIRE_INTERVAL_MS,
     magazine: PISTOL_MAGAZINE,
@@ -81,7 +82,7 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     maybeRoundLimit: Option.none(),
   },
   Shotgun: {
-    name: 'Barn Buster',
+    name: GUN_NAMES.Shotgun,
     roundsLabel: 'shells',
     fireIntervalMs: 620,
     magazine: 6,
@@ -105,7 +106,7 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     maybeRoundLimit: Option.some({ starting: 16, max: 48 }),
   },
   Smg: {
-    name: 'Chatterbox',
+    name: GUN_NAMES.Smg,
     roundsLabel: 'rounds',
     fireIntervalMs: 70,
     magazine: 30,
@@ -129,7 +130,7 @@ export const WEAPONS: Readonly<Record<WeaponKind, WeaponStats>> = {
     maybeRoundLimit: Option.some({ starting: 150, max: 360 }),
   },
   Peashooter: {
-    name: 'Pea Shooter',
+    name: GUN_NAMES.Peashooter,
     roundsLabel: 'peas',
     fireIntervalMs: 1200,
     // NOTE: The Grumpy Gnome fires on its own cooldown and never reloads, so
@@ -172,7 +173,6 @@ type TierBoost = Readonly<{
 }>
 
 export type WeaponTier = Readonly<{
-  name: string
   price: number
   boost: TierBoost
 }>
@@ -182,7 +182,6 @@ export const UPGRADE_TIERS: Readonly<
 > = {
   Pistol: [
     {
-      name: 'Shovey Popper',
       price: 200,
       boost: {
         damage: 0,
@@ -196,7 +195,6 @@ export const UPGRADE_TIERS: Readonly<
       },
     },
     {
-      name: 'Golden Grandpopper',
       price: 500,
       boost: {
         damage: 0,
@@ -210,7 +208,6 @@ export const UPGRADE_TIERS: Readonly<
       },
     },
     {
-      name: 'Double-Dip Popper',
       price: 750,
       boost: {
         damage: 1,
@@ -226,7 +223,6 @@ export const UPGRADE_TIERS: Readonly<
   ],
   Shotgun: [
     {
-      name: 'Barn Buster Plus',
       price: 40,
       boost: {
         damage: 0,
@@ -240,7 +236,6 @@ export const UPGRADE_TIERS: Readonly<
       },
     },
     {
-      name: 'Silo Splitter',
       price: 140,
       boost: {
         damage: 0,
@@ -254,7 +249,6 @@ export const UPGRADE_TIERS: Readonly<
       },
     },
     {
-      name: 'Hayloft Howitzer',
       price: 320,
       boost: {
         damage: 1,
@@ -270,7 +264,6 @@ export const UPGRADE_TIERS: Readonly<
   ],
   Smg: [
     {
-      name: 'Gossip Box',
       price: 60,
       boost: {
         damage: 0,
@@ -284,7 +277,6 @@ export const UPGRADE_TIERS: Readonly<
       },
     },
     {
-      name: 'Rumor Mill',
       price: 180,
       boost: {
         damage: 0,
@@ -298,7 +290,6 @@ export const UPGRADE_TIERS: Readonly<
       },
     },
     {
-      name: 'Blabbermouth 3000',
       price: 350,
       boost: {
         damage: 1,
@@ -352,11 +343,10 @@ export const maybeNextTier = (
   tier: number,
 ): Option.Option<WeaponTier> => Array.get(UPGRADE_TIERS[kind], tier)
 
+// NOTE: the names, and the tier word ladder every gun shares, are in
+// `src/names.ts`.
 export const tierName = (kind: WeaponKind, tier: number): string =>
-  Option.match(Array.get(UPGRADE_TIERS[kind], clampTier(kind, tier) - 1), {
-    onNone: () => WEAPONS[kind].name,
-    onSome: ({ name }) => name,
-  })
+  gunTierName(kind, clampTier(kind, tier))
 
 // ARSENAL
 

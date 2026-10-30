@@ -2,6 +2,7 @@ import { Array, Option, pipe } from 'effect'
 import type { Canvas } from 'foldkit'
 
 import type { KillCounts, Model, ZombieKind } from './model'
+import { ZOMBIE_NAMES } from './names'
 import { type WornFrames, ZOMBIE_SPRITES, standaloneSource } from './sprite'
 import { ZOMBIE_KINDS } from './zombies'
 
@@ -42,7 +43,7 @@ export const MUNCHOPEDIA: Array.NonEmptyReadonlyArray<MunchopediaEntry> = [
   {
     kind: 'Thrower',
     bio: 'Got cut from the big leagues. Still bitter.',
-    behavior: 'Hangs back and pitches Groaners at your head.',
+    behavior: `Hangs back and pitches ${ZOMBIE_NAMES.Shambler}s at your head.`,
     howToBeat: 'Get close. He hides behind a buddy, so shoot around it.',
   },
   {

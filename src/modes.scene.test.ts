@@ -125,7 +125,7 @@ describe('Mode choice', () => {
       ),
       expect(
         text(
-          'You have $321. Holding the Rumor Mill. Second slot: Rumor Mill, upgrade tier 2 of 3, with 99 rounds. Pistol upgrade tier 0 of 3.',
+          'You have $321. Holding the Gossip Box DELUXE. Second slot: Gossip Box DELUXE, upgrade tier 2 of 3, with 99 rounds. Pistol upgrade tier 0 of 3.',
         ),
       ).toExist(),
     )
@@ -209,7 +209,7 @@ describe('Upgrades in the shop', () => {
 
   test('names the next tier, says what changes, buys it, and shows MAX once done', () => {
     const nextShotgunTier = role('button', {
-      name: 'Hayloft Howitzer, upgrade for Silo Splitter, $320',
+      name: 'Barn Buster 3000, upgrade for Barn Buster DELUXE, $320',
     })
     scene(
       { update, view },
@@ -225,28 +225,34 @@ describe('Upgrades in the shop', () => {
         'aria-selected',
         'true',
       ),
-      expect(role('heading', { name: 'Silo Splitter' })).toExist(),
+      expect(role('heading', { name: 'Barn Buster DELUXE' })).toExist(),
       expect(
         text('Hits for 2 instead of 1. Holds 80 shells instead of 64.'),
       ).toExist(),
       expect(role('img', { name: 'Tier 2 of 3' })).toExist(),
       expect(
-        role('button', { name: 'Shovey Popper, upgrade for Pop Pistol, $200' }),
+        role('button', {
+          name: 'Beefy Pop Pistol, upgrade for Pop Pistol, $200',
+        }),
       ).not.toHaveAttr('aria-disabled', 'true'),
       expect(
-        role('button', { name: 'Gossip Box, upgrade for Chatterbox, $60' }),
+        role('button', {
+          name: 'Beefy Gossip Box, upgrade for Gossip Box, $60',
+        }),
       ).toBeAbsent(),
       click(nextShotgunTier),
       expect(text('You have $80')).toExist(),
-      expect(role('heading', { name: 'Hayloft Howitzer' })).toExist(),
+      expect(role('heading', { name: 'Barn Buster 3000' })).toExist(),
       expect(role('img', { name: 'Tier 3 of 3' })).toExist(),
       expect(
-        role('button', { name: 'Hayloft Howitzer, fully upgraded' }),
+        role('button', { name: 'Barn Buster 3000, fully upgraded' }),
       ).toHaveAttr('aria-disabled', 'true'),
       expect(text('Fully upgraded')).toExist(),
       expect(text('MAX')).toExist(),
       expect(
-        role('button', { name: 'Shovey Popper, upgrade for Pop Pistol, $200' }),
+        role('button', {
+          name: 'Beefy Pop Pistol, upgrade for Pop Pistol, $200',
+        }),
       ).toHaveAttr('aria-disabled', 'true'),
       expect(text('Need $120 more')).toExist(),
       expect(
@@ -255,7 +261,7 @@ describe('Upgrades in the shop', () => {
         ),
       ).toExist(),
       expect(
-        text('Replaces your Hayloft Howitzer, and its upgrades are lost'),
+        text('Replaces your Barn Buster 3000, and its upgrades are lost'),
       ).toExist(),
     )
   })
