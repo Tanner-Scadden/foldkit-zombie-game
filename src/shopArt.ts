@@ -1,7 +1,13 @@
-import { Array, Record } from 'effect'
+import { Array, Record, Schema } from 'effect'
 
 import { pixelIconUrl } from './icons'
-import type { ShopCategory, ShopItemId, WeaponKind } from './model'
+import {
+  FixedShopItemId,
+  type ShopCategory,
+  type ShopItemId,
+  type TrapKind,
+  type WeaponKind,
+} from './model'
 import type { Mood } from './shopkeeper'
 import type { Palette } from './sprite'
 
@@ -255,7 +261,7 @@ const SIGHT_ART = artOf(
   { K: INK, M: '#4a4f5a', R: '#ff3a3f', L: '#ffb3b6' },
 )
 
-export const ITEM_ART: Readonly<Record<ShopItemId, ShopArt>> = {
+export const ITEM_ART: Readonly<Record<FixedShopItemId, ShopArt>> = {
   Shotgun: gunArt('Shotgun', 0),
   ShotgunShells: SACK_ART,
   ShotgunUpgrade: gunArt('Shotgun', 1),
@@ -267,7 +273,14 @@ export const ITEM_ART: Readonly<Record<ShopItemId, ShopArt>> = {
   Heart: JAR_ART,
   Barricade: PLANK_ART,
   Turret: GNOME_ART,
-  RepairTraps: GLUE_ART,
+}
+
+export const itemArt = (id: ShopItemId): ShopArt =>
+  Schema.is(FixedShopItemId)(id) ? ITEM_ART[id] : GLUE_ART
+
+export const TRAP_ART: Readonly<Record<TrapKind, ShopArt>> = {
+  Barricade: PLANK_ART,
+  Turret: GNOME_ART,
 }
 
 // STATS

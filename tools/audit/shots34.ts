@@ -60,6 +60,15 @@ const fromHand = (name: RegExp) => async (page: Page) => {
   await clickButton(name)(page)
 }
 
+// NOTE: a tap, not a click, so the game stays on its touch layout.
+const tapTab = (name: RegExp) => async (page: Page) => {
+  const box = await page.getByRole('tab', { name }).first().boundingBox()
+  if (box !== null) {
+    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
+  }
+  await wait(500)
+}
+
 const SCENES: ReadonlyArray<Scene> = [
   {
     name: 'wave',
@@ -85,6 +94,12 @@ const SCENES: ReadonlyArray<Scene> = [
     query: 'wave=2&seen=all&money=45&barricades=1&break=open&px=200&py=40',
   },
   { name: 'shop', query: 'wave=5&money=180&gun=smg&tier=1&px=270&py=142' },
+  {
+    name: 'shoptraps',
+    query:
+      'wave=5&money=180&gun=smg&tier=1&planks=West,North&plankhp=12&px=270&py=142',
+    act: tapTab(/^Traps,/),
+  },
   { name: 'home', query: '' },
   {
     name: 'bests',

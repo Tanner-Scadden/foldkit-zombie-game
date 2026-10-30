@@ -1002,7 +1002,7 @@ export const Blast = Schema.Struct({
 })
 export type Blast = typeof Blast.Type
 
-export const ShopItemId = Schema.Literals([
+export const FixedShopItemId = Schema.Literals([
   'Shotgun',
   'ShotgunShells',
   'ShotgunUpgrade',
@@ -1014,8 +1014,15 @@ export const ShopItemId = Schema.Literals([
   'Heart',
   'Barricade',
   'Turret',
-  'RepairTraps',
 ])
+export type FixedShopItemId = typeof FixedShopItemId.Type
+
+// NOTE: a placed trap is repaired on its own, so its repair row is named by
+// the trap's id.
+export const RepairItemId = Schema.TemplateLiteral(['Repair-', Schema.Number])
+export type RepairItemId = typeof RepairItemId.Type
+
+export const ShopItemId = Schema.Union([FixedShopItemId, RepairItemId])
 export type ShopItemId = typeof ShopItemId.Type
 
 // NOTE: the laser sight is bought in the shop for one run: a line or a

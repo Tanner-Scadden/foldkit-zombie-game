@@ -205,7 +205,7 @@ Proposed numbers. The table is in `src/traps.ts`, the chewing rates in `src/zomb
 | --------- | -------------- | ------ | ------ | ------------ | ------------------------------------------------------------------------------------------------------ |
 | Barricade | Plank Pile     | $40    | 30     | 2            | Boards up one doorway. Blocks zombies and the player; shots and peas fly through the gaps              |
 | Turret    | Grumpy Gnome   | $75    | 10     | 2            | Shoots a pea (1 damage, 1200 ms apart) at the nearest walking zombie it can see within 84 px           |
-| Repair    | Glue and Nails | Varies | -      | -            | Restores every damaged trap for half of each trap's price, scaled by the share of health it is missing |
+| Repair    | Glue and Nails | Varies | -      | -            | Restores one placed trap for half its price, scaled by the share of health it is missing               |
 
 - **Placing.** Traps are bought into a pack shown in the HUD. In Preparation, T (or the place icon) puts the selected one down and G (or the next icon) switches kinds. A Plank Pile goes in the doorway the player stands in or beside; a gnome on the free tile in front of the player. A green or red ghost shows where it would go.
 - **Chewing.** A walking zombie that touches a trap chews it: a Groaner 3 health a second, a Hotfoot 2, a Big Lug 12. A Kaboomer that touches one fuses. A Plank Pile cracks at two thirds and one third and breaks with a crash.
@@ -229,13 +229,13 @@ From a playtest on 2026-10-28 ("Shop should have categories, and be more of a ra
 - **Affordable at a glance.** Each tab has a badge counting what the player can buy now. A row's price is a gold coin tag when affordable, grey with the shortfall when not, and one word (FULL, MAX, OWNED) when done.
 - **Phones.** Under 500 px tall the panel widens and the rows sit side by side, so every tab fits an 844x390 or 667x375 phone without scrolling (`tools/audit/shots34.ts`).
 - **The ramp.** Cheap first steps and dear top tiers, so the first visit buys a gun and the top tiers are goals for the late waves. The pistol line stays expensive on purpose: it never runs dry, and a cheap pistol damage tier once took the bot from 28% wins to 100%.
-- **The bot's shopping.** A heart at 3 or fewer, the Chatterbox when affordable (else the Barn Buster), ammo below half, two Plank Piles, Glue and Nails at $25 or less, spare gun tiers, one gnome, pistol tiers only once the spare gun is maxed, then a second gnome. It keeps $30 back after an upgrade or a gnome.
+- **The bot's shopping.** A heart at 3 or fewer, the Chatterbox when affordable (else the Barn Buster), ammo below half, two Plank Piles, repairs while all of them together cost $25 or less, spare gun tiers, one gnome, pistol tiers only once the spare gun is maxed, then a second gnome. It keeps $30 back after an upgrade or a gnome.
 
 #### Ammo and upgrades under the gun
 
 From a playtest on 2026-10-28. Proposed, not decided. The layout is `gunShelves` in `src/shop.ts`.
 
-- **One card per gun.** GUNS lists the Barn Buster, the Chatterbox, and the Pop Pistol in a fixed order. A gun the player does not carry is one buy row. A carried gun is a card with its tier name, its rounds, and tier pips, and its ammo refill and next upgrade as rows under it.
+- **One card per gun.** GUNS lists the Pop Pistol, the Barn Buster, and the Chatterbox, always in that order (changed on 2026-10-29 at the owner's request, pistol first), then the Laser Sight. A gun the player does not carry is one buy row. A carried gun is a card with its tier name, its rounds, and tier pips, and its ammo refill and next upgrade as rows under it.
 - **A gun goes by the name on its card.** Everything the shop says about a carried gun uses its tier name.
 - **Focus.** Buying a gun moves focus to its ammo row; buying ammo or an upgrade keeps it in place.
 
@@ -247,6 +247,7 @@ Built on 2026-10-29 at the owner's request ("The shop doesn't feel engaging"), u
 - **Pictures over sentences.** Each row is its art, its name, and its tag. Guns show power, speed, and magazine as bars, with the next tier's gain blinking gold; ammo is a fill bar, hearts a row of hearts, traps dots. Long descriptions are for screen readers only.
 - **Just bought.** A MINE! stamp and a spray of coins on the row. A tap on a row the player cannot buy flashes red and Rattles reacts.
 - **Focus.** Opens on the most useful row (low ammo, a heart, an upgrade), never first on a gun that would replace the one carried.
+- **Repairs per trap.** Changed on 2026-10-29 at the owner's request: the one Glue and Nails row for every trap is gone. Each placed Plank Pile or gnome gets its own row under its kind, like ammo under a gun: the trap, a tiny map of the room with a dot where it stands, its health bar, and its own price (the same rule, for that trap alone), or FULL. The row is named `Repair-<trap id>`.
 
 #### Power-ups
 

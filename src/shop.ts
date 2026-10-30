@@ -19,14 +19,17 @@ import { arriveAtExit, hasLeftExits } from './exits'
 import {
   Arsenal,
   type CarriedGun,
+  type FixedShopItemId,
   Lesson,
   type Model,
   Phase,
   type Player,
+  type RepairItemId,
   type ShopCategory,
   ShopChatter,
   ShopItemId,
   ShopState,
+  Trap,
   TrapKind,
   type Vector,
   type Wallet,
@@ -35,11 +38,12 @@ import {
 import { countPurchase } from './stats'
 import {
   TRAPS,
+  healthShare,
   isDamaged,
   ownedCount,
   placedCount,
   repairPrice,
-  repairTraps,
+  repairTrap,
   stockTrap,
 } from './traps'
 import {
@@ -96,7 +100,7 @@ export const ShopGood = defineTaggedUnion({
   Upgrade: { weapon: WeaponKind },
   Heart: {},
   Trap: { kind: TrapKind },
-  Repair: {},
+  Repair: { trapId: Schema.Number },
   Sight: {},
 })
 export type ShopGood = typeof ShopGood.Type
@@ -185,7 +189,7 @@ const SMG_ROUNDS = 120
 // upgrade, so it is a late-run buy, and it is gone with the run.
 export const LASER_SIGHT_PRICE = 400
 
-export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
+export const SHOP_ITEMS: Readonly<Record<FixedShopItemId, ShopItem>> = {
   Shotgun: {
     id: 'Shotgun',
     name: WEAPONS.Shotgun.name,
@@ -264,14 +268,28 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
     price: TRAPS.Turret.price,
     good: ShopGood.Trap({ kind: 'Turret' }),
   },
-  RepairTraps: {
-    id: 'RepairTraps',
-    name: 'Glue and Nails',
-    blurb: 'Fixes every damaged trap. Costs more the worse they look.',
-    price: 0,
-    good: ShopGood.Repair(),
-  },
 }
+
+const REPAIR_PREFIX = 'Repair-'
+
+export const repairItemId = (trapId: number): RepairItemId =>
+  `${REPAIR_PREFIX}${trapId}`
+
+const isRepairItem = (id: ShopItemId): id is RepairItemId =>
+  String.startsWith(REPAIR_PREFIX)(id)
+
+export const shopItem = (id: ShopItemId): ShopItem =>
+  isRepairItem(id)
+    ? {
+        id,
+        name: 'Glue and Nails',
+        blurb: 'Fixes this trap. Costs more the worse it looks.',
+        price: 0,
+        good: ShopGood.Repair({
+          trapId: Number(String.slice(REPAIR_PREFIX.length)(id)),
+        }),
+      }
+    : SHOP_ITEMS[id]
 
 // CATEGORIES
 
@@ -305,6 +323,53 @@ export const SHOP_CATEGORY_ORDER: Array.NonEmptyReadonlyArray<ShopCategory> = [
 ]
 
 export const ShopTabs = Tabs.create<ShopCategory>()
+
+// TRAPS
+
+export type TrapShelf = Readonly<{
+  kind: TrapKind
+  item: FixedShopItemId
+  repairs: ReadonlyArray<ShopItemId>
+}>
+
+const TRAP_SHELF_KINDS: Array.NonEmptyReadonlyArray<TrapKind> = [
+  'Barricade',
+  'Turret',
+]
+
+export const trapShelves = (
+  model: Model,
+): Array.NonEmptyReadonlyArray<TrapShelf> =>
+  Array.map(TRAP_SHELF_KINDS, kind => ({
+    kind,
+    item: kind,
+    repairs: pipe(
+      model.traps,
+      Array.filter(trap => trap._tag === kind),
+      Array.map(trap => repairItemId(trap.id)),
+    ),
+  }))
+
+export const maybeRepairTrap = (
+  model: Model,
+  id: ShopItemId,
+): Option.Option<Trap> =>
+  ShopGood.match(shopItem(id).good, {
+    Gun: () => Option.none(),
+    Ammo: () => Option.none(),
+    Upgrade: () => Option.none(),
+    Heart: () => Option.none(),
+    Trap: () => Option.none(),
+    Repair: ({ trapId }) =>
+      Array.findFirst(model.traps, trap => trap.id === trapId),
+    Sight: () => Option.none(),
+  })
+
+const trapPlace = (trap: Trap): string =>
+  Trap.match(trap, {
+    Barricade: ({ door }) => `at the ${door} door`,
+    Turret: ({ column, row }) => `at column ${column}, row ${row}`,
+  })
 
 // GUNS
 
@@ -368,7 +433,7 @@ const sidearmShelf = (player: Player): GunShelf =>
 export const gunShelves = (
   model: Model,
 ): Array.NonEmptyReadonlyArray<GunShelf> =>
-  Array.append(
+  Array.prepend(
     Array.map(SPARE_LINES, line => spareShelf(model.player, line)),
     sidearmShelf(model.player),
   )
@@ -391,12 +456,15 @@ export const itemsIn = (
   } else if (category === 'Health') {
     return ['Heart']
   } else {
-    return ['Barricade', 'Turret', 'RepairTraps']
+    return Array.flatMap(trapShelves(model), shelf => [
+      shelf.item,
+      ...shelf.repairs,
+    ])
   }
 }
 
 const maybeGunOf = (item: ShopItemId): Option.Option<WeaponKind> =>
-  ShopGood.match(SHOP_ITEMS[item].good, {
+  ShopGood.match(shopItem(item).good, {
     Gun: ({ weapon }) => Option.some(weapon),
     Ammo: ({ weapon }) => Option.some(weapon),
     Upgrade: ({ weapon }) => Option.some(weapon),
@@ -437,22 +505,26 @@ export const maybeDisplacedFocus = (model: Model): Option.Option<ShopItemId> =>
   })
 
 export const priceFor = (model: Model, id: ShopItemId): number =>
-  ShopGood.match(SHOP_ITEMS[id].good, {
-    Gun: () => SHOP_ITEMS[id].price,
-    Ammo: () => SHOP_ITEMS[id].price,
+  ShopGood.match(shopItem(id).good, {
+    Gun: () => shopItem(id).price,
+    Ammo: () => shopItem(id).price,
     Upgrade: ({ weapon }) =>
       Option.match(nextTierFor(model, weapon), {
         onNone: () => 0,
         onSome: ({ price }) => price,
       }),
-    Heart: () => SHOP_ITEMS[id].price,
-    Trap: () => SHOP_ITEMS[id].price,
-    Repair: () => repairPrice(model.traps),
-    Sight: () => SHOP_ITEMS[id].price,
+    Heart: () => shopItem(id).price,
+    Trap: () => shopItem(id).price,
+    Repair: () =>
+      Option.match(maybeRepairTrap(model, id), {
+        onNone: () => 0,
+        onSome: trap => repairPrice([trap]),
+      }),
+    Sight: () => shopItem(id).price,
   })
 
 const isMaxedUpgrade = (model: Model, id: ShopItemId): boolean =>
-  ShopGood.match(SHOP_ITEMS[id].good, {
+  ShopGood.match(shopItem(id).good, {
     Gun: () => false,
     Ammo: () => false,
     Upgrade: ({ weapon }) => Option.isNone(nextTierFor(model, weapon)),
@@ -466,18 +538,22 @@ export const priceLabel = (model: Model, id: ShopItemId): string =>
   isMaxedUpgrade(model, id) ? 'MAX' : `$${priceFor(model, id)}`
 
 export const itemName = (model: Model, id: ShopItemId): string =>
-  ShopGood.match(SHOP_ITEMS[id].good, {
-    Gun: () => SHOP_ITEMS[id].name,
-    Ammo: () => SHOP_ITEMS[id].name,
+  ShopGood.match(shopItem(id).good, {
+    Gun: () => shopItem(id).name,
+    Ammo: () => shopItem(id).name,
     Upgrade: ({ weapon }) =>
       Option.match(nextTierFor(model, weapon), {
         onNone: () => `${tierName(weapon, maxTier(weapon))}, fully upgraded`,
         onSome: ({ name }) => `Upgrade to ${name}`,
       }),
-    Heart: () => SHOP_ITEMS[id].name,
-    Trap: () => SHOP_ITEMS[id].name,
-    Repair: () => SHOP_ITEMS[id].name,
-    Sight: () => SHOP_ITEMS[id].name,
+    Heart: () => shopItem(id).name,
+    Trap: () => shopItem(id).name,
+    Repair: () =>
+      Option.match(maybeRepairTrap(model, id), {
+        onNone: () => shopItem(id).name,
+        onSome: trap => `Repair the ${TRAPS[trap._tag].name}`,
+      }),
+    Sight: () => shopItem(id).name,
   })
 
 const ammoGain = (model: Model, weapon: WeaponKind, rounds: number): string => {
@@ -497,7 +573,7 @@ const ammoGain = (model: Model, weapon: WeaponKind, rounds: number): string => {
 
 export const itemAriaLabel = (model: Model, id: ShopItemId): string => {
   const price = `$${priceFor(model, id)}`
-  return ShopGood.match(SHOP_ITEMS[id].good, {
+  return ShopGood.match(shopItem(id).good, {
     Gun: () => `Buy ${itemName(model, id)} for ${price}`,
     Ammo: ({ weapon, rounds }) =>
       `${itemName(model, id)}, ammo for ${gunName(model, weapon)}, ${price}, ${ammoGain(model, weapon, rounds)}`,
@@ -509,17 +585,22 @@ export const itemAriaLabel = (model: Model, id: ShopItemId): string => {
       }),
     Heart: () => `Buy ${itemName(model, id)} for ${price}`,
     Trap: () => `Buy ${itemName(model, id)} for ${price}`,
-    Repair: () => `Buy ${itemName(model, id)} for ${price}`,
+    Repair: () =>
+      Option.match(maybeRepairTrap(model, id), {
+        onNone: () => `Buy ${itemName(model, id)} for ${price}`,
+        onSome: trap =>
+          `Repair the ${TRAPS[trap._tag].name} ${trapPlace(trap)}, ${price}`,
+      }),
     Sight: () => `Buy ${itemName(model, id)} for ${price}`,
   })
 }
 
 export const itemBlurb = (model: Model, id: ShopItemId): string =>
-  ShopGood.match(SHOP_ITEMS[id].good, {
-    Gun: () => SHOP_ITEMS[id].blurb,
+  ShopGood.match(shopItem(id).good, {
+    Gun: () => shopItem(id).blurb,
     Ammo: ({ weapon, rounds }) =>
       Option.match(carried(model.player, weapon), {
-        onNone: () => SHOP_ITEMS[id].blurb,
+        onNone: () => shopItem(id).blurb,
         onSome: spare =>
           `${String.capitalize(ammoGain(model, weapon, rounds))}. You have ${spare.rounds} of ${maxRounds(weapon, spare.tier)}.`,
       }),
@@ -530,10 +611,10 @@ export const itemBlurb = (model: Model, id: ShopItemId): string =>
         onSome: () => upgradeChanges(weapon, tier),
       })
     },
-    Heart: () => SHOP_ITEMS[id].blurb,
-    Trap: () => SHOP_ITEMS[id].blurb,
-    Repair: () => SHOP_ITEMS[id].blurb,
-    Sight: () => SHOP_ITEMS[id].blurb,
+    Heart: () => shopItem(id).blurb,
+    Trap: () => shopItem(id).blurb,
+    Repair: () => shopItem(id).blurb,
+    Sight: () => shopItem(id).blurb,
   })
 
 export const shopItemElementId = (id: ShopItemId): string => `shop-item-${id}`
@@ -589,10 +670,15 @@ const blockedBy = (model: Model, good: ShopGood): Option.Option<Block> => {
       ownedCount(model, kind) >= TRAPS[kind].limit
         ? block(TRAPS[kind].buyLimitNote, 'MAX')
         : Option.none(),
-    Repair: () =>
-      Array.some(model.traps, isDamaged)
-        ? Option.none()
-        : block('Nothing needs fixing', 'ALL FIXED'),
+    Repair: ({ trapId }) =>
+      Option.match(
+        Array.findFirst(model.traps, trap => trap.id === trapId),
+        {
+          onNone: () => block('That trap is gone', 'GONE'),
+          onSome: trap =>
+            isDamaged(trap) ? Option.none() : block('Good as new', 'FULL'),
+        },
+      ),
     Sight: () =>
       model.laserSight === 'Fitted'
         ? block('Already fitted', 'OWNED')
@@ -604,7 +690,7 @@ const blockedReason = (model: Model, good: ShopGood): Option.Option<string> =>
   Option.map(blockedBy(model, good), ({ reason }) => reason)
 
 export const verdictFor = (model: Model, id: ShopItemId): Verdict => {
-  const item = SHOP_ITEMS[id]
+  const item = shopItem(id)
   const price = priceFor(model, id)
   return pipe(
     blockedReason(model, item.good),
@@ -644,7 +730,7 @@ export type StockTag = typeof StockTag.Type
 
 export const stockTag = (model: Model, id: ShopItemId): StockTag => {
   const price = priceFor(model, id)
-  return Option.match(blockedBy(model, SHOP_ITEMS[id].good), {
+  return Option.match(blockedBy(model, shopItem(id).good), {
     onSome: ({ tag }) => StockTag.Done({ label: tag }),
     onNone: () =>
       price > model.wallet.balance
@@ -662,7 +748,7 @@ const isRunningLow = (model: Model, weapon: WeaponKind): boolean =>
   })
 
 const suggestionRank = (model: Model, id: ShopItemId): number =>
-  ShopGood.match(SHOP_ITEMS[id].good, {
+  ShopGood.match(shopItem(id).good, {
     Ammo: ({ weapon }) => (isRunningLow(model, weapon) ? 0 : 3),
     Upgrade: ({ weapon }) => (weapon === SIDEARM ? 2 : 1),
     Gun: () => (Option.isNone(maybeSpare(model.player.arsenal)) ? 0 : 4),
@@ -763,7 +849,7 @@ export const isHolding = (player: Player, weapon: WeaponKind): boolean =>
 export const ownedNote = (model: Model, id: ShopItemId): string => {
   const { player } = model
   const maybeCarried = maybeSpare(player.arsenal)
-  return ShopGood.match(SHOP_ITEMS[id].good, {
+  return ShopGood.match(shopItem(id).good, {
     Gun: ({ weapon }) =>
       Option.match(maybeCarried, {
         onNone: () => 'Goes in your empty second slot',
@@ -790,12 +876,11 @@ export const ownedNote = (model: Model, id: ShopItemId): string => {
     Heart: () => `Hearts ${player.hp} of ${PLAYER_MAX_HP}`,
     Trap: ({ kind }) =>
       `${model.trapStock[kind]} ready to place, ${placedCount(model.traps, kind)} placed, up to ${TRAPS[kind].limit}`,
-    Repair: () => {
-      const damaged = Array.filter(model.traps, isDamaged).length
-      return damaged === 1
-        ? '1 trap is damaged'
-        : `${damaged} traps are damaged`
-    },
+    Repair: () =>
+      Option.match(maybeRepairTrap(model, id), {
+        onNone: () => 'Gone',
+        onSome: trap => `Health ${Math.round(healthShare(trap) * 100)} percent`,
+      }),
     Sight: () =>
       model.laserSight === 'Fitted'
         ? 'Fitted to every gun you carry'
@@ -867,7 +952,8 @@ const grant = (model: Model, good: ShopGood): Model =>
         modifyFields(player, { hp: hp => Math.min(PLAYER_MAX_HP, hp + 1) }),
       ),
     Trap: ({ kind }) => stockTrap(model, kind),
-    Repair: () => modifyFields(model, { traps: repairTraps }),
+    Repair: ({ trapId }) =>
+      modifyFields(model, { traps: traps => repairTrap(traps, trapId) }),
     Sight: () => modifyFields(model, { laserSight: () => 'Fitted' }),
   })
 
@@ -875,7 +961,7 @@ export const purchase = (
   model: Model,
   id: ShopItemId,
 ): Option.Option<Model> => {
-  const item = SHOP_ITEMS[id]
+  const item = shopItem(id)
   const price = priceFor(model, id)
   return Verdict.match(verdictFor(model, id), {
     Available: () =>

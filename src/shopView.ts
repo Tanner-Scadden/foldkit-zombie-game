@@ -1,9 +1,10 @@
-import { Array, Option, String, pipe } from 'effect'
+import { Array, Match, Option, String, pipe } from 'effect'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Button, Dialog, Tabs } from '@foldkit/ui'
 
-import { PLAYER_MAX_HP } from './constants'
+import { levelOf } from './arena'
+import { PLAYER_MAX_HP, TILE_SIZE } from './constants'
 import { dialogShell } from './dialogs'
 import { COIN_SYMBOL } from './font'
 import { Message } from './message'
@@ -13,6 +14,7 @@ import {
   ShopChatter,
   type ShopItemId,
   ShopState,
+  Trap,
   type WeaponKind,
 } from './model'
 import {
@@ -21,10 +23,10 @@ import {
   GunShelf,
   SHOP_CATEGORIES,
   SHOP_CATEGORY_ORDER,
-  SHOP_ITEMS,
   ShopGood,
   ShopTabs,
   StockTag,
+  type TrapShelf,
   Verdict,
   affordableCount,
   ammoGauge,
@@ -35,10 +37,13 @@ import {
   itemBlurb,
   itemName,
   itemsIn,
+  maybeRepairTrap,
   ownedNote,
+  shopItem,
   shopItemElementId,
   stockTag,
   totalAffordable,
+  trapShelves,
   verdictFor,
 } from './shop'
 import {
@@ -46,18 +51,19 @@ import {
   HEART_EMPTY,
   HEART_FULL,
   HIT_ICON,
-  ITEM_ART,
   LOAD_ICON,
   RATE_ICON,
   RATTLES_ART,
   SWAP_ICON,
   type ShopArt,
   TAB_ART,
+  TRAP_ART,
   UPGRADE_ART,
   gunArt,
+  itemArt,
 } from './shopArt'
 import { type Mood, chatterLine, moodOf } from './shopkeeper'
-import { TRAPS, ownedCount } from './traps'
+import { TRAPS, healthShare, ownedCount } from './traps'
 import { maxTier, maybeNextTier, maybeSpare, tierName, tierOf } from './weapons'
 
 // FOCUS
@@ -230,13 +236,53 @@ const countDotsView = (
     ),
   )
 
-const damagedTrapsView = (damaged: number, h: HtmlBuilder<Message>): Html =>
-  damaged === 0
-    ? h.empty
-    : h.span(
-        [h.Class('shop-dots'), h.AriaHidden(true)],
-        Array.makeBy(damaged, () => h.span([h.Class('shop-dot is-hurt')])),
-      )
+const healthBarView = (share: number, h: HtmlBuilder<Message>): Html =>
+  h.span(
+    [h.Class('shop-gauge'), h.AriaHidden(true)],
+    [
+      h.span(
+        [h.Class('shop-gauge-track shop-health-track')],
+        [
+          h.span([
+            h.Class(share < 0.5 ? 'shop-health is-low' : 'shop-health'),
+            h.Style({ width: `${Math.round(share * 100)}%` }),
+          ]),
+        ],
+      ),
+    ],
+  )
+
+const percentOf = (value: number, total: number): string =>
+  `${Math.round((Math.min(Math.max(value, 0), total) / total) * 100)}%`
+
+// NOTE: a tiny map of the room with a dot where the trap stands, so two
+// planks at two doors tell apart without words.
+const mapPipView = (
+  model: Model,
+  trap: Trap,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const level = levelOf(model)
+  const spot = Trap.match(trap, {
+    Barricade: ({ door }) => level.doors[door].center,
+    Turret: ({ column, row }) => ({
+      x: (column + 0.5) * TILE_SIZE,
+      y: (row + 0.5) * TILE_SIZE,
+    }),
+  })
+  return h.span(
+    [h.Class('shop-map'), h.AriaHidden(true)],
+    [
+      h.span([
+        h.Class('shop-map-dot'),
+        h.Style({
+          left: percentOf(spot.x, level.width),
+          top: percentOf(spot.y, level.height),
+        }),
+      ]),
+    ],
+  )
+}
 
 const gaugeView = (
   model: Model,
@@ -286,7 +332,7 @@ const metaView = (
   item: ShopItemId,
   h: HtmlBuilder<Message>,
 ): Html =>
-  ShopGood.match(SHOP_ITEMS[item].good, {
+  ShopGood.match(shopItem(item).good, {
     Gun: ({ weapon }) =>
       h.span(
         [h.Class('shop-meta')],
@@ -301,10 +347,10 @@ const metaView = (
     Trap: ({ kind }) =>
       countDotsView(ownedCount(model, kind), TRAPS[kind].limit, h),
     Repair: () =>
-      damagedTrapsView(
-        Array.filter(model.traps, trap => trap.hp < TRAPS[trap._tag].hp).length,
-        h,
-      ),
+      Option.match(maybeRepairTrap(model, item), {
+        onNone: () => h.empty,
+        onSome: trap => healthBarView(healthShare(trap), h),
+      }),
     Sight: () => h.empty,
   })
 
@@ -417,7 +463,7 @@ const reasonView = (
   })
 
 const shortName = (model: Model, item: ShopItemId): string =>
-  ShopGood.match(SHOP_ITEMS[item].good, {
+  ShopGood.match(shopItem(item).good, {
     Gun: () => itemName(model, item),
     Ammo: () => itemName(model, item),
     Upgrade: ({ weapon }) =>
@@ -427,7 +473,7 @@ const shortName = (model: Model, item: ShopItemId): string =>
       }),
     Heart: () => itemName(model, item),
     Trap: () => itemName(model, item),
-    Repair: () => itemName(model, item),
+    Repair: () => '',
     Sight: () => itemName(model, item),
   })
 
@@ -441,9 +487,9 @@ const itemArtView = (
   item: ShopItemId,
   h: HtmlBuilder<Message>,
 ): Html =>
-  ShopGood.match(SHOP_ITEMS[item].good, {
-    Gun: () => artView(ITEM_ART[item], 'shop-card-art', h),
-    Ammo: () => artView(ITEM_ART[item], 'shop-card-art', h),
+  ShopGood.match(shopItem(item).good, {
+    Gun: () => artView(itemArt(item), 'shop-card-art', h),
+    Ammo: () => artView(itemArt(item), 'shop-card-art', h),
     Upgrade: ({ weapon }) =>
       h.span(
         [h.Class('shop-card-art shop-upgrade-art'), h.AriaHidden(true)],
@@ -459,10 +505,21 @@ const itemArtView = (
           artView(UPGRADE_ART, 'shop-upgrade-arrow', h),
         ],
       ),
-    Heart: () => artView(ITEM_ART[item], 'shop-card-art', h),
-    Trap: () => artView(ITEM_ART[item], 'shop-card-art', h),
-    Repair: () => artView(ITEM_ART[item], 'shop-card-art', h),
-    Sight: () => artView(ITEM_ART[item], 'shop-card-art', h),
+    Heart: () => artView(itemArt(item), 'shop-card-art', h),
+    Trap: () => artView(itemArt(item), 'shop-card-art', h),
+    Repair: () =>
+      Option.match(maybeRepairTrap(model, item), {
+        onNone: () => artView(itemArt(item), 'shop-card-art', h),
+        onSome: trap =>
+          h.span(
+            [h.Class('shop-card-art shop-repair-art'), h.AriaHidden(true)],
+            [
+              artView(TRAP_ART[trap._tag], 'shop-repair-trap', h),
+              mapPipView(model, trap, h),
+            ],
+          ),
+      }),
+    Sight: () => artView(itemArt(item), 'shop-card-art', h),
   })
 
 const rowView = (
@@ -561,6 +618,25 @@ const itemView = (
     h,
   )
 
+// NOTE: a row that spans the whole tab in one slim line, so an extra good
+// under the gun cards never pushes the shop past a short phone's screen.
+const wideItemView = (
+  model: Model,
+  item: ShopItemId,
+  initialFocus: Dialog.RenderInfo['initialFocus'],
+  h: HtmlBuilder<Message>,
+): Html =>
+  rowView(
+    model,
+    item,
+    {
+      rowClass: 'shop-row shop-row-wide',
+      itemClass: 'shop-item shop-card is-wide',
+    },
+    initialFocus,
+    h,
+  )
+
 const subItemView = (
   model: Model,
   item: ShopItemId,
@@ -617,7 +693,7 @@ const isGunJustBought = (model: Model, weapon: WeaponKind): boolean =>
   ShopChatter.match(model.shopChatter, {
     Greeting: () => false,
     Bought: ({ item }) =>
-      ShopGood.match(SHOP_ITEMS[item].good, {
+      ShopGood.match(shopItem(item).good, {
         Gun: ({ weapon: bought }) => bought === weapon,
         Ammo: () => false,
         Upgrade: () => false,
@@ -693,13 +769,53 @@ const categoryRowsView = (
   initialFocus: Dialog.RenderInfo['initialFocus'],
   h: HtmlBuilder<Message>,
 ): ReadonlyArray<Html> =>
-  category === 'Guns'
-    ? Array.map(gunShelves(model), shelf =>
+  Match.value(category).pipe(
+    Match.when('Guns', () => [
+      ...Array.map(gunShelves(model), shelf =>
         gunShelfView(model, shelf, initialFocus, h),
-      )
-    : Array.map(itemsIn(model, category), item =>
+      ),
+      wideItemView(model, 'LaserSight', initialFocus, h),
+    ]),
+    Match.when('Traps', () =>
+      Array.map(trapShelves(model), shelf =>
+        trapShelfView(model, shelf, initialFocus, h),
+      ),
+    ),
+    Match.orElse(() =>
+      Array.map(itemsIn(model, category), item =>
         itemView(model, item, initialFocus, h),
-      )
+      ),
+    ),
+  )
+
+const trapShelfView = (
+  model: Model,
+  shelf: TrapShelf,
+  initialFocus: Dialog.RenderInfo['initialFocus'],
+  h: HtmlBuilder<Message>,
+): Html =>
+  Array.match(shelf.repairs, {
+    onEmpty: () => itemView(model, shelf.item, initialFocus, h),
+    onNonEmpty: repairs =>
+      h.keyed('li')(
+        `shelf-${shelf.kind}`,
+        [h.Class('shop-gun shop-trap-shelf')],
+        [
+          h.ul(
+            [
+              h.Class('shop-subrows'),
+              h.AriaLabel(`${TRAPS[shelf.kind].name} and repairs`),
+            ],
+            [
+              subItemView(model, shelf.item, initialFocus, h),
+              ...Array.map(repairs, item =>
+                subItemView(model, item, initialFocus, h),
+              ),
+            ],
+          ),
+        ],
+      ),
+  })
 
 // DIALOG
 

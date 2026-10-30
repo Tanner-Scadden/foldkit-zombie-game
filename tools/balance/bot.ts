@@ -31,7 +31,13 @@ import { update } from '../../src/main'
 import { Message } from '../../src/message'
 import { type Difficulty, ZombieKind, initialModel } from '../../src/model'
 import { DEFAULT_PORTRAIT_SCREEN } from '../../src/screen'
-import { STALL_BOX, isShopOpenFor, priceFor, verdictFor } from '../../src/shop'
+import {
+  STALL_BOX,
+  isShopOpenFor,
+  priceFor,
+  repairItemId,
+  verdictFor,
+} from '../../src/shop'
 import { asVeteran } from '../../src/veteran'
 import { beginPreparation, doorCounts } from '../../src/waves'
 import {
@@ -795,8 +801,15 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
     return 'Barricade'
   }
   if (model.player.hp <= 4 && isAvailable('Heart')) return 'Heart'
-  if (isAvailable('RepairTraps') && priceFor(model, 'RepairTraps') <= 25) {
-    return 'RepairTraps'
+  const repairs = model.traps
+    .map(trap => repairItemId(trap.id))
+    .filter(item => isAvailable(item))
+  const repairTotal = repairs.reduce(
+    (total, item) => total + priceFor(model, item),
+    0,
+  )
+  if (repairs.length > 0 && repairTotal <= 25) {
+    return repairs[0]
   }
   if (current.noUpgrades) return undefined
   const turrets =

@@ -285,7 +285,7 @@ describe('Shop', () => {
         FocusShopItem({ item: 'Smg' }),
         Message.CompletedFocusShopItem(),
       ),
-      keydown(smgButton, 'ArrowDown'),
+      keydown(smgButton, 'Home'),
       Command.resolve(
         FocusShopItem({ item: 'PistolUpgrade' }),
         Message.CompletedFocusShopItem(),
@@ -397,11 +397,7 @@ describe('Shop', () => {
       click(role('button', { name: 'Buy Plank Pile for $40' })),
       expect(text('You have $60')).toExist(),
       expect(text('1 ready to place, 0 placed, up to 2')).toExist(),
-      expect(role('button', { name: 'Buy Glue and Nails for $0' })).toHaveAttr(
-        'aria-disabled',
-        'true',
-      ),
-      expect(text('Nothing needs fixing')).toExist(),
+      expect(role('button', { name: /^Repair the/ })).toBeAbsent(),
       ...leaveShop(),
       expect(placeButton).toHaveAttr('aria-disabled', 'true'),
       expect(placeButton).toHaveAttr('aria-keyshortcuts', 'T'),

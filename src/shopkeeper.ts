@@ -8,9 +8,9 @@ import {
   type TrapKind,
 } from './model'
 import {
-  SHOP_ITEMS,
   ShopGood,
   Verdict,
+  shopItem,
   totalAffordable,
   verdictFor,
 } from './shop'
@@ -58,7 +58,7 @@ const REPAIR_QUIPS: Lines = ['Good as new-ish!', 'Glued!']
 const SIGHT_QUIPS: Lines = ['Pew, precisely!', 'Mind the dot.']
 
 const boughtLines = (item: ShopItemId): Lines =>
-  ShopGood.match(SHOP_ITEMS[item].good, {
+  ShopGood.match(shopItem(item).good, {
     Gun: () => GUN_QUIPS,
     Ammo: () => AMMO_QUIPS,
     Upgrade: () => UPGRADE_QUIPS,

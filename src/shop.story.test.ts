@@ -42,6 +42,7 @@ import {
   SHOP_CATEGORY_ORDER,
   SHOP_ITEMS,
   affordableCount,
+  gunShelves,
   itemsIn,
   stallPrompt,
   totalAffordable,
@@ -1114,30 +1115,51 @@ describe('shop categories', () => {
 })
 
 describe('ammo and upgrades under the gun', () => {
-  test('a gun for sale is one row, and an owned gun lists its ammo, then its upgrade', () => {
+  test('guns always go pistol, shotgun, machine gun, whether owned, in hand, or for sale', () => {
     const unarmed = browsing(withMoney(readyModel, 100))
+    const weaponOrder = (current: Model): ReadonlyArray<WeaponKind> =>
+      Array.map(gunShelves(current), ({ weapon }) => weapon)
+    const PISTOL_FIRST: ReadonlyArray<WeaponKind> = ['Pistol', 'Shotgun', 'Smg']
+
+    expect(weaponOrder(unarmed)).toEqual(PISTOL_FIRST)
     expect(itemsIn(unarmed, 'Guns')).toEqual([
+      'PistolUpgrade',
       'Shotgun',
       'Smg',
-      'PistolUpgrade',
       'LaserSight',
     ])
-    expect(itemsIn(withArsenal(unarmed, holdingSpare(20)), 'Guns')).toEqual([
+
+    const shotgunInHand = withArsenal(unarmed, holdingSpare(20))
+    expect(weaponOrder(shotgunInHand)).toEqual(PISTOL_FIRST)
+    expect(itemsIn(shotgunInHand, 'Guns')).toEqual([
+      'PistolUpgrade',
       'ShotgunShells',
       'ShotgunUpgrade',
       'Smg',
-      'PistolUpgrade',
       'LaserSight',
     ])
-    expect(
-      itemsIn(withArsenal(unarmed, holdingSpare(60, 'Smg')), 'Guns'),
-    ).toEqual([
+
+    const shotgunHolstered = withArsenal(
+      unarmed,
+      Arsenal.HoldingPistol({ spare: gun('Shotgun', 20) }),
+    )
+    expect(weaponOrder(shotgunHolstered)).toEqual(PISTOL_FIRST)
+
+    const smgInHand = withArsenal(unarmed, holdingSpare(60, 'Smg'))
+    expect(weaponOrder(smgInHand)).toEqual(PISTOL_FIRST)
+    expect(itemsIn(smgInHand, 'Guns')).toEqual([
+      'PistolUpgrade',
       'Shotgun',
       'SmgRounds',
       'SmgUpgrade',
-      'PistolUpgrade',
       'LaserSight',
     ])
+
+    const smgHolstered = withArsenal(
+      unarmed,
+      Arsenal.HoldingPistol({ spare: gun('Smg', 60) }),
+    )
+    expect(weaponOrder(smgHolstered)).toEqual(PISTOL_FIRST)
     expect(itemsIn(unarmed, 'Health')).toEqual(['Heart'])
   })
 

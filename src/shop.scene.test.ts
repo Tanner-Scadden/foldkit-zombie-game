@@ -20,8 +20,9 @@ import { Dialog, Tabs } from '@foldkit/ui'
 import { PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
-import { Arsenal, type Model, Phase, initialModel } from './model'
+import { Arsenal, type Model, Phase, Trap, initialModel } from './model'
 import { measureSurface } from './testing'
+import { TRAPS } from './traps'
 import { view } from './view'
 
 const atStall = (balance: number, arsenal: Arsenal): Model =>
@@ -175,6 +176,66 @@ describe('the shop at a glance', () => {
       measureSurface,
       ...openShop,
       expect(keeper).toHaveAttr('data-mood', 'Sad'),
+    )
+  })
+})
+
+describe('repairing placed traps', () => {
+  const withPlanks = modifyFields(atStall(100, holdingSmg(200, 1)), {
+    shopCategory: () => 'Traps',
+    traps: () => [
+      Trap.Barricade({
+        id: 1,
+        door: 'West',
+        hp: TRAPS.Barricade.hp / 2,
+        hitRemainingMs: 0,
+      }),
+      Trap.Barricade({
+        id: 2,
+        door: 'North',
+        hp: TRAPS.Barricade.hp,
+        hitRemainingMs: 0,
+      }),
+    ],
+  })
+  const westPlank = selector('#shop-item-Repair-1')
+  const northPlank = selector('#shop-item-Repair-2')
+
+  test('each placed plank gets its own row with a map pip, a health bar, and its own price or FULL', () => {
+    scene(
+      { update, view },
+      given(withPlanks),
+      measureSurface,
+      ...openShop,
+      expect(
+        role('button', { name: 'Repair the Plank Pile at the West door, $10' }),
+      ).toExist(),
+      expect(within(westPlank, selector('.shop-tag'))).toHaveText('$10'),
+      expect(within(westPlank, selector('.shop-map-dot'))).toExist(),
+      expect(within(westPlank, selector('.shop-health'))).toHaveStyle(
+        'width',
+        '50%',
+      ),
+      expect(within(northPlank, selector('.shop-tag'))).toHaveText('FULL'),
+      expect(selector('[data-stock="Done"] #shop-item-Repair-2')).toExist(),
+      click(westPlank),
+      expect(within(westPlank, selector('.shop-tag'))).toHaveText('FULL'),
+      expect(selector('.shop-balance')).toHaveText('You have $90'),
+    )
+  })
+
+  test('with nothing placed, the trap tab has no repair rows', () => {
+    scene(
+      { update, view },
+      given(
+        modifyFields(atStall(100, holdingSmg(200, 1)), {
+          shopCategory: () => 'Traps',
+        }),
+      ),
+      measureSurface,
+      ...openShop,
+      expect(role('button', { name: /^Repair the/ })).toBeAbsent(),
+      expect(role('button', { name: 'Buy Plank Pile for $40' })).toExist(),
     )
   })
 })

@@ -885,3 +885,13 @@ export const repairPrice = (traps: ReadonlyArray<Trap>): number =>
 
 export const repairTraps = (traps: ReadonlyArray<Trap>): ReadonlyArray<Trap> =>
   Array.map(traps, trap => setHealth(trap, TRAPS[trap._tag].hp, 0))
+
+export const repairTrap = (
+  traps: ReadonlyArray<Trap>,
+  trapId: number,
+): ReadonlyArray<Trap> =>
+  Array.map(traps, trap =>
+    trap.id === trapId ? setHealth(trap, TRAPS[trap._tag].hp, 0) : trap,
+  )
+
+export const healthShare = (trap: Trap): number => 1 - missingShare(trap)

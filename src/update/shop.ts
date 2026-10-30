@@ -18,7 +18,6 @@ import {
 } from '../model'
 import { burstCoins } from '../particles'
 import {
-  SHOP_ITEMS,
   ShopGood,
   ShopTabs,
   StockTag,
@@ -26,6 +25,7 @@ import {
   maybeDisplacedFocus,
   purchase,
   selectShopCategory,
+  shopItem,
   stockTag,
 } from '../shop'
 import { refreshIntent } from '../simulation'
@@ -102,7 +102,7 @@ export const closeShopOutsidePreparation: UpdateStep = stepModel =>
 // BUYING
 
 const purchaseCues = (item: ShopItemId): ReadonlyArray<SoundCue> =>
-  ShopGood.isAnyOf(['Upgrade'])(SHOP_ITEMS[item].good)
+  ShopGood.isAnyOf(['Upgrade'])(shopItem(item).good)
     ? [uiCue('Purchase'), uiCue('PowerUp')]
     : [uiCue('Purchase')]
 

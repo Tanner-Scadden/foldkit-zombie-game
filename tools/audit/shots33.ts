@@ -113,6 +113,12 @@ const SCENES: ReadonlyArray<Scene> = [
   { name: 'shop', query: 'wave=5&money=180&gun=smg&tier=1&px=270&py=142' },
   { name: 'shop-broke', query: 'wave=3&money=12&gun=shotgun&px=270&py=142' },
   {
+    name: 'shop-traps',
+    query:
+      'wave=5&money=180&gun=smg&tier=1&planks=West,North&plankhp=12&px=270&py=142',
+    open: ['[role=tab] >> nth=2'],
+  },
+  {
     name: 'gameover-new-entry',
     query: 'wave=7&phase=gameover&stats&newentries=Crawler,Thrower',
   },

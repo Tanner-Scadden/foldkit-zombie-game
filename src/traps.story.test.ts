@@ -30,7 +30,15 @@ import {
   ZombieState,
   initialModel,
 } from './model'
-import { SHOP_ITEMS, Verdict, priceFor, verdictFor } from './shop'
+import {
+  StockTag,
+  Verdict,
+  itemsIn,
+  priceFor,
+  repairItemId,
+  stockTag,
+  verdictFor,
+} from './shop'
 import { scoreOf } from './stats'
 import { holdFire, press, release, tick, ticks, zombieOf } from './testing'
 import { TRAPS, repairPrice, stageOf, tollsOf } from './traps'
@@ -955,35 +963,54 @@ describe('between waves', () => {
     )
   })
 
-  test('repair restores every trap for a price scaled by the missing hp', () => {
-    const expectedPrice = Math.ceil(
-      0.5 * TRAPS.Barricade.price * 0.5 + 0.5 * TRAPS.Turret.price * 0.5,
-    )
+  test('each placed trap repairs on its own, priced by its own missing health', () => {
+    const plankPrice = Math.ceil(0.5 * TRAPS.Barricade.price * 0.5)
+    const gnomePrice = Math.ceil(0.5 * TRAPS.Turret.price * 0.5)
     const shopping = modifyFields(readyModel, {
       phase: () => preparing(),
-      shop: () => ShopState.Browsing({ focusedItem: 'RepairTraps' }),
+      shop: () => ShopState.Browsing({ focusedItem: repairItemId(1) }),
       wallet: () => ({ balance: 100, earned: 100, shown: 100 }),
       traps: () => damagedTraps,
     })
-    expect(repairPrice(damagedTraps)).toBe(expectedPrice)
-    expect(expectedPrice).toBe(29)
-    expect(priceFor(shopping, 'RepairTraps')).toBe(expectedPrice)
-    expect(SHOP_ITEMS.RepairTraps.name).toBe('Glue and Nails')
+    expect(plankPrice).toBe(10)
+    expect(priceFor(shopping, repairItemId(1))).toBe(plankPrice)
+    expect(priceFor(shopping, repairItemId(2))).toBe(gnomePrice)
+    expect(repairPrice([damagedTraps[0]!])).toBe(plankPrice)
+    expect(itemsIn(shopping, 'Traps')).toEqual([
+      'Barricade',
+      repairItemId(1),
+      'Turret',
+      repairItemId(2),
+    ])
 
     story(
       update,
       given(shopping),
-      message(Message.ClickedBuyButton({ item: 'RepairTraps' })),
+      message(Message.ClickedBuyButton({ item: repairItemId(1) })),
+      model(current => {
+        expect(current.wallet.balance).toBe(100 - plankPrice)
+        expect(Array.map(current.traps, ({ hp }) => hp)).toEqual([
+          TRAPS.Barricade.hp,
+          TRAPS.Turret.hp / 2,
+        ])
+        expect(stockTag(current, repairItemId(1))).toEqual(
+          StockTag.Done({ label: 'FULL' }),
+        )
+        expect(stockTag(current, repairItemId(2))).toEqual(
+          StockTag.Price({ price: gnomePrice }),
+        )
+      }),
+      message(Message.ClickedBuyButton({ item: repairItemId(1) })),
+      model(({ wallet }) => {
+        expect(wallet.balance).toBe(100 - plankPrice)
+      }),
+      message(Message.ClickedBuyButton({ item: repairItemId(2) })),
       model(({ wallet, traps }) => {
-        expect(wallet.balance).toBe(100 - expectedPrice)
+        expect(wallet.balance).toBe(100 - plankPrice - gnomePrice)
         expect(Array.map(traps, ({ hp }) => hp)).toEqual([
           TRAPS.Barricade.hp,
           TRAPS.Turret.hp,
         ])
-      }),
-      message(Message.ClickedBuyButton({ item: 'RepairTraps' })),
-      model(({ wallet }) => {
-        expect(wallet.balance).toBe(100 - expectedPrice)
       }),
     )
   })

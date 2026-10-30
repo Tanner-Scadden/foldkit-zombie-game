@@ -402,6 +402,39 @@
   white-space: nowrap;
 }
 
+/* A slim row across the whole tab: art, name, the shortfall, and the tag. */
+.shop-row-wide {
+  grid-column: 1 / -1;
+}
+
+.shop-card.is-wide {
+  display: grid;
+  grid-template-areas: 'art name need tag';
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: calc(10 * var(--shop-u));
+  padding: calc(4 * var(--shop-u)) calc(10 * var(--shop-u));
+  text-align: left;
+}
+
+.shop-card.is-wide .shop-card-art {
+  --px: calc(2 * var(--shop-u));
+  grid-area: art;
+  margin: 0;
+}
+
+.shop-card.is-wide .shop-card-name {
+  grid-area: name;
+}
+
+.shop-card.is-wide .shop-need {
+  grid-area: need;
+}
+
+.shop-card.is-wide .shop-tag {
+  grid-area: tag;
+}
+
 /* STATS */
 
 .shop-meta {
@@ -694,6 +727,48 @@
   50% {
     transform: translateY(calc(-2 * var(--shop-u)));
   }
+}
+
+/* A placed trap's repair row: the trap, a tiny map of the room with a dot
+   where it stands, and its health. */
+.shop-repair-art {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: calc(4 * var(--shop-u));
+}
+
+.shop-repair-trap {
+  --px: calc(2 * var(--shop-u));
+}
+
+.shop-map {
+  position: relative;
+  width: calc(18 * var(--shop-u));
+  height: calc(12 * var(--shop-u));
+  border: max(1px, calc(1 * var(--shop-u))) solid var(--shop-muted);
+  border-radius: calc(2 * var(--shop-u));
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.shop-map-dot {
+  position: absolute;
+  width: calc(4 * var(--shop-u));
+  height: calc(4 * var(--shop-u));
+  margin: calc(-2 * var(--shop-u));
+  background: var(--shop-gold);
+}
+
+.shop-health {
+  background: var(--shop-good);
+}
+
+.shop-health.is-low {
+  background: var(--shop-bad);
+}
+
+.shop-subitem .shop-gauge {
+  min-width: calc(40 * var(--shop-u));
 }
 
 /* JUST BOUGHT */
