@@ -228,13 +228,13 @@ Built on 2026-10-29, against a stand-in world. The `GameRoom` and `Matchmaker` o
 
 **Measured** (on the owner's laptop, 2026-10-29):
 
-| Where                                                      | Players         | Round trip  | Down per player | Up per player                           | Own-player corrections                  |
-| ---------------------------------------------------------- | --------------- | ----------- | --------------- | --------------------------------------- | --------------------------------------- |
-| Pure simulation, 60 ms round trip (`test/session.test.ts`) | 4               | 64 ms       | under 2 KB/s    | 12 inputs in 8 s, plus a ping every 2 s | 1 or 2 while the clock settles, 0 after |
-| Local workerd, real sockets (`bun run mp:e2e`)             | 3               | 2 to 4 ms   | 1.1 KB/s        | 2.2 messages a second                   | 1 (2.5 px)                              |
-| PR preview, headless Chrome (`tools/audit/mp.ts`)          | PREVIEW_PLAYERS | PREVIEW_RTT | PREVIEW_DOWN    | PREVIEW_UP                              | PREVIEW_CORRECTIONS                     |
+| Where                                                            | Players | Round trip  | Down per player                                      | Up per player                           | Own-player corrections                  |
+| ---------------------------------------------------------------- | ------- | ----------- | ---------------------------------------------------- | --------------------------------------- | --------------------------------------- |
+| Pure simulation, 60 ms round trip (`test/session.test.ts`)       | 4       | 64 ms       | under 2 KB/s                                         | 12 inputs in 8 s, plus a ping every 2 s | 1 or 2 while the clock settles, 0 after |
+| Local workerd, real sockets (`bun run mp:e2e`)                   | 3       | 2 to 4 ms   | 1.1 KB/s                                             | 2.2 messages a second                   | 1 (2.5 px)                              |
+| PR #5 preview, headless Chrome (`tools/audit/mp.ts`), 2026-10-29 | 3 and 4 | 35 to 53 ms | 1.26 KB/s (3), 1.37 KB/s (4), 20.6 messages a second | 3 messages a second (2.6 inputs)        | 1 or 2 each, at most 2.5 px             |
 
-The stand-in's messages are small (about 10 bytes a moving entity, a 20 byte header and ack), in line with "The wire at 20 Hz". Billed requests are inputs on change (about 1 to 3 a second while walking) and a ping every 2 s, well under the 10 a second ceiling the cost tables assume.
+On the preview, QUICK PLAY made a room of four in 1.5 s and, with three players, the offer to start with fewer came at 45 s and formed the room at 45.2 s. The stand-in's messages are small (about 10 bytes a moving entity, a 20 byte header and ack), in line with "The wire at 20 Hz". Billed requests are inputs on change (about 1 to 3 a second while walking) and a ping every 2 s, well under the 10 a second ceiling the cost tables assume.
 
 **Checks.** `bun run test` covers the wire and its sizes, every frame's round trip, the room's tick, broadcast, inputs by tick, Away, rejoin, freed seats, and the end of a run, the client session over a simulated 60 ms network with four players, the lobby scope (including a real `Replica` following it), and the QUICK PLAY queue and offer. `infra`'s `bun test` covers the room host over SQLite (creating, seating, the scope, reactions, the Hello answer, listings, the alarm) and the Matchmaker core. `bun run mp:e2e` runs the API Worker in a local workerd and plays three players through create, join, READY, play, drop and rejoin, end, then four QUICK PLAY presses. `bun run heavy -- --shared bun tools/audit/mp.ts <dev page url> [players]` does the same in headless Chrome against a deploy, with screenshots in `tools/audit/shots/mp-*.png`.
 
