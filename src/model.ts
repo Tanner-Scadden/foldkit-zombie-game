@@ -85,17 +85,12 @@ export type Orientation = typeof Orientation.Type
 export const Trigger = Schema.Literals(['Released', 'Held'])
 export type Trigger = typeof Trigger.Type
 
-export const AimSource = Schema.Literals(['Pointer', 'Keys'])
-export type AimSource = typeof AimSource.Type
-
 export const Input = Schema.Struct({
   pressedKeys: Schema.Array(Schema.String),
   maybeMouseInView: Schema.Option(Vector),
   mouseButton: MouseButton,
   moveStick: Stick,
   aimStick: Stick,
-  aimHeading: Schema.Number,
-  aimSource: AimSource,
 })
 export type Input = typeof Input.Type
 
@@ -1241,8 +1236,6 @@ const idleInput: Input = {
   mouseButton: MouseButton.Released(),
   moveStick: Stick.Idle(),
   aimStick: Stick.Idle(),
-  aimHeading: 0,
-  aimSource: 'Pointer',
 }
 
 export const idleIntent: Intent = {

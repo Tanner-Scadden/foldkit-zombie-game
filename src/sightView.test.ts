@@ -17,7 +17,6 @@ import {
   initialModel,
 } from './model'
 import { aimSightShapes } from './sightView'
-import { press, release } from './testing'
 import { asVeteran } from './veteran'
 
 const SHOTGUN: CarriedGun = { kind: 'Shotgun', rounds: 16, loaded: 6, tier: 0 }
@@ -34,6 +33,30 @@ const fighting: Model = modifyFields(asVeteran(initialModel), {
 })
 
 const unfitted: Model = modifyFields(fighting, { laserSight: () => 'None' })
+
+// NOTE: the right thumb aims exactly along its deflection, so a stick pushed
+// straight right or straight up gives a sight to test against.
+const THUMB = 70
+
+const thumbAim = (dx: number, dy: number) => [
+  message(
+    Message.PressedPointer({
+      pointerId: THUMB,
+      device: 'Touch',
+      clientX: 600,
+      clientY: 200,
+    }),
+  ),
+  message(
+    Message.MovedPointer({
+      pointerId: THUMB,
+      clientX: 600 + dx,
+      clientY: 200 + dy,
+    }),
+  ),
+]
+
+const liftThumb = message(Message.ReleasedPointer({ pointerId: THUMB }))
 
 const onlyPath = (current: Model) => {
   const shapes = aimSightShapes(current)
@@ -62,15 +85,14 @@ describe('the laser sight', () => {
       model(current => {
         expect(aimSightShapes(current)).toEqual([])
       }),
-      press('ArrowRight'),
-      release('ArrowRight'),
+      ...thumbAim(50, 0),
       model(current => {
         expect(aimSightShapes(current)).toEqual([])
       }),
     )
   })
 
-  test('once fitted it shows for the mouse too', () => {
+  test('once fitted it shows for the mouse', () => {
     story(
       update,
       given(fighting),
@@ -85,8 +107,7 @@ describe('the laser sight', () => {
     story(
       update,
       given(fighting),
-      press('ArrowRight'),
-      release('ArrowRight'),
+      ...thumbAim(50, 0),
       model(current => {
         const laser = onlyPath(current)
         expect(laser.fill).toBeUndefined()
@@ -112,11 +133,15 @@ describe('the laser sight', () => {
   test('draws a fan as wide as the shotgun spread', () => {
     story(
       update,
-      given(fighting),
-      press('KeyQ'),
-      release('KeyQ'),
-      press('ArrowRight'),
-      release('ArrowRight'),
+      given(
+        modifyFields(fighting, {
+          player: player =>
+            modifyFields(player, {
+              arsenal: () => Arsenal.HoldingSpare({ spare: SHOTGUN }),
+            }),
+        }),
+      ),
+      ...thumbAim(50, 0),
       model(current => {
         const fan = onlyPath(current)
         expect(fan.fill).toBeDefined()
@@ -145,8 +170,7 @@ describe('the laser sight', () => {
       given(
         modifyFields(fighting, { player: player => ({ ...player, y: 90 }) }),
       ),
-      press('ArrowRight'),
-      release('ArrowRight'),
+      ...thumbAim(50, 0),
       model(current => {
         const [, to] = Array.map(onlyPath(current).instructions, pointOf)
         expect(to).toBeDefined()
@@ -158,12 +182,11 @@ describe('the laser sight', () => {
     )
   })
 
-  test('follows whichever device aimed last', () => {
+  test('follows whichever device aims', () => {
     story(
       update,
       given(fighting),
-      press('ArrowUp'),
-      release('ArrowUp'),
+      ...thumbAim(0, -50),
       model(current => {
         const [, to] = Array.map(onlyPath(current).instructions, pointOf)
         expect(to).toBeDefined()
@@ -171,6 +194,7 @@ describe('the laser sight', () => {
           expect(to.y).toBeLessThan(current.player.y)
         }
       }),
+      liftThumb,
       message(Message.MovedMouse({ clientX: 700, clientY: 200 })),
       model(current => {
         const [, to] = Array.map(onlyPath(current).instructions, pointOf)

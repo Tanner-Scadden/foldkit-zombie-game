@@ -53,7 +53,7 @@ import {
   scaleVector,
   vectorLength,
 } from './geometry'
-import { deriveIntent, turnAim } from './input'
+import { deriveIntent } from './input'
 import { advanceJuice, thawHitStop } from './juice'
 import {
   Arsenal,
@@ -1191,7 +1191,6 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
   const tolls = tollsOf(level, model.traps)
   const moved = refreshIntent(
     modifyFields(model, {
-      input: input => turnAim(input, deltaMs),
       player: player =>
         movePlayer(
           level,
