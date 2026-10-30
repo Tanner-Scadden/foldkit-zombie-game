@@ -235,6 +235,26 @@ export const UPGRADE_ART = artOf(
   { K: INK, Y: '#ffd23f' },
 )
 
+// NOTE: the laser sight: a grey scope with a red lens, and the red dot it
+// throws on the floor below.
+const SIGHT_ART = artOf(
+  [
+    '..KKKKKKKKKK..',
+    '.KMMMMMMMMMMK.',
+    'KMMKKKKKKKKMMK',
+    'KMKRRRRRRRRKMK',
+    'KMKRLRRRRRRKMK',
+    'KMKRRRRRRRRKMK',
+    'KMMKKKKKKKKMMK',
+    '.KMMMMMMMMMMK.',
+    '..KKKKKKKKKK..',
+    '......RR......',
+    '......RR......',
+    '.....RRRR.....',
+  ],
+  { K: INK, M: '#4a4f5a', R: '#ff3a3f', L: '#ffb3b6' },
+)
+
 export const ITEM_ART: Readonly<Record<ShopItemId, ShopArt>> = {
   Shotgun: gunArt('Shotgun', 0),
   ShotgunShells: SACK_ART,
@@ -243,6 +263,7 @@ export const ITEM_ART: Readonly<Record<ShopItemId, ShopArt>> = {
   SmgRounds: DRUM_ART,
   SmgUpgrade: gunArt('Smg', 1),
   PistolUpgrade: gunArt('Pistol', 1),
+  LaserSight: SIGHT_ART,
   Heart: JAR_ART,
   Barricade: PLANK_ART,
   Turret: GNOME_ART,

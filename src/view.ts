@@ -262,6 +262,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
       [
         h.Class('game-root'),
         h.DataAttribute('layout', screen.layout),
+        h.DataAttribute('cursor', model.cursorSetting),
         h.Style({
           '--screen-w': `${screen.width}`,
           '--screen-h': `${screen.height}`,

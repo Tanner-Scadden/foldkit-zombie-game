@@ -684,6 +684,20 @@ export const findStrike = (
   )
 }
 
+// NOTE: where a ray ends: the last point before a wall or before it leaves
+// the room through a doorway, or `to` when nothing is in the way.
+export const findReach = (level: Level, from: Vector, to: Vector): Vector => {
+  const points = pointsAlong(from, to, BULLET_STEP_PX)
+  return pipe(
+    points,
+    Array.findFirstIndex(
+      point => isSolidAt(level, point) || !isInsideRoomAt(level, point),
+    ),
+    Option.flatMap(index => Array.get(points, Math.max(0, index - 1))),
+    Option.getOrElse(() => to),
+  )
+}
+
 const isLaneClear = (level: Level, from: Vector, to: Vector): boolean =>
   !Array.some(pointsAlong(from, to, LINE_OF_SIGHT_STEP_PX), point =>
     isSolidAt(level, point),

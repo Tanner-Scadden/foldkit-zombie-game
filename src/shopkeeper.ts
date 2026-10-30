@@ -55,6 +55,7 @@ const AMMO_QUIPS: Lines = ['More boom!', 'Lock and load!']
 const UPGRADE_QUIPS: Lines = ['Shiny! Hits harder!', 'Fancy!']
 const HEART_QUIPS: Lines = ['Freshly pickled!', "Don't ask whose."]
 const REPAIR_QUIPS: Lines = ['Good as new-ish!', 'Glued!']
+const SIGHT_QUIPS: Lines = ['Pew, precisely!', 'Mind the dot.']
 
 const boughtLines = (item: ShopItemId): Lines =>
   ShopGood.match(SHOP_ITEMS[item].good, {
@@ -64,6 +65,7 @@ const boughtLines = (item: ShopItemId): Lines =>
     Heart: () => HEART_QUIPS,
     Trap: ({ kind }) => TRAP_QUIPS[kind],
     Repair: () => REPAIR_QUIPS,
+    Sight: () => SIGHT_QUIPS,
   })
 
 const GREETING_MOOD: Mood = 'Grinning'

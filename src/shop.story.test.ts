@@ -37,6 +37,7 @@ import {
   initialModel,
 } from './model'
 import {
+  LASER_SIGHT_PRICE,
   SHOP_CATEGORY_ORDER,
   SHOP_ITEMS,
   affordableCount,
@@ -541,6 +542,36 @@ describe('buying', () => {
       'Shotgun',
     )
     refused(withMoney(readyModel, 500), 'Shotgun')
+  })
+
+  test('the laser sight is dear, fits once, lists last under GUNS, and goes with the run', () => {
+    story(
+      update,
+      given(browsing(withMoney(readyModel, LASER_SIGHT_PRICE - 1))),
+      model(current => {
+        expect(Array.last(itemsIn(current, 'Guns'))).toEqual(
+          Option.some('LaserSight'),
+        )
+      }),
+      message(Message.ClickedBuyButton({ item: 'LaserSight' })),
+      model(({ laserSight, wallet }) => {
+        expect(laserSight).toBe('None')
+        expect(wallet.balance).toBe(LASER_SIGHT_PRICE - 1)
+      }),
+    )
+    story(
+      update,
+      given(browsing(withMoney(readyModel, LASER_SIGHT_PRICE + 10))),
+      message(Message.ClickedBuyButton({ item: 'LaserSight' })),
+      model(({ laserSight, wallet }) => {
+        expect(laserSight).toBe('Fitted')
+        expect(wallet.balance).toBe(10)
+      }),
+      message(Message.ClickedBuyButton({ item: 'LaserSight' })),
+      model(({ wallet }) => {
+        expect(wallet.balance).toBe(10)
+      }),
+    )
   })
 
   test('ammo tops up to the cap', () => {
@@ -1054,16 +1085,24 @@ describe('ammo and upgrades under the gun', () => {
       'Shotgun',
       'Smg',
       'PistolUpgrade',
+      'LaserSight',
     ])
     expect(itemsIn(withArsenal(unarmed, holdingSpare(20)), 'Guns')).toEqual([
       'ShotgunShells',
       'ShotgunUpgrade',
       'Smg',
       'PistolUpgrade',
+      'LaserSight',
     ])
     expect(
       itemsIn(withArsenal(unarmed, holdingSpare(60, 'Smg')), 'Guns'),
-    ).toEqual(['Shotgun', 'SmgRounds', 'SmgUpgrade', 'PistolUpgrade'])
+    ).toEqual([
+      'Shotgun',
+      'SmgRounds',
+      'SmgUpgrade',
+      'PistolUpgrade',
+      'LaserSight',
+    ])
     expect(itemsIn(unarmed, 'Health')).toEqual(['Heart'])
   })
 

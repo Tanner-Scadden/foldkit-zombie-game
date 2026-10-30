@@ -223,7 +223,7 @@ From a playtest on 2026-10-28 ("I tried going to the side of it and got lost"). 
 
 From a playtest on 2026-10-28 ("Shop should have categories, and be more of a ramp up"). Proposed, not decided. The rules are in `src/shop.ts`, the dialog in `src/shopView.ts`.
 
-- **Categories.** Three tabs: GUNS (each gun with its ammo and upgrades), HEALTH (the Pickled Heart), and TRAPS. Arrows, Home, End, and Enter work as a menu; tabs are at least 48 px tall. The shop opens on the last tab used; a new run starts on GUNS.
+- **Categories.** Three tabs: GUNS (each gun with its ammo and upgrades, then the Laser Sight, a dear one-run buy that draws where the held gun's shot goes), HEALTH (the Pickled Heart), and TRAPS. Arrows, Home, End, and Enter work as a menu; tabs are at least 48 px tall. The shop opens on the last tab used; a new run starts on GUNS.
 - **Affordable at a glance.** Each tab has a badge counting what the player can buy now. A row's price is a gold coin tag when affordable, grey with the shortfall when not, and one word (FULL, MAX, OWNED) when done.
 - **Phones.** Under 500 px tall the panel widens and the rows sit side by side, so every tab fits an 844x390 or 667x375 phone without scrolling (`tools/audit/shots34.ts`).
 - **The ramp.** Cheap first steps and dear top tiers, so the first visit buys a gun and the top tiers are goals for the late waves. The pistol line stays expensive on purpose: it never runs dry, and a cheap pistol damage tier once took the bot from 28% wins to 100%.
@@ -335,7 +335,9 @@ Proposed, not decided. The rules are in `src/main.ts` and `src/update/home.ts`.
   | Move between menu buttons         | Arrows or Tab |
   | Close a panel or dialog           | Esc           |
 
-  Removed for good: the arrow keys for movement, Space as fire or start, E as swap, 1 and 2 to pick a gun, and P as pause. The shop dialog keeps its own list keys.
+  Removed for good: the arrow keys for movement, Space as fire or start, E as swap, 1 and 2 to pick a gun, and P as pause. The shop dialog keeps its own list keys. Aiming with the arrow keys and firing with Space was tried on 2026-10-29 and dropped the same day: it did not play well.
+
+  The Laser Sight from the shop draws where the shot goes on the floor (`src/sightView.ts`): a laser line for a gun that shoots straight, a fan as wide as the spread for one that scatters, both as long as a shot flies and stopped by the first wall or doorway.
 
 - **End screens.** Game Over and Victory put MENU first. The TELL WHOEVER SENT YOU THIS WHAT YOU THINK! line shows only on a player's first three runs, counted by the runs played in the bests (owner decision 2026-10-29). When a newer build is waiting they offer only MENU (see "The home menu, the loading splash, and taps"). `tools/audit/taps.ts` fails when anything covers a button there.
 
@@ -388,7 +390,7 @@ From owner feedback on 2026-10-28: a home base, a loading page, and taps that la
   - **Keys.** One per button, used nowhere else: Enter PLAY, E mode, L What's New, Z Munchopedia, C Character, I How to play, O Settings.
 - **What's New.** The newest day of `CHANGELOG.md`, paged with OLDER and NEWER. `src/changelog.ts` decodes the file at build time; it is the only source.
 - **The Munchopedia.** A field guide to every zombie (`src/munchopedia.ts`, `src/guideView.ts`). Unfound kinds are silhouettes. An entry shows the zombie walking through its wear, a one-line bio, how it plays and how to beat it, the player's kills of it, and badges at 10, 100, and 1,000.
-- **SETTINGS.** Sound, music, screen shake, full screen, the difficulty, linking devices, sharing anonymous play stats, and RESET TUTORIAL behind a confirm.
+- **SETTINGS.** Sound, music, screen shake, the big cursor (a bold yellow crosshair over the game in place of the thin system one, on by default since 2026-10-29), full screen, the difficulty, linking devices, sharing anonymous play stats, and RESET TUTORIAL behind a confirm.
 - **MENU.** From pause (or H) it asks LEAVE THIS RUN? with STAY focused. Going home keeps the look, settings, lessons, and bests.
 - **Updates wait on the home menu.** From owner feedback on 2026-10-28: the "New version ready" chip shows only on the home menu, so a reload never costs a run. When a newer build waits, Game Over and Victory offer only MENU. See "How updates reach installed apps" in `PLATFORM.md`.
 - **No tap to start.** A tap on the game itself starts nothing on the home menu or Game Over.
@@ -399,7 +401,7 @@ From owner feedback on 2026-10-28: a home base, a loading page, and taps that la
 
 From owner feedback on 2026-10-28 ("save if they've already done the tutorial"). The record is `PlayerSave` in `src/save.ts`, kept in SQLite on OPFS as the player sync scope, so linked devices share it. See "The on-device save" in `PLATFORM.md`.
 
-- **What is saved.** The lessons, the zombie cards seen, the Home Screen tip, sound, music, screen shake, the look, the difficulty and the Nightmare unlock, the bests and kills per kind, the What's New day seen, the Munchopedia entries opened, the play stats setting, and the power-up kinds grabbed (version 6, merged across linked devices as a union).
+- **What is saved.** The lessons, the zombie cards seen, the Home Screen tip, sound, music, screen shake, the look, the difficulty and the Nightmare unlock, the bests and kills per kind, the What's New day seen, the Munchopedia entries opened, the play stats setting, the power-up kinds grabbed (merged across linked devices as a union), and the cursor setting (version 7).
 - **What is not.** The run itself and full screen.
 - **Loading and writing.** The splash waits for the save, so no hint flashes. A missing, corrupt, or unreadable save reads as no save. It is written only when a saved field changes.
 - **Reset tutorial** clears the lessons, the cards, and the power-ups seen, and keeps everything else.

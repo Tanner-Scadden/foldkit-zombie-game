@@ -305,6 +305,7 @@ const metaView = (
         Array.filter(model.traps, trap => trap.hp < TRAPS[trap._tag].hp).length,
         h,
       ),
+    Sight: () => h.empty,
   })
 
 // TAGS
@@ -426,6 +427,7 @@ const shortName = (model: Model, item: ShopItemId): string =>
     Heart: () => itemName(model, item),
     Trap: () => itemName(model, item),
     Repair: () => itemName(model, item),
+    Sight: () => itemName(model, item),
   })
 
 type RowShape = Readonly<{
@@ -459,6 +461,7 @@ const itemArtView = (
     Heart: () => artView(ITEM_ART[item], 'shop-card-art', h),
     Trap: () => artView(ITEM_ART[item], 'shop-card-art', h),
     Repair: () => artView(ITEM_ART[item], 'shop-card-art', h),
+    Sight: () => artView(ITEM_ART[item], 'shop-card-art', h),
   })
 
 const rowView = (
@@ -620,6 +623,7 @@ const isGunJustBought = (model: Model, weapon: WeaponKind): boolean =>
         Heart: () => false,
         Trap: () => false,
         Repair: () => false,
+        Sight: () => false,
       }),
     TooPricey: () => false,
     Refused: () => false,

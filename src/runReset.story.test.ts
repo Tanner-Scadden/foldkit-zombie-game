@@ -46,6 +46,7 @@ const RUN_FIELDS = [
   'callouts',
   'trapStock',
   'selectedTrap',
+  'laserSight',
   'trapNotice',
   'level',
   'flowField',

@@ -132,6 +132,7 @@ const saveOfRow = (
     music: row.music,
     shake: row.shake,
     shareStats: row.share_stats,
+    cursor: row.cursor,
   },
   appearance: row.appearance,
   difficulty: {

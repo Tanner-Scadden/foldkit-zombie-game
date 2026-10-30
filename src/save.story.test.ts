@@ -68,7 +68,13 @@ const learnedSave: PlayerSave = {
     introducedKinds: ZOMBIE_KIND_ORDER,
   },
   homeScreenTip: 'Dismissed',
-  settings: { sound: 'Muted', music: 'Off', shake: 'Off', shareStats: 'Off' },
+  settings: {
+    sound: 'Muted',
+    music: 'Off',
+    shake: 'Off',
+    shareStats: 'Off',
+    cursor: 'Thin',
+  },
   appearance: {
     body: 'Female',
     hairStyle: 'Ponytail',
@@ -95,9 +101,20 @@ const learnedSave: PlayerSave = {
   seenPowerUps: ['RapidFire', 'Burp'],
 }
 
-const neverSeenSave: PlayerSave = { ...learnedSave, seenPowerUps: [] }
+// NOTE: a save from before the cursor setting comes back with the bold
+// cursor, whatever the fixture above keeps for round trips.
+const boldCursorSave: PlayerSave = {
+  ...learnedSave,
+  settings: { ...learnedSave.settings, cursor: 'Bold' },
+}
 
-const { seenPowerUps: _seenPowerUps, ...versionFiveSave } = learnedSave
+const neverSeenSave: PlayerSave = { ...boldCursorSave, seenPowerUps: [] }
+
+const { cursor: _cursor, ...SETTINGS_BEFORE_CURSOR } = learnedSave.settings
+
+const versionSixSave = { ...learnedSave, settings: SETTINGS_BEFORE_CURSOR }
+
+const { seenPowerUps: _seenPowerUps, ...versionFiveSave } = versionSixSave
 
 const { home: _home, ...versionThreeSave } = versionFiveSave
 
@@ -154,7 +171,7 @@ describe('the schema', () => {
 
   const sharingLearnedSave: PlayerSave = {
     ...neverSeenSave,
-    settings: { ...learnedSave.settings, shareStats: 'On' },
+    settings: { ...boldCursorSave.settings, shareStats: 'On' },
   }
 
   test('the bests round trip through the model', () => {
@@ -234,6 +251,26 @@ describe('the schema', () => {
     expect(decodeSave(json)).toEqual(Option.some(sharingLearnedSave))
   })
 
+  test('a version 6 save keeps everything and gets the bold cursor', () => {
+    const json = JSON.stringify({ ...versionSixSave, version: 6 })
+    expect(decodeSave(json)).toEqual(Option.some(boldCursorSave))
+    const restored = restoreSave(
+      initialModel,
+      Option.getOrThrow(decodeSave(json)),
+    )
+    expect(restored.cursorSetting).toBe('Bold')
+  })
+
+  test('the cursor setting round trips through JSON and the model', () => {
+    const json = Option.getOrThrow(encodeSave(learnedSave))
+    const reloaded = restoreSave(
+      initialModel,
+      Option.getOrThrow(decodeSave(json)),
+    )
+    expect(reloaded.cursorSetting).toBe('Thin')
+    expect(saveOf(reloaded).settings.cursor).toBe('Thin')
+  })
+
   test('a version 5 save keeps everything, with no power-up seen yet', () => {
     const json = JSON.stringify({ ...versionFiveSave, version: 5 })
     expect(decodeSave(json)).toEqual(Option.some(neverSeenSave))
@@ -285,10 +322,10 @@ describe('the schema', () => {
 
   test('corrupted JSON, a wrong version, and a missing field read as no save', () => {
     const json = Option.getOrThrow(encodeSave(learnedSave))
-    expect(decodeSave('{"version":6,')).toEqual(Option.none())
-    expect(decodeSave(json.replace('"version":6', '"version":0'))).toEqual(
-      Option.none(),
-    )
+    expect(decodeSave(`{"version":${SAVE_VERSION},`)).toEqual(Option.none())
+    expect(
+      decodeSave(json.replace(`"version":${SAVE_VERSION}`, '"version":0')),
+    ).toEqual(Option.none())
     expect(
       decodeSave(JSON.stringify({ ...learnedSave, settings: undefined })),
     ).toEqual(Option.none())

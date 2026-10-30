@@ -597,6 +597,13 @@ const settingToggles = (model: Model): ReadonlyArray<Toggle> => [
     message: Message.ClickedShakeButton(),
   },
   {
+    label: 'Big cursor',
+    isOn: model.cursorSetting === 'Bold',
+    maybeKey: Option.none(),
+    maybeNote: Option.none(),
+    message: Message.ClickedCursorButton(),
+  },
+  {
     label: 'Share anonymous play stats',
     isOn: model.shareStats === 'On',
     maybeKey: Option.none(),

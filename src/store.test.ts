@@ -62,7 +62,13 @@ const legacySave: PlayerSave = {
     introducedKinds: ['Shambler'],
   },
   homeScreenTip: 'Dismissed',
-  settings: { sound: 'Muted', music: 'On', shake: 'Off', shareStats: 'On' },
+  settings: {
+    sound: 'Muted',
+    music: 'On',
+    shake: 'Off',
+    shareStats: 'On',
+    cursor: 'Thin',
+  },
   appearance: { ...defaultAppearance, hairColor: 'Ginger' },
   difficulty: { ...unpickedDifficulty, chosen: 'Hard', card: 'Seen' },
   bests: {
@@ -267,6 +273,32 @@ describe('the save in the player scope', () => {
         const second = yield* openOn(hub, fake.legacy)
         expect(yield* second.load).toEqual(
           Option.some({ ...legacySave, seenPowerUps: [] }),
+        )
+      }),
+    ))
+
+  test('a player row from before the cursor setting gets the bold cursor', () =>
+    run(
+      Effect.gen(function* () {
+        const hub = yield* makeHub()
+        const fake = yield* makeLegacy(Option.some(legacySave))
+        const first = yield* openOn(hub, fake.legacy)
+        yield* first.load
+        const sql = yield* sqlOn(hub)
+        yield* pipe(
+          Effect.all([
+            sql`ALTER TABLE player DROP COLUMN cursor`,
+            sql`ALTER TABLE sync_confirmed_player DROP COLUMN cursor`,
+            sql`DELETE FROM sync_migrations WHERE id = '0005_add_cursor'`,
+          ]),
+          Effect.orDie,
+        )
+        const second = yield* openOn(hub, fake.legacy)
+        expect(yield* second.load).toEqual(
+          Option.some({
+            ...legacySave,
+            settings: { ...legacySave.settings, cursor: 'Bold' },
+          }),
         )
       }),
     ))
@@ -712,7 +744,13 @@ const migratedLiveSave: PlayerSave = {
     introducedKinds: ['Shambler', 'Runner', 'Tank'],
   },
   homeScreenTip: 'Dismissed',
-  settings: { sound: 'On', music: 'Off', shake: 'Off', shareStats: 'On' },
+  settings: {
+    sound: 'On',
+    music: 'Off',
+    shake: 'Off',
+    shareStats: 'On',
+    cursor: 'Bold',
+  },
   appearance: {
     body: 'Male',
     hairStyle: 'Curls',

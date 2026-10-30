@@ -107,6 +107,7 @@ import {
   pickFromSettings,
   settleNightmareFrom,
   startOrAsk,
+  toggleCursor,
   toggleShake,
   toggleShareStats,
   turnMunchopediaPage,
@@ -748,6 +749,8 @@ const updateGame = (model: Model, message: Message) =>
       foldPanelDialog(model, dialogMessage),
 
     ClickedShakeButton: () => ({ model: toggleShake(model) }),
+
+    ClickedCursorButton: () => ({ model: toggleCursor(model) }),
 
     ClickedDifficultyCardButton: ({ difficulty }) =>
       pickFromCard(difficulty)(model),

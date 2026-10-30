@@ -95,6 +95,7 @@ export const ShopGood = defineTaggedUnion({
   Heart: {},
   Trap: { kind: TrapKind },
   Repair: {},
+  Sight: {},
 })
 export type ShopGood = typeof ShopGood.Type
 
@@ -178,6 +179,10 @@ type ShopItem = Readonly<{
 const SHOTGUN_SHELLS = 16
 const SMG_ROUNDS = 120
 
+// NOTE: the sight is a luxury: it costs about as much as a gun's top
+// upgrade, so it is a late-run buy, and it is gone with the run.
+export const LASER_SIGHT_PRICE = 400
+
 export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
   Shotgun: {
     id: 'Shotgun',
@@ -227,6 +232,14 @@ export const SHOP_ITEMS: Readonly<Record<ShopItemId, ShopItem>> = {
     blurb: `Shines up the ${WEAPONS.Pistol.name} you never put down.`,
     price: 0,
     good: ShopGood.Upgrade({ weapon: 'Pistol' }),
+  },
+  LaserSight: {
+    id: 'LaserSight',
+    name: 'Laser Sight',
+    blurb:
+      'A red line on the floor shows where your shot goes. Fans out for a scattergun. Lasts the run.',
+    price: LASER_SIGHT_PRICE,
+    good: ShopGood.Sight(),
   },
   Heart: {
     id: 'Heart',
@@ -369,7 +382,10 @@ export const itemsIn = (
   category: ShopCategory,
 ): Array.NonEmptyReadonlyArray<ShopItemId> => {
   if (category === 'Guns') {
-    return Array.flatMap(gunShelves(model), shelfItems)
+    return Array.append(
+      Array.flatMap(gunShelves(model), shelfItems),
+      'LaserSight' as const,
+    )
   } else if (category === 'Health') {
     return ['Heart']
   } else {
@@ -385,6 +401,7 @@ const maybeGunOf = (item: ShopItemId): Option.Option<WeaponKind> =>
     Heart: () => Option.none(),
     Trap: () => Option.none(),
     Repair: () => Option.none(),
+    Sight: () => Option.none(),
   })
 
 const replacementFor = (model: Model, item: ShopItemId): ShopItemId => {
@@ -428,6 +445,7 @@ export const priceFor = (model: Model, id: ShopItemId): number =>
     Heart: () => SHOP_ITEMS[id].price,
     Trap: () => SHOP_ITEMS[id].price,
     Repair: () => repairPrice(model.traps),
+    Sight: () => SHOP_ITEMS[id].price,
   })
 
 const isMaxedUpgrade = (model: Model, id: ShopItemId): boolean =>
@@ -438,6 +456,7 @@ const isMaxedUpgrade = (model: Model, id: ShopItemId): boolean =>
     Heart: () => false,
     Trap: () => false,
     Repair: () => false,
+    Sight: () => false,
   })
 
 export const priceLabel = (model: Model, id: ShopItemId): string =>
@@ -455,6 +474,7 @@ export const itemName = (model: Model, id: ShopItemId): string =>
     Heart: () => SHOP_ITEMS[id].name,
     Trap: () => SHOP_ITEMS[id].name,
     Repair: () => SHOP_ITEMS[id].name,
+    Sight: () => SHOP_ITEMS[id].name,
   })
 
 const ammoGain = (model: Model, weapon: WeaponKind, rounds: number): string => {
@@ -487,6 +507,7 @@ export const itemAriaLabel = (model: Model, id: ShopItemId): string => {
     Heart: () => `Buy ${itemName(model, id)} for ${price}`,
     Trap: () => `Buy ${itemName(model, id)} for ${price}`,
     Repair: () => `Buy ${itemName(model, id)} for ${price}`,
+    Sight: () => `Buy ${itemName(model, id)} for ${price}`,
   })
 }
 
@@ -509,6 +530,7 @@ export const itemBlurb = (model: Model, id: ShopItemId): string =>
     Heart: () => SHOP_ITEMS[id].blurb,
     Trap: () => SHOP_ITEMS[id].blurb,
     Repair: () => SHOP_ITEMS[id].blurb,
+    Sight: () => SHOP_ITEMS[id].blurb,
   })
 
 export const shopItemElementId = (id: ShopItemId): string => `shop-item-${id}`
@@ -568,6 +590,10 @@ const blockedBy = (model: Model, good: ShopGood): Option.Option<Block> => {
       Array.some(model.traps, isDamaged)
         ? Option.none()
         : block('Nothing needs fixing', 'ALL FIXED'),
+    Sight: () =>
+      model.laserSight === 'Fitted'
+        ? block('Already fitted', 'OWNED')
+        : Option.none(),
   })
 }
 
@@ -640,6 +666,7 @@ const suggestionRank = (model: Model, id: ShopItemId): number =>
     Heart: () => 0,
     Repair: () => 0,
     Trap: () => 1,
+    Sight: () => 4,
   })
 
 // NOTE: the shop opens on the row a player most likely wants, so Enter never
@@ -766,6 +793,10 @@ export const ownedNote = (model: Model, id: ShopItemId): string => {
         ? '1 trap is damaged'
         : `${damaged} traps are damaged`
     },
+    Sight: () =>
+      model.laserSight === 'Fitted'
+        ? 'Fitted to every gun you carry'
+        : 'Shows the shot before you take it',
   })
 }
 
@@ -834,6 +865,7 @@ const grant = (model: Model, good: ShopGood): Model =>
       ),
     Trap: ({ kind }) => stockTrap(model, kind),
     Repair: () => modifyFields(model, { traps: repairTraps }),
+    Sight: () => modifyFields(model, { laserSight: () => 'Fitted' }),
   })
 
 export const purchase = (

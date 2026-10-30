@@ -312,6 +312,11 @@ export const toggleShake = (model: Model): Model =>
     shakeSetting: setting => (setting === 'On' ? 'Off' : 'On'),
   })
 
+export const toggleCursor = (model: Model): Model =>
+  modifyFields(model, {
+    cursorSetting: setting => (setting === 'Bold' ? 'Thin' : 'Bold'),
+  })
+
 export const toggleShareStats = (model: Model): Model =>
   modifyFields(model, {
     shareStats: setting => (setting === 'On' ? 'Off' : 'On'),

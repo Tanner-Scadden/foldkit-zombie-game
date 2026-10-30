@@ -43,6 +43,16 @@ body {
   cursor: crosshair;
 }
 
+/* The bold cursor: a 32 px yellow crosshair with a dark outline and an open
+   middle, so the aim point stays visible on the dark floor. The system
+   crosshair stands in where a custom cursor is refused. */
+.game-root[data-cursor='Bold'] .game-surface {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32' shape-rendering='crispEdges'%3E%3Cg fill='%23140c10'%3E%3Crect x='14' y='1' width='4' height='10'/%3E%3Crect x='14' y='21' width='4' height='10'/%3E%3Crect x='1' y='14' width='10' height='4'/%3E%3Crect x='21' y='14' width='10' height='4'/%3E%3Crect x='13' y='13' width='6' height='6'/%3E%3C/g%3E%3Cg fill='%23ffd23f'%3E%3Crect x='15' y='2' width='2' height='8'/%3E%3Crect x='15' y='22' width='2' height='8'/%3E%3Crect x='2' y='15' width='8' height='2'/%3E%3Crect x='22' y='15' width='8' height='2'/%3E%3Crect x='15' y='15' width='2' height='2'/%3E%3C/g%3E%3C/svg%3E")
+      16 16,
+    crosshair;
+}
+
 .game-frame {
   position: absolute;
   inset: 0;

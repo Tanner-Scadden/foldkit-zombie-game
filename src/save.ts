@@ -38,9 +38,11 @@ import {
   type SavedLesson,
   type SavedLessons,
   SavedOnboarding,
+  SavedPowerUps,
   SavedSettings,
   type SavedTrapHint,
   ShakeSetting,
+  ShareStatsSetting,
   SoundSetting,
 } from './playerData'
 
@@ -78,6 +80,15 @@ const SavedSettingsV2 = Schema.Struct({
   shake: ShakeSetting,
 })
 type SavedSettingsV2 = typeof SavedSettingsV2.Type
+
+// NOTE: the settings from version 5 to 6: sharing, and no cursor yet.
+const SavedSettingsV5 = Schema.Struct({
+  sound: SoundSetting,
+  music: MusicSetting,
+  shake: ShakeSetting,
+  shareStats: ShareStatsSetting,
+})
+type SavedSettingsV5 = typeof SavedSettingsV5.Type
 
 const PlayerSaveV1 = Schema.Struct({
   version: Schema.Literal(1),
@@ -131,7 +142,7 @@ const PlayerSavePreviewV4 = Schema.Struct({
   version: Schema.Literal(4),
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
-  settings: SavedSettings,
+  settings: SavedSettingsV5,
   appearance: Appearance,
   difficulty: SavedDifficulty,
   bests: SavedBests,
@@ -144,7 +155,7 @@ const PlayerSaveV5 = Schema.Struct({
   version: Schema.Literal(5),
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
-  settings: SavedSettings,
+  settings: SavedSettingsV5,
   appearance: Appearance,
   difficulty: SavedDifficulty,
   bests: SavedBests,
@@ -152,7 +163,24 @@ const PlayerSaveV5 = Schema.Struct({
 })
 type PlayerSaveV5 = typeof PlayerSaveV5.Type
 
+// NOTE: version 6 is the save before the cursor setting: the power-ups seen,
+// and the thin system crosshair for everyone.
+const PlayerSaveV6 = Schema.Struct({
+  version: Schema.Literal(6),
+  onboarding: SavedOnboarding,
+  homeScreenTip: HomeScreenTip,
+  settings: SavedSettingsV5,
+  appearance: Appearance,
+  difficulty: SavedDifficulty,
+  bests: SavedBests,
+  home: SavedHome,
+  seenPowerUps: SavedPowerUps,
+})
+type PlayerSaveV6 = typeof PlayerSaveV6.Type
+
 const PlayerSaveJson = Schema.fromJsonString(PlayerSave)
+
+const PlayerSaveV6Json = Schema.fromJsonString(PlayerSaveV6)
 
 const PlayerSaveV5Json = Schema.fromJsonString(PlayerSaveV5)
 
@@ -194,11 +222,21 @@ export const unvisitedHome: SavedHome = {
   openedEntries: [],
 }
 
-const sharingSettings = (settings: SavedSettingsV2): SavedSettings => ({
+const sharingSettings = (settings: SavedSettingsV2): SavedSettingsV5 => ({
   sound: settings.sound,
   music: settings.music,
   shake: settings.shake,
   shareStats: 'On',
+})
+
+// NOTE: a save from before the cursor setting gets the bold cursor, the
+// default for a new player too, since the thin one was hard to see.
+const boldCursorSettings = (settings: SavedSettingsV5): SavedSettings => ({
+  sound: settings.sound,
+  music: settings.music,
+  shake: settings.shake,
+  shareStats: settings.shareStats,
+  cursor: 'Bold',
 })
 
 const migrateV1 = (save: PlayerSaveV1): PlayerSaveV2 => ({
@@ -253,8 +291,8 @@ const migratePreviewV4 = (save: PlayerSavePreviewV4): PlayerSaveV5 => ({
   home: unvisitedHome,
 })
 
-const migrateV5 = (save: PlayerSaveV5): PlayerSave => ({
-  version: SAVE_VERSION,
+const migrateV5 = (save: PlayerSaveV5): PlayerSaveV6 => ({
+  version: 6,
   onboarding: save.onboarding,
   homeScreenTip: save.homeScreenTip,
   settings: save.settings,
@@ -263,6 +301,18 @@ const migrateV5 = (save: PlayerSaveV5): PlayerSave => ({
   bests: save.bests,
   home: save.home,
   seenPowerUps: [],
+})
+
+const migrateV6 = (save: PlayerSaveV6): PlayerSave => ({
+  version: SAVE_VERSION,
+  onboarding: save.onboarding,
+  homeScreenTip: save.homeScreenTip,
+  settings: boldCursorSettings(save.settings),
+  appearance: save.appearance,
+  difficulty: save.difficulty,
+  bests: save.bests,
+  home: save.home,
+  seenPowerUps: save.seenPowerUps,
 })
 
 // NOTE: the one list of save versions this build reads, newest first, each
@@ -279,43 +329,50 @@ const SAVE_VERSIONS: ReadonlyArray<
 > = [
   { version: SAVE_VERSION, read: Schema.decodeOption(PlayerSaveJson) },
   {
+    version: 6,
+    read: raw =>
+      Option.map(Schema.decodeOption(PlayerSaveV6Json)(raw), migrateV6),
+  },
+  {
     version: 5,
     read: raw =>
-      Option.map(Schema.decodeOption(PlayerSaveV5Json)(raw), migrateV5),
+      Option.map(Schema.decodeOption(PlayerSaveV5Json)(raw), save =>
+        migrateV6(migrateV5(save)),
+      ),
   },
   {
     version: 4,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV4Json)(raw), save =>
-        migrateV5(migrateV4(save)),
+        migrateV6(migrateV5(migrateV4(save))),
       ),
   },
   {
     version: 4,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSavePreviewV4Json)(raw), save =>
-        migrateV5(migratePreviewV4(save)),
+        migrateV6(migrateV5(migratePreviewV4(save))),
       ),
   },
   {
     version: 3,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV3Json)(raw), save =>
-        migrateV5(migrateV4(migrateV3(save))),
+        migrateV6(migrateV5(migrateV4(migrateV3(save)))),
       ),
   },
   {
     version: 2,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV2Json)(raw), save =>
-        migrateV5(migrateV4(migrateV3(migrateV2(save)))),
+        migrateV6(migrateV5(migrateV4(migrateV3(migrateV2(save))))),
       ),
   },
   {
     version: 1,
     read: raw =>
       Option.map(Schema.decodeOption(PlayerSaveV1Json)(raw), save =>
-        migrateV5(migrateV4(migrateV3(migrateV2(migrateV1(save))))),
+        migrateV6(migrateV5(migrateV4(migrateV3(migrateV2(migrateV1(save)))))),
       ),
   },
 ]
@@ -369,6 +426,7 @@ export const SAVED_FIELDS = [
   'musicSetting',
   'shakeSetting',
   'shareStats',
+  'cursorSetting',
   'appearance',
   'difficulty',
   'difficultyCard',
@@ -402,6 +460,7 @@ export const saveOf = (model: Model): PlayerSave => ({
     music: model.musicSetting,
     shake: model.shakeSetting,
     shareStats: model.shareStats,
+    cursor: model.cursorSetting,
   },
   appearance: model.appearance,
   difficulty: {
@@ -510,6 +569,7 @@ export const restoreSave = (model: Model, save: PlayerSave): Model =>
     musicSetting: () => save.settings.music,
     shakeSetting: () => save.settings.shake,
     shareStats: () => save.settings.shareStats,
+    cursorSetting: () => save.settings.cursor,
     appearance: () => save.appearance,
     difficulty: setting =>
       modifyFields(setting, {

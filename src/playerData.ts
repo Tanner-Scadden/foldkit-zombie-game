@@ -20,6 +20,11 @@ export type HomeScreenTip = typeof HomeScreenTip.Type
 export const ShakeSetting = Schema.Literals(['On', 'Off'])
 export type ShakeSetting = typeof ShakeSetting.Type
 
+// NOTE: the pointer over the game: the thin system crosshair, or a bold
+// drawn one that stands out on the dark floor.
+export const CursorSetting = Schema.Literals(['Thin', 'Bold'])
+export type CursorSetting = typeof CursorSetting.Type
+
 // NOTE: whether the game sends an anonymous run summary at the end of each
 // run (src/analytics.ts). On by default, kept in the player's save.
 export const ShareStatsSetting = Schema.Literals(['On', 'Off'])
@@ -83,7 +88,7 @@ export type Appearance = typeof Appearance.Type
 
 // SAVED
 
-export const SAVE_VERSION = 6
+export const SAVE_VERSION = 7
 
 export const SavedLesson = Schema.Literals(['Pending', 'Learned'])
 export type SavedLesson = typeof SavedLesson.Type
@@ -110,12 +115,14 @@ export const SavedOnboarding = Schema.Struct({
 })
 export type SavedOnboarding = typeof SavedOnboarding.Type
 
-// NOTE: version 5 added shareStats, the "Share anonymous play stats" toggle.
+// NOTE: version 5 added shareStats, the "Share anonymous play stats" toggle,
+// and version 7 added cursor, the "Big cursor" toggle.
 export const SavedSettings = Schema.Struct({
   sound: SoundSetting,
   music: MusicSetting,
   shake: ShakeSetting,
   shareStats: ShareStatsSetting,
+  cursor: CursorSetting,
 })
 export type SavedSettings = typeof SavedSettings.Type
 
