@@ -1,5 +1,6 @@
 import {
   Array,
+  Deferred,
   Effect,
   Exit,
   Fiber,
@@ -8,12 +9,20 @@ import {
   Schedule,
   Scope,
   Stream,
+  SubscriptionRef,
 } from 'effect'
 import type { SqlError } from 'effect/sql'
+import { TestClock } from 'effect/testing'
 import { describe, expect, test } from 'vitest'
 
-import { type Host, type NetworkOptions, makeHost } from '../src/InProcess'
-import { type Sync, type SyncStatus, startSync } from '../src/Sync'
+import { type Host, type Network, makeHost } from '../src/InProcess'
+import {
+  type Sync,
+  type SyncStatus,
+  type Transport,
+  startSync,
+} from '../src/Sync'
+import { first, settle } from '../src/Testing'
 import {
   type LocalDatabase,
   type Replica,
@@ -34,8 +43,10 @@ import {
   openServerDatabase,
 } from './fixtures'
 
+// NOTE: every test runs on the TestClock and waits with settle (see
+// src/Testing.ts), so time moves only when a test moves it.
 const run = <A, E>(program: Effect.Effect<A, E, Scope.Scope>): Promise<A> =>
-  Effect.runPromise(Effect.scoped(program))
+  Effect.runPromise(Effect.provide(Effect.scoped(program), TestClock.layer()))
 
 interface Device {
   readonly database: LocalDatabase
@@ -44,21 +55,20 @@ interface Device {
 
 const openReplica = (
   database: LocalDatabase,
+  scope = SCOPE,
 ): Effect.Effect<Replica, SqlError.SqlError> =>
-  makeReplica({ definition: Notes, database, scope: SCOPE })
+  makeReplica({ definition: Notes, database, scope })
 
-const openDevice = (): Effect.Effect<
-  Device,
-  SqlError.SqlError,
-  Scope.Scope
-> =>
+const openDevice = (
+  scope = SCOPE,
+): Effect.Effect<Device, SqlError.SqlError, Scope.Scope> =>
   Effect.gen(function* () {
     const database = yield* openClientDatabase()
-    const replica = yield* openReplica(database)
+    const replica = yield* openReplica(database, scope)
     return { database, replica }
   })
 
-const FAST = {
+const TIMING = {
   heartbeat: '40 millis',
   silence: '250 millis',
   resendEvery: '60 millis',
@@ -73,40 +83,38 @@ const makeTestHost = () =>
     authenticate,
   })
 
+const syncOver = (
+  transport: Transport,
+  replica: Replica,
+  deviceId: string,
+  playerId: Effect.Effect<string> = Effect.succeed(PLAYER),
+) =>
+  startSync({
+    replica,
+    transports: [transport],
+    credentials: Effect.map(playerId, player => ({
+      token: `${deviceId}:${player}`,
+      clientId: deviceId,
+    })),
+    ...TIMING,
+  })
+
 const connect = (
   host: Host,
   replica: Replica,
   deviceId: string,
-  network: NetworkOptions = {},
   playerId = PLAYER,
-) =>
+): Effect.Effect<{ net: Network; sync: Sync }, never, Scope.Scope> =>
   Effect.gen(function* () {
-    const net = yield* host.network(network)
-    const sync = yield* startSync({
+    const net = yield* host.network()
+    const sync = yield* syncOver(
+      net.transport,
       replica,
-      transports: [net.transport],
-      credentials: Effect.succeed({
-        token: `${deviceId}:${playerId}`,
-        clientId: deviceId,
-      }),
-      ...FAST,
-    })
+      deviceId,
+      Effect.succeed(playerId),
+    )
     return { net, sync }
   })
-
-// NOTE: waits, on the real clock, for a condition the sync loop reaches.
-const eventually = <A, E>(
-  read: Effect.Effect<A, E>,
-  isDone: (value: A) => boolean,
-): Effect.Effect<A, E> =>
-  read.pipe(
-    Effect.repeat({
-      until: isDone,
-      schedule: Schedule.spaced('10 millis'),
-    }),
-    Effect.timeout('10 seconds'),
-    Effect.orDie,
-  )
 
 const isFreshReady = (status: ScopeStatus): boolean =>
   status._tag === 'Ready' && status.fresh
@@ -116,18 +124,27 @@ const connectionIs =
   (status: SyncStatus): boolean =>
     status._tag === tag
 
-// NOTE: every status the replica's stream shows, in order, from now on.
+// NOTE: every status the replica's stream shows, in order, from now on. The
+// recording fiber starts at once, so it has subscribed before this returns.
 const recordStatuses = (replica: Replica) =>
   Effect.gen(function* () {
-    const seen = yield* Ref.make<ReadonlyArray<ScopeStatus>>([])
+    const seen = yield* SubscriptionRef.make<ReadonlyArray<ScopeStatus>>([])
     yield* Effect.forkScoped(
       Stream.runForEach(replica.status, status =>
-        Ref.update(seen, Array.append(status)),
+        SubscriptionRef.update(seen, Array.append(status)),
       ),
+      { startImmediately: true },
     )
-    yield* Effect.sleep('20 millis')
     return seen
   })
+
+const lastSeen = (
+  seen: SubscriptionRef.SubscriptionRef<ReadonlyArray<ScopeStatus>>,
+  isDone: (status: ScopeStatus) => boolean,
+) =>
+  first(SubscriptionRef.changes(seen), statuses =>
+    Option.exists(Array.last(statuses), isDone),
+  )
 
 describe('scope status', () => {
   test('a new replica is idle, then loading, then ready and fresh', () =>
@@ -141,11 +158,8 @@ describe('scope status', () => {
         )
         const seen = yield* recordStatuses(device.replica)
         yield* connect(host, device.replica, 'phone')
-        yield* eventually(device.replica.currentStatus, isFreshReady)
-        yield* Effect.sleep('20 millis')
-        const tags = Array.dedupe(
-          Array.map(yield* Ref.get(seen), status => status._tag),
-        )
+        const statuses = yield* lastSeen(seen, isFreshReady)
+        const tags = Array.dedupe(Array.map(statuses, status => status._tag))
         expect(tags).toEqual(['Idle', 'Loading', 'Ready'])
       }),
     ))
@@ -156,10 +170,10 @@ describe('scope status', () => {
         const host = yield* makeTestHost()
         const database = yield* openClientDatabase()
         const firstSession = yield* Scope.make()
-        const first = yield* openReplica(database)
-        yield* first.run(Counted, { kind: 'runs', count: 2 })
-        yield* Scope.provide(firstSession)(connect(host, first, 'phone'))
-        yield* eventually(first.pending, Array.isReadonlyArrayEmpty)
+        const firstReplica = yield* openReplica(database)
+        const id = yield* firstReplica.run(Counted, { kind: 'runs', count: 2 })
+        yield* Scope.provide(firstSession)(connect(host, firstReplica, 'phone'))
+        yield* settle(firstReplica.awaitSettled(id))
         yield* Scope.close(firstSession, Exit.void)
 
         const notFresh = ScopeStatus.cases.Ready.make({ seq: 1, fresh: false })
@@ -181,12 +195,12 @@ describe('scope status', () => {
         expect(yield* reopened.currentStatus).toEqual(notFresh)
         const { net, sync } = yield* connect(host, reopened, 'phone')
         yield* net.setOnline(false)
-        yield* eventually(sync.current, connectionIs('Offline'))
+        yield* first(sync.status, connectionIs('Offline'))
         expect(yield* reopened.currentStatus).toEqual(
           ScopeStatus.cases.Ready.make({ seq: 1, fresh: false }),
         )
         yield* net.setOnline(true)
-        const back = yield* eventually(reopened.currentStatus, isFreshReady)
+        const back = yield* first(reopened.status, isFreshReady)
         expect(back).toEqual(
           ScopeStatus.cases.Ready.make({ seq: 1, fresh: true }),
         )
@@ -199,20 +213,24 @@ describe('scope status', () => {
         const host = yield* makeTestHost()
         const device = yield* openDevice()
         const { net, sync } = yield* connect(host, device.replica, 'phone')
-        yield* eventually(device.replica.currentStatus, isFreshReady)
+        yield* first(device.replica.status, isFreshReady)
         const seen = yield* recordStatuses(device.replica)
         yield* net.setOnline(false)
-        yield* eventually(sync.current, connectionIs('Offline'))
-        yield* device.replica.run(Counted, { kind: 'runs', count: 3 })
+        yield* first(sync.status, connectionIs('Offline'))
+        const id = yield* device.replica.run(Counted, {
+          kind: 'runs',
+          count: 3,
+        })
         yield* net.setOnline(true)
-        yield* eventually(sync.current, connectionIs('Online'))
-        yield* eventually(device.replica.pending, Array.isReadonlyArrayEmpty)
-        yield* Effect.sleep('20 millis')
-        const statuses = yield* Ref.get(seen)
-        expect(Array.every(statuses, isFreshReady)).toBe(true)
-        expect(Array.last(statuses)).toEqual(
-          Option.some(ScopeStatus.cases.Ready.make({ seq: 1, fresh: true })),
+        yield* first(sync.status, connectionIs('Online'))
+        yield* settle(device.replica.awaitSettled(id))
+        const confirmed = ScopeStatus.cases.Ready.make({ seq: 1, fresh: true })
+        const statuses = yield* lastSeen(
+          seen,
+          status => ScopeStatus.isAnyOf(['Ready'])(status) && status.seq === 1,
         )
+        expect(Array.every(statuses, isFreshReady)).toBe(true)
+        expect(Array.last(statuses)).toEqual(Option.some(confirmed))
       }),
     ))
 
@@ -221,9 +239,9 @@ describe('scope status', () => {
       Effect.gen(function* () {
         const host = yield* makeTestHost()
         const device = yield* openDevice()
-        yield* connect(host, device.replica, 'evil', {}, 'mallory')
-        const failed = yield* eventually(
-          device.replica.currentStatus,
+        yield* connect(host, device.replica, 'evil', 'mallory')
+        const failed = yield* first(
+          device.replica.status,
           status => status._tag === 'Failed',
         )
         expect(failed).toMatchObject({
@@ -246,11 +264,8 @@ describe('scope status', () => {
         const seen = yield* recordStatuses(follower)
         const following = yield* connect(host, follower, 'tab-2')
         yield* connect(host, device.replica, 'phone')
-        yield* eventually(follower.currentStatus, isFreshReady)
-        yield* eventually(
-          Effect.map(Ref.get(seen), Array.last),
-          last => Option.exists(last, isFreshReady),
-        )
+        yield* first(follower.status, isFreshReady)
+        yield* lastSeen(seen, isFreshReady)
         const current: Sync['current'] = following.sync.current
         expect((yield* current)._tag).toBe('Following')
       }),
@@ -268,6 +283,58 @@ describe('scope status', () => {
   })
 })
 
+describe('switching scopes', () => {
+  // NOTE: a device linked while its first session connects. The session has
+  // read the old scope and is opening its channel when the scope switches
+  // and the sync is kicked. It must still end up on the new scope.
+  test('a switch while a session connects moves the session to the new scope', () =>
+    run(
+      Effect.gen(function* () {
+        const host = yield* makeTestHost()
+        const theirs = yield* openDevice('notes:bob')
+        const theirRun = yield* theirs.replica.run(Counted, {
+          kind: 'runs',
+          count: 7,
+        })
+        yield* connect(host, theirs.replica, 'bob-phone', 'bob')
+        yield* settle(theirs.replica.awaitSettled(theirRun))
+
+        const device = yield* openDevice()
+        const player = yield* Ref.make(PLAYER)
+        const net = yield* host.network()
+        const opening = yield* Deferred.make<string>()
+        const gate = yield* Deferred.make<void>()
+        const gated: Transport = {
+          name: net.transport.name,
+          open: scope =>
+            Effect.andThen(
+              Effect.andThen(
+                Deferred.succeed(opening, scope),
+                Deferred.await(gate),
+              ),
+              net.transport.open(scope),
+            ),
+        }
+        const sync = yield* syncOver(
+          gated,
+          device.replica,
+          'laptop',
+          Ref.get(player),
+        )
+        expect(yield* settle(Deferred.await(opening))).toBe(SCOPE)
+
+        yield* Ref.set(player, 'bob')
+        yield* device.replica.switchScope('notes:bob')
+        yield* sync.reconnect
+        yield* Deferred.succeed(gate, undefined)
+
+        expect(yield* first(device.replica.status, isFreshReady)).toEqual(
+          ScopeStatus.cases.Ready.make({ seq: 1, fresh: true }),
+        )
+      }),
+    ))
+})
+
 describe('awaiting a settlement', () => {
   test('a pushed mutation settles as confirmed at its seq', () =>
     run(
@@ -279,7 +346,11 @@ describe('awaiting a settlement', () => {
           kind: 'runs',
           count: 2,
         })
-        const { sync } = yield* connect(host, device.replica, 'phone')
+        // NOTE: offline until the receipt watch has subscribed, so the
+        // receipt cannot go out before anyone listens.
+        const net = yield* host.network()
+        yield* net.setOnline(false)
+        const sync = yield* syncOver(net.transport, device.replica, 'phone')
         const receipt = yield* Effect.forkScoped(
           Stream.runHead(
             Stream.filter(
@@ -287,13 +358,12 @@ describe('awaiting a settlement', () => {
               next => next._tag === 'Confirmed' && next.id === id,
             ),
           ),
+          { startImmediately: true },
         )
-        const settled = yield* Effect.timeout(
-          device.replica.awaitSettled(id),
-          '10 seconds',
-        )
+        yield* net.setOnline(true)
+        const settled = yield* settle(device.replica.awaitSettled(id))
         expect(settled).toEqual(Settled.cases.Confirmed.make({ seq: 2 }))
-        expect(yield* Fiber.join(receipt)).toEqual(
+        expect(yield* settle(Fiber.join(receipt))).toEqual(
           Option.some({ _tag: 'Confirmed', id, seq: 2 }),
         )
       }),
@@ -305,28 +375,27 @@ describe('awaiting a settlement', () => {
         const host = yield* makeTestHost()
         const phone = yield* openDevice()
         const laptop = yield* openDevice()
-        const first = yield* phone.replica.run(Claimed, {
+        const claimed = yield* phone.replica.run(Claimed, {
           slot: 'crown',
           by: 'phone',
         })
         yield* connect(host, phone.replica, 'phone')
-        yield* Effect.timeout(phone.replica.awaitSettled(first), '10 seconds')
+        yield* settle(phone.replica.awaitSettled(claimed))
         const second = yield* laptop.replica.run(Claimed, {
           slot: 'crown',
           by: 'laptop',
         })
         yield* connect(host, laptop.replica, 'laptop')
-        const settled = yield* Effect.timeout(
-          laptop.replica.awaitSettled(second),
-          '10 seconds',
-        )
+        const settled = yield* settle(laptop.replica.awaitSettled(second))
         expect(settled).toEqual(
           Settled.cases.Rejected.make({
             code: 'Precondition',
             reason: 'crown is taken',
           }),
         )
-        expect(yield* laptop.replica.awaitSettled(second)).toEqual(settled)
+        expect(yield* settle(laptop.replica.awaitSettled(second))).toEqual(
+          settled,
+        )
       }),
     ))
 
@@ -342,15 +411,12 @@ describe('awaiting a settlement', () => {
           ServerMessage.cases.Acked.make({ id, seq: 0 }),
         )
         expect(yield* device.replica.pending).toHaveLength(0)
-        expect(
-          yield* Effect.timeout(device.replica.awaitSettled(id), '1 second'),
-        ).toEqual(Settled.cases.Confirmed.make({ seq: 0 }))
-        expect(
-          yield* Effect.timeout(
-            device.replica.awaitSettled('never-made-0001'),
-            '1 second',
-          ),
-        ).toEqual(Settled.cases.Confirmed.make({ seq: 0 }))
+        expect(yield* device.replica.awaitSettled(id)).toEqual(
+          Settled.cases.Confirmed.make({ seq: 0 }),
+        )
+        expect(yield* device.replica.awaitSettled('never-made-0001')).toEqual(
+          Settled.cases.Confirmed.make({ seq: 0 }),
+        )
       }),
     ))
 
@@ -360,9 +426,9 @@ describe('awaiting a settlement', () => {
         const host = yield* makeTestHost()
         const device = yield* openDevice()
         const { net, sync } = yield* connect(host, device.replica, 'phone')
-        yield* eventually(sync.current, connectionIs('Online'))
+        yield* first(sync.status, connectionIs('Online'))
         yield* net.setOnline(false)
-        yield* eventually(sync.current, connectionIs('Offline'))
+        yield* first(sync.status, connectionIs('Offline'))
         const id = yield* device.replica.run(Counted, {
           kind: 'runs',
           count: 5,
@@ -370,10 +436,10 @@ describe('awaiting a settlement', () => {
         const waiting = yield* Effect.forkScoped(
           device.replica.awaitSettled(id),
         )
-        yield* Effect.sleep('150 millis')
+        yield* TestClock.adjust('150 millis')
         expect(waiting.pollUnsafe()).toBeUndefined()
         yield* net.setOnline(true)
-        const settled = yield* Effect.timeout(Fiber.join(waiting), '10 seconds')
+        const settled = yield* settle(Fiber.join(waiting))
         expect(settled).toEqual(Settled.cases.Confirmed.make({ seq: 1 }))
       }),
     ))

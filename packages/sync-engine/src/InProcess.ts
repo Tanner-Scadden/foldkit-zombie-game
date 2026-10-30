@@ -109,7 +109,12 @@ export const makeHost = (
   options: HostOptions,
 ): Effect.Effect<Host, never, Scope.Scope> =>
   Effect.gen(function* () {
-    const outer = yield* Effect.scope
+    // NOTE: the host's own child scope, made now, so what it opens later
+    // (each scope's database, opened on its first message) closes when the
+    // host does: after every client that connected since. Opened straight
+    // into the caller's scope, a database closed before the clients using it,
+    // and a client mid-message at the end waited out its request timeout.
+    const outer = yield* Scope.fork(yield* Effect.scope)
     const servers = yield* Ref.make<ReadonlyMap<string, Scoped>>(new Map())
     const creating = yield* Semaphore.make(1)
     const peers = yield* Ref.make<ReadonlyArray<Peer>>([])

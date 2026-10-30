@@ -144,6 +144,11 @@ export const startSync = (
     ): Effect.Effect<void, TransportError | Dropped> =>
       Effect.scoped(
         Effect.gen(function* () {
+          // NOTE: subscribed before the scope is read. A device linked while
+          // this session connects switches its scope and kicks; a kick sent
+          // before the watch below started would be lost, and the session
+          // would stay on the old scope until the next reconnect.
+          const kicked = yield* PubSub.subscribe(kicks)
           const credentials = yield* options.credentials
           const scope = yield* Effect.mapError(replica.scope, fromSql)
           const channel = yield* transport.open(scope)
@@ -242,8 +247,17 @@ export const startSync = (
             Effect.repeat(Schedule.spaced(Duration.millis(silenceMs / 4))),
           )
 
+          // NOTE: checks once at the start too, for a switch another tab
+          // made before the watch subscribed to the database's changes.
           const scopeWatch = pipe(
-            Stream.merge(replica.remoteChanges, Stream.fromPubSub(kicks)),
+            Stream.mergeAll(
+              [
+                Stream.make(undefined),
+                replica.remoteChanges,
+                Stream.fromSubscription(kicked),
+              ],
+              { concurrency: 'unbounded' },
+            ),
             Stream.runForEach(() =>
               Effect.flatMap(
                 Effect.mapError(replica.scope, fromSql),

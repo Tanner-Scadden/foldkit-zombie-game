@@ -10,7 +10,8 @@
     ".": "./src/index.ts",
     "./server": "./src/server.ts",
     "./browser": "./src/Browser.ts",
-    "./in-process": "./src/InProcess.ts"
+    "./in-process": "./src/InProcess.ts",
+    "./testing": "./src/Testing.ts"
   },
   "scripts": {
     "test": "vitest run",

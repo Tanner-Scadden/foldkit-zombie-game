@@ -11,6 +11,7 @@ import {
   pipe,
 } from 'effect'
 import { SqlClient } from 'effect/sql'
+import { TestClock } from 'effect/testing'
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { SqliteClient } from '@munch/sqlite-wasm-effect'
@@ -26,6 +27,7 @@ import {
   verifyToken,
 } from '@munch/sync-engine'
 import { type Host, makeHost } from '@munch/sync-engine/in-process'
+import { settle } from '@munch/sync-engine/testing'
 
 import { defaultAppearance } from './model'
 import { LinkedDevices, PlayerScope } from './playerScope'
@@ -135,6 +137,22 @@ const sqlOn = (hub: Hub) =>
 
 const run = <A, E>(program: Effect.Effect<A, E, Scope.Scope>): Promise<A> =>
   Effect.runPromise(Effect.scoped(program))
+
+// NOTE: syncing tests run on the TestClock, so the sync's backoff, heartbeat,
+// and resend timer, the server's token times, and the waits in `until` all
+// move only as `settle` moves them. A loaded machine changes how long a test
+// takes, never what it sees.
+const SYNC_EPOCH_MS = Date.UTC(2026, 9, 30)
+
+const runSynced = <A, E>(
+  program: Effect.Effect<A, E, Scope.Scope>,
+): Promise<A> =>
+  Effect.runPromise(
+    Effect.provide(
+      Effect.andThen(TestClock.setTime(SYNC_EPOCH_MS), Effect.scoped(program)),
+      TestClock.layer(),
+    ),
+  )
 
 const write = (
   database: PlayerDatabase,
@@ -555,7 +573,8 @@ const makeServer = () =>
             ),
         ),
     })
-    const now = () => Date.now()
+    const clock = yield* Effect.clockWith(Effect.succeed)
+    const now = () => clock.currentTimeMillisUnsafe()
     const claimsOf = (token: string) =>
       Effect.mapError(
         verifyToken(SECRET, token, now()),
@@ -597,16 +616,18 @@ const makeServer = () =>
     return { host, api }
   })
 
+// NOTE: polls on the TestClock, which settle moves.
 const until = <A, E>(probe: Effect.Effect<A, E>, done: (value: A) => boolean) =>
-  pipe(
-    probe,
-    Effect.repeat({ until: done, schedule: Schedule.spaced('20 millis') }),
-    Effect.timeout('15 seconds'),
+  settle(
+    Effect.repeat(probe, {
+      until: done,
+      schedule: Schedule.spaced('20 millis'),
+    }),
   )
 
 describe('two devices syncing one player', () => {
   test('a linked device gets the look and kills, and its change comes back', () =>
-    run(
+    runSynced(
       Effect.gen(function* () {
         const server = yield* makeServer()
         const network = yield* server.host.network()
@@ -678,7 +699,7 @@ describe('two devices syncing one player', () => {
     ))
 
   test('a name set on one linked device shows on the other, and the last one set wins', () =>
-    run(
+    runSynced(
       Effect.gen(function* () {
         const server = yield* makeServer()
         const network = yield* server.host.network()
@@ -722,7 +743,7 @@ describe('two devices syncing one player', () => {
     ))
 
   test('power-ups seen on two devices at once are all kept', () =>
-    run(
+    runSynced(
       Effect.gen(function* () {
         const server = yield* makeServer()
         const network = yield* server.host.network()
@@ -777,7 +798,7 @@ describe('two devices syncing one player', () => {
     ))
 
   test('a finished run settles once the server confirms it, and the scope is fresh', () =>
-    run(
+    runSynced(
       Effect.gen(function* () {
         const server = yield* makeServer()
         const network = yield* server.host.network()
@@ -813,9 +834,8 @@ describe('two devices syncing one player', () => {
         }
         const maybeRunId = yield* write(phone, legacySave, played)
         expect(Option.isSome(maybeRunId)).toBe(true)
-        const settled = yield* Effect.timeout(
+        const settled = yield* settle(
           phone.awaitSettled(Option.getOrElse(maybeRunId, () => '')),
-          '15 seconds',
         )
         expect(settled._tag).toBe('Confirmed')
         const seen = yield* until(Ref.get(scopeStatuses), all =>
@@ -829,7 +849,7 @@ describe('two devices syncing one player', () => {
     ))
 
   test('a build without a sync server returns no run id to wait on', () =>
-    run(
+    runSynced(
       Effect.gen(function* () {
         const legacy = yield* makeLegacy(Option.some(legacySave))
         const local = yield* openOn(yield* makeHub(), legacy.legacy)
@@ -954,7 +974,7 @@ describe("the live game's version 4 save", () => {
   afterEach(() => localStorage.clear())
 
   test('moves from localStorage into SQLite and the server with nothing lost', () =>
-    run(
+    runSynced(
       Effect.gen(function* () {
         localStorage.setItem(SAVE_KEY, LIVE_VERSION_4_SAVE)
         const server = yield* makeServer()
