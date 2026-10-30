@@ -1,8 +1,21 @@
 import { execFileSync } from 'node:child_process'
-import { type Plugin, defineConfig } from 'vite'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { join, relative, resolve, sep } from 'node:path'
+import { type Plugin, defineConfig, transformWithOxc } from 'vite'
 
 import { foldkit } from '@foldkit/vite-plugin'
 import tailwindcss from '@tailwindcss/vite'
+
+import {
+  IS_SERVICE_WORKER_KILLED,
+  KILL_SWITCH_SOURCE,
+  SERVICE_WORKER_FILE,
+  precacheDrift,
+  precacheList,
+  serviceWorkerSource,
+} from './src/sw/precache.ts'
+
+const WORKER_SOURCE = resolve(import.meta.dirname, 'src/sw/worker.ts')
 
 const DEV_BUILD = 'dev'
 
@@ -37,8 +50,11 @@ const resolveBuild = (): string =>
 
 // Stamps every production build with an id and writes it to version.json,
 // so an installed app can tell that a newer build is live.
+// NOTE: shared with the service worker plugin, which names its cache after
+// the build.
+const build = { id: DEV_BUILD }
+
 const buildId = (): Plugin => {
-  const build = { id: DEV_BUILD }
   return {
     name: 'munch-manor:build-id',
     config: (_config, { command }) => {
@@ -52,6 +68,68 @@ const buildId = (): Plugin => {
         fileName: 'version.json',
         source: `${JSON.stringify({ build: build.id })}\n`,
       })
+    },
+  }
+}
+
+const filesUnder = (directory: string): ReadonlyArray<string> =>
+  existsSync(directory)
+    ? readdirSync(directory, { recursive: true, withFileTypes: true })
+        .filter(entry => entry.isFile())
+        .map(entry =>
+          relative(directory, join(entry.parentPath, entry.name))
+            .split(sep)
+            .join('/'),
+        )
+    : []
+
+// Writes sw.js, the service worker that lets the game cold start offline
+// (src/sw/worker.ts), with this build's id and its precache list: every file
+// Vite emitted and every file copied from public/, less NOT_PRECACHED. Once
+// dist is written it checks the list against the files on disk and fails the
+// build if they drift. KILL_SERVICE_WORKER=1 writes the kill switch instead.
+const serviceWorker = (): Plugin => {
+  const state = { outDir: '', publicDir: '', precache: [] as Array<string> }
+  return {
+    name: 'munch-manor:service-worker',
+    apply: 'build',
+    applyToEnvironment: environment => environment.name === 'client',
+    configResolved: config => {
+      state.outDir = resolve(config.root, config.build.outDir)
+      state.publicDir = config.publicDir
+    },
+    generateBundle: {
+      order: 'post',
+      async handler(_options, bundle) {
+        state.precache = [
+          ...precacheList(Object.keys(bundle), filesUnder(state.publicDir)),
+        ]
+        const isKilled =
+          IS_SERVICE_WORKER_KILLED || process.env.KILL_SERVICE_WORKER === '1'
+        const worker = await transformWithOxc(
+          readFileSync(WORKER_SOURCE, 'utf8'),
+          WORKER_SOURCE,
+          { lang: 'ts', target: 'es2022' },
+        )
+        this.emitFile({
+          type: 'asset',
+          fileName: SERVICE_WORKER_FILE,
+          source: isKilled
+            ? KILL_SWITCH_SOURCE
+            : serviceWorkerSource(build.id, state.precache, worker.code),
+        })
+      },
+    },
+    closeBundle() {
+      const { missing, extra } = precacheDrift(
+        filesUnder(state.outDir),
+        state.precache,
+      )
+      if (missing.length > 0 || extra.length > 0) {
+        throw new Error(
+          `the service worker's precache list drifted from dist: missing ${missing.join(', ') || 'none'}, extra ${extra.join(', ') || 'none'}`,
+        )
+      }
     },
   }
 }
@@ -124,6 +202,7 @@ export default defineConfig({
     buildId(),
     loadStylesBehindSplash(),
     earlyEntry(),
+    serviceWorker(),
   ],
   // NOTE: sqlite-wasm finds sqlite3.wasm next to its own module with
   // `new URL(..., import.meta.url)`. Pre-bundling would move the module and

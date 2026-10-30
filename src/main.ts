@@ -15,10 +15,12 @@ import {
   LoadFonts,
   LoadSave,
   LoadStyles,
+  RegisterServiceWorker,
   ReloadPage,
   ResumeAudio,
   SendRunSummary,
   SetFullscreen,
+  UpdateServiceWorker,
 } from './commands'
 import {
   countRunFrom,
@@ -161,6 +163,7 @@ import {
 } from './update/sound'
 import { type UpdateReturn, type UpdateStep, withInput } from './update/step'
 import { nextTrap, placeSelectedTrap, trapFromKey } from './update/traps'
+import { isUsingServiceWorker } from './serviceWorker'
 import { RUNNING_BUILD, isCheckingForUpdates, maybeNewerBuild } from './version'
 import { isRoundActive, pause, startWaveEarly } from './waves'
 import {
@@ -390,6 +393,30 @@ const isFreshRun = (model: Model): boolean =>
 const checkForUpdate = (model: Model): UpdateReturn =>
   isCheckingForUpdates(RUNNING_BUILD)
     ? { model, commands: [FetchBuild()] }
+    : { model }
+
+// NOTE: a newer build also asks the service worker to look for it, so the
+// new build installs in the background before the player taps the chip.
+export const recordRemoteBuild = (
+  model: Model,
+  runningBuild: string,
+  remoteBuild: string,
+): UpdateReturn => {
+  const maybeNewer = maybeNewerBuild(runningBuild, remoteBuild)
+  const next = modifyFields(model, { maybeNewerBuild: () => maybeNewer })
+  return Option.isSome(maybeNewer) && isUsingServiceWorker(runningBuild)
+    ? { model: next, commands: [UpdateServiceWorker()] }
+    : { model: next }
+}
+
+// NOTE: the service worker registers once the splash is gone, so precaching
+// the game for offline play never slows the game's own first load.
+export const registerServiceWorkerAfterSplash = (
+  model: Model,
+  runningBuild: string,
+): UpdateReturn =>
+  isUsingServiceWorker(runningBuild)
+    ? { model, commands: [RegisterServiceWorker()] }
     : { model }
 
 const updateGame = (model: Model, message: Message) =>
@@ -718,11 +745,8 @@ const updateGame = (model: Model, message: Message) =>
 
     TickedUpdateCheck: () => checkForUpdate(model),
 
-    CompletedFetchBuild: ({ build }) => ({
-      model: modifyFields(model, {
-        maybeNewerBuild: () => maybeNewerBuild(RUNNING_BUILD, build),
-      }),
-    }),
+    CompletedFetchBuild: ({ build }) =>
+      recordRemoteBuild(model, RUNNING_BUILD, build),
 
     FailedFetchBuild: () => ({ model }),
 
@@ -731,6 +755,14 @@ const updateGame = (model: Model, message: Message) =>
     CompletedReloadPage: () => ({ model }),
 
     FailedReloadPage: () => ({ model }),
+
+    CompletedRegisterServiceWorker: () => ({ model }),
+
+    FailedRegisterServiceWorker: () => ({ model }),
+
+    CompletedUpdateServiceWorker: () => ({ model }),
+
+    FailedUpdateServiceWorker: () => ({ model }),
 
     ClickedHowToPlayButton: () =>
       Update.combine(model, [unlockAudio, openPanel('HowToPlay')]),
@@ -783,7 +815,8 @@ const updateGame = (model: Model, message: Message) =>
 
     CompletedShowLoadProgress: () => ({ model }),
 
-    CompletedHideSplash: () => ({ model }),
+    CompletedHideSplash: () =>
+      registerServiceWorkerAfterSplash(model, RUNNING_BUILD),
 
     CompletedLoadSave: ({ maybeSave }) => loadSave(model, maybeSave),
 

@@ -4,9 +4,19 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { FetchBuild, FocusEndMenuButton, ReloadPage } from './commands'
+import {
+  FetchBuild,
+  FocusEndMenuButton,
+  RegisterServiceWorker,
+  ReloadPage,
+  UpdateServiceWorker,
+} from './commands'
 import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
-import { update } from './main'
+import {
+  recordRemoteBuild,
+  registerServiceWorkerAfterSplash,
+  update,
+} from './main'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
 import {
@@ -15,6 +25,7 @@ import {
   pageVisibilityMessage,
   updateCheckActivity,
 } from './subscriptions'
+import { isUsingServiceWorker } from './serviceWorker'
 import { fighting } from './testing'
 import {
   RUNNING_BUILD,
@@ -242,6 +253,56 @@ describe('the end screens with a new version waiting', () => {
       message(Message.PressedKey({ code: 'Enter' })),
       model(current => {
         expect(Phase.guards.Preparation(current.phase)).toBe(true)
+      }),
+    )
+  })
+})
+
+describe('the service worker', () => {
+  const PRODUCTION_BUILD = 'abc123'
+
+  test('only production builds use one, never dev, tests, or the harness', () => {
+    expect(isUsingServiceWorker(PRODUCTION_BUILD)).toBe(true)
+    expect(isUsingServiceWorker('dev')).toBe(false)
+    expect(isUsingServiceWorker('test')).toBe(false)
+    expect(isUsingServiceWorker(RUNNING_BUILD)).toBe(false)
+  })
+
+  test('a production build registers it once the splash is gone', () => {
+    expect(
+      registerServiceWorkerAfterSplash(initialModel, PRODUCTION_BUILD).commands,
+    ).toStrictEqual([RegisterServiceWorker()])
+    expect(
+      registerServiceWorkerAfterSplash(initialModel, 'dev').commands ?? [],
+    ).toHaveLength(0)
+  })
+
+  test('a newer build asks the worker to fetch it in the background', () => {
+    const found = recordRemoteBuild(initialModel, PRODUCTION_BUILD, NEWER_BUILD)
+    expect(found.model.maybeNewerBuild).toStrictEqual(Option.some(NEWER_BUILD))
+    expect(found.commands).toStrictEqual([UpdateServiceWorker()])
+
+    const same = recordRemoteBuild(
+      initialModel,
+      PRODUCTION_BUILD,
+      PRODUCTION_BUILD,
+    )
+    expect(same.model.maybeNewerBuild).toStrictEqual(Option.none())
+    expect(same.commands ?? []).toHaveLength(0)
+
+    const onDev = recordRemoteBuild(initialModel, 'dev', NEWER_BUILD)
+    expect(onDev.model.maybeNewerBuild).toStrictEqual(Option.some(NEWER_BUILD))
+    expect(onDev.commands ?? []).toHaveLength(0)
+  })
+
+  test('a failed worker command changes nothing', () => {
+    story(
+      update,
+      given(initialModel),
+      message(Message.FailedRegisterServiceWorker({ reason: 'insecure' })),
+      message(Message.FailedUpdateServiceWorker({ reason: 'offline' })),
+      model(current => {
+        expect(current).toStrictEqual(initialModel)
       }),
     )
   })

@@ -28,6 +28,11 @@ import {
 import { MusicLevel, MusicMood, MusicStinger } from './music'
 import { PlayerChange } from './playerSync'
 import { PlayerSave } from './save'
+import {
+  activateNewBuild,
+  registerServiceWorker,
+  updateServiceWorker,
+} from './serviceWorker'
 import { shopItemElementId } from './shop'
 import {
   awaitFirstFrame,
@@ -257,13 +262,49 @@ export const FetchBuild = Command.define('FetchBuild', {
   ),
 })
 
+// NOTE: the new build's service worker takes over first, when there is one,
+// so the reload and any later offline start run the new build. A worker that
+// fails or is slow never stops the reload.
 export const ReloadPage = Command.define('ReloadPage', {
   messages: [Message.CompletedReloadPage, Message.FailedReloadPage],
   execute: pipe(
-    reloadPage,
+    Effect.ignore(activateNewBuild),
+    Effect.andThen(reloadPage),
     Effect.as(Message.CompletedReloadPage()),
     Effect.catch(error =>
       Effect.succeed(Message.FailedReloadPage({ reason: error.reason })),
+    ),
+  ),
+})
+
+export const RegisterServiceWorker = Command.define('RegisterServiceWorker', {
+  messages: [
+    Message.CompletedRegisterServiceWorker,
+    Message.FailedRegisterServiceWorker,
+  ],
+  execute: pipe(
+    registerServiceWorker,
+    Effect.as(Message.CompletedRegisterServiceWorker()),
+    Effect.catch(error =>
+      Effect.succeed(
+        Message.FailedRegisterServiceWorker({ reason: error.reason }),
+      ),
+    ),
+  ),
+})
+
+export const UpdateServiceWorker = Command.define('UpdateServiceWorker', {
+  messages: [
+    Message.CompletedUpdateServiceWorker,
+    Message.FailedUpdateServiceWorker,
+  ],
+  execute: pipe(
+    updateServiceWorker,
+    Effect.as(Message.CompletedUpdateServiceWorker()),
+    Effect.catch(error =>
+      Effect.succeed(
+        Message.FailedUpdateServiceWorker({ reason: error.reason }),
+      ),
     ),
   ),
 })

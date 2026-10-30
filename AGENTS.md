@@ -26,7 +26,7 @@ A pixel-art zombie shooter. It runs on desktop and on phones. The vision, the de
 | `cd tools/audit && bun live-check.ts [url]`  | Load a deployed copy in headless Chrome and check that it boots                                                                                                                           |
 | `cd infra && bun run test`                   | Test the analytics Worker: the size cap, rate limits, decoding, and D1 rows                                                                                                               |
 | `bun tools/analytics/report.ts --stage <s>`  | Print a stage's analytics. `smoke.ts <api url>` posts one fake run summary and checks the API Worker                                                                                      |
-| `bun run heavy -- bun tools/audit/sqlite.ts` | Check the SQLite save on OPFS in headless Chrome. `sync.ts <url>` checks player sync on a deployed copy                                                                                   |
+| `bun run heavy -- bun tools/audit/sqlite.ts` | Check the SQLite save on OPFS in headless Chrome. `sync.ts <url>` checks player sync on a deployed copy. `offline.ts` checks offline play and updates with the service worker               |
 | `bun run balance [runs]`                     | The balance bot through the guard. `-- --wave 4 --runs 100` plays one wave from snapshots (`--wave all` for every wave). Env vars such as `MODE=endless` and `VIEW=portrait` pass through |
 | `bun run balance:model`                      | The analytical balance model: every wave and level from the tables, in under a second                                                                                                     |
 | `bun run balance:nightly`                    | The nightly balance suite through the guard, reported in `tools/balance/reports/<date>.md`                                                                                                |
@@ -97,6 +97,7 @@ Paths are under `src/`. The API Worker is in `infra/worker/` (analytics, and syn
 | `font.ts`, `sprite.ts`, `png.ts`                        | The pixel font and coin; pixel maps baked into sprite images; colors, rasters, and the PNG encoder                                                            |
 | `testPng.ts`, `icons.ts`                                | PNG data URLs read back into pixels for tests; pixel maps turned into SVG icons for HTML buttons                                                              |
 | `version.ts`, `updateChip.ts`, `splash.ts`              | The build id, the `version.json` check, and reloading; the update chip; the loading splash's load steps                                                       |
+| `serviceWorker.ts`, `sw/worker.ts`, `sw/precache.ts`    | Registering the service worker and handing over to a new build; the worker; its precache list, built from Vite's output                                       |
 | `support.ts`, `supportView.ts`                          | The tip jar's `SUPPORT_URL` (empty hides it) and its check; the coffee button on home and Victory                                                             |
 | `prng.ts`, `constants.ts`                               | The seeded random number generator; the view size, speeds, and other tuning numbers                                                                           |
 
@@ -104,7 +105,7 @@ Paths are under `src/`. The API Worker is in `infra/worker/` (analytics, and syn
 
 - **The Foldkit patch.** Every fixed sprite is a `Canvas.Image`, which Foldkit 0.169.0 has only through the Bun patch `patches/foldkit@0.169.0.patch`. Read [`patches/README.md`](./patches/README.md) before changing it, dropping it, or upgrading Foldkit.
 - **Deploying.** A push to `main` deploys production through `.github/workflows/deploy.yml` once `typecheck`, `lint`, `test`, and `build` pass, and a pull request gets a preview. Stages, local deploys, itch.io, and credentials are in [`infra/README.md`](./infra/README.md). The workflow is the only deploy path: never connect Cloudflare Workers Builds, and never put a token in the repo or in a `VITE_` variable.
-- **How updates reach installed apps.** There is no service worker: each build is stamped into `version.json`, and a "New version ready" chip waits on the home menu. See "How updates reach installed apps" in [`PLATFORM.md`](./PLATFORM.md).
+- **How updates reach installed apps, and offline play.** Each build is stamped into `version.json`, and a "New version ready" chip waits on the home menu. A service worker (`src/sw/`) precaches the build so the game cold starts with no network; it never decides which build runs, `version.json` does. Its kill switch is `IS_SERVICE_WORKER_KILLED` in `src/sw/precache.ts`. Check it with `bun run heavy -- bun tools/audit/offline.ts`. See "How updates reach installed apps" in [`PLATFORM.md`](./PLATFORM.md).
 
 ### Rules
 
