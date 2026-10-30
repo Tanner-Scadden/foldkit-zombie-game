@@ -15,6 +15,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, test, expect as vitestExpect } from 'vitest'
 
 import { screenCameraOf } from './camera'
+import { TURN_HINT_TEXT } from './homeView'
 import { hudShapes } from './hud'
 import { update } from './main'
 import { Message } from './message'
@@ -27,7 +28,6 @@ import {
 } from './model'
 import { screenOf, thumbAreaTop } from './screen'
 import { asVeteran } from './veteran'
-import { TURN_HINT_TEXT } from './homeView'
 import { MeasureGameSurface, view } from './view'
 import { wavePreviewShapes } from './wavePreview'
 
@@ -321,5 +321,26 @@ describe('the portrait door preview', () => {
         screen.world.x + screen.world.width,
       )
     })
+  })
+
+  test('points at no door during a wave', () => {
+    const waveAtWestWall = inPortrait(
+      modifyFields(
+        onTouch(
+          Phase.Wave({
+            wave: 3,
+            elapsedMs: 500,
+            spawns: Array.flatMap(
+              ['North', 'East', 'West', 'South'] as const,
+              door => [{ ...DISTANT_SPAWN, atMs: 1000, door }],
+            ),
+          }),
+        ),
+        { player: player => ({ ...player, x: 40, y: 90 }) },
+      ),
+    )
+    vitestExpect(
+      wavePreviewShapes(waveAtWestWall, screenCameraOf(waveAtWestWall)),
+    ).toEqual([])
   })
 })

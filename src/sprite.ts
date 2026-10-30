@@ -1741,7 +1741,7 @@ export const gunSprite = (
 
 // TRAPS
 
-const GNOME_PALETTE: Palette = {
+export const GNOME_PALETTE: Palette = {
   R: '#d8423a',
   D: '#a8302a',
   S: '#f2c39b',
@@ -1752,7 +1752,7 @@ const GNOME_PALETTE: Palette = {
   F: '#2a5aa8',
 }
 
-const GNOME_PIXELS: ReadonlyArray<string> = [
+export const GNOME_PIXELS: ReadonlyArray<string> = [
   '.....R...',
   '....RR...',
   '...RRR...',

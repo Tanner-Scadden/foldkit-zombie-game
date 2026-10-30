@@ -1,4 +1,4 @@
-import { Array, Option, Result, Schema, pipe } from 'effect'
+import { Array, Option, Result, Schema, String, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { cameraOf, worldToView } from './camera'
@@ -274,47 +274,87 @@ export const HintId = Schema.Literals([
 ])
 export type HintId = typeof HintId.Type
 
-export const HINT_TEXT: Readonly<
-  Record<HintId, Readonly<Record<InputDevice, string>>>
+// NOTE: a hint shows instead of explaining: a small moving picture of the
+// key, mouse, thumb, or thing to use, and at most three words. A part with no
+// words is a picture that leads into the next part, such as the T key before
+// the planks.
+export const HintIcon = Schema.Literals([
+  'Wasd',
+  'Mouse',
+  'MoveStick',
+  'AimStick',
+  'Tap',
+  'KeyT',
+  'KeyQ',
+  'KeyEnter',
+  'Goodie',
+  'PlankDoor',
+  'Gnome',
+  'Guns',
+  'Stall',
+  'Stopwatch',
+])
+export type HintIcon = typeof HintIcon.Type
+
+export type HintPart = Readonly<{ icon: HintIcon; words: string }>
+
+type HintParts = Array.NonEmptyReadonlyArray<HintPart>
+
+const part = (icon: HintIcon, words = ''): HintPart => ({ icon, words })
+
+const onBoth = (
+  parts: HintParts,
+): Readonly<Record<InputDevice, HintParts>> => ({
+  KeyboardMouse: parts,
+  Touch: parts,
+})
+
+export const HINT_PARTS: Readonly<
+  Record<HintId, Readonly<Record<InputDevice, HintParts>>>
 > = {
-  Move: { KeyboardMouse: 'WASD MOVES', Touch: 'DRAG YOUR LEFT THUMB TO MOVE' },
+  Move: {
+    KeyboardMouse: [part('Wasd', 'MOVE')],
+    Touch: [part('MoveStick', 'MOVE')],
+  },
   Fire: {
-    KeyboardMouse: 'CLICK FIRES. OR TURN WITH ARROWS, FIRE WITH SPACE',
-    Touch: 'DRAG YOUR RIGHT THUMB TO AIM AND FIRE',
+    KeyboardMouse: [part('Mouse', 'AIM + SHOOT')],
+    Touch: [part('AimStick', 'AIM + SHOOT')],
   },
-  Pickup: {
-    KeyboardMouse: 'WALK OVER THE GOODIE TO GRAB IT',
-    Touch: 'STEER OVER THE GOODIE TO GRAB IT',
-  },
+  Pickup: onBoth([part('Goodie', 'GRAB IT')]),
   Barricade: {
-    KeyboardMouse: 'STAND IN A DOORWAY AND PRESS T',
-    Touch: 'STAND IN A DOORWAY, TAP THE PLANKS',
+    KeyboardMouse: [part('KeyT'), part('PlankDoor', 'BLOCK DOOR')],
+    Touch: [part('Tap'), part('PlankDoor', 'BLOCK DOOR')],
   },
   Turret: {
-    KeyboardMouse: 'PRESS T TO PLONK THE GNOME DOWN',
-    Touch: 'TAP THE GNOME TO PLONK IT DOWN',
+    KeyboardMouse: [part('KeyT'), part('Gnome', 'PLONK IT')],
+    Touch: [part('Tap'), part('Gnome', 'PLONK IT')],
   },
-  Shop: {
-    KeyboardMouse: 'WALK UP TO THE $ STALL TO SHOP',
-    Touch: 'STEER UP TO THE $ STALL TO SHOP',
-  },
+  Shop: onBoth([part('Stall', 'GO SHOP')]),
   Swap: {
-    KeyboardMouse: 'Q SWAPS GUNS',
-    Touch: 'TAP YOUR GUNS TO SWAP',
+    KeyboardMouse: [part('KeyQ'), part('Guns', 'SWAP GUNS')],
+    Touch: [part('Tap'), part('Guns', 'SWAP GUNS')],
   },
   StartWave: {
-    KeyboardMouse: 'PRESS ENTER WHEN YOU ARE READY',
-    Touch: 'TAP START WAVE WHEN YOU ARE READY',
+    KeyboardMouse: [part('KeyEnter', 'START WAVE')],
+    Touch: [part('Tap', 'START WAVE')],
   },
-  OpenBreak: {
-    KeyboardMouse: 'PLANKS BLOCK DOORS. GNOMES SHOOT.',
-    Touch: 'PLANKS BLOCK DOORS. GNOMES SHOOT.',
-  },
-  TimedBreaks: {
-    KeyboardMouse: 'BREAKS ARE TIMED FROM NOW ON',
-    Touch: 'BREAKS ARE TIMED FROM NOW ON',
-  },
+  OpenBreak: onBoth([part('PlankDoor', 'BLOCK'), part('Gnome', 'SHOOT')]),
+  TimedBreaks: onBoth([part('Stopwatch', 'TIMED BREAKS')]),
 }
+
+export const hintWords = (id: HintId, device: InputDevice): string =>
+  pipe(
+    HINT_PARTS[id][device],
+    Array.map(({ words }) => words),
+    Array.filter(String.isNonEmpty),
+    Array.join(' '),
+  )
+
+export const hintIcons = (
+  id: HintId,
+  device: InputDevice,
+): ReadonlyArray<HintIcon> =>
+  Array.map(HINT_PARTS[id][device], ({ icon }) => icon)
 
 export type ShownHint = Readonly<{ id: HintId; ageMs: number }>
 

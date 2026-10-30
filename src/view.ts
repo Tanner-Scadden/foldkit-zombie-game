@@ -3,8 +3,9 @@ import { Mount } from 'foldkit'
 import { Document, Html, HtmlBuilder } from 'foldkit/html'
 
 import * as CharacterView from './characterView'
-import { FEEDBACK_LINE, GAME_TITLE } from './constants'
+import { GAME_TITLE } from './constants'
 import { DIFFICULTIES, bestsFor } from './difficulty'
+import { feedbackSentence } from './home'
 import { homeMenuView, menuPanelView, newEntryNoticeView } from './homeView'
 import { gameStageView } from './layers'
 import {
@@ -176,9 +177,9 @@ const statusText = (model: Model): string => {
     Paused: ({ round }) =>
       `Paused during ${statusWave(model, round.wave)}. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.`,
     Victory: () =>
-      `Victory. ${victoryVerdict(model.stats)}. ${statsLabel(model)} ${KEEP_GOING} ${PLAY_AGAIN} ${BACK_HOME} ${FEEDBACK_LINE}`,
+      `Victory. ${victoryVerdict(model.stats)}. ${statsLabel(model)} ${KEEP_GOING} ${PLAY_AGAIN} ${BACK_HOME}${feedbackSentence(model)}`,
     GameOver: ({ wave }) =>
-      `Game over. ${defeatVerdict(wave, model.stats)}. ${statsLabel(model)} ${PLAY_AGAIN} ${BACK_HOME} ${FEEDBACK_LINE}`,
+      `Game over. ${defeatVerdict(wave, model.stats)}. ${statsLabel(model)} ${PLAY_AGAIN} ${BACK_HOME}${feedbackSentence(model)}`,
   })
 }
 

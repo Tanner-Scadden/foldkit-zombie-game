@@ -28,6 +28,12 @@ import {
 } from './font'
 import { clamp } from './geometry'
 import {
+  HINT_ICON_SPRITES,
+  type HintIconSprites,
+  hintIconFrame,
+} from './hintIcons'
+import { isAskingForFeedback } from './home'
+import {
   Alarm,
   type Appearance,
   DebutCard,
@@ -42,8 +48,9 @@ import {
 } from './model'
 import {
   DEBUT_CARD_MS,
-  HINT_TEXT,
+  HINT_PARTS,
   type HintId,
+  type HintPart,
   type ShownHint,
   isDebutCardUp,
   msIntoPhase,
@@ -58,6 +65,7 @@ import {
   frameAt,
   group,
   gunSprite,
+  placeAt,
   showcaseWalk,
   spriteShapes,
 } from './sprite'
@@ -137,49 +145,151 @@ const RESUME_PROMPT = deviceText(
 const BAND_TOP: Readonly<Record<HintBand, number>> = { Top: 21, Bottom: 84 }
 const SUBTITLE_OFFSET = 15
 const HINT_OFFSET = 24
-const HINT_ROW_PX = 9
 const HINT_FADE_MS = 500
 const HINT_DELAY_MS = 250
 const HINT_BACK_COLOR = 'rgba(8, 10, 12, 0.55)'
-const HINT_PAD_X = 3
+const HINT_PAD_X = 4
+const HINT_PAD_Y = 2
+const HINT_ROW_GAP = 1
+const HINT_WORD_GAP = 3
+const HINT_PART_GAP = 5
 
-const HINT_SPRITES: Readonly<Record<HintId, DeviceText>> = Record.map(
-  HINT_TEXT,
-  texts => deviceText(texts, 'Plain'),
-)
+type BakedHintPart = Readonly<{
+  icon: HintIconSprites
+  maybeWords: Option.Option<BakedText>
+  x: number
+}>
+
+type BakedHintRow = Readonly<{
+  width: number
+  height: number
+  parts: ReadonlyArray<BakedHintPart>
+}>
+
+const partWidth = (
+  icon: HintIconSprites,
+  maybeWords: Option.Option<BakedText>,
+): number =>
+  icon.width +
+  Option.match(maybeWords, {
+    onNone: () => 0,
+    onSome: words => HINT_WORD_GAP + words.width,
+  })
+
+type HintLayout = Readonly<{ x: number; parts: ReadonlyArray<BakedHintPart> }>
+
+const EMPTY_HINT_LAYOUT: HintLayout = { x: 0, parts: [] }
+
+const bakeHintRow = (parts: ReadonlyArray<HintPart>): BakedHintRow => {
+  const laidOut = Array.reduce(
+    parts,
+    EMPTY_HINT_LAYOUT,
+    (row, { icon, words }): HintLayout => {
+      const sprites = HINT_ICON_SPRITES[icon]
+      const maybeWords = String.isNonEmpty(words)
+        ? Option.some(bakeText(words, 'Plain'))
+        : Option.none()
+      const x = Array.isReadonlyArrayEmpty(row.parts)
+        ? row.x
+        : row.x + HINT_PART_GAP
+      return {
+        x: x + partWidth(sprites, maybeWords),
+        parts: Array.append(row.parts, { icon: sprites, maybeWords, x }),
+      }
+    },
+  )
+  const iconHeight = Array.reduce(
+    laidOut.parts,
+    GLYPH_HEIGHT,
+    (tallest, { icon }) => Math.max(tallest, icon.height),
+  )
+  return {
+    width: laidOut.x,
+    height: iconHeight + HINT_PAD_Y * 2,
+    parts: laidOut.parts,
+  }
+}
+
+const HINT_ROWS: Readonly<
+  Record<HintId, Readonly<Record<InputDevice, BakedHintRow>>>
+> = Record.map(HINT_PARTS, byDevice => Record.map(byDevice, bakeHintRow))
 
 const hintOpacity = (ageMs: number): number =>
   clamp((ageMs - HINT_DELAY_MS) / HINT_FADE_MS, 0, 1)
 
-const hintRowShapes =
-  (model: Model) =>
-  ({ id, ageMs }: ShownHint, index: number): ReadonlyArray<Canvas.Shape> => {
-    const opacity = hintOpacity(ageMs)
-    if (opacity <= 0) {
-      return []
-    }
+const hintPartShapes =
+  (left: number, top: number, height: number, ageMs: number) =>
+  ({ icon, maybeWords, x }: BakedHintPart): ReadonlyArray<Canvas.Shape> => [
+    placeAt(
+      left + x,
+      top + Math.floor((height - icon.height) / 2),
+      hintIconFrame(icon, ageMs),
+    ),
+    ...Option.match(maybeWords, {
+      onNone: () => [],
+      onSome: words => [
+        placeBaked(words, {
+          x: left + x + icon.width + HINT_WORD_GAP,
+          y: top + Math.floor((height - GLYPH_HEIGHT) / 2) + 1,
+          align: 'Left',
+        }),
+      ],
+    }),
+  ]
 
-    const baked = HINT_SPRITES[id][model.lastDevice]
-    const y = BAND_TOP[model.hintBand] + HINT_OFFSET + index * HINT_ROW_PX
-    return [
-      group({
-        opacity,
-        shapes: [
-          Canvas.Rect({
-            x: Math.round(CENTER_X - baked.width / 2) - HINT_PAD_X,
-            y: y - 2,
-            width: baked.width + HINT_PAD_X * 2,
-            height: HINT_ROW_PX,
-            fill: HINT_BACK_COLOR,
-          }),
-          centered(baked, y),
-        ],
-      }),
-    ]
+const hintRowShapes = (
+  row: BakedHintRow,
+  top: number,
+  ageMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const opacity = hintOpacity(ageMs)
+  if (opacity <= 0) {
+    return []
   }
 
-const hintShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
-  Array.flatMap(shownHints(model), hintRowShapes(model))
+  const left = Math.round(CENTER_X - row.width / 2)
+  return [
+    group({
+      opacity,
+      shapes: [
+        Canvas.Rect({
+          x: left - HINT_PAD_X,
+          y: top,
+          width: row.width + HINT_PAD_X * 2,
+          height: row.height,
+          fill: HINT_BACK_COLOR,
+        }),
+        ...Array.flatMap(
+          row.parts,
+          hintPartShapes(left, top, row.height, ageMs),
+        ),
+      ],
+    }),
+  ]
+}
+
+type HintStack = Readonly<{ top: number; shapes: ReadonlyArray<Canvas.Shape> }>
+
+const hintShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
+  const start: HintStack = {
+    top: BAND_TOP[model.hintBand] + HINT_OFFSET - HINT_PAD_Y,
+    shapes: [],
+  }
+  return Array.reduce(
+    shownHints(model),
+    start,
+    (stack, { id, ageMs }: ShownHint): HintStack => {
+      const row = HINT_ROWS[id][model.lastDevice]
+      return {
+        top: stack.top + row.height + HINT_ROW_GAP,
+        shapes: Array.appendAll(
+          stack.shapes,
+          hintRowShapes(row, stack.top, ageMs),
+        ),
+      }
+    },
+  ).shapes
+}
 
 // BANNERS
 
@@ -952,7 +1062,11 @@ const statRows = (model: Model): ReadonlyArray<StatRow> => {
       value: `${stats.trapsPlaced}`,
       tone: 'Plain',
     },
-    { label: STAT_LABELS.score, value: `${scoreOf(model.stats)}`, tone: 'Victory' },
+    {
+      label: STAT_LABELS.score,
+      value: `${scoreOf(model.stats)}`,
+      tone: 'Victory',
+    },
   ]
 }
 
@@ -1041,6 +1155,24 @@ const NIGHTMARE_UNLOCKED_DIM = bakeText(
   'Alert',
 )
 
+const endNoteShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
+  const y = panelBottom(model) + FEEDBACK_GAP
+  if (model.difficulty.nightmare === 'JustUnlocked') {
+    return [
+      centered(
+        Math.floor(model.screenMs / UNLOCK_BLINK_MS) % 2 === 0
+          ? NIGHTMARE_UNLOCKED
+          : NIGHTMARE_UNLOCKED_DIM,
+        y,
+      ),
+    ]
+  } else if (isAskingForFeedback(model)) {
+    return [centered(FEEDBACK, y)]
+  } else {
+    return []
+  }
+}
+
 const endShapes = (
   model: Model,
   title: BakedText,
@@ -1056,12 +1188,7 @@ const endShapes = (
     'Center',
   ),
   ...panelShapes(model),
-  model.difficulty.nightmare === 'JustUnlocked' &&
-  Math.floor(model.screenMs / UNLOCK_BLINK_MS) % 2 === 0
-    ? centered(NIGHTMARE_UNLOCKED, panelBottom(model) + FEEDBACK_GAP)
-    : model.difficulty.nightmare === 'JustUnlocked'
-      ? centered(NIGHTMARE_UNLOCKED_DIM, panelBottom(model) + FEEDBACK_GAP)
-      : centered(FEEDBACK, panelBottom(model) + FEEDBACK_GAP),
+  ...endNoteShapes(model),
 ]
 
 // OVERLAY
