@@ -17,7 +17,6 @@ import {
   puddleSlowAt,
   woundScaleOf,
 } from './boss'
-import { leanCamera, screenCameraOf } from './camera'
 import { advanceChuckers, maybeChuckerHeading, maybeShieldFor } from './chucker'
 import {
   hitEvent,
@@ -33,12 +32,10 @@ import {
   DRY_FIRE_DELAY_MS,
   FIXED_STEP_MS,
   KNOCKBACK_REST_SPEED,
-  MAX_FRAME_DELTA_MS,
   MS_PER_SECOND,
   PLAYER_KNOCKBACK_DECAY_PER_SECOND,
   PLAYER_RADIUS,
   SEPARATION_SPEED,
-  STEP_EPSILON_MS,
   ZOMBIE_BUMP_SPEED,
   ZOMBIE_KNOCKBACK_DECAY_PER_SECOND,
 } from './constants'
@@ -56,8 +53,7 @@ import {
   scaleVector,
   vectorLength,
 } from './geometry'
-import { deriveIntent } from './input'
-import { advanceJuice, stopForHits, thawTick } from './juice'
+import { stopForHits, thawTick } from './juice'
 import { advanceKitchen, soupSkid } from './kitchen'
 import {
   Arsenal,
@@ -80,7 +76,6 @@ import {
   idleIntent,
 } from './model'
 import { advanceIntensity } from './pacing'
-import { advanceParticles } from './particles'
 import {
   type Clearance,
   maybeNearestBait,
@@ -90,7 +85,6 @@ import {
   steerToward,
 } from './pathing'
 import {
-  advanceCallouts,
   advancePowerUps,
   bulletGlaze,
   bulletPierce,
@@ -111,7 +105,7 @@ import {
   tollsOf,
   trapBlockers,
 } from './traps'
-import { advanceRound, endWhenDefeated, isRoundActive } from './waves'
+import { advanceRound, endWhenDefeated } from './waves'
 import {
   SIDEARM,
   type WeaponStats,
@@ -137,13 +131,12 @@ import {
 
 // INTENT
 
-export const refreshIntent = (model: Model): Model =>
-  modifyFields(model, {
-    intent: () =>
-      ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)
-        ? idleIntent
-        : deriveIntent(model.input, model.player, screenCameraOf(model)),
-  })
+// NOTE: the player's intent is the step's input. A player at the stall's
+// counter or the exit's sign does nothing else, whatever they hold.
+const gateIntent = (model: Model): Model =>
+  ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)
+    ? modifyFields(model, { intent: () => idleIntent })
+    : model
 
 // TIMERS
 
@@ -1261,16 +1254,13 @@ const feelIntensity = (before: Model, after: Model, deltaMs: number): Model =>
 
 // FRAME
 
-export const clampFrameDelta = (deltaTime: number): number =>
-  clamp(deltaTime, 0, MAX_FRAME_DELTA_MS)
-
 const advanceWorld = (model: Model, deltaMs: number): Model => {
   const seconds = deltaMs / MS_PER_SECOND
 
   const level = levelOf(model)
   const blockers = trapBlockers(level, model.traps)
   const tolls = tollsOf(level, model.traps)
-  const moved = refreshIntent(
+  const moved = gateIntent(
     modifyFields(model, {
       player: player =>
         movePlayer(
@@ -1288,7 +1278,7 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
       frameEvents: () => [],
     }),
   )
-  const routed = refreshIntent(
+  const routed = gateIntent(
     refreshShopPresence(
       modifyFields(moved, {
         flowField: flowField =>
@@ -1326,94 +1316,17 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
   )
 }
 
-// NOTE: one 60 Hz tick: hit-stop decides whether the world steps, then
-// the camera lean follows and the tick's events decide the next hit-stop.
-type Tick = Readonly<{ model: Model; worldMs: number }>
+// NOTE: one 60 Hz tick of the world from the player's intent: hit-stop
+// decides whether the world steps, then the tick's events decide the next
+// hit-stop.
+export type Tick = Readonly<{ model: Model; worldMs: number }>
 
-const advanceTick = (model: Model): Tick => {
+export const advanceTick = (model: Model): Tick => {
   const thaw = thawTick(model.hitStop, FIXED_STEP_MS)
   const thawed = modifyFields(model, {
     hitStop: () => thaw.hitStop,
     frameEvents: () => [],
   })
   const stepped = thaw.worldMs > 0 ? advanceWorld(thawed, thaw.worldMs) : thawed
-  const leaned = modifyFields(stepped, {
-    cameraLean: lean =>
-      leanCamera(lean, stepped.intent.maybeAim, FIXED_STEP_MS),
-  })
-  return { model: stopForHits(leaned, thaw.worldMs), worldMs: thaw.worldMs }
-}
-
-type Ticks = Readonly<{ count: number; carryMs: number }>
-
-// NOTE: a 60 Hz frame on an empty carry is exactly one tick and leaves
-// exactly zero, so a 60 Hz display steps as it did before the fixed step.
-export const ticksIn = (carryMs: number, count = 0): Ticks =>
-  carryMs >= FIXED_STEP_MS - STEP_EPSILON_MS
-    ? ticksIn(carryMs - FIXED_STEP_MS, count + 1)
-    : { count, carryMs: Math.max(0, carryMs) }
-
-type Stepped = Readonly<{
-  model: Model
-  events: ReadonlyArray<GameEvent>
-  worldMs: number
-}>
-
-// NOTE: a tick that ends the round ends the frame's ticks.
-const runTicks = (stepped: Stepped, count: number): Stepped => {
-  if (count <= 0 || !isRoundActive(stepped.model.phase)) {
-    return stepped
-  }
-  const ticked = advanceTick(stepped.model)
-  return runTicks(
-    {
-      model: ticked.model,
-      events: [...stepped.events, ...ticked.model.frameEvents],
-      worldMs: stepped.worldMs + ticked.worldMs,
-    },
-    count - 1,
-  )
-}
-
-// NOTE: what the frame looks like once its ticks ran: particles, the
-// walking dust, callouts, and the juice, all from the frame's events and
-// the cosmetic stream, so they never touch the World.
-const advanceCosmetics = (
-  model: Model,
-  frameMs: number,
-  worldMs: number,
-): Model =>
-  advanceJuice(
-    advanceCallouts(
-      worldMs > 0
-        ? advanceParticles(model, worldMs / MS_PER_SECOND, worldMs)
-        : model,
-      worldMs,
-    ),
-    frameMs,
-    worldMs,
-  )
-
-// NOTE: a frame runs the whole ticks its time owes and carries the rest,
-// then makes its cosmetics. Its `frameEvents` are every tick's events in
-// order, so the cosmetics, sounds, stats, and lessons see each one.
-export const advanceGame = (model: Model, deltaTime: number): Model => {
-  const frameMs = clampFrameDelta(deltaTime)
-  const ticks = ticksIn(model.stepCarryMs + frameMs)
-  const stepped = runTicks(
-    {
-      model: modifyFields(model, {
-        stepCarryMs: () => ticks.carryMs,
-        frameEvents: () => [],
-      }),
-      events: [],
-      worldMs: 0,
-    },
-    ticks.count,
-  )
-  return advanceCosmetics(
-    modifyFields(stepped.model, { frameEvents: () => stepped.events }),
-    frameMs,
-    stepped.worldMs,
-  )
+  return { model: stopForHits(stepped, thaw.worldMs), worldMs: thaw.worldMs }
 }

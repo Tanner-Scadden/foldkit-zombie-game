@@ -11,7 +11,7 @@ import { releaseAll } from '../input'
 import { Message } from '../message'
 import { type ExitId, type Model, ShopState } from '../model'
 import { burstCoins, smashBoards } from '../particles'
-import { refreshIntent } from '../simulation'
+import { refreshIntent } from '../frame'
 import { playSounds, uiCue } from './sound'
 import { type UpdateReturn, type UpdateStep, withInput } from './step'
 

@@ -28,7 +28,7 @@ import {
   shopItem,
   stockTag,
 } from '../shop'
-import { refreshIntent } from '../simulation'
+import { refreshIntent } from '../frame'
 import { closeExit } from './exit'
 import { type SoundCue, playSounds, uiCue } from './sound'
 import { type UpdateReturn, type UpdateStep, withInput } from './step'

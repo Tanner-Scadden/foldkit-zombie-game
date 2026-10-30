@@ -4,7 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import type { AppServices } from '../commands'
 import type { Message } from '../message'
 import type { Input, Model } from '../model'
-import { refreshIntent } from '../simulation'
+import { refreshIntent } from '../frame'
 
 export type UpdateReturn = Update.Return<Model, Message, AppServices>
 export type UpdateStep = Update.Step<Model, Message, AppServices>
