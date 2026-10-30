@@ -28,6 +28,16 @@ export const SCENARIOS: Record<string, Scenario> = {
     warm: () => wait(4000),
     bot: true,
   },
+  // The kitchen open, with the player in it by the ovens and the room full,
+  // so the bigger level, its ovens, and its soup are on screen.
+  kitchen: {
+    q: '?wave=8&start=wave&god&gun=smg&kitchen&fill&crowd=30&px=96&py=-46&ovens=belch&slip',
+    warm: () => wait(4000),
+    bot: true,
+  },
+  // The co-op arena staged with three players and a network that never
+  // answers, so it measures the online run's view of a still World.
+  coopArena: { q: '?coop=arena', warm: () => wait(1500), bot: false },
   endless15: {
     q: '?wave=15&mode=endless&start=wave&god&gun=smg&tier=3&fill',
     warm: () => wait(15000),
