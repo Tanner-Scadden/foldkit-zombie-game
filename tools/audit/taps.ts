@@ -65,6 +65,14 @@ type Scene = Readonly<{
 
 const MANOR = '#home-manor'
 
+// NOTE: the end screens show their buttons only once the restart grace
+// (RESTART_GRACE_MS, 900 ms) is over, and those buttons come before the
+// corner's Music and Mute in the page. On real frames a scene could be
+// measured inside the grace and tapped after it, so a button's index named
+// another button. 72 fixed frames (1.2 s), played at once and held, open
+// every end scene past the grace with all its buttons, on every run.
+const PAST_GRACE = 'tick=72'
+
 const SCENES: ReadonlyArray<Scene> = [
   { name: 'home', query: '' },
   {
@@ -141,8 +149,8 @@ const SCENES: ReadonlyArray<Scene> = [
     query: 'wave=3&money=12&gun=shotgun&px=270&py=142',
     opensDialog: true,
   },
-  { name: 'gameover', query: 'wave=4&phase=gameover&stats' },
-  { name: 'victory', query: 'wave=8&phase=victory&stats' },
+  { name: 'gameover', query: `wave=4&phase=gameover&stats&${PAST_GRACE}` },
+  { name: 'victory', query: `wave=8&phase=victory&stats&${PAST_GRACE}` },
 ]
 
 type Point = Readonly<{ x: number; y: number }>

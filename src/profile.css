@@ -1200,10 +1200,14 @@
   }
 }
 
+/* NOTE: the tabs stand 22 px above the panel and the chosen one rises 6 px
+   more and grows, so the panel sits that much lower than center and gives up
+   that height, which keeps the chosen tab on a short phone's screen. */
 .game-root[data-layout='Portrait'] .profile {
   width: calc(100vw - 20px);
-  height: min(640px, calc(100dvh - 40px));
-  padding: 0 var(--menu-pad) var(--menu-pad);
+  height: min(640px, calc(100dvh - 72px));
+  margin-top: 32px;
+  padding: 0 12px 12px;
 }
 
 .game-root[data-layout='Portrait'] .profile-body {
@@ -1273,6 +1277,28 @@
 
 .game-root[data-layout='Portrait'] .look-bounce {
   bottom: 14px;
+}
+
+/* NOTE: a row of swatches fits a 360 px phone across, and a short phone
+   gets a smaller stage, so every row of the Look tab fits without a scroll. */
+.game-root[data-layout='Portrait'] .look-options {
+  gap: 4px;
+}
+
+@media (max-height: 720px) {
+  .game-root[data-layout='Portrait'] .look-stage {
+    height: 120px;
+  }
+
+  .game-root[data-layout='Portrait'] .look-stage .look-preview,
+  .game-root[data-layout='Portrait'] .look-stage .look-preview-canvas {
+    width: 96px;
+    height: 96px;
+  }
+
+  .game-root[data-layout='Portrait'] .look-bounce {
+    bottom: 8px;
+  }
 }
 
 .game-root[data-layout='Portrait'] .name-stone {

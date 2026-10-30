@@ -5,6 +5,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 ## October 30, 2026: Tap and go
 
 - ▶️ PLAY is one big arrow now, every menu's close X slimmed down (still easy to tap), and a CODE card in the MORE hand shows off the game's source.
+- 👕 Your Profile fits small phones held upright: every tab stays on screen and every shirt color is in reach.
 
 ## October 29, 2026: How tough are you?
 

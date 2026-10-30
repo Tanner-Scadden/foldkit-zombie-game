@@ -3,7 +3,9 @@
 // an upright phone, as `s37-<TAG>-<viewport>-<scene>.png`. It exits with 1 on
 // a phone button under 48 px, a text field under 16 px (iOS zooms in on
 // those), or the Profile past the screen's edge.
-//   TAG=after BASE=http://localhost:4174/ bun run heavy -- bun tools/audit/shots37.ts
+//   TAG=after bun run heavy -- bun tools/audit/shots37.ts
+import type { Page } from 'playwright-core'
+
 import {
   DESKTOP_1280,
   PHONE_844,
@@ -11,15 +13,15 @@ import {
   type Viewport,
   deviceQuery,
   finish,
-  harnessUrl,
+  harnessQuery,
   isPickedScene,
   launch,
-  openPage,
   pickViewports,
+  scenePages,
   settleAnimations,
   shot,
   tagOr,
-  wait,
+  useHarness,
 } from './lib'
 
 const TAG = tagOr('after')
@@ -74,11 +76,7 @@ const SCENES: ReadonlyArray<Scene> = [
 
 const problems: Array<string> = []
 
-const checkLayout = async (
-  page: Awaited<ReturnType<typeof openPage>>,
-  viewport: Viewport,
-  where: string,
-) => {
+const checkLayout = async (page: Page, viewport: Viewport, where: string) => {
   const found = await page.evaluate(() => {
     const panel = document.querySelector('.profile')
     const box = panel?.getBoundingClientRect()
@@ -143,26 +141,30 @@ const checkLayout = async (
   }
 }
 
+await useHarness()
 const browser = await launch()
+const pages = scenePages(browser, ['nodev'])
 for (const viewport of VIEWPORTS as ReadonlyArray<Viewport>) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) continue
-    const page = await openPage(browser, viewport)
-    await page.goto(harnessUrl(scene.query, deviceQuery(viewport), 'nodev'))
+    const page = await pages.open(
+      viewport,
+      harnessQuery(scene.query, deviceQuery(viewport)),
+    )
     await page.waitForSelector('.profile-dialog[open] .profile-page', {
       timeout: 15000,
     })
+    await settleAnimations(page)
     for (const selector of scene.click ?? []) {
       await page.click(selector)
-      await wait(200)
+      await settleAnimations(page)
     }
-    await settleAnimations(page)
-    await wait(400)
     const where = `${viewport.name} ${scene.name}`
     await checkLayout(page, viewport, where)
     await shot(page, `s37-${TAG}-${viewport.name}-${scene.name}`)
-    await page.context().close()
+    pages.release(page)
   }
 }
+await pages.close()
 await browser.close()
 finish(problems, 'Every Profile tab fits, with big enough buttons and fields.')

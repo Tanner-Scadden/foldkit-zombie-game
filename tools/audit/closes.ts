@@ -17,7 +17,7 @@
 //     dialog,
 //   - Escape sends one RequestedClose and closes the dialog.
 // Exits with 1 on any problem.
-//   TAG=after BASE=http://localhost:4174/ bun run heavy -- bun tools/audit/closes.ts
+//   TAG=after bun run heavy -- bun tools/audit/closes.ts
 // ONLY picks scenes, such as `ONLY=shop,hand`, VIEWPORTS picks screens
 // (`l844`, `p390`, `p375`, `d1280`, `d1920`), and CLOSES_PARALLEL sets how
 // many scenes run at once (3 by default).
@@ -34,16 +34,16 @@ import {
   deviceQuery,
   finish,
   forEachInOrder,
-  harnessUrl,
+  harnessQuery,
   isPickedScene,
   launch,
-  openPage,
   parallelFrom,
   pickViewports,
+  scenePages,
   settleAnimations,
   shot,
   tagOr,
-  wait,
+  useHarness,
 } from './lib'
 
 const TAG = tagOr('after')
@@ -97,7 +97,6 @@ const MIN_SIDE = 48
 const PHONE_FACE = { min: 26, max: 34 }
 const DESKTOP_FACE = { min: 26, max: 40 }
 const INSET = 2
-const SETTLE_MS = 1100
 const OPEN_TIMEOUT_MS = 10_000
 const CLOSE_TIMEOUT_MS = 3000
 
@@ -151,9 +150,19 @@ const press = async (page: Page, viewport: Viewport, point: Point) => {
   }
 }
 
+const waitForDialog = (page: Page) =>
+  page
+    .locator('dialog[open]')
+    .first()
+    .waitFor({ state: 'visible', timeout: OPEN_TIMEOUT_MS })
+    .catch(() => undefined)
+
+// NOTE: the harness's ready signal says the scene is in. A dialog the game
+// opens itself, such as the shop on reaching the stall, is waited for by
+// its close, and each tap that opens a dialog waits for it to open and
+// settle, never for a fixed time.
 const openScene = async (page: Page, viewport: Viewport, scene: Scene) => {
-  await page.goto(harnessUrl(scene.query, deviceQuery(viewport), 'nodev'))
-  await wait(SETTLE_MS)
+  await settleAnimations(page)
   for (const selector of scene.open) {
     const locator = page.locator(selector).first()
     await locator
@@ -167,7 +176,8 @@ const openScene = async (page: Page, viewport: Viewport, scene: Scene) => {
       x: box.x + box.width / 2,
       y: box.y + box.height / 2,
     })
-    await wait(500)
+    await waitForDialog(page)
+    await settleAnimations(page)
   }
   await page
     .locator(CLOSE)
@@ -177,10 +187,17 @@ const openScene = async (page: Page, viewport: Viewport, scene: Scene) => {
   await settleAnimations(page)
 }
 
+await useHarness()
 const browser = await launch()
+const pages = scenePages(browser, ['nodev'])
 
+// NOTE: every scene starts from its query with an empty save, switched in on
+// a page of the same screen, whatever an earlier close left behind.
 const freshScene = async (viewport: Viewport, scene: Scene) => {
-  const page = await openPage(browser, viewport)
+  const page = await pages.open(
+    viewport,
+    harnessQuery(scene.query, deviceQuery(viewport)),
+  )
   await openScene(page, viewport, scene)
   return page
 }
@@ -372,14 +389,14 @@ const checkClosing = async (
   const page = await freshScene(viewport, scene)
   const placed = await placeClose(page)
   if (placed === null) {
-    await page.context().close()
+    pages.release(page)
     return [`${where}: no close button on reopen`]
   }
   await clearMessages(page)
   await act(page, placed)
   const isClosed = await waitForClosed(page)
   const tags = await messages(page)
-  await page.context().close()
+  pages.release(page)
   const closes = tags.filter(isRequestedClose)
   const strays = tags.filter(
     tag => TAP_LEAVES.test(tag) && !isRequestedClose(tag),
@@ -406,7 +423,7 @@ const checkScene = async (
   const placed = await placeClose(page)
   await shot(page, `closes-${TAG}-${viewport.name}-${scene.name}`)
   if (placed === null) {
-    await page.context().close()
+    pages.release(page)
     return [`${where}: no shared close button in the open dialog`]
   }
   const width = placed.button.right - placed.button.left
@@ -435,7 +452,7 @@ const checkScene = async (
   for (const overlap of await overlaps(page)) {
     problems.push(`${where}: the close ${overlap}`)
   }
-  await page.context().close()
+  pages.release(page)
 
   const tapPoints = ['face center', 'hit top left', 'hit bottom right']
   for (const name of tapPoints) {
@@ -476,6 +493,7 @@ const problems = await forEachInOrder(
   parallelFrom('CLOSES_PARALLEL'),
   ({ viewport, scene }, log) => checkScene(viewport, scene, log),
 )
+await pages.close()
 await browser.close()
 
 finish(
