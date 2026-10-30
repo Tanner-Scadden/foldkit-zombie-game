@@ -20,7 +20,7 @@ Things the game is blocked on until the owner does or decides them. Agents add a
 
 ## Later
 
-- [ ] **Release video, once co-op lands.** See `RELEASE_VIDEO.md`. You will need: the X account to post from, a few seconds of friends playing on a couch filmed on a phone, and a decision on a custom domain.
+- [ ] **Release video, once co-op lands.** See `RELEASE_VIDEO.md`. You will need: the X account to post from and a decision on a custom domain. The players-together shots are mocked in pixel art.
 
 ## Coming up for review
 

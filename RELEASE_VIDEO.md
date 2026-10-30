@@ -16,7 +16,7 @@ The plan for the launch video. It is shot once co-op works (multiplayer Phase 3,
 | --- | --- | --- |
 | 0 to 2 s | The north door splinters, Groaners pour in, four players on the rug open fire | (none) |
 | 2 to 4 s | Title slam over the fireplace, with drips | MUNCH MANOR |
-| 4 to 7 s | Four phones and a laptop join one room code | BRING 3 FRIENDS |
+| 4 to 7 s | The pixel couch: four characters on phones, then four device frames joining one room code | BRING 3 FRIENDS |
 | 7 to 13 s | Montage, about a second each: shotgun knockback, the Big Lug's armor flying off, a Kaboomer chain, Ankle Biters popping up, the kitchen oven belching fire, a zombie slipping in soup | (none) |
 | 13 to 16 s | Boards smash as the kitchen opens | GUN OR ROOM? |
 | 16 to 19 s | Rattles' shop, the MINE! stamp, coin spray | (none) |
@@ -27,7 +27,7 @@ The plan for the launch video. It is shot once co-op works (multiplayer Phase 3,
 
 - **9:16 vertical (1080x1920)** for TikTok, Reels, and Shorts, shot in the portrait layout, which already exists. The same beats, with tighter framing.
 - **A 6 second loop** for a pinned reply: the door bursting and the horde on the rug, looping cleanly.
-- **A real-world shot** the owner films on a phone: friends on a couch, each on their own phone, laughing. Even three seconds of real people makes it feel real.
+- **Players together, mocked (owner decision 2026-10-29).** No filmed footage. Two mocked shots instead: a short pixel-art cutscene in the game's style of four player characters (built from the character looks) squished on a couch, each holding a phone, flinching and cheering in sync with the action; and a split screen of four device frames (three phones and a laptop) showing the same room from each player's camera at the same moment, which also proves the co-op is real.
 
 ## How it is made
 
@@ -41,7 +41,7 @@ The plan for the launch video. It is shot once co-op works (multiplayer Phase 3,
 
 - **Now, while co-op is built:** short devlog clips to build an audience. The parlour before and after, Rattles' MINE! stamp, and portrait play all make good 10 second posts. These need only the director mode, not co-op.
 - **Needed from co-op:** four-player rooms, room codes, revives, and teammate avatars at the edge.
-- **Needed from the owner:** the X account to post from, the real-world couch shot, and the final URL (a custom domain would read better than the workers.dev address).
+- **Needed from the owner:** the X account to post from and the final URL (a custom domain would read better than the workers.dev address).
 
 ## Copy
 
