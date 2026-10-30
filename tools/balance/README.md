@@ -15,7 +15,7 @@ Three layers of balance checks, cheapest first. Run the heavy ones through the g
 
 ## Portrait view
 
-`VIEW=portrait` (for example `VIEW=portrait bun run balance -- --wave all --runs 100`) makes the bot see only the zombies inside the portrait camera's window on a 390x844 phone, 135 by 180 of the room, which follows it and leans toward its aim, the way a phone held upright shows the room. It does not shoot or flee what it cannot see. It gets the portrait layout's aim assist (`src/aimAssist.ts`) every tick its trigger is held, the way a phone does; `NO_ASSIST=1` plays portrait without it. The nightly plays two portrait campaign passes (see below). See "Portrait play" in `GAME_DESIGN.md` for the comparison.
+`VIEW=portrait` (for example `VIEW=portrait bun run balance -- --wave all --runs 100`) makes the bot see only the zombies inside the portrait camera's window on a 390x844 phone, 135 by 180 of the room, which follows it and leans toward its aim, the way a phone held upright shows the room. It does not shoot or flee what it cannot see. The nightly plays two portrait campaign passes (see below). See "Portrait play" in `GAME_DESIGN.md` for the comparison.
 
 ## The analytical model
 

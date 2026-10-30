@@ -1,9 +1,6 @@
-import { Option } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { assistAim } from './aimAssist'
-import { levelOf } from './arena'
-import { cameraOf, leanCamera, screenCameraOf } from './camera'
+import { leanCamera, screenCameraOf } from './camera'
 import {
   FIXED_STEP_MS,
   MAX_FRAME_DELTA_MS,
@@ -14,17 +11,10 @@ import { couchInputs, isCouchPlay } from './couch'
 import { clamp } from './geometry'
 import { deriveIntent } from './input'
 import { advanceJuice } from './juice'
-import {
-  type GameEvent,
-  type Intent,
-  type Model,
-  ShopState,
-  idleIntent,
-} from './model'
+import { type GameEvent, type Model, ShopState, idleIntent } from './model'
 import { raiseDebutCardFrom } from './onboarding'
 import { advanceParticles } from './particles'
 import { advanceCallouts } from './powerups'
-import { isPortrait } from './screen'
 import { soloInputs, stepWorld } from './stepWorld'
 import { ageTrapNotice } from './traps'
 import { endRoundOnClient, isRoundActive } from './waves'
@@ -37,24 +27,6 @@ import { withWorld } from './world'
 export const clampFrameDelta = (deltaTime: number): number =>
   clamp(deltaTime, 0, MAX_FRAME_DELTA_MS)
 
-// NOTE: in the portrait layout a held trigger's aim bends onto the zombie
-// it is almost on (src/aimAssist.ts). It is part of the intent, so the world
-// steps the same with or without it, given the same intent.
-const withAimAssist = (model: Model, intent: Intent): Intent =>
-  isPortrait(model) && intent.trigger === 'Held'
-    ? modifyFields(intent, {
-        maybeAim: Option.map(aim =>
-          assistAim(
-            levelOf(model),
-            cameraOf(model),
-            model.player,
-            model.zombies,
-            aim,
-          ),
-        ),
-      })
-    : intent
-
 // NOTE: the client turns raw input into intent: aim goes through the
 // camera, which only this device knows. A player at the stall's counter or
 // the exit's sign intends nothing.
@@ -63,10 +35,7 @@ export const refreshIntent = (model: Model): Model =>
     intent: () =>
       ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)
         ? idleIntent
-        : withAimAssist(
-            model,
-            deriveIntent(model.input, model.player, screenCameraOf(model)),
-          ),
+        : deriveIntent(model.input, model.player, screenCameraOf(model)),
   })
 
 type Ticks = Readonly<{ count: number; carryMs: number }>

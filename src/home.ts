@@ -169,23 +169,6 @@ export const steppedHomeFocus = (
 
 export const isOnHome = Phase.isAnyOf(['Ready'])
 
-// CORNER
-
-// NOTE: a newer build waits on the home menu only, never mid-run.
-export const isUpdateGiftShown = (model: Model): boolean =>
-  Option.isSome(model.maybeNewerBuild) && isOnHome(model.phase)
-
-const isInstalled = (model: Model): boolean =>
-  model.screenFit === 'Installed' || model.installOffer === 'Installed'
-
-// NOTE: the install tile is for a browser that can put the game on the Home
-// Screen: one that offered Chrome's install prompt, or an iPhone, which can
-// only do it by hand. Installed, or with no way to install, it hides.
-export const isInstallTileShown = (model: Model): boolean =>
-  isOnHome(model.phase) &&
-  !isInstalled(model) &&
-  (model.installOffer === 'Ready' || model.screenFit === 'HomeScreen')
-
 // MODE
 
 export const runModeOf = (mode: HomeMode): RunMode =>

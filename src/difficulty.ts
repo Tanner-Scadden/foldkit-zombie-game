@@ -44,15 +44,15 @@ export const DIFFICULTIES: Readonly<Record<Difficulty, DifficultyStats>> = {
   Hard: {
     name: 'Hard',
     blurb: 'They bite back',
-    healthScale: 1.08,
+    healthScale: 1.12,
     speedScale: 1.02,
     biteScale: 1,
   },
   Nightmare: {
     name: 'Nightmare',
     blurb: 'No mercy. Bring snacks',
-    healthScale: 1.16,
-    speedScale: 1.02,
+    healthScale: 1.18,
+    speedScale: 1.04,
     biteScale: 1.25,
   },
 }

@@ -103,21 +103,3 @@ export const NEWS_DAYS: ReadonlyArray<NewsDay> =
   parseChangelog(changelogMarkdown)
 
 export const maybeNewestNewsDay: Option.Option<NewsDay> = Array.head(NEWS_DAYS)
-
-// HEADLINES
-
-const HEADLINE_MAX_WORDS = 7
-
-// NOTE: a bullet's first clause, seven words at most, for the greeting after
-// an update: "PLAY is one big arrow now" from the whole line.
-export const newsHeadline = (text: string): string => {
-  const clause = pipe(
-    String.split(text, /[:,.;!?](?:\s|$)/),
-    Array.headNonEmpty,
-    String.trim,
-  )
-  const words = String.split(clause, /\s+/)
-  return words.length > HEADLINE_MAX_WORDS
-    ? `${Array.join(Array.take(words, HEADLINE_MAX_WORDS), ' ')}…`
-    : clause
-}

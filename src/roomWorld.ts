@@ -21,9 +21,11 @@ import {
 import { normalize } from './geometry'
 import { freshOvens } from './kitchen'
 import {
+  biteGraceFor,
   focusSeat,
   forEachSeat,
   maybePlayerAt,
+  modifyLeadSeat,
   playersOf,
   presenceOf,
   seatCrew,
@@ -33,8 +35,14 @@ import {
   withSeat,
 } from './party'
 import { flowFieldToward } from './pathing'
-import { predictLeadSeat } from './simulation'
+import {
+  type ZombieAt,
+  catchUpShots,
+  predictLeadSeat,
+  zombiesAt,
+} from './simulation'
 import { SeatAction, applySeatAction, stepWorld } from './stepWorld'
+import { TURRET_WEAPON } from './traps'
 import { FINAL_WAVE, beginPreparation } from './waves'
 import type { World } from './world'
 import {
@@ -47,6 +55,7 @@ import {
 } from './worldCodec'
 import {
   Boss,
+  type Bullet,
   DebutCard,
   type Difficulty,
   FIRST_SHOP_CATEGORY,
@@ -96,11 +105,21 @@ export type TickEvents = Readonly<{
   events: ReadonlyArray<GameEvent>
 }>
 
+// NOTE: `history` is where the zombies stood after each of the last
+// MAX_VIEW_LAG_TICKS ticks, newest last, for checking a lagging player's
+// shots against what they saw; it is the room's alone and never goes on
+// the wire, so a client's copy keeps it empty.
+export type TickPositions = Readonly<{
+  tick: number
+  zombies: ReadonlyArray<ZombieAt>
+}>
+
 export type RoomWorld = Readonly<{
   tick: number
   world: World
   events: ReadonlyArray<TickEvents>
   pressed: ReadonlyArray<readonly [slot: PlayerSlot, action: number]>
+  history: ReadonlyArray<TickPositions>
 }>
 
 // NOTE: your own part of the World, for prediction: your slot and player.
@@ -121,6 +140,11 @@ export const roomSettingsOf = (
       ? RunMode.Endless()
       : RunMode.Campaign(),
 })
+
+// NOTE: the furthest back a shot is checked, 250 ms; the room caps each
+// player's view lag at the same (packages/netcode, World.ts), which this
+// module may not import at run time (`bun run world:check`).
+const MAX_VIEW_LAG_TICKS = 15
 
 // NOTE: events older than this many ticks are dropped from the room's
 // copy; a diff goes out every 3 ticks.
@@ -369,6 +393,7 @@ export const startRoomWorld = (
   ),
   events: [],
   pressed: [],
+  history: [],
 })
 
 // KEEP GOING
@@ -412,6 +437,7 @@ export const keepGoingRoomWorld = (world: World): RoomWorld => ({
   world: keepGoingWorld(world),
   events: [],
   pressed: [],
+  history: [],
 })
 
 // STEP
@@ -438,28 +464,95 @@ const pressOf = (room: RoomWorld, world: World, tick: PlayerTick): World =>
       })
     : world
 
+// NOTE: each seat's bite grace from its round trip (src/party.ts), set
+// only when it changes.
+const syncGrace = (world: World, tick: PlayerTick): World => {
+  const graceMs = biteGraceFor(tick.rttMs)
+  return Option.exists(
+    maybeSeatOf(world, tick.slot),
+    seat => seat.graceMs === graceMs,
+  )
+    ? world
+    : withSeat(world, tick.slot, seatWorld =>
+        modifyLeadSeat(seatWorld, seat =>
+          modifyFields(seat, { graceMs: () => graceMs }),
+        ),
+      )
+}
+
+const isOwnGunShot =
+  (slot: PlayerSlot, firstId: number) =>
+  (bullet: Bullet): boolean =>
+    bullet.id >= firstId &&
+    bullet.shooter === slot &&
+    bullet.weapon !== TURRET_WEAPON
+
+// NOTE: favor the shooter: each player's shots of this tick fly the ticks
+// they were behind, against where the zombies stood then (src/simulation.ts,
+// catchUpShots), capped at MAX_VIEW_LAG_TICKS.
+const catchUp = (
+  room: RoomWorld,
+  world: World,
+  players: ReadonlyArray<PlayerTick>,
+  firstId: number,
+): World =>
+  Array.reduce(players, world, (current, player) => {
+    const ticks = Math.min(MAX_VIEW_LAG_TICKS, player.viewLagTicks)
+    const shots = new Set(
+      Array.map(
+        Array.filter(current.bullets, isOwnGunShot(player.slot, firstId)),
+        bullet => bullet.id,
+      ),
+    )
+    if (ticks <= 0 || shots.size === 0) {
+      return current
+    }
+    const pasts = Array.map(
+      Array.filter(
+        room.history,
+        entry => entry.tick > room.tick - ticks && entry.tick <= room.tick,
+      ),
+      entry => entry.zombies,
+    )
+    return catchUpShots(current, shots, pasts)
+  })
+
 export const stepRoomWorld = (
   room: RoomWorld,
   players: ReadonlyArray<PlayerTick>,
 ): RoomWorld => {
   const pressedWorld = Array.reduce(players, room.world, (world, tick) =>
-    pressOf(room, syncPresence(world, tick), tick),
+    syncGrace(pressOf(room, syncPresence(world, tick), tick), tick),
   )
   const stepped = stepWorld(
     pressedWorld,
     new Map(Array.map(players, tick => [tick.slot, intentOfInput(tick.input)])),
   )
+  const caught = catchUp(
+    room,
+    stepped.world,
+    players,
+    pressedWorld.nextEntityId,
+  )
+  const events = [
+    ...stepped.events,
+    ...Array.drop(caught.frameEvents, stepped.world.frameEvents.length),
+  ]
   const tick = room.tick + 1
   return {
     tick,
-    world: stepped.world,
+    world: caught,
     events: Array.filter(
-      Array.isReadonlyArrayEmpty(stepped.events)
+      Array.isReadonlyArrayEmpty(events)
         ? room.events
-        : Array.append(room.events, { tick, events: stepped.events }),
+        : Array.append(room.events, { tick, events }),
       entry => entry.tick > tick - EVENT_TICKS,
     ),
     pressed: Array.map(players, player => [player.slot, player.input.action]),
+    history: Array.takeRight(
+      Array.append(room.history, { tick, zombies: zombiesAt(caught) }),
+      MAX_VIEW_LAG_TICKS,
+    ),
   }
 }
 
@@ -475,6 +568,7 @@ export const readRoomSnapshot = (reader: Reader): RoomWorld => ({
   world: readWorld(reader),
   events: [],
   pressed: [],
+  history: [],
 })
 
 const MAX_EVENTS = 4096
@@ -519,7 +613,7 @@ export const readRoomDiff = (reader: Reader, prev: RoomWorld): RoomWorld => {
       events: readMany(readCount(reader), () => readEvent(reader)),
     }
   })
-  return { tick, world, events, pressed: [] }
+  return { tick, world, events, pressed: [], history: [] }
 }
 
 // INTERPOLATION

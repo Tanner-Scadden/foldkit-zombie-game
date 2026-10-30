@@ -23,9 +23,14 @@ import {
 // both know, or refuses with its own range so the client can say "update".
 // Version 2 (2026-10-30): the room's lobby carries picks, looks, and the
 // Nightmare unlock, and a run can close as Won; a version 1 client is
-// refused rather than handed messages it cannot read.
-export const PROTOCOL_VERSION = 2
-export const MIN_PROTOCOL_VERSION = 2
+// refused rather than handed messages it cannot read. Version 3: an Input
+// says which room tick its player was looking at (`seen`) and its round
+// trip, and a Delta can carry everyone's round trips (`pings`).
+export const PROTOCOL_VERSION = 3
+export const MIN_PROTOCOL_VERSION = 3
+
+// NOTE: a round trip as the wire carries it, in whole ms.
+export const MAX_RTT_MS = 60_000
 
 export interface VersionRange {
   readonly minVersion: number
@@ -139,9 +144,18 @@ export const ClientFrame = Schema.TaggedUnion({
   // NOTE: the samples since the last Input, in tick order, from `tick`
   // on. Inputs go out when they change, at most 10 a second, and at least
   // once a second as a heartbeat.
+  // NOTE: `seen` is the room tick the player's picture showed when the
+  // newest sample was taken (everyone else is drawn behind the room's
+  // clock), so the room can check that player's shots against what they
+  // saw (MULTIPLAYER.md, "Latency"). `rttMs` is the player's own round
+  // trip, so the room can share it.
   Input: {
     seq: Count,
     tick: Count,
+    seen: Count,
+    rttMs: Schema.Int.check(
+      Schema.isBetween({ minimum: 0, maximum: MAX_RTT_MS }),
+    ),
     samples: Schema.Array(Sample).check(
       Schema.isMaxLength(MAX_SAMPLES_PER_INPUT),
     ),
@@ -188,7 +202,15 @@ export const ServerFrame = Schema.TaggedUnion({
   Snapshot: { tick: Count, ack: Count, world: Schema.Uint8Array },
   // NOTE: the change since this player's previous message, which the
   // ordered WebSocket guarantees it has, as of `base`.
-  Delta: { tick: Count, base: Count, ack: Count, diff: Schema.Uint8Array },
+  // NOTE: `pings` is every seat's round trip, sent every couple of seconds
+  // and otherwise empty, for the ping bars.
+  Delta: {
+    tick: Count,
+    base: Count,
+    ack: Count,
+    pings: Schema.Array(Schema.Struct({ slot: Slot, rttMs: Count })),
+    diff: Schema.Uint8Array,
+  },
   Pong: { nonce: Count, tick: Count },
   Away: { slot: Slot },
   Back: { slot: Slot },
@@ -298,6 +320,8 @@ const writeClientFrame = (writer: Writer, frame: ClientFrame) => {
     Input: input => {
       writer.varint(input.seq)
       writer.varint(input.tick)
+      writer.varint(input.seen)
+      writer.varint(input.rttMs)
       writer.varint(input.samples.length)
       Array.forEach(input.samples, sample => {
         writer.varint(sample.ticks)
@@ -327,6 +351,8 @@ const readClientFrame = (reader: Reader): unknown => {
   if (tag === 'Input') {
     const seq = reader.varint()
     const tick = reader.varint()
+    const seen = reader.varint()
+    const rttMs = reader.varint()
     const count = reader.varint()
     if (count > MAX_SAMPLES_PER_INPUT) {
       throw new WireError({ reason: `${count} samples` })
@@ -335,6 +361,8 @@ const readClientFrame = (reader: Reader): unknown => {
       _tag: tag,
       seq,
       tick,
+      seen,
+      rttMs,
       samples: repeat(count, () => ({
         ticks: reader.varint(),
         input: readInput(reader),
@@ -395,6 +423,11 @@ const writeServerFrame = (writer: Writer, frame: ServerFrame) => {
       writer.varint(delta.tick)
       writer.varint(delta.tick - delta.base)
       writer.varint(delta.ack)
+      writer.varint(delta.pings.length)
+      Array.forEach(delta.pings, ping => {
+        writer.u8(ping.slot)
+        writer.varint(ping.rttMs)
+      })
       writer.raw(delta.diff)
     },
     Pong: pong => {
@@ -438,10 +471,20 @@ const readServerFrame = (reader: Reader): ServerFrame => {
     if (back > tick) {
       throw new WireError({ reason: 'Delta base before tick 0' })
     }
+    const ack = reader.varint()
+    const pingCount = reader.varint()
+    if (pingCount > MAX_SLOTS) {
+      throw new WireError({ reason: `${pingCount} pings` })
+    }
+    const pings = repeat(pingCount, () => ({
+      slot: reader.u8(),
+      rttMs: reader.varint(),
+    }))
     return ServerFrame.cases.Delta.make({
       tick,
       base: tick - back,
-      ack: reader.varint(),
+      ack,
+      pings,
       diff: reader.rest(),
     })
   }

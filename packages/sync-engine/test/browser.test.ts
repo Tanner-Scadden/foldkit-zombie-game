@@ -1,4 +1,4 @@
-import { Effect, Exit, Option, Stream } from 'effect'
+import { Effect, Exit, Stream } from 'effect'
 import { FetchHttpClient } from 'effect/http'
 import { describe, expect, test } from 'vitest'
 
@@ -76,35 +76,25 @@ describe('the browser identity client', () => {
     )
   })
 
-  // NOTE: compares the error alone, since a failure raised inside the
-  // request's span carries that span's stack frame in its Cause.
   test('a refusal without a failure, or no answer, is Unavailable', async () => {
-    const unavailable = Option.some(
+    const unavailable = Exit.fail(
       new IdentityRefused({
         failure: IdentityFailure.cases.Unavailable.make({}),
       }),
     )
-    const errorOf = (exit: Exit.Exit<unknown, IdentityRefused>) =>
-      Exit.findErrorOption(exit)
     const { fetch: proxyPage } = fakeFetch([
       () => new Response('<html>Bad gateway</html>', { status: 502 }),
     ])
-    expect(
-      errorOf(await runWith(proxyPage, httpIdentityApi(ORIGIN).challenge)),
-    ).toEqual(
+    expect(await runWith(proxyPage, httpIdentityApi(ORIGIN).challenge)).toEqual(
       unavailable,
     )
     const offline: typeof globalThis.fetch = () =>
       Promise.reject(new TypeError('Failed to fetch'))
-    expect(
-      errorOf(await runWith(offline, httpIdentityApi(ORIGIN).challenge)),
-    ).toEqual(
+    expect(await runWith(offline, httpIdentityApi(ORIGIN).challenge)).toEqual(
       unavailable,
     )
     const { fetch: garbled } = fakeFetch([() => Response.json({ nope: 1 })])
-    expect(
-      errorOf(await runWith(garbled, httpIdentityApi(ORIGIN).challenge)),
-    ).toEqual(
+    expect(await runWith(garbled, httpIdentityApi(ORIGIN).challenge)).toEqual(
       unavailable,
     )
   })

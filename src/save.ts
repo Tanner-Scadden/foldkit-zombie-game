@@ -26,9 +26,9 @@ import {
   noPractice,
 } from './model'
 import {
+  Appearance,
   HomeScreenTip,
   MusicSetting,
-  PlayerName,
   PlayerSave,
   RotationSetting,
   SAVE_VERSION,
@@ -45,12 +45,10 @@ import {
   ShakeSetting,
   ShareStatsSetting,
   SoundSetting,
-  StoredAppearance,
 } from './playerData'
 import { cleanName } from './profile'
 
 export {
-  PlayerName,
   PlayerSave,
   SAVE_VERSION,
   SavedBests,
@@ -99,7 +97,7 @@ const PlayerSaveV1 = Schema.Struct({
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
   settings: SavedSettingsV2,
-  appearance: StoredAppearance,
+  appearance: Appearance,
 })
 type PlayerSaveV1 = typeof PlayerSaveV1.Type
 
@@ -108,7 +106,7 @@ const PlayerSaveV2 = Schema.Struct({
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
   settings: SavedSettingsV2,
-  appearance: StoredAppearance,
+  appearance: Appearance,
   difficulty: SavedDifficulty,
 })
 type PlayerSaveV2 = typeof PlayerSaveV2.Type
@@ -118,7 +116,7 @@ const PlayerSaveV3 = Schema.Struct({
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
   settings: SavedSettingsV2,
-  appearance: StoredAppearance,
+  appearance: Appearance,
   difficulty: SavedDifficulty,
   bests: SavedBests,
 })
@@ -131,7 +129,7 @@ const PlayerSaveV4 = Schema.Struct({
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
   settings: SavedSettingsV2,
-  appearance: StoredAppearance,
+  appearance: Appearance,
   difficulty: SavedDifficulty,
   bests: SavedBests,
   home: SavedHome,
@@ -147,7 +145,7 @@ const PlayerSavePreviewV4 = Schema.Struct({
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
   settings: SavedSettingsV5,
-  appearance: StoredAppearance,
+  appearance: Appearance,
   difficulty: SavedDifficulty,
   bests: SavedBests,
 })
@@ -160,7 +158,7 @@ const PlayerSaveV5 = Schema.Struct({
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
   settings: SavedSettingsV5,
-  appearance: StoredAppearance,
+  appearance: Appearance,
   difficulty: SavedDifficulty,
   bests: SavedBests,
   home: SavedHome,
@@ -174,7 +172,7 @@ const PlayerSaveV6 = Schema.Struct({
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
   settings: SavedSettingsV5,
-  appearance: StoredAppearance,
+  appearance: Appearance,
   difficulty: SavedDifficulty,
   bests: SavedBests,
   home: SavedHome,
@@ -188,7 +186,7 @@ const PlayerSaveV7 = Schema.Struct({
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
   settings: SavedSettings,
-  appearance: StoredAppearance,
+  appearance: Appearance,
   difficulty: SavedDifficulty,
   bests: SavedBests,
   home: SavedHome,
@@ -202,7 +200,7 @@ const PlayerSaveV8 = Schema.Struct({
   onboarding: SavedOnboarding,
   homeScreenTip: HomeScreenTip,
   settings: SavedSettings,
-  appearance: StoredAppearance,
+  appearance: Appearance,
   difficulty: SavedDifficulty,
   bests: SavedBests,
   home: SavedHome,
@@ -211,28 +209,7 @@ const PlayerSaveV8 = Schema.Struct({
 })
 type PlayerSaveV8 = typeof PlayerSaveV8.Type
 
-// NOTE: versions 9 and 10 are the saves before the simple look, with the
-// display name: 9 with a Female or Male body, and 10 with the many-part
-// look that shipped for a few hours on 2026-10-30. Their fields are the
-// same; StoredAppearance reads either look.
-const PlayerSaveV9 = Schema.Struct({
-  version: Schema.Literals([9, 10]),
-  onboarding: SavedOnboarding,
-  homeScreenTip: HomeScreenTip,
-  settings: SavedSettings,
-  appearance: StoredAppearance,
-  difficulty: SavedDifficulty,
-  bests: SavedBests,
-  home: SavedHome,
-  seenPowerUps: SavedPowerUps,
-  rotation: RotationSetting,
-  name: PlayerName,
-})
-type PlayerSaveV9 = typeof PlayerSaveV9.Type
-
 const PlayerSaveJson = Schema.fromJsonString(PlayerSave)
-
-const PlayerSaveV9Json = Schema.fromJsonString(PlayerSaveV9)
 
 const PlayerSaveV8Json = Schema.fromJsonString(PlayerSaveV8)
 
@@ -389,8 +366,8 @@ const migrateV7 = (save: PlayerSaveV7): PlayerSaveV8 => ({
 
 // NOTE: a save from before the display name has no name yet, and shows the
 // placeholder until the player picks one.
-const migrateV8 = (save: PlayerSaveV8): PlayerSaveV9 => ({
-  version: 9,
+const migrateV8 = (save: PlayerSaveV8): PlayerSave => ({
+  version: SAVE_VERSION,
   onboarding: save.onboarding,
   homeScreenTip: save.homeScreenTip,
   settings: save.settings,
@@ -403,26 +380,7 @@ const migrateV8 = (save: PlayerSaveV8): PlayerSaveV9 => ({
   name: '',
 })
 
-// NOTE: a save from before the simple look keeps its look: every older
-// version reads it through StoredAppearance (src/playerData.ts) as the
-// closest current one, so only the version number moves on.
-const migrateV9 = (save: PlayerSaveV9): PlayerSave => ({
-  version: SAVE_VERSION,
-  onboarding: save.onboarding,
-  homeScreenTip: save.homeScreenTip,
-  settings: save.settings,
-  appearance: save.appearance,
-  difficulty: save.difficulty,
-  bests: save.bests,
-  home: save.home,
-  seenPowerUps: save.seenPowerUps,
-  rotation: save.rotation,
-  name: save.name,
-})
-
-const fromV8 = (save: PlayerSaveV8): PlayerSave => migrateV9(migrateV8(save))
-
-const fromV7 = (save: PlayerSaveV7): PlayerSave => fromV8(migrateV7(save))
+const fromV7 = (save: PlayerSaveV7): PlayerSave => migrateV8(migrateV7(save))
 
 const fromV6 = (save: PlayerSaveV6): PlayerSave => fromV7(migrateV6(save))
 
@@ -448,13 +406,9 @@ const SAVE_VERSIONS: ReadonlyArray<
 > = [
   { version: SAVE_VERSION, read: Schema.decodeOption(PlayerSaveJson) },
   {
-    version: 10,
-    read: raw =>
-      Option.map(Schema.decodeOption(PlayerSaveV9Json)(raw), migrateV9),
-  },
-  {
     version: 8,
-    read: raw => Option.map(Schema.decodeOption(PlayerSaveV8Json)(raw), fromV8),
+    read: raw =>
+      Option.map(Schema.decodeOption(PlayerSaveV8Json)(raw), migrateV8),
   },
   {
     version: 7,

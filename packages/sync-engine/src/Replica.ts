@@ -142,17 +142,12 @@ export const statusAtSessionStart = (
 
 // NOTE: what a tab that opens the replica starts from. Rows the confirmed
 // tables already hold are ready, though not fresh, before any connection.
-// A receipt commits the confirmed seq before the status moves, so a tab
-// closed between the two left a stored seq behind: the larger one wins.
 const statusOnOpen = (
   stored: Option.Option<ScopeStatus>,
   confirmed: number,
 ): ScopeStatus =>
   Option.isSome(stored) && stored.value._tag === 'Ready'
-    ? ScopeStatus.cases.Ready.make({
-        seq: Math.max(stored.value.seq, confirmed),
-        fresh: false,
-      })
+    ? ScopeStatus.cases.Ready.make({ seq: stored.value.seq, fresh: false })
     : confirmed > 0
       ? ScopeStatus.cases.Ready.make({ seq: confirmed, fresh: false })
       : idle

@@ -64,6 +64,8 @@ import {
 } from './gameRoomCore.ts'
 import {
   MATCHMAKER_NAME,
+  REGION_HEADER,
+  continentOf,
   createRoomIn,
   joinRoomIn,
   reportListing,
@@ -1014,7 +1016,10 @@ const routeRoomPath = (request: Request, env: GameRoomBindings, url: URL) =>
       const stub = matchmakers.get(matchmakers.idFromName(MATCHMAKER_NAME))
       const response = yield* tryCall('open the quick play socket', () =>
         stub.fetch(request.url, {
-          headers: Object.fromEntries(request.headers.entries()),
+          headers: {
+            ...Object.fromEntries(request.headers.entries()),
+            [REGION_HEADER]: continentOf(request),
+          },
         }),
       )
       return new Response(null, {
@@ -1080,6 +1085,7 @@ const routeRoomPath = (request: Request, env: GameRoomBindings, url: URL) =>
           onSome: body => body.look ?? '',
         }),
         'Private',
+        continentOf(request),
       )
       return answer(called.status, called.text)
     }

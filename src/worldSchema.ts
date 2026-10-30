@@ -16,8 +16,6 @@ export {
   HairColor,
   CursorSetting,
   HairStyle,
-  Outfit,
-  Print,
   HomeScreenTip,
   MusicSetting,
   PlayerName,
@@ -498,6 +496,7 @@ export const GameEvent = defineTaggedUnion({
     direction: Vector,
     damage: Schema.Number,
     kind: ZombieKind,
+    maybeShooter: Schema.Option(Schema.Number),
   },
   ZombieKilled: {
     x: Schema.Number,
@@ -640,23 +639,6 @@ export const ScreenFit = Schema.Literals([
   'Unavailable',
 ])
 export type ScreenFit = typeof ScreenFit.Type
-
-// NOTE: whether the browser offered to install the game: Chrome's
-// beforeinstallprompt, held by src/install.ts until the install tile asks.
-export const InstallOffer = Schema.Literals(['None', 'Ready', 'Installed'])
-export type InstallOffer = typeof InstallOffer.Type
-
-export const InstallOutcome = Schema.Literals([
-  'Accepted',
-  'Dismissed',
-  'Unavailable',
-])
-export type InstallOutcome = typeof InstallOutcome.Type
-
-// NOTE: the update gift on the home menu, wrapped until a tap unwraps it
-// and the page reloads onto the newer build.
-export const UpdateGift = Schema.Literals(['Wrapped', 'Unwrapping'])
-export type UpdateGift = typeof UpdateGift.Type
 
 export const FullscreenSetting = Schema.Literals(['Off', 'On'])
 export type FullscreenSetting = typeof FullscreenSetting.Type
@@ -826,19 +808,8 @@ export const LookPart = Schema.Literals([
   'HairColor',
   'SkinTone',
   'ShirtColor',
-  'Outfit',
-  'Print',
 ])
 export type LookPart = typeof LookPart.Type
-
-// NOTE: the look's two on and off parts, each one tap.
-export const LookToggle = Schema.Literals(['Beard', 'Glasses'])
-export type LookToggle = typeof LookToggle.Type
-
-// NOTE: the Look tab's little tabs: the body, skin, beard, and glasses; the
-// hair; and the outfit.
-export const LookSection = Schema.Literals(['Body', 'Hair', 'Outfit'])
-export type LookSection = typeof LookSection.Type
 
 export const PlannedSpawn = Schema.Struct({
   atMs: Schema.Number,
@@ -1207,6 +1178,11 @@ export type Readiness = typeof Readiness.Type
 // NOTE: what co-op adds to a player: their seat, life, presence, READY for
 // the break, the traps they placed (one of each kind, decided row 21), and
 // the kills credited to them.
+// NOTE: `graceMs` is how long a zombie must keep touching this player
+// before its first bite lands, half their round trip and at most 100 ms
+// (MULTIPLAYER.md, "Latency"), so a dodge they made on their own screen
+// counts; `touchedMs` is how long one has touched them so far. Both stay 0
+// for a player with no lag.
 export const Seat = Schema.Struct({
   slot: PlayerSlot,
   life: Life,
@@ -1214,6 +1190,8 @@ export const Seat = Schema.Struct({
   readiness: Readiness,
   trapIds: Schema.Array(Schema.Number),
   kills: Schema.Number,
+  graceMs: Schema.Number,
+  touchedMs: Schema.Number,
 })
 export type Seat = typeof Seat.Type
 
@@ -1312,8 +1290,6 @@ export const EXIT_DIALOG_ID = 'exit-offer'
 
 export const HOME_SCREEN_STEPS_ID = 'home-screen-steps'
 
-export const UPDATE_GREETING_ID = 'update-greeting'
-
 export const SHOP_TABS_ID = 'shop-tabs'
 
 export const FIRST_SHOP_CATEGORY: ShopCategory = 'Guns'
@@ -1410,13 +1386,9 @@ export const initialHitStop: HitStop = HitStop.Running({ cooldownMs: 0 })
 export const stillShake: Shake = { trauma: 0, offset: { x: 0, y: 0 } }
 
 export const defaultAppearance: Appearance = {
-  body: 'Broad',
-  hairStyle: 'Short',
+  body: 'Male',
+  hairStyle: 'Crop',
   hairColor: 'Brown',
   skinTone: 'Light',
   shirtColor: 'Blue',
-  outfit: 'Tee',
-  print: 'Plain',
-  beard: false,
-  glasses: false,
 }

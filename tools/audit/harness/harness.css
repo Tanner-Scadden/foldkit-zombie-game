@@ -2,11 +2,8 @@
 @source '../../../src';
 
 .look-sheet {
-  width: min(840px, calc(100vw - 16px));
-  height: auto;
-  aspect-ratio: 168 / 268;
-  max-width: none;
-  max-height: none;
+  width: 1600px;
+  height: 880px;
   image-rendering: pixelated;
 }
 

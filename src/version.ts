@@ -74,54 +74,7 @@ export const fetchRemoteBuild: Effect.Effect<string, VersionCheckError> = pipe(
   }),
 )
 
-// UPDATE MARKER
-
-// NOTE: the gift reloads with the build it unwrapped in the address, so the
-// page that loads can tell it was just updated, and onto which build. The
-// greeting shows only when that build is the one running: a reload that
-// still landed on the old build greets nobody. The marker leaves the address
-// at once, so a later reload never greets again.
-const UPDATE_MARKER_PARAM = 'updated'
-
-const markedUrl = (build: string): string => {
-  const url = new URL(window.location.href)
-  url.searchParams.set(UPDATE_MARKER_PARAM, build)
-  return url.href
-}
-
-export const reloadOnto = (
-  build: string,
-): Effect.Effect<void, VersionCheckError> =>
-  Effect.try({
-    try: () => window.location.replace(markedUrl(build)),
-    catch: error => new VersionCheckError({ reason: describeError(error) }),
-  })
-
-const takeUpdateMarker = (): Option.Option<string> => {
-  const url = new URL(window.location.href)
-  const maybeBuild = Option.fromNullishOr(
-    url.searchParams.get(UPDATE_MARKER_PARAM),
-  )
-  if (Option.isSome(maybeBuild)) {
-    url.searchParams.delete(UPDATE_MARKER_PARAM)
-    window.history.replaceState(window.history.state, '', url.href)
-  }
-  return maybeBuild
-}
-
-export const readUpdateMarker: Effect.Effect<
-  Option.Option<string>,
-  VersionCheckError
-> = Effect.try({
-  try: takeUpdateMarker,
+export const reloadPage: Effect.Effect<void, VersionCheckError> = Effect.try({
+  try: () => window.location.reload(),
   catch: error => new VersionCheckError({ reason: describeError(error) }),
 })
-
-export const isGreetingDue = (
-  runningBuild: string,
-  maybeBuild: Option.Option<string>,
-): boolean =>
-  Option.match(maybeBuild, {
-    onNone: () => false,
-    onSome: build => build === runningBuild,
-  })

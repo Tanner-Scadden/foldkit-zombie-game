@@ -1,14 +1,11 @@
-import { Option } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
-
-import { Dialog } from '@foldkit/ui'
 
 import { FIXED_STEP_MS, PLAYER_MAX_HP } from './constants'
 import { update } from './main'
 import { Message } from './message'
-import { type Model, ShopState, initialModel } from './model'
-import { forEachSeat, playersOf, shopOf } from './party'
+import { type Model, initialModel } from './model'
+import { forEachSeat, playersOf } from './party'
 import { asVeteran } from './veteran'
 import { withWorld } from './world'
 
@@ -93,19 +90,6 @@ const drive = (current: Model, frame: number): Model => {
   }
   if (current.phase._tag !== 'Wave') {
     return current
-  }
-  // NOTE: the kitchen's offer opens mid-wave too, so a walk into its
-  // boards leaves the offer: its close for player 1, swap for player 2.
-  if (current.shop._tag === 'AtExit') {
-    return send(
-      hold(current, []),
-      Message.GotExitDialogMessage({
-        message: Dialog.Message.RequestedClose(),
-      }),
-    )
-  }
-  if (Option.exists(shopOf(current, 1), ShopState.isAnyOf(['AtExit']))) {
-    return tap(current, 'KeyO')
   }
   const step = Math.floor(frame / FRAMES_PER_MOVE)
   const moved = hold(current, [

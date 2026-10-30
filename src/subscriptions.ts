@@ -4,7 +4,6 @@ import { Dom, Subscription } from 'foldkit'
 import type { Message as CoopMessage } from './coop/message'
 import { subscriptions as coopSubscriptions } from './coop/subscriptions'
 import { isTrackingPointer } from './input'
-import { InstallPrompt } from './install'
 import { KEY_WATCH_QUIET_MS, isGrabbedKeyUp, isLetterKeyCode } from './keyGrab'
 import { Message } from './message'
 import type { Model } from './model'
@@ -307,26 +306,9 @@ const syncMessages: Stream.Stream<Message, never, PlayerStore> = Stream.unwrap(
   ),
 )
 
-// NOTE: what the browser offers to install, held by the InstallPrompt
-// service from the moment the runtime starts.
-const installOfferMessages: Stream.Stream<Message, never, InstallPrompt> =
-  Stream.unwrap(
-    InstallPrompt.use(installPrompt =>
-      Effect.succeed(
-        Stream.map(installPrompt.offers, installOffer =>
-          Message.ChangedInstallOffer({ installOffer }),
-        ),
-      ),
-    ),
-  )
-
-type GameServices = PlayerStore | InstallPrompt
-
-const gameSubscriptions = Subscription.make<Model, Message, GameServices>()(
+const gameSubscriptions = Subscription.make<Model, Message, PlayerStore>()(
   entry => ({
     playerSync: Subscription.persistentEntry(syncMessages),
-
-    installOffers: Subscription.persistentEntry(installOfferMessages),
 
     frame: Subscription.animationFrameEntry({
       isActive: isFrameActive,
