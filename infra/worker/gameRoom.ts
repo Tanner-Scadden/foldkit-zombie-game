@@ -603,7 +603,13 @@ export class GameRoom {
           error => new BadSyncBody({ reason: error.message }),
         )
         const created = yield* this.lock.withPermit(
-          host.create(body.playerId, body.name, body.code, body.visibility),
+          host.create(
+            body.playerId,
+            body.name,
+            body.look ?? '',
+            body.code,
+            body.visibility,
+          ),
         )
         if (Result.isSuccess(created)) {
           const nowMs = yield* Clock.currentTimeMillis
@@ -622,7 +628,7 @@ export class GameRoom {
         )
         const everyone = this.syncSockets()
         const joined = yield* this.lock.withPermit(
-          host.join(body.playerId, body.name, everyone),
+          host.join(body.playerId, body.name, body.look ?? '', everyone),
         )
         yield* this.list(host)
         return ticketResponse(joined)
@@ -1027,11 +1033,22 @@ const routeRoomPath = (request: Request, env: GameRoomBindings, url: URL) =>
     const playerId = claims.success.playerId
     const text = yield* tryCall('read the body', () => request.text())
     if (url.pathname === ROOM_PATHS.create) {
-      const name = Option.match(
-        Schema.decodeOption(Schema.fromJsonString(CreateRequest))(text),
-        { onNone: () => '', onSome: body => body.name },
+      const maybeBody = Schema.decodeOption(
+        Schema.fromJsonString(CreateRequest),
+      )(text)
+      const called = yield* createRoomIn(
+        rooms,
+        playerId,
+        Option.match(maybeBody, {
+          onNone: () => '',
+          onSome: body => body.name,
+        }),
+        Option.match(maybeBody, {
+          onNone: () => '',
+          onSome: body => body.look ?? '',
+        }),
+        'Private',
       )
-      const called = yield* createRoomIn(rooms, playerId, name, 'Private')
       return answer(called.status, called.text)
     }
     if (url.pathname === ROOM_PATHS.join) {
@@ -1049,6 +1066,7 @@ const routeRoomPath = (request: Request, env: GameRoomBindings, url: URL) =>
         maybeCode.value,
         playerId,
         maybeBody.value.name,
+        maybeBody.value.look ?? '',
       )
       return answer(called.status, called.text)
     }

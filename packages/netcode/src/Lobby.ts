@@ -109,6 +109,22 @@ export const displayName = (raw: string, slot: number): string => {
 
 export const NameInput = Schema.String.check(Schema.isMaxLength(MAX_NAME_INPUT))
 
+// LOOKS
+
+// NOTE: a player's look as the game writes it (src/playerData.ts,
+// lookCodeOf): a few words joined by dots, such as
+// `Female.Ponytail.Ginger.Tan.Teal`. The scope keeps it as text and knows
+// nothing of what the words mean; anything else becomes '', which the game
+// draws as the seat's own look. The Worker checks the words before it
+// seats anyone.
+export const MAX_LOOK_INPUT = 64
+const LOOK_PATTERN = /^[A-Za-z]{1,12}(\.[A-Za-z]{1,12}){0,7}$/
+
+export const LookInput = Schema.String.check(Schema.isMaxLength(MAX_LOOK_INPUT))
+
+export const cleanLook = (raw: string): string =>
+  raw.length <= MAX_LOOK_INPUT && LOOK_PATTERN.test(raw) ? raw : ''
+
 // ROWS
 
 export const RoomStatus = Schema.Literals(['Lobby', 'Playing', 'Closed'])
@@ -180,6 +196,7 @@ export type RoomRow = typeof RoomRow.Type
 export const MemberRow = Schema.Struct({
   player_id: Schema.String,
   name: Schema.String,
+  look: Schema.String,
   slot: Schema.Number,
   ready: Schema.Number,
   joined_ms: Schema.Number,
@@ -195,6 +212,7 @@ const encodeResult = Schema.encodeSync(RoomResultJson)
 export const LobbyMember = Schema.Struct({
   playerId: Schema.String,
   name: Schema.String,
+  look: Schema.String,
   slot: Schema.Number,
   ready: Schema.Boolean,
   joinedMs: Schema.Number,
@@ -242,6 +260,7 @@ export const lobbyOfRows = (
     Array.map(member => ({
       playerId: member.player_id,
       name: member.name,
+      look: member.look,
       slot: member.slot,
       ready: member.ready !== 0,
       joinedMs: member.joined_ms,
@@ -285,7 +304,7 @@ export const readLobby = (
     )
     const members = yield* rejectBadRows(
       decodeMemberRows(
-        yield* sql`SELECT player_id, name, slot, ready, joined_ms
+        yield* sql`SELECT player_id, name, look, slot, ready, joined_ms
           FROM ${context.table('members')}`,
       ),
     )
@@ -389,17 +408,18 @@ const picksAfter = (
 
 export const CreatedRoom = defineMutation({
   name: 'CreatedRoom',
-  version: 1,
+  version: 2,
   args: Schema.Struct({
     code: RoomCode,
     host: Schema.String,
     hostName: NameInput,
+    hostLook: LookInput,
     mode: RoomMode,
     visibility: RoomVisibility,
   }),
   scopes: [ROOM_SCOPE_KIND],
   writer: 'ServerOnly',
-  apply: ({ code, host, hostName, mode, visibility }, context) =>
+  apply: ({ code, host, hostName, hostLook, mode, visibility }, context) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
       if (Option.isSome(yield* readLobby(context))) {
@@ -422,6 +442,7 @@ export const CreatedRoom = defineMutation({
       yield* sql`INSERT INTO ${context.table('members')} ${sql.insert({
         player_id: host,
         name: displayName(hostName, 0),
+        look: cleanLook(hostLook),
         slot: 0,
         ready: 0,
         joined_ms: context.timestampMs,
@@ -431,11 +452,15 @@ export const CreatedRoom = defineMutation({
 
 export const JoinedRoom = defineMutation({
   name: 'JoinedRoom',
-  version: 1,
-  args: Schema.Struct({ playerId: Schema.String, name: NameInput }),
+  version: 2,
+  args: Schema.Struct({
+    playerId: Schema.String,
+    name: NameInput,
+    look: LookInput,
+  }),
   scopes: [ROOM_SCOPE_KIND],
   writer: 'ServerOnly',
-  apply: ({ playerId, name }, context) =>
+  apply: ({ playerId, name, look }, context) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
       const lobby = yield* requireLobby(context)
@@ -454,6 +479,7 @@ export const JoinedRoom = defineMutation({
       yield* sql`INSERT INTO ${context.table('members')} ${sql.insert({
         player_id: playerId,
         name: displayName(name, slot),
+        look: cleanLook(look),
         slot,
         ready: 0,
         joined_ms: context.timestampMs,
@@ -665,6 +691,12 @@ export const RoomScope = defineScope({
         yield* sql`ALTER TABLE ${sql(table('room'))}
           ADD COLUMN kept INTEGER NOT NULL DEFAULT 0`
       }),
+    '0003_looks': table =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        yield* sql`ALTER TABLE ${sql(table('members'))}
+          ADD COLUMN look TEXT NOT NULL DEFAULT ''`
+      }),
   },
 })
 
@@ -682,9 +714,13 @@ export const ROOM_PATHS = {
 export const JoinRequest = Schema.Struct({
   code: Schema.String,
   name: NameInput,
+  look: Schema.optionalKey(LookInput),
 })
 
-export const CreateRequest = Schema.Struct({ name: NameInput })
+export const CreateRequest = Schema.Struct({
+  name: NameInput,
+  look: Schema.optionalKey(LookInput),
+})
 export type CreateRequest = typeof CreateRequest.Type
 export type JoinRequest = typeof JoinRequest.Type
 

@@ -147,7 +147,11 @@ describe('co-op hub', () => {
         expect(current.screen._tag).toBe('Asking')
       }),
       Command.resolve(
-        RequestRoom({ request: RoomRequest.Join({ code: CODE }), name: '' }),
+        RequestRoom({
+          request: RoomRequest.Join({ code: CODE }),
+          name: '',
+          look: '',
+        }),
         Message.FailedRequestRoom({ problem: 'NoRoom' }),
       ),
       resolveRemember(),
@@ -165,7 +169,7 @@ describe('co-op hub', () => {
       given(onHub),
       message(Message.ClickedCreateButton()),
       Command.resolve(
-        RequestRoom({ request: RoomRequest.Create(), name: '' }),
+        RequestRoom({ request: RoomRequest.Create(), name: '', look: '' }),
         Message.SucceededRequestRoom({ code: CODE, slot: 0 }),
       ),
       resolveRemember(),
@@ -696,6 +700,7 @@ describe('the network service', () => {
           RequestRoom({
             request: RoomRequest.Join({ code: CODE }),
             name: 'Ana',
+            look: 'Male.Curls.Black.Deep.Yellow',
           }).effect,
           fake.layer,
         )
@@ -710,6 +715,7 @@ describe('the network service', () => {
         _tag: 'RequestRoom',
         request: RoomRequest.Join({ code: CODE }),
         name: 'Ana',
+        look: 'Male.Curls.Black.Deep.Yellow',
       },
     ])
   })

@@ -72,8 +72,8 @@ export type ViewInputs = Readonly<{
   isKeyboard: boolean
 }>
 
-const lookOf = (inputs: ViewInputs, mySeat: number, seat: number) =>
-  seatLookOf(inputs.look, mySeat, seat)
+const lookOf = (inputs: ViewInputs, room: Room, seat: number) =>
+  seatLookOf(inputs.look, room.slot, seat, room.maybeLobby)
 
 // PIECES
 
@@ -543,7 +543,7 @@ const memberSeatView = (
       h.AriaLabel(label),
     ],
     [
-      portraitView(lookOf(inputs, room.slot, member.slot), 'coop-seat-head', h),
+      portraitView(lookOf(inputs, room, member.slot), 'coop-seat-head', h),
       isTheHost ? iconView('coop-crown', CROWN_ICON, h) : h.empty,
       member.ready
         ? h.span(
@@ -596,7 +596,7 @@ const resultView = (
                   ],
                   [
                     portraitView(
-                      lookOf(inputs, room.slot, score.slot),
+                      lookOf(inputs, room, score.slot),
                       'coop-result-head',
                       h,
                     ),

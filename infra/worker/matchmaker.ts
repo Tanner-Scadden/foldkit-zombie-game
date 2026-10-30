@@ -48,6 +48,7 @@ const Attachment = Schema.TaggedUnion({
     socket: Schema.String,
     playerId: Schema.String,
     name: Schema.String,
+    look: Schema.optionalKey(Schema.String),
   },
 })
 type Attachment = typeof Attachment.Type
@@ -99,7 +100,13 @@ export class Matchmaker {
     }
     return Effect.gen(function* () {
       const created = ticketOf(
-        yield* createRoomIn(rooms, first.playerId, first.name, 'Public'),
+        yield* createRoomIn(
+          rooms,
+          first.playerId,
+          first.name,
+          first.look ?? '',
+          'Public',
+        ),
       )
       if (Result.isFailure(created)) {
         return Result.fail(created.failure)
@@ -107,7 +114,13 @@ export class Matchmaker {
       const code = created.success.code
       const joined = yield* Effect.forEach(rest, player =>
         Effect.map(
-          joinRoomIn(rooms, code, player.playerId, player.name),
+          joinRoomIn(
+            rooms,
+            code,
+            player.playerId,
+            player.name,
+            player.look ?? '',
+          ),
           called => ({
             socket: player.socket,
             ticket: ticketOf(called),
@@ -165,7 +178,13 @@ export class Matchmaker {
               const rooms = this.env.GAME_ROOMS
               return rooms === undefined
                 ? Effect.succeed(unavailable())
-                : joinRoomIn(rooms, code, player.playerId, player.name).pipe(
+                : joinRoomIn(
+                    rooms,
+                    code,
+                    player.playerId,
+                    player.name,
+                    player.look ?? '',
+                  ).pipe(
                     Effect.map(ticketOf),
                     Effect.catchTag('SyncCallFailed', () =>
                       Effect.succeed(unavailable()),
@@ -269,12 +288,14 @@ export class Matchmaker {
               socket: attachment.socket,
               playerId: claims.success.playerId,
               name: said.name,
+              look: said.look ?? '',
             }),
           )
           const player: Matchmaking.Queued = {
             socket: attachment.socket,
             playerId: claims.success.playerId,
             name: said.name,
+            look: said.look ?? '',
             queuedMs: nowMs,
           }
           return yield* this.run((matchmaker, now) =>

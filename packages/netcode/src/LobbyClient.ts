@@ -42,6 +42,7 @@ import {
   CreateRequest,
   JoinRequest,
   Lobby,
+  MAX_LOOK_INPUT,
   MAX_NAME_INPUT,
   ROOM_PATHS,
   RoomRefusal,
@@ -127,11 +128,15 @@ export const createRoom = (
   origin: string,
   token: string,
   name: string,
+  look = '',
 ): Effect.Effect<RoomTicket, RoomRequestFailed> =>
   roomCall(
     new URL(ROOM_PATHS.create, origin).toString(),
     token,
-    CreateRequest.make({ name: name.slice(0, MAX_NAME_INPUT) }),
+    CreateRequest.make({
+      name: name.slice(0, MAX_NAME_INPUT),
+      look: look.slice(0, MAX_LOOK_INPUT),
+    }),
   )
 
 export const joinRoom = (
@@ -139,11 +144,16 @@ export const joinRoom = (
   token: string,
   code: string,
   name: string,
+  look = '',
 ): Effect.Effect<RoomTicket, RoomRequestFailed> =>
   roomCall(
     new URL(ROOM_PATHS.join, origin).toString(),
     token,
-    JoinRequest.make({ code, name: name.slice(0, MAX_NAME_INPUT) }),
+    JoinRequest.make({
+      code,
+      name: name.slice(0, MAX_NAME_INPUT),
+      look: look.slice(0, MAX_LOOK_INPUT),
+    }),
   )
 
 export const roomSocketUrl = (origin: string, code: string): string => {
@@ -354,6 +364,7 @@ export type QuickPlayEvent = typeof QuickPlayEvent.Type
 export interface QuickPlayOptions {
   readonly origin: string
   readonly name: string
+  readonly look?: string
   readonly token: Effect.Effect<string, TokenUnavailable>
 }
 
@@ -399,6 +410,7 @@ export const startQuickPlay = (
           _tag: 'Hello',
           token,
           name: options.name.slice(0, MAX_NAME_INPUT),
+          look: (options.look ?? '').slice(0, MAX_LOOK_INPUT),
         }),
       )
       yield* Stream.runForEach(socket.messages, data =>

@@ -74,6 +74,32 @@ const GRADUATE_SAVE = {
   difficulty: { chosen: 'Normal', card: 'Seen', nightmare: 'Locked' },
 }
 
+// NOTE: each player wears their own look, so every page can check that it
+// draws the others in theirs.
+const LOOKS = [
+  {
+    body: 'Female',
+    hairStyle: 'Ponytail',
+    hairColor: 'Pink',
+    skinTone: 'Tan',
+    shirtColor: 'Teal',
+  },
+  {
+    body: 'Male',
+    hairStyle: 'Curls',
+    hairColor: 'Blonde',
+    skinTone: 'Deep',
+    shirtColor: 'Red',
+  },
+  {
+    body: 'Female',
+    hairStyle: 'Long',
+    hairColor: 'Black',
+    skinTone: 'Fair',
+    shirtColor: 'Yellow',
+  },
+]
+
 const problems: Array<string> = []
 
 const check = (isOk: boolean, label: string) => {
@@ -111,7 +137,7 @@ const PHONE_CONTEXT =
   VIEWPORT_NAME === 'd1280' ? {} : { isMobile: true, hasTouch: true }
 const contexts: Array<BrowserContext> = []
 
-const openPlayer = async (name: string): Promise<Page> => {
+const openPlayer = async (name: string, lookIndex = 0): Promise<Page> => {
   const context = await browser.newContext({
     viewport: { width: VIEWPORT.width, height: VIEWPORT.height },
     ...PHONE_CONTEXT,
@@ -122,7 +148,10 @@ const openPlayer = async (name: string): Promise<Page> => {
   await page.goto(new URL('version.json', BASE).href)
   await page.evaluate(([key, json]) => localStorage.setItem(key, json), [
     SAVE_KEY,
-    JSON.stringify(GRADUATE_SAVE),
+    JSON.stringify({
+      ...GRADUATE_SAVE,
+      appearance: LOOKS[lookIndex % LOOKS.length],
+    }),
   ] as const)
   return page
 }
@@ -447,7 +476,7 @@ check(
 
 const guests: Array<Page> = []
 for (const index of Array.from({ length: PLAYERS - 1 }, (_, i) => i)) {
-  const guest = await openPlayer(`guest ${index + 1}`)
+  const guest = await openPlayer(`guest ${index + 1}`, index + 1)
   const link = new URL(BASE)
   link.searchParams.set('room', code)
   await guest.goto(link.href)
@@ -476,6 +505,20 @@ check(
 )
 await shot(host, 'lobby-host')
 
+const headOf = (page: Page, who: 'Me' | 'Other', at = 0) =>
+  page
+    .locator(`.coop-seat[data-me="${who}"] .coop-seat-head`)
+    .nth(at)
+    .evaluate(element => getComputedStyle(element).backgroundImage)
+const hostHead = await headOf(host, 'Me')
+const guestHead = await headOf(guests[0]!, 'Me')
+check(hostHead !== guestHead, 'the host and the guest wear different looks')
+check(
+  (await headOf(host, 'Other')) === guestHead &&
+    (await headOf(guests[0]!, 'Other')) === hostHead,
+  'each page draws the other player in their own look',
+)
+
 if (PICK_MODE !== undefined && PICK_DIFFICULTY !== undefined) {
   await guests[0]!.getByRole('button', { name: 'READY' }).click()
   await until(
@@ -483,17 +526,13 @@ if (PICK_MODE !== undefined && PICK_DIFFICULTY !== undefined) {
     async () => (await host.locator('.coop-stamp').count()) === 1,
   )
   await host.getByRole('button', { name: PICK_MODE, exact: true }).click()
-  await host
-    .getByRole('button', { name: PICK_DIFFICULTY, exact: true })
-    .click()
+  await host.getByRole('button', { name: PICK_DIFFICULTY, exact: true }).click()
   for (const [index, page] of everyone.entries()) {
     await until(
       `player ${index + 1} sees ${PICK_MODE} on ${PICK_DIFFICULTY}`,
       async () =>
         (await page
-          .locator(
-            `.coop-picks[aria-label="${PICK_MODE}, ${PICK_DIFFICULTY}"]`,
-          )
+          .locator(`.coop-picks[aria-label="${PICK_MODE}, ${PICK_DIFFICULTY}"]`)
           .count()) === 1,
     )
   }

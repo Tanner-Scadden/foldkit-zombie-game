@@ -10,12 +10,16 @@ import { maybeRoomOf } from './update'
 // PLAY socket while queued, the lobby and the game socket while in a room,
 // and a frame clock while a run is on. Ending a stream closes its socket.
 
-const MaybeName = Schema.Option(Schema.String)
+const MaybeJoiner = Schema.Option(
+  Schema.Struct({ name: Schema.String, look: Schema.String }),
+)
 const MaybeCode = Schema.Option(Schema.String)
 
-const maybeQueueName = (model: Model): Option.Option<string> =>
+const maybeQueueJoiner = (
+  model: Model,
+): Option.Option<Readonly<{ name: string; look: string }>> =>
   Screen.isAnyOf(['Queue'])(model.screen)
-    ? Option.some(model.name)
+    ? Option.some({ name: model.name, look: model.look })
     : Option.none()
 
 const maybeRoomCode = (model: Model): Option.Option<string> =>
@@ -51,15 +55,17 @@ const whenSome = <A, B>(
 export const subscriptions = Subscription.make<Model, Message, CoopNet>()(
   entry => ({
     quickPlay: entry(
-      { maybeName: MaybeName },
+      { maybeJoiner: MaybeJoiner },
       {
-        modelToDependencies: model => ({ maybeName: maybeQueueName(model) }),
-        dependenciesToStream: ({ maybeName }) =>
-          whenSome(maybeName, name =>
+        modelToDependencies: model => ({
+          maybeJoiner: maybeQueueJoiner(model),
+        }),
+        dependenciesToStream: ({ maybeJoiner }) =>
+          whenSome(maybeJoiner, ({ name, look }) =>
             Stream.unwrap(
               CoopNet.use(net =>
                 Effect.succeed(
-                  Stream.map(net.quickPlay(name), event =>
+                  Stream.map(net.quickPlay(name, look), event =>
                     Message.ReceivedQuickPlayEvent({ event }),
                   ),
                 ),

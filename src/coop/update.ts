@@ -53,10 +53,10 @@ export const FocusCoopElement = Command.define('FocusCoopElement', {
 })
 
 export const RequestRoom = Command.define('RequestRoom', {
-  args: { request: RoomRequest, name: Schema.String },
+  args: { request: RoomRequest, name: Schema.String, look: Schema.String },
   messages: [Message.SucceededRequestRoom, Message.FailedRequestRoom],
-  execute: ({ request, name }) =>
-    CoopNet.use(net => net.requestRoom(request, name)).pipe(
+  execute: ({ request, name, look }) =>
+    CoopNet.use(net => net.requestRoom(request, name, look)).pipe(
       Effect.map(ticket => Message.SucceededRequestRoom(ticket)),
       Effect.catch(problem =>
         Effect.succeed(Message.FailedRequestRoom({ problem })),
@@ -204,7 +204,7 @@ const enterRoom = (model: Model, code: string, slot: number): UpdateReturn => ({
 
 const ask = (model: Model, request: RoomRequest): UpdateReturn => ({
   model: withScreen(model, Screen.Asking({ request })),
-  commands: [RequestRoom({ request, name: model.name })],
+  commands: [RequestRoom({ request, name: model.name, look: model.look })],
 })
 
 const isCodeSymbol = (symbol: string): boolean =>
@@ -658,9 +658,11 @@ export const open = (
   name: string,
   maybeCode: Option.Option<string>,
   canPickNightmare = false,
+  look = '',
 ): UpdateReturn => {
   const named = modifyFields(model, {
     name: () => name,
+    look: () => look,
     canPickNightmare: () => canPickNightmare,
   })
   return Option.match(maybeCode, {

@@ -858,6 +858,15 @@ const coopRoom = (
 
 const COOP_NAMES = ['Tanner', 'Mo', 'Pip', 'Grumbles']
 
+// NOTE: the looks the staged teammates sent with their joins; the first
+// seat is the page's own player, who wears the page's own look.
+const COOP_LOOKS = [
+  '',
+  'Male.Curls.Blonde.Deep.Red',
+  'Female.Long.Black.Fair.Yellow',
+  'Male.Crop.Pink.Medium.Purple',
+]
+
 const coopScreen = (stage: NonNullable<typeof config.coop>) => {
   const Screen = CoopModel.Screen
   const queue = (
@@ -878,7 +887,7 @@ const coopScreen = (stage: NonNullable<typeof config.coop>) => {
     })
   const members = (count: number, readyCount = 0) =>
     COOP_NAMES.slice(0, count).map((name, slot) =>
-      memberOf(slot, name, slot < readyCount),
+      memberOf(slot, name, slot < readyCount, COOP_LOOKS[slot] ?? ''),
     )
   switch (stage) {
     case 'tile':

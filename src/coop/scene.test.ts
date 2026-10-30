@@ -14,6 +14,9 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
 import { defaultAppearance } from '../model'
+import { type Appearance, lookCodeOf } from '../playerData'
+import { portraitOf } from './icons'
+import { seatLook } from './looks'
 import { Message } from './message'
 import {
   LobbyChange,
@@ -91,7 +94,7 @@ describe('the hub', () => {
       click(role('button', { name: 'Make a room for friends' })),
       expect(role('status', { name: 'Finding the room' })).toExist(),
       Command.resolve(
-        RequestRoom({ request: RoomRequest.Create(), name: '' }),
+        RequestRoom({ request: RoomRequest.Create(), name: '', look: '' }),
         Message.SucceededRequestRoom({ code: CODE, slot: 0 }),
       ),
       Command.resolve(RememberRoom, Message.CompletedRememberRoom()),
@@ -111,7 +114,11 @@ describe('the code', () => {
       expect(role('button', { name: 'Join' })).toBeDisabled(),
       type(role('textbox', { name: 'Room code' }), 'mnch7'),
       Command.resolve(
-        RequestRoom({ request: RoomRequest.Join({ code: CODE }), name: '' }),
+        RequestRoom({
+          request: RoomRequest.Join({ code: CODE }),
+          name: '',
+          look: '',
+        }),
         Message.FailedRequestRoom({ problem: 'Full' }),
       ),
       Command.resolve(RememberRoom, Message.CompletedRememberRoom()),
@@ -247,6 +254,37 @@ describe('the lobby', () => {
         'aria-pressed',
         'true',
       ),
+    )
+  })
+
+  test('each seat wears the look its player sent, or its seat look', () => {
+    const sent: Appearance = {
+      body: 'Female',
+      hairStyle: 'Long',
+      hairColor: 'Pink',
+      skinTone: 'Fair',
+      shirtColor: 'Purple',
+    }
+    scene(
+      { update, view },
+      given(
+        lobbyRoom([
+          memberOf(0, 'Ana'),
+          memberOf(1, 'Bo', false, lookCodeOf(sent)),
+          memberOf(2, 'Cy', false, 'Robot.Chrome'),
+        ]),
+      ),
+      expect(selector('[aria-label="Bo"] .coop-seat-head')).toHaveStyle(
+        'background-image',
+        portraitOf(sent),
+      ),
+      expect(selector('[aria-label="Cy"] .coop-seat-head')).toHaveStyle(
+        'background-image',
+        portraitOf(seatLook(2)),
+      ),
+      expect(
+        selector('[aria-label="Ana, you, host"] .coop-seat-head'),
+      ).toHaveStyle('background-image', portraitOf(defaultAppearance)),
     )
   })
 

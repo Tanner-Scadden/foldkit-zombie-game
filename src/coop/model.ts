@@ -130,11 +130,13 @@ export const Screen = defineTaggedUnion({
 })
 export type Screen = typeof Screen.Type
 
-// NOTE: `canPickNightmare` is whether this player has unlocked Nightmare,
-// so as a room's host they may pick it in the lobby.
+// NOTE: `name` and `look` are what joining sends for this player (the
+// look as src/playerData.ts writes it), and `canPickNightmare` is whether
+// they have unlocked Nightmare, so as a room's host they may pick it.
 export const Model = Schema.Struct({
   screen: Screen,
   name: Schema.String,
+  look: Schema.String,
   canPickNightmare: Schema.Boolean,
 })
 export type Model = typeof Model.Type
@@ -142,6 +144,7 @@ export type Model = typeof Model.Type
 export const initialModel: Model = {
   screen: Screen.Closed(),
   name: '',
+  look: '',
   canPickNightmare: false,
 }
 

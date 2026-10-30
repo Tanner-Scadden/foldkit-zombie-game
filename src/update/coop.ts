@@ -14,6 +14,7 @@ import { releaseAll } from '../input'
 import { Message } from '../message'
 import type { Model } from '../model'
 import { isLearned } from '../onboarding'
+import { lookCodeOf } from '../playerData'
 import { joinName } from '../profile'
 import type { SeatAction } from '../stepWorld'
 import { canMoveHomeFocus } from './home'
@@ -49,10 +50,11 @@ const foldCoopOpen = (
   name: string,
   maybeCode: Option.Option<string>,
   canPickNightmare: boolean,
+  look: string,
 ) =>
   Update.foldChildStep({
     update: (coop: CoopModel) =>
-      Coop.open(coop, name, maybeCode, canPickNightmare),
+      Coop.open(coop, name, maybeCode, canPickNightmare, look),
     read: (model: Model) => Option.some(model.coop),
     write: (model, nextCoop) => modifyFields(model, { coop: () => nextCoop }),
     toParentMessage,
@@ -112,6 +114,7 @@ export const openCoop =
       joinName(stepModel),
       maybeCode,
       stepModel.difficulty.nightmare !== 'Locked',
+      lookCodeOf(stepModel.appearance),
     )(withInput(stepModel, releaseAll))
   }
 

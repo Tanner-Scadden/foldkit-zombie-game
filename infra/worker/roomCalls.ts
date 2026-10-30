@@ -56,6 +56,7 @@ export const createRoomIn = (
   rooms: DurableObjectNamespace,
   playerId: string,
   name: string,
+  look: string,
   visibility: RoomVisibility,
   attempt = 0,
 ): Effect.Effect<Called, SyncCallFailed> =>
@@ -65,10 +66,17 @@ export const createRoomIn = (
       rooms,
       code,
       INTERNAL_PATHS.create,
-      JSON.stringify({ playerId, name, code, visibility }),
+      JSON.stringify({ playerId, name, look, code, visibility }),
     )
     return called.status === 409 && attempt + 1 < CREATE_ATTEMPTS
-      ? yield* createRoomIn(rooms, playerId, name, visibility, attempt + 1)
+      ? yield* createRoomIn(
+          rooms,
+          playerId,
+          name,
+          look,
+          visibility,
+          attempt + 1,
+        )
       : called
   })
 
@@ -77,8 +85,14 @@ export const joinRoomIn = (
   code: string,
   playerId: string,
   name: string,
+  look: string,
 ): Effect.Effect<Called, SyncCallFailed> =>
-  callRoom(rooms, code, INTERNAL_PATHS.join, JSON.stringify({ playerId, name }))
+  callRoom(
+    rooms,
+    code,
+    INTERNAL_PATHS.join,
+    JSON.stringify({ playerId, name, look }),
+  )
 
 const decodeTicket = Schema.decodeOption(
   Schema.fromJsonString(RoomTicketSchema),

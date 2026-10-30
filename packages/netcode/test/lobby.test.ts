@@ -107,7 +107,11 @@ const seat = (server: ScopeServer, playerId: string) =>
     counter += 1
     return yield* server.runServer(
       JoinedRoom,
-      { playerId, name: `  ${playerId}\u0000  the   great one ` },
+      {
+        playerId,
+        name: `  ${playerId}\u0000  the   great one `,
+        look: playerId === BO ? 'Female.Bun.Pink.Tan.Teal' : 'not a <look>',
+      },
       `joined-room-${counter}`,
     )
   })
@@ -121,6 +125,7 @@ const created = Effect.gen(function* () {
       code: CODE,
       host: ANA,
       hostName: 'Ana',
+      hostLook: 'Male.Crop.Brown.Light.Blue',
       mode: 'Campaign',
       visibility: 'Private',
     },
@@ -180,6 +185,12 @@ describe('the room scope', () => {
           [BO, 1, 'bo the great'],
           [CY, 2, 'cy the great'],
           [DEE, 3, 'dee the grea'],
+        ])
+        expect(lobby.members.map(member => member.look)).toEqual([
+          'Male.Crop.Brown.Light.Blue',
+          'Female.Bun.Pink.Tan.Teal',
+          '',
+          '',
         ])
       }),
     ))
@@ -385,6 +396,7 @@ describe('the room scope', () => {
             code: CODE,
             host: ANA,
             hostName: 'Ana',
+            hostLook: 'Male.Crop.Brown.Light.Blue',
             mode: 'Campaign',
             visibility: 'Public',
           },
@@ -444,6 +456,7 @@ describe('the room scope', () => {
             code: CODE,
             host: ANA,
             hostName: 'Ana',
+            hostLook: 'Male.Crop.Brown.Light.Blue',
             mode: 'Campaign',
             visibility: 'Private',
           },

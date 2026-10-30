@@ -1,6 +1,6 @@
 import { Array, Option, Order, Schema, pipe } from 'effect'
 
-import { MAX_PLAYERS, NameInput, cleanName } from './Lobby'
+import { LookInput, MAX_PLAYERS, NameInput, cleanName } from './Lobby'
 
 // NOTE: QUICK PLAY (MULTIPLAYER.md, decision 15), as pure functions over
 // plain data, apart from the Matchmaker Durable Object that runs them
@@ -34,6 +34,7 @@ export const QuickClient = Schema.TaggedUnion({
   Hello: {
     token: Schema.String.check(Schema.isMaxLength(1024)),
     name: NameInput,
+    look: Schema.optionalKey(LookInput),
   },
   Answer: { accept: Schema.Boolean },
   Cancel: {},
@@ -67,6 +68,7 @@ export interface Queued {
   readonly socket: string
   readonly playerId: string
   readonly name: string
+  readonly look?: string
   readonly queuedMs: number
 }
 
@@ -96,6 +98,7 @@ const QueuedSchema = Schema.Struct({
   socket: Schema.String,
   playerId: Schema.String,
   name: Schema.String,
+  look: Schema.optionalKey(Schema.String),
   queuedMs: Schema.Number,
 })
 
