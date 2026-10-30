@@ -26,6 +26,7 @@ import {
 import {
   type Persistence,
   Request,
+  Response,
   type SqlValue,
   type TableChange,
 } from './Protocol'
@@ -165,17 +166,19 @@ const makeConnection = (
           'execute',
         ),
       ),
-      Effect.flatMap((response): Effect.Effect<Rows, SqlError.SqlError> =>
-        response._tag === 'Rows'
-          ? Effect.succeed(response)
-          : response._tag === 'Failed'
-            ? Effect.fail(databaseError(response.failure, 'execute'))
-            : Effect.fail(
-                connectionError(
-                  `Unexpected ${response._tag} response`,
-                  'execute',
-                ),
-              ),
+      Effect.flatMap(
+        Response.matchOrElse(
+          {
+            Rows: (rows): Effect.Effect<Rows, SqlError.SqlError> =>
+              Effect.succeed(rows),
+            Failed: ({ failure }) =>
+              Effect.fail(databaseError(failure, 'execute')),
+          },
+          ({ _tag }) =>
+            Effect.fail(
+              connectionError(`Unexpected ${_tag} response`, 'execute'),
+            ),
+        ),
       ),
     )
 

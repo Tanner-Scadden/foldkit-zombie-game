@@ -1,6 +1,7 @@
 import * as Array from 'effect/Array'
 import * as Clock from 'effect/Clock'
 import * as Effect from 'effect/Effect'
+import * as Match from 'effect/Match'
 import * as Result from 'effect/Result'
 import * as Semaphore from 'effect/Semaphore'
 
@@ -80,65 +81,70 @@ const carryOut = (
     stepped.actions,
     () => stepped.matchmaker,
     (matchmaker, action) =>
-      Effect.gen(function* () {
-        if (action._tag === 'Send') {
-          yield* io.send(action.socket, action.message)
-          return matchmaker
-        }
-        if (action._tag === 'WakeAt') {
-          yield* io.wakeAt(action.atMs)
-          return matchmaker
-        }
-        if (action._tag === 'Seat') {
-          const seated = yield* io.seat(action.player, action.code)
-          if (Result.isSuccess(seated)) {
-            yield* matched(io, action.player.socket, seated.success)
-            return matchmaker
-          }
-          return yield* carryOut(
-            io,
-            Matchmaking.seatFailed(
-              matchmaker,
-              action.player,
-              action.code,
-              nowMs,
-            ),
-            nowMs,
-          )
-        }
-        const made = yield* io.makeRoom(action.players)
-        if (Result.isFailure(made)) {
-          yield* Effect.forEach(
-            action.players,
-            player => refused(io, player.socket, made.failure),
-            { discard: true },
-          )
-          return matchmaker
-        }
-        yield* Effect.forEach(
-          made.success.tickets,
-          ({ socket, ticket }) =>
-            Result.match(ticket, {
-              onSuccess: held => matched(io, socket, held),
-              onFailure: refusal => refused(io, socket, refusal),
-            }),
-          { discard: true },
-        )
-        const seatedCount = Array.filter(made.success.tickets, ({ ticket }) =>
-          Result.isSuccess(ticket),
-        ).length
-        return yield* carryOut(
-          io,
-          Matchmaking.roomMade(
-            matchmaker,
-            made.success.code,
-            seatedCount,
-            nowMs,
-          ),
-          nowMs,
-        )
+      Match.valueTags(action, {
+        Send: ({ socket, message }) =>
+          Effect.as(io.send(socket, message), matchmaker),
+        WakeAt: ({ atMs }) => Effect.as(io.wakeAt(atMs), matchmaker),
+        Seat: ({ player, code }) =>
+          seatPlayer(io, matchmaker, player, code, nowMs),
+        MakeRoom: ({ players }) => makeRoomFor(io, matchmaker, players, nowMs),
       }),
   )
+
+const seatPlayer = (
+  io: MatchmakerIo,
+  matchmaker: Matchmaking.Matchmaker,
+  player: Matchmaking.Queued,
+  code: string,
+  nowMs: number,
+): Effect.Effect<Matchmaking.Matchmaker> =>
+  Effect.gen(function* () {
+    const seated = yield* io.seat(player, code)
+    if (Result.isSuccess(seated)) {
+      yield* matched(io, player.socket, seated.success)
+      return matchmaker
+    }
+    return yield* carryOut(
+      io,
+      Matchmaking.seatFailed(matchmaker, player, code, nowMs),
+      nowMs,
+    )
+  })
+
+const makeRoomFor = (
+  io: MatchmakerIo,
+  matchmaker: Matchmaking.Matchmaker,
+  players: ReadonlyArray<Matchmaking.Queued>,
+  nowMs: number,
+): Effect.Effect<Matchmaking.Matchmaker> =>
+  Effect.gen(function* () {
+    const made = yield* io.makeRoom(players)
+    if (Result.isFailure(made)) {
+      yield* Effect.forEach(
+        players,
+        player => refused(io, player.socket, made.failure),
+        { discard: true },
+      )
+      return matchmaker
+    }
+    yield* Effect.forEach(
+      made.success.tickets,
+      ({ socket, ticket }) =>
+        Result.match(ticket, {
+          onSuccess: held => matched(io, socket, held),
+          onFailure: refusal => refused(io, socket, refusal),
+        }),
+      { discard: true },
+    )
+    const seatedCount = Array.filter(made.success.tickets, ({ ticket }) =>
+      Result.isSuccess(ticket),
+    ).length
+    return yield* carryOut(
+      io,
+      Matchmaking.roomMade(matchmaker, made.success.code, seatedCount, nowMs),
+      nowMs,
+    )
+  })
 
 export const makeMatchmakerHost = (
   io: MatchmakerIo,

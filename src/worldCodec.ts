@@ -1,5 +1,5 @@
 import type { SchemaAST } from 'effect'
-import { Array, Option, Result, Struct } from 'effect'
+import { Array, Match, Option, Result, Struct } from 'effect'
 
 import type { Reader, Writer } from '@munch/netcode'
 
@@ -813,30 +813,36 @@ const tagOf = (ast: SchemaAST.AST): Option.Option<SchemaAST.LiteralValue> =>
       )
     : Option.none()
 
-const isMemberOf =
-  (ast: SchemaAST.AST) =>
-  (value: unknown): boolean => {
-    if (ast._tag === 'Literal') {
-      return value === ast.literal
-    } else if (ast._tag === 'Objects') {
-      return Option.match(tagOf(ast), {
-        onNone: () => isRecord(value),
-        onSome: tag => isRecord(value) && value['_tag'] === tag,
-      })
-    } else if (ast._tag === 'String' || ast._tag === 'TemplateLiteral') {
-      return typeof value === 'string'
-    } else if (ast._tag === 'Number') {
-      return typeof value === 'number'
-    } else if (ast._tag === 'Boolean') {
-      return typeof value === 'boolean'
-    } else if (ast._tag === 'Arrays') {
-      return isList(value)
-    } else if (ast._tag === 'Declaration') {
-      return Option.isOption(value)
-    } else {
-      return false
-    }
-  }
+// NOTE: the member test is chosen once per Schema node, not per value: the
+// codec runs on every tick the room sends.
+const isMemberOf = (ast: SchemaAST.AST): ((value: unknown) => boolean) =>
+  Match.value(ast).pipe(
+    Match.tag(
+      'Literal',
+      ({ literal }) =>
+        (value: unknown) =>
+          value === literal,
+    ),
+    Match.tag('Objects', objects =>
+      Option.match(tagOf(objects), {
+        onNone: () => isRecord,
+        onSome:
+          tag =>
+          (value: unknown): boolean =>
+            isRecord(value) && value['_tag'] === tag,
+      }),
+    ),
+    Match.tag(
+      'String',
+      'TemplateLiteral',
+      () => (value: unknown) => typeof value === 'string',
+    ),
+    Match.tag('Number', () => (value: unknown) => typeof value === 'number'),
+    Match.tag('Boolean', () => (value: unknown) => typeof value === 'boolean'),
+    Match.tag('Arrays', () => isList),
+    Match.tag('Declaration', () => Option.isOption),
+    Match.orElse(() => () => false),
+  )
 
 const propertyName = (property: SchemaAST.PropertySignature): string =>
   typeof property.name === 'string'
@@ -891,44 +897,39 @@ const objectsCodec = (
 
 const NO_FIELDS: ReadonlySet<string> = new Set()
 
-const codecOf = (ast: SchemaAST.AST, hint: Hint): Codec => {
-  if (ast._tag === 'Number') {
-    return NUMBER_CODECS[hint]
-  } else if (ast._tag === 'String' || ast._tag === 'TemplateLiteral') {
-    return textCodec
-  } else if (ast._tag === 'Boolean') {
-    return booleanCodec
-  } else if (ast._tag === 'Literal') {
-    return constantCodec(ast.literal)
-  } else if (ast._tag === 'Declaration') {
-    return ast.typeParameters.length === 1 &&
-      ast.typeParameters[0] !== undefined
-      ? optionCodec(codecOf(ast.typeParameters[0], hint))
-      : fail('A Schema declaration other than Option')
-  } else if (ast._tag === 'Arrays') {
-    return Array.isReadonlyArrayEmpty(ast.elements) &&
-      ast.rest.length === 1 &&
-      ast.rest[0] !== undefined
-      ? listCodec(codecOf(ast.rest[0], hint))
-      : fail('A tuple in the World')
-  } else if (ast._tag === 'Objects') {
-    return objectsCodec(ast, hint, NO_FIELDS, {})
-  } else if (ast._tag === 'Union') {
-    const members = flattenUnion(ast)
-    return Array.every(members, member => member._tag === 'Literal')
-      ? literalCodec(Array.map(members, member => member.literal))
-      : unionCodec(
-          Array.map(members, member => ({
-            isMember: isMemberOf(member),
-            codec: codecOf(member, hint),
-          })),
-        )
-  } else if (ast._tag === 'Suspend') {
-    return codecOf(ast.thunk(), hint)
-  } else {
-    return fail(`No wire form for a ${ast._tag}`)
-  }
-}
+const codecOf = (ast: SchemaAST.AST, hint: Hint): Codec =>
+  Match.value(ast).pipe(
+    Match.tag('Number', () => NUMBER_CODECS[hint]),
+    Match.tag('String', 'TemplateLiteral', () => textCodec),
+    Match.tag('Boolean', () => booleanCodec),
+    Match.tag('Literal', ({ literal }) => constantCodec(literal)),
+    Match.tag('Declaration', ({ typeParameters }) =>
+      typeParameters.length === 1 && typeParameters[0] !== undefined
+        ? optionCodec(codecOf(typeParameters[0], hint))
+        : fail('A Schema declaration other than Option'),
+    ),
+    Match.tag('Arrays', ({ elements, rest }) =>
+      Array.isReadonlyArrayEmpty(elements) &&
+      rest.length === 1 &&
+      rest[0] !== undefined
+        ? listCodec(codecOf(rest[0], hint))
+        : fail('A tuple in the World'),
+    ),
+    Match.tag('Objects', objects => objectsCodec(objects, hint, NO_FIELDS, {})),
+    Match.tag('Union', union => {
+      const members = flattenUnion(union)
+      return Array.every(members, member => member._tag === 'Literal')
+        ? literalCodec(Array.map(members, member => member.literal))
+        : unionCodec(
+            Array.map(members, member => ({
+              isMember: isMemberOf(member),
+              codec: codecOf(member, hint),
+            })),
+          )
+    }),
+    Match.tag('Suspend', suspend => codecOf(suspend.thunk(), hint)),
+    Match.orElse(({ _tag }) => fail(`No wire form for a ${_tag}`)),
+  )
 
 // THE WORLD
 

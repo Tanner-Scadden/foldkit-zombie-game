@@ -23,6 +23,7 @@ import {
   Phase,
   ShopState,
   Trap,
+  type Turret,
   TurretGun,
   type Vector,
 } from './model'
@@ -169,7 +170,7 @@ const gnomeShapes = (
 
 const turretShapes = (
   level: Level,
-  turret: Extract<Trap, Readonly<{ _tag: 'Turret' }>>,
+  turret: Turret,
   elapsedMs: number,
 ): ReadonlyArray<Canvas.Shape> =>
   gnomeShapes(
@@ -182,7 +183,7 @@ const turretShapes = (
 
 const turretOverheadShapes = (
   level: Level,
-  turret: Extract<Trap, Readonly<{ _tag: 'Turret' }>>,
+  turret: Turret,
   elapsedMs: number,
 ): ReadonlyArray<Canvas.Shape> => {
   const center = trapCenter(level, turret)

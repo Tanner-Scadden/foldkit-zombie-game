@@ -1,8 +1,9 @@
-import { Array, Option, pipe } from 'effect'
+import { Array, Match, Option, pipe } from 'effect'
 
 import {
-  type ClientFrame,
+  ClientFrame,
   type ClosedReason,
+  type InputFrame,
   MAX_RTT_MS,
   NEUTRAL_INPUT,
   PROTOCOL_VERSION,
@@ -93,6 +94,13 @@ export interface Scored {
   readonly score: number
 }
 
+export interface Ended {
+  readonly _tag: 'Ended'
+  readonly reason: ClosedReason
+  readonly tick: number
+  readonly scores: ReadonlyArray<Scored>
+}
+
 export type Out =
   | {
       readonly _tag: 'Send'
@@ -101,12 +109,7 @@ export type Out =
     }
   | { readonly _tag: 'Close'; readonly socket: SocketId }
   | { readonly _tag: 'FreedSeat'; readonly playerId: string }
-  | {
-      readonly _tag: 'Ended'
-      readonly reason: ClosedReason
-      readonly tick: number
-      readonly scores: ReadonlyArray<Scored>
-    }
+  | Ended
 
 export interface Stepped<W> {
   readonly room: Room<W>
@@ -337,7 +340,7 @@ export const dropPlayer = <W, Own>(
 // INPUTS
 
 const changesOf = (
-  frame: Extract<ClientFrame, { readonly _tag: 'Input' }>,
+  frame: InputFrame,
   firstTick: number,
 ): readonly [ReadonlyArray<Change>, number] => {
   const none: readonly [ReadonlyArray<Change>, number] = [[], firstTick]
@@ -357,10 +360,7 @@ const changesOf = (
 // on time. A message claiming ticks too far ahead is pulled back whole.
 // The new change points replace queued ones at or after their first tick:
 // they are newer word about the same ticks.
-const pointsOf = (
-  frame: Extract<ClientFrame, { readonly _tag: 'Input' }>,
-  tick: number,
-): ReadonlyArray<Change> => {
+const pointsOf = (frame: InputFrame, tick: number): ReadonlyArray<Change> => {
   const pulledBack = Math.max(0, frame.tick - (tick + MAX_INPUT_LEAD_TICKS))
   const [points] = changesOf(frame, frame.tick - pulledBack)
   const late = Array.filter(points, point => point.tick <= tick)
@@ -405,11 +405,7 @@ const pointsOf = (
   })
 }
 
-const enqueue = (
-  seat: Seat,
-  frame: Extract<ClientFrame, { readonly _tag: 'Input' }>,
-  tick: number,
-): Seat => {
+const enqueue = (seat: Seat, frame: InputFrame, tick: number): Seat => {
   const changes = pointsOf(frame, tick)
   const firstTick = Option.match(Array.head(changes), {
     onNone: () => tick + 1,
@@ -470,48 +466,41 @@ export const receive = <W, Own>(
         seatOfSocket(woke.room, socket),
         () => seat,
       )
-      if (frame._tag === 'Input') {
-        return {
+      return ClientFrame.match(frame, {
+        Input: (input): Stepped<W> => ({
           room: {
             ...woke.room,
             seats: updateSeat(woke.room.seats, seat.slot, () =>
-              enqueue(current, frame, woke.room.tick),
+              enqueue(current, input, woke.room.tick),
             ),
           },
           out: woke.out,
-        }
-      }
-      if (frame._tag === 'Ping') {
-        return {
+        }),
+        Ping: ({ rttMs, nonce }): Stepped<W> => ({
           room: {
             ...woke.room,
             seats: updateSeat(woke.room.seats, seat.slot, () => ({
               ...current,
-              rttMs: frame.rttMs,
+              rttMs,
             })),
           },
           out: [
             ...woke.out,
             send(
               socket,
-              ServerFrame.cases.Pong.make({
-                nonce: frame.nonce,
-                tick: woke.room.tick,
-              }),
+              ServerFrame.cases.Pong.make({ nonce, tick: woke.room.tick }),
             ),
           ],
-        }
-      }
-      if (frame._tag === 'Leave') {
-        return {
+        }),
+        Leave: (): Stepped<W> => ({
           room: removeSeat(world, woke.room, current),
           out: [
             close(socket),
             { _tag: 'FreedSeat', playerId: current.playerId },
           ],
-        }
-      }
-      return woke
+        }),
+        Hello: (): Stepped<W> => woke,
+      })
     },
   })
 
@@ -602,38 +591,37 @@ const checkPresence = <W, Own>(
   nowMs: number,
 ): Stepped<W> => {
   const none: Stepped<W> = { room, out: [] }
-  return Array.reduce(room.seats, none, (stepped, seat): Stepped<W> => {
-    if (
-      seat.presence._tag === 'Here' &&
-      nowMs - seat.lastHeardMs > AWAY_AFTER_MS
-    ) {
-      const seats = updateSeat(stepped.room.seats, seat.slot, current => ({
-        ...current,
-        presence: awaySince(nowMs),
-      }))
-      return {
-        room: { ...stepped.room, seats },
-        out: [...stepped.out, ...awayOut(seats, seat.slot)],
-      }
-    }
-    if (
-      seat.presence._tag === 'Away' &&
-      nowMs - seat.presence.sinceMs > FREE_SEAT_AFTER_MS
-    ) {
-      return {
-        room: removeSeat(world, stepped.room, seat),
-        out: [
-          ...stepped.out,
-          ...Option.match(seat.socket, {
-            onNone: () => [],
-            onSome: socket => [close(socket)],
-          }),
-          { _tag: 'FreedSeat', playerId: seat.playerId },
-        ],
-      }
-    }
-    return stepped
-  })
+  return Array.reduce(room.seats, none, (stepped, seat): Stepped<W> =>
+    Match.valueTags(seat.presence, {
+      Here: (): Stepped<W> => {
+        if (nowMs - seat.lastHeardMs <= AWAY_AFTER_MS) {
+          return stepped
+        }
+        const seats = updateSeat(stepped.room.seats, seat.slot, current => ({
+          ...current,
+          presence: awaySince(nowMs),
+        }))
+        return {
+          room: { ...stepped.room, seats },
+          out: [...stepped.out, ...awayOut(seats, seat.slot)],
+        }
+      },
+      Away: ({ sinceMs }): Stepped<W> =>
+        nowMs - sinceMs > FREE_SEAT_AFTER_MS
+          ? {
+              room: removeSeat(world, stepped.room, seat),
+              out: [
+                ...stepped.out,
+                ...Option.match(seat.socket, {
+                  onNone: () => [],
+                  onSome: socket => [close(socket)],
+                }),
+                { _tag: 'FreedSeat', playerId: seat.playerId },
+              ],
+            }
+          : stepped,
+    }),
+  )
 }
 
 // NOTE: the game is over. Everyone linked hears why; `Ended` carries the

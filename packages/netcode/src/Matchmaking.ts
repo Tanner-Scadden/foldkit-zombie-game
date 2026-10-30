@@ -43,6 +43,7 @@ export const QuickClient = Schema.TaggedUnion({
   Cancel: {},
 })
 export type QuickClient = typeof QuickClient.Type
+export type QuickHello = typeof QuickClient.cases.Hello.Type
 
 // NOTE: `offerPlayers` is 0 with no offer open, else the size of the group
 // offered to start now; `accepted` is how many of it said yes so far.

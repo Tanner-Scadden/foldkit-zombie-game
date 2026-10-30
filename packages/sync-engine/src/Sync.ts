@@ -21,7 +21,7 @@ import {
   PROTOCOL_VERSION,
   type ServerMessage,
 } from './Protocol'
-import type { Receipt, Replica } from './Replica'
+import { Receipt, type Replica } from './Replica'
 import { mutationVersions } from './Scope'
 
 // TRANSPORT
@@ -209,32 +209,43 @@ export const startSync = (
                 replica.receive(message),
                 fromSql,
               )
-              if (receipt._tag === 'Applied') {
-                if (!(yield* Ref.get(online))) {
-                  yield* Ref.set(online, true)
-                  yield* Ref.set(failures, 0)
-                  yield* setStatus(
-                    SyncStatus.cases.Online.make({ transport: transport.name }),
-                  )
-                  yield* push(true)
-                }
-              } else if (receipt._tag === 'Resync') {
-                yield* hello(receipt.mode)
-              } else if (receipt._tag === 'Confirmed') {
-                yield* settle(receipt.id)
-                yield* PubSub.publish(receipts, receipt)
-              } else if (receipt._tag === 'Rejected') {
-                yield* settle(receipt.id)
-                yield* PubSub.publish(receipts, receipt)
-              } else if (receipt._tag === 'Failed') {
-                if (receipt.code === 'Unauthorized') {
-                  yield* options.refreshCredentials ?? Effect.void
-                }
-                yield* PubSub.publish(receipts, receipt)
-                return yield* new TransportError({
-                  reason: `${receipt.code}: ${receipt.reason}`,
-                })
-              }
+              yield* Receipt.match(receipt, {
+                Applied: () =>
+                  Effect.gen(function* () {
+                    if (!(yield* Ref.get(online))) {
+                      yield* Ref.set(online, true)
+                      yield* Ref.set(failures, 0)
+                      yield* setStatus(
+                        SyncStatus.cases.Online.make({
+                          transport: transport.name,
+                        }),
+                      )
+                      yield* push(true)
+                    }
+                  }),
+                Resync: ({ mode }) => hello(mode),
+                Confirmed: confirmed =>
+                  Effect.andThen(
+                    settle(confirmed.id),
+                    PubSub.publish(receipts, confirmed),
+                  ),
+                Rejected: rejected =>
+                  Effect.andThen(
+                    settle(rejected.id),
+                    PubSub.publish(receipts, rejected),
+                  ),
+                Failed: failure =>
+                  Effect.gen(function* () {
+                    if (failure.code === 'Unauthorized') {
+                      yield* options.refreshCredentials ?? Effect.void
+                    }
+                    yield* PubSub.publish(receipts, failure)
+                    return yield* new TransportError({
+                      reason: `${failure.code}: ${failure.reason}`,
+                    })
+                  }),
+                Ignored: () => Effect.void,
+              })
             })
 
           const watchdog = Effect.gen(function* () {

@@ -6,10 +6,12 @@ import {
   Fiber,
   Layer,
   Option,
+  Schema,
   Semaphore,
   Stream,
   pipe,
 } from 'effect'
+import { defineTaggedUnion } from 'foldkit/schema'
 
 import type { RoomAccess } from './coop/roomReplica'
 import {
@@ -43,13 +45,18 @@ import type { PlayerDatabase } from './storeSqlite'
 // - LocalStorage: SQLite did not open in time, or not at all. The legacy
 //   localStorage copy is read and written for this page session, and
 //   nothing syncs.
-type Backend = Data.TaggedEnum<{
-  Sqlite: { readonly database: PlayerDatabase }
-  LocalStorage: { readonly reason: string }
-}>
-// NOTE: Backend holds a live database handle, which no Schema describes.
-// oxlint-disable-next-line no-restricted-properties
-const Backend = Data.taggedEnum<Backend>()
+// NOTE: a live database handle is never decoded or written out: its Schema
+// only names the type, checked by shape when a Backend is made.
+const OpenDatabase = Schema.declare(
+  (value: unknown): value is PlayerDatabase =>
+    typeof value === 'object' && value !== null && 'persistence' in value,
+)
+
+const Backend = defineTaggedUnion({
+  Sqlite: { database: OpenDatabase },
+  LocalStorage: { reason: Schema.String },
+})
+type Backend = typeof Backend.Type
 
 class StoreError extends Data.TaggedError('StoreError')<{
   readonly reason: string
@@ -101,7 +108,7 @@ const openSqlite: Effect.Effect<PlayerDatabase, StoreError> = pipe(
 )
 
 const loadFrom = (backend: Backend) =>
-  Backend.$match(backend, {
+  Backend.match(backend, {
     Sqlite: ({ database }) =>
       pipe(
         database.load,
@@ -128,7 +135,7 @@ const writeTo = (
   save: PlayerSave,
   changes: ReadonlyArray<PlayerChange>,
 ): Effect.Effect<Option.Option<string>, StoreError> =>
-  Backend.$match(backend, {
+  Backend.match(backend, {
     Sqlite: ({ database }) => {
       const written = pipe(
         database.write(save, changes),
@@ -174,7 +181,7 @@ export const layer: Layer.Layer<PlayerStore> = Layer.effect(
             Effect.succeed(Backend.LocalStorage({ reason: error.reason })),
           ),
           Effect.tap(opened =>
-            Backend.$match(opened, {
+            Backend.match(opened, {
               Sqlite: () => Effect.void,
               LocalStorage: ({ reason }) =>
                 Effect.logWarning(
@@ -191,7 +198,7 @@ export const layer: Layer.Layer<PlayerStore> = Layer.effect(
     yield* Effect.forkIn(backend, scope)
     const writes = yield* Semaphore.make(1)
     const database = Effect.flatMap(backend, current =>
-      Backend.$match(current, {
+      Backend.match(current, {
         Sqlite: ({ database: opened }) => Effect.succeed(opened),
         LocalStorage: () =>
           Effect.fail(new LinkError({ problem: 'Unavailable' })),
@@ -218,7 +225,7 @@ export const layer: Layer.Layer<PlayerStore> = Layer.effect(
         ),
       events: Stream.unwrap(
         Effect.map(backend, current =>
-          Backend.$match(current, {
+          Backend.match(current, {
             Sqlite: ({ database: opened }) => opened.events,
             LocalStorage: () => localOnly,
           }),
@@ -232,7 +239,7 @@ export const layer: Layer.Layer<PlayerStore> = Layer.effect(
           Effect.mapError(opened.redeemLinkCode(code), toLinkError),
         ),
       roomAccess: Effect.map(backend, current =>
-        Backend.$match(current, {
+        Backend.match(current, {
           Sqlite: ({ database: opened }) => opened.maybeRoomAccess,
           LocalStorage: () => Option.none<RoomAccess>(),
         }),

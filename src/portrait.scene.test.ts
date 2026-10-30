@@ -1,4 +1,4 @@
-import { Array, Option } from 'effect'
+import { Array, Match, Option } from 'effect'
 import { Canvas } from 'foldkit'
 import {
   Mount,
@@ -37,44 +37,39 @@ const rectsOf = (
   shapes: ReadonlyArray<Canvas.Shape>,
   offset: Readonly<{ x: number; y: number }>,
 ): ReadonlyArray<Canvas.Rect & Box> =>
-  Array.flatMap(shapes, shape => {
-    if (shape._tag === 'Group') {
-      return rectsOf(shape.shapes, {
-        x: offset.x + (shape.translate?.x ?? 0),
-        y: offset.y + (shape.translate?.y ?? 0),
-      })
-    } else if (shape._tag === 'Rect') {
-      return [
-        Canvas.Rect({ ...shape, x: shape.x + offset.x, y: shape.y + offset.y }),
-      ]
-    } else {
-      return []
-    }
-  })
+  Array.flatMap(shapes, shape =>
+    Match.value(shape).pipe(
+      Match.tag('Group', group =>
+        rectsOf(group.shapes, {
+          x: offset.x + (group.translate?.x ?? 0),
+          y: offset.y + (group.translate?.y ?? 0),
+        }),
+      ),
+      Match.tag('Rect', rect => [
+        Canvas.Rect({ ...rect, x: rect.x + offset.x, y: rect.y + offset.y }),
+      ]),
+      Match.orElse(() => []),
+    ),
+  )
 
 const boxesOf = (
   shapes: ReadonlyArray<Canvas.Shape>,
   offset: Readonly<{ x: number; y: number }>,
 ): ReadonlyArray<Box> =>
-  Array.flatMap(shapes, (shape): ReadonlyArray<Box> => {
-    if (shape._tag === 'Group') {
-      return boxesOf(shape.shapes, {
-        x: offset.x + (shape.translate?.x ?? 0),
-        y: offset.y + (shape.translate?.y ?? 0),
-      })
-    } else if (shape._tag === 'Rect' || shape._tag === 'Image') {
-      return [
-        {
-          x: shape.x + offset.x,
-          y: shape.y + offset.y,
-          width: shape.width,
-          height: shape.height,
-        },
-      ]
-    } else {
-      return []
-    }
-  })
+  Array.flatMap(shapes, (shape): ReadonlyArray<Box> =>
+    Match.value(shape).pipe(
+      Match.tag('Group', group =>
+        boxesOf(group.shapes, {
+          x: offset.x + (group.translate?.x ?? 0),
+          y: offset.y + (group.translate?.y ?? 0),
+        }),
+      ),
+      Match.tag('Rect', 'Image', ({ x, y, width, height }) => [
+        { x: x + offset.x, y: y + offset.y, width, height },
+      ]),
+      Match.orElse(() => []),
+    ),
+  )
 
 const PORTRAIT = { left: 0, top: 0, width: 390, height: 844 }
 const LANDSCAPE = { left: 0, top: 0, width: 844, height: 390 }

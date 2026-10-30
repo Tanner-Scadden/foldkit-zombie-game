@@ -31,7 +31,7 @@ import { settle } from '@munch/sync-engine/testing'
 
 import { defaultAppearance } from './model'
 import { LinkedDevices, PlayerScope } from './playerScope'
-import { PlayerChange, changesBetween } from './playerSync'
+import { PlayerChange, StoreEvent, changesBetween } from './playerSync'
 import {
   type PlayerSave,
   SAVE_KEY,
@@ -648,11 +648,11 @@ describe('two devices syncing one player', () => {
           Stream.runForEach(event =>
             Ref.update(phoneEvents, all => [
               ...all,
-              event._tag === 'SyncStatus'
-                ? event.state._tag
-                : event._tag === 'ScopeStatus'
-                  ? `Scope${event.status._tag}`
-                  : event.save.settings.music,
+              StoreEvent.match(event, {
+                SyncStatus: ({ state }) => state._tag,
+                ScopeStatus: ({ status }) => `Scope${status._tag}`,
+                SyncedSave: ({ save }) => save.settings.music,
+              }),
             ]),
           ),
           Effect.forkScoped,

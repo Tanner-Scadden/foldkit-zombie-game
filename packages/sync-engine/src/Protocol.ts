@@ -94,6 +94,7 @@ export const ClientMessage = Schema.TaggedUnion({
   Ping: {},
 })
 export type ClientMessage = typeof ClientMessage.Type
+export type HelloMessage = typeof ClientMessage.cases.Hello.Type
 
 // SERVER TO CLIENT
 
@@ -114,6 +115,10 @@ export const ServerMessage = Schema.TaggedUnion({
   Pong: {},
 })
 export type ServerMessage = typeof ServerMessage.Type
+export type SnapshotMessage = typeof ServerMessage.cases.Snapshot.Type
+export type DeltasMessage = typeof ServerMessage.cases.Deltas.Type
+export type AckedMessage = typeof ServerMessage.cases.Acked.Type
+export type RejectedMessage = typeof ServerMessage.cases.Rejected.Type
 
 // NOTE: the HTTP fallback sends a batch of client messages, the first one a
 // Hello, and gets back everything the server would have sent on a socket.

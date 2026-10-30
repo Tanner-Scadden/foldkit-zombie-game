@@ -22,7 +22,7 @@ import { modifyFields } from 'foldkit/struct'
 import { PLAYER_MAX_HP } from '../../src/constants'
 import { update } from '../../src/main'
 import { Message } from '../../src/message'
-import { type Model, initialModel } from '../../src/model'
+import { type Model, Phase, initialModel } from '../../src/model'
 import { asVeteran } from '../../src/veteran'
 
 export const FIXED_STEP_MS = 1000 / 60
@@ -279,25 +279,25 @@ const nearestZombie = (model: Model) =>
         : best
     }, undefined)
 
-// The input Messages for one frame, before the frame ticks.
-const drive = (
+// Through Preparation: let go of the trigger, close the stall, and start
+// the wave.
+const prepare = (model: Model, count: { messages: number }): Model => {
+  const still = holdKeys(model, [], count)
+  const released =
+    still.input.mouseButton._tag === 'Held'
+      ? send(still, Message.ReleasedPointer({ pointerId: 1 }), count)
+      : still
+  return released.shop._tag === 'Browsing'
+    ? tapKey(released, 'Escape', count)
+    : tapKey(released, 'Enter', count)
+}
+
+// In a wave: walk the pattern, and aim and fire at the nearest zombie.
+const fight = (
   model: Model,
   frame: number,
   count: { messages: number },
 ): Model => {
-  if (model.phase._tag === 'Preparation') {
-    const still = holdKeys(model, [], count)
-    const released =
-      still.input.mouseButton._tag === 'Held'
-        ? send(still, Message.ReleasedPointer({ pointerId: 1 }), count)
-        : still
-    return released.shop._tag === 'Browsing'
-      ? tapKey(released, 'Escape', count)
-      : tapKey(released, 'Enter', count)
-  }
-  if (model.phase._tag !== 'Wave') {
-    return model
-  }
   const moved = holdKeys(
     model,
     MOVE_PATTERN[Math.floor(frame / FRAMES_PER_MOVE) % MOVE_PATTERN.length] ??
@@ -329,6 +329,21 @@ const drive = (
         count,
       )
 }
+
+// The input Messages for one frame, before the frame ticks.
+const drive = (
+  model: Model,
+  frame: number,
+  count: { messages: number },
+): Model =>
+  Phase.matchOrElse(
+    model.phase,
+    {
+      Preparation: () => prepare(model, count),
+      Wave: () => fight(model, frame, count),
+    },
+    () => model,
+  )
 
 export const startedRun = (seed: number, mode: ScenarioMode): Model => {
   const count = { messages: 0 }
@@ -385,11 +400,15 @@ export type ScenarioReport = Readonly<{
 }>
 
 const waveOf = (model: Model): number =>
-  model.phase._tag === 'Preparation' || model.phase._tag === 'Wave'
-    ? model.phase.wave
-    : model.phase._tag === 'GameOver'
-      ? model.phase.wave
-      : 0
+  Phase.matchOrElse(
+    model.phase,
+    {
+      Preparation: ({ wave }) => wave,
+      Wave: ({ wave }) => wave,
+      GameOver: ({ wave }) => wave,
+    },
+    () => 0,
+  )
 
 export const runScenario = (options: ScenarioOptions): ScenarioReport => {
   const count = { messages: 0 }

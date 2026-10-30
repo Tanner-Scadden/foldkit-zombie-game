@@ -1,4 +1,4 @@
-import { Array, Option, Record, String, pipe } from 'effect'
+import { Array, Match, Option, Record, String, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
 import type { PickupKind, TrapKind, WeaponKind, ZombieKind } from './model'
@@ -373,36 +373,41 @@ const isPlainTranslate = (group: Canvas.Group): boolean =>
   isWhole(group.translate?.x) &&
   isWhole(group.translate?.y)
 
+const isWholeRect = (rect: Canvas.Rect): boolean =>
+  rect.stroke === undefined &&
+  Array.every([rect.x, rect.y, rect.width, rect.height], isWhole)
+
 const shapeRuns = (
   shape: Canvas.Shape,
   offsetX: number,
   offsetY: number,
-): Option.Option<ReadonlyArray<PixelRun>> => {
-  if (
-    shape._tag === 'Rect' &&
-    shape.stroke === undefined &&
-    shape.fill !== undefined &&
-    Array.every([shape.x, shape.y, shape.width, shape.height], isWhole)
-  ) {
-    return Option.some([
-      {
-        x: shape.x + offsetX,
-        y: shape.y + offsetY,
-        width: shape.width,
-        height: shape.height,
-        color: shape.fill,
-      },
-    ])
-  } else if (shape._tag === 'Group' && isPlainTranslate(shape)) {
-    return flattenRects(
-      shape.shapes,
-      offsetX + (shape.translate?.x ?? 0),
-      offsetY + (shape.translate?.y ?? 0),
-    )
-  } else {
-    return Option.none()
-  }
-}
+): Option.Option<ReadonlyArray<PixelRun>> =>
+  Match.valueTags(shape, {
+    Rect: rect =>
+      rect.fill !== undefined && isWholeRect(rect)
+        ? Option.some([
+            {
+              x: rect.x + offsetX,
+              y: rect.y + offsetY,
+              width: rect.width,
+              height: rect.height,
+              color: rect.fill,
+            },
+          ])
+        : Option.none(),
+    Group: group =>
+      isPlainTranslate(group)
+        ? flattenRects(
+            group.shapes,
+            offsetX + (group.translate?.x ?? 0),
+            offsetY + (group.translate?.y ?? 0),
+          )
+        : Option.none(),
+    Circle: () => Option.none(),
+    Path: () => Option.none(),
+    Text: () => Option.none(),
+    Image: () => Option.none(),
+  })
 
 const flattenRects = (
   shapes: ReadonlyArray<Canvas.Shape>,

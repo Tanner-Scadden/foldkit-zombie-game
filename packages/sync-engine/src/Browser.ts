@@ -27,9 +27,10 @@ import {
   SessionResponse,
 } from './Identity'
 import {
-  type ClientMessage,
+  ClientMessage,
   ExchangeReply,
-  type ServerMessage,
+  type HelloMessage,
+  ServerMessage,
   decodeServerMessage,
   encodeClientMessage,
   encodeExchange,
@@ -186,9 +187,7 @@ export const httpTransport = (origin: string): Transport => ({
         ServerMessage,
         TransportError | Cause.Done
       >()
-      const hello = yield* Ref.make<
-        Option.Option<Extract<ClientMessage, { _tag: 'Hello' }>>
-      >(Option.none())
+      const hello = yield* Ref.make<Option.Option<HelloMessage>>(Option.none())
       const lock = yield* Semaphore.make(1)
 
       const seen = (reply: ReadonlyArray<ServerMessage>) =>
@@ -198,14 +197,15 @@ export const httpTransport = (origin: string): Transport => ({
               reply,
               current.lastSeq,
               (seq, message) =>
-                message._tag === 'Snapshot'
-                  ? Math.max(seq, message.seq)
-                  : message._tag === 'Deltas'
-                    ? Math.max(
-                        seq,
-                        ...Array.map(message.deltas, delta => delta.seq),
-                      )
-                    : seq,
+                ServerMessage.matchOrElse(
+                  message,
+                  {
+                    Snapshot: snapshot => Math.max(seq, snapshot.seq),
+                    Deltas: ({ deltas }) =>
+                      Math.max(seq, ...Array.map(deltas, delta => delta.seq)),
+                  },
+                  () => seq,
+                ),
             )
             return { ...current, lastSeq: newest, mode: 'Catchup' as const }
           }),
@@ -248,11 +248,15 @@ export const httpTransport = (origin: string): Transport => ({
           .pipe(Effect.tapError(error => Queue.fail(inbox, error)))
 
       const send = (message: ClientMessage) =>
-        message._tag === 'Hello'
-          ? Effect.andThen(Ref.set(hello, Option.some(message)), exchange([]))
-          : message._tag === 'Ping'
-            ? exchange([])
-            : exchange([message])
+        ClientMessage.match(message, {
+          Hello: helloMessage =>
+            Effect.andThen(
+              Ref.set(hello, Option.some(helloMessage)),
+              exchange([]),
+            ),
+          Ping: () => exchange([]),
+          Push: push => exchange([push]),
+        })
 
       yield* pipe(
         Effect.sleep(HTTP_SESSION),
