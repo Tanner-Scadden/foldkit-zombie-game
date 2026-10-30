@@ -84,31 +84,45 @@ const BYTES_PER_PIXEL = 4
 
 const rowLength = (width: number): number => 1 + width * BYTES_PER_PIXEL
 
-const colorAt = (lines: Uint8Array, at: number): Rgba => ({
-  r: lines[at] ?? 0,
-  g: lines[at + 1] ?? 0,
-  b: lines[at + 2] ?? 0,
-  a: lines[at + 3] ?? 0,
-})
-
+// NOTE: plain loops over the byte buffer, since this runs for every pixel of
+// every sprite as the game loads, behind the splash. A callback per pixel
+// cost several times more.
 const paintFill =
   (lines: Uint8Array, width: number, height: number) =>
   (fill: Fill): void => {
-    const columns = Array.range(
-      Math.max(0, fill.x),
-      Math.min(width, fill.x + fill.width) - 1,
-    )
-    const rows = Array.range(
-      Math.max(0, fill.y),
-      Math.min(height, fill.y + fill.height) - 1,
-    )
-    Array.forEach(rows, y =>
-      Array.forEach(columns, x => {
-        const at = y * rowLength(width) + 1 + x * BYTES_PER_PIXEL
-        const { r, g, b, a } = blend(colorAt(lines, at), fill.color)
-        lines.set(a === 0 ? [0, 0, 0, 0] : [r, g, b, a], at)
-      }),
-    )
+    const left = Math.max(0, fill.x)
+    const right = Math.min(width, fill.x + fill.width)
+    const top = Math.max(0, fill.y)
+    const bottom = Math.min(height, fill.y + fill.height)
+    const over = fill.color
+    for (let y = top; y < bottom; y++) {
+      const rowStart = y * rowLength(width) + 1
+      for (let x = left; x < right; x++) {
+        const at = rowStart + x * BYTES_PER_PIXEL
+        if (over.a === 255) {
+          lines[at] = over.r
+          lines[at + 1] = over.g
+          lines[at + 2] = over.b
+          lines[at + 3] = 255
+          continue
+        }
+        const under: Rgba = {
+          r: lines[at] ?? 0,
+          g: lines[at + 1] ?? 0,
+          b: lines[at + 2] ?? 0,
+          a: lines[at + 3] ?? 0,
+        }
+        const { r, g, b, a } = blend(under, over)
+        if (a === 0) {
+          lines.fill(0, at, at + BYTES_PER_PIXEL)
+        } else {
+          lines[at] = r
+          lines[at + 1] = g
+          lines[at + 2] = b
+          lines[at + 3] = a
+        }
+      }
+    }
   }
 
 // NOTE: the scanlines are painted into one local byte buffer in place, one
@@ -138,26 +152,33 @@ const CRC_TABLE: ReadonlyArray<number> = Array.makeBy(256, byte =>
   ),
 )
 
-const crc32 = (bytes: Uint8Array): number =>
-  (bytes.reduce(
-    (crc, byte) => ((CRC_TABLE[(crc ^ byte) & 0xff] ?? 0) ^ (crc >>> 8)) >>> 0,
-    0xffffffff,
-  ) ^
-    0xffffffff) >>>
-  0
+const crc32 = (bytes: Uint8Array): number => {
+  let crc = 0xffffffff
+  for (let index = 0; index < bytes.length; index++) {
+    crc = (CRC_TABLE[(crc ^ (bytes[index] ?? 0)) & 0xff] ?? 0) ^ (crc >>> 8)
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
 
 const ADLER_MOD = 65521
-const ADLER_HIGH = 65536
 
-// NOTE: both running sums stay under 65521, so they pack into one number as
-// high * 65536 + low and the reduce allocates nothing per byte.
+// NOTE: the largest run of bytes whose sums cannot pass 2^32 before the
+// modulo, as in zlib, so the loop takes the modulo once per run.
+const ADLER_RUN = 5552
+
 const adler32 = (bytes: Uint8Array): number => {
-  const packed = bytes.reduce((sums, byte) => {
-    const low = ((sums % ADLER_HIGH) + byte) % ADLER_MOD
-    const high = (Math.floor(sums / ADLER_HIGH) + low) % ADLER_MOD
-    return high * ADLER_HIGH + low
-  }, 1)
-  return packed >>> 0
+  let low = 1
+  let high = 0
+  for (let start = 0; start < bytes.length; start += ADLER_RUN) {
+    const end = Math.min(bytes.length, start + ADLER_RUN)
+    for (let index = start; index < end; index++) {
+      low += bytes[index] ?? 0
+      high += low
+    }
+    low %= ADLER_MOD
+    high %= ADLER_MOD
+  }
+  return ((high << 16) | low) >>> 0
 }
 
 const uint32 = (value: number): ReadonlyArray<number> => [

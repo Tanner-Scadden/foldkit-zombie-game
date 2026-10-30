@@ -17,41 +17,40 @@ type PixelRun = Readonly<{
 
 export const TRANSPARENT = '.'
 
-const appendToRowRuns =
-  (y: number, palette: Palette) =>
-  (runs: ReadonlyArray<PixelRun>, symbol: string, x: number) => {
-    const maybeColor = Option.fromNullishOr(palette[symbol])
-    if (symbol === TRANSPARENT || Option.isNone(maybeColor)) {
-      return runs
-    }
-
-    const color = maybeColor.value
-    return Option.match(Array.last(runs), {
-      onNone: () => Array.append(runs, { x, y, width: 1, height: 1, color }),
-      onSome: lastRun =>
-        lastRun.color === color && lastRun.x + lastRun.width === x
-          ? Array.append(Array.dropRight(runs, 1), {
-              x: lastRun.x,
-              y,
-              width: lastRun.width + 1,
-              height: 1,
-              color,
-            })
-          : Array.append(runs, { x, y, width: 1, height: 1, color }),
-    })
-  }
-
+// NOTE: one pass along the row that grows the last run in place, since this
+// runs for every row of every sprite as the game loads. Copying the run list
+// for each pixel made a long row cost the square of its length.
 const rowRuns = (
   row: string,
   y: number,
   palette: Palette,
-): ReadonlyArray<PixelRun> =>
-  pipe(
-    String.split(row, ''),
-    Array.reduce<ReadonlyArray<PixelRun>, string>([], (runs, symbol, x) =>
-      appendToRowRuns(y, palette)(runs, symbol, x),
-    ),
-  )
+): ReadonlyArray<PixelRun> => {
+  const runs: Array<{
+    x: number
+    y: number
+    width: number
+    height: number
+    color: string
+  }> = []
+  for (let x = 0; x < row.length; x++) {
+    const symbol = row.charAt(x)
+    const color = palette[symbol]
+    if (symbol === TRANSPARENT || color === undefined) {
+      continue
+    }
+    const last = runs[runs.length - 1]
+    if (
+      last !== undefined &&
+      last.color === color &&
+      last.x + last.width === x
+    ) {
+      last.width += 1
+    } else {
+      runs.push({ x, y, width: 1, height: 1, color })
+    }
+  }
+  return runs
+}
 
 const isVerticalContinuation = (above: PixelRun, below: PixelRun): boolean =>
   above.x === below.x &&
