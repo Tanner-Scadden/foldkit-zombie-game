@@ -2035,6 +2035,18 @@ const startScene = () =>
 
 let running = startScene()
 
+// NOTE: a disposed runtime puts its empty container back on its own time,
+// so the next scene waits for `#root` before it starts.
+const containerRestored = async () => {
+  for (let frame = 0; frame < 120; frame++) {
+    if (document.getElementById('root') !== null) {
+      return
+    }
+    await new Promise(resolve => requestAnimationFrame(resolve))
+  }
+  throw new Error('the harness container did not come back')
+}
+
 // NOTE: `window.__loadScene('wave=3&start=wave')` swaps the scene in place:
 // the runtime stops, as a page leaving would, and starts again on the new
 // scene's Model. It resets what a new page would: open dialogs, focus, full
@@ -2056,6 +2068,7 @@ w.__loadScene = async (query: string) => {
   window.scrollTo(0, 0)
   maybeCarriedModel = Option.some(w.__model)
   running.dispose()
+  await containerRestored()
   w.__sceneError = undefined
   useConfig(next)
   framesRun = 0
