@@ -1071,15 +1071,15 @@
   right: -4px;
 }
 
-/* UPDATE GIFT: a wrapped present with a NEW VERSION tag that rattles now
-   and then. A tap flings the lid and pops a Groaner out of the box. */
+/* UPDATE GIFT: a wrapped present with a little paper NEW! tag on a string
+   tied to its bow. It rattles now and then, and the tag swings with it. A
+   tap flings the lid and pops a Groaner out of the box. The whole present is
+   the button, a corner button's size; the tag hangs off its left side, where
+   the corner has nothing else. */
 
 .home-stage .home-gift {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  width: auto;
-  padding: 0 8px 0 4px;
+  position: relative;
+  overflow: visible;
   border-color: var(--menu-pink);
   background:
     linear-gradient(
@@ -1153,23 +1153,56 @@
 }
 
 .gift-tag {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2px 5px;
-  border-radius: 3px 8px 8px 3px;
-  background: var(--menu-gold);
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
-  color: #2b1840;
-  font: bold clamp(10px, 2.4 * var(--a), 18px) / 1.05 var(--menu-font);
-  letter-spacing: 0.04em;
-  rotate: -4deg;
+  --tag-font: clamp(9px, 1.5 * var(--a), 11px);
+  position: absolute;
+  right: 80%;
+  top: 54%;
+  display: block;
+  rotate: 16deg;
+  transform-origin: 100% 50%;
   pointer-events: none;
 }
 
-.gift-tag-new {
+/* NOTE: the string, from the tag's tied end up to the bow. */
+.gift-tag::after {
+  content: '';
+  position: absolute;
+  left: calc(100% - 6px);
+  bottom: 50%;
+  width: 2px;
+  height: calc(var(--tag-font) * 3);
+  background: var(--menu-gold);
+  rotate: 24deg;
+  transform-origin: 50% 100%;
+}
+
+/* NOTE: the paper, its pointed end punched with the string's hole. */
+.gift-tag-text {
+  display: block;
+  padding: 2px 8px 2px 3px;
+  clip-path: polygon(
+    0 0,
+    calc(100% - 4px) 0,
+    100% 50%,
+    calc(100% - 4px) 100%,
+    0 100%
+  );
+  background:
+    radial-gradient(
+      circle at calc(100% - 5px) 50%,
+      #2b1840 1.5px,
+      transparent 2px
+    ),
+    #fff4c9;
+  box-shadow: inset -2px -2px 0 rgba(176, 40, 122, 0.25);
   color: #b0287a;
-  font-size: 1.1em;
+  font: bold var(--tag-font) / 1 var(--menu-font);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.home-gift[data-state='Wrapped'] .gift-tag {
+  animation: gift-tag-swing 3.6s ease-in-out infinite;
 }
 
 .home-gift[data-state='Unwrapping'] .gift-lid {
@@ -1254,13 +1287,37 @@
   }
 }
 
+@keyframes gift-tag-swing {
+  0%,
+  78%,
+  100% {
+    rotate: 16deg;
+  }
+
+  82% {
+    rotate: 2deg;
+  }
+
+  86% {
+    rotate: 26deg;
+  }
+
+  90% {
+    rotate: 10deg;
+  }
+
+  94% {
+    rotate: 18deg;
+  }
+}
+
 @keyframes gift-tag-wave {
   from {
-    rotate: -8deg;
+    rotate: 4deg;
   }
 
   to {
-    rotate: 6deg;
+    rotate: 30deg;
   }
 }
 

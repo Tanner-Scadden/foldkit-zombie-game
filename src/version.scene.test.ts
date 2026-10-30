@@ -99,12 +99,12 @@ describe('the update gift', () => {
     )
   })
 
-  test('wears a NEW VERSION tag', () => {
+  test('wears a little NEW! tag', () => {
     scene(
       { update, view },
       given(withNewerBuild(initialModel)),
       measureSurface,
-      expect(updateChip).toHaveText('NEWVERSION'),
+      expect(updateChip).toHaveText('NEW!'),
     )
   })
 

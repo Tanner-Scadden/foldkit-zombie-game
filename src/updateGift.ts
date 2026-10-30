@@ -47,9 +47,9 @@ const giftArtView = (h: HtmlBuilder<Message>): Html =>
 
 export const UPDATE_GIFT_LABEL = 'Update ready: tap to get it'
 
-// NOTE: a wrapped present with a NEW VERSION tag, under the gear on the home
-// menu. It rattles now and then; a tap unwraps it and reloads onto the new
-// build.
+// NOTE: a wrapped present under the gear on the home menu, with a little
+// paper NEW! tag on a string tied to its bow. It rattles now and then, the tag
+// swinging with it; a tap unwraps it and reloads onto the new build.
 export const updateGiftView = (model: Model, h: HtmlBuilder<Message>): Html =>
   isUpdateGiftShown(model)
     ? h.button(
@@ -66,10 +66,7 @@ export const updateGiftView = (model: Model, h: HtmlBuilder<Message>): Html =>
           giftArtView(h),
           h.span(
             [h.Class('gift-tag'), h.AriaHidden(true)],
-            [
-              h.span([h.Class('gift-tag-new')], ['NEW']),
-              h.span([h.Class('gift-tag-version')], ['VERSION']),
-            ],
+            [h.span([h.Class('gift-tag-text')], ['NEW!'])],
           ),
         ],
       )
