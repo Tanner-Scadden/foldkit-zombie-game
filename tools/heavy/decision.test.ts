@@ -13,124 +13,216 @@ import {
   LockAction,
   type LockHolder,
   LockState,
-  MAX_WORKERS,
+  MAX_CPU_WORKERS,
+  MAX_OTHER_WORKERS,
   REPORT_EVERY_MS,
+  type SharedSlot,
   type Snapshot,
   allowedWorkers,
   batchesUsed,
   budgetKey,
   classifyLock,
+  costOf,
   decide,
   decodeLedger,
+  decodeLockHolder,
   encodeLedger,
   encodeLockHolder,
   formatDuration,
   freeSlot,
+  headroom,
   isSameHolder,
   jobClassOf,
   jobKindOf,
   maybeConflictAfterTaking,
   parseArguments,
+  recentCost,
   recordBatch,
   resetBudget,
+  sharedCostOf,
   shouldReport,
   summaryLine,
+  targetLoad,
+  testWorkers,
 } from './decision'
+
+const NOW = 1_700_000_600_000
+const LONG_AGO = NOW - 10 * 60_000
 
 const HOLDER: LockHolder = {
   pid: 4212,
   command: 'bun tools/balance/simulate.ts 100',
   cwd: '/repo',
-  startedAt: 1_700_000_000_000,
+  startedAt: LONG_AGO,
 }
+const BALANCE: LockHolder = { ...HOLDER, jobClass: 'Cpu', cost: 4 }
+const PERF: LockHolder = {
+  pid: 4300,
+  command: 'bun tools/audit/perf.ts',
+  cwd: '/repo',
+  startedAt: LONG_AGO,
+  jobClass: 'Timing',
+  cost: 1,
+}
+const TAPS: LockHolder = {
+  pid: 5101,
+  command: 'bun tools/audit/taps.ts',
+  cwd: '/repo',
+  startedAt: LONG_AGO,
+  jobClass: 'Shared',
+  cost: 3,
+}
+const SHOTS: LockHolder = {
+  ...TAPS,
+  pid: 5102,
+  command: 'bun shots9.ts',
+  cost: 1,
+}
+const OG: LockHolder = { ...SHOTS, pid: 5103, command: 'bun og.ts' }
+const ICONS: LockHolder = { ...SHOTS, pid: 5104, command: 'bun icons.ts' }
 
-const IDLE: Snapshot = {
+const held = (slot: number, holder: LockHolder): SharedSlot => ({
+  slot,
+  lock: LockState.Held({ holder }),
+})
+
+const fresh = (holder: LockHolder): LockHolder => ({
+  ...holder,
+  startedAt: NOW - 10_000,
+})
+
+const waiting = (holder: LockHolder, arrivedBeforeMs: number): LockHolder => ({
+  ...holder,
+  startedAt: NOW - 2000 - arrivedBeforeMs,
+})
+
+// NOTE: 12 cores, a target of 8.4, a load of 2, nothing running.
+const BASE: Snapshot = {
   load: 2,
   cores: 12,
-  jobClass: JobClass.Exclusive(),
-  sharedSlots: 3,
+  target: 8.4,
+  now: NOW,
+  jobClass: JobClass.Cpu(),
+  cost: 1,
+  maybeRequestedWorkers: Option.none(),
   lock: LockState.Free(),
   shared: [],
-  exclusiveWaiters: [],
-  arrivedAt: 1_700_000_100_000,
+  waiters: [],
+  extraRecent: [],
+  arrivedAt: NOW - 1000,
   batchesUsed: 0,
-  requestedWorkers: 4,
   job: JobKind.Balance(),
   budgetPolicy: BudgetPolicy.Enforced(),
+}
+const TIMING: Snapshot = {
+  ...BASE,
+  jobClass: JobClass.Timing(),
+  job: JobKind.Other(),
+}
+const CPU = BASE
+const SHARED: Snapshot = {
+  ...BASE,
+  jobClass: JobClass.Shared(),
+  cost: 3,
+  job: JobKind.Other(),
 }
 
 const alwaysAlive = () => true
 const neverAlive = () => false
 
-describe('allowedWorkers', () => {
-  test('keeps a request at or under the cap on a quiet machine', () => {
-    expect(allowedWorkers(1, 2, 12)).toBe(1)
-    expect(allowedWorkers(3, 2, 12)).toBe(3)
-    expect(allowedWorkers(4, 6, 12)).toBe(4)
+const isRun = (decision: Decision) => Decision.$is('Run')(decision)
+const isWait = (decision: Decision) => Decision.$is('Wait')(decision)
+const workersOf = (decision: Decision) =>
+  Decision.$is('Run')(decision) ? decision.workers : -1
+
+describe('the budget', () => {
+  test('aims at 70% of the cores unless HEAVY_TARGET_LOAD is set', () => {
+    expect(targetLoad(12, Option.none())).toBeCloseTo(8.4)
+    expect(targetLoad(12, Option.some(6))).toBe(6)
   })
 
-  test('caps a big request at the maximum', () => {
-    expect(allowedWorkers(8, 0, 12)).toBe(MAX_WORKERS)
-    expect(allowedWorkers(64, 0, 64)).toBe(MAX_WORKERS)
+  test('counts only the jobs started in the last minute', () => {
+    expect(
+      recentCost({
+        ...BASE,
+        lock: LockState.Held({ holder: fresh(BALANCE) }),
+        shared: [held(1, fresh(TAPS)), held(2, SHOTS)],
+        extraRecent: [{ ...fresh(SHOTS), pid: 9, cost: 2 }],
+      }),
+    ).toBe(4 + 3 + 2)
+    expect(headroom(BASE)).toBeCloseTo(6.4)
   })
 
-  test('raises a zero or negative request to one worker', () => {
-    expect(allowedWorkers(0, 0, 12)).toBe(1)
-    expect(allowedWorkers(-3, 0, 12)).toBe(1)
+  test('estimates a slot from an older guard by its command', () => {
+    expect(
+      costOf({ pid: 1, command: 'bun taps.ts', cwd: '/', startedAt: 0 }),
+    ).toBe(3)
+    expect(
+      costOf({ pid: 1, command: 'bun og.ts', cwd: '/', startedAt: 0 }),
+    ).toBe(1)
   })
 
-  test('cuts workers once the load passes half the cores', () => {
-    expect(allowedWorkers(4, 6.1, 12)).toBe(2)
-    expect(allowedWorkers(4, 7.9, 12)).toBe(2)
-    expect(allowedWorkers(4, 8.1, 12)).toBe(1)
-    expect(allowedWorkers(4, 11.5, 12)).toBe(1)
-  })
-
-  test('never goes under one worker, even past the core count', () => {
-    expect(allowedWorkers(4, 30, 12)).toBe(1)
-  })
-
-  test('never raises a small request when the load is high', () => {
-    expect(allowedWorkers(1, 6.5, 12)).toBe(1)
+  test('costs a Shared job one core per browser context', () => {
+    const env = (values: Record<string, string>) => (key: string) =>
+      Option.fromNullishOr(values[key])
+    expect(sharedCostOf(['bun', 'tools/audit/taps.ts'], env({}))).toBe(3)
+    expect(
+      sharedCostOf(['bun', 'tools/audit/taps.ts'], env({ TAPS_PARALLEL: '1' })),
+    ).toBe(1)
+    expect(
+      sharedCostOf(['bun', 'shots34.ts'], env({ SHOTS_PARALLEL: '2' })),
+    ).toBe(2)
+    expect(sharedCostOf(['bun', 'shots9.ts'], env({}))).toBe(1)
+    expect(sharedCostOf(['bun', 'og.ts'], env({ TAPS_PARALLEL: '3' }))).toBe(1)
   })
 })
 
-describe('decide', () => {
-  test('runs on a quiet machine with a free lock', () => {
-    expect(decide(IDLE)).toStrictEqual(
+describe('Timing jobs', () => {
+  test('run alone on a quiet machine, holding the solo lock', () => {
+    expect(decide(TIMING)).toStrictEqual(
       Decision.Run({
-        hold: Hold.Exclusive(),
-        workers: 4,
+        hold: Hold.Solo(),
+        workers: MAX_OTHER_WORKERS,
+        cost: 1,
         lockAction: LockAction.Create(),
         notes: [],
       }),
     )
   })
 
-  test('waits while the load is over the core count', () => {
-    expect(decide({ ...IDLE, load: 24.1 })).toStrictEqual(
+  test('keep the old load gate: wait over the core count, run at it', () => {
+    expect(decide({ ...TIMING, load: 24.1 })).toStrictEqual(
       Decision.Wait({ reason: 'load 24.1 over 12 cores' }),
     )
+    expect(isRun(decide({ ...TIMING, load: 12 }))).toBe(true)
   })
 
-  test('runs at exactly the core count', () => {
-    expect(Decision.$is('Run')(decide({ ...IDLE, load: 12 }))).toBe(true)
-  })
-
-  test('waits while a live job holds the lock', () => {
+  test('wait for every running Shared job', () => {
     expect(
-      decide({ ...IDLE, lock: LockState.Held({ holder: HOLDER }) }),
+      decide({ ...TIMING, shared: [held(1, TAPS), held(2, SHOTS)] }),
     ).toStrictEqual(
       Decision.Wait({
-        reason: 'lock held by pid 4212: bun tools/balance/simulate.ts 100',
+        reason:
+          '2 shared jobs running (pid 5101: bun tools/audit/taps.ts; pid 5102: bun shots9.ts)',
       }),
     )
   })
 
-  test('names both the load and the holder when both block', () => {
+  test('wait for a CPU job', () => {
+    expect(
+      decide({ ...TIMING, lock: LockState.Held({ holder: BALANCE }) }),
+    ).toStrictEqual(
+      Decision.Wait({
+        reason:
+          'a CPU job is running (pid 4212: bun tools/balance/simulate.ts 100)',
+      }),
+    )
+  })
+
+  test('name both the load and the holder when both block', () => {
     expect(
       decide({
-        ...IDLE,
+        ...TIMING,
         load: 24.1,
         lock: LockState.Held({ holder: HOLDER }),
       }),
@@ -142,13 +234,14 @@ describe('decide', () => {
     )
   })
 
-  test('takes over a stale lock', () => {
+  test('take over a stale or corrupt lock', () => {
     expect(
-      decide({ ...IDLE, lock: LockState.Stale({ holder: HOLDER }) }),
+      decide({ ...TIMING, lock: LockState.Stale({ holder: HOLDER }) }),
     ).toStrictEqual(
       Decision.Run({
-        hold: Hold.Exclusive(),
-        workers: 4,
+        hold: Hold.Solo(),
+        workers: MAX_OTHER_WORKERS,
+        cost: 1,
         lockAction: LockAction.TakeOver({
           reason:
             'Taking over a stale lock: pid 4212: bun tools/balance/simulate.ts 100 is gone.',
@@ -156,11 +249,8 @@ describe('decide', () => {
         notes: [],
       }),
     )
-  })
-
-  test('takes over a lock file that does not decode', () => {
     const decision = decide({
-      ...IDLE,
+      ...TIMING,
       lock: LockState.Unreadable({ text: '{"pid":' }),
     })
     expect(
@@ -169,371 +259,273 @@ describe('decide', () => {
     ).toBe(true)
   })
 
-  test('notes when it lowers the workers of a balance run', () => {
-    expect(decide({ ...IDLE, load: 8.5, requestedWorkers: 6 })).toStrictEqual(
-      Decision.Run({
-        hold: Hold.Exclusive(),
-        workers: 1,
-        lockAction: LockAction.Create(),
-        notes: ['WORKERS lowered from 6 to 1 (cap 4, load 8.5 on 12 cores).'],
-      }),
-    )
-  })
-
-  test('lowers workers without a note for a job that is not balance', () => {
+  test('ignore stale and corrupt slots', () => {
     expect(
       decide({
-        ...IDLE,
-        load: 8.5,
-        requestedWorkers: 6,
-        job: JobKind.Other(),
-      }),
-    ).toStrictEqual(
-      Decision.Run({
-        hold: Hold.Exclusive(),
-        workers: 1,
-        lockAction: LockAction.Create(),
-        notes: [],
-      }),
-    )
-  })
-
-  test('says nothing about the budget for the first two batches', () => {
-    expect(decide({ ...IDLE, batchesUsed: 0 })).toStrictEqual(decide(IDLE))
-    expect(decide({ ...IDLE, batchesUsed: BUDGET_WARN_AT - 2 })).toStrictEqual(
-      decide(IDLE),
-    )
-  })
-
-  test('warns on the third batch and after', () => {
-    expect(decide({ ...IDLE, batchesUsed: BUDGET_WARN_AT - 1 })).toStrictEqual(
-      Decision.Run({
-        hold: Hold.Exclusive(),
-        workers: 4,
-        lockAction: LockAction.Create(),
-        notes: [
-          'Third balance batch on this branch; prefer accepting near-target results.',
-        ],
-      }),
-    )
-    expect(decide({ ...IDLE, batchesUsed: 4 })).toStrictEqual(
-      Decision.Run({
-        hold: Hold.Exclusive(),
-        workers: 4,
-        lockAction: LockAction.Create(),
-        notes: [
-          'Fifth balance batch on this branch; prefer accepting near-target results.',
-        ],
-      }),
-    )
-  })
-
-  test('refuses the sixth batch', () => {
-    const decision = decide({ ...IDLE, batchesUsed: BUDGET_REFUSE_AT - 1 })
-    expect(Decision.$is('Refuse')(decision)).toBe(true)
-  })
-
-  test('refuses before it waits, so a refused run never queues', () => {
-    expect(
-      Decision.$is('Refuse')(
-        decide({
-          ...IDLE,
-          load: 30,
-          lock: LockState.Held({ holder: HOLDER }),
-          batchesUsed: 9,
-        }),
-      ),
-    ).toBe(true)
-  })
-
-  test('runs past the budget with --allow-more and still warns', () => {
-    expect(
-      decide({
-        ...IDLE,
-        batchesUsed: BUDGET_REFUSE_AT - 1,
-        budgetPolicy: BudgetPolicy.AllowMore(),
-      }),
-    ).toStrictEqual(
-      Decision.Run({
-        hold: Hold.Exclusive(),
-        workers: 4,
-        lockAction: LockAction.Create(),
-        notes: [
-          '6th balance batch on this branch; prefer accepting near-target results.',
-        ],
-      }),
-    )
-  })
-
-  test('never budgets a job that is not balance', () => {
-    expect(
-      decide({ ...IDLE, batchesUsed: 50, job: JobKind.Other() }),
-    ).toStrictEqual(
-      Decision.Run({
-        hold: Hold.Exclusive(),
-        workers: 4,
-        lockAction: LockAction.Create(),
-        notes: [],
-      }),
-    )
-  })
-})
-
-const TAPS: LockHolder = {
-  pid: 5101,
-  command: 'bun tools/audit/taps.ts',
-  cwd: '/repo',
-  startedAt: 1_700_000_000_000,
-}
-const SHOTS: LockHolder = { ...TAPS, pid: 5102, command: 'bun shots34.ts' }
-const OG: LockHolder = { ...TAPS, pid: 5103, command: 'bun og.ts' }
-const SPLASH_WAITER: LockHolder = {
-  pid: 6001,
-  command: 'bun tools/audit/splash.ts',
-  cwd: '/repo',
-  startedAt: 1_700_000_050_000,
-}
-
-const held = (slot: number, holder: LockHolder) => ({
-  slot,
-  lock: LockState.Held({ holder }),
-})
-
-const SHARED_IDLE: Snapshot = {
-  ...IDLE,
-  jobClass: JobClass.Shared(),
-  job: JobKind.Other(),
-}
-
-describe('decide for Shared jobs', () => {
-  test('takes the first slot on a quiet machine', () => {
-    expect(decide(SHARED_IDLE)).toStrictEqual(
-      Decision.Run({
-        hold: Hold.Shared({ slot: 1 }),
-        workers: 4,
-        lockAction: LockAction.Create(),
-        notes: [],
-      }),
-    )
-  })
-
-  test('takes the lowest free slot beside other Shared jobs', () => {
-    expect(
-      decide({
-        ...SHARED_IDLE,
-        shared: [held(1, TAPS), held(3, SHOTS)],
-      }),
-    ).toStrictEqual(
-      Decision.Run({
-        hold: Hold.Shared({ slot: 2 }),
-        workers: 4,
-        lockAction: LockAction.Create(),
-        notes: [],
-      }),
-    )
-  })
-
-  test('takes over a stale slot', () => {
-    const decision = decide({
-      ...SHARED_IDLE,
-      shared: [
-        held(1, TAPS),
-        { slot: 2, lock: LockState.Stale({ holder: SHOTS }) },
-      ],
-    })
-    expect(decision).toStrictEqual(
-      Decision.Run({
-        hold: Hold.Shared({ slot: 2 }),
-        workers: 4,
-        lockAction: LockAction.TakeOver({
-          reason:
-            'Taking over a stale shared slot 2: pid 5102: bun shots34.ts is gone.',
-        }),
-        notes: [],
-      }),
-    )
-  })
-
-  test('waits while every slot is busy', () => {
-    expect(
-      decide({
-        ...SHARED_IDLE,
-        shared: [held(1, TAPS), held(2, SHOTS), held(3, OG)],
-      }),
-    ).toStrictEqual(
-      Decision.Wait({
-        reason:
-          'all 3 shared slots busy (pid 5101: bun tools/audit/taps.ts; pid 5102: bun shots34.ts; pid 5103: bun og.ts)',
-      }),
-    )
-  })
-
-  test('counts live jobs in slots past its own count', () => {
-    expect(
-      Decision.$is('Wait')(
-        decide({
-          ...SHARED_IDLE,
-          sharedSlots: 2,
-          shared: [held(3, TAPS), held(4, SHOTS)],
-        }),
-      ),
-    ).toBe(true)
-  })
-
-  test('waits while an Exclusive job holds the lock', () => {
-    expect(
-      decide({ ...SHARED_IDLE, lock: LockState.Held({ holder: HOLDER }) }),
-    ).toStrictEqual(
-      Decision.Wait({
-        reason: 'lock held by pid 4212: bun tools/balance/simulate.ts 100',
-      }),
-    )
-  })
-
-  test('treats a lock from a guard without slots as Exclusive', () => {
-    expect(
-      Decision.$is('Wait')(
-        decide({ ...SHARED_IDLE, lock: LockState.Held({ holder: TAPS }) }),
-      ),
-    ).toBe(true)
-  })
-
-  test('ignores a stale Exclusive lock', () => {
-    expect(
-      decide({ ...SHARED_IDLE, lock: LockState.Stale({ holder: HOLDER }) }),
-    ).toStrictEqual(decide(SHARED_IDLE))
-  })
-
-  test('waits behind an Exclusive job that started waiting first', () => {
-    expect(
-      decide({
-        ...SHARED_IDLE,
-        arrivedAt: SPLASH_WAITER.startedAt + 1,
-        exclusiveWaiters: [SPLASH_WAITER],
-      }),
-    ).toStrictEqual(
-      Decision.Wait({
-        reason:
-          'an exclusive job is waiting first (pid 6001: bun tools/audit/splash.ts)',
-      }),
-    )
-  })
-
-  test('goes ahead of an Exclusive job that arrived after it', () => {
-    expect(
-      Decision.$is('Run')(
-        decide({
-          ...SHARED_IDLE,
-          arrivedAt: SPLASH_WAITER.startedAt - 1,
-          exclusiveWaiters: [SPLASH_WAITER],
-        }),
-      ),
-    ).toBe(true)
-  })
-
-  test('starts only under three quarters of the cores', () => {
-    expect(decide({ ...SHARED_IDLE, load: 8.9 })).toStrictEqual(
-      Decision.Run({
-        hold: Hold.Shared({ slot: 1 }),
-        workers: 1,
-        lockAction: LockAction.Create(),
-        notes: [],
-      }),
-    )
-    expect(decide({ ...SHARED_IDLE, load: 9 })).toStrictEqual(
-      Decision.Wait({
-        reason: 'load 9.0 over the shared gate of 9.0 on 12 cores',
-      }),
-    )
-  })
-
-  test('names the load and the slots when both block', () => {
-    expect(
-      decide({
-        ...SHARED_IDLE,
-        load: 10,
-        shared: [held(1, TAPS), held(2, SHOTS), held(3, OG)],
-      }),
-    ).toStrictEqual(
-      Decision.Wait({
-        reason:
-          'load 10.0 over the shared gate of 9.0 on 12 cores (all 3 shared slots busy (pid 5101: bun tools/audit/taps.ts; pid 5102: bun shots34.ts; pid 5103: bun og.ts))',
-      }),
-    )
-  })
-})
-
-describe('decide for Exclusive jobs beside Shared ones', () => {
-  test('waits for every running Shared job', () => {
-    expect(
-      decide({ ...IDLE, shared: [held(1, TAPS), held(2, SHOTS)] }),
-    ).toStrictEqual(
-      Decision.Wait({
-        reason:
-          '2 shared jobs running (pid 5101: bun tools/audit/taps.ts; pid 5102: bun shots34.ts)',
-      }),
-    )
-  })
-
-  test('ignores stale and corrupt slots', () => {
-    expect(
-      decide({
-        ...IDLE,
+        ...TIMING,
         shared: [
           { slot: 1, lock: LockState.Stale({ holder: TAPS }) },
           { slot: 2, lock: LockState.Unreadable({ text: '{' }) },
         ],
       }),
-    ).toStrictEqual(decide(IDLE))
+    ).toStrictEqual(decide(TIMING))
   })
+})
 
-  test('keeps the old load gate, past the Shared one', () => {
-    expect(Decision.$is('Run')(decide({ ...IDLE, load: 11 }))).toBe(true)
-  })
-
-  test('waits behind an Exclusive job that started waiting first', () => {
+describe('CPU jobs', () => {
+  test('size WORKERS to the budget, up to 8', () => {
+    expect(workersOf(decide(CPU))).toBe(6)
+    expect(workersOf(decide({ ...CPU, load: 0.2 }))).toBe(MAX_CPU_WORKERS)
     expect(
-      Decision.$is('Wait')(
-        decide({
-          ...IDLE,
-          arrivedAt: SPLASH_WAITER.startedAt + 1,
-          exclusiveWaiters: [SPLASH_WAITER],
-        }),
-      ),
+      workersOf(decide({ ...CPU, load: 0.2, cores: 32, target: 22.4 })),
+    ).toBe(MAX_CPU_WORKERS)
+  })
+
+  test('say how they sized WORKERS', () => {
+    expect(decide(CPU)).toStrictEqual(
+      Decision.Run({
+        hold: Hold.Solo(),
+        workers: 6,
+        cost: 6,
+        lockAction: LockAction.Create(),
+        notes: [
+          'WORKERS=6 fits the budget (target 8.4, load 2.0, 0.0 just started, cap 8).',
+        ],
+      }),
+    )
+  })
+
+  test('treat a WORKERS the caller set as a ceiling', () => {
+    expect(
+      workersOf(decide({ ...CPU, maybeRequestedWorkers: Option.some(2) })),
+    ).toBe(2)
+    expect(
+      workersOf(decide({ ...CPU, maybeRequestedWorkers: Option.some(12) })),
+    ).toBe(6)
+  })
+
+  test('leave room for Shared jobs started in the last minute', () => {
+    expect(workersOf(decide({ ...CPU, shared: [held(1, fresh(TAPS))] }))).toBe(
+      3,
+    )
+    expect(workersOf(decide({ ...CPU, shared: [held(1, TAPS)] }))).toBe(6)
+  })
+
+  test('run beside Shared jobs', () => {
+    expect(
+      isRun(decide({ ...CPU, load: 4, shared: [held(1, TAPS), held(2, OG)] })),
     ).toBe(true)
+  })
+
+  test('wait when not even one worker fits', () => {
+    expect(decide({ ...CPU, load: 7.5 })).toStrictEqual(
+      Decision.Wait({
+        reason:
+          'load 7.5 + 0.0 just started + 1 worker is over the target of 8.4 on 12 cores',
+      }),
+    )
+    expect(workersOf(decide({ ...CPU, load: 7.4 }))).toBe(1)
+  })
+
+  test('run one at a time', () => {
     expect(
-      Decision.$is('Run')(
+      decide({ ...CPU, lock: LockState.Held({ holder: BALANCE }) }),
+    ).toStrictEqual(
+      Decision.Wait({
+        reason:
+          'a CPU job is running (pid 4212: bun tools/balance/simulate.ts 100)',
+      }),
+    )
+  })
+
+  test('never run beside a Timing job, or an older guard', () => {
+    expect(
+      decide({ ...CPU, lock: LockState.Held({ holder: PERF }) }),
+    ).toStrictEqual(
+      Decision.Wait({
+        reason: 'lock held by pid 4300: bun tools/audit/perf.ts',
+      }),
+    )
+    expect(
+      isWait(decide({ ...CPU, lock: LockState.Held({ holder: HOLDER }) })),
+    ).toBe(true)
+  })
+})
+
+describe('Shared jobs', () => {
+  test('take the first slot within the budget', () => {
+    expect(decide(SHARED)).toStrictEqual(
+      Decision.Run({
+        hold: Hold.Shared({ slot: 1 }),
+        workers: MAX_OTHER_WORKERS,
+        cost: 3,
+        lockAction: LockAction.Create(),
+        notes: [],
+      }),
+    )
+  })
+
+  test('take the lowest free slot beside other Shared jobs', () => {
+    const decision = decide({
+      ...SHARED,
+      shared: [held(1, TAPS), held(3, SHOTS)],
+    })
+    expect(Decision.$is('Run')(decision) && decision.hold).toStrictEqual(
+      Hold.Shared({ slot: 2 }),
+    )
+  })
+
+  test('take over a stale slot', () => {
+    const decision = decide({
+      ...SHARED,
+      shared: [
+        held(1, TAPS),
+        { slot: 2, lock: LockState.Stale({ holder: SHOTS }) },
+      ],
+    })
+    expect(Decision.$is('Run')(decision) && decision.lockAction).toStrictEqual(
+      LockAction.TakeOver({
+        reason:
+          'Taking over a stale shared slot 2: pid 5102: bun shots9.ts is gone.',
+      }),
+    )
+  })
+
+  test('wait at four running, the hard cap', () => {
+    expect(
+      decide({
+        ...SHARED,
+        cost: 1,
+        shared: [held(1, TAPS), held(2, SHOTS), held(3, OG), held(4, ICONS)],
+      }),
+    ).toStrictEqual(
+      Decision.Wait({
+        reason:
+          'all 4 shared slots busy (pid 5101: bun tools/audit/taps.ts; pid 5102: bun shots9.ts; pid 5103: bun og.ts; pid 5104: bun icons.ts)',
+      }),
+    )
+  })
+
+  test('start only while the load and recent jobs leave room for their cost', () => {
+    expect(isRun(decide({ ...SHARED, load: 5.4 }))).toBe(true)
+    expect(decide({ ...SHARED, load: 5.5 })).toStrictEqual(
+      Decision.Wait({
+        reason:
+          'load 5.5 + 0.0 just started + 3 for this job is over the target of 8.4 on 12 cores',
+      }),
+    )
+    expect(
+      decide({ ...SHARED, load: 3, shared: [held(1, fresh(TAPS))] }),
+    ).toStrictEqual(
+      Decision.Wait({
+        reason:
+          'load 3.0 + 3.0 just started + 3 for this job is over the target of 8.4 on 12 cores',
+      }),
+    )
+    expect(isRun(decide({ ...SHARED, cost: 1, load: 7 }))).toBe(true)
+  })
+
+  test('run beside a CPU job', () => {
+    expect(
+      isRun(decide({ ...SHARED, lock: LockState.Held({ holder: BALANCE }) })),
+    ).toBe(true)
+  })
+
+  test('wait while a Timing job, or an older guard, holds the lock', () => {
+    expect(
+      decide({ ...SHARED, lock: LockState.Held({ holder: PERF }) }),
+    ).toStrictEqual(
+      Decision.Wait({
+        reason: 'lock held by pid 4300: bun tools/audit/perf.ts',
+      }),
+    )
+    expect(
+      isWait(decide({ ...SHARED, lock: LockState.Held({ holder: HOLDER }) })),
+    ).toBe(true)
+  })
+
+  test('ignore a stale solo lock', () => {
+    expect(
+      decide({ ...SHARED, lock: LockState.Stale({ holder: PERF }) }),
+    ).toStrictEqual(decide(SHARED))
+  })
+
+  test('count test runs in the budget', () => {
+    expect(
+      isWait(
         decide({
-          ...IDLE,
-          arrivedAt: SPLASH_WAITER.startedAt - 1,
-          exclusiveWaiters: [SPLASH_WAITER],
+          ...SHARED,
+          extraRecent: [{ ...fresh(SHOTS), command: 'bun run test', cost: 4 }],
         }),
       ),
     ).toBe(true)
   })
 })
 
+describe('fairness by arrival', () => {
+  test('a Timing job waiting first blocks every later arrival', () => {
+    const waiters = [waiting(PERF, 0)]
+    expect(decide({ ...SHARED, cost: 1, waiters })).toStrictEqual(
+      Decision.Wait({
+        reason: 'a job is waiting first (pid 4300: bun tools/audit/perf.ts)',
+      }),
+    )
+    expect(isWait(decide({ ...CPU, waiters }))).toBe(true)
+    expect(isWait(decide({ ...TIMING, waiters }))).toBe(true)
+  })
+
+  test('a CPU job waiting first blocks every later arrival', () => {
+    const waiters = [waiting(BALANCE, 0)]
+    expect(isWait(decide({ ...SHARED, cost: 1, waiters }))).toBe(true)
+    expect(isWait(decide({ ...TIMING, waiters }))).toBe(true)
+  })
+
+  test('a waiter that arrived later blocks nothing', () => {
+    const later = { ...PERF, startedAt: NOW }
+    expect(isRun(decide({ ...SHARED, waiters: [later] }))).toBe(true)
+  })
+
+  test('a Shared job waiting first blocks later Shared jobs of equal or larger cost', () => {
+    const waiters = [waiting(TAPS, 0)]
+    expect(isWait(decide({ ...SHARED, cost: 3, waiters }))).toBe(true)
+    expect(isWait(decide({ ...SHARED, cost: 4, waiters }))).toBe(true)
+    expect(isRun(decide({ ...SHARED, cost: 1, waiters }))).toBe(true)
+    expect(isWait(decide({ ...TIMING, waiters }))).toBe(true)
+  })
+
+  test('a later CPU job passes a waiting Shared job but leaves its cost free', () => {
+    const waiters = [waiting(TAPS, 0)]
+    expect(workersOf(decide({ ...CPU, waiters }))).toBe(3)
+    expect(decide({ ...CPU, load: 5, waiters })).toStrictEqual(
+      Decision.Wait({
+        reason:
+          'load 5.0 + 0.0 just started + 1 worker (and 3 kept for jobs waiting first) is over the target of 8.4 on 12 cores',
+      }),
+    )
+  })
+})
+
 describe('freeSlot', () => {
-  test('is the lowest slot without a live job, within the count', () => {
-    expect(freeSlot([], 3)).toStrictEqual(
+  test('is the lowest of the four slots without a live job', () => {
+    expect(freeSlot([])).toStrictEqual(
       Option.some({ slot: 1, lock: LockState.Free() }),
     )
-    expect(freeSlot([held(1, TAPS), held(2, SHOTS)], 3)).toStrictEqual(
+    expect(freeSlot([held(1, TAPS), held(2, SHOTS)])).toStrictEqual(
       Option.some({ slot: 3, lock: LockState.Free() }),
     )
-    expect(freeSlot([held(1, TAPS), held(2, SHOTS)], 2)).toStrictEqual(
-      Option.none(),
-    )
+    expect(
+      freeSlot([held(1, TAPS), held(2, SHOTS), held(3, OG), held(4, ICONS)]),
+    ).toStrictEqual(Option.none())
   })
 })
 
 describe('maybeConflictAfterTaking', () => {
   const self: LockHolder = { ...TAPS, pid: 7000, startedAt: 5 }
 
-  test('an Exclusive job backs off when a Shared job slipped in', () => {
+  test('a Timing job backs off when a Shared job slipped in', () => {
     expect(
       maybeConflictAfterTaking(
-        Hold.Exclusive(),
+        JobClass.Timing(),
         self,
         LockState.Held({ holder: self }),
         [held(1, TAPS)],
@@ -545,7 +537,7 @@ describe('maybeConflictAfterTaking', () => {
     )
     expect(
       maybeConflictAfterTaking(
-        Hold.Exclusive(),
+        JobClass.Timing(),
         self,
         LockState.Held({ holder: self }),
         [{ slot: 1, lock: LockState.Stale({ holder: TAPS }) }],
@@ -553,27 +545,59 @@ describe('maybeConflictAfterTaking', () => {
     ).toStrictEqual(Option.none())
   })
 
-  test('a Shared job backs off when an Exclusive job slipped in', () => {
+  test('a CPU job keeps running beside Shared jobs', () => {
     expect(
       maybeConflictAfterTaking(
-        Hold.Shared({ slot: 1 }),
+        JobClass.Cpu(),
         self,
-        LockState.Held({ holder: HOLDER }),
+        LockState.Held({ holder: self }),
+        [held(1, TAPS)],
+      ),
+    ).toStrictEqual(Option.none())
+  })
+
+  test('a Shared job backs off when a Timing job slipped in, not a CPU one', () => {
+    expect(
+      maybeConflictAfterTaking(
+        JobClass.Shared(),
+        self,
+        LockState.Held({ holder: PERF }),
         [held(1, self)],
       ),
     ).toStrictEqual(
       Option.some(
-        'an exclusive job started at the same time (pid 4212: bun tools/balance/simulate.ts 100)',
+        'a timing job started at the same time (pid 4300: bun tools/audit/perf.ts)',
       ),
     )
     expect(
       maybeConflictAfterTaking(
-        Hold.Shared({ slot: 1 }),
+        JobClass.Shared(),
         self,
-        LockState.Free(),
-        [held(1, self), held(2, SHOTS)],
+        LockState.Held({ holder: BALANCE }),
+        [held(1, self)],
       ),
     ).toStrictEqual(Option.none())
+  })
+})
+
+describe('testWorkers', () => {
+  test('gives vitest what is left of the budget', () => {
+    expect(testWorkers(BASE)).toBe(6)
+    expect(testWorkers({ ...BASE, load: 0 })).toBe(8)
+  })
+
+  test('never goes under 2 or over one less than the cores', () => {
+    expect(testWorkers({ ...BASE, load: 23 })).toBe(2)
+    expect(testWorkers({ ...BASE, load: 0, target: 40 })).toBe(11)
+  })
+
+  test('counts other test runs started in the last minute', () => {
+    expect(
+      testWorkers({
+        ...BASE,
+        extraRecent: [{ ...fresh(SHOTS), command: 'bun run test', cost: 4 }],
+      }),
+    ).toBe(2)
   })
 })
 
@@ -604,52 +628,140 @@ describe('jobClassOf', () => {
     )
   })
 
-  test('runs timing runs, the balance bot, and determinism as Exclusive', () => {
+  test('runs the balance bot and determinism as CPU', () => {
     Array.forEach(
       [
         ['bun', 'tools/balance/simulate.ts', '100'],
+        ['bun', 'tools/balance/simulate.ts', '--wave', '4', '--runs', '200'],
         ['bun', 'tools/balance/nightly.ts'],
+        ['bun', 'tools/determinism/crossEngine.ts'],
+        ['bun', 'tools/determinism/beforeAfter.ts', 'origin/main'],
+      ],
+      command => {
+        expect(classOf(...command)).toStrictEqual(JobClass.Cpu())
+      },
+    )
+  })
+
+  test('runs timing audits as Timing', () => {
+    Array.forEach(
+      [
         ['bun', 'tools/audit/perf.ts'],
         ['bun', 'tools/audit/perf-check.ts'],
         ['bun', 'tools/audit/profile.ts'],
         ['bun', 'tools/audit/measure.ts'],
         ['bun', 'tools/audit/splash.ts'],
-        ['bun', 'tools/determinism/crossEngine.ts'],
-        ['bun', 'tools/determinism/beforeAfter.ts', 'origin/main'],
       ],
       command => {
-        expect(classOf(...command)).toStrictEqual(JobClass.Exclusive())
+        expect(classOf(...command)).toStrictEqual(JobClass.Timing())
       },
     )
   })
 
-  test('runs a command it does not know as Exclusive', () => {
+  test('runs a command it does not know as Timing', () => {
     expect(classOf('bun', 'tools/audit/shots.ts')).toStrictEqual(
-      JobClass.Exclusive(),
+      JobClass.Timing(),
     )
-    expect(classOf('bun', 'src/save.ts')).toStrictEqual(JobClass.Exclusive())
-    expect(classOf('bun', 'tools/new-heavy.ts')).toStrictEqual(
-      JobClass.Exclusive(),
-    )
-    expect(classOf('sleep', '30')).toStrictEqual(JobClass.Exclusive())
+    expect(classOf('bun', 'src/save.ts')).toStrictEqual(JobClass.Timing())
+    expect(classOf('sleep', '30')).toStrictEqual(JobClass.Timing())
   })
 
-  test('runs a command naming both as Exclusive', () => {
+  test('takes the most careful class a command names', () => {
     expect(
       classOf('sh', '-c', 'bun tools/audit/taps.ts && bun tools/audit/perf.ts'),
-    ).toStrictEqual(JobClass.Exclusive())
+    ).toStrictEqual(JobClass.Timing())
+    expect(
+      classOf(
+        'sh',
+        '-c',
+        'bun tools/audit/taps.ts && bun tools/balance/simulate.ts',
+      ),
+    ).toStrictEqual(JobClass.Cpu())
   })
 
-  test('follows an override either way', () => {
+  test('follows an override', () => {
     expect(
       jobClassOf(['sleep', '30'], Option.some(JobClass.Shared())),
     ).toStrictEqual(JobClass.Shared())
     expect(
-      jobClassOf(
-        ['bun', 'tools/audit/taps.ts'],
-        Option.some(JobClass.Exclusive()),
+      jobClassOf(['bun', 'tools/audit/taps.ts'], Option.some(JobClass.Cpu())),
+    ).toStrictEqual(JobClass.Cpu())
+  })
+})
+
+describe('allowedWorkers for Timing and Shared jobs', () => {
+  test('keeps the old cap of 4, cut once the load passes half the cores', () => {
+    expect(allowedWorkers(8, 0, 12)).toBe(MAX_OTHER_WORKERS)
+    expect(allowedWorkers(0, 0, 12)).toBe(1)
+    expect(allowedWorkers(4, 8.1, 12)).toBe(1)
+  })
+})
+
+describe('the balance batch budget', () => {
+  test('says nothing for the first two batches', () => {
+    expect(decide({ ...CPU, batchesUsed: BUDGET_WARN_AT - 2 })).toStrictEqual(
+      decide(CPU),
+    )
+  })
+
+  test('warns on the third batch and after', () => {
+    const decision = decide({ ...CPU, batchesUsed: BUDGET_WARN_AT - 1 })
+    expect(Decision.$is('Run')(decision) && decision.notes[1]).toBe(
+      'Third balance batch on this branch; prefer accepting near-target results.',
+    )
+  })
+
+  test('refuses the sixth batch, before it would wait', () => {
+    expect(
+      Decision.$is('Refuse')(
+        decide({ ...CPU, batchesUsed: BUDGET_REFUSE_AT - 1 }),
       ),
-    ).toStrictEqual(JobClass.Exclusive())
+    ).toBe(true)
+    expect(
+      Decision.$is('Refuse')(
+        decide({
+          ...CPU,
+          load: 30,
+          lock: LockState.Held({ holder: HOLDER }),
+          batchesUsed: 9,
+        }),
+      ),
+    ).toBe(true)
+  })
+
+  test('runs past the budget with --allow-more and still warns', () => {
+    const decision = decide({
+      ...CPU,
+      batchesUsed: BUDGET_REFUSE_AT - 1,
+      budgetPolicy: BudgetPolicy.AllowMore(),
+    })
+    expect(Decision.$is('Run')(decision) && decision.notes[1]).toBe(
+      '6th balance batch on this branch; prefer accepting near-target results.',
+    )
+  })
+
+  test('never counts a job that is not balance', () => {
+    expect(
+      isRun(decide({ ...CPU, batchesUsed: 50, job: JobKind.Other() })),
+    ).toBe(true)
+  })
+})
+
+describe('lock files from older guards', () => {
+  test('decode without a class or cost', () => {
+    expect(
+      decodeLockHolder(
+        '{"pid":4212,"command":"bun x.ts","cwd":"/","startedAt":1}',
+      ),
+    ).toStrictEqual(
+      Option.some({ pid: 4212, command: 'bun x.ts', cwd: '/', startedAt: 1 }),
+    )
+  })
+
+  test('round trip with a class and cost', () => {
+    expect(decodeLockHolder(encodeLockHolder(BALANCE))).toStrictEqual(
+      Option.some(BALANCE),
+    )
   })
 })
 
@@ -796,29 +908,34 @@ describe('parseArguments', () => {
     )
   })
 
-  test('reads --exclusive and --shared before the command', () => {
-    expect(parseArguments(['--', '--shared', 'sleep', '30'])).toStrictEqual(
-      Invocation.RunCommand({
-        command: ['sleep', '30'],
-        budgetPolicy: BudgetPolicy.Enforced(),
-        maybeClassOverride: Option.some(JobClass.Shared()),
-      }),
+  test('reads a class flag before the command', () => {
+    const overrideOf = (flag: string) => {
+      const invocation = parseArguments(['--', flag, 'sleep', '30'])
+      return Invocation.$is('RunCommand')(invocation)
+        ? invocation.maybeClassOverride
+        : Option.none()
+    }
+    expect(overrideOf('--shared')).toStrictEqual(Option.some(JobClass.Shared()))
+    expect(overrideOf('--cpu')).toStrictEqual(Option.some(JobClass.Cpu()))
+    expect(overrideOf('--timing')).toStrictEqual(Option.some(JobClass.Timing()))
+    expect(overrideOf('--exclusive')).toStrictEqual(
+      Option.some(JobClass.Timing()),
     )
     expect(
-      parseArguments(['--', '--exclusive', '--allow-more', ...command]),
+      parseArguments(['--', '--cpu', '--allow-more', ...command]),
     ).toStrictEqual(
       Invocation.RunCommand({
         command: ['bun', 'tools/balance/simulate.ts', '100'],
         budgetPolicy: BudgetPolicy.AllowMore(),
-        maybeClassOverride: Option.some(JobClass.Exclusive()),
+        maybeClassOverride: Option.some(JobClass.Cpu()),
       }),
     )
   })
 
-  test('refuses --exclusive with --shared', () => {
+  test('refuses two class flags', () => {
     expect(
       Invocation.$is('ShowUsage')(
-        parseArguments(['--', '--exclusive', '--shared', 'sleep', '1']),
+        parseArguments(['--', '--cpu', '--shared', 'sleep', '1']),
       ),
     ).toBe(true)
   })

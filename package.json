@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "typecheck": "effect-tsgo tsrs --noEmit && effect-tsgo tsrs --noEmit -p tools/heavy && effect-tsgo tsrs --noEmit -p tools/balance && effect-tsgo tsrs --noEmit -p tools/analytics && effect-tsgo tsrs --noEmit -p tools/audit && effect-tsgo tsrs --noEmit -p tools/mp-spike && effect-tsgo tsrs --noEmit -p tools/determinism && effect-tsgo tsrs --noEmit -p packages/sqlite-wasm-effect && effect-tsgo tsrs --noEmit -p packages/sync-engine",
     "format": "oxfmt",
-    "test": "vitest run && vitest run --root packages/sqlite-wasm-effect && vitest run --root packages/sync-engine",
+    "test": "bun tools/heavy/testRun.ts",
     "perf:check": "bun tools/heavy/main.ts -- bun tools/audit/perf-check.ts",
     "heavy": "bun tools/heavy/main.ts --",
     "determinism": "bun tools/heavy/main.ts -- bun tools/determinism/crossEngine.ts",

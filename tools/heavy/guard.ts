@@ -22,8 +22,6 @@ import * as Os from 'node:os'
 
 import {
   type BudgetPolicy,
-  DEFAULT_SHARED_SLOTS,
-  DEFAULT_WORKERS,
   Decision,
   Hold,
   Invocation,
@@ -31,6 +29,8 @@ import {
   JobKind,
   LockAction,
   type LockHolder,
+  type LockState,
+  type SharedSlot,
   type Snapshot,
   USAGE,
   batchesUsed,
@@ -44,8 +44,10 @@ import {
   parseArguments,
   recordBatch,
   resetBudget,
+  sharedCostOf,
   shouldReport,
   summaryLine,
+  targetLoad,
 } from './decision'
 import { readLedger, updateLedger } from './ledger'
 import {
@@ -53,12 +55,13 @@ import {
   clearIfNotHeld,
   ensureLockDirectory,
   isProcessAlive,
-  readExclusiveWaiters,
   readSharedSlots,
+  readTestRuns,
   readTextIfPresent,
+  readWaiters,
   releaseLock,
   sharedSlotPath,
-  whileWaitingExclusive,
+  whileWaiting,
 } from './lock'
 
 export class BudgetRefused extends Data.TaggedError('BudgetRefused')<{
@@ -92,44 +95,45 @@ class NotYet extends Data.TaggedError('NotYet')<{
   readonly reason: string
 }> {}
 
-// NOTE: the Exclusive lock keeps the name every guard has used, so guards in
-// worktrees that have not rebased still see it. The directory beside it is
-// new and only this guard reads it.
+// NOTE: the solo lock keeps the name every guard has used, so guards in
+// worktrees that have not rebased still see it. The directory beside it
+// holds the Shared slots and the markers.
 const LOCK_FILE = 'munch-manor-heavy.lock'
 const LOCK_DIRECTORY = 'munch-manor-heavy.d'
 const LEDGER_FILE = 'munch-manor-heavy-budget.json'
 const FAILURE_EXIT_CODE = 1
 
 const GuardConfig = Config.all({
-  requestedWorkers: Config.Int('WORKERS').pipe(
-    Config.withDefault(DEFAULT_WORKERS),
-  ),
-  sharedSlots: Config.Int('HEAVY_SHARED_SLOTS').pipe(
-    Config.withDefault(DEFAULT_SHARED_SLOTS),
-  ),
+  maybeRequestedWorkers: Config.Int('WORKERS').pipe(Config.option),
+  maybeTargetLoad: Config.Number('HEAVY_TARGET_LOAD').pipe(Config.option),
   waitMinutes: Config.Number('HEAVY_WAIT_MINUTES').pipe(Config.withDefault(30)),
   pollSeconds: Config.Number('HEAVY_POLL_SECONDS').pipe(Config.withDefault(10)),
   stateDirectory: Config.String('HEAVY_STATE_DIR').pipe(
     Config.withDefault(Os.tmpdir()),
   ),
+  // NOTE: for trying the guard: a fixed 1 minute load instead of the real
+  // one, so a scratch run can check the budget on any machine.
+  maybeFakeLoad: Config.Number('HEAVY_FAKE_LOAD').pipe(Config.option),
 })
 
-type Context = Readonly<{
+export type Context = Readonly<{
   lockPath: string
   lockDirectory: string
   ledgerPath: string
   ledgerKey: string
-  requestedWorkers: number
-  sharedSlots: number
+  maybeRequestedWorkers: Option.Option<number>
+  maybeTargetLoad: Option.Option<number>
+  maybeFakeLoad: Option.Option<number>
   waitMinutes: number
   pollSeconds: number
 }>
 
-// NOTE: who this guard is while it waits: its pid, its command, and when it
-// arrived, which orders it against the Exclusive jobs waiting beside it.
+// NOTE: who this guard is while it waits: its pid, its command, its class
+// and cost, and when it arrived, which orders it against other waiters.
 type Arrival = Readonly<{
   command: Array.NonEmptyReadonlyArray<string>
   jobClass: JobClass
+  cost: number
   budgetPolicy: BudgetPolicy
   waiter: LockHolder
 }>
@@ -147,14 +151,17 @@ type Plan = Readonly<{
 
 const say = (line: string): Effect.Effect<void> => Console.log(`heavy: ${line}`)
 
-const readMachine = Effect.sync(() => ({
-  load: pipe(
-    Os.loadavg(),
-    Array.head,
-    Option.getOrElse(() => 0),
-  ),
-  cores: Os.availableParallelism(),
-}))
+export const readMachine = (context: Pick<Context, 'maybeFakeLoad'>) =>
+  Effect.sync(() => ({
+    load: Option.getOrElse(context.maybeFakeLoad, () =>
+      pipe(
+        Os.loadavg(),
+        Array.head,
+        Option.getOrElse(() => 0),
+      ),
+    ),
+    cores: Os.availableParallelism(),
+  }))
 
 const gitLine = (
   args: ReadonlyArray<string>,
@@ -170,7 +177,7 @@ const gitLine = (
       .pipe(Effect.map(String.trim), Effect.option)
   })
 
-const makeContext = Effect.gen(function* () {
+export const makeContext = Effect.gen(function* () {
   const config = yield* GuardConfig
   const path = yield* Path.Path
   const repoRoot = yield* gitLine(['rev-parse', '--show-toplevel'])
@@ -183,8 +190,9 @@ const makeContext = Effect.gen(function* () {
       Option.getOrElse(repoRoot, () => process.cwd()),
       Option.getOrElse(branch, () => 'unknown'),
     ),
-    requestedWorkers: config.requestedWorkers,
-    sharedSlots: Math.max(1, config.sharedSlots),
+    maybeRequestedWorkers: config.maybeRequestedWorkers,
+    maybeTargetLoad: config.maybeTargetLoad,
+    maybeFakeLoad: config.maybeFakeLoad,
     waitMinutes: config.waitMinutes,
     pollSeconds: config.pollSeconds,
   }
@@ -201,29 +209,56 @@ const readLocks = (context: Context) =>
     }
   })
 
+export type Budget = Readonly<{
+  load: number
+  cores: number
+  target: number
+  now: number
+  lock: LockState
+  shared: ReadonlyArray<SharedSlot>
+  extraRecent: ReadonlyArray<LockHolder>
+}>
+
+// NOTE: what the budget reads, for a guard and for `bun run test`: the
+// load, the target, the running jobs, and the test runs.
+export const readBudget = (
+  context: Context,
+): Effect.Effect<Budget, PlatformError, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const machine = yield* readMachine(context)
+    const now = yield* Clock.currentTimeMillis
+    const { lock, shared } = yield* readLocks(context)
+    const testRuns = yield* readTestRuns(context.lockDirectory)
+    return {
+      load: machine.load,
+      cores: machine.cores,
+      target: targetLoad(machine.cores, context.maybeTargetLoad),
+      now,
+      lock,
+      shared,
+      extraRecent: testRuns,
+    }
+  })
+
 const gatherSnapshot = (
   context: Context,
   arrival: Arrival,
 ): Effect.Effect<Snapshot, PlatformError, FileSystem.FileSystem> =>
   Effect.gen(function* () {
-    const machine = yield* readMachine
-    const { lock, shared } = yield* readLocks(context)
-    const waiters = yield* readExclusiveWaiters(context.lockDirectory)
+    const budget = yield* readBudget(context)
+    const waiters = yield* readWaiters(context.lockDirectory)
     const ledger = yield* readLedger(context.ledgerPath)
     return {
-      load: machine.load,
-      cores: machine.cores,
+      ...budget,
       jobClass: arrival.jobClass,
-      sharedSlots: context.sharedSlots,
-      lock,
-      shared,
-      exclusiveWaiters: Array.filter(
+      cost: arrival.cost,
+      maybeRequestedWorkers: context.maybeRequestedWorkers,
+      waiters: Array.filter(
         waiters,
         waiter => waiter.pid !== arrival.waiter.pid,
       ),
       arrivedAt: arrival.waiter.startedAt,
       batchesUsed: batchesUsed(ledger, context.ledgerKey),
-      requestedWorkers: context.requestedWorkers,
       job: jobKindOf(arrival.command),
       budgetPolicy: arrival.budgetPolicy,
     }
@@ -249,7 +284,7 @@ const reportWait = (
 
 const pathOfHold = (context: Context, hold: Hold): string =>
   Hold.$match(hold, {
-    Exclusive: () => context.lockPath,
+    Solo: () => context.lockPath,
     Shared: ({ slot }) => sharedSlotPath(context.lockDirectory, slot),
   })
 
@@ -257,6 +292,7 @@ const takeTheLock = (
   context: Context,
   arrival: Arrival,
   hold: Hold,
+  cost: number,
   lockAction: LockAction,
 ): Effect.Effect<
   void,
@@ -276,6 +312,8 @@ const takeTheLock = (
       command: Array.join(arrival.command, ' '),
       cwd: process.cwd(),
       startedAt,
+      jobClass: arrival.jobClass._tag,
+      cost,
     }
     yield* acquireLock(path, holder).pipe(
       Effect.catchTag('LockTaken', () =>
@@ -283,7 +321,12 @@ const takeTheLock = (
       ),
     )
     const { lock, shared } = yield* readLocks(context)
-    const maybeConflict = maybeConflictAfterTaking(hold, holder, lock, shared)
+    const maybeConflict = maybeConflictAfterTaking(
+      arrival.jobClass,
+      holder,
+      lock,
+      shared,
+    )
     if (Option.isSome(maybeConflict)) {
       yield* releaseLock(path, holder)
       return yield* new NotYet({ reason: maybeConflict.value })
@@ -306,15 +349,17 @@ const execute = (
       reportWait(waitLog, reason).pipe(
         Effect.andThen(Effect.fail(new NotYet({ reason }))),
       ),
-    Run: ({ hold, workers, lockAction, notes }) =>
+    Run: ({ hold, workers, cost, lockAction, notes }) =>
       Effect.gen(function* () {
-        yield* takeTheLock(context, arrival, hold, lockAction)
+        yield* takeTheLock(context, arrival, hold, cost, lockAction)
         yield* Effect.forEach(notes, say, { discard: true })
         return { hold, workers, loadBefore: snapshot.load }
       }),
   })
 
-const pollUntilRun = (
+// NOTE: every job marks itself as waiting, so jobs that arrive after it
+// queue behind it by the fairness rule in `blockingWaiters`.
+const waitForTurn = (
   context: Context,
   arrival: Arrival,
 ): Effect.Effect<
@@ -323,11 +368,12 @@ const pollUntilRun = (
   FileSystem.FileSystem | Scope.Scope
 > =>
   Effect.gen(function* () {
+    yield* ensureLockDirectory(context.lockDirectory)
     const waitLog = yield* Ref.make<WaitLog>({
       maybeLastReportAt: Option.none(),
       maybeLastReason: Option.none(),
     })
-    return yield* pipe(
+    const poll = pipe(
       gatherSnapshot(context, arrival),
       Effect.flatMap(snapshot => execute(context, arrival, waitLog, snapshot)),
       Effect.retry({
@@ -357,29 +403,7 @@ const pollUntilRun = (
           ),
       }),
     )
-  })
-
-// NOTE: an Exclusive job marks itself as waiting, so Shared jobs that arrive
-// after it hold off until it has had its turn.
-const waitForTurn = (
-  context: Context,
-  arrival: Arrival,
-): Effect.Effect<
-  Plan,
-  BudgetRefused | WaitTimedOut | PlatformError,
-  FileSystem.FileSystem | Scope.Scope
-> =>
-  Effect.gen(function* () {
-    yield* ensureLockDirectory(context.lockDirectory)
-    return yield* JobClass.$match(arrival.jobClass, {
-      Exclusive: () =>
-        whileWaitingExclusive(
-          context.lockDirectory,
-          arrival.waiter,
-          pollUntilRun(context, arrival),
-        ),
-      Shared: () => pollUntilRun(context, arrival),
-    })
+    return yield* whileWaiting(context.lockDirectory, arrival.waiter, poll)
   })
 
 const countBatch = (
@@ -400,9 +424,9 @@ const countBatch = (
       ),
   })
 
-const runChild = (
+export const runChild = (
   command: Array.NonEmptyReadonlyArray<string>,
-  workers: number,
+  env: Readonly<Record<string, string>>,
 ): Effect.Effect<
   number,
   CommandFailedToStart,
@@ -416,7 +440,7 @@ const runChild = (
           Array.headNonEmpty(command),
           Array.tailNonEmpty(command),
           {
-            env: { WORKERS: `${workers}` },
+            env,
             extendEnv: true,
             stdin: 'inherit',
             stdout: 'inherit',
@@ -437,11 +461,15 @@ const runChild = (
     return exitCode
   })
 
-const describeHold = (context: Context, hold: Hold): string =>
+const describeHold = (hold: Hold, jobClass: JobClass): string =>
   Hold.$match(hold, {
-    Exclusive: () => 'alone',
-    Shared: ({ slot }) => `in shared slot ${slot} of ${context.sharedSlots}`,
+    Solo: () =>
+      JobClass.$is('Cpu')(jobClass) ? 'as the CPU job' : 'alone (timing)',
+    Shared: ({ slot }) => `in shared slot ${slot}`,
   })
+
+const envValue = (key: string): Option.Option<string> =>
+  Option.fromNullishOr(process.env[key])
 
 const runGuarded = (
   command: Array.NonEmptyReadonlyArray<string>,
@@ -451,27 +479,38 @@ const runGuarded = (
   Effect.gen(function* () {
     const context = yield* makeContext
     const arrivedAt = yield* Clock.currentTimeMillis
+    const jobClass = jobClassOf(command, maybeClassOverride)
+    const cost = JobClass.$match(jobClass, {
+      Timing: () => 1,
+      Cpu: () => 1,
+      Shared: () => sharedCostOf(command, envValue),
+    })
     const arrival: Arrival = {
       command,
-      jobClass: jobClassOf(command, maybeClassOverride),
+      jobClass,
+      cost,
       budgetPolicy,
       waiter: {
         pid: process.pid,
         command: Array.join(command, ' '),
         cwd: process.cwd(),
         startedAt: arrivedAt,
+        jobClass: jobClass._tag,
+        cost,
       },
     }
     const plan = yield* waitForTurn(context, arrival)
     yield* countBatch(context, command)
-    const machine = yield* readMachine
+    const machine = yield* readMachine(context)
     yield* say(
-      `Running ${Array.join(command, ' ')} ${describeHold(context, plan.hold)} with WORKERS=${plan.workers} (load ${formatLoad(machine.load)} on ${machine.cores} cores).`,
+      `Running ${Array.join(command, ' ')} ${describeHold(plan.hold, jobClass)} with WORKERS=${plan.workers} (load ${formatLoad(machine.load)} on ${machine.cores} cores).`,
     )
     const startedAt = yield* Clock.currentTimeMillis
-    const exitCode = yield* runChild(command, plan.workers)
+    const exitCode = yield* runChild(command, {
+      WORKERS: `${plan.workers}`,
+    })
     const endedAt = yield* Clock.currentTimeMillis
-    const after = yield* readMachine
+    const after = yield* readMachine(context)
     yield* say(
       summaryLine({
         exitCode,
@@ -494,7 +533,7 @@ const resetThisBudget = Effect.gen(function* () {
   yield* say(`Reset the balance budget for ${context.ledgerKey}.`)
 })
 
-const failWith = (message: string): Effect.Effect<never, GuardExit> =>
+export const failWith = (message: string): Effect.Effect<never, GuardExit> =>
   Console.error(`heavy: ${message}`).pipe(
     Effect.andThen(Effect.fail(new GuardExit({ code: FAILURE_EXIT_CODE }))),
   )

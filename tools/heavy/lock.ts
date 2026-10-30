@@ -111,19 +111,28 @@ export const clearStaleLock = (
 
 // THE LOCK DIRECTORY
 
-// NOTE: the Exclusive lock keeps the old name, `munch-manor-heavy.lock`,
-// beside this directory, so a guard that predates Shared slots still waits
-// for an Exclusive job and still blocks Shared ones. The directory holds one
-// file per Shared slot, `shared-<n>.lock`, and one marker per waiting
-// Exclusive job, `exclusive-waiting-<pid>.json`.
+// NOTE: the solo lock keeps the old name, `munch-manor-heavy.lock`, beside
+// this directory, so a guard that predates classes still waits for a Timing
+// or CPU job. The directory holds:
+// - `shared-<n>.lock`, one per running Shared job.
+// - `exclusive-waiting-<pid>.json`, a Timing or CPU job waiting. The name
+//   is the one the two class guard reads, so it still yields to them.
+// - `waiting-<pid>.json`, a Shared job waiting.
+// - `tests-<pid>.json`, a `bun run test` run, counted in the budget.
 const SHARED_SLOT_FILE = /^shared-(\d+)\.lock$/
-const WAITER_FILE = /^exclusive-waiting-\d+\.json$/
+const WAITER_FILE = /^(?:exclusive-)?waiting-\d+\.json$/
+const TEST_RUN_FILE = /^tests-\d+\.json$/
 
 export const sharedSlotPath = (directory: string, slot: number): string =>
   `${directory}/shared-${slot}.lock`
 
-const waiterPath = (directory: string, pid: number): string =>
-  `${directory}/exclusive-waiting-${pid}.json`
+const waiterPath = (directory: string, holder: LockHolder): string =>
+  holder.jobClass === 'Shared'
+    ? `${directory}/waiting-${holder.pid}.json`
+    : `${directory}/exclusive-waiting-${holder.pid}.json`
+
+const testRunPath = (directory: string, pid: number): string =>
+  `${directory}/tests-${pid}.json`
 
 const listDirectory = (
   directory: string,
@@ -174,10 +183,11 @@ export const readSharedSlots = (
     )
   })
 
-// NOTE: a marker whose pid is gone is removed as it is found, so a guard
-// killed while it waited never blocks anyone.
-export const readExclusiveWaiters = (
+// NOTE: a marker whose pid is gone is removed as it is found, so a process
+// killed while it waited or tested never counts.
+const readMarkers = (
   directory: string,
+  pattern: RegExp,
 ): Effect.Effect<
   ReadonlyArray<LockHolder>,
   PlatformError,
@@ -186,7 +196,7 @@ export const readExclusiveWaiters = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const names = Array.filter(yield* listDirectory(directory), name =>
-      WAITER_FILE.test(name),
+      pattern.test(name),
     )
     const found = yield* Effect.forEach(names, name =>
       readTextIfPresent(`${directory}/${name}`).pipe(
@@ -206,26 +216,49 @@ export const readExclusiveWaiters = (
     )
   })
 
+export const readWaiters = (directory: string) =>
+  readMarkers(directory, WAITER_FILE)
+
+export const readTestRuns = (directory: string) =>
+  readMarkers(directory, TEST_RUN_FILE)
+
 // NOTE: the marker is written to a draft and renamed into place, so a
-// reader never sees half of it. It is removed once the job holds the lock,
-// gives up, or is stopped.
-export const whileWaitingExclusive = <A, E, R>(
-  directory: string,
+// reader never sees half of it, and removed when `use` ends however it
+// ends.
+const withMarker = <A, E, R>(
+  path: string,
   holder: LockHolder,
-  wait: Effect.Effect<A, E, R>,
+  use: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | PlatformError, R | FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
-    const path = waiterPath(directory, holder.pid)
     const draft = `${path}.draft`
     return yield* Effect.acquireUseRelease(
       fs
         .writeFileString(draft, encodeLockHolder(holder))
         .pipe(Effect.andThen(fs.rename(draft, path))),
-      () => wait,
+      () => use,
       () => Effect.ignore(fs.remove(path, { force: true })),
     )
   })
+
+// NOTE: marks the job as waiting until it holds its file, gives up, or is
+// stopped.
+export const whileWaiting = <A, E, R>(
+  directory: string,
+  holder: LockHolder,
+  wait: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | PlatformError, R | FileSystem.FileSystem> =>
+  withMarker(waiterPath(directory, holder), holder, wait)
+
+// NOTE: marks a test run for as long as `run` lasts, so other test runs and
+// guards count its cost.
+export const whileTesting = <A, E, R>(
+  directory: string,
+  holder: LockHolder,
+  run: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | PlatformError, R | FileSystem.FileSystem> =>
+  withMarker(testRunPath(directory, holder.pid), holder, run)
 
 // NOTE: clears a lock or slot file only while it still reads as stale or
 // corrupt, and only that same text, so a live job that took it in the
