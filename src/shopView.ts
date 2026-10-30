@@ -3,35 +3,61 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Button, Dialog, Tabs } from '@foldkit/ui'
 
+import { PLAYER_MAX_HP } from './constants'
 import { dialogShell } from './dialogs'
 import { COIN_SYMBOL } from './font'
 import { Message } from './message'
 import {
   type Model,
   type ShopCategory,
+  ShopChatter,
   type ShopItemId,
   ShopState,
   type WeaponKind,
 } from './model'
 import {
+  BAR_SEGMENTS,
+  type GunBars,
   GunShelf,
   SHOP_CATEGORIES,
   SHOP_CATEGORY_ORDER,
+  SHOP_ITEMS,
+  ShopGood,
   ShopTabs,
+  StockTag,
   Verdict,
   affordableCount,
+  ammoGauge,
+  gunBars,
   gunShelves,
+  isHolding,
   itemAriaLabel,
   itemBlurb,
   itemName,
   itemsIn,
   ownedNote,
-  priceLabel,
   shopItemElementId,
+  stockTag,
   totalAffordable,
   verdictFor,
 } from './shop'
-import { maxTier, tierName } from './weapons'
+import {
+  HEART_EMPTY,
+  HEART_FULL,
+  HIT_ICON,
+  ITEM_ART,
+  LOAD_ICON,
+  RATE_ICON,
+  RATTLES_ART,
+  SWAP_ICON,
+  type ShopArt,
+  TAB_ART,
+  UPGRADE_ART,
+  gunArt,
+} from './shopArt'
+import { type Mood, chatterLine, moodOf } from './shopkeeper'
+import { TRAPS, ownedCount } from './traps'
+import { maxTier, maybeNextTier, maybeSpare, tierName, tierOf } from './weapons'
 
 // FOCUS
 
@@ -113,6 +139,242 @@ const withCoins = (
     Array.filter(child => child !== ''),
   )
 
+// PICTURES
+
+const artView = (
+  art: ShopArt,
+  className: string,
+  h: HtmlBuilder<Message>,
+): Html =>
+  h.span([
+    h.Class(`shop-art ${className}`),
+    h.AriaHidden(true),
+    h.Style({
+      backgroundImage: art.url,
+      '--art-w': `${art.width}`,
+      '--art-h': `${art.height}`,
+    }),
+  ])
+
+const segmentsView = (
+  filled: number,
+  ghost: number,
+  total: number,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> =>
+  Array.makeBy(total, index =>
+    h.span([
+      h.Class(
+        index < filled
+          ? 'shop-seg is-on'
+          : index < ghost
+            ? 'shop-seg is-next'
+            : 'shop-seg',
+      ),
+    ]),
+  )
+
+const barView = (
+  icon: ShopArt,
+  label: string,
+  now: number,
+  next: number,
+  h: HtmlBuilder<Message>,
+): Html =>
+  h.span(
+    [h.Class('shop-bar'), h.Title(label)],
+    [
+      artView(icon, 'shop-bar-icon', h),
+      h.span(
+        [h.Class('shop-bar-segs')],
+        segmentsView(now, Math.max(now, next), BAR_SEGMENTS, h),
+      ),
+    ],
+  )
+
+const barsLabel = (bars: GunBars): string =>
+  `Power ${bars.hit}, speed ${bars.rate}, magazine ${bars.load}, out of ${BAR_SEGMENTS}`
+
+const barsView = (now: GunBars, next: GunBars, h: HtmlBuilder<Message>): Html =>
+  h.span(
+    [h.Class('shop-bars'), h.Role('img'), h.AriaLabel(barsLabel(now))],
+    [
+      barView(HIT_ICON, 'Power', now.hit, next.hit, h),
+      barView(RATE_ICON, 'Speed', now.rate, next.rate, h),
+      barView(LOAD_ICON, 'Magazine', now.load, next.load, h),
+    ],
+  )
+
+const heartsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.span(
+    [h.Class('shop-hearts'), h.AriaHidden(true)],
+    Array.makeBy(PLAYER_MAX_HP, index =>
+      artView(
+        index < model.player.hp ? HEART_FULL : HEART_EMPTY,
+        index === model.player.hp ? 'shop-heart is-next' : 'shop-heart',
+        h,
+      ),
+    ),
+  )
+
+const countDotsView = (
+  have: number,
+  most: number,
+  h: HtmlBuilder<Message>,
+): Html =>
+  h.span(
+    [h.Class('shop-dots'), h.AriaHidden(true)],
+    Array.makeBy(most, index =>
+      h.span([h.Class(index < have ? 'shop-dot is-on' : 'shop-dot')]),
+    ),
+  )
+
+const damagedTrapsView = (damaged: number, h: HtmlBuilder<Message>): Html =>
+  damaged === 0
+    ? h.empty
+    : h.span(
+        [h.Class('shop-dots'), h.AriaHidden(true)],
+        Array.makeBy(damaged, () => h.span([h.Class('shop-dot is-hurt')])),
+      )
+
+const gaugeView = (
+  model: Model,
+  weapon: WeaponKind,
+  rounds: number,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const { have, gain, most } = ammoGauge(model, weapon, rounds)
+  const percent = (value: number): string =>
+    `${Math.round((value / most) * 100)}%`
+  return h.span(
+    [h.Class('shop-gauge'), h.AriaHidden(true)],
+    [
+      h.span(
+        [h.Class('shop-gauge-track')],
+        [
+          h.span([
+            h.Class('shop-gauge-have'),
+            h.Style({ width: percent(have) }),
+          ]),
+          h.span([
+            h.Class('shop-gauge-gain'),
+            h.Style({ width: percent(gain) }),
+          ]),
+        ],
+      ),
+      h.span([h.Class('shop-gauge-text')], [`${have}/${most}`]),
+    ],
+  )
+}
+
+const swapBadgeView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  Option.match(maybeSpare(model.player.arsenal), {
+    onNone: () => h.empty,
+    onSome: spare =>
+      h.span(
+        [h.Class('shop-swap'), h.AriaHidden(true)],
+        [
+          artView(SWAP_ICON, 'shop-swap-icon', h),
+          artView(gunArt(spare.kind, spare.tier), 'shop-swap-gun', h),
+        ],
+      ),
+  })
+
+const metaView = (
+  model: Model,
+  item: ShopItemId,
+  h: HtmlBuilder<Message>,
+): Html =>
+  ShopGood.match(SHOP_ITEMS[item].good, {
+    Gun: ({ weapon }) =>
+      h.span(
+        [h.Class('shop-meta')],
+        [
+          barsView(gunBars(weapon, 0), gunBars(weapon, 0), h),
+          swapBadgeView(model, h),
+        ],
+      ),
+    Ammo: ({ weapon, rounds }) => gaugeView(model, weapon, rounds, h),
+    Upgrade: () => h.empty,
+    Heart: () => heartsView(model, h),
+    Trap: ({ kind }) =>
+      countDotsView(ownedCount(model, kind), TRAPS[kind].limit, h),
+    Repair: () =>
+      damagedTrapsView(
+        Array.filter(model.traps, trap => trap.hp < TRAPS[trap._tag].hp).length,
+        h,
+      ),
+  })
+
+// TAGS
+
+const tagView = (
+  model: Model,
+  item: ShopItemId,
+  h: HtmlBuilder<Message>,
+): Html =>
+  StockTag.match(stockTag(model, item), {
+    Price: ({ price }) =>
+      h.span([h.Class('shop-tag shop-item-price')], withCoins(`$${price}`, h)),
+    Short: ({ price }) =>
+      h.span(
+        [h.Class('shop-tag is-short shop-item-price')],
+        withCoins(`$${price}`, h),
+      ),
+    Done: ({ label }) =>
+      h.span([h.Class('shop-tag is-done shop-item-price')], [label]),
+  })
+
+// JUST BOUGHT
+
+const COIN_BURST = 6
+
+const burstView = (h: HtmlBuilder<Message>): Html =>
+  h.span(
+    [h.Class('shop-burst'), h.AriaHidden(true)],
+    Array.makeBy(COIN_BURST, () =>
+      h.span([h.Class('shop-burst-coin coin-icon')]),
+    ),
+  )
+
+const stampChildren = (h: HtmlBuilder<Message>): ReadonlyArray<Html> => [
+  h.span([h.Class('shop-stamp-word')], ['MINE!']),
+  burstView(h),
+]
+
+const evenStampView = (h: HtmlBuilder<Message>): Html =>
+  h.span([h.Class('shop-stamp'), h.AriaHidden(true)], stampChildren(h))
+
+const oddStampView = (h: HtmlBuilder<Message>): Html =>
+  h.span([h.Class('shop-stamp'), h.AriaHidden(true)], stampChildren(h))
+
+// NOTE: two view functions, so two buys of the same row in a row each get a
+// fresh stamp element and its animation plays again.
+const stampView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  model.stats.purchases % 2 === 0 ? evenStampView(h) : oddStampView(h)
+
+const isJustBought = (model: Model, item: ShopItemId): boolean =>
+  ShopChatter.match(model.shopChatter, {
+    Greeting: () => false,
+    Bought: ({ item: bought }) => bought === item,
+    TooPricey: () => false,
+    Refused: () => false,
+  })
+
+const evenNopeView = (h: HtmlBuilder<Message>): Html =>
+  h.span([h.Class('shop-nope'), h.AriaHidden(true)])
+
+const oddNopeView = (h: HtmlBuilder<Message>): Html =>
+  h.span([h.Class('shop-nope'), h.AriaHidden(true)])
+
+const isJustRefused = (model: Model, item: ShopItemId): boolean =>
+  ShopChatter.match(model.shopChatter, {
+    Greeting: () => false,
+    Bought: () => false,
+    TooPricey: ({ item: refused }) => refused === item,
+    Refused: ({ item: refused }) => refused === item,
+  })
+
 // ITEMS
 
 const detailsId = (item: ShopItemId): string =>
@@ -130,12 +392,73 @@ const focusedItem = (model: Model): ShopItemId =>
     Dismissed: () => Array.headNonEmpty(itemsIn(model, model.shopCategory)),
   })
 
+const reasonView = (
+  model: Model,
+  item: ShopItemId,
+  h: HtmlBuilder<Message>,
+): Html =>
+  Verdict.match(verdictFor(model, item), {
+    Available: () => h.empty,
+    Refused: ({ reason }) =>
+      h.span(
+        [
+          h.Id(reasonId(item)),
+          h.Class(
+            StockTag.isAnyOf(['Short'])(stockTag(model, item))
+              ? 'shop-item-reason shop-need'
+              : 'shop-item-reason sr-only',
+          ),
+        ],
+        withCoins(reason, h),
+      ),
+  })
+
+const shortName = (model: Model, item: ShopItemId): string =>
+  ShopGood.match(SHOP_ITEMS[item].good, {
+    Gun: () => itemName(model, item),
+    Ammo: () => itemName(model, item),
+    Upgrade: ({ weapon }) =>
+      Option.match(maybeNextTier(weapon, tierOf(model.player, weapon)), {
+        onNone: () => tierName(weapon, maxTier(weapon)),
+        onSome: ({ name }) => name,
+      }),
+    Heart: () => itemName(model, item),
+    Trap: () => itemName(model, item),
+    Repair: () => itemName(model, item),
+  })
+
 type RowShape = Readonly<{
   rowClass: string
   itemClass: string
-  details: ReadonlyArray<Html>
-  describedBy: ReadonlyArray<string>
 }>
+
+const itemArtView = (
+  model: Model,
+  item: ShopItemId,
+  h: HtmlBuilder<Message>,
+): Html =>
+  ShopGood.match(SHOP_ITEMS[item].good, {
+    Gun: () => artView(ITEM_ART[item], 'shop-card-art', h),
+    Ammo: () => artView(ITEM_ART[item], 'shop-card-art', h),
+    Upgrade: ({ weapon }) =>
+      h.span(
+        [h.Class('shop-card-art shop-upgrade-art'), h.AriaHidden(true)],
+        [
+          artView(
+            gunArt(
+              weapon,
+              Math.min(tierOf(model.player, weapon) + 1, maxTier(weapon)),
+            ),
+            'shop-upgrade-gun',
+            h,
+          ),
+          artView(UPGRADE_ART, 'shop-upgrade-arrow', h),
+        ],
+      ),
+    Heart: () => artView(ITEM_ART[item], 'shop-card-art', h),
+    Trap: () => artView(ITEM_ART[item], 'shop-card-art', h),
+    Repair: () => artView(ITEM_ART[item], 'shop-card-art', h),
+  })
 
 const rowView = (
   model: Model,
@@ -147,24 +470,20 @@ const rowView = (
   const verdict = verdictFor(model, item)
   const isRefused = Verdict.isAnyOf(['Refused'])(verdict)
   const isFocused = focusedItem(model) === item
-  const reasonView = Verdict.match(verdict, {
-    Available: () => h.empty,
-    Refused: ({ reason }) =>
-      h.span(
-        [h.Id(reasonId(item)), h.Class('shop-item-reason')],
-        withCoins(reason, h),
-      ),
-  })
   const describedBy = Array.join(
-    isRefused ? [...shape.describedBy, reasonId(item)] : shape.describedBy,
+    isRefused
+      ? [detailsId(item), noteId(item), reasonId(item)]
+      : [detailsId(item), noteId(item)],
     ' ',
   )
+  const tag = stockTag(model, item)
 
   return h.keyed('li')(
     item,
     [
       h.Class(shape.rowClass),
       h.DataAttribute('verdict', isRefused ? 'refused' : 'available'),
+      h.DataAttribute('stock', tag._tag),
     ],
     [
       Button.view(
@@ -175,6 +494,9 @@ const rowView = (
             h.button(
               [
                 ...attributes.button,
+                ...(isRefused
+                  ? [h.OnClick(Message.ClickedBuyButton({ item }))]
+                  : []),
                 ...(isFocused ? initialFocus : []),
                 h.Id(shopItemElementId(item)),
                 h.Class(shape.itemClass),
@@ -186,21 +508,28 @@ const rowView = (
                 ),
               ],
               [
+                itemArtView(model, item, h),
                 h.span(
-                  [h.Class('shop-item-heading')],
-                  [
-                    h.span(
-                      [h.Class('shop-item-name')],
-                      [itemName(model, item)],
-                    ),
-                    h.span(
-                      [h.Class('shop-item-price')],
-                      withCoins(priceLabel(model, item), h),
-                    ),
-                  ],
+                  [h.Class('shop-card-name shop-item-name')],
+                  [shortName(model, item)],
                 ),
-                ...shape.details,
-                reasonView,
+                metaView(model, item, h),
+                tagView(model, item, h),
+                reasonView(model, item, h),
+                h.span(
+                  [h.Id(detailsId(item)), h.Class('sr-only')],
+                  [itemBlurb(model, item)],
+                ),
+                h.span(
+                  [h.Id(noteId(item)), h.Class('sr-only')],
+                  [ownedNote(model, item)],
+                ),
+                isJustBought(model, item) ? stampView(model, h) : h.empty,
+                isJustRefused(model, item)
+                  ? model.stats.purchases % 2 === 0
+                    ? evenNopeView(h)
+                    : oddNopeView(h)
+                  : h.empty,
               ],
             ),
         },
@@ -221,18 +550,7 @@ const itemView = (
     item,
     {
       rowClass: 'shop-row',
-      itemClass: 'shop-item',
-      details: [
-        h.span(
-          [h.Id(detailsId(item)), h.Class('shop-item-blurb')],
-          [itemBlurb(model, item)],
-        ),
-        h.span(
-          [h.Id(noteId(item)), h.Class('shop-item-note')],
-          [ownedNote(model, item)],
-        ),
-      ],
-      describedBy: [detailsId(item), noteId(item)],
+      itemClass: 'shop-item shop-card',
     },
     initialFocus,
     h,
@@ -250,13 +568,6 @@ const subItemView = (
     {
       rowClass: 'shop-row shop-subrow',
       itemClass: 'shop-item shop-subitem',
-      details: [
-        h.span(
-          [h.Id(detailsId(item)), h.Class('shop-item-blurb')],
-          [itemBlurb(model, item)],
-        ),
-      ],
-      describedBy: [detailsId(item)],
     },
     initialFocus,
     h,
@@ -276,9 +587,42 @@ const tierPipsView = (
       h.AriaLabel(`Tier ${tier} of ${maxTier(weapon)}`),
     ],
     Array.makeBy(maxTier(weapon), index =>
-      h.span([h.Class(index < tier ? 'shop-pip is-filled' : 'shop-pip')]),
+      h.span([
+        h.Class(
+          index < tier
+            ? 'shop-pip is-filled'
+            : index === tier
+              ? 'shop-pip is-next'
+              : 'shop-pip',
+        ),
+      ]),
     ),
   )
+
+const ownedBadge = (model: Model, weapon: WeaponKind): string =>
+  isHolding(model.player, weapon) ? 'IN HAND' : 'OWNED'
+
+const nextBars = (weapon: WeaponKind, tier: number): GunBars =>
+  Option.match(maybeNextTier(weapon, tier), {
+    onNone: () => gunBars(weapon, tier),
+    onSome: () => gunBars(weapon, tier + 1),
+  })
+
+const isGunJustBought = (model: Model, weapon: WeaponKind): boolean =>
+  ShopChatter.match(model.shopChatter, {
+    Greeting: () => false,
+    Bought: ({ item }) =>
+      ShopGood.match(SHOP_ITEMS[item].good, {
+        Gun: ({ weapon: bought }) => bought === weapon,
+        Ammo: () => false,
+        Upgrade: () => false,
+        Heart: () => false,
+        Trap: () => false,
+        Repair: () => false,
+      }),
+    TooPricey: () => false,
+    Refused: () => false,
+  })
 
 const ownedGunView = (
   model: Model,
@@ -292,26 +636,35 @@ const ownedGunView = (
   const name = tierName(weapon, tier)
   return h.keyed('li')(
     `owned-${weapon}`,
-    [h.Class('shop-gun')],
+    [
+      h.Class('shop-gun'),
+      h.DataAttribute(
+        'held',
+        isHolding(model.player, weapon) ? 'true' : 'false',
+      ),
+    ],
     [
       h.div(
         [h.Class('shop-gun-heading')],
         [
-          h.h3([h.Class('shop-gun-name')], [name]),
-          h.span([h.Class('shop-gun-owned')], ['OWNED']),
+          artView(gunArt(weapon, tier), 'shop-gun-art', h),
+          h.span(
+            [h.Class('shop-gun-title')],
+            [
+              h.h3([h.Class('shop-gun-name')], [name]),
+              tierPipsView(weapon, tier, h),
+            ],
+          ),
+          h.span([h.Class('shop-gun-owned')], [ownedBadge(model, weapon)]),
         ],
       ),
-      h.div(
-        [h.Class('shop-gun-status')],
-        [
-          h.span([h.Class('shop-gun-rounds')], [status]),
-          tierPipsView(weapon, tier, h),
-        ],
-      ),
+      barsView(gunBars(weapon, tier), nextBars(weapon, tier), h),
+      h.span([h.Class('sr-only')], [status]),
       h.ul(
         [h.Class('shop-subrows'), h.AriaLabel(`For your ${name}`)],
         Array.map(items, item => subItemView(model, item, initialFocus, h)),
       ),
+      isGunJustBought(model, weapon) ? stampView(model, h) : h.empty,
     ],
   )
 }
@@ -345,7 +698,6 @@ const categoryRowsView = (
 // DIALOG
 
 const SHOP_TITLE = "Rattles' Bone Bazaar"
-const SHOP_GREETING = 'Everything here is a little haunted. No refunds.'
 
 const thingsLabel = (count: number): string =>
   count === 1 ? '1 thing' : `${count} things`
@@ -373,6 +725,7 @@ const tabButtonView = (
   return h.button(
     [...tab.tab, h.Class('shop-tab'), h.AriaLabel(tabLabel(model, tab.value))],
     [
+      artView(TAB_ART[tab.value], 'shop-tab-icon', h),
       h.span([h.Class('shop-tab-label')], [SHOP_CATEGORIES[tab.value].label]),
       h.span(
         [
@@ -394,7 +747,10 @@ const categoryPanelView = (
   h.div(
     [...tab.panel, h.Class('shop-tabpanel')],
     [
-      h.p([h.Class('shop-rule')], [SHOP_CATEGORIES[tab.value].blurb(model)]),
+      h.p(
+        [h.Class('shop-rule sr-only')],
+        [SHOP_CATEGORIES[tab.value].blurb(model)],
+      ),
       h.ul(
         [
           h.Class(`shop-items shop-items-${String.toLowerCase(tab.value)}`),
@@ -437,6 +793,49 @@ const categoriesView = (
     toParentMessage: message => Message.GotShopTabsMessage({ message }),
   })
 
+const MOOD_LABELS: Readonly<Record<Mood, string>> = {
+  Grinning: 'grinning',
+  Delighted: 'delighted, with coins in his eyes',
+  Sad: 'sad',
+  Shrugging: 'shrugging',
+}
+
+const keeperView = (model: Model, h: HtmlBuilder<Message>): Html => {
+  const mood = moodOf(model)
+  return h.span(
+    [
+      h.Class('shop-keeper'),
+      h.DataAttribute('mood', mood),
+      h.Role('img'),
+      h.AriaLabel(`Rattles the skeleton, ${MOOD_LABELS[mood]}`),
+    ],
+    [artView(RATTLES_ART[mood], 'shop-keeper-face', h)],
+  )
+}
+
+const evenBalanceView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.span(
+    [h.Class('shop-balance')],
+    [
+      h.span([h.Class('sr-only')], ['You have ']),
+      ...withCoins(`$${model.wallet.balance}`, h),
+    ],
+  )
+
+const oddBalanceView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.span(
+    [h.Class('shop-balance')],
+    [
+      h.span([h.Class('sr-only')], ['You have ']),
+      ...withCoins(`$${model.wallet.balance}`, h),
+    ],
+  )
+
+const balanceView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  model.stats.purchases % 2 === 0
+    ? evenBalanceView(model, h)
+    : oddBalanceView(model, h)
+
 const panelView = (
   model: Model,
   { title, description, closeButton, initialFocus }: Dialog.RenderInfo,
@@ -445,30 +844,31 @@ const panelView = (
   h.header(
     [h.Class('shop-header')],
     [
+      keeperView(model, h),
       h.div(
-        [h.Class('shop-heading')],
+        [h.Class('shop-speech')],
         [
           h.h2([...title, h.Class('shop-title')], [SHOP_TITLE]),
-          h.p([...description, h.Class('shop-greeting')], [SHOP_GREETING]),
+          h.p(
+            [...description, h.Class('shop-greeting'), h.AriaLive('polite')],
+            withCoins(chatterLine(model), h),
+          ),
         ],
       ),
       h.p(
         [h.Class('shop-wallet'), h.Role('status')],
         [
-          h.span(
-            [h.Class('shop-balance')],
-            withCoins(`You have $${model.wallet.balance}`, h),
-          ),
-          h.span([h.Class('shop-summary')], [affordSummary(model)]),
+          balanceView(model, h),
+          h.span([h.Class('shop-summary sr-only')], [affordSummary(model)]),
         ],
+      ),
+      h.button(
+        [...closeButton, h.Class('shop-close'), h.AriaKeyshortcuts('Escape')],
+        ['LEAVE SHOP'],
       ),
     ],
   ),
   categoriesView(model, initialFocus, h),
-  h.button(
-    [...closeButton, h.Class('shop-close'), h.AriaKeyshortcuts('Escape')],
-    ['LEAVE SHOP'],
-  ),
 ]
 
 export const shopDialogView = (model: Model, h: HtmlBuilder<Message>): Html =>

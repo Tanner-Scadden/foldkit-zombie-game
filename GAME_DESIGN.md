@@ -224,7 +224,7 @@ From a playtest on 2026-10-28 ("I tried going to the side of it and got lost"). 
 From a playtest on 2026-10-28 ("Shop should have categories, and be more of a ramp up"). Proposed, not decided. The rules are in `src/shop.ts`, the dialog in `src/shopView.ts`.
 
 - **Categories.** Three tabs: GUNS (each gun with its ammo and upgrades), HEALTH (the Pickled Heart), and TRAPS. Arrows, Home, End, and Enter work as a menu; tabs are at least 48 px tall. The shop opens on the last tab used; a new run starts on GUNS.
-- **Affordable at a glance.** Each tab has a badge counting what the player can buy now. Prices are green when affordable and grey with the shortfall when not.
+- **Affordable at a glance.** Each tab has a badge counting what the player can buy now. A row's price is a gold coin tag when affordable, grey with the shortfall when not, and one word (FULL, MAX, OWNED) when done.
 - **Phones.** Under 500 px tall the panel widens and the rows sit side by side, so every tab fits an 844x390 or 667x375 phone without scrolling (`tools/audit/shots34.ts`).
 - **The ramp.** Cheap first steps and dear top tiers, so the first visit buys a gun and the top tiers are goals for the late waves. The pistol line stays expensive on purpose: it never runs dry, and a cheap pistol damage tier once took the bot from 28% wins to 100%.
 - **The bot's shopping.** A heart at 3 or fewer, the Chatterbox when affordable (else the Barn Buster), ammo below half, two Plank Piles, Glue and Nails at $25 or less, spare gun tiers, one gnome, pistol tiers only once the spare gun is maxed, then a second gnome. It keeps $30 back after an upgrade or a gnome.
@@ -236,6 +236,15 @@ From a playtest on 2026-10-28. Proposed, not decided. The layout is `gunShelves`
 - **One card per gun.** GUNS lists the Barn Buster, the Chatterbox, and the Pop Pistol in a fixed order. A gun the player does not carry is one buy row. A carried gun is a card with its tier name, its rounds, and tier pips, and its ammo refill and next upgrade as rows under it.
 - **A gun goes by the name on its card.** Everything the shop says about a carried gun uses its tier name.
 - **Focus.** Buying a gun moves focus to its ammo row; buying ammo or an upgrade keeps it in place.
+
+#### The shop at a glance
+
+Built on 2026-10-29 at the owner's request ("The shop doesn't feel engaging"), under "Show, don't explain". No price or rule changed. The view is `src/shopView.ts`, the art `src/shopArt.ts`, Rattles' lines `src/shopkeeper.ts`, the styles `src/shop.css`.
+
+- **Rattles at the counter.** His face and one short line: a grin hello (sad when nothing is affordable), coin eyes on a buy, a tear and "Need $35 more. No IOUs!" when short, a shrug when a row is full. The line is `shopChatter` in the Model, picked from the purchase count and wave.
+- **Pictures over sentences.** Each row is its art, its name, and its tag. Guns show power, speed, and magazine as bars, with the next tier's gain blinking gold; ammo is a fill bar, hearts a row of hearts, traps dots. Long descriptions are for screen readers only.
+- **Just bought.** A MINE! stamp and a spray of coins on the row. A tap on a row the player cannot buy flashes red and Rattles reacts.
+- **Focus.** Opens on the most useful row (low ammo, a heart, an upgrade), never first on a gun that would replace the one carried.
 
 #### Power-ups
 

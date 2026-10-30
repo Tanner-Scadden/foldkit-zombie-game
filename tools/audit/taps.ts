@@ -2,7 +2,7 @@
 // update chip, and a NEW ENTRY pop too), What's New, the Munchopedia list and
 // an entry, the difficulty picker, its other panels, the pause screen,
 // the character picker, the leave question, the gun cluster in a wave and a
-// break, Game Over, and Victory on
+// break, the shop (its cards, tabs, and LEAVE SHOP), Game Over, and Victory on
 // 667x375 and 844x390 phones, or with PORTRAIT=1 on 390x844, 430x932, and
 // 360x800 phones held upright, with touch. For each button it checks that the center and four points just
 // inside its edges hit that button (document.elementFromPoint), then taps the
@@ -54,6 +54,7 @@ type Scene = Readonly<{
   query: string
   openWith?: string
   thenOpen?: string
+  opensDialog?: boolean
 }>
 
 const SCENES: ReadonlyArray<Scene> = [
@@ -99,6 +100,16 @@ const SCENES: ReadonlyArray<Scene> = [
     name: 'break-lowammo',
     query: 'wave=3&seen=all&gun=smg&loaded=9&barricades=1&turrets=1',
   },
+  {
+    name: 'shop',
+    query: 'wave=5&money=180&gun=smg&tier=1&px=270&py=142',
+    opensDialog: true,
+  },
+  {
+    name: 'shop-broke',
+    query: 'wave=3&money=12&gun=shotgun&px=270&py=142',
+    opensDialog: true,
+  },
   { name: 'gameover', query: 'wave=4&phase=gameover&stats' },
   { name: 'victory', query: 'wave=8&phase=victory&stats' },
 ]
@@ -121,7 +132,7 @@ const AFTER_TAP_MS = 250
 const surfaceTags = new Set(['PressedPointer'])
 
 const TAP_LEAVES =
-  /(^|:)(Clicked\w*|SelectedOption|RequestedClose|PressedPointer)$/
+  /(^|:)(Clicked\w*|SelectedOption|SelectedTab|RequestedClose|PressedPointer)$/
 
 const isTapMessage = (tag: string): boolean => TAP_LEAVES.test(tag)
 
@@ -255,7 +266,7 @@ for (const viewport of VIEWPORTS) {
       continue
     }
     const page = await openFreshScene(viewport, scene)
-    const hasDialog = scene.openWith !== undefined
+    const hasDialog = scene.openWith !== undefined || scene.opensDialog === true
     const indices = await visibleTargets(page)
     const where = `${viewport.name} ${scene.name}`
     if (indices.length === 0) {

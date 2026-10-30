@@ -1,0 +1,109 @@
+import { Array, Option, String } from 'effect'
+
+import {
+  type Model,
+  Phase,
+  ShopChatter,
+  type ShopItemId,
+  type TrapKind,
+} from './model'
+import {
+  SHOP_ITEMS,
+  ShopGood,
+  Verdict,
+  totalAffordable,
+  verdictFor,
+} from './shop'
+
+// MOOD
+
+export type Mood = 'Grinning' | 'Delighted' | 'Sad' | 'Shrugging'
+
+// NOTE: Rattles says a few words at most. Each line is picked by how many
+// things the player bought this run, so the same Messages give the same line.
+const pick = (
+  lines: Array.NonEmptyReadonlyArray<string>,
+  index: number,
+): string =>
+  Option.getOrElse(Array.get(lines, index % lines.length), () =>
+    Array.headNonEmpty(lines),
+  )
+
+const GREETINGS: Array.NonEmptyReadonlyArray<string> = [
+  'Fresh meat! Er, customer.',
+  'Bones half off. Not mine.',
+  'Still breathing? Spend it!',
+  'Everything is a bit haunted.',
+]
+
+const BROKE_GREETINGS: Array.NonEmptyReadonlyArray<string> = [
+  'Empty pockets? Go pop heads.',
+  'Just looking? I see.',
+]
+
+const TRAP_QUIPS: Readonly<
+  Record<TrapKind, Array.NonEmptyReadonlyArray<string>>
+> = {
+  Barricade: ['Board it up!', 'Splinters for them!'],
+  Turret: ['He bites. Lovingly.', 'Grumpy and loyal!'],
+}
+
+type Lines = Array.NonEmptyReadonlyArray<string>
+
+const GUN_QUIPS: Lines = ['Loud end goes that way!', 'Ooh, a beauty!']
+const AMMO_QUIPS: Lines = ['More boom!', 'Lock and load!']
+const UPGRADE_QUIPS: Lines = ['Shiny! Hits harder!', 'Fancy!']
+const HEART_QUIPS: Lines = ['Freshly pickled!', "Don't ask whose."]
+const REPAIR_QUIPS: Lines = ['Good as new-ish!', 'Glued!']
+
+const boughtLines = (item: ShopItemId): Lines =>
+  ShopGood.match(SHOP_ITEMS[item].good, {
+    Gun: () => GUN_QUIPS,
+    Ammo: () => AMMO_QUIPS,
+    Upgrade: () => UPGRADE_QUIPS,
+    Heart: () => HEART_QUIPS,
+    Trap: ({ kind }) => TRAP_QUIPS[kind],
+    Repair: () => REPAIR_QUIPS,
+  })
+
+const GREETING_MOOD: Mood = 'Grinning'
+const BROKE_MOOD: Mood = 'Sad'
+const BOUGHT_MOOD: Mood = 'Delighted'
+const REFUSED_MOOD: Mood = 'Shrugging'
+
+export const moodOf = (model: Model): Mood =>
+  ShopChatter.match(model.shopChatter, {
+    Greeting: () => (totalAffordable(model) === 0 ? BROKE_MOOD : GREETING_MOOD),
+    Bought: () => BOUGHT_MOOD,
+    TooPricey: () => BROKE_MOOD,
+    Refused: () => REFUSED_MOOD,
+  })
+
+const NEED_PREFIX = 'Need $'
+
+const wavesSeen = (model: Model): number =>
+  Phase.isAnyOf(['Preparation'])(model.phase) ? model.phase.wave : 0
+
+export const chatterLine = (model: Model): string => {
+  const index = model.stats.purchases
+  return ShopChatter.match(model.shopChatter, {
+    Greeting: () =>
+      totalAffordable(model) === 0
+        ? pick(BROKE_GREETINGS, wavesSeen(model) + index)
+        : pick(GREETINGS, wavesSeen(model) + index),
+    Bought: ({ item }) => pick(boughtLines(item), index),
+    TooPricey: ({ item }) =>
+      Verdict.match(verdictFor(model, item), {
+        Available: () => 'Now you can!',
+        Refused: ({ reason }) =>
+          String.startsWith(NEED_PREFIX)(reason)
+            ? `${reason}. No IOUs!`
+            : reason,
+      }),
+    Refused: ({ item }) =>
+      Verdict.match(verdictFor(model, item), {
+        Available: () => 'Go on, then!',
+        Refused: ({ reason }) => reason,
+      }),
+  })
+}

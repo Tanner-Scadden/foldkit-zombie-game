@@ -1,4 +1,4 @@
-import { Array, Option, Schema, String, pipe } from 'effect'
+import { Array, Option, Order, Schema, String, pipe } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
@@ -22,6 +22,7 @@ import {
   Phase,
   type Player,
   type ShopCategory,
+  ShopChatter,
   ShopItemId,
   ShopState,
   TrapKind,
@@ -520,12 +521,17 @@ export const Verdict = defineTaggedUnion({
 })
 export type Verdict = typeof Verdict.Type
 
-const blockedReason = (model: Model, good: ShopGood): Option.Option<string> => {
+type Block = Readonly<{ reason: string; tag: string }>
+
+const block = (reason: string, tag: string): Option.Option<Block> =>
+  Option.some({ reason, tag })
+
+const blockedBy = (model: Model, good: ShopGood): Option.Option<Block> => {
   const { player } = model
   return ShopGood.match(good, {
     Gun: ({ weapon }) =>
       isCarrying(player, weapon)
-        ? Option.some('You already carry it')
+        ? block('You already carry it', 'OWNED')
         : Option.none(),
     Ammo: ({ weapon }) =>
       Option.match(
@@ -534,36 +540,39 @@ const blockedReason = (model: Model, good: ShopGood): Option.Option<string> => {
           spare => spare.kind === weapon,
         ),
         {
-          onNone: () => Option.some(`Needs the ${gunName(model, weapon)}`),
+          onNone: () => block(`Needs the ${gunName(model, weapon)}`, 'NO GUN'),
           onSome: spare =>
             spare.rounds >= maxRounds(weapon, spare.tier)
-              ? Option.some(`Your ${tierName(weapon, spare.tier)} is full`)
+              ? block(`Your ${tierName(weapon, spare.tier)} is full`, 'FULL')
               : Option.none(),
         },
       ),
     Upgrade: ({ weapon }) => {
       if (weapon !== SIDEARM && !isCarrying(player, weapon)) {
-        return Option.some(`Needs the ${gunName(model, weapon)}`)
+        return block(`Needs the ${gunName(model, weapon)}`, 'NO GUN')
       } else if (Option.isNone(nextTierFor(model, weapon))) {
-        return Option.some('Fully upgraded')
+        return block('Fully upgraded', 'MAX')
       } else {
         return Option.none()
       }
     },
     Heart: () =>
       player.hp >= PLAYER_MAX_HP
-        ? Option.some('Your hearts are full')
+        ? block('Your hearts are full', 'FULL')
         : Option.none(),
     Trap: ({ kind }) =>
       ownedCount(model, kind) >= TRAPS[kind].limit
-        ? Option.some(TRAPS[kind].buyLimitNote)
+        ? block(TRAPS[kind].buyLimitNote, 'MAX')
         : Option.none(),
     Repair: () =>
       Array.some(model.traps, isDamaged)
         ? Option.none()
-        : Option.some('Nothing needs fixing'),
+        : block('Nothing needs fixing', 'ALL FIXED'),
   })
 }
+
+const blockedReason = (model: Model, good: ShopGood): Option.Option<string> =>
+  Option.map(blockedBy(model, good), ({ reason }) => reason)
 
 export const verdictFor = (model: Model, id: ShopItemId): Verdict => {
   const item = SHOP_ITEMS[id]
@@ -594,6 +603,132 @@ export const totalAffordable = (model: Model): number =>
     0,
     (total, category) => total + affordableCount(model, category),
   )
+
+// TAGS
+
+export const StockTag = defineTaggedUnion({
+  Price: { price: Schema.Number },
+  Short: { price: Schema.Number, need: Schema.Number },
+  Done: { label: Schema.String },
+})
+export type StockTag = typeof StockTag.Type
+
+export const stockTag = (model: Model, id: ShopItemId): StockTag => {
+  const price = priceFor(model, id)
+  return Option.match(blockedBy(model, SHOP_ITEMS[id].good), {
+    onSome: ({ tag }) => StockTag.Done({ label: tag }),
+    onNone: () =>
+      price > model.wallet.balance
+        ? StockTag.Short({ price, need: price - model.wallet.balance })
+        : StockTag.Price({ price }),
+  })
+}
+
+// SUGGESTION
+
+const isRunningLow = (model: Model, weapon: WeaponKind): boolean =>
+  Option.match(carried(model.player, weapon), {
+    onNone: () => false,
+    onSome: spare => spare.rounds * 2 < maxRounds(weapon, spare.tier),
+  })
+
+const suggestionRank = (model: Model, id: ShopItemId): number =>
+  ShopGood.match(SHOP_ITEMS[id].good, {
+    Ammo: ({ weapon }) => (isRunningLow(model, weapon) ? 0 : 3),
+    Upgrade: ({ weapon }) => (weapon === SIDEARM ? 2 : 1),
+    Gun: () => (Option.isNone(maybeSpare(model.player.arsenal)) ? 0 : 4),
+    Heart: () => 0,
+    Repair: () => 0,
+    Trap: () => 1,
+  })
+
+// NOTE: the shop opens on the row a player most likely wants, so Enter never
+// lands first on a gun that would replace the one in their hands.
+export const suggestedItem = (
+  model: Model,
+  category: ShopCategory,
+): ShopItemId => {
+  const stockRank = (id: ShopItemId): number =>
+    StockTag.match(stockTag(model, id), {
+      Price: () => 0,
+      Short: () => 1,
+      Done: () => 2,
+    })
+  return pipe(
+    itemsIn(model, category),
+    Array.sort(
+      Order.combine(
+        Order.mapInput(Order.Number, stockRank),
+        Order.mapInput(Order.Number, (id: ShopItemId) =>
+          suggestionRank(model, id),
+        ),
+      ),
+    ),
+    Array.headNonEmpty,
+  )
+}
+
+// STATS
+
+export type GunBars = Readonly<{
+  hit: number
+  rate: number
+  load: number
+}>
+
+export const BAR_SEGMENTS = 5
+
+const SHOP_GUNS: ReadonlyArray<WeaponKind> = ['Pistol', 'Shotgun', 'Smg']
+
+const ALL_TIERS = Array.flatMap(SHOP_GUNS, weapon =>
+  Array.makeBy(maxTier(weapon) + 1, tier => statsAt(weapon, tier)),
+)
+
+const MAX_HIT = Math.max(
+  ...Array.map(ALL_TIERS, stats => stats.damage * stats.pellets),
+)
+const MAX_RATE = Math.max(
+  ...Array.map(ALL_TIERS, stats => 1 / stats.fireIntervalMs),
+)
+const MAX_LOAD = Math.max(...Array.map(ALL_TIERS, stats => stats.magazine))
+
+const segments = (value: number, most: number): number =>
+  Math.max(1, Math.min(BAR_SEGMENTS, Math.round((value / most) * BAR_SEGMENTS)))
+
+export const gunBars = (weapon: WeaponKind, tier: number): GunBars => {
+  const stats = statsAt(weapon, tier)
+  return {
+    hit: segments(stats.damage * stats.pellets, MAX_HIT),
+    rate: segments(1 / stats.fireIntervalMs, MAX_RATE),
+    load: segments(stats.magazine, MAX_LOAD),
+  }
+}
+
+export type AmmoGauge = Readonly<{ have: number; gain: number; most: number }>
+
+export const ammoGauge = (
+  model: Model,
+  weapon: WeaponKind,
+  rounds: number,
+): AmmoGauge =>
+  Option.match(carried(model.player, weapon), {
+    onNone: () => ({ have: 0, gain: 0, most: 1 }),
+    onSome: spare => {
+      const most = maxRounds(weapon, spare.tier)
+      return {
+        have: spare.rounds,
+        gain: Math.max(0, Math.min(rounds, most - spare.rounds)),
+        most,
+      }
+    },
+  })
+
+export const isHolding = (player: Player, weapon: WeaponKind): boolean =>
+  Arsenal.match(player.arsenal, {
+    PistolOnly: () => weapon === SIDEARM,
+    HoldingPistol: () => weapon === SIDEARM,
+    HoldingSpare: ({ spare }) => spare.kind === weapon,
+  })
 
 export const ownedNote = (model: Model, id: ShopItemId): string => {
   const { player } = model
@@ -772,7 +907,7 @@ export const isBrowsing = (shop: ShopState): boolean =>
 const arriveAtStall = (model: Model): ShopState =>
   isShopOpenFor(model.phase)
     ? ShopState.Browsing({
-        focusedItem: Array.headNonEmpty(itemsIn(model, model.shopCategory)),
+        focusedItem: suggestedItem(model, model.shopCategory),
       })
     : ShopState.Away()
 
@@ -782,12 +917,13 @@ export const selectShopCategory = (
 ): Model =>
   modifyFields(model, {
     shopCategory: () => category,
+    shopChatter: () => ShopChatter.Greeting(),
     shop: shop =>
       ShopState.match(shop, {
         Away: () => shop,
         Browsing: () =>
           ShopState.Browsing({
-            focusedItem: Array.headNonEmpty(itemsIn(model, category)),
+            focusedItem: suggestedItem(model, category),
           }),
         Dismissed: () => shop,
       }),

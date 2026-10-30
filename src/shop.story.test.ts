@@ -30,6 +30,7 @@ import {
   Pierce,
   type PlannedSpawn,
   type ShopCategory,
+  ShopChatter,
   type ShopItemId,
   ShopState,
   type WeaponKind,
@@ -1119,6 +1120,89 @@ describe('ammo and upgrades under the gun', () => {
       model(({ shop }) => {
         expect(shop).toEqual(ShopState.Browsing({ focusedItem: 'Shotgun' }))
       }),
+    )
+  })
+})
+
+describe('the row the shop opens on', () => {
+  const focusAfterWalkingUp = (base: Model): Array<ShopItemId> => {
+    const focused: Array<ShopItemId> = []
+    story(
+      update,
+      given(base),
+      press('KeyD'),
+      ...ticks(FRAMES_TO_STALL, FRAME_MS),
+      resolveShowShop,
+      model(({ shop }) => {
+        focused.push(
+          Option.getOrThrow(
+            Option.liftPredicate(shop, ShopState.guards.Browsing),
+          ).focusedItem,
+        )
+      }),
+    )
+    return focused
+  }
+
+  const withSmg = (balance: number, rounds: number): Model =>
+    withArsenal(
+      withMoney(besideStall(preparing(4)), balance),
+      Arsenal.HoldingSpare({ spare: gun('Smg', rounds, 1) }),
+    )
+
+  test('with only the pistol, it opens on a gun the player can afford', () => {
+    expect(
+      focusAfterWalkingUp(withMoney(besideStall(preparing(2)), 40)),
+    ).toEqual(['Shotgun'])
+  })
+
+  test('with a spare gun running low, it opens on that gun ammo', () => {
+    expect(focusAfterWalkingUp(withSmg(200, 40))).toEqual(['SmgRounds'])
+  })
+
+  test('with a full spare gun, it opens on its upgrade, never on a gun that would replace it', () => {
+    expect(focusAfterWalkingUp(withSmg(200, 360))).toEqual(['SmgUpgrade'])
+  })
+
+  test('with nothing affordable, it opens on something to save up for', () => {
+    expect(focusAfterWalkingUp(withSmg(5, 360))).toEqual(['SmgUpgrade'])
+  })
+})
+
+describe('what Rattles says', () => {
+  test('he cheers a buy and tells short money apart from a full gun', () => {
+    story(
+      update,
+      given(
+        withHp(
+          withArsenal(
+            browsing(withMoney(readyModel, 30)),
+            Arsenal.HoldingSpare({ spare: gun('Shotgun', 48) }),
+          ),
+          3,
+        ),
+      ),
+      model(({ shopChatter }) => {
+        expect(shopChatter).toEqual(ShopChatter.Greeting())
+      }),
+      message(Message.PressedBuyKey({ item: 'ShotgunShells' })),
+      model(({ shopChatter }) => {
+        expect(shopChatter).toEqual(
+          ShopChatter.Refused({ item: 'ShotgunShells' }),
+        )
+      }),
+      message(Message.PressedBuyKey({ item: 'ShotgunUpgrade' })),
+      model(({ shopChatter }) => {
+        expect(shopChatter).toEqual(
+          ShopChatter.TooPricey({ item: 'ShotgunUpgrade' }),
+        )
+      }),
+      message(Message.PressedBuyKey({ item: 'Heart' })),
+      model(({ shopChatter, wallet }) => {
+        expect(shopChatter).toEqual(ShopChatter.Bought({ item: 'Heart' }))
+        expect(wallet.balance).toBe(5)
+      }),
+      resolveFocusShopItem,
     )
   })
 })

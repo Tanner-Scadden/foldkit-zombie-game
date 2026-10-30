@@ -12,6 +12,7 @@ import {
   type Model,
   Phase,
   type ShopCategory,
+  ShopChatter,
   ShopItemId,
   ShopState,
 } from '../model'
@@ -20,10 +21,12 @@ import {
   SHOP_ITEMS,
   ShopGood,
   ShopTabs,
+  StockTag,
   isBrowsing,
   maybeDisplacedFocus,
   purchase,
   selectShopCategory,
+  stockTag,
 } from '../shop'
 import { refreshIntent } from '../simulation'
 import { type SoundCue, playSounds, uiCue } from './sound'
@@ -78,10 +81,12 @@ const leaveShopStep: UpdateStep = stepModel => ({
 // ENTERING AND LEAVING
 
 export const enterShop: UpdateStep = stepModel =>
-  Update.combine(withInput(stepModel, releaseAll), [
-    shopDialog.open,
-    playSounds([uiCue('ShopBell')]),
-  ])
+  Update.combine(
+    modifyFields(withInput(stepModel, releaseAll), {
+      shopChatter: () => ShopChatter.Greeting(),
+    }),
+    [shopDialog.open, playSounds([uiCue('ShopBell')])],
+  )
 
 export const closeShop: UpdateStep = stepModel =>
   isBrowsing(stepModel.shop)
@@ -106,14 +111,24 @@ export const buy = (model: Model, item: ShopItemId): UpdateReturn => {
   }
 
   return Option.match(purchase(model, item), {
-    onNone: () => playSounds([uiCue('Denied')])(model),
+    onNone: () => playSounds([uiCue('Denied')])(refusedChatter(model, item)),
     onSome: bought =>
-      Update.combine(burstCoins(bought, bought.player.x, bought.player.y), [
-        playSounds(purchaseCues(item)),
-        refocusDisplacedRow,
-      ]),
+      Update.combine(
+        modifyFields(burstCoins(bought, bought.player.x, bought.player.y), {
+          shopChatter: () => ShopChatter.Bought({ item }),
+        }),
+        [playSounds(purchaseCues(item)), refocusDisplacedRow],
+      ),
   })
 }
+
+const refusedChatter = (model: Model, item: ShopItemId): Model =>
+  modifyFields(model, {
+    shopChatter: () =>
+      StockTag.isAnyOf(['Short'])(stockTag(model, item))
+        ? ShopChatter.TooPricey({ item })
+        : ShopChatter.Refused({ item }),
+  })
 
 const refocusDisplacedRow: UpdateStep = stepModel =>
   Option.match(maybeDisplacedFocus(stepModel), {

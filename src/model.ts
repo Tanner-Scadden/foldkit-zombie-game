@@ -996,6 +996,14 @@ export const ShopState = defineTaggedUnion({
 })
 export type ShopState = typeof ShopState.Type
 
+export const ShopChatter = defineTaggedUnion({
+  Greeting: {},
+  Bought: { item: ShopItemId },
+  TooPricey: { item: ShopItemId },
+  Refused: { item: ShopItemId },
+})
+export type ShopChatter = typeof ShopChatter.Type
+
 export const Wallet = Schema.Struct({
   balance: Schema.Number,
   earned: Schema.Number,
@@ -1117,6 +1125,7 @@ export const Model = Schema.Struct({
   shopDialog: Dialog.Model,
   shopCategory: ShopCategory,
   shopTabs: Tabs.Model,
+  shopChatter: ShopChatter,
   elapsedMs: Schema.Number,
   frameEvents: Schema.Array(GameEvent),
   hitStop: HitStop,
@@ -1360,6 +1369,7 @@ export const initialModel: Model = {
   shopDialog: Dialog.init({ id: SHOP_DIALOG_ID }),
   shopCategory: FIRST_SHOP_CATEGORY,
   shopTabs: Tabs.init({ id: SHOP_TABS_ID }),
+  shopChatter: ShopChatter.Greeting(),
   elapsedMs: 0,
   frameEvents: [],
   hitStop: initialHitStop,
