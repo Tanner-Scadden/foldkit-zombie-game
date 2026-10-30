@@ -25,9 +25,12 @@ import {
 // Nightmare unlock, and a run can close as Won; a version 1 client is
 // refused rather than handed messages it cannot read. Version 3: an Input
 // says which room tick its player was looking at (`seen`) and its round
-// trip, and a Delta can carry everyone's round trips (`pings`).
-export const PROTOCOL_VERSION = 3
-export const MIN_PROTOCOL_VERSION = 3
+// trip, and a Delta can carry everyone's round trips (`pings`). Version 4:
+// the World holds each seat's hold-to-buy (src/purchase.ts), the interact
+// hold rides as button bit 2, and the BuyExit seat action is gone, which
+// moved the codes of LeaveCounter and Ready (src/roomWorld.ts pins them).
+export const PROTOCOL_VERSION = 4
+export const MIN_PROTOCOL_VERSION = 4
 
 // NOTE: a round trip as the wire carries it, in whole ms.
 export const MAX_RTT_MS = 60_000

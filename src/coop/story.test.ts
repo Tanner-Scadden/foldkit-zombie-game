@@ -10,7 +10,12 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { type ClientFrame, NEUTRAL_INPUT, makeWriter } from '@munch/netcode'
+import {
+  type ClientFrame,
+  NEUTRAL_INPUT,
+  PROTOCOL_VERSION,
+  makeWriter,
+} from '@munch/netcode'
 import { RoomEvent } from '@munch/netcode/browser'
 
 import { playRoom } from '../roomTesting'
@@ -763,8 +768,8 @@ describe('the room', () => {
           {
             _tag: 'Refused',
             reason: 'VersionMismatch',
-            minVersion: 3,
-            maxVersion: 3,
+            minVersion: PROTOCOL_VERSION + 1,
+            maxVersion: PROTOCOL_VERSION + 1,
           },
           500,
         ),

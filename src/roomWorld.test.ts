@@ -209,6 +209,37 @@ describe('inputs and presses', () => {
     })
   })
 
+  // NOTE: these codes are the wire. A client and a room on the same
+  // protocol must agree on them, so removing or reordering an action moves
+  // the codes after it and needs a PROTOCOL_VERSION bump
+  // (packages/netcode/src/Protocol.ts). New actions and shop items go at
+  // the end, where they leave every code here alone.
+  test('every action keeps its wire code', () => {
+    const pinned: ReadonlyArray<readonly [SeatAction, number]> = [
+      [SeatAction.Swap(), 1],
+      [SeatAction.Reload(), 2],
+      [SeatAction.PlaceTrap(), 3],
+      [SeatAction.NextTrap(), 4],
+      [SeatAction.LeaveCounter(), 5],
+      [SeatAction.Ready(), 6],
+      [SeatAction.Buy({ item: 'Shotgun' }), 16],
+      [SeatAction.Buy({ item: 'ShotgunShells' }), 17],
+      [SeatAction.Buy({ item: 'ShotgunUpgrade' }), 18],
+      [SeatAction.Buy({ item: 'Smg' }), 19],
+      [SeatAction.Buy({ item: 'SmgRounds' }), 20],
+      [SeatAction.Buy({ item: 'SmgUpgrade' }), 21],
+      [SeatAction.Buy({ item: 'PistolUpgrade' }), 22],
+      [SeatAction.Buy({ item: 'LaserSight' }), 23],
+      [SeatAction.Buy({ item: 'Heart' }), 24],
+      [SeatAction.Buy({ item: 'Barricade' }), 25],
+      [SeatAction.Buy({ item: 'Turret' }), 26],
+      [SeatAction.Buy({ item: 'Repair-3' }), 67],
+    ]
+    Array.forEach(pinned, ([action, code]) => {
+      expect(actionCodeOf(action)).toBe(code)
+    })
+  })
+
   test('the break waits for everyone and starts once both are READY', () => {
     const ready = heldAction(actionCodeOf(SeatAction.Ready()), 1)
     const step = (room: RoomWorld, actions: readonly [number, number]) =>

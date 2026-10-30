@@ -4,7 +4,9 @@ import { describe, expect, test } from 'vitest'
 import {
   type ClientFrame,
   MAX_CLIENT_FRAME_BYTES,
+  MIN_PROTOCOL_VERSION,
   NEUTRAL_INPUT,
+  PROTOCOL_VERSION,
   type PlayerInput,
   SERVER_VERSIONS,
   ServerFrame,
@@ -96,13 +98,25 @@ describe('versions', () => {
       negotiateVersion({ minVersion: 1, maxVersion: 1 }, SERVER_VERSIONS),
     ).toEqual(Option.none())
     expect(
-      negotiateVersion({ minVersion: 1, maxVersion: 3 }, SERVER_VERSIONS),
-    ).toEqual(Option.some(3))
+      negotiateVersion(
+        { minVersion: 1, maxVersion: PROTOCOL_VERSION },
+        SERVER_VERSIONS,
+      ),
+    ).toEqual(Option.some(PROTOCOL_VERSION))
     expect(
-      negotiateVersion({ minVersion: 1, maxVersion: 2 }, SERVER_VERSIONS),
+      negotiateVersion(
+        { minVersion: 1, maxVersion: MIN_PROTOCOL_VERSION - 1 },
+        SERVER_VERSIONS,
+      ),
     ).toEqual(Option.none())
     expect(
-      negotiateVersion({ minVersion: 4, maxVersion: 5 }, SERVER_VERSIONS),
+      negotiateVersion(
+        {
+          minVersion: PROTOCOL_VERSION + 1,
+          maxVersion: PROTOCOL_VERSION + 2,
+        },
+        SERVER_VERSIONS,
+      ),
     ).toEqual(Option.none())
     expect(
       negotiateVersion(
