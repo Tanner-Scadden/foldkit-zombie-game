@@ -8,6 +8,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 - 👕 Your Profile fits small phones held upright: every tab stays on screen, every shirt color is in reach, and your pick never gets its edge clipped.
 - 🔫 Upgraded guns keep their names now: Beefy, then DELUXE, then 3000. The SMG is the Chatterbox.
 - 🏎️ Big hordes run smoother on slower phones.
+- 🧹 Playtest fixes: Rattles looks like himself in his shop, key hints read the right way round, sprites stay crisp, skin colors fit one row, and we tell you when a browser extension eats your keys.
 
 ## October 29, 2026: How tough are you?
 
