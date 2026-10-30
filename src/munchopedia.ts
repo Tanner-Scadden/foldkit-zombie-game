@@ -2,7 +2,7 @@ import { Array, Option, pipe } from 'effect'
 import type { Canvas } from 'foldkit'
 
 import type { KillCounts, Model, ZombieKind } from './model'
-import { type WornFrames, ZOMBIE_SPRITES } from './sprite'
+import { type WornFrames, ZOMBIE_SPRITES, standaloneSource } from './sprite'
 import { ZOMBIE_KINDS } from './zombies'
 
 // ENTRIES
@@ -133,7 +133,7 @@ const imageOf = (
     Option.flatMap(shape =>
       shape._tag === 'Image'
         ? Option.some({
-            src: shape.src,
+            src: standaloneSource(shape),
             width: shape.width,
             height: shape.height,
           })
@@ -161,14 +161,19 @@ const entryFramesOf = (kind: ZombieKind): ReadonlyArray<EntryFrame> =>
     Array.getSomes,
   )
 
-const ENTRY_FRAMES: Readonly<Record<ZombieKind, ReadonlyArray<EntryFrame>>> = {
-  Shambler: entryFramesOf('Shambler'),
-  Runner: entryFramesOf('Runner'),
-  Tank: entryFramesOf('Tank'),
-  Exploder: entryFramesOf('Exploder'),
-  Thrower: entryFramesOf('Thrower'),
-  Crawler: entryFramesOf('Crawler'),
-  Boss: entryFramesOf('Boss'),
+const entryFramesByKind = new Map<ZombieKind, ReadonlyArray<EntryFrame>>()
+
+// NOTE: the pictures are <img> elements, which cannot crop a sprite out of
+// the prebuilt atlas, so each frame gets an image of its own. They are built
+// the first time the Munchopedia shows the kind, not as the game loads.
+const entryFrames = (kind: ZombieKind): ReadonlyArray<EntryFrame> => {
+  const cached = entryFramesByKind.get(kind)
+  if (cached !== undefined) {
+    return cached
+  }
+  const frames = entryFramesOf(kind)
+  entryFramesByKind.set(kind, frames)
+  return frames
 }
 
 const ENTRY_STRIDE_MS = 200
@@ -177,7 +182,7 @@ export const entryFrameAt = (
   kind: ZombieKind,
   screenMs: number,
 ): Option.Option<EntryFrame> => {
-  const frames = ENTRY_FRAMES[kind]
+  const frames = entryFrames(kind)
   return Array.get(
     frames,
     Math.floor(screenMs / ENTRY_STRIDE_MS) % Math.max(1, frames.length),
@@ -185,4 +190,4 @@ export const entryFrameAt = (
 }
 
 export const firstEntryFrame = (kind: ZombieKind): Option.Option<EntryFrame> =>
-  Array.head(ENTRY_FRAMES[kind])
+  Array.head(entryFrames(kind))

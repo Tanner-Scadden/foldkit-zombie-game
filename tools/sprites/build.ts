@@ -1,0 +1,216 @@
+// Builds the sprite atlas (docs/IMAGES_PLAN.md): loads the game's modules in
+// stand-in mode, so every sprite they build is recorded by its content key
+// instead of encoded, adds the sprites built later on first use
+// (src/spritePrecompile.ts), and packs them into PNG files with a manifest
+// from key to box. The Vite plugin in ./vitePlugin.ts runs it for every
+// production build and serves the result to the game.
+//   bun tools/sprites/build.ts <out dir>   writes the files, or reuses them
+//   bun tools/sprites/build.ts --keys      prints every sprite key as JSON
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+import { rasterOf } from '../../src/png'
+import {
+  type AtlasEntry,
+  type SpriteAtlas,
+  useSpriteMode,
+} from '../../src/spriteAtlas'
+import { packShelves } from './pack'
+import { type Raster, decodePng, encodePng } from './png'
+
+const globals = globalThis as { __BUILD_ID__?: string }
+globals.__BUILD_ID__ = 'sprites'
+
+useSpriteMode('StandIn')
+
+// NOTE: the modules src/entry.ts runs, which build every sprite made at load.
+// They load only now, in stand-in mode: a static import would run first.
+const { spriteContents } = await import('../../src/sprite')
+await import('../../src/view')
+await import('../../src/main')
+await import('../../src/commands')
+const { precompileSprites } = await import('../../src/spritePrecompile')
+precompileSprites()
+
+const contents = spriteContents()
+const keys = [...contents.keys()].sort()
+
+if (process.argv.includes('--keys')) {
+  process.stdout.write(`${JSON.stringify(keys)}\n`)
+  process.exit(0)
+}
+
+const outDir = process.argv[2]
+if (outDir === undefined) {
+  throw new Error('usage: bun tools/sprites/build.ts <out dir> | --keys')
+}
+
+// NOTE: changing how the files are written must make every cache miss.
+const GENERATOR_VERSION = 1
+const MANIFEST_FILE = 'manifest.json'
+const SIGNATURE_FILE = 'signature.txt'
+
+const started = performance.now()
+const signature = createHash('sha256')
+  .update(`${GENERATOR_VERSION}\n${keys.join('\n')}`)
+  .digest('hex')
+const signaturePath = join(outDir, SIGNATURE_FILE)
+if (
+  existsSync(signaturePath) &&
+  readFileSync(signaturePath, 'utf8') === signature &&
+  existsSync(join(outDir, MANIFEST_FILE))
+) {
+  console.log(`sprites: ${keys.length} sprites unchanged, reused ${outDir}`)
+  process.exit(0)
+}
+
+// IMAGES
+
+type Image = Readonly<{
+  keys: ReadonlyArray<string>
+  raster: Raster
+  hash: string
+}>
+
+const imagesByHash = new Map<string, { keys: Array<string>; raster: Raster }>()
+for (const key of keys) {
+  const content = contents.get(key)
+  if (content === undefined) {
+    continue
+  }
+  const pixels = rasterOf(content.width, content.height, content.fills)
+  const hash = createHash('sha256')
+    .update(`${content.width}x${content.height}`)
+    .update(pixels)
+    .digest('hex')
+  const found = imagesByHash.get(hash)
+  if (found === undefined) {
+    imagesByHash.set(hash, {
+      keys: [key],
+      raster: { width: content.width, height: content.height, pixels },
+    })
+  } else {
+    found.keys.push(key)
+  }
+}
+const images: ReadonlyArray<Image> = [...imagesByHash.entries()]
+  .map(([hash, { keys, raster }]) => ({ hash, keys, raster }))
+  .sort((first, second) => (first.hash < second.hash ? -1 : 1))
+
+// NOTE: a room is one big image drawn on its own, and a level holds only
+// one, so each gets its own file instead of a place in the atlas.
+const OWN_FILE_AREA = 16_384
+const isOwnFile = ({ raster }: Image) =>
+  raster.width * raster.height > OWN_FILE_AREA
+
+const ATLAS_WIDTH = 1024
+// NOTE: a transparent pixel between sprites, so a scaled or rotated draw of
+// one never samples its neighbor.
+const GUTTER = 1
+
+type Sheet = Readonly<{ raster: Raster; placed: ReadonlyArray<Placed> }>
+type Placed = Readonly<{ image: Image; x: number; y: number }>
+
+const sheetOf = (
+  width: number,
+  height: number,
+  placed: ReadonlyArray<Placed>,
+): Sheet => {
+  const pixels = new Uint8Array(width * height * 4)
+  for (const { image, x, y } of placed) {
+    const { raster } = image
+    for (let row = 0; row < raster.height; row++) {
+      pixels.set(
+        raster.pixels.subarray(
+          row * raster.width * 4,
+          (row + 1) * raster.width * 4,
+        ),
+        ((y + row) * width + x) * 4,
+      )
+    }
+  }
+  return { raster: { width, height, pixels }, placed }
+}
+
+const atlasImages = images.filter(image => !isOwnFile(image))
+const packed = packShelves(
+  atlasImages.map(image => ({
+    item: image,
+    width: image.raster.width,
+    height: image.raster.height,
+  })),
+  ATLAS_WIDTH,
+  GUTTER,
+)
+const sheets: ReadonlyArray<Readonly<{ name: string; sheet: Sheet }>> = [
+  {
+    name: 'sprites.png',
+    sheet: sheetOf(
+      packed.width,
+      packed.height,
+      packed.placed.map(({ item, x, y }) => ({ image: item, x, y })),
+    ),
+  },
+  ...images.filter(isOwnFile).map((image, index) => ({
+    name: `sprite-${index}.png`,
+    sheet: sheetOf(image.raster.width, image.raster.height, [
+      { image, x: 0, y: 0 },
+    ]),
+  })),
+]
+
+// ENCODE AND CHECK
+
+const samePixels = (sheet: Raster, { image, x, y }: Placed): boolean => {
+  const { raster } = image
+  for (let row = 0; row < raster.height; row++) {
+    for (let column = 0; column < raster.width * 4; column++) {
+      const want = raster.pixels[row * raster.width * 4 + column] ?? 0
+      const alpha =
+        raster.pixels[row * raster.width * 4 + (column - (column % 4)) + 3] ?? 0
+      const got = sheet.pixels[((y + row) * sheet.width + x) * 4 + column] ?? 0
+      // NOTE: a fully transparent pixel is written as transparent black.
+      if (got !== (alpha === 0 ? 0 : want)) {
+        return false
+      }
+    }
+  }
+  return true
+}
+
+mkdirSync(outDir, { recursive: true })
+const entries: Record<string, AtlasEntry> = {}
+let bytes = 0
+sheets.forEach(({ name, sheet }, source) => {
+  const png = encodePng(sheet.raster)
+  const decoded = decodePng(png)
+  for (const placed of sheet.placed) {
+    if (!samePixels(decoded, placed)) {
+      throw new Error(
+        `sprites: ${placed.image.keys[0]} does not read back from ${name}`,
+      )
+    }
+    for (const key of placed.image.keys) {
+      entries[key] = [
+        source,
+        placed.x,
+        placed.y,
+        placed.image.raster.width,
+        placed.image.raster.height,
+      ]
+    }
+  }
+  writeFileSync(join(outDir, name), png)
+  bytes += png.length
+})
+
+const manifest: SpriteAtlas = {
+  sources: sheets.map(({ name }) => name),
+  entries,
+}
+writeFileSync(join(outDir, MANIFEST_FILE), `${JSON.stringify(manifest)}\n`)
+writeFileSync(signaturePath, signature)
+console.log(
+  `sprites: ${keys.length} sprites, ${images.length} distinct, in ${sheets.length} files (atlas ${packed.width}x${packed.height}), ${Math.round(bytes / 1024)} KB, ${Math.round(performance.now() - started)} ms`,
+)

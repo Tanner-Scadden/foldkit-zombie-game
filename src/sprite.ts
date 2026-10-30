@@ -221,9 +221,36 @@ const imageAt = (
   return Canvas.Image({ src, x, y, width, height, rendering: 'Pixelated' })
 }
 
+// NOTE: how to build a prebuilt sprite's image on its own, by where it sits
+// in the atlas, for HTML that shows a sprite as an <img>, which cannot crop.
+const recipesByPlace = new Map<string, () => Option.Option<string>>()
+
+const placeOf = (src: string, x: number, y: number): string =>
+  `${src}#${x},${y}`
+
+// NOTE: a sprite's image as a source of its own: a prebuilt sprite's built
+// on first use, anything else's own source.
+export const standaloneSource = (image: Canvas.Image): string => {
+  if (image.crop === undefined) {
+    return image.src
+  }
+  const recipe = recipesByPlace.get(
+    placeOf(image.src, image.crop.x, image.crop.y),
+  )
+  return recipe === undefined
+    ? image.src
+    : Option.getOrElse(recipe(), () => image.src)
+}
+
 // NOTE: a prebuilt sprite is a cropped region of one of the atlas's files.
-const atlasImageAt = (hit: AtlasHit, x: number, y: number): Canvas.Image => {
+const atlasImageAt = (
+  hit: AtlasHit,
+  x: number,
+  y: number,
+  recipe: () => Option.Option<string>,
+): Canvas.Image => {
   builtSpriteSources.add(hit.src)
+  recipesByPlace.set(placeOf(hit.src, hit.x, hit.y), recipe)
   return Canvas.Image({
     src: hit.src,
     x,
@@ -324,7 +351,11 @@ export const spriteShapes = (
     onSome: maybeHit =>
       Option.match(maybeHit, {
         onNone: () => [],
-        onSome: hit => [atlasImageAt(hit, -anchor.x, -anchor.y)],
+        onSome: hit => [
+          atlasImageAt(hit, -anchor.x, -anchor.y, () =>
+            runsDataUrl(width, pixels.length, rowRunsOf(pixels, palette)),
+          ),
+        ],
       }),
   })
 }
@@ -431,7 +462,11 @@ export const bakeShapes = (
     onSome: maybeHit =>
       Option.match(maybeHit, {
         onNone: () => [],
-        onSome: hit => [atlasImageAt(hit, box.left, box.top)],
+        onSome: hit => [
+          atlasImageAt(hit, box.left, box.top, () =>
+            runsDataUrl(width, height, shifted),
+          ),
+        ],
       }),
   })
 }

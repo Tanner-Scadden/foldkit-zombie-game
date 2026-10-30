@@ -91,8 +91,8 @@ const cropOf = (room: Canvas.Image, piece: Piece): Canvas.Shape =>
     width: piece.width,
     height: piece.height,
     crop: {
-      x: piece.x - room.x,
-      y: piece.y - room.y,
+      x: (room.crop?.x ?? 0) + piece.x - room.x,
+      y: (room.crop?.y ?? 0) + piece.y - room.y,
       width: piece.width,
       height: piece.height,
     },

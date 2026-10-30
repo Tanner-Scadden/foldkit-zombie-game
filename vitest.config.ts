@@ -40,6 +40,7 @@ export default defineConfig({
           include: [
             'src/**/*.test.ts',
             'tools/heavy/**/*.test.ts',
+            'tools/sprites/**/*.test.ts',
             'tools/balance/**/*.test.ts',
             'tools/determinism/**/*.test.ts',
           ],

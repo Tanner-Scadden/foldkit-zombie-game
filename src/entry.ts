@@ -1,3 +1,6 @@
+// NOTE: first, so the prebuilt sprite atlas is in place before any module
+// builds a sprite (see src/spriteAtlasBoot.ts).
+import './spriteAtlasBoot'
 import { Effect } from 'effect'
 import { Runtime } from 'foldkit'
 

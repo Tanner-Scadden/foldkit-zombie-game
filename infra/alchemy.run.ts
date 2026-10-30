@@ -107,8 +107,8 @@ const Website = (apiUrl: Output.Output<string | undefined>) =>
       // tells the game where to post run summaries (src/analyticsBeacon.ts).
       env: { VITE_API_ORIGIN: Output.map(apiUrl, url => url ?? '') },
       // NOTE: every input of the game's build. src/changelog.ts reads
-      // CHANGELOG.md at build time, and patches/ holds the Foldkit patch
-      // that `bun install` applies.
+      // CHANGELOG.md at build time, patches/ holds the Foldkit patch that
+      // `bun install` applies, and tools/sprites/ builds the sprite atlas.
       memo: {
         include: [
           'src/**',
@@ -116,6 +116,7 @@ const Website = (apiUrl: Output.Output<string | undefined>) =>
           'packages/*/package.json',
           'public/**',
           'patches/**',
+          'tools/sprites/**',
           'index.html',
           'CHANGELOG.md',
           'vite.config.ts',

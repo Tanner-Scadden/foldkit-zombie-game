@@ -14,6 +14,7 @@ import {
   precacheList,
   serviceWorkerSource,
 } from './src/sw/precache.ts'
+import { spriteAtlas } from './tools/sprites/vitePlugin.ts'
 
 const WORKER_SOURCE = resolve(import.meta.dirname, 'src/sw/worker.ts')
 
@@ -202,6 +203,7 @@ export default defineConfig({
     buildId(),
     loadStylesBehindSplash(),
     earlyEntry(),
+    spriteAtlas(),
     serviceWorker(),
   ],
   // NOTE: sqlite-wasm finds sqlite3.wasm next to its own module with
