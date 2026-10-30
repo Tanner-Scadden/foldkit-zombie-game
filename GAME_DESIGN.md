@@ -215,7 +215,7 @@ Proposed numbers. The table is in `src/traps.ts`, the chewing rates in `src/zomb
 
 From a playtest on 2026-10-28 ("I tried going to the side of it and got lost"). The rule is in `src/shop.ts`, the art in `src/stall.ts`, the coin in `src/font.ts`.
 
-- **Walking in.** The shop opens when the player comes within 12 px of any open side of the stall, only in Preparation from wave 2. After LEAVE SHOP it stays shut until the player is 22 px away.
+- **Walking in.** The shop opens when the player comes within 12 px of any open side of the stall, only in Preparation from wave 2. After the player leaves it stays shut until the player is 22 px away.
 - **Signposts.** While the shop is open, a gold outline pulses around the stall, a coin and an arrow bob over the awning, and Rattles waves.
 - **The coin.** Money is a chunky gold coin drawn wherever `$` appears in canvas text and before every price in the shop. Screen readers still hear dollars.
 

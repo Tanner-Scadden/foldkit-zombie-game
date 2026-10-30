@@ -2,7 +2,7 @@
 // update chip, and a NEW ENTRY pop too), What's New, the Munchopedia list and
 // an entry, the difficulty picker, its other panels, the pause screen,
 // the character picker, the leave question, the gun cluster in a wave and a
-// break, the shop (its cards, tabs, and LEAVE SHOP), Game Over, and Victory on
+// break, the shop (its cards, tabs, and the close X), Game Over, and Victory on
 // 667x375 and 844x390 phones, or with PORTRAIT=1 on 390x844, 430x932, and
 // 360x800 phones held upright, with touch. For each button it checks that the center and four points just
 // inside its edges hit that button (document.elementFromPoint), then taps the
