@@ -173,6 +173,10 @@ describe('the budget', () => {
       sharedCostOf(['bun', 'shots34.ts'], env({ SHOTS_PARALLEL: '2' })),
     ).toBe(2)
     expect(sharedCostOf(['bun', 'shots9.ts'], env({}))).toBe(1)
+    expect(sharedCostOf(['bun', 'shots33.ts'], env({}))).toBe(6)
+    expect(
+      sharedCostOf(['bun', 'shots33.ts'], env({ SHOTS_PARALLEL: '1' })),
+    ).toBe(2)
     expect(sharedCostOf(['bun', 'og.ts'], env({ TAPS_PARALLEL: '3' }))).toBe(1)
   })
 })

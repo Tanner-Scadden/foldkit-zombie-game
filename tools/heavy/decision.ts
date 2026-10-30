@@ -262,10 +262,13 @@ const SHARED_SCRIPTS: ReadonlyArray<RegExp> = [
 ]
 
 // NOTE: these scripts drive several browser contexts at once, set by their
-// own variable.
-const PARALLEL_SCRIPTS: ReadonlyArray<readonly [RegExp, string]> = [
-  [auditScript('taps'), 'TAPS_PARALLEL'],
-  [auditScript('shots33|shots34'), 'SHOTS_PARALLEL'],
+// own variable, and each context costs about this many cores. shots33 shoots
+// full HD desktop screens, which measured near two cores a context: with a
+// cost of one it pushed the load to 16 against a target of 8.4.
+const PARALLEL_SCRIPTS: ReadonlyArray<readonly [RegExp, string, number]> = [
+  [auditScript('taps'), 'TAPS_PARALLEL', 1],
+  [auditScript('shots33'), 'SHOTS_PARALLEL', 2],
+  [auditScript('shots34'), 'SHOTS_PARALLEL', 1],
 ]
 
 // NOTE: the command is split into words, so a script inside `sh -c "..."`
@@ -323,7 +326,7 @@ export const sharedCostOf = (
     ),
     Option.match({
       onNone: () => 1,
-      onSome: ([, key]) => parallelOf(env(key)),
+      onSome: ([, key, perContext]) => parallelOf(env(key)) * perContext,
     }),
   )
 }
