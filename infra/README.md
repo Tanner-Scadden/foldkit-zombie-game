@@ -2,19 +2,23 @@
 
 The Cloudflare side of Munch Manor, declared with [Alchemy](https://alchemy.run/). It has its own `package.json` because Alchemy needs a newer Effect (4.0.7) than the game, which Foldkit pins to 4.0.0. Versions are pinned exactly, since Alchemy v2 is still in beta.
 
-| File                  | What it holds                                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------------------------- |
-| `alchemy.run.ts`      | The game as a `Cloudflare.Website.Foldkit` Worker, the analytics API Worker and its D1, and the comment |
-| `github.ts`           | The narrow CI token and the two GitHub Actions secrets it is written to                                 |
-| `worker/api.ts`       | The analytics `HttpApi`: `POST /api/runs` and `GET /api/health`, its errors, and the handlers           |
-| `worker/rules.ts`     | The pure rules: the size cap, the rate limit decision, the daily address hash input, and the D1 row     |
-| `worker/main.ts`      | The Worker entry: `/sync` paths to sync, the rest to analytics, and the daily retention cleanup         |
-| `worker/sync.ts`      | The sync Durable Objects (`SyncScope`, `SyncDirectory`) and the `/sync` routes                          |
-| `worker/syncCore.ts`  | The sync logic they run, kept apart so `bun test` covers it without the Workers runtime                 |
-| `worker/workerd.d.ts` | Types for the Workers globals the sync object uses (`WebSocketPair`, auto-responses)                    |
-| `worker/*.test.ts`    | `bun test` for the rules and the handler, over in-memory SQLite with the real migration                 |
-| `migrations/`         | The analytics D1 migrations, applied in order on deploy                                                 |
-| `oneEffect.ts`        | The `bun test` preload that loads the shared game files and the sync engine against infra's Effect      |
+| File                                               | What it holds                                                                                           |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `alchemy.run.ts`                                   | The game as a `Cloudflare.Website.Foldkit` Worker, the analytics API Worker and its D1, and the comment |
+| `github.ts`                                        | The narrow CI token and the two GitHub Actions secrets it is written to                                 |
+| `worker/api.ts`                                    | The analytics `HttpApi`: `POST /api/runs` and `GET /api/health`, its errors, and the handlers           |
+| `worker/rules.ts`                                  | The pure rules: the size cap, the rate limit decision, the daily address hash input, and the D1 row     |
+| `worker/main.ts`                                   | The Worker entry: `/sync` paths to sync, the rest to analytics, and the daily retention cleanup         |
+| `worker/sync.ts`                                   | The sync Durable Objects (`SyncScope`, `SyncDirectory`) and the `/sync` routes                          |
+| `worker/syncCore.ts`                               | The sync logic they run, kept apart so `bun test` covers it without the Workers runtime                 |
+| `worker/gameRoom.ts`                               | The co-op `GameRoom` Durable Object (a room's lobby scope and its run) and the `/room` routes           |
+| `worker/gameRoomCore.ts`                           | The room's logic apart from the runtime: the scope host, reactions, the Hello answer, the alarm         |
+| `worker/matchmaker.ts`, `worker/matchmakerCore.ts` | QUICK PLAY's `Matchmaker` Durable Object and its logic                                                  |
+| `worker/roomCalls.ts`                              | The internal calls between the Worker, the rooms, and the Matchmaker                                    |
+| `worker/workerd.d.ts`                              | Types for the Workers globals the sync object uses (`WebSocketPair`, auto-responses)                    |
+| `worker/*.test.ts`                                 | `bun test` for the rules and the handler, over in-memory SQLite with the real migration                 |
+| `migrations/`                                      | The analytics D1 migrations, applied in order on deploy                                                 |
+| `oneEffect.ts`                                     | The `bun test` preload that loads the shared game files and the sync engine against infra's Effect      |
 
 ## Stages
 
@@ -22,7 +26,9 @@ The Cloudflare side of Munch Manor, declared with [Alchemy](https://alchemy.run/
 | ------------- | ------------------------- | ----------------------------- | ----------------------------------- |
 | `prod`        | `munch-manor`             | `munch-manor-api`             | `munch-manor-analytics`             |
 | `pr-<number>` | `munch-manor-pr-<number>` | `munch-manor-api-pr-<number>` | `munch-manor-analytics-pr-<number>` |
-| any other     | `munch-manor-<stage>`     | `munch-manor-api-<stage>`     | `munch-manor-analytics-<stage>`     |
+
+Every stage, production included, binds the API Worker's `GAME_ROOMS` and `MATCHMAKER` Durable Objects (approved 2026-10-29). Every stage but `prod` also gets the co-op dev page, `munch-manor-mp-dev-<stage>` (a static site built by `tools/mp-dev/build.ts`, pointed at the stage's API Worker).
+| any other | `munch-manor-<stage>` | `munch-manor-api-<stage>` | `munch-manor-analytics-<stage>` |
 
 Every Worker lives at `https://<worker>.tanner-scadden.workers.dev`. A stage such as `dev-infra` is a scratch copy deployed from this machine; destroy it when done. Destroying a stage deletes its D1 database and its rows.
 
@@ -77,6 +83,22 @@ The same API Worker serves `/sync` for the sync engine (see "What phase 4 built"
 - **Durable Objects.** `SyncScope` (one per `player:<id>`, by name) and `SyncDirectory` (one, named `directory`) are SQLite backed, so they run on the free plan, and declared as `Cloudflare.DurableObject` bindings on the API Worker; Alchemy adds them as new SQLite classes. Their SQL goes through `@effect/sql-sqlite-do` 4.0.7. They are plain classes with `fetch` and `webSocketMessage`, so the bundle never imports `cloudflare:workers`.
 - **Secrets and limits.** `SyncSecret` (an `Alchemy.Random` per stage) signs tokens and nonces. `SYNC_BY_ADDRESS` (namespace 7103) allows 30 identity requests a minute per address. Sockets and exchanges need a valid token in their Hello.
 - **The shared files.** The Worker bundles `src/playerScope.ts`, `src/playerData.ts`, and the engine against infra's Effect, the same way as `src/analytics.ts`.
+
+## Co-op rooms
+
+On every stage the API Worker also serves co-op rooms (see "What Phases 2 and 3 built" in `MULTIPLAYER.md`).
+
+| Path                        | Goes to               | What it does                                                                   |
+| --------------------------- | --------------------- | ------------------------------------------------------------------------------ |
+| `POST /room/create`         | a new `GameRoom`      | A private room under a fresh five-symbol code, with the caller as host         |
+| `POST /room/join`           | the code's `GameRoom` | Seats the caller while the room is in its lobby                                |
+| `GET /room/socket?code=`    | the code's `GameRoom` | The binary game socket, Hello with the session token first                     |
+| `GET /room/quick`           | the `Matchmaker`      | The QUICK PLAY socket: the queue, the offer to start with fewer, then the room |
+| `/sync/*?scope=room:<code>` | the code's `GameRoom` | The room's lobby scope over the sync engine                                    |
+
+- **Durable Objects.** `GameRoom` (one per room, named `room:<code>`) and `Matchmaker` (one, named `matchmaker`), both SQLite backed, added by Alchemy as new SQLite classes on the stages that bind them. A room runs a timer loop only during a run, so it hibernates in its lobby; the Matchmaker hibernates while nobody waits.
+- **Locally.** `bun tools/mp-dev/local.ts` runs this Worker (sync and rooms, no analytics) in `node_modules/.bin/workerd`, and `bun run mp:e2e` (from the repo root) plays three players and a QUICK PLAY group through it.
+- **On a preview.** `bun run heavy -- --shared bun tools/audit/mp.ts https://munch-manor-mp-dev-pr-<n>.tanner-scadden.workers.dev/ 4` from the repo root.
 
 ## Analytics
 

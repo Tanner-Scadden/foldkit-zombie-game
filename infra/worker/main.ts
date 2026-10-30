@@ -16,8 +16,11 @@ import {
   deleteExpiredRuns,
   makeHandler,
 } from './api.ts'
+import { routeRoom } from './gameRoom.ts'
 import { type SyncBindings, routeSync } from './sync.ts'
 
+export { GameRoom } from './gameRoom.ts'
+export { Matchmaker } from './matchmaker.ts'
 export { SyncDirectory, SyncScope } from './sync.ts'
 
 export type Bindings = SyncBindings &
@@ -51,11 +54,15 @@ const cleanUp = (env: Bindings, scheduledMs: number) =>
   )
 
 // NOTE: the edge. Each request runs one Effect: routeSync answers the /sync
-// paths and every failure on them, and anything else goes to the analytics
-// handler.
+// paths, routeRoom the /room paths (co-op rooms), each with every failure
+// on them, and anything else goes to the analytics handler.
 const respond = (request: Request, env: Bindings) =>
   Effect.flatMap(
-    routeSync(request, env),
+    Effect.flatMap(routeSync(request, env), maybeSync =>
+      Option.isSome(maybeSync)
+        ? Effect.succeed(maybeSync)
+        : routeRoom(request, env),
+    ),
     Option.match({
       onSome: Effect.succeed,
       onNone: () =>

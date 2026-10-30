@@ -47,6 +47,10 @@ const SYNC_REQUESTS_PER_ADDRESS_PER_MINUTE = 30
 // database is destroyed with its pull request anyway.
 const RETENTION_CRON = '17 4 * * *'
 
+// NOTE: the co-op dev page (the stand-in world in a room) is a test tool:
+// every stage but production gets it.
+const hasDevPage = (stage: string): boolean => stage !== PRODUCTION_STAGE
+
 const Analytics = Effect.gen(function* () {
   const stage = yield* Alchemy.Stage
 
@@ -85,6 +89,14 @@ const Analytics = Effect.gen(function* () {
         namespaceId: RATE_LIMIT_NAMESPACES.sync,
         simple: { limit: SYNC_REQUESTS_PER_ADDRESS_PER_MINUTE, period: 60 },
       }),
+      // NOTE: co-op rooms (worker/gameRoom.ts): one SQLite-backed Durable
+      // Object per room, holding its `room:<code>` lobby scope and, while a
+      // run is on, the run. QUICK PLAY's one Matchmaker (worker/matchmaker.ts)
+      // keeps its queue in hibernating sockets. Every stage, production
+      // included (approved 2026-10-29): both are SQLite classes, which the
+      // free plan allows, and neither ticks while idle.
+      GAME_ROOMS: Cloudflare.DurableObject('GameRoom'),
+      MATCHMAKER: Cloudflare.DurableObject('Matchmaker'),
     },
     build: {
       input: { resolve: { alias: { effect: INFRA_EFFECT } } },
@@ -128,9 +140,36 @@ const Website = (apiUrl: Output.Output<string | undefined>) =>
     })
   })
 
+// NOTE: the co-op dev page (tools/mp-dev), a small static site of its own
+// that is never part of the game's bundle, pointed at this stage's API
+// Worker. Preview stages only.
+const MpDev = (apiUrl: Output.Output<string | undefined>) =>
+  Effect.gen(function* () {
+    const stage = yield* Alchemy.Stage
+
+    return yield* Cloudflare.Website.StaticSite('MpDev', {
+      name: stageName('munch-manor-mp-dev', stage),
+      command: 'bun tools/mp-dev/build.ts',
+      cwd: Path.resolve(import.meta.dirname, '..'),
+      outdir: 'tools/mp-dev/dist/page',
+      env: { MP_DEV_API_ORIGIN: Output.map(apiUrl, url => url ?? '') },
+      memo: {
+        include: [
+          'tools/mp-dev/*.ts',
+          'tools/mp-dev/index.html',
+          'packages/*/src/**',
+          'packages/*/package.json',
+          'package.json',
+        ],
+        lockfile: true,
+      },
+    })
+  })
+
 const PreviewComment = (
   url: Output.Output<string | undefined>,
   apiUrl: Output.Output<string | undefined>,
+  mpDevLine: Output.Output<string> | string,
 ) =>
   Effect.gen(function* () {
     const github = yield* GitHub.GitHubEnv
@@ -148,6 +187,8 @@ const PreviewComment = (
 
             **Analytics API:** ${apiUrl}/api/health
 
+            ${mpDevLine}
+
             Built from commit ${github.sha.slice(0, 7)}. This comment updates on every push, and the preview is destroyed when the pull request closes.
           `,
         })
@@ -160,10 +201,24 @@ export default Alchemy.Stack(
     state: Cloudflare.state(),
   },
   Effect.gen(function* () {
+    const stage = yield* Alchemy.Stage
     const api = yield* Analytics
     const website = yield* Website(api.url)
-    yield* PreviewComment(website.url, api.url)
+    const mpDev = hasDevPage(stage) ? yield* MpDev(api.url) : undefined
+    yield* PreviewComment(
+      website.url,
+      api.url,
+      mpDev === undefined
+        ? ''
+        : Output.map(
+            mpDev.url,
+            url =>
+              `**Co-op dev page:** ${url ?? ''} (the stand-in world in a room: open it in 2 to 4 tabs)`,
+          ),
+    )
 
-    return { url: website.url, apiUrl: api.url }
+    return mpDev === undefined
+      ? { url: website.url, apiUrl: api.url }
+      : { url: website.url, apiUrl: api.url, mpDevUrl: mpDev.url }
   }),
 )

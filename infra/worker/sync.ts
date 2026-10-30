@@ -22,6 +22,7 @@ import {
   makeChallenge,
 } from '@munch/sync-engine'
 
+import { roomScopeStub } from './gameRoom.ts'
 import {
   BadSyncBody,
   CORS_HEADERS,
@@ -41,11 +42,16 @@ import {
   tryCall,
 } from './syncCore.ts'
 
+// NOTE: GAME_ROOMS and MATCHMAKER are optional so a Worker without them
+// (an older deploy, a test) answers that rooms are unavailable instead of
+// failing.
 export type SyncBindings = Readonly<{
   SYNC_SCOPES: DurableObjectNamespace
   SYNC_DIRECTORY: DurableObjectNamespace
   SYNC_SECRET: string
   SYNC_BY_ADDRESS: RateLimit
+  GAME_ROOMS?: DurableObjectNamespace | undefined
+  MATCHMAKER?: DurableObjectNamespace | undefined
 }>
 
 const DIRECTORY_NAME = 'directory'
@@ -199,7 +205,9 @@ export class SyncScope {
       Effect.flatMap(this.hostFor(maybeSocket.value.scope), host =>
         lock.withPermit(
           Effect.suspend(() =>
-            host.onMessage(maybeSocket.value, message, everyone()),
+            Effect.asVoid(
+              host.onMessage(maybeSocket.value, message, everyone()),
+            ),
           ),
         ),
       ).pipe(
@@ -350,8 +358,19 @@ export const routeSync = (
 
 const forwardToScope = (request: Request, env: SyncBindings, url: URL) =>
   Effect.gen(function* () {
-    const maybeScope = playerScopeOf(url)
-    if (Option.isNone(maybeScope)) {
+    const maybeTarget = Option.orElse(
+      Option.map(playerScopeOf(url), scope => ({
+        scope,
+        stub: env.SYNC_SCOPES.get(env.SYNC_SCOPES.idFromName(scope)),
+      })),
+      () =>
+        Option.flatMap(
+          Option.fromNullishOr(url.searchParams.get('scope')),
+          scope =>
+            Option.map(roomScopeStub(env, scope), stub => ({ scope, stub })),
+        ),
+    )
+    if (Option.isNone(maybeTarget)) {
       return json(400, '{"_tag":"BadRequest","reason":"Bad scope"}')
     }
     const isUpgrade =
@@ -359,12 +378,10 @@ const forwardToScope = (request: Request, env: SyncBindings, url: URL) =>
     if (url.pathname === IDENTITY_PATHS.socket && !isUpgrade) {
       return json(426, '{}')
     }
-    const stub = env.SYNC_SCOPES.get(
-      env.SYNC_SCOPES.idFromName(maybeScope.value),
-    )
+    const stub = maybeTarget.value.stub
     const headers = {
       ...Object.fromEntries(request.headers.entries()),
-      [SCOPE_HEADER]: maybeScope.value,
+      [SCOPE_HEADER]: maybeTarget.value.scope,
     }
     const body =
       request.method === 'POST'

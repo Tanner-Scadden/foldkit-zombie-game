@@ -13,6 +13,7 @@ import { SqlClient, type SqlError } from 'effect/sql'
 import {
   Actor,
   type AnyMutation,
+  type DeviceActor,
   type Mutation,
   type MutationRejected,
   applyContext,
@@ -103,6 +104,9 @@ export interface ScopeServer {
     id: string,
   ) => Effect.Effect<Outcome, SqlError.SqlError | Schema.SchemaError>
   readonly addMember: (
+    playerId: string,
+  ) => Effect.Effect<void, SqlError.SqlError>
+  readonly removeMember: (
     playerId: string,
   ) => Effect.Effect<void, SqlError.SqlError>
   readonly checkRead: (
@@ -425,6 +429,17 @@ export const makeScopeServer = (
         if (Result.isFailure(decoded)) {
           return refused(envelope.id, 'InvalidArgs', decoded.failure.message)
         }
+        if (
+          actor._tag === 'Device' &&
+          mutation.authorize !== undefined &&
+          !mutation.authorize(decoded.success, actor)
+        ) {
+          return refused(
+            envelope.id,
+            'Forbidden',
+            `${mutation.name} is not yours to write`,
+          )
+        }
         const timestampMs = yield* Clock.currentTimeMillis
         const outcome = yield* pipe(
           applyInTransaction(
@@ -501,6 +516,10 @@ export const makeScopeServer = (
           sql`INSERT INTO sync_members ${sql.insert({ player_id: playerId })}
             ON CONFLICT (player_id) DO NOTHING`,
         ),
+      removeMember: playerId =>
+        Effect.asVoid(
+          sql`DELETE FROM sync_members WHERE player_id = ${playerId}`,
+        ),
       checkRead: actor => provide(checkRead(definition, actor, address)),
       snapshot,
     }
@@ -525,8 +544,6 @@ export const OPENED: Connection = Connection.cases.Opened.make({})
 export class Unauthorized extends Data.TaggedError('Unauthorized')<{
   readonly reason: string
 }> {}
-
-export type DeviceActor = Extract<Actor, { readonly _tag: 'Device' }>
 
 export type Authenticate = (
   token: string,

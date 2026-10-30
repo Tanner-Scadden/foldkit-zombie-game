@@ -32,6 +32,8 @@ All on 2026-10-28.
 - **SQLite loads behind the splash, lazily.** The save is the first thing the game reads, so the splash waits for it as it waited for localStorage, but the SQLite code, worker, and wasm are their own chunks fetched only then, alongside the fonts and sprites. A 12 second limit falls back to localStorage for the session. Decided 2026-10-29, which settles open question 7.
 - **Analytics run rows are kept for 90 days.** A Cron Trigger on the production API Worker runs once a day at 04:17 UTC and deletes every `runs` row whose `received_day` is more than 90 days back. Previews get no trigger, since the free plan allows five per account and a preview's database goes with its pull request. Decided 2026-10-29, which settles the rest of open question 3. See "Retention".
 - **Linking takes on the other device's progress, with no merge.** The device that types a link code becomes the other device's player and uses its progress; what it had saved is left behind. The code entry form says so before Link: "This device will use the other device's progress." Merging two players stays out of scope. Decided 2026-10-29.
+- **Co-op rooms are built, and bound on every stage.** A SQLite `GameRoom` Durable Object per room (named `room:<code>`) hosts the room's `room:<code>` sync scope and, while a run is on, the run itself on a timer loop; one `Matchmaker` Durable Object runs QUICK PLAY. Both are bound to the API Worker on every stage, production included (approved 2026-10-29): SQLite classes, which the free plan allows, and nothing ticks while idle. Built 2026-10-29; see "What Phases 2 and 3 built" in `MULTIPLAYER.md` and "Co-op rooms" below.
+- **A mutation may check its args against its sender.** The sync engine's optional `authorize(args, actor)` runs on the server only, so a shared scope's mutation can say "only for yourself" while its apply stays a function of args and rows. Added 2026-10-29 for the room scope.
 - **The engine and the SQLite wrapper live in `packages/` in this repo** while the API settles, then move to their own repo and npm packages. The name is still open.
 
 This file collects the plan for running Munch Manor on Cloudflare with an Effect-native stack: hosting, analytics, local data, sync, and the server side of multiplayer. Hosting, analytics, the on-device SQLite save, and player sync are built and live in production; the rest is a plan. When a piece is chosen it moves into the "Decided" section of [`GAME_DESIGN.md`](./GAME_DESIGN.md) with a date. The multiplayer ideas live in [`MULTIPLAYER.md`](./MULTIPLAYER.md); this file is the ground they would stand on.
@@ -198,6 +200,8 @@ A scope is any piece of shared state with one authority. Each scope is one Durab
 | `daily:<date>`                | The server (the seed, the board)         | Everyone                |
 | `room:<code>`                 | The players in the room, plus the server | The players in the room |
 
+The `room:<code>` scope is built: see "Co-op rooms" below.
+
 - **Subscriptions.** A client subscribes to the scopes it needs and keeps a local mirror of each in browser SQLite. Rebase happens per scope.
 - **Permissions per mutation.** Each mutation declares which scopes it may target and who may write it. Some are server-only, such as `RecordedLeaderboardEntry`, so a client can never forge them.
 - **Across scopes.** There are no transactions that span scopes. A mutation in one scope makes the server create a mutation in another: `SubmittedRun` in a player scope is verified by replaying it, then the server adds `RecordedLeaderboardEntry` to the leaderboard scope.
@@ -329,6 +333,16 @@ What our engine already had: confirmed tables apart from view tables, rebuilt wi
 6. **Top-N leaderboard tables** kept by the server's apply (an entry that falls out of the top 100 is deleted in the same apply that adds the new one), with "my rank" as a plain HTTP read rather than a synced row.
 7. **Polish:** a pending marker per row, so a view can show "saving" on just the rows with unconfirmed changes, and coalescing in the outbox for whole-value mutations (`ChangedSettings`, `ChangedAppearance`, `ChangedHome`), where only the newest of several pending ones needs to go out.
 8. **Later, a TanStack DB adapter**, so a scope can back a TanStack DB collection, for reach once the engine is open source.
+
+### Co-op rooms
+
+Built on 2026-10-29, bound on every stage. The engine's side of it; the netcode is in `MULTIPLAYER.md`.
+
+- **The scope.** `room:<code>` (`packages/netcode/src/Lobby.ts`), readers `Members`. Tables `room` (code, host, status Lobby, Playing, or Closed, visibility Private or Public, mode, round, the last result) and `members` (player id, display name, slot, READY). The room writes `CreatedRoom`, `JoinedRoom`, and `RecordedRoomResult`; players write `ChangedReady` (the last READY starts the run), `EndedGame` and `KickedPlayer` (the creator only), and `LeftRoom`, each naming its player in `by`, which `authorize` checks against the sender.
+- **The object.** `GameRoom` (`infra/worker/gameRoom.ts`) serves `/sync/socket` and `/sync/exchange` for its scope, the binary game socket, and the internal create and join calls the Worker makes after checking the session token. Joining adds the player to `sync_members` before `JoinedRoom`; leaving or a kick removes them and closes their sockets.
+- **QUICK PLAY.** `Matchmaker` (`infra/worker/matchmaker.ts`) is one object named `matchmaker`. Public rooms post their seat counts to it on every lobby change; players wait on its hibernating sockets; it creates public rooms through the same internal calls.
+- **Routes** on the API Worker: `POST /room/create`, `POST /room/join` (bearer token, the sync limiter per address), `GET /room/socket?code=`, `GET /room/quick`. Without the bindings they answer `Unavailable`.
+- **Storage.** A room keeps a few rows and its log; nothing per tick touches SQLite. A room is deleted a day after its last change once no socket is open.
 
 ## Costs and limits
 

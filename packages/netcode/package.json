@@ -1,0 +1,26 @@
+{
+  "name": "@munch/netcode",
+  "version": "0.1.0",
+  "description": "Munch Manor's co-op netcode: the binary room protocol, the server-authoritative room tick, the room lobby scope, and the browser client with interpolation and own-player prediction.",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./browser": "./src/browser.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "effect-tsgo tsrs --noEmit"
+  },
+  "dependencies": {
+    "@munch/sync-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@munch/sqlite-wasm-effect": "workspace:*"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0"
+  }
+}
