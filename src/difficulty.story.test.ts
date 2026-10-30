@@ -24,6 +24,7 @@ import {
 } from './model'
 import { SURFACE, press, showDialog, tick } from './testing'
 import { asVeteran } from './veteran'
+import { FINAL_WAVE } from './waves'
 import { ZOMBIE_KINDS } from './zombies'
 
 const firstVisit: Model = modifyFields(initialModel, {
@@ -221,7 +222,8 @@ describe('difficulty by PLAY', () => {
 
 const winning = (base: Model): Model =>
   modifyFields(base, {
-    phase: () => Phase.Wave({ wave: 8, elapsedMs: 90_000, spawns: [] }),
+    phase: () =>
+      Phase.Wave({ wave: FINAL_WAVE, elapsedMs: 90_000, spawns: [] }),
   })
 
 describe('unlocking Nightmare', () => {

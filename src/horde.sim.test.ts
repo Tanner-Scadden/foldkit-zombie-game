@@ -8,7 +8,6 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import {
-  DOOR_IDS,
   PARLOUR,
   doorSpawnPoint,
   isSolidAt,
@@ -139,7 +138,7 @@ describe('spawn tables', () => {
 
     const arrivals = Array.fromIterable(seen.values())
     expect(arrivals).toHaveLength(spawns.length)
-    const arrivedCounts = Array.filterMap(DOOR_IDS, door => {
+    const arrivedCounts = Array.filterMap(PARLOUR.doorIds, door => {
       const atDoor = Array.filter(arrivals, arrival => arrival.door === door)
       const kinds = Array.filterMap(ZOMBIE_KIND_ORDER, kind => {
         const count = Array.filter(
@@ -237,7 +236,7 @@ describe('tank pathing', () => {
 
   test('a Tank fits through every doorway at the edge of its spawn spread and reaches the player', () => {
     const room = DOOR_HALF_WIDTH_PX - ZOMBIE_KINDS.Tank.radius
-    Array.forEach(DOOR_IDS, door => {
+    Array.forEach(PARLOUR.doorIds, door => {
       Array.forEach([-room, room], offset => {
         Array.forEach([underThePiano, roomCenter], target => {
           const frames = tankRun(door, offset, target)

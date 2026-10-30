@@ -797,6 +797,7 @@ export const doorRattleShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
               model.phase.spawns,
               model.traps,
               model.pacing.packDoors,
+              levelOf(model).doorIds,
             ),
             model.pacing.warnedPacks,
           ),

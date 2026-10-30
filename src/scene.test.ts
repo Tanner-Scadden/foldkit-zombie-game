@@ -42,10 +42,10 @@ import { pause } from './waves'
 import { maxRounds } from './weapons'
 
 const PLAY_AGAIN =
-  'Press Enter or choose Campaign for 8 waves, or press E or choose Endless to fight until you fall.'
+  'Press Enter or choose Campaign for 10 waves, or press E or choose Endless to fight until you fall.'
 
 const KEEP_GOING =
-  'Press K or choose Keep going to carry on into endless from wave 9 with your money, guns, and traps.'
+  'Press K or choose Keep going to carry on into endless from wave 11 with your money, guns, and traps.'
 
 const BACK_HOME = 'Press H or choose Menu to go back to the main menu.'
 
@@ -53,10 +53,10 @@ const FEEDBACK = 'Tell whoever sent you this what you think!'
 const READY_STATUS = `${GAME_TITLE}, an early alpha. Main menu. Press Enter or choose Play to start. Press E to switch between the campaign and endless, and X to pick the difficulty. Press V or choose Manor for your character, the Munchopedia, what is new, and how to play. Press O or choose the gear for settings. Arrow keys move between the buttons.`
 
 const PAUSED_STATUS =
-  'Paused during wave 3 of 8. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.'
+  'Paused during wave 3 of 10. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.'
 
 const playButton = role('button', {
-  name: 'Play the campaign: 8 waves, then victory',
+  name: 'Play the campaign: 10 waves, then victory',
 })
 
 const pausedRound: Model = pause(
@@ -66,7 +66,7 @@ const pausedRound: Model = pause(
 )
 
 const PREPARING_WAVE_ONE =
-  'Get ready for wave 1 of 8. Press Enter, or use the Start wave button, to start it now.'
+  'Get ready for wave 1 of 10. Press Enter, or use the Start wave button, to start it now.'
 
 describe('Ready screen', () => {
   test('waits for a button: a tap beside the buttons starts nothing, and Play starts the campaign', () => {
@@ -140,7 +140,7 @@ describe('Start wave button', () => {
       expect(role('timer')).toHaveText('6 seconds until wave 1.'),
       expect(startWaveButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
       click(startWaveButton),
-      expect(role('status')).toHaveText('Fighting wave 1 of 8.'),
+      expect(role('status')).toHaveText('Fighting wave 1 of 10.'),
       expect(startWaveButton).toBeAbsent(),
       expect(role('timer')).toBeAbsent(),
     )
@@ -595,7 +595,7 @@ describe('Run stats', () => {
       }),
     })
   const STATS =
-    'Waves cleared: 3 of 8. Zombies splatted: 69 (41 Groaner, 17 Hotfoot, 9 Kaboomer, 2 Big Lug, 0 Big Leaguer, 0 Ankle Biter). Run time 6:11. Accuracy 43 percent. Money earned $615. Hearts lost 7. Traps placed 3. Score 690.'
+    'Waves cleared: 3 of 10. Zombies splatted: 69 (41 Groaner, 17 Hotfoot, 9 Kaboomer, 2 Big Lug, 0 Big Leaguer, 0 Ankle Biter). Run time 6:11. Accuracy 43 percent. Money earned $615. Hearts lost 7. Traps placed 3. Score 690.'
 
   test('Game Over reads out the verdict and the whole run', () => {
     scene(
@@ -709,7 +709,7 @@ describe('New zombie card', () => {
       expect(tapToContinue).toHaveAttr('aria-keyshortcuts', 'Enter'),
       click(tapToContinue),
       expect(card).toBeAbsent(),
-      expect(role('status')).toHaveText('Fighting wave 1 of 8.'),
+      expect(role('status')).toHaveText('Fighting wave 1 of 10.'),
     )
   })
 

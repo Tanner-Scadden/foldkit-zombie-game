@@ -33,22 +33,40 @@ type WindowSize = Readonly<{ width: number; height: number }>
 
 const LANDSCAPE_WINDOW: WindowSize = { width: VIEW_WIDTH, height: VIEW_HEIGHT }
 
-const followAxis = (focus: number, span: number, viewSpan: number): number =>
+const followAxis = (
+  focus: number,
+  start: number,
+  span: number,
+  viewSpan: number,
+): number =>
   span <= viewSpan
-    ? Math.round((span - viewSpan) / 2)
-    : Math.round(clamp(focus - viewSpan / 2, 0, span - viewSpan))
+    ? start + Math.round((span - viewSpan) / 2)
+    : start +
+      Math.round(clamp(focus - start - viewSpan / 2, 0, span - viewSpan))
 
 // NOTE: the camera is derived, not stored. It centers the window on the
-// focus and stops at the level's edges, and a level no bigger than the
-// window sits centered and still. The result is whole pixels, so the pixel
-// art never lands between canvas pixels.
+// focus and stops at the edges of the level's open rooms, its bounds, and a
+// level no bigger than the window sits centered and still. While the kitchen
+// is shut the bounds are the parlour, so the camera never shows the rooms
+// behind a boarded exit. The result is whole pixels, so the pixel art never
+// lands between canvas pixels.
 export const cameraFor = (
   level: Level,
   focus: Vector,
   window: WindowSize = LANDSCAPE_WINDOW,
 ): Camera => ({
-  x: followAxis(focus.x, level.width, window.width),
-  y: followAxis(focus.y, level.height, window.height),
+  x: followAxis(
+    focus.x,
+    level.bounds.left,
+    level.bounds.right - level.bounds.left,
+    window.width,
+  ),
+  y: followAxis(
+    focus.y,
+    level.bounds.top,
+    level.bounds.bottom - level.bounds.top,
+    window.height,
+  ),
   width: window.width,
   height: window.height,
   scale: 1,

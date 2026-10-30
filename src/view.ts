@@ -5,6 +5,7 @@ import { Document, Html, HtmlBuilder } from 'foldkit/html'
 import * as CharacterView from './characterView'
 import { GAME_TITLE } from './constants'
 import { DIFFICULTIES, bestsFor } from './difficulty'
+import { exitDialogView } from './exitView'
 import { feedbackSentence } from './home'
 import {
   homeMenuView,
@@ -116,8 +117,7 @@ const shopHint = (model: Model): string =>
     ? ' The shop stall in the bottom right corner is open. Walk up to it from any side to browse.'
     : ''
 
-const PLAY_AGAIN =
-  'Press Enter or choose Campaign for 8 waves, or press E or choose Endless to fight until you fall.'
+const PLAY_AGAIN = `Press Enter or choose Campaign for ${FINAL_WAVE} waves, or press E or choose Endless to fight until you fall.`
 
 const HOME_MENU =
   'Main menu. Press Enter or choose Play to start. Press E to switch between the campaign and endless, and X to pick the difficulty. Press V or choose Manor for your character, the Munchopedia, what is new, and how to play. Press O or choose the gear for settings. Arrow keys move between the buttons.'
@@ -310,6 +310,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
         homeScreenStepsView(model, h),
         shopDialogView(model, h),
         manorHandView(model, h),
+        exitDialogView(model, h),
         menuPanelView(model, h),
         h.submodel({
           slotId: 'character-picker',

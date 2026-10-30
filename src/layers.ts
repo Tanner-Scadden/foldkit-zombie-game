@@ -1,4 +1,4 @@
-import { Array, Equal } from 'effect'
+import { Array, Equal, Result } from 'effect'
 import { Canvas } from 'foldkit'
 import { type Html, type HtmlBuilder, createLazy } from 'foldkit/html'
 
@@ -17,9 +17,10 @@ import {
   defaultAppearance,
 } from './model'
 import { calloutShapes } from './powerupView'
-import { FLOOR_COLOR, roomShapes } from './room'
+import { FLOOR_COLOR, manorRoomImages, roomShapes } from './room'
 import { type Screen, inLandscapeFrame, screenOf } from './screen'
 import { overlayShapes } from './screens'
+import { group } from './sprite'
 import { thumbAreaView } from './thumbArea'
 import { wavePreviewShapes } from './wavePreview'
 import { isRoundActive } from './waves'
@@ -66,6 +67,8 @@ const NO_DECALS: ReadonlyArray<Decal> = []
 const percentOf = (part: number, whole: number): string =>
   `${(part * 100) / whole}%`
 
+// NOTE: a floor canvas covers the whole map, whose first row can sit above
+// the parlour's top wall, so its shapes are moved down by the map's top.
 const layerCanvasView = (
   level: Level,
   shapes: ReadonlyArray<Canvas.Shape>,
@@ -75,7 +78,10 @@ const layerCanvasView = (
     {
       width: level.width,
       height: level.height,
-      shapes,
+      shapes:
+        level.top === 0
+          ? shapes
+          : [group({ translate: { x: 0, y: -level.top }, shapes })],
       className: 'floor-layer-canvas',
     },
     h,
@@ -119,7 +125,7 @@ const floorLayersView = (
       h.Style({
         width: percentOf(level.width, camera.width),
         height: percentOf(level.height, camera.height),
-        transform: `translate(${percentOf(offset.x, level.width)}, ${percentOf(offset.y, level.height)})`,
+        transform: `translate(${percentOf(offset.x, level.width)}, ${percentOf(offset.y + level.top, level.height)})`,
       }),
     ],
     [
@@ -180,11 +186,19 @@ const WARM_UP_CHUNK = 64
 // this module loads, so it includes the sprites of modules loaded after it.
 export const WARM_UP_CLASS = 'sprite-warm-up'
 
+const roomSources = (): ReadonlyArray<string> =>
+  Array.filterMap(manorRoomImages(), shape =>
+    shape._tag === 'Image' ? Result.succeed(shape.src) : Result.failVoid,
+  )
+
 const warmUpView = (h: HtmlBuilder<Message>): Html =>
   h.div(
     [h.AriaHidden(true), h.Style({ display: 'none' })],
     Array.map(
-      Array.chunksOf(spriteWarmUpSources(defaultAppearance), WARM_UP_CHUNK),
+      Array.chunksOf(
+        [...roomSources(), ...spriteWarmUpSources(defaultAppearance)],
+        WARM_UP_CHUNK,
+      ),
       sources =>
         Canvas.view(
           {

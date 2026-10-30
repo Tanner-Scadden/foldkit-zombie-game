@@ -192,12 +192,12 @@ describe('turning the phone', () => {
       measure(LANDSCAPE),
       expect(root).toHaveAttr('data-layout', 'Landscape'),
       expect(root).toHaveStyle('--screen-w', '320'),
-      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
+      expect(role('status')).toHaveText('Fighting wave 3 of 10.'),
       Subscription.emit(Message.MeasuredGameSurface(PORTRAIT)),
       expect(root).toHaveAttr('data-layout', 'Portrait'),
       expect(root).toHaveStyle('--screen-w', '180'),
       expect(root).toHaveStyle('--screen-h', '390'),
-      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
+      expect(role('status')).toHaveText('Fighting wave 3 of 10.'),
       expect(role('dialog', { name: 'Turn your phone sideways' })).toBeAbsent(),
       expect(role('group', { name: 'Your guns' })).toExist(),
       expect(root).toHaveStyle('--frame-top', '74'),
@@ -206,7 +206,7 @@ describe('turning the phone', () => {
       expect(root).toHaveAttr('data-layout', 'Landscape'),
       expect(root).toHaveStyle('--frame-top', '0'),
       expect(selector('.thumb-area')).toBeAbsent(),
-      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
+      expect(role('status')).toHaveText('Fighting wave 3 of 10.'),
     )
   })
 
@@ -216,7 +216,7 @@ describe('turning the phone', () => {
       given(modifyFields(fighting, { lastDevice: () => 'KeyboardMouse' })),
       measure(PORTRAIT),
       expect(root).toHaveAttr('data-layout', 'Landscape'),
-      expect(role('status')).toHaveText('Fighting wave 3 of 8.'),
+      expect(role('status')).toHaveText('Fighting wave 3 of 10.'),
     )
   })
 })

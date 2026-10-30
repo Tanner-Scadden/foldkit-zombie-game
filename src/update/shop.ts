@@ -29,6 +29,7 @@ import {
   stockTag,
 } from '../shop'
 import { refreshIntent } from '../simulation'
+import { closeExit } from './exit'
 import { type SoundCue, playSounds, uiCue } from './sound'
 import { type UpdateReturn, type UpdateStep, withInput } from './step'
 
@@ -91,7 +92,7 @@ export const enterShop: UpdateStep = stepModel =>
 export const closeShop: UpdateStep = stepModel =>
   isBrowsing(stepModel.shop)
     ? Update.combine(stepModel, [shopDialog.close, leaveShopStep])
-    : { model: stepModel }
+    : closeExit(stepModel)
 
 export const closeShopOutsidePreparation: UpdateStep = stepModel =>
   Phase.isAnyOf(['Preparation'])(stepModel.phase)
@@ -148,6 +149,7 @@ export const focusShopItem = (model: Model, item: ShopItemId): Model =>
       modifyFields(model, {
         shop: () => ShopState.Browsing({ focusedItem: item }),
       }),
+    AtExit: () => model,
     Dismissed: () => model,
   })
 

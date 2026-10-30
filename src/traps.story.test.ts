@@ -3,7 +3,7 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { PARLOUR, doorSpawnPoint, isInsideRoomAt } from './arena'
+import { MANOR, PARLOUR, doorSpawnPoint, isInsideRoomAt } from './arena'
 import {
   FIRE_INTERVAL_MS,
   PLAYER_RADIUS,
@@ -507,10 +507,10 @@ describe('barricades and pathing', () => {
       tick(FRAME_MS),
       model(({ flowField, wideFlowField }) => {
         expect(flowField).not.toBe(start.flowField)
-        expect(flowField.tolls).toEqual(tollsOf(PARLOUR, start.traps))
-        expect(wideFlowField.tolls).toEqual(tollsOf(PARLOUR, start.traps))
+        expect(flowField.tolls).toEqual(tollsOf(MANOR, start.traps))
+        expect(wideFlowField.tolls).toEqual(tollsOf(MANOR, start.traps))
         const innerDistance = pipe(
-          Array.head(PARLOUR.thresholds.North.indices),
+          Array.head(MANOR.thresholds.North.indices),
           Option.flatMap(index => Array.get(flowField.distances, index)),
           Option.getOrThrow,
         )
@@ -585,7 +585,7 @@ describe('barricades and pathing', () => {
     expect(eventsOf(frames, GameEvent.guards.TrapBroken)).toHaveLength(1)
     const last = Option.getOrThrow(Array.last(frames))
     expect(last.traps).toHaveLength(3)
-    expect(last.flowField.tolls).toEqual(tollsOf(PARLOUR, last.traps))
+    expect(last.flowField.tolls).toEqual(tollsOf(MANOR, last.traps))
     expect(
       Array.some(last.zombies, zombie => zombie.y > 40 && zombie.y < 170),
     ).toBe(true)

@@ -31,8 +31,8 @@ const keyboardHelp = role('region', {
 })
 const touchHelp = role('region', { name: 'How to play with touch' })
 const PAUSED_STATUS =
-  'Paused during wave 3 of 8. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.'
-const FIGHTING_STATUS = 'Fighting wave 3 of 8.'
+  'Paused during wave 3 of 10. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.'
+const FIGHTING_STATUS = 'Fighting wave 3 of 10.'
 
 const card = (action: string, input: string) =>
   role('listitem', { name: `${action}: ${input}` })

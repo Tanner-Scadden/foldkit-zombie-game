@@ -404,8 +404,11 @@ describe('wave plans', () => {
     )
   }
 
-  test('there are eight waves that grow in health and speed with the wave number', () => {
-    expect(FINAL_WAVE).toBe(8)
+  // NOTE: waves 8 and 9 are a breather and a test between the Ankle Biters
+  // and the finale, so health grows through wave 7 and the finale tops it,
+  // while speed grows every wave.
+  test('there are ten waves that grow in speed, grow in health to wave 7, and peak at the finale', () => {
+    expect(FINAL_WAVE).toBe(10)
     const totals = Array.makeBy(FINAL_WAVE, index => healthOf(index + 1))
     const speeds = Array.map(WAVE_PLANS, ({ speedScale }) => speedScale)
     expect(
@@ -414,10 +417,17 @@ describe('wave plans', () => {
         ([earlier, later]) => later > earlier,
       ),
     ).toBe(true)
+    const arc = Array.take(totals, 7)
     expect(
       Array.every(
-        Array.zip(Array.dropRight(totals, 1), Array.drop(totals, 1)),
+        Array.zip(Array.dropRight(arc, 1), Array.drop(arc, 1)),
         ([earlier, later]) => later > earlier,
+      ),
+    ).toBe(true)
+    expect(
+      Array.every(
+        Array.dropRight(totals, 1),
+        total => total < (totals[9] ?? 0),
       ),
     ).toBe(true)
   })

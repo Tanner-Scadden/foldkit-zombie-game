@@ -3,7 +3,7 @@ import { given, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { DOOR_IDS, PARLOUR, doorSpawnPoint, nearestDoor } from './arena'
+import { PARLOUR, doorSpawnPoint, nearestDoor } from './arena'
 import {
   DOOR_HALF_WIDTH_PX,
   MAX_BLASTS_PER_FRAME,
@@ -116,7 +116,9 @@ describe('the kind table', () => {
       (kind, index) => ({
         atMs: 0,
         kind,
-        door: Option.getOrThrow(Array.get(DOOR_IDS, index % DOOR_IDS.length)),
+        door: Option.getOrThrow(
+          Array.get(PARLOUR.doorIds, index % PARLOUR.doorIds.length),
+        ),
         offset: 5,
         speedScale: 1.1,
         hpScale: 1,
@@ -533,6 +535,8 @@ describe('spawn tables', () => {
       ['Tank'],
       ['Thrower'],
       ['Crawler'],
+      [],
+      [],
       [],
     ])
     Array.forEach([1, 2, 3, 99, 31337], seed => {

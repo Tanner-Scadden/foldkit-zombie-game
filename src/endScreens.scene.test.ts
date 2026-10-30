@@ -31,13 +31,13 @@ const tickPastGrace = () =>
 
 const menuButton = role('button', { name: 'Menu: back to the home screen' })
 const campaignButton = role('button', {
-  name: 'Campaign: 8 waves, then victory',
+  name: 'Campaign: 10 waves, then victory',
 })
 const endlessButton = role('button', {
   name: 'Endless: waves keep coming until you fall',
 })
 const keepGoingButton = role('button', {
-  name: 'Keep going: carry on into endless from wave 9 with your money, guns, and traps',
+  name: 'Keep going: carry on into endless from wave 11 with your money, guns, and traps',
 })
 const updateChip = role('button', { name: /New version ready/ })
 const mainMenu = role('button', { name: /^More:/ })

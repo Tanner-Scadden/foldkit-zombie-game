@@ -59,6 +59,8 @@ const LAYS: Readonly<Record<DoorId, Lay>> = {
   South: 'Across',
   West: 'Upright',
   East: 'Upright',
+  Back: 'Across',
+  Window: 'Upright',
 }
 
 const trapTone = (hitRemainingMs: number): Tone =>

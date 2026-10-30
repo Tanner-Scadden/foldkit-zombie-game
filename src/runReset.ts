@@ -1,7 +1,8 @@
-import { PARLOUR, startingLevel } from './arena'
+import { MANOR, startingLevel } from './arena'
 import { cameraFor } from './camera'
 import { ZERO_VECTOR } from './geometry'
 import { deriveIntent } from './input'
+import { freshOvens } from './kitchen'
 import {
   Boss,
   DebutCard,
@@ -59,6 +60,7 @@ export type RunFields = Pick<
   | 'laserSight'
   | 'trapNotice'
   | 'level'
+  | 'ovens'
   | 'flowField'
   | 'wideFlowField'
   | 'intent'
@@ -101,12 +103,13 @@ export const freshRun = (model: Model): RunFields => ({
   laserSight: 'None',
   trapNotice: TrapNotice.Quiet(),
   level: startingLevel,
-  flowField: flowFieldToward(PARLOUR, initialPlayer, 'Narrow', []),
-  wideFlowField: flowFieldToward(PARLOUR, initialPlayer, 'Wide', []),
+  ovens: freshOvens(MANOR),
+  flowField: flowFieldToward(MANOR, initialPlayer, 'Narrow', []),
+  wideFlowField: flowFieldToward(MANOR, initialPlayer, 'Wide', []),
   intent: deriveIntent(
     model.input,
     initialPlayer,
-    cameraFor(PARLOUR, initialPlayer),
+    cameraFor(MANOR, initialPlayer),
   ),
   debutCard: DebutCard.Hidden(),
   hintBand: 'Top',

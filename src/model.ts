@@ -3,7 +3,7 @@ import { defineTaggedUnion } from 'foldkit/schema'
 
 import { Dialog, RadioGroup, Tabs } from '@foldkit/ui'
 
-import { PARLOUR, startingLevel } from './arena'
+import { MANOR, PARLOUR, startingLevel } from './arena'
 import { DEFAULT_SEED, PISTOL_MAGAZINE, PLAYER_MAX_HP } from './constants'
 import { flowFieldToward } from './pathing'
 import {
@@ -392,10 +392,17 @@ export type Decal = typeof Decal.Type
 export const TrapKind = Schema.Literals(['Barricade', 'Turret'])
 export type TrapKind = typeof TrapKind.Type
 
-export const DoorId = Schema.Literals(['North', 'West', 'East', 'South'])
+export const DoorId = Schema.Literals([
+  'North',
+  'West',
+  'East',
+  'South',
+  'Back',
+  'Window',
+])
 export type DoorId = typeof DoorId.Type
 
-export const LevelId = Schema.Literals(['Parlour'])
+export const LevelId = Schema.Literals(['Parlour', 'Manor'])
 export type LevelId = typeof LevelId.Type
 
 export const ExitId = Schema.String
@@ -570,6 +577,8 @@ export const GameEvent = defineTaggedUnion({
   AnklesGrabbed: { x: Schema.Number, y: Schema.Number },
   PackFrenzied: { x: Schema.Number, y: Schema.Number, door: DoorId },
   PackWiped: { x: Schema.Number, y: Schema.Number, bonus: Schema.Number },
+  OvenBelched: { x: Schema.Number, y: Schema.Number },
+  ZombieSlipped: { x: Schema.Number, y: Schema.Number },
 })
 export type GameEvent = typeof GameEvent.Type
 
@@ -1017,9 +1026,12 @@ export type LaserSight = typeof LaserSight.Type
 export const ShopCategory = Schema.Literals(['Guns', 'Health', 'Traps'])
 export type ShopCategory = typeof ShopCategory.Type
 
+// NOTE: AtExit is the player standing at a boarded exit between waves with
+// its offer open, the way Browsing is the player at the stall.
 export const ShopState = defineTaggedUnion({
   Away: {},
   Browsing: { focusedItem: ShopItemId },
+  AtExit: { exit: ExitId },
   Dismissed: {},
 })
 export type ShopState = typeof ShopState.Type
@@ -1031,6 +1043,16 @@ export const ShopChatter = defineTaggedUnion({
   Refused: { item: ShopItemId },
 })
 export type ShopChatter = typeof ShopChatter.Type
+
+// NOTE: a kitchen oven belches fire when it is shot while Ready, then cools
+// off before it can again. The Model keeps one per oven on the map, in the
+// order the map lists them.
+export const Oven = defineTaggedUnion({
+  Ready: {},
+  Belching: { remainingMs: Schema.Number, burnedTicks: Schema.Number },
+  Cooling: { remainingMs: Schema.Number },
+})
+export type Oven = typeof Oven.Type
 
 export const Wallet = Schema.Struct({
   balance: Schema.Number,
@@ -1172,6 +1194,8 @@ export const Model = Schema.Struct({
   trapHint: TrapHint,
   trapNotice: TrapNotice,
   level: LevelState,
+  ovens: Schema.Array(Oven),
+  exitDialog: Dialog.Model,
   flowField: FlowField,
   wideFlowField: FlowField,
   rngState: Schema.Number,
@@ -1247,6 +1271,8 @@ export const initialPlayer: Player = {
 export const emptyWallet: Wallet = { balance: 0, earned: 0, shown: 0 }
 
 const SHOP_DIALOG_ID = 'shop'
+
+const EXIT_DIALOG_ID = 'exit-offer'
 
 const HOME_SCREEN_STEPS_ID = 'home-screen-steps'
 
@@ -1423,8 +1449,10 @@ export const initialModel: Model = {
   trapHint: TrapHint.Unseen(),
   trapNotice: TrapNotice.Quiet(),
   level: startingLevel,
-  flowField: flowFieldToward(PARLOUR, initialPlayer, 'Narrow', []),
-  wideFlowField: flowFieldToward(PARLOUR, initialPlayer, 'Wide', []),
+  ovens: [],
+  exitDialog: Dialog.init({ id: EXIT_DIALOG_ID }),
+  flowField: flowFieldToward(MANOR, initialPlayer, 'Narrow', []),
+  wideFlowField: flowFieldToward(MANOR, initialPlayer, 'Wide', []),
   rngState: DEFAULT_SEED,
   input: idleInput,
   intent: idleIntent,

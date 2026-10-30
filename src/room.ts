@@ -7,6 +7,8 @@ import {
   DOOR_SYMBOLS,
   type Exit,
   type Level,
+  MANOR,
+  MANOR_SPEC,
   PARLOUR_SPEC,
   SHOP_STALL_SYMBOL,
   type Tile,
@@ -14,10 +16,23 @@ import {
   closedExits,
   isInsideRoom,
   isWalkableTile,
+  openExit,
   symbolAt,
   tilesWithSymbol,
 } from './arena'
 import { SHAKE_MAX_PX, TILE_SIZE } from './constants'
+import {
+  backDoorShapes,
+  kitchenFloorShapes,
+  kitchenWallShapes,
+  openedExitShapes,
+  ovenShapes,
+  pantryShapes,
+  prepTableShapes,
+  sacksShapes,
+  sinkShapes,
+  windowShapes,
+} from './kitchenView'
 import type { DoorId } from './model'
 import { nextRandom } from './prng'
 import {
@@ -175,7 +190,31 @@ const boxOfKind = (level: Level, kind: CoverKind): Option.Option<Box> =>
 
 // FLOOR
 
-const plankRow = (level: Level, row: number): ReadonlyArray<Canvas.Shape> => {
+// NOTE: the parlour's plank floor covers the parlour's own block of the
+// map, which is the whole map when the level is the parlour alone.
+type Floor = Readonly<{ width: number; height: number; tileCount: number }>
+
+const parlourFloorOf = (level: Level): Floor =>
+  pipe(
+    level.rooms,
+    Array.findFirst(({ id }) => id === 'Parlour'),
+    Option.match({
+      onNone: () => ({
+        width: level.width,
+        height: level.height,
+        tileCount: level.tileCount,
+      }),
+      onSome: ({ box }) => ({
+        width: box.right - box.left,
+        height: box.bottom - box.top,
+        tileCount:
+          ((box.right - box.left) * (box.bottom - box.top)) /
+          (TILE_SIZE * TILE_SIZE),
+      }),
+    }),
+  )
+
+const plankRow = (level: Floor, row: number): ReadonlyArray<Canvas.Shape> => {
   const y = row * PLANK_HEIGHT
   const joints = Array.sort(
     Array.makeBy(PLANK_JOINTS, index =>
@@ -201,12 +240,12 @@ const plankRow = (level: Level, row: number): ReadonlyArray<Canvas.Shape> => {
   ]
 }
 
-const plankRowsOf = (level: Level): number =>
+const plankRowsOf = (level: Floor): number =>
   Math.ceil(level.height / PLANK_HEIGHT)
 
 const FLOOR_MARKS_PER_TILE = 70 / (32 * 18)
 
-const floorMark = (level: Level, index: number): Canvas.Shape => {
+const floorMark = (level: Floor, index: number): Canvas.Shape => {
   const x = Math.floor(roll(index, 101) * level.width)
   const plank = Math.floor(roll(index, 102) * plankRowsOf(level))
   const isKnot = roll(index, 103) < 0.4
@@ -221,7 +260,7 @@ const floorMark = (level: Level, index: number): Canvas.Shape => {
       )
 }
 
-const boardShapes = (level: Level): ReadonlyArray<Canvas.Shape> => [
+const boardShapes = (level: Floor): ReadonlyArray<Canvas.Shape> => [
   rect(
     -SHAKE_MAX_PX,
     -SHAKE_MAX_PX,
@@ -507,18 +546,23 @@ const isWall = (level: Level, column: number, row: number): boolean =>
 const MARK = 'M'
 const BLANK = '.'
 
+// NOTE: the grid's lines are the map's lines, so a run's y counts from the
+// map's first row. runTop turns it back into a world y.
 const markedGrid = (
   level: Level,
   isMarked: (column: number, row: number) => boolean,
 ): ReadonlyArray<string> =>
-  Array.map(level.tiles, (line, row) =>
+  Array.map(level.tiles, (line, index) =>
     pipe(
       Array.makeBy(line.length, column =>
-        isMarked(column, row) ? MARK : BLANK,
+        isMarked(column, index + level.topRow) ? MARK : BLANK,
       ),
       Array.join(''),
     ),
   )
+
+const runTop = (level: Level, runY: number): number =>
+  (runY + level.topRow) * TILE_SIZE
 
 type Inset = Readonly<{
   dx: number
@@ -528,6 +572,7 @@ type Inset = Readonly<{
 }>
 
 const runShapes = (
+  level: Level,
   grid: ReadonlyArray<string>,
   fill: string,
   inset: Inset,
@@ -535,7 +580,7 @@ const runShapes = (
   Array.map(pixelRuns(grid, { [MARK]: fill }), run =>
     rect(
       run.x * TILE_SIZE + inset.dx,
-      run.y * TILE_SIZE + inset.dy,
+      runTop(level, run.y) + inset.dy,
       inset.width(run.width * TILE_SIZE),
       inset.height(run.height * TILE_SIZE),
       fill,
@@ -576,7 +621,7 @@ const northFaceSpans = (level: Level): ReadonlyArray<Span> =>
     }),
     run => ({
       x: run.x * TILE_SIZE,
-      y: (run.y + 1) * TILE_SIZE,
+      y: runTop(level, run.y + 1),
       width: run.width * TILE_SIZE,
     }),
   )
@@ -638,6 +683,7 @@ const wallShapes = (level: Level): ReadonlyArray<Canvas.Shape> => {
   const spans = northFaceSpans(level)
   return [
     ...runShapes(
+      level,
       markedGrid(level, (column, row) => isWall(level, column, row)),
       WALL_COLOR,
       FULL_TILE,
@@ -647,6 +693,7 @@ const wallShapes = (level: Level): ReadonlyArray<Canvas.Shape> => {
       rect(x, y - TILE_SIZE * 2 + FACE_TOP - 1, width, 1, WALL_CAP_EDGE_COLOR),
     ),
     ...runShapes(
+      level,
       markedGrid(level, isWallFacing(level, 1, 0)),
       WALL_EDGE_COLOR,
       {
@@ -657,6 +704,7 @@ const wallShapes = (level: Level): ReadonlyArray<Canvas.Shape> => {
       },
     ),
     ...runShapes(
+      level,
       markedGrid(level, isWallFacing(level, -1, 0)),
       WALL_EDGE_COLOR,
       {
@@ -667,6 +715,7 @@ const wallShapes = (level: Level): ReadonlyArray<Canvas.Shape> => {
       },
     ),
     ...runShapes(
+      level,
       markedGrid(level, isWallFacing(level, 0, -1)),
       WALL_TRIM_COLOR,
       {
@@ -684,6 +733,7 @@ const wallShadowShapes = (level: Level): ReadonlyArray<Canvas.Shape> => [
     rect(x, y, width, 2, WALL_SHADOW_COLOR),
   ),
   ...runShapes(
+    level,
     markedGrid(level, isWallFacing(level, 1, 0)),
     SIDE_SHADOW_COLOR,
     {
@@ -694,6 +744,7 @@ const wallShadowShapes = (level: Level): ReadonlyArray<Canvas.Shape> => [
     },
   ),
   ...runShapes(
+    level,
     markedGrid(level, isWallFacing(level, -1, 0)),
     SIDE_SHADOW_COLOR,
     {
@@ -1049,6 +1100,8 @@ const DOOR_DRAWINGS: Readonly<
   West: box => sideDoorShapes(box, true),
   East: box => sideDoorShapes(box, false),
   South: southDoorShapes,
+  Back: backDoorShapes,
+  Window: windowShapes,
 }
 
 const doorwayShapes = (level: Level): ReadonlyArray<Canvas.Shape> =>
@@ -1596,6 +1649,11 @@ const COVER_DRAWINGS: Readonly<
   Coffin: coffinShapes,
   Trunk: trunkShapes,
   Crate: crateShapes,
+  Oven: ovenShapes,
+  PrepTable: prepTableShapes,
+  Sink: sinkShapes,
+  Pantry: pantryShapes,
+  Sacks: sacksShapes,
 }
 
 const coverShapes = (
@@ -1633,7 +1691,8 @@ const PARLOUR_STAINS: ReadonlyArray<Canvas.Shape> = bloodTrail([
   [54, 121, 1, 2],
 ])
 
-const isParlour = (level: Level): boolean => level.spec.id === PARLOUR_SPEC.id
+const isParlour = (level: Level): boolean =>
+  level.spec.id === PARLOUR_SPEC.id || level.spec.id === MANOR_SPEC.id
 
 const floorDetailShapes = (level: Level): ReadonlyArray<Canvas.Shape> => [
   ...(isParlour(level) ? rugShapes(PARLOUR_RUG) : []),
@@ -1651,12 +1710,21 @@ const floorDetailShapes = (level: Level): ReadonlyArray<Canvas.Shape> => [
     : []),
 ]
 
-const cobwebShapes = (level: Level): ReadonlyArray<Canvas.Shape> => [
+const cobwebShapes = (level: Floor): ReadonlyArray<Canvas.Shape> => [
   ...cobweb(TILE_SIZE, FACE_TOP + 1, true, true),
   ...cobweb(level.width - TILE_SIZE, FACE_TOP + 1, false, true),
   ...cobweb(TILE_SIZE, level.height - TILE_SIZE, true, false),
   ...cobweb(level.width - TILE_SIZE, level.height - TILE_SIZE, false, false),
 ]
+
+const openedExitArt = (level: Level): ReadonlyArray<Canvas.Shape> =>
+  Array.flatMap(
+    Array.filter(level.exits, ({ isOpen }) => isOpen),
+    (exit: Exit) =>
+      Array.isReadonlyArrayNonEmpty(exit.tiles)
+        ? openedExitShapes(boundingBox(exit.tiles))
+        : [],
+  )
 
 // ROOM
 
@@ -1670,21 +1738,34 @@ export const roomShapes = (level: Level): ReadonlyArray<Canvas.Shape> => {
   if (cached !== undefined) {
     return cached
   }
+  const floor = parlourFloorOf(level)
   const shapes = bakeShapes([
-    ...boardShapes(level),
+    ...boardShapes(floor),
+    ...kitchenFloorShapes(level),
     ...floorDetailShapes(level),
     ...wallShadowShapes(level),
     ...wallShapes(level),
+    ...kitchenWallShapes(level),
     ...(isParlour(level) ? PARLOUR_WALL_DECOR : []),
     ...sconceShapes(level),
     ...closedExitShapes(level),
+    ...openedExitArt(level),
     ...doorwayShapes(level),
     ...allCoverShapes(level),
-    ...cobwebShapes(level),
+    ...cobwebShapes(floor),
   ])
   builtRooms.set(level, shapes)
   return shapes
 }
+
+// NOTE: the manor's two room images, with the kitchen shut and open. The
+// sprite warm-up asks for both before it lists the images to decode, so the
+// open kitchen's image is decoded behind the loading splash and opening the
+// kitchen never shows a bare floor for a frame.
+export const manorRoomImages = (): ReadonlyArray<Canvas.Shape> => [
+  ...roomShapes(MANOR),
+  ...roomShapes(openExit(MANOR, 'Kitchen')),
+]
 
 // HEARTH FIRE
 

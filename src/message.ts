@@ -89,6 +89,8 @@ export const Message = defineMessageUnion({
   ClickedPlaceTrapButton: {},
   ClickedNextTrapButton: {},
   GotShopDialogMessage: { message: Dialog.Message },
+  GotExitDialogMessage: { message: Dialog.Message },
+  ClickedOpenExitButton: {},
   GotShopTabsMessage: { message: Tabs.Message },
   ClickedBuyButton: { item: ShopItemId },
   PressedBuyKey: { item: ShopItemId },

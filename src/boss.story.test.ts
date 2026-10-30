@@ -136,20 +136,20 @@ const preparationOf = (current: Model) =>
   )
 
 describe('planning the boss', () => {
-  test('only every eighth wave has a boss', () => {
+  test('only every tenth wave has a boss', () => {
     expect(FINAL_WAVE).toBe(BOSS_RULES.everyWaves)
     expect(
       Array.filter(
-        Array.makeBy(24, index => index + 1),
+        Array.makeBy(30, index => index + 1),
         hasBoss,
       ),
-    ).toEqual([8, 16, 24])
+    ).toEqual([10, 20, 30])
   })
 
-  test('clearing wave 7 plans a boss at a door that waits out two thirds of wave 8', () => {
+  test('clearing wave 9 plans a boss at a door that waits out two thirds of wave 10', () => {
     story(
       update,
-      given(clearing(7)),
+      given(clearing(FINAL_WAVE - 1)),
       tick(FRAME_MS),
       model(current => {
         const preparation = preparationOf(current)
@@ -164,27 +164,28 @@ describe('planning the boss', () => {
         expect(waiting.hp).toBe(
           scaledHp(
             ZOMBIE_KINDS.Boss.hp,
-            (WAVE_PLANS[7]?.hpScale ?? 1) * DIFFICULTIES.Normal.healthScale,
+            (WAVE_PLANS[FINAL_WAVE - 1]?.hpScale ?? 1) *
+              DIFFICULTIES.Normal.healthScale,
           ),
         )
       }),
     )
   })
 
-  test('endless brings him back every eighth wave with the wave health bonus', () => {
+  test('endless brings him back every tenth wave with the wave health bonus', () => {
     story(
       update,
-      given(modifyFields(clearing(15), { mode: () => RunMode.Endless() })),
+      given(modifyFields(clearing(19), { mode: () => RunMode.Endless() })),
       tick(FRAME_MS),
       model(current => {
-        expect(preparationOf(current).wave).toBe(16)
+        expect(preparationOf(current).wave).toBe(20)
         const waiting = Option.getOrThrow(
           Option.liftPredicate(current.boss, Boss.guards.Waiting),
         )
         expect(waiting.hp).toBe(
           scaledHp(
             ZOMBIE_KINDS.Boss.hp,
-            hpScaleFor(16) * DIFFICULTIES.Normal.healthScale,
+            hpScaleFor(20) * DIFFICULTIES.Normal.healthScale,
           ),
         )
         expect(waiting.hp).toBeGreaterThan(BOSS_HP)
@@ -1281,7 +1282,7 @@ describe('the door preview', () => {
     })
   }
 
-  test('marks the boss at its door on wave 8 and nowhere else', () => {
+  test('marks the boss at its door on the last wave and nowhere else', () => {
     const withBoss = preparing(
       FINAL_WAVE,
       Boss.Waiting({ door: 'South', waitBelow: 20, hp: BOSS_HP }),

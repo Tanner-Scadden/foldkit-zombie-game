@@ -3,7 +3,16 @@ import { given, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { PARLOUR, ROOM_MAP, isSolidAt, isWalkableTile } from './arena'
+import {
+  PARLOUR,
+  ROOM_MAP,
+  isInsideRoomAt,
+  isSolidAt,
+  isWalkableTile,
+  levelOf,
+  tileCenter,
+  tileOfIndex,
+} from './arena'
 import {
   MAX_FRAME_DELTA_MS,
   PLAYER_MAX_HP,
@@ -77,7 +86,7 @@ describe('the room', () => {
     expect(PARLOUR.rows * TILE_SIZE).toBe(PARLOUR.height)
     expect(PARLOUR.doorIds).toEqual(['North', 'West', 'East', 'South'])
     expect(
-      Array.map(Object.values(PARLOUR.doors), ({ center }) => ({
+      Array.map(PARLOUR.doorIds, id => PARLOUR.doors[id]).map(({ center }) => ({
         isOnEdge:
           center.x < TILE_SIZE ||
           center.x > PARLOUR.width - TILE_SIZE ||
@@ -87,16 +96,18 @@ describe('the room', () => {
     ).toEqual(Array.makeBy(4, () => ({ isOnEdge: true })))
   })
 
-  test('every walkable tile can reach the player', () => {
+  test('every walkable tile in the house can reach the player', () => {
     const { flowField } = initialModel
+    const level = levelOf(initialModel)
     const walkableDistances = Array.filter(
       flowField.distances,
-      (_distance, index) =>
-        isWalkableTile(
-          PARLOUR,
-          index % PARLOUR.columns,
-          Math.floor(index / PARLOUR.columns),
-        ),
+      (_distance, index) => {
+        const { column, row } = tileOfIndex(level, index)
+        return (
+          isWalkableTile(level, column, row) &&
+          isInsideRoomAt(level, tileCenter({ column, row }))
+        )
+      },
     )
     expect(Array.isReadonlyArrayNonEmpty(walkableDistances)).toBe(true)
     expect(

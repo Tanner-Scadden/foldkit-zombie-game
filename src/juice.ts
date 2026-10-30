@@ -183,6 +183,8 @@ const eventTrauma = (event: GameEvent): number =>
     AnklesGrabbed: () => ANKLE_TRAUMA,
     PackFrenzied: () => FRENZY_TRAUMA,
     PackWiped: () => 0,
+    OvenBelched: () => SHAKE_TRAUMA_BURP,
+    ZombieSlipped: () => 0,
   })
 
 const shakeAxis = (roll: number, trauma: number): number => {
@@ -331,6 +333,8 @@ const eventPopups = (
       ),
     PackWiped: ({ x, y, bonus }) =>
       generateMany(state, 1, popup('Wipe', bonus, x, y - PAYDAY_POPUP_LIFT_PX)),
+    OvenBelched: () => noPopups(state),
+    ZombieSlipped: () => noPopups(state),
   })
 
 const agePopups = (

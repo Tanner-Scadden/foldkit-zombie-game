@@ -23,6 +23,7 @@ import {
   SetFullscreen,
   UpdateServiceWorker,
 } from './commands'
+import { isAtExit } from './exits'
 import {
   countRunFrom,
   forgetNewEntriesFrom,
@@ -77,7 +78,7 @@ import { dropClip } from './particles'
 import { LinkFlow } from './playerSync'
 import { forgetTutorial } from './save'
 import { isUsingServiceWorker } from './serviceWorker'
-import { isBrowsing } from './shop'
+import { isAtCounter, isBrowsing } from './shop'
 import { advanceGame, clampFrameDelta, refreshIntent } from './simulation'
 import { tallyFrame } from './stats'
 import { PlayerStore } from './store'
@@ -86,6 +87,12 @@ import {
   foldCharacter,
   openCharacterPicker,
 } from './update/character'
+import {
+  enterExit,
+  foldExitDialog,
+  leaveExitWithoutDialog,
+  openOfferedExit,
+} from './update/exit'
 import {
   canMoveHomeFocus,
   closePanel,
@@ -268,7 +275,7 @@ const victoryFromKey = (model: Model, code: string): Model =>
 const swapGun = (model: Model): Model => {
   if (
     !isRoundActive(model.phase) ||
-    isBrowsing(model.shop) ||
+    isAtCounter(model.shop) ||
     isDebutCardUp(model)
   ) {
     return model
@@ -334,7 +341,7 @@ const reloadHeldGun: UpdateStep = stepModel => {
   const { player } = stepModel
   if (
     !isRoundActive(stepModel.phase) ||
-    isBrowsing(stepModel.shop) ||
+    isAtCounter(stepModel.shop) ||
     !canReload(player)
   ) {
     return { model: stepModel }
@@ -449,9 +456,11 @@ const updateGame = (model: Model, message: Message) =>
         )
         const hasEnteredShop =
           !isBrowsing(model.shop) && isBrowsing(advanced.shop)
+        const hasEnteredExit = !isAtExit(model.shop) && isAtExit(advanced.shop)
         return Update.combine(hasEnteredShop ? learnShop(advanced) : advanced, [
           playSounds(frameSoundCues(advanced.frameEvents)),
           ...(hasEnteredShop ? [enterShop] : []),
+          ...(hasEnteredExit ? [enterExit] : []),
           closeShopOutsidePreparation,
         ])
       } else if (isScreenAnimated(model.phase)) {
@@ -467,7 +476,7 @@ const updateGame = (model: Model, message: Message) =>
 
     PressedKey: ({ code }) => {
       const keyed = useDevice(model, 'KeyboardMouse')
-      if (isBrowsing(keyed.shop)) {
+      if (isAtCounter(keyed.shop)) {
         return unlockAudio(
           withInput(toggleAudioFromKey(keyed, code), input =>
             pressKey(input, code),
@@ -607,7 +616,7 @@ const updateGame = (model: Model, message: Message) =>
       foldCharacter(model, characterMessage),
 
     ClickedStartWaveButton: () =>
-      isBrowsing(model.shop) || isDebutCardBlocking(model)
+      isAtCounter(model.shop) || isDebutCardBlocking(model)
         ? { model }
         : unlockAudio(learnStartWaveWhen(model, startWaveEarly(model))),
 
@@ -692,12 +701,12 @@ const updateGame = (model: Model, message: Message) =>
         : { model },
 
     ClickedPlaceTrapButton: () =>
-      isBrowsing(model.shop) || isDebutCardBlocking(model)
+      isAtCounter(model.shop) || isDebutCardBlocking(model)
         ? { model }
         : Update.combine(model, [unlockAudio, placeSelectedTrap]),
 
     ClickedNextTrapButton: () =>
-      isBrowsing(model.shop) || isDebutCardBlocking(model)
+      isAtCounter(model.shop) || isDebutCardBlocking(model)
         ? { model }
         : Update.combine(model, [unlockAudio, nextTrap]),
 
@@ -706,6 +715,14 @@ const updateGame = (model: Model, message: Message) =>
         stepModel => foldShopDialog(stepModel, dialogMessage),
         leaveShopWithoutDialog,
       ]),
+
+    GotExitDialogMessage: ({ message: dialogMessage }) =>
+      Update.combine(model, [
+        stepModel => foldExitDialog(stepModel, dialogMessage),
+        leaveExitWithoutDialog,
+      ]),
+
+    ClickedOpenExitButton: () => openOfferedExit(model),
 
     GotShopTabsMessage: ({ message: tabsMessage }) =>
       isBrowsing(model.shop) ? foldShopTabs(model, tabsMessage) : { model },

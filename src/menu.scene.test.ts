@@ -54,7 +54,7 @@ const closeDialog = () => [
 ]
 
 const playButton = role('button', {
-  name: 'Play the campaign: 8 waves, then victory',
+  name: 'Play the campaign: 10 waves, then victory',
 })
 const playEndlessButton = role('button', {
   name: 'Play endless: waves keep coming until you fall',
@@ -96,9 +96,9 @@ const bests = role('region', { name: 'Your bests, Normal' })
 const NO_POINTERDOWN_PATH =
   /neither it nor any ancestor has a pointerdown handler/
 
-const PREPARING = 'Get ready for wave 1 of 8.'
+const PREPARING = 'Get ready for wave 1 of 10.'
 const PAUSED =
-  'Paused during wave 3 of 8. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.'
+  'Paused during wave 3 of 10. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.'
 
 const home: Model = asVeteran(initialModel)
 

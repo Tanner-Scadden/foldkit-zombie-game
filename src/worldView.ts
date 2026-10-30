@@ -1,7 +1,7 @@
 import { Array } from 'effect'
 import type { Canvas } from 'foldkit'
 
-import { type Level, levelOf } from './arena'
+import { type Level, isInsideRoomAt, levelOf } from './arena'
 import { bossGroundShapes, bossOverheadShapes } from './bossView'
 import { type Camera, sceneOffset } from './camera'
 import { type Drawable, depthSortedShapes } from './depth'
@@ -14,6 +14,11 @@ import {
   groundParticleShapes,
   popupShape,
 } from './effectsView'
+import {
+  exitPromptShapes,
+  ovenFlameShapes,
+  ovenGlowShapes,
+} from './kitchenView'
 import { type Model, Phase, ShopState, type Vector, type Zombie } from './model'
 import { isBehindWall, occludersOf } from './occluders'
 import {
@@ -73,11 +78,36 @@ export const worldOffset = (model: Model, camera: Camera): Vector =>
 const stallLook = (model: Model): StallLook => {
   if (!isShopOpenFor(model.phase)) {
     return 'Closed'
-  } else if (ShopState.isAnyOf(['Away'])(model.shop)) {
+  } else if (ShopState.isAnyOf(['Away', 'AtExit'])(model.shop)) {
     return 'Beckoning'
   } else {
     return 'Open'
   }
+}
+
+// CULLING
+
+const CULL_MARGIN_PX = 24
+
+// NOTE: on a map bigger than the window, a zombie out of the camera's view
+// costs nothing to draw, and one outside the house, in the yard or past the
+// map's edge, is never drawn at all. The margin keeps a big zombie whose feet
+// are just off the edge drawn, along with its shadow and its health bar.
+const isOnCamera =
+  (camera: Camera) =>
+  ({ x, y }: Vector): boolean =>
+    x > camera.x - CULL_MARGIN_PX &&
+    x < camera.x + camera.width + CULL_MARGIN_PX &&
+    y > camera.y - CULL_MARGIN_PX &&
+    y < camera.y + camera.height + CULL_MARGIN_PX
+
+const shownZombies = (model: Model, camera: Camera): ReadonlyArray<Zombie> => {
+  const level = levelOf(model)
+  const onCamera = isOnCamera(camera)
+  return Array.filter(
+    model.zombies,
+    zombie => onCamera(zombie) && isInsideRoomAt(level, zombie),
+  )
 }
 
 // GROUND
@@ -85,12 +115,14 @@ const stallLook = (model: Model): StallLook => {
 const groundShapes = (
   model: Model,
   look: StallLook,
+  zombies: ReadonlyArray<Zombie>,
 ): ReadonlyArray<Canvas.Shape> => [
   ...hearthFireShapes(levelOf(model), model.elapsedMs),
+  ...ovenGlowShapes(model),
   ...stallGroundShapes(look, model.elapsedMs),
   playerShadow(model.player),
-  ...zombieGroundShapes(model.zombies, model.elapsedMs),
-  ...Array.filterMap(model.zombies, zombieShadow),
+  ...zombieGroundShapes(zombies, model.elapsedMs),
+  ...Array.filterMap(zombies, zombieShadow),
   ...bossGroundShapes(model),
   ...Array.filterMap(model.traps, trapShadow(levelOf(model))),
   ...Array.filterMap(model.particles, gibShadow),
@@ -106,6 +138,7 @@ const groundShapes = (
 const standingDrawables = (
   model: Model,
   look: StallLook,
+  zombies: ReadonlyArray<Zombie>,
 ): ReadonlyArray<Drawable> => {
   const drawZombie = zombieShapes(model.player, model.elapsedMs, model.boss)
   const level = levelOf(model)
@@ -131,7 +164,7 @@ const standingDrawables = (
       rank: 'Pickup',
       shapes: pickupShapes(pickup),
     })),
-    ...Array.map(model.zombies, (zombie): Drawable => ({
+    ...Array.map(zombies, (zombie): Drawable => ({
       footY: zombieFootY(zombie),
       rank: 'Zombie',
       shapes: drawZombie(zombie),
@@ -159,14 +192,16 @@ const isInView =
 const overheadShapes = (
   model: Model,
   camera: Camera,
+  zombies: ReadonlyArray<Zombie>,
 ): ReadonlyArray<Canvas.Shape> => [
   ...playerFlashShapes(model.player),
+  ...ovenFlameShapes(model),
   ...Array.flatMap(
     model.traps,
     trapOverheadShapes(levelOf(model), model.elapsedMs),
   ),
   ...Array.flatMap(
-    Array.filter(model.zombies, isInView(levelOf(model))),
+    Array.filter(zombies, isInView(levelOf(model))),
     zombieHealthBarShapes,
   ),
   ...Array.flatMap(model.blasts, blastShapes),
@@ -176,6 +211,7 @@ const overheadShapes = (
   ...Array.map(model.popups, popupShape(camera)),
   ...reloadBarShapes(model.player),
   ...stallPromptShapes(stallPrompt(model)),
+  ...exitPromptShapes(model),
 ]
 
 // WORLD
@@ -191,10 +227,11 @@ const playWorldShapes = (
   camera: Camera,
 ): ReadonlyArray<Canvas.Shape> => {
   const look = stallLook(model)
+  const zombies = shownZombies(model, camera)
   return [
-    ...groundShapes(model, look),
-    ...depthSortedShapes(standingDrawables(model, look)),
-    ...overheadShapes(model, camera),
+    ...groundShapes(model, look, zombies),
+    ...depthSortedShapes(standingDrawables(model, look, zombies)),
+    ...overheadShapes(model, camera, zombies),
   ]
 }
 

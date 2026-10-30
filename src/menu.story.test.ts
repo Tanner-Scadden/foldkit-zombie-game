@@ -33,6 +33,7 @@ import { scoreOf } from './stats'
 import { maybeKeyDownMessage } from './subscriptions'
 import { scoring, showDialog } from './testing'
 import { asVeteran } from './veteran'
+import { FINAL_WAVE } from './waves'
 import { pause } from './waves'
 
 const withEndlessBest = (base: Model, wave: number): Model =>
@@ -165,7 +166,8 @@ describe('the bests', () => {
     const winning = (runMs: number): Model =>
       withKills(
         modifyFields(fighting, {
-          phase: () => Phase.Wave({ wave: 8, elapsedMs: 90_000, spawns: [] }),
+          phase: () =>
+            Phase.Wave({ wave: FINAL_WAVE, elapsedMs: 90_000, spawns: [] }),
         }),
         0,
         runMs,

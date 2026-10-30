@@ -44,6 +44,7 @@ import { PlayerChange } from './playerSync'
 import { saveOf } from './save'
 import { SURFACE, showDialog } from './testing'
 import { asVeteran } from './veteran'
+import { FINAL_WAVE } from './waves'
 import { pause } from './waves'
 
 const VISIT_ID = '0123456789abcdef'
@@ -93,7 +94,7 @@ const lastHeart: Model = modifyFields(midRun, {
 })
 
 const finalWave: Model = modifyFields(midRun, {
-  phase: () => Phase.Wave({ wave: 8, elapsedMs: 90_000, spawns: [] }),
+  phase: () => Phase.Wave({ wave: FINAL_WAVE, elapsedMs: 90_000, spawns: [] }),
 })
 
 const FRAME_MS = 16
@@ -205,7 +206,10 @@ describe('sending at the end of a run', () => {
       }),
       Command.expectHas(
         SendRunSummary({
-          summary: expectedSummary({ outcome: { _tag: 'Victory' }, wave: 8 }),
+          summary: expectedSummary({
+            outcome: { _tag: 'Victory' },
+            wave: FINAL_WAVE,
+          }),
         }),
       ),
       Command.resolve(SendRunSummary, Message.CompletedSendRunSummary()),
@@ -321,7 +325,10 @@ describe('the sharing setting', () => {
 })
 
 describe('the beacon', () => {
-  const summary = expectedSummary({ outcome: { _tag: 'Victory' }, wave: 8 })
+  const summary = expectedSummary({
+    outcome: { _tag: 'Victory' },
+    wave: FINAL_WAVE,
+  })
 
   afterEach(() => {
     vi.unstubAllGlobals()

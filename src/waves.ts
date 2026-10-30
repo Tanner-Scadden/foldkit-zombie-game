@@ -1,7 +1,7 @@
 import { Array, Option, Order, Result, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { DOOR_IDS, doorSpawnPoint, levelOf } from './arena'
+import { DOOR_IDS, PARLOUR, doorSpawnPoint, levelOf } from './arena'
 import {
   advanceBossEntrance,
   isBossOutside,
@@ -36,7 +36,7 @@ import {
 } from './constants'
 import { burrowed, drawSurfacingSpot } from './crawler'
 import { toughenSpawns, withBests } from './difficulty'
-import { routeSpawns } from './doorRoute'
+import { OPPOSITE_DOOR, routeSpawns } from './doorRoute'
 import { frenzyOnArrival, frenzyPacksOf } from './frenzy'
 import { clamp } from './geometry'
 import {
@@ -101,6 +101,9 @@ type DoorPattern = 'One' | 'Pincer' | 'All'
 // so a wave mixes singles, pairs, and squads differently every time while its
 // zombie count stays the same. doorDraw doors are drawn from doors once per
 // run, so a group's doors change from run to run too.
+// NOTE: a group that may use any door names no doors of its own. Its doors
+// are the level's spawn doors when the wave is rolled, so the kitchen's back
+// door and window join every such group once the kitchen is open.
 export type SpawnGroup = Readonly<{
   count: number
   packs: Array.NonEmptyReadonlyArray<number>
@@ -108,6 +111,7 @@ export type SpawnGroup = Readonly<{
   pattern: DoorPattern
   mix: Array.NonEmptyReadonlyArray<KindWeight>
   doors: Array.NonEmptyReadonlyArray<DoorId>
+  isAnyDoor: boolean
   doorDraw: number
   startMs: number
   intervalMs: number
@@ -121,7 +125,9 @@ type WavePlan = Readonly<{
   holds: ReadonlyArray<Hold>
 }>
 
-const ALL_DOORS: Array.NonEmptyReadonlyArray<DoorId> = [
+// NOTE: the parlour's doors, which every run has. A wave rolled while the
+// kitchen is shut uses exactly these.
+export const PARLOUR_DOORS: Array.NonEmptyReadonlyArray<DoorId> = [
   'North',
   'West',
   'East',
@@ -144,20 +150,26 @@ const mixOf = (
 
 type DoorChoice = Readonly<{
   doors: Array.NonEmptyReadonlyArray<DoorId>
+  isAnyDoor: boolean
   draw: number
 }>
 
 const fromDoors = (doors: Array.NonEmptyReadonlyArray<DoorId>): DoorChoice => ({
   doors,
+  isAnyDoor: false,
   draw: doors.length,
 })
 
 const through = (...doors: Array.NonEmptyReadonlyArray<DoorId>): DoorChoice =>
   fromDoors(doors)
 
-const anyDoors = (draw: number): DoorChoice => ({ doors: ALL_DOORS, draw })
+const anyDoors = (draw: number): DoorChoice => ({
+  doors: PARLOUR_DOORS,
+  isAnyDoor: true,
+  draw,
+})
 
-const EVERY_DOOR = anyDoors(ALL_DOORS.length)
+const EVERY_DOOR = anyDoors(DOOR_IDS.length)
 
 type GroupSpec = Readonly<{
   packs: Array.NonEmptyReadonlyArray<number>
@@ -183,6 +195,7 @@ const squads = ({
   pattern: 'One',
   mix,
   doors: from.doors,
+  isAnyDoor: from.isAnyDoor,
   doorDraw: from.draw,
   startMs,
   intervalMs: everyMs,
@@ -515,9 +528,110 @@ export const WAVE_PLANS: Array.NonEmptyReadonlyArray<WavePlan> = [
     ],
     holds: [fadeThenRelax(28000, 3000), fadeThenRelax(45000, 2500)],
   },
+  // NOTE: waves 8 and 9 came with the kitchen. Their open groups draw from
+  // every spawn door the level has, so once the kitchen is open its back
+  // door and window send packs too, and a run that never opens it meets the
+  // same waves through the parlour's four doors. Wave 8 is a breather after
+  // the Ankle Biters: a long build of squads and lone stragglers from all
+  // over, no pincer until the end, and one Big Lug. Wave 9 tests everything
+  // before the finale.
+  {
+    speedScale: 1.4,
+    hpScale: 1.1,
+    groups: [
+      stragglers({ count: 3, mix: MIXED, startMs: 500, everyMs: 1800 }),
+      squads({
+        packs: [3, 2, 4, 2, 3],
+        mix: MIXED,
+        from: anyDoors(2),
+        startMs: 1500,
+        everyMs: 2800,
+      }),
+      stragglers({
+        count: 5,
+        mix: mixOf(3, 1, 1),
+        startMs: 26000,
+        everyMs: 2000,
+      }),
+      chuckers(anyDoors(1), 1, 9000, 0),
+      squads({
+        packs: [3, 4, 3, 4],
+        mix: MIXED,
+        from: anyDoors(3),
+        startMs: 15000,
+        everyMs: 2600,
+      }),
+      squads({
+        packs: [3, 2, 3],
+        mix: mixOf(2, 2, 1),
+        from: anyDoors(3),
+        startMs: 25000,
+        everyMs: 2400,
+      }),
+      lug(anyDoors(1), 31000),
+      pincers({
+        packs: [3, 3, 2, 3],
+        mix: MIXED,
+        startMs: 32000,
+        everyMs: 2800,
+      }),
+    ],
+    holds: [fadeThenRelax(24000, 2500)],
+  },
+  {
+    speedScale: 1.42,
+    hpScale: 1,
+    groups: [
+      crawlers({ count: 2, startMs: 6000, everyMs: 12000 }),
+      chuckers(anyDoors(1), 1, 12000, 0),
+      squads({
+        packs: [2, 4, 3, 3],
+        mix: MIXED,
+        from: anyDoors(3),
+        startMs: 800,
+        everyMs: 3000,
+      }),
+      stragglers({
+        count: 7,
+        mix: mixOf(3, 1, 1),
+        startMs: 3000,
+        everyMs: 2200,
+      }),
+      lug(anyDoors(1), 14500),
+      pincers({ packs: [4, 4], mix: MIXED, startMs: 16000, everyMs: 0 }),
+      squads({
+        packs: [3, 2],
+        mix: only('Runner'),
+        from: anyDoors(1),
+        startMs: 19000,
+        everyMs: 2300,
+      }),
+      squads({
+        packs: [4, 3, 3],
+        mix: MIXED,
+        from: anyDoors(2),
+        startMs: 29000,
+        everyMs: 3000,
+      }),
+      stragglers({
+        count: 4,
+        mix: mixOf(3, 1, 1),
+        startMs: 31000,
+        everyMs: 1600,
+      }),
+      lug(anyDoors(1), 39000),
+      pincers({
+        packs: [4, 3, 3, 3],
+        mix: MIXED,
+        startMs: 40000,
+        everyMs: 3200,
+      }),
+    ],
+    holds: [fadeThenRelax(28000, 3000), fadeThenRelax(38500, 2500)],
+  },
   {
     speedScale: 1.45,
-    hpScale: 1.1,
+    hpScale: 1,
     groups: [
       crawlers({ count: 2, startMs: 9000, everyMs: 16000 }),
       chuckers(anyDoors(1), 1, 21000, 0),
@@ -627,6 +741,8 @@ export const pickKind = (
 
 // PACKS
 
+// NOTE: the parlour's pairs come first and in their old order, so a run that
+// never opens the kitchen draws the same pairs it always did.
 const DOOR_PAIRS: Array.NonEmptyReadonlyArray<
   Array.NonEmptyReadonlyArray<DoorId>
 > = [
@@ -636,19 +752,24 @@ const DOOR_PAIRS: Array.NonEmptyReadonlyArray<
   ['West', 'South'],
   ['North', 'West'],
   ['East', 'South'],
+  ['Back', 'South'],
+  ['Window', 'East'],
+  ['Back', 'West'],
+  ['Window', 'North'],
 ]
-
-const OPPOSITE_DOOR: Readonly<Record<DoorId, DoorId>> = {
-  North: 'South',
-  South: 'North',
-  West: 'East',
-  East: 'West',
-}
 
 const isPairWithin =
   (doors: ReadonlyArray<DoorId>) =>
   (pair: ReadonlyArray<DoorId>): boolean =>
     Array.every(pair, door => Array.contains(doors, door))
+
+const pairsWithin = (
+  doors: ReadonlyArray<DoorId>,
+): Array.NonEmptyReadonlyArray<Array.NonEmptyReadonlyArray<DoorId>> =>
+  Array.match(Array.filter(DOOR_PAIRS, isPairWithin(doors)), {
+    onEmpty: () => DOOR_PAIRS,
+    onNonEmpty: pairs => pairs,
+  })
 
 const isOppositePair = (pair: Array.NonEmptyReadonlyArray<DoorId>): boolean =>
   Option.contains(Array.get(pair, 1), OPPOSITE_DOOR[Array.headNonEmpty(pair)])
@@ -731,19 +852,32 @@ const shuffle = <A>(
   ]
 }
 
+const groupDoors = (
+  group: SpawnGroup,
+  levelDoors: Array.NonEmptyReadonlyArray<DoorId>,
+): Array.NonEmptyReadonlyArray<DoorId> =>
+  group.isAnyDoor
+    ? levelDoors
+    : Array.match(
+        Array.filter(group.doors, door => Array.contains(levelDoors, door)),
+        { onEmpty: () => levelDoors, onNonEmpty: doors => doors },
+      )
+
 const drawDoors = (
   state: number,
   group: SpawnGroup,
+  levelDoors: Array.NonEmptyReadonlyArray<DoorId>,
 ): Seeded<Array.NonEmptyReadonlyArray<DoorId>> => {
-  if (group.doorDraw >= group.doors.length) {
-    return [state, group.doors]
+  const candidates = groupDoors(group, levelDoors)
+  if (group.doorDraw >= candidates.length) {
+    return [state, candidates]
   }
 
-  const [nextState, shuffled] = shuffle(state, group.doors)
+  const [nextState, shuffled] = shuffle(state, candidates)
   return [
     nextState,
     Array.match(Array.take(shuffled, Math.max(1, group.doorDraw)), {
-      onEmpty: () => group.doors,
+      onEmpty: () => candidates,
       onNonEmpty: doors => doors,
     }),
   ]
@@ -833,13 +967,13 @@ const rollVolley =
   }
 
 const rollGroup =
-  (plan: WavePlan) =>
+  (plan: WavePlan, levelDoors: Array.NonEmptyReadonlyArray<DoorId>) =>
   (
     state: number,
     group: SpawnGroup,
     groupIndex: number,
   ): Seeded<ReadonlyArray<PlannedSpawn>> => {
-    const [doorState, doors] = drawDoors(state, group)
+    const [doorState, doors] = drawDoors(state, group, levelDoors)
     const [sizeState, sizes] = shuffle(doorState, group.packs)
     const volleySizes = Array.chunksOf(
       sizes,
@@ -976,6 +1110,7 @@ const endlessPeak = (
   count: number,
   packSize: number,
   mix: Array.NonEmptyReadonlyArray<KindWeight>,
+  doorCount: number,
 ): SpawnGroup => {
   const startMs = cycle.startMs + ENDLESS_BUILD_MS
   if (cycle.peak === 'All') {
@@ -985,7 +1120,7 @@ const endlessPeak = (
         Math.max(ENDLESS_HORDE_PACK_MIN, packSize - ENDLESS_HORDE_PACK_SHRINK),
       ),
     )
-    const volleys = Math.ceil(packs.length / ALL_DOORS.length)
+    const volleys = Math.ceil(packs.length / doorCount)
     return hordes({
       packs,
       mix,
@@ -1008,6 +1143,7 @@ const endlessCycleGroups = (
   cycle: EndlessCycle,
   packSize: number,
   mix: Array.NonEmptyReadonlyArray<KindWeight>,
+  doorCount: number,
 ): Array.NonEmptyReadonlyArray<SpawnGroup> => {
   const buildCount = Math.round(cycle.escorts * ENDLESS_BUILD_SHARE)
   const buildPacks = packsOf(buildCount, variedSizes(packSize))
@@ -1031,21 +1167,25 @@ const endlessCycleGroups = (
       everyMs: ENDLESS_BUILD_MS / buildPacks.length,
     }),
     ...tankGroups,
-    endlessPeak(cycle, cycle.escorts - buildCount, packSize, mix),
+    endlessPeak(cycle, cycle.escorts - buildCount, packSize, mix, doorCount),
   ]
 }
 
 const shareOf = (total: number, share: number): number =>
   Math.round(total * share)
 
-const endlessPlan = (state: number, wave: number): Seeded<WavePlan> => {
+const endlessPlan = (
+  state: number,
+  wave: number,
+  levelDoors: Array.NonEmptyReadonlyArray<DoorId>,
+): Seeded<WavePlan> => {
   const depth = endlessDepth(wave)
   const [doorState, buildDoors] = Array.mapAccum(
     ENDLESS_CYCLE_SHARES,
     state,
     (drawState): Seeded<Array.NonEmptyReadonlyArray<DoorId>> => {
       const draw = nextRandom(drawState)
-      return [draw.nextState, pickOne(DOOR_PAIRS, draw.value)]
+      return [draw.nextState, pickOne(pairsWithin(levelDoors), draw.value)]
     },
   )
   const tanks = endlessTankCount(wave)
@@ -1075,7 +1215,7 @@ const endlessPlan = (state: number, wave: number): Seeded<WavePlan> => {
       tanks: index === lastCycle ? tanks - earlyTanks * lastCycle : earlyTanks,
       buildDoors: Option.getOrElse(
         Array.get(buildDoors, index),
-        () => ALL_DOORS,
+        () => levelDoors,
       ),
       peak: index === lastCycle ? 'All' : 'Pincer',
     }),
@@ -1091,7 +1231,7 @@ const endlessPlan = (state: number, wave: number): Seeded<WavePlan> => {
       hpScale: hpScaleFor(wave),
       groups: [
         ...Array.flatMap(cycles, cycle =>
-          endlessCycleGroups(cycle, packSize, mix),
+          endlessCycleGroups(cycle, packSize, mix, levelDoors.length),
         ),
         chuckers(
           anyDoors(1),
@@ -1115,20 +1255,36 @@ const endlessPlan = (state: number, wave: number): Seeded<WavePlan> => {
   ]
 }
 
-const rollPlan = (state: number, wave: number): Seeded<WavePlan> =>
-  wave > FINAL_WAVE ? endlessPlan(state, wave) : [state, planFor(wave)]
+const rollPlan = (
+  state: number,
+  wave: number,
+  levelDoors: Array.NonEmptyReadonlyArray<DoorId>,
+): Seeded<WavePlan> =>
+  wave > FINAL_WAVE
+    ? endlessPlan(state, wave, levelDoors)
+    : [state, planFor(wave)]
 
 export type RolledWave = Readonly<{
   spawns: ReadonlyArray<PlannedSpawn>
   holds: ReadonlyArray<Hold>
 }>
 
-export const rollWave = (state: number, wave: number): Seeded<RolledWave> => {
-  const [planState, plan] = rollPlan(state, wave)
+// NOTE: doors are the level's spawn doors as the wave is rolled. They are
+// the parlour's four until the kitchen is open.
+export const rollWave = (
+  state: number,
+  wave: number,
+  doors: ReadonlyArray<DoorId> = PARLOUR.doorIds,
+): Seeded<RolledWave> => {
+  const levelDoors = Array.match(doors, {
+    onEmpty: () => PARLOUR_DOORS,
+    onNonEmpty: nonEmpty => nonEmpty,
+  })
+  const [planState, plan] = rollPlan(state, wave, levelDoors)
   const [nextState, groups] = Array.mapAccum(
     plan.groups,
     planState,
-    rollGroup(plan),
+    rollGroup(plan, levelDoors),
   )
   return [
     nextState,
@@ -1142,8 +1298,9 @@ export const rollWave = (state: number, wave: number): Seeded<RolledWave> => {
 export const rollSpawns = (
   state: number,
   wave: number,
+  doors: ReadonlyArray<DoorId> = PARLOUR.doorIds,
 ): Seeded<ReadonlyArray<PlannedSpawn>> => {
-  const [nextState, rolled] = rollWave(state, wave)
+  const [nextState, rolled] = rollWave(state, wave, doors)
   return [nextState, rolled.spawns]
 }
 
@@ -1175,8 +1332,9 @@ export const floorCounts = (
 export const doorCounts = (
   plannedSpawns: ReadonlyArray<PlannedSpawn>,
   traps: ReadonlyArray<Trap>,
+  doors: ReadonlyArray<DoorId> = DOOR_IDS,
 ): ReadonlyArray<DoorCount> => {
-  const spawns = routeSpawns(plannedSpawns, traps, [])
+  const spawns = routeSpawns(plannedSpawns, traps, [], doors)
   return Array.filterMap(DOOR_IDS, door => {
     const atDoor = Array.filter(
       spawns,
@@ -1206,7 +1364,11 @@ export const beginPreparation = (
   durationMs: number,
   clock: BreakClock = BreakClock.Counting(),
 ): Model => {
-  const [waveState, rolled] = rollWave(model.rngState, wave)
+  const [waveState, rolled] = rollWave(
+    model.rngState,
+    wave,
+    levelOf(model).doorIds,
+  )
   const { holds } = rolled
   const spawns = toughenSpawns(model.difficulty.chosen, rolled.spawns)
   const [rngState, boss] = planBoss(
@@ -1483,7 +1645,13 @@ const advanceWave = (
     spawns,
   )
   const clockMs = paced.clockMs
-  const route = routeSpawns(paced.spawns, model.traps, model.pacing.packDoors)
+  const doors = levelOf(model).doorIds
+  const route = routeSpawns(
+    paced.spawns,
+    model.traps,
+    model.pacing.packDoors,
+    doors,
+  )
   const camped = delayCampedPacks(
     levelOf(model),
     paced.spawns,
@@ -1500,13 +1668,13 @@ const advanceWave = (
         }),
     }),
     camped,
-    routeSpawns(camped, model.traps, model.pacing.packDoors),
+    routeSpawns(camped, model.traps, model.pacing.packDoors, doors),
     clockMs,
   )
   const released = releaseDue(
     warned,
     camped,
-    routeSpawns(camped, warned.traps, warned.pacing.packDoors),
+    routeSpawns(camped, warned.traps, warned.pacing.packDoors, doors),
     clockMs,
   )
   const entered = advanceBossEntrance(
@@ -1556,7 +1724,8 @@ export const advanceRound = (model: Model, worldMs: number): Model =>
   Phase.match(model.phase, {
     Ready: () => model,
     Preparation: preparation =>
-      ShopState.isAnyOf(['Browsing'])(model.shop) || isPracticeGateHeld(model)
+      ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop) ||
+      isPracticeGateHeld(model)
         ? model
         : countDownBreak(model, preparation, worldMs),
     Wave: round => advanceWave(model, round, worldMs),

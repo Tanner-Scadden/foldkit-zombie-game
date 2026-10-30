@@ -26,10 +26,10 @@ import { asVeteran } from './veteran'
 import { view } from './view'
 
 const campaignButton = role('button', {
-  name: 'Campaign: 8 waves, then victory',
+  name: 'Campaign: 10 waves, then victory',
 })
 const playButton = role('button', {
-  name: 'Play the campaign: 8 waves, then victory',
+  name: 'Play the campaign: 10 waves, then victory',
 })
 const endlessButton = role('button', {
   name: 'Endless: waves keep coming until you fall',
@@ -44,7 +44,7 @@ const playEndlessButton = role('button', {
   name: 'Play endless: waves keep coming until you fall',
 })
 const keepGoingButton = role('button', {
-  name: 'Keep going: carry on into endless from wave 9 with your money, guns, and traps',
+  name: 'Keep going: carry on into endless from wave 11 with your money, guns, and traps',
 })
 
 const START_PROMPT =
@@ -70,7 +70,7 @@ describe('Mode choice', () => {
     )
   })
 
-  test('the Play button starts the 8 wave campaign', () => {
+  test('the Play button starts the 10 wave campaign', () => {
     scene(
       { update, view },
       given(
@@ -81,7 +81,7 @@ describe('Mode choice', () => {
       measureSurface,
       click(playButton),
       expect(role('status')).toHaveText(
-        `Get ready for wave 1 of 8. ${START_PROMPT}`,
+        `Get ready for wave 1 of 10. ${START_PROMPT}`,
       ),
     )
   })
@@ -96,7 +96,7 @@ describe('Mode choice', () => {
     )
   })
 
-  test('Victory offers Keep going after the grace, and it carries on into wave 9', () => {
+  test('Victory offers Keep going after the grace, and it carries on into wave 11', () => {
     const victorious: Model = modifyFields(asVeteran(initialModel), {
       phase: () => Phase.Victory(),
       wallet: () => ({ balance: 321, earned: 1900, shown: 321 }),
@@ -121,7 +121,7 @@ describe('Mode choice', () => {
       expect(endlessButton).toExist(),
       click(keepGoingButton),
       expect(role('status')).toHaveText(
-        `Get ready for endless wave 9. ${START_PROMPT} The shop stall in the bottom right corner is open. Walk up to it from any side to browse.`,
+        `Get ready for endless wave 11. ${START_PROMPT} The shop stall in the bottom right corner is open. Walk up to it from any side to browse.`,
       ),
       expect(
         text(

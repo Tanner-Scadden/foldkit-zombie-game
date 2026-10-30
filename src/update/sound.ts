@@ -74,6 +74,8 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     AnklesGrabbed: () => Option.some<SoundEffect>('Clutch'),
     PackFrenzied: () => Option.some<SoundEffect>('Howl'),
     PackWiped: () => Option.some<SoundEffect>('PackBonus'),
+    OvenBelched: () => Option.some<SoundEffect>('BossBelch'),
+    ZombieSlipped: () => Option.some<SoundEffect>('Thud'),
   })
 
 const maybeEventSoundCue = (event: GameEvent): Option.Option<SoundCue> =>

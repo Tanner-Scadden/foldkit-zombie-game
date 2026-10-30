@@ -3,6 +3,7 @@ import { Array, Option, Order, Result, pipe } from 'effect'
 import {
   type Level,
   type Tile,
+  byDoor,
   doorSpawnPoint,
   hasClearPath,
   isInsideRoomAt,
@@ -103,17 +104,21 @@ const STEP_RULES: Readonly<Record<Clearance, StepRule>> = {
   Wide: isWideStepOpen,
 }
 
+// NOTE: the flow field covers the house only. A zombie out in the yard, or
+// past the map's edge, walks straight to its door instead of reading it.
 const openNeighbors = (
   level: Level,
   index: number,
   clearance: Clearance,
 ): ReadonlyArray<number> => {
   const { column, row } = tileOfIndex(level, index)
-  return Array.filterMap(ORTHOGONAL_STEPS, step =>
-    STEP_RULES[clearance](level, column, row, step)
-      ? Result.succeed(tileIndex(level, column + step.column, row + step.row))
-      : Result.failVoid,
-  )
+  return Array.filterMap(ORTHOGONAL_STEPS, step => {
+    const neighbor = tileIndex(level, column + step.column, row + step.row)
+    return STEP_RULES[clearance](level, column, row, step) &&
+      !level.outsideTiles.has(neighbor)
+      ? Result.succeed(neighbor)
+      : Result.failVoid
+  })
 }
 
 type Neighbors = Readonly<
@@ -426,13 +431,8 @@ const baitFieldsFor = (level: Level, door: DoorId): BaitFields =>
 // face is built once per level. A zombie drawn to a Plank Pile reads the
 // field of that doorway, and nothing is recomputed when planks go up or
 // break.
-const baitFieldsOf = perLevel(
-  (level): Readonly<Record<DoorId, BaitFields>> => ({
-    North: baitFieldsFor(level, 'North'),
-    West: baitFieldsFor(level, 'West'),
-    East: baitFieldsFor(level, 'East'),
-    South: baitFieldsFor(level, 'South'),
-  }),
+const baitFieldsOf = perLevel((level): Readonly<Record<DoorId, BaitFields>> =>
+  byDoor(door => baitFieldsFor(level, door)),
 )
 
 type Bait = Readonly<{ door: DoorId; distancePx: number }>
@@ -506,8 +506,9 @@ type LoopMark = Readonly<{ at: number; point: Vector }>
 type LoopSide = Readonly<{ gap: number; at: number }>
 
 // NOTE: the loop is the path just outside a level's walls that a zombie
-// walks around to reach an open door. It is the level's size plus the spawn
-// margin on every side.
+// walks around to reach an open door. It is the open part of the level, its
+// bounds, plus the spawn margin on every side, so it hugs the parlour while
+// the kitchen is shut.
 type LoopBounds = Readonly<{
   left: number
   top: number
@@ -545,10 +546,10 @@ const loopPositionOf = (loop: LoopBounds, { x, y }: Vector): number => {
 }
 
 const loopOf = perLevel((level): Loop => {
-  const left = -ZOMBIE_SPAWN_MARGIN
-  const top = -ZOMBIE_SPAWN_MARGIN
-  const right = level.width + ZOMBIE_SPAWN_MARGIN
-  const bottom = level.height + ZOMBIE_SPAWN_MARGIN
+  const left = level.bounds.left - ZOMBIE_SPAWN_MARGIN
+  const top = level.bounds.top - ZOMBIE_SPAWN_MARGIN
+  const right = level.bounds.right + ZOMBIE_SPAWN_MARGIN
+  const bottom = level.bounds.bottom + ZOMBIE_SPAWN_MARGIN
   const bounds: LoopBounds = {
     left,
     top,
@@ -573,12 +574,7 @@ const loopOf = perLevel((level): Loop => {
         point: { x: left, y: bottom },
       },
     ],
-    doorMarks: {
-      North: doorMark('North'),
-      West: doorMark('West'),
-      East: doorMark('East'),
-      South: doorMark('South'),
-    },
+    doorMarks: byDoor(doorMark),
   }
 })
 
@@ -685,6 +681,18 @@ const towardDoor = (level: Level, position: Vector, id: DoorId): Vector =>
     () => ZERO_VECTOR,
   )
 
+const isWithinBounds = (level: Level, { x, y }: Vector): boolean =>
+  x > level.bounds.left &&
+  x < level.bounds.right &&
+  y > level.bounds.top &&
+  y < level.bounds.bottom
+
+// NOTE: a zombie in the yard is inside the manor's bounds, where the loop's
+// corners lie across the kitchen roof. It walks back out the way its nearest
+// door faces until it is past the bounds, then takes the loop.
+const leaveYard = (level: Level, position: Vector): Vector =>
+  nearestDoor(level, position).outward
+
 const routeAround = (
   level: Level,
   flowField: FlowField,
@@ -694,6 +702,8 @@ const routeAround = (
   const entry = bestEntry(level, flowField, position)
   if (Option.contains(maybeHere, entry)) {
     return towardDoor(level, position, entry)
+  } else if (isWithinBounds(level, position)) {
+    return leaveYard(level, position)
   }
 
   const loop = loopOf(level)

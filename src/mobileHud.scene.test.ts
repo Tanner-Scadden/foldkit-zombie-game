@@ -233,7 +233,7 @@ describe('the corner', () => {
       expect(fullscreenButton).toBeAbsent(),
       click(pauseButton),
       expect(role('status')).toHaveText(
-        'Paused during wave 3 of 8. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.',
+        'Paused during wave 3 of 10. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.',
       ),
       expect(pauseButton).toBeAbsent(),
     )
@@ -254,7 +254,7 @@ describe('the corner', () => {
       click(musicButton),
       expect(musicButton).toHaveAttr('aria-pressed', 'false'),
       expect(role('status')).toHaveText(
-        'Paused during wave 3 of 8. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.',
+        'Paused during wave 3 of 10. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.',
       ),
     )
   })
@@ -316,7 +316,7 @@ describe('the Add to Home Screen tip', () => {
       expect(dismissTip).toExist(),
       expect(fullscreenButton).toBeAbsent(),
       click(
-        role('button', { name: 'Play the campaign: 8 waves, then victory' }),
+        role('button', { name: 'Play the campaign: 10 waves, then victory' }),
       ),
       expect(homeScreenTip).toBeAbsent(),
     )

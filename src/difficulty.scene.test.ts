@@ -20,7 +20,7 @@ import { asVeteran } from './veteran'
 import { view } from './view'
 
 const playButton = role('button', {
-  name: 'Play the campaign: 8 waves, then victory',
+  name: 'Play the campaign: 10 waves, then victory',
 })
 const difficultyButton = role('button', {
   name: 'Difficulty: Normal. Change it',

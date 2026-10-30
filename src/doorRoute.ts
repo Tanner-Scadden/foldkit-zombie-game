@@ -7,28 +7,40 @@ import { isFloorKind } from './zombies'
 
 // ORDER
 
+// NOTE: the doors in order around the manor, starting at the top of the
+// kitchen. A level that has only some of them goes around the ones it has.
 const CLOCKWISE: Array.NonEmptyReadonlyArray<DoorId> = [
+  'Back',
   'North',
   'East',
   'South',
   'West',
+  'Window',
 ]
 
-const OPPOSITE: Readonly<Record<DoorId, DoorId>> = {
+export const OPPOSITE_DOOR: Readonly<Record<DoorId, DoorId>> = {
   North: 'South',
   East: 'West',
   South: 'North',
   West: 'East',
+  Back: 'South',
+  Window: 'East',
 }
 
-const clockwiseAfter = (door: DoorId): ReadonlyArray<DoorId> => {
+const clockwiseAfter = (
+  door: DoorId,
+  doors: ReadonlyArray<DoorId>,
+): ReadonlyArray<DoorId> => {
   const index = Option.getOrElse(
     Array.findFirstIndex(CLOCKWISE, each => each === door),
     () => 0,
   )
-  return Array.makeBy(
-    CLOCKWISE.length - 1,
-    step => CLOCKWISE[(index + step + 1) % CLOCKWISE.length] ?? door,
+  return Array.filter(
+    Array.makeBy(
+      CLOCKWISE.length - 1,
+      step => CLOCKWISE[(index + step + 1) % CLOCKWISE.length] ?? door,
+    ),
+    each => Array.contains(doors, each),
   )
 }
 
@@ -37,6 +49,7 @@ const clockwiseAfter = (door: DoorId): ReadonlyArray<DoorId> => {
 // avoid when it can. Two piles at most leave two doors open.
 const openDoorFrom = (
   door: DoorId,
+  doors: ReadonlyArray<DoorId>,
   boarded: ReadonlyArray<DoorId>,
   avoid: ReadonlyArray<DoorId>,
 ): DoorId => {
@@ -45,7 +58,7 @@ const openDoorFrom = (
   }
 
   const open = Array.filter(
-    clockwiseAfter(door),
+    clockwiseAfter(door, doors),
     each => !Array.contains(boarded, each),
   )
   return pipe(
@@ -87,6 +100,7 @@ const isVolleyMate =
 const mateDoors = (
   spawn: PlannedSpawn,
   spawns: ReadonlyArray<PlannedSpawn>,
+  doors: ReadonlyArray<DoorId>,
   boarded: ReadonlyArray<DoorId>,
   packDoors: ReadonlyArray<PackDoor>,
 ): ReadonlyArray<DoorId> => {
@@ -107,7 +121,9 @@ const mateDoors = (
     ...Array.map(entered, ({ door }) => door),
     ...Array.filterMap(waiting, mate => {
       if (mate.pack < spawn.pack) {
-        return Result.succeed(routedDoor(mate, spawns, boarded, packDoors))
+        return Result.succeed(
+          routedDoor(mate, spawns, doors, boarded, packDoors),
+        )
       } else if (!Array.contains(boarded, mate.door)) {
         return Result.succeed(mate.door)
       } else {
@@ -120,6 +136,7 @@ const mateDoors = (
 const routedDoor = (
   spawn: PlannedSpawn,
   spawns: ReadonlyArray<PlannedSpawn>,
+  doors: ReadonlyArray<DoorId>,
   boarded: ReadonlyArray<DoorId>,
   packDoors: ReadonlyArray<PackDoor>,
 ): DoorId =>
@@ -127,23 +144,27 @@ const routedDoor = (
     if (isFloorKind(spawn.kind) || !Array.contains(boarded, spawn.door)) {
       return spawn.door
     } else if (spawn.formation !== 'Pincer') {
-      return openDoorFrom(spawn.door, boarded, [])
+      return openDoorFrom(spawn.door, doors, boarded, [])
     }
 
-    const avoid = mateDoors(spawn, spawns, boarded, packDoors)
+    const avoid = mateDoors(spawn, spawns, doors, boarded, packDoors)
     return openDoorFrom(
       spawn.door,
+      doors,
       boarded,
       Array.isReadonlyArrayEmpty(avoid)
-        ? [openDoorFrom(OPPOSITE[spawn.door], boarded, [])]
+        ? [openDoorFrom(OPPOSITE_DOOR[spawn.door], doors, boarded, [])]
         : avoid,
     )
   })
 
+// NOTE: doors are the level's spawn doors, so a pack rerouted from a boarded
+// doorway only ever goes to a door that is open on the map.
 export const routeSpawns = (
   spawns: ReadonlyArray<PlannedSpawn>,
   traps: ReadonlyArray<Trap>,
   packDoors: ReadonlyArray<PackDoor>,
+  doors: ReadonlyArray<DoorId>,
 ): ReadonlyArray<PlannedSpawn> => {
   const boarded = barricadedDoors(traps)
   if (
@@ -154,7 +175,7 @@ export const routeSpawns = (
   }
 
   return Array.map(spawns, spawn => {
-    const door = routedDoor(spawn, spawns, boarded, packDoors)
+    const door = routedDoor(spawn, spawns, doors, boarded, packDoors)
     return door === spawn.door
       ? spawn
       : modifyFields(spawn, { door: () => door })

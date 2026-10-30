@@ -6,8 +6,10 @@ import { describe, expect, test } from 'vitest'
 
 import {
   type LevelSpec,
+  MANOR,
   PARLOUR,
   closedExits,
+  doorSpawnPoint,
   isDoorTile,
   isWalkableTile,
   levelFor,
@@ -46,7 +48,18 @@ const HALL: LevelSpec = {
     '#......#',
     '###SS###',
   ],
+  topRow: 0,
   exits: [{ id: 'Kitchen', symbol: 'K', doors: ['South'] }],
+  rooms: [
+    {
+      id: 'TestHall',
+      firstColumn: 0,
+      lastColumn: 7,
+      firstRow: 0,
+      lastRow: 8,
+      maybeExit: Option.none(),
+    },
+  ],
 }
 
 const BOARDS = { column: 3, row: 5 }
@@ -140,26 +153,46 @@ describe('opening an exit', () => {
   })
 })
 
-describe('the parlour', () => {
+describe('the manor', () => {
   test('is where every run starts, with the way to the kitchen boarded shut', () => {
     expect(initialModel.level).toEqual(startingLevel)
-    expect(levelOf(initialModel)).toBe(PARLOUR)
+    expect(levelOf(initialModel)).toBe(MANOR)
     expect(freshRun(initialModel).level).toEqual(startingLevel)
-    expect(Array.map(closedExits(PARLOUR), ({ id }) => id)).toEqual(['Kitchen'])
-    expect(PARLOUR.doorIds).toEqual(['North', 'West', 'East', 'South'])
+    expect(Array.map(closedExits(MANOR), ({ id }) => id)).toEqual(['Kitchen'])
+    expect(MANOR.doorIds).toEqual(['North', 'West', 'East', 'South'])
     expect(
-      isWalkableTile(PARLOUR, KITCHEN_BOARDS.column, KITCHEN_BOARDS.row),
+      isWalkableTile(MANOR, KITCHEN_BOARDS.column, KITCHEN_BOARDS.row),
     ).toBe(false)
-    expect(drawsBoards(roomShapes(PARLOUR))).toBe(true)
+    expect(drawsBoards(roomShapes(MANOR))).toBe(true)
   })
 
-  test('opens the kitchen exit into floor without adding a spawn door', () => {
+  test('keeps the parlour where it always was, with the kitchen above it', () => {
+    expect(PARLOUR.doorIds).toEqual(MANOR.doorIds)
+    Array.forEach(PARLOUR.doorIds, door => {
+      expect(MANOR.doors[door]).toEqual(PARLOUR.doors[door])
+      expect(doorSpawnPoint(MANOR, door, 3)).toEqual(
+        doorSpawnPoint(PARLOUR, door, 3),
+      )
+    })
+    expect(MANOR.bounds).toEqual(PARLOUR.bounds)
+    expect(MANOR.top).toBeLessThan(0)
+  })
+
+  test('opens the kitchen exit into floor and adds the back door and window', () => {
     const opened = levelOf({ level: openExitIn(startingLevel, 'Kitchen') })
     expect(closedExits(opened)).toEqual([])
-    expect(opened.doorIds).toEqual(PARLOUR.doorIds)
+    expect(opened.doorIds).toEqual([
+      'North',
+      'West',
+      'East',
+      'South',
+      'Back',
+      'Window',
+    ])
     expect(
       isWalkableTile(opened, KITCHEN_BOARDS.column, KITCHEN_BOARDS.row),
     ).toBe(true)
+    expect(opened.bounds.top).toBe(opened.top)
     expect(drawsBoards(roomShapes(opened))).toBe(false)
   })
 
@@ -174,9 +207,9 @@ describe('the parlour', () => {
       given(fighting),
       ...ticks(30, MAX_FRAME_DELTA_MS),
       model(current => {
-        expect(levelOf(current)).toBe(PARLOUR)
-        expect(current.flowField.levelKey).toBe(PARLOUR.key)
-        expect(current.wideFlowField.levelKey).toBe(PARLOUR.key)
+        expect(levelOf(current)).toBe(MANOR)
+        expect(current.flowField.levelKey).toBe(MANOR.key)
+        expect(current.wideFlowField.levelKey).toBe(MANOR.key)
       }),
     )
   })

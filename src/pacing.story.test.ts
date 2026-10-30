@@ -132,6 +132,8 @@ const OPPOSITE: Readonly<Record<DoorId, DoorId>> = {
   South: 'North',
   West: 'East',
   East: 'West',
+  Back: 'South',
+  Window: 'East',
 }
 
 describe('packs', () => {

@@ -84,7 +84,7 @@ type BossRules = {
 }
 
 export const BOSS_RULES: BossRules = {
-  everyWaves: 8,
+  everyWaves: 10,
   arriveAfterShare: 2 / 3,
   entranceMs: 2600,
   firstAttackMs: 2500,

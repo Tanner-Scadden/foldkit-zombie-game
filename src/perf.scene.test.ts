@@ -5,7 +5,7 @@ import { Mount, Subscription, given, scene } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { DOOR_IDS } from './arena'
+import { DOOR_IDS, openExitIn } from './arena'
 import { BOSS_RULES } from './boss'
 import {
   BLAST_MAX,
@@ -15,6 +15,7 @@ import {
   POPUP_MAX,
   ZOMBIE_ALIVE_MAX,
 } from './constants'
+import { KITCHEN_EXIT } from './exits'
 import { WARM_UP_CLASS, sceneShapes } from './layers'
 import { update } from './main'
 import { Message } from './message'
@@ -34,6 +35,7 @@ import {
   Glob,
   Lesson,
   type Model,
+  Oven,
   type Particle,
   ParticleKind,
   Phase,
@@ -56,7 +58,7 @@ import { DROP_RULES } from './powerups'
 import { WIDE_SURFACE, scoring } from './testing'
 import { asVeteran } from './veteran'
 import { MeasureGameSurface, view } from './view'
-import { rollSpawns, startOrResume } from './waves'
+import { FINAL_WAVE, rollSpawns, startOrResume } from './waves'
 import { ZOMBIE_KINDS } from './zombies'
 
 // WORST-CASE ROOMS
@@ -588,10 +590,38 @@ const BUDGET_KEYS: ReadonlyArray<keyof FrameCost> = [
   'fullRepaintPaintOps',
 ]
 
+// NOTE: the kitchen open with both ovens belching, the player up in it, and
+// half the crowd moved up beside the player. The other half stays down in
+// the parlour, out of the camera's view, where it is culled from drawing.
+const kitchenRoom = (wave: number): Model => {
+  const room = fullRoom(RunMode.Campaign(), wave, 2)
+  return modifyFields(room, {
+    level: level => openExitIn(level, KITCHEN_EXIT),
+    ovens: ovens =>
+      Array.map(ovens, () =>
+        Oven.Belching({ remainingMs: 400, burnedTicks: 2 }),
+      ),
+    player: player => modifyFields(player, { x: () => 100, y: () => -40 }),
+    zombies: zombies =>
+      Array.map(zombies, (zombie, index) =>
+        index % 2 === 0
+          ? modifyFields(zombie, {
+              x: () => 30 + ((index * 17) % 150),
+              y: () => -110 + ((index * 23) % 100),
+            })
+          : zombie,
+      ),
+  })
+}
+
 const SCENARIOS: ReadonlyArray<Readonly<{ name: string; model: Model }>> = [
   {
-    name: 'campaign wave 8 at the alive cap with the boss enraged mid-charge',
-    model: fullRoom(RunMode.Campaign(), 8, 0),
+    name: 'campaign wave 9 in the open kitchen with both ovens belching',
+    model: kitchenRoom(9),
+  },
+  {
+    name: 'campaign wave 10 at the alive cap with the boss enraged mid-charge',
+    model: fullRoom(RunMode.Campaign(), FINAL_WAVE, 0),
   },
   {
     name: 'endless wave 15 at the alive cap',

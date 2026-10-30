@@ -1,7 +1,7 @@
 import { Array, Option, Result } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { type Level, isSolidAt, levelOf } from './arena'
+import { type Level, isInsideRoomAt, isSolidAt, levelOf } from './arena'
 import {
   BLOOD_DRAG_PER_SECOND,
   BLOOD_GRAVITY,
@@ -342,11 +342,7 @@ const leftDecal = (decal: Decal): ParticleStep =>
   Result.fail(Option.some(decal))
 
 const isOnFloor = (level: Level, x: number, y: number): boolean =>
-  x >= 0 &&
-  x < level.width &&
-  y >= 0 &&
-  y < level.height &&
-  !isSolidAt(level, { x, y })
+  isInsideRoomAt(level, { x, y }) && !isSolidAt(level, { x, y })
 
 const land = (
   level: Level,
@@ -928,6 +924,12 @@ const belchParticles = (
   )
 
 const SMOKE_PER_BLAST = 6
+const OVEN_SMOKE = 4
+const OVEN_SPARKS = 8
+const SLIP_SPLASH = 5
+const SMASH_SPLINTERS = 14
+const SMASH_PLANKS = 6
+const SMASH_DUST = 10
 
 const blastParticles = (
   state: number,
@@ -1161,6 +1163,18 @@ const eventParticles = (
     PackFrenzied: ({ x, y }) =>
       dustRing({ x, y }, RATTLE_DUST_PER_WARNING)(state),
     PackWiped: ({ x, y }) => generateMany(state, WIPE_COINS, coin({ x, y })),
+    OvenBelched: ({ x, y }) =>
+      chain(state, [
+        drawState =>
+          generateMany(drawState, OVEN_SMOKE, smokePuff({ x, y: y + 4 })),
+        sparks({ x, y: y + 6 }, OVEN_SPARKS),
+      ]),
+    ZombieSlipped: ({ x, y }) =>
+      generateMany(
+        state,
+        SLIP_SPLASH,
+        droplet('Goo', { x, y }, Math.PI / 2, Math.PI * 2, GOO_BURST_SPEED),
+      ),
   })
 
 type Spawn = Readonly<{
@@ -1274,6 +1288,21 @@ export const burstCoins = (model: Model, x: number, y: number): Model => {
   )
   return modifyFields(model, {
     particles: particles => keepNewest([...particles, ...coins], PARTICLE_MAX),
+    rngState: () => rngState,
+  })
+}
+
+// NOTE: the boards over an exit the player buys open burst into splinters
+// and planks with a cloud of dust.
+export const smashBoards = (model: Model, x: number, y: number): Model => {
+  const ground = { x, y }
+  const [rngState, debris] = chain(model.rngState, [
+    woodBits('Splinter', ground, SMASH_SPLINTERS),
+    woodBits('Plank', ground, SMASH_PLANKS),
+    dustRing(ground, SMASH_DUST),
+  ])
+  return modifyFields(model, {
+    particles: particles => keepNewest([...particles, ...debris], PARTICLE_MAX),
     rngState: () => rngState,
   })
 }

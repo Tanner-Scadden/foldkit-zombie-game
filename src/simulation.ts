@@ -56,6 +56,7 @@ import {
 } from './geometry'
 import { deriveIntent } from './input'
 import { advanceJuice, thawHitStop } from './juice'
+import { advanceKitchen, soupSkid } from './kitchen'
 import {
   Arsenal,
   type Boss,
@@ -137,7 +138,7 @@ import {
 export const refreshIntent = (model: Model): Model =>
   modifyFields(model, {
     intent: () =>
-      ShopState.isAnyOf(['Browsing'])(model.shop)
+      ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)
         ? idleIntent
         : deriveIntent(model.input, model.player, screenCameraOf(model)),
   })
@@ -193,12 +194,19 @@ const movePlayer = (
     scaleVector(velocity, seconds),
     PLAYER_RADIUS,
     blockers,
+    'Player',
   )
+  const { bounds } = level
   return modifyFields(player, {
-    x: () => clamp(moved.x, PLAYER_RADIUS, level.width - PLAYER_RADIUS),
-    y: () => clamp(moved.y, PLAYER_RADIUS, level.height - PLAYER_RADIUS),
+    x: () =>
+      clamp(moved.x, bounds.left + PLAYER_RADIUS, bounds.right - PLAYER_RADIUS),
+    y: () =>
+      clamp(moved.y, bounds.top + PLAYER_RADIUS, bounds.bottom - PLAYER_RADIUS),
     knockback: knockback =>
-      decayKnockback(knockback, PLAYER_KNOCKBACK_DECAY_PER_SECOND, seconds),
+      addVectors(
+        decayKnockback(knockback, PLAYER_KNOCKBACK_DECAY_PER_SECOND, seconds),
+        soupSkid(level, player, move, seconds),
+      ),
     invulnerability: invulnerability =>
       tickInvulnerability(invulnerability, deltaMs),
     recoilRemainingMs: remainingMs => countDown(remainingMs, deltaMs),
@@ -401,7 +409,7 @@ const autoReload = (model: Model, isTriggerHeld: boolean): Model => {
 }
 
 const isShopBrowsing = (model: Model): boolean =>
-  ShopState.isAnyOf(['Browsing'])(model.shop)
+  ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)
 
 const topUp = (model: Model): Model =>
   isShopBrowsing(model)
@@ -467,8 +475,10 @@ const tickReload = (model: Model, deltaMs: number): Model => {
 
 // BULLETS
 
-const isInsideArena = (level: Level, { x, y }: Vector): boolean =>
-  x >= 0 && x <= level.width && y >= 0 && y <= level.height
+// NOTE: a bullet flies on until it leaves the house: past the map's edge or
+// out a door into the yard, where nothing is drawn.
+const isInsideArena = (level: Level, point: Vector): boolean =>
+  isInsideRoomAt(level, point)
 
 const advanceBullet =
   (seconds: number, deltaMs: number) =>
@@ -1297,6 +1307,7 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
     recordFootfalls(advanced, deltaMs),
     footed => resolveBulletHits(footed, seconds, routed.nextEntityId),
     trapped => advanceTraps(trapped, seconds, deltaMs),
+    trapped => advanceKitchen(armed, trapped, deltaMs),
     resolvePlayerContact,
     contacted => recoverActions(contacted, deltaMs),
     recovered => advanceChuckers(recovered, deltaMs),

@@ -15,6 +15,7 @@ import {
   SHOP_REACH_PX,
   TILE_SIZE,
 } from './constants'
+import { arriveAtExit, hasLeftExits } from './exits'
 import {
   Arsenal,
   type CarriedGun,
@@ -431,6 +432,7 @@ export const maybeDisplacedFocus = (model: Model): Option.Option<ShopItemId> =>
         replacementFor(model, focusedItem),
         replacement => replacement !== focusedItem,
       ),
+    AtExit: () => Option.none(),
     Dismissed: () => Option.none(),
   })
 
@@ -937,6 +939,11 @@ export const isShopOpenFor = (phase: Phase): boolean =>
 export const isBrowsing = (shop: ShopState): boolean =>
   ShopState.isAnyOf(['Browsing'])(shop)
 
+// NOTE: at the stall or at a boarded exit's offer, the player is out of the
+// fight for a moment: the break clock stops and the game takes no input.
+export const isAtCounter = (shop: ShopState): boolean =>
+  ShopState.isAnyOf(['Browsing', 'AtExit'])(shop)
+
 const arriveAtStall = (model: Model): ShopState =>
   isShopOpenFor(model.phase)
     ? ShopState.Browsing({
@@ -958,17 +965,30 @@ export const selectShopCategory = (
           ShopState.Browsing({
             focusedItem: suggestedItem(model, category),
           }),
+        AtExit: () => shop,
         Dismissed: () => shop,
       }),
   })
+
+// NOTE: walking into the stall opens the shop, and walking into a boarded
+// exit between waves opens its offer. Either one stays shut after it is left
+// until the player steps away from both.
+const arriveAt = (model: Model, shop: ShopState): ShopState =>
+  isAtStall(model.player)
+    ? arriveAtStall(model)
+    : Option.getOrElse(arriveAtExit(model), () => shop)
 
 export const refreshShopPresence = (model: Model): Model =>
   modifyFields(model, {
     shop: shop =>
       ShopState.match(shop, {
-        Away: () => (isAtStall(model.player) ? arriveAtStall(model) : shop),
+        Away: () => arriveAt(model, shop),
         Browsing: () => shop,
-        Dismissed: () => (hasLeftStall(model.player) ? ShopState.Away() : shop),
+        AtExit: () => shop,
+        Dismissed: () =>
+          hasLeftStall(model.player) && hasLeftExits(model)
+            ? ShopState.Away()
+            : shop,
       }),
   })
 

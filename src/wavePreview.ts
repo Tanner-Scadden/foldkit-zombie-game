@@ -1,4 +1,4 @@
-import { Array, Option } from 'effect'
+import { Array, Option, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
@@ -6,6 +6,7 @@ import { DOOR_OUTWARD, type Level, levelOf } from './arena'
 import { maybeBossDoor } from './boss'
 import { type Camera, worldToView } from './camera'
 import { FULL_TURN, placeSprite } from './drawing'
+import { exitBoxOf } from './exits'
 import {
   COUNT_SPRITES,
   GLYPH_HEIGHT,
@@ -198,19 +199,103 @@ const markerEdgeOpacity = (elapsedMs: number): number =>
   (1 - DOOR_MARKER_EDGE_DIM) *
     (0.5 + 0.5 * Math.sin((FULL_TURN * elapsedMs) / DOOR_MARKER_PULSE_MS))
 
+// NOTE: where a door's marker goes. A marker shows only for a door whose
+// spot is on the screen, never one above or below the window, so nothing
+// points at a door out of view. A door behind an open exit that is out of
+// view counts at that exit's doorway instead when the doorway is in view,
+// since that is where its zombies come into the room the player is in.
+type MarkerSpot = Readonly<{ key: string; anchor: Vector; outward: Vector }>
+
+const isRowInWindow = (window: Box, y: number): boolean =>
+  y >= window.y && y <= window.y + window.height
+
+const exitSpotOf = (level: Level, door: DoorId): Option.Option<MarkerSpot> =>
+  pipe(
+    level.exits,
+    Array.findFirst(
+      ({ isOpen, doors }) => isOpen && Array.contains(doors, door),
+    ),
+    Option.flatMap(exit =>
+      Option.map(exitBoxOf(level, exit.id), box => ({
+        key: `exit:${exit.id}`,
+        anchor: {
+          x: Math.round((box.left + box.right) / 2),
+          y: Math.round(box.bottom + DOOR_MARKER_INSET / 2),
+        },
+        outward: { x: 0, y: -1 },
+      })),
+    ),
+  )
+
+const markerSpotOf = (
+  level: Level,
+  camera: Camera,
+  window: Box,
+  door: DoorId,
+): Option.Option<MarkerSpot> => {
+  const own: MarkerSpot = {
+    key: door,
+    anchor: markerAnchor(level, door),
+    outward: DOOR_OUTWARD[door],
+  }
+  const isShown = (spot: MarkerSpot): boolean =>
+    isRowInWindow(window, worldToView(camera, spot.anchor).y)
+  return isShown(own)
+    ? Option.some(own)
+    : Option.filter(exitSpotOf(level, door), isShown)
+}
+
+type PlacedCount = Readonly<{
+  spot: MarkerSpot
+  kinds: Array.NonEmptyReadonlyArray<KindCount>
+}>
+
+const mergeKinds = (
+  first: Array.NonEmptyReadonlyArray<KindCount>,
+  second: ReadonlyArray<KindCount>,
+): Array.NonEmptyReadonlyArray<KindCount> =>
+  Array.reduce(second, first, (merged, { kind, count }) =>
+    Array.some(merged, entry => entry.kind === kind)
+      ? Array.map(merged, entry =>
+          entry.kind === kind ? { kind, count: entry.count + count } : entry,
+        )
+      : Array.append(merged, { kind, count }),
+  )
+
+const NOTHING_PLACED: ReadonlyArray<PlacedCount> = []
+
+const placeCounts = (
+  level: Level,
+  camera: Camera,
+  window: Box,
+  counts: ReadonlyArray<DoorCount>,
+): ReadonlyArray<PlacedCount> =>
+  Array.reduce(counts, NOTHING_PLACED, (placed, { door, kinds }) =>
+    Option.match(markerSpotOf(level, camera, window, door), {
+      onNone: () => placed,
+      onSome: spot =>
+        Array.some(placed, entry => entry.spot.key === spot.key)
+          ? Array.map(placed, entry =>
+              entry.spot.key === spot.key
+                ? { spot, kinds: mergeKinds(entry.kinds, kinds) }
+                : entry,
+            )
+          : Array.append(placed, { spot, kinds }),
+    }),
+  )
+
 const doorMarkerShapes =
   (
-    level: Level,
     camera: Camera,
     window: Box,
     elapsedMs: number,
     debuts: ReadonlyArray<ZombieKind>,
   ) =>
-  ({ door, kinds }: DoorCount): ReadonlyArray<Canvas.Shape> => {
-    const outward = DOOR_OUTWARD[door]
+  ({ spot, kinds }: PlacedCount): ReadonlyArray<Canvas.Shape> => {
+    const outward = spot.outward
     const pinned = pinToWindow(
       window,
-      worldToView(camera, markerAnchor(level, door)),
+      worldToView(camera, spot.anchor),
       DOOR_MARKER_BACK_WIDTH / 2,
     )
     const top = markerTop(outward.y, kinds.length)
@@ -295,54 +380,62 @@ const bossMarkerShapes = (
   elapsedMs: number,
   counts: ReadonlyArray<DoorCount>,
 ): ReadonlyArray<Canvas.Shape> =>
-  Option.match(maybeBossDoor(boss), {
-    onNone: () => [],
-    onSome: door => {
-      const anchor = worldToView(camera, markerAnchor(level, door))
-      const offset = bossMarkerOffset(door, counts)
-      const pinned = pinToWindow(
-        window,
-        { x: anchor.x + offset.x, y: anchor.y + offset.y },
-        BOSS_MARKER_WIDTH / 2,
-      )
-      const left = -BOSS_MARKER_WIDTH / 2
-      const top = -BOSS_MARKER_HEIGHT / 2
-      return [
-        group({
-          translate: pinned.point,
-          shapes: [
-            ...arrowShapes(
-              pinned.side,
-              BOSS_MARKER_WIDTH / 2,
-              0,
-              BOSS_MARKER_EDGE_COLOR,
-            ),
-            group({
-              opacity: Math.round(markerEdgeOpacity(elapsedMs) * 10) / 10,
-              shapes: [
-                Canvas.Rect({
-                  x: left - 1,
-                  y: top - 1,
-                  width: BOSS_MARKER_WIDTH + 2,
-                  height: BOSS_MARKER_HEIGHT + 2,
-                  fill: BOSS_MARKER_EDGE_COLOR,
-                }),
-              ],
-            }),
-            Canvas.Rect({
-              x: left,
-              y: top,
-              width: BOSS_MARKER_WIDTH,
-              height: BOSS_MARKER_HEIGHT,
-              fill: DOOR_MARKER_BACK_COLOR,
-            }),
-            placeSprite(BOSS_ICON_X, 0, BOSS_ICON),
-            placeBaked(BOSS_TAG, { x: BOSS_TAG_X, y: -2, align: 'Left' }),
-          ],
-        }),
-      ]
+  Option.match(
+    Option.flatMap(maybeBossDoor(boss), door =>
+      Option.map(markerSpotOf(level, camera, window, door), spot => ({
+        door,
+        spot,
+      })),
+    ),
+    {
+      onNone: () => [],
+      onSome: ({ door, spot }) => {
+        const anchor = worldToView(camera, spot.anchor)
+        const offset = bossMarkerOffset(door, counts)
+        const pinned = pinToWindow(
+          window,
+          { x: anchor.x + offset.x, y: anchor.y + offset.y },
+          BOSS_MARKER_WIDTH / 2,
+        )
+        const left = -BOSS_MARKER_WIDTH / 2
+        const top = -BOSS_MARKER_HEIGHT / 2
+        return [
+          group({
+            translate: pinned.point,
+            shapes: [
+              ...arrowShapes(
+                pinned.side,
+                BOSS_MARKER_WIDTH / 2,
+                0,
+                BOSS_MARKER_EDGE_COLOR,
+              ),
+              group({
+                opacity: Math.round(markerEdgeOpacity(elapsedMs) * 10) / 10,
+                shapes: [
+                  Canvas.Rect({
+                    x: left - 1,
+                    y: top - 1,
+                    width: BOSS_MARKER_WIDTH + 2,
+                    height: BOSS_MARKER_HEIGHT + 2,
+                    fill: BOSS_MARKER_EDGE_COLOR,
+                  }),
+                ],
+              }),
+              Canvas.Rect({
+                x: left,
+                y: top,
+                width: BOSS_MARKER_WIDTH,
+                height: BOSS_MARKER_HEIGHT,
+                fill: DOOR_MARKER_BACK_COLOR,
+              }),
+              placeSprite(BOSS_ICON_X, 0, BOSS_ICON),
+              placeBaked(BOSS_TAG, { x: BOSS_TAG_X, y: -2, align: 'Left' }),
+            ],
+          }),
+        ]
+      },
     },
-  })
+  )
 
 // FLOOR MARKER
 
@@ -415,19 +508,13 @@ export const wavePreviewShapes = (
   Phase.match(model.phase, {
     Ready: () => [],
     Preparation: ({ wave, spawns }) => {
-      const counts = doorCounts(spawns, model.traps)
-      const window = screenOf(model).world
       const level = levelOf(model)
+      const counts = doorCounts(spawns, model.traps, level.doorIds)
+      const window = screenOf(model).world
       return [
         ...Array.flatMap(
-          counts,
-          doorMarkerShapes(
-            level,
-            camera,
-            window,
-            model.elapsedMs,
-            debutKinds(wave),
-          ),
+          placeCounts(level, camera, window, counts),
+          doorMarkerShapes(camera, window, model.elapsedMs, debutKinds(wave)),
         ),
         ...bossMarkerShapes(
           level,

@@ -5,9 +5,11 @@ import { modifyFields } from 'foldkit/struct'
 import {
   type Box,
   type Level,
+  type Room,
   circleTouchesBox,
   isSolidAt,
   levelOf,
+  roomAt,
 } from './arena'
 import type { SoundEffect } from './audio'
 import {
@@ -501,9 +503,11 @@ const SPOT_TOP = 26
 const SPOT_EDGE = 16
 const SPOT_STEPS = 24
 
-const roomMiddleOf = (level: Level): Vector => ({
-  x: level.width / 2,
-  y: level.height / 2 + 5,
+// NOTE: a drop settles inside the room it fell in, so one in the kitchen
+// stays in the kitchen and one in the parlour lands where it always did.
+const roomMiddleOf = ({ box }: Room): Vector => ({
+  x: (box.left + box.right) / 2,
+  y: (box.top + box.bottom) / 2 + 5,
 })
 
 const isClearSpot =
@@ -517,13 +521,20 @@ const settleSpot = (
   point: Vector,
   blockers: ReadonlyArray<Box>,
 ): Vector => {
-  const middle = roomMiddleOf(level)
+  const room = roomAt(level, point)
+  const middle = roomMiddleOf(room)
   const start = {
     x: Math.round(
-      Math.min(level.width - SPOT_EDGE, Math.max(SPOT_LEFT, point.x)),
+      Math.min(
+        room.box.right - SPOT_EDGE,
+        Math.max(room.box.left + SPOT_LEFT, point.x),
+      ),
     ),
     y: Math.round(
-      Math.min(level.height - SPOT_EDGE, Math.max(SPOT_TOP, point.y)),
+      Math.min(
+        room.box.bottom - SPOT_EDGE,
+        Math.max(room.box.top + SPOT_TOP, point.y),
+      ),
     ),
   }
   return pipe(
@@ -722,7 +733,7 @@ export const advancePowerUps = (
   model: Model,
   worldMs: number,
 ): Model => {
-  if (ShopState.isAnyOf(['Browsing'])(model.shop)) {
+  if (ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)) {
     return model
   }
 
