@@ -16,7 +16,7 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
 
 ### In flight
 
-- [ ] **0a. Strictness.** Restore oxlint's default plugins and correctness category, type-aware lint (`oxlint-tsgolint`), the Effect language service rules at error, the Effect oxlint `strict` preset, stricter tsconfig flags on one shared base for app, infra, and packages, and custom rules for the project rules (no `Math.random`/`Date.now`/`crypto.randomUUID`, storage only through the store, no `.guards` in per-frame code, no `Data.taggedEnum`, no `VIEW_WIDTH` in overlays, no em dashes). Files other agents were editing got scoped overrides with a TODO: clear them in slice 9.
+- [x] **0a. Strictness.** (#18) Restore oxlint's default plugins and correctness category, type-aware lint (`oxlint-tsgolint`), the Effect language service rules at error, the Effect oxlint `strict` preset, stricter tsconfig flags on one shared base for app, infra, and packages, and custom rules for the project rules (no `Math.random`/`Date.now`/`crypto.randomUUID`, storage only through the store, no `.guards` in per-frame code, no `Data.taggedEnum`, no `VIEW_WIDTH` in overlays, no em dashes). Files other agents were editing got scoped overrides with a TODO: clear them in slice 9.
 - [ ] **0b. Foldkit Block preview.** Move to `foldkit@0.169.0-canary.90746b32d2ca` (what foldkit-domains uses): Blocks, Definitions, and Bindings in place of Submodels, a Dialog Binding in place of `dialogFolds`, `Update.combineSteps`, Effect back to 4.0.x. Lands after 0a.
 
 ### Queue
@@ -63,7 +63,12 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
 9. [ ] **Dead code and leftover overrides.** (S)
    - Unused exports: `MOVE_ICON`, `SHOOT_ICON`, `SHOP_ICON` (`icons.ts`), `isInteractKey` (`input.ts`), `nearestTarget` (`party.ts`), `isRoomSlot` (`roomWorld.ts`), `priceLabel` (`shop.ts`), `repairTraps` (`traps.ts`), `WIRE_FIELDS` (`worldCodec.ts`), `isProfileOpenOn`, `GAG_NAMES` (`names.ts`; `fridgeView.ts:101` uses literals instead), `isFridgePrizeWeapon` (`leftovers.ts`), `isOwnLob`, `lobPoint`, `lobDirection` (`fridgeWeapons.ts`).
    - Mode names hard-coded in `coop/view.ts:700` ("Campaign", "Endless", "Keep going"): move to `names.ts`.
-   - Clear every scoped override with a TODO that 0a left.
+   - Clear every scoped override marked `TODO(cleanup slice 9)` that 0a left:
+     - `noImplicitReturns` is off in `tsconfig.base.json`: its one hit is `packages/netcode/src/Lobby.ts:530`.
+     - `tsconfig.inflight.json` checks `src/store.test.ts` and `packages/sync-engine/test/engine.test.ts` without `noPropertyAccessFromIndexSignature`. Fix their hits, drop the excludes in `tsconfig.json` and `packages/sync-engine/tsconfig.json`, and delete the file and its `typecheck` step.
+     - `.oxlintrc.json`: `src/main.ts` and `src/update/shop.ts` (consistent-type-imports); `src/store.test.ts` (Date.now, no-unnecessary-condition); `packages/sync-engine/test/**` (consistent-type-imports, expect-expect, no-base-to-string, no-unsafe-assignment); `packages/netcode/**` (no-control-regex, no-shadow, consistent-type-imports, require-to-throw-message, no-unnecessary-condition, no-useless-spread); `tools/balance/bot.ts` and `simulate.ts` in `ignorePatterns`.
+     - `tsconfig.base.json` Effect overrides: `tools/balance/bot.ts` and `simulate.ts` (strictBooleanExpressions); `packages/netcode/src/Socket.ts` (runEffectInsideEffect); `packages/sync-engine/test/**` (preferSchemaOverJson, lazyEffect).
+     - `.oxlintrc.effect.json`: `packages/netcode/src/Socket.ts` (run-effect-inside-effect); `packages/sync-engine/test/fixtures.ts` (lazy-effect).
    - Lock in: `knip` (or an unused-exports check) in `bun run lint`.
 10. [ ] **Finish.** Re-run the audit's checks, list what is left as follow-ups in the right doc, make sure AGENTS.md has every new rule, and delete this file.
 
@@ -71,4 +76,3 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
 
 - `storeEarly.ts` uses Promises and try/catch on purpose: it is boot code that runs before the Effect runtime. Leave it, with a comment.
 - The co-op audit's "host walks into the stall" and revive steps are flaky (failed once each on production and locally, passed on rerun). Make them wait on state, not time.
-- `infra/worker/gameRoom.ts:345` logs round trips with a raw `JSON.stringify`. Harmless; fold into slice 7.
