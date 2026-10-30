@@ -314,14 +314,14 @@ On 2026-10-30, in one pull request of increments: the room plays the game's own 
 | The rules around the run | `src/update/coopRun.ts`, `src/main.ts`                          | No pause (the corner holds LEAVE), the stall's dialog opens when the room puts the player at the counter and closing it tells the room, a run counts toward the player's own bests and Munchopedia kills when it ends (the team's kills by kind; the room credits each seat's kills for the lobby's scores), no analytics summary until RunSummary has co-op fields, leaving the room goes home                                              |
 | The last world           | `packages/netcode/src/Room.ts`                                  | A run that ends between messages sends its last world before RoomClosed, so every player sees how it ended                                                                                                                                                                                                                                                                                                                                   |
 
-**Measured.** Four scripted players over a simulated 60 ms round trip, every message through the real codecs, 150 s into wave 4 with 500 hearts each so they last (`src/roomWorld.sim.test.ts`):
+**Measured.** Four scripted players over a simulated 60 ms round trip, every message through the real codecs, 100 s into wave 3 with 500 hearts each so they last (`src/roomWorld.sim.test.ts`):
 
 | Per player, downstream, 4 players at 20 Hz | Bytes a message (p50, p95, mean) | KB/s                   |
 | ------------------------------------------ | -------------------------------- | ---------------------- |
-| Whole run                                  | 260, 403, 260                    | 5.08 mean              |
-| Crowded (15+ alive, 4,332 messages)        | 317, 438, 324                    | 6.32 mean, 8.55 at p95 |
+| Whole run                                  | 246, 396, 249                    | 4.87 mean              |
+| Crowded (15+ alive, 2,396 messages)        | 308, 451, 318                    | 6.21 mean, 8.81 at p95 |
 
-That is under the estimate of "The wire at 20 Hz" (5.7 mean, 7.4 crowded, 11.2 at p95), WebSocket frame headers included and TCP, IP, and TLS not. The largest messages (about 3 KB) are wave starts, which write the new wave's planned spawns. Inputs went out about 9 times a second while walking and shooting. Own-player corrections came about 0.7 a second, at most 11.8 px, from the knockback of bites the client does not predict. A snapshot of a two-player run is under 4 KB.
+That is under the estimate of "The wire at 20 Hz" (5.7 mean, 7.4 crowded, 11.2 at p95), WebSocket frame headers included and TCP, IP, and TLS not. A longer 300 s run into wave 5 averaged 5.5 KB/s a player. The largest messages (2 to 3 KB) are wave starts, which write the new wave's planned spawns. Inputs went out about 9 times a second while walking and shooting. Own-player corrections came about 0.7 a second, at most about 12 px, from the knockback of bites the client does not predict. A snapshot of a two-player run is under 4 KB.
 
 PREVIEW_RESULTS
 

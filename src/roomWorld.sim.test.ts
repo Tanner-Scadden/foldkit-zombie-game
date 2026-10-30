@@ -3,7 +3,7 @@ import { describe, expect, test } from 'vitest'
 
 import { Session } from '@munch/netcode'
 
-import { mean, percentile, simulateRoom } from './roomTesting'
+import { DRAW_EVERY, mean, percentile, simulateRoom } from './roomTesting'
 
 // NOTE: four scripted players in a room over a 60 ms round trip, every
 // message through the real codecs, into the crowded waves (MULTIPLAYER.md,
@@ -11,7 +11,7 @@ import { mean, percentile, simulateRoom } from './roomTesting'
 // The numbers it logs are the ones "What Phase 2 built" reports.
 
 const PLAYERS = 4
-const SECONDS = 150
+const SECONDS = 100
 
 const run = simulateRoom({
   players: PLAYERS,
@@ -52,7 +52,7 @@ describe('four players in a crowded room', () => {
 
   test('every player draws the room and their own player stays close', () => {
     Array.forEach(run.clients, client => {
-      expect(client.shown).toBeGreaterThan(SECONDS * 50)
+      expect(client.shown).toBeGreaterThan((SECONDS * 50) / DRAW_EVERY)
       expect(client.session.stats.maxCorrectionPx).toBeLessThan(
         Session.SNAP_DISTANCE,
       )

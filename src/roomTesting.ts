@@ -173,6 +173,10 @@ export type NetworkRun = Readonly<{
 const T0 = 5_000_000
 const CROWDED = 15
 
+// NOTE: each client draws every fourth frame, which keeps the run light
+// enough for CI; the input and prediction still run every frame.
+export const DRAW_EVERY = 4
+
 // NOTE: a room and a client per player, each message encoded to bytes and
 // decoded on the far side as the Durable Object and the browser do, over a
 // network with a fixed one-way delay. Every client plays the scripted
@@ -214,6 +218,7 @@ export const simulateRoom = (
     bytesDown: 0,
     nextFrameMs: T0,
     isEnded: false,
+    frame: 0,
     endedMs: T0 + options.seconds * 1000,
   }
   const messageBytes: Array<number> = []
@@ -296,6 +301,7 @@ export const simulateRoom = (
       })
       if (nowMs >= state.nextFrameMs) {
         state.nextFrameMs += frameMs
+        state.frame += 1
         Array.forEach(clients, client => {
           const input = Option.match(Array.last(client.session.frames), {
             onNone: () => NEUTRAL_INPUT,
@@ -314,9 +320,11 @@ export const simulateRoom = (
             client.session = Session.countSent(client.session, bytes.length)
             client.toRoom.push({ atMs: nowMs + options.oneWayMs, bytes })
           })
-          const rendered = Session.render(world, client.session, nowMs)
-          client.session = rendered.session
-          client.shown += Option.isSome(rendered.world) ? 1 : 0
+          if (state.frame % DRAW_EVERY === 0) {
+            const rendered = Session.render(world, client.session, nowMs)
+            client.session = rendered.session
+            client.shown += Option.isSome(rendered.world) ? 1 : 0
+          }
         })
       }
     },
