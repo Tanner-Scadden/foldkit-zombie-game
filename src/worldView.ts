@@ -30,6 +30,7 @@ import {
 } from './powerupView'
 import { hearthFireShapes } from './room'
 import { isShopOpenFor, stallPrompt } from './shop'
+import { aimSightShapes } from './sightView'
 import { group } from './sprite'
 import {
   STALL_FOOT_Y,
@@ -95,6 +96,7 @@ const groundShapes = (
   ...groundParticleShapes(model.particles),
   ...ghostShapes(model),
   ...doorRattleShapes(model),
+  ...aimSightShapes(model),
   ...Array.flatMap(model.bullets, bulletShapes),
 ]
 
