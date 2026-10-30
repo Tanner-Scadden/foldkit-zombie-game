@@ -74,10 +74,12 @@ const attachmentOf = (socket: WorkersWebSocket): Option.Option<Attachment> =>
 export class Matchmaker {
   private host: Option.Option<MatchmakerHost> = Option.none()
 
-  constructor(
-    private readonly ctx: DurableObjectState,
-    private readonly env: SyncBindings,
-  ) {
+  private readonly ctx: DurableObjectState
+  private readonly env: SyncBindings
+
+  constructor(ctx: DurableObjectState, env: SyncBindings) {
+    this.ctx = ctx
+    this.env = env
     ctx.setWebSocketAutoResponse(
       new WebSocketRequestResponsePair(PING_JSON, PONG_JSON),
     )
@@ -225,6 +227,8 @@ export class Matchmaker {
       pair[1].serializeAttachment(
         encodeAttachment({
           _tag: 'Opened',
+          // NOTE: a socket's id needs no Effect service.
+          // @effect-diagnostics-next-line cryptoRandomUUID:off
           socket: crypto.randomUUID(),
           region: request.headers.get(REGION_HEADER) ?? '',
         }),

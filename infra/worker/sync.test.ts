@@ -41,6 +41,14 @@ import {
   setupOnce,
 } from './syncCore.ts'
 
+const decodeCode = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.Struct({ code: Schema.String })),
+)
+
+const decodeTagged = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.Struct({ _tag: Schema.String })),
+)
+
 const SECRET = 'infra-sync-test-secret'
 
 const memory = (): Promise<SqlClient.SqlClient> =>
@@ -142,7 +150,7 @@ describe('the sync Worker', () => {
         Date.now(),
       ),
     )
-    const { code } = JSON.parse(await link.response.text())
+    const { code } = decodeCode(await link.response.text())
     const redeem = await Effect.runPromise(
       handleDirectory(
         directory,
@@ -227,7 +235,7 @@ describe('the sync Worker', () => {
       ],
     })
     await Effect.runPromise(host.onMessage(phone, push, everyone))
-    const tags = phone.sent.map(text => JSON.parse(text)._tag)
+    const tags = phone.sent.map(text => decodeTagged(text)._tag)
     expect(tags).toEqual(['Deltas', 'Deltas', 'Acked'])
 
     const reply = await Effect.runPromise(
@@ -393,7 +401,7 @@ describe('a sync Durable Object', () => {
       ).text(),
     )
     const link = await post(host, '/sync/link', '{}', Option.some(phone.token))
-    const { code } = JSON.parse(await link.text())
+    const { code } = decodeCode(await link.text())
     const redeem = await post(
       host,
       '/sync/link/redeem',

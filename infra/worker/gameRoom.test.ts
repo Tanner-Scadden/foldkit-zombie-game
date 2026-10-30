@@ -4,6 +4,7 @@ import * as Effect from 'effect/Effect'
 import * as Layer from 'effect/Layer'
 import * as Option from 'effect/Option'
 import * as Result from 'effect/Result'
+import * as Schema from 'effect/Schema'
 import * as Scope from 'effect/Scope'
 import * as SqlClient from 'effect/sql/SqlClient'
 
@@ -37,6 +38,10 @@ import {
   reactionsOf,
 } from './gameRoomCore.ts'
 import type { Socket } from './syncCore.ts'
+
+const decodeTagged = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.Struct({ _tag: Schema.String })),
+)
 
 const SECRET = 'infra-room-test-secret'
 const CODE = 'KX7PQ'
@@ -241,7 +246,7 @@ describe('the room host', () => {
         stranger,
       ]),
     )
-    expect(JSON.parse(member.sent[0] ?? '{}')._tag).toBe('Snapshot')
+    expect(decodeTagged(member.sent[0] ?? '{}')._tag).toBe('Snapshot')
     expect(JSON.parse(stranger.sent[0] ?? '{}')).toMatchObject({
       _tag: 'Failed',
       code: 'Forbidden',

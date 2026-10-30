@@ -1,3 +1,4 @@
+import * as DateTime from 'effect/DateTime'
 import * as Option from 'effect/Option'
 import * as Schema from 'effect/Schema'
 
@@ -58,8 +59,11 @@ export const decideRate = ({ visit, address }: RateCheck): RateDecision => {
 
 const DAY_LENGTH = 10
 
+const isoOf = (nowMs: number): string =>
+  DateTime.formatIso(DateTime.makeUnsafe(nowMs))
+
 export const utcDay = (nowMs: number): string =>
-  new Date(nowMs).toISOString().slice(0, DAY_LENGTH)
+  isoOf(nowMs).slice(0, DAY_LENGTH)
 
 // RETENTION
 
@@ -115,7 +119,7 @@ export type RunRow = Readonly<{
 }>
 
 export const rowOf = (summary: RunSummary, nowMs: number): RunRow => ({
-  received_at: new Date(nowMs).toISOString(),
+  received_at: isoOf(nowMs),
   received_day: utcDay(nowMs),
   summary_version: summary.version,
   visit_id: summary.visitId,

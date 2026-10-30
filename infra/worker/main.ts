@@ -58,10 +58,8 @@ const cleanUp = (env: Bindings, scheduledMs: number) =>
 // on them, and anything else goes to the analytics handler.
 const respond = (request: Request, env: Bindings) =>
   Effect.flatMap(
-    Effect.flatMap(routeSync(request, env), maybeSync =>
-      Option.isSome(maybeSync)
-        ? Effect.succeed(maybeSync)
-        : routeRoom(request, env),
+    Effect.filterOrElse(routeSync(request, env), Option.isSome, () =>
+      routeRoom(request, env),
     ),
     Option.match({
       onSome: Effect.succeed,

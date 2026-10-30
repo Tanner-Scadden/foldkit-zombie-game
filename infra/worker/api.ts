@@ -52,7 +52,7 @@ export type WorkerServices = Readonly<{
 }>
 
 export class WorkerEnv extends Context.Service<WorkerEnv, WorkerServices>()(
-  'munch-manor/WorkerEnv',
+  'munch-manor-infra/worker/api/WorkerEnv',
 ) {}
 
 // ERRORS
@@ -174,7 +174,7 @@ const checkRate = (visitId: string, address: string) =>
 
 const failWhenLimited = (decision: RateDecision) =>
   decision._tag === 'Limited'
-    ? Effect.fail(new RateLimited({ by: decision.by }))
+    ? Effect.fail(RateLimited.make({ by: decision.by }))
     : Effect.void
 
 // HANDLERS
@@ -188,15 +188,14 @@ const RunsLive = HttpApiBuilder.group(Api, 'runs', handlers =>
     .handleRaw('record', ({ request }) =>
       Effect.gen(function* () {
         if (declaredSize(request.headers['content-length']) === 'TooLarge') {
-          return yield* new SummaryTooLarge()
+          return yield* SummaryTooLarge.make()
         }
         const body = yield* Effect.orElseSucceed(request.text, () => '')
         if (bodySize(body) === 'TooLarge') {
-          return yield* new SummaryTooLarge()
+          return yield* SummaryTooLarge.make()
         }
-        const summary = yield* Effect.mapError(
-          decodeSummary(body),
-          () => new SummaryRejected(),
+        const summary = yield* Effect.mapError(decodeSummary(body), () =>
+          SummaryRejected.make(),
         )
         const address = Option.getOrElse(
           Option.fromNullishOr(request.headers[CLIENT_ADDRESS_HEADER]),
@@ -208,7 +207,7 @@ const RunsLive = HttpApiBuilder.group(Api, 'runs', handlers =>
         )
         const nowMs = yield* Clock.currentTimeMillis
         yield* withDatabase(insertRun(rowOf(summary, nowMs))).pipe(
-          Effect.mapError(() => new StoreUnavailable()),
+          Effect.mapError(() => StoreUnavailable.make()),
         )
       }),
     )

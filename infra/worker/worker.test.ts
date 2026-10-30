@@ -150,7 +150,7 @@ const query = (setup: Setup, statement: string) =>
   Effect.runPromise(setup.sql.unsafe<Record<string, unknown>>(statement))
 
 const rowCount = async (setup: Setup): Promise<unknown> =>
-  (await query(setup, 'SELECT count(*) AS n FROM runs'))[0]?.n
+  (await query(setup, 'SELECT count(*) AS n FROM runs'))[0]?.['n']
 
 // RULES
 

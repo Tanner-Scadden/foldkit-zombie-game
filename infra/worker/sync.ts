@@ -33,6 +33,7 @@ import {
   type Socket,
   SyncCallFailed,
   type SyncSetupFailed,
+  encodeJson,
   encodeNightmareAnswer,
   failureResponse,
   json,
@@ -94,10 +95,12 @@ export class SyncScope {
   private host: Option.Option<Effect.Effect<ScopeHost, SyncSetupFailed>> =
     Option.none()
 
-  constructor(
-    private readonly ctx: DurableObjectState,
-    private readonly env: SyncBindings,
-  ) {
+  private readonly ctx: DurableObjectState
+  private readonly env: SyncBindings
+
+  constructor(ctx: DurableObjectState, env: SyncBindings) {
+    this.ctx = ctx
+    this.env = env
     ctx.setWebSocketAutoResponse(
       new WebSocketRequestResponsePair(PING_JSON, PONG_JSON),
     )
@@ -327,7 +330,7 @@ const routeSyncPath = (request: Request, env: SyncBindings, url: URL) =>
         makeChallenge(env.SYNC_SECRET, now),
         cause => new SyncCallFailed({ step: 'make a challenge', cause }),
       )
-      return json(200, JSON.stringify({ nonce }))
+      return json(200, yield* Effect.orDie(encodeJson({ nonce })))
     }
     if (isIdentityPath(url.pathname)) {
       const stub = env.SYNC_DIRECTORY.get(
@@ -397,7 +400,11 @@ const forwardToScope = (request: Request, env: SyncBindings, url: URL) =>
         ? yield* tryCall('read the body', () => request.text())
         : undefined
     const response = yield* tryCall('call the scope', () =>
-      stub.fetch(request.url, { method: request.method, headers, body }),
+      stub.fetch(request.url, {
+        method: request.method,
+        headers,
+        body: body ?? null,
+      }),
     )
     if (isUpgrade) {
       return new Response(null, {

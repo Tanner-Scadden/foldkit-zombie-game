@@ -71,11 +71,11 @@ import {
   reportListing,
 } from './roomCalls.ts'
 import type { SyncBindings } from './sync.ts'
+import type { SyncCallFailed } from './syncCore.ts'
 import {
   BadSyncBody,
   CORS_HEADERS,
   type Socket,
-  SyncCallFailed,
   type SyncSetupFailed,
   json,
   readNightmareUnlock,
@@ -152,10 +152,12 @@ export class GameRoom {
   private game: Option.Option<Game> = Option.none()
   private loop: Option.Option<Fiber.Fiber<void>> = Option.none()
 
-  constructor(
-    private readonly ctx: DurableObjectState,
-    private readonly env: GameRoomBindings,
-  ) {
+  private readonly ctx: DurableObjectState
+  private readonly env: GameRoomBindings
+
+  constructor(ctx: DurableObjectState, env: GameRoomBindings) {
+    this.ctx = ctx
+    this.env = env
     ctx.setWebSocketAutoResponse(
       new WebSocketRequestResponsePair(PING_JSON, PONG_JSON),
     )
@@ -174,8 +176,12 @@ export class GameRoom {
               .exec('SELECT code FROM room WHERE id = 1')
               .toArray()[0],
           ),
-          row =>
-            Option.map(normalizeRoomCode(String(row['code'])), roomScopeId),
+          row => {
+            const code = row['code']
+            return typeof code === 'string'
+              ? Option.map(normalizeRoomCode(code), roomScopeId)
+              : Option.none()
+          },
         ),
       catch: () => Option.none<string>(),
     }).pipe(Effect.catch(none => Effect.succeed(none)))
@@ -342,7 +348,8 @@ export class GameRoom {
     const everyone = this.syncSockets()
     return Effect.gen({ self: this }, function* () {
       yield* Effect.logInfo(
-        `Room game ${round} ended (${ended.reason}) at tick ${ended.tick}; round trips ${JSON.stringify(rtts)}`,
+        `Room game ${round} ended (${ended.reason}) at tick ${ended.tick}; round trips`,
+        rtts,
       )
       yield* Option.match(maybeWon, {
         onNone: () => Effect.void,
@@ -609,6 +616,8 @@ export class GameRoom {
         return this.accept(GAME_TAG, {
           _tag: 'GameOpened',
           scope,
+          // NOTE: a socket's id needs no Effect service.
+          // @effect-diagnostics-next-line cryptoRandomUUIDInEffect:off
           socket: crypto.randomUUID(),
         })
       }
