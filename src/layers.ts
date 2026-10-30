@@ -6,6 +6,7 @@ import { spriteWarmUpSources } from './appearance'
 import { type Level, levelOf } from './arena'
 import { bossBandShapes } from './bossView'
 import { type Camera, toScreenCamera, worldCameraFor } from './camera'
+import { coopEdgeShapes } from './coopMarksView'
 import { decalShapes } from './effectsView'
 import { hudShapes, hudStripShapes } from './hud'
 import type { Message } from './message'
@@ -45,6 +46,7 @@ const overlayLayerShapes = (
   ...wavePreviewShapes(model, camera),
   ...hudShapes(model, screen, camera),
   ...calloutLayerShapes(model, camera),
+  ...(isRoundActive(model.phase) ? coopEdgeShapes(model, camera) : []),
   ...inLandscapeFrame(screen, overlayShapes(model, screen)),
   ...(Phase.isAnyOf(['Wave'])(model.phase)
     ? inLandscapeFrame(screen, bossBandShapes(model))

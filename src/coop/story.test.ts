@@ -1,4 +1,4 @@
-import { Effect, Option } from 'effect'
+import { Array, Effect, Option } from 'effect'
 import {
   Command,
   expectOutMessage,
@@ -10,9 +10,12 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { makeWriter } from '@munch/netcode'
+import { type ClientFrame, NEUTRAL_INPUT, makeWriter } from '@munch/netcode'
 import { RoomEvent } from '@munch/netcode/browser'
 
+import { playRoom } from '../roomTesting'
+import { seatActionOf } from '../roomWorld'
+import { SeatAction } from '../stepWorld'
 import { Message, OutMessage } from './message'
 import {
   LobbyChange,
@@ -44,6 +47,8 @@ import {
   freshRoom,
   maybeRoomOf,
   open,
+  pressAction,
+  tickRoom,
   update,
 } from './update'
 
@@ -340,6 +345,29 @@ describe('the lobby', () => {
   })
 })
 
+// NOTE: the Input frames a return's SendRoomFrames carry.
+const sentInputs = (
+  commands: ReadonlyArray<{ readonly name: string; readonly args?: unknown }>,
+): ReadonlyArray<Extract<ClientFrame, { readonly _tag: 'Input' }>> =>
+  commands.flatMap(command => {
+    const args = command.args
+    if (
+      command.name !== SendRoomFrames.name ||
+      typeof args !== 'object' ||
+      args === null ||
+      !('frames' in args) ||
+      !globalThis.Array.isArray(args.frames)
+    ) {
+      return []
+    }
+    return args.frames.filter(
+      (
+        frame: ClientFrame,
+      ): frame is Extract<ClientFrame, { readonly _tag: 'Input' }> =>
+        frame._tag === 'Input',
+    )
+  })
+
 const snapshotFrame = (tick: number) => {
   const writer = makeWriter()
   coopWorld.snapshot(writer, stagedWorld([0, 1]))
@@ -423,10 +451,11 @@ describe('the room', () => {
     )
   })
 
-  test('a held key walks the player and sends inputs to the room', () => {
+  test('the controls from the parent go to the room and the World comes back', () => {
+    const walking = { ...NEUTRAL_INPUT, moveX: 127 }
     story(
       update,
-      given(modifyFields(inRoom(0), { heldKeys: () => ['KeyD'] })),
+      given(inRoom(0)),
       message(
         received(
           { _tag: 'Welcome', version: 1, slot: 0, state: 'Playing', tick: 0 },
@@ -434,17 +463,131 @@ describe('the room', () => {
         ),
       ),
       message(received(snapshotFrame(10), 1010)),
-      message(Message.TickedRoomFrame({ nowMs: 1200 })),
       model(current => {
-        expect(Option.isSome(roomOf(current).maybeWorld)).toBe(true)
+        const ticked = tickRoom(current, walking, 1200)
+        expect(Option.isSome(roomOf(ticked.model).maybeWorld)).toBe(true)
+        const later = tickRoom(ticked.model, walking, 1400)
+        const inputs = [
+          ...sentInputs(ticked.commands ?? []),
+          ...sentInputs(later.commands ?? []),
+        ]
+        expect(
+          inputs.some(input =>
+            input.samples.some(sample => sample.input.moveX === 127),
+          ),
+        ).toBe(true)
       }),
-      Command.expectHas(SendRoomFrames),
-      Command.resolveAll([
-        SendRoomFrames,
-        Message.CompletedSendRoomFrames({ bytes: [12] }),
-      ]),
+    )
+  })
+
+  test('a press rides the inputs as a held value, one at a time', () => {
+    story(
+      update,
+      given(inRoom(0)),
+      message(
+        received(
+          { _tag: 'Welcome', version: 1, slot: 0, state: 'Playing', tick: 0 },
+          1000,
+        ),
+      ),
+      message(received(snapshotFrame(10), 1010)),
       model(current => {
-        expect(roomOf(current).session.stats.framesOut).toBe(1)
+        const pressed = pressAction(
+          pressAction(current, SeatAction.Swap()),
+          SeatAction.Ready(),
+        )
+        expect(roomOf(pressed).presses.queued.length).toBe(2)
+        const firstTick = tickRoom(pressed, NEUTRAL_INPUT, 1100)
+        const first = firstTick.model
+        const firstHeld = roomOf(first).presses.held
+        expect(seatActionOf(stagedWorld([0, 1]).world, firstHeld)).toEqual(
+          Option.some(SeatAction.Swap()),
+        )
+        const secondTick = tickRoom(first, NEUTRAL_INPUT, 1150)
+        const second = secondTick.model
+        const secondHeld = roomOf(second).presses.held
+        expect(secondHeld).not.toBe(firstHeld)
+        expect(seatActionOf(stagedWorld([0, 1]).world, secondHeld)).toEqual(
+          Option.some(SeatAction.Ready()),
+        )
+        const sent = tickRoom(second, NEUTRAL_INPUT, 1300)
+        const actions = [
+          ...sentInputs(firstTick.commands ?? []),
+          ...sentInputs(secondTick.commands ?? []),
+          ...sentInputs(sent.commands ?? []),
+        ].flatMap(input => input.samples.map(sample => sample.input.action))
+        expect(actions).toContain(firstHeld)
+        expect(actions).toContain(secondHeld)
+      }),
+    )
+  })
+
+  test('each event of the room reaches the drawing once, after any hit-stop', () => {
+    const played = playRoom(stagedWorld([0, 1]), 600)
+    const later = playRoom(played, 30)
+    const diff = makeWriter()
+    coopWorld.diff(diff, played, later)
+    const start = makeWriter()
+    coopWorld.snapshot(start, played)
+    const eventsIn = Array.reduce(
+      Array.filter(
+        later.events,
+        entry => entry.tick > played.tick && entry.tick <= later.tick,
+      ),
+      0,
+      (sum, entry) => sum + entry.events.length,
+    )
+    story(
+      update,
+      given(inRoom(0)),
+      message(
+        received(
+          { _tag: 'Welcome', version: 1, slot: 0, state: 'Playing', tick: 0 },
+          1000,
+        ),
+      ),
+      message(
+        received(
+          {
+            _tag: 'Snapshot',
+            tick: played.tick,
+            ack: 0,
+            world: start.finish(),
+          },
+          1000,
+        ),
+      ),
+      message(
+        received(
+          {
+            _tag: 'Delta',
+            tick: later.tick,
+            base: played.tick,
+            ack: 0,
+            diff: diff.finish(),
+          },
+          1500,
+        ),
+      ),
+      model(current => {
+        const drawn = Array.reduce(
+          [1600, 1700, 1800, 1900, 2000],
+          { model: current, events: 0 },
+          (state, nowMs) => {
+            const ticked = tickRoom(
+              state.model,
+              NEUTRAL_INPUT,
+              nowMs,
+              nowMs < 1750,
+            ).model
+            return {
+              model: ticked,
+              events: state.events + roomOf(ticked).frameEvents.length,
+            }
+          },
+        )
+        expect(eventsIn).toBeGreaterThan(0)
+        expect(drawn.events).toBe(eventsIn)
       }),
     )
   })

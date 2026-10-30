@@ -2,6 +2,8 @@ import { Effect, Option } from 'effect'
 import { Command, Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
+import type { PlayerInput } from '@munch/netcode'
+
 import { FocusHomeButton } from '../commands'
 import * as CoopMessage from '../coop/message'
 import type { Model as CoopModel } from '../coop/model'
@@ -13,6 +15,7 @@ import { Message } from '../message'
 import type { Model } from '../model'
 import { isLearned } from '../onboarding'
 import { joinName } from '../profile'
+import type { SeatAction } from '../stepWorld'
 import { canMoveHomeFocus } from './home'
 import { type UpdateStep, withInput } from './step'
 
@@ -61,6 +64,27 @@ const foldCoopKey = (
     write: (model, nextCoop) => modifyFields(model, { coop: () => nextCoop }),
     toParentMessage,
     foldOutMessage: foldCoopOutMessage,
+  })
+
+// NOTE: the room's frame with this client's controls in it (src/coopPlay.ts).
+export const tickCoopRoom =
+  (nowMs: number) => (controls: PlayerInput, isPictureHeld: boolean) =>
+    Update.foldChildStep({
+      update: (coop: CoopModel) =>
+        Coop.tickRoom(coop, controls, nowMs, isPictureHeld),
+      read: (model: Model) => Option.some(model.coop),
+      write: (model, nextCoop) => modifyFields(model, { coop: () => nextCoop }),
+      toParentMessage,
+      foldOutMessage: foldCoopOutMessage,
+    })
+
+// NOTE: a press for the room, sent with the next inputs.
+export const pressInRoom =
+  (action: SeatAction): UpdateStep =>
+  stepModel => ({
+    model: modifyFields(stepModel, {
+      coop: coop => Coop.pressAction(coop, action),
+    }),
   })
 
 export const pressCoopKey = (code: string): UpdateStep =>

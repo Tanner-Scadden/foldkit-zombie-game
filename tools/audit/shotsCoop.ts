@@ -26,6 +26,7 @@ import {
   pickViewports,
   shot,
   tagOr,
+  useHarness,
   wait,
 } from './lib'
 
@@ -107,6 +108,7 @@ const checkButtons = async (
   }
 }
 
+await useHarness()
 const browser = await launch()
 const problems: Array<string> = []
 for (const viewport of VIEWPORTS) {

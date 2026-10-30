@@ -24,6 +24,7 @@ import {
   SetFullscreen,
   UpdateServiceWorker,
 } from './commands'
+import { isOnlineRun } from './coopPlay'
 import { isCouchKey, pressCouchKey } from './couch'
 import { isAtExit } from './exits'
 import { advanceGame, clampFrameDelta, refreshIntent } from './frame'
@@ -97,6 +98,7 @@ import {
   pressCoopKey,
   releaseCoopKey,
 } from './update/coop'
+import { updateRunInRoom } from './update/coopRun'
 import {
   enterExit,
   foldExitDialog,
@@ -383,10 +385,12 @@ const reloadFromKey: (code: string) => UpdateStep = code => stepModel =>
 
 // NOTE: the summary is built here from the Model, so update stays pure. The
 // visit id comes from GenerateVisitId and the build id is a build constant.
+// An online co-op run sends none until RunSummary has co-op's fields
+// (MULTIPLAYER.md, Phase 6).
 const sendRunSummaryFrom =
   (before: Model): UpdateStep =>
   stepModel => {
-    if (stepModel.shareStats === 'Off') {
+    if (stepModel.shareStats === 'Off' || isOnlineRun(before)) {
       return { model: stepModel }
     }
 
@@ -1067,7 +1071,10 @@ const updateGame = (model: Model, message: Message) =>
 
 export const update = (model: Model, message: Message): UpdateReturn =>
   Update.combine(model, [
-    stepModel => updateGame(stepModel, message),
+    stepModel =>
+      Option.getOrElse(updateRunInRoom(stepModel, message, updateGame), () =>
+        updateGame(stepModel, message),
+      ),
     cueMusicFrom(model),
     focusEndMenuFrom(model),
     applyRotationFrom(model),

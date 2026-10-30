@@ -15,6 +15,7 @@ import {
   Stick,
 } from './model'
 import { type GhostStick, isDebutCardUp, shownGhostSticks } from './onboarding'
+import { isCoop, leadSeatOf } from './party'
 import { type Screen, screenOf } from './screen'
 import { STALL_BOX, gunName } from './shop'
 import {
@@ -282,6 +283,24 @@ const clusterSideView = (
 
 // START WAVE
 
+// NOTE: in co-op the button is the player's READY, and it says so once
+// pressed while the others still choose (decided 7).
+const startWaveWord = (model: Model): string => {
+  if (!isCoop(model)) {
+    return 'START WAVE'
+  }
+  return leadSeatOf(model).readiness === 'Ready' ? 'READY!' : 'READY'
+}
+
+const startWaveLabel = (model: Model, wave: number): string => {
+  if (!isCoop(model)) {
+    return `Start wave ${wave} now`
+  }
+  return leadSeatOf(model).readiness === 'Ready'
+    ? 'Ready, waiting for the others'
+    : `Ready for wave ${wave}`
+}
+
 const startWaveButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
   Phase.match(model.phase, {
     Ready: () => h.empty,
@@ -295,13 +314,14 @@ const startWaveButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
               h.Class(
                 isOnTouch(model) ? 'start-wave-pill' : 'start-wave-button',
               ),
-              h.AriaLabel(`Start wave ${wave} now`),
+              h.AriaLabel(startWaveLabel(model, wave)),
+              h.DataAttribute('ready', leadSeatOf(model).readiness),
               h.AriaKeyshortcuts('Enter'),
               h.OnClick(Message.ClickedStartWaveButton(), {
                 focusSelector: '.game-surface',
               }),
             ],
-            ['START WAVE', keyBadgeView(model, 'ENTER', h)],
+            [startWaveWord(model), keyBadgeView(model, 'ENTER', h)],
           ),
         ],
       ),

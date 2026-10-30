@@ -4,6 +4,7 @@ import type { Canvas } from 'foldkit'
 import { type Level, isInsideRoomAt, levelOf } from './arena'
 import { bossGroundShapes, bossOverheadShapes } from './bossView'
 import { type Camera, sceneOffset } from './camera'
+import { coopNameShapes } from './coopMarksView'
 import { type Drawable, depthSortedShapes } from './depth'
 import {
   airborneParticleShapes,
@@ -223,6 +224,7 @@ const overheadShapes = (
   ...Array.map(model.popups, popupShape(camera)),
   ...reloadBarShapes(model.player),
   ...mateOverheadShapes(model),
+  ...coopNameShapes(model),
   ...stallPromptShapes(stallPrompt(model)),
   ...exitPromptShapes(model),
 ]

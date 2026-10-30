@@ -1,7 +1,6 @@
 import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import type { SoundEffect } from './soundEffect'
 import {
   BULLET_LIFETIME_MS,
   BULLET_SPEED,
@@ -15,6 +14,7 @@ import {
   PLAYER_RECOIL_SQUASH,
   ZOMBIE_KNOCKBACK_SPEED,
 } from './constants'
+import type { SoundEffect } from './soundEffect'
 import {
   Arsenal,
   type CarriedGun,

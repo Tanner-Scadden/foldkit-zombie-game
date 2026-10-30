@@ -1,6 +1,9 @@
 import { Array, Option, Result } from 'effect'
 import { Canvas } from 'foldkit'
+import { modifyFields } from 'foldkit/struct'
 
+import { seatLookOf } from './coop/looks'
+import { maybeRoomOf } from './coop/update'
 import type { Drawable } from './depth'
 import type { Model } from './model'
 import {
@@ -27,13 +30,23 @@ import { Life, type PlayerSlot, type Seat } from './worldSchema'
 // and a downed player's bleed and revive bars.
 
 // NOTE: the client Model as each teammate's seat would show it, so the
-// player's own views draw them. Only co-op pays for it.
+// player's own views draw them. Only co-op pays for it. Online, each
+// teammate wears their seat's look (src/coop/looks.ts).
 const mateModelsOf = (model: Model): ReadonlyArray<Model> => {
   const lead = leadSeatOf(model).slot
+  const isOnline = Option.isSome(maybeRoomOf(model.coop))
   return Array.filterMap(playersOf(model), ({ slot, seat }) =>
     slot === lead || isBledOut(seat)
       ? Result.failVoid
-      : Result.succeed(withWorld(model, world => focusSeat(world, slot))),
+      : Result.succeed(
+          modifyFields(
+            withWorld(model, world => focusSeat(world, slot)),
+            {
+              appearance: appearance =>
+                isOnline ? seatLookOf(appearance, lead, slot) : appearance,
+            },
+          ),
+        ),
   )
 }
 

@@ -1,7 +1,6 @@
 import { Array, Option, Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
-import type { SoundEffect } from './soundEffect'
 import {
   BLOOD_PER_KILL,
   MEAT_GIBS_PER_KILL,
@@ -19,6 +18,7 @@ import {
   ZOMBIE_SPEED_MIN,
 } from './constants'
 import type { Clearance } from './pathing'
+import type { SoundEffect } from './soundEffect'
 import {
   Frenzy,
   type ParticleKind,

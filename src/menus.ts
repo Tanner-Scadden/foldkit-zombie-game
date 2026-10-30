@@ -3,6 +3,7 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Dialog } from '@foldkit/ui'
 
+import { isOpen as isCoopOpen } from './coop/update'
 import { dialogShell } from './dialogs'
 import { END_MENU_BUTTON_ID, endOffer } from './home'
 import { pauseMenuButtonView } from './homeView'
@@ -99,10 +100,13 @@ const cornerButtons = (
   h: HtmlBuilder<Message>,
 ): ReadonlyArray<Html> => {
   const audioButtons = [musicButtonView(model, h), muteButtonView(model, h)]
+  // NOTE: a co-op room has no pause (decided 7); its LEAVE takes the
+  // corner instead (src/coop/view.ts).
+  const pause = isCoopOpen(model.coop) ? [] : [pauseButtonView(h)]
   return Phase.match(model.phase, {
     Ready: () => [],
-    Preparation: () => [pauseButtonView(h)],
-    Wave: () => [pauseButtonView(h)],
+    Preparation: () => pause,
+    Wave: () => pause,
     Paused: () => [
       pauseMenuButtonView(model, h),
       fullscreenButtonView(model, h),

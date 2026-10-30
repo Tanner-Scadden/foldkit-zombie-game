@@ -1,8 +1,9 @@
-import { Option, Schema } from 'effect'
+import { Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
 import { Lobby, RoomCode } from '@munch/netcode'
 
+import { GameEvent } from '../worldSchema'
 import { RoomSession, WorldState } from './seam'
 
 // NOTE: co-op's own state, a Submodel the root Model holds. Nothing here is
@@ -76,6 +77,30 @@ export type Share = typeof Share.Type
 export const Departure = Schema.Literals(['Staying', 'Leaving'])
 export type Departure = typeof Departure.Type
 
+// NOTE: the player's presses on their way to the room (src/roomWorld.ts,
+// "ACTIONS"): `queued` are action codes not sent yet, `held` is the value
+// the inputs carry now, `presses` counts them, and `heldFrom` is the input
+// tick it started on, so each press rides at least one tick before the
+// next one replaces it.
+export const Presses = Schema.Struct({
+  queued: Schema.Array(Schema.Number),
+  held: Schema.Number,
+  presses: Schema.Number,
+  heldFrom: Schema.Number,
+})
+export type Presses = typeof Presses.Type
+
+export const noPresses: Presses = {
+  queued: [],
+  held: 0,
+  presses: 0,
+  heldFrom: -1,
+}
+
+// NOTE: `maybeWorld` is the World to draw this frame, everyone else about
+// 100 ms behind and your own player predicted; `frameEvents` are the
+// events the drawing reached this frame, each once, and `eventsTick` the
+// room tick they reached.
 export const Room = Schema.Struct({
   code: RoomCode,
   slot: Schema.Number,
@@ -84,6 +109,9 @@ export const Room = Schema.Struct({
   link: Link,
   session: RoomSession,
   maybeWorld: Schema.Option(WorldState),
+  frameEvents: Schema.Array(GameEvent),
+  eventsTick: Schema.Number,
+  presses: Presses,
   share: Share,
   departure: Departure,
 })
@@ -101,24 +129,15 @@ export const Screen = defineTaggedUnion({
 })
 export type Screen = typeof Screen.Type
 
-// CONTROLS
-
-export const ArenaPoint = Schema.Struct({ x: Schema.Number, y: Schema.Number })
-export type ArenaPoint = typeof ArenaPoint.Type
-
 export const Model = Schema.Struct({
   screen: Screen,
   name: Schema.String,
-  heldKeys: Schema.Array(Schema.String),
-  maybePointer: Schema.Option(ArenaPoint),
 })
 export type Model = typeof Model.Type
 
 export const initialModel: Model = {
   screen: Screen.Closed(),
   name: '',
-  heldKeys: [],
-  maybePointer: Option.none(),
 }
 
 export const emptyQueue: Queue = {
