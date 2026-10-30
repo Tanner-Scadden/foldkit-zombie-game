@@ -186,6 +186,70 @@ describe('the lobby', () => {
     )
   })
 
+  test('the host taps a mode and a skull; Nightmare stays padlocked', () => {
+    scene(
+      { update, view },
+      given(lobbyRoom([memberOf(0, 'Ana'), memberOf(1, 'Bo')])),
+      expect(role('group', { name: 'Mode' })).toExist(),
+      expect(role('button', { name: 'Campaign' })).toHaveAttr(
+        'aria-pressed',
+        'true',
+      ),
+      expect(role('button', { name: 'Keep going' })).not.toExist(),
+      expect(role('button', { name: 'Nightmare, locked' })).toHaveAttr(
+        'aria-disabled',
+        'true',
+      ),
+      click(role('button', { name: 'Endless' })),
+      Command.resolve(
+        ChangeLobby({
+          change: LobbyChange.ChangedPicks({
+            mode: 'Endless',
+            difficulty: 'Normal',
+          }),
+        }),
+        Message.CompletedChangeLobby(),
+      ),
+      click(role('button', { name: 'Hard' })),
+      Command.resolve(
+        ChangeLobby({
+          change: LobbyChange.ChangedPicks({
+            mode: 'Campaign',
+            difficulty: 'Hard',
+          }),
+        }),
+        Message.CompletedChangeLobby(),
+      ),
+    )
+  })
+
+  test('a guest sees the picks as icons, and KEEP GOING after a win', () => {
+    scene(
+      { update, view },
+      given(
+        roomWith({
+          slot: 1,
+          maybePlayerId: Option.some('player-1'),
+          maybeLobby: Option.some({
+            ...lobbyOf([memberOf(0, 'Ana'), memberOf(1, 'Bo')]),
+            mode: 'KeepGoing',
+            canKeepGoing: true,
+            difficulty: 'Hard',
+          }),
+        }),
+      ),
+      expect(selector('[aria-label="Keep going, Hard"]')).toExist(),
+      expect(role('button', { name: 'Keep going' })).toHaveAttr(
+        'aria-disabled',
+        'true',
+      ),
+      expect(role('button', { name: 'Hard' })).toHaveAttr(
+        'aria-pressed',
+        'true',
+      ),
+    )
+  })
+
   test('a guest sees no kick', () => {
     scene(
       { update, view },

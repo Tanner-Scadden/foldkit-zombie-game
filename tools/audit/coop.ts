@@ -17,7 +17,9 @@
 // 45 s, and must land in one room. Screenshots go to
 // `tools/audit/shots/coop-e2e-*.png`. VIEWPORT=p390 or l844 shoots a phone
 // held upright or sideways instead of a desktop (the walking and shooting
-// use keys and the mouse either way).
+// use keys and the mouse either way). PICK=Endless,Hard has the host pick
+// that mode and difficulty in the lobby (after a guest's READY, which the
+// pick takes back) and checks every page plays it.
 // Run it through the heavy guard, as a Shared job (one context per page):
 //   bun run heavy -- --shared bun tools/audit/coop.ts http://localhost:4398/ [players]
 import type { BrowserContext, Page } from 'playwright-core'
@@ -31,6 +33,7 @@ if (BASE === undefined) {
 }
 const PLAYERS = Math.min(3, Math.max(2, Number(process.argv[3] ?? 3)))
 const IS_QUICK = process.env.QUICK === '1'
+const [PICK_MODE, PICK_DIFFICULTY] = (process.env.PICK ?? '').split(',')
 const SAVE_KEY = 'munch-manor:save'
 
 const VIEWPORTS: Readonly<
@@ -154,6 +157,8 @@ type Seat = Readonly<{
 type Readout = Readonly<{
   tick: number
   phase: string
+  mode: string
+  difficulty: string
   wave: number
   stall: Readonly<{ left: number; top: number; right: number; bottom: number }>
   zombies: ReadonlyArray<Readonly<{ x: number; y: number }>>
@@ -471,6 +476,35 @@ check(
 )
 await shot(host, 'lobby-host')
 
+if (PICK_MODE !== undefined && PICK_DIFFICULTY !== undefined) {
+  await guests[0]!.getByRole('button', { name: 'READY' }).click()
+  await until(
+    'a guest READY stamps on the host',
+    async () => (await host.locator('.coop-stamp').count()) === 1,
+  )
+  await host.getByRole('button', { name: PICK_MODE, exact: true }).click()
+  await host
+    .getByRole('button', { name: PICK_DIFFICULTY, exact: true })
+    .click()
+  for (const [index, page] of everyone.entries()) {
+    await until(
+      `player ${index + 1} sees ${PICK_MODE} on ${PICK_DIFFICULTY}`,
+      async () =>
+        (await page
+          .locator(
+            `.coop-picks[aria-label="${PICK_MODE}, ${PICK_DIFFICULTY}"]`,
+          )
+          .count()) === 1,
+    )
+  }
+  await until(
+    'the pick takes back the READY stamps',
+    async () => (await host.locator('.coop-stamp').count()) === 0,
+  )
+  await shot(host, 'picks-host')
+  await shot(guests[0]!, 'picks-guest')
+}
+
 for (const page of everyone.slice(0, -1)) {
   await page.getByRole('button', { name: 'READY' }).click()
 }
@@ -488,6 +522,15 @@ for (const [index, page] of everyone.entries()) {
       (await page.locator('.coop[data-screen="Arena"]').count()) === 1 &&
       (await page.locator('.game-canvas').isVisible()),
   )
+}
+if (PICK_MODE !== undefined && PICK_DIFFICULTY !== undefined) {
+  for (const [index, page] of everyone.entries()) {
+    const readout = await readoutOf(page)
+    check(
+      readout?.mode === PICK_MODE && readout.difficulty === PICK_DIFFICULTY,
+      `player ${index + 1} plays ${PICK_MODE} on ${PICK_DIFFICULTY} (${readout?.mode} on ${readout?.difficulty})`,
+    )
+  }
 }
 await wait(400)
 await shot(host, 'countdown')

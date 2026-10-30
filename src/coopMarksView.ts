@@ -7,7 +7,7 @@ import { textShapes } from './font'
 import type { Model } from './model'
 import { isBledOut, isCoop, leadSeatOf, playersOf } from './party'
 import { seatColorOf } from './partyView'
-import { bakeShapes, placeAt } from './sprite'
+import { TOP_LEFT, bakeShapes, placeAt, spriteShapes } from './sprite'
 import { Phase, type PlayerSlot } from './worldSchema'
 
 // What an online co-op run adds over the players (MULTIPLAYER.md, Phase
@@ -36,8 +36,145 @@ const namesOf = (model: Model): ReadonlyMap<PlayerSlot, string> =>
 const isOnline = (model: Model): boolean =>
   isCoop(model) && Option.isSome(maybeRoomOf(model.coop))
 
-const NAME_LIFT_PX = 27
-const READY_LIFT_PX = 33
+// NAME TAGS
+
+// NOTE: a teammate's name is a small tag tight over their head: a 3 by 4
+// pixel font, smaller than the game's own, light on a dark plate so it
+// reads on any floor, with a line of their seat's color under it. The
+// glyphs are sprites built once; only the plate and the line are drawn
+// each frame. A symbol the font lacks is left out.
+const TAG_PIXELS: Readonly<Record<string, ReadonlyArray<string>>> = {
+  A: ['.#.', '#.#', '###', '#.#'],
+  B: ['##.', '###', '#.#', '##.'],
+  C: ['.##', '#..', '#..', '.##'],
+  D: ['##.', '#.#', '#.#', '##.'],
+  E: ['###', '##.', '#..', '###'],
+  F: ['###', '#..', '##.', '#..'],
+  G: ['.##', '#..', '#.#', '.##'],
+  H: ['#.#', '###', '#.#', '#.#'],
+  I: ['###', '.#.', '.#.', '###'],
+  J: ['..#', '..#', '#.#', '.#.'],
+  K: ['#.#', '##.', '#.#', '#.#'],
+  L: ['#..', '#..', '#..', '###'],
+  M: ['#...#', '##.##', '#.#.#', '#...#'],
+  N: ['#..#', '##.#', '#.##', '#..#'],
+  O: ['.#.', '#.#', '#.#', '.#.'],
+  P: ['##.', '#.#', '##.', '#..'],
+  Q: ['.#.', '#.#', '#.#', '.##'],
+  R: ['##.', '#.#', '##.', '#.#'],
+  S: ['.##', '#..', '..#', '##.'],
+  T: ['###', '.#.', '.#.', '.#.'],
+  U: ['#.#', '#.#', '#.#', '###'],
+  V: ['#.#', '#.#', '#.#', '.#.'],
+  W: ['#...#', '#.#.#', '##.##', '#...#'],
+  X: ['#.#', '.#.', '.#.', '#.#'],
+  Y: ['#.#', '#.#', '.#.', '.#.'],
+  Z: ['###', '..#', '#..', '###'],
+  '0': ['###', '#.#', '#.#', '###'],
+  '1': ['.#.', '##.', '.#.', '###'],
+  '2': ['##.', '..#', '.#.', '###'],
+  '3': ['###', '.##', '..#', '###'],
+  '4': ['#.#', '#.#', '###', '..#'],
+  '5': ['###', '##.', '..#', '##.'],
+  '6': ['#..', '###', '#.#', '###'],
+  '7': ['###', '..#', '.#.', '.#.'],
+  '8': ['###', '.#.', '#.#', '###'],
+  '9': ['###', '#.#', '###', '..#'],
+}
+
+const TAG_ROWS = 4
+const TAG_GAP = 1
+const TAG_SPACE = 2
+const TAG_PAD = 1
+const TAG_INK = '#f4f1de'
+const TAG_PLATE = 'rgba(16, 10, 18, 0.72)'
+
+type TagGlyph = Readonly<{ width: number; sprite: ReadonlyArray<Canvas.Shape> }>
+
+const TAG_GLYPHS: ReadonlyMap<string, TagGlyph> = new Map(
+  Array.map(Object.entries(TAG_PIXELS), ([symbol, pixels]) => [
+    symbol,
+    {
+      width: Array.reduce(pixels, 0, (widest, row) =>
+        Math.max(widest, row.length),
+      ),
+      sprite: spriteShapes(pixels, { '#': TAG_INK }, TOP_LEFT),
+    },
+  ]),
+)
+
+type TagCell = Readonly<{ width: number; maybeGlyph: Option.Option<TagGlyph> }>
+
+const tagCellsOf = (name: string): ReadonlyArray<TagCell> =>
+  Array.flatMap(
+    globalThis.Array.from(name),
+    (symbol): ReadonlyArray<TagCell> =>
+      symbol === ' '
+        ? [{ width: TAG_SPACE, maybeGlyph: Option.none() }]
+        : Option.match(Option.fromNullishOr(TAG_GLYPHS.get(symbol)), {
+            onNone: () => [],
+            onSome: glyph => [
+              { width: glyph.width, maybeGlyph: Option.some(glyph) },
+            ],
+          }),
+  )
+
+const tagWidthOf = (cells: ReadonlyArray<TagCell>): number =>
+  Math.max(
+    0,
+    Array.reduce(cells, 0, (total, cell) => total + cell.width + TAG_GAP) -
+      TAG_GAP,
+  )
+
+// NOTE: `bottom` is the row just over the head; the tag sits on it.
+export const nameTagShapes = (
+  name: string,
+  color: string,
+  x: number,
+  bottom: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const cells = tagCellsOf(name)
+  if (Array.isReadonlyArrayEmpty(cells)) {
+    return []
+  }
+  const width = tagWidthOf(cells)
+  const left = Math.round(x - width / 2)
+  const top = Math.round(bottom) - TAG_ROWS - TAG_PAD - 1
+  const glyphs = Array.reduce(
+    cells,
+    { at: left, shapes: Array.empty<Canvas.Shape>() },
+    (placed, cell) => ({
+      at: placed.at + cell.width + TAG_GAP,
+      shapes: Option.match(cell.maybeGlyph, {
+        onNone: () => placed.shapes,
+        onSome: glyph =>
+          Array.append(placed.shapes, placeAt(placed.at, top, glyph.sprite)),
+      }),
+    }),
+  )
+  return [
+    Canvas.Rect({
+      x: left - TAG_PAD,
+      y: top - TAG_PAD,
+      width: width + TAG_PAD * 2,
+      height: TAG_ROWS + TAG_PAD * 2,
+      fill: TAG_PLATE,
+    }),
+    Canvas.Rect({
+      x: left - TAG_PAD,
+      y: top + TAG_ROWS + TAG_PAD,
+      width: width + TAG_PAD * 2,
+      height: 1,
+      fill: color,
+    }),
+    ...glyphs.shapes,
+  ]
+}
+
+// NOTE: the tag's bottom sits a pixel or two over the head, and READY
+// stands over the tag.
+const NAME_BOTTOM_LIFT_PX = 8
+const READY_LIFT_PX = 21
 
 const isBreak = (model: Model): boolean =>
   Phase.isAnyOf(['Preparation'])(model.phase)
@@ -55,12 +192,11 @@ export const coopNameShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
       : [
           ...(slot === ownSlot
             ? []
-            : textShapes(
+            : nameTagShapes(
                 names.get(slot) ?? `P${slot + 1}`,
-                'Plain',
+                seatColorOf(slot),
                 player.x,
-                player.y - NAME_LIFT_PX,
-                'Center',
+                player.y - NAME_BOTTOM_LIFT_PX,
               )),
           ...(isBreak(model) && seat.readiness === 'Ready'
             ? textShapes(

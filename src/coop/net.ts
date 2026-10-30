@@ -10,6 +10,7 @@ import {
 } from 'effect'
 
 import {
+  ChangedPicks,
   ChangedReady,
   type ClientFrame,
   KickedPlayer,
@@ -112,6 +113,8 @@ const writeChange = <E>(
       ? write(LeftRoom, { by })
       : LobbyChange.match(change, {
           ChangedReady: ({ ready }) => write(ChangedReady, { by, ready }),
+          ChangedPicks: ({ mode, difficulty }) =>
+            write(ChangedPicks, { by, mode, difficulty }),
           KickedPlayer: ({ playerId }) => write(KickedPlayer, { by, playerId }),
         }),
     Effect.asVoid,

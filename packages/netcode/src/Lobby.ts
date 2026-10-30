@@ -117,8 +117,33 @@ export type RoomStatus = typeof RoomStatus.Type
 export const RoomVisibility = Schema.Literals(['Private', 'Public'])
 export type RoomVisibility = typeof RoomVisibility.Type
 
-export const RoomMode = Schema.Literals(['StandIn'])
+// NOTE: what the room plays next, picked by the host in the lobby: the
+// campaign or endless, or KeepGoing, which carries a won campaign's run on
+// into endless (GAME_DESIGN.md, "Keep going"). KeepGoing is offered only
+// while the room keeps that run: from a won campaign until the crew
+// changes. StandIn is the dev page's stand-in world. A new room plays a
+// Normal campaign.
+export const RoomMode = Schema.Literals([
+  'StandIn',
+  'Campaign',
+  'Endless',
+  'KeepGoing',
+])
 export type RoomMode = typeof RoomMode.Type
+
+export const PickedMode = Schema.Literals(['Campaign', 'Endless', 'KeepGoing'])
+export type PickedMode = typeof PickedMode.Type
+
+export const RoomDifficulty = Schema.Literals([
+  'Easy',
+  'Normal',
+  'Hard',
+  'Nightmare',
+])
+export type RoomDifficulty = typeof RoomDifficulty.Type
+
+export const DEFAULT_MODE: PickedMode = 'Campaign'
+export const DEFAULT_DIFFICULTY: RoomDifficulty = 'Normal'
 
 export const RoomScore = Schema.Struct({
   playerId: Schema.String,
@@ -143,6 +168,8 @@ export const RoomRow = Schema.Struct({
   status: RoomStatus,
   visibility: RoomVisibility,
   mode: RoomMode,
+  difficulty: RoomDifficulty,
+  kept: Schema.Number,
   round: Schema.Number,
   created_ms: Schema.Number,
   updated_ms: Schema.Number,
@@ -180,6 +207,8 @@ export const Lobby = Schema.Struct({
   status: RoomStatus,
   visibility: RoomVisibility,
   mode: RoomMode,
+  difficulty: RoomDifficulty,
+  canKeepGoing: Schema.Boolean,
   round: Schema.Number,
   createdMs: Schema.Number,
   updatedMs: Schema.Number,
@@ -202,6 +231,8 @@ export const lobbyOfRows = (
   status: room.status,
   visibility: room.visibility,
   mode: room.mode,
+  difficulty: room.difficulty,
+  canKeepGoing: room.kept !== 0,
   round: room.round,
   createdMs: room.created_ms,
   updatedMs: room.updated_ms,
@@ -248,7 +279,7 @@ export const readLobby = (
     const sql = yield* SqlClient.SqlClient
     const rooms = yield* rejectBadRows(
       decodeRoomRows(
-        yield* sql`SELECT code, host, status, visibility, mode, round, created_ms, updated_ms, result
+        yield* sql`SELECT code, host, status, visibility, mode, difficulty, kept, round, created_ms, updated_ms, result
           FROM ${context.table('room')} WHERE id = 1`,
       ),
     )
@@ -324,6 +355,36 @@ const isSender = (args: { readonly by: string }, actor: DeviceActor) =>
 
 const ByArgs = Schema.Struct({ by: Schema.String })
 
+const clearReady = (context: ApplyContext) =>
+  Effect.flatMap(
+    SqlClient.SqlClient,
+    sql => sql`UPDATE ${context.table('members')} SET ready = 0`,
+  )
+
+// NOTE: a kept run plays on only with the crew that won it, so a change of
+// crew lets it go: a KeepGoing pick becomes Endless, and everyone READY
+// says yes again to the new pick.
+const forgetKept = (context: ApplyContext, lobby: Lobby) =>
+  lobby.canKeepGoing
+    ? Effect.andThen(
+        lobby.mode === 'KeepGoing' ? clearReady(context) : Effect.void,
+        touch(context, {
+          kept: 0,
+          mode: lobby.mode === 'KeepGoing' ? 'Endless' : lobby.mode,
+        }),
+      )
+    : touch(context, {})
+
+// NOTE: what a run's result leaves for the next one. A won campaign keeps
+// its run and offers to keep going; any other end lets a kept run go.
+const picksAfter = (
+  lobby: Lobby,
+  result: RoomResult,
+): Record<string, string | number> =>
+  result.reason === 'Won' && lobby.mode === 'Campaign'
+    ? { kept: 1, mode: 'KeepGoing' }
+    : { kept: 0, mode: lobby.mode === 'KeepGoing' ? 'Endless' : lobby.mode }
+
 // MUTATIONS
 
 export const CreatedRoom = defineMutation({
@@ -351,6 +412,8 @@ export const CreatedRoom = defineMutation({
         status: 'Lobby',
         visibility,
         mode,
+        difficulty: DEFAULT_DIFFICULTY,
+        kept: 0,
         round: 0,
         created_ms: context.timestampMs,
         updated_ms: context.timestampMs,
@@ -395,7 +458,7 @@ export const JoinedRoom = defineMutation({
         ready: 0,
         joined_ms: context.timestampMs,
       })}`
-      yield* touch(context, {})
+      yield* forgetKept(context, lobby)
     }),
 })
 
@@ -427,6 +490,38 @@ export const ChangedReady = defineMutation({
         })
       }
       yield* touch(context, {})
+    }),
+})
+
+// NOTE: the host picks what the room plays next while it is in its lobby.
+// A change takes back everyone's READY, so nobody starts a run they did not
+// say yes to; picking what is already picked changes nothing.
+export const ChangedPicks = defineMutation({
+  name: 'ChangedPicks',
+  version: 1,
+  args: Schema.Struct({
+    by: Schema.String,
+    mode: PickedMode,
+    difficulty: RoomDifficulty,
+  }),
+  scopes: [ROOM_SCOPE_KIND],
+  writer: 'Members',
+  authorize: (args, actor) => isSender(args, actor),
+  apply: ({ by, mode, difficulty }, context) =>
+    Effect.gen(function* () {
+      const lobby = yield* requireLobby(context)
+      yield* requireHost(lobby, by)
+      if (lobby.status !== 'Lobby') {
+        return yield* reject('Not in the lobby')
+      }
+      if (mode === 'KeepGoing' && !lobby.canKeepGoing) {
+        return yield* reject('No run to keep going')
+      }
+      if (mode === lobby.mode && difficulty === lobby.difficulty) {
+        return
+      }
+      yield* clearReady(context)
+      yield* touch(context, { mode, difficulty })
     }),
 })
 
@@ -462,7 +557,11 @@ export const RecordedRoomResult = defineMutation({
       if (lobby.status !== 'Playing') {
         return yield* reject('No game to record')
       }
-      yield* touch(context, { status: 'Lobby', result: encodeResult(result) })
+      yield* touch(context, {
+        status: 'Lobby',
+        result: encodeResult(result),
+        ...picksAfter(lobby, result),
+      })
     }),
 })
 
@@ -483,7 +582,7 @@ export const KickedPlayer = defineMutation({
         return yield* reject('The host cannot kick themselves')
       }
       yield* sql`DELETE FROM ${context.table('members')} WHERE player_id = ${playerId}`
-      yield* touch(context, {})
+      yield* forgetKept(context, lobby)
     }),
 })
 
@@ -507,9 +606,12 @@ export const LeftRoom = defineMutation({
       yield* Option.match(Array.head(rest), {
         onNone: () => touch(context, { status: 'Closed' }),
         onSome: next =>
-          lobby.host === by
-            ? touch(context, { host: next.playerId })
-            : touch(context, {}),
+          Effect.andThen(
+            forgetKept(context, lobby),
+            lobby.host === by
+              ? touch(context, { host: next.playerId })
+              : Effect.void,
+          ),
       })
     }),
 })
@@ -525,6 +627,7 @@ export const RoomScope = defineScope({
     CreatedRoom,
     JoinedRoom,
     ChangedReady,
+    ChangedPicks,
     EndedGame,
     RecordedRoomResult,
     KickedPlayer,
@@ -553,6 +656,14 @@ export const RoomScope = defineScope({
           ready INTEGER NOT NULL,
           joined_ms INTEGER NOT NULL
         )`
+      }),
+    '0002_picks': table =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        yield* sql`ALTER TABLE ${sql(table('room'))}
+          ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'Normal'`
+        yield* sql`ALTER TABLE ${sql(table('room'))}
+          ADD COLUMN kept INTEGER NOT NULL DEFAULT 0`
       }),
   },
 })

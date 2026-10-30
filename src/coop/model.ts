@@ -1,7 +1,7 @@
 import { Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
-import { Lobby, RoomCode } from '@munch/netcode'
+import { Lobby, PickedMode, RoomCode, RoomDifficulty } from '@munch/netcode'
 
 import { GameEvent } from '../worldSchema'
 import { RoomSession, WorldState } from './seam'
@@ -31,6 +31,7 @@ export type CoopProblem = typeof CoopProblem.Type
 // in who it is for (`by`), so the update never needs the player id.
 export const LobbyChange = defineTaggedUnion({
   ChangedReady: { ready: Schema.Boolean },
+  ChangedPicks: { mode: PickedMode, difficulty: RoomDifficulty },
   KickedPlayer: { playerId: Schema.String },
 })
 export type LobbyChange = typeof LobbyChange.Type
@@ -129,15 +130,19 @@ export const Screen = defineTaggedUnion({
 })
 export type Screen = typeof Screen.Type
 
+// NOTE: `canPickNightmare` is whether this player has unlocked Nightmare,
+// so as a room's host they may pick it in the lobby.
 export const Model = Schema.Struct({
   screen: Screen,
   name: Schema.String,
+  canPickNightmare: Schema.Boolean,
 })
 export type Model = typeof Model.Type
 
 export const initialModel: Model = {
   screen: Screen.Closed(),
   name: '',
+  canPickNightmare: false,
 }
 
 export const emptyQueue: Queue = {

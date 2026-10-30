@@ -26,7 +26,12 @@ import { frameSoundCues, playSounds, playStartSoundWhen } from './update/sound'
 import type { UpdateStep } from './update/step'
 import { isRoundActive } from './waves'
 import { type World, withWorld } from './world'
-import { type GameEvent, HitStop, type ShopState } from './worldSchema'
+import {
+  type Difficulty,
+  type GameEvent,
+  HitStop,
+  type ShopState,
+} from './worldSchema'
 
 // The root's half of an online co-op run (MULTIPLAYER.md, Phase 2): the
 // game's own scene, HUD, shop, and touch controls drawn from the room's
@@ -53,6 +58,19 @@ export const isLeftFromRoom = (model: Model): boolean =>
   model.localPlayers <= 1 &&
   !Phase.isAnyOf(['Ready'])(model.phase) &&
   Option.isNone(maybeRoomOf(model.coop))
+
+// NOTE: the difficulty a run plays on: the room's, which its host picked,
+// while the player is in a room that has sent a World, else their own.
+export const runDifficultyOf = (model: Model): Difficulty =>
+  Option.getOrElse(
+    Option.flatMap(maybeRoomOf(model.coop), room =>
+      Option.map(
+        room.maybeWorld,
+        roomWorld => roomWorld.world.difficulty.chosen,
+      ),
+    ),
+    () => model.difficulty.chosen,
+  )
 
 // THE ROOM'S WORLD IN THE ROOT
 

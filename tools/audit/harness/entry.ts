@@ -901,6 +901,36 @@ const coopScreen = (stage: NonNullable<typeof config.coop>) => {
       return Screen.InRoom({ room: coopRoom(members(2), 'Lobby') })
     case 'host':
       return Screen.InRoom({ room: coopRoom(members(4, 1), 'Lobby') })
+    case 'picks': {
+      const room = coopRoom(members(2, 1), 'Lobby')
+      return Screen.InRoom({
+        room: {
+          ...room,
+          maybeLobby: Option.map(room.maybeLobby, lobby => ({
+            ...lobby,
+            mode: 'Endless' as const,
+            difficulty: 'Hard' as const,
+          })),
+        },
+      })
+    }
+    case 'keep': {
+      const room = coopRoom(members(2), 'Lobby', {
+        slot: 1,
+        maybePlayerId: Option.some('player-1'),
+      })
+      return Screen.InRoom({
+        room: {
+          ...room,
+          maybeLobby: Option.map(room.maybeLobby, lobby => ({
+            ...lobby,
+            mode: 'KeepGoing' as const,
+            canKeepGoing: true,
+            difficulty: 'Nightmare' as const,
+          })),
+        },
+      })
+    }
     case 'ready':
       return Screen.InRoom({
         room: coopRoom(

@@ -16,6 +16,7 @@ import * as SqliteClient from '@effect/sql-sqlite-do/SqliteClient'
 import {
   type ClosedReason,
   CreateRequest,
+  type World as RoomWorldOf,
   JoinRequest,
   type Lobby,
   ROOM_PATHS,
@@ -41,10 +42,13 @@ import {
 } from '@munch/sync-engine'
 
 import {
-  DEFAULT_ROOM_SETTINGS,
+  type OwnSeat,
   type RoomWorld,
+  roomSettingsOf,
   roomWorldFor,
 } from '../../src/roomWorld.ts'
+import type { World as GameState } from '../../src/world.ts'
+import { worldFromJson, worldToJson } from '../../src/worldWire.ts'
 import {
   INTERNAL_PATHS,
   InternalCreate,
@@ -88,12 +92,16 @@ import {
 // whenever its lobby changes. See MULTIPLAYER.md, Phase 2 and 3.
 //
 // The world is the game's own (src/roomWorld.ts): `stepWorld` over the
-// lobby's seats, a campaign on Normal until the lobby picks a difficulty.
+// lobby's seats, with the mode and difficulty the host picked. A won
+// campaign's last World is kept in storage, so the next run can keep going
+// into endless (Lobby.ts, KeepGoing) even after the object hibernates.
 
 export type GameRoomBindings = SyncBindings
 
 type GameWorld = RoomWorld
-const World = roomWorldFor(DEFAULT_ROOM_SETTINGS)
+type GameRules = RoomWorldOf<GameWorld, OwnSeat>
+
+const KEPT_KEY = 'kept-world'
 
 const SCOPE_HEADER = 'x-sync-scope'
 const GAME_TAG = 'game'
@@ -120,6 +128,7 @@ const sqlOf = (storage: DurableObjectState['storage']) =>
   SqliteClient.layer({ storage })
 
 interface Game {
+  readonly world: GameRules
   readonly room: Room.Room<GameWorld>
   readonly round: number
   readonly advancedMs: number
@@ -317,6 +326,10 @@ export class GameRoom {
       onNone: () => [],
       onSome: game => Room.rttsOf(game.room),
     })
+    const maybeWon = Option.filter(
+      Option.map(this.game, game => game.room.world.world),
+      () => ended.reason === 'Won',
+    )
     this.game = Option.none()
     const stopLoop = Option.match(this.loop, {
       onNone: () => Effect.void,
@@ -328,6 +341,10 @@ export class GameRoom {
       yield* Effect.logInfo(
         `Room game ${round} ended (${ended.reason}) at tick ${ended.tick}; round trips ${JSON.stringify(rtts)}`,
       )
+      yield* Option.match(maybeWon, {
+        onNone: () => Effect.void,
+        onSome: world => this.keep(world),
+      })
       yield* this.lock.withPermit(
         host.recordResult(
           {
@@ -351,8 +368,13 @@ export class GameRoom {
         return
       }
       const nowMs = yield* Clock.currentTimeMillis
-      const stepped = Room.advance(World, current.value.room, nowMs)
+      const stepped = Room.advance(
+        current.value.world,
+        current.value.room,
+        nowMs,
+      )
       this.game = Option.some({
+        world: current.value.world,
         room: stepped.room,
         round: current.value.round,
         advancedMs: nowMs,
@@ -386,8 +408,15 @@ export class GameRoom {
       const sockets = this.gameSockets()
       const nowMs = yield* Clock.currentTimeMillis
       const seed = crypto.getRandomValues(new Uint32Array(1))[0] ?? nowMs
+      const maybeKept =
+        lobby.mode === 'KeepGoing' ? yield* this.kept : Option.none()
+      yield* this.forgetKept
+      const world = roomWorldFor(
+        roomSettingsOf(lobby.mode, lobby.difficulty),
+        maybeKept,
+      )
       const started = Room.startRoom(
-        World,
+        world,
         Array.map(lobby.members, member => ({
           slot: member.slot,
           playerId: member.playerId,
@@ -405,6 +434,7 @@ export class GameRoom {
         nowMs,
       )
       this.game = Option.some({
+        world,
         room: started.room,
         round: lobby.round,
         advancedMs: nowMs,
@@ -420,7 +450,8 @@ export class GameRoom {
   private endGame(host: RoomHost, reason: ClosedReason): Effect.Effect<void> {
     return Option.match(this.game, {
       onNone: () => Effect.void,
-      onSome: game => this.apply(Room.endRoom(World, game.room, reason), host),
+      onSome: game =>
+        this.apply(Room.endRoom(game.world, game.room, reason), host),
     })
   }
 
@@ -439,7 +470,7 @@ export class GameRoom {
       const game = this.game
       if (Option.isSome(game)) {
         const dropped = Room.dropPlayer(
-          World,
+          game.value.world,
           game.value.room,
           playerId,
           kicked,
@@ -492,6 +523,37 @@ export class GameRoom {
           }),
       }),
     )
+  }
+
+  // KEPT RUN
+
+  private keep(world: GameState): Effect.Effect<void> {
+    return tryCall('keep the won run', () =>
+      this.ctx.storage.put(KEPT_KEY, worldToJson(world)),
+    ).pipe(Effect.ignore)
+  }
+
+  private get kept(): Effect.Effect<Option.Option<GameState>> {
+    return tryCall('read the kept run', () =>
+      this.ctx.storage.get<string>(KEPT_KEY),
+    ).pipe(
+      Effect.flatMap(text =>
+        Effect.try({
+          try: () =>
+            typeof text === 'string'
+              ? Option.some(worldFromJson(text))
+              : Option.none(),
+          catch: () => Option.none<GameState>(),
+        }),
+      ),
+      Effect.catch(() => Effect.succeedNone),
+    )
+  }
+
+  private get forgetKept(): Effect.Effect<void> {
+    return tryCall('forget the kept run', () =>
+      this.ctx.storage.delete(KEPT_KEY),
+    ).pipe(Effect.ignore)
   }
 
   // HTTP
@@ -642,7 +704,7 @@ export class GameRoom {
         const game = this.game
         const linked = Option.flatMap(game, current =>
           Room.link(
-            World,
+            current.world,
             current.room,
             answer.playerId,
             attachment.socket,
@@ -669,7 +731,7 @@ export class GameRoom {
         return
       }
       const received = Room.receive(
-        World,
+        game.value.world,
         game.value.room,
         attachment.socket,
         frame,

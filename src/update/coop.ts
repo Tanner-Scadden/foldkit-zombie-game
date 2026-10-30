@@ -45,9 +45,14 @@ export const foldCoop = Update.foldChild({
   foldOutMessage: foldCoopOutMessage,
 })
 
-const foldCoopOpen = (name: string, maybeCode: Option.Option<string>) =>
+const foldCoopOpen = (
+  name: string,
+  maybeCode: Option.Option<string>,
+  canPickNightmare: boolean,
+) =>
   Update.foldChildStep({
-    update: (coop: CoopModel) => Coop.open(coop, name, maybeCode),
+    update: (coop: CoopModel) =>
+      Coop.open(coop, name, maybeCode, canPickNightmare),
     read: (model: Model) => Option.some(model.coop),
     write: (model, nextCoop) => modifyFields(model, { coop: () => nextCoop }),
     toParentMessage,
@@ -106,6 +111,7 @@ export const openCoop =
     return foldCoopOpen(
       joinName(stepModel),
       maybeCode,
+      stepModel.difficulty.nightmare !== 'Locked',
     )(withInput(stepModel, releaseAll))
   }
 

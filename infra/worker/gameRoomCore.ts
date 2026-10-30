@@ -9,6 +9,7 @@ import type * as SqlClient from 'effect/sql/SqlClient'
 import {
   type ClientFrame,
   CreatedRoom,
+  DEFAULT_MODE,
   JoinedRoom,
   KickedPlayer,
   LeftRoom,
@@ -156,7 +157,7 @@ export const makeRoomHost = (
               code,
               host: playerId,
               hostName: name.slice(0, MAX_NAME_INPUT),
-              mode: 'StandIn',
+              mode: DEFAULT_MODE,
               visibility,
             },
             `created-room-${code}`,

@@ -16,6 +16,8 @@ import {
   predictOwn,
   readRoomDiff,
   readRoomSnapshot,
+  roomSettingsOf,
+  roomWorldFor,
   seatActionOf,
   startRoomWorld,
   stepRoomWorld,
@@ -23,7 +25,7 @@ import {
   writeRoomSnapshot,
 } from './roomWorld'
 import { SeatAction } from './stepWorld'
-import { beginPreparation } from './waves'
+import { FINAL_WAVE, beginPreparation } from './waves'
 import { isSameOnWire } from './worldCodec'
 import { Phase, ShopState } from './worldSchema'
 
@@ -265,5 +267,45 @@ describe('own-player prediction', () => {
       Option.getOrThrow(maybePlayerAt(room.world, 0)).player.x
     expect(xOf(halfway)).toBeCloseTo((xOf(start) + xOf(later)) / 2, 5)
     expect(scriptedTicks(start).length).toBe(2)
+  })
+})
+
+describe('the lobby picks', () => {
+  test('a room starts on the mode and difficulty the lobby picked', () => {
+    const picked = roomWorldFor(roomSettingsOf('Endless', 'Hard')).start(
+      [0, 1],
+      7,
+    )
+    expect(picked.world.mode._tag).toBe('Endless')
+    expect(picked.world.difficulty.chosen).toBe('Hard')
+    const fresh = roomWorldFor(roomSettingsOf('Campaign', 'Normal')).start(
+      [0, 1],
+      7,
+    )
+    expect(fresh.world.mode._tag).toBe('Campaign')
+  })
+
+  test('a won campaign keeps going into endless for the crew that won it', () => {
+    const won = modifyFields(start.world, {
+      phase: () => Phase.Victory(),
+      elapsedMs: () => 600000,
+    })
+    const rules = roomWorldFor(
+      roomSettingsOf('KeepGoing', 'Normal'),
+      Option.some(won),
+    )
+    expect(rules.isWon({ ...start, world: won })).toBe(true)
+    const kept = rules.start([0, 1], 99)
+    expect(kept.tick).toBe(0)
+    expect(kept.world.mode._tag).toBe('Endless')
+    expect(kept.world.elapsedMs).toBe(600000)
+    expect(
+      Phase.isAnyOf(['Preparation'])(kept.world.phase)
+        ? kept.world.phase.wave
+        : 0,
+    ).toBe(FINAL_WAVE + 1)
+    const newCrew = rules.start([0, 1, 2], 99)
+    expect(newCrew.world.elapsedMs).toBe(0)
+    expect(newCrew.world.mode._tag).toBe('Endless')
   })
 })

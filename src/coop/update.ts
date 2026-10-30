@@ -7,7 +7,9 @@ import {
   type Lobby,
   type LobbyMember,
   NEUTRAL_INPUT,
+  type PickedMode,
   type PlayerInput,
+  type RoomDifficulty,
   Session,
   normalizeRoomCode,
 } from '@munch/netcode'
@@ -431,8 +433,121 @@ const close = (model: Model): UpdateReturn => ({
   outMessage: OutMessage.ClosedCoop(),
 })
 
+// PICKS
+
+export const MODE_PICKS: Array.NonEmptyReadonlyArray<PickedMode> = [
+  'Campaign',
+  'Endless',
+  'KeepGoing',
+]
+
+export const DIFFICULTY_PICKS: Array.NonEmptyReadonlyArray<RoomDifficulty> = [
+  'Easy',
+  'Normal',
+  'Hard',
+  'Nightmare',
+]
+
+export const pickedModeOf = (lobby: Lobby): PickedMode =>
+  lobby.mode === 'StandIn' ? 'Campaign' : lobby.mode
+
+// NOTE: KeepGoing is there only while the room keeps a won run, and
+// Nightmare only for a host who unlocked it (or when it is picked already).
+export const canPickMode = (lobby: Lobby, mode: PickedMode): boolean =>
+  mode !== 'KeepGoing' || lobby.canKeepGoing
+
+export const canPickDifficulty = (
+  model: Model,
+  lobby: Lobby,
+  difficulty: RoomDifficulty,
+): boolean =>
+  difficulty !== 'Nightmare' ||
+  model.canPickNightmare ||
+  lobby.difficulty === 'Nightmare'
+
+export const isPicking = (room: Room): boolean =>
+  isHost(room) &&
+  Option.exists(room.maybeLobby, lobby => lobby.status === 'Lobby')
+
+const pick = (
+  model: Model,
+  room: Room,
+  mode: PickedMode,
+  difficulty: RoomDifficulty,
+): UpdateReturn =>
+  Option.match(room.maybeLobby, {
+    onNone: () => ({ model }),
+    onSome: lobby =>
+      isPicking(room) &&
+      canPickMode(lobby, mode) &&
+      canPickDifficulty(model, lobby, difficulty) &&
+      (mode !== pickedModeOf(lobby) || difficulty !== lobby.difficulty)
+        ? {
+            model,
+            commands: [
+              ChangeLobby({
+                change: LobbyChange.ChangedPicks({ mode, difficulty }),
+              }),
+            ],
+          }
+        : { model },
+  })
+
+const nextOf = <A>(
+  all: Array.NonEmptyReadonlyArray<A>,
+  current: A,
+  isAllowed: (value: A) => boolean,
+): A => {
+  const at = Option.getOrElse(
+    Array.findFirstIndex(all, value => value === current),
+    () => 0,
+  )
+  return Option.getOrElse(
+    Array.findFirst(
+      Array.makeBy(all.length - 1, step =>
+        Option.getOrElse(
+          Array.get(all, (at + step + 1) % all.length),
+          () => current,
+        ),
+      ),
+      isAllowed,
+    ),
+    () => current,
+  )
+}
+
+const pickFromKey = (model: Model, room: Room, code: string): UpdateReturn =>
+  Option.match(room.maybeLobby, {
+    onNone: () => ({ model }),
+    onSome: lobby => {
+      if (code === MODE_KEY) {
+        return pick(
+          model,
+          room,
+          nextOf(MODE_PICKS, pickedModeOf(lobby), mode =>
+            canPickMode(lobby, mode),
+          ),
+          lobby.difficulty,
+        )
+      } else if (code === DIFFICULTY_KEY) {
+        return pick(
+          model,
+          room,
+          pickedModeOf(lobby),
+          nextOf(DIFFICULTY_PICKS, lobby.difficulty, difficulty =>
+            canPickDifficulty(model, lobby, difficulty),
+          ),
+        )
+      } else {
+        return { model }
+      }
+    },
+  })
+
 const ESCAPE = 'Escape'
 const ENTER = 'Enter'
+export const MODE_KEY = 'KeyE'
+export const DIFFICULTY_KEY = 'KeyX'
 
 const keyOnScreen = (model: Model, code: string): UpdateReturn =>
   Screen.match<UpdateReturn>(model.screen, {
@@ -461,8 +576,15 @@ const keyOnScreen = (model: Model, code: string): UpdateReturn =>
         return { model }
       }
     },
-    InRoom: ({ room }) =>
-      code === ENTER && isInLobby(room) ? toggleReady(model, room) : { model },
+    InRoom: ({ room }) => {
+      if (!isInLobby(room)) {
+        return { model }
+      } else if (code === ENTER) {
+        return toggleReady(model, room)
+      } else {
+        return pickFromKey(model, room, code)
+      }
+    },
   })
 
 export const isInLobby = (room: Room): boolean =>
@@ -535,8 +657,12 @@ export const open = (
   model: Model,
   name: string,
   maybeCode: Option.Option<string>,
+  canPickNightmare = false,
 ): UpdateReturn => {
-  const named = modifyFields(model, { name: () => name })
+  const named = modifyFields(model, {
+    name: () => name,
+    canPickNightmare: () => canPickNightmare,
+  })
   return Option.match(maybeCode, {
     onNone: () => ({
       model: hub(named, Option.none()),
@@ -700,6 +826,22 @@ export const update = (model: Model, message: Message): UpdateReturn =>
               ],
             }
           : { model },
+      ),
+
+    ClickedModePick: ({ mode }) =>
+      inRoom(model, room =>
+        Option.match(room.maybeLobby, {
+          onNone: () => ({ model }),
+          onSome: lobby => pick(model, room, mode, lobby.difficulty),
+        }),
+      ),
+
+    ClickedDifficultyPick: ({ difficulty }) =>
+      inRoom(model, room =>
+        Option.match(room.maybeLobby, {
+          onNone: () => ({ model }),
+          onSome: lobby => pick(model, room, pickedModeOf(lobby), difficulty),
+        }),
       ),
 
     CompletedChangeLobby: () => ({ model }),

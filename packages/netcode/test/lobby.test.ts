@@ -26,6 +26,7 @@ import {
 import { makeHost } from '@munch/sync-engine/in-process'
 
 import {
+  ChangedPicks,
   ChangedReady,
   CreatedRoom,
   EndedGame,
@@ -120,7 +121,7 @@ const created = Effect.gen(function* () {
       code: CODE,
       host: ANA,
       hostName: 'Ana',
-      mode: 'StandIn',
+      mode: 'Campaign',
       visibility: 'Private',
     },
     'created-room',
@@ -262,6 +263,117 @@ describe('the room scope', () => {
       }),
     ))
 
+  test('the host picks the mode and difficulty, which takes back READY', () =>
+    run(
+      Effect.gen(function* () {
+        const server = yield* created
+        yield* seat(server, BO)
+        const fresh = yield* lobbyOf(server)
+        expect([fresh.mode, fresh.difficulty]).toEqual(['Campaign', 'Normal'])
+        yield* push(server, BO, ChangedReady, { by: BO, ready: true })
+        expect(
+          yield* push(server, BO, ChangedPicks, {
+            by: BO,
+            mode: 'Endless',
+            difficulty: 'Hard',
+          }),
+        ).toMatch(/Only the host/)
+        expect(
+          yield* push(server, ANA, ChangedPicks, {
+            by: ANA,
+            mode: 'KeepGoing',
+            difficulty: 'Normal',
+          }),
+        ).toMatch(/No run to keep going/)
+        expect(
+          yield* push(server, ANA, ChangedPicks, {
+            by: ANA,
+            mode: 'Endless',
+            difficulty: 'Hard',
+          }),
+        ).toBe('Acked')
+        const picked = yield* lobbyOf(server)
+        expect([picked.mode, picked.difficulty]).toEqual(['Endless', 'Hard'])
+        expect(picked.members.map(member => member.ready)).toEqual([
+          false,
+          false,
+        ])
+        yield* push(server, BO, ChangedReady, { by: BO, ready: true })
+        yield* push(server, ANA, ChangedPicks, {
+          by: ANA,
+          mode: 'Endless',
+          difficulty: 'Hard',
+        })
+        expect(
+          (yield* lobbyOf(server)).members.map(member => member.ready),
+        ).toEqual([false, true])
+        yield* push(server, ANA, ChangedReady, { by: ANA, ready: true })
+        expect((yield* lobbyOf(server)).status).toBe('Playing')
+        expect(
+          yield* push(server, ANA, ChangedPicks, {
+            by: ANA,
+            mode: 'Campaign',
+            difficulty: 'Easy',
+          }),
+        ).toMatch(/Not in the lobby/)
+      }),
+    ))
+
+  test('a won campaign offers to keep going until the crew changes', () =>
+    run(
+      Effect.gen(function* () {
+        const server = yield* created
+        yield* seat(server, BO)
+        const record = (round: number, reason: 'Won' | 'GameOver') =>
+          server.runServer(
+            RecordedRoomResult,
+            { result: { round, reason, ticks: 900, scores: [] } },
+            `recorded-result-${round}`,
+          )
+        const playRound = Effect.gen(function* () {
+          yield* push(server, ANA, ChangedReady, { by: ANA, ready: true })
+          yield* push(server, BO, ChangedReady, { by: BO, ready: true })
+        })
+        yield* playRound
+        yield* record(1, 'Won')
+        const won = yield* lobbyOf(server)
+        expect([won.mode, won.canKeepGoing]).toEqual(['KeepGoing', true])
+        yield* push(server, ANA, ChangedPicks, {
+          by: ANA,
+          mode: 'Campaign',
+          difficulty: 'Normal',
+        })
+        expect(
+          yield* push(server, ANA, ChangedPicks, {
+            by: ANA,
+            mode: 'KeepGoing',
+            difficulty: 'Normal',
+          }),
+        ).toBe('Acked')
+        yield* playRound
+        expect((yield* lobbyOf(server)).mode).toBe('KeepGoing')
+        yield* record(2, 'GameOver')
+        const lost = yield* lobbyOf(server)
+        expect([lost.mode, lost.canKeepGoing]).toEqual(['Endless', false])
+        yield* push(server, ANA, ChangedPicks, {
+          by: ANA,
+          mode: 'Campaign',
+          difficulty: 'Normal',
+        })
+        yield* playRound
+        yield* record(3, 'Won')
+        yield* push(server, BO, ChangedReady, { by: BO, ready: true })
+        yield* seat(server, CY)
+        const joined = yield* lobbyOf(server)
+        expect([joined.mode, joined.canKeepGoing]).toEqual(['Endless', false])
+        expect(joined.members.map(member => member.ready)).toEqual([
+          false,
+          false,
+          false,
+        ])
+      }),
+    ))
+
   test('a public room is open to QUICK PLAY only in its lobby with a seat', () =>
     run(
       Effect.gen(function* () {
@@ -273,7 +385,7 @@ describe('the room scope', () => {
             code: CODE,
             host: ANA,
             hostName: 'Ana',
-            mode: 'StandIn',
+            mode: 'Campaign',
             visibility: 'Public',
           },
           'created-room',
@@ -332,7 +444,7 @@ describe('the room scope', () => {
             code: CODE,
             host: ANA,
             hostName: 'Ana',
-            mode: 'StandIn',
+            mode: 'Campaign',
             visibility: 'Private',
           },
           'created-room',
