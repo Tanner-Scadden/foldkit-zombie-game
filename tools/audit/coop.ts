@@ -804,9 +804,10 @@ if (isPhone) {
   check(atStall, 'the host walks into the stall')
   await Promise.all(everyone.map((page, index) => stopAll(page, helds[index]!)))
   const shopOpen = await until(
-    'the shop dialog opens for the host only',
+    'one shop dialog opens, for the host only',
     async () =>
-      (await host.locator('.shop-dialog[open]').count()) >= 1 &&
+      (await host.locator('dialog#shop').count()) === 1 &&
+      (await host.locator('dialog[open]').count()) === 1 &&
       (await guests[0]!.locator('.shop-dialog[open]').count()) === 0,
   )
   if (shopOpen) {
