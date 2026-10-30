@@ -51,13 +51,13 @@ type Scene = Readonly<{
 
 // NOTE: every scene plays its frames at once with `tick=N` (N frames of
 // 1/60 s) and holds there, so each picture is the same on every run. The
-// fridge stands on the kitchen's back wall, tiles 14 and 15 of rows -13
-// and -12, so (150, -97) is just in reach below its door. The weapon
+// fridge stands in the kitchen's north-east corner, tiles 17 and 18 of rows
+// -13 and -12, so (180, -102) is just in reach below its door. The weapon
 // scenes stand at (40, -12), on the open floor at the kitchen's foot.
 const LEARNED =
   'learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak'
 const BREAK = `wave=3&seen=all&kitchen&money=200&gun=smg&prep=14000&${LEARNED}`
-const AT_FRIDGE = 'px=150&py=-97'
+const AT_FRIDGE = 'px=180&py=-102'
 const IN_KITCHEN = `wave=4&seen=all&start=wave&elapsed=9000&kitchen&god&px=40&py=-12&${LEARNED}`
 
 // NOTE: fridge seed 2 draws Brain Freeze, the rare prize.
@@ -80,7 +80,7 @@ const SCENES: ReadonlyArray<Scene> = [
   },
   {
     name: 'slammed',
-    query: `${BREAK}&px=150&py=-92&fridge=slammed&fridgeMs=20000&tick=24`,
+    query: `${BREAK}&px=160&py=-96&fridge=slammed&fridgeMs=20000&tick=24`,
   },
   {
     name: 'cooker',

@@ -32,9 +32,10 @@ import {
 // Version 5: the Mystery Leftovers fridge and its weapons. The World holds
 // the fridge, the Cooker's lids in flight, each player's charge, and the
 // new zombie actions; the shop sells the fridge weapons' upgrades and
-// lids, whose codes follow the old ones.
-export const PROTOCOL_VERSION = 5
-export const MIN_PROTOCOL_VERSION = 5
+// lids, whose codes follow the old ones. Version 6: take it or leave it,
+// the fridge's door can hold a weapon on Offering, taken with a hold.
+export const PROTOCOL_VERSION = 6
+export const MIN_PROTOCOL_VERSION = 6
 
 // NOTE: a round trip as the wire carries it, in whole ms.
 export const MAX_RTT_MS = 60_000

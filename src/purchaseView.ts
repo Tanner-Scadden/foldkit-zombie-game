@@ -123,8 +123,12 @@ const ringSprite = (pixels: ReadonlyArray<RingPixel>, filled: number): Sprite =>
 
 // NOTE: built once per price, as the module loads, so every tag is an
 // image from the atlas.
-export const bakePriceTag = (price: number): PriceTag => {
-  const text = bakeText(`$${price}`, 'Coin')
+export const bakePriceTag = (price: number): PriceTag =>
+  bakeTag(bakeText(`$${price}`, 'Coin'))
+
+// NOTE: a weapon the fridge offers is already paid for, so its tag says
+// TAKE in place of a price.
+const bakeTag = (text: BakedText): PriceTag => {
   const width = text.width + TAG_PAD * 2 + 1
   const height = GLYPH_HEIGHT + TAG_PAD * 2
   const pixels = ringPixels(Math.ceil(width / 2) + RING_GAP)
@@ -147,10 +151,13 @@ const EXIT_TAG = bakePriceTag(EXIT_RULES.price)
 
 const FRIDGE_TAG = bakePriceTag(FRIDGE_RULES.price)
 
+const TAKE_TAG = bakeTag(bakeText('TAKE', 'Prompt'))
+
 const tagOf = (target: Purchasable): PriceTag =>
   Purchasable.match(target, {
     Exit: () => EXIT_TAG,
     Fridge: () => FRIDGE_TAG,
+    Prize: () => TAKE_TAG,
   })
 
 // THE PROMPT

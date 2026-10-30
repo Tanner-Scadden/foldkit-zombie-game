@@ -25,6 +25,7 @@ const nameOf = (target: Purchasable): string =>
   Purchasable.match(target, {
     Exit: ({ exit }) => exitName(exit).toLowerCase(),
     Fridge: () => FRIDGE_NAME.toLowerCase(),
+    Prize: () => 'the prize from the fridge, free',
   })
 
 // NOTE: what the player is at: the offer in reach, or the one they still
