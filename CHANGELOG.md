@@ -8,7 +8,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 - 💣 Meet the Kaboomer, who brought a bomb to share, and the Big Leaguer, who pitches zombies. Big Lugs wear junk armor now, and point-blank shots always land.
 - 🃏 A brand new menu: tap MORE to deal your cards, from your look to the Munchopedia of every zombie you've splatted. Once you've visited, it even plays on a plane with no internet.
 - 📱 Play holding your phone upright: the manor zooms in up close, and your guns sit on the wall right under your thumbs. Turn it sideways any time to see the whole room.
-- 🔥 The parlour got cozy, Rattles' shop got big pictures and a pricey Laser Sight, and your cursor is big and yellow so the dark floor never swallows it.
+- 🍲 Smash open the kitchen behind the parlour: shoot the ovens to toast zombies, watch them slip in spilled soup, and last ten waves. The parlour got cozy, Rattles' shop got big pictures and a pricey Laser Sight, and your cursor is big and yellow so the dark floor never swallows it.
 
 ## October 28, 2026: Opening night
 
