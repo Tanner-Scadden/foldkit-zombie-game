@@ -14,7 +14,6 @@ import { circlesOverlap, directionBetween, scaleVector } from './geometry'
 import {
   GameEvent,
   Invulnerability,
-  type Model,
   type Player,
   type Vector,
   type Zombie,
@@ -22,6 +21,7 @@ import {
 } from './model'
 import { earn } from './shop'
 import { trapBlastTarget } from './traps'
+import type { World } from './world'
 import {
   Behavior,
   type DeathCause,
@@ -225,7 +225,7 @@ export const bountyOf = (events: ReadonlyArray<GameEvent>): number =>
     GameEvent.isAnyOf(['ZombieKilled'])(event) ? sum + event.bounty : sum,
   )
 
-const detonate = (model: Model, bomberId: number): Model => {
+const detonate = (model: World, bomberId: number): World => {
   const rest = Array.filter(model.zombies, ({ id }) => id !== bomberId)
   const maybeBlast = pipe(
     model.zombies,
@@ -276,7 +276,7 @@ const byOverdue = Order.combine(
   Order.mapInput(Order.Number, ({ id }: SpentFuse) => id),
 )
 
-export const resolveBlasts = (model: Model): Model =>
+export const resolveBlasts = (model: World): World =>
   pipe(
     model.zombies,
     Array.map(maybeSpentFuse),

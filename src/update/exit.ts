@@ -7,11 +7,11 @@ import { Dialog } from '@foldkit/ui'
 import { levelOf } from '../arena'
 import { dialogFolds } from '../dialogs'
 import { buyExit, exitBoxOf, isAtExit } from '../exits'
+import { refreshIntent } from '../frame'
 import { releaseAll } from '../input'
 import { Message } from '../message'
 import { type ExitId, type Model, ShopState } from '../model'
 import { burstCoins, smashBoards } from '../particles'
-import { refreshIntent } from '../frame'
 import { playSounds, uiCue } from './sound'
 import { type UpdateReturn, type UpdateStep, withInput } from './step'
 
@@ -90,7 +90,9 @@ const smashOpen = (model: Model, exit: ExitId): Model =>
 export const openOfferedExit = (model: Model): UpdateReturn =>
   Option.match(
     Option.flatMap(maybeOfferedExit(model), exit =>
-      Option.map(buyExit(model, exit), bought => smashOpen(bought, exit)),
+      Option.map(buyExit(model, exit), bought =>
+        smashOpen({ ...model, ...bought }, exit),
+      ),
     ),
     {
       onNone: () => playSounds([uiCue('Denied')])(model),

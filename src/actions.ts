@@ -1,7 +1,8 @@
 import { Array } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { type Model, type Zombie, ZombieAction } from './model'
+import { type Zombie, ZombieAction } from './model'
+import type { World } from './world'
 
 // RECOVERY
 
@@ -33,7 +34,7 @@ const recover =
     }
   }
 
-export const recoverActions = (model: Model, deltaMs: number): Model =>
+export const recoverActions = (model: World, deltaMs: number): World =>
   Array.some(model.zombies, zombie => isRecovering(zombie.action))
     ? modifyFields(model, {
         zombies: Array.map(recover(deltaMs)),

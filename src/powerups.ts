@@ -52,6 +52,7 @@ import {
   isReloading,
   statsAt,
 } from './weapons'
+import type { World } from './world'
 
 // BOOSTS
 
@@ -340,7 +341,7 @@ const extendTimer = (timer: BoostTimer, durationMs: number): BoostTimer => {
   return BoostTimer.On({ remainingMs, durationMs: remainingMs })
 }
 
-const tickBoosts = (model: Model, deltaMs: number): Model => {
+const tickBoosts = (model: World, deltaMs: number): World => {
   if (!Array.some(BOOST_KIND_ORDER, kind => isOn(model.boosts[kind]))) {
     return model
   }
@@ -365,7 +366,7 @@ const tickBoosts = (model: Model, deltaMs: number): Model => {
 
 // FLOOR
 
-const agePickups = (model: Model, deltaMs: number): Model => {
+const agePickups = (model: World, deltaMs: number): World => {
   if (Array.isReadonlyArrayEmpty(model.pickups)) {
     return model
   }
@@ -409,7 +410,7 @@ const isWithinGrab =
   (pickup: Pickup): boolean =>
     Math.hypot(pickup.x - player.x, pickup.y - player.y) <= PICKUP_GRAB_PX
 
-const burpAt = (model: Model, at: Vector): Model => {
+const burpAt = (model: World, at: Vector): World => {
   const blast: BlastSpec = {
     x: at.x,
     y: at.y,
@@ -431,7 +432,7 @@ const burpAt = (model: Model, at: Vector): Model => {
   })
 }
 
-const applyEffect = (model: Model, effect: PickupEffect): Model =>
+const applyEffect = (model: World, effect: PickupEffect): World =>
   PickupEffect.match(effect, {
     Boost: ({ boost }) => {
       const boosts: Boosts = Record.map(model.boosts, (timer, kind) =>
@@ -452,7 +453,7 @@ const applyEffect = (model: Model, effect: PickupEffect): Model =>
       }),
   })
 
-const grab = (model: Model, pickup: Pickup): Model =>
+const grab = (model: World, pickup: Pickup): World =>
   modifyFields(applyEffect(model, PICKUPS[pickup.kind].effect), {
     frameEvents: Array.append(
       GameEvent.PickupGrabbed({ x: pickup.x, y: pickup.y, kind: pickup.kind }),
@@ -492,7 +493,7 @@ export const advanceCallouts = (model: Model, worldMs: number): Model => {
     : ageCallouts(called, worldMs)
 }
 
-const grabPickups = (model: Model): Model => {
+const grabPickups = (model: World): World => {
   if (Array.isReadonlyArrayEmpty(model.pickups)) {
     return model
   }
@@ -610,7 +611,7 @@ const killsIn = (events: ReadonlyArray<GameEvent>): ReadonlyArray<Kill> =>
       : Result.failVoid,
   )
 
-const placePickup = (model: Model, kind: PickupKind, at: Vector): Model => {
+const placePickup = (model: World, kind: PickupKind, at: Vector): World => {
   const level = levelOf(model)
   const spot = settleSpot(level, at, trapBlockers(level, model.traps))
   const pickup: Pickup = {
@@ -630,9 +631,9 @@ const placePickup = (model: Model, kind: PickupKind, at: Vector): Model => {
 }
 
 const dropTutorialPickup = (
-  model: Model,
+  model: World,
   kills: ReadonlyArray<Kill>,
-): Model => {
+): World => {
   const killsBefore = totalKills(model.stats)
   return pipe(
     Array.get(kills, TUTORIAL_DROP_KILL - 1 - killsBefore),
@@ -676,11 +677,11 @@ const rollForKill =
   }
 
 const dropFromKills = (
-  model: Model,
+  model: World,
   kills: ReadonlyArray<Kill>,
   worldMs: number,
   beatBefore: Beat,
-): Model => {
+): World => {
   const loot = modifyFields(model.loot, {
     dryMs: dryMs => dryMs + worldMs,
     prize: prize => oweForPeak(prize, beatBefore, model.pacing.beat),
@@ -720,14 +721,14 @@ const dropFromKills = (
   })
 }
 
-const settleLoot = (model: Model): Model =>
+const settleLoot = (model: World): World =>
   Prize.isAnyOf(['Owed'])(model.loot.prize)
     ? modifyFields(model, {
         loot: loot => modifyFields(loot, { prize: () => Prize.Settled() }),
       })
     : model
 
-const dropLoot = (before: Model, model: Model, worldMs: number): Model =>
+const dropLoot = (before: World, model: World, worldMs: number): World =>
   Phase.match(before.phase, {
     Ready: () => settleLoot(model),
     Preparation: () => settleLoot(model),
@@ -748,10 +749,10 @@ const dropLoot = (before: Model, model: Model, worldMs: number): Model =>
 // FRAME
 
 export const advancePowerUps = (
-  before: Model,
-  model: Model,
+  before: World,
+  model: World,
   worldMs: number,
-): Model => {
+): World => {
   if (ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)) {
     return model
   }

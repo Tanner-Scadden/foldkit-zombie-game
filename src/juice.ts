@@ -50,6 +50,7 @@ import { type Seeded, between, generateMany, nextRandom } from './prng'
 import { tickShownMoney } from './shop'
 import { TRAPS } from './traps'
 import { WEAPONS } from './weapons'
+import type { World } from './world'
 import { ZOMBIE_KINDS } from './zombies'
 
 // HIT-STOP
@@ -432,7 +433,7 @@ const countWhere = (
 
 // NOTE: hit-stop is decided on each tick's own events, since it decides
 // how much world time the next ticks get.
-export const stopForHits = (model: Model, worldMs: number): Model => {
+export const stopForHits = (model: World, worldMs: number): World => {
   const events = model.frameEvents
   const isBossFelled = Array.some(
     events,

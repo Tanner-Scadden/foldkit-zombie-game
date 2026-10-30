@@ -26,13 +26,13 @@ import {
   Beat,
   type DoorId,
   GameEvent,
-  type Model,
   type Pacing,
   type PlannedSpawn,
   type Vector,
   type Zombie,
   type ZombieKind,
 } from './model'
+import type { World } from './world'
 import { isFloorKind, isFree, isFusing, isWalking } from './zombies'
 
 // CROWD
@@ -363,11 +363,11 @@ const plannedDoorOf = (
   )
 
 export const warnPacks = (
-  model: Model,
+  model: World,
   spawns: ReadonlyArray<PlannedSpawn>,
   routed: ReadonlyArray<PlannedSpawn>,
   clockMs: number,
-): Model => {
+): World => {
   const warnedPacks = model.pacing.warnedPacks
   const fresh = pipe(
     routed,

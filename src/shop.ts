@@ -62,6 +62,7 @@ import {
   tierName,
   tierOf,
 } from './weapons'
+import type { World } from './world'
 
 // MONEY
 
@@ -107,11 +108,11 @@ export type ShopGood = typeof ShopGood.Type
 
 // UPGRADES
 
-export const gunName = (model: Model, weapon: WeaponKind): string =>
+export const gunName = (model: World, weapon: WeaponKind): string =>
   tierName(weapon, tierOf(model.player, weapon))
 
 const nextTierFor = (
-  model: Model,
+  model: World,
   weapon: WeaponKind,
 ): Option.Option<WeaponTier> =>
   maybeNextTier(weapon, tierOf(model.player, weapon))
@@ -295,7 +296,7 @@ export const shopItem = (id: ShopItemId): ShopItem =>
 
 type ShopCategoryInfo = Readonly<{
   label: string
-  blurb: (model: Model) => string
+  blurb: (model: World) => string
 }>
 
 export const SHOP_CATEGORIES: Readonly<Record<ShopCategory, ShopCategoryInfo>> =
@@ -338,7 +339,7 @@ const TRAP_SHELF_KINDS: Array.NonEmptyReadonlyArray<TrapKind> = [
 ]
 
 export const trapShelves = (
-  model: Model,
+  model: World,
 ): Array.NonEmptyReadonlyArray<TrapShelf> =>
   Array.map(TRAP_SHELF_KINDS, kind => ({
     kind,
@@ -351,7 +352,7 @@ export const trapShelves = (
   }))
 
 export const maybeRepairTrap = (
-  model: Model,
+  model: World,
   id: ShopItemId,
 ): Option.Option<Trap> =>
   ShopGood.match(shopItem(id).good, {
@@ -431,7 +432,7 @@ const sidearmShelf = (player: Player): GunShelf =>
   })
 
 export const gunShelves = (
-  model: Model,
+  model: World,
 ): Array.NonEmptyReadonlyArray<GunShelf> =>
   Array.prepend(
     Array.map(SPARE_LINES, line => spareShelf(model.player, line)),
@@ -445,7 +446,7 @@ const shelfItems = (shelf: GunShelf): Array.NonEmptyReadonlyArray<ShopItemId> =>
   })
 
 export const itemsIn = (
-  model: Model,
+  model: World,
   category: ShopCategory,
 ): Array.NonEmptyReadonlyArray<ShopItemId> => {
   if (category === 'Guns') {
@@ -474,7 +475,7 @@ const maybeGunOf = (item: ShopItemId): Option.Option<WeaponKind> =>
     Sight: () => Option.none(),
   })
 
-const replacementFor = (model: Model, item: ShopItemId): ShopItemId => {
+const replacementFor = (model: World, item: ShopItemId): ShopItemId => {
   const isShown = Array.contains(itemsIn(model, model.shopCategory), item)
   if (model.shopCategory !== 'Guns' || isShown) {
     return item
@@ -492,7 +493,7 @@ const replacementFor = (model: Model, item: ShopItemId): ShopItemId => {
   )
 }
 
-export const maybeDisplacedFocus = (model: Model): Option.Option<ShopItemId> =>
+export const maybeDisplacedFocus = (model: World): Option.Option<ShopItemId> =>
   ShopState.match(model.shop, {
     Away: () => Option.none(),
     Browsing: ({ focusedItem }) =>
@@ -504,7 +505,7 @@ export const maybeDisplacedFocus = (model: Model): Option.Option<ShopItemId> =>
     Dismissed: () => Option.none(),
   })
 
-export const priceFor = (model: Model, id: ShopItemId): number =>
+export const priceFor = (model: World, id: ShopItemId): number =>
   ShopGood.match(shopItem(id).good, {
     Gun: () => shopItem(id).price,
     Ammo: () => shopItem(id).price,
@@ -523,7 +524,7 @@ export const priceFor = (model: Model, id: ShopItemId): number =>
     Sight: () => shopItem(id).price,
   })
 
-const isMaxedUpgrade = (model: Model, id: ShopItemId): boolean =>
+const isMaxedUpgrade = (model: World, id: ShopItemId): boolean =>
   ShopGood.match(shopItem(id).good, {
     Gun: () => false,
     Ammo: () => false,
@@ -534,10 +535,10 @@ const isMaxedUpgrade = (model: Model, id: ShopItemId): boolean =>
     Sight: () => false,
   })
 
-export const priceLabel = (model: Model, id: ShopItemId): string =>
+export const priceLabel = (model: World, id: ShopItemId): string =>
   isMaxedUpgrade(model, id) ? 'MAX' : `$${priceFor(model, id)}`
 
-export const itemName = (model: Model, id: ShopItemId): string =>
+export const itemName = (model: World, id: ShopItemId): string =>
   ShopGood.match(shopItem(id).good, {
     Gun: () => shopItem(id).name,
     Ammo: () => shopItem(id).name,
@@ -556,7 +557,7 @@ export const itemName = (model: Model, id: ShopItemId): string =>
     Sight: () => shopItem(id).name,
   })
 
-const ammoGain = (model: Model, weapon: WeaponKind, rounds: number): string => {
+const ammoGain = (model: World, weapon: WeaponKind, rounds: number): string => {
   const roundsLabel = WEAPONS[weapon].roundsLabel
   const room = Option.match(carried(model.player, weapon), {
     onNone: () => rounds,
@@ -571,7 +572,7 @@ const ammoGain = (model: Model, weapon: WeaponKind, rounds: number): string => {
   }
 }
 
-export const itemAriaLabel = (model: Model, id: ShopItemId): string => {
+export const itemAriaLabel = (model: World, id: ShopItemId): string => {
   const price = `$${priceFor(model, id)}`
   return ShopGood.match(shopItem(id).good, {
     Gun: () => `Buy ${itemName(model, id)} for ${price}`,
@@ -595,7 +596,7 @@ export const itemAriaLabel = (model: Model, id: ShopItemId): string => {
   })
 }
 
-export const itemBlurb = (model: Model, id: ShopItemId): string =>
+export const itemBlurb = (model: World, id: ShopItemId): string =>
   ShopGood.match(shopItem(id).good, {
     Gun: () => shopItem(id).blurb,
     Ammo: ({ weapon, rounds }) =>
@@ -632,7 +633,7 @@ type Block = Readonly<{ reason: string; tag: string }>
 const block = (reason: string, tag: string): Option.Option<Block> =>
   Option.some({ reason, tag })
 
-const blockedBy = (model: Model, good: ShopGood): Option.Option<Block> => {
+const blockedBy = (model: World, good: ShopGood): Option.Option<Block> => {
   const { player } = model
   return ShopGood.match(good, {
     Gun: ({ weapon }) =>
@@ -686,10 +687,10 @@ const blockedBy = (model: Model, good: ShopGood): Option.Option<Block> => {
   })
 }
 
-const blockedReason = (model: Model, good: ShopGood): Option.Option<string> =>
+const blockedReason = (model: World, good: ShopGood): Option.Option<string> =>
   Option.map(blockedBy(model, good), ({ reason }) => reason)
 
-export const verdictFor = (model: Model, id: ShopItemId): Verdict => {
+export const verdictFor = (model: World, id: ShopItemId): Verdict => {
   const item = shopItem(id)
   const price = priceFor(model, id)
   return pipe(
@@ -706,13 +707,13 @@ export const verdictFor = (model: Model, id: ShopItemId): Verdict => {
   )
 }
 
-const isAvailable = (model: Model, id: ShopItemId): boolean =>
+const isAvailable = (model: World, id: ShopItemId): boolean =>
   Verdict.isAnyOf(['Available'])(verdictFor(model, id))
 
-export const affordableCount = (model: Model, category: ShopCategory): number =>
+export const affordableCount = (model: World, category: ShopCategory): number =>
   Array.filter(itemsIn(model, category), id => isAvailable(model, id)).length
 
-export const totalAffordable = (model: Model): number =>
+export const totalAffordable = (model: World): number =>
   Array.reduce(
     SHOP_CATEGORY_ORDER,
     0,
@@ -728,7 +729,7 @@ export const StockTag = defineTaggedUnion({
 })
 export type StockTag = typeof StockTag.Type
 
-export const stockTag = (model: Model, id: ShopItemId): StockTag => {
+export const stockTag = (model: World, id: ShopItemId): StockTag => {
   const price = priceFor(model, id)
   return Option.match(blockedBy(model, shopItem(id).good), {
     onSome: ({ tag }) => StockTag.Done({ label: tag }),
@@ -741,13 +742,13 @@ export const stockTag = (model: Model, id: ShopItemId): StockTag => {
 
 // SUGGESTION
 
-const isRunningLow = (model: Model, weapon: WeaponKind): boolean =>
+const isRunningLow = (model: World, weapon: WeaponKind): boolean =>
   Option.match(carried(model.player, weapon), {
     onNone: () => false,
     onSome: spare => spare.rounds * 2 < maxRounds(weapon, spare.tier),
   })
 
-const suggestionRank = (model: Model, id: ShopItemId): number =>
+const suggestionRank = (model: World, id: ShopItemId): number =>
   ShopGood.match(shopItem(id).good, {
     Ammo: ({ weapon }) => (isRunningLow(model, weapon) ? 0 : 3),
     Upgrade: ({ weapon }) => (weapon === SIDEARM ? 2 : 1),
@@ -761,7 +762,7 @@ const suggestionRank = (model: Model, id: ShopItemId): number =>
 // NOTE: the shop opens on the row a player most likely wants, so Enter never
 // lands first on a gun that would replace the one in their hands.
 export const suggestedItem = (
-  model: Model,
+  model: World,
   category: ShopCategory,
 ): ShopItemId => {
   const stockRank = (id: ShopItemId): number =>
@@ -823,7 +824,7 @@ export const gunBars = (weapon: WeaponKind, tier: number): GunBars => {
 export type AmmoGauge = Readonly<{ have: number; gain: number; most: number }>
 
 export const ammoGauge = (
-  model: Model,
+  model: World,
   weapon: WeaponKind,
   rounds: number,
 ): AmmoGauge =>
@@ -846,7 +847,7 @@ export const isHolding = (player: Player, weapon: WeaponKind): boolean =>
     HoldingSpare: ({ spare }) => spare.kind === weapon,
   })
 
-export const ownedNote = (model: Model, id: ShopItemId): string => {
+export const ownedNote = (model: World, id: ShopItemId): string => {
   const { player } = model
   const maybeCarried = maybeSpare(player.arsenal)
   return ShopGood.match(shopItem(id).good, {
@@ -929,10 +930,10 @@ const upgrade = (player: Player, weapon: WeaponKind): Player =>
           ),
       })
 
-const equip = (model: Model, toPlayer: (player: Player) => Player): Model =>
+const equip = (model: World, toPlayer: (player: Player) => Player): World =>
   modifyFields(model, { player: toPlayer })
 
-const grant = (model: Model, good: ShopGood): Model =>
+const grant = (model: World, good: ShopGood): World =>
   ShopGood.match(good, {
     Gun: ({ weapon }) =>
       equip(model, player =>
@@ -958,9 +959,9 @@ const grant = (model: Model, good: ShopGood): Model =>
   })
 
 export const purchase = (
-  model: Model,
+  model: World,
   id: ShopItemId,
-): Option.Option<Model> => {
+): Option.Option<World> => {
   const item = shopItem(id)
   const price = priceFor(model, id)
   return Verdict.match(verdictFor(model, id), {
@@ -1030,7 +1031,7 @@ export const isBrowsing = (shop: ShopState): boolean =>
 export const isAtCounter = (shop: ShopState): boolean =>
   ShopState.isAnyOf(['Browsing', 'AtExit'])(shop)
 
-const arriveAtStall = (model: Model): ShopState =>
+const arriveAtStall = (model: World): ShopState =>
   isShopOpenFor(model.phase)
     ? ShopState.Browsing({
         focusedItem: suggestedItem(model, model.shopCategory),
@@ -1059,12 +1060,12 @@ export const selectShopCategory = (
 // NOTE: walking into the stall opens the shop, and walking into a boarded
 // exit between waves opens its offer. Either one stays shut after it is left
 // until the player steps away from both.
-const arriveAt = (model: Model, shop: ShopState): ShopState =>
+const arriveAt = (model: World, shop: ShopState): ShopState =>
   isAtStall(model.player)
     ? arriveAtStall(model)
     : Option.getOrElse(arriveAtExit(model), () => shop)
 
-export const refreshShopPresence = (model: Model): Model =>
+export const refreshShopPresence = (model: World): World =>
   modifyFields(model, {
     shop: shop =>
       ShopState.match(shop, {
@@ -1089,7 +1090,7 @@ const closedPrompt = (phase: Phase): StallPrompt =>
 
 // NOTE: the words teach the stall once. After the player has shopped, its
 // sign and the bobbing coin over it say the same without words.
-export const stallPrompt = (model: Model): StallPrompt => {
+export const stallPrompt = (model: World): StallPrompt => {
   const { phase, player, shop, lessons } = model
   if (
     !Phase.isAnyOf(['Preparation', 'Wave'])(phase) ||

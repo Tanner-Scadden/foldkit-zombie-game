@@ -6,6 +6,7 @@ import { Dialog, Tabs } from '@foldkit/ui'
 
 import { FocusShopItem } from '../commands'
 import { dialogFolds } from '../dialogs'
+import { refreshIntent } from '../frame'
 import { releaseAll } from '../input'
 import { Message } from '../message'
 import {
@@ -28,7 +29,7 @@ import {
   shopItem,
   stockTag,
 } from '../shop'
-import { refreshIntent } from '../frame'
+import { showTrapHint } from '../traps'
 import { closeExit } from './exit'
 import { type SoundCue, playSounds, uiCue } from './sound'
 import { type UpdateReturn, type UpdateStep, withInput } from './step'
@@ -113,15 +114,20 @@ export const buy = (model: Model, item: ShopItemId): UpdateReturn => {
 
   return Option.match(purchase(model, item), {
     onNone: () => playSounds([uiCue('Denied')])(refusedChatter(model, item)),
-    onSome: bought =>
-      Update.combine(
+    onSome: world => {
+      const bought = withHint(item, { ...model, ...world })
+      return Update.combine(
         modifyFields(burstCoins(bought, bought.player.x, bought.player.y), {
           shopChatter: () => ShopChatter.Bought({ item }),
         }),
         [playSounds(purchaseCues(item)), refocusDisplacedRow],
-      ),
+      )
+    },
   })
 }
+
+const withHint = (item: ShopItemId, model: Model): Model =>
+  ShopGood.isAnyOf(['Trap'])(shopItem(item).good) ? showTrapHint(model) : model
 
 const refusedChatter = (model: Model, item: ShopItemId): Model =>
   modifyFields(model, {

@@ -10,11 +10,20 @@ import {
 import { clamp } from './geometry'
 import { deriveIntent } from './input'
 import { advanceJuice } from './juice'
-import { type GameEvent, type Model, ShopState, idleIntent } from './model'
+import {
+  type GameEvent,
+  type Model,
+  Phase,
+  ShopState,
+  idleIntent,
+} from './model'
+import { raiseDebutCard } from './onboarding'
 import { advanceParticles } from './particles'
 import { advanceCallouts } from './powerups'
-import { advanceTick } from './simulation'
-import { isRoundActive } from './waves'
+import { soloInputs, stepWorld } from './stepWorld'
+import { ageTrapNotice } from './traps'
+import { endRoundOnClient, isRoundActive } from './waves'
+import { withWorld } from './world'
 
 // The client's frame: the display's time becomes whole 60 Hz ticks of the
 // world, each fed the intent the client derives from its own input and
@@ -54,11 +63,12 @@ const runTicks = (stepped: Stepped, count: number): Stepped => {
   if (count <= 0 || !isRoundActive(stepped.model.phase)) {
     return stepped
   }
-  const ticked = advanceTick(refreshIntent(stepped.model))
+  const intended = refreshIntent(stepped.model)
+  const ticked = stepWorld(intended, soloInputs(intended.intent))
   return runTicks(
     {
-      model: ticked.model,
-      events: [...stepped.events, ...ticked.model.frameEvents],
+      model: withWorld(intended, () => ticked.world),
+      events: [...stepped.events, ...ticked.events],
       worldMs: stepped.worldMs + ticked.worldMs,
     },
     count - 1,
@@ -75,9 +85,12 @@ const advanceCosmetics = (
 ): Model =>
   advanceJuice(
     advanceCallouts(
-      worldMs > 0
-        ? advanceParticles(model, worldMs / MS_PER_SECOND, worldMs)
-        : model,
+      ageTrapNotice(
+        worldMs > 0
+          ? advanceParticles(model, worldMs / MS_PER_SECOND, worldMs)
+          : model,
+        worldMs,
+      ),
       worldMs,
     ),
     frameMs,
@@ -89,6 +102,18 @@ const leanFor = (model: Model, frameMs: number): Model =>
   modifyFields(model, {
     cameraLean: lean => leanCamera(lean, model.intent.maybeAim, frameMs),
   })
+
+// NOTE: the client's half of what the ticks did to the round: a wave that
+// started raises the new zombie card, and a round that ended starts its
+// end screen.
+const followRound = (before: Model, after: Model): Model =>
+  endRoundOnClient(
+    before,
+    Phase.isAnyOf(['Preparation'])(before.phase) &&
+      Phase.isAnyOf(['Wave'])(after.phase)
+      ? raiseDebutCard(after)
+      : after,
+  )
 
 // NOTE: a frame runs the whole ticks its time owes and carries the rest,
 // then makes its cosmetics. Its `frameEvents` are every tick's events in
@@ -109,7 +134,10 @@ export const advanceGame = (model: Model, deltaTime: number): Model => {
   )
   return advanceCosmetics(
     leanFor(
-      modifyFields(stepped.model, { frameEvents: () => stepped.events }),
+      followRound(
+        model,
+        modifyFields(stepped.model, { frameEvents: () => stepped.events }),
+      ),
       frameMs,
     ),
     frameMs,

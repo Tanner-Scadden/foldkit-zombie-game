@@ -8,13 +8,13 @@ import { directionBetween, normalize } from './geometry'
 import {
   GameEvent,
   Invulnerability,
-  type Model,
   type Player,
   type Vector,
   type Zombie,
   ZombieAction,
   type ZombieKind,
 } from './model'
+import type { World } from './world'
 import {
   ZOMBIE_KINDS,
   bodyRadiusOf,
@@ -165,7 +165,7 @@ const heftMsOf = (chucker: Zombie): number =>
     ? CHUCKER_RULES.heftMs * CHUCKER_RULES.limpHeftScale
     : CHUCKER_RULES.heftMs
 
-const tryGrab = (model: Model, chucker: Zombie): Model => {
+const tryGrab = (model: World, chucker: Zombie): World => {
   if (
     !ZombieAction.isAnyOf(['Roaming'])(chucker.action) ||
     !isWalking(chucker) ||
@@ -224,7 +224,7 @@ const isCarriedBy = (chucker: Zombie) => (victim: Zombie) =>
   ZombieAction.isAnyOf(['Carried'])(victim.action) &&
   victim.action.byId === chucker.id
 
-const windChucker = (model: Model, chucker: Zombie): Model =>
+const windChucker = (model: World, chucker: Zombie): World =>
   modifyFields(model, {
     zombies: Array.map(
       setAction(
@@ -234,7 +234,7 @@ const windChucker = (model: Model, chucker: Zombie): Model =>
     ),
   })
 
-const release = (model: Model, chucker: Zombie, victim: Zombie): Model => {
+const release = (model: World, chucker: Zombie, victim: Zombie): World => {
   const target = { x: model.player.x, y: model.player.y }
   return modifyFields(windChucker(model, chucker), {
     zombies: Array.map(
@@ -254,7 +254,7 @@ const release = (model: Model, chucker: Zombie, victim: Zombie): Model => {
   })
 }
 
-const stepHeft = (model: Model, chucker: Zombie, deltaMs: number): Model => {
+const stepHeft = (model: World, chucker: Zombie, deltaMs: number): World => {
   if (!ZombieAction.isAnyOf(['Hefting'])(chucker.action)) {
     return model
   }
@@ -412,7 +412,7 @@ const landings = (
 
 const OUTWARD: Vector = { x: 1, y: 0 }
 
-const land = (model: Model, landing: Landing): Model => {
+const land = (model: World, landing: Landing): World => {
   const { player } = model
   const landed = modifyFields(model, {
     frameEvents: Array.append(
@@ -478,7 +478,7 @@ const isUnderThreat = (chucker: Zombie, player: Player): boolean =>
 // nearest small zombie in front of him as a shield: a Groaner if one is in
 // reach, otherwise a Hotfoot or an Ankle Biter, never a Kaboomer, a Big Lug,
 // or the boss.
-const tryShield = (model: Model, chucker: Zombie): Model => {
+const tryShield = (model: World, chucker: Zombie): World => {
   if (
     !ZombieAction.isAnyOf(['Roaming'])(chucker.action) ||
     !isWalking(chucker) ||
@@ -540,7 +540,7 @@ const isShieldedBy = (chucker: Zombie) => (victim: Zombie) =>
   ZombieAction.isAnyOf(['Shielded'])(victim.action) &&
   victim.action.byId === chucker.id
 
-const dropShield = (model: Model, chucker: Zombie): Model =>
+const dropShield = (model: World, chucker: Zombie): World =>
   modifyFields(model, {
     zombies: Array.map(zombie =>
       zombie.id === chucker.id
@@ -569,7 +569,7 @@ const turnToward = (aim: number, target: number, maxTurn: number): number => {
 
 // NOTE: he turns slowly to keep the shield toward the player, so a player
 // who circles around him can shoot him from the side.
-const stepShield = (model: Model, chucker: Zombie, deltaMs: number): Model => {
+const stepShield = (model: World, chucker: Zombie, deltaMs: number): World => {
   if (!ZombieAction.isAnyOf(['Shielding'])(chucker.action)) {
     return model
   }
@@ -631,7 +631,7 @@ const isBusy = (zombie: Zombie): boolean =>
     'Shielded',
   ])(zombie.action)
 
-export const advanceChuckers = (model: Model, deltaMs: number): Model => {
+export const advanceChuckers = (model: World, deltaMs: number): World => {
   const hasWork = Array.some(
     model.zombies,
     zombie => isChucker(zombie) || isBusy(zombie),

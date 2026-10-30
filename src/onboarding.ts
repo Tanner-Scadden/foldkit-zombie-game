@@ -22,6 +22,7 @@ import {
 import { isShopOpenFor } from './shop'
 import { TURRET_WEAPON, maybeSelectedKind } from './traps'
 import { maybeSpare } from './weapons'
+import type { World } from './world'
 import { ZOMBIE_KIND_ORDER } from './zombies'
 
 // LESSONS
@@ -118,7 +119,7 @@ const isFirstPreparation = (phase: Phase): boolean =>
     GameOver: () => false,
   })
 
-export const isPracticeGateHeld = (model: Model): boolean =>
+export const isPracticeGateHeld = (model: World): boolean =>
   isFirstPreparation(model.phase) &&
   (isPending(model.lessons.move) || isPending(model.lessons.fire))
 
@@ -195,7 +196,7 @@ export const learnSwap = (model: Model): Model =>
       modifyFields(lessons, { swap: lesson => learn(lesson, model.elapsedMs) }),
   })
 
-export const learnTimedBreaks = (model: Model): Model =>
+export const learnTimedBreaks = (model: World): World =>
   modifyFields(model, {
     lessons: lessons =>
       modifyFields(lessons, {
@@ -203,7 +204,7 @@ export const learnTimedBreaks = (model: Model): Model =>
       }),
   })
 
-export const learnOpenBreak = (model: Model): Model =>
+export const learnOpenBreak = (model: World): World =>
   modifyFields(model, {
     lessons: lessons =>
       modifyFields(lessons, {

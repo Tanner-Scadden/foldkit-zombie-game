@@ -324,7 +324,11 @@ const roomModel = (): Model => {
     const before = modifyFields(model, { zombies: () => fresh as any })
     const after = modifyFields(model, { zombies: () => worn as any })
     model = modifyFields(
-      advanceParticles(shedParts(before, after), 1 / 60, 1000 / 60),
+      advanceParticles(
+        { ...after, ...shedParts(before, after) },
+        1 / 60,
+        1000 / 60,
+      ),
       { nextEntityId: () => 2000 },
     )
   }

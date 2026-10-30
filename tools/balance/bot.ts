@@ -48,6 +48,7 @@ import {
   maxTier,
   maybeSpare,
 } from '../../src/weapons'
+import { withWorld } from '../../src/world'
 import { ZOMBIE_KINDS } from '../../src/zombies'
 
 export type Model = typeof initialModel
@@ -1486,15 +1487,14 @@ export const snapshotFor = (
 
 // The same wave start with the wave rolled again from waveSeed: new packs,
 // doors, kinds, and boss door, the same money, gear, traps, and hearts.
-export const rerolled = (model: Model, waveSeed: number): Model =>
-  model.phase._tag === 'Preparation'
-    ? beginPreparation(
-        modifyFields(model, { rngState: () => waveSeed }),
-        model.phase.wave,
-        model.phase.durationMs,
-        model.phase.clock,
+export const rerolled = (model: Model, waveSeed: number): Model => {
+  const { phase } = model
+  return phase._tag === 'Preparation'
+    ? withWorld(modifyFields(model, { rngState: () => waveSeed }), world =>
+        beginPreparation(world, phase.wave, phase.durationMs, phase.clock),
       )
     : model
+}
 
 export type WaveOutcome = 'Cleared' | 'Died' | 'TimedOut'
 

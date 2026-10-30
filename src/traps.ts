@@ -56,6 +56,7 @@ import {
 } from './model'
 import { countTrapPlaced } from './stats'
 import { WEAPONS } from './weapons'
+import type { World } from './world'
 import { Behavior, isFree, isGrounded, radiusOf, statsOf } from './zombies'
 
 // TABLE
@@ -232,7 +233,7 @@ export const trapBlastTarget = (level: Level): BlastTarget<Trap> => ({
 
 const isBroken = (trap: Trap): boolean => trap.hp <= 0
 
-export const clearBrokenTraps = (model: Model): Model => {
+export const clearBrokenTraps = (model: World): World => {
   const broken = Array.filter(model.traps, isBroken)
   if (Array.isReadonlyArrayEmpty(broken)) {
     return model
@@ -306,7 +307,7 @@ const tickHit =
       ? setHealth(trap, trap.hp, countDown(trap.hitRemainingMs, deltaMs))
       : trap
 
-const chewTraps = (model: Model, seconds: number): Model => {
+const chewTraps = (model: World, seconds: number): World => {
   if (Array.isReadonlyArrayEmpty(model.traps)) {
     return model
   }
@@ -452,7 +453,7 @@ const operateTurret = (
   })
 }
 
-const runTurrets = (model: Model, deltaMs: number): Model => {
+const runTurrets = (model: World, deltaMs: number): World => {
   if (Array.isReadonlyArrayEmpty(model.traps)) {
     return model
   }
@@ -482,30 +483,37 @@ const runTurrets = (model: Model, deltaMs: number): Model => {
 }
 
 export const advanceTraps = (
-  model: Model,
+  model: World,
   seconds: number,
   deltaMs: number,
-): Model =>
+): World =>
   runTurrets(
     chewTraps(
       modifyFields(model, {
         traps: Array.map(tickHit(deltaMs)),
-        trapNotice: notice =>
-          TrapNotice.match(notice, {
-            Quiet: () => notice,
-            Refused: ({ reason, remainingMs }) =>
-              remainingMs > deltaMs
-                ? TrapNotice.Refused({
-                    reason,
-                    remainingMs: remainingMs - deltaMs,
-                  })
-                : TrapNotice.Quiet(),
-          }),
       }),
       seconds,
     ),
     deltaMs,
   )
+
+// NOTE: a refused placement's notice fades on world time, on the client.
+export const ageTrapNotice = (model: Model, worldMs: number): Model =>
+  TrapNotice.isAnyOf(['Quiet'])(model.trapNotice)
+    ? model
+    : modifyFields(model, {
+        trapNotice: notice =>
+          TrapNotice.match(notice, {
+            Quiet: () => notice,
+            Refused: ({ reason, remainingMs }) =>
+              remainingMs > worldMs
+                ? TrapNotice.Refused({
+                    reason,
+                    remainingMs: remainingMs - worldMs,
+                  })
+                : TrapNotice.Quiet(),
+          }),
+      })
 
 // STOCK
 
@@ -514,13 +522,13 @@ export const placedCount = (
   kind: TrapKind,
 ): number => Array.filter(traps, trap => trap._tag === kind).length
 
-export const ownedCount = (model: Model, kind: TrapKind): number =>
+export const ownedCount = (model: World, kind: TrapKind): number =>
   model.trapStock[kind] + placedCount(model.traps, kind)
 
 const otherKind = (kind: TrapKind): TrapKind =>
   kind === 'Barricade' ? 'Turret' : 'Barricade'
 
-export const maybeSelectedKind = (model: Model): Option.Option<TrapKind> => {
+export const maybeSelectedKind = (model: World): Option.Option<TrapKind> => {
   const { selectedTrap, trapStock } = model
   if (trapStock[selectedTrap] > 0) {
     return Option.some(selectedTrap)
@@ -531,15 +539,15 @@ export const maybeSelectedKind = (model: Model): Option.Option<TrapKind> => {
   }
 }
 
-const hasBothKinds = (model: Model): boolean =>
+const hasBothKinds = (model: World): boolean =>
   Array.every(TRAP_KIND_ORDER, kind => model.trapStock[kind] > 0)
 
-export const maybeNextKind = (model: Model): Option.Option<TrapKind> =>
+export const maybeNextKind = (model: World): Option.Option<TrapKind> =>
   hasBothKinds(model)
     ? Option.map(maybeSelectedKind(model), otherKind)
     : Option.none()
 
-export const cycleTrap = (model: Model): Model =>
+export const cycleTrap = (model: World): World =>
   Option.match(maybeNextKind(model), {
     onNone: () => model,
     onSome: kind => modifyFields(model, { selectedTrap: () => kind }),
@@ -551,10 +559,15 @@ const addStock = (stock: TrapCounts, kind: TrapKind, amount: number) =>
     Turret: count => (kind === 'Turret' ? count + amount : count),
   })
 
-export const stockTrap = (model: Model, kind: TrapKind): Model =>
+export const stockTrap = (model: World, kind: TrapKind): World =>
   modifyFields(model, {
     trapStock: stock => addStock(stock, kind, 1),
     selectedTrap: selected => (model.trapStock[selected] > 0 ? selected : kind),
+  })
+
+// NOTE: the first trap a player stocks brings up the hint for placing it.
+export const showTrapHint = (model: Model): Model =>
+  modifyFields(model, {
     trapHint: hint =>
       TrapHint.match(hint, {
         Unseen: () => TrapHint.Showing(),
@@ -615,7 +628,7 @@ const firstReason = (
     }),
   )
 
-const isAtLimit = (model: Model, kind: TrapKind): boolean =>
+const isAtLimit = (model: World, kind: TrapKind): boolean =>
   placedCount(model.traps, kind) >= TRAPS[kind].limit
 
 const maybeDoorInReach = (
@@ -636,7 +649,7 @@ const maybeDoorInReach = (
     Array.head,
   )
 
-const barricadePlacement = (model: Model, isBetweenWaves: boolean) =>
+const barricadePlacement = (model: World, isBetweenWaves: boolean) =>
   Option.match(maybeDoorInReach(levelOf(model), model.player), {
     onNone: (): Placement => ({
       kind: 'Barricade',
@@ -673,7 +686,7 @@ const TURRET_SEARCH_PX = 15
 type FloorTile = Readonly<{ column: number; row: number }>
 
 const floorVerdict = (
-  model: Model,
+  model: World,
   { column, row }: FloorTile,
 ): PlaceVerdict => {
   const level = levelOf(model)
@@ -741,7 +754,7 @@ const floorPlacement = (tile: FloorTile, verdict: PlaceVerdict): Placement => ({
   verdict,
 })
 
-const turretPlacement = (model: Model, isBetweenWaves: boolean): Placement => {
+const turretPlacement = (model: World, isBetweenWaves: boolean): Placement => {
   const { player } = model
   const front = addVectors(
     player,
@@ -776,7 +789,7 @@ const turretPlacement = (model: Model, isBetweenWaves: boolean): Placement => {
   )
 }
 
-export const maybePlacement = (model: Model): Option.Option<Placement> =>
+export const maybePlacement = (model: World): Option.Option<Placement> =>
   Option.map(maybeSelectedKind(model), kind => {
     const isBetweenWaves = Phase.isAnyOf(['Preparation'])(model.phase)
     return kind === 'Barricade'

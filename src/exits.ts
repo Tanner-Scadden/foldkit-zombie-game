@@ -10,7 +10,8 @@ import {
   openExitIn,
   tileBox,
 } from './arena'
-import { type ExitId, type Model, Phase, ShopState, type Vector } from './model'
+import { type ExitId, Phase, ShopState, type Vector } from './model'
+import type { World } from './world'
 
 // THE EXIT
 
@@ -82,10 +83,10 @@ const maybeExitWithin = (
 export const isExitOfferOpenFor = (phase: Phase): boolean =>
   Phase.isAnyOf(['Preparation'])(phase) && phase.wave >= EXIT_RULES.firstWave
 
-export const maybeExitAt = (model: Model): Option.Option<ExitId> =>
+export const maybeExitAt = (model: World): Option.Option<ExitId> =>
   maybeExitWithin(levelOf(model), model.player, EXIT_RULES.reachPx)
 
-export const hasLeftExits = (model: Model): boolean =>
+export const hasLeftExits = (model: World): boolean =>
   Option.isNone(
     maybeExitWithin(levelOf(model), model.player, EXIT_RULES.leavePx),
   )
@@ -93,7 +94,7 @@ export const hasLeftExits = (model: Model): boolean =>
 // NOTE: the player bumps a boarded exit between waves to see its offer, the
 // way they bump the stall to shop. Nothing opens mid-wave or before the
 // kitchen's first break.
-export const arriveAtExit = (model: Model): Option.Option<ShopState> =>
+export const arriveAtExit = (model: World): Option.Option<ShopState> =>
   isExitOfferOpenFor(model.phase)
     ? Option.map(maybeExitAt(model), exit => ShopState.AtExit({ exit }))
     : Option.none()
@@ -112,7 +113,7 @@ const NO_PROMPT: ExitPrompt = { _tag: 'None' }
 // padlock before the kitchen's first break. Mid-wave the boards are bare,
 // so a fight is never cluttered with signs. The tag stays up while the
 // player browses the stall, and goes while its own offer is open.
-export const exitPrompt = (model: Model): ExitPrompt => {
+export const exitPrompt = (model: World): ExitPrompt => {
   if (
     !Phase.isAnyOf(['Preparation'])(model.phase) ||
     ShopState.isAnyOf(['AtExit'])(model.shop)
@@ -136,7 +137,7 @@ export type ExitVerdict =
   | Readonly<{ _tag: 'Affordable'; price: number }>
   | Readonly<{ _tag: 'Short'; price: number; shortBy: number }>
 
-export const exitVerdict = (model: Model): ExitVerdict => {
+export const exitVerdict = (model: World): ExitVerdict => {
   const price = EXIT_RULES.price
   const shortBy = price - model.wallet.balance
   return shortBy > 0
@@ -144,7 +145,7 @@ export const exitVerdict = (model: Model): ExitVerdict => {
     : { _tag: 'Affordable', price }
 }
 
-const spendOn = (model: Model, price: number): Model =>
+const spendOn = (model: World, price: number): World =>
   modifyFields(model, {
     wallet: wallet =>
       modifyFields(wallet, { balance: balance => balance - price }),
@@ -155,7 +156,7 @@ const spendOn = (model: Model, price: number): Model =>
 // NOTE: buying the exit opens it for the rest of the run. The wave already
 // shown on the door markers stays as rolled, so the exit's doors join from
 // the next wave's roll.
-export const buyExit = (model: Model, exit: ExitId): Option.Option<Model> => {
+export const buyExit = (model: World, exit: ExitId): Option.Option<World> => {
   const level = levelOf(model)
   const isClosed = Option.exists(
     maybeExit(level, exit),

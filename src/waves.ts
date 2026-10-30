@@ -78,6 +78,7 @@ import {
 import { type Seeded, between, nextRandom } from './prng'
 import { freshRun } from './runReset'
 import { earn } from './shop'
+import { type World, withWorld } from './world'
 import {
   ZOMBIE_KINDS,
   ZOMBIE_KIND_ORDER,
@@ -1359,11 +1360,11 @@ const breakClockFor = (wave: number): BreakClock =>
     : BreakClock.Counting()
 
 export const beginPreparation = (
-  model: Model,
+  model: World,
   wave: number,
   durationMs: number,
   clock: BreakClock = BreakClock.Counting(),
-): Model => {
+): World => {
   const [waveState, rolled] = rollWave(
     model.rngState,
     wave,
@@ -1401,15 +1402,14 @@ export const beginPreparation = (
 }
 
 const startRun = (model: Model, mode: RunMode): Model =>
-  beginPreparation(
+  withWorld(
     {
       ...model,
       ...freshRun(model),
       mode,
       lessons: settleLessons(model.lessons),
     },
-    1,
-    FIRST_PREPARATION_MS,
+    world => beginPreparation(world, 1, FIRST_PREPARATION_MS),
   )
 
 const resume = (model: Model, round: Round): Model =>
@@ -1433,18 +1433,24 @@ export const startOrResume = (model: Model, mode: RunMode): Model =>
 
 export const keepGoing = (model: Model): Model =>
   Phase.isAnyOf(['Victory'])(model.phase)
-    ? beginPreparation(
+    ? withWorld(
         modifyFields(model, {
           mode: () => RunMode.Endless(),
           shop: () => ShopState.Away(),
           screenMs: () => 0,
         }),
-        FINAL_WAVE + 1,
-        PREPARATION_MS,
+        world => beginPreparation(world, FINAL_WAVE + 1, PREPARATION_MS),
       )
     : model
 
-const isEndless = (model: Model): boolean =>
+// NOTE: START WAVE from the player: the wave starts, and a new kind in it
+// raises its card.
+export const startWave = (model: Model): Model =>
+  Phase.isAnyOf(['Preparation'])(model.phase)
+    ? raiseDebutCard(withWorld(model, startWaveEarly))
+    : model
+
+const isEndless = (model: World): boolean =>
   RunMode.isAnyOf(['Endless'])(model.mode)
 
 export const pause = (model: Model): Model =>
@@ -1461,22 +1467,20 @@ export const pause = (model: Model): Model =>
     GameOver: () => model,
   })
 
-const learnFromBreak = (model: Model, wave: number, clock: BreakClock) =>
+const learnFromBreak = (model: World, wave: number, clock: BreakClock) =>
   BreakClock.match(clock, {
     Waiting: () => learnOpenBreak(model),
     Counting: () =>
       isTimedBreak(wave, clock) ? learnTimedBreaks(model) : model,
   })
 
-export const startWaveEarly = (model: Model): Model =>
+export const startWaveEarly = (model: World): World =>
   Phase.match(model.phase, {
     Ready: () => model,
     Preparation: ({ wave, spawns, clock }) =>
-      raiseDebutCard(
-        modifyFields(learnFromBreak(model, wave, clock), {
-          phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns }),
-        }),
-      ),
+      modifyFields(learnFromBreak(model, wave, clock), {
+        phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns }),
+      }),
     Wave: () => model,
     Paused: () => model,
     Victory: () => model,
@@ -1497,7 +1501,7 @@ const arrivalAction = (spawn: PlannedSpawn): ZombieAction =>
     ? ZombieAction.Winded({ remainingMs: CHUCKER_RULES.arrivalWindedMs })
     : ZombieAction.Roaming()
 
-const arriveAt = (model: Model, spawn: PlannedSpawn): Arrival => {
+const arriveAt = (model: World, spawn: PlannedSpawn): Arrival => {
   if (isFloorKind(spawn.kind)) {
     const [rngState, at] = drawSurfacingSpot(
       levelOf(model),
@@ -1529,7 +1533,7 @@ const arriveAt = (model: Model, spawn: PlannedSpawn): Arrival => {
   }
 }
 
-const spawnZombie = (model: Model, spawn: PlannedSpawn): Model => {
+const spawnZombie = (model: World, spawn: PlannedSpawn): World => {
   const stats = ZOMBIE_KINDS[spawn.kind]
   const arrival = arriveAt(model, spawn)
   const speedDraw = nextRandom(arrival.rngState)
@@ -1552,14 +1556,14 @@ const spawnZombie = (model: Model, spawn: PlannedSpawn): Model => {
 }
 
 const isWaveCleared = (
-  model: Model,
+  model: World,
   spawns: ReadonlyArray<PlannedSpawn>,
 ): boolean =>
   Array.isReadonlyArrayEmpty(spawns) &&
   !isBossOutside(model.boss) &&
   !Array.some(model.zombies, zombie => isAlive(zombie) || isBoss(zombie))
 
-const payWaveBonus = (model: Model, wave: number): Model => {
+const payWaveBonus = (model: World, wave: number): World => {
   const bonus = waveBonus(wave)
   return modifyFields(model, {
     wallet: wallet => earn(wallet, bonus),
@@ -1569,13 +1573,10 @@ const payWaveBonus = (model: Model, wave: number): Model => {
   })
 }
 
-const clearWave = (model: Model, wave: number): Model => {
+const clearWave = (model: World, wave: number): World => {
   const paid = payWaveBonus(model, wave)
   if (wave >= FINAL_WAVE && !isEndless(model)) {
-    return modifyFields(paid, {
-      phase: () => Phase.Victory(),
-      screenMs: () => 0,
-    })
+    return modifyFields(paid, { phase: () => Phase.Victory() })
   } else {
     return beginPreparation(
       paid,
@@ -1590,11 +1591,11 @@ const clearWave = (model: Model, wave: number): Model => {
 // is a spawn point again. routed is the same list with each door rerouted
 // around the boarded ones, index for index.
 const releaseDue = (
-  model: Model,
+  model: World,
   spawns: ReadonlyArray<PlannedSpawn>,
   routed: ReadonlyArray<PlannedSpawn>,
   clockMs: number,
-): Readonly<{ model: Model; pending: ReadonlyArray<PlannedSpawn> }> => {
+): Readonly<{ model: World; pending: ReadonlyArray<PlannedSpawn> }> => {
   const paired = Array.zip(spawns, routed)
   const due = Array.filter(paired, ([spawn]) => spawn.atMs <= clockMs)
   if (Array.isReadonlyArrayEmpty(due)) {
@@ -1627,10 +1628,10 @@ const releaseDue = (
 type WaveRound = Phase & { readonly _tag: 'Wave' }
 
 const advanceWave = (
-  model: Model,
+  model: World,
   round: WaveRound,
   worldMs: number,
-): Model => {
+): World => {
   const { wave, elapsedMs, spawns } = round
   const pacedMs = isWaveHeldByBoss(model.boss) ? 0 : worldMs
   const paced = stepBeat(
@@ -1697,10 +1698,10 @@ const advanceWave = (
 }
 
 const countDownBreak = (
-  model: Model,
+  model: World,
   preparation: Round & { readonly _tag: 'Preparation' },
   worldMs: number,
-): Model =>
+): World =>
   BreakClock.match(preparation.clock, {
     Counting: () =>
       preparation.remainingMs > worldMs
@@ -1720,7 +1721,7 @@ const countDownBreak = (
       }),
   })
 
-export const advanceRound = (model: Model, worldMs: number): Model =>
+export const advanceRound = (model: World, worldMs: number): World =>
   Phase.match(model.phase, {
     Ready: () => model,
     Preparation: preparation =>
@@ -1759,22 +1760,32 @@ const recordBestWave = (model: Model, wave: number): Model =>
       )
     : model
 
-export const endWhenDefeated = (model: Model): Model => {
+export const endWhenDefeated = (model: World): World => {
   if (model.player.hp > 0) {
     return model
   }
 
-  const wave = roundWave(model.phase)
-  return recordBestWave(
-    modifyFields(model, {
-      phase: () => Phase.GameOver({ wave }),
-      screenMs: () => 0,
-    }),
-    wave,
-  )
+  return modifyFields(model, {
+    phase: () => Phase.GameOver({ wave: roundWave(model.phase) }),
+  })
+}
+
+// NOTE: the client's half of a round ending on a tick: the end screen's
+// clock starts, and a lost endless run records its best wave.
+export const endRoundOnClient = (before: Model, after: Model): Model => {
+  if (
+    !isRoundActive(before.phase) ||
+    !Phase.isAnyOf(['Victory', 'GameOver'])(after.phase)
+  ) {
+    return after
+  }
+  const shown = modifyFields(after, { screenMs: () => 0 })
+  return Phase.isAnyOf(['GameOver'])(after.phase)
+    ? recordBestWave(shown, roundWave(after.phase))
+    : shown
 }
 
 export const zombiesRemaining = (
-  model: Model,
+  model: World,
   spawns: ReadonlyArray<PlannedSpawn>,
 ): number => spawns.length + Array.filter(model.zombies, isWalking).length

@@ -14,6 +14,7 @@ import {
   trapCenter,
 } from '../traps'
 import { isRoundActive } from '../waves'
+import { withWorld } from '../world'
 import { playSounds, uiCue } from './sound'
 import type { UpdateReturn, UpdateStep } from './step'
 
@@ -47,7 +48,7 @@ export const nextTrap = (model: Model): UpdateReturn => {
     return { model }
   }
 
-  const cycled = cycleTrap(model)
+  const cycled = withWorld(model, cycleTrap)
   return playSounds(
     cycled.selectedTrap === model.selectedTrap ? [] : [uiCue('Swap')],
   )(cycled)

@@ -6,7 +6,6 @@ import { PLAYER_RADIUS } from './constants'
 import { circlesOverlap } from './geometry'
 import {
   GameEvent,
-  type Model,
   type Trap,
   type Vector,
   type Zombie,
@@ -15,6 +14,7 @@ import {
 import { type Seeded, between, nextRandom } from './prng'
 import { STALL_BOX } from './shop'
 import { trapBlockers } from './traps'
+import type { World } from './world'
 import { bodyRadiusOf, isFree, isWalking } from './zombies'
 
 // RULES
@@ -267,7 +267,7 @@ const stepCrawler =
 const hasCrawler = (zombies: ReadonlyArray<Zombie>): boolean =>
   Array.some(zombies, zombie => zombie.kind === CRAWLER_KIND)
 
-export const advanceCrawlers = (model: Model, deltaMs: number): Model => {
+export const advanceCrawlers = (model: World, deltaMs: number): World => {
   if (!hasCrawler(model.zombies)) {
     return model
   }

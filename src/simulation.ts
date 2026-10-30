@@ -64,7 +64,6 @@ import {
   type FlowField,
   GameEvent,
   Invulnerability,
-  type Model,
   Pierce,
   type Player,
   Reload,
@@ -118,6 +117,7 @@ import {
   isReloading,
   spendRound,
 } from './weapons'
+import type { World } from './world'
 import {
   Behavior,
   bodyRadiusOf,
@@ -133,7 +133,7 @@ import {
 
 // NOTE: the player's intent is the step's input. A player at the stall's
 // counter or the exit's sign does nothing else, whatever they hold.
-const gateIntent = (model: Model): Model =>
+const gateIntent = (model: World): World =>
   ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)
     ? modifyFields(model, { intent: () => idleIntent })
     : model
@@ -208,7 +208,7 @@ const movePlayer = (
   })
 }
 
-const faceTowardIntent = (model: Model): Model =>
+const faceTowardIntent = (model: World): World =>
   modifyFields(model, {
     player: player =>
       modifyFields(player, {
@@ -298,11 +298,11 @@ const nextFireCooldown = (
 }
 
 const shoot = (
-  model: Model,
+  model: World,
   weapon: WeaponKind,
   tier: number,
   deltaMs: number,
-): Model => {
+): World => {
   const { player, nextEntityId, boosts } = model
   const stats = firingStats(boosts, weapon, tier)
   const load: Load = {
@@ -346,7 +346,7 @@ const shoot = (
   })
 }
 
-const runDry = (model: Model): Model =>
+const runDry = (model: World): World =>
   modifyFields(model, {
     player: player =>
       modifyFields(player, {
@@ -358,7 +358,7 @@ const runDry = (model: Model): Model =>
     ),
   })
 
-const pullTrigger = (model: Model, deltaMs: number): Model =>
+const pullTrigger = (model: World, deltaMs: number): World =>
   Arsenal.match(model.player.arsenal, {
     PistolOnly: () => shoot(model, SIDEARM, model.player.pistolTier, deltaMs),
     HoldingPistol: () =>
@@ -370,10 +370,10 @@ const pullTrigger = (model: Model, deltaMs: number): Model =>
   })
 
 const coolTrigger = (
-  model: Model,
+  model: World,
   deltaMs: number,
   isTriggerHeld: boolean,
-): Model =>
+): World =>
   modifyFields(model, {
     player: player =>
       modifyFields(player, {
@@ -382,7 +382,7 @@ const coolTrigger = (
       }),
   })
 
-const autoReload = (model: Model, isTriggerHeld: boolean): Model => {
+const autoReload = (model: World, isTriggerHeld: boolean): World => {
   const { player } = model
   const started = GameEvent.ReloadStarted({
     x: player.x,
@@ -403,17 +403,17 @@ const autoReload = (model: Model, isTriggerHeld: boolean): Model => {
   })
 }
 
-const isShopBrowsing = (model: Model): boolean =>
+const isShopBrowsing = (model: World): boolean =>
   ShopState.isAnyOf(['Browsing', 'AtExit'])(model.shop)
 
-const topUp = (model: Model): Model =>
+const topUp = (model: World): World =>
   isShopBrowsing(model)
     ? model
     : modifyFields(model, {
         player: player => keepTopped(player, model.boosts),
       })
 
-const fire = (stocked: Model, deltaMs: number): Model => {
+const fire = (stocked: World, deltaMs: number): World => {
   const model = topUp(stocked)
   const { player, intent } = model
   const isTriggerHeld = intent.trigger === 'Held'
@@ -435,7 +435,7 @@ const fire = (stocked: Model, deltaMs: number): Model => {
 
 // RELOADING
 
-const tickReload = (model: Model, deltaMs: number): Model => {
+const tickReload = (model: World, deltaMs: number): World => {
   const { player } = model
   if (isShopBrowsing(model)) {
     return model
@@ -509,10 +509,10 @@ const flyBullet =
   }
 
 const advanceBullets = (
-  model: Model,
+  model: World,
   seconds: number,
   deltaMs: number,
-): Model => {
+): World => {
   const [flying, stopped] = Array.partition(
     model.bullets,
     flyBullet(levelOf(model), seconds, deltaMs),
@@ -783,7 +783,7 @@ const advanceZombie = (
 }
 
 const advanceZombies = (
-  model: Model,
+  model: World,
   seconds: number,
   deltaMs: number,
 ): ReadonlyArray<Zombie> => {
@@ -846,7 +846,7 @@ const maybeFootfall =
       )
     })
 
-const recordFootfalls = (model: Model, deltaMs: number): Model =>
+const recordFootfalls = (model: World, deltaMs: number): World =>
   modifyFields(model, {
     frameEvents: frameEvents => [
       ...frameEvents,
@@ -1057,10 +1057,10 @@ const skewer =
     )
 
 const resolveBulletHits = (
-  model: Model,
+  model: World,
   seconds: number,
   firstFreshId: number,
-): Model => {
+): World => {
   const hits = findBulletHits(
     model.bullets,
     model.zombies,
@@ -1120,7 +1120,7 @@ const bumpAttacker =
         })
       : zombie
 
-const bitePlayer = (model: Model, attacker: Zombie): Model => {
+const bitePlayer = (model: World, attacker: Zombie): World => {
   const { player } = model
   const direction = Option.getOrElse(directionBetween(attacker, player), () =>
     scaleVector(player.facing, -1),
@@ -1168,10 +1168,10 @@ const popOnContact =
         })
       : zombie
 
-const popBombers = (model: Model): Model =>
+const popBombers = (model: World): World =>
   modifyFields(model, { zombies: Array.map(popOnContact(model.player)) })
 
-const biteOnContact = (model: Model): Model => {
+const biteOnContact = (model: World): World => {
   if (Invulnerability.isAnyOf(['Invulnerable'])(model.player.invulnerability)) {
     return model
   }
@@ -1186,7 +1186,7 @@ const biteOnContact = (model: Model): Model => {
   })
 }
 
-const resolvePlayerContact = (model: Model): Model =>
+const resolvePlayerContact = (model: World): World =>
   popBombers(biteOnContact(model))
 
 // WEAR
@@ -1226,7 +1226,7 @@ const shedEvents =
     )
   }
 
-export const shedParts = (before: Model, after: Model): Model => {
+export const shedParts = (before: World, after: World): World => {
   const shed = Array.flatMap(
     after.zombies,
     shedEvents(before.zombies, after.player),
@@ -1240,7 +1240,7 @@ export const shedParts = (before: Model, after: Model): Model => {
 
 // INTENSITY
 
-const feelIntensity = (before: Model, after: Model, deltaMs: number): Model =>
+const feelIntensity = (before: World, after: World, deltaMs: number): World =>
   modifyFields(after, {
     intensity: intensity =>
       advanceIntensity(
@@ -1254,7 +1254,7 @@ const feelIntensity = (before: Model, after: Model, deltaMs: number): Model =>
 
 // FRAME
 
-const advanceWorld = (model: Model, deltaMs: number): Model => {
+const advanceWorld = (model: World, deltaMs: number): World => {
   const seconds = deltaMs / MS_PER_SECOND
 
   const level = levelOf(model)
@@ -1319,14 +1319,14 @@ const advanceWorld = (model: Model, deltaMs: number): Model => {
 // NOTE: one 60 Hz tick of the world from the player's intent: hit-stop
 // decides whether the world steps, then the tick's events decide the next
 // hit-stop.
-export type Tick = Readonly<{ model: Model; worldMs: number }>
+export type Tick = Readonly<{ world: World; worldMs: number }>
 
-export const advanceTick = (model: Model): Tick => {
-  const thaw = thawTick(model.hitStop, FIXED_STEP_MS)
-  const thawed = modifyFields(model, {
+export const advanceTick = (world: World): Tick => {
+  const thaw = thawTick(world.hitStop, FIXED_STEP_MS)
+  const thawed = modifyFields(world, {
     hitStop: () => thaw.hitStop,
     frameEvents: () => [],
   })
   const stepped = thaw.worldMs > 0 ? advanceWorld(thawed, thaw.worldMs) : thawed
-  return { model: stopForHits(stepped, thaw.worldMs), worldMs: thaw.worldMs }
+  return { world: stopForHits(stepped, thaw.worldMs), worldMs: thaw.worldMs }
 }

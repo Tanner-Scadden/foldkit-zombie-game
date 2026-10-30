@@ -24,6 +24,7 @@ import {
   UpdateServiceWorker,
 } from './commands'
 import { isAtExit } from './exits'
+import { advanceGame, clampFrameDelta, refreshIntent } from './frame'
 import {
   countRunFrom,
   forgetNewEntriesFrom,
@@ -80,7 +81,6 @@ import { LinkFlow } from './playerSync'
 import { forgetTutorial } from './save'
 import { isUsingServiceWorker } from './serviceWorker'
 import { isAtCounter, isBrowsing } from './shop'
-import { advanceGame, clampFrameDelta, refreshIntent } from './frame'
 import { tallyFrame } from './stats'
 import { PlayerStore } from './store'
 import { foldCharacter } from './update/character'
@@ -195,7 +195,7 @@ import {
 import { type UpdateReturn, type UpdateStep, withInput } from './update/step'
 import { nextTrap, placeSelectedTrap, trapFromKey } from './update/traps'
 import { RUNNING_BUILD, isCheckingForUpdates, maybeNewerBuild } from './version'
-import { isRoundActive, pause, startWaveEarly } from './waves'
+import { isRoundActive, pause, startWave } from './waves'
 import {
   beginReload,
   canReload,
@@ -267,7 +267,7 @@ const preparationFromKey = (model: Model, code: string): Model => {
   if (isPauseKey(code)) {
     return pause(model)
   } else if (isStartWaveKey(code)) {
-    return startWaveEarly(model)
+    return startWave(model)
   } else {
     return model
   }
@@ -660,7 +660,7 @@ const updateGame = (model: Model, message: Message) =>
     ClickedStartWaveButton: () =>
       isAtCounter(model.shop) || isDebutCardBlocking(model)
         ? { model }
-        : unlockAudio(learnStartWaveWhen(model, startWaveEarly(model))),
+        : unlockAudio(learnStartWaveWhen(model, startWave(model))),
 
     ClickedSwapButton: () => {
       const swapped = learnSwapWhen(model, refreshIntent(swapGun(model)))

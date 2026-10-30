@@ -5,11 +5,11 @@ import {
   Frenzy,
   type FrenzyPack,
   GameEvent,
-  type Model,
   type PlannedSpawn,
   type Zombie,
 } from './model'
 import { earn } from './shop'
+import type { World } from './world'
 import { isFloorKind, isWalking } from './zombies'
 
 // RULES
@@ -141,7 +141,7 @@ const hasAnyFrenzy = (zombies: ReadonlyArray<Zombie>): boolean =>
     Frenzy.isAnyOf(['Frenzied', 'Fading'])(zombie.frenzy),
   )
 
-export const advanceFrenzy = (model: Model, deltaMs: number): Model =>
+export const advanceFrenzy = (model: World, deltaMs: number): World =>
   hasAnyFrenzy(model.zombies)
     ? modifyFields(model, {
         zombies: zombies =>
@@ -194,7 +194,7 @@ const wipeEvent =
       ({ x, y }) => GameEvent.PackWiped({ x, y, bonus: entry.bonus }),
     )
 
-export const payWipedPacks = (before: Model, after: Model): Model => {
+export const payWipedPacks = (before: World, after: World): World => {
   if (Array.isReadonlyArrayEmpty(after.frenzyPacks)) {
     return after
   }

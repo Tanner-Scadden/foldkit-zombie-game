@@ -18,7 +18,6 @@ import { BULLET_STEP_PX } from './constants'
 import { KITCHEN_EXIT, boxAround } from './exits'
 import {
   GameEvent,
-  type Model,
   Oven,
   type Vector,
   type Zombie,
@@ -26,6 +25,7 @@ import {
   type ZombieKind,
 } from './model'
 import { earn } from './shop'
+import type { World } from './world'
 import { bodyRadiusOf, isFree, isGrounded, statsOf } from './zombies'
 
 // OVENS
@@ -118,10 +118,10 @@ const isKitchenOpen = (level: Level): boolean =>
 export const freshOvens = (level: Level): ReadonlyArray<Oven> =>
   Array.map(ovenBoxesOf(level), () => Oven.Ready())
 
-const ovenAt = (model: Model, index: number): Oven =>
+const ovenAt = (model: World, index: number): Oven =>
   Option.getOrElse(Array.get(model.ovens, index), () => Oven.Ready())
 
-export const ovensOf = (model: Model): ReadonlyArray<Oven> =>
+export const ovensOf = (model: World): ReadonlyArray<Oven> =>
   Array.map(ovenBoxesOf(levelOf(model)), (_, index) => ovenAt(model, index))
 
 const isStruckBy =
@@ -133,7 +133,7 @@ const isStruckBy =
 const belching = (): Oven =>
   Oven.Belching({ remainingMs: OVEN_RULES.belchMs, burnedTicks: 0 })
 
-const ignite = (model: Model): Model => {
+const ignite = (model: World): World => {
   const boxes = ovenBoxesOf(levelOf(model))
   const struck = Array.map(
     boxes,
@@ -172,7 +172,7 @@ const isInFlames =
 
 const SCORCH_DIRECTION: Vector = { x: 0, y: 1 }
 
-const scorch = (model: Model, oven: Box): Model => {
+const scorch = (model: World, oven: Box): World => {
   const flames = flameBoxOf(oven)
   const outcomes = Array.map(model.zombies, zombie =>
     isInFlames(flames)(zombie)
@@ -230,7 +230,7 @@ const isIdle = Oven.isAnyOf(['Ready'])
 // A belch burns whatever stands in front of the oven once every tick,
 // so a zombie that walks into the flames late still gets singed, and one
 // that stands in them the whole time takes every tick.
-const tickOvens = (model: Model, deltaMs: number): Model => {
+const tickOvens = (model: World, deltaMs: number): World => {
   if (Array.every(model.ovens, isIdle)) {
     return model
   }
@@ -238,20 +238,20 @@ const tickOvens = (model: Model, deltaMs: number): Model => {
   const heats = Array.map(boxes, (_, index) =>
     heatUp(ovenAt(model, index), deltaMs),
   )
-  const heated: Model = modifyFields(model, {
+  const heated: World = modifyFields(model, {
     ovens: () => Array.map(heats, ({ oven }) => oven),
   })
   return Array.reduce(
     Array.zip(boxes, heats),
     heated,
-    (current: Model, [box, { ticksDue }]) =>
+    (current: World, [box, { ticksDue }]) =>
       Array.reduce(
         Array.filter(
           Array.makeBy(OVEN_RULES.ticks, index => index),
           index => index < ticksDue,
         ),
         current,
-        (scorched: Model) => scorch(scorched, box),
+        (scorched: World) => scorch(scorched, box),
       ),
   )
 }
@@ -304,7 +304,7 @@ const slip = (zombie: Zombie, before: Vector): Zombie =>
 // footing: it skids on in the way it was walking and lies there dazed for a
 // moment. One that gets up in the soup walks out of it, so it never slips
 // forever. Big Lugs, Ankle Biters, and Uncle Chunk keep their feet.
-const slipOnSoup = (before: Model, model: Model): Model => {
+const slipOnSoup = (before: World, model: World): World => {
   const level = levelOf(model)
   if (level.soupTiles.size === 0 || !isKitchenOpen(level)) {
     return model
@@ -365,10 +365,10 @@ export const soupSkid = (
 // FRAME
 
 export const advanceKitchen = (
-  before: Model,
-  model: Model,
+  before: World,
+  model: World,
   deltaMs: number,
-): Model =>
+): World =>
   isKitchenOpen(levelOf(model))
     ? slipOnSoup(before, tickOvens(ignite(model), deltaMs))
     : model
