@@ -188,20 +188,18 @@ describe('the laser sight', () => {
       given(fighting),
       ...thumbAim(0, -50),
       model(current => {
-        const [, to] = Array.map(onlyPath(current).instructions, pointOf)
-        expect(to).toBeDefined()
-        if (to !== undefined) {
-          expect(to.y).toBeLessThan(current.player.y)
-        }
+        const to = Option.getOrThrow(
+          Array.get(Array.map(onlyPath(current).instructions, pointOf), 1),
+        )
+        expect(to.y).toBeLessThan(current.player.y)
       }),
       liftThumb,
       message(Message.MovedMouse({ clientX: 700, clientY: 200 })),
       model(current => {
-        const [, to] = Array.map(onlyPath(current).instructions, pointOf)
-        expect(to).toBeDefined()
-        if (to !== undefined) {
-          expect(to.x).toBeGreaterThan(current.player.x)
-        }
+        const to = Option.getOrThrow(
+          Array.get(Array.map(onlyPath(current).instructions, pointOf), 1),
+        )
+        expect(to.x).toBeGreaterThan(current.player.x)
       }),
     )
   })

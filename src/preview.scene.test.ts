@@ -37,11 +37,10 @@ const atTime = (model: Model, elapsedMs: number): Model =>
 
 const withoutOpacity = (shape: Canvas.Shape): Canvas.Shape =>
   shape._tag === 'Group'
-    ? {
-        ...shape,
-        opacity: undefined,
-        shapes: Array.map(shape.shapes, withoutOpacity),
-      }
+    ? modifyFields(shape, {
+        opacity: () => undefined,
+        shapes: shapes => Array.map(shapes, withoutOpacity),
+      })
     : shape
 
 const isScaled = (shape: Canvas.Shape): boolean =>

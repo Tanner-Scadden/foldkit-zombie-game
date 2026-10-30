@@ -30,7 +30,6 @@ import {
   type DoorId,
   GameEvent,
   Glob,
-  HitStop,
   Invulnerability,
   type Model,
   Phase,
@@ -1216,12 +1215,7 @@ describe('victory', () => {
         expect(eventsTagged(current.frameEvents, 'ZombieKilled')).toMatchObject(
           [{ kind: 'Boss', bounty: ZOMBIE_KINDS.Boss.bounty }],
         )
-        expect(current.hitStop).toEqual(
-          HitStop.Slowed({
-            remainingMs: expect.any(Number),
-            carryMs: 0,
-          }),
-        )
+        expect(current.hitStop).toMatchObject({ _tag: 'Slowed', carryMs: 0 })
         expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)
       }),
       ...ticks(frames, FRAME_MS),

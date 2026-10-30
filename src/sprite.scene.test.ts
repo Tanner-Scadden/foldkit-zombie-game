@@ -144,7 +144,8 @@ describe('sprite images', () => {
       COIN_SPRITE,
     ]
     Array.forEach(sprites, sprite => {
-      onlyImage(sprite)
+      expect(sprite).toHaveLength(1)
+      expect(imagesIn(sprite)).toHaveLength(1)
     })
   })
 

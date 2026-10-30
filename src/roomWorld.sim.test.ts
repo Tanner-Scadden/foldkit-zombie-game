@@ -25,6 +25,8 @@ const kilobytesPerSecond = (bytesPerMessage: number): number =>
 
 const perPlayerKbps = run.bytesDown / PLAYERS / run.seconds / 1024
 
+// NOTE: this sim test reports the wire's bandwidth for MULTIPLAYER.md.
+// oxlint-disable-next-line no-console
 console.log(
   [
     `co-op wire, ${PLAYERS} players, ${run.seconds} s to wave ${run.room.world.world.phase._tag === 'Wave' || run.room.world.world.phase._tag === 'Preparation' ? run.room.world.world.phase.wave : '?'}:`,

@@ -374,7 +374,10 @@ describe('fetching version.json', () => {
   const fetchWith = (response: () => Response) => {
     const seen: Array<Seen> = []
     const fetch: typeof globalThis.fetch = (input, init) => {
-      seen.push({ url: new URL(String(input)), init })
+      seen.push({
+        url: new URL(input instanceof Request ? input.url : String(input)),
+        init,
+      })
       return Promise.resolve(response())
     }
     const run = Effect.runPromiseExit(

@@ -324,7 +324,7 @@ describe('Home menu', () => {
             maybeFastestWinMs: Option.some(402_000),
           })),
           {
-            bests: bests => modifyFields(bests, { totalKills: () => 341 }),
+            bests: current => modifyFields(current, { totalKills: () => 341 }),
           },
         ),
       ),

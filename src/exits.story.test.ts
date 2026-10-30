@@ -1,5 +1,5 @@
 import { Array, Option } from 'effect'
-import { Canvas } from 'foldkit'
+import type { Canvas } from 'foldkit'
 import { given, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'

@@ -12,10 +12,10 @@ import {
 } from './constants'
 import { update } from './main'
 import { Message } from './message'
+import type { GameEvent } from './model'
 import {
   Arsenal,
   type CarriedGun,
-  GameEvent,
   type Model,
   Phase,
   type PlannedSpawn,

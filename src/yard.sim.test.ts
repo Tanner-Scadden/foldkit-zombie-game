@@ -50,7 +50,7 @@ const crowd: ReadonlyArray<Zombie> = [
       -170 + Math.floor(index / 5) * 13,
     ),
   ),
-].map(zombie => ({ ...zombie, speed: speedOf(zombie) }))
+].map(zombie => modifyFields(zombie, { speed: () => speedOf(zombie) }))
 
 const stuckInTheYard: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),

@@ -32,9 +32,9 @@ const touchDown = (pointerId: number, clientX: number) =>
     }),
   )
 
-const isAnyStickActive = (model: Model): boolean =>
-  Stick.isAnyOf(['Active'])(model.input.moveStick) ||
-  Stick.isAnyOf(['Active'])(model.input.aimStick)
+const isAnyStickActive = (current: Model): boolean =>
+  Stick.isAnyOf(['Active'])(current.input.moveStick) ||
+  Stick.isAnyOf(['Active'])(current.input.aimStick)
 
 const firstReleaseMessage = (
   dispatch: () => void,

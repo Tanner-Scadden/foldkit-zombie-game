@@ -9,9 +9,9 @@ import { FIXED_STEP_MS, HIT_STOP_HURT_MS, PLAYER_MAX_HP } from './constants'
 import { update } from './main'
 import { debutPitch } from './menus'
 import { Message } from './message'
+import type { GameEvent } from './model'
 import {
   type Bullet,
-  GameEvent,
   type Model,
   Phase,
   Pierce,
@@ -111,17 +111,13 @@ describe('the Big Leaguer', () => {
             findById(current, CHUCKER_ID).action,
           ),
         ).toBe(true)
-        const thrown = findById(current, GROANER_ID).action
-        expect(ZombieAction.isAnyOf(['Flying'])(thrown)).toBe(true)
-        if (ZombieAction.isAnyOf(['Flying'])(thrown)) {
-          expect(thrown.to).toEqual({
-            x: current.player.x,
-            y: current.player.y,
-          })
-          const chucker = findById(current, CHUCKER_ID)
-          expect(thrown.from).toEqual({ x: chucker.x, y: chucker.y })
-          expect(thrown.durationMs).toBe(CHUCKER_RULES.flightMs)
-        }
+        const chucker = findById(current, CHUCKER_ID)
+        expect(findById(current, GROANER_ID).action).toMatchObject({
+          _tag: 'Flying',
+          to: { x: current.player.x, y: current.player.y },
+          from: { x: chucker.x, y: chucker.y },
+          durationMs: CHUCKER_RULES.flightMs,
+        })
       }),
     )
   })
