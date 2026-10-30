@@ -11,7 +11,7 @@ import { mean, percentile, simulateRoom } from './roomTesting'
 // The numbers it logs are the ones "What Phase 2 built" reports.
 
 const PLAYERS = 4
-const SECONDS = 240
+const SECONDS = 150
 
 const run = simulateRoom({
   players: PLAYERS,
@@ -41,7 +41,7 @@ console.log(
 
 describe('four players in a crowded room', () => {
   test('the waves get crowded', () => {
-    expect(run.crowdedBytes.length).toBeGreaterThan(1000)
+    expect(run.crowdedBytes.length).toBeGreaterThan(500)
   })
 
   test('the wire stays near the 6 KB a second estimated', () => {

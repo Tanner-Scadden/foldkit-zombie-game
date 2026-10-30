@@ -108,7 +108,18 @@ const leaveCounterWhenClosed =
 const isRunOn = (model: Model): boolean =>
   isOnlineRun(model) && isRoundActive(model.phase)
 
+// NOTE: outside a room only co-op's own Messages are looked at, so single
+// player's frames never pay for the match below.
 export const updateRunInRoom = (
+  model: Model,
+  message: Message,
+  otherwise: (model: Model, message: Message) => UpdateReturn,
+): Option.Option<UpdateReturn> =>
+  message._tag !== 'GotCoopMessage' && Option.isNone(maybeRunRoom(model))
+    ? Option.none()
+    : matchRunInRoom(model, message, otherwise)
+
+const matchRunInRoom = (
   model: Model,
   message: Message,
   otherwise: (model: Model, message: Message) => UpdateReturn,
