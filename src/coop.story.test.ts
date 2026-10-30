@@ -160,7 +160,9 @@ describe('co-op from home', () => {
         expect(current.phase._tag).toBe('Ready')
       }),
       Command.resolve(
-        ChangeLobby({ change: LobbyChange.ChangedReady({ ready: true }) }),
+        ChangeLobby({
+          change: LobbyChange.ChangedReady({ ready: true, pingMs: 0 }),
+        }),
         CoopMessage.CompletedChangeLobby(),
       ),
     )

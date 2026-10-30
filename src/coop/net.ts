@@ -116,7 +116,12 @@ const writeChange = <E>(
     change === 'Left'
       ? write(LeftRoom, { by })
       : LobbyChange.match(change, {
-          ChangedReady: ({ ready }) => write(ChangedReady, { by, ready }),
+          ChangedReady: ({ ready, pingMs }) =>
+            write(ChangedReady, {
+              by,
+              ready,
+              pingMs: Math.max(0, Math.min(60_000, Math.round(pingMs))),
+            }),
           ChangedPicks: ({ mode, difficulty }) =>
             write(ChangedPicks, { by, mode, difficulty }),
           KickedPlayer: ({ playerId }) => write(KickedPlayer, { by, playerId }),

@@ -67,6 +67,7 @@ import {
   leadSeatOf,
   maybePlayerAt,
   maybeShooterOf,
+  modifyLeadSeat,
   nearestOf,
   payTo,
   playersOf,
@@ -546,6 +547,69 @@ const advanceBullets = (
   })
 }
 
+// LAG COMPENSATION
+
+// NOTE: where each zombie stood after one tick, for the room's history.
+export type ZombieAt = Readonly<{ id: number; x: number; y: number }>
+
+export const zombiesAt = (model: World): ReadonlyArray<ZombieAt> =>
+  Array.map(model.zombies, ({ id, x, y }) => ({ id, x, y }))
+
+// NOTE: favor the shooter (MULTIPLAYER.md, "Latency"). A shot fired by a
+// player who saw the room `pasts.length` ticks ago flies those ticks now,
+// one tick against each past, oldest first, with every zombie where it
+// stood then, so it lands where the player aimed. Its hits apply to the
+// zombies as they are now (hearts, deaths, money, events); only the
+// positions are rewound, then put back. Pure, so the room replays the
+// same everywhere.
+export const catchUpShots = (
+  model: World,
+  bulletIds: ReadonlySet<number>,
+  pasts: ReadonlyArray<ReadonlyArray<ZombieAt>>,
+): World =>
+  Array.reduce(pasts, model, (current, past) => {
+    const mine = Array.filter(current.bullets, bullet =>
+      bulletIds.has(bullet.id),
+    )
+    const others = Array.filter(
+      current.bullets,
+      bullet => !bulletIds.has(bullet.id),
+    )
+    if (Array.isReadonlyArrayEmpty(mine)) {
+      return current
+    }
+    const then = new Map(Array.map(past, at => [at.id, at] as const))
+    const now = new Map(
+      Array.map(current.zombies, zombie => [zombie.id, zombie] as const),
+    )
+    const rewound = modifyFields(current, {
+      zombies: zombies =>
+        Array.map(zombies, zombie =>
+          Option.match(Option.fromNullishOr(then.get(zombie.id)), {
+            onNone: () => zombie,
+            onSome: at => ({ ...zombie, x: at.x, y: at.y }),
+          }),
+        ),
+      bullets: () => mine,
+    })
+    const seconds = FIXED_STEP_MS / MS_PER_SECOND
+    const struck = resolveBulletHits(
+      advanceBullets(rewound, seconds, FIXED_STEP_MS),
+      seconds,
+      current.nextEntityId,
+    )
+    return modifyFields(struck, {
+      zombies: zombies =>
+        Array.map(zombies, zombie =>
+          Option.match(Option.fromNullishOr(now.get(zombie.id)), {
+            onNone: () => zombie,
+            onSome: was => ({ ...zombie, x: was.x, y: was.y }),
+          }),
+        ),
+      bullets: flying => [...others, ...flying],
+    })
+  })
+
 // TRACERS
 
 // NOTE: a co-op client's own shot, drawn the instant it fires (src/coopPlay.ts):
@@ -589,26 +653,36 @@ export const aimTracers = (
 // NOTE: tracers fly as bullets do and stop at a wall, the arena's edge, the
 // end of their life, or the first zombie they touch; a zombie the room says
 // was missed is simply not hurt, and nothing is rewound.
+// NOTE: `struck` counts the tracers that stopped on a zombie: the hits a
+// player saw, which the audit sets beside the hits the room confirmed.
+export type FlownTracers = Readonly<{
+  tracers: ReadonlyArray<Bullet>
+  struck: number
+}>
+
 export const flyTracers = (
   level: Level,
   zombies: ReadonlyArray<Zombie>,
   tracers: ReadonlyArray<Bullet>,
   deltaMs: number,
-): ReadonlyArray<Bullet> =>
-  Array.flatMap(tracers, tracer =>
-    Result.match(flyBullet(level, deltaMs / MS_PER_SECOND, deltaMs)(tracer), {
-      onFailure: () => [],
-      onSuccess: flown =>
-        Array.some(
-          zombies,
-          zombie =>
-            isFree(zombie) &&
-            Math.hypot(zombie.x - flown.x, zombie.y - flown.y) <=
-              radiusOf(zombie),
-        )
-          ? []
-          : [flown],
-    }),
+): FlownTracers =>
+  Array.reduce(
+    tracers,
+    { tracers: Array.empty<Bullet>(), struck: 0 },
+    (flown, tracer) =>
+      Result.match(flyBullet(level, deltaMs / MS_PER_SECOND, deltaMs)(tracer), {
+        onFailure: () => flown,
+        onSuccess: moved =>
+          Array.some(
+            zombies,
+            zombie =>
+              isFree(zombie) &&
+              Math.hypot(zombie.x - moved.x, zombie.y - moved.y) <=
+                radiusOf(zombie),
+          )
+            ? { ...flown, struck: flown.struck + 1 }
+            : { ...flown, tracers: Array.append(flown.tracers, moved) },
+      }),
   )
 
 // ZOMBIES
@@ -1109,8 +1183,16 @@ const hitEventOn =
   (hits: ReadonlyArray<BulletHit>) =>
   (zombie: Zombie): Option.Option<GameEvent> => {
     const zombieHits = hitsOn(hits, zombie.id)
-    return Option.map(Array.last(zombieHits), ({ x, y, direction }) =>
-      hitEvent(zombie, { x, y }, direction, totalDamage(zombieHits)),
+    return Option.map(
+      Array.last(zombieHits),
+      ({ x, y, direction, maybeShooter }) =>
+        hitEvent(
+          zombie,
+          { x, y },
+          direction,
+          totalDamage(zombieHits),
+          maybeShooter,
+        ),
     )
   }
 
@@ -1306,6 +1388,8 @@ const popOnContact =
 const popBombers = (model: World): World =>
   modifyFields(model, { zombies: Array.map(popOnContact(model.player)) })
 
+// NOTE: in co-op a zombie must keep touching a player for their seat's
+// bite grace before it bites (see Seat); single player bites at once.
 const biteOnContact = (model: World): World => {
   if (Invulnerability.isAnyOf(['Invulnerable'])(model.player.invulnerability)) {
     return model
@@ -1315,9 +1399,28 @@ const biteOnContact = (model: World): World => {
     model.zombies,
     zombie => isBrawler(zombie) && isTouching(model.player)(zombie),
   )
+  if (!isCoop(model)) {
+    return Option.match(maybeAttacker, {
+      onNone: () => model,
+      onSome: attacker => bitePlayer(model, attacker),
+    })
+  }
+  const seat = leadSeatOf(model)
   return Option.match(maybeAttacker, {
-    onNone: () => model,
-    onSome: attacker => bitePlayer(model, attacker),
+    onNone: () =>
+      seat.touchedMs === 0
+        ? model
+        : modifyLeadSeat(model, current =>
+            modifyFields(current, { touchedMs: () => 0 }),
+          ),
+    onSome: attacker =>
+      seat.touchedMs >= seat.graceMs
+        ? bitePlayer(model, attacker)
+        : modifyLeadSeat(model, current =>
+            modifyFields(current, {
+              touchedMs: touched => touched + FIXED_STEP_MS,
+            }),
+          ),
   })
 }
 

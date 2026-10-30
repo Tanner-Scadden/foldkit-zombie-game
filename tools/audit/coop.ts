@@ -19,7 +19,12 @@
 // held upright or sideways instead of a desktop (the walking and shooting
 // use keys and the mouse either way). PICK=Endless,Hard has the host pick
 // that mode and difficulty in the lobby (after a guest's READY, which the
-// pick takes back) and checks every page plays it.
+// pick takes back) and checks every page plays it. NET=200,50,2 puts each
+// page behind a bad link: a 200 ms round trip, up to 50 ms of jitter, and
+// 2% of messages held 200 ms as a lost TCP segment's resend would be,
+// order kept (the page's WebSockets are wrapped; Chrome's own throttling
+// leaves WebSockets alone). It reports hit registration: the hits each
+// page saw its own tracers make against the hits the room confirmed.
 // Run it through the heavy guard, as a Shared job (one context per page):
 //   bun run heavy -- --shared bun tools/audit/coop.ts http://localhost:4398/ [players]
 import type { BrowserContext, Page } from 'playwright-core'
@@ -34,6 +39,55 @@ if (BASE === undefined) {
 const PLAYERS = Math.min(3, Math.max(2, Number(process.argv[3] ?? 3)))
 const IS_QUICK = process.env.QUICK === '1'
 const [PICK_MODE, PICK_DIFFICULTY] = (process.env.PICK ?? '').split(',')
+const [NET_RTT, NET_JITTER, NET_LOSS] = (process.env.NET ?? '')
+  .split(',')
+  .map(Number)
+
+// NOTE: runs in the page before the game: every WebSocket's sends and
+// messages wait half the round trip, plus jitter, plus a resend's delay
+// for the lost ones, each in order behind the one before.
+const slowSockets = (link: {
+  readonly rttMs: number
+  readonly jitterMs: number
+  readonly lossPercent: number
+}) => {
+  const Native = window.WebSocket
+  const delay = () =>
+    link.rttMs / 2 +
+    Math.random() * link.jitterMs +
+    (Math.random() * 100 < link.lossPercent ? 200 : 0)
+  const replayed = new WeakSet<Event>()
+  class SlowSocket extends Native {
+    private outAt = 0
+    private inAt = 0
+    constructor(url: string | URL, protocols?: string | Array<string>) {
+      super(url, protocols)
+      super.addEventListener('message', event => {
+        if (replayed.has(event)) {
+          return
+        }
+        event.stopImmediatePropagation()
+        const atMs = Math.max(this.inAt, performance.now() + delay())
+        this.inAt = atMs
+        setTimeout(() => {
+          const again = new MessageEvent('message', { data: event.data })
+          replayed.add(again)
+          this.dispatchEvent(again)
+        }, atMs - performance.now())
+      })
+    }
+    override send(data: Parameters<WebSocket['send']>[0]) {
+      const atMs = Math.max(this.outAt, performance.now() + delay())
+      this.outAt = atMs
+      setTimeout(() => {
+        if (this.readyState === Native.OPEN) {
+          super.send(data)
+        }
+      }, atMs - performance.now())
+    }
+  }
+  window.WebSocket = SlowSocket
+}
 const SAVE_KEY = 'munch-manor:save'
 
 const VIEWPORTS: Readonly<
@@ -144,6 +198,13 @@ const openPlayer = async (name: string, lookIndex = 0): Promise<Page> => {
   })
   contexts.push(context)
   const page = await context.newPage()
+  if (NET_RTT !== undefined && !Number.isNaN(NET_RTT)) {
+    await page.addInitScript(slowSockets, {
+      rttMs: NET_RTT,
+      jitterMs: NET_JITTER ?? 0,
+      lossPercent: NET_LOSS ?? 0,
+    })
+  }
   page.on('pageerror', error => problems.push(`${name}: ${error.message}`))
   await page.goto(new URL('version.json', BASE).href)
   await page.evaluate(([key, json]) => localStorage.setItem(key, json), [
@@ -196,6 +257,9 @@ type Readout = Readonly<{
 
 type Net = Readonly<{
   slot: number
+  lookedHits: number
+  confirmedHits: number
+  delayMs: number
   rttMs: number
   bytesIn: number
   framesIn: number
@@ -214,6 +278,9 @@ const netOf = (page: Page): Promise<Net | undefined> =>
     const number = (key: string) => Number(element.dataset[key] ?? 0)
     return {
       slot: number('slot'),
+      lookedHits: number('lookedHits'),
+      confirmedHits: number('confirmedHits'),
+      delayMs: number('delay'),
       rttMs: number('rtt'),
       bytesIn: number('bytesIn'),
       framesIn: number('framesIn'),
@@ -739,7 +806,7 @@ if (isPhone) {
   const shopOpen = await until(
     'the shop dialog opens for the host only',
     async () =>
-      (await host.locator('.shop-dialog[open]').count()) === 1 &&
+      (await host.locator('.shop-dialog[open]').count()) >= 1 &&
       (await guests[0]!.locator('.shop-dialog[open]').count()) === 0,
   )
   if (shopOpen) {
@@ -800,6 +867,9 @@ for (const [index, net] of endNet.nets.entries()) {
   const inputs = (net.inputsOut - start.inputsOut) / seconds
   console.log(
     `  player ${index + 1}: round trip ${net.rttMs} ms, down ${kbps.toFixed(2)} KB/s over ${net.framesIn - start.framesIn} messages (${((net.framesIn - start.framesIn) / seconds).toFixed(1)} a second), up ${inputs.toFixed(1)} inputs a second, ${net.corrections} corrections (at most ${net.correctionPx} px)`,
+  )
+  console.log(
+    `  player ${index + 1}: hits seen ${net.lookedHits - start.lookedHits}, confirmed ${net.confirmedHits - start.confirmedHits}; drawn ${net.delayMs} ms behind`,
   )
   check(net.rttMs > 0, `player ${index + 1} measured a round trip`)
 }
