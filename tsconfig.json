@@ -1,24 +1,10 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "lib": ["ES2022", "DOM"],
-    "moduleResolution": "bundler",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "exactOptionalPropertyTypes": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "plugins": [
-      {
-        "name": "@effect/language-service",
-        "includeSuggestionsInTsc": false,
-        "diagnosticSeverity": { "unstableApiUsage": "off" }
-      }
-    ]
+    "lib": ["ES2022", "DOM"]
   },
   "include": ["src/**/*"],
-  "exclude": ["src/sw/worker.ts"]
+  // NOTE: the service worker has its own project (src/sw). store.test.ts is
+  // checked by tsconfig.inflight.json for now.
+  "exclude": ["src/sw/worker.ts", "src/store.test.ts"]
 }

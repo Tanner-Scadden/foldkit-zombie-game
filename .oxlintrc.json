@@ -1,9 +1,14 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": ["./node_modules/@foldkit/oxlint-plugin/recommended.json"],
-  "plugins": ["typescript"],
+  // NOTE: naming plugins replaces oxlint's defaults, so the defaults are listed
+  // here with vitest added.
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "vitest"],
+  // NOTE: type-aware rules run through oxlint-tsgolint.
+  "options": { "typeAware": true },
   "categories": {
-    "correctness": "off"
+    "correctness": "error",
+    "perf": "error"
   },
   "rules": {
     "no-unused-vars": [
@@ -23,9 +28,337 @@
     "sort-imports": [
       "error",
       { "ignoreDeclarationSort": true, "ignoreCase": false }
-    ]
+    ],
+    "typescript/array-type": ["error", { "default": "generic" }],
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-non-null-assertion": "error",
+    "curly": ["error", "all"],
+    "eqeqeq": ["error", "always"],
+    "no-shadow": "error",
+    "unicorn/require-post-message-target-origin": "error",
+    // NOTE: a scene's tap step runs its expects, and vitest takes a message
+    // as expect's second argument.
+    "vitest/no-standalone-expect": [
+      "error",
+      { "additionalTestBlockFunctions": ["tap"] }
+    ],
+    "vitest/valid-expect": ["error", { "maxArgs": 2 }],
+    // NOTE: story() and scene() assert through their steps.
+    "vitest/expect-expect": [
+      "error",
+      {
+        "assertFunctionNames": [
+          "expect",
+          "expect*",
+          "vitestExpect",
+          "story",
+          "scene",
+          "Story.story",
+          "Scene.scene"
+        ]
+      }
+    ],
+    // NOTE: a ratchet, not a gate. A file past about 1200 lines holds two
+    // jobs. The files over it today are listed in an override below.
+    "max-lines": ["warn", { "max": 1200 }],
+
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/no-unnecessary-condition": "error",
+    "typescript/no-misused-spread": "error",
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-return": "error",
+    "typescript/no-base-to-string": "error",
+    "typescript/prefer-optional-chain": "error",
+    "typescript/no-unnecessary-type-arguments": "error",
+    "typescript/strict-boolean-expressions": "error"
   },
+  "overrides": [
+    {
+      // NOTE: the game's own rules (AGENTS.md "Rules"): update is pure and
+      // deterministic, storage goes through the store, per-frame code checks
+      // tags with isAnyOf, and overlays read the screen from screenOf(model).
+      "files": ["src/**/*.ts"],
+      "rules": {
+        "no-console": "error",
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "Math",
+            "property": "random",
+            "message": "update is pure: draw from the seeded generator in the Model (src/prng.ts)."
+          },
+          {
+            "object": "Date",
+            "property": "now",
+            "message": "update never reads the clock: time arrives in a Message."
+          },
+          {
+            "object": "crypto",
+            "property": "randomUUID",
+            "message": "Ids come from the seeded generator, or from Effect's Crypto in a Command."
+          },
+          {
+            "object": "performance",
+            "property": "now",
+            "message": "Frame time is read once, in src/subscriptions.ts."
+          },
+          {
+            "object": "Data",
+            "property": "taggedEnum",
+            "message": "Use a Schema union (defineTaggedUnion) and its exhaustive match."
+          },
+          {
+            "property": "guards",
+            "message": "A guard validates the whole value through Schema. Check a tag with isAnyOf."
+          }
+        ],
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "localStorage",
+            "message": "Persistent data goes through PlayerStore (src/store.ts)."
+          },
+          {
+            "name": "sessionStorage",
+            "message": "Persistent data goes through PlayerStore (src/store.ts)."
+          },
+          {
+            "name": "indexedDB",
+            "message": "Persistent data goes through PlayerStore (src/store.ts)."
+          },
+          {
+            "name": "setTimeout",
+            "message": "Wait with Effect.sleep or a Schedule in a Command or Subscription."
+          },
+          {
+            "name": "setInterval",
+            "message": "Tick with a Subscription and a Schedule."
+          }
+        ],
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/constants", "./constants"],
+                "importNames": ["VIEW_WIDTH", "VIEW_HEIGHT"],
+                "message": "Overlay code reads the screen from screenOf(model)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      // NOTE: a wrong non-null assertion in a test fails the test loudly, as
+      // it should. test.todo marks a balance guardrail not met yet (AGENTS.md).
+      "files": ["**/*.test.ts"],
+      "rules": {
+        "typescript/no-non-null-assertion": "off",
+        "vitest/warn-todo": "off"
+      }
+    },
+    {
+      // NOTE: tests may read guards, seed the legacy localStorage save, and
+      // check the view size itself.
+      "files": ["src/**/*.test.ts", "src/testing.ts", "src/vitest-setup.ts"],
+      "rules": {
+        "no-restricted-imports": "off",
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "Math",
+            "property": "random",
+            "message": "Tests replay seeds: use the seeded generator (src/prng.ts)."
+          },
+          {
+            "object": "Date",
+            "property": "now",
+            "message": "Tests replay Messages: pass time in a Message."
+          },
+          {
+            "object": "Data",
+            "property": "taggedEnum",
+            "message": "Use a Schema union (defineTaggedUnion) and its exhaustive match."
+          }
+        ],
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "setTimeout",
+            "message": "Wait with Effect.sleep or a TestClock."
+          },
+          {
+            "name": "setInterval",
+            "message": "Tick with a Subscription and a Schedule."
+          }
+        ]
+      }
+    },
+    {
+      // NOTE: the frame clock is read here and nowhere else.
+      "files": ["src/subscriptions.ts"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          { "object": "Math", "property": "random" },
+          { "object": "Date", "property": "now" },
+          { "object": "crypto", "property": "randomUUID" },
+          { "object": "Data", "property": "taggedEnum" },
+          { "property": "guards" }
+        ]
+      }
+    },
+    {
+      // NOTE: the store is where storage lives: save.ts keeps the legacy
+      // localStorage copy that store.ts falls back to.
+      "files": [
+        "src/save.ts",
+        "src/store.ts",
+        "src/storeSqlite.ts",
+        "src/storeEarly.ts",
+        "src/store.worker.ts"
+      ],
+      "rules": {
+        "no-restricted-globals": "off"
+      }
+    },
+    {
+      // NOTE: the service worker runs outside the game and the Effect runtime.
+      "files": ["src/sw/worker.ts"],
+      "rules": {
+        "no-restricted-globals": "off"
+      }
+    },
+    {
+      // NOTE: these define the view size (constants, screen), do world math
+      // (camera, geometry), or draw deliberately inside inLandscapeFrame
+      // (screens, bossView).
+      "files": [
+        "src/constants.ts",
+        "src/screen.ts",
+        "src/camera.ts",
+        "src/geometry.ts",
+        "src/screens.ts",
+        "src/bossView.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      // NOTE: tools are host scripts, not Foldkit apps: the Foldkit rules do
+      // not apply, and they wait on browsers and child processes one at a time.
+      "files": ["tools/**/*.ts"],
+      "rules": {
+        "foldkit/no-impure-call-at-decision-time": "off",
+        "foldkit/no-module-level-mutable-state": "off",
+        "foldkit/no-child-message-construction-in-root": "off",
+        "foldkit/no-spread-in-modify-fields": "off",
+        "no-await-in-loop": "off"
+      }
+    },
+    {
+      // NOTE: the audits and the spike drive headless Chrome: much of their
+      // code runs in page.evaluate on untyped page globals.
+      "files": [
+        "tools/audit/**/*.ts",
+        "tools/mp-spike/**/*.ts",
+        "tools/sprites/**/*.ts"
+      ],
+      "rules": {
+        "typescript/no-explicit-any": "off",
+        "typescript/consistent-type-assertions": "off",
+        "typescript/no-non-null-assertion": "off",
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/strict-boolean-expressions": "off",
+        "typescript/no-unnecessary-condition": "off",
+        "no-shadow": "off",
+        "oxc/no-map-spread": "off",
+        "oxc/no-accumulating-spread": "off"
+      }
+    },
+    // TODO(cleanup slice 9): the overrides below are temporary. Other changes
+    // were editing these files when the strict rules landed: fix the hits and
+    // drop each override once those changes are in.
+    {
+      // TODO(cleanup slice 9): the knife and two gun slots change.
+      "files": ["src/main.ts", "src/update/shop.ts"],
+      "rules": {
+        "typescript/consistent-type-imports": "off"
+      }
+    },
+    {
+      // TODO(cleanup slice 9): the sync tests change.
+      "files": ["src/store.test.ts"],
+      "rules": {
+        "typescript/no-unnecessary-condition": "off",
+        "no-restricted-properties": [
+          "error",
+          { "object": "Math", "property": "random" },
+          { "object": "Data", "property": "taggedEnum" }
+        ]
+      }
+    },
+    {
+      // TODO(cleanup slice 9): the sync tests change.
+      "files": ["packages/sync-engine/test/**/*.ts"],
+      "rules": {
+        "typescript/consistent-type-imports": "off",
+        "vitest/expect-expect": "off",
+        "typescript/no-base-to-string": "off",
+        "typescript/no-unsafe-assignment": "off"
+      }
+    },
+    {
+      // TODO(cleanup slice 9): the netcode change.
+      "files": ["packages/netcode/**/*.ts"],
+      "rules": {
+        "no-control-regex": "off",
+        "no-shadow": "off",
+        "typescript/consistent-type-imports": "off",
+        "vitest/require-to-throw-message": "off",
+        "typescript/no-unnecessary-condition": "off"
+      }
+    },
+    {
+      // NOTE: known exceptions to max-lines today. Split one, then drop it here.
+      "files": [
+        "src/audio.ts",
+        "src/boss.story.test.ts",
+        "src/particles.ts",
+        "src/room.ts",
+        "src/screens.ts",
+        "src/shop.story.test.ts",
+        "src/simulation.ts",
+        "src/sprite.ts",
+        "src/story.test.ts",
+        "src/waves.ts",
+        "src/worldSchema.ts",
+        "tools/audit/harness/entry.ts",
+        "tools/balance/bot.ts",
+        "tools/heavy/decision.test.ts"
+      ],
+      "rules": {
+        "max-lines": "off"
+      }
+    }
+  ],
   "ignorePatterns": [
+    // TODO(cleanup slice 9): lint the balance bot once the knife and two gun
+    // slots land. It was never linted, and that change is editing it.
+    "tools/balance/bot.ts",
+    "tools/balance/simulate.ts",
     "dist/",
     "node_modules/",
     "repos/",

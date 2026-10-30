@@ -1,26 +1,31 @@
 {
   "$schema": "./node_modules/@effect/tsgo/oxlint-schema.json",
-  "extends": ["./node_modules/@effect/tsgo/oxlint-presets/correctness.json"],
+  "extends": ["./node_modules/@effect/tsgo/oxlint-presets/strict.json"],
   "categories": {
     "correctness": "off"
   },
   "rules": {
-    "effecttsgo/catch-unfailable-effect": "warn",
-    "effecttsgo/effect-fn-iife": "warn",
-    "effecttsgo/effect-gen-uses-adapter": "warn",
-    "effecttsgo/effect-in-failure": "warn",
-    "effecttsgo/effect-in-void-success": "warn",
-    "effecttsgo/layer-merge-all-with-dependencies": "warn",
-    "effecttsgo/lazy-promise-in-effect-sync": "warn",
-    "effecttsgo/leaking-requirements": "warn",
-    "effecttsgo/multiple-effect-provide": "warn",
-    "effecttsgo/prefer-typed-schema-decoder": "warn",
-    "effecttsgo/prefer-unsafe-constructor": "warn",
-    "effecttsgo/return-effect-in-gen": "warn",
-    "effecttsgo/schema-sync-in-effect": "warn",
-    "effecttsgo/scope-in-layer-effect": "warn",
-    "effecttsgo/try-catch-in-effect-gen": "warn",
-    "effecttsgo/unstable-api-usage": "off",
-    "effecttsgo/unknown-in-effect-catch": "warn"
-  }
+    // NOTE: Schema.Number is the house style for numbers (see the language
+    // service's schemaNumber, off for the same reason).
+    "effecttsgo/schema-number": "off",
+    // NOTE: FOLDKIT.md prescribes `Effect.catch(() => Effect.succeed(...))`
+    // for a Command's fallback Message, and FOLDKIT.md wins.
+    "effecttsgo/catch-to-or-else-succeed": "off",
+    // NOTE: unstable APIs such as effect/unstable/sql are in use on purpose.
+    "effecttsgo/unstable-api-usage": "off"
+  },
+  "overrides": [
+    {
+      // TODO(cleanup slice 9): the netcode change was editing this file when
+      // the strict preset landed. Fix the hit and drop this override.
+      "files": ["packages/netcode/src/Socket.ts"],
+      "rules": { "effecttsgo/run-effect-inside-effect": "off" }
+    },
+    {
+      // TODO(cleanup slice 9): the sync tests change was editing this file
+      // when the strict preset landed. Fix the hits and drop this override.
+      "files": ["packages/sync-engine/test/fixtures.ts"],
+      "rules": { "effecttsgo/lazy-effect": "off" }
+    }
+  ]
 }

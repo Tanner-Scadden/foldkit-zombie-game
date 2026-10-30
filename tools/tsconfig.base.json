@@ -1,0 +1,8 @@
+// NOTE: what the tools add to the shared base.
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    // NOTE: tools read JSON reports, env maps, and page globals by key.
+    "noPropertyAccessFromIndexSignature": false
+  }
+}
