@@ -436,7 +436,7 @@ export const advanceJuice = (
     model.shake,
     events,
     seconds,
-    model.rngState,
+    model.cosmeticRngState,
   )
   const [popupState, popupBatches] = Array.mapAccum(
     events,
@@ -472,6 +472,6 @@ export const advanceJuice = (
       ),
     streak: streak => advanceStreak(streak, kills, worldMs),
     wallet: wallet => tickShownMoney(wallet, seconds),
-    rngState: () => popupState,
+    cosmeticRngState: () => popupState,
   })
 }

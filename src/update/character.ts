@@ -30,12 +30,12 @@ const foldCharacterOutMessage = Character.OutMessage.match<UpdateStep>({
     }),
   RequestedRandomLook: () => stepModel => {
     const [rngState, appearance] = randomAppearance(
-      stepModel.rngState,
+      stepModel.cosmeticRngState,
       stepModel.appearance,
     )
     return {
       model: modifyFields(stepModel, {
-        rngState: () => rngState,
+        cosmeticRngState: () => rngState,
         appearance: () => appearance,
       }),
     }

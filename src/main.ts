@@ -61,6 +61,7 @@ import {
   type Orientation,
   Phase,
   RunMode,
+  cosmeticSeedOf,
   initialModel,
 } from './model'
 import { cueMusicFrom } from './musicPlan'
@@ -583,7 +584,10 @@ const updateGame = (model: Model, message: Message) =>
     }),
 
     CompletedGenerateSeed: ({ seed }) => ({
-      model: modifyFields(model, { rngState: () => seed }),
+      model: modifyFields(model, {
+        rngState: () => seed,
+        cosmeticRngState: () => cosmeticSeedOf(seed),
+      }),
     }),
 
     CompletedDetectInputDevice: ({ touchControls }) => ({

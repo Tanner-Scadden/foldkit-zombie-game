@@ -1206,6 +1206,7 @@ export const Model = Schema.Struct({
   flowField: FlowField,
   wideFlowField: FlowField,
   rngState: Schema.Number,
+  cosmeticRngState: Schema.Number,
   input: Input,
   intent: Intent,
   maybeSurface: Schema.Option(SurfaceRectangle),
@@ -1365,6 +1366,15 @@ export const freshLoot = (seed: number): Loot => ({
   prize: Prize.Settled(),
 })
 
+// NOTE: particles, shake, popups, coin bursts, trap dust, and the random
+// look draw from their own stream, never from `rngState`, so how many
+// cosmetics a frame makes never changes what spawns next. A room that makes
+// none and a phone that makes fewer play the same game (MULTIPLAYER.md).
+const COSMETIC_SEED_SALT = 0x0c05e71c
+
+export const cosmeticSeedOf = (seed: number): number =>
+  (seed ^ COSMETIC_SEED_SALT) >>> 0
+
 export const initialHitStop: HitStop = HitStop.Running({ cooldownMs: 0 })
 
 export const stillShake: Shake = { trauma: 0, offset: { x: 0, y: 0 } }
@@ -1461,6 +1471,7 @@ export const initialModel: Model = {
   flowField: flowFieldToward(MANOR, initialPlayer, 'Narrow', []),
   wideFlowField: flowFieldToward(MANOR, initialPlayer, 'Wide', []),
   rngState: DEFAULT_SEED,
+  cosmeticRngState: cosmeticSeedOf(DEFAULT_SEED),
   input: idleInput,
   intent: idleIntent,
   maybeSurface: Option.none(),

@@ -195,7 +195,7 @@ describe('Character', () => {
       const holder: { current: Model } = { current: onTitle }
       story(
         update,
-        given(modifyFields(onTitle, { rngState: () => seed })),
+        given(modifyFields(onTitle, { cosmeticRngState: () => seed })),
         randomize(),
         model(rolled => {
           holder.current = rolled
@@ -206,8 +206,8 @@ describe('Character', () => {
     const first = rollFrom(1234)
     const again = rollFrom(1234)
     expect(again.appearance).toEqual(first.appearance)
-    expect(again.rngState).toBe(first.rngState)
-    expect(first.rngState).not.toBe(1234)
+    expect(again.cosmeticRngState).toBe(first.cosmeticRngState)
+    expect(first.cosmeticRngState).not.toBe(1234)
     expect(first.appearance).not.toEqual(defaultAppearance)
 
     const looks = pipe(

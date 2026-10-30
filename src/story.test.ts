@@ -821,7 +821,7 @@ describe('particles and decals', () => {
     story(
       update,
       given(
-        withZombies(modifyFields(playingModel, { rngState: () => seed }), [
+        withZombies(modifyFields(playingModel, { cosmeticRngState: () => seed }), [
           zombieAt(100, 200, PARLOUR.height / 2, { speed: 0 }),
           zombieAt(101, 230, PARLOUR.height / 2, { speed: 0 }),
           zombieAt(102, 260, PARLOUR.height / 2, { speed: 0 }),
@@ -1342,7 +1342,7 @@ describe('juice determinism', () => {
     story(
       update,
       given(
-        withZombies(modifyFields(playingModel, { rngState: () => seed }), [
+        withZombies(modifyFields(playingModel, { cosmeticRngState: () => seed }), [
           bigKillAt(100, 200),
           bigKillAt(101, 230),
           bigKillAt(102, 260),

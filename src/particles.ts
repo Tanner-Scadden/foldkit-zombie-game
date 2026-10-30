@@ -1260,7 +1260,7 @@ export const advanceParticles = (
 
   const [eventState, eventBatches] = Array.mapAccum(
     model.frameEvents,
-    model.rngState,
+    model.cosmeticRngState,
     eventParticles,
   )
   const dust = walkingDust(model, deltaMs, eventState)
@@ -1275,20 +1275,20 @@ export const advanceParticles = (
       Array.isReadonlyArrayEmpty(landed)
         ? decals
         : keepNewest([...decals, ...landed], DECAL_MAX),
-    rngState: () => dust.rngState,
+    cosmeticRngState: () => dust.rngState,
     dustCooldownMs: () => dust.dustCooldownMs,
   })
 }
 
 export const burstCoins = (model: Model, x: number, y: number): Model => {
   const [rngState, coins] = generateMany(
-    model.rngState,
+    model.cosmeticRngState,
     COINS_PER_PURCHASE,
     coin(playerGround(x, y)),
   )
   return modifyFields(model, {
     particles: particles => keepNewest([...particles, ...coins], PARTICLE_MAX),
-    rngState: () => rngState,
+    cosmeticRngState: () => rngState,
   })
 }
 
@@ -1296,14 +1296,14 @@ export const burstCoins = (model: Model, x: number, y: number): Model => {
 // and planks with a cloud of dust.
 export const smashBoards = (model: Model, x: number, y: number): Model => {
   const ground = { x, y }
-  const [rngState, debris] = chain(model.rngState, [
+  const [rngState, debris] = chain(model.cosmeticRngState, [
     woodBits('Splinter', ground, SMASH_SPLINTERS),
     woodBits('Plank', ground, SMASH_PLANKS),
     dustRing(ground, SMASH_DUST),
   ])
   return modifyFields(model, {
     particles: particles => keepNewest([...particles, ...debris], PARTICLE_MAX),
-    rngState: () => rngState,
+    cosmeticRngState: () => rngState,
   })
 }
 
@@ -1311,10 +1311,10 @@ export const puffDust = (model: Model, x: number, y: number): Model => {
   const [rngState, puffs] = dustRing(
     { x, y },
     DUST_PER_PLACEMENT,
-  )(model.rngState)
+  )(model.cosmeticRngState)
   return modifyFields(model, {
     particles: particles => keepNewest([...particles, ...puffs], PARTICLE_MAX),
-    rngState: () => rngState,
+    cosmeticRngState: () => rngState,
   })
 }
 

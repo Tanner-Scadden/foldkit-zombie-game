@@ -13,6 +13,7 @@ import {
   Streak,
   TrapNotice,
   calmPacing,
+  cosmeticSeedOf,
   emptyTrapStock,
   emptyWallet,
   freshLoot,
@@ -54,6 +55,7 @@ export type RunFields = Pick<
   | 'pickups'
   | 'boosts'
   | 'loot'
+  | 'cosmeticRngState'
   | 'callouts'
   | 'trapStock'
   | 'selectedTrap'
@@ -97,6 +99,7 @@ export const freshRun = (model: Model): RunFields => ({
   pickups: [],
   boosts: idleBoosts,
   loot: freshLoot(model.rngState),
+  cosmeticRngState: cosmeticSeedOf(model.rngState),
   callouts: [],
   trapStock: emptyTrapStock,
   selectedTrap: 'Barricade',

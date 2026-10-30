@@ -40,6 +40,9 @@ const waveOf = (model: Model): number =>
 export const runScript = (
   options: RunOptions,
   onFrame?: (frame: number, model: Model) => void,
+  // NOTE: a change made to the Model after each frame, before it is hashed,
+  // such as throwing the cosmetics away.
+  afterFrame: (model: Model) => Model = model => model,
 ): RunReport => {
   const hasher = makeGameplayHasher({ cached: options.cached })
   const start = startedRun(options.seed, options.mode)
@@ -49,7 +52,7 @@ export const runScript = (
   let model = start
   let frame = 0
   for (; frame < options.frames && isPlaying(model); frame++) {
-    model = playFrame(model, frame, options.pattern)
+    model = afterFrame(playFrame(model, frame, options.pattern))
     onFrame?.(frame, model)
     if (frame % options.every === options.every - 1) {
       checkpoints.push([frame, hasher.hashModel(model)])
