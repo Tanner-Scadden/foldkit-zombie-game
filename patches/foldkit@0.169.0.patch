@@ -423,3 +423,37 @@ index f8ee4870de83702ddef4fc1d393012043b1fbfb9..5a66b83c18026665f63c1be81bebe560
                  }
              },
          },
+diff --git a/dist/struct/index.js b/dist/struct/index.js
+index edbf519f8aa91f5d611beca06cf068ce6d037137..f0048b7e461fa0947e5ef16ea58ea630a087aff0 100644
+--- a/dist/struct/index.js
++++ b/dist/struct/index.js
+@@ -1,7 +1,24 @@
+-import { Struct } from 'effect';
++// NOTE: patched (see the game's patches/README.md). Effect's `Struct.evolve`
++// walks every key of the struct with `Reflect.ownKeys` and
++// `propertyIsEnumerable`, which made it the top cost of a frame on a large
++// Model. This copies the struct with a spread, which keeps the same own
++// enumerable keys in the same order, then applies only the given transforms,
++// to keys the struct has, as `evolve` does.
++const evolveFast = (self, transforms) => {
++    const out = { ...self };
++    for (const key of Object.keys(transforms)) {
++        if (Object.hasOwn(out, key)) {
++            out[key] = transforms[key](out[key]);
++        }
++    }
++    return out;
++};
+ /** Immutably modifies fields of a struct by applying transform functions. Each transformer must return its field's existing type. Wraps Effect's `Struct.evolve` with stricter key checking. */
+-export const modifyFields = Struct.evolve;
++export const modifyFields = function (self, transforms) {
++    if (arguments.length >= 2) {
++        return evolveFast(self, transforms);
++    }
++    return (struct) => evolveFast(struct, self);
++};
+ /** Creates a field modifier for a base shape. Use in generic helpers whose Model extends that shape. Transformers are checked against the base shape, and the returned function preserves the Model's subtype and all fields not in the transform. */
+-export const makeModifyFieldsFor = () => (model, transforms) => 
+-/* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+-Struct.evolve(model, transforms);
++export const makeModifyFieldsFor = () => (model, transforms) => evolveFast(model, transforms);
