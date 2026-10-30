@@ -1,7 +1,7 @@
 import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import type { SoundEffect } from './audio'
+import type { SoundEffect } from './soundEffect'
 import {
   BULLET_LIFETIME_MS,
   BULLET_SPEED,

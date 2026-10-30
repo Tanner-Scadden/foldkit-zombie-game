@@ -1,7 +1,7 @@
 import { Array, Option, Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
-import type { SoundEffect } from './audio'
+import type { SoundEffect } from './soundEffect'
 import {
   BLOOD_PER_KILL,
   MEAT_GIBS_PER_KILL,

@@ -1358,6 +1358,22 @@ const moveSeat =
           }),
         )
 
+// NOTE: one tick of the seat in the World's per-player fields walking and
+// turning from its intent, and nothing else: what a co-op client runs to
+// predict its own player before the room's answer comes (MULTIPLAYER.md,
+// Phase 4). Hits, money, and deaths stay the room's.
+export const walkLeadSeat = (model: World, deltaMs: number): World => {
+  const level = levelOf(model)
+  return faceTowardIntent(
+    moveSeat(
+      level,
+      trapBlockers(level, model.traps),
+      deltaMs / MS_PER_SECOND,
+      deltaMs,
+    )(model),
+  )
+}
+
 // NOTE: only a standing player shops, reloads, and fires.
 const armSeat =
   (deltaMs: number) =>

@@ -3,10 +3,12 @@
 // it runs in workerd, the runtime of Durable Objects, playing bit for bit
 // what Bun plays.
 //
-// 1. Bundles worldWorker.ts (stepWorld, its wire, and detMath) into out/ and
-//    fails on any forbidden module the bundle pulls in.
+// 1. Bundles worldWorker.ts (stepWorld, the co-op room's adapter and binary
+//    wire, and detMath) into out/ and fails on any forbidden module the
+//    bundle pulls in, or on any runtime code of the netcode package.
 // 2. Plays a World 600 ticks in Bun and in a local workerd from infra's
 //    binary (or WORKERD), and fails unless both give the same World.
+// 3. Plays a co-op room's World from its seats the same way.
 //
 //   bun run world:check
 
@@ -22,7 +24,13 @@ import { seatCrew } from '../../src/party'
 import type { Intent } from '../../src/worldSchema'
 import { worldToJson } from '../../src/worldWire'
 import { playFrame, startedRun } from './script'
-import { type PlayRequest, intentToJson, playWorld } from './worldPlay'
+import {
+  type PlayRequest,
+  type RoomPlayRequest,
+  intentToJson,
+  playRoomWorld,
+  playWorld,
+} from './worldPlay'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '../..')
@@ -46,6 +54,8 @@ const FORBIDDEN_GAME_MODULES: ReadonlyArray<RegExp> = [
   /^src\/(onboarding|runReset|frame|particles|hud|menus|screens)\.ts$/,
   /^src\/update\//,
   /^src\/coop\//,
+  /^src\/roomTesting\.ts$/,
+  /^packages\//,
 ]
 
 const ALLOWED_PACKAGES: ReadonlyArray<RegExp> = [
@@ -81,8 +91,7 @@ const problemsOf = (inputs: ReadonlyArray<string>): ReadonlyArray<string> =>
   inputs.filter(path =>
     path.includes('node_modules/')
       ? !ALLOWED_PACKAGES.some(allowed => allowed.test(path))
-      : path.startsWith('src/') &&
-        FORBIDDEN_GAME_MODULES.some(forbidden => forbidden.test(path)),
+      : FORBIDDEN_GAME_MODULES.some(forbidden => forbidden.test(path)),
   )
 
 const workerdBinary = (): string | undefined => {
@@ -100,7 +109,10 @@ const workerdBinary = (): string | undefined => {
   ].find(path => path !== undefined && existsSync(path))
 }
 
-const playInWorkerd = async (request: PlayRequest): Promise<string> => {
+const playInWorkerd = async (
+  request: PlayRequest | RoomPlayRequest,
+  path = '/',
+): Promise<string> => {
   const binary = workerdBinary()
   if (binary === undefined) {
     throw new Error('no workerd: run bun install in infra/, or set WORKERD')
@@ -112,10 +124,13 @@ const playInWorkerd = async (request: PlayRequest): Promise<string> => {
   try {
     const attempt = async (left: number): Promise<string> => {
       try {
-        const response = await fetch(`http://127.0.0.1:${WORKERD_PORT}/`, {
-          method: 'POST',
-          body: JSON.stringify(request),
-        })
+        const response = await fetch(
+          `http://127.0.0.1:${WORKERD_PORT}${path}`,
+          {
+            method: 'POST',
+            body: JSON.stringify(request),
+          },
+        )
         return await response.text()
       } catch (error) {
         if (left <= 0) {
@@ -143,7 +158,9 @@ if (problems.length > 0) {
   )
   process.exit(1)
 }
-console.log('No UI, art, audio, camera, input, store, or sync module in it.')
+console.log(
+  'No UI, art, audio, camera, input, store, sync, or netcode module in it.',
+)
 
 // NOTE: a World mid-wave, with zombies about, from the scripted player.
 const played = Array.from({ length: 900 }).reduce(
@@ -198,3 +215,35 @@ const checkPlayers = async (players: number): Promise<void> => {
 await checkPlayers(1)
 await checkPlayers(2)
 await checkPlayers(4)
+
+// NOTE: a co-op room's World from its seats (src/roomWorld.ts): the lobby's
+// players walking and firing their own ways from the start of the run.
+const ROOM_INPUTS: ReadonlyArray<RoomPlayRequest['inputs'][number]> = [
+  [0, { moveX: 90, moveY: -90, aimX: 0, aimY: -1024, buttons: 1, action: 0 }],
+  [1, { moveX: -127, moveY: 0, aimX: 0, aimY: 0, buttons: 1, action: 0 }],
+  [2, { moveX: 0, moveY: 127, aimX: 1024, aimY: 0, buttons: 0, action: 0 }],
+  [3, { moveX: 0, moveY: 0, aimX: -724, aimY: 724, buttons: 1, action: 0 }],
+]
+
+const checkRoom = async (players: number): Promise<void> => {
+  const request: RoomPlayRequest = {
+    slots: ROOM_INPUTS.slice(0, players).map(([slot]) => slot),
+    seed: 11,
+    inputs: ROOM_INPUTS.slice(0, players),
+    ticks: 900,
+  }
+  const inWorkerd = await playInWorkerd(request, '/room')
+  const inBun = playRoomWorld(request)
+  if (inWorkerd !== inBun) {
+    console.error(
+      `workerd and Bun disagree on a co-op room after ${request.ticks} ticks with ${players} players.\n  workerd: ${inWorkerd.slice(0, 300)}`,
+    )
+    process.exit(1)
+  }
+  console.log(
+    `workerd plays ${request.ticks} ticks of a co-op room with ${players} players exactly as Bun does.`,
+  )
+}
+
+await checkRoom(2)
+await checkRoom(4)

@@ -19,7 +19,7 @@ import {
   tileIndex,
   tilesWithSymbol,
 } from './arena'
-import type { SoundEffect } from './audio'
+import type { SoundEffect } from './soundEffect'
 import type { BlastTarget } from './combat'
 import {
   BARRICADE_REACH_PX,

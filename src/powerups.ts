@@ -11,7 +11,7 @@ import {
   levelOf,
   roomAt,
 } from './arena'
-import type { SoundEffect } from './audio'
+import type { SoundEffect } from './soundEffect'
 import {
   type BlastSpec,
   ZOMBIE_BLAST_TARGET,

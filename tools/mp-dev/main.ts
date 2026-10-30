@@ -1,9 +1,10 @@
-// The co-op dev page: the stand-in world in a room, end to end, with no
-// game code. Open it in 2 to 4 tabs (or phones): one creates a room and the
-// others join from its link, or everyone presses QUICK PLAY; the run starts
-// when everyone is READY, and each tab moves its dot with WASD, the arrow
-// keys, or by holding a finger or the mouse on the arena. `?bot=1` walks in
-// circles on its own, and with `?quick=1` it presses QUICK PLAY and accepts
+// The co-op dev page: a room end to end with the game's World drawn as
+// dots, and none of the game's screens. Open it in 2 to 4 tabs (or phones):
+// one creates a room and the others join from its link, or everyone presses
+// QUICK PLAY; the run starts when everyone is READY, and each tab moves its
+// dot with WASD, the arrow keys, or by holding a finger or the mouse on the
+// arena. `?bot=1` walks in circles on its own and presses READY in the
+// breaks, and with `?quick=1` it presses QUICK PLAY and accepts
 // any offer. `?name=` sets the display name. Each tab keeps its own device
 // key in sessionStorage, so it is its own player, and a reload rejoins the
 // same seat.
@@ -24,11 +25,7 @@ import {
 } from 'effect'
 
 import {
-  ARENA_HEIGHT,
-  ARENA_WIDTH,
   ChangedReady,
-  DOT_RADIUS,
-  type Dot,
   EndedGame,
   KickedPlayer,
   LeftRoom,
@@ -39,9 +36,6 @@ import {
   type PlayerInput,
   type RoomTicket,
   Session,
-  StandIn,
-  type StandInWorld,
-  WALKER_RADIUS,
   normalizeRoomCode,
 } from '@munch/netcode'
 import {
@@ -65,9 +59,31 @@ import {
   makePlayerId,
 } from '@munch/sync-engine'
 
+import { MANOR, levelOf } from '../../src/arena'
+import { playersOf } from '../../src/party'
+import {
+  DEFAULT_ROOM_SETTINGS,
+  type OwnSeat,
+  type RoomWorld,
+  actionCodeOf,
+  heldAction,
+  roomWorldFor,
+} from '../../src/roomWorld'
+import { SeatAction } from '../../src/stepWorld'
+
 declare const __MP_API_ORIGIN__: string
 
-type Play = Session.Session<StandInWorld, Dot>
+// NOTE: the game's own World, as the GameRoom runs it, drawn as dots: the
+// manor's whole floor, players in their seat's color, zombies green, and
+// bullets as specks. The game itself draws it with its sprites.
+const GAME = roomWorldFor(DEFAULT_ROOM_SETTINGS)
+const ARENA_WIDTH = MANOR.width
+const ARENA_HEIGHT = MANOR.height
+const ARENA_TOP = MANOR.top
+const DOT_RADIUS = 6
+const WALKER_RADIUS = 5
+
+type Play = Session.Session<RoomWorld, OwnSeat>
 
 const SLOT_COLORS = ['#ff7a59', '#59c2ff', '#b4ff59', '#ff59d6']
 const IDENTITY_KEY = 'munch-mp-dev:identity'
@@ -372,7 +388,7 @@ const listenToControls = (): Controls => {
     const box = ui.canvas.getBoundingClientRect()
     return {
       x: ((event.clientX - box.left) / box.width) * ARENA_WIDTH,
-      y: ((event.clientY - box.top) / box.height) * ARENA_HEIGHT,
+      y: ((event.clientY - box.top) / box.height) * ARENA_HEIGHT + ARENA_TOP,
     }
   }
   ui.canvas.addEventListener('pointerdown', event => {
@@ -405,14 +421,28 @@ const toward = (dx: number, dy: number): PlayerInput => {
 
 const isBot = params.get('bot') === '1'
 
+// NOTE: READY held through every break, a new press each wave.
+const readyIn = (world: Option.Option<RoomWorld>): number =>
+  Option.match(world, {
+    onNone: () => 0,
+    onSome: room =>
+      room.world.phase._tag === 'Preparation'
+        ? heldAction(actionCodeOf(SeatAction.Ready()), room.world.phase.wave)
+        : 0,
+  })
+
 const inputNow = (
   controls: Controls,
-  own: Option.Option<Dot>,
+  own: Option.Option<OwnSeat>,
+  world: Option.Option<RoomWorld>,
   nowMs: number,
 ): PlayerInput => {
   if (isBot) {
     const angle = Math.floor(nowMs / 400) * 0.5
-    return toward(Math.cos(angle) * 100, Math.sin(angle) * 100)
+    return {
+      ...toward(Math.cos(angle) * 100, Math.sin(angle) * 100),
+      action: readyIn(world),
+    }
   }
   const held = (...names: ReadonlyArray<string>) =>
     Array.some(names, name => controls.keys.has(name)) ? 1 : 0
@@ -423,7 +453,8 @@ const inputNow = (
   }
   return Option.match(Option.all([controls.pointer.at, own]), {
     onNone: () => NEUTRAL_INPUT,
-    onSome: ([target, dot]) => toward(target.x - dot.x, target.y - dot.y),
+    onSome: ([target, seat]) =>
+      toward(target.x - seat.player.x, target.y - seat.player.y),
   })
 }
 
@@ -438,7 +469,7 @@ const nameOfSlot = (lobby: Option.Option<Lobby>, slot: number): string =>
   )
 
 const draw = (
-  world: Option.Option<StandInWorld>,
+  world: Option.Option<RoomWorld>,
   play: Play,
   lobby: Option.Option<Lobby>,
 ) => {
@@ -467,18 +498,33 @@ const draw = (
       )
     },
     onSome: drawn => {
-      Array.forEach(drawn.walkers, walker => {
+      const level = levelOf(drawn.world)
+      context.save()
+      context.translate(0, -ARENA_TOP)
+      context.strokeStyle = '#3b3350'
+      context.strokeRect(
+        level.bounds.left,
+        level.bounds.top,
+        level.bounds.right - level.bounds.left,
+        level.bounds.bottom - level.bounds.top,
+      )
+      Array.forEach(drawn.world.zombies, zombie => {
         context.fillStyle = '#5f8f3e'
         context.beginPath()
-        context.arc(walker.x, walker.y, WALKER_RADIUS, 0, Math.PI * 2)
+        context.arc(zombie.x, zombie.y, WALKER_RADIUS, 0, Math.PI * 2)
         context.fill()
       })
-      Array.forEach(drawn.dots, dot => {
-        const mine = Option.exists(play.slot, slot => slot === dot.slot)
-        context.globalAlpha = dot.away ? 0.35 : 1
-        context.fillStyle = SLOT_COLORS[dot.slot] ?? '#fff'
+      Array.forEach(drawn.world.bullets, bullet => {
+        context.fillStyle = '#ffe9a8'
+        context.fillRect(bullet.x - 1, bullet.y - 1, 2, 2)
+      })
+      Array.forEach(playersOf(drawn.world), ({ slot, player, seat }) => {
+        const mine = Option.exists(play.slot, own => own === slot)
+        const away = seat.presence === 'Away'
+        context.globalAlpha = away ? 0.35 : 1
+        context.fillStyle = SLOT_COLORS[slot] ?? '#fff'
         context.beginPath()
-        context.arc(dot.x, dot.y, DOT_RADIUS, 0, Math.PI * 2)
+        context.arc(player.x, player.y, DOT_RADIUS, 0, Math.PI * 2)
         context.fill()
         if (mine) {
           context.strokeStyle = '#fff'
@@ -486,22 +532,23 @@ const draw = (
           context.stroke()
         }
         context.fillStyle = '#e8e2f0'
-        context.font = '11px monospace'
+        context.font = '9px monospace'
         context.textAlign = 'center'
         context.fillText(
-          `${nameOfSlot(lobby, dot.slot)} ${dot.score}${dot.away ? ' away' : ''}`,
-          dot.x,
-          dot.y - DOT_RADIUS - 4,
+          `${nameOfSlot(lobby, slot)} ${seat.kills}${away ? ' away' : ''}`,
+          player.x,
+          player.y - DOT_RADIUS - 3,
         )
         context.textAlign = 'start'
         context.globalAlpha = 1
       })
+      context.restore()
       context.fillStyle = '#a99cc4'
-      context.font = '12px monospace'
+      context.font = '10px monospace'
       context.fillText(
-        `tick ${drawn.tick}  ${Math.max(0, Math.ceil((10_800 - drawn.tick) / 60))} s left`,
-        8,
-        ARENA_HEIGHT - 8,
+        `tick ${drawn.tick}  ${drawn.world.phase._tag}${'wave' in drawn.world.phase ? ` ${drawn.world.phase.wave}` : ''}`,
+        6,
+        ARENA_HEIGHT - 6,
       )
     },
   })
@@ -682,7 +729,7 @@ const playRoom = (
           if (event._tag === 'Received') {
             const current = yield* Ref.get(play)
             const next = Session.receive(
-              StandIn,
+              GAME,
               current,
               event.frame,
               event.bytes,
@@ -716,15 +763,20 @@ const playRoom = (
       yield* nextFrame
       const nowMs = yield* Clock.currentTimeMillis
       const before = yield* Ref.get(play)
-      const input = inputNow(controls, before.predicted, nowMs)
-      const ticked = Session.tickInput(StandIn, before, input, nowMs)
+      const input = inputNow(
+        controls,
+        before.predicted,
+        Option.map(Array.last(before.frames), frame => frame.world),
+        nowMs,
+      )
+      const ticked = Session.tickInput(GAME, before, input, nowMs)
       const sent = yield* Effect.forEach(ticked.outgoing, room.send)
       const counted = Array.reduce(
         Array.getSomes(sent),
         ticked.session,
         Session.countSent,
       )
-      const rendered = Session.render(StandIn, counted, nowMs)
+      const rendered = Session.render(GAME, counted, nowMs)
       yield* Ref.set(play, rendered.session)
       const currentLobby = yield* Ref.get(lobby)
       draw(rendered.world, rendered.session, currentLobby)
@@ -740,9 +792,12 @@ const playRoom = (
         onNone: () => [],
         onSome: world =>
           Array.filter(
-            world.dots,
-            dot =>
-              !Option.exists(rendered.session.slot, slot => slot === dot.slot),
+            playersOf(world.world),
+            seated =>
+              !Option.exists(
+                rendered.session.slot,
+                slot => slot === seated.slot,
+              ),
           ),
       })
       const status = yield* Ref.get(connection)
@@ -786,15 +841,15 @@ const playRoom = (
           onNone: () => null,
           onSome: world => world.tick,
         }),
-        others: Array.map(others, dot => ({
-          slot: dot.slot,
-          x: dot.x,
-          y: dot.y,
-          away: dot.away,
+        others: Array.map(others, seated => ({
+          slot: seated.slot,
+          x: seated.player.x,
+          y: seated.player.y,
+          away: seated.seat.presence === 'Away',
         })),
         own: Option.match(rendered.session.shown, {
           onNone: () => null,
-          onSome: dot => ({ x: dot.x, y: dot.y }),
+          onSome: own => ({ x: own.player.x, y: own.player.y }),
         }),
       })
     })

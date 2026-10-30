@@ -24,8 +24,6 @@ import {
   type RoomTicket,
   SERVER_VERSIONS,
   ServerFrame,
-  StandIn,
-  type StandInWorld,
   decodeClientFrame,
   encodeServerFrame,
   normalizeRoomCode,
@@ -42,6 +40,11 @@ import {
   verifyToken,
 } from '@munch/sync-engine'
 
+import {
+  DEFAULT_ROOM_SETTINGS,
+  type RoomWorld,
+  roomWorldFor,
+} from '../../src/roomWorld.ts'
 import {
   INTERNAL_PATHS,
   InternalCreate,
@@ -84,13 +87,13 @@ import {
 // READY makes it Playing. A public room tells the Matchmaker (matchmaker.ts)
 // whenever its lobby changes. See MULTIPLAYER.md, Phase 2 and 3.
 //
-// The world is the stand-in (dots and walkers) until the game's own
-// `stepWorld` lands; it is the one line `World` below.
+// The world is the game's own (src/roomWorld.ts): `stepWorld` over the
+// lobby's seats, a campaign on Normal until the lobby picks a difficulty.
 
 export type GameRoomBindings = SyncBindings
 
-type GameWorld = StandInWorld
-const World = StandIn
+type GameWorld = RoomWorld
+const World = roomWorldFor(DEFAULT_ROOM_SETTINGS)
 
 const SCOPE_HEADER = 'x-sync-scope'
 const GAME_TAG = 'game'

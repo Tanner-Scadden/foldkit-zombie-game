@@ -26,15 +26,12 @@ import {
 import * as NodeRuntime from '@effect/platform-node/NodeRuntime'
 import {
   ChangedReady,
-  type Dot,
   EndedGame,
   type Lobby,
   MOVE_SCALE,
   NEUTRAL_INPUT,
   type PlayerInput,
   Session,
-  StandIn,
-  type StandInWorld,
 } from '@munch/netcode'
 import {
   type LobbyClient,
@@ -49,13 +46,23 @@ import {
 } from '@munch/netcode/browser'
 import { type Mutation, generateKey, makePlayerId } from '@munch/sync-engine'
 
+import { playersOf } from '../../src/party'
+import {
+  DEFAULT_ROOM_SETTINGS,
+  type OwnSeat,
+  type RoomWorld,
+  roomWorldFor,
+} from '../../src/roomWorld'
 import { LOCAL_ORIGIN, startWorkerd } from './local'
+
+// NOTE: the game's own World, as the GameRoom runs it.
+const GAME = roomWorldFor(DEFAULT_ROOM_SETTINGS)
 
 class CheckFailed extends Data.TaggedError('CheckFailed')<{
   readonly check: string
 }> {}
 
-type Play = Session.Session<StandInWorld, Dot>
+type Play = Session.Session<RoomWorld, OwnSeat>
 
 interface RoomHandle {
   readonly client: RoomClient
@@ -68,7 +75,7 @@ interface Player {
   readonly token: string
   readonly lobby: Ref.Ref<Option.Option<Lobby>>
   readonly play: Ref.Ref<Play>
-  readonly seen: Ref.Ref<ReadonlyArray<StandInWorld>>
+  readonly seen: Ref.Ref<ReadonlyArray<RoomWorld>>
   readonly room: Ref.Ref<Option.Option<RoomHandle>>
   lobbyClient: Option.Option<LobbyClient>
 }
@@ -110,8 +117,8 @@ const signIn = (name: string) =>
       playerId: session.playerId,
       token: session.token,
       lobby: yield* Ref.make(Option.none<Lobby>()),
-      play: yield* Ref.make(Session.makeSession<StandInWorld, Dot>(nowMs)),
-      seen: yield* Ref.make<ReadonlyArray<StandInWorld>>([]),
+      play: yield* Ref.make(Session.makeSession<RoomWorld, OwnSeat>(nowMs)),
+      seen: yield* Ref.make<ReadonlyArray<RoomWorld>>([]),
       room: yield* Ref.make(Option.none<RoomHandle>()),
       lobbyClient: Option.none(),
     }
@@ -173,7 +180,7 @@ const joinGame = (player: Player, code: string) =>
           if (event._tag === 'Received') {
             const current = yield* Ref.get(player.play)
             const next = Session.receive(
-              StandIn,
+              GAME,
               current,
               event.frame,
               event.bytes,
@@ -221,12 +228,7 @@ const drive = (player: Player, index: number) =>
   Effect.gen(function* () {
     const nowMs = yield* Clock.currentTimeMillis
     const current = yield* Ref.get(player.play)
-    const ticked = Session.tickInput(
-      StandIn,
-      current,
-      walk(index, nowMs),
-      nowMs,
-    )
+    const ticked = Session.tickInput(GAME, current, walk(index, nowMs), nowMs)
     const room = yield* Ref.get(player.room)
     const sent = yield* Option.match(room, {
       onNone: () => Effect.succeed([]),
@@ -237,7 +239,7 @@ const drive = (player: Player, index: number) =>
       ticked.session,
       Session.countSent,
     )
-    const rendered = Session.render(StandIn, counted, nowMs)
+    const rendered = Session.render(GAME, counted, nowMs)
     yield* Ref.set(player.play, rendered.session)
     yield* Option.match(rendered.world, {
       onNone: () => Effect.void,
@@ -250,9 +252,9 @@ const othersMoved = (player: Player, others: ReadonlyArray<number>) =>
   Effect.map(Ref.get(player.seen), seen =>
     Array.every(others, slot => {
       const xs = Array.flatMap(seen, world =>
-        Array.filterMap(world.dots, dot =>
-          dot.slot === slot
-            ? Result.succeed(Math.round(dot.x))
+        Array.filterMap(playersOf(world.world), seated =>
+          seated.slot === slot
+            ? Result.succeed(Math.round(seated.player.x))
             : Result.failVoid,
         ),
       )
