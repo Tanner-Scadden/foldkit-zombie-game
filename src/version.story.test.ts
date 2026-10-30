@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { Effect, Option } from 'effect'
 import { FetchHttpClient } from 'effect/http'
 import { Command, given, message, model, story } from 'foldkit/story'

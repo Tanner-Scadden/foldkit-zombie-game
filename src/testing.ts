@@ -1,4 +1,4 @@
-import { Array } from 'effect'
+import { Array, Option } from 'effect'
 import { Scene, Story } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
@@ -9,9 +9,11 @@ import { Message } from './message'
 import {
   type Bullet,
   Frenzy,
+  GameEvent,
   type Model,
   Phase,
   Pierce,
+  type PlannedSpawn,
   type RunStats,
   type Zombie,
   ZombieAction,
@@ -95,6 +97,57 @@ export const showDialogInScene = () => [
 export const fighting: Model = modifyFields(initialModel, {
   phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),
 })
+
+// NOTE: a spawn planned so far out that it never comes, so a wave that holds
+// it stays in progress with only the zombies a test puts in the room.
+export const DISTANT_SPAWN: PlannedSpawn = {
+  atMs: 1e9,
+  kind: 'Shambler',
+  door: 'North',
+  offset: 0,
+  speedScale: 1,
+  hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
+}
+
+// A wave in progress on a measured surface, with nothing coming in.
+export const quietWave = (wave: number): Model =>
+  modifyFields(initialModel, {
+    maybeSurface: () => Option.some(SURFACE),
+    phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
+  })
+
+export const withActors = (
+  base: Model,
+  zombies: ReadonlyArray<Zombie>,
+  bullets: ReadonlyArray<Bullet> = [],
+): Model =>
+  modifyFields(base, {
+    zombies: () => zombies,
+    bullets: () => bullets,
+  })
+
+// Ticks that push each frame's Model onto `frames`, for tests that look at a
+// whole fight after it is played.
+export const recordTicks = (
+  count: number,
+  deltaTime: number,
+  frames: Array<Model>,
+) =>
+  Array.flatMap(ticks(count, deltaTime), frame => [
+    frame,
+    Story.model((current: Model) => {
+      frames.push(current)
+    }),
+  ])
+
+export const blastFrames = (
+  frames: ReadonlyArray<Model>,
+): ReadonlyArray<Model> =>
+  Array.filter(frames, ({ frameEvents }) =>
+    Array.some(frameEvents, GameEvent.guards.Exploded),
+  )
 
 type ZombieOptions = Readonly<{
   speed?: number

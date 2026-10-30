@@ -31,7 +31,8 @@ Tap, click, or press Enter to start or retry. Esc pauses and resumes, and so doe
 | `bun dev`           | Start the Vite dev server                                                         |
 | `bun run build`     | Build for production                                                              |
 | `bun run typecheck` | Typecheck with [`tsrs`](https://github.com/oxc-project/tsrs) and the Effect rules |
-| `bun run test`      | Run the Story and Scene tests                                                     |
+| `bun run test`      | Run the fast tests: Story, Scene, and unit tests                                  |
+| `bun run test:full` | Run every test, as CI does: the fast tests plus whole wave replays                |
 | `bun run lint`      | Lint with oxlint, plus the Effect rules from `@effect/tsgo`                       |
 
 `tsrs` is a Rust port of the TypeScript 7 compiler. `effect-tsgo tsrs` runs it with the [Effect language service](https://github.com/Effect-TS/tsgo) diagnostics, which come from the `@effect/language-service` plugin entry in `tsconfig.json`. Without that entry, the typecheck is plain `tsrs` and reports no Effect diagnostics. `tsrs` is pre-1.0. If it misbehaves, `tsc --noEmit` from the `typescript` devDependency is the fallback typecheck.

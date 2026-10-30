@@ -2,15 +2,16 @@
 
 Three layers of balance checks, cheapest first. Run the heavy ones through the guard (see `tools/heavy/README.md`), never `simulate.ts` or `nightly.ts` directly.
 
-| Command                                        | Layer           | Time                       |
-| ---------------------------------------------- | --------------- | -------------------------- |
-| `bun run balance:model`                        | Analytical      | Under a second             |
-| `bun run test`                                 | Model and smoke | Part of the test suite     |
-| `bun run balance -- --wave 4 --runs 200`       | Wave snapshots  | Seconds                    |
-| `bun run balance -- --wave all --runs 100`     | Wave snapshots  | About a minute             |
-| `bun run balance [runs]`                       | Campaign bot    | Minutes                    |
-| `bun run balance:nightly`                      | Everything      | About 20 minutes           |
-| `bun run balance:nightly -- --update-baseline` | Everything      | Also rewrites the baseline |
+| Command                                        | Layer          | Time                       |
+| ---------------------------------------------- | -------------- | -------------------------- |
+| `bun run balance:model`                        | Analytical     | Under a second             |
+| `bun run test`                                 | Model          | Part of the test suite     |
+| `bun run test:full`                            | Smoke pass     | Part of the full tier (CI) |
+| `bun run balance -- --wave 4 --runs 200`       | Wave snapshots | Seconds                    |
+| `bun run balance -- --wave all --runs 100`     | Wave snapshots | About a minute             |
+| `bun run balance [runs]`                       | Campaign bot   | Minutes                    |
+| `bun run balance:nightly`                      | Everything     | About 20 minutes           |
+| `bun run balance:nightly -- --update-baseline` | Everything     | Also rewrites the baseline |
 
 ## Portrait view
 
@@ -38,14 +39,14 @@ The baseline is written when it is missing or with `--update-baseline`. `--exten
 
 ## Files
 
-| File            | What it holds                                                                      |
-| --------------- | ---------------------------------------------------------------------------------- |
-| `bot.ts`        | The bot, a campaign run, and wave snapshots                                        |
-| `simulate.ts`   | The command line: campaign and snapshot passes, workers, the text report, `--json` |
-| `summary.ts`    | Run summaries and their Schemas                                                    |
-| `model.ts`      | The analytical model                                                               |
-| `targets.ts`    | The targets from `GAME_DESIGN.md`, as data                                         |
-| `suite.ts`      | The nightly's jobs, metrics, target verdicts, baseline drift, and report           |
-| `nightly.ts`    | The nightly's shell: runs the jobs and writes the files                            |
-| `baseline.json` | The stored numbers the nightly compares against, written by the first nightly run  |
-| `*.test.ts`     | The model, suite, and snapshot tests, run by `bun run test`                        |
+| File            | What it holds                                                                                                           |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `bot.ts`        | The bot, a campaign run, and wave snapshots                                                                             |
+| `simulate.ts`   | The command line: campaign and snapshot passes, workers, the text report, `--json`                                      |
+| `summary.ts`    | Run summaries and their Schemas                                                                                         |
+| `model.ts`      | The analytical model                                                                                                    |
+| `targets.ts`    | The targets from `GAME_DESIGN.md`, as data                                                                              |
+| `suite.ts`      | The nightly's jobs, metrics, target verdicts, baseline drift, and report                                                |
+| `nightly.ts`    | The nightly's shell: runs the jobs and writes the files                                                                 |
+| `baseline.json` | The stored numbers the nightly compares against, written by the first nightly run                                       |
+| `*.test.ts`     | The model and suite tests, run by `bun run test`; `snapshot.sim.test.ts`, the wave 2 smoke pass, by `bun run test:full` |

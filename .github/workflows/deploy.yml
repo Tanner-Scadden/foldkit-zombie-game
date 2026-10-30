@@ -38,7 +38,9 @@ jobs:
         working-directory: tools/audit
       - run: bun run typecheck
       - run: bun run lint
-      - run: bun run test
+      # NOTE: the full tier: the fast tests plus the sim tier (whole wave
+      # replays and seed sweeps) that `bun run test` leaves out.
+      - run: bun run test:full
       - run: bun run build
       - run: bun run typecheck
         working-directory: infra

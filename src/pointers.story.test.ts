@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { Effect, Fiber, Option, Stream } from 'effect'
 import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'

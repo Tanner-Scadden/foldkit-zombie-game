@@ -13,6 +13,7 @@
     "typecheck": "effect-tsgo tsrs --noEmit && effect-tsgo tsrs --noEmit -p src/sw && effect-tsgo tsrs --noEmit -p tools/heavy && effect-tsgo tsrs --noEmit -p tools/balance && effect-tsgo tsrs --noEmit -p tools/analytics && effect-tsgo tsrs --noEmit -p tools/audit && effect-tsgo tsrs --noEmit -p tools/mp-spike && effect-tsgo tsrs --noEmit -p tools/determinism && effect-tsgo tsrs --noEmit -p packages/sqlite-wasm-effect && effect-tsgo tsrs --noEmit -p packages/sync-engine",
     "format": "oxfmt",
     "test": "bun tools/heavy/testRun.ts",
+    "test:full": "bun tools/heavy/testRun.ts --full",
     "perf:check": "bun tools/heavy/main.ts -- bun tools/audit/perf-check.ts",
     "heavy": "bun tools/heavy/main.ts --",
     "determinism": "bun tools/heavy/main.ts -- bun tools/determinism/crossEngine.ts",

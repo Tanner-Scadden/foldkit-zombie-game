@@ -1,9 +1,15 @@
-// `bun run test`: the three vitest runs, sized to the heavy guard's budget.
+// `bun run test` and `bun run test:full`: one vitest run, sized to the heavy
+// guard's budget. `bun run test` is the fast tier, every project but `sim`.
+// `bun run test:full` (the `--full` flag) adds the `sim` project, the whole
+// wave replays and seed sweeps (see vitest.config.ts). Any other arguments go
+// on to vitest, such as `bun run test -- src/kaboomer.story.test.ts` or
+// `bun run test -- --changed`.
+//
 // It never queues and takes no lock. It reads the budget once, gives vitest
 // what is left (at least 2 workers, at most one less than the cores), and
 // marks itself in the lock directory for as long as it runs, so test runs
 // from several agents, and the guard, count each other. In CI it runs
-// vitest with its own defaults.
+// vitest with its own worker defaults.
 import { Array, Clock, Config, Console, Effect, Option } from 'effect'
 
 import * as NodeRuntime from '@effect/platform-node/NodeRuntime'
@@ -13,24 +19,30 @@ import { type LockHolder, formatLoad, testWorkers } from './decision'
 import { GuardExit, makeContext, readBudget, runChild } from './guard'
 import { ensureLockDirectory, whileTesting } from './lock'
 
-const RUNS: ReadonlyArray<Array.NonEmptyReadonlyArray<string>> = [
-  ['vitest', 'run'],
-  ['vitest', 'run', '--root', 'packages/sqlite-wasm-effect'],
-  ['vitest', 'run', '--root', 'packages/sync-engine'],
-]
+const FULL_FLAG = '--full'
 
-// NOTE: runs each vitest in turn and stops at the first that fails, as
-// `a && b && c` did.
-const runAll = (extraArgs: ReadonlyArray<string>) =>
+const ARGUMENTS = Array.drop(process.argv, 2)
+
+const isFull = Array.contains(ARGUMENTS, FULL_FLAG)
+
+const passedOn = Array.filter(ARGUMENTS, argument => argument !== FULL_FLAG)
+
+// NOTE: the fast tier names the one project it leaves out, so a new project
+// (a new package) runs in both tiers without touching this file.
+const TIER_ARGUMENTS: ReadonlyArray<string> = isFull
+  ? []
+  : ['--project', '!sim']
+
+const COMMAND = isFull ? 'bun run test:full' : 'bun run test'
+
+const runVitest = (extraArgs: ReadonlyArray<string>) =>
   Effect.gen(function* () {
-    for (const run of RUNS) {
-      const exitCode = yield* runChild(
-        Array.appendAll(run, extraArgs),
-        {},
-      ).pipe(Effect.orDie)
-      if (exitCode !== 0) {
-        return yield* new GuardExit({ code: exitCode })
-      }
+    const exitCode = yield* runChild(
+      ['vitest', 'run', ...TIER_ARGUMENTS, ...extraArgs, ...passedOn],
+      {},
+    ).pipe(Effect.orDie)
+    if (exitCode !== 0) {
+      return yield* new GuardExit({ code: exitCode })
     }
   })
 
@@ -45,7 +57,7 @@ const budgeted = Effect.gen(function* () {
   const startedAt = yield* Clock.currentTimeMillis
   const holder: LockHolder = {
     pid: process.pid,
-    command: 'bun run test',
+    command: COMMAND,
     cwd: process.cwd(),
     startedAt,
     jobClass: 'Shared',
@@ -54,13 +66,13 @@ const budgeted = Effect.gen(function* () {
   yield* whileTesting(
     context.lockDirectory,
     holder,
-    runAll([`--maxWorkers=${workers}`]),
+    runVitest([`--maxWorkers=${workers}`]),
   )
 })
 
 const program = Effect.gen(function* () {
   const maybeCi = yield* Config.String('CI').pipe(Config.option)
-  yield* Option.isSome(maybeCi) ? runAll([]) : budgeted
+  yield* Option.isSome(maybeCi) ? runVitest([]) : budgeted
 })
 
 NodeRuntime.runMain(program.pipe(Effect.provide(NodeServices.layer)))

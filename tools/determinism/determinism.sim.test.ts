@@ -1,5 +1,6 @@
-// The in-process determinism check, run by `bun run test`: the same script
-// played twice in one engine must give the same gameplay hash on every frame.
+// The in-process determinism check, run by `bun run test:full` and CI: the
+// same script played twice in one engine must give the same gameplay hash on
+// every frame.
 // The second run sees a different Math.random and a clock a day later, so
 // an update that reads either diverges here at once. Iteration order of a
 // Map or Set built from data that differs run to run, or a Model mutated in

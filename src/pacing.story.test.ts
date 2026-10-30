@@ -37,14 +37,7 @@ import {
   initialModel,
 } from './model'
 import { tick, ticks } from './testing'
-import { asVeteran } from './veteran'
-import {
-  FINAL_WAVE,
-  debutKinds,
-  doorCounts,
-  rollSpawns,
-  rollWave,
-} from './waves'
+import { FINAL_WAVE, debutKinds, rollSpawns, rollWave } from './waves'
 
 const FRAME_MS = 50
 
@@ -467,86 +460,6 @@ describe('mercy', () => {
   })
 })
 
-type Arrival = Readonly<{ kind: string; door: DoorId; atMs: number }>
-
-type Played = Readonly<{
-  spawns: ReadonlyArray<PlannedSpawn>
-  arrivals: ReadonlyArray<Arrival>
-  quietFrames: ReadonlyArray<boolean>
-}>
-
-const isAnnounced = (current: Model): boolean =>
-  Alarm.guards.Ringing(current.pacing.alarm) ||
-  (Phase.guards.Wave(current.phase) &&
-    Array.some(current.phase.spawns, ({ pack }) =>
-      Array.contains(current.pacing.warnedPacks, pack),
-    ))
-
-// NOTE: This plays a wave as a player who kills every zombie the moment it
-// walks in, the worst case for an empty room. A frame is quiet when the room
-// is empty and no warned pack waits at a door. The player has met every kind,
-// so a new zombie intro does not hold the wave clock.
-const playKillingEverything = (wave: number, seed: number): Played => {
-  const [rngState, rolled] = rollWave(seed, wave)
-  const preparing = modifyFields(asVeteran(waveModel([])), {
-    phase: () =>
-      Phase.Preparation({
-        wave,
-        remainingMs: 5000,
-        durationMs: 5000,
-        spawns: rolled.spawns,
-      }),
-    pacing: () => modifyFields(calmPacing, { holds: () => rolled.holds }),
-    rngState: () => rngState,
-  })
-  const started = update(preparing, Message.PressedKey({ code: 'Enter' })).model
-  const seen = new Map<number, Arrival>()
-  const quietFrames: Array<boolean> = []
-  Array.reduce(
-    Array.makeBy(6000, index => index + 1),
-    started,
-    (current, frame) => {
-      if (!Phase.guards.Wave(current.phase)) {
-        return current
-      }
-      const next = update(
-        current,
-        Message.TickedFrame({ deltaTime: FRAME_MS }),
-      ).model
-      Array.forEach(next.zombies, zombie => {
-        if (!seen.has(zombie.id)) {
-          seen.set(zombie.id, {
-            kind: zombie.kind,
-            door: nearestDoor(PARLOUR, zombie).id,
-            atMs: frame * FRAME_MS,
-          })
-        }
-      })
-      if (Phase.guards.Wave(next.phase)) {
-        quietFrames.push(
-          Array.isReadonlyArrayEmpty(next.zombies) && !isAnnounced(next),
-        )
-      }
-      return modifyFields(next, { zombies: () => [] })
-    },
-  )
-  return {
-    spawns: rolled.spawns,
-    arrivals: Array.fromIterable(seen.values()),
-    quietFrames,
-  }
-}
-
-const longestQuietMs = (quietFrames: ReadonlyArray<boolean>): number =>
-  Array.reduce(
-    quietFrames,
-    { run: 0, longest: 0 },
-    ({ run, longest }, quiet) => {
-      const next = quiet ? run + FRAME_MS : 0
-      return { run: next, longest: Math.max(longest, next) }
-    },
-  ).longest
-
 type Frame = Readonly<{
   clockMs: number
   beat: Beat['_tag']
@@ -590,57 +503,9 @@ describe('determinism and the preview', () => {
       },
     )
   })
-
-  test('the preview matches every zombie that comes out of each door', () => {
-    Array.forEach([4, 6, FINAL_WAVE, FINAL_WAVE + 2], wave => {
-      const { spawns, arrivals } = playKillingEverything(wave, 2468)
-      expect(arrivals).toHaveLength(spawns.length)
-      Array.forEach(doorCounts(spawns, []), ({ door, kinds }) => {
-        const atDoor = Array.filter(arrivals, arrival => arrival.door === door)
-        expect(
-          Array.map(kinds, ({ kind }) => ({
-            kind,
-            count: Array.filter(atDoor, arrival => arrival.kind === kind)
-              .length,
-          })),
-        ).toEqual(kinds)
-      })
-    })
-  })
-
-  test('replaying the same seed and Messages gives the same spawns in the same order', () => {
-    const first = playKillingEverything(6, 777)
-    const second = playKillingEverything(6, 777)
-    expect(second).toEqual(first)
-  })
 })
 
 describe('dead air', () => {
-  const DEAD_AIR_MAX_MS = 1000
-  const SEEDS = Array.makeBy(12, index => 1 + index * 7919)
-
-  test("wave 2's first pack walks in within 2 seconds of the wave starting", () => {
-    Array.forEach(SEEDS, seed => {
-      const { arrivals } = playKillingEverything(2, seed)
-      const firstMs = Math.min(...Array.map(arrivals, ({ atMs }) => atMs))
-      expect(firstMs).toBeLessThanOrEqual(2000)
-    })
-  })
-
-  test('no wave leaves the room empty and unannounced for more than a second', () => {
-    Array.forEach(
-      Array.makeBy(FINAL_WAVE + 2, index => index + 1),
-      wave => {
-        Array.forEach(Array.take(SEEDS, wave > FINAL_WAVE ? 1 : 5), seed => {
-          const { quietFrames } = playKillingEverything(wave, seed)
-          expect(longestQuietMs(quietFrames)).toBeLessThanOrEqual(
-            DEAD_AIR_MAX_MS,
-          )
-        })
-      },
-    )
-  }, 60_000)
-
   test('an empty, quiet room pulls the next pack forward to its warning', () => {
     const atMs = 10_000
     story(
@@ -847,29 +712,4 @@ describe('spawn variety', () => {
       ).toBeGreaterThan(1)
     })
   })
-
-  test('the preview matches every zombie on every campaign wave for several seeds', () => {
-    Array.forEach(
-      Array.makeBy(FINAL_WAVE, index => index + 1),
-      wave => {
-        Array.forEach([11, 4242], seed => {
-          const { spawns, arrivals } = playKillingEverything(wave, seed)
-          expect(arrivals).toHaveLength(spawns.length)
-          Array.forEach(doorCounts(spawns, []), ({ door, kinds }) => {
-            const atDoor = Array.filter(
-              arrivals,
-              arrival => arrival.door === door,
-            )
-            expect(
-              Array.map(kinds, ({ kind }) => ({
-                kind,
-                count: Array.filter(atDoor, arrival => arrival.kind === kind)
-                  .length,
-              })),
-            ).toEqual(kinds)
-          })
-        })
-      },
-    )
-  }, 30_000)
 })

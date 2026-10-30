@@ -4,6 +4,8 @@ The goal, in the owner's words: "How we can get our test suite really good. Stan
 
 This plan has five parts: what the suite costs today (measured), what the industry and the research say (with sources, proven practice kept apart from the bleeding edge), a standard fixture and story layer, the speed work, and a phased migration with effort, expected gains, and risks. The browser audits (shots, taps, and the rest) are covered in their own section. The screenshot pipeline's own speed is in `docs/IMAGES_PLAN.md` and is not repeated here.
 
+**Status.** Recommendations 1 to 3 (section 4) are in: `isolate: false`, the `sim` tier (`*.sim.test.ts`, run by `bun run test:full` and CI), the Node environment by default, and the packages in the same run. Of 1,044 tests, 1,021 run in `bun run test` and 23 in the sim tier. At 5 workers, `bun run test` went from about 21 s to 6 to 8 s, and `test:full` takes about 21 s, most of it `pacing.sim.test.ts`. A nightly workflow runs `test:full` in a shuffled order. One parallel fast run of about a dozen timed out in the store's two-device sync test, and that test passed 8 runs alone and 4 shuffled serial runs. Watch it in the nightly runs.
+
 ## 1. Today, measured
 
 All numbers are from 2026-10-29 on the 12 core development laptop, at 4 vitest workers (what `bun run test` picks at normal load), with other agents' jobs running (load average 3 to 10). Times vary by about 10% between runs.

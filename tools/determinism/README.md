@@ -2,11 +2,11 @@
 
 The game's `update` must be deterministic: the same seed and the same Messages give the same game. This harness checks it three ways, with one scripted player and one gameplay hash:
 
-| Check            | Command                                | What it proves                                                                            |
-| ---------------- | -------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Same engine      | `bun run test` (`determinism.test.ts`) | Two runs in one engine hash the same on every frame. Light, runs on every change          |
-| Before and after | `bun run determinism:diff -- [ref]`    | A refactor changed no gameplay: the working tree plays exactly like `ref` (`origin/main`) |
-| Cross engine     | `bun run determinism`                  | Bun, Node, headless Chrome, and workerd play the same run bit for bit                     |
+| Check            | Command                                         | What it proves                                                                               |
+| ---------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Same engine      | `bun run test:full` (`determinism.sim.test.ts`) | Two runs in one engine hash the same on every frame. A few seconds, runs in CI on every push |
+| Before and after | `bun run determinism:diff -- [ref]`             | A refactor changed no gameplay: the working tree plays exactly like `ref` (`origin/main`)    |
+| Cross engine     | `bun run determinism`                           | Bun, Node, headless Chrome, and workerd play the same run bit for bit                        |
 
 The two heavy ones play whole runs, so they go through the guard like every heavy job (see `tools/heavy/README.md`).
 
@@ -28,7 +28,7 @@ Frame lengths come from a pattern: `Fixed60` (every frame 1000/60 ms, the room's
 
 ## The same engine check
 
-`determinism.test.ts` plays 1,800 campaign frames twice and 900 endless frames with mixed frame lengths twice, and the second run sees a `Math.random` that returns other numbers and a `Date.now` and `performance.now` a day later. An `update` that reads the clock or `Math.random` fails it at once. It also checks that the whole Model, client fields included, ends the same, and the hash's own rules.
+`determinism.sim.test.ts` (in the sim tier, so `bun run test:full` and CI run it, not `bun run test`) plays 1,800 campaign frames twice and 900 endless frames with mixed frame lengths twice, and the second run sees a `Math.random` that returns other numbers and a `Date.now` and `performance.now` a day later. An `update` that reads the clock or `Math.random` fails it at once. It also checks that the whole Model, client fields included, ends the same, and the hash's own rules.
 
 ## Before and after
 
@@ -68,4 +68,4 @@ So the game is deterministic in each engine, and across engines only the transce
 | `build.ts`, `workerd.capnp`        | The bundles in `out/` and the workerd config                         |
 | `crossEngine.ts`, `beforeAfter.ts` | The two heavy checks                                                 |
 | `detMath.ts`                       | Deterministic `hypot`, `sin`, `cos`, `atan2`, and `exp`, for replays |
-| `determinism.test.ts`              | The same engine check and the hash's rules                           |
+| `determinism.sim.test.ts`          | The same engine check and the hash's rules                           |

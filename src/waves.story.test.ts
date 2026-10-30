@@ -5,11 +5,7 @@ import { describe, expect, test } from 'vitest'
 
 import { PARLOUR } from './arena'
 import { hasBoss } from './boss'
-import {
-  FIRST_PREPARATION_MS,
-  PLAYER_MAX_HP,
-  PREPARATION_MS,
-} from './constants'
+import { FIRST_PREPARATION_MS, PREPARATION_MS } from './constants'
 import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
@@ -453,52 +449,5 @@ describe('wave plans', () => {
         ).toBe(true)
       },
     )
-  })
-})
-
-describe('a full wave', () => {
-  const SECONDS_PER_RUN = 40
-  const STEP_RIGHT_TICKS = 17
-
-  const playFirstWave = (seed: number): ReadonlyArray<Model> => {
-    const frames: Array<Model> = []
-    const record = model((frame: Model) => {
-      frames.push(frame)
-    })
-    story(
-      update,
-      given(modifyFields(readyModel, { rngState: () => seed })),
-      press('Enter'),
-      release('Enter'),
-      press('KeyD'),
-      ...ticks(STEP_RIGHT_TICKS, FRAME_MS),
-      release('KeyD'),
-      press('KeyW'),
-      tick(FRAME_MS),
-      release('KeyW'),
-      press('Enter'),
-      holdFire,
-      ...Array.flatMap(
-        ticks((SECONDS_PER_RUN * 1000) / FRAME_MS, FRAME_MS),
-        frame => [frame, record],
-      ),
-    )
-    return frames
-  }
-
-  test('wave 1 can be cleared, leads to wave 2 preparation, and replays identically', () => {
-    const first = playFirstWave(1234)
-    const second = playFirstWave(1234)
-
-    const maybeCleared = Array.findFirst(
-      first,
-      ({ phase }) => Phase.guards.Preparation(phase) && phase.wave === 2,
-    )
-    const cleared = Option.getOrThrow(maybeCleared)
-    expect(scoreOf(cleared.stats)).toBeGreaterThan(0)
-    expect(cleared.player.hp).toBeGreaterThan(0)
-    expect(cleared.player.hp).toBeLessThanOrEqual(PLAYER_MAX_HP)
-    expect(second).toEqual(first)
-    expect(playFirstWave(98765)).not.toEqual(first)
   })
 })

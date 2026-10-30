@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { Array, Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'

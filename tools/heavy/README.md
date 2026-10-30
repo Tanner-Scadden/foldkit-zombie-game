@@ -2,17 +2,18 @@
 
 A small Effect program that every CPU-heavy job goes through, so several agents on one laptop share it instead of piling up. It aims to keep the machine at about 70% busy. Run it from the repo root.
 
-| Command                                      | What it does                                              |
-| -------------------------------------------- | --------------------------------------------------------- |
-| `bun run balance [runs]`                     | The balance bot through the guard                         |
-| `bun run perf:check`                         | The frame time gate through the guard                     |
-| `bun run heavy -- <command...>`              | Any other heavy command, such as an audit or shots script |
-| `bun run heavy -- --allow-more <command...>` | Run past the balance budget                               |
-| `bun run heavy -- --timing <command...>`     | Run as a Timing job, whatever the command                 |
-| `bun run heavy -- --cpu <command...>`        | Run as a CPU job, whatever the command                    |
-| `bun run heavy -- --shared <command...>`     | Run as a Shared job, whatever the command                 |
-| `bun run heavy -- --reset-budget`            | Reset this worktree and branch's balance batch count      |
-| `bun run test`                               | The tests, with vitest's workers sized to the budget      |
+| Command                                      | What it does                                                  |
+| -------------------------------------------- | ------------------------------------------------------------- |
+| `bun run balance [runs]`                     | The balance bot through the guard                             |
+| `bun run perf:check`                         | The frame time gate through the guard                         |
+| `bun run heavy -- <command...>`              | Any other heavy command, such as an audit or shots script     |
+| `bun run heavy -- --allow-more <command...>` | Run past the balance budget                                   |
+| `bun run heavy -- --timing <command...>`     | Run as a Timing job, whatever the command                     |
+| `bun run heavy -- --cpu <command...>`        | Run as a CPU job, whatever the command                        |
+| `bun run heavy -- --shared <command...>`     | Run as a Shared job, whatever the command                     |
+| `bun run heavy -- --reset-budget`            | Reset this worktree and branch's balance batch count          |
+| `bun run test`                               | The fast test tier, with vitest's workers sized to the budget |
+| `bun run test:full`                          | The full test tier (adds the sim tier), sized the same way    |
 
 Env vars on the command line, such as `MODE=endless bun run balance 100`, pass through to the child. `--exclusive` still works and means `--timing`.
 
@@ -74,7 +75,7 @@ Every waiting job writes a marker with when it arrived, its class, and its cost,
 
 ## Tests
 
-`bun run test` (`testRun.ts`) never queues and takes no lock. It reads the budget once, runs vitest with `--maxWorkers` set to `floor(headroom)`, at least 2 and at most one less than the cores, and marks itself in `tests-<pid>.json` while it runs, so test runs from several agents, and the guard, count each other in the first minute. In CI (`CI` set) it runs vitest with its own defaults.
+`bun run test` and `bun run test:full` (`testRun.ts`, the second with `--full`) run one vitest over every project but `sim`, or over all of them, and pass any other arguments on to vitest. Neither queues or takes a lock. It reads the budget once, runs vitest with `--maxWorkers` set to `floor(headroom)`, at least 2 and at most one less than the cores, and marks itself in `tests-<pid>.json` while it runs, so test runs from several agents, and the guard, count each other in the first minute. In CI (`CI` set) it runs vitest with its own defaults.
 
 ## Worktrees on an older guard
 
@@ -95,6 +96,6 @@ Rebase a long-lived worktree before running timing audits in it.
 | `ledger.ts`        | Reading and writing the balance batch ledger                                                                                                             |
 | `guard.ts`         | The shell: reads the budget, gathers a snapshot, acts on the decision, and runs the child                                                                |
 | `main.ts`          | The guard's entry point                                                                                                                                  |
-| `testRun.ts`       | `bun run test`: vitest sized to the budget                                                                                                               |
+| `testRun.ts`       | `bun run test` and `test:full`: vitest sized to the budget                                                                                               |
 
 Every choice is made by `decide(snapshot)`, which returns `Run` (with the file to hold, the workers, the cost, whether to take over a stale file, and notes), `Wait` (with the reason), or `Refuse` (with the reason). The shell only reads the load, the files, the markers, and the ledger into a snapshot and carries out what comes back. `maybeConflictAfterTaking` is the pure check each guard makes after taking its file.
