@@ -1,15 +1,15 @@
 import { Array, Equal, Result } from 'effect'
 import { Canvas } from 'foldkit'
-import { type Html, type HtmlBuilder, createLazy } from 'foldkit/html'
+import { type Html, createLazy } from 'foldkit/html'
 
 import { spriteWarmUpSources } from './appearance'
 import { type Level, levelOf } from './arena'
 import { bossBandShapes } from './bossView'
 import { type Camera, toScreenCamera, worldCameraFor } from './camera'
+import type { ApplicationViewBuilder } from './composition'
 import { coopEdgeShapes } from './coopMarksView'
 import { decalShapes } from './effectsView'
 import { hudShapes, hudStripShapes } from './hud'
-import type { Message } from './message'
 import {
   type Decal,
   type Model,
@@ -77,7 +77,7 @@ const layerCanvasView = (
   key: string,
   level: Level,
   shapes: ReadonlyArray<Canvas.Shape>,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   Canvas.view(
     {
@@ -93,13 +93,13 @@ const layerCanvasView = (
     h,
   )
 
-const roomLayerView = (level: Level, h: HtmlBuilder<Message>): Html =>
+const roomLayerView = (level: Level, h: ApplicationViewBuilder): Html =>
   layerCanvasView('room-layer', level, roomShapes(level), h)
 
 const decalLayerView = (
   level: Level,
   decals: ReadonlyArray<Decal>,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => layerCanvasView('decal-layer', level, decalShapes(decals), h)
 
 const lazyRoomLayer = createLazy()
@@ -127,7 +127,7 @@ const floorLayersView = (
   model: Model,
   camera: Camera,
   offset: Vector,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const level = levelOf(model)
   return h.div(
@@ -170,7 +170,7 @@ const overlayLayerView = (
   width: number,
   height: number,
   shapes: ReadonlyArray<Canvas.Shape>,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   Canvas.view(
     {
@@ -204,7 +204,7 @@ const roomSources = (): ReadonlyArray<string> =>
     shape._tag === 'Image' ? Result.succeed(shape.src) : Result.failVoid,
   )
 
-const warmUpView = (h: HtmlBuilder<Message>): Html =>
+const warmUpView = (h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Key(WARM_UP_CLASS), h.AriaHidden(true), h.Style({ display: 'none' })],
     Array.map(
@@ -233,7 +233,10 @@ const lazyWarmUp = createLazy()
 
 const STAGE_BACKDROP = '#140c10'
 
-export const gameStageView = (model: Model, h: HtmlBuilder<Message>): Html => {
+export const gameStageView = (
+  model: Model,
+  h: ApplicationViewBuilder,
+): Html => {
   const screen = screenOf(model)
   const camera = worldCameraFor(model, screen)
   const { world } = screen

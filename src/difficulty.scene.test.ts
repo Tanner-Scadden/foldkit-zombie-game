@@ -13,11 +13,9 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
 import { RESTART_GRACE_MS } from './constants'
-import { update } from './main'
 import { type Model, Phase, initialModel } from './model'
-import { measureSurface, showDialogInScene } from './testing'
+import { ROOT, measureSurface, showDialogInScene } from './testing'
 import { asVeteran } from './veteran'
-import { view } from './view'
 
 const playButton = role('button', {
   name: 'Play',
@@ -46,7 +44,7 @@ const INITIAL_FOCUS = 'data-foldkit-dialog-initial-focus'
 describe('the difficulty card', () => {
   test('the first PLAY shows four choices with Nightmare locked', () => {
     scene(
-      { update, view },
+      ROOT,
       given(initialModel),
       measureSurface,
       click(playButton),
@@ -67,7 +65,7 @@ describe('the difficulty card', () => {
 
   test('after a Hard win Nightmare is open, with a NEW badge', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(initialModel, {
           difficulty: () => ({ chosen: 'Hard', nightmare: 'JustUnlocked' }),
@@ -89,7 +87,7 @@ describe('the difficulty card', () => {
 describe('the difficulty picker by PLAY', () => {
   test('marks the chosen level, keeps Nightmare locked, and opens on the chosen level', () => {
     scene(
-      { update, view },
+      ROOT,
       given(asVeteran(initialModel)),
       measureSurface,
       click(difficultyButton),
@@ -116,7 +114,7 @@ const ended = (phase: Phase, base: Model): Model =>
 describe('the end screens', () => {
   test('Game Over names the difficulty', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         ended(
           Phase.GameOver({ wave: 4 }),
@@ -132,7 +130,7 @@ describe('the end screens', () => {
 
   test('a Hard Victory names the difficulty and the unlock', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         ended(
           Phase.Victory(),

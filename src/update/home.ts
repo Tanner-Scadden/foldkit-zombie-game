@@ -2,8 +2,6 @@ import { Array, Option } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { Dialog } from '@foldkit/ui'
-
 import { NEWS_DAYS } from '../changelog'
 import {
   FocusEndMenuButton,
@@ -13,9 +11,15 @@ import {
   ShowInstallPrompt,
   WaitForUnwrap,
 } from '../commands'
+import {
+  HandDialogBinding,
+  HomeScreenStepsBinding,
+  PanelDialogBinding,
+  UpdateGreetingBinding,
+} from '../composition'
 import { Screen as CoopScreen } from '../coop/model'
 import { runDifficultyOf } from '../coopPlay'
-import { dialogFolds } from '../dialogs'
+import { makeStep } from '../definition'
 import {
   chooseDifficulty,
   isLocked,
@@ -44,7 +48,6 @@ import {
   turnNewsPage,
 } from '../home'
 import { isMenuKey, isStartKey, maybeFocusStep, releaseAll } from '../input'
-import { Message } from '../message'
 import {
   type Difficulty,
   DifficultyCard,
@@ -65,36 +68,28 @@ import {
   startsRun,
 } from './run'
 import { playSounds, uiCue, unlockAudio } from './sound'
-import { type UpdateReturn, type UpdateStep, withInput } from './step'
+import {
+  type UpdateReturn,
+  type UpdateStep,
+  combine,
+  unchanged,
+  withInput,
+} from './step'
 
 // MENU
 
-const writePanelDialog = (model: Model, nextPanelDialog: Dialog.Model): Model =>
-  modifyFields(model, { panelDialog: () => nextPanelDialog })
-
-const forgetAskedMode = (model: Model): Model =>
-  DifficultyCard.isAnyOf(['Asking'])(model.difficultyCard)
-    ? modifyFields(model, { difficultyCard: () => DifficultyCard.Unseen() })
-    : model
-
-const foldPanelDialogOutMessage = Dialog.OutMessage.match<UpdateStep>({
-  Opened: () => stepModel => ({ model: stepModel }),
-  Closed: () => stepModel => ({ model: forgetAskedMode(stepModel) }),
+// NOTE: the panel's Closed fold (src/composition.ts): a Difficulty panel
+// that asked before a run, closed without a pick, asks again next time.
+export const forgetAskedMode: UpdateStep = stepModel => ({
+  model: DifficultyCard.isAnyOf(['Asking'])(stepModel.difficultyCard)
+    ? modifyFields(stepModel, { difficultyCard: () => DifficultyCard.Unseen() })
+    : stepModel,
 })
-
-const panelDialog = dialogFolds({
-  read: (model: Model) => model.panelDialog,
-  write: writePanelDialog,
-  toParentMessage: message => Message.GotPanelDialogMessage({ message }),
-  foldOutMessage: foldPanelDialogOutMessage,
-})
-
-export const foldPanelDialog = panelDialog.fold
 
 const isPanelAllowed = (model: Model, panel: MenuPanel): boolean => {
   if (
     model.panelDialog.isOpen ||
-    model.profile.dialog.isOpen ||
+    model.profileDialog.isOpen ||
     model.handDialog.isOpen
   ) {
     return false
@@ -105,25 +100,31 @@ const isPanelAllowed = (model: Model, panel: MenuPanel): boolean => {
   }
 }
 
-export const openPanel =
+const showPanel =
   (panel: MenuPanel): UpdateStep =>
-  stepModel =>
-    isPanelAllowed(stepModel, panel)
-      ? panelDialog.open(
-          withInput(
-            modifyFields(stepModel, {
-              panel: () => panel,
-              tutorialReset: () => 'Idle',
-            }),
-            releaseAll,
-          ),
-        )
-      : { model: stepModel }
+  stepModel => ({
+    model: withInput(
+      modifyFields(stepModel, {
+        panel: () => panel,
+        tutorialReset: () => 'Idle',
+      }),
+      releaseAll,
+    ),
+  })
 
-export const closePanel: UpdateStep = stepModel =>
-  stepModel.panelDialog.isOpen
-    ? panelDialog.close(stepModel)
-    : { model: stepModel }
+export const openPanel = (panel: MenuPanel) =>
+  makeStep(model =>
+    isPanelAllowed(model, panel)
+      ? Update.combineSteps([
+          showPanel(panel),
+          PanelDialogBinding.requestOpen(),
+        ])
+      : unchanged,
+  )
+
+export const closePanel = makeStep(model =>
+  model.panelDialog.isOpen ? PanelDialogBinding.requestClose() : unchanged,
+)
 
 export const goHome: UpdateStep = stepModel => ({
   model: returnHome(withInput(stepModel, releaseAll)),
@@ -131,70 +132,59 @@ export const goHome: UpdateStep = stepModel => ({
 
 const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
 
-export const leaveFromMenu: UpdateStep = stepModel => {
-  if (isPaused(stepModel.phase)) {
-    return openPanel('LeaveRun')(stepModel)
-  } else if (isEndScreen(stepModel.phase) && isPastRestartGrace(stepModel)) {
-    return goHome(stepModel)
+export const leaveFromMenu = makeStep(model => {
+  if (isPaused(model.phase)) {
+    return openPanel('LeaveRun')
+  } else if (isEndScreen(model.phase) && isPastRestartGrace(model)) {
+    return goHome
   } else {
-    return { model: stepModel }
+    return unchanged
   }
-}
+})
 
-export const leaveRun: UpdateStep = stepModel =>
-  isPaused(stepModel.phase) && stepModel.panel === 'LeaveRun'
-    ? Update.combine(stepModel, [closePanel, goHome])
-    : { model: stepModel }
+export const leaveRun = makeStep(model =>
+  isPaused(model.phase) && model.panel === 'LeaveRun'
+    ? Update.combineSteps([closePanel, goHome])
+    : unchanged,
+)
 
 const isEndMenuKey = (model: Model, code: string): boolean =>
   isMenuKey(code) || (isStartKey(code) && endOffer(model) === 'MenuOnly')
 
-export const menuFromKey: (code: string) => UpdateStep = code => stepModel =>
-  isEndMenuKey(stepModel, code)
-    ? leaveFromMenu(stepModel)
-    : { model: stepModel }
+export const menuFromKey = (code: string) =>
+  makeStep(model => (isEndMenuKey(model, code) ? leaveFromMenu : unchanged))
 
 export const canMoveHomeFocus = (model: Model): boolean =>
   isOnHome(model.phase) &&
   CoopScreen.isAnyOf(['Closed'])(model.coop.screen) &&
   !model.panelDialog.isOpen &&
-  !model.profile.dialog.isOpen &&
+  !model.profileDialog.isOpen &&
   !model.handDialog.isOpen
 
 // NOTE: the gear opens the Profile on its Settings tab, only from the menu
 // itself, as the gear is only there.
-export const openSettingsFromGear: UpdateStep = stepModel =>
-  canMoveHomeFocus(stepModel)
-    ? openProfile('Settings')(stepModel)
-    : { model: stepModel }
+export const openSettingsFromGear = makeStep(model =>
+  canMoveHomeFocus(model) ? openProfile('Settings') : unchanged,
+)
 
 // THE MANOR HAND
 
-const handDialog = dialogFolds({
-  read: (model: Model) => model.handDialog,
-  write: (model, nextHandDialog) =>
-    modifyFields(model, { handDialog: () => nextHandDialog }),
-  toParentMessage: message => Message.GotHandDialogMessage({ message }),
+const releaseInput: UpdateStep = stepModel => ({
+  model: withInput(stepModel, releaseAll),
 })
 
-export const foldHandDialog = handDialog.fold
+export const openHand = makeStep(model =>
+  canMoveHomeFocus(model)
+    ? Update.combineSteps([releaseInput, HandDialogBinding.requestOpen()])
+    : unchanged,
+)
 
-export const openHand: UpdateStep = stepModel =>
-  canMoveHomeFocus(stepModel)
-    ? handDialog.open(withInput(stepModel, releaseAll))
-    : { model: stepModel }
-
-const closeHand: UpdateStep = stepModel =>
-  stepModel.handDialog.isOpen
-    ? handDialog.close(stepModel)
-    : { model: stepModel }
-
-// NOTE: a card puts the hand away, then opens its panel, so the panel's
-// Done or Esc lands back on the menu, not in the hand.
-export const fromHand =
-  (step: UpdateStep): UpdateStep =>
-  stepModel =>
-    Update.combine(stepModel, [closeHand, step])
+// NOTE: a card puts the hand away before it opens its panel, so the
+// panel's Done or Esc lands back on the menu, not in the hand: a card's
+// handler runs closeHand, then the card's own Step.
+export const closeHand = makeStep(model =>
+  model.handDialog.isOpen ? HandDialogBinding.requestClose() : unchanged,
+)
 
 export const stepHandFocus = (model: Model, card: HandCard): UpdateReturn =>
   model.handDialog.isOpen && Array.contains(dealtCards(model), card)
@@ -228,17 +218,24 @@ const isPanelOpen = (model: Model, panel: MenuPanel): boolean =>
 export const homeStartFromKey = (model: Model, code: string): Model =>
   isStartKey(code) ? startWhenAllowed(model, runModeOf(model.home.mode)) : model
 
-export const openWhatsNew: UpdateStep = stepModel =>
-  isPanelAllowed(stepModel, 'WhatsNew')
-    ? openPanel('WhatsNew')(seeNews(stepModel))
-    : { model: stepModel }
+const seeNewsStep: UpdateStep = stepModel => ({ model: seeNews(stepModel) })
 
-export const openMunchopedia =
+export const openWhatsNew = makeStep(model =>
+  isPanelAllowed(model, 'WhatsNew')
+    ? Update.combineSteps([seeNewsStep, openPanel('WhatsNew')])
+    : unchanged,
+)
+
+const showPage =
   (page: MunchopediaPage): UpdateStep =>
-  stepModel =>
-    isPanelAllowed(stepModel, 'Munchopedia')
-      ? openPanel('Munchopedia')(showMunchopediaPage(stepModel, page))
-      : { model: stepModel }
+  stepModel => ({ model: showMunchopediaPage(stepModel, page) })
+
+export const openMunchopedia = (page: MunchopediaPage) =>
+  makeStep(model =>
+    isPanelAllowed(model, 'Munchopedia')
+      ? Update.combineSteps([showPage(page), openPanel('Munchopedia')])
+      : unchanged,
+  )
 
 export const turnMunchopediaPage = (
   model: Model,
@@ -255,37 +252,45 @@ export const turnNews = (model: Model, step: number): UpdateReturn => ({
     : model,
 })
 
-const CARD_OPENERS: Readonly<Record<KeyedHandCard, UpdateStep>> = {
-  WhatsNew: openWhatsNew,
-  Munchopedia: openMunchopedia(MunchopediaPage.List()),
-  Character: openProfile('Look'),
-  HowToPlay: openPanel('HowToPlay'),
+const openCard = (card: KeyedHandCard) => {
+  switch (card) {
+    case 'WhatsNew':
+      return openWhatsNew
+    case 'Munchopedia':
+      return openMunchopedia(MunchopediaPage.List())
+    case 'Character':
+      return openProfile('Look')
+    case 'HowToPlay':
+      return openPanel('HowToPlay')
+  }
 }
+
+const switchModeStep: UpdateStep = stepModel => ({
+  model: switchMode(stepModel),
+})
 
 // NOTE: C opens the character picker on every screen that offers it, so it
 // stays with characterFromKey and is left out here. The card keys work from
 // the menu without opening the hand first.
-export const homeFromKey: (code: string) => UpdateStep = code => stepModel => {
-  if (!canMoveHomeFocus(stepModel)) {
-    return { model: stepModel }
-  } else if (isModeKey(code)) {
-    return { model: switchMode(stepModel) }
-  } else if (isDifficultyKey(code)) {
-    return openPanel('Difficulty')(stepModel)
-  } else if (isManorKey(code)) {
-    return openHand(stepModel)
-  } else if (isSettingsKey(code)) {
-    return openProfile('Settings')(stepModel)
-  } else {
-    return Option.match(maybeHandCardOfKey(code), {
-      onNone: () => ({ model: stepModel }),
-      onSome: card =>
-        card === 'Character'
-          ? { model: stepModel }
-          : CARD_OPENERS[card](stepModel),
-    })
-  }
-}
+export const homeFromKey = (code: string) =>
+  makeStep(model => {
+    if (!canMoveHomeFocus(model)) {
+      return unchanged
+    } else if (isModeKey(code)) {
+      return switchModeStep
+    } else if (isDifficultyKey(code)) {
+      return openPanel('Difficulty')
+    } else if (isManorKey(code)) {
+      return openHand
+    } else if (isSettingsKey(code)) {
+      return openProfile('Settings')
+    } else {
+      return Option.match(maybeHandCardOfKey(code), {
+        onNone: () => unchanged,
+        onSome: card => (card === 'Character' ? unchanged : openCard(card)),
+      })
+    }
+  })
 
 // DIFFICULTY
 
@@ -293,63 +298,72 @@ export const isAskingDifficultyFirst = (model: Model): boolean =>
   DifficultyCard.isAnyOf(['Unseen'])(model.difficultyCard) &&
   isOnHome(model.phase)
 
-const askDifficulty =
+const markAsking =
+  (mode: RunMode): UpdateStep =>
+  stepModel => ({
+    model: modifyFields(stepModel, {
+      difficultyCard: () => DifficultyCard.Asking({ mode }),
+    }),
+  })
+
+const askDifficulty = (mode: RunMode) =>
+  makeStep(model =>
+    isPanelAllowed(model, 'Difficulty')
+      ? Update.combineSteps([markAsking(mode), openPanel('Difficulty')])
+      : unchanged,
+  )
+
+const startWithMode =
   (mode: RunMode): UpdateStep =>
   stepModel =>
-    isPanelAllowed(stepModel, 'Difficulty')
-      ? openPanel('Difficulty')(
-          modifyFields(stepModel, {
-            difficultyCard: () => DifficultyCard.Asking({ mode }),
-          }),
-        )
-      : { model: stepModel }
+    startFromButton(stepModel, startWhenAllowed(stepModel, mode))
 
-export const startOrAsk =
-  (mode: RunMode): UpdateStep =>
-  stepModel =>
-    isAskingDifficultyFirst(stepModel)
-      ? Update.combine(stepModel, [unlockAudio, askDifficulty(mode)])
-      : startFromButton(stepModel, startWhenAllowed(stepModel, mode))
+export const startOrAsk = (mode: RunMode) =>
+  makeStep(model =>
+    isAskingDifficultyFirst(model)
+      ? Update.combineSteps([unlockAudio, askDifficulty(mode)])
+      : startWithMode(mode),
+  )
 
-export const difficultyCardFromKey: (code: string) => UpdateStep =
-  code => stepModel =>
-    isAskingDifficultyFirst(stepModel) && isStartKey(code)
-      ? askDifficulty(runModeOf(stepModel.home.mode))(stepModel)
-      : { model: stepModel }
+export const difficultyCardFromKey = (code: string) =>
+  makeStep(model =>
+    isAskingDifficultyFirst(model) && isStartKey(code)
+      ? askDifficulty(runModeOf(model.home.mode))
+      : unchanged,
+  )
 
-const pickFromBadge =
+const chooseFromCard =
   (difficulty: Difficulty): UpdateStep =>
-  stepModel =>
-    isPanelOpen(stepModel, 'Difficulty') &&
-    isOnHome(stepModel.phase) &&
-    !isLocked(stepModel.difficulty, difficulty)
-      ? closePanel(
-          modifyFields(chooseDifficulty(stepModel, difficulty), {
-            difficultyCard: () => DifficultyCard.Seen(),
-          }),
-        )
-      : { model: stepModel }
+  stepModel => ({
+    model: modifyFields(chooseDifficulty(stepModel, difficulty), {
+      difficultyCard: () => DifficultyCard.Seen(),
+    }),
+  })
 
-export const pickFromCard =
-  (difficulty: Difficulty): UpdateStep =>
-  stepModel =>
-    DifficultyCard.match(stepModel.difficultyCard, {
-      Unseen: () => pickFromBadge(difficulty)(stepModel),
-      Seen: () => pickFromBadge(difficulty)(stepModel),
+const pickFromBadge = (difficulty: Difficulty) =>
+  makeStep(model =>
+    isPanelOpen(model, 'Difficulty') &&
+    isOnHome(model.phase) &&
+    !isLocked(model.difficulty, difficulty)
+      ? Update.combineSteps([chooseFromCard(difficulty), closePanel])
+      : unchanged,
+  )
+
+export const pickFromCard = (difficulty: Difficulty) =>
+  makeStep(model =>
+    DifficultyCard.match(model.difficultyCard, {
+      Unseen: () => pickFromBadge(difficulty),
+      Seen: () => pickFromBadge(difficulty),
       Asking: ({ mode }) =>
-        isLocked(stepModel.difficulty, difficulty)
-          ? { model: stepModel }
-          : Update.combine(
-              modifyFields(chooseDifficulty(stepModel, difficulty), {
-                difficultyCard: () => DifficultyCard.Seen(),
-              }),
-              [
-                closePanel,
-                nextModel =>
-                  startFromButton(nextModel, startWhenAllowed(nextModel, mode)),
-              ],
-            ),
-    })
+        isLocked(model.difficulty, difficulty)
+          ? unchanged
+          : Update.combineSteps([
+              chooseFromCard(difficulty),
+              closePanel,
+              startWithMode(mode),
+            ]),
+    }),
+  )
 
 export const settleNightmareFrom =
   (before: Model): UpdateStep =>
@@ -390,35 +404,33 @@ export const dismissHomeScreenTip = (model: Model): Model =>
     ? model
     : modifyFields(model, { homeScreenTip: () => 'Dismissed' })
 
-const homeScreenSteps = dialogFolds({
-  read: (model: Model) => model.homeScreenSteps,
-  write: (model, nextHomeScreenSteps) =>
-    modifyFields(model, { homeScreenSteps: () => nextHomeScreenSteps }),
-  toParentMessage: message => Message.GotHomeScreenStepsMessage({ message }),
+const dismissTip: UpdateStep = stepModel => ({
+  model: dismissHomeScreenTip(stepModel),
 })
 
-export const foldHomeScreenSteps = homeScreenSteps.fold
+const openHomeScreenSteps = makeStep(model =>
+  model.homeScreenSteps.isOpen
+    ? unchanged
+    : Update.combineSteps([releaseInput, HomeScreenStepsBinding.requestOpen()]),
+)
 
-const openHomeScreenSteps: UpdateStep = stepModel =>
-  stepModel.homeScreenSteps.isOpen
-    ? { model: stepModel }
-    : homeScreenSteps.open(withInput(stepModel, releaseAll))
+const promptInstall: UpdateStep = stepModel => ({
+  model: dismissHomeScreenTip(stepModel),
+  commands: [ShowInstallPrompt()],
+})
 
 // NOTE: the install tile pulses until its first tap. Chrome's own prompt
 // comes first where the browser offered one; an iPhone gets the picture
 // guide, since Safari has no prompt to show.
-export const pressInstall: UpdateStep = stepModel => {
-  if (!isInstallTileShown(stepModel)) {
-    return { model: stepModel }
-  } else if (stepModel.installOffer === 'Ready') {
-    return {
-      model: dismissHomeScreenTip(stepModel),
-      commands: [ShowInstallPrompt()],
-    }
+export const pressInstall = makeStep(model => {
+  if (!isInstallTileShown(model)) {
+    return unchanged
+  } else if (model.installOffer === 'Ready') {
+    return promptInstall
   } else {
-    return openHomeScreenSteps(dismissHomeScreenTip(stepModel))
+    return Update.combineSteps([dismissTip, openHomeScreenSteps])
   }
-}
+})
 
 export const settleInstallPrompt = (
   model: Model,
@@ -432,7 +444,7 @@ export const settleInstallPrompt = (
 
 export const unwrapUpdateGift: UpdateStep = model =>
   isUpdateGiftShown(model) && model.updateGift === 'Wrapped'
-    ? Update.combine(model, [
+    ? combine(model, [
         stepModel => ({
           model: modifyFields(stepModel, { updateGift: () => 'Unwrapping' }),
           commands: [WaitForUnwrap()],
@@ -452,26 +464,18 @@ export const reloadOntoNewerBuild: UpdateStep = model =>
 
 // UPDATE GREETING
 
-const updateGreeting = dialogFolds({
-  read: (model: Model) => model.updateGreeting,
-  write: (model, nextUpdateGreeting) =>
-    modifyFields(model, { updateGreeting: () => nextUpdateGreeting }),
-  toParentMessage: message => Message.GotUpdateGreetingMessage({ message }),
-})
-
-export const foldUpdateGreeting = updateGreeting.fold
-
 // NOTE: the page just reloaded from the gift onto the build it unwrapped,
 // so the home menu throws a little party, once.
-export const greetUpdate =
-  (isDue: boolean): UpdateStep =>
-  model =>
+export const greetUpdate = (isDue: boolean) =>
+  makeStep(model =>
     isDue && isOnHome(model.phase) && !model.updateGreeting.isOpen
-      ? updateGreeting.open(model)
-      : { model }
+      ? UpdateGreetingBinding.requestOpen()
+      : unchanged,
+  )
 
-export const newsFromGreeting: UpdateStep = model =>
-  Update.combine(model, [updateGreeting.close, openWhatsNew])
+export const newsFromGreeting = makeStep(() =>
+  Update.combineSteps([UpdateGreetingBinding.requestClose(), openWhatsNew]),
+)
 
 // END SCREENS
 

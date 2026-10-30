@@ -1,9 +1,9 @@
 import { Option } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
+import type { ApplicationViewBuilder } from './composition'
 import { RESTART_GRACE_MS } from './constants'
 import { COFFEE_ICON } from './icons'
-import type { Message } from './message'
 import { type Model, Phase } from './model'
 
 // VIEW
@@ -13,7 +13,7 @@ const SUPPORT_LABEL = 'Buy the shopkeeper a coffee: support the game'
 const isVictoryShown = (model: Model): boolean =>
   Phase.isAnyOf(['Victory'])(model.phase) && model.screenMs >= RESTART_GRACE_MS
 
-const supportLinkView = (url: string, h: HtmlBuilder<Message>): Html =>
+const supportLinkView = (url: string, h: ApplicationViewBuilder): Html =>
   h.a(
     [
       h.Class('support-link'),
@@ -43,7 +43,7 @@ const supportLinkView = (url: string, h: HtmlBuilder<Message>): Html =>
 // tap meant for the last zombie never lands on it.
 export const victorySupportView = (
   model: Model,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   Option.match(model.maybeSupportUrl, {
     onNone: () => h.empty,

@@ -2,7 +2,6 @@ import { Array, Match, Option } from 'effect'
 import { Canvas } from 'foldkit'
 import {
   Mount,
-  Subscription,
   expect,
   given,
   role,
@@ -26,9 +25,10 @@ import {
   type PlannedSpawn,
   initialModel,
 } from './model'
+import { MeasureGameSurface } from './mount'
 import { screenOf, thumbAreaTop } from './screen'
+import { ROOT } from './testing'
 import { asVeteran } from './veteran'
-import { MeasureGameSurface, view } from './view'
 import { wavePreviewShapes } from './wavePreview'
 
 type Box = Readonly<{ x: number; y: number; width: number; height: number }>
@@ -116,6 +116,19 @@ const root = selector('.game-root')
 const measure = (surface: typeof PORTRAIT) =>
   Mount.resolve(MeasureGameSurface, Message.MeasuredGameSurface(surface))
 
+// NOTE: the surface's MeasureGameSurface Mount reports once per Scene, so a
+// phone turning mid-scene is a new Scene on the Model the earlier
+// measurements left, whose Mount then reports the new size.
+const remeasured = (
+  model: Model,
+  surfaces: ReadonlyArray<typeof PORTRAIT>,
+): Model =>
+  surfaces.reduce(
+    (current, surface) =>
+      update(current, Message.MeasuredGameSurface(surface)).model,
+    model,
+  )
+
 describe('the portrait HUD and thumb area', () => {
   test('the guns sit in the thumb area under the world window', () => {
     const portrait = inPortrait(fighting)
@@ -162,7 +175,7 @@ describe('the portrait HUD and thumb area', () => {
 
   test('the gun cluster buttons follow the guns into the thumb area', () => {
     scene(
-      { update, view },
+      ROOT,
       given(fighting),
       measure(PORTRAIT),
       expect(root).toHaveAttr('data-layout', 'Portrait'),
@@ -182,13 +195,17 @@ describe('the portrait HUD and thumb area', () => {
 describe('turning the phone', () => {
   test('switches the layout live mid-wave and keeps fighting', () => {
     scene(
-      { update, view },
+      ROOT,
       given(fighting),
       measure(LANDSCAPE),
       expect(root).toHaveAttr('data-layout', 'Landscape'),
       expect(root).toHaveStyle('--screen-w', '320'),
       expect(role('status')).toHaveText('Fighting wave 3 of 10.'),
-      Subscription.emit(Message.MeasuredGameSurface(PORTRAIT)),
+    )
+    scene(
+      ROOT,
+      given(remeasured(fighting, [LANDSCAPE])),
+      measure(PORTRAIT),
       expect(root).toHaveAttr('data-layout', 'Portrait'),
       expect(root).toHaveStyle('--screen-w', '180'),
       expect(root).toHaveStyle('--screen-h', '390'),
@@ -197,7 +214,11 @@ describe('turning the phone', () => {
       expect(role('group', { name: 'Your guns' })).toExist(),
       expect(root).toHaveStyle('--frame-top', '74'),
       expect(selector('.thumb-area')).toExist(),
-      Subscription.emit(Message.MeasuredGameSurface(LANDSCAPE)),
+    )
+    scene(
+      ROOT,
+      given(remeasured(fighting, [LANDSCAPE, PORTRAIT])),
+      measure(LANDSCAPE),
       expect(root).toHaveAttr('data-layout', 'Landscape'),
       expect(root).toHaveStyle('--frame-top', '0'),
       expect(selector('.thumb-area')).toBeAbsent(),
@@ -207,7 +228,7 @@ describe('turning the phone', () => {
 
   test('a keyboard and mouse keep the landscape layout in a tall window', () => {
     scene(
-      { update, view },
+      ROOT,
       given(modifyFields(fighting, { lastDevice: () => 'KeyboardMouse' })),
       measure(PORTRAIT),
       expect(root).toHaveAttr('data-layout', 'Landscape'),
@@ -219,7 +240,7 @@ describe('turning the phone', () => {
 describe('the portrait home menu', () => {
   test('keeps every slot: the player, the MORE deck, and PLAY with its mode and difficulty, and no bests badge before a best', () => {
     scene(
-      { update, view },
+      ROOT,
       given(onTouch(Phase.Ready())),
       measure(PORTRAIT),
       expect(root).toHaveAttr('data-layout', 'Portrait'),
@@ -238,23 +259,31 @@ describe('the turn hint', () => {
 
   test('shows the tipping phone, with no words, on the portrait home menu and goes when the phone turns', () => {
     scene(
-      { update, view },
+      ROOT,
       given(onTouch(Phase.Ready())),
       measure(PORTRAIT),
       expect(turnHint).toExist(),
       expect(selector('.home-turn-hint')).toExist(),
       expect(text(TURN_HINT_TEXT)).toBeAbsent(),
-      Subscription.emit(Message.MeasuredGameSurface(LANDSCAPE)),
+    )
+    scene(
+      ROOT,
+      given(remeasured(onTouch(Phase.Ready()), [PORTRAIT])),
+      measure(LANDSCAPE),
       expect(root).toHaveAttr('data-layout', 'Landscape'),
       expect(turnHint).toBeAbsent(),
-      Subscription.emit(Message.MeasuredGameSurface(PORTRAIT)),
+    )
+    scene(
+      ROOT,
+      given(remeasured(onTouch(Phase.Ready()), [PORTRAIT, LANDSCAPE])),
+      measure(PORTRAIT),
       expect(turnHint).toExist(),
     )
   })
 
   test('is not on the landscape home menu', () => {
     scene(
-      { update, view },
+      ROOT,
       given(onTouch(Phase.Ready())),
       measure(LANDSCAPE),
       expect(role('group', { name: 'Play' })).toExist(),
@@ -264,7 +293,7 @@ describe('the turn hint', () => {
 
   test('is not shown mid-run in portrait', () => {
     scene(
-      { update, view },
+      ROOT,
       given(fighting),
       measure(PORTRAIT),
       expect(root).toHaveAttr('data-layout', 'Portrait'),
@@ -274,7 +303,7 @@ describe('the turn hint', () => {
 
   test('is not shown on a keyboard and mouse in a tall window', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(onTouch(Phase.Ready()), {
           lastDevice: () => 'KeyboardMouse',

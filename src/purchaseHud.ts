@@ -1,6 +1,7 @@
 import { Option } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
+import type { ApplicationViewBuilder } from './composition'
 import { exitName } from './exits'
 import { HOLD_ICON } from './icons'
 import { Message } from './message'
@@ -82,7 +83,7 @@ const toPressedHoldButton = (
 const holdButtonFor = (
   model: Model,
   offer: Offer,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const isShort = shortfallFor(model, offer) > 0
   return h.button(
@@ -117,7 +118,10 @@ const holdButtonFor = (
   )
 }
 
-export const holdButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+export const holdButtonView = (
+  model: Model,
+  h: ApplicationViewBuilder,
+): Html =>
   model.lastDevice === 'Touch'
     ? Option.match(maybeShownOffer(model), {
         onNone: () => h.empty,
@@ -140,7 +144,7 @@ const announcementOf = (model: Model, offer: Offer): string => {
 // the wallet's verdict changes, never while the fight goes on around it.
 export const purchaseAnnouncementView = (
   model: Model,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.p(
     [h.Class('sr-only'), h.Role('status'), h.AriaLive('polite')],

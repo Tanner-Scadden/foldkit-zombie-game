@@ -1,12 +1,19 @@
 import { Array, Option, pipe } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
+import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
 
-import { Dialog, RadioGroup, Tabs } from '@foldkit/ui'
+import { Dialog, DialogBlock, RadioGroup, Tabs } from '@foldkit/ui'
 
 import * as Character from './character'
 import { PlaySound, WriteSave } from './commands'
+import {
+  CharacterBinding,
+  ProfileDialogBinding,
+  ProfileTabsBinding,
+} from './composition'
+import { PartRadioGroupBlock } from './lookRadios'
 import { update } from './main'
 import { Message } from './message'
 import {
@@ -22,6 +29,7 @@ import {
   GOOFY_NAMES,
   MAX_NAME_LENGTH,
   PROFILE_TABS,
+  ProfileTabsBlock,
   cleanName,
   draftName,
   joinName,
@@ -42,11 +50,12 @@ const writeSave = () => Command.resolve(WriteSave, Message.CompletedWriteSave())
 
 const closeProfile = () => [
   message(
-    Message.GotProfileDialogMessage({
-      message: Dialog.Message.RequestedClose(),
-    }),
+    toParentMessage(ProfileDialogBinding, DialogBlock.Message.RequestedClose()),
   ),
-  Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()),
+  Command.resolve(
+    Dialog.test.CloseDialog,
+    DialogBlock.Message.CompletedCloseDialog(),
+  ),
 ]
 
 const tabIndex = (tab: ProfileTab): number =>
@@ -57,30 +66,31 @@ const tabIndex = (tab: ProfileTab): number =>
 
 const selectTab = (tab: ProfileTab) => [
   message(
-    Message.GotProfileTabsMessage({
-      message: Tabs.Message.SelectedTab({ index: tabIndex(tab), value: tab }),
-    }),
+    toParentMessage(
+      ProfileTabsBinding,
+      ProfileTabsBlock.Message.SelectedTab({
+        index: tabIndex(tab),
+        value: tab,
+      }),
+    ),
   ),
   Command.resolve(
-    Tabs.FocusTab({ id: 'profile-tabs', index: tabIndex(tab) }),
-    Tabs.Message.CompletedFocusTab(),
+    Tabs.test.FocusTab({ id: 'profile-tabs', index: tabIndex(tab) }),
+    ProfileTabsBlock.Message.CompletedFocusTab(),
   ),
 ]
 
 const expectOpenOn = (tab: ProfileTab) =>
   model((current: Model) => {
-    expect(current.profile.dialog.isOpen).toBe(true)
+    expect(current.profileDialog.isOpen).toBe(true)
     expect(current.profile.tab).toBe(tab)
     expect(current.panelDialog.isOpen).toBe(false)
   })
 
 const openOn = (tab: ProfileTab): Model =>
   modifyFields(home, {
-    profile: profile =>
-      modifyFields(profile, {
-        dialog: dialog => modifyFields(dialog, { isOpen: () => true }),
-        tab: () => tab,
-      }),
+    profile: profile => modifyFields(profile, { tab: () => tab }),
+    profileDialog: dialog => modifyFields(dialog, { isOpen: () => true }),
   })
 
 describe('the Profile', () => {
@@ -136,7 +146,7 @@ describe('the Profile', () => {
           given(fighting),
           message(sent),
           model(current => {
-            expect(current.profile.dialog.isOpen).toBe(false)
+            expect(current.profileDialog.isOpen).toBe(false)
           }),
         ),
     )
@@ -165,12 +175,13 @@ describe('the Profile', () => {
       update,
       given(modifyFields(openOn('Look'), { audio: () => AudioState.Ready() })),
       message(
-        Message.GotProfileTabsMessage({
-          message: Tabs.Message.SelectedTab({ index: 1, value: 'Name' }),
-        }),
+        toParentMessage(
+          ProfileTabsBinding,
+          ProfileTabsBlock.Message.SelectedTab({ index: 1, value: 'Name' }),
+        ),
       ),
       Command.expectExact(
-        Tabs.FocusTab({ id: 'profile-tabs', index: 1 }),
+        Tabs.test.FocusTab({ id: 'profile-tabs', index: 1 }),
         PlaySound({ sound: 'Whoosh', variation: 0 }),
       ),
       Command.resolve(
@@ -178,8 +189,8 @@ describe('the Profile', () => {
         Message.CompletedPlaySound({ sound: 'Whoosh', outcome: 'Played' }),
       ),
       Command.resolve(
-        Tabs.FocusTab({ id: 'profile-tabs', index: 1 }),
-        Tabs.Message.CompletedFocusTab(),
+        Tabs.test.FocusTab({ id: 'profile-tabs', index: 1 }),
+        ProfileTabsBlock.Message.CompletedFocusTab(),
       ),
     )
   })
@@ -263,7 +274,7 @@ describe('the name', () => {
       message(Message.UpdatedNameDraft({ value: 'Tot Terror' })),
       ...closeProfile(),
       model(current => {
-        expect(current.profile.dialog.isOpen).toBe(false)
+        expect(current.profileDialog.isOpen).toBe(false)
         expect(current.playerName).toBe('Tot Terror')
       }),
       writeSave(),
@@ -366,19 +377,20 @@ describe('the Look tab', () => {
       update,
       given(openOn('Look')),
       message(
-        Message.GotCharacterMessage({
-          message: Character.Message.GotPartMessage({
-            partId: 'ShirtColor',
-            message: RadioGroup.Message.SelectedOption({
+        toParentMessage(
+          CharacterBinding,
+          toParentMessage(
+            Character.ShirtColorBinding,
+            PartRadioGroupBlock.Message.SelectedOption({
               index: 3,
               value: 'Teal',
             }),
-          }),
-        }),
+          ),
+        ),
       ),
       Command.resolve(
-        RadioGroup.FocusOption,
-        RadioGroup.Message.CompletedFocusOption(),
+        RadioGroup.test.FocusOption,
+        PartRadioGroupBlock.Message.CompletedFocusOption(),
       ),
       model(current => {
         expect(current.appearance.shirtColor).toBe('Teal')
@@ -387,9 +399,10 @@ describe('the Look tab', () => {
       }),
       writeSave(),
       message(
-        Message.GotCharacterMessage({
-          message: Character.Message.ClickedDiceButton(),
-        }),
+        toParentMessage(
+          CharacterBinding,
+          Character.Message.ClickedDiceButton(),
+        ),
       ),
       model(current => {
         expect(current.profile.fx).toBe('Spin')

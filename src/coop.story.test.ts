@@ -1,9 +1,11 @@
 import { Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
+import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
 
 import { FocusHomeButton } from './commands'
+import { CoopBinding } from './composition'
 import { Message as CoopMessage } from './coop/message'
 import { LobbyChange, RoomRequest, Screen } from './coop/model'
 import { CODE, lobbyOf, memberOf } from './coop/testing'
@@ -119,9 +121,7 @@ describe('co-op from home', () => {
       ),
       message(Message.ClickedCoopButton()),
       resolveFocusCoop(),
-      message(
-        Message.GotCoopMessage({ message: CoopMessage.ClickedCreateButton() }),
-      ),
+      message(toParentMessage(CoopBinding, CoopMessage.ClickedCreateButton())),
       Command.resolve(
         RequestRoom({
           request: RoomRequest.Create(),

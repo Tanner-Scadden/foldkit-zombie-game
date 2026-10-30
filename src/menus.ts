@@ -1,6 +1,7 @@
 import { Array } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
+import type { ApplicationViewBuilder } from './composition'
 import { isOpen as isCoopOpen } from './coop/update'
 import { END_MENU_BUTTON_ID, endOffer } from './home'
 import { pauseMenuButtonView } from './homeView'
@@ -36,7 +37,7 @@ export const debutPitch = (kind: ZombieKind): string =>
 
 // CORNER BUTTONS
 
-const muteButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
+const muteButtonView = (model: Model, h: ApplicationViewBuilder): Html => {
   const isMuted = model.soundSetting === 'Muted'
   return iconButtonView(
     {
@@ -51,7 +52,7 @@ const muteButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
   )
 }
 
-const musicButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
+const musicButtonView = (model: Model, h: ApplicationViewBuilder): Html => {
   const isOn = model.musicSetting === 'On'
   return iconButtonView(
     {
@@ -66,7 +67,7 @@ const musicButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
   )
 }
 
-const pauseButtonView = (h: HtmlBuilder<Message>): Html =>
+const pauseButtonView = (h: ApplicationViewBuilder): Html =>
   iconButtonView(
     {
       className: 'corner-button pause-button',
@@ -78,7 +79,7 @@ const pauseButtonView = (h: HtmlBuilder<Message>): Html =>
     h,
   )
 
-const fullscreenButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const fullscreenButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
   model.screenFit === 'Fullscreen'
     ? iconButtonView(
         {
@@ -94,7 +95,7 @@ const fullscreenButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
 
 const cornerButtons = (
   model: Model,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => {
   const audioButtons = [musicButtonView(model, h), muteButtonView(model, h)]
   // NOTE: a co-op room has no pause (decided 7); its LEAVE takes the
@@ -114,12 +115,11 @@ const cornerButtons = (
   })
 }
 
-const isPickingCharacter = (model: Model): boolean =>
-  model.profile.dialog.isOpen
+const isPickingCharacter = (model: Model): boolean => model.profileDialog.isOpen
 
 export const cornerButtonsView = (
   model: Model,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   isPickingCharacter(model)
     ? h.empty
@@ -191,7 +191,7 @@ const UPDATE_MENU_BUTTON: ModeButton = {
 
 // NOTE: a newer build waits on the menu, so the MENU button carries a
 // little gift that bobs on its corner, the same one the menu shows.
-const updateGiftBadgeView = (h: HtmlBuilder<Message>): Html =>
+const updateGiftBadgeView = (h: ApplicationViewBuilder): Html =>
   h.span([
     h.Class('mode-button-gift'),
     h.AriaHidden(true),
@@ -201,7 +201,7 @@ const updateGiftBadgeView = (h: HtmlBuilder<Message>): Html =>
 const modeButtonView = (
   model: Model,
   button: ModeButton,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
   badges: ReadonlyArray<Html> = [],
 ): Html =>
   h.button(
@@ -236,13 +236,13 @@ const modeButtons = (model: Model): ReadonlyArray<ModeButton> =>
     ? [KEEP_GOING_BUTTON, CAMPAIGN_BUTTON, ENDLESS_BUTTON]
     : [CAMPAIGN_BUTTON, ENDLESS_BUTTON]
 
-const menuOnlyView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const menuOnlyView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('mode-choice is-update-waiting')],
     [modeButtonView(model, UPDATE_MENU_BUTTON, h, [updateGiftBadgeView(h)])],
   )
 
-const menuAndModesView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const menuAndModesView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('mode-choice')],
     [
@@ -256,7 +256,10 @@ const menuAndModesView = (model: Model, h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-export const modeChoiceView = (model: Model, h: HtmlBuilder<Message>): Html => {
+export const modeChoiceView = (
+  model: Model,
+  h: ApplicationViewBuilder,
+): Html => {
   const offer = endOffer(model)
   if (offer === 'MenuOnly') {
     return menuOnlyView(model, h)
@@ -272,7 +275,7 @@ export const modeChoiceView = (model: Model, h: HtmlBuilder<Message>): Html => {
 const DEBUT_TITLE_ID = 'debut-title'
 const DEBUT_BODY_ID = 'debut-body'
 
-const debutCardButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const debutCardButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
   canSkipDebutCard(model)
     ? h.button(
         [
@@ -293,7 +296,7 @@ const debutCardButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
       )
     : h.empty
 
-export const debutCardView = (model: Model, h: HtmlBuilder<Message>): Html =>
+export const debutCardView = (model: Model, h: ApplicationViewBuilder): Html =>
   !Phase.isAnyOf(['Wave'])(model.phase)
     ? h.empty
     : DebutCard.match(model.debutCard, {

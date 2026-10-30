@@ -1,9 +1,14 @@
 import { Array, Option, pipe } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import type { Dialog, Tabs } from '@foldkit/ui'
 
-import * as CharacterView from './characterView'
+import {
+  CharacterBinding,
+  ProfileDialogBinding,
+  ProfileTabsBinding,
+} from './composition'
+import type { ApplicationViewBuilder } from './composition'
 import { closeButtonView, dialogShell } from './dialogs'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
 import {
@@ -44,7 +49,6 @@ import {
   MAX_NAME_LENGTH,
   NAME_INPUT_ID,
   PROFILE_TABS,
-  ProfileTabs,
   nameLength,
   shownName,
 } from './profile'
@@ -55,7 +59,7 @@ import { isPortrait } from './screen'
 const iconView = (
   className: string,
   icon: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.span([
     h.Class(className),
@@ -69,7 +73,7 @@ const isKeyboard = (model: Model): boolean =>
 const keyCapView = (
   model: Model,
   cap: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> =>
   isKeyboard(model)
     ? [h.span([h.Class('home-key'), h.AriaHidden(true)], [cap])]
@@ -92,7 +96,7 @@ const TAB_LOOKS: Readonly<Record<ProfileTab, TabLook>> = {
 const tabButtonView = (
   tab: Tabs.TabInfo<ProfileTab>,
   initialFocus: Dialog.RenderInfo['initialFocus'],
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.button(
     [
@@ -109,23 +113,23 @@ const tabButtonView = (
 
 // LOOK
 
-const lookTabView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.submodel({
-    slotId: 'character-picker',
-    model: model.character,
-    view: CharacterView.view,
-    viewInputs: {
-      appearance: model.appearance,
-      screenMs: model.screenMs,
-      fx: model.profile.fx,
-      fxCount: model.profile.fxCount,
-    },
-    toParentMessage: message => Message.GotCharacterMessage({ message }),
-  })
+const lookTabView = (model: Model, h: ApplicationViewBuilder): Html =>
+  h.block(
+    CharacterBinding.embedView({
+      slotId: 'character-picker',
+      model: model.character,
+      viewInputs: {
+        appearance: model.appearance,
+        screenMs: model.screenMs,
+        fx: model.profile.fx,
+        fxCount: model.profile.fxCount,
+      },
+    }),
+  )
 
 // NAME
 
-const nameLettersView = (name: string, h: HtmlBuilder<Message>): Html =>
+const nameLettersView = (name: string, h: ApplicationViewBuilder): Html =>
   h.span(
     [h.Class('name-stone-name'), h.AriaHidden(true)],
     Array.map(Array.fromIterable(name), (letter, index) =>
@@ -136,7 +140,7 @@ const nameLettersView = (name: string, h: HtmlBuilder<Message>): Html =>
     ),
   )
 
-const stoneChildren = (model: Model, h: HtmlBuilder<Message>) => [
+const stoneChildren = (model: Model, h: ApplicationViewBuilder) => [
   h.span([h.Class('name-stone-rip'), h.AriaHidden(true)], ['R.I.P.']),
   nameLettersView(shownName(model.profile.nameDraft), h),
   h.span([h.Class('name-stone-crack'), h.AriaHidden(true)]),
@@ -144,7 +148,7 @@ const stoneChildren = (model: Model, h: HtmlBuilder<Message>) => [
 
 // NOTE: the name is carved on a tombstone, live as it is typed. A dice roll
 // swaps the stone, so its letters spin in like a slot machine each time.
-const evenStoneView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const evenStoneView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [
       h.Class('name-stone'),
@@ -157,7 +161,7 @@ const evenStoneView = (model: Model, h: HtmlBuilder<Message>): Html =>
     stoneChildren(model, h),
   )
 
-const oddStoneView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const oddStoneView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [
       h.Class('name-stone'),
@@ -170,12 +174,12 @@ const oddStoneView = (model: Model, h: HtmlBuilder<Message>): Html =>
     stoneChildren(model, h),
   )
 
-const stoneView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const stoneView = (model: Model, h: ApplicationViewBuilder): Html =>
   model.profile.fxCount % 2 === 0
     ? evenStoneView(model, h)
     : oddStoneView(model, h)
 
-const namePipsView = (model: Model, h: HtmlBuilder<Message>): Html => {
+const namePipsView = (model: Model, h: ApplicationViewBuilder): Html => {
   const used = nameLength(model.profile.nameDraft)
   const left = MAX_NAME_LENGTH - used
   return h.div(
@@ -193,7 +197,7 @@ const namePipsView = (model: Model, h: HtmlBuilder<Message>): Html => {
   )
 }
 
-const nameTabView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const nameTabView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.form(
     [h.Class('name-tab'), h.OnSubmit(Message.SubmittedName())],
     [
@@ -285,7 +289,7 @@ const deviceKinds = (model: Model): ReadonlyArray<DeviceKind> => {
   )
 }
 
-const devicesView = (model: Model, h: HtmlBuilder<Message>): Html => {
+const devicesView = (model: Model, h: ApplicationViewBuilder): Html => {
   const dot = syncDot(model.syncState, model.playerScopeStatus)
   const count = deviceCount(model.syncState)
   return h.div(
@@ -345,7 +349,7 @@ const bigButton = (
   word: string,
   ariaLabel: string,
   message: Message,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.button(
     [
@@ -364,7 +368,7 @@ const pillButton = (
   label: string,
   message: Message,
   tone: 'Go' | 'Back',
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.button(
     [
@@ -377,13 +381,20 @@ const pillButton = (
     [label],
   )
 
-const noteView = (icon: string, text: string, h: HtmlBuilder<Message>): Html =>
+const noteView = (
+  icon: string,
+  text: string,
+  h: ApplicationViewBuilder,
+): Html =>
   h.p(
     [h.Class('account-note')],
     [iconView('account-note-icon', icon, h), h.span([], [text])],
   )
 
-const portalView = (spin: 'Spinning' | 'Open', h: HtmlBuilder<Message>): Html =>
+const portalView = (
+  spin: 'Spinning' | 'Open',
+  h: ApplicationViewBuilder,
+): Html =>
   h.span(
     [
       h.Class('account-portal'),
@@ -396,7 +407,7 @@ const portalView = (spin: 'Spinning' | 'Open', h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-const codeView = (code: string, h: HtmlBuilder<Message>): Html =>
+const codeView = (code: string, h: ApplicationViewBuilder): Html =>
   h.p(
     [
       h.Class('account-code'),
@@ -416,7 +427,7 @@ const codeView = (code: string, h: HtmlBuilder<Message>): Html =>
 
 const CODE_INPUT_ID = 'link-code-input'
 
-const codeEntryView = (code: string, h: HtmlBuilder<Message>): Html =>
+const codeEntryView = (code: string, h: ApplicationViewBuilder): Html =>
   h.form(
     [h.Class('account-entry'), h.OnSubmit(Message.SubmittedLinkCode())],
     [
@@ -464,7 +475,7 @@ const codeEntryView = (code: string, h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-const zapView = (model: Model, h: HtmlBuilder<Message>): Html => {
+const zapView = (model: Model, h: ApplicationViewBuilder): Html => {
   const here: DeviceKind = model.lastDevice === 'Touch' ? 'Phone' : 'Laptop'
   const other: DeviceKind = here === 'Phone' ? 'Laptop' : 'Phone'
   return h.div(
@@ -477,7 +488,7 @@ const zapView = (model: Model, h: HtmlBuilder<Message>): Html => {
   )
 }
 
-const linkView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const linkView = (model: Model, h: ApplicationViewBuilder): Html =>
   LinkFlow.match(model.linkFlow, {
     Idle: () =>
       h.div(
@@ -579,7 +590,7 @@ export const SHARE_STATS_NOTE = 'Wave, kills, and run time. Nothing personal.'
 
 const SHARE_STATS_NOTE_ID = 'share-stats-note'
 
-const shareStatsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const shareStatsView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('account-share')],
     [
@@ -605,7 +616,7 @@ const shareStatsView = (model: Model, h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-const accountTabView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const accountTabView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('account-tab')],
     [
@@ -710,7 +721,7 @@ const settingTiles = (model: Model): ReadonlyArray<Toggle> => [
 const tileView = (
   model: Model,
   toggle: Toggle,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.li(
     [h.Class('setting-tile-item')],
@@ -751,7 +762,7 @@ const tileView = (
     ],
   )
 
-const resetTutorialButtonView = (h: HtmlBuilder<Message>): Html =>
+const resetTutorialButtonView = (h: ApplicationViewBuilder): Html =>
   h.button(
     [
       h.Type('button'),
@@ -764,7 +775,7 @@ const resetTutorialButtonView = (h: HtmlBuilder<Message>): Html =>
   )
 
 // NOTE: the confirm wobbles in, so it reads as "are you sure?" at a glance.
-const askResetTutorialView = (h: HtmlBuilder<Message>): Html =>
+const askResetTutorialView = (h: ApplicationViewBuilder): Html =>
   h.div(
     [
       h.Class('setting-confirm'),
@@ -805,7 +816,7 @@ const askResetTutorialView = (h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-const settingsTabView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const settingsTabView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('settings-tab')],
     [
@@ -835,7 +846,7 @@ type PageAttributes = Tabs.TabInfo<ProfileTab>['panel']
 const pageAttributes = (
   panel: PageAttributes,
   tab: ProfileTab,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ) => [...panel, h.Class('profile-page'), h.DataAttribute('tab', tab)]
 
 // NOTE: each tab's page is its own view, so switching tabs swaps the page
@@ -843,33 +854,33 @@ const pageAttributes = (
 const lookPageView = (
   model: Model,
   panel: PageAttributes,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => h.div(pageAttributes(panel, 'Look', h), [lookTabView(model, h)])
 
 const namePageView = (
   model: Model,
   panel: PageAttributes,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => h.div(pageAttributes(panel, 'Name', h), [nameTabView(model, h)])
 
 const accountPageView = (
   model: Model,
   panel: PageAttributes,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.div(pageAttributes(panel, 'Account', h), [accountTabView(model, h)])
 
 const settingsPageView = (
   model: Model,
   panel: PageAttributes,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.div(pageAttributes(panel, 'Settings', h), [settingsTabView(model, h)])
 
 const PAGE_VIEWS: Readonly<
   Record<
     ProfileTab,
-    (model: Model, panel: PageAttributes, h: HtmlBuilder<Message>) => Html
+    (model: Model, panel: PageAttributes, h: ApplicationViewBuilder) => Html
   >
 > = {
   Look: lookPageView,
@@ -881,40 +892,40 @@ const PAGE_VIEWS: Readonly<
 const tabsView = (
   model: Model,
   initialFocus: Dialog.RenderInfo['initialFocus'],
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
-  h.submodel({
-    slotId: model.profile.tabs.id,
-    model: model.profile.tabs,
-    view: ProfileTabs.view,
-    viewInputs: {
-      tabs: PROFILE_TABS,
-      selectedValue: model.profile.tab,
-      ariaLabel: 'Profile',
-      orientation: isPortrait(model) ? 'Horizontal' : 'Vertical',
-      toView: ({ tablist, tabs, activeIndex }) =>
-        h.div(
-          [h.Class('profile-body')],
-          [
-            h.div(
-              [...tablist, h.Class('profile-tabs')],
-              Array.map(tabs, tab => tabButtonView(tab, initialFocus, h)),
-            ),
-            ...pipe(
-              tabs,
-              Array.filter(tab => tab.index === activeIndex),
-              Array.map(tab => PAGE_VIEWS[tab.value](model, tab.panel, h)),
-            ),
-          ],
-        ),
-    },
-    toParentMessage: message => Message.GotProfileTabsMessage({ message }),
-  })
+  h.block(
+    ProfileTabsBinding.embedView({
+      slotId: model.profileTabs.id,
+      model: model.profileTabs,
+      viewInputs: {
+        tabs: PROFILE_TABS,
+        selectedValue: model.profile.tab,
+        ariaLabel: 'Profile',
+        orientation: isPortrait(model) ? 'Horizontal' : 'Vertical',
+        toView: ({ tablist, tabs, activeIndex }) =>
+          h.div(
+            [h.Class('profile-body')],
+            [
+              h.div(
+                [...tablist, h.Class('profile-tabs')],
+                Array.map(tabs, tab => tabButtonView(tab, initialFocus, h)),
+              ),
+              ...pipe(
+                tabs,
+                Array.filter(tab => tab.index === activeIndex),
+                Array.map(tab => PAGE_VIEWS[tab.value](model, tab.panel, h)),
+              ),
+            ],
+          ),
+      },
+    }),
+  )
 
 const panelView = (
   model: Model,
   { title, description, closeButton, initialFocus }: Dialog.RenderInfo,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => [
   h.h2([...title, h.Class('sr-only')], ['Profile']),
   h.p(
@@ -932,13 +943,10 @@ const panelView = (
   tabsView(model, initialFocus, h),
 ]
 
-const toProfileDialogMessage = (message: Dialog.Message): Message =>
-  Message.GotProfileDialogMessage({ message })
-
-export const profileView = (model: Model, h: HtmlBuilder<Message>): Html =>
+export const profileView = (model: Model, h: ApplicationViewBuilder): Html =>
   dialogShell(
     {
-      dialog: model.profile.dialog,
+      dialog: model.profileDialog,
       dialogClass: 'profile-dialog',
       backdropClass: 'profile-backdrop',
       panelClass: 'profile',
@@ -947,7 +955,7 @@ export const profileView = (model: Model, h: HtmlBuilder<Message>): Html =>
         h.DataAttribute('device', model.lastDevice),
       ],
       panelView: renderInfo => panelView(model, renderInfo, h),
-      toParentMessage: toProfileDialogMessage,
+      binding: ProfileDialogBinding,
     },
     h,
   )

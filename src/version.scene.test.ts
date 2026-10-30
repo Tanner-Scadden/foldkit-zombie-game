@@ -12,7 +12,7 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import { maybeNewestNewsDay, newsHeadline } from './changelog'
 import { ReloadPage, WaitForUnwrap } from './commands'
@@ -20,9 +20,8 @@ import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
-import { fighting, measureSurface, showDialogInScene } from './testing'
+import { ROOT, SCENE_SUBSCRIPTIONS, fighting, measureSurface } from './testing'
 import { RUNNING_BUILD } from './version'
-import { view } from './view'
 import { pause } from './waves'
 
 const updateChip = role('button', { name: 'Update ready: tap to get it' })
@@ -30,6 +29,16 @@ const greeting = role('dialog', { name: 'Updated!' })
 const newsButton = role('button', { name: "WHAT'S NEW" })
 const closeGreeting = role('button', { name: 'Close' })
 const mainMenu = role('button', { name: /^More:/ })
+
+// NOTE: the build check's answer is a Command's result, which no
+// Subscription emits, so a scene starts from the Model it leaves.
+const after = (model: Model, message: Message): Model =>
+  update(model, message).model
+
+const foundMidWave = after(
+  fighting,
+  Message.CompletedFetchBuild({ build: 'newer-build' }),
+)
 
 const withNewerBuild = (model: Model): Model =>
   modifyFields(model, { maybeNewerBuild: () => Option.some('newer-build') })
@@ -61,7 +70,7 @@ const SCREENS_WITHOUT_THE_CHIP: ReadonlyArray<readonly [string, Model]> = [
 describe('the update gift', () => {
   test('shows on the home menu', () => {
     scene(
-      { update, view },
+      ROOT,
       given(withNewerBuild(initialModel)),
       measureSurface,
       expect(updateChip).toExist(),
@@ -69,17 +78,12 @@ describe('the update gift', () => {
   })
 
   test.each(SCREENS_WITHOUT_THE_CHIP)('waits off %s', (_name, quiet) => {
-    scene(
-      { update, view },
-      given(quiet),
-      measureSurface,
-      expect(updateChip).toBeAbsent(),
-    )
+    scene(ROOT, given(quiet), measureSurface, expect(updateChip).toBeAbsent())
   })
 
   test('shows nothing when the live build is the one running', () => {
     scene(
-      { update, view },
+      ROOT,
       given(initialModel),
       measureSurface,
       expect(updateChip).toBeAbsent(),
@@ -88,12 +92,14 @@ describe('the update gift', () => {
 
   test('a build found mid-wave waits through pause and shows on the home menu', () => {
     scene(
-      { update, view },
-      given(fighting),
+      ROOT,
+      given(foundMidWave),
       measureSurface,
-      Subscription.emit(Message.CompletedFetchBuild({ build: 'newer-build' })),
       expect(updateChip).toBeAbsent(),
-      Subscription.emit(Message.PressedKey({ code: 'Escape' })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.keyboard,
+        Message.PressedKey({ code: 'Escape' }),
+      ),
       expect(updateChip).toBeAbsent(),
       expect(mainMenu).toBeAbsent(),
     )
@@ -101,7 +107,7 @@ describe('the update gift', () => {
 
   test('wears a little NEW! tag', () => {
     scene(
-      { update, view },
+      ROOT,
       given(withNewerBuild(initialModel)),
       measureSurface,
       expect(updateChip).toHaveText('NEW!'),
@@ -110,7 +116,7 @@ describe('the update gift', () => {
 
   test('tapping it unwraps the gift, then reloads onto the new build', () => {
     scene(
-      { update, view },
+      ROOT,
       given(withNewerBuild(initialModel)),
       measureSurface,
       click(updateChip),
@@ -131,42 +137,49 @@ const newestHeadline = Option.match(maybeNewestNewsDay, {
   onSome: day => newsHeadline(day.bullets[0].text),
 })
 
-const justUpdated = Message.CompletedReadUpdateMarker({
-  maybeBuild: Option.some(RUNNING_BUILD),
-})
+// NOTE: the update marker is read by a Command at boot, so a scene starts
+// from the Model it leaves: the greeting already opening.
+const justUpdated = after(
+  initialModel,
+  Message.CompletedReadUpdateMarker({ maybeBuild: Option.some(RUNNING_BUILD) }),
+)
+
+// NOTE: a Dialog that is already open when the page draws takes its
+// resources through its Mount.
+const acquireGreeting = Mount.resolve(
+  Dialog.test.AcquireResources,
+  DialogBlock.Message.SucceededAcquireResources(),
+)
 
 describe('the greeting after an update', () => {
   test('throws a party with the news when the reload lands on the new build', () => {
     scene(
-      { update, view },
-      given(initialModel),
+      ROOT,
+      given(justUpdated),
       measureSurface,
-      Subscription.emit(justUpdated),
-      ...showDialogInScene(),
+      acquireGreeting,
       expect(greeting).toExist(),
       expect(greeting).toContainText(newestHeadline),
       expect(newsButton).toExist(),
       click(closeGreeting),
       Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
       ),
-      Mount.expectEnded(Dialog.AcquireResources),
       expect(greeting).toBeAbsent(),
     )
   })
 
   test('the news button opens the full news', () => {
     scene(
-      { update, view },
-      given(initialModel),
+      ROOT,
+      given(justUpdated),
       measureSurface,
-      Subscription.emit(justUpdated),
-      ...showDialogInScene(),
+      acquireGreeting,
       click(newsButton),
       Command.resolveAll(
-        [Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()],
-        [Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()],
+        [Dialog.test.CloseDialog, DialogBlock.Message.CompletedCloseDialog()],
+        [Dialog.test.ShowDialog, DialogBlock.Message.SucceededShowDialog()],
       ),
       expect(greeting).toBeAbsent(),
       expect(role('dialog', { name: /^What's new/i })).toExist(),
@@ -175,18 +188,27 @@ describe('the greeting after an update', () => {
 
   test('greets nobody on a plain load or a reload that kept the old build', () => {
     scene(
-      { update, view },
-      given(initialModel),
+      ROOT,
+      given(
+        after(
+          initialModel,
+          Message.CompletedReadUpdateMarker({ maybeBuild: Option.none() }),
+        ),
+      ),
       measureSurface,
-      Subscription.emit(
-        Message.CompletedReadUpdateMarker({ maybeBuild: Option.none() }),
-      ),
       expect(greeting).toBeAbsent(),
-      Subscription.emit(
-        Message.CompletedReadUpdateMarker({
-          maybeBuild: Option.some('an-older-build'),
-        }),
+    )
+    scene(
+      ROOT,
+      given(
+        after(
+          initialModel,
+          Message.CompletedReadUpdateMarker({
+            maybeBuild: Option.some('an-older-build'),
+          }),
+        ),
       ),
+      measureSurface,
       expect(greeting).toBeAbsent(),
     )
   })

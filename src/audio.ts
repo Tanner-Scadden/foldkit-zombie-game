@@ -7,7 +7,6 @@ import {
   type Scope,
   pipe,
 } from 'effect'
-import { ManagedResource } from 'foldkit'
 
 import { describeError } from './describeError'
 import {
@@ -37,16 +36,13 @@ export type PlayOutcome = typeof PlayOutcome.Type
 
 // ENGINE
 
-type AudioEngine = Readonly<{
+export type AudioEngine = Readonly<{
   context: AudioContext
   output: GainNode
   noise: AudioBuffer
   activeVoices: MutableRef.MutableRef<number>
   music: MusicDeck
 }>
-
-export const AudioEngineResource =
-  ManagedResource.tag<AudioEngine>()('AudioEngine')
 
 export class AudioEngineError extends Data.TaggedError('AudioEngineError')<{
   readonly reason: string

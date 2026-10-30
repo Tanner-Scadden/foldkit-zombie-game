@@ -1,11 +1,7 @@
 import { Schema } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { Dialog, Tabs } from '@foldkit/ui'
-
 import { PlayOutcome, Playback, SoundEffect } from './audio'
-import * as Character from './character'
-import * as Coop from './coop/message'
 import {
   Difficulty,
   FullscreenSetting,
@@ -74,9 +70,6 @@ export const Message = defineMessageUnion({
   ClickedEndlessButton: {},
   ClickedKeepGoingButton: {},
   ClickedCharacterButton: {},
-  GotCharacterMessage: { message: Character.Message },
-  GotProfileDialogMessage: { message: Dialog.Message },
-  GotProfileTabsMessage: { message: Tabs.Message },
   UpdatedNameDraft: { value: Schema.String },
   SubmittedName: {},
   BlurredNameInput: {},
@@ -98,11 +91,8 @@ export const Message = defineMessageUnion({
   ClickedInstallButton: {},
   ChangedInstallOffer: { installOffer: InstallOffer },
   CompletedShowInstallPrompt: { outcome: InstallOutcome },
-  GotHomeScreenStepsMessage: { message: Dialog.Message },
   ClickedPlaceTrapButton: {},
   ClickedNextTrapButton: {},
-  GotShopDialogMessage: { message: Dialog.Message },
-  GotShopTabsMessage: { message: Tabs.Message },
   ClickedBuyButton: { item: ShopItemId },
   PressedBuyKey: { item: ShopItemId },
   MovedShopFocus: { item: ShopItemId },
@@ -125,7 +115,6 @@ export const Message = defineMessageUnion({
   ClickedUpdateButton: {},
   CompletedWaitForUnwrap: {},
   CompletedReadUpdateMarker: { maybeBuild: Schema.Option(Schema.String) },
-  GotUpdateGreetingMessage: { message: Dialog.Message },
   ClickedUpdateGreetingNewsButton: {},
   CompletedReloadPage: {},
   FailedReloadPage: { reason: Schema.String },
@@ -138,7 +127,6 @@ export const Message = defineMessageUnion({
   ClickedMenuButton: {},
   ClickedLeaveRunButton: {},
   ClickedStayButton: {},
-  GotPanelDialogMessage: { message: Dialog.Message },
   ClickedShakeButton: {},
   ClickedDifficultyCardButton: { difficulty: Difficulty },
   FocusedHomeButton: { button: HomeButton },
@@ -194,11 +182,24 @@ export const Message = defineMessageUnion({
   ClickedNewEntryButton: { kind: ZombieKind },
   ClickedDifficultyBadge: {},
   ClickedManorButton: {},
-  GotHandDialogMessage: { message: Dialog.Message },
   SteppedHandFocus: { card: HandCard },
   CompletedFocusHandCard: {},
   ClickedCoopButton: {},
-  GotCoopMessage: { message: Coop.Message },
+  TickedRoomFrame: { nowMs: Schema.Number },
   CompletedReadRoomLink: { maybeCode: Schema.Option(Schema.String) },
 })
 export type Message = typeof Message.Type
+
+export type TickedFrame = typeof Message.TickedFrame.Type
+export type PressedKey = typeof Message.PressedKey.Type
+export type PressedMetaKey = typeof Message.PressedMetaKey.Type
+export type MissedKeyDown = typeof Message.MissedKeyDown.Type
+export type BlurredWindow = typeof Message.BlurredWindow.Type
+export type FocusedWindow = typeof Message.FocusedWindow.Type
+export type ChangedPageVisibility = typeof Message.ChangedPageVisibility.Type
+export type RestoredPageFromCache = typeof Message.RestoredPageFromCache.Type
+export type ReleasedPointer = typeof Message.ReleasedPointer.Type
+export type CancelledPointer = typeof Message.CancelledPointer.Type
+export type ReleasedEveryTouch = typeof Message.ReleasedEveryTouch.Type
+export type MeasuredGameSurface = typeof Message.MeasuredGameSurface.Type
+export type PressedPointer = typeof Message.PressedPointer.Type

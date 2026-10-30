@@ -1,4 +1,4 @@
-import { Array, Effect, Option, Schema } from 'effect'
+import { Array, Effect, Layer, Option, Schema } from 'effect'
 import {
   Command,
   expectOutMessage,
@@ -434,6 +434,7 @@ describe('the lobby', () => {
         expect(roomOf(current).departure).toBe('Leaving')
       }),
       Command.resolve(LeaveRoom, Message.CompletedLeaveRoom()),
+      expectOutMessage(OutMessage.LeftRoom()),
       resolveRemember(),
       resolveFocus(),
       model(current => {
@@ -792,6 +793,7 @@ describe('the room', () => {
       update,
       given(inRoom(1)),
       message(received({ _tag: 'Kicked' }, 500)),
+      expectOutMessage(OutMessage.LeftRoom()),
       resolveRemember(),
       model(current => {
         expect(current.screen).toEqual(
@@ -838,7 +840,7 @@ describe('the network service', () => {
             name: 'Ana',
             look: 'Male.Curls.Black.Deep.Yellow',
           }).effect,
-          fake.layer,
+          Layer.provide(RequestRoom.layer, fake.layer),
         )
         return { result, calls: yield* fake.calls }
       }),

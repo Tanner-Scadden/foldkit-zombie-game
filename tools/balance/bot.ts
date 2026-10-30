@@ -11,8 +11,9 @@ import {
   Schema,
 } from 'effect'
 import { modifyFields } from 'foldkit/struct'
+import { toParentMessage } from 'foldkit/test'
 
-import { Dialog } from '@foldkit/ui'
+import { DialogBlock } from '@foldkit/ui'
 
 import { assistAim } from '../../src/aimAssist'
 import {
@@ -31,6 +32,7 @@ import {
   worldWindowOf,
 } from '../../src/camera'
 import { CHUCKER_RULES, maybeShieldFor } from '../../src/chucker'
+import { ShopDialogBinding } from '../../src/composition'
 import { PLAYER_MAX_HP, PLAYER_RADIUS } from '../../src/constants'
 import { CRAWLER_RULES } from '../../src/crawler'
 import { EXIT_RULES, KITCHEN_EXIT, isExitOfferOpenFor } from '../../src/exits'
@@ -1560,15 +1562,15 @@ let gnomeTries = 0
 let gnomesPlaced = 0
 let boughtLog: Array<Array<string>> = []
 
+// NOTE: what the shop dialog's close button sends: a Dialog Message in its
+// Binding's envelope (src/composition.ts).
+const closeShopDialog = () =>
+  toParentMessage(ShopDialogBinding, DialogBlock.Message.RequestedClose())
+
 const shop = (model: Model): Model => {
   const item = wantedPurchase(model)
   if (item === undefined) {
-    return send(
-      model,
-      Message.GotShopDialogMessage({
-        message: Dialog.Message.RequestedClose(),
-      }),
-    )
+    return send(model, closeShopDialog())
   }
   const bought = send(model, Message.ClickedBuyButton({ item }))
   if (item.endsWith('Upgrade')) {
@@ -1581,12 +1583,7 @@ const shop = (model: Model): Model => {
     ;(boughtLog[model.phase.wave] ??= []).push(item)
   }
   return bought.wallet.balance === model.wallet.balance
-    ? send(
-        bought,
-        Message.GotShopDialogMessage({
-          message: Dialog.Message.RequestedClose(),
-        }),
-      )
+    ? send(bought, closeShopDialog())
     : bought
 }
 

@@ -1,10 +1,11 @@
 import { Option, Schema } from 'effect'
 
-import { Dialog, RadioGroup, Tabs } from '@foldkit/ui'
+import { DialogBlock } from '@foldkit/ui'
 
 import { MANOR, startingLevel } from './arena'
 import { DEFAULT_SEED } from './constants'
 import * as Coop from './coop/model'
+import { PartRadioGroupBlock, SectionRadioGroupBlock } from './lookRadios'
 import { flowFieldToward } from './pathing'
 import {
   Appearance,
@@ -24,6 +25,8 @@ import {
   PlayerScopeStatus,
   SyncState,
 } from './playerSync'
+import { ProfileTabsBlock } from './profile'
+import { ShopTabsBlock } from './shopTabs'
 import { SUPPORT_URL, maybeSupportUrlOf } from './support'
 import type { DifficultyBests, LoadStep } from './worldSchema'
 import {
@@ -103,14 +106,14 @@ export * from './worldSchema'
 // group per part. Not saved: it opens on Body each time.
 export const CharacterPicker = Schema.Struct({
   section: LookSection,
-  sections: RadioGroup.Model,
-  body: RadioGroup.Model,
-  hairStyle: RadioGroup.Model,
-  hairColor: RadioGroup.Model,
-  skinTone: RadioGroup.Model,
-  shirtColor: RadioGroup.Model,
-  outfit: RadioGroup.Model,
-  print: RadioGroup.Model,
+  sections: SectionRadioGroupBlock.Model,
+  body: PartRadioGroupBlock.Model,
+  hairStyle: PartRadioGroupBlock.Model,
+  hairColor: PartRadioGroupBlock.Model,
+  skinTone: PartRadioGroupBlock.Model,
+  shirtColor: PartRadioGroupBlock.Model,
+  outfit: PartRadioGroupBlock.Model,
+  print: PartRadioGroupBlock.Model,
 })
 export type CharacterPicker = typeof CharacterPicker.Type
 
@@ -131,10 +134,9 @@ export type ProfileFx = typeof ProfileFx.Type
 
 // NOTE: the Profile dialog: the open tab, the name as it is being typed,
 // and the last effect. The view reads fxCount only for its parity, so the
-// same effect twice in a row still replays.
+// same effect twice in a row still replays. Its Dialog and Tabs are the
+// root's `profileDialog` and `profileTabs`, where their Bindings attach.
 export const ProfilePanel = Schema.Struct({
-  dialog: Dialog.Model,
-  tabs: Tabs.Model,
   tab: ProfileTab,
   nameDraft: Schema.String,
   fx: ProfileFx,
@@ -148,8 +150,8 @@ export const Model = Schema.Struct({
   particles: Schema.Array(Particle),
   decals: Schema.Array(Decal),
   dustCooldownMs: Schema.Number,
-  shopDialog: Dialog.Model,
-  shopTabs: Tabs.Model,
+  shopDialog: DialogBlock.Model,
+  shopTabs: ShopTabsBlock.Model,
   shopChatter: ShopChatter,
   shake: Shake,
   popups: Schema.Array(Popup),
@@ -176,19 +178,21 @@ export const Model = Schema.Struct({
   screenFit: ScreenFit,
   fullscreen: FullscreenSetting,
   homeScreenTip: HomeScreenTip,
-  homeScreenSteps: Dialog.Model,
+  homeScreenSteps: DialogBlock.Model,
   pageVisibility: PageVisibility,
   // NOTE: keys whose keyup came with no keydown: a browser extension took
   // them first (see src/keyGrab.ts).
   missedKeyDowns: Schema.Number,
   maybeNewerBuild: Schema.Option(Schema.String),
   updateGift: UpdateGift,
-  updateGreeting: Dialog.Model,
+  updateGreeting: DialogBlock.Model,
   installOffer: InstallOffer,
   maybeSupportUrl: Schema.Option(Schema.String),
   appearance: Appearance,
   character: CharacterPicker,
   profile: ProfilePanel,
+  profileDialog: DialogBlock.Model,
+  profileTabs: ProfileTabsBlock.Model,
   playerName: PlayerName,
   coop: Coop.Model,
   shakeSetting: ShakeSetting,
@@ -202,8 +206,8 @@ export const Model = Schema.Struct({
   maybeVisitId: Schema.Option(Schema.String),
   maybeHomeFocus: Schema.Option(HomeButton),
   panel: MenuPanel,
-  panelDialog: Dialog.Model,
-  handDialog: Dialog.Model,
+  panelDialog: DialogBlock.Model,
+  handDialog: DialogBlock.Model,
   bests: PlayerBests,
   runTally: RunTally,
   loading: Loading,
@@ -223,9 +227,12 @@ export type Model = typeof Model.Type
 const PROFILE_DIALOG_ID = 'profile'
 const PROFILE_TABS_ID = 'profile-tabs'
 
+// NOTE: a closed Dialog, Tabs, or RadioGroup has no Commands to run, so
+// the Model takes each one's initial state as it is. The Bindings in
+// src/composition.ts leave these fields to the root (`init: false`).
+const closedDialog = (id: string) => DialogBlock.init({ id }).model
+
 const closedProfile: ProfilePanel = {
-  dialog: Dialog.init({ id: PROFILE_DIALOG_ID }),
-  tabs: Tabs.init({ id: PROFILE_TABS_ID }),
   tab: 'Look',
   nameDraft: '',
   fx: 'Still',
@@ -234,14 +241,14 @@ const closedProfile: ProfilePanel = {
 
 const closedCharacterPicker: CharacterPicker = {
   section: 'Body',
-  sections: RadioGroup.init({ id: 'look-sections' }),
-  body: RadioGroup.init({ id: 'look-body' }),
-  hairStyle: RadioGroup.init({ id: 'look-hair-style' }),
-  hairColor: RadioGroup.init({ id: 'look-hair-color' }),
-  skinTone: RadioGroup.init({ id: 'look-skin-tone' }),
-  shirtColor: RadioGroup.init({ id: 'look-shirt-color' }),
-  outfit: RadioGroup.init({ id: 'look-outfit' }),
-  print: RadioGroup.init({ id: 'look-print' }),
+  sections: SectionRadioGroupBlock.init({ id: 'look-sections' }).model,
+  body: PartRadioGroupBlock.init({ id: 'look-body' }).model,
+  hairStyle: PartRadioGroupBlock.init({ id: 'look-hair-style' }).model,
+  hairColor: PartRadioGroupBlock.init({ id: 'look-hair-color' }).model,
+  skinTone: PartRadioGroupBlock.init({ id: 'look-skin-tone' }).model,
+  shirtColor: PartRadioGroupBlock.init({ id: 'look-shirt-color' }).model,
+  outfit: PartRadioGroupBlock.init({ id: 'look-outfit' }).model,
+  print: PartRadioGroupBlock.init({ id: 'look-print' }).model,
 }
 
 const PANEL_DIALOG_ID = 'menu-panel'
@@ -293,9 +300,9 @@ export const initialModel: Model = {
   shop: ShopState.Away(),
   purchase: Purchase.Idle(),
   fridge: shutFridge,
-  shopDialog: Dialog.init({ id: SHOP_DIALOG_ID }),
+  shopDialog: closedDialog(SHOP_DIALOG_ID),
   shopCategory: FIRST_SHOP_CATEGORY,
-  shopTabs: Tabs.init({ id: SHOP_TABS_ID }),
+  shopTabs: ShopTabsBlock.init({ id: SHOP_TABS_ID }).model,
   shopChatter: ShopChatter.Greeting(),
   elapsedMs: 0,
   frameEvents: [],
@@ -342,17 +349,19 @@ export const initialModel: Model = {
   screenFit: 'Unknown',
   fullscreen: 'Off',
   homeScreenTip: 'Unseen',
-  homeScreenSteps: Dialog.init({ id: HOME_SCREEN_STEPS_ID }),
+  homeScreenSteps: closedDialog(HOME_SCREEN_STEPS_ID),
   pageVisibility: 'Visible',
   missedKeyDowns: 0,
   maybeNewerBuild: Option.none(),
   updateGift: 'Wrapped',
-  updateGreeting: Dialog.init({ id: UPDATE_GREETING_ID }),
+  updateGreeting: closedDialog(UPDATE_GREETING_ID),
   installOffer: 'None',
   maybeSupportUrl: maybeSupportUrlOf(SUPPORT_URL),
   appearance: defaultAppearance,
   character: closedCharacterPicker,
   profile: closedProfile,
+  profileDialog: closedDialog(PROFILE_DIALOG_ID),
+  profileTabs: ProfileTabsBlock.init({ id: PROFILE_TABS_ID }).model,
   playerName: '',
   coop: Coop.initialModel,
   shakeSetting: 'On',
@@ -365,8 +374,8 @@ export const initialModel: Model = {
   maybeVisitId: Option.none(),
   maybeHomeFocus: Option.none(),
   panel: 'HowToPlay',
-  panelDialog: Dialog.init({ id: PANEL_DIALOG_ID }),
-  handDialog: Dialog.init({ id: HAND_DIALOG_ID }),
+  panelDialog: closedDialog(PANEL_DIALOG_ID),
+  handDialog: closedDialog(HAND_DIALOG_ID),
   bests: noBests,
   runTally: RunTally.Uncounted(),
   loading: Loading.Loaded(),

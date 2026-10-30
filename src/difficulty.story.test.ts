@@ -1,10 +1,12 @@
 import { Array, Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
+import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
+import { PanelDialogBinding } from './composition'
 import { FIXED_STEP_MS } from './constants'
 import { bestsFor, biteDamage } from './difficulty'
 import { update } from './main'
@@ -37,7 +39,10 @@ const veteran: Model = modifyFields(asVeteran(initialModel), {
 })
 
 const closeDialog = () =>
-  Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog())
+  Command.resolve(
+    Dialog.test.CloseDialog,
+    DialogBlock.Message.CompletedCloseDialog(),
+  )
 
 const pick = (difficulty: Difficulty) =>
   message(Message.ClickedDifficultyCardButton({ difficulty }))
@@ -118,9 +123,10 @@ describe('the first-time difficulty card', () => {
       press('Enter'),
       showDialog(),
       message(
-        Message.GotPanelDialogMessage({
-          message: Dialog.Message.RequestedClose(),
-        }),
+        toParentMessage(
+          PanelDialogBinding,
+          DialogBlock.Message.RequestedClose(),
+        ),
       ),
       closeDialog(),
       model(current => {

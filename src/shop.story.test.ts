@@ -1,11 +1,13 @@
 import { Array, Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
+import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
 
-import { Dialog, Tabs } from '@foldkit/ui'
+import { Dialog, DialogBlock, Tabs } from '@foldkit/ui'
 
 import { FocusShopItem } from './commands'
+import { ShopDialogBinding, ShopTabsBinding } from './composition'
 import {
   BULLET_MAX,
   COINS_PER_PURCHASE,
@@ -48,6 +50,7 @@ import {
   stallPrompt,
   totalAffordable,
 } from './shop'
+import { ShopTabsBlock } from './shopTabs'
 import {
   bulletInto,
   holdFire,
@@ -91,13 +94,13 @@ const GRACE_TICK_MS = 50
 const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
 
 const resolveShowShop = Command.resolve(
-  Dialog.ShowDialog,
-  Dialog.Message.SucceededShowDialog(),
+  Dialog.test.ShowDialog,
+  DialogBlock.Message.SucceededShowDialog(),
 )
 
 const resolveCloseShop = Command.resolve(
-  Dialog.CloseDialog,
-  Dialog.Message.CompletedCloseDialog(),
+  Dialog.test.CloseDialog,
+  DialogBlock.Message.CompletedCloseDialog(),
 )
 
 const preparing = (wave: number): Phase =>
@@ -299,7 +302,7 @@ describe('the shop stall', () => {
         expect(shop).toEqual(ShopState.Away())
       }),
       tick(FRAME_MS),
-      Command.expectExact(Dialog.ShowDialog),
+      Command.expectExact(Dialog.test.ShowDialog),
       resolveShowShop,
       model(({ shop, shopDialog, input }) => {
         expect(shop).toEqual(ShopState.Browsing({ focusedItem: 'Shotgun' }))
@@ -343,7 +346,7 @@ describe('the shop stall', () => {
         expect(shop).toEqual(ShopState.Away())
       }),
       tick(FRAME_MS),
-      Command.expectExact(Dialog.ShowDialog),
+      Command.expectExact(Dialog.test.ShowDialog),
       resolveShowShop,
       model(({ shop, shopDialog }) => {
         expect(ShopState.guards.Browsing(shop)).toBe(true)
@@ -403,9 +406,10 @@ describe('the shop stall', () => {
       resolveShowShop,
       release('KeyD'),
       message(
-        Message.GotShopDialogMessage({
-          message: Dialog.Message.RequestedClose(),
-        }),
+        toParentMessage(
+          ShopDialogBinding,
+          DialogBlock.Message.RequestedClose(),
+        ),
       ),
       resolveCloseShop,
       model(({ shop }) => {
@@ -433,7 +437,7 @@ describe('the shop stall', () => {
       ...ticks(3, FRAME_MS),
       Command.expectNone(),
       tick(FRAME_MS),
-      Command.expectExact(Dialog.ShowDialog),
+      Command.expectExact(Dialog.test.ShowDialog),
       resolveShowShop,
       model(({ shop }) => {
         expect(ShopState.guards.Browsing(shop)).toBe(true)
@@ -806,7 +810,7 @@ describe('the stall entrance', () => {
         expect(shop).toEqual(ShopState.Away())
       }),
       tick(FRAME_MS),
-      Command.expectExact(Dialog.ShowDialog),
+      Command.expectExact(Dialog.test.ShowDialog),
       resolveShowShop,
       model(({ shop }) => {
         expect(ShopState.guards.Browsing(shop)).toBe(true)
@@ -829,12 +833,13 @@ describe('the stall entrance', () => {
         at(modifyFields(readyModel, { phase: () => preparing(2) }), 251, 160),
       ),
       tick(FRAME_MS),
-      Command.expectExact(Dialog.ShowDialog),
+      Command.expectExact(Dialog.test.ShowDialog),
       resolveShowShop,
       message(
-        Message.GotShopDialogMessage({
-          message: Dialog.Message.RequestedClose(),
-        }),
+        toParentMessage(
+          ShopDialogBinding,
+          DialogBlock.Message.RequestedClose(),
+        ),
       ),
       resolveCloseShop,
       ...ticks(10, FRAME_MS),
@@ -953,20 +958,21 @@ describe('shop categories', () => {
 
   const selectTab = (value: ShopCategory) =>
     message(
-      Message.GotShopTabsMessage({
-        message: Tabs.Message.SelectedTab({
+      toParentMessage(
+        ShopTabsBinding,
+        ShopTabsBlock.Message.SelectedTab({
           index: Option.getOrElse(
             Array.findFirstIndex(SHOP_CATEGORY_ORDER, tab => tab === value),
             () => 0,
           ),
           value,
         }),
-      }),
+      ),
     )
 
   const resolveFocusTab = Command.resolve(
-    Tabs.FocusTab,
-    Tabs.Message.CompletedFocusTab(),
+    Tabs.test.FocusTab,
+    ShopTabsBlock.Message.CompletedFocusTab(),
   )
 
   test('choosing a tab shows its items, focuses its first item, and moves keyboard focus to the tab', () => {
@@ -977,7 +983,7 @@ describe('shop categories', () => {
         expect(shopCategory).toBe('Guns')
       }),
       selectTab('Traps'),
-      Command.expectExact(Tabs.FocusTab),
+      Command.expectExact(Tabs.test.FocusTab),
       resolveFocusTab,
       model(({ shopCategory, shop }) => {
         expect(shopCategory).toBe('Traps')
@@ -999,10 +1005,14 @@ describe('shop categories', () => {
       selectTab('Health'),
       resolveFocusTab,
       message(
-        Message.GotShopDialogMessage({
-          message: Dialog.Message.RequestedClose(),
-        }),
+        toParentMessage(
+          ShopDialogBinding,
+          DialogBlock.Message.RequestedClose(),
+        ),
       ),
+      // NOTE: the fixture browses with the dialog already down, which the
+      // next frame takes as a dialog that failed to show.
+      ...ticks(1, FRAME_MS),
       model(({ shop, shopCategory }) => {
         expect(shop).toEqual(ShopState.Dismissed())
         expect(shopCategory).toBe('Health')

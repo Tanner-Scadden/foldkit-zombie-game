@@ -1,5 +1,5 @@
 diff --git a/dist/canvas/index.d.ts b/dist/canvas/index.d.ts
-index c0804b185ff86c9d5aa570eaadbe85cace4b40a8..d1258e62545dad679b12c05d1d4128d675f8579d 100644
+index c0804b1..d1258e6 100644
 --- a/dist/canvas/index.d.ts
 +++ b/dist/canvas/index.d.ts
 @@ -1,4 +1,4 @@
@@ -9,7 +9,7 @@ index c0804b185ff86c9d5aa570eaadbe85cace4b40a8..d1258e62545dad679b12c05d1d4128d6
  export { view } from './view.js';
  export type { ViewConfig } from './view.js';
 diff --git a/dist/canvas/index.js b/dist/canvas/index.js
-index 694551d155943c18c724decb79c660e56c05e157..76f0db510c48673ba449d83954f2f8d0cf63c81f 100644
+index 694551d..76f0db5 100644
 --- a/dist/canvas/index.js
 +++ b/dist/canvas/index.js
 @@ -1,2 +1,2 @@
@@ -17,7 +17,7 @@ index 694551d155943c18c724decb79c660e56c05e157..76f0db510c48673ba449d83954f2f8d0
 +export { BezierTo, Circle, Close, Group, Image, ImageCrop, ImageRendering, LineCap, LineJoin, LineTo, MoveTo, Path, PathInstruction, Point, QuadTo, Rect, Text, TextAlign, TextBaseline, } from './shape.js';
  export { view } from './view.js';
 diff --git a/dist/canvas/paint.d.ts b/dist/canvas/paint.d.ts
-index 2a47bd191d355b39633751bc900c9f1669913f46..185c3a42bfe6ca95a33dccfdf6036dc2b81708e0 100644
+index 2a47bd1..185c3a4 100644
 --- a/dist/canvas/paint.d.ts
 +++ b/dist/canvas/paint.d.ts
 @@ -1,14 +1,24 @@
@@ -50,7 +50,7 @@ index 2a47bd191d355b39633751bc900c9f1669913f46..185c3a42bfe6ca95a33dccfdf6036dc2
  //# sourceMappingURL=paint.d.ts.map
 \ No newline at end of file
 diff --git a/dist/canvas/paint.js b/dist/canvas/paint.js
-index e31d0d92cecd61a44eea969ad2e054920c8a87d4..7bdd634ad63b41f808fb44fdbdeb0f397738863b 100644
+index e31d0d9..7bdd634 100644
 --- a/dist/canvas/paint.js
 +++ b/dist/canvas/paint.js
 @@ -1,4 +1,46 @@
@@ -203,7 +203,7 @@ index e31d0d92cecd61a44eea969ad2e054920c8a87d4..7bdd634ad63b41f808fb44fdbdeb0f39
 +    Array.forEach(shapes, paintShape(ctx, onImageLoad));
  };
 diff --git a/dist/canvas/public.d.ts b/dist/canvas/public.d.ts
-index f7470ae5766b15a20bfd87d266677482b881a7bb..1b7d16f8279fdc3eb149ce547ca7a1159e022697 100644
+index f7470ae..1b7d16f 100644
 --- a/dist/canvas/public.d.ts
 +++ b/dist/canvas/public.d.ts
 @@ -1,3 +1,3 @@
@@ -213,14 +213,14 @@ index f7470ae5766b15a20bfd87d266677482b881a7bb..1b7d16f8279fdc3eb149ce547ca7a115
  //# sourceMappingURL=public.d.ts.map
 \ No newline at end of file
 diff --git a/dist/canvas/public.js b/dist/canvas/public.js
-index 5bf857be1bd8635bf06ca9df1e23ed7a0fe9a866..f19b8a2e5c3e0744689b962d72934a308fb479e3 100644
+index 5bf857b..f19b8a2 100644
 --- a/dist/canvas/public.js
 +++ b/dist/canvas/public.js
 @@ -1 +1 @@
 -export { BezierTo, Circle, Close, Group, LineCap, LineJoin, LineTo, MoveTo, Path, PathInstruction, Point, QuadTo, Rect, Text, TextAlign, TextBaseline, view, } from './index.js';
 +export { BezierTo, Circle, Close, Group, Image, ImageCrop, ImageRendering, LineCap, LineJoin, LineTo, MoveTo, Path, PathInstruction, Point, QuadTo, Rect, Text, TextAlign, TextBaseline, view, } from './index.js';
 diff --git a/dist/canvas/shape.d.ts b/dist/canvas/shape.d.ts
-index 6b0087ab87b34e9963b9c88e020c5cfc5771d768..484d745907db381a541b287c199be300f7ae7025 100644
+index 363f54c..9d059e0 100644
 --- a/dist/canvas/shape.d.ts
 +++ b/dist/canvas/shape.d.ts
 @@ -148,6 +148,68 @@ export declare const Text: import("../schema/index.js").CallableTaggedStruct<"Te
@@ -296,13 +296,13 @@ index 6b0087ab87b34e9963b9c88e020c5cfc5771d768..484d745907db381a541b287c199be300
   * the painter walks the tree depth-first, applying transforms via
   * `ctx.save` / `ctx.restore`.
   */
--export type Shape = typeof Rect.Type | typeof Circle.Type | typeof Path.Type | typeof Text.Type | Group;
-+export type Shape = typeof Rect.Type | typeof Circle.Type | typeof Path.Type | typeof Text.Type | typeof Image.Type | Group;
+-export type Shape = Rect | Circle | Path | Text | Group;
++export type Shape = Rect | Circle | Path | Text | Image | Group;
  /** Construct a `Group` shape that wraps its children in a transformed scope. */
  export declare const Group: import("../schema/index.js").CallableTaggedStruct<"Group", {
      shapes: Schema.$Array<Schema.Schema<Shape>>;
 diff --git a/dist/canvas/shape.js b/dist/canvas/shape.js
-index cd32f90de3c6c054f5e859ceadb44e619be541f5..82b0d7d9c7539c2366b4e755a9db0fcd07f07589 100644
+index cd32f90..82b0d7d 100644
 --- a/dist/canvas/shape.js
 +++ b/dist/canvas/shape.js
 @@ -1,3 +1,4 @@
@@ -360,7 +360,7 @@ index cd32f90de3c6c054f5e859ceadb44e619be541f5..82b0d7d9c7539c2366b4e755a9db0fcd
  export const Group = taggedStruct('Group', {
      shapes: Schema.Array(Shape),
 diff --git a/dist/canvas/view.d.ts b/dist/canvas/view.d.ts
-index 1ca895e1a1fe57a1bd610b956a1a74755b476d34..36a06d8170c76fd4abfac3560d3a5002479cdbfe 100644
+index 1ca895e..36a06d8 100644
 --- a/dist/canvas/view.d.ts
 +++ b/dist/canvas/view.d.ts
 @@ -11,6 +11,8 @@ export type ViewConfig<Message> = Readonly<{
@@ -384,7 +384,7 @@ index 1ca895e1a1fe57a1bd610b956a1a74755b476d34..36a06d8170c76fd4abfac3560d3a5002
   * The trailing `h` fixes `Message` to the calling view's frame; the pointer
   * handlers dispatch through that frame at fire time, so passing the builder
 diff --git a/dist/canvas/view.js b/dist/canvas/view.js
-index f8ee4870de83702ddef4fc1d393012043b1fbfb9..c5830a9bc2eed2bcb259c5a80020418cb2a90729 100644
+index f8ee487..c5830a9 100644
 --- a/dist/canvas/view.js
 +++ b/dist/canvas/view.js
 @@ -1,13 +1,16 @@
@@ -477,7 +477,7 @@ index f8ee4870de83702ddef4fc1d393012043b1fbfb9..c5830a9bc2eed2bcb259c5a80020418c
              },
          },
 diff --git a/dist/domReflection.js b/dist/domReflection.js
-index fa2e6d7c12f5cd7c4539baeb32e9d2b97890cea1..6cad7a23dabce13c75a72af18f448a85e9464b3a 100644
+index fa2e6d7..6cad7a2 100644
 --- a/dist/domReflection.js
 +++ b/dist/domReflection.js
 @@ -456,6 +456,24 @@ const hasUnsafeStyleSyntax = (value) => {
@@ -601,7 +601,7 @@ index fa2e6d7c12f5cd7c4539baeb32e9d2b97890cea1..6cad7a23dabce13c75a72af18f448a85
  };
  /** The CSS declaration name corresponding to a CSSStyleDeclaration property.
 diff --git a/dist/schema/index.js b/dist/schema/index.js
-index d25261f64aadd984acd82ec41a4ae38c2d4dadb2..d8008383a5c2eb59ae66ef96eb5bcca4f8231d80 100644
+index fa19443..0dce512 100644
 --- a/dist/schema/index.js
 +++ b/dist/schema/index.js
 @@ -22,10 +22,10 @@ const runConstructorOperation = (operation) => {
@@ -617,7 +617,7 @@ index d25261f64aadd984acd82ec41a4ae38c2d4dadb2..d8008383a5c2eb59ae66ef96eb5bcca4
          return false;
      }
      return Match.value(ast).pipe(Match.withReturnType(), Match.tagsExhaustive({
-@@ -45,28 +45,51 @@ const isDirectlyCopyable = (ast) => {
+@@ -45,31 +45,54 @@ const isDirectlyCopyable = (ast) => {
          UniqueSymbol: () => true,
          ObjectKeyword: () => true,
          Enum: () => true,
@@ -664,6 +664,9 @@ index d25261f64aadd984acd82ec41a4ae38c2d4dadb2..d8008383a5c2eb59ae66ef96eb5bcca4
 -    return names;
 +    return { names, optionalNames };
  };
+ const callableTaggedStructs = new WeakSet();
+ /** @internal Recognizes callable tagged constructors created by Foldkit. */
+ export const isCallableTaggedStruct = (value) => Predicate.isFunction(value) && callableTaggedStructs.has(value);
  const makeCallable = (tag, fields) => {
      const schema = Schema.TaggedStruct(tag, fields);
 -    const propertyNames = Object.hasOwn(fields, '_tag')
@@ -675,7 +678,7 @@ index d25261f64aadd984acd82ec41a4ae38c2d4dadb2..d8008383a5c2eb59ae66ef96eb5bcca4
      const make = (value) => schema.make(
      /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
      (value ?? {}));
-@@ -79,12 +102,17 @@ const makeCallable = (tag, fields) => {
+@@ -82,12 +105,17 @@ const makeCallable = (tag, fields) => {
              }
              const output = {};
              for (const name of propertyNames) {
@@ -700,7 +703,7 @@ index d25261f64aadd984acd82ec41a4ae38c2d4dadb2..d8008383a5c2eb59ae66ef96eb5bcca4
                      if (inputValue !== undefined && inputValue !== tag) {
                          return make(value);
 diff --git a/dist/struct/index.js b/dist/struct/index.js
-index edbf519f8aa91f5d611beca06cf068ce6d037137..f0048b7e461fa0947e5ef16ea58ea630a087aff0 100644
+index edbf519..f0048b7 100644
 --- a/dist/struct/index.js
 +++ b/dist/struct/index.js
 @@ -1,7 +1,24 @@

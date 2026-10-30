@@ -774,6 +774,7 @@ describe('timers', () => {
     expectStaysFrozen(
       modifyFields(preparing, {
         shop: () => ShopState.Browsing({ focusedItem: 'Heart' }),
+        shopDialog: dialog => ({ ...dialog, isOpen: true }),
       }),
     )
   })

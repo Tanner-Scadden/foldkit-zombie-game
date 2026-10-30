@@ -12,6 +12,12 @@ import {
   scene,
   selector,
 } from 'foldkit/scene'
+import {
+  Command as StoryCommand,
+  message,
+  story,
+  given as storyGiven,
+} from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
@@ -20,13 +26,20 @@ import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
-import { emitPressedKey, measureSurface } from './testing'
+import {
+  ROOT,
+  SCENE_SUBSCRIPTIONS,
+  emitPressedKey,
+  measureSurface,
+} from './testing'
 import { asVeteran } from './veteran'
-import { view } from './view'
 
 const tickPastGrace = () =>
   Array.makeBy(Math.ceil(RESTART_GRACE_MS / 50), () =>
-    Subscription.emit(Message.TickedFrame({ deltaTime: 50 })),
+    Subscription.emit(
+      SCENE_SUBSCRIPTIONS.frame,
+      Message.TickedFrame({ deltaTime: 50 }),
+    ),
   )
 
 const menuButton = role('button', { name: /^Menu: back/ })
@@ -61,7 +74,7 @@ const withNewerBuild = (model: Model): Model =>
 describe('the end screens', () => {
   test('Game Over puts MENU first, then Campaign and Endless', () => {
     scene(
-      { update, view },
+      ROOT,
       given(onEndScreen(Phase.GameOver({ wave: 4 }), RESTART_GRACE_MS)),
       measureSurface,
       expectAll(endButtons).toHaveCount(3),
@@ -76,7 +89,7 @@ describe('the end screens', () => {
 
   test('Victory puts MENU first, then Keep going, Campaign, and Endless', () => {
     scene(
-      { update, view },
+      ROOT,
       given(onEndScreen(Phase.Victory(), RESTART_GRACE_MS)),
       measureSurface,
       expectAll(endButtons).toHaveCount(4),
@@ -90,7 +103,7 @@ describe('the end screens', () => {
     '%s with a new version waiting offers only MENU, wearing a gift, and it lands on the gift',
     (_name, phase) => {
       scene(
-        { update, view },
+        ROOT,
         given(withNewerBuild(onEndScreen(phase, RESTART_GRACE_MS))),
         measureSurface,
         expectAll(endButtons).toHaveCount(1),
@@ -114,7 +127,7 @@ describe('the end screens', () => {
     '%s waits out the grace, then focuses MENU, and Enter goes home',
     (_name, phase) => {
       scene(
-        { update, view },
+        ROOT,
         given(withNewerBuild(onEndScreen(phase, 0))),
         measureSurface,
         expect(menuButton).toBeAbsent(),
@@ -135,18 +148,32 @@ describe('the end screens', () => {
     },
   )
 
+  // NOTE: the newer build arrives as FetchBuild's result, which a Scene
+  // cannot send by itself: the Story sends it and checks the focus, and the
+  // Scene draws the Model it left.
   test('a new version found on Game Over swaps the choices for MENU', () => {
+    const gameOver = onEndScreen(Phase.GameOver({ wave: 4 }), RESTART_GRACE_MS)
+    const found = Message.CompletedFetchBuild({ build: 'newer-build' })
     scene(
-      { update, view },
-      given(onEndScreen(Phase.GameOver({ wave: 4 }), RESTART_GRACE_MS)),
+      ROOT,
+      given(gameOver),
       measureSurface,
       expect(campaignButton).toExist(),
-      Subscription.emit(Message.CompletedFetchBuild({ build: 'newer-build' })),
-      Command.expectExact(FocusEndMenuButton),
-      Command.resolve(
+    )
+    story(
+      update,
+      storyGiven(gameOver),
+      message(found),
+      StoryCommand.expectExact(FocusEndMenuButton),
+      StoryCommand.resolve(
         FocusEndMenuButton,
         Message.CompletedFocusEndMenuButton(),
       ),
+    )
+    scene(
+      ROOT,
+      given(update(gameOver, found).model),
+      measureSurface,
       expect(campaignButton).toBeAbsent(),
       expect(updateNote).toExist(),
     )

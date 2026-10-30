@@ -333,6 +333,7 @@ describe('reload pauses', () => {
   test('a reload does not progress while the shop is open', () => {
     const shopping = modifyFields(withPistolLoaded(preparing, 3), {
       shop: () => ShopState.Browsing({ focusedItem: 'Heart' }),
+      shopDialog: dialog => ({ ...dialog, isOpen: true }),
       player: player =>
         modifyFields(player, {
           reload: () =>

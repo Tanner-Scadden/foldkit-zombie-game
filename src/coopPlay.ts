@@ -2,11 +2,11 @@ import { Array, Option } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import type { PlayerInput } from '@munch/netcode'
-
 import { levelOf } from './arena'
+import { CoopBinding } from './composition'
 import type { Room as CoopRoom } from './coop/model'
 import { isInLobby, keepTracers, maybeRoomOf } from './coop/update'
+import { makeStep } from './definition'
 import {
   advanceCosmetics,
   clampFrameDelta,
@@ -31,7 +31,7 @@ import {
   playStartSoundWhen,
   shotSoundCue,
 } from './update/sound'
-import type { UpdateStep } from './update/step'
+import { toModel, unchanged } from './update/step'
 import { endRoundOnClient, isRoundActive } from './waves'
 import { type World, withWorld } from './world'
 import {
@@ -211,11 +211,10 @@ const traceOwnShots = (
 // NOTE: the drawing of one frame. A run starting (or the next one after the
 // end screen) resets the client's run fields first. While the client's own
 // hit-stop holds, the picture stays, and the events wait in the session.
-const drawRoom =
-  (frameMs: number, maybeShopBefore: Option.Option<ShopState>): UpdateStep =>
-  stepModel =>
+const drawRoom = (frameMs: number, maybeShopBefore: Option.Option<ShopState>) =>
+  makeStep(stepModel =>
     Option.match(maybeDrawnOf(stepModel), {
-      onNone: () => ({ model: stepModel }),
+      onNone: () => unchanged,
       onSome: ({ room, world }) => {
         const isStart =
           !isRoundActive(stepModel.phase) && isRoundActive(world.phase)
@@ -245,12 +244,12 @@ const drawRoom =
             ),
         })
         if (isFrozen(thaw.hitStop)) {
-          return {
-            model: modifyFields(traced, {
+          return toModel(
+            modifyFields(traced, {
               hitStop: () => thaw.hitStop,
               frameEvents: () => [],
             }),
-          }
+          )
         }
         const applied = withWorld(
           takeRoomWorld(
@@ -287,7 +286,8 @@ const drawRoom =
           frameMs,
         )
         const shopNow = world.shop
-        return Update.combine(drawn, [
+        return Update.combineSteps([
+          toModel(drawn),
           playSounds([
             ...(room.predictedShots > 0 ? [shotSoundCue(world.player)] : []),
             ...frameSoundCues(
@@ -303,17 +303,13 @@ const drawRoom =
             : []),
         ])
       },
-    })
+    }),
+  )
 
 // NOTE: one frame of an online run: the controls go to the room through
-// the co-op Submodel's `tickRoom` (`tickCoop`, folded by the caller), then
-// the root draws what came back.
-export const playRoomFrame =
-  (
-    nowMs: number,
-    tickCoop: (controls: PlayerInput, isPictureHeld: boolean) => UpdateStep,
-  ): UpdateStep =>
-  stepModel => {
+// the co-op Block's `requestTickRoom`, then the root draws what came back.
+export const playRoomFrame = (nowMs: number) =>
+  makeStep(stepModel => {
     const maybeBefore = maybeRunRoom(stepModel)
     const frameMs = clampFrameDelta(
       Option.match(maybeBefore, {
@@ -322,11 +318,13 @@ export const playRoomFrame =
       }),
     )
     const intended = refreshIntent(stepModel)
-    return Update.combine(intended, [
-      tickCoop(
-        inputOfIntent(intended.intent, 0),
-        isFrozen(thawTick(stepModel.hitStop, frameMs).hitStop),
-      ),
+    return Update.combineSteps([
+      toModel(intended),
+      CoopBinding.requestTickRoom({
+        controls: inputOfIntent(intended.intent, 0),
+        nowMs,
+        isPictureHeld: isFrozen(thawTick(stepModel.hitStop, frameMs).hitStop),
+      }),
       drawRoom(frameMs, ownShopOf(stepModel)),
     ])
-  }
+  })

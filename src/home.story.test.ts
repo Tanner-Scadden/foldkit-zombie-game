@@ -3,7 +3,7 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import changelogMarkdown from '../CHANGELOG.md?raw'
 import { NEWS_DAYS, newsHeadline, parseChangelog } from './changelog'
@@ -193,7 +193,7 @@ describe('the home menu keys', () => {
       press('KeyC'),
       showDialog(),
       model(current => {
-        expect(current.profile.dialog.isOpen).toBe(true)
+        expect(current.profileDialog.isOpen).toBe(true)
         expect(current.profile.tab).toBe('Look')
       }),
     )
@@ -203,7 +203,7 @@ describe('the home menu keys', () => {
       press('KeyO'),
       showDialog(),
       model(current => {
-        expect(current.profile.dialog.isOpen).toBe(true)
+        expect(current.profileDialog.isOpen).toBe(true)
         expect(current.profile.tab).toBe('Settings')
         expect(current.panelDialog.isOpen).toBe(false)
       }),
@@ -221,7 +221,7 @@ describe('the home menu keys', () => {
         press(code),
         model(current => {
           expect(current.panelDialog.isOpen).toBe(false)
-          expect(current.profile.dialog.isOpen).toBe(false)
+          expect(current.profileDialog.isOpen).toBe(false)
           expect(current.home.mode).toBe('Campaign')
         }),
       ),
@@ -279,8 +279,8 @@ describe('the mode toggle', () => {
       showDialog(),
       message(Message.ClickedLeaveRunButton()),
       Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
       ),
       model(current => {
         expect(Phase.guards.Ready(current.phase)).toBe(true)

@@ -1,8 +1,10 @@
 import { Array, Option } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import type { Dialog } from '@foldkit/ui'
 
+import type { ApplicationViewBuilder } from './composition'
+import { HandDialogBinding, PanelDialogBinding } from './composition'
 import { COOP_ICON } from './coop/icons'
 import { IS_COOP_RELEASED } from './coop/release'
 import { closeButtonView, dialogShell } from './dialogs'
@@ -84,7 +86,7 @@ const isKeyboard = (model: Model): boolean =>
 const keyCapView = (
   model: Model,
   cap: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> =>
   isKeyboard(model)
     ? [h.span([h.Class('home-key'), h.AriaHidden(true)], [cap])]
@@ -93,10 +95,13 @@ const keyCapView = (
 const keyBadgeView = (
   model: Model,
   button: HomeButton,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => keyCapView(model, HOME_KEYS[button].cap, h)
 
-const homeButtonAttributes = (button: HomeButton, h: HtmlBuilder<Message>) => [
+const homeButtonAttributes = (
+  button: HomeButton,
+  h: ApplicationViewBuilder,
+) => [
   h.Type('button'),
   h.Id(homeButtonId(button)),
   h.AriaKeyshortcuts(HOME_KEYS[button].name),
@@ -107,7 +112,7 @@ const homeButtonAttributes = (button: HomeButton, h: HtmlBuilder<Message>) => [
 const iconView = (
   className: string,
   icon: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.span([
     h.Class(className),
@@ -130,7 +135,7 @@ const modeName = (mode: HomeMode): string =>
 
 // NOTE: show, don't explain. PLAY is the big play icon alone, and the mode
 // beside it says which run it starts.
-const playButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const playButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.button(
     [
       ...homeButtonAttributes('Play', h),
@@ -151,7 +156,7 @@ const playButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
 const modeOptionView = (
   model: Model,
   mode: HomeMode,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.span(
     [
@@ -162,7 +167,7 @@ const modeOptionView = (
     [iconView('home-mode-icon', MODE_ICONS[mode], h)],
   )
 
-const modeButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const modeButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.button(
     [
       ...homeButtonAttributes('Mode', h),
@@ -185,7 +190,7 @@ const modeButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
 const skullMeterView = (
   model: Model,
   difficulty: Difficulty,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const lit = Array.findFirstIndex(
     DIFFICULTY_ORDER,
@@ -208,7 +213,10 @@ const skullMeterView = (
 
 // NOTE: the difficulty sits by PLAY, so the run is picked where it starts.
 // It opens the picker anchored just above this cluster.
-const difficultyButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
+const difficultyButtonView = (
+  model: Model,
+  h: ApplicationViewBuilder,
+): Html => {
   const name = DIFFICULTIES[model.difficulty.chosen].name
   return h.button(
     [
@@ -228,7 +236,7 @@ const difficultyButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
 
 // NOTE: CO-OP is two heads, pink and teal, by PLAY. Until the tutorial is
 // done it is padlocked, with the aim icon of the tutorial's own lesson.
-const coopButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
+const coopButtonView = (model: Model, h: ApplicationViewBuilder): Html => {
   const isOpen = hasFinishedTutorial(model)
   return h.button(
     [
@@ -261,7 +269,7 @@ const coopButtonView = (model: Model, h: HtmlBuilder<Message>): Html => {
   )
 }
 
-const playClusterView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const playClusterView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('home-play-cluster'), h.Role('group'), h.AriaLabel('Play')],
     [
@@ -375,7 +383,7 @@ const manorAriaLabel = (model: Model): string =>
 // NOTE: the badges of the cards inside bubble up to the closed MANOR button
 // as little pips, each the card's own icon with a red dot, so What's New and
 // the Munchopedia still show their news without opening the hand.
-const manorPipsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const manorPipsView = (model: Model, h: ApplicationViewBuilder): Html =>
   Array.match(newsCards(model), {
     onEmpty: () => h.empty,
     onNonEmpty: cards =>
@@ -390,7 +398,7 @@ const manorPipsView = (model: Model, h: HtmlBuilder<Message>): Html =>
       ),
   })
 
-const manorButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const manorButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.button(
     [
       ...homeButtonAttributes('Manor', h),
@@ -430,7 +438,7 @@ const handKeyMessage = (
 const cardBodyView = (
   model: Model,
   card: HandCard,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => [
   h.span(
     [h.Class('hand-card-face')],
@@ -475,7 +483,7 @@ const handCardView = (
   index: number,
   count: number,
   renderInfo: Dialog.RenderInfo,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const shared = [
     ...(index === 0 ? renderInfo.initialFocus : []),
@@ -518,7 +526,7 @@ const HAND_TITLE = 'The manor'
 const handView = (
   model: Model,
   renderInfo: Dialog.RenderInfo,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => {
   const cards = dealtCards(model)
   return [
@@ -544,10 +552,7 @@ const handView = (
   ]
 }
 
-const toHandDialogMessage = (message: Dialog.Message): Message =>
-  Message.GotHandDialogMessage({ message })
-
-export const manorHandView = (model: Model, h: HtmlBuilder<Message>): Html =>
+export const manorHandView = (model: Model, h: ApplicationViewBuilder): Html =>
   dialogShell(
     {
       dialog: model.handDialog,
@@ -556,7 +561,7 @@ export const manorHandView = (model: Model, h: HtmlBuilder<Message>): Html =>
       panelClass: 'hand',
       dialogAttributes: [h.DataAttribute('device', model.lastDevice)],
       panelView: renderInfo => handView(model, renderInfo, h),
-      toParentMessage: toHandDialogMessage,
+      binding: HandDialogBinding,
     },
     h,
   )
@@ -589,7 +594,7 @@ const shownBests = (model: Model): ReadonlyArray<Best> => [
     : []),
 ]
 
-const bestView = (best: Best, h: HtmlBuilder<Message>): Html =>
+const bestView = (best: Best, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('home-best')],
     [
@@ -606,7 +611,7 @@ const bestView = (best: Best, h: HtmlBuilder<Message>): Html =>
 
 // NOTE: a badge of icons and big numbers, in the chosen level's color, and
 // nothing at all until the player has a best.
-const bestsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const bestsView = (model: Model, h: ApplicationViewBuilder): Html =>
   Array.match(shownBests(model), {
     onEmpty: () => h.empty,
     onNonEmpty: bests =>
@@ -634,7 +639,7 @@ const bestsView = (model: Model, h: HtmlBuilder<Message>): Html =>
 // the canvas by screens.ts. This button sits over them, so a tap on your
 // character opens the picker. The hand's Character card is the one a
 // keyboard or a screen reader reaches.
-const heroButtonView = (h: HtmlBuilder<Message>): Html =>
+const heroButtonView = (h: ApplicationViewBuilder): Html =>
   h.button([
     h.Type('button'),
     h.Class('home-hero'),
@@ -646,7 +651,7 @@ const heroButtonView = (h: HtmlBuilder<Message>): Html =>
 
 // CORNER
 
-const fullscreenButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const fullscreenButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
   model.screenFit === 'Fullscreen'
     ? h.button(
         [
@@ -662,7 +667,7 @@ const fullscreenButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
 
 // NOTE: the gear sits in the corner itself, and full screen, where the
 // browser can do it, sits just inside it.
-const settingsButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const settingsButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.button(
     [
       ...homeButtonAttributes('Settings', h),
@@ -686,7 +691,7 @@ const newEntryText = (model: Model): Option.Option<string> =>
       : entryName(kind),
   )
 
-const newEntryButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const newEntryButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
   Option.match(Array.head(model.home.newEntries), {
     onNone: () => h.empty,
     onSome: kind =>
@@ -716,7 +721,7 @@ const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
 // NOTE: the end screens only tell. The entry opens from the menu.
 export const newEntryNoticeView = (
   model: Model,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   isEndScreen(model.phase)
     ? Option.match(newEntryText(model), {
@@ -744,7 +749,7 @@ export const TURN_HINT_TEXT = 'Turn your phone sideways to see the whole room'
 // small nudge to turn: only the tipping phone, no words, with its line for a
 // screen reader. It sits above the controls, takes no taps, and is gone the
 // moment the phone turns. isPortrait is false on a keyboard and mouse.
-const turnHintView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const turnHintView = (model: Model, h: ApplicationViewBuilder): Html =>
   isPortrait(model)
     ? h.div(
         [h.Class('home-turn-hint'), h.Role('img'), h.AriaLabel(TURN_HINT_TEXT)],
@@ -754,7 +759,7 @@ const turnHintView = (model: Model, h: HtmlBuilder<Message>): Html =>
 
 // HOME MENU
 
-export const homeMenuView = (model: Model, h: HtmlBuilder<Message>): Html =>
+export const homeMenuView = (model: Model, h: ApplicationViewBuilder): Html =>
   isOnHome(model.phase)
     ? h.div(
         [
@@ -798,7 +803,7 @@ export const homeMenuView = (model: Model, h: HtmlBuilder<Message>): Html =>
 
 export const pauseMenuButtonView = (
   model: Model,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   Phase.isAnyOf(['Paused'])(model.phase)
     ? h.button(
@@ -846,7 +851,7 @@ const HAND_KEY_CARDS: ReadonlyArray<KeyedHandCard> = [
   'HowToPlay',
 ]
 
-const menuKeysView = (h: HtmlBuilder<Message>): Html =>
+const menuKeysView = (h: ApplicationViewBuilder): Html =>
   h.section(
     [h.Class('menu-keys'), h.AriaLabelledBy(MENU_KEYS_TITLE_ID)],
     [
@@ -885,7 +890,7 @@ const menuKeysView = (h: HtmlBuilder<Message>): Html =>
 const freshBadgeView = (
   model: Model,
   difficulty: Difficulty,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> =>
   difficulty === 'Nightmare' && model.difficulty.nightmare === 'JustUnlocked'
     ? [h.span([h.Class('difficulty-new'), h.AriaHidden(true)], ['NEW!'])]
@@ -903,7 +908,7 @@ const difficultyChoiceView = (
   model: Model,
   difficulty: Difficulty,
   renderInfo: Dialog.RenderInfo,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const locked = isLocked(model.difficulty, difficulty)
   const isChosen = difficulty === model.difficulty.chosen
@@ -980,7 +985,7 @@ const panelText = (model: Model, panel: MenuPanel): PanelText => {
 
 const doneButtonView = (
   { closeButton, initialFocus }: Dialog.RenderInfo,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
   focus: 'TakesInitialFocus' | 'LeavesInitialFocus' = 'TakesInitialFocus',
 ): Html =>
   closeButtonView(
@@ -998,7 +1003,7 @@ const doneButtonView = (
 const panelBodyView = (
   model: Model,
   renderInfo: Dialog.RenderInfo,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => {
   if (model.panel === 'HowToPlay') {
     return [
@@ -1077,7 +1082,7 @@ const isBlurbShown = (model: Model): boolean =>
 const panelView = (
   model: Model,
   renderInfo: Dialog.RenderInfo,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => {
   const text = panelText(model, model.panel)
   return [
@@ -1098,10 +1103,7 @@ const panelView = (
 const panelAnchor = (model: Model): string =>
   model.panel === 'Difficulty' && !isAskingFirst(model) ? 'Play' : 'Center'
 
-const toPanelDialogMessage = (message: Dialog.Message): Message =>
-  Message.GotPanelDialogMessage({ message })
-
-export const menuPanelView = (model: Model, h: HtmlBuilder<Message>): Html =>
+export const menuPanelView = (model: Model, h: ApplicationViewBuilder): Html =>
   dialogShell(
     {
       dialog: model.panelDialog,
@@ -1113,7 +1115,7 @@ export const menuPanelView = (model: Model, h: HtmlBuilder<Message>): Html =>
         h.DataAttribute('anchor', panelAnchor(model)),
       ],
       panelView: renderInfo => panelView(model, renderInfo, h),
-      toParentMessage: toPanelDialogMessage,
+      binding: PanelDialogBinding,
     },
     h,
   )

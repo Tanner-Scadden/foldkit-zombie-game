@@ -1,6 +1,6 @@
 import { Array, Option } from 'effect'
-import { Canvas, Submodel } from 'foldkit'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import { Canvas } from 'foldkit'
+import type { Html } from 'foldkit/html'
 
 import type { RadioGroup } from '@foldkit/ui'
 
@@ -23,11 +23,13 @@ import {
   playerSprites,
 } from './appearance'
 import {
+  CharacterComposition,
+  type CharacterViewBuilder,
   Message,
-  PartRadioGroup,
+  PART_BINDINGS,
   SECTION_PARTS,
   SECTION_TOGGLES,
-  SectionRadioGroup,
+  SectionsBinding,
   chooseLook,
   flipLook,
   isToggleOn,
@@ -267,7 +269,7 @@ const previewShapes = (
 const previewView = (
   appearance: Appearance,
   screenMs: number,
-  h: HtmlBuilder<Message>,
+  h: CharacterViewBuilder,
 ): Html =>
   h.div(
     [
@@ -295,7 +297,7 @@ const previewView = (
 // like a slot machine.
 const stageChildren = (
   inputs: ViewInputs,
-  h: HtmlBuilder<Message>,
+  h: CharacterViewBuilder,
 ): ReadonlyArray<Html> => [
   h.span([h.Class('look-spotlight'), h.AriaHidden(true)]),
   h.span([h.Class('look-floor'), h.AriaHidden(true)]),
@@ -321,19 +323,19 @@ const stageChildren = (
   ),
 ]
 
-const evenStageView = (inputs: ViewInputs, h: HtmlBuilder<Message>): Html =>
+const evenStageView = (inputs: ViewInputs, h: CharacterViewBuilder): Html =>
   h.div(
     [h.Class('look-stage'), h.DataAttribute('fx', inputs.fx)],
     stageChildren(inputs, h),
   )
 
-const oddStageView = (inputs: ViewInputs, h: HtmlBuilder<Message>): Html =>
+const oddStageView = (inputs: ViewInputs, h: CharacterViewBuilder): Html =>
   h.div(
     [h.Class('look-stage'), h.DataAttribute('fx', inputs.fx)],
     stageChildren(inputs, h),
   )
 
-const stageView = (inputs: ViewInputs, h: HtmlBuilder<Message>): Html =>
+const stageView = (inputs: ViewInputs, h: CharacterViewBuilder): Html =>
   inputs.fxCount % 2 === 0 ? evenStageView(inputs, h) : oddStageView(inputs, h)
 
 // SECTIONS
@@ -390,46 +392,46 @@ const SECTION_LOOKS: Readonly<Record<LookSection, SectionLook>> = {
   },
 }
 
-const sectionsView = (picker: CharacterPicker, h: HtmlBuilder<Message>): Html =>
-  h.submodel({
-    slotId: picker.sections.id,
-    model: picker.sections,
-    view: SectionRadioGroup.view,
-    viewInputs: {
-      options: LookSection.literals,
-      selectedValue: Option.some(picker.section),
-      ariaLabel: 'Parts',
-      orientation: 'Horizontal',
-      toView: ({ group: groupAttributes, options }) =>
-        h.div(
-          [...groupAttributes, h.Class('look-sections')],
-          Array.map(options, option =>
-            h.button(
-              [
-                ...option.option,
-                h.Key(option.value),
-                h.Class('look-section'),
-                h.DataAttribute('section', option.value),
-              ],
-              [
-                h.span([
-                  h.Class('look-section-icon'),
-                  h.AriaHidden(true),
-                  h.Style({
-                    backgroundImage: SECTION_LOOKS[option.value].icon,
-                  }),
-                ]),
-                h.span(
-                  [...option.label, h.Class('look-section-word')],
-                  [SECTION_LOOKS[option.value].word],
-                ),
-              ],
+const sectionsView = (picker: CharacterPicker, h: CharacterViewBuilder): Html =>
+  h.block(
+    SectionsBinding.embedView({
+      slotId: picker.sections.id,
+      model: picker.sections,
+      viewInputs: {
+        options: LookSection.literals,
+        selectedValue: Option.some(picker.section),
+        ariaLabel: 'Parts',
+        orientation: 'Horizontal',
+        toView: ({ group: groupAttributes, options }) =>
+          h.div(
+            [...groupAttributes, h.Class('look-sections')],
+            Array.map(options, option =>
+              h.button(
+                [
+                  ...option.option,
+                  h.Key(option.value),
+                  h.Class('look-section'),
+                  h.DataAttribute('section', option.value),
+                ],
+                [
+                  h.span([
+                    h.Class('look-section-icon'),
+                    h.AriaHidden(true),
+                    h.Style({
+                      backgroundImage: SECTION_LOOKS[option.value].icon,
+                    }),
+                  ]),
+                  h.span(
+                    [...option.label, h.Class('look-section-word')],
+                    [SECTION_LOOKS[option.value].word],
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-    },
-    toParentMessage: message => Message.GotSectionMessage({ message }),
-  })
+      },
+    }),
+  )
 
 // ROWS
 
@@ -446,7 +448,7 @@ const optionFace = (
   part: LookPart,
   value: string,
   appearance: Appearance,
-  h: HtmlBuilder<Message>,
+  h: CharacterViewBuilder,
 ): Html => {
   const partView = PART_VIEWS[part]
   if (partView.look === 'Figure' || partView.look === 'Head') {
@@ -478,7 +480,7 @@ const optionView = (
   part: LookPart,
   appearance: Appearance,
   option: RadioGroup.OptionInfo,
-  h: HtmlBuilder<Message>,
+  h: CharacterViewBuilder,
 ): Html =>
   h.button(
     [
@@ -496,7 +498,7 @@ const lookRowView = (
   picker: CharacterPicker,
   part: LookPart,
   appearance: Appearance,
-  h: HtmlBuilder<Message>,
+  h: CharacterViewBuilder,
 ): Html => {
   const partView = PART_VIEWS[part]
   const groupModel = partGroupOf(picker, part)
@@ -511,32 +513,31 @@ const lookRowView = (
           h.span([h.Class('look-row-value')], [selected]),
         ],
       ),
-      h.submodel({
-        slotId: groupModel.id,
-        model: groupModel,
-        view: PartRadioGroup.view,
-        viewInputs: {
-          options: partView.options,
-          selectedValue: Option.some(selected),
-          ariaLabel: partView.ariaLabel,
-          orientation: 'Horizontal',
-          toView: ({ group: groupAttributes, options }) =>
-            h.div(
-              [
-                ...groupAttributes,
-                h.Class('look-options'),
-                h.Style({
-                  '--look-columns': `${balancedColumns(partView.options.length)}`,
-                }),
-              ],
-              Array.map(options, option =>
-                optionView(part, appearance, option, h),
+      h.block(
+        PART_BINDINGS[part].embedView({
+          slotId: groupModel.id,
+          model: groupModel,
+          viewInputs: {
+            options: partView.options,
+            selectedValue: Option.some(selected),
+            ariaLabel: partView.ariaLabel,
+            orientation: 'Horizontal',
+            toView: ({ group: groupAttributes, options }) =>
+              h.div(
+                [
+                  ...groupAttributes,
+                  h.Class('look-options'),
+                  h.Style({
+                    '--look-columns': `${balancedColumns(partView.options.length)}`,
+                  }),
+                ],
+                Array.map(options, option =>
+                  optionView(part, appearance, option, h),
+                ),
               ),
-            ),
-        },
-        toParentMessage: message =>
-          Message.GotPartMessage({ partId: part, message }),
-      }),
+          },
+        }),
+      ),
     ],
   )
 }
@@ -553,7 +554,7 @@ const TOGGLE_LABELS: Readonly<Record<LookToggle, string>> = {
 const toggleView = (
   toggle: LookToggle,
   appearance: Appearance,
-  h: HtmlBuilder<Message>,
+  h: CharacterViewBuilder,
 ): Html => {
   const isOn = isToggleOn(appearance, toggle)
   const shown = isOn ? appearance : flipLook(appearance, toggle)
@@ -579,7 +580,7 @@ const toggleView = (
 const togglesView = (
   toggles: ReadonlyArray<LookToggle>,
   appearance: Appearance,
-  h: HtmlBuilder<Message>,
+  h: CharacterViewBuilder,
 ): ReadonlyArray<Html> =>
   Array.match(toggles, {
     onEmpty: () => [],
@@ -609,7 +610,7 @@ type ViewInputs = Readonly<{
   fxCount: number
 }>
 
-export const view = Submodel.defineView<CharacterPicker, Message, ViewInputs>(
+export const view = CharacterComposition.makeView.withInputs<ViewInputs>(
   (picker, inputs, h) =>
     h.div(
       [h.Class('look-tab')],

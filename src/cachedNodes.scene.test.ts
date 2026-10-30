@@ -4,11 +4,11 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { FIXED_STEP_MS } from './constants'
-import { update } from './main'
 import { Message } from './message'
 import { type Model, Phase, type PlannedSpawn, initialModel } from './model'
+import { MeasureGameSurface } from './mount'
+import { ROOT, SCENE_SUBSCRIPTIONS } from './testing'
 import { asVeteran } from './veteran'
-import { MeasureGameSurface, view } from './view'
 
 // NOTE: a lazy view (`createLazy`, `createKeyedLazy`, the shut dialog cache)
 // hands snabbdom the very VNode it patched last frame. Snabbdom pairs
@@ -76,11 +76,14 @@ const reuseAcrossAFrame = (
     frames.push(html)
   })
   scene(
-    { update, view },
+    ROOT,
     given(model),
     Mount.resolve(MeasureGameSurface, Message.MeasuredGameSurface(surface)),
     keep,
-    Subscription.emit(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
+    Subscription.emit(
+      SCENE_SUBSCRIPTIONS.frame,
+      Message.TickedFrame({ deltaTime: FIXED_STEP_MS }),
+    ),
     keep,
   )
   const [previous, next] = frames

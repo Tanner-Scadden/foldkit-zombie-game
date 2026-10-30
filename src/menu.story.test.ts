@@ -2,9 +2,10 @@
 import { Array, Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
+import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import {
   AwaitFirstFrame,
@@ -13,8 +14,10 @@ import {
   LoadFonts,
   LoadSave,
   LoadStyles,
+  ReadRoomLink,
   ShowLoadProgress,
 } from './commands'
+import { PanelDialogBinding } from './composition'
 import { FIXED_STEP_MS, RESTART_GRACE_MS } from './constants'
 import { bestsFor, withBests } from './difficulty'
 import { returnHome } from './home'
@@ -32,7 +35,6 @@ import {
 import { scoreOf } from './stats'
 import { maybeKeyDownMessage } from './subscriptions'
 import { scoring, showDialog } from './testing'
-import { ReadRoomLink } from './update/coop'
 import { asVeteran } from './veteran'
 import { FINAL_WAVE } from './waves'
 import { pause } from './waves'
@@ -217,13 +219,14 @@ describe('leaving a run', () => {
         expect(Phase.guards.Paused(phase)).toBe(true)
       }),
       message(
-        Message.GotPanelDialogMessage({
-          message: Dialog.Message.RequestedClose(),
-        }),
+        toParentMessage(
+          PanelDialogBinding,
+          DialogBlock.Message.RequestedClose(),
+        ),
       ),
       Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
       ),
       model(({ panelDialog, phase }) => {
         expect(panelDialog.isOpen).toBe(false)

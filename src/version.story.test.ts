@@ -14,11 +14,7 @@ import {
   WaitForUnwrap,
 } from './commands'
 import { FIXED_STEP_MS, PREPARATION_MS, RESTART_GRACE_MS } from './constants'
-import {
-  recordRemoteBuild,
-  registerServiceWorkerAfterSplash,
-  update,
-} from './main'
+import { update } from './main'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
 import { isUsingServiceWorker } from './serviceWorker'
@@ -29,6 +25,10 @@ import {
   updateCheckActivity,
 } from './subscriptions'
 import { fighting, showDialog } from './testing'
+import {
+  recordRemoteBuild,
+  registerServiceWorkerAfterSplash,
+} from './update/play'
 import {
   RUNNING_BUILD,
   fetchRemoteBuild,
@@ -315,6 +315,12 @@ describe('the end screens with a new version waiting', () => {
   })
 })
 
+// NOTE: each Command invocation carries its own Effect, so Commands compare
+// by name and args.
+const namesOf = (
+  commands: ReadonlyArray<Readonly<{ name: string; args?: unknown }>> = [],
+) => commands.map(({ name, args }) => [name, args])
+
 describe('the service worker', () => {
   const PRODUCTION_BUILD = 'abc123'
 
@@ -327,8 +333,11 @@ describe('the service worker', () => {
 
   test('a production build registers it once the splash is gone', () => {
     expect(
-      registerServiceWorkerAfterSplash(initialModel, PRODUCTION_BUILD).commands,
-    ).toStrictEqual([RegisterServiceWorker()])
+      namesOf(
+        registerServiceWorkerAfterSplash(initialModel, PRODUCTION_BUILD)
+          .commands,
+      ),
+    ).toStrictEqual(namesOf([RegisterServiceWorker()]))
     expect(
       registerServiceWorkerAfterSplash(initialModel, 'dev').commands ?? [],
     ).toHaveLength(0)
@@ -337,7 +346,9 @@ describe('the service worker', () => {
   test('a newer build asks the worker to fetch it in the background', () => {
     const found = recordRemoteBuild(initialModel, PRODUCTION_BUILD, NEWER_BUILD)
     expect(found.model.maybeNewerBuild).toStrictEqual(Option.some(NEWER_BUILD))
-    expect(found.commands).toStrictEqual([UpdateServiceWorker()])
+    expect(namesOf(found.commands)).toStrictEqual(
+      namesOf([UpdateServiceWorker()]),
+    )
 
     const same = recordRemoteBuild(
       initialModel,

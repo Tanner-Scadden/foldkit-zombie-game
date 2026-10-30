@@ -125,6 +125,8 @@ export const FIELD_CLASSES = {
   orientationLock: 'Client',
   playerName: 'Client',
   profile: 'Client',
+  profileDialog: 'Client',
+  profileTabs: 'Client',
   rotationSetting: 'Client',
   shopChatter: 'Client',
   localPlayers: 'Client',

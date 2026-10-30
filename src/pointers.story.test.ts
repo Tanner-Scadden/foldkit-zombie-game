@@ -58,7 +58,7 @@ const firstReleaseMessage = (
       )
       yield* Fiber.interrupt(dispatcher)
       return messages
-    }),
+    }).pipe(Effect.provide(pointerReleases.layer)),
   )
 }
 

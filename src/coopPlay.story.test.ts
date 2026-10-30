@@ -1,12 +1,14 @@
 import { Array, Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
+import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import { positionVariation } from './audio'
 import { PlaySound } from './commands'
+import { CoopBinding, ShopDialogBinding } from './composition'
 import { Message as CoopMessage } from './coop/message'
 import { Screen } from './coop/model'
 import { CODE, lobbyOf, memberOf, playingSession } from './coop/testing'
@@ -43,7 +45,7 @@ import {
 // An online co-op run in the root (src/coopPlay.ts): the room's World drawn
 // as the game, this player's own seat as the player, presses sent to the
 // room as seat actions, the shop opening when the room says so, and no
-// pause. The room and its network are the co-op Submodel's, faked here
+// pause. The room and its network are the co-op Block's, faked here
 // with a session already holding a World.
 
 const graduated: Model = modifyFields(asVeteran(initialModel), {
@@ -79,10 +81,7 @@ const inRun = (world: RoomWorld, isAnchored = false): Model =>
       }),
   })
 
-const roomFrame = (nowMs: number) =>
-  Message.GotCoopMessage({
-    message: CoopMessage.TickedRoomFrame({ nowMs }),
-  })
+const roomFrame = (nowMs: number) => Message.TickedRoomFrame({ nowMs })
 
 const queuedOf = (current: Model): ReadonlyArray<number> =>
   Option.match(maybeRoomOf(current.coop), {
@@ -379,19 +378,23 @@ describe('an online co-op run', () => {
       update,
       given(inRun(atStall)),
       message(roomFrame(100)),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      Command.resolve(
+        Dialog.test.ShowDialog,
+        DialogBlock.Message.SucceededShowDialog(),
+      ),
       model(current => {
         expect(current.shopDialog.isOpen).toBe(true)
       }),
       message(Message.ClickedBuyButton({ item: 'Shotgun' })),
       message(
-        Message.GotShopDialogMessage({
-          message: Dialog.Message.RequestedClose(),
-        }),
+        toParentMessage(
+          ShopDialogBinding,
+          DialogBlock.Message.RequestedClose(),
+        ),
       ),
       Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
       ),
       model(current => {
         expect(current.shopDialog.isOpen).toBe(false)
@@ -408,9 +411,7 @@ describe('an online co-op run', () => {
       update,
       given(inRun(roomWorld)),
       message(roomFrame(100)),
-      message(
-        Message.GotCoopMessage({ message: CoopMessage.CompletedLeaveRoom() }),
-      ),
+      message(toParentMessage(CoopBinding, CoopMessage.CompletedLeaveRoom())),
       Command.resolve(RememberRoom, CoopMessage.CompletedRememberRoom()),
       Command.resolve(
         FocusCoopElement,

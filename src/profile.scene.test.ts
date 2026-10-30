@@ -19,17 +19,22 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Dialog, Tabs } from '@foldkit/ui'
+import { Dialog, DialogBlock, Tabs } from '@foldkit/ui'
 
 import { RequestLinkCode, WriteSave } from './commands'
-import { update } from './main'
 import { Message } from './message'
 import { type Model, initialModel } from './model'
+import { MeasureGameSurface } from './mount'
 import { LinkFlow, SyncState } from './playerSync'
+import { ProfileTabsBlock } from './profile'
 import { LINK_TAKES_PROGRESS_NOTE, SHARE_STATS_NOTE } from './profileView'
-import { emitPressedKey, measureSurface, showDialogInScene } from './testing'
+import {
+  ROOT,
+  emitPressedKey,
+  measureSurface,
+  showDialogInScene,
+} from './testing'
 import { asVeteran } from './veteran'
-import { MeasureGameSurface, view } from './view'
 
 const home: Model = modifyFields(asVeteran(initialModel), {
   saveStatus: () => 'Read',
@@ -48,13 +53,15 @@ const closeButton = role('button', { name: 'Close' })
 
 const focusTab = (index: number) =>
   Command.resolve(
-    Tabs.FocusTab({ id: 'profile-tabs', index }),
-    Tabs.Message.CompletedFocusTab(),
+    Tabs.test.FocusTab({ id: 'profile-tabs', index }),
+    ProfileTabsBlock.Message.CompletedFocusTab(),
   )
 
 const closeDialog = () => [
-  Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()),
-  Mount.expectEnded(Dialog.AcquireResources),
+  Command.resolve(
+    Dialog.test.CloseDialog,
+    DialogBlock.Message.CompletedCloseDialog(),
+  ),
 ]
 
 const measureUpright = Mount.resolve(
@@ -65,7 +72,7 @@ const measureUpright = Mount.resolve(
 describe('the Profile', () => {
   test('the gear opens it on Settings: four tabs, sound and friends, and no devices or stats sharing', () => {
     scene(
-      { update, view },
+      ROOT,
       given(synced),
       measureSurface,
       click(gear),
@@ -99,7 +106,7 @@ describe('the Profile', () => {
 
   test('the arrow keys move between the tabs, down the side in landscape', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       emitPressedKey('KeyC'),
@@ -125,7 +132,7 @@ describe('the Profile', () => {
 
   test('upright on a phone the tabs run across the top, and the arrows go left and right', () => {
     scene(
-      { update, view },
+      ROOT,
       given(onTouch),
       measureUpright,
       click(role('button', { name: 'Your character: change how you look' })),
@@ -142,7 +149,7 @@ describe('the Profile', () => {
 
   test('a tap on a tab switches to it', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(onTouch, {
           syncState: () => SyncState.Synced({ devices: 2 }),
@@ -169,7 +176,7 @@ describe('the Name tab', () => {
 
   test('the stone shows the placeholder, then the name as it is typed, and Enter keeps it', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       click(gear),
@@ -190,7 +197,7 @@ describe('the Name tab', () => {
 
   test('the dice rolls a goofy name onto the stone', () => {
     scene(
-      { update, view },
+      ROOT,
       given(modifyFields(home, { cosmeticRngState: () => 99 })),
       measureSurface,
       click(gear),
@@ -208,7 +215,7 @@ describe('the Name tab', () => {
 describe('the Account tab', () => {
   test("Use a code says this device will take the other device's progress before Link", () => {
     scene(
-      { update, view },
+      ROOT,
       given(synced),
       measureSurface,
       click(gear),
@@ -225,7 +232,7 @@ describe('the Account tab', () => {
 
   test('summoning asks for a code and shows it in big letters', () => {
     scene(
-      { update, view },
+      ROOT,
       given(synced),
       measureSurface,
       click(gear),
@@ -244,7 +251,7 @@ describe('the Account tab', () => {
 
   test('the devices zap together once linked', () => {
     scene(
-      { update, view },
+      ROOT,
       given(modifyFields(synced, { linkFlow: () => LinkFlow.Linked() })),
       measureSurface,
       click(gear),
@@ -261,7 +268,7 @@ describe('the Account tab', () => {
   test('stats sharing is one icon toggle, its note read aloud', () => {
     const shareToggle = role('button', { name: 'Share anonymous play stats' })
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       click(gear),
@@ -295,7 +302,7 @@ describe('every entry point', () => {
       ],
       ({ open, tab: name }) =>
         scene(
-          { update, view },
+          ROOT,
           given(home),
           measureSurface,
           open,

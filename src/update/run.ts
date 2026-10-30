@@ -1,5 +1,3 @@
-import { Update } from 'foldkit'
-
 import { RESTART_GRACE_MS } from '../constants'
 import { endOffer } from '../home'
 import { releaseAll } from '../input'
@@ -7,7 +5,7 @@ import { type Model, Phase, type RunMode } from '../model'
 import { startOrResume } from '../runFlow'
 import { isRoundActive, keepGoing } from '../waves'
 import { playStartSoundWhen, unlockAudio } from './sound'
-import { type UpdateReturn, withInput } from './step'
+import { type UpdateReturn, combine, withInput } from './step'
 
 export const isPaused = Phase.isAnyOf(['Paused'])
 
@@ -36,7 +34,7 @@ export const startsRun = (before: Model, after: Model): boolean =>
   Phase.isAnyOf(['Preparation'])(after.phase)
 
 export const startFromButton = (before: Model, started: Model): UpdateReturn =>
-  Update.combine(withInput(started, releaseAll), [
+  combine(withInput(started, releaseAll), [
     unlockAudio,
     playStartSoundWhen(startsRun(before, started)),
   ])

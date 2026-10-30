@@ -1,0 +1,94 @@
+import { Option } from 'effect'
+import { Update } from 'foldkit'
+
+import { maybeRunOutcome, runSummaryOf } from '../analyticsRun'
+import { SendRunSummary } from '../commands'
+import { isOnlineRun, runDifficultyOf } from '../coopPlay'
+import { countRunFrom, forgetNewEntriesFrom } from '../home'
+import type { Model } from '../model'
+import { cueMusicFrom } from '../musicPlan'
+import { RUNNING_BUILD } from '../version'
+import {
+  focusEndMenuFrom,
+  settleNightmareFrom,
+  unlockNightmareFrom,
+} from './home'
+import { applyRotationFrom } from './rotation'
+import { writeSaveFrom } from './save'
+import type { UpdateStep } from './step'
+
+// ANALYTICS
+
+// NOTE: the summary is built here from the Model, so update stays pure. The
+// visit id comes from GenerateVisitId and the build id is a build constant.
+// An online co-op run sends none until RunSummary has co-op's fields
+// (MULTIPLAYER.md, Phase 6).
+const sendRunSummaryFrom =
+  (before: Model): UpdateStep =>
+  stepModel => {
+    if (stepModel.shareStats === 'Off' || isOnlineRun(before)) {
+      return { model: stepModel }
+    }
+
+    return Option.match(
+      Option.all([maybeRunOutcome(before, stepModel), stepModel.maybeVisitId]),
+      {
+        onNone: () => ({ model: stepModel }),
+        onSome: ([outcome, visitId]) => ({
+          model: stepModel,
+          commands: [
+            SendRunSummary({
+              summary: runSummaryOf(
+                before,
+                stepModel,
+                outcome,
+                visitId,
+                RUNNING_BUILD,
+              ),
+            }),
+          ],
+        }),
+      },
+    )
+  }
+
+// AFTER A MESSAGE
+
+// NOTE: what the root does after any change, comparing the Model from
+// before it: music for the phase, the end menu's focus, the rotation lock,
+// Nightmare, the run count and its summary, the new zombie badges, and the
+// save. Each looks only at the root's own fields, so a child Message that
+// changes nothing but its child needs none of them.
+export const afterMessage = (
+  before: Model,
+  saveWrite: SaveWrite = 'Write',
+): ReadonlyArray<UpdateStep> => [
+  cueMusicFrom(before),
+  focusEndMenuFrom(before),
+  applyRotationFrom(before),
+  settleNightmareFrom(before),
+  unlockNightmareFrom(before),
+  stepModel => ({
+    model: countRunFrom(before, stepModel, runDifficultyOf(stepModel)),
+  }),
+  sendRunSummaryFrom(before),
+  stepModel => ({ model: forgetNewEntriesFrom(before, stepModel) }),
+  writeSaveFrom(before, saveWrite),
+]
+
+// NOTE: a synced save is taken from the store, so writing it back would
+// echo it. Its Messages pass `Synced`.
+export type SaveWrite = 'Write' | 'Synced'
+
+// NOTE: one root change, then the after-message Steps. Every root handler
+// and every OutMessage fold in src/composition.ts ends with them, once. A
+// Step that uses a Binding (opening a dialog, a co-op operation) needs the
+// handler's own Model, so its handler spells the same thing out:
+// `Update.combineSteps(model, [step, ...afterMessage(model)])`. A fold
+// that runs inside a handler (a dialog the handler closes) settles again,
+// which only matters if the fold changes what the save, the music, or the
+// run count read; none does (see "Blocks and Bindings" in AGENTS.md).
+export const settled =
+  (step: UpdateStep, saveWrite: SaveWrite = 'Write'): UpdateStep =>
+  before =>
+    Update.combineSteps(before, [step, ...afterMessage(before, saveWrite)])

@@ -1,8 +1,10 @@
 import { Array } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import type { Dialog } from '@foldkit/ui'
 
+import type { ApplicationViewBuilder } from './composition'
+import { HomeScreenStepsBinding } from './composition'
 import { closeButtonView, dialogShell } from './dialogs'
 import { isInstallTileShown } from './home'
 import {
@@ -24,7 +26,10 @@ const tileLabel = (model: Model): string =>
 // NOTE: a phone with an arrow dropping onto it, beside the gear. It pulses
 // until its first tap. Chrome shows its own install prompt; an iPhone gets
 // the picture guide.
-export const installTileView = (model: Model, h: HtmlBuilder<Message>): Html =>
+export const installTileView = (
+  model: Model,
+  h: ApplicationViewBuilder,
+): Html =>
   isInstallTileShown(model)
     ? h.button(
         [
@@ -61,7 +66,7 @@ const STEPS: ReadonlyArray<Step> = [
 const stepView = (
   { icon, word }: Step,
   index: number,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.li(
     [h.Class('install-step'), h.Style({ '--step': `${index}` })],
@@ -88,7 +93,7 @@ const stepView = (
 
 const guidePanelView = (
   { title, description, closeButton, initialFocus }: Dialog.RenderInfo,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => [
   h.h2([...title, h.Class('panel-title')], ['Home Screen']),
   h.p(
@@ -111,12 +116,9 @@ const guidePanelView = (
   ),
 ]
 
-const toHomeScreenStepsMessage = (message: Dialog.Message): Message =>
-  Message.GotHomeScreenStepsMessage({ message })
-
 export const homeScreenGuideView = (
   model: Model,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   dialogShell(
     {
@@ -126,7 +128,7 @@ export const homeScreenGuideView = (
       panelClass: 'panel install-guide',
       dialogAttributes: [h.DataAttribute('panel', 'HomeScreen')],
       panelView: renderInfo => guidePanelView(renderInfo, h),
-      toParentMessage: toHomeScreenStepsMessage,
+      binding: HomeScreenStepsBinding,
     },
     h,
   )

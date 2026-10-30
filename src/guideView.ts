@@ -1,6 +1,7 @@
 import { Array, Option } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
+import type { ApplicationViewBuilder } from './composition'
 import { Message } from './message'
 import { type Model, MunchopediaPage, type ZombieKind } from './model'
 import {
@@ -54,7 +55,7 @@ const pictureView = (
   isKnown: boolean,
   altText: string,
   className: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   Option.match(maybeFrame, {
     onNone: () => h.span([h.Class(className)]),
@@ -81,7 +82,7 @@ const pictureAlt = (kind: ZombieKind, isKnown: boolean): string =>
 const tileView = (
   model: Model,
   entry: MunchopediaEntry,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const count = killsOf(model.bests.killsByKind, entry.kind)
   const isKnown = isDiscovered(model.bests.killsByKind, entry.kind)
@@ -131,7 +132,7 @@ const tileView = (
   )
 }
 
-const listView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const listView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.ul(
     [h.Class('munch-list'), h.AriaLabel('Zombies')],
     Array.map(MUNCHOPEDIA, entry => tileView(model, entry, h)),
@@ -141,7 +142,7 @@ const listView = (model: Model, h: HtmlBuilder<Message>): Html =>
 
 const ENTRY_NAME_ID = 'munch-entry-name'
 
-const badgeView = (count: number, h: HtmlBuilder<Message>) =>
+const badgeView = (count: number, h: ApplicationViewBuilder) =>
   Array.map(BADGES, badge => {
     const isEarned = count >= badge.threshold
     return h.li(
@@ -163,7 +164,7 @@ const badgeView = (count: number, h: HtmlBuilder<Message>) =>
 const knownEntryView = (
   model: Model,
   entry: MunchopediaEntry,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => {
   const count = killsOf(model.bests.killsByKind, entry.kind)
   return [
@@ -188,7 +189,7 @@ const knownEntryView = (
 const entryView = (
   model: Model,
   kind: ZombieKind,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const entry = entryOf(kind)
   const isKnown = isDiscovered(model.bests.killsByKind, kind)
@@ -234,7 +235,7 @@ const entryView = (
 export const munchopediaBodyView = (
   model: Model,
   doneButton: Html,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> =>
   MunchopediaPage.match(model.home.munchopediaPage, {
     List: () => [

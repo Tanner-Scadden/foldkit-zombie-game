@@ -1,6 +1,5 @@
 import {
   Command,
-  Mount,
   Subscription,
   all,
   click,
@@ -13,19 +12,32 @@ import {
   selector,
   within,
 } from 'foldkit/scene'
+import {
+  Command as StoryCommand,
+  message,
+  story,
+  given as storyGiven,
+  model as storyModel,
+} from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
-import { describe, test } from 'vitest'
+import { toParentMessage } from 'foldkit/test'
+import { describe, test, expect as vitestExpect } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import { ShowInstallPrompt } from './commands'
+import { HomeScreenStepsBinding } from './composition'
 import { PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import { BreakClock, type Model, Phase, initialModel } from './model'
-import { holdingSecond, measureSurface } from './testing'
+import {
+  ROOT,
+  SCENE_SUBSCRIPTIONS,
+  holdingSecond,
+  measureSurface,
+} from './testing'
 import { asVeteran } from './veteran'
-import { view } from './view'
 import { tierName } from './weapons'
 
 const SMG_NAME = tierName('Smg', 0)
@@ -68,19 +80,22 @@ const homeScreenTip = role('button', {
 })
 const installButton = role('button', { name: 'Install Munch Manor' })
 const frame = (deltaTime: number) =>
-  Subscription.emit(Message.TickedFrame({ deltaTime }))
+  Subscription.emit(
+    SCENE_SUBSCRIPTIONS.frame,
+    Message.TickedFrame({ deltaTime }),
+  )
 
 describe('the reload icon', () => {
   test('shows only below half a magazine and hides while reloading', () => {
     scene(
-      { update, view },
+      ROOT,
       given(fightingWith(15)),
       measureSurface,
       expect(reloadIcon).toBeAbsent(),
       expect(role('button', { name: `Reload the ${SMG_NAME}` })).toExist(),
     )
     scene(
-      { update, view },
+      ROOT,
       given(fightingWith(14)),
       measureSurface,
       expect(reloadIcon).toExist(),
@@ -92,7 +107,7 @@ describe('the reload icon', () => {
 
   test('tapping the ammo readout reloads early', () => {
     scene(
-      { update, view },
+      ROOT,
       given(fightingWith(20)),
       measureSurface,
       click(role('button', { name: `Reload the ${SMG_NAME}` })),
@@ -111,7 +126,7 @@ describe('the gun cluster', () => {
 
   test('sits at the bottom middle with the held gun marked', () => {
     scene(
-      { update, view },
+      ROOT,
       given(fightingWith(30)),
       measureSurface,
       expect(cluster).toHaveStyle('left', '35.9375%'),
@@ -127,7 +142,7 @@ describe('the gun cluster', () => {
 
   test('a tap on the other gun swaps, a tap on the held gun reloads', () => {
     scene(
-      { update, view },
+      ROOT,
       given(fightingWith(20)),
       measureSurface,
       click(smgSlot),
@@ -146,7 +161,7 @@ describe('the gun cluster', () => {
 
   test('the reload icon sits right beside the guns', () => {
     scene(
-      { update, view },
+      ROOT,
       given(fightingWith(9)),
       measureSurface,
       expect(within(selector('.gun-cluster-side'), reloadIcon)).toExist(),
@@ -158,15 +173,21 @@ describe('the gun cluster', () => {
       lastDevice: () => 'KeyboardMouse',
     })
     scene(
-      { update, view },
+      ROOT,
       given(onKeyboard),
       measureSurface,
       expect(within(smgSlot, selector('.key-badge'))).toHaveText('R'),
       expect(within(pistolSlot, selector('.key-badge'))).toHaveText('Q'),
       expect(reloadIcon).toBeAbsent(),
-      Subscription.emit(Message.PressedKey({ code: 'KeyR' })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.keyboard,
+        Message.PressedKey({ code: 'KeyR' }),
+      ),
       expect(smgSlot).toHaveAttr('aria-disabled', 'true'),
-      Subscription.emit(Message.PressedKey({ code: 'KeyQ' })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.keyboard,
+        Message.PressedKey({ code: 'KeyQ' }),
+      ),
       expect(role('button', { name: 'Reload the Pop Pistol' })).toHaveAttr(
         'data-held',
         'true',
@@ -180,7 +201,7 @@ describe('the gun cluster', () => {
 describe('trap icons and START WAVE', () => {
   test('show between waves on touch and go away when the wave starts', () => {
     scene(
-      { update, view },
+      ROOT,
       given(breakWithTraps),
       measureSurface,
       expect(placeTrap).toHaveClass('place-icon-button'),
@@ -200,7 +221,7 @@ describe('trap icons and START WAVE', () => {
 
   test('are the same icons on a keyboard, with their keys', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(breakWithTraps, { lastDevice: () => 'KeyboardMouse' }),
       ),
@@ -209,7 +230,10 @@ describe('trap icons and START WAVE', () => {
       expect(within(nextTrap, selector('.key-badge'))).toHaveText('G'),
       expect(within(startWave, selector('.key-badge'))).toHaveText('ENTER'),
       expect(within(selector('.gun-cluster-top'), startWave)).toExist(),
-      Subscription.emit(Message.PressedKey({ code: 'KeyG' })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.keyboard,
+        Message.PressedKey({ code: 'KeyG' }),
+      ),
       expect(role('button', { name: 'Place a Grumpy Gnome' })).toExist(),
     )
   })
@@ -218,7 +242,7 @@ describe('trap icons and START WAVE', () => {
 describe('the corner', () => {
   test('has only the pause icon in a round, and the pause icon pauses', () => {
     scene(
-      { update, view },
+      ROOT,
       given(fightingWith(30)),
       measureSurface,
       expect(pauseButton).toHaveAttr('aria-keyshortcuts', 'Escape'),
@@ -235,7 +259,7 @@ describe('the corner', () => {
 
   test('the pause screen holds the audio toggles, which still toggle', () => {
     scene(
-      { update, view },
+      ROOT,
       given(fightingWith(30)),
       measureSurface,
       click(pauseButton),
@@ -257,7 +281,7 @@ describe('the corner', () => {
     const canFill = (base: Model): Model =>
       modifyFields(base, { screenFit: () => 'Fullscreen' })
     scene(
-      { update, view },
+      ROOT,
       given(canFill(initialModel)),
       measureSurface,
       inside(selector('.home-corner'), expect(fullscreenButton).toExist()),
@@ -266,10 +290,9 @@ describe('the corner', () => {
           name: 'Settings',
         }),
       ),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-      Mount.resolve(
-        Dialog.AcquireResources,
-        Dialog.Message.SucceededAcquireResources(),
+      Command.resolve(
+        Dialog.test.ShowDialog,
+        DialogBlock.Message.SucceededShowDialog(),
       ),
       inside(
         role('dialog', { name: 'Profile' }),
@@ -277,7 +300,7 @@ describe('the corner', () => {
       ),
     )
     scene(
-      { update, view },
+      ROOT,
       given(canFill(fightingWith(30))),
       measureSurface,
       expect(fullscreenButton).toBeAbsent(),
@@ -292,17 +315,16 @@ describe('the install tile', () => {
     screenFit: () => 'HomeScreen',
   })
   const showSteps = [
-    Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-    Mount.resolve(
-      Dialog.AcquireResources,
-      Dialog.Message.SucceededAcquireResources(),
+    Command.resolve(
+      Dialog.test.ShowDialog,
+      DialogBlock.Message.SucceededShowDialog(),
     ),
   ]
   const steps = role('dialog', { name: 'Home Screen' })
 
   test('pulses by the gear on an iPhone until its first tap', () => {
     scene(
-      { update, view },
+      ROOT,
       given(onIphone),
       measureSurface,
       inside(selector('.home-corner'), expect(homeScreenTip).toExist()),
@@ -312,7 +334,7 @@ describe('the install tile', () => {
       expect(homeScreenTip).toBeAbsent(),
     )
     scene(
-      { update, view },
+      ROOT,
       given(modifyFields(onIphone, { homeScreenTip: () => 'Dismissed' })),
       measureSurface,
       expect(homeScreenTip).toHaveAttr('data-tip', 'Dismissed'),
@@ -321,7 +343,7 @@ describe('the install tile', () => {
 
   test('opens the picture guide, three steps of a word each, and the X closes it', () => {
     scene(
-      { update, view },
+      ROOT,
       given(onIphone),
       measureSurface,
       expect(steps).toBeAbsent(),
@@ -336,45 +358,64 @@ describe('the install tile', () => {
       expect(homeScreenTip).toHaveAttr('data-tip', 'Dismissed'),
       click(role('button', { name: 'Close' })),
       Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
       ),
-      Mount.expectEnded(Dialog.AcquireResources),
       expect(steps).toBeAbsent(),
       expect(homeScreenTip).toExist(),
     )
   })
 
+  // NOTE: Escape reaches the Dialog as its own close request, which a
+  // Scene cannot raise, so the Story sends it to the open guide and the
+  // Scene draws the Model it left.
   test('Escape closes the guide too', () => {
+    const shown = update(
+      update(onIphone, Message.ClickedInstallButton()).model,
+      toParentMessage(
+        HomeScreenStepsBinding,
+        DialogBlock.Message.SucceededShowDialog(),
+      ),
+    ).model
+    const escaped = toParentMessage(
+      HomeScreenStepsBinding,
+      DialogBlock.Message.RequestedClose(),
+    )
+    story(
+      update,
+      storyGiven(shown),
+      storyModel(current => {
+        vitestExpect(current.homeScreenSteps.isOpen).toBe(true)
+      }),
+      message(escaped),
+      StoryCommand.resolve(
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
+      ),
+      storyModel(current => {
+        vitestExpect(current.homeScreenSteps.isOpen).toBe(false)
+      }),
+    )
     scene(
-      { update, view },
-      given(onIphone),
+      ROOT,
+      given(update(shown, escaped).model),
       measureSurface,
-      click(homeScreenTip),
-      ...showSteps,
-      Subscription.emit(
-        Message.GotHomeScreenStepsMessage({
-          message: Dialog.Message.RequestedClose(),
-        }),
-      ),
-      Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
-      ),
-      Mount.expectEnded(Dialog.AcquireResources),
       expect(steps).toBeAbsent(),
     )
   })
 
   test('on Chrome, it shows only once the browser offers to install, and a tap asks for the prompt', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(onTouch(initialModel), { screenFit: () => 'Fullscreen' }),
       ),
       measureSurface,
       expect(installButton).toBeAbsent(),
-      Subscription.emit(Message.ChangedInstallOffer({ installOffer: 'Ready' })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.installOffers,
+        Message.ChangedInstallOffer({ installOffer: 'Ready' }),
+      ),
       expect(installButton).toExist(),
       click(installButton),
       Command.expectExact(ShowInstallPrompt),
@@ -388,14 +429,14 @@ describe('the install tile', () => {
 
   test('hides in the installed app and on a desktop with no way to install', () => {
     scene(
-      { update, view },
+      ROOT,
       given(modifyFields(onIphone, { screenFit: () => 'Installed' })),
       measureSurface,
       expect(homeScreenTip).toBeAbsent(),
       expect(fullscreenButton).toBeAbsent(),
     )
     scene(
-      { update, view },
+      ROOT,
       given(modifyFields(initialModel, { screenFit: () => 'Fullscreen' })),
       measureSurface,
       expect(homeScreenTip).toBeAbsent(),
@@ -407,7 +448,7 @@ describe('the install tile', () => {
 describe('the first break on screen', () => {
   test('has no timer, and the timer line says so', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(breakWithTraps, {
           phase: () =>
@@ -430,16 +471,15 @@ describe('the first break on screen', () => {
 
 describe('the title icons and the character picker', () => {
   const showPicker = [
-    Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-    Mount.resolve(
-      Dialog.AcquireResources,
-      Dialog.Message.SucceededAcquireResources(),
+    Command.resolve(
+      Dialog.test.ShowDialog,
+      DialogBlock.Message.SucceededShowDialog(),
     ),
   ]
 
   test('the title keeps its corner clear for the picker', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(onTouch(initialModel), { screenFit: () => 'HomeScreen' }),
       ),
@@ -456,10 +496,13 @@ describe('the title icons and the character picker', () => {
 
   test('C opens the Profile from the title', () => {
     scene(
-      { update, view },
+      ROOT,
       given(asVeteran(initialModel)),
       measureSurface,
-      Subscription.emit(Message.PressedKey({ code: 'KeyC' })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.keyboard,
+        Message.PressedKey({ code: 'KeyC' }),
+      ),
       ...showPicker,
       expect(role('dialog', { name: 'Profile' })).toExist(),
     )
