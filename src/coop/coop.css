@@ -941,88 +941,28 @@
   letter-spacing: 0.1em;
 }
 
-/* ARENA: the world in a 16:9 frame, names over the players. */
+/* ARENA: the game's own scene shows through; co-op adds only LEAVE, the
+   countdown, Away, and the trophy over it. */
+
+.coop[data-screen='Arena'] {
+  background: none;
+  backdrop-filter: none;
+  pointer-events: none;
+  animation: none;
+}
 
 .coop-arena {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-}
-
-.coop-arena-frame {
-  position: relative;
-  container-type: size;
-  width: min(100cqw, 100cqh * 16 / 9);
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-  border-radius: var(--menu-radius-sm);
-  box-shadow:
-    0 0 0 3px #10090f,
-    var(--menu-pop);
-}
-
-.coop-arena-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  image-rendering: pixelated;
-  touch-action: none;
-}
-
-.coop-plates {
   position: absolute;
   inset: 0;
-  pointer-events: none;
-}
-
-.coop-plate {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 6px;
-  border: 2px solid #10240a;
-  border-radius: var(--menu-radius-sm);
-  background: var(--coop-teal);
-  color: #0a2220;
-  font: bold clamp(10px, 2.2 * var(--coop-unit), 15px) / 1.2 var(--menu-font);
-  white-space: nowrap;
-  translate: -50% calc(-100% - 9cqh);
-}
-
-.coop-plate[data-me='Me'] {
-  background: var(--menu-gold);
-  color: #241a06;
-}
-
-.coop-plate[data-away='Away'] {
-  opacity: 0.6;
-}
-
-.coop-plate-score {
-  padding: 0 4px;
-  border-radius: 3px;
-  background: rgba(0, 0, 0, 0.25);
-}
-
-.coop-plate-away {
-  width: 12px;
-  height: 10px;
-  background: center / contain no-repeat;
-  image-rendering: pixelated;
-  filter: brightness(0.2);
+  container-type: size;
 }
 
 .coop-arena-hud {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  left: 8px;
+  top: 6px;
+  right: 6px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   pointer-events: none;
 }
 
@@ -1030,23 +970,18 @@
   pointer-events: auto;
 }
 
-.coop-timer {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 2px solid var(--menu-gold);
-  border-radius: var(--menu-radius-pill);
-  background: var(--menu-glass);
-  color: var(--menu-gold);
-  font: bold clamp(16px, 4 * var(--coop-unit), 26px) / 1 var(--menu-font);
+/* In the run LEAVE sits where PAUSE would, the size of the corner buttons. */
+.coop-arena-hud .coop-leave {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 9999px;
+  opacity: 0.8;
 }
 
-.coop-timer-icon {
-  width: 18px;
-  height: 18px;
-  background: center / contain no-repeat;
-  image-rendering: pixelated;
+.coop-net {
+  display: none;
 }
 
 .coop-countdown {

@@ -114,7 +114,7 @@ export const closePanel: UpdateStep = stepModel =>
     ? panelDialog.close(stepModel)
     : { model: stepModel }
 
-const goHome: UpdateStep = stepModel => ({
+export const goHome: UpdateStep = stepModel => ({
   model: returnHome(withInput(stepModel, releaseAll)),
 })
 

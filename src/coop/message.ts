@@ -3,7 +3,7 @@ import { defineMessageUnion } from 'foldkit/message'
 
 import { LobbyEvent, QuickPlayEvent, RoomEvent } from '@munch/netcode/browser'
 
-import { ArenaPoint, CoopProblem, Share } from './model'
+import { CoopProblem, Share } from './model'
 
 // MESSAGE
 
@@ -37,9 +37,6 @@ export const Message = defineMessageUnion({
   CompletedShareRoomLink: { share: Share },
   CompletedRememberRoom: {},
   CompletedFocusCoopElement: {},
-  PressedArena: { point: ArenaPoint },
-  MovedArena: { point: ArenaPoint },
-  ReleasedArena: {},
 })
 export type Message = typeof Message.Type
 

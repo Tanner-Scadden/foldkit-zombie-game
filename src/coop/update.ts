@@ -6,25 +6,30 @@ import {
   ClientFrame,
   type Lobby,
   type LobbyMember,
+  NEUTRAL_INPUT,
+  type PlayerInput,
   Session,
   normalizeRoomCode,
 } from '@munch/netcode'
 import { CODE_ALPHABET } from '@munch/sync-engine'
 
+import { actionCodeOf, eventsBetween, heldAction } from '../roomWorld'
+import type { SeatAction } from '../stepWorld'
 import { Message, OutMessage } from './message'
 import {
   type CoopProblem,
   LobbyChange,
   type Model,
+  type Presses,
   type Queue,
   type Room,
   RoomRequest,
   Screen,
   emptyQueue,
+  noPresses,
 } from './model'
 import { CoopNet } from './net'
 import { coopWorld } from './seam'
-import { inputOf, isMoveKey } from './world'
 
 // IDS
 
@@ -170,10 +175,7 @@ const withScreen = (model: Model, screen: Screen): Model =>
   modifyFields(model, { screen: () => screen })
 
 const hub = (model: Model, maybeProblem: Option.Option<CoopProblem>): Model =>
-  modifyFields(withScreen(model, Screen.Hub({ maybeProblem })), {
-    heldKeys: () => [],
-    maybePointer: () => Option.none(),
-  })
+  withScreen(model, Screen.Hub({ maybeProblem }))
 
 export const freshRoom = (code: string, slot: number): Room => ({
   code,
@@ -183,6 +185,9 @@ export const freshRoom = (code: string, slot: number): Room => ({
   link: 'Connecting',
   session: Session.makeSession(0),
   maybeWorld: Option.none(),
+  frameEvents: [],
+  eventsTick: 0,
+  presses: noPresses,
   share: 'Idle',
   departure: 'Staying',
 })
@@ -305,19 +310,97 @@ const receiveFrame = (
   }
 }
 
-const tickRoom = (model: Model, room: Room, nowMs: number): UpdateReturn => {
-  const input = inputOf(model.heldKeys, model.maybePointer, room.session.shown)
-  const ticked = Session.tickInput(coopWorld, room.session, input, nowMs)
-  const rendered = Session.render(coopWorld, ticked.session, nowMs)
-  const next = withRoom(model, {
-    ...room,
-    session: rendered.session,
-    maybeWorld: Option.orElse(rendered.world, () => room.maybeWorld),
+// NOTE: the next queued press takes over the held value once the one held
+// now has gone out on at least one input tick.
+const pressFor = (presses: Presses, inputTick: number): Presses =>
+  Array.match(presses.queued, {
+    onEmpty: () => presses,
+    onNonEmpty: ([next, ...rest]) =>
+      presses.held === 0 || inputTick > presses.heldFrom
+        ? {
+            queued: rest,
+            held: heldAction(next, presses.presses + 1),
+            presses: presses.presses + 1,
+            heldFrom: inputTick + 1,
+          }
+        : presses,
   })
-  return Array.isReadonlyArrayNonEmpty(ticked.outgoing)
-    ? { model: next, commands: [SendRoomFrames({ frames: ticked.outgoing })] }
-    : { model: next }
-}
+
+// NOTE: events are counted from the tick the last frame reached. A room that
+// started its ticks again, a new run, counts from what it holds.
+const startOfEvents = (room: Room, frames: Room['session']['frames']) =>
+  Option.match(Array.last(frames), {
+    onNone: () => room.eventsTick,
+    onSome: newest =>
+      room.eventsTick > newest.tick
+        ? Option.match(Array.head(frames), {
+            onNone: () => 0,
+            onSome: oldest => oldest.tick,
+          })
+        : room.eventsTick,
+  })
+
+// NOTE: one frame of the room: the parent's controls go in as this frame's
+// input with the held press, the session sends what it owes, and the World
+// to draw and the events it reached come out. The parent reads `maybeWorld`
+// and `frameEvents` after it (src/coopPlay.ts). While the parent holds its
+// picture still for hit-stop, the events wait in the session for it.
+export const tickRoom = (
+  model: Model,
+  controls: PlayerInput,
+  nowMs: number,
+  isPictureHeld = false,
+): UpdateReturn =>
+  inRoom(model, room => {
+    const presses = pressFor(room.presses, room.session.inputTick)
+    const ticked = Session.tickInput(
+      coopWorld,
+      room.session,
+      { ...controls, action: presses.held },
+      nowMs,
+    )
+    const rendered = Session.render(coopWorld, ticked.session, nowMs)
+    const reached = Math.max(
+      0,
+      Math.min(
+        Math.floor(rendered.renderTick),
+        Option.match(Array.last(rendered.session.frames), {
+          onNone: () => 0,
+          onSome: newest => newest.tick,
+        }),
+      ),
+    )
+    const from = startOfEvents(room, rendered.session.frames)
+    const next = withRoom(model, {
+      ...room,
+      session: rendered.session,
+      maybeWorld: Option.orElse(rendered.world, () => room.maybeWorld),
+      frameEvents:
+        reached > from && !isPictureHeld
+          ? eventsBetween(rendered.session.frames, from, reached)
+          : [],
+      eventsTick: isPictureHeld ? from : Math.max(from, reached),
+      presses,
+    })
+    return Array.isReadonlyArrayNonEmpty(ticked.outgoing)
+      ? { model: next, commands: [SendRoomFrames({ frames: ticked.outgoing })] }
+      : { model: next }
+  })
+
+// NOTE: a press for the room: a swap, a buy, READY, and the rest
+// (src/stepWorld.ts, SeatAction). It goes out with the next inputs.
+export const pressAction = (model: Model, action: SeatAction): Model =>
+  Option.match(maybeRoomOf(model), {
+    onNone: () => model,
+    onSome: room =>
+      withRoom(model, {
+        ...room,
+        presses: {
+          ...room.presses,
+          queued: Array.append(room.presses.queued, actionCodeOf(action)),
+        },
+      }),
+  })
 
 const toggleReady = (model: Model, room: Room): UpdateReturn =>
   Option.match(meIn(room), {
@@ -347,16 +430,6 @@ const close = (model: Model): UpdateReturn => ({
   model: withScreen(model, Screen.Closed()),
   outMessage: OutMessage.ClosedCoop(),
 })
-
-const withoutKey = (model: Model, code: string): Model =>
-  modifyFields(model, {
-    heldKeys: Array.filter(held => held !== code),
-  })
-
-const holdKey = (model: Model, code: string): Model =>
-  isMoveKey(code) && !Array.contains(model.heldKeys, code)
-    ? modifyFields(model, { heldKeys: Array.append(code) })
-    : model
 
 const ESCAPE = 'Escape'
 const ENTER = 'Enter'
@@ -389,9 +462,7 @@ const keyOnScreen = (model: Model, code: string): UpdateReturn =>
       }
     },
     InRoom: ({ room }) =>
-      code === ENTER && isInLobby(room)
-        ? toggleReady(model, room)
-        : { model: holdKey(model, code) },
+      code === ENTER && isInLobby(room) ? toggleReady(model, room) : { model },
   })
 
 export const isInLobby = (room: Room): boolean =>
@@ -452,8 +523,8 @@ const heardInQueue = (
 export const pressKey = (model: Model, code: string): UpdateReturn =>
   keyOnScreen(model, code)
 
-export const releaseKey = (model: Model, code: string): UpdateReturn => ({
-  model: withoutKey(model, code),
+export const releaseKey = (model: Model, _code: string): UpdateReturn => ({
+  model,
 })
 
 // OPEN
@@ -607,8 +678,7 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     ReceivedRoomEvent: ({ event, atMs }) =>
       inRoom(model, room => receiveFrame(model, room, event, atMs)),
 
-    TickedRoomFrame: ({ nowMs }) =>
-      inRoom(model, room => tickRoom(model, room, nowMs)),
+    TickedRoomFrame: ({ nowMs }) => tickRoom(model, NEUTRAL_INPUT, nowMs),
 
     CompletedSendRoomFrames: ({ bytes }) =>
       inRoom(model, room => ({
@@ -660,18 +730,4 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     CompletedRememberRoom: () => ({ model }),
 
     CompletedFocusCoopElement: () => ({ model }),
-
-    PressedArena: ({ point }) => ({
-      model: modifyFields(model, { maybePointer: () => Option.some(point) }),
-    }),
-
-    MovedArena: ({ point }) => ({
-      model: Option.isSome(model.maybePointer)
-        ? modifyFields(model, { maybePointer: () => Option.some(point) })
-        : model,
-    }),
-
-    ReleasedArena: () => ({
-      model: modifyFields(model, { maybePointer: () => Option.none() }),
-    }),
   })

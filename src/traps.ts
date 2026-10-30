@@ -19,7 +19,6 @@ import {
   tileIndex,
   tilesWithSymbol,
 } from './arena'
-import type { SoundEffect } from './audio'
 import type { BlastTarget } from './combat'
 import {
   BARRICADE_REACH_PX,
@@ -43,6 +42,7 @@ import {
   modifyLeadSeat,
   trapOwnerOf,
 } from './party'
+import type { SoundEffect } from './soundEffect'
 import { countTrapPlaced } from './stats'
 import { WEAPONS } from './weapons'
 import { type World, withWorld } from './world'

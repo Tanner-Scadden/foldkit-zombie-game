@@ -2,13 +2,15 @@ import { Array, Record } from 'effect'
 
 import { playerSprites } from './appearance'
 import { LEVEL_SPECS, type LevelSpec, levelFor } from './arena'
+import { SEAT_LOOKS } from './coop/looks'
 import { type ExitId, defaultAppearance } from './model'
 import { occludersOf } from './occluders'
 import { roomShapes } from './room'
 
 // NOTE: most sprites are built as their modules load, and the atlas
 // generator (tools/sprites/build.ts) finds them by loading the modules. These
-// are the ones built later, on first use: the starting look's frames, and
+// are the ones built later, on first use: the starting look's frames, the
+// looks co-op teammates wear by seat, and
 // the room of every level with every set of exits open, with the occluders
 // cut from it. A sprite built lazily belongs here, or it is encoded at
 // runtime instead of drawn from the atlas, and tools/sprites/atlas.test.ts fails.
@@ -35,6 +37,7 @@ const levelStatesOf = (spec: LevelSpec) =>
 
 export const precompileSprites = (): void => {
   playerSprites(defaultAppearance)
+  Array.forEach(SEAT_LOOKS, playerSprites)
   Array.forEach(Record.values(LEVEL_SPECS), spec =>
     Array.forEach(levelStatesOf(spec), level => {
       roomShapes(level)

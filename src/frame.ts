@@ -84,7 +84,7 @@ const runTicks = (stepped: Stepped, count: number): Stepped => {
 // NOTE: what the frame looks like once its ticks ran: the camera lean,
 // particles, the walking dust, callouts, and the juice, all from the
 // frame's events and the cosmetic stream, so they never touch the World.
-const advanceCosmetics = (
+export const advanceCosmetics = (
   model: Model,
   frameMs: number,
   worldMs: number,
@@ -104,7 +104,7 @@ const advanceCosmetics = (
   )
 
 // NOTE: the camera leans toward the aim on the display's own time.
-const leanFor = (model: Model, frameMs: number): Model =>
+export const leanFor = (model: Model, frameMs: number): Model =>
   modifyFields(model, {
     cameraLean: lean => leanCamera(lean, model.intent.maybeAim, frameMs),
   })

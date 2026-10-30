@@ -1,10 +1,10 @@
-import { settle } from './readiness'
+import { Effect, Layer, Option, Queue, Schema, Stream } from 'effect'
+
 // NOTE: next, so the build's prebuilt sprite atlas is in place before any
 // game module builds a sprite, as in the game's own entry.
 import '@game/spriteAtlasBoot'
 
 import './harness.css'
-import { Effect, Layer, Option, Queue, Schema, Stream } from 'effect'
 import { Canvas, Dom, ManagedResource, Runtime, Subscription } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
@@ -31,6 +31,7 @@ import {
   quietCoopNet,
   stagedWorld,
 } from '@game/coop/testing'
+import { playRoomFrame } from '@game/coopPlay'
 import { withBests } from '@game/difficulty'
 import { KITCHEN_EXIT } from '@game/exits'
 import { sceneShapes } from '@game/layers'
@@ -58,19 +59,21 @@ import { raiseDebutCard } from '@game/onboarding'
 import { advanceParticles } from '@game/particles'
 import { LinkFlow, PlayerScopeStatus, SyncState } from '@game/playerSync'
 import { FLOOR_COLOR } from '@game/room'
+import { startOrResume } from '@game/runFlow'
 import { STALL_BOX } from '@game/shop'
 import { shedParts } from '@game/simulation'
 import { frameAt, group, gunSprite } from '@game/sprite'
 import { type PlayerStore, layer as PlayerStoreLayer } from '@game/store'
 import { subscriptions } from '@game/subscriptions'
+import { tickCoopRoom } from '@game/update/coop'
 import { openProfile } from '@game/update/profile'
 import { view } from '@game/view'
-import { startOrResume } from '@game/runFlow'
 import { pause, planFor, rollSpawns } from '@game/waves'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
 import { Session } from '@munch/netcode'
 
 import { type HarnessConfig, decodeHarnessConfig } from './config'
+import { settle } from './readiness'
 
 const readConfig = () => {
   try {
@@ -844,6 +847,9 @@ const coopRoom = (
     session:
       status === 'Playing' ? playingSession(world, 0) : Session.makeSession(0),
     maybeWorld: status === 'Playing' ? Option.some(world) : Option.none(),
+    frameEvents: [],
+    eventsTick: 0,
+    presses: CoopModel.noPresses,
     share: 'Idle',
     departure: 'Staying',
     ...extra,
@@ -946,16 +952,19 @@ const coopScreen = (stage: NonNullable<typeof config.coop>) => {
   }
 }
 
+// NOTE: a staged run draws its room's World as the game, one frame of it,
+// as an online run does (src/coopPlay.ts).
 const withCoop = (model: Model): Model => {
   const stage = config.coop
   if (stage === undefined) return model
-  return modifyFields(model, {
+  const staged = modifyFields(model, {
     lessons: lessons => ({
       ...lessons,
       openBreak: Lesson.Learned({ atMs: 0 }),
     }),
     coop: coop => ({ ...coop, screen: coopScreen(stage) }),
   })
+  return playRoomFrame(0, tickCoopRoom(0))(staged).model
 }
 
 const scenarioModel = (): Model => withCoop(scenarioModelOf())
@@ -1394,9 +1403,7 @@ const sceneOf = (model: Model): HarnessReturn => {
                 : 'Look',
         )(modifyFields(seeded, { screenMs: () => 99999 }))
       : { model: seeded }
-  return config.tick === undefined
-    ? opened
-    : advance(opened, config.tick)
+  return config.tick === undefined ? opened : advance(opened, config.tick)
 }
 
 // THE READY SIGNAL

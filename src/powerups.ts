@@ -11,7 +11,6 @@ import {
   levelOf,
   roomAt,
 } from './arena'
-import type { SoundEffect } from './audio'
 import {
   type BlastSpec,
   ZOMBIE_BLAST_TARGET,
@@ -23,6 +22,7 @@ import type { Model } from './model'
 import { forEachSeat, isCoop, isStanding, leadSeatOf } from './party'
 import { nextRandom } from './prng'
 import { earn } from './shop'
+import type { SoundEffect } from './soundEffect'
 import { totalKills } from './stats'
 import { trapBlockers } from './traps'
 import {

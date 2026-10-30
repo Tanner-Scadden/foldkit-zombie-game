@@ -1,5 +1,5 @@
 import { Array, Option, Order, pipe } from 'effect'
-import { Canvas, Submodel } from 'foldkit'
+import { Submodel } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import {
@@ -10,7 +10,7 @@ import {
 } from '@munch/netcode'
 
 import { closeButtonView } from '../dialogs'
-import { CLOCK_ICON, SHARE_ICON, TROPHY_ICON } from '../icons'
+import { SHARE_ICON, TROPHY_ICON } from '../icons'
 import type { Appearance } from '../model'
 import {
   AWAY_ICON,
@@ -28,6 +28,7 @@ import {
   WAIT_ICON,
   portraitOf,
 } from './icons'
+import { seatLook, seatLookOf } from './looks'
 import { Message } from './message'
 import {
   type CoopProblem,
@@ -36,13 +37,7 @@ import {
   type Room,
   Screen,
 } from './model'
-import {
-  WORLD_HEIGHT,
-  WORLD_WIDTH,
-  type WorldState,
-  playerMarks,
-  secondsLeft,
-} from './seam'
+import { readoutOf } from './seam'
 import {
   CODE_INPUT_ID,
   QUICK_PLAY_BUTTON_ID,
@@ -52,7 +47,6 @@ import {
   isInLobby,
   meIn,
 } from './update'
-import { CANVAS_HEIGHT, CANVAS_SCALE, CANVAS_WIDTH, worldShapes } from './world'
 
 // INPUTS
 
@@ -61,46 +55,8 @@ export type ViewInputs = Readonly<{
   isKeyboard: boolean
 }>
 
-// NOTE: until each player's look rides in the lobby, a teammate wears one
-// of these, by seat, and your own seat wears your own look.
-const SEAT_LOOKS: Array.NonEmptyReadonlyArray<Appearance> = [
-  {
-    body: 'Male',
-    hairStyle: 'Crop',
-    hairColor: 'Brown',
-    skinTone: 'Light',
-    shirtColor: 'Blue',
-  },
-  {
-    body: 'Female',
-    hairStyle: 'Ponytail',
-    hairColor: 'Ginger',
-    skinTone: 'Tan',
-    shirtColor: 'Teal',
-  },
-  {
-    body: 'Male',
-    hairStyle: 'Curls',
-    hairColor: 'Black',
-    skinTone: 'Deep',
-    shirtColor: 'Yellow',
-  },
-  {
-    body: 'Female',
-    hairStyle: 'Long',
-    hairColor: 'Pink',
-    skinTone: 'Fair',
-    shirtColor: 'Purple',
-  },
-]
-
-const seatLook = (seat: number): Appearance =>
-  Option.getOrElse(Array.get(SEAT_LOOKS, seat % SEAT_LOOKS.length), () =>
-    Array.headNonEmpty(SEAT_LOOKS),
-  )
-
 const lookOf = (inputs: ViewInputs, mySeat: number, seat: number) =>
-  seat === mySeat ? inputs.look : seatLook(seat)
+  seatLookOf(inputs.look, mySeat, seat)
 
 // PIECES
 
@@ -713,45 +669,6 @@ const lobbyView = (
 
 // ARENA
 
-const toWorldPoint = (point: Readonly<{ x: number; y: number }>) => ({
-  x: point.x / CANVAS_SCALE,
-  y: point.y / CANVAS_SCALE,
-})
-
-const percent = (part: number, whole: number): string =>
-  `${(part * 100) / whole}%`
-
-const nameplatesView = (
-  room: Room,
-  world: WorldState,
-  h: HtmlBuilder<Message>,
-): Html =>
-  h.div(
-    [h.Class('coop-plates'), h.AriaHidden(true)],
-    Array.map(playerMarks(world), mark =>
-      h.keyed('span')(
-        `plate-${mark.slot}`,
-        [
-          h.Class('coop-plate'),
-          h.DataAttribute('me', mark.slot === room.slot ? 'Me' : 'Other'),
-          h.DataAttribute('away', mark.isAway ? 'Away' : 'Here'),
-          h.Style({
-            left: percent(mark.x, WORLD_WIDTH),
-            top: percent(mark.y, WORLD_HEIGHT),
-          }),
-        ],
-        [
-          mark.isAway ? iconView('coop-plate-away', AWAY_ICON, h) : h.empty,
-          Option.match(room.maybeLobby, {
-            onNone: () => `Player ${mark.slot + 1}`,
-            onSome: lobby => nameAt(lobby, mark.slot),
-          }),
-          h.span([h.Class('coop-plate-score')], [`${mark.score}`]),
-        ],
-      ),
-    ),
-  )
-
 const countdownView = (room: Room, h: HtmlBuilder<Message>): Html =>
   h.keyed('div')(
     `countdown-${Option.match(room.maybeLobby, { onNone: () => 0, onSome: lobby => lobby.round })}`,
@@ -784,75 +701,45 @@ const endedView = (room: Room, h: HtmlBuilder<Message>): Html =>
       )
     : h.empty
 
-const arenaHudView = (
-  room: Room,
-  maybeWorld: Option.Option<WorldState>,
-  h: HtmlBuilder<Message>,
-): Html =>
-  h.div(
-    [h.Class('coop-arena-hud')],
-    [
-      leaveButtonView(room, h),
-      Option.match(maybeWorld, {
-        onNone: () => h.empty,
-        onSome: world =>
-          h.span(
-            [
-              h.Class('coop-timer'),
-              h.AriaLabel(`${secondsLeft(world)} seconds left`),
-            ],
-            [
-              iconView('coop-timer-icon', CLOCK_ICON, h),
-              `${secondsLeft(world)}`,
-            ],
-          ),
+// NOTE: the link's numbers, for the audit harness and the curious: the
+// round trip, what came down, and how far your own player was corrected.
+const netView = (room: Room, h: HtmlBuilder<Message>): Html => {
+  const { stats } = room.session
+  return h.div([
+    h.Class('coop-net'),
+    h.AriaHidden(true),
+    h.DataAttribute('rtt', `${Math.round(room.session.rttMs)}`),
+    h.DataAttribute('bytes-in', `${stats.bytesIn}`),
+    h.DataAttribute('frames-in', `${stats.framesIn}`),
+    h.DataAttribute('inputs-out', `${stats.inputsOut}`),
+    h.DataAttribute('since', `${stats.sinceMs}`),
+    h.DataAttribute('now', `${room.session.renderedMs}`),
+    h.DataAttribute('corrections', `${stats.corrections}`),
+    h.DataAttribute('correction-px', `${stats.maxCorrectionPx.toFixed(1)}`),
+    h.DataAttribute('slot', `${room.slot}`),
+    h.DataAttribute(
+      'world',
+      Option.match(room.maybeWorld, {
+        onNone: () => '',
+        onSome: readoutOf,
       }),
-    ],
-  )
+    ),
+  ])
+}
 
-const arenaView = (
-  room: Room,
-  inputs: ViewInputs,
-  h: HtmlBuilder<Message>,
-): Html =>
+// NOTE: the run itself is the game's own scene under this overlay
+// (src/coopPlay.ts), drawn from the room's World with the game's views.
+// Co-op adds only what the room is: LEAVE, the countdown, Away while the
+// socket reconnects, and the trophy when the run ends.
+const arenaView = (room: Room, h: HtmlBuilder<Message>): Html =>
   h.div(
     [h.Class('coop-arena')],
     [
-      h.div(
-        [h.Class('coop-arena-frame')],
-        [
-          Canvas.view(
-            {
-              width: CANVAS_WIDTH,
-              height: CANVAS_HEIGHT,
-              className: 'coop-arena-canvas',
-              shapes: Option.match(room.maybeWorld, {
-                onNone: () => [],
-                onSome: world =>
-                  worldShapes(
-                    world,
-                    seat => lookOf(inputs, room.slot, seat),
-                    room.session.renderedMs,
-                  ),
-              }),
-              onPointerDown: point =>
-                Message.PressedArena({ point: toWorldPoint(point) }),
-              onPointerMove: point =>
-                Message.MovedArena({ point: toWorldPoint(point) }),
-              onPointerUp: () => Message.ReleasedArena(),
-            },
-            h,
-          ),
-          Option.match(room.maybeWorld, {
-            onNone: () => h.empty,
-            onSome: world => nameplatesView(room, world, h),
-          }),
-          countdownView(room, h),
-          awayView(room, h),
-          endedView(room, h),
-        ],
-      ),
-      arenaHudView(room, room.maybeWorld, h),
+      countdownView(room, h),
+      awayView(room, h),
+      endedView(room, h),
+      h.div([h.Class('coop-arena-hud')], [leaveButtonView(room, h)]),
+      netView(room, h),
     ],
   )
 
@@ -860,8 +747,7 @@ const roomView = (
   room: Room,
   inputs: ViewInputs,
   h: HtmlBuilder<Message>,
-): Html =>
-  isInLobby(room) ? lobbyView(room, inputs, h) : arenaView(room, inputs, h)
+): Html => (isInLobby(room) ? lobbyView(room, inputs, h) : arenaView(room, h))
 
 // VIEW
 

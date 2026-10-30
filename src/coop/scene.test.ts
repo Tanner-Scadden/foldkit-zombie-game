@@ -237,12 +237,13 @@ describe('the arena', () => {
       ...overrides,
     })
 
-  test('the world shows with a timer and a leave button', () => {
+  test('the game shows through, with a leave button and the link numbers', () => {
     scene(
       { update, view },
       given(playing()),
-      expect(selector('canvas.coop-arena-canvas')).toExist(),
-      expect(selector('.coop-plate[data-me="Me"]')).toExist(),
+      expect(selector('.coop[data-screen="Arena"]')).toExist(),
+      expect(selector('canvas')).not.toExist(),
+      expect(selector('.coop-net[data-slot="0"]')).toExist(),
       expect(role('button', { name: 'Leave the room' })).toExist(),
     )
   })

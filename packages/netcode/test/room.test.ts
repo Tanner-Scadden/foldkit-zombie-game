@@ -226,6 +226,8 @@ describe('the room', () => {
     )
     expect(Room.isEnded(end.out)).toBe(true)
     expect(tagsTo(end.out, 'socket-0').at(-1)).toBe('RoomClosed')
+    expect(tagsTo(end.out, 'socket-0').at(-2)).toBe('Delta')
+    expect(end.room.sentTick).toBe(end.room.tick)
     const ended = end.out.find(item => item._tag === 'Ended')
     expect(ended).toMatchObject({ _tag: 'Ended', reason: 'GameOver' })
     expect(
@@ -236,6 +238,20 @@ describe('the room', () => {
       [0, 'player-0'],
       [1, 'player-1'],
     ])
+  })
+
+  test('a run that ends between messages sends its last world first', () => {
+    const endsAtTen = {
+      ...StandIn,
+      isOver: (world: StandInWorld) => world.tick >= 10,
+    }
+    const started = Room.startRoom(endsAtTen, members([0, 1]), 7, T0)
+    const atNine = Room.advance(endsAtTen, started.room, T0 + 9 * Room.TICK_MS)
+    expect(atNine.room.sentTick).toBe(9)
+    const atTen = Room.advance(endsAtTen, atNine.room, T0 + 10 * Room.TICK_MS)
+    expect(Room.isEnded(atTen.out)).toBe(true)
+    expect(tagsTo(atTen.out, 'socket-0')).toEqual(['Delta', 'RoomClosed'])
+    expect(atTen.room.sentTick).toBe(10)
   })
 
   test('Leave frees the seat at once; a kick says so first', () => {

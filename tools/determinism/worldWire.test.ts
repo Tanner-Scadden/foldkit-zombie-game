@@ -1,5 +1,7 @@
-// The World on the wire: a snapshot reads back as the World, and a client
-// that applies every diff holds what a snapshot of the room's World gives.
+// The World on the binary wire (src/worldCodec.ts), in single player: a
+// snapshot reads back as the World, and a client that applies every diff
+// holds what a snapshot of the room's World gives. The co-op room's own
+// round trips are in src/roomWorld.test.ts.
 
 import { Struct } from 'effect'
 import { describe, expect, test } from 'vitest'
@@ -9,11 +11,12 @@ import { refreshIntent } from '../../src/frame'
 import { soloInputs, stepWorld } from '../../src/stepWorld'
 import { World } from '../../src/world'
 import {
-  applyWorldDiff,
-  diffWorld,
-  readWorldSnapshot,
-  snapshotWorld,
-} from '../../src/worldWire'
+  isSameOnWire,
+  readWorld,
+  readWorldDiff,
+  writeWorld,
+  writeWorldDiff,
+} from '../../src/worldCodec'
 import { firstDifference } from './diff'
 import { playFrame, startedRun } from './script'
 
@@ -21,8 +24,8 @@ const WORLD_KEYS = Struct.keys(World.fields)
 
 const roundTrip = (world: World): World => {
   const writer = makeWriter()
-  snapshotWorld(writer, world)
-  return readWorldSnapshot(makeReader(writer.finish()))
+  writeWorld(writer, world)
+  return readWorld(makeReader(writer.finish()))
 }
 
 describe('the World on the wire', () => {
@@ -35,30 +38,32 @@ describe('the World on the wire', () => {
     const intended = refreshIntent(played)
     const start: World = Struct.pick(intended, WORLD_KEYS)
     const room = Array.from({ length: 180 }).reduce<
-      Readonly<{ world: World; client: World }>
+      Readonly<{ world: World; sent: World; client: World }>
     >(
-      ({ world, client }, _, tick) => {
+      ({ world, sent, client }, _, tick) => {
         const next = stepWorld(world, soloInputs(intended.intent)).world
         if (tick % 3 !== 2) {
-          return { world: next, client }
+          return { world: next, sent, client }
         }
         const writer = makeWriter()
-        diffWorld(writer, client, next)
+        writeWorldDiff(writer, sent, next)
         return {
           world: next,
-          client: applyWorldDiff(makeReader(writer.finish()), client),
+          sent: next,
+          client: readWorldDiff(makeReader(writer.finish()), client),
         }
       },
-      { world: start, client: roundTrip(start) },
+      { world: start, sent: start, client: roundTrip(start) },
     )
     expect(firstDifference(roundTrip(room.world), room.client)).toBe(undefined)
+    expect(isSameOnWire(room.client, room.world)).toBe(true)
     expect(room.client.elapsedMs).toBeGreaterThan(start.elapsedMs)
   })
 
-  test('an unchanged World diffs to nothing', () => {
+  test('an unchanged World diffs to one byte', () => {
     const world = Struct.pick(startedRun(1, 'Campaign'), WORLD_KEYS)
     const writer = makeWriter()
-    diffWorld(writer, world, world)
+    writeWorldDiff(writer, world, world)
     expect(writer.finish().length).toBe(1)
   })
 })

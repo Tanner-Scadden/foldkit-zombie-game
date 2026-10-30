@@ -620,7 +620,8 @@ export const ticksDue = (room: Room<unknown>, nowMs: number): number =>
 
 // NOTE: one wake of the room's loop: the ticks the clock owes, one message
 // to everyone if a send tick passed, then presence, then the end of the
-// game. After an `Ended` out the room is done.
+// game, which first sends the last world if it is not out yet, so every
+// player sees how the run ended. After an `Ended` out the room is done.
 export const advance = <W, Own>(
   world: World<W, Own>,
   room: Room<W>,
@@ -645,9 +646,13 @@ export const advance = <W, Own>(
   const present = checkPresence(world, sent.room, nowMs)
   const out = [...sent.out, ...present.out]
   if (world.isOver(present.room.world)) {
+    const last =
+      present.room.sentTick === present.room.tick
+        ? { room: present.room, out: [] }
+        : broadcast(world, present.room)
     return {
-      room: present.room,
-      out: [...out, ...endRoom(world, present.room, 'GameOver')],
+      room: last.room,
+      out: [...out, ...last.out, ...endRoom(world, last.room, 'GameOver')],
     }
   }
   if (Array.isReadonlyArrayEmpty(present.room.seats)) {

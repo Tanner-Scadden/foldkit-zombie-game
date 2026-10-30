@@ -3,7 +3,8 @@ import { Data, Result } from 'effect'
 // NOTE: the bytes under the room protocol, after the estimate in
 // tools/mp-spike/wire.ts: unsigned integers as LEB128 varints, signed ones
 // zigzagged first, positions and other fractions as int16 fixed point,
-// strings and byte runs prefixed with their length. A Reader that runs off
+// strings and byte runs prefixed with their length, and any other number
+// as a little-endian float64. A Reader that runs off
 // the end, or meets a malformed varint, throws a WireError, and `readAll`
 // turns that into a failed Result, so callers never see an exception.
 
@@ -42,6 +43,7 @@ export interface Writer {
   readonly i16: (value: number) => void
   readonly fixed: (value: number, scale: number) => void
   readonly position: (value: number) => void
+  readonly f64: (value: number) => void
   readonly bool: (value: boolean) => void
   readonly bytes: (value: Uint8Array) => void
   readonly raw: (value: Uint8Array) => void
@@ -106,6 +108,11 @@ export const makeWriter = (capacity = 64): Writer => {
     i16,
     fixed: (value, scale) => i16(fixedOf(value, scale)),
     position: value => i16(fixedOf(value, POSITION_SCALE)),
+    f64: value => {
+      const bytes = new Uint8Array(8)
+      new DataView(bytes.buffer).setFloat64(0, value, true)
+      raw(bytes)
+    },
     bool: value => u8(value ? 1 : 0),
     bytes: value => {
       varint(value.length)
@@ -131,6 +138,7 @@ export interface Reader {
   readonly i16: () => number
   readonly fixed: (scale: number) => number
   readonly position: () => number
+  readonly f64: () => number
   readonly bool: () => boolean
   readonly bytes: (maxLength: number) => Uint8Array
   readonly rest: () => Uint8Array
@@ -197,6 +205,14 @@ export const makeReader = (bytes: Uint8Array): Reader => {
     i16,
     fixed: scale => i16() / scale,
     position: () => i16() / POSITION_SCALE,
+    f64: () => {
+      const taken = take(8)
+      return new DataView(
+        taken.buffer,
+        taken.byteOffset,
+        taken.byteLength,
+      ).getFloat64(0, true)
+    },
     bool: () => u8() !== 0,
     bytes: maxLength => take(lengthOf(maxLength)).slice(),
     rest: () => take(bytes.length - state.at).slice(),
