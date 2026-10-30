@@ -3,6 +3,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import { maybeNewestNewsDay } from './changelog'
 import { FEEDBACK_LINE, RESTART_GRACE_MS } from './constants'
+import { IS_COOP_RELEASED } from './coop/release'
 import { hasJustWon, withBests } from './difficulty'
 import type { FocusStep } from './input'
 import {
@@ -23,21 +24,20 @@ import { addKills, killTotal, killsSince } from './stats'
 
 // BUTTONS
 
-// NOTE: the home layout. Arrow keys walk PLAY, the mode, the difficulty, the
-// MANOR button, then the gear. Everything else lives in the MANOR hand, so a
+// NOTE: the home layout. Arrow keys walk PLAY, the mode, the difficulty,
+// CO-OP, the MANOR button, then the gear. Everything else lives in the MANOR hand, so a
 // new feature is a new card there and PLAY never moves.
-export const HOME_BUTTONS: Array.NonEmptyReadonlyArray<HomeButton> = [
-  'Play',
-  'Mode',
-  'Difficulty',
-  'Manor',
-  'Settings',
-]
+// CO-OP joins only in builds where co-op is released (src/coop/release.ts).
+export const HOME_BUTTONS: Array.NonEmptyReadonlyArray<HomeButton> =
+  IS_COOP_RELEASED
+    ? ['Play', 'Mode', 'Difficulty', 'Coop', 'Manor', 'Settings']
+    : ['Play', 'Mode', 'Difficulty', 'Manor', 'Settings']
 
 const HOME_BUTTON_IDS: Readonly<Record<HomeButton, string>> = {
   Play: 'home-play',
   Mode: 'home-mode',
   Difficulty: 'home-difficulty',
+  Coop: 'home-coop',
   Manor: 'home-manor',
   Settings: 'home-settings',
 }
@@ -45,13 +45,14 @@ const HOME_BUTTON_IDS: Readonly<Record<HomeButton, string>> = {
 type HomeKey = Readonly<{ code: string; cap: string; name: string }>
 
 // NOTE: one key per action. Enter, E, C, L, Z, I, and O were already the
-// home keys. X picks the difficulty and V opens the MANOR hand, letters no
-// other screen uses, so WASD, R, Q, T, G, H, K, M, and N keep their one
-// meaning.
+// home keys. X picks the difficulty, J joins up for co-op, and V opens the
+// MANOR hand, letters no other screen uses, so WASD, R, Q, T, G, H, K, M,
+// and N keep their one meaning.
 export const HOME_KEYS: Readonly<Record<HomeButton, HomeKey>> = {
   Play: { code: 'Enter', cap: 'ENTER', name: 'Enter' },
   Mode: { code: 'KeyE', cap: 'E', name: 'E' },
   Difficulty: { code: 'KeyX', cap: 'X', name: 'X' },
+  Coop: { code: 'KeyJ', cap: 'J', name: 'J' },
   Manor: { code: 'KeyV', cap: 'V', name: 'V' },
   Settings: { code: 'KeyO', cap: 'O', name: 'O' },
 }
@@ -60,6 +61,8 @@ export const isModeKey = (code: string): boolean => code === HOME_KEYS.Mode.code
 
 export const isDifficultyKey = (code: string): boolean =>
   code === HOME_KEYS.Difficulty.code
+
+export const isCoopKey = (code: string): boolean => code === HOME_KEYS.Coop.code
 
 export const isManorKey = (code: string): boolean =>
   code === HOME_KEYS.Manor.code

@@ -14,6 +14,7 @@ import {
   releaseAudioEngine,
   resumeAudio,
 } from './audio'
+import type { CoopNet } from './coop/net'
 import { END_MENU_BUTTON_ID, handCardId, homeButtonId } from './home'
 import { Message } from './message'
 import {
@@ -77,7 +78,7 @@ export const managedResources = ManagedResource.make<Model, Message>()(
 
 type AudioServices = ManagedResource.ServicesOf<typeof managedResources>
 
-export type AppServices = AudioServices | PlayerStore
+export type AppServices = AudioServices | PlayerStore | CoopNet
 
 // COMMAND
 

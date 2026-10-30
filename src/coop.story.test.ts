@@ -1,0 +1,142 @@
+import { Option } from 'effect'
+import { Command, given, message, model, story } from 'foldkit/story'
+import { modifyFields } from 'foldkit/struct'
+import { describe, expect, test } from 'vitest'
+
+import { FocusHomeButton } from './commands'
+import { Message as CoopMessage } from './coop/message'
+import { LobbyChange, RoomRequest, Screen } from './coop/model'
+import { CODE, lobbyOf, memberOf } from './coop/testing'
+import {
+  ChangeLobby,
+  FocusCoopElement,
+  RememberRoom,
+  RequestRoom,
+  freshRoom,
+} from './coop/update'
+import { update } from './main'
+import { Message } from './message'
+import { Lesson, type Model, initialModel } from './model'
+import { asVeteran } from './veteran'
+
+const graduate = (current: Model): Model =>
+  modifyFields(current, {
+    lessons: lessons =>
+      modifyFields(lessons, {
+        openBreak: () => Lesson.Learned({ atMs: 0 }),
+      }),
+  })
+
+const newcomer = asVeteran(initialModel)
+const graduated = graduate(newcomer)
+
+const resolveFocusCoop = () =>
+  Command.resolve(FocusCoopElement, CoopMessage.CompletedFocusCoopElement())
+
+describe('co-op from home', () => {
+  test('J and the CO-OP tile stay shut until the tutorial is done', () => {
+    story(
+      update,
+      given(newcomer),
+      message(Message.PressedKey({ code: 'KeyJ' })),
+      message(Message.ClickedCoopButton()),
+      model(current => {
+        expect(current.coop.screen._tag).toBe('Closed')
+      }),
+    )
+  })
+
+  test('J opens the hub, Escape closes it and lands back on the tile', () => {
+    story(
+      update,
+      given(graduated),
+      message(Message.PressedKey({ code: 'KeyJ' })),
+      resolveFocusCoop(),
+      model(current => {
+        expect(current.coop.screen._tag).toBe('Hub')
+      }),
+      message(Message.PressedKey({ code: 'KeyE' })),
+      model(current => {
+        expect(current.home.mode).toBe('Campaign')
+      }),
+      message(Message.PressedKey({ code: 'Escape' })),
+      Command.resolve(
+        FocusHomeButton({ button: 'Coop' }),
+        Message.CompletedFocusHomeButton(),
+      ),
+      model(current => {
+        expect(current.coop.screen._tag).toBe('Closed')
+      }),
+    )
+  })
+
+  test('a room link joins that room once the splash is gone', () => {
+    story(
+      update,
+      given(graduated),
+      message(Message.CompletedReadRoomLink({ maybeCode: Option.some(CODE) })),
+      model(current => {
+        expect(current.coop.screen).toEqual(
+          Screen.Asking({ request: RoomRequest.Join({ code: CODE }) }),
+        )
+      }),
+      Command.resolve(
+        RequestRoom({ request: RoomRequest.Join({ code: CODE }), name: '' }),
+        CoopMessage.FailedRequestRoom({ problem: 'NoRoom' }),
+      ),
+      Command.resolve(RememberRoom, CoopMessage.CompletedRememberRoom()),
+      model(current => {
+        expect(current.coop.screen._tag).toBe('Code')
+      }),
+    )
+  })
+
+  test('the saved display name goes with the room request', () => {
+    story(
+      update,
+      given(modifyFields(graduated, { playerName: () => 'Snackula' })),
+      message(Message.ClickedCoopButton()),
+      resolveFocusCoop(),
+      message(
+        Message.GotCoopMessage({ message: CoopMessage.ClickedCreateButton() }),
+      ),
+      Command.resolve(
+        RequestRoom({ request: RoomRequest.Create(), name: 'Snackula' }),
+        CoopMessage.FailedRequestRoom({ problem: 'Offline' }),
+      ),
+      model(current => {
+        expect(current.coop.screen).toEqual(
+          Screen.Hub({ maybeProblem: Option.some('Offline') }),
+        )
+      }),
+    )
+  })
+
+  test('Enter in the lobby is READY, not PLAY', () => {
+    const inLobby = modifyFields(graduated, {
+      coop: coop =>
+        modifyFields(coop, {
+          screen: () =>
+            Screen.InRoom({
+              room: {
+                ...freshRoom(CODE, 0),
+                maybePlayerId: Option.some('player-0'),
+                maybeLobby: Option.some(lobbyOf([memberOf(0, 'Ana')])),
+              },
+            }),
+        }),
+    })
+    story(
+      update,
+      given(inLobby),
+      message(Message.PressedKey({ code: 'Enter' })),
+      model(current => {
+        expect(current.phase._tag).toBe('Ready')
+      }),
+      Command.resolve(
+        ChangeLobby({ change: LobbyChange.ChangedReady({ ready: true }) }),
+        CoopMessage.CompletedChangeLobby(),
+      ),
+    )
+  })
+})

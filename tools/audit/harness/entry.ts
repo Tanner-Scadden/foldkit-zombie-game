@@ -1,5 +1,5 @@
 import './harness.css'
-import { Option } from 'effect'
+import { Layer, Option } from 'effect'
 import { Canvas, ManagedResource, Runtime } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
@@ -15,6 +15,16 @@ import { PARLOUR, levelOf, openExitIn } from '@game/arena'
 import { BOSS_RULES, hasBoss, planBoss } from '@game/boss'
 import { managedResources } from '@game/commands'
 import { DECAL_MAX, PLAYER_MAX_HP, SHADOW_COLOR } from '@game/constants'
+import * as CoopModel from '@game/coop/model'
+import type { CoopNet } from '@game/coop/net'
+import {
+  CODE as COOP_CODE,
+  lobbyOf,
+  memberOf,
+  playingSession,
+  quietCoopNet,
+  stagedWorld,
+} from '@game/coop/testing'
 import { withBests } from '@game/difficulty'
 import { KITCHEN_EXIT } from '@game/exits'
 import { sceneShapes } from '@game/layers'
@@ -51,6 +61,7 @@ import { openProfile } from '@game/update/profile'
 import { view } from '@game/view'
 import { pause, planFor, rollSpawns, startOrResume } from '@game/waves'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
+import { Session } from '@munch/netcode'
 
 import { decodeHarnessConfig } from './config'
 
@@ -789,7 +800,140 @@ const roomModel = (): Model => {
   return model
 }
 
-const scenarioModel = (): Model => {
+// NOTE: co-op staged at one screen, with a fake network that never
+// answers, so the screen holds still for a screenshot.
+const coopRoom = (
+  members: ReadonlyArray<ReturnType<typeof memberOf>>,
+  status: 'Lobby' | 'Playing',
+  extra: Partial<CoopModel.Room> = {},
+): CoopModel.Room => {
+  const world = stagedWorld(members.map(member => member.slot))
+  return {
+    code: COOP_CODE,
+    slot: 0,
+    maybePlayerId: Option.some('player-0'),
+    maybeLobby: Option.some(lobbyOf(members, status)),
+    link: 'Online',
+    session:
+      status === 'Playing' ? playingSession(world, 0) : Session.makeSession(0),
+    maybeWorld: status === 'Playing' ? Option.some(world) : Option.none(),
+    share: 'Idle',
+    departure: 'Staying',
+    ...extra,
+  }
+}
+
+const COOP_NAMES = ['Tanner', 'Mo', 'Pip', 'Grumbles']
+
+const coopScreen = (stage: NonNullable<typeof config.coop>) => {
+  const Screen = CoopModel.Screen
+  const queue = (
+    waiting: number,
+    offer: number,
+    answer: CoopModel.OfferAnswer,
+  ) =>
+    Screen.Queue({
+      queue: {
+        names: COOP_NAMES.slice(0, waiting),
+        waiting,
+        position: 1,
+        groupSize: 4,
+        offerPlayers: offer,
+        accepted: answer === 'Accepted' ? 2 : 1,
+        answer,
+      },
+    })
+  const members = (count: number, readyCount = 0) =>
+    COOP_NAMES.slice(0, count).map((name, slot) =>
+      memberOf(slot, name, slot < readyCount),
+    )
+  switch (stage) {
+    case 'tile':
+      return Screen.Closed()
+    case 'hub':
+      return Screen.Hub({ maybeProblem: Option.none() })
+    case 'problem':
+      return Screen.Hub({ maybeProblem: Option.some('Full') })
+    case 'code':
+      return Screen.Code({ typed: 'MN', maybeProblem: Option.none() })
+    case 'asking':
+      return Screen.Asking({ request: { _tag: 'Create' } })
+    case 'queue':
+      return queue(2, 0, 'Unanswered')
+    case 'offer':
+      return queue(3, 3, 'Unanswered')
+    case 'accepted':
+      return queue(3, 3, 'Accepted')
+    case 'lobby':
+      return Screen.InRoom({ room: coopRoom(members(2), 'Lobby') })
+    case 'host':
+      return Screen.InRoom({ room: coopRoom(members(4, 1), 'Lobby') })
+    case 'ready':
+      return Screen.InRoom({
+        room: coopRoom(
+          members(3, 3).map((member, slot) =>
+            slot === 2 ? { ...member, ready: false } : member,
+          ),
+          'Lobby',
+        ),
+      })
+    case 'result': {
+      const room = coopRoom(members(3), 'Lobby')
+      return Screen.InRoom({
+        room: {
+          ...room,
+          maybeLobby: Option.map(room.maybeLobby, lobby => ({
+            ...lobby,
+            result: Option.some({
+              round: 1,
+              reason: 'GameOver' as const,
+              ticks: 10800,
+              scores: members(3).map((member, slot) => ({
+                playerId: member.playerId,
+                slot,
+                score: [7, 12, 3][slot] ?? 0,
+              })),
+            }),
+          })),
+        },
+      })
+    }
+    case 'arena':
+      return Screen.InRoom({ room: coopRoom(members(3), 'Playing') })
+    case 'away':
+      return Screen.InRoom({
+        room: coopRoom(members(3), 'Playing', { link: 'Reconnecting' }),
+      })
+    case 'ended': {
+      const room = coopRoom(members(3), 'Playing')
+      return Screen.InRoom({
+        room: {
+          ...room,
+          session: {
+            ...room.session,
+            phase: { _tag: 'Ended', reason: 'GameOver' },
+          },
+        },
+      })
+    }
+  }
+}
+
+const withCoop = (model: Model): Model => {
+  const stage = config.coop
+  if (stage === undefined) return model
+  return modifyFields(model, {
+    lessons: lessons => ({
+      ...lessons,
+      openBreak: Lesson.Learned({ atMs: 0 }),
+    }),
+    coop: coop => ({ ...coop, screen: coopScreen(stage) }),
+  })
+}
+
+const scenarioModel = (): Model => withCoop(scenarioModelOf())
+
+const scenarioModelOf = (): Model => {
   let model = roomModel()
   const runs = config.runs
   if (runs !== undefined)
@@ -1175,7 +1319,7 @@ const harnessInit: Runtime.ApplicationInit<
   Model,
   Message,
   void,
-  PlayerStore,
+  PlayerStore | CoopNet,
   ManagedResource.ServicesOf<typeof managedResources>
 > = () => {
   const base = init()
@@ -1341,7 +1485,7 @@ const application = Runtime.makeApplication({
   },
   subscriptions,
   managedResources,
-  resources: PlayerStoreLayer,
+  resources: Layer.merge(PlayerStoreLayer, quietCoopNet),
   container: document.getElementById('root'),
   ...(config.nodev ? { devTools: false as const } : {}),
 })

@@ -111,15 +111,18 @@ const afterGrace = (phase: Phase): Model =>
   })
 
 describe('Home menu', () => {
-  test('fills the slots: the gear, the MORE deck, and PLAY with its mode and difficulty, with a key badge on every button on a keyboard, and no bests badge before a best', () => {
+  test('fills the slots: the gear, the MORE deck, and PLAY with its mode, difficulty, and CO-OP, with a key badge on every button on a keyboard, and no bests badge before a best', () => {
     scene(
       { update, view },
       given(home),
       measureSurface,
       inside(
         playCluster,
-        expectAll(all.role('button')).toHaveCount(3),
+        expectAll(all.role('button')).toHaveCount(4),
         expect(playButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
+        expect(
+          role('button', { name: 'Co-op: finish the tutorial to unlock' }),
+        ).toHaveAttr('aria-keyshortcuts', 'J'),
         expect(modeButton).toHaveAttr('aria-keyshortcuts', 'E'),
         expect(difficultyButton).toHaveAttr('aria-keyshortcuts', 'X'),
         expect(difficultyButton).toHaveAttr('aria-haspopup', 'dialog'),
@@ -131,7 +134,7 @@ describe('Home menu', () => {
         expect(settingsButton).toHaveAttr('aria-keyshortcuts', 'O'),
         expect(settingsButton).toHaveAttr('aria-haspopup', 'dialog'),
       ),
-      expectAll(all.selector('.home-stage .home-key')).toHaveCount(5),
+      expectAll(all.selector('.home-stage .home-key')).toHaveCount(6),
       expect(
         role('button', { name: 'Your character: change how you look' }),
       ).toHaveAttr('aria-haspopup', 'dialog'),
@@ -275,7 +278,7 @@ describe('Home menu', () => {
       { update, view },
       given(modifyFields(home, { lastDevice: () => 'Touch' })),
       measureSurface,
-      inside(playCluster, expectAll(all.role('button')).toHaveCount(3)),
+      inside(playCluster, expectAll(all.role('button')).toHaveCount(4)),
       expect(manorButton).toExist(),
       expect(settingsButton).toExist(),
       expect(selector('.home-key')).toBeAbsent(),
@@ -409,7 +412,7 @@ describe('Home menu', () => {
         Message.CompletedFocusHomeButton(),
       ),
       ...Array.flatMap(
-        ['Mode', 'Difficulty', 'Manor', 'Settings', 'Play'] as const,
+        ['Mode', 'Difficulty', 'Coop', 'Manor', 'Settings', 'Play'] as const,
         button => [
           emitPressedKey('ArrowDown'),
           Command.resolve(

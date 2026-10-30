@@ -5,6 +5,7 @@ import { Dialog, RadioGroup, Tabs } from '@foldkit/ui'
 
 import { MANOR, PARLOUR, startingLevel } from './arena'
 import { DEFAULT_SEED, PISTOL_MAGAZINE, PLAYER_MAX_HP } from './constants'
+import * as Coop from './coop/model'
 import { flowFieldToward } from './pathing'
 import {
   Appearance,
@@ -654,6 +655,7 @@ export const HomeButton = Schema.Literals([
   'Play',
   'Mode',
   'Difficulty',
+  'Coop',
   'Manor',
   'Settings',
 ])
@@ -1260,6 +1262,7 @@ export const Model = Schema.Struct({
   character: CharacterPicker,
   profile: ProfilePanel,
   playerName: PlayerName,
+  coop: Coop.Model,
   shakeSetting: ShakeSetting,
   rotationSetting: RotationSetting,
   orientationLock: OrientationLock,
@@ -1535,6 +1538,7 @@ export const initialModel: Model = {
   character: closedCharacterPicker,
   profile: closedProfile,
   playerName: '',
+  coop: Coop.initialModel,
   shakeSetting: 'On',
   rotationSetting: 'Landscape',
   orientationLock: 'Unsupported',

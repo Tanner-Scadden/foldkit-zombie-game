@@ -3,6 +3,7 @@ import { Mount } from 'foldkit'
 import { Document, Html, HtmlBuilder } from 'foldkit/html'
 
 import { GAME_TITLE } from './constants'
+import * as CoopView from './coop/view'
 import { DIFFICULTIES, bestsFor } from './difficulty'
 import { exitDialogView } from './exitView'
 import { feedbackSentence } from './home'
@@ -54,6 +55,7 @@ import {
   stickView,
 } from './touchControls'
 import { TRAPS, TRAP_KIND_ORDER } from './traps'
+import { isCoopOpen } from './update/coop'
 import { updateChipView } from './updateChip'
 import { FINAL_WAVE, isRoundActive, roundWave } from './waves'
 import {
@@ -297,7 +299,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
         ),
         loadoutView(model, h),
         pauseHelpView(model, h.OnPointerDown(toPressedPointer), h),
-        homeMenuView(model, h),
+        isCoopOpen(model) ? h.empty : homeMenuView(model, h),
         preparationControlsView(model, h),
         gunClusterView(model, h),
         debutCardView(model, h),
@@ -313,6 +315,16 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
         exitDialogView(model, h),
         menuPanelView(model, h),
         profileView(model, h),
+        h.submodel({
+          slotId: 'coop',
+          model: model.coop,
+          view: CoopView.view,
+          viewInputs: {
+            look: model.appearance,
+            isKeyboard: model.lastDevice === 'KeyboardMouse',
+          },
+          toParentMessage: message => Message.GotCoopMessage({ message }),
+        }),
       ],
     ),
   }

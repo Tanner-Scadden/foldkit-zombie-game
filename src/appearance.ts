@@ -94,7 +94,7 @@ const PANTS_COLOR = '#2b3550'
 const SHOE_COLOR = '#141414'
 const STRAP_COLOR = '#9aa3ad'
 
-const playerPalette = (appearance: Appearance): Palette => {
+export const playerPalette = (appearance: Appearance): Palette => {
   const hair = HAIR_SHADES[appearance.hairColor]
   const skin = SKIN_SHADES[appearance.skinTone]
   const shirt = SHIRT_SHADES[appearance.shirtColor]

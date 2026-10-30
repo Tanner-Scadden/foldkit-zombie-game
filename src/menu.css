@@ -138,6 +138,7 @@
 
 .home-play-cluster {
   position: absolute;
+  z-index: 1;
   right: calc(4 * var(--a));
   bottom: calc(4 * var(--a));
   display: flex;
@@ -250,6 +251,83 @@
   flex-direction: column;
   gap: var(--menu-gap-sm);
   width: max(128px, 60 * var(--a));
+}
+
+/* NOTE: CO-OP is a bar of two bobbing heads in pink and teal sitting on
+   PLAY, so the cluster grows up, not across the room. Locked, it greys out
+   under a padlock and the tutorial's aim icon. */
+.home-stage .home-coop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 3 * var(--a));
+  width: max(132px, 66 * var(--a));
+  height: var(--pick-h);
+  border: 3px solid var(--menu-pink);
+  background:
+    radial-gradient(
+      circle at 50% 40%,
+      rgba(95, 212, 200, 0.35),
+      transparent 65%
+    ),
+    #46213f;
+  box-shadow:
+    var(--menu-lift),
+    0 0 14px rgba(255, 157, 240, 0.45);
+}
+
+.home-coop-icon {
+  height: 78%;
+  aspect-ratio: 14 / 9;
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+  animation: home-coop-bob 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes home-coop-bob {
+  50% {
+    translate: 0 -2px;
+  }
+}
+
+.home-stage .home-coop[data-lock='Locked'] {
+  border-color: var(--menu-line-strong);
+  background: var(--menu-glass);
+  box-shadow: var(--menu-lift);
+}
+
+.home-coop[data-lock='Locked'] .home-coop-icon {
+  opacity: 0.35;
+  filter: grayscale(1);
+  animation: none;
+}
+
+.home-coop-lock {
+  display: flex;
+  justify-content: center;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.home-coop-lock-icon {
+  width: max(14px, 5 * var(--a));
+  height: max(14px, 5 * var(--a));
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+}
+
+.home-stage .home-coop[data-lock='Locked']:active {
+  animation: home-coop-nope 300ms ease-out;
+}
+
+@keyframes home-coop-nope {
+  25% {
+    translate: -4px 0;
+  }
+
+  60% {
+    translate: 4px 0;
+  }
 }
 
 .home-pick {
@@ -2076,6 +2154,24 @@
 .game-root[data-layout='Portrait'] .home-loadout {
   flex-direction: row;
   width: auto;
+}
+
+.game-root[data-layout='Portrait'] .home-stage .home-coop {
+  position: relative;
+  bottom: auto;
+  flex: 0 0 56px;
+  width: 56px;
+  height: auto;
+}
+
+.game-root[data-layout='Portrait'] .home-coop-icon {
+  width: 80%;
+  height: auto;
+}
+
+.game-root[data-layout='Portrait'] .home-coop-lock {
+  position: absolute;
+  inset: auto 0 8%;
 }
 
 .game-root[data-layout='Portrait'] .home-pick {

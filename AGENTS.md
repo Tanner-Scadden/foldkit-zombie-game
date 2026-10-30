@@ -106,11 +106,14 @@ Paths are under `src/`. The API Worker is in `infra/worker/` (analytics, and syn
 | `input.ts`, `touchControls.ts`, `thumbArea.ts`          | Keyboard, mouse, and touch input; sticks, ghost sticks, and icon buttons; the portrait thumb area                                                             |
 | `menus.ts`, `pauseHelp.ts`, `screens.ts`                | Mode buttons, the zombie card, corner icons; the control cards (pause and How to play); title, banners, pause, and stats panels                               |
 | `font.ts`, `sprite.ts`, `png.ts`                        | The pixel font and coin; pixel maps baked into sprite images; colors, rasters, and the PNG encoder                                                            |
-| `spriteAtlas.ts`, `spritePrecompile.ts`                 | The prebuilt sprite atlas, content keys, and test stand-ins; the sprites built lazily that the atlas generator must also build                               |
+| `spriteAtlas.ts`, `spritePrecompile.ts`                 | The prebuilt sprite atlas, content keys, and test stand-ins; the sprites built lazily that the atlas generator must also build                                |
 | `testPng.ts`, `icons.ts`                                | PNG data URLs read back into pixels for tests; pixel maps turned into SVG icons for HTML buttons                                                              |
 | `version.ts`, `updateChip.ts`, `splash.ts`              | The build id, the `version.json` check, and reloading; the update chip; the loading splash's load steps                                                       |
 | `serviceWorker.ts`, `sw/worker.ts`, `sw/precache.ts`    | Registering the service worker and handing over to a new build; the worker; its precache list, built from Vite's output                                       |
 | `support.ts`, `supportView.ts`                          | The tip jar's `SUPPORT_URL` (empty hides it) and its check; the coffee pill on Victory (home: the hand's TIP JAR card)                                        |
+| `coop/model.ts`, `coop/update.ts`, `coop/view.ts`       | The co-op Submodel: screens (hub, code, queue, lobby, arena), its Messages, update and Commands, and its views; `coop.css`                                    |
+| `coop/net.ts`, `coop/subscriptions.ts`, `coop/seam.ts`  | `CoopNet`, the room requests, queue, lobby, and socket as one service; the Subscriptions over them; the one place the stand-in world is named                 |
+| `coop/roomReplica.ts`, `update/coop.ts`                 | The lobby's Replica in the player database (store chunk); opening co-op from home, the tutorial gate, and the keys while it is open                           |
 | `prng.ts`, `constants.ts`                               | The seeded random number generator; the view size, speeds, and other tuning numbers                                                                           |
 
 ### Elsewhere

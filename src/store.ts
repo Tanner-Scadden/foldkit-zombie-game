@@ -11,6 +11,7 @@ import {
   pipe,
 } from 'effect'
 
+import type { RoomAccess } from './coop/roomReplica'
 import {
   type LinkProblem,
   type PlayerChange,
@@ -67,6 +68,7 @@ export class PlayerStore extends Context.Service<
     readonly events: Stream.Stream<StoreEvent>
     readonly requestLinkCode: Effect.Effect<string, LinkError>
     readonly redeemLinkCode: (code: string) => Effect.Effect<void, LinkError>
+    readonly roomAccess: Effect.Effect<Option.Option<RoomAccess>>
   }
 >()('munch-manor/PlayerStore') {}
 
@@ -227,6 +229,12 @@ export const layer: Layer.Layer<PlayerStore> = Layer.effect(
         Effect.flatMap(database, opened =>
           Effect.mapError(opened.redeemLinkCode(code), toLinkError),
         ),
+      roomAccess: Effect.map(backend, current =>
+        Backend.$match(current, {
+          Sqlite: ({ database: opened }) => opened.maybeRoomAccess,
+          LocalStorage: () => Option.none<RoomAccess>(),
+        }),
+      ),
     }
   }),
 )
