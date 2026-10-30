@@ -9,6 +9,15 @@ import { PARLOUR } from './arena'
 import { PISTOL_MAGAZINE, PLAYER_MAX_HP } from './constants'
 import type { Appearance } from './playerData'
 import { Difficulty } from './playerData'
+import {
+  Heading,
+  MillisNumber,
+  Point,
+  PositionNumber,
+  Push,
+  UnitNumber,
+  VelocityNumber,
+} from './wireNumber'
 
 export {
   Appearance,
@@ -97,8 +106,8 @@ export type Input = typeof Input.Type
 // buy what the player stands at (src/purchase.ts). `stab` is the knife key
 // or the touch knife button, held to stab on repeat (src/knife.ts).
 export const Intent = Schema.Struct({
-  move: Vector,
-  maybeAim: Schema.Option(Vector),
+  move: Heading,
+  maybeAim: Schema.Option(Heading),
   trigger: Trigger,
   interact: Trigger,
   stab: Trigger,
@@ -107,7 +116,7 @@ export type Intent = typeof Intent.Type
 
 export const Invulnerability = defineTaggedUnion({
   Vulnerable: {},
-  Invulnerable: { remainingMs: Schema.Number, durationMs: Schema.Number },
+  Invulnerable: { remainingMs: MillisNumber, durationMs: MillisNumber },
 })
 export type Invulnerability = typeof Invulnerability.Type
 
@@ -146,7 +155,7 @@ export type Arsenal = typeof Arsenal.Type
 
 export const Reload = defineTaggedUnion({
   Ready: {},
-  Reloading: { remainingMs: Schema.Number, durationMs: Schema.Number },
+  Reloading: { remainingMs: MillisNumber, durationMs: MillisNumber },
 })
 export type Reload = typeof Reload.Type
 
@@ -156,24 +165,24 @@ export type Reload = typeof Reload.Type
 // lid that popped in the player's hands: nothing builds until fire is let go.
 export const Charge = defineTaggedUnion({
   Idle: {},
-  Building: { heldMs: Schema.Number, aim: Vector },
+  Building: { heldMs: MillisNumber, aim: Point },
   Spent: {},
 })
 export type Charge = typeof Charge.Type
 
 export const Player = Schema.Struct({
-  x: Schema.Number,
-  y: Schema.Number,
+  x: PositionNumber,
+  y: PositionNumber,
   hp: Schema.Number,
-  facing: Vector,
-  fireCooldownMs: Schema.Number,
-  knockback: Vector,
+  facing: Heading,
+  fireCooldownMs: MillisNumber,
+  knockback: Push,
   invulnerability: Invulnerability,
-  recoilRemainingMs: Schema.Number,
+  recoilRemainingMs: MillisNumber,
   arsenal: Arsenal,
   reload: Reload,
   charge: Charge,
-  knifeCooldownMs: Schema.Number,
+  knifeCooldownMs: MillisNumber,
 })
 export type Player = typeof Player.Type
 
@@ -190,8 +199,8 @@ export type ZombieKind = typeof ZombieKind.Type
 
 export const ZombieState = defineTaggedUnion({
   Walking: {},
-  Fusing: { remainingMs: Schema.Number },
-  Dying: { remainingMs: Schema.Number, direction: Vector },
+  Fusing: { remainingMs: MillisNumber },
+  Dying: { remainingMs: MillisNumber, direction: Heading },
 })
 export type ZombieState = typeof ZombieState.Type
 
@@ -201,36 +210,36 @@ export type ZombieState = typeof ZombieState.Type
 // clings to the player's ankles. Winded walks like Roaming but cannot grab.
 export const ZombieAction = defineTaggedUnion({
   Roaming: {},
-  Winded: { remainingMs: Schema.Number },
+  Winded: { remainingMs: MillisNumber },
   Hefting: {
     victimId: Schema.Number,
-    remainingMs: Schema.Number,
-    durationMs: Schema.Number,
+    remainingMs: MillisNumber,
+    durationMs: MillisNumber,
   },
   Carried: { byId: Schema.Number },
   Shielding: {
     victimId: Schema.Number,
-    remainingMs: Schema.Number,
+    remainingMs: MillisNumber,
     aim: Schema.Number,
   },
   Shielded: { byId: Schema.Number },
   Flying: {
-    from: Vector,
-    to: Vector,
-    remainingMs: Schema.Number,
-    durationMs: Schema.Number,
+    from: Point,
+    to: Point,
+    remainingMs: MillisNumber,
+    durationMs: MillisNumber,
   },
-  Dazed: { remainingMs: Schema.Number, durationMs: Schema.Number },
-  Burrowed: { remainingMs: Schema.Number, durationMs: Schema.Number },
-  Clinging: { remainingMs: Schema.Number },
+  Dazed: { remainingMs: MillisNumber, durationMs: MillisNumber },
+  Burrowed: { remainingMs: MillisNumber, durationMs: MillisNumber },
+  Clinging: { remainingMs: MillisNumber },
   // NOTE: the fridge weapons' (src/fridgeWeapons.ts). Frozen is a small
   // zombie iced solid by Brain Freeze: it stands still and the next hit
   // shatters it. Chilled is a big one only slowed. Reeling is a small one
   // the Clang Pan rang: it gets up Winded, so the Pan cannot daze it again
   // at once.
-  Frozen: { remainingMs: Schema.Number, durationMs: Schema.Number },
-  Chilled: { remainingMs: Schema.Number },
-  Reeling: { remainingMs: Schema.Number, durationMs: Schema.Number },
+  Frozen: { remainingMs: MillisNumber, durationMs: MillisNumber },
+  Chilled: { remainingMs: MillisNumber },
+  Reeling: { remainingMs: MillisNumber, durationMs: MillisNumber },
 })
 export type ZombieAction = typeof ZombieAction.Type
 
@@ -240,8 +249,8 @@ export type ZombieAction = typeof ZombieAction.Type
 // the bonus for wiping out the whole pack.
 export const Frenzy = defineTaggedUnion({
   Calm: {},
-  Frenzied: { pack: Schema.Number, apartMs: Schema.Number },
-  Fading: { pack: Schema.Number, remainingMs: Schema.Number },
+  Frenzied: { pack: Schema.Number, apartMs: MillisNumber },
+  Fading: { pack: Schema.Number, remainingMs: MillisNumber },
   Spent: { pack: Schema.Number },
 })
 export type Frenzy = typeof Frenzy.Type
@@ -249,13 +258,13 @@ export type Frenzy = typeof Frenzy.Type
 export const Zombie = Schema.Struct({
   id: Schema.Number,
   kind: ZombieKind,
-  x: Schema.Number,
-  y: Schema.Number,
+  x: PositionNumber,
+  y: PositionNumber,
   speed: Schema.Number,
   hp: Schema.Number,
   maxHp: Schema.Number,
-  knockback: Vector,
-  hitRemainingMs: Schema.Number,
+  knockback: Push,
+  hitRemainingMs: MillisNumber,
   state: ZombieState,
   action: ZombieAction,
   frenzy: Frenzy,
@@ -271,21 +280,25 @@ export type PlantedAttack = typeof PlantedAttack.Type
 // NOTE: a charge locks its target when the brace starts, so the line on the
 // floor never follows the player. The rush runs past the target by the
 // overshoot, and remainingPx counts down what is left of it.
+// TODO(wire): `target` and `remainingPx` go as Unit (4096ths, at most 8),
+// as the field-name codec packed them under `move`, so a co-op client
+// draws the charge lane short. They want Point and PositionNumber, which
+// changes the bytes and so bumps the protocol: see cleanup.md.
 export const BossMove = defineTaggedUnion({
-  Stalking: { cooldownMs: Schema.Number },
+  Stalking: { cooldownMs: MillisNumber },
   WindingUp: {
     attack: PlantedAttack,
-    remainingMs: Schema.Number,
-    durationMs: Schema.Number,
+    remainingMs: MillisNumber,
+    durationMs: MillisNumber,
   },
   Bracing: {
-    target: Vector,
-    remainingMs: Schema.Number,
-    durationMs: Schema.Number,
+    target: Heading,
+    remainingMs: MillisNumber,
+    durationMs: MillisNumber,
   },
-  Rushing: { direction: Vector, remainingPx: Schema.Number },
-  Dazed: { remainingMs: Schema.Number, durationMs: Schema.Number },
-  Recovering: { remainingMs: Schema.Number, cooldownMs: Schema.Number },
+  Rushing: { direction: Heading, remainingPx: UnitNumber },
+  Dazed: { remainingMs: MillisNumber, durationMs: MillisNumber },
+  Recovering: { remainingMs: MillisNumber, cooldownMs: MillisNumber },
 })
 export type BossMove = typeof BossMove.Type
 
@@ -297,12 +310,12 @@ type FarAttack = typeof FarAttack.Type
 
 export const Glob = defineTaggedUnion({
   Flying: {
-    from: Vector,
-    to: Vector,
-    remainingMs: Schema.Number,
-    durationMs: Schema.Number,
+    from: Point,
+    to: Point,
+    remainingMs: MillisNumber,
+    durationMs: MillisNumber,
   },
-  Pooled: { at: Vector, remainingMs: Schema.Number, durationMs: Schema.Number },
+  Pooled: { at: Point, remainingMs: MillisNumber, durationMs: MillisNumber },
 })
 export type Glob = typeof Glob.Type
 
@@ -317,14 +330,14 @@ export type Pierce = typeof Pierce.Type
 
 export const Bullet = Schema.Struct({
   id: Schema.Number,
-  x: Schema.Number,
-  y: Schema.Number,
-  velocityX: Schema.Number,
-  velocityY: Schema.Number,
-  remainingMs: Schema.Number,
+  x: PositionNumber,
+  y: PositionNumber,
+  velocityX: VelocityNumber,
+  velocityY: VelocityNumber,
+  remainingMs: MillisNumber,
   weapon: WeaponKind,
   damage: Schema.Number,
-  knockback: Schema.Number,
+  knockback: VelocityNumber,
   glaze: BulletGlaze,
   pierce: Pierce,
   // NOTE: the slot of the player or the gnome's owner who fired it, set
@@ -382,7 +395,7 @@ export const Particle = Schema.Struct({
   velocityY: Schema.Number,
   velocityZ: Schema.Number,
   size: Schema.Number,
-  remainingMs: Schema.Number,
+  remainingMs: MillisNumber,
 })
 export type Particle = typeof Particle.Type
 
@@ -482,15 +495,15 @@ export type PickupKind = typeof PickupKind.Type
 export const Pickup = Schema.Struct({
   id: Schema.Number,
   kind: PickupKind,
-  x: Schema.Number,
-  y: Schema.Number,
-  ageMs: Schema.Number,
+  x: PositionNumber,
+  y: PositionNumber,
+  ageMs: MillisNumber,
 })
 export type Pickup = typeof Pickup.Type
 
 export const BoostTimer = defineTaggedUnion({
   Off: {},
-  On: { remainingMs: Schema.Number, durationMs: Schema.Number },
+  On: { remainingMs: MillisNumber, durationMs: MillisNumber },
 })
 export type BoostTimer = typeof BoostTimer.Type
 
@@ -513,7 +526,7 @@ export type Prize = typeof Prize.Type
 // changes what drops or which zombies come.
 export const Loot = Schema.Struct({
   rngState: Schema.Number,
-  dryMs: Schema.Number,
+  dryMs: MillisNumber,
   prize: Prize,
   fridgeRngState: Schema.Number,
 })
@@ -546,18 +559,18 @@ export const FridgeDoor = defineTaggedUnion({
   Open: {
     prize: FridgePrize,
     slot: Schema.Number,
-    remainingMs: Schema.Number,
-    durationMs: Schema.Number,
+    remainingMs: MillisNumber,
+    durationMs: MillisNumber,
   },
-  Slammed: { remainingMs: Schema.Number, durationMs: Schema.Number },
+  Slammed: { remainingMs: MillisNumber, durationMs: MillisNumber },
   // NOTE: take it or leave it (owner, 2026-10-30): a weapon prize floats
   // in the open door until the puller holds to take it, walks off, or its
   // time runs out; left, it sinks back into the fridge.
   Offering: {
     prize: FridgePrize,
     slot: Schema.Number,
-    remainingMs: Schema.Number,
-    durationMs: Schema.Number,
+    remainingMs: MillisNumber,
+    durationMs: MillisNumber,
   },
 })
 export type FridgeDoor = typeof FridgeDoor.Type
@@ -576,12 +589,12 @@ export type Fridge = typeof Fridge.Type
 // that threw it, as a bullet does, only in co-op.
 export const Lob = Schema.Struct({
   id: Schema.Number,
-  x: Schema.Number,
-  y: Schema.Number,
-  from: Vector,
-  to: Vector,
-  remainingMs: Schema.Number,
-  durationMs: Schema.Number,
+  x: PositionNumber,
+  y: PositionNumber,
+  from: Point,
+  to: Point,
+  remainingMs: MillisNumber,
+  durationMs: MillisNumber,
   charge: Schema.Number,
   tier: Schema.Number,
   shooter: Schema.optionalKey(Schema.Number),
@@ -593,7 +606,7 @@ export const Callout = Schema.Struct({
   look: CalloutLook,
   x: Schema.Number,
   y: Schema.Number,
-  ageMs: Schema.Number,
+  ageMs: MillisNumber,
 })
 export type Callout = typeof Callout.Type
 
@@ -602,124 +615,124 @@ export type Callout = typeof Callout.Type
 // trap's shot names none.
 export const GameEvent = defineTaggedUnion({
   Fired: {
-    x: Schema.Number,
-    y: Schema.Number,
-    direction: Vector,
+    x: PositionNumber,
+    y: PositionNumber,
+    direction: Heading,
     weapon: WeaponKind,
     maybeShooter: Schema.Option(Schema.Number),
   },
   ZombieHit: {
-    x: Schema.Number,
-    y: Schema.Number,
-    direction: Vector,
+    x: PositionNumber,
+    y: PositionNumber,
+    direction: Heading,
     damage: Schema.Number,
     kind: ZombieKind,
     maybeShooter: Schema.Option(Schema.Number),
   },
   ZombieKilled: {
-    x: Schema.Number,
-    y: Schema.Number,
-    direction: Vector,
+    x: PositionNumber,
+    y: PositionNumber,
+    direction: Heading,
     bounty: Schema.Number,
     kind: ZombieKind,
   },
-  Exploded: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
+  Exploded: { x: PositionNumber, y: PositionNumber, radius: Schema.Number },
   Footfall: {
-    x: Schema.Number,
-    y: Schema.Number,
+    x: PositionNumber,
+    y: PositionNumber,
     kind: ZombieKind,
     nearness: Schema.Number,
   },
   PlayerHurt: {
-    x: Schema.Number,
-    y: Schema.Number,
-    direction: Vector,
+    x: PositionNumber,
+    y: PositionNumber,
+    direction: Heading,
     source: ZombieKind,
   },
-  BulletStruck: { x: Schema.Number, y: Schema.Number, direction: Vector },
-  RanDry: { x: Schema.Number, y: Schema.Number },
-  DryFired: { x: Schema.Number, y: Schema.Number },
+  BulletStruck: { x: PositionNumber, y: PositionNumber, direction: Heading },
+  RanDry: { x: PositionNumber, y: PositionNumber },
+  DryFired: { x: PositionNumber, y: PositionNumber },
   ReloadStarted: {
-    x: Schema.Number,
-    y: Schema.Number,
-    direction: Vector,
+    x: PositionNumber,
+    y: PositionNumber,
+    direction: Heading,
     weapon: WeaponKind,
   },
-  Reloaded: { x: Schema.Number, y: Schema.Number, weapon: WeaponKind },
-  WaveCleared: { x: Schema.Number, y: Schema.Number, bonus: Schema.Number },
+  Reloaded: { x: PositionNumber, y: PositionNumber, weapon: WeaponKind },
+  WaveCleared: { x: PositionNumber, y: PositionNumber, bonus: Schema.Number },
   PackWarned: {
-    x: Schema.Number,
-    y: Schema.Number,
+    x: PositionNumber,
+    y: PositionNumber,
     door: DoorId,
     formation: Formation,
   },
-  TrapHit: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
-  TrapCracked: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
-  TrapBroken: { x: Schema.Number, y: Schema.Number, kind: TrapKind },
-  PickupDropped: { x: Schema.Number, y: Schema.Number, kind: PickupKind },
-  PickupGrabbed: { x: Schema.Number, y: Schema.Number, kind: PickupKind },
-  PickupFizzled: { x: Schema.Number, y: Schema.Number },
-  BoostFaded: { x: Schema.Number, y: Schema.Number, kind: BoostKind },
-  Burped: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
+  TrapHit: { x: PositionNumber, y: PositionNumber, kind: TrapKind },
+  TrapCracked: { x: PositionNumber, y: PositionNumber, kind: TrapKind },
+  TrapBroken: { x: PositionNumber, y: PositionNumber, kind: TrapKind },
+  PickupDropped: { x: PositionNumber, y: PositionNumber, kind: PickupKind },
+  PickupGrabbed: { x: PositionNumber, y: PositionNumber, kind: PickupKind },
+  PickupFizzled: { x: PositionNumber, y: PositionNumber },
+  BoostFaded: { x: PositionNumber, y: PositionNumber, kind: BoostKind },
+  Burped: { x: PositionNumber, y: PositionNumber, radius: Schema.Number },
   PartShed: {
-    x: Schema.Number,
-    y: Schema.Number,
-    direction: Vector,
+    x: PositionNumber,
+    y: PositionNumber,
+    direction: Heading,
     kind: ZombieKind,
     stage: Schema.Number,
   },
-  BossRoared: { x: Schema.Number, y: Schema.Number, door: DoorId },
-  BossWoundUp: { x: Schema.Number, y: Schema.Number, attack: BossAttack },
-  BossStomped: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
-  BossBelched: { x: Schema.Number, y: Schema.Number },
-  BossRushed: { x: Schema.Number, y: Schema.Number, direction: Vector },
-  BossRammed: { x: Schema.Number, y: Schema.Number, direction: Vector },
-  BossBonked: { x: Schema.Number, y: Schema.Number, direction: Vector },
-  BossSpat: { x: Schema.Number, y: Schema.Number },
-  GlobLanded: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
-  BossEnraged: { x: Schema.Number, y: Schema.Number },
-  ZombieGrabbed: { x: Schema.Number, y: Schema.Number },
-  ShieldRaised: { x: Schema.Number, y: Schema.Number },
-  ZombieThrown: { x: Schema.Number, y: Schema.Number },
-  ZombieLanded: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
-  CrawlerStirred: { x: Schema.Number, y: Schema.Number },
-  CrawlerSurfaced: { x: Schema.Number, y: Schema.Number },
-  AnklesGrabbed: { x: Schema.Number, y: Schema.Number },
-  PackFrenzied: { x: Schema.Number, y: Schema.Number, door: DoorId },
-  PackWiped: { x: Schema.Number, y: Schema.Number, bonus: Schema.Number },
-  OvenBelched: { x: Schema.Number, y: Schema.Number },
-  Purchased: { x: Schema.Number, y: Schema.Number },
-  PurchaseRefused: { x: Schema.Number, y: Schema.Number },
-  ExitOpened: { x: Schema.Number, y: Schema.Number },
-  FridgeOpened: { x: Schema.Number, y: Schema.Number, prize: FridgePrize },
-  FridgeSlammed: { x: Schema.Number, y: Schema.Number },
-  PrizeTaken: { x: Schema.Number, y: Schema.Number },
-  PrizeLeft: { x: Schema.Number, y: Schema.Number },
-  DudBurped: { x: Schema.Number, y: Schema.Number, refund: Schema.Number },
-  LidLaunched: { x: Schema.Number, y: Schema.Number, direction: Vector },
-  LidBlasted: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
-  CookerPopped: { x: Schema.Number, y: Schema.Number, direction: Vector },
-  PanSwung: { x: Schema.Number, y: Schema.Number, direction: Vector },
-  PanClanged: { x: Schema.Number, y: Schema.Number, direction: Vector },
-  PanSmashed: { x: Schema.Number, y: Schema.Number, radius: Schema.Number },
-  PanFlattened: { x: Schema.Number, y: Schema.Number },
-  KnifeStabbed: { x: Schema.Number, y: Schema.Number, direction: Vector },
-  KnifeHit: { x: Schema.Number, y: Schema.Number, direction: Vector },
-  HomeRun: { x: Schema.Number, y: Schema.Number, direction: Vector },
-  FreezeSprayed: { x: Schema.Number, y: Schema.Number, direction: Vector },
-  ZombieFrozen: { x: Schema.Number, y: Schema.Number },
-  ZombieShattered: { x: Schema.Number, y: Schema.Number, kind: ZombieKind },
-  ZombieSlipped: { x: Schema.Number, y: Schema.Number },
-  PlayerDowned: { x: Schema.Number, y: Schema.Number },
-  PlayerRevived: { x: Schema.Number, y: Schema.Number },
-  FriendlyFire: { x: Schema.Number, y: Schema.Number, direction: Vector },
+  BossRoared: { x: PositionNumber, y: PositionNumber, door: DoorId },
+  BossWoundUp: { x: PositionNumber, y: PositionNumber, attack: BossAttack },
+  BossStomped: { x: PositionNumber, y: PositionNumber, radius: Schema.Number },
+  BossBelched: { x: PositionNumber, y: PositionNumber },
+  BossRushed: { x: PositionNumber, y: PositionNumber, direction: Heading },
+  BossRammed: { x: PositionNumber, y: PositionNumber, direction: Heading },
+  BossBonked: { x: PositionNumber, y: PositionNumber, direction: Heading },
+  BossSpat: { x: PositionNumber, y: PositionNumber },
+  GlobLanded: { x: PositionNumber, y: PositionNumber, radius: Schema.Number },
+  BossEnraged: { x: PositionNumber, y: PositionNumber },
+  ZombieGrabbed: { x: PositionNumber, y: PositionNumber },
+  ShieldRaised: { x: PositionNumber, y: PositionNumber },
+  ZombieThrown: { x: PositionNumber, y: PositionNumber },
+  ZombieLanded: { x: PositionNumber, y: PositionNumber, radius: Schema.Number },
+  CrawlerStirred: { x: PositionNumber, y: PositionNumber },
+  CrawlerSurfaced: { x: PositionNumber, y: PositionNumber },
+  AnklesGrabbed: { x: PositionNumber, y: PositionNumber },
+  PackFrenzied: { x: PositionNumber, y: PositionNumber, door: DoorId },
+  PackWiped: { x: PositionNumber, y: PositionNumber, bonus: Schema.Number },
+  OvenBelched: { x: PositionNumber, y: PositionNumber },
+  Purchased: { x: PositionNumber, y: PositionNumber },
+  PurchaseRefused: { x: PositionNumber, y: PositionNumber },
+  ExitOpened: { x: PositionNumber, y: PositionNumber },
+  FridgeOpened: { x: PositionNumber, y: PositionNumber, prize: FridgePrize },
+  FridgeSlammed: { x: PositionNumber, y: PositionNumber },
+  PrizeTaken: { x: PositionNumber, y: PositionNumber },
+  PrizeLeft: { x: PositionNumber, y: PositionNumber },
+  DudBurped: { x: PositionNumber, y: PositionNumber, refund: Schema.Number },
+  LidLaunched: { x: PositionNumber, y: PositionNumber, direction: Heading },
+  LidBlasted: { x: PositionNumber, y: PositionNumber, radius: Schema.Number },
+  CookerPopped: { x: PositionNumber, y: PositionNumber, direction: Heading },
+  PanSwung: { x: PositionNumber, y: PositionNumber, direction: Heading },
+  PanClanged: { x: PositionNumber, y: PositionNumber, direction: Heading },
+  PanSmashed: { x: PositionNumber, y: PositionNumber, radius: Schema.Number },
+  PanFlattened: { x: PositionNumber, y: PositionNumber },
+  KnifeStabbed: { x: PositionNumber, y: PositionNumber, direction: Heading },
+  KnifeHit: { x: PositionNumber, y: PositionNumber, direction: Heading },
+  HomeRun: { x: PositionNumber, y: PositionNumber, direction: Heading },
+  FreezeSprayed: { x: PositionNumber, y: PositionNumber, direction: Heading },
+  ZombieFrozen: { x: PositionNumber, y: PositionNumber },
+  ZombieShattered: { x: PositionNumber, y: PositionNumber, kind: ZombieKind },
+  ZombieSlipped: { x: PositionNumber, y: PositionNumber },
+  PlayerDowned: { x: PositionNumber, y: PositionNumber },
+  PlayerRevived: { x: PositionNumber, y: PositionNumber },
+  FriendlyFire: { x: PositionNumber, y: PositionNumber, direction: Heading },
 })
 export type GameEvent = typeof GameEvent.Type
 
 export const HitStop = defineTaggedUnion({
-  Running: { cooldownMs: Schema.Number },
-  Frozen: { remainingMs: Schema.Number },
-  Slowed: { remainingMs: Schema.Number, carryMs: Schema.Number },
+  Running: { cooldownMs: MillisNumber },
+  Frozen: { remainingMs: MillisNumber },
+  Slowed: { remainingMs: MillisNumber, carryMs: MillisNumber },
 })
 export type HitStop = typeof HitStop.Type
 
@@ -743,13 +756,13 @@ export const Popup = Schema.Struct({
   x: Schema.Number,
   y: Schema.Number,
   velocityX: Schema.Number,
-  ageMs: Schema.Number,
+  ageMs: MillisNumber,
 })
 export type Popup = typeof Popup.Type
 
 export const Streak = defineTaggedUnion({
   Cold: {},
-  Hot: { count: Schema.Number, remainingMs: Schema.Number },
+  Hot: { count: Schema.Number, remainingMs: MillisNumber },
 })
 export type Streak = typeof Streak.Type
 
@@ -979,12 +992,12 @@ export const LookSection = Schema.Literals(['Body', 'Hair', 'Outfit'])
 export type LookSection = typeof LookSection.Type
 
 export const PlannedSpawn = Schema.Struct({
-  atMs: Schema.Number,
+  atMs: MillisNumber,
   kind: ZombieKind,
   door: DoorId,
-  offset: Schema.Number,
-  speedScale: Schema.Number,
-  hpScale: Schema.Number,
+  offset: PositionNumber,
+  speedScale: UnitNumber,
+  hpScale: UnitNumber,
   pack: Schema.Number,
   formation: Formation,
 })
@@ -995,14 +1008,14 @@ export type PlannedSpawn = typeof PlannedSpawn.Type
 // ages the hints and banners. remainingMs and durationMs stay put meanwhile.
 export const BreakClock = defineTaggedUnion({
   Counting: {},
-  Waiting: { elapsedMs: Schema.Number },
+  Waiting: { elapsedMs: MillisNumber },
 })
 export type BreakClock = typeof BreakClock.Type
 
 const preparationFields = {
   wave: Schema.Number,
-  remainingMs: Schema.Number,
-  durationMs: Schema.Number,
+  remainingMs: MillisNumber,
+  durationMs: MillisNumber,
   spawns: Schema.Array(PlannedSpawn),
   clock: BreakClock.pipe(
     Schema.withConstructorDefault(Effect.succeed(BreakClock.Counting())),
@@ -1013,7 +1026,7 @@ const preparationFields = {
 // the pacing beat is Fading or Resting.
 const waveFields = {
   wave: Schema.Number,
-  elapsedMs: Schema.Number,
+  elapsedMs: MillisNumber,
   spawns: Schema.Array(PlannedSpawn),
 }
 
@@ -1058,16 +1071,16 @@ export const Boss = defineTaggedUnion({
   Arriving: {
     door: DoorId,
     hp: Schema.Number,
-    remainingMs: Schema.Number,
-    durationMs: Schema.Number,
+    remainingMs: MillisNumber,
+    durationMs: MillisNumber,
   },
   Fighting: {
     id: Schema.Number,
     move: BossMove,
-    standingMs: Schema.Number,
+    standingMs: MillisNumber,
     mood: BossMood,
     nextFar: FarAttack,
-    belchMs: Schema.Number,
+    belchMs: MillisNumber,
     globs: Schema.Array(Glob),
   },
 })
@@ -1084,9 +1097,9 @@ export const FrenzyPack = Schema.Struct({
 export type FrenzyPack = typeof FrenzyPack.Type
 
 export const Hold = Schema.Struct({
-  atMs: Schema.Number,
+  atMs: MillisNumber,
   releaseBelow: Schema.Number,
-  relaxMs: Schema.Number,
+  relaxMs: MillisNumber,
 })
 export type Hold = typeof Hold.Type
 
@@ -1094,12 +1107,12 @@ export const Beat = defineTaggedUnion({
   Flowing: {},
   Fading: {
     releaseBelow: Schema.Number,
-    relaxMs: Schema.Number,
-    waitedMs: Schema.Number,
+    relaxMs: MillisNumber,
+    waitedMs: MillisNumber,
   },
   Resting: {
-    remainingMs: Schema.Number,
-    extendedMs: Schema.Number,
+    remainingMs: MillisNumber,
+    extendedMs: MillisNumber,
     trickled: Schema.Number,
   },
 })
@@ -1107,7 +1120,7 @@ export type Beat = typeof Beat.Type
 
 export const Alarm = defineTaggedUnion({
   Quiet: {},
-  Ringing: { remainingMs: Schema.Number },
+  Ringing: { remainingMs: MillisNumber },
 })
 export type Alarm = typeof Alarm.Type
 
@@ -1126,7 +1139,7 @@ export const Pacing = Schema.Struct({
   warnedPacks: Schema.Array(Schema.Number),
   packDoors: Schema.Array(PackDoor),
   alarm: Alarm,
-  quietMs: Schema.Number,
+  quietMs: MillisNumber,
 })
 export type Pacing = typeof Pacing.Type
 
@@ -1151,7 +1164,7 @@ export const Blast = Schema.Struct({
   x: Schema.Number,
   y: Schema.Number,
   radius: Schema.Number,
-  ageMs: Schema.Number,
+  ageMs: MillisNumber,
 })
 export type Blast = typeof Blast.Type
 
@@ -1212,11 +1225,11 @@ export type Purchasable = typeof Purchasable.Type
 // Done waits for the key to be let go after a buy, so one hold buys once.
 export const Purchase = defineTaggedUnion({
   Idle: {},
-  Holding: { target: Purchasable, heldMs: Schema.Number },
+  Holding: { target: Purchasable, heldMs: MillisNumber },
   Refused: {
     target: Purchasable,
     shortBy: Schema.Number,
-    sinceMs: Schema.Number,
+    sinceMs: MillisNumber,
   },
   Done: {},
 })
@@ -1235,8 +1248,8 @@ export type ShopChatter = typeof ShopChatter.Type
 // order the map lists them.
 export const Oven = defineTaggedUnion({
   Ready: {},
-  Belching: { remainingMs: Schema.Number, burnedTicks: Schema.Number },
-  Cooling: { remainingMs: Schema.Number },
+  Belching: { remainingMs: MillisNumber, burnedTicks: Schema.Number },
+  Cooling: { remainingMs: MillisNumber },
 })
 export type Oven = typeof Oven.Type
 
@@ -1249,7 +1262,7 @@ export type Wallet = typeof Wallet.Type
 
 export const TurretGun = defineTaggedUnion({
   Armed: {},
-  CoolingDown: { remainingMs: Schema.Number },
+  CoolingDown: { remainingMs: MillisNumber },
 })
 export type TurretGun = typeof TurretGun.Type
 
@@ -1258,15 +1271,15 @@ export const Trap = defineTaggedUnion({
     id: Schema.Number,
     door: DoorId,
     hp: Schema.Number,
-    hitRemainingMs: Schema.Number,
+    hitRemainingMs: MillisNumber,
   },
   Turret: {
     id: Schema.Number,
     column: Schema.Number,
     row: Schema.Number,
     hp: Schema.Number,
-    hitRemainingMs: Schema.Number,
-    facing: Vector,
+    hitRemainingMs: MillisNumber,
+    facing: Heading,
     gun: TurretGun,
   },
 })
@@ -1289,13 +1302,13 @@ export type TrapHint = typeof TrapHint.Type
 
 export const TrapNotice = defineTaggedUnion({
   Quiet: {},
-  Refused: { reason: Schema.String, remainingMs: Schema.Number },
+  Refused: { reason: Schema.String, remainingMs: MillisNumber },
 })
 export type TrapNotice = typeof TrapNotice.Type
 
 export const Lesson = defineTaggedUnion({
   Pending: {},
-  Learned: { atMs: Schema.Number },
+  Learned: { atMs: MillisNumber },
 })
 export type Lesson = typeof Lesson.Type
 
@@ -1319,7 +1332,7 @@ export type Practice = typeof Practice.Type
 
 export const DebutCard = defineTaggedUnion({
   Hidden: {},
-  Showing: { kind: ZombieKind, ageMs: Schema.Number },
+  Showing: { kind: ZombieKind, ageMs: MillisNumber },
 })
 export type DebutCard = typeof DebutCard.Type
 
@@ -1337,8 +1350,8 @@ export const RunStats = Schema.Struct({
   powerUpsGrabbed: Schema.Number,
   maybeLastHurtBy: Schema.Option(ZombieKind),
   activeFrames: Schema.Number,
-  activeFrameMs: Schema.Number,
-  runMs: Schema.Number,
+  activeFrameMs: MillisNumber,
+  runMs: MillisNumber,
 })
 export type RunStats = typeof RunStats.Type
 
@@ -1357,7 +1370,7 @@ export const SOLO_SLOT: PlayerSlot = 0
 // fight until the next break (MULTIPLAYER.md, decided row 4).
 export const Life = defineTaggedUnion({
   Standing: {},
-  Downed: { bleedMs: Schema.Number, reviveMs: Schema.Number },
+  Downed: { bleedMs: MillisNumber, reviveMs: MillisNumber },
   BledOut: {},
 })
 export type Life = typeof Life.Type
@@ -1385,8 +1398,8 @@ export const Seat = Schema.Struct({
   readiness: Readiness,
   trapIds: Schema.Array(Schema.Number),
   kills: Schema.Number,
-  graceMs: Schema.Number,
-  touchedMs: Schema.Number,
+  graceMs: MillisNumber,
+  touchedMs: MillisNumber,
 })
 export type Seat = typeof Seat.Type
 
@@ -1429,7 +1442,7 @@ export const World = Schema.Struct({
   pacing: Pacing,
   boss: Boss,
   frenzyPacks: Schema.Array(FrenzyPack),
-  intensity: Schema.Number,
+  intensity: UnitNumber,
   mode: RunMode,
   difficulty: DifficultySetting,
   player: Player,
@@ -1438,7 +1451,7 @@ export const World = Schema.Struct({
   lobs: Schema.Array(Lob),
   nextEntityId: Schema.Number,
   wallet: Wallet,
-  elapsedMs: Schema.Number,
+  elapsedMs: MillisNumber,
   frameEvents: Schema.Array(GameEvent),
   traps: Schema.Array(Trap),
   pickups: Schema.Array(Pickup),
