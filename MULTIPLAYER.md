@@ -1,6 +1,6 @@
 # Multiplayer
 
-**Status: scoped on 2026-10-29. The netcode model and the main gameplay rules were decided by the owner on 2026-10-29** (see "Decided"). **The plumbing of Phases 2 and 3 is built against a stand-in world** (see "What Phases 2 and 3 built"), **Phase 0 is built** (see "What Phase 0 built"), and **Phase 1 is built** (see "What Phase 1 built"): the World holds 1 to 4 players with the decided co-op rules, played offline at one keyboard, and `stepWorld` is ready to replace the stand-in, which is not done yet. This file is the plan for online co-op on Cloudflare Durable Objects: the recommendation, the decisions, the defaults still waiting for a yes, the phases, and the measurements behind them. Gameplay decisions are mirrored in [`GAME_DESIGN.md`](./GAME_DESIGN.md) where they bend an existing rule, and platform decisions in [`PLATFORM.md`](./PLATFORM.md). The earlier dream ideas are kept at the end, under "The dream".
+**Status: scoped on 2026-10-29. The netcode model and the main gameplay rules were decided by the owner on 2026-10-29** (see "Decided"). **The plumbing of Phases 2 and 3 is built against a stand-in world** (see "What Phases 2 and 3 built"), **Phase 0 is built** (see "What Phase 0 built"), **Phase 1 is built** (see "What Phase 1 built"): the World holds 1 to 4 players with the decided co-op rules, and **the room now plays the real game** (see "What Phase 2 built"): the `GameRoom` runs `stepWorld` over a binary wire and every player draws it with the game's own scene, predicting their own walk. This file is the plan for online co-op on Cloudflare Durable Objects: the recommendation, the decisions, the defaults still waiting for a yes, the phases, and the measurements behind them. Gameplay decisions are mirrored in [`GAME_DESIGN.md`](./GAME_DESIGN.md) where they bend an existing rule, and platform decisions in [`PLATFORM.md`](./PLATFORM.md). The earlier dream ideas are kept at the end, under "The dream".
 
 ## The recommendation
 
@@ -112,7 +112,7 @@ Choices made on the way:
 
 - **The World is flat in the Model.** `Model` is `World.fields` plus the client's own, not `model.world`, so no view or test changed its paths. `withWorld(model, step)` runs a World step on a client Model. The gameplay hash reads either shape.
 - **The Gates are World fields for now.** The lessons, practice, and the new zombie card are single player gates the step reads; a co-op room plays with them settled. The shop's tab moved in because walking into the stall picks the suggested row from it.
-- **The wire is JSON per field.** `snapshotWorld` and `diffWorld` write each changed field as its Schema's JSON through the netcode `Writer`. It is correct but not compact: the flow fields ride along. Phase 2's binary entity lists replace it.
+- **The wire was JSON per field.** `snapshotWorld` and `diffWorld` wrote each changed field as its Schema's JSON through the netcode `Writer`, flow fields and all. Phase 2's binary codec (`src/worldCodec.ts`) replaced it; `src/worldWire.ts` keeps only the World as JSON for the determinism tools.
 - **Players are keyed by slot**, with single player as the one entry at `SOLO_SLOT`. The World still holds one `player`; Phase 1 makes it many.
 
 #### What the split needs
@@ -226,7 +226,7 @@ How the players live in the World:
 Left for later:
 
 - **Within the World.** The new zombie card and the lessons are single player's; a co-op room plays them settled. Intensity, footfalls, and an Ankle Biter's fair surfacing spot read the lead player only. The boss's stomp and charge hit only the player he fights. A downed player cannot be bitten again and has no crawl animation. Run stats (accuracy, hearts lost) are the client's tally of its own events, with the World's per-seat `kills` beside them.
-- **For Phase 2's swap.** A netcode `World` adapter over `stepWorld` in `src/coop/seam.ts` and `infra/worker/gameRoom.ts`: `start` from `seatCrew`, `step` from each slot's `PlayerInput` (move and aim to `Intent`, the action bits to `SeatAction`), `removePlayer` and Away to `setPresence`, `interpolate` positions between snapshots, and `of` and `put` for own-player prediction on the lead seat; the binary codec of entity lists in place of `src/worldWire.ts`'s JSON fields; and the client drawing the real scene from the World in `src/coop/world.ts` instead of the stand-in's dots, with `focusSeat` putting its own player in the World's fields.
+- **For Phase 2's swap.** Done on 2026-10-30: see "What Phase 2 built".
 
 ### Phase 2: the room and the wire
 
@@ -296,15 +296,43 @@ On the preview, QUICK PLAY made a room of four in 1.5 s and, with three players,
 - **Shown on previews only.** `VITE_COOP=On` (set by `infra/alchemy.run.ts` on every stage but production, and by the tests and the harness) shows the CO-OP bar, until co-op is announced on Workers Paid (decision 8).
 - **Checks.** Story tests for the Submodel and the root (`src/coop/story.test.ts`, `src/coop.story.test.ts`) and Scene tests for each screen (`src/coop/scene.test.ts`), with a fake `CoopNet` (`src/coop/testing.ts`). `tools/audit/shotsCoop.ts` shoots every screen at 1280x720, 844x390, and 390x844, and `tools/audit/coop.ts` plays it end to end through the game UI with 2 or 3 browsers.
 
-**What remains for the real game:**
-
-1. Phase 0 and 1: `stepWorld` over a `World` with 2 to 4 players, bundled for workerd with no UI imports. It then implements `World` from `World.ts` (its snapshot and diff after the `wire.ts` estimate, with frame events for particles and sounds) and replaces `StandIn` in `infra/worker/gameRoom.ts`, one line.
-2. `PlayerInput` from the game's `deriveIntent` (move, aim in world space, buttons for fire, swap, reload, trap, a purchase as the action), and own-player prediction from the game's movement against the level's collision.
-3. The in-room picture: the game's own scene in place of the stand-in arena behind the seam, and each player's look in the lobby.
-4. The gameplay rules decided for co-op: revives, money, doors, friendly fire on Nightmare, difficulty by player count, Away players still hurt, the end of a run when everyone is down.
-5. Results into each player's own scope with `RecordedRun`, the tutorial gate before co-op, and Workers Paid before co-op is announced.
+**What remained for the real game** was built in Phase 0, Phase 1, and "What Phase 2 built" below, except each player's look in the lobby and Workers Paid before co-op is announced.
 
 **The display name** is picked and synced already: the Profile's NAME tab (2026-10-29) keeps it in the player scope, cleaned the same way `cleanName` in `Lobby.ts` cleans it (`cleanName` in `src/profile.ts`). The game's co-op client (`src/coop`) passes `joinName(model)` from `src/profile.ts` as the name to `createRoom`, `joinRoom`, and QUICK PLAY. That is empty when the player has not picked one, so the room seats them as "Player N".
+
+### What Phase 2 built
+
+On 2026-10-30, in one pull request of increments: the room plays the game's own World, the wire is binary, and every player draws it with the game's own scene.
+
+| Piece                    | Where                                                           | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The room's World         | `src/roomWorld.ts`, `infra/worker/gameRoom.ts`                  | The netcode `World` over `stepWorld`: a fresh run with the lobby's slots (even one player plays as a crew of one, by co-op's rules), the room's seed, a Normal campaign until the lobby picks; each `PlayerInput` to an `Intent` (move in 127ths, aim as a direction times 1024, the trigger as a button bit), presence to `setPresence`, `removePlayer` to Away, the tick's events kept by tick so every diff carries them                  |
+| Presses                  | `src/roomWorld.ts` (`ACTIONS`), `src/coop/update.ts`            | A seat action rides in the input's `action` as a held value: 12 bits name it (swap, reload, the traps, READY, the exit, leaving the counter, each item, a repair by trap id), 4 bits count presses, so the room applies it once, on the tick it changes, however long it is held and whatever ticks collapse. The client queues presses and holds each for at least one input tick                                                           |
+| The binary codec         | `src/worldCodec.ts`                                             | Read off the World's Schemas, so a new field travels with no codec change: positions in eighths of a pixel, velocities in eighths, directions and scales in 4096ths, timers in whole ms, other numbers exactly; tags and literals as indexes; entity lists (zombies, bullets, pickups, traps, teammates) keyed by id; nested field masks; list diffs that name only what left or changed. Seeds, flow fields, stats, and the gates stay home |
+| The client               | `src/coopPlay.ts`, `src/update/coopRun.ts`, `src/coop/`         | Each frame: intent from the client's own input and camera, the Session's input and render, then the room's World with the client's seat focused (`focusSeat`) in the root's World fields, so every view, the HUD, the shop, and the touch controls draw it with its own camera. Cosmetics and sounds from the events the drawing reached, each once; hit-stop holds only the client's picture while the events wait                          |
+| Teammates                | `src/coopMarksView.ts`, `src/partyView.ts`, `src/coop/looks.ts` | Each teammate in their seat's look, their name over their head, READY over everyone ready in a break, and a badge of their seat's color at the screen's edge when off screen (decided 4). START WAVE reads READY in co-op, READY! once pressed                                                                                                                                                                                               |
+| The rules around the run | `src/update/coopRun.ts`, `src/main.ts`                          | No pause (the corner holds LEAVE), the stall's dialog opens when the room puts the player at the counter and closing it tells the room, a run counts toward the player's own bests and Munchopedia kills when it ends (the team's kills by kind; the room credits each seat's kills for the lobby's scores), no analytics summary until RunSummary has co-op fields, leaving the room goes home                                              |
+| The last world           | `packages/netcode/src/Room.ts`                                  | A run that ends between messages sends its last world before RoomClosed, so every player sees how it ended                                                                                                                                                                                                                                                                                                                                   |
+
+**Measured.** Four scripted players over a simulated 60 ms round trip, every message through the real codecs, 240 s into wave 5 with 500 hearts each so they last (`src/roomWorld.sim.test.ts`):
+
+| Per player, downstream, 4 players at 20 Hz | Bytes a message (p50, p95, mean) | KB/s                   |
+| ------------------------------------------ | -------------------------------- | ---------------------- |
+| Whole run                                  | 265, 399, 264                    | 5.15 mean              |
+| Crowded (15+ alive, 8,028 messages)        | 316, 426, 323                    | 6.30 mean, 8.32 at p95 |
+
+That is under the estimate of "The wire at 20 Hz" (5.7 mean, 7.4 crowded, 11.2 at p95), WebSocket frame headers included and TCP, IP, and TLS not. The largest messages (about 3 KB) are wave starts, which write the new wave's planned spawns. Inputs went out about 9 times a second while walking and shooting. Own-player corrections came about 0.7 a second, at most 11.8 px, from the knockback of bites the client does not predict. A snapshot of a two-player run is under 4 KB.
+
+PREVIEW_RESULTS
+
+**Checks.** `src/roomWorld.test.ts` (round trips: a snapshot reads back as the room's World, a client applying every third tick's diff holds what a snapshot holds, every event rides once, diff and snapshot sizes, presses applied once, READY for the break, Away, the input mapping, prediction landing where the room puts the player, interpolation), `tools/determinism/worldWire.test.ts` (the same in single player), `packages/netcode/test/room.test.ts` (the last world), Story tests for the Submodel's frame, presses, and events with hit-stop (`src/coop/story.test.ts`) and for the root's online run (`src/coopPlay.story.test.ts`), the sim measurement above, `bun run world:check` (the room's adapter and codec bundle with no UI, store, or netcode runtime code, and workerd plays a two- and four-player room exactly as Bun does), `bun run mp:e2e` with the real World, and `tools/audit/coop.ts`, which plays a real wave through the game UI with 2 or 3 pages.
+
+Left for later:
+
+- **The lobby picks.** Difficulty and mode (campaign or endless) in the lobby, and Keep going after a won campaign; a room plays a Normal campaign and ends at Victory.
+- **Feel (Phase 4).** Only the own player's walk and aim are predicted: shots, muzzle flash, and the shot sound wait for the room. The new zombie card is not shown in co-op, and footfalls and intensity (the music) follow the lead seat. Throttled 4G on real phones is not measured yet.
+- **Looks in the lobby.** Teammates wear a look by seat until looks ride in the lobby.
+- **Co-op analytics and balance (Phase 6).** RunSummary has no co-op fields, so an online run sends none.
 
 ### Phase 4: feel and phones
 
