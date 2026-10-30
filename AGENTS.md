@@ -117,6 +117,8 @@ Paths are under `src/`. The API Worker is in `infra/worker/` (analytics, and syn
 | `coop/model.ts`, `coop/update.ts`, `coop/view.ts`       | The co-op Submodel: screens (hub, code, queue, lobby, arena), its Messages, update and Commands, and its views; `coop.css`                                    |
 | `coop/net.ts`, `coop/subscriptions.ts`, `coop/seam.ts`  | `CoopNet`, the room requests, queue, lobby, and socket as one service; the Subscriptions over them; the one place the stand-in world is named                 |
 | `coop/roomReplica.ts`, `update/coop.ts`                 | The lobby's Replica in the player database (store chunk); opening co-op from home, the tutorial gate, and the keys while it is open                           |
+| `party.ts`, `revive.ts`                                 | Co-op's players in the World: seats by slot, `withSeat` and `forEachSeat`, targets, money splits, trap owners; downed, revived, READY, friendly fire          |
+| `couch.ts`, `partyView.ts`                              | Players 2 to 4 at one keyboard (dev-only `?local=N`): their keys, intents, and shared camera; teammates, seat marks, and down bars in the world view          |
 | `prng.ts`, `constants.ts`                               | The seeded random number generator; the view size, speeds, and other tuning numbers                                                                           |
 
 ### Elsewhere

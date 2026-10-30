@@ -4,17 +4,18 @@
 
 import { Schema } from 'effect'
 
-import { soloInputs, stepWorld } from '../../src/stepWorld'
+import { type InputsByPlayer, stepWorld } from '../../src/stepWorld'
 import type { World } from '../../src/world'
-import { worldFromJson, worldToJson } from '../../src/worldWire'
 import { Intent } from '../../src/worldSchema'
+import { worldFromJson, worldToJson } from '../../src/worldWire'
 import { installDeterministicMath } from './detMath'
 
 // NOTE: plain JSON both ways, so it crosses into any engine: the World and
-// the intent as their Schemas' JSON.
+// each player's intent by slot, as their Schemas' JSON. One entry is single
+// player; co-op holds an entry per seat.
 export type PlayRequest = Readonly<{
   world: string
-  intent: string
+  intents: ReadonlyArray<readonly [slot: number, intent: string]>
   ticks: number
 }>
 
@@ -23,10 +24,19 @@ const IntentJson = Schema.toCodecJson(Intent)
 export const intentToJson = (intent: Intent): string =>
   JSON.stringify(Schema.encodeSync(IntentJson)(intent))
 
-const play = (world: World, intent: Intent, ticks: number): World =>
-  ticks <= 0
-    ? world
-    : play(stepWorld(world, soloInputs(intent)).world, intent, ticks - 1)
+const play = (world: World, inputs: InputsByPlayer, ticks: number): World =>
+  ticks <= 0 ? world : play(stepWorld(world, inputs).world, inputs, ticks - 1)
+
+const inputsOf = (request: PlayRequest): InputsByPlayer =>
+  new Map(
+    request.intents.map(
+      ([slot, intent]) =>
+        [
+          slot,
+          Schema.decodeUnknownSync(IntentJson)(JSON.parse(intent)),
+        ] as const,
+    ),
+  )
 
 // NOTE: the engines' own transcendental Math differs in its last bits
 // (tools/determinism/README.md), so both sides play with detMath to agree
@@ -34,10 +44,6 @@ const play = (world: World, intent: Intent, ticks: number): World =>
 export const playWorld = (request: PlayRequest): string => {
   installDeterministicMath()
   return worldToJson(
-    play(
-      worldFromJson(request.world),
-      Schema.decodeUnknownSync(IntentJson)(JSON.parse(request.intent)),
-      request.ticks,
-    ),
+    play(worldFromJson(request.world), inputsOf(request), request.ticks),
   )
 }

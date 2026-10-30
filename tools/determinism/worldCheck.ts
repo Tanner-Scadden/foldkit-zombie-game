@@ -11,12 +11,15 @@
 //   bun run world:check
 
 import './globals'
+import { Option } from 'effect'
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { refreshIntent } from '../../src/frame'
+import { seatCrew } from '../../src/party'
+import type { Intent } from '../../src/worldSchema'
 import { worldToJson } from '../../src/worldWire'
 import { playFrame, startedRun } from './script'
 import { type PlayRequest, intentToJson, playWorld } from './worldPlay'
@@ -149,19 +152,49 @@ const played = Array.from({ length: 900 }).reduce(
   startedRun(7, 'Campaign'),
 )
 const intended = refreshIntent(played)
-const request: PlayRequest = {
-  world: worldToJson(intended),
-  intent: intentToJson(intended.intent),
+
+// NOTE: co-op's crew joins the same World mid-wave (Phase 1): teammates who
+// walk, aim, and fire their own way, so the bundle plays every seat.
+const MATE_INTENTS: ReadonlyArray<Intent> = [
+  {
+    move: { x: -0.6, y: 0.8 },
+    maybeAim: Option.some({ x: 0, y: -1 }),
+    trigger: 'Held',
+  },
+  { move: { x: 1, y: 0 }, maybeAim: Option.none(), trigger: 'Held' },
+  {
+    move: { x: 0, y: 0 },
+    maybeAim: Option.some({ x: -1, y: 0 }),
+    trigger: 'Released',
+  },
+]
+
+const requestFor = (players: number): PlayRequest => ({
+  world: worldToJson(seatCrew(intended, players)),
+  intents: [
+    [0, intentToJson(intended.intent)],
+    ...MATE_INTENTS.slice(0, players - 1).map(
+      (intent, index) => [index + 1, intentToJson(intent)] as const,
+    ),
+  ],
   ticks: 600,
-}
-const inWorkerd = await playInWorkerd(request)
-const inBun = playWorld(request)
-if (inWorkerd !== inBun) {
-  console.error(
-    `workerd and Bun disagree after ${request.ticks} ticks.\n  workerd: ${inWorkerd.slice(0, 300)}`,
+})
+
+const checkPlayers = async (players: number): Promise<void> => {
+  const request = requestFor(players)
+  const inWorkerd = await playInWorkerd(request)
+  const inBun = playWorld(request)
+  if (inWorkerd !== inBun) {
+    console.error(
+      `workerd and Bun disagree after ${request.ticks} ticks with ${players} players.\n  workerd: ${inWorkerd.slice(0, 300)}`,
+    )
+    process.exit(1)
+  }
+  console.log(
+    `workerd plays ${request.ticks} ticks of the World with ${players} ${players === 1 ? 'player' : 'players'} exactly as Bun does.`,
   )
-  process.exit(1)
 }
-console.log(
-  `workerd plays ${request.ticks} ticks of the World exactly as Bun does.`,
-)
+
+await checkPlayers(1)
+await checkPlayers(2)
+await checkPlayers(4)
