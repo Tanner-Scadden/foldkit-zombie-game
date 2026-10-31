@@ -72,6 +72,10 @@ describe('the kitchen tour tracker', () => {
       ),
       measureSurface,
       expect(role('region', { name: 'Kitchen tour' })).toExist(),
+      expect(role('region', { name: 'Kitchen tour' })).toHaveAttr(
+        'data-side',
+        'Right',
+      ),
       expect(role('img', { name: 'The break clock waits' })).toExist(),
       expect(
         role('listitem', { name: 'Open the kitchen, free, now' }),

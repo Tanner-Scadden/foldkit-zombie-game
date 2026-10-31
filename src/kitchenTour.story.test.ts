@@ -3,6 +3,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { levelOf } from './arena'
+import { cameraOf } from './camera'
 import { FIXED_STEP_MS } from './constants'
 import { EXIT_RULES, exitPriceFor } from './exits'
 import { isKitchenOpen } from './kitchen'
@@ -28,6 +29,7 @@ import { soloSeat } from './party'
 import { nextRandom } from './prng'
 import { PURCHASE_RULES } from './purchase'
 import { forgetTutorial } from './save'
+import { maybeBubbleKind } from './stallBubble'
 import { AT_FRIDGE, atFridge, freshRunModel } from './testing'
 import { isKitchenTourOn } from './tutorialRules'
 import { asTutorialDone } from './veteran'
@@ -221,6 +223,12 @@ describe('the kitchen tour', () => {
       expect(remainingOf(frames(shut, 10))).toBeLessThan(BREAK_MS)
     },
   )
+
+  test("Rattles' trap bubble steps aside while the kitchen tour runs", () => {
+    const running = frames(atBoards(), 2)
+    expect(isTourRunning(running)).toBe(true)
+    expect(maybeBubbleKind(running, cameraOf(running))).toEqual(Option.none())
+  })
 
   test('the skip button ends it: the clock runs and prices are back', () => {
     const started = frames(atBoards(), 2)

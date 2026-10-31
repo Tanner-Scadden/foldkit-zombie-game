@@ -1063,11 +1063,51 @@ body {
   }
 }
 
-.game-root[data-layout='Portrait'] .quest-tracker {
-  top: calc(
-    (100cqh - var(--screen-h) * var(--arena-px)) / 2 + (var(--world-top) + 4) *
-      var(--arena-px)
+/* In landscape the tracker docks in the top corner away from what it
+   teaches; in portrait it sits in the band above the world, at the right,
+   compact, so it never covers the room. */
+.quest-tracker[data-side='Right'] {
+  left: auto;
+  right: calc(
+    (100cqw - var(--screen-w) * var(--arena-px)) / 2 + 4 * var(--arena-px)
   );
+}
+
+.game-root[data-layout='Portrait'] .quest-tracker {
+  left: auto;
+  right: calc(
+    (100cqw - var(--screen-w) * var(--arena-px)) / 2 + 3 * var(--arena-px)
+  );
+  top: auto;
+  bottom: calc(
+    100cqh - (100cqh - var(--screen-h) * var(--arena-px)) / 2 -
+      (var(--world-top) - 2) * var(--arena-px)
+  );
+  gap: 3px;
+  padding: 2px 2px 2px 4px;
+  border-width: 1px;
+}
+
+.game-root[data-layout='Portrait'] .quest-steps {
+  gap: 3px;
+}
+
+.game-root[data-layout='Portrait'] .quest-step {
+  padding: 2px 3px;
+}
+
+.game-root[data-layout='Portrait'] .quest-step-word {
+  display: none;
+}
+
+.game-root[data-layout='Portrait'] .quest-step-icon {
+  width: 16px;
+  height: 14px;
+}
+
+.game-root[data-layout='Portrait'] .quest-held {
+  width: 14px;
+  height: 10px;
 }
 
 @media (prefers-reduced-motion: reduce) {

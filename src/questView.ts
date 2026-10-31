@@ -1,8 +1,15 @@
-import { Array, Option } from 'effect'
+import { Array, Option, pipe } from 'effect'
 import type { Html } from 'foldkit/html'
 
+import { levelOf } from './arena'
+import { cameraOf, viewBoxOf, worldToView } from './camera'
 import type { ApplicationViewBuilder } from './composition'
-import { QUEST_STEPS, isQuestDone, questStepOf } from './firstBreakQuest'
+import {
+  QUEST_STEPS,
+  isQuestDone,
+  maybeQuestDoor,
+  questStepOf,
+} from './firstBreakQuest'
 import {
   QUEST_BUY_ICON,
   QUEST_PLACE_ICON,
@@ -12,10 +19,16 @@ import {
   TOUR_PAUSED_ICON,
   TOUR_PRIZE_ICON,
 } from './icons'
-import { type KitchenStep, kitchenStepOf } from './kitchenTour'
+import {
+  type KitchenStep,
+  kitchenStepOf,
+  maybeKitchenMark,
+} from './kitchenTour'
+import { fridgeBoxOf } from './leftovers'
 import { Message } from './message'
 import type { Model } from './model'
-import { Tour } from './worldSchema'
+import { STALL_BOX } from './shop'
+import { Tour, type Vector } from './worldSchema'
 
 // NOTE: the guided tutorial's tracker, in the corner under the hearts: a
 // chapter's steps as icons, the current one lit with its one word, the done
@@ -88,6 +101,43 @@ const kitchenChapter = (model: Model): Option.Option<Chapter> => {
       })
 }
 
+// NOTE: in landscape the tracker docks in the top corner away from what it
+// teaches, so it never covers the stall, the boards, or the fridge. In
+// portrait it sits in the band above the world (CSS), off the world itself.
+type Side = 'Left' | 'Right'
+
+const maybeTargetOf = (model: Model): Option.Option<Vector> => {
+  if (Option.contains(questStepOf(model), 'Shop')) {
+    return Option.some({
+      x: (STALL_BOX.left + STALL_BOX.right) / 2,
+      y: STALL_BOX.top,
+    })
+  }
+  return pipe(
+    maybeQuestDoor(model),
+    Option.orElse(() => maybeKitchenMark(model)),
+    Option.orElse(() =>
+      Option.contains(kitchenStepOf(model), 'Choose')
+        ? fridgeBoxOf(levelOf(model)).pipe(
+            Option.map(box => ({ x: box.left, y: box.top })),
+          )
+        : Option.none(),
+    ),
+  )
+}
+
+const sideOf = (model: Model): Side =>
+  Option.match(maybeTargetOf(model), {
+    onNone: () => 'Left',
+    onSome: target => {
+      const camera = cameraOf(model)
+      const view = viewBoxOf(camera)
+      return worldToView(camera, target).x < view.x + view.width / 2
+        ? 'Right'
+        : 'Left'
+    },
+  })
+
 type StepState = 'Done' | 'Now' | 'Later'
 
 const stateOf = (
@@ -149,7 +199,11 @@ const stepView = (
 
 const CONFETTI = Array.makeBy(10, index => index)
 
-const chapterView = (chapter: Chapter, h: ApplicationViewBuilder): Html =>
+const chapterView = (
+  chapter: Chapter,
+  side: Side,
+  h: ApplicationViewBuilder,
+): Html =>
   h.div(
     [h.Class('quest-frame')],
     [
@@ -157,6 +211,7 @@ const chapterView = (chapter: Chapter, h: ApplicationViewBuilder): Html =>
         [
           h.Class('quest-tracker'),
           h.DataAttribute('done', chapter.isDone ? 'true' : 'false'),
+          h.DataAttribute('side', side),
           h.AriaLabel(chapter.label),
         ],
         [
@@ -211,6 +266,6 @@ export const questTrackerView = (
     Option.orElse(firstBreakChapter(model), () => kitchenChapter(model)),
     {
       onNone: () => h.empty,
-      onSome: chapter => chapterView(chapter, h),
+      onSome: chapter => chapterView(chapter, sideOf(model), h),
     },
   )
