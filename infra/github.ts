@@ -29,6 +29,18 @@ const CI_PERMISSIONS = [
   'D1 Write',
 ] as const
 
+// NOTE: production serves munchmanor.com as Workers Custom Domains
+// (alchemy.run.ts). Zone Read finds the zone by name, Workers Routes Write
+// attaches the custom domains, and Dynamic URL Redirects Write keeps the
+// www to apex redirect rule. Scoped to that one zone.
+const MUNCHMANOR_ZONE_ID = 'e0b39985e4fdbd2cb2a8f2ffa1e33ac5'
+
+const CI_ZONE_PERMISSIONS = [
+  'Zone Read',
+  'Workers Routes Write',
+  'Dynamic URL Redirects Write',
+] as const
+
 export default Alchemy.Stack(
   'munch-manor-github',
   {
@@ -46,6 +58,13 @@ export default Alchemy.Stack(
           effect: 'allow',
           permissionGroups: [...CI_PERMISSIONS],
           resources: { [`com.cloudflare.api.account.${accountId}`]: '*' },
+        },
+        {
+          effect: 'allow',
+          permissionGroups: [...CI_ZONE_PERMISSIONS],
+          resources: {
+            [`com.cloudflare.api.account.zone.${MUNCHMANOR_ZONE_ID}`]: '*',
+          },
         },
       ],
     })

@@ -245,7 +245,7 @@ The lobby is a `room:<code>` sync scope (see "How it fits the sync engine"). Cod
 
 ### What Phases 2 and 3 built
 
-Built on 2026-10-29, against a stand-in world. The `GameRoom` and `Matchmaker` objects are bound on every stage, production included (approved 2026-10-29); the dev page deploys on preview stages only. Everything below is the plumbing the real `stepWorld` drops into once Phase 0 and 1 land.
+Built on 2026-10-29, against a stand-in world. The `GameRoom` and `Matchmaker` objects are bound on every stage, production included (approved 2026-10-29); the dev page deploys on preview stages only. In production the API Worker, and so every room, answers at `https://api.munchmanor.com` and still at its `workers.dev` address (see "Two origins" in `PLATFORM.md`). Everything below is the plumbing the real `stepWorld` drops into once Phase 0 and 1 land.
 
 **`packages/netcode`** (no game imports; shared by the browser, the Worker, and the tests):
 

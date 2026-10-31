@@ -18,6 +18,24 @@ const workerName = (stage: string): string => stageName('munch-manor', stage)
 const apiWorkerName = (stage: string): string =>
   stageName('munch-manor-api', stage)
 
+// NOTE: production's own domain (the munchmanor.com zone, in the same
+// account). The game answers at the apex, www redirects to it with a 301
+// (a redirect rule that runs before the Worker), and the API Worker answers
+// at api.munchmanor.com. Both Workers keep their workers.dev addresses too:
+// saves live per origin (OPFS, localStorage, the service worker's cache) and
+// installed apps are bound to the origin they were installed from, so the
+// old address must keep serving the same build (see "Two origins" in
+// PLATFORM.md). Preview stages stay on workers.dev only.
+const DOMAIN = 'munchmanor.com'
+
+const gameDomain = (stage: string) =>
+  stage === PRODUCTION_STAGE
+    ? { domain: { name: DOMAIN, redirects: [`www.${DOMAIN}`] } }
+    : {}
+
+const apiDomain = (stage: string) =>
+  stage === PRODUCTION_STAGE ? { domain: `api.${DOMAIN}` } : {}
+
 // NOTE: the Worker imports src/analytics.ts, which the game shares, so its
 // `effect` import would resolve from the game's node_modules (Foldkit pins an
 // older Effect). The alias bundles infra's one copy of Effect for the shared
@@ -66,6 +84,7 @@ const Analytics = Effect.gen(function* () {
 
   return yield* Cloudflare.Worker('Api', {
     name: apiWorkerName(stage),
+    ...apiDomain(stage),
     main: Path.resolve(import.meta.dirname, 'worker/main.ts'),
     crons: stage === PRODUCTION_STAGE ? [RETENTION_CRON] : [],
     env: {
@@ -110,13 +129,18 @@ const Website = (apiUrl: Output.Output<string | undefined>) =>
 
     return yield* Cloudflare.Website.Foldkit('Website', {
       name: workerName(stage),
+      ...gameDomain(stage),
       rootDir: Path.resolve(import.meta.dirname, '..'),
       // The game has no routes. With the default single page fallback a
       // nested path such as /a/b served index.html, whose relative asset
       // paths then missed, so unknown paths answer 404 instead.
       assets: { notFoundHandling: 'none' },
       // NOTE: VITE_ variables are inlined into the game's bundle. This one
-      // tells the game where to post run summaries (src/analyticsBeacon.ts).
+      // tells the game where to post run summaries (src/analyticsBeacon.ts),
+      // sync, and open co-op rooms. It is the API Worker's primary URL:
+      // https://api.munchmanor.com in production, its workers.dev URL
+      // elsewhere. The API allows any origin, so the build served at the old
+      // workers.dev address reaches it too.
       // VITE_COOP shows the CO-OP tile. It is on for every stage since the
       // account moved to Workers Paid on 2026-10-30 (MULTIPLAYER.md, decision 8).
       env: {

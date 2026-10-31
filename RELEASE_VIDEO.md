@@ -52,7 +52,7 @@ Where the cut differs from the table above:
 
 - **Now, while co-op is built:** short devlog clips to build an audience. The parlour before and after, Rattles' MINE! stamp, and portrait play all make good 10 second posts. These need only the director mode, not co-op.
 - **Needed from co-op:** four-player rooms, room codes, revives, and teammate avatars at the edge.
-- **Needed from the owner:** the X account to post from and the final URL (a custom domain would read better than the workers.dev address).
+- **Needed from the owner:** the X account to post from. The end card shows munchmanor.com.
 
 ## Copy
 

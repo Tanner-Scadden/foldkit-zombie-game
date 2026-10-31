@@ -30,7 +30,7 @@ The Cloudflare side of Munch Manor, declared with [Alchemy](https://alchemy.run/
 Every stage, production included, binds the API Worker's `GAME_ROOMS` and `MATCHMAKER` Durable Objects (approved 2026-10-29). Every stage but `prod` also gets the co-op dev page, `munch-manor-mp-dev-<stage>` (a static site built by `tools/mp-dev/build.ts`, pointed at the stage's API Worker).
 | any other | `munch-manor-<stage>` | `munch-manor-api-<stage>` | `munch-manor-analytics-<stage>` |
 
-Every Worker lives at `https://<worker>.tanner-scadden.workers.dev`. A stage such as `dev-infra` is a scratch copy deployed from this machine; destroy it when done. Destroying a stage deletes its D1 database and its rows.
+Every Worker lives at `https://<worker>.tanner-scadden.workers.dev`. Production also has its own domain: the game at `https://munchmanor.com` (a Workers Custom Domain, with `www.munchmanor.com` redirecting to it by a 301 rule) and the API Worker at `https://api.munchmanor.com`, so production's `VITE_API_ORIGIN` is `https://api.munchmanor.com`. Its `workers.dev` addresses stay on and are never redirected, since saves and installed apps are bound to their origin (see "Two origins" in `PLATFORM.md`). The CI token has Zone Read, Workers Routes Write, and Dynamic URL Redirects Write on the `munchmanor.com` zone alone for this (`github.ts`). A stage such as `dev-infra` is a scratch copy deployed from this machine; destroy it when done. Destroying a stage deletes its D1 database and its rows.
 
 State lives in Alchemy's Cloudflare state store (the `alchemy-state-store` Worker on the same account), so local and CI deploys share it.
 
@@ -38,7 +38,7 @@ State lives in Alchemy's Cloudflare state store (the `alchemy-state-store` Worke
 
 `.github/workflows/deploy.yml` is the only deploy path. Cloudflare Workers Builds stays disconnected, so do not connect the repo in the Cloudflare dashboard: two deploy paths overwrite each other quietly (see "What Phase 1 taught us" in `PLATFORM.md`). GitHub Pages is gone, its workflow deleted and the site disabled.
 
-- **Push to `main`.** The check job runs `typecheck`, `lint`, `test`, and `build`, and typechecks `infra/`. Only if all pass does the deploy job run `alchemy deploy --stage prod`, then wait for the URL to answer 200. A failing check publishes nothing.
+- **Push to `main`.** The check job runs `typecheck`, `lint`, `test`, and `build`, and typechecks `infra/`. Only if all pass does the deploy job run `alchemy deploy --stage prod`, then wait for the URL (`https://munchmanor.com`) to answer 200. A failing check publishes nothing.
 - **Pull request.** The same checks, then a preview at `https://munch-manor-pr-<number>.tanner-scadden.workers.dev`, with its URL in a comment on the pull request. Closing the pull request destroys the preview.
 - **By hand.** Run the workflow from the Actions tab on `main` to redeploy production, or deploy from this machine with the commands below.
 
@@ -113,6 +113,7 @@ The game posts one run summary per run to its stage's API Worker (see "Analytics
 ```sh
 bun test                                                     # the Worker's tests
 bun tools/analytics/smoke.ts https://munch-manor-api-pr-12.tanner-scadden.workers.dev   # post one fake run (from the repo root)
+bun tools/analytics/smoke.ts https://api.munchmanor.com                                # the same against production
 bun tools/analytics/report.ts --stage pr-12                  # the report for a stage (from the repo root)
 bun run heavy -- bun tools/audit/beacon-check.ts https://munch-manor-pr-12.tanner-scadden.workers.dev/   # a real run end in headless Chrome
 ```
@@ -141,7 +142,7 @@ The Vite build stamps the bundle and `version.json` with `GITHUB_SHA`, which the
 ## Check a deploy
 
 ```sh
-cd ../tools/audit && bun live-check.ts [url]
+cd ../tools/audit && bun live-check.ts [url]   # https://munchmanor.com/ by default
 ```
 
 It loads the page in headless Chrome and fails unless it answers 200, mounts four canvases, and logs no errors.

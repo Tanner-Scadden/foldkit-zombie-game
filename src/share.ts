@@ -5,7 +5,7 @@ import type { Difficulty } from './playerData'
 // the voice in one place. The link carries the game's address and nothing
 // else: no tracking parameters and no tokens.
 
-export const GAME_URL = 'https://munch-manor.tanner-scadden.workers.dev/'
+export const GAME_URL = 'https://munchmanor.com'
 
 const X_POST_INTENT = 'https://x.com/intent/post'
 
