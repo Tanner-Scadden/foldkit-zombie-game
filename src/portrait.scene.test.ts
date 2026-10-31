@@ -1,7 +1,6 @@
 import { Array, Match } from 'effect'
 import type { Canvas } from 'foldkit'
 import {
-  Mount,
   expect,
   given,
   role,
@@ -20,9 +19,14 @@ import { update } from './main'
 import { Message } from './message'
 import { BreakClock, type Model, Phase, initialModel } from './model'
 import { DISTANT_SPAWN, inPortrait } from './model.fixture'
-import { MeasureGameSurface } from './mount'
 import { screenOf, thumbAreaTop } from './screen'
-import { PHONE_LANDSCAPE, PHONE_PORTRAIT, ROOT, rectsOf } from './testing'
+import {
+  PHONE_LANDSCAPE,
+  PHONE_PORTRAIT,
+  ROOT,
+  measureSurfaceAs,
+  rectsOf,
+} from './testing'
 import { asVeteran } from './veteran'
 import { wavePreviewShapes } from './wavePreview'
 
@@ -69,8 +73,7 @@ const gunSlotFills = (model: Model): ReadonlyArray<Box> =>
   )
 
 const root = selector('.game-root')
-const measure = (surface: typeof PHONE_PORTRAIT) =>
-  Mount.resolve(MeasureGameSurface, Message.MeasuredGameSurface(surface))
+const measure = (surface: typeof PHONE_PORTRAIT) => measureSurfaceAs(surface)
 
 // NOTE: the surface's MeasureGameSurface Mount reports once per Scene, so a
 // phone turning mid-scene is a new Scene on the Model the earlier

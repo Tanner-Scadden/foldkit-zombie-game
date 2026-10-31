@@ -35,7 +35,7 @@ import {
   RunMode,
   type RunStats,
 } from './model'
-import { MeasureGameSurface } from './mount'
+import { ListenForTouchTaps, MeasureGameSurface } from './mount'
 import { isOpenBreak, isPracticeGateHeld } from './onboarding'
 import { pauseHelpView } from './pauseHelp'
 import { BOOST_KIND_ORDER, PICKUPS, isBoosted } from './powerups'
@@ -258,6 +258,7 @@ export const view = ApplicationComposition.makeView((model, h): Document => {
     body: h.main(
       [
         h.Class('game-root'),
+        h.OnMount(ListenForTouchTaps()),
         h.DataAttribute('layout', screen.layout),
         h.DataAttribute('cursor', model.cursorSetting),
         h.Style({

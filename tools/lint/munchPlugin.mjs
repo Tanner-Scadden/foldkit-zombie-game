@@ -483,6 +483,44 @@ const noRunInTests = {
   },
 }
 
+// NOTE: a press acts on its OnClick. src/touchTaps.ts makes every touch tap
+// a click from that finger's own pointer events, so a button works with
+// another finger on the glass and acts once. A handler on a touch's or a
+// mouse's release, or on a touch's start, would act beside that click, or
+// in its place on one device only. OnPointerDown stays allowed: the game
+// surface, the HUD slots, and the hold-to-buy button act the moment a
+// finger lands, which no click can.
+const RELEASE_HANDLERS = new Set([
+  'OnTouchStart',
+  'OnTouchEnd',
+  'OnTouchCancel',
+  'OnPointerUp',
+  'OnMouseDown',
+  'OnMouseUp',
+])
+
+const TAP_BY_CLICK_MESSAGE =
+  'Act on OnClick: src/touchTaps.ts turns every touch tap into a click, so the press works with another finger down and acts once. OnPointerDown is the one press handler for acting as a finger lands.'
+
+const tapByClick = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description:
+        'Act on OnClick (made from each finger by src/touchTaps.ts), never on a touch or mouse release or a touch start.',
+    },
+  },
+  create(context) {
+    return {
+      MemberExpression(node) {
+        if (RELEASE_HANDLERS.has(propertyName(node))) {
+          context.report({ node, message: TAP_BY_CLICK_MESSAGE })
+        }
+      },
+    }
+  },
+}
+
 export default {
   meta: { name: 'munch' },
   rules: {
@@ -494,5 +532,6 @@ export default {
     'no-menu-field': noMenuField,
     'command-beside-update': commandBesideUpdate,
     'no-run-in-tests': noRunInTests,
+    'tap-by-click': tapByClick,
   },
 }

@@ -1,7 +1,7 @@
 import { Array, Option, pipe } from 'effect'
 import type { Canvas } from 'foldkit'
 import type { Html } from 'foldkit/html'
-import { Mount, Subscription, given, scene } from 'foldkit/scene'
+import { Subscription, given, scene } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
@@ -57,13 +57,13 @@ import {
   ZombieState,
   initialModel,
 } from './model'
-import { MeasureGameSurface } from './mount'
 import { DROP_RULES } from './powerups'
 import { startOrResume } from './runFlow'
 import {
   SCENE_SUBSCRIPTIONS,
   WIDE_SURFACE,
   holdingSecond,
+  measureSurfaceAs,
   scoring,
 } from './testing'
 import { asVeteran } from './veteran'
@@ -523,10 +523,7 @@ const measureFrames = (model: Model): Measured => {
   scene(
     { update, view: recordingView, subscriptions: SCENE_SUBSCRIPTIONS },
     given(model),
-    Mount.resolve(
-      MeasureGameSurface,
-      Message.MeasuredGameSurface(WIDE_SURFACE),
-    ),
+    measureSurfaceAs(WIDE_SURFACE),
     Subscription.emit(
       SCENE_SUBSCRIPTIONS.mouseAim,
       Message.MovedMouse({ clientX: 900, clientY: 300 }),

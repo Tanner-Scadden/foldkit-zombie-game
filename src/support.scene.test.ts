@@ -1,7 +1,6 @@
 import { Option } from 'effect'
 import {
   Command,
-  Mount,
   all,
   expect,
   expectAll,
@@ -21,13 +20,13 @@ import menuCss from './menu.css?raw'
 import { Message } from './message'
 import { type Model, Phase } from './model'
 import { fighting, home, inPortrait, withNewerBuild } from './model.fixture'
-import { MeasureGameSurface } from './mount'
 import {
   PHONE_LANDSCAPE,
   PHONE_PORTRAIT,
   ROOT,
   emitPressedKey,
   measureSurface,
+  measureSurfaceAs,
   openHandInScene,
 } from './testing'
 import { ClickSupportLink } from './update/home'
@@ -223,7 +222,7 @@ describe('the coffee in the home corner', () => {
       scene(
         ROOT,
         given(model),
-        Mount.resolve(MeasureGameSurface, Message.MeasuredGameSurface(surface)),
+        measureSurfaceAs(surface),
         expect(selector(`[data-layout='${layout}']`)).toExist(),
         inside(
           nth(all.selector('.home-corner .home-corner-row'), 0),

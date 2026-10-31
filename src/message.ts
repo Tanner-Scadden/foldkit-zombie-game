@@ -62,6 +62,7 @@ export const Message = defineMessageUnion({
   ReleasedEveryTouch: {},
   MovedMouse: { clientX: Schema.Number, clientY: Schema.Number },
   SuppressedContextMenu: {},
+  TappedWithTouch: {},
   MeasuredGameSurface: {
     left: Schema.Number,
     top: Schema.Number,
@@ -225,5 +226,6 @@ export type ReleasedPointer = typeof Message.ReleasedPointer.Type
 export type CancelledPointer = typeof Message.CancelledPointer.Type
 export type ReleasedEveryTouch = typeof Message.ReleasedEveryTouch.Type
 export type MeasuredGameSurface = typeof Message.MeasuredGameSurface.Type
+export type TappedWithTouch = typeof Message.TappedWithTouch.Type
 export type PressedPointer = typeof Message.PressedPointer.Type
 export type PressedHudSlot = typeof Message.PressedHudSlot.Type

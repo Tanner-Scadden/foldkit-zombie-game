@@ -64,13 +64,15 @@
   font: var(--menu-text-size) / 1.35 var(--menu-font);
   user-select: none;
   transition: border-color 160ms linear;
-  animation: profile-in 260ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+  animation: profile-in 220ms ease-out both;
 }
 
+/* NOTE: the panel flashes in where it stands. A pop that grew it moved its
+   corner X and its tabs under a quick finger (src/motion.test.ts). */
 @keyframes profile-in {
   from {
     opacity: 0;
-    scale: 0.86;
+    filter: brightness(2.2);
   }
 }
 
@@ -217,14 +219,13 @@
   overscroll-behavior: contain;
   touch-action: pan-y;
   padding: 4px 30px 4px 0;
-  animation: page-flip 240ms ease-out both;
-  transform-origin: left center;
+  animation: page-flip 200ms ease-out both;
 }
 
 @keyframes page-flip {
   from {
     opacity: 0;
-    transform: perspective(600px) rotateY(-24deg) translateX(-12px);
+    filter: brightness(1.8);
   }
 }
 
@@ -568,7 +569,6 @@
 @keyframes look-rows-in {
   from {
     opacity: 0;
-    translate: 0 6px;
   }
 }
 
@@ -1273,7 +1273,22 @@
   border: 2px solid rgba(255, 107, 94, 0.55);
   border-radius: 12px;
   background: rgba(255, 107, 94, 0.08);
+  animation: confirm-flash 520ms ease-out both;
+}
+
+.settings-tab .setting-confirm-question {
   animation: confirm-wobble 520ms ease-out both;
+}
+
+@keyframes confirm-flash {
+  0% {
+    opacity: 0;
+  }
+
+  25% {
+    border-color: var(--menu-red);
+    opacity: 1;
+  }
 }
 
 .setting-confirm-question {
