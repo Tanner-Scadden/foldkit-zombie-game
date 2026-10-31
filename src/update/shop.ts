@@ -1,4 +1,4 @@
-import { Effect, Option } from 'effect'
+import { Effect, Option, Result } from 'effect'
 import { Dom, Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
@@ -10,27 +10,26 @@ import { isShopDialogOpen } from '../menuState'
 import { Message } from '../message'
 import {
   type Model,
-  Phase,
   type ShopCategory,
   ShopChatter,
   ShopItemId,
   ShopState,
 } from '../model'
+import { learnShop } from '../onboarding'
 import { burstCoins } from '../particles'
 import {
   ShopGood,
   StockTag,
   isBrowsing,
   maybeDisplacedFocus,
-  purchase,
   selectShopCategory,
   shopItem,
   shopItemElementId,
   stockTag,
 } from '../shop'
-import { SeatAction } from '../stepWorld'
+import { ActionRefusal, SeatAction } from '../stepWorld'
 import { showTrapHint } from '../traps'
-import { withWorld } from '../world'
+import { tryAsLead } from './action'
 import { isRunOn } from './coopRun'
 import { type SoundCue, playSounds, uiCue } from './sound'
 import {
@@ -59,18 +58,12 @@ export const FocusShopItem = makeCommand('FocusShopItem', {
 // DIALOG
 
 const leaveShopModel = (model: Model): Model =>
-  isBrowsing(model.shop)
-    ? refreshIntent(modifyFields(model, { shop: () => ShopState.Dismissed() }))
-    : model
+  Result.match(tryAsLead(model, SeatAction.LeaveCounter()), {
+    onFailure: () => model,
+    onSuccess: refreshIntent,
+  })
 
 const leaveCounter = modelStep(leaveShopModel)
-
-// NOTE: a shop dialog that failed to show resets to closed without its
-// Closed fold, so the round's next frame leaves the counter (src/main.ts).
-// While the dialog opens normally it is open by the end of the same Step.
-export const leaveShopWithoutDialog: UpdateStep = stepModel => ({
-  model: isShopDialogOpen(stepModel) ? stepModel : leaveShopModel(stepModel),
-})
 
 // NOTE: the shop dialog closed. In an online run the room hears LEAVE, so
 // the player can walk off once it does.
@@ -95,7 +88,7 @@ const greetAtCounter: UpdateStep = stepModel => ({
   }),
 })
 
-export const enterShop = makeStep(() =>
+const enterShop = makeStep(() =>
   Update.combineSteps([
     greetAtCounter,
     ShopDialogBinding.requestOpen(),
@@ -109,10 +102,26 @@ export const closeShop = makeStep(model =>
     : unchanged,
 )
 
-// NOTE: the stall shuts outside the break.
-export const closeShopOutsidePreparation = makeStep(model =>
-  Phase.isAnyOf(['Preparation'])(model.phase) ? unchanged : closeShop,
-)
+// NOTE: the shop dialog follows the World's shop after each frame, single
+// player's and an online run's alike. It opens as the player arrives at the
+// counter (`wasBrowsing` is the shop before the frame: an online run reads
+// the room's), and closes once the World has them away from it, as when
+// the wave starts (src/waves.ts, startWaveEarly). A dialog that failed to
+// show resets to closed without its Closed fold, so the next frame leaves
+// the counter; while it opens normally it is open by the end of the Step.
+export const syncShopDialog = (wasBrowsing: boolean) =>
+  makeStep(model => {
+    const isAtCounterNow = isBrowsing(model.shop)
+    if (isAtCounterNow && !wasBrowsing) {
+      return Update.combineSteps([modelStep(learnShop), enterShop])
+    } else if (!isAtCounterNow && isShopDialogOpen(model)) {
+      return ShopDialogBinding.requestClose()
+    } else if (isAtCounterNow && !isShopDialogOpen(model)) {
+      return leaveShop
+    } else {
+      return unchanged
+    }
+  })
 
 // BUYING
 
@@ -121,18 +130,16 @@ const purchaseCues = (item: ShopItemId): ReadonlyArray<SoundCue> =>
     ? [uiCue('Purchase'), uiCue('PowerUp')]
     : [uiCue('Purchase')]
 
-export const buy = (model: Model, item: ShopItemId): UpdateReturn => {
-  if (!isBrowsing(model.shop)) {
-    return { model }
-  }
-
-  return Option.match(purchase(model, item), {
-    onNone: () => playSounds([uiCue('Denied')])(refusedChatter(model, item)),
-    onSome: world => {
-      const bought = withHint(
-        item,
-        withWorld(model, () => world),
-      )
+export const buy = (model: Model, item: ShopItemId): UpdateReturn =>
+  Result.match(tryAsLead(model, SeatAction.Buy({ item })), {
+    onFailure: refusal =>
+      ActionRefusal.match(refusal, {
+        NotNow: () => ({ model }),
+        Refused: () =>
+          playSounds([uiCue('Denied')])(refusedChatter(model, item)),
+      }),
+    onSuccess: world => {
+      const bought = withHint(item, world)
       return combine(
         modifyFields(burstCoins(bought, bought.player.x, bought.player.y), {
           shopChatter: () => ShopChatter.Bought({ item }),
@@ -141,7 +148,6 @@ export const buy = (model: Model, item: ShopItemId): UpdateReturn => {
       )
     },
   })
-}
 
 const withHint = (item: ShopItemId, model: Model): Model =>
   ShopGood.isAnyOf(['Trap'])(shopItem(item).good) ? showTrapHint(model) : model

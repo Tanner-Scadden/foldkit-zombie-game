@@ -51,7 +51,7 @@ import {
 import type { SoundEffect } from './soundEffect'
 import { countTrapPlaced } from './stats'
 import { WEAPONS } from './weapons'
-import { type World, withWorld } from './world'
+import type { World } from './world'
 import {
   type Bullet,
   DoorId,
@@ -870,8 +870,6 @@ const stepOutOfDoorway = (
     Floor: () => player,
   })
 
-export type Placed = Readonly<{ model: Model; trap: Trap }>
-
 export type PlacedInWorld = Readonly<{ world: World; trap: Trap }>
 
 // NOTE: places the selected trap for the player in the World's per-player
@@ -912,17 +910,12 @@ export const placeTrapIn = (
       }),
   })
 
-export const placeTrap = (model: Model): Result.Result<Placed, string> =>
-  Result.map(placeTrapIn(model), ({ world, trap }) => ({
-    trap,
-    model: modifyFields(
-      withWorld(model, () => world),
-      {
-        trapHint: () => TrapHint.Seen(),
-        trapNotice: () => TrapNotice.Quiet(),
-      },
-    ),
-  }))
+// NOTE: a trap placed settles its hint and quiets the notice.
+export const notePlacement = (model: Model): Model =>
+  modifyFields(model, {
+    trapHint: () => TrapHint.Seen(),
+    trapNotice: () => TrapNotice.Quiet(),
+  })
 
 export const refusePlacement = (model: Model, reason: string): Model =>
   modifyFields(model, {

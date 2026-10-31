@@ -406,6 +406,32 @@ describe('an online co-op run', () => {
     )
   })
 
+  test('the room sending the player off the counter closes the shop', () => {
+    const offCounter = {
+      ...roomWorld,
+      world: withSeat(startWaveEarly(roomWorld.world), OWN_SLOT, world =>
+        modifyFields(world, { shop: () => ShopState.Dismissed() }),
+      ),
+    }
+    const shopping = modifyFields(inRun(offCounter), {
+      shop: () => ShopState.Browsing({ focusedItem: 'Shotgun' }),
+      shopDialog: dialog => modifyFields(dialog, { isOpen: () => true }),
+    })
+    story(
+      update,
+      given(shopping),
+      message(roomFrame(100)),
+      Command.resolve(
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
+      ),
+      model(current => {
+        expect(current.shopDialog.isOpen).toBe(false)
+        expect(current.shop).toEqual(ShopState.Dismissed())
+      }),
+    )
+  })
+
   test('leaving the room goes home', () => {
     story(
       update,

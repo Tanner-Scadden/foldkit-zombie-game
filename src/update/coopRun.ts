@@ -1,4 +1,4 @@
-import { Option } from 'effect'
+import { Option, Result } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
@@ -15,17 +15,11 @@ import {
   releaseAll,
 } from '../input'
 import { Message } from '../message'
-import {
-  type GunSlot,
-  type Model,
-  type PageVisibility,
-  type ShopItemId,
-} from '../model'
+import { type Model, type PageVisibility, type ShopItemId } from '../model'
 import { isInteractTaken } from '../purchase'
-import { isAtCounter, verdictFor } from '../shop'
-import { SeatAction } from '../stepWorld'
+import { isAtCounter } from '../shop'
+import { SeatAction, gunSlotAction, trySeatAction } from '../stepWorld'
 import { isRoundActive } from '../waves'
-import { heldSlotOf, isWieldingMelee } from '../weapons'
 import { pressInRoom } from './coop'
 import { playSounds, toggleAudioFromKey, uiCue, unlockAudio } from './sound'
 import { type UpdateStep, modelStep, unchanged, withInput } from './step'
@@ -45,15 +39,18 @@ export const isRunOn = (model: Model): boolean =>
 const pressInRun = (action: SeatAction) =>
   makeStep(() => Update.combineSteps([unlockAudio, pressInRoom(action)]))
 
-// NOTE: a buy the shop would refuse sounds refused at once; one it would
-// take rings up at once, and the room's wallet follows.
+// NOTE: a buy the room would refuse sounds refused at once; one it would
+// take rings up at once, and the room's wallet follows. The client asks the
+// same rule the room runs, on its own seat.
 const buyInRun = (item: ShopItemId) =>
   makeStep(model =>
     Update.combineSteps([
       pressInRun(SeatAction.Buy({ item })),
       playSounds([
         uiCue(
-          verdictFor(model, item)._tag === 'Available' ? 'Purchase' : 'Denied',
+          Result.isSuccess(trySeatAction(model, SeatAction.Buy({ item })))
+            ? 'Purchase'
+            : 'Denied',
         ),
       ]),
     ]),
@@ -101,13 +98,6 @@ const keyInRun = (code: string) =>
         }),
   )
 
-// NOTE: a tap on the held gun reloads it; any other tap draws that gun,
-// including from the knife.
-const gunSlotPress = (model: Model, slot: GunSlot): SeatAction =>
-  !isWieldingMelee(model.player) && heldSlotOf(model.player.arsenal) === slot
-    ? SeatAction.Reload()
-    : SeatAction.Draw({ slot })
-
 const blurInRun = modelStep(model => withInput(model, releaseAll))
 
 const pageVisibilityInRun = (visibility: PageVisibility) =>
@@ -148,7 +138,7 @@ const inRun = (model: Model, message: RunMessage) =>
     ClickedPauseButton: () => unchanged,
     ClickedStartWaveButton: () => pressInRun(SeatAction.Ready()),
     ClickedSwapButton: () => pressInRun(SeatAction.Swap()),
-    ClickedGunSlot: ({ slot }) => pressInRun(gunSlotPress(model, slot)),
+    ClickedGunSlot: ({ slot }) => pressInRun(gunSlotAction(model.player, slot)),
     ClickedMeleeSlot: () => pressInRun(SeatAction.Melee()),
     ClickedReloadButton: () => pressInRun(SeatAction.Reload()),
     ClickedPlaceTrapButton: () => pressInRun(SeatAction.PlaceTrap()),

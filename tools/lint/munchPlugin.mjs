@@ -521,6 +521,84 @@ const tapByClick = {
   },
 }
 
+// NOTE: a player action's rule lives once, in src/stepWorld.ts, where the
+// co-op room runs it; single player applies it through its lead seat
+// (src/update/action.ts). A client module that imports a rule's own steps,
+// or writes the fields a seat action owns, is deciding the action again.
+const SEAT_ACTION_STEPS = new Set([
+  'swapInHand',
+  'drawMelee',
+  'drawSlot',
+  'beginReload',
+  'cycleTrap',
+  'placeTrapIn',
+  'purchase',
+  'tryPurchase',
+  'startWaveEarly',
+  'markReady',
+])
+
+const SEAT_ACTION_MODULES = /(^|\/)(weapons|traps|shop|waves|revive)$/
+
+const SEAT_ACTION_FIELDS = new Set([
+  'player',
+  'wallet',
+  'traps',
+  'trapStock',
+  'selectedTrap',
+])
+
+const SEAT_ACTION_MESSAGE =
+  'A player action\'s rule lives once, in src/stepWorld.ts: apply it as a seat action (actAsLead or tryAsLead in src/update/action.ts) and wrap only the client cues around it (AGENTS.md "Code shape").'
+
+const isModifyFields = node =>
+  node?.type === 'CallExpression' &&
+  ((node.callee.type === 'Identifier' && node.callee.name === 'modifyFields') ||
+    memberName(node.callee) === 'modifyFields')
+
+const keyName = property =>
+  property.type === 'Property' && !property.computed
+    ? property.key.type === 'Identifier'
+      ? property.key.name
+      : isStringLiteral(property.key)
+        ? property.key.value
+        : undefined
+    : undefined
+
+const seatActionOnce = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description:
+        "Apply a player action as a seat action from src/stepWorld.ts, never with the rule's own steps.",
+    },
+  },
+  create(context) {
+    return {
+      ImportSpecifier(node) {
+        if (
+          SEAT_ACTION_MODULES.test(String(node.parent.source.value)) &&
+          node.imported.type === 'Identifier' &&
+          SEAT_ACTION_STEPS.has(node.imported.name)
+        ) {
+          context.report({ node, message: SEAT_ACTION_MESSAGE })
+        }
+      },
+      CallExpression(node) {
+        const changes = node.arguments[1]
+        if (!isModifyFields(node) || changes?.type !== 'ObjectExpression') {
+          return
+        }
+        changes.properties
+          .filter(property => SEAT_ACTION_FIELDS.has(keyName(property)))
+          .forEach(property =>
+            context.report({ node: property, message: SEAT_ACTION_MESSAGE }),
+          )
+      },
+    }
+  },
+}
+
 export default {
   meta: { name: 'munch' },
   rules: {
@@ -533,5 +611,6 @@ export default {
     'command-beside-update': commandBesideUpdate,
     'no-run-in-tests': noRunInTests,
     'tap-by-click': tapByClick,
+    'seat-action-once': seatActionOnce,
   },
 }

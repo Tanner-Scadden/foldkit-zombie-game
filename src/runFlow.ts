@@ -3,10 +3,11 @@ import { modifyFields } from 'foldkit/struct'
 import { FIRST_PREPARATION_MS } from './constants'
 import { type Model, Phase, Round, type RunMode } from './model'
 import { raiseDebutCard, settleLessons } from './onboarding'
-import { isCoop, seatCrew } from './party'
-import { markReady } from './revive'
+import { seatCrew } from './party'
 import { freshRun } from './runReset'
-import { beginPreparation, startWaveEarly } from './waves'
+import { SeatAction } from './stepWorld'
+import { actAsLead } from './update/action'
+import { beginPreparation } from './waves'
 import { withWorld } from './world'
 
 // Starting, resuming, and starting a wave from the player's side: each
@@ -50,15 +51,13 @@ export const startOrResume = (model: Model, mode: RunMode): Model =>
     GameOver: () => startRun(model, mode),
   })
 
-// NOTE: START WAVE from the player: the wave starts, and a new kind in it
-// raises its card.
-// In co-op START WAVE is the player's READY, and the wave starts once
-// everyone has pressed it (decided 7).
+// NOTE: START WAVE from the player, as their seat's READY
+// (src/stepWorld.ts): alone the wave starts, and a new kind in it raises
+// its card; in co-op it waits for everyone (decided 7).
 export const startWave = (model: Model): Model => {
-  if (!Phase.isAnyOf(['Preparation'])(model.phase)) {
-    return model
-  }
-  return isCoop(model)
-    ? withWorld(model, markReady)
-    : raiseDebutCard(withWorld(model, startWaveEarly))
+  const readied = actAsLead(model, SeatAction.Ready())
+  return Phase.isAnyOf(['Preparation'])(model.phase) &&
+    Phase.isAnyOf(['Wave'])(readied.phase)
+    ? raiseDebutCard(readied)
+    : readied
 }
