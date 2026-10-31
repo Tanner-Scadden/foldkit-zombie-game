@@ -75,10 +75,11 @@ import {
   heldSlotOf,
   isReloadable,
   isReloading,
-  isWieldingKnife,
+  isWieldingMelee,
   looseRounds,
   magazineOf,
   maxTier,
+  maybePanOf,
 } from './weapons'
 
 // HUD
@@ -92,8 +93,8 @@ const STREAK_Y = HUD_MARGIN + 30
 const SLOT_WIDTH = 40
 const SLOT_HEIGHT = 12
 const SLOT_GAP = 3
-const KNIFE_SLOT_WIDTH = 26
-const CLUSTER_WIDTH = 2 * SLOT_WIDTH + KNIFE_SLOT_WIDTH + 2 * SLOT_GAP
+const MELEE_SLOT_WIDTH = 26
+const CLUSTER_WIDTH = 2 * SLOT_WIDTH + MELEE_SLOT_WIDTH + 2 * SLOT_GAP
 const TRAP_SLOT_WIDTH = 24
 
 const BOOST_CHIPS_LEFT = HUD_MARGIN + PLAYER_MAX_HP * HEART_SPACING + 2
@@ -119,7 +120,7 @@ type HudLayout = Readonly<{
 
 // NOTE: the guns sit at the bottom middle, nudged a little left in landscape
 // so the buttons beside them stop short of the stall's outline, with the
-// knife's slot on their right. In portrait they sit at the bottom of the
+// melee slot on their right. In portrait they sit at the bottom of the
 // thumb area and the HUD is a band on top.
 const hudLayoutFor = (screen: Screen): HudLayout => {
   const slotTop = screen.height - HUD_MARGIN - SLOT_HEIGHT
@@ -364,8 +365,8 @@ type SlotGun = Readonly<{ weapon: WeaponKind; tier: number }>
 
 type AmmoLook = 'Loaded' | 'Low' | 'Last' | 'Reloading' | 'Empty'
 
-// NOTE: `maybeMeter` is the Clang Pan's dent meter, from 1 (flat) to 0
-// (fully dented), drawn as a bar in place of a count. `isBeckoning` pulses
+// NOTE: `maybeMeter` is the Clang Pan's dent meter in the melee slot, from
+// 1 (flat) to 0 (fully dented), drawn as a bar in place of a count. `isBeckoning` pulses
 // the slot's border gold: the other gun, until the player has swapped once.
 type SlotLook = Readonly<{
   maybeGun: Option.Option<SlotGun>
@@ -378,17 +379,18 @@ type SlotLook = Readonly<{
   isPulsing?: boolean
 }>
 
-const METER_WIDTH = 12
+const METER_WIDTH = 8
 const METER_COLOR = '#ffe066'
 const METER_DENTED_COLOR = '#ff4a4f'
 const METER_TRACK_COLOR = 'rgba(244, 241, 222, 0.25)'
 
 const meterShapes = (
   x: number,
+  width: number,
   top: number,
   share: number,
 ): ReadonlyArray<Canvas.Shape> => {
-  const left = x + SLOT_WIDTH - 3 - METER_WIDTH
+  const left = x + width - 3 - METER_WIDTH
   const filled = Math.round(clamp(share, 0, 1) * METER_WIDTH)
   return [
     Canvas.Rect({
@@ -473,15 +475,15 @@ const tierPipShapes = (
     }),
   )
 
-// NOTE: slots 0 and 1 are the guns, slot 2 the knife, narrower: it has
-// only its icon and ∞.
-export const KNIFE_SLOT_INDEX = 2
+// NOTE: slots 0 and 1 are the guns, slot 2 the melee slot, narrower: it
+// has only its icon and ∞, or the Pan's icon and dent meter.
+export const MELEE_SLOT_INDEX = 2
 
 const slotLeftOf = (layout: HudLayout, index: number): number =>
   layout.slotLeft + index * (SLOT_WIDTH + SLOT_GAP)
 
 const slotWidthOf = (index: number): number =>
-  index === KNIFE_SLOT_INDEX ? KNIFE_SLOT_WIDTH : SLOT_WIDTH
+  index === MELEE_SLOT_INDEX ? MELEE_SLOT_WIDTH : SLOT_WIDTH
 
 export const gunSlotBox = (screen: Screen, index: number): Box => {
   const layout = hudLayoutFor(screen)
@@ -556,7 +558,7 @@ const slotShapes = (
           top + SLOT_TEXT_TOP,
           'Right',
         ),
-      onSome: share => meterShapes(x, top, share),
+      onSome: share => meterShapes(x, width, top, share),
     }),
   ]
   return isHeld ? shapes : [group({ opacity: SLOT_DIM_OPACITY, shapes })]
@@ -600,10 +602,6 @@ const gunSlotLook = (
   ammo: ammoText(gun),
   isHeld,
   ammoLook: ammoLook(player, isHeld, gun),
-  maybeMeter:
-    gun.kind === 'Pan'
-      ? Option.some(gun.loaded / magazineOf('Pan', gun.tier))
-      : Option.none(),
 })
 
 const EMPTY_SLOT: SlotLook = {
@@ -613,11 +611,12 @@ const EMPTY_SLOT: SlotLook = {
   ammoLook: 'Loaded',
 }
 
-// THE KNIFE'S SLOT
+// THE MELEE SLOT
 
-// NOTE: the knife's slot, right of the guns: its icon and ∞, held when the
-// knife is in hand. With every gun dry it pulses red, as the knife comes
-// out by itself.
+// NOTE: the melee slot, right of the guns: the knife's icon and ∞, or once
+// the fridge has given one, the Clang Pan's icon, tier pips, and dent
+// meter. Held when it is in hand. With every gun dry it pulses red, as the
+// melee weapon comes out by itself.
 const KNIFE_PALETTE: Palette = { X: '#e9e3cf', R: '#a8302a', o: '#140c10' }
 
 const KNIFE_SPRITE = spriteShapes(
@@ -636,11 +635,19 @@ const KNIFE_SPRITE = spriteShapes(
   TOP_LEFT,
 )
 
-const knifeSlotLook = (player: Player): SlotLook => ({
-  maybeGun: Option.none(),
-  maybeIcon: Option.some(KNIFE_SPRITE),
+export const meleeSlotLook = (player: Player): SlotLook => ({
+  ...Option.match(maybePanOf(player), {
+    onNone: () => ({
+      maybeGun: Option.none(),
+      maybeIcon: Option.some(KNIFE_SPRITE),
+    }),
+    onSome: pan => ({
+      maybeGun: Option.some({ weapon: pan.kind, tier: pan.tier }),
+      maybeMeter: Option.some(pan.loaded / magazineOf(pan.kind, pan.tier)),
+    }),
+  }),
   ammo: ENDLESS_ROUNDS,
-  isHeld: isWieldingKnife(player),
+  isHeld: isWieldingMelee(player),
   ammoLook: 'Loaded',
   isPulsing: isOutOfGuns(player),
 })
@@ -660,7 +667,7 @@ const loadoutShapes = (
 ): ReadonlyArray<Canvas.Shape> => {
   const { player } = model
   const { arsenal } = player
-  const held = isWieldingKnife(player)
+  const held = isWieldingMelee(player)
     ? Option.none()
     : Option.some(heldSlotOf(arsenal))
   const isBeckoning = isSwapBeckoning(model)
@@ -682,8 +689,8 @@ const loadoutShapes = (
     ...slotShapes(layout, 1, secondSlot, model.elapsedMs),
     ...slotShapes(
       layout,
-      KNIFE_SLOT_INDEX,
-      knifeSlotLook(player),
+      MELEE_SLOT_INDEX,
+      meleeSlotLook(player),
       model.elapsedMs,
     ),
   ]

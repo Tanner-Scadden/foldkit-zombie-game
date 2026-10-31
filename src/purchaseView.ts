@@ -34,7 +34,8 @@ import {
   spriteShapes,
 } from './sprite'
 import { AMMO_BOX, AMMO_BOX_WIDTH } from './stallBubble'
-import { heldGun, maybeReplacedGun } from './weapons'
+import { hasPan, heldGun, maybeReplacedGun } from './weapons'
+import { FridgeDoor } from './worldSchema'
 
 // NOTE: a purchasable says what it costs without a word: a dark tag with
 // the coin and the price hangs off a nail. Walk up and it brightens, with a
@@ -342,8 +343,9 @@ const placedOffer = (offer: Offer, tag: PriceTag): Offer =>
     }),
   })
 
-// NOTE: with both gun slots full, taking a prize replaces the gun in the
-// player's hands: that gun hangs under the TAKE tag, crossed out.
+// NOTE: what taking a prize gives up hangs under the TAKE tag, crossed
+// out: for the Clang Pan the knife, whose slot it takes; for a gun-slot
+// prize with both gun slots full, the gun in the player's hands.
 const CROSS: Sprite = spriteShapes(
   [
     'r.......r',
@@ -361,10 +363,29 @@ const CROSS: Sprite = spriteShapes(
 
 const REPLACED_DROP_PX = 7
 
+// NOTE: the knife lying flat on the plate, dark steel so it reads on the
+// pale plate, for a Clang Pan that would take its slot.
+export const REPLACED_KNIFE: Sprite = spriteShapes(
+  ['....XXXXX..', 'RRRoXXXXXXX', '....XXXX...'],
+  { X: '#5d6672', R: '#a8302a', o: '#140c10' },
+)
+
 const REPLACED_PLATE: Sprite = bakeShapes([
   rect(-7, -6, 14, 12, '#140c10'),
   rect(-6, -5, 12, 10, '#c9c3b0'),
 ])
+
+export const maybeReplacedIcon = (model: Model): Option.Option<Sprite> => {
+  const { door } = model.fridge
+  const isPanOffered =
+    FridgeDoor.isAnyOf(['Offering'])(door) && door.prize === 'Pan'
+  if (isPanOffered) {
+    return hasPan(model.player) ? Option.none() : Option.some(REPLACED_KNIFE)
+  }
+  return Option.map(maybeReplacedGun(model.player.arsenal), gun =>
+    gunIcon(gun.kind, gun.tier),
+  )
+}
 
 const replacedShapes = (
   model: Model,
@@ -372,13 +393,13 @@ const replacedShapes = (
   tag: PriceTag,
 ): ReadonlyArray<Canvas.Shape> =>
   Purchasable.isAnyOf(['Prize'])(offer.target)
-    ? Option.match(maybeReplacedGun(model.player.arsenal), {
+    ? Option.match(maybeReplacedIcon(model), {
         onNone: () => [],
-        onSome: gun => {
+        onSome: icon => {
           const y = offer.spot.y + tag.height + REPLACED_DROP_PX
           return [
             placeAt(offer.spot.x, y, REPLACED_PLATE),
-            placeAt(offer.spot.x, y, gunIcon(gun.kind, gun.tier)),
+            placeAt(offer.spot.x, y, icon),
             placeAt(offer.spot.x, y, CROSS),
           ]
         },

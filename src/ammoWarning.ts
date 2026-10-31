@@ -72,8 +72,8 @@ export const isTickingShot = (
   )
 }
 
-// NOTE: no gun the player carries has anything left to fire, so the knife
-// is the way out.
+// NOTE: no gun the player carries has anything left to fire, so the melee
+// slot (the knife or the Pan) is the way out.
 export const isOutOfGuns = (player: Player): boolean =>
   pipe(
     gunsOf(player.arsenal),

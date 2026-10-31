@@ -8,11 +8,12 @@ import { GameEvent, type Player, ShopState } from './worldSchema'
 import { isGrounded } from './zombies'
 
 // The knife (GAME_DESIGN.md, "The knife and two gun slots"): every player
-// always carries one in a third slot, right of the guns. F or a tap on the
-// slot draws it (src/weapons.ts, drawKnife), and then the trigger stabs on
-// repeat: a quick, weak jab at the one zombie nearest in a short arc in
+// starts a run with one in the melee slot, right of the guns. F or a tap on
+// the slot draws it (src/weapons.ts, drawMelee), and then the trigger stabs
+// on repeat: a quick, weak jab at the one zombie nearest in a short arc in
 // front, with a small shove. It never runs out and never upgrades; the
-// Clang Pan is the only melee upgrade. It strikes through src/melee.ts, as
+// Clang Pan from the fridge is the only melee upgrade, and takes its place
+// in the slot for the rest of the run. It strikes through src/melee.ts, as
 // the Pan does.
 
 type KnifeRules = Readonly<{

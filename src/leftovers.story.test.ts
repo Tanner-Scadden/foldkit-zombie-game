@@ -17,6 +17,7 @@ import {
   FridgeDoor,
   type FridgePrize,
   GameEvent,
+  Melee,
   type Model,
   Phase,
   Purchase,
@@ -96,6 +97,33 @@ describe('pulling from Mystery Leftovers', () => {
                 arsenal: () => holdingSecond(freshGun('Smg')),
               }),
           }),
+          'Cooker',
+        ),
+      ),
+      ...pull,
+      ...ticks(OPEN_TICKS, FRAME_MS),
+      ...pull,
+      model(current => {
+        expect(current.player.arsenal).toEqual(
+          holdingSecond(freshGun('Cooker')),
+        )
+        expect(current.player.melee).toEqual(Melee.Knife())
+        expect(current.wallet.balance).toBe(100 - FRIDGE_RULES.price)
+        expect(isPrizeOffered(current)).toBe(false)
+        expect(FridgeDoor.isAnyOf(['Shut'])(current.fridge.door)).toBe(true)
+      }),
+    )
+  })
+
+  test('take the Pan: it goes in the melee slot in hand, in place of the knife, and both guns stay', () => {
+    const guns = holdingSecond(freshGun('Smg'))
+    story(
+      update,
+      given(
+        fridgeSeededFor(
+          modifyFields(atFridge(100), {
+            player: player => modifyFields(player, { arsenal: () => guns }),
+          }),
           'Pan',
         ),
       ),
@@ -103,9 +131,11 @@ describe('pulling from Mystery Leftovers', () => {
       ...ticks(OPEN_TICKS, FRAME_MS),
       ...pull,
       model(current => {
-        expect(current.player.arsenal).toEqual(holdingSecond(freshGun('Pan')))
-        expect(current.wallet.balance).toBe(100 - FRIDGE_RULES.price)
-        expect(isPrizeOffered(current)).toBe(false)
+        expect(current.player.arsenal).toEqual(guns)
+        expect(current.player.melee).toEqual(
+          Melee.Pan({ pan: freshGun('Pan') }),
+        )
+        expect(current.player.wield).toBe('Melee')
         expect(FridgeDoor.isAnyOf(['Shut'])(current.fridge.door)).toBe(true)
       }),
     )
@@ -487,8 +517,11 @@ describe('the fridge in co-op', () => {
       true,
     )
     const pullerTook = holdFor(offered, 1)
+    const puller = Option.getOrThrow(maybePlayerAt(pullerTook, 1)).player
+    expect(puller.arsenal).toEqual(pistolOnly())
+    expect(puller.melee).toEqual(Melee.Pan({ pan: freshGun('Pan') }))
     expect(
-      Option.getOrThrow(maybePlayerAt(pullerTook, 1)).player.arsenal,
-    ).toEqual(holdingSecond(freshGun('Pan')))
+      Option.getOrThrow(maybePlayerAt(pullerTook, 0)).player.melee,
+    ).toEqual(Melee.Knife())
   })
 })

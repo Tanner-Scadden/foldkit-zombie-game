@@ -10,7 +10,7 @@ import {
   type WeaponStats,
   heldTier,
   heldWeapon,
-  isWieldingKnife,
+  isWieldingMelee,
 } from './weapons'
 
 // NOTE: the sight is a shop upgrade for the run, and it shows for any aim,
@@ -22,9 +22,10 @@ const LASER_COLOR = 'rgba(255, 58, 63, 0.55)'
 const FAN_FILL = 'rgba(255, 58, 63, 0.12)'
 const FAN_EDGE_COLOR = 'rgba(255, 58, 63, 0.35)'
 
-// NOTE: the knife fires nothing, so the sight goes dark while it is out.
+// NOTE: the knife and the Pan fire nothing, so the sight goes dark while
+// the melee slot is in hand.
 const hasSight = (model: Model): boolean =>
-  model.laserSight === 'Fitted' && !isWieldingKnife(model.player)
+  model.laserSight === 'Fitted' && !isWieldingMelee(model.player)
 
 const rangeOf = (stats: WeaponStats): number =>
   (stats.bulletSpeed * stats.bulletLifetimeMs) / MS_PER_SECOND

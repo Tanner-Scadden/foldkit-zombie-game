@@ -49,8 +49,12 @@ import {
 // knife (`wield`), the knife is drawn by a press (a new action code, as is
 // drawing a gun by its slot) and stabs on the fire button, and button bit
 // 4 no longer holds it.
-export const PROTOCOL_VERSION = 11
-export const MIN_PROTOCOL_VERSION = 11
+// Version 12: the Clang Pan takes the knife's place. Each player carries
+// what is in the melee slot (`melee`, the knife or the Pan with its dents
+// and tier), the Pan no longer takes a gun slot, and the action that drew
+// the knife draws the melee slot, whatever is in it.
+export const PROTOCOL_VERSION = 12
+export const MIN_PROTOCOL_VERSION = 12
 
 // NOTE: a round trip as the wire carries it, in whole ms.
 export const MAX_RTT_MS = 60_000

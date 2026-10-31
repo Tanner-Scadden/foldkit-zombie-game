@@ -14,12 +14,13 @@ import {
   PLAYER_RECOIL_SQUASH,
   ZOMBIE_KNOCKBACK_SPEED,
 } from './constants'
-import { GUN_NAMES, gunTierName } from './names'
+import { GUN_NAMES, KNIFE_NAME, gunTierName } from './names'
 import type { SoundEffect } from './soundEffect'
 import {
   Arsenal,
   type CarriedGun,
   type GunSlot,
+  Melee,
   type ParticleKind,
   type Player,
   Reload,
@@ -525,17 +526,24 @@ export const heldSlotOf = (arsenal: Arsenal): GunSlot =>
 export const heldWeapon = (arsenal: Arsenal): WeaponKind =>
   heldGun(arsenal).kind
 
+// NOTE: what the player carries: the guns in slot order, then the Pan in
+// the melee slot, if they have one.
+export const carriedOf = (player: Player): ReadonlyArray<CarriedGun> => [
+  ...gunsOf(player.arsenal),
+  ...Option.toArray(maybePanOf(player)),
+]
+
 export const isCarrying = (player: Player, kind: WeaponKind): boolean =>
-  Array.some(gunsOf(player.arsenal), gun => gun.kind === kind)
+  Array.some(carriedOf(player), gun => gun.kind === kind)
 
 export const maybeCarried = (
   player: Player,
   kind: WeaponKind,
 ): Option.Option<CarriedGun> =>
-  Array.findFirst(gunsOf(player.arsenal), gun => gun.kind === kind)
+  Array.findFirst(carriedOf(player), gun => gun.kind === kind)
 
 export const isHolding = (player: Player, kind: WeaponKind): boolean =>
-  heldWeapon(player.arsenal) === kind
+  inHandOf(player) === kind
 
 export const mapGuns = (
   arsenal: Arsenal,
@@ -609,10 +617,9 @@ export const heldLoaded = (player: Player): number =>
 export const looseRounds = (gun: CarriedGun): number =>
   hasEndlessRounds(gun.kind) ? Infinity : Math.max(0, gun.rounds - gun.loaded)
 
-// NOTE: whether a gun can still fire, now or after a reload. The Pan
-// always swings, dented or not.
+// NOTE: whether a gun can still fire, now or after a reload.
 export const hasRoundsLeft = (gun: CarriedGun): boolean =>
-  hasEndlessRounds(gun.kind) || gun.kind === 'Pan' || gun.rounds > 0
+  hasEndlessRounds(gun.kind) || gun.rounds > 0
 
 export const isReloading = (player: Player): boolean =>
   Reload.isAnyOf(['Reloading'])(player.reload)
@@ -672,26 +679,98 @@ export const spendRound = (player: Player): Player =>
       ),
   })
 
-// THE KNIFE IN HAND
+// THE MELEE SLOT
 
-// NOTE: the knife is the third slot, right of the two guns (GAME_DESIGN.md,
-// "The knife and two gun slots"). The arsenal keeps naming the last gun
-// held, and a reload of that gun carries on while the knife is out, so a
-// player can stab mid-reload and go back to a full magazine. Only changing
-// guns stops a reload.
+// NOTE: the third slot, right of the two guns (GAME_DESIGN.md, "The knife
+// and two gun slots"): the knife, or the Clang Pan once the fridge has
+// given one, which takes the knife's place for the rest of the run. The
+// arsenal keeps naming the last gun held, and a reload of that gun carries
+// on while the melee weapon is out, so a player can stab or swing
+// mid-reload and go back to a full magazine. Only changing guns stops a
+// reload.
+export const isWieldingMelee = (player: Player): boolean =>
+  player.wield === 'Melee'
+
+// NOTE: the Clang Pan in the melee slot, if the fridge has given one.
+export const maybePanOf = (player: Player): Option.Option<CarriedGun> =>
+  Melee.match(player.melee, {
+    Knife: () => Option.none(),
+    Pan: ({ pan }) => Option.some(pan),
+  })
+
+export const hasPan = (player: Player): boolean =>
+  Melee.isAnyOf(['Pan'])(player.melee)
+
 export const isWieldingKnife = (player: Player): boolean =>
-  player.wield === 'Knife'
+  isWieldingMelee(player) && !hasPan(player)
+
+// NOTE: the Pan in hand, for the trigger and the views.
+export const maybeWieldedPan = (player: Player): Option.Option<CarriedGun> =>
+  isWieldingMelee(player) ? maybePanOf(player) : Option.none()
+
+export const mapPan = (
+  player: Player,
+  change: (pan: CarriedGun) => CarriedGun,
+): Player =>
+  Melee.match(player.melee, {
+    Knife: () => player,
+    Pan: ({ pan }) =>
+      modifyFields(player, { melee: () => Melee.Pan({ pan: change(pan) }) }),
+  })
+
+// NOTE: every gun and the Pan, mapped alike: an upgrade, a refill, or
+// Rattles banging the Pan flat finds it in whichever slot it is.
+export const mapCarried = (
+  player: Player,
+  change: (gun: CarriedGun) => CarriedGun,
+): Player =>
+  mapPan(
+    modifyFields(player, { arsenal: arsenal => mapGuns(arsenal, change) }),
+    change,
+  )
+
+// NOTE: the Pan from the fridge goes in the melee slot, in hand, and both
+// guns stay. A second Pan never comes out of the fridge (the weapon a
+// player carries is never pulled again), so a Pan already there only gets
+// banged flat, its upgrades kept.
+export const takePan = (player: Player, fresh: CarriedGun): Player =>
+  modifyFields(player, {
+    melee: () =>
+      Melee.Pan({
+        pan: Option.match(maybePanOf(player), {
+          onNone: () => fresh,
+          onSome: pan =>
+            modifyFields(pan, {
+              loaded: () => magazineOf(pan.kind, pan.tier),
+              rounds: () => magazineOf(pan.kind, pan.tier),
+            }),
+        }),
+      }),
+    wield: () => 'Melee',
+  })
+
+// NOTE: the melee slot's name as a player reads it: the knife, or the Pan
+// with its tier word.
+export const meleeNameOf = (player: Player): string =>
+  Option.match(maybePanOf(player), {
+    onNone: () => KNIFE_NAME,
+    onSome: pan => tierName(pan.kind, pan.tier),
+  })
 
 export type InHand = WeaponKind | 'Knife'
 
-// NOTE: what the player holds: the knife, or the held gun's kind.
-export const inHandOf = (player: Player): InHand =>
-  isWieldingKnife(player) ? 'Knife' : heldWeapon(player.arsenal)
+// NOTE: what the player holds: the knife, the Pan, or the held gun's kind.
+export const inHandOf = (player: Player): InHand => {
+  if (!isWieldingMelee(player)) {
+    return heldWeapon(player.arsenal)
+  }
+  return hasPan(player) ? 'Pan' : 'Knife'
+}
 
-export const drawKnife = (player: Player): Player =>
-  isWieldingKnife(player)
+export const drawMelee = (player: Player): Player =>
+  isWieldingMelee(player)
     ? player
-    : modifyFields(player, { wield: () => 'Knife' })
+    : modifyFields(player, { wield: () => 'Melee' })
 
 // NOTE: the gun in `slot` in hand. A slot with no gun leaves the arsenal
 // as it is, and a gun that changes stops a reload.
@@ -709,21 +788,22 @@ export const drawSlot = (player: Player, slot: GunSlot): Player => {
     : cancelReload(drawn)
 }
 
-// NOTE: Q. With the knife out it goes back to the last gun held; with a
-// gun in hand it switches to the other gun.
+// NOTE: Q. With the melee weapon out it goes back to the last gun held;
+// with a gun in hand it switches to the other gun.
 export const swapInHand = (player: Player): Player =>
-  isWieldingKnife(player)
+  isWieldingMelee(player)
     ? modifyFields(player, { wield: () => 'Gun' })
     : drawSlot(player, heldSlotOf(swapWeapon(player.arsenal)))
 
 // NOTE: a gun that runs dry with nothing left to load hands over to the
-// other gun if that one can still fire. With every gun dry the knife comes
-// out by itself, and Rattles' ammo is what brings a gun back.
+// other gun if that one can still fire. With every gun dry the melee
+// weapon (the knife or the Pan) comes out by itself, and Rattles' ammo is
+// what brings a gun back.
 export const handOverWhenDry = (player: Player): Player => {
   if (Option.exists(maybeOtherGun(player.arsenal), hasRoundsLeft)) {
     return modifyFields(player, { arsenal: swapWeapon })
   } else if (Array.every(gunsOf(player.arsenal), gun => !hasRoundsLeft(gun))) {
-    return drawKnife(player)
+    return drawMelee(player)
   } else {
     return player
   }

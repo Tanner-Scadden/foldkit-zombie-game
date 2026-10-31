@@ -41,10 +41,10 @@ import {
   handOverWhenDry,
   heldGun,
   heldWeapon,
+  isWieldingMelee,
   magazineOf,
-  mapGuns,
-  mapHeld,
-  maybeCarried,
+  mapPan,
+  maybePanOf,
   spendRound,
 } from './weapons'
 import type { World } from './world'
@@ -71,7 +71,9 @@ import { bodyRadiusOf, isGrounded } from './zombies'
 //   bursts where it lands or on the first zombie it meets; more charge
 //   throws it farther with a bigger blast. Held past full it pops in the
 //   player's hands: a shove and a lost lid. Any charge costs one lid.
-// - The Clang Pan swings on repeat while fire is held, a wide arc in front
+// - The Clang Pan sits in the melee slot in place of the knife, drawn as
+//   the knife is (F or a tap on the slot), and swings on repeat while fire
+//   is held, a wide arc in front
 //   with huge knockback, scaled per kind as every knockback is. It dazes
 //   small zombies, which get up Winded so it cannot daze them again at
 //   once, and it swats a thrown Groaner out of the air. Each swing that
@@ -224,12 +226,6 @@ const withEvents = (world: World, events: ReadonlyArray<GameEvent>): World =>
     : modifyFields(world, {
         frameEvents: frameEvents => [...frameEvents, ...events],
       })
-
-const withHeld = (
-  player: Player,
-  change: (gun: CarriedGun) => CarriedGun,
-): Player =>
-  modifyFields(player, { arsenal: arsenal => mapHeld(arsenal, change) })
 
 const runDry = (world: World): World =>
   withEvents(
@@ -652,8 +648,8 @@ const firePan = (world: World, spare: CarriedGun, deltaMs: number): World => {
     player: current =>
       modifyFields(
         swing.connected
-          ? withHeld(current, gun =>
-              modifyFields(gun, {
+          ? mapPan(current, pan =>
+              modifyFields(pan, {
                 loaded: loaded => Math.max(0, loaded - 1),
               }),
             )
@@ -677,7 +673,7 @@ const firePan = (world: World, spare: CarriedGun, deltaMs: number): World => {
 export const flattenPans = (world: World): World =>
   Option.match(
     Option.filter(
-      maybeCarried(world.player, 'Pan'),
+      maybePanOf(world.player),
       pan => pan.loaded < magazineOf('Pan', pan.tier),
     ),
     {
@@ -685,17 +681,12 @@ export const flattenPans = (world: World): World =>
       onSome: () =>
         withEvents(
           withPlayer(world, player =>
-            modifyFields(player, {
-              arsenal: arsenal =>
-                mapGuns(arsenal, gun =>
-                  gun.kind === 'Pan'
-                    ? modifyFields(gun, {
-                        loaded: () => magazineOf('Pan', gun.tier),
-                        rounds: () => magazineOf('Pan', gun.tier),
-                      })
-                    : gun,
-                ),
-            }),
+            mapPan(player, pan =>
+              modifyFields(pan, {
+                loaded: () => magazineOf('Pan', pan.tier),
+                rounds: () => magazineOf('Pan', pan.tier),
+              }),
+            ),
           ),
           [GameEvent.PanFlattened({ x: world.player.x, y: world.player.y })],
         ),
@@ -771,11 +762,16 @@ const fireFreeze = (
 
 // THE TRIGGER
 
-// NOTE: the fridge weapon the player holds, if they hold one.
+// NOTE: the fridge weapon the player holds, if they hold one: the Cooker
+// or Brain Freeze in a gun slot, or the Pan drawn from the melee slot.
 export const maybeHeldFridgeWeapon = (
   player: Player,
 ): Option.Option<CarriedGun> =>
-  Option.liftPredicate(heldGun(player.arsenal), gun => isFridgeWeapon(gun.kind))
+  isWieldingMelee(player)
+    ? maybePanOf(player)
+    : Option.liftPredicate(heldGun(player.arsenal), gun =>
+        isFridgeWeapon(gun.kind),
+      )
 
 // NOTE: one tick of the trigger for a player holding a fridge weapon.
 export const fireFridgeWeapon = (

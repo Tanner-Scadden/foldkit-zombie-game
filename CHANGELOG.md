@@ -5,7 +5,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 ## October 31, 2026: Rattles has notes
 
 - 🧭 New here? Your first breaks walk you through it: a free Plank Pile from Rattles, then a free kitchen and a free fridge roll, with the clock on hold. Confetti included.
-- 🔫 Your gun now yells before it runs dry: the ammo blinks amber, then red, the last shots tick, and Rattles hollers from his stall, where his AMMO window now sells you more mid-wave. Out of everything? Out comes the knife.
+- 🔫 Your gun now yells before it runs dry: the ammo blinks amber, then red, the last shots tick, and Rattles hollers from his stall, where his AMMO window now sells you more mid-wave. Out of everything? Out comes the knife, or the Clang Pan, which now takes the knife's slot so you keep both guns.
 - 💀 Getting munched is a moment now: you topple, the zombies pile on, MUNCHED! slams down, and your run counts up. Go further or splat more than ever for a NEW BEST!
 - 🏆 Winning rains confetti (and a little gore) and crowns the MVP in co-op. Hit SHARE to brag on X.
 - 🎯 Zombie lurking behind your gun slots? Mid-wave, a mouse click there shoots it now instead of swapping guns.

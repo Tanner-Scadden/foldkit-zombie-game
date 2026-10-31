@@ -25,7 +25,7 @@ import { isInteractTaken } from '../purchase'
 import { isAtCounter, verdictFor } from '../shop'
 import { SeatAction } from '../stepWorld'
 import { isRoundActive } from '../waves'
-import { heldSlotOf, isWieldingKnife } from '../weapons'
+import { heldSlotOf, isWieldingMelee } from '../weapons'
 import { pressInRoom } from './coop'
 import { playSounds, toggleAudioFromKey, uiCue, unlockAudio } from './sound'
 import { type UpdateStep, modelStep, unchanged, withInput } from './step'
@@ -65,7 +65,7 @@ const keyAction = (model: Model, code: string): Option.Option<SeatAction> => {
   if (isSwapKey(code)) {
     return Option.some(SeatAction.Swap())
   } else if (isKnifeKey(code)) {
-    return Option.some(SeatAction.Knife())
+    return Option.some(SeatAction.Melee())
   } else if (isReloadKey(code)) {
     return Option.some(SeatAction.Reload())
   } else if (isStartWaveKey(code) && !isInteractTaken(model)) {
@@ -104,7 +104,7 @@ export const keyInRun = (code: string) =>
 // NOTE: a tap on the held gun reloads it; any other tap draws that gun,
 // including from the knife.
 const gunSlotPress = (model: Model, slot: GunSlot): SeatAction =>
-  !isWieldingKnife(model.player) && heldSlotOf(model.player.arsenal) === slot
+  !isWieldingMelee(model.player) && heldSlotOf(model.player.arsenal) === slot
     ? SeatAction.Reload()
     : SeatAction.Draw({ slot })
 
@@ -129,7 +129,7 @@ type RunMessage =
   | typeof Message.ClickedStartWaveButton.Type
   | typeof Message.ClickedSwapButton.Type
   | typeof Message.ClickedGunSlot.Type
-  | typeof Message.ClickedKnifeSlot.Type
+  | typeof Message.ClickedMeleeSlot.Type
   | typeof Message.ClickedReloadButton.Type
   | typeof Message.ClickedPlaceTrapButton.Type
   | typeof Message.ClickedNextTrapButton.Type
@@ -149,7 +149,7 @@ const inRun = (model: Model, message: RunMessage) =>
     ClickedStartWaveButton: () => pressInRun(SeatAction.Ready()),
     ClickedSwapButton: () => pressInRun(SeatAction.Swap()),
     ClickedGunSlot: ({ slot }) => pressInRun(gunSlotPress(model, slot)),
-    ClickedKnifeSlot: () => pressInRun(SeatAction.Knife()),
+    ClickedMeleeSlot: () => pressInRun(SeatAction.Melee()),
     ClickedReloadButton: () => pressInRun(SeatAction.Reload()),
     ClickedPlaceTrapButton: () => pressInRun(SeatAction.PlaceTrap()),
     ClickedNextTrapButton: () => pressInRun(SeatAction.NextTrap()),

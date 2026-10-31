@@ -131,6 +131,7 @@ import {
   heldWeapon,
   isReloading,
   isWieldingKnife,
+  isWieldingMelee,
   spendRound,
 } from './weapons'
 import type { World } from './world'
@@ -453,7 +454,9 @@ const withoutCharge = (model: World): World =>
 
 // NOTE: a fridge weapon fires no bullets, so its trigger is its own
 // (src/fridgeWeapons.ts). The stall and a reload let go of a charge. With
-// the knife in hand the trigger stabs (src/knife.ts) and the gun rests.
+// the knife in hand the trigger stabs (src/knife.ts) and the gun rests;
+// with the Clang Pan drawn from the melee slot it swings, and a reload of
+// the last gun carries on meanwhile.
 const fire = (stocked: World, deltaMs: number): World => {
   const topped = topUp(stocked)
   if (isWieldingKnife(topped.player)) {
@@ -466,7 +469,10 @@ const fire = (stocked: World, deltaMs: number): World => {
   const { player, intent } = model
   const isTriggerHeld = intent.trigger === 'Held'
 
-  if (isShopBrowsing(model) || isReloading(player)) {
+  if (
+    isShopBrowsing(model) ||
+    (isReloading(player) && !isWieldingMelee(player))
+  ) {
     return coolTrigger(withoutCharge(model), deltaMs, false)
   } else if (Option.isSome(maybeFridgeWeapon)) {
     return fireFridgeWeapon(model, maybeFridgeWeapon.value, deltaMs)

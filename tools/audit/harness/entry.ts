@@ -54,6 +54,7 @@ import {
   DifficultyCard,
   FridgeDoor,
   Lesson,
+  Melee,
   type Model,
   MouseButton,
   Oven,
@@ -93,8 +94,8 @@ import { withWorld } from '@game/world'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
 import { Session } from '@munch/netcode'
 
-import { type HarnessConfig, decodeHarnessConfig } from './config'
 import { cardShapes } from './cards'
+import { type HarnessConfig, decodeHarnessConfig } from './config'
 import * as Director from './director'
 import { settle } from './readiness'
 
@@ -364,28 +365,37 @@ const roomModel = (): Model => {
               },
             }),
           }
-        : gun === 'cooker' || gun === 'pan' || gun === 'freeze'
+        : gun === 'pan'
           ? {
               ...p,
-              arsenal: Arsenal.HoldingSecond({
-                first,
-                second: { ...freshGun(FRIDGE_GUNS[gun]), tier: config.tier },
+              arsenal: Arsenal.OneGun({ first }),
+              melee: Melee.Pan({
+                pan: { ...freshGun('Pan'), tier: config.tier },
               }),
+              wield: 'Melee',
             }
-          : gun === 'shotgun'
+          : gun === 'cooker' || gun === 'freeze'
             ? {
                 ...p,
                 arsenal: Arsenal.HoldingSecond({
                   first,
-                  second: {
-                    kind: 'Shotgun',
-                    rounds: shotgunRounds,
-                    loaded: Math.min(6, shotgunRounds),
-                    tier: config.tier,
-                  },
+                  second: { ...freshGun(FRIDGE_GUNS[gun]), tier: config.tier },
                 }),
               }
-            : p,
+            : gun === 'shotgun'
+              ? {
+                  ...p,
+                  arsenal: Arsenal.HoldingSecond({
+                    first,
+                    second: {
+                      kind: 'Shotgun',
+                      rounds: shotgunRounds,
+                      loaded: Math.min(6, shotgunRounds),
+                      tier: config.tier,
+                    },
+                  }),
+                }
+              : p,
   })
   const crowd = config.crowd ?? gasbagRoom
   const toughness = config.tough ? 40 : 1
@@ -1825,15 +1835,27 @@ const sceneOf = (model: Model): HarnessReturn => {
         }),
       }
     : sectioned
+  const panned: HarnessReturn = config.pan
+    ? {
+        ...holding,
+        model: modifyFields(holding.model, {
+          player: player =>
+            modifyFields(player, {
+              melee: () =>
+                Melee.Pan({ pan: { ...freshGun('Pan'), tier: config.tier } }),
+            }),
+        }),
+      }
+    : holding
   const knifed: HarnessReturn =
     config.knife || config.stab
       ? {
-          ...holding,
-          model: modifyFields(holding.model, {
-            player: player => modifyFields(player, { wield: () => 'Knife' }),
+          ...panned,
+          model: modifyFields(panned.model, {
+            player: player => modifyFields(player, { wield: () => 'Melee' }),
           }),
         }
-      : holding
+      : panned
   const held: HarnessReturn = config.stab
     ? {
         ...knifed,

@@ -158,10 +158,20 @@ export const Arsenal = defineTaggedUnion({
 })
 export type Arsenal = typeof Arsenal.Type
 
-// NOTE: what the player has in hand (GAME_DESIGN.md, "The knife and two gun
-// slots"): the arsenal's held gun, or the knife, the third slot. With the
-// knife out the arsenal still names the last gun held, which Q goes back to.
-export const Wield = Schema.Literals(['Gun', 'Knife'])
+// NOTE: the third slot, right of the guns (GAME_DESIGN.md, "The knife and
+// two gun slots"): the knife every run starts with, or the Clang Pan from
+// the Mystery Leftovers fridge, which takes the knife's place for the rest
+// of the run. The Pan's `loaded` is its dent meter, as in src/weapons.ts.
+export const Melee = defineTaggedUnion({
+  Knife: {},
+  Pan: { pan: CarriedGun },
+})
+export type Melee = typeof Melee.Type
+
+// NOTE: what the player has in hand: the arsenal's held gun, or the third
+// slot, the melee weapon. With the melee weapon out the arsenal still names
+// the last gun held, which Q goes back to.
+export const Wield = Schema.Literals(['Gun', 'Melee'])
 export type Wield = typeof Wield.Type
 
 export const Reload = defineTaggedUnion({
@@ -194,6 +204,7 @@ export const Player = Schema.Struct({
   reload: Reload,
   charge: Charge,
   knifeCooldownMs: MillisNumber,
+  melee: Melee,
   wield: Wield,
 })
 export type Player = typeof Player.Type
@@ -1552,6 +1563,7 @@ export const initialPlayer: Player = {
   reload: Reload.Ready(),
   charge: Charge.Idle(),
   knifeCooldownMs: 0,
+  melee: Melee.Knife(),
   wield: 'Gun',
 }
 
