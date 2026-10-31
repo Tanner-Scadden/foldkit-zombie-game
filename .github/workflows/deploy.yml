@@ -113,6 +113,17 @@ jobs:
           done
           echo "$API_URL/api/health answered $body"
           exit 1
+      # NOTE: production also answers at its old workers.dev addresses, on
+      # purpose: saves and installed apps are bound to their origin, so they
+      # must keep serving (see "Two origins" in PLATFORM.md).
+      - name: Check the old addresses still answer
+        if: env.STAGE == 'prod'
+        run: |
+          for url in https://munch-manor.tanner-scadden.workers.dev/ https://munch-manor-api.tanner-scadden.workers.dev/api/health; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' "$url")
+            echo "$url answered $status"
+            test "$status" = "200"
+          done
 
   cleanup:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
