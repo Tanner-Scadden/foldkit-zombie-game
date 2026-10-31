@@ -21,6 +21,11 @@ export const withInput = (model: Model, toNextInput: (input: Input) => Input) =>
 
 export const unchanged: UpdateStep = model => ({ model })
 
+// NOTE: a Step that only changes the Model, from a plain Model function.
+export const modelStep =
+  (change: (model: Model) => Model): UpdateStep =>
+  model => ({ model: change(model) })
+
 // NOTE: the first Step of a Step built from the Model it is given (inside
 // `makeStep`): the Model it made from that one.
 export const toModel =

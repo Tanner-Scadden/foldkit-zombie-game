@@ -4,10 +4,10 @@ import { modifyFields } from 'foldkit/struct'
 
 import { FocusShopItem } from '../commands'
 import { CoopBinding, ShopDialogBinding } from '../composition'
-import { isOnlineRun } from '../coopPlay'
 import { makeStep } from '../definition'
 import { refreshIntent } from '../frame'
 import { releaseAll } from '../input'
+import { isShopDialogOpen } from '../menuState'
 import {
   type Model,
   Phase,
@@ -29,35 +29,32 @@ import {
 } from '../shop'
 import { SeatAction } from '../stepWorld'
 import { showTrapHint } from '../traps'
-import { isRoundActive } from '../waves'
+import { withWorld } from '../world'
+import { isRunOn } from './coopRun'
 import { type SoundCue, playSounds, uiCue } from './sound'
 import {
   type UpdateReturn,
   type UpdateStep,
   combine,
+  modelStep,
   unchanged,
   withInput,
 } from './step'
 
 // DIALOG
 
-const isRunOn = (model: Model): boolean =>
-  isOnlineRun(model) && isRoundActive(model.phase)
-
 const leaveShopModel = (model: Model): Model =>
   isBrowsing(model.shop)
     ? refreshIntent(modifyFields(model, { shop: () => ShopState.Dismissed() }))
     : model
 
-const leaveShopStep: UpdateStep = stepModel => ({
-  model: leaveShopModel(stepModel),
-})
+const leaveCounter = modelStep(leaveShopModel)
 
 // NOTE: a shop dialog that failed to show resets to closed without its
 // Closed fold, so the round's next frame leaves the counter (src/main.ts).
 // While the dialog opens normally it is open by the end of the same Step.
 export const leaveShopWithoutDialog: UpdateStep = stepModel => ({
-  model: stepModel.shopDialog.isOpen ? stepModel : leaveShopModel(stepModel),
+  model: isShopDialogOpen(stepModel) ? stepModel : leaveShopModel(stepModel),
 })
 
 // NOTE: the shop dialog closed. In an online run the room hears LEAVE, so
@@ -65,10 +62,10 @@ export const leaveShopWithoutDialog: UpdateStep = stepModel => ({
 export const leaveShop = makeStep(model =>
   isRunOn(model)
     ? Update.combineSteps([
-        leaveShopStep,
+        leaveCounter,
         CoopBinding.requestPressAction({ action: SeatAction.LeaveCounter() }),
       ])
-    : leaveShopStep,
+    : leaveCounter,
 )
 
 export const selectCategory =
@@ -93,7 +90,7 @@ export const enterShop = makeStep(() =>
 
 export const closeShop = makeStep(model =>
   isBrowsing(model.shop)
-    ? Update.combineSteps([ShopDialogBinding.requestClose(), leaveShopStep])
+    ? Update.combineSteps([ShopDialogBinding.requestClose(), leaveCounter])
     : unchanged,
 )
 
@@ -117,7 +114,10 @@ export const buy = (model: Model, item: ShopItemId): UpdateReturn => {
   return Option.match(purchase(model, item), {
     onNone: () => playSounds([uiCue('Denied')])(refusedChatter(model, item)),
     onSome: world => {
-      const bought = withHint(item, { ...model, ...world })
+      const bought = withHint(
+        item,
+        withWorld(model, () => world),
+      )
       return combine(
         modifyFields(burstCoins(bought, bought.player.x, bought.player.y), {
           shopChatter: () => ShopChatter.Bought({ item }),

@@ -14,6 +14,7 @@ import {
   refreshIntent,
 } from './frame'
 import { stopForHits, thawTick } from './juice'
+import { isShopDialogOpen } from './menuState'
 import { type Model, Phase } from './model'
 import { ageDebutCard, raiseDebutCardFrom } from './onboarding'
 import { isCoop, shopOf } from './party'
@@ -298,7 +299,7 @@ const drawRoom = (frameMs: number, maybeShopBefore: Option.Option<ShopState>) =>
           ...(isEntering(maybeShopBefore, shopNow, isBrowsing)
             ? [enterShop]
             : []),
-          ...(drawn.shopDialog.isOpen && !isBrowsing(shopNow)
+          ...(isShopDialogOpen(drawn) && !isBrowsing(shopNow)
             ? [closeShop]
             : []),
         ])

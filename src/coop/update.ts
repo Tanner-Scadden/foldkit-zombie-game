@@ -2,6 +2,7 @@ import {
   Array,
   Effect,
   Layer,
+  Match,
   Option,
   Result,
   Schema,
@@ -25,6 +26,7 @@ import {
 import { CODE_ALPHABET } from '@munch/sync-engine'
 
 import { actionCodeOf, eventsBetween, heldAction } from '../roomWorld'
+import { stepWhen } from '../stepWhen'
 import type { SeatAction } from '../stepWorld'
 import type { Bullet } from '../worldSchema'
 import { CoopComposition } from './composition'
@@ -383,7 +385,10 @@ const receiveFrame = (
       }),
     }
   } else {
-    return event.reason === 'Kicked' ? leaveFor(model, 'Kicked') : { model }
+    return stepWhen(
+      (_: Model) => event.reason === 'Kicked',
+      current => leaveFor(current, 'Kicked'),
+    )(model)
   }
 }
 
@@ -819,9 +824,11 @@ const inQueue = (
   model: Model,
   toReturn: (queue: Queue) => UpdateReturn,
 ): UpdateReturn =>
-  Screen.isAnyOf(['Queue'])(model.screen)
-    ? toReturn(model.screen.queue)
-    : { model }
+  Screen.matchOrElse(
+    model.screen,
+    { Queue: ({ queue }) => toReturn(queue) },
+    () => ({ model }),
+  )
 
 const submitCode = (model: Model, typed: string): UpdateReturn =>
   Option.match(normalizeRoomCode(typed), {
@@ -835,18 +842,23 @@ const submitCode = (model: Model, typed: string): UpdateReturn =>
   })
 
 const failedRequest = (model: Model, problem: CoopProblem): UpdateReturn =>
-  Screen.isAnyOf(['Asking'])(model.screen)
-    ? RoomRequest.match<UpdateReturn>(model.screen.request, {
-        Create: () => ({ model: hub(model, Option.some(problem)) }),
-        Join: ({ code }) => ({
-          model: withScreen(
-            model,
-            Screen.Code({ typed: code, maybeProblem: Option.some(problem) }),
-          ),
-          commands: [RememberRoom({ maybeCode: Option.none() })],
+  Screen.matchOrElse(
+    model.screen,
+    {
+      Asking: ({ request }) =>
+        RoomRequest.match<UpdateReturn>(request, {
+          Create: () => ({ model: hub(model, Option.some(problem)) }),
+          Join: ({ code }) => ({
+            model: withScreen(
+              model,
+              Screen.Code({ typed: code, maybeProblem: Option.some(problem) }),
+            ),
+            commands: [RememberRoom({ maybeCode: Option.none() })],
+          }),
         }),
-      })
-    : { model }
+    },
+    () => ({ model }),
+  )
 
 const updateMessage = (model: Model, message: Message): UpdateReturn =>
   Message.match<UpdateReturn>(message, {
@@ -884,14 +896,18 @@ const updateMessage = (model: Model, message: Message): UpdateReturn =>
     },
 
     SubmittedCode: () =>
-      Screen.isAnyOf(['Code'])(model.screen)
-        ? submitCode(model, model.screen.typed)
-        : { model },
+      Screen.matchOrElse(
+        model.screen,
+        { Code: ({ typed }) => submitCode(model, typed) },
+        () => ({ model }),
+      ),
 
     SucceededRequestRoom: ({ code, slot }) =>
-      Screen.isAnyOf(['Asking'])(model.screen)
-        ? enterRoom(model, code, slot)
-        : { model },
+      Screen.matchOrElse(
+        model.screen,
+        { Asking: () => enterRoom(model, code, slot) },
+        () => ({ model }),
+      ),
 
     FailedRequestRoom: ({ problem }) => failedRequest(model, problem),
 
@@ -915,9 +931,10 @@ const updateMessage = (model: Model, message: Message): UpdateReturn =>
 
     ReceivedLobbyEvent: ({ event }) =>
       inRoom(model, room =>
-        event._tag === 'Updated'
-          ? lobbyUpdated(model, room, event.lobby)
-          : { model },
+        Match.value(event).pipe(
+          Match.tag('Updated', ({ lobby }) => lobbyUpdated(model, room, lobby)),
+          Match.orElse(() => ({ model })),
+        ),
       ),
 
     ReceivedRoomEvent: ({ event, atMs }) =>

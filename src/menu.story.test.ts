@@ -127,13 +127,16 @@ describe('the bests', () => {
   })
 
   test('leaving a paused run for the menu counts it', () => {
-    const leaving = modifyFields(pause(withKills(fighting, 5, 0)), {
-      panel: () => 'LeaveRun',
-    })
     story(
       update,
-      given(leaving),
+      given(pause(withKills(fighting, 5, 0))),
+      message(Message.PressedKey({ code: 'KeyH' })),
+      showDialog(),
       message(Message.ClickedLeaveRunButton()),
+      Command.resolve(
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
+      ),
       model(({ phase, bests, runTally }) => {
         expect(Phase.guards.Ready(phase)).toBe(true)
         expect(bests.totalKills).toBe(5)
@@ -229,6 +232,31 @@ describe('leaving a run', () => {
         DialogBlock.Message.CompletedCloseDialog(),
       ),
       model(({ panelDialog, phase }) => {
+        expect(panelDialog.isOpen).toBe(false)
+        expect(Phase.guards.Paused(phase)).toBe(true)
+      }),
+    )
+  })
+
+  test('LEAVE tapped as the question fades out after Back keeps the run', () => {
+    story(
+      update,
+      given(pause(fighting)),
+      message(Message.PressedKey({ code: 'KeyH' })),
+      showDialog(),
+      message(
+        toParentMessage(
+          PanelDialogBinding,
+          DialogBlock.Message.RequestedClose(),
+        ),
+      ),
+      message(Message.ClickedLeaveRunButton()),
+      Command.resolve(
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
+      ),
+      model(({ panel, panelDialog, phase }) => {
+        expect(panel).toBe('LeaveRun')
         expect(panelDialog.isOpen).toBe(false)
         expect(Phase.guards.Paused(phase)).toBe(true)
       }),

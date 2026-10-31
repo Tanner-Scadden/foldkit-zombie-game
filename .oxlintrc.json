@@ -71,6 +71,8 @@
     "munch/no-tag-chain": "error",
     "munch/no-extract-tag": "error",
     "munch/no-raw-json": "error",
+    "munch/no-conditional-step": "error",
+    "munch/no-world-spread": "error",
     "typescript/no-unnecessary-condition": "error",
     "typescript/no-misused-spread": "error",
     "typescript/no-unsafe-argument": "error",
@@ -91,6 +93,7 @@
       "files": ["src/**/*.ts"],
       "rules": {
         "no-console": "error",
+        "munch/no-menu-field": "error",
         "no-restricted-properties": [
           "error",
           {
@@ -170,11 +173,12 @@
       }
     },
     {
-      // NOTE: tests may read guards, seed the legacy localStorage save, and
-      // check the view size itself.
+      // NOTE: tests may read guards, seed the legacy localStorage save,
+      // check the view size itself, and look at a dialog's own state.
       "files": ["src/**/*.test.ts", "src/testing.ts", "src/vitest-setup.ts"],
       "rules": {
         "no-restricted-imports": "off",
+        "munch/no-menu-field": "off",
         "no-restricted-properties": [
           "error",
           {
@@ -294,6 +298,12 @@
         "oxc/no-map-spread": "off",
         "oxc/no-accumulating-spread": "off"
       }
+    },
+    {
+      // NOTE: menuState derives which menu is up from these fields, so it is
+      // the one place that reads them (munch/no-menu-field).
+      "files": ["src/menuState.ts"],
+      "rules": { "munch/no-menu-field": "off" }
     },
     // NOTE: the files allowed raw JSON.parse and JSON.stringify, each with
     // its reason. Everything else reads and writes JSON through a Schema.

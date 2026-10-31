@@ -12,6 +12,7 @@ import {
   WriteSave,
 } from '../commands'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from '../home'
+import { isProfileOpenOn } from '../menuState'
 import {
   LOAD_STEPS,
   type LoadStep,
@@ -38,7 +39,7 @@ import type { UpdateReturn, UpdateStep } from './step'
 
 // LOADING
 
-export const finishLoadStep = (model: Model, step: LoadStep): UpdateReturn =>
+export const finishLoading = (model: Model, step: LoadStep): UpdateReturn =>
   Loading.match(model.loading, {
     Loaded: () => ({ model }),
     Loading: ({ pending }) => {
@@ -69,7 +70,7 @@ export const loadSave = (
   model: Model,
   maybeSave: Option.Option<PlayerSave>,
 ): UpdateReturn =>
-  finishLoadStep(
+  finishLoading(
     modifyFields(
       Option.match(maybeSave, {
         onNone: () => model,
@@ -239,11 +240,8 @@ export const submitLinkCode = (model: Model): UpdateReturn =>
 
 // TUTORIAL RESET
 
-const isSettingsOpen = (model: Model): boolean =>
-  model.profileDialog.isOpen && model.profile.tab === 'Settings'
-
 export const askToResetTutorial = (model: Model): UpdateReturn =>
-  isSettingsOpen(model)
+  isProfileOpenOn(model, 'Settings')
     ? {
         model: modifyFields(model, { tutorialReset: () => 'Asking' }),
         commands: [FocusTutorialReset({ id: KEEP_TUTORIAL_BUTTON_ID })],

@@ -228,11 +228,178 @@ const noRawJson = {
   },
 }
 
+// NOTE: the name m in `{ model: m }`, `{ model }`, or `unchanged(m)`: a
+// Step's result that changes nothing. Anything else has no name.
+const bareModelName = node => {
+  if (
+    node.type === 'ObjectExpression' &&
+    node.properties.length === 1 &&
+    node.properties[0].type === 'Property' &&
+    !node.properties[0].computed &&
+    node.properties[0].key.type === 'Identifier' &&
+    node.properties[0].key.name === 'model' &&
+    node.properties[0].value.type === 'Identifier'
+  ) {
+    return node.properties[0].value.name
+  }
+  if (
+    node.type === 'CallExpression' &&
+    node.callee.type === 'Identifier' &&
+    node.callee.name === 'unchanged' &&
+    node.arguments.length === 1 &&
+    node.arguments[0].type === 'Identifier'
+  ) {
+    return node.arguments[0].name
+  }
+  return undefined
+}
+
+// NOTE: whether the name appears in the call's arguments, at any depth:
+// `step(m)`, `leaveFor(m, 'Kicked')`, `playSounds(cues)(keep(m))`.
+const mentions = (node, name) => {
+  if (node === null || typeof node !== 'object') {
+    return false
+  }
+  if (node.type === 'Identifier') {
+    return node.name === name
+  }
+  return Object.entries(node).some(
+    ([key, value]) =>
+      key !== 'parent' &&
+      (Array.isArray(value)
+        ? value.some(child => mentions(child, name))
+        : typeof value === 'object' && mentions(value, name)),
+  )
+}
+
+const isStepCallOn = (node, name) =>
+  name !== undefined &&
+  node.type === 'CallExpression' &&
+  (node.arguments.some(argument => mentions(argument, name)) ||
+    (node.callee.type === 'CallExpression' && isStepCallOn(node.callee, name)))
+
+const noConditionalStep = {
+  meta: {
+    type: 'suggestion',
+    docs: {
+      description:
+        'Run a Step on a condition with stepWhen, not a ternary whose other branch is { model }.',
+    },
+  },
+  create(context) {
+    return {
+      // NOTE: `cond ? step(m) : { model: m }`, either way round.
+      ConditionalExpression(node) {
+        const { consequent, alternate } = node
+        if (
+          isStepCallOn(consequent, bareModelName(alternate)) ||
+          isStepCallOn(alternate, bareModelName(consequent))
+        ) {
+          context.report({
+            node,
+            message:
+              'A Step run on a condition: use stepWhen(isDue, step) from src/stepWhen.ts, or match the union when the condition narrows it (AGENTS.md "Code shape").',
+          })
+        }
+      },
+    }
+  },
+}
+
+// NOTE: a value named as a World: `world`, `nextWorld`, `x.world`.
+const isWorldNamed = node =>
+  (node.type === 'Identifier' && /^world$|World$/.test(node.name)) ||
+  (node.type === 'MemberExpression' &&
+    !node.computed &&
+    node.property.type === 'Identifier' &&
+    /^world$|World$/.test(node.property.name))
+
+const noWorldSpread = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description:
+        'Merge a World into a Model with withWorld, not by spreading it.',
+    },
+  },
+  create(context) {
+    return {
+      // NOTE: `{ ...model, ...world }`: a spread after the first one.
+      ObjectExpression(node) {
+        node.properties.forEach((property, index) => {
+          if (
+            index > 0 &&
+            property.type === 'SpreadElement' &&
+            isWorldNamed(property.argument)
+          ) {
+            context.report({
+              node: property,
+              message:
+                'A World spread over a Model: use withWorld(model, step) from src/world.ts (AGENTS.md "Code shape").',
+            })
+          }
+        })
+      },
+    }
+  },
+}
+
+// NOTE: the Model fields that say which menu is up. menuState in
+// src/menuState.ts reads them; everything else reads menuState. A new
+// dialog Binding joins this list and MenuState together.
+const DIALOG_FIELDS = new Set([
+  'shopDialog',
+  'profileDialog',
+  'panelDialog',
+  'handDialog',
+  'homeScreenSteps',
+  'updateGreeting',
+])
+
+const memberName = node =>
+  node?.type === 'MemberExpression' &&
+  !node.computed &&
+  node.property.type === 'Identifier'
+    ? node.property.name
+    : undefined
+
+const noMenuField = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description:
+        'Read which menu is up from menuState(model), not from the dialog and co-op fields.',
+    },
+  },
+  create(context) {
+    return {
+      // NOTE: `model.profileDialog.isOpen`, `model.coop.screen`.
+      MemberExpression(node) {
+        const name = memberName(node)
+        const owner = memberName(node.object)
+        if (
+          (name === 'isOpen' && DIALOG_FIELDS.has(owner)) ||
+          (name === 'screen' && owner === 'coop')
+        ) {
+          context.report({
+            node,
+            message:
+              'Which menu is up comes from menuState(model) in src/menuState.ts (or isCoopOpen for co-op), so every gate agrees (AGENTS.md "Code shape").',
+          })
+        }
+      },
+    }
+  },
+}
+
 export default {
   meta: { name: 'munch' },
   rules: {
     'no-tag-chain': noTagChain,
     'no-extract-tag': noExtractTag,
     'no-raw-json': noRawJson,
+    'no-conditional-step': noConditionalStep,
+    'no-world-spread': noWorldSpread,
+    'no-menu-field': noMenuField,
   },
 }

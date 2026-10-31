@@ -1,4 +1,3 @@
-import { RESTART_GRACE_MS } from '../constants'
 import { endOffer } from '../home'
 import { releaseAll } from '../input'
 import { type Model, Phase, type RunMode } from '../model'
@@ -8,9 +7,6 @@ import { playStartSoundWhen, unlockAudio } from './sound'
 import { type UpdateReturn, combine, withInput } from './step'
 
 export const isPaused = Phase.isAnyOf(['Paused'])
-
-export const isPastRestartGrace = (model: Model): boolean =>
-  model.screenMs >= RESTART_GRACE_MS
 
 const canStart = (model: Model): boolean =>
   Phase.match(model.phase, {

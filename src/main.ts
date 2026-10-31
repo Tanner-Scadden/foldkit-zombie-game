@@ -34,6 +34,7 @@ import {
   releaseSticks,
 } from './input'
 import { noteMissedKeyDown } from './keyGrab'
+import { isOnHomeMenu } from './menuState'
 import {
   AudioState,
   LOAD_STEPS,
@@ -47,18 +48,10 @@ import {
 import { skipDebutCard } from './onboarding'
 import { LinkFlow } from './playerSync'
 import { forgetTutorial } from './save'
-import { SeatAction } from './stepWorld'
+import { stepWhen } from './stepWhen'
 import { openCoop, tickRoomFrame } from './update/coop'
+import { orInRun } from './update/coopRun'
 import {
-  blurInRun,
-  buyInRun,
-  gunSlotPress,
-  isRunOn,
-  pageVisibilityInRun,
-  pressInRun,
-} from './update/coopRun'
-import {
-  canMoveHomeFocus,
   closeHand,
   closePanel,
   greetUpdate,
@@ -91,6 +84,7 @@ import {
   isDebutCardBlocking,
   isFreshRun,
   isTrapButtonHeld,
+  notePageVisibility,
   orientationOf,
   pauseRound,
   pauseWhenAway,
@@ -121,7 +115,7 @@ import {
   answerTutorialReset,
   askToResetTutorial,
   failWrite,
-  finishLoadStep,
+  finishLoading,
   finishWrite,
   finishWriteWithRun,
   forgetRunWait,
@@ -145,7 +139,7 @@ import {
 import {
   type UpdateReturn,
   combine,
-  toModel,
+  modelStep,
   unchanged,
   withInput,
 } from './update/step'
@@ -196,14 +190,20 @@ const settle = (
 }
 
 export const update = ApplicationComposition.makeUpdate({
-  TickedFrame: (model, { deltaTime }) =>
-    Update.combineSteps(model, [tickFrame(deltaTime), ...afterMessage(model)]),
+  TickedFrame: (model, message) =>
+    Update.combineSteps(model, [
+      makeStep(orInRun(message, tickFrame(message.deltaTime))),
+      ...afterMessage(model),
+    ]),
 
   TickedRoomFrame: (model, { nowMs }) =>
     Update.combineSteps(model, [tickRoomFrame(nowMs), ...afterMessage(model)]),
 
-  PressedKey: (model, { code }) =>
-    Update.combineSteps(model, [pressedKey(code), ...afterMessage(model)]),
+  PressedKey: (model, message) =>
+    Update.combineSteps(model, [
+      makeStep(orInRun(message, pressedKey(message.code))),
+      ...afterMessage(model),
+    ]),
 
   ReleasedKey: (model, { code }) =>
     Update.combineSteps(model, [releasedKey(code), ...afterMessage(model)]),
@@ -213,25 +213,15 @@ export const update = ApplicationComposition.makeUpdate({
 
   MissedKeyDown: model => settle(model, { model: noteMissedKeyDown(model) }),
 
-  BlurredWindow: model =>
+  BlurredWindow: (model, message) =>
     Update.combineSteps(model, [
-      isRunOn(model) ? blurInRun : pauseWhenAway,
+      makeStep(orInRun(message, pauseWhenAway)),
       ...afterMessage(model),
     ]),
 
-  ChangedPageVisibility: (model, { visibility }) =>
+  ChangedPageVisibility: (model, message) =>
     Update.combineSteps(model, [
-      makeStep(stepModel => {
-        if (isRunOn(stepModel)) {
-          return pageVisibilityInRun(visibility)
-        }
-        const noted = modifyFields(stepModel, {
-          pageVisibility: () => visibility,
-        })
-        return visibility === 'Hidden'
-          ? Update.combineSteps([toModel(noted), pauseWhenAway])
-          : () => checkForUpdate(noted)
-      }),
+      makeStep(orInRun(message, notePageVisibility(message.visibility))),
       ...afterMessage(model),
     ]),
 
@@ -335,12 +325,17 @@ export const update = ApplicationComposition.makeUpdate({
 
   ClickedMuteButton: model => settle(model, unlockAudio(toggleSound(model))),
 
-  ClickedPauseButton: model =>
+  ClickedPauseButton: (model, message) =>
     Update.combineSteps(model, [
-      makeStep(stepModel =>
-        !isRunOn(stepModel) && isRoundActive(stepModel.phase)
-          ? Update.combineSteps([unlockAudio, pauseRound])
-          : unchanged,
+      makeStep(
+        orInRun(
+          message,
+          makeStep(stepModel =>
+            isRoundActive(stepModel.phase)
+              ? Update.combineSteps([unlockAudio, pauseRound])
+              : unchanged,
+          ),
+        ),
       ),
       ...afterMessage(model),
     ]),
@@ -380,57 +375,53 @@ export const update = ApplicationComposition.makeUpdate({
 
   ClickedNameDiceButton: model => settle(model, rollNameDice(model)),
 
-  ClickedStartWaveButton: model =>
+  ClickedStartWaveButton: (model, message) =>
     Update.combineSteps(model, [
-      makeStep(stepModel => {
-        if (isRunOn(stepModel)) {
-          return pressInRun(SeatAction.Ready())
-        } else if (isTrapButtonHeld(stepModel)) {
-          return unchanged
-        } else {
-          return Update.combineSteps([startWaveFromButton, unlockAudio])
-        }
-      }),
+      makeStep(
+        orInRun(
+          message,
+          makeStep(stepModel =>
+            isTrapButtonHeld(stepModel)
+              ? unchanged
+              : Update.combineSteps([startWaveFromButton, unlockAudio]),
+          ),
+        ),
+      ),
       ...afterMessage(model),
     ]),
 
   ClickedDebutCardButton: model =>
     settle(
       model,
-      isDebutCardBlocking(model)
-        ? unlockAudio(skipDebutCard(model))
-        : { model },
+      stepWhen(isDebutCardBlocking, stepModel =>
+        unlockAudio(skipDebutCard(stepModel)),
+      )(model),
     ),
 
-  ClickedSwapButton: model =>
+  ClickedSwapButton: (model, message) =>
     Update.combineSteps(model, [
-      makeStep(stepModel =>
-        isRunOn(stepModel) ? pressInRun(SeatAction.Swap()) : swapFromButton,
-      ),
+      makeStep(orInRun(message, swapFromButton)),
       ...afterMessage(model),
     ]),
 
-  ClickedGunSlot: (model, { slot }) =>
+  ClickedGunSlot: (model, message) =>
     Update.combineSteps(model, [
-      makeStep(stepModel =>
-        isRunOn(stepModel)
-          ? pressInRun(gunSlotPress(stepModel, slot))
-          : pressGunSlot(slot),
-      ),
+      makeStep(orInRun(message, pressGunSlot(message.slot))),
       ...afterMessage(model),
     ]),
 
-  ClickedReloadButton: model =>
+  ClickedReloadButton: (model, message) =>
     Update.combineSteps(model, [
-      makeStep(stepModel => {
-        if (isRunOn(stepModel)) {
-          return pressInRun(SeatAction.Reload())
-        } else if (isDebutCardBlocking(stepModel)) {
-          return unchanged
-        } else {
-          return Update.combineSteps([unlockAudio, reloadHeldGun])
-        }
-      }),
+      makeStep(
+        orInRun(
+          message,
+          makeStep(stepModel =>
+            isDebutCardBlocking(stepModel)
+              ? unchanged
+              : Update.combineSteps([unlockAudio, reloadHeldGun]),
+          ),
+        ),
+      ),
       ...afterMessage(model),
     ]),
 
@@ -492,50 +483,52 @@ export const update = ApplicationComposition.makeUpdate({
   CompletedShowInstallPrompt: (model, { outcome }) =>
     settle(model, { model: settleInstallPrompt(model, outcome) }),
 
-  ClickedPlaceTrapButton: model =>
+  ClickedPlaceTrapButton: (model, message) =>
     Update.combineSteps(model, [
-      makeStep(stepModel => {
-        if (isRunOn(stepModel)) {
-          return pressInRun(SeatAction.PlaceTrap())
-        } else if (isTrapButtonHeld(stepModel)) {
-          return unchanged
-        } else {
-          return Update.combineSteps([unlockAudio, placeSelectedTrap])
-        }
-      }),
-      ...afterMessage(model),
-    ]),
-
-  ClickedNextTrapButton: model =>
-    Update.combineSteps(model, [
-      makeStep(stepModel => {
-        if (isRunOn(stepModel)) {
-          return pressInRun(SeatAction.NextTrap())
-        } else if (isTrapButtonHeld(stepModel)) {
-          return unchanged
-        } else {
-          return Update.combineSteps([unlockAudio, nextTrap])
-        }
-      }),
-      ...afterMessage(model),
-    ]),
-
-  ClickedBuyButton: (model, { item }) =>
-    Update.combineSteps(model, [
-      makeStep(stepModel =>
-        isRunOn(stepModel)
-          ? buyInRun(item)
-          : (buyingModel: Model) => buy(buyingModel, item),
+      makeStep(
+        orInRun(
+          message,
+          makeStep(stepModel =>
+            isTrapButtonHeld(stepModel)
+              ? unchanged
+              : Update.combineSteps([unlockAudio, placeSelectedTrap]),
+          ),
+        ),
       ),
       ...afterMessage(model),
     ]),
 
-  PressedBuyKey: (model, { item }) =>
+  ClickedNextTrapButton: (model, message) =>
     Update.combineSteps(model, [
-      makeStep(stepModel =>
-        isRunOn(stepModel)
-          ? buyInRun(item)
-          : (buyingModel: Model) => buy(buyingModel, item),
+      makeStep(
+        orInRun(
+          message,
+          makeStep(stepModel =>
+            isTrapButtonHeld(stepModel)
+              ? unchanged
+              : Update.combineSteps([unlockAudio, nextTrap]),
+          ),
+        ),
+      ),
+      ...afterMessage(model),
+    ]),
+
+  ClickedBuyButton: (model, message) =>
+    Update.combineSteps(model, [
+      makeStep(
+        orInRun(message, (buyingModel: Model) =>
+          buy(buyingModel, message.item),
+        ),
+      ),
+      ...afterMessage(model),
+    ]),
+
+  PressedBuyKey: (model, message) =>
+    Update.combineSteps(model, [
+      makeStep(
+        orInRun(message, (buyingModel: Model) =>
+          buy(buyingModel, message.item),
+        ),
       ),
       ...afterMessage(model),
     ]),
@@ -695,17 +688,17 @@ export const update = ApplicationComposition.makeUpdate({
 
   CompletedFocusEndMenuButton: model => settle(model, { model }),
 
-  CompletedLoadStyles: model => settle(model, finishLoadStep(model, 'Styles')),
+  CompletedLoadStyles: model => settle(model, finishLoading(model, 'Styles')),
 
-  CompletedLoadFonts: model => settle(model, finishLoadStep(model, 'Fonts')),
+  CompletedLoadFonts: model => settle(model, finishLoading(model, 'Fonts')),
 
-  FailedLoadFonts: model => settle(model, finishLoadStep(model, 'Fonts')),
+  FailedLoadFonts: model => settle(model, finishLoading(model, 'Fonts')),
 
   CompletedAwaitFirstFrame: model =>
-    settle(model, finishLoadStep(model, 'FirstFrame')),
+    settle(model, finishLoading(model, 'FirstFrame')),
 
   CompletedDecodeSprites: model =>
-    settle(model, finishLoadStep(model, 'Sprites')),
+    settle(model, finishLoading(model, 'Sprites')),
 
   CompletedShowLoadProgress: model => settle(model, { model }),
 
@@ -843,14 +836,7 @@ export const update = ApplicationComposition.makeUpdate({
   ClickedModeButton: model =>
     settle(
       model,
-      combine(model, [
-        stepModel => ({
-          model: canMoveHomeFocus(stepModel)
-            ? switchMode(stepModel)
-            : stepModel,
-        }),
-        tapSound,
-      ]),
+      combine(model, [stepWhen(isOnHomeMenu, modelStep(switchMode)), tapSound]),
     ),
 
   ClickedWhatsNewButton: model =>
