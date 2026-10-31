@@ -37,6 +37,7 @@ import { forgetTutorial } from './save'
 import { stepWhen } from './stepWhen'
 import { askForRoomLink, openCoop, tickRoomFrame } from './update/coop'
 import { orInRun } from './update/coopRun'
+import { retry, shareFromButton, skipFromPointer } from './update/end'
 import { toggleFullscreen } from './update/fullscreen'
 import {
   closeHand,
@@ -216,7 +217,7 @@ export const update = ApplicationComposition.makeUpdate({
       ? withInput(skipDebutCardWhenUp(started), input =>
           pressPointer(input, started.maybeSurface, press),
         )
-      : refreshIntent(started)
+      : refreshIntent(skipFromPointer(started))
     return settle(
       model,
       combine(pressed, [
@@ -335,6 +336,12 @@ export const update = ApplicationComposition.makeUpdate({
 
   ClickedKeepGoingButton: model =>
     settle(model, startFromButton(model, keepGoingWhenAllowed(model))),
+
+  ClickedRetryButton: model =>
+    settle(model, startFromButton(model, retry(model))),
+
+  ClickedShareButton: model =>
+    settle(model, combine(model, [unlockAudio, shareFromButton])),
 
   ClickedCharacterButton: model =>
     Update.combineSteps(model, [
@@ -662,6 +669,8 @@ export const update = ApplicationComposition.makeUpdate({
 
   CompletedFocusEndMenuButton: model => settle(model, { model }),
 
+  CompletedOpenShare: model => settle(model, { model }),
+
   CompletedLoadStyles: model => settle(model, finishLoading(model, 'Styles')),
 
   CompletedLoadFonts: model => settle(model, finishLoading(model, 'Fonts')),
@@ -709,6 +718,10 @@ export const update = ApplicationComposition.makeUpdate({
   CompletedSendRunSummary: model => settle(model, { model }),
 
   FailedSendRunSummary: model => settle(model, { model }),
+
+  CompletedSendShareEvent: model => settle(model, { model }),
+
+  FailedSendShareEvent: model => settle(model, { model }),
 
   ClickedResetTutorialButton: model => settle(model, askToResetTutorial(model)),
 

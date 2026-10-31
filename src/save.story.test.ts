@@ -44,6 +44,7 @@ import {
   unvisitedHome,
   writeLegacySave,
 } from './save'
+import { noSavedRunRecords } from './playerData'
 import { SURFACE, showDialog, tick } from './testing'
 import { ReadRoomLink } from './update/coop'
 import {
@@ -109,6 +110,12 @@ const learnedSave: PlayerSave = {
   seenPowerUps: ['RapidFire', 'Burp'],
   rotation: 'Landscape',
   name: 'Snackula',
+  records: {
+    Easy: { furthestWave: null, mostKills: null },
+    Normal: { furthestWave: 7, mostKills: 140 },
+    Hard: { furthestWave: 4, mostKills: 66 },
+    Nightmare: { furthestWave: null, mostKills: null },
+  },
 }
 
 // NOTE: the look as saves before version 10 kept it, a Female or Male
@@ -136,7 +143,12 @@ const MIGRATED_LOOK: PlayerSave['appearance'] = {
 
 const versionNineSave = { ...learnedSave, appearance: LEGACY_LOOK }
 
-const migratedSave: PlayerSave = { ...learnedSave, appearance: MIGRATED_LOOK }
+// NOTE: a save from before version 12 has no run records yet.
+const migratedSave: PlayerSave = {
+  ...learnedSave,
+  appearance: MIGRATED_LOOK,
+  records: noSavedRunRecords,
+}
 
 const { name: _name, ...versionEightSave } = versionNineSave
 
@@ -400,7 +412,7 @@ describe('the schema', () => {
         const { appearance: _migrated, ...others } = save
         return others
       }),
-    ).toEqual(Option.some(rest))
+    ).toEqual(Option.some({ ...rest, records: noSavedRunRecords }))
   })
 
   test('a version 9 save with a look no build ever made reads as no save', () => {

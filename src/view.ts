@@ -8,6 +8,7 @@ import {
 } from './composition'
 import { GAME_TITLE } from './constants'
 import { DIFFICULTIES, bestsFor } from './difficulty'
+import { crewOf, isRunCardHeld, mvpOf } from './endBeat'
 import { feedbackSentence } from './home'
 import {
   homeMenuView,
@@ -48,7 +49,6 @@ import {
   accuracyPercent,
   defeatVerdict,
   runTimeLabel,
-  scoreOf,
   totalKills,
   victoryVerdict,
 } from './stats'
@@ -87,7 +87,8 @@ const shopHint = (model: Model): string =>
     ? ' The shop stall in the bottom right corner is open. Walk up to it from any side to browse.'
     : ''
 
-const PLAY_AGAIN = `Press Enter or choose Campaign for ${FINAL_WAVE} waves, or press E or choose Endless to fight until you fall.`
+const PLAY_AGAIN =
+  'Press Enter or choose Retry to play again, or E for an endless run. Press X or choose Share to post your run on X.'
 
 const HOME_MENU =
   'Main menu. Press Enter or choose Play to start. Press E to switch between the campaign and endless, and X to pick the difficulty. Press V or choose Manor for your character, the Munchopedia, what is new, and how to play. Press O or choose the gear for settings. Arrow keys move between the buttons.'
@@ -120,9 +121,26 @@ const waveStatsLabel = (model: Model): string =>
 const nightmareNews = (model: Model): string =>
   model.difficulty.nightmare === 'JustUnlocked' ? ' Nightmare unlocked!' : ''
 
+const recordNews = (model: Model): string =>
+  Array.isReadonlyArrayEmpty(model.runRecords) ? '' : ' A new best!'
+
+const crewLabel = (model: Model): string => {
+  const crew = crewOf(model)
+  return Array.isReadonlyArrayEmpty(crew)
+    ? ''
+    : ` ${Array.join(
+        Array.map(
+          crew,
+          member =>
+            `Player ${member.slot + 1}: ${member.kills} kills${Option.exists(mvpOf(crew), slot => slot === member.slot) ? ', MVP' : ''}.`,
+        ),
+        ' ',
+      )}`
+}
+
 const statsLabel = (model: Model): string => {
   const { stats } = model
-  return `Difficulty: ${DIFFICULTIES[model.difficulty.chosen].name}.${nightmareNews(model)} ${waveStatsLabel(model)} Zombies splatted: ${totalKills(stats)} (${killLabel(stats)}). Run time ${runTimeLabel(stats)}. Accuracy ${accuracyPercent(stats)} percent. Money earned $${model.wallet.earned}. Hearts lost ${stats.heartsLost}. Traps placed ${stats.trapsPlaced}. Score ${scoreOf(stats)}.`
+  return `Difficulty: ${DIFFICULTIES[model.difficulty.chosen].name}.${nightmareNews(model)} ${waveStatsLabel(model)}${recordNews(model)} Zombies splatted: ${totalKills(stats)} (${killLabel(stats)}). Best streak ${model.bestStreak}. Run time ${runTimeLabel(stats)}. Accuracy ${accuracyPercent(stats)} percent. Money earned $${model.wallet.earned}.${crewLabel(model)}`
 }
 
 const debutCardStatus = (model: Model): Option.Option<string> =>
@@ -291,6 +309,7 @@ export const view = ApplicationComposition.makeView((model, h): Document => {
             viewInputs: {
               look: model.appearance,
               isKeyboard: model.lastDevice === 'KeyboardMouse',
+              isRunCardUp: isRunCardHeld(model),
             },
           }),
         ),

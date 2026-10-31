@@ -152,6 +152,32 @@ export const defeatVerdict = (wave: number, stats: RunStats): string => {
   }
 }
 
+// NOTE: Rattles' word on the end card. The wave is on the card already, so
+// the quip never says it.
+const DEFEAT_QUIPS: ReadonlyArray<string> = [
+  'Rattles will miss your money',
+  'Tasted like chicken, they say',
+  'Chewed, not stirred',
+  'Better luck next life',
+  'Dinner is served. You',
+]
+
+export const defeatQuip = (wave: number, stats: RunStats): string => {
+  if (wave <= 1) {
+    return 'Those were the slow ones'
+  } else if (
+    stats.shotsFired > 0 &&
+    accuracyPercent(stats) < POOR_AIM_PERCENT
+  ) {
+    return 'Try hitting them'
+  } else {
+    return (
+      DEFEAT_QUIPS[(wave + totalKills(stats)) % DEFEAT_QUIPS.length] ??
+      'Better luck next life'
+    )
+  }
+}
+
 export const victoryVerdict = (stats: RunStats): string =>
   stats.heartsLost === 0
     ? 'Not a single bite. Show-off'

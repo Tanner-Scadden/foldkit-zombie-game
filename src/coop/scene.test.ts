@@ -45,6 +45,7 @@ import { view as coopView } from './view'
 const view = withViewInputs(coopView, {
   look: defaultAppearance,
   isKeyboard: false,
+  isRunCardUp: false,
 })()
 
 const at = (screen: Screen): Model =>
@@ -393,29 +394,45 @@ describe('the arena', () => {
     )
   })
 
-  test('the run ending shows the trophy', () => {
-    const ended = playing()
+  test('the lobby waits behind the run end card, then crowns the MVP', () => {
+    const back = modifyFields(initialModel, {
+      screen: () =>
+        Screen.InRoom({
+          room: {
+            ...freshRoom(CODE, 0),
+            maybeLobby: Option.some({
+              ...lobbyOf([memberOf(0, 'Ana'), memberOf(1, 'Bo')]),
+              result: Option.some({
+                round: 1,
+                reason: 'GameOver' as const,
+                ticks: 600,
+                scores: [
+                  { playerId: 'player-0', slot: 0, score: 3 },
+                  { playerId: 'player-1', slot: 1, score: 9 },
+                ],
+              }),
+            }),
+          },
+        }),
+    })
+    const heldView = withViewInputs(coopView, {
+      look: defaultAppearance,
+      isKeyboard: false,
+      isRunCardUp: true,
+    })()
+    scene(
+      { update, view: heldView },
+      given(back),
+      expect(selector('#coop-ready')).toBeAbsent(),
+      expect(role('listitem', { name: 'Bo: 9, MVP' })).toBeAbsent(),
+      expect(role('button', { name: /^Leave/ })).toExist(),
+    )
     scene(
       { update, view },
-      given(
-        modifyFields(ended, {
-          screen: () =>
-            Screen.InRoom({
-              room: {
-                ...freshRoom(CODE, 0),
-                maybeLobby: Option.some(
-                  lobbyOf([memberOf(0, 'Ana')], 'Playing'),
-                ),
-                session: {
-                  ...playingSession(world, 0),
-                  phase: { _tag: 'Ended', reason: 'GameOver' },
-                },
-                maybeWorld: Option.some(world),
-              },
-            }),
-        }),
-      ),
-      expect(role('status', { name: 'Run over' })).toExist(),
+      given(back),
+      expect(role('listitem', { name: 'Bo: 9, MVP' })).toExist(),
+      expect(role('listitem', { name: 'Ana: 3' })).toExist(),
+      expect(selector('.coop-result-crown')).toExist(),
     )
   })
 })

@@ -27,14 +27,11 @@ import {
 } from './testing'
 import { asVeteran } from './veteran'
 
-const campaignButton = role('button', {
-  name: 'Campaign: 10 waves, then victory',
+const retryButton = role('button', {
+  name: 'Retry: a new campaign of 10 waves',
 })
 const playButton = role('button', {
   name: 'Play',
-})
-const endlessButton = role('button', {
-  name: 'Endless: waves keep coming until you fall',
 })
 const modeButton = role('button', {
   name: 'Mode: Campaign. Switch to Endless',
@@ -120,8 +117,7 @@ describe('Mode choice', () => {
         ),
       ),
       expect(keepGoingButton).toHaveAttr('aria-keyshortcuts', 'K'),
-      expect(campaignButton).toExist(),
-      expect(endlessButton).toExist(),
+      expect(retryButton).toExist(),
       click(keepGoingButton),
       expect(role('status')).toHaveText(
         `Get ready for endless wave 11. ${START_PROMPT} The shop stall in the bottom right corner is open. Walk up to it from any side to browse.`,

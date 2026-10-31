@@ -174,3 +174,25 @@ export const mateOverheadShapes = (
         ...seatMarkShapes(model),
       ]
     : []
+
+// NOTE: every player, the lead too, as their own seat's Model, for the end
+// card's crew: each wears their own look, as in the world.
+export const seatModelsOf = (
+  model: Model,
+): ReadonlyArray<Readonly<{ slot: PlayerSlot; model: Model }>> => {
+  const lead = leadSeatOf(model).slot
+  const maybeRoom = maybeRoomOf(model.coop)
+  const maybeLobby = Option.flatMap(maybeRoom, room => room.maybeLobby)
+  return Array.map(playersOf(model), ({ slot }) => ({
+    slot,
+    model: modifyFields(
+      withWorld(model, world => focusSeat(world, slot)),
+      {
+        appearance: appearance =>
+          Option.isSome(maybeRoom)
+            ? seatLookOf(appearance, lead, slot, maybeLobby)
+            : appearance,
+      },
+    ),
+  }))
+}

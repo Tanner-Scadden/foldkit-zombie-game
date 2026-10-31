@@ -31,6 +31,7 @@ import {
   emitPressedKey,
   measureSurface,
 } from './testing'
+import { OpenShare } from './update/end'
 import { FocusEndMenuButton } from './update/home'
 import { asVeteran } from './veteran'
 
@@ -43,11 +44,11 @@ const tickPastGrace = () =>
   )
 
 const menuButton = role('button', { name: /^Menu: back/ })
-const campaignButton = role('button', {
-  name: 'Campaign: 10 waves, then victory',
+const retryButton = role('button', {
+  name: 'Retry: a new campaign of 10 waves',
 })
-const endlessButton = role('button', {
-  name: 'Endless: waves keep coming until you fall',
+const shareButton = role('button', {
+  name: 'Share your run on X. Opens in a new tab',
 })
 const keepGoingButton = role('button', {
   name: 'Keep going: carry on into endless from wave 11 with your money, guns, and traps',
@@ -55,7 +56,8 @@ const keepGoingButton = role('button', {
 const updateChip = role('button', { name: 'Update ready: tap to get it' })
 const mainMenu = role('button', { name: /^More:/ })
 const updateNote = selector('.mode-button-gift')
-const endButtons = all.selector('.mode-choice .mode-button')
+const endButtons = all.selector('.end-actions .end-button')
+const menuOnlyButtons = all.selector('.mode-choice .mode-button')
 
 const END_PHASES: ReadonlyArray<readonly [string, Phase]> = [
   ['Game Over', Phase.GameOver({ wave: 4 })],
@@ -72,30 +74,43 @@ const withNewerBuild = (model: Model): Model =>
   modifyFields(model, { maybeNewerBuild: () => Option.some('newer-build') })
 
 describe('the end screens', () => {
-  test('Game Over puts MENU first, then Campaign and Endless', () => {
+  test('Game Over puts HOME first, then RETRY and SHARE', () => {
     scene(
       ROOT,
       given(onEndScreen(Phase.GameOver({ wave: 4 }), RESTART_GRACE_MS)),
       measureSurface,
       expectAll(endButtons).toHaveCount(3),
-      expect(first(endButtons)).toHaveText('MENUBACK HOMEH'),
-      expect(menuButton).toHaveClass('is-primary'),
+      expect(first(endButtons)).toHaveText('HOMEH'),
       expect(menuButton).toHaveAttr('aria-keyshortcuts', 'H'),
-      expect(campaignButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
-      expect(endlessButton).toHaveAttr('aria-keyshortcuts', 'E'),
+      expect(retryButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
+      expect(retryButton).toHaveText('RETRYENTER'),
+      expect(shareButton).toHaveAttr('aria-keyshortcuts', 'X'),
       expect(updateNote).toBeAbsent(),
     )
   })
 
-  test('Victory puts MENU first, then Keep going, Campaign, and Endless', () => {
+  test('Victory puts HOME first, then AGAIN, Keep going, and SHARE', () => {
     scene(
       ROOT,
       given(onEndScreen(Phase.Victory(), RESTART_GRACE_MS)),
       measureSurface,
       expectAll(endButtons).toHaveCount(4),
-      expect(first(endButtons)).toHaveText('MENUBACK HOMEH'),
+      expect(first(endButtons)).toHaveText('HOMEH'),
+      expect(retryButton).toHaveText('AGAINENTER'),
       expect(keepGoingButton).toExist(),
+      expect(shareButton).toExist(),
       expect(updateNote).toBeAbsent(),
+    )
+  })
+
+  test('a tap on SHARE skips the beat and opens X with the run', () => {
+    scene(
+      ROOT,
+      given(onEndScreen(Phase.GameOver({ wave: 4 }), RESTART_GRACE_MS)),
+      measureSurface,
+      click(shareButton),
+      Command.expectHas(OpenShare),
+      Command.resolve(OpenShare, Message.CompletedOpenShare()),
     )
   })
 
@@ -106,14 +121,14 @@ describe('the end screens', () => {
         ROOT,
         given(withNewerBuild(onEndScreen(phase, RESTART_GRACE_MS))),
         measureSurface,
-        expectAll(endButtons).toHaveCount(1),
+        expectAll(menuOnlyButtons).toHaveCount(1),
         expect(menuButton).toHaveAttr('aria-keyshortcuts', 'Enter H'),
         expect(menuButton).toHaveAccessibleName(
           'Menu: back home, where a new version is waiting',
         ),
         expect(updateNote).toExist(),
-        expect(campaignButton).toBeAbsent(),
-        expect(endlessButton).toBeAbsent(),
+        expect(retryButton).toBeAbsent(),
+        expect(shareButton).toBeAbsent(),
         expect(keepGoingButton).toBeAbsent(),
         expect(updateChip).toBeAbsent(),
         click(menuButton),
@@ -124,16 +139,16 @@ describe('the end screens', () => {
   )
 
   test.each(END_PHASES)(
-    '%s waits out the grace, then focuses MENU, and Enter goes home',
+    '%s skips the beat on an early Enter, then focuses MENU, and Enter goes home',
     (_name, phase) => {
       scene(
         ROOT,
         given(withNewerBuild(onEndScreen(phase, 0))),
         measureSurface,
         expect(menuButton).toBeAbsent(),
+        ...tickPastGrace().slice(0, 2),
         emitPressedKey('Enter'),
         expect(mainMenu).toBeAbsent(),
-        ...tickPastGrace(),
         Command.expectExact(FocusEndMenuButton),
         Command.resolve(
           FocusEndMenuButton,
@@ -154,12 +169,7 @@ describe('the end screens', () => {
   test('a new version found on Game Over swaps the choices for MENU', () => {
     const gameOver = onEndScreen(Phase.GameOver({ wave: 4 }), RESTART_GRACE_MS)
     const found = Message.CompletedFetchBuild({ build: 'newer-build' })
-    scene(
-      ROOT,
-      given(gameOver),
-      measureSurface,
-      expect(campaignButton).toExist(),
-    )
+    scene(ROOT, given(gameOver), measureSurface, expect(retryButton).toExist())
     story(
       update,
       storyGiven(gameOver),
@@ -174,7 +184,7 @@ describe('the end screens', () => {
       ROOT,
       given(update(gameOver, found).model),
       measureSurface,
-      expect(campaignButton).toBeAbsent(),
+      expect(retryButton).toBeAbsent(),
       expect(updateNote).toExist(),
     )
   })

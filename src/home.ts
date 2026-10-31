@@ -265,6 +265,8 @@ export const showMunchopediaPage = (
 type EndOffer = 'Nothing' | 'MenuOnly' | 'MenuAndModes'
 
 export const END_MENU_BUTTON_ID = 'end-menu-button'
+export const END_RETRY_BUTTON_ID = 'end-retry-button'
+export const END_SHARE_BUTTON_ID = 'end-share-button'
 
 const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
 

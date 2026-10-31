@@ -6,6 +6,8 @@ import {
   MAX_SUMMARY_BYTES,
   type RunSummary,
   RunSummaryJson,
+  type ShareEvent,
+  ShareEventJson,
   SummaryKills,
 } from '../../src/analytics.ts'
 
@@ -33,6 +35,8 @@ export const bodySize = (body: string): BodySize =>
 // DECODING
 
 export const decodeSummary = Schema.decodeUnknownEffect(RunSummaryJson)
+
+export const decodeShare = Schema.decodeUnknownEffect(ShareEventJson)
 
 // RATE LIMITS
 
@@ -139,4 +143,26 @@ export const rowOf = (summary: RunSummary, nowMs: number): RunRow => ({
   screen_fit: summary.screenFit,
   frame_time: summary.frameTime,
   kills: Schema.encodeSync(KillsJson)(summary.kills),
+})
+
+export type ShareRow = Readonly<{
+  received_at: string
+  received_day: string
+  event_version: number
+  visit_id: string
+  build: string
+  screen: string
+  mode: string
+  difficulty: string
+}>
+
+export const shareRowOf = (event: ShareEvent, nowMs: number): ShareRow => ({
+  received_at: isoOf(nowMs),
+  received_day: utcDay(nowMs),
+  event_version: event.version,
+  visit_id: event.visitId,
+  build: event.build,
+  screen: event.screen,
+  mode: event.mode,
+  difficulty: event.difficulty,
 })

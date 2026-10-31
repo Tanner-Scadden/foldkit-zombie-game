@@ -887,6 +887,22 @@
   font: bold clamp(16px, 4 * var(--coop-unit), 24px) / 1 var(--menu-font);
 }
 
+.coop-result-score {
+  position: relative;
+}
+
+/* NOTE: the MVP's crown sits on their head, a little tipped. */
+.coop-result-crown {
+  position: absolute;
+  top: -12px;
+  left: 2px;
+  width: 18px;
+  height: 14px;
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+  rotate: -12deg;
+}
+
 .coop-result-head {
   height: clamp(24px, 6 * var(--coop-unit), 36px);
 }
@@ -1033,8 +1049,7 @@
   }
 }
 
-.coop-away,
-.coop-ended {
+.coop-away {
   position: absolute;
   inset: 0;
   display: grid;
@@ -1042,17 +1057,12 @@
   background: rgba(8, 6, 12, 0.55);
 }
 
-.coop-away-icon,
-.coop-ended-icon {
+.coop-away-icon {
   width: clamp(48px, 16cqh, 110px);
   aspect-ratio: 1;
   background: center / contain no-repeat;
   image-rendering: pixelated;
   animation: coop-bob 1s ease-in-out infinite;
-}
-
-.coop-ended-icon {
-  animation: coop-stamp 400ms cubic-bezier(0.2, 1.6, 0.4, 1);
 }
 
 /* PICKS: what the room plays next, the host's to change. The mode is a

@@ -25,6 +25,8 @@ import {
   SavedNightmare,
   SavedOnboarding,
   SavedPowerUps,
+  type SavedRunRecord,
+  SavedRunRecords,
   SavedSettings,
   ShakeSetting,
   ShareStatsSetting,
@@ -68,6 +70,7 @@ export const PlayerRow = Schema.Struct({
   cursor: CursorSetting,
   rotation: RotationSetting,
   name: PlayerName,
+  run_records: Schema.fromJsonString(SavedRunRecords),
 })
 export type PlayerRow = typeof PlayerRow.Type
 
@@ -96,6 +99,7 @@ export const PLAYER_COLUMNS = Array.make(
   'cursor',
   'rotation',
   'name',
+  'run_records',
 )
 
 export const rowOfSave = (save: PlayerSave): PlayerRow => ({
@@ -117,6 +121,7 @@ export const rowOfSave = (save: PlayerSave): PlayerRow => ({
   cursor: save.settings.cursor,
   rotation: save.rotation,
   name: save.name,
+  run_records: save.records,
 })
 
 export const killsRowsOfSave = (save: PlayerSave): ReadonlyArray<KillsRow> =>
@@ -155,10 +160,11 @@ const updatePlayer = (
 // before sync. It only seeds an empty scope. On a scope that already has a
 // player (a device that linked to another device's player) it does nothing,
 // so linking never overwrites the player it joined. Version 8 is the save
-// with the simple look (save version 11).
+// with the simple look (save version 11), and 9 the save with the run
+// records (save version 12).
 export const SeededPlayer = defineMutation({
   name: 'SeededPlayer',
-  version: 8,
+  version: 9,
   args: Schema.Struct({ save: PlayerSave }),
   scopes: [PLAYER_SCOPE_KIND],
   writer: 'Owner',
@@ -473,6 +479,60 @@ export const RecordedRun = defineMutation({
     }),
 })
 
+const RecordsRow = Schema.Struct({
+  run_records: Schema.fromJsonString(SavedRunRecords),
+})
+
+const mergeRecord = (
+  kept: SavedRunRecord,
+  reached: SavedRunRecord,
+): SavedRunRecord => ({
+  furthestWave: larger(kept.furthestWave, reached.furthestWave),
+  mostKills: larger(kept.mostKills, reached.mostKills),
+})
+
+export const mergeRunRecords = (
+  kept: SavedRunRecords,
+  reached: SavedRunRecords,
+): SavedRunRecords => ({
+  Easy: mergeRecord(kept.Easy, reached.Easy),
+  Normal: mergeRecord(kept.Normal, reached.Normal),
+  Hard: mergeRecord(kept.Hard, reached.Hard),
+  Nightmare: mergeRecord(kept.Nightmare, reached.Nightmare),
+})
+
+// NOTE: the run records a device reached, merged into the player's as the
+// larger of each, never written over, so two devices that set records
+// offline both keep their best, in whatever order the server gets them.
+export const ReachedRecords = defineMutation({
+  name: 'ReachedRecords',
+  version: 1,
+  args: Schema.Struct({ records: SavedRunRecords }),
+  scopes: [PLAYER_SCOPE_KIND],
+  writer: 'Owner',
+  apply: ({ records }, context) =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient
+      const rows =
+        yield* sql`SELECT run_records FROM ${context.table('player')} WHERE id = 1`
+      const maybeKept = pipe(
+        Array.head(rows),
+        Option.flatMap(Schema.decodeUnknownOption(RecordsRow)),
+        Option.map(row => row.run_records),
+      )
+      if (Option.isNone(maybeKept)) {
+        return
+      }
+      const json = yield* Effect.mapError(
+        Schema.encodeEffect(Schema.fromJsonString(SavedRunRecords))(
+          mergeRunRecords(maybeKept.value, records),
+        ),
+        toRejected,
+      )
+      yield* updatePlayer(context, { run_records: json })
+    }),
+})
+
 // NOTE: written by the server when a device links to this player, so every
 // device can say how many are linked.
 export const LinkedDevices = defineMutation({
@@ -509,6 +569,7 @@ export const PlayerScope = defineScope({
     SawPowerUps,
     ForgotPowerUps,
     RecordedRun,
+    ReachedRecords,
     LinkedDevices,
   ],
   migrations: {
@@ -584,6 +645,15 @@ export const PlayerScope = defineScope({
         const sql = yield* SqlClient.SqlClient
         yield* sql`ALTER TABLE ${sql(table('player'))}
           ADD COLUMN name TEXT NOT NULL DEFAULT ''`
+      }),
+    // NOTE: the run records came after the name. A player from before them
+    // has none, so their first records set without a NEW BEST.
+    '0008_add_run_records': table =>
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient
+        yield* sql`ALTER TABLE ${sql(table('player'))}
+          ADD COLUMN run_records TEXT NOT NULL
+          DEFAULT '{"Easy":{"furthestWave":null,"mostKills":null},"Normal":{"furthestWave":null,"mostKills":null},"Hard":{"furthestWave":null,"mostKills":null},"Nightmare":{"furthestWave":null,"mostKills":null}}'`
       }),
   },
 })

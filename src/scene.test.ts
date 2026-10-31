@@ -48,7 +48,7 @@ import { pause } from './waves'
 import { STARTING_PISTOL, maxRounds } from './weapons'
 
 const PLAY_AGAIN =
-  'Press Enter or choose Campaign for 10 waves, or press E or choose Endless to fight until you fall.'
+  'Press Enter or choose Retry to play again, or E for an endless run. Press X or choose Share to post your run on X.'
 
 const KEEP_GOING =
   'Press K or choose Keep going to carry on into endless from wave 11 with your money, guns, and traps.'
@@ -605,7 +605,7 @@ describe('Run stats', () => {
       }),
     })
   const STATS =
-    'Waves cleared: 3 of 10. Zombies splatted: 69 (41 Groaner, 17 Hotfoot, 9 Kaboomer, 2 Big Lug, 0 Big Leaguer, 0 Ankle Biter). Run time 6:11. Accuracy 43 percent. Money earned $615. Hearts lost 7. Traps placed 3. Score 690.'
+    'Waves cleared: 3 of 10. Zombies splatted: 69 (41 Groaner, 17 Hotfoot, 9 Kaboomer, 2 Big Lug, 0 Big Leaguer, 0 Ankle Biter). Best streak 0. Run time 6:11. Accuracy 43 percent. Money earned $615.'
 
   test('Game Over reads out the verdict and the whole run', () => {
     scene(

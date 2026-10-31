@@ -12,22 +12,26 @@ import * as HttpApiGroup from 'effect/http-api/HttpApiGroup'
 import * as HttpApiSchema from 'effect/http-api/HttpApiSchema'
 import * as HttpRouter from 'effect/http/HttpRouter'
 import * as HttpServer from 'effect/http/HttpServer'
+import type * as HttpServerRequest from 'effect/http/HttpServerRequest'
 import * as SqlClient from 'effect/sql/SqlClient'
 import type * as SqlError from 'effect/sql/SqlError'
 
-import { HEALTH_PATH, RUNS_PATH } from '../../src/analytics.ts'
+import { HEALTH_PATH, RUNS_PATH, SHARES_PATH } from '../../src/analytics.ts'
 import {
   type RateDecision,
   type RunRow,
+  type ShareRow,
   addressHashInput,
   addressRateKey,
   bodySize,
   decideRate,
   declaredSize,
+  decodeShare,
   decodeSummary,
   rateOutcome,
   retentionCutoffDay,
   rowOf,
+  shareRowOf,
   utcDay,
   visitRateKey,
 } from './rules.ts'
@@ -102,6 +106,17 @@ export const Api = HttpApi.make('munch-manor').add(
         ],
       }),
     )
+    .add(
+      HttpApiEndpoint.post('share', SHARES_PATH, {
+        success: HttpApiSchema.Accepted,
+        error: [
+          SummaryTooLarge,
+          SummaryRejected,
+          RateLimited,
+          StoreUnavailable,
+        ],
+      }),
+    )
     .add(HttpApiEndpoint.get('health', HEALTH_PATH, { success: Health })),
 )
 
@@ -119,15 +134,23 @@ const insertRun = (row: RunRow) =>
     yield* sql`INSERT INTO runs ${sql.insert(row)}`
   })
 
-// NOTE: the retention rule: every run row received before the cutoff day
-// goes. `runs_by_day` indexes received_day, so this is one range delete.
-// Answers how many rows went.
+const insertShare = (row: ShareRow) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient
+    yield* sql`INSERT INTO shares ${sql.insert(row)}`
+  })
+
+// NOTE: the retention rule: every run row and share row received before the
+// cutoff day goes. Both tables index received_day, so each is one range
+// delete. Answers how many run rows went.
 export const deleteExpiredRuns = (nowMs: number) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
+    const cutoff = retentionCutoffDay(nowMs)
     const deleted = yield* sql<{
       readonly id: number
-    }>`DELETE FROM runs WHERE received_day < ${retentionCutoffDay(nowMs)} RETURNING id`
+    }>`DELETE FROM runs WHERE received_day < ${cutoff} RETURNING id`
+    yield* sql`DELETE FROM shares WHERE received_day < ${cutoff}`
     return deleted.length
   })
 
@@ -183,33 +206,49 @@ const healthy: Health = { status: 'Ok', database: 'Ok' }
 
 const databaseDown: Health = { status: 'Ok', database: 'Unavailable' }
 
+// NOTE: a run summary and a share event go in the same way: the size cap,
+// the decode, the rate limits by visit and by address, then one row.
+const recordPosted = <A extends { readonly visitId: string }, E>(
+  request: HttpServerRequest.HttpServerRequest,
+  decode: (body: string) => Effect.Effect<A, E>,
+  insert: (
+    posted: A,
+    nowMs: number,
+  ) => Effect.Effect<void, SqlError.SqlError, SqlClient.SqlClient>,
+) =>
+  Effect.gen(function* () {
+    if (declaredSize(request.headers['content-length']) === 'TooLarge') {
+      return yield* SummaryTooLarge.make()
+    }
+    const body = yield* Effect.orElseSucceed(request.text, () => '')
+    if (bodySize(body) === 'TooLarge') {
+      return yield* SummaryTooLarge.make()
+    }
+    const posted = yield* Effect.mapError(decode(body), () =>
+      SummaryRejected.make(),
+    )
+    const address = Option.getOrElse(
+      Option.fromNullishOr(request.headers[CLIENT_ADDRESS_HEADER]),
+      () => UNKNOWN_ADDRESS,
+    )
+    yield* Effect.flatMap(checkRate(posted.visitId, address), failWhenLimited)
+    const nowMs = yield* Clock.currentTimeMillis
+    yield* withDatabase(insert(posted, nowMs)).pipe(
+      Effect.mapError(() => StoreUnavailable.make()),
+    )
+  })
+
 const RunsLive = HttpApiBuilder.group(Api, 'runs', handlers =>
   handlers
     .handleRaw('record', ({ request }) =>
-      Effect.gen(function* () {
-        if (declaredSize(request.headers['content-length']) === 'TooLarge') {
-          return yield* SummaryTooLarge.make()
-        }
-        const body = yield* Effect.orElseSucceed(request.text, () => '')
-        if (bodySize(body) === 'TooLarge') {
-          return yield* SummaryTooLarge.make()
-        }
-        const summary = yield* Effect.mapError(decodeSummary(body), () =>
-          SummaryRejected.make(),
-        )
-        const address = Option.getOrElse(
-          Option.fromNullishOr(request.headers[CLIENT_ADDRESS_HEADER]),
-          () => UNKNOWN_ADDRESS,
-        )
-        yield* Effect.flatMap(
-          checkRate(summary.visitId, address),
-          failWhenLimited,
-        )
-        const nowMs = yield* Clock.currentTimeMillis
-        yield* withDatabase(insertRun(rowOf(summary, nowMs))).pipe(
-          Effect.mapError(() => StoreUnavailable.make()),
-        )
-      }),
+      recordPosted(request, decodeSummary, (summary, nowMs) =>
+        insertRun(rowOf(summary, nowMs)),
+      ),
+    )
+    .handleRaw('share', ({ request }) =>
+      recordPosted(request, decodeShare, (event, nowMs) =>
+        insertShare(shareRowOf(event, nowMs)),
+      ),
     )
     .handle('health', () =>
       withDatabase(checkDatabase).pipe(

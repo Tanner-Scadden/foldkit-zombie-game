@@ -512,7 +512,7 @@ export const lookOfCode = (code: string): Option.Option<Appearance> => {
 
 // SAVED
 
-export const SAVE_VERSION = 11
+export const SAVE_VERSION = 12
 
 export const SavedLesson = Schema.Literals(['Pending', 'Learned'])
 export type SavedLesson = typeof SavedLesson.Type
@@ -597,6 +597,33 @@ export const SavedBests = Schema.Struct({
 })
 export type SavedBests = typeof SavedBests.Type
 
+// NOTE: version 12 added a run's records for each difficulty: the furthest
+// campaign wave reached and the most zombies splatted in one run, for the
+// end card's NEW BEST. A record not set yet is null. Two devices merge them
+// to the larger (src/playerScope.ts).
+export const SavedRunRecord = Schema.Struct({
+  furthestWave: Schema.NullOr(Schema.Number),
+  mostKills: Schema.NullOr(Schema.Number),
+})
+export type SavedRunRecord = typeof SavedRunRecord.Type
+
+export const SavedRunRecords = Schema.Struct({
+  Easy: SavedRunRecord,
+  Normal: SavedRunRecord,
+  Hard: SavedRunRecord,
+  Nightmare: SavedRunRecord,
+})
+export type SavedRunRecords = typeof SavedRunRecords.Type
+
+const noSavedRunRecord: SavedRunRecord = { furthestWave: null, mostKills: null }
+
+export const noSavedRunRecords: SavedRunRecords = {
+  Easy: noSavedRunRecord,
+  Normal: noSavedRunRecord,
+  Hard: noSavedRunRecord,
+  Nightmare: noSavedRunRecord,
+}
+
 // NOTE: version 4 added the home menu: the newest What's New day seen, by
 // its date, and the Munchopedia entries opened, by kind id.
 export const SavedHome = Schema.Struct({
@@ -633,5 +660,6 @@ export const PlayerSave = Schema.Struct({
   seenPowerUps: SavedPowerUps,
   rotation: RotationSetting,
   name: PlayerName,
+  records: SavedRunRecords,
 })
 export type PlayerSave = typeof PlayerSave.Type

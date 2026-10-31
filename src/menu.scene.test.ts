@@ -315,7 +315,8 @@ describe('Home menu', () => {
       ROOT,
       given(
         modifyFields(
-          withBests(home, () => ({
+          withBests(home, current => ({
+            ...current,
             maybeBestEndlessWave: Option.some(12),
             maybeFastestWinMs: Option.some(402_000),
           })),

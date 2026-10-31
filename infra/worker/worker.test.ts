@@ -4,6 +4,7 @@ import * as Context from 'effect/Context'
 import * as Effect from 'effect/Effect'
 import * as Exit from 'effect/Exit'
 import * as Layer from 'effect/Layer'
+import * as Order from 'effect/Order'
 import * as Schema from 'effect/Schema'
 import * as Scope from 'effect/Scope'
 import * as SqlClient from 'effect/sql/SqlClient'
@@ -16,6 +17,8 @@ import {
   MAX_SUMMARY_BYTES,
   type RunSummary,
   RunSummaryJson,
+  type ShareEvent,
+  ShareEventJson,
 } from '../../src/analytics.ts'
 import {
   type RateLimiter,
@@ -65,9 +68,17 @@ const summaryJson = Schema.encodeSync(RunSummaryJson)(summary)
 
 // FAKES
 
-const MIGRATION = Path.resolve(
-  import.meta.dirname,
-  '../migrations/0001_create_runs.sql',
+// NOTE: every D1 migration, in the order D1 applies them.
+const MIGRATIONS_DIR = Path.resolve(import.meta.dirname, '../migrations')
+
+const MIGRATIONS = Array.map(
+  Array.sort(
+    Array.filter(FileSystem.readdirSync(MIGRATIONS_DIR), name =>
+      name.endsWith('.sql'),
+    ),
+    Order.String,
+  ),
+  name => Path.join(MIGRATIONS_DIR, name),
 )
 
 const isComment = (line: string): boolean => line.trim().startsWith('--')
@@ -94,7 +105,9 @@ const memoryDatabase = (): Promise<SqlClient.SqlClient> =>
       )
       const sql = Context.get(context, SqlClient.SqlClient)
       yield* Effect.forEach(
-        migrationStatements(FileSystem.readFileSync(MIGRATION, 'utf8')),
+        Array.flatMap(MIGRATIONS, file =>
+          migrationStatements(FileSystem.readFileSync(file, 'utf8')),
+        ),
         statement => sql.unsafe(statement),
       )
       return sql
@@ -136,9 +149,10 @@ const post = (
   setup: Setup,
   body: string,
   headers: Record<string, string> = {},
+  path = '/api/runs',
 ) =>
   handler(
-    new Request('https://api.test/api/runs', {
+    new Request(`https://api.test${path}`, {
       method: 'POST',
       body,
       headers: { 'content-type': 'text/plain', ...headers },
@@ -266,6 +280,82 @@ describe('POST /api/runs', () => {
   })
 })
 
+const shareEvent: ShareEvent = {
+  version: 1,
+  visitId: summary.visitId,
+  build: summary.build,
+  screen: 'CoopVictory',
+  mode: 'Campaign',
+  difficulty: 'Hard',
+}
+
+const shareJson = Schema.encodeSync(ShareEventJson)(shareEvent)
+
+const postShare = (
+  setup: Setup,
+  body: string,
+  headers: Record<string, string> = {},
+) => post(setup, body, headers, '/api/shares')
+
+const shareCount = async (setup: Setup): Promise<unknown> =>
+  (await query(setup, 'SELECT count(*) AS n FROM shares'))[0]?.['n']
+
+describe('POST /api/shares', () => {
+  test('a share is stored with its screen, mode, and difficulty, and answers 202', async () => {
+    const setup = await setUp()
+    const response = await postShare(setup, shareJson, {
+      'cf-connecting-ip': '203.0.113.7',
+    })
+    expect(response.status).toBe(202)
+    const rows = await query(
+      setup,
+      'SELECT visit_id, screen, mode, difficulty, event_version FROM shares',
+    )
+    expect(rows).toEqual([
+      {
+        visit_id: shareEvent.visitId,
+        screen: 'CoopVictory',
+        mode: 'Campaign',
+        difficulty: 'Hard',
+        event_version: 1,
+      },
+    ])
+    const stored = JSON.stringify(await query(setup, 'SELECT * FROM shares'))
+    expect(stored).not.toContain('203.0.113.7')
+    expect(await rowCount(setup)).toBe(0)
+  })
+
+  test('a broken share answers 400, and a run summary is no share', async () => {
+    const setup = await setUp()
+    expect(
+      (
+        await postShare(
+          setup,
+          JSON.stringify({ ...shareEvent, screen: 'Lobby' }),
+        )
+      ).status,
+    ).toBe(400)
+    expect((await postShare(setup, summaryJson)).status).toBe(400)
+    expect(await shareCount(setup)).toBe(0)
+  })
+
+  test('an oversized share answers 413', async () => {
+    const setup = await setUp()
+    expect(
+      (await postShare(setup, 'x'.repeat(MAX_SUMMARY_BYTES + 1))).status,
+    ).toBe(413)
+    expect(await shareCount(setup)).toBe(0)
+  })
+
+  test('shares count against the same visit limit as runs', async () => {
+    const setup = await setUp(2)
+    expect((await post(setup, summaryJson)).status).toBe(202)
+    expect((await postShare(setup, shareJson)).status).toBe(202)
+    expect((await postShare(setup, shareJson)).status).toBe(429)
+    expect(await shareCount(setup)).toBe(1)
+  })
+})
+
 describe('GET /api/health', () => {
   test('answers Ok with the database checked', async () => {
     const setup = await setUp()
@@ -330,6 +420,30 @@ describe('the 90 day retention', () => {
       { received_day: '2026-07-31' },
       { received_day: '2026-09-29' },
       { received_day: '2026-10-29' },
+    ])
+  })
+
+  test('the cleanup deletes shares older than 90 days too', async () => {
+    const setup = await setUp()
+    const now = Date.UTC(2026, 9, 29, 4, 17)
+    const shareAt = (atMs: number) =>
+      Effect.runPromise(
+        setup.sql.unsafe(
+          `INSERT INTO shares (received_at, received_day, event_version, visit_id, build, screen, mode, difficulty)
+           VALUES ('${new Date(atMs).toISOString()}', '${utcDay(atMs)}', 1, '0123456789abcdef', 'test', 'Death', 'Campaign', 'Normal')`,
+        ),
+      )
+    await shareAt(now - 91 * DAY_MS)
+    await shareAt(now - 30 * DAY_MS)
+    await Effect.runPromise(
+      Effect.provideService(
+        deleteExpiredRuns(now),
+        SqlClient.SqlClient,
+        setup.sql,
+      ),
+    )
+    expect(await query(setup, 'SELECT received_day FROM shares')).toEqual([
+      { received_day: '2026-09-29' },
     ])
   })
 

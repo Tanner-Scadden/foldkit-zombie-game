@@ -3076,3 +3076,149 @@ button.help-card:focus-visible {
 .pause-help .help-cards {
   --pic-px: 0.19em;
 }
+
+/* END BUTTONS
+
+   NOTE: the end card's buttons, icon first: HOME, the big RETRY, KEEP
+   GOING on Victory, and SHARE with X's own logo on X's black. They pop in
+   one after another once the card is up (src/menus.ts). */
+.end-actions {
+  align-items: flex-end;
+}
+
+.end-button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 76px;
+  min-height: var(--menu-tap);
+  padding: 6px 12px;
+  border: 2px solid var(--menu-line-strong);
+  border-radius: var(--menu-radius);
+  background: var(--menu-glass);
+  box-shadow: var(--menu-lift);
+  color: var(--menu-ink);
+  font: bold var(--menu-small-size) var(--menu-font);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  touch-action: manipulation;
+  animation: end-button-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.end-button-icon {
+  width: var(--menu-icon);
+  height: var(--menu-icon);
+  background: no-repeat center / contain;
+  image-rendering: pixelated;
+}
+
+.end-button[data-look='Retry'] {
+  min-width: 140px;
+  min-height: 60px;
+  border-color: var(--menu-green);
+  background: var(--menu-green);
+  color: var(--menu-sunken);
+  font-size: var(--menu-title-size);
+}
+
+.end-button[data-look='Retry'] .end-button-icon {
+  width: 28px;
+  height: 28px;
+  animation: end-retry-spin 2.4s ease-in-out infinite;
+}
+
+.end-button[data-look='KeepGoing'] {
+  border-color: var(--menu-green);
+  color: var(--menu-green);
+}
+
+.end-button[data-look='Share'] {
+  border-color: #ffffff;
+  background: #000000;
+  color: #ffffff;
+}
+
+.end-button[data-look='Share'] .end-button-icon {
+  width: 20px;
+  height: 20px;
+  margin: 2px;
+  image-rendering: auto;
+}
+
+.end-button-key {
+  position: absolute;
+  top: -9px;
+  right: 6px;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  background: var(--menu-sunken);
+  color: var(--menu-gold);
+  font-size: 10px;
+}
+
+@media (hover: hover) {
+  .end-button:hover {
+    translate: 0 -2px;
+  }
+}
+
+.end-button:active {
+  translate: 0 2px;
+  box-shadow: var(--menu-press);
+}
+
+.end-button:focus-visible {
+  outline: var(--menu-focus);
+  outline-offset: 2px;
+}
+
+@keyframes end-button-pop {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes end-retry-spin {
+  0%,
+  70% {
+    rotate: 0deg;
+  }
+
+  100% {
+    rotate: 360deg;
+  }
+}
+
+.game-root[data-layout='Portrait'] .mode-choice.end-actions {
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--menu-gap);
+}
+
+.game-root[data-layout='Portrait'] .end-button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 4px;
+}
+
+.game-root[data-layout='Portrait'] .end-button[data-look='Retry'] {
+  flex: 1.6 1 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .end-button,
+  .end-button[data-look='Retry'] .end-button-icon {
+    animation: none;
+  }
+}

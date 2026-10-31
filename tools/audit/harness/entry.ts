@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, Scope } from 'effect'
+import { Array, Effect, Layer, Option, Scope } from 'effect'
 
 // NOTE: next, so the build's prebuilt sprite atlas is in place before any
 // game module builds a sprite, as in the game's own entry.
@@ -37,6 +37,7 @@ import {
   stagedWorld,
 } from '@game/coop/testing'
 import { withBests } from '@game/difficulty'
+import { noteRecords } from '@game/endBeat'
 import { KITCHEN_EXIT } from '@game/exits'
 import {
   pressHoldButton,
@@ -76,6 +77,7 @@ import {
 } from '@game/model'
 import { raiseDebutCard } from '@game/onboarding'
 import { advanceParticles } from '@game/particles'
+import { creditKills, seatCrew } from '@game/party'
 import { LinkFlow, PlayerScopeStatus, SyncState } from '@game/playerSync'
 import { FLOOR_COLOR } from '@game/room'
 import { startOrResume } from '@game/runFlow'
@@ -91,6 +93,7 @@ import { RUNNING_BUILD } from '@game/version'
 import { view } from '@game/view'
 import { pause, planFor, rollSpawns } from '@game/waves'
 import { STARTING_PISTOL, freshGun, mapGuns } from '@game/weapons'
+import { withWorld } from '@game/world'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
 import { Session } from '@munch/netcode'
 
@@ -409,7 +412,7 @@ const roomModel = (): Model => {
       [30, 90],
       [290, 90],
     ]
-    const zombies = Array.from({ length: crowd }, (_, i) => {
+    const zombies = globalThis.Array.from({ length: crowd }, (_, i) => {
       const kind =
         gasbagRoom > 0 ? 'Exploder' : i < 4 ? 'Tank' : kinds[i % kinds.length]!
       const [sx, sy] = spots[i % spots.length]!
@@ -480,15 +483,17 @@ const roomModel = (): Model => {
       ['Crawler', 2, 50, 118],
     ]
     const zombies = rows.flatMap(([kind, maxHp, left, y], row) =>
-      Array.from({ length: ZOMBIE_KINDS[kind].wear.length + 1 }, (_, stage) =>
-        standing(
-          1000 + row * 10 + stage,
-          kind,
-          left + stage * (kind === 'Tank' ? 30 : 28),
-          y,
-          maxHp,
-          stage,
-        ),
+      globalThis.Array.from(
+        { length: ZOMBIE_KINDS[kind].wear.length + 1 },
+        (_, stage) =>
+          standing(
+            1000 + row * 10 + stage,
+            kind,
+            left + stage * (kind === 'Tank' ? 30 : 28),
+            y,
+            maxHp,
+            stage,
+          ),
       ),
     )
     model = modifyFields(model, {
@@ -516,10 +521,10 @@ const roomModel = (): Model => {
   if (lineup === 'armor') {
     const stages = ZOMBIE_KINDS.Tank.wear.length + 1
     const at = (stage: number) => ({ x: 70 + stage * 50, y: 90 })
-    const fresh = Array.from({ length: stages }, (_, stage) =>
+    const fresh = globalThis.Array.from({ length: stages }, (_, stage) =>
       standing(1000 + stage, 'Tank', at(stage).x, at(stage).y, 36, 0),
     )
-    const worn = Array.from({ length: stages }, (_, stage) =>
+    const worn = globalThis.Array.from({ length: stages }, (_, stage) =>
       standing(1000 + stage, 'Tank', at(stage).x, at(stage).y, 36, stage),
     )
     const before = modifyFields(model, { zombies: () => fresh as any })
@@ -534,7 +539,7 @@ const roomModel = (): Model => {
     )
   }
   if (lineup === 'boss') {
-    const zombies = Array.from({ length: 5 }, (_, stage) =>
+    const zombies = globalThis.Array.from({ length: 5 }, (_, stage) =>
       standing(1100 + stage, 'Boss', 48 + stage * 56, 80, 99, stage),
     )
     model = modifyFields(model, {
@@ -1030,7 +1035,19 @@ const roomModel = (): Model => {
       ],
     })
   }
+  const { party } = config
+  const PARTY_KILLS: ReadonlyArray<number> = [31, 47, 12, 8]
+  if (party !== undefined) {
+    model = withWorld(model, world =>
+      Array.reduce(
+        Array.range(0, party - 1),
+        seatCrew(world, party),
+        (seated, slot) => creditKills(seated, slot, PARTY_KILLS[slot] ?? 0),
+      ),
+    )
+  }
   const phase = config.phase
+  const beforeEnd = model
   if (phase === 'victory') {
     model = modifyFields(model, {
       phase: () => Phase.Victory(),
@@ -1053,7 +1070,9 @@ const roomModel = (): Model => {
       }),
     })
   }
-  return model
+  // NOTE: a staged end screen breaks the records the run would have, so
+  // `best` below the wave shows its NEW BEST.
+  return noteRecords(beforeEnd, model)
 }
 
 // NOTE: co-op staged at one screen, with a fake network that never
@@ -1313,7 +1332,8 @@ const scenarioModelOf = (): Model => {
   }
   if (config.bests) {
     model = modifyFields(
-      withBests(model, () => ({
+      withBests(model, current => ({
+        ...current,
         maybeBestEndlessWave: Option.some(12),
         maybeFastestWinMs: Option.some(402_000),
       })),
@@ -1569,7 +1589,7 @@ const topUpGasbags = (model: Model): Model => {
   if (missing === 0 || model.phase._tag !== 'Wave') {
     return model
   }
-  const fresh = Array.from({ length: missing }, (_, i) => {
+  const fresh = globalThis.Array.from({ length: missing }, (_, i) => {
     const [x, y] = GASBAG_DOORS[(model.nextEntityId + i) % GASBAG_DOORS.length]!
     return {
       id: model.nextEntityId + i,
@@ -1906,7 +1926,7 @@ const nextSceneOf = (model: Model): HarnessReturn => {
 // what every dialog holds, as that Command does, before the next scene.
 const releaseDialogs = Effect.suspend(() =>
   Effect.forEach(
-    Array.from(document.querySelectorAll('dialog[id]')),
+    globalThis.Array.from(document.querySelectorAll('dialog[id]')),
     dialog =>
       Dom.releaseDialogResources(dialog.id).pipe(
         Effect.flatMap(isReleased =>

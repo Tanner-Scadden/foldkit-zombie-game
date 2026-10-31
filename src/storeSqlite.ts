@@ -55,6 +55,7 @@ import {
   PLAYER_COLUMNS,
   PlayerRow,
   PlayerScope,
+  ReachedRecords,
   RecordedRun,
   SawPowerUps,
   SeededPlayer,
@@ -174,6 +175,7 @@ const saveOfRow = (
   seenPowerUps: row.seen_power_ups,
   rotation: row.rotation,
   name: row.name,
+  records: row.run_records,
 })
 
 // LEGACY
@@ -413,6 +415,7 @@ const runChange = (replica: Replica, change: PlayerChange) =>
     ForgotPowerUps: () => replica.run(ForgotPowerUps, {}),
     RecordedRun: ({ runs, totalKills, kills, bests }) =>
       replica.run(RecordedRun, { runs, totalKills, kills, bests }),
+    ReachedRecords: ({ records }) => replica.run(ReachedRecords, { records }),
   })
 
 const sameSyncState = Schema.toEquivalence(SyncState)

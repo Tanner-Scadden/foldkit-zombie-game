@@ -867,9 +867,13 @@ export const DifficultySetting = Schema.Struct({
 })
 export type DifficultySetting = typeof DifficultySetting.Type
 
+// NOTE: the furthest campaign wave and the most kills in one run are the
+// run records, saved apart from the bests (SavedRunRecords).
 export const DifficultyBests = Schema.Struct({
   maybeFastestWinMs: Schema.Option(Schema.Number),
   maybeBestEndlessWave: Schema.Option(Schema.Number),
+  maybeFurthestWave: Schema.Option(Schema.Number),
+  maybeMostKills: Schema.Option(Schema.Number),
 })
 export type DifficultyBests = typeof DifficultyBests.Type
 

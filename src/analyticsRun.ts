@@ -7,6 +7,9 @@ import {
   RUN_SUMMARY_VERSION,
   type RunOutcome,
   type RunSummary,
+  SHARE_EVENT_VERSION,
+  type ShareEvent,
+  type ShareScreen,
   type SummaryScreenFit,
   UNKNOWN_CAUSE,
   WonRun,
@@ -18,6 +21,8 @@ import {
   type RunStats,
   type ScreenFit,
 } from './model'
+import { isCoop } from './party'
+import type { Difficulty } from './playerData'
 import { roundWave } from './waves'
 
 // FRAME TIME
@@ -116,5 +121,37 @@ export const runSummaryOf = (
     device: run.lastDevice,
     screenFit: summaryScreenFit(run.screenFit),
     frameTime: frameTimeBucket(stats),
+  }
+}
+
+// SHARE
+
+const shareScreenOf = (isWon: boolean, isCrew: boolean): ShareScreen => {
+  if (isCrew) {
+    return isWon ? 'CoopVictory' : 'CoopDeath'
+  } else {
+    return isWon ? 'Victory' : 'Death'
+  }
+}
+
+// NOTE: a tap on SHARE as its event: which end screen, a crew's or one
+// player's, and the run's mode and difficulty. `played` is the run's
+// difficulty, the room's in an online co-op run.
+export const shareEventOf = (
+  model: Model,
+  visitId: string,
+  build: string,
+  played: Difficulty,
+): ShareEvent => {
+  return {
+    version: SHARE_EVENT_VERSION,
+    visitId,
+    build,
+    screen: shareScreenOf(
+      Phase.isAnyOf(['Victory'])(model.phase),
+      isCoop(model),
+    ),
+    mode: RunMode.isAnyOf(['Endless'])(model.mode) ? 'Endless' : 'Campaign',
+    difficulty: played,
   }
 }

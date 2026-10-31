@@ -30,6 +30,7 @@ import { type Host, makeHost } from '@munch/sync-engine/in-process'
 import { settle } from '@munch/sync-engine/testing'
 
 import { defaultAppearance } from './model'
+import { noSavedRunRecords } from './playerData'
 import { LinkedDevices, PlayerScope } from './playerScope'
 import { PlayerChange, StoreEvent, changesBetween } from './playerSync'
 import {
@@ -89,6 +90,7 @@ const legacySave: PlayerSave = {
   seenPowerUps: ['RapidFire'],
   rotation: 'Landscape',
   name: 'Lil Gnaw',
+  records: noSavedRunRecords,
 }
 
 interface FakeLegacy {
@@ -798,6 +800,71 @@ describe('two devices syncing one player', () => {
       }),
     ))
 
+  test('run records from two devices merge to the larger of each', () =>
+    runSynced(
+      Effect.gen(function* () {
+        const server = yield* makeServer()
+        const network = yield* server.host.network()
+        const setup = Option.some<SyncSetup>({
+          identityApi: server.api,
+          transports: [network.transport],
+        })
+        const phone = yield* openOn(
+          yield* makeHub(),
+          (yield* makeLegacy(Option.some(legacySave))).legacy,
+          setup,
+        )
+        const laptop = yield* openOn(
+          yield* makeHub(),
+          (yield* makeLegacy(Option.none())).legacy,
+          setup,
+        )
+        yield* phone.load
+        const code = yield* phone.requestLinkCode
+        yield* laptop.redeemLinkCode(code)
+        yield* until(laptop.load, maybeSave =>
+          Option.exists(maybeSave, save => save.appearance.hairColor === 'Red'),
+        )
+
+        const withNormal = (
+          furthestWave: number,
+          mostKills: number,
+        ): PlayerSave => ({
+          ...legacySave,
+          records: {
+            ...noSavedRunRecords,
+            Normal: { furthestWave, mostKills },
+          },
+        })
+        // NOTE: the phone sets the higher records first, then the laptop,
+        // offline all along, writes lower ones it reached. The larger stay.
+        const isHigh = (maybeSave: Option.Option<PlayerSave>) =>
+          Option.exists(
+            maybeSave,
+            save =>
+              save.records.Normal.furthestWave === 7 &&
+              save.records.Normal.mostKills === 95,
+          )
+        yield* write(phone, legacySave, withNormal(7, 95))
+        yield* until(laptop.load, isHigh)
+        // NOTE: the laptop's Easy record marks its write as landed.
+        const stale: PlayerSave = {
+          ...withNormal(4, 40),
+          records: {
+            ...withNormal(4, 40).records,
+            Easy: { furthestWave: 2, mostKills: 2 },
+          },
+        }
+        yield* write(laptop, legacySave, stale)
+        const hasLanded = (maybeSave: Option.Option<PlayerSave>) =>
+          Option.exists(maybeSave, save => save.records.Easy.furthestWave === 2)
+        const onPhone = yield* until(phone.load, hasLanded)
+        const onLaptop = yield* until(laptop.load, hasLanded)
+        expect(isHigh(onPhone)).toBe(true)
+        expect(isHigh(onLaptop)).toBe(true)
+      }),
+    ))
+
   test('a finished run settles once the server confirms it, and the scope is fresh', () =>
     runSynced(
       Effect.gen(function* () {
@@ -965,6 +1032,7 @@ const migratedLiveSave: PlayerSave = {
   seenPowerUps: [],
   rotation: 'Landscape',
   name: '',
+  records: noSavedRunRecords,
 }
 
 const realLegacy: LegacySave = {

@@ -15,6 +15,7 @@ import {
   groundParticleShapes,
   popupShape,
 } from './effectsView'
+import { chompShapes, fallenOf, isChomping, toppleShapes } from './endView'
 import { maybeQuestDoor } from './firstBreakQuest'
 import {
   fridgeDrawables,
@@ -155,6 +156,7 @@ const standingDrawables = (
   zombies: ReadonlyArray<Zombie>,
 ): ReadonlyArray<Drawable> => {
   const drawZombie = zombieShapes(model.player, model.elapsedMs, model.boss)
+  const isChomp = isChomping(model.phase)
   const level = levelOf(model)
   const drawTrap = trapShapes(level, model.elapsedMs)
   return [
@@ -181,17 +183,19 @@ const standingDrawables = (
     ...Array.map(zombies, (zombie): Drawable => ({
       footY: zombieFootY(zombie),
       rank: 'Zombie',
-      shapes: drawZombie(zombie),
+      shapes: isChomp
+        ? chompShapes(model, zombie, drawZombie(zombie))
+        : drawZombie(zombie),
     })),
     ...(isLeadShown(model)
       ? [
           {
             footY: playerFootY(model.player),
             rank: 'Player' as const,
-            shapes: [
+            shapes: toppleShapes(model, [
               ...auraShapes(model.player, model.boosts, model.elapsedMs),
-              ...playerShapes(model),
-            ],
+              ...playerShapes(fallenOf(model)),
+            ]),
           },
         ]
       : []),

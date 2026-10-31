@@ -74,6 +74,12 @@ body {
   overflow: hidden;
 }
 
+/* NOTE: the end of a run zooms and drains this, never the overlay. */
+.world-lens {
+  position: absolute;
+  inset: 0;
+}
+
 .thumb-area {
   position: absolute;
   left: 0;

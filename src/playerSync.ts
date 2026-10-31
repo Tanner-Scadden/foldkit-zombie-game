@@ -13,6 +13,7 @@ import {
   SavedHome,
   SavedOnboarding,
   SavedPowerUps,
+  SavedRunRecords,
   SavedSettings,
 } from './playerData'
 
@@ -44,6 +45,7 @@ export const PlayerChange = defineTaggedUnion({
     kills: Schema.Record(Schema.String, Schema.Number),
     bests: SavedBestsByDifficulty,
   },
+  ReachedRecords: { records: SavedRunRecords },
 })
 export type PlayerChange = typeof PlayerChange.Type
 
@@ -52,6 +54,7 @@ const sameAppearance = Schema.toEquivalence(Appearance)
 const sameOnboarding = Schema.toEquivalence(SavedOnboarding)
 const sameBests = Schema.toEquivalence(SavedBestsByDifficulty)
 const sameHome = Schema.toEquivalence(SavedHome)
+const sameRecords = Schema.toEquivalence(SavedRunRecords)
 
 const killsAdded = (
   before: Readonly<Record<string, number>>,
@@ -148,6 +151,9 @@ export const changesBetween = (
           bests: after.bests.byDifficulty,
         }),
       ),
+      changeWhen(!sameRecords(before.records, after.records), () =>
+        PlayerChange.ReachedRecords({ records: after.records }),
+      ),
     ],
     Array.flatten,
   )
@@ -182,6 +188,8 @@ const refreshed = (change: PlayerChange, save: PlayerSave): PlayerChange =>
     ForgotPowerUps: () => change,
     RecordedRun: run =>
       PlayerChange.RecordedRun({ ...run, bests: save.bests.byDifficulty }),
+    ReachedRecords: () =>
+      PlayerChange.ReachedRecords({ records: save.records }),
   })
 
 // NOTE: a finished run counts each time it is sent, and the power-ups seen

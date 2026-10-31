@@ -164,6 +164,11 @@ export const ProfilePanel = Schema.Struct({
 })
 export type ProfilePanel = typeof ProfilePanel.Type
 
+// NOTE: a record the run that just ended broke, for its NEW BEST: the
+// deepest endless wave, or the fastest win (src/endBeat.ts).
+export const RunRecord = Schema.Literals(['Wave', 'Time', 'Kills'])
+export type RunRecord = typeof RunRecord.Type
+
 export const Model = Schema.Struct({
   ...World.fields,
   difficultyCard: DifficultyCard,
@@ -176,6 +181,7 @@ export const Model = Schema.Struct({
   shake: Shake,
   popups: Schema.Array(Popup),
   streak: Streak,
+  bestStreak: Schema.Number,
   blasts: Schema.Array(Blast),
   callouts: Schema.Array(Callout),
   prizeFlight: PrizeFlight,
@@ -196,6 +202,7 @@ export const Model = Schema.Struct({
   seenPowerUps: Schema.Array(PickupKind),
   hintBand: HintBand,
   screenMs: Schema.Number,
+  runRecords: Schema.Array(RunRecord),
   audio: AudioState,
   soundSetting: SoundSetting,
   musicSetting: MusicSetting,
@@ -290,6 +297,8 @@ export const LOAD_STEPS: ReadonlyArray<LoadStep> = [
 const noDifficultyBests: DifficultyBests = {
   maybeFastestWinMs: Option.none(),
   maybeBestEndlessWave: Option.none(),
+  maybeFurthestWave: Option.none(),
+  maybeMostKills: Option.none(),
 }
 
 export const noBests: PlayerBests = {
@@ -335,6 +344,7 @@ export const initialModel: Model = {
   shake: stillShake,
   popups: [],
   streak: Streak.Cold(),
+  bestStreak: 0,
   blasts: [],
   traps: [],
   pickups: [],
@@ -372,6 +382,7 @@ export const initialModel: Model = {
   hintBand: 'Top',
   stats: freshStats,
   screenMs: 0,
+  runRecords: [],
   audio: AudioState.Locked(),
   soundSetting: 'On',
   musicSetting: 'On',

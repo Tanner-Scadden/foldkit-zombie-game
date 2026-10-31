@@ -126,6 +126,9 @@ export const HarnessConfig = Schema.Struct({
   mode: Choice(['endless', 'campaign']),
   start: Choice(['wave']),
   phase: Choice(['victory', 'paused', 'gameover']),
+  // NOTE: `party` seats a crew of that many players around the player, each
+  // with kills of their own, as the end card's crew and MVP show them.
+  party: MaybeNum,
   elapsed: Num(0),
   prep: Num(20000),
   break: Choice(['open']),
