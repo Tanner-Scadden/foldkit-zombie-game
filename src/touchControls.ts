@@ -7,7 +7,7 @@ import { STICK_RADIUS_PX } from './constants'
 import { KNIFE_SLOT_INDEX, gunClusterBox, gunSlotBox, secondsLeft } from './hud'
 import { NEXT_TRAP_ICON, RELOAD_ICON, TRAP_BUTTON_ICONS } from './icons'
 import { thumbOffset } from './input'
-import { Message } from './message'
+import { Message, type PressedHudSlot } from './message'
 import {
   BreakClock,
   type GunSlot,
@@ -117,6 +117,32 @@ const heldSlot = (model: Model): GunSlot => heldSlotOf(model.player.arsenal)
 
 const SLOT_INDEX: Readonly<Record<GunSlot, number>> = { First: 0, Second: 1 }
 
+const PRIMARY_MOUSE_BUTTON = 0
+
+// NOTE: every press on a slot, by its pointer's type, before its click. A
+// mouse press mid-wave is a shot at the world beneath and its click passes
+// through (isSlotPressAShot in src/update/play.ts); a touch keeps the tap.
+const toPressedHudSlot = (
+  pointerType: string,
+  button: number,
+  _screenX: number,
+  _screenY: number,
+  _timeStamp: number,
+  clientX: number,
+  clientY: number,
+  pointerId: number,
+): Option.Option<PressedHudSlot> =>
+  pointerType === 'mouse' && button !== PRIMARY_MOUSE_BUTTON
+    ? Option.none()
+    : Option.some(
+        Message.PressedHudSlot({
+          pointerId,
+          device: pointerType === 'mouse' ? 'Mouse' : 'Touch',
+          clientX,
+          clientY,
+        }),
+      )
+
 // NOTE: the key that reaches a gun slot: R reloads the held gun, Q swaps
 // to the other; with the knife out, Q goes back to the last gun held.
 const gunSlotKey = (model: Model, slot: GunSlot): Option.Option<string> => {
@@ -162,6 +188,7 @@ const gunSlotButtonView = (
       }),
       ...(isHeld && !canReload(model.player) ? [h.AriaDisabled(true)] : []),
       h.Style(slotSpan(screen, SLOT_INDEX[slot])),
+      h.OnPointerDown(toPressedHudSlot),
       h.OnClick(Message.ClickedGunSlot({ slot }), {
         focusSelector: '.game-surface',
       }),
@@ -197,6 +224,7 @@ const knifeSlotButtonView = (
       h.AriaKeyshortcuts('F'),
       ...(isHeld ? [h.AriaDisabled(true)] : []),
       h.Style(slotSpan(screen, KNIFE_SLOT_INDEX)),
+      h.OnPointerDown(toPressedHudSlot),
       h.OnClick(Message.ClickedKnifeSlot(), {
         focusSelector: '.game-surface',
       }),
@@ -211,7 +239,15 @@ const gunSlotsView = (
   h: ApplicationViewBuilder,
 ): Html =>
   h.div(
-    [h.Class('gun-slots'), h.Role('group'), h.AriaLabel('Your guns')],
+    [
+      h.Class('gun-slots'),
+      h.Role('group'),
+      h.AriaLabel('Your guns'),
+      h.DataAttribute(
+        'click',
+        Phase.isAnyOf(['Wave'])(model.phase) ? 'World' : 'Slot',
+      ),
+    ],
     [
       ...Array.map(slotGuns(model), gun =>
         gunSlotButtonView(model, screen, gun, h),

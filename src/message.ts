@@ -43,6 +43,12 @@ export const Message = defineMessageUnion({
     clientX: Schema.Number,
     clientY: Schema.Number,
   },
+  PressedHudSlot: {
+    pointerId: Schema.Number,
+    device: PointerDevice,
+    clientX: Schema.Number,
+    clientY: Schema.Number,
+  },
   MovedPointer: {
     pointerId: Schema.Number,
     clientX: Schema.Number,
@@ -213,3 +219,4 @@ export type CancelledPointer = typeof Message.CancelledPointer.Type
 export type ReleasedEveryTouch = typeof Message.ReleasedEveryTouch.Type
 export type MeasuredGameSurface = typeof Message.MeasuredGameSurface.Type
 export type PressedPointer = typeof Message.PressedPointer.Type
+export type PressedHudSlot = typeof Message.PressedHudSlot.Type

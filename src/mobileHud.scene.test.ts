@@ -7,6 +7,7 @@ import {
   expectAll,
   given,
   inside,
+  pointerDown,
   role,
   scene,
   selector,
@@ -228,6 +229,35 @@ describe('the gun cluster', () => {
       click(role('button', { name: `Switch to the ${SMG_NAME}` })),
       expect(smgSlot).toHaveAttr('data-held', 'true'),
       expect(knifeSlot).toHaveAttr('data-held', 'false'),
+    )
+  })
+
+  test('mid-wave a mouse click on a slot shoots through it, and a tap still draws', () => {
+    const slots = selector('.gun-slots')
+    const onMouse = modifyFields(fightingWith(20), {
+      lastDevice: () => 'KeyboardMouse',
+    })
+    scene(
+      ROOT,
+      given(onMouse),
+      measureSurface,
+      expect(slots).toHaveAttr('data-click', 'World'),
+      pointerDown(knifeSlot, { pointerType: 'mouse', pointerId: 1 }),
+      click(knifeSlot),
+      expect(knifeSlot).toHaveAttr('data-held', 'false'),
+      expect(smgSlot).toHaveAttr('data-held', 'true'),
+      pointerDown(knifeSlot, { pointerType: 'touch', pointerId: 7 }),
+      click(knifeSlot),
+      expect(knifeSlot).toHaveAttr('data-held', 'true'),
+    )
+    scene(
+      ROOT,
+      given(modifyFields(breakWithTraps, { player: () => withSmg(20) })),
+      measureSurface,
+      expect(slots).toHaveAttr('data-click', 'Slot'),
+      pointerDown(knifeSlot, { pointerType: 'mouse', pointerId: 1 }),
+      click(knifeSlot),
+      expect(knifeSlot).toHaveAttr('data-held', 'true'),
     )
   })
 })

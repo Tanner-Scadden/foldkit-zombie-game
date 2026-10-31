@@ -9,6 +9,7 @@ import { endQuest } from './firstBreakQuest'
 import { refreshIntent } from './frame'
 import { runModeOf, switchMode } from './home'
 import {
+  type PointerPress,
   moveMouse,
   movePointer,
   pressHoldButton,
@@ -22,10 +23,12 @@ import { skipKitchenTour } from './kitchenTour'
 import { isOnHomeMenu } from './menuState'
 import {
   AudioState,
+  type InputDevice,
   LOAD_STEPS,
   Loading,
   Model,
   MunchopediaPage,
+  type PointerDevice,
   RunMode,
   cosmeticSeedOf,
   initialModel,
@@ -69,6 +72,8 @@ import {
   asAllowedPress,
   isDebutCardBlocking,
   isFreshRun,
+  isSlotClickPassingThrough,
+  isSlotPressAShot,
   isTrapButtonHeld,
   notePageVisibility,
   orientationOf,
@@ -86,6 +91,7 @@ import {
   tapSound,
   tickFrame,
   useDevice,
+  withSlotClick,
 } from './update/play'
 import {
   leaveNameInput,
@@ -167,6 +173,31 @@ const settle = (
   }
 }
 
+const deviceOf = (device: PointerDevice): InputDevice =>
+  device === 'Touch' ? 'Touch' : 'KeyboardMouse'
+
+const pressedPointer = (model: Model, pointer: PointerPress): UpdateReturn => {
+  const press = asAllowedPress(model, pointer)
+  const started = resumeFromPointer(useDevice(model, deviceOf(press.device)))
+  const pressed = isRoundActive(model.phase)
+    ? withInput(skipDebutCardWhenUp(started), input =>
+        pressPointer(input, started.maybeSurface, press),
+      )
+    : refreshIntent(skipFromPointer(started))
+  return settle(
+    model,
+    combine(pressed, [
+      unlockAudio,
+      playStartSoundWhen(startsRun(model, pressed)),
+    ]),
+  )
+}
+
+// NOTE: the click after a mouse's shot through a slot (PressedHudSlot) is
+// spent, and the next click on a slot acts again.
+const passSlotClick = (model: Model): UpdateReturn =>
+  settle(model, { model: withSlotClick(model, 'Acts') })
+
 export const update = ApplicationComposition.makeUpdate({
   TickedFrame: (model, message) =>
     Update.combineSteps(model, [
@@ -203,29 +234,17 @@ export const update = ApplicationComposition.makeUpdate({
       ...afterMessage(model),
     ]),
 
-  PressedPointer: (model, { pointerId, device, clientX, clientY }) => {
-    const press = asAllowedPress(model, {
-      pointerId,
-      device,
-      clientX,
-      clientY,
-    })
-    const started = resumeFromPointer(
-      useDevice(model, press.device === 'Touch' ? 'Touch' : 'KeyboardMouse'),
-    )
-    const pressed = isRoundActive(model.phase)
-      ? withInput(skipDebutCardWhenUp(started), input =>
-          pressPointer(input, started.maybeSurface, press),
-        )
-      : refreshIntent(skipFromPointer(started))
-    return settle(
-      model,
-      combine(pressed, [
-        unlockAudio,
-        playStartSoundWhen(startsRun(model, pressed)),
-      ]),
-    )
-  },
+  PressedPointer: (model, press) => pressedPointer(model, press),
+
+  PressedHudSlot: (model, press) =>
+    isSlotPressAShot(model, press.device)
+      ? pressedPointer(withSlotClick(model, 'PassesThrough'), press)
+      : settle(model, {
+          model: withSlotClick(
+            useDevice(model, deviceOf(press.device)),
+            'Acts',
+          ),
+        }),
 
   MovedPointer: (model, { pointerId, clientX, clientY }) =>
     settle(model, {
@@ -379,16 +398,20 @@ export const update = ApplicationComposition.makeUpdate({
     ]),
 
   ClickedGunSlot: (model, message) =>
-    Update.combineSteps(model, [
-      makeStep(orInRun(message, pressGunSlot(message.slot))),
-      ...afterMessage(model),
-    ]),
+    isSlotClickPassingThrough(model)
+      ? passSlotClick(model)
+      : Update.combineSteps(model, [
+          makeStep(orInRun(message, pressGunSlot(message.slot))),
+          ...afterMessage(model),
+        ]),
 
   ClickedKnifeSlot: (model, message) =>
-    Update.combineSteps(model, [
-      makeStep(orInRun(message, pressKnifeSlot)),
-      ...afterMessage(model),
-    ]),
+    isSlotClickPassingThrough(model)
+      ? passSlotClick(model)
+      : Update.combineSteps(model, [
+          makeStep(orInRun(message, pressKnifeSlot)),
+          ...afterMessage(model),
+        ]),
 
   ClickedReloadButton: (model, message) =>
     Update.combineSteps(model, [

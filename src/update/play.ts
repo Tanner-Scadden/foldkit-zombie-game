@@ -29,7 +29,9 @@ import {
   type Orientation,
   type PageVisibility,
   Phase,
+  type PointerDevice,
   RunMode,
+  type SlotClick,
 } from '../model'
 import {
   ageDebutCard,
@@ -468,6 +470,21 @@ export const pressGunSlot =
       return swapFromButton(model)
     }
   }
+
+// NOTE: a press on a HUD gun or knife slot. With a mouse mid-wave it is a
+// shot at the world beneath, like a click anywhere else, so a zombie behind
+// the slots still gets shot; keyboard players swap with Q, F, and R. A
+// touch, or a mouse in a break, leaves the slot's click to act.
+export const isSlotPressAShot = (
+  model: Model,
+  device: PointerDevice,
+): boolean => device === 'Mouse' && Phase.isAnyOf(['Wave'])(model.phase)
+
+export const withSlotClick = (model: Model, slotClick: SlotClick): Model =>
+  withInput(model, input => modifyFields(input, { slotClick: () => slotClick }))
+
+export const isSlotClickPassingThrough = (model: Model): boolean =>
+  model.input.slotClick === 'PassesThrough'
 
 // NOTE: a tap on the knife slot draws the knife; on the knife in hand it
 // does nothing.
