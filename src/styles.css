@@ -950,6 +950,13 @@ body {
   }
 }
 
+.quest-held {
+  width: 22px;
+  height: 14px;
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+}
+
 .quest-steps {
   display: flex;
   gap: 6px;

@@ -62,6 +62,9 @@ export const FIRST_PREPARATION_MS = 6000
 export const PREPARATION_MS = 20000
 // NOTE: the break before this wave waits for START WAVE. Later ones are timed.
 export const OPEN_BREAK_WAVE = 2
+// NOTE: the break before this wave is the first where the kitchen's boards
+// are for sale (src/exits.ts) and the guided tutorial's kitchen tour runs.
+export const KITCHEN_FIRST_WAVE = 3
 export const SPAWN_JITTER_MS = 400
 export const STRAGGLER_JITTER_MS = 1500
 export const DOOR_SPAWN_SPREAD_PX = 5

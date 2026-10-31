@@ -56,7 +56,6 @@ import {
   type Decal,
   type DecalKind,
   DifficultyCard,
-  FirstBreakQuest,
   FridgeDoor,
   Lesson,
   type Model,
@@ -67,6 +66,7 @@ import {
   type ProfileTab,
   RunMode,
   Stick,
+  Tour,
   Trap,
   TrapHint,
   type WeaponKind,
@@ -1286,12 +1286,13 @@ const scenarioModelOf = (): Model => {
   }
   const quest = config.quest
   if (quest !== undefined) {
-    model = modifyFields(model, {
-      firstBreakQuest: () =>
-        quest === 'done'
-          ? FirstBreakQuest.Done({ ageMs: 0 })
-          : FirstBreakQuest.Running(),
-    })
+    model =
+      quest === 'kitchendone'
+        ? modifyFields(model, { kitchenTour: () => Tour.Done({ ageMs: 0 }) })
+        : modifyFields(model, {
+            firstBreakQuest: () =>
+              quest === 'done' ? Tour.Done({ ageMs: 0 }) : Tour.Running(),
+          })
   }
   const newer = config.newer
   if (newer !== undefined) {

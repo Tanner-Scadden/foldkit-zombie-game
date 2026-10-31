@@ -93,10 +93,14 @@ describe('the first break waits', () => {
     )
   })
 
-  test('the break before wave 3 counts down, with the heads-up shown once', () => {
+  test('the break before wave 3 counts down once the fridge is tried, with the heads-up shown once', () => {
     story(
       update,
-      given(clearingWave(2)),
+      given(
+        modifyFields(clearingWave(2), {
+          fridge: fridge => modifyFields(fridge, { pulls: () => 1 }),
+        }),
+      ),
       tick(TICK_MS),
       model(current => {
         expect(breakClock(current)).toEqual(Option.some(BreakClock.Counting()))

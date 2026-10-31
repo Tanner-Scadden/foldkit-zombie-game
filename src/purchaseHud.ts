@@ -17,6 +17,10 @@ import {
   shortfallFor,
 } from './purchase'
 
+// NOTE: the kitchen tour's free boards and pull are read as free.
+const priceWords = (price: number): string =>
+  price === 0 ? 'free' : `${price} dollars`
+
 // The HTML half of buying in the world (src/purchase.ts): on touch, a hold
 // button beside the guns while the player stands at a purchasable, in the
 // right thumb's reach, and for a screen reader a polite line with the name
@@ -37,7 +41,7 @@ const badgeOf = (offer: Offer): string =>
 const labelOf = (offer: Offer): string =>
   Purchasable.isAnyOf(['Prize'])(offer.target)
     ? 'Hold to take the prize from the fridge'
-    : `Hold to open ${nameOf(offer.target)} for ${offer.price} dollars`
+    : `Hold to open ${nameOf(offer.target)} for ${priceWords(offer.price)}`
 
 // NOTE: what the player is at: the offer in reach, or the one they still
 // hold or were refused at a moment ago.
@@ -147,8 +151,8 @@ const announcementOf = (model: Model, offer: Offer): string => {
       ? 'Stand still or hold the button to buy.'
       : 'Stand still or hold Enter to buy.'
   return shortBy > 0
-    ? `${nameOf(offer.target)}, ${offer.price} dollars. ${shortBy} dollars short.`
-    : `${nameOf(offer.target)}, ${offer.price} dollars. ${how}`
+    ? `${nameOf(offer.target)}, ${priceWords(offer.price)}. ${shortBy} dollars short.`
+    : `${nameOf(offer.target)}, ${priceWords(offer.price)}. ${how}`
 }
 
 // NOTE: spoken once as the player reaches a purchasable, and again when

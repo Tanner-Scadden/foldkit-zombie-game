@@ -95,6 +95,7 @@ import {
   isWalking,
   scaledHp,
 } from './zombies'
+import { isKitchenTourOn } from './tutorialRules'
 
 export const waveBonus = (wave: number): number =>
   WAVE_BONUS_BASE + WAVE_BONUS_PER_WAVE * wave
@@ -1847,7 +1848,8 @@ export const advanceRound = (model: World, worldMs: number): World =>
           : countDownBreak(model, preparation, worldMs)
       }
       return ShopState.isAnyOf(['Browsing'])(model.shop) ||
-        isPracticeGateHeld(model)
+        isPracticeGateHeld(model) ||
+        isKitchenTourOn(model)
         ? model
         : countDownBreak(model, preparation, worldMs)
     },

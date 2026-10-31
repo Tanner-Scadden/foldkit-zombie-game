@@ -6,6 +6,7 @@ import { bootCommands } from './boot'
 import { ApplicationComposition } from './composition'
 import { makeStep } from './definition'
 import { endQuest } from './firstBreakQuest'
+import { skipKitchenTour } from './kitchenTour'
 import { refreshIntent } from './frame'
 import { runModeOf, switchMode } from './home'
 import {
@@ -614,6 +615,9 @@ export const update = ApplicationComposition.makeUpdate({
     settle(model, unlockAudio(showHelpLine(model, card))),
 
   ClickedSkipQuestButton: model => settle(model, unlockAudio(endQuest(model))),
+
+  ClickedSkipKitchenTourButton: model =>
+    settle(model, unlockAudio(skipKitchenTour(model))),
 
   ClickedSettingsButton: model =>
     Update.combineSteps(model, [

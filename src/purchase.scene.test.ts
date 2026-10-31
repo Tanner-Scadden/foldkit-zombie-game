@@ -25,13 +25,18 @@ import {
   initialModel,
 } from './model'
 import { PURCHASE_RULES } from './purchase'
-import { ROOT, SCENE_SUBSCRIPTIONS, measureSurface } from './testing'
+import {
+  ROOT,
+  SCENE_SUBSCRIPTIONS,
+  measureSurface,
+  pastTimedBreaks,
+} from './testing'
 import { asVeteran } from './veteran'
 
 const HOLD_TICKS = Math.ceil(PURCHASE_RULES.holdMs / FIXED_STEP_MS) + 1
 
 const atBoards = (device: InputDevice, balance: number): Model =>
-  modifyFields(asVeteran(initialModel), {
+  modifyFields(pastTimedBreaks(asVeteran(initialModel)), {
     lastDevice: () => device,
     phase: () =>
       Phase.Preparation({

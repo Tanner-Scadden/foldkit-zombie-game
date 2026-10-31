@@ -25,7 +25,14 @@ import {
 } from './model'
 import { PURCHASE_RULES, holdProgress } from './purchase'
 import { freshRun } from './runReset'
-import { press, release, tick, ticks, zombieOf } from './testing'
+import {
+  pastTimedBreaks,
+  press,
+  release,
+  tick,
+  ticks,
+  zombieOf,
+} from './testing'
 import { asVeteran } from './veteran'
 import {
   JOIN_LEAD_MS,
@@ -49,7 +56,7 @@ const DISTANT_SPAWN: PlannedSpawn = {
   formation: 'Squad',
 }
 
-const base: Model = freshRunModel()
+const base: Model = pastTimedBreaks(freshRunModel())
 
 function freshRunModel(): Model {
   const veteran = asVeteran(initialModel)

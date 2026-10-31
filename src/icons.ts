@@ -914,3 +914,82 @@ export const QUEST_PLACE_ICON = pixelIconUrl(
   ],
   QUEST_PALETTE,
 )
+
+// NOTE: the kitchen tour's tracker: the break clock held (an hourglass with
+// a pause mark), the kitchen's boards, the fridge, and its prize to take.
+const TOUR_ICON_PALETTE: Palette = {
+  o: SHADE,
+  w: LIGHT,
+  y: '#ffe066',
+  Y: '#c9a227',
+  f: '#6b4426',
+  d: '#21140c',
+  P: '#c98a4a',
+  L: '#8a5a2b',
+  k: '#d6cfa4',
+  G: '#9be36a',
+  g: '#4e6a2a',
+  m: '#b8c0cc',
+  M: '#5d6672',
+}
+
+export const TOUR_PAUSED_ICON = pixelIconUrl(
+  [
+    'ooooooo....',
+    '.oyyyo.....',
+    '..oyo..w.w.',
+    '...o...w.w.',
+    '..o.o..w.w.',
+    '.oyyyo.....',
+    'ooooooo....',
+  ],
+  TOUR_ICON_PALETTE,
+)
+
+export const TOUR_BOARDS_ICON = pixelIconUrl(
+  [
+    'fffffffffff',
+    'fdddddddddf',
+    'oooooooooo.',
+    'oPPPLPPPPPo',
+    'oooooooooo.',
+    'fdddddddddf',
+    '.oooooooooo',
+    'oPPPPPLPPPo',
+    '.oooooooooo',
+    'fdddddddddf',
+  ],
+  TOUR_ICON_PALETTE,
+)
+
+export const TOUR_FRIDGE_ICON = pixelIconUrl(
+  [
+    '.oooooooo.',
+    'okkkkkkkko',
+    'okkkkkkoko',
+    'oooooooooo',
+    'okkkkoGGGo',
+    'okkkkoGgGo',
+    'okkokoGGGo',
+    'okkokogGgo',
+    'okkkkoGGGo',
+    'oooooooooo',
+  ],
+  TOUR_ICON_PALETTE,
+)
+
+export const TOUR_PRIZE_ICON = pixelIconUrl(
+  [
+    '...yyy.....',
+    '..y...y....',
+    '......y....',
+    '.....y.....',
+    '....y......',
+    '...........',
+    '....y......',
+    '..mmmmmmmm.',
+    'mmmmmmmmmmm',
+    'm..M.......',
+  ],
+  TOUR_ICON_PALETTE,
+)

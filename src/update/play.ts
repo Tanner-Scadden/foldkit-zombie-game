@@ -20,6 +20,7 @@ import {
   releaseAll,
   releaseKey,
 } from '../input'
+import { advanceKitchenTour } from '../kitchenTour'
 import {
   type GunSlot,
   type InputDevice,
@@ -285,15 +286,18 @@ export const tickFrame = (deltaTime: number) =>
       return toModel(ageDebutCard(model, clampFrameDelta(deltaTime)))
     } else if (isRoundActive(model.phase)) {
       const framed = moveHintBand(
-        advanceQuest(
-          noteAmmoTip(
-            learnFromFrame(
-              model,
-              tallyFrame(
+        advanceKitchenTour(
+          advanceQuest(
+            noteAmmoTip(
+              learnFromFrame(
                 model,
-                advanceGame(model, deltaTime),
-                clampFrameDelta(deltaTime),
+                tallyFrame(
+                  model,
+                  advanceGame(model, deltaTime),
+                  clampFrameDelta(deltaTime),
+                ),
               ),
+              clampFrameDelta(deltaTime),
             ),
             clampFrameDelta(deltaTime),
           ),

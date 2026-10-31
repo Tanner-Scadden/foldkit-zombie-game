@@ -29,6 +29,7 @@ import {
   Purchasable,
   type WeaponKind,
 } from './worldSchema'
+import { isKitchenTourOn } from './tutorialRules'
 
 // Mystery Leftovers (GAME_DESIGN.md): a grimy fridge against the kitchen's
 // back wall. Once the kitchen is open it is for sale any time the round
@@ -118,6 +119,16 @@ export const prizeWeights = (
     return [prize, isCarried(player, prize) ? 0 : lucky] as const
   })
 
+// NOTE: the kitchen tour's free pull shows off a weapon, never a gag: the
+// same draw from the fridge's own stream, against the weapons' weights alone,
+// so it never shifts the waves or the drops.
+export const weaponsOnly = (
+  weights: ReadonlyArray<readonly [FridgePrize, number]>,
+): ReadonlyArray<readonly [FridgePrize, number]> =>
+  Array.map(weights, ([prize, weight]) =>
+    [prize, isFridgePrizeWeapon(prize) ? weight : 0] as const,
+  )
+
 // NOTE: a roll from 0 to 1 against the weights, in their order.
 export const pickPrize = (
   weights: ReadonlyArray<readonly [FridgePrize, number]>,
@@ -190,6 +201,10 @@ const isOfferedTo = (world: World): boolean =>
   FridgeDoor.isAnyOf(['Offering'])(world.fridge.door) &&
   world.fridge.door.slot === leadSeatOf(world).slot
 
+// NOTE: the kitchen tour's pull is free (src/tutorialRules.ts).
+export const fridgePriceFor = (world: World): number =>
+  isKitchenTourOn(world) ? 0 : FRIDGE_RULES.price
+
 export const fridgeOffers = (world: World): ReadonlyArray<Offer> =>
   Option.match(fridgeBoxOf(levelOf(world)), {
     onNone: () => [],
@@ -198,7 +213,7 @@ export const fridgeOffers = (world: World): ReadonlyArray<Offer> =>
         ? [
             {
               target: Purchasable.Fridge(),
-              price: FRIDGE_RULES.price,
+              price: fridgePriceFor(world),
               box,
               reachPx: FRIDGE_RULES.reachPx,
               spot: fridgeSpot(box),
@@ -255,21 +270,25 @@ const givePrize = (world: World, prize: FridgePrize): World =>
 
 // NOTE: the pull: the price is paid, the prize drawn from the fridge's own
 // stream and given to the seat that held, and the door swings open.
-export const pullFridge = (world: World): Option.Option<World> => {
-  if (!isFridgeForSale(world) || world.wallet.balance < FRIDGE_RULES.price) {
+export const pullFridge = (
+  world: World,
+  price: number,
+): Option.Option<World> => {
+  if (!isFridgeForSale(world) || world.wallet.balance < price) {
     return Option.none()
   }
   return Option.map(fridgeBoxOf(levelOf(world)), box => {
     const draw = nextRandom(world.loot.fridgeRngState)
+    const weights = prizeWeights(world.fridge, world.player)
     const prize = pickPrize(
-      prizeWeights(world.fridge, world.player),
+      isKitchenTourOn(world) ? weaponsOnly(weights) : weights,
       draw.value,
     )
     const spot = fridgeSpot(box)
     const paid = modifyFields(world, {
       wallet: wallet =>
         modifyFields(wallet, {
-          balance: balance => balance - FRIDGE_RULES.price,
+          balance: balance => balance - price,
         }),
       stats: stats =>
         modifyFields(stats, { purchases: purchases => purchases + 1 }),

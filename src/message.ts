@@ -127,6 +127,7 @@ export const Message = defineMessageUnion({
   FocusedHelpCard: { card: HelpCard },
   ClickedHelpCard: { card: HelpCard },
   ClickedSkipQuestButton: {},
+  ClickedSkipKitchenTourButton: {},
   ClickedSettingsButton: {},
   ClickedMenuButton: {},
   ClickedLeaveRunButton: {},

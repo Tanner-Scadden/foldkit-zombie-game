@@ -3,13 +3,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
 import { PREPARATION_MS } from './constants'
-import {
-  BreakClock,
-  FirstBreakQuest,
-  type Model,
-  Phase,
-  initialModel,
-} from './model'
+import { BreakClock, type Model, Phase, Tour, initialModel } from './model'
 import { ROOT, measureSurface } from './testing'
 import { asVeteran } from './veteran'
 
@@ -22,7 +16,7 @@ const questBreak: Model = modifyFields(asVeteran(initialModel), {
       spawns: [],
       clock: BreakClock.Waiting({ elapsedMs: 0 }),
     }),
-  firstBreakQuest: () => FirstBreakQuest.Running(),
+  firstBreakQuest: () => Tour.Running(),
 })
 
 const tracker = role('region', { name: 'First break' })
@@ -48,7 +42,7 @@ describe('the first break tracker', () => {
       ROOT,
       given(
         modifyFields(questBreak, {
-          firstBreakQuest: () => FirstBreakQuest.Done({ ageMs: 0 }),
+          firstBreakQuest: () => Tour.Done({ ageMs: 0 }),
         }),
       ),
       measureSurface,
@@ -56,6 +50,34 @@ describe('the first break tracker', () => {
       expect(
         role('button', { name: 'Skip the first break tour' }),
       ).toBeAbsent(),
+    )
+  })
+})
+
+describe('the kitchen tour tracker', () => {
+  test('shows the held clock and the boards step, and skips on a tap', () => {
+    scene(
+      ROOT,
+      given(
+        modifyFields(asVeteran(initialModel), {
+          phase: () =>
+            Phase.Preparation({
+              wave: 3,
+              remainingMs: PREPARATION_MS,
+              durationMs: PREPARATION_MS,
+              spawns: [],
+            }),
+          kitchenTour: () => Tour.Running(),
+        }),
+      ),
+      measureSurface,
+      expect(role('region', { name: 'Kitchen tour' })).toExist(),
+      expect(role('img', { name: 'The break clock waits' })).toExist(),
+      expect(
+        role('listitem', { name: 'Open the kitchen, free, now' }),
+      ).toExist(),
+      click(role('button', { name: 'Skip the kitchen tour' })),
+      expect(role('region', { name: 'Kitchen tour' })).toBeAbsent(),
     )
   })
 })
