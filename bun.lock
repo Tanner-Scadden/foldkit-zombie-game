@@ -23,6 +23,7 @@
         "@tailwindcss/vite": "^4.3.3",
         "@types/node": "26.6.5",
         "happy-dom": "^20.14.5",
+        "oxc-parser": "0.150.0",
         "oxfmt": "^0.66.0",
         "oxlint": "1.89.0",
         "oxlint-tsgolint": "7.0.2005",
