@@ -81,9 +81,11 @@ jobs:
         run: |
           set -o pipefail
           bun alchemy deploy --stage "$STAGE" --yes --no-input | tee "$RUNNER_TEMP/deploy.log"
+          # Any https host: production's outputs are its custom domains
+          # (munchmanor.com, api.munchmanor.com), a preview's are workers.dev.
           output_url() {
-            grep -oE "(^|[^A-Za-z])$1: 'https://[a-z0-9.-]+\.workers\.dev'" "$RUNNER_TEMP/deploy.log" |
-              tail -n 1 | grep -oE "https://[a-z0-9.-]+\.workers\.dev"
+            grep -oE "(^|[^A-Za-z])$1: 'https://[a-z0-9.-]+'" "$RUNNER_TEMP/deploy.log" |
+              tail -n 1 | grep -oE "https://[a-z0-9.-]+"
           }
           echo "url=$(output_url url)" >> "$GITHUB_OUTPUT"
           echo "api_url=$(output_url apiUrl)" >> "$GITHUB_OUTPUT"
@@ -111,6 +113,17 @@ jobs:
           done
           echo "$API_URL/api/health answered $body"
           exit 1
+      # NOTE: production also answers at its old workers.dev addresses, on
+      # purpose: saves and installed apps are bound to their origin, so they
+      # must keep serving (see "Two origins" in PLATFORM.md).
+      - name: Check the old addresses still answer
+        if: env.STAGE == 'prod'
+        run: |
+          for url in https://munch-manor.tanner-scadden.workers.dev/ https://munch-manor-api.tanner-scadden.workers.dev/api/health; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' "$url")
+            echo "$url answered $status"
+            test "$status" = "200"
+          done
 
   cleanup:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
