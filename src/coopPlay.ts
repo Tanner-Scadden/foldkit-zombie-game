@@ -15,7 +15,6 @@ import {
 } from './frame'
 import { launchPrize } from './fridgeReveal'
 import { stopForHits, thawTick } from './juice'
-import { isShopDialogOpen } from './menuState'
 import { type Model, Phase } from './model'
 import { ageDebutCard, raiseDebutCardFrom } from './onboarding'
 import { isCoop, shopOf } from './party'
@@ -25,7 +24,7 @@ import { isBrowsing } from './shop'
 import { aimTracers, flyTracers } from './simulation'
 import { tallyFrame } from './stats'
 import { TURRET_WEAPON } from './traps'
-import { closeShop, enterShop } from './update/shop'
+import { syncShopDialog } from './update/shop'
 import {
   frameSoundCues,
   fridgeLandCues,
@@ -42,7 +41,7 @@ import {
   type Difficulty,
   GameEvent,
   HitStop,
-  type ShopState,
+  ShopState,
   type Vector,
 } from './worldSchema'
 import { footfallNearness } from './zombies'
@@ -88,10 +87,17 @@ export const runDifficultyOf = (model: Model): Difficulty =>
 
 // THE ROOM'S WORLD IN THE ROOT
 
+// NOTE: while the room has this player at the counter the client keeps its
+// own Browsing (the row it focused) or its own Dismissed (LEAVE sent, the
+// room a round trip behind), so a dialog it closed stays closed.
+const heldShop = (own: ShopState, room: ShopState): ShopState =>
+  isBrowsing(room) && !ShopState.isAnyOf(['Away'])(own) ? own : room
+
 // NOTE: the fields the room owns, from the World with this client's own
 // seat in the player fields. The rest stay the client's: its intent, the
 // run's stats and the gates, the save's difficulty, the money count-up,
-// the shop's open tab, and its focused row while it browses.
+// the shop's open tab, and, while the room still has the player at the
+// counter, their focused row or their own LEAVE on its way (heldShop).
 const takeRoomWorld = (
   model: Model,
   world: World,
@@ -120,8 +126,7 @@ const takeRoomWorld = (
     ovens: () => world.ovens,
     fridge: () => world.fridge,
     laserSight: () => world.laserSight,
-    shop: shop =>
-      isBrowsing(shop) && isBrowsing(world.shop) ? shop : world.shop,
+    shop: shop => heldShop(shop, world.shop),
     party: () => world.party,
   })
 
@@ -159,13 +164,6 @@ const ownShopOf = (model: Model): Option.Option<ShopState> =>
   Option.flatMap(maybeDrawnOf(model), ({ room, world }) =>
     shopOf(world, room.slot),
   )
-
-const isEntering = (
-  maybeBefore: Option.Option<ShopState>,
-  after: ShopState,
-  isThere: (shop: ShopState) => boolean,
-): boolean =>
-  isThere(after) && !Option.exists(maybeBefore, before => isThere(before))
 
 // OWN TRACERS
 
@@ -291,7 +289,6 @@ const drawRoom = (frameMs: number, maybeShopBefore: Option.Option<ShopState>) =>
             frameMs,
           ),
         )
-        const shopNow = world.shop
         return Update.combineSteps([
           toModel(drawn),
           playSounds([
@@ -302,12 +299,7 @@ const drawRoom = (frameMs: number, maybeShopBefore: Option.Option<ShopState>) =>
             ...fridgeLandCues(base, drawn),
           ]),
           playStartSoundWhen(isStart),
-          ...(isEntering(maybeShopBefore, shopNow, isBrowsing)
-            ? [enterShop]
-            : []),
-          ...(isShopDialogOpen(drawn) && !isBrowsing(shopNow)
-            ? [closeShop]
-            : []),
+          syncShopDialog(Option.exists(maybeShopBefore, isBrowsing)),
         ])
       },
     }),

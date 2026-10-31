@@ -16,11 +16,11 @@ import {
   SHOP_CATEGORY_ORDER,
   isShopOpenFor,
   itemsIn,
-  purchase,
   suggestedItem,
+  tryPurchase,
 } from './shop'
 import { advanceTick } from './simulation'
-import { cycleTrap, placeTrapIn } from './traps'
+import { cycleTrap, maybeSelectedKind, placeTrapIn } from './traps'
 import { isRoundActive, startWaveEarly } from './waves'
 import {
   beginReload,
@@ -36,6 +36,7 @@ import {
   type GameEvent,
   GunSlot,
   type Intent,
+  Phase,
   type PlayerSlot,
   SOLO_SLOT,
   ShopItemId,
@@ -105,13 +106,14 @@ export const stepWorld = (
 
 // ACTIONS
 
-// NOTE: a player's presses between ticks, as inputs the room applies to
-// their own seat (MULTIPLAYER.md, Phase 1): swapping, drawing the knife or
-// a gun by its slot, and reloading, traps,
-// the shop's buys and its leaving (decided row 8), and READY (decided 7).
-// Single player's client runs the same rules through its own Messages. A
-// purchasable in the world is no press: it is bought by holding the
-// intent's interact (src/purchase.ts).
+// NOTE: a player's presses, as actions on their own seat (MULTIPLAYER.md,
+// Phase 1): swapping, drawing the knife or a gun by its slot, reloading,
+// traps, the shop's buys and its leaving (decided row 8), and READY
+// (decided 7). Each action's rule lives here once. The room applies a
+// seat's presses between ticks; single player applies its own presses to
+// its lead seat (src/update/action.ts) and wraps its cues around them.
+// A purchasable in the world is no press: it is bought by holding the
+// intent's interact, in the tick (src/purchase.ts).
 export const SeatAction = defineTaggedUnion({
   Swap: {},
   Melee: {},
@@ -125,74 +127,121 @@ export const SeatAction = defineTaggedUnion({
 })
 export type SeatAction = typeof SeatAction.Type
 
+// NOTE: why an action left the World as it was. NotNow is no moment for
+// it (out of the fight, away from the counter, nothing to place): the
+// client stays quiet. Refused is a try the game turns down, with the
+// reason a client can show (the trap notice, Rattles' grumble).
+export const ActionRefusal = defineTaggedUnion({
+  NotNow: {},
+  Refused: { reason: Schema.String },
+})
+export type ActionRefusal = typeof ActionRefusal.Type
+
+export type ActionResult = Result.Result<World, ActionRefusal>
+
+const notNow: ActionResult = Result.fail(ActionRefusal.NotNow())
+
+const refused = (reason: string): ActionRefusal =>
+  ActionRefusal.Refused({ reason })
+
 const isFighting = (world: World): boolean =>
   isRoundActive(world.phase) &&
   isStanding(leadSeatOf(world)) &&
   !ShopState.isAnyOf(['Browsing'])(world.shop)
 
-const inHand =
-  (change: (player: World['player']) => World['player']) =>
-  (world: World): World =>
-    isFighting(world) ? modifyFields(world, { player: change }) : world
+const whenFighting =
+  (act: (world: World) => ActionResult) =>
+  (world: World): ActionResult =>
+    isFighting(world) ? act(world) : notNow
+
+const inHand = (change: (player: World['player']) => World['player']) =>
+  whenFighting(world => Result.succeed(modifyFields(world, { player: change })))
 
 const swap = inHand(swapInHand)
 
 const melee = inHand(drawMelee)
 
-const draw = (world: World, slot: GunSlot): World =>
+const draw = (world: World, slot: GunSlot): ActionResult =>
   inHand(player => drawSlot(player, slot))(world)
 
-// NOTE: with the knife out, a reload puts the last gun back in hand first.
-const reload = (world: World): World => {
+// NOTE: with the knife out, a reload puts the last gun back in hand first,
+// even when that gun cannot reload.
+const reload = (world: World): ActionResult => {
   const drawn = isWieldingMelee(world.player)
     ? draw(world, heldSlotOf(world.player.arsenal))
-    : world
-  return isFighting(drawn) && canReload(drawn.player)
-    ? modifyFields(drawn, { player: beginReload })
+    : notNow
+  const inHandNow = Result.getOrElse(drawn, () => world)
+  return isFighting(inHandNow) && canReload(inHandNow.player)
+    ? Result.succeed(modifyFields(inHandNow, { player: beginReload }))
     : drawn
 }
 
-const placeTrap = (world: World): World =>
-  isFighting(world)
-    ? Result.match(placeTrapIn(world), {
-        onFailure: () => world,
+// NOTE: with no trap in stock there is nothing to try.
+const placeTrap = whenFighting(world =>
+  Option.isNone(maybeSelectedKind(world))
+    ? notNow
+    : Result.mapBoth(placeTrapIn(world), {
+        onFailure: refused,
         onSuccess: ({ world: placed }) => placed,
-      })
-    : world
+      }),
+)
 
-const buy = (world: World, item: ShopItemId): World =>
+const nextTrap = whenFighting(world => Result.succeed(cycleTrap(world)))
+
+// NOTE: only at the counter, and only in a break the shop is open for.
+const buy = (world: World, item: ShopItemId): ActionResult =>
   ShopState.isAnyOf(['Browsing'])(world.shop) && isShopOpenFor(world.phase)
-    ? Option.getOrElse(purchase(world, item), () => world)
-    : world
+    ? Result.mapError(tryPurchase(world, item), refused)
+    : notNow
 
-const leaveCounter = (world: World): World =>
+const leaveCounter = (world: World): ActionResult =>
   ShopState.isAnyOf(['Browsing'])(world.shop)
-    ? modifyFields(world, { shop: () => ShopState.Dismissed() })
-    : world
+    ? Result.succeed(modifyFields(world, { shop: () => ShopState.Dismissed() }))
+    : notNow
 
 // NOTE: READY in single player starts the wave at once, as START WAVE
-// always has; in co-op it waits for everyone.
-const ready = (world: World): World =>
-  isCoop(world) ? markReady(world) : startWaveEarly(world)
+// always has; in co-op it waits for everyone. Only a break has one.
+const ready = (world: World): ActionResult =>
+  Phase.isAnyOf(['Preparation'])(world.phase)
+    ? Result.succeed(isCoop(world) ? markReady(world) : startWaveEarly(world))
+    : notNow
 
-const applyToSeat = (world: World, action: SeatAction): World =>
+// NOTE: an action on a seat World's lead seat (party.ts, withSeat): the
+// World it makes, or why it made none.
+export const trySeatAction = (
+  seatWorld: World,
+  action: SeatAction,
+): ActionResult =>
   SeatAction.match(action, {
-    Swap: () => swap(world),
-    Melee: () => melee(world),
-    Draw: ({ slot }) => draw(world, slot),
-    Reload: () => reload(world),
-    PlaceTrap: () => placeTrap(world),
-    NextTrap: () => (isFighting(world) ? cycleTrap(world) : world),
-    Buy: ({ item }) => buy(world, item),
-    LeaveCounter: () => leaveCounter(world),
-    Ready: () => ready(world),
+    Swap: () => swap(seatWorld),
+    Melee: () => melee(seatWorld),
+    Draw: ({ slot }) => draw(seatWorld, slot),
+    Reload: () => reload(seatWorld),
+    PlaceTrap: () => placeTrap(seatWorld),
+    NextTrap: () => nextTrap(seatWorld),
+    Buy: ({ item }) => buy(seatWorld, item),
+    LeaveCounter: () => leaveCounter(seatWorld),
+    Ready: () => ready(seatWorld),
   })
 
 export const applySeatAction = (
   world: World,
   slot: PlayerSlot,
   action: SeatAction,
-): World => withSeat(world, slot, seatWorld => applyToSeat(seatWorld, action))
+): World =>
+  withSeat(world, slot, seatWorld =>
+    Result.getOrElse(trySeatAction(seatWorld, action), () => seatWorld),
+  )
+
+// NOTE: a tap on a HUD gun slot. On the gun in hand it reloads it; any
+// other tap draws that gun, from the knife too.
+export const gunSlotAction = (
+  player: World['player'],
+  slot: GunSlot,
+): SeatAction =>
+  !isWieldingMelee(player) && heldSlotOf(player.arsenal) === slot
+    ? SeatAction.Reload()
+    : SeatAction.Draw({ slot })
 
 // THE SHOP WITHOUT A DIALOG
 

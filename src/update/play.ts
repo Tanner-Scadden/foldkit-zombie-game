@@ -36,7 +36,6 @@ import {
   ageDebutCard,
   isDebutCardUp,
   learnFromFrame,
-  learnShop,
   learnStartWave,
   learnSwap,
   moveHintBand,
@@ -49,17 +48,10 @@ import { startWave } from '../runFlow'
 import { isAtCounter, isBrowsing } from '../shop'
 import { tallyFrame } from '../stats'
 import { stepWhen } from '../stepWhen'
+import { SeatAction, gunSlotAction } from '../stepWorld'
 import { isRoundActive, pause } from '../waves'
-import {
-  beginReload,
-  canReload,
-  drawMelee,
-  drawSlot,
-  heldSlotOf,
-  inHandOf,
-  isWieldingMelee,
-  swapInHand,
-} from '../weapons'
+import { inHandOf, isReloading, isWieldingMelee } from '../weapons'
+import { actAsLead } from './action'
 import { coopFromKey, isCoopOpen, pressCoopKey, releaseCoopKey } from './coop'
 import {
   advanceEndScreen,
@@ -79,12 +71,7 @@ import {
 } from './home'
 import { profileFromKey } from './profile'
 import { isPaused, isScreenAnimated, startWhenAllowed, startsRun } from './run'
-import {
-  closeShop,
-  closeShopOutsidePreparation,
-  enterShop,
-  leaveShopWithoutDialog,
-} from './shop'
+import { closeShop, syncShopDialog } from './shop'
 import {
   ammoTickCues,
   frameSoundCues,
@@ -157,27 +144,19 @@ const preparationFromKey = (model: Model, code: string): Model => {
 const resumeFromKey = (model: Model, code: string): Model =>
   isPauseKey(code) ? startWhenAllowed(model, model.mode) : model
 
-const isHandFree = (model: Model): boolean =>
-  isRoundActive(model.phase) &&
-  !isAtCounter(model.shop) &&
-  !isDebutCardUp(model)
+// NOTE: a press of the hand, unless the new zombie card holds the game.
+// The rule is the seat action's (src/stepWorld.ts).
+const actInHand =
+  (action: SeatAction) =>
+  (model: Model): Model =>
+    isDebutCardBlocking(model) ? model : actAsLead(model, action)
 
 // NOTE: Q switches guns, or with the knife out goes back to the last gun.
-const swapGun = (model: Model): Model =>
-  isHandFree(model) ? modifyFields(model, { player: swapInHand }) : model
+const swapGun = actInHand(SeatAction.Swap())
 
 // NOTE: F, or a tap on the knife slot: the knife in hand (GAME_DESIGN.md,
 // "The knife and two gun slots").
-const equipMelee = (model: Model): Model =>
-  isHandFree(model) ? modifyFields(model, { player: drawMelee }) : model
-
-// NOTE: a tap on a gun slot with the knife out: that gun in hand.
-const drawGunSlot = (model: Model, slot: GunSlot): Model =>
-  isHandFree(model)
-    ? modifyFields(model, { player: player => drawSlot(player, slot) })
-    : model
-
-const heldSlot = (model: Model): GunSlot => heldSlotOf(model.player.arsenal)
+const equipMelee = actInHand(SeatAction.Melee())
 
 const swapFromKey = (model: Model, code: string): Model => {
   if (isSwapKey(code)) {
@@ -233,23 +212,21 @@ export const tapSound: UpdateStep = playSounds([uiCue('Pop')])
 
 // RELOAD
 
+const hasBegunReload = (before: Model, after: Model): boolean =>
+  !isReloading(before.player) && isReloading(after.player)
+
+const dropMagazine: UpdateStep = model =>
+  playSounds([
+    {
+      sound: 'MagOut',
+      variation: positionVariation(model.player.x, model.player.y),
+    },
+  ])(dropClip(model))
+
 // NOTE: with the knife out, R puts the last gun back in hand to reload it.
 const reloadHeldGun: UpdateStep = model => {
-  const stepModel = isWieldingMelee(model.player)
-    ? drawGunSlot(model, heldSlot(model))
-    : model
-  const { player } = stepModel
-  if (
-    !isRoundActive(stepModel.phase) ||
-    isAtCounter(stepModel.shop) ||
-    !canReload(player)
-  ) {
-    return { model: stepModel }
-  }
-
-  return playSounds([
-    { sound: 'MagOut', variation: positionVariation(player.x, player.y) },
-  ])(dropClip(modifyFields(stepModel, { player: beginReload })))
+  const reloaded = actInHand(SeatAction.Reload())(model)
+  return stepWhen(() => hasBegunReload(model, reloaded), dropMagazine)(reloaded)
 }
 
 const reloadFromKey = (code: string): UpdateStep =>
@@ -313,18 +290,14 @@ export const tickFrame = (deltaTime: number) =>
       const advanced = isCoop(framed)
         ? ageDebutCard(framed, clampFrameDelta(deltaTime))
         : framed
-      const hasEnteredShop =
-        !isBrowsing(model.shop) && isBrowsing(advanced.shop)
       return Update.combineSteps([
-        toModel(hasEnteredShop ? learnShop(advanced) : advanced),
+        toModel(advanced),
         playSounds([
           ...frameSoundCues(advanced.frameEvents),
           ...ammoTickCues(advanced),
           ...fridgeLandCues(model, advanced),
         ]),
-        ...(hasEnteredShop ? [enterShop] : []),
-        closeShopOutsidePreparation,
-        leaveShopWithoutDialog,
+        syncShopDialog(isBrowsing(model.shop)),
       ])
     } else if (isEndScreen(model.phase)) {
       return advanceEndScreen(clampFrameDelta(deltaTime))
@@ -445,19 +418,16 @@ export const swapFromButton: UpdateStep = drawFromButton(swapGun)
 
 // NOTE: a tap on the held gun reloads it; on the other gun, or on either
 // with the knife out, it puts that gun in hand.
-export const pressGunSlot =
-  (slot: GunSlot): UpdateStep =>
-  model => {
-    if (isDebutCardBlocking(model)) {
-      return { model }
-    } else if (isWieldingMelee(model.player)) {
-      return drawFromButton(current => drawGunSlot(current, slot))(model)
-    } else if (slot === heldSlot(model)) {
-      return combine(model, [unlockAudio, reloadHeldGun])
-    } else {
-      return swapFromButton(model)
-    }
-  }
+export const pressGunSlot = (slot: GunSlot): UpdateStep =>
+  stepWhen(
+    model => !isDebutCardBlocking(model),
+    model => {
+      const action = gunSlotAction(model.player, slot)
+      return SeatAction.isAnyOf(['Reload'])(action)
+        ? combine(model, [unlockAudio, reloadHeldGun])
+        : drawFromButton(actInHand(action))(model)
+    },
+  )
 
 // NOTE: the touch HUD's reload button: R's reload, so with the knife out
 // it puts the last gun back in hand and reloads that.

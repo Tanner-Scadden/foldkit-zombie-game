@@ -1037,15 +1037,16 @@ const grant = (model: World, good: ShopGood): World =>
     Sight: () => modifyFields(model, { laserSight: () => 'Fitted' }),
   })
 
-export const purchase = (
+// NOTE: the World with `id` bought, or why Rattles turns it down.
+export const tryPurchase = (
   model: World,
   id: ShopItemId,
-): Option.Option<World> => {
+): Result.Result<World, string> => {
   const item = shopItem(id)
   const price = priceFor(model, id)
   return Verdict.match(verdictFor(model, id), {
     Available: () =>
-      Option.some(
+      Result.succeed(
         grant(
           modifyFields(model, {
             wallet: wallet => spend(wallet, price),
@@ -1054,9 +1055,12 @@ export const purchase = (
           item.good,
         ),
       ),
-    Refused: () => Option.none(),
+    Refused: ({ reason }) => Result.fail(reason),
   })
 }
+
+export const purchase = (model: World, id: ShopItemId): Option.Option<World> =>
+  Result.getSuccess(tryPurchase(model, id))
 
 // STALL
 

@@ -1,4 +1,4 @@
-import { Option, Result } from 'effect'
+import { Array, Option, Result } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { levelOf } from '../arena'
@@ -6,15 +6,9 @@ import { SHAKE_TRAUMA_MAX, TRAP_PLACE_TRAUMA } from '../constants'
 import { type TrapChoice, maybeTrapChoice } from '../input'
 import type { Model } from '../model'
 import { puffDust } from '../particles'
-import {
-  cycleTrap,
-  maybeSelectedKind,
-  placeTrap,
-  refusePlacement,
-  trapCenter,
-} from '../traps'
-import { isRoundActive } from '../waves'
-import { withWorld } from '../world'
+import { ActionRefusal, SeatAction } from '../stepWorld'
+import { notePlacement, refusePlacement, trapCenter } from '../traps'
+import { actAsLead, tryAsLead } from './action'
 import { playSounds, uiCue } from './sound'
 import type { UpdateReturn, UpdateStep } from './step'
 
@@ -26,29 +20,30 @@ const shakeBy = (model: Model, trauma: number): Model =>
       }),
   })
 
-export const placeSelectedTrap = (model: Model): UpdateReturn => {
-  if (Option.isNone(maybeSelectedKind(model)) || !isRoundActive(model.phase)) {
-    return { model }
-  }
-
-  return Result.match(placeTrap(model), {
-    onFailure: reason =>
-      playSounds([uiCue('Denied')])(refusePlacement(model, reason)),
-    onSuccess: ({ model: placed, trap }) => {
-      const { x, y } = trapCenter(levelOf(placed), trap)
-      return playSounds([{ sound: 'Thunk', variation: 0 }])(
-        shakeBy(puffDust(placed, x, y), TRAP_PLACE_TRAUMA),
-      )
-    },
+// NOTE: a placed trap stamps its dust and thunk where it landed; a refused
+// one says why in the trap notice.
+export const placeSelectedTrap = (model: Model): UpdateReturn =>
+  Result.match(tryAsLead(model, SeatAction.PlaceTrap()), {
+    onFailure: refusal =>
+      ActionRefusal.match(refusal, {
+        NotNow: () => ({ model }),
+        Refused: ({ reason }) =>
+          playSounds([uiCue('Denied')])(refusePlacement(model, reason)),
+      }),
+    onSuccess: placed =>
+      Option.match(Array.last(placed.traps), {
+        onNone: () => ({ model: placed }),
+        onSome: trap => {
+          const { x, y } = trapCenter(levelOf(placed), trap)
+          return playSounds([{ sound: 'Thunk', variation: 0 }])(
+            shakeBy(puffDust(notePlacement(placed), x, y), TRAP_PLACE_TRAUMA),
+          )
+        },
+      }),
   })
-}
 
 export const nextTrap = (model: Model): UpdateReturn => {
-  if (!isRoundActive(model.phase)) {
-    return { model }
-  }
-
-  const cycled = withWorld(model, cycleTrap)
+  const cycled = actAsLead(model, SeatAction.NextTrap())
   return playSounds(
     cycled.selectedTrap === model.selectedTrap ? [] : [uiCue('Swap')],
   )(cycled)

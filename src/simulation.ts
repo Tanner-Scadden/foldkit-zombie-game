@@ -440,6 +440,19 @@ const autoReload = (model: World, isTriggerHeld: boolean): World => {
 const isShopBrowsing = (model: World): boolean =>
   ShopState.isAnyOf(['Browsing'])(model.shop)
 
+// NOTE: the stall shuts outside the break. A player still at the counter
+// when the wave starts (in co-op the break runs on while one shops) or the
+// run ends is sent off it, and their shop dialog follows
+// (src/update/shop.ts, syncShopDialog).
+const shutStallOutsideBreak = (model: World): World =>
+  Phase.isAnyOf(['Preparation'])(model.phase)
+    ? model
+    : forEachSeat(model, seatWorld =>
+        isShopBrowsing(seatWorld)
+          ? modifyFields(seatWorld, { shop: () => ShopState.Dismissed() })
+          : seatWorld,
+      )
+
 const topUp = (model: World): World =>
   isShopBrowsing(model)
     ? model
@@ -1673,6 +1686,7 @@ const advanceWorld = (model: World, deltaMs: number): World => {
     shed => shatterEvents(model, shed),
     downed => advanceParty(downed, deltaMs),
     endWhenDefeated,
+    shutStallOutsideBreak,
   )
 }
 
