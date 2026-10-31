@@ -22,6 +22,7 @@ import {
   freshRunModel,
   fridgeSeededFor,
   holdFire,
+  pastTimedBreaks,
   press,
   release,
   ticks,
@@ -39,7 +40,7 @@ const STAND_TICKS = Math.ceil(PURCHASE_RULES.standMs / FRAME_MS) + 1
 const BELOW_KITCHEN_DOOR = { x: 70, y: 26 }
 
 const atBoards = (balance: number): Model =>
-  modifyFields(freshRunModel(), {
+  modifyFields(pastTimedBreaks(freshRunModel()), {
     phase: () =>
       Phase.Preparation({
         wave: 3,

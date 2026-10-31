@@ -9,7 +9,6 @@ import { TURRET_WEAPON, maybeSelectedKind } from './traps'
 import {
   BreakClock,
   DebutCard,
-  FirstBreakQuest,
   GameEvent,
   type HintBand,
   type InputDevice,
@@ -18,9 +17,11 @@ import {
   Phase,
   type Practice,
   Stick,
+  Tour,
   TrapHint,
   type ZombieKind,
 } from './worldSchema'
+import { isKitchenTourOn } from './tutorialRules'
 import { ZOMBIE_KIND_ORDER } from './zombies'
 
 export {
@@ -414,12 +415,14 @@ export const isStartWaveBeckoning = ({
   ((isPending(lessons.startWave) &&
     isLearned(lessons.move) &&
     isLearned(lessons.fire)) ||
-    FirstBreakQuest.isAnyOf(['Done'])(firstBreakQuest))
+    Tour.isAnyOf(['Done'])(firstBreakQuest))
 
 // NOTE: the first timed break's countdown blinks, so the player sees the
 // clock is running.
 export const isCountdownBeckoning = (model: Model): boolean =>
-  isLaterTimedBreak(model) && isPending(model.lessons.timedBreaks)
+  isLaterTimedBreak(model) &&
+  isPending(model.lessons.timedBreaks) &&
+  !isKitchenTourOn(model)
 
 // NOTE: a goodie on the floor wears a bouncing arrow until the player has
 // grabbed one.

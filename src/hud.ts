@@ -65,7 +65,7 @@ import {
   gunIcon,
   spriteShapes,
 } from './sprite'
-import { stallBubbleShapes } from './stallBubble'
+import { kitchenBubbleShapes, stallBubbleShapes } from './stallBubble'
 import { scoreOf } from './stats'
 import { TRAP_KIND_ORDER, maybeSelectedKind } from './traps'
 import { isRoundActive, zombiesRemaining } from './waves'
@@ -816,6 +816,7 @@ const playHudShapes = (
   ...trapNoticeShapes(model, camera),
   ...knifePromptShapes(model, camera),
   ...stallBubbleShapes(model, camera),
+  ...kitchenBubbleShapes(model, camera),
   ...roundHudShapes(model, layout),
   ...(isRoundActive(model.phase)
     ? textShapes(

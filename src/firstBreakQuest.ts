@@ -7,12 +7,7 @@ import type { Model } from './model'
 import { isCoop } from './party'
 import { isBrowsing, isShopOpenFor } from './shop'
 import { barricadedDoors } from './traps'
-import {
-  type DoorId,
-  FirstBreakQuest,
-  TrapHint,
-  type Vector,
-} from './worldSchema'
+import { type DoorId, Tour, TrapHint, type Vector } from './worldSchema'
 
 // NOTE: the guided first break, from playtesters who wanted the game to walk
 // them to the shop after the first wave, as other games do. One step at a
@@ -45,7 +40,7 @@ const isQuestDue = (model: Model): boolean =>
   TrapHint.isAnyOf(['Unseen'])(model.trapHint)
 
 export const questStepOf = (model: Model): Option.Option<QuestStep> => {
-  if (!FirstBreakQuest.isAnyOf(['Running'])(model.firstBreakQuest)) {
+  if (!Tour.isAnyOf(['Running'])(model.firstBreakQuest)) {
     return Option.none()
   } else if (TrapHint.isAnyOf(['Showing'])(model.trapHint)) {
     return Option.some('Place')
@@ -57,23 +52,23 @@ export const questStepOf = (model: Model): Option.Option<QuestStep> => {
 }
 
 export const isQuestDone = (model: Model): boolean =>
-  FirstBreakQuest.isAnyOf(['Done'])(model.firstBreakQuest)
+  Tour.isAnyOf(['Done'])(model.firstBreakQuest)
 
 // NOTE: one frame of the quest: it starts once its break comes, finishes
 // once the Plank Pile is placed, ends if the wave starts first, and its
 // tick fades after a moment.
 export const advanceQuest = (model: Model, deltaMs: number): Model =>
-  FirstBreakQuest.match(model.firstBreakQuest, {
+  Tour.match(model.firstBreakQuest, {
     Waiting: () =>
       isQuestDue(model)
         ? modifyFields(model, {
-            firstBreakQuest: () => FirstBreakQuest.Running(),
+            firstBreakQuest: () => Tour.Running(),
           })
         : model,
     Running: () => {
       if (TrapHint.isAnyOf(['Seen'])(model.trapHint)) {
         return modifyFields(model, {
-          firstBreakQuest: () => FirstBreakQuest.Done({ ageMs: 0 }),
+          firstBreakQuest: () => Tour.Done({ ageMs: 0 }),
         })
       } else if (!isQuestBreak(model)) {
         return endQuest(model)
@@ -85,20 +80,20 @@ export const advanceQuest = (model: Model, deltaMs: number): Model =>
       modifyFields(model, {
         firstBreakQuest: () =>
           ageMs + deltaMs >= QUEST_DONE_MS
-            ? FirstBreakQuest.Over()
-            : FirstBreakQuest.Done({ ageMs: ageMs + deltaMs }),
+            ? Tour.Over()
+            : Tour.Done({ ageMs: ageMs + deltaMs }),
       }),
     Over: () => model,
   })
 
 export const endQuest = (model: Model): Model =>
-  FirstBreakQuest.isAnyOf(['Over'])(model.firstBreakQuest)
+  Tour.isAnyOf(['Over'])(model.firstBreakQuest)
     ? model
-    : modifyFields(model, { firstBreakQuest: () => FirstBreakQuest.Over() })
+    : modifyFields(model, { firstBreakQuest: () => Tour.Over() })
 
 // NOTE: a tutorial reset lets the quest run again.
 export const rewindQuest = (model: Model): Model =>
-  modifyFields(model, { firstBreakQuest: () => FirstBreakQuest.Waiting() })
+  modifyFields(model, { firstBreakQuest: () => Tour.Waiting() })
 
 // NOTE: in the Place step an arrow bobs over the nearest open doorway, the
 // sensible spot for the Plank Pile.

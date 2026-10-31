@@ -1,6 +1,7 @@
-// The guided first break pass: each step of the tour a new player gets in
-// the break before wave 2 (walk to Rattles, buy a free Plank Pile, place it
-// in a doorway, done), on a 1280x720 desktop and a 390x844 phone held
+// The guided tutorial pass: each step of the tour a new player gets in the
+// break before wave 2 (walk to Rattles, buy a free Plank Pile, place it in a
+// doorway, done) and of the kitchen tour before wave 3 (the free boards, the
+// free pull, take it or leave it, done), on a 1280x720 desktop and a 390x844 phone held
 // upright, as `s42-<TAG>-<viewport>-<scene>.png`. It checks that the
 // tracker shows on every step, that the Plank Pile is FREE, and that the
 // tracker's skip button is big enough to tap, and exits with 1 on a miss.
@@ -15,6 +16,7 @@ import {
   harnessQuery,
   isPickedScene,
   launch,
+  model,
   pickViewports,
   scenePages,
   settleAnimations,
@@ -49,6 +51,26 @@ const hasTracker = async (
   }
 }
 
+// NOTE: chapter 2, the kitchen tour: a new save in the break before wave 3,
+// past the first break but not the timed breaks.
+const KITCHEN_BREAK =
+  'wave=3&prep=15000&money=5&seen=all&learned=move,fire,startWave,shop,swap,pickup,openBreak'
+
+const hasFreeTag = async (
+  page: Page,
+  problems: Array<string>,
+  label: string,
+) => {
+  await hasTracker(page, problems, label)
+  const current = await model(page)
+  if (current.kitchenTour._tag !== 'Running') {
+    problems.push(`${label}: the kitchen tour is ${current.kitchenTour._tag}`)
+  }
+  if (current.wallet.balance !== 5) {
+    problems.push(`${label}: the wallet moved to ${current.wallet.balance}`)
+  }
+}
+
 const SCENES: ReadonlyArray<Scene> = [
   { name: 'go', query: `${FIRST_BREAK}&tick=2`, act: hasTracker },
   {
@@ -77,6 +99,26 @@ const SCENES: ReadonlyArray<Scene> = [
         problems.push(`${label}: the skip button is too small to tap`)
       }
     },
+  },
+  {
+    name: 'kboards',
+    query: `${KITCHEN_BREAK}&px=70&py=26&tick=2`,
+    act: hasFreeTag,
+  },
+  {
+    name: 'kfridge',
+    query: `${KITCHEN_BREAK}&kitchen&px=180&py=-102&tick=2`,
+    act: hasFreeTag,
+  },
+  {
+    name: 'kchoose',
+    query: `${KITCHEN_BREAK}&kitchen&px=180&py=-102&hold&tick=130`,
+    act: hasTracker,
+  },
+  {
+    name: 'kdone',
+    query: `${KITCHEN_BREAK}&kitchen&quest=kitchendone&tick=2`,
+    act: hasTracker,
   },
   {
     name: 'done',

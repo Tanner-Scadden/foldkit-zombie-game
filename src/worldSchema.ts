@@ -1319,16 +1319,17 @@ export const AmmoTip = defineTaggedUnion({
 })
 export type AmmoTip = typeof AmmoTip.Type
 
-// NOTE: the guided first break (src/firstBreakQuest.ts): waiting for a new
-// player's first shop, running through its steps, done with its tick shown
-// for a moment, or over for this session.
-export const FirstBreakQuest = defineTaggedUnion({
+// NOTE: a chapter of the guided tutorial (src/firstBreakQuest.ts, the
+// first break, and src/kitchenTour.ts, the kitchen and the fridge): waiting
+// for its break, running through its steps, done with its tick shown for a
+// moment, or over for this session.
+export const Tour = defineTaggedUnion({
   Waiting: {},
   Running: {},
   Done: { ageMs: MillisNumber },
   Over: {},
 })
-export type FirstBreakQuest = typeof FirstBreakQuest.Type
+export type Tour = typeof Tour.Type
 
 export const TrapNotice = defineTaggedUnion({
   Quiet: {},

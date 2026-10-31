@@ -3,9 +3,9 @@ import { modifyFields } from 'foldkit/struct'
 import {
   AmmoTip,
   DifficultyCard,
-  FirstBreakQuest,
   Lesson,
   type Model,
+  Tour,
   TrapHint,
 } from './model'
 import { ZOMBIE_KIND_ORDER } from './zombies'
@@ -29,7 +29,8 @@ export const asTutorialDone = (model: Model): Model =>
     }),
     trapHint: () => TrapHint.Seen(),
     ammoTip: () => AmmoTip.Seen(),
-    firstBreakQuest: () => FirstBreakQuest.Over(),
+    firstBreakQuest: () => Tour.Over(),
+    kitchenTour: () => Tour.Over(),
   })
 
 export const asVeteran = (model: Model): Model =>

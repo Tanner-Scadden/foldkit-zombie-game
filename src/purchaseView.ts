@@ -155,10 +155,14 @@ const FRIDGE_TAG = bakePriceTag(FRIDGE_RULES.price)
 
 const TAKE_TAG = bakeTag(bakeText('TAKE', 'Prompt'))
 
-const tagOf = (target: Purchasable): PriceTag =>
+// NOTE: the kitchen tour gives the boards and the first pull away
+// (src/tutorialRules.ts), so their tags say FREE.
+const FREE_TAG = bakeTag(bakeText('FREE', 'Title'))
+
+const tagOf = ({ target, price }: Offer): PriceTag =>
   Purchasable.match(target, {
-    Exit: () => EXIT_TAG,
-    Fridge: () => FRIDGE_TAG,
+    Exit: () => (price === 0 ? FREE_TAG : EXIT_TAG),
+    Fridge: () => (price === 0 ? FREE_TAG : FRIDGE_TAG),
     Prize: () => TAKE_TAG,
   })
 
@@ -333,7 +337,7 @@ const replacedShapes = (
 const offerShapes =
   (model: Model, maybeInReach: Option.Option<Offer>) =>
   (unplaced: Offer): ReadonlyArray<Canvas.Shape> => {
-    const tag = tagOf(unplaced.target)
+    const tag = tagOf(unplaced)
     const offer = placedOffer(unplaced, tag)
     const replaced = replacedShapes(model, offer, tag)
     const isMine = (target: Purchasable) =>

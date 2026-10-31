@@ -68,10 +68,10 @@ export const offersOf = (world: World): ReadonlyArray<Offer> => [
   ...fridgeOffers(world),
 ]
 
-const buy = (world: World, target: Purchasable): Option.Option<World> =>
-  Purchasable.match(target, {
-    Exit: ({ exit }) => buyExit(world, exit),
-    Fridge: () => pullFridge(world),
+const buy = (world: World, offer: Offer): Option.Option<World> =>
+  Purchasable.match(offer.target, {
+    Exit: ({ exit }) => buyExit(world, exit, offer.price),
+    Fridge: () => pullFridge(world, offer.price),
     Prize: () => takePrize(world),
   })
 
@@ -171,7 +171,7 @@ const press = (world: World, offer: Offer): World =>
     : withPurchase(world, Purchase.Holding({ target: offer.target, heldMs: 0 }))
 
 const complete = (world: World, offer: Offer): World =>
-  Option.match(buy(world, offer.target), {
+  Option.match(buy(world, offer), {
     onNone: () => refuse(world, offer),
     onSome: bought =>
       withEvent(

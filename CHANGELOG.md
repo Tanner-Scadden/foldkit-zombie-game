@@ -4,7 +4,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 
 ## October 31, 2026: Rattles has notes
 
-- 🧭 New here? Your first break now walks you through it: visit Rattles, grab a free Plank Pile, and slap it on a door. Confetti included.
+- 🧭 New here? Your first breaks walk you through it: a free Plank Pile from Rattles, then a free kitchen and a free fridge roll, with the clock on hold. Confetti included.
 - 🔫 Your gun now yells before it runs dry: the ammo blinks amber, then red, the last shots tick, and Rattles hollers from his stall. Out of everything? The knife lights up.
 
 ## October 30, 2026: Bring your friends

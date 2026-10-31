@@ -150,6 +150,15 @@ export const pastFirstBreak = (model: Model): Model =>
       modifyFields(lessons, { openBreak: () => Lesson.Learned({ atMs: 0 }) }),
   })
 
+// NOTE: past the kitchen tour's break, so the break before wave 3 counts
+// down and the kitchen and the fridge have their prices (the tour holds the
+// clock and gives them away in a new save, see src/tutorialRules.ts).
+export const pastTimedBreaks = (model: Model): Model =>
+  modifyFields(model, {
+    lessons: lessons =>
+      modifyFields(lessons, { timedBreaks: () => Lesson.Learned({ atMs: 0 }) }),
+  })
+
 export const fighting: Model = modifyFields(initialModel, {
   phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),
 })

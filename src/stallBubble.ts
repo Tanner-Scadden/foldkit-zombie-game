@@ -1,9 +1,12 @@
 import { Array, Option } from 'effect'
 import { Canvas } from 'foldkit'
 
+import { levelOf } from './arena'
 import { type Camera, viewBoxOf, worldToView } from './camera'
 import { FULL_TURN, placeSprite } from './drawing'
 import { COIN_SPRITE, COIN_WIDTH } from './font'
+import { kitchenStepOf, maybeKitchenMark } from './kitchenTour'
+import { fridgeBoxOf, fridgeSpot } from './leftovers'
 import type { Model } from './model'
 import { isLearned } from './onboarding'
 import { STALL_BOX, isBrowsing, isShopOpenFor } from './shop'
@@ -15,7 +18,7 @@ import {
   bakeShapes,
   spriteShapes,
 } from './sprite'
-import { AmmoTip, TrapHint } from './worldSchema'
+import { AmmoTip, TrapHint, type Vector } from './worldSchema'
 
 // NOTE: Rattles calls from his stall with a speech bubble of pictures: a
 // coin and what he sells that the player needs now. Traps, in the breaks
@@ -25,7 +28,11 @@ import { AmmoTip, TrapHint } from './worldSchema'
 // window and the shop has never been opened. The bubble hangs beside the
 // stall, and when the stall is out of view it waits at the window's edge
 // with an arrow toward it. It never points at a zombie.
-export type BubbleKind = 'Ammo' | 'Traps' | 'Shop'
+//
+// The kitchen tour (src/kitchenTour.ts) hangs the same bubble from its
+// spots: a gift over the boards and the fridge it gives away, and the
+// prize's choice, the hold ring for take and an arrow away for leave.
+export type BubbleKind = 'Ammo' | 'Traps' | 'Shop' | 'Gift' | 'Choice'
 
 const AMMO_PALETTE: Palette = {
   o: '#140c10',
@@ -41,7 +48,73 @@ const AMMO_BOX: Sprite = spriteShapes(
   TOP_LEFT,
 )
 
-type Good = Readonly<{ sprite: Sprite; isCentered: boolean }>
+type Good = Readonly<{ sprite: Sprite; isCentered: boolean; width: number }>
+
+const TOUR_PALETTE: Palette = {
+  o: '#140c10',
+  r: '#ff4a4f',
+  y: '#ffe066',
+  g: '#4fb04f',
+  w: '#5d6672',
+}
+
+const tourIcon = (pixels: ReadonlyArray<string>): Good => ({
+  sprite: spriteShapes(pixels, TOUR_PALETTE, TOP_LEFT),
+  isCentered: false,
+  width: 7,
+})
+
+const GIFT = tourIcon([
+  '.y...y.',
+  '..yry..',
+  'rrryrrr',
+  'rrryrrr',
+  '.rryrr.',
+  '.rryrr.',
+  '.rrrrr.',
+])
+
+const HOLD_RING = tourIcon([
+  '..yyy..',
+  '.y...y.',
+  'y.....y',
+  'y..o..y',
+  'y.....y',
+  '.y...y.',
+  '..yyy..',
+])
+
+const CHECK = tourIcon([
+  '.......',
+  '......g',
+  '.....gg',
+  'g...gg.',
+  'gg.gg..',
+  '.ggg...',
+  '..g....',
+])
+
+const WALK_AWAY = tourIcon([
+  '...w...',
+  '...ww..',
+  'wwwwww.',
+  'wwwwwww',
+  'wwwwww.',
+  '...ww..',
+  '...w...',
+])
+
+const CROSS = tourIcon([
+  'r.....r',
+  'rr...rr',
+  '.rr.rr.',
+  '..rrr..',
+  '.rr.rr.',
+  'rr...rr',
+  'r.....r',
+])
+
+const COIN: Good = { sprite: COIN_SPRITE, isCentered: false, width: COIN_WIDTH }
 
 const ICON_SIZE = 7
 const ICON_GAP = 2
@@ -50,16 +123,21 @@ const BUBBLE_HEIGHT = ICON_SIZE + PAD * 2
 const TAIL = 3
 
 const GOODS: Readonly<Record<BubbleKind, ReadonlyArray<Good>>> = {
-  Ammo: [{ sprite: AMMO_BOX, isCentered: false }],
+  Ammo: [COIN, { sprite: AMMO_BOX, isCentered: false, width: ICON_SIZE }],
   Traps: [
-    { sprite: TRAP_ICONS.Barricade, isCentered: true },
-    { sprite: TRAP_ICONS.Turret, isCentered: true },
+    COIN,
+    { sprite: TRAP_ICONS.Barricade, isCentered: true, width: ICON_SIZE },
+    { sprite: TRAP_ICONS.Turret, isCentered: true, width: ICON_SIZE },
   ],
-  Shop: [],
+  Shop: [COIN],
+  Gift: [GIFT],
+  Choice: [HOLD_RING, CHECK, WALK_AWAY, CROSS],
 }
 
 const bubbleWidth = (kind: BubbleKind): number =>
-  PAD * 2 + COIN_WIDTH + GOODS[kind].length * (ICON_SIZE + ICON_GAP)
+  PAD * 2 +
+  Array.reduce(GOODS[kind], 0, (sum, good) => sum + good.width) +
+  (GOODS[kind].length - 1) * ICON_GAP
 
 const BUBBLE_INK = '#140c10'
 const BUBBLE_FILL = '#f4f1de'
@@ -113,6 +191,8 @@ const FRAMES: Readonly<Record<BubbleKind, Sprite>> = {
   Ammo: bakeShapes(frameRects(bubbleWidth('Ammo'), BUBBLE_ALERT)),
   Traps: bakeShapes(frameRects(bubbleWidth('Traps'), BUBBLE_INK)),
   Shop: bakeShapes(frameRects(bubbleWidth('Shop'), BUBBLE_INK)),
+  Gift: bakeShapes(frameRects(bubbleWidth('Gift'), BUBBLE_INK)),
+  Choice: bakeShapes(frameRects(bubbleWidth('Choice'), BUBBLE_INK)),
 }
 
 const isStallInView = (camera: Camera): boolean => {
@@ -231,16 +311,20 @@ const goodsShapes = (
   kind: BubbleKind,
   x: number,
   y: number,
-): ReadonlyArray<Canvas.Shape> => [
-  placeSprite(x + PAD, y + PAD, COIN_SPRITE),
-  ...Array.map(GOODS[kind], ({ sprite, isCentered }, index) => {
-    const left =
-      x + PAD + COIN_WIDTH + ICON_GAP + index * (ICON_SIZE + ICON_GAP)
-    return isCentered
-      ? placeSprite(left + 3, y + PAD + 3, sprite)
-      : placeSprite(left, y + PAD, sprite)
-  }),
-]
+): ReadonlyArray<Canvas.Shape> =>
+  Array.reduce(
+    GOODS[kind],
+    { left: x + PAD, shapes: Array.empty<Canvas.Shape>() },
+    ({ left, shapes }, { sprite, isCentered, width }) => ({
+      left: left + width + ICON_GAP,
+      shapes: [
+        ...shapes,
+        isCentered
+          ? placeSprite(left + 3, y + PAD + 3, sprite)
+          : placeSprite(left, y + PAD, sprite),
+      ],
+    }),
+  ).shapes
 
 export const stallBubbleShapes = (
   model: Model,
@@ -248,27 +332,55 @@ export const stallBubbleShapes = (
 ): ReadonlyArray<Canvas.Shape> =>
   Option.match(maybeBubbleKind(model, camera), {
     onNone: () => [],
-    onSome: kind => {
-      const width = bubbleWidth(kind)
-      const view = viewBoxOf(camera)
-      const tip = worldToView(camera, TIP)
-      const bob = Math.round(
-        Math.sin((FULL_TURN * model.elapsedMs) / BOB_MS) * 1,
-      )
-      const left = view.x + EDGE_MARGIN + ARROW_LENGTH
-      const right = view.x + view.width - EDGE_MARGIN - ARROW_LENGTH - width
-      const top = view.y + HUD_CLEARANCE
-      const bottom = view.y + view.height - EDGE_MARGIN - BUBBLE_HEIGHT - TAIL
-      const wantedX = Math.round(tip.x) - width + 2
-      const wantedY = Math.round(tip.y) - BUBBLE_HEIGHT - TAIL
-      const x = Math.max(left, Math.min(right, wantedX))
-      const y = Math.max(top, Math.min(bottom, wantedY)) + bob
-      const side = sideOf({ x: wantedX, y: wantedY }, left, right, top, bottom)
-      const color = kind === 'Ammo' ? BUBBLE_ALERT : BUBBLE_INK
-      return [
-        placeSprite(x, y, FRAMES[kind]),
-        ...goodsShapes(kind, x, y),
-        ...(side === 'Inside' ? [] : arrowRects(side, x, y, width, color)),
-      ]
-    },
+    onSome: kind => bubbleShapes(kind, TIP, model, camera),
+  })
+
+// NOTE: a bubble whose tail tip points at a spot in the world, pinned to
+// the window's edge with an arrow when the spot is out of view.
+export const bubbleShapes = (
+  kind: BubbleKind,
+  tipInWorld: Vector,
+  model: Model,
+  camera: Camera,
+): ReadonlyArray<Canvas.Shape> => {
+  const width = bubbleWidth(kind)
+  const view = viewBoxOf(camera)
+  const tip = worldToView(camera, tipInWorld)
+  const bob = Math.round(Math.sin((FULL_TURN * model.elapsedMs) / BOB_MS) * 1)
+  const left = view.x + EDGE_MARGIN + ARROW_LENGTH
+  const right = view.x + view.width - EDGE_MARGIN - ARROW_LENGTH - width
+  const top = view.y + HUD_CLEARANCE
+  const bottom = view.y + view.height - EDGE_MARGIN - BUBBLE_HEIGHT - TAIL
+  const wantedX = Math.round(tip.x) - width + 2
+  const wantedY = Math.round(tip.y) - BUBBLE_HEIGHT - TAIL
+  const x = Math.max(left, Math.min(right, wantedX))
+  const y = Math.max(top, Math.min(bottom, wantedY)) + bob
+  const side = sideOf({ x: wantedX, y: wantedY }, left, right, top, bottom)
+  const color = kind === 'Ammo' ? BUBBLE_ALERT : BUBBLE_INK
+  return [
+    placeSprite(x, y, FRAMES[kind]),
+    ...goodsShapes(kind, x, y),
+    ...(side === 'Inside' ? [] : arrowRects(side, x, y, width, color)),
+  ]
+}
+
+// NOTE: the kitchen tour's bubbles: a gift over the boards, then over the
+// fridge, and the take or leave choice while the prize floats.
+export const kitchenBubbleShapes = (
+  model: Model,
+  camera: Camera,
+): ReadonlyArray<Canvas.Shape> =>
+  Option.match(kitchenStepOf(model), {
+    onNone: () => [],
+    onSome: step =>
+      step === 'Choose'
+        ? Option.match(fridgeBoxOf(levelOf(model)), {
+            onNone: () => [],
+            onSome: box =>
+              bubbleShapes('Choice', fridgeSpot(box), model, camera),
+          })
+        : Option.match(maybeKitchenMark(model), {
+            onNone: () => [],
+            onSome: mark => bubbleShapes('Gift', mark, model, camera),
+          }),
   })
