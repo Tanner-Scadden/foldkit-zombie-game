@@ -3,7 +3,8 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
 import { Arsenal, type CarriedGun, type Model } from './model'
-import { ROOT, fighting, measureSurface } from './testing'
+import { fighting } from './model.fixture'
+import { ROOT, measureSurface } from './testing'
 import { freshGun } from './weapons'
 
 // NOTE: on touch, with every gun dry, the knife button glows: it is the way

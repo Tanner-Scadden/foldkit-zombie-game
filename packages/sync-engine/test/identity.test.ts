@@ -30,10 +30,7 @@ import {
   verifySignature,
   verifyToken,
 } from '../src/index'
-import { openServerDatabase } from './fixtures'
-
-const run = <A, E>(program: Effect.Effect<A, E, Scope.Scope>): Promise<A> =>
-  Effect.runPromise(Effect.scoped(program))
+import { openServerDatabase, run } from './fixtures'
 
 const SECRET = 'test-secret-that-is-long-enough'
 

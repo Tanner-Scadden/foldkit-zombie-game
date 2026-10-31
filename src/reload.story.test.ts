@@ -12,17 +12,16 @@ import {
 } from './constants'
 import { update } from './main'
 import { Message } from './message'
-import type { GameEvent } from './model'
 import {
   Arsenal,
   type CarriedGun,
   type Model,
   Phase,
-  type PlannedSpawn,
   Reload,
   ShopState,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN, withArsenal } from './model.fixture'
 import {
   holdFire,
   holdingFirst,
@@ -32,6 +31,7 @@ import {
   press,
   release,
   releaseFire,
+  tagsOf,
   tick,
   ticks,
   withPistol,
@@ -52,20 +52,9 @@ const SMG_FIRING_TICKS = ticksOf(3000)
 // round number.
 const aboutMs = (ms: number) => Option.some(expect.closeTo(ms, 6))
 
-const HELD_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const fighting: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
-  phase: () => Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [HELD_SPAWN] }),
+  phase: () => Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
 })
 
 const preparing: Model = modifyFields(fighting, {
@@ -74,7 +63,7 @@ const preparing: Model = modifyFields(fighting, {
       wave: 2,
       remainingMs: 15_000,
       durationMs: PREPARATION_MS,
-      spawns: [HELD_SPAWN],
+      spawns: [DISTANT_SPAWN],
     }),
 })
 
@@ -84,20 +73,12 @@ const withPistolLoaded = (base: Model, pistolLoaded: number): Model =>
       withPistol(player, pistol => ({ ...pistol, loaded: pistolLoaded })),
   })
 
-const withArsenal = (base: Model, arsenal: Arsenal): Model =>
-  modifyFields(base, {
-    player: player => modifyFields(player, { arsenal: () => arsenal }),
-  })
-
 const smg = (rounds: number, loaded: number): CarriedGun => ({
   kind: 'Smg',
   rounds,
   loaded,
   tier: 0,
 })
-
-const tagsOf = (events: ReadonlyArray<GameEvent>): ReadonlyArray<string> =>
-  Array.map(events, ({ _tag }) => _tag)
 
 const reloadingMs = (reload: Reload): Option.Option<number> =>
   Reload.match(reload, {

@@ -1,10 +1,10 @@
 import { Array, Option, pipe } from 'effect'
-import { Command, given, message, model, story } from 'foldkit/story'
+import { Command, given, message, model, steps, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
 
-import { Dialog, DialogBlock, RadioGroup, Tabs } from '@foldkit/ui'
+import { DialogBlock, RadioGroup, Tabs } from '@foldkit/ui'
 
 import * as Character from './character'
 import {
@@ -37,7 +37,7 @@ import {
   shownName,
 } from './profile'
 import { saveOf } from './save'
-import { SURFACE, press, showDialog } from './testing'
+import { SURFACE, closeDialog, press, showDialog, writeSave } from './testing'
 import { WriteSave } from './update/save'
 import { PlaySound } from './update/sound'
 import { asVeteran } from './veteran'
@@ -47,17 +47,16 @@ const home: Model = modifyFields(asVeteran(initialModel), {
   saveStatus: () => 'Read',
 })
 
-const writeSave = () => Command.resolve(WriteSave, Message.CompletedWriteSave())
-
-const closeProfile = () => [
-  message(
-    toParentMessage(ProfileDialogBinding, DialogBlock.Message.RequestedClose()),
-  ),
-  Command.resolve(
-    Dialog.test.CloseDialog,
-    DialogBlock.Message.CompletedCloseDialog(),
-  ),
-]
+const closeProfile = () =>
+  steps(
+    message(
+      toParentMessage(
+        ProfileDialogBinding,
+        DialogBlock.Message.RequestedClose(),
+      ),
+    ),
+    closeDialog(),
+  )
 
 const tabIndex = (tab: ProfileTab): number =>
   pipe(
@@ -65,21 +64,22 @@ const tabIndex = (tab: ProfileTab): number =>
     Option.getOrElse(() => 0),
   )
 
-const selectTab = (tab: ProfileTab) => [
-  message(
-    toParentMessage(
-      ProfileTabsBinding,
-      ProfileTabsBlock.Message.SelectedTab({
-        index: tabIndex(tab),
-        value: tab,
-      }),
+const selectTab = (tab: ProfileTab) =>
+  steps(
+    message(
+      toParentMessage(
+        ProfileTabsBinding,
+        ProfileTabsBlock.Message.SelectedTab({
+          index: tabIndex(tab),
+          value: tab,
+        }),
+      ),
     ),
-  ),
-  Command.resolve(
-    Tabs.test.FocusTab({ id: 'profile-tabs', index: tabIndex(tab) }),
-    ProfileTabsBlock.Message.CompletedFocusTab(),
-  ),
-]
+    Command.resolve(
+      Tabs.test.FocusTab({ id: 'profile-tabs', index: tabIndex(tab) }),
+      ProfileTabsBlock.Message.CompletedFocusTab(),
+    ),
+  )
 
 const expectOpenOn = (tab: ProfileTab) =>
   model((current: Model) => {
@@ -159,12 +159,12 @@ describe('the Profile', () => {
       given(
         modifyFields(openOn('Settings'), { tutorialReset: () => 'Asking' }),
       ),
-      ...selectTab('Account'),
+      selectTab('Account'),
       model(current => {
         expect(current.profile.tab).toBe('Account')
         expect(current.tutorialReset).toBe('Idle')
       }),
-      ...selectTab('Name'),
+      selectTab('Name'),
       model(current => {
         expect(current.profile.tab).toBe('Name')
       }),
@@ -263,7 +263,7 @@ describe('the name', () => {
       update,
       given(openOn('Name')),
       message(Message.UpdatedNameDraft({ value: 'Gobbler' })),
-      ...selectTab('Account'),
+      selectTab('Account'),
       model(current => {
         expect(current.playerName).toBe('Gobbler')
       }),
@@ -273,7 +273,7 @@ describe('the name', () => {
       update,
       given(openOn('Name')),
       message(Message.UpdatedNameDraft({ value: 'Tot Terror' })),
-      ...closeProfile(),
+      closeProfile(),
       model(current => {
         expect(current.profileDialog.isOpen).toBe(false)
         expect(current.playerName).toBe('Tot Terror')

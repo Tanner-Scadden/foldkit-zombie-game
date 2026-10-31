@@ -9,40 +9,21 @@ import {
   Invulnerability,
   type Model,
   Phase,
-  type PlannedSpawn,
-  Trap,
   type Vector,
   type Zombie,
   initialModel,
 } from './model'
-import { ticks, zombieOf } from './testing'
+import { DISTANT_SPAWN } from './model.fixture'
+import { ticks, westPlank, zombieOf } from './testing'
 import { TRAPS } from './traps'
 import { ZOMBIE_KINDS } from './zombies'
 
 const FRAME_MS = 50
 const SPEED = 20
 
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const NEAR_WEST_PLANK: Vector = { x: 45, y: 90 }
 const FAR_FROM_PLANKS: Vector = { x: 95, y: 90 }
 const PLAYER_AT: Vector = { x: 250, y: 90 }
-
-const westPlank = Trap.Barricade({
-  id: 1,
-  door: 'West',
-  hp: TRAPS.Barricade.hp,
-  hitRemainingMs: 0,
-})
 
 const fightingWith = (zombie: Zombie): Model =>
   modifyFields(initialModel, {

@@ -14,15 +14,16 @@ import { describe, test } from 'vitest'
 
 import { RESTART_GRACE_MS } from './constants'
 import { type Model, Phase, initialModel } from './model'
-import { ROOT, measureSurface, showDialogInScene } from './testing'
+import {
+  ROOT,
+  difficultyButton,
+  lockedNightmare,
+  measureSurface,
+  playButton,
+  showDialogInScene,
+} from './testing'
 import { asVeteran } from './veteran'
 
-const playButton = role('button', {
-  name: 'Play',
-})
-const difficultyButton = role('button', {
-  name: 'Difficulty: Normal. Change it',
-})
 const card = role('dialog', { name: 'How tough are you?' })
 const picker = role('dialog', { name: 'Difficulty' })
 const easy = role('button', { name: 'Easy: Just here for the vibes' })
@@ -30,9 +31,6 @@ const normal = role('button', {
   name: "Normal: The way it's meant to be played",
 })
 const hard = role('button', { name: 'Hard: They bite back' })
-const lockedNightmare = role('button', {
-  name: 'Nightmare, locked. Beat Hard to unlock',
-})
 const openNightmare = role('button', {
   name: 'Nightmare: No mercy. Bring snacks',
 })

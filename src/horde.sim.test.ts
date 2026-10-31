@@ -20,15 +20,8 @@ import {
   ZombieAction,
   type ZombieKind,
 } from './model'
-import {
-  blastFrames,
-  holdFire,
-  quietWave,
-  recordTicks,
-  ticks,
-  withActors,
-  zombieOf,
-} from './testing'
+import { quietWave, withActors } from './model.fixture'
+import { blastFrames, holdFire, recordTicks, ticks, zombieOf } from './testing'
 import { FINAL_WAVE, doorCounts, floorCounts, rollSpawns } from './waves'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
 
@@ -36,10 +29,8 @@ const FRAME_MS = FIXED_STEP_MS
 const CENTER_X = PARLOUR.width / 2
 const CENTER_Y = PARLOUR.height / 2
 
-const fightingModel: Model = quietWave(1)
-
 const withScene = (zombies: ReadonlyArray<Zombie>): Model =>
-  withActors(fightingModel, zombies)
+  withActors(quietWave(1), zombies)
 
 describe('exploders', () => {
   test('a fight with Exploder chains replays identically from the same seed', () => {
@@ -99,7 +90,7 @@ describe('spawn tables', () => {
     story(
       update,
       given(
-        modifyFields(fightingModel, {
+        modifyFields(quietWave(1), {
           phase: () => preparation,
           rngState: () => rngState,
           player: player =>

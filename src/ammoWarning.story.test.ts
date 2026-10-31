@@ -20,9 +20,9 @@ import {
   DifficultyCard,
   type Model,
   Phase,
-  type PlannedSpawn,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN } from './model.fixture'
 import { SavedOnboarding } from './playerData'
 import { restoreSave, saveOf } from './save'
 import { maybeBubbleKind } from './stallBubble'
@@ -42,24 +42,13 @@ const smg = (rounds: number, loaded = Math.min(rounds, 30)): CarriedGun => ({
   tier: 0,
 })
 
-const HELD_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const fightingWith = (second: CarriedGun, first = STARTING_PISTOL): Model =>
   modifyFields(initialModel, {
     difficultyCard: () => DifficultyCard.Seen(),
     maybeSurface: () => Option.some(SURFACE),
     musicSetting: () => 'Off',
     audio: () => AudioState.Ready(),
-    phase: () => Phase.Wave({ wave: 4, elapsedMs: 0, spawns: [HELD_SPAWN] }),
+    phase: () => Phase.Wave({ wave: 4, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
     player: player =>
       modifyFields(player, {
         arsenal: () => Arsenal.HoldingSecond({ first, second }),

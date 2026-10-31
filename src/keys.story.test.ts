@@ -1,4 +1,4 @@
-import { Array, Option } from 'effect'
+import { Array } from 'effect'
 import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
@@ -6,50 +6,29 @@ import { describe, expect, test } from 'vitest'
 import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
-import {
-  type CarriedGun,
-  DebutCard,
-  type Model,
-  Phase,
-  type PlannedSpawn,
-  Reload,
-  RunMode,
-  initialModel,
-} from './model'
+import { DebutCard, type Model, Phase, Reload, RunMode } from './model'
+import { DISTANT_SPAWN, readyModel } from './model.fixture'
 import { DEBUT_CARD_MIN_MS } from './onboarding'
-import { holdingFirst, holdingSecond, press, release, tick } from './testing'
-import { asVeteran } from './veteran'
+import {
+  SHOTGUN,
+  holdingFirst,
+  holdingSecond,
+  press,
+  tap,
+  tick,
+} from './testing'
 import { STARTING_PISTOL } from './weapons'
 
 const FRAME_MS = 50
 
-const tap = (code: string) => [press(code), release(code)]
-
-const HELD_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
-const FIGHTING = Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [HELD_SPAWN] })
+const FIGHTING = Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [DISTANT_SPAWN] })
 
 const PREPARING = Phase.Preparation({
   wave: 2,
   remainingMs: 15_000,
   durationMs: PREPARATION_MS,
-  spawns: [HELD_SPAWN],
+  spawns: [DISTANT_SPAWN],
 })
-
-const readyModel: Model = modifyFields(asVeteran(initialModel), {
-  maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
-})
-
-const SHOTGUN: CarriedGun = { kind: 'Shotgun', rounds: 16, loaded: 6, tier: 0 }
 
 const fighting: Model = modifyFields(readyModel, {
   phase: () => FIGHTING,
@@ -117,7 +96,7 @@ describe('one key per action: removed keys do nothing', () => {
       story(
         update,
         given(fighting),
-        ...tap(code),
+        tap(code),
         model(({ player }) => {
           expect(player.arsenal).toEqual(fighting.player.arsenal)
         }),
@@ -130,7 +109,7 @@ describe('one key per action: removed keys do nothing', () => {
       story(
         update,
         given(start),
-        ...tap('KeyP'),
+        tap('KeyP'),
         model(current => {
           expect(isPaused(current)).toBe(false)
         }),
@@ -151,7 +130,7 @@ describe('one key per action: removed keys do nothing', () => {
         story(
           update,
           given(start),
-          ...tap('Space'),
+          tap('Space'),
           model(({ phase }) => {
             expect(phase).toEqual(start.phase)
           }),
@@ -163,7 +142,7 @@ describe('one key per action: removed keys do nothing', () => {
     story(
       update,
       given(preparing),
-      ...tap('Space'),
+      tap('Space'),
       model(({ phase }) => {
         expect(phase).toEqual(PREPARING)
       }),
@@ -171,7 +150,7 @@ describe('one key per action: removed keys do nothing', () => {
     story(
       update,
       given(withDebutCard),
-      ...tap('Space'),
+      tap('Space'),
       model(({ debutCard }) => {
         expect(debutCard).toEqual(withDebutCard.debutCard)
       }),
@@ -183,8 +162,8 @@ describe('one key per action: removed keys do nothing', () => {
       story(
         update,
         given(fighting),
-        ...tap('Escape'),
-        ...tap(code),
+        tap('Escape'),
+        tap(code),
         model(current => {
           expect(current.phase).toEqual(Phase.Paused({ round: FIGHTING }))
         }),
@@ -217,13 +196,13 @@ describe('one key per action: the kept keys work', () => {
     story(
       update,
       given(fighting),
-      ...tap('KeyQ'),
+      tap('KeyQ'),
       model(({ player }) => {
         expect(player.arsenal).toEqual(
           holdingSecond(SHOTGUN, { ...STARTING_PISTOL, loaded: 3 }),
         )
       }),
-      ...tap('KeyQ'),
+      tap('KeyQ'),
       model(({ player }) => {
         expect(player.arsenal).toEqual(fighting.player.arsenal)
       }),
@@ -234,7 +213,7 @@ describe('one key per action: the kept keys work', () => {
     story(
       update,
       given(fighting),
-      ...tap('KeyR'),
+      tap('KeyR'),
       model(({ player }) => {
         expect(Reload.isAnyOf(['Reloading'])(player.reload)).toBe(true)
       }),
@@ -250,11 +229,11 @@ describe('one key per action: the kept keys work', () => {
           selectedTrap: () => 'Barricade',
         }),
       ),
-      ...tap('KeyG'),
+      tap('KeyG'),
       model(({ selectedTrap }) => {
         expect(selectedTrap).toBe('Turret')
       }),
-      ...tap('KeyT'),
+      tap('KeyT'),
       model(({ traps, trapStock }) => {
         expect(traps).toHaveLength(1)
         expect(trapStock.Turret).toBe(0)
@@ -266,7 +245,7 @@ describe('one key per action: the kept keys work', () => {
     story(
       update,
       given(readyModel),
-      ...tap('Enter'),
+      tap('Enter'),
       model(({ phase, mode }) => {
         expect(Phase.isAnyOf(['Preparation'])(phase)).toBe(true)
         expect(mode).toEqual(RunMode.Campaign())
@@ -275,7 +254,7 @@ describe('one key per action: the kept keys work', () => {
     story(
       update,
       given(preparing),
-      ...tap('Enter'),
+      tap('Enter'),
       model(({ phase }) => {
         expect(Phase.isAnyOf(['Wave'])(phase)).toBe(true)
       }),
@@ -283,7 +262,7 @@ describe('one key per action: the kept keys work', () => {
     story(
       update,
       given(withDebutCard),
-      ...tap('Enter'),
+      tap('Enter'),
       model(({ debutCard }) => {
         expect(debutCard).toEqual(DebutCard.Hidden())
       }),
@@ -294,12 +273,12 @@ describe('one key per action: the kept keys work', () => {
     story(
       update,
       given(readyModel),
-      ...tap('KeyE'),
+      tap('KeyE'),
       model(({ phase, home }) => {
         expect(Phase.isAnyOf(['Ready'])(phase)).toBe(true)
         expect(home.mode).toBe('Endless')
       }),
-      ...tap('Enter'),
+      tap('Enter'),
       model(({ phase, mode }) => {
         expect(Phase.isAnyOf(['Preparation'])(phase)).toBe(true)
         expect(mode).toEqual(RunMode.Endless())
@@ -312,12 +291,12 @@ describe('one key per action: the kept keys work', () => {
       story(
         update,
         given(start),
-        ...tap('Escape'),
+        tap('Escape'),
         model(current => {
           expect(current.phase).toEqual(Phase.Paused({ round }))
         }),
         tick(FRAME_MS),
-        ...tap('Escape'),
+        tap('Escape'),
         model(current => {
           expect(current.phase).toEqual(start.phase)
         }),
@@ -329,8 +308,8 @@ describe('one key per action: the kept keys work', () => {
     story(
       update,
       given(fighting),
-      ...tap('KeyM'),
-      ...tap('KeyN'),
+      tap('KeyM'),
+      tap('KeyN'),
       model(({ soundSetting, musicSetting }) => {
         expect(soundSetting).toBe('Muted')
         expect(musicSetting).toBe('Off')

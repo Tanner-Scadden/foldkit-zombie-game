@@ -55,16 +55,17 @@ import {
   type Particle,
   Phase,
   Pierce,
-  type PlannedSpawn,
   Stick,
   Streak,
   type Zombie,
   ZombieState,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN, readyModel } from './model.fixture'
 import { scoreOf } from './stats'
 import {
-  SURFACE,
+  MUZZLE_X,
+  RESTART_GRACE_TICKS,
   bulletInto,
   holdFire,
   holdingSecond,
@@ -73,29 +74,15 @@ import {
   scoring,
   tick,
   ticks,
+  touchDown,
+  touchMove,
   zombieAt,
 } from './testing'
-import { asVeteran } from './veteran'
 
 const LEFT_THUMB = 11
 const RIGHT_THUMB = 12
 const STRAY_POINTER = 99
 const MOUSE_POINTER = 1
-
-const readyModel: Model = modifyFields(asVeteran(initialModel), {
-  maybeSurface: () => Option.some(SURFACE),
-})
-
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
 
 const FIGHTING_PHASE: Phase = Phase.Wave({
   wave: 1,
@@ -117,7 +104,6 @@ const dyingZombieAt = (id: number, x: number, y: number): Zombie =>
       }),
   })
 
-const MUZZLE_X = PARLOUR.width / 2 + 10
 const FRAME_MS = FIXED_STEP_MS
 const RIGHT = { x: 1, y: 0 }
 
@@ -125,8 +111,6 @@ const withZombies = (base: Model, zombies: ReadonlyArray<Zombie>): Model =>
   modifyFields(base, { zombies: () => zombies })
 
 const GRACE_TICK_MS = 50
-const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
-
 // NOTE: hit-stop counts whole ticks: a freeze lasts its length rounded to
 // whole ticks, and the world does not step on any of them.
 const freezeTicks = (freezeMs: number): number =>
@@ -134,14 +118,6 @@ const freezeTicks = (freezeMs: number): number =>
 
 const waitOutFreeze = (freezeMs: number) =>
   ticks(freezeTicks(freezeMs), FRAME_MS)
-
-const touchDown = (pointerId: number, clientX: number, clientY: number) =>
-  message(
-    Message.PressedPointer({ pointerId, device: 'Touch', clientX, clientY }),
-  )
-
-const touchMove = (pointerId: number, clientX: number, clientY: number) =>
-  message(Message.MovedPointer({ pointerId, clientX, clientY }))
 
 describe('movement', () => {
   test('moves the player by speed times the tick', () => {

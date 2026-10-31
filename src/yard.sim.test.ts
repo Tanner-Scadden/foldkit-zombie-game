@@ -11,12 +11,11 @@ import {
   Invulnerability,
   type Model,
   Phase,
-  Trap,
   type Zombie,
   initialModel,
 } from './model'
-import { DISTANT_SPAWN, ticks, zombieOf } from './testing'
-import { TRAPS } from './traps'
+import { DISTANT_SPAWN } from './model.fixture'
+import { ticks, westPlank, zombieOf } from './testing'
 import { ZOMBIE_KINDS } from './zombies'
 
 // NOTE: seed 31677's wave 10 with the fridge on, as the balance bot left it
@@ -30,13 +29,6 @@ const FRAME_MS = FIXED_STEP_MS
 const SECONDS = 40
 
 const PLAYER_AT = { x: 160, y: 90 }
-
-const westPlank = Trap.Barricade({
-  id: 1,
-  door: 'West',
-  hp: TRAPS.Barricade.hp,
-  hitRemainingMs: 0,
-})
 
 const speedOf = (zombie: Zombie): number => ZOMBIE_KINDS[zombie.kind].speedMin
 

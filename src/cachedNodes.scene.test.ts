@@ -1,13 +1,19 @@
-import { Option } from 'effect'
 import { Mount, Subscription, given, scene, tap } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { FIXED_STEP_MS } from './constants'
 import { Message } from './message'
-import { type Model, Phase, type PlannedSpawn, initialModel } from './model'
+import { type Model, Phase, initialModel } from './model'
+import { DISTANT_SPAWN, homeAfterRead, inPortrait } from './model.fixture'
 import { MeasureGameSurface } from './mount'
-import { ROOT, SCENE_SUBSCRIPTIONS } from './testing'
+import {
+  PHONE_LANDSCAPE,
+  PHONE_PORTRAIT,
+  ROOT,
+  SCENE_SUBSCRIPTIONS,
+  nodesOf,
+} from './testing'
 import { asVeteran } from './veteran'
 
 // NOTE: a lazy view (`createLazy`, `createKeyedLazy`, the shut dialog cache)
@@ -24,19 +30,6 @@ type VNodeLike = Readonly<{
   key?: PropertyKey | undefined
   children?: ReadonlyArray<VNodeLike | string> | undefined
 }>
-
-const nodesOf = (root: VNodeLike): ReadonlyArray<VNodeLike> => {
-  const found: Array<VNodeLike> = []
-  const visit = (node: VNodeLike | string) => {
-    if (typeof node === 'string') {
-      return
-    }
-    found.push(node)
-    node.children?.forEach(visit)
-  }
-  visit(root)
-  return found
-}
 
 // NOTE: the VNodes of `next` that are the very objects of `previous`, at the
 // top of each reused subtree (snabbdom skips what is under one).
@@ -66,7 +59,7 @@ const describeNode = (node: VNodeLike): string => node.sel ?? '(text)'
 // VNodes' keys and the selectors of any reused VNode without one.
 const reuseAcrossAFrame = (
   model: Model,
-  surface: typeof LANDSCAPE,
+  surface: typeof PHONE_LANDSCAPE,
 ): Readonly<{
   keys: ReadonlyArray<string>
   unkeyed: ReadonlyArray<string>
@@ -99,39 +92,15 @@ const reuseAcrossAFrame = (
   }
 }
 
-const LANDSCAPE = { left: 0, top: 0, width: 844, height: 390 }
-const PORTRAIT = { left: 0, top: 0, width: 390, height: 844 }
-
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
-const home: Model = modifyFields(asVeteran(initialModel), {
-  saveStatus: () => 'Read',
-})
-
 const fighting: Model = modifyFields(asVeteran(initialModel), {
   lastDevice: () => 'Touch',
   phase: () =>
     Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [DISTANT_SPAWN] }),
 })
 
-const inPortrait = (model: Model): Model =>
-  modifyFields(model, {
-    orientation: () => 'Portrait',
-    maybeSurface: () => Option.some(PORTRAIT),
-  })
-
 describe('cached VNodes', () => {
   test('on the home menu, every VNode a frame reuses is keyed', () => {
-    const { keys, unkeyed } = reuseAcrossAFrame(home, LANDSCAPE)
+    const { keys, unkeyed } = reuseAcrossAFrame(homeAfterRead, PHONE_LANDSCAPE)
     expect(unkeyed).toEqual([])
     expect(keys).toEqual(
       expect.arrayContaining(['room-layer', 'decal-layer', 'sprite-warm-up']),
@@ -139,7 +108,7 @@ describe('cached VNodes', () => {
   })
 
   test('in a landscape fight, every VNode a frame reuses is keyed', () => {
-    const { keys, unkeyed } = reuseAcrossAFrame(fighting, LANDSCAPE)
+    const { keys, unkeyed } = reuseAcrossAFrame(fighting, PHONE_LANDSCAPE)
     expect(unkeyed).toEqual([])
     expect(keys).toEqual(
       expect.arrayContaining(['room-layer', 'sprite-warm-up', 'shop']),
@@ -147,7 +116,10 @@ describe('cached VNodes', () => {
   })
 
   test('in a portrait fight, the thumb area and every other reused VNode is keyed', () => {
-    const { keys, unkeyed } = reuseAcrossAFrame(inPortrait(fighting), PORTRAIT)
+    const { keys, unkeyed } = reuseAcrossAFrame(
+      inPortrait(fighting),
+      PHONE_PORTRAIT,
+    )
     expect(unkeyed).toEqual([])
     expect(keys).toEqual(
       expect.arrayContaining(['room-layer', 'sprite-warm-up', 'thumb-area']),

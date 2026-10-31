@@ -1,10 +1,10 @@
 import { Array, Option } from 'effect'
-import { Command, given, message, model, story } from 'foldkit/story'
+import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
 
-import { Dialog, DialogBlock } from '@foldkit/ui'
+import { DialogBlock } from '@foldkit/ui'
 
 import { PanelDialogBinding } from './composition'
 import { FIXED_STEP_MS } from './constants'
@@ -25,7 +25,7 @@ import {
   ZombieState,
   initialModel,
 } from './model'
-import { SURFACE, press, showDialog, tick } from './testing'
+import { SURFACE, closeDialog, press, showDialog, tick } from './testing'
 import { asVeteran } from './veteran'
 import { FINAL_WAVE } from './waves'
 import { ZOMBIE_KINDS } from './zombies'
@@ -37,12 +37,6 @@ const firstVisit: Model = modifyFields(initialModel, {
 const veteran: Model = modifyFields(asVeteran(initialModel), {
   maybeSurface: () => Option.some(SURFACE),
 })
-
-const closeDialog = () =>
-  Command.resolve(
-    Dialog.test.CloseDialog,
-    DialogBlock.Message.CompletedCloseDialog(),
-  )
 
 const pick = (difficulty: Difficulty) =>
   message(Message.ClickedDifficultyCardButton({ difficulty }))

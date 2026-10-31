@@ -10,19 +10,15 @@ import {
   FIXED_STEP_MS,
   PREPARATION_MS,
 } from './constants'
-import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
-import {
-  type Model,
-  Phase,
-  type PlannedSpawn,
-  type Zombie,
-  initialModel,
-} from './model'
+import { type Model, Phase, type PlannedSpawn, type Zombie } from './model'
+import { plannedSpawn, readyModel } from './model.fixture'
 import { scoreOf } from './stats'
 import {
+  RESTART_GRACE_TICKS,
   bulletInto,
+  doomed,
   holdFire,
   press,
   release,
@@ -31,7 +27,6 @@ import {
   ticks,
   zombieAt,
 } from './testing'
-import { asVeteran } from './veteran'
 import {
   FINAL_WAVE,
   type SpawnGroup,
@@ -42,26 +37,7 @@ import {
 import { ZOMBIE_KINDS } from './zombies'
 
 const FRAME_MS = 50
-const MUZZLE_X = PARLOUR.width / 2 + 10
-
-const readyModel: Model = modifyFields(asVeteran(initialModel), {
-  maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
-})
-
 const GRACE_TICK_MS = 50
-const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
-
-const plannedSpawn = (atMs: number): PlannedSpawn => ({
-  atMs,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-})
-
 const inWave = (
   wave: number,
   spawns: ReadonlyArray<PlannedSpawn>,
@@ -75,7 +51,6 @@ const inWave = (
 const killShot = (base: Model, zombie: Zombie): Model =>
   modifyFields(base, { bullets: () => [bulletInto(500, zombie)] })
 
-const doomed = zombieAt(100, MUZZLE_X, PARLOUR.height / 2, { hp: 1 })
 const farAway = zombieAt(101, 40, 150)
 
 describe('preparation', () => {

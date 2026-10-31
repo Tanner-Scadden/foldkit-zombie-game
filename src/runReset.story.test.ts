@@ -1,19 +1,12 @@
-import { Option } from 'effect'
-import { Command, given, message, model, story } from 'foldkit/story'
+import { given, message, model, steps, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { Dialog, DialogBlock } from '@foldkit/ui'
-
 import { update } from './main'
 import { Message } from './message'
-import { type Model, Phase, TrapNotice, freshLoot, initialModel } from './model'
-import { SURFACE, press, release, showDialog, ticks } from './testing'
-import { asVeteran } from './veteran'
-
-const home: Model = modifyFields(asVeteran(initialModel), {
-  maybeSurface: () => Option.some(SURFACE),
-})
+import { type Model, Phase, TrapNotice, freshLoot } from './model'
+import { readyModel } from './model.fixture'
+import { closeDialog, press, release, showDialog, ticks } from './testing'
 
 // NOTE: listed here by hand, not read from the reset itself, so a field the
 // reset forgets shows up as a difference.
@@ -62,23 +55,20 @@ const RUN_FIELDS = [
 const runState = (current: Model) =>
   Object.fromEntries(RUN_FIELDS.map(field => [field, current[field]]))
 
-const leaveForHome = [
+const leaveForHome = steps(
   press('Escape'),
   press('KeyH'),
   showDialog(),
   message(Message.ClickedLeaveRunButton()),
-  Command.resolve(
-    Dialog.test.CloseDialog,
-    DialogBlock.Message.CompletedCloseDialog(),
-  ),
-]
+  closeDialog(),
+)
 
 describe('going home', () => {
   test('resets every run field, and the next run starts like a fresh one', () => {
     const played: Array<Model> = []
     story(
       update,
-      given(home),
+      given(readyModel),
       press('Enter'),
       press('KeyD'),
       press('KeyS'),
@@ -107,11 +97,11 @@ describe('going home', () => {
     story(
       update,
       given(messy),
-      ...leaveForHome,
+      leaveForHome,
       model(current => {
         expect(Phase.guards.Ready(current.phase)).toBe(true)
         expect(runState(current)).toEqual(
-          runState({ ...home, loot: freshLoot(current.rngState) }),
+          runState({ ...readyModel, loot: freshLoot(current.rngState) }),
         )
         atHome.push(current)
       }),
@@ -121,7 +111,7 @@ describe('going home', () => {
     const freshStart: Array<Model> = []
     story(
       update,
-      given({ ...home, rngState: wentHome.rngState }),
+      given({ ...readyModel, rngState: wentHome.rngState }),
       press('Enter'),
       model(current => {
         freshStart.push(current)

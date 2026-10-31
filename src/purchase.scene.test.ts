@@ -24,16 +24,14 @@ import {
   Phase,
   initialModel,
 } from './model'
-import { PURCHASE_RULES } from './purchase'
+import { pastTimedBreaks } from './model.fixture'
 import {
+  HOLD_TICKS,
   ROOT,
   SCENE_SUBSCRIPTIONS,
   measureSurface,
-  pastTimedBreaks,
 } from './testing'
 import { asVeteran } from './veteran'
-
-const HOLD_TICKS = Math.ceil(PURCHASE_RULES.holdMs / FIXED_STEP_MS) + 1
 
 const atBoards = (device: InputDevice, balance: number): Model =>
   modifyFields(pastTimedBreaks(asVeteran(initialModel)), {

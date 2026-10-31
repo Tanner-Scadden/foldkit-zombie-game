@@ -14,13 +14,8 @@ import { CAMERA_LEAN_PX, FIXED_STEP_MS, STICK_RADIUS_PX } from './constants'
 import { clientToView } from './geometry'
 import { update } from './main'
 import { Message } from './message'
-import {
-  type Model,
-  Phase,
-  type PlannedSpawn,
-  Stick,
-  initialModel,
-} from './model'
+import { type Model, Phase, Stick, initialModel } from './model'
+import { DISTANT_SPAWN } from './model.fixture'
 import {
   PORTRAIT_HUD_PX,
   PORTRAIT_WIDTH,
@@ -31,36 +26,23 @@ import {
   thumbAreaTop,
 } from './screen'
 import { scoreOf } from './stats'
-import { scoring, ticks } from './testing'
+import { PHONE_LANDSCAPE, PHONE_PORTRAIT, scoring, ticks } from './testing'
 import { asVeteran } from './veteran'
 
-const PORTRAIT_SURFACE = { left: 0, top: 0, width: 390, height: 844 }
-const LANDSCAPE_SURFACE = { left: 0, top: 0, width: 844, height: 390 }
 const LEFT_THUMB = 11
 const RIGHT_THUMB = 12
 const FRAME_MS = FIXED_STEP_MS
 
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const fightingInPortrait: Model = modifyFields(asVeteran(initialModel), {
   lastDevice: () => 'Touch',
   orientation: () => 'Portrait',
-  maybeSurface: () => Option.some(PORTRAIT_SURFACE),
+  maybeSurface: () => Option.some(PHONE_PORTRAIT),
   phase: () => Phase.Wave({ wave: 3, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
 })
 
 const fightingInLandscape: Model = modifyFields(fightingInPortrait, {
   orientation: () => 'Landscape',
-  maybeSurface: () => Option.some(LANDSCAPE_SURFACE),
+  maybeSurface: () => Option.some(PHONE_LANDSCAPE),
 })
 
 const standingAt = (base: Model, x: number, y: number): Model =>
@@ -74,7 +56,7 @@ const pressThumb = (pointerId: number, clientX: number, clientY: number) =>
 const moveThumb = (pointerId: number, clientX: number, clientY: number) =>
   message(Message.MovedPointer({ pointerId, clientX, clientY }))
 
-const rotateTo = (surface: typeof PORTRAIT_SURFACE) =>
+const rotateTo = (surface: typeof PHONE_PORTRAIT) =>
   message(Message.MeasuredGameSurface(surface))
 
 describe('the portrait screen', () => {
@@ -307,13 +289,13 @@ describe('portrait input', () => {
   test('a point on a portrait phone turns into the world point under it', () => {
     const fighting = standingAt(fightingInPortrait, 300, 120)
     const screen = screenOf(fighting)
-    const scale = PORTRAIT_SURFACE.width / screen.width
+    const scale = PHONE_PORTRAIT.width / screen.width
     const onScreen = Option.getOrThrow(
-      clientToView(PORTRAIT_SURFACE, { x: 195, y: 422 }, screen),
+      clientToView(PHONE_PORTRAIT, { x: 195, y: 422 }, screen),
     )
     expect(onScreen.x).toBeCloseTo(90)
     expect(onScreen.y).toBeCloseTo(
-      (422 - (PORTRAIT_SURFACE.height - screen.height * scale) / 2) / scale,
+      (422 - (PHONE_PORTRAIT.height - screen.height * scale) / 2) / scale,
     )
     const world = viewToWorld(screenCameraOf(fighting), onScreen)
     expect(world.x).toBeCloseTo(90 / screen.zoom + cameraOf(fighting).x)
@@ -336,7 +318,7 @@ describe('turning the phone', () => {
       pressThumb(LEFT_THUMB, 120, 300),
       pressThumb(RIGHT_THUMB, 700, 300),
       moveThumb(RIGHT_THUMB, 700 + STICK_RADIUS_PX, 300),
-      rotateTo(PORTRAIT_SURFACE),
+      rotateTo(PHONE_PORTRAIT),
       model(current => {
         expect(isPortrait(current)).toBe(true)
         expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)
@@ -351,7 +333,7 @@ describe('turning the phone', () => {
         expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)
         expect(current.stats.shotsFired).toBeGreaterThan(0)
       }),
-      rotateTo(LANDSCAPE_SURFACE),
+      rotateTo(PHONE_LANDSCAPE),
       model(current => {
         expect(isPortrait(current)).toBe(false)
         expect(Phase.isAnyOf(['Wave'])(current.phase)).toBe(true)

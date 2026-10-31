@@ -18,15 +18,16 @@ import { Dialog, DialogBlock, RadioGroup } from '@foldkit/ui'
 
 import { PartRadioGroupBlock } from './lookRadios'
 import { Message } from './message'
-import { type Model, Phase, initialModel } from './model'
+import { Phase } from './model'
+import { home } from './model.fixture'
 import {
   ROOT,
   SCENE_SUBSCRIPTIONS,
+  closeButton,
   measureSurface,
   openHandInScene,
   pickCardInScene,
 } from './testing'
-import { asVeteran } from './veteran'
 
 const characterButton = role('button', {
   name: 'Your character: change how you look',
@@ -35,7 +36,6 @@ const characterCard = role('button', {
   name: 'Character: change how you look',
 })
 const pickerDialog = role('dialog', { name: 'Profile' })
-const closeButton = role('button', { name: 'Close' })
 const randomizeButton = role('button', { name: 'Roll a random look' })
 
 const group = (name: string) => role('radiogroup', { name })
@@ -83,13 +83,11 @@ const pick = (groupName: string, name: string) => [
   resolveFocusOption(),
 ]
 
-const onTitle: Model = asVeteran(initialModel)
-
 describe('Character picker', () => {
   test('the MANOR hand deals a Character card with the C key badge, and the player on stage opens it too', () => {
     scene(
       ROOT,
-      given(onTitle),
+      given(home),
       measureSurface,
       expect(characterButton).toExist(),
       ...openHandInScene(),
@@ -106,7 +104,7 @@ describe('Character picker', () => {
   test('opens as a labelled dialog with little tabs over the parts and a preview', () => {
     scene(
       ROOT,
-      given(onTitle),
+      given(home),
       measureSurface,
       click(characterButton),
       ...showPicker(),
@@ -155,7 +153,7 @@ describe('Character picker', () => {
   test('picking a part on every little tab changes the look and the preview', () => {
     scene(
       ROOT,
-      given(onTitle),
+      given(home),
       measureSurface,
       click(characterButton),
       ...showPicker(),
@@ -186,7 +184,7 @@ describe('Character picker', () => {
   test('the same name in two groups picks only its own part', () => {
     scene(
       ROOT,
-      given(onTitle),
+      given(home),
       measureSurface,
       click(characterButton),
       ...showPicker(),
@@ -208,7 +206,7 @@ describe('Character picker', () => {
   test('works from the keyboard: C opens it and the arrow keys pick within a group', () => {
     scene(
       ROOT,
-      given(onTitle),
+      given(home),
       measureSurface,
       Subscription.emit(
         SCENE_SUBSCRIPTIONS.keyboard,
@@ -234,7 +232,7 @@ describe('Character picker', () => {
   test('works by touch: no key badges, taps open it, pick, and close it', () => {
     scene(
       ROOT,
-      given(modifyFields(onTitle, { lastDevice: () => 'Touch' })),
+      given(modifyFields(home, { lastDevice: () => 'Touch' })),
       measureSurface,
       expect(
         within(characterButton, selector('.home-button-key')),
@@ -253,7 +251,7 @@ describe('Character picker', () => {
   test('the dice rolls a new look from the seed', () => {
     scene(
       ROOT,
-      given(modifyFields(onTitle, { rngState: () => 7 })),
+      given(modifyFields(home, { rngState: () => 7 })),
       measureSurface,
       click(characterButton),
       ...showPicker(),
@@ -268,7 +266,7 @@ describe('Character picker', () => {
     scene(
       ROOT,
       given(
-        modifyFields(onTitle, {
+        modifyFields(home, {
           phase: () => Phase.GameOver({ wave: 3 }),
           screenMs: () => 99_999,
         }),
@@ -282,7 +280,7 @@ describe('Character picker', () => {
     scene(
       ROOT,
       given(
-        modifyFields(onTitle, {
+        modifyFields(home, {
           phase: () => Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [] }),
         }),
       ),

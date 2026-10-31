@@ -1,4 +1,4 @@
-import { Array, Match, Option, Record, pipe } from 'effect'
+import { Array, Option, Record, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 import { given, scene } from 'foldkit/scene'
@@ -21,6 +21,7 @@ import {
 } from './sprite'
 import { standInKeyOf, useSpriteAtlas, useSpriteMode } from './spriteAtlas'
 import { decodePng, hexOf } from './testPng'
+import { imagesIn } from './testing'
 
 // PIXEL MAPS
 
@@ -40,17 +41,6 @@ const colorAt = (x: number, y: number): Option.Option<string> =>
     Array.get(PIXELS, y),
     Option.flatMap(row => Option.fromNullishOr(row[x])),
     Option.flatMap(symbol => Option.fromNullishOr(PALETTE[symbol])),
-  )
-
-const imagesIn = (
-  shapes: ReadonlyArray<Canvas.Shape>,
-): ReadonlyArray<Canvas.Image> =>
-  Array.flatMap(shapes, shape =>
-    Match.value(shape).pipe(
-      Match.tag('Image', image => [image]),
-      Match.tag('Group', ({ shapes: inner }) => imagesIn(inner)),
-      Match.orElse(() => []),
-    ),
   )
 
 const onlyImage = (shapes: ReadonlyArray<Canvas.Shape>): Canvas.Image => {

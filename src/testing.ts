@@ -1,41 +1,51 @@
-import { Array, Option } from 'effect'
-import { Scene, Story } from 'foldkit'
+// Shared steps, locators, and builders for Story and Scene tests: what a test
+// does to the game, and the zombies, bullets, and guns it puts in. Named
+// Models live in `model.fixture.ts`. `tools/lint/duplicateTestHelpers.ts`
+// fails a helper copied between test files: add it here instead.
+
+import { Array, Match, Option, Struct } from 'effect'
+import { Canvas, Scene, Story } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { Dialog, DialogBlock } from '@foldkit/ui'
+import { Dialog, DialogBlock, RadioGroup } from '@foldkit/ui'
 
-import { levelOf, openExitIn } from './arena'
+import { PARLOUR, levelOf } from './arena'
+import { type SoundEffect } from './audio'
 import { ApplicationComposition } from './composition'
-import { SCORE_PER_ZOMBIE, ZOMBIE_MAX_HP } from './constants'
+import {
+  FIXED_STEP_MS,
+  RESTART_GRACE_MS,
+  SCORE_PER_ZOMBIE,
+  ZOMBIE_MAX_HP,
+} from './constants'
 import { KITCHEN_EXIT } from './exits'
-import { fridgeBoxOf, pickPrize, prizeWeights } from './leftovers'
+import { PartRadioGroupBlock } from './lookRadios'
 import { update } from './main'
 import { Message } from './message'
 import {
   type Bullet,
   Frenzy,
-  type FridgePrize,
   GameEvent,
-  Lesson,
   type Model,
-  Phase,
   Pierce,
-  type PlannedSpawn,
   type RunStats,
   type Zombie,
   ZombieAction,
   type ZombieKind,
   ZombieState,
-  initialModel,
 } from './model'
 import { MeasureGameSurface } from './mount'
-import { nextRandom } from './prng'
-import { freshRun } from './runReset'
+import { type HintId, LESSON_MIN_SHOWN_MS, shownHints } from './onboarding'
+import { PURCHASE_RULES } from './purchase'
 import { subscriptions } from './subscriptions'
-import { asVeteran } from './veteran'
+import { TRAPS } from './traps'
+import { ReadRoomLink } from './update/coop'
+import { HideSplash, ShowLoadProgress, WriteSave } from './update/save'
+import { PlaySound } from './update/sound'
 import { view } from './view'
 import { STARTING_PISTOL, gunsOf, mapGuns, maybeCarried } from './weapons'
-import { Arsenal, type CarriedGun, type Player } from './worldSchema'
+import { World } from './world'
+import { Arsenal, type CarriedGun, type Player, Trap } from './worldSchema'
 import { ZOMBIE_KINDS } from './zombies'
 
 // NOTE: the score is read from the kills, so a test that wants a score
@@ -53,6 +63,11 @@ export const scoring =
 export const SURFACE = { left: 0, top: 0, width: 800, height: 400 }
 
 export const WIDE_SURFACE = { left: 0, top: 0, width: 1280, height: 720 }
+
+// NOTE: a phone held sideways and held upright.
+export const PHONE_LANDSCAPE = { left: 0, top: 0, width: 844, height: 390 }
+
+export const PHONE_PORTRAIT = { left: 0, top: 0, width: 390, height: 844 }
 
 export const tick = (deltaTime: number) =>
   Story.message(Message.TickedFrame({ deltaTime }))
@@ -132,66 +147,224 @@ export const openHandInScene = () => [
 // NOTE: a card puts the hand away, then opens its own dialog.
 export const pickCardInScene = (name: string | RegExp) => [
   Scene.click(Scene.role('button', { name })),
+  ...closeDialogInScene(),
+  ...showDialogInScene(),
+]
+
+export const closeDialog = () =>
+  Story.Command.resolve(
+    Dialog.test.CloseDialog,
+    DialogBlock.Message.CompletedCloseDialog(),
+  )
+
+export const closeDialogInScene = () => [
   Scene.Command.resolve(
     Dialog.test.CloseDialog,
     DialogBlock.Message.CompletedCloseDialog(),
   ),
-  Scene.Command.resolve(
-    Dialog.test.ShowDialog,
-    DialogBlock.Message.SucceededShowDialog(),
-  ),
 ]
 
-// NOTE: past the first break's lesson, so a Plank Pile has its price (a
-// new save's first one is free, see isFirstPlankFree in src/shop.ts).
-export const pastFirstBreak = (model: Model): Model =>
-  modifyFields(model, {
-    lessons: lessons =>
-      modifyFields(lessons, { openBreak: () => Lesson.Learned({ atMs: 0 }) }),
-  })
+export const resolveFocusOption = () =>
+  Story.Command.resolve(
+    RadioGroup.test.FocusOption,
+    PartRadioGroupBlock.Message.CompletedFocusOption(),
+  )
 
-// NOTE: past the kitchen tour's break, so the break before wave 3 counts
-// down and the kitchen and the fridge have their prices (the tour holds the
-// clock and gives them away in a new save, see src/tutorialRules.ts).
-export const pastTimedBreaks = (model: Model): Model =>
-  modifyFields(model, {
-    lessons: lessons =>
-      modifyFields(lessons, { timedBreaks: () => Lesson.Learned({ atMs: 0 }) }),
-  })
+/* oxlint-enable foldkit/no-child-message-construction-in-root */
 
-export const fighting: Model = modifyFields(initialModel, {
-  phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),
-})
+// STORY STEPS
 
-// NOTE: a spawn planned so far out that it never comes, so a wave that holds
-// it stays in progress with only the zombies a test puts in the room.
-export const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
+export const tap = (code: string) => Story.steps(press(code), release(code))
+
+export const touchDown = (
+  pointerId: number,
+  clientX: number,
+  clientY: number,
+) =>
+  Story.message(
+    Message.PressedPointer({ pointerId, device: 'Touch', clientX, clientY }),
+  )
+
+export const touchMove = (
+  pointerId: number,
+  clientX: number,
+  clientY: number,
+) => Story.message(Message.MovedPointer({ pointerId, clientX, clientY }))
+
+export const mouseDown = (clientX: number, clientY: number) =>
+  Story.message(
+    Message.PressedPointer({ pointerId: 1, device: 'Mouse', clientX, clientY }),
+  )
+
+// NOTE: the frames, of `frameMs` each, that play `ms` of game time.
+export const ticksFor = (ms: number, frameMs: number) =>
+  ticks(Math.round(ms / frameMs), frameMs)
+
+// NOTE: the Model one fixed-step frame later, for a test that plays frames
+// by hand and looks at each.
+export const nextFrame = (current: Model): Model =>
+  update(current, Message.TickedFrame({ deltaTime: FIXED_STEP_MS })).model
+
+// NOTE: how many fixed-step frames it takes to play at least `ms`.
+export const tickCountFor = (ms: number): number =>
+  Math.ceil(ms / FIXED_STEP_MS)
+
+// NOTE: fixed-step frames that hold a stand-to-buy prompt until it buys.
+export const HOLD_TICKS = Math.ceil(PURCHASE_RULES.holdMs / FIXED_STEP_MS) + 1
+
+// NOTE: fixed-step frames that stand the player at a counter long enough for
+// its prompt to come up.
+export const STAND_TICKS = Math.ceil(PURCHASE_RULES.standMs / FIXED_STEP_MS) + 1
+
+// NOTE: 50 ms frames that keep a lesson's hint up for its shortest time.
+export const SHOWN_TICKS = Math.ceil(LESSON_MIN_SHOWN_MS / 50)
+
+// NOTE: 50 ms frames past the grace after a run ends, when a key or tap
+// restarts.
+export const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / 50)
+
+export const writeSave = () =>
+  Story.Command.resolve(WriteSave, Message.CompletedWriteSave())
+
+export const resolvePlayed = (sound: SoundEffect) =>
+  Story.Command.resolve(
+    PlaySound,
+    Message.CompletedPlaySound({ sound, outcome: 'Played' }),
+  )
+
+// NOTE: the boot splash's last Commands once the save is read: the load
+// bar fills, the splash goes, and no room link is waiting.
+export const finishSplash = Story.steps(
+  Story.Command.resolve(
+    ShowLoadProgress({ loaded: 5, total: 5 }),
+    Message.CompletedShowLoadProgress(),
+  ),
+  Story.Command.resolve(HideSplash(), Message.CompletedHideSplash()),
+  Story.Command.resolve(
+    ReadRoomLink,
+    Message.CompletedReadRoomLink({ maybeCode: Option.none() }),
+  ),
+)
+
+// READING A MODEL
+
+export const hasEvent = (current: Model, tag: GameEvent['_tag']): boolean =>
+  Array.some(current.frameEvents, event => event._tag === tag)
+
+export const tagsOf = (
+  events: ReadonlyArray<GameEvent>,
+): ReadonlyArray<string> => Array.map(events, ({ _tag }) => _tag)
+
+export const hintIds = (current: Model): ReadonlyArray<HintId> =>
+  Array.map(shownHints(current), ({ id }) => id)
+
+export const isKitchenOpen = (current: Model): boolean =>
+  Array.contains(levelOf(current).openExits, KITCHEN_EXIT)
+
+export const WORLD_KEYS = Struct.keys(World.fields)
+
+// READING A VIEW
+
+type Box = Readonly<{ x: number; y: number; width: number; height: number }>
+
+// NOTE: every Rect in a shape tree, moved by its Groups' translations.
+export const rectsOf = (
+  shapes: ReadonlyArray<Canvas.Shape>,
+  offset: Readonly<{ x: number; y: number }>,
+): ReadonlyArray<Canvas.Rect & Box> =>
+  Array.flatMap(shapes, shape =>
+    Match.value(shape).pipe(
+      Match.tag('Group', group =>
+        rectsOf(group.shapes, {
+          x: offset.x + (group.translate?.x ?? 0),
+          y: offset.y + (group.translate?.y ?? 0),
+        }),
+      ),
+      Match.tag('Rect', rect => [
+        Canvas.Rect({ ...rect, x: rect.x + offset.x, y: rect.y + offset.y }),
+      ]),
+      Match.orElse(() => []),
+    ),
+  )
+
+export const imagesIn = (
+  shapes: ReadonlyArray<Canvas.Shape>,
+): ReadonlyArray<Canvas.Image> =>
+  Array.flatMap(shapes, shape =>
+    Match.value(shape).pipe(
+      Match.tag('Image', image => [image]),
+      Match.tag('Group', ({ shapes: inner }) => imagesIn(inner)),
+      Match.orElse(() => []),
+    ),
+  )
+
+export type VNodeLike = Readonly<{
+  sel?: string | undefined
+  key?: PropertyKey | undefined
+  data?:
+    | Readonly<{
+        attrs?: Readonly<Record<string, unknown>> | undefined
+        props?: Readonly<Record<string, unknown>> | undefined
+      }>
+    | undefined
+  children?: ReadonlyArray<VNodeLike | string> | undefined
+}>
+
+// NOTE: a rendered VNode and every element under it, depth first.
+export const nodesOf = (root: VNodeLike): ReadonlyArray<VNodeLike> => {
+  const found: Array<VNodeLike> = []
+  const visit = (node: VNodeLike | string) => {
+    if (typeof node === 'string') {
+      return
+    }
+    found.push(node)
+    node.children?.forEach(visit)
+  }
+  visit(root)
+  return found
 }
 
-// A wave in progress on a measured surface, with nothing coming in.
-export const quietWave = (wave: number): Model =>
-  modifyFields(initialModel, {
-    maybeSurface: () => Option.some(SURFACE),
-    phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
-  })
+// LOCATORS
 
-export const withActors = (
-  base: Model,
-  zombies: ReadonlyArray<Zombie>,
-  bullets: ReadonlyArray<Bullet> = [],
-): Model =>
-  modifyFields(base, {
-    zombies: () => zombies,
-    bullets: () => bullets,
-  })
+export const playButton = Scene.role('button', { name: 'Play' })
+
+export const closeButton = Scene.role('button', { name: 'Close' })
+
+export const modeButton = Scene.role('button', {
+  name: 'Mode: Campaign. Switch to Endless',
+})
+
+export const playEndlessButton = Scene.selector(
+  ".home-play[data-mode='Endless']",
+)
+
+export const difficultyButton = Scene.role('button', {
+  name: 'Difficulty: Normal. Change it',
+})
+
+export const lockedNightmare = Scene.role('button', {
+  name: 'Nightmare, locked. Beat Hard to unlock',
+})
+
+export const campaignButton = Scene.role('button', {
+  name: 'Campaign: 10 waves, then victory',
+})
+
+export const endlessButton = Scene.role('button', {
+  name: 'Endless: waves keep coming until you fall',
+})
+
+export const keepGoingButton = Scene.role('button', {
+  name: 'Keep going: carry on into endless from wave 11 with your money, guns, and traps',
+})
+
+export const retryButton = Scene.role('button', {
+  name: 'Retry: a new campaign of 10 waves',
+})
+
+export const updateChip = Scene.role('button', {
+  name: 'Update ready: tap to get it',
+})
 
 // Ticks that push each frame's Model onto `frames`, for tests that look at a
 // whole fight after it is played.
@@ -325,72 +498,30 @@ export const pistolOf = (player: Player): CarriedGun =>
 export const maybeSpareGun = (arsenal: Arsenal): Option.Option<CarriedGun> =>
   Array.findFirst(gunsOf(arsenal), gun => gun.kind !== 'Pistol')
 
-// MYSTERY LEFTOVERS
-
-// NOTE: a fresh run with the kitchen open and the player at the fridge's
-// door in a break, for the fridge's Story tests.
-export const FRIDGE_DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
+export const SHOTGUN: CarriedGun = {
+  kind: 'Shotgun',
+  rounds: 16,
+  loaded: 6,
+  tier: 0,
 }
 
-export const fridgeBox = Option.getOrThrow(
-  fridgeBoxOf(
-    levelOf({ level: openExitIn(freshRunModel().level, KITCHEN_EXIT) }),
-  ),
-)
+// THE ROOM
 
-export const AT_FRIDGE = {
-  x: (fridgeBox.left + fridgeBox.right) / 2,
-  y: fridgeBox.bottom + 8,
-}
+// NOTE: where a zombie or the player stands just inside a door.
+export const BELOW_NORTH_DOOR = { x: 220, y: 27 }
 
-export function freshRunModel(): Model {
-  const veteran = asVeteran(initialModel)
-  return modifyFields(
-    { ...veteran, ...freshRun(veteran) },
-    {
-      maybeSurface: () =>
-        Option.some({ left: 0, top: 0, width: 800, height: 400 }),
-    },
-  )
-}
+export const BELOW_KITCHEN_DOOR = { x: 70, y: 26 }
 
-export const atFridge = (balance: number, wave = 5): Model =>
-  modifyFields(freshRunModel(), {
-    level: level => openExitIn(level, KITCHEN_EXIT),
-    phase: () =>
-      Phase.Preparation({
-        wave,
-        remainingMs: 120_000,
-        durationMs: 120_000,
-        spawns: [FRIDGE_DISTANT_SPAWN],
-      }),
-    wallet: () => ({ balance, earned: balance, shown: balance }),
-    player: player =>
-      modifyFields(player, { x: () => AT_FRIDGE.x, y: () => AT_FRIDGE.y }),
-  })
+// NOTE: just right of the player at the parlour's center, where a shot
+// leaves the gun.
+export const MUZZLE_X = PARLOUR.width / 2 + 10
 
-// NOTE: a fridge whose stream's next draw lands on `prize`, found by trying
-// seeds, so a test can ask for each prize without knowing the stream.
-export const fridgeSeededFor = (current: Model, prize: FridgePrize): Model => {
-  const seed = Option.getOrThrow(
-    Array.findFirst(
-      Array.makeBy(500, index => index + 1),
-      candidate =>
-        pickPrize(
-          prizeWeights(current.fridge, current.player),
-          nextRandom(candidate).value,
-        ) === prize,
-    ),
-  )
-  return modifyFields(current, {
-    loot: loot => modifyFields(loot, { fridgeRngState: () => seed }),
-  })
-}
+// NOTE: a zombie one shot from death in front of the gun.
+export const doomed = zombieAt(100, MUZZLE_X, PARLOUR.height / 2, { hp: 1 })
+
+export const westPlank = Trap.Barricade({
+  id: 1,
+  door: 'West',
+  hp: TRAPS.Barricade.hp,
+  hitRemainingMs: 0,
+})

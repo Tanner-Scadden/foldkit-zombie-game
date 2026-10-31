@@ -22,13 +22,14 @@ import { FIXED_STEP_MS, PREPARATION_MS } from './constants'
 import * as Coop from './coop/model'
 import { Message } from './message'
 import { type Model, Phase, ShopState, initialModel } from './model'
+import { homeAfterRead } from './model.fixture'
 import {
   ROOT,
   SCENE_SUBSCRIPTIONS,
   holdingSecond,
   measureSurface,
+  nodesOf,
 } from './testing'
-import { asVeteran } from './veteran'
 
 // NOTE: every menu dialog is in the page on every frame, and a shut one is
 // handed back from a cache (see `dialogShell`). Snabbdom pairs unkeyed
@@ -52,19 +53,6 @@ type VNodeLike = Readonly<{
     | undefined
   children?: ReadonlyArray<VNodeLike | string> | undefined
 }>
-
-const nodesOf = (root: VNodeLike): ReadonlyArray<VNodeLike> => {
-  const found: Array<VNodeLike> = []
-  const visit = (node: VNodeLike | string) => {
-    if (typeof node === 'string') {
-      return
-    }
-    found.push(node)
-    node.children?.forEach(visit)
-  }
-  visit(root)
-  return found
-}
 
 const idOf = (node: VNodeLike): string | undefined => {
   const id = node.data?.props?.['id'] ?? node.data?.attrs?.['id']
@@ -176,14 +164,10 @@ const opened = (dialog: DialogModel): DialogModel => ({
   isOpen: true,
 })
 
-const home: Model = modifyFields(asVeteran(initialModel), {
-  saveStatus: () => 'Read',
-})
-
 type OpenCase = Readonly<{ name: string; model: Model; opensDialog: boolean }>
 
 const OPEN_CASES: ReadonlyArray<OpenCase> = [
-  { name: 'nothing open', model: home, opensDialog: false },
+  { name: 'nothing open', model: homeAfterRead, opensDialog: false },
   {
     name: 'the shop',
     model: modifyFields(atStall, {
@@ -194,12 +178,12 @@ const OPEN_CASES: ReadonlyArray<OpenCase> = [
   },
   {
     name: 'the MORE hand',
-    model: modifyFields(home, { handDialog: opened }),
+    model: modifyFields(homeAfterRead, { handDialog: opened }),
     opensDialog: true,
   },
   {
     name: 'a menu panel',
-    model: modifyFields(home, {
+    model: modifyFields(homeAfterRead, {
       panel: () => 'HowToPlay',
       panelDialog: opened,
     }),
@@ -207,24 +191,24 @@ const OPEN_CASES: ReadonlyArray<OpenCase> = [
   },
   {
     name: 'the Profile',
-    model: modifyFields(home, {
+    model: modifyFields(homeAfterRead, {
       profileDialog: opened,
     }),
     opensDialog: true,
   },
   {
     name: 'the Home Screen steps',
-    model: modifyFields(home, { homeScreenSteps: opened }),
+    model: modifyFields(homeAfterRead, { homeScreenSteps: opened }),
     opensDialog: true,
   },
   {
     name: 'the update greeting',
-    model: modifyFields(home, { updateGreeting: opened }),
+    model: modifyFields(homeAfterRead, { updateGreeting: opened }),
     opensDialog: true,
   },
   {
     name: 'co-op',
-    model: modifyFields(home, {
+    model: modifyFields(homeAfterRead, {
       coop: coop =>
         modifyFields(coop, {
           screen: () => Coop.Screen.Hub({ maybeProblem: Option.none() }),

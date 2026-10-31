@@ -8,18 +8,10 @@ import { isSolidAt, levelOf } from './arena'
 import { BULLET_STEP_PX, TILE_SIZE } from './constants'
 import { update } from './main'
 import { Message } from './message'
-import {
-  type CarriedGun,
-  type Model,
-  Phase,
-  type Vector,
-  initialModel,
-} from './model'
+import { type Model, Phase, type Vector, initialModel } from './model'
 import { aimSightShapes } from './sightView'
-import { holdingFirst, holdingSecond } from './testing'
+import { SHOTGUN, holdingFirst, holdingSecond } from './testing'
 import { asVeteran } from './veteran'
-
-const SHOTGUN: CarriedGun = { kind: 'Shotgun', rounds: 16, loaded: 6, tier: 0 }
 
 const fighting: Model = modifyFields(asVeteran(initialModel), {
   maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),

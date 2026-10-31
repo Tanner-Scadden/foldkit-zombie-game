@@ -8,16 +8,12 @@ import { describe, expect, test } from 'vitest'
 
 import { PLAYER_MAX_HP } from './constants'
 import { update } from './main'
-import { type Model, Phase, initialModel } from './model'
+import { type Model, Phase } from './model'
+import { readyModel } from './model.fixture'
 import { scoreOf } from './stats'
-import { SURFACE, holdFire, press, release, tick, ticks } from './testing'
-import { asVeteran } from './veteran'
+import { holdFire, press, release, tick, ticks } from './testing'
 
 const FRAME_MS = 50
-
-const readyModel: Model = modifyFields(asVeteran(initialModel), {
-  maybeSurface: () => Option.some(SURFACE),
-})
 
 describe('a full wave', () => {
   const SECONDS_PER_RUN = 40

@@ -3,7 +3,7 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { FIXED_STEP_MS, PREPARATION_MS, RESTART_GRACE_MS } from './constants'
+import { FIXED_STEP_MS, PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
@@ -11,15 +11,15 @@ import {
   type CarriedGun,
   type Model,
   Phase,
-  type PlannedSpawn,
   type ShopItemId,
   ShopState,
   type WeaponKind,
-  initialModel,
 } from './model'
+import { DISTANT_SPAWN, newPlayerReady } from './model.fixture'
 import { TIER_LADDER } from './names'
 import { Verdict, verdictFor } from './shop'
 import {
+  RESTART_GRACE_TICKS,
   holdFire,
   holdingSecond,
   maybeSpareGun,
@@ -43,25 +43,8 @@ import {
 
 const FRAME_MS = FIXED_STEP_MS
 const GRACE_TICK_MS = 50
-const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
-
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
-const readyModel: Model = modifyFields(initialModel, {
-  maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
-})
-
 const browsing = (balance: number, arsenal: Arsenal): Model =>
-  modifyFields(readyModel, {
+  modifyFields(newPlayerReady, {
     phase: () =>
       Phase.Preparation({
         wave: 3,
@@ -188,7 +171,7 @@ describe('upgrade tiers', () => {
 
   test('firing reads the effective stats of the held gun at its tier', () => {
     const fighting = (arsenal: Arsenal): Model =>
-      modifyFields(readyModel, {
+      modifyFields(newPlayerReady, {
         phase: () =>
           Phase.Wave({ wave: 3, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
         player: player =>
@@ -290,7 +273,7 @@ describe('tier resets', () => {
     story(
       update,
       given(
-        modifyFields(readyModel, {
+        modifyFields(newPlayerReady, {
           phase: () => Phase.GameOver({ wave: 5 }),
           player: player =>
             modifyFields(player, {

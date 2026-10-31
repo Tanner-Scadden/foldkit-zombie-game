@@ -1,5 +1,5 @@
 import { Array, Option } from 'effect'
-import { given, message, model, story } from 'foldkit/story'
+import { given, message, model, steps, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
@@ -21,20 +21,23 @@ import {
 import {
   DEBUT_CARD_MIN_MS,
   DEBUT_CARD_MS,
-  type HintId,
-  LESSON_MIN_SHOWN_MS,
   isLearned,
   shownGhostSticks,
-  shownHints,
 } from './onboarding'
 import {
+  SHOWN_TICKS,
   SURFACE,
+  hintIds,
   holdFire,
+  mouseDown,
   press,
   release,
   releaseFire,
+  tap,
   tick,
   ticks,
+  touchDown,
+  touchMove,
 } from './testing'
 import { asVeteran } from './veteran'
 import { rollSpawns } from './waves'
@@ -42,37 +45,19 @@ import { rollSpawns } from './waves'
 const TICK_MS = 50
 const CARD_TICKS = Math.ceil(DEBUT_CARD_MIN_MS / TICK_MS)
 const AUTO_TICKS = Math.ceil(DEBUT_CARD_MS / TICK_MS)
-const SHOWN_TICKS = Math.ceil(LESSON_MIN_SHOWN_MS / TICK_MS)
-
 const freshModel: Model = modifyFields(initialModel, {
   difficultyCard: () => DifficultyCard.Seen(),
   maybeSurface: () => Option.some(SURFACE),
 })
 
-const tap = (code: string) => [press(code), release(code)]
-
-const touchDown = (pointerId: number, clientX: number, clientY: number) =>
-  message(
-    Message.PressedPointer({ pointerId, device: 'Touch', clientX, clientY }),
-  )
-const touchMove = (pointerId: number, clientX: number, clientY: number) =>
-  message(Message.MovedPointer({ pointerId, clientX, clientY }))
 const touchUp = (pointerId: number) =>
   message(Message.ReleasedPointer({ pointerId }))
-
-const mouseDown = (clientX: number, clientY: number) =>
-  message(
-    Message.PressedPointer({ pointerId: 1, device: 'Mouse', clientX, clientY }),
-  )
 
 const cardKind = (current: Model): Option.Option<ZombieKind> =>
   DebutCard.match(current.debutCard, {
     Hidden: () => Option.none(),
     Showing: ({ kind }) => Option.some(kind),
   })
-
-const hintIds = (current: Model): ReadonlyArray<HintId> =>
-  Array.map(shownHints(current), ({ id }) => id)
 
 const remainingMs = (current: Model): number =>
   Phase.match(current.phase, {
@@ -156,7 +141,7 @@ describe('new zombie card', () => {
     story(
       update,
       given(freshModel),
-      ...tap('Enter'),
+      tap('Enter'),
       model(current => {
         expect(Phase.guards.Preparation(current.phase)).toBe(true)
         expect(cardKind(current)).toStrictEqual(Option.none())
@@ -229,7 +214,7 @@ describe('new zombie card', () => {
           ['Shambler'],
         ),
       ),
-      ...tap('Enter'),
+      tap('Enter'),
       message(Message.ClickedStartWaveButton()),
       model(current => {
         expect(Phase.guards.Wave(current.phase)).toBe(true)
@@ -260,7 +245,7 @@ describe('new zombie card', () => {
           'Crawler',
         ]),
       ),
-      ...tap('KeyK'),
+      tap('KeyK'),
       message(Message.ClickedStartWaveButton()),
       model(current => {
         expect(Phase.guards.Wave(current.phase)).toBe(true)
@@ -273,7 +258,7 @@ describe('new zombie card', () => {
       given(
         victorious(['Shambler', 'Runner', 'Exploder', 'Thrower', 'Crawler']),
       ),
-      ...tap('KeyK'),
+      tap('KeyK'),
       model(current => {
         expect(cardKind(current)).toStrictEqual(Option.none())
       }),
@@ -311,20 +296,23 @@ describe('new zombie card', () => {
   test('a click, a tap, Enter, or GOT IT skip it, but only after a short minimum', () => {
     const skips = [
       tap('Enter'),
-      [mouseDown(700, 200), message(Message.ReleasedPointer({ pointerId: 1 }))],
-      [touchDown(4, 100, 200), touchUp(4)],
-      [message(Message.ClickedDebutCardButton())],
+      steps(
+        mouseDown(700, 200),
+        message(Message.ReleasedPointer({ pointerId: 1 })),
+      ),
+      steps(touchDown(4, 100, 200), touchUp(4)),
+      message(Message.ClickedDebutCardButton()),
     ]
     Array.forEach(skips, skip => {
       story(
         update,
         given(atWaveStart(['Shambler'])),
-        ...skip,
+        skip,
         model(current => {
           expect(cardKind(current)).toStrictEqual(Option.some('Runner'))
         }),
         ...ticks(CARD_TICKS, TICK_MS),
-        ...skip,
+        skip,
         model(current => {
           expect(cardKind(current)).toStrictEqual(Option.none())
           expect(current.introducedKinds).toEqual(['Shambler', 'Runner'])
@@ -341,10 +329,10 @@ describe('new zombie card', () => {
       ...ticks(CARD_TICKS, TICK_MS),
       press('KeyW'),
       press('KeyD'),
-      ...tap('KeyR'),
-      ...tap('KeyQ'),
-      ...tap('KeyT'),
-      ...tap('KeyM'),
+      tap('KeyR'),
+      tap('KeyQ'),
+      tap('KeyT'),
+      tap('KeyM'),
       message(Message.MovedMouse({ clientX: 700, clientY: 100 })),
       message(Message.ClickedSwapButton()),
       message(Message.ClickedReloadButton()),
@@ -362,12 +350,12 @@ describe('new zombie card', () => {
       update,
       given(atWaveStart(['Shambler'])),
       ...ticks(CARD_TICKS, TICK_MS),
-      ...tap('Escape'),
+      tap('Escape'),
       model(current => {
         expect(Phase.guards.Paused(current.phase)).toBe(true)
       }),
       ...ticks(AUTO_TICKS, TICK_MS),
-      ...tap('Escape'),
+      tap('Escape'),
       model(current => {
         expect(Phase.guards.Wave(current.phase)).toBe(true)
         expect(cardKind(current)).toStrictEqual(Option.some('Runner'))
@@ -426,7 +414,7 @@ describe('touch first play', () => {
     story(
       update,
       given(freshModel),
-      ...tap('Enter'),
+      tap('Enter'),
       model(current => {
         expect(hintIds(current)).toEqual(['Move', 'Fire'])
         expect(shownGhostSticks(current)).toEqual([])
@@ -440,12 +428,12 @@ describe('tutorial hints', () => {
     story(
       update,
       given(freshModel),
-      ...tap('Enter'),
-      ...tap('KeyQ'),
-      ...tap('KeyM'),
-      ...tap('KeyM'),
-      ...tap('KeyG'),
-      ...tap('Digit2'),
+      tap('Enter'),
+      tap('KeyQ'),
+      tap('KeyM'),
+      tap('KeyM'),
+      tap('KeyG'),
+      tap('Digit2'),
       message(Message.MovedMouse({ clientX: 700, clientY: 100 })),
       press('KeyD'),
       tick(TICK_MS),
@@ -465,7 +453,7 @@ describe('tutorial hints', () => {
     story(
       update,
       given(freshModel),
-      ...tap('Enter'),
+      tap('Enter'),
       press('KeyD'),
       ...ticks(10, TICK_MS),
       release('KeyD'),
@@ -486,9 +474,9 @@ describe('wave 1 practice gate', () => {
     story(
       update,
       given(freshModel),
-      ...tap('Enter'),
+      tap('Enter'),
       ...ticks(Math.ceil((FIRST_PREPARATION_MS * 3) / TICK_MS), TICK_MS),
-      ...tap('KeyR'),
+      tap('KeyR'),
       model(current => {
         expect(remainingMs(current)).toBe(FIRST_PREPARATION_MS)
       }),
@@ -503,7 +491,7 @@ describe('wave 1 practice gate', () => {
     story(
       update,
       given(freshModel),
-      ...tap('Enter'),
+      tap('Enter'),
       press('KeyD'),
       ...ticks(10, TICK_MS),
       release('KeyD'),

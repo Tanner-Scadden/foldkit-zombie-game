@@ -21,6 +21,7 @@ import {
   ShopState,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN, atSeat } from './model.fixture'
 import {
   COOP_RULES,
   type SeatedPlayer,
@@ -29,7 +30,6 @@ import {
   playersOf,
   seatCrew,
   setPresence,
-  withSeat,
 } from './party'
 import { PURCHASE_RULES } from './purchase'
 import { SHOP_ITEMS, STALL_BOX } from './shop'
@@ -56,17 +56,6 @@ const LEFT_X = 60
 const RIGHT_X = 240
 const ROW_Y = 104
 
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const veteranModel = asVeteran(initialModel)
 
 const runningWave = Phase.Wave({
@@ -83,12 +72,6 @@ const crewOf = (count: number, phase: Phase = runningWave): Model =>
     }),
     world => seatCrew(world, count),
   )
-
-const atSeat = (
-  current: Model,
-  slot: number,
-  change: (world: World) => World,
-): Model => withWorld(current, world => withSeat(world, slot, change))
 
 const placed =
   (slot: number, x: number, y: number, hp = PLAYER_MAX_HP) =>

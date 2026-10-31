@@ -16,12 +16,11 @@ import {
   type Model,
   MunchopediaPage,
   Phase,
-  type PlannedSpawn,
   RunMode,
   type ZombieKind,
-  initialModel,
   noKills,
 } from './model'
+import { DISTANT_SPAWN, readyModel } from './model.fixture'
 import {
   MUNCHOPEDIA,
   earnedBadges,
@@ -30,28 +29,12 @@ import {
   unopenedKinds,
 } from './munchopedia'
 import { saveOf } from './save'
-import { SURFACE, press, showDialog, tick } from './testing'
+import { press, showDialog, tick, writeSave } from './testing'
 import { WriteSave } from './update/save'
-import { asVeteran } from './veteran'
 
-const home: Model = modifyFields(asVeteran(initialModel), {
-  maybeSurface: () => Option.some(SURFACE),
+const homeAfterRead: Model = modifyFields(readyModel, {
+  saveStatus: () => 'Read',
 })
-
-const homeAfterRead: Model = modifyFields(home, { saveStatus: () => 'Read' })
-
-const writeSave = () => Command.resolve(WriteSave, Message.CompletedWriteSave())
-
-const farSpawn: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
 
 const withKills = (
   base: Model,
@@ -69,7 +52,8 @@ const dyingWith = (
   kills: Partial<Record<ZombieKind, number>>,
 ): Model =>
   modifyFields(base, {
-    phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [farSpawn] }),
+    phase: () =>
+      Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [DISTANT_SPAWN] }),
     player: player => modifyFields(player, { hp: () => 0 }),
     stats: stats =>
       modifyFields(stats, { kills: () => ({ ...noKills, ...kills }) }),
@@ -185,11 +169,17 @@ describe('the home menu keys', () => {
       ['KeyI', 'HowToPlay'],
     ]
     Array.forEach(opens, ([code, panel]) =>
-      story(update, given(home), press(code), showDialog(), expectPanel(panel)),
+      story(
+        update,
+        given(readyModel),
+        press(code),
+        showDialog(),
+        expectPanel(panel),
+      ),
     )
     story(
       update,
-      given(home),
+      given(readyModel),
       press('KeyC'),
       showDialog(),
       model(current => {
@@ -199,7 +189,7 @@ describe('the home menu keys', () => {
     )
     story(
       update,
-      given(home),
+      given(readyModel),
       press('KeyO'),
       showDialog(),
       model(current => {
@@ -211,8 +201,9 @@ describe('the home menu keys', () => {
   })
 
   test('the rail keys and E do nothing in a wave', () => {
-    const fighting = modifyFields(home, {
-      phase: () => Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [farSpawn] }),
+    const fighting = modifyFields(readyModel, {
+      phase: () =>
+        Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
     })
     Array.forEach(['KeyL', 'KeyZ', 'KeyI', 'KeyO', 'KeyE'], code =>
       story(
@@ -233,7 +224,7 @@ describe('the mode toggle', () => {
   test('E and the mode button switch the mode back and forth, and start nothing', () => {
     story(
       update,
-      given(home),
+      given(readyModel),
       press('KeyE'),
       model(current => {
         expect(current.home.mode).toBe('Endless')
@@ -250,7 +241,7 @@ describe('the mode toggle', () => {
   test('PLAY starts the chosen mode', () => {
     story(
       update,
-      given(home),
+      given(readyModel),
       message(Message.ClickedModeButton()),
       message(Message.ClickedPlayButton()),
       model(current => {
@@ -260,7 +251,7 @@ describe('the mode toggle', () => {
     )
     story(
       update,
-      given(home),
+      given(readyModel),
       message(Message.ClickedPlayButton()),
       model(current => {
         expect(current.mode).toEqual(RunMode.Campaign())
@@ -271,7 +262,7 @@ describe('the mode toggle', () => {
   test('the chosen mode stays when the player comes home', () => {
     story(
       update,
-      given(home),
+      given(readyModel),
       press('KeyE'),
       press('Enter'),
       press('Escape'),
@@ -315,7 +306,7 @@ describe("What's New", () => {
     const lastPage = NEWS_DAYS.length - 1
     story(
       update,
-      given(home),
+      given(readyModel),
       message(Message.ClickedWhatsNewButton()),
       showDialog(),
       message(Message.ClickedNewerNewsButton()),
@@ -340,11 +331,11 @@ describe('the Munchopedia', () => {
   test('every kind starts locked, and a kind unlocks with its first kill', () => {
     expect(
       Array.filter(MUNCHOPEDIA, ({ kind }) =>
-        isDiscovered(home.bests.killsByKind, kind),
+        isDiscovered(readyModel.bests.killsByKind, kind),
       ),
     ).toEqual([])
     expect(MUNCHOPEDIA.length).toBe(7)
-    const tallied = withKills(home, { Runner: 1 })
+    const tallied = withKills(readyModel, { Runner: 1 })
     expect(isDiscovered(tallied.bests.killsByKind, 'Runner')).toBe(true)
     expect(isDiscovered(tallied.bests.killsByKind, 'Shambler')).toBe(false)
   })
@@ -353,7 +344,9 @@ describe('the Munchopedia', () => {
     story(
       update,
       given(
-        withKills(dyingWith(home, { Runner: 1, Shambler: 3 }), { Shambler: 5 }),
+        withKills(dyingWith(readyModel, { Runner: 1, Shambler: 3 }), {
+          Shambler: 5,
+        }),
       ),
       tick(FIXED_STEP_MS),
       model(current => {
@@ -391,7 +384,7 @@ describe('the Munchopedia', () => {
   test('a locked entry opens as a silhouette and is not marked as opened', () => {
     story(
       update,
-      given(home),
+      given(readyModel),
       message(Message.ClickedMunchopediaButton()),
       showDialog(),
       message(Message.ClickedMunchopediaEntryButton({ kind: 'Tank' })),
@@ -410,7 +403,7 @@ describe('the Munchopedia', () => {
   })
 
   test('the NEW ENTRY pop goes away when the next run starts, but the dot stays', () => {
-    const fresh = modifyFields(withKills(home, { Runner: 1 }), {
+    const fresh = modifyFields(withKills(readyModel, { Runner: 1 }), {
       home: menu => modifyFields(menu, { newEntries: () => ['Runner'] }),
     })
     story(
@@ -428,7 +421,7 @@ describe('the Munchopedia', () => {
   test('a kind already found raises no NEW ENTRY', () => {
     story(
       update,
-      given(withKills(dyingWith(home, { Runner: 4 }), { Runner: 9 })),
+      given(withKills(dyingWith(readyModel, { Runner: 4 }), { Runner: 9 })),
       tick(FIXED_STEP_MS),
       model(current => {
         expect(current.bests.killsByKind.Runner).toBe(13)
@@ -440,7 +433,7 @@ describe('the Munchopedia', () => {
   test('Uncle Chunk unlocks when he is beaten, and his entry counts every win over him', () => {
     story(
       update,
-      given(dyingWith(home, { Boss: 1, Shambler: 20 })),
+      given(dyingWith(readyModel, { Boss: 1, Shambler: 20 })),
       tick(FIXED_STEP_MS),
       model(current => {
         expect(isDiscovered(current.bests.killsByKind, 'Boss')).toBe(true)

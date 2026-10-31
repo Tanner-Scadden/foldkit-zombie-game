@@ -4,12 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { PARLOUR } from './arena'
-import {
-  PREPARATION_MS,
-  RESTART_GRACE_MS,
-  ZOMBIE_ALIVE_MAX,
-  ZOMBIE_MAX_HP,
-} from './constants'
+import { PREPARATION_MS, ZOMBIE_ALIVE_MAX, ZOMBIE_MAX_HP } from './constants'
 import { DIFFICULTIES, bestsFor, withBests } from './difficulty'
 import { update } from './main'
 import { Message } from './message'
@@ -17,15 +12,18 @@ import {
   DifficultyCard,
   type Model,
   Phase,
-  type PlannedSpawn,
   RunMode,
   Trap,
   initialModel,
 } from './model'
+import { plannedSpawn } from './model.fixture'
 import { endlessBannerOf } from './screens'
 import { scoreOf } from './stats'
 import {
+  MUZZLE_X,
+  RESTART_GRACE_TICKS,
   bulletInto,
+  doomed,
   holdingSecond,
   pistolOf,
   pistolOnly,
@@ -46,9 +44,6 @@ import { ZOMBIE_KINDS } from './zombies'
 
 const FRAME_MS = 50
 const GRACE_TICK_MS = 50
-const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
-const MUZZLE_X = PARLOUR.width / 2 + 10
-
 const readyModel: Model = modifyFields(initialModel, {
   difficultyCard: () => DifficultyCard.Seen(),
   maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
@@ -56,19 +51,6 @@ const readyModel: Model = modifyFields(initialModel, {
 
 const waitOutGrace = () =>
   Array.makeBy(RESTART_GRACE_TICKS, () => tick(GRACE_TICK_MS))
-
-const plannedSpawn = (atMs: number): PlannedSpawn => ({
-  atMs,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-})
-
-const doomed = zombieAt(100, MUZZLE_X, PARLOUR.height / 2, { hp: 1 })
 
 const clearingFinalWave = (mode: RunMode): Model =>
   modifyFields(readyModel, {

@@ -19,11 +19,9 @@ import {
   WAVE_BONUS_PER_WAVE,
   ZOMBIE_MAX_HP,
 } from './constants'
-import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import {
-  type Arsenal,
   type Bullet,
   type CarriedGun,
   GameEvent,
@@ -31,7 +29,6 @@ import {
   type Model,
   Phase,
   Pierce,
-  type PlannedSpawn,
   type ShopCategory,
   ShopChatter,
   type ShopItemId,
@@ -39,6 +36,7 @@ import {
   type WeaponKind,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN, pastFirstBreak, withArsenal } from './model.fixture'
 import {
   LASER_SIGHT_PRICE,
   SHOP_CATEGORY_ORDER,
@@ -51,12 +49,12 @@ import {
 } from './shop'
 import { ShopTabsBlock } from './shopTabs'
 import {
+  RESTART_GRACE_TICKS,
   bulletInto,
   holdFire,
   holdingFirst,
   holdingSecond,
   maybeSpareGun,
-  pastFirstBreak,
   pistolOnly,
   press,
   release,
@@ -84,20 +82,7 @@ const readyModel: Model = modifyFields(
   },
 )
 
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const GRACE_TICK_MS = 50
-const RESTART_GRACE_TICKS = Math.ceil(RESTART_GRACE_MS / GRACE_TICK_MS)
-
 const resolveShowShop = Command.resolve(
   Dialog.test.ShowDialog,
   DialogBlock.Message.SucceededShowDialog(),
@@ -147,11 +132,6 @@ const resolveFocusShopItem = Command.resolve(
 
 const focusedOn = (base: Model, item: ShopItemId): Model =>
   modifyFields(base, { shop: () => ShopState.Browsing({ focusedItem: item }) })
-
-const withArsenal = (base: Model, arsenal: Arsenal): Model =>
-  modifyFields(base, {
-    player: player => modifyFields(player, { arsenal: () => arsenal }),
-  })
 
 const withHp = (base: Model, hp: number): Model =>
   modifyFields(base, {

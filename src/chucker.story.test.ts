@@ -9,19 +9,18 @@ import { FIXED_STEP_MS, HIT_STOP_HURT_MS, PLAYER_MAX_HP } from './constants'
 import { update } from './main'
 import { debutPitch } from './menus'
 import { Message } from './message'
-import type { GameEvent } from './model'
 import {
   type Bullet,
   type Model,
   Phase,
   Pierce,
-  type PlannedSpawn,
   type Zombie,
   ZombieAction,
   ZombieState,
   initialModel,
 } from './model'
-import { bulletInto, tick, ticks, zombieOf } from './testing'
+import { DISTANT_SPAWN } from './model.fixture'
+import { bulletInto, hasEvent, tick, ticks, zombieOf } from './testing'
 import { ZOMBIE_KINDS } from './zombies'
 
 const FRAME_MS = FIXED_STEP_MS
@@ -35,17 +34,6 @@ const GROANER_ID = 11
 // counts down the way the game does instead of dividing.
 const framesFor = (ms: number, count = 0): number =>
   ms > 0 ? framesFor(ms - FRAME_MS, count + 1) : count
-
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
 
 const CHUCKER = zombieOf('Thrower', CHUCKER_ID, CENTER_X + 60, CENTER_Y, {
   hp: 8,
@@ -66,9 +54,6 @@ const findById = (current: Model, id: number): Zombie =>
   Option.getOrThrow(
     Array.findFirst(current.zombies, zombie => zombie.id === id),
   )
-
-const hasEvent = (current: Model, tag: GameEvent['_tag']): boolean =>
-  Array.some(current.frameEvents, event => event._tag === tag)
 
 const HEFT_FRAMES = framesFor(CHUCKER_RULES.heftMs)
 const FLIGHT_FRAMES = framesFor(CHUCKER_RULES.flightMs)

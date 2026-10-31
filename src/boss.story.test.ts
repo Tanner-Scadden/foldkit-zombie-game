@@ -36,8 +36,8 @@ import {
   type PlannedSpawn,
   RunMode,
   type Zombie,
-  initialModel,
 } from './model'
+import { newPlayerReady } from './model.fixture'
 import { BOSS_ICON } from './sprite'
 import { bulletInto, tick, ticks, zombieOf } from './testing'
 import { wavePreviewShapes } from './wavePreview'
@@ -62,17 +62,13 @@ const spawnAt = (atMs: number, pack: number): PlannedSpawn => ({
   formation: 'Squad',
 })
 
-const readyModel: Model = modifyFields(initialModel, {
-  maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
-})
-
 const inWave = (
   wave: number,
   spawns: ReadonlyArray<PlannedSpawn>,
   boss: Boss,
   zombies: ReadonlyArray<Zombie> = [],
 ): Model =>
-  modifyFields(readyModel, {
+  modifyFields(newPlayerReady, {
     phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns }),
     boss: () => boss,
     zombies: () => zombies,
@@ -124,7 +120,7 @@ const DOOMED: Zombie = zombieOf('Shambler', 100, CENTER_X + 30, CENTER_Y, {
 })
 
 const clearing = (wave: number): Model =>
-  modifyFields(readyModel, {
+  modifyFields(newPlayerReady, {
     phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns: [] }),
     zombies: () => [DOOMED],
     bullets: () => [bulletInto(500, DOOMED)],
@@ -1152,7 +1148,7 @@ describe('the health bar', () => {
         isEnraged: false,
       }),
     )
-    expect(maybeBossBar(readyModel)).toEqual(Option.none())
+    expect(maybeBossBar(newPlayerReady)).toEqual(Option.none())
     story(
       update,
       given(
@@ -1272,8 +1268,8 @@ describe('the door preview', () => {
     )
 
   const preparing = (wave: number, boss: Boss): Model => {
-    const [rngState, spawns] = rollSpawns(readyModel.rngState, wave)
-    return modifyFields(readyModel, {
+    const [rngState, spawns] = rollSpawns(newPlayerReady.rngState, wave)
+    return modifyFields(newPlayerReady, {
       rngState: () => rngState,
       phase: () =>
         Phase.Preparation({

@@ -1,5 +1,4 @@
-import { Array, Match, Result } from 'effect'
-import { Canvas } from 'foldkit'
+import { Array, Result } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
@@ -16,31 +15,9 @@ import {
 } from './model'
 import { BOOSTS } from './powerups'
 import { DEFAULT_PORTRAIT_SCREEN, LANDSCAPE_SCREEN } from './screen'
+import { rectsOf } from './testing'
 
 type Box = Readonly<{ x: number; y: number; width: number; height: number }>
-
-const rectsOf = (
-  shapes: ReadonlyArray<Canvas.Shape>,
-  offset: Readonly<{ x: number; y: number }>,
-): ReadonlyArray<Canvas.Rect & Box> =>
-  Array.flatMap(shapes, shape =>
-    Match.value(shape).pipe(
-      Match.tag('Group', group =>
-        rectsOf(group.shapes, {
-          x: offset.x + (group.translate?.x ?? 0),
-          y: offset.y + (group.translate?.y ?? 0),
-        }),
-      ),
-      Match.tag('Rect', rect => [
-        Canvas.Rect({
-          ...rect,
-          x: rect.x + offset.x,
-          y: rect.y + offset.y,
-        }),
-      ]),
-      Match.orElse(() => []),
-    ),
-  )
 
 const twoBoosts: Model = modifyFields(initialModel, {
   phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),

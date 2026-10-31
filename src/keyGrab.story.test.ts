@@ -11,12 +11,12 @@ import {
 } from './keyGrab'
 import { update } from './main'
 import { Message } from './message'
+import { fighting } from './model.fixture'
 import {
   type KeyDown,
   isKeptFromBrowser,
   maybeKeyDownMessage,
 } from './subscriptions'
-import { fighting } from './testing'
 
 const surface = (): HTMLDivElement => {
   const element = document.createElement('div')

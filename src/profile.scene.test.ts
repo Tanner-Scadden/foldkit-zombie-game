@@ -19,50 +19,41 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Dialog, DialogBlock, Tabs } from '@foldkit/ui'
+import { Tabs } from '@foldkit/ui'
 
 import { Message } from './message'
-import { type Model, initialModel } from './model'
+import { type Model } from './model'
+import { homeAfterRead } from './model.fixture'
 import { MeasureGameSurface } from './mount'
 import { LinkFlow, SyncState } from './playerSync'
 import { ProfileTabsBlock } from './profile'
 import { LINK_TAKES_PROGRESS_NOTE, SHARE_STATS_NOTE } from './profileView'
 import {
   ROOT,
+  closeButton,
+  closeDialogInScene,
   emitPressedKey,
   measureSurface,
   showDialogInScene,
 } from './testing'
 import { RequestLinkCode, WriteSave } from './update/save'
-import { asVeteran } from './veteran'
 
-const home: Model = modifyFields(asVeteran(initialModel), {
-  saveStatus: () => 'Read',
+const onTouch: Model = modifyFields(homeAfterRead, {
+  lastDevice: () => 'Touch',
 })
 
-const onTouch: Model = modifyFields(home, { lastDevice: () => 'Touch' })
-
-const synced: Model = modifyFields(home, {
+const synced: Model = modifyFields(homeAfterRead, {
   syncState: () => SyncState.Synced({ devices: 2 }),
 })
 
 const gear = role('button', { name: 'Settings' })
 const profile = role('dialog', { name: 'Profile' })
 const tab = (name: string) => role('tab', { name })
-const closeButton = role('button', { name: 'Close' })
-
 const focusTab = (index: number) =>
   Command.resolve(
     Tabs.test.FocusTab({ id: 'profile-tabs', index }),
     ProfileTabsBlock.Message.CompletedFocusTab(),
   )
-
-const closeDialog = () => [
-  Command.resolve(
-    Dialog.test.CloseDialog,
-    DialogBlock.Message.CompletedCloseDialog(),
-  ),
-]
 
 const measureUpright = Mount.resolve(
   MeasureGameSurface,
@@ -99,7 +90,7 @@ describe('the Profile', () => {
       ).toBeAbsent(),
       expect(role('button', { name: /^Devices/ })).toBeAbsent(),
       click(closeButton),
-      ...closeDialog(),
+      ...closeDialogInScene(),
       expect(profile).toBeAbsent(),
     )
   })
@@ -107,7 +98,7 @@ describe('the Profile', () => {
   test('the arrow keys move between the tabs, down the side in landscape', () => {
     scene(
       ROOT,
-      given(home),
+      given(homeAfterRead),
       measureSurface,
       emitPressedKey('KeyC'),
       ...showDialogInScene(),
@@ -177,7 +168,7 @@ describe('the Name tab', () => {
   test('the stone shows the placeholder, then the name as it is typed, and Enter keeps it', () => {
     scene(
       ROOT,
-      given(home),
+      given(homeAfterRead),
       measureSurface,
       click(gear),
       ...showDialogInScene(),
@@ -198,7 +189,7 @@ describe('the Name tab', () => {
   test('the dice rolls a goofy name onto the stone', () => {
     scene(
       ROOT,
-      given(modifyFields(home, { cosmeticRngState: () => 99 })),
+      given(modifyFields(homeAfterRead, { cosmeticRngState: () => 99 })),
       measureSurface,
       click(gear),
       ...showDialogInScene(),
@@ -269,7 +260,7 @@ describe('the Account tab', () => {
     const shareToggle = role('button', { name: 'Share anonymous play stats' })
     scene(
       ROOT,
-      given(home),
+      given(homeAfterRead),
       measureSurface,
       click(gear),
       ...showDialogInScene(),
@@ -303,7 +294,7 @@ describe('every entry point', () => {
       ({ open, tab: name }) =>
         scene(
           ROOT,
-          given(home),
+          given(homeAfterRead),
           measureSurface,
           open,
           ...showDialogInScene(),

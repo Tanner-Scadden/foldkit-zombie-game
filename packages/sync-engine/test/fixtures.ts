@@ -115,6 +115,11 @@ export const Notes = defineScope({
 export const PLAYER = 'ada'
 export const SCOPE = `notes:${PLAYER}`
 
+// NOTE: runs a scoped test program, closing its scope at the end.
+export const run = <A, E>(
+  program: Effect.Effect<A, E, Scope.Scope>,
+): Promise<A> => Effect.runPromise(Effect.scoped(program))
+
 // NOTE: the tests' tokens are `<deviceId>:<playerId>`; real hosts verify a
 // signed token instead.
 export const authenticate: Authenticate = token => {

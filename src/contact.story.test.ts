@@ -11,11 +11,11 @@ import {
   Invulnerability,
   type Model,
   Phase,
-  type PlannedSpawn,
   type Zombie,
   ZombieAction,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN } from './model.fixture'
 import { holdFire, holdingSecond, ticks, zombieOf } from './testing'
 import { WEAPONS } from './weapons'
 import { ZOMBIE_KINDS, bodyRadiusOf } from './zombies'
@@ -25,17 +25,6 @@ const LONG_FRAME_MS = 50
 const PLAYER_X = 150
 const PLAYER_Y = 104
 const EPSILON = 1e-6
-
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
 
 const fightingBase: Model = modifyFields(initialModel, {
   maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),

@@ -31,6 +31,7 @@ import {
   Reload,
   initialModel,
 } from './model'
+import { pastFirstBreak } from './model.fixture'
 import { DEBUT_CARD_MIN_MS } from './onboarding'
 import { ShopTabsBlock } from './shopTabs'
 import {
@@ -38,7 +39,7 @@ import {
   SCENE_SUBSCRIPTIONS,
   holdingSecond,
   measureSurface,
-  pastFirstBreak,
+  playButton,
   withPistol,
 } from './testing'
 import { FocusShopItem } from './update/shop'
@@ -60,10 +61,6 @@ const READY_STATUS = `${GAME_TITLE}, an early alpha. Main menu. Press Enter or c
 
 const PAUSED_STATUS =
   'Paused during wave 3 of 10. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.'
-
-const playButton = role('button', {
-  name: 'Play',
-})
 
 const pausedRound: Model = pause(
   modifyFields(asVeteran(initialModel), {

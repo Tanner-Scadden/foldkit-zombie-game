@@ -34,10 +34,8 @@ import {
   authenticate,
   openClientDatabase,
   openServerDatabase,
+  run,
 } from './fixtures'
-
-const run = <A, E>(program: Effect.Effect<A, E, Scope.Scope>): Promise<A> =>
-  Effect.runPromise(Effect.scoped(program))
 
 const Tally = Schema.Struct({ kind: Schema.String, count: Schema.Number })
 const Profile = Schema.Struct({

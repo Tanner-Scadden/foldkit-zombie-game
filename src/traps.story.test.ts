@@ -31,6 +31,7 @@ import {
   ZombieState,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN, pastFirstBreak } from './model.fixture'
 import {
   StockTag,
   Verdict,
@@ -42,8 +43,8 @@ import {
 } from './shop'
 import { scoreOf } from './stats'
 import {
+  BELOW_NORTH_DOOR,
   holdFire,
-  pastFirstBreak,
   press,
   release,
   tick,
@@ -64,23 +65,11 @@ const countdownTicks = (ms: number): number =>
   ms <= 0 ? 0 : 1 + countdownTicks(ms - FRAME_MS)
 const PEA_INTERVAL_MS = WEAPONS.Peashooter.fireIntervalMs
 
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const PLANNED_SPAWNS: ReadonlyArray<PlannedSpawn> = [
   { ...DISTANT_SPAWN, atMs: 2000, door: 'West' },
   { ...DISTANT_SPAWN, atMs: 4000, door: 'East', kind: 'Runner' },
 ]
 
-const BELOW_NORTH_DOOR: Vector = { x: 220, y: 27 }
 const ROOM_MIDDLE: Vector = { x: 160, y: 95 }
 
 const readyModel: Model = modifyFields(pastFirstBreak(initialModel), {

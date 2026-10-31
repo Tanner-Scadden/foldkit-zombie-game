@@ -25,7 +25,7 @@ import {
   shownHints,
 } from './onboarding'
 import { maybeBubbleKind } from './stallBubble'
-import { holdingFirst, showDialog, tick, ticks } from './testing'
+import { holdingFirst, showDialog, tap, tick, ticks } from './testing'
 import { SetFullscreen } from './update/fullscreen'
 import { ShowInstallPrompt } from './update/home'
 import { asVeteran } from './veteran'
@@ -35,11 +35,6 @@ import { STARTING_PISTOL } from './weapons'
 const TICK_MS = 50
 // NOTE: a 50 ms frame is three 60 Hz ticks; the moment a wave clears is
 // checked after a single tick, before the break's clock has run.
-
-const tapKey = (code: string) => [
-  message(Message.PressedKey({ code })),
-  message(Message.ReleasedKey({ code })),
-]
 
 const veteran: Model = asVeteran(initialModel)
 
@@ -86,7 +81,7 @@ describe('the first break waits', () => {
         expect(isCountdownBeckoning(current)).toBe(false)
         expect(bubble(current)).toEqual(Option.some('Traps'))
       }),
-      ...tapKey('Enter'),
+      tap('Enter'),
       model(current => {
         expect(isFighting(current)).toBe(true)
       }),
@@ -160,14 +155,14 @@ describe('the new zombie card', () => {
       update,
       given(carded),
       ...ticks(DEBUT_CARD_MIN_MS / TICK_MS - 1, TICK_MS),
-      ...tapKey('Enter'),
+      tap('Enter'),
       message(Message.ClickedDebutCardButton()),
       model(current => {
         expect(current.debutCard._tag).toBe('Showing')
         expect(current.player.x).toBe(veteran.player.x)
       }),
       tick(TICK_MS),
-      ...tapKey('Enter'),
+      tap('Enter'),
       model(current => {
         expect(current.debutCard).toEqual(DebutCard.Hidden())
       }),
@@ -319,7 +314,7 @@ describe('the install tile', () => {
           difficultyCard: () => DifficultyCard.Seen(),
         }),
       ),
-      ...tapKey('Enter'),
+      tap('Enter'),
       model(current => {
         expect(current.homeScreenTip).toBe('Unseen')
       }),

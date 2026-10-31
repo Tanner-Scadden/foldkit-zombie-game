@@ -25,12 +25,12 @@ import {
   Phase,
   Tour,
 } from './model'
+import { AT_FRIDGE, atFridge, freshRunModel } from './model.fixture'
 import { soloSeat } from './party'
 import { nextRandom } from './prng'
-import { PURCHASE_RULES } from './purchase'
 import { forgetTutorial } from './save'
 import { maybeBubbleKind } from './stallBubble'
-import { AT_FRIDGE, atFridge, freshRunModel } from './testing'
+import { BELOW_KITCHEN_DOOR, HOLD_TICKS, nextFrame } from './testing'
 import { isKitchenTourOn } from './tutorialRules'
 import { asTutorialDone } from './veteran'
 
@@ -40,27 +40,22 @@ import { asTutorialDone } from './veteran'
 // weapon, and the clock runs again once the fridge has been tried.
 
 const FRAME_MS = FIXED_STEP_MS
-const HOLD_FRAMES = Math.ceil(PURCHASE_RULES.holdMs / FRAME_MS) + 1
 const OPEN_FRAMES = Math.ceil(FRIDGE_RULES.openMs / FRAME_MS) + 1
 const OFFER_FRAMES = Math.ceil(FRIDGE_RULES.offerMs / FRAME_MS) + 2
-const BELOW_KITCHEN_DOOR = { x: 70, y: 26 }
 const BREAK_MS = 15_000
-
-const frame = (current: Model): Model =>
-  update(current, Message.TickedFrame({ deltaTime: FRAME_MS })).model
 
 const frames = (current: Model, count: number): Model =>
   Array.reduce(
     Array.makeBy(count, () => 0),
     current,
-    frame,
+    nextFrame,
   )
 
 const holdEnter = (current: Model): Model =>
   update(
     frames(
       update(current, Message.PressedKey({ code: 'Enter' })).model,
-      HOLD_FRAMES,
+      HOLD_TICKS,
     ),
     Message.ReleasedKey({ code: 'Enter' }),
   ).model

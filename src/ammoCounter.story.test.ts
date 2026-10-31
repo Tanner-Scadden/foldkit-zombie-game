@@ -15,6 +15,7 @@ import {
   ShopState,
   type WeaponKind,
 } from './model'
+import { DISTANT_SPAWN, freshRunModel } from './model.fixture'
 import { PURCHASE_RULES, offersOf } from './purchase'
 import {
   SHOP_ITEMS,
@@ -22,13 +23,7 @@ import {
   isShopOpenFor,
   refreshShopPresence,
 } from './shop'
-import {
-  FRIDGE_DISTANT_SPAWN,
-  freshRunModel,
-  press,
-  release,
-  ticks,
-} from './testing'
+import { STAND_TICKS, press, release, ticks } from './testing'
 import { freshGun, heldGun, maxRounds } from './weapons'
 import type { World } from './world'
 import { Arsenal } from './worldSchema'
@@ -38,7 +33,6 @@ import { Arsenal } from './worldSchema'
 
 const FRAME_MS = FIXED_STEP_MS
 const HOLD_TICKS = Math.ceil(PURCHASE_RULES.holdMs / FRAME_MS) + 1
-const STAND_TICKS = Math.ceil(PURCHASE_RULES.standMs / FRAME_MS) + 1
 const BELOW_STALL = {
   x: (STALL_BOX.left + STALL_BOX.right) / 2,
   y: STALL_BOX.bottom + 6,
@@ -60,7 +54,7 @@ const midWaveAtStall = (
       Phase.Wave({
         wave: 5,
         elapsedMs: 20_000,
-        spawns: [FRIDGE_DISTANT_SPAWN],
+        spawns: [DISTANT_SPAWN],
       }),
     wallet: () => ({ balance, earned: balance, shown: balance }),
     player: player =>
@@ -180,7 +174,7 @@ describe('in a break', () => {
           wave: 5,
           remainingMs: 15_000,
           durationMs: 20_000,
-          spawns: [FRIDGE_DISTANT_SPAWN],
+          spawns: [DISTANT_SPAWN],
         }),
       player: player =>
         modifyFields(player, { y: () => STALL_BOX.bottom + 20 }),

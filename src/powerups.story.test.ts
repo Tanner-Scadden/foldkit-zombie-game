@@ -29,7 +29,6 @@ import {
   Phase,
   type Pickup,
   type PickupKind,
-  type PlannedSpawn,
   Prize,
   Reload,
   ShopState,
@@ -38,6 +37,7 @@ import {
   idleBoosts,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN } from './model.fixture'
 import { isGoodieBeckoning, shownHints } from './onboarding'
 import { pickupShapes } from './powerupView'
 import {
@@ -59,8 +59,10 @@ import {
   press,
   release,
   releaseFire,
+  tagsOf,
   tick,
   ticks,
+  ticksFor,
   withPistol,
   zombieOf,
 } from './testing'
@@ -74,25 +76,12 @@ const FRAME_MS = 50
 // frame's ticks, so the tests that check one moment step a single tick.
 const TICK_MS = FIXED_STEP_MS
 
-const ticksFor = (ms: number) => ticks(Math.round(ms / FRAME_MS), FRAME_MS)
-
-const HELD_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const fightingWave = (wave: number): Model =>
   modifyFields(asVeteran(initialModel), {
     maybeSurface: () => Option.some(SURFACE),
-    phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns: [HELD_SPAWN] }),
+    phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
     pacing: pacing =>
-      modifyFields(pacing, { warnedPacks: () => [HELD_SPAWN.pack] }),
+      modifyFields(pacing, { warnedPacks: () => [DISTANT_SPAWN.pack] }),
   })
 
 const fighting = fightingWave(3)
@@ -103,7 +92,7 @@ const preparing: Model = modifyFields(fighting, {
       wave: 3,
       remainingMs: 15_000,
       durationMs: PREPARATION_MS,
-      spawns: [HELD_SPAWN],
+      spawns: [DISTANT_SPAWN],
     }),
 })
 
@@ -160,9 +149,6 @@ const remainingOf = (boosts: Boosts, kind: BoostKind): number =>
     Off: () => 0,
     On: ({ remainingMs }) => remainingMs,
   })
-
-const tagsOf = (events: ReadonlyArray<GameEvent>): ReadonlyArray<string> =>
-  Array.map(events, ({ _tag }) => _tag)
 
 type Drop = Readonly<{ kind: PickupKind; x: number; y: number }>
 
@@ -296,7 +282,7 @@ describe('drops', () => {
     const peakRoom = (rngState: number): Model =>
       modifyFields(withLoot(fighting, { dryMs: 0, rngState }), {
         phase: () =>
-          Phase.Wave({ wave: 3, elapsedMs: 990, spawns: [HELD_SPAWN] }),
+          Phase.Wave({ wave: 3, elapsedMs: 990, spawns: [DISTANT_SPAWN] }),
         pacing: pacing => modifyFields(pacing, { holds: () => [hold] }),
         zombies: () => [...crowd, target],
         bullets: () => [incoming],
@@ -493,7 +479,7 @@ describe('explaining a power-up once', () => {
     story(
       update,
       given(named),
-      ...ticksFor(1100),
+      ...ticksFor(1100, FRAME_MS),
       model(({ callouts }) => {
         expect(callouts).toEqual([])
       }),
@@ -501,7 +487,7 @@ describe('explaining a power-up once', () => {
     story(
       update,
       given(explained),
-      ...ticksFor(1100),
+      ...ticksFor(1100, FRAME_MS),
       model(({ callouts }) => {
         expect(Array.map(callouts, ({ look }) => look)).toEqual(['Explained'])
       }),
@@ -537,7 +523,7 @@ describe('effects', () => {
       update,
       given(withBoost(loaded, 'RapidFire', 5000)),
       holdFire,
-      ...ticksFor(2000),
+      ...ticksFor(2000, FRAME_MS),
       model(({ stats, player }) => {
         const plainShots = 2000 / FIRE_INTERVAL_MS
         expect(stats.shotsFired).toBeGreaterThan(plainShots * 1.6)
@@ -590,7 +576,7 @@ describe('effects', () => {
       update,
       given(withBoost(fighting, 'Speed', 5000)),
       press('KeyD'),
-      ...ticksFor(1000),
+      ...ticksFor(1000, FRAME_MS),
       model(({ player }) => {
         expect(player.x - startX).toBeCloseTo(
           PLAYER_SPEED * BOOSTS.Speed.speedScale,
@@ -707,7 +693,7 @@ describe('timers', () => {
       model(({ boosts }) => {
         expect(remainingOf(boosts, 'Damage')).toBe(durationMs)
       }),
-      ...ticksFor(durationMs - FRAME_MS),
+      ...ticksFor(durationMs - FRAME_MS, FRAME_MS),
       model(({ boosts }) => {
         expect(remainingOf(boosts, 'Damage')).toBeCloseTo(FRAME_MS)
       }),
@@ -761,7 +747,11 @@ describe('timers', () => {
       modifyFields(fighting, {
         phase: () =>
           Phase.Paused({
-            round: Phase.Wave({ wave: 3, elapsedMs: 0, spawns: [HELD_SPAWN] }),
+            round: Phase.Wave({
+              wave: 3,
+              elapsedMs: 0,
+              spawns: [DISTANT_SPAWN],
+            }),
           }),
       }),
     )
@@ -870,7 +860,7 @@ describe('the floor', () => {
     story(
       update,
       given(withPickups(fighting, [pickupAt(900, 'Pierce', 40, 150)])),
-      ...ticksFor(PICKUP_LIFETIME_MS - FRAME_MS),
+      ...ticksFor(PICKUP_LIFETIME_MS - FRAME_MS, FRAME_MS),
       model(({ pickups }) => {
         expect(pickups).toHaveLength(1)
         expect(pickups[0]?.ageMs).toBeCloseTo(PICKUP_LIFETIME_MS - FRAME_MS)

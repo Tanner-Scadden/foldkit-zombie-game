@@ -14,16 +14,15 @@ import { describe, test, expect as vitestExpect } from 'vitest'
 
 import { ATLAS_SHEET } from './atlasHtml.setup'
 import { Message } from './message'
-import { type Model, Phase, initialModel } from './model'
+import { type Model, Phase } from './model'
+import { fighting, home } from './model.fixture'
 import {
   ROOT,
   SCENE_SUBSCRIPTIONS,
-  fighting,
   measureSurface,
   openHandInScene,
   pickCardInScene,
 } from './testing'
-import { asVeteran } from './veteran'
 
 // NOTE: a production build draws every sprite as a cropped region of the
 // atlas sheet (src/atlasHtml.setup.ts stands one in). A canvas crops it, but
@@ -69,8 +68,6 @@ const ownImages = (selected: string, count: number) => [
     count,
   ),
 ]
-
-const home: Model = asVeteran(initialModel)
 
 const pausedOn = (device: Model['lastDevice']): Model =>
   modifyFields(fighting, {

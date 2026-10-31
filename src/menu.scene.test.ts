@@ -18,46 +18,33 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test, expect as vitestExpect } from 'vitest'
 
-import { Dialog, DialogBlock } from '@foldkit/ui'
-
 import { RESTART_GRACE_MS } from './constants'
 import { withBests } from './difficulty'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
 import { Message } from './message'
-import { type HandCard, type Model, Phase, initialModel } from './model'
+import { type HandCard, type Model, Phase } from './model'
+import { home } from './model.fixture'
 import { noSavedBests, restoreSave, saveOf } from './save'
 import {
   ROOT,
+  closeDialogInScene,
+  difficultyButton,
   emitPressedKey,
+  lockedNightmare,
   manorButton,
   measureSurface,
+  modeButton,
   openHandInScene,
   pickCardInScene,
+  playButton,
+  playEndlessButton,
   showDialogInScene,
 } from './testing'
 import { FocusHandCard, FocusHomeButton } from './update/home'
 import { ApplyRotation } from './update/rotation'
 import { FocusTutorialReset, WriteSave } from './update/save'
-import { asVeteran } from './veteran'
 import { pause } from './waves'
 
-const closeDialog = () => [
-  Command.resolve(
-    Dialog.test.CloseDialog,
-    DialogBlock.Message.CompletedCloseDialog(),
-  ),
-]
-
-const playButton = role('button', {
-  name: 'Play',
-})
-const playEndlessButton = selector(".home-play[data-mode='Endless']")
-const modeButton = role('button', {
-  name: 'Mode: Campaign. Switch to Endless',
-})
-const difficultyButton = role('button', {
-  name: 'Difficulty: Normal. Change it',
-})
 const playCluster = role('group', { name: 'Play' })
 const hand = role('dialog', { name: 'The manor' })
 const closeHandButton = role('button', { name: 'Close' })
@@ -74,13 +61,9 @@ const howToPlayCard = role('button', { name: CARD_NAMES.HowToPlay })
 const munchopediaName = /^Munchopedia:/
 const whatsNewName = /^What's new:/
 const settingsButton = role('button', { name: 'Settings' })
-const lockedNightmare = role('button', {
-  name: 'Nightmare, locked. Beat Hard to unlock',
-})
 const pauseMenuButton = role('button', { name: 'Menu: leave this run' })
 const endMenuButton = role('button', { name: 'Menu: back to the home screen' })
 const leaveQuestion = role('dialog', { name: 'Leave this run?' })
-const mainMenu = manorButton
 const bests = role('region', { name: 'Your bests, Normal' })
 
 // NOTE: Scene refuses a pointerdown that no handler on the element or its
@@ -92,8 +75,6 @@ const NO_POINTERDOWN_PATH =
 const PREPARING = 'Get ready for wave 1 of 10.'
 const PAUSED =
   'Paused during wave 3 of 10. Tap, click, or press Escape to resume. Press H or choose Menu to leave the run.'
-
-const home: Model = asVeteran(initialModel)
 
 const pausedRound: Model = pause(
   modifyFields(home, {
@@ -158,9 +139,9 @@ describe('Home menu', () => {
         expect(role('link', { name: /^Tip jar/ })).toBeAbsent(),
         click(closeHandButton),
       ),
-      ...closeDialog(),
+      ...closeDialogInScene(),
       expect(hand).toBeAbsent(),
-      expect(mainMenu).toExist(),
+      expect(manorButton).toExist(),
     )
   })
 
@@ -266,10 +247,10 @@ describe('Home menu', () => {
       expect(selector("[data-difficulty='Nightmare'] .skull-locked")).toExist(),
       expect(role('dialog', { name: 'Difficulty' })).toExist(),
       click(role('button', { name: /^Hard:/ })),
-      ...closeDialog(),
+      ...closeDialogInScene(),
       expect(role('button', { name: 'Difficulty: Hard. Change it' })).toExist(),
       expect(bests).toBeAbsent(),
-      expect(mainMenu).toExist(),
+      expect(manorButton).toExist(),
     )
   })
 
@@ -293,7 +274,7 @@ describe('Home menu', () => {
       click(difficultyButton),
       ...showDialogInScene(),
       click(role('button', { name: /^Easy:/ })),
-      ...closeDialog(),
+      ...closeDialogInScene(),
       expect(role('button', { name: 'Difficulty: Easy. Change it' })).toExist(),
     )
   })
@@ -367,7 +348,7 @@ describe('Home menu', () => {
       measureSurface,
       emitPressedKey('Enter'),
       expect(role('status')).toContainText(PREPARING),
-      expect(mainMenu).toBeAbsent(),
+      expect(manorButton).toBeAbsent(),
     )
     scene(
       ROOT,
@@ -386,7 +367,7 @@ describe('Home menu', () => {
         expect(selector('.home-play')).toHaveAttr('id', 'home-play'),
         expect(playEndlessButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
       ),
-      expect(mainMenu).toExist(),
+      expect(manorButton).toExist(),
       emitPressedKey('Enter'),
       expect(role('status')).toContainText('Get ready for endless wave 1.'),
     )
@@ -499,7 +480,7 @@ describe('Home menu', () => {
         expect(closeButton).toHaveText(''),
         click(closeButton),
       ),
-      ...closeDialog(),
+      ...closeDialogInScene(),
       expect(role('dialog', { name: dialog })).toBeAbsent(),
     )
   })
@@ -521,9 +502,9 @@ describe('Home menu', () => {
         expect(role('region', { name: 'On the menu' })).toExist(),
         click(role('button', { name: 'Close' })),
       ),
-      ...closeDialog(),
+      ...closeDialogInScene(),
       expect(role('dialog', { name: 'How to play' })).toBeAbsent(),
-      expect(mainMenu).toExist(),
+      expect(manorButton).toExist(),
     )
   })
 
@@ -620,7 +601,7 @@ describe('Menu from a run', () => {
       ...showDialogInScene(),
       expect(leaveQuestion).toExist(),
       click(role('button', { name: 'Stay' })),
-      ...closeDialog(),
+      ...closeDialogInScene(),
       expect(leaveQuestion).toBeAbsent(),
       expect(role('status')).toHaveText(PAUSED),
     )
@@ -634,8 +615,8 @@ describe('Menu from a run', () => {
       emitPressedKey('KeyH'),
       ...showDialogInScene(),
       inside(leaveQuestion, click(role('button', { name: 'Leave' }))),
-      ...closeDialog(),
-      expect(mainMenu).toExist(),
+      ...closeDialogInScene(),
+      expect(manorButton).toExist(),
       expect(pauseMenuButton).toBeAbsent(),
     )
   })
@@ -665,14 +646,14 @@ describe('Menu from a run', () => {
         measureSurface,
         expect(endMenuButton).toHaveAttr('aria-keyshortcuts', 'H'),
         click(endMenuButton),
-        expect(mainMenu).toExist(),
+        expect(manorButton).toExist(),
       )
       scene(
         ROOT,
         given(afterGrace(phase)),
         measureSurface,
         emitPressedKey('KeyH'),
-        expect(mainMenu).toExist(),
+        expect(manorButton).toExist(),
       )
     })
   })

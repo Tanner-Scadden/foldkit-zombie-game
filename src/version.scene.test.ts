@@ -19,17 +19,21 @@ import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
-import { ROOT, SCENE_SUBSCRIPTIONS, fighting, measureSurface } from './testing'
+import { fighting, withNewerBuild } from './model.fixture'
+import {
+  ROOT,
+  SCENE_SUBSCRIPTIONS,
+  manorButton,
+  measureSurface,
+  updateChip,
+} from './testing'
 import { ReloadPage, WaitForUnwrap } from './update/home'
 import { RUNNING_BUILD } from './version'
 import { pause } from './waves'
 
-const updateChip = role('button', { name: 'Update ready: tap to get it' })
 const greeting = role('dialog', { name: 'Updated!' })
 const newsButton = role('button', { name: "WHAT'S NEW" })
 const closeGreeting = role('button', { name: 'Close' })
-const mainMenu = role('button', { name: /^More:/ })
-
 // NOTE: the build check's answer is a Command's result, which no
 // Subscription emits, so a scene starts from the Model it leaves.
 const after = (model: Model, message: Message): Model =>
@@ -39,9 +43,6 @@ const foundMidWave = after(
   fighting,
   Message.CompletedFetchBuild({ build: 'newer-build' }),
 )
-
-const withNewerBuild = (model: Model): Model =>
-  modifyFields(model, { maybeNewerBuild: () => Option.some('newer-build') })
 
 const onPhase = (phase: Phase): Model =>
   withNewerBuild(modifyFields(initialModel, { phase: () => phase }))
@@ -101,7 +102,7 @@ describe('the update gift', () => {
         Message.PressedKey({ code: 'Escape' }),
       ),
       expect(updateChip).toBeAbsent(),
-      expect(mainMenu).toBeAbsent(),
+      expect(manorButton).toBeAbsent(),
     )
   })
 

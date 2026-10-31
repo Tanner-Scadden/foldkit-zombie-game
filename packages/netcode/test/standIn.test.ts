@@ -13,8 +13,7 @@ import {
   readAll,
   writeAll,
 } from '../src/index'
-
-const right: PlayerInput = { ...NEUTRAL_INPUT, moveX: MOVE_SCALE }
+import { right } from './fixtures'
 
 const here = (slot: number, input: PlayerInput): PlayerTick => ({
   slot,
