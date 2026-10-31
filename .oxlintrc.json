@@ -176,6 +176,18 @@
       }
     },
     {
+      // NOTE: single player's handlers apply a player action as a seat
+      // action (src/stepWorld.ts), the rule the co-op room runs, and never
+      // decide one again (AGENTS.md "Code shape").
+      "files": [
+        "src/update/**/*.ts",
+        "src/main.ts",
+        "src/runFlow.ts",
+        "src/couch.ts"
+      ],
+      "rules": { "munch/seat-action-once": "error" }
+    },
+    {
       // NOTE: tests may read guards, seed the legacy localStorage save,
       // check the view size itself, and look at a dialog's own state.
       "files": ["src/**/*.test.ts", "src/testing.ts", "src/vitest-setup.ts"],
