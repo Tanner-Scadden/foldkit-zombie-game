@@ -81,9 +81,11 @@ jobs:
         run: |
           set -o pipefail
           bun alchemy deploy --stage "$STAGE" --yes --no-input | tee "$RUNNER_TEMP/deploy.log"
+          # Any https host: production's outputs are its custom domains
+          # (munchmanor.com, api.munchmanor.com), a preview's are workers.dev.
           output_url() {
-            grep -oE "(^|[^A-Za-z])$1: 'https://[a-z0-9.-]+\.workers\.dev'" "$RUNNER_TEMP/deploy.log" |
-              tail -n 1 | grep -oE "https://[a-z0-9.-]+\.workers\.dev"
+            grep -oE "(^|[^A-Za-z])$1: 'https://[a-z0-9.-]+'" "$RUNNER_TEMP/deploy.log" |
+              tail -n 1 | grep -oE "https://[a-z0-9.-]+"
           }
           echo "url=$(output_url url)" >> "$GITHUB_OUTPUT"
           echo "api_url=$(output_url apiUrl)" >> "$GITHUB_OUTPUT"
