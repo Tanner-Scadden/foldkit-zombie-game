@@ -1,46 +1,41 @@
-import { Effect, Fiber, Option, Stream } from 'effect'
+import { Effect, Option, Stream } from 'effect'
 import { TestClock } from 'effect/testing'
 
 // TESTING
 
-// NOTE: for tests that run sync on the TestClock, where the heartbeat, the
-// silence watchdog, the resend timer, the backoff, and the follower poll
-// move only when the test moves time. A loaded machine then cannot make a
-// server look quiet and drop a session halfway through a test.
+// NOTE: for tests that run sync on the TestClock `it.effect` provides, where
+// the heartbeat, the silence watchdog, the resend timer, the backoff, and the
+// follower poll move only when the test moves time. A loaded machine then
+// cannot make a server look quiet and drop a session halfway through a test.
 
 const STEP = '10 millis'
 const TURNS_PER_STEP = 20
-const MAX_STEPS = 3000
+const LIMIT = '30 seconds'
 
-// NOTE: waits for an event, not for time. The wait runs in its own fiber
-// while this one hands the other fibers turns and moves the TestClock a step
-// at a time, so a backoff or a poll in the way still elapses. A wait that
-// never ends fails after 30 seconds of test clock, not of real time.
+// NOTE: hands the other fibers turns and moves the TestClock a step, so a
+// backoff or a poll in the way of a wait still elapses. It never ends: settle
+// interrupts it once the wait is over.
+const driveClock: Effect.Effect<never> = Effect.forever(
+  Effect.andThen(
+    Effect.repeat(Effect.yieldNow, { times: TURNS_PER_STEP - 1 }),
+    TestClock.adjust(STEP),
+  ),
+)
+
+// NOTE: waits for an event, not for time, while driveClock runs beside it.
+// The limit is on the TestClock too, so a wait that never ends fails after 30
+// seconds of test clock, not of real time.
 export const settle = <A, E, R>(
   wait: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E, R> =>
-  Effect.gen(function* () {
-    const fiber = yield* Effect.forkChild(wait, { startImmediately: true })
-    const drive = (turn: number): Effect.Effect<A, E> => {
-      const exit = fiber.pollUnsafe()
-      if (exit !== undefined) {
-        return exit
-      }
-      if (turn >= MAX_STEPS * TURNS_PER_STEP) {
-        return Effect.andThen(
-          Fiber.interrupt(fiber),
-          Effect.die(new Error('Still waiting after 30 s of test clock')),
-        )
-      }
-      return Effect.andThen(
-        turn % TURNS_PER_STEP === TURNS_PER_STEP - 1
-          ? TestClock.adjust(STEP)
-          : Effect.yieldNow,
-        Effect.suspend(() => drive(turn + 1)),
-      )
-    }
-    return yield* drive(0)
-  })
+  Effect.raceFirst(
+    Effect.timeoutOrElse(wait, {
+      duration: LIMIT,
+      orElse: () =>
+        Effect.die(new Error('Still waiting after 30 s of test clock')),
+    }),
+    driveClock,
+  )
 
 // NOTE: the first value a stream shows that passes, waited for with settle.
 // The status streams start with the current value, so nothing is missed.

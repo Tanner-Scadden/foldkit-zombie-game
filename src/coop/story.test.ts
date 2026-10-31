@@ -8,8 +8,8 @@ import {
   story,
 } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
-import { describe, expect, test } from 'vitest'
 
+import { describe, expect, it, test } from '@effect/vitest'
 import {
   type ClientFrame,
   type InputFrame,
@@ -828,8 +828,9 @@ describe('the room', () => {
 })
 
 describe('the network service', () => {
-  test('RequestRoom runs against the service and reports its refusal', async () => {
-    const outcome = await Effect.runPromise(
+  it.effect(
+    'RequestRoom runs against the service and reports its refusal',
+    () =>
       Effect.gen(function* () {
         const fake = yield* makeFakeCoopNet(() => Effect.fail('Full'))
         const result = yield* Effect.provide(
@@ -840,19 +841,15 @@ describe('the network service', () => {
           }).effect,
           Layer.provide(RequestRoom.layer, fake.layer),
         )
-        return { result, calls: yield* fake.calls }
+        expect(result).toEqual(Message.FailedRequestRoom({ problem: 'Full' }))
+        expect(yield* fake.calls).toEqual([
+          {
+            _tag: 'RequestRoom',
+            request: RoomRequest.Join({ code: CODE }),
+            name: 'Ana',
+            look: 'Male.Curls.Black.Deep.Yellow',
+          },
+        ])
       }),
-    )
-    expect(outcome.result).toEqual(
-      Message.FailedRequestRoom({ problem: 'Full' }),
-    )
-    expect(outcome.calls).toEqual([
-      {
-        _tag: 'RequestRoom',
-        request: RoomRequest.Join({ code: CODE }),
-        name: 'Ana',
-        look: 'Male.Curls.Black.Deep.Yellow',
-      },
-    ])
-  })
+  )
 })

@@ -3,7 +3,8 @@ import { Effect, Option } from 'effect'
 import { FetchHttpClient } from 'effect/http'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
-import { describe, expect, test } from 'vitest'
+
+import { describe, expect, it, test } from '@effect/vitest'
 
 import { FIXED_STEP_MS, PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { update } from './main'
@@ -388,36 +389,43 @@ describe('fetching version.json', () => {
       })
       return Promise.resolve(response())
     }
-    const run = Effect.runPromiseExit(
+    const exit = Effect.exit(
       fetchRemoteBuild.pipe(
         Effect.provideService(FetchHttpClient.Fetch, fetch),
       ),
     )
-    return { seen, run }
+    return { seen, exit }
   }
 
-  test('asks past every cache and reads the build', async () => {
-    const { seen, run } = fetchWith(() => Response.json({ build: NEWER_BUILD }))
-    const exit = await run
-    expect(exit).toEqual(
-      expect.objectContaining({ _tag: 'Success', value: NEWER_BUILD }),
-    )
-    expect(seen).toHaveLength(1)
-    expect(seen[0]?.url.pathname).toMatch(/version\.json$/)
-    expect(seen[0]?.url.searchParams.get('at')).toMatch(/^\d+$/)
-    expect(seen[0]?.init?.cache).toBe('no-store')
-    expect(new Headers(seen[0]?.init?.headers).has('traceparent')).toBe(false)
-  })
+  it.effect('asks past every cache and reads the build', () =>
+    Effect.gen(function* () {
+      const { seen, exit } = fetchWith(() =>
+        Response.json({ build: NEWER_BUILD }),
+      )
+      expect(yield* exit).toEqual(
+        expect.objectContaining({ _tag: 'Success', value: NEWER_BUILD }),
+      )
+      expect(seen).toHaveLength(1)
+      expect(seen[0]?.url.pathname).toMatch(/version\.json$/)
+      expect(seen[0]?.url.searchParams.get('at')).toMatch(/^\d+$/)
+      expect(seen[0]?.init?.cache).toBe('no-store')
+      expect(new Headers(seen[0]?.init?.headers).has('traceparent')).toBe(false)
+    }),
+  )
 
-  test('a missing file fails the check', async () => {
-    const { run } = fetchWith(() =>
-      Response.json({ build: NEWER_BUILD }, { status: 404 }),
-    )
-    expect((await run)._tag).toBe('Failure')
-  })
+  it.effect('a missing file fails the check', () =>
+    Effect.gen(function* () {
+      const { exit } = fetchWith(() =>
+        Response.json({ build: NEWER_BUILD }, { status: 404 }),
+      )
+      expect((yield* exit)._tag).toBe('Failure')
+    }),
+  )
 
-  test('a file without a build fails the check', async () => {
-    const { run } = fetchWith(() => Response.json({ commit: 'abc' }))
-    expect((await run)._tag).toBe('Failure')
-  })
+  it.effect('a file without a build fails the check', () =>
+    Effect.gen(function* () {
+      const { exit } = fetchWith(() => Response.json({ commit: 'abc' }))
+      expect((yield* exit)._tag).toBe('Failure')
+    }),
+  )
 })

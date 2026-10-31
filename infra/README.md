@@ -10,15 +10,15 @@ The Cloudflare side of Munch Manor, declared with [Alchemy](https://alchemy.run/
 | `worker/rules.ts`                                  | The pure rules: the size cap, the rate limit decision, the daily address hash input, and the D1 row     |
 | `worker/main.ts`                                   | The Worker entry: `/sync` paths to sync, the rest to analytics, and the daily retention cleanup         |
 | `worker/sync.ts`                                   | The sync Durable Objects (`SyncScope`, `SyncDirectory`) and the `/sync` routes                          |
-| `worker/syncCore.ts`                               | The sync logic they run, kept apart so `bun test` covers it without the Workers runtime                 |
+| `worker/syncCore.ts`                               | The sync logic they run, kept apart so the tests cover it without the Workers runtime                   |
 | `worker/gameRoom.ts`                               | The co-op `GameRoom` Durable Object (a room's lobby scope and its run) and the `/room` routes           |
 | `worker/gameRoomCore.ts`                           | The room's logic apart from the runtime: the scope host, reactions, the Hello answer, the alarm         |
 | `worker/matchmaker.ts`, `worker/matchmakerCore.ts` | QUICK PLAY's `Matchmaker` Durable Object and its logic                                                  |
 | `worker/roomCalls.ts`                              | The internal calls between the Worker, the rooms, and the Matchmaker                                    |
 | `worker/workerd.d.ts`                              | Types for the Workers globals the sync object uses (`WebSocketPair`, auto-responses)                    |
-| `worker/*.test.ts`                                 | `bun test` for the rules and the handler, over in-memory SQLite with the real migration                 |
+| `worker/*.test.ts`                                 | `it.effect` tests for the rules and the handler, over in-memory SQLite with the real migration          |
 | `migrations/`                                      | The analytics D1 migrations, applied in order on deploy                                                 |
-| `oneEffect.ts`                                     | The `bun test` preload that loads the shared game files and the sync engine against infra's Effect      |
+| `vitest.config.ts`                                 | The tests, run by vitest under Bun, with the shared game files and the sync engine on infra's Effect    |
 
 ## Stages
 
@@ -62,7 +62,7 @@ bun alchemy deploy --stage prod --force     # redeploy even when nothing changed
 bun alchemy destroy --stage pr-12           # tear down a preview
 bun run typecheck                           # types and the Effect diagnostics
 bun run lint                                # oxlint, then the Effect rules
-bun test
+bun run test                                # the Worker's tests (vitest under Bun)
 ```
 
 Alchemy skips the build when no input changed, and `alchemy drift` does not notice a Worker that something else overwrote. Use `--force` to put the declared version back.
@@ -104,14 +104,14 @@ On every stage the API Worker also serves co-op rooms (see "What Phases 2 and 3 
 
 The game posts one run summary per run to its stage's API Worker (see "Analytics" in `PLATFORM.md`). The Website gets the API Worker's URL as `VITE_API_ORIGIN`, which Vite inlines into the game.
 
-- **Two Effects.** The Worker imports `src/analytics.ts`, which the game shares. Its `effect` import would otherwise resolve from the game's `node_modules` (Effect 4.0.6), so three things point it at infra's Effect 4.0.7: the Worker bundle's `resolve.alias` in `alchemy.run.ts`, `paths` in `tsconfig.json`, and the `oneEffect.ts` preload for `bun test`. Keep `src/analytics.ts` importing only `effect`.
+- **Two Effects.** The Worker imports `src/analytics.ts`, which the game shares. Its `effect` import would otherwise resolve from the game's `node_modules` (Effect 4.0.6), so three things point it at infra's Effect 4.0.7: the Worker bundle's `resolve.alias` in `alchemy.run.ts`, `paths` in `tsconfig.json`, and the `one-effect` plugin in `vitest.config.ts` for the tests. Keep `src/analytics.ts` importing only `effect`.
 - **Migrations.** Add a new numbered file to `migrations/`, such as `0002_add_column.sql`. Never edit one that has shipped: Alchemy records each file's hash in the database's `__alchemy_migrations` table and applies new files in order on the next deploy.
 - **Secrets.** The address salt is an `Alchemy.Random`, made once per stage and kept in Alchemy's state. It reaches the Worker as a `secret_text` binding.
 - **Rate limits.** Cloudflare Rate Limiting bindings, namespaces 7101 (per visit) and 7102 (per address bucket), shared by every stage.
-- **Retention.** Run rows are kept for 90 days. Production's API Worker has the Cron Trigger `17 4 * * *` (`RETENTION_CRON` in `alchemy.run.ts`), and the `scheduled` handler in `worker/main.ts` runs `deleteExpiredRuns` (`worker/api.ts`) over D1, deleting rows whose `received_day` is before `retentionCutoffDay` (`worker/rules.ts`). Other stages get `crons: []`: the free plan allows five Cron Triggers per account, and a preview's database is destroyed with it. The rule is covered by `bun test`. The schedule shows under the Worker's **Settings**, **Trigger events** in the dashboard.
+- **Retention.** Run rows are kept for 90 days. Production's API Worker has the Cron Trigger `17 4 * * *` (`RETENTION_CRON` in `alchemy.run.ts`), and the `scheduled` handler in `worker/main.ts` runs `deleteExpiredRuns` (`worker/api.ts`) over D1, deleting rows whose `received_day` is before `retentionCutoffDay` (`worker/rules.ts`). Other stages get `crons: []`: the free plan allows five Cron Triggers per account, and a preview's database is destroyed with it. The rule is covered by the Worker's tests. The schedule shows under the Worker's **Settings**, **Trigger events** in the dashboard.
 
 ```sh
-bun test                                                     # the Worker's tests
+bun run test                                                 # the Worker's tests
 bun tools/analytics/smoke.ts https://munch-manor-api-pr-12.tanner-scadden.workers.dev   # post one fake run (from the repo root)
 bun tools/analytics/smoke.ts https://api.munchmanor.com                                # the same against production
 bun tools/analytics/report.ts --stage pr-12                  # the report for a stage (from the repo root)

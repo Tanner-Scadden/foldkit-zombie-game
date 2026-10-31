@@ -5,7 +5,7 @@ import * as Context from 'effect/Context'
 import * as Effect from 'effect/Effect'
 import * as Layer from 'effect/Layer'
 import * as Schema from 'effect/Schema'
-import * as Scope from 'effect/Scope'
+import type * as Scope from 'effect/Scope'
 import * as SqlClient from 'effect/sql/SqlClient'
 
 import * as SqliteClient from '@effect/sql-sqlite-bun/SqliteClient'
@@ -18,16 +18,19 @@ export const decodeTagged = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Struct({ _tag: Schema.String })),
 )
 
-// NOTE: a fresh in-memory SQLite database, as a Durable Object's storage.
-export const memory = (): Promise<SqlClient.SqlClient> =>
-  Effect.runPromise(
-    Effect.map(
-      Layer.buildWithScope(
-        SqliteClient.layer({ filename: ':memory:' }),
-        Scope.makeUnsafe(),
-      ),
-      context => Context.get(context, SqlClient.SqlClient),
-    ),
+// NOTE: any value as JSON text, and JSON text read back, for the bodies
+// and messages a test builds and reads.
+export const toJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))
+export const fromJson = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.Unknown),
+)
+
+// NOTE: a fresh in-memory SQLite database, as a Durable Object's storage,
+// open for the test's Scope.
+export const memory: Effect.Effect<SqlClient.SqlClient, never, Scope.Scope> =
+  Effect.map(
+    Effect.orDie(Layer.build(SqliteClient.layer({ filename: ':memory:' }))),
+    context => Context.get(context, SqlClient.SqlClient),
   )
 
 // NOTE: an open socket that keeps what is sent on it.

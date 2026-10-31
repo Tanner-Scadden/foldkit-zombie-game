@@ -1,5 +1,6 @@
 import { Effect, Fiber } from 'effect'
-import { describe, expect, test } from 'vitest'
+
+import { describe, expect, it } from '@effect/vitest'
 
 import { Request, decodeResponse, encodeRequest } from '../src/Protocol'
 import { type WorkerScope, holdEarlyMessages, serveWorker } from '../src/worker'
@@ -29,15 +30,13 @@ const fakeScope = (): FakeScope => {
   }
 }
 
-const openRequest = Effect.runSync(
-  encodeRequest(
-    Request.cases.Open.make({
-      id: 'tab:1',
-      session: 'tab',
-      file: '/early.sqlite3',
-      directory: '.early',
-    }),
-  ),
+const openRequest = encodeRequest(
+  Request.cases.Open.make({
+    id: 'tab:1',
+    session: 'tab',
+    file: '/early.sqlite3',
+    directory: '.early',
+  }),
 )
 
 const waitForReply = (scope: FakeScope) =>
@@ -49,23 +48,19 @@ const waitForReply = (scope: FakeScope) =>
   })
 
 describe('the worker', () => {
-  test('answers a request that came before its server listened', async () => {
-    const scope = fakeScope()
-    const held = holdEarlyMessages(scope)
-    scope.deliver(openRequest)
+  // NOTE: it.live, since the server opens SQLite on real time and the test
+  // polls for its reply.
+  it.live('answers a request that came before its server listened', () =>
+    Effect.gen(function* () {
+      const scope = fakeScope()
+      const held = holdEarlyMessages(scope)
+      scope.deliver(yield* openRequest)
 
-    const reply = await Effect.runPromise(
-      Effect.gen(function* () {
-        const serving = yield* Effect.forkDetach(serveWorker(held))
-        const response = yield* Effect.timeout(
-          waitForReply(scope),
-          '10 seconds',
-        )
-        yield* Fiber.interrupt(serving)
-        return response
-      }),
-    )
+      const serving = yield* Effect.forkDetach(serveWorker(held))
+      const reply = yield* Effect.timeout(waitForReply(scope), '10 seconds')
+      yield* Fiber.interrupt(serving)
 
-    expect(reply._tag).toBe('Opened')
-  })
+      expect(reply._tag).toBe('Opened')
+    }),
+  )
 })

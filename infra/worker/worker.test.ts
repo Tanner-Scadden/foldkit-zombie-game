@@ -1,4 +1,3 @@
-import { describe, expect, test } from 'bun:test'
 import * as Array from 'effect/Array'
 import * as Context from 'effect/Context'
 import * as Effect from 'effect/Effect'
@@ -6,12 +5,11 @@ import * as Exit from 'effect/Exit'
 import * as Layer from 'effect/Layer'
 import * as Order from 'effect/Order'
 import * as Schema from 'effect/Schema'
-import * as Scope from 'effect/Scope'
 import * as SqlClient from 'effect/sql/SqlClient'
 import * as FileSystem from 'node:fs'
 import * as Path from 'node:path'
 
-import * as SqliteClient from '@effect/sql-sqlite-bun/SqliteClient'
+import { describe, expect, it } from '@effect/vitest'
 
 import {
   MAX_SUMMARY_BYTES,
@@ -36,6 +34,7 @@ import {
   rowOf,
   utcDay,
 } from './rules.ts'
+import { fromJson, memory, toJson } from './testing.ts'
 
 const summary: RunSummary = {
   version: 1,
@@ -64,7 +63,9 @@ const summary: RunSummary = {
   frameTime: 'Under17Ms',
 }
 
-const summaryJson = Schema.encodeSync(RunSummaryJson)(summary)
+const encodeSummary = Schema.encodeSync(RunSummaryJson)
+
+const summaryJson = encodeSummary(summary)
 
 // FAKES
 
@@ -96,23 +97,16 @@ const migrationStatements = (sql: string): ReadonlyArray<string> => {
 
 // NOTE: D1 is SQLite, so an in-memory SQLite database with the real
 // migration stands in for it, through Effect SQL like the Worker's own.
-const memoryDatabase = (): Promise<SqlClient.SqlClient> =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const context = yield* Layer.buildWithScope(
-        SqliteClient.layer({ filename: ':memory:' }),
-        Scope.makeUnsafe(),
-      )
-      const sql = Context.get(context, SqlClient.SqlClient)
-      yield* Effect.forEach(
-        Array.flatMap(MIGRATIONS, file =>
-          migrationStatements(FileSystem.readFileSync(file, 'utf8')),
-        ),
-        statement => sql.unsafe(statement),
-      )
-      return sql
-    }),
+const memoryDatabase = Effect.gen(function* () {
+  const sql = yield* memory
+  yield* Effect.forEach(
+    Array.flatMap(MIGRATIONS, file =>
+      migrationStatements(FileSystem.readFileSync(file, 'utf8')),
+    ),
+    statement => Effect.orDie(sql.unsafe(statement)),
   )
+  return sql
+})
 
 const countingLimiter = (limit: number): RateLimiter => {
   const counts = new Map<string, number>()
@@ -130,9 +124,8 @@ type Setup = Readonly<{
   context: Context.Context<WorkerEnv>
 }>
 
-const setUp = async (visitLimit = 5, addressLimit = 20): Promise<Setup> => {
-  const sql = await memoryDatabase()
-  return {
+const setUp = (visitLimit = 5, addressLimit = 20) =>
+  Effect.map(memoryDatabase, (sql): Setup => ({
     sql,
     context: Context.make(WorkerEnv, {
       database: Layer.succeed(SqlClient.SqlClient, sql),
@@ -140,10 +133,13 @@ const setUp = async (visitLimit = 5, addressLimit = 20): Promise<Setup> => {
       addressLimiter: countingLimiter(addressLimit),
       addressSalt: 'test-salt',
     }),
-  }
-}
+  }))
 
 const { handler } = makeHandler()
+
+// NOTE: the Worker's own fetch handler, a Promise as Cloudflare calls it.
+const fetchFrom = (setup: Setup, request: Request) =>
+  Effect.promise(() => handler(request, setup.context))
 
 const post = (
   setup: Setup,
@@ -151,25 +147,30 @@ const post = (
   headers: Record<string, string> = {},
   path = '/api/runs',
 ) =>
-  handler(
+  fetchFrom(
+    setup,
     new Request(`https://api.test${path}`, {
       method: 'POST',
       body,
       headers: { 'content-type': 'text/plain', ...headers },
     }),
-    setup.context,
   )
 
 const query = (setup: Setup, statement: string) =>
-  Effect.runPromise(setup.sql.unsafe<Record<string, unknown>>(statement))
+  Effect.orDie(setup.sql.unsafe<Record<string, unknown>>(statement))
 
-const rowCount = async (setup: Setup): Promise<unknown> =>
-  (await query(setup, 'SELECT count(*) AS n FROM runs'))[0]?.['n']
+const countOf = (setup: Setup, table: string) =>
+  Effect.map(
+    query(setup, `SELECT count(*) AS n FROM ${table}`),
+    rows => rows[0]?.['n'],
+  )
+
+const rowCount = (setup: Setup) => countOf(setup, 'runs')
 
 // RULES
 
 describe('the rules', () => {
-  test('the size cap reads the header and then the body', () => {
+  it('the size cap reads the header and then the body', () => {
     expect(declaredSize(undefined)).toBe('Fits')
     expect(declaredSize('not a number')).toBe('Fits')
     expect(declaredSize(String(MAX_SUMMARY_BYTES))).toBe('Fits')
@@ -179,14 +180,18 @@ describe('the rules', () => {
     expect(bodySize('é'.repeat(MAX_SUMMARY_BYTES / 2 + 1))).toBe('TooLarge')
   })
 
-  test('a summary decodes, and a broken one does not', () => {
-    expect(Effect.runSync(decodeSummary(summaryJson))).toEqual(summary)
-    const broken = JSON.stringify({ ...summary, mode: 'Speedrun' })
-    expect(Exit.isFailure(Effect.runSyncExit(decodeSummary(broken)))).toBe(true)
-    expect(Exit.isFailure(Effect.runSyncExit(decodeSummary('{')))).toBe(true)
-  })
+  it.effect('a summary decodes, and a broken one does not', () =>
+    Effect.gen(function* () {
+      expect(yield* decodeSummary(summaryJson)).toEqual(summary)
+      const broken = toJson({ ...summary, mode: 'Speedrun' })
+      expect(Exit.isFailure(yield* Effect.exit(decodeSummary(broken)))).toBe(
+        true,
+      )
+      expect(Exit.isFailure(yield* Effect.exit(decodeSummary('{')))).toBe(true)
+    }),
+  )
 
-  test('the address limit wins over the visit limit', () => {
+  it('the address limit wins over the visit limit', () => {
     expect(decideRate({ visit: 'Allowed', address: 'Allowed' })).toEqual({
       _tag: 'Allowed',
     })
@@ -200,12 +205,12 @@ describe('the rules', () => {
     })
   })
 
-  test('a row keeps the cause only for Game Over and stores kills as JSON', () => {
+  it('a row keeps the cause only for Game Over and stores kills as JSON', () => {
     const at = Date.UTC(2026, 9, 29, 23, 59)
     const row = rowOf(summary, at)
     expect(row.received_day).toBe('2026-10-29')
     expect(row.killed_by).toBe('Runner')
-    expect(JSON.parse(row.kills)).toEqual(summary.kills)
+    expect(fromJson(row.kills)).toEqual(summary.kills)
     expect(rowOf({ ...summary, outcome: { _tag: 'Quit' } }, at).killed_by).toBe(
       null,
     )
@@ -216,68 +221,83 @@ describe('the rules', () => {
 // HANDLER
 
 describe('POST /api/runs', () => {
-  test('a valid summary is stored and answers 202', async () => {
-    const setup = await setUp()
-    const response = await post(setup, summaryJson, {
-      'cf-connecting-ip': '203.0.113.7',
-    })
-    expect(response.status).toBe(202)
-    expect(await rowCount(setup)).toBe(1)
-    const [stored] = await query(
-      setup,
-      'SELECT visit_id, outcome, killed_by, wave FROM runs',
-    )
-    expect(stored).toEqual({
-      visit_id: summary.visitId,
-      outcome: 'GameOver',
-      killed_by: 'Runner',
-      wave: 5,
-    })
-  })
+  it.effect('a valid summary is stored and answers 202', () =>
+    Effect.gen(function* () {
+      const setup = yield* setUp()
+      const response = yield* post(setup, summaryJson, {
+        'cf-connecting-ip': '203.0.113.7',
+      })
+      expect(response.status).toBe(202)
+      expect(yield* rowCount(setup)).toBe(1)
+      const [stored] = yield* query(
+        setup,
+        'SELECT visit_id, outcome, killed_by, wave FROM runs',
+      )
+      expect(stored).toEqual({
+        visit_id: summary.visitId,
+        outcome: 'GameOver',
+        killed_by: 'Runner',
+        wave: 5,
+      })
+    }),
+  )
 
-  test('no column holds the address or its hash', async () => {
-    const setup = await setUp()
-    await post(setup, summaryJson, { 'cf-connecting-ip': '203.0.113.7' })
-    const row = JSON.stringify(await query(setup, 'SELECT * FROM runs'))
-    expect(row).not.toContain('203.0.113.7')
-    expect(row).not.toContain('test-salt')
-  })
+  it.effect('no column holds the address or its hash', () =>
+    Effect.gen(function* () {
+      const setup = yield* setUp()
+      yield* post(setup, summaryJson, { 'cf-connecting-ip': '203.0.113.7' })
+      const row = toJson(yield* query(setup, 'SELECT * FROM runs'))
+      expect(row).not.toContain('203.0.113.7')
+      expect(row).not.toContain('test-salt')
+    }),
+  )
 
-  test('a broken summary answers 400 and stores nothing', async () => {
-    const setup = await setUp()
-    const response = await post(setup, JSON.stringify({ ...summary, wave: -3 }))
-    expect(response.status).toBe(400)
-    expect(await rowCount(setup)).toBe(0)
-  })
+  it.effect('a broken summary answers 400 and stores nothing', () =>
+    Effect.gen(function* () {
+      const setup = yield* setUp()
+      const response = yield* post(setup, toJson({ ...summary, wave: -3 }))
+      expect(response.status).toBe(400)
+      expect(yield* rowCount(setup)).toBe(0)
+    }),
+  )
 
-  test('an oversized body answers 413, by its header or by its bytes', async () => {
-    const setup = await setUp()
-    const huge = 'x'.repeat(MAX_SUMMARY_BYTES + 1)
-    expect((await post(setup, huge)).status).toBe(413)
-    expect(
-      (await post(setup, summaryJson, { 'content-length': '99999' })).status,
-    ).toBe(413)
-    expect(await rowCount(setup)).toBe(0)
-  })
+  it.effect(
+    'an oversized body answers 413, by its header or by its bytes',
+    () =>
+      Effect.gen(function* () {
+        const setup = yield* setUp()
+        const huge = 'x'.repeat(MAX_SUMMARY_BYTES + 1)
+        expect((yield* post(setup, huge)).status).toBe(413)
+        expect(
+          (yield* post(setup, summaryJson, { 'content-length': '99999' }))
+            .status,
+        ).toBe(413)
+        expect(yield* rowCount(setup)).toBe(0)
+      }),
+  )
 
-  test('too many runs from one visit answers 429', async () => {
-    const setup = await setUp(2)
-    expect((await post(setup, summaryJson)).status).toBe(202)
-    expect((await post(setup, summaryJson)).status).toBe(202)
-    expect((await post(setup, summaryJson)).status).toBe(429)
-    expect(await rowCount(setup)).toBe(2)
-  })
+  it.effect('too many runs from one visit answers 429', () =>
+    Effect.gen(function* () {
+      const setup = yield* setUp(2)
+      expect((yield* post(setup, summaryJson)).status).toBe(202)
+      expect((yield* post(setup, summaryJson)).status).toBe(202)
+      expect((yield* post(setup, summaryJson)).status).toBe(429)
+      expect(yield* rowCount(setup)).toBe(2)
+    }),
+  )
 
-  test('too many runs from one address answers 429 across visits', async () => {
-    const setup = await setUp(5, 1)
-    const other = Schema.encodeSync(RunSummaryJson)({
-      ...summary,
-      visitId: 'fedcba9876543210',
-    })
-    const headers = { 'cf-connecting-ip': '198.51.100.2' }
-    expect((await post(setup, summaryJson, headers)).status).toBe(202)
-    expect((await post(setup, other, headers)).status).toBe(429)
-  })
+  it.effect('too many runs from one address answers 429 across visits', () =>
+    Effect.gen(function* () {
+      const setup = yield* setUp(5, 1)
+      const other = encodeSummary({
+        ...summary,
+        visitId: 'fedcba9876543210',
+      })
+      const headers = { 'cf-connecting-ip': '198.51.100.2' }
+      expect((yield* post(setup, summaryJson, headers)).status).toBe(202)
+      expect((yield* post(setup, other, headers)).status).toBe(429)
+    }),
+  )
 })
 
 const shareEvent: ShareEvent = {
@@ -297,84 +317,96 @@ const postShare = (
   headers: Record<string, string> = {},
 ) => post(setup, body, headers, '/api/shares')
 
-const shareCount = async (setup: Setup): Promise<unknown> =>
-  (await query(setup, 'SELECT count(*) AS n FROM shares'))[0]?.['n']
+const shareCount = (setup: Setup) => countOf(setup, 'shares')
 
 describe('POST /api/shares', () => {
-  test('a share is stored with its screen, mode, and difficulty, and answers 202', async () => {
-    const setup = await setUp()
-    const response = await postShare(setup, shareJson, {
-      'cf-connecting-ip': '203.0.113.7',
-    })
-    expect(response.status).toBe(202)
-    const rows = await query(
-      setup,
-      'SELECT visit_id, screen, mode, difficulty, event_version FROM shares',
-    )
-    expect(rows).toEqual([
-      {
-        visit_id: shareEvent.visitId,
-        screen: 'CoopVictory',
-        mode: 'Campaign',
-        difficulty: 'Hard',
-        event_version: 1,
-      },
-    ])
-    const stored = JSON.stringify(await query(setup, 'SELECT * FROM shares'))
-    expect(stored).not.toContain('203.0.113.7')
-    expect(await rowCount(setup)).toBe(0)
-  })
-
-  test('a broken share answers 400, and a run summary is no share', async () => {
-    const setup = await setUp()
-    expect(
-      (
-        await postShare(
+  it.effect(
+    'a share is stored with its screen, mode, and difficulty, and answers 202',
+    () =>
+      Effect.gen(function* () {
+        const setup = yield* setUp()
+        const response = yield* postShare(setup, shareJson, {
+          'cf-connecting-ip': '203.0.113.7',
+        })
+        expect(response.status).toBe(202)
+        const rows = yield* query(
           setup,
-          JSON.stringify({ ...shareEvent, screen: 'Lobby' }),
+          'SELECT visit_id, screen, mode, difficulty, event_version FROM shares',
         )
-      ).status,
-    ).toBe(400)
-    expect((await postShare(setup, summaryJson)).status).toBe(400)
-    expect(await shareCount(setup)).toBe(0)
-  })
+        expect(rows).toEqual([
+          {
+            visit_id: shareEvent.visitId,
+            screen: 'CoopVictory',
+            mode: 'Campaign',
+            difficulty: 'Hard',
+            event_version: 1,
+          },
+        ])
+        const stored = toJson(yield* query(setup, 'SELECT * FROM shares'))
+        expect(stored).not.toContain('203.0.113.7')
+        expect(yield* rowCount(setup)).toBe(0)
+      }),
+  )
 
-  test('an oversized share answers 413', async () => {
-    const setup = await setUp()
-    expect(
-      (await postShare(setup, 'x'.repeat(MAX_SUMMARY_BYTES + 1))).status,
-    ).toBe(413)
-    expect(await shareCount(setup)).toBe(0)
-  })
+  it.effect('a broken share answers 400, and a run summary is no share', () =>
+    Effect.gen(function* () {
+      const setup = yield* setUp()
+      expect(
+        (yield* postShare(setup, toJson({ ...shareEvent, screen: 'Lobby' })))
+          .status,
+      ).toBe(400)
+      expect((yield* postShare(setup, summaryJson)).status).toBe(400)
+      expect(yield* shareCount(setup)).toBe(0)
+    }),
+  )
 
-  test('shares count against the same visit limit as runs', async () => {
-    const setup = await setUp(2)
-    expect((await post(setup, summaryJson)).status).toBe(202)
-    expect((await postShare(setup, shareJson)).status).toBe(202)
-    expect((await postShare(setup, shareJson)).status).toBe(429)
-    expect(await shareCount(setup)).toBe(1)
-  })
+  it.effect('an oversized share answers 413', () =>
+    Effect.gen(function* () {
+      const setup = yield* setUp()
+      expect(
+        (yield* postShare(setup, 'x'.repeat(MAX_SUMMARY_BYTES + 1))).status,
+      ).toBe(413)
+      expect(yield* shareCount(setup)).toBe(0)
+    }),
+  )
+
+  it.effect('shares count against the same visit limit as runs', () =>
+    Effect.gen(function* () {
+      const setup = yield* setUp(2)
+      expect((yield* post(setup, summaryJson)).status).toBe(202)
+      expect((yield* postShare(setup, shareJson)).status).toBe(202)
+      expect((yield* postShare(setup, shareJson)).status).toBe(429)
+      expect(yield* shareCount(setup)).toBe(1)
+    }),
+  )
 })
 
 describe('GET /api/health', () => {
-  test('answers Ok with the database checked', async () => {
-    const setup = await setUp()
-    const response = await handler(
-      new Request('https://api.test/api/health'),
-      setup.context,
-    )
-    expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ status: 'Ok', database: 'Ok' })
-  })
+  it.effect('answers Ok with the database checked', () =>
+    Effect.gen(function* () {
+      const setup = yield* setUp()
+      const response = yield* fetchFrom(
+        setup,
+        new Request('https://api.test/api/health'),
+      )
+      expect(response.status).toBe(200)
+      expect(yield* Effect.promise(() => response.json())).toEqual({
+        status: 'Ok',
+        database: 'Ok',
+      })
+    }),
+  )
 
-  test('an unknown path answers 404', async () => {
-    const setup = await setUp()
-    const response = await handler(
-      new Request('https://api.test/api/nothing'),
-      setup.context,
-    )
-    expect(response.status).toBe(404)
-  })
+  it.effect('an unknown path answers 404', () =>
+    Effect.gen(function* () {
+      const setup = yield* setUp()
+      const response = yield* fetchFrom(
+        setup,
+        new Request('https://api.test/api/nothing'),
+      )
+      expect(response.status).toBe(404)
+    }),
+  )
 })
 
 // RETENTION
@@ -382,85 +414,79 @@ describe('GET /api/health', () => {
 const DAY_MS = 24 * 60 * 60 * 1000
 
 const insertRowAt = (setup: Setup, atMs: number) =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const row = rowOf(summary, atMs)
-      yield* setup.sql`INSERT INTO runs ${setup.sql.insert(row)}`
-    }),
+  Effect.orDie(
+    setup.sql`INSERT INTO runs ${setup.sql.insert(rowOf(summary, atMs))}`,
+  )
+
+const cleanUp = (setup: Setup, nowMs: number) =>
+  Effect.orDie(
+    Effect.provideService(
+      deleteExpiredRuns(nowMs),
+      SqlClient.SqlClient,
+      setup.sql,
+    ),
   )
 
 describe('the 90 day retention', () => {
-  test('the cutoff is the UTC day 90 days back', () => {
+  it('the cutoff is the UTC day 90 days back', () => {
     expect(RETENTION_DAYS).toBe(90)
     expect(retentionCutoffDay(Date.UTC(2026, 9, 29, 4, 17))).toBe('2026-07-31')
     expect(retentionCutoffDay(Date.UTC(2026, 0, 15, 23, 59))).toBe('2025-10-17')
   })
 
-  test('the cleanup deletes rows older than 90 days and keeps the rest', async () => {
-    const setup = await setUp()
-    const now = Date.UTC(2026, 9, 29, 4, 17)
-    await insertRowAt(setup, now - 200 * DAY_MS)
-    await insertRowAt(setup, now - 91 * DAY_MS)
-    await insertRowAt(setup, now - 90 * DAY_MS)
-    await insertRowAt(setup, now - 30 * DAY_MS)
-    await insertRowAt(setup, now)
-    const deleted = await Effect.runPromise(
-      Effect.provideService(
-        deleteExpiredRuns(now),
-        SqlClient.SqlClient,
-        setup.sql,
-      ),
-    )
-    expect(deleted).toBe(2)
-    const days = await query(
-      setup,
-      'SELECT received_day FROM runs ORDER BY received_day',
-    )
-    expect(days).toEqual([
-      { received_day: '2026-07-31' },
-      { received_day: '2026-09-29' },
-      { received_day: '2026-10-29' },
-    ])
-  })
+  it.effect(
+    'the cleanup deletes rows older than 90 days and keeps the rest',
+    () =>
+      Effect.gen(function* () {
+        const setup = yield* setUp()
+        const now = Date.UTC(2026, 9, 29, 4, 17)
+        yield* insertRowAt(setup, now - 200 * DAY_MS)
+        yield* insertRowAt(setup, now - 91 * DAY_MS)
+        yield* insertRowAt(setup, now - 90 * DAY_MS)
+        yield* insertRowAt(setup, now - 30 * DAY_MS)
+        yield* insertRowAt(setup, now)
+        const deleted = yield* cleanUp(setup, now)
+        expect(deleted).toBe(2)
+        const days = yield* query(
+          setup,
+          'SELECT received_day FROM runs ORDER BY received_day',
+        )
+        expect(days).toEqual([
+          { received_day: '2026-07-31' },
+          { received_day: '2026-09-29' },
+          { received_day: '2026-10-29' },
+        ])
+      }),
+  )
 
-  test('the cleanup deletes shares older than 90 days too', async () => {
-    const setup = await setUp()
-    const now = Date.UTC(2026, 9, 29, 4, 17)
-    const shareAt = (atMs: number) =>
-      Effect.runPromise(
-        setup.sql.unsafe(
-          `INSERT INTO shares (received_at, received_day, event_version, visit_id, build, screen, mode, difficulty)
+  it.effect('the cleanup deletes shares older than 90 days too', () =>
+    Effect.gen(function* () {
+      const setup = yield* setUp()
+      const now = Date.UTC(2026, 9, 29, 4, 17)
+      const shareAt = (atMs: number) =>
+        Effect.orDie(
+          setup.sql.unsafe(
+            `INSERT INTO shares (received_at, received_day, event_version, visit_id, build, screen, mode, difficulty)
            VALUES ('${new Date(atMs).toISOString()}', '${utcDay(atMs)}', 1, '0123456789abcdef', 'test', 'Death', 'Campaign', 'Normal')`,
-        ),
-      )
-    await shareAt(now - 91 * DAY_MS)
-    await shareAt(now - 30 * DAY_MS)
-    await Effect.runPromise(
-      Effect.provideService(
-        deleteExpiredRuns(now),
-        SqlClient.SqlClient,
-        setup.sql,
-      ),
-    )
-    expect(await query(setup, 'SELECT received_day FROM shares')).toEqual([
-      { received_day: '2026-09-29' },
-    ])
-  })
+          ),
+        )
+      yield* shareAt(now - 91 * DAY_MS)
+      yield* shareAt(now - 30 * DAY_MS)
+      yield* cleanUp(setup, now)
+      expect(yield* query(setup, 'SELECT received_day FROM shares')).toEqual([
+        { received_day: '2026-09-29' },
+      ])
+    }),
+  )
 
-  test('a second cleanup on the same day deletes nothing', async () => {
-    const setup = await setUp()
-    const now = Date.UTC(2026, 9, 29, 4, 17)
-    await insertRowAt(setup, now - 120 * DAY_MS)
-    const run = () =>
-      Effect.runPromise(
-        Effect.provideService(
-          deleteExpiredRuns(now),
-          SqlClient.SqlClient,
-          setup.sql,
-        ),
-      )
-    expect(await run()).toBe(1)
-    expect(await run()).toBe(0)
-    expect(await rowCount(setup)).toBe(0)
-  })
+  it.effect('a second cleanup on the same day deletes nothing', () =>
+    Effect.gen(function* () {
+      const setup = yield* setUp()
+      const now = Date.UTC(2026, 9, 29, 4, 17)
+      yield* insertRowAt(setup, now - 120 * DAY_MS)
+      expect(yield* cleanUp(setup, now)).toBe(1)
+      expect(yield* cleanUp(setup, now)).toBe(0)
+      expect(yield* rowCount(setup)).toBe(0)
+    }),
+  )
 })

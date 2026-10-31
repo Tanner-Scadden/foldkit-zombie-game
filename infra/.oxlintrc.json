@@ -56,6 +56,12 @@
   },
   "overrides": [
     {
+      // NOTE: tests and their shared setup run Effects with it.effect from
+      // @effect/vitest, never by hand (munch/no-run-in-tests).
+      "files": ["**/*.test.ts", "worker/testing.ts"],
+      "rules": { "munch/no-run-in-tests": "error" }
+    },
+    {
       // NOTE: a wrong non-null assertion in a test fails the test loudly.
       "files": ["**/*.test.ts"],
       "rules": { "typescript/no-non-null-assertion": "off" }
