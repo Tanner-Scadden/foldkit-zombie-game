@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest'
 
 import { type Writer, makeReader, makeWriter } from '@munch/netcode'
 
+import { freshFight } from './boss'
 import { playRoom } from './roomTesting'
 import { DEFAULT_ROOM_SETTINGS, startRoomWorld } from './roomWorld'
 import { beginPreparation } from './waves'
@@ -10,12 +11,13 @@ import { type WireHint, wireHintOf } from './wireNumber'
 import {
   WIRE_FIELDS,
   readEvent,
+  readWorld,
   valueCodecOf,
   writeEvent,
   writeWorld,
   writeWorldDiff,
 } from './worldCodec'
-import { GameEvent, Vector, World } from './worldSchema'
+import { BossMove, GameEvent, Vector, World } from './worldSchema'
 
 // NOTE: every number the World and its events hold, by its path, with how
 // the wire packs it. It follows the codec: Options, lists, unions, and
@@ -114,14 +116,14 @@ describe('the wire packs numbers by their Schema', () => {
     ]
     // NOTE: a new lossy field shows up here. Name it on purpose.
     expect(hintTable(numbers)).toEqual({
-      Position: { count: 168, names: ['offset', 'x', 'y'] },
+      Position: { count: 171, names: ['offset', 'remainingPx', 'x', 'y'] },
       Velocity: {
         count: 9,
         names: ['knockback', 'velocityX', 'velocityY', 'x', 'y'],
       },
       Unit: {
-        count: 68,
-        names: ['hpScale', 'intensity', 'remainingPx', 'speedScale', 'x', 'y'],
+        count: 65,
+        names: ['hpScale', 'intensity', 'speedScale', 'x', 'y'],
       },
       Millis: {
         count: 118,
@@ -170,10 +172,72 @@ describe('the wire packs numbers by their Schema', () => {
   })
 })
 
+const BOSS_ID = 9000
+
+// NOTE: a charge aimed across the room: the target and the rush both go
+// far past the 8 px a unit value holds.
+const BRACING = BossMove.Bracing({
+  target: { x: 213.37, y: 101.9 },
+  remainingMs: 400,
+  durationMs: 800,
+})
+const RUSHING = BossMove.Rushing({
+  direction: { x: 0.6, y: -0.8 },
+  remainingPx: 140.25,
+})
+
+const ROOM = startRoomWorld([0, 1], 7, DEFAULT_ROOM_SETTINGS)
+
+const withBossMove = (move: BossMove): World => ({
+  ...ROOM.world,
+  boss: freshFight(BOSS_ID, move),
+})
+
+const readBackMove = (move: BossMove): BossMove => {
+  const writer = makeWriter()
+  writeWorld(writer, withBossMove(move))
+  const boss = readWorld(makeReader(writer.finish())).boss
+  return boss._tag === 'Fighting' ? boss.move : expect.fail('No fight')
+}
+
+// NOTE: a position goes in eighths of a pixel, so it reads back within
+// half of one.
+const POSITION_PRECISION = 1 / 16
+
+// NOTE: how far each read-back number is from the one sent, or Infinity
+// when the move came back as another case.
+const braceMiss = (move: BossMove): ReadonlyArray<number> =>
+  move._tag === 'Bracing'
+    ? [
+        Math.abs(move.target.x - BRACING.target.x),
+        Math.abs(move.target.y - BRACING.target.y),
+      ]
+    : [Infinity]
+
+const rushMiss = (move: BossMove): number =>
+  move._tag === 'Rushing'
+    ? Math.abs(move.remainingPx - RUSHING.remainingPx)
+    : Infinity
+
+describe("the boss's charge on the wire", () => {
+  test('a far brace target reads back where the room aimed it', () => {
+    expect(Math.max(...braceMiss(readBackMove(BRACING)))).toBeLessThanOrEqual(
+      POSITION_PRECISION,
+    )
+  })
+
+  test('a long rush reads back its whole length', () => {
+    expect(rushMiss(readBackMove(RUSHING))).toBeLessThanOrEqual(
+      POSITION_PRECISION,
+    )
+  })
+})
+
 // NOTE: the bytes of a scripted room of three in wave 4, its snapshots,
-// diffs, and events, as the codec wrote them when it packed numbers by
-// field name. The wire must not change without a protocol bump.
-const GOLDEN_DIGEST = '63122:19aa296f05d51085'
+// diffs, and events, then a boss bracing and rushing. Protocol 8 changed
+// the boss's bytes (its brace target and rush length went from unit
+// values to positions). The wire must not change without a protocol bump.
+const GOLDEN_DIGEST = '63700:473963e5e94dc6f7'
 const WIRE_TICKS = 360
 
 const bytesOf = (write: (writer: Writer) => void): Uint8Array => {
@@ -220,6 +284,12 @@ const wireDigest = (): Readonly<{ digest: string; zombies: number }> => {
     )
     sent.at = room
     sent.zombies = Math.max(sent.zombies, room.world.zombies.length)
+  })
+  const stalking = withBossMove(BossMove.Stalking({ cooldownMs: 1000 }))
+  Array.forEach([BRACING, RUSHING], move => {
+    const world = withBossMove(move)
+    hash.update(bytesOf(writer => writeWorld(writer, world)))
+    hash.update(bytesOf(writer => writeWorldDiff(writer, stalking, world)))
   })
   return { digest: hash.digest(), zombies: sent.zombies }
 }
