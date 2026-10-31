@@ -1,8 +1,8 @@
 import { Array, Option, Schema } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { cameraOf, worldToView } from '@game/camera'
-import { STICK_RADIUS_PX } from '@game/constants'
+import { cameraOf, screenCameraOf, worldToView } from '@game/camera'
+import { PLAYER_MAX_HP, STICK_RADIUS_PX } from '@game/constants'
 import * as CoopModel from '@game/coop/model'
 import { type WorldState, coopWorld } from '@game/coop/seam'
 import { update } from '@game/main'
@@ -15,7 +15,13 @@ import {
   type Vector,
 } from '@game/model'
 import { CueMusic, cueMusicFrom } from '@game/musicPlan'
-import { playersOf } from '@game/party'
+import {
+  isDowned,
+  leadSeatOf,
+  modifyLeadSeat,
+  playersOf,
+  withSeat,
+} from '@game/party'
 import { Difficulty } from '@game/playerData'
 import {
   AIM_REACH,
@@ -26,8 +32,10 @@ import {
   heldAction,
   roomWorldFor,
 } from '@game/roomWorld'
+import { screenOf } from '@game/screen'
 import { SeatAction } from '@game/stepWorld'
 import { PlaySound } from '@game/update/sound'
+import { Life } from '@game/worldSchema'
 import { isWalking } from '@game/zombies'
 import { NEUTRAL_INPUT, type PlayerInput, Room } from '@munch/netcode'
 
@@ -65,16 +73,43 @@ const Tap = Schema.Struct({ at: Schema.Finite, key: Schema.String })
 // NOTE: a co-op shot steps the room's World here, every seat played by a
 // bot, on the lobby's difficulty. `preroll` ticks play before the first
 // captured frame, so a later wave is under way when the shot starts.
+// NOTE: `revive` downs one seat on purpose at `at`, with `bleedMs` left on
+// its clock, and from `walkAt` sends a teammate to stand still beside it.
+// With `spot` the seat to be downed walks there first, so the camera knows
+// where to look;
+// `god` keeps every other seat at full hearts.
+const Revive = Schema.Struct({
+  down: Schema.Finite,
+  reviver: Schema.Finite,
+  at: Schema.Finite,
+  walkAt: Schema.Finite,
+  bleedMs: Schema.Finite,
+  spot: Schema.optionalKey(Point),
+})
+
 const CoopPlan = Schema.Struct({
   seed: Schema.Finite,
   preroll: Schema.Finite,
   difficulty: Schema.optionalKey(Difficulty),
+  god: Schema.optionalKey(Schema.Boolean),
+  revive: Schema.optionalKey(Revive),
 })
+type CoopPlan = typeof CoopPlan.Type
+
+// NOTE: a pixel art card drawn over the game (cards.ts) from `from` up to
+// before `to`.
+const Card = Schema.Struct({
+  from: Schema.Finite,
+  to: Schema.Finite,
+  card: Schema.Literals(['Title', 'End', 'Couch']),
+})
+export type Card = typeof Card.Type
 
 export const Plan = Schema.Struct({
   segments: Schema.Array(Segment),
   taps: Schema.Array(Tap),
   coop: Schema.optionalKey(CoopPlan),
+  cards: Schema.Array(Card),
 })
 export type Plan = typeof Plan.Type
 
@@ -106,16 +141,53 @@ const TOUCH_POINTER_MOVE = 31
 const TOUCH_POINTER_AIM = 32
 const MOUSE_POINTER = 1
 
-let plan: Plan = { segments: [], taps: [] }
+let plan: Plan = { segments: [], taps: [], cards: [] }
 let tick = 0
 let cues: Array<AudioCue> = []
 let isShooting = false
 const scriptedKeys = new Set<string>()
 let maybeRoom: Option.Option<{ world: WorldState; nowMs: number }> =
   Option.none()
+// NOTE: the preroll plays before the shot's first tick, so the shot's own
+// script (a revive) waits for it to end.
+let isPrerolled = false
 
 export const audioLog = (): ReadonlyArray<AudioCue> => cues
 export const currentTick = (): number => tick
+
+// NOTE: the card showing on the tick the page last stepped to, with how
+// many ticks it has been up.
+export const cardNow = (): Option.Option<
+  Readonly<{ card: Card['card']; age: number }>
+> =>
+  Option.map(
+    Array.findFirst(
+      plan.cards,
+      card => isShooting && card.from <= tick && tick < card.to,
+    ),
+    card => ({ card: card.card, age: tick - card.from }),
+  )
+
+// NOTE: where each seat stands on the screen, and the world's window on
+// it, in game pixels of the screen, for the split screen of devices.
+export const seatsOnScreen = (
+  model: Model,
+): Readonly<{
+  world: Readonly<{ x: number; y: number; width: number; height: number }>
+  seats: ReadonlyArray<Readonly<{ slot: number; x: number; y: number }>>
+}> => ({
+  world: screenOf(model).world,
+  seats: Option.match(maybeRoom, {
+    onNone: () => [
+      { slot: 0, ...worldToView(screenCameraOf(model), model.player) },
+    ],
+    onSome: ({ world }) =>
+      Array.map(playersOf(world.world), ({ slot, player }) => ({
+        slot,
+        ...worldToView(screenCameraOf(model), player),
+      })),
+  }),
+})
 
 // COMMANDS
 
@@ -196,9 +268,11 @@ export const startShot = (model: Model, next: Plan): Return => {
         },
         eventsTick: 0,
       }))
+      isPrerolled = false
       for (let index = 0; index < coop.preroll; index++) {
         current = coopTick(current, false).model
       }
+      isPrerolled = true
       cues = Array.filter(cues, cue => cue._tag === 'Music')
       return { model: current, commands: opening }
     },
@@ -446,6 +520,48 @@ const KEEP_FRAMES = 12
 // room takes a press when the value changes), walks a slow circle round
 // the rug a quarter turn from the others, and fires at the zombie nearest
 // it.
+// NOTE: a reviver walks to the downed seat and stands still once beside
+// it; every other seat circles the rug.
+const REVIVE_STOP_PX = 7
+
+const spotFor = (
+  world: WorldState,
+  slot: number,
+  atTick: number,
+): Option.Option<Vector> => {
+  const revive = Option.fromNullishOr(plan.coop?.revive)
+  const maybeDowned = Option.flatMap(
+    Option.filter(
+      revive,
+      ({ reviver, walkAt }) =>
+        isPrerolled && reviver === slot && tick >= walkAt,
+    ),
+    ({ down }) =>
+      Array.findFirst(playersOf(world.world), seat => seat.slot === down),
+  )
+  if (Option.isSome(maybeDowned)) {
+    return Option.some(maybeDowned.value.player)
+  }
+  const maybeMark = Option.flatMap(
+    Option.filter(revive, ({ down }) => isPrerolled && down === slot),
+    ({ spot }) => Option.fromNullishOr(spot),
+  )
+  if (Option.isSome(maybeMark)) {
+    return Option.some({ x: maybeMark.value[0], y: maybeMark.value[1] })
+  }
+  const angle = (atTick / ORBIT_TICKS) * 2 * Math.PI + (slot * Math.PI) / 2
+  return Option.some({
+    x: RUG_CENTER.x + Math.cos(angle) * ORBIT_RADIUS,
+    y: RUG_CENTER.y + Math.sin(angle) * ORBIT_RADIUS * 0.7,
+  })
+}
+
+const isReviving = (slot: number): boolean =>
+  isPrerolled &&
+  plan.coop?.revive !== undefined &&
+  plan.coop.revive.reviver === slot &&
+  tick >= plan.coop.revive.walkAt
+
 const botInput = (
   world: WorldState,
   slot: number,
@@ -458,16 +574,13 @@ const botInput = (
   return Option.match(seated, {
     onNone: () => NEUTRAL_INPUT,
     onSome: ({ player }) => {
-      const angle = (atTick / ORBIT_TICKS) * 2 * Math.PI + (slot * Math.PI) / 2
-      const spot = {
-        x: RUG_CENTER.x + Math.cos(angle) * ORBIT_RADIUS,
-        y: RUG_CENTER.y + Math.sin(angle) * ORBIT_RADIUS * 0.7,
-      }
+      const spot = Option.getOrElse(spotFor(world, slot, atTick), () => player)
       const toSpot = { x: spot.x - player.x, y: spot.y - player.y }
-      const pace = Math.min(
-        1,
-        Math.sqrt(toSpot.x * toSpot.x + toSpot.y * toSpot.y) / 12,
-      )
+      const distance = Math.sqrt(toSpot.x * toSpot.x + toSpot.y * toSpot.y)
+      const pace =
+        isReviving(slot) && distance < REVIVE_STOP_PX
+          ? 0
+          : Math.min(1, isReviving(slot) ? 1 : distance / 12)
       const walk = unit(toSpot)
       const nearest = Array.head(
         byDistance(
@@ -502,6 +615,61 @@ const botInput = (
   })
 }
 
+const isDownedOnPurpose = (coop: CoopPlan, slot: number): boolean =>
+  coop.revive?.down === slot &&
+  isPrerolled &&
+  tick >= coop.revive.at
+
+// NOTE: the shot's own hand on the room before it steps: on `at` the
+// downed seat drops to zero hearts (the room downs it that tick), a tick
+// later its bleed out clock is set, and `god` keeps the rest standing.
+const scripted = (
+  held: WorldState,
+  maybeCoop: CoopPlan | undefined,
+): WorldState => {
+  if (maybeCoop === undefined) {
+    return held
+  }
+  const coop = maybeCoop
+  const revive = coop.revive
+  let world = held.world
+  if (revive !== undefined && isPrerolled && tick === revive.at) {
+    world = withSeat(world, revive.down, seatWorld =>
+      modifyFields(seatWorld, {
+        player: player => modifyFields(player, { hp: () => 0 }),
+      }),
+    )
+  }
+  if (revive !== undefined && isPrerolled && tick === revive.at + 1) {
+    world = withSeat(world, revive.down, seatWorld =>
+      isDowned(leadSeatOf(seatWorld))
+        ? modifyLeadSeat(seatWorld, seat =>
+            modifyFields(seat, {
+              life: () =>
+                Life.Downed({ bleedMs: revive.bleedMs, reviveMs: 0 }),
+            }),
+          )
+        : seatWorld,
+    )
+  }
+  if (coop.god === true) {
+    world = Array.reduce(
+      playersOf(world),
+      world,
+      (current, { slot, seat }) =>
+        isDownedOnPurpose(coop, slot) || isDowned(seat)
+          ? current
+          : withSeat(current, slot, seatWorld =>
+              modifyFields(seatWorld, {
+                player: player =>
+                  modifyFields(player, { hp: () => PLAYER_MAX_HP }),
+              }),
+            ),
+    )
+  }
+  return world === held.world ? held : { ...held, world }
+}
+
 // NOTE: the room's World steps here, as the GameRoom would, and arrives as
 // the newest of the frames the client holds, with the room's clock set so
 // the client draws exactly that tick. Then the client's own frame runs, as
@@ -512,7 +680,7 @@ const coopTick = (model: Model, isCaptured: boolean): Return =>
     onSome: ([held, room]) => {
       const slots = roomSlots(model)
       const world = coopWorld.step(
-        held.world,
+        scripted(held.world, plan.coop),
         Array.map(slots, slot => ({
           slot,
           input: botInput(held.world, slot, held.world.tick),

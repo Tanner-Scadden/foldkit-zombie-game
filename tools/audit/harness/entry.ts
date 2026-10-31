@@ -81,6 +81,7 @@ import { creditKills, seatCrew } from '@game/party'
 import { LinkFlow, PlayerScopeStatus, SyncState } from '@game/playerSync'
 import { FLOOR_COLOR } from '@game/room'
 import { startOrResume } from '@game/runFlow'
+import { screenOf } from '@game/screen'
 import { STALL_BOX } from '@game/shop'
 import { shedParts } from '@game/simulation'
 import { frameAt, group, gunSprite } from '@game/sprite'
@@ -98,6 +99,7 @@ import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER, scaledHp } from '@game/zombies'
 import { Session } from '@munch/netcode'
 
 import { type HarnessConfig, decodeHarnessConfig } from './config'
+import { cardShapes } from './cards'
 import * as Director from './director'
 import { settle } from './readiness'
 
@@ -2020,6 +2022,7 @@ w.__director = {
   },
   step: (ticks: number) => raiseDirectorRequest({ _tag: 'Step', ticks }),
   audio: () => Director.audioLog(),
+  seats: () => Director.seatsOnScreen(w.__model),
 }
 
 // NOTE: the harness's update is the game's, wrapped for the scene's
@@ -2031,6 +2034,41 @@ const everyTag = Object.fromEntries(
 )
 const harnessUpdate = ApplicationComposition.makeUpdate(everyTag as any)
 
+// NOTE: a director shot's card (cards.ts) on a canvas the screen's size in
+// game pixels, over the game. The wrapper has no box of its own, so the
+// game's root lays out as it always does.
+const withDirectorCard = <D extends { body: unknown }>(
+  model: Model,
+  document: D,
+  h: any,
+): D => {
+  const screen = screenOf(model)
+  return {
+    ...document,
+    body: h.div(
+      [h.Class('director-stage')],
+      [
+        document.body,
+        ...Option.match(Director.cardNow(), {
+          onNone: () => [],
+          onSome: ({ card, age }) => [
+            Canvas.view(
+              {
+                width: screen.width,
+                height: screen.height,
+                shapes: cardShapes(card, screen, age),
+                className: 'director-card',
+                key: 'director-card',
+              },
+              h,
+            ),
+          ],
+        }),
+      ],
+    ),
+  }
+}
+
 const harnessView = ApplicationComposition.makeView((model, h: any) => {
   if (config.looksheet) {
     return lookSheetView(h)
@@ -2040,7 +2078,7 @@ const harnessView = ApplicationComposition.makeView((model, h: any) => {
   if (instrument) {
     w.__timings.view.push(performance.now() - t0)
   }
-  return out
+  return config.director ? withDirectorCard(model, out, h) : out
 })
 
 // NOTE: typed loosely, as the wrapped update is: the harness is a test page,

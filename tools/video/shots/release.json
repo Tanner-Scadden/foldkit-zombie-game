@@ -1,0 +1,943 @@
+{
+  "clips": [
+    {
+      "name": "release-30s",
+      "format": "16:9",
+      "score": {
+        "bpm": 152,
+        "cues": [
+          {
+            "frame": 0,
+            "mood": "Stampede"
+          },
+          {
+            "frame": 1489,
+            "mood": "Silence",
+            "stinger": "Victory"
+          }
+        ]
+      },
+      "shots": [
+        {
+          "name": "door",
+          "scene": "wave=3&start=wave&elapsed=6000&planks=West&plankhp=10&chewers=4&god&seed=3&px=160&py=100&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "skip": 12,
+          "ticks": 86,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": "nearest",
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 12,
+              "zoom": 2.2,
+              "x": 44,
+              "y": 92
+            },
+            {
+              "at": 86,
+              "zoom": 2.8,
+              "x": 34,
+              "y": 92
+            }
+          ]
+        },
+        {
+          "name": "rug",
+          "scene": "coop=host&seed=7&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 170,
+          "coop": {
+            "seed": 7,
+            "preroll": 5200,
+            "difficulty": "Hard",
+            "god": true
+          },
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 1.5,
+              "x": 160,
+              "y": 92
+            },
+            {
+              "at": 40,
+              "zoom": 1.0,
+              "x": 160,
+              "y": 90
+            }
+          ],
+          "cards": [
+            {
+              "from": 40,
+              "to": 999,
+              "card": "Title"
+            }
+          ]
+        },
+        {
+          "name": "couch",
+          "scene": "wave=3&seed=3&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 122,
+          "crossfade": 8,
+          "hideHud": true,
+          "cards": [
+            {
+              "from": 0,
+              "to": 999,
+              "card": "Couch"
+            }
+          ],
+          "captions": [
+            {
+              "from": 0,
+              "to": 999,
+              "text": "Bring 3 friends"
+            }
+          ]
+        },
+        {
+          "name": "devices",
+          "scene": "coop=host&seed=7&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 71,
+          "coop": {
+            "seed": 7,
+            "preroll": 5250,
+            "difficulty": "Hard",
+            "god": true
+          },
+          "hideHud": true,
+          "devices": {
+            "from": 0,
+            "to": 999
+          },
+          "captions": [
+            {
+              "from": 0,
+              "to": 999,
+              "text": "Bring 3 friends"
+            }
+          ]
+        },
+        {
+          "name": "shotgun",
+          "scene": "wave=4&start=wave&elapsed=9000&gun=shotgun&crowd=14&god&seed=4&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 71,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": "nearest",
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 1.25,
+              "x": 160,
+              "y": 90
+            },
+            {
+              "at": 71,
+              "zoom": 1.6,
+              "x": 160,
+              "y": 92
+            }
+          ]
+        },
+        {
+          "name": "lug",
+          "scene": "wave=5&start=wave&elapsed=9000&gun=smg&chewers=5&god&seed=5&px=120&py=90&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "skip": 20,
+          "ticks": 68,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": "nearest",
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 20,
+              "zoom": 2.0,
+              "x": 70,
+              "y": 88
+            },
+            {
+              "at": 68,
+              "zoom": 2.3,
+              "x": 66,
+              "y": 88
+            }
+          ]
+        },
+        {
+          "name": "kaboom",
+          "scene": "wave=6&start=wave&elapsed=9000&gasroom=10&gun=smg&god&seed=6&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "skip": 10,
+          "ticks": 81,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": "nearest",
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 10,
+              "zoom": 1.3,
+              "x": 150,
+              "y": 70
+            },
+            {
+              "at": 81,
+              "zoom": 1.1,
+              "x": 155,
+              "y": 80
+            }
+          ]
+        },
+        {
+          "name": "biters",
+          "scene": "wave=5&start=wave&elapsed=9000&crawler=cling&gun=smg&god&seed=5&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 47,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": "nearest",
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 2.8,
+              "x": 160,
+              "y": 88
+            },
+            {
+              "at": 47,
+              "zoom": 2.2,
+              "x": 160,
+              "y": 88
+            }
+          ]
+        },
+        {
+          "name": "kitchen",
+          "scene": "wave=4&start=wave&elapsed=9000&kitchen&gun=smg&god&px=96&py=-46&ovens=belch&ovenMs=600&slip&seed=4&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 95,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": [
+                70,
+                -100
+              ],
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 1.8,
+              "x": 100,
+              "y": 45
+            },
+            {
+              "at": 95,
+              "zoom": 1.5,
+              "x": 120,
+              "y": 110
+            }
+          ]
+        },
+        {
+          "name": "smash",
+          "scene": "wave=3&money=85&gun=smg&px=70&py=27&hold&seed=3&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 146,
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 1.6,
+              "x": 80,
+              "y": 50
+            },
+            {
+              "at": 40,
+              "zoom": 1.2,
+              "x": 100,
+              "y": 80
+            },
+            {
+              "at": 142,
+              "zoom": 1.0,
+              "x": 160,
+              "y": 90
+            }
+          ],
+          "captions": [
+            {
+              "from": 0,
+              "to": 999,
+              "text": "Gun or room?",
+              "place": "Bottom"
+            }
+          ]
+        },
+        {
+          "name": "shop",
+          "scene": "wave=5&money=900&gun=smg&tier=1&px=200&py=142&seed=5&prep=30000&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "skip": 64,
+          "ticks": 234,
+          "crossfade": 8,
+          "segments": [
+            {
+              "from": 0,
+              "to": 60,
+              "keys": [
+                "KeyD"
+              ]
+            }
+          ],
+          "clicks": [
+            {
+              "at": 88,
+              "selector": "dialog[open] li[data-verdict='available'] button"
+            },
+            {
+              "at": 136,
+              "selector": "dialog[open] li[data-verdict='available'] button"
+            },
+            {
+              "at": 184,
+              "selector": "dialog[open] li[data-verdict='available'] button"
+            }
+          ]
+        },
+        {
+          "name": "boss",
+          "scene": "wave=8&start=wave&elapsed=20000&boss=stomp&windMs=900&gun=shotgun&god&seed=8&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 123,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": "nearest",
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 1.3,
+              "x": 180,
+              "y": 85
+            },
+            {
+              "at": 118,
+              "zoom": 1.8,
+              "x": 190,
+              "y": 82
+            }
+          ]
+        },
+        {
+          "name": "revive",
+          "scene": "coop=host&seed=7&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 319,
+          "crossfade": 10,
+          "coop": {
+            "seed": 7,
+            "preroll": 5400,
+            "difficulty": "Hard",
+            "god": true,
+            "revive": {
+              "down": 0,
+              "reviver": 1,
+              "at": 40,
+              "walkAt": 56,
+              "bleedMs": 4300,
+              "spot": [
+                160,
+                104
+              ]
+            }
+          },
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 1.2,
+              "x": 160,
+              "y": 90
+            },
+            {
+              "at": 60,
+              "zoom": 1.6,
+              "x": 160,
+              "y": 88
+            },
+            {
+              "at": 319,
+              "zoom": 1.9,
+              "x": 160,
+              "y": 88
+            }
+          ],
+          "captions": [
+            {
+              "from": 24,
+              "to": 999,
+              "text": "Don't get eaten",
+              "tone": "Defeat"
+            }
+          ]
+        },
+        {
+          "name": "end",
+          "scene": "wave=3&seed=3&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 311,
+          "crossfade": 12,
+          "hideHud": true,
+          "cards": [
+            {
+              "from": 0,
+              "to": 999,
+              "card": "End"
+            }
+          ],
+          "captions": [
+            {
+              "from": 30,
+              "to": 999,
+              "text": "Free. Phone or computer.",
+              "top": 0.7,
+              "tone": "Plain"
+            },
+            {
+              "from": 60,
+              "to": 999,
+              "text": "munch-manor.tanner-scadden.workers.dev",
+              "top": 0.83
+            }
+          ],
+          "fadeOut": 24
+        }
+      ]
+    },
+    {
+      "name": "release-30s-vertical",
+      "format": "9:16",
+      "score": {
+        "bpm": 152,
+        "cues": [
+          {
+            "frame": 0,
+            "mood": "Stampede"
+          },
+          {
+            "frame": 1489,
+            "mood": "Silence",
+            "stinger": "Victory"
+          }
+        ]
+      },
+      "shots": [
+        {
+          "name": "door",
+          "scene": "wave=3&start=wave&elapsed=6000&planks=West&plankhp=10&chewers=4&god&seed=3&px=50&py=100&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "skip": 12,
+          "ticks": 86,
+          "segments": [
+            {
+              "from": 40,
+              "to": 900,
+              "aim": "nearest",
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 12,
+              "zoom": 2.2,
+              "x": 30,
+              "y": 140
+            },
+            {
+              "at": 86,
+              "zoom": 2.7,
+              "x": 24,
+              "y": 140
+            }
+          ]
+        },
+        {
+          "name": "rug",
+          "scene": "coop=host&seed=7&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 170,
+          "coop": {
+            "seed": 7,
+            "preroll": 5200,
+            "difficulty": "Hard",
+            "god": true
+          },
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 1.8,
+              "x": 90,
+              "y": 140
+            },
+            {
+              "at": 40,
+              "zoom": 1.0,
+              "x": 90,
+              "y": 160
+            }
+          ],
+          "cards": [
+            {
+              "from": 40,
+              "to": 999,
+              "card": "Title"
+            }
+          ]
+        },
+        {
+          "name": "couch",
+          "scene": "wave=3&seed=3&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 122,
+          "crossfade": 8,
+          "hideHud": true,
+          "cards": [
+            {
+              "from": 0,
+              "to": 999,
+              "card": "Couch"
+            }
+          ],
+          "captions": [
+            {
+              "from": 0,
+              "to": 999,
+              "text": "Bring 3 friends"
+            }
+          ]
+        },
+        {
+          "name": "devices",
+          "scene": "coop=host&seed=7&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 71,
+          "coop": {
+            "seed": 7,
+            "preroll": 5250,
+            "difficulty": "Hard",
+            "god": true
+          },
+          "hideHud": true,
+          "devices": {
+            "from": 0,
+            "to": 999
+          },
+          "captions": [
+            {
+              "from": 0,
+              "to": 999,
+              "text": "Bring 3 friends"
+            }
+          ]
+        },
+        {
+          "name": "shotgun",
+          "scene": "wave=4&start=wave&elapsed=9000&gun=shotgun&crowd=14&god&seed=4&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 71,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": "nearest",
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 1.616,
+              "x": 90.0,
+              "y": 144.0
+            },
+            {
+              "at": 71,
+              "zoom": 1.92,
+              "x": 90.0,
+              "y": 142.7
+            }
+          ]
+        },
+        {
+          "name": "lug",
+          "scene": "wave=5&start=wave&elapsed=9000&gun=smg&chewers=5&god&seed=5&px=120&py=90&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "skip": 20,
+          "ticks": 68,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": "nearest",
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 20,
+              "zoom": 2.4,
+              "x": 37.5,
+              "y": 138.3
+            },
+            {
+              "at": 68,
+              "zoom": 2.76,
+              "x": 32.6,
+              "y": 138.3
+            }
+          ]
+        },
+        {
+          "name": "kaboom",
+          "scene": "wave=6&start=wave&elapsed=9000&gasroom=10&gun=smg&god&seed=6&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "skip": 10,
+          "ticks": 81,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": "nearest",
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 10,
+              "zoom": 1.616,
+              "x": 79.0,
+              "y": 144.0
+            },
+            {
+              "at": 81,
+              "zoom": 1.616,
+              "x": 84.5,
+              "y": 144.0
+            }
+          ]
+        },
+        {
+          "name": "biters",
+          "scene": "wave=5&start=wave&elapsed=9000&crawler=cling&gun=smg&god&seed=5&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 47,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": "nearest",
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 3.36,
+              "x": 90.0,
+              "y": 138.3
+            },
+            {
+              "at": 47,
+              "zoom": 2.64,
+              "x": 90.0,
+              "y": 138.3
+            }
+          ]
+        },
+        {
+          "name": "kitchen",
+          "scene": "wave=4&start=wave&elapsed=9000&kitchen&gun=smg&god&px=96&py=-46&ovens=belch&ovenMs=600&slip&seed=4&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 95,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": [
+                70,
+                -100
+              ],
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 2.16,
+              "x": 41.7,
+              "y": 119.1
+            },
+            {
+              "at": 95,
+              "zoom": 1.8,
+              "x": 50.0,
+              "y": 154.1
+            }
+          ]
+        },
+        {
+          "name": "smash",
+          "scene": "wave=3&money=85&gun=smg&px=70&py=27&hold&seed=3&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 146,
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 1.92,
+              "x": 46.9,
+              "y": 128.3
+            },
+            {
+              "at": 40,
+              "zoom": 1.616,
+              "x": 55.7,
+              "y": 144.0
+            },
+            {
+              "at": 142,
+              "zoom": 1.616,
+              "x": 90.0,
+              "y": 144.0
+            }
+          ],
+          "captions": [
+            {
+              "from": 0,
+              "to": 999,
+              "text": "Gun or room?",
+              "place": "Bottom"
+            }
+          ]
+        },
+        {
+          "name": "shop",
+          "scene": "wave=5&money=900&gun=smg&tier=1&px=200&py=142&seed=5&prep=30000&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "skip": 64,
+          "ticks": 234,
+          "crossfade": 8,
+          "segments": [
+            {
+              "from": 0,
+              "to": 60,
+              "keys": [
+                "KeyD"
+              ]
+            }
+          ],
+          "clicks": [
+            {
+              "at": 88,
+              "selector": "dialog[open] li[data-verdict='available'] button"
+            },
+            {
+              "at": 136,
+              "selector": "dialog[open] li[data-verdict='available'] button"
+            },
+            {
+              "at": 184,
+              "selector": "dialog[open] li[data-verdict='available'] button"
+            }
+          ]
+        },
+        {
+          "name": "boss",
+          "scene": "wave=8&start=wave&elapsed=20000&boss=stomp&windMs=900&gun=shotgun&god&seed=8&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 123,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": "nearest",
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 1.616,
+              "x": 112.0,
+              "y": 144.0
+            },
+            {
+              "at": 118,
+              "zoom": 2.16,
+              "x": 123.0,
+              "y": 131.7
+            }
+          ]
+        },
+        {
+          "name": "revive",
+          "scene": "coop=host&seed=7&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 319,
+          "crossfade": 10,
+          "coop": {
+            "seed": 7,
+            "preroll": 5400,
+            "difficulty": "Hard",
+            "god": true,
+            "revive": {
+              "down": 0,
+              "reviver": 1,
+              "at": 40,
+              "walkAt": 56,
+              "bleedMs": 4300,
+              "spot": [
+                160,
+                104
+              ]
+            }
+          },
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 1.616,
+              "x": 90.0,
+              "y": 144.0
+            },
+            {
+              "at": 60,
+              "zoom": 1.92,
+              "x": 90.0,
+              "y": 138.3
+            },
+            {
+              "at": 319,
+              "zoom": 2.28,
+              "x": 90.0,
+              "y": 138.3
+            }
+          ],
+          "captions": [
+            {
+              "from": 24,
+              "to": 999,
+              "text": "Don't get eaten",
+              "tone": "Defeat"
+            }
+          ]
+        },
+        {
+          "name": "end",
+          "scene": "wave=3&seed=3&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 311,
+          "crossfade": 12,
+          "hideHud": true,
+          "cards": [
+            {
+              "from": 0,
+              "to": 999,
+              "card": "End"
+            }
+          ],
+          "captions": [
+            {
+              "from": 30,
+              "to": 999,
+              "text": "Free. Phone or computer.",
+              "top": 0.69,
+              "tone": "Plain"
+            },
+            {
+              "from": 60,
+              "to": 999,
+              "text": "munch-manor.tanner-scadden.workers.dev",
+              "top": 0.78
+            }
+          ],
+          "fadeOut": 24
+        }
+      ]
+    },
+    {
+      "name": "release-loop",
+      "format": "16:9",
+      "gif": true,
+      "loop": 24,
+      "score": {
+        "bpm": 152,
+        "cues": [
+          {
+            "frame": 0,
+            "mood": "Stampede"
+          }
+        ]
+      },
+      "shots": [
+        {
+          "name": "burst",
+          "scene": "wave=3&start=wave&elapsed=6000&planks=West&plankhp=10&chewers=4&god&seed=3&px=160&py=100&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
+          "ticks": 384,
+          "segments": [
+            {
+              "from": 0,
+              "to": 900,
+              "aim": "nearest",
+              "fire": true
+            }
+          ],
+          "hideHud": true,
+          "camera": [
+            {
+              "at": 0,
+              "zoom": 1.8,
+              "x": 50,
+              "y": 92
+            },
+            {
+              "at": 120,
+              "zoom": 1.25,
+              "x": 110,
+              "y": 92
+            },
+            {
+              "at": 360,
+              "zoom": 1.8,
+              "x": 50,
+              "y": 92
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

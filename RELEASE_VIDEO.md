@@ -39,6 +39,15 @@ The plan for the launch video. It is shot once co-op works (multiplayer Phase 3,
 
 The first slice is built: `tools/video` (see its README) with the director mode in `tools/audit/harness/director.ts`, and four devlog clips in `tools/video/shots/devlog.json`.
 
+The cut is built too, in `tools/video/shots/release.json`: the 30 second cut in 16:9 (`release-30s`) and 9:16 (`release-30s-vertical`), and the 6 second loop (`release-loop`). `bun run video -- tools/video/shots/release.json` renders all three. The director has its own camera (pans and push-ins), dissolves between shots, the title slam, the end card, the couch, and the four device split screen (`tools/audit/harness/cards.ts`), and scripts a co-op seat going down and a teammate reviving it. The music is one Stampede loop at 152 bpm with every cut on a beat, ending on the Victory fanfare.
+
+Where the cut differs from the table above:
+
+- **The opening is two shots.** The west door splinters in close up (the chewers are staged at the west door, not the north one), then the four players on the rug open fire.
+- **The montage shows one Kaboomer burst, not a chain**, and an Ankle Biter clinging to an ankle rather than popping up, since one surfacing is a few pixels at full frame.
+- **Uncle Chunk and the revive are two shots.** The boss fight is single player; the revive is a co-op room on Hard. The downed player's teammate stands beside them with about a second of bleed out left.
+- **The vertical cut is pushed in on the room's window**, so the portrait layout's HUD band and thumb area are cropped away during play.
+
 ## Before the shoot
 
 - **Now, while co-op is built:** short devlog clips to build an audience. The parlour before and after, Rattles' MINE! stamp, and portrait play all make good 10 second posts. These need only the director mode, not co-op.

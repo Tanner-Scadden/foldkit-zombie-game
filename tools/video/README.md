@@ -6,7 +6,10 @@ Clips of the game for devlogs and the launch video (`RELEASE_VIDEO.md`), rendere
 bun run video -- tools/video/shots/devlog.json            # every clip
 bun run video -- tools/video/shots/devlog.json --only coop-looks
 bun run video -- tools/video/shots/devlog.json --frames-only  # no ffmpeg needed
+bun run video -- tools/video/shots/release.json --only release-30s  # the launch cut
 ```
+
+`shots/release.json` holds the launch video: `release-30s` (16:9), `release-30s-vertical` (9:16, the portrait layout), and `release-loop`, the 6 second loop for the pinned reply.
 
 It runs through the heavy guard as a CPU job and writes to `tools/video/out/` (gitignored): `<clip>.mp4`, `<clip>.gif` when the clip asks for one, and `<clip>/` with the frames, the soundtrack WAV, and `hashes.txt`. It needs ffmpeg for the MP4 and GIF (`brew install ffmpeg`), and stops with that hint when it is missing, unless `--frames-only`. Playwright comes from `tools/audit` (`cd tools/audit && bun install` once).
 
@@ -21,6 +24,8 @@ It runs through the heavy guard as a CPU job and writes to `tools/video/out/` (g
 
 Captions (the game's pixel font, `src/font.ts`) and fades are drawn over the page before each capture, so a frame on disk is the finished frame. Slow motion repeats frames, and a hold repeats one; a repeat is a hard link.
 
+The director has its own camera: a shot's `camera` keys say where the frame looks and how far it is pushed in, and between keys it eases, so it pans and pushes in on its own path, never tied to the player. It crops the page's own picture and scales it back up, so the game never knows. The same way, `devices` turns the frame into a laptop and three phones, each showing one seat's view of the same moment, and `crossfade` dissolves a shot's start over the last shot's end. The cards the game never shows (the title slam with its drips, the end card with the chomping Groaner, the couch of four players on their phones) are pixel art drawn over the game by the harness (`tools/audit/harness/cards.ts`), on the shot's clock.
+
 The frames are deterministic: two renders of a shot list give the same files (compare `hashes.txt`). The soundtrack is the same tune and the same sounds on the same frames, but Chrome sums a node's inputs in an order of its own, so a few samples can differ in the last bit between renders, and so can the AAC in the MP4.
 
 ## The shot list
@@ -32,4 +37,10 @@ A JSON file of clips (see `shotList.ts` for the Schema and `shots/devlog.json` f
 - `segments`: from and to a tick, `keys` held, a touch `move` direction, `aim` (`"nearest"` or an offset from the player) bent by `turn` degrees, and `fire`.
 - `taps` (a key on a tick) and `clicks` (a CSS selector on a tick, for HTML such as the shop's rows).
 - `coop`: `seed`, `preroll` ticks played before the first frame, and `difficulty`, for a room staged with `coop=host` (four seats) or `coop=arena` (three).
-- `captions` (three or four words, `place` Top, Middle, or Bottom, a font `tone`), `slowMotion`, `holds`, `fadeIn`, `fadeOut`, and `hideHud`.
+- `captions` (three or four words, `place` Top, Middle, or Bottom or an exact `top`, a font `tone`), `slowMotion`, `holds`, `fadeIn`, `fadeOut`, and `hideHud`.
+- `skip`: ticks played before the first frame, such as the walk to the stall.
+- `camera`: keys of `at`, `zoom` (1 is the whole frame), and the center `x`, `y` in game pixels of the screen (320x180, or 180x320 upright).
+- `cards`: `Title`, `End`, or `Couch` over a span of ticks; `devices`: the split screen over a span; `crossfade`: frames dissolved over the last shot.
+- `coop.god` keeps every seat standing, and `coop.revive` downs a seat on purpose (`down`, at `at`, after walking to `spot`), sets its bleed out clock to `bleedMs`, and from `walkAt` sends the `reviver` to stand beside it.
+
+A clip can carry its own `score`: music cues by clip frame in place of what the game cued, with the tune's `bpm`, and the render prints how far each cut lands from a beat. `loop` dissolves the clip's last frames into its first, so it plays round with no seam.
