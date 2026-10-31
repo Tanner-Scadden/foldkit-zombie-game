@@ -335,6 +335,8 @@ body {
 }
 
 .hud-tap-stage {
+  /* One HUD pixel in CSS, so HTML drawn over the canvas HUD matches it. */
+  --hud-px: min(100cqw / var(--screen-w), 100cqh / var(--screen-h));
   position: absolute;
   inset: 0;
   margin: auto;
@@ -389,12 +391,67 @@ body {
 
 .gun-cluster-side {
   position: absolute;
-  bottom: 0;
   display: flex;
   flex-wrap: wrap-reverse;
+  justify-content: flex-end;
   align-items: flex-end;
   gap: 4px;
   pointer-events: none;
+}
+
+/* RELOAD: always on the touch HUD, past the knife's slot (on it in
+   portrait). The button is the thumb's target, at least 48px; its face is
+   one more HUD slot, sized in the HUD's pixels (--hud-px), bright while a
+   reload would load rounds and dim like a slot not in hand while not. */
+
+.reload-button {
+  position: absolute;
+  display: flex;
+  align-items: flex-end;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.reload-button[data-layout='Landscape'] {
+  justify-content: flex-start;
+}
+
+.reload-button[data-layout='Portrait'] {
+  justify-content: flex-end;
+}
+
+.reload-face {
+  box-sizing: border-box;
+  flex: none;
+  border: var(--hud-px) solid #ffe066;
+  background: rgba(8, 10, 12, 0.6) center / calc(9 * var(--hud-px))
+    calc(8 * var(--hud-px)) no-repeat;
+  image-rendering: pixelated;
+}
+
+.reload-button[data-ready='false'] .reload-face {
+  border-color: rgba(244, 241, 222, 0.25);
+  opacity: 0.5;
+}
+
+.reload-button:active .reload-face {
+  background-color: rgba(255, 224, 102, 0.3);
+}
+
+.reload-button:focus-visible {
+  outline: 2px solid #9be36a;
+}
+
+.gun-cluster-side > * {
+  flex: none;
 }
 
 .cluster-button {
@@ -405,7 +462,6 @@ body {
 .gun-cluster-top {
   position: absolute;
   bottom: calc(100% + 6px);
-  left: 50%;
   transform: translateX(-50%);
   display: flex;
   pointer-events: none;

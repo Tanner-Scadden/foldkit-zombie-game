@@ -153,6 +153,15 @@ const SCENES: ReadonlyArray<Scene> = [
       'wave=4&seen=all&start=wave&gun=smg&elapsed=6000&loaded=9&money=85&px=70&py=27',
   },
   {
+    name: 'stall-wave',
+    query:
+      'wave=4&seen=all&start=wave&gun=smg&elapsed=6000&loaded=9&money=85&px=240&py=146',
+  },
+  {
+    name: 'knife-wave',
+    query: 'wave=4&seen=all&start=wave&gun=smg&elapsed=6000&loaded=30&knife',
+  },
+  {
     name: 'shop',
     query: 'wave=5&money=180&gun=smg&tier=1&px=270&py=142',
     opensDialog: true,

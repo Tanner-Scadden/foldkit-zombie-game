@@ -3,6 +3,7 @@ import type { Html } from 'foldkit/html'
 import { createLazy } from 'foldkit/html'
 
 import type { ApplicationViewBuilder } from './composition'
+import { percentOf } from './menuParts'
 import { type Screen, thumbAreaTop } from './screen'
 import { type Palette, spriteDataUrl } from './sprite'
 
@@ -80,9 +81,6 @@ const RAIL_URL = cssUrl(RAIL_PIXELS)
 const PANEL_URL = cssUrl(PANEL_PIXELS)
 
 // VIEW
-
-const percentOf = (part: number, whole: number): string =>
-  `${(part * 100) / whole}%`
 
 const thumbAreaBoxView = (
   width: number,

@@ -26,7 +26,7 @@ import {
   type InputDevice,
   LOAD_STEPS,
   Loading,
-  Model,
+  type Model,
   MunchopediaPage,
   type PointerDevice,
   RunMode,
@@ -88,7 +88,7 @@ import {
   pressMeleeSlot,
   pressedKey,
   releasedKey,
-  reloadHeldGun,
+  reloadFromButton,
   resumeFromPointer,
   skipDebutCardWhenUp,
   startWaveFromButton,
@@ -422,18 +422,11 @@ export const update = ApplicationComposition.makeUpdate({
           ...afterMessage(model),
         ]),
 
+  // NOTE: on touch the reload button is a tap like any button, made into a
+  // click by src/touchTaps.ts even with a thumb on the move stick.
   ClickedReloadButton: (model, message) =>
     Update.combineSteps(model, [
-      makeStep(
-        orInRun(
-          message,
-          makeStep(stepModel =>
-            isDebutCardBlocking(stepModel)
-              ? unchanged
-              : Update.combineSteps([unlockAudio, reloadHeldGun]),
-          ),
-        ),
-      ),
+      makeStep(orInRun(message, reloadFromButton)),
       ...afterMessage(model),
     ]),
 

@@ -8,7 +8,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 - 🔫 Your gun now yells before it runs dry: the ammo blinks amber, then red, the last shots tick, and Rattles hollers from his stall, where his AMMO window now sells you more mid-wave. Out of everything? Out comes the knife, or the Clang Pan, which now takes the knife's slot so you keep both guns.
 - 💀 Getting munched is a moment now: you topple, the zombies pile on, MUNCHED! slams down, and your run counts up. Go further or splat more than ever for a NEW BEST!
 - 🏆 Winning rains confetti (and a little gore) and crowns the MVP in co-op. Hit SHARE to brag on X.
-- 🎯 Taps land where you mean them: the settings X closes every time, buttons answer even with another finger on the screen, and a mid-wave mouse click on your gun slots shoots the zombie behind them.
+- 🎯 Taps land where you mean them: the settings X closes every time, buttons answer even with another finger on the screen, and a mid-wave mouse click on your gun slots shoots the zombie behind them. On phones your guns sit centered, with a reload button always by your melee slot.
 - 🏠 Munch Manor has a real address now: munchmanor.com. Swing by the steaming mug next to the gear to buy Rattles a coffee.
 
 ## October 30, 2026: Bring your friends

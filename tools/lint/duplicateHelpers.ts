@@ -84,18 +84,7 @@ const KINDS: ReadonlyArray<Kind> = [
 // NOTE: copies left on purpose, each with its reason. Keep this list short.
 const ALLOWED: ReadonlyArray<
   Readonly<{ file: string; name: string; reason: string }>
-> = [
-  // TODO(cleanup slice 6b): another agent is reworking the knife into a
-  // third HUD slot in these two files; share them from layers.ts and
-  // update/play.ts once it lands.
-  {
-    file: 'src/touchControls.ts',
-    name: 'percentOf',
-    reason: 'slice 6b',
-  },
-  { file: 'src/thumbArea.ts', name: 'percentOf', reason: 'slice 6b' },
-  { file: 'src/touchControls.ts', name: 'heldSlot', reason: 'slice 6b' },
-]
+> = []
 
 const groupOf = (file: string): string =>
   file.startsWith('packages/')

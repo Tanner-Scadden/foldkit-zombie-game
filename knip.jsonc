@@ -66,7 +66,7 @@
     },
     "tools/audit": {
       "entry": [
-        "{beacon-check,closes,coop,live-check,mp,offline,og,perf-check,perf,profile,profileClicks,save,splash,sqlite,sync,taps}.ts",
+        "{beacon-check,closes,coop,live-check,mp,offline,og,perf-check,perf,profile,profileClicks,save,splash,sqlite,sync,taps,twoThumbs}.ts",
         "shots*.ts",
         "harness/entry.ts",
         "harness/vite.config.ts",
@@ -80,8 +80,6 @@
   "ignoreIssues": {
     // The balance bot, with its other overrides (TODO(cleanup slice 9b)).
     "tools/balance/bot.ts": ["exports", "types"],
-    // The mobile HUD.
-    "src/update/play.ts": ["exports"],
     // The phone zoom.
     "src/onboarding.ts": ["exports"],
   },
