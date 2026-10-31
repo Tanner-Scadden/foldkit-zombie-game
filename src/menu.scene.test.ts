@@ -148,7 +148,7 @@ describe('Home menu', () => {
   test('the MANOR hand deals a card for each page with its key, and CLOSE puts it away', () => {
     scene(
       ROOT,
-      given(home),
+      given(modifyFields(home, { maybeSupportUrl: () => Option.none() })),
       measureSurface,
       expect(hand).toBeAbsent(),
       ...openHandInScene(),
@@ -173,7 +173,7 @@ describe('Home menu', () => {
       Command.resolve(FocusHandCard({ card }), Message.CompletedFocusHandCard())
     scene(
       ROOT,
-      given(home),
+      given(modifyFields(home, { maybeSupportUrl: () => Option.none() })),
       measureSurface,
       emitPressedKey('KeyV'),
       ...showDialogInScene(),

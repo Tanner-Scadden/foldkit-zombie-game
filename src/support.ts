@@ -7,7 +7,7 @@ import { Option } from 'effect'
 // it shows as the TIP JAR card in the home menu's MANOR hand (homeView.ts)
 // and as a pill on Victory (supportView.ts). support.test.ts fails a
 // link that is not https on buy.stripe.com.
-export const SUPPORT_URL = ''
+export const SUPPORT_URL = 'https://buy.stripe.com/14A3cwe3i8xXcMX1qscs800'
 
 export const SUPPORT_HOST = 'buy.stripe.com'
 
