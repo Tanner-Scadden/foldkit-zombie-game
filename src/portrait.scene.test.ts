@@ -14,7 +14,7 @@ import { describe, test, expect as vitestExpect } from 'vitest'
 
 import { screenCameraOf } from './camera'
 import { TURN_HINT_TEXT } from './homeView'
-import { hudShapes } from './hud'
+import { MELEE_SLOT_INDEX, gunSlotBox, hudShapes, reloadFaceOf } from './hud'
 import { update } from './main'
 import { Message } from './message'
 import { BreakClock, type Model, Phase, initialModel } from './model'
@@ -69,7 +69,9 @@ const gunSlotFills = (model: Model): ReadonlyArray<Box> =>
       x: 0,
       y: 0,
     }),
-    rect => rect.fill === SLOT_FILL && rect.width === 38,
+    rect =>
+      rect.fill === SLOT_FILL &&
+      rect.width === gunSlotBox(screenOf(model), 0).width - 2,
   )
 
 const root = selector('.game-root')
@@ -114,18 +116,37 @@ describe('the portrait HUD and thumb area', () => {
     })
   })
 
-  test('the reload button stands on the knife slot, as the row has no room past it', () => {
+  test('the reload button sits in the row, past the melee slot', () => {
     scene(
       ROOT,
       given(fighting),
       measure(PHONE_PORTRAIT),
       expect(selector('.reload-button')).toHaveAttr('data-layout', 'Portrait'),
-      expect(selector('.reload-button')).toHaveStyle('right', '0px'),
-      expect(selector('.reload-button')).toHaveStyle(
-        'bottom',
-        'calc(100% + 4px)',
-      ),
+      expect(selector('.reload-button')).toHaveStyle('bottom', '0px'),
+      expect(selector('.reload-button')).toHaveStyle('height', '100%'),
     )
+  })
+
+  // NOTE: a 360 px phone held upright is the narrowest, at 2 CSS pixels to a
+  // HUD pixel, so a 48 px target is 24 HUD pixels there.
+  test('the guns, the melee slot, and a square reload button fit one row, each a thumb wide', () => {
+    const screen = screenOf(inPortrait(fighting))
+    const thumb = 48 / 2
+    const [first, second, melee] = Array.map([0, 1, MELEE_SLOT_INDEX], index =>
+      gunSlotBox(screen, index),
+    )
+    const face = reloadFaceOf(screen)
+    vitestExpect(face.width).toBe(face.height)
+    vitestExpect(face.height).toBe(melee!.height)
+    const reloadLeft = melee!.x + melee!.width + 3
+    const reloadRight = reloadLeft + Math.max(thumb, face.width)
+    vitestExpect(reloadRight).toBeLessThanOrEqual(screen.width - 2)
+    Array.forEach([first!, second!, melee!], box => {
+      vitestExpect(box.width).toBeGreaterThanOrEqual(thumb)
+      vitestExpect(box.y).toBe(melee!.y)
+    })
+    vitestExpect(second!.x).toBeGreaterThan(first!.x + first!.width)
+    vitestExpect(melee!.x).toBeGreaterThan(second!.x + second!.width)
   })
 
   test('the hearts, money, and wave label sit in the band above the world window', () => {
