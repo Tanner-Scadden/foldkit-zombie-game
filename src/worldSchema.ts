@@ -280,10 +280,6 @@ export type PlantedAttack = typeof PlantedAttack.Type
 // NOTE: a charge locks its target when the brace starts, so the line on the
 // floor never follows the player. The rush runs past the target by the
 // overshoot, and remainingPx counts down what is left of it.
-// TODO(wire): `target` and `remainingPx` go as Unit (4096ths, at most 8),
-// as the field-name codec packed them under `move`, so a co-op client
-// draws the charge lane short. They want Point and PositionNumber, which
-// changes the bytes and so bumps the protocol: see cleanup.md.
 export const BossMove = defineTaggedUnion({
   Stalking: { cooldownMs: MillisNumber },
   WindingUp: {
@@ -292,11 +288,11 @@ export const BossMove = defineTaggedUnion({
     durationMs: MillisNumber,
   },
   Bracing: {
-    target: Heading,
+    target: Point,
     remainingMs: MillisNumber,
     durationMs: MillisNumber,
   },
-  Rushing: { direction: Heading, remainingPx: UnitNumber },
+  Rushing: { direction: Heading, remainingPx: PositionNumber },
   Dazed: { remainingMs: MillisNumber, durationMs: MillisNumber },
   Recovering: { remainingMs: MillisNumber, cooldownMs: MillisNumber },
 })
