@@ -399,15 +399,15 @@ body {
   pointer-events: none;
 }
 
-/* RELOAD: always on the touch HUD, past the knife's slot (on it in
-   portrait). The button is the thumb's target, at least 48px; its face is
-   one more HUD slot, sized in the HUD's pixels (--hud-px), bright while a
+/* RELOAD: always on the touch HUD, past the melee slot. The button is the
+   thumb's target, at least 48px; its face is one more HUD slot, sized in the HUD's pixels (--hud-px), bright while a
    reload would load rounds and dim like a slot not in hand while not. */
 
 .reload-button {
   position: absolute;
   display: flex;
   align-items: flex-end;
+  justify-content: flex-start;
   padding: 0;
   border: 0;
   border-radius: 6px;
@@ -418,14 +418,6 @@ body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-}
-
-.reload-button[data-layout='Landscape'] {
-  justify-content: flex-start;
-}
-
-.reload-button[data-layout='Portrait'] {
-  justify-content: flex-end;
 }
 
 .reload-face {

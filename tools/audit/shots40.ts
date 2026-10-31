@@ -1,34 +1,50 @@
 // The knife and two gun slots pass: the knife in hand mid-slash into a
 // Groaner, the HUD's slots with the pistol traded for a Pressure Cooker and
-// the knife's slot on their right (with a gun in hand, and with the knife),
-// the Clang Pan in the melee slot, the row in a break with the trap and hold-to-buy buttons up and mid-wave
-// at the stall, and the shop's GUNS tab offering the Pop Pistol back for $0,
-// on a 1280x720 desktop, an 844x390 phone on its side, and a 390x844 phone
-// held upright, as `s40-<TAG>-<viewport>-<scene>.png`. It checks that the
-// knife in hand stabs on the trigger, that the guns are centered with the
-// melee slot on their right and on touch the reload button past it (on it in
-// portrait), none covering another or the buttons over the row, all on
-// screen, and that the shop offers the pistol for $0. Exits with 1 on any
-// miss.
+// the melee slot on their right (with a gun in hand, and with the knife),
+// the Clang Pan in the melee slot, the row in a break with the trap and
+// hold-to-buy buttons up and mid-wave at the stall, and the shop's GUNS tab
+// offering the Pop Pistol back for $0, on a 1280x720 desktop, an 844x390
+// phone on its side, and 360x800, 390x844, and 430x932 phones held upright,
+// as `s40-<TAG>-<viewport>-<scene>.png`. It checks that the knife in hand
+// stabs on the trigger, that the guns are centered with the melee slot on
+// their right and on touch the reload button past it, all in one row (the
+// reload button square in portrait), each a thumb wide, none covering
+// another or the buttons over the row, all on screen, and that the shop
+// offers the pistol for $0. Exits with 1 on any miss.
 //   TAG=after bun run heavy -- --shared bun tools/audit/shots40.ts
 // ONLY picks scenes, such as `ONLY=slash`, and VIEWPORTS picks screens.
 import type { Page } from 'playwright-core'
 
 import {
-  SHOT_VIEWPORTS,
+  DESKTOP_1280,
+  PHONE_844,
   TAG,
+  UPRIGHT_360,
+  UPRIGHT_390,
+  UPRIGHT_430,
   type Viewport,
   deviceQuery,
   finish,
   harnessQuery,
   isPickedScene,
   launch,
+  pickViewports,
   scenePages,
   settleAnimations,
   shot,
   useHarness,
 } from './lib'
 import { FIGHTING, LEARNED } from './scenes'
+
+// NOTE: the shot screens plus the narrowest and widest phones held
+// upright, where the portrait row is tightest and loosest.
+const VIEWPORTS = pickViewports([
+  { ...DESKTOP_1280, name: 'd1280' },
+  { ...PHONE_844, name: 'l844' },
+  { ...UPRIGHT_360, name: 'p360' },
+  { ...UPRIGHT_390, name: 'p390' },
+  { ...UPRIGHT_430, name: 'p430' },
+])
 
 type Scene = Readonly<{
   name: string
@@ -72,9 +88,10 @@ const overlaps = (a: Edges, b: Edges): boolean =>
 
 // NOTE: the HUD row (changed at the owner's request on 2026-10-30): the two
 // guns centered on the screen, the melee slot on their right, and on touch
-// the reload button past it (in portrait, standing on the melee slot, as a
-// phone held upright has no room past it). None covers another, and all
-// are on screen. A desktop has no reload button: R reloads.
+// the reload button past it, all in one row (in portrait the slots stack
+// and the reload button is square). Every target is a thumb wide, none
+// covers another, and all are on screen. A desktop has no reload button: R
+// reloads.
 const checkSlots = async (
   page: Page,
   problems: Array<string>,
@@ -148,19 +165,18 @@ const checkSlots = async (
   if (isTouch) {
     if (reload === undefined || face === undefined) {
       problems.push(`${label}: no reload button on touch`)
-    } else if (isPortrait) {
-      if (reload.bottom > knife.top + 1) {
-        problems.push(`${label}: the reload button is not over the melee slot`)
-      }
-      if (face.right < knife.left || face.left > knife.right) {
-        problems.push(`${label}: the reload button is not on the melee slot`)
-      }
     } else {
       if (reload.left < knife.right - 1) {
         problems.push(`${label}: the reload button is not right of the melee`)
       }
       if (Math.abs(face.bottom - knife.bottom) > 1) {
         problems.push(`${label}: the reload button is not in the row`)
+      }
+      if (
+        isPortrait &&
+        Math.abs(face.right - face.left - (face.bottom - face.top)) > 1
+      ) {
+        problems.push(`${label}: the reload button is not square`)
       }
     }
     if (
@@ -176,6 +192,11 @@ const checkSlots = async (
     box =>
       !['First', 'Second', 'Melee', 'Reload', 'ReloadFace'].includes(box.name),
   )
+  ;[first, second, knife].forEach(box => {
+    if (isTouch && box.right - box.left < 47) {
+      problems.push(`${label}: ${box.name} is under a thumb's 48 px`)
+    }
+  })
   const targets = [
     first,
     second,
@@ -286,7 +307,7 @@ await useHarness()
 const browser = await launch()
 const pages = scenePages(browser, ['nodev'])
 const problems: Array<string> = []
-for (const viewport of SHOT_VIEWPORTS) {
+for (const viewport of VIEWPORTS) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
       continue

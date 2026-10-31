@@ -5,13 +5,12 @@ import { isOutOfGuns } from './ammoWarning'
 import type { ApplicationViewBuilder } from './composition'
 import { STICK_RADIUS_PX } from './constants'
 import {
-  GUN_PAIR_WIDTH,
   MELEE_SLOT_INDEX,
   SLOT_GAP,
-  SLOT_HEIGHT,
   gunClusterBox,
+  gunPairWidthOf,
   gunSlotBox,
-  gunSlotBoxWidth,
+  reloadFaceOf,
   secondsLeft,
 } from './hud'
 import { NEXT_TRAP_ICON, RELOAD_ICON, TRAP_BUTTON_ICONS } from './icons'
@@ -267,39 +266,30 @@ const gunSlotsView = (
 
 // RELOAD
 
-// NOTE: on touch the reload button is always in the row: past the melee
-// slot in landscape, standing on it in portrait, where a phone held upright
-// has no room past it. Its face is drawn as one more slot, in the HUD's own
-// pixels (--hud-px), so it reads as part of the row; its target is at least
-// a thumb wide. It reloads the held gun, or with the knife or the Pan out puts the last
-// gun back and reloads it, as R does. It dims when a reload would load
-// nothing: a full magazine, no rounds left to load, or a reload going.
-const RELOAD_FACE_WIDTH: Readonly<Record<Screen['layout'], number>> = {
-  Landscape: 18,
-  Portrait: gunSlotBoxWidth(MELEE_SLOT_INDEX),
-}
-
+// NOTE: on touch the reload button is always in the row, past the melee
+// slot. Its face is one more slot in the HUD's own pixels (--hud-px): a
+// short one in landscape, a square the row's height in portrait, where the
+// row stacks to fit four on a phone held upright (SLOT_SIZES in src/hud.ts).
+// Its target is at least a thumb wide. It reloads the held gun, or with the
+// knife or the Pan out puts the last gun back and reloads it, as R does. It
+// dims when a reload would load nothing: a full magazine, no rounds left to
+// load, or a reload going.
 const hudPixels = (count: number): string => `calc(${count} * var(--hud-px))`
 
 const reloadWidth = (screen: Screen): string =>
-  `max(${ICON_BUTTON_PX}px, ${hudPixels(RELOAD_FACE_WIDTH[screen.layout])})`
+  `max(${ICON_BUTTON_PX}px, ${hudPixels(reloadFaceOf(screen).width)})`
 
-const reloadSpot = (screen: Screen): Readonly<Record<string, string>> => {
-  const width = reloadWidth(screen)
-  return screen.layout === 'Landscape'
-    ? {
-        left: `calc(100% + ${percentOf(SLOT_GAP, gunClusterBox(screen).width)})`,
-        bottom: '0px',
-        width,
-        height: '100%',
-      }
-    : {
-        right: '0px',
-        bottom: `calc(100% + ${SIDE_GAP_PX}px)`,
-        width,
-        height: `max(${ICON_BUTTON_PX}px, ${hudPixels(SLOT_HEIGHT)})`,
-      }
-}
+// NOTE: from the right of the row's cluster (guns and melee) to the reload
+// button's right edge.
+const pastReload = (screen: Screen): string =>
+  `calc(-${percentOf(SLOT_GAP, gunClusterBox(screen).width)} - ${reloadWidth(screen)})`
+
+const reloadSpot = (screen: Screen): Readonly<Record<string, string>> => ({
+  left: `calc(100% + ${percentOf(SLOT_GAP, gunClusterBox(screen).width)})`,
+  bottom: '0px',
+  width: reloadWidth(screen),
+  height: '100%',
+})
 
 const reloadButtonView = (
   model: Model,
@@ -330,8 +320,8 @@ const reloadButtonView = (
         h.Class('reload-face'),
         h.AriaHidden(true),
         h.Style({
-          width: hudPixels(RELOAD_FACE_WIDTH[screen.layout]),
-          height: hudPixels(SLOT_HEIGHT),
+          width: hudPixels(reloadFaceOf(screen).width),
+          height: hudPixels(reloadFaceOf(screen).height),
           backgroundImage: RELOAD_ICON,
         }),
       ]),
@@ -435,10 +425,8 @@ const trapIconsView = (
 // start wave button centered over the guns. Mid-wave (only hold-to-buy) they
 // end over the melee slot, left of a player buying at the stall's ammo
 // window. In a landscape break they run from the start wave button to short
-// of the stall. In portrait the reload button stands on the melee slot
-// (the row has no room past it on a phone held upright): mid-wave they run
-// left of it, and in a break, when the start wave button shares that band,
-// they go one band higher.
+// of the stall. In portrait they end over the reload button, and in a break,
+// when the start wave button takes the band over the row, one band higher.
 const START_WAVE_HALF_PX = 64
 const STALL_CLEARANCE = 10
 
@@ -452,7 +440,7 @@ const sideStyle = (
   if (screen.layout === 'Landscape') {
     return {
       left: isBreak
-        ? `calc(${percentOf(GUN_PAIR_WIDTH / 2, cluster.width)} + ${START_WAVE_HALF_PX}px)`
+        ? `calc(${percentOf(gunPairWidthOf(screen) / 2, cluster.width)} + ${START_WAVE_HALF_PX}px)`
         : '0px',
       right: isBreak
         ? percentOf(
@@ -462,19 +450,13 @@ const sideStyle = (
         : '0px',
       bottom,
     }
-  } else if (isBreak) {
-    return {
-      left: '0px',
-      right: '0px',
-      bottom: `calc(100% + ${2 * SIDE_GAP_PX + ICON_BUTTON_PX}px)`,
-    }
   } else {
     return {
       left: '0px',
-      right: isOnTouch(model)
-        ? `calc(${reloadWidth(screen)} + ${SIDE_GAP_PX}px)`
-        : '0px',
-      bottom,
+      right: isOnTouch(model) ? pastReload(screen) : '0px',
+      bottom: isBreak
+        ? `calc(100% + ${2 * SIDE_GAP_PX + ICON_BUTTON_PX}px)`
+        : bottom,
     }
   }
 }
@@ -521,7 +503,10 @@ const startWaveButtonView = (
         [
           h.Class('gun-cluster-top'),
           h.Style({
-            left: percentOf(GUN_PAIR_WIDTH / 2, gunClusterBox(screen).width),
+            left: percentOf(
+              gunPairWidthOf(screen) / 2,
+              gunClusterBox(screen).width,
+            ),
           }),
         ],
         [

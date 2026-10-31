@@ -90,13 +90,47 @@ const HUD_MARGIN = 5
 const STREAK_X = HUD_MARGIN + 8
 const STREAK_Y = HUD_MARGIN + 30
 
-const SLOT_WIDTH = 40
-export const SLOT_HEIGHT = 12
+const SLOT_HEIGHT = 12
 export const SLOT_GAP = 3
-const MELEE_SLOT_WIDTH = 26
-export const GUN_PAIR_WIDTH = 2 * SLOT_WIDTH + SLOT_GAP
-const CLUSTER_WIDTH = GUN_PAIR_WIDTH + SLOT_GAP + MELEE_SLOT_WIDTH
 const TRAP_SLOT_WIDTH = 24
+
+// NOTE: the row's slots by layout. In landscape they are one line: a gun's
+// icon, pips, and ammo side by side. In portrait a phone held upright has
+// room for the four in one row (two guns, the melee slot, the reload
+// button) only if the slots stack: a gun's icon and pips over its ammo, and
+// the melee slot and the reload button square, the row's height. Every
+// target stays at least 48 px wide on a 360 px phone (24 HUD pixels).
+type SlotSizes = Readonly<{
+  gunWidth: number
+  meleeWidth: number
+  height: number
+  isStacked: boolean
+}>
+
+const SLOT_SIZES: Readonly<Record<Screen['layout'], SlotSizes>> = {
+  Landscape: {
+    gunWidth: 40,
+    meleeWidth: 26,
+    height: SLOT_HEIGHT,
+    isStacked: false,
+  },
+  Portrait: { gunWidth: 28, meleeWidth: 24, height: 24, isStacked: true },
+}
+
+const gunPairWidth = ({ gunWidth }: SlotSizes): number =>
+  2 * gunWidth + SLOT_GAP
+
+export const gunPairWidthOf = (screen: Screen): number =>
+  gunPairWidth(SLOT_SIZES[screen.layout])
+
+// NOTE: the reload button's face past the melee slot (src/touchControls.ts):
+// one more slot in landscape, a square the row's height in portrait.
+export const reloadFaceOf = (
+  screen: Screen,
+): Readonly<{ width: number; height: number }> =>
+  screen.layout === 'Landscape'
+    ? { width: 18, height: SLOT_HEIGHT }
+    : { width: SLOT_SIZES.Portrait.height, height: SLOT_SIZES.Portrait.height }
 
 const BOOST_CHIPS_LEFT = HUD_MARGIN + PLAYER_MAX_HP * HEART_SPACING + 2
 const BOOST_CHIP_STRIDE = 16
@@ -113,6 +147,7 @@ type HudLayout = Readonly<{
   boostLeft: number
   boostTop: number
   boostColumns: number
+  slots: SlotSizes
   slotLeft: number
   slotTop: number
   trapTop: number
@@ -120,11 +155,12 @@ type HudLayout = Readonly<{
 
 // NOTE: the two guns sit centered at the bottom, with the melee slot on
 // their right (and on touch the reload button past it, src/touchControls.ts).
-// In portrait they sit at the bottom of the thumb area and the HUD is a band
-// on top.
+// In portrait they sit at the bottom of the thumb area, stacked (SLOT_SIZES),
+// and the HUD is a band on top.
 const hudLayoutFor = (screen: Screen): HudLayout => {
-  const slotTop = screen.height - HUD_MARGIN - SLOT_HEIGHT
-  const slotLeft = Math.round((screen.width - GUN_PAIR_WIDTH) / 2)
+  const slots = SLOT_SIZES[screen.layout]
+  const slotTop = screen.height - HUD_MARGIN - slots.height
+  const slotLeft = Math.round((screen.width - gunPairWidth(slots)) / 2)
   if (screen.layout === 'Landscape') {
     return {
       centerX: screen.width / 2,
@@ -134,6 +170,7 @@ const hudLayoutFor = (screen: Screen): HudLayout => {
       boostLeft: BOOST_CHIPS_LEFT,
       boostTop: HUD_MARGIN - 3,
       boostColumns: 2,
+      slots,
       slotLeft,
       slotTop,
       trapTop: slotTop,
@@ -148,6 +185,7 @@ const hudLayoutFor = (screen: Screen): HudLayout => {
       boostLeft: scoreRight - BOOST_CHIPS * BOOST_CHIP_STRIDE + 3,
       boostTop: HUD_MARGIN + 7,
       boostColumns: BOOST_CHIPS,
+      slots,
       slotLeft,
       slotTop,
       trapTop: Math.max(
@@ -359,6 +397,14 @@ const PIP_GAP = 1
 const PIP_LEFT = 3
 const PIP_DROP = 3
 const PIP_ON_COLOR = '#ffe066'
+
+// NOTE: where a stacked (portrait) slot's parts sit, down from its top: the
+// icon's middle, the pips under it, then the ammo or the dent meter.
+const STACKED_ICON_Y = 6
+const STACKED_PIP_Y = 10
+const STACKED_TEXT_Y = 14
+const STACKED_METER_Y = 16
+const MELEE_ICON_SIZE = 9
 const PIP_OFF_COLOR = 'rgba(244, 241, 222, 0.25)'
 
 type SlotGun = Readonly<{ weapon: WeaponKind; tier: number }>
@@ -385,24 +431,22 @@ const METER_DENTED_COLOR = '#ff4a4f'
 const METER_TRACK_COLOR = 'rgba(244, 241, 222, 0.25)'
 
 const meterShapes = (
-  x: number,
-  width: number,
-  top: number,
+  left: number,
+  y: number,
   share: number,
 ): ReadonlyArray<Canvas.Shape> => {
-  const left = x + width - 3 - METER_WIDTH
   const filled = Math.round(clamp(share, 0, 1) * METER_WIDTH)
   return [
     Canvas.Rect({
       x: left,
-      y: top + SLOT_TEXT_TOP + 1,
+      y,
       width: METER_WIDTH,
       height: 3,
       fill: METER_TRACK_COLOR,
     }),
     Canvas.Rect({
       x: left,
-      y: top + SLOT_TEXT_TOP + 1,
+      y,
       width: Math.max(1, filled),
       height: 3,
       fill: filled > 0 ? METER_COLOR : METER_DENTED_COLOR,
@@ -461,39 +505,40 @@ const slotBorder = (
 }
 
 const tierPipShapes = (
-  x: number,
-  top: number,
+  left: number,
+  y: number,
   { weapon, tier }: SlotGun,
 ): ReadonlyArray<Canvas.Shape> =>
   Array.makeBy(maxTier(weapon), index =>
     Canvas.Rect({
-      x: x + PIP_LEFT + index * (PIP_WIDTH + PIP_GAP),
-      y: top + SLOT_HEIGHT - PIP_DROP,
+      x: left + index * (PIP_WIDTH + PIP_GAP),
+      y,
       width: PIP_WIDTH,
       height: 1,
       fill: index < tier ? PIP_ON_COLOR : PIP_OFF_COLOR,
     }),
   )
 
+const pipsWidth = ({ weapon }: SlotGun): number =>
+  Math.max(0, maxTier(weapon) * (PIP_WIDTH + PIP_GAP) - PIP_GAP)
+
 // NOTE: slots 0 and 1 are the guns, slot 2 the melee slot, narrower: it
 // has only its icon and ∞, or the Pan's icon and dent meter.
 export const MELEE_SLOT_INDEX = 2
 
 const slotLeftOf = (layout: HudLayout, index: number): number =>
-  layout.slotLeft + index * (SLOT_WIDTH + SLOT_GAP)
+  layout.slotLeft + index * (layout.slots.gunWidth + SLOT_GAP)
 
-const slotWidthOf = (index: number): number =>
-  index === MELEE_SLOT_INDEX ? MELEE_SLOT_WIDTH : SLOT_WIDTH
-
-export const gunSlotBoxWidth = slotWidthOf
+const slotWidthOf = (layout: HudLayout, index: number): number =>
+  index === MELEE_SLOT_INDEX ? layout.slots.meleeWidth : layout.slots.gunWidth
 
 export const gunSlotBox = (screen: Screen, index: number): Box => {
   const layout = hudLayoutFor(screen)
   return {
     x: slotLeftOf(layout, index),
     y: layout.slotTop,
-    width: slotWidthOf(index),
-    height: SLOT_HEIGHT,
+    width: slotWidthOf(layout, index),
+    height: layout.slots.height,
   }
 }
 
@@ -502,9 +547,95 @@ export const gunClusterBox = (screen: Screen): Box => {
   return {
     x: layout.slotLeft,
     y: layout.slotTop,
-    width: CLUSTER_WIDTH,
-    height: SLOT_HEIGHT,
+    width: gunPairWidth(layout.slots) + SLOT_GAP + layout.slots.meleeWidth,
+    height: layout.slots.height,
   }
+}
+
+// NOTE: what a slot shows, in one line (landscape) or stacked (portrait):
+// the gun's or the melee weapon's icon with its tier pips, then the ammo, or
+// the Pan's dent meter.
+const slotContentShapes = (
+  x: number,
+  top: number,
+  width: number,
+  isStacked: boolean,
+  look: SlotLook,
+  elapsedMs: number,
+): ReadonlyArray<Canvas.Shape> => {
+  const {
+    maybeGun,
+    ammo,
+    ammoLook,
+    maybeMeter = Option.none(),
+    maybeIcon = Option.none(),
+  } = look
+  const middle = x + width / 2
+  return [
+    ...Option.match(maybeGun, {
+      onNone: () => [],
+      onSome: slotGun =>
+        isStacked
+          ? [
+              placeSprite(
+                middle,
+                top + STACKED_ICON_Y,
+                gunIcon(slotGun.weapon, slotGun.tier),
+              ),
+              ...tierPipShapes(
+                middle - pipsWidth(slotGun) / 2,
+                top + STACKED_PIP_Y,
+                slotGun,
+              ),
+            ]
+          : [
+              placeSprite(
+                x + 8,
+                top + 5,
+                gunIcon(slotGun.weapon, slotGun.tier),
+              ),
+              ...tierPipShapes(
+                x + PIP_LEFT,
+                top + SLOT_HEIGHT - PIP_DROP,
+                slotGun,
+              ),
+            ],
+    }),
+    ...Option.match(maybeIcon, {
+      onNone: () => [],
+      onSome: icon => [
+        isStacked
+          ? placeSprite(middle - MELEE_ICON_SIZE / 2, top + 3, icon)
+          : placeSprite(x + 3, top + 1, icon),
+      ],
+    }),
+    ...Option.match(maybeMeter, {
+      onNone: () =>
+        isStacked
+          ? textShapes(
+              ammo,
+              ammoTone(ammoLook, elapsedMs),
+              middle,
+              top + STACKED_TEXT_Y,
+              'Center',
+            )
+          : textShapes(
+              ammo,
+              ammoTone(ammoLook, elapsedMs),
+              x + width - 3,
+              top + SLOT_TEXT_TOP,
+              'Right',
+            ),
+      onSome: share =>
+        isStacked
+          ? meterShapes(middle - METER_WIDTH / 2, top + STACKED_METER_Y, share)
+          : meterShapes(
+              x + width - 3 - METER_WIDTH,
+              top + SLOT_TEXT_TOP + 1,
+              share,
+            ),
+    }),
+  ]
 }
 
 const slotShapes = (
@@ -513,57 +644,28 @@ const slotShapes = (
   look: SlotLook,
   elapsedMs: number,
 ): ReadonlyArray<Canvas.Shape> => {
-  const {
-    maybeGun,
-    ammo,
-    isHeld,
-    ammoLook,
-    maybeMeter = Option.none(),
-    maybeIcon = Option.none(),
-  } = look
   const x = slotLeftOf(layout, index)
-  const width = slotWidthOf(index)
+  const width = slotWidthOf(layout, index)
+  const { height, isStacked } = layout.slots
   const top = layout.slotTop
-  const border = slotBorder(look, elapsedMs)
   const shapes = [
     Canvas.Rect({
       x,
       y: top,
       width,
-      height: SLOT_HEIGHT,
-      fill: border,
+      height,
+      fill: slotBorder(look, elapsedMs),
     }),
     Canvas.Rect({
       x: x + 1,
       y: top + 1,
       width: width - 2,
-      height: SLOT_HEIGHT - 2,
+      height: height - 2,
       fill: SLOT_FILL,
     }),
-    ...Option.match(maybeGun, {
-      onNone: () => [],
-      onSome: slotGun => [
-        placeSprite(x + 8, top + 5, gunIcon(slotGun.weapon, slotGun.tier)),
-        ...tierPipShapes(x, top, slotGun),
-      ],
-    }),
-    ...Option.match(maybeIcon, {
-      onNone: () => [],
-      onSome: icon => [placeSprite(x + 3, top + 1, icon)],
-    }),
-    ...Option.match(maybeMeter, {
-      onNone: () =>
-        textShapes(
-          ammo,
-          ammoTone(ammoLook, elapsedMs),
-          x + width - 3,
-          top + SLOT_TEXT_TOP,
-          'Right',
-        ),
-      onSome: share => meterShapes(x, width, top, share),
-    }),
+    ...slotContentShapes(x, top, width, isStacked, look, elapsedMs),
   ]
-  return isHeld ? shapes : [group({ opacity: SLOT_DIM_OPACITY, shapes })]
+  return look.isHeld ? shapes : [group({ opacity: SLOT_DIM_OPACITY, shapes })]
 }
 
 const ammoLook = (
