@@ -14,6 +14,7 @@ import {
   PHONE_667,
   PHONE_844,
   PHONE_932,
+  TAG,
   type Viewport,
   deviceQuery,
   finish,
@@ -24,11 +25,8 @@ import {
   openPage,
   settleAnimations,
   shot,
-  tagOr,
   useHarness,
 } from './lib'
-
-const TAG = tagOr('after')
 
 const VIEWPORTS: ReadonlyArray<Viewport> = [
   PHONE_667,
@@ -97,9 +95,12 @@ for (const viewport of VIEWPORTS) {
     await gotoScene(page, harnessUrl(scene.query, deviceQuery(viewport)))
     await settleAnimations(page)
     const report = await page.evaluate(inset => {
-      const stage = document.querySelector('.game-stage')!
+      const stage = document.querySelector('.game-stage')
+      if (stage === null) {
+        throw new Error('No .game-stage on the page')
+      }
       const rect = stage.getBoundingClientRect()
-      const model = (window as any).__model
+      const model = window.__model
       const buttons = Array.from(document.querySelectorAll('button'))
         .filter(button => {
           const box = button.getBoundingClientRect()
@@ -130,9 +131,7 @@ for (const viewport of VIEWPORTS) {
             .map(([name]) => name)
           return {
             label:
-              button.getAttribute('aria-label') ??
-              button.textContent?.trim() ??
-              '?',
+              button.getAttribute('aria-label') ?? button.textContent.trim(),
             x: box.x,
             y: box.y,
             width: box.width,
@@ -142,7 +141,7 @@ for (const viewport of VIEWPORTS) {
         })
       return {
         stage: { x: rect.x, y: rect.y, scale: rect.width / 320 },
-        player: model ? { x: model.player.x, y: model.player.y } : undefined,
+        player: { x: model.player.x, y: model.player.y },
         buttons,
       }
     }, EDGE_INSET)
@@ -155,19 +154,15 @@ for (const viewport of VIEWPORTS) {
     })
     const areas = [
       ...AREAS,
-      ...(report.player
-        ? [
-            {
-              name: 'player',
-              box: {
-                x: report.player.x - 5,
-                y: report.player.y - 8,
-                width: 10,
-                height: 14,
-              },
-            },
-          ]
-        : []),
+      {
+        name: 'player',
+        box: {
+          x: report.player.x - 5,
+          y: report.player.y - 8,
+          width: 10,
+          height: 14,
+        },
+      },
     ]
     const where = `${viewport.name} ${scene.name}`
     const lines = [

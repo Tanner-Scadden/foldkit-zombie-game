@@ -1,5 +1,6 @@
-import type { Request } from 'playwright-core'
+import { Schema } from 'effect'
 
+import { encodeJson } from '../json'
 import { desktop, launch, wait } from './lib'
 
 // Plays the shortest real run end against a deployed copy, from the menu to a
@@ -23,13 +24,14 @@ const page = await desktop(browser)
 const errors: Array<string> = []
 page.on('pageerror', error => errors.push(`pageerror: ${error.message}`))
 
-const beacon = new Promise<Request>(resolve => {
-  page.on('request', request => {
-    if (request.method() === 'POST' && request.url().endsWith(RUNS_PATH)) {
-      resolve(request)
-    }
-  })
-})
+// NOTE: listens from here on, with no time limit of its own: the race below
+// gives up after BEACON_WAIT_MS, and a page that closes first never posted.
+const beacon = page
+  .waitForRequest(
+    request => request.method() === 'POST' && request.url().endsWith(RUNS_PATH),
+    { timeout: 0 },
+  )
+  .catch(() => undefined)
 
 await page.goto(URL, { waitUntil: 'networkidle' })
 await wait(2000)
@@ -64,16 +66,22 @@ await browser.close()
 const ACCEPTED = 202
 const isOk = response?.status() === ACCEPTED && errors.length === 0
 
+const Report = Schema.Struct({
+  url: Schema.String,
+  beaconUrl: Schema.optional(Schema.String),
+  status: Schema.optional(Schema.Number),
+  errors: Schema.Array(Schema.String),
+})
+
 console.log(
-  JSON.stringify(
-    {
-      url: URL,
-      beaconUrl: outcome.request?.url(),
-      status: response?.status(),
-      errors,
-    },
-    null,
+  encodeJson(
+    Report,
     2,
-  ),
+  )({
+    url: URL,
+    beaconUrl: outcome.request?.url(),
+    status: response?.status(),
+    errors,
+  }),
 )
 process.exit(isOk ? 0 : 1)

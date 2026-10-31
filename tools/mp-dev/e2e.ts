@@ -48,16 +48,9 @@ import {
 import { type Mutation, generateKey, makePlayerId } from '@munch/sync-engine'
 
 import { playersOf } from '../../src/party'
-import {
-  DEFAULT_ROOM_SETTINGS,
-  type OwnSeat,
-  type RoomWorld,
-  roomWorldFor,
-} from '../../src/roomWorld'
+import type { OwnSeat, RoomWorld } from '../../src/roomWorld'
+import { GAME } from './game'
 import { LOCAL_ORIGIN, startWorkerd } from './local'
-
-// NOTE: the game's own World, as the GameRoom runs it.
-const GAME = roomWorldFor(DEFAULT_ROOM_SETTINGS)
 
 class CheckFailed extends Data.TaggedError('CheckFailed')<{
   readonly check: string

@@ -8,35 +8,25 @@
 // CHECK=1 it checks that the Pan sits in the melee slot, in hand, with
 // both guns kept, and exits with 1 on a miss.
 //   TAG=after CHECK=1 bun run heavy -- --shared bun tools/audit/shots45.ts
-// ONLY picks scenes, such as `ONLY=take`, and VIEWPORTS picks screens.
+// ONLY picks scenes, such as `ONLY=take`, and SHOT_VIEWPORTS picks screens.
 import type { Page } from 'playwright-core'
 
 import {
-  DESKTOP_1280,
-  PHONE_844,
-  UPRIGHT_390,
+  SHOT_VIEWPORTS,
+  TAG,
   deviceQuery,
   finish,
   harnessQuery,
   isPickedScene,
   launch,
-  model,
-  pickViewports,
   scenePages,
   settleAnimations,
   shot,
-  tagOr,
   useHarness,
 } from './lib'
+import { BREAK, IN_KITCHEN } from './scenes'
 
-const TAG = tagOr('after')
-const IS_CHECKED = process.env.CHECK === '1'
-
-const VIEWPORTS = pickViewports([
-  { ...DESKTOP_1280, name: 'd1280' },
-  { ...PHONE_844, name: 'l844' },
-  { ...UPRIGHT_390, name: 'p390' },
-])
+const IS_CHECKED = process.env['CHECK'] === '1'
 
 type Scene = Readonly<{
   name: string
@@ -44,10 +34,6 @@ type Scene = Readonly<{
   act?: (page: Page, problems: Array<string>, label: string) => Promise<void>
 }>
 
-const LEARNED =
-  'learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak'
-const IN_KITCHEN = `wave=4&seen=all&start=wave&elapsed=9000&kitchen&god&px=40&py=-12&${LEARNED}`
-const BREAK = `wave=3&seen=all&kitchen&money=200&gun=smg&prep=14000&${LEARNED}`
 const AT_FRIDGE = 'px=180&py=-102'
 
 const SCENES: ReadonlyArray<Scene> = [
@@ -55,8 +41,11 @@ const SCENES: ReadonlyArray<Scene> = [
     name: 'pan-slot',
     query: `${IN_KITCHEN}&gun=pan&tier=1&iced=pan&stick=60,0&tick=34`,
     act: async (page, problems, label) => {
-      const { player } = await model(page)
-      if (player.melee._tag !== 'Pan' || player.wield !== 'Melee') {
+      const player = await page.evaluate(() => ({
+        melee: window.__model.player.melee._tag,
+        wield: window.__model.player.wield,
+      }))
+      if (player.melee !== 'Pan' || player.wield !== 'Melee') {
         problems.push(`${label}: the Pan is not in hand in the melee slot`)
       }
     },
@@ -65,8 +54,10 @@ const SCENES: ReadonlyArray<Scene> = [
     name: 'take',
     query: `${BREAK}&${AT_FRIDGE}&fridge=offering&prize=Pan&fridgeMs=5000&tick=2`,
     act: async (page, problems, label) => {
-      const { player } = await model(page)
-      if (player.arsenal._tag === 'OneGun') {
+      const arsenal = await page.evaluate(
+        () => window.__model.player.arsenal._tag,
+      )
+      if (arsenal === 'OneGun') {
         problems.push(`${label}: both gun slots should be full`)
       }
     },
@@ -77,7 +68,7 @@ await useHarness()
 const browser = await launch()
 const pages = scenePages(browser, ['nodev'])
 const problems: Array<string> = []
-for (const viewport of VIEWPORTS) {
+for (const viewport of SHOT_VIEWPORTS) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
       continue

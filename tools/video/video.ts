@@ -1,7 +1,16 @@
 // Renders the clips of a shot list to MP4 (and GIF) in tools/video/out:
 //   bun run video -- tools/video/shots/devlog.json [--only <clip>] [--frames-only]
 // It runs through the heavy guard as a CPU job. See tools/video/README.md.
-import { Array, Console, Data, Effect, FileSystem, Option, Path } from 'effect'
+import {
+  Array,
+  Clock,
+  Console,
+  Data,
+  Effect,
+  FileSystem,
+  Option,
+  Path,
+} from 'effect'
 
 import * as NodeRuntime from '@effect/platform-node/NodeRuntime'
 import * as NodeServices from '@effect/platform-node/NodeServices'
@@ -86,19 +95,16 @@ const soundsOf = (
   if (clip.score !== undefined) {
     return [
       ...effects,
-      ...Array.map(
-        clip.score.cues,
-        (cue): ClipCue => ({
-          frame: cue.frame,
-          cue: {
-            _tag: 'Music',
-            tick: cue.frame,
-            mood: cue.mood,
-            level: cue.level ?? 'Full',
-            stinger: cue.stinger ?? 'None',
-          },
-        }),
-      ),
+      ...Array.map(clip.score.cues, (cue): ClipCue => ({
+        frame: cue.frame,
+        cue: {
+          _tag: 'Music',
+          tick: cue.frame,
+          mood: cue.mood,
+          level: cue.level ?? 'Full',
+          stinger: cue.stinger ?? 'None',
+        },
+      })),
     ]
   }
   return clip.music === false ? effects : cues
@@ -112,7 +118,7 @@ const MUSIC_START_FRAMES = 0.05 * FRAMES_PER_SECOND
 // nearest beat, so a shot list can be cut to the music.
 const beatReport = (score: Score, cuts: ReadonlyArray<number>): string => {
   const beat = (FRAMES_PER_SECOND * 60) / score.bpm
-  const start = (score.cues[0]?.frame ?? 0) + MUSIC_START_FRAMES
+  const start = score.cues[0].frame + MUSIC_START_FRAMES
   const lines = Array.map(cuts, cut => {
     const beats = (cut - start) / beat
     const nearest = Math.round(beats)
@@ -131,7 +137,7 @@ const renderClip = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const path = yield* Path.Path
-    const startedMs = Date.now()
+    const startedMs = yield* Clock.currentTimeMillis
     const clipDir = path.join(outDir, clip.name)
     const framesDir = path.join(clipDir, 'frames')
     yield* fs.remove(clipDir, { recursive: true }).pipe(Effect.ignore)
@@ -164,7 +170,9 @@ const renderClip = (
       frames = firstFrame + result.frameCount
     }
     if (clip.loop !== undefined) {
-      yield* Console.log(`  looping the last ${clip.loop} frames into the first`)
+      yield* Console.log(
+        `  looping the last ${clip.loop} frames into the first`,
+      )
       const tailStart = yield* loopFrames(page, framesDir, frames, clip.loop)
       // NOTE: the tail's sounds play over the head it dissolved into.
       const moved = Array.map(cues, cue =>
@@ -207,9 +215,10 @@ const renderClip = (
         info => `${file} (${(Number(info.size) / 1e6).toFixed(1)} MB)`,
       ),
     )
+    const finishedMs = yield* Clock.currentTimeMillis
     yield* Console.log(
       [
-        `${clip.name}: ${frames} frames, ${seconds.toFixed(2)} s at ${FRAMES_PER_SECOND} fps, rendered in ${((Date.now() - startedMs) / 1000).toFixed(1)} s`,
+        `${clip.name}: ${frames} frames, ${seconds.toFixed(2)} s at ${FRAMES_PER_SECOND} fps, rendered in ${((finishedMs - startedMs) / 1000).toFixed(1)} s`,
         `  frames and sound hash ${hash}`,
         ...Array.map(sizes, line => `  ${line}`),
       ].join('\n'),

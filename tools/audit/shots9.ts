@@ -1,5 +1,7 @@
+import { Schema } from 'effect'
 import { readdirSync } from 'node:fs'
 
+import { encodeJson } from '../json'
 import {
   SHOTS_DIR,
   comparePngs,
@@ -8,13 +10,25 @@ import {
   harnessUrl,
   launch,
   mobile,
-  model,
+  modelAs,
   shot,
   tagOr,
   useHarness,
 } from './lib'
 
 const TAG = tagOr('now')
+
+const Offset = Schema.Struct({ x: Schema.Number, y: Schema.Number })
+
+// NOTE: the Model's fields the log line reads.
+const SceneCounts = Schema.Struct({
+  shake: Schema.Struct({ offset: Offset }),
+  zombies: Schema.Array(Schema.Unknown),
+  particles: Schema.Array(Schema.Unknown),
+  decals: Schema.Array(Schema.Unknown),
+})
+
+const offsetJson = encodeJson(Offset)
 
 const scenes: ReadonlyArray<
   Readonly<{ name: string; q: string; isMobile?: boolean }>
@@ -50,25 +64,27 @@ const scenes: ReadonlyArray<
 await useHarness()
 const browser = await launch()
 for (const scene of scenes) {
-  const page = scene.isMobile
-    ? await mobile(browser, true)
-    : await desktop(browser)
+  const page =
+    scene.isMobile === true
+      ? await mobile(browser, true)
+      : await desktop(browser)
   await gotoScene(page, harnessUrl(scene.q.replace(/^\?/, '')))
-  const m = await model(page)
+  const m = await modelAs(page, SceneCounts)
   await shot(page, `s9-${TAG}-${scene.name}`)
   console.log(
     scene.name,
-    `shake ${JSON.stringify(m.shake.offset)}`,
+    `shake ${offsetJson(m.shake.offset)}`,
     `zombies ${m.zombies.length} particles ${m.particles.length} decals ${m.decals.length}`,
   )
   await page.context().close()
 }
 
-if (process.env.COMPARE) {
+const compareTag = process.env['COMPARE']
+if (compareTag !== undefined && compareTag !== '') {
   const page = await desktop(browser)
   const files = readdirSync(SHOTS_DIR)
   for (const scene of scenes) {
-    const before = `s9-${process.env.COMPARE}-${scene.name}.png`
+    const before = `s9-${compareTag}-${scene.name}.png`
     const after = `s9-${TAG}-${scene.name}.png`
     if (!files.includes(before) || !files.includes(after)) {
       continue

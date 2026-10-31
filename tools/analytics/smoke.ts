@@ -1,4 +1,5 @@
 import { Array, Console, Data, Effect, Random, Schema, pipe } from 'effect'
+import { FetchHttpClient, HttpClient, HttpClientRequest } from 'effect/http'
 
 import * as NodeRuntime from '@effect/platform-node/NodeRuntime'
 
@@ -21,9 +22,6 @@ const USAGE = 'Usage: bun tools/analytics/smoke.ts <api origin>'
 class SmokeError extends Data.TaggedError('SmokeError')<{
   readonly reason: string
 }> {}
-
-const describe = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
 
 const SMOKE_BUILD = 'smoke-test'
 
@@ -65,14 +63,15 @@ const randomVisitId = Effect.map(
     ),
 )
 
-const call = (url: string, init: RequestInit) =>
-  Effect.tryPromise({
-    try: async () => {
-      const response = await fetch(url, init)
-      return { status: response.status, body: await response.text() }
-    },
-    catch: error => new SmokeError({ reason: describe(error) }),
-  })
+const call = (request: HttpClientRequest.HttpClientRequest) =>
+  pipe(
+    HttpClient.execute(request),
+    Effect.flatMap(response =>
+      Effect.map(response.text, body => ({ status: response.status, body })),
+    ),
+    Effect.mapError(error => new SmokeError({ reason: error.message })),
+    Effect.provide(FetchHttpClient.layer),
+  )
 
 const expectStatus =
   (expected: number, what: string) =>
@@ -93,15 +92,15 @@ const program = Effect.gen(function* () {
     Effect.mapError(error => new SmokeError({ reason: error.message })),
   )
   yield* Effect.flatMap(
-    call(new URL(HEALTH_PATH, origin).href, {}),
+    call(HttpClientRequest.get(new URL(HEALTH_PATH, origin).href)),
     expectStatus(200, `GET ${HEALTH_PATH}`),
   )
   yield* Effect.flatMap(
-    call(new URL(RUNS_PATH, origin).href, {
-      method: 'POST',
-      body,
-      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-    }),
+    call(
+      HttpClientRequest.post(new URL(RUNS_PATH, origin).href).pipe(
+        HttpClientRequest.bodyText(body, 'text/plain;charset=UTF-8'),
+      ),
+    ),
     expectStatus(202, `POST ${RUNS_PATH}`),
   )
 })

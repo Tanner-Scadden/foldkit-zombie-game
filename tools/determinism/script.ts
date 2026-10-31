@@ -40,7 +40,9 @@ const stepMsOf = (pattern: StepPattern, frame: number): number =>
     ? FIXED_STEP_MS
     : (MIXED_STEPS_MS[frame % MIXED_STEPS_MS.length] ?? FIXED_STEP_MS)
 
-const SURFACE = { left: 0, top: 0, width: 320, height: 180 }
+// NOTE: the landscape view, measured at its own size (the balance bot
+// plays on it too).
+export const SURFACE = { left: 0, top: 0, width: 320, height: 180 }
 
 const MOVE_PATTERN: ReadonlyArray<ReadonlyArray<string>> = [
   ['KeyW'],

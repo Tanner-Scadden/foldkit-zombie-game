@@ -10,11 +10,13 @@
 // and must land in one public room together.
 // Run it through the heavy guard, as a Shared job (one context per page):
 //   bun run heavy -- --shared bun tools/audit/mp.ts https://munch-manor-mp-dev-pr-12.tanner-scadden.workers.dev/ [players]
+import { Duration, Effect, Schedule, Schema } from 'effect'
 import type { BrowserContext, Page } from 'playwright-core'
 
-import { SHOTS_DIR, finish, launch, wait } from './lib'
+import { decodeJson, encodeJson } from '../json'
+import { SHOTS_DIR, finish, launch, pollUntil, wait } from './lib'
 
-const BASE = process.argv[2] ?? process.env.BASE
+const BASE = process.argv[2] ?? process.env['BASE']
 if (BASE === undefined) {
   console.error('Usage: bun tools/audit/mp.ts <co-op dev page url> [players]')
   process.exit(2)
@@ -22,29 +24,34 @@ if (BASE === undefined) {
 const PLAYERS = Math.min(4, Math.max(2, Number(process.argv[3] ?? 3)))
 const PLAY_SECONDS = 12
 
-type Debug = Readonly<{
-  me: string
-  code: string
-  visibility: string | null
-  names: ReadonlyArray<string>
-  slot: number | null
-  phase: string
-  lobbyStatus: string | null
-  members: number
-  connection: string
-  rttMs: number
-  downKBs: number
-  upPerSecond: number
-  inputsPerSecond: number
-  bytesIn: number
-  framesIn: number
-  framesOut: number
-  corrections: number
-  maxCorrectionPx: number
-  tick: number | null
-  others: ReadonlyArray<{ slot: number; x: number; y: number; away: boolean }>
-  own: { x: number; y: number } | null
-}>
+// NOTE: the dev page's `#debug` readout, the fields this audit reads.
+const Debug = Schema.Struct({
+  code: Schema.String,
+  visibility: Schema.NullOr(Schema.String),
+  names: Schema.Array(Schema.String),
+  slot: Schema.NullOr(Schema.Number),
+  phase: Schema.String,
+  lobbyStatus: Schema.NullOr(Schema.String),
+  members: Schema.Number,
+  rttMs: Schema.Number,
+  downKBs: Schema.Number,
+  inputsPerSecond: Schema.Number,
+  bytesIn: Schema.Number,
+  framesIn: Schema.Number,
+  framesOut: Schema.Number,
+  corrections: Schema.Number,
+  maxCorrectionPx: Schema.Number,
+  tick: Schema.NullOr(Schema.Number),
+  others: Schema.Array(
+    Schema.Struct({
+      slot: Schema.Number,
+      x: Schema.Number,
+      away: Schema.Boolean,
+    }),
+  ),
+})
+type Debug = typeof Debug.Type
+const decodeDebug = decodeJson(Debug)
 
 const problems: Array<string> = []
 
@@ -53,7 +60,7 @@ const debugOf = async (page: Page): Promise<Debug | undefined> => {
   if (text === null || text === '') {
     return undefined
   }
-  return JSON.parse(text)
+  return decodeDebug(text)
 }
 
 const until = async (
@@ -62,14 +69,18 @@ const until = async (
   holds: (debug: Debug) => boolean,
   timeoutMs = 20_000,
 ): Promise<boolean> => {
-  const startedMs = Date.now()
-  while (Date.now() - startedMs < timeoutMs) {
-    const debugs = await Promise.all(pages.map(debugOf))
-    if (debugs.every(debug => debug !== undefined && holds(debug))) {
-      console.log(`  ok  ${what} (${Date.now() - startedMs} ms)`)
-      return true
-    }
-    await wait(250)
+  const { last: isMet, elapsedMs } = await pollUntil(
+    async () =>
+      (await Promise.all(pages.map(debugOf))).every(
+        debug => debug !== undefined && holds(debug),
+      ),
+    isDone => isDone,
+    250,
+    timeoutMs,
+  )
+  if (isMet) {
+    console.log(`  ok  ${what} (${elapsedMs} ms)`)
+    return true
   }
   problems.push(what)
   console.log(`  FAIL ${what}`)
@@ -144,9 +155,8 @@ await until(
 )
 
 const seen = new Map<number, Map<number, Set<number>>>()
-const playStartedMs = Date.now()
-const firstStats = await Promise.all(pages.map(debugOf))
-while (Date.now() - playStartedMs < PLAY_SECONDS * 1000) {
+const statsOfAll = Effect.promise(() => Promise.all(pages.map(debugOf)))
+const watchOthers = Effect.promise(async () => {
   const debugs = await Promise.all(pages.map(debugOf))
   debugs.forEach((debug, index) => {
     debug?.others.forEach(other => {
@@ -157,8 +167,24 @@ while (Date.now() - playStartedMs < PLAY_SECONDS * 1000) {
       seen.set(index, byOther)
     })
   })
-  await wait(200)
-}
+})
+// NOTE: the play is timed from the first readout to the last, so the rates
+// below are over the whole play.
+const [played, [firstStats, lastStats]] = await Effect.runPromise(
+  Effect.timed(
+    Effect.all([
+      statsOfAll,
+      watchOthers.pipe(
+        Effect.repeat(
+          Schedule.spaced(Duration.millis(200)).pipe(
+            Schedule.upTo({ duration: Duration.seconds(PLAY_SECONDS) }),
+          ),
+        ),
+        Effect.andThen(statsOfAll),
+      ),
+    ]),
+  ),
+)
 pages.forEach((_, index) => {
   const byOther = seen.get(index)
   const moved = [...(byOther?.values() ?? [])].filter(xs => xs.size > 10).length
@@ -169,8 +195,7 @@ pages.forEach((_, index) => {
   }
 })
 
-const lastStats = await Promise.all(pages.map(debugOf))
-const seconds = (Date.now() - playStartedMs) / 1000
+const seconds = Duration.toMillis(played) / 1000
 const measured = lastStats.map((debug, index) => {
   const first = firstStats[index]
   return {
@@ -199,7 +224,20 @@ const measured = lastStats.map((debug, index) => {
   }
 })
 console.log('  measured over the play:')
-measured.forEach(row => console.log(`    ${JSON.stringify(row)}`))
+const Measured = Schema.Struct({
+  page: Schema.Number,
+  slot: Schema.optional(Schema.NullOr(Schema.Number)),
+  rttMs: Schema.optional(Schema.Number),
+  downKBsWindow: Schema.Number,
+  downKBsRun: Schema.Number,
+  messagesInPerSecond: Schema.Number,
+  messagesOutPerSecond: Schema.Number,
+  inputsPerSecond: Schema.Number,
+  corrections: Schema.optional(Schema.Number),
+  maxCorrectionPx: Schema.Number,
+})
+const encodeMeasured = encodeJson(Measured)
+measured.forEach(row => console.log(`    ${encodeMeasured(row)}`))
 
 await Promise.all(
   pages.map((page, index) =>

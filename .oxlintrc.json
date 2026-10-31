@@ -278,29 +278,45 @@
       }
     },
     {
-      // NOTE: the audits, the video tool, and the spike drive headless
-      // Chrome: much of their code runs in page.evaluate on untyped page
-      // globals.
-      "files": [
-        "tools/audit/**/*.ts",
-        "tools/video/**/*.ts",
-        "tools/mp-spike/**/*.ts",
-        "tools/sprites/**/*.ts"
-      ],
+      // NOTE: the tools and the packages keep the game's bans that apply
+      // outside update (AGENTS.md "Strictness"): time from Effect's Clock,
+      // waits from Effect.sleep or a Schedule, requests through HttpClient,
+      // and unions as Schema unions.
+      "files": ["tools/**/*.ts", "packages/**/*.ts"],
       "rules": {
-        "typescript/no-explicit-any": "off",
-        "typescript/consistent-type-assertions": "off",
-        "typescript/no-non-null-assertion": "off",
-        "typescript/no-unsafe-argument": "off",
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-call": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/no-unsafe-return": "off",
-        "typescript/strict-boolean-expressions": "off",
-        "typescript/no-unnecessary-condition": "off",
-        "no-shadow": "off",
-        "oxc/no-map-spread": "off",
-        "oxc/no-accumulating-spread": "off"
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "Math",
+            "property": "random",
+            "message": "Draw from a seeded generator, or Effect's Random."
+          },
+          {
+            "object": "Date",
+            "property": "now",
+            "message": "Read the time from Effect's Clock (Clock.currentTimeMillis)."
+          },
+          {
+            "object": "Data",
+            "property": "taggedEnum",
+            "message": "Use a Schema union (Schema.TaggedUnion) and its exhaustive match."
+          }
+        ],
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "setTimeout",
+            "message": "Wait with Effect.sleep or a Schedule."
+          },
+          {
+            "name": "setInterval",
+            "message": "Repeat with a Schedule."
+          },
+          {
+            "name": "fetch",
+            "message": "Request through Effect's HttpClient."
+          }
+        ]
       }
     },
     {
@@ -329,12 +345,6 @@
       // NOTE: tests write raw and malformed payloads to feed the decoders,
       // and compare plain values by their text.
       "files": ["**/*.test.ts"],
-      "rules": { "munch/no-raw-json": "off" }
-    },
-    {
-      // NOTE: host scripts read and write reports, fixtures, and page
-      // results of their own (slice 9b tightens the tools).
-      "files": ["tools/**/*.ts"],
       "rules": { "munch/no-raw-json": "off" }
     },
     {
@@ -373,10 +383,6 @@
     }
   ],
   "ignorePatterns": [
-    // TODO(cleanup slice 9b): lint the balance bot once the Clang Pan lands.
-    // It was never linted, and that change is editing it.
-    "tools/balance/bot.ts",
-    "tools/balance/simulate.ts",
     "dist/",
     "node_modules/",
     "repos/",

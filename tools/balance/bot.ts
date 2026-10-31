@@ -79,14 +79,16 @@ import {
   maybePanOf,
 } from '../../src/weapons'
 import { withWorld } from '../../src/world'
+import { BossMove } from '../../src/worldSchema'
 import { ZOMBIE_KINDS, bodyRadiusOf } from '../../src/zombies'
+import { SURFACE } from '../determinism/script'
 
 export type Model = typeof initialModel
 type GameMessage = Parameters<typeof update>[1]
 type Vector = { x: number; y: number }
 export type Kind = ZombieKind
 
-export type BotMode = 'Campaign' | 'Endless'
+type BotMode = 'Campaign' | 'Endless'
 
 // What the bot plays: the level, the mode, and how it shops and swaps.
 // swapsBack is SWAP=1: it re-arms the spare gun before each wave while it
@@ -108,19 +110,26 @@ export const DEFAULT_OPTIONS: BotOptions = {
 
 export const parseDifficulty = (raw: string | undefined): Difficulty => {
   const name = (raw ?? 'normal').toLowerCase()
-  if (name === 'easy') return 'Easy'
-  if (name === 'hard') return 'Hard'
-  if (name === 'nightmare') return 'Nightmare'
-  if (name === 'normal') return 'Normal'
+  if (name === 'easy') {
+    return 'Easy'
+  }
+  if (name === 'hard') {
+    return 'Hard'
+  }
+  if (name === 'nightmare') {
+    return 'Nightmare'
+  }
+  if (name === 'normal') {
+    return 'Normal'
+  }
   throw new Error(
     `DIFFICULTY must be easy, normal, hard, or nightmare, not ${name}`,
   )
 }
 
-export const FRAME_MS = 1000 / 30
+const FRAME_MS = 1000 / 30
 const maxRunMs = (options: BotOptions) =>
   (options.mode === 'Endless' ? 90 : 20) * 60 * 1000
-const SURFACE = { left: 0, top: 0, width: 320, height: 180 }
 const ROOM_CENTER: Vector = { x: 160, y: 95 }
 const KEYS = {
   up: 'KeyW',
@@ -166,7 +175,7 @@ export type RunResult = {
 // What the bot pulled from the Mystery Leftovers fridge and what it did
 // with the fridge weapons: lids thrown and popped, Pan swings and the ones
 // that connected, sprays, and frozen zombies shattered.
-export type FridgeLog = {
+type FridgeLog = {
   pulls: number
   firstPullWave: number
   prizes: Record<string, number>
@@ -260,12 +269,12 @@ const emptyBossBlame = (): Record<BossBlame, number> => ({
   Bite: 0,
 })
 
-export type BossLog = Array<BossFight>
+type BossLog = Array<BossFight>
 
 // The timeline of one wave in wall time from its start: every pack as it
 // walks in, and the stretches with no zombie alive. A stretch is announced
 // while a warned pack still waits at its door or the dinner bell rings.
-export type PackArrival = {
+type PackArrival = {
   atMs: number
   pack: number
   door: string
@@ -276,7 +285,7 @@ export type PackArrival = {
 
 export type EmptyStretch = { fromMs: number; ms: number; announcedMs: number }
 
-export type WaveTimeline = {
+type WaveTimeline = {
   packs: Array<PackArrival>
   empty: Array<EmptyStretch>
   restMs: Array<number>
@@ -288,7 +297,7 @@ export type WaveTimeline = {
 // none announced, and spawns still to come (quiet, the dead air the pacing
 // rules forbid) and its longest stretch, its length, and the most alive at
 // once.
-export type WaveLog = {
+type WaveLog = {
   heartsLost: number
   pressureMs: number
   relaxMs: number
@@ -375,13 +384,17 @@ const recordTimeline = (
   const isOngoing = last !== undefined && last.fromMs + last.ms >= atMs - 1
   if (isEmpty) {
     const stretch = isOngoing ? last : { fromMs: atMs, ms: 0, announcedMs: 0 }
-    if (!isOngoing) timeline.empty.push(stretch)
+    if (!isOngoing) {
+      timeline.empty.push(stretch)
+    }
     stretch.ms += FRAME_MS
     stretch.announcedMs += isAnnounced(after) ? FRAME_MS : 0
   }
   const resting = after.pacing.beat._tag === 'Resting'
   const wasResting = before.pacing.beat._tag === 'Resting'
-  if (resting && !wasResting) timeline.restMs.push(0)
+  if (resting && !wasResting) {
+    timeline.restMs.push(0)
+  }
   if (resting) {
     timeline.restMs[timeline.restMs.length - 1] =
       (timeline.restMs[timeline.restMs.length - 1] ?? 0) + FRAME_MS
@@ -402,7 +415,7 @@ const OUT_OF_REACH = new Set(['Burrowed', 'Carried', 'Flying'])
 // VIEW=portrait plays as a phone held upright would: it sees only the
 // zombies inside the portrait camera's window, which follows it and leans
 // toward its aim like the game's. Zombies out of view are not shot or fled.
-const SEES_PORTRAIT_ONLY = process.env.VIEW === 'portrait'
+const SEES_PORTRAIT_ONLY = process.env['VIEW'] === 'portrait'
 
 const portraitCamera = (model: Model) =>
   cameraFor(
@@ -444,17 +457,19 @@ const steerToward = (from: Vector, to: Vector): Vector => {
 // Keeps its distance from the nearest zombie only once it is inside the
 // comfort radius, the way a player plants their feet to shoot until
 // something gets close, and drifts back toward the middle otherwise.
-const FLEE_PX = Number(process.env.FLEE_PX ?? 36)
+const FLEE_PX = Number(process.env['FLEE_PX'] ?? 36)
 
 // It walks over a pickup when nothing is inside its comfort radius, the
 // pickup is close, and no zombie stands near the pickup. NO_PICKUPS=1 keeps
 // it from ever going for one.
-const IGNORES_PICKUPS = process.env.NO_PICKUPS !== undefined
-const PICKUP_SEEK_PX = Number(process.env.PICKUP_SEEK_PX ?? 90)
+const IGNORES_PICKUPS = process.env['NO_PICKUPS'] !== undefined
+const PICKUP_SEEK_PX = Number(process.env['PICKUP_SEEK_PX'] ?? 90)
 const PICKUP_SAFE_PX = 28
 
 const safePickup = (model: Model): Vector | undefined => {
-  if (IGNORES_PICKUPS) return undefined
+  if (IGNORES_PICKUPS) {
+    return undefined
+  }
   const zombies = walking(model)
   return model.pickups
     .filter(
@@ -470,9 +485,9 @@ const safePickup = (model: Model): Vector | undefined => {
 // marker or a puddle. It keeps a wider berth from the boss than from the
 // horde, since the boss is wider. KITE=1 is the player who never learns the
 // tells: it only runs to the far side of the room from the boss and shoots.
-const DODGE_MARGIN_PX = Number(process.env.DODGE_MARGIN ?? 10)
-const NO_DODGE = process.env.NO_DODGE !== undefined
-const KITES = process.env.KITE !== undefined
+const DODGE_MARGIN_PX = Number(process.env['DODGE_MARGIN'] ?? 10)
+const NO_DODGE = process.env['NO_DODGE'] !== undefined
+const KITES = process.env['KITE'] !== undefined
 const BOSS_BODY_PX = 12
 const PLAYER_BODY_PX = 4
 
@@ -529,7 +544,9 @@ const clearSide = (model: Model, boss: Vector): Vector => {
   const crowd = walking(model)
     .filter(zombie => zombie.kind !== 'Boss')
     .sort((a, b) => distance(model.player, a) - distance(model.player, b))[0]
-  if (crowd === undefined) return across
+  if (crowd === undefined) {
+    return across
+  }
   const left = {
     x: model.player.x + across.x * 10,
     y: model.player.y + across.y * 10,
@@ -545,8 +562,8 @@ const clearSide = (model: Model, boss: Vector): Vector => {
 
 // It steps off a thrown Groaner's landing mark the way it steps off a glob's,
 // and keeps clear of the cracks where an Ankle Biter is about to come up.
-const LANDING_MARGIN_PX = Number(process.env.LANDING_MARGIN ?? 6)
-const CRACK_BERTH_PX = Number(process.env.CRACK_BERTH ?? 8)
+const LANDING_MARGIN_PX = Number(process.env['LANDING_MARGIN'] ?? 6)
+const CRACK_BERTH_PX = Number(process.env['CRACK_BERTH'] ?? 8)
 
 const landingDodge = (model: Model): Vector | undefined => {
   const mark = model.zombies.find(
@@ -555,7 +572,9 @@ const landingDodge = (model: Model): Vector | undefined => {
       distance(model.player, zombie.action.to) <
         CHUCKER_RULES.landRadius + PLAYER_BODY_PX + LANDING_MARGIN_PX,
   )
-  if (mark === undefined || mark.action._tag !== 'Flying') return undefined
+  if (mark?.action._tag !== 'Flying') {
+    return undefined
+  }
   const center = mark.action.to
   return distance(model.player, center) < 3
     ? clearSide(model, mark.action.from)
@@ -576,8 +595,12 @@ const floorDodge = (model: Model): Vector | undefined =>
 
 const telegraphDodge = (model: Model): Vector | undefined => {
   const floor = floorDodge(model)
-  if (floor !== undefined) return floor
-  if (NO_DODGE || KITES || model.boss._tag !== 'Fighting') return undefined
+  if (floor !== undefined) {
+    return floor
+  }
+  if (NO_DODGE || KITES || model.boss._tag !== 'Fighting') {
+    return undefined
+  }
   const boss = bossOf(model)
   const marker = model.boss.globs.find(
     glob =>
@@ -593,31 +616,33 @@ const telegraphDodge = (model: Model): Vector | undefined => {
       ? clearSide(model, boss ?? { x: center.x, y: center.y - 1 })
       : steerToward(center, model.player)
   }
-  if (boss === undefined) return undefined
-  const move = model.boss.move
-  if (move._tag === 'WindingUp' && move.attack === 'Stomp') {
-    return distance(model.player, boss) <
-      BOSS_RULES.stompRadius + DODGE_MARGIN_PX
-      ? steerToward(boss, model.player)
-      : { x: 0, y: 0 }
+  if (boss === undefined) {
+    return undefined
   }
-  if (move._tag === 'Bracing') {
-    const length = distance(boss, move.target)
-    const direction = steerToward(boss, move.target)
-    return laneDodge(
-      model,
-      boss,
-      direction,
-      length + BOSS_RULES.chargeOvershootPx,
-    )
-  }
-  if (move._tag === 'Rushing') {
-    return laneDodge(model, boss, move.direction, move.remainingPx)
-  }
-  return undefined
+  return BossMove.matchOrElse<Vector | undefined>(
+    model.boss.move,
+    {
+      WindingUp: move =>
+        move.attack !== 'Stomp'
+          ? undefined
+          : distance(model.player, boss) <
+              BOSS_RULES.stompRadius + DODGE_MARGIN_PX
+            ? steerToward(boss, model.player)
+            : { x: 0, y: 0 },
+      Bracing: move =>
+        laneDodge(
+          model,
+          boss,
+          steerToward(boss, move.target),
+          distance(boss, move.target) + BOSS_RULES.chargeOvershootPx,
+        ),
+      Rushing: move => laneDodge(model, boss, move.direction, move.remainingPx),
+    },
+    () => undefined,
+  )
 }
 
-const BOSS_BERTH_PX = Number(process.env.BOSS_BERTH ?? 16)
+const BOSS_BERTH_PX = Number(process.env['BOSS_BERTH'] ?? 16)
 
 // A frenzied zombie closes the gap faster, so the bot backs off from it
 // sooner, in proportion to the frenzy's extra speed.
@@ -637,9 +662,9 @@ const KITE_SPOTS: Array<Vector> = [
 ]
 
 const kiteAway = (model: Model, boss: Vector): Vector => {
-  const spot = [...KITE_SPOTS].sort(
-    (a, b) => distance(b, boss) - distance(a, boss),
-  )[0]!
+  const spot =
+    [...KITE_SPOTS].sort((a, b) => distance(b, boss) - distance(a, boss))[0] ??
+    model.player
   return distance(model.player, spot) > 6
     ? steerToward(model.player, spot)
     : { x: 0, y: 0 }
@@ -648,8 +673,8 @@ const kiteAway = (model: Model, boss: Vector): Vector => {
 // ENGAGE=1 holds the middle distance from the boss: outside his stomp
 // trigger, inside his charge range. It walks into the horde to get there,
 // so it does worse than the default, which holds the middle of the room.
-const ENGAGES = process.env.ENGAGE !== undefined
-const ENGAGE_PX = Number(process.env.ENGAGE_PX ?? 58)
+const ENGAGES = process.env['ENGAGE'] !== undefined
+const ENGAGE_PX = Number(process.env['ENGAGE_PX'] ?? 58)
 
 const engage = (model: Model, boss: Vector): Vector => {
   const away = steerToward(boss, model.player)
@@ -737,7 +762,9 @@ const PAN_FAR_PX = 16
 
 const panStance = (model: Model): Vector | undefined => {
   const { panTarget } = panPlanNow
-  if (panTarget === undefined) return undefined
+  if (panTarget === undefined) {
+    return undefined
+  }
   const { player } = model
   const threat = walking(model)
     .filter(zombie => !isPannable(zombie))
@@ -750,10 +777,16 @@ const panStance = (model: Model): Vector | undefined => {
     return steerToward(threat, player)
   }
   const target = walking(model).find(zombie => zombie.id === panTarget.id)
-  if (target === undefined) return undefined
+  if (target === undefined) {
+    return undefined
+  }
   const gap = distance(player, target)
-  if (gap < PAN_NEAR_PX) return steerToward(target, player)
-  if (gap > PAN_FAR_PX) return steerToward(player, target)
+  if (gap < PAN_NEAR_PX) {
+    return steerToward(target, player)
+  }
+  if (gap > PAN_FAR_PX) {
+    return steerToward(player, target)
+  }
   return { x: 0, y: 0 }
 }
 
@@ -847,10 +880,18 @@ const desiredKeys = (direction: Vector): Set<string> => {
   }
   const x = direction.x / length
   const y = direction.y / length
-  if (x > 0.38) keys.add(KEYS.right)
-  if (x < -0.38) keys.add(KEYS.left)
-  if (y > 0.38) keys.add(KEYS.down)
-  if (y < -0.38) keys.add(KEYS.up)
+  if (x > 0.38) {
+    keys.add(KEYS.right)
+  }
+  if (x < -0.38) {
+    keys.add(KEYS.left)
+  }
+  if (y > 0.38) {
+    keys.add(KEYS.down)
+  }
+  if (y < -0.38) {
+    keys.add(KEYS.up)
+  }
   return keys
 }
 
@@ -861,11 +902,11 @@ const pressKeys = (model: Model, wanted: Set<string>): Model => {
   )
   const pressed = [...wanted].filter(key => !held.has(key))
   const afterRelease = released.reduce(
-    (current, code) => send(current, Message.ReleasedKey({ code })),
+    (sent, code) => send(sent, Message.ReleasedKey({ code })),
     model,
   )
   return pressed.reduce(
-    (current, code) => send(current, Message.PressedKey({ code })),
+    (sent, code) => send(sent, Message.PressedKey({ code })),
     afterRelease,
   )
 }
@@ -875,9 +916,9 @@ const tapKey = (model: Model, code: string): Model =>
 
 // The bot is a fair player, not an aimbot: it re-aims only every few
 // frames, aims where the target was a moment ago, and its hand shakes.
-const AIM_EVERY_FRAMES = Number(process.env.AIM_EVERY ?? 5)
-const AIM_NOISE_RADIANS = Number(process.env.AIM_NOISE ?? 0.22)
-const MOVE_EVERY_FRAMES = Number(process.env.MOVE_EVERY ?? 4)
+const AIM_EVERY_FRAMES = Number(process.env['AIM_EVERY'] ?? 5)
+const AIM_NOISE_RADIANS = Number(process.env['AIM_NOISE'] ?? 0.22)
+const MOVE_EVERY_FRAMES = Number(process.env['MOVE_EVERY'] ?? 4)
 
 let botRandom = 1
 const nextBotRandom = () => {
@@ -889,8 +930,8 @@ const nextBotRandom = () => {
 // shoots him unless something else is within FOCUS_PX, and it always shoots
 // him while he is dazed.
 // NO_FOCUS=1 always shoots the nearest.
-const FOCUSES_BOSS = process.env.NO_FOCUS === undefined
-const FOCUS_PX = Number(process.env.FOCUS_PX ?? 60)
+const FOCUSES_BOSS = process.env['NO_FOCUS'] === undefined
+const FOCUS_PX = Number(process.env['FOCUS_PX'] ?? 60)
 // A Big Leaguer holding his shield toward the bot, and the zombie he holds,
 // only soak up shots, so the bot shoots something else while there is
 // anything else to shoot.
@@ -942,7 +983,7 @@ const topOff = (model: Model): Model => {
 // trigger is held, the aim from where the bot last pointed bends onto the
 // zombie it is almost on. NO_ASSIST=1 plays portrait without it.
 const IS_AIM_ASSISTED =
-  SEES_PORTRAIT_ONLY && process.env.NO_ASSIST === undefined
+  SEES_PORTRAIT_ONLY && process.env['NO_ASSIST'] === undefined
 const AIM_REACH_PX = 40
 let maybeRawAim: Vector | undefined
 
@@ -1076,11 +1117,21 @@ const isSpent = (gun: Gun): boolean =>
 // replaces: a spent fridge weapon is worth nothing, the pistol little, and
 // an upgraded Chatterbox the most.
 const gunValue = (gun: Gun): number => {
-  if (isSpent(gun)) return 0
-  if (gun.kind === 'Pistol') return 1 + gun.tier
-  if (gun.kind === 'Shotgun') return 2 + gun.tier
-  if (gun.kind === 'Smg') return 3 + gun.tier * 1.5
-  if (gun.kind === 'Freeze') return 3
+  if (isSpent(gun)) {
+    return 0
+  }
+  if (gun.kind === 'Pistol') {
+    return 1 + gun.tier
+  }
+  if (gun.kind === 'Shotgun') {
+    return 2 + gun.tier
+  }
+  if (gun.kind === 'Smg') {
+    return 3 + gun.tier * 1.5
+  }
+  if (gun.kind === 'Freeze') {
+    return 3
+  }
   return 4 + gun.tier
 }
 
@@ -1127,7 +1178,7 @@ const LOB_SAFE_PX = 22
 const LID_START_PX = COOKER_RULES.lidRadius + PLAYER_RADIUS
 const LOB_OVERSHOOT_PX = 4
 
-export const lobHoldMs = (gap: number, tier: number): number => {
+const lobHoldMs = (gap: number, tier: number): number => {
   const share =
     (gap - LID_START_PX + LOB_OVERSHOOT_PX - COOKER_RULES.minThrowPx) /
     (COOKER_RULES.maxThrowPx - COOKER_RULES.minThrowPx)
@@ -1137,7 +1188,9 @@ export const lobHoldMs = (gap: number, tier: number): number => {
 }
 
 const cookerPlan = (model: Model, spare: FridgeSpare): FridgePlan => {
-  if (spare.rounds <= 0) return gunPlan()
+  if (spare.rounds <= 0) {
+    return gunPlan()
+  }
   const { player } = model
   const seen = visibleZombies(model)
   const nearest = nearestOf(player, seen)
@@ -1162,7 +1215,9 @@ const cookerPlan = (model: Model, spare: FridgeSpare): FridgePlan => {
         b.score - a.score ||
         distance(player, a.zombie) - distance(player, b.zombie),
     )[0]
-  if (best === undefined || best.score < 2) return gunPlan()
+  if (best === undefined || best.score < 2) {
+    return gunPlan()
+  }
   return {
     useSpare: true,
     target: best.zombie,
@@ -1187,7 +1242,9 @@ const panPlan = (model: Model): FridgePlan => {
       distance(player, zombie) <
         PAN_THREAT_PX + (zombie.kind === 'Boss' ? BOSS_BERTH_PX : 0),
   )
-  if (isThreat) return gunPlan()
+  if (isThreat) {
+    return gunPlan()
+  }
   const target = nearestOf(
     player,
     seen.filter(
@@ -1210,7 +1267,9 @@ const freezePlan = (model: Model, spare: FridgeSpare): FridgePlan => {
   const seen = visibleZombies(model)
   const isFrozen = (zombie: Zombie) => zombie.action._tag === 'Frozen'
   const frozen = nearestOf(player, seen.filter(isFrozen))
-  if (spare.rounds <= 0) return gunPlan(frozen)
+  if (spare.rounds <= 0) {
+    return gunPlan(frozen)
+  }
   const freezable = seen.filter(
     zombie =>
       isSmallKind(zombie.kind) &&
@@ -1227,8 +1286,12 @@ const freezePlan = (model: Model, spare: FridgeSpare): FridgePlan => {
     lobMs: 0,
     panTarget: undefined,
   })
-  if (close !== undefined) return spray(close)
-  if (frozen !== undefined) return gunPlan(frozen)
+  if (close !== undefined) {
+    return spray(close)
+  }
+  if (frozen !== undefined) {
+    return gunPlan(frozen)
+  }
   const group = freezable
     .map(zombie => ({
       zombie,
@@ -1305,9 +1368,13 @@ const fightWithFridge = (
     return aimAndFire(swapped, frame, fridgePlan.target)
   }
   const { target } = fridgePlan
-  if (target === undefined) return holdFire(swapped)
+  if (target === undefined) {
+    return holdFire(swapped)
+  }
   const aimed = aimAt(swapped, target)
-  if (spare.kind !== 'Cooker') return pressFire(aimed.model, aimed.point)
+  if (spare.kind !== 'Cooker') {
+    return pressFire(aimed.model, aimed.point)
+  }
   const { charge, fireCooldownMs } = aimed.model.player
   return charge._tag === 'Idle' && fireCooldownMs <= 0
     ? pressFire(aimed.model, aimed.point)
@@ -1334,9 +1401,9 @@ const STALL_BELOW: Vector = {
 // takes the spare to its top tier before it upgrades the pistol.
 // NO_GNOME=1 keeps the old bot that never buys a gnome, and NO_PLANKS=1 a
 // bot that never buys a Plank Pile, to check planks help without carrying.
-const NO_GNOME = process.env.NO_GNOME !== undefined
-const NO_PLANKS = process.env.NO_PLANKS !== undefined
-const RESERVE = Number(process.env.RESERVE ?? 30)
+const NO_GNOME = process.env['NO_GNOME'] !== undefined
+const NO_PLANKS = process.env['NO_PLANKS'] !== undefined
+const RESERVE = Number(process.env['RESERVE'] ?? 30)
 
 type ItemId = Parameters<typeof priceFor>[1]
 type SpareKind = FridgeSpare['kind']
@@ -1361,9 +1428,13 @@ const replacedBy = (model: Model, item: ItemId): Gun | undefined => {
   if (item === 'Pistol') {
     return gunsOfBot(model).find(isSpent) ?? weakerGun(model)
   }
-  if (item !== 'Smg' && item !== 'Shotgun') return undefined
+  if (item !== 'Smg' && item !== 'Shotgun') {
+    return undefined
+  }
   const guns = gunsOfBot(model)
-  if (guns.length < 2) return undefined
+  if (guns.length < 2) {
+    return undefined
+  }
   return (
     guns.find(gun => gun.kind === 'Shotgun') ??
     guns.find(isSpent) ??
@@ -1379,7 +1450,9 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
     verdictFor(model, item)._tag === 'Available'
   const canSpare = (item: ItemId) =>
     isAvailable(item) && model.wallet.balance - priceFor(model, item) >= RESERVE
-  if (model.player.hp <= 3 && isAvailable('Heart')) return 'Heart'
+  if (model.player.hp <= 3 && isAvailable('Heart')) {
+    return 'Heart'
+  }
   // Traded the pistol for a fridge weapon that is now spent: Rattles gives
   // the pistol back for nothing, in place of the spent one.
   if (
@@ -1395,16 +1468,24 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
     firearm === undefined &&
     (fridge === undefined || (isSpent(fridge) && isAvailable('Smg')))
   ) {
-    if (isAvailable('Smg')) return 'Smg'
-    if (isAvailable('Shotgun')) return 'Shotgun'
+    if (isAvailable('Smg')) {
+      return 'Smg'
+    }
+    if (isAvailable('Shotgun')) {
+      return 'Shotgun'
+    }
     return undefined
   }
-  if (spare === undefined) return undefined
+  if (spare === undefined) {
+    return undefined
+  }
   if (spare.kind === 'Shotgun' && spare.tier === 0 && isAvailable('Smg')) {
     return 'Smg'
   }
   const refills = [firearm, fridge].flatMap(gun => {
-    if (gun === undefined) return []
+    if (gun === undefined) {
+      return []
+    }
     const refill = REFILLS[gun.kind]
     const cap = maxRounds(gun.kind, gun.tier)
     return refill !== undefined && gun.rounds < cap / 2 && isAvailable(refill)
@@ -1420,7 +1501,9 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
   if (!NO_PLANKS && barricades < 2 && isAvailable('Barricade')) {
     return 'Barricade'
   }
-  if (model.player.hp <= 4 && isAvailable('Heart')) return 'Heart'
+  if (model.player.hp <= 4 && isAvailable('Heart')) {
+    return 'Heart'
+  }
   const repairs = model.traps
     .map(trap => repairItemId(trap.id))
     .filter(item => isAvailable(item))
@@ -1431,7 +1514,9 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
   if (repairs.length > 0 && repairTotal <= 25) {
     return repairs[0]
   }
-  if (current.noUpgrades) return undefined
+  if (current.noUpgrades) {
+    return undefined
+  }
   const turrets =
     model.trapStock.Turret +
     model.traps.filter(trap => trap._tag === 'Turret').length
@@ -1447,8 +1532,12 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
   ) {
     return spareUpgrade
   }
-  if (!NO_GNOME && turrets < 1 && canSpare('Turret')) return 'Turret'
-  if (wantsKitchen(model)) return undefined
+  if (!NO_GNOME && turrets < 1 && canSpare('Turret')) {
+    return 'Turret'
+  }
+  if (wantsKitchen(model)) {
+    return undefined
+  }
   if (
     spareUpgrade !== undefined &&
     spare.tier < maxTier(spare.kind) &&
@@ -1493,7 +1582,7 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
 // holds the SMG at its second upgrade, both Plank Piles, and a Grumpy Gnome,
 // while it keeps its reserve. It walks to the boarded door and holds the interact key. KITCHEN=0 is the bot
 // that never opens it, to see what the kitchen does to a run.
-const NO_KITCHEN = process.env.KITCHEN === '0'
+const NO_KITCHEN = process.env['KITCHEN'] === '0'
 const KITCHEN_DOOR_PUSH: Vector = { x: 70, y: 16 }
 
 const isKitchenOpen = (model: Model) =>
@@ -1530,7 +1619,7 @@ let kitchenWave = 0
 // (src/ammoCounter.ts) and holds the interact key until it buys. It keeps
 // shooting on the way, so standing alone never buys for it. AMMO=0 is the
 // bot that never uses the window.
-const NO_AMMO_WINDOW = process.env.AMMO === '0'
+const NO_AMMO_WINDOW = process.env['AMMO'] === '0'
 const AMMO_WINDOW_NEAR_PX = 70
 
 const wantsAmmoWindow = (model: Model): boolean => {
@@ -1577,7 +1666,7 @@ const holdingAtKitchen = (model: Model, keys: Set<string>): Set<string> =>
 // pulls while the door is open or slammed. A weapon is offered, not given:
 // see wouldTake.
 // FRIDGE=0 is the bot that never pulls.
-const NO_FRIDGE = process.env.FRIDGE === '0'
+const NO_FRIDGE = process.env['FRIDGE'] === '0'
 const FRIDGE_STAND_PX = 6
 
 const fridgeStand = (model: Model): Vector | undefined =>
@@ -1699,10 +1788,14 @@ const shop = (model: Model): Model => {
 }
 
 // The bot holds the parlour, so its planks go in the parlour's doorways.
-const PARLOUR_DOOR_SET = new Set<string>(['North', 'West', 'East', 'South'])
+const isParlourDoor = Schema.is(
+  Schema.Literals(['North', 'West', 'East', 'South']),
+)
 
 const busiestDoor = (model: Model) => {
-  if (model.phase._tag !== 'Preparation') return undefined
+  if (model.phase._tag !== 'Preparation') {
+    return undefined
+  }
   // Counts follow the planks already up: a boarded door's packs come through
   // the next open door, so the second pile goes where they pile up.
   const counts = new Map<string, number>()
@@ -1715,13 +1808,10 @@ const busiestDoor = (model: Model) => {
     model.traps.flatMap(trap => (trap._tag === 'Barricade' ? [trap.door] : [])),
   )
   return [...counts.entries()]
-    .filter(([door]) => !boarded.has(door) && PARLOUR_DOOR_SET.has(door))
-    .sort((a, b) => b[1] - a[1])[0]?.[0] as
-    | 'North'
-    | 'West'
-    | 'East'
-    | 'South'
-    | undefined
+    .flatMap(([door, count]) =>
+      !boarded.has(door) && isParlourDoor(door) ? [{ door, count }] : [],
+    )
+    .sort((a, b) => b.count - a.count)[0]?.door
 }
 
 type PrepPlan =
@@ -1745,7 +1835,7 @@ const gnomeSpot = (model: Model): Vector =>
       GNOME_SPOTS.length - 1,
       model.traps.filter(trap => trap._tag === 'Turret').length,
     )
-  ]!
+  ] ?? model.player
 
 const prepPlan = (model: Model, shopped: boolean): PrepPlan => {
   if (
@@ -1782,11 +1872,23 @@ export const KINDS: ReadonlyArray<Kind> = Object.keys(ZOMBIE_KINDS).filter(
 export const emptyHurt = (): Record<Kind, number> =>
   EffectRecord.fromIterableWith(KINDS, kind => [kind, 0])
 
+// NOTE: adds a fresh log entry and hands it back to fill in.
+const pushed = <A>(log: Array<A>, entry: A): A => {
+  log.push(entry)
+  return entry
+}
+
 const bossBlameOf = (after: Model): BossBlame | undefined => {
-  const tags = after.frameEvents.map(event => event._tag)
-  if (tags.includes('BossRammed')) return 'Charge'
-  if (tags.includes('BossStomped')) return 'Stomp'
-  if (tags.includes('GlobLanded')) return 'Glob'
+  const tags = new Set(after.frameEvents.map(event => event._tag))
+  if (tags.has('BossRammed')) {
+    return 'Charge'
+  }
+  if (tags.has('BossStomped')) {
+    return 'Stomp'
+  }
+  if (tags.has('GlobLanded')) {
+    return 'Glob'
+  }
   return undefined
 }
 
@@ -1796,11 +1898,15 @@ const blamedKind = (before: Model, after: Model): Kind | undefined => {
       event._tag === 'Exploded' &&
       Math.hypot(event.x - after.player.x, event.y - after.player.y) < 34,
   )
-  if (burst) return 'Exploder'
+  if (burst) {
+    return 'Exploder'
+  }
   if (after.frameEvents.some(event => event._tag === 'ZombieLanded')) {
     return 'Thrower'
   }
-  if (bossBlameOf(after) !== undefined) return 'Boss'
+  if (bossBlameOf(after) !== undefined) {
+    return 'Boss'
+  }
   return walking(before).sort(
     (a, b) => distance(before.player, a) - distance(before.player, b),
   )[0]?.kind
@@ -1813,14 +1919,18 @@ const blame = (
   hurtBy: Record<Kind, number>,
 ): Kind | undefined => {
   const lost = before.player.hp - after.player.hp
-  if (lost <= 0) return undefined
+  if (lost <= 0) {
+    return undefined
+  }
   const kind = blamedKind(before, after)
-  if (kind !== undefined) hurtBy[kind] += lost
+  if (kind !== undefined) {
+    hurtBy[kind] += lost
+  }
   return kind
 }
 
 // The model of a fresh run on the title, already started.
-export const startedRun = (seed: number, options: BotOptions): Model => {
+const startedRun = (seed: number, options: BotOptions): Model => {
   const ready = send(
     modifyFields(asTutorialDone(asVeteran(initialModel)), {
       rngState: () => seed,
@@ -1836,16 +1946,16 @@ export const startedRun = (seed: number, options: BotOptions): Model => {
 
 // How far play goes: to the end of the run, to the end of the wave it
 // starts in, or to the start of a wave's Preparation.
-export type Stop =
+type Stop =
   | { _tag: 'RunEnd' }
   | { _tag: 'WaveEnd' }
   | { _tag: 'WaveStart'; wave: number }
 
 // Called with the model on the first frame of each wave's Preparation,
 // before the bot shops, which is where a wave snapshot is taken.
-export type OnPreparation = (wave: number, model: Model) => void
+type OnPreparation = (wave: number, model: Model) => void
 
-export const play = (
+const play = (
   start: Model,
   seed: number,
   options: BotOptions,
@@ -1901,7 +2011,9 @@ export const play = (
     if (model.phase._tag === 'Preparation' && preparedWave !== wave) {
       preparedWave = wave
       onPreparation(wave, model)
-      if (stop._tag === 'WaveStart' && wave >= stop.wave) break
+      if (stop._tag === 'WaveStart' && wave >= stop.wave) {
+        break
+      }
     }
     if (
       model.phase._tag === 'Preparation' &&
@@ -1912,7 +2024,9 @@ export const play = (
     }
     if (model.shop._tag === 'Browsing') {
       model = shop(model)
-      if (model.shop._tag !== 'Browsing') shoppedWave = wave
+      if (model.shop._tag !== 'Browsing') {
+        shoppedWave = wave
+      }
       continue
     }
     if (model.phase._tag === 'Preparation') {
@@ -2029,15 +2143,29 @@ export const play = (
     frame += 1
     const before = model
     model = send(model, Message.TickedFrame({ deltaTime: FRAME_MS }))
-    if (!isKitchenOpen(before) && isKitchenOpen(model)) kitchenWave = wave
+    if (!isKitchenOpen(before) && isKitchenOpen(model)) {
+      kitchenWave = wave
+    }
     const blamed = blame(before, model, hurtBy)
-    if (model.player.hp <= 0 && before.player.hp > 0) killedBy = blamed
+    if (model.player.hp <= 0 && before.player.hp > 0) {
+      killedBy = blamed
+    }
     model.frameEvents.forEach(event => {
-      if (event._tag === 'ZombieThrown') newKinds.throws += 1
-      if (event._tag === 'ShieldRaised') newKinds.shields += 1
-      if (event._tag === 'AnklesGrabbed') newKinds.grabs += 1
-      if (event._tag === 'CrawlerSurfaced') newKinds.surfaced += 1
-      if (event._tag === 'PackFrenzied') newKinds.frenzies += 1
+      if (event._tag === 'ZombieThrown') {
+        newKinds.throws += 1
+      }
+      if (event._tag === 'ShieldRaised') {
+        newKinds.shields += 1
+      }
+      if (event._tag === 'AnklesGrabbed') {
+        newKinds.grabs += 1
+      }
+      if (event._tag === 'CrawlerSurfaced') {
+        newKinds.surfaced += 1
+      }
+      if (event._tag === 'PackFrenzied') {
+        newKinds.frenzies += 1
+      }
       if (event._tag === 'PackWiped') {
         newKinds.wipes += 1
         newKinds.wipeBonus += event.bonus
@@ -2047,13 +2175,27 @@ export const play = (
         fridgeLog.firstPullWave ||= wave
         fridgeLog.prizes[event.prize] = (fridgeLog.prizes[event.prize] ?? 0) + 1
       }
-      if (event._tag === 'LidLaunched') fridgeLog.lids += 1
-      if (event._tag === 'CookerPopped') fridgeLog.pops += 1
-      if (event._tag === 'PanSwung') fridgeLog.swings += 1
-      if (event._tag === 'PanClanged') fridgeLog.clangs += 1
-      if (event._tag === 'KnifeStabbed') fridgeLog.stabs += 1
-      if (event._tag === 'KnifeHit') fridgeLog.stabHits += 1
-      if (event._tag === 'PrizeTaken') fridgeLog.taken += 1
+      if (event._tag === 'LidLaunched') {
+        fridgeLog.lids += 1
+      }
+      if (event._tag === 'CookerPopped') {
+        fridgeLog.pops += 1
+      }
+      if (event._tag === 'PanSwung') {
+        fridgeLog.swings += 1
+      }
+      if (event._tag === 'PanClanged') {
+        fridgeLog.clangs += 1
+      }
+      if (event._tag === 'KnifeStabbed') {
+        fridgeLog.stabs += 1
+      }
+      if (event._tag === 'KnifeHit') {
+        fridgeLog.stabHits += 1
+      }
+      if (event._tag === 'PrizeTaken') {
+        fridgeLog.taken += 1
+      }
       if (
         event._tag === 'Purchased' &&
         model.phase._tag === 'Wave' &&
@@ -2061,8 +2203,12 @@ export const play = (
       ) {
         fridgeLog.counterBuys += 1
       }
-      if (event._tag === 'FreezeSprayed') fridgeLog.sprays += 1
-      if (event._tag === 'ZombieShattered') fridgeLog.shatters += 1
+      if (event._tag === 'FreezeSprayed') {
+        fridgeLog.sprays += 1
+      }
+      if (event._tag === 'ZombieShattered') {
+        fridgeLog.shatters += 1
+      }
     })
     if (
       model.player.hp < before.player.hp &&
@@ -2096,7 +2242,7 @@ export const play = (
       const fight =
         known ??
         (hasBoss
-          ? (bossLog.push({
+          ? pushed(bossLog, {
               wave,
               arrived: false,
               felled: false,
@@ -2115,8 +2261,7 @@ export const play = (
               heartsByAttack: emptyBossBlame(),
               damageTaken: 0,
               aimedMs: 0,
-            }),
-            bossLog[bossLog.length - 1]!)
+            })
           : undefined)
       if (fight !== undefined) {
         if (model.boss._tag === 'Fighting') {
@@ -2127,13 +2272,27 @@ export const play = (
           if (event._tag === 'ZombieKilled' && event.kind === 'Boss') {
             fight.felled = true
           }
-          if (event._tag === 'BossStomped') fight.stomps += 1
-          if (event._tag === 'BossBelched') fight.belches += 1
-          if (event._tag === 'BossRushed') fight.charges += 1
-          if (event._tag === 'BossRammed') fight.chargeHits += 1
-          if (event._tag === 'BossBonked') fight.bonks += 1
-          if (event._tag === 'BossSpat') fight.spits += 1
-          if (event._tag === 'BossEnraged') fight.enraged = true
+          if (event._tag === 'BossStomped') {
+            fight.stomps += 1
+          }
+          if (event._tag === 'BossBelched') {
+            fight.belches += 1
+          }
+          if (event._tag === 'BossRushed') {
+            fight.charges += 1
+          }
+          if (event._tag === 'BossRammed') {
+            fight.chargeHits += 1
+          }
+          if (event._tag === 'BossBonked') {
+            fight.bonks += 1
+          }
+          if (event._tag === 'BossSpat') {
+            fight.spits += 1
+          }
+          if (event._tag === 'BossEnraged') {
+            fight.enraged = true
+          }
           if (
             (event._tag === 'ZombieHit' || event._tag === 'ZombieKilled') &&
             event.kind === 'Boss' &&
@@ -2157,7 +2316,9 @@ export const play = (
           )[0]
           if (cause !== undefined) {
             fight.heartsByAttack[cause] += lost
-            if (cause === 'Glob') fight.spitHits += 1
+            if (cause === 'Glob') {
+              fight.spitHits += 1
+            }
           } else if (nearest?.kind === 'Boss') {
             fight.heartsByAttack.Bite += lost
           }
@@ -2205,7 +2366,8 @@ export const play = (
       log.peakAlive = Math.max(log.peakAlive, alive.length)
     }
     if (
-      process.env.BOSS_TRACE &&
+      process.env['BOSS_TRACE'] !== undefined &&
+      process.env['BOSS_TRACE'] !== '' &&
       frame % 150 === 0 &&
       model.boss._tag === 'Fighting'
     ) {
@@ -2222,7 +2384,11 @@ export const play = (
         walking(model).length,
       )
     }
-    if (process.env.DEBUG && frame % 150 === 0) {
+    if (
+      process.env['DEBUG'] !== undefined &&
+      process.env['DEBUG'] !== '' &&
+      frame % 150 === 0
+    ) {
       const near = walking(model).map(z => distance(model.player, z))
       console.log(
         model.phase._tag,
@@ -2319,7 +2485,9 @@ export const waveStarts = (
 ): ReadonlyMap<number, Model> => {
   const key = startsKey(seed, options)
   const known = derivedStarts.get(key)
-  if (known !== undefined && known.untilWave >= untilWave) return known.starts
+  if (known !== undefined && known.untilWave >= untilWave) {
+    return known.starts
+  }
   const campaign: BotOptions = { ...options, mode: 'Campaign' }
   const starts = new Map<number, Model>()
   play(
@@ -2337,7 +2505,7 @@ export const waveStarts = (
 
 // How many campaign seeds a snapshot slot tries before it gives up on a
 // wave the bot rarely reaches.
-export const SNAPSHOT_TRIES = 12
+const SNAPSHOT_TRIES = 12
 
 // Slot k of slots takes its snapshot from the first of the seeds k,
 // k + slots, k + 2 slots, and so on whose run reached the wave. Every slot
@@ -2353,7 +2521,9 @@ export const snapshotFor = (
   EffectArray.makeBy(SNAPSHOT_TRIES, attempt =>
     seedAt(firstSeed, slot + attempt * slots),
   ).reduce<WaveSnapshot | undefined>((found, seed) => {
-    if (found !== undefined) return found
+    if (found !== undefined) {
+      return found
+    }
     const model = waveStarts(seed, options, untilWave).get(wave)
     return model === undefined ? undefined : { wave, seed, model }
   }, undefined)
@@ -2369,7 +2539,7 @@ export const rerolled = (model: Model, waveSeed: number): Model => {
     : model
 }
 
-export type WaveOutcome = 'Cleared' | 'Died' | 'TimedOut'
+type WaveOutcome = 'Cleared' | 'Died' | 'TimedOut'
 
 export type WaveRun = {
   wave: number
@@ -2427,10 +2597,12 @@ export type WavePass = {
   runs: number
   slots: number
   firstSeed: number
+  // Runs to skip in the seed list, so a second batch rolls new waves.
+  seedOffset: number
 }
 
 // Plays runs of every wave in the pass. Run i of a wave starts from slot
-// i % slots and rolls its wave from waveSeedAt(i). ownsSlot picks the slots
+// i % slots and rolls its wave from waveSeedAt(seedOffset + i). ownsSlot picks the slots
 // this process plays, so workers can split a pass by slot.
 export const playWavePass = (
   pass: WavePass,
@@ -2441,7 +2613,9 @@ export const playWavePass = (
   return pass.waves.flatMap(wave =>
     EffectArray.makeBy(pass.runs, index => index).flatMap(index => {
       const slot = index % pass.slots
-      if (!ownsSlot(slot)) return []
+      if (!ownsSlot(slot)) {
+        return []
+      }
       const snapshot = snapshotFor(
         wave,
         slot,
@@ -2452,7 +2626,13 @@ export const playWavePass = (
       )
       return snapshot === undefined
         ? []
-        : [playSnapshot(snapshot, waveSeedAt(pass.firstSeed, index), options)]
+        : [
+            playSnapshot(
+              snapshot,
+              waveSeedAt(pass.firstSeed, pass.seedOffset + index),
+              options,
+            ),
+          ]
     }),
   )
 }

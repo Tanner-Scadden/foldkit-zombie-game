@@ -5,7 +5,7 @@
 //   BASE=http://localhost:4173/ bun save.ts
 import { GAME, desktop, launch, wait } from './lib'
 
-const BASE = process.env.BASE ?? GAME
+const BASE = process.env['BASE'] ?? GAME
 const GATE_NOTE = 'The wave waits until you try moving, aiming, and firing.'
 
 const browser = await launch()

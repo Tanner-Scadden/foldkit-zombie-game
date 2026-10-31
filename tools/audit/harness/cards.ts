@@ -3,6 +3,7 @@ import { Canvas } from 'foldkit'
 
 import { playerSprites } from '@game/appearance'
 import { SEAT_LOOKS } from '@game/coop/looks'
+import { rect } from '@game/drawing'
 import { logoShapes } from '@game/screens'
 import { frameAt, group } from '@game/sprite'
 
@@ -25,14 +26,6 @@ export type CardScreen = Readonly<{ width: number; height: number }>
 const LOGO_CENTER_X = 160
 const LOGO_MIDDLE_Y = 36
 const MS_PER_TICK = 1000 / 60
-
-const rect = (
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  fill: string,
-): Canvas.Shape => Canvas.Rect({ x, y, width, height, fill })
 
 // NOTE: the logo from the title screen, centered on (x, y), scaled about
 // its middle, with shapes of its own (its drips) drawn under it, placed
@@ -117,8 +110,7 @@ const titleShapes = (
   const y = isWide ? 66 : 112
   const rest = isWide ? TITLE_SCALE_WIDE : TITLE_SCALE_UPRIGHT
   const progress = Math.min(1, age / SLAM_TICKS)
-  const scale =
-    rest * (1 + (SLAM_FROM - 1) * (1 - progress) * (1 - progress))
+  const scale = rest * (1 + (SLAM_FROM - 1) * (1 - progress) * (1 - progress))
   const [shakeX, shakeY] =
     age >= SLAM_TICKS && age < SLAM_TICKS + SHAKE_TICKS
       ? (SHAKE[(age - SLAM_TICKS) % SHAKE.length] ?? [0, 0])
@@ -154,9 +146,9 @@ const END_BACK = '#160b24'
 const GLOW_RINGS: ReadonlyArray<readonly [number, string]> = [
   [92, '#1d0f30'],
   [72, '#24123a'],
-  [56, PALETTE.b ?? '#3b2160'],
-  [44, PALETTE.h ?? '#6d4a9a'],
-  [35, PALETTE.H ?? '#8a62c0'],
+  [56, PALETTE['b'] ?? '#3b2160'],
+  [44, PALETTE['h'] ?? '#6d4a9a'],
+  [35, PALETTE['H'] ?? '#8a62c0'],
 ]
 const END_LOGO_SCALE = 1.6
 const JAW_ROW = 15
@@ -274,7 +266,9 @@ const sitterShapes = (
   const look = SEAT_LOOKS[seat % SEAT_LOOKS.length] ?? SEAT_LOOKS[0]
   const mood = moodAt(age)
   const hop = Match.value(mood).pipe(
-    Match.when('Tapping', () => (Math.floor(age / 6 + seat) % 4 === 0 ? -1 : 0)),
+    Match.when('Tapping', () =>
+      Math.floor(age / 6 + seat) % 4 === 0 ? -1 : 0,
+    ),
     Match.when('Flinching', () => 0),
     Match.when('Cheering', () =>
       Math.round(
@@ -341,19 +335,49 @@ const couchShapes = (
     rect(0, floorY, screen.width, screen.height - floorY, FLOOR),
     ...boards,
     // NOTE: the couch's back, behind the four of them.
-    rect(left - scale, seatY - 12 * scale, couchWidth + 2 * scale, 13 * scale, OUTLINE),
+    rect(
+      left - scale,
+      seatY - 12 * scale,
+      couchWidth + 2 * scale,
+      13 * scale,
+      OUTLINE,
+    ),
     rect(left, seatY - 11 * scale, couchWidth, 11 * scale, COUCH),
     rect(left, seatY - 11 * scale, couchWidth, scale, COUCH_LIGHT),
     ...sitters,
     // NOTE: the seat and the arms, over their legs.
-    rect(left - 4 * scale, seatY - scale, couchWidth + 8 * scale, 8 * scale, OUTLINE),
+    rect(
+      left - 4 * scale,
+      seatY - scale,
+      couchWidth + 8 * scale,
+      8 * scale,
+      OUTLINE,
+    ),
     rect(left - 3 * scale, seatY, couchWidth + 6 * scale, 6 * scale, COUCH),
     rect(left - 3 * scale, seatY, couchWidth + 6 * scale, scale, COUCH_LIGHT),
-    rect(left - 3 * scale, seatY + 5 * scale, couchWidth + 6 * scale, scale, COUCH_DARK),
+    rect(
+      left - 3 * scale,
+      seatY + 5 * scale,
+      couchWidth + 6 * scale,
+      scale,
+      COUCH_DARK,
+    ),
     rect(left - 5 * scale, seatY - 6 * scale, 5 * scale, 13 * scale, OUTLINE),
-    rect(left - 4 * scale, seatY - 5 * scale, 3 * scale, 11 * scale, COUCH_LIGHT),
+    rect(
+      left - 4 * scale,
+      seatY - 5 * scale,
+      3 * scale,
+      11 * scale,
+      COUCH_LIGHT,
+    ),
     rect(left + couchWidth, seatY - 6 * scale, 5 * scale, 13 * scale, OUTLINE),
-    rect(left + couchWidth + scale, seatY - 5 * scale, 3 * scale, 11 * scale, COUCH),
+    rect(
+      left + couchWidth + scale,
+      seatY - 5 * scale,
+      3 * scale,
+      11 * scale,
+      COUCH,
+    ),
     rect(left - 2 * scale, seatY + 7 * scale, 2 * scale, 2 * scale, OUTLINE),
     rect(left + couchWidth, seatY + 7 * scale, 2 * scale, 2 * scale, OUTLINE),
   ]

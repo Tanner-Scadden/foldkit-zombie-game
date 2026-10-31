@@ -19,7 +19,6 @@
         "tools/balance/{nightly,simulate}.ts",
         "tools/determinism/{beforeAfter,build,cli,crossEngine,page,worker,worldWorker}.ts",
         "tools/mp-dev/{build,e2e,local,main,serve}.ts",
-        "tools/mp-spike/{build,cost,crossEngine,hashes,mathProbe,measure,worker}.ts",
         "tools/sprites/build.ts",
         "tools/video/{audioPage,video}.ts",
       ],
@@ -66,7 +65,7 @@
     },
     "tools/audit": {
       "entry": [
-        "{beacon-check,closes,coop,live-check,mp,offline,og,perf-check,perf,profile,profileClicks,save,splash,sqlite,sync,taps,twoThumbs}.ts",
+        "{beacon-check,closes,coop,icons,live-check,mp,offline,og,perf-check,perf,profile,profileClicks,save,splash,sqlite,sync,taps,twoThumbs}.ts",
         "shots*.ts",
         "harness/entry.ts",
         "harness/vite.config.ts",
@@ -78,8 +77,6 @@
   // landed. Drop the export (or the dead code) and the file's line here once
   // its change is in (cleanup.md, slice 9c).
   "ignoreIssues": {
-    // The balance bot, with its other overrides (TODO(cleanup slice 9b)).
-    "tools/balance/bot.ts": ["exports", "types"],
     // The phone zoom.
     "src/onboarding.ts": ["exports"],
   },

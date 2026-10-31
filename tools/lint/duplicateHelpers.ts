@@ -51,7 +51,7 @@ type Kind = Readonly<{
 }>
 
 const isTestSupport = (file: string): boolean =>
-  /\.test\.ts$/.test(file) ||
+  file.endsWith('.test.ts') ||
   file.includes('/test/') ||
   file === 'src/testing.ts' ||
   file === 'src/model.fixture.ts' ||
@@ -74,7 +74,12 @@ const KINDS: ReadonlyArray<Kind> = [
   },
   {
     name: 'helper',
-    patterns: ['src/**/*.ts', 'packages/*/src/**/*.ts', 'infra/worker/**/*.ts'],
+    patterns: [
+      'src/**/*.ts',
+      'tools/**/*.ts',
+      'packages/*/src/**/*.ts',
+      'infra/worker/**/*.ts',
+    ],
     isSkipped: file => isTestSupport(file) || file.endsWith('.d.ts'),
     advice:
       'share each: canvas helpers from src/drawing.ts, menu view helpers from src/menuParts.ts, the rest from the module they are about',
@@ -84,7 +89,14 @@ const KINDS: ReadonlyArray<Kind> = [
 // NOTE: copies left on purpose, each with its reason. Keep this list short.
 const ALLOWED: ReadonlyArray<
   Readonly<{ file: string; name: string; reason: string }>
-> = []
+> = [
+  {
+    file: 'tools/determinism/build.ts',
+    name: 'stringSource',
+    reason:
+      'determinism:diff copies tools/determinism into an older checkout, so it imports only src and effect',
+  },
+]
 
 const groupOf = (file: string): string =>
   file.startsWith('packages/')
@@ -113,6 +125,14 @@ const isNode = (value: unknown): value is Node =>
   value !== null &&
   'type' in value &&
   typeof value.type === 'string'
+
+// NOTE: the nodes in a field that holds a list of them, or none.
+const nodesIn = (value: unknown): ReadonlyArray<Node> =>
+  Array.isArray(value) ? value.filter(isNode) : []
+
+// NOTE: the name of an identifier node, or '' for anything else.
+const nameOf = (value: unknown): string =>
+  isNode(value) && typeof value['name'] === 'string' ? value['name'] : ''
 
 const childrenOf = (node: Node): ReadonlyArray<Node> =>
   Object.values(node).flatMap(value =>
@@ -171,6 +191,30 @@ const isPlain = (node: Node): boolean => {
   }
 }
 
+// NOTE: a value that is its own file's, never a copy: what a script awaits
+// (its browser, its page), an empty list, object, or `new` to fill as it
+// runs, or anything read from `import.meta` (its own path), its arguments,
+// its environment, or its clock. A helper built on one is the file's own too.
+const isOwnState = (node: Node, body: string): boolean => {
+  switch (node.type) {
+    case 'AwaitExpression':
+      return true
+    case 'ArrayExpression':
+      return Array.isArray(node['elements']) && node['elements'].length === 0
+    case 'ObjectExpression':
+      return (
+        Array.isArray(node['properties']) && node['properties'].length === 0
+      )
+    case 'NewExpression':
+      return Array.isArray(node['arguments']) && node['arguments'].length === 0
+    case 'TSAsExpression':
+    case 'TSSatisfiesExpression':
+      return isNode(node['expression']) && isOwnState(node['expression'], body)
+    default:
+      return /import\.meta|process\.(argv|env)|performance\.now\(\)/.test(body)
+  }
+}
+
 type Declaration = Readonly<{ node: Node; line: number }>
 
 type Helper = Readonly<{
@@ -197,6 +241,7 @@ const helpersOf = (file: string, text: string): ReadonlyArray<Helper> => {
   const values = new Map<string, Declaration>()
   const types = new Map<string, Declaration>()
   const helperNames = new Set<string>()
+  const ownState = new Set<string>()
   const imports = new Map<string, string>()
   const record = (
     map: Map<string, Declaration>,
@@ -207,15 +252,17 @@ const helpersOf = (file: string, text: string): ReadonlyArray<Helper> => {
     map.set(name, { node, line: lineOf(text, at) })
   }
 
-  for (const raw of program.body as unknown as ReadonlyArray<Node>) {
+  for (const raw of nodesIn(program.body)) {
     const statement =
       raw.type === 'ExportNamedDeclaration' && isNode(raw['declaration'])
         ? raw['declaration']
         : raw
     if (statement.type === 'ImportDeclaration') {
-      const source = (statement['source'] as Node)['value']
-      for (const specifier of statement['specifiers'] as ReadonlyArray<Node>) {
-        const local = (specifier['local'] as Node)['name'] as string
+      const source = isNode(statement['source'])
+        ? statement['source']['value']
+        : undefined
+      for (const specifier of nodesIn(statement['specifiers'])) {
+        const local = nameOf(specifier['local'])
         const imported = isNode(specifier['imported'])
           ? String(
               specifier['imported']['name'] ?? specifier['imported']['value'],
@@ -230,28 +277,23 @@ const helpersOf = (file: string, text: string): ReadonlyArray<Helper> => {
         statement.type === 'TSInterfaceDeclaration') &&
       isNode(statement['id'])
     ) {
-      record(
-        types,
-        statement['id']['name'] as string,
-        statement,
-        statement.start,
-      )
+      record(types, nameOf(statement['id']), statement, statement.start)
     }
     if (statement.type === 'FunctionDeclaration' && isNode(statement['id'])) {
-      const name = statement['id']['name'] as string
+      const name = nameOf(statement['id'])
       record(values, name, statement, statement.start)
       helperNames.add(name)
     }
     if (statement.type === 'VariableDeclaration') {
-      for (const declarator of statement[
-        'declarations'
-      ] as ReadonlyArray<Node>) {
+      for (const declarator of nodesIn(statement['declarations'])) {
         const id = declarator['id']
         const init = declarator['init']
         if (isNode(id) && id.type === 'Identifier' && isNode(init)) {
-          const name = id['name'] as string
+          const name = nameOf(id)
           record(values, name, init, declarator.start)
-          if (!isPlain(init)) {
+          if (isOwnState(init, text.slice(init.start, init.end))) {
+            ownState.add(name)
+          } else if (!isPlain(init)) {
             helperNames.add(name)
           }
         }
@@ -291,6 +333,9 @@ const helpersOf = (file: string, text: string): ReadonlyArray<Helper> => {
     }
     if (seen.has(name)) {
       return `cycle:${name}`
+    }
+    if (ownState.has(name)) {
+      return `own:${file}#${name}`
     }
     return [values.get(name), types.get(name)]
       .flatMap(declaration =>

@@ -26,6 +26,7 @@
 // --pattern Mixed, --every N, --no-hit-stop (clear hit-stop after every
 // frame on both sides). It exits 1 when the two differ.
 
+import { Option, Schema } from 'effect'
 import { spawnSync } from 'node:child_process'
 import {
   cpSync,
@@ -39,12 +40,19 @@ import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { firstDifference, firstDivergentCheckpoint, revive } from './diff'
+import {
+  firstDifference,
+  firstDivergentCheckpoint,
+  jsonTextOf,
+  revive,
+} from './diff'
 import {
   DEFAULT_REQUEST,
   type EngineDump,
   type EngineRequest,
   type EngineRun,
+  decodeEngineDump,
+  decodeEngineRun,
   paramsOf,
 } from './request'
 
@@ -108,18 +116,20 @@ const installBase = (cwd: string): void => {
 }
 
 // NOTE: `patchedDependencies` maps `name@version` to the patch file.
+const PackageManifest = Schema.Struct({
+  patchedDependencies: Schema.Record(Schema.String, Schema.Unknown),
+})
+
 const patchesOf = (cwd: string): ReadonlyArray<[string, string]> => {
-  const manifest: unknown = JSON.parse(
-    readFileSync(resolve(cwd, 'package.json'), 'utf8'),
+  const patched = Option.match(
+    Schema.decodeOption(Schema.fromJsonString(PackageManifest))(
+      readFileSync(resolve(cwd, 'package.json'), 'utf8'),
+    ),
+    {
+      onNone: () => [],
+      onSome: manifest => Object.entries(manifest.patchedDependencies),
+    },
   )
-  const patched =
-    typeof manifest === 'object' &&
-    manifest !== null &&
-    'patchedDependencies' in manifest &&
-    typeof manifest.patchedDependencies === 'object' &&
-    manifest.patchedDependencies !== null
-      ? Object.entries(manifest.patchedDependencies)
-      : []
   return patched.flatMap(([key, path]): Array<[string, string]> =>
     typeof path === 'string'
       ? [[key.slice(0, key.lastIndexOf('@')), path]]
@@ -151,34 +161,25 @@ const checkPatches = (cwd: string, side: string): void => {
   }
 }
 
-const isRun = (value: unknown): value is EngineRun =>
-  typeof value === 'object' && value !== null && 'checkpoints' in value
-const isDump = (value: unknown): value is EngineDump =>
-  typeof value === 'object' && value !== null && 'fieldHashes' in value
-
-const askRun = (cwd: string, ofRequest: EngineRequest): EngineRun => {
-  const parsed: unknown = JSON.parse(
-    run('bun', ['tools/determinism/cli.ts', paramsOf(ofRequest)], cwd),
-  )
-  if (!isRun(parsed)) {
-    throw new Error(`no run from ${cwd}`)
-  }
-  return parsed
-}
-
-const askDump = (cwd: string, frame: number): EngineDump => {
-  const parsed: unknown = JSON.parse(
-    run(
-      'bun',
-      ['tools/determinism/cli.ts', paramsOf({ ...request, dump: frame })],
-      cwd,
+const askRun = (cwd: string, ofRequest: EngineRequest): EngineRun =>
+  Option.getOrThrowWith(
+    decodeEngineRun(
+      run('bun', ['tools/determinism/cli.ts', paramsOf(ofRequest)], cwd),
     ),
+    () => new Error(`no run from ${cwd}`),
   )
-  if (!isDump(parsed)) {
-    throw new Error(`no dump from ${cwd} for frame ${frame}`)
-  }
-  return parsed
-}
+
+const askDump = (cwd: string, frame: number): EngineDump =>
+  Option.getOrThrowWith(
+    decodeEngineDump(
+      run(
+        'bun',
+        ['tools/determinism/cli.ts', paramsOf({ ...request, dump: frame })],
+        cwd,
+      ),
+    ),
+    () => new Error(`no dump from ${cwd} for frame ${frame}`),
+  )
 
 // NOTE: the merge base, not ref's tip: when ref has moved on since HEAD
 // branched (or was rebased onto), its new commits would read as this change's.
@@ -251,7 +252,7 @@ try {
       )
       if (difference !== undefined) {
         console.log(
-          `  first difference at ${difference.path}: ${String(JSON.stringify(difference.a)).slice(0, 120)} vs ${String(JSON.stringify(difference.b)).slice(0, 120)}`,
+          `  first difference at ${difference.path}: ${jsonTextOf(difference.a).slice(0, 120)} vs ${jsonTextOf(difference.b).slice(0, 120)}`,
         )
       }
     }

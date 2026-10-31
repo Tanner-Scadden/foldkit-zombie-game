@@ -1,9 +1,12 @@
+import { Clock, Effect, Schema } from 'effect'
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
 import type { Plugin, ViteDevServer } from 'vite'
 
 import type { SpriteAtlas } from '../../src/spriteAtlas.ts'
+import { encodeJson, readJsonFile } from '../json.ts'
+import { AtlasEntries, SpriteAtlasManifest } from './manifest.ts'
 
 // The sprite atlas in the build (docs/IMAGES_PLAN.md). ./build.ts writes the
 // atlas, one file per room, and a manifest into a cache folder, reusing them
@@ -51,7 +54,7 @@ const runGenerator = (outDir: string): void => {
 const manifestIn = (outDir: string): SpriteAtlas | undefined => {
   const manifestPath = join(outDir, 'manifest.json')
   return existsSync(manifestPath)
-    ? JSON.parse(readFileSync(manifestPath, 'utf8'))
+    ? readJsonFile(SpriteAtlasManifest, manifestPath)
     : undefined
 }
 
@@ -63,12 +66,12 @@ const builtAtlasModule = (outDir: string): string => {
   }
   const imports = manifest.sources.map(
     (name, index) =>
-      `import source${index} from ${JSON.stringify(`${join(outDir, name)}?url&no-inline`)}`,
+      `import source${index} from ${encodeJson(Schema.String)(`${join(outDir, name)}?url&no-inline`)}`,
   )
   const sources = manifest.sources.map((_name, index) => `source${index}`)
   return [
     ...imports,
-    `export default { sources: [${sources.join(', ')}], entries: ${JSON.stringify(manifest.entries)} }`,
+    `export default { sources: [${sources.join(', ')}], entries: ${encodeJson(AtlasEntries)(manifest.entries)} }`,
     '',
   ].join('\n')
 }
@@ -87,7 +90,7 @@ const devAtlasModule = (): string => {
     sources: manifest.sources.map(name => `${DEV_URL_PREFIX}${name}`),
     entries: manifest.entries,
   }
-  return `export default ${JSON.stringify(atlas)}\n`
+  return `export default ${encodeJson(SpriteAtlasManifest)(atlas)}\n`
 }
 
 const FILE_NAME = /^[\w-]+\.png$/
@@ -102,15 +105,20 @@ const REGENERATE_DELAY_MS = 300
 // NOTE: one generator at a time. An edit while it runs asks for one more
 // run after it, so the atlas always catches up with the last edit.
 const regenerateInBackground = (server: ViteDevServer) => {
-  const state = {
+  const state: {
+    isRunning: boolean
+    isWanted: boolean
+    timer: ReturnType<typeof globalThis.setTimeout> | undefined
+  } = {
     isRunning: false,
     isWanted: false,
-    timer: undefined as ReturnType<typeof setTimeout> | undefined,
+    timer: undefined,
   }
   const run = () => {
     state.isRunning = true
     state.isWanted = false
-    const started = Date.now()
+    // NOTE: the generator's wall time, logged for whoever runs the dev server.
+    const started = Effect.runSync(Clock.currentTimeMillis)
     const child = spawn('bun', [GENERATOR, DEV_CACHE_DIR], {
       cwd: ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -127,7 +135,7 @@ const regenerateInBackground = (server: ViteDevServer) => {
           graph.invalidateModule(atlasModuleNode)
         }
         server.config.logger.info(
-          `${output.join('').trim()} (${Date.now() - started} ms in the background)`,
+          `${output.join('').trim()} (${Effect.runSync(Clock.currentTimeMillis) - started} ms in the background)`,
           { timestamp: true },
         )
       } else {
@@ -142,7 +150,11 @@ const regenerateInBackground = (server: ViteDevServer) => {
   }
   return () => {
     clearTimeout(state.timer)
+    // NOTE: Vite calls the watcher outside any Effect: a plain debounce.
+    /* oxlint-disable no-restricted-globals */
+    // @effect-diagnostics-next-line globalTimers:off
     state.timer = setTimeout(() => {
+      /* oxlint-enable no-restricted-globals */
       if (state.isRunning) {
         state.isWanted = true
       } else {

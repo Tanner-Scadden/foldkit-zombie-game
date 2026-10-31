@@ -9,12 +9,26 @@
 // Vite would give a build with no sync server.
 //   bun tools/determinism/build.ts
 
+import { Schema } from 'effect'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const outdir = resolve(here, 'out')
+
+// NOTE: Bun's `define` takes each value as source text, so strings and the
+// env object go in as JSON.
+const stringSource = Schema.encodeSync(Schema.fromJsonString(Schema.String))
+const envSource = Schema.encodeSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      DEV: Schema.Boolean,
+      PROD: Schema.Boolean,
+      MODE: Schema.String,
+    }),
+  ),
+)
 
 const rawPlugin: Bun.BunPlugin = {
   name: 'raw',
@@ -24,7 +38,7 @@ const rawPlugin: Bun.BunPlugin = {
       namespace: 'raw',
     }))
     build.onLoad({ filter: /.*/, namespace: 'raw' }, args => ({
-      contents: `export default ${JSON.stringify(readFileSync(args.path, 'utf8'))}`,
+      contents: `export default ${stringSource(readFileSync(args.path, 'utf8'))}`,
       loader: 'js',
     }))
   },
@@ -44,7 +58,7 @@ const bundle = async (
     metafile: false,
     plugins: [rawPlugin],
     define: {
-      'import.meta.env': JSON.stringify({
+      'import.meta.env': envSource({
         DEV: false,
         PROD: true,
         MODE: 'production',
@@ -53,7 +67,7 @@ const bundle = async (
       // on-device store's worker URL reads it, and the harness never runs
       // a Command.
       ...(format === 'iife'
-        ? { 'import.meta.url': JSON.stringify('file:///determinism/') }
+        ? { 'import.meta.url': stringSource('file:///determinism/') }
         : {}),
     },
   })

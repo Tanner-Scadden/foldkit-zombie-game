@@ -15,6 +15,7 @@ import type { Page } from 'playwright-core'
 import {
   type Log,
   PHONE_844,
+  TAG,
   UPRIGHT_360,
   UPRIGHT_375,
   UPRIGHT_390,
@@ -29,11 +30,8 @@ import {
   scenePages,
   settleAnimations,
   shot,
-  tagOr,
   useHarness,
 } from './lib'
-
-const TAG = tagOr('after')
 
 const VIEWPORTS = pickViewports([
   { ...UPRIGHT_390, name: 'p390' },
@@ -161,7 +159,7 @@ const checkScene = async (
 ): Promise<ReadonlyArray<string>> => {
   const problems: Array<string> = []
   const page = await pages.open(viewport, scene.query)
-  if (scene.act) {
+  if (scene.act !== undefined) {
     await scene.act(page)
   }
   await settleAnimations(page)
@@ -220,7 +218,7 @@ const checkScene = async (
               box.bottom <= innerHeight + 1),
         }
       })
-    const scroller = document.scrollingElement!
+    const scroller = document.scrollingElement ?? document.documentElement
     const pageScrolls = scroller.scrollHeight > innerHeight + 1
     const panels = Array.from(
       document.querySelectorAll('dialog[open], dialog[open] > *'),

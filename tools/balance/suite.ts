@@ -3,7 +3,16 @@
 // and the Markdown report. tools/balance/nightly.ts runs the jobs and does
 // the file work.
 
-import { Array, Match, Option, Order, Record, Schema, pipe } from 'effect'
+import {
+  Array,
+  DateTime,
+  Match,
+  Option,
+  Order,
+  Record,
+  Schema,
+  pipe,
+} from 'effect'
 
 import { DIFFICULTY_ORDER } from '../../src/difficulty'
 import type { Difficulty } from '../../src/model'
@@ -134,12 +143,11 @@ export const parseInvocation = (args: ReadonlyArray<string>): Invocation => ({
 
 // DATES
 
-const pad = (value: number): string => `${value}`.padStart(2, '0')
-
-export const localDate = (ms: number): string => {
-  const date = new Date(ms)
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
+// NOTE: the day on the laptop's own clock, as YYYY-MM-DD.
+export const localDate = (ms: number): string =>
+  DateTime.formatIsoDate(
+    DateTime.makeZonedUnsafe(ms, { timeZone: DateTime.zoneMakeLocal() }),
+  )
 
 // METRICS
 

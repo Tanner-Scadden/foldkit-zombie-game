@@ -231,12 +231,12 @@ const readMarkers = (
       ),
     )
     yield* Effect.forEach(
-      Array.filter(found, ({ state }) => LockState.$is('Stale')(state)),
+      Array.filter(found, ({ state }) => LockState.isAnyOf(['Stale'])(state)),
       ({ name }) => Effect.ignore(fs.remove(`${directory}/${name}`)),
       { discard: true },
     )
     return Array.flatMap(found, ({ state }) =>
-      LockState.$is('Held')(state) ? [state.holder] : [],
+      LockState.isAnyOf(['Held'])(state) ? [state.holder] : [],
     )
   })
 
@@ -292,7 +292,7 @@ export const clearIfNotHeld = (
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const maybeText = yield* readTextIfPresent(path)
-    if (!LockState.$is('Held')(classifyLock(maybeText, isProcessAlive))) {
+    if (!LockState.isAnyOf(['Held'])(classifyLock(maybeText, isProcessAlive))) {
       yield* clearStaleLock(path, maybeText)
     }
   })

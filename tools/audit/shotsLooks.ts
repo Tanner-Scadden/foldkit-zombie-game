@@ -8,6 +8,7 @@ import {
   DESKTOP_1280,
   PHONE_844,
   SHOTS_DIR,
+  TAG,
   UPRIGHT_390,
   type Viewport,
   gotoScene,
@@ -15,11 +16,8 @@ import {
   launch,
   openPage,
   pickViewports,
-  tagOr,
   useHarness,
 } from './lib'
-
-const TAG = tagOr('after')
 
 const VIEWPORTS: ReadonlyArray<Viewport> = pickViewports([
   { ...DESKTOP_1280, name: 'd1280' },

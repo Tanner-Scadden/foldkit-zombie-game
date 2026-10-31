@@ -24,11 +24,12 @@ import {
   type SpriteAtlas,
   useSpriteMode,
 } from '../../src/spriteAtlas'
+import { encodeJson, readJsonFile } from '../json'
+import { SpriteAtlasManifest, SpriteKeys } from './manifest'
 import { packShelves } from './pack'
 import { type Raster, decodePng, encodePng } from './png'
 
-const globals = globalThis as { __BUILD_ID__?: string }
-globals.__BUILD_ID__ = 'sprites'
+Object.assign(globalThis, { __BUILD_ID__: 'sprites' })
 
 useSpriteMode('StandIn')
 
@@ -45,7 +46,7 @@ const contents = spriteContents()
 const keys = [...contents.keys()].sort()
 
 if (process.argv.includes('--keys')) {
-  process.stdout.write(`${JSON.stringify(keys)}\n`)
+  process.stdout.write(`${encodeJson(SpriteKeys)(keys)}\n`)
   process.exit(0)
 }
 
@@ -103,7 +104,7 @@ for (const key of keys) {
   }
 }
 const images: ReadonlyArray<Image> = [...imagesByHash.entries()]
-  .map(([hash, { keys, raster }]) => ({ hash, keys, raster }))
+  .map(([hash, image]) => ({ hash, keys: image.keys, raster: image.raster }))
   .sort((first, second) => (first.hash < second.hash ? -1 : 1))
 
 // NOTE: a room is one big image drawn on its own, and a level holds only
@@ -245,9 +246,12 @@ sheets.forEach(({ name, sheet }, source) => {
 const manifest: SpriteAtlas = { sources: fileNames, entries }
 const manifestPath = join(outDir, MANIFEST_FILE)
 const previousFiles: ReadonlyArray<string> = existsSync(manifestPath)
-  ? JSON.parse(readFileSync(manifestPath, 'utf8')).sources
+  ? readJsonFile(SpriteAtlasManifest, manifestPath).sources
   : []
-writeFileSync(`${manifestPath}.next`, `${JSON.stringify(manifest)}\n`)
+writeFileSync(
+  `${manifestPath}.next`,
+  `${encodeJson(SpriteAtlasManifest)(manifest)}\n`,
+)
 renameSync(`${manifestPath}.next`, manifestPath)
 writeFileSync(signaturePath, signature)
 for (const file of readdirSync(outDir)) {

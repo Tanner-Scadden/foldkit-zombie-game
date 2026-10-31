@@ -63,21 +63,19 @@ import {
 import { MANOR, levelOf } from '../../src/arena'
 import { playersOf } from '../../src/party'
 import {
-  DEFAULT_ROOM_SETTINGS,
   type OwnSeat,
   type RoomWorld,
   actionCodeOf,
   heldAction,
-  roomWorldFor,
 } from '../../src/roomWorld'
 import { SeatAction } from '../../src/stepWorld'
+import { GAME } from './game'
 
 declare const __MP_API_ORIGIN__: string
 
-// NOTE: the game's own World, as the GameRoom runs it, drawn as dots: the
-// manor's whole floor, players in their seat's color, zombies green, and
-// bullets as specks. The game itself draws it with its sprites.
-const GAME = roomWorldFor(DEFAULT_ROOM_SETTINGS)
+// NOTE: the game's own World (GAME), as the GameRoom runs it, drawn as
+// dots: the manor's whole floor, players in their seat's color, zombies
+// green, and bullets as specks. The game itself draws it with its sprites.
 const ARENA_WIDTH = MANOR.width
 const ARENA_HEIGHT = MANOR.height
 const ARENA_TOP = MANOR.top

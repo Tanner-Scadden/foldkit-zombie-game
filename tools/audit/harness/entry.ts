@@ -1,4 +1,4 @@
-import { Array, Effect, Layer, Option, Scope } from 'effect'
+import { Array, Effect, Layer, Option, Record, Scope } from 'effect'
 
 // NOTE: next, so the build's prebuilt sprite atlas is in place before any
 // game module builds a sprite, as in the game's own entry.
@@ -6,6 +6,8 @@ import '@game/spriteAtlasBoot'
 
 import './harness.css'
 import { Block, Canvas, Dom, Program, Runtime } from 'foldkit'
+import type * as Command from 'foldkit/command'
+import type { Document } from 'foldkit/html'
 import { modifyFields } from 'foldkit/struct'
 import { toParentMessage } from 'foldkit/test'
 
@@ -48,11 +50,15 @@ import { Message } from '@game/message'
 import {
   type Appearance,
   Arsenal,
+  type Boosts,
+  type Boss,
+  type BossMove,
   BreakClock,
   type Decal,
   type DecalKind,
   DifficultyCard,
   FridgeDoor,
+  type Glob,
   Lesson,
   Melee,
   type Model,
@@ -67,7 +73,9 @@ import {
   Trap,
   TrapHint,
   type WeaponKind,
+  type Zombie,
   ZombieAction,
+  type ZombieKind,
   defaultAppearance,
   initialModel,
 } from '@game/model'
@@ -139,8 +147,8 @@ const useConfig = (next: HarnessConfig) => {
     next.tick !== undefined || next.director ? 0 : (next.freeze ?? Infinity)
 }
 useConfig(config)
-const ROAMING = { _tag: 'Roaming' as const }
-const CALM = { _tag: 'Calm' as const }
+const ROAMING: Zombie['action'] = { _tag: 'Roaming' }
+const CALM: Zombie['frenzy'] = { _tag: 'Calm' }
 
 const KINDS: ReadonlyArray<DecalKind> = [
   'Blood',
@@ -160,7 +168,7 @@ const makeDecals = (count: number): Array<Decal> => {
   const r = () => (s = (s * 1103515245 + 12345) >>> 0) / 0xffffffff
   for (let i = 0; i < count; i++) {
     out.push({
-      kind: KINDS[i % KINDS.length]!,
+      kind: KINDS[i % KINDS.length] ?? 'Blood',
       x: Math.round(24 + r() * 272),
       y: Math.round(24 + r() * 132),
       width: 2 + Math.round(r() * 5),
@@ -249,7 +257,7 @@ const withLeftovers = (start: Model): Model => {
     model = modifyFields(model, {
       zombies: zombies => [
         ...zombies,
-        ...ICED_SPOTS.map((spot, index) => ({
+        ...ICED_SPOTS.map((spot, index): Zombie => ({
           id: 9400 + index,
           kind: spot.kind,
           x: px + spot.dx,
@@ -419,10 +427,14 @@ const roomModel = (): Model => {
       [30, 90],
       [290, 90],
     ]
-    const zombies = globalThis.Array.from({ length: crowd }, (_, i) => {
+    const zombies = globalThis.Array.from({ length: crowd }, (_, i): Zombie => {
       const kind =
-        gasbagRoom > 0 ? 'Exploder' : i < 4 ? 'Tank' : kinds[i % kinds.length]!
-      const [sx, sy] = spots[i % spots.length]!
+        gasbagRoom > 0
+          ? 'Exploder'
+          : i < 4
+            ? 'Tank'
+            : (kinds[i % kinds.length] ?? 'Shambler')
+      const [sx, sy] = spots[i % spots.length] ?? [0, 0]
       return {
         id: 1000 + i,
         kind,
@@ -439,7 +451,7 @@ const roomModel = (): Model => {
       }
     })
     model = modifyFields(model, {
-      zombies: () => zombies as any,
+      zombies: () => zombies,
       nextEntityId: () => 2000,
     })
   }
@@ -449,16 +461,9 @@ const roomModel = (): Model => {
       ? maxHp
       : Math.max(
           1,
-          Math.floor(maxHp * ZOMBIE_KINDS[kind].wear[stage - 1]!.below),
+          Math.floor(maxHp * (ZOMBIE_KINDS[kind].wear[stage - 1]?.below ?? 1)),
         )
-  type LineupKind =
-    | 'Shambler'
-    | 'Runner'
-    | 'Tank'
-    | 'Exploder'
-    | 'Thrower'
-    | 'Crawler'
-    | 'Boss'
+  type LineupKind = ZombieKind
   const standing = (
     id: number,
     kind: LineupKind,
@@ -466,7 +471,7 @@ const roomModel = (): Model => {
     y: number,
     maxHp: number,
     stage: number,
-  ) => ({
+  ): Zombie => ({
     id,
     kind,
     x,
@@ -476,7 +481,7 @@ const roomModel = (): Model => {
     maxHp,
     knockback: { x: 0, y: 0 },
     hitRemainingMs: 0,
-    state: { _tag: 'Walking' as const },
+    state: { _tag: 'Walking' },
     action: ROAMING,
     frenzy: CALM,
   })
@@ -504,7 +509,7 @@ const roomModel = (): Model => {
       ),
     )
     model = modifyFields(model, {
-      zombies: () => zombies as any,
+      zombies: () => zombies,
       nextEntityId: () => 2000,
     })
   }
@@ -521,7 +526,7 @@ const roomModel = (): Model => {
       standing(1000 + index, kind, 70 + index * 24, 100, maxHp, 0),
     )
     model = modifyFields(model, {
-      zombies: () => zombies as any,
+      zombies: () => zombies,
       nextEntityId: () => 2000,
     })
   }
@@ -534,8 +539,8 @@ const roomModel = (): Model => {
     const worn = globalThis.Array.from({ length: stages }, (_, stage) =>
       standing(1000 + stage, 'Tank', at(stage).x, at(stage).y, 36, stage),
     )
-    const before = modifyFields(model, { zombies: () => fresh as any })
-    const after = modifyFields(model, { zombies: () => worn as any })
+    const before = modifyFields(model, { zombies: () => fresh })
+    const after = modifyFields(model, { zombies: () => worn })
     model = modifyFields(
       advanceParticles(
         { ...after, ...shedParts(before, after) },
@@ -550,7 +555,7 @@ const roomModel = (): Model => {
       standing(1100 + stage, 'Boss', 48 + stage * 56, 80, 99, stage),
     )
     model = modifyFields(model, {
-      zombies: () => zombies as any,
+      zombies: () => zombies,
       nextEntityId: () => 2000,
     })
   }
@@ -559,7 +564,7 @@ const roomModel = (): Model => {
     const bossMaxHp = scaledHp(ZOMBIE_KINDS.Boss.hp, planFor(8).hpScale)
     const bossHp = Math.round(bossMaxHp * config.bosshp)
     const { bx, by } = config
-    const bossZombie = {
+    const bossZombie: Zombie = {
       ...standing(1500, 'Boss', bx, by, bossMaxHp, 0),
       hp: bossHp,
       speed: 10,
@@ -572,17 +577,17 @@ const roomModel = (): Model => {
       y: (target.y - by) / toTarget,
     }
     const windMs = config.windMs
-    const puddles = (config.puddles ?? []).map(([x, y]) => ({
-      _tag: 'Pooled' as const,
+    const puddles = (config.puddles ?? []).map(([x, y]): Glob => ({
+      _tag: 'Pooled',
       at: { x, y },
       remainingMs: config.puddleMs,
       durationMs: BOSS_RULES.puddleMs,
     }))
-    const flying =
+    const flying: ReadonlyArray<Glob> =
       bossParam === 'spit'
         ? [
             {
-              _tag: 'Flying' as const,
+              _tag: 'Flying',
               from: { x: bx, y: by },
               to: target,
               remainingMs: config.globMs,
@@ -590,7 +595,7 @@ const roomModel = (): Model => {
             },
           ]
         : []
-    const moves: Record<string, () => unknown> = {
+    const moves: Readonly<Record<string, () => BossMove>> = {
       stomp: () => ({
         _tag: 'WindingUp',
         attack: 'Stomp',
@@ -620,22 +625,22 @@ const roomModel = (): Model => {
         durationMs: BOSS_RULES.dazedMs,
       }),
     }
-    const moveFor = () =>
+    const moveFor = (): BossMove =>
       (
         moves[bossParam] ??
-        (() => ({ _tag: 'Stalking', cooldownMs: config.cooldownMs }))
+        ((): BossMove => ({ _tag: 'Stalking', cooldownMs: config.cooldownMs }))
       )()
-    const bossState =
+    const bossState: Boss =
       bossParam === 'arriving'
         ? {
-            _tag: 'Arriving' as const,
+            _tag: 'Arriving',
             door,
             hp: bossMaxHp,
             remainingMs: config.arriveMs,
             durationMs: 2600,
           }
         : {
-            _tag: 'Fighting' as const,
+            _tag: 'Fighting',
             id: 1500,
             standingMs: 4000,
             move: moveFor(),
@@ -645,35 +650,35 @@ const roomModel = (): Model => {
             globs: [...puddles, ...flying],
           }
     model = modifyFields(model, {
-      boss: () => bossState as any,
+      boss: () => bossState,
       zombies: zombies =>
-        bossParam === 'arriving' ? zombies : ([...zombies, bossZombie] as any),
+        bossParam === 'arriving' ? zombies : [...zombies, bossZombie],
       nextEntityId: () => 2000,
     })
   } else if (hasBoss(wave)) {
-    const spawns =
+    const planned =
       model.phase._tag === 'Preparation' || model.phase._tag === 'Wave'
         ? model.phase.spawns
         : []
-    const [bossRng, planned] = planBoss(
+    const [bossRng, plannedBoss] = planBoss(
       levelOf(model).doorIds,
       model.rngState,
       wave,
-      spawns,
+      planned,
     )
     model = modifyFields(model, {
-      boss: () => planned,
+      boss: () => plannedBoss,
       rngState: () => bossRng,
     })
   }
-  const staged: Array<unknown> = []
+  const staged: Array<Zombie> = []
   const stagedZombie = (
     id: number,
     kind: LineupKind,
     x: number,
     y: number,
-    extra: Record<string, unknown> = {},
-  ) => ({
+    extra: Partial<Zombie> = {},
+  ): Zombie => ({
     ...standing(id, kind, x, y, ZOMBIE_KINDS[kind].hp, 0),
     speed: 20,
     ...extra,
@@ -841,7 +846,7 @@ const roomModel = (): Model => {
   }
   if (staged.length > 0) {
     model = modifyFields(model, {
-      zombies: zombies => [...zombies, ...staged] as any,
+      zombies: zombies => [...zombies, ...staged],
       nextEntityId: () => 3000,
     })
   }
@@ -986,7 +991,9 @@ const roomModel = (): Model => {
     const boostMs = config.boostMs
     model = modifyFields(model, {
       boosts: boosts => {
-        const next: Record<string, unknown> = { ...boosts }
+        const next: { -readonly [Kind in keyof Boosts]: Boosts[Kind] } = {
+          ...boosts,
+        }
         boostKinds.forEach((kind, index) => {
           next[kind] = {
             _tag: 'On',
@@ -994,7 +1001,7 @@ const roomModel = (): Model => {
             durationMs: 8000,
           }
         })
-        return next as typeof boosts
+        return next
       },
     })
   }
@@ -1153,10 +1160,12 @@ const coopScreen = (stage: NonNullable<typeof config.coop>) => {
       },
     })
   const members = (count: number, readyCount = 0) =>
-    COOP_NAMES.slice(0, count).map((name, slot) => ({
-      ...memberOf(slot, name, slot < readyCount, COOP_LOOKS[slot] ?? ''),
-      pingMs: COOP_PINGS[slot] ?? 0,
-    }))
+    COOP_NAMES.slice(0, count).map((name, slot) =>
+      modifyFields(
+        memberOf(slot, name, slot < readyCount, COOP_LOOKS[slot] ?? ''),
+        { pingMs: () => COOP_PINGS[slot] ?? 0 },
+      ),
+    )
   switch (stage) {
     case 'tile':
       return Screen.Closed()
@@ -1194,7 +1203,9 @@ const coopScreen = (stage: NonNullable<typeof config.coop>) => {
     case 'keep': {
       const room = coopRoom(
         members(2).map(member =>
-          member.slot === 0 ? { ...member, canNightmare: true } : member,
+          member.slot === 0
+            ? modifyFields(member, { canNightmare: () => true })
+            : member,
         ),
         'Lobby',
         {
@@ -1218,7 +1229,7 @@ const coopScreen = (stage: NonNullable<typeof config.coop>) => {
       return Screen.InRoom({
         room: coopRoom(
           members(3, 3).map((member, slot) =>
-            slot === 2 ? { ...member, ready: false } : member,
+            slot === 2 ? modifyFields(member, { ready: () => false }) : member,
           ),
           'Lobby',
         ),
@@ -1596,11 +1607,13 @@ const topUpGasbags = (model: Model): Model => {
   if (missing === 0 || model.phase._tag !== 'Wave') {
     return model
   }
-  const fresh = globalThis.Array.from({ length: missing }, (_, i) => {
-    const [x, y] = GASBAG_DOORS[(model.nextEntityId + i) % GASBAG_DOORS.length]!
+  const fresh = globalThis.Array.from({ length: missing }, (_, i): Zombie => {
+    const [x, y] = GASBAG_DOORS[
+      (model.nextEntityId + i) % GASBAG_DOORS.length
+    ] ?? [0, 0]
     return {
       id: model.nextEntityId + i,
-      kind: 'Exploder' as const,
+      kind: 'Exploder',
       x,
       y,
       speed: 22,
@@ -1608,27 +1621,26 @@ const topUpGasbags = (model: Model): Model => {
       maxHp: 3,
       knockback: { x: 0, y: 0 },
       hitRemainingMs: 0,
-      state: { _tag: 'Walking' as const },
+      state: { _tag: 'Walking' },
       action: ROAMING,
       frenzy: CALM,
     }
   })
   return modifyFields(model, {
-    zombies: zombies => [...zombies, ...(fresh as any)],
+    zombies: zombies => [...zombies, ...fresh],
     nextEntityId: id => id + missing,
   })
 }
-const w = window as any
-w.__shapeCounts = []
+window.__shapeCounts = []
 
-const countShapes = (shapes: ReadonlyArray<any>): number =>
+const countShapes = (shapes: ReadonlyArray<Canvas.Shape>): number =>
   shapes.reduce(
     (n, s) => n + 1 + (s._tag === 'Group' ? countShapes(s.shapes) : 0),
     0,
   )
-w.__countShapes = () => countShapes(sceneShapes(w.__model))
+window.__countShapes = () => countShapes(sceneShapes(window.__model))
 
-w.__timings = { update: [] as Array<number>, view: [] as Array<number> }
+window.__timings = { update: [], view: [] }
 const FIXED_FRAME_MS = 1000 / 60
 let framesRun = 0
 const QUIET_MESSAGES = new Set([
@@ -1640,12 +1652,9 @@ const QUIET_MESSAGES = new Set([
   'FailedCueMusic',
   'FailedPlaySound',
 ])
-w.__messages = [] as Array<string>
+window.__messages = []
 
-type HarnessReturn = Readonly<{
-  model: Model
-  commands?: ReadonlyArray<any> | undefined
-}>
+type HarnessReturn = Director.Return
 
 // NOTE: what the harness adds after every update: full health with `god`,
 // and fresh Kaboomers at the doors with `gasroom`.
@@ -1685,11 +1694,16 @@ const advance = (scene: HarnessReturn, frames: number): HarnessReturn => {
 // runtime reports each update through its `slow` hook, with a budget no
 // update can beat.
 const logMessage = (incoming: unknown) => {
-  const chain = (message: any): Array<string> =>
-    message?._tag === undefined ? [] : [message._tag, ...chain(message.message)]
+  const chain = (message: unknown): Array<string> =>
+    typeof message === 'object' &&
+    message !== null &&
+    '_tag' in message &&
+    typeof message._tag === 'string'
+      ? [message._tag, ...('message' in message ? chain(message.message) : [])]
+      : []
   const tags = chain(incoming)
   if (tags[0] !== undefined && !QUIET_MESSAGES.has(tags[0])) {
-    w.__messages.push(tags.join(':'))
+    window.__messages.push(tags.join(':'))
   }
 }
 
@@ -1759,14 +1773,14 @@ const gameUpdate = (model: Model, incoming: Message): HarnessReturn => {
   if (message._tag === 'TickedFrame') {
     framesRun++
   }
-  w.__isFrozen = framesRun >= freezeAfter
+  window.__isFrozen = framesRun >= freezeAfter
   const t0 = performance.now()
   const result = update(model, message)
   if (instrument && message._tag === 'TickedFrame') {
-    w.__timings.update.push(performance.now() - t0)
+    window.__timings.update.push(performance.now() - t0)
   }
   const next = keepScene(result, message)
-  w.__model = next.model
+  window.__model = next.model
   return next
 }
 
@@ -1895,19 +1909,19 @@ const sceneOf = (model: Model): HarnessReturn => {
 // Scripts wait for it instead of sleeping. Loading another scene clears it.
 let sceneNumber = 0
 const clearReady = () => {
-  w.__harnessReady = false
-  delete document.documentElement.dataset.harnessReady
+  window.__harnessReady = false
+  delete document.documentElement.dataset['harnessReady']
 }
 const markReadyWhenSettled = (number: number) => {
   clearReady()
   void settle(
     () =>
-      w.__model?.saveStatus !== 'Unread' &&
+      window.__model.saveStatus !== 'Unread' &&
       (!Number.isFinite(freezeAfter) || framesRun >= freezeAfter),
   ).then(() => {
     if (number === sceneNumber) {
-      w.__harnessReady = true
-      document.documentElement.dataset.harnessReady = String(number)
+      window.__harnessReady = true
+      document.documentElement.dataset['harnessReady'] = String(number)
     }
   })
 }
@@ -1918,7 +1932,7 @@ const decodeScene = (query: string): HarnessConfig | undefined => {
   try {
     return decodeHarnessConfig(query)
   } catch (error) {
-    w.__sceneError = String(error)
+    window.__sceneError = String(error)
     return undefined
   }
 }
@@ -1970,6 +1984,24 @@ const releaseDialogs = Effect.suspend(() =>
 // Model the last scene left (see nextSceneOf).
 let maybeCarriedModel: Option.Option<Model> = Option.none()
 
+// NOTE: a scene's Commands come from the game's update, so a Message one
+// gives back may be a child's envelope (the Profile dialog's open, from
+// `profile`). Foldkit types an init's Commands with the root's own Messages
+// only, since child Messages come through Binding Steps there; the runtime
+// routes an envelope from an init Command as it does one from update. A
+// typed harness init needs a Foldkit hook for a Composition's init that
+// takes update's Commands.
+type InitCommand = Command.Command<
+  Message,
+  never,
+  Effect.Services<Director.GameCommand['effect']>
+>
+const asInitCommands = (
+  commands: ReadonlyArray<Director.GameCommand>,
+): ReadonlyArray<InitCommand> =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions
+  commands as ReadonlyArray<InitCommand>
+
 const harnessInit = ApplicationComposition.makeInit(() => {
   const scene = Option.match(maybeCarriedModel, {
     onNone: () => {
@@ -1982,10 +2014,10 @@ const harnessInit = ApplicationComposition.makeInit(() => {
     },
     onSome: nextSceneOf,
   })
-  w.__isFrozen = framesRun >= freezeAfter
-  w.__model = scene.model
+  window.__isFrozen = framesRun >= freezeAfter
+  window.__model = scene.model
   markReadyWhenSettled(sceneNumber)
-  return { model: scene.model, commands: scene.commands ?? [] }
+  return { model: scene.model, commands: asInitCommands(scene.commands ?? []) }
 })
 
 // THE DIRECTOR
@@ -1995,8 +2027,8 @@ const directorStep = (model: Model, message: Message): HarnessReturn =>
   keepScene(update(model, message), message)
 
 const directed = (result: HarnessReturn): HarnessReturn => {
-  w.__model = result.model
-  w.__directedTick = Director.currentTick()
+  window.__model = result.model
+  window.__directedTick = Director.currentTick()
   return result
 }
 
@@ -2042,33 +2074,45 @@ const harnessStep = (model: Model, message: Message): HarnessReturn =>
 // query). `start` takes the shot's script as JSON, `step(n)` plays n fixed
 // ticks; each sets `window.__directedTick` once the Model holds them, and
 // `audio()` is the sound and music log so far.
-w.__director = {
+window.__director = {
   start: (plan: string) => {
-    w.__directedTick = undefined
+    window.__directedTick = undefined
     raiseDirectorRequest({ _tag: 'Start', plan })
   },
   step: (ticks: number) => raiseDirectorRequest({ _tag: 'Step', ticks }),
   audio: () => Director.audioLog(),
-  seats: () => Director.seatsOnScreen(w.__model),
+  seats: () => Director.seatsOnScreen(window.__model),
 }
 
 // NOTE: the harness's update is the game's, wrapped for the scene's
 // settings (gameUpdate). A Composition's update is authored as one handler
 // per local Message, so every tag gets the same wrapper. Child envelopes go
 // to their Bindings as in the game.
-const everyTag = Object.fromEntries(
-  Object.keys(Reflect.get(Message, 'cases')).map(tag => [tag, harnessStep]),
+// NOTE: the union's variant Schemas by tag, which Effect's TaggedUnion keeps
+// at runtime as `cases`; Foldkit's MessageUnion type leaves the field out.
+const hasCases = (
+  union: object,
+): union is Readonly<{ cases: Readonly<Record<Message['_tag'], unknown>> }> =>
+  'cases' in union && typeof union.cases === 'object' && union.cases !== null
+if (!hasCases(Message)) {
+  throw new Error('the Message union has no cases')
+}
+const harnessUpdate = ApplicationComposition.makeUpdate(
+  Record.map(Message.cases, () => harnessStep),
 )
-const harnessUpdate = ApplicationComposition.makeUpdate(everyTag as any)
 
 // NOTE: a director shot's card (cards.ts) on a canvas the screen's size in
 // game pixels, over the game. The wrapper has no box of its own, so the
 // game's root lays out as it always does.
-const withDirectorCard = <D extends { body: unknown }>(
+type ViewHtml = Parameters<
+  Parameters<typeof ApplicationComposition.makeView>[0]
+>[1]
+
+const withDirectorCard = (
   model: Model,
-  document: D,
-  h: any,
-): D => {
+  document: Document,
+  h: ViewHtml,
+): Document => {
   const screen = screenOf(model)
   return {
     ...document,
@@ -2096,21 +2140,19 @@ const withDirectorCard = <D extends { body: unknown }>(
   }
 }
 
-const harnessView = ApplicationComposition.makeView((model, h: any) => {
+const harnessView = ApplicationComposition.makeView((model, h): Document => {
   if (config.looksheet) {
     return lookSheetView(h)
   }
   const t0 = performance.now()
-  const out = (view as any)(model, h)
+  const out = view(model, h)
   if (instrument) {
-    w.__timings.view.push(performance.now() - t0)
+    window.__timings.view.push(performance.now() - t0)
   }
   return config.director ? withDirectorCard(model, out, h) : out
 })
 
-// NOTE: typed loosely, as the wrapped update is: the harness is a test page,
-// and the game's own Block (src/block.ts) carries the exact types.
-const prepareHarness: any = () =>
+const prepareHarness = () =>
   ApplicationComposition.prepareBlock({
     init: harnessInit,
     update: harnessUpdate,
@@ -2118,8 +2160,11 @@ const prepareHarness: any = () =>
     subscriptions,
     managedResources,
     EffectsLayer,
-  } as any)
-const HarnessBlock: any = (Block.assemble as any)(prepareHarness)
+  })
+const HarnessBlock: Block.FromAssemblyWithView<
+  typeof Model,
+  typeof prepareHarness
+> = Block.assemble(prepareHarness)
 
 // NOTE: the services are built once for the page and shared by every
 // scene, as one runtime shared them before scenes restarted it: the player
@@ -2135,17 +2180,17 @@ const harnessServices = Effect.runSync(
 
 const startScene = () =>
   Runtime.embed(
-    (Program.make as any)({
+    Program.make({
       block: HarnessBlock,
       container: document.getElementById('root'),
       slow: {
         show: 'Always',
         measuredPhases: ['Update'],
         thresholdOverrides: { Update: -1 },
-        onSlow: (context: any) => {
+        onSlow: context => {
           if (context._tag === 'Update') {
             logMessage(context.message)
-            w.__model = context.nextModel
+            window.__model = context.nextModel
           }
         },
       },
@@ -2162,7 +2207,11 @@ const containerRestored = async () => {
     if (document.getElementById('root') !== null) {
       return
     }
-    await new Promise(resolve => requestAnimationFrame(resolve))
+    await Effect.runPromise(
+      Effect.callback<void>(resume => {
+        requestAnimationFrame(() => resume(Effect.void))
+      }),
+    )
   }
   throw new Error('the harness container did not come back')
 }
@@ -2172,7 +2221,7 @@ const containerRestored = async () => {
 // scene's Model. It resets what a new page would: open dialogs, focus, full
 // screen, and scroll. Wait for the ready signal afterwards. `nodev` belongs
 // to the page, not the scene.
-w.__loadScene = async (query: string) => {
+window.__loadScene = async (query: string) => {
   const next = decodeScene(query.replace(/^\?/, ''))
   if (next === undefined) {
     return
@@ -2186,14 +2235,14 @@ w.__loadScene = async (query: string) => {
     document.activeElement.blur()
   }
   window.scrollTo(0, 0)
-  maybeCarriedModel = Option.some(w.__model)
+  maybeCarriedModel = Option.some(window.__model)
   running.dispose()
   await containerRestored()
-  w.__sceneError = undefined
+  window.__sceneError = undefined
   useConfig(next)
   framesRun = 0
-  w.__messages.length = 0
-  w.__timings = { update: [], view: [] }
+  window.__messages.length = 0
+  window.__timings = { update: [], view: [] }
   sceneNumber++
   running = startScene()
 }
@@ -2247,37 +2296,53 @@ const lookSheetShapes = (): Array<Canvas.Shape> => {
   }
   const base = defaultAppearance
   const rows: ReadonlyArray<ReadonlyArray<Appearance>> = [
-    BODIES.map(body => ({ ...base, body })),
-    BODIES.map(body => ({
-      ...base,
-      body,
-      outfit: 'Dress',
-      hairStyle: 'Long',
-    })),
-    BODIES.map(body => ({
-      ...base,
-      body,
-      outfit: 'Overalls',
-      print: 'Rainbow',
-      beard: true,
-      glasses: true,
-    })),
-    HAIR_STYLES.map(hairStyle => ({ ...base, hairStyle })),
-    HAIR_COLORS.map(hairColor => ({ ...base, hairColor, hairStyle: 'Long' })),
-    SKIN_TONES.map(skinTone => ({ ...base, skinTone })),
-    SHIRT_COLORS.map(shirtColor => ({ ...base, shirtColor })),
-    OUTFITS.map(outfit => ({ ...base, outfit })),
-    PRINTS.map(print => ({ ...base, print })),
+    BODIES.map(body => modifyFields(base, { body: () => body })),
+    BODIES.map(body =>
+      modifyFields(base, {
+        body: () => body,
+        outfit: () => 'Dress',
+        hairStyle: () => 'Long',
+      }),
+    ),
+    BODIES.map(body =>
+      modifyFields(base, {
+        body: () => body,
+        outfit: () => 'Overalls',
+        print: () => 'Rainbow',
+        beard: () => true,
+        glasses: () => true,
+      }),
+    ),
+    HAIR_STYLES.map(hairStyle =>
+      modifyFields(base, { hairStyle: () => hairStyle }),
+    ),
+    HAIR_COLORS.map(hairColor =>
+      modifyFields(base, {
+        hairColor: () => hairColor,
+        hairStyle: () => 'Long',
+      }),
+    ),
+    SKIN_TONES.map(skinTone =>
+      modifyFields(base, { skinTone: () => skinTone }),
+    ),
+    SHIRT_COLORS.map(shirtColor =>
+      modifyFields(base, { shirtColor: () => shirtColor }),
+    ),
+    OUTFITS.map(outfit => modifyFields(base, { outfit: () => outfit })),
+    PRINTS.map(print => modifyFields(base, { print: () => print })),
     OUTFITS.flatMap(outfit =>
-      PRINTS.map(print => ({
-        ...base,
-        outfit,
-        print,
-        body: 'Slim' as const,
-      })),
+      PRINTS.map(print =>
+        modifyFields(base, {
+          outfit: () => outfit,
+          print: () => print,
+          body: () => 'Slim',
+        }),
+      ),
     ),
     ON_OFF.flatMap(beard =>
-      ON_OFF.map(glasses => ({ ...base, beard, glasses })),
+      ON_OFF.map(glasses =>
+        modifyFields(base, { beard: () => beard, glasses: () => glasses }),
+      ),
     ),
   ]
   rows.forEach((row, r) =>
@@ -2350,7 +2415,7 @@ const lookSheetShapes = (): Array<Canvas.Shape> => {
   return shapes
 }
 
-const lookSheetView = (h: any) => ({
+const lookSheetView = (h: ViewHtml): Document => ({
   title: 'Looks',
   body: h.div(
     [h.Style({ background: '#000', padding: '8px' })],
@@ -2368,9 +2433,9 @@ const lookSheetView = (h: any) => ({
   ),
 })
 
-w.__stall = STALL_BOX
-w.__doors = PARLOUR.doors
+window.__stall = STALL_BOX
+window.__doors = PARLOUR.doors
 
 // NOTE: for scripts after a click or a key: resolves once the page has
 // rendered and every image it asked for has decoded.
-w.__whenSettled = () => settle(() => true)
+window.__whenSettled = () => settle(() => true)

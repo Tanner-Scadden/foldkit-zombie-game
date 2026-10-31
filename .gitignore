@@ -31,7 +31,6 @@ Thumbs.db
 tools/balance/reports/
 
 # Multiplayer spike and determinism harness bundles
-tools/mp-spike/out/
 tools/determinism/out/
 
 # Video renders

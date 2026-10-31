@@ -15,17 +15,21 @@
 //   bun run heavy -- bun tools/audit/offline.ts
 // Against a deployed copy (steps 1 and 2 only, nothing is built):
 //   BASE=https://munchmanor.com/ bun run heavy -- bun tools/audit/offline.ts
+import { Duration, Effect, Schedule, Schema } from 'effect'
+import { FetchHttpClient, HttpClient, HttpClientResponse } from 'effect/http'
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { BrowserContext, Page } from 'playwright-core'
 
+import { decodeJson, encodeJson, readJsonFile } from '../json'
 import { PHONE_844, launch, wait } from './lib'
+import { evaluateAs } from './page'
 
 const ROOT = resolve(import.meta.dir, '../..')
 const PREVIEW_PORT = 4297
 const LOCAL = `http://localhost:${PREVIEW_PORT}/`
-const BASE = process.env.BASE ?? LOCAL
+const BASE = process.env['BASE'] ?? LOCAL
 const IS_LOCAL = BASE === LOCAL
 const CACHE_PREFIX = 'munch-manor-'
 
@@ -48,13 +52,21 @@ const build = (id: string) => {
   console.log(`built ${id}`)
 }
 
+const VersionFile = Schema.Struct({ build: Schema.optional(Schema.String) })
+
+// NOTE: the build the preview port serves, or nothing when nobody answers
+// with a version file.
 const servedBuild = (): Promise<string | undefined> =>
-  fetch(`${LOCAL}version.json`, { cache: 'no-store' })
-    .then(response => response.json())
-    .then(
-      (body: { build?: string }) => body.build,
-      () => undefined,
-    )
+  Effect.runPromise(
+    HttpClient.get(`${LOCAL}version.json`).pipe(
+      Effect.flatMap(HttpClientResponse.schemaBodyJson(VersionFile)),
+      Effect.map(body => body.build),
+      Effect.provideService(FetchHttpClient.RequestInit, { cache: 'no-store' }),
+      Effect.provideService(HttpClient.TracerPropagationEnabled, false),
+      Effect.provide(FetchHttpClient.layer),
+      Effect.orElseSucceed(() => undefined),
+    ),
+  )
 
 // NOTE: other worktrees run their own servers, so the port must be free
 // first, and the server that answers must serve this dist.
@@ -62,19 +74,27 @@ const serve = async (): Promise<ChildProcess> => {
   if ((await servedBuild()) !== undefined) {
     throw new Error(`port ${PREVIEW_PORT} is already taken by another server`)
   }
-  const expected = JSON.parse(
-    readFileSync(resolve(ROOT, 'dist/version.json'), 'utf8'),
+  const expected = readJsonFile(
+    VersionFile,
+    resolve(ROOT, 'dist/version.json'),
   ).build
   const server = spawn(
     'bunx',
     ['vite', 'preview', '--port', String(PREVIEW_PORT), '--strictPort'],
     { cwd: ROOT, stdio: 'ignore', detached: true },
   )
-  for (const _ of Array.from({ length: 60 })) {
-    if ((await servedBuild()) === expected) {
-      return server
-    }
-    await wait(500)
+  const served = await Effect.runPromise(
+    Effect.promise(servedBuild).pipe(
+      Effect.repeat({
+        until: answered => answered === expected,
+        schedule: Schedule.spaced(Duration.millis(500)).pipe(
+          Schedule.upTo({ times: 59 }),
+        ),
+      }),
+    ),
+  )
+  if (served === expected) {
+    return server
   }
   throw new Error(`vite preview never served ${expected} on ${LOCAL}`)
 }
@@ -94,30 +114,56 @@ const stop = async (server: ChildProcess | undefined) => {
 const precacheCount = (): number => {
   const source = readFileSync(resolve(ROOT, 'dist/sw.js'), 'utf8')
   const line = source.split('\n')[1] ?? ''
-  return JSON.parse(line.replace(/^const PRECACHE = /, '').replace(/;$/, ''))
-    .length
+  return decodeJson(Schema.Array(Schema.Unknown))(
+    line.replace(/^const PRECACHE = /, '').replace(/;$/, ''),
+  ).length
 }
 
 // THE PAGE
 
-type Caches = ReadonlyArray<Readonly<{ name: string; entries: number }>>
+const Caches = Schema.Array(
+  Schema.Struct({ name: Schema.String, entries: Schema.Number }),
+)
+type Caches = typeof Caches.Type
+const encodeCaches = encodeJson(Caches)
 
 const gameCaches = (page: Page): Promise<Caches> =>
-  page.evaluate(async prefix => {
-    const names = (await caches.keys()).filter(name => name.startsWith(prefix))
-    return Promise.all(
-      names.map(async name => ({
-        name,
-        entries: (await (await caches.open(name)).keys()).length,
-      })),
-    )
-  }, CACHE_PREFIX)
+  evaluateAs(
+    page,
+    Caches,
+    async (prefix: string) => {
+      const names = (await caches.keys()).filter(name =>
+        name.startsWith(prefix),
+      )
+      return Promise.all(
+        names.map(async name => ({
+          name,
+          entries: (await (await caches.open(name)).keys()).length,
+        })),
+      )
+    },
+    CACHE_PREFIX,
+  )
 
+// NOTE: a page with no service worker support counts as controlled here, as
+// it always has: the checks after it report the missing worker.
 const isControlled = (page: Page) =>
-  page.evaluate(() => navigator.serviceWorker?.controller !== null)
+  page.evaluate(
+    () =>
+      !('serviceWorker' in navigator) ||
+      navigator.serviceWorker.controller !== null,
+  )
+
+const WorkerState = Schema.Struct({
+  support: Schema.Boolean,
+  registered: Schema.optional(Schema.Boolean),
+  installing: Schema.optional(Schema.NullOr(Schema.String)),
+  waiting: Schema.optional(Schema.NullOr(Schema.String)),
+  active: Schema.optional(Schema.NullOr(Schema.String)),
+})
 
 const workerState = (page: Page) =>
-  page.evaluate(async () => {
+  evaluateAs(page, WorkerState, async () => {
     if (!('serviceWorker' in navigator)) {
       return { support: false }
     }
@@ -180,6 +226,9 @@ const isMuted = async (page: Page) => {
 const frameCount = (page: Page, ms: number) =>
   page.evaluate(
     duration =>
+      // NOTE: counts the page's own animation frames, which only the
+      // browser's callback API hands out.
+      // @effect-diagnostics-next-line newPromise:off
       new Promise<number>(done => {
         const start = performance.now()
         let frames = 0
@@ -241,13 +290,17 @@ const offlinePart = async (page: Page) => {
   const online = await openGame(page, goto(page))
   check(online.isBooted, 'online: the first visit boots')
   await page
-    .waitForFunction(() => navigator.serviceWorker?.controller !== null, null, {
-      timeout: 30_000,
-    })
+    .waitForFunction(
+      () =>
+        !('serviceWorker' in navigator) ||
+        navigator.serviceWorker.controller !== null,
+      null,
+      { timeout: 30_000 },
+    )
     .catch(() => undefined)
   const isFirstControlled = await isControlled(page)
   if (!isFirstControlled) {
-    console.log(`worker: ${JSON.stringify(await workerState(page))}`)
+    console.log(`worker: ${encodeJson(WorkerState)(await workerState(page))}`)
     console.log(
       `registering by hand: ${await page.evaluate(() =>
         navigator.serviceWorker.register('sw.js').then(
@@ -259,7 +312,7 @@ const offlinePart = async (page: Page) => {
   }
   check(isFirstControlled, 'online: the service worker controls the page')
   const firstCaches = await gameCaches(page)
-  console.log(`caches: ${JSON.stringify(firstCaches)}`)
+  console.log(`caches: ${encodeCaches(firstCaches)}`)
   check(
     firstCaches.length === 1 && (firstCaches[0]?.entries ?? 0) > 10,
     'online: one cache holds the precached game',
@@ -299,12 +352,21 @@ const main = async () => {
 
     await goOffline(context, server)
     server = undefined
+    // NOTE: the page's own fetch, through its service worker, with a fresh
+    // query so nothing but the network could answer.
+    /* oxlint-disable no-restricted-globals, no-restricted-properties */
     const versionOffline = await page.evaluate(() =>
-      fetch(`version.json?at=${Date.now()}`, { cache: 'no-store' }).then(
+      // @effect-diagnostics-next-line globalFetch:off
+      fetch(
+        // @effect-diagnostics-next-line globalDate:off
+        `version.json?at=${Date.now()}`,
+        { cache: 'no-store' },
+      ).then(
         () => 'answered',
         () => 'failed',
       ),
     )
+    /* oxlint-enable no-restricted-globals, no-restricted-properties */
     check(versionOffline === 'failed', 'offline: version.json is not cached')
 
     const reloaded = await openGame(page, reload(page))
@@ -386,7 +448,7 @@ const updatePart = async (
     )
     await wait(1000)
     const after = await gameCaches(page)
-    console.log(`caches after the update: ${JSON.stringify(after)}`)
+    console.log(`caches after the update: ${encodeCaches(after)}`)
     check(
       after.every(cache => cache.name !== oldCache) &&
         after.some(cache => cache.name === `${CACHE_PREFIX}offline-two`),

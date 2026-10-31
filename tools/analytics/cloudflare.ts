@@ -9,6 +9,12 @@ import {
   String,
   pipe,
 } from 'effect'
+import {
+  FetchHttpClient,
+  HttpClient,
+  HttpClientRequest,
+  HttpClientResponse,
+} from 'effect/http'
 import { ChildProcess, ChildProcessSpawner } from 'effect/process'
 
 // NOTE: the report reads D1 through the Cloudflare REST API with the same
@@ -80,31 +86,29 @@ const Envelope = <S extends Schema.Top>(result: S) =>
     result: Schema.NullOr(result),
   })
 
+// NOTE: a D1 query goes as a POST with its SQL as the JSON body.
+const SqlBody = Schema.Struct({ sql: Schema.String })
+
 const request = <S extends Schema.Top>(
   token: Redacted.Redacted,
   path: string,
   result: S,
-  init: RequestInit = {},
+  maybeSql: Option.Option<string> = Option.none(),
 ) =>
   pipe(
-    Effect.tryPromise({
-      try: signal =>
-        fetch(`${API}${path}`, {
-          ...init,
-          signal,
-          headers: {
-            Authorization: `Bearer ${Redacted.value(token)}`,
-            'Content-Type': 'application/json',
-          },
-        }).then(response => response.json()),
-      catch: error => new CloudflareError({ reason: describe(error) }),
+    Option.match(maybeSql, {
+      onNone: () => Effect.succeed(HttpClientRequest.get(`${API}${path}`)),
+      onSome: sql =>
+        HttpClientRequest.schemaBodyJson(SqlBody)(
+          HttpClientRequest.post(`${API}${path}`),
+          { sql },
+        ),
     }),
-    Effect.flatMap(json =>
-      Effect.mapError(
-        Schema.decodeUnknownEffect(Envelope(result))(json),
-        error => new CloudflareError({ reason: error.message }),
-      ),
-    ),
+    Effect.map(HttpClientRequest.bearerToken(token)),
+    Effect.flatMap(HttpClient.execute),
+    Effect.flatMap(HttpClientResponse.schemaBodyJson(Envelope(result))),
+    Effect.mapError(error => new CloudflareError({ reason: error.message })),
+    Effect.provide(FetchHttpClient.layer),
     Effect.flatMap(envelope =>
       envelope.success && envelope.result !== null
         ? Effect.succeed(envelope.result)
@@ -192,10 +196,7 @@ export const query = <S extends Schema.Top>(
       token,
       `/accounts/${account}/d1/database/${database}/query`,
       QueryResult,
-      {
-        method: 'POST',
-        body: JSON.stringify({ sql }),
-      },
+      Option.some(sql),
     ),
     Effect.map(results =>
       Option.match(Array.head(results), {

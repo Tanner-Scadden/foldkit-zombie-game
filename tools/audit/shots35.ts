@@ -5,29 +5,17 @@
 // room, so it takes the room once with the player by each door.
 //   TAG=after bun run heavy -- bun tools/audit/shots35.ts
 import {
-  DESKTOP_1280,
-  PHONE_844,
-  UPRIGHT_390,
-  type Viewport,
+  SHOT_VIEWPORTS,
+  TAG,
   deviceQuery,
   gotoScene,
   harnessUrl,
   isPickedScene,
   launch,
   openPage,
-  pickViewports,
   shot,
-  tagOr,
   useHarness,
 } from './lib'
-
-const TAG = tagOr('after')
-
-const VIEWPORTS = pickViewports([
-  { ...DESKTOP_1280, name: 'd1280' },
-  { ...PHONE_844, name: 'l844' },
-  { ...UPRIGHT_390, name: 'p390' },
-])
 
 const ROOM = 'wave=3&seen=all&start=wave&elapsed=6000&god&doorway&freeze=30'
 
@@ -41,7 +29,7 @@ const SCENES: ReadonlyArray<Readonly<{ name: string; query: string }>> = [
 
 await useHarness()
 const browser = await launch()
-for (const viewport of VIEWPORTS as ReadonlyArray<Viewport>) {
+for (const viewport of SHOT_VIEWPORTS) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
       continue

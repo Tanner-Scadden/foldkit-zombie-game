@@ -402,10 +402,7 @@ const EMPTY_OVERLAY: Overlay = {
 // NOTE: runs in the page: every CSS animation paused at its age on the
 // shot's clock, counted from the tick it was first seen on.
 const holdAnimations = (tick: number) => {
-  const page = window as unknown as {
-    __animationStarts?: WeakMap<Animation, number>
-  }
-  const starts = (page.__animationStarts ??= new WeakMap())
+  const starts = (window.__animationStarts ??= new WeakMap())
   for (const animation of document.getAnimations()) {
     if (!starts.has(animation)) {
       starts.set(animation, tick)
@@ -616,17 +613,14 @@ const repeatsAt = (shot: Shot, tick: number): number =>
   )
 
 const directedTick = (page: Page) =>
-  onPage('read the tick', () =>
-    page.evaluate(() => (window as any).__directedTick as number | undefined),
-  )
+  onPage('read the tick', () => page.evaluate(() => window.__directedTick))
 
 const awaitTick = (page: Page, tick: number) =>
   onPage(`reach tick ${tick}`, () =>
-    page.waitForFunction(
-      expected => (window as any).__directedTick === expected,
-      tick,
-      { polling: 'raf', timeout: 60_000 },
-    ),
+    page.waitForFunction(expected => window.__directedTick === expected, tick, {
+      polling: 'raf',
+      timeout: 60_000,
+    }),
   )
 
 const capture = (page: Page, overlay: Overlay) =>
@@ -688,13 +682,13 @@ export const captureShot = (
       ...(shot.coop === undefined ? {} : { coop: shot.coop }),
     })
     yield* onPage('start the shot', () =>
-      page.evaluate(json => (window as any).__director.start(json), plan),
+      page.evaluate(json => window.__director.start(json), plan),
     )
     yield* awaitTick(page, 0)
     const skip = shot.skip ?? 0
     if (skip > 0) {
       yield* onPage('skip', () =>
-        page.evaluate(n => (window as any).__director.step(n), skip),
+        page.evaluate(n => window.__director.step(n), skip),
       )
       yield* awaitTick(page, skip)
     }
@@ -706,7 +700,7 @@ export const captureShot = (
     for (let tick = skip; tick < shot.ticks; tick += step) {
       for (const click of Array.filter(
         shot.clicks ?? [],
-        click => click.at === tick,
+        planned => planned.at === tick,
       )) {
         yield* onPage(`click ${click.selector}`, () =>
           page.click(click.selector, { timeout: 5_000 }),
@@ -714,7 +708,7 @@ export const captureShot = (
       }
       if (tick > skip) {
         yield* onPage('step', () =>
-          page.evaluate(n => (window as any).__director.step(n), step),
+          page.evaluate(n => window.__director.step(n), step),
         )
         yield* awaitTick(page, tick)
       }
@@ -733,7 +727,7 @@ export const captureShot = (
       if (isDevices) {
         const src = pngSource(yield* capture(page, EMPTY_OVERLAY))
         const seats: Seats = yield* onPage('read the seats', () =>
-          page.evaluate(() => (window as any).__director.seats()),
+          page.evaluate(() => window.__director.seats()),
         )
         base = { kind: 'Devices', src, devices: devicesOf(format, seats) }
       } else if (Option.isSome(maybeCrop)) {
@@ -780,7 +774,7 @@ export const captureShot = (
     const reached = yield* directedTick(page)
     const audio = yield* decodeAudioLog(
       yield* onPage('read the audio log', () =>
-        page.evaluate((): unknown => (window as any).__director.audio()),
+        page.evaluate((): unknown => window.__director.audio()),
       ),
     )
     // NOTE: a sound logged on tick t is heard on the first frame that

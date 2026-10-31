@@ -12,13 +12,16 @@
 // Under the heavy guard it yields the guard's turn between profiles, so
 // other jobs go in between instead of waiting for all three.
 //   BASE=http://localhost:4173/ bun splash.ts
+import { Schema } from 'effect'
 import type { BrowserContext } from 'playwright-core'
 
 import { yieldTurnAsync } from '../heavy/turn'
-import { GAME, launch, wait } from './lib'
+import { encodeJson } from '../json'
+import { GAME, launch, nowMs, wait } from './lib'
+import { evaluateAs } from './page'
 
-const BASE = process.env.BASE ?? GAME
-const TAG = process.env.TAG ?? 'after'
+const BASE = process.env['BASE'] ?? GAME
+const TAG = process.env['TAG'] ?? 'after'
 
 // NOTE: the first visit loads with the cache off and no save. The repeat
 // visit closes that page and opens a new one in the same browser context
@@ -40,9 +43,9 @@ const PROFILES: ReadonlyArray<Profile> = [
 ]
 
 const KBPS_TO_BYTES = 1000 / 8
-const ONLY = process.env.ONLY
-const PROFILE = process.env.PROFILE === '1'
-const NETWORK = process.env.NETWORK === '1'
+const ONLY = process.env['ONLY']
+const PROFILE = process.env['PROFILE'] === '1'
+const NETWORK = process.env['NETWORK'] === '1'
 const TOP_FUNCTIONS = 20
 
 type ProfileNode = Readonly<{
@@ -56,23 +59,21 @@ type ProfileNode = Readonly<{
 
 type CpuProfile = Readonly<{
   nodes: ReadonlyArray<ProfileNode>
-  samples: ReadonlyArray<number>
-  timeDeltas: ReadonlyArray<number>
+  samples?: ReadonlyArray<number>
+  timeDeltas?: ReadonlyArray<number>
 }>
 
 const topSelfTime = (profile: CpuProfile): ReadonlyArray<string> => {
   const byId = new Map(profile.nodes.map(node => [node.id, node]))
   const selfMs = new Map<string, number>()
-  profile.samples.forEach((id, index) => {
+  const timeDeltas = profile.timeDeltas ?? []
+  ;(profile.samples ?? []).forEach((id, index) => {
     const frame = byId.get(id)?.callFrame
     const name =
       frame === undefined
         ? '?'
         : `${frame.functionName || '(anonymous)'} ${frame.url.split('/').pop()}:${frame.lineNumber + 1}`
-    selfMs.set(
-      name,
-      (selfMs.get(name) ?? 0) + (profile.timeDeltas[index] ?? 0) / 1000,
-    )
+    selfMs.set(name, (selfMs.get(name) ?? 0) + (timeDeltas[index] ?? 0) / 1000)
   })
   return [...selfMs.entries()]
     .sort(([, first], [, second]) => second - first)
@@ -111,18 +112,18 @@ const measureVisit = async (visit: Visit) => {
   context.removeAllListeners('request')
   context.removeAllListeners('requestfinished')
   const asked = new Map<object, number>()
-  const navigationAt = Date.now()
+  const navigationAt = nowMs()
   if (NETWORK) {
-    context.on('request', request => asked.set(request, Date.now()))
+    context.on('request', request => asked.set(request, nowMs()))
     context.on('requestfinished', request =>
       requests.push(
-        `${String((asked.get(request) ?? navigationAt) - navigationAt).padStart(6)} to ${String(Date.now() - navigationAt).padStart(6)} ms  ${request.url().split('/').pop()?.slice(0, 60)}`,
+        `${String((asked.get(request) ?? navigationAt) - navigationAt).padStart(6)} to ${String(nowMs() - navigationAt).padStart(6)} ms  ${request.url().split('/').pop()?.slice(0, 60)}`,
       ),
     )
   }
   const shots: Array<string> = []
   await page.goto(BASE, { waitUntil: 'commit' })
-  const started = Date.now()
+  const started = nowMs()
   const snap = async (moment: string) => {
     const name = `splash-${TAG}-${profile.name}-${visit.name}-${moment}`
     await page.screenshot({ path: `${import.meta.dir}/shots/${name}.png` })
@@ -131,13 +132,12 @@ const measureVisit = async (visit: Visit) => {
   await wait(profile.cpuRate === 1 ? 60 : 300)
   await snap('early')
   await page.waitForFunction(
-    () => (window as any).__splashTimes?.['splash hiding'] !== undefined,
+    () => window.__splashTimes?.['splash hiding'] !== undefined,
     undefined,
     { timeout: 120_000 },
   )
-  const maybeProfile = PROFILE
-    ? ((await cdp.send('Profiler.stop')) as unknown as { profile: CpuProfile })
-        .profile
+  const maybeProfile: CpuProfile | undefined = PROFILE
+    ? (await cdp.send('Profiler.stop')).profile
     : undefined
   await snap('hiding')
   await page.waitForFunction(
@@ -146,17 +146,21 @@ const measureVisit = async (visit: Visit) => {
     { timeout: 30_000 },
   )
   await snap('ready')
-  const times: Record<string, number> = await page.evaluate(() => {
-    const [navigation] = performance.getEntriesByType('navigation')
-    const times = (window as any).__splashTimes
-    if (navigation instanceof PerformanceNavigationTiming) {
-      times['DOMContentLoaded'] = navigation.domContentLoadedEventStart
-      times['load event'] = navigation.loadEventStart
-    }
-    return times
-  })
+  const times = await evaluateAs(
+    page,
+    Schema.Record(Schema.String, Schema.Number),
+    () => {
+      const [navigation] = performance.getEntriesByType('navigation')
+      const splashTimes = window.__splashTimes ?? {}
+      if (navigation instanceof PerformanceNavigationTiming) {
+        splashTimes['DOMContentLoaded'] = navigation.domContentLoadedEventStart
+        splashTimes['load event'] = navigation.loadEventStart
+      }
+      return splashTimes
+    },
+  )
   console.log(
-    `\n${profile.name} ${visit.name} visit (latency ${profile.latencyMs} ms, ${profile.downloadKbps || 'full'} kbps, CPU ${profile.cpuRate}x), ${Date.now() - started} ms wall:`,
+    `\n${profile.name} ${visit.name} visit (latency ${profile.latencyMs} ms, ${profile.downloadKbps || 'full'} kbps, CPU ${profile.cpuRate}x), ${nowMs() - started} ms wall:`,
   )
   Object.entries(times)
     .sort(([, first], [, second]) => first - second)
@@ -177,8 +181,10 @@ const measureVisit = async (visit: Visit) => {
       ),
     )
   }
-  const longTasks: ReadonlyArray<[number, number]> = await page.evaluate(
-    () => (window as any).__longTasks,
+  const longTasks = await evaluateAs(
+    page,
+    Schema.Array(Schema.Tuple([Schema.Number, Schema.Number])),
+    () => window.__longTasks ?? [],
   )
   const hiding = times['splash hiding'] ?? Infinity
   const beforeHiding = longTasks.filter(([start]) => start < hiding)
@@ -193,7 +199,7 @@ const measureVisit = async (visit: Visit) => {
   if (maybeProfile !== undefined) {
     await Bun.write(
       `${import.meta.dir}/shots/splash-${TAG}-${profile.name}-${visit.name}.cpuprofile`,
-      JSON.stringify(maybeProfile),
+      encodeJson(Schema.Unknown)(maybeProfile),
     )
     console.log('  most CPU time before hiding (self, throttled):')
     topSelfTime(maybeProfile).forEach(line => console.log(`    ${line}`))
@@ -217,8 +223,9 @@ const chosen = PROFILES.filter(
   ({ name }) => ONLY === undefined || ONLY === name,
 )
 for (const [index, profile] of chosen.entries()) {
-  if (index > 0) {
-    await yieldTurnAsync(`the ${chosen[index - 1]!.name} profile`, 1)
+  const previous = chosen[index - 1]
+  if (previous !== undefined) {
+    await yieldTurnAsync(`the ${previous.name} profile`, 1)
   }
   const context = await browser.newContext({
     viewport: { width: 844, height: 390 },
@@ -229,8 +236,8 @@ for (const [index, profile] of chosen.entries()) {
   await context.addInitScript(() => {
     const times: Record<string, number> = {}
     const longTasks: Array<[number, number]> = []
-    ;(window as any).__splashTimes = times
-    ;(window as any).__longTasks = longTasks
+    window.__splashTimes = times
+    window.__longTasks = longTasks
     new PerformanceObserver(list => {
       list.getEntries().forEach(entry => {
         longTasks.push([entry.startTime, entry.duration])
@@ -258,7 +265,7 @@ for (const [index, profile] of chosen.entries()) {
             performance.now()
         }
       }
-      if (splash?.classList.contains('is-gone')) {
+      if (splash?.classList.contains('is-gone') === true) {
         times['splash hiding'] ??= performance.now()
       }
       if (splash === null && times['splash in DOM'] !== undefined) {

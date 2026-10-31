@@ -23,6 +23,7 @@ import {
   type Log,
   PHONE_667,
   PHONE_844,
+  TAG,
   type Viewport,
   deviceQuery,
   finish,
@@ -34,12 +35,9 @@ import {
   scenePages,
   settleAnimations,
   shot,
-  tagOr,
   useHarness,
   whenSettled,
 } from './lib'
-
-const TAG = tagOr('after')
 
 const VIEWPORTS: ReadonlyArray<Viewport> = [
   PHONE_667,
@@ -155,7 +153,7 @@ const press = async (
   await settleAnimations(page)
 }
 
-const check = (page: Page, minSide: number, isPhone: boolean) =>
+const check = (page: Page, side: number, phone: boolean) =>
   page.evaluate(
     ({ minSide, isPhone }) => {
       const openDialog = document.querySelector('dialog[open]')
@@ -163,12 +161,11 @@ const check = (page: Page, minSide: number, isPhone: boolean) =>
       const buttons = Array.from(
         scope.querySelectorAll('button, a.home-support'),
       )
-        .filter(button => openDialog !== null || !button.closest('dialog'))
+        .filter(
+          button => openDialog !== null || button.closest('dialog') === null,
+        )
         .map(button => ({
-          label:
-            button.getAttribute('aria-label') ??
-            button.textContent?.trim() ??
-            '?',
+          label: button.getAttribute('aria-label') ?? button.textContent.trim(),
           box: button.getBoundingClientRect(),
         }))
         .filter(({ box }) => box.width > 0 && box.height > 0)
@@ -215,7 +212,7 @@ const check = (page: Page, minSide: number, isPhone: boolean) =>
             : `${Math.round(play.x)},${Math.round(play.y)} ${Math.round(play.width)}x${Math.round(play.height)}`,
       }
     },
-    { minSide, isPhone },
+    { minSide: side, isPhone: phone },
   )
 
 await useHarness()
@@ -294,12 +291,17 @@ const checkViewport = async (
     await page.locator('#home-play').focus()
     for (let step = 0; step < 8; step++) {
       tabOrder.push(
-        await page.evaluate(
-          () =>
-            document.activeElement?.id ||
-            document.activeElement?.getAttribute('aria-label') ||
-            '(none)',
-        ),
+        await page.evaluate(() => {
+          const active = document.activeElement
+          if (active === null) {
+            return '(none)'
+          }
+          if (active.id !== '') {
+            return active.id
+          }
+          const label = active.getAttribute('aria-label')
+          return label === null || label === '' ? '(none)' : label
+        }),
       )
       await page.keyboard.press('Tab')
       await whenSettled(page)

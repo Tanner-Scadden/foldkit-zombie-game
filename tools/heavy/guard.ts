@@ -319,7 +319,7 @@ const reportWait = (
   })
 
 const pathOfHold = (context: Context, hold: Hold): string =>
-  Hold.$match(hold, {
+  Hold.match(hold, {
     Solo: () => context.lockPath,
     Shared: ({ slot }) => sharedSlotPath(context.lockDirectory, slot),
   })
@@ -337,7 +337,7 @@ const takeTheLock = (
 > =>
   Effect.gen(function* () {
     const path = pathOfHold(context, hold)
-    yield* LockAction.$match(lockAction, {
+    yield* LockAction.match(lockAction, {
       Create: () => Effect.void,
       TakeOver: ({ reason }) =>
         say(reason).pipe(Effect.andThen(clearIfNotHeld(path))),
@@ -350,7 +350,7 @@ const takeTheLock = (
       startedAt,
       jobClass: arrival.jobClass._tag,
       cost,
-      ...(Hold.$is('Solo')(hold) ? { leaseMs: context.leaseMs } : {}),
+      ...(Hold.isAnyOf(['Solo'])(hold) ? { leaseMs: context.leaseMs } : {}),
     }
     yield* acquireLock(path, holder).pipe(
       Effect.catchTag('LockTaken', () =>
@@ -390,7 +390,13 @@ const execute = (
   BudgetRefused | NotYet | PlatformError,
   FileSystem.FileSystem | Scope.Scope
 > =>
-  Decision.$match(decide(snapshot), {
+  Decision.match<
+    Effect.Effect<
+      Plan,
+      BudgetRefused | NotYet | PlatformError,
+      FileSystem.FileSystem | Scope.Scope
+    >
+  >(decide(snapshot), {
     Refuse: ({ reason }) => Effect.fail(new BudgetRefused({ reason })),
     Wait: ({ reason }) =>
       reportWait(waitLog, reason).pipe(
@@ -493,7 +499,7 @@ const countBatch = (
   context: Context,
   command: Array.NonEmptyReadonlyArray<string>,
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem> =>
-  JobKind.$match(jobKindOf(command), {
+  JobKind.match(jobKindOf(command), {
     Other: () => Effect.void,
     Balance: () =>
       updateLedger(context.ledgerPath, ledger =>
@@ -545,9 +551,9 @@ export const runChild = (
   })
 
 const describeHold = (hold: Hold, jobClass: JobClass): string =>
-  Hold.$match(hold, {
+  Hold.match(hold, {
     Solo: () =>
-      JobClass.$is('Cpu')(jobClass) ? 'as the CPU job' : 'alone (timing)',
+      JobClass.isAnyOf(['Cpu'])(jobClass) ? 'as the CPU job' : 'alone (timing)',
     Shared: ({ slot }) => `in shared slot ${slot}`,
   })
 
@@ -605,7 +611,7 @@ const answerRequest = (
           arrival.jobClass,
           arrival.cost,
           arrival.budgetPolicy,
-          JobKind.Other(),
+          JobKind.cases.Other.make({}),
           queuedAt,
         ),
         'WaitsOn',
@@ -619,7 +625,7 @@ const answerRequest = (
     })
     // NOTE: a job that offers to yield and keeps its turn renews its lease.
     const renewLease = Effect.gen(function* () {
-      if (!Hold.$is('Solo')(turn.plan.hold)) {
+      if (!Hold.isAnyOf(['Solo'])(turn.plan.hold)) {
         return
       }
       const now = yield* Clock.currentTimeMillis
@@ -633,7 +639,7 @@ const answerRequest = (
     })
     // NOTE: a turn let go of by an earlier answer that then failed is
     // queued for again, whoever waits.
-    yield* Handover.$match(decideHandover(process.pid, waiters), {
+    yield* Handover.match(decideHandover(process.pid, waiters), {
       Keep: () => (turn.isReleased ? queueAgain : renewLease),
       HandOver: ({ reason }) =>
         say(`Handing over after ${pending.request.label}: ${reason}.`).pipe(
@@ -679,7 +685,7 @@ const watchLease = (context: Context, current: Ref.Ref<CurrentTurn>) =>
   Effect.gen(function* () {
     const turn = yield* Ref.get(current)
     // NOTE: a turn handed over holds no file while it queues again.
-    if (!Hold.$is('Solo')(turn.plan.hold) || turn.isReleased) {
+    if (!Hold.isAnyOf(['Solo'])(turn.plan.hold) || turn.isReleased) {
       return
     }
     const now = yield* Clock.currentTimeMillis
@@ -717,7 +723,7 @@ const runGuarded = (
     const context = yield* makeContext
     const arrivedAt = yield* Clock.currentTimeMillis
     const jobClass = jobClassOf(command, maybeClassOverride)
-    const cost = JobClass.$match(jobClass, {
+    const cost = JobClass.match(jobClass, {
       Timing: () => 1,
       Cpu: () => 1,
       Shared: () => sharedCostOf(command, envValue),
@@ -799,8 +805,16 @@ const failWith = (message: string): Effect.Effect<never, GuardExit> =>
     Effect.andThen(Effect.fail(new GuardExit({ code: FAILURE_EXIT_CODE }))),
   )
 
+type Guarded = ReturnType<typeof runGuarded>
+
 export const program = Effect.suspend(() =>
-  Invocation.$match(parseArguments(Array.drop(process.argv, 2)), {
+  Invocation.match<
+    Effect.Effect<
+      void,
+      Effect.Error<Guarded> | GuardExit,
+      Effect.Services<Guarded>
+    >
+  >(parseArguments(Array.drop(process.argv, 2)), {
     ShowUsage: ({ problem }) => failWith(`${problem}\n${USAGE}`),
     ResetBudget: () => resetThisBudget,
     RunCommand: ({ command, budgetPolicy, maybeClassOverride }) =>

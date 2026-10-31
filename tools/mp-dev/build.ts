@@ -3,11 +3,15 @@
 // MP_DEV_API_ORIGIN (set by the preview deploy in infra/alchemy.run.ts),
 // else the page's own origin; `?api=` on the page overrides either.
 //   MP_DEV_API_ORIGIN=http://127.0.0.1:8798 bun tools/mp-dev/build.ts
+import { Schema } from 'effect'
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
+
+// NOTE: Bun's `define` takes the value as source text: a JSON string.
+const stringSource = Schema.encodeSync(Schema.fromJsonString(Schema.String))
 const outdir = resolve(here, 'dist/page')
 
 export const buildPage = async (apiOrigin: string): Promise<void> => {
@@ -21,7 +25,7 @@ export const buildPage = async (apiOrigin: string): Promise<void> => {
     minify: true,
     metafile: false,
     plugins: [],
-    define: { __MP_API_ORIGIN__: JSON.stringify(apiOrigin) },
+    define: { __MP_API_ORIGIN__: stringSource(apiOrigin) },
   })
   if (!result.success) {
     throw new Error(`The dev page did not build: ${String(result.logs)}`)

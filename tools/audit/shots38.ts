@@ -11,10 +11,9 @@
 import type { Page } from 'playwright-core'
 
 import {
-  DESKTOP_1280,
-  PHONE_844,
   SHOTS_DIR,
-  UPRIGHT_390,
+  SHOT_VIEWPORTS,
+  TAG,
   type Viewport,
   deviceQuery,
   finish,
@@ -23,29 +22,15 @@ import {
   isPickedScene,
   launch,
   openPage,
-  pickViewports,
+  pressButton,
   settleAnimations,
-  tagOr,
   useHarness,
 } from './lib'
 
-const TAG = tagOr('after')
-
-const VIEWPORTS = pickViewports([
-  { ...DESKTOP_1280, name: 'd1280' },
-  { ...PHONE_844, name: 'l844' },
-  { ...UPRIGHT_390, name: 'p390' },
-])
-
-const press = async (page: Page, viewport: Viewport, name: RegExp) => {
-  const button = page.getByRole('button', { name }).first()
-  await (viewport.isPhone ? button.tap() : button.click())
-}
-
 const fromHand = (card: RegExp) => async (page: Page, viewport: Viewport) => {
-  await press(page, viewport, /^More:/)
+  await pressButton(page, viewport, /^More:/)
   await page.locator('dialog[open]').first().waitFor({ state: 'visible' })
-  await press(page, viewport, card)
+  await pressButton(page, viewport, card)
   await page
     .locator('dialog[open] .panel')
     .first()
@@ -96,11 +81,11 @@ const checkSprites = async (page: Page, where: string) => {
     )
     const wideFrames = [...document.querySelectorAll('.help-card-frame')]
       .filter(
-        frame =>
+        (frame): frame is HTMLImageElement =>
           frame instanceof HTMLImageElement &&
           (frame.naturalWidth === 0 || frame.naturalWidth > maxPx),
       )
-      .map(frame => `frame ${(frame as HTMLImageElement).naturalWidth} px wide`)
+      .map(frame => `frame ${frame.naturalWidth} px wide`)
     return {
       bad: [...sheetImages, ...sheetBackgrounds, ...wideFrames],
       images: images.length,
@@ -181,7 +166,7 @@ const checkGift = async (page: Page, viewport: Viewport, where: string) => {
 
 await useHarness()
 const browser = await launch()
-for (const viewport of VIEWPORTS) {
+for (const viewport of SHOT_VIEWPORTS) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
       continue

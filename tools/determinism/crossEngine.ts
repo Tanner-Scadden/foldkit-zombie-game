@@ -28,23 +28,30 @@
 // the clock to say how long each engine took.
 /* oxlint-disable foldkit/no-impure-call-at-decision-time */
 
+import { Option, Schema } from 'effect'
+import { HttpClientRequest } from 'effect/http'
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import { askWorkerd } from './askWorkerd'
 import {
   type Difference,
   firstDifference,
   firstDivergentCheckpoint,
+  jsonTextOf,
   revive,
 } from './diff'
 import {
   DEFAULT_REQUEST,
   type EngineDump,
-  type EngineRequest,
+  EngineRequest,
   type EngineRun,
+  decodeEngineDump,
+  decodeEngineError,
+  decodeEngineRun,
   paramsOf,
 } from './request'
 
@@ -158,21 +165,9 @@ const runWorkerd = async (params: string): Promise<string> => {
     stdio: ['ignore', 'ignore', 'inherit'],
   })
   try {
-    const attempt = async (left: number): Promise<string> => {
-      try {
-        const response = await fetch(
-          `http://127.0.0.1:${WORKERD_PORT}/?${params}`,
-        )
-        return await response.text()
-      } catch (error) {
-        if (left <= 0) {
-          throw error
-        }
-        await new Promise(done => setTimeout(done, 200))
-        return attempt(left - 1)
-      }
-    }
-    return await attempt(50)
+    return await askWorkerd(
+      HttpClientRequest.get(`http://127.0.0.1:${WORKERD_PORT}/?${params}`),
+    )
   } finally {
     server.kill()
   }
@@ -188,40 +183,33 @@ const ask = async (engine: EngineName, ofRequest: EngineRequest) => {
         : engine === 'chrome'
           ? runChrome(params)
           : await runWorkerd(params)
-  const parsed: unknown = JSON.parse(text)
-  if (typeof parsed === 'object' && parsed !== null && 'error' in parsed) {
-    throw new Error(`${engine}: ${String(parsed.error)}`)
+  const maybeError = decodeEngineError(text)
+  if (Option.isSome(maybeError)) {
+    throw new Error(`${engine}: ${String(maybeError.value.error)}`)
   }
   return text
 }
-
-const isRun = (value: unknown): value is EngineRun =>
-  typeof value === 'object' && value !== null && 'checkpoints' in value
-const isDump = (value: unknown): value is EngineDump =>
-  typeof value === 'object' && value !== null && 'fieldHashes' in value
 
 const askRun = async (
   engine: EngineName,
   ofRequest: EngineRequest,
 ): Promise<EngineRun> => {
-  const parsed: unknown = JSON.parse(await ask(engine, ofRequest))
-  if (!isRun(parsed)) {
-    throw new Error(`${engine} answered no run`)
-  }
-  return parsed
+  const text = await ask(engine, ofRequest)
+  return Option.getOrThrowWith(
+    decodeEngineRun(text),
+    () => new Error(`${engine} answered no run`),
+  )
 }
 
 const askDump = async (
   engine: EngineName,
   frame: number,
 ): Promise<EngineDump> => {
-  const parsed: unknown = JSON.parse(
-    await ask(engine, { ...request, dump: frame }),
+  const text = await ask(engine, { ...request, dump: frame })
+  return Option.getOrThrowWith(
+    decodeEngineDump(text),
+    () => new Error(`${engine} answered no dump for frame ${frame}`),
   )
-  if (!isDump(parsed)) {
-    throw new Error(`${engine} answered no dump for frame ${frame}`)
-  }
-  return parsed
 }
 
 // THE CHECK
@@ -322,42 +310,64 @@ const divergences = await pairsOf(engines).reduce<
 // THE REPORT
 
 const shown = (value: unknown): string => {
-  // NOTE: JSON.stringify returns undefined for undefined and functions,
-  // though its type says string.
-  const text: unknown =
+  const text =
     typeof value === 'number'
       ? Object.is(value, -0)
         ? '-0'
         : String(value)
-      : JSON.stringify(value)
-  return typeof text !== 'string'
-    ? 'undefined'
-    : text.length > 120
-      ? `${text.slice(0, 117)}...`
-      : text
+      : jsonTextOf(value)
+  return text.length > 120 ? `${text.slice(0, 117)}...` : text
 }
+
+// NOTE: the --json report. A difference's values are whatever the states
+// held there, so they pass through as they are.
+const Report = Schema.Struct({
+  request: EngineRequest,
+  engines: Schema.Array(
+    Schema.Struct({
+      name: Schema.String,
+      engine: Schema.String,
+      frames: Schema.Number,
+      endPhase: Schema.String,
+      endWave: Schema.Number,
+      finalHash: Schema.UndefinedOr(Schema.Number),
+    }),
+  ),
+  divergences: Schema.Array(
+    Schema.Struct({
+      a: Schema.String,
+      b: Schema.String,
+      frame: Schema.Number,
+      fields: Schema.Array(Schema.String),
+      difference: Schema.UndefinedOr(
+        Schema.Struct({
+          path: Schema.String,
+          a: Schema.Unknown,
+          b: Schema.Unknown,
+        }),
+      ),
+    }),
+  ),
+  unclassified: Schema.Array(Schema.String),
+})
 
 const unclassified = [...new Set(runs.flatMap(([, run]) => run.unclassified))]
 
 if (asJson) {
   console.log(
-    JSON.stringify(
-      {
-        request,
-        engines: runs.map(([name, run]) => ({
-          name,
-          engine: run.engine,
-          frames: run.frames,
-          endPhase: run.endPhase,
-          endWave: run.endWave,
-          finalHash: run.checkpoints.at(-1)?.[1],
-        })),
-        divergences,
-        unclassified,
-      },
-      null,
-      2,
-    ),
+    Schema.encodeSync(Schema.fromJsonString(Report, { space: 2 }))({
+      request,
+      engines: runs.map(([name, run]) => ({
+        name,
+        engine: run.engine,
+        frames: run.frames,
+        endPhase: run.endPhase,
+        endWave: run.endWave,
+        finalHash: run.checkpoints.at(-1)?.[1],
+      })),
+      divergences,
+      unclassified,
+    }),
   )
 } else {
   console.log(

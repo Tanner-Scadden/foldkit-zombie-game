@@ -16,7 +16,7 @@ export type Raster = Readonly<{
 const CRC_TABLE = Array.from({ length: 256 }, (_, byte) => {
   let crc = byte
   for (let bit = 0; bit < 8; bit++) {
-    crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1
+    crc = (crc & 1) !== 0 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1
   }
   return crc >>> 0
 })
@@ -190,8 +190,11 @@ const chunksOf = (png: Buffer): Chunks => {
     const length = png.readUInt32BE(at)
     const type = png.subarray(at + 4, at + 8).toString('ascii')
     const data = png.subarray(at + 8, at + 8 + length)
+    const previous = found[type]
     found[type] =
-      type === 'IDAT' && found[type] ? Buffer.concat([found[type], data]) : data
+      type === 'IDAT' && previous !== undefined
+        ? Buffer.concat([previous, data])
+        : data
     at += 12 + length
   }
   return found

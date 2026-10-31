@@ -44,29 +44,26 @@ const Choice = <const L extends ReadonlyArray<string>>(literals: L) =>
 const split = (text: string, separator: string) =>
   text.split(separator).filter(part => part.length > 0)
 
-const ListOf = <S extends Schema.Top & { readonly Encoded: string }>(item: S) =>
+// NOTE: text split into its parts, which the next Schema decodes.
+const SplitBy = (separator: string, isKeepingEmpty = false) =>
   Schema.String.pipe(
-    Schema.decodeTo(Schema.Array(item), {
-      decode: SchemaGetter.transform(
-        text => split(text, ',') as ReadonlyArray<S['Encoded']>,
+    Schema.decodeTo(Schema.Array(Schema.String), {
+      decode: SchemaGetter.transform(text =>
+        isKeepingEmpty ? text.split(separator) : split(text, separator),
       ),
-      encode: SchemaGetter.transform(items => items.join(',')),
+      encode: SchemaGetter.transform(parts => parts.join(separator)),
     }),
   )
+
+const ListOf = <S extends Schema.Top & { readonly Encoded: string }>(item: S) =>
+  SplitBy(',').pipe(Schema.decodeTo(Schema.Array(item)))
 
 const AllOr = <S extends Schema.Top & { readonly Encoded: string }>(item: S) =>
   Schema.optionalKey(Schema.Union([Schema.Literal('all'), ListOf(item)]))
 
 const Point = Schema.Tuple([Schema.FiniteFromString, Schema.FiniteFromString])
 
-const PointFromString = Schema.String.pipe(
-  Schema.decodeTo(Point, {
-    decode: SchemaGetter.transform(
-      text => text.split(',') as unknown as readonly [string, string],
-    ),
-    encode: SchemaGetter.transform(point => point.join(',')),
-  }),
-)
+const PointFromString = SplitBy(',', true).pipe(Schema.decodeTo(Point))
 
 const Puddles = Schema.String.pipe(
   Schema.decodeTo(Schema.Array(PointFromString), {
@@ -77,24 +74,27 @@ const Puddles = Schema.String.pipe(
 
 const KillCount = Schema.Tuple([ZombieKind, Schema.FiniteFromString])
 
-const Kills = Schema.String.pipe(
-  Schema.decodeTo(Schema.Array(KillCount), {
-    decode: SchemaGetter.transform(
-      text =>
-        split(text, ',').map(pair =>
-          pair.split(':'),
-        ) as unknown as ReadonlyArray<readonly [ZombieKind, string]>,
-    ),
-    encode: SchemaGetter.transform(pairs =>
-      pairs.map(pair => pair.join(':')).join(','),
-    ),
-  }),
+const Kills = SplitBy(',').pipe(
+  Schema.decodeTo(Schema.Array(SplitBy(':', true))),
+  Schema.decodeTo(Schema.Array(KillCount)),
 )
 
 const LookPart = <S extends Schema.Top>(part: S) =>
   Schema.Union([Schema.Literal(''), part])
 
+const LOOK_PARTS = 9
+
 const Look = Schema.String.pipe(
+  Schema.decodeTo(Schema.Array(Schema.String), {
+    decode: SchemaGetter.transform(text => {
+      const parts = text.split(',')
+      return Array.from(
+        { length: LOOK_PARTS },
+        (_, index) => parts[index] ?? '',
+      )
+    }),
+    encode: SchemaGetter.transform(parts => parts.join(',')),
+  }),
   Schema.decodeTo(
     Schema.Tuple([
       LookPart(Body),
@@ -107,16 +107,6 @@ const Look = Schema.String.pipe(
       LookPart(Schema.Literal('Beard')),
       LookPart(Schema.Literal('Glasses')),
     ]),
-    {
-      decode: SchemaGetter.transform(text => {
-        const parts = text.split(',')
-        return Array.from(
-          { length: 9 },
-          (_, index) => parts[index] ?? '',
-        ) as unknown as readonly ['', '', '', '', '', '', '', '', '']
-      }),
-      encode: SchemaGetter.transform(parts => parts.join(',')),
-    },
   ),
 )
 

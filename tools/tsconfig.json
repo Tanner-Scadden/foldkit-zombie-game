@@ -1,0 +1,9 @@
+// NOTE: the modules every tool shares, at the top of tools/ (json.ts).
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["ES2022"]
+  },
+  "include": ["./*.ts"]
+}

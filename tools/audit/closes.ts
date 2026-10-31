@@ -32,6 +32,7 @@ import {
   DESKTOP_1920,
   type Log,
   PHONE_844,
+  TAG,
   UPRIGHT_375,
   UPRIGHT_390,
   type Viewport,
@@ -47,11 +48,9 @@ import {
   scenePages,
   settleAnimations,
   shot,
-  tagOr,
   useHarness,
+  waitForDialog,
 } from './lib'
-
-const TAG = tagOr('after')
 
 const VIEWPORTS = pickViewports([
   { ...PHONE_844, name: 'l844', scale: 2 },
@@ -152,13 +151,6 @@ const press = async (page: Page, viewport: Viewport, point: Point) => {
   }
 }
 
-const waitForDialog = (page: Page) =>
-  page
-    .locator('dialog[open]')
-    .first()
-    .waitFor({ state: 'visible', timeout: OPEN_TIMEOUT_MS })
-    .catch(() => undefined)
-
 // NOTE: the harness's ready signal says the scene is in. A dialog the game
 // opens itself, such as the shop on reaching the stall, is waited for by
 // its close, and each tap that opens a dialog waits for it to open and
@@ -209,12 +201,7 @@ const placeClose = (page: Page): Promise<Placed | null> =>
     ({ selector, inset }) => {
       const button = document.querySelector(selector)
       const face = button?.querySelector('.menu-close-face')
-      if (
-        button === null ||
-        button === undefined ||
-        face === null ||
-        face === undefined
-      ) {
+      if (button === null || face === null || face === undefined) {
         return null
       }
       const toBox = (rect: DOMRect) => ({
@@ -306,14 +293,15 @@ const overlaps = (page: Page) =>
         return (
           style.visibility !== 'hidden' &&
           style.display !== 'none' &&
-          !element.closest('.sr-only')
+          element.closest('.sr-only') === null
         )
       }
       const name = (element: Element) =>
         (
           element.getAttribute('aria-label') ??
-          (element as HTMLElement).innerText ??
-          element.className
+          (element instanceof HTMLElement
+            ? element.innerText
+            : element.className)
         )
           .replace(/\s+/g, ' ')
           .slice(0, 40)
@@ -333,7 +321,7 @@ const overlaps = (page: Page) =>
         const walker = document.createTreeWalker(text, NodeFilter.SHOW_TEXT)
         const rects: Array<DOMRect> = []
         for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-          if (node.parentElement?.closest('.sr-only')) {
+          if ((node.parentElement?.closest('.sr-only') ?? null) !== null) {
             continue
           }
           const range = document.createRange()
@@ -356,21 +344,21 @@ const overlaps = (page: Page) =>
 
 const isOnScreen = (page: Page, box: Box) =>
   page.evaluate(
-    box =>
-      box.left >= -1 &&
-      box.top >= -1 &&
-      box.right <= innerWidth + 1 &&
-      box.bottom <= innerHeight + 1,
+    rect =>
+      rect.left >= -1 &&
+      rect.top >= -1 &&
+      rect.right <= innerWidth + 1 &&
+      rect.bottom <= innerHeight + 1,
     box,
   )
 
 const clearMessages = (page: Page) =>
   page.evaluate(() => {
-    ;(window as any).__messages.length = 0
+    window.__messages.length = 0
   })
 
 const messages = (page: Page): Promise<ReadonlyArray<string>> =>
-  page.evaluate(() => [...(window as any).__messages])
+  page.evaluate(() => [...window.__messages])
 
 const waitForClosed = (page: Page) =>
   page
@@ -469,8 +457,11 @@ const checkScene = async (
         scene,
         `${viewport.isPhone ? 'tap' : 'click'} ${name}`,
         async (tapPage, placedNow) => {
-          const point = placedNow.points.find(p => p.name === name)!.point
-          await press(tapPage, viewport, point)
+          const placedPoint = placedNow.points.find(p => p.name === name)
+          if (placedPoint === undefined) {
+            throw new Error(`No ${name} point on the close button`)
+          }
+          await press(tapPage, viewport, placedPoint.point)
         },
         log,
       )),
@@ -495,7 +486,10 @@ const checkScene = async (
 // stale shell after co-op opened, so the shop opened as a second
 // `<dialog id="shop">` under an empty one that took every tap. So the shop
 // is opened straight from its query, and again after co-op's screen.
-const SHOP = SCENES.find(scene => scene.name === 'shop')!
+const SHOP = SCENES.find(scene => scene.name === 'shop')
+if (SHOP === undefined) {
+  throw new Error('No shop scene')
+}
 
 type BuyRoute = Readonly<{ name: string; before: ReadonlyArray<string> }>
 
@@ -555,7 +549,9 @@ const checkBuying = async (
   const where = `${viewport.name} ${route.name}`
   const query = (part: string) => harnessQuery(part, deviceQuery(viewport))
   const [first, ...rest] = [...route.before, SHOP.query]
-  const page = await pages.open(viewport, query(first!), { fresh: true })
+  const page = await pages.open(viewport, query(first), {
+    fresh: true,
+  })
   for (const part of rest) {
     await loadScene(page, query(part))
   }
@@ -584,9 +580,9 @@ const checkBuying = async (
   await press(page, viewport, placed.point)
   await page
     .waitForFunction(
-      before =>
+      shown =>
         document.querySelector('dialog[open] .shop-balance')?.textContent !==
-        before,
+        shown,
       before,
       { timeout: CLOSE_TIMEOUT_MS },
     )

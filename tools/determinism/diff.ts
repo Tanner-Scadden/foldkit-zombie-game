@@ -2,6 +2,8 @@
 // where two gameplay states differ, and JSON that keeps every number exact.
 // No game imports, so the orchestrator can load it without the game.
 
+import { Predicate, Schema } from 'effect'
+
 export type Checkpoint = readonly [frame: number, hash: number]
 
 // The first checkpoint two runs disagree on, by frame.
@@ -32,9 +34,6 @@ export const firstDivergentCheckpoint = (
 
 export type Difference = Readonly<{ path: string; a: unknown; b: unknown }>
 
-const isObject = (value: unknown): value is object =>
-  typeof value === 'object' && value !== null
-
 const sameNumber = (a: number, b: number): boolean =>
   Object.is(a, b) || (Number.isNaN(a) && Number.isNaN(b))
 
@@ -51,7 +50,7 @@ export const firstDifference = (
   if (typeof a === 'number' && typeof b === 'number') {
     return sameNumber(a, b) ? undefined : { path, a, b }
   }
-  if (!isObject(a) || !isObject(b)) {
+  if (!Predicate.isObjectKeyword(a) || !Predicate.isObjectKeyword(b)) {
     return Object.is(a, b) ? undefined : { path, a, b }
   }
   if (Array.isArray(a) !== Array.isArray(b)) {
@@ -84,7 +83,10 @@ export const firstDifference = (
 
 // JSON that keeps every float64 exactly: -0, NaN, and the infinities become
 // tagged strings, which `revive` turns back.
+// NOTE: a Schema cannot replace numbers anywhere in a state of any shape,
+// and the engines must print these exact bytes.
 export const exactJson = (value: unknown): string =>
+  // oxlint-disable-next-line munch/no-raw-json
   JSON.stringify(value, (_, inner: unknown) =>
     typeof inner === 'number' &&
     (!Number.isFinite(inner) || Object.is(inner, -0))
@@ -92,9 +94,18 @@ export const exactJson = (value: unknown): string =>
       : inner,
   )
 
+// NOTE: the other way from exactJson, for a state of any shape.
 export const revive = (text: string): unknown =>
+  // oxlint-disable-next-line munch/no-raw-json
   JSON.parse(text, (_, inner: unknown) =>
     typeof inner === 'string' && inner.startsWith('#num:')
       ? Number(inner.slice(5))
       : inner,
   )
+
+const encodeAnyJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))
+
+// NOTE: a value from a state as JSON text for a report: `undefined` when
+// it is missing, which JSON has no text for.
+export const jsonTextOf = (value: unknown): string =>
+  value === undefined ? 'undefined' : encodeAnyJson(value)

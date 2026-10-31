@@ -29,19 +29,30 @@
 // nothing from the room), and resyncs (a message that would not apply).
 // Run it through the heavy guard, as a Shared job (one context per page):
 //   bun run heavy -- --shared bun tools/audit/coop.ts http://localhost:4398/ [players]
+import { Schema } from 'effect'
 import type { BrowserContext, Page } from 'playwright-core'
 
-import { SHOTS_DIR, finish, launch, wait } from './lib'
+import { decodeJson, encodeJson } from '../json'
+import {
+  SHOTS_DIR,
+  awaitGame,
+  finish,
+  launch,
+  nowMs,
+  pollUntil,
+  wait,
+} from './lib'
+import { evaluateAs } from './page'
 
-const BASE = process.argv[2] ?? process.env.BASE
+const BASE = process.argv[2] ?? process.env['BASE']
 if (BASE === undefined) {
   console.error('Usage: bun tools/audit/coop.ts <game url> [players]')
   process.exit(2)
 }
 const PLAYERS = Math.min(3, Math.max(2, Number(process.argv[3] ?? 3)))
-const IS_QUICK = process.env.QUICK === '1'
-const [PICK_MODE, PICK_DIFFICULTY] = (process.env.PICK ?? '').split(',')
-const [NET_RTT, NET_JITTER, NET_LOSS] = (process.env.NET ?? '')
+const IS_QUICK = process.env['QUICK'] === '1'
+const [PICK_MODE, PICK_DIFFICULTY] = (process.env['PICK'] ?? '').split(',')
+const [NET_RTT, NET_JITTER, NET_LOSS] = (process.env['NET'] ?? '')
   .split(',')
   .map(Number)
 
@@ -60,26 +71,38 @@ const slowSockets = (link: {
   readonly lossPercent: number
 }) => {
   const Native = window.WebSocket
+  // NOTE: the bad link runs in the browser, outside any seeded game, so
+  // its jitter and losses come from the page's own random numbers.
+  const random = () =>
+    // @effect-diagnostics-next-line globalRandom:off
+    Math.random() // oxlint-disable-line no-restricted-properties
   const delay = () =>
     link.rttMs / 2 +
-    Math.random() * link.jitterMs +
-    (Math.random() * 100 < link.lossPercent ? Math.max(200, link.rttMs) : 0)
+    random() * link.jitterMs +
+    (random() * 100 < link.lossPercent ? Math.max(200, link.rttMs) : 0)
+  // NOTE: one line's timer is the page's own, as the sockets it slows are.
+  const later = (run: () => void, ms: number) =>
+    // @effect-diagnostics-next-line globalTimers:off
+    setTimeout(run, ms) // oxlint-disable-line no-restricted-globals
   const line = () => {
     const queue: Array<{ readonly atMs: number; readonly run: () => void }> = []
     let lastAtMs = 0
     const pump = () => {
-      while (queue.length > 0 && queue[0]!.atMs <= performance.now()) {
-        queue.shift()!.run()
+      let next = queue[0]
+      while (next !== undefined && next.atMs <= performance.now()) {
+        queue.shift()
+        next.run()
+        next = queue[0]
       }
-      if (queue.length > 0) {
-        setTimeout(pump, queue[0]!.atMs - performance.now())
+      if (next !== undefined) {
+        later(pump, next.atMs - performance.now())
       }
     }
     return (run: () => void) => {
       lastAtMs = Math.max(lastAtMs, performance.now() + delay())
       queue.push({ atMs: lastAtMs, run })
       if (queue.length === 1) {
-        setTimeout(pump, lastAtMs - performance.now())
+        later(pump, lastAtMs - performance.now())
       }
     }
   }
@@ -89,7 +112,7 @@ const slowSockets = (link: {
     private readonly incoming = line()
     constructor(url: string | URL, protocols?: string | Array<string>) {
       super(url, protocols)
-      super.addEventListener('message', event => {
+      super.addEventListener('message', (event: MessageEvent<unknown>) => {
         if (replayed.has(event)) {
           return
         }
@@ -113,15 +136,19 @@ const slowSockets = (link: {
 }
 const SAVE_KEY = 'munch-manor:save'
 
-const VIEWPORTS: Readonly<
-  Record<string, { width: number; height: number; isMobile: boolean }>
-> = {
-  d1280: { width: 1280, height: 720, isMobile: false },
+type ViewportSize = Readonly<{
+  width: number
+  height: number
+  isMobile: boolean
+}>
+const DESKTOP: ViewportSize = { width: 1280, height: 720, isMobile: false }
+const VIEWPORTS: Readonly<Record<string, ViewportSize>> = {
+  d1280: DESKTOP,
   l844: { width: 844, height: 390, isMobile: false },
   p390: { width: 390, height: 844, isMobile: false },
 }
-const VIEWPORT_NAME = process.env.VIEWPORT ?? 'd1280'
-const VIEWPORT = VIEWPORTS[VIEWPORT_NAME] ?? VIEWPORTS['d1280']!
+const VIEWPORT_NAME = process.env['VIEWPORT'] ?? 'd1280'
+const VIEWPORT = VIEWPORTS[VIEWPORT_NAME] ?? DESKTOP
 
 const GRADUATE_SAVE = {
   version: 2,
@@ -191,13 +218,15 @@ const until = async (
   holds: () => Promise<boolean>,
   timeoutMs = 20_000,
 ): Promise<boolean> => {
-  const startedMs = Date.now()
-  while (Date.now() - startedMs < timeoutMs) {
-    if (await holds().catch(() => false)) {
-      console.log(`  ok   ${label} (${Date.now() - startedMs} ms)`)
-      return true
-    }
-    await wait(200)
+  const { last: isMet, elapsedMs } = await pollUntil(
+    () => holds().catch(() => false),
+    isDone => isDone,
+    200,
+    timeoutMs,
+  )
+  if (isMet) {
+    console.log(`  ok   ${label} (${elapsedMs} ms)`)
+    return true
   }
   problems.push(label)
   console.log(`  FAIL ${label}`)
@@ -232,18 +261,13 @@ const openPlayer = async (name: string, lookIndex = 0): Promise<Page> => {
   await page.goto(new URL('version.json', BASE).href)
   await page.evaluate(([key, json]) => localStorage.setItem(key, json), [
     SAVE_KEY,
-    JSON.stringify({
+    encodeJson(Schema.Json)({
       ...GRADUATE_SAVE,
-      appearance: LOOKS[lookIndex % LOOKS.length],
+      appearance: LOOKS[lookIndex % LOOKS.length] ?? null,
     }),
   ] as const)
   return page
 }
-
-const awaitGame = (page: Page) =>
-  page.waitForFunction(() => document.getElementById('splash') === null, {
-    timeout: 45_000,
-  })
 
 const filledSeats = (page: Page) =>
   page.locator('.coop-seat:not([data-state="Empty"])').count()
@@ -255,48 +279,56 @@ const roomCodeOf = async (page: Page): Promise<string> => {
 
 // THE ROOM'S WORLD, AS THE PAGE DRAWS IT
 
-type Seat = Readonly<{
-  slot: number
-  x: number
-  y: number
-  hp: number
-  life: string
-  ready: string
-  kills: number
-  money: number
-  shop: string
-}>
+// NOTE: the readout src/coop/seam.ts `readoutOf` writes on the arena, the
+// fields this audit reads.
+const Seat = Schema.Struct({
+  slot: Schema.Number,
+  x: Schema.Number,
+  y: Schema.Number,
+  life: Schema.String,
+  kills: Schema.Number,
+  money: Schema.Number,
+  shop: Schema.String,
+})
+type Seat = typeof Seat.Type
 
-type Readout = Readonly<{
-  tick: number
-  phase: string
-  mode: string
-  difficulty: string
-  wave: number
-  stall: Readonly<{ left: number; top: number; right: number; bottom: number }>
-  zombies: ReadonlyArray<Readonly<{ x: number; y: number }>>
-  players: ReadonlyArray<Seat>
-}>
+const Readout = Schema.Struct({
+  phase: Schema.String,
+  mode: Schema.String,
+  difficulty: Schema.String,
+  wave: Schema.Number,
+  stall: Schema.Struct({
+    left: Schema.Number,
+    top: Schema.Number,
+    right: Schema.Number,
+    bottom: Schema.Number,
+  }),
+  zombies: Schema.Array(Schema.Struct({ x: Schema.Number, y: Schema.Number })),
+  players: Schema.Array(Seat),
+})
+type Readout = typeof Readout.Type
+const decodeReadout = decodeJson(Readout)
 
-type Net = Readonly<{
-  slot: number
-  lookedHits: number
-  confirmedHits: number
-  delayMs: number
-  rttMs: number
-  bytesIn: number
-  framesIn: number
-  inputsOut: number
-  nowMs: number
-  corrections: number
-  correctionPx: number
-  stalls: number
-  longestStallMs: number
-  resyncs: number
-}>
+const Net = Schema.Struct({
+  slot: Schema.Number,
+  lookedHits: Schema.Number,
+  confirmedHits: Schema.Number,
+  delayMs: Schema.Number,
+  rttMs: Schema.Number,
+  bytesIn: Schema.Number,
+  framesIn: Schema.Number,
+  inputsOut: Schema.Number,
+  nowMs: Schema.Number,
+  corrections: Schema.Number,
+  correctionPx: Schema.Number,
+  stalls: Schema.Number,
+  longestStallMs: Schema.Number,
+  resyncs: Schema.Number,
+})
+type Net = typeof Net.Type
 
 const netOf = (page: Page): Promise<Net | undefined> =>
-  page.evaluate(() => {
+  evaluateAs(page, Schema.UndefinedOr(Net), () => {
     const element = document.querySelector<HTMLElement>('.coop-net')
     if (element === null) {
       return undefined
@@ -325,7 +357,7 @@ const readoutOf = async (page: Page): Promise<Readout | undefined> => {
     .locator('.coop-net')
     .getAttribute('data-world')
     .catch(() => null)
-  return text === null || text === '' ? undefined : JSON.parse(text)
+  return text === null || text === '' ? undefined : decodeReadout(text)
 }
 
 const slotOf = async (page: Page): Promise<number> =>
@@ -339,8 +371,12 @@ const ownSeatOf = async (page: Page): Promise<Seat | undefined> => {
 // NOTE: the parlour fills the 320 by 180 view while the kitchen is shut,
 // so the camera stands still and a world point is a fixed point on the
 // game canvas.
+const ClientPoint = Schema.Struct({ x: Schema.Number, y: Schema.Number })
+
 const toClient = async (page: Page, x: number, y: number) =>
-  page.evaluate(
+  evaluateAs(
+    page,
+    ClientPoint,
     ([worldX, worldY]) => {
       const canvas = document.querySelector('.game-canvas')
       if (canvas === null) {
@@ -527,10 +563,10 @@ const drive = async (
           : keysToward(own, beside, 2),
     )
   }
-  const leg = Math.floor(Date.now() / 900 + slot) % 4
-  const drift = [MOVE_KEYS.right, MOVE_KEYS.down, MOVE_KEYS.left, MOVE_KEYS.up][
-    leg
-  ]!
+  const leg = Math.floor(nowMs() / 900 + slot) % 4
+  const drift =
+    [MOVE_KEYS.right, MOVE_KEYS.down, MOVE_KEYS.left, MOVE_KEYS.up][leg] ??
+    MOVE_KEYS.right
   const home =
     Math.hypot(own.x - PARLOUR_MIDDLE.x, own.y - PARLOUR_MIDDLE.y) > 50
   await holdKeys(
@@ -541,6 +577,14 @@ const drive = async (
   return shootNearest(page, held, readout, own)
 }
 
+const heldOf = (helds: ReadonlyArray<Held>, index: number): Held => {
+  const held = helds[index]
+  if (held === undefined) {
+    throw new Error(`no keys held for player ${index + 1}`)
+  }
+  return held
+}
+
 const playFor = async (
   everyone: ReadonlyArray<Page>,
   helds: ReadonlyArray<Held>,
@@ -549,19 +593,22 @@ const playFor = async (
   isDone: () => Promise<boolean>,
   timeoutMs: number,
 ): Promise<boolean> => {
-  const startedMs = Date.now()
-  while (Date.now() - startedMs < timeoutMs) {
-    await Promise.all(
-      everyone.map((page, index) =>
-        drive(page, helds[index]!, roleOf(index), partner).catch(() => {}),
-      ),
-    )
-    if (await isDone().catch(() => false)) {
-      return true
-    }
-    await wait(90)
-  }
-  return false
+  const { last: isMet } = await pollUntil(
+    async () => {
+      await Promise.all(
+        everyone.map((page, index) =>
+          drive(page, heldOf(helds, index), roleOf(index), partner).catch(
+            () => {},
+          ),
+        ),
+      )
+      return isDone().catch(() => false)
+    },
+    hasFinished => hasFinished,
+    90,
+    timeoutMs,
+  )
+  return isMet
 }
 
 // ROOM BY CODE
@@ -598,6 +645,11 @@ for (const index of Array.from({ length: PLAYERS - 1 }, (_, i) => i)) {
   await awaitGame(guest)
   guests.push(guest)
 }
+const firstGuest = guests[0]
+const lastGuest = guests.at(-1)
+if (firstGuest === undefined || lastGuest === undefined) {
+  throw new Error('No guest page')
+}
 const everyone = [host, ...guests]
 const helds: Array<Held> = everyone.map(() => ({
   keys: new Set(),
@@ -615,7 +667,7 @@ check(
   'the host can kick each guest',
 )
 check(
-  (await guests[0]!.locator('.coop-kick').count()) === 0,
+  (await firstGuest.locator('.coop-kick').count()) === 0,
   'a guest cannot kick',
 )
 await shot(host, 'lobby-host')
@@ -626,16 +678,16 @@ const headOf = (page: Page, who: 'Me' | 'Other', at = 0) =>
     .nth(at)
     .evaluate(element => getComputedStyle(element).backgroundImage)
 const hostHead = await headOf(host, 'Me')
-const guestHead = await headOf(guests[0]!, 'Me')
+const guestHead = await headOf(firstGuest, 'Me')
 check(hostHead !== guestHead, 'the host and the guest wear different looks')
 check(
   (await headOf(host, 'Other')) === guestHead &&
-    (await headOf(guests[0]!, 'Other')) === hostHead,
+    (await headOf(firstGuest, 'Other')) === hostHead,
   'each page draws the other player in their own look',
 )
 
 if (PICK_MODE !== undefined && PICK_DIFFICULTY !== undefined) {
-  await guests[0]!.getByRole('button', { name: 'READY' }).click()
+  await firstGuest.getByRole('button', { name: 'READY' }).click()
   await until(
     'a guest READY stamps on the host',
     async () => (await host.locator('.coop-stamp').count()) === 1,
@@ -656,7 +708,7 @@ if (PICK_MODE !== undefined && PICK_DIFFICULTY !== undefined) {
     async () => (await host.locator('.coop-stamp').count()) === 0,
   )
   await shot(host, 'picks-host')
-  await shot(guests[0]!, 'picks-guest')
+  await shot(firstGuest, 'picks-guest')
 }
 
 for (const page of everyone.slice(0, -1)) {
@@ -666,7 +718,7 @@ await until(
   'the READY stamps show on the host',
   async () => (await host.locator('.coop-stamp').count()) === PLAYERS - 1,
 )
-await everyone.at(-1)!.getByRole('button', { name: 'READY' }).click()
+await lastGuest.getByRole('button', { name: 'READY' }).click()
 
 for (const [index, page] of everyone.entries()) {
   await until(
@@ -689,13 +741,13 @@ if (PICK_MODE !== undefined && PICK_DIFFICULTY !== undefined) {
 await wait(400)
 await shot(host, 'countdown')
 const startNet = await Promise.all(everyone.map(netOf))
-const startedMs = Date.now()
+const startedMs = nowMs()
 
 // NOTE: the link is measured over the fight, while the room still sends,
 // or until now on a phone, which only fights for its pictures.
 const linkNow = async () => ({
   nets: await Promise.all(everyone.map(netOf)),
-  atMs: Date.now(),
+  atMs: nowMs(),
 })
 let linkAtEnd: Awaited<ReturnType<typeof linkNow>> | undefined
 
@@ -704,7 +756,7 @@ let linkAtEnd: Awaited<ReturnType<typeof linkNow>> | undefined
 const positionsOn = async (page: Page) =>
   new Map((await readoutOf(page))?.players.map(seat => [seat.slot, seat]) ?? [])
 
-const before = await positionsOn(guests[0]!)
+const before = await positionsOn(firstGuest)
 await Promise.all(
   everyone.map((page, index) =>
     page.keyboard.down(index % 2 === 0 ? 'KeyD' : 'KeyA'),
@@ -717,8 +769,8 @@ await Promise.all(
   ),
 )
 await wait(400)
-const after = await positionsOn(guests[0]!)
-const guestSlot = await slotOf(guests[0]!)
+const after = await positionsOn(firstGuest)
+const guestSlot = await slotOf(firstGuest)
 const moved = [...after.values()].filter(
   seat => Math.abs(seat.x - (before.get(seat.slot)?.x ?? seat.x)) > 10,
 )
@@ -730,7 +782,7 @@ check(
   moved.some(seat => seat.slot === guestSlot),
   'a guest walks its own player, predicted',
 )
-await shot(guests[0]!, 'walked')
+await shot(firstGuest, 'walked')
 
 // READY STARTS THE WAVE
 
@@ -761,12 +813,12 @@ if (isPhone) {
   // NOTE: keys made each phone a keyboard; a tap makes it a touch screen
   // again, which draws the phone's own layout and its touch controls.
   for (const [index, page] of everyone.entries()) {
-    await stopAll(page, helds[index]!)
+    await stopAll(page, heldOf(helds, index))
     await page.touchscreen.tap(VIEWPORT.width / 2, VIEWPORT.height * 0.45)
   }
   await wait(500)
   await shot(host, 'wave')
-  await shot(guests[0]!, 'wave-guest')
+  await shot(firstGuest, 'wave-guest')
 } else {
   // THE FIGHT AND A REVIVE
 
@@ -788,10 +840,10 @@ if (isPhone) {
   // NOTE: kept in case the run ends before the revive's reading below.
   linkAtEnd = await linkNow()
   await shot(host, 'fight')
-  await shot(guests[0]!, 'fight-guest')
+  await shot(firstGuest, 'fight-guest')
 
   const feeder = everyone.length - 1
-  const feederSlot = await slotOf(everyone[feeder]!)
+  const feederSlot = await slotOf(lastGuest)
   // NOTE: the others hold their fire meanwhile, or they shoot the zombies
   // before any reaches the feeder.
   const downed = await playFor(
@@ -842,7 +894,9 @@ if (isPhone) {
     180_000,
   )
   check(cleared, 'the wave is cleared and the next break opens')
-  await Promise.all(everyone.map((page, index) => stopAll(page, helds[index]!)))
+  await Promise.all(
+    everyone.map((page, index) => stopAll(page, heldOf(helds, index))),
+  )
   await shot(host, 'break')
 
   const moneyBefore = (await ownSeatOf(host))?.money ?? 0
@@ -855,13 +909,15 @@ if (isPhone) {
     15_000,
   )
   check(atStall, 'the host walks into the stall')
-  await Promise.all(everyone.map((page, index) => stopAll(page, helds[index]!)))
+  await Promise.all(
+    everyone.map((page, index) => stopAll(page, heldOf(helds, index))),
+  )
   const shopOpen = await until(
     'one shop dialog opens, for the host only',
     async () =>
       (await host.locator('dialog#shop').count()) === 1 &&
       (await host.locator('dialog[open]').count()) === 1 &&
-      (await guests[0]!.locator('.shop-dialog[open]').count()) === 0,
+      (await firstGuest.locator('.shop-dialog[open]').count()) === 0,
   )
   if (shopOpen) {
     await shot(host, 'shop')
@@ -931,7 +987,7 @@ for (const [index, net] of endNet.nets.entries()) {
 
 // REJOIN
 
-const rejoiner = guests[0]!
+const rejoiner = firstGuest
 const rejoinSlot = await slotOf(rejoiner)
 await rejoiner.reload()
 await awaitGame(rejoiner)
@@ -945,7 +1001,7 @@ await shot(rejoiner, 'rejoined')
 
 // LEAVE
 
-const leaver = everyone.at(-1)!
+const leaver = lastGuest
 await leaver.getByRole('button', { name: 'Leave the room' }).click()
 await until('LEAVE lands back on the hub', () =>
   leaver.getByRole('button', { name: /Quick play/ }).isVisible(),
@@ -958,7 +1014,9 @@ check(
 // QUICK PLAY
 
 if (IS_QUICK) {
-  const quick = [await openPlayer('quick 1'), await openPlayer('quick 2')]
+  const quickOne = await openPlayer('quick 1')
+  const quickTwo = await openPlayer('quick 2')
+  const quick = [quickOne, quickTwo]
   for (const page of quick) {
     await page.goto(BASE)
     await awaitGame(page)
@@ -968,14 +1026,14 @@ if (IS_QUICK) {
   await until(
     'two queued players see two heads',
     async () =>
-      (await quick[0]!
+      (await quickOne
         .locator('.coop-queue-seat[data-state="Filled"]')
         .count()) === 2,
   )
-  await shot(quick[0]!, 'queue')
+  await shot(quickOne, 'queue')
   await until(
     'the offer to start with two comes',
-    () => quick[0]!.locator('.coop-offer-start').isVisible(),
+    () => quickOne.locator('.coop-offer-start').isVisible(),
     60_000,
   )
   for (const page of quick) {
@@ -988,7 +1046,7 @@ if (IS_QUICK) {
     )
   }
   check(
-    (await roomCodeOf(quick[0]!)) === (await roomCodeOf(quick[1]!)),
+    (await roomCodeOf(quickOne)) === (await roomCodeOf(quickTwo)),
     'both quick players share one room',
   )
 }

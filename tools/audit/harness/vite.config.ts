@@ -7,6 +7,7 @@ import { spriteAtlas } from '../../sprites/vitePlugin.ts'
 import { foldkitBrandingViews } from '../../vite/viewIdentity.ts'
 
 const GAME = resolve(__dirname, '../../..')
+const isProfile = (process.env['PROFILE'] ?? '') !== ''
 
 export default defineConfig({
   root: __dirname,
@@ -24,10 +25,8 @@ export default defineConfig({
   },
   worker: { format: 'es' },
   build: {
-    outDir: process.env.PROFILE
-      ? `${__dirname}/dist-profile`
-      : `${__dirname}/dist`,
+    outDir: isProfile ? `${__dirname}/dist-profile` : `${__dirname}/dist`,
     emptyOutDir: true,
-    minify: !process.env.PROFILE,
+    minify: !isProfile,
   },
 })

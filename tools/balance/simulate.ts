@@ -9,9 +9,12 @@
 //   DIFFICULTY=hard bun run balance 200   (easy, normal, hard, or nightmare)
 //   bun run balance -- --wave 4 --runs 200   (the wave snapshot pass)
 //   bun run balance -- --wave all --runs 100   (every campaign wave)
-// Flags: --runs n, --first-seed n, --wave n|all, --slots n (snapshot slots,
-// 10 by default), and --json path (also write the summary the nightly suite
-// reads). Under the guard it plays the runs in chunks of about 25 (by
+//   bun run balance -- --runs 100 --seed-offset 100   (the next 100 seeds)
+// Flags: --runs n, --first-seed n, --seed-offset n (skips the first n runs'
+// seeds, so a second batch plays new seeds: --seed-offset 100 after a batch
+// of 100 plays runs 100 to 199 of the same seed list), --wave n|all, --slots
+// n (snapshot slots, 10 by default), and --json path (also write the summary
+// the nightly suite reads). Under the guard it plays the runs in chunks of about 25 (by
 // slot groups for a wave pass) and yields the guard's turn between them, so
 // waiting jobs go in between; the report is the same as one unchunked
 // batch, since every run is seeded by its index. HEAVY_CHUNK_RUNS=n sets
@@ -20,10 +23,19 @@
 // curve, and which zombie kinds cost the bot the most hearts. Nothing here
 // ships with the game.
 
+import { Data, Effect, Predicate, Schema } from 'effect'
 import { Window } from 'happy-dom'
 import { spawn } from 'node:child_process'
-import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+
+import { encodeJson, readJsonFile, writeJsonFile } from '../json'
+import type {
+  BossFight,
+  BotOptions,
+  NewKindLog,
+  RunResult,
+  WaveRun,
+} from './bot'
 
 const browserWindow = new Window()
 Object.assign(globalThis, {
@@ -43,11 +55,6 @@ const {
   runOnce,
   seedAt: seedFrom,
 } = bot
-type RunResult = import('./bot').RunResult
-type WaveRun = import('./bot').WaveRun
-type BossFight = import('./bot').BossFight
-type NewKindLog = import('./bot').NewKindLog
-type BotOptions = import('./bot').BotOptions
 const { FINAL_WAVE } = await import('../../src/waves')
 const summary = await import('./summary')
 const turn = await import('../heavy/turn')
@@ -56,29 +63,40 @@ const { nextChunk } = await import('../heavy/decision')
 // TUNE=path/to/tune.ts loads a module whose default export edits the
 // tables in place before the runs, so a balance idea can be tried without
 // touching src. Bake the winning numbers into src afterwards.
-if (process.env.TUNE !== undefined) {
-  const tunePath = process.env.TUNE.startsWith('/')
-    ? process.env.TUNE
-    : `${process.cwd()}/${process.env.TUNE}`
-  const tune = await import(tunePath)
-  tune.default({
-    WAVE_PLANS: (await import('../../src/waves')).WAVE_PLANS,
-    ZOMBIE_KINDS: (await import('../../src/zombies')).ZOMBIE_KINDS,
-    SHOP_ITEMS: (await import('../../src/shop')).SHOP_ITEMS,
-    WEAPONS: (await import('../../src/weapons')).WEAPONS,
-    UPGRADE_TIERS: (await import('../../src/weapons')).UPGRADE_TIERS,
-    TRAPS: (await import('../../src/traps')).TRAPS,
-    DROP_CHANCE: (await import('../../src/powerups')).DROP_CHANCE,
-    DROP_RULES: (await import('../../src/powerups')).DROP_RULES,
-    BOOSTS: (await import('../../src/powerups')).BOOSTS,
-    PICKUPS: (await import('../../src/powerups')).PICKUPS,
-    BOSS_RULES: (await import('../../src/boss')).BOSS_RULES,
-    CHUCKER_RULES: (await import('../../src/chucker')).CHUCKER_RULES,
-    CRAWLER_RULES: (await import('../../src/crawler')).CRAWLER_RULES,
-    FRENZY_RULES: (await import('../../src/frenzy')).FRENZY_RULES,
-    BAIT_RULES: (await import('../../src/traps')).BAIT_RULES,
-    DIFFICULTIES: (await import('../../src/difficulty')).DIFFICULTIES,
-  })
+// NOTE: the tables a tune module may edit in place.
+const tuneTables = async () => ({
+  WAVE_PLANS: (await import('../../src/waves')).WAVE_PLANS,
+  ZOMBIE_KINDS: (await import('../../src/zombies')).ZOMBIE_KINDS,
+  SHOP_ITEMS: (await import('../../src/shop')).SHOP_ITEMS,
+  WEAPONS: (await import('../../src/weapons')).WEAPONS,
+  UPGRADE_TIERS: (await import('../../src/weapons')).UPGRADE_TIERS,
+  TRAPS: (await import('../../src/traps')).TRAPS,
+  DROP_CHANCE: (await import('../../src/powerups')).DROP_CHANCE,
+  DROP_RULES: (await import('../../src/powerups')).DROP_RULES,
+  BOOSTS: (await import('../../src/powerups')).BOOSTS,
+  PICKUPS: (await import('../../src/powerups')).PICKUPS,
+  BOSS_RULES: (await import('../../src/boss')).BOSS_RULES,
+  CHUCKER_RULES: (await import('../../src/chucker')).CHUCKER_RULES,
+  CRAWLER_RULES: (await import('../../src/crawler')).CRAWLER_RULES,
+  FRENZY_RULES: (await import('../../src/frenzy')).FRENZY_RULES,
+  BAIT_RULES: (await import('../../src/traps')).BAIT_RULES,
+  DIFFICULTIES: (await import('../../src/difficulty')).DIFFICULTIES,
+})
+type TuneTables = Awaited<ReturnType<typeof tuneTables>>
+
+// NOTE: a tune module is the caller's own script: its default export is
+// checked to be a function, and is trusted to take the tables.
+const TuneModule = Schema.Struct({
+  default: Schema.declare(
+    (value: unknown): value is (tables: TuneTables) => void =>
+      Predicate.isFunction(value),
+  ),
+})
+const TUNE = process.env['TUNE']
+if (TUNE !== undefined) {
+  const tunePath = TUNE.startsWith('/') ? TUNE : `${process.cwd()}/${TUNE}`
+  const tune = Schema.decodeUnknownSync(TuneModule)(await import(tunePath))
+  tune.default(await tuneTables())
 }
 
 // ARGUMENTS
@@ -89,29 +107,34 @@ const flagValue = (name: string): string | undefined => {
   return at === -1 ? undefined : argv[at + 1]
 }
 const positional = argv.filter(
-  (arg, index) => !arg.startsWith('--') && !argv[index - 1]?.startsWith('--'),
+  (arg, index) =>
+    !arg.startsWith('--') && argv[index - 1]?.startsWith('--') !== true,
 )
 
-const IS_ENDLESS = process.env.MODE === 'endless'
+const IS_ENDLESS = process.env['MODE'] === 'endless'
 const OPTIONS: BotOptions = {
   ...DEFAULT_OPTIONS,
-  difficulty: parseDifficulty(process.env.DIFFICULTY),
+  difficulty: parseDifficulty(process.env['DIFFICULTY']),
   mode: IS_ENDLESS ? 'Endless' : 'Campaign',
-  swapsBack: process.env.SWAP !== undefined,
-  noUpgrades: process.env.NO_UPGRADES !== undefined,
+  swapsBack: process.env['SWAP'] !== undefined,
+  noUpgrades: process.env['NO_UPGRADES'] !== undefined,
 }
 const DIFFICULTY = OPTIONS.difficulty
 const SWAPS_BACK = OPTIONS.swapsBack
 const NO_UPGRADES = OPTIONS.noUpgrades
-const KITES = process.env.KITE !== undefined
-const IGNORES_PICKUPS = process.env.NO_PICKUPS !== undefined
+const KITES = process.env['KITE'] !== undefined
+const IGNORES_PICKUPS = process.env['NO_PICKUPS'] !== undefined
 const WAVE_FLAG = flagValue('--wave')
 const JSON_OUT = flagValue('--json')
 const runs = Number(flagValue('--runs') ?? positional[0] ?? 40)
 const firstSeed = Number(flagValue('--first-seed') ?? positional[1] ?? 1)
+const seedOffset = Number(flagValue('--seed-offset') ?? 0)
+if (!Number.isInteger(seedOffset) || seedOffset < 0) {
+  throw new Error('--seed-offset must be a whole number of runs, 0 or more')
+}
 const slots = Number(flagValue('--slots') ?? 10)
-const seedAt = (index: number) => seedFrom(firstSeed, index)
-const WORKERS = Math.max(1, Number(process.env.WORKERS ?? 1))
+const seedAt = (index: number) => seedFrom(firstSeed, seedOffset + index)
+const WORKERS = Math.max(1, Number(process.env['WORKERS'] ?? 1))
 const IS_CHUNKED = turn.isUnderGuard()
 const started = performance.now()
 const STYLE = SWAPS_BACK ? 'SwapsBack' : 'Default'
@@ -134,50 +157,99 @@ const waveList = (flag: string): Array<number> => {
 // worker plays a slice of the seeds, from:to. A wave worker plays the
 // snapshot slots whose index modulo the worker count is its own, index:count,
 // among the slots of its chunk, WORKER_SLOTS=from:to.
-if (process.env.WORKER_SLICE !== undefined) {
-  const [from, to] = process.env.WORKER_SLICE.split(':').map(Number)
-  const [slotFrom, slotTo] = (process.env.WORKER_SLOTS ?? `0:${slots}`)
-    .split(':')
-    .map(Number)
-  const output =
-    WAVE_FLAG === undefined
-      ? Array.from({ length: to! - from! }, (_, offset) =>
-          runOnce(seedAt(from! + offset), OPTIONS),
-        )
-      : playWavePass(
-          { waves: waveList(WAVE_FLAG), runs, slots, firstSeed },
-          OPTIONS,
-          slot => slot >= slotFrom! && slot < slotTo! && slot % to! === from!,
-        )
-  writeFileSync(process.env.WORKER_OUT!, JSON.stringify(output))
+// NOTE: a worker's output is read back by this same script, so beyond its
+// being a list of objects, its shape is the bot's own RunResult or WaveRun.
+const isListOf =
+  <A>(key: string) =>
+  (value: unknown): value is Array<A> =>
+    Array.isArray(value) &&
+    value.every(item => Predicate.isObject(item) && key in item)
+const RunResults = Schema.declare(isListOf<RunResult>('seed'))
+const WaveRuns = Schema.declare(isListOf<WaveRun>('waveSeed'))
+
+// NOTE: an env var holding from:to, two whole numbers.
+const rangeFrom = (text: string): readonly [number, number] => {
+  const [from, to] = text.split(':').map(Number)
+  if (from === undefined || to === undefined) {
+    throw new Error(`Expected from:to, got ${text}`)
+  }
+  return [from, to]
+}
+
+const WORKER_SLICE = process.env['WORKER_SLICE']
+if (WORKER_SLICE !== undefined) {
+  const [from, to] = rangeFrom(WORKER_SLICE)
+  const [slotFrom, slotTo] = rangeFrom(
+    process.env['WORKER_SLOTS'] ?? `0:${slots}`,
+  )
+  const out = process.env['WORKER_OUT']
+  if (out === undefined) {
+    throw new Error('A worker needs WORKER_OUT')
+  }
+  if (WAVE_FLAG === undefined) {
+    writeJsonFile(
+      RunResults,
+      out,
+      Array.from({ length: to - from }, (_, offset) =>
+        runOnce(seedAt(from + offset), OPTIONS),
+      ),
+    )
+  } else {
+    writeJsonFile(
+      WaveRuns,
+      out,
+      playWavePass(
+        { waves: waveList(WAVE_FLAG), runs, slots, firstSeed, seedOffset },
+        OPTIONS,
+        slot => slot >= slotFrom && slot < slotTo && slot % to === from,
+      ),
+    )
+  }
   process.exit(0)
 }
 
 const SELF = fileURLToPath(import.meta.url)
 
-const runWorker = (
+class WorkerFailed extends Data.TaggedError('WorkerFailed')<{
+  message: string
+}> {}
+
+// NOTE: plays one worker's share in a child process and reads back what it
+// wrote, decoded with `schema`.
+const runWorker = <A>(
+  schema: Schema.ConstraintDecoder<Array<A>>,
   slice: string,
   index: number,
   slotRange?: string,
-): Promise<unknown> =>
-  new Promise((resolve, reject) => {
-    const out = `/tmp/simulate-${process.pid}-${index}.json`
-    const child = spawn(process.execPath, [SELF, ...argv], {
-      env: {
-        ...process.env,
-        WORKER_SLICE: slice,
-        WORKER_OUT: out,
-        ...(slotRange === undefined ? {} : { WORKER_SLOTS: slotRange }),
-      },
-      stdio: 'inherit',
-    })
-    child.on('error', reject)
-    child.on('exit', code =>
-      code === 0
-        ? resolve(JSON.parse(readFileSync(out, 'utf8')))
-        : reject(new Error(`worker ${index} exited with ${code}`)),
-    )
-  })
+): Promise<Array<A>> =>
+  Effect.runPromise(
+    Effect.callback<Array<A>, WorkerFailed>(resume => {
+      const out = `/tmp/simulate-${process.pid}-${index}.json`
+      const child = spawn(process.execPath, [SELF, ...argv], {
+        env: {
+          ...process.env,
+          WORKER_SLICE: slice,
+          WORKER_OUT: out,
+          ...(slotRange === undefined ? {} : { WORKER_SLOTS: slotRange }),
+        },
+        stdio: 'inherit',
+      })
+      child.on('error', error =>
+        resume(Effect.fail(new WorkerFailed({ message: error.message }))),
+      )
+      child.on('exit', code =>
+        resume(
+          code === 0
+            ? Effect.sync(() => readJsonFile(schema, out))
+            : Effect.fail(
+                new WorkerFailed({
+                  message: `worker ${index} exited with ${String(code)}`,
+                }),
+              ),
+        ),
+      )
+    }),
+  )
 
 // NOTE: the guard may give a later chunk more or fewer workers.
 let workers = WORKERS
@@ -192,14 +264,17 @@ const playRange = async (
     )
   }
   const per = Math.ceil((end - first) / workers)
-  const slices = Array.from({ length: workers }, (_, index) => [
-    first + index * per,
-    Math.min(end, first + (index + 1) * per),
-  ]).filter(([from, to]) => to! > from!)
+  const slices = Array.from(
+    { length: workers },
+    (_, index) =>
+      [first + index * per, Math.min(end, first + (index + 1) * per)] as const,
+  ).filter(([from, to]) => to > from)
   const outputs = await Promise.all(
-    slices.map(([from, to], index) => runWorker(`${from}:${to}`, index)),
+    slices.map(([from, to], index) =>
+      runWorker(RunResults, `${from}:${to}`, index),
+    ),
   )
-  return outputs.flat() as Array<RunResult>
+  return outputs.flat()
 }
 
 // NOTE: plays the runs in chunks, in seed order, yielding the guard's turn
@@ -227,7 +302,7 @@ const playSlots = async (
   slotFrom: number,
   slotTo: number,
 ): Promise<Array<WaveRun>> => {
-  const pass = { waves, runs, slots, firstSeed }
+  const pass = { waves, runs, slots, firstSeed, seedOffset }
   const count = Math.min(workers, slotTo - slotFrom)
   if (count === 1) {
     return playWavePass(
@@ -238,10 +313,10 @@ const playSlots = async (
   }
   const outputs = await Promise.all(
     Array.from({ length: count }, (_, index) =>
-      runWorker(`${index}:${count}`, index, `${slotFrom}:${slotTo}`),
+      runWorker(WaveRuns, `${index}:${count}`, index, `${slotFrom}:${slotTo}`),
     ),
   )
-  return outputs.flat() as Array<WaveRun>
+  return outputs.flat()
 }
 
 // NOTE: a wave pass chunks by snapshot slot, one slot a worker, so each
@@ -272,7 +347,7 @@ const playWaves = async (waves: Array<number>): Promise<Array<WaveRun>> => {
 
 const writeJson = (value: unknown) => {
   if (JSON_OUT !== undefined) {
-    writeFileSync(JSON_OUT, `${JSON.stringify(value, null, 2)}\n`)
+    writeJsonFile(Schema.Unknown, JSON_OUT, value)
     console.log(`\nWrote the summary to ${JSON_OUT}`)
   }
 }
@@ -325,9 +400,7 @@ console.log(
   '\nWave  died  hearts lost  pressure s  relax s  length s  peak alive  (means over runs that played the wave)',
 )
 for (let wave = 1; wave <= lastWave; wave++) {
-  const logs = results.flatMap(r =>
-    r.waves[wave - 1] === undefined ? [] : [r.waves[wave - 1]!],
-  )
+  const logs = results.flatMap(r => r.waves[wave - 1] ?? [])
   const died = deaths.filter(death => death === wave).length
   console.log(
     `${String(wave).padStart(4)}  ${((100 * died) / runs).toFixed(0).padStart(3)}%  ${mean(
@@ -367,6 +440,8 @@ console.log(
   `Kitchen bought: ${((100 * kitchenWaves.length) / Math.max(1, results.length)).toFixed(0)}% of runs, in the break before wave ${kitchenWaves.length > 0 ? median(kitchenWaves) : '-'} (median)`,
 )
 const pullers = results.filter(r => r.fridge.pulls > 0)
+const countsJson = encodeJson(Schema.Record(Schema.String, Schema.Number))
+const emptyCounts = (): Record<string, number> => ({})
 const fridgeTotals = results.reduce(
   (totals, { fridge }) => {
     Object.entries(fridge.prizes).forEach(([prize, count]) => {
@@ -386,8 +461,8 @@ const fridgeTotals = results.reduce(
     return totals
   },
   {
-    prizes: {} as Record<string, number>,
-    ended: {} as Record<string, number>,
+    prizes: emptyCounts(),
+    ended: emptyCounts(),
     lids: 0,
     pops: 0,
     swings: 0,
@@ -406,7 +481,7 @@ console.log(
   `Fridge: pulled in ${((100 * pullers.length) / Math.max(1, results.length)).toFixed(0)}% of runs, ${results.reduce((sum, r) => sum + r.fridge.pulls, 0)} pulls, first in the break before wave ${pullers.length > 0 ? median(pullers.map(r => r.fridge.firstPullWave)) : '-'} (median)`,
 )
 console.log(
-  `Fridge prizes: ${JSON.stringify(fridgeTotals.prizes)}; carried at the end: ${JSON.stringify(fridgeTotals.ended)}`,
+  `Fridge prizes: ${countsJson(fridgeTotals.prizes)}; carried at the end: ${countsJson(fridgeTotals.ended)}`,
 )
 console.log(
   `Fridge weapons taken: ${fridgeTotals.taken}. Knife: ${fridgeTotals.stabs} stabs, ${fridgeTotals.stabHits} hits (${(fridgeTotals.stabs / Math.max(1, results.length)).toFixed(1)} stabs a run).`,
@@ -420,8 +495,8 @@ console.log(
 console.log(
   `Wins by fridge weapon pulled: ${['Cooker', 'Pan', 'Freeze']
     .map(prize => {
-      const runs = fridgeWins(prize)
-      return `${prize} ${runs.filter(r => r.victory).length}/${runs.length}`
+      const pulled = fridgeWins(prize)
+      return `${prize} ${pulled.filter(r => r.victory).length}/${pulled.length}`
     })
     .join(
       ', ',
@@ -437,25 +512,27 @@ console.log(
   '\nMoney earned by the end of wave (median of runs that cleared it)',
 )
 for (let wave = 1; wave <= lastWave; wave++) {
-  const values = results.flatMap(r =>
-    r.moneyAfterWave[wave - 1] === undefined
-      ? []
-      : [r.moneyAfterWave[wave - 1]!],
-  )
-  if (values.length > 0) console.log(`  wave ${wave}: $${median(values)}`)
+  const values = results.flatMap(r => r.moneyAfterWave[wave - 1] ?? [])
+  if (values.length > 0) {
+    console.log(`  wave ${wave}: $${median(values)}`)
+  }
 }
 console.log(
   '\nShop visits: money on arrival (median, p25 to p75) and what the bot bought (share of visits)',
 )
 const quantile = (values: Array<number>, q: number): number => {
-  if (values.length === 0) return 0
+  if (values.length === 0) {
+    return 0
+  }
   const sorted = [...values].sort((a, b) => a - b)
-  return sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!
+  return sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? 0
 }
 for (let wave = 2; wave <= lastWave; wave++) {
+  const money = results.flatMap(r => r.moneyAtVisit[wave] ?? [])
   const visits = results.filter(r => r.moneyAtVisit[wave] !== undefined)
-  if (visits.length === 0) continue
-  const money = visits.map(r => r.moneyAtVisit[wave]!)
+  if (visits.length === 0) {
+    continue
+  }
   const counts = new Map<string, number>()
   visits.forEach(r =>
     (r.boughtAtVisit[wave] ?? []).forEach(item =>
@@ -617,7 +694,7 @@ const printTimeline = (result: RunResult) => {
   result.timelines.forEach((timeline, index) => {
     const gaps = timeline.packs
       .slice(1)
-      .map((arrival, at) => arrival.atMs - timeline.packs[at]!.atMs)
+      .map((arrival, at) => arrival.atMs - (timeline.packs[at]?.atMs ?? 0))
     console.log(
       `  Wave ${index + 1}: ${seconds(timeline.lengthMs)} s, ${timeline.packs.length} packs, rests ${timeline.restMs.map(seconds).join(', ') || 'none'}, longest gap between packs ${seconds(Math.max(0, ...gaps))} s`,
     )
@@ -643,16 +720,17 @@ const printTimeline = (result: RunResult) => {
   })
 }
 
-if (process.env.TIMELINE !== undefined) {
-  printTimeline(results[0]!)
+const firstResult = results[0]
+if (process.env['TIMELINE'] !== undefined && firstResult !== undefined) {
+  printTimeline(firstResult)
   console.log(
     '\nWave  first pack s  packs  sizes (min to max, distinct)  empty s  longest empty s  longest quiet s (mean, worst)  rests s',
   )
   for (let wave = 1; wave <= lastWave; wave++) {
-    const timelines = results.flatMap(r =>
-      r.timelines[wave - 1] === undefined ? [] : [r.timelines[wave - 1]!],
-    )
-    if (timelines.length === 0) continue
+    const timelines = results.flatMap(r => r.timelines[wave - 1] ?? [])
+    if (timelines.length === 0) {
+      continue
+    }
     const sizes = timelines.flatMap(t => t.packs.map(p => p.size))
     const distinct = mean(
       timelines.map(t => new Set(t.packs.map(p => p.size)).size),

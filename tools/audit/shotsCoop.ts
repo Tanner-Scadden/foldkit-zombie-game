@@ -9,13 +9,12 @@
 // on a phone button under 48 px, a button covered at its center or off
 // screen, or a page that scrolls.
 //   TAG=after BASE=http://localhost:4174/ bun tools/audit/shotsCoop.ts
-// ONLY picks scenes, such as `ONLY=hub,lobby`, and VIEWPORTS picks screens.
+// ONLY picks scenes, such as `ONLY=hub,lobby`, and SHOT_VIEWPORTS picks screens.
 import type { Page } from 'playwright-core'
 
 import {
-  DESKTOP_1280,
-  PHONE_844,
-  UPRIGHT_390,
+  SHOT_VIEWPORTS,
+  TAG,
   type Viewport,
   deviceQuery,
   finish,
@@ -23,20 +22,10 @@ import {
   isPickedScene,
   launch,
   openPage,
-  pickViewports,
   shot,
-  tagOr,
   useHarness,
   wait,
 } from './lib'
-
-const TAG = tagOr('after')
-
-const VIEWPORTS = pickViewports([
-  { ...DESKTOP_1280, name: 'd1280' },
-  { ...PHONE_844, name: 'l844' },
-  { ...UPRIGHT_390, name: 'p390' },
-])
 
 const SCENES: ReadonlyArray<Readonly<{ name: string; query: string }>> = [
   { name: 'locked', query: '' },
@@ -113,7 +102,7 @@ const checkButtons = async (
 await useHarness()
 const browser = await launch()
 const problems: Array<string> = []
-for (const viewport of VIEWPORTS) {
+for (const viewport of SHOT_VIEWPORTS) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
       continue

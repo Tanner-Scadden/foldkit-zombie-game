@@ -4,6 +4,7 @@
 //   bun tools/mp-dev/local.ts            (API at http://127.0.0.1:8798)
 //   bun tools/mp-dev/serve.ts http://127.0.0.1:8798
 import { Console, Data, Effect, Schedule, type Scope } from 'effect'
+import { FetchHttpClient, HttpClient, HttpClientRequest } from 'effect/http'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -94,15 +95,17 @@ class WorkerdFailed extends Data.TaggedError('WorkerdFailed')<{
   readonly reason: string
 }> {}
 
-const answersChallenge = Effect.tryPromise({
-  try: () =>
-    fetch(`${LOCAL_ORIGIN}/sync/challenge`, { method: 'POST', body: '{}' }),
-  catch: () => new WorkerdFailed({ reason: 'Not answering yet' }),
-}).pipe(
+const answersChallenge = HttpClient.execute(
+  HttpClientRequest.post(`${LOCAL_ORIGIN}/sync/challenge`).pipe(
+    HttpClientRequest.bodyText('{}'),
+  ),
+).pipe(
+  Effect.mapError(() => new WorkerdFailed({ reason: 'Not answering yet' })),
   Effect.filterOrFail(
-    response => response.ok,
+    response => response.status >= 200 && response.status < 300,
     () => new WorkerdFailed({ reason: 'Not ready yet' }),
   ),
+  Effect.provide(FetchHttpClient.layer),
 )
 
 // NOTE: workerd runs for as long as the Scope; closing it stops workerd.

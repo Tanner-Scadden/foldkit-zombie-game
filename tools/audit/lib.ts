@@ -1,6 +1,8 @@
+import { Clock, Duration, Effect, Schedule, Schema } from 'effect'
 import { type Browser, type Page, chromium } from 'playwright-core'
 
 import { builtHarness, serveDir } from './harnessServer'
+import { evaluateAs } from './page'
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 export const GAME = 'http://localhost:4173/'
@@ -116,8 +118,11 @@ export const mobile = (browser: Browser, landscape = false) =>
 // NOTE: every harness script reads the same variables: TAG names the shot
 // set, BASE points at another harness port, ONLY picks scenes by name, and
 // VIEWPORTS picks screens by name.
-export const tagOr = (fallback: string) => process.env.TAG ?? fallback
-const BASE = process.env.BASE ?? HARNESS
+export const tagOr = (fallback: string) => process.env['TAG'] ?? fallback
+
+// NOTE: the shot set most scripts write, `after` unless TAG names another.
+export const TAG = tagOr('after')
+const BASE = process.env['BASE'] ?? HARNESS
 
 const listFromEnv = (key: string) => process.env[key]?.split(',')
 const ONLY = listFromEnv('ONLY')
@@ -134,6 +139,14 @@ export const pickViewports = (
       PICKED_VIEWPORTS === undefined ||
       PICKED_VIEWPORTS.includes(viewport.name),
   )
+
+// NOTE: a desktop, a phone on its side, and a phone held upright: the
+// screens most shot scripts take.
+export const SHOT_VIEWPORTS = pickViewports([
+  { ...DESKTOP_1280, name: 'd1280' },
+  { ...PHONE_844, name: 'l844' },
+  { ...UPRIGHT_390, name: 'p390' },
+])
 
 // CONCURRENCY
 
@@ -163,8 +176,8 @@ export const forEachInOrder = async <A, B>(
   const done: Array<boolean> = items.map(() => false)
   let printed = 0
   const flush = () => {
-    while (printed < items.length && done[printed]) {
-      for (const line of lines[printed]!) {
+    while (printed < items.length && done[printed] === true) {
+      for (const line of lines[printed] ?? []) {
         console.log(line)
       }
       printed++
@@ -172,10 +185,14 @@ export const forEachInOrder = async <A, B>(
   }
   let next = 0
   const worker = async () => {
-    while (next < items.length) {
-      const index = next++
-      results[index] = await work(items[index]!, line => {
-        lines[index]!.push(line)
+    for (let index = next++; index < items.length; index = next++) {
+      const item = items[index]
+      const itemLines = lines[index]
+      if (item === undefined || itemLines === undefined) {
+        return
+      }
+      results[index] = await work(item, line => {
+        itemLines.push(line)
       })
       done[index] = true
       flush()
@@ -196,7 +213,7 @@ export const forEachInOrder = async <A, B>(
 let harnessBase = BASE
 
 export const useHarness = async (): Promise<string> => {
-  if (process.env.BASE !== undefined || process.env.HARNESS_DEV === '1') {
+  if (process.env['BASE'] !== undefined || process.env['HARNESS_DEV'] === '1') {
     harnessBase = BASE
     return harnessBase
   }
@@ -221,20 +238,16 @@ const READY_TIMEOUT_MS = 20_000
 // the Schema error instead of timing out.
 export const waitForReady = async (page: Page) => {
   await page.waitForFunction(
-    () => {
-      const harness = window as any
-      return (
-        harness.__harnessReady === true ||
-        harness.__sceneError !== undefined ||
-        document.querySelector('.harness-error') !== null
-      )
-    },
+    () =>
+      window.__harnessReady === true ||
+      window.__sceneError !== undefined ||
+      document.querySelector('.harness-error') !== null,
     null,
     { timeout: READY_TIMEOUT_MS, polling: 'raf' },
   )
   const problem = await page.evaluate(
     () =>
-      (window as any).__sceneError ??
+      window.__sceneError ??
       document.querySelector('.harness-error')?.textContent ??
       undefined,
   )
@@ -246,7 +259,7 @@ export const waitForReady = async (page: Page) => {
 // NOTE: after a click or a key, waits until the page has rendered what it
 // set off and every image it asked for has decoded.
 export const whenSettled = (page: Page) =>
-  page.evaluate(() => (window as any).__whenSettled())
+  page.evaluate(() => window.__whenSettled())
 
 export const gotoScene = async (page: Page, url: string) => {
   await page.goto(url)
@@ -256,13 +269,13 @@ export const gotoScene = async (page: Page, url: string) => {
 // NOTE: swaps the scene in place through `window.__loadScene`, without a
 // reload, and waits for it to be ready.
 export const loadScene = async (page: Page, query: string) => {
-  await page.evaluate(query => (window as any).__loadScene(query), query)
+  await page.evaluate(sceneQuery => window.__loadScene(sceneQuery), query)
   await waitForReady(page)
 }
 
 // NOTE: `FRESH_PAGES=1` loads every scene in a new page, as before scenes
 // were switched in place, to check that switching changes no picture.
-const isAlwaysFresh = process.env.FRESH_PAGES === '1'
+const isAlwaysFresh = process.env['FRESH_PAGES'] === '1'
 
 export type ScenePages = Readonly<{
   // NOTE: a page showing the scene: an idle page of this screen with the
@@ -301,7 +314,7 @@ export const scenePages = (
   return {
     open: async (viewport, query, options) => {
       const reusable = idleFor(viewport).pop()
-      if (reusable !== undefined && !options?.fresh && !isAlwaysFresh) {
+      if (reusable !== undefined && options?.fresh !== true && !isAlwaysFresh) {
         await loadScene(reusable, harnessQuery(query, ...pageQuery))
         return reusable
       }
@@ -350,7 +363,36 @@ export const shot = (page: Page, name: string) =>
     animations: 'disabled',
   })
 
-export const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
+export const wait = (ms: number): Promise<void> =>
+  Effect.runPromise(Effect.sleep(Duration.millis(ms)))
+
+// NOTE: the wall clock, for an audit that reports how long something took.
+export const nowMs = (): number => Effect.runSync(Clock.currentTimeMillis)
+
+// NOTE: runs `attempt`, then again every `everyMs`, until `isDone` holds of
+// its result or `timeoutMs` has passed. Hands back the last result and how
+// long the polling took, in whole milliseconds.
+export const pollUntil = <A>(
+  attempt: () => Promise<A>,
+  isDone: (result: A) => boolean,
+  everyMs: number,
+  timeoutMs: number,
+): Promise<Readonly<{ last: A; elapsedMs: number }>> =>
+  Effect.runPromise(
+    Effect.promise(attempt).pipe(
+      Effect.repeat({
+        until: isDone,
+        schedule: Schedule.spaced(Duration.millis(everyMs)).pipe(
+          Schedule.upTo({ duration: Duration.millis(timeoutMs) }),
+        ),
+      }),
+      Effect.timed,
+      Effect.map(([elapsed, last]) => ({
+        last,
+        elapsedMs: Math.round(Duration.toMillis(elapsed)),
+      })),
+    ),
+  )
 
 // NOTE: jumps every animation that ends, such as a button's pop in, to its
 // end, so a size check never measures a button mid scale and never waits for
@@ -414,18 +456,21 @@ export const comparePngs = async (
 ): Promise<PixelDiff> =>
   page.evaluate(
     async ([first, second]) => {
-      const load = (src: string) =>
-        new Promise<HTMLImageElement>(resolve => {
-          const image = new Image()
-          image.onload = () => resolve(image)
-          image.src = src
-        })
+      const load = async (src: string) => {
+        const image = new Image()
+        image.src = src
+        await image.decode()
+        return image
+      }
       const pixels = async (src: string) => {
         const image = await load(src)
         const canvas = document.createElement('canvas')
         canvas.width = image.width
         canvas.height = image.height
-        const context = canvas.getContext('2d')!
+        const context = canvas.getContext('2d')
+        if (context === null) {
+          throw new Error('No 2d context for the pixel compare')
+        }
         context.drawImage(image, 0, 0)
         return {
           width: image.width,
@@ -438,7 +483,10 @@ export const comparePngs = async (
       const diff = document.createElement('canvas')
       diff.width = a.width
       diff.height = a.height
-      const diffContext = diff.getContext('2d')!
+      const diffContext = diff.getContext('2d')
+      if (diffContext === null) {
+        throw new Error('No 2d context for the pixel diff')
+      }
       const out = diffContext.createImageData(a.width, a.height)
       let differing = 0
       let maxDelta = 0
@@ -446,14 +494,17 @@ export const comparePngs = async (
       let top = Infinity
       let right = -Infinity
       let bottom = -Infinity
-      for (let i = 0; i < a.data.data.length; i += 4) {
+      const before = a.data.data
+      const after = b.data.data
+      const at = (data: Uint8ClampedArray, index: number) => data[index] ?? 0
+      for (let i = 0; i < before.length; i += 4) {
         const delta = Math.max(
-          Math.abs(a.data.data[i]! - b.data.data[i]!),
-          Math.abs(a.data.data[i + 1]! - b.data.data[i + 1]!),
-          Math.abs(a.data.data[i + 2]! - b.data.data[i + 2]!),
+          Math.abs(at(before, i) - at(after, i)),
+          Math.abs(at(before, i + 1) - at(after, i + 1)),
+          Math.abs(at(before, i + 2) - at(after, i + 2)),
         )
         const gray = Math.round(
-          (b.data.data[i]! + b.data.data[i + 1]! + b.data.data[i + 2]!) / 12,
+          (at(after, i) + at(after, i + 1) + at(after, i + 2)) / 12,
         )
         out.data[i] = delta > 0 ? 255 : gray
         out.data[i + 1] = delta > 0 ? 0 : gray
@@ -483,12 +534,19 @@ export const comparePngs = async (
     [await pngDataUrl(beforePath), await pngDataUrl(afterPath)] as const,
   )
 
-export const model = (page: Page) =>
-  page.evaluate(() => (window as any).__model)
+// NOTE: the fields of the harness's Model that `schema` names, decoded
+// (see `evaluateAs` in page.ts).
+export const modelAs = <S extends Schema.ConstraintDecoder<unknown>>(
+  page: Page,
+  schema: S,
+): Promise<S['Type']> => evaluateAs(page, schema, () => window.__model)
 
 export const canvasRect = (page: Page) =>
   page.evaluate(() => {
-    const c = document.querySelector('.game-canvas')!
+    const c = document.querySelector('.game-canvas')
+    if (c === null) {
+      throw new Error('No .game-canvas on the page')
+    }
     const r = c.getBoundingClientRect()
     const scale = Math.min(r.width / 320, r.height / 180)
     const w = 320 * scale,
@@ -509,15 +567,56 @@ export const toClient = (
   y: rect.top + y * rect.scale,
 })
 
-export const nearestZombie = (m: any) => {
-  const walking = m.zombies.filter((z: any) => z.state._tag !== 'Dying')
-  if (walking.length === 0) {
-    return undefined
-  }
-  return walking.reduce((best: any, z: any) =>
-    Math.hypot(z.x - m.player.x, z.y - m.player.y) <
-    Math.hypot(best.x - m.player.x, best.y - m.player.y)
-      ? z
-      : best,
-  )
+export const Spot = Schema.Struct({ x: Schema.Number, y: Schema.Number })
+
+// NOTE: the player and the zombies, as much of the Model as aiming needs.
+export const AimView = Schema.Struct({
+  player: Spot,
+  zombies: Schema.Array(
+    Schema.Struct({
+      x: Schema.Number,
+      y: Schema.Number,
+      state: Schema.Struct({ _tag: Schema.String }),
+    }),
+  ),
+})
+export type AimView = typeof AimView.Type
+type AimZombie = AimView['zombies'][number]
+
+export const nearestZombie = (m: AimView): AimZombie | undefined => {
+  const distance = (z: typeof Spot.Type) =>
+    Math.hypot(z.x - m.player.x, z.y - m.player.y)
+  return m.zombies
+    .filter(z => z.state._tag !== 'Dying')
+    .reduce<AimZombie | undefined>(
+      (best, z) =>
+        best === undefined || distance(z) < distance(best) ? z : best,
+      undefined,
+    )
 }
+
+// NOTE: taps a button on a phone and clicks it on a desktop.
+export const pressButton = async (
+  page: Page,
+  viewport: Viewport,
+  name: RegExp,
+) => {
+  const button = page.getByRole('button', { name }).first()
+  await (viewport.isPhone ? button.tap() : button.click())
+}
+
+const OPEN_TIMEOUT_MS = 10_000
+
+// NOTE: waits for a dialog to open, and goes on after 10 s if none does.
+export const waitForDialog = (page: Page) =>
+  page
+    .locator('dialog[open]')
+    .first()
+    .waitFor({ state: 'visible', timeout: OPEN_TIMEOUT_MS })
+    .catch(() => undefined)
+
+// NOTE: waits for the game's loading splash to go, the game up.
+export const awaitGame = (page: Page) =>
+  page.waitForFunction(() => document.getElementById('splash') === null, {
+    timeout: 45_000,
+  })

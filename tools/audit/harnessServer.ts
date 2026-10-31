@@ -4,6 +4,7 @@
 // folder for today's hash skips the build, so only a change to the game, the
 // harness, or the dependencies costs a build (about 2 s).
 import { type Server, spawn } from 'bun'
+import { Clock, DateTime, Effect } from 'effect'
 import {
   existsSync,
   mkdirSync,
@@ -79,7 +80,7 @@ const pruneOldBuilds = () => {
 // NOTE: builds into a folder of its own and renames it into place, so two
 // scripts building the same hash at once both end with one whole build.
 const buildInto = async (outDir: string) => {
-  const draft = `${outDir}.draft-${process.pid}-${Date.now()}`
+  const draft = `${outDir}.draft-${process.pid}-${Effect.runSync(Clock.currentTimeMillis)}`
   const build = spawn(
     [VITE, 'build', 'tools/audit/harness', '--outDir', draft, '--emptyOutDir'],
     { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' },
@@ -110,7 +111,7 @@ export const builtHarness = async (): Promise<string> => {
   const hash = await harnessHash()
   const outDir = join(HARNESS_CACHE, hash)
   if (existsSync(`${outDir}/index.html`)) {
-    const now = new Date()
+    const now = DateTime.toDateUtc(Effect.runSync(DateTime.now))
     utimesSync(outDir, now, now)
     console.log(`Harness ${hash}: cached`)
   } else {

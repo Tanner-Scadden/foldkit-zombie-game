@@ -7,6 +7,7 @@ import {
   Queue,
   Ref,
   Result,
+  Schema,
   type Scope,
   pipe,
 } from 'effect'
@@ -40,12 +41,15 @@ type EngineState = Data.TaggedEnum<{
   Closed: {}
   Ready: { readonly engine: Engine }
 }>
+// NOTE: Ready holds the live engine, a handle no Schema can describe.
+// oxlint-disable-next-line no-restricted-properties
 const EngineState = Data.taggedEnum<EngineState>()
 
-interface Owner {
-  readonly session: string
-  readonly epoch: number
-}
+const Owner = Schema.Struct({
+  session: Schema.String,
+  epoch: Schema.Number,
+})
+type Owner = typeof Owner.Type
 
 interface State {
   readonly engine: EngineState
@@ -54,11 +58,11 @@ interface State {
   readonly epoch: number
 }
 
-type Inbound = Data.TaggedEnum<{
-  Arrived: { readonly request: Request }
-  IdledOut: { readonly owner: Owner }
-}>
-const Inbound = Data.taggedEnum<Inbound>()
+const Inbound = Schema.TaggedUnion({
+  Arrived: { request: Request },
+  IdledOut: { owner: Owner },
+})
+type Inbound = typeof Inbound.Type
 
 const NOT_OPEN = {
   code: 'SQLITE_MISUSE',
@@ -90,7 +94,9 @@ export const makeServer = (
     const watchIdle = (owner: Owner): Effect.Effect<void> =>
       pipe(
         Effect.sleep(idleTimeout),
-        Effect.andThen(Queue.offer(inbox, Inbound.IdledOut({ owner }))),
+        Effect.andThen(
+          Queue.offer(inbox, Inbound.cases.IdledOut.make({ owner })),
+        ),
         Effect.asVoid,
         Effect.forkIn(scope),
         Effect.asVoid,
@@ -252,7 +258,7 @@ export const makeServer = (
       }))
 
     const handle = (inbound: Inbound): Effect.Effect<void> =>
-      Inbound.$match(inbound, {
+      Inbound.match(inbound, {
         Arrived: ({ request }) =>
           Request.match(request, {
             Open: open,
@@ -272,6 +278,8 @@ export const makeServer = (
 
     return {
       offer: request =>
-        Effect.asVoid(Queue.offer(inbox, Inbound.Arrived({ request }))),
+        Effect.asVoid(
+          Queue.offer(inbox, Inbound.cases.Arrived.make({ request })),
+        ),
     }
   })

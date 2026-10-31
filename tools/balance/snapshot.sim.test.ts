@@ -58,7 +58,13 @@ describe('wave snapshots', () => {
   })
 
   test('the smoke pass clears wave 2 the same way every time', () => {
-    const pass = { waves: [SMOKE_WAVE], runs: 3, slots: 2, firstSeed: 1 }
+    const pass = {
+      waves: [SMOKE_WAVE],
+      runs: 3,
+      slots: 2,
+      firstSeed: 1,
+      seedOffset: 0,
+    }
     const runs = playWavePass(pass, DEFAULT_OPTIONS)
     const summary = summarizeWave(SMOKE_WAVE, runs)
     expect(summary.runs).toBe(3)

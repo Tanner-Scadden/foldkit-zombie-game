@@ -115,7 +115,7 @@ export const renderSoundtrack = (
           await page.setContent('<!doctype html><title>soundtrack</title>')
           await page.addScriptTag({ content: script })
           return await page.evaluate(
-            json => (window as any).__renderAudio(json) as Promise<string>,
+            json => window.__renderAudio(json),
             request,
           )
         } finally {

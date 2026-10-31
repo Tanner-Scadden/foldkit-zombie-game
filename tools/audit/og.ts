@@ -7,10 +7,12 @@ import { plugin } from 'bun'
 //   bun og.ts
 // It also writes shots/og-600.png and shots/og-300.png, the card scaled down
 // the way chat apps shrink a link preview.
+import { Schema } from 'effect'
 import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { launch } from './lib'
+import { BIG_HEAD, PALETTE } from './zombieHead'
 
 const ROOT = resolve(import.meta.dir, '../..')
 const OUT = `${ROOT}/public/og-image.png`
@@ -18,9 +20,8 @@ const SHOTS = resolve(import.meta.dir, 'shots')
 
 // SOURCES
 
-// The logo and the head are private to src/screens.ts and icons.ts, so they
-// are loaded with a few exports added. icons.ts writes the icons when it
-// runs, so only its pixel maps, the part above "// SVG", are kept.
+// The logo is private to src/screens.ts, so it is loaded with a few exports
+// added. The head is the app icon's (zombieHead.ts).
 plugin({
   name: 'og-sources',
   setup(build) {
@@ -30,41 +31,35 @@ export { logoLetterPixels, MUNCH_LOOK, MANOR_LOOK, TITLE_WORDS, LOGO_GAP, LOGO_L
 `,
       loader: 'ts',
     }))
-    build.onLoad({ filter: /tools\/audit\/icons\.ts$/ }, async ({ path }) => {
-      const source = await Bun.file(path).text()
-      const end = source.indexOf('// SVG')
-      if (end < 0) {
-        throw new Error('icons.ts has no // SVG section')
-      }
-      return {
-        contents: `${source.slice(0, end)}
-export { PALETTE, BIG_HEAD }
-`,
-        loader: 'ts',
-      }
-    })
   },
 })
 
 type Rows = ReadonlyArray<string>
 type Palette = Readonly<Record<string, string>>
 
-// The added exports are invisible to TypeScript, hence the casts.
-type Screens = Readonly<{
-  logoLetterPixels: (glyph: string, seed: number) => Rows
-  MUNCH_LOOK: { palette: Palette }
-  MANOR_LOOK: { palette: Palette }
-  TITLE_WORDS: ReadonlyArray<string>
-  LOGO_GAP: number
-  LOGO_LINE_PX: number
-  LOGO_BOB_PX: number
-}>
-type Icons = Readonly<{ PALETTE: Palette; BIG_HEAD: Rows }>
+// NOTE: the added exports are invisible to TypeScript, so the module is
+// decoded: a renamed or reshaped export fails here by name.
+const LogoLook = Schema.Struct({
+  palette: Schema.Record(Schema.String, Schema.String),
+})
+const Screens = Schema.Struct({
+  logoLetterPixels: Schema.declare(
+    (value: unknown): value is (glyph: string, seed: number) => Rows =>
+      typeof value === 'function',
+  ),
+  MUNCH_LOOK: LogoLook,
+  MANOR_LOOK: LogoLook,
+  TITLE_WORDS: Schema.Array(Schema.String),
+  LOGO_GAP: Schema.Number,
+  LOGO_LINE_PX: Schema.Number,
+  LOGO_BOB_PX: Schema.Number,
+})
 
-const screens = (await import('../../src/screens.ts')) as unknown as Screens
+const screens = Schema.decodeUnknownSync(Screens)(
+  await import('../../src/screens.ts'),
+)
 const font: { textPixels: (text: string) => Rows } =
   await import('../../src/font.ts')
-const icons = (await import('./icons.ts')) as unknown as Icons
 
 // CARD
 
@@ -149,7 +144,7 @@ const HEAD_SCALE = 14
 const LOGO_SCALE = 6
 const TEXT_SCALE = 5
 
-const HEAD = icons.BIG_HEAD.filter(row => /[^.]/.test(row))
+const HEAD = BIG_HEAD.filter(row => /[^.]/.test(row))
 const HEAD_W = widthOf(HEAD) * HEAD_SCALE
 const HEAD_H = HEAD.length * HEAD_SCALE
 
@@ -271,7 +266,7 @@ for (let row = 0; FLOOR_TOP + 5 + row * BOARD_H < HEIGHT; row++) {
 
 // FOREGROUND
 
-paintRows(HEAD, icons.PALETTE, HEAD_X, HEAD_Y, HEAD_SCALE)
+paintRows(HEAD, PALETTE, HEAD_X, HEAD_Y, HEAD_SCALE)
 
 LOGO.forEach((letters, line) => {
   let x = TEXT_X + Math.round((TEXT_W - lineCells(letters) * LOGO_SCALE) / 2)

@@ -11,21 +11,18 @@ import type { Page } from 'playwright-core'
 
 import {
   DESKTOP_1280,
+  TAG,
   UPRIGHT_390,
   deviceQuery,
   finish,
   harnessQuery,
   isPickedScene,
   launch,
-  model,
   pickViewports,
   scenePages,
   shot,
-  tagOr,
   useHarness,
 } from './lib'
-
-const TAG = tagOr('after')
 
 const VIEWPORTS = pickViewports([
   { ...DESKTOP_1280, name: 'd1280' },
@@ -62,8 +59,8 @@ const SCENES: ReadonlyArray<Scene> = [
     name: 'sale',
     query: `${MID_WAVE}&rounds=20&${AT_WINDOW}&hold&tick=44`,
     act: async (page, problems, label) => {
-      const current = await model(page)
-      if (current.wallet.balance >= 120) {
+      const balance = await page.evaluate(() => window.__model.wallet.balance)
+      if (balance >= 120) {
         problems.push(`${label}: holding at the ammo window did not buy`)
       }
     },

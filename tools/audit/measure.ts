@@ -1,29 +1,79 @@
-import type { Browser, Page } from 'playwright-core'
+import { Effect, Schema } from 'effect'
+import type { Browser, CDPSession, Page } from 'playwright-core'
 
-import { canvasRect, desktop, model, toClient, wait } from './lib'
+import { Spot, canvasRect, desktop, modelAs, toClient, wait } from './lib'
+import { evaluateAs } from './page'
 import { SCENARIOS } from './scenarios'
 
-export type FrameRow = Readonly<{
-  scenario: string
-  rate: number
-  frames: number
-  fps: number
-  median: number
-  p95: number
-  max: number
-  dropped: number
-  updateMean: number
-  updateP95: number
-  viewMean: number
-  viewP95: number
-  jsMs: number
-  busyMs: number
-  shapes: number
-  zombies: string
-  particles: string
-  phase: string
-  decals: number
-}>
+export const FrameRow = Schema.Struct({
+  scenario: Schema.String,
+  rate: Schema.Number,
+  frames: Schema.Number,
+  fps: Schema.Number,
+  median: Schema.Number,
+  p95: Schema.Number,
+  max: Schema.Number,
+  dropped: Schema.Number,
+  updateMean: Schema.Number,
+  updateP95: Schema.Number,
+  viewMean: Schema.Number,
+  viewP95: Schema.Number,
+  jsMs: Schema.Number,
+  busyMs: Schema.Number,
+  shapes: Schema.Number,
+  zombies: Schema.String,
+  particles: Schema.String,
+  phase: Schema.String,
+  decals: Schema.Number,
+})
+export type FrameRow = typeof FrameRow.Type
+
+// NOTE: the fields of a Chrome trace event the audits read.
+export const TraceEvent = Schema.Struct({
+  name: Schema.String,
+  ph: Schema.String,
+  pid: Schema.Number,
+  tid: Schema.Number,
+  ts: Schema.Number,
+  dur: Schema.optional(Schema.Number),
+  args: Schema.optional(
+    Schema.Struct({ name: Schema.optional(Schema.Unknown) }),
+  ),
+})
+export type TraceEvent = typeof TraceEvent.Type
+
+// NOTE: collects the trace events of one `Tracing.start` to `Tracing.end`
+// pass, listening before the pass starts. `done` resolves with them, decoded,
+// once Chrome says the trace is complete.
+export const collectTrace = (cdp: CDPSession) => {
+  const raw: Array<unknown> = []
+  cdp.on('Tracing.dataCollected', ({ value }) => {
+    raw.push(...value)
+  })
+  const done = Effect.runPromise(
+    Effect.callback<ReadonlyArray<TraceEvent>, Schema.SchemaError>(resume => {
+      cdp.once('Tracing.tracingComplete', () =>
+        resume(Schema.decodeUnknownEffect(Schema.Array(TraceEvent))(raw)),
+      )
+    }),
+  )
+  return { done }
+}
+
+const RunModel = Schema.Struct({
+  zombies: Schema.Array(Schema.Unknown),
+  particles: Schema.Array(Schema.Unknown),
+  phase: Schema.Struct({ _tag: Schema.String }),
+  decals: Schema.Array(Schema.Unknown),
+})
+
+const FrameData = Schema.Struct({
+  deltas: Schema.Array(Schema.Number),
+  elapsedMs: Schema.Number,
+  update: Schema.Array(Schema.Number),
+  view: Schema.Array(Schema.Number),
+  shapes: Schema.Number,
+})
 
 const stats = (xs: ReadonlyArray<number>) => {
   const s = [...xs].sort((a, b) => a - b)
@@ -39,10 +89,12 @@ const stats = (xs: ReadonlyArray<number>) => {
 
 const round = (value: number, digits: number) => +value.toFixed(digits)
 
+// NOTE: the nearest zombie still standing, found in the page so the bot
+// reads two numbers each step instead of the whole Model.
 const aimTarget = (page: Page) =>
-  page.evaluate(() => {
-    const m = (window as any).__model
-    let best: any
+  evaluateAs(page, Schema.UndefinedOr(Spot), () => {
+    const m = window.__model
+    let best: { x: number; y: number } | undefined
     let bestDistance = Infinity
     for (const z of m.zombies) {
       if (z.state._tag === 'Dying') {
@@ -54,7 +106,7 @@ const aimTarget = (page: Page) =>
         best = z
       }
     }
-    return best ? { x: best.x, y: best.y } : undefined
+    return best === undefined ? undefined : { x: best.x, y: best.y }
   })
 
 const runBot = (page: Page, isDone: () => boolean) =>
@@ -64,7 +116,7 @@ const runBot = (page: Page, isDone: () => boolean) =>
     await page.mouse.down()
     while (!isDone()) {
       const target = await aimTarget(page)
-      if (target) {
+      if (target !== undefined) {
         const point = toClient(rect, target.x, target.y)
         await page.mouse.move(point.x, point.y)
       }
@@ -73,11 +125,11 @@ const runBot = (page: Page, isDone: () => boolean) =>
     await page.mouse.up()
   })()
 
-const mainThreadBusyMs = (events: ReadonlyArray<any>): number => {
+const mainThreadBusyMs = (events: ReadonlyArray<TraceEvent>): number => {
   const main = events.find(
     e => e.name === 'thread_name' && e.args?.name === 'CrRendererMain',
   )
-  if (!main) {
+  if (main === undefined) {
     return 0
   }
   const tasks = events
@@ -109,7 +161,7 @@ export const measureScenario = async (
   seconds: number,
 ): Promise<FrameRow> => {
   const scenario = SCENARIOS[name]
-  if (!scenario) {
+  if (scenario === undefined) {
     throw new Error(`unknown scenario ${name}`)
   }
   const page = await desktop(browser)
@@ -124,51 +176,52 @@ export const measureScenario = async (
   }
   await cdp.send('Emulation.setCPUThrottlingRate', { rate })
   await wait(500)
-  const m0 = await model(page)
+  const m0 = await modelAs(page, RunModel)
 
-  const traceEvents: Array<any> = []
-  cdp.on('Tracing.dataCollected', ({ value }: any) =>
-    traceEvents.push(...value),
-  )
-  const traceDone = new Promise<void>(resolve =>
-    cdp.once('Tracing.tracingComplete', () => resolve()),
-  )
+  const trace = collectTrace(cdp)
   await cdp.send('Tracing.start', {
     categories: 'toplevel',
     transferMode: 'ReportEvents',
   })
-  const data = await page.evaluate(async seconds => {
-    const w = window as any
-    w.__timings.update.length = 0
-    w.__timings.view.length = 0
-    const deltas: Array<number> = []
-    const start = performance.now()
-    let last = start
-    await new Promise<void>(resolve => {
-      const end = last + seconds * 1000
-      const tick = (t: number) => {
-        deltas.push(t - last)
-        last = t
-        if (t < end) {
-          requestAnimationFrame(tick)
-        } else {
-          resolve()
+  const data = await evaluateAs(
+    page,
+    FrameData,
+    async (durationSeconds: number) => {
+      window.__timings.update.length = 0
+      window.__timings.view.length = 0
+      const deltas: Array<number> = []
+      const start = performance.now()
+      let last = start
+      // NOTE: runs in the page: it waits on the browser's own frames, which
+      // only `requestAnimationFrame` gives.
+      // @effect-diagnostics-next-line newPromise:off
+      await new Promise<void>(resolve => {
+        const end = last + durationSeconds * 1000
+        const tick = (t: number) => {
+          deltas.push(t - last)
+          last = t
+          if (t < end) {
+            requestAnimationFrame(tick)
+          } else {
+            resolve()
+          }
         }
+        requestAnimationFrame(tick)
+      })
+      return {
+        deltas,
+        elapsedMs: last - start,
+        update: [...window.__timings.update],
+        view: [...window.__timings.view],
+        shapes: window.__countShapes(),
       }
-      requestAnimationFrame(tick)
-    })
-    return {
-      deltas,
-      elapsedMs: last - start,
-      update: [...w.__timings.update],
-      view: [...w.__timings.view],
-      shapes: w.__countShapes(),
-    }
-  }, seconds)
+    },
+    seconds,
+  )
   await cdp.send('Tracing.end')
-  await traceDone
+  const traceEvents = await trace.done
 
-  const m1 = await model(page)
+  const m1 = await modelAs(page, RunModel)
   isDone = true
   await bot
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 })
@@ -206,22 +259,26 @@ export const measureScenario = async (
 export const calibrationMs = async (browser: Browser): Promise<number> => {
   const page = await desktop(browser)
   await page.goto('about:blank')
-  const times = await page.evaluate(() => {
+  const times = await evaluateAs(page, Schema.Array(Schema.Number), () => {
     const run = () => {
       const t0 = performance.now()
       let checksum = 0
-      for (let round = 0; round < 40; round++) {
+      for (let pass = 0; pass < 40; pass++) {
         const items = Array.from({ length: 20000 }, (_, i) => ({
           id: i,
           value: (i * 2654435761) % 1000003,
         }))
         items.sort((a, b) => a.value - b.value)
-        checksum += items[round]!.value
+        checksum += items[pass]?.value ?? 0
       }
-      return [performance.now() - t0, checksum]
+      return { ms: performance.now() - t0, checksum }
     }
-    return Array.from({ length: 5 }, () => run()[0]!)
+    return Array.from({ length: 5 }, () => run().ms)
   })
   await page.context().close()
-  return [...times].sort((a, b) => a - b)[2]!
+  const median = [...times].sort((a, b) => a - b)[2]
+  if (median === undefined) {
+    throw new Error('the calibration ran no passes')
+  }
+  return median
 }
