@@ -106,6 +106,7 @@ import {
   type UpdateStep,
   combine,
   modelStep,
+  releaseInput,
   toModel,
   unchanged,
   withInput,
@@ -267,8 +268,6 @@ export const pauseRound = makeStep(() =>
     modelStep(model => withInput(pause(model), releaseAll)),
   ]),
 )
-
-export const releaseInput = modelStep(model => withInput(model, releaseAll))
 
 export const pauseWhenAway = makeStep(model =>
   isRoundActive(model.phase) ? pauseRound : releaseInput,

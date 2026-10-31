@@ -4,6 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import type { CommandsLayer } from '../commands'
 import { refreshIntent } from '../frame'
+import { releaseAll } from '../input'
 import type { Message } from '../message'
 import type { Input, Model } from '../model'
 
@@ -25,6 +26,9 @@ export const unchanged: UpdateStep = model => ({ model })
 export const modelStep =
   (change: (model: Model) => Model): UpdateStep =>
   model => ({ model: change(model) })
+
+// NOTE: lets go of every key, button, and stick, as a menu opens over play.
+export const releaseInput = modelStep(model => withInput(model, releaseAll))
 
 // NOTE: the first Step of a Step built from the Model it is given (inside
 // `makeStep`): the Model it made from that one.

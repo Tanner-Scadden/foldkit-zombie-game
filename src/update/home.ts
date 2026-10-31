@@ -77,6 +77,7 @@ import {
   type UpdateStep,
   combine,
   modelStep,
+  releaseInput,
   unchanged,
   withInput,
 } from './step'
@@ -167,8 +168,6 @@ export const openSettingsFromGear = makeStep(model =>
 )
 
 // THE MANOR HAND
-
-const releaseInput = modelStep(model => withInput(model, releaseAll))
 
 export const openHand = makeStep(model =>
   isOnHomeMenu(model)

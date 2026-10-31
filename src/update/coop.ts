@@ -10,7 +10,6 @@ import * as Coop from '../coop/update'
 import { isLeftFromRoom, maybeRunRoom, playRoomFrame } from '../coopPlay'
 import { makeStep } from '../definition'
 import { isCoopKey } from '../home'
-import { releaseAll } from '../input'
 import { MenuState, menuState } from '../menuState'
 import type { Model } from '../model'
 import { isLearned } from '../onboarding'
@@ -19,13 +18,7 @@ import { joinName } from '../profile'
 import { stepWhen } from '../stepWhen'
 import type { SeatAction } from '../stepWorld'
 import { goHome } from './home'
-import {
-  type UpdateStep,
-  combine,
-  modelStep,
-  unchanged,
-  withInput,
-} from './step'
+import { type UpdateStep, combine, releaseInput, unchanged } from './step'
 
 // NOTE: co-op opens only for a player who has finished the tutorial
 // (MULTIPLAYER.md, decision 14): wave 1 cleared and wave 2 started from its
@@ -86,8 +79,6 @@ export const pressCoopKey = (code: string) =>
 
 export const releaseCoopKey = (code: string) =>
   makeStep(() => CoopBinding.requestReleaseKey({ code }))
-
-const releaseInput = modelStep(model => withInput(model, releaseAll))
 
 // NOTE: co-op opens over the bare home menu. A room link read at boot may
 // land while the update greeting is up: co-op opens under it, so neither
