@@ -1,7 +1,7 @@
 // The playtest clarity pass: the first break's trap hint and the trap slot
 // that sends players to Rattles, the place-it hint once a trap is owned,
 // How to play with a card's line open, the pause screen, the spare gun's
-// ammo running low (amber, then red), EMPTY with the knife prompt, Rattles
+// ammo running low (amber, then red), EMPTY with the knife drawn, Rattles
 // calling about ammo, and the shop's gun cards with their rounds, on a
 // 1280x720 desktop, an 844x390 phone on its side, and a 390x844 phone held
 // upright, as `s41-<TAG>-<viewport>-<scene>.png`.
@@ -131,7 +131,7 @@ const SCENES: ReadonlyArray<Scene> = [
   },
   {
     name: 'knife',
-    query: `${FIGHTING}&first=shotgun&gun=smg&dry&tick=6`,
+    query: `${FIGHTING}&first=shotgun&gun=smg&dry&aim=160,40&tick=6`,
   },
   {
     name: 'rattles',

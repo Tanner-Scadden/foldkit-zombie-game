@@ -6,7 +6,12 @@ import { MS_PER_SECOND } from './constants'
 import { addVectors, scaleVector } from './geometry'
 import type { Model, Vector } from './model'
 import { firingStats } from './powerups'
-import { type WeaponStats, heldTier, heldWeapon } from './weapons'
+import {
+  type WeaponStats,
+  heldTier,
+  heldWeapon,
+  isWieldingKnife,
+} from './weapons'
 
 // NOTE: the sight is a shop upgrade for the run, and it shows for any aim,
 // keys or pointer. A gun that shoots straight gets a laser line, and one that
@@ -17,7 +22,9 @@ const LASER_COLOR = 'rgba(255, 58, 63, 0.55)'
 const FAN_FILL = 'rgba(255, 58, 63, 0.12)'
 const FAN_EDGE_COLOR = 'rgba(255, 58, 63, 0.35)'
 
-const hasSight = (model: Model): boolean => model.laserSight === 'Fitted'
+// NOTE: the knife fires nothing, so the sight goes dark while it is out.
+const hasSight = (model: Model): boolean =>
+  model.laserSight === 'Fitted' && !isWieldingKnife(model.player)
 
 const rangeOf = (stats: WeaponStats): number =>
   (stats.bulletSpeed * stats.bulletLifetimeMs) / MS_PER_SECOND

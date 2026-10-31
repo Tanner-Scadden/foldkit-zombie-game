@@ -6,20 +6,19 @@ import { bootCommands } from './boot'
 import { ApplicationComposition } from './composition'
 import { makeStep } from './definition'
 import { endQuest } from './firstBreakQuest'
-import { skipKitchenTour } from './kitchenTour'
 import { refreshIntent } from './frame'
 import { runModeOf, switchMode } from './home'
 import {
   moveMouse,
   movePointer,
   pressHoldButton,
-  pressKnifeButton,
   pressPointer,
   releaseKeys,
   releasePointer,
   releaseSticks,
 } from './input'
 import { noteMissedKeyDown } from './keyGrab'
+import { skipKitchenTour } from './kitchenTour'
 import { isOnHomeMenu } from './menuState'
 import {
   AudioState,
@@ -76,6 +75,7 @@ import {
   pauseRound,
   pauseWhenAway,
   pressGunSlot,
+  pressKnifeSlot,
   pressedKey,
   releasedKey,
   reloadHeldGun,
@@ -250,16 +250,6 @@ export const update = ApplicationComposition.makeUpdate({
       ),
     ),
 
-  PressedKnifeButton: (model, { pointerId }) =>
-    settle(
-      model,
-      unlockAudio(
-        withInput(useDevice(model, 'Touch'), input =>
-          pressKnifeButton(input, pointerId),
-        ),
-      ),
-    ),
-
   CancelledPointer: (model, { pointerId }) =>
     settle(model, {
       model: withInput(model, input => releasePointer(input, pointerId)),
@@ -391,6 +381,12 @@ export const update = ApplicationComposition.makeUpdate({
   ClickedGunSlot: (model, message) =>
     Update.combineSteps(model, [
       makeStep(orInRun(message, pressGunSlot(message.slot))),
+      ...afterMessage(model),
+    ]),
+
+  ClickedKnifeSlot: (model, message) =>
+    Update.combineSteps(model, [
+      makeStep(orInRun(message, pressKnifeSlot)),
       ...afterMessage(model),
     ]),
 

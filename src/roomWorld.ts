@@ -61,6 +61,7 @@ import {
   FIRST_SHOP_CATEGORY,
   FixedShopItemId,
   type GameEvent,
+  type GunSlot,
   type Intent,
   Lesson,
   type Lessons,
@@ -157,13 +158,13 @@ const EVENT_TICKS = 60
 // NOTE: a PlayerInput as the room reads it (packages/netcode, Protocol.ts):
 // move as whole 127ths, aim as a direction scaled to AIM_REACH and kept to
 // eighths (the wire's precision), the trigger as button bit FIRE_BUTTON,
-// the interact hold (src/purchase.ts) as bit INTERACT_BUTTON, the knife
-// (src/knife.ts) as bit STAB_BUTTON, and a press as `action`.
+// the interact hold (src/purchase.ts) as bit INTERACT_BUTTON, and a press
+// as `action`. Bit 4 held the knife until protocol version 11; the knife is
+// now drawn by a press (Knife) and stabs on the trigger, so it is unused.
 export const MOVE_SCALE = 127
 export const AIM_REACH = 1024
 export const FIRE_BUTTON = 1
 export const INTERACT_BUTTON = 2
-export const STAB_BUTTON = 4
 const AIM_PRECISION = 8
 
 const eighths = (value: number): number =>
@@ -178,8 +179,7 @@ export const inputOfIntent = (intent: Intent, action: number): PlayerInput => {
     aimY: eighths(aim.y * AIM_REACH),
     buttons:
       (intent.trigger === 'Held' ? FIRE_BUTTON : 0) |
-      (intent.interact === 'Held' ? INTERACT_BUTTON : 0) |
-      (intent.stab === 'Held' ? STAB_BUTTON : 0),
+      (intent.interact === 'Held' ? INTERACT_BUTTON : 0),
     action,
   }
 }
@@ -199,7 +199,6 @@ export const intentOfInput = (input: PlayerInput): Intent => ({
       : normalize({ x: input.aimX, y: input.aimY }),
   trigger: (input.buttons & FIRE_BUTTON) !== 0 ? 'Held' : 'Released',
   interact: (input.buttons & INTERACT_BUTTON) !== 0 ? 'Held' : 'Released',
-  stab: (input.buttons & STAB_BUTTON) !== 0 ? 'Held' : 'Released',
 })
 
 // ACTIONS
@@ -224,7 +223,15 @@ const SIMPLE_ACTIONS: ReadonlyArray<SeatAction['_tag']> = [
   'NextTrap',
   'LeaveCounter',
   'Ready',
+  'Knife',
 ]
+
+// NOTE: drawing a gun by its slot follows the simple actions' codes.
+const DRAW_BASE = 8
+const DRAW_SLOTS: ReadonlyArray<GunSlot> = ['First', 'Second']
+
+const drawCode = (slot: GunSlot): number =>
+  DRAW_BASE + (slot === 'First' ? 0 : 1)
 
 const FIXED_ITEMS = FixedShopItemId.literals
 
@@ -247,6 +254,8 @@ const itemCode = (item: string): number =>
 export const actionCodeOf = (action: SeatAction): number =>
   SeatAction.match(action, {
     Swap: () => simpleCode('Swap'),
+    Knife: () => simpleCode('Knife'),
+    Draw: ({ slot }) => drawCode(slot),
     Reload: () => simpleCode('Reload'),
     PlaceTrap: () => simpleCode('PlaceTrap'),
     NextTrap: () => simpleCode('NextTrap'),
@@ -272,6 +281,8 @@ const simpleAction = (tag: SeatAction['_tag']): Option.Option<SeatAction> => {
     return Option.some(SeatAction.LeaveCounter())
   } else if (tag === 'Ready') {
     return Option.some(SeatAction.Ready())
+  } else if (tag === 'Knife') {
+    return Option.some(SeatAction.Knife())
   } else {
     return Option.none()
   }
@@ -297,6 +308,10 @@ export const seatActionOf = (
   } else if (code >= BUY_BASE) {
     return Option.map(Array.get(FIXED_ITEMS, code - BUY_BASE), item =>
       SeatAction.Buy({ item }),
+    )
+  } else if (code >= DRAW_BASE) {
+    return Option.map(Array.get(DRAW_SLOTS, code - DRAW_BASE), slot =>
+      SeatAction.Draw({ slot }),
     )
   } else {
     return Option.flatMap(Array.get(SIMPLE_ACTIONS, code - 1), simpleAction)

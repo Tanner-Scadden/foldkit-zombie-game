@@ -1940,6 +1940,25 @@ const GUN_SPRITES: Readonly<
   Array.map(GUN_TIERS, tier => gunTurns(gun, gunPalette(tier))),
 )
 
+// NOTE: the knife in hand, the third slot (GAME_DESIGN.md, "The knife and
+// two gun slots"): a wooden grip and a short pale blade, turned as a gun is.
+const KNIFE_IN_HAND: GunPixels = {
+  pixels: ['VWGGH'],
+  pivot: { x: 1, y: 0 },
+}
+
+const KNIFE_TURNS = gunTurns(KNIFE_IN_HAND, GUN_PALETTE)
+
+export const knifeSprite = (angle: number): Sprite => {
+  const step = (Math.PI * 2) / GUN_DIRECTIONS
+  const index =
+    ((Math.round(angle / step) % GUN_DIRECTIONS) + GUN_DIRECTIONS) %
+    GUN_DIRECTIONS
+  return Option.getOrElse(Array.get(KNIFE_TURNS, index), () =>
+    Array.headNonEmpty(KNIFE_TURNS),
+  )
+}
+
 const GUN_ICONS: Readonly<Record<WeaponKind, ReadonlyArray<Sprite>>> =
   Record.map(GUN_PIXELS, ({ pixels }) =>
     Array.map(GUN_TIERS, tier => spriteShapes(pixels, gunPalette(tier))),

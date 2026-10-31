@@ -39,12 +39,7 @@ import {
 import { withBests } from '@game/difficulty'
 import { noteRecords } from '@game/endBeat'
 import { KITCHEN_EXIT } from '@game/exits'
-import {
-  pressHoldButton,
-  pressKey,
-  pressKnifeButton,
-  releaseAll,
-} from '@game/input'
+import { pressHoldButton, pressKey, releaseAll } from '@game/input'
 import { quietLayer as quietInstallPrompt } from '@game/install'
 import { EffectsLayer } from '@game/layer'
 import { sceneShapes } from '@game/layers'
@@ -1830,17 +1825,27 @@ const sceneOf = (model: Model): HarnessReturn => {
         }),
       }
     : sectioned
+  const knifed: HarnessReturn =
+    config.knife || config.stab
+      ? {
+          ...holding,
+          model: modifyFields(holding.model, {
+            player: player => modifyFields(player, { wield: () => 'Knife' }),
+          }),
+        }
+      : holding
   const held: HarnessReturn = config.stab
     ? {
-        ...holding,
-        model: modifyFields(holding.model, {
+        ...knifed,
+        model: modifyFields(knifed.model, {
           input: input =>
-            holding.model.lastDevice === 'Touch'
-              ? pressKnifeButton(input, STAB_POINTER_ID)
-              : pressKey(input, 'KeyF'),
+            modifyFields(input, {
+              mouseButton: () =>
+                MouseButton.Held({ pointerId: STAB_POINTER_ID }),
+            }),
         }),
       }
-    : holding
+    : knifed
   const dried: HarnessReturn = config.dry
     ? {
         ...held,

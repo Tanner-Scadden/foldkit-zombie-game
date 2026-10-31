@@ -4,19 +4,13 @@ import type { Html } from 'foldkit/html'
 import { isOutOfGuns } from './ammoWarning'
 import type { ApplicationViewBuilder } from './composition'
 import { STICK_RADIUS_PX } from './constants'
-import { gunClusterBox, gunSlotBox, secondsLeft } from './hud'
-import {
-  KNIFE_ICON,
-  NEXT_TRAP_ICON,
-  RELOAD_ICON,
-  TRAP_BUTTON_ICONS,
-} from './icons'
+import { KNIFE_SLOT_INDEX, gunClusterBox, gunSlotBox, secondsLeft } from './hud'
+import { NEXT_TRAP_ICON, RELOAD_ICON, TRAP_BUTTON_ICONS } from './icons'
 import { thumbOffset } from './input'
 import { Message } from './message'
 import {
   BreakClock,
   type GunSlot,
-  HoldButton,
   type Model,
   Phase,
   Stick,
@@ -49,6 +43,7 @@ import {
   heldSlotOf,
   heldStats,
   heldWeapon,
+  isWieldingKnife,
   tierName,
 } from './weapons'
 
@@ -122,33 +117,91 @@ const heldSlot = (model: Model): GunSlot => heldSlotOf(model.player.arsenal)
 
 const SLOT_INDEX: Readonly<Record<GunSlot, number>> = { First: 0, Second: 1 }
 
+// NOTE: the key that reaches a gun slot: R reloads the held gun, Q swaps
+// to the other; with the knife out, Q goes back to the last gun held.
+const gunSlotKey = (model: Model, slot: GunSlot): Option.Option<string> => {
+  const isLastHeld = slot === heldSlot(model)
+  if (isWieldingKnife(model.player)) {
+    return isLastHeld ? Option.some('Q') : Option.none()
+  } else {
+    return Option.some(isLastHeld ? 'R' : 'Q')
+  }
+}
+
+const slotSpan = (
+  screen: Screen,
+  index: number,
+): Readonly<{ left: string; width: string }> => {
+  const box = gunSlotBox(screen, index)
+  const cluster = gunClusterBox(screen)
+  return {
+    left: percentOf(box.x - cluster.x, cluster.width),
+    width: percentOf(box.width, cluster.width),
+  }
+}
+
 const gunSlotButtonView = (
   model: Model,
   screen: Screen,
   { slot, name }: SlotGun,
   h: ApplicationViewBuilder,
 ): Html => {
-  const isHeld = slot === heldSlot(model)
-  const box = gunSlotBox(screen, SLOT_INDEX[slot])
-  const cluster = gunClusterBox(screen)
+  const isHeld = !isWieldingKnife(model.player) && slot === heldSlot(model)
+  const maybeKey = gunSlotKey(model, slot)
   return h.keyed('button')(
     slot,
     [
       h.Type('button'),
       h.Class('gun-slot-button'),
+      h.DataAttribute('slot', slot),
       h.DataAttribute('held', isHeld ? 'true' : 'false'),
       h.AriaLabel(isHeld ? `Reload the ${name}` : `Switch to the ${name}`),
-      h.AriaKeyshortcuts(isHeld ? 'R' : 'Q'),
-      ...(isHeld && !canReload(model.player) ? [h.AriaDisabled(true)] : []),
-      h.Style({
-        left: percentOf(box.x - cluster.x, cluster.width),
-        width: percentOf(box.width, cluster.width),
+      ...Option.match(maybeKey, {
+        onNone: () => [],
+        onSome: key => [h.AriaKeyshortcuts(key)],
       }),
+      ...(isHeld && !canReload(model.player) ? [h.AriaDisabled(true)] : []),
+      h.Style(slotSpan(screen, SLOT_INDEX[slot])),
       h.OnClick(Message.ClickedGunSlot({ slot }), {
         focusSelector: '.game-surface',
       }),
     ],
-    [keyBadgeView(model, isHeld ? 'R' : 'Q', h)],
+    [
+      Option.match(maybeKey, {
+        onNone: () => h.empty,
+        onSome: key => keyBadgeView(model, key, h),
+      }),
+    ],
+  )
+}
+
+// NOTE: the knife's slot, right of the guns: a tap draws the knife, and a
+// tap on the knife in hand does nothing.
+const knifeSlotButtonView = (
+  model: Model,
+  screen: Screen,
+  h: ApplicationViewBuilder,
+): Html => {
+  const isHeld = isWieldingKnife(model.player)
+  return h.keyed('button')(
+    'Knife',
+    [
+      h.Type('button'),
+      h.Class('gun-slot-button'),
+      h.DataAttribute('slot', 'Knife'),
+      h.DataAttribute('held', isHeld ? 'true' : 'false'),
+      h.DataAttribute('out', isOutOfGuns(model.player) ? 'true' : 'false'),
+      h.AriaLabel(
+        isHeld ? `The ${KNIFE_NAME} is in hand` : `Switch to the ${KNIFE_NAME}`,
+      ),
+      h.AriaKeyshortcuts('F'),
+      ...(isHeld ? [h.AriaDisabled(true)] : []),
+      h.Style(slotSpan(screen, KNIFE_SLOT_INDEX)),
+      h.OnClick(Message.ClickedKnifeSlot(), {
+        focusSelector: '.game-surface',
+      }),
+    ],
+    [isHeld ? h.empty : keyBadgeView(model, 'F', h)],
   )
 }
 
@@ -159,63 +212,13 @@ const gunSlotsView = (
 ): Html =>
   h.div(
     [h.Class('gun-slots'), h.Role('group'), h.AriaLabel('Your guns')],
-    Array.map(slotGuns(model), gun => gunSlotButtonView(model, screen, gun, h)),
+    [
+      ...Array.map(slotGuns(model), gun =>
+        gunSlotButtonView(model, screen, gun, h),
+      ),
+      knifeSlotButtonView(model, screen, h),
+    ],
   )
-
-// THE KNIFE
-
-// NOTE: the knife button is held, not clicked, like the hold button: the
-// finger that lands on it stabs on repeat until it lifts (src/input.ts).
-// It sits outside the game surface, so it never takes a stick's finger.
-const toPressedKnifeButton = (
-  pointerType: string,
-  _button: number,
-  _screenX: number,
-  _screenY: number,
-  _timeStamp: number,
-  _clientX: number,
-  _clientY: number,
-  pointerId: number,
-): Option.Option<Message> =>
-  pointerType === 'mouse'
-    ? Option.none()
-    : Option.some(Message.PressedKnifeButton({ pointerId }))
-
-const knifeButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
-  isOnTouch(model)
-    ? h.div(
-        [h.Class('gun-cluster-knife')],
-        [
-          h.button(
-            [
-              h.Type('button'),
-              h.Class('icon-button cluster-button knife-button'),
-              h.AriaLabel(`Stab with the ${KNIFE_NAME}`),
-              h.AriaKeyshortcuts('F'),
-              h.DataAttribute(
-                'held',
-                HoldButton.isAnyOf(['Held'])(model.input.knifeButton)
-                  ? 'true'
-                  : 'false',
-              ),
-              h.DataAttribute(
-                'out',
-                isOutOfGuns(model.player) ? 'true' : 'false',
-              ),
-              h.OnPointerDown(toPressedKnifeButton),
-              h.OnContextMenu(Message.SuppressedContextMenu()),
-            ],
-            [
-              h.span([
-                h.Class('icon-button-glyph'),
-                h.AriaHidden(true),
-                h.Style({ backgroundImage: KNIFE_ICON }),
-              ]),
-            ],
-          ),
-        ],
-      )
-    : h.empty
 
 // UTILITY ICONS
 
@@ -223,7 +226,10 @@ const isMagazineLow = (model: Model): boolean =>
   heldLoaded(model.player) * 2 < heldStats(model.player).magazine
 
 const reloadIconView = (model: Model, h: ApplicationViewBuilder): Html =>
-  isOnTouch(model) && isMagazineLow(model) && canReload(model.player)
+  isOnTouch(model) &&
+  !isWieldingKnife(model.player) &&
+  isMagazineLow(model) &&
+  canReload(model.player)
     ? iconButtonView(
         {
           className: 'cluster-button reload-icon-button',
@@ -437,7 +443,6 @@ const clusterView = (
               }),
             ],
             [
-              knifeButtonView(model, h),
               gunSlotsView(model, screen, h),
               clusterSideView(model, screen, h),
               startWaveButtonView(model, h),

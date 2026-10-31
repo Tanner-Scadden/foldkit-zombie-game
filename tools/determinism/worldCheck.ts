@@ -14,13 +14,14 @@
 
 import './globals'
 import { Option } from 'effect'
+import { modifyFields } from 'foldkit/struct'
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { refreshIntent } from '../../src/frame'
-import { seatCrew } from '../../src/party'
+import { seatCrew, withSeat } from '../../src/party'
 import type { Intent } from '../../src/worldSchema'
 import { worldToJson } from '../../src/worldWire'
 import { playFrame, startedRun } from './script'
@@ -171,33 +172,39 @@ const played = Array.from({ length: 900 }).reduce(
 const intended = refreshIntent(played)
 
 // NOTE: co-op's crew joins the same World mid-wave (Phase 1): teammates who
-// walk, aim, fire, and stab their own way, so the bundle plays every seat.
+// walk, aim, fire, and stab their own way, so the bundle plays every seat:
+// the last teammate holds the knife, so its trigger stabs.
 const MATE_INTENTS: ReadonlyArray<Intent> = [
   {
     move: { x: -0.6, y: 0.8 },
     maybeAim: Option.some({ x: 0, y: -1 }),
     trigger: 'Held',
     interact: 'Released',
-    stab: 'Released',
   },
   {
     move: { x: 1, y: 0 },
     maybeAim: Option.none(),
     trigger: 'Held',
     interact: 'Held',
-    stab: 'Held',
   },
   {
     move: { x: 0, y: 0 },
     maybeAim: Option.some({ x: -1, y: 0 }),
-    trigger: 'Released',
+    trigger: 'Held',
     interact: 'Released',
-    stab: 'Held',
   },
 ]
 
+const KNIFE_SEAT = 3
+
 const requestFor = (players: number): PlayRequest => ({
-  world: worldToJson(seatCrew(intended, players)),
+  world: worldToJson(
+    withSeat(seatCrew(intended, players), KNIFE_SEAT, seatWorld =>
+      modifyFields(seatWorld, {
+        player: player => modifyFields(player, { wield: () => 'Knife' }),
+      }),
+    ),
+  ),
   intents: [
     [0, intentToJson(intended.intent)],
     ...MATE_INTENTS.slice(0, players - 1).map(

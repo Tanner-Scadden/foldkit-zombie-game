@@ -3,13 +3,14 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { NEUTRAL_INPUT } from '@munch/netcode'
+import { NEUTRAL_INPUT, type PlayerInput } from '@munch/netcode'
 
 import { FIXED_STEP_MS, PISTOL_MAGAZINE } from './constants'
 import { KNIFE_RULES } from './knife'
 import { update } from './main'
 import { Message } from './message'
 import {
+  type CarriedGun,
   GameEvent,
   type Model,
   Phase,
@@ -22,12 +23,15 @@ import { maybePlayerAt, withSeat } from './party'
 import {
   AIM_REACH,
   DEFAULT_ROOM_SETTINGS,
+  FIRE_BUTTON,
   type RoomWorld,
-  STAB_BUTTON,
+  actionCodeOf,
+  heldAction,
   startRoomWorld,
   stepRoomWorld,
 } from './roomWorld'
 import { SHOP_ITEMS, verdictFor } from './shop'
+import { SeatAction } from './stepWorld'
 import {
   SURFACE,
   holdingFirst,
@@ -47,13 +51,15 @@ import {
   gunsOf,
   heldGun,
   heldWeapon,
+  inHandOf,
   magazineOf,
 } from './weapons'
 import { Reload } from './worldSchema'
 
 // The knife (src/knife.ts) and the two gun slots (src/weapons.ts), played
-// through `update` the way a player plays them: F or the touch knife button
-// held to stab, and the shop's GUNS tab trading one gun for another.
+// through `update` the way a player plays them: F or a tap on the knife's
+// slot to draw it, fire to stab, Q or a gun's slot to go back, and the
+// shop's GUNS tab trading one gun for another.
 
 const FRAME_MS = FIXED_STEP_MS
 const ROW_Y = 104
@@ -101,12 +107,108 @@ const stabsIn = (seen: ReadonlyArray<Model>): number =>
 const tough = (id: number, x: number, y = ROW_Y): Zombie =>
   zombieOf('Shambler', id, x, y, { hp: 99 })
 
+const FIRE_THUMB = 70
+
+const fire = Message.PressedPointer({
+  pointerId: FIRE_THUMB,
+  device: 'Touch',
+  clientX: 600,
+  clientY: 200,
+})
+
+const letGoOfFire = Message.ReleasedPointer({ pointerId: FIRE_THUMB })
+
+const send = (start: Model, ...messages: ReadonlyArray<Message>): Model =>
+  Array.reduce(messages, start, (current, next) => update(current, next).model)
+
+const knifed = (zombies: ReadonlyArray<Zombie>): Model =>
+  send(fightingWith(zombies), Message.PressedKey({ code: 'KeyF' }))
+
 describe('the knife', () => {
-  test('F stabs the zombie in front for a little damage and a small shove', () => {
+  test('F puts the knife in hand, and a reload carries on while it is out', () => {
+    const reloading = modifyFields(fightingWith([]), {
+      player: player =>
+        modifyFields(player, {
+          arsenal: () =>
+            pistolOnly(modifyFields(STARTING_PISTOL, { loaded: () => 0 })),
+          reload: () => Reload.Reloading({ remainingMs: 600, durationMs: 800 }),
+        }),
+    })
+    const drawn = send(reloading, Message.PressedKey({ code: 'KeyF' }))
+    expect(drawn.player.wield).toBe('Knife')
+    expect(inHandOf(drawn.player)).toBe('Knife')
+    expect(drawn.player.reload._tag).toBe('Reloading')
+    const reloaded = lastOf(frames(drawn, tickCountFor(600) + 1))
+    expect(reloaded.player.reload._tag).toBe('Ready')
+    expect(heldGun(reloaded.player.arsenal).loaded).toBe(PISTOL_MAGAZINE)
+    expect(reloaded.player.wield).toBe('Knife')
+  })
+
+  test('changing guns from the knife stops the reload of the last gun', () => {
+    const reloading = modifyFields(fightingWith([]), {
+      player: player =>
+        modifyFields(player, {
+          arsenal: () => holdingSecond(freshGun('Smg')),
+          reload: () => Reload.Reloading({ remainingMs: 600, durationMs: 800 }),
+          wield: () => 'Knife',
+        }),
+    })
+    const toPistol = send(reloading, Message.ClickedGunSlot({ slot: 'First' }))
+    expect(heldWeapon(toPistol.player.arsenal)).toBe('Pistol')
+    expect(toPistol.player.reload._tag).toBe('Ready')
+    const back = send(reloading, Message.ClickedGunSlot({ slot: 'Second' }))
+    expect(back.player.reload._tag).toBe('Reloading')
+  })
+
+  test('a tap on the knife slot puts the knife in hand', () => {
     story(
       update,
-      given(fightingWith([tough(900, PLAYER_X + 10)])),
-      press('KeyF'),
+      given(fightingWith([])),
+      message(Message.ClickedKnifeSlot()),
+      model(({ player }) => {
+        expect(player.wield).toBe('Knife')
+      }),
+    )
+  })
+
+  test('a second tap on the knife slot does nothing, not even a reload', () => {
+    const emptyPistol = modifyFields(fightingWith([]), {
+      player: player =>
+        modifyFields(player, {
+          arsenal: () =>
+            pistolOnly(modifyFields(STARTING_PISTOL, { loaded: () => 0 })),
+        }),
+    })
+    const drawn = update(emptyPistol, Message.ClickedKnifeSlot()).model
+    const again = update(drawn, Message.ClickedKnifeSlot())
+    expect(again.model.player).toEqual(drawn.player)
+    expect(again.model.player.reload._tag).toBe('Ready')
+    expect(again.commands ?? []).toHaveLength(0)
+  })
+
+  test('with a gun in hand, fire shoots and never stabs', () => {
+    const seen = frames(
+      send(fightingWith([tough(900, PLAYER_X + 10)]), fire),
+      3,
+    )
+    expect(stabsIn(seen)).toBe(0)
+    expect(
+      Array.some(seen, current =>
+        Array.some(current.frameEvents, GameEvent.isAnyOf(['Fired'])),
+      ),
+    ).toBe(true)
+  })
+
+  test('F alone does not stab: the knife waits for the trigger', () => {
+    const seen = frames(knifed([tough(900, PLAYER_X + 10)]), 3)
+    expect(stabsIn(seen)).toBe(0)
+  })
+
+  test('in hand, fire stabs the zombie in front for a little damage and a small shove', () => {
+    story(
+      update,
+      given(knifed([tough(900, PLAYER_X + 10)])),
+      message(fire),
       tick(FRAME_MS),
       model(current => {
         const hit = zombieIn(current, 900)
@@ -116,6 +218,8 @@ describe('the knife', () => {
         expect(Array.map(current.frameEvents, ({ _tag }) => _tag)).toEqual(
           expect.arrayContaining(['KnifeStabbed', 'KnifeHit', 'ZombieHit']),
         )
+        expect(current.bullets).toHaveLength(0)
+        expect(heldGun(current.player.arsenal).loaded).toBe(PISTOL_MAGAZINE)
       }),
     )
   })
@@ -126,8 +230,8 @@ describe('the knife', () => {
     const behind = tough(902, PLAYER_X - 9)
     story(
       update,
-      given(fightingWith([near, farther, behind])),
-      press('KeyF'),
+      given(knifed([near, farther, behind])),
+      message(fire),
       tick(FRAME_MS),
       model(current => {
         expect(zombieIn(current, 900).hp).toBe(98)
@@ -137,121 +241,145 @@ describe('the knife', () => {
     )
   })
 
-  test('held, it stabs on repeat, one stab per cooldown and no faster', () => {
+  test('fire held stabs on repeat, one stab per cooldown and no faster', () => {
     const lug = zombieOf('Tank', 900, PLAYER_X + 12, ROW_Y, { hp: 99 })
-    const held = update(
-      fightingWith([lug]),
-      Message.PressedKey({ code: 'KeyF' }),
-    ).model
-    const seen = frames(
-      held,
-      tickCountFor(KNIFE_RULES.intervalMs * 3 - FRAME_MS),
-    )
+    const held = send(knifed([lug]), fire)
+    const seen = frames(held, tickCountFor(KNIFE_RULES.intervalMs * 3 - FRAME_MS))
     expect(stabsIn(seen)).toBe(3)
     expect(zombieIn(lastOf(seen), 900).hp).toBe(99 - 3 * KNIFE_RULES.damage)
   })
 
-  test('letting go of F stops the stabbing', () => {
-    const held = update(
-      fightingWith([tough(900, PLAYER_X + 10)]),
-      Message.PressedKey({ code: 'KeyF' }),
-    ).model
-    const firstStab = update(
-      held,
-      Message.TickedFrame({ deltaTime: FRAME_MS }),
-    ).model
-    const letGo = update(firstStab, Message.ReleasedKey({ code: 'KeyF' })).model
-    expect(
-      stabsIn(frames(letGo, tickCountFor(KNIFE_RULES.intervalMs * 3))),
-    ).toBe(0)
-  })
-
-  test('it needs no ammo: it stabs mid-reload with an empty pistol and spends nothing', () => {
-    const empty = modifyFields(fightingWith([tough(900, PLAYER_X + 10)]), {
-      player: player =>
-        modifyFields(player, {
-          arsenal: () =>
-            pistolOnly(modifyFields(STARTING_PISTOL, { loaded: () => 0 })),
-          reload: () => Reload.Reloading({ remainingMs: 600, durationMs: 800 }),
-        }),
-    })
-    story(
-      update,
-      given(empty),
-      press('KeyF'),
-      tick(FRAME_MS),
-      model(current => {
-        expect(zombieIn(current, 900).hp).toBe(98)
-        expect(heldGun(current.player.arsenal).loaded).toBe(0)
-        expect(current.player.reload._tag).toBe('Reloading')
-      }),
+  test('letting go of fire stops the stabbing', () => {
+    const firstStab = lastOf(
+      frames(send(knifed([tough(900, PLAYER_X + 10)]), fire), 1),
     )
+    const letGo = send(firstStab, letGoOfFire)
+    expect(stabsIn(frames(letGo, tickCountFor(KNIFE_RULES.intervalMs * 3)))).toBe(0)
   })
 
-  test('it stabs while the gun fires, and the gun keeps its own rounds', () => {
+  test('another finger lifting does not let go of the trigger', () => {
+    const held = send(
+      knifed([tough(900, PLAYER_X + 10)]),
+      fire,
+      Message.ReleasedPointer({ pointerId: 7 }),
+    )
+    expect(stabsIn(frames(held, tickCountFor(KNIFE_RULES.intervalMs * 2)))).toBe(2)
+  })
+
+  test('Q puts the knife away for the last gun held', () => {
     const smg = freshGun('Smg')
     story(
       update,
       given(
-        modifyFields(fightingWith([tough(900, PLAYER_X + 10)]), {
+        modifyFields(fightingWith([]), {
           player: player =>
             modifyFields(player, { arsenal: () => holdingSecond(smg) }),
         }),
       ),
       press('KeyF'),
-      tick(FRAME_MS),
-      model(current => {
-        expect(zombieIn(current, 900).hp).toBe(98)
-        expect(heldGun(current.player.arsenal)).toEqual(smg)
+      release('KeyF'),
+      press('KeyQ'),
+      model(({ player }) => {
+        expect(player.wield).toBe('Gun')
+        expect(heldGun(player.arsenal)).toEqual(smg)
+      }),
+      release('KeyQ'),
+      press('KeyQ'),
+      model(({ player }) => {
+        expect(heldWeapon(player.arsenal)).toBe('Pistol')
       }),
     )
   })
 
-  test('a finger on the touch knife button stabs until it lifts', () => {
-    const fingered = update(
-      fightingWith([tough(900, PLAYER_X + 10)]),
-      Message.PressedKnifeButton({ pointerId: 31 }),
-    ).model
-    expect(fingered.lastDevice).toBe('Touch')
-    const stabbed = frames(fingered, 1)
-    expect(stabsIn(stabbed)).toBe(1)
-    const lifted = update(
-      lastOf(stabbed),
-      Message.ReleasedPointer({ pointerId: 31 }),
-    ).model
-    expect(
-      stabsIn(frames(lifted, tickCountFor(KNIFE_RULES.intervalMs * 2))),
-    ).toBe(0)
+  test('a tap on either gun slot leaves the knife for that gun', () => {
+    const smg = freshGun('Smg')
+    const armed = modifyFields(fightingWith([]), {
+      player: player =>
+        modifyFields(player, { arsenal: () => holdingSecond(smg) }),
+    })
+    story(
+      update,
+      given(armed),
+      message(Message.ClickedKnifeSlot()),
+      message(Message.ClickedGunSlot({ slot: 'First' })),
+      model(({ player }) => {
+        expect(player.wield).toBe('Gun')
+        expect(heldWeapon(player.arsenal)).toBe('Pistol')
+      }),
+    )
+    const emptySmg = modifyFields(smg, { loaded: () => 0 })
+    story(
+      update,
+      given(
+        modifyFields(armed, {
+          player: player =>
+            modifyFields(player, { arsenal: () => holdingSecond(emptySmg) }),
+        }),
+      ),
+      message(Message.ClickedKnifeSlot()),
+      message(Message.ClickedGunSlot({ slot: 'Second' })),
+      model(({ player }) => {
+        expect(player.wield).toBe('Gun')
+        expect(heldGun(player.arsenal)).toEqual(emptySmg)
+        expect(player.reload._tag).toBe('Ready')
+      }),
+    )
   })
 
-  test('another finger lifting does not let go of the knife', () => {
-    const fingered = update(
-      fightingWith([tough(900, PLAYER_X + 10)]),
-      Message.PressedKnifeButton({ pointerId: 31 }),
-    ).model
-    const other = update(
-      fingered,
-      Message.ReleasedPointer({ pointerId: 7 }),
-    ).model
-    expect(
-      stabsIn(frames(other, tickCountFor(KNIFE_RULES.intervalMs * 2))),
-    ).toBe(2)
+  test('R with the knife out puts the last gun back and reloads it', () => {
+    const empty = modifyFields(fightingWith([]), {
+      player: player =>
+        modifyFields(player, {
+          arsenal: () =>
+            pistolOnly(modifyFields(STARTING_PISTOL, { loaded: () => 0 })),
+          wield: () => 'Knife',
+        }),
+    })
+    story(
+      update,
+      given(empty),
+      press('KeyR'),
+      model(({ player }) => {
+        expect(player.wield).toBe('Gun')
+        expect(player.reload._tag).toBe('Reloading')
+      }),
+    )
+  })
+
+  test('with every gun dry, the next pull draws the knife by itself', () => {
+    const dry = (gun: CarriedGun): CarriedGun =>
+      modifyFields(gun, { rounds: () => 0, loaded: () => 0 })
+    const allDry = modifyFields(fightingWith([tough(900, PLAYER_X + 10)]), {
+      player: player =>
+        modifyFields(player, {
+          arsenal: () =>
+            holdingSecond(dry(freshGun('Shotgun')), dry(freshGun('Smg'))),
+        }),
+    })
+    const seen = frames(send(allDry, fire), 1)
+    const pulled = lastOf(seen)
+    expect(pulled.player.wield).toBe('Knife')
+    expect(Array.some(pulled.frameEvents, GameEvent.isAnyOf(['RanDry']))).toBe(
+      true,
+    )
+    const stabbing = frames(pulled, tickCountFor(KNIFE_RULES.intervalMs))
+    expect(stabsIn([...seen, ...stabbing])).toBeGreaterThan(0)
+    expect(zombieIn(lastOf(stabbing), 900).hp).toBeLessThan(99)
   })
 
   test('it rests while the player browses the shop', () => {
     story(
       update,
       given(
-        modifyFields(fightingWith([tough(900, PLAYER_X + 10)]), {
+        modifyFields(knifed([tough(900, PLAYER_X + 10)]), {
           shop: () => ShopState.Browsing({ focusedItem: 'Heart' }),
         }),
       ),
-      press('KeyF'),
+      message(fire),
       tick(FRAME_MS),
       model(current => {
         expect(zombieIn(current, 900).hp).toBe(99)
       }),
-      release('KeyF'),
     )
   })
 
@@ -259,14 +387,38 @@ describe('the knife', () => {
     const doomed = zombieOf('Shambler', 900, PLAYER_X + 10, ROW_Y, { hp: 1 })
     story(
       update,
-      given(fightingWith([doomed])),
-      press('KeyF'),
+      given(knifed([doomed])),
+      message(fire),
       tick(FRAME_MS),
       model(current => {
         expect(current.wallet.earned).toBeGreaterThan(0)
         expect(
           Array.some(current.frameEvents, GameEvent.isAnyOf(['ZombieKilled'])),
         ).toBe(true)
+      }),
+    )
+  })
+
+  test('a new gun goes in hand, putting the knife away', () => {
+    const shopping = modifyFields(knifed([]), {
+      phase: () =>
+        Phase.Preparation({
+          wave: 2,
+          remainingMs: 15_000,
+          durationMs: 20_000,
+          spawns: [DISTANT_SPAWN],
+        }),
+      wallet: () => ({ balance: 200, earned: 200, shown: 200 }),
+      shop: () => ShopState.Browsing({ focusedItem: 'Smg' }),
+    })
+    story(
+      update,
+      given(shopping),
+      message(Message.ClickedBuyButton({ item: 'Smg' })),
+      Command.resolve(FocusShopItem, Message.CompletedFocusShopItem()),
+      model(({ player }) => {
+        expect(player.wield).toBe('Gun')
+        expect(heldWeapon(player.arsenal)).toBe('Smg')
       }),
     )
   })
@@ -376,7 +528,9 @@ describe('two gun slots', () => {
         clientY: 200,
       }),
     ).model
-    expect(heldWeapon(lastOf(frames(stuck, 2)).player.arsenal)).toBe('Smg')
+    const stuckAfter = lastOf(frames(stuck, 2)).player
+    expect(heldWeapon(stuckAfter.arsenal)).toBe('Smg')
+    expect(stuckAfter.wield).toBe('Knife')
   })
 
   test('the pistol upgrade goes with the pistol, wherever it sits', () => {
@@ -419,24 +573,30 @@ describe('the knife in co-op', () => {
     })
   }
 
-  const stepWith = (current: RoomWorld, stabber: number): RoomWorld =>
+  const stepWith = (
+    current: RoomWorld,
+    slotInput: (slot: number) => Partial<PlayerInput>,
+  ): RoomWorld =>
     stepRoomWorld(
       current,
       Array.map([0, 1], slot => ({
         slot,
-        input: {
-          ...NEUTRAL_INPUT,
-          aimX: AIM_REACH,
-          buttons: slot === stabber ? STAB_BUTTON : 0,
-        },
+        input: { ...NEUTRAL_INPUT, aimX: AIM_REACH, ...slotInput(slot) },
         presence: 'Here' as const,
         viewLagTicks: 0,
         rttMs: 0,
       })),
     )
 
-  test('a seat holding the knife bit stabs in front of its own player only', () => {
-    const stepped = stepWith(room(), 1)
+  const pressed = (action: SeatAction, count: number): number =>
+    heldAction(actionCodeOf(action), count)
+
+  test('a seat draws its own knife and its fire stabs in front of its own player only', () => {
+    const stepped = stepWith(room(), slot =>
+      slot === 1
+        ? { action: pressed(SeatAction.Knife(), 1), buttons: FIRE_BUTTON }
+        : {},
+    )
     const hpOf = (id: number): number =>
       Option.getOrThrow(
         Array.findFirst(stepped.world.zombies, zombie => zombie.id === id),
@@ -445,7 +605,23 @@ describe('the knife in co-op', () => {
     expect(hpOf(901)).toBe(99)
     const stabber = Option.getOrThrow(maybePlayerAt(stepped.world, 1))
     const other = Option.getOrThrow(maybePlayerAt(stepped.world, 0))
+    expect(stabber.player.wield).toBe('Knife')
     expect(stabber.player.knifeCooldownMs).toBeGreaterThan(0)
+    expect(other.player.wield).toBe('Gun')
     expect(other.player.knifeCooldownMs).toBe(0)
+  })
+
+  test('a seat goes back to a gun by its slot', () => {
+    const drawn = stepWith(room(), slot =>
+      slot === 1 ? { action: pressed(SeatAction.Knife(), 1) } : {},
+    )
+    const back = stepWith(drawn, slot =>
+      slot === 1
+        ? { action: pressed(SeatAction.Draw({ slot: 'First' }), 2) }
+        : {},
+    )
+    const seat = Option.getOrThrow(maybePlayerAt(back.world, 1))
+    expect(seat.player.wield).toBe('Gun')
+    expect(heldWeapon(seat.player.arsenal)).toBe('Pistol')
   })
 })

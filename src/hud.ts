@@ -31,7 +31,6 @@ import {
   textWidth,
 } from './font'
 import { clamp } from './geometry'
-import { hintIconFrame, keyIcon } from './hintIcons'
 import { isPending } from './lessons'
 import {
   type CarriedGun,
@@ -59,6 +58,7 @@ import {
   FLASH_HEART_SPRITE,
   HEART_SPRITE,
   type Palette,
+  type Sprite,
   TOP_LEFT,
   TRAP_ICONS,
   group,
@@ -75,6 +75,7 @@ import {
   heldSlotOf,
   isReloadable,
   isReloading,
+  isWieldingKnife,
   looseRounds,
   magazineOf,
   maxTier,
@@ -91,7 +92,8 @@ const STREAK_Y = HUD_MARGIN + 30
 const SLOT_WIDTH = 40
 const SLOT_HEIGHT = 12
 const SLOT_GAP = 3
-const CLUSTER_WIDTH = 2 * SLOT_WIDTH + SLOT_GAP
+const KNIFE_SLOT_WIDTH = 26
+const CLUSTER_WIDTH = 2 * SLOT_WIDTH + KNIFE_SLOT_WIDTH + 2 * SLOT_GAP
 const TRAP_SLOT_WIDTH = 24
 
 const BOOST_CHIPS_LEFT = HUD_MARGIN + PLAYER_MAX_HP * HEART_SPACING + 2
@@ -116,8 +118,9 @@ type HudLayout = Readonly<{
 }>
 
 // NOTE: the guns sit at the bottom middle, nudged a little left in landscape
-// so the buttons beside them stop short of the stall's outline. In portrait
-// they sit at the bottom of the thumb area and the HUD is a band on top.
+// so the buttons beside them stop short of the stall's outline, with the
+// knife's slot on their right. In portrait they sit at the bottom of the
+// thumb area and the HUD is a band on top.
 const hudLayoutFor = (screen: Screen): HudLayout => {
   const slotTop = screen.height - HUD_MARGIN - SLOT_HEIGHT
   if (screen.layout === 'Landscape') {
@@ -129,7 +132,7 @@ const hudLayoutFor = (screen: Screen): HudLayout => {
       boostLeft: BOOST_CHIPS_LEFT,
       boostTop: HUD_MARGIN - 3,
       boostColumns: 2,
-      slotLeft: 115,
+      slotLeft: 86,
       slotTop,
       trapTop: slotTop,
     }
@@ -371,6 +374,8 @@ type SlotLook = Readonly<{
   ammoLook: AmmoLook
   maybeMeter?: Option.Option<number>
   isBeckoning?: boolean
+  maybeIcon?: Option.Option<Sprite>
+  isPulsing?: boolean
 }>
 
 const METER_WIDTH = 12
@@ -432,11 +437,17 @@ const isBlinkOff = (look: AmmoLook, elapsedMs: number): boolean => {
 const ammoTone = (look: AmmoLook, elapsedMs: number): TextTone =>
   isBlinkOff(look, elapsedMs) ? 'Plain' : AMMO_TONES[look]
 
+const KNIFE_PULSE_MS = 260
+
 const slotBorder = (
-  { isHeld, ammoLook: look, isBeckoning = false }: SlotLook,
+  { isHeld, ammoLook: look, isBeckoning = false, isPulsing = false }: SlotLook,
   elapsedMs: number,
 ): string => {
-  if (look === 'Last' && !isBlinkOff(look, elapsedMs)) {
+  if (isPulsing) {
+    return Math.floor(elapsedMs / KNIFE_PULSE_MS) % 2 === 0
+      ? SLOT_LAST_BORDER
+      : SLOT_HELD_BORDER
+  } else if (look === 'Last' && !isBlinkOff(look, elapsedMs)) {
     return SLOT_LAST_BORDER
   } else if (isHeld) {
     return SLOT_HELD_BORDER
@@ -462,12 +473,22 @@ const tierPipShapes = (
     }),
   )
 
+// NOTE: slots 0 and 1 are the guns, slot 2 the knife, narrower: it has
+// only its icon and ∞.
+export const KNIFE_SLOT_INDEX = 2
+
+const slotLeftOf = (layout: HudLayout, index: number): number =>
+  layout.slotLeft + index * (SLOT_WIDTH + SLOT_GAP)
+
+const slotWidthOf = (index: number): number =>
+  index === KNIFE_SLOT_INDEX ? KNIFE_SLOT_WIDTH : SLOT_WIDTH
+
 export const gunSlotBox = (screen: Screen, index: number): Box => {
   const layout = hudLayoutFor(screen)
   return {
-    x: layout.slotLeft + index * (SLOT_WIDTH + SLOT_GAP),
+    x: slotLeftOf(layout, index),
     y: layout.slotTop,
-    width: SLOT_WIDTH,
+    width: slotWidthOf(index),
     height: SLOT_HEIGHT,
   }
 }
@@ -488,22 +509,30 @@ const slotShapes = (
   look: SlotLook,
   elapsedMs: number,
 ): ReadonlyArray<Canvas.Shape> => {
-  const { maybeGun, ammo, isHeld, ammoLook, maybeMeter = Option.none() } = look
-  const x = layout.slotLeft + index * (SLOT_WIDTH + SLOT_GAP)
+  const {
+    maybeGun,
+    ammo,
+    isHeld,
+    ammoLook,
+    maybeMeter = Option.none(),
+    maybeIcon = Option.none(),
+  } = look
+  const x = slotLeftOf(layout, index)
+  const width = slotWidthOf(index)
   const top = layout.slotTop
   const border = slotBorder(look, elapsedMs)
   const shapes = [
     Canvas.Rect({
       x,
       y: top,
-      width: SLOT_WIDTH,
+      width,
       height: SLOT_HEIGHT,
       fill: border,
     }),
     Canvas.Rect({
       x: x + 1,
       y: top + 1,
-      width: SLOT_WIDTH - 2,
+      width: width - 2,
       height: SLOT_HEIGHT - 2,
       fill: SLOT_FILL,
     }),
@@ -514,12 +543,16 @@ const slotShapes = (
         ...tierPipShapes(x, top, slotGun),
       ],
     }),
+    ...Option.match(maybeIcon, {
+      onNone: () => [],
+      onSome: icon => [placeSprite(x + 3, top + 1, icon)],
+    }),
     ...Option.match(maybeMeter, {
       onNone: () =>
         textShapes(
           ammo,
           ammoTone(ammoLook, elapsedMs),
-          x + SLOT_WIDTH - 3,
+          x + width - 3,
           top + SLOT_TEXT_TOP,
           'Right',
         ),
@@ -580,6 +613,38 @@ const EMPTY_SLOT: SlotLook = {
   ammoLook: 'Loaded',
 }
 
+// THE KNIFE'S SLOT
+
+// NOTE: the knife's slot, right of the guns: its icon and ∞, held when the
+// knife is in hand. With every gun dry it pulses red, as the knife comes
+// out by itself.
+const KNIFE_PALETTE: Palette = { X: '#e9e3cf', R: '#a8302a', o: '#140c10' }
+
+const KNIFE_SPRITE = spriteShapes(
+  [
+    '.......XX',
+    '......XXX',
+    '.....XXX.',
+    '....XXX..',
+    '...XXX...',
+    '.RXXX....',
+    '..RR.....',
+    '.RRR.....',
+    'RR.R.....',
+  ],
+  KNIFE_PALETTE,
+  TOP_LEFT,
+)
+
+const knifeSlotLook = (player: Player): SlotLook => ({
+  maybeGun: Option.none(),
+  maybeIcon: Option.some(KNIFE_SPRITE),
+  ammo: ENDLESS_ROUNDS,
+  isHeld: isWieldingKnife(player),
+  ammoLook: 'Loaded',
+  isPulsing: isOutOfGuns(player),
+})
+
 // NOTE: until the player has swapped once, the gun they are not holding
 // pulses, where the swap happens (its Q badge on a keyboard, a tap on
 // touch), in place of a SWAP GUNS label in the room.
@@ -595,20 +660,32 @@ const loadoutShapes = (
 ): ReadonlyArray<Canvas.Shape> => {
   const { player } = model
   const { arsenal } = player
-  const held = heldSlotOf(arsenal)
+  const held = isWieldingKnife(player)
+    ? Option.none()
+    : Option.some(heldSlotOf(arsenal))
   const isBeckoning = isSwapBeckoning(model)
   const [first, ...rest] = gunsOf(arsenal)
   const secondSlot: SlotLook = Option.match(Array.head(rest), {
     onNone: () => EMPTY_SLOT,
     onSome: second =>
-      beckonWhen(gunSlotLook(player, second, held === 'Second'), isBeckoning),
+      beckonWhen(
+        gunSlotLook(player, second, Option.contains(held, 'Second')),
+        isBeckoning,
+      ),
   })
+  const isFirstHeld = Option.contains(held, 'First')
   const firstSlot = Array.isReadonlyArrayNonEmpty(rest)
-    ? beckonWhen(gunSlotLook(player, first, held === 'First'), isBeckoning)
-    : gunSlotLook(player, first, held === 'First')
+    ? beckonWhen(gunSlotLook(player, first, isFirstHeld), isBeckoning)
+    : gunSlotLook(player, first, isFirstHeld)
   return [
     ...slotShapes(layout, 0, firstSlot, model.elapsedMs),
     ...slotShapes(layout, 1, secondSlot, model.elapsedMs),
+    ...slotShapes(
+      layout,
+      KNIFE_SLOT_INDEX,
+      knifeSlotLook(player),
+      model.elapsedMs,
+    ),
   ]
 }
 
@@ -668,63 +745,6 @@ const trapStockShapes = (
 
 const NOTICE_LIFT_PX = 14
 const NOTICE_MARGIN_PX = 4
-
-// NOTE: with every gun dry, a keyboard player sees the knife's key and the
-// knife over their head, blinking, until a gun has rounds again. On touch
-// the knife button glows instead (src/touchControls.ts).
-const KNIFE_PALETTE: Palette = { X: '#e9e3cf', R: '#a8302a', o: '#140c10' }
-
-const KNIFE_SPRITE = spriteShapes(
-  [
-    '.......XX',
-    '......XXX',
-    '.....XXX.',
-    '....XXX..',
-    '...XXX...',
-    '.RXXX....',
-    '..RR.....',
-    '.RRR.....',
-    'RR.R.....',
-  ],
-  KNIFE_PALETTE,
-  TOP_LEFT,
-)
-
-const KNIFE_KEY = keyIcon('F')
-const KNIFE_PROMPT_LIFT_PX = 30
-const KNIFE_PROMPT_GAP_PX = 2
-const KNIFE_PROMPT_BLINK_MS = 260
-
-const knifePromptShapes = (
-  model: Model,
-  camera: Camera,
-): ReadonlyArray<Canvas.Shape> => {
-  if (
-    model.lastDevice !== 'KeyboardMouse' ||
-    !Phase.isAnyOf(['Wave'])(model.phase) ||
-    !isOutOfGuns(model.player)
-  ) {
-    return []
-  }
-  const player = worldToView(camera, model.player)
-  const width = KNIFE_KEY.width + KNIFE_PROMPT_GAP_PX + 9
-  const left = Math.round(player.x - width / 2)
-  const top = Math.round(player.y) - KNIFE_PROMPT_LIFT_PX
-  return [
-    placeSprite(left, top, hintIconFrame(KNIFE_KEY, model.elapsedMs)),
-    group({
-      opacity:
-        Math.floor(model.elapsedMs / KNIFE_PROMPT_BLINK_MS) % 2 === 0 ? 1 : 0.5,
-      shapes: [
-        placeSprite(
-          left + KNIFE_KEY.width + KNIFE_PROMPT_GAP_PX,
-          top - 1,
-          KNIFE_SPRITE,
-        ),
-      ],
-    }),
-  ]
-}
 
 const trapNoticeShapes = (
   model: Model,
@@ -814,7 +834,6 @@ const playHudShapes = (
   ),
   ...trapStockShapes(model, layout),
   ...trapNoticeShapes(model, camera),
-  ...knifePromptShapes(model, camera),
   ...stallBubbleShapes(model, camera),
   ...kitchenBubbleShapes(model, camera),
   ...roundHudShapes(model, layout),

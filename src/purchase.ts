@@ -136,13 +136,13 @@ export const holdProgress = (purchase: Purchase): number =>
     Spent: () => 0,
   })
 
-// NOTE: standing still to buy: not moving, firing, or stabbing, the shop
-// shut, and the wave past its first moments.
+// NOTE: standing still to buy: not moving, firing, or stabbing (the
+// trigger, with the knife in hand), the shop shut, and the wave past its
+// first moments.
 export const isStandingToBuy = (world: World): boolean =>
   world.intent.move.x === 0 &&
   world.intent.move.y === 0 &&
   world.intent.trigger === 'Released' &&
-  world.intent.stab === 'Released' &&
   !ShopState.isAnyOf(['Browsing'])(world.shop) &&
   !(
     Phase.isAnyOf(['Wave'])(world.phase) &&
@@ -236,7 +236,11 @@ export const advancePurchase = (world: World, deltaMs: number): World => {
         ? world
         : withPurchase(world, isStanding ? Purchase.Spent() : Purchase.Idle()),
     Spent: () =>
-      isHeld ? fromIdle() : isStanding ? world : withPurchase(world, Purchase.Idle()),
+      isHeld
+        ? fromIdle()
+        : isStanding
+          ? world
+          : withPurchase(world, Purchase.Idle()),
   })
 }
 

@@ -98,6 +98,7 @@ export const isReloadKey = (code: string): boolean => code === RELOAD_KEY
 
 export const isSwapKey = (code: string): boolean => code === SWAP_KEY
 
+// NOTE: F draws the knife, the third slot; the trigger then stabs.
 export const isKnifeKey = (code: string): boolean => code === KNIFE_KEY
 
 const axis = (isNegative: boolean, isPositive: boolean): number =>
@@ -144,7 +145,6 @@ export const releaseAll = (input: Input): Input =>
     moveStick: () => Stick.Idle(),
     aimStick: () => Stick.Idle(),
     holdButton: () => HoldButton.Released(),
-    knifeButton: () => HoldButton.Released(),
   })
 
 export const releaseSticks = (input: Input): Input =>
@@ -289,7 +289,6 @@ export const releasePointer = (input: Input, pointerId: number): Input =>
     aimStick: stick => releaseStickPointer(stick, pointerId),
     mouseButton: mouseButton => releaseMouseButton(mouseButton, pointerId),
     holdButton: holdButton => releaseHoldButton(holdButton, pointerId),
-    knifeButton: knifeButton => releaseHoldButton(knifeButton, pointerId),
   })
 
 // NOTE: a finger on the touch HUD's hold button. The button sits outside
@@ -301,17 +300,6 @@ export const pressHoldButton = (input: Input, pointerId: number): Input =>
       HoldButton.match(holdButton, {
         Released: () => HoldButton.Held({ pointerId }),
         Held: () => holdButton,
-      }),
-  })
-
-// NOTE: a finger on the touch HUD's knife button holds the intent's stab
-// until it lifts, as the hold button holds interact.
-export const pressKnifeButton = (input: Input, pointerId: number): Input =>
-  modifyFields(input, {
-    knifeButton: knifeButton =>
-      HoldButton.match(knifeButton, {
-        Released: () => HoldButton.Held({ pointerId }),
-        Held: () => knifeButton,
       }),
   })
 
@@ -375,12 +363,6 @@ const interactOf = (input: Input): Trigger =>
     ? 'Held'
     : 'Released'
 
-const stabOf = (input: Input): Trigger =>
-  Array.contains(input.pressedKeys, KNIFE_KEY) ||
-  HoldButton.isAnyOf(['Held'])(input.knifeButton)
-    ? 'Held'
-    : 'Released'
-
 export const deriveIntent = (
   input: Input,
   player: Player,
@@ -398,7 +380,6 @@ export const deriveIntent = (
   ),
   trigger: triggerOf(input),
   interact: interactOf(input),
-  stab: stabOf(input),
 })
 
 export const thumbOffset = (stick: Stick): Vector =>

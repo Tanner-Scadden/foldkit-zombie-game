@@ -45,17 +45,20 @@ import {
 } from './model'
 import {
   type Facing,
+  type Sprite,
   type SpriteSet,
   type Tone,
   frameAt,
   group,
   gunSprite,
+  knifeSprite,
 } from './sprite'
 import {
   type MuzzleFlash,
   type WeaponStats,
   heldTier,
   heldWeapon,
+  isWieldingKnife,
   statsAt,
 } from './weapons'
 
@@ -265,19 +268,30 @@ export const playerShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
     shapes: playerFrames(model)[playerTone(player)][facing],
   })
   const rattle = lidRattlePx(player, model.elapsedMs)
+  const angle = Math.atan2(player.facing.y, player.facing.x)
   const gun = group({
     translate: {
       x: Math.round(bodyX + player.facing.x * GUN_HOLD_PX) + rattle,
       y: Math.round(bodyY + player.facing.y * GUN_HOLD_PX),
     },
     opacity: playerOpacity(player),
-    shapes: gunSprite(
-      weapon,
-      tier,
-      Math.atan2(player.facing.y, player.facing.x) + swingTurn(weapon, recoil),
-    ),
+    shapes: heldSprite(player, weapon, tier, angle + swingTurn(weapon, recoil)),
   })
   return player.facing.y < AIMING_UP ? [gun, body] : [body, gun]
+}
+
+// NOTE: the knife in hand rests where the gun would; mid-slash the thrust
+// blade (knifeSlashShapes) takes its place.
+const heldSprite = (
+  player: Player,
+  weapon: WeaponKind,
+  tier: number,
+  angle: number,
+): Sprite => {
+  if (!isWieldingKnife(player)) {
+    return gunSprite(weapon, tier, angle)
+  }
+  return Option.isSome(maybeSlashShare(player)) ? [] : knifeSprite(angle)
 }
 
 // THE KNIFE

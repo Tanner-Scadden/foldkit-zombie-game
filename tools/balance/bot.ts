@@ -17,7 +17,7 @@ import { DialogBlock } from '@foldkit/ui'
 
 import { assistAim } from '../../src/aimAssist'
 import { isCounterOpen, maybeAmmoItemOf } from '../../src/ammoCounter'
-import { ammoLevelOf } from '../../src/ammoWarning'
+import { ammoLevelOf, isOutOfGuns } from '../../src/ammoWarning'
 import {
   boxCenter,
   distanceToBox,
@@ -71,6 +71,7 @@ import {
   heldLoaded,
   heldStats,
   isReloading,
+  isWieldingKnife,
   maxRounds,
   maxTier,
   maybeOtherGun,
@@ -125,7 +126,7 @@ const KEYS = {
   left: 'KeyA',
   right: 'KeyD',
   interact: 'Enter',
-  stab: 'KeyF',
+  knife: 'KeyF',
 }
 
 // The options of the run being played. play sets it before every run.
@@ -753,8 +754,12 @@ const panStance = (model: Model): Vector | undefined => {
 
 // THE KNIFE
 
-// The bot stabs a zombie within the knife's reach while its gun cannot
-// shoot: mid-reload, empty with nothing to load, or a spent fridge weapon.
+// The knife is the third slot: F draws it and the trigger then stabs. The
+// bot draws it while a zombie is within the knife's reach and its gun
+// cannot shoot (mid-reload, empty with nothing to load, or a spent fridge
+// weapon); with every gun dry the game draws it by itself. A reload carries
+// on while the knife is out, so it goes back to its last gun (Q) as soon
+// as that gun can shoot again and a gun has rounds.
 const STAB_SLACK_PX = 1
 
 const isGunIdle = (model: Model): boolean => {
@@ -767,13 +772,22 @@ const isGunIdle = (model: Model): boolean => {
   )
 }
 
-const stabbing = (model: Model, keys: Set<string>): Set<string> => {
-  const isInReach = walking(model).some(
+const isWithinKnife = (model: Model): boolean =>
+  walking(model).some(
     zombie =>
       distance(model.player, zombie) - bodyRadiusOf(zombie) - PLAYER_RADIUS <=
       KNIFE_RULES.reachPx - STAB_SLACK_PX,
   )
-  return isInReach && isGunIdle(model) ? new Set([...keys, KEYS.stab]) : keys
+
+const handleKnife = (model: Model): Model => {
+  if (!isWieldingKnife(model.player)) {
+    return isWithinKnife(model) && isGunIdle(model)
+      ? tapKey(model, KEYS.knife)
+      : model
+  }
+  return !isOutOfGuns(model.player) && !isGunIdle(model)
+    ? tapKey(model, 'KeyQ')
+    : model
 }
 
 const kite = (model: Model): Vector => {
@@ -1928,9 +1942,8 @@ export const play = (
       }
     } else {
       if (frame % MOVE_EVERY_FRAMES === 0) {
-        model = pressKeys(
-          model,
-          stabbing(
+        model = handleKnife(
+          pressKeys(
             model,
             holdingAtWindow(
               model,
