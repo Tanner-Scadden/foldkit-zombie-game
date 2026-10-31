@@ -327,6 +327,17 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
     ],
     noises: [],
   },
+  AmmoTick: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'triangle',
+        pitch: [at(0, 420), at(0.03, 300)],
+        envelope: envelope(0.14, 0.001, 0.035),
+      },
+    ],
+    noises: [],
+  },
   MagOut: {
     variationCents: 60,
     tones: [

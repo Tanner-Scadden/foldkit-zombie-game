@@ -8,6 +8,7 @@ export const SoundEffect = Schema.Literals([
   'ShotgunBlast',
   'SmgShot',
   'DryClick',
+  'AmmoTick',
   'MagOut',
   'MagIn',
   'Swap',

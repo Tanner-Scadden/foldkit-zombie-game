@@ -18,7 +18,14 @@ import { Dialog, DialogBlock, Tabs } from '@foldkit/ui'
 
 import { FIXED_STEP_MS, PREPARATION_MS } from './constants'
 import { Message } from './message'
-import { type Arsenal, type Model, Phase, Trap, initialModel } from './model'
+import {
+  type Arsenal,
+  type Model,
+  Phase,
+  Trap,
+  TrapHint,
+  initialModel,
+} from './model'
 import { ShopTabsBlock } from './shopTabs'
 import {
   ROOT,
@@ -244,6 +251,52 @@ describe('repairing placed traps', () => {
       ...openShop,
       expect(role('button', { name: /^Repair the/ })).toBeAbsent(),
       expect(role('button', { name: 'Buy Plank Pile for $40' })).toExist(),
+    )
+  })
+})
+
+// NOTE: from playtests: traps looked like something a button builds, and a
+// bought gun's ammo looked endless like the pistol's.
+describe('what the shop teaches', () => {
+  test('until the first trap is bought, TRAPS wears NEW and its traps pulse', () => {
+    scene(
+      ROOT,
+      given(
+        modifyFields(atStall(100, holdingSmg(200, 0)), {
+          shopCategory: () => 'Traps',
+        }),
+      ),
+      measureSurface,
+      ...openShop,
+      expect(selector('.shop-tab-new')).toHaveText('NEW'),
+      expect(selector('.shop-row[data-fresh="true"]')).toExist(),
+    )
+  })
+
+  test('once a trap has been bought, TRAPS is plain', () => {
+    scene(
+      ROOT,
+      given(
+        modifyFields(atStall(100, holdingSmg(200, 0)), {
+          shopCategory: () => 'Traps',
+          trapHint: () => TrapHint.Seen(),
+        }),
+      ),
+      measureSurface,
+      ...openShop,
+      expect(selector('.shop-tab-new')).toBeAbsent(),
+      expect(selector('.shop-row[data-fresh="true"]')).toBeAbsent(),
+    )
+  })
+
+  test("each gun shows its rounds: the pistol's endless, the others a count", () => {
+    scene(
+      ROOT,
+      given(atStall(100, holdingSmg(200, 0))),
+      measureSurface,
+      ...openShop,
+      expect(selector('.shop-rounds.is-endless')).toHaveText('∞'),
+      expect(selector('[data-held="true"] .shop-rounds')).toHaveText('200'),
     )
   })
 })

@@ -5,92 +5,162 @@ import type {
   ApplicationAttribute,
   ApplicationViewBuilder,
 } from './composition'
-import { HINT_ICON_SPRITES, type HintIconSprites, keyIcon } from './hintIcons'
-import { CHARGE_ICON, FRIDGE_ICON, PAUSE_ICON } from './icons'
-import { type InputDevice, type Model, Phase } from './model'
+import {
+  HELP_DEMO_SPRITES,
+  HINT_ICON_SPRITES,
+  type HintIconSprites,
+  keyIcon,
+} from './hintIcons'
+import { Message } from './message'
+import { type HelpCard, type InputDevice, type Model, Phase } from './model'
+import { GUN_NAMES, KNIFE_NAME } from './names'
 import { standaloneSource } from './sprite'
 
 // CONTROLS
 
-// NOTE: the one list of controls a new player needs. The home menu's HOW TO
-// PLAY and the pause screen both draw it as a grid of small cards: the
-// tutorial's own moving picture for the last device used and a word or two.
-// The input is spoken, not shown, since the picture already shows it.
-type Picture =
-  | Readonly<{ _tag: 'Moving'; sprites: HintIconSprites }>
-  | Readonly<{ _tag: 'Still'; icon: string }>
-
-type Input = Readonly<{ spoken: string; picture: Picture }>
+// NOTE: the one list of things a new player needs to do. The home menu's HOW
+// TO PLAY and the pause screen both draw it as a grid of small cards: a
+// moving picture for the last device used and a word or two. Each card also
+// has one line of how to do it, from a playtester who found a picture and a
+// word ("Leftovers", "Charge") taught nothing. On the home menu a card is a
+// button that shows its line when focused, tapped, or hovered; on the pause
+// screen, where a tap resumes, the line shows on hover and is read out.
+type Input = Readonly<{ line: string; sprites: HintIconSprites }>
 
 type ControlCard = Readonly<{
+  id: HelpCard
   action: string
   keyboard: Input
   touch: Input
 }>
 
-const moving = (spoken: string, sprites: HintIconSprites): Input => ({
-  spoken,
-  picture: { _tag: 'Moving', sprites },
+const input = (line: string, sprites: HintIconSprites): Input => ({
+  line,
+  sprites,
 })
 
-const still = (spoken: string, icon: string): Input => ({
-  spoken,
-  picture: { _tag: 'Still', icon },
+const onBoth = (
+  line: string,
+  sprites: HintIconSprites,
+): Readonly<{ keyboard: Input; touch: Input }> => ({
+  keyboard: input(line, sprites),
+  touch: input(line, sprites),
 })
 
 const KEY_R = keyIcon('R')
-const KEY_ESC = keyIcon('ESC')
 
 export const CONTROL_CARDS: Array.NonEmptyReadonlyArray<ControlCard> = [
   {
+    id: 'Move',
     action: 'Move',
-    keyboard: moving('WASD', HINT_ICON_SPRITES.Wasd),
-    touch: moving('Left thumb', HINT_ICON_SPRITES.MoveStick),
+    keyboard: input(
+      'Walk with WASD. They are slow, so keep moving.',
+      HINT_ICON_SPRITES.Wasd,
+    ),
+    touch: input(
+      'Drag a thumb on the left half. They are slow, so keep moving.',
+      HINT_ICON_SPRITES.MoveStick,
+    ),
   },
   {
+    id: 'Aim',
     action: 'Aim + shoot',
-    keyboard: moving('Mouse, hold click', HINT_ICON_SPRITES.Mouse),
-    touch: moving('Right thumb, hold', HINT_ICON_SPRITES.AimStick),
+    keyboard: input(
+      'Point with the mouse. Hold the button to keep firing.',
+      HINT_ICON_SPRITES.Mouse,
+    ),
+    touch: input(
+      'Drag a thumb on the right half toward a zombie. It fires as you drag.',
+      HINT_ICON_SPRITES.AimStick,
+    ),
   },
   {
+    id: 'Reload',
     action: 'Reload',
-    keyboard: moving('R', KEY_R),
-    touch: moving('Tap your gun', HINT_ICON_SPRITES.Tap),
+    keyboard: input(
+      'Press R for a fresh magazine. An empty gun gets one by itself.',
+      KEY_R,
+    ),
+    touch: input(
+      'Tap the gun you hold for a fresh magazine.',
+      HINT_ICON_SPRITES.Tap,
+    ),
   },
   {
+    id: 'Swap',
     action: 'Swap',
-    keyboard: moving('Q', HINT_ICON_SPRITES.KeyQ),
-    touch: moving('Tap the other gun', HINT_ICON_SPRITES.Guns),
+    keyboard: input(
+      `Q switches guns. Only the ${GUN_NAMES.Pistol} never runs dry.`,
+      HINT_ICON_SPRITES.KeyQ,
+    ),
+    touch: input(
+      `Tap your other gun. Only the ${GUN_NAMES.Pistol} never runs dry.`,
+      HINT_ICON_SPRITES.Guns,
+    ),
   },
   {
+    id: 'Knife',
+    action: KNIFE_NAME,
+    keyboard: input(
+      'Hold F to stab. It works with no ammo at all.',
+      HELP_DEMO_SPRITES.Knife,
+    ),
+    touch: input(
+      'Hold the stab button by your guns. It works with no ammo.',
+      HELP_DEMO_SPRITES.Knife,
+    ),
+  },
+  {
+    id: 'Shop',
     action: 'Shop',
-    keyboard: moving('Walk into the stall', HINT_ICON_SPRITES.Stall),
-    touch: moving('Walk into the stall', HINT_ICON_SPRITES.Stall),
+    ...onBoth(
+      "Between waves, walk into Rattles' stall for ammo, guns, and hearts.",
+      HINT_ICON_SPRITES.Stall,
+    ),
   },
   {
-    action: 'Planks',
-    keyboard: moving('T', HINT_ICON_SPRITES.PlankDoor),
-    touch: moving('Trap button', HINT_ICON_SPRITES.PlankDoor),
+    id: 'Traps',
+    action: 'Traps',
+    keyboard: input(
+      'Buy them from Rattles, then press T in a doorway.',
+      HINT_ICON_SPRITES.PlankDoor,
+    ),
+    touch: input(
+      'Buy them from Rattles, then tap the trap button in a doorway.',
+      HINT_ICON_SPRITES.PlankDoor,
+    ),
   },
   {
-    action: 'Leftovers',
-    keyboard: still('Hold Enter at the kitchen fridge', FRIDGE_ICON),
-    touch: still('Hold the button at the kitchen fridge', FRIDGE_ICON),
-  },
-  {
-    action: 'Charge',
-    keyboard: still('Hold click, let go to throw', CHARGE_ICON),
-    touch: still('Hold your right thumb, lift to throw', CHARGE_ICON),
-  },
-  {
+    id: 'Goodies',
     action: 'Goodies',
-    keyboard: moving('Walk over them', HINT_ICON_SPRITES.Goodie),
-    touch: moving('Walk over them', HINT_ICON_SPRITES.Goodie),
+    ...onBoth(
+      'Zombies drop hearts and boosts. Walk over them before they fade.',
+      HINT_ICON_SPRITES.Goodie,
+    ),
   },
   {
-    action: 'Pause',
-    keyboard: moving('Esc', KEY_ESC),
-    touch: still('Pause button', PAUSE_ICON),
+    id: 'Leftovers',
+    action: 'Leftovers',
+    keyboard: input(
+      'Hold Enter at the kitchen fridge to pay for a surprise weapon.',
+      HELP_DEMO_SPRITES.Fridge,
+    ),
+    touch: input(
+      'Hold the fridge button in the kitchen to pay for a surprise weapon.',
+      HELP_DEMO_SPRITES.Fridge,
+    ),
+  },
+  {
+    id: 'Charge',
+    action: 'Charge',
+    keyboard: input(
+      `${GUN_NAMES.Cooker}: hold click to build pressure, let go to throw.`,
+      HELP_DEMO_SPRITES.Charge,
+    ),
+    touch: input(
+      `${GUN_NAMES.Cooker}: hold your aim thumb, lift it to throw.`,
+      HELP_DEMO_SPRITES.Charge,
+    ),
   },
 ]
 
@@ -99,10 +169,9 @@ type ExtraKey = Readonly<{ key: string; action: string }>
 // NOTE: the rest of the keyboard's keys, one short line under the cards, so
 // every key still has a home on the screen that teaches the controls.
 export const EXTRA_KEYS: Array.NonEmptyReadonlyArray<ExtraKey> = [
-  { key: 'F', action: 'knife' },
-  { key: 'T', action: 'trap' },
   { key: 'G', action: 'next trap' },
   { key: 'Enter', action: 'start' },
+  { key: 'Esc', action: 'pause' },
   { key: 'H', action: 'menu' },
   { key: 'M', action: 'sound' },
   { key: 'N', action: 'music' },
@@ -115,6 +184,21 @@ const DEVICE_LABELS: Readonly<Record<InputDevice, string>> = {
 
 const inputOf = (card: ControlCard, device: InputDevice): Input =>
   device === 'KeyboardMouse' ? card.keyboard : card.touch
+
+export const helpLineOf = (card: HelpCard, device: InputDevice): string =>
+  Option.match(
+    Array.findFirst(CONTROL_CARDS, ({ id }) => id === card),
+    {
+      onNone: () => '',
+      onSome: found => inputOf(found, device).line,
+    },
+  )
+
+export const helpCardElementId = (card: HelpCard): string =>
+  `help-card-${card.toLowerCase()}`
+
+export const helpLineElementId = (card: HelpCard): string =>
+  `${helpCardElementId(card)}-line`
 
 // VIEW
 
@@ -189,29 +273,68 @@ const movingView = (
   )
 }
 
-const pictureView = (picture: Picture, h: ApplicationViewBuilder): Html =>
-  picture._tag === 'Moving'
-    ? movingView(picture.sprites, h)
-    : h.span([
-        h.Class('help-card-icon'),
-        h.AriaHidden(true),
-        h.Style({ backgroundImage: picture.icon }),
-      ])
+// NOTE: How to play on the home menu lets a card show its line; the pause
+// screen, where a press resumes the game, only shows it on hover.
+export type HelpCards = 'Interactive' | 'Static'
 
-const controlCardView = (
+const cardFaceView = (
   card: ControlCard,
   device: InputDevice,
   h: ApplicationViewBuilder,
+): ReadonlyArray<Html> => {
+  const { sprites, line } = inputOf(card, device)
+  return [
+    movingView(sprites, h),
+    h.span([h.Class('help-card-action')], [card.action]),
+    h.span(
+      [h.Id(helpLineElementId(card.id)), h.Class('help-card-line')],
+      [line],
+    ),
+  ]
+}
+
+const interactiveCardView = (
+  card: ControlCard,
+  device: InputDevice,
+  maybeOpen: Option.Option<HelpCard>,
+  h: ApplicationViewBuilder,
 ): Html => {
-  const input = inputOf(card, device)
-  return h.li(
-    [h.Class('help-card'), h.AriaLabel(`${card.action}: ${input.spoken}`)],
+  const isOpen = Option.contains(maybeOpen, card.id)
+  return h.keyed('li')(
+    card.id,
+    [h.Class('help-card-slot')],
     [
-      pictureView(input.picture, h),
-      h.span([h.Class('help-card-action')], [card.action]),
+      h.button(
+        [
+          h.Type('button'),
+          h.Id(helpCardElementId(card.id)),
+          h.Class('help-card'),
+          h.DataAttribute('open', isOpen ? 'true' : 'false'),
+          h.AriaExpanded(isOpen),
+          h.AriaDescribedBy(helpLineElementId(card.id)),
+          h.OnFocus(Message.FocusedHelpCard({ card: card.id })),
+          h.OnClick(Message.ClickedHelpCard({ card: card.id })),
+        ],
+        cardFaceView(card, device, h),
+      ),
     ],
   )
 }
+
+const staticCardView = (
+  card: ControlCard,
+  device: InputDevice,
+  h: ApplicationViewBuilder,
+): Html =>
+  h.keyed('li')(
+    card.id,
+    [
+      h.Class('help-card'),
+      h.DataAttribute('open', 'false'),
+      h.AriaLabel(`${card.action}: ${inputOf(card, device).line}`),
+    ],
+    cardFaceView(card, device, h),
+  )
 
 const extraKeysView = (h: ApplicationViewBuilder): Html =>
   h.ul(
@@ -229,15 +352,29 @@ export const helpLabel = (device: InputDevice): string => DEVICE_LABELS[device]
 // NOTE: the home menu's HOW TO PLAY adds its own keys under the cards on a
 // keyboard.
 export const howToPlayView = (
-  device: InputDevice,
+  model: Model,
+  cards: HelpCards,
   h: ApplicationViewBuilder,
   maybeUnder: Option.Option<Html> = Option.none(),
 ): ReadonlyArray<Html> => [
   h.ul(
-    [h.Class('help-cards'), h.AriaLabel('Controls')],
-    Array.map(CONTROL_CARDS, card => controlCardView(card, device, h)),
+    [
+      h.Class('help-cards'),
+      h.DataAttribute('cards', cards),
+      h.AriaLabel('Controls'),
+    ],
+    Array.map(CONTROL_CARDS, card =>
+      cards === 'Interactive'
+        ? interactiveCardView(
+            card,
+            model.lastDevice,
+            model.maybeOpenHelpCard,
+            h,
+          )
+        : staticCardView(card, model.lastDevice, h),
+    ),
   ),
-  ...(device === 'KeyboardMouse' ? [extraKeysView(h)] : []),
+  ...(model.lastDevice === 'KeyboardMouse' ? [extraKeysView(h)] : []),
   ...Option.toArray(maybeUnder),
 ]
 
@@ -274,7 +411,7 @@ export const pauseHelpView = (
               ),
             ],
           ),
-          ...howToPlayView(model.lastDevice, h),
+          ...howToPlayView(model, 'Static', h),
         ],
       ),
     ],

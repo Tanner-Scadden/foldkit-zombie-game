@@ -381,33 +381,122 @@ const STALL = iconOf(11, 11, 300, [
   [layer(STALL_BODY, 0, 1), layer(DOLLAR, 3, 2)],
 ])
 
-const WATCH: Pixels = [
-  '....ooo....',
-  '.....o.....',
-  '...ooooo...',
-  '..owwwwwo..',
-  '.owwwwwwwo.',
-  'owwwwwwwwwo',
-  'owwwwwwwwwo',
-  'owwwwgwwwwo',
-  'owwwwwwwwwo',
-  'owwwwwwwwwo',
-  '.owwwwwwwo.',
-  '..owwwwwo..',
-  '...ooooo...',
+// HOW TO PLAY DEMOS
+
+// NOTE: tiny looping demos for the How to play cards whose action a still
+// picture cannot show: charging the Pressure Cooker and letting go, pulling
+// from the Mystery Leftovers fridge, and stabbing with the knife.
+
+const meter = (filled: number): Pixels => {
+  const color = filled >= 6 ? 'r' : 'y'
+  const fill = `${color.repeat(filled)}${'g'.repeat(6 - filled)}`
+  return ['oooooooo', `o${fill}o`, 'oooooooo']
+}
+
+const COOKER_LID: Pixels = ['..oo..', 'oMMMMo']
+const COOKER_POT: Pixels = [
+  'oooooooo',
+  'rmmmmmmr',
+  'omMMMMmo',
+  'ommmmmmo',
+  '.oooooo.',
+]
+const STEAM: Pixels = ['w.w', '.w.']
+const LID_BURST: Pixels = ['b...b', '.bwb.', '.wyw.', '.bwb.', 'b...b']
+
+const cookerFrame = (
+  filled: number,
+  lid: ReadonlyArray<Layer>,
+): ReadonlyArray<Layer> => [
+  layer(meter(filled), 0, 0),
+  layer(COOKER_POT, 0, 7),
+  ...lid,
 ]
 
-const watchFrame = (hand: Layer): ReadonlyArray<Layer> => [
-  layer(WATCH, 0, 0),
-  hand,
-]
-
-const STOPWATCH = iconOf(11, 13, 250, [
-  watchFrame(layer(['r', 'r', 'r'], 5, 4)),
-  watchFrame(layer(['rrr'], 6, 7)),
-  watchFrame(layer(['r', 'r', 'r'], 5, 8)),
-  watchFrame(layer(['rrr'], 2, 7)),
+const CHARGE_DEMO = iconOf(18, 12, 280, [
+  cookerFrame(0, [layer(COOKER_LID, 1, 5)]),
+  cookerFrame(2, [layer(COOKER_LID, 1, 5)]),
+  cookerFrame(4, [layer(COOKER_LID, 1, 4), layer(STEAM, 7, 3)]),
+  cookerFrame(6, [layer(COOKER_LID, 2, 4), layer(STEAM, 0, 3)]),
+  cookerFrame(0, [layer(COOKER_LID, 9, 3)]),
+  cookerFrame(0, [layer(LID_BURST, 13, 2)]),
 ])
+
+const FRIDGE_PALETTE: Palette = {
+  o: '#140c10',
+  k: '#d6cfa4',
+  G: '#9be36a',
+  g: '#4e6a2a',
+}
+
+const FRIDGE_SHUT: Pixels = [
+  '.oooooooo.',
+  'okkkkkkkko',
+  'okkkkkkoko',
+  'oooooooooo',
+  'okkkkkkkko',
+  'okkkkkkkko',
+  'okkokkkkko',
+  'okkokkkkko',
+  'okkkkkkkko',
+  'oooooooooo',
+  '.o......o.',
+]
+
+const FRIDGE_OPEN: Pixels = [
+  '.oooooooo.',
+  'okkkkkkkko',
+  'okkkkkkoko',
+  'oooooooooo',
+  'okkkkoGGGo',
+  'okkkkoGgGo',
+  'okkokoGGGo',
+  'okkokogGgo',
+  'okkkkoGGGo',
+  'oooooooooo',
+  '.o.....go.',
+]
+
+const FOG: Pixels = ['.G.G', 'G.G.']
+
+const FRIDGE_DEMO = iconOf(12, 17, 320, [
+  [layer(FRIDGE_SHUT, 1, 6, FRIDGE_PALETTE)],
+  [layer(FRIDGE_SHUT, 2, 6, FRIDGE_PALETTE)],
+  [layer(FRIDGE_SHUT, 0, 6, FRIDGE_PALETTE)],
+  [layer(FRIDGE_OPEN, 1, 6, FRIDGE_PALETTE), layer(FOG, 7, 3, FRIDGE_PALETTE)],
+  [layer(FRIDGE_OPEN, 1, 6, FRIDGE_PALETTE), layer(SMG, 2, 1)],
+  [layer(FRIDGE_OPEN, 1, 6, FRIDGE_PALETTE), layer(SMG, 2, 0)],
+])
+
+const KNIFE_PALETTE: Palette = { X: '#e9e3cf', R: '#a8302a' }
+
+const KNIFE: Pixels = [
+  '.......XX',
+  '......XXX',
+  '.....XXX.',
+  '....XXX..',
+  '...XXX...',
+  '.RXXX....',
+  '..RR.....',
+  '.RRR.....',
+  'RR.R.....',
+]
+
+const SWISH: Pixels = ['..ww', '.w..', 'w...', 'w...', '.w..', '..ww']
+
+const KNIFE_DEMO = iconOf(17, 11, 240, [
+  [layer(KNIFE, 0, 2, KNIFE_PALETTE)],
+  [layer(KNIFE, 3, 0, KNIFE_PALETTE), layer(SWISH, 13, 2)],
+  [layer(KNIFE, 1, 1, KNIFE_PALETTE)],
+])
+
+export type HelpDemo = 'Charge' | 'Fridge' | 'Knife'
+
+export const HELP_DEMO_SPRITES: Readonly<Record<HelpDemo, HintIconSprites>> = {
+  Charge: CHARGE_DEMO,
+  Fridge: FRIDGE_DEMO,
+  Knife: KNIFE_DEMO,
+}
 
 export const HINT_ICON_SPRITES: Readonly<Record<HintIcon, HintIconSprites>> = {
   Wasd: WASD,
@@ -417,11 +506,9 @@ export const HINT_ICON_SPRITES: Readonly<Record<HintIcon, HintIconSprites>> = {
   Tap: TAP,
   KeyT: keyIcon('T'),
   KeyQ: keyIcon('Q'),
-  KeyEnter: keyIcon('ENTER'),
   Goodie: GOODIE,
   PlankDoor: PLANK_DOOR,
   Gnome: GNOME,
   Guns: GUNS,
   Stall: STALL,
-  Stopwatch: STOPWATCH,
 }

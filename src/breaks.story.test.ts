@@ -1,8 +1,9 @@
-import { Array, Option } from 'effect'
+import { Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
+import { cameraOf } from './camera'
 import { SetFullscreen, ShowInstallPrompt } from './commands'
 import { FIXED_STEP_MS, PREPARATION_MS } from './constants'
 import { update } from './main'
@@ -21,9 +22,10 @@ import {
 import {
   DEBUT_CARD_MIN_MS,
   DEBUT_CARD_MS,
-  hintWords,
+  isCountdownBeckoning,
   shownHints,
 } from './onboarding'
+import { maybeBubbleKind } from './stallBubble'
 import { holdingFirst, showDialog, tick, ticks } from './testing'
 import { asVeteran } from './veteran'
 import { keepGoing } from './waves'
@@ -61,11 +63,7 @@ const breakClock = (current: Model): Option.Option<BreakClock> =>
     GameOver: () => Option.none(),
   })
 
-const hintTexts = (current: Model): ReadonlyArray<string> =>
-  Array.map(shownHints(current), ({ id }) => hintWords(id, current.lastDevice))
-
-const TIMED_HEADS_UP = hintWords('TimedBreaks', 'KeyboardMouse')
-const OPEN_BREAK_LINE = hintWords('OpenBreak', 'KeyboardMouse')
+const bubble = (current: Model) => maybeBubbleKind(current, cameraOf(current))
 const BREAK_TICKS = Math.ceil(PREPARATION_MS / TICK_MS) + 10
 
 describe('the first break waits', () => {
@@ -83,8 +81,9 @@ describe('the first break waits', () => {
       ...ticks(BREAK_TICKS, TICK_MS),
       model(current => {
         expect(isBreak(current)).toBe(true)
-        expect(hintTexts(current)).toContain(OPEN_BREAK_LINE)
-        expect(hintTexts(current)).not.toContain(TIMED_HEADS_UP)
+        expect(shownHints(current)).toEqual([])
+        expect(isCountdownBeckoning(current)).toBe(false)
+        expect(bubble(current)).toEqual(Option.some('Traps'))
       }),
       ...tapKey('Enter'),
       model(current => {
@@ -100,7 +99,7 @@ describe('the first break waits', () => {
       tick(TICK_MS),
       model(current => {
         expect(breakClock(current)).toEqual(Option.some(BreakClock.Counting()))
-        expect(hintTexts(current)).toContain(TIMED_HEADS_UP)
+        expect(isCountdownBeckoning(current)).toBe(true)
       }),
       ...ticks(BREAK_TICKS, TICK_MS),
       model(current => {
@@ -118,7 +117,7 @@ describe('the first break waits', () => {
       Message.TickedFrame({ deltaTime: TICK_MS }),
     ).model
     expect(isBreak(afterHeadsUp)).toBe(true)
-    expect(hintTexts(afterHeadsUp)).not.toContain(TIMED_HEADS_UP)
+    expect(isCountdownBeckoning(afterHeadsUp)).toBe(false)
   })
 
   test('endless keeps the same rule, and Keep going is timed', () => {

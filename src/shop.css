@@ -251,6 +251,49 @@
   color: #6f6a7c;
 }
 
+/* Until the first trap is bought: a NEW tag on TRAPS and a pulse on each
+   trap, so traps are plainly bought here. */
+.shop-tab-new {
+  padding: calc(1 * var(--shop-u)) calc(4 * var(--shop-u));
+  border-radius: calc(3 * var(--shop-u));
+  background: #ff4a4f;
+  color: #fff;
+  font-size: var(--shop-small);
+  font-weight: bold;
+  line-height: calc(14 * var(--shop-u));
+  letter-spacing: 0.06em;
+  animation: shop-new-bob 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes shop-new-bob {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(-2 * var(--shop-u)));
+  }
+}
+
+.shop-row[data-fresh='true'] .shop-item {
+  animation: shop-fresh-pulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes shop-fresh-pulse {
+  from {
+    box-shadow: 0 0 0 0 rgba(255, 224, 102, 0);
+  }
+  to {
+    box-shadow: 0 0 0 calc(3 * var(--shop-u)) rgba(255, 224, 102, 0.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shop-tab-new,
+  .shop-row[data-fresh='true'] .shop-item {
+    animation: none;
+  }
+}
+
 /* CARDS */
 
 .shop-items {
@@ -425,6 +468,33 @@
   gap: calc(3 * var(--shop-u));
 }
 
+/* A gun's rounds: an infinity sign on the Pop Pistol, a count on the rest. */
+.shop-rounds {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4 * var(--shop-u));
+  padding: calc(1 * var(--shop-u)) calc(6 * var(--shop-u));
+  border-radius: calc(4 * var(--shop-u));
+  background: rgba(255, 138, 61, 0.18);
+  color: #ff8a3d;
+  font-weight: bold;
+  font-size: var(--shop-small);
+  line-height: calc(16 * var(--shop-u));
+}
+
+.shop-rounds.is-endless {
+  background: rgba(155, 227, 106, 0.16);
+  color: #9be36a;
+  font-size: calc(var(--shop-small) * 1.4);
+}
+
+.shop-rounds-icon {
+  width: calc(11 * var(--shop-u));
+  height: calc(6 * var(--shop-u));
+  background: center / contain no-repeat;
+  image-rendering: pixelated;
+}
+
 .shop-bar {
   display: flex;
   align-items: center;
@@ -596,7 +666,14 @@
   color: var(--shop-bg);
 }
 
-.shop-gun > .shop-bars {
+.shop-gun-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(4 * var(--shop-u)) calc(10 * var(--shop-u));
+}
+
+.shop-gun-stats > .shop-bars {
   flex-direction: row;
   flex-wrap: wrap;
   gap: calc(4 * var(--shop-u)) calc(8 * var(--shop-u));

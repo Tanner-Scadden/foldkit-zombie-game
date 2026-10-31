@@ -160,6 +160,8 @@ export const HarnessConfig = Schema.Struct({
   // touch a finger on the knife button) from the first frame.
   first: Choice(['smg', 'shotgun', 'cooker', 'pan', 'freeze']),
   stab: Flag,
+  // NOTE: `dry` empties every gun the player carries, for the knife prompt.
+  dry: Flag,
   rounds: MaybeNum,
   loaded: Num(30),
   tier: Num(0),

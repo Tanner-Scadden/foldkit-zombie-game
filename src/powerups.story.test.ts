@@ -38,7 +38,7 @@ import {
   idleBoosts,
   initialModel,
 } from './model'
-import { shownHints } from './onboarding'
+import { isGoodieBeckoning, shownHints } from './onboarding'
 import { pickupShapes } from './powerupView'
 import {
   BOOSTS,
@@ -427,24 +427,21 @@ describe('grabbing', () => {
     )
   })
 
-  test('the first pickup ever shows a hint until it is grabbed', () => {
+  test('the first pickup ever wears an arrow until one is grabbed', () => {
     const { x, y } = fighting.player
     story(
       update,
       given(withPickups(fighting, [pickupAt(900, 'Damage', x + 14, y)])),
       tick(FRAME_MS),
       model(current => {
-        expect(Array.map(shownHints(current), ({ id }) => id)).toContain(
-          'Pickup',
-        )
+        expect(shownHints(current)).toEqual([])
+        expect(isGoodieBeckoning(current)).toBe(true)
       }),
       press('KeyD'),
       ...ticks(3, FRAME_MS),
       release('KeyD'),
       model(current => {
-        expect(Array.map(shownHints(current), ({ id }) => id)).not.toContain(
-          'Pickup',
-        )
+        expect(isGoodieBeckoning(current)).toBe(false)
       }),
     )
   })

@@ -400,6 +400,30 @@ body {
   -webkit-touch-callout: none;
 }
 
+/* Out of every gun: the knife is the way out, so its button glows. */
+.cluster-button.knife-button[data-out='true'] {
+  border-color: #ff4a4f;
+  animation: knife-out 0.5s steps(2, jump-none) infinite alternate;
+}
+
+@keyframes knife-out {
+  from {
+    background: rgba(255, 74, 79, 0.15);
+    box-shadow: 0 0 0 0 rgba(255, 74, 79, 0);
+  }
+  to {
+    background: rgba(255, 74, 79, 0.45);
+    box-shadow: 0 0 0 4px rgba(255, 74, 79, 0.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cluster-button.knife-button[data-out='true'] {
+    animation: none;
+    background: rgba(255, 74, 79, 0.4);
+  }
+}
+
 .cluster-button.knife-button[data-held='true'] {
   border-color: #ffe066;
   background: rgba(255, 224, 102, 0.25);
@@ -483,6 +507,34 @@ body {
 .start-wave-pill:active {
   opacity: 1;
   background: rgba(40, 30, 20, 0.85);
+}
+
+/* Until the player has started a wave once, the button itself pulses, in
+   place of a START WAVE label in the room. So does the place trap button
+   once the first trap is bought, until one is placed. */
+.place-icon-button[data-beckon='true'],
+.start-wave-pill[data-beckon='true'],
+.start-wave-button[data-beckon='true'] {
+  opacity: 1;
+  animation: start-wave-beckon 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes start-wave-beckon {
+  from {
+    box-shadow: 0 0 0 0 rgba(255, 224, 102, 0);
+  }
+  to {
+    box-shadow: 0 0 0 5px rgba(255, 224, 102, 0.45);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .place-icon-button[data-beckon='true'],
+  .start-wave-pill[data-beckon='true'],
+  .start-wave-button[data-beckon='true'] {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(255, 224, 102, 0.45);
+  }
 }
 
 .start-wave-pill:focus-visible,

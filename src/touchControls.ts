@@ -1,6 +1,7 @@
 import { Array, Option } from 'effect'
 import type { Html } from 'foldkit/html'
 
+import { isOutOfGuns } from './ammoWarning'
 import type { ApplicationViewBuilder } from './composition'
 import { STICK_RADIUS_PX } from './constants'
 import { gunClusterBox, gunSlotBox, secondsLeft } from './hud'
@@ -19,9 +20,15 @@ import {
   type Model,
   Phase,
   Stick,
+  TrapHint,
 } from './model'
 import { KNIFE_NAME } from './names'
-import { type GhostStick, isDebutCardUp, shownGhostSticks } from './onboarding'
+import {
+  type GhostStick,
+  isDebutCardUp,
+  isStartWaveBeckoning,
+  shownGhostSticks,
+} from './onboarding'
 import { isCoop, leadSeatOf } from './party'
 import { holdButtonView } from './purchaseHud'
 import { type Screen, screenOf } from './screen'
@@ -191,6 +198,10 @@ const knifeButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
                   ? 'true'
                   : 'false',
               ),
+              h.DataAttribute(
+                'out',
+                isOutOfGuns(model.player) ? 'true' : 'false',
+              ),
               h.OnPointerDown(toPressedKnifeButton),
               h.OnContextMenu(Message.SuppressedContextMenu()),
             ],
@@ -248,6 +259,10 @@ const placeIconView = (
     [
       h.Type('button'),
       h.Class('icon-button cluster-button place-icon-button'),
+      h.DataAttribute(
+        'beckon',
+        TrapHint.isAnyOf(['Showing'])(model.trapHint) ? 'true' : 'false',
+      ),
       h.AriaLabel(`Place a ${TRAPS[kind].name}`),
       h.AriaKeyshortcuts('T'),
       ...(isBlocked
@@ -373,6 +388,10 @@ const startWaveButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
               ),
               h.AriaLabel(startWaveLabel(model, wave)),
               h.DataAttribute('ready', leadSeatOf(model).readiness),
+              h.DataAttribute(
+                'beckon',
+                isStartWaveBeckoning(model) ? 'true' : 'false',
+              ),
               h.AriaKeyshortcuts('Enter'),
               h.OnClick(Message.ClickedStartWaveButton(), {
                 focusSelector: '.game-surface',

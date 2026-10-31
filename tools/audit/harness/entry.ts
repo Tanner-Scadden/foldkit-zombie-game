@@ -1798,7 +1798,21 @@ const sceneOf = (model: Model): HarnessReturn => {
         }),
       }
     : holding
-  return config.tick === undefined ? held : advance(held, config.tick)
+  const dried: HarnessReturn = config.dry
+    ? {
+        ...held,
+        model: modifyFields(held.model, {
+          player: player =>
+            modifyFields(player, {
+              arsenal: arsenal =>
+                mapGuns(arsenal, gun =>
+                  modifyFields(gun, { rounds: () => 0, loaded: () => 0 }),
+                ),
+            }),
+        }),
+      }
+    : held
+  return config.tick === undefined ? dried : advance(dried, config.tick)
 }
 
 // THE READY SIGNAL

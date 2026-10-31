@@ -2,6 +2,7 @@ import { Option } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
+import { noteAmmoTip } from '../ammoWarning'
 import { positionVariation } from '../audio'
 import {
   FetchBuild,
@@ -88,6 +89,7 @@ import {
   leaveShopWithoutDialog,
 } from './shop'
 import {
+  ammoTickCues,
   frameSoundCues,
   playSounds,
   playStartSoundWhen,
@@ -318,13 +320,16 @@ export const tickFrame = (deltaTime: number) =>
       return toModel(ageDebutCard(model, clampFrameDelta(deltaTime)))
     } else if (isRoundActive(model.phase)) {
       const framed = moveHintBand(
-        learnFromFrame(
-          model,
-          tallyFrame(
+        noteAmmoTip(
+          learnFromFrame(
             model,
-            advanceGame(model, deltaTime),
-            clampFrameDelta(deltaTime),
+            tallyFrame(
+              model,
+              advanceGame(model, deltaTime),
+              clampFrameDelta(deltaTime),
+            ),
           ),
+          clampFrameDelta(deltaTime),
         ),
       )
       const advanced = isCoop(framed)
@@ -334,7 +339,10 @@ export const tickFrame = (deltaTime: number) =>
         !isBrowsing(model.shop) && isBrowsing(advanced.shop)
       return Update.combineSteps([
         toModel(hasEnteredShop ? learnShop(advanced) : advanced),
-        playSounds(frameSoundCues(advanced.frameEvents)),
+        playSounds([
+          ...frameSoundCues(advanced.frameEvents),
+          ...ammoTickCues(advanced),
+        ]),
         ...(hasEnteredShop ? [enterShop] : []),
         closeShopOutsidePreparation,
         leaveShopWithoutDialog,

@@ -23,6 +23,7 @@ import {
 import { ovenFlameShapes, ovenGlowShapes, padlockShapes } from './kitchenView'
 import { type Model, Phase, ShopState, type Vector, type Zombie } from './model'
 import { isBehindWall, occludersOf } from './occluders'
+import { isGoodieBeckoning } from './onboarding'
 import {
   isLeadShown,
   mateDrawables,
@@ -39,6 +40,7 @@ import {
 import {
   auraShapes,
   burpRingShapes,
+  goodieArrowShapes,
   pickupFootY,
   pickupShapes,
 } from './powerupView'
@@ -224,6 +226,9 @@ const overheadShapes = (
   ...Array.flatMap(model.callouts, burpRingShapes),
   ...bossOverheadShapes(model),
   ...airborneParticleShapes(model.particles),
+  ...(isGoodieBeckoning(model)
+    ? Array.flatMap(model.pickups, goodieArrowShapes)
+    : []),
   ...Array.map(model.popups, popupShape(camera)),
   ...reloadBarShapes(model.player),
   ...fridgeOverheadShapes(model),

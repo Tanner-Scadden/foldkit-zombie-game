@@ -30,6 +30,7 @@ import { ShopTabsBlock } from './shopTabs'
 import { SUPPORT_URL, maybeSupportUrlOf } from './support'
 import type { DifficultyBests, LoadStep } from './worldSchema'
 import {
+  AmmoTip,
   AudioState,
   Blast,
   Boss,
@@ -136,6 +137,23 @@ export type ProfileFx = typeof ProfileFx.Type
 // and the last effect. The view reads fxCount only for its parity, so the
 // same effect twice in a row still replays. Its Dialog and Tabs are the
 // root's `profileDialog` and `profileTabs`, where their Bindings attach.
+// NOTE: the How to play cards (src/pauseHelp.ts). One card at a time shows
+// its line of how to do it: the one focused or tapped last, until the
+// panel closes.
+export const HelpCard = Schema.Literals([
+  'Move',
+  'Aim',
+  'Reload',
+  'Swap',
+  'Knife',
+  'Shop',
+  'Traps',
+  'Goodies',
+  'Leftovers',
+  'Charge',
+])
+export type HelpCard = typeof HelpCard.Type
+
 export const ProfilePanel = Schema.Struct({
   tab: ProfileTab,
   nameDraft: Schema.String,
@@ -159,6 +177,7 @@ export const Model = Schema.Struct({
   blasts: Schema.Array(Blast),
   callouts: Schema.Array(Callout),
   trapHint: TrapHint,
+  ammoTip: AmmoTip,
   trapNotice: TrapNotice,
   cosmeticRngState: Schema.Number,
   stepCarryMs: Schema.Number,
@@ -206,6 +225,7 @@ export const Model = Schema.Struct({
   maybeVisitId: Schema.Option(Schema.String),
   maybeHomeFocus: Schema.Option(HomeButton),
   panel: MenuPanel,
+  maybeOpenHelpCard: Schema.Option(HelpCard),
   panelDialog: DialogBlock.Model,
   handDialog: DialogBlock.Model,
   bests: PlayerBests,
@@ -320,6 +340,7 @@ export const initialModel: Model = {
   selectedTrap: 'Barricade',
   laserSight: 'None',
   trapHint: TrapHint.Unseen(),
+  ammoTip: AmmoTip.Unseen(),
   trapNotice: TrapNotice.Quiet(),
   level: startingLevel,
   ovens: [],
@@ -374,6 +395,7 @@ export const initialModel: Model = {
   maybeVisitId: Option.none(),
   maybeHomeFocus: Option.none(),
   panel: 'HowToPlay',
+  maybeOpenHelpCard: Option.none(),
   panelDialog: closedDialog(PANEL_DIALOG_ID),
   handDialog: closedDialog(HAND_DIALOG_ID),
   bests: noBests,

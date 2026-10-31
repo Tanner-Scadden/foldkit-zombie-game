@@ -24,6 +24,7 @@ import {
   LESSON_MIN_SHOWN_MS,
   hintIcons,
   hintWords,
+  isStartWaveBeckoning,
   shownGhostSticks,
   shownHints,
 } from './onboarding'
@@ -162,13 +163,14 @@ describe('onboarding hints', () => {
       ...ticks(FIRE_TICKS, TICK_MS),
       message(Message.ReleasedPointer({ pointerId: 1 })),
       model(current => {
-        expect(hintIds(current)).toEqual(['StartWave'])
-        expect(hintTexts(current)).toEqual(['KeyEnter START WAVE'])
+        expect(hintIds(current)).toEqual([])
+        expect(isStartWaveBeckoning(current)).toBe(true)
       }),
       press('Enter'),
       model(current => {
         expect(Phase.guards.Wave(current.phase)).toBe(true)
         expect(hintIds(current)).toEqual([])
+        expect(isStartWaveBeckoning(current)).toBe(false)
       }),
     )
   })
@@ -203,11 +205,13 @@ describe('onboarding hints', () => {
       ...ticks(FIRE_TICKS, TICK_MS),
       message(Message.ReleasedPointer({ pointerId: 3 })),
       model(current => {
-        expect(hintTexts(current)).toEqual(['Tap START WAVE'])
+        expect(hintTexts(current)).toEqual([])
+        expect(isStartWaveBeckoning(current)).toBe(true)
       }),
       message(Message.ClickedStartWaveButton()),
       model(current => {
         expect(hintIds(current)).toEqual([])
+        expect(isStartWaveBeckoning(current)).toBe(false)
       }),
     )
   })

@@ -11,6 +11,7 @@ import {
 import { modifyFields } from 'foldkit/struct'
 
 import {
+  AmmoTip,
   DebutCard,
   type DifficultyBests,
   DifficultyCard,
@@ -539,6 +540,7 @@ const savedBests = (bests: PlayerBests): SavedBests => ({
 export const SAVED_FIELDS = [
   'lessons',
   'trapHint',
+  'ammoTip',
   'introducedKinds',
   'homeScreenTip',
   'soundSetting',
@@ -573,6 +575,7 @@ export const saveOf = (model: Model): PlayerSave => ({
       openBreak: savedLesson(model.lessons.openBreak),
     },
     trapHint: savedTrapHint(model.trapHint),
+    ammoTip: AmmoTip.isAnyOf(['Unseen'])(model.ammoTip) ? 'Unseen' : 'Seen',
     introducedKinds: model.introducedKinds,
   },
   homeScreenTip: model.homeScreenTip,
@@ -684,6 +687,7 @@ export const restoreSave = (model: Model, save: PlayerSave): Model =>
     lessons: lessons => restoreLessons(lessons, save.onboarding.lessons),
     trapHint: hint =>
       save.onboarding.trapHint === 'Seen' ? TrapHint.Seen() : hint,
+    ammoTip: tip => (save.onboarding.ammoTip === 'Seen' ? AmmoTip.Seen() : tip),
     introducedKinds: kinds =>
       Array.union(kinds, knownKinds(save.onboarding.introducedKinds)),
     homeScreenTip: tip =>
@@ -726,6 +730,7 @@ export const forgetTutorial = (model: Model): Model =>
     lessons: () => freshLessons,
     practice: () => noPractice,
     trapHint: () => TrapHint.Unseen(),
+    ammoTip: () => AmmoTip.Unseen(),
     introducedKinds: () => [],
     debutCard: () => DebutCard.Hidden(),
     seenPowerUps: () => [],

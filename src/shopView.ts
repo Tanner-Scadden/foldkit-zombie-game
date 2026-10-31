@@ -10,6 +10,7 @@ import { ShopDialogBinding, ShopTabsBinding } from './composition'
 import { PLAYER_MAX_HP, TILE_SIZE } from './constants'
 import { closeButtonView, dialogShell } from './dialogs'
 import { COIN_SYMBOL } from './font'
+import { ROUNDS_ICON } from './icons'
 import { Message } from './message'
 import {
   type Model,
@@ -18,6 +19,7 @@ import {
   type ShopItemId,
   ShopState,
   Trap,
+  TrapHint,
   type WeaponKind,
 } from './model'
 import {
@@ -67,9 +69,12 @@ import {
 import { type Mood, chatterLine, moodOf } from './shopkeeper'
 import { TRAPS, healthShare, ownedCount } from './traps'
 import {
+  hasEndlessRounds,
   maxTier,
+  maybeCarried,
   maybeNextTier,
   maybeReplacedGun,
+  startingRounds,
   tierName,
   tierOf,
 } from './weapons'
@@ -339,6 +344,40 @@ const swapBadgeView = (model: Model, h: ApplicationViewBuilder): Html =>
       ),
   })
 
+// NOTE: how many rounds a gun has, beside its bars: the Pop Pistol's
+// endless ammo as an infinity sign, any other gun as a count that runs down,
+// from a playtester who traded up and never knew the new gun could run dry.
+const roundsView = (
+  maybeRounds: Option.Option<number>,
+  h: ApplicationViewBuilder,
+): Html =>
+  h.span(
+    [
+      h.Class(
+        Option.isNone(maybeRounds) ? 'shop-rounds is-endless' : 'shop-rounds',
+      ),
+      h.AriaHidden(true),
+    ],
+    [
+      h.span([
+        h.Class('shop-rounds-icon'),
+        h.Style({ backgroundImage: ROUNDS_ICON }),
+      ]),
+      Option.match(maybeRounds, {
+        onNone: () => '\u221e',
+        onSome: rounds => `${rounds}`,
+      }),
+    ],
+  )
+
+const carriedRounds = (
+  model: Model,
+  weapon: WeaponKind,
+): Option.Option<number> =>
+  hasEndlessRounds(weapon)
+    ? Option.none()
+    : Option.map(maybeCarried(model.player, weapon), gun => gun.rounds)
+
 const metaView = (
   model: Model,
   item: ShopItemId,
@@ -350,6 +389,12 @@ const metaView = (
         [h.Class('shop-meta')],
         [
           barsView(gunBars(weapon, 0), gunBars(weapon, 0), h),
+          roundsView(
+            hasEndlessRounds(weapon)
+              ? Option.none()
+              : Option.some(startingRounds(weapon)),
+            h,
+          ),
           swapBadgeView(model, h),
         ],
       ),
@@ -557,6 +602,7 @@ const rowView = (
       h.Class(shape.rowClass),
       h.DataAttribute('verdict', isRefused ? 'refused' : 'available'),
       h.DataAttribute('stock', tag._tag),
+      h.DataAttribute('fresh', isFreshTrap(model, item) ? 'true' : 'false'),
     ],
     [
       Button.view(
@@ -751,7 +797,15 @@ const ownedGunView = (
           h.span([h.Class('shop-gun-owned')], [ownedBadge(model, weapon)]),
         ],
       ),
-      barsView(gunBars(weapon, tier), nextBars(weapon, tier), h),
+      h.div(
+        [h.Class('shop-gun-stats')],
+        [
+          barsView(gunBars(weapon, tier), nextBars(weapon, tier), h),
+          weapon === 'Pan'
+            ? h.empty
+            : roundsView(carriedRounds(model, weapon), h),
+        ],
+      ),
       h.span([h.Class('sr-only')], [status]),
       h.ul(
         [h.Class('shop-subrows'), h.AriaLabel(`For your ${name}`)],
@@ -849,6 +903,17 @@ const tabLabel = (model: Model, category: ShopCategory): string => {
     : `${SHOP_CATEGORIES[category].label}, ${count} you can buy`
 }
 
+// NOTE: until the first trap is bought, the TRAPS tab wears a NEW tag and
+// its traps pulse, so a player sees traps are bought here, from Rattles.
+const isTrapNew = (model: Model): boolean =>
+  TrapHint.isAnyOf(['Unseen'])(model.trapHint)
+
+const isFreshTraps = (model: Model, category: ShopCategory): boolean =>
+  category === 'Traps' && isTrapNew(model)
+
+const isFreshTrap = (model: Model, item: ShopItemId): boolean =>
+  isTrapNew(model) && ShopGood.isAnyOf(['Trap'])(shopItem(item).good)
+
 const tabButtonView = (
   model: Model,
   tab: Tabs.TabInfo<ShopCategory>,
@@ -860,6 +925,9 @@ const tabButtonView = (
     [
       artView(TAB_ART[tab.value], 'shop-tab-icon', h),
       h.span([h.Class('shop-tab-label')], [SHOP_CATEGORIES[tab.value].label]),
+      isFreshTraps(model, tab.value)
+        ? h.span([h.Class('shop-tab-new')], ['NEW'])
+        : h.empty,
       h.span(
         [
           h.Class(count === 0 ? 'shop-tab-count is-empty' : 'shop-tab-count'),
