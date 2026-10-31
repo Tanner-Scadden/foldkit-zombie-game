@@ -421,6 +421,8 @@ const nearestOf = (
 
 // NOTE: aims the mouse at the nearest zombie in the parlour and holds the
 // trigger; with none in, lets go.
+const AIM_REACH_PX = 20
+
 const shootNearest = async (
   page: Page,
   held: Held,
@@ -441,7 +443,16 @@ const shootNearest = async (
     }
     return
   }
-  const at = await toClient(page, target.x, target.y)
+  // NOTE: the mouse points along the line to the zombie, a short way from
+  // the player, not at the zombie itself: a zombie down by the HUD would
+  // put the click on a slot (the knife's draws the knife), not the room.
+  const gap = Math.max(1, Math.hypot(target.x - own.x, target.y - own.y))
+  const reach = Math.min(gap, AIM_REACH_PX)
+  const at = await toClient(
+    page,
+    own.x + ((target.x - own.x) / gap) * reach,
+    own.y + ((target.y - own.y) / gap) * reach,
+  )
   await page.mouse.move(at.x, at.y)
   if (!held.firing) {
     await page.mouse.down()
