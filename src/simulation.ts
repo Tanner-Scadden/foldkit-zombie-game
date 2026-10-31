@@ -799,7 +799,7 @@ const chaseHeading = (
 // NOTE: a slow zombie in the room goes for a standing Plank Pile within
 // BAIT_RULES.pullPx of walking when the plank is nearer than the player. A
 // frenzied one only has eyes for the player.
-export const maybeBaitDoor = (
+const maybeBaitDoor = (
   level: Level,
   zombie: Zombie,
   playerField: FlowField,
@@ -1555,7 +1555,7 @@ const moveSeat =
 // turning from its intent, and nothing else: what a co-op client runs to
 // predict its own player before the room's answer comes (MULTIPLAYER.md,
 // Phase 4). Hits, money, and deaths stay the room's.
-export const walkLeadSeat = (model: World, deltaMs: number): World => {
+const walkLeadSeat = (model: World, deltaMs: number): World => {
   const level = levelOf(model)
   return faceTowardIntent(
     moveSeat(

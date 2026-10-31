@@ -88,7 +88,7 @@ export class SqliteClient extends Context.Service<
 
 export const MIGRATIONS_TABLE = 'effect_sql_migrations'
 
-export const DEFAULT_REQUEST_TIMEOUT: Duration.Input = '30 seconds'
+const DEFAULT_REQUEST_TIMEOUT: Duration.Input = '30 seconds'
 
 // PARAMETERS
 

@@ -56,7 +56,7 @@ const varintBytes = (value: number): number => {
   return zigzag < 128 ? 1 : Math.ceil(Math.log2(zigzag + 1) / 7)
 }
 
-export const valueBytes = (key: string, value: unknown): number => {
+const valueBytes = (key: string, value: unknown): number => {
   if (typeof value === 'number') {
     if (key === 'x' || key === 'y') {
       return 2

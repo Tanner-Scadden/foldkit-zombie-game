@@ -138,14 +138,14 @@ const LEGACY_HAIR_COLORS = [
   'Pink',
 ] as const
 
-export const LegacyAppearance = Schema.Struct({
+const LegacyAppearance = Schema.Struct({
   body: Schema.Literals(['Female', 'Male']),
   hairStyle: Schema.Literals(LEGACY_HAIR_STYLES),
   hairColor: Schema.Literals(LEGACY_HAIR_COLORS),
   skinTone: SkinTone,
   shirtColor: ShirtColor,
 })
-export type LegacyAppearance = typeof LegacyAppearance.Type
+type LegacyAppearance = typeof LegacyAppearance.Type
 
 const HAIR_STYLE_OF_LEGACY: Readonly<
   Record<(typeof LEGACY_HAIR_STYLES)[number], HairStyle>
@@ -161,7 +161,7 @@ const HAIR_COLOR_OF_LEGACY: Readonly<
   Pink: 'Pink',
 }
 
-export const appearanceOfLegacy = (look: LegacyAppearance): Appearance => ({
+const appearanceOfLegacy = (look: LegacyAppearance): Appearance => ({
   body: 'Broad',
   hairStyle: HAIR_STYLE_OF_LEGACY[look.hairStyle],
   hairColor: HAIR_COLOR_OF_LEGACY[look.hairColor],
@@ -272,7 +272,7 @@ const V10_FACIAL_HAIRS = [
 const V10_MAKEUPS = ['None', 'Lashes', 'Lipstick', 'Glam', 'Blush'] as const
 const V10_EXTRAS = ['None', 'Earrings', 'Glasses', 'Shades', 'Bow'] as const
 
-export const ManyPartAppearance = Schema.Struct({
+const ManyPartAppearance = Schema.Struct({
   body: Schema.Literals(V10_BODIES),
   hairStyle: Schema.Literals(V10_HAIR_STYLES),
   hairColor: Schema.Literals(V10_HAIR_COLORS),
@@ -284,7 +284,7 @@ export const ManyPartAppearance = Schema.Struct({
   makeup: Schema.Literals(V10_MAKEUPS),
   extra: Schema.Literals(V10_EXTRAS),
 })
-export type ManyPartAppearance = typeof ManyPartAppearance.Type
+type ManyPartAppearance = typeof ManyPartAppearance.Type
 
 const HAIR_STYLE_OF_V10: Readonly<
   Record<(typeof V10_HAIR_STYLES)[number], HairStyle>
@@ -363,9 +363,7 @@ const OUTFIT_OF_V10: Readonly<Record<(typeof V10_OUTFITS)[number], Outfit>> = {
 const printOfV10 = (print: (typeof V10_PRINTS)[number]): Print =>
   print === 'Plain' || print === 'Stripes' ? print : 'Rainbow'
 
-export const appearanceOfManyParts = (
-  look: ManyPartAppearance,
-): Appearance => ({
+const appearanceOfManyParts = (look: ManyPartAppearance): Appearance => ({
   body: look.body === 'Slim' ? 'Slim' : 'Broad',
   hairStyle: HAIR_STYLE_OF_V10[look.hairStyle],
   hairColor: HAIR_COLOR_OF_V10[look.hairColor],

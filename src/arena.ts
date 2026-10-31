@@ -38,7 +38,7 @@ export const ROOM_MAP: ReadonlyArray<string> = [
 // rows -15 to -1. The yard east of it, the commas, is outside the house: the
 // way to the parlour's north door. Zombies walk the yard, the player never
 // does, and nothing out there is drawn.
-export const KITCHEN_MAP: ReadonlyArray<string> = [
+const KITCHEN_MAP: ReadonlyArray<string> = [
   '############DD######,,,,,,,,,,,,',
   '############DD######,,,,,,,,,,,,',
   '#QQQ..GG..GG..IIIZZ#,,,,,,,,,,,,',
@@ -58,7 +58,7 @@ export const KITCHEN_MAP: ReadonlyArray<string> = [
 
 export const KITCHEN_TOP_ROW = -KITCHEN_MAP.length
 
-export const MANOR_MAP: ReadonlyArray<string> = [...KITCHEN_MAP, ...ROOM_MAP]
+const MANOR_MAP: ReadonlyArray<string> = [...KITCHEN_MAP, ...ROOM_MAP]
 
 // SYMBOLS
 
@@ -82,7 +82,7 @@ export type CoverKind =
 
 export const WALL_SYMBOL = '#'
 export const SHOP_STALL_SYMBOL = '$'
-export const OUTSIDE_SYMBOL = ','
+const OUTSIDE_SYMBOL = ','
 export const SOUP_SYMBOL = '~'
 
 export const COVER_SYMBOLS: Readonly<Record<string, CoverKind>> = {
@@ -151,7 +151,7 @@ export const byDoor = <A>(
 // NOTE: an exit is a boarded doorway drawn on the map with its own symbol.
 // While it is closed its tiles are solid and the doors behind it stay shut.
 // Opening it makes its tiles floor and adds its doors to the spawn doors.
-export type ExitSpec = Readonly<{
+type ExitSpec = Readonly<{
   id: ExitId
   symbol: string
   doors: ReadonlyArray<DoorId>
@@ -160,7 +160,7 @@ export type ExitSpec = Readonly<{
 // NOTE: a room is a block of whole tiles the camera may show. One behind an
 // exit counts only once that exit is open, so the camera never scrolls onto
 // a room the player cannot reach.
-export type RoomSpec = Readonly<{
+type RoomSpec = Readonly<{
   id: string
   firstColumn: number
   lastColumn: number
@@ -393,7 +393,7 @@ export type Door = Readonly<{
   edge: Vector
 }>
 
-export type Threshold = Readonly<{
+type Threshold = Readonly<{
   tiles: ReadonlyArray<Tile>
   indices: ReadonlyArray<number>
   box: Box

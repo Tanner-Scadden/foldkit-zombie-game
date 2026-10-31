@@ -70,14 +70,14 @@ export type Queue = typeof Queue.Type
 
 // ROOM
 
-export const Link = Schema.Literals(['Connecting', 'Online', 'Reconnecting'])
-export type Link = typeof Link.Type
+const Link = Schema.Literals(['Connecting', 'Online', 'Reconnecting'])
+type Link = typeof Link.Type
 
 export const Share = Schema.Literals(['Idle', 'Shared', 'Copied'])
 export type Share = typeof Share.Type
 
-export const Departure = Schema.Literals(['Staying', 'Leaving'])
-export type Departure = typeof Departure.Type
+const Departure = Schema.Literals(['Staying', 'Leaving'])
+type Departure = typeof Departure.Type
 
 // NOTE: the player's presses on their way to the room (src/roomWorld.ts,
 // "ACTIONS"): `queued` are action codes not sent yet, `held` is the value

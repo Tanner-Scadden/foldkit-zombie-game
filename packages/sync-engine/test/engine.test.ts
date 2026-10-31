@@ -9,7 +9,7 @@ import {
   type Scope,
   Stream,
 } from 'effect'
-import { SqlClient, type SqlError } from 'effect/sql'
+import type { SqlClient, SqlError } from 'effect/sql'
 
 import { describe, expect, it } from '@effect/vitest'
 
@@ -76,7 +76,7 @@ const openDevice = (
   scope = SCOPE,
 ): Effect.Effect<Device, SqlError.SqlError, Scope.Scope> =>
   Effect.gen(function* () {
-    const database = yield* openClientDatabase()
+    const database = yield* openClientDatabase
     const replica = yield* makeReplica({ definition: Notes, database, scope })
     return { database, replica }
   })
@@ -115,7 +115,7 @@ const makeTestHost = (
 ) =>
   makeHost({
     definitions: [Notes],
-    openDatabase: openServerDatabase,
+    openDatabase: () => openServerDatabase,
     authenticate,
     ...options,
   })
@@ -285,7 +285,7 @@ describe('the server', () => {
         { _tag: 'Acked', id: 'mutation-0001', seq: 1 },
       ])
       const snapshot = yield* server.snapshot
-      expect(snapshot._tag === 'Snapshot' && snapshot.tables.tally).toEqual([
+      expect(snapshot._tag === 'Snapshot' && snapshot.tables['tally']).toEqual([
         { kind: 'runs', count: 4 },
       ])
     }),
@@ -433,7 +433,7 @@ describe('convergence over a bad network', () => {
         server._tag === 'Snapshot'
           ? Array.sort(
               yield* Schema.decodeUnknownEffect(Schema.Array(Tally))(
-                server.tables.tally,
+                server.tables['tally'],
               ),
               Order.mapInput(
                 Order.String,

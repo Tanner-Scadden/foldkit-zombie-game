@@ -54,7 +54,7 @@ export const isRunningLow = (gun: CarriedGun): boolean => {
 
 // NOTE: the last few shots of a gun that can run dry each tick, so the ear
 // hears it coming before the click.
-export const TICK_ROUNDS = 5
+const TICK_ROUNDS = 5
 
 export const isTickingShot = (
   player: Player,

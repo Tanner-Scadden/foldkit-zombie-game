@@ -155,7 +155,7 @@ export function freshRunModel(): Model {
   )
 }
 
-export const fridgeBox = Option.getOrThrow(
+const fridgeBox = Option.getOrThrow(
   fridgeBoxOf(
     levelOf({ level: openExitIn(freshRunModel().level, KITCHEN_EXIT) }),
   ),

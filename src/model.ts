@@ -157,13 +157,13 @@ export const HelpCard = Schema.Literals([
 ])
 export type HelpCard = typeof HelpCard.Type
 
-export const ProfilePanel = Schema.Struct({
+const ProfilePanel = Schema.Struct({
   tab: ProfileTab,
   nameDraft: Schema.String,
   fx: ProfileFx,
   fxCount: Schema.Number,
 })
-export type ProfilePanel = typeof ProfilePanel.Type
+type ProfilePanel = typeof ProfilePanel.Type
 
 // NOTE: whether the browser has a share sheet (navigator.share). On a touch
 // screen SHARE opens it, so the player picks X and X's own composer opens

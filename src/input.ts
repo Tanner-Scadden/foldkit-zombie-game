@@ -89,11 +89,6 @@ export const isPauseKey = (code: string): boolean => code === PAUSE_KEY
 
 export const isStartWaveKey = (code: string): boolean => code === START_WAVE_KEY
 
-// NOTE: the key a purchasable in the world is held with (src/purchase.ts).
-// It is START WAVE's key, the one that bought from the old offer: at a
-// purchasable it holds to buy instead.
-export const isInteractKey = (code: string): boolean => code === INTERACT_KEY
-
 export const isReloadKey = (code: string): boolean => code === RELOAD_KEY
 
 export const isSwapKey = (code: string): boolean => code === SWAP_KEY

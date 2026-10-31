@@ -56,23 +56,13 @@ import {
 import { cleanName } from './profile'
 
 export {
-  PlayerName,
   PlayerSave,
   SAVE_VERSION,
   SavedBests,
-  SavedBestsByDifficulty,
-  SavedCard,
   SavedDifficulty,
-  SavedDifficultyBests,
   SavedHome,
   SavedLesson,
-  SavedLessons,
-  SavedNightmare,
-  SavedOnboarding,
-  SavedPowerUps,
-  SavedRunRecord,
   SavedRunRecords,
-  SavedSettings,
   SavedTrapHint,
 } from './playerData'
 

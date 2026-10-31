@@ -42,12 +42,12 @@ import { type UpdateStep, modelStep, unchanged, withInput } from './step'
 export const isRunOn = (model: Model): boolean =>
   isOnlineRun(model) && isRoundActive(model.phase)
 
-export const pressInRun = (action: SeatAction) =>
+const pressInRun = (action: SeatAction) =>
   makeStep(() => Update.combineSteps([unlockAudio, pressInRoom(action)]))
 
 // NOTE: a buy the shop would refuse sounds refused at once; one it would
 // take rings up at once, and the room's wallet follows.
-export const buyInRun = (item: ShopItemId) =>
+const buyInRun = (item: ShopItemId) =>
   makeStep(model =>
     Update.combineSteps([
       pressInRun(SeatAction.Buy({ item })),
@@ -90,7 +90,7 @@ const holdKey =
 
 // NOTE: at the counter the dialog has the keys; in the fight a press key
 // goes to the room, and every key is held in the input for walking.
-export const keyInRun = (code: string) =>
+const keyInRun = (code: string) =>
   makeStep(model =>
     isAtCounter(model.shop)
       ? Update.combineSteps([holdKey(code), unlockAudio])

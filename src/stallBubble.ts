@@ -327,7 +327,7 @@ export const stallBubbleShapes = (
 
 // NOTE: a bubble whose tail tip points at a spot in the world, pinned to
 // the window's edge with an arrow when the spot is out of view.
-export const bubbleShapes = (
+const bubbleShapes = (
   kind: BubbleKind,
   tipInWorld: Vector,
   model: Model,

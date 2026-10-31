@@ -150,7 +150,7 @@ const lifeShapes = (seat: Seat, x: number, y: number) =>
 
 // NOTE: over every player's head in co-op: their seat's mark, and while
 // they are down, the bleed bar or the revive bar filling.
-export const seatMarkShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
+const seatMarkShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
   isCoop(model)
     ? Array.flatMap(playersOf(model), ({ slot, seat, player }) =>
         isBledOut(seat)

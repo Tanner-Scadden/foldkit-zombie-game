@@ -27,12 +27,12 @@ export const Message = defineMessageUnion({
 })
 export type Message = typeof Message.Type
 
-export const OutMessage = defineMessageUnion({
+const OutMessage = defineMessageUnion({
   ChoseLook: { part: LookPart, value: Schema.String },
   FlippedLook: { toggle: LookToggle },
   RequestedRandomLook: {},
 })
-export type OutMessage = typeof OutMessage.Type
+type OutMessage = typeof OutMessage.Type
 
 type PartRadioGroupModel = typeof PartRadioGroupBlock.Model.Type
 
@@ -156,7 +156,7 @@ export const chooseLook = (
 
 // BLOCK
 
-export const CharacterDefinition = Block.makeDefinition('Character', {
+const CharacterDefinition = Block.makeDefinition('Character', {
   Model: CharacterPicker,
   Message,
   OutMessage,

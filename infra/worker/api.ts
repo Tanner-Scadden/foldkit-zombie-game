@@ -61,17 +61,17 @@ export class WorkerEnv extends Context.Service<WorkerEnv, WorkerServices>()(
 
 // ERRORS
 
-export class SummaryTooLarge extends Schema.TaggedError<
+class SummaryTooLarge extends Schema.TaggedError<
   SummaryTooLarge,
   { readonly brand: unique symbol }
 >()('SummaryTooLarge', {}, { httpApiStatus: 413 }) {}
 
-export class SummaryRejected extends Schema.TaggedError<
+class SummaryRejected extends Schema.TaggedError<
   SummaryRejected,
   { readonly brand: unique symbol }
 >()('SummaryRejected', {}, { httpApiStatus: 400 }) {}
 
-export class RateLimited extends Schema.TaggedError<
+class RateLimited extends Schema.TaggedError<
   RateLimited,
   { readonly brand: unique symbol }
 >()(
@@ -80,7 +80,7 @@ export class RateLimited extends Schema.TaggedError<
   { httpApiStatus: 429 },
 ) {}
 
-export class StoreUnavailable extends Schema.TaggedError<
+class StoreUnavailable extends Schema.TaggedError<
   StoreUnavailable,
   { readonly brand: unique symbol }
 >()('StoreUnavailable', {}, { httpApiStatus: 503 }) {}
@@ -93,7 +93,7 @@ export const Health = Schema.Struct({
 })
 export type Health = typeof Health.Type
 
-export const Api = HttpApi.make('munch-manor').add(
+const Api = HttpApi.make('munch-manor').add(
   HttpApiGroup.make('runs')
     .add(
       HttpApiEndpoint.post('record', RUNS_PATH, {
@@ -258,7 +258,7 @@ const RunsLive = HttpApiBuilder.group(Api, 'runs', handlers =>
     ),
 )
 
-export const ApiLive = HttpApiBuilder.layer(Api).pipe(
+const ApiLive = HttpApiBuilder.layer(Api).pipe(
   Layer.provide(RunsLive),
   Layer.provide(HttpServer.layerServices),
 )

@@ -80,11 +80,11 @@ import {
   readRequests,
 } from './turn'
 
-export class BudgetRefused extends Data.TaggedError('BudgetRefused')<{
+class BudgetRefused extends Data.TaggedError('BudgetRefused')<{
   readonly reason: string
 }> {}
 
-export class WaitTimedOut extends Data.TaggedError('WaitTimedOut')<{
+class WaitTimedOut extends Data.TaggedError('WaitTimedOut')<{
   readonly minutes: number
   readonly maybeLastReason: Option.Option<string>
 }> {}
@@ -182,7 +182,7 @@ type CurrentTurn = Readonly<{
 
 const say = (line: string): Effect.Effect<void> => Console.log(`heavy: ${line}`)
 
-export const readMachine = (context: Pick<Context, 'maybeFakeLoad'>) =>
+const readMachine = (context: Pick<Context, 'maybeFakeLoad'>) =>
   Effect.sync(() => ({
     load: Option.getOrElse(context.maybeFakeLoad, () =>
       pipe(
@@ -794,7 +794,7 @@ const resetThisBudget = Effect.gen(function* () {
   yield* say(`Reset the balance budget for ${context.ledgerKey}.`)
 })
 
-export const failWith = (message: string): Effect.Effect<never, GuardExit> =>
+const failWith = (message: string): Effect.Effect<never, GuardExit> =>
   Console.error(`heavy: ${message}`).pipe(
     Effect.andThen(Effect.fail(new GuardExit({ code: FAILURE_EXIT_CODE }))),
   )

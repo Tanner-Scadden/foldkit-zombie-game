@@ -42,7 +42,7 @@ const AMMO_ITEMS: Readonly<Partial<Record<WeaponKind, AmmoItemId>>> = {
 export const maybeAmmoItemOf = (kind: WeaponKind): Option.Option<AmmoItemId> =>
   Option.fromNullishOr(AMMO_ITEMS[kind])
 
-export const isFullGun = (gun: CarriedGun): boolean =>
+const isFullGun = (gun: CarriedGun): boolean =>
   gun.rounds >= maxRounds(gun.kind, gun.tier)
 
 const COUNTER_TAG_DROP_PX = 4
@@ -86,7 +86,7 @@ export const sellAmmo = (world: World): Option.Option<World> =>
 
 // THE SALE
 
-export const COUNTER_SALE_MS = 1400
+const COUNTER_SALE_MS = 1400
 
 // NOTE: what Rattles says as he slides the rounds across, a different line
 // each sale. Kept here, away from the shop dialog's lines, so the World's

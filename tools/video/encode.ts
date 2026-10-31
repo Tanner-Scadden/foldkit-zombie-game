@@ -10,7 +10,7 @@ import { FRAMES_PER_SECOND } from './shotList'
 // yuv420p with AAC sound and the index up front, what X takes. The GIF is
 // half size at 30 frames a second, scaled by whole pixels, one palette.
 
-export class EncodeFailed extends Data.TaggedError('EncodeFailed')<{
+class EncodeFailed extends Data.TaggedError('EncodeFailed')<{
   readonly reason: string
 }> {}
 

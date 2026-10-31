@@ -21,14 +21,14 @@ import type { SpriteAtlas } from '../../src/spriteAtlas.ts'
 // hashes, so a stale atlas can only miss, never draw old art. Once the
 // generator finishes, the next reload draws from the new atlas.
 
-export const SPRITE_ATLAS_ID = 'virtual:sprite-atlas'
+const SPRITE_ATLAS_ID = 'virtual:sprite-atlas'
 const RESOLVED_ID = `\0${SPRITE_ATLAS_ID}`
 
 const ROOT = resolve(import.meta.dirname, '../..')
 const SOURCE_DIR = join(ROOT, 'src') + sep
 const GENERATOR = join(ROOT, 'tools/sprites/build.ts')
-export const BUILD_CACHE_DIR = join(ROOT, 'node_modules/.cache/munch-sprites')
-export const DEV_CACHE_DIR = join(ROOT, 'node_modules/.cache/munch-sprites-dev')
+const BUILD_CACHE_DIR = join(ROOT, 'node_modules/.cache/munch-sprites')
+const DEV_CACHE_DIR = join(ROOT, 'node_modules/.cache/munch-sprites-dev')
 
 const EMPTY_ATLAS_MODULE = 'export default { sources: [], entries: {} }\n'
 

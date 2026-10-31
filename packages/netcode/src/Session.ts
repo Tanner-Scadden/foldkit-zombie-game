@@ -14,7 +14,7 @@ import {
   inputsEqual,
 } from './Protocol'
 import { TICK_MS } from './Room'
-import { WireError, readAll } from './Wire'
+import { type WireError, readAll } from './Wire'
 import type { World } from './World'
 
 // NOTE: a player's side of the room, as pure functions over plain data, so
@@ -420,7 +420,7 @@ export const receive = <W, Own>(
       heard.isResyncing
         ? ok(heard)
         : pipe(
-            Array.findFirst(heard.frames, frame => frame.tick === delta.base),
+            Array.findFirst(heard.frames, held => held.tick === delta.base),
             Option.flatMap(base =>
               Result.getSuccess(
                 readAll(delta.diff, reader =>

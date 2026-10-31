@@ -12,7 +12,7 @@ import { CoopProblem, Share } from './model'
 // a Message's payload goes through its Schema when it is built, so a stray
 // aim beyond the range would throw on every frame. The session packs the
 // input for the wire itself, so the Message carries plain numbers.
-export const Controls = Schema.Struct({
+const Controls = Schema.Struct({
   moveX: Schema.Number,
   moveY: Schema.Number,
   aimX: Schema.Number,
@@ -20,7 +20,7 @@ export const Controls = Schema.Struct({
   buttons: Schema.Number,
   action: Schema.Number,
 })
-export type Controls = typeof Controls.Type
+type Controls = typeof Controls.Type
 
 // MESSAGE
 

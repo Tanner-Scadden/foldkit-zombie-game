@@ -156,7 +156,7 @@ const withDirectory = <A, E>(
   ) => Effect.Effect<A, E, Scope.Scope>,
 ) =>
   Effect.gen(function* () {
-    const sql = yield* openServerDatabase()
+    const sql = yield* openServerDatabase
     const directory = yield* Effect.provideService(
       makeDirectory(SECRET),
       SqlClient.SqlClient,
@@ -170,7 +170,7 @@ const withDirectory = <A, E>(
   })
 
 const openIdentity = (api: IdentityApi) =>
-  Effect.flatMap(openServerDatabase(), sql => makeDeviceIdentity({ sql, api }))
+  Effect.flatMap(openServerDatabase, sql => makeDeviceIdentity({ sql, api }))
 
 describe('device identity and linking', () => {
   it.effect('a device registers with the player id it made, and keeps it', () =>

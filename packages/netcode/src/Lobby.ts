@@ -92,6 +92,8 @@ export const MAX_NAME_LENGTH = 12
 export const MAX_NAME_INPUT = 64
 
 const CONTROL =
+  // NOTE: matching control characters is the point: they are cleaned out.
+  // oxlint-disable-next-line no-control-regex
   /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff]/g
 
 export const defaultName = (slot: number): string => `Player ${slot + 1}`
@@ -550,7 +552,7 @@ export const ChangedReady = defineMutation({
           round: lobby.round + 1,
         })
       }
-      yield* touch(context, {})
+      return yield* touch(context, {})
     }),
 })
 

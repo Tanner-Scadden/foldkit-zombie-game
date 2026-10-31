@@ -6,13 +6,13 @@ import { SoundEffect } from '../../src/soundEffect'
 // NOTE: what the tool asks the soundtrack page for (audioPage.ts): the
 // sounds and music cues at their second, the length, and the sample rate.
 
-export const SoundCue = Schema.TaggedStruct('Sound', {
+const SoundCue = Schema.TaggedStruct('Sound', {
   seconds: Schema.Finite,
   sound: SoundEffect,
   variation: Schema.Finite,
 })
 
-export const MusicCue = Schema.TaggedStruct('Music', {
+const MusicCue = Schema.TaggedStruct('Music', {
   seconds: Schema.Finite,
   mood: MusicMood,
   level: MusicLevel,
@@ -22,18 +22,18 @@ export const MusicCue = Schema.TaggedStruct('Music', {
 export const Cue = Schema.Union([SoundCue, MusicCue])
 export type Cue = typeof Cue.Type
 
-export const SoundtrackRequest = Schema.Struct({
+const SoundtrackRequest = Schema.Struct({
   cues: Schema.Array(Cue),
   seconds: Schema.Finite,
   sampleRate: Schema.Int,
 })
-export type SoundtrackRequest = typeof SoundtrackRequest.Type
+type SoundtrackRequest = typeof SoundtrackRequest.Type
 
 export const SoundtrackRequestJson = Schema.fromJsonString(SoundtrackRequest)
 
 // NOTE: the director's log (tools/audit/harness/director.ts): each sound
 // and music cue the game asked for, by the tick it asked on.
-export const LoggedCue = Schema.Union([
+const LoggedCue = Schema.Union([
   Schema.TaggedStruct('Sound', {
     tick: Schema.Finite,
     sound: SoundEffect,
@@ -46,7 +46,7 @@ export const LoggedCue = Schema.Union([
     stinger: MusicStinger,
   }),
 ])
-export type LoggedCue = typeof LoggedCue.Type
+type LoggedCue = typeof LoggedCue.Type
 
 export const decodeAudioLog = Schema.decodeUnknownEffect(
   Schema.Array(LoggedCue),

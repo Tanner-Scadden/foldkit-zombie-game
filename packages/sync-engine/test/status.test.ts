@@ -7,6 +7,7 @@ import {
   Option,
   Ref,
   Schedule,
+  Schema,
   Scope,
   Stream,
   SubscriptionRef,
@@ -62,7 +63,7 @@ const openDevice = (
   scope = SCOPE,
 ): Effect.Effect<Device, SqlError.SqlError, Scope.Scope> =>
   Effect.gen(function* () {
-    const database = yield* openClientDatabase()
+    const database = yield* openClientDatabase
     const replica = yield* openReplica(database, scope)
     return { database, replica }
   })
@@ -78,7 +79,7 @@ const TIMING = {
 const makeTestHost = () =>
   makeHost({
     definitions: [Notes],
-    openDatabase: openServerDatabase,
+    openDatabase: () => openServerDatabase,
     authenticate,
   })
 
@@ -167,7 +168,7 @@ describe('scope status', () => {
     () =>
       Effect.gen(function* () {
         const host = yield* makeTestHost()
-        const database = yield* openClientDatabase()
+        const database = yield* openClientDatabase
         const firstSession = yield* Scope.make()
         const firstReplica = yield* openReplica(database)
         const id = yield* firstReplica.run(Counted, { kind: 'runs', count: 2 })
@@ -181,9 +182,9 @@ describe('scope status', () => {
         )
         // A tab closed after a receipt committed but before its status
         // moved: the stored seq is behind the confirmed one.
-        const behind = JSON.stringify(
-          ScopeStatus.cases.Ready.make({ seq: 0, fresh: true }),
-        )
+        const behind = yield* Schema.encodeEffect(
+          Schema.fromJsonString(ScopeStatus),
+        )(ScopeStatus.cases.Ready.make({ seq: 0, fresh: true }))
         yield* database.sql`UPDATE sync_status SET status = ${behind}`
         expect(yield* (yield* openReplica(database)).currentStatus).toEqual(
           notFresh,
@@ -241,10 +242,7 @@ describe('scope status', () => {
         device.replica.status,
         status => status._tag === 'Failed',
       )
-      expect(failed).toMatchObject({
-        _tag: 'Failed',
-        reason: expect.stringContaining('Forbidden'),
-      })
+      expect(failed._tag === 'Failed' && failed.reason).toContain('Forbidden')
     }),
   )
 

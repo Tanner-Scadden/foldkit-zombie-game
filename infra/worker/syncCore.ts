@@ -17,7 +17,7 @@ import type { Unauthorized } from '@munch/sync-engine'
 import {
   Actor,
   type Authenticate,
-  Connection,
+  type Connection,
   type Delta,
   type Directory,
   IDENTITY_PATHS,
@@ -56,8 +56,8 @@ import {
 
 // LIMITS
 
-export const MAX_EXCHANGE_BYTES = 64 * 1024
-export const MAX_IDENTITY_BYTES = 4 * 1024
+const MAX_EXCHANGE_BYTES = 64 * 1024
+const MAX_IDENTITY_BYTES = 4 * 1024
 
 export const CORS_HEADERS: Readonly<Record<string, string>> = {
   'access-control-allow-origin': '*',
@@ -143,7 +143,7 @@ export const tryCall = <A>(step: string, call: () => PromiseLike<A>) =>
 // never takes a client's word for it (Lobby.ts, ChangedPicks). Anything
 // that goes wrong reads as locked.
 export const NIGHTMARE_PATH = '/internal/nightmare'
-export const SCOPE_HEADER = 'x-sync-scope'
+const SCOPE_HEADER = 'x-sync-scope'
 
 const NightmareRows = Schema.Array(Schema.Struct({ nightmare: Schema.String }))
 const decodeNightmareRows = Schema.decodeUnknownOption(NightmareRows)
@@ -334,7 +334,7 @@ export const deliver = (
 export const joinedOf = (sockets: ReadonlyArray<Socket>) =>
   Array.filter(sockets, socket => socket.connection._tag === 'Joined')
 
-export const deltasOf = (
+const deltasOf = (
   messages: ReadonlyArray<ServerMessage>,
 ): ReadonlyArray<Delta> =>
   Array.flatMap(messages, message =>
@@ -636,7 +636,7 @@ export const makeDirectoryHost = <E>(options: {
     return { fetch }
   })
 
-export const directoryRequestOf = (
+const directoryRequestOf = (
   request: Request,
   body: string,
 ): DirectoryRequest => ({
@@ -645,4 +645,4 @@ export const directoryRequestOf = (
   bearer: bearerOf(request),
 })
 
-export { Connection, OPENED, playerScopeId }
+export { playerScopeId }

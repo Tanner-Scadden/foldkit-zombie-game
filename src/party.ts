@@ -59,7 +59,7 @@ export const soloSeat: Seat = {
   touchedMs: 0,
 }
 
-export const MAX_BITE_GRACE_MS = 100
+const MAX_BITE_GRACE_MS = 100
 
 // NOTE: the bite grace for a round trip, in whole ticks so it only
 // changes when it matters.
@@ -282,12 +282,9 @@ export const nearestOf = <A extends Vector>(
         : nearest,
   )
 
-export const nearestTarget = (world: World, at: Vector): Player =>
-  nearestOf(targetsOf(world), at)
-
 // NOTE: the slot of the standing player nearest a point, for the systems
 // that fight one player at a time (the boss, a Big Leaguer, an Ankle Biter).
-export const nearestStandingSlot = (world: World, at: Vector): PlayerSlot =>
+const nearestStandingSlot = (world: World, at: Vector): PlayerSlot =>
   pipe(
     playersOf(world),
     Array.filter(({ seat }) => isStanding(seat)),

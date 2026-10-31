@@ -40,7 +40,7 @@ export interface Engine {
   readonly close: () => void
 }
 
-export interface EngineRows {
+interface EngineRows {
   readonly columns: ReadonlyArray<string>
   readonly values: ReadonlyArray<ReadonlyArray<SqlValue>>
 }

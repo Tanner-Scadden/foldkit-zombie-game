@@ -112,7 +112,7 @@ export type TickEvents = Readonly<{
 // MAX_VIEW_LAG_TICKS ticks, newest last, for checking a lagging player's
 // shots against what they saw; it is the room's alone and never goes on
 // the wire, so a client's copy keeps it empty.
-export type TickPositions = Readonly<{
+type TickPositions = Readonly<{
   tick: number
   zombies: ReadonlyArray<ZombieAt>
 }>
@@ -322,7 +322,7 @@ export const seatActionOf = (
 
 // NOTE: a fresh run's World with nobody seated yet, as single player's run
 // reset starts one, with single player's gates settled.
-export const freshWorld = (seed: number, settings: RoomSettings): World => ({
+const freshWorld = (seed: number, settings: RoomSettings): World => ({
   phase: Phase.Ready(),
   pacing: calmPacing,
   boss: Boss.Absent(),
@@ -413,7 +413,7 @@ export const startRoomWorld = (
 // GOING does (src/waves.ts, keepGoing): the same crew with their money,
 // guns, traps, and hearts, everyone out of the shop, the first endless
 // wave's break counting. The room's ticks start again from 0.
-export const keepGoingWorld = (world: World): World =>
+const keepGoingWorld = (world: World): World =>
   beginPreparation(
     forEachSeat(
       modifyFields(world, { mode: () => RunMode.Endless() }),
@@ -427,12 +427,12 @@ export const keepGoingWorld = (world: World): World =>
     PREPARATION_MS,
   )
 
-export const isWonRun = (world: World): boolean =>
+const isWonRun = (world: World): boolean =>
   Phase.isAnyOf(['Victory'])(world.phase) &&
   RunMode.isAnyOf(['Campaign'])(world.mode)
 
 // NOTE: a kept run plays on only for the crew that won it, seat for seat.
-export const canKeepGoingWith = (
+const canKeepGoingWith = (
   world: World,
   slots: ReadonlyArray<PlayerSlot>,
 ): boolean => {
@@ -447,7 +447,7 @@ export const canKeepGoingWith = (
   )
 }
 
-export const keepGoingRoomWorld = (world: World): RoomWorld => ({
+const keepGoingRoomWorld = (world: World): RoomWorld => ({
   tick: 0,
   world: keepGoingWorld(world),
   events: [],
@@ -676,7 +676,7 @@ const lerpParty = (from: World, to: World, t: number): Party =>
       }),
   })
 
-export const interpolateWorld = (from: World, to: World, t: number): World =>
+const interpolateWorld = (from: World, to: World, t: number): World =>
   modifyFields(to, {
     player: player => lerpPlaced(from.player, player, t),
     zombies: zombies => lerpById(from.zombies, zombies, t),
@@ -736,7 +736,7 @@ const blendOwn = (from: OwnSeat, to: OwnSeat, t: number): OwnSeat => ({
 
 // THE ROOM'S WORLD
 
-export const isRunOver = (world: World): boolean =>
+const isRunOver = (world: World): boolean =>
   Phase.isAnyOf(['GameOver', 'Victory'])(world.phase)
 
 const scoresOf = (world: World): ReadonlyArray<Score> =>
@@ -795,9 +795,6 @@ export const roomWorldFor = (
 export const ownWorldOf = (room: RoomWorld, slot: PlayerSlot): World =>
   focusSeat(room.world, slot)
 
-export const isRoomSlot = (room: RoomWorld, slot: PlayerSlot): boolean =>
-  Option.isSome(maybePlayerAt(room.world, slot))
-
 // NOTE: the events of the ticks after `afterTick` up to `untilTick`, oldest
 // first, from every message a client holds.
 export const eventsBetween = (
@@ -815,8 +812,5 @@ export const eventsBetween = (
     Array.flatMap(entry => entry.events),
   )
 
-export const maybeSeatOf = (
-  world: World,
-  slot: PlayerSlot,
-): Option.Option<Seat> =>
+const maybeSeatOf = (world: World, slot: PlayerSlot): Option.Option<Seat> =>
   Option.map(maybePlayerAt(world, slot), ({ seat }) => seat)

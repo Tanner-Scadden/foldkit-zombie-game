@@ -32,7 +32,7 @@ export const Renamed = defineMutation({
     }),
 })
 
-export const MAX_COUNT = 100
+const MAX_COUNT = 100
 
 export const Counted = defineMutation({
   name: 'Counted',
@@ -124,29 +124,27 @@ export const authenticate: Authenticate = token => {
     : Effect.fail(new Unauthorized({ reason: 'Bad token' }))
 }
 
-export const openServerDatabase = (): Effect.Effect<
+export const openServerDatabase: Effect.Effect<
   SqlClient.SqlClient,
   never,
   Scope.Scope
-> =>
-  Effect.gen(function* () {
-    const hub = yield* makeHub()
-    const context = yield* Effect.orDie(Layer.build(hub.layer()))
-    return Context.get(context, SqlClient.SqlClient)
-  })
+> = Effect.gen(function* () {
+  const hub = yield* makeHub()
+  const context = yield* Effect.orDie(Layer.build(hub.layer()))
+  return Context.get(context, SqlClient.SqlClient)
+})
 
-export const openClientDatabase = (): Effect.Effect<
+export const openClientDatabase: Effect.Effect<
   LocalDatabase,
   never,
   Scope.Scope
-> =>
-  Effect.gen(function* () {
-    const hub = yield* makeHub()
-    const context = yield* Effect.orDie(Layer.build(hub.layer()))
-    const client = Context.get(context, SqliteClient)
-    return {
-      sql: client.sql,
-      changes: client.changes,
-      role: Effect.succeed('Leader'),
-    }
-  })
+> = Effect.gen(function* () {
+  const hub = yield* makeHub()
+  const context = yield* Effect.orDie(Layer.build(hub.layer()))
+  const client = Context.get(context, SqliteClient)
+  return {
+    sql: client.sql,
+    changes: client.changes,
+    role: Effect.succeed('Leader'),
+  }
+})

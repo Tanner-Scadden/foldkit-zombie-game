@@ -320,7 +320,7 @@ const LID_STACK_ART = artOf(
   GUN_BASE,
 )
 
-export const ITEM_ART: Readonly<Record<FixedShopItemId, ShopArt>> = {
+const ITEM_ART: Readonly<Record<FixedShopItemId, ShopArt>> = {
   Shotgun: gunArt('Shotgun', 0),
   ShotgunShells: SACK_ART,
   ShotgunUpgrade: gunArt('Shotgun', 1),

@@ -433,7 +433,7 @@ export const ROOM_CODE_HEADER = 'x-room-code'
 // NOTE: when the watchdog or the cleanup should run next. A room with a
 // game checks its loop every minute; any other room is deleted a day after
 // its last change.
-export const WATCHDOG_MS = 60 * 1000
+const WATCHDOG_MS = 60 * 1000
 export const DELETE_AFTER_MS = 24 * 60 * 60 * 1000
 export const STALLED_LOOP_MS = 5000
 

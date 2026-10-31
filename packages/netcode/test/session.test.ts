@@ -454,9 +454,10 @@ describe('a message that cannot apply', () => {
     const snapshot = framesOf(started.out).find(
       frame => frame._tag === 'Snapshot',
     )
-    const back = receiveAll(receiveAll(joined, deltas.slice(1)), [
-      ...(snapshot === undefined ? [] : [snapshot]),
-    ])
+    const back = receiveAll(
+      receiveAll(joined, deltas.slice(1)),
+      snapshot === undefined ? [] : [snapshot],
+    )
     expect(snapshot?._tag).toBe('Snapshot')
     expect(back.isResyncing).toBe(false)
     expect(back.stats.resyncs).toBe(1)

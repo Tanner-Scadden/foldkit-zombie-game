@@ -25,7 +25,7 @@ import type { ScriptMode, StepPattern } from './request'
 
 export type { ScriptMode, StepPattern } from './request'
 
-export const FIXED_STEP_MS = 1000 / 60
+const FIXED_STEP_MS = 1000 / 60
 const MIXED_STEPS_MS: ReadonlyArray<number> = [
   1000 / 60,
   1000 / 120,
@@ -35,7 +35,7 @@ const MIXED_STEPS_MS: ReadonlyArray<number> = [
   25,
 ]
 
-export const stepMsOf = (pattern: StepPattern, frame: number): number =>
+const stepMsOf = (pattern: StepPattern, frame: number): number =>
   pattern === 'Fixed60'
     ? FIXED_STEP_MS
     : (MIXED_STEPS_MS[frame % MIXED_STEPS_MS.length] ?? FIXED_STEP_MS)
@@ -135,7 +135,7 @@ const fightFrame = (model: Model, frame: number): Model => {
 }
 
 // The input Messages for one frame, sent before the frame ticks.
-export const driveFrame = (model: Model, frame: number): Model =>
+const driveFrame = (model: Model, frame: number): Model =>
   Phase.matchOrElse(
     model.phase,
     {
@@ -175,7 +175,7 @@ export const startedRun = (seed: number, mode: ScriptMode): Model => {
   return tapKey(mode === 'Endless' ? tapKey(ready, 'KeyE') : ready, 'Enter')
 }
 
-export const godMode = (model: Model): Model =>
+const godMode = (model: Model): Model =>
   model.player.hp === PLAYER_MAX_HP
     ? model
     : modifyFields(model, {

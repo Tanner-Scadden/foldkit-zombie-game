@@ -35,7 +35,7 @@ const SKIPPED_DIRS = new Set(['dist', 'dist-profile', 'node_modules'])
 
 // NOTE: the cache is shared by every worktree, since the folder name is the
 // content's hash. Only the newest few builds are kept.
-export const HARNESS_CACHE = join(tmpdir(), 'munch-manor-harness')
+const HARNESS_CACHE = join(tmpdir(), 'munch-manor-harness')
 const KEPT_BUILDS = 8
 
 const filesUnder = (dir: string): ReadonlyArray<string> =>
@@ -51,7 +51,7 @@ const filesUnder = (dir: string): ReadonlyArray<string> =>
       )
     : []
 
-export const harnessHash = async (): Promise<string> => {
+const harnessHash = async (): Promise<string> => {
   const paths = [
     ...INPUT_DIRS.flatMap(dir => filesUnder(join(ROOT, dir))),
     ...INPUT_FILES.map(file => join(ROOT, file)).filter(existsSync),

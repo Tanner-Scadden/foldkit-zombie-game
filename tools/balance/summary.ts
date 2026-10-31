@@ -9,11 +9,11 @@ import type { Kind, RunResult, WaveRun } from './bot'
 
 // SCHEMAS
 
-export const BotStyle = Schema.Literals(['Default', 'SwapsBack'])
-export type BotStyle = typeof BotStyle.Type
+const BotStyle = Schema.Literals(['Default', 'SwapsBack'])
+type BotStyle = typeof BotStyle.Type
 
-export const RunKind = Schema.Literals(['Campaign', 'Endless'])
-export type RunKind = typeof RunKind.Type
+const RunKind = Schema.Literals(['Campaign', 'Endless'])
+type RunKind = typeof RunKind.Type
 
 const Shares = Schema.Record(Schema.String, Schema.Number)
 
@@ -73,7 +73,7 @@ export type Summary = typeof Summary.Type
 
 // STATISTICS
 
-export const mean = (values: ReadonlyArray<number>): number =>
+const mean = (values: ReadonlyArray<number>): number =>
   values.length === 0 ? 0 : Number.sumAll(values) / values.length
 
 const valueAt = (values: ReadonlyArray<number>, index: number): number =>
@@ -87,7 +87,7 @@ export const median = (values: ReadonlyArray<number>): number => {
     : valueAt(sorted, middle)
 }
 
-export const quantile = (values: ReadonlyArray<number>, q: number): number => {
+const quantile = (values: ReadonlyArray<number>, q: number): number => {
   const sorted = Array.sort(values, Order.Number)
   return valueAt(
     sorted,

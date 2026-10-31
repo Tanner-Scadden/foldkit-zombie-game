@@ -10,6 +10,7 @@ import {
   type PlayerInput,
   SERVER_VERSIONS,
   ServerFrame,
+  WireError,
   decodeClientFrame,
   decodeServerFrame,
   encodeClientFrame,
@@ -82,7 +83,7 @@ describe('the wire', () => {
     const reader = makeReader(
       new Uint8Array([255, 255, 255, 255, 255, 255, 255, 1]),
     )
-    expect(() => reader.varint()).toThrow()
+    expect(() => reader.varint()).toThrow(WireError)
   })
 
   test('a writer grows past its first buffer', () => {

@@ -80,7 +80,7 @@ export const FRIDGE_RULES: FridgeRules = {
 // 100, and each slam adds 3 more, up to 20; the gags are one pull in five.
 // The weapon the puller already carries is never pulled again: its share
 // goes to the rest.
-export const PRIZE_WEIGHTS: Readonly<Record<FridgePrize, number>> = {
+const PRIZE_WEIGHTS: Readonly<Record<FridgePrize, number>> = {
   Cooker: 36,
   Pan: 36,
   Freeze: 8,
@@ -123,7 +123,7 @@ export const prizeWeights = (
 // NOTE: the kitchen tour's free pull shows off a weapon, never a gag: the
 // same draw from the fridge's own stream, against the weapons' weights alone,
 // so it never shifts the waves or the drops.
-export const weaponsOnly = (
+const weaponsOnly = (
   weights: ReadonlyArray<readonly [FridgePrize, number]>,
 ): ReadonlyArray<readonly [FridgePrize, number]> =>
   Array.map(
@@ -188,7 +188,7 @@ export const fridgeBoxOf = (level: Level): Option.Option<Box> => {
 
 // NOTE: for sale once the kitchen is open, in a break or mid-wave, while
 // the door is shut.
-export const isFridgeForSale = (world: World): boolean =>
+const isFridgeForSale = (world: World): boolean =>
   Phase.isAnyOf(['Preparation', 'Wave'])(world.phase) &&
   isKitchenOpen(levelOf(world)) &&
   FridgeDoor.isAnyOf(['Shut'])(world.fridge.door)

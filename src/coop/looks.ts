@@ -75,7 +75,7 @@ const lookOfCodeOnce = (code: string): Option.Option<Appearance> => {
   return read
 }
 
-export const memberLookAt = (
+const memberLookAt = (
   maybeLobby: Option.Option<Lobby>,
   seat: number,
 ): Option.Option<Appearance> =>

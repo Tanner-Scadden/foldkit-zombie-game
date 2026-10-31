@@ -376,7 +376,7 @@ const slashArcShapes = (
   )
 }
 
-export const knifeSlashShapes = (player: Player): ReadonlyArray<Canvas.Shape> =>
+const knifeSlashShapes = (player: Player): ReadonlyArray<Canvas.Shape> =>
   Option.match(maybeSlashShare(player), {
     onNone: () => [],
     onSome: share => [

@@ -336,18 +336,6 @@ export const STATS_ICON = icon([
 
 // CONTROLS
 
-export const MOVE_ICON = icon([
-  '....X....',
-  '...XXX...',
-  '....X....',
-  '.X.....X.',
-  'XXX.X.XXX',
-  '.X.....X.',
-  '....X....',
-  '...XXX...',
-  '....X....',
-])
-
 export const AIM_ICON = icon([
   '....X....',
   '..XXXXX..',
@@ -359,21 +347,6 @@ export const AIM_ICON = icon([
   '..XXXXX..',
   '....X....',
 ])
-
-const SHOOT_PALETTE: Palette = { X: LIGHT, Y: '#ffe066', R: ALERT }
-
-export const SHOOT_ICON = pixelIconUrl(
-  [
-    '......Y..',
-    '.....YRY.',
-    'XXXXXRRRY',
-    'XXXXXX.Y.',
-    'X.XX.....',
-    'X.XX.....',
-    '..XX.....',
-  ],
-  SHOOT_PALETTE,
-)
 
 // NOTE: a finger pressing down, for the touch HUD's hold-to-buy button.
 export const HOLD_ICON = icon([
@@ -388,31 +361,6 @@ export const HOLD_ICON = icon([
   '.OXXXXXXO.',
   '..OOOOOO..',
 ])
-
-export const SWAP_ICON = icon([
-  '......X..',
-  'XXXXXXXX.',
-  '......X..',
-  '.........',
-  '..X......',
-  '.XXXXXXXX',
-  '..X......',
-])
-
-const COIN_PALETTE: Palette = { Y: '#ffe066', O: '#a87a1e' }
-
-export const SHOP_ICON = pixelIconUrl(
-  [
-    '..YYYYY..',
-    '.YYOOOYY.',
-    'YYOYYYOYY',
-    'YYOYYYYYY',
-    'YYOYYYOYY',
-    '.YYOOOYY.',
-    '..YYYYY..',
-  ],
-  COIN_PALETTE,
-)
 
 // NOTE: an upright phone with a little Groaner on its screen. The portrait
 // home menu's turn hint tips it on its side with CSS.

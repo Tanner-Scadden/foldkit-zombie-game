@@ -8,7 +8,7 @@ import { subscriptions } from './subscriptions'
 import { CommandsLayer, update } from './update'
 import { view } from './view'
 
-export const init = CoopComposition.makeInit(() => ({ model: initialModel }))
+const init = CoopComposition.makeInit(() => ({ model: initialModel }))
 
 const EffectsLayer = Layer.merge(CommandsLayer, subscriptions.layer)
 

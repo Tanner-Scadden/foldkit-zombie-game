@@ -16,17 +16,17 @@ export const BUDGET_REFUSE_AT = 6
 export const REPORT_EVERY_MS = 30_000
 
 // NOTE: the guard aims to keep the 1 minute load near 70% of the cores.
-export const TARGET_SHARE = 0.7
+const TARGET_SHARE = 0.7
 // NOTE: the load average lags, so a job started in the last minute counts
 // at its estimated cost on top of the load.
-export const RECENT_MS = 60_000
-export const MAX_SHARED_JOBS = 4
+const RECENT_MS = 60_000
+const MAX_SHARED_JOBS = 4
 export const MAX_CPU_WORKERS = 8
-export const MIN_TEST_WORKERS = 2
+const MIN_TEST_WORKERS = 2
 // NOTE: the cap for the WORKERS a Timing or Shared job is given. Neither
 // uses it much; only CPU jobs size it to the budget.
 export const MAX_OTHER_WORKERS = 4
-export const DEFAULT_PARALLEL = 3
+const DEFAULT_PARALLEL = 3
 
 // NOTE: a hold of the solo lock is a lease. A job past it is not stopped,
 // but its guard says so loudly, and every waiting job names it.
@@ -357,7 +357,7 @@ export const jobClassOf = (
       : JobClass.Timing()
   })
 
-export const parallelOf = (maybeValue: Option.Option<string>): number => {
+const parallelOf = (maybeValue: Option.Option<string>): number => {
   const value = globalThis.Number(
     Option.getOrElse(maybeValue, () => `${DEFAULT_PARALLEL}`),
   )
@@ -446,8 +446,7 @@ export const targetLoad = (
   maybeOverride: Option.Option<number>,
 ): number => Option.getOrElse(maybeOverride, () => cores * TARGET_SHARE)
 
-export const isOverloaded = (load: number, cores: number): boolean =>
-  load > cores
+const isOverloaded = (load: number, cores: number): boolean => load > cores
 
 // NOTE: the old cap for jobs that do not size to the budget.
 export const allowedWorkers = (
@@ -477,9 +476,7 @@ const isBalance = (snapshot: Snapshot): boolean =>
 
 const thisBatch = (snapshot: Snapshot): number => snapshot.batchesUsed + 1
 
-export const maybeBudgetRefusal = (
-  snapshot: Snapshot,
-): Option.Option<string> =>
+const maybeBudgetRefusal = (snapshot: Snapshot): Option.Option<string> =>
   isBalance(snapshot) &&
   BudgetPolicy.$is('Enforced')(snapshot.budgetPolicy) &&
   thisBatch(snapshot) >= BUDGET_REFUSE_AT
@@ -488,9 +485,7 @@ export const maybeBudgetRefusal = (
       )
     : Option.none()
 
-export const maybeBudgetWarning = (
-  snapshot: Snapshot,
-): Option.Option<string> =>
+const maybeBudgetWarning = (snapshot: Snapshot): Option.Option<string> =>
   isBalance(snapshot) && thisBatch(snapshot) >= BUDGET_WARN_AT
     ? Option.some(
         `${String.capitalize(ordinal(thisBatch(snapshot)))} balance batch on this branch; prefer accepting near-target results.`,
@@ -505,7 +500,7 @@ const describeHolders = (holders: ReadonlyArray<LockHolder>): string =>
 
 // LEASE
 
-export const leaseOf = (holder: LockHolder): number =>
+const leaseOf = (holder: LockHolder): number =>
   holder.leaseMs ?? DEFAULT_LEASE_MS
 
 const leaseStartOf = (holder: LockHolder): number =>
@@ -551,7 +546,7 @@ export const maybeLeaseWarning = (
 
 // NOTE: a solo lock without a class came from an older guard, which ran
 // everything alone, so it counts as Timing.
-export const soloClassOf = (holder: LockHolder): JobClass =>
+const soloClassOf = (holder: LockHolder): JobClass =>
   jobClassOfName(holder.jobClass ?? 'Timing')
 
 const noEnv = (): Option.Option<string> => Option.none()
@@ -559,7 +554,7 @@ const noEnv = (): Option.Option<string> => Option.none()
 export const costOf = (holder: LockHolder): number =>
   holder.cost ?? sharedCostOf([holder.command], noEnv)
 
-export const liveSharedHolders = (
+const liveSharedHolders = (
   shared: ReadonlyArray<SharedSlot>,
 ): ReadonlyArray<LockHolder> =>
   Array.flatMap(shared, ({ lock }) =>
@@ -650,26 +645,19 @@ const earlierWaiters = (snapshot: Snapshot): ReadonlyArray<LockHolder> =>
 // beside the CPU job. It stops once the waiter has waited
 // BACKFILL_GRACE_MS, and never applies when the waiter waits only for
 // Shared jobs to drain, so it cannot starve the waiter.
-export const canBackfillPast = (
-  snapshot: Snapshot,
-  waiter: LockHolder,
-): boolean =>
+const canBackfillPast = (snapshot: Snapshot, waiter: LockHolder): boolean =>
   JobClass.$is('Shared')(snapshot.jobClass) &&
   !JobClass.$is('Shared')(waiterClassOf(waiter)) &&
   LockState.$is('Held')(snapshot.lock) &&
   JobClass.$is('Cpu')(soloClassOf(snapshot.lock.holder)) &&
   snapshot.now - waiter.startedAt < BACKFILL_GRACE_MS
 
-export const backfilledWaiters = (
-  snapshot: Snapshot,
-): ReadonlyArray<LockHolder> =>
+const backfilledWaiters = (snapshot: Snapshot): ReadonlyArray<LockHolder> =>
   Array.filter(earlierWaiters(snapshot), waiter =>
     canBackfillPast(snapshot, waiter),
   )
 
-export const blockingWaiters = (
-  snapshot: Snapshot,
-): ReadonlyArray<LockHolder> =>
+const blockingWaiters = (snapshot: Snapshot): ReadonlyArray<LockHolder> =>
   Array.filter(earlierWaiters(snapshot), waiter =>
     JobClass.$match(waiterClassOf(waiter), {
       Timing: () => !canBackfillPast(snapshot, waiter),
@@ -689,7 +677,7 @@ export const blockingWaiters = (
 // 12 core laptop and starved balance batches. The rest are not delayed long:
 // a CPU job yields at each chunk boundary, well within BACKFILL_GRACE_MS,
 // and then queues again behind them.
-export const reservedCost = (snapshot: Snapshot): number =>
+const reservedCost = (snapshot: Snapshot): number =>
   pipe(
     earlierWaiters(snapshot),
     Array.filter(waiter => JobClass.$is('Shared')(waiterClassOf(waiter))),
@@ -713,7 +701,7 @@ export const reservedCost = (snapshot: Snapshot): number =>
 // NOTE: a CPU job takes what is left of the budget, after the load, the
 // jobs started in the last minute, and the Shared jobs that were waiting
 // first. A WORKERS the caller set is a ceiling.
-export const cpuWorkers = (snapshot: Snapshot): number =>
+const cpuWorkers = (snapshot: Snapshot): number =>
   Math.min(
     MAX_CPU_WORKERS,
     Option.getOrElse(snapshot.maybeRequestedWorkers, () => MAX_CPU_WORKERS),

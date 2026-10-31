@@ -99,7 +99,7 @@ export const addressRateKey = (addressHash: string): string =>
 
 // ROWS
 
-export const KillsJson = Schema.fromJsonString(SummaryKills)
+const KillsJson = Schema.fromJsonString(SummaryKills)
 
 export type RunRow = Readonly<{
   received_at: string
