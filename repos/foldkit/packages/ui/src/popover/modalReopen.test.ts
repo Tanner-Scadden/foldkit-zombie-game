@@ -1,89 +1,89 @@
 import { Option, Schema } from 'effect'
-import { Runtime, Update } from 'foldkit'
-import type { Html, HtmlBuilder } from 'foldkit/html'
-import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
+import { Block, Program, Runtime } from 'foldkit'
 import { afterEach, expect, it, vi } from 'vitest'
 
-import * as Popover from './index.js'
+import { PopoverBlock } from './block.js'
 
 const PORTAL_ROOT_ID = 'foldkit-portal-root'
 const POPOVER_ID = 'sort'
 
-const Message = defineMessageUnion({
-  GotPopoverMessage: { message: Popover.Message },
-})
-type Message = typeof Message.Type
-
-const Model = Schema.Struct({
-  popover: Popover.Model,
-})
+const Model = Schema.Struct({ popover: PopoverBlock.Model })
 type Model = typeof Model.Type
-
-const foldPopoverOutMessage = Popover.OutMessage.match<
-  Update.Step<Model, Message>
->({
-  Opened: () => model => ({ model }),
-  Closed: () => model => ({ model }),
-})
-
-const foldPopover = Update.foldChild({
-  update: Popover.update,
-  read: (model: Model) => Option.some(model.popover),
-  write: (model, nextPopover) =>
-    modifyFields(model, { popover: () => nextPopover }),
-  toParentMessage: (message: Popover.Message): Message =>
-    Message.GotPopoverMessage({ message }),
-  foldOutMessage: foldPopoverOutMessage,
-})
-
-const view = (model: Model, h: HtmlBuilder<Message>): Html =>
+const PopoverModalReopenTestDefinition = Block.makeDefinition(
+  'PopoverModalReopenTest',
+  {
+    Model,
+    Message: Schema.Never,
+  },
+)
+const foldPopoverOutMessage =
+  PopoverModalReopenTestDefinition.makeOutMessageFold(PopoverBlock, {
+    Opened: () => PopoverModalReopenTestDefinition.makeNoopStep(),
+    Closed: () => PopoverModalReopenTestDefinition.makeNoopStep(),
+  })
+const PopoverBinding = PopoverModalReopenTestDefinition.makeBinding(
+  PopoverBlock,
+  {
+    field: 'popover',
+    init: false,
+  },
+).withOutMessagePolicy({ fold: foldPopoverOutMessage })
+const PopoverModalReopenTestComposition =
+  PopoverModalReopenTestDefinition.makeComposition({
+    bindings: [PopoverBinding],
+  })
+const view = PopoverModalReopenTestComposition.makeView((model, h) =>
   h.main(
     [h.Id('page')],
     [
-      h.submodel({
-        slotId: 'pop',
-        model: model.popover,
-        view: Popover.view,
-        viewInputs: {
-          anchor: { placement: 'bottom-start' },
-          toView: ({ button, panel, backdrop, isVisible }) =>
-            h.div(
-              [],
-              [
-                h.button([...button], ['Sort']),
-                ...(isVisible
-                  ? [
-                      h.div([...backdrop]),
-                      h.div([...panel], [h.button([h.Id('item')], ['Name'])]),
-                    ]
-                  : []),
-              ],
-            ),
-        },
-        toParentMessage: message => Message.GotPopoverMessage({ message }),
-      }),
-    ],
-  )
-
-const mount = (container: HTMLElement) =>
-  Runtime.embed(
-    Runtime.makeElement({
-      Model,
-      init: () => ({
-        model: {
-          popover: Popover.init({ id: POPOVER_ID, isModal: true }),
-        },
-      }),
-      update: (model: Model, message: Message) =>
-        Message.match<Update.Return<Model, Message>>(message, {
-          GotPopoverMessage: ({ message: popoverMessage }) =>
-            foldPopover(model, popoverMessage),
+      h.block(
+        PopoverBinding.embedView({
+          slotId: 'popover',
+          model: model.popover,
+          viewInputs: {
+            anchor: { placement: 'bottom-start' },
+            toView: ({ button, panel, backdrop, isVisible }) =>
+              h.div(
+                [],
+                [
+                  h.button([...button], ['Sort']),
+                  ...(isVisible
+                    ? [
+                        h.div([...backdrop]),
+                        h.div(
+                          [...panel],
+                          [
+                            h.button(
+                              [h.Id('item'), h.Type('button')],
+                              ['Name'],
+                            ),
+                          ],
+                        ),
+                      ]
+                    : []),
+                ],
+              ),
+          },
         }),
-      view,
-      container,
-    }),
-  )
+      ),
+    ],
+  ),
+)
+const prepare = () =>
+  PopoverModalReopenTestComposition.prepareBlock({
+    init: PopoverModalReopenTestComposition.makeInit(() =>
+      PopoverBinding.init({
+        args: [{ id: POPOVER_ID, isModal: true }],
+        toParentModel: popover => ({ popover }),
+      }),
+    ),
+    update: PopoverModalReopenTestComposition.makeUpdate({}),
+    view,
+  })
+const ApplicationBlock: Block.FromAssemblyWithView<
+  typeof Model,
+  typeof prepare
+> = Block.assemble(prepare)
 
 const findInertAncestor = (element: Element | null): Option.Option<Element> => {
   for (
@@ -108,7 +108,9 @@ it('keeps a modal Popover panel usable on the second open', async () => {
   const container = document.createElement('div')
   container.id = 'app'
   document.body.append(container)
-  const handle = mount(container)
+  const handle = Runtime.embed(
+    Program.makeElement({ block: ApplicationBlock, container }),
+  )
   const button = () => document.getElementById(`${POPOVER_ID}-button`)
   const panel = () => document.getElementById(`${POPOVER_ID}-panel`)
 

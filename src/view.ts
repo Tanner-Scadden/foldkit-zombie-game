@@ -1,9 +1,12 @@
-import { Array, Effect, Option, Queue, Result, Stream, pipe } from 'effect'
-import { Mount } from 'foldkit'
-import type { Document, Html, HtmlBuilder } from 'foldkit/html'
+import { Array, Option, Result, pipe } from 'effect'
+import type { Document, Html } from 'foldkit/html'
 
+import {
+  ApplicationComposition,
+  type ApplicationViewBuilder,
+  CoopBinding,
+} from './composition'
 import { GAME_TITLE } from './constants'
-import * as CoopView from './coop/view'
 import { DIFFICULTIES, bestsFor } from './difficulty'
 import { feedbackSentence } from './home'
 import {
@@ -22,7 +25,7 @@ import {
   modeChoiceView,
   toSentenceCase,
 } from './menus'
-import { Message } from './message'
+import { Message, type PressedPointer } from './message'
 import {
   DebutCard,
   type Model,
@@ -31,6 +34,7 @@ import {
   RunMode,
   type RunStats,
 } from './model'
+import { MeasureGameSurface } from './mount'
 import { isOpenBreak, isPracticeGateHeld } from './onboarding'
 import { pauseHelpView } from './pauseHelp'
 import { BOOST_KIND_ORDER, PICKUPS, isBoosted } from './powerups'
@@ -68,43 +72,6 @@ import {
   tierName,
 } from './weapons'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
-
-// MOUNT
-
-type MeasuredGameSurface = typeof Message.MeasuredGameSurface.Type
-
-const measure = (element: Element): MeasuredGameSurface => {
-  const { left, top, width, height } = element.getBoundingClientRect()
-  return Message.MeasuredGameSurface({ left, top, width, height })
-}
-
-export const MeasureGameSurface = Mount.defineStream('MeasureGameSurface', {
-  messages: [Message.MeasuredGameSurface],
-  execute: ({ element }) =>
-    Stream.callback<MeasuredGameSurface>(queue =>
-      Effect.acquireRelease(
-        Effect.sync(() => {
-          const emitMeasurement = (): void => {
-            Queue.offerUnsafe(queue, measure(element))
-          }
-          const resizeObserver = new ResizeObserver(emitMeasurement)
-          resizeObserver.observe(element)
-          window.addEventListener('resize', emitMeasurement)
-          window.visualViewport?.addEventListener('resize', emitMeasurement)
-          return { resizeObserver, emitMeasurement }
-        }),
-        ({ resizeObserver, emitMeasurement }) =>
-          Effect.sync(() => {
-            resizeObserver.disconnect()
-            window.removeEventListener('resize', emitMeasurement)
-            window.visualViewport?.removeEventListener(
-              'resize',
-              emitMeasurement,
-            )
-          }),
-      ).pipe(Effect.flatMap(() => Effect.never)),
-    ),
-})
 
 // STATUS
 
@@ -222,7 +189,7 @@ const boostLabel = (model: Model): string => {
     : ` Power-ups running: ${Array.join(running, ', ')}.`
 }
 
-const loadoutView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const loadoutView = (model: Model, h: ApplicationViewBuilder): Html =>
   isRoundActive(model.phase)
     ? h.p(
         [h.Class('sr-only')],
@@ -248,7 +215,7 @@ const toPressedPointer = (
   clientX: number,
   clientY: number,
   pointerId: number,
-): Option.Option<Message> => {
+): Option.Option<PressedPointer> => {
   const device = toPointerDevice(pointerType)
   if (device === 'Mouse' && button !== PRIMARY_MOUSE_BUTTON) {
     return Option.none()
@@ -261,7 +228,7 @@ const toPressedPointer = (
 
 // VIEW
 
-export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
+export const view = ApplicationComposition.makeView((model, h): Document => {
   const screen = screenOf(model)
   return {
     title: GAME_TITLE,
@@ -315,17 +282,17 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => {
         manorHandView(model, h),
         menuPanelView(model, h),
         profileView(model, h),
-        h.submodel({
-          slotId: 'coop',
-          model: model.coop,
-          view: CoopView.view,
-          viewInputs: {
-            look: model.appearance,
-            isKeyboard: model.lastDevice === 'KeyboardMouse',
-          },
-          toParentMessage: message => Message.GotCoopMessage({ message }),
-        }),
+        h.block(
+          CoopBinding.embedView({
+            slotId: 'coop',
+            model: model.coop,
+            viewInputs: {
+              look: model.appearance,
+              isKeyboard: model.lastDevice === 'KeyboardMouse',
+            },
+          }),
+        ),
       ],
     ),
   }
-}
+})

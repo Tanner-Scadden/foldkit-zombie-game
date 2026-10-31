@@ -17,9 +17,9 @@ import { describe, test } from 'vitest'
 
 import { NEWS_DAYS } from './changelog'
 import { RESTART_GRACE_MS } from './constants'
-import { update } from './main'
 import { type Model, Phase, type ZombieKind, initialModel } from './model'
 import {
+  ROOT,
   manorButton,
   measureSurface,
   openHandInScene,
@@ -27,7 +27,6 @@ import {
   showDialogInScene,
 } from './testing'
 import { asVeteran } from './veteran'
-import { view } from './view'
 
 const home: Model = asVeteran(initialModel)
 
@@ -66,7 +65,7 @@ const munchopediaDialog = role('dialog', { name: 'Munchopedia' })
 describe("What's New", () => {
   test("the closed MANOR button shows a What's New pip and its card a NEW tag until the newest day is seen, and the panel shows that day", () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       expect(newsPip).toExist(),
@@ -97,7 +96,7 @@ describe("What's New", () => {
   test('Older shows the day before, with its intro line', () => {
     const before = Option.getOrThrow(Array.get(NEWS_DAYS, 1))
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       ...openHandInScene(),
@@ -119,7 +118,7 @@ describe("What's New", () => {
 describe('the Munchopedia', () => {
   test('every zombie starts as a silhouette marked ???, and the header tallies the finds', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       ...openHandInScene(),
@@ -148,7 +147,7 @@ describe('the Munchopedia', () => {
 
   test('a found zombie shows its name, bio, tips, kills, and badges, and the Munchopedia pip stays until every new entry is opened', () => {
     scene(
-      { update, view },
+      ROOT,
       given(withKills(home, { Shambler: 1203, Runner: 7 })),
       measureSurface,
       expect(munchopediaPip).toExist(),
@@ -182,7 +181,7 @@ describe('the Munchopedia', () => {
 
   test('badges light up only past their counts', () => {
     scene(
-      { update, view },
+      ROOT,
       given(withKills(home, { Tank: 12 })),
       measureSurface,
       ...openHandInScene(),
@@ -205,7 +204,7 @@ describe('the Munchopedia', () => {
 
   test('Uncle Chunk is locked until beaten, then counts the wins', () => {
     scene(
-      { update, view },
+      ROOT,
       given(withKills(home, { Boss: 2 })),
       measureSurface,
       ...openHandInScene(),
@@ -218,7 +217,7 @@ describe('the Munchopedia', () => {
 
   test('a NEW ENTRY pop on the menu opens that entry', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(withKills(home, { Runner: 1 }), {
           home: menu => modifyFields(menu, { newEntries: () => ['Runner'] }),
@@ -239,7 +238,7 @@ describe('the Munchopedia', () => {
 
   test('Game Over tells about a NEW ENTRY waiting on the menu', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(withKills(home, { Runner: 1, Crawler: 1 }), {
           phase: () => Phase.GameOver({ wave: 7 }),

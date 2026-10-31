@@ -18,7 +18,7 @@ export const PROFILE_TABS: Array.NonEmptyReadonlyArray<ProfileTab> = [
   'Settings',
 ]
 
-export const ProfileTabs = Tabs.create<ProfileTab>()
+export const ProfileTabsBlock = Tabs.makeBlock<ProfileTab>()
 
 // NOTE: plays an effect in the Profile. The count moves on every time, so
 // the view swaps the element and the CSS animation starts over.

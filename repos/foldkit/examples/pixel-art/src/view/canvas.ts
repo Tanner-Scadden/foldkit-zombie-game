@@ -1,6 +1,7 @@
 import { Array, Equal, Option, pipe } from 'effect'
-import { type Html, type HtmlBuilder, createKeyedLazy } from 'foldkit/html'
+import { type Html, createKeyedLazy } from 'foldkit/html'
 
+import type { ApplicationViewBuilder } from '../composition'
 import { EMPTY_COLOR } from '../constant'
 import { floodFill, getMirroredPositions } from '../grid'
 import { Message } from '../message'
@@ -53,7 +54,7 @@ export const computeFillPreview = (
 export const canvasView = (
   model: Model,
   theme: PaletteTheme,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const previewPositions = computePreviewPositions(model)
   const previewColor =
@@ -112,7 +113,7 @@ export const rowView = (
   previewColor: HexColor,
   previewPositions: ReadonlyArray<readonly [number, number]>,
   theme: PaletteTheme,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.div(
     [h.Style({ display: 'flex', flex: '1' })],

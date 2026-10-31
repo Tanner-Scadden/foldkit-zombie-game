@@ -1,15 +1,11 @@
-import { Option } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { Dialog, Tabs } from '@foldkit/ui'
-
-import { dialogFolds } from '../dialogs'
+import { ProfileDialogBinding } from '../composition'
+import { makeStep } from '../definition'
 import { isCharacterKey, releaseAll } from '../input'
-import { Message } from '../message'
 import { type Model, Phase, type ProfileTab } from '../model'
 import {
-  ProfileTabs,
   cleanName,
   draftName,
   rollName,
@@ -18,14 +14,19 @@ import {
 } from '../profile'
 import { isPastRestartGrace } from './run'
 import { playSounds, uiCue } from './sound'
-import { type UpdateReturn, type UpdateStep, withInput } from './step'
+import {
+  type UpdateReturn,
+  type UpdateStep,
+  unchanged,
+  withInput,
+} from './step'
 
 // NAME
 
 // NOTE: the name is kept, and so saved and synced, when the player is done
 // typing: Enter, leaving the field, another tab, or closing the Profile.
 // Saving on every key would send a sync mutation per letter.
-const keepName = (model: Model): Model => {
+const keepNameModel = (model: Model): Model => {
   const name = cleanName(model.profile.nameDraft)
   return modifyFields(model, {
     playerName: () => name,
@@ -33,10 +34,12 @@ const keepName = (model: Model): Model => {
   })
 }
 
-const keepNameStep: UpdateStep = stepModel => ({ model: keepName(stepModel) })
+export const keepName: UpdateStep = stepModel => ({
+  model: keepNameModel(stepModel),
+})
 
 export const typeName = (model: Model, value: string): UpdateReturn => ({
-  model: model.profile.dialog.isOpen
+  model: model.profileDialog.isOpen
     ? modifyFields(model, {
         profile: profile =>
           modifyFields(profile, {
@@ -48,17 +51,15 @@ export const typeName = (model: Model, value: string): UpdateReturn => ({
 })
 
 export const submitName: UpdateStep = stepModel =>
-  stepModel.profile.dialog.isOpen
-    ? playSounds([uiCue('Pop')])(keepName(stepModel))
+  stepModel.profileDialog.isOpen
+    ? playSounds([uiCue('Pop')])(keepNameModel(stepModel))
     : { model: stepModel }
 
 export const leaveNameInput: UpdateStep = stepModel =>
-  stepModel.profile.dialog.isOpen
-    ? keepNameStep(stepModel)
-    : { model: stepModel }
+  stepModel.profileDialog.isOpen ? keepName(stepModel) : { model: stepModel }
 
 export const rollNameDice: UpdateStep = stepModel => {
-  if (!stepModel.profile.dialog.isOpen) {
+  if (!stepModel.profileDialog.isOpen) {
     return { model: stepModel }
   }
   const [rngState, name] = rollName(
@@ -79,27 +80,10 @@ export const rollNameDice: UpdateStep = stepModel => {
 
 // DIALOG
 
-const foldProfileDialogOutMessage = Dialog.OutMessage.match<UpdateStep>({
-  Opened: () => stepModel => ({ model: stepModel }),
-  Closed: () => keepNameStep,
-})
-
-const profileDialog = dialogFolds({
-  read: (model: Model) => model.profile.dialog,
-  write: (model, nextDialog) =>
-    modifyFields(model, {
-      profile: profile => modifyFields(profile, { dialog: () => nextDialog }),
-    }),
-  toParentMessage: message => Message.GotProfileDialogMessage({ message }),
-  foldOutMessage: foldProfileDialogOutMessage,
-})
-
-export const foldProfileDialog = profileDialog.fold
-
 // NOTE: the Profile opens from the home menu, and from the end screens once
 // their grace is past, as the character picker always did. Never in a run.
 const canOpenProfile = (model: Model): boolean =>
-  !model.profile.dialog.isOpen &&
+  !model.profileDialog.isOpen &&
   !model.panelDialog.isOpen &&
   !model.handDialog.isOpen &&
   Phase.match(model.phase, {
@@ -118,53 +102,39 @@ const showTab = (model: Model, tab: ProfileTab): Model =>
       modifyFields(profile, { tab: () => tab, fx: () => 'Still' }),
   })
 
-export const openProfile =
+const prepareProfile =
   (tab: ProfileTab): UpdateStep =>
-  stepModel =>
-    canOpenProfile(stepModel)
-      ? profileDialog.open(
-          withInput(
-            modifyFields(showTab(stepModel, tab), {
-              profile: profile =>
-                modifyFields(profile, {
-                  nameDraft: () => stepModel.playerName,
-                }),
-            }),
-            releaseAll,
-          ),
-        )
-      : { model: stepModel }
+  stepModel => ({
+    model: withInput(
+      modifyFields(showTab(stepModel, tab), {
+        profile: profile =>
+          modifyFields(profile, { nameDraft: () => stepModel.playerName }),
+      }),
+      releaseAll,
+    ),
+  })
 
-export const profileFromKey: (code: string) => UpdateStep = code =>
-  isCharacterKey(code)
-    ? openProfile('Look')
-    : stepModel => ({ model: stepModel })
+export const openProfile = (tab: ProfileTab) =>
+  makeStep(model =>
+    canOpenProfile(model)
+      ? Update.combineSteps([
+          prepareProfile(tab),
+          ProfileDialogBinding.requestOpen(),
+        ])
+      : unchanged,
+  )
+
+export const profileFromKey = (code: string) =>
+  makeStep(() => (isCharacterKey(code) ? openProfile('Look') : unchanged))
 
 // TABS
 
-const switchTab =
+export const switchTab =
   (tab: ProfileTab): UpdateStep =>
   stepModel =>
     tab === stepModel.profile.tab
       ? { model: stepModel }
-      : playSounds([uiCue('Whoosh')])(showTab(keepName(stepModel), tab))
-
-export const foldProfileTabs = Update.foldChild({
-  update: ProfileTabs.update,
-  read: (model: Model) =>
-    model.profile.dialog.isOpen
-      ? Option.some(model.profile.tabs)
-      : Option.none(),
-  write: (model, nextTabs) =>
-    modifyFields(model, {
-      profile: profile => modifyFields(profile, { tabs: () => nextTabs }),
-    }),
-  toParentMessage: message => Message.GotProfileTabsMessage({ message }),
-  foldOutMessage: Tabs.OutMessage.match<
-    UpdateStep,
-    Tabs.OutMessage<ProfileTab>
-  >({ Selected: ({ value }) => switchTab(value) }),
-})
+      : playSounds([uiCue('Whoosh')])(showTab(keepNameModel(stepModel), tab))
 
 export const isProfileOpenOn = (model: Model, tab: ProfileTab): boolean =>
-  model.profile.dialog.isOpen && model.profile.tab === tab
+  model.profileDialog.isOpen && model.profile.tab === tab

@@ -52,7 +52,6 @@ export const TypeDocSource = Schema.Struct({
   url: Schema.OptionFromOptional(Schema.String),
 })
 export type TypeDocSource = typeof TypeDocSource.Type
-
 type TypeDocIntrinsicType = Readonly<{
   type: 'intrinsic'
   name: string
@@ -89,9 +88,21 @@ interface TypeDocRestType<Self> {
   readonly elementType: Self
 }
 
+interface TypeDocNamedTupleMemberType<Self> {
+  readonly type: 'namedTupleMember'
+  readonly name: string
+  readonly isOptional: boolean
+  readonly element: Self
+}
+
 interface TypeDocTupleType<Self> {
   readonly type: 'tuple'
   readonly elements: ReadonlyArray<Self>
+}
+
+interface TypeDocTupleTypeEncoded<Self> {
+  readonly type: 'tuple'
+  readonly elements?: ReadonlyArray<Self> | undefined
 }
 
 interface TypeDocUnionType<Self> {
@@ -167,6 +178,7 @@ export type TypeDocType =
   | TypeDocReferenceType<TypeDocType>
   | TypeDocArrayType<TypeDocType>
   | TypeDocRestType<TypeDocType>
+  | TypeDocNamedTupleMemberType<TypeDocType>
   | TypeDocTupleType<TypeDocType>
   | TypeDocUnionType<TypeDocType>
   | TypeDocIntersectionType<TypeDocType>
@@ -189,7 +201,8 @@ type TypeDocTypeEncoded =
   | TypeDocReferenceType<TypeDocTypeEncoded>
   | TypeDocArrayType<TypeDocTypeEncoded>
   | TypeDocRestType<TypeDocTypeEncoded>
-  | TypeDocTupleType<TypeDocTypeEncoded>
+  | TypeDocNamedTupleMemberType<TypeDocTypeEncoded>
+  | TypeDocTupleTypeEncoded<TypeDocTypeEncoded>
   | TypeDocUnionType<TypeDocTypeEncoded>
   | TypeDocIntersectionType<TypeDocTypeEncoded>
   | TypeDocReflectionType<TypeDocItemEncoded>
@@ -233,8 +246,16 @@ export const TypeDocTypeSchema = Schema.suspend(() =>
       elementType: TypeDocTypeSchema,
     }),
     Schema.Struct({
+      type: Schema.Literal('namedTupleMember'),
+      name: Schema.String,
+      isOptional: Schema.Boolean,
+      element: TypeDocTypeSchema,
+    }),
+    Schema.Struct({
       type: Schema.Literal('tuple'),
-      elements: Schema.Array(TypeDocTypeSchema),
+      elements: Schema.Array(TypeDocTypeSchema).pipe(
+        Schema.withDecodingDefaultKey(Effect.succeed([])),
+      ),
     }),
     Schema.Struct({
       type: Schema.Literal('union'),

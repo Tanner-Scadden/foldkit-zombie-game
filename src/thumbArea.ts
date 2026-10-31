@@ -1,8 +1,8 @@
 import { Option } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 import { createLazy } from 'foldkit/html'
 
-import type { Message } from './message'
+import type { ApplicationViewBuilder } from './composition'
 import { type Screen, thumbAreaTop } from './screen'
 import { type Palette, spriteDataUrl } from './sprite'
 
@@ -89,7 +89,7 @@ const thumbAreaBoxView = (
   top: number,
   height: number,
   screenHeight: number,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.div([
     h.Key('thumb-area'),
@@ -109,7 +109,7 @@ const lazyThumbArea = createLazy()
 
 export const thumbAreaView = (
   screen: Screen,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   if (screen.layout === 'Landscape') {
     return h.empty

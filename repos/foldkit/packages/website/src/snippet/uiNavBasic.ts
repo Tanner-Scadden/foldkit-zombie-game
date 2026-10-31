@@ -10,10 +10,10 @@ import { Nav } from '@foldkit/ui'
 // no Nav.Model to store and no Nav.update to delegate to. Your app already
 // holds the active route in its Model:
 const Model = Schema.Struct({
-  route: AppRoute,
+  route: ApplicationRoute,
   // ...your other fields
 })
-
+type Model = typeof Model.Type
 // The nav items are the sections you navigate between. Use the route tags as
 // the item values so toView can switch on them without casting:
 type Section = 'Home' | 'Search' | 'Library' | 'Profile'
@@ -38,7 +38,7 @@ const sectionToHref = (section: Section): string =>
   )
 
 const isSectionCurrent =
-  (route: AppRoute) =>
+  (route: ApplicationRoute) =>
   (section: Section): boolean =>
     sectionToRouteTag(section) === route._tag
 

@@ -4,7 +4,9 @@ import { expect, given, role, scene, selector, type } from 'foldkit/scene'
 import { describe, test } from 'vitest'
 
 import { Deployment } from '../../deployment'
-import { init, update, view } from '../../main'
+import { init } from '../../init'
+import { update } from '../../update'
+import { view } from '../../view/view'
 
 const url = pipe(
   Url.fromString('https://foldkit.dev/newsletter'),

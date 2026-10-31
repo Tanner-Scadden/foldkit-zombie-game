@@ -1,4 +1,13 @@
-import { Array, DateTime, Effect, Option, Order, Record, pipe } from 'effect'
+import {
+  Array,
+  Clock,
+  DateTime,
+  Effect,
+  Option,
+  Order,
+  Record,
+  pipe,
+} from 'effect'
 
 import {
   ContributorSummary,
@@ -43,34 +52,30 @@ import {
 
 const TOP_CONTRIBUTOR_COUNT = 6
 
-// MODEL
-
 export type RawPackageData = Readonly<{
   spec: PackageSpec
-  downloads: typeof NpmDownloadsResponse.Type
-  packument: typeof NpmPackument.Type
+  downloads: NpmDownloadsResponse
+  packument: NpmPackument
 }>
 
 export type RawTelemetry = Readonly<{
   fetchedAt: number
-  repository: typeof GitHubRepositoryResponse.Type
-  contributors: ReadonlyArray<typeof GitHubContributorResponse.Type>
-  issues: ReadonlyArray<typeof GitHubIssueResponse.Type>
-  pullRequests: ReadonlyArray<typeof GitHubPullRequestResponse.Type>
-  releases: ReadonlyArray<typeof GitHubReleaseResponse.Type>
-  starHistory: ReadonlyArray<typeof GitHubStarHistoryResponse.Type>
-  commitActivity: GitHubStatResult<
-    ReadonlyArray<typeof GitHubCommitActivityResponse.Type>
-  >
+  repository: GitHubRepositoryResponse
+  contributors: ReadonlyArray<GitHubContributorResponse>
+  issues: ReadonlyArray<GitHubIssueResponse>
+  pullRequests: ReadonlyArray<GitHubPullRequestResponse>
+  releases: ReadonlyArray<GitHubReleaseResponse>
+  starHistory: ReadonlyArray<GitHubStarHistoryResponse>
+  commitActivity: GitHubStatResult<ReadonlyArray<GitHubCommitActivityResponse>>
   packageData: ReadonlyArray<RawPackageData>
 }>
 
 // DERIVE
 
 const weeklyDownloads = (
-  downloads: typeof NpmDownloadsResponse.Type,
+  downloads: NpmDownloadsResponse,
   weekStarts: ReadonlyArray<string>,
-): ReadonlyArray<typeof WeeklyDownloads.Type> => {
+): ReadonlyArray<WeeklyDownloads> => {
   const weeklySums = sumByWeek(
     downloads.downloads,
     weekStarts,
@@ -87,7 +92,7 @@ const weeklyDownloads = (
 }
 
 const lastWeekDownloads = (
-  downloadsByWeek: ReadonlyArray<typeof WeeklyDownloads.Type>,
+  downloadsByWeek: ReadonlyArray<WeeklyDownloads>,
 ): number =>
   pipe(
     downloadsByWeek,
@@ -107,9 +112,7 @@ const dependenciesOrEmpty = (
 ): Readonly<globalThis.Record<string, string>> =>
   Option.getOrElse(maybeDependencies, Record.empty<string, string>)
 
-const latestMetadata = (
-  packument: typeof NpmPackument.Type,
-): NpmVersionMetadata =>
+const latestMetadata = (packument: NpmPackument): NpmVersionMetadata =>
   Option.getOrElse(
     Record.get(packument.versions, packument['dist-tags'].latest),
     () => ({
@@ -121,7 +124,7 @@ const latestMetadata = (
 export const dependencyEdgesForPackage = (
   packageId: PackageId,
   metadata: NpmVersionMetadata,
-): ReadonlyArray<typeof DependencyEdge.Type> => {
+): ReadonlyArray<DependencyEdge> => {
   const dependencies = dependenciesOrEmpty(metadata.dependencies)
   const peerDependencies = dependenciesOrEmpty(metadata.peerDependencies)
 
@@ -154,12 +157,12 @@ export const dependencyEdgesForPackage = (
 
 export const packageSnapshotFromResponses = (
   spec: PackageSpec,
-  downloads: typeof NpmDownloadsResponse.Type,
-  packument: typeof NpmPackument.Type,
+  downloads: NpmDownloadsResponse,
+  packument: NpmPackument,
   weekStarts: ReadonlyArray<string>,
 ): Readonly<{
-  snapshot: typeof PackageSnapshot.Type
-  edges: ReadonlyArray<typeof DependencyEdge.Type>
+  snapshot: PackageSnapshot
+  edges: ReadonlyArray<DependencyEdge>
 }> => {
   const distTags = packument['dist-tags']
   const metadata = latestMetadata(packument)
@@ -197,7 +200,7 @@ export const packageSnapshotFromResponses = (
 }
 
 export const weeklyStars = (
-  starHistory: ReadonlyArray<typeof GitHubStarHistoryResponse.Type>,
+  starHistory: ReadonlyArray<GitHubStarHistoryResponse>,
   weekStarts: ReadonlyArray<string>,
 ): ReadonlyArray<WeeklyCount> =>
   pipe(
@@ -224,7 +227,7 @@ export const weeklyStars = (
 
 export const cumulativeStarsByWeek = (
   currentStars: number,
-  starHistory: ReadonlyArray<typeof GitHubStarHistoryResponse.Type>,
+  starHistory: ReadonlyArray<GitHubStarHistoryResponse>,
   weekStarts: ReadonlyArray<string>,
 ): ReadonlyArray<WeeklyCount> => {
   const emptyWeeks: ReadonlyArray<WeeklyCount> = []
@@ -258,7 +261,7 @@ export const cumulativeStarsByWeek = (
 
 const commitCountForWeek =
   (weekStart: string) =>
-  (activity: ReadonlyArray<typeof GitHubCommitActivityResponse.Type>): number =>
+  (activity: ReadonlyArray<GitHubCommitActivityResponse>): number =>
     pipe(
       activity,
       Array.findFirst(
@@ -274,7 +277,7 @@ const commitCountForWeek =
 
 export const weeklyCommitTotals = (
   maybeCommitActivity: Option.Option<
-    ReadonlyArray<typeof GitHubCommitActivityResponse.Type>
+    ReadonlyArray<GitHubCommitActivityResponse>
   >,
   weekStarts: ReadonlyArray<string>,
 ): ReadonlyArray<WeeklyCount> =>
@@ -287,7 +290,7 @@ export const weeklyCommitTotals = (
   }))
 
 export const weeklyReleaseTotals = (
-  releases: ReadonlyArray<typeof GitHubReleaseResponse.Type>,
+  releases: ReadonlyArray<GitHubReleaseResponse>,
   weekStarts: ReadonlyArray<string>,
 ): ReadonlyArray<WeeklyCount> =>
   countByWeek(releases, weekStarts, release =>
@@ -303,7 +306,7 @@ export const makeWeeklyTelemetry = (
   cumulativeStars: ReadonlyArray<WeeklyCount>,
   commits: ReadonlyArray<WeeklyCount>,
   releases: ReadonlyArray<WeeklyCount>,
-): ReadonlyArray<typeof WeeklyTelemetry.Type> =>
+): ReadonlyArray<WeeklyTelemetry> =>
   Array.map(weekStarts, weekStart =>
     WeeklyTelemetry.make({
       weekStart,
@@ -315,7 +318,7 @@ export const makeWeeklyTelemetry = (
 
 export const contributorSummary = (
   contributor: GitHubContributorResponse,
-): typeof ContributorSummary.Type =>
+): ContributorSummary =>
   ContributorSummary.make({
     login: contributor.login,
     contributions: contributor.contributions,
@@ -324,57 +327,60 @@ export const contributorSummary = (
 
 // FETCH
 
-export const fetchRawTelemetry: Effect.Effect<
-  RawTelemetry,
-  Error,
-  GitHubApi | NpmApi
-> = Effect.gen(function* () {
-  const github = yield* GitHubApi
-  const npm = yield* NpmApi
-  const fetchedAt = yield* DateTime.now
+export const fetchRawTelemetry = ({
+  github,
+  npm,
+  clock,
+}: Readonly<{
+  github: typeof GitHubApi.Service
+  npm: typeof NpmApi.Service
+  clock: typeof Clock.Clock.Service
+}>): Effect.Effect<RawTelemetry, Error> =>
+  Effect.gen(function* () {
+    const fetchedAt = DateTime.makeUnsafe(yield* clock.currentTimeMillis)
 
-  const repository = yield* github.fetchRepository
-  const yearCutoff = DateTime.subtract(fetchedAt, { weeks: LAST_YEAR_WEEKS })
-  const [contributors, issues, pullRequests, releases] = yield* Effect.all(
-    [
-      github.fetchContributors,
-      github.fetchIssues,
-      github.fetchPullRequests,
-      github.fetchReleases(yearCutoff),
-    ],
-    { concurrency: 'unbounded' },
-  )
-  const starHistory = yield* github.fetchStarHistory(yearCutoff)
-  const commitActivity = yield* github.fetchCommitActivity
-  const packageData = yield* Effect.forEach(
-    packageSpecs,
-    spec =>
-      npm.fetchPackage(spec).pipe(
-        Effect.map(({ downloads, packument }) => ({
-          spec,
-          downloads,
-          packument,
-        })),
-      ),
-    { concurrency: 'unbounded' },
-  )
+    const repository = yield* github.fetchRepository
+    const yearCutoff = DateTime.subtract(fetchedAt, {
+      weeks: LAST_YEAR_WEEKS,
+    })
+    const [contributors, issues, pullRequests, releases] = yield* Effect.all(
+      [
+        github.fetchContributors,
+        github.fetchIssues,
+        github.fetchPullRequests,
+        github.fetchReleases(yearCutoff),
+      ],
+      { concurrency: 'unbounded' },
+    )
+    const starHistory = yield* github.fetchStarHistory(yearCutoff)
+    const commitActivity = yield* github.fetchCommitActivity
+    const packageData = yield* Effect.forEach(
+      packageSpecs,
+      spec =>
+        npm.fetchPackage(spec).pipe(
+          Effect.map(({ downloads, packument }) => ({
+            spec,
+            downloads,
+            packument,
+          })),
+        ),
+      { concurrency: 'unbounded' },
+    )
 
-  return {
-    fetchedAt: DateTime.toEpochMillis(fetchedAt),
-    repository,
-    contributors,
-    issues,
-    pullRequests,
-    releases,
-    starHistory,
-    commitActivity,
-    packageData,
-  }
-})
+    return {
+      fetchedAt: DateTime.toEpochMillis(fetchedAt),
+      repository,
+      contributors,
+      issues,
+      pullRequests,
+      releases,
+      starHistory,
+      commitActivity,
+      packageData,
+    }
+  })
 
-export const transformTelemetry = (
-  raw: RawTelemetry,
-): typeof Telemetry.Type => {
+export const transformTelemetry = (raw: RawTelemetry): Telemetry => {
   const weekStarts = weekStartsForLastYear(DateTime.makeUnsafe(raw.fetchedAt))
 
   const packageResults = Array.map(

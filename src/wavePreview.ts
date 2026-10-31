@@ -1,10 +1,11 @@
 import { Array, Option, pipe } from 'effect'
 import { Canvas } from 'foldkit'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import { DOOR_OUTWARD, type Level, levelOf } from './arena'
 import { maybeBossDoor } from './boss'
 import { type Camera, worldToView } from './camera'
+import type { ApplicationViewBuilder } from './composition'
 import { FULL_TURN, placeSprite } from './drawing'
 import { exitBoxOf } from './exits'
 import {
@@ -15,7 +16,6 @@ import {
   textShapes,
 } from './font'
 import { clamp } from './geometry'
-import type { Message } from './message'
 import {
   type Boss,
   type DoorId,
@@ -583,6 +583,6 @@ export const wavePreviewView = (
   spawns: ReadonlyArray<PlannedSpawn>,
   traps: ReadonlyArray<Trap>,
   boss: Boss,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.p([h.Class('sr-only')], [wavePreviewLabel(wave, spawns, traps, boss)])

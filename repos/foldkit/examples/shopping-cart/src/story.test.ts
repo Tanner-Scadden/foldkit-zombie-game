@@ -1,24 +1,33 @@
 import { Option } from 'effect'
 import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
+import { toParentMessage } from 'foldkit/test'
 import { fromString } from 'foldkit/url'
 import { describe, expect, test } from 'vitest'
 
+import { ProductsPageBinding } from './composition'
 import { products } from './data/products'
-import { Message, type Model, update } from './main'
-import { Products } from './page'
-import { AppRoute } from './route'
+import { Message } from './message'
+import type { Model } from './model'
+import { ProductsBlock } from './page'
+import { ApplicationRoute } from './route'
+import { update } from './update'
+
+type ProductsMessage = typeof ProductsBlock.Message.Type
 
 const apple = { id: '1', name: 'Apple', price: 1.5 }
 const banana = { id: '2', name: 'Banana', price: 0.75 }
 
 const baseModel: Model = {
-  route: AppRoute.Products({ searchText: Option.none() }),
+  route: ApplicationRoute.Products({ searchText: Option.none() }),
   cart: [],
   deliveryInstructions: '',
   orderPlaced: false,
-  productsPage: Products.init(products),
+  productsPage: ProductsBlock.init(products).model,
 }
+
+const productsMessage = (message: ProductsMessage) =>
+  toParentMessage(ProductsPageBinding, message)
 
 const urlOrThrow = (raw: string) =>
   Option.getOrThrowWith(
@@ -89,9 +98,9 @@ describe('update', () => {
         update,
         given(baseModel),
         message(
-          Message.GotProductsMessage({
-            message: Products.Message.ClickedAddToCart({ item: apple }),
-          }),
+          productsMessage(
+            ProductsBlock.Message.ClickedAddToCart({ item: apple }),
+          ),
         ),
         model(model => {
           expect(model.cart).toHaveLength(1)
@@ -106,14 +115,14 @@ describe('update', () => {
         update,
         given(baseModel),
         message(
-          Message.GotProductsMessage({
-            message: Products.Message.ClickedAddToCart({ item: apple }),
-          }),
+          productsMessage(
+            ProductsBlock.Message.ClickedAddToCart({ item: apple }),
+          ),
         ),
         message(
-          Message.GotProductsMessage({
-            message: Products.Message.ClickedAddToCart({ item: apple }),
-          }),
+          productsMessage(
+            ProductsBlock.Message.ClickedAddToCart({ item: apple }),
+          ),
         ),
         model(model => {
           expect(model.cart).toHaveLength(1)

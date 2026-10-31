@@ -1,7 +1,6 @@
 import { Array } from 'effect'
 import {
   Command,
-  Mount,
   Subscription,
   click,
   expect,
@@ -15,14 +14,19 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Dialog, RadioGroup } from '@foldkit/ui'
+import { Dialog, DialogBlock, RadioGroup } from '@foldkit/ui'
 
-import { update } from './main'
+import { PartRadioGroupBlock } from './lookRadios'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
-import { measureSurface, openHandInScene, pickCardInScene } from './testing'
+import {
+  ROOT,
+  SCENE_SUBSCRIPTIONS,
+  measureSurface,
+  openHandInScene,
+  pickCardInScene,
+} from './testing'
 import { asVeteran } from './veteran'
-import { view } from './view'
 
 const characterButton = role('button', {
   name: 'Your character: change how you look',
@@ -55,22 +59,23 @@ const openSection = (name: string) => [
 ]
 
 const showPicker = () => [
-  Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-  Mount.resolve(
-    Dialog.AcquireResources,
-    Dialog.Message.SucceededAcquireResources(),
+  Command.resolve(
+    Dialog.test.ShowDialog,
+    DialogBlock.Message.SucceededShowDialog(),
   ),
 ]
 
 const closePicker = () => [
-  Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()),
-  Mount.expectEnded(Dialog.AcquireResources),
+  Command.resolve(
+    Dialog.test.CloseDialog,
+    DialogBlock.Message.CompletedCloseDialog(),
+  ),
 ]
 
 const resolveFocusOption = () =>
   Command.resolve(
-    RadioGroup.FocusOption,
-    RadioGroup.Message.CompletedFocusOption(),
+    RadioGroup.test.FocusOption,
+    PartRadioGroupBlock.Message.CompletedFocusOption(),
   )
 
 const pick = (groupName: string, name: string) => [
@@ -83,7 +88,7 @@ const onTitle: Model = asVeteran(initialModel)
 describe('Character picker', () => {
   test('the MANOR hand deals a Character card with the C key badge, and the player on stage opens it too', () => {
     scene(
-      { update, view },
+      ROOT,
       given(onTitle),
       measureSurface,
       expect(characterButton).toExist(),
@@ -100,7 +105,7 @@ describe('Character picker', () => {
 
   test('opens as a labelled dialog with little tabs over the parts and a preview', () => {
     scene(
-      { update, view },
+      ROOT,
       given(onTitle),
       measureSurface,
       click(characterButton),
@@ -149,7 +154,7 @@ describe('Character picker', () => {
 
   test('picking a part on every little tab changes the look and the preview', () => {
     scene(
-      { update, view },
+      ROOT,
       given(onTitle),
       measureSurface,
       click(characterButton),
@@ -180,7 +185,7 @@ describe('Character picker', () => {
 
   test('the same name in two groups picks only its own part', () => {
     scene(
-      { update, view },
+      ROOT,
       given(onTitle),
       measureSurface,
       click(characterButton),
@@ -202,10 +207,13 @@ describe('Character picker', () => {
 
   test('works from the keyboard: C opens it and the arrow keys pick within a group', () => {
     scene(
-      { update, view },
+      ROOT,
       given(onTitle),
       measureSurface,
-      Subscription.emit(Message.PressedKey({ code: 'KeyC' })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.keyboard,
+        Message.PressedKey({ code: 'KeyC' }),
+      ),
       ...showPicker(),
       expect(pickerDialog).toExist(),
       keydown(optionIn('Body shape', 'Broad'), 'ArrowLeft'),
@@ -225,7 +233,7 @@ describe('Character picker', () => {
 
   test('works by touch: no key badges, taps open it, pick, and close it', () => {
     scene(
-      { update, view },
+      ROOT,
       given(modifyFields(onTitle, { lastDevice: () => 'Touch' })),
       measureSurface,
       expect(
@@ -244,7 +252,7 @@ describe('Character picker', () => {
 
   test('the dice rolls a new look from the seed', () => {
     scene(
-      { update, view },
+      ROOT,
       given(modifyFields(onTitle, { rngState: () => 7 })),
       measureSurface,
       click(characterButton),
@@ -258,7 +266,7 @@ describe('Character picker', () => {
 
   test('lives on the home menu: Game Over offers Menu instead, and a wave offers neither', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(onTitle, {
           phase: () => Phase.GameOver({ wave: 3 }),
@@ -272,7 +280,7 @@ describe('Character picker', () => {
       ).toExist(),
     )
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(onTitle, {
           phase: () => Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [] }),
@@ -280,7 +288,10 @@ describe('Character picker', () => {
       ),
       measureSurface,
       expect(characterButton).toBeAbsent(),
-      Subscription.emit(Message.PressedKey({ code: 'KeyC' })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.keyboard,
+        Message.PressedKey({ code: 'KeyC' }),
+      ),
       expect(pickerDialog).toBeAbsent(),
     )
   })

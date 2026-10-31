@@ -1,10 +1,10 @@
 import { Schema } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { ApiData } from './model'
+import { ApiData } from './domain'
 
 export const Message = defineMessageUnion({
-  RequestedApiData: {},
+  InformedOfRouteChange: {},
   SucceededLoadApiData: { apiData: ApiData },
   FailedLoadApiData: { error: Schema.String },
   ToggledSignature: {

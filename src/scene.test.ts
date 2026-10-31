@@ -1,8 +1,6 @@
 import { Array, Option } from 'effect'
-import type { HtmlBuilder } from 'foldkit/html'
 import {
   Command,
-  Mount,
   Subscription,
   click,
   expect,
@@ -18,10 +16,11 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test, expect as vitestExpect } from 'vitest'
 
-import { Dialog, Tabs } from '@foldkit/ui'
+import { Dialog, DialogBlock, Tabs } from '@foldkit/ui'
 
 import indexHtml from '../index.html?raw'
 import { FocusShopItem } from './commands'
+import type { ApplicationViewBuilder } from './composition'
 import { FIXED_STEP_MS, GAME_TITLE, PREPARATION_MS } from './constants'
 import { FEEDBACK_RUNS } from './home'
 import { update } from './main'
@@ -34,7 +33,14 @@ import {
   initialModel,
 } from './model'
 import { DEBUT_CARD_MIN_MS } from './onboarding'
-import { holdingSecond, measureSurface, withPistol } from './testing'
+import { ShopTabsBlock } from './shopTabs'
+import {
+  ROOT,
+  SCENE_SUBSCRIPTIONS,
+  holdingSecond,
+  measureSurface,
+  withPistol,
+} from './testing'
 import { asVeteran } from './veteran'
 import { view } from './view'
 import { pause } from './waves'
@@ -70,7 +76,7 @@ const PREPARING_WAVE_ONE =
 describe('Ready screen', () => {
   test('waits for a button: a tap beside the buttons starts nothing, and Play starts the campaign', () => {
     scene(
-      { update, view },
+      ROOT,
       given(asVeteran(initialModel)),
       measureSurface,
       expect(role('heading', { name: GAME_TITLE })).toExist(),
@@ -93,7 +99,7 @@ describe('Mute button', () => {
   test('toggles sound with a click or tap and reports its pressed state', () => {
     const muteButton = role('button', { name: 'Mute sound' })
     scene(
-      { update, view },
+      ROOT,
       given(pausedRound),
       measureSurface,
       expect(muteButton).toHaveAttr('aria-pressed', 'false'),
@@ -111,7 +117,7 @@ describe('Music button', () => {
     const musicButton = role('button', { name: 'Music' })
     const muteButton = role('button', { name: 'Mute sound' })
     scene(
-      { update, view },
+      ROOT,
       given(pausedRound),
       measureSurface,
       expect(musicButton).toHaveAttr('aria-pressed', 'true'),
@@ -130,7 +136,7 @@ describe('Start wave button', () => {
   test('appears during preparation, starts the wave on a click, then goes away', () => {
     const startWaveButton = role('button', { name: 'Start wave 1 now' })
     scene(
-      { update, view },
+      ROOT,
       given(asVeteran(initialModel)),
       measureSurface,
       expect(startWaveButton).toBeAbsent(),
@@ -187,29 +193,33 @@ describe('Shop', () => {
   const healthTab = role('tab', { name: /^Health,/ })
   const trapsTab = role('tab', { name: /^Traps,/ })
   const resolveFocusTab = Command.resolve(
-    Tabs.FocusTab,
-    Tabs.Message.CompletedFocusTab(),
+    Tabs.test.FocusTab,
+    ShopTabsBlock.Message.CompletedFocusTab(),
   )
   const openShop = () => [
-    Subscription.emit(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
-    Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-    Mount.resolve(
-      Dialog.AcquireResources,
-      Dialog.Message.SucceededAcquireResources(),
+    Subscription.emit(
+      SCENE_SUBSCRIPTIONS.frame,
+      Message.TickedFrame({ deltaTime: FIXED_STEP_MS }),
+    ),
+    Command.resolve(
+      Dialog.test.ShowDialog,
+      DialogBlock.Message.SucceededShowDialog(),
     ),
   ]
   const leaveShop = () => [
     expect(role('button', { name: 'Leave shop' })).toHaveClass('menu-close'),
     click(role('button', { name: 'Leave shop' })),
-    Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()),
-    Mount.expectEnded(Dialog.AcquireResources),
+    Command.resolve(
+      Dialog.test.CloseDialog,
+      DialogBlock.Message.CompletedCloseDialog(),
+    ),
   ]
 
   test('prices and the balance show a coin and read as plain dollars', () => {
     const shotgunPrice = within(shotgunButton, selector('.shop-item-price'))
     const smgReason = within(smgButton, selector('.shop-item-reason'))
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(atStall, {
           wallet: () => ({ balance: 70, earned: 70, shown: 70 }),
@@ -234,7 +244,7 @@ describe('Shop', () => {
 
   test('opens on the Guns tab, buys with the keyboard and a click, switches tabs, and closes', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(atStall, {
           wallet: () => ({ balance: 70, earned: 70, shown: 70 }),
@@ -310,7 +320,7 @@ describe('Shop', () => {
 
   test('a full gun cannot take more ammo, and says why', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(atStall, {
           player: player =>
@@ -352,7 +362,7 @@ describe('Shop', () => {
       name: 'Chatter Drum, ammo for Beefy Chatterbox, $20, adds up to 120 rounds',
     })
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(atStall, {
           player: player =>
@@ -391,7 +401,7 @@ describe('Shop', () => {
   test('buys a Plank Pile, and the PLACE button explains it needs a doorway', () => {
     const placeButton = role('button', { name: 'Place a Plank Pile' })
     scene(
-      { update, view },
+      ROOT,
       given(atStall),
       measureSurface,
       expect(placeButton).toBeAbsent(),
@@ -412,7 +422,7 @@ describe('Shop', () => {
 
   test('each tab counts what the player can buy, and the shop sums it up', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(atStall, {
           wallet: () => ({ balance: 37, earned: 37, shown: 37 }),
@@ -438,7 +448,7 @@ describe('Shop', () => {
 
   test('with a second gun, a click on the other slot swaps to it', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(atStall, {
           player: player =>
@@ -465,7 +475,7 @@ describe('Reload button', () => {
 
   test('shows on touch and starts a reload when tapped', () => {
     scene(
-      { update, view },
+      ROOT,
       given(modifyFields(fighting, { lastDevice: () => 'Touch' })),
       measureSurface,
       expect(reloadButton).toHaveAttr('aria-keyshortcuts', 'R'),
@@ -480,7 +490,7 @@ describe('Reload button', () => {
 
   test('stays hidden on a keyboard, where the held gun shows R', () => {
     scene(
-      { update, view },
+      ROOT,
       given(fighting),
       measureSurface,
       expect(selector('.reload-icon-button')).toBeAbsent(),
@@ -519,7 +529,7 @@ describe('Place button', () => {
     const plankButton = role('button', { name: 'Place a Plank Pile' })
     const gnomeButton = role('button', { name: 'Place a Grumpy Gnome' })
     scene(
-      { update, view },
+      ROOT,
       given(atNorthDoor),
       measureSurface,
       expect(plankButton).not.toHaveAttr('aria-disabled', 'true'),
@@ -543,7 +553,7 @@ describe('Place button', () => {
 
   test('is not offered without traps or outside Preparation', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(atNorthDoor, {
           trapStock: () => ({ Barricade: 0, Turret: 0 }),
@@ -553,7 +563,7 @@ describe('Place button', () => {
       expect(role('button', { name: 'Place a Plank Pile' })).toBeAbsent(),
     )
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(atNorthDoor, {
           phase: () => Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [] }),
@@ -598,7 +608,7 @@ describe('Run stats', () => {
 
   test('Game Over reads out the verdict and the whole run', () => {
     scene(
-      { update, view },
+      ROOT,
       given(finished(Phase.GameOver({ wave: 4 }))),
       measureSurface,
       expect(role('status')).toHaveText(
@@ -609,7 +619,7 @@ describe('Run stats', () => {
 
   test('Victory reads out the verdict and the whole run', () => {
     scene(
-      { update, view },
+      ROOT,
       given(finished(Phase.Victory())),
       measureSurface,
       expect(role('status')).toHaveText(
@@ -624,7 +634,7 @@ describe('Run stats', () => {
 
   test('the end screens still ask for feedback on the third run', () => {
     scene(
-      { update, view },
+      ROOT,
       given(afterRuns(FEEDBACK_RUNS, Phase.GameOver({ wave: 4 }))),
       measureSurface,
       expect(role('status')).toHaveText(
@@ -635,7 +645,7 @@ describe('Run stats', () => {
 
   test('the end screens stop asking for feedback after the first few runs', () => {
     scene(
-      { update, view },
+      ROOT,
       given(afterRuns(FEEDBACK_RUNS + 1, Phase.GameOver({ wave: 4 }))),
       measureSurface,
       expect(role('status')).toHaveText(
@@ -643,7 +653,7 @@ describe('Run stats', () => {
       ),
     )
     scene(
-      { update, view },
+      ROOT,
       given(afterRuns(FEEDBACK_RUNS + 1, Phase.Victory())),
       measureSurface,
       expect(role('status')).toHaveText(
@@ -654,7 +664,7 @@ describe('Run stats', () => {
 })
 
 describe('Title', () => {
-  const titledView = (current: Model, h: HtmlBuilder<Message>) => {
+  const titledView = (current: Model, h: ApplicationViewBuilder) => {
     const document = view(current, h)
     return h.div(
       [h.DataAttribute('document-title', document.title)],
@@ -681,7 +691,7 @@ describe('New zombie card', () => {
     const tapToContinue = role('button', { name: 'TAP TO CONTINUE' })
     const card = role('group', { name: 'New zombie: Groaner' })
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(initialModel, {
           lastDevice: () => 'Touch',
@@ -701,10 +711,16 @@ describe('New zombie card', () => {
         "New zombie: Groaner. He's slow. Back up and keep shooting. The wave starts in a moment. Once Continue shows, press Enter or choose it to start now.",
       ),
       ...Array.makeBy(CARD_TICKS - 1, () =>
-        Subscription.emit(Message.TickedFrame({ deltaTime: 50 })),
+        Subscription.emit(
+          SCENE_SUBSCRIPTIONS.frame,
+          Message.TickedFrame({ deltaTime: 50 }),
+        ),
       ),
       expect(tapToContinue).toBeAbsent(),
-      Subscription.emit(Message.TickedFrame({ deltaTime: 50 })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.frame,
+        Message.TickedFrame({ deltaTime: 50 }),
+      ),
       expect(tapToContinue).toHaveAttr('aria-keyshortcuts', 'Enter'),
       click(tapToContinue),
       expect(card).toBeAbsent(),
@@ -715,7 +731,7 @@ describe('New zombie card', () => {
   test('shows CONTINUE with an ENTER key on a keyboard once it can be skipped', () => {
     const continueButton = role('button', { name: 'CONTINUE' })
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(asVeteran(initialModel), { introducedKinds: () => [] }),
       ),
@@ -724,7 +740,10 @@ describe('New zombie card', () => {
       click(role('button', { name: 'Start wave 1 now' })),
       expect(continueButton).toBeAbsent(),
       ...Array.makeBy(CARD_TICKS, () =>
-        Subscription.emit(Message.TickedFrame({ deltaTime: 50 })),
+        Subscription.emit(
+          SCENE_SUBSCRIPTIONS.frame,
+          Message.TickedFrame({ deltaTime: 50 }),
+        ),
       ),
       expect(continueButton).toExist(),
       expect(text('ENTER')).toExist(),

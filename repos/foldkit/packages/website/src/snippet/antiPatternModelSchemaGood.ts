@@ -6,6 +6,7 @@ const Session = Schema.Struct({
   userId: Schema.String,
   displayName: Schema.String,
 })
+type Session = typeof Session.Type
 
 const Model = Schema.Struct({
   session: Session,

@@ -129,6 +129,18 @@ test('a markdown change selects the packed consumer gate', () => {
   )
 })
 
+test('Effect peer package changes select the packed compatibility consumer', () => {
+  for (const directory of ['ui', 'node', 'devtools', 'devtools-mcp']) {
+    assert.equal(
+      planCiForFile(`packages/${directory}/package.json`)[
+        'packed_ssr_consumer'
+      ],
+      'true',
+      directory,
+    )
+  }
+})
+
 test('a website-only change leaves the packed consumer gate alone', () => {
   assert.equal(
     planCiForFile('packages/website/src/page/landing.ts')[
@@ -227,7 +239,7 @@ test('a host parity fixture change selects only its focused gate', () => {
 })
 
 test('a typing game change stays out of the website scope', () => {
-  const scopes = planCiForFile('packages/typing-game/client/src/main.ts')
+  const scopes = planCiForFile('packages/typing-game/client/src/app.ts')
 
   assert.equal(scopes['typing_game'], 'true')
   assert.equal(scopes['website'], 'false')
@@ -241,6 +253,17 @@ test('website deployment infrastructure selects the website scope', () => {
     'scripts/lib/package-version.d.mts',
     'scripts/lib/package-version.mjs',
     'scripts/website-vercel-config.mjs',
+  ]) {
+    assert.equal(planCiForFile(file)['website'], 'true', file)
+  }
+})
+
+test('preview deployment inputs select the website scope', () => {
+  for (const file of [
+    '.github/workflows/deploy-website-preview.yml',
+    'scripts/lib/preview-release.d.mts',
+    'scripts/lib/preview-release.mjs',
+    'scripts/preview-release-manifest.mjs',
   ]) {
     assert.equal(planCiForFile(file)['website'], 'true', file)
   }

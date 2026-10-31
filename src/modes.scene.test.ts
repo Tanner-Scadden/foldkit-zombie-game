@@ -1,7 +1,6 @@
 import { Array, Option } from 'effect'
 import {
   Command,
-  Mount,
   Subscription,
   click,
   expect,
@@ -14,16 +13,19 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import { FIXED_STEP_MS, PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { withBests } from './difficulty'
-import { update } from './main'
 import { Message } from './message'
 import { type Model, Phase, RunMode, initialModel } from './model'
-import { holdingSecond, measureSurface } from './testing'
+import {
+  ROOT,
+  SCENE_SUBSCRIPTIONS,
+  holdingSecond,
+  measureSurface,
+} from './testing'
 import { asVeteran } from './veteran'
-import { view } from './view'
 
 const campaignButton = role('button', {
   name: 'Campaign: 10 waves, then victory',
@@ -51,7 +53,7 @@ const START_PROMPT =
 describe('Mode choice', () => {
   test('the home menu offers PLAY with a mode toggle, and PLAY in Endless starts endless', () => {
     scene(
-      { update, view },
+      ROOT,
       given(asVeteran(initialModel)),
       measureSurface,
       expect(playButton).toHaveAttr('aria-keyshortcuts', 'Enter'),
@@ -70,7 +72,7 @@ describe('Mode choice', () => {
 
   test('the Play button starts the 10 wave campaign', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(asVeteran(initialModel), {
           mode: () => RunMode.Endless(),
@@ -86,7 +88,7 @@ describe('Mode choice', () => {
 
   test('touch shows the buttons without key badges, and PLAY as its icon alone', () => {
     scene(
-      { update, view },
+      ROOT,
       given(modifyFields(initialModel, { lastDevice: () => 'Touch' })),
       measureSurface,
       expect(playButton).toExist(),
@@ -107,12 +109,15 @@ describe('Mode choice', () => {
         }),
     })
     scene(
-      { update, view },
+      ROOT,
       given(victorious),
       measureSurface,
       expect(keepGoingButton).toBeAbsent(),
       ...Array.makeBy(Math.ceil(RESTART_GRACE_MS / 50), () =>
-        Subscription.emit(Message.TickedFrame({ deltaTime: 50 })),
+        Subscription.emit(
+          SCENE_SUBSCRIPTIONS.frame,
+          Message.TickedFrame({ deltaTime: 50 }),
+        ),
       ),
       expect(keepGoingButton).toHaveAttr('aria-keyshortcuts', 'K'),
       expect(campaignButton).toExist(),
@@ -133,14 +138,14 @@ describe('Mode choice', () => {
     const FEEDBACK = 'Tell whoever sent you this what you think!'
     Array.forEach([Phase.GameOver({ wave: 4 }), Phase.Victory()], phase => {
       scene(
-        { update, view },
+        ROOT,
         given(modifyFields(initialModel, { phase: () => phase })),
         measureSurface,
         expect(role('status')).toContainText(FEEDBACK),
       )
     })
     scene(
-      { update, view },
+      ROOT,
       given(initialModel),
       measureSurface,
       expect(role('status')).not.toContainText(FEEDBACK),
@@ -149,7 +154,7 @@ describe('Mode choice', () => {
 
   test('an endless Game Over reads out the wave reached and your best', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(
           withBests(initialModel, bests =>
@@ -208,14 +213,16 @@ describe('Upgrades in the shop', () => {
       name: 'Barn Buster 3000, upgrade for Barn Buster DELUXE, $320',
     })
     scene(
-      { update, view },
+      ROOT,
       given(atStall),
       measureSurface,
-      Subscription.emit(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-      Mount.resolve(
-        Dialog.AcquireResources,
-        Dialog.Message.SucceededAcquireResources(),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.frame,
+        Message.TickedFrame({ deltaTime: FIXED_STEP_MS }),
+      ),
+      Command.resolve(
+        Dialog.test.ShowDialog,
+        DialogBlock.Message.SucceededShowDialog(),
       ),
       expect(role('tab', { name: /^Guns,/ })).toHaveAttr(
         'aria-selected',

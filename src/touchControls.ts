@@ -1,6 +1,7 @@
 import { Array, Option } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
+import type { ApplicationViewBuilder } from './composition'
 import { STICK_RADIUS_PX } from './constants'
 import { gunClusterBox, gunSlotBox, secondsLeft } from './hud'
 import {
@@ -57,7 +58,7 @@ type IconButton = Readonly<{
 
 export const iconButtonView = (
   button: IconButton,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
   children: ReadonlyArray<Html> = [],
 ): Html =>
   h.button(
@@ -89,7 +90,7 @@ const isClusterUp = (model: Model): boolean =>
 const keyBadgeView = (
   model: Model,
   key: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   isOnTouch(model)
     ? h.empty
@@ -118,7 +119,7 @@ const gunSlotButtonView = (
   model: Model,
   screen: Screen,
   { slot, name }: SlotGun,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const isHeld = slot === heldSlot(model)
   const box = gunSlotBox(screen, SLOT_INDEX[slot])
@@ -147,7 +148,7 @@ const gunSlotButtonView = (
 const gunSlotsView = (
   model: Model,
   screen: Screen,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.div(
     [h.Class('gun-slots'), h.Role('group'), h.AriaLabel('Your guns')],
@@ -173,7 +174,7 @@ const toPressedKnifeButton = (
     ? Option.none()
     : Option.some(Message.PressedKnifeButton({ pointerId }))
 
-const knifeButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const knifeButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
   isOnTouch(model)
     ? h.div(
         [h.Class('gun-cluster-knife')],
@@ -210,7 +211,7 @@ const knifeButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
 const isMagazineLow = (model: Model): boolean =>
   heldLoaded(model.player) * 2 < heldStats(model.player).magazine
 
-const reloadIconView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const reloadIconView = (model: Model, h: ApplicationViewBuilder): Html =>
   isOnTouch(model) && isMagazineLow(model) && canReload(model.player)
     ? iconButtonView(
         {
@@ -228,7 +229,7 @@ const PLACE_REASON_ID = 'place-trap-reason'
 
 const placeReasonView = (
   { verdict }: Placement,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   PlaceVerdict.match(verdict, {
     Placeable: () => h.empty,
@@ -239,7 +240,7 @@ const placeReasonView = (
 const placeIconView = (
   model: Model,
   placement: Placement,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const { kind, verdict } = placement
   const isBlocked = PlaceVerdict.isAnyOf(['Blocked'])(verdict)
@@ -272,7 +273,7 @@ const placeIconView = (
   )
 }
 
-const nextTrapIconView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const nextTrapIconView = (model: Model, h: ApplicationViewBuilder): Html =>
   Option.match(maybeNextKind(model), {
     onNone: () => h.empty,
     onSome: kind =>
@@ -291,7 +292,7 @@ const nextTrapIconView = (model: Model, h: HtmlBuilder<Message>): Html =>
 
 const trapIconsView = (
   model: Model,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> =>
   Phase.isAnyOf(['Preparation'])(model.phase)
     ? Option.match(maybePlacement(model), {
@@ -317,7 +318,7 @@ const sideRight = (screen: Screen): number =>
 const clusterSideView = (
   model: Model,
   screen: Screen,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const cluster = gunClusterBox(screen)
   const room = sideRight(screen) - cluster.x - cluster.width
@@ -357,7 +358,7 @@ const startWaveLabel = (model: Model, wave: number): string => {
     : `Ready for wave ${wave}`
 }
 
-const startWaveButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const startWaveButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
   Phase.match(model.phase, {
     Ready: () => h.empty,
     Preparation: ({ wave }) =>
@@ -392,7 +393,7 @@ const startWaveButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
 const clusterView = (
   model: Model,
   screen: Screen,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const cluster = gunClusterBox(screen)
   return h.div(
@@ -429,7 +430,10 @@ const clusterView = (
   )
 }
 
-export const gunClusterView = (model: Model, h: HtmlBuilder<Message>): Html =>
+export const gunClusterView = (
+  model: Model,
+  h: ApplicationViewBuilder,
+): Html =>
   isClusterUp(model) ? clusterView(model, screenOf(model), h) : h.empty
 
 // STICKS
@@ -437,7 +441,7 @@ export const gunClusterView = (model: Model, h: HtmlBuilder<Message>): Html =>
 export const stickView = (
   stick: Stick,
   label: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   Stick.match(stick, {
     Idle: () => h.empty,
@@ -473,7 +477,7 @@ const preparationTimerView = (
   wave: number,
   remainingMs: number,
   clock: BreakClock,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.p(
     [h.Class('sr-only'), h.Role('timer')],
@@ -488,7 +492,7 @@ const preparationTimerView = (
 
 export const preparationControlsView = (
   model: Model,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   Phase.match(model.phase, {
     Ready: () => h.empty,
@@ -513,7 +517,10 @@ const GHOST_LABELS: Readonly<Record<GhostStick, string>> = {
   Aim: 'AIM + SHOOT',
 }
 
-export const ghostSticksView = (model: Model, h: HtmlBuilder<Message>): Html =>
+export const ghostSticksView = (
+  model: Model,
+  h: ApplicationViewBuilder,
+): Html =>
   Array.match(shownGhostSticks(model), {
     onEmpty: () => h.empty,
     onNonEmpty: ghosts =>

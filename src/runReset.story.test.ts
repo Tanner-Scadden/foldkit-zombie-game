@@ -3,7 +3,7 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import { update } from './main'
 import { Message } from './message'
@@ -67,7 +67,10 @@ const leaveForHome = [
   press('KeyH'),
   showDialog(),
   message(Message.ClickedLeaveRunButton()),
-  Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()),
+  Command.resolve(
+    Dialog.test.CloseDialog,
+    DialogBlock.Message.CompletedCloseDialog(),
+  ),
 ]
 
 describe('going home', () => {

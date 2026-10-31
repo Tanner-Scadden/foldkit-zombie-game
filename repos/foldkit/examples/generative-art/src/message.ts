@@ -1,8 +1,6 @@
 import { Schema } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { Slider } from '@foldkit/ui'
-
 const generatedParticleFields = {
   x: Schema.Number,
   y: Schema.Number,
@@ -28,8 +26,9 @@ export const Message = defineMessageUnion({
   },
   ClickedTogglePlay: {},
   ClickedReset: {},
-  GotFlowStrengthSliderMessage: { message: Slider.Message },
-  GotNoiseScaleSliderMessage: { message: Slider.Message },
 })
-
 export type Message = typeof Message.Type
+export type CompletedGenerateAmbientParticle =
+  typeof Message.CompletedGenerateAmbientParticle.Type
+export type CompletedGenerateBurstParticle =
+  typeof Message.CompletedGenerateBurstParticle.Type

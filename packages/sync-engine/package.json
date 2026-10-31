@@ -21,6 +21,6 @@
     "@munch/sqlite-wasm-effect": "workspace:*"
   },
   "peerDependencies": {
-    "effect": "^4.1.0"
+    "effect": "^4.0.6"
   }
 }

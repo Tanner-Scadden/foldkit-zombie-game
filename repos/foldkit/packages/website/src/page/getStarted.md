@@ -41,7 +41,7 @@ The exact files depend on the rendering mode and starter example. The small brow
 
 The Counter starter begins with these files:
 
-- `src/main.ts`: pure application definitions
+- `src/application.ts`: the typed Application and its implementation pieces
 - `src/entry.ts`: runtime bootstrap referenced by `index.html`
 - `src/styles.css`: Tailwind CSS entry point
 - `index.html`: HTML entry point
@@ -53,11 +53,11 @@ The Counter starter begins with these files:
 - `AGENTS.md`: your instructions for AI coding assistants working on the project
 - `FOLDKIT.md`: Foldkit's own conventions for those assistants, [replaced from the current template when you upgrade Foldkit](/ai/overview)
 
-In a small starter, `src/main.ts` holds the Model, Messages, update, init, and view. Larger examples move those definitions into focused modules as the application grows.
+In a small starter, `src/application.ts` calls `Block.makeDefinition('Application', { Model, Message })`, creates a named `ApplicationComposition`, and assembles `ApplicationBlock`. The Definition authors Commands, Steps, lifecycle behavior, and Bindings; the Composition owns init, update, and the primary view after its child and Mount graph is fixed. Commands, Subscriptions, Mounts, ManagedResources, and their handler recipes stay on the root Block. Larger examples move substantial pieces into focused files as the application grows.
 
 ### Runtime Entry
 
-For the Counter starter, `src/entry.ts` imports the application definitions and starts the runtime with `Runtime.makeApplication` and `Runtime.run`. Other starters may compose the application from several modules or start a different host, but they keep runtime startup separate from the pure definitions. That separation lets tests import the application without starting a runtime as a side effect.
+For the Counter starter, `src/entry.ts` imports `ApplicationBlock` and passes it with the page container to `Program.make`. The returned lowercase `program` is a passive runtime input. A starter whose handlers need application Services defines `ApplicationLayer` in `services.ts`, then the entry calls `program.provide(ApplicationLayer)`. Importing the Block, creating the Program, and providing a Layer remain passive; startup happens only when the Runtime starts the Program.
 
 ### Project Scripts
 
@@ -67,9 +67,9 @@ The generated project also includes `lint` and `format` scripts. Run them with y
 
 Skip this section if you used `create-foldkit-app`. Scaffolded projects already receive compatible package versions.
 
-Foldkit uses Effect 4 stable and pins its peer dependencies to exact versions: `effect@4.0.0` and `@effect/platform-browser@4.0.0`. Install those versions together. When upgrading an existing app, update every Effect package to the same version. Use the stable import paths, such as `effect/http` and `effect/persistence`, in place of their `effect/unstable` paths.
+Foldkit uses Effect 4 stable. These installation instructions use the tested exact versions: `effect@4.0.0` and `@effect/platform-browser@4.0.0`. Install those versions together. Published peer ranges describe compatible versions; the installation command selects one tested version. When upgrading an existing app, update every Effect package to the same version. Use the stable import paths, such as `effect/http` and `effect/persistence`, in place of their `effect/unstable` paths.
 
-Install Foldkit together with its pinned peer dependencies:
+Install Foldkit together with those Effect versions:
 
 ::Snippet{name="getStartedInstallFoldkit" label="Install Foldkit and Effect"}
 

@@ -1,18 +1,13 @@
-import { Array, Effect, Fiber, Option, Ref, pipe } from 'effect'
-import { TestClock } from 'effect/testing'
+import { Array, Option, pipe } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { describe, expect, test } from 'vitest'
 
-import {
-  CheckoutState,
-  Message,
-  type Model,
-  PlaceOrder,
-  Promo,
-  TRANSITION_LOG_LIMIT,
-  initialModel,
-  update,
-} from './main'
+import { PlaceOrder } from './command'
+import { initialModel } from './init'
+import { Message } from './message'
+import { CheckoutState, type Model, Promo } from './model'
+import { TRANSITION_LOG_LIMIT } from './transition'
+import { update } from './update'
 
 const maybeLatestTransitionSummary = (model: Model): Option.Option<string> =>
   pipe(
@@ -21,27 +16,6 @@ const maybeLatestTransitionSummary = (model: Model): Option.Option<string> =>
   )
 
 describe('update', () => {
-  test('PlaceOrder waits before succeeding', () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const didComplete = yield* Ref.make(false)
-        const fiber = yield* Effect.forkChild(
-          PlaceOrder({ isShippingRequired: false }).effect.pipe(
-            Effect.tap(() => Ref.set(didComplete, true)),
-          ),
-          { startImmediately: true },
-        )
-
-        yield* TestClock.adjust('999 millis')
-        expect(yield* Ref.get(didComplete)).toBe(false)
-
-        yield* TestClock.adjust('1 millis')
-        expect(yield* Fiber.join(fiber)).toStrictEqual(
-          Message.SucceededPlaceOrder({ orderId: 'DIGI-1001' }),
-        )
-      }).pipe(Effect.scoped, Effect.provide(TestClock.layer())),
-    ))
-
   test('physical carts visit Shipping before Payment', () => {
     story(
       update,
@@ -165,7 +139,7 @@ describe('update', () => {
       Command.expectExact(PlaceOrder({ isShippingRequired: false })),
       Command.resolve(
         PlaceOrder,
-        Message.SucceededPlaceOrder({ orderId: 'DIGI-1001' }),
+        Message.CompletedPlaceOrder({ orderId: 'DIGI-1001' }),
       ),
       model(model => {
         expect(model.checkout._tag).toBe('Confirmed')

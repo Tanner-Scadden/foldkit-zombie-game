@@ -3,7 +3,7 @@ import { click, expect, given, label, role, scene, text } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Slider } from '@foldkit/ui'
+import { SliderBlock } from '@foldkit/ui'
 
 import {
   FLOW_STRENGTH_MAX,
@@ -26,19 +26,19 @@ const initialModel: Model = {
   maybeMousePosition: Option.none(),
   isRunning: true,
   flowStrength: INITIAL_FLOW_STRENGTH,
-  flowStrengthSlider: Slider.init({
+  flowStrengthSlider: SliderBlock.init({
     id: 'flow-strength-slider',
     min: FLOW_STRENGTH_MIN,
     max: FLOW_STRENGTH_MAX,
     step: FLOW_STRENGTH_STEP,
-  }),
+  }).model,
   noiseScale: INITIAL_NOISE_SCALE,
-  noiseScaleSlider: Slider.init({
+  noiseScaleSlider: SliderBlock.init({
     id: 'noise-scale-slider',
     min: NOISE_SCALE_MIN_DIVISOR,
     max: NOISE_SCALE_MAX_DIVISOR,
     step: NOISE_SCALE_STEP,
-  }),
+  }).model,
 }
 
 const makeParticle = (id: number, x: number, y: number): Particle => ({

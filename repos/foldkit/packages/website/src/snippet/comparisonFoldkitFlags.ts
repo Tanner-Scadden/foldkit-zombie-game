@@ -7,12 +7,14 @@ export const SavedCanvas = Schema.Struct({
   paletteThemeIndex: Schema.Number,
   selectedColorIndex: PaletteIndex,
 })
+export type SavedCanvas = typeof SavedCanvas.Type
 
 export const SavedCanvasJsonString = Schema.fromJsonString(
   Schema.toCodecJson(SavedCanvas),
 )
+export type SavedCanvasJsonString = typeof SavedCanvasJsonString.Type
 
-export const flags: Effect.Effect<Flags> = Effect.gen(function* () {
+export const flags = Effect.gen(function* () {
   const store = yield* KeyValueStore.KeyValueStore
   const json = yield* Effect.fromOption(
     Option.fromNullishOr(yield* store.get(STORAGE_KEY)),
@@ -23,7 +25,6 @@ export const flags: Effect.Effect<Flags> = Effect.gen(function* () {
   Effect.catch(() =>
     Effect.succeed(Flags.make({ maybeSavedCanvas: Option.none() })),
   ),
-  Effect.provide(BrowserKeyValueStore.layerLocalStorage),
 )
 
 // Saving goes through the same Schema:

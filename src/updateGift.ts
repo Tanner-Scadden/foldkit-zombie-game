@@ -1,9 +1,11 @@
 import { Array, Option } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import type { Dialog } from '@foldkit/ui'
 
 import { type NewsBullet, maybeNewestNewsDay, newsHeadline } from './changelog'
+import type { ApplicationViewBuilder } from './composition'
+import { UpdateGreetingBinding } from './composition'
 import { closeButtonView, dialogShell } from './dialogs'
 import { isUpdateGiftShown } from './home'
 import {
@@ -21,7 +23,7 @@ import type { Model } from './model'
 const layerView = (
   className: string,
   icon: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.span([
     h.Class(className),
@@ -31,7 +33,7 @@ const layerView = (
 
 // NOTE: the Groaner hides in the box, under the lid, until the unwrap pops
 // it out. Two sparkles twinkle around it while it waits.
-const giftArtView = (h: HtmlBuilder<Message>): Html =>
+const giftArtView = (h: ApplicationViewBuilder): Html =>
   h.span(
     [h.Class('gift-art'), h.AriaHidden(true)],
     [
@@ -50,7 +52,10 @@ export const UPDATE_GIFT_LABEL = 'Update ready: tap to get it'
 // NOTE: a wrapped present under the gear on the home menu, with a little
 // paper NEW! tag on a string tied to its bow. It rattles now and then, the tag
 // swinging with it; a tap unwraps it and reloads onto the new build.
-export const updateGiftView = (model: Model, h: HtmlBuilder<Message>): Html =>
+export const updateGiftView = (
+  model: Model,
+  h: ApplicationViewBuilder,
+): Html =>
   isUpdateGiftShown(model)
     ? h.button(
         [
@@ -77,7 +82,7 @@ export const updateGiftView = (model: Model, h: HtmlBuilder<Message>): Html =>
 const CONFETTI_PIECES = 14
 const GREETING_BULLETS = 3
 
-const confettiView = (h: HtmlBuilder<Message>): Html =>
+const confettiView = (h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('greeting-confetti'), h.AriaHidden(true)],
     Array.makeBy(CONFETTI_PIECES, index =>
@@ -88,7 +93,7 @@ const confettiView = (h: HtmlBuilder<Message>): Html =>
     ),
   )
 
-const openedGiftView = (h: HtmlBuilder<Message>): Html =>
+const openedGiftView = (h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('greeting-gift'), h.AriaHidden(true)],
     [
@@ -98,7 +103,7 @@ const openedGiftView = (h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-const bulletView = (bullet: NewsBullet, h: HtmlBuilder<Message>): Html =>
+const bulletView = (bullet: NewsBullet, h: ApplicationViewBuilder): Html =>
   h.li(
     [h.Class('greeting-bullet')],
     [
@@ -120,7 +125,7 @@ const greetingBullets: ReadonlyArray<NewsBullet> = Option.match(
 
 const greetingPanelView = (
   { title, description, closeButton, initialFocus }: Dialog.RenderInfo,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => [
   confettiView(h),
   openedGiftView(h),
@@ -159,12 +164,9 @@ const greetingPanelView = (
   ),
 ]
 
-const toUpdateGreetingMessage = (message: Dialog.Message): Message =>
-  Message.GotUpdateGreetingMessage({ message })
-
 export const updateGreetingView = (
   model: Model,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   dialogShell(
     {
@@ -174,7 +176,7 @@ export const updateGreetingView = (
       panelClass: 'panel greeting-panel',
       dialogAttributes: [h.DataAttribute('panel', 'Updated')],
       panelView: renderInfo => greetingPanelView(renderInfo, h),
-      toParentMessage: toUpdateGreetingMessage,
+      binding: UpdateGreetingBinding,
     },
     h,
   )

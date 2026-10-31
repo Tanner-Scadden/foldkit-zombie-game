@@ -14,13 +14,11 @@ import { describe, test } from 'vitest'
 
 import { FIXED_STEP_MS } from './constants'
 import { EXIT_RULES } from './exits'
-import { update } from './main'
 import { Message } from './message'
 import { type InputDevice, type Model, Phase, initialModel } from './model'
 import { PURCHASE_RULES } from './purchase'
-import { measureSurface } from './testing'
+import { ROOT, SCENE_SUBSCRIPTIONS, measureSurface } from './testing'
 import { asVeteran } from './veteran'
-import { view } from './view'
 
 const HOLD_TICKS = Math.ceil(PURCHASE_RULES.holdMs / FIXED_STEP_MS) + 1
 
@@ -44,13 +42,16 @@ const holdButton = role('button', {
 
 const frames = (count: number) =>
   Array.makeBy(count, () =>
-    Subscription.emit(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
+    Subscription.emit(
+      SCENE_SUBSCRIPTIONS.frame,
+      Message.TickedFrame({ deltaTime: FIXED_STEP_MS }),
+    ),
   )
 
 describe('holding to buy on touch', () => {
   test('at the boards a hold button sits by the guns, and holding it buys the kitchen', () => {
     scene(
-      { update, view },
+      ROOT,
       given(atBoards('Touch', 85)),
       measureSurface,
       expect(holdButton).toExist(),
@@ -60,13 +61,16 @@ describe('holding to buy on touch', () => {
       expect(holdButton).toExist(),
       ...frames(8),
       expect(holdButton).toBeAbsent(),
-      Subscription.emit(Message.ReleasedPointer({ pointerId: 4 })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.pointerReleases,
+        Message.ReleasedPointer({ pointerId: 4 }),
+      ),
     )
   })
 
   test('short of the price the button says so, and a hold only shakes it', () => {
     scene(
-      { update, view },
+      ROOT,
       given(atBoards('Touch', EXIT_RULES.price - 5)),
       measureSurface,
       expect(holdButton).toHaveAttr('data-short', 'true'),
@@ -76,7 +80,10 @@ describe('holding to buy on touch', () => {
       expect(selector('.hold-buy-button.is-refused')).toExist(),
       ...frames(HOLD_TICKS),
       expect(holdButton).toExist(),
-      Subscription.emit(Message.ReleasedPointer({ pointerId: 4 })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.pointerReleases,
+        Message.ReleasedPointer({ pointerId: 4 }),
+      ),
     )
   })
 })
@@ -84,7 +91,7 @@ describe('holding to buy on touch', () => {
 describe('holding to buy on a keyboard', () => {
   test('no button shows, and a screen reader hears the price and the key', () => {
     scene(
-      { update, view },
+      ROOT,
       given(atBoards('KeyboardMouse', 85)),
       measureSurface,
       expect(holdButton).toBeAbsent(),

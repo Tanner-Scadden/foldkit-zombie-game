@@ -1,65 +1,72 @@
 import { Option, Schema } from 'effect'
-import { Runtime, Update } from 'foldkit'
-import type { Html, HtmlBuilder } from 'foldkit/html'
-import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
+import { Block, Program, Runtime } from 'foldkit'
 import { afterEach, expect, vi } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
-import {
-  Message as ListboxMessage,
-  Model as ListboxModel,
-  OutMessage,
-  create,
-  init,
-} from './public.js'
+import { makeBlock } from './public.js'
 
-const TestListbox = create<string>()
+const TestListbox = makeBlock<string>()
 
-const Message = defineMessageUnion({
-  GotListboxMessage: { message: ListboxMessage },
-})
-type Message = typeof Message.Type
-
-const Model = Schema.Struct({
-  listbox: ListboxModel,
-})
+const Model = Schema.Struct({ listbox: TestListbox.Model })
 type Model = typeof Model.Type
-
-const foldListboxOutMessage = OutMessage.match<Update.Step<Model, Message>>({
-  Selected: () => model => ({ model }),
-})
-
-const foldListbox = Update.foldChild({
-  update: TestListbox.update,
-  read: (model: Model) => Option.some(model.listbox),
-  write: (model: Model, nextListbox: ListboxModel) =>
-    modifyFields(model, { listbox: () => nextListbox }),
-  toParentMessage: (message: ListboxMessage) =>
-    Message.GotListboxMessage({ message }),
-  foldOutMessage: foldListboxOutMessage,
-})
-
-const listboxView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const ListboxTriggerClickTestDefinition = Block.makeDefinition(
+  'ListboxTriggerClickTest',
+  {
+    Model,
+    Message: Schema.Never,
+  },
+)
+const foldListboxOutMessage =
+  ListboxTriggerClickTestDefinition.makeOutMessageFold(TestListbox, {
+    Selected: () => ListboxTriggerClickTestDefinition.makeNoopStep(),
+  })
+const ListboxBinding = ListboxTriggerClickTestDefinition.makeBinding(
+  TestListbox,
+  {
+    field: 'listbox',
+    init: false,
+  },
+).withOutMessagePolicy({ fold: foldListboxOutMessage })
+const ListboxTriggerClickTestComposition =
+  ListboxTriggerClickTestDefinition.makeComposition({
+    bindings: [ListboxBinding],
+  })
+const view = ListboxTriggerClickTestComposition.makeView((model, h) =>
   h.div(
     [],
     [
-      h.submodel({
-        slotId: 'listbox',
-        model: model.listbox,
-        view: TestListbox.view,
-        viewInputs: {
-          items: ['Name'],
-          itemToConfig: item => ({ content: h.span([], [item]) }),
-          buttonContent: h.span([], ['Sort']),
-          maybeSelectedValue: Option.none(),
-          anchor: { placement: 'bottom-start' },
-        },
-        toParentMessage: message => Message.GotListboxMessage({ message }),
-      }),
+      h.block(
+        ListboxBinding.embedView({
+          slotId: 'listbox',
+          model: model.listbox,
+          viewInputs: {
+            items: ['Name'],
+            itemToConfig: item => ({ content: h.span([], [item]) }),
+            buttonContent: h.span([], ['Sort']),
+            maybeSelectedValue: Option.none(),
+            anchor: { placement: 'bottom-start' },
+          },
+        }),
+      ),
     ],
-  )
+  ),
+)
+const prepare = () =>
+  ListboxTriggerClickTestComposition.prepareBlock({
+    init: ListboxTriggerClickTestComposition.makeInit(() =>
+      ListboxBinding.init({
+        args: [{ id: 'sort', isModal: true }],
+        toParentModel: listbox => ({ listbox }),
+      }),
+    ),
+    update: ListboxTriggerClickTestComposition.makeUpdate({}),
+    view,
+  })
+const ApplicationBlock: Block.FromAssemblyWithView<
+  typeof Model,
+  typeof prepare
+> = Block.assemble(prepare)
 
 const requireElement = (id: string): HTMLElement => {
   const element = document.getElementById(id)
@@ -83,29 +90,16 @@ const clickButtonInOneTask = (button: HTMLElement) => {
 describe('Listbox trigger click', () => {
   afterEach(() => {
     document.body.replaceChildren()
+    document.documentElement.style.overflow = ''
   })
 
-  it('treats a same-task click as one open', async () => {
+  it('treats a same-task click as one open and releases modal resources on close', async () => {
+    const background = document.createElement('button')
     const container = document.createElement('div')
-    document.body.append(container)
     container.id = 'app'
-    const tags: Array<string> = []
+    document.body.append(background, container)
     const handle = Runtime.embed(
-      Runtime.makeElement({
-        Model,
-        init: () => ({
-          model: { listbox: init({ id: 'sort', isModal: true }) },
-        }),
-        update: (model: Model, message: Message) => {
-          tags.push(message.message._tag)
-          return Message.match<Update.Return<Model, Message>>(message, {
-            GotListboxMessage: ({ message: listboxMessage }) =>
-              foldListbox(model, listboxMessage),
-          })
-        },
-        view: listboxView,
-        container,
-      }),
+      Program.makeElement({ block: ApplicationBlock, container }),
     )
 
     try {
@@ -116,15 +110,28 @@ describe('Listbox trigger click', () => {
       clickButtonInOneTask(requireElement('sort-button'))
 
       await vi.waitFor(() => {
-        expect(tags).toContain('CompletedLockScroll')
+        expect(
+          document.getElementById('sort-button')?.getAttribute('aria-expanded'),
+        ).toBe('true')
+        expect(document.documentElement.style.overflow).toBe('hidden')
+        expect(background.inert).toBe(true)
       })
 
-      expect(tags).toContain('ClickedButton')
-      expect(tags.filter(tag => tag === 'CompletedLockScroll')).toHaveLength(1)
-      expect(tags.filter(tag => tag === 'CompletedInertOthers')).toHaveLength(1)
-      expect(
-        document.getElementById('sort-button')?.getAttribute('aria-expanded'),
-      ).toBe('true')
+      requireElement('sort-items').dispatchEvent(
+        new KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          key: 'Escape',
+        }),
+      )
+
+      await vi.waitFor(() => {
+        expect(
+          document.getElementById('sort-button')?.getAttribute('aria-expanded'),
+        ).toBe('false')
+        expect(document.documentElement.style.overflow).toBe('')
+        expect(background.inert).toBe(false)
+      })
     } finally {
       handle.dispose()
     }

@@ -15,10 +15,12 @@ export const NpmDownloadDay = Schema.Struct({
   day: Schema.String,
   downloads: Schema.Number,
 })
+export type NpmDownloadDay = typeof NpmDownloadDay.Type
 
 export const NpmDownloadsResponse = Schema.Struct({
   downloads: Schema.Array(NpmDownloadDay),
 })
+export type NpmDownloadsResponse = typeof NpmDownloadsResponse.Type
 
 export const NpmVersionMetadata = Schema.Struct({
   dependencies: Schema.OptionFromOptional(
@@ -38,14 +40,15 @@ export const NpmPackument = Schema.Struct({
     latest: Schema.String,
   }),
 })
+export type NpmPackument = typeof NpmPackument.Type
 
 // SERVICE
 
 type NpmApiShape = Readonly<{
   fetchPackage: (spec: PackageSpec) => Effect.Effect<
     Readonly<{
-      downloads: typeof NpmDownloadsResponse.Type
-      packument: typeof NpmPackument.Type
+      downloads: NpmDownloadsResponse
+      packument: NpmPackument
     }>,
     Error
   >
@@ -55,7 +58,7 @@ export class NpmApi extends Context.Service<NpmApi, NpmApiShape>()(
   'charting/NpmApi',
 ) {}
 
-export const NpmApiLive: Layer.Layer<NpmApi, never, HttpClient.HttpClient> =
+export const NpmApiLayer: Layer.Layer<NpmApi, never, HttpClient.HttpClient> =
   Layer.effect(
     NpmApi,
     Effect.gen(function* () {

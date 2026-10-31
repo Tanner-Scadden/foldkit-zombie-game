@@ -1,12 +1,13 @@
 import { Array, Option, pipe } from 'effect'
 import type { Canvas } from 'foldkit'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 import { Mount, Subscription, given, scene } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { DOOR_IDS, openExitIn } from './arena'
 import { BOSS_RULES } from './boss'
+import type { ApplicationViewBuilder } from './composition'
 import {
   BLAST_MAX,
   BULLET_MAX,
@@ -56,11 +57,17 @@ import {
   ZombieState,
   initialModel,
 } from './model'
+import { MeasureGameSurface } from './mount'
 import { DROP_RULES } from './powerups'
 import { startOrResume } from './runFlow'
-import { WIDE_SURFACE, holdingSecond, scoring } from './testing'
+import {
+  SCENE_SUBSCRIPTIONS,
+  WIDE_SURFACE,
+  holdingSecond,
+  scoring,
+} from './testing'
 import { asVeteran } from './veteran'
-import { MeasureGameSurface, view } from './view'
+import { view } from './view'
 import { FINAL_WAVE, rollSpawns } from './waves'
 import { freshGun } from './weapons'
 import { ZOMBIE_KINDS } from './zombies'
@@ -508,19 +515,22 @@ type Measured = FrameCost & Readonly<{ steadyImagesDrawn: number }>
 
 const measureFrames = (model: Model): Measured => {
   const renders: Array<ReadonlyArray<CanvasNode>> = []
-  const recordingView = (current: Model, h: HtmlBuilder<Message>) => {
+  const recordingView = (current: Model, h: ApplicationViewBuilder) => {
     const rendered = view(current, h)
     renders.push(canvasNodes(rendered.body))
     return rendered
   }
   scene(
-    { update, view: recordingView },
+    { update, view: recordingView, subscriptions: SCENE_SUBSCRIPTIONS },
     given(model),
     Mount.resolve(
       MeasureGameSurface,
       Message.MeasuredGameSurface(WIDE_SURFACE),
     ),
-    Subscription.emit(Message.MovedMouse({ clientX: 900, clientY: 300 })),
+    Subscription.emit(
+      SCENE_SUBSCRIPTIONS.mouseAim,
+      Message.MovedMouse({ clientX: 900, clientY: 300 }),
+    ),
   )
   const last = Option.getOrElse(Array.last(renders), () => [])
   const beforeLast = Option.getOrElse(

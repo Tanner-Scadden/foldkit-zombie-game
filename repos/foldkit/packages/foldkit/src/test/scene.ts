@@ -13,6 +13,13 @@ import {
 } from 'effect'
 import { dual } from 'effect/Function'
 
+import {
+  type AggregatedChildren,
+  type AnyBinding,
+  type BindingRequirement,
+  aggregateChildren,
+} from '../block/binding.js'
+import { LocalMountsTypeId, isComposition } from '../block/definition.js'
 import { kebabToPascal } from '../customElement/index.js'
 import type { CustomElementSpec, EventSchema } from '../customElement/index.js'
 import { serializedStylePropertyName } from '../domReflection.js'
@@ -22,6 +29,7 @@ import {
   FOLDKIT_MOUNT_KEY,
   FileHandlerSymbol,
   __clearRuntime as clearHtmlRuntime,
+  __createBoundaryRegistry as createHtmlBoundaryRegistry,
   __htmlBuilder as htmlBuilderFor,
   __setRuntime as setHtmlRuntime,
 } from '../html/index.js'
@@ -33,15 +41,42 @@ import type {
 } from '../html/index.js'
 import type { Entry as ManagedResourceEntry } from '../managedResource/index.js'
 import { MountTracker } from '../mount/index.js'
-import type { MountDefinition } from '../mount/index.js'
+import type {
+  AnyMountHandler,
+  LayeredMountDefinition,
+  MountDefinition,
+} from '../mount/index.js'
+import {
+  type RoutingConfig,
+  type RoutingInputConfig,
+  normalizeRoutingHandler,
+} from '../runtime/browserListeners.js'
 import { Dispatch } from '../runtime/dispatch.js'
+import {
+  type ChildPairingSteps,
+  pairChildren,
+  sameVnode,
+} from '../snabbdom/init.js'
+import { vnode as makeVNode } from '../snabbdom/vnode.js'
+import {
+  type Registrations as RuntimeRegistrations,
+  type RegistryEntries as RuntimeRegistryEntries,
+  type Subscription as RuntimeSubscription,
+  type MessageDeclaration as SubscriptionMessageDeclaration,
+  aggregate as aggregateSubscriptions,
+  __maybeActiveDependencies as maybeActiveDependencies,
+  __messageDeclarations as subscriptionMessageDeclarations,
+} from '../subscription/subscription.js'
 import { tagNameFromSelector } from '../tagName.js'
-import type { VNode } from '../vdom.js'
+import { type Url, fromString as urlFromString } from '../url/index.js'
+import { type VNode, dedupeSharedVNodes, memoizedVNodes } from '../vdom.js'
+import { commandArgs, commandMatches } from './bindingMatcher.js'
 import type {
   AnyCommand,
   AnyCommandInstance,
   AnyMount,
   BaseInternal,
+  CommandArgs,
   CommandMatcher,
   MountMatcher,
   MountResolver,
@@ -51,6 +86,7 @@ import type {
   Resolver,
   ResolverEntry,
   SimulationUpdateReturn,
+  SubscriptionEmissionSource,
 } from './internal.js'
 import {
   assertAllCommandsResolved,
@@ -75,6 +111,8 @@ import {
   resolveAllInternal,
   resolveByMatcher,
   resolveMountByMatcher,
+  resolveSubscriptionDeclaration,
+  resolveSubscriptionMessage,
 } from './internal.js'
 import type { Locator, LocatorAll } from './query.js'
 import {
@@ -184,9 +222,44 @@ type GivenStep<Model> = Readonly<{ _phantomModel: Model }> &
   ) => SceneSimulation<M, Message, OutMessage>)
 
 /** A typed Subscription Message step. */
-export type SubscriptionMessageStep<Message> = Readonly<{
+export type SubscriptionMessageStep<Message, Entry = undefined> = Readonly<{
   _tag: 'SubscriptionMessageStep'
+  entry: Entry
   message: Message
+}>
+
+type SubscriptionActivityStep<Entry> = Readonly<{
+  _tag: 'SubscriptionActivityStep'
+  entry: Entry
+  expected: 'Active' | 'Inactive'
+}>
+
+/** URL-change delivery configuration. Uses the same callback or canonical
+ * Message constructor accepted by Program routing. Relative references resolve
+ * against origin (default http://localhost), never the test host or prior step. */
+export type SceneRouting<Message> = Pick<
+  RoutingInputConfig<Message>,
+  'onUrlChange'
+> &
+  Readonly<{ origin?: string }>
+
+type SceneRoutingCallback<Message> = Pick<
+  RoutingConfig<Message>,
+  'onUrlChange'
+> &
+  Readonly<{ origin?: string }>
+
+/** An explicit URL-change event delivered through the Scene's routing callback. */
+export type ChangedUrlStep = Readonly<{
+  _tag: 'ChangedUrlStep'
+  url: string
+}>
+
+/** A group of Scene steps whose Locators resolve within one parent element. */
+export type InsideStep<Steps extends ReadonlyArray<unknown>> = Readonly<{
+  _tag: 'InsideStep'
+  parent: Locator
+  steps: Steps
 }>
 
 /** A typed OutMessage assertion step. */
@@ -201,14 +274,155 @@ export type OutMessagesStep<OutMessage> = Readonly<{
   expected: readonly [OutMessage, OutMessage, ...ReadonlyArray<OutMessage>]
 }>
 
+type AnySubscriptions = RuntimeRegistrations<any, any, any>
+
+type RegisteredSubscriptions<Model, Message> = RuntimeRegistrations<
+  Model,
+  Message,
+  any
+>
+
+type AnyComposition = Readonly<{
+  Model: Schema.Top
+  Message: Schema.Top
+  [LocalMountsTypeId]: ReadonlyArray<LayeredMountDefinition>
+  bindings: ReadonlyArray<AnyBinding>
+  makeView: (...args: ReadonlyArray<any>) => any
+}>
+
+type ModelSchemaOf<CompositionValue> =
+  CompositionValue extends Readonly<{
+    Model: infer ModelSchema extends Schema.Top
+  }>
+    ? ModelSchema
+    : never
+
+type MessageSchemaOf<CompositionValue> =
+  CompositionValue extends Readonly<{
+    Message: infer MessageSchema extends Schema.Top
+  }>
+    ? MessageSchema
+    : never
+
+type ChildrenOf<CompositionValue> =
+  CompositionValue extends Readonly<{
+    bindings: infer Children extends ReadonlyArray<AnyBinding>
+  }>
+    ? Children
+    : never
+
+type ChildSubscriptions<CompositionValue extends AnyComposition> =
+  AggregatedChildren<ChildrenOf<CompositionValue>>['subscriptions']
+
+/**
+ * Collects a Block Composition's registered child Subscriptions for
+ * Scene emission steps. Local declarations may be supplied as the second
+ * argument. The result retains placement-qualified keys, exact Message
+ * declarations, and the same lift paths used by the Runtime.
+ *
+ * This only prepares test configuration. It does not initialize Models,
+ * construct handler Layers, or start Streams. Completed feature Blocks already
+ * expose their aggregated `subscriptions` directly.
+ *
+ * @param composition - The Block Composition whose child graph is tested.
+ * @param localSubscriptions - Optional Subscriptions declared by that Block.
+ * Duplicate registration keys are rejected rather than overwritten.
+ */
+export function subscriptions<const CompositionValue extends AnyComposition>(
+  composition: CompositionValue,
+): ChildSubscriptions<CompositionValue>
+export function subscriptions<
+  const CompositionValue extends AnyComposition,
+  const LocalSubscriptions extends RegisteredSubscriptions<
+    ModelSchemaOf<NoInfer<CompositionValue>>['Type'],
+    MessageSchemaOf<NoInfer<CompositionValue>>['Type']
+  >,
+>(
+  composition: CompositionValue,
+  localSubscriptions: LocalSubscriptions,
+): RuntimeRegistryEntries<LocalSubscriptions> &
+  ChildSubscriptions<CompositionValue>
+export function subscriptions(
+  composition: AnyComposition,
+  localSubscriptions: AnySubscriptions = {},
+): AnySubscriptions {
+  if (!isComposition(composition)) {
+    throw new Error(
+      '[foldkit] Scene.subscriptions Composition must come from Block.makeDefinition(...).makeComposition(...).',
+    )
+  }
+
+  const children = aggregateChildren(composition.bindings)
+  return aggregateSubscriptions(localSubscriptions, children.subscriptions)
+}
+
+type TestBindingDefinition = Readonly<{
+  mounts: ReadonlyArray<LayeredMountDefinition>
+}>
+
+type TestMountRequirements =
+  | AnyMountHandler
+  | BindingRequirement<string, TestBindingDefinition, Schema.Top>
+
+type TestHtmlBuilder<Message> = HtmlBuilder<Message, TestMountRequirements>
+
 /** A single step in a scene: a `given` step, typed Message or OutMessage step,
  *  or scene simulation transform. */
-export type SceneStep<Model, Message, OutMessage> =
+export type SceneStep<
+  Model,
+  Message,
+  OutMessage,
+  Subscriptions = undefined,
+  Routing = undefined,
+> =
   | GivenStep<NoInfer<Model>>
-  | Readonly<{
-      _tag: 'SubscriptionMessageStep'
-      message: NoInfer<Message>
-    }>
+  | ([Routing] extends [SceneRouting<NoInfer<Message>>]
+      ? ChangedUrlStep
+      : never)
+  | (RuntimeRegistryEntries<NoInfer<Subscriptions>> extends Readonly<
+      Record<string, RuntimeSubscription<any, any, any, any>>
+    >
+      ? {
+          readonly [
+            Key in keyof RuntimeRegistryEntries<NoInfer<Subscriptions>>
+          ]: RuntimeRegistryEntries<
+            NoInfer<Subscriptions>
+          >[Key] extends Readonly<{
+            messages: infer Messages extends ReadonlyArray<Schema.Top>
+          }>
+            ? SubscriptionMessageStep<
+                Schema.Schema.Type<Messages[number]>,
+                SubscriptionEmissionSource<
+                  RuntimeRegistryEntries<NoInfer<Subscriptions>>[Key]
+                >
+              >
+            : never
+        }[keyof RuntimeRegistryEntries<NoInfer<Subscriptions>>]
+      : never)
+  | (RuntimeRegistryEntries<NoInfer<Subscriptions>> extends Readonly<
+      Record<string, RuntimeSubscription<any, any, any, any>>
+    >
+      ? {
+          readonly [
+            Key in keyof RuntimeRegistryEntries<NoInfer<Subscriptions>>
+          ]: SubscriptionActivityStep<
+            SubscriptionEmissionSource<
+              RuntimeRegistryEntries<NoInfer<Subscriptions>>[Key]
+            >
+          >
+        }[keyof RuntimeRegistryEntries<NoInfer<Subscriptions>>]
+      : never)
+  | InsideStep<
+      ReadonlyArray<
+        SceneStep<
+          NoInfer<Model>,
+          NoInfer<Message>,
+          NoInfer<OutMessage>,
+          NoInfer<Subscriptions>,
+          NoInfer<Routing>
+        >
+      >
+    >
   | Readonly<{
       _tag: 'OutMessageStep'
       expected: NoInfer<OutMessage>
@@ -265,6 +479,7 @@ type MountStatus =
 type MountSlotState = Readonly<{
   slot: PendingMount
   status: MountStatus
+  vnode: VNode
 }>
 
 const PENDING: MountStatus = { _tag: 'Pending' }
@@ -285,7 +500,7 @@ type InternalSceneSimulation<
       message: Message,
     ) => SimulationUpdateReturn<Model, OutMessage>
     resolvers: ReadonlyArray<ResolverEntry>
-    viewFn: (model: Model, h: HtmlBuilder<Message>) => Html | Document
+    viewFn: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
     capturingDispatch: CapturingDispatch
     scope: Option.Option<Locator>
     mountSlots: ReadonlyArray<MountSlotState>
@@ -293,83 +508,148 @@ type InternalSceneSimulation<
     outMessageRevision: number
     lastInteractionOutcome: InteractionOutcome
     maybeUnacknowledgedIgnored: Option.Option<IgnoredInteraction>
+    subscriptionDeclarations: ReadonlyArray<SubscriptionMessageDeclaration>
+    keptPendingCommands: ReadonlyArray<AnyCommand>
+    routing:
+      | Readonly<{
+          onUrlChange: (url: Url) => Message
+          origin: string
+        }>
+      | undefined
   }>
 
-const slotKey = ({ name, occurrence }: PendingMount): string =>
-  `${name}#${occurrence}`
+const mountMarkerOf = (node: VNode): FoldkitMountMarker | undefined =>
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  node.data?.[FOLDKIT_MOUNT_KEY] as FoldkitMountMarker | undefined
 
-const collectRenderedSlots = (vnode: VNode): ReadonlyArray<PendingMount> => {
-  const counts = new Map<string, number>()
-  const slots: Array<PendingMount> = []
-  const walk = (node: VNode): void => {
-    /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-    const marker = node.data?.[FOLDKIT_MOUNT_KEY] as
-      | FoldkitMountMarker
-      | undefined
-    if (marker !== undefined) {
-      const occurrence = counts.get(marker.name) ?? 0
-      counts.set(marker.name, occurrence + 1)
-      const slotWithArgs: PendingMount =
-        marker.args === undefined
-          ? { name: marker.name, occurrence }
-          : { name: marker.name, args: marker.args, occurrence }
-      slots.push(
-        marker.messageMappers === undefined
-          ? slotWithArgs
-          : { ...slotWithArgs, messageMappers: marker.messageMappers },
-      )
-    }
-    for (const child of node.children ?? []) {
-      if (typeof child !== 'string') {
-        walk(child)
-      }
-    }
-  }
-  walk(vnode)
-  return slots
+const slotOfMarker = (
+  marker: FoldkitMountMarker,
+  occurrence: number,
+): PendingMount => {
+  return { ...marker, occurrence }
+}
+
+const toPatchedChild = (child: VNode | string): VNode =>
+  Predicate.isString(child)
+    ? makeVNode(undefined, undefined, undefined, child, undefined)
+    : child
+
+const patchedChildrenOf = (node: VNode): Array<VNode> =>
+  node.text === undefined ? Array.map(node.children ?? [], toPatchedChild) : []
+
+const recordPatchedChildren: ChildPairingSteps<Map<VNode, VNode>> = {
+  patch: (previousByChild, previousChild, child) => {
+    previousByChild.set(child, previousChild)
+  },
+  moveAfter: Function.constVoid,
+  moveBefore: Function.constVoid,
+  createBefore: Function.constVoid,
+  createAfter: Function.constVoid,
+  indexPreviousKeys: Function.constVoid,
+  addRest: Function.constVoid,
+  removeRest: Function.constVoid,
 }
 
 const reconcileMountSlots = (
   previous: ReadonlyArray<MountSlotState>,
+  previousTree: VNode | undefined,
   rendered: VNode,
 ): ReadonlyArray<MountSlotState> => {
-  const previousByKey = new Map(
-    Array.map(previous, state => [slotKey(state.slot), state] as const),
-  )
-  const renderedSlots = collectRenderedSlots(rendered)
-  const renderedKeys = new Set(Array.map(renderedSlots, slotKey))
-  const fromRendered = Array.map(renderedSlots, slot => {
-    const existing = previousByKey.get(slotKey(slot))
-    if (existing !== undefined && existing.status._tag !== 'Ended') {
-      return existing
+  const liveByVNode = new Map<VNode, MountSlotState>()
+
+  for (const state of previous) {
+    if (state.status._tag !== 'Ended') {
+      liveByVNode.set(state.vnode, state)
     }
-    return { slot, status: PENDING }
-  })
-  const fromVanished = pipe(
-    previous,
-    Array.filter(state => !renderedKeys.has(slotKey(state.slot))),
-    Array.map(state => endStatus(state)),
-  )
-  const unacknowledgedRevived = pipe(
+  }
+
+  const occurrenceCounts = new Map<string, number>()
+  const carried = new Set<MountSlotState>()
+  const renderedSlots: Array<MountSlotState> = []
+
+  const nextOccurrence = (name: string): number => {
+    const occurrence = occurrenceCounts.get(name) ?? 0
+    occurrenceCounts.set(name, occurrence + 1)
+
+    return occurrence
+  }
+
+  const visitCreated = (node: VNode): void => {
+    const marker = mountMarkerOf(node)
+
+    if (marker !== undefined) {
+      renderedSlots.push({
+        slot: slotOfMarker(marker, nextOccurrence(marker.name)),
+        status: PENDING,
+        vnode: node,
+      })
+    }
+
+    for (const child of patchedChildrenOf(node)) {
+      visitCreated(child)
+    }
+  }
+
+  const visitPatched = (previousNode: VNode, node: VNode): void => {
+    const liveState = liveByVNode.get(previousNode)
+
+    if (liveState !== undefined) {
+      carried.add(liveState)
+      renderedSlots.push({
+        slot: {
+          ...liveState.slot,
+          occurrence: nextOccurrence(liveState.slot.name),
+        },
+        status: liveState.status,
+        vnode: node,
+      })
+    }
+
+    const previousByChild = new Map<VNode, VNode>()
+    const children = patchedChildrenOf(node)
+
+    pairChildren(
+      patchedChildrenOf(previousNode),
+      children,
+      recordPatchedChildren,
+      previousByChild,
+    )
+
+    for (const child of children) {
+      const previousChild = previousByChild.get(child)
+
+      if (previousChild === undefined) {
+        visitCreated(child)
+      } else {
+        visitPatched(previousChild, child)
+      }
+    }
+  }
+
+  if (previousTree !== undefined && sameVnode(previousTree, rendered)) {
+    visitPatched(previousTree, rendered)
+  } else {
+    visitCreated(rendered)
+  }
+
+  const ended = pipe(
     previous,
     Array.filter(
       state =>
-        renderedKeys.has(slotKey(state.slot)) &&
-        state.status._tag === 'Ended' &&
-        !state.status.acknowledged,
+        (state.status._tag !== 'Ended' && !carried.has(state)) ||
+        (state.status._tag === 'Ended' && !state.status.acknowledged),
     ),
+    Array.map(endStatus),
   )
-  return Array.appendAll(
-    fromRendered,
-    Array.appendAll(fromVanished, unacknowledgedRevived),
-  )
+
+  return Array.appendAll(renderedSlots, ended)
 }
 
 const endStatus = (state: MountSlotState): MountSlotState => {
   if (state.status._tag === 'Ended') {
     return state
   }
-  return { slot: state.slot, status: ENDED_UNACKNOWLEDGED }
+  return { ...state, status: ENDED_UNACKNOWLEDGED }
 }
 
 const pendingMountsOf = (
@@ -515,9 +795,10 @@ const createCapturingDispatch = (): CapturingDispatch => {
 // RENDERING
 
 const renderView = <Model, Message>(
-  viewFn: (model: Model, h: HtmlBuilder<Message>) => Html | Document,
+  viewFn: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document,
   model: Model,
   dispatch: DispatchService,
+  previousTree: VNode | undefined,
 ): VNode => {
   const sceneContext = Context.make(Dispatch, dispatch).pipe(
     Context.add(MountTracker, {
@@ -526,10 +807,21 @@ const renderView = <Model, Message>(
     }),
   )
 
-  setHtmlRuntime(dispatch.dispatchSync, sceneContext)
+  const boundaryRegistry = createHtmlBoundaryRegistry()
+
+  if (previousTree !== undefined) {
+    markPreviousRenderVNodes(previousTree, boundaryRegistry.dedupeSeen)
+  }
+
+  setHtmlRuntime(
+    dispatch.dispatchSync,
+    sceneContext,
+    boundaryRegistry,
+    'Replay',
+  )
   let result: Html | Document
   try {
-    result = viewFn(model, htmlBuilderFor<Message>())
+    result = viewFn(model, htmlBuilderFor<Message, TestMountRequirements>())
   } finally {
     clearHtmlRuntime()
   }
@@ -544,7 +836,19 @@ const renderView = <Model, Message>(
     )
   }
 
-  return vnode
+  return dedupeSharedVNodes(vnode, boundaryRegistry.dedupeSeen)
+}
+
+const markPreviousRenderVNodes = (node: VNode, seen: Set<object>): void => {
+  if (!memoizedVNodes.has(node)) {
+    seen.add(node)
+  }
+
+  for (const child of node.children ?? []) {
+    if (!Predicate.isString(child)) {
+      markPreviousRenderVNodes(child, seen)
+    }
+  }
 }
 
 const isDocument = (value: Html | Document): value is Document =>
@@ -566,6 +870,8 @@ const EVENT_NAMES: Record<string, string> = {
   focusout: 'OnFocusLeave',
   mouseenter: 'OnMouseEnter',
   mouseover: 'OnMouseOver',
+  mouseleave: 'OnMouseLeave',
+  mouseout: 'OnMouseOut',
   keydown:
     'OnKeyDown, OnKeyDownPreventDefault, OnKeyDownSelf, or OnKeyDownSelfPreventDefault',
   pointerdown: 'OnPointerDown',
@@ -660,8 +966,16 @@ const assertExternalMessageBoundary = <Model, Message, OutMessage>(
   context: string,
 ): void => {
   const internal = toInternal(simulation)
+  const commandsAtBoundary = Array.filter(
+    internal.commands,
+    command =>
+      !Array.some(
+        internal.keptPendingCommands,
+        keptCommand => keptCommand === command,
+      ),
+  )
 
-  assertNoUnresolvedCommands(internal.commands, context)
+  assertNoUnresolvedCommands(commandsAtBoundary, context)
   assertNoUnresolvedMounts(internal.mounts, context)
   assertNoUnacknowledgedUnmounts(
     unacknowledgedEndedMountsOf(internal.mountSlots),
@@ -681,13 +995,20 @@ const applyExternalMessages = <Model, Message, OutMessage>(
 
 const applySubscriptionMessage = <Model, Message, OutMessage>(
   simulation: SceneSimulation<Model, Message, OutMessage>,
-  message: Message,
+  step: SubscriptionMessageStep<unknown, unknown>,
 ): SceneSimulation<Model, Message, OutMessage> => {
   const internal = toInternal(simulation)
   const context = 'when a Subscription emitted a new Message'
 
   assertExternalMessageBoundary(simulation, context)
 
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  const message = resolveSubscriptionMessage(
+    'Scene.Subscription.emit',
+    internal.subscriptionDeclarations,
+    step.entry,
+    step.message,
+  ) as Message
   const messageUpdate = internal.updateFn(internal.model, message)
 
   /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
@@ -698,6 +1019,115 @@ const applySubscriptionMessage = <Model, Message, OutMessage>(
     commands: Array.appendAll(internal.commands, messageUpdate.commands ?? []),
     outMessage: messageUpdate.outMessage,
   } as SceneSimulation<Model, Message, OutMessage>
+}
+
+const applySubscriptionActivity = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  step: SubscriptionActivityStep<unknown>,
+): SceneSimulation<Model, Message, OutMessage> => {
+  const internal = toInternal(simulation)
+  const declaration = resolveSubscriptionDeclaration(
+    `Scene.Subscription.expect${step.expected}`,
+    internal.subscriptionDeclarations,
+    step.entry,
+  )
+  const isActive = Option.isSome(
+    maybeActiveDependencies(declaration.entry, internal.model),
+  )
+
+  if (isActive !== (step.expected === 'Active')) {
+    throw new Error(
+      `Scene.Subscription.expect${step.expected} expected the selected Subscription to be ${step.expected.toLowerCase()}.`,
+    )
+  }
+
+  return simulation
+}
+
+const DEFAULT_SCENE_ORIGIN = 'http://localhost'
+
+const sceneOrigin = (origin: string): string => {
+  if (Predicate.isString(origin)) {
+    try {
+      const url = new URL(origin)
+
+      if (
+        url.origin !== 'null' &&
+        url.pathname === '/' &&
+        url.search === '' &&
+        url.hash === '' &&
+        url.username === '' &&
+        url.password === ''
+      ) {
+        return url.origin
+      }
+    } catch {}
+  }
+
+  throw new Error(
+    `Scene routing.origin must be an absolute origin without a path, query, fragment, or credentials. Received: ${globalThis.String(origin)}`,
+  )
+}
+
+const normalizeSceneRouting = <Message>(
+  routing: SceneRouting<Message> | undefined,
+): InternalSceneSimulation<unknown, Message>['routing'] => {
+  if (routing === undefined) {
+    return undefined
+  }
+
+  if (
+    !Predicate.isObject(routing) ||
+    !Predicate.isFunction(routing.onUrlChange)
+  ) {
+    throw new Error(
+      'Scene routing.onUrlChange must be a callback or canonical Message constructor.',
+    )
+  }
+
+  return {
+    onUrlChange: normalizeRoutingHandler('url', routing.onUrlChange),
+    origin: sceneOrigin(
+      routing.origin === undefined ? DEFAULT_SCENE_ORIGIN : routing.origin,
+    ),
+  }
+}
+
+const resolveSceneUrl = (url: string, origin: string): Url => {
+  if (Predicate.isString(url)) {
+    try {
+      const resolved = urlFromString(new URL(url, `${origin}/`).href)
+
+      if (Option.isSome(resolved)) {
+        return resolved.value
+      }
+    } catch {}
+  }
+
+  throw new Error(
+    `Scene.Navigation.changedUrl received an invalid URL: ${globalThis.String(url)}`,
+  )
+}
+
+const applyChangedUrl = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  step: ChangedUrlStep,
+): SceneSimulation<Model, Message, OutMessage> => {
+  const { routing } = toInternal(simulation)
+
+  if (routing === undefined) {
+    throw new Error(
+      'Scene.Navigation.changedUrl requires routing.onUrlChange in the scene configuration.',
+    )
+  }
+
+  const url = resolveSceneUrl(step.url, routing.origin)
+  assertExternalMessageBoundary(
+    simulation,
+    'when Navigation.changedUrl delivered a new URL',
+  )
+
+  return applyMessageWithoutBoundaryChecks(simulation, routing.onUrlChange(url))
 }
 
 /** Clears the pending fall-through, marking it acknowledged. Paired with
@@ -961,9 +1391,9 @@ export const given = <Model>(model: Model): GivenStep<Model> => {
   /* eslint-enable @typescript-eslint/consistent-type-assertions */
 }
 
-/** Resolves a pending Command with the given result Message. Accepts either
- *  a Command Definition (matches by name; any pending Command of that name)
- *  or a Command instance (matches by name AND args; strict). */
+/** Resolves a pending Command with its raw result Message. A Definition matches
+ *  its originating identity; an instance also matches its complete args.
+ *  A scoped instance selects its composition occurrence. */
 const resolveCommand: {
   <Name extends string, ResultMessage>(
     definition: ResolvableCommandDefinition<Name, ResultMessage>,
@@ -1044,8 +1474,9 @@ const resolveAllExactCommands =
     return { ...internal, ...next }
   }
 
-/** Asserts that every given matcher matches a pending Command. Definition
- *  matchers match by name only; Instance matchers match by name + args. */
+/** Asserts that every matcher selects a pending Command. Definitions select
+ *  their originating identity; instances also compare complete args and any
+ *  explicitly scoped composition occurrence. */
 const expectHasCommandsStep =
   (...matchers: ReadonlyArray<CommandMatcher>) =>
   <Model, Message, OutMessage = undefined>(
@@ -1056,8 +1487,8 @@ const expectHasCommandsStep =
   }
 
 /** Asserts that the pending Commands match the given matchers exactly
- *  (order-independent). Definition matchers compare by name; Instance
- *  matchers compare by name + args. */
+ *  (order-independent). Definitions select their originating identity;
+ *  instances also compare complete args and any scoped occurrence. */
 const expectExactCommandsStep =
   (...matchers: ReadonlyArray<CommandMatcher>) =>
   <Model, Message, OutMessage = undefined>(
@@ -1077,11 +1508,11 @@ const expectNoCommandsStep =
     return simulation
   }
 
-/** Resolves a specific pending Mount with the given result Message. Accepts
- *  either a Mount Definition (matches by name) or a Mount instance produced
- *  by calling a Definition (matches by name + structural-equal args). The
+/** Resolves a specific pending Mount with the given result Message. A
+ *  Definition selects its originating identity; an instance also compares
+ *  complete args and any explicitly scoped composition occurrence. The
  *  first pending mount that matches is resolved. Mirrors `resolve` for
- *  Commands: when the mount lives inside a Submodel, the boundary's own
+ *  Commands: when the mount lives inside a Block, the boundary's own
  *  `toParentMessage` lift (snapshotted at render time) is applied to
  *  `resultMessage`, so pass the child's raw lifecycle result Message. */
 const resolveMount: {
@@ -1116,22 +1547,13 @@ const resolveMount: {
       )
     }
 
-    const resolvedKeys = new Set(
-      Array.map(next.pendingMounts, slot => slotKey(slot)),
-    )
+    const stillPending = new Set(next.pendingMounts)
     const updatedSlots = Array.map(
       internal.mountSlots,
-      (state): MountSlotState => {
-        if (state.status._tag !== 'Pending') {
-          return state
-        }
-        const key = slotKey(state.slot)
-        return resolvedKeys.has(key)
-          ? state
-          : state.slot.name === matcher.name
-            ? { slot: state.slot, status: RESOLVED }
-            : state
-      },
+      (state): MountSlotState =>
+        state.status._tag === 'Pending' && !stillPending.has(state.slot)
+          ? { ...state, status: RESOLVED }
+          : state,
     )
 
     return {
@@ -1156,8 +1578,9 @@ const resolveAllMounts =
       resolveMount(matcher, resultMessage)(current),
     )
 
-/** Asserts that every given Mount is among the pending Mounts. Accepts Mount
- *  Definitions (match by name) and Mount instances (match by name + args). */
+/** Asserts that every matcher selects a pending Mount. Definitions select
+ *  their originating identity; instances also compare complete args and any
+ *  explicitly scoped composition occurrence. */
 const expectHasMountsStep =
   (...matchers: ReadonlyArray<MountMatcher>) =>
   <Model, Message, OutMessage = undefined>(
@@ -1168,8 +1591,8 @@ const expectHasMountsStep =
   }
 
 /** Asserts that the pending Mounts match the given matchers exactly
- *  (order-independent). Accepts Mount Definitions (match by name) and Mount
- *  instances (match by name + args). */
+ *  (order-independent). Definitions select their originating identity;
+ *  instances also compare complete args and any scoped occurrence. */
 const expectExactMountsStep =
   (...matchers: ReadonlyArray<MountMatcher>) =>
   <Model, Message, OutMessage = undefined>(
@@ -1189,11 +1612,12 @@ const expectNoMountsStep =
     return simulation
   }
 
-/** Acknowledges that the given Mounts disappeared from the rendered tree.
- *  Required for every Mount that fires and then unmounts during a scene,
- *  whether or not it was resolved first. Without this, the scene throws at
- *  the end of the test for any unacknowledged unmount. Mount matchers may
- *  be Definitions or instances; instances acknowledge a specific args shape. */
+/** Acknowledges that the given Mounts ended because their elements were
+ *  removed or replaced. Required for every Mount that fires and then unmounts
+ *  during a scene, whether or not it was resolved first. Without this, the
+ *  scene throws at the end of the test for any unacknowledged unmount. Mount
+ *  matchers may be Definitions or instances; instances acknowledge a specific
+ *  args shape. */
 const expectEndedMountsStep =
   (...matchers: ReadonlyArray<MountMatcher>) =>
   <Model, Message, OutMessage = undefined>(
@@ -1215,7 +1639,7 @@ const expectEndedMountsStep =
         onNone: () => updatedSlots.push(state),
         onSome: matchIndex => {
           remaining.splice(matchIndex, 1)
-          updatedSlots.push({ slot: state.slot, status: ENDED_ACKNOWLEDGED })
+          updatedSlots.push({ ...state, status: ENDED_ACKNOWLEDGED })
         },
       })
     }
@@ -1227,7 +1651,7 @@ const expectEndedMountsStep =
             Array.map(matcher => `    ${formatMountMatcher(matcher)}`),
             Array.join('\n'),
           ) +
-          '\n\nUse Scene.Mount.expectEnded only after the Mount has disappeared from the rendered tree.',
+          "\n\nUse Scene.Mount.expectEnded only after the Mount's element has been removed or replaced.",
       )
     }
     return {
@@ -1245,20 +1669,34 @@ const applyExternalMessage = <Model, Message, OutMessage>(
   return applyExternalMessages(simulation, [message], context)
 }
 
-/** Feeds a Message through update as if a Subscription had emitted it,
- *  then re-renders. Use it for Messages whose real cause is a Subscription
- *  (a timer tick, a WebSocket frame, a global listener), which have no
- *  element in the rendered tree to interact with. Do NOT reach for it when
- *  the Message has a DOM affordance: click the actual button instead, so
- *  the test exercises the handler wiring this step skips. Like an
- *  interaction, it throws if unresolved Commands, unresolved Mounts, or
- *  unacknowledged unmounts are pending. */
-const emitSubscriptionMessage = <Message>(
-  message: Message,
-): SubscriptionMessageStep<Message> => ({
+/**
+ * Feeds a declared Message through update as if a registered Subscription
+ *  emitted it, then re-renders. A lifted Subscription accepts its raw child
+ *  Message and applies the same `toParentMessage` chain as production.
+ */
+const emitSubscriptionMessage = <
+  Entry extends Readonly<{
+    messages: ReadonlyArray<Schema.Top>
+  }>,
+>(
+  entry: Entry,
+  message: NoInfer<Schema.Schema.Type<Entry['messages'][number]>>,
+): SubscriptionMessageStep<
+  Schema.Schema.Type<Entry['messages'][number]>,
+  Entry
+> => ({
   _tag: 'SubscriptionMessageStep',
+  entry,
   message,
 })
+
+const expectSubscriptionActivity =
+  (expected: SubscriptionActivityStep<unknown>['expected']) =>
+  <Entry>(entry: Entry): SubscriptionActivityStep<Entry> => ({
+    _tag: 'SubscriptionActivityStep',
+    entry,
+    expected,
+  })
 
 const MANAGED_RESOURCE_CONTEXT =
   'when a ManagedResource dispatched a new Message'
@@ -1279,7 +1717,8 @@ type SceneManagedResourceEntry<
   Option.Option<any>,
   Value,
   any,
-  OnAcquired
+  OnAcquired,
+  any
 >
 
 /** Declares that a ManagedResource's acquire succeeded, feeding the entry's
@@ -1459,9 +1898,72 @@ const emitCustomElementEvent =
     )
   }
 
-/** Steps that operate on the pending Commands of a scene simulation.
+const formatCommands = (commands: ReadonlyArray<AnyCommand>): string =>
+  Array.match(commands, {
+    onEmpty: () => '    (none)',
+    onNonEmpty: nonEmpty =>
+      pipe(
+        nonEmpty,
+        Array.map(command => `    ${formatCommand(command)}`),
+        Array.join('\n'),
+      ),
+  })
+
+/** Keeps one exact pending Command invocation active across later Scene
+ *  interactions and Subscription deliveries. The Command remains visible to
+ *  assertions and every resolver, and must be resolved before the Scene ends. */
+const keepPendingCommandStep =
+  (matcher: CommandMatcher) =>
+  <Model, Message, OutMessage = undefined>(
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ): SceneSimulation<Model, Message, OutMessage> => {
+    const internal = toInternal(simulation)
+    const candidates = Array.filter(
+      internal.commands,
+      command =>
+        !Array.some(
+          internal.keptPendingCommands,
+          keptCommand => keptCommand === command,
+        ) && commandMatches(matcher, command),
+    )
+
+    if (Array.isReadonlyArrayEmpty(candidates)) {
+      throw new Error(
+        `I tried to keep "${formatMatcher(matcher)}" pending but no matching unkept Command was found.\n\n` +
+          `Pending Commands:\n${formatCommands(internal.commands)}`,
+      )
+    }
+
+    if (candidates.length > 1) {
+      throw new Error(
+        `I tried to keep "${formatMatcher(matcher)}" pending but multiple pending Commands match.\n\n` +
+          `Matches:\n${formatCommands(candidates)}\n\n` +
+          'Pass a bound Command instance with the intended occurrence and args.',
+      )
+    }
+
+    /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+    return {
+      ...internal,
+      keptPendingCommands: Array.append(
+        internal.keptPendingCommands,
+        Option.getOrThrow(Array.head(candidates)),
+      ),
+    } as unknown as SceneSimulation<Model, Message, OutMessage>
+  }
+
+/** Utilities for inspecting and resolving pending Commands of a scene simulation.
  *  Destructure as `const { Command } = Scene` for concise call sites. */
 export const Command = {
+  /** Projects captured args by reference when the pending Command has this
+   * Definition's source identity, across all Binding and keyed occurrences.
+   * An argless match returns `Some(undefined)`; other sources and name-only
+   * metadata return `None`. This does not decode args, narrow the pending value,
+   * run Effects, or choose among matching occurrences. */
+  argsOf: <Definition extends ResolvableCommandDefinition<string, unknown>>(
+    definition: Definition,
+  ): ((pending: AnyCommand) => Option.Option<CommandArgs<Definition>>) =>
+    commandArgs(definition),
   /** Resolves a specific pending Command with the given result Message. */
   resolve: resolveCommand,
   /** Resolves listed Commands with their result Messages, cascading through any
@@ -1480,6 +1982,10 @@ export const Command = {
   expectExact: expectExactCommandsStep,
   /** Asserts that there are no pending Commands. */
   expectNone: expectNoCommandsStep,
+  /** Keeps one exact pending invocation active across later interactions and
+   *  Subscription or Navigation deliveries. It remains pending for assertions and
+   *  resolution, and must be resolved before the Scene ends. */
+  keepPending: keepPendingCommandStep,
 } as const
 
 /** Steps that operate on the pending Mounts of a scene simulation.
@@ -1491,11 +1997,11 @@ export const Mount = {
   resolveAll: resolveAllMounts,
   /** Asserts that every given Mount is among the pending Mounts. */
   expectHas: expectHasMountsStep,
-  /** Asserts that the pending Mounts match the given definitions exactly (order-independent, by name). */
+  /** Asserts that the pending Mounts match the given source and instance matchers exactly, regardless of order. */
   expectExact: expectExactMountsStep,
   /** Asserts that there are no pending Mounts. */
   expectNone: expectNoMountsStep,
-  /** Acknowledges Mounts that disappeared from the rendered tree. Required for
+  /** Acknowledges Mounts whose element was removed or replaced. Required for
    *  every Mount that fires and then unmounts during a scene. */
   expectEnded: expectEndedMountsStep,
 } as const
@@ -1503,11 +2009,39 @@ export const Mount = {
 /** Steps that model Messages arriving from a Subscription.
  *  Destructure as `const { Subscription } = Scene` for concise call sites. */
 export const Subscription = {
-  /** Feeds a Message through update as if a Subscription had emitted it,
-   *  then re-renders. Only for Messages whose real cause is a Subscription;
-   *  if the Message has a DOM affordance, click it instead. */
+  /**
+   * Feeds a Message declared by the Scene's registered Subscriptions through
+   *  update, then re-renders. Pass the raw child Message for a lifted
+   *  Subscription; Scene applies its `toParentMessage` chain. The originating
+   *  definition must have one matching registration in the Scene config and
+   *  declare the Message. When reused across placements, select its bound entry.
+   *  Silent Subscriptions accept no Messages. Use this only for Messages whose
+   *  real cause is a Subscription;
+   *  interact with the rendered DOM for DOM Messages.
+   */
   emit: emitSubscriptionMessage,
+  /** Asserts that the registered Subscription's current Model dependencies are active. */
+  expectActive: expectSubscriptionActivity('Active'),
+  /** Asserts that the registered Subscription is inactive for the current Model. */
+  expectInactive: expectSubscriptionActivity('Inactive'),
 } as const
+
+/** Explicit Program routing events. No navigation Effect or browser history
+ * is executed. Resolving a navigation Command does not deliver this event. */
+export const Navigation = {
+  /** Delivers a URL through configured routing.onUrlChange, then runs update
+   * and re-renders. Relative references use routing.origin, defaulting to
+   * http://localhost. Each step uses that fixed origin root, not the previous
+   * URL. Absolute URLs retain their own origin.
+   *
+   * Requires routing configuration and the ordinary external-Message boundary:
+   * resolve pending work first, or use Command.keepPending for an exact Command
+   * whose completion should arrive later. Pending work is never resolved here. */
+  changedUrl: (url: string): ChangedUrlStep => ({
+    _tag: 'ChangedUrlStep',
+    url,
+  }),
+}
 
 /** Steps that model the lifecycle Messages of a ManagedResource. The test
  *  declares the lifecycle outcome the way `Scene.Command.resolve` declares a
@@ -1720,12 +2254,24 @@ export const tap =
     return simulation
   }
 
-const applySceneStep = <Model, Message, OutMessage>(
+const applySceneStep = <Model, Message, OutMessage, Subscriptions, Routing>(
   simulation: SceneSimulation<Model, Message, OutMessage>,
-  step: SceneStep<Model, Message, OutMessage>,
+  step: SceneStep<Model, Message, OutMessage, Subscriptions, Routing>,
 ): SceneSimulation<Model, Message, OutMessage> => {
+  if (Predicate.isTagged(step, 'InsideStep')) {
+    return applyInsideStep(simulation, step)
+  }
+
+  if (Predicate.isTagged(step, 'ChangedUrlStep')) {
+    return applyChangedUrl(simulation, step)
+  }
+
   if (Predicate.isTagged(step, 'SubscriptionMessageStep')) {
-    return applySubscriptionMessage(simulation, step.message)
+    return applySubscriptionMessage(simulation, step)
+  }
+
+  if (Predicate.isTagged(step, 'SubscriptionActivityStep')) {
+    return applySubscriptionActivity(simulation, step)
   }
 
   if (Predicate.isTagged(step, 'OutMessageStep')) {
@@ -1745,9 +2291,11 @@ const applySceneStep = <Model, Message, OutMessage>(
   return simulation
 }
 
-const runSteps = <Model, Message, OutMessage>(
+const runSteps = <Model, Message, OutMessage, Subscriptions, Routing>(
   seed: SceneSimulation<Model, Message, OutMessage>,
-  steps: ReadonlyArray<SceneStep<Model, Message, OutMessage>>,
+  steps: ReadonlyArray<
+    SceneStep<Model, Message, OutMessage, Subscriptions, Routing>
+  >,
 ): SceneSimulation<Model, Message, OutMessage> =>
   /* eslint-disable @typescript-eslint/consistent-type-assertions */
   Array.reduce(steps, seed, (current, step) => {
@@ -1780,8 +2328,13 @@ const runSteps = <Model, Message, OutMessage>(
         internal.viewFn,
         internal.model,
         internal.capturingDispatch.dispatch,
+        internal.html,
       )
-      const mountSlots = reconcileMountSlots(internal.mountSlots, html)
+      const mountSlots = reconcileMountSlots(
+        internal.mountSlots,
+        internal.html,
+        html,
+      )
       const mounts = pendingMountsOf(mountSlots)
       return { ...internal, html, mountSlots, mounts } as SceneSimulation<
         Model,
@@ -1794,38 +2347,53 @@ const runSteps = <Model, Message, OutMessage>(
   })
 /* eslint-enable @typescript-eslint/consistent-type-assertions */
 
+const applyInsideStep = <Model, Message, OutMessage, Subscriptions, Routing>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  step: InsideStep<
+    ReadonlyArray<SceneStep<Model, Message, OutMessage, Subscriptions, Routing>>
+  >,
+): SceneSimulation<Model, Message, OutMessage> => {
+  const internal = toInternal(simulation)
+  const priorScope = internal.scope
+  const nextScope = Option.match(priorScope, {
+    onNone: () => step.parent,
+    onSome: within(step.parent),
+  })
+  /* eslint-disable @typescript-eslint/consistent-type-assertions */
+  const scopedEntry = {
+    ...internal,
+    scope: Option.some(nextScope),
+  } as unknown as SceneSimulation<Model, Message, OutMessage>
+  const afterSteps = runSteps<
+    Model,
+    Message,
+    OutMessage,
+    Subscriptions,
+    Routing
+  >(scopedEntry, step.steps)
+  const afterInternal = toInternal(afterSteps)
+  return {
+    ...afterInternal,
+    scope: priorScope,
+  } as unknown as SceneSimulation<Model, Message, OutMessage>
+  /* eslint-enable @typescript-eslint/consistent-type-assertions */
+}
+
 /** Scopes a sequence of steps to a parent element. Every Locator referenced by
  *  child steps (assertions, interactions) resolves within the parent's subtree.
  *  Use this when several steps share the same scope. For a single scoped query,
  *  prefer `within(parent, child)` directly. Nested `inside` calls compose scopes
  *  via `within(outer, inner)`. */
-export const inside =
-  <Model, Message, OutMessage = undefined>(
-    parent: Locator,
-    ...steps: ReadonlyArray<NoInfer<SceneStep<Model, Message, OutMessage>>>
-  ) =>
-  (
-    simulation: SceneSimulation<Model, Message, OutMessage>,
-  ): SceneSimulation<Model, Message, OutMessage> => {
-    const internal = toInternal(simulation)
-    const priorScope = internal.scope
-    const nextScope = Option.match(priorScope, {
-      onNone: () => parent,
-      onSome: within(parent),
-    })
-    /* eslint-disable @typescript-eslint/consistent-type-assertions */
-    const scopedEntry = {
-      ...internal,
-      scope: Option.some(nextScope),
-    } as unknown as SceneSimulation<Model, Message, OutMessage>
-    const afterSteps = runSteps(scopedEntry, steps)
-    const afterInternal = toInternal(afterSteps)
-    return {
-      ...afterInternal,
-      scope: priorScope,
-    } as unknown as SceneSimulation<Model, Message, OutMessage>
-    /* eslint-enable @typescript-eslint/consistent-type-assertions */
-  }
+export const inside = <
+  const Steps extends ReadonlyArray<SceneStep<any, any, any, any, any>>,
+>(
+  parent: Locator,
+  ...steps: Steps
+): InsideStep<Steps> => ({
+  _tag: 'InsideStep',
+  parent,
+  steps,
+})
 
 const findAncestorWithHandler = (
   root: VNode,
@@ -2312,6 +2880,28 @@ export const hover =
       onNone: () => 'mouseenter',
       onSome: element =>
         element.data?.on?.['mouseenter'] ? 'mouseenter' : 'mouseover',
+    })
+    return invokeAndCapture(simulation, target, eventName, handler => {
+      handler()
+    })
+  }
+
+/** Simulates the pointer leaving the element matching the target.
+ *  Dispatches the `mouseleave` handler, falling back to `mouseout`. */
+export const unhover =
+  (target: string | Locator) =>
+  <Model, Message, OutMessage = undefined>(
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ): SceneSimulation<Model, Message, OutMessage> => {
+    const internal = toInternal(simulation)
+    const scopedTarget = applyScopeToTarget(internal.scope, target)
+    const { maybeElement } = resolveTarget(internal.html, scopedTarget)
+    const eventName = Option.match(maybeElement, {
+      onNone: () => 'mouseleave',
+      onSome: element =>
+        element.data?.on?.['mouseleave'] || !element.data?.on?.['mouseout']
+          ? 'mouseleave'
+          : 'mouseout',
     })
     return invokeAndCapture(simulation, target, eventName, handler => {
       handler()
@@ -2996,7 +3586,7 @@ export const expectAll = (locatorAll: LocatorAll) => ({
 
 // VIEW ADAPTERS
 
-/** Adapts a Submodel view that declares `ViewInputs` to the `(model, h)`
+/** Adapts a Block view that declares `ViewInputs` to the `(model, h)`
  *  shape `Scene.scene` takes. `defaults` supplies the full `ViewInputs`
  *  once; the returned factory accepts per-test overrides for everything
  *  except `toView`, so tests vary value inputs while the renderer stays
@@ -3017,61 +3607,216 @@ export const withViewInputs =
     view: (
       model: Model,
       viewInputs: ViewInputs,
-      h: HtmlBuilder<Message>,
+      h: TestHtmlBuilder<Message>,
     ) => Html,
     defaults: NoInfer<ViewInputs>,
   ) =>
   (overrides?: Omit<Partial<NoInfer<ViewInputs>>, 'toView'>) =>
-  (model: Model, h: HtmlBuilder<Message>): Html =>
+  (model: Model, h: TestHtmlBuilder<Message>): Html =>
     view(model, { ...defaults, ...overrides }, h)
 
 // SCENE
 
-/** Executes a scene test. Throws if any Commands or Mounts remain
- *  unresolved, any unmount is unacknowledged, or any interaction fell
- *  through unacknowledged. */
+/** Configuration for a deterministic Scene. Routing and Subscription entries
+ * declare the external causes the Scene may deliver; no Effects are executed. */
+export type SceneConfig<
+  Model,
+  Message,
+  OutMessage = undefined,
+  Subscriptions = undefined,
+  Routing = undefined,
+> = Readonly<{
+  update: (
+    model: Model,
+    message: Message,
+  ) => Readonly<{
+    model: Model
+    commands?: ReadonlyArray<AnyCommand> | undefined
+    outMessage?: OutMessage
+  }>
+  view: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
+  subscriptions?: Subscriptions
+  routing?: Routing
+}>
+
+/** Runs update and view against deterministic Scene steps. Register
+ * subscriptions for Subscription.emit and routing.onUrlChange for
+ * Navigation.changedUrl. Routing accepts the same callback or canonical
+ * Message constructor as Program; Navigation delivery remains explicit.
+ *
+ * Throws if Commands or Mounts remain unresolved, unmounts remain
+ * unacknowledged, or an interaction fell through without acknowledgement. */
 export const scene: {
-  <Model, Message, OutMessage = never>(
-    config: Readonly<{
-      update: (
-        model: Model,
-        message: Message,
-      ) => Readonly<{
-        model: Model
-        commands?: ReadonlyArray<AnyCommand>
-        outMessage?: OutMessage
-      }>
-      view: (model: Model, h: HtmlBuilder<Message>) => Html | Document
-    }>,
+  <
+    Model,
+    Message,
+    OutMessage = never,
+    const Subscriptions extends
+      | RegisteredSubscriptions<Model, Message>
+      | undefined = undefined,
+  >(
+    config: SceneConfig<
+      Model,
+      Message,
+      OutMessage,
+      Subscriptions,
+      SceneRoutingCallback<NoInfer<Message>>
+    > &
+      Readonly<{ routing: SceneRoutingCallback<NoInfer<Message>> }>,
     ...steps: ReadonlyArray<
-      SceneStep<NoInfer<Model>, NoInfer<Message>, NoInfer<OutMessage>>
+      SceneStep<
+        NoInfer<Model>,
+        NoInfer<Message>,
+        NoInfer<OutMessage>,
+        NoInfer<Subscriptions>,
+        SceneRouting<NoInfer<Message>>
+      >
     >
   ): void
-  <Model, Message>(
-    config: Readonly<{
-      update: (
-        model: Model,
-        message: Message,
-      ) => Readonly<{
-        model: Model
-        commands?: ReadonlyArray<AnyCommand>
-        outMessage?: never
-      }>
-      view: (model: Model, h: HtmlBuilder<Message>) => Html | Document
-    }>,
+  <
+    Model,
+    Message,
+    const Subscriptions extends
+      | RegisteredSubscriptions<Model, Message>
+      | undefined = undefined,
+  >(
+    config: SceneConfig<
+      Model,
+      Message,
+      never,
+      Subscriptions,
+      SceneRoutingCallback<NoInfer<Message>>
+    > &
+      Readonly<{ routing: SceneRoutingCallback<NoInfer<Message>> }>,
     ...steps: ReadonlyArray<
-      SceneStep<NoInfer<Model>, NoInfer<Message>, undefined>
+      SceneStep<
+        NoInfer<Model>,
+        NoInfer<Message>,
+        undefined,
+        NoInfer<Subscriptions>,
+        SceneRouting<NoInfer<Message>>
+      >
     >
   ): void
-} = <Model, Message, OutMessage = undefined>(
+  <
+    Model,
+    Message,
+    OutMessage = never,
+    const Subscriptions extends
+      | RegisteredSubscriptions<Model, Message>
+      | undefined = undefined,
+  >(
+    config: SceneConfig<
+      Model,
+      Message,
+      OutMessage,
+      Subscriptions,
+      SceneRouting<NoInfer<Message>>
+    > &
+      Readonly<{ routing: SceneRouting<NoInfer<Message>> }>,
+    ...steps: ReadonlyArray<
+      SceneStep<
+        NoInfer<Model>,
+        NoInfer<Message>,
+        NoInfer<OutMessage>,
+        NoInfer<Subscriptions>,
+        SceneRouting<NoInfer<Message>>
+      >
+    >
+  ): void
+  <
+    Model,
+    Message,
+    const Subscriptions extends
+      | RegisteredSubscriptions<Model, Message>
+      | undefined = undefined,
+  >(
+    config: SceneConfig<
+      Model,
+      Message,
+      never,
+      Subscriptions,
+      SceneRouting<NoInfer<Message>>
+    > &
+      Readonly<{ routing: SceneRouting<NoInfer<Message>> }>,
+    ...steps: ReadonlyArray<
+      SceneStep<
+        NoInfer<Model>,
+        NoInfer<Message>,
+        undefined,
+        NoInfer<Subscriptions>,
+        SceneRouting<NoInfer<Message>>
+      >
+    >
+  ): void
+  <
+    Model,
+    Message,
+    OutMessage = never,
+    const Subscriptions extends
+      | RegisteredSubscriptions<Model, Message>
+      | undefined = undefined,
+  >(
+    config: SceneConfig<
+      Model,
+      Message,
+      OutMessage,
+      Subscriptions,
+      SceneRouting<NoInfer<Message>> | undefined
+    >,
+    ...steps: ReadonlyArray<
+      SceneStep<
+        NoInfer<Model>,
+        NoInfer<Message>,
+        NoInfer<OutMessage>,
+        NoInfer<Subscriptions>,
+        undefined
+      >
+    >
+  ): void
+  <
+    Model,
+    Message,
+    const Subscriptions extends
+      | RegisteredSubscriptions<Model, Message>
+      | undefined = undefined,
+  >(
+    config: SceneConfig<
+      Model,
+      Message,
+      never,
+      Subscriptions,
+      SceneRouting<NoInfer<Message>> | undefined
+    >,
+    ...steps: ReadonlyArray<
+      SceneStep<
+        NoInfer<Model>,
+        NoInfer<Message>,
+        undefined,
+        NoInfer<Subscriptions>,
+        undefined
+      >
+    >
+  ): void
+} = <
+  Model,
+  Message,
+  OutMessage = undefined,
+  Subscriptions extends AnySubscriptions | undefined = undefined,
+  Routing extends SceneRouting<Message> | undefined = undefined,
+>(
   config: Readonly<{
     update: (
       model: Model,
       message: Message,
     ) => SimulationUpdateReturn<Model, OutMessage>
-    view: (model: Model, h: HtmlBuilder<Message>) => Html | Document
+    view: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
+    subscriptions?: Subscriptions
+    routing?: Routing
   }>,
-  ...steps: ReadonlyArray<SceneStep<Model, Message, OutMessage>>
+  ...steps: ReadonlyArray<
+    SceneStep<Model, Message, OutMessage, Subscriptions, Routing>
+  >
 ): void => {
   const capturingDispatch = createCapturingDispatch()
 
@@ -3093,6 +3838,11 @@ export const scene: {
     scope: Option.none(),
     lastInteractionOutcome: NotRun,
     maybeUnacknowledgedIgnored: Option.none(),
+    subscriptionDeclarations: subscriptionMessageDeclarations(
+      config.subscriptions ?? {},
+    ),
+    keptPendingCommands: [],
+    routing: normalizeSceneRouting(config.routing),
   } as unknown as SceneSimulation<Model, Message, OutMessage>
 
   const result = runSteps(seed, steps)

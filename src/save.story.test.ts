@@ -3,11 +3,12 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { afterEach, describe, expect, test } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import {
   FocusTutorialReset,
   HideSplash,
+  ReadRoomLink,
   ShowLoadProgress,
   WriteSave,
 } from './commands'
@@ -51,7 +52,6 @@ import {
   writeLegacySave,
 } from './save'
 import { SURFACE, showDialog, tick } from './testing'
-import { ReadRoomLink } from './update/coop'
 import { ZOMBIE_KIND_ORDER } from './zombies'
 
 const learnedSave: PlayerSave = {
@@ -579,8 +579,8 @@ describe('loading the save', () => {
       showDialog(),
       message(Message.ClickedDifficultyCardButton({ difficulty: 'Normal' })),
       Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
       ),
       Command.resolve(WriteSave, Message.CompletedWriteSave()),
       tick(50),
@@ -666,8 +666,8 @@ describe('writing the save', () => {
       given(settings),
       message(Message.ClickedDifficultyCardButton({ difficulty: 'Easy' })),
       Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
       ),
       Command.expectExact(
         WriteSave({
@@ -691,11 +691,14 @@ describe('writing the save', () => {
       update,
       given(read),
       message(Message.ClickedCampaignButton()),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      Command.resolve(
+        Dialog.test.ShowDialog,
+        DialogBlock.Message.SucceededShowDialog(),
+      ),
       message(Message.ClickedDifficultyCardButton({ difficulty: 'Hard' })),
       Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
       ),
       Command.resolve(WriteSave, Message.CompletedWriteSave()),
       model(current => {

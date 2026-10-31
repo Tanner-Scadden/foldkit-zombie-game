@@ -1,15 +1,25 @@
 import { Equal, Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
+import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
 
-import { Dialog, Listbox, RadioGroup } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import { ExportPng, SaveCanvas } from './command'
+import {
+  GridSizeRadioGroupBlock,
+  PaletteRadioGroupBlock,
+  ThemeListboxBlock,
+  ToolRadioGroupBlock,
+} from './components'
+import { ErrorDialogBinding } from './composition'
 import { createEmptyGrid } from './grid'
 import { Message } from './message'
 import { type Model, type PaletteIndex } from './model'
 import { update } from './update'
+
+type DialogMessage = typeof DialogBlock.Message.Type
 
 const emptyModel: Model = {
   grid: createEmptyGrid(4),
@@ -21,16 +31,22 @@ const emptyModel: Model = {
   mirrorMode: 'None' as const,
   isDrawing: false,
   maybeHoveredCell: Option.none(),
-  errorDialog: Dialog.init({ id: 'export-error-dialog' }),
+  errorDialog: DialogBlock.init({ id: 'export-error-dialog' }).model,
   maybeExportError: Option.none(),
   paletteThemeIndex: 0,
-  gridSizeConfirmDialog: Dialog.init({ id: 'grid-size-confirm-dialog' }),
+  gridSizeConfirmDialog: DialogBlock.init({ id: 'grid-size-confirm-dialog' })
+    .model,
   maybePendingGridSize: Option.none(),
-  themeListbox: Listbox.init({ id: 'theme-picker' }),
-  toolRadioGroup: RadioGroup.init({ id: 'tool-picker' }),
-  gridSizeRadioGroup: RadioGroup.init({ id: 'grid-size-picker' }),
-  paletteRadioGroup: RadioGroup.init({ id: 'palette-picker' }),
+  themeListbox: ThemeListboxBlock.init({ id: 'theme-picker' }).model,
+  toolRadioGroup: ToolRadioGroupBlock.init({ id: 'tool-picker' }).model,
+  gridSizeRadioGroup: GridSizeRadioGroupBlock.init({ id: 'grid-size-picker' })
+    .model,
+  paletteRadioGroup: PaletteRadioGroupBlock.init({ id: 'palette-picker' })
+    .model,
 }
+
+const errorDialogMessage = (message: DialogMessage) =>
+  toParentMessage(ErrorDialogBinding, message)
 
 describe('brush tool', () => {
   test('painting a cell sets its color and pushes undo history', () => {
@@ -303,7 +319,10 @@ describe('grid size', () => {
       update,
       given(paintedModel),
       message(Message.SelectedGridSize({ size: 8 })),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      Command.resolve(
+        Dialog.test.ShowDialog,
+        DialogBlock.Message.SucceededShowDialog(),
+      ),
       model(model => {
         expect(model.maybePendingGridSize).toEqual(Option.some(8))
         expect(model.gridSizeConfirmDialog.isOpen).toBe(true)
@@ -313,22 +332,28 @@ describe('grid size', () => {
   })
 
   test('confirming grid size change resets canvas and history', () => {
-    const modelWithPending: Model = modifyFields(emptyModel, {
-      maybePendingGridSize: () => Option.some(8),
-      gridSizeConfirmDialog: () =>
-        Dialog.boot({
-          id: 'grid-size-confirm-dialog',
-        }).model,
+    const paintedModel: Model = modifyFields(emptyModel, {
+      grid: () =>
+        createEmptyGrid(4).map((row, y) =>
+          row.map((cell, x) =>
+            x === 0 && y === 0 ? Option.some<PaletteIndex>(0) : cell,
+          ),
+        ),
       undoStack: () => [createEmptyGrid(4)],
     })
 
     story(
       update,
-      given(modelWithPending),
+      given(paintedModel),
+      message(Message.SelectedGridSize({ size: 8 })),
+      Command.resolve(
+        Dialog.test.ShowDialog,
+        DialogBlock.Message.SucceededShowDialog(),
+      ),
       message(Message.ConfirmedGridSizeChange()),
       Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
       ),
       Command.resolve(SaveCanvas, Message.CompletedSaveCanvas()),
       model(model => {
@@ -450,7 +475,10 @@ describe('export failure', () => {
       message(
         Message.FailedExportPng({ error: 'Canvas 2D context not available' }),
       ),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      Command.resolve(
+        Dialog.test.ShowDialog,
+        DialogBlock.Message.SucceededShowDialog(),
+      ),
       model(model => {
         expect(model.maybeExportError).toEqual(
           Option.some('Canvas 2D context not available'),
@@ -467,15 +495,14 @@ describe('export failure', () => {
       message(
         Message.FailedExportPng({ error: 'Canvas 2D context not available' }),
       ),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-      message(
-        Message.GotErrorDialogMessage({
-          message: Dialog.Message.RequestedClose(),
-        }),
-      ),
       Command.resolve(
-        Dialog.CloseDialog,
-        Dialog.Message.CompletedCloseDialog(),
+        Dialog.test.ShowDialog,
+        DialogBlock.Message.SucceededShowDialog(),
+      ),
+      message(errorDialogMessage(DialogBlock.Message.RequestedClose())),
+      Command.resolve(
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
       ),
       model(model => {
         expect(model.maybeExportError).toEqual(Option.none())

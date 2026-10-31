@@ -1,6 +1,7 @@
-import { type Html, type HtmlBuilder, inertHtml as ih } from 'foldkit/html'
+import { type Html, inertHtml as ih } from 'foldkit/html'
 
 import { Shared } from '../component'
+import type { ApplicationViewBuilder } from '../composition'
 import { Icon } from '../icon'
 import { Link } from '../link'
 import { Message } from '../message'
@@ -10,7 +11,7 @@ import { HeaderNav, Search, Sidebar, ThemeSelector } from '../view'
 
 const PagefindBody = ih.DataAttribute('pagefind-body', '')
 
-const headerView = (model: Model, h: HtmlBuilder<Message>) =>
+const headerView = (model: Model, h: ApplicationViewBuilder) =>
   h.header(
     [
       h.Class(
@@ -92,7 +93,7 @@ const footerView = (currentYear: number): Html =>
           'Built with ',
           ih.a(
             [
-              ih.Href(`${Link.websiteSource}/src/main.ts`),
+              ih.Href(`${Link.websiteSource}/src/composition/composition.ts`),
               ih.Class('link-accent'),
             ],
             ['Foldkit'],
@@ -114,7 +115,7 @@ type ViewOptions = Readonly<{
 export const view = (
   model: Model,
   { content, mainClassName, isPagefindBody }: ViewOptions,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.div(
     [h.Class('flex flex-col min-h-screen')],

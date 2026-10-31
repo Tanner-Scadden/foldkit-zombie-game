@@ -1,5 +1,4 @@
 import { Array, Option, Order, pipe } from 'effect'
-import { Submodel } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import {
@@ -24,6 +23,7 @@ import {
 } from '../icons'
 import type { Appearance } from '../model'
 import { seatColorOf } from '../partyView'
+import { CoopComposition } from './composition'
 import {
   AWAY_ICON,
   BACK_ICON,
@@ -1013,7 +1013,7 @@ const screenName = (model: Model): string =>
     InRoom: ({ room }) => (isInLobby(room) ? 'Lobby' : 'Arena'),
   })
 
-export const view = Submodel.defineView<Model, Message, ViewInputs>(
+export const view = CoopComposition.makeView.withInputs<ViewInputs>(
   (model, inputs, h) =>
     Screen.isAnyOf(['Closed'])(model.screen)
       ? h.empty
@@ -1025,7 +1025,6 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>(
           ],
           [
             Screen.match(model.screen, {
-              Closed: () => h.empty,
               Hub: ({ maybeProblem }) => hubView(maybeProblem, inputs, h),
               Code: ({ typed, maybeProblem }) =>
                 codeView(typed, maybeProblem, h),

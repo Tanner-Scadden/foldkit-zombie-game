@@ -1,8 +1,8 @@
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 import { modifyFields } from 'foldkit/struct'
 
+import type { ApplicationViewBuilder } from './composition'
 import { pixelIconUrl } from './icons'
-import type { Message } from './message'
 import type { Model } from './model'
 
 // KEYS A BROWSER EXTENSION GRABS
@@ -96,7 +96,7 @@ const NO_EXTENSION_ICON = pixelIconUrl(
 // moving between screens never plays it again.
 export const keyGrabToastView = (
   model: Model,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   isKeyGrabToastShown(model)
     ? h.div(

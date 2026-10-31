@@ -13,17 +13,17 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, test, expect as vitestExpect } from 'vitest'
 
 import { ATLAS_SHEET } from './atlasHtml.setup'
-import { update } from './main'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
 import {
+  ROOT,
+  SCENE_SUBSCRIPTIONS,
   fighting,
   measureSurface,
   openHandInScene,
   pickCardInScene,
 } from './testing'
 import { asVeteran } from './veteran'
-import { view } from './view'
 
 // NOTE: a production build draws every sprite as a cropped region of the
 // atlas sheet (src/atlasHtml.setup.ts stands one in). A canvas crops it, but
@@ -92,7 +92,7 @@ const FRAMES_BY_DEVICE: Readonly<Record<Model['lastDevice'], number>> = {
 describe('sprites in HTML', () => {
   test('How to play shows each card its own frames, not the atlas sheet', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       ...noSheetInHtml(),
@@ -111,7 +111,7 @@ describe('sprites in HTML', () => {
     'the pause screen shows the %s cards without the atlas sheet',
     device => {
       scene(
-        { update, view },
+        ROOT,
         given(pausedOn(device)),
         measureSurface,
         ...noSheetInHtml(),
@@ -122,28 +122,28 @@ describe('sprites in HTML', () => {
 
   test('the Munchopedia list shows each zombie its own image', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       ...openHandInScene(),
       ...pickCardInScene(/^Munchopedia:/),
-      inside(
-        role('dialog', { name: 'Munchopedia' }),
-        ...ownImages('img', 7),
-      ),
+      inside(role('dialog', { name: 'Munchopedia' }), ...ownImages('img', 7)),
       ...noSheetInHtml(),
     )
   })
 
   test('the character picker shows no atlas sheet', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       ...openHandInScene(),
       ...pickCardInScene(/^Character:/),
       ...noSheetInHtml(),
-      Subscription.emit(Message.PressedKey({ code: 'Escape' })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.keyboard,
+        Message.PressedKey({ code: 'Escape' }),
+      ),
     )
   })
 })

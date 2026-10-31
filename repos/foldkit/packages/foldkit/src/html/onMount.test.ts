@@ -1,4 +1,4 @@
-import { Context, Effect, Function, Queue, Stream } from 'effect'
+import { Context, Effect, Function, Layer, Queue, Stream } from 'effect'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
@@ -7,6 +7,7 @@ import { defineMessageUnion } from '../message/index.js'
 import * as Mount from '../mount/index.js'
 import type { MountAction } from '../mount/index.js'
 import { MountTracker } from '../mount/index.js'
+import { mountModule } from '../mountModule.js'
 import { propsModule } from '../propsModule.js'
 import { noOpDispatch } from '../runtime/crashUI.js'
 import { Dispatch } from '../runtime/index.js'
@@ -20,6 +21,7 @@ import {
   toVNode,
 } from '../snabbdom/index.js'
 import type { VNode } from '../vdom.js'
+import { childAttributes } from './childAttribute.js'
 import {
   __htmlBuilder,
   __clearRuntime as clearHtmlRuntime,
@@ -32,6 +34,7 @@ const patch = init([
   classModule,
   datasetModule,
   eventListenersModule,
+  mountModule,
   propsModule,
   styleModule,
 ])
@@ -39,6 +42,7 @@ const patch = init([
 const Message = defineMessageUnion({
   MountedRoot: {},
 })
+type Message = typeof Message.Type
 
 const WAIT_FOR_INTERRUPT_PROPAGATION_MS = 50
 
@@ -79,10 +83,11 @@ const createCapturingDispatch = () => {
   return { dispatch, dispatched }
 }
 
-const renderView = (
+const renderView = <Requirements = never>(
   buildView: () => VNode | null,
   dispatch: typeof Dispatch.Service,
   mountRenderOwner: MountRenderOwner = 'Live',
+  runtimeContext?: Context.Context<Requirements>,
 ): VNode => {
   const testContext = Context.make(Dispatch, dispatch).pipe(
     Context.add(MountTracker, {
@@ -93,7 +98,7 @@ const renderView = (
 
   setHtmlRuntime(
     dispatch.dispatchSync,
-    testContext,
+    Context.merge(testContext, runtimeContext ?? Context.empty()),
     undefined,
     mountRenderOwner,
   )
@@ -118,6 +123,56 @@ describe('OnMount', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it('rejects two Mounts on one element before either handler starts', () => {
+    const h = __htmlBuilder<typeof Message.MountedRoot.Type>()
+    const firstHandler = vi.fn(() => oneShotStream())
+    const secondHandler = vi.fn(() => oneShotStream())
+
+    expect(() =>
+      h.div([
+        h.OnMount({ name: 'FocusPanel', f: firstHandler }),
+        h.OnMount({ name: 'ObserveSize', f: secondHandler }),
+      ]),
+    ).toThrow(/FocusPanel.*ObserveSize/)
+
+    expect(firstHandler).not.toHaveBeenCalled()
+    expect(secondHandler).not.toHaveBeenCalled()
+  })
+
+  it('rejects the same Mount attached twice to one element', () => {
+    const h = __htmlBuilder<typeof Message.MountedRoot.Type>()
+    const handler = vi.fn(() => oneShotStream())
+    const action = { name: 'FocusPanel', f: handler }
+
+    expect(() => h.div([h.OnMount(action), h.OnMount(action)])).toThrow(
+      /FocusPanel.*FocusPanel/,
+    )
+
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('rejects a second Mount spread from child attribute groups', () => {
+    const h = __htmlBuilder<typeof Message.MountedRoot.Type>()
+    const firstHandler = vi.fn(() => oneShotStream())
+    const secondHandler = vi.fn(() => oneShotStream())
+    const { dispatch } = createCapturingDispatch()
+    const view = () => {
+      const firstAttributes = childAttributes([
+        h.OnMount({ name: 'FocusPanel', f: firstHandler }),
+      ])
+      const secondAttributes = childAttributes([
+        h.OnMount({ name: 'ObserveSize', f: secondHandler }),
+      ])
+
+      return h.div([...firstAttributes, ...secondAttributes])
+    }
+
+    expect(() => renderView(view, dispatch)).toThrow(/FocusPanel.*ObserveSize/)
+
+    expect(firstHandler).not.toHaveBeenCalled()
+    expect(secondHandler).not.toHaveBeenCalled()
   })
 
   it('dispatches the emitted Message when the element mounts', async () => {
@@ -655,14 +710,20 @@ describe('OnMount', () => {
   })
 
   it('Mount.define wraps an Effect: dispatches the result Message and holds the scope open until destroy for acquireRelease finalizers', async () => {
-    const h = __htmlBuilder<typeof Message.MountedRoot.Type>()
     const { dispatch, dispatched } = createCapturingDispatch()
     let acquired = false
     let released = false
 
     const WrappedEffect = Mount.define('WrappedEffect', {
       messages: [Message.MountedRoot],
-      execute: () =>
+    })
+    const h = __htmlBuilder<
+      typeof Message.MountedRoot.Type,
+      Mount.RequirementsOf<typeof WrappedEffect>
+    >()
+
+    const WrappedEffectLayer = WrappedEffect.toLayer(
+      Effect.succeed(() =>
         Effect.gen(function* () {
           yield* Effect.acquireRelease(
             Effect.sync(() => {
@@ -675,14 +736,18 @@ describe('OnMount', () => {
           )
           return Message.MountedRoot()
         }),
-    })
+      ),
+    )
 
     const withChild = () => h.div([], [h.span([h.OnMount(WrappedEffect())])])
     const withoutChild = () => h.div([])
+    const handlerContext = Effect.runSync(
+      Effect.scoped(Layer.build(WrappedEffectLayer)),
+    )
 
     const mounted = patch(
       toVNode(makeRootContainer()),
-      renderView(withChild, dispatch),
+      renderView(withChild, dispatch, 'Live', handlerContext),
     )
 
     await vi.waitFor(() => {
@@ -737,5 +802,47 @@ describe('OnMount', () => {
     await vi.waitFor(() => {
       expect(cleanupRunCount).toBe(1)
     })
+  })
+
+  it('runs cleanup when a patched element drops OnMount before removal', async () => {
+    const h = __htmlBuilder<typeof Message.MountedRoot.Type>()
+    const { dispatch, dispatched } = createCapturingDispatch()
+    let cleanupRunCount = 0
+
+    const withMount = () =>
+      h.div(
+        [],
+        [
+          h.span([
+            h.OnMount(
+              makeMounted(() => oneShotStream(() => (cleanupRunCount += 1))),
+            ),
+          ]),
+        ],
+      )
+    const withoutMount = () => h.div([], [h.span([])])
+    const withoutChild = () => h.div([])
+
+    const mounted = patch(
+      toVNode(makeRootContainer()),
+      renderView(withMount, dispatch),
+    )
+    await vi.waitFor(() => {
+      expect(dispatched).toHaveLength(1)
+    })
+
+    const patchedWithoutMount = patch(
+      mounted,
+      renderView(withoutMount, dispatch),
+    )
+    expect(cleanupRunCount).toBe(0)
+    patch(patchedWithoutMount, renderView(withoutChild, dispatch))
+
+    await vi.waitFor(() => {
+      expect(cleanupRunCount).toBe(1)
+    })
+
+    patch(toVNode(makeRootContainer()), renderView(withoutChild, dispatch))
+    expect(cleanupRunCount).toBe(1)
   })
 })

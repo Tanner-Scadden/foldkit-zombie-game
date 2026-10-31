@@ -2,13 +2,12 @@ import { Option } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { Dialog, Tabs } from '@foldkit/ui'
-
 import { FocusShopItem } from '../commands'
-import { dialogFolds } from '../dialogs'
+import { CoopBinding, ShopDialogBinding } from '../composition'
+import { isOnlineRun } from '../coopPlay'
+import { makeStep } from '../definition'
 import { refreshIntent } from '../frame'
 import { releaseAll } from '../input'
-import { Message } from '../message'
 import {
   type Model,
   Phase,
@@ -28,77 +27,80 @@ import {
   shopItem,
   stockTag,
 } from '../shop'
-import { ShopTabs } from '../shopTabs'
+import { SeatAction } from '../stepWorld'
 import { showTrapHint } from '../traps'
+import { isRoundActive } from '../waves'
 import { type SoundCue, playSounds, uiCue } from './sound'
-import { type UpdateReturn, type UpdateStep, withInput } from './step'
+import {
+  type UpdateReturn,
+  type UpdateStep,
+  combine,
+  unchanged,
+  withInput,
+} from './step'
 
 // DIALOG
 
-const foldShopDialogOutMessage = Dialog.OutMessage.match<UpdateStep>({
-  Opened: () => stepModel => ({ model: stepModel }),
-  Closed: () => leaveShopStep,
-})
+const isRunOn = (model: Model): boolean =>
+  isOnlineRun(model) && isRoundActive(model.phase)
 
-const shopDialog = dialogFolds({
-  read: (model: Model) => model.shopDialog,
-  write: (model, nextShopDialog) =>
-    modifyFields(model, { shopDialog: () => nextShopDialog }),
-  toParentMessage: message => Message.GotShopDialogMessage({ message }),
-  foldOutMessage: foldShopDialogOutMessage,
-})
-
-export const foldShopDialog = shopDialog.fold
-
-const leaveShop = (model: Model): Model =>
+const leaveShopModel = (model: Model): Model =>
   isBrowsing(model.shop)
     ? refreshIntent(modifyFields(model, { shop: () => ShopState.Dismissed() }))
     : model
 
-export const foldShopTabs = Update.foldChild({
-  update: ShopTabs.update,
-  read: (model: Model) => Option.some(model.shopTabs),
-  write: (model, nextShopTabs) =>
-    modifyFields(model, { shopTabs: () => nextShopTabs }),
-  toParentMessage: message => Message.GotShopTabsMessage({ message }),
-  foldOutMessage: Tabs.OutMessage.match<
-    UpdateStep,
-    Tabs.OutMessage<ShopCategory>
-  >({
-    Selected:
-      ({ value }) =>
-      stepModel => ({ model: selectShopCategory(stepModel, value) }),
-  }),
-})
-
-export const leaveShopWithoutDialog: UpdateStep = stepModel => ({
-  model: stepModel.shopDialog.isOpen ? stepModel : leaveShop(stepModel),
-})
-
 const leaveShopStep: UpdateStep = stepModel => ({
-  model: leaveShop(stepModel),
+  model: leaveShopModel(stepModel),
 })
+
+// NOTE: a shop dialog that failed to show resets to closed without its
+// Closed fold, so the round's next frame leaves the counter (src/main.ts).
+// While the dialog opens normally it is open by the end of the same Step.
+export const leaveShopWithoutDialog: UpdateStep = stepModel => ({
+  model: stepModel.shopDialog.isOpen ? stepModel : leaveShopModel(stepModel),
+})
+
+// NOTE: the shop dialog closed. In an online run the room hears LEAVE, so
+// the player can walk off once it does.
+export const leaveShop = makeStep(model =>
+  isRunOn(model)
+    ? Update.combineSteps([
+        leaveShopStep,
+        CoopBinding.requestPressAction({ action: SeatAction.LeaveCounter() }),
+      ])
+    : leaveShopStep,
+)
+
+export const selectCategory =
+  (category: ShopCategory): UpdateStep =>
+  stepModel => ({ model: selectShopCategory(stepModel, category) })
 
 // ENTERING AND LEAVING
 
-export const enterShop: UpdateStep = stepModel =>
-  Update.combine(
-    modifyFields(withInput(stepModel, releaseAll), {
-      shopChatter: () => ShopChatter.Greeting(),
-    }),
-    [shopDialog.open, playSounds([uiCue('ShopBell')])],
-  )
+const greetAtCounter: UpdateStep = stepModel => ({
+  model: modifyFields(withInput(stepModel, releaseAll), {
+    shopChatter: () => ShopChatter.Greeting(),
+  }),
+})
 
-export const closeShop: UpdateStep = stepModel =>
-  isBrowsing(stepModel.shop)
-    ? Update.combine(stepModel, [shopDialog.close, leaveShopStep])
-    : { model: stepModel }
+export const enterShop = makeStep(() =>
+  Update.combineSteps([
+    greetAtCounter,
+    ShopDialogBinding.requestOpen(),
+    playSounds([uiCue('ShopBell')]),
+  ]),
+)
+
+export const closeShop = makeStep(model =>
+  isBrowsing(model.shop)
+    ? Update.combineSteps([ShopDialogBinding.requestClose(), leaveShopStep])
+    : unchanged,
+)
 
 // NOTE: the stall shuts outside the break.
-export const closeShopOutsidePreparation: UpdateStep = stepModel =>
-  Phase.isAnyOf(['Preparation'])(stepModel.phase)
-    ? { model: stepModel }
-    : closeShop(stepModel)
+export const closeShopOutsidePreparation = makeStep(model =>
+  Phase.isAnyOf(['Preparation'])(model.phase) ? unchanged : closeShop,
+)
 
 // BUYING
 
@@ -116,7 +118,7 @@ export const buy = (model: Model, item: ShopItemId): UpdateReturn => {
     onNone: () => playSounds([uiCue('Denied')])(refusedChatter(model, item)),
     onSome: world => {
       const bought = withHint(item, { ...model, ...world })
-      return Update.combine(
+      return combine(
         modifyFields(burstCoins(bought, bought.player.x, bought.player.y), {
           shopChatter: () => ShopChatter.Bought({ item }),
         }),

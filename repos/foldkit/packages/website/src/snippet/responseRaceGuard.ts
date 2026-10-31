@@ -1,25 +1,22 @@
 import { Effect, Schema, pipe } from 'effect'
 import { HttpClient, HttpClientRequest } from 'effect/http'
-import { AsyncData, Command, Http, type Update } from 'foldkit'
+import { AsyncData, Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
 const SearchResult = Schema.Struct({ id: Schema.String, title: Schema.String })
+type SearchResult = typeof SearchResult.Type
 
 const SearchResultsData = AsyncData.Schema(
   Schema.Array(SearchResult),
   Schema.String,
 )
-
-// MODEL
-
+type SearchResultsData = typeof SearchResultsData.schema.Type
 const Model = Schema.Struct({
   queryInput: Schema.String,
   searchResults: SearchResultsData.schema,
 })
 type Model = typeof Model.Type
-
-// MESSAGE
 
 const Message = defineMessageUnion({
   UpdatedQuery: { query: Schema.String },
@@ -30,48 +27,51 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-// COMMAND
+const ApplicationDefinition = Block.makeDefinition('Application', {
+  Model,
+  Message,
+})
+const ApplicationComposition = ApplicationDefinition.makeComposition()
 
-const Search = Command.define('Search', {
+const Search = ApplicationDefinition.makeCommand('Search', {
   args: { query: Schema.String },
   messages: [Message.SettledSearch],
-  execute: ({ query }) =>
-    pipe(
-      Effect.gen(function* () {
-        const client = yield* HttpClient.HttpClient
-        const request = HttpClientRequest.get('/api/search').pipe(
-          HttpClientRequest.setUrlParams({ q: query }),
-        )
-        const response = yield* client.execute(request)
-        return yield* Schema.decodeUnknownEffect(Schema.Array(SearchResult))(
-          yield* response.json,
-        )
-      }),
-      Effect.mapError(error => String(error)),
-      Effect.result,
-      Effect.map(result => Message.SettledSearch({ query, result })),
-      Effect.provide(Http.layer),
-    ),
+  handler: function* () {
+    const client = yield* HttpClient.HttpClient
+
+    return ({ query }) =>
+      pipe(
+        Effect.gen(function* () {
+          const request = HttpClientRequest.get('/api/search').pipe(
+            HttpClientRequest.setUrlParams({ q: query }),
+          )
+          const response = yield* client.execute(request)
+          return yield* Schema.decodeUnknownEffect(Schema.Array(SearchResult))(
+            yield* response.json,
+          )
+        }),
+        Effect.mapError(error => String(error)),
+        Effect.result,
+        Effect.map(result => Message.SettledSearch({ query, result })),
+      )
+  },
 })
 
-// UPDATE
-
-const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
-    UpdatedQuery: ({ query }) => ({
-      model: modifyFields(model, {
-        queryInput: () => query,
-        searchResults: () => SearchResultsData.Loading(),
-      }),
-      commands: [Search({ query })],
+const update = ApplicationComposition.makeUpdate({
+  UpdatedQuery: (model, { query }) => ({
+    model: modifyFields(model, {
+      queryInput: () => query,
+      searchResults: () => SearchResultsData.Loading(),
     }),
+    commands: [Search({ query })],
+  }),
 
-    SettledSearch: ({ query, result }) => {
-      if (query !== model.queryInput) {
-        return { model }
-      }
-      return {
-        model: modifyFields(model, { searchResults: AsyncData.settle(result) }),
-      }
-    },
-  })
+  SettledSearch: (model, { query, result }) => {
+    if (query !== model.queryInput) {
+      return { model }
+    }
+    return {
+      model: modifyFields(model, { searchResults: AsyncData.settle(result) }),
+    }
+  },
+})

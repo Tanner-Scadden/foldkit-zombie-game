@@ -18,8 +18,13 @@ import { PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import { type Model, MouseButton, Phase, initialModel } from './model'
-import { fighting, holdingFirst, measureSurface } from './testing'
-import { view } from './view'
+import {
+  ROOT,
+  SCENE_SUBSCRIPTIONS,
+  fighting,
+  holdingFirst,
+  measureSurface,
+} from './testing'
 import { pause } from './waves'
 import { STARTING_PISTOL, WEAPONS, tierName } from './weapons'
 
@@ -40,11 +45,14 @@ const card = (action: string, input: string) =>
 describe('Pause screen controls', () => {
   test('shows the keyboard and mouse controls as cards, with the other keys in one line', () => {
     scene(
-      { update, view },
+      ROOT,
       given(fighting),
       measureSurface,
       expect(keyboardHelp).toBeAbsent(),
-      Subscription.emit(Message.PressedKey({ code: 'Escape' })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.keyboard,
+        Message.PressedKey({ code: 'Escape' }),
+      ),
       expect(role('status')).toHaveText(PAUSED_STATUS),
       expect(touchHelp).toBeAbsent(),
       expect(keyboardHelp).toExist(),
@@ -71,7 +79,10 @@ describe('Pause screen controls', () => {
         expect(role('listitem', { name: 'M sound' })).toExist(),
         expect(role('listitem', { name: 'N music' })).toExist(),
       ),
-      Subscription.emit(Message.PressedKey({ code: 'Escape' })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.keyboard,
+        Message.PressedKey({ code: 'Escape' }),
+      ),
       expect(role('status')).toHaveText(FIGHTING_STATUS),
       expect(keyboardHelp).toBeAbsent(),
     )
@@ -79,7 +90,7 @@ describe('Pause screen controls', () => {
 
   test('shows the touch controls as cards, with no keys', () => {
     scene(
-      { update, view },
+      ROOT,
       given(pausedOn('Touch')),
       measureSurface,
       expect(keyboardHelp).toBeAbsent(),
@@ -100,7 +111,7 @@ describe('Pause screen controls', () => {
 
   test('is plain text with no controls of its own to tab to', () => {
     scene(
-      { update, view },
+      ROOT,
       given(pausedOn('KeyboardMouse')),
       measureSurface,
       expect(keyboardHelp).toExist(),
@@ -113,7 +124,7 @@ describe('Pause screen controls', () => {
 
   test('a tap on the panel resumes and does not grab a stick', () => {
     scene(
-      { update, view },
+      ROOT,
       given(pausedOn('Touch')),
       measureSurface,
       pointerDown(touchHelp, {
@@ -130,7 +141,7 @@ describe('Pause screen controls', () => {
 
   test('a click on the panel resumes without pulling the trigger', () => {
     scene(
-      { update, view },
+      ROOT,
       given(pausedOn('KeyboardMouse')),
       measureSurface,
       pointerDown(keyboardHelp, { pointerId: 1, clientX: 400, clientY: 200 }),
@@ -162,7 +173,7 @@ describe('The PAUSE button', () => {
 
   test('pauses a round, hides on the pause screen, and Esc brings it back', () => {
     scene(
-      { update, view },
+      ROOT,
       given(fighting),
       measureSurface,
       expect(pauseButton).toHaveAttr('aria-keyshortcuts', 'Escape'),
@@ -170,7 +181,10 @@ describe('The PAUSE button', () => {
       expect(role('status')).toHaveText(PAUSED_STATUS),
       expect(keyboardHelp).toExist(),
       expect(pauseButton).toBeAbsent(),
-      Subscription.emit(Message.PressedKey({ code: 'Escape' })),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.keyboard,
+        Message.PressedKey({ code: 'Escape' }),
+      ),
       expect(role('status')).toHaveText(FIGHTING_STATUS),
       expect(pauseButton).toExist(),
     )
@@ -178,7 +192,7 @@ describe('The PAUSE button', () => {
 
   test('shows on touch between waves, and not on the title', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(fighting, {
           lastDevice: () => 'Touch',
@@ -197,7 +211,7 @@ describe('The PAUSE button', () => {
       expect(touchHelp).toExist(),
     )
     scene(
-      { update, view },
+      ROOT,
       given(initialModel),
       measureSurface,
       expect(pauseButton).toBeAbsent(),
@@ -212,7 +226,7 @@ describe('Touch gun slots', () => {
     vitestExpect(pistolName).not.toBe(WEAPONS.Pistol.name)
     vitestExpect(shotgunName).not.toBe(WEAPONS.Shotgun.name)
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(fighting, {
           lastDevice: () => 'Touch',

@@ -17,7 +17,7 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
 ### In flight
 
 - [x] **0a. Strictness.** (#18) Restore oxlint's default plugins and correctness category, type-aware lint (`oxlint-tsgolint`), the Effect language service rules at error, the Effect oxlint `strict` preset, stricter tsconfig flags on one shared base for app, infra, and packages, and custom rules for the project rules (no `Math.random`/`Date.now`/`crypto.randomUUID`, storage only through the store, no `.guards` in per-frame code, no `Data.taggedEnum`, no `VIEW_WIDTH` in overlays, no em dashes). Files other agents were editing got scoped overrides with a TODO: clear them in slice 9.
-- [ ] **0b. Foldkit Block preview.** Move to `foldkit@0.169.0-canary.90746b32d2ca` (what foldkit-domains uses): Blocks, Definitions, and Bindings in place of Submodels, a Dialog Binding in place of `dialogFolds`, `Update.combineSteps`, Effect back to 4.0.x. Lands after 0a.
+- [x] **0b. Foldkit Block preview.** (#22) Move to `foldkit@0.169.0-canary.90746b32d2ca` (what foldkit-domains uses): Blocks, Definitions, and Bindings in place of Submodels, a Dialog Binding in place of `dialogFolds`, `Update.combineSteps`, Effect back to 4.0.x. Lands after 0a.
 
 ### Queue
 
@@ -34,10 +34,12 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
    - "Is a menu open" lives in three places that disagree: `update/home.ts:94-106` `isPanelAllowed`, `:156-161` `canMoveHomeFocus`, `update/profile.ts:101-104` `canOpenProfile`. `update/home.ts:159` reads `model.coop.screen` instead of `isCoopOpen`. `update/save.ts:244` `isSettingsOpen` duplicates the unused `isProfileOpenOn`.
    - Replace with one derived `menuState(model)` tagged union, computed never stored, read by update and view (domains `searchViewState.ts:36`).
    - `cond ? step(m) : { model: m }` appears 23 times (15 in `update/home.ts`): add `stepWhen(pred, step)` and `modelStep(f)` to `update/step.ts` (or use `Update.combineSteps` after 0b). Drop the `Step` suffix from step names (`keepNameStep`, `leaveShopStep`, `finishLoadStep`).
+   - After 0b: the dialog folds are gone (each dialog is a Binding with an OutMessage fold in `composition.ts`), and every Step that opens or closes a dialog is now a `makeStep` returning `unchanged` or the Binding's operation, so those branches in `update/home.ts`, `update/profile.ts`, and `update/shop.ts` are done. `update/step.ts` already has `unchanged`, `combine`, and `toModel`; what is left is the plain `UpdateStep` branches, and `keepNameStep` is now `keepName`.
    - `update/coopRun.ts:146-221`: `isRunOn(model) ? Option.some(…) : Option.none()` in 14 arms. Check once, then one `Match.tags`.
    - `update/shop.ts:118` merges `{ ...model, ...world }`: use `withWorld`.
    - Lock in: `no-restricted-syntax` against spreading a World into a Model if expressible; AGENTS.md rules for `menuState` and the step helpers.
 3. [ ] **Commands beside their updates.** (M, mechanical)
+   - After 0b each Command is a `makeCommand` with a handler, and `src/commands.ts` also holds `CommandsLayer`, the list every root handler comes from: a moved Command's `.layer` stays in that list (or a per-module Layer merged into it in `src/layer.ts`).
    - `src/commands.ts` (642 lines) holds Commands for `update/save.ts` (WriteSave, AwaitRunSettled, ReloadSyncedSave, RequestLinkCode, RedeemLinkCode, ShowLoadProgress, HideSplash, FocusTutorialReset), `update/home.ts` (WaitForUnwrap, ReloadPage, FocusHandCard, FocusEndMenuButton), `update/shop.ts` (FocusShopItem), `update/sound.ts` (PlaySound), `update/rotation.ts` (ApplyRotation), `musicPlan.ts` (CueMusic). Move each beside its update, as FOLDKIT.md asks; keep boot Commands only.
    - Lock in: AGENTS.md rule.
 4. [ ] **Shared test helpers.** (S/M)
@@ -92,3 +94,6 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
 - `packages/sqlite-wasm-effect` has its own two copies of `describeError` (`Browser.ts`, `Engine.ts`, named `describe`); the package cannot import `src`. Share them inside the package.
 - `src/coop/seam.ts` `readoutOf` writes the audit readout with raw `JSON.stringify` (allowed in `.oxlintrc.json`); after 0b it could be a Schema the audit decodes. `tools/` is allowed raw JSON wholesale until 9b.
 - The co-op audit's "host walks into the stall" and revive steps are flaky (failed once each on production and locally, passed on rerun). Make them wait on state, not time.
+- 0b: `drawRoom` in `src/coopPlay.ts` still writes `model.coop` directly (`keepTracers`) from the root. It belongs behind a co-op operation, like `requestTickRoom`, as the Bindings rule in AGENTS.md says. Fold it into slice 5.
+- 0b: the preview's Dialog resets to closed without its `Closed` OutMessage when `ShowDialog` fails, so the shop's next frame leaves the counter (`leaveShopWithoutDialog` in `src/main.ts`'s frame). Drop that once the Dialog reports the failure.
+- 0b: the audit harness (`tools/audit/harness/entry.ts`) wraps the game's update with one handler for every tag and assembles its Block with `any` casts. A typed wrapper needs a Foldkit hook around a Composition's update; revisit when the preview has one.

@@ -1,10 +1,12 @@
 import { Array, Match, Option, String, pipe } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import type { Dialog, Tabs } from '@foldkit/ui'
 import { Button } from '@foldkit/ui'
 
 import { levelOf } from './arena'
+import type { ApplicationViewBuilder } from './composition'
+import { ShopDialogBinding, ShopTabsBinding } from './composition'
 import { PLAYER_MAX_HP, TILE_SIZE } from './constants'
 import { closeButtonView, dialogShell } from './dialogs'
 import { COIN_SYMBOL } from './font'
@@ -62,7 +64,6 @@ import {
   gunArt,
   itemArt,
 } from './shopArt'
-import { ShopTabs } from './shopTabs'
 import { type Mood, chatterLine, moodOf } from './shopkeeper'
 import { TRAPS, healthShare, ownedCount } from './traps'
 import {
@@ -118,12 +119,12 @@ const keyMessage = (
 
 // MONEY
 
-const coinIconView = (h: HtmlBuilder<Message>): Html =>
+const coinIconView = (h: ApplicationViewBuilder): Html =>
   h.span([h.Class('coin-icon'), h.AriaHidden(true)])
 
 const NOT_DIGIT = /\D/
 
-const moneyView = (amount: string, h: HtmlBuilder<Message>): Html =>
+const moneyView = (amount: string, h: ApplicationViewBuilder): Html =>
   h.span(
     [h.Class('money')],
     [coinIconView(h), h.span([h.Class('sr-only')], [COIN_SYMBOL]), amount],
@@ -131,7 +132,7 @@ const moneyView = (amount: string, h: HtmlBuilder<Message>): Html =>
 
 const afterCoin = (
   part: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html | string> => {
   const amountLength = Option.getOrElse(
     String.search(part, NOT_DIGIT),
@@ -145,7 +146,7 @@ const afterCoin = (
 
 const withCoins = (
   text: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html | string> =>
   pipe(
     String.split(text, COIN_SYMBOL),
@@ -158,7 +159,7 @@ const withCoins = (
 const artView = (
   art: ShopArt,
   className: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.span([
     h.Class(`shop-art ${className}`),
@@ -174,7 +175,7 @@ const segmentsView = (
   filled: number,
   ghost: number,
   total: number,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> =>
   Array.makeBy(total, index =>
     h.span([
@@ -193,7 +194,7 @@ const barView = (
   label: string,
   now: number,
   next: number,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.span(
     [h.Class('shop-bar'), h.Title(label)],
@@ -209,7 +210,11 @@ const barView = (
 const barsLabel = (bars: GunBars): string =>
   `Power ${bars.hit}, speed ${bars.rate}, magazine ${bars.load}, out of ${BAR_SEGMENTS}`
 
-const barsView = (now: GunBars, next: GunBars, h: HtmlBuilder<Message>): Html =>
+const barsView = (
+  now: GunBars,
+  next: GunBars,
+  h: ApplicationViewBuilder,
+): Html =>
   h.span(
     [h.Class('shop-bars'), h.Role('img'), h.AriaLabel(barsLabel(now))],
     [
@@ -219,7 +224,7 @@ const barsView = (now: GunBars, next: GunBars, h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-const heartsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const heartsView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.span(
     [h.Class('shop-hearts'), h.AriaHidden(true)],
     Array.makeBy(PLAYER_MAX_HP, index =>
@@ -234,7 +239,7 @@ const heartsView = (model: Model, h: HtmlBuilder<Message>): Html =>
 const countDotsView = (
   have: number,
   most: number,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.span(
     [h.Class('shop-dots'), h.AriaHidden(true)],
@@ -243,7 +248,7 @@ const countDotsView = (
     ),
   )
 
-const healthBarView = (share: number, h: HtmlBuilder<Message>): Html =>
+const healthBarView = (share: number, h: ApplicationViewBuilder): Html =>
   h.span(
     [h.Class('shop-gauge'), h.AriaHidden(true)],
     [
@@ -267,7 +272,7 @@ const percentOf = (value: number, total: number): string =>
 const mapPipView = (
   model: Model,
   trap: Trap,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const level = levelOf(model)
   const spot = Trap.match(trap, {
@@ -295,7 +300,7 @@ const gaugeView = (
   model: Model,
   weapon: WeaponKind,
   rounds: number,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const { have, gain, most } = ammoGauge(model, weapon, rounds)
   const percent = (value: number): string =>
@@ -321,7 +326,7 @@ const gaugeView = (
   )
 }
 
-const swapBadgeView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const swapBadgeView = (model: Model, h: ApplicationViewBuilder): Html =>
   Option.match(maybeReplacedGun(model.player.arsenal), {
     onNone: () => h.empty,
     onSome: spare =>
@@ -337,7 +342,7 @@ const swapBadgeView = (model: Model, h: HtmlBuilder<Message>): Html =>
 const metaView = (
   model: Model,
   item: ShopItemId,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   ShopGood.match(shopItem(item).good, {
     Gun: ({ weapon }) =>
@@ -366,7 +371,7 @@ const metaView = (
 const tagView = (
   model: Model,
   item: ShopItemId,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   StockTag.match(stockTag(model, item), {
     Price: ({ price }) =>
@@ -384,7 +389,7 @@ const tagView = (
 
 const COIN_BURST = 6
 
-const burstView = (h: HtmlBuilder<Message>): Html =>
+const burstView = (h: ApplicationViewBuilder): Html =>
   h.span(
     [h.Class('shop-burst'), h.AriaHidden(true)],
     Array.makeBy(COIN_BURST, () =>
@@ -392,20 +397,20 @@ const burstView = (h: HtmlBuilder<Message>): Html =>
     ),
   )
 
-const stampChildren = (h: HtmlBuilder<Message>): ReadonlyArray<Html> => [
+const stampChildren = (h: ApplicationViewBuilder): ReadonlyArray<Html> => [
   h.span([h.Class('shop-stamp-word')], ['MINE!']),
   burstView(h),
 ]
 
-const evenStampView = (h: HtmlBuilder<Message>): Html =>
+const evenStampView = (h: ApplicationViewBuilder): Html =>
   h.span([h.Class('shop-stamp'), h.AriaHidden(true)], stampChildren(h))
 
-const oddStampView = (h: HtmlBuilder<Message>): Html =>
+const oddStampView = (h: ApplicationViewBuilder): Html =>
   h.span([h.Class('shop-stamp'), h.AriaHidden(true)], stampChildren(h))
 
 // NOTE: two view functions, so two buys of the same row in a row each get a
 // fresh stamp element and its animation plays again.
-const stampView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const stampView = (model: Model, h: ApplicationViewBuilder): Html =>
   model.stats.purchases % 2 === 0 ? evenStampView(h) : oddStampView(h)
 
 const isJustBought = (model: Model, item: ShopItemId): boolean =>
@@ -416,10 +421,10 @@ const isJustBought = (model: Model, item: ShopItemId): boolean =>
     Refused: () => false,
   })
 
-const evenNopeView = (h: HtmlBuilder<Message>): Html =>
+const evenNopeView = (h: ApplicationViewBuilder): Html =>
   h.span([h.Class('shop-nope'), h.AriaHidden(true)])
 
-const oddNopeView = (h: HtmlBuilder<Message>): Html =>
+const oddNopeView = (h: ApplicationViewBuilder): Html =>
   h.span([h.Class('shop-nope'), h.AriaHidden(true)])
 
 const isJustRefused = (model: Model, item: ShopItemId): boolean =>
@@ -450,7 +455,7 @@ const focusedItem = (model: Model): ShopItemId =>
 const reasonView = (
   model: Model,
   item: ShopItemId,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   Verdict.match(verdictFor(model, item), {
     Available: () => h.empty,
@@ -491,7 +496,7 @@ type RowShape = Readonly<{
 const itemArtView = (
   model: Model,
   item: ShopItemId,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   ShopGood.match(shopItem(item).good, {
     Gun: () => artView(itemArt(item), 'shop-card-art', h),
@@ -533,7 +538,7 @@ const rowView = (
   item: ShopItemId,
   shape: RowShape,
   initialFocus: Dialog.RenderInfo['initialFocus'],
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const verdict = verdictFor(model, item)
   const isRefused = Verdict.isAnyOf(['Refused'])(verdict)
@@ -611,7 +616,7 @@ const itemView = (
   model: Model,
   item: ShopItemId,
   initialFocus: Dialog.RenderInfo['initialFocus'],
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   rowView(
     model,
@@ -630,7 +635,7 @@ const wideItemView = (
   model: Model,
   item: ShopItemId,
   initialFocus: Dialog.RenderInfo['initialFocus'],
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   rowView(
     model,
@@ -647,7 +652,7 @@ const subItemView = (
   model: Model,
   item: ShopItemId,
   initialFocus: Dialog.RenderInfo['initialFocus'],
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   rowView(
     model,
@@ -665,7 +670,7 @@ const subItemView = (
 const tierPipsView = (
   weapon: WeaponKind,
   tier: number,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.span(
     [
@@ -719,7 +724,7 @@ const ownedGunView = (
   status: string,
   items: Array.NonEmptyReadonlyArray<ShopItemId>,
   initialFocus: Dialog.RenderInfo['initialFocus'],
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const name = tierName(weapon, tier)
   return h.keyed('li')(
@@ -761,7 +766,7 @@ const gunShelfView = (
   model: Model,
   shelf: GunShelf,
   initialFocus: Dialog.RenderInfo['initialFocus'],
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   GunShelf.match(shelf, {
     ForSale: ({ item }) => itemView(model, item, initialFocus, h),
@@ -773,7 +778,7 @@ const categoryRowsView = (
   model: Model,
   category: ShopCategory,
   initialFocus: Dialog.RenderInfo['initialFocus'],
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> =>
   Match.value(category).pipe(
     Match.when('Guns', () => [
@@ -798,7 +803,7 @@ const trapShelfView = (
   model: Model,
   shelf: TrapShelf,
   initialFocus: Dialog.RenderInfo['initialFocus'],
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   Array.match(shelf.repairs, {
     onEmpty: () => itemView(model, shelf.item, initialFocus, h),
@@ -847,7 +852,7 @@ const tabLabel = (model: Model, category: ShopCategory): string => {
 const tabButtonView = (
   model: Model,
   tab: Tabs.TabInfo<ShopCategory>,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const count = affordableCount(model, tab.value)
   return h.button(
@@ -870,7 +875,7 @@ const categoryPanelView = (
   model: Model,
   tab: Tabs.TabInfo<ShopCategory>,
   initialFocus: Dialog.RenderInfo['initialFocus'],
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.div(
     [...tab.panel, h.Class('shop-tabpanel')],
@@ -892,34 +897,36 @@ const categoryPanelView = (
 const categoriesView = (
   model: Model,
   initialFocus: Dialog.RenderInfo['initialFocus'],
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
-  h.submodel({
-    slotId: model.shopTabs.id,
-    model: model.shopTabs,
-    view: ShopTabs.view,
-    viewInputs: {
-      tabs: SHOP_CATEGORY_ORDER,
-      selectedValue: model.shopCategory,
-      ariaLabel: 'Shop sections',
-      toView: ({ tablist, tabs, activeIndex }) =>
-        h.div(
-          [h.Class('shop-categories')],
-          [
-            h.div(
-              [...tablist, h.Class('shop-tabs')],
-              Array.map(tabs, tab => tabButtonView(model, tab, h)),
-            ),
-            ...pipe(
-              tabs,
-              Array.filter(tab => tab.index === activeIndex),
-              Array.map(tab => categoryPanelView(model, tab, initialFocus, h)),
-            ),
-          ],
-        ),
-    },
-    toParentMessage: message => Message.GotShopTabsMessage({ message }),
-  })
+  h.block(
+    ShopTabsBinding.embedView({
+      slotId: model.shopTabs.id,
+      model: model.shopTabs,
+      viewInputs: {
+        tabs: SHOP_CATEGORY_ORDER,
+        selectedValue: model.shopCategory,
+        ariaLabel: 'Shop sections',
+        toView: ({ tablist, tabs, activeIndex }) =>
+          h.div(
+            [h.Class('shop-categories')],
+            [
+              h.div(
+                [...tablist, h.Class('shop-tabs')],
+                Array.map(tabs, tab => tabButtonView(model, tab, h)),
+              ),
+              ...pipe(
+                tabs,
+                Array.filter(tab => tab.index === activeIndex),
+                Array.map(tab =>
+                  categoryPanelView(model, tab, initialFocus, h),
+                ),
+              ),
+            ],
+          ),
+      },
+    }),
+  )
 
 const MOOD_LABELS: Readonly<Record<Mood, string>> = {
   Grinning: 'grinning',
@@ -928,7 +935,7 @@ const MOOD_LABELS: Readonly<Record<Mood, string>> = {
   Shrugging: 'shrugging',
 }
 
-const keeperView = (model: Model, h: HtmlBuilder<Message>): Html => {
+const keeperView = (model: Model, h: ApplicationViewBuilder): Html => {
   const mood = moodOf(model)
   return h.span(
     [
@@ -941,7 +948,7 @@ const keeperView = (model: Model, h: HtmlBuilder<Message>): Html => {
   )
 }
 
-const evenBalanceView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const evenBalanceView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.span(
     [h.Class('shop-balance')],
     [
@@ -950,7 +957,7 @@ const evenBalanceView = (model: Model, h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-const oddBalanceView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const oddBalanceView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.span(
     [h.Class('shop-balance')],
     [
@@ -959,7 +966,7 @@ const oddBalanceView = (model: Model, h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-const balanceView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const balanceView = (model: Model, h: ApplicationViewBuilder): Html =>
   model.stats.purchases % 2 === 0
     ? evenBalanceView(model, h)
     : oddBalanceView(model, h)
@@ -967,7 +974,7 @@ const balanceView = (model: Model, h: HtmlBuilder<Message>): Html =>
 const panelView = (
   model: Model,
   { title, description, closeButton, initialFocus }: Dialog.RenderInfo,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => [
   h.header(
     [h.Class('shop-header')],
@@ -1003,10 +1010,7 @@ const panelView = (
   categoriesView(model, initialFocus, h),
 ]
 
-const toShopDialogMessage = (message: Dialog.Message): Message =>
-  Message.GotShopDialogMessage({ message })
-
-export const shopDialogView = (model: Model, h: HtmlBuilder<Message>): Html =>
+export const shopDialogView = (model: Model, h: ApplicationViewBuilder): Html =>
   dialogShell(
     {
       dialog: model.shopDialog,
@@ -1014,7 +1018,7 @@ export const shopDialogView = (model: Model, h: HtmlBuilder<Message>): Html =>
       backdropClass: 'shop-backdrop',
       panelClass: 'shop-panel',
       panelView: renderInfo => panelView(model, renderInfo, h),
-      toParentMessage: toShopDialogMessage,
+      binding: ShopDialogBinding,
     },
     h,
   )

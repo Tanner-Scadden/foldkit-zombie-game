@@ -1,7 +1,8 @@
 import { Array, Option } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import { NEWS_DAYS, type NewsBullet, type NewsDay } from './changelog'
+import type { ApplicationViewBuilder } from './composition'
 import { Message } from './message'
 import type { Model } from './model'
 
@@ -24,7 +25,7 @@ export const whatsNewText = (
     }),
   })
 
-const bulletView = (bullet: NewsBullet, h: HtmlBuilder<Message>): Html =>
+const bulletView = (bullet: NewsBullet, h: ApplicationViewBuilder): Html =>
   h.li(
     [h.Class('news-bullet')],
     [
@@ -33,7 +34,7 @@ const bulletView = (bullet: NewsBullet, h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-const dayView = (day: NewsDay, h: HtmlBuilder<Message>): Html =>
+const dayView = (day: NewsDay, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('news-day')],
     [
@@ -52,7 +53,7 @@ const pageButtonView = (
   label: string,
   ariaLabel: string,
   message: Message,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.button(
     [
@@ -69,7 +70,7 @@ const pageButtonView = (
 export const whatsNewBodyView = (
   model: Model,
   doneButton: Html,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => [
   ...Option.match(maybeShownDay(model), {
     onNone: () => [],

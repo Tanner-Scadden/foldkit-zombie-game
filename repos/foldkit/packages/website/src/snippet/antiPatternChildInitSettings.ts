@@ -1,34 +1,62 @@
-// settings.ts
+// definition.ts
+import { Schema } from 'effect'
+import { Block } from 'foldkit'
+import { defineMessageUnion } from 'foldkit/message'
 
 export const Theme = Schema.Literals(['Light', 'Dark'])
 export type Theme = typeof Theme.Type
 
-const BootArgs = Schema.Struct({ theme: Theme })
-type BootArgs = typeof BootArgs.Type
-
 export const Message = defineMessageUnion({
-  RestoredTheme: { theme: Theme },
+  RequestedRestore: { theme: Theme },
   CompletedRefreshAvailableThemes: {},
 })
+export type Message = typeof Message.Type
 
 export const OutMessage = defineMessageUnion({
   RestoredTheme: { theme: Theme },
 })
+export type OutMessage = typeof OutMessage.Type
 
-export const init = () => ({ model: Model.make({ theme: 'Light' }) })
+export const Model = Schema.Struct({ theme: Theme })
+export type Model = typeof Model.Type
 
-export const update = (model: Model, message: Message) =>
-  Message.match<Update.ReturnWithOutMessage<Model, Message, OutMessage>>(
-    message,
-    {
-      RestoredTheme: ({ theme }) => ({
-        model: modifyFields(model, { theme: () => theme }),
-        commands: [RefreshAvailableThemes()],
-        outMessage: OutMessage.RestoredTheme({ theme }),
-      }),
-      CompletedRefreshAvailableThemes: () => ({ model }),
-    },
-  )
+export const SettingsDefinition = Block.makeDefinition('Settings', {
+  Model,
+  Message,
+  OutMessage,
+})
 
-export const boot = ({ theme }: BootArgs) =>
-  update(init().model, Message.RestoredTheme({ theme }))
+// settings.ts
+import { Block } from 'foldkit'
+import { modifyFields } from 'foldkit/struct'
+
+import { EffectsLayer, RefreshAvailableThemes } from './command'
+import { Message, Model, OutMessage, SettingsDefinition } from './definition'
+
+const SettingsComposition = SettingsDefinition.makeComposition()
+const requestRestore = Message.RequestedRestore
+
+export const init = SettingsComposition.makeInit(() => ({
+  model: Model.make({ theme: 'Light' }),
+}))
+
+export const update = SettingsComposition.makeUpdate({
+  RequestedRestore: (model, { theme }) => ({
+    model: modifyFields(model, { theme: () => theme }),
+    commands: [RefreshAvailableThemes()],
+    outMessage: OutMessage.RestoredTheme({ theme }),
+  }),
+  CompletedRefreshAvailableThemes: model => ({ model }),
+})
+
+const prepare = () =>
+  SettingsComposition.prepareBlock({
+    init,
+    update,
+    operations: { requestRestore },
+    EffectsLayer,
+  })
+export const block: Block.FromAssemblyWithOutMessage<
+  typeof Model,
+  typeof prepare
+> = Block.assemble(prepare)

@@ -1,14 +1,13 @@
 import { Option, Schema } from 'effect'
-import { Update } from 'foldkit'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-import { RadioGroup } from '@foldkit/ui'
-
+import { PartRadioGroupBlock, SectionRadioGroupBlock } from './lookRadios'
 import {
   type Appearance,
   Body,
-  type CharacterPicker,
+  CharacterPicker,
   HairColor,
   HairStyle,
   LookPart,
@@ -23,8 +22,6 @@ import {
 // MESSAGE
 
 export const Message = defineMessageUnion({
-  GotPartMessage: { partId: LookPart, message: RadioGroup.Message },
-  GotSectionMessage: { message: RadioGroup.Message },
   ClickedToggle: { toggle: LookToggle },
   ClickedDiceButton: {},
 })
@@ -37,13 +34,9 @@ export const OutMessage = defineMessageUnion({
 })
 export type OutMessage = typeof OutMessage.Type
 
+type PartRadioGroupModel = typeof PartRadioGroupBlock.Model.Type
+
 // LOOK
-
-export const SectionRadioGroup = RadioGroup.create<LookSection>()
-
-// NOTE: one radio group serves every part: its values are the part's own
-// words, and chooseLook reads them back through the part's Schema.
-export const PartRadioGroup = RadioGroup.create()
 
 // NOTE: the parts on each of the Look tab's little tabs, in order.
 export const SECTION_PARTS: Readonly<
@@ -80,8 +73,7 @@ const readAs =
     Schema.decodeUnknownOption(schema)(value)
 
 type Part = Readonly<{
-  read: (picker: CharacterPicker) => RadioGroup.Model
-  write: (picker: CharacterPicker, next: RadioGroup.Model) => CharacterPicker
+  read: (picker: CharacterPicker) => PartRadioGroupModel
   choose: (appearance: Appearance, value: string) => Appearance
 }>
 
@@ -91,7 +83,6 @@ type Part = Readonly<{
 const PARTS: Readonly<Record<LookPart, Part>> = {
   Body: {
     read: picker => picker.body,
-    write: (picker, next) => modifyFields(picker, { body: () => next }),
     choose: (appearance, value) =>
       Option.match(readAs(Body)(value), {
         onNone: () => appearance,
@@ -100,7 +91,6 @@ const PARTS: Readonly<Record<LookPart, Part>> = {
   },
   HairStyle: {
     read: picker => picker.hairStyle,
-    write: (picker, next) => modifyFields(picker, { hairStyle: () => next }),
     choose: (appearance, value) =>
       Option.match(readAs(HairStyle)(value), {
         onNone: () => appearance,
@@ -110,7 +100,6 @@ const PARTS: Readonly<Record<LookPart, Part>> = {
   },
   HairColor: {
     read: picker => picker.hairColor,
-    write: (picker, next) => modifyFields(picker, { hairColor: () => next }),
     choose: (appearance, value) =>
       Option.match(readAs(HairColor)(value), {
         onNone: () => appearance,
@@ -120,7 +109,6 @@ const PARTS: Readonly<Record<LookPart, Part>> = {
   },
   SkinTone: {
     read: picker => picker.skinTone,
-    write: (picker, next) => modifyFields(picker, { skinTone: () => next }),
     choose: (appearance, value) =>
       Option.match(readAs(SkinTone)(value), {
         onNone: () => appearance,
@@ -130,7 +118,6 @@ const PARTS: Readonly<Record<LookPart, Part>> = {
   },
   ShirtColor: {
     read: picker => picker.shirtColor,
-    write: (picker, next) => modifyFields(picker, { shirtColor: () => next }),
     choose: (appearance, value) =>
       Option.match(readAs(ShirtColor)(value), {
         onNone: () => appearance,
@@ -140,7 +127,6 @@ const PARTS: Readonly<Record<LookPart, Part>> = {
   },
   Outfit: {
     read: picker => picker.outfit,
-    write: (picker, next) => modifyFields(picker, { outfit: () => next }),
     choose: (appearance, value) =>
       Option.match(readAs(Outfit)(value), {
         onNone: () => appearance,
@@ -149,7 +135,6 @@ const PARTS: Readonly<Record<LookPart, Part>> = {
   },
   Print: {
     read: picker => picker.print,
-    write: (picker, next) => modifyFields(picker, { print: () => next }),
     choose: (appearance, value) =>
       Option.match(readAs(Print)(value), {
         onNone: () => appearance,
@@ -161,7 +146,7 @@ const PARTS: Readonly<Record<LookPart, Part>> = {
 export const partGroupOf = (
   picker: CharacterPicker,
   part: LookPart,
-): RadioGroup.Model => PARTS[part].read(picker)
+): PartRadioGroupModel => PARTS[part].read(picker)
 
 export const chooseLook = (
   appearance: Appearance,
@@ -169,68 +154,108 @@ export const chooseLook = (
   value: string,
 ): Appearance => PARTS[part].choose(appearance, value)
 
-// UPDATE
+// BLOCK
 
-type UpdateReturn = Update.ReturnWithOutMessage<
-  CharacterPicker,
+export const CharacterDefinition = Block.makeDefinition('Character', {
+  Model: CharacterPicker,
   Message,
-  OutMessage
->
+  OutMessage,
+})
 
-const foldPart = (
-  part: LookPart,
-): Update.FoldWithOutMessage<
-  CharacterPicker,
-  Message,
-  RadioGroup.Message,
-  OutMessage
-> =>
-  Update.foldChild({
-    update: PartRadioGroup.update,
-    read: (picker: CharacterPicker) => Option.some(PARTS[part].read(picker)),
-    write: PARTS[part].write,
-    toParentMessage: message =>
-      Message.GotPartMessage({ partId: part, message }),
-    toParentOutMessage: ({ value }) => OutMessage.ChoseLook({ part, value }),
-  })
-
-const PART_FOLDS: Readonly<Record<LookPart, ReturnType<typeof foldPart>>> = {
-  Body: foldPart('Body'),
-  HairStyle: foldPart('HairStyle'),
-  HairColor: foldPart('HairColor'),
-  SkinTone: foldPart('SkinTone'),
-  ShirtColor: foldPart('ShirtColor'),
-  Outfit: foldPart('Outfit'),
-  Print: foldPart('Print'),
-}
+const { makeBinding, makeOutMessageForward, makeOutMessageFold } =
+  CharacterDefinition
 
 // NOTE: a little tab's choice changes only which parts show. It plays no
 // poof, since the look itself is the same.
-const foldSection = Update.foldChild({
-  update: SectionRadioGroup.update,
-  read: (picker: CharacterPicker) => Option.some(picker.sections),
-  write: (picker: CharacterPicker, next: RadioGroup.Model) =>
-    modifyFields(picker, { sections: () => next }),
-  toParentMessage: message => Message.GotSectionMessage({ message }),
-  foldOutMessage:
-    ({ value }) =>
-    (picker: CharacterPicker) => ({
-      model: modifyFields(picker, { section: () => value }),
-    }),
+export const SectionsBinding = makeBinding(SectionRadioGroupBlock, {
+  field: 'sections',
+  init: false,
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(SectionRadioGroupBlock, {
+    Selected: ({ value }) =>
+      CharacterDefinition.makeFieldsStep(() => ({ section: () => value })),
+  }),
 })
 
-export const update = (picker: CharacterPicker, message: Message) =>
-  Message.match<UpdateReturn>(message, {
-    GotPartMessage: ({ partId, message: groupMessage }) =>
-      PART_FOLDS[partId](picker, groupMessage),
-    GotSectionMessage: ({ message: groupMessage }) =>
-      foldSection(picker, groupMessage),
-    ClickedToggle: ({ toggle }) => ({
-      model: picker,
-      outMessage: OutMessage.FlippedLook({ toggle }),
-    }),
-    ClickedDiceButton: () => ({
-      model: picker,
-      outMessage: OutMessage.RequestedRandomLook(),
-    }),
+// NOTE: a part's choice goes up to the root as ChoseLook, which owns the
+// look and plays the poof.
+const forwardPart = (part: LookPart) =>
+  makeOutMessageForward(PartRadioGroupBlock, {
+    Selected: ({ value }) => OutMessage.ChoseLook({ part, value }),
   })
+
+export const BodyBinding = makeBinding(PartRadioGroupBlock, {
+  field: 'body',
+  init: false,
+}).withOutMessagePolicy({ forward: forwardPart('Body') })
+
+export const HairStyleBinding = makeBinding(PartRadioGroupBlock, {
+  field: 'hairStyle',
+  init: false,
+}).withOutMessagePolicy({ forward: forwardPart('HairStyle') })
+
+export const HairColorBinding = makeBinding(PartRadioGroupBlock, {
+  field: 'hairColor',
+  init: false,
+}).withOutMessagePolicy({ forward: forwardPart('HairColor') })
+
+export const SkinToneBinding = makeBinding(PartRadioGroupBlock, {
+  field: 'skinTone',
+  init: false,
+}).withOutMessagePolicy({ forward: forwardPart('SkinTone') })
+
+export const ShirtColorBinding = makeBinding(PartRadioGroupBlock, {
+  field: 'shirtColor',
+  init: false,
+}).withOutMessagePolicy({ forward: forwardPart('ShirtColor') })
+
+export const OutfitBinding = makeBinding(PartRadioGroupBlock, {
+  field: 'outfit',
+  init: false,
+}).withOutMessagePolicy({ forward: forwardPart('Outfit') })
+
+export const PrintBinding = makeBinding(PartRadioGroupBlock, {
+  field: 'print',
+  init: false,
+}).withOutMessagePolicy({ forward: forwardPart('Print') })
+
+export const PART_BINDINGS = {
+  Body: BodyBinding,
+  HairStyle: HairStyleBinding,
+  HairColor: HairColorBinding,
+  SkinTone: SkinToneBinding,
+  ShirtColor: ShirtColorBinding,
+  Outfit: OutfitBinding,
+  Print: PrintBinding,
+} as const
+
+export const CharacterComposition = CharacterDefinition.makeComposition({
+  bindings: [
+    SectionsBinding,
+    BodyBinding,
+    HairStyleBinding,
+    HairColorBinding,
+    SkinToneBinding,
+    ShirtColorBinding,
+    OutfitBinding,
+    PrintBinding,
+  ],
+})
+export type CharacterViewBuilder = Block.ViewBuilderFor<
+  typeof CharacterComposition
+>
+
+// UPDATE
+
+export const update = CharacterComposition.makeUpdate({
+  ClickedToggle: CharacterDefinition.makeOutMessageStep.fromMessage(
+    ({ toggle }) => OutMessage.FlippedLook({ toggle }),
+  ),
+  ClickedDiceButton: CharacterDefinition.makeOutMessageStep(() =>
+    OutMessage.RequestedRandomLook(),
+  ),
+})
+
+export const init = CharacterComposition.makeInit(
+  (picker: CharacterPicker) => ({ model: picker }),
+)

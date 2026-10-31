@@ -41,7 +41,6 @@ const Message = defineMessageUnion({
   ChangedFillColor: { value: Schema.String },
 })
 type Message = typeof Message.Type
-
 // Inside a view, mint typed builders with `withMessage(h)`. The view's
 // builder fixes the Message universe, so the elements' event factories can
 // only produce Messages the surrounding frame dispatches.

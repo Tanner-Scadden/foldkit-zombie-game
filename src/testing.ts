@@ -2,9 +2,11 @@ import { Array, Option } from 'effect'
 import { Scene, Story } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
+import { ApplicationComposition } from './composition'
 import { SCORE_PER_ZOMBIE, ZOMBIE_MAX_HP } from './constants'
+import { update } from './main'
 import { Message } from './message'
 import {
   type Bullet,
@@ -21,7 +23,9 @@ import {
   ZombieState,
   initialModel,
 } from './model'
-import { MeasureGameSurface } from './view'
+import { MeasureGameSurface } from './mount'
+import { subscriptions } from './subscriptions'
+import { view } from './view'
 import { STARTING_PISTOL, gunsOf, mapGuns, maybeCarried } from './weapons'
 import { Arsenal, type CarriedGun, type Player } from './worldSchema'
 import { ZOMBIE_KINDS } from './zombies'
@@ -75,10 +79,27 @@ export const releaseFire = Story.message(
 /* oxlint-disable foldkit/no-child-message-construction-in-root */
 
 export const showDialog = () =>
-  Story.Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog())
+  Story.Command.resolve(
+    Dialog.test.ShowDialog,
+    DialogBlock.Message.SucceededShowDialog(),
+  )
+
+// NOTE: the root's Subscriptions, its children's included, so a Scene can
+// emit a Message from one of them (Scene.Subscription.emit).
+export const SCENE_SUBSCRIPTIONS = Scene.subscriptions(
+  ApplicationComposition,
+  subscriptions,
+)
+
+// NOTE: what every root Scene runs: the root's update, view, and
+// Subscriptions.
+export const ROOT = { update, view, subscriptions: SCENE_SUBSCRIPTIONS }
 
 export const emitPressedKey = (code: string) =>
-  Scene.Subscription.emit(Message.PressedKey({ code }))
+  Scene.Subscription.emit(
+    SCENE_SUBSCRIPTIONS.keyboard,
+    Message.PressedKey({ code }),
+  )
 
 export const measureSurface = Scene.Mount.resolve(
   MeasureGameSurface,
@@ -87,12 +108,8 @@ export const measureSurface = Scene.Mount.resolve(
 
 export const showDialogInScene = () => [
   Scene.Command.resolve(
-    Dialog.ShowDialog,
-    Dialog.Message.SucceededShowDialog(),
-  ),
-  Scene.Mount.resolve(
-    Dialog.AcquireResources,
-    Dialog.Message.SucceededAcquireResources(),
+    Dialog.test.ShowDialog,
+    DialogBlock.Message.SucceededShowDialog(),
   ),
 ]
 
@@ -108,12 +125,12 @@ export const openHandInScene = () => [
 export const pickCardInScene = (name: string | RegExp) => [
   Scene.click(Scene.role('button', { name })),
   Scene.Command.resolve(
-    Dialog.CloseDialog,
-    Dialog.Message.CompletedCloseDialog(),
+    Dialog.test.CloseDialog,
+    DialogBlock.Message.CompletedCloseDialog(),
   ),
   Scene.Command.resolve(
-    Dialog.ShowDialog,
-    Dialog.Message.SucceededShowDialog(),
+    Dialog.test.ShowDialog,
+    DialogBlock.Message.SucceededShowDialog(),
   ),
 ]
 

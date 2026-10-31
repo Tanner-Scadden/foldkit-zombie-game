@@ -1,12 +1,16 @@
 import { Context, Schema } from 'effect'
 import { describe, expect, test } from 'vitest'
 
+import { makeDefinition } from '../block/define.js'
+import * as Block from '../block/public.js'
+import { block } from '../html/block.js'
 import {
   type Html,
   type HtmlBuilder,
   createKeyedLazy,
   createLazy,
   defineView,
+  __htmlBuilder as htmlBuilderFor,
   inertHtml as ih,
 } from '../html/index.js'
 import { observeLazyResolutions } from '../html/lazy.js'
@@ -68,6 +72,49 @@ describe('Lazy.expectAllReused', () => {
       )
 
     expect(() => Lazy.expectAllReused({ view, model })).not.toThrow()
+  })
+
+  test('accepts a Composition view with registered child capabilities', () => {
+    const lazyTitle = createLazy()
+
+    const ChildComposition = makeDefinition('LazyAssertionChild', {
+      Model,
+      Message: Schema.Never,
+    }).makeComposition()
+    const childView = ChildComposition.makeView((model, h) =>
+      h.div([], [lazyTitle(titleView, [model.title])]),
+    )
+    const prepareChild = () =>
+      ChildComposition.prepareBlock({
+        init: ChildComposition.makeInit(() => ({ model })),
+        update: ChildComposition.makeUpdate({}),
+        view: childView,
+      })
+    const child: Block.FromAssemblyWithView<typeof Model, typeof prepareChild> =
+      Block.assemble(prepareChild)
+    const ParentModel = Schema.Struct({ child: Model })
+    type ParentModel = typeof ParentModel.Type
+    const ParentDefinition = makeDefinition('LazyAssertionParent', {
+      Model: ParentModel,
+      Message: Schema.Never,
+    })
+    const ChildBinding = ParentDefinition.makeBinding(child, { field: 'child' })
+    const ParentComposition = ParentDefinition.makeComposition({
+      bindings: [ChildBinding],
+    })
+    const view = ParentComposition.makeView((model, h) =>
+      h.block(ChildBinding.embedView({ slotId: 'child', model: model.child })),
+    )
+    const parentModel = ParentModel.make({ child: model })
+
+    expect(() =>
+      Lazy.expectAllReused({ view, model: parentModel }),
+    ).not.toThrow()
+
+    if (false) {
+      // @ts-expect-error The view's exact parent Model is still required.
+      Lazy.expectAllReused({ view, model })
+    }
   })
 
   test('reports a slot created during the view as NoCachedEntry', () => {
@@ -184,24 +231,27 @@ describe('Lazy.expectAllReused', () => {
     expect(outerResolutions).toHaveLength(1)
   })
 
-  test('reuses lazy views inside Submodel boundaries across assertions', () => {
+  test('reuses lazy views inside Block boundaries across assertions', () => {
     const lazyTitle = createLazy()
     const childView = defineView<Model>((model, h) =>
       h.div([], [lazyTitle(titleView, [model.title])]),
     )
-    const view: View = (model, h) =>
-      h.submodel({
-        slotId: 'child',
-        model,
-        view: childView,
-        toParentMessage: message => message,
-      })
+    const view: View = model =>
+      block(
+        {
+          slotId: 'child',
+          model,
+          view: childView,
+          toParentMessage: message => message,
+        },
+        htmlBuilderFor(),
+      )
 
     expect(() => Lazy.expectAllReused({ view, model })).not.toThrow()
     expect(() => Lazy.expectAllReused({ view, model })).not.toThrow()
   })
 
-  test('reports FrameChanged when a slot is shared across Submodel boundaries', () => {
+  test('reports FrameChanged when a slot is shared across Block boundaries', () => {
     const lazyTitle = createLazy()
     const childView = defineView<Model>((model, h) =>
       h.div([], [lazyTitle(titleView, [model.title])]),
@@ -210,18 +260,24 @@ describe('Lazy.expectAllReused', () => {
       h.div(
         [],
         [
-          h.submodel({
-            slotId: 'first',
-            model,
-            view: childView,
-            toParentMessage: message => message,
-          }),
-          h.submodel({
-            slotId: 'second',
-            model,
-            view: childView,
-            toParentMessage: message => message,
-          }),
+          block(
+            {
+              slotId: 'first',
+              model,
+              view: childView,
+              toParentMessage: message => message,
+            },
+            htmlBuilderFor(),
+          ),
+          block(
+            {
+              slotId: 'second',
+              model,
+              view: childView,
+              toParentMessage: message => message,
+            },
+            htmlBuilderFor(),
+          ),
         ],
       )
 

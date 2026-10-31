@@ -2,9 +2,10 @@ import { Array, Match, Option, Schema, pipe } from 'effect'
 import type { Canvas } from 'foldkit'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
+import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
 
-import { Dialog, RadioGroup } from '@foldkit/ui'
+import { Dialog, DialogBlock, RadioGroup } from '@foldkit/ui'
 
 import {
   BODIES,
@@ -25,7 +26,9 @@ import {
   randomAppearance,
 } from './appearance'
 import * as Character from './character'
+import { CharacterBinding } from './composition'
 import { RESTART_GRACE_MS } from './constants'
+import { PartRadioGroupBlock, SectionRadioGroupBlock } from './lookRadios'
 import { update } from './main'
 import { Message } from './message'
 import {
@@ -43,27 +46,49 @@ import { asVeteran } from './veteran'
 
 const onTitle: Model = asVeteran(initialModel)
 
+type PartMessage = typeof PartRadioGroupBlock.Message.Type
+
+// NOTE: a part's radio group Message as the Look tab hears it, through
+// that part's own Binding.
+const partMessage = (part: LookPart, partGroupMessage: PartMessage) => {
+  switch (part) {
+    case 'Body':
+      return toParentMessage(Character.BodyBinding, partGroupMessage)
+    case 'HairStyle':
+      return toParentMessage(Character.HairStyleBinding, partGroupMessage)
+    case 'HairColor':
+      return toParentMessage(Character.HairColorBinding, partGroupMessage)
+    case 'SkinTone':
+      return toParentMessage(Character.SkinToneBinding, partGroupMessage)
+    case 'ShirtColor':
+      return toParentMessage(Character.ShirtColorBinding, partGroupMessage)
+    case 'Outfit':
+      return toParentMessage(Character.OutfitBinding, partGroupMessage)
+    case 'Print':
+      return toParentMessage(Character.PrintBinding, partGroupMessage)
+  }
+}
+
 const choose = (part: LookPart, index: number, value: string) =>
   message(
-    Message.GotCharacterMessage({
-      message: Character.Message.GotPartMessage({
-        partId: part,
-        message: RadioGroup.Message.SelectedOption({ index, value }),
-      }),
-    }),
+    toParentMessage(
+      CharacterBinding,
+      partMessage(
+        part,
+        PartRadioGroupBlock.Message.SelectedOption({ index, value }),
+      ),
+    ),
   )
 
 const resolveFocusOption = () =>
   Command.resolve(
-    RadioGroup.FocusOption,
-    RadioGroup.Message.CompletedFocusOption(),
+    RadioGroup.test.FocusOption,
+    PartRadioGroupBlock.Message.CompletedFocusOption(),
   )
 
 const rollDice = () =>
   message(
-    Message.GotCharacterMessage({
-      message: Character.Message.ClickedDiceButton(),
-    }),
+    toParentMessage(CharacterBinding, Character.Message.ClickedDiceButton()),
   )
 
 const PICKED: Appearance = {
@@ -80,9 +105,10 @@ const PICKED: Appearance = {
 
 const flip = (toggle: 'Beard' | 'Glasses') =>
   message(
-    Message.GotCharacterMessage({
-      message: Character.Message.ClickedToggle({ toggle }),
-    }),
+    toParentMessage(
+      CharacterBinding,
+      Character.Message.ClickedToggle({ toggle }),
+    ),
   )
 
 const withLook = (base: Model, appearance: Appearance): Model =>
@@ -235,16 +261,21 @@ describe('Character', () => {
         expect(character.section).toBe('Body')
       }),
       message(
-        Message.GotCharacterMessage({
-          message: Character.Message.GotSectionMessage({
-            message: RadioGroup.Message.SelectedOption({
+        toParentMessage(
+          CharacterBinding,
+          toParentMessage(
+            Character.SectionsBinding,
+            SectionRadioGroupBlock.Message.SelectedOption({
               index: 2,
               value: 'Outfit',
             }),
-          }),
-        }),
+          ),
+        ),
       ),
-      resolveFocusOption(),
+      Command.resolve(
+        RadioGroup.test.FocusOption,
+        SectionRadioGroupBlock.Message.CompletedFocusOption(),
+      ),
       model(({ character, appearance }) => {
         expect(character.section).toBe('Outfit')
         expect(appearance).toEqual(onTitle.appearance)
@@ -267,11 +298,11 @@ describe('Character', () => {
         given(given_),
         message(Message.PressedKey({ code: 'KeyC' })),
         Command.resolve(
-          Dialog.ShowDialog,
-          Dialog.Message.SucceededShowDialog(),
+          Dialog.test.ShowDialog,
+          DialogBlock.Message.SucceededShowDialog(),
         ),
-        model(({ profile }) => {
-          expect(profile.dialog.isOpen).toBe(true)
+        model(({ profile, profileDialog }) => {
+          expect(profileDialog.isOpen).toBe(true)
           expect(profile.tab).toBe('Look')
         }),
       )
@@ -291,8 +322,8 @@ describe('Character', () => {
         }),
       ),
       message(Message.PressedKey({ code: 'KeyC' })),
-      model(({ profile }) => {
-        expect(profile.dialog.isOpen).toBe(false)
+      model(({ profileDialog }) => {
+        expect(profileDialog.isOpen).toBe(false)
       }),
     )
     story(
@@ -304,8 +335,8 @@ describe('Character', () => {
         }),
       ),
       message(Message.ClickedCharacterButton()),
-      model(({ profile }) => {
-        expect(profile.dialog.isOpen).toBe(false)
+      model(({ profileDialog }) => {
+        expect(profileDialog.isOpen).toBe(false)
       }),
     )
   })

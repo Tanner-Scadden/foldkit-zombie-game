@@ -2,6 +2,7 @@ import {
   Context,
   Duration,
   Effect,
+  Layer,
   Match,
   Option,
   Schema,
@@ -180,8 +181,15 @@ const connectingToMaybeNextAttempt = (
 const LogTransition = Command.define('LogTransition', {
   args: { description: Schema.String },
   messages: [ConnectionMessage.CompletedLogTransition],
-  execute: () => Effect.succeed(ConnectionMessage.CompletedLogTransition()),
 })
+
+const LogTransitionLayer = LogTransition.toLayer(
+  Effect.succeed(() =>
+    Effect.succeed(ConnectionMessage.CompletedLogTransition()),
+  ),
+)
+
+type ConnectionHandlerRequirements = Command.HandlerOf<typeof LogTransition>
 
 const connectionMachine = define({
   state: ConnectionState,
@@ -306,8 +314,6 @@ const AppModel = Schema.Struct({
 })
 type AppModel = typeof AppModel.Type
 
-type AppUpdateReturn = Update.Return<AppModel, ConnectionMessage>
-
 const foldConnection = fold({
   machine: connectionMachine,
   read: (model: AppModel) => Option.some(model.connection),
@@ -315,8 +321,8 @@ const foldConnection = fold({
     modifyFields(model, { connection: () => nextConnection }),
 })
 
-const update = (model: AppModel, message: ConnectionMessage) =>
-  ConnectionMessage.match<AppUpdateReturn>(message, {
+const update = Update.define((model: AppModel, message: ConnectionMessage) =>
+  ConnectionMessage.match(message, {
     ClickedConnect: connectionMessage =>
       foldConnection(model, connectionMessage),
     ClickedDisconnect: connectionMessage =>
@@ -329,7 +335,8 @@ const update = (model: AppModel, message: ConnectionMessage) =>
       foldConnection(model, connectionMessage),
     ReleasedSocket: () => ({ model }),
     CompletedLogTransition: () => ({ model }),
-  })
+  }),
+)
 
 // The Machine owns transitions only. Lifecycle effects stay in ordinary
 // primitives gated on the state tag. The socket is a ManagedResource that
@@ -344,28 +351,33 @@ const Socket = ManagedResource.tag<WebSocket>()('Socket')
 
 const managedResources = ManagedResource.make<AppModel, ConnectionMessage>()(
   entry => ({
-    socket: entry(Schema.Option(Schema.Null), {
+    socket: entry('ManageSocket', Schema.Option(Schema.Null), {
       resource: Socket,
       modelToMaybeRequirements: model =>
         Match.value(model.connection).pipe(
           Match.tag('Connecting', 'Connected', () => Option.some(null)),
           Match.orElse(() => Option.none()),
         ),
-      acquire: () =>
-        Effect.callback<WebSocket, string>(resume => {
-          const socket = new WebSocket(SOCKET_URL)
-          socket.addEventListener('open', () => resume(Effect.succeed(socket)))
-          socket.addEventListener('error', () =>
-            resume(Effect.fail('Socket failed to open')),
-          )
-        }),
-      release: socket => Effect.sync(() => socket.close()),
       onAcquired: socket =>
         ConnectionMessage.SocketOpened({ sessionId: socket.url }),
       onReleased: () => ConnectionMessage.ReleasedSocket(),
       onAcquireError: error =>
         ConnectionMessage.SocketErrored({ reason: String(error) }),
     }),
+  }),
+)
+
+const SocketLayer = managedResources.socket.toLayer(
+  Effect.succeed({
+    acquire: () =>
+      Effect.callback<WebSocket, string>(resume => {
+        const socket = new WebSocket(SOCKET_URL)
+        socket.addEventListener('open', () => resume(Effect.succeed(socket)))
+        socket.addEventListener('error', () =>
+          resume(Effect.fail('Socket failed to open')),
+        )
+      }),
+    release: socket => Effect.sync(() => socket.close()),
   }),
 )
 
@@ -377,6 +389,7 @@ const managedResources = ManagedResource.make<AppModel, ConnectionMessage>()(
 const subscriptions = Subscription.make<AppModel, ConnectionMessage>()(
   entry => ({
     backoffTimer: entry(
+      'BackoffTimer',
       { maybeDelayMillis: Schema.Option(Schema.Number) },
       {
         modelToDependencies: model => ({
@@ -387,20 +400,31 @@ const subscriptions = Subscription.make<AppModel, ConnectionMessage>()(
             Match.orElse(() => Option.none()),
           ),
         }),
-        dependenciesToStream: ({ maybeDelayMillis }) =>
-          Option.match(maybeDelayMillis, {
-            onNone: () => Stream.empty,
-            onSome: delayMillis =>
-              Stream.fromEffect(
-                Effect.as(
-                  Effect.sleep(Duration.millis(delayMillis)),
-                  ConnectionMessage.TimedOutBackoff(),
-                ),
-              ),
-          }),
+        messages: [ConnectionMessage.TimedOutBackoff],
       },
     ),
   }),
+)
+
+const BackoffTimerLayer = subscriptions.backoffTimer.toLayer(
+  Effect.succeed(({ maybeDelayMillis }) =>
+    Option.match(maybeDelayMillis, {
+      onNone: () => Stream.empty,
+      onSome: delayMillis =>
+        Stream.fromEffect(
+          Effect.as(
+            Effect.sleep(Duration.millis(delayMillis)),
+            ConnectionMessage.TimedOutBackoff(),
+          ),
+        ),
+    }),
+  ),
+)
+
+const EffectsLayer = Layer.mergeAll(
+  LogTransitionLayer,
+  SocketLayer,
+  BackoffTimerLayer,
 )
 
 // TYPE-LEVEL GUARANTEES
@@ -847,11 +871,13 @@ const DelimiterCollisionState = defineTaggedUnion({
   Target0: {},
   Target1: {},
 })
+type DelimiterCollisionState = typeof DelimiterCollisionState.Type
 
 const DelimiterCollisionMessage = defineMessageUnion({
   C: {},
   'B|C': {},
 })
+type DelimiterCollisionMessage = typeof DelimiterCollisionMessage.Type
 
 const delimiterCollisionMachine = define({
   state: DelimiterCollisionState,
@@ -890,7 +916,9 @@ const delimiterCollisionMachine = define({
 })
 
 const PlainIdle = Schema.Struct({ _tag: Schema.Literal('PlainIdle') })
+type PlainIdle = typeof PlainIdle.Type
 const PlainActive = Schema.Struct({ _tag: Schema.Literal('PlainActive') })
+type PlainActive = typeof PlainActive.Type
 
 const PlainState = Schema.Union([PlainIdle, PlainActive])
 type PlainState = typeof PlainState.Type
@@ -917,8 +945,11 @@ const NestedState = defineTaggedUnion({
   NestedError: { error: Schema.String },
   NestedOk: { data: Schema.String },
 })
+type NestedState = typeof NestedState.Type
 const NestedSettled = NestedState.subset(['NestedError', 'NestedOk'])
+type NestedSettled = typeof NestedSettled.Type
 const NestedActive = Schema.Union([NestedState.NestedLoading, NestedSettled])
+type NestedActive = typeof NestedActive.Type
 const NestedStateSchema = Schema.Union([NestedState.NestedIdle, NestedActive])
 type NestedStateSchema = typeof NestedStateSchema.Type
 
@@ -953,7 +984,9 @@ const nestedUnionMachine = define({
 })
 
 const UntaggedMember = Schema.Struct({ _tag: Schema.String })
+type UntaggedMember = typeof UntaggedMember.Type
 const UntaggedState = Schema.Union([PlainIdle, UntaggedMember])
+type UntaggedState = typeof UntaggedState.Type
 
 // REQUIREMENTS
 
@@ -992,21 +1025,35 @@ type SubmitMessage = typeof SubmitMessage.Type
 
 const Presign = Command.define('Presign', {
   messages: [SubmitMessage.SucceededPresign],
-  execute: Effect.gen(function* () {
-    const client = yield* UploadsClient
-    const url = yield* client.presign
-    return SubmitMessage.SucceededPresign({ url })
-  }),
 })
+
+const PresignLayer = Presign.toLayer(
+  Effect.succeed(() =>
+    Effect.gen(function* () {
+      const client = yield* UploadsClient
+      const url = yield* client.presign
+      return SubmitMessage.SucceededPresign({ url })
+    }),
+  ),
+)
 
 const Persist = Command.define('Persist', {
   messages: [SubmitMessage.SucceededPersist],
-  execute: Effect.gen(function* () {
-    const client = yield* SaveClient
-    const id = yield* client.save
-    return SubmitMessage.SucceededPersist({ id })
-  }),
 })
+
+const PersistLayer = Persist.toLayer(
+  Effect.succeed(() =>
+    Effect.gen(function* () {
+      const client = yield* SaveClient
+      const id = yield* client.save
+      return SubmitMessage.SucceededPersist({ id })
+    }),
+  ),
+)
+
+type SubmitHandlerRequirements =
+  | Command.HandlerOf<typeof Presign>
+  | Command.HandlerOf<typeof Persist>
 
 const SubmitContext = Schema.Struct({ shouldSubmit: Schema.Boolean })
 type SubmitContext = typeof SubmitContext.Type
@@ -1154,7 +1201,7 @@ const inferredOtherwiseRequirementsMachine = define({
 const explicitRequirementsMachine = define({
   state: SubmitState,
   message: SubmitMessage,
-})<UploadsClient | SaveClient>({
+})<SubmitHandlerRequirements>({
   initial: SubmitState.Idle(),
   states: {
     Idle: {
@@ -1194,7 +1241,7 @@ const explicitContextualRequirementsMachine = define({
   state: SubmitState,
   message: SubmitMessage,
   context: SubmitContext,
-})<UploadsClient | SaveClient>({
+})<SubmitHandlerRequirements>({
   initial: SubmitState.Idle(),
   states: {
     Idle: {
@@ -1413,7 +1460,7 @@ describe('shared transitions', () => {
         states: {},
       }),
     ).toThrow(
-      'Machine.define: shared transitions overlap for state "Idle" and Message "ClickedFetch"',
+      'Machine.makeMachine: shared transitions overlap for state "Idle" and Message "ClickedFetch"',
     )
   })
 
@@ -1460,7 +1507,7 @@ describe('connection machine', () => {
       expect(commandNames).toEqual(['LogTransition'])
 
       const commandResults = result.commands.map(command =>
-        Effect.runSync(command.effect),
+        Effect.runSync(command.effect.pipe(Effect.provide(EffectsLayer))),
       )
       expect(commandResults).toEqual([
         ConnectionMessage.CompletedLogTransition(),
@@ -1787,7 +1834,7 @@ describe('context', () => {
       remoteDataContext: fails,
     }
 
-    const result = Update.combine(model, [
+    const result = Update.combineSteps(model, [
       stepModel => ({
         model: modifyFields(stepModel, {
           remoteDataContext: () => succeeds,
@@ -2108,7 +2155,7 @@ describe('state tag extraction', () => {
         states: {},
       }),
     ).toThrow(
-      'Machine.define: every member of the state union Schema must be a Struct with a literal _tag field',
+      'Machine.makeMachine: every member of the state union Schema must be a Struct with a literal _tag field',
     )
   })
 })
@@ -2346,7 +2393,12 @@ describe('integration', () => {
     const connectionUpdate = connect(model)
 
     expectTypeOf(foldConnection).toEqualTypeOf<
-      Update.Fold<AppModel, ConnectionMessage, ConnectionMessage>
+      Update.Fold<
+        AppModel,
+        ConnectionMessage,
+        ConnectionMessage,
+        ConnectionHandlerRequirements
+      >
     >()
     expect(connectionUpdate.model.connection).toStrictEqual(
       ConnectionState.Connecting({ attemptCount: 1 }),
@@ -2356,7 +2408,11 @@ describe('integration', () => {
 
   it('calls context-free transitions with two arguments', () => {
     const transition = vi.fn(connectionMachine.transition)
-    const machine: Machine<ConnectionState, ConnectionMessage> = {
+    const machine: Machine<
+      ConnectionState,
+      ConnectionMessage,
+      ConnectionHandlerRequirements
+    > = {
       ...connectionMachine,
       transition,
     }
@@ -2399,10 +2455,15 @@ describe('integration', () => {
   })
 
   it('preserves Machine Commands without mapping them', () => {
-    const commands: Update.Commands<ConnectionMessage> = [
-      LogTransition({ description: 'Opened session session-1' }),
-    ]
-    const machine: Machine<ConnectionState, ConnectionMessage> = {
+    const commands: Update.Commands<
+      ConnectionMessage,
+      ConnectionHandlerRequirements
+    > = [LogTransition({ description: 'Opened session session-1' })]
+    const machine: Machine<
+      ConnectionState,
+      ConnectionMessage,
+      ConnectionHandlerRequirements
+    > = {
       ...connectionMachine,
       transition: state => ({ model: state, commands }),
     }
@@ -2501,7 +2562,11 @@ describe('edge command requirements', () => {
     )
 
     expectTypeOf(submitClick).toEqualTypeOf<
-      Update.Return<SubmitAppModel, SubmitMessage, UploadsClient>
+      Update.Return<
+        SubmitAppModel,
+        SubmitMessage,
+        Command.HandlerOf<typeof Presign>
+      >
     >()
     expect(submitClick.commands ?? []).toHaveLength(1)
   })
@@ -2513,16 +2578,21 @@ describe('edge command requirements', () => {
     )
     expect(submitClick.model).toStrictEqual(SubmitState.Presigning())
 
-    expectTypeOf(submitClick.commands).toEqualTypeOf<
-      | ReadonlyArray<Command.Command<SubmitMessage, never, UploadsClient>>
-      | undefined
-    >()
+    expectTypeOf<
+      Update.RequirementsOf<() => typeof submitClick>
+    >().toEqualTypeOf<Command.HandlerOf<typeof Presign>>()
     expect(submitClick.commands ?? []).toHaveLength(1)
 
     const uploads: UploadsShape = { presign: Effect.succeed(PRESIGNED_URL) }
     const messages = (submitClick.commands ?? []).map(command =>
       Effect.runSync(
-        Effect.provideService(command.effect, UploadsClient, uploads),
+        command.effect.pipe(
+          Effect.provide(
+            PresignLayer.pipe(
+              Layer.provide(Layer.succeed(UploadsClient, uploads)),
+            ),
+          ),
+        ),
       ),
     )
     expect(messages).toEqual([
@@ -2537,10 +2607,9 @@ describe('edge command requirements', () => {
     )
     expect(submitClick.model).toStrictEqual(SubmitState.Presigning())
 
-    expectTypeOf(submitClick.commands).toEqualTypeOf<
-      | ReadonlyArray<Command.Command<SubmitMessage, never, UploadsClient>>
-      | undefined
-    >()
+    expectTypeOf<
+      Update.RequirementsOf<() => typeof submitClick>
+    >().toEqualTypeOf<Command.HandlerOf<typeof Presign>>()
     expect(submitClick.commands ?? []).toHaveLength(1)
   })
 
@@ -2551,10 +2620,9 @@ describe('edge command requirements', () => {
       { shouldSubmit: true },
     )
 
-    expectTypeOf(submitClick.commands).toEqualTypeOf<
-      | ReadonlyArray<Command.Command<SubmitMessage, never, UploadsClient>>
-      | undefined
-    >()
+    expectTypeOf<
+      Update.RequirementsOf<() => typeof submitClick>
+    >().toEqualTypeOf<Command.HandlerOf<typeof Presign>>()
     expect(submitClick.commands ?? []).toHaveLength(1)
   })
 
@@ -2565,16 +2633,21 @@ describe('edge command requirements', () => {
     )
     expect(submitClick.model).toStrictEqual(SubmitState.Presigning())
 
-    expectTypeOf(submitClick.commands).toEqualTypeOf<
-      | ReadonlyArray<Command.Command<SubmitMessage, never, UploadsClient>>
-      | undefined
-    >()
+    expectTypeOf<
+      Update.RequirementsOf<() => typeof submitClick>
+    >().toEqualTypeOf<Command.HandlerOf<typeof Presign>>()
     expect(submitClick.commands ?? []).toHaveLength(1)
 
     const uploads: UploadsShape = { presign: Effect.succeed(PRESIGNED_URL) }
     const messages = (submitClick.commands ?? []).map(command =>
       Effect.runSync(
-        Effect.provideService(command.effect, UploadsClient, uploads),
+        command.effect.pipe(
+          Effect.provide(
+            PresignLayer.pipe(
+              Layer.provide(Layer.succeed(UploadsClient, uploads)),
+            ),
+          ),
+        ),
       ),
     )
     expect(messages).toEqual([
@@ -2589,10 +2662,9 @@ describe('edge command requirements', () => {
       { shouldSubmit: true },
     )
 
-    expectTypeOf(submitClick.commands).toEqualTypeOf<
-      | ReadonlyArray<Command.Command<SubmitMessage, never, UploadsClient>>
-      | undefined
-    >()
+    expectTypeOf<
+      Update.RequirementsOf<() => typeof submitClick>
+    >().toEqualTypeOf<Command.HandlerOf<typeof Presign>>()
     expect(submitClick.commands ?? []).toHaveLength(1)
   })
 
@@ -2603,16 +2675,21 @@ describe('edge command requirements', () => {
     )
     expect(submitClick.model).toStrictEqual(SubmitState.Presigning())
 
-    expectTypeOf(submitClick.commands).toEqualTypeOf<
-      | ReadonlyArray<Command.Command<SubmitMessage, never, UploadsClient>>
-      | undefined
-    >()
+    expectTypeOf<
+      Update.RequirementsOf<() => typeof submitClick>
+    >().toEqualTypeOf<Command.HandlerOf<typeof Presign>>()
     expect(submitClick.commands ?? []).toHaveLength(1)
 
     const uploads: UploadsShape = { presign: Effect.succeed(PRESIGNED_URL) }
     const messages = (submitClick.commands ?? []).map(command =>
       Effect.runSync(
-        Effect.provideService(command.effect, UploadsClient, uploads),
+        command.effect.pipe(
+          Effect.provide(
+            PresignLayer.pipe(
+              Layer.provide(Layer.succeed(UploadsClient, uploads)),
+            ),
+          ),
+        ),
       ),
     )
     expect(messages).toEqual([
@@ -2626,10 +2703,9 @@ describe('edge command requirements', () => {
       RemoteDataMessage.ClickedFetch(),
     )
 
-    expectTypeOf(fetchClick.commands).toEqualTypeOf<
-      | ReadonlyArray<Command.Command<RemoteDataMessage, never, never>>
-      | undefined
-    >()
+    expectTypeOf<
+      Update.RequirementsOf<() => typeof fetchClick>
+    >().toEqualTypeOf<never>()
     expect(fetchClick.commands ?? []).toEqual([])
   })
 
@@ -2639,7 +2715,7 @@ describe('edge command requirements', () => {
       SubmitMessage.ClickedSubmit(),
     )
 
-    // @ts-expect-error the edge command requires UploadsClient, so R is not never
+    // @ts-expect-error the edge command requires its Presign handler, so R is not never
     const requiresNever: ReadonlyArray<
       Command.Command<SubmitMessage, never, never>
     > = submitClick.commands ?? []
@@ -2656,19 +2732,22 @@ describe('edge command requirements', () => {
     )
     expect(submitClick.model).toStrictEqual(SubmitState.Presigning())
 
-    expectTypeOf(submitClick.commands).toEqualTypeOf<
-      | ReadonlyArray<
-          Command.Command<SubmitMessage, never, UploadsClient | SaveClient>
-        >
-      | undefined
-    >()
+    expectTypeOf<
+      Update.RequirementsOf<() => typeof submitClick>
+    >().toEqualTypeOf<SubmitHandlerRequirements>()
     expect(submitClick.commands ?? []).toHaveLength(1)
 
     const presignMessages = (submitClick.commands ?? []).map(command =>
       Effect.runSync(
         command.effect.pipe(
-          Effect.provideService(UploadsClient, uploads),
-          Effect.provideService(SaveClient, save),
+          Effect.provide(
+            Layer.mergeAll(
+              PresignLayer.pipe(
+                Layer.provide(Layer.succeed(UploadsClient, uploads)),
+              ),
+              PersistLayer.pipe(Layer.provide(Layer.succeed(SaveClient, save))),
+            ),
+          ),
         ),
       ),
     )
@@ -2685,8 +2764,14 @@ describe('edge command requirements', () => {
     const persistMessages = (presignSuccess.commands ?? []).map(command =>
       Effect.runSync(
         command.effect.pipe(
-          Effect.provideService(UploadsClient, uploads),
-          Effect.provideService(SaveClient, save),
+          Effect.provide(
+            Layer.mergeAll(
+              PresignLayer.pipe(
+                Layer.provide(Layer.succeed(UploadsClient, uploads)),
+              ),
+              PersistLayer.pipe(Layer.provide(Layer.succeed(SaveClient, save))),
+            ),
+          ),
         ),
       ),
     )
@@ -2702,12 +2787,9 @@ describe('edge command requirements', () => {
       { shouldSubmit: true },
     )
 
-    expectTypeOf(submitClick.commands).toEqualTypeOf<
-      | ReadonlyArray<
-          Command.Command<SubmitMessage, never, UploadsClient | SaveClient>
-        >
-      | undefined
-    >()
+    expectTypeOf<
+      Update.RequirementsOf<() => typeof submitClick>
+    >().toEqualTypeOf<SubmitHandlerRequirements>()
     expect(submitClick.commands ?? []).toHaveLength(1)
   })
 })

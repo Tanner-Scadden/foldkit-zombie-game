@@ -7,10 +7,9 @@ export const Position = Schema.Struct({
   x: Schema.Number,
   y: Schema.Number,
 })
+export type Position = typeof Position.Type
 
 export const equivalence = Schema.toEquivalence(Position)
-
-export type Position = typeof Position.Type
 
 export const wrap = ({ x, y }: Position): Position => ({
   x: x < 0 ? GAME.GRID_SIZE - 1 : x >= GAME.GRID_SIZE ? 0 : x,

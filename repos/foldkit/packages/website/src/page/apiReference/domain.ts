@@ -10,6 +10,7 @@ import {
   flow,
   pipe,
 } from 'effect'
+import { AsyncData } from 'foldkit'
 
 import {
   type NamedSchemas,
@@ -32,6 +33,7 @@ import {
 const NullableString = Schema.OptionFromNullishOr(Schema.String, {
   onNoneEncoding: null,
 })
+type NullableString = typeof NullableString.Type
 
 export const ApiParameter = Schema.Struct({
   name: Schema.String,
@@ -95,7 +97,6 @@ export const ParsedApiReference = Schema.Struct({
   modules: Schema.Array(ApiModule),
 })
 export type ParsedApiReference = typeof ParsedApiReference.Type
-
 // SHARED
 
 export const SIGNATURE_COLLAPSE_THRESHOLD = 500
@@ -504,3 +505,42 @@ export const resolveModule = (
   slug: string,
 ): Option.Option<ApiModule> =>
   Record.get(modulesBySlug(parsedApi.modules), slug)
+
+export const ApiData = Schema.Struct({
+  parsedApi: ParsedApiReference,
+  highlights: Schema.Record(Schema.String, Schema.String),
+})
+export type ApiData = typeof ApiData.Type
+/**
+ * Narrows a full ApiData to what one module's page renders: that module plus
+ * only the highlight entries whose scoped ids belong to it. A prerendered
+ * module page embeds this slice in its hydration Flags instead of the full
+ * reference. The loadInitialData operation returns a Command that loads the full data after
+ * hydration, allowing navigation to other modules.
+ */
+export const sliceApiDataToModule = (
+  apiData: ApiData,
+  moduleSlug: string,
+): Option.Option<ApiData> =>
+  Option.map(resolveModule(apiData.parsedApi, moduleSlug), module => ({
+    parsedApi: { modules: [module] },
+    highlights: Record.filter(apiData.highlights, (_, id) =>
+      scopedIdBelongsToModule(id, module.name),
+    ),
+  }))
+
+export const ApiDataAsyncData = AsyncData.Schema(ApiData, Schema.String)
+export type ApiDataAsyncData = typeof ApiDataAsyncData.schema.Type
+export const tableOfContentsFor = (
+  model: Readonly<{ apiData: ApiDataAsyncData }>,
+  moduleSlug: string,
+): Option.Option<ReadonlyArray<TableOfContentsEntry>> =>
+  AsyncData.matchData(model.apiData, {
+    onData: data =>
+      Option.map(
+        resolveModule(data.parsedApi, moduleSlug),
+        toModuleTableOfContents,
+      ),
+    onFailure: () => Option.none(),
+    onEmpty: () => Option.none(),
+  })

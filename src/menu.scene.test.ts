@@ -1,7 +1,6 @@
 import { Array, Option } from 'effect'
 import {
   Command,
-  Mount,
   all,
   click,
   expect,
@@ -19,7 +18,7 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test, expect as vitestExpect } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import {
   ApplyRotation,
@@ -31,11 +30,11 @@ import {
 import { RESTART_GRACE_MS } from './constants'
 import { withBests } from './difficulty'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
-import { update } from './main'
 import { Message } from './message'
 import { type HandCard, type Model, Phase, initialModel } from './model'
 import { noSavedBests, restoreSave, saveOf } from './save'
 import {
+  ROOT,
   emitPressedKey,
   manorButton,
   measureSurface,
@@ -44,12 +43,13 @@ import {
   showDialogInScene,
 } from './testing'
 import { asVeteran } from './veteran'
-import { view } from './view'
 import { pause } from './waves'
 
 const closeDialog = () => [
-  Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()),
-  Mount.expectEnded(Dialog.AcquireResources),
+  Command.resolve(
+    Dialog.test.CloseDialog,
+    DialogBlock.Message.CompletedCloseDialog(),
+  ),
 ]
 
 const playButton = role('button', {
@@ -114,7 +114,7 @@ const afterGrace = (phase: Phase): Model =>
 describe('Home menu', () => {
   test('fills the slots: the gear, the MORE deck, and PLAY with its mode, difficulty, and CO-OP, with a key badge on every button on a keyboard, and no bests badge before a best', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       inside(
@@ -147,7 +147,7 @@ describe('Home menu', () => {
 
   test('the MANOR hand deals a card for each page with its key, and CLOSE puts it away', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       expect(hand).toBeAbsent(),
@@ -172,7 +172,7 @@ describe('Home menu', () => {
     const focusCard = (card: HandCard) =>
       Command.resolve(FocusHandCard({ card }), Message.CompletedFocusHandCard())
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       emitPressedKey('KeyV'),
@@ -191,7 +191,7 @@ describe('Home menu', () => {
 
   test('the tip jar is a card in the hand only while a support link is set', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(home, {
           maybeSupportUrl: () => Option.some('https://buy.stripe.com/test'),
@@ -214,7 +214,7 @@ describe('Home menu', () => {
   test('the Code card is the last card, a plain link to the source on GitHub that opens in a new tab', () => {
     const codeCard = role('link', { name: /^Code:/ })
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       expect(codeCard).toBeAbsent(),
@@ -247,7 +247,7 @@ describe('Home menu', () => {
       ],
       ({ name, dialog }) => {
         scene(
-          { update, view },
+          ROOT,
           given(home),
           measureSurface,
           ...openHandInScene(),
@@ -261,7 +261,7 @@ describe('Home menu', () => {
 
   test('the difficulty beside PLAY opens the picker, a pick changes it without starting a run, and Nightmare stays locked', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       click(difficultyButton),
@@ -279,7 +279,7 @@ describe('Home menu', () => {
 
   test('X opens the difficulty picker by PLAY on a keyboard, and a tap opens it on touch', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       emitPressedKey('KeyX'),
@@ -290,7 +290,7 @@ describe('Home menu', () => {
       ),
     )
     scene(
-      { update, view },
+      ROOT,
       given(modifyFields(home, { lastDevice: () => 'Touch' })),
       measureSurface,
       inside(playCluster, expect(selector('.home-key')).toBeAbsent()),
@@ -304,7 +304,7 @@ describe('Home menu', () => {
 
   test('touch shows the same buttons in the same slots without key badges', () => {
     scene(
-      { update, view },
+      ROOT,
       given(modifyFields(home, { lastDevice: () => 'Touch' })),
       measureSurface,
       inside(playCluster, expectAll(all.role('button')).toHaveCount(4)),
@@ -316,7 +316,7 @@ describe('Home menu', () => {
 
   test('shows your best endless wave, fastest win, and kills', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(
           withBests(home, () => ({
@@ -356,7 +356,7 @@ describe('Home menu', () => {
       },
     }
     scene(
-      { update, view },
+      ROOT,
       given(restoreSave(home, saved)),
       measureSurface,
       inside(bests, expect(text('9')).toExist(), expect(text('97')).toExist()),
@@ -365,7 +365,7 @@ describe('Home menu', () => {
 
   test('Enter plays the chosen mode, and E switches the mode without moving PLAY', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       emitPressedKey('Enter'),
@@ -373,7 +373,7 @@ describe('Home menu', () => {
       expect(mainMenu).toBeAbsent(),
     )
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       inside(
@@ -397,7 +397,7 @@ describe('Home menu', () => {
 
   test('C opens the Profile straight from the menu, without the hand', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       emitPressedKey('KeyC'),
@@ -418,7 +418,7 @@ describe('Home menu', () => {
       ],
       ({ key, dialog }) => {
         scene(
-          { update, view },
+          ROOT,
           given(home),
           measureSurface,
           emitPressedKey(key),
@@ -432,7 +432,7 @@ describe('Home menu', () => {
 
   test('arrow keys walk the buttons in order and wrap', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       emitPressedKey('ArrowRight'),
@@ -489,7 +489,7 @@ describe('Home menu', () => {
   ])('$dialog (#$#) closes with the shared close X', ({ dialog, open }) => {
     const closeButton = role('button', { name: 'Close' })
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       ...open,
@@ -509,7 +509,7 @@ describe('Home menu', () => {
 
   test('How to play shows the controls as cards for the device, and its X closes it', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       ...openHandInScene(),
@@ -536,7 +536,7 @@ describe('Home menu', () => {
     const shakeToggle = role('button', { name: 'Screen shake' })
     const cursorToggle = role('button', { name: 'Big cursor' })
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       click(settingsButton),
@@ -575,7 +575,7 @@ describe('Home menu', () => {
         Message.CompletedFocusTutorialReset(),
       )
     scene(
-      { update, view },
+      ROOT,
       given(modifyFields(home, { saveStatus: () => 'Read' })),
       measureSurface,
       click(settingsButton),
@@ -601,7 +601,7 @@ describe('Home menu', () => {
       button => {
         vitestExpect(() =>
           scene(
-            { update, view },
+            ROOT,
             given(modifyFields(home, { lastDevice: () => 'Touch' })),
             measureSurface,
             pointerDown(button, { pointerType: 'touch', pointerId: 4 }),
@@ -615,7 +615,7 @@ describe('Home menu', () => {
 describe('Menu from a run', () => {
   test('the pause screen asks before leaving: Stay keeps the run paused', () => {
     scene(
-      { update, view },
+      ROOT,
       given(pausedRound),
       measureSurface,
       expect(pauseMenuButton).toHaveAttr('aria-keyshortcuts', 'H'),
@@ -631,7 +631,7 @@ describe('Menu from a run', () => {
 
   test('Leave goes back to the home menu', () => {
     scene(
-      { update, view },
+      ROOT,
       given(pausedRound),
       measureSurface,
       emitPressedKey('KeyH'),
@@ -646,7 +646,7 @@ describe('Menu from a run', () => {
   test('a press on the pause MENU button never reaches the game surface, so it cannot resume the run', () => {
     vitestExpect(() =>
       scene(
-        { update, view },
+        ROOT,
         given(pausedRound),
         measureSurface,
         pointerDown(pauseMenuButton, { pointerType: 'touch', pointerId: 2 }),
@@ -657,13 +657,13 @@ describe('Menu from a run', () => {
   test('Game Over and Victory offer Menu after the grace, and it goes home', () => {
     Array.forEach([Phase.GameOver({ wave: 4 }), Phase.Victory()], phase => {
       scene(
-        { update, view },
+        ROOT,
         given(modifyFields(home, { phase: () => phase })),
         measureSurface,
         expect(endMenuButton).toBeAbsent(),
       )
       scene(
-        { update, view },
+        ROOT,
         given(afterGrace(phase)),
         measureSurface,
         expect(endMenuButton).toHaveAttr('aria-keyshortcuts', 'H'),
@@ -671,7 +671,7 @@ describe('Menu from a run', () => {
         expect(mainMenu).toExist(),
       )
       scene(
-        { update, view },
+        ROOT,
         given(afterGrace(phase)),
         measureSurface,
         emitPressedKey('KeyH'),
@@ -686,7 +686,7 @@ describe('the rotation tile', () => {
 
   test('Settings shows ROTATE only on a phone that can lock how it turns', () => {
     scene(
-      { update, view },
+      ROOT,
       given(home),
       measureSurface,
       click(settingsButton),
@@ -695,7 +695,7 @@ describe('the rotation tile', () => {
       expect(rotateTile).toBeAbsent(),
     )
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(home, {
           lastDevice: () => 'Touch',

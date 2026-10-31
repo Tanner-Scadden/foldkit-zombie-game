@@ -27,24 +27,24 @@
     "lint": "oxlint src tools/heavy tools/vite tools/balance tools/analytics tools/determinism tools/audit tools/video tools/sprites tools/mp-spike tools/mp-dev packages/sqlite-wasm-effect packages/sync-engine packages/netcode && effect-tsgo oxlint --config .oxlintrc.effect.json --deny-warnings src tools/heavy tools/vite tools/balance tools/analytics tools/determinism tools/audit tools/video tools/sprites tools/mp-spike tools/mp-dev packages/sqlite-wasm-effect packages/sync-engine packages/netcode && sh tools/lint/noEmDash.sh"
   },
   "dependencies": {
-    "@effect/platform-browser": "4.1.0",
-    "@foldkit/ui": "0.170.0",
+    "@effect/platform-browser": "4.0.6",
+    "@foldkit/ui": "0.169.0-canary.90746b32d2ca",
     "@munch/netcode": "workspace:*",
     "@munch/sqlite-wasm-effect": "workspace:*",
     "@munch/sync-engine": "workspace:*",
-    "effect": "4.1.0",
-    "foldkit": "0.170.0"
+    "effect": "4.0.6",
+    "foldkit": "0.169.0-canary.90746b32d2ca"
   },
   "patchedDependencies": {
-    "foldkit@0.170.0": "patches/foldkit@0.170.0.patch"
+    "foldkit@0.169.0-canary.90746b32d2ca": "patches/foldkit@0.169.0-canary.90746b32d2ca.patch"
   },
   "devDependencies": {
-    "@effect/platform-node": "4.1.0",
+    "@effect/platform-node": "4.0.6",
     "@effect/tsgo": "0.62.0",
-    "@foldkit/devtools": "0.170.0",
-    "@foldkit/devtools-mcp": "0.26.0",
-    "@foldkit/oxlint-plugin": "0.15.4",
-    "@foldkit/vite-plugin": "0.29.0",
+    "@foldkit/devtools": "0.169.0-canary.90746b32d2ca",
+    "@foldkit/devtools-mcp": "0.25.0-canary.90746b32d2ca",
+    "@foldkit/oxlint-plugin": "0.15.3-canary.90746b32d2ca",
+    "@foldkit/vite-plugin": "0.28.0-canary.90746b32d2ca",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "26.6.5",
     "happy-dom": "^20.14.5",
@@ -56,5 +56,11 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"
+  },
+  "overrides": {
+    "effect": "4.0.6",
+    "@effect/platform-browser": "4.0.6",
+    "@effect/platform-node": "4.0.6",
+    "@effect/platform-node-shared": "4.0.6"
   }
 }

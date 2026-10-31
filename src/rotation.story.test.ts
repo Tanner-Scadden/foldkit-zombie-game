@@ -7,6 +7,7 @@ import {
   ApplyRotation,
   FetchBuild,
   HideSplash,
+  ReadRoomLink,
   ShowLoadProgress,
   WriteSave,
 } from './commands'
@@ -15,7 +16,6 @@ import { Message } from './message'
 import { Loading, type Model, initialModel } from './model'
 import { decodeSave, encodeSave, restoreSave, saveOf } from './save'
 import { SURFACE } from './testing'
-import { ReadRoomLink } from './update/coop'
 import { asVeteran } from './veteran'
 
 const onPhone = (base: Model): Model =>

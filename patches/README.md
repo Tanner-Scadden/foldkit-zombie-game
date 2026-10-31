@@ -1,6 +1,6 @@
 # The Foldkit patch
 
-The game draws every fixed sprite with `Canvas.Image`, which Foldkit 0.170.0 does not ship. It is ported from the upstream pull request [foldkit/foldkit#1846](https://github.com/foldkit/foldkit/pull/1846) (commit `a9009a20`) as a Bun patch: `foldkit@0.170.0.patch` in this directory, listed under `patchedDependencies` in `package.json` and `bun.lock`. `bun install`, including `bun install --frozen-lockfile` in CI, applies it to `node_modules/foldkit`.
+The game runs Foldkit's Block preview, `foldkit@0.169.0-canary.90746b32d2ca`, and draws every fixed sprite with `Canvas.Image`, which neither that canary nor any release ships. It is ported from the upstream pull request [foldkit/foldkit#1846](https://github.com/foldkit/foldkit/pull/1846) (commit `a9009a20`) as a Bun patch: `foldkit@0.169.0-canary.90746b32d2ca.patch` in this directory, listed under `patchedDependencies` in `package.json` and `bun.lock`. `bun install`, including `bun install --frozen-lockfile` in CI, applies it to `node_modules/foldkit`.
 
 It adds:
 
@@ -20,7 +20,7 @@ Two more speedups for what the view builds every frame, neither upstream yet and
 - **Shapes skip `schema.make`.** A `taggedStruct` constructor (every Canvas shape and Message variant) already copies required keys of plain types without validating them. The patch in `schema/index.js` copies optional keys of plain types too, such as a `Rect`'s `fill`, and leaves out a key the input leaves out, as `make` does. A key with a constructor default still goes through `make`, and so does `undefined` for an exact optional key. Building `Rect`s through `make` was about 27 ms of a 2 s worst-case profile at 4x CPU throttle.
 - **Inline styles are checked once.** `assertStyleIsRepresentable` in `domReflection.js` remembers each name and value that passed (up to 4,096, then it starts over) and each declaration name, and still checks every style for two spellings of one declaration. It was about 20 ms of the same profile.
 
-The third cost of that profile, `brandViewResult` around every function return, is not in the patch: `tools/vite/viewIdentity.ts` wraps the Foldkit Vite plugin so it brands only modules that can make a vnode.
+The third cost of that profile, `brandViewResult` around every function return, is not in the patch: `tools/vite/viewIdentity.ts` wraps the Foldkit Vite plugin so it brands only modules that can make a vnode. The preview's `@foldkit/ui` ships already branded (its `dist` wraps each return in `__foldkitBrandViewResult`), which `bun run perf:check` shows costs nothing measurable, since only the menus' dialogs and tabs come from it.
 
 Upstream keeps the cache in `canvas/imageCache.ts`. The patch puts it in `canvas/paint.js`, because Bun failed to apply a patch that adds a file.
 
@@ -30,7 +30,7 @@ A change to the patch rebuilds the site on deploy, since `patches/` is one of th
 
 Run `bun patch foldkit`, edit the files under `node_modules/foldkit/dist/`, then `bun patch --commit node_modules/foldkit`. Delete the `.bun-tag-*` hunk Bun writes at the top of the patch, and check that no hunk creates a new file.
 
-Bun 1.3 names its cached copy of the patched package by a hash that does not follow the patch's content, so after a change `bun install` can keep linking the old patched copy from `~/.bun/install/cache` (CI starts with no cache, so it is not fooled). Check `node_modules/foldkit/dist` for the change; if it is missing, move the `foldkit@0.170.0@@@1_patch_hash=*` folder out of the cache and run `bun install` again.
+Bun 1.3 names its cached copy of the patched package by a hash that does not follow the patch's content, so after a change `bun install` can keep linking the old patched copy from `~/.bun/install/cache` (CI starts with no cache, so it is not fooled). Check `node_modules/foldkit/dist` for the change; if it is missing, move the patched folder out of the cache and run `bun install` again. A canary's folder is named by a hash of its prerelease tag, not the tag itself: `foldkit@0.169.0-<hash>@@@1_patch_hash=*`.
 
 `bun run determinism:diff` shows whether a patch change changes gameplay: the base installs the old patch on its own, and the tool stops if the working tree's `node_modules` does not match the new one.
 
@@ -40,6 +40,6 @@ Once a Foldkit release ships `Canvas.Image`, upgrade `foldkit`, delete `patches/
 
 ## Upgrading Foldkit before then
 
-The patch is pinned to `foldkit@0.170.0`. A new version needs the patch redone against its `dist`.
+The patch is pinned to `foldkit@0.169.0-canary.90746b32d2ca`. A new version needs the patch redone against its `dist`.
 
-First diff the new `dist` against the old one (`npm pack foldkit@<old>` and `foldkit@<new>`, then `diff -r`). Foldkit 0.170.0 only moved to Effect 4.1: its JavaScript is byte for byte 0.169.0's, and only two declaration files changed (`html/lazy.d.ts` and `mount/index.d.ts`), neither in the patch. So `foldkit@0.170.0.patch` is the 0.169.0 patch unchanged, renamed. It still carries all four parts: upstream has none of them yet, and #1846 is still open.
+First diff the new `dist` against the old one (`npm pack foldkit@<old>` and `foldkit@<new>`, then `diff -r`), then apply the old patch to a copy of the new `dist` with `patch -p1` and redo the hunks it rejects. Moving from 0.170.0 to the preview canary, every hunk applied but two: the `Shape` union in `canvas/shape.d.ts` (the canary names each shape's type, so the union reads `Rect | Circle | Path | Text | Image | Group`), and the `schema/index.js` fast path, which only moved because the canary added `callableTaggedStructs` between `getDirectPropertyNames` and `makeCallable`. The canary has none of the five parts, so the patch still carries all of them; #1846 is still open. Generate the patch with `git diff --no-index` between the pristine and the patched copy, each in a folder named `a` and `b`, so its paths read `a/dist/...` and `b/dist/...`.

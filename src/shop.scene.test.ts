@@ -1,7 +1,6 @@
 import { Option } from 'effect'
 import {
   Command,
-  Mount,
   Subscription,
   click,
   expect,
@@ -15,15 +14,19 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Dialog, Tabs } from '@foldkit/ui'
+import { Dialog, DialogBlock, Tabs } from '@foldkit/ui'
 
 import { FIXED_STEP_MS, PREPARATION_MS } from './constants'
-import { update } from './main'
 import { Message } from './message'
 import { type Arsenal, type Model, Phase, Trap, initialModel } from './model'
-import { holdingSecond, measureSurface } from './testing'
+import { ShopTabsBlock } from './shopTabs'
+import {
+  ROOT,
+  SCENE_SUBSCRIPTIONS,
+  holdingSecond,
+  measureSurface,
+} from './testing'
 import { TRAPS } from './traps'
-import { view } from './view'
 
 const atStall = (balance: number, arsenal: Arsenal): Model =>
   modifyFields(initialModel, {
@@ -61,11 +64,13 @@ const holdingSmg = (rounds: number, tier: number): Arsenal =>
   holdingSecond({ kind: 'Smg', rounds, loaded: 30, tier })
 
 const openShop = [
-  Subscription.emit(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
-  Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-  Mount.resolve(
-    Dialog.AcquireResources,
-    Dialog.Message.SucceededAcquireResources(),
+  Subscription.emit(
+    SCENE_SUBSCRIPTIONS.frame,
+    Message.TickedFrame({ deltaTime: FIXED_STEP_MS }),
+  ),
+  Command.resolve(
+    Dialog.test.ShowDialog,
+    DialogBlock.Message.SucceededShowDialog(),
   ),
 ]
 
@@ -76,7 +81,7 @@ describe('the shop at a glance', () => {
   test('a row the player cannot afford is dimmed, greys its tag, and shows the shortfall', () => {
     const pistolUpgrade = selector('#shop-item-PistolUpgrade')
     scene(
-      { update, view },
+      ROOT,
       given(atStall(180, holdingSmg(200, 1))),
       measureSurface,
       ...openShop,
@@ -103,7 +108,7 @@ describe('the shop at a glance', () => {
   test('a full row says so in one word on its tag and keeps the reason for screen readers', () => {
     const drum = selector('#shop-item-SmgRounds')
     scene(
-      { update, view },
+      ROOT,
       given(atStall(180, holdingSmg(360, 1))),
       measureSurface,
       ...openShop,
@@ -118,7 +123,7 @@ describe('the shop at a glance', () => {
   test('an upgrade row names the next tier, and its gun card previews what it adds', () => {
     const upgrade = selector('#shop-item-SmgUpgrade')
     scene(
-      { update, view },
+      ROOT,
       given(atStall(180, holdingSmg(200, 1))),
       measureSurface,
       ...openShop,
@@ -143,7 +148,7 @@ describe('the shop at a glance', () => {
 
   test('Rattles greets, grins at a buy with a stamp, and is sad when the player is short', () => {
     scene(
-      { update, view },
+      ROOT,
       given(atStall(180, holdingSmg(200, 1))),
       measureSurface,
       ...openShop,
@@ -164,14 +169,17 @@ describe('the shop at a glance', () => {
       ).toExist(),
       expect(selector('.shop-balance')).toHaveText('You have $160'),
       click(role('tab', { name: /^Traps,/ })),
-      Command.resolve(Tabs.FocusTab, Tabs.Message.CompletedFocusTab()),
+      Command.resolve(
+        Tabs.test.FocusTab,
+        ShopTabsBlock.Message.CompletedFocusTab(),
+      ),
       expect(keeper).toHaveAttr('data-mood', 'Grinning'),
     )
   })
 
   test('a player with nothing to buy gets a sad hello', () => {
     scene(
-      { update, view },
+      ROOT,
       given(atStall(5, holdingSmg(360, 1))),
       measureSurface,
       ...openShop,
@@ -203,7 +211,7 @@ describe('repairing placed traps', () => {
 
   test('each placed plank gets its own row with a map pip, a health bar, and its own price or FULL', () => {
     scene(
-      { update, view },
+      ROOT,
       given(withPlanks),
       measureSurface,
       ...openShop,
@@ -226,7 +234,7 @@ describe('repairing placed traps', () => {
 
   test('with nothing placed, the trap tab has no repair rows', () => {
     scene(
-      { update, view },
+      ROOT,
       given(
         modifyFields(atStall(100, holdingSmg(200, 1)), {
           shopCategory: () => 'Traps',

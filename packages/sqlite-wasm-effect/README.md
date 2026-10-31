@@ -7,7 +7,7 @@ It lives in the Munch Manor repo while the API settles, and will move to its own
 ## Install
 
 ```sh
-bun add @munch/sqlite-wasm-effect effect@4.1.0
+bun add @munch/sqlite-wasm-effect effect@4.0.6
 ```
 
 `@sqlite.org/sqlite-wasm` is pinned to `3.54.1-build1`. `effect` is a peer dependency.

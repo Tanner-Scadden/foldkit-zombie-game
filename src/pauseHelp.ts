@@ -1,9 +1,12 @@
 import { Array, Option } from 'effect'
-import type { Attribute, Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
+import type {
+  ApplicationAttribute,
+  ApplicationViewBuilder,
+} from './composition'
 import { HINT_ICON_SPRITES, type HintIconSprites, keyIcon } from './hintIcons'
 import { CHARGE_ICON, FRIDGE_ICON, PAUSE_ICON } from './icons'
-import type { Message } from './message'
 import { type InputDevice, type Model, Phase } from './model'
 import { standaloneSource } from './sprite'
 
@@ -153,7 +156,7 @@ const percent = (part: number, whole: number): string =>
 // turn, so the picture moves with no work in the game's frame.
 const movingView = (
   sprites: HintIconSprites,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const frames = framesOf(sprites)
   return h.span(
@@ -186,7 +189,7 @@ const movingView = (
   )
 }
 
-const pictureView = (picture: Picture, h: HtmlBuilder<Message>): Html =>
+const pictureView = (picture: Picture, h: ApplicationViewBuilder): Html =>
   picture._tag === 'Moving'
     ? movingView(picture.sprites, h)
     : h.span([
@@ -198,7 +201,7 @@ const pictureView = (picture: Picture, h: HtmlBuilder<Message>): Html =>
 const controlCardView = (
   card: ControlCard,
   device: InputDevice,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const input = inputOf(card, device)
   return h.li(
@@ -210,7 +213,7 @@ const controlCardView = (
   )
 }
 
-const extraKeysView = (h: HtmlBuilder<Message>): Html =>
+const extraKeysView = (h: ApplicationViewBuilder): Html =>
   h.ul(
     [h.Class('help-extra'), h.AriaLabel('More keys')],
     Array.map(EXTRA_KEYS, ({ key, action }) =>
@@ -227,7 +230,7 @@ export const helpLabel = (device: InputDevice): string => DEVICE_LABELS[device]
 // keyboard.
 export const howToPlayView = (
   device: InputDevice,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
   maybeUnder: Option.Option<Html> = Option.none(),
 ): ReadonlyArray<Html> => [
   h.ul(
@@ -243,8 +246,8 @@ const isPauseHelpUp = (model: Model): boolean =>
 
 export const pauseHelpView = (
   model: Model,
-  pressSurface: Attribute<Message>,
-  h: HtmlBuilder<Message>,
+  pressSurface: ApplicationAttribute,
+  h: ApplicationViewBuilder,
 ): Html => {
   if (!isPauseHelpUp(model)) {
     return h.empty

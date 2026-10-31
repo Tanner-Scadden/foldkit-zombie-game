@@ -14,7 +14,7 @@ import type { VNode } from '../../vdom.js'
 import {
   FOLDKIT_APP_ATTRIBUTE,
   FOLDKIT_FLAGS_ATTRIBUTE,
-  renderToString as renderToStringWithOptions,
+  __renderFromConfig as renderToStringWithOptions,
 } from './server.js'
 
 const h = __htmlBuilder<never>()
@@ -229,6 +229,7 @@ describe('renderToString', () => {
           }),
         ),
       )
+      type TrimmedTheme = typeof TrimmedTheme.Type
       const rendered = yield* renderToString(
         { ...routingConfig, Flags: Schema.Struct({ theme: TrimmedTheme }) },
         { url: 'https://example.com/', flags: { theme: '  dark  ' } },
@@ -261,6 +262,7 @@ describe('renderToString', () => {
             }),
           ),
         )
+        type PrefixedTheme = typeof PrefixedTheme.Type
         const error = yield* Effect.flip(
           renderToString(
             {
@@ -866,6 +868,7 @@ describe('renderToString', () => {
     () =>
       Effect.gen(function* () {
         const RatioFlags = Schema.Struct({ ratio: Schema.Number })
+        type RatioFlags = typeof RatioFlags.Type
         const RatioModel = Schema.Struct({ ratio: Schema.Number })
         type RatioModel = typeof RatioModel.Type
         const rendered = yield* renderToString(
@@ -903,6 +906,7 @@ describe('renderToString', () => {
             }),
           ),
         )
+        type AsyncTheme = typeof AsyncTheme.Type
         const error = yield* Effect.flip(
           renderToString(
             { ...routingConfig, Flags: Schema.Struct({ theme: AsyncTheme }) },

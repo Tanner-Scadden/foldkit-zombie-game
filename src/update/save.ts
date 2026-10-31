@@ -12,7 +12,6 @@ import {
   WriteSave,
 } from '../commands'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from '../home'
-import type { Message } from '../message'
 import {
   LOAD_STEPS,
   type LoadStep,
@@ -85,13 +84,12 @@ export const loadSave = (
 // it into the Model writes nothing back. Every other change to the save is
 // written with the mutations that describe it.
 export const writeSaveFrom =
-  (before: Model, message: Message): UpdateStep =>
+  (before: Model, saveWrite: 'Write' | 'Synced'): UpdateStep =>
   stepModel => {
     if (
       before.saveStatus === 'Unread' ||
       stepModel.saveStatus === 'Unread' ||
-      message._tag === 'UpdatedSyncedSave' ||
-      message._tag === 'CompletedReloadSyncedSave' ||
+      saveWrite === 'Synced' ||
       !hasSaveFieldsChanged(before, stepModel)
     ) {
       return { model: stepModel }
@@ -242,7 +240,7 @@ export const submitLinkCode = (model: Model): UpdateReturn =>
 // TUTORIAL RESET
 
 const isSettingsOpen = (model: Model): boolean =>
-  model.profile.dialog.isOpen && model.profile.tab === 'Settings'
+  model.profileDialog.isOpen && model.profile.tab === 'Settings'
 
 export const askToResetTutorial = (model: Model): UpdateReturn =>
   isSettingsOpen(model)

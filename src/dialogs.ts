@@ -1,5 +1,3 @@
-import { Option } from 'effect'
-import { Update } from 'foldkit'
 import {
   type Attribute,
   type ChildAttribute,
@@ -8,131 +6,110 @@ import {
   createKeyedLazy,
 } from 'foldkit/html'
 
-import { Dialog } from '@foldkit/ui'
+import type { Dialog, DialogBlock } from '@foldkit/ui'
 
+import type {
+  ApplicationAttribute,
+  ApplicationViewBuilder,
+  HandDialogBinding,
+  HomeScreenStepsBinding,
+  PanelDialogBinding,
+  ProfileDialogBinding,
+  ShopDialogBinding,
+  UpdateGreetingBinding,
+} from './composition'
 import { CLOSE_ICON } from './icons'
 
-// UPDATE
-
-type DialogFoldConfig<Model, Message, R> = Readonly<{
-  read: (model: Model) => Dialog.Model
-  write: (model: Model, nextDialog: Dialog.Model) => Model
-  toParentMessage: (message: Dialog.Message) => Message
-  foldOutMessage?: (
-    outMessage: Dialog.OutMessage,
-  ) => Update.Step<Model, Message, R>
-}>
-
-export type DialogFolds<Model, Message, R = never> = Readonly<{
-  fold: Update.Fold<Model, Message, Dialog.Message, R>
-  open: Update.Step<Model, Message, R>
-  close: Update.Step<Model, Message, R>
-}>
-
-const ignoreOutMessage =
-  <Model, Message>() =>
-  (_outMessage: Dialog.OutMessage): Update.Step<Model, Message> =>
-  model => ({ model })
-
-// NOTE: one lens onto a Dialog field gives its three folds: the Dialog's own
-// Messages, opening it, and closing it. Each runs `foldOutMessage` on the
-// Opened and Closed OutMessages, which are ignored when it is left out.
-export const dialogFolds = <Model, Message, R = never>({
-  read,
-  write,
-  toParentMessage,
-  foldOutMessage = ignoreOutMessage<Model, Message>(),
-}: DialogFoldConfig<Model, Message, R>): DialogFolds<Model, Message, R> => {
-  const lens = {
-    read: (model: Model) => Option.some(read(model)),
-    write,
-    toParentMessage,
-    foldOutMessage,
-  }
-  return {
-    fold: Update.foldChild({ update: Dialog.update, ...lens }),
-    open: Update.foldChildStep({ update: Dialog.open, ...lens }),
-    close: Update.foldChildStep({ update: Dialog.close, ...lens }),
-  }
-}
-
+// NOTE: the root's dialogs, each a Dialog Binding in src/composition.ts.
+// Opening and closing one is its Binding's `requestOpen` and
+// `requestClose`; what the root does when one closes is its OutMessage fold.
 // VIEW
 
-type DialogShell<Message> = Readonly<{
-  dialog: Dialog.Model
+type DialogModel = typeof DialogBlock.Model.Type
+
+export type DialogBinding =
+  | typeof ShopDialogBinding
+  | typeof ProfileDialogBinding
+  | typeof PanelDialogBinding
+  | typeof HandDialogBinding
+  | typeof HomeScreenStepsBinding
+  | typeof UpdateGreetingBinding
+
+type DialogShell = Readonly<{
+  binding: DialogBinding
+  dialog: DialogModel
   dialogClass: string
   backdropClass: string
   panelClass: string
-  dialogAttributes?: ReadonlyArray<Attribute<Message>>
+  dialogAttributes?: ReadonlyArray<ApplicationAttribute>
   panelView: (renderInfo: Dialog.RenderInfo) => ReadonlyArray<Html>
-  toParentMessage: (message: Dialog.Message) => Message
 }>
 
-const shellView = <Message>(
+const shellView = (
   {
+    binding,
     dialog,
     dialogClass,
     backdropClass,
     panelClass,
     dialogAttributes = [],
     panelView,
-    toParentMessage,
-  }: DialogShell<Message>,
-  h: HtmlBuilder<Message>,
+  }: DialogShell,
+  h: ApplicationViewBuilder,
 ): Html =>
-  h.submodel({
-    slotId: dialog.id,
-    model: dialog,
-    view: Dialog.view,
-    viewInputs: {
-      hasDescription: true,
-      toView: renderInfo =>
-        h.dialog(
-          [
-            h.Key(dialog.id),
-            ...renderInfo.dialog,
-            h.Class(dialogClass),
-            ...dialogAttributes,
-          ],
-          renderInfo.isVisible
-            ? [
-                h.div([...renderInfo.backdrop, h.Class(backdropClass)]),
-                h.div(
-                  [...renderInfo.panel, h.Class(panelClass)],
-                  panelView(renderInfo),
-                ),
-              ]
-            : [],
-        ),
-    },
-    toParentMessage,
-  })
+  h.block(
+    binding.embedView({
+      slotId: dialog.id,
+      model: dialog,
+      viewInputs: {
+        hasDescription: true,
+        toView: renderInfo =>
+          h.dialog(
+            [
+              h.Key(dialog.id),
+              ...renderInfo.dialog,
+              h.Class(dialogClass),
+              ...dialogAttributes,
+            ],
+            renderInfo.isVisible
+              ? [
+                  h.div([...renderInfo.backdrop, h.Class(backdropClass)]),
+                  h.div(
+                    [...renderInfo.panel, h.Class(panelClass)],
+                    panelView(renderInfo),
+                  ),
+                ]
+              : [],
+          ),
+      },
+    }),
+  )
 
 const NO_PANEL = (): ReadonlyArray<Html> => []
 
-const closedShellView = <Message>(
-  dialog: Dialog.Model,
+const closedShellView = (
+  binding: DialogBinding,
+  dialog: DialogModel,
   dialogClass: string,
   backdropClass: string,
   panelClass: string,
-  toParentMessage: (message: Dialog.Message) => Message,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   shellView(
     {
+      binding,
       dialog,
       dialogClass,
       backdropClass,
       panelClass,
       panelView: NO_PANEL,
-      toParentMessage,
     },
     h,
   )
 
 const lazyClosedShells = createKeyedLazy()
 
-const isShut = (dialog: Dialog.Model): boolean =>
+const isShut = (dialog: DialogModel): boolean =>
   !dialog.isOpen && dialog.animation.transitionState === 'Idle'
 
 // NOTE: every menu dialog is in the view on every frame, and building even a
@@ -141,8 +118,8 @@ const isShut = (dialog: Dialog.Model): boolean =>
 // its leave animation, shows nothing, so it comes from a lazy slot keyed on
 // its id and redraws only when its Dialog model changes, as opening does. Its
 // `dialogAttributes` are left off while it is shut: they style the open
-// panel, and the open view puts them back. So `toParentMessage` must be one
-// function for the whole page, kept at module scope, or the slot misses.
+// panel, and the open view puts them back. Its Binding is one value for the
+// whole page, from src/composition.ts, so the slot hits.
 //
 // The `<dialog>` is keyed on its id, open or shut, and that is what makes
 // the cache safe. A cache hit hands snabbdom the very VNode it patched last
@@ -155,17 +132,17 @@ const isShut = (dialog: Dialog.Model): boolean =>
 // `<dialog id="shop">` under an empty one that took every click. Keyed, a
 // cached dialog is found by its id wherever it moves. `dialogs.scene.test.ts`
 // holds every dialog to a key and every id to one element.
-export const dialogShell = <Message>(
-  shell: DialogShell<Message>,
-  h: HtmlBuilder<Message>,
+export const dialogShell = (
+  shell: DialogShell,
+  h: ApplicationViewBuilder,
 ): Html =>
   isShut(shell.dialog)
-    ? lazyClosedShells(shell.dialog.id, closedShellView<Message>, [
+    ? lazyClosedShells(shell.dialog.id, closedShellView, [
+        shell.binding,
         shell.dialog,
         shell.dialogClass,
         shell.backdropClass,
         shell.panelClass,
-        shell.toParentMessage,
         h,
       ])
     : shellView(shell, h)

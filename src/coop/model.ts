@@ -6,7 +6,7 @@ import { Lobby, PickedMode, RoomCode, RoomDifficulty } from '@munch/netcode'
 import { Bullet, GameEvent } from '../worldSchema'
 import { RoomSession, WorldState } from './seam'
 
-// NOTE: co-op's own state, a Submodel the root Model holds. Nothing here is
+// NOTE: co-op's own state, a Block the root Model holds. Nothing here is
 // saved: a room lasts as long as the page, and a reload rejoins it from the
 // `?room=CODE` link (see MULTIPLAYER.md, "What Phases 2 and 3 built").
 

@@ -16,16 +16,19 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect as expectValue, test } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import { FIXED_STEP_MS, PREPARATION_MS } from './constants'
 import * as Coop from './coop/model'
-import { update } from './main'
 import { Message } from './message'
 import { type Model, Phase, ShopState, initialModel } from './model'
-import { holdingSecond, measureSurface } from './testing'
+import {
+  ROOT,
+  SCENE_SUBSCRIPTIONS,
+  holdingSecond,
+  measureSurface,
+} from './testing'
 import { asVeteran } from './veteran'
-import { view } from './view'
 
 // NOTE: every menu dialog is in the page on every frame, and a shut one is
 // handed back from a cache (see `dialogShell`). Snabbdom pairs unkeyed
@@ -35,6 +38,8 @@ import { view } from './view'
 // shop then opened as a second `<dialog id="shop">` under an empty one that
 // took every click. These tests hold the two things that keep it from
 // coming back: every dialog is keyed on its id, and no id is used twice.
+
+type DialogModel = typeof DialogBlock.Model.Type
 
 type VNodeLike = Readonly<{
   sel?: string | undefined
@@ -136,18 +141,20 @@ const atStall: Model = modifyFields(initialModel, {
 })
 
 const walkIntoStall = [
-  Subscription.emit(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
-  Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
-  Mount.resolve(
-    Dialog.AcquireResources,
-    Dialog.Message.SucceededAcquireResources(),
+  Subscription.emit(
+    SCENE_SUBSCRIPTIONS.frame,
+    Message.TickedFrame({ deltaTime: FIXED_STEP_MS }),
+  ),
+  Command.resolve(
+    Dialog.test.ShowDialog,
+    DialogBlock.Message.SucceededShowDialog(),
   ),
 ]
 
 describe('the shop dialog', () => {
   test('walking into the stall opens one shop, keyed on its id, and its buy buttons buy', () => {
     scene(
-      { update, view },
+      ROOT,
       given(atStall),
       measureSurface,
       ...walkIntoStall,
@@ -164,7 +171,7 @@ describe('the shop dialog', () => {
   })
 })
 
-const opened = (dialog: Dialog.Model): Dialog.Model => ({
+const opened = (dialog: DialogModel): DialogModel => ({
   ...dialog,
   isOpen: true,
 })
@@ -201,7 +208,7 @@ const OPEN_CASES: ReadonlyArray<OpenCase> = [
   {
     name: 'the Profile',
     model: modifyFields(home, {
-      profile: profile => modifyFields(profile, { dialog: opened }),
+      profileDialog: opened,
     }),
     opensDialog: true,
   },
@@ -232,14 +239,14 @@ describe('every menu dialog', () => {
     'with $name, each dialog is in the page once, keyed on its id, and no id repeats',
     ({ model, opensDialog }) => {
       scene(
-        { update, view },
+        ROOT,
         given(model),
         measureSurface,
         ...(opensDialog
           ? [
               Mount.resolve(
-                Dialog.AcquireResources,
-                Dialog.Message.SucceededAcquireResources(),
+                Dialog.test.AcquireResources,
+                DialogBlock.Message.SucceededAcquireResources(),
               ),
             ]
           : []),

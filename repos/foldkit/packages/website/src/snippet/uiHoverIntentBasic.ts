@@ -1,64 +1,77 @@
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
-import { Option, Schema } from 'effect'
-import { Update } from 'foldkit'
-import type { HtmlBuilder } from 'foldkit/html'
+import { Schema, Tuple } from 'effect'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 
 import { HoverIntent } from '@foldkit/ui'
+import type { RenderInfo as HoverIntentRenderInfo } from '@foldkit/ui/hoverIntent'
 
 // Add a field to your Model:
 const Model = Schema.Struct({
-  hoverIntent: HoverIntent.Model,
+  hoverIntent: HoverIntent.HoverIntentBlock.Model,
   // ...your other fields
 })
 type Model = typeof Model.Type
-
-// Initialize it. This behavior primitive owns no DOM id:
-const init = () => ({
-  model: {
-    hoverIntent: HoverIntent.init({ openDelay: 200, closeDelay: 300 }),
-    // ...your other fields
-  },
-})
-
-// Embed child Messages in your parent Message:
-const Message = defineMessageUnion({
-  GotHoverIntentMessage: { message: HoverIntent.Message },
-})
+// This excerpt has no parent-owned facts. The Composition derives delivery.
+const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
-const foldHoverIntentOutMessage = HoverIntent.OutMessage.match<
-  Update.Step<Model, Message>
->({
-  Opened: () => model => ({ model }),
-  Closed: () => model => ({ model }),
-})
+const HoverIntentExampleDefinition = Block.makeDefinition(
+  'HoverIntentExample',
+  {
+    Model,
+    Message,
+  },
+)
 
-const foldHoverIntent = Update.foldChild({
-  update: HoverIntent.update,
-  read: model => Option.some(model.hoverIntent),
-  write: (model, nextHoverIntent) =>
-    modifyFields(model, { hoverIntent: () => nextHoverIntent }),
-  toParentMessage: message => Message.GotHoverIntentMessage({ message }),
-  foldOutMessage: foldHoverIntentOutMessage,
-})
+const { makeNoopStep } = HoverIntentExampleDefinition
 
-GotHoverIntentMessage: ({ message }) => foldHoverIntent(model, message)
+const foldHoverIntentOutMessage =
+  HoverIntentExampleDefinition.makeOutMessageFold(
+    HoverIntent.HoverIntentBlock,
+    {
+      Opened: makeNoopStep,
+      Closed: makeNoopStep,
+    },
+  )
+
+const HoverIntentBinding = HoverIntentExampleDefinition.makeBinding(
+  HoverIntent.HoverIntentBlock,
+  {
+    field: 'hoverIntent',
+    init: {
+      contextToArgs: () => Tuple.make({ openDelay: 200, closeDelay: 300 }),
+    },
+  },
+).withOutMessagePolicy({ fold: foldHoverIntentOutMessage })
+
+const HoverIntentExampleComposition =
+  HoverIntentExampleDefinition.makeComposition({
+    bindings: [HoverIntentBinding],
+  })
+
+// Initialize it. This behavior primitive owns no DOM id:
+const init = HoverIntentExampleComposition.makeInit(() => ({
+  model: {
+    // ...your other fields
+  },
+}))
+
+const update = HoverIntentExampleComposition.makeUpdate({})
 
 // Spread each attribute bundle onto the element it names. HoverIntent owns the
 // interaction; this view owns the markup, semantics, positioning, and styles.
 const triggerId = 'more-information-trigger'
 const panelId = 'more-information-panel'
 
-const view = (h: HtmlBuilder<Message>) => {
+const view = HoverIntentExampleComposition.makeView((model, h) => {
   const hoverIntentView = ({
     trigger,
     panel,
     isVisible,
-  }: HoverIntent.RenderInfo) =>
+  }: HoverIntentRenderInfo) =>
     h.div(
       [],
       [
@@ -83,14 +96,14 @@ const view = (h: HtmlBuilder<Message>) => {
       ],
     )
 
-  return h.submodel({
-    slotId: 'more-information',
-    model: model.hoverIntent,
-    view: HoverIntent.view,
-    viewInputs: {
-      focusTriggerSelector: `#${triggerId}`,
-      toView: hoverIntentView,
-    },
-    toParentMessage: message => Message.GotHoverIntentMessage({ message }),
-  })
-}
+  return h.block(
+    HoverIntentBinding.embedView({
+      slotId: 'more-information',
+      model: model.hoverIntent,
+      viewInputs: {
+        focusTriggerSelector: `#${triggerId}`,
+        toView: hoverIntentView,
+      },
+    }),
+  )
+})

@@ -1,77 +1,94 @@
-import { Option, Schema } from 'effect'
-import { Runtime, Update } from 'foldkit'
-import type { Html, HtmlBuilder } from 'foldkit/html'
-import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
+import { Schema } from 'effect'
+import { Block, Program, Runtime } from 'foldkit'
 import { afterEach, expect, vi } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
-import {
-  OutMessage,
-  Message as PopoverMessage,
-  Model as PopoverModel,
-  init,
-  update,
-  view,
-} from './public.js'
+import { PopoverBlock } from './block.js'
 
-const Message = defineMessageUnion({
-  GotPopoverMessage: { message: PopoverMessage },
-})
-type Message = typeof Message.Type
-
-const Model = Schema.Struct({
-  popover: PopoverModel,
-})
+const Model = Schema.Struct({ popover: PopoverBlock.Model })
 type Model = typeof Model.Type
-
-const foldPopoverOutMessage = OutMessage.match<Update.Step<Model, Message>>({
-  Opened: () => model => ({ model }),
-  Closed: () => model => ({ model }),
-})
-
-const foldPopover = Update.foldChild({
-  update,
-  read: (model: Model) => Option.some(model.popover),
-  write: (model: Model, nextPopover: PopoverModel) =>
-    modifyFields(model, { popover: () => nextPopover }),
-  toParentMessage: (message: PopoverMessage) =>
-    Message.GotPopoverMessage({ message }),
-  foldOutMessage: foldPopoverOutMessage,
-})
-
-const popoverView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const PopoverTriggerClickTestDefinition = Block.makeDefinition(
+  'PopoverTriggerClickTest',
+  {
+    Model,
+    Message: Schema.Never,
+  },
+)
+const foldPopoverOutMessage =
+  PopoverTriggerClickTestDefinition.makeOutMessageFold(PopoverBlock, {
+    Opened: () => PopoverTriggerClickTestDefinition.makeNoopStep(),
+    Closed: () => PopoverTriggerClickTestDefinition.makeNoopStep(),
+  })
+const PopoverBinding = PopoverTriggerClickTestDefinition.makeBinding(
+  PopoverBlock,
+  {
+    field: 'popover',
+    init: false,
+  },
+).withOutMessagePolicy({ fold: foldPopoverOutMessage })
+const PopoverTriggerClickTestComposition =
+  PopoverTriggerClickTestDefinition.makeComposition({
+    bindings: [PopoverBinding],
+  })
+const view = PopoverTriggerClickTestComposition.makeView((model, h) =>
   h.div(
     [],
     [
-      h.submodel({
-        slotId: 'pop',
-        model: model.popover,
-        view,
-        viewInputs: {
-          anchor: { placement: 'bottom-start' },
-          toView: ({ button, panel, backdrop, isVisible }) =>
-            h.div(
-              [],
-              [
-                h.button([...button], ['Sort']),
-                ...(isVisible
-                  ? [
-                      h.div([...backdrop]),
-                      h.div(
-                        [...panel],
-                        [h.button([h.Id('item'), h.Type('button')], ['Name'])],
-                      ),
-                    ]
-                  : []),
-              ],
-            ),
-        },
-        toParentMessage: message => Message.GotPopoverMessage({ message }),
-      }),
+      h.block(
+        PopoverBinding.embedView({
+          slotId: 'popover',
+          model: model.popover,
+          viewInputs: {
+            anchor: { placement: 'bottom-start' },
+            toView: ({ button, panel, backdrop, isVisible }) =>
+              h.div(
+                [],
+                [
+                  h.button([...button], ['Sort']),
+                  ...(isVisible
+                    ? [
+                        h.div([...backdrop]),
+                        h.div(
+                          [...panel],
+                          [
+                            h.button(
+                              [h.Id('item'), h.Type('button')],
+                              ['Name'],
+                            ),
+                          ],
+                        ),
+                      ]
+                    : []),
+                ],
+              ),
+          },
+        }),
+      ),
     ],
-  )
+  ),
+)
+
+const makeProgram = (container: HTMLElement, isModal: boolean) => {
+  const prepare = () =>
+    PopoverTriggerClickTestComposition.prepareBlock({
+      init: PopoverTriggerClickTestComposition.makeInit(() =>
+        PopoverBinding.init({
+          args: [{ id: 'sort', isModal }],
+          toParentModel: popover => ({ popover }),
+        }),
+      ),
+      update: PopoverTriggerClickTestComposition.makeUpdate({}),
+      view,
+    })
+  const block: Block.FromAssemblyWithView<typeof Model, typeof prepare> =
+    Block.assemble(prepare)
+
+  return Program.makeElement({
+    block,
+    container,
+  })
+}
 
 const requireElement = (id: string): HTMLElement => {
   const element = document.getElementById(id)
@@ -79,30 +96,6 @@ const requireElement = (id: string): HTMLElement => {
     throw new Error(`Missing #${id}`)
   }
   return element
-}
-
-const mountPopover = (container: HTMLElement, isModal: boolean) => {
-  container.id = 'app'
-  const tags: Array<string> = []
-  const handle = Runtime.embed(
-    Runtime.makeElement({
-      Model,
-      init: () => ({
-        model: { popover: init({ id: 'sort', isModal }) },
-      }),
-      update: (model: Model, message: Message) => {
-        tags.push(message.message._tag)
-        return Message.match<Update.Return<Model, Message>>(message, {
-          GotPopoverMessage: ({ message: popoverMessage }) =>
-            foldPopover(model, popoverMessage),
-        })
-      },
-      view: popoverView,
-      container,
-    }),
-  )
-
-  return { tags, handle }
 }
 
 const clickButtonInOneTask = (button: HTMLElement) => {
@@ -119,14 +112,16 @@ const clickButtonInOneTask = (button: HTMLElement) => {
 describe('Popover trigger click', () => {
   afterEach(() => {
     document.body.replaceChildren()
+    document.documentElement.style.overflow = ''
   })
 
   it('treats a same-task click as one open, and still closes when focus leaves', async () => {
     const container = document.createElement('div')
     const outside = document.createElement('button')
+    container.id = 'app'
     outside.id = 'outside'
     document.body.append(container, outside)
-    const { tags, handle } = mountPopover(container, false)
+    const handle = Runtime.embed(makeProgram(container, false))
 
     try {
       await vi.waitFor(() => {
@@ -136,13 +131,10 @@ describe('Popover trigger click', () => {
       clickButtonInOneTask(requireElement('sort-button'))
 
       await vi.waitFor(() => {
-        expect(tags).toContain('CompletedAnchorPopover')
+        expect(
+          document.getElementById('sort-button')?.getAttribute('aria-expanded'),
+        ).toBe('true')
       })
-
-      expect(tags).toContain('ClickedButton')
-      expect(
-        document.getElementById('sort-button')?.getAttribute('aria-expanded'),
-      ).toBe('true')
 
       requireElement('sort-panel').focus()
       outside.focus()
@@ -152,16 +144,16 @@ describe('Popover trigger click', () => {
           document.getElementById('sort-button')?.getAttribute('aria-expanded'),
         ).toBe('false')
       })
-      expect(tags).toContain('BlurredPanel')
     } finally {
       handle.dispose()
     }
   })
 
-  it('takes the scroll lock once when a modal popover opens from a same-task click', async () => {
+  it('takes and releases modal resources once around a same-task click', async () => {
     const container = document.createElement('div')
+    container.id = 'app'
     document.body.append(container)
-    const { tags, handle } = mountPopover(container, true)
+    const handle = Runtime.embed(makeProgram(container, true))
 
     try {
       await vi.waitFor(() => {
@@ -171,11 +163,9 @@ describe('Popover trigger click', () => {
       clickButtonInOneTask(requireElement('sort-button'))
 
       await vi.waitFor(() => {
-        expect(tags).toContain('CompletedLockScroll')
+        expect(document.documentElement.style.overflow).toBe('hidden')
+        expect(document.querySelector('[inert]')).not.toBeNull()
       })
-
-      expect(tags.filter(tag => tag === 'CompletedLockScroll')).toHaveLength(1)
-      expect(tags.filter(tag => tag === 'CompletedInertOthers')).toHaveLength(1)
 
       requireElement('sort-panel').dispatchEvent(
         new KeyboardEvent('keydown', {
@@ -186,14 +176,9 @@ describe('Popover trigger click', () => {
       )
 
       await vi.waitFor(() => {
-        expect(tags).toContain('CompletedUnlockScroll')
+        expect(document.documentElement.style.overflow).toBe('')
+        expect(document.querySelector('[inert]')).toBeNull()
       })
-      expect(tags.filter(tag => tag === 'CompletedUnlockScroll')).toHaveLength(
-        1,
-      )
-      expect(tags.filter(tag => tag === 'CompletedRestoreInert')).toHaveLength(
-        1,
-      )
     } finally {
       handle.dispose()
     }

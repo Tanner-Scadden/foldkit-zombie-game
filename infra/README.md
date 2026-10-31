@@ -1,6 +1,6 @@
 # Infra
 
-The Cloudflare side of Munch Manor, declared with [Alchemy](https://alchemy.run/). It has its own `package.json` because Alchemy 2.0.0-beta.84 imports `effect/Crypto`, which Effect 4.1 removed, so `infra/` stays on `effect` 4.0.7 while the game and the packages run 4.1.0. Versions are pinned exactly, since Alchemy v2 is still in beta.
+The Cloudflare side of Munch Manor, declared with [Alchemy](https://alchemy.run/). It has its own `package.json` because Alchemy 2.0.0-beta.84 imports `effect/Crypto`, which Effect 4.1 removed, so `infra/` stays on `effect` 4.0.7 while the game and the packages run 4.0.6, the Effect the Foldkit Block preview accepts. Versions are pinned exactly, since Alchemy v2 is still in beta.
 
 | File                                               | What it holds                                                                                           |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -104,7 +104,7 @@ On every stage the API Worker also serves co-op rooms (see "What Phases 2 and 3 
 
 The game posts one run summary per run to its stage's API Worker (see "Analytics" in `PLATFORM.md`). The Website gets the API Worker's URL as `VITE_API_ORIGIN`, which Vite inlines into the game.
 
-- **Two Effects.** The Worker imports `src/analytics.ts`, which the game shares. Its `effect` import would otherwise resolve from the game's `node_modules` (Effect 4.1.0), so three things point it at infra's Effect 4.0.7: the Worker bundle's `resolve.alias` in `alchemy.run.ts`, `paths` in `tsconfig.json`, and the `oneEffect.ts` preload for `bun test`. Keep `src/analytics.ts` importing only `effect`.
+- **Two Effects.** The Worker imports `src/analytics.ts`, which the game shares. Its `effect` import would otherwise resolve from the game's `node_modules` (Effect 4.0.6), so three things point it at infra's Effect 4.0.7: the Worker bundle's `resolve.alias` in `alchemy.run.ts`, `paths` in `tsconfig.json`, and the `oneEffect.ts` preload for `bun test`. Keep `src/analytics.ts` importing only `effect`.
 - **Migrations.** Add a new numbered file to `migrations/`, such as `0002_add_column.sql`. Never edit one that has shipped: Alchemy records each file's hash in the database's `__alchemy_migrations` table and applies new files in order on the next deploy.
 - **Secrets.** The address salt is an `Alchemy.Random`, made once per stage and kept in Alchemy's state. It reaches the Worker as a `secret_text` binding.
 - **Rate limits.** Cloudflare Rate Limiting bindings, namespaces 7101 (per visit) and 7102 (per address bucket), shared by every stage.

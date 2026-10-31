@@ -1,12 +1,20 @@
-import { Array, Effect, Option, Result, Schema, String, pipe } from 'effect'
-import { Command, Dom, type Update } from 'foldkit'
+import {
+  Array,
+  Effect,
+  Layer,
+  Option,
+  Result,
+  Schema,
+  String,
+  pipe,
+} from 'effect'
+import { Dom, type Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import {
   ClientFrame,
   type Lobby,
   type LobbyMember,
-  NEUTRAL_INPUT,
   type PickedMode,
   type PlayerInput,
   type RoomDifficulty,
@@ -19,6 +27,8 @@ import { CODE_ALPHABET } from '@munch/sync-engine'
 import { actionCodeOf, eventsBetween, heldAction } from '../roomWorld'
 import type { SeatAction } from '../stepWorld'
 import type { Bullet } from '../worldSchema'
+import { CoopComposition } from './composition'
+import { makeCommand } from './definition'
 import { Message, OutMessage } from './message'
 import {
   type CoopProblem,
@@ -44,79 +54,98 @@ export const ROOM_CODE_LENGTH = 5
 
 // COMMAND
 
-export const FocusCoopElement = Command.define('FocusCoopElement', {
+export const FocusCoopElement = makeCommand('FocusCoopElement', {
   args: { id: Schema.String },
   messages: [Message.CompletedFocusCoopElement],
-  execute: ({ id }) =>
-    Dom.focus(`#${id}`).pipe(
-      Effect.ignore,
-      Effect.as(Message.CompletedFocusCoopElement()),
-    ),
+  handler: function* () {
+    return ({ id }) =>
+      Dom.focus(`#${id}`).pipe(
+        Effect.ignore,
+        Effect.as(Message.CompletedFocusCoopElement()),
+      )
+  },
 })
 
-export const RequestRoom = Command.define('RequestRoom', {
+export const RequestRoom = makeCommand('RequestRoom', {
   args: { request: RoomRequest, name: Schema.String, look: Schema.String },
   messages: [Message.SucceededRequestRoom, Message.FailedRequestRoom],
-  execute: ({ request, name, look }) =>
-    CoopNet.use(net => net.requestRoom(request, name, look)).pipe(
-      Effect.map(ticket => Message.SucceededRequestRoom(ticket)),
-      Effect.catch(problem =>
-        Effect.succeed(Message.FailedRequestRoom({ problem })),
-      ),
-    ),
+  handler: function* () {
+    return ({ request, name, look }) =>
+      CoopNet.use(net => net.requestRoom(request, name, look)).pipe(
+        Effect.map(ticket => Message.SucceededRequestRoom(ticket)),
+        Effect.catch(problem =>
+          Effect.succeed(Message.FailedRequestRoom({ problem })),
+        ),
+      )
+  },
 })
 
-export const AnswerOffer = Command.define('AnswerOffer', {
+export const AnswerOffer = makeCommand('AnswerOffer', {
   args: { accept: Schema.Boolean },
   messages: [Message.CompletedAnswerOffer],
-  execute: ({ accept }) =>
-    CoopNet.use(net => net.answerOffer(accept)).pipe(
-      Effect.as(Message.CompletedAnswerOffer()),
-    ),
+  handler: function* () {
+    return ({ accept }) =>
+      CoopNet.use(net => net.answerOffer(accept)).pipe(
+        Effect.as(Message.CompletedAnswerOffer()),
+      )
+  },
 })
 
-export const CancelQuickPlay = Command.define('CancelQuickPlay', {
+export const CancelQuickPlay = makeCommand('CancelQuickPlay', {
   messages: [Message.CompletedCancelQuickPlay],
-  execute: CoopNet.use(net => net.cancelQuickPlay).pipe(
-    Effect.as(Message.CompletedCancelQuickPlay()),
-  ),
+  handler: function* () {
+    return () =>
+      CoopNet.use(net => net.cancelQuickPlay).pipe(
+        Effect.as(Message.CompletedCancelQuickPlay()),
+      )
+  },
 })
 
-export const ChangeLobby = Command.define('ChangeLobby', {
+export const ChangeLobby = makeCommand('ChangeLobby', {
   args: { change: LobbyChange },
   messages: [Message.CompletedChangeLobby, Message.FailedChangeLobby],
-  execute: ({ change }) =>
-    CoopNet.use(net => net.changeLobby(change)).pipe(
-      Effect.as(Message.CompletedChangeLobby()),
-      Effect.catch(problem =>
-        Effect.succeed(Message.FailedChangeLobby({ problem })),
-      ),
-    ),
+  handler: function* () {
+    return ({ change }) =>
+      CoopNet.use(net => net.changeLobby(change)).pipe(
+        Effect.as(Message.CompletedChangeLobby()),
+        Effect.catch(problem =>
+          Effect.succeed(Message.FailedChangeLobby({ problem })),
+        ),
+      )
+  },
 })
 
-export const SendRoomFrames = Command.define('SendRoomFrames', {
+export const SendRoomFrames = makeCommand('SendRoomFrames', {
   args: { frames: Schema.Array(ClientFrame) },
   messages: [Message.CompletedSendRoomFrames],
-  execute: ({ frames }) =>
-    CoopNet.use(net => net.sendToRoom(frames)).pipe(
-      Effect.map(bytes => Message.CompletedSendRoomFrames({ bytes })),
-    ),
+  handler: function* () {
+    return ({ frames }) =>
+      CoopNet.use(net => net.sendToRoom(frames)).pipe(
+        Effect.map(bytes => Message.CompletedSendRoomFrames({ bytes })),
+      )
+  },
 })
 
-export const LeaveRoom = Command.define('LeaveRoom', {
+export const LeaveRoom = makeCommand('LeaveRoom', {
   messages: [Message.CompletedLeaveRoom],
-  execute: CoopNet.use(net => net.leaveRoom).pipe(
-    Effect.as(Message.CompletedLeaveRoom()),
-  ),
+  handler: function* () {
+    return () =>
+      CoopNet.use(net => net.leaveRoom).pipe(
+        Effect.as(Message.CompletedLeaveRoom()),
+      )
+  },
 })
 
 // NOTE: the session could not apply a message from the room, so it asks
 // for a new socket, whose link brings a fresh Snapshot.
-export const ResyncRoom = Command.define('ResyncRoom', {
+export const ResyncRoom = makeCommand('ResyncRoom', {
   messages: [Message.CompletedResyncRoom],
-  execute: CoopNet.use(net => net.resyncRoom).pipe(
-    Effect.as(Message.CompletedResyncRoom()),
-  ),
+  handler: function* () {
+    return () =>
+      CoopNet.use(net => net.resyncRoom).pipe(
+        Effect.as(Message.CompletedResyncRoom()),
+      )
+  },
 })
 
 export const ROOM_PARAM = 'room'
@@ -131,41 +160,45 @@ const linkOf = (code: string): string => {
 
 // NOTE: the phone's own share sheet where there is one, else the link on the
 // clipboard. Either way the button shows what happened with an icon.
-export const ShareRoomLink = Command.define('ShareRoomLink', {
+export const ShareRoomLink = makeCommand('ShareRoomLink', {
   args: { code: Schema.String },
   messages: [Message.CompletedShareRoomLink],
-  execute: ({ code }) =>
-    Effect.gen(function* () {
-      const url = linkOf(code)
-      if (typeof navigator.share === 'function') {
-        yield* Effect.tryPromise(() =>
-          navigator.share({ title: 'Munch Manor', url }),
-        )
-        return Message.CompletedShareRoomLink({ share: 'Shared' })
-      }
-      yield* Effect.tryPromise(() => navigator.clipboard.writeText(url))
-      return Message.CompletedShareRoomLink({ share: 'Copied' })
-    }).pipe(
-      Effect.catch(() =>
-        Effect.succeed(Message.CompletedShareRoomLink({ share: 'Idle' })),
-      ),
-    ),
+  handler: function* () {
+    return ({ code }) =>
+      Effect.gen(function* () {
+        const url = linkOf(code)
+        if (typeof navigator.share === 'function') {
+          yield* Effect.tryPromise(() =>
+            navigator.share({ title: 'Munch Manor', url }),
+          )
+          return Message.CompletedShareRoomLink({ share: 'Shared' })
+        }
+        yield* Effect.tryPromise(() => navigator.clipboard.writeText(url))
+        return Message.CompletedShareRoomLink({ share: 'Copied' })
+      }).pipe(
+        Effect.catch(() =>
+          Effect.succeed(Message.CompletedShareRoomLink({ share: 'Idle' })),
+        ),
+      )
+  },
 })
 
 // NOTE: the room's code rides in the address, so a reload rejoins the same
 // seat and the address bar is itself the invite.
-export const RememberRoom = Command.define('RememberRoom', {
+export const RememberRoom = makeCommand('RememberRoom', {
   args: { maybeCode: Schema.Option(Schema.String) },
   messages: [Message.CompletedRememberRoom],
-  execute: ({ maybeCode }) =>
-    Effect.sync(() => {
-      const url = new URL(location.href)
-      Option.match(maybeCode, {
-        onNone: () => url.searchParams.delete(ROOM_PARAM),
-        onSome: code => url.searchParams.set(ROOM_PARAM, code),
-      })
-      history.replaceState(history.state, '', url)
-    }).pipe(Effect.ignore, Effect.as(Message.CompletedRememberRoom())),
+  handler: function* () {
+    return ({ maybeCode }) =>
+      Effect.sync(() => {
+        const url = new URL(location.href)
+        Option.match(maybeCode, {
+          onNone: () => url.searchParams.delete(ROOM_PARAM),
+          onSome: code => url.searchParams.set(ROOM_PARAM, code),
+        })
+        history.replaceState(history.state, '', url)
+      }).pipe(Effect.ignore, Effect.as(Message.CompletedRememberRoom()))
+  },
 })
 
 // NOTE: the code a `?room=` link carries, read once as the game boots.
@@ -177,11 +210,17 @@ export const readRoomLink = (search: string): Option.Option<string> =>
 
 // HELPERS
 
+// NOTE: the handlers co-op's Commands need; the CoopNet service they use
+// is a requirement of their Layers, supplied by the application.
+// NOTE: the handlers co-op's Commands need, read off the Layer that
+// supplies them (CommandsLayer below), so a new Command joins both at once.
+type CoopHandlers = Layer.Success<typeof CommandsLayer>
+
 export type UpdateReturn = Update.ReturnWithOutMessage<
   Model,
   Message,
   OutMessage,
-  CoopNet
+  CoopHandlers
 >
 
 const withScreen = (model: Model, screen: Screen): Model =>
@@ -809,7 +848,7 @@ const failedRequest = (model: Model, problem: CoopProblem): UpdateReturn =>
       })
     : { model }
 
-export const update = (model: Model, message: Message): UpdateReturn =>
+const updateMessage = (model: Model, message: Message): UpdateReturn =>
   Message.match<UpdateReturn>(message, {
     ClickedQuickPlayButton: () => ({
       model: withScreen(model, Screen.Queue({ queue: emptyQueue })),
@@ -884,8 +923,6 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     ReceivedRoomEvent: ({ event, atMs }) =>
       inRoom(model, room => receiveFrame(model, room, event, atMs)),
 
-    TickedRoomFrame: ({ nowMs }) => tickRoom(model, NEUTRAL_INPUT, nowMs),
-
     CompletedSendRoomFrames: ({ bytes }) =>
       inRoom(model, room => ({
         model: withRoom(model, {
@@ -954,4 +991,87 @@ export const update = (model: Model, message: Message): UpdateReturn =>
     CompletedRememberRoom: () => ({ model }),
 
     CompletedFocusCoopElement: () => ({ model }),
+
+    RequestedOpen: ({ name, maybeCode, look }) =>
+      open(model, name, maybeCode, look),
+
+    RequestedPressKey: ({ code }) => pressKey(model, code),
+
+    RequestedReleaseKey: ({ code }) => releaseKey(model, code),
+
+    RequestedTickRoom: ({ controls, nowMs, isPictureHeld }) =>
+      tickRoom(model, controls, nowMs, isPictureHeld),
+
+    RequestedPressAction: ({ action }) => ({
+      model: pressAction(model, action),
+    }),
   })
+
+// NOTE: a delivered Message that drops the room tells the parent, unless it
+// already says something (NeededNewerBuild drops the room too).
+const delivered = (model: Model, message: Message): UpdateReturn => {
+  const result = updateMessage(model, message)
+  return result.outMessage === undefined &&
+    Option.isSome(maybeRoomOf(model)) &&
+    Option.isNone(maybeRoomOf(result.model))
+    ? { ...result, outMessage: OutMessage.LeftRoom() }
+    : result
+}
+
+// NOTE: the parent's requests (the Block's operations) run as they are.
+const requested = (model: Model, message: Message): UpdateReturn =>
+  updateMessage(model, message)
+
+export const update = CoopComposition.makeUpdate({
+  ClickedQuickPlayButton: delivered,
+  ClickedCodeButton: delivered,
+  ClickedCreateButton: delivered,
+  ClickedBackButton: delivered,
+  ClickedCloseButton: delivered,
+  UpdatedCode: delivered,
+  SubmittedCode: delivered,
+  SucceededRequestRoom: delivered,
+  FailedRequestRoom: delivered,
+  ReceivedQuickPlayEvent: delivered,
+  ClickedAcceptOfferButton: delivered,
+  ClickedKeepWaitingButton: delivered,
+  ClickedCancelQueueButton: delivered,
+  CompletedAnswerOffer: delivered,
+  CompletedCancelQuickPlay: delivered,
+  ReceivedLobbyEvent: delivered,
+  ReceivedRoomEvent: delivered,
+  CompletedSendRoomFrames: delivered,
+  ClickedReadyButton: delivered,
+  ClickedKickButton: delivered,
+  ClickedModePick: delivered,
+  ClickedDifficultyPick: delivered,
+  CompletedChangeLobby: delivered,
+  FailedChangeLobby: delivered,
+  ClickedLeaveButton: delivered,
+  CompletedLeaveRoom: delivered,
+  CompletedResyncRoom: delivered,
+  ClickedShareButton: delivered,
+  CompletedShareRoomLink: delivered,
+  CompletedRememberRoom: delivered,
+  CompletedFocusCoopElement: delivered,
+  RequestedOpen: requested,
+  RequestedPressKey: requested,
+  RequestedReleaseKey: requested,
+  RequestedTickRoom: requested,
+  RequestedPressAction: requested,
+})
+
+// HANDLERS
+
+export const CommandsLayer = Layer.mergeAll(
+  FocusCoopElement.layer,
+  RequestRoom.layer,
+  AnswerOffer.layer,
+  CancelQuickPlay.layer,
+  ChangeLobby.layer,
+  SendRoomFrames.layer,
+  LeaveRoom.layer,
+  ShareRoomLink.layer,
+  RememberRoom.layer,
+  ResyncRoom.layer,
+)

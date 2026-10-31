@@ -45,6 +45,7 @@ const PostCoverImagePath = Schema.String.check(
     },
   ),
 )
+type PostCoverImagePath = typeof PostCoverImagePath.Type
 
 const POSITIVE_INTEGER_PATTERN = /^[1-9][0-9]*$/
 
@@ -60,6 +61,7 @@ const PostCoverImageDimension = Schema.String.check(
     },
   ),
 )
+type PostCoverImageDimension = typeof PostCoverImageDimension.Type
 
 /**
  * Frontmatter schema for blog posts. One schema drives both halves of the

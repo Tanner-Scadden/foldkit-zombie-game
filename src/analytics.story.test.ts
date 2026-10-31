@@ -4,7 +4,7 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
-import { Dialog } from '@foldkit/ui'
+import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import {
   CauseOfDeath,
@@ -120,7 +120,10 @@ const expectedSummary = (
 })
 
 const closeDialog = () =>
-  Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog())
+  Command.resolve(
+    Dialog.test.CloseDialog,
+    DialogBlock.Message.CompletedCloseDialog(),
+  )
 
 describe('the run summary schema', () => {
   const summary = expectedSummary({
@@ -312,7 +315,9 @@ describe('the sharing setting', () => {
   })
 
   test('the visit id comes from a Command at start', () => {
-    expect(init().commands).toContainEqual(GenerateVisitId())
+    expect((init().commands ?? []).map(command => command.name)).toContain(
+      GenerateVisitId().name,
+    )
     story(
       update,
       given(modifyFields(home, { maybeVisitId: () => Option.none() })),

@@ -12,9 +12,10 @@ export type RoomPlayerSession = typeof RoomPlayerSession.Type
 export const RoomPlayerSessionJsonString = Schema.fromJsonString(
   Schema.toCodecJson(RoomPlayerSession),
 )
+export type RoomPlayerSessionJsonString =
+  typeof RoomPlayerSessionJsonString.Type
 
 export const RoomAsyncData = AsyncData.Schema(Shared.Room, Schema.String)
-export type RoomAsyncData = typeof RoomAsyncData.schema.Type
 
 export const Model = Schema.Struct({
   roomAsyncData: RoomAsyncData.schema,

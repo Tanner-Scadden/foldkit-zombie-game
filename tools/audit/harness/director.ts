@@ -2,10 +2,11 @@ import { Array, Option, Schema } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { cameraOf, worldToView } from '@game/camera'
+import { CueMusic, PlaySound } from '@game/commands'
 import { STICK_RADIUS_PX } from '@game/constants'
 import * as CoopModel from '@game/coop/model'
 import { type WorldState, coopWorld } from '@game/coop/seam'
-import { playRoomFrame } from '@game/coopPlay'
+import { update } from '@game/main'
 import { Message } from '@game/message'
 import {
   AudioState,
@@ -27,7 +28,6 @@ import {
   roomWorldFor,
 } from '@game/roomWorld'
 import { SeatAction } from '@game/stepWorld'
-import { tickCoopRoom } from '@game/update/coop'
 import { isWalking } from '@game/zombies'
 import { NEUTRAL_INPUT, type PlayerInput, Room } from '@munch/netcode'
 
@@ -95,7 +95,10 @@ export type AudioCue =
       stinger: string
     }>
 
-type Return = Readonly<{ model: Model; commands?: ReadonlyArray<any> }>
+type Return = Readonly<{
+  model: Model
+  commands?: ReadonlyArray<any> | undefined
+}>
 type Step = (model: Model, message: Message) => Return
 
 const FIXED_TICK_MS = 1000 / 60
@@ -122,7 +125,7 @@ const logAudio = (
   atTick: number,
 ): ReadonlyArray<any> =>
   Array.filter(commands, command => {
-    if (command.name === 'PlaySound') {
+    if (command.name === PlaySound.name) {
       cues.push({
         tick: atTick,
         _tag: 'Sound',
@@ -130,7 +133,7 @@ const logAudio = (
         variation: command.args.variation,
       })
       return false
-    } else if (command.name === 'CueMusic') {
+    } else if (command.name === CueMusic.name) {
       cues.push({ tick: atTick, _tag: 'Music', ...command.args })
       return false
     } else {
@@ -535,7 +538,9 @@ const coopTick = (model: Model, isCaptured: boolean): Return =>
           }),
         },
       }))
-      const drawn = playRoomFrame(nowMs, tickCoopRoom(nowMs))(staged)
+      // NOTE: the game's own handler for the room's frame, as an online
+      // run gets it (src/update/coop.ts).
+      const drawn = update(staged, Message.TickedRoomFrame({ nowMs }))
       return isCaptured ? drawn : { model: drawn.model }
     },
   })
