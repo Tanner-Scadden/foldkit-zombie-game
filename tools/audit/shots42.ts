@@ -1,7 +1,8 @@
 // The guided tutorial pass: each step of the tour a new player gets in the
 // break before wave 2 (walk to Rattles, buy a free Plank Pile, place it in a
 // doorway, done) and of the kitchen tour before wave 3 (the free boards, the
-// free pull, take it or leave it, done), on a 1280x720 desktop and a 390x844 phone held
+// free pull, take it or leave it, done), on a 1280x720 desktop, an 844x390
+// phone on its side, and a 390x844 phone held
 // upright, as `s42-<TAG>-<viewport>-<scene>.png`. It checks that the
 // tracker shows on every step, that the Plank Pile is FREE, and that the
 // tracker's skip button is big enough to tap, and exits with 1 on a miss.
@@ -10,6 +11,7 @@ import type { Page } from 'playwright-core'
 
 import {
   DESKTOP_1280,
+  PHONE_844,
   UPRIGHT_390,
   deviceQuery,
   finish,
@@ -29,6 +31,7 @@ const TAG = tagOr('after')
 
 const VIEWPORTS = pickViewports([
   { ...DESKTOP_1280, name: 'd1280' },
+  { ...PHONE_844, name: 'l844' },
   { ...UPRIGHT_390, name: 'p390' },
 ])
 

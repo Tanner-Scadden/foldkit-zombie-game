@@ -6,7 +6,7 @@ import { type Camera, viewBoxOf, worldToView } from './camera'
 import { FULL_TURN, placeSprite } from './drawing'
 import { COIN_SPRITE, COIN_WIDTH } from './font'
 import { kitchenStepOf, maybeKitchenMark } from './kitchenTour'
-import { fridgeBoxOf, fridgeSpot } from './leftovers'
+import { fridgeBoxOf } from './leftovers'
 import type { Model } from './model'
 import { isLearned } from './onboarding'
 import { STALL_BOX, isBrowsing, isShopOpenFor } from './shop'
@@ -18,7 +18,7 @@ import {
   bakeShapes,
   spriteShapes,
 } from './sprite'
-import { AmmoTip, TrapHint, type Vector } from './worldSchema'
+import { AmmoTip, Tour, TrapHint, type Vector } from './worldSchema'
 
 // NOTE: Rattles calls from his stall with a speech bubble of pictures: a
 // coin and what he sells that the player needs now. Traps, in the breaks
@@ -30,9 +30,10 @@ import { AmmoTip, TrapHint, type Vector } from './worldSchema'
 // with an arrow toward it. It never points at a zombie.
 //
 // The kitchen tour (src/kitchenTour.ts) hangs the same bubble from its
-// spots: a gift over the boards and the fridge it gives away, and the
-// prize's choice, the hold ring for take and an arrow away for leave.
-export type BubbleKind = 'Ammo' | 'Traps' | 'Shop' | 'Gift' | 'Choice'
+// spots: a gift over the boards and the fridge it gives away, and, under
+// the prize's TAKE tag and its ring (which teach taking), footprints and a
+// cross for leaving it by walking away.
+export type BubbleKind = 'Ammo' | 'Traps' | 'Shop' | 'Gift' | 'Leave'
 
 const AMMO_PALETTE: Palette = {
   o: '#140c10',
@@ -74,34 +75,15 @@ const GIFT = tourIcon([
   '.rrrrr.',
 ])
 
-const HOLD_RING = tourIcon([
-  '..yyy..',
-  '.y...y.',
-  'y.....y',
-  'y..o..y',
-  'y.....y',
-  '.y...y.',
-  '..yyy..',
-])
-
-const CHECK = tourIcon([
+// NOTE: two footprints walking off, for leaving the prize behind.
+const FOOTSTEPS = tourIcon([
+  '....oo.',
+  '...ooo.',
+  '...oo..',
+  'oo.....',
+  'ooo....',
+  'oo.....',
   '.......',
-  '......g',
-  '.....gg',
-  'g...gg.',
-  'gg.gg..',
-  '.ggg...',
-  '..g....',
-])
-
-const WALK_AWAY = tourIcon([
-  '...w...',
-  '...ww..',
-  'wwwwww.',
-  'wwwwwww',
-  'wwwwww.',
-  '...ww..',
-  '...w...',
 ])
 
 const CROSS = tourIcon([
@@ -131,7 +113,7 @@ const GOODS: Readonly<Record<BubbleKind, ReadonlyArray<Good>>> = {
   ],
   Shop: [COIN],
   Gift: [GIFT],
-  Choice: [HOLD_RING, CHECK, WALK_AWAY, CROSS],
+  Leave: [FOOTSTEPS, CROSS],
 }
 
 const bubbleWidth = (kind: BubbleKind): number =>
@@ -192,7 +174,7 @@ const FRAMES: Readonly<Record<BubbleKind, Sprite>> = {
   Traps: bakeShapes(frameRects(bubbleWidth('Traps'), BUBBLE_INK)),
   Shop: bakeShapes(frameRects(bubbleWidth('Shop'), BUBBLE_INK)),
   Gift: bakeShapes(frameRects(bubbleWidth('Gift'), BUBBLE_INK)),
-  Choice: bakeShapes(frameRects(bubbleWidth('Choice'), BUBBLE_INK)),
+  Leave: bakeShapes(frameRects(bubbleWidth('Leave'), BUBBLE_INK)),
 }
 
 const isStallInView = (camera: Camera): boolean => {
@@ -216,9 +198,15 @@ export const maybeBubbleKind = (
 ): Option.Option<BubbleKind> => {
   if (AmmoTip.isAnyOf(['Showing'])(model.ammoTip)) {
     return Option.some('Ammo')
-  } else if (!isBreakWithShop(model)) {
+  } else if (
+    !isBreakWithShop(model) ||
+    Tour.isAnyOf(['Running', 'Done'])(model.kitchenTour)
+  ) {
     return Option.none()
-  } else if (TrapHint.isAnyOf(['Unseen'])(model.trapHint)) {
+  } else if (
+    TrapHint.isAnyOf(['Unseen'])(model.trapHint) &&
+    (isStallInView(camera) || Tour.isAnyOf(['Running'])(model.firstBreakQuest))
+  ) {
     return Option.some('Traps')
   } else if (!isLearned(model.lessons.shop) && !isStallInView(camera)) {
     return Option.some('Shop')
@@ -365,7 +353,11 @@ export const bubbleShapes = (
 }
 
 // NOTE: the kitchen tour's bubbles: a gift over the boards, then over the
-// fridge, and the take or leave choice while the prize floats.
+// fridge, and while the prize floats, under its TAKE tag (and the ring that
+// teaches taking), footprints and a cross for leaving it.
+const LEAVE_TIP_RIGHT = 26
+const LEAVE_TIP_DROP = 32
+
 export const kitchenBubbleShapes = (
   model: Model,
   camera: Camera,
@@ -377,7 +369,12 @@ export const kitchenBubbleShapes = (
         ? Option.match(fridgeBoxOf(levelOf(model)), {
             onNone: () => [],
             onSome: box =>
-              bubbleShapes('Choice', fridgeSpot(box), model, camera),
+              bubbleShapes(
+                'Leave',
+                { x: box.right + LEAVE_TIP_RIGHT, y: box.top + LEAVE_TIP_DROP },
+                model,
+                camera,
+              ),
           })
         : Option.match(maybeKitchenMark(model), {
             onNone: () => [],
