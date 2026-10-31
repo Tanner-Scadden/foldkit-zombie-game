@@ -15,7 +15,7 @@ import {
   LoadStyles,
   ReadUpdateMarker,
 } from './boot'
-import { MeasureGameSurface } from './mount'
+import { ListenForTouchTaps, MeasureGameSurface } from './mount'
 import { CueMusic } from './musicPlan'
 import { subscriptions } from './subscriptions'
 import { ReadRoomLink } from './update/coop'
@@ -112,4 +112,5 @@ export const EffectsLayer = Layer.mergeAll(
   CommandsLayer,
   subscriptions.layer,
   MeasureGameSurface.layer,
+  ListenForTouchTaps.layer,
 )

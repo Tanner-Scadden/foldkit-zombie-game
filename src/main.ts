@@ -291,6 +291,10 @@ export const update = ApplicationComposition.makeUpdate({
 
   SuppressedContextMenu: model => settle(model, { model }),
 
+  // NOTE: the touch tap listener (src/touchTaps.ts) reports each tap it
+  // made. The tapped button's own Message did the work.
+  TappedWithTouch: model => settle(model, { model }),
+
   MeasuredGameSurface: (model, { left, top, width, height }) =>
     settle(model, {
       model: modifyFields(model, {

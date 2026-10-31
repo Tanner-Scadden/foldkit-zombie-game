@@ -311,7 +311,7 @@
   image-rendering: pixelated;
 }
 
-.home-stage .home-coop[data-lock='Locked']:active {
+.home-stage .home-coop[data-lock='Locked']:active .home-coop-lock {
   animation: home-coop-nope 300ms ease-out;
 }
 
@@ -603,8 +603,6 @@
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   translate: 0 calc(var(--o) * var(--o) * 5px);
-  animation: hand-deal 280ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
-  animation-delay: calc(var(--i) * 45ms);
   transition:
     translate 120ms ease-out,
     filter 60ms linear;
@@ -759,6 +757,14 @@
   pointer-events: auto;
 }
 
+/* NOTE: what a card shows flies in from the deck, while the card's button
+   already stands where it lands, so a tap on a card mid-deal picks it
+   (src/motion.test.ts). */
+.hand-card > * {
+  animation: hand-deal 280ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+  animation-delay: calc(var(--i) * 45ms);
+}
+
 @keyframes hand-deal {
   from {
     opacity: 0;
@@ -780,7 +786,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hand-card,
+  .hand-card > *,
   .hand-backdrop,
   .hand-card-new,
   .manor-pip {
@@ -958,6 +964,10 @@
   background: rgba(20, 36, 14, 0.94);
   color: var(--menu-ink);
   font: clamp(10px, 3.4 * var(--a, 2px), 24px) / 1.2 var(--menu-font);
+  animation: menu-fade-in 0.35s ease-out both;
+}
+
+.new-entry > * {
   animation: new-entry-pop 0.5s ease-out both;
 }
 
@@ -999,7 +1009,6 @@
 
 @keyframes new-entry-pop {
   0% {
-    opacity: 0;
     scale: 0.6;
   }
 
@@ -1008,13 +1017,13 @@
   }
 
   100% {
-    opacity: 1;
     scale: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .new-entry,
+  .new-entry > *,
   .new-entry-flag {
     animation: none;
   }
@@ -2401,8 +2410,7 @@ button.help-card:focus-visible {
   width: min(360px, 62vw);
   max-height: calc(100dvh - 16px);
   border-top-color: var(--menu-gold);
-  animation: picker-pop 180ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
-  transform-origin: 100% 100%;
+  animation: picker-pop 180ms ease-out both;
 }
 
 .panel-dialog[data-anchor='Play'] .panel-title {
@@ -2412,7 +2420,7 @@ button.help-card:focus-visible {
 @keyframes picker-pop {
   from {
     opacity: 0;
-    scale: 0.7;
+    filter: brightness(2);
   }
 }
 
@@ -3183,7 +3191,19 @@ button.help-card:focus-visible {
   letter-spacing: 0.06em;
   cursor: pointer;
   touch-action: manipulation;
+  animation: menu-fade-in 0.28s ease-out both;
+}
+
+/* NOTE: the button fades in where it stands and what it shows pops, so a
+   tap as it comes in still lands (src/motion.test.ts). */
+.end-button > * {
   animation: end-button-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes menu-fade-in {
+  from {
+    opacity: 0;
+  }
 }
 
 .end-button-icon {
@@ -3256,12 +3276,10 @@ button.help-card:focus-visible {
 
 @keyframes end-button-pop {
   from {
-    opacity: 0;
     scale: 0.4;
   }
 
   to {
-    opacity: 1;
     scale: 1;
   }
 }
@@ -3296,6 +3314,7 @@ button.help-card:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .end-button,
+  .end-button > *,
   .end-button[data-look='Retry'] .end-button-icon {
     animation: none;
   }

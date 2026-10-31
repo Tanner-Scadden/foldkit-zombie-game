@@ -1,4 +1,4 @@
-import { Mount, Subscription, given, scene, tap } from 'foldkit/scene'
+import { Subscription, given, scene, tap } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
@@ -6,12 +6,12 @@ import { FIXED_STEP_MS } from './constants'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
 import { DISTANT_SPAWN, homeAfterRead, inPortrait } from './model.fixture'
-import { MeasureGameSurface } from './mount'
 import {
   PHONE_LANDSCAPE,
   PHONE_PORTRAIT,
   ROOT,
   SCENE_SUBSCRIPTIONS,
+  measureSurfaceAs,
   nodesOf,
 } from './testing'
 import { asVeteran } from './veteran'
@@ -71,7 +71,7 @@ const reuseAcrossAFrame = (
   scene(
     ROOT,
     given(model),
-    Mount.resolve(MeasureGameSurface, Message.MeasuredGameSurface(surface)),
+    measureSurfaceAs(surface),
     keep,
     Subscription.emit(
       SCENE_SUBSCRIPTIONS.frame,

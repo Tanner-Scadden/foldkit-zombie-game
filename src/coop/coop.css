@@ -39,7 +39,6 @@
 @keyframes coop-in {
   from {
     opacity: 0;
-    scale: 1.03;
   }
 }
 
@@ -414,9 +413,11 @@
   animation: coop-blink 1s step-end infinite;
 }
 
+/* NOTE: a flash, not a grow: it plays on seats and buttons, which stay
+   where a finger finds them (src/motion.test.ts). */
 @keyframes coop-pop {
   from {
-    scale: 1.25;
+    filter: brightness(1.9);
   }
 }
 

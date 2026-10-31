@@ -1,7 +1,6 @@
 import { Array } from 'effect'
 import {
   Command,
-  Mount,
   all,
   click,
   expect,
@@ -24,7 +23,6 @@ import { Tabs } from '@foldkit/ui'
 import { Message } from './message'
 import { type Model } from './model'
 import { homeAfterRead } from './model.fixture'
-import { MeasureGameSurface } from './mount'
 import { LinkFlow, SyncState } from './playerSync'
 import { ProfileTabsBlock } from './profile'
 import { LINK_TAKES_PROGRESS_NOTE, SHARE_STATS_NOTE } from './profileView'
@@ -34,6 +32,7 @@ import {
   closeDialogInScene,
   emitPressedKey,
   measureSurface,
+  measureSurfaceAs,
   showDialogInScene,
 } from './testing'
 import { RequestLinkCode, WriteSave } from './update/save'
@@ -55,10 +54,12 @@ const focusTab = (index: number) =>
     ProfileTabsBlock.Message.CompletedFocusTab(),
   )
 
-const measureUpright = Mount.resolve(
-  MeasureGameSurface,
-  Message.MeasuredGameSurface({ left: 0, top: 0, width: 390, height: 844 }),
-)
+const measureUpright = measureSurfaceAs({
+  left: 0,
+  top: 0,
+  width: 390,
+  height: 844,
+})
 
 describe('the Profile', () => {
   test('the gear opens it on Settings: four tabs, sound and friends, and no devices or stats sharing', () => {

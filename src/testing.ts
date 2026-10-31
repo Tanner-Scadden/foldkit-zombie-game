@@ -34,7 +34,7 @@ import {
   type ZombieKind,
   ZombieState,
 } from './model'
-import { MeasureGameSurface } from './mount'
+import { ListenForTouchTaps, MeasureGameSurface } from './mount'
 import { type HintId, LESSON_MIN_SHOWN_MS, shownHints } from './onboarding'
 import { PURCHASE_RULES } from './purchase'
 import { subscriptions } from './subscriptions'
@@ -124,10 +124,22 @@ export const emitPressedKey = (code: string) =>
     Message.PressedKey({ code }),
   )
 
-export const measureSurface = Scene.Mount.resolve(
-  MeasureGameSurface,
-  Message.MeasuredGameSurface(SURFACE),
-)
+// NOTE: the root's two Mounts: the surface's size, and the touch tap
+// listener, whose tap Message changes nothing.
+export const measureSurfaceAs = (
+  surface: Readonly<{
+    left: number
+    top: number
+    width: number
+    height: number
+  }>,
+) =>
+  Scene.Mount.resolveAll(
+    [MeasureGameSurface, Message.MeasuredGameSurface(surface)],
+    [ListenForTouchTaps, Message.TappedWithTouch()],
+  )
+
+export const measureSurface = measureSurfaceAs(SURFACE)
 
 export const showDialogInScene = () => [
   Scene.Command.resolve(

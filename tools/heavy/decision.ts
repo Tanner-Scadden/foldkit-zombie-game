@@ -307,7 +307,7 @@ const CPU_SCRIPTS: ReadonlyArray<RegExp> = [
 
 const SHARED_SCRIPTS: ReadonlyArray<RegExp> = [
   auditScript(
-    'shots\\d+|taps|closes|offline|sqlite|sync|save|live-check|icons|og|beacon-check|mp',
+    'shots\\d+|taps|closes|profileClicks|offline|sqlite|sync|save|live-check|icons|og|beacon-check|mp',
   ),
 ]
 
@@ -318,6 +318,7 @@ const SHARED_SCRIPTS: ReadonlyArray<RegExp> = [
 const PARALLEL_SCRIPTS: ReadonlyArray<readonly [RegExp, string, number]> = [
   [auditScript('taps'), 'TAPS_PARALLEL', 1],
   [auditScript('closes'), 'CLOSES_PARALLEL', 1],
+  [auditScript('profileClicks'), 'PROFILE_PARALLEL', 1],
   [auditScript('shots33'), 'SHOTS_PARALLEL', 2],
   [auditScript('shots34'), 'SHOTS_PARALLEL', 1],
 ]

@@ -1,7 +1,12 @@
 import { Effect, Queue, Stream } from 'effect'
 
 import { ApplicationDefinition } from './definition'
-import { type MeasuredGameSurface, Message } from './message'
+import {
+  type MeasuredGameSurface,
+  Message,
+  type TappedWithTouch,
+} from './message'
+import { listenForTouchTaps } from './touchTaps'
 
 const measure = (element: Element): MeasuredGameSurface => {
   const { left, top, width, height } = element.getBoundingClientRect()
@@ -43,4 +48,30 @@ export const MeasureGameSurface = ApplicationDefinition.makeMountStream(
   },
 )
 
-export const mounts = [MeasureGameSurface]
+// NOTE: taps on touch screens come from each finger's own pointer events,
+// so a button works with another finger on the glass (src/touchTaps.ts).
+// The tapped button's own OnClick sends its Message; this Mount only says a
+// finger tapped.
+export const ListenForTouchTaps = ApplicationDefinition.makeMountStream(
+  'ListenForTouchTaps',
+  {
+    messages: [Message.TappedWithTouch],
+    handler: function* () {
+      return ({ element }) =>
+        Stream.callback<TappedWithTouch>(queue =>
+          Effect.acquireRelease(
+            Effect.sync(() =>
+              element instanceof HTMLElement
+                ? listenForTouchTaps(element, () => {
+                    Queue.offerUnsafe(queue, Message.TappedWithTouch())
+                  })
+                : () => undefined,
+            ),
+            stopListening => Effect.sync(stopListening),
+          ).pipe(Effect.flatMap(() => Effect.never)),
+        )
+    },
+  },
+)
+
+export const mounts = [MeasureGameSurface, ListenForTouchTaps]

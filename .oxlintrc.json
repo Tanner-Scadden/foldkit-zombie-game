@@ -74,6 +74,7 @@
     "munch/no-raw-json": "error",
     "munch/no-conditional-step": "error",
     "munch/no-world-spread": "error",
+    "munch/tap-by-click": "error",
     "typescript/no-unnecessary-condition": "error",
     "typescript/no-misused-spread": "error",
     "typescript/no-unsafe-argument": "error",
