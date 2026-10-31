@@ -140,7 +140,7 @@ export const Message = defineMessageUnion({
   BlurredHomeButton: {},
   CompletedFocusHomeButton: {},
   CompletedFocusEndMenuButton: {},
-  CompletedOpenShare: {},
+  CompletedClickShareLink: {},
   CompletedSendShareEvent: {},
   FailedSendShareEvent: { reason: Schema.String },
   CompletedLoadStyles: {},

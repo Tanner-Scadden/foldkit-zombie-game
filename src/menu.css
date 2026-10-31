@@ -3088,6 +3088,7 @@ button.help-card:focus-visible {
 
 .end-button {
   position: relative;
+  text-decoration: none;
   display: flex;
   flex-direction: column;
   align-items: center;

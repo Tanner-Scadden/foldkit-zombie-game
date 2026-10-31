@@ -226,28 +226,32 @@ const openScene = async (page: Page, scene: Scene) => {
   }
 }
 
+// NOTE: what a tap can land on: every button, and the end screens' SHARE,
+// a link so the browser opens X on the tap itself.
+const TAP_TARGETS = 'button, a.end-button'
+
 // NOTE: true once the scene shows a button at `index`, in the open dialog
 // when there is one.
 const hasButton = (page: Page, index: number, hasDialog: boolean) =>
   page
     .waitForFunction(
-      ({ index, hasDialog }) => {
+      ({ index, hasDialog, targets }) => {
         const scope: ParentNode = hasDialog
           ? (document.querySelector('dialog[open]') ?? document)
           : document
-        return scope.querySelectorAll('button')[index] !== undefined
+        return scope.querySelectorAll(targets)[index] !== undefined
       },
-      { index, hasDialog },
+      { index, hasDialog, targets: TAP_TARGETS },
       { timeout: OPEN_TIMEOUT_MS },
     )
     .then(() => true)
     .catch(() => false)
 
 const visibleTargets = (page: Page): Promise<ReadonlyArray<number>> =>
-  page.evaluate(() => {
+  page.evaluate(targets => {
     const openDialog = document.querySelector('dialog[open]')
     const scope: ParentNode = openDialog ?? document
-    return Array.from(scope.querySelectorAll('button'))
+    return Array.from(scope.querySelectorAll(targets))
       .map((button, index) => ({ button, index }))
       .filter(({ button }) => {
         const box = button.getBoundingClientRect()
@@ -261,7 +265,7 @@ const visibleTargets = (page: Page): Promise<ReadonlyArray<number>> =>
         )
       })
       .map(({ index }) => index)
-  })
+  }, TAP_TARGETS)
 
 // NOTE: only a dialog's own panel counts. A list inside it, such as the
 // Munchopedia's tiles, may keep its place.
@@ -279,11 +283,11 @@ const placeTarget = (
   hasDialog: boolean,
 ): Promise<Target> =>
   page.evaluate(
-    ({ index, hasDialog, inset }) => {
+    ({ index, hasDialog, inset, targets }) => {
       const scope: ParentNode = hasDialog
         ? (document.querySelector('dialog[open]') ?? document)
         : document
-      const button = scope.querySelectorAll('button')[index]!
+      const button = scope.querySelectorAll(targets)[index]!
       button.scrollIntoView({ block: 'nearest', inline: 'nearest' })
       const box = button.getBoundingClientRect()
       const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
@@ -309,7 +313,7 @@ const placeTarget = (
         ],
       }
     },
-    { index, hasDialog, inset: EDGE_INSET },
+    { index, hasDialog, inset: EDGE_INSET, targets: TAP_TARGETS },
   )
 
 const hitsButton = (
@@ -319,11 +323,11 @@ const hitsButton = (
   hasDialog: boolean,
 ) =>
   page.evaluate(
-    ({ index, point: { x, y }, hasDialog }) => {
+    ({ index, point: { x, y }, hasDialog, targets }) => {
       const scope: ParentNode = hasDialog
         ? (document.querySelector('dialog[open]') ?? document)
         : document
-      const button = scope.querySelectorAll('button')[index]
+      const button = scope.querySelectorAll(targets)[index]
       const hit = document.elementFromPoint(x, y)
       return button !== undefined && hit !== null && button.contains(hit)
     },
@@ -331,6 +335,7 @@ const hitsButton = (
       index: target.index,
       point,
       hasDialog,
+      targets: TAP_TARGETS,
     },
   )
 
@@ -427,6 +432,13 @@ const checkScene = async (
       await tapPage.evaluate(() => {
         ;(window as any).__messages.length = 0
       })
+      // NOTE: the end screens' SHARE is a link that opens X in a new tab;
+      // x.com is answered here, so a tap never reaches X.
+      await tapPage
+        .context()
+        .route('https://x.com/**', route =>
+          route.fulfill({ status: 200, body: '' }),
+        )
       await tapPage.touchscreen.tap(tapPoint.x, tapPoint.y)
       await wait(AFTER_TAP_MS)
       const tags: ReadonlyArray<string> = await tapPage.evaluate(() => [

@@ -1,4 +1,5 @@
-import { Array, Effect, Option, Schema } from 'effect'
+import { Array, Effect, Option } from 'effect'
+import { Dom } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import { ShareEvent } from '../analytics'
@@ -15,10 +16,9 @@ import {
   isBeatOver,
   isEndScreen,
   isRunCardHeld,
-  sharedRunOf,
   skipBeat,
 } from '../endBeat'
-import { endOffer } from '../home'
+import { END_SHARE_BUTTON_ID, endOffer } from '../home'
 import {
   isCharacterKey,
   isEndlessKey,
@@ -30,7 +30,6 @@ import { advanceJuice } from '../juice'
 import { Message } from '../message'
 import { type Model, Phase, RunMode } from '../model'
 import { advanceParticles } from '../particles'
-import { shareUrl } from '../share'
 import { stepWhen } from '../stepWhen'
 import { RUNNING_BUILD } from '../version'
 import { keepGoingWhenAllowed, startWhenAllowed } from './run'
@@ -155,21 +154,22 @@ export const runCardFromKey = (model: Model, code: string): Model =>
 
 // SHARE
 
-// NOTE: X's post intent in a new tab, or the X app on a phone; an installed
-// app hands a new tab to the browser, so the game stays where it was.
-export const OpenShare = makeCommand('OpenShare', {
-  args: { url: Schema.String },
-  messages: [Message.CompletedOpenShare],
+// NOTE: SHARE is a link (src/menus.ts), so the browser opens X's post
+// intent itself, on the tap, where no popup blocker can stop it; an
+// installed app hands it to the browser or the X app. On a keyboard, X
+// clicks that same link from the key's own Command, inside the key press's
+// activation, and the click sends ClickedShareButton like a tap.
+export const ClickShareLink = makeCommand('ClickShareLink', {
+  messages: [Message.CompletedClickShareLink],
   handler: function* () {
-    return ({ url }) =>
-      Effect.sync(() => window.open(url, '_blank', 'noopener,noreferrer')).pipe(
+    return () =>
+      Dom.clickElement(`#${END_SHARE_BUTTON_ID}`).pipe(
         Effect.ignore,
-        Effect.as(Message.CompletedOpenShare()),
+        Effect.as(Message.CompletedClickShareLink()),
       )
   },
 })
 
-// NOTE: the post is built here from the Model; X opens in the Command.
 // NOTE: a tap on SHARE, sent like a run summary, as an anonymous event.
 export const SendShareEvent = makeCommand('SendShareEvent', {
   args: { event: ShareEvent },
@@ -206,21 +206,17 @@ const shareEventCommands = (model: Model) =>
       })
     : []
 
-export const shareRun: UpdateStep = stepWhen(
+// NOTE: the link's own href is the post; this only counts the tap.
+const countShare: UpdateStep = stepWhen(
   (model: Model) => isEndScreen(model.phase),
-  model => ({
-    model,
-    commands: [
-      OpenShare({
-        url: shareUrl(sharedRunOf(model, runDifficultyOf(model))),
-      }),
-      ...shareEventCommands(model),
-    ],
-  }),
+  model => ({ model, commands: shareEventCommands(model) }),
 )
 
 export const shareFromKey = (code: string): UpdateStep =>
-  stepWhen(() => isShareKey(code), shareRun)
+  stepWhen(
+    (model: Model) => isShareKey(code) && isEndScreen(model.phase),
+    model => ({ model, commands: [ClickShareLink()] }),
+  )
 
 export const shareFromButton: UpdateStep = model =>
-  combine(skipBeat(model), [shareRun])
+  combine(skipBeat(model), [countShare])

@@ -1,4 +1,4 @@
-import { Array } from 'effect'
+import { Array, Option } from 'effect'
 import {
   Command,
   Subscription,
@@ -23,6 +23,7 @@ import { describe, test } from 'vitest'
 
 import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
+import { shareHrefOf } from './menus'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
 import { withNewerBuild } from './model.fixture'
@@ -36,7 +37,7 @@ import {
   retryButton,
   updateChip,
 } from './testing'
-import { OpenShare } from './update/end'
+import { SendShareEvent } from './update/end'
 import { FocusEndMenuButton } from './update/home'
 import { asVeteran } from './veteran'
 
@@ -49,7 +50,7 @@ const tickPastGrace = () =>
   )
 
 const menuButton = role('button', { name: /^Menu: back/ })
-const shareButton = role('button', {
+const shareButton = role('link', {
   name: 'Share your run on X. Opens in a new tab',
 })
 const updateNote = selector('.mode-button-gift')
@@ -97,14 +98,35 @@ describe('the end screens', () => {
     )
   })
 
-  test('a tap on SHARE skips the beat and opens X with the run', () => {
+  test('SHARE is a link to X post intent that opens in a new tab', () => {
+    const gameOver = onEndScreen(Phase.GameOver({ wave: 4 }), RESTART_GRACE_MS)
     scene(
       ROOT,
-      given(onEndScreen(Phase.GameOver({ wave: 4 }), RESTART_GRACE_MS)),
+      given(gameOver),
+      measureSurface,
+      expect(shareButton).toHaveAttr('href', shareHrefOf(gameOver)),
+      expect(shareButton).toHaveAttr('target', '_blank'),
+      expect(shareButton).toHaveAttr('rel', 'noopener noreferrer'),
+      expect(selector('a#end-share-button')).toExist(),
+    )
+  })
+
+  test('a tap on the SHARE link skips the beat and counts the share', () => {
+    scene(
+      ROOT,
+      given(
+        modifyFields(
+          onEndScreen(Phase.GameOver({ wave: 4 }), RESTART_GRACE_MS),
+          {
+            shareStats: () => 'On' as const,
+            maybeVisitId: () => Option.some('0123456789abcdef'),
+          },
+        ),
+      ),
       measureSurface,
       click(shareButton),
-      Command.expectHas(OpenShare),
-      Command.resolve(OpenShare, Message.CompletedOpenShare()),
+      Command.expectHas(SendShareEvent),
+      Command.resolve(SendShareEvent, Message.CompletedSendShareEvent()),
     )
   })
 

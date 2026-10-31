@@ -3,6 +3,8 @@ import type { Html } from 'foldkit/html'
 
 import type { ApplicationViewBuilder } from './composition'
 import { isOpen as isCoopOpen } from './coop/update'
+import { runDifficultyOf } from './coopPlay'
+import { sharedRunOf } from './endBeat'
 import {
   END_MENU_BUTTON_ID,
   END_RETRY_BUTTON_ID,
@@ -28,6 +30,7 @@ import { isProfileOpen } from './menuState'
 import { Message } from './message'
 import { DebutCard, type Model, Phase, RunMode, type ZombieKind } from './model'
 import { canSkipDebutCard } from './onboarding'
+import { shareUrl } from './share'
 import { iconButtonView } from './touchControls'
 import { FINAL_WAVE } from './waves'
 import { ZOMBIE_KINDS } from './zombies'
@@ -241,44 +244,63 @@ const SHARE_BUTTON: EndButton = {
 
 const END_BUTTON_STAGGER_MS = 70
 
+const endButtonFace = (
+  model: Model,
+  button: EndButton,
+  h: ApplicationViewBuilder,
+): ReadonlyArray<Html> => [
+  h.span([
+    h.Class('end-button-icon'),
+    h.AriaHidden(true),
+    h.Style({ backgroundImage: button.icon }),
+  ]),
+  h.span([h.Class('end-button-label'), h.AriaHidden(true)], [button.label]),
+  ...(model.lastDevice === 'KeyboardMouse'
+    ? [h.span([h.Class('end-button-key'), h.AriaHidden(true)], [button.key])]
+    : []),
+]
+
+// NOTE: X's post intent for this run, the room's difficulty in an online
+// co-op run. The words are src/share.ts's.
+export const shareHrefOf = (model: Model): string =>
+  shareUrl(sharedRunOf(model, runDifficultyOf(model)))
+
+// NOTE: SHARE is a real link, so the browser opens X on the tap itself
+// (a new tab, the X app on a phone, or the browser from an installed app)
+// and no popup blocker can stop it. Its click still sends its Message, which
+// counts the share and never prevents the link.
 const endButtonView =
   (model: Model, h: ApplicationViewBuilder) =>
-  (button: EndButton, index: number): Html =>
-    h.keyed('button')(
-      button.id,
-      [
-        h.Type('button'),
-        h.Id(button.id),
-        h.Class('end-button'),
-        h.DataAttribute('look', button.look),
-        h.Style({ animationDelay: `${index * END_BUTTON_STAGGER_MS}ms` }),
-        h.AriaLabel(button.ariaLabel),
-        h.AriaKeyshortcuts(button.keyName),
-        h.OnClick(button.message, {
-          focusSelector: '.game-surface',
-          propagation: 'Stop',
-        }),
-      ],
-      [
-        h.span([
-          h.Class('end-button-icon'),
-          h.AriaHidden(true),
-          h.Style({ backgroundImage: button.icon }),
-        ]),
-        h.span(
-          [h.Class('end-button-label'), h.AriaHidden(true)],
-          [button.label],
-        ),
-        ...(model.lastDevice === 'KeyboardMouse'
-          ? [
-              h.span(
-                [h.Class('end-button-key'), h.AriaHidden(true)],
-                [button.key],
-              ),
-            ]
-          : []),
-      ],
-    )
+  (button: EndButton, index: number): Html => {
+    const shared = [
+      h.Id(button.id),
+      h.Class('end-button'),
+      h.DataAttribute('look', button.look),
+      h.Style({ animationDelay: `${index * END_BUTTON_STAGGER_MS}ms` }),
+      h.AriaLabel(button.ariaLabel),
+      h.AriaKeyshortcuts(button.keyName),
+      h.OnClick(button.message, {
+        focusSelector: '.game-surface',
+        propagation: 'Stop',
+      }),
+    ]
+    return button.look === 'Share'
+      ? h.keyed('a')(
+          button.id,
+          [
+            ...shared,
+            h.Href(shareHrefOf(model)),
+            h.Target('_blank'),
+            h.Rel('noopener noreferrer'),
+          ],
+          endButtonFace(model, button, h),
+        )
+      : h.keyed('button')(
+          button.id,
+          [h.Type('button'), ...shared],
+          endButtonFace(model, button, h),
+        )
+  }
 
 // NOTE: in an online co-op run the room's lobby comes next, so the card
 // offers only SHARE until the lobby takes over.
