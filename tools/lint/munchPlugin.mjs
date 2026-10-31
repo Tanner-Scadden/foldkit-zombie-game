@@ -434,6 +434,55 @@ const commandBesideUpdate = {
   },
 }
 
+// NOTE: the ways to run an Effect by hand. A test runs its Effect with
+// `it.effect` from @effect/vitest instead, which gives it a Scope and the
+// TestClock.
+const RUN_METHODS = new Set([
+  'runPromise',
+  'runPromiseExit',
+  'runSync',
+  'runSyncExit',
+  'runFork',
+])
+
+const RUN_IN_TESTS_MESSAGE =
+  'A test runs its Effect with it.effect from @effect/vitest (it.live for real time, layer(...) to share a Layer), not by hand (AGENTS.md "Code shape").'
+
+const isEffectModule = source =>
+  source === 'effect' || source === 'effect/Effect'
+
+const noRunInTests = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description:
+        "Run a test's Effect with it.effect from @effect/vitest, not Effect.runPromise, runSync, or runFork.",
+    },
+  },
+  create(context) {
+    return {
+      MemberExpression(node) {
+        if (
+          node.object.type === 'Identifier' &&
+          node.object.name === 'Effect' &&
+          RUN_METHODS.has(propertyName(node))
+        ) {
+          context.report({ node, message: RUN_IN_TESTS_MESSAGE })
+        }
+      },
+      ImportSpecifier(node) {
+        if (
+          isEffectModule(node.parent.source.value) &&
+          node.imported.type === 'Identifier' &&
+          RUN_METHODS.has(node.imported.name)
+        ) {
+          context.report({ node, message: RUN_IN_TESTS_MESSAGE })
+        }
+      },
+    }
+  },
+}
+
 export default {
   meta: { name: 'munch' },
   rules: {
@@ -444,5 +493,6 @@ export default {
     'no-world-spread': noWorldSpread,
     'no-menu-field': noMenuField,
     'command-beside-update': commandBesideUpdate,
+    'no-run-in-tests': noRunInTests,
   },
 }

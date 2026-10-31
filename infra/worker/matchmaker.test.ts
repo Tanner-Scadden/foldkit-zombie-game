@@ -1,7 +1,7 @@
-import { describe, expect, test } from 'bun:test'
 import * as Effect from 'effect/Effect'
 import * as Result from 'effect/Result'
 
+import { describe, expect, it } from '@effect/vitest'
 import { Matchmaking, RoomRefusal, type RoomTicket } from '@munch/netcode'
 
 import { type MatchmakerIo, makeMatchmakerHost } from './matchmakerCore.ts'
@@ -59,7 +59,7 @@ const fakeIo = (fake: Fake): MatchmakerIo => ({
   wakeAt: atMs => Effect.sync(() => void fake.alarms.push(atMs)),
 })
 
-const setUp = async () => {
+const setUp = Effect.gen(function* () {
   const fake: Fake = {
     state: Matchmaking.emptyMatchmaker,
     sent: [],
@@ -70,36 +70,30 @@ const setUp = async () => {
     fullRooms: new Set(),
     failMaking: false,
   }
-  const host = await Effect.runPromise(makeMatchmakerHost(fakeIo(fake)))
+  const host = yield* makeMatchmakerHost(fakeIo(fake))
   const arrive = (n: number) =>
-    Effect.runPromise(
-      host.run((matchmaker, nowMs) =>
-        Matchmaking.arrive(
-          matchmaker,
-          {
-            socket: `s${n}`,
-            playerId: `p${n}`,
-            name: `Zed ${n}`,
-            queuedMs: nowMs,
-          },
-          nowMs,
-        ),
+    host.run((matchmaker, nowMs) =>
+      Matchmaking.arrive(
+        matchmaker,
+        {
+          socket: `s${n}`,
+          playerId: `p${n}`,
+          name: `Zed ${n}`,
+          queuedMs: nowMs,
+        },
+        nowMs,
       ),
     )
   const leave = (n: number) =>
-    Effect.runPromise(
-      host.run((matchmaker, nowMs) =>
-        Matchmaking.leave(matchmaker, `s${n}`, nowMs),
-      ),
+    host.run((matchmaker, nowMs) =>
+      Matchmaking.leave(matchmaker, `s${n}`, nowMs),
     )
   const list = (code: string, members: number, open = true) =>
-    Effect.runPromise(
-      host.run((matchmaker, nowMs) =>
-        Matchmaking.listed(matchmaker, { code, members, open }, nowMs),
-      ),
+    host.run((matchmaker, nowMs) =>
+      Matchmaking.listed(matchmaker, { code, members, open }, nowMs),
     )
   return { fake, arrive, leave, list }
-}
+})
 
 const lastWaiting = (fake: Fake, socket: string) =>
   fake.sent
@@ -108,64 +102,79 @@ const lastWaiting = (fake: Fake, socket: string) =>
     .at(-1)
 
 describe('the Matchmaker', () => {
-  test('four arrivals make a room, and each hears Matched', async () => {
-    const { fake, arrive } = await setUp()
-    await arrive(1)
-    await arrive(2)
-    await arrive(3)
-    expect(lastWaiting(fake, 's3')).toMatchObject({
-      waiting: 3,
-      position: 3,
-      names: ['Zed 1', 'Zed 2', 'Zed 3'],
-    })
-    expect(fake.alarms.length).toBeGreaterThan(0)
-    await arrive(4)
-    expect(fake.made).toEqual([['s1', 's2', 's3', 's4']])
-    expect(fake.closed).toEqual(['s1', 's2', 's3', 's4'])
-    expect(
-      fake.sent.filter(([, message]) => message._tag === 'Matched').length,
-    ).toBe(4)
-    expect(fake.state.queue).toEqual([])
-  })
+  it.effect('four arrivals make a room, and each hears Matched', () =>
+    Effect.gen(function* () {
+      const { fake, arrive } = yield* setUp
+      yield* arrive(1)
+      yield* arrive(2)
+      yield* arrive(3)
+      expect(lastWaiting(fake, 's3')).toMatchObject({
+        waiting: 3,
+        position: 3,
+        names: ['Zed 1', 'Zed 2', 'Zed 3'],
+      })
+      expect(fake.alarms.length).toBeGreaterThan(0)
+      yield* arrive(4)
+      expect(fake.made).toEqual([['s1', 's2', 's3', 's4']])
+      expect(fake.closed).toEqual(['s1', 's2', 's3', 's4'])
+      expect(
+        fake.sent.filter(([, message]) => message._tag === 'Matched').length,
+      ).toBe(4)
+      expect(fake.state.queue).toEqual([])
+    }),
+  )
 
-  test('a dropped socket mid-queue leaves it, and the others hear the new count', async () => {
-    const { fake, arrive, leave } = await setUp()
-    await arrive(1)
-    await arrive(2)
-    await arrive(3)
-    await leave(2)
-    expect(lastWaiting(fake, 's3')).toMatchObject({ waiting: 2, position: 2 })
-    await arrive(4)
-    await arrive(5)
-    expect(fake.made).toEqual([['s1', 's3', 's4', 's5']])
-  })
+  it.effect(
+    'a dropped socket mid-queue leaves it, and the others hear the new count',
+    () =>
+      Effect.gen(function* () {
+        const { fake, arrive, leave } = yield* setUp
+        yield* arrive(1)
+        yield* arrive(2)
+        yield* arrive(3)
+        yield* leave(2)
+        expect(lastWaiting(fake, 's3')).toMatchObject({
+          waiting: 2,
+          position: 2,
+        })
+        yield* arrive(4)
+        yield* arrive(5)
+        expect(fake.made).toEqual([['s1', 's3', 's4', 's5']])
+      }),
+  )
 
-  test('a seat that opens goes to the first in line; a full room is skipped', async () => {
-    const { fake, arrive, list } = await setUp()
-    await arrive(1)
-    await arrive(2)
-    fake.fullRooms.add('FULLR')
-    await list('FULLR', 3)
-    await list('OPENR', 2)
-    expect(fake.seated).toEqual([
-      ['s1', 'OPENR'],
-      ['s2', 'OPENR'],
-    ])
-    expect(fake.state.rooms.map(room => room.code)).toEqual(['OPENR'])
-  })
+  it.effect(
+    'a seat that opens goes to the first in line; a full room is skipped',
+    () =>
+      Effect.gen(function* () {
+        const { fake, arrive, list } = yield* setUp
+        yield* arrive(1)
+        yield* arrive(2)
+        fake.fullRooms.add('FULLR')
+        yield* list('FULLR', 3)
+        yield* list('OPENR', 2)
+        expect(fake.seated).toEqual([
+          ['s1', 'OPENR'],
+          ['s2', 'OPENR'],
+        ])
+        expect(fake.state.rooms.map(room => room.code)).toEqual(['OPENR'])
+      }),
+  )
 
-  test('a room that cannot be made says so to its players', async () => {
-    const { fake, arrive } = await setUp()
-    fake.failMaking = true
-    await arrive(1)
-    await arrive(2)
-    await arrive(3)
-    await arrive(4)
-    expect(
-      fake.sent
-        .filter(([, message]) => message._tag === 'Refused')
-        .map(([to]) => to),
-    ).toEqual(['s1', 's2', 's3', 's4'])
-    expect(fake.state.queue).toEqual([])
-  })
+  it.effect('a room that cannot be made says so to its players', () =>
+    Effect.gen(function* () {
+      const { fake, arrive } = yield* setUp
+      fake.failMaking = true
+      yield* arrive(1)
+      yield* arrive(2)
+      yield* arrive(3)
+      yield* arrive(4)
+      expect(
+        fake.sent
+          .filter(([, message]) => message._tag === 'Refused')
+          .map(([to]) => to),
+      ).toEqual(['s1', 's2', 's3', 's4'])
+      expect(fake.state.queue).toEqual([])
+    }),
+  )
 })

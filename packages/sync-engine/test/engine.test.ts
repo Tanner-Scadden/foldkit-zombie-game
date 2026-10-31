@@ -10,7 +10,8 @@ import {
   Stream,
 } from 'effect'
 import { SqlClient, type SqlError } from 'effect/sql'
-import { describe, expect, test } from 'vitest'
+
+import { describe, expect, it } from '@effect/vitest'
 
 import { type Host, type NetworkOptions, makeHost } from '../src/InProcess'
 import { type Sync, startSync } from '../src/Sync'
@@ -34,7 +35,6 @@ import {
   authenticate,
   openClientDatabase,
   openServerDatabase,
-  run,
 } from './fixtures'
 
 const Tally = Schema.Struct({ kind: Schema.String, count: Schema.Number })
@@ -121,7 +121,9 @@ const makeTestHost = (
   })
 
 // NOTE: waits, on the real clock, until every device has nothing pending
-// and has confirmed the server's head.
+// and has confirmed the server's head. The tests that sync run with
+// it.live: they play a network with delays and heartbeats on real time, as
+// a device does. The status tests cover the same sync on the TestClock.
 const settled = (host: Host, devices: ReadonlyArray<Device>) =>
   Effect.gen(function* () {
     const server = yield* host.server(SCOPE)
@@ -159,111 +161,104 @@ const tallyOf = (state: State, kind: string): number =>
   )
 
 describe('rebuild plus replay', () => {
-  test('a pending mutation stays on top of deltas from elsewhere', () =>
-    run(
-      Effect.gen(function* () {
-        const device = yield* openDevice()
-        yield* device.replica.run(Counted, { kind: 'runs', count: 2 })
-        const fromElsewhere = yield* encodeArgs(Counted, {
-          kind: 'runs',
-          count: 3,
-        })
-        const receipt = yield* device.replica.receive(
-          ServerMessage.cases.Deltas.make({
-            scope: SCOPE,
-            head: 1,
-            deltas: [
-              {
-                seq: 1,
-                id: 'other-device-0001',
-                name: 'Counted',
-                version: 1,
-                args: fromElsewhere,
-                timestampMs: 5,
-                origin: 'Client',
-              },
-            ],
-          }),
-        )
-        expect(receipt._tag).toBe('Applied')
-        const view = yield* viewOf(device)
-        const confirmed = yield* readState(
-          device.database.sql,
-          'sync_confirmed_',
-        )
-        expect(tallyOf(view, 'runs')).toBe(5)
-        expect(tallyOf(confirmed, 'runs')).toBe(3)
-        expect(yield* device.replica.pending).toHaveLength(1)
-        expect(yield* device.replica.confirmedSeq).toBe(1)
-      }),
-    ))
+  it.effect('a pending mutation stays on top of deltas from elsewhere', () =>
+    Effect.gen(function* () {
+      const device = yield* openDevice()
+      yield* device.replica.run(Counted, { kind: 'runs', count: 2 })
+      const fromElsewhere = yield* encodeArgs(Counted, {
+        kind: 'runs',
+        count: 3,
+      })
+      const receipt = yield* device.replica.receive(
+        ServerMessage.cases.Deltas.make({
+          scope: SCOPE,
+          head: 1,
+          deltas: [
+            {
+              seq: 1,
+              id: 'other-device-0001',
+              name: 'Counted',
+              version: 1,
+              args: fromElsewhere,
+              timestampMs: 5,
+              origin: 'Client',
+            },
+          ],
+        }),
+      )
+      expect(receipt._tag).toBe('Applied')
+      const view = yield* viewOf(device)
+      const confirmed = yield* readState(device.database.sql, 'sync_confirmed_')
+      expect(tallyOf(view, 'runs')).toBe(5)
+      expect(tallyOf(confirmed, 'runs')).toBe(3)
+      expect(yield* device.replica.pending).toHaveLength(1)
+      expect(yield* device.replica.confirmedSeq).toBe(1)
+    }),
+  )
 
-  test('duplicated and out of order deltas apply once, in order', () =>
-    run(
-      Effect.gen(function* () {
-        const device = yield* openDevice()
-        const args = yield* encodeArgs(Counted, { kind: 'runs', count: 1 })
-        const delta = (seq: number) => ({
-          seq,
-          id: `delta-${seq}-aaaaaa`,
-          name: 'Counted',
-          version: 1,
-          args,
-          timestampMs: seq,
-          origin: 'Client' as const,
-        })
-        const gap = yield* device.replica.receive(
-          ServerMessage.cases.Deltas.make({
-            scope: SCOPE,
-            head: 2,
-            deltas: [delta(2)],
-          }),
-        )
-        expect(gap).toEqual({ _tag: 'Resync', mode: 'Catchup' })
-        yield* device.replica.receive(
-          ServerMessage.cases.Deltas.make({
-            scope: SCOPE,
-            head: 3,
-            deltas: [delta(3), delta(1), delta(2), delta(1)],
-          }),
-        )
-        const view = yield* viewOf(device)
-        expect(tallyOf(view, 'runs')).toBe(3)
-        expect(yield* device.replica.confirmedSeq).toBe(3)
-      }),
-    ))
+  it.effect('duplicated and out of order deltas apply once, in order', () =>
+    Effect.gen(function* () {
+      const device = yield* openDevice()
+      const args = yield* encodeArgs(Counted, { kind: 'runs', count: 1 })
+      const delta = (seq: number) => ({
+        seq,
+        id: `delta-${seq}-aaaaaa`,
+        name: 'Counted',
+        version: 1,
+        args,
+        timestampMs: seq,
+        origin: 'Client' as const,
+      })
+      const gap = yield* device.replica.receive(
+        ServerMessage.cases.Deltas.make({
+          scope: SCOPE,
+          head: 2,
+          deltas: [delta(2)],
+        }),
+      )
+      expect(gap).toEqual({ _tag: 'Resync', mode: 'Catchup' })
+      yield* device.replica.receive(
+        ServerMessage.cases.Deltas.make({
+          scope: SCOPE,
+          head: 3,
+          deltas: [delta(3), delta(1), delta(2), delta(1)],
+        }),
+      )
+      const view = yield* viewOf(device)
+      expect(tallyOf(view, 'runs')).toBe(3)
+      expect(yield* device.replica.confirmedSeq).toBe(3)
+    }),
+  )
 
-  test('a rejection drops the mutation and rebuilds the view', () =>
-    run(
-      Effect.gen(function* () {
-        const device = yield* openDevice()
-        const id = yield* device.replica.run(Claimed, { slot: 'x', by: 'me' })
-        expect((yield* viewOf(device)).slots).toHaveLength(1)
-        const receipt = yield* device.replica.receive(
-          ServerMessage.cases.Rejected.make({
-            id,
-            code: 'Precondition',
-            reason: 'x is taken',
-          }),
-        )
-        expect(receipt._tag).toBe('Rejected')
-        expect((yield* viewOf(device)).slots).toHaveLength(0)
-        expect(yield* device.replica.pending).toHaveLength(0)
-      }),
-    ))
+  it.effect('a rejection drops the mutation and rebuilds the view', () =>
+    Effect.gen(function* () {
+      const device = yield* openDevice()
+      const id = yield* device.replica.run(Claimed, { slot: 'x', by: 'me' })
+      expect((yield* viewOf(device)).slots).toHaveLength(1)
+      const receipt = yield* device.replica.receive(
+        ServerMessage.cases.Rejected.make({
+          id,
+          code: 'Precondition',
+          reason: 'x is taken',
+        }),
+      )
+      expect(receipt._tag).toBe('Rejected')
+      expect((yield* viewOf(device)).slots).toHaveLength(0)
+      expect(yield* device.replica.pending).toHaveLength(0)
+    }),
+  )
 
-  test('a mutation that fails locally never reaches the outbox', () =>
-    run(
-      Effect.gen(function* () {
-        const device = yield* openDevice()
-        const exit = yield* Effect.exit(
-          device.replica.run(Counted, { kind: 'runs', count: 500 }),
-        )
-        expect(Exit.isFailure(exit)).toBe(true)
-        expect(yield* device.replica.pending).toHaveLength(0)
-        expect((yield* viewOf(device)).tally).toHaveLength(0)
-      }),
-    ))
+  it.effect('a mutation that fails locally never reaches the outbox', () =>
+    Effect.gen(function* () {
+      const device = yield* openDevice()
+      const exit = yield* Effect.exit(
+        device.replica.run(Counted, { kind: 'runs', count: 500 }),
+      )
+      expect(Exit.isFailure(exit)).toBe(true)
+      expect(yield* device.replica.pending).toHaveLength(0)
+      expect((yield* viewOf(device)).tally).toHaveLength(0)
+    }),
+  )
 })
 
 describe('the server', () => {
@@ -273,32 +268,32 @@ describe('the server', () => {
       (args): Envelope => ({ id, name: 'Counted', version: 1, args }),
     )
 
-  test('applies a mutation id once, however often it arrives', () =>
-    run(
-      Effect.gen(function* () {
-        const host = yield* makeTestHost()
-        const server = yield* host.server(SCOPE)
-        const owner = Actor.cases.Device.make({
-          playerId: PLAYER,
-          deviceId: 'a',
-        })
-        const once = yield* envelope('mutation-0001', 4)
-        const first = yield* server.push(owner, [once, once])
-        const again = yield* server.push(owner, [once])
-        expect(first.deltas).toHaveLength(1)
-        expect(again.deltas).toHaveLength(0)
-        expect(again.replies).toEqual([
-          { _tag: 'Acked', id: 'mutation-0001', seq: 1 },
-        ])
-        const snapshot = yield* server.snapshot
-        expect(snapshot._tag === 'Snapshot' && snapshot.tables.tally).toEqual([
-          { kind: 'runs', count: 4 },
-        ])
-      }),
-    ))
+  it.effect('applies a mutation id once, however often it arrives', () =>
+    Effect.gen(function* () {
+      const host = yield* makeTestHost()
+      const server = yield* host.server(SCOPE)
+      const owner = Actor.cases.Device.make({
+        playerId: PLAYER,
+        deviceId: 'a',
+      })
+      const once = yield* envelope('mutation-0001', 4)
+      const first = yield* server.push(owner, [once, once])
+      const again = yield* server.push(owner, [once])
+      expect(first.deltas).toHaveLength(1)
+      expect(again.deltas).toHaveLength(0)
+      expect(again.replies).toEqual([
+        { _tag: 'Acked', id: 'mutation-0001', seq: 1 },
+      ])
+      const snapshot = yield* server.snapshot
+      expect(snapshot._tag === 'Snapshot' && snapshot.tables.tally).toEqual([
+        { kind: 'runs', count: 4 },
+      ])
+    }),
+  )
 
-  test('refuses writers without permission, unknown names, and old versions', () =>
-    run(
+  it.effect(
+    'refuses writers without permission, unknown names, and old versions',
+    () =>
       Effect.gen(function* () {
         const host = yield* makeTestHost()
         const server = yield* host.server(SCOPE)
@@ -341,23 +336,23 @@ describe('the server', () => {
         const outsider = yield* server.checkRead(stranger)
         expect(outsider._tag).toBe('Forbidden')
       }),
-    ))
+  )
 
-  test('runs its own mutations with its own clock, idempotently', () =>
-    run(
-      Effect.gen(function* () {
-        const host = yield* makeTestHost()
-        const server = yield* host.server(SCOPE)
-        const first = yield* server.runServer(Stamped, {}, 'server-stamp-1')
-        const again = yield* server.runServer(Stamped, {}, 'server-stamp-1')
-        expect(first._tag).toBe('Applied')
-        expect(again._tag).toBe('Duplicate')
-        expect(yield* server.head).toBe(1)
-      }),
-    ))
+  it.effect('runs its own mutations with its own clock, idempotently', () =>
+    Effect.gen(function* () {
+      const host = yield* makeTestHost()
+      const server = yield* host.server(SCOPE)
+      const first = yield* server.runServer(Stamped, {}, 'server-stamp-1')
+      const again = yield* server.runServer(Stamped, {}, 'server-stamp-1')
+      expect(first._tag).toBe('Applied')
+      expect(again._tag).toBe('Duplicate')
+      expect(yield* server.head).toBe(1)
+    }),
+  )
 
-  test('a far behind client joins with a snapshot, and the log is trimmed', () =>
-    run(
+  it.live(
+    'a far behind client joins with a snapshot, and the log is trimmed',
+    () =>
       Effect.gen(function* () {
         const host = yield* makeTestHost({ logTail: 3, snapshotAfter: 3 })
         const server = yield* host.server(SCOPE)
@@ -382,94 +377,95 @@ describe('the server', () => {
         const trimmed = yield* server.join({ lastSeq: 6, mode: 'Catchup' })
         expect(trimmed._tag).toBe('Snapshot')
       }),
-    ))
+  )
 })
 
 describe('convergence over a bad network', () => {
   const scenario = (seed: number) =>
-    run(
-      Effect.gen(function* () {
-        const host = yield* makeTestHost({ logTail: 8, snapshotAfter: 6 })
-        const phone = yield* openDevice()
-        const laptop = yield* openDevice()
-        const flaky: NetworkOptions = {
-          seed,
-          drop: 0.08,
-          duplicate: 0.2,
-          maxDelayMs: 6,
-        }
-        const onPhone = yield* connect(host, phone, 'phone', flaky)
-        const onLaptop = yield* connect(host, laptop, 'laptop', {
-          ...flaky,
-          seed: seed + 1,
-        })
+    Effect.gen(function* () {
+      const host = yield* makeTestHost({ logTail: 8, snapshotAfter: 6 })
+      const phone = yield* openDevice()
+      const laptop = yield* openDevice()
+      const flaky: NetworkOptions = {
+        seed,
+        drop: 0.08,
+        duplicate: 0.2,
+        maxDelayMs: 6,
+      }
+      const onPhone = yield* connect(host, phone, 'phone', flaky)
+      const onLaptop = yield* connect(host, laptop, 'laptop', {
+        ...flaky,
+        seed: seed + 1,
+      })
 
-        yield* Effect.forEach(Array.range(1, 12), n =>
-          Effect.andThen(
-            phone.replica.run(Counted, {
-              kind: n % 2 === 0 ? 'even' : 'odd',
-              count: n,
-            }),
-            laptop.replica.run(Counted, { kind: 'laptop', count: 1 }),
-          ),
-        )
+      yield* Effect.forEach(Array.range(1, 12), n =>
+        Effect.andThen(
+          phone.replica.run(Counted, {
+            kind: n % 2 === 0 ? 'even' : 'odd',
+            count: n,
+          }),
+          laptop.replica.run(Counted, { kind: 'laptop', count: 1 }),
+        ),
+      )
 
-        yield* onLaptop.net.setOnline(false)
-        yield* Effect.forEach(Array.range(1, 15), n =>
-          laptop.replica.run(Counted, { kind: 'offline', count: n }),
-        )
-        yield* laptop.replica.run(Claimed, { slot: 'crown', by: 'laptop' })
-        yield* laptop.replica.run(Renamed, { name: 'From the laptop' })
-        yield* phone.replica.run(Claimed, { slot: 'crown', by: 'phone' })
-        yield* phone.replica.run(Renamed, { name: 'From the phone' })
-        yield* settled(host, [phone])
-        yield* onLaptop.net.setOnline(true)
+      yield* onLaptop.net.setOnline(false)
+      yield* Effect.forEach(Array.range(1, 15), n =>
+        laptop.replica.run(Counted, { kind: 'offline', count: n }),
+      )
+      yield* laptop.replica.run(Claimed, { slot: 'crown', by: 'laptop' })
+      yield* laptop.replica.run(Renamed, { name: 'From the laptop' })
+      yield* phone.replica.run(Claimed, { slot: 'crown', by: 'phone' })
+      yield* phone.replica.run(Renamed, { name: 'From the phone' })
+      yield* settled(host, [phone])
+      yield* onLaptop.net.setOnline(true)
 
-        yield* settled(host, [phone, laptop])
-        const server = yield* serverState(host)
-        const phoneView = yield* viewOf(phone)
-        const laptopView = yield* viewOf(laptop)
-        const laptopConfirmed = yield* readState(
-          laptop.database.sql,
-          'sync_confirmed_',
-        )
-        expect(phoneView).toEqual(laptopView)
-        expect(laptopConfirmed).toEqual(laptopView)
-        const serverTally =
-          server._tag === 'Snapshot'
-            ? Array.sort(
-                yield* Schema.decodeUnknownEffect(Schema.Array(Tally))(
-                  server.tables.tally,
-                ),
-                Order.mapInput(
-                  Order.String,
-                  (row: typeof Tally.Type) => row.kind,
-                ),
-              )
-            : []
-        expect(serverTally).toEqual(laptopView.tally)
-        expect(tallyOf(laptopView, 'odd')).toBe(1 + 3 + 5 + 7 + 9 + 11)
-        expect(tallyOf(laptopView, 'even')).toBe(2 + 4 + 6 + 8 + 10 + 12)
-        expect(tallyOf(laptopView, 'laptop')).toBe(12)
-        expect(tallyOf(laptopView, 'offline')).toBe(120)
-        expect(laptopView.slots).toEqual([{ slot: 'crown', by: 'phone' }])
-        expect(laptopView.profile[0]?.name).toBe('From the laptop')
-        const phoneFaults = yield* onPhone.net.faults
-        const laptopFaults = yield* onLaptop.net.faults
-        expect(phoneFaults.dropped + laptopFaults.dropped).toBeGreaterThan(0)
-        expect(
-          phoneFaults.duplicated + laptopFaults.duplicated,
-        ).toBeGreaterThan(0)
-      }),
-    )
+      yield* settled(host, [phone, laptop])
+      const server = yield* serverState(host)
+      const phoneView = yield* viewOf(phone)
+      const laptopView = yield* viewOf(laptop)
+      const laptopConfirmed = yield* readState(
+        laptop.database.sql,
+        'sync_confirmed_',
+      )
+      expect(phoneView).toEqual(laptopView)
+      expect(laptopConfirmed).toEqual(laptopView)
+      const serverTally =
+        server._tag === 'Snapshot'
+          ? Array.sort(
+              yield* Schema.decodeUnknownEffect(Schema.Array(Tally))(
+                server.tables.tally,
+              ),
+              Order.mapInput(
+                Order.String,
+                (row: typeof Tally.Type) => row.kind,
+              ),
+            )
+          : []
+      expect(serverTally).toEqual(laptopView.tally)
+      expect(tallyOf(laptopView, 'odd')).toBe(1 + 3 + 5 + 7 + 9 + 11)
+      expect(tallyOf(laptopView, 'even')).toBe(2 + 4 + 6 + 8 + 10 + 12)
+      expect(tallyOf(laptopView, 'laptop')).toBe(12)
+      expect(tallyOf(laptopView, 'offline')).toBe(120)
+      expect(laptopView.slots).toEqual([{ slot: 'crown', by: 'phone' }])
+      expect(laptopView.profile[0]?.name).toBe('From the laptop')
+      const phoneFaults = yield* onPhone.net.faults
+      const laptopFaults = yield* onLaptop.net.faults
+      expect(phoneFaults.dropped + laptopFaults.dropped).toBeGreaterThan(0)
+      expect(phoneFaults.duplicated + laptopFaults.duplicated).toBeGreaterThan(
+        0,
+      )
+    })
 
-  test('two devices, drops, duplicates, reorders, and a long offline spell', () =>
-    scenario(7))
+  it.live(
+    'two devices, drops, duplicates, reorders, and a long offline spell',
+    () => scenario(7),
+  )
 
-  test('the same with another seed', () => scenario(42))
+  it.live('the same with another seed', () => scenario(42))
 
-  test('a stranger cannot join, and a follower tab leaves syncing to the leader', () =>
-    run(
+  it.live(
+    'a stranger cannot join, and a follower tab leaves syncing to the leader',
+    () =>
       Effect.gen(function* () {
         const host = yield* makeTestHost()
         const device = yield* openDevice()
@@ -490,5 +486,5 @@ describe('convergence over a bad network', () => {
         const status: Sync['current'] = following.sync.current
         expect((yield* status)._tag).toBe('Following')
       }),
-    ))
+  )
 })

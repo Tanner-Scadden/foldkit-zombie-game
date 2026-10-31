@@ -6,14 +6,13 @@ import {
   Option,
   Ref,
   Schedule,
-  type Scope,
   Stream,
   pipe,
 } from 'effect'
 import { SqlClient } from 'effect/sql'
 import { TestClock } from 'effect/testing'
-import { afterEach, describe, expect, test } from 'vitest'
 
+import { afterEach, describe, expect, it } from '@effect/vitest'
 import { SqliteClient } from '@munch/sqlite-wasm-effect'
 import { type Hub, makeHub } from '@munch/sqlite-wasm-effect/in-process'
 import {
@@ -138,24 +137,17 @@ const sqlOn = (hub: Hub) =>
     Context.get(context, SqlClient.SqlClient),
   )
 
-const run = <A, E>(program: Effect.Effect<A, E, Scope.Scope>): Promise<A> =>
-  Effect.runPromise(Effect.scoped(program))
-
-// NOTE: syncing tests run on the TestClock, so the sync's backoff, heartbeat,
-// and resend timer, the server's token times, and the waits in `until` all
-// move only as `settle` moves them. A loaded machine changes how long a test
-// takes, never what it sees.
+// NOTE: syncing tests run on `it.effect`'s TestClock, so the sync's backoff,
+// heartbeat, and resend timer, the server's token times, and the waits in
+// `until` all move only as `settle` moves them. A loaded machine changes how
+// long a test takes, never what it sees. `synced` starts the clock at a real
+// date, since the server's tokens are stamped with it.
 const SYNC_EPOCH_MS = Date.UTC(2026, 9, 30)
 
-const runSynced = <A, E>(
-  program: Effect.Effect<A, E, Scope.Scope>,
-): Promise<A> =>
-  Effect.runPromise(
-    Effect.provide(
-      Effect.andThen(TestClock.setTime(SYNC_EPOCH_MS), Effect.scoped(program)),
-      TestClock.layer(),
-    ),
-  )
+const synced = <A, E, R>(
+  program: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> =>
+  Effect.andThen(TestClock.setTime(SYNC_EPOCH_MS), program)
 
 const write = (
   database: PlayerDatabase,
@@ -169,117 +161,113 @@ const muted = (save: PlayerSave): PlayerSave => ({
 })
 
 describe('the save in the player scope', () => {
-  test('a localStorage save is imported once and seeds the scope', () =>
-    run(
-      Effect.gen(function* () {
-        const hub = yield* makeHub()
-        const fake = yield* makeLegacy(Option.some(legacySave))
+  it.effect('a localStorage save is imported once and seeds the scope', () =>
+    Effect.gen(function* () {
+      const hub = yield* makeHub()
+      const fake = yield* makeLegacy(Option.some(legacySave))
 
-        const first = yield* openOn(hub, fake.legacy)
-        expect(yield* first.load).toEqual(Option.some(legacySave))
-        expect(yield* fake.reads).toBe(1)
+      const first = yield* openOn(hub, fake.legacy)
+      expect(yield* first.load).toEqual(Option.some(legacySave))
+      expect(yield* fake.reads).toBe(1)
 
-        const changed = muted(legacySave)
-        yield* write(first, legacySave, changed)
+      const changed = muted(legacySave)
+      yield* write(first, legacySave, changed)
 
-        const second = yield* openOn(hub, fake.legacy)
-        expect(yield* second.load).toEqual(Option.some(changed))
-        expect(yield* fake.reads).toBe(1)
-        expect(yield* fake.stored).toEqual(Option.some(legacySave))
-        const sql = yield* sqlOn(hub)
-        const outbox = yield* Effect.orDie(
-          sql`SELECT name FROM sync_outbox ORDER BY local_seq`,
-        )
-        expect(outbox).toEqual([
-          { name: 'SeededPlayer' },
-          { name: 'ChangedSettings' },
-        ])
-      }),
-    ))
+      const second = yield* openOn(hub, fake.legacy)
+      expect(yield* second.load).toEqual(Option.some(changed))
+      expect(yield* fake.reads).toBe(1)
+      expect(yield* fake.stored).toEqual(Option.some(legacySave))
+      const sql = yield* sqlOn(hub)
+      const outbox = yield* Effect.orDie(
+        sql`SELECT name FROM sync_outbox ORDER BY local_seq`,
+      )
+      expect(outbox).toEqual([
+        { name: 'SeededPlayer' },
+        { name: 'ChangedSettings' },
+      ])
+    }),
+  )
 
-  test('a device with no save imports nothing and never looks again', () =>
-    run(
-      Effect.gen(function* () {
-        const hub = yield* makeHub()
-        const fake = yield* makeLegacy(Option.none())
-        const first = yield* openOn(hub, fake.legacy)
-        expect(yield* first.load).toEqual(Option.none())
-        yield* fake.legacy.write(legacySave)
-        const second = yield* openOn(hub, fake.legacy)
-        expect(yield* second.load).toEqual(Option.none())
-        expect(yield* fake.reads).toBe(1)
-      }),
-    ))
+  it.effect('a device with no save imports nothing and never looks again', () =>
+    Effect.gen(function* () {
+      const hub = yield* makeHub()
+      const fake = yield* makeLegacy(Option.none())
+      const first = yield* openOn(hub, fake.legacy)
+      expect(yield* first.load).toEqual(Option.none())
+      yield* fake.legacy.write(legacySave)
+      const second = yield* openOn(hub, fake.legacy)
+      expect(yield* second.load).toEqual(Option.none())
+      expect(yield* fake.reads).toBe(1)
+    }),
+  )
 
-  test('the first write on a new device seeds the whole save', () =>
-    run(
-      Effect.gen(function* () {
-        const hub = yield* makeHub()
-        const fake = yield* makeLegacy(Option.none())
-        const first = yield* openOn(hub, fake.legacy)
-        yield* first.write(legacySave, [])
-        yield* first.write(legacySave, [])
-        expect(yield* first.load).toEqual(Option.some(legacySave))
-      }),
-    ))
+  it.effect('the first write on a new device seeds the whole save', () =>
+    Effect.gen(function* () {
+      const hub = yield* makeHub()
+      const fake = yield* makeLegacy(Option.none())
+      const first = yield* openOn(hub, fake.legacy)
+      yield* first.write(legacySave, [])
+      yield* first.write(legacySave, [])
+      expect(yield* first.load).toEqual(Option.some(legacySave))
+    }),
+  )
 
-  test('a finished run adds its kills to each kind', () =>
-    run(
-      Effect.gen(function* () {
-        const hub = yield* makeHub()
-        const fake = yield* makeLegacy(Option.some(legacySave))
-        const first = yield* openOn(hub, fake.legacy)
-        yield* first.load
-        const after: PlayerSave = {
+  it.effect('a finished run adds its kills to each kind', () =>
+    Effect.gen(function* () {
+      const hub = yield* makeHub()
+      const fake = yield* makeLegacy(Option.some(legacySave))
+      const first = yield* openOn(hub, fake.legacy)
+      yield* first.load
+      const after: PlayerSave = {
+        ...legacySave,
+        bests: {
+          ...legacySave.bests,
+          runsPlayed: 4,
+          totalKills: 70,
+          killsByKind: { Shambler: 60, Runner: 7, Tank: 3 },
+        },
+      }
+      expect(changesBetween(legacySave, after)).toEqual([
+        PlayerChange.RecordedRun({
+          runs: 1,
+          totalKills: 13,
+          kills: { Shambler: 10, Tank: 3 },
+          bests: legacySave.bests.byDifficulty,
+        }),
+      ])
+      yield* write(first, legacySave, after)
+      expect(yield* first.load).toEqual(Option.some(after))
+    }),
+  )
+
+  it.effect('a player row from before the home menu gains it, unvisited', () =>
+    Effect.gen(function* () {
+      const hub = yield* makeHub()
+      const fake = yield* makeLegacy(Option.some(legacySave))
+      const first = yield* openOn(hub, fake.legacy)
+      yield* first.load
+      const sql = yield* sqlOn(hub)
+      yield* pipe(
+        Effect.all([
+          sql`ALTER TABLE player DROP COLUMN home`,
+          sql`ALTER TABLE sync_confirmed_player DROP COLUMN home`,
+          sql`DELETE FROM sync_migrations WHERE id = '0003_add_home'`,
+        ]),
+        Effect.orDie,
+      )
+      const second = yield* openOn(hub, fake.legacy)
+      expect(yield* second.load).toEqual(
+        Option.some({
           ...legacySave,
-          bests: {
-            ...legacySave.bests,
-            runsPlayed: 4,
-            totalKills: 70,
-            killsByKind: { Shambler: 60, Runner: 7, Tank: 3 },
-          },
-        }
-        expect(changesBetween(legacySave, after)).toEqual([
-          PlayerChange.RecordedRun({
-            runs: 1,
-            totalKills: 13,
-            kills: { Shambler: 10, Tank: 3 },
-            bests: legacySave.bests.byDifficulty,
-          }),
-        ])
-        yield* write(first, legacySave, after)
-        expect(yield* first.load).toEqual(Option.some(after))
-      }),
-    ))
+          home: { seenNewsDay: null, openedEntries: [] },
+        }),
+      )
+    }),
+  )
 
-  test('a player row from before the home menu gains it, unvisited', () =>
-    run(
-      Effect.gen(function* () {
-        const hub = yield* makeHub()
-        const fake = yield* makeLegacy(Option.some(legacySave))
-        const first = yield* openOn(hub, fake.legacy)
-        yield* first.load
-        const sql = yield* sqlOn(hub)
-        yield* pipe(
-          Effect.all([
-            sql`ALTER TABLE player DROP COLUMN home`,
-            sql`ALTER TABLE sync_confirmed_player DROP COLUMN home`,
-            sql`DELETE FROM sync_migrations WHERE id = '0003_add_home'`,
-          ]),
-          Effect.orDie,
-        )
-        const second = yield* openOn(hub, fake.legacy)
-        expect(yield* second.load).toEqual(
-          Option.some({
-            ...legacySave,
-            home: { seenNewsDay: null, openedEntries: [] },
-          }),
-        )
-      }),
-    ))
-
-  test('a player row from before the power-ups seen gains them, none seen', () =>
-    run(
+  it.effect(
+    'a player row from before the power-ups seen gains them, none seen',
+    () =>
       Effect.gen(function* () {
         const hub = yield* makeHub()
         const fake = yield* makeLegacy(Option.some(legacySave))
@@ -299,10 +287,11 @@ describe('the save in the player scope', () => {
           Option.some({ ...legacySave, seenPowerUps: [] }),
         )
       }),
-    ))
+  )
 
-  test('a player row from before the rotation gains it, locked to landscape', () =>
-    run(
+  it.effect(
+    'a player row from before the rotation gains it, locked to landscape',
+    () =>
       Effect.gen(function* () {
         const hub = yield* makeHub()
         const fake = yield* makeLegacy(Option.some(legacySave))
@@ -322,33 +311,33 @@ describe('the save in the player scope', () => {
           Option.some({ ...legacySave, rotation: 'Landscape' }),
         )
       }),
-    ))
+  )
 
-  test('a player row from before the name gains it, empty', () =>
-    run(
-      Effect.gen(function* () {
-        const hub = yield* makeHub()
-        const fake = yield* makeLegacy(Option.some(legacySave))
-        const first = yield* openOn(hub, fake.legacy)
-        yield* first.load
-        const sql = yield* sqlOn(hub)
-        yield* pipe(
-          Effect.all([
-            sql`ALTER TABLE player DROP COLUMN name`,
-            sql`ALTER TABLE sync_confirmed_player DROP COLUMN name`,
-            sql`DELETE FROM sync_migrations WHERE id = '0007_add_name'`,
-          ]),
-          Effect.orDie,
-        )
-        const second = yield* openOn(hub, fake.legacy)
-        expect(yield* second.load).toEqual(
-          Option.some({ ...legacySave, name: '' }),
-        )
-      }),
-    ))
+  it.effect('a player row from before the name gains it, empty', () =>
+    Effect.gen(function* () {
+      const hub = yield* makeHub()
+      const fake = yield* makeLegacy(Option.some(legacySave))
+      const first = yield* openOn(hub, fake.legacy)
+      yield* first.load
+      const sql = yield* sqlOn(hub)
+      yield* pipe(
+        Effect.all([
+          sql`ALTER TABLE player DROP COLUMN name`,
+          sql`ALTER TABLE sync_confirmed_player DROP COLUMN name`,
+          sql`DELETE FROM sync_migrations WHERE id = '0007_add_name'`,
+        ]),
+        Effect.orDie,
+      )
+      const second = yield* openOn(hub, fake.legacy)
+      expect(yield* second.load).toEqual(
+        Option.some({ ...legacySave, name: '' }),
+      )
+    }),
+  )
 
-  test('a new name is one ChangedName mutation and lasts across a reload', () =>
-    run(
+  it.effect(
+    'a new name is one ChangedName mutation and lasts across a reload',
+    () =>
       Effect.gen(function* () {
         const hub = yield* makeHub()
         const fake = yield* makeLegacy(Option.some(legacySave))
@@ -362,10 +351,11 @@ describe('the save in the player scope', () => {
         const second = yield* openOn(hub, fake.legacy)
         expect(yield* second.load).toEqual(Option.some(renamed))
       }),
-    ))
+  )
 
-  test('a player row from before the cursor setting gets the bold cursor', () =>
-    run(
+  it.effect(
+    'a player row from before the cursor setting gets the bold cursor',
+    () =>
       Effect.gen(function* () {
         const hub = yield* makeHub()
         const fake = yield* makeLegacy(Option.some(legacySave))
@@ -388,77 +378,75 @@ describe('the save in the player scope', () => {
           }),
         )
       }),
-    ))
+  )
 
-  test('a row that no longer decodes reads as no save', () =>
-    run(
-      Effect.gen(function* () {
-        const hub = yield* makeHub()
-        const fake = yield* makeLegacy(Option.some(legacySave))
-        const first = yield* openOn(hub, fake.legacy)
-        yield* first.load
-        const sql = yield* sqlOn(hub)
-        yield* pipe(
-          sql`UPDATE player SET appearance = '{"body":"Robot"}'`,
-          Effect.orDie,
-        )
-        expect(yield* first.load).toEqual(Option.none())
-      }),
-    ))
+  it.effect('a row that no longer decodes reads as no save', () =>
+    Effect.gen(function* () {
+      const hub = yield* makeHub()
+      const fake = yield* makeLegacy(Option.some(legacySave))
+      const first = yield* openOn(hub, fake.legacy)
+      yield* first.load
+      const sql = yield* sqlOn(hub)
+      yield* pipe(
+        sql`UPDATE player SET appearance = '{"body":"Robot"}'`,
+        Effect.orDie,
+      )
+      expect(yield* first.load).toEqual(Option.none())
+    }),
+  )
 
   // NOTE: rows written before 2026-10-30 keep the old look until it next
   // changes, here and in the server's copy of the scope.
-  test('rows with an older look read as their closest current look', () =>
-    run(
-      Effect.gen(function* () {
-        const hub = yield* makeHub()
-        const fake = yield* makeLegacy(Option.some(legacySave))
-        const first = yield* openOn(hub, fake.legacy)
-        yield* first.load
-        const sql = yield* sqlOn(hub)
-        const lookAfter = (json: string) =>
-          Effect.gen(function* () {
-            yield* Effect.orDie(
-              sql`UPDATE player SET appearance = ${json} WHERE id = 1`,
-            )
-            return Option.map(yield* first.load, save => save.appearance)
-          })
-        expect(
-          yield* lookAfter(
-            '{"body":"Female","hairStyle":"Long","hairColor":"Black","skinTone":"Deep","shirtColor":"Pink"}',
-          ),
-        ).toEqual(
-          Option.some({
-            body: 'Broad',
-            hairStyle: 'Long',
-            hairColor: 'Black',
-            skinTone: 'Deep',
-            shirtColor: 'Pink',
-            outfit: 'Tee',
-            print: 'Plain',
-            beard: false,
-            glasses: false,
-          }),
-        )
-        expect(
-          yield* lookAfter(
-            '{"body":"Slim","hairStyle":"Bob","hairColor":"Rainbow","skinTone":"Medium","shirtColor":"Sky","outfit":"Hoodie","print":"Ace","facialHair":"Beard","makeup":"Lashes","extra":"Glasses"}',
-          ),
-        ).toEqual(
-          Option.some({
-            body: 'Slim',
-            hairStyle: 'Long',
-            hairColor: 'Pink',
-            skinTone: 'Medium',
-            shirtColor: 'Blue',
-            outfit: 'Hoodie',
-            print: 'Rainbow',
-            beard: true,
-            glasses: true,
-          }),
-        )
-      }),
-    ))
+  it.effect('rows with an older look read as their closest current look', () =>
+    Effect.gen(function* () {
+      const hub = yield* makeHub()
+      const fake = yield* makeLegacy(Option.some(legacySave))
+      const first = yield* openOn(hub, fake.legacy)
+      yield* first.load
+      const sql = yield* sqlOn(hub)
+      const lookAfter = (json: string) =>
+        Effect.gen(function* () {
+          yield* Effect.orDie(
+            sql`UPDATE player SET appearance = ${json} WHERE id = 1`,
+          )
+          return Option.map(yield* first.load, save => save.appearance)
+        })
+      expect(
+        yield* lookAfter(
+          '{"body":"Female","hairStyle":"Long","hairColor":"Black","skinTone":"Deep","shirtColor":"Pink"}',
+        ),
+      ).toEqual(
+        Option.some({
+          body: 'Broad',
+          hairStyle: 'Long',
+          hairColor: 'Black',
+          skinTone: 'Deep',
+          shirtColor: 'Pink',
+          outfit: 'Tee',
+          print: 'Plain',
+          beard: false,
+          glasses: false,
+        }),
+      )
+      expect(
+        yield* lookAfter(
+          '{"body":"Slim","hairStyle":"Bob","hairColor":"Rainbow","skinTone":"Medium","shirtColor":"Sky","outfit":"Hoodie","print":"Ace","facialHair":"Beard","makeup":"Lashes","extra":"Glasses"}',
+        ),
+      ).toEqual(
+        Option.some({
+          body: 'Slim',
+          hairStyle: 'Long',
+          hairColor: 'Pink',
+          skinTone: 'Medium',
+          shirtColor: 'Blue',
+          outfit: 'Hoodie',
+          print: 'Rainbow',
+          beard: true,
+          glasses: true,
+        }),
+      )
+    }),
+  )
 })
 
 describe('a write the database refuses', () => {
@@ -475,8 +463,9 @@ describe('a write the database refuses', () => {
     },
   })
 
-  test('fails, leaves nothing behind, and goes in whole on the retry', () =>
-    run(
+  it.effect(
+    'fails, leaves nothing behind, and goes in whole on the retry',
+    () =>
       Effect.gen(function* () {
         const hub = yield* makeHub()
         const fake = yield* makeLegacy(Option.some(legacySave))
@@ -492,8 +481,8 @@ describe('a write the database refuses', () => {
         // first change of the two has already gone in.
         yield* Effect.orDie(
           sql`CREATE TRIGGER refuse_runs BEFORE INSERT ON sync_outbox
-            WHEN NEW.name = 'RecordedRun'
-            BEGIN SELECT RAISE(ABORT, 'disk full'); END`,
+          WHEN NEW.name = 'RecordedRun'
+          BEGIN SELECT RAISE(ABORT, 'disk full'); END`,
         )
         const after = afterRun(legacySave)
         const changes = changesBetween(legacySave, after)
@@ -511,28 +500,27 @@ describe('a write the database refuses', () => {
         yield* database.write(after, changes)
         expect(yield* database.load).toEqual(Option.some(after))
       }),
-    ))
+  )
 
-  test('a change the scope rejects is dropped, and the rest go in', () =>
-    run(
-      Effect.gen(function* () {
-        const hub = yield* makeHub()
-        const fake = yield* makeLegacy(Option.some(legacySave))
-        const database = yield* openOn(hub, fake.legacy)
-        yield* database.load
-        const changed = muted(legacySave)
-        yield* database.write(changed, [
-          PlayerChange.RecordedRun({
-            runs: 1_000,
-            totalKills: 0,
-            kills: {},
-            bests: legacySave.bests.byDifficulty,
-          }),
-          ...changesBetween(legacySave, changed),
-        ])
-        expect(yield* database.load).toEqual(Option.some(changed))
-      }),
-    ))
+  it.effect('a change the scope rejects is dropped, and the rest go in', () =>
+    Effect.gen(function* () {
+      const hub = yield* makeHub()
+      const fake = yield* makeLegacy(Option.some(legacySave))
+      const database = yield* openOn(hub, fake.legacy)
+      yield* database.load
+      const changed = muted(legacySave)
+      yield* database.write(changed, [
+        PlayerChange.RecordedRun({
+          runs: 1_000,
+          totalKills: 0,
+          kills: {},
+          bests: legacySave.bests.byDifficulty,
+        }),
+        ...changesBetween(legacySave, changed),
+      ])
+      expect(yield* database.load).toEqual(Option.some(changed))
+    }),
+  )
 })
 
 // SYNC
@@ -629,124 +617,130 @@ const until = <A, E>(probe: Effect.Effect<A, E>, done: (value: A) => boolean) =>
   )
 
 describe('two devices syncing one player', () => {
-  test('a linked device gets the look and kills, and its change comes back', () =>
-    runSynced(
-      Effect.gen(function* () {
-        const server = yield* makeServer()
-        const network = yield* server.host.network()
-        const setup = Option.some<SyncSetup>({
-          identityApi: server.api,
-          transports: [network.transport],
-        })
-        const phoneHub = yield* makeHub()
-        const laptopHub = yield* makeHub()
-        const phoneLegacy = yield* makeLegacy(Option.some(legacySave))
-        const laptopLegacy = yield* makeLegacy(Option.none())
-        const phone = yield* openOn(phoneHub, phoneLegacy.legacy, setup)
-        const laptop = yield* openOn(laptopHub, laptopLegacy.legacy, setup)
+  it.effect(
+    'a linked device gets the look and kills, and its change comes back',
+    () =>
+      synced(
+        Effect.gen(function* () {
+          const server = yield* makeServer()
+          const network = yield* server.host.network()
+          const setup = Option.some<SyncSetup>({
+            identityApi: server.api,
+            transports: [network.transport],
+          })
+          const phoneHub = yield* makeHub()
+          const laptopHub = yield* makeHub()
+          const phoneLegacy = yield* makeLegacy(Option.some(legacySave))
+          const laptopLegacy = yield* makeLegacy(Option.none())
+          const phone = yield* openOn(phoneHub, phoneLegacy.legacy, setup)
+          const laptop = yield* openOn(laptopHub, laptopLegacy.legacy, setup)
 
-        const phoneEvents = yield* Ref.make<ReadonlyArray<string>>([])
-        yield* pipe(
-          phone.events,
-          Stream.runForEach(event =>
-            Ref.update(phoneEvents, all => [
-              ...all,
-              StoreEvent.match(event, {
-                SyncStatus: ({ state }) => state._tag,
-                ScopeStatus: ({ status }) => `Scope${status._tag}`,
-                SyncedSave: ({ save }) => save.settings.music,
-              }),
-            ]),
-          ),
-          Effect.forkScoped,
-        )
+          const phoneEvents = yield* Ref.make<ReadonlyArray<string>>([])
+          yield* pipe(
+            phone.events,
+            Stream.runForEach(event =>
+              Ref.update(phoneEvents, all => [
+                ...all,
+                StoreEvent.match(event, {
+                  SyncStatus: ({ state }) => state._tag,
+                  ScopeStatus: ({ status }) => `Scope${status._tag}`,
+                  SyncedSave: ({ save }) => save.settings.music,
+                }),
+              ]),
+            ),
+            Effect.forkScoped,
+          )
 
-        const restyled: PlayerSave = {
-          ...legacySave,
-          appearance: { ...legacySave.appearance, shirtColor: 'Purple' },
-          bests: {
-            ...legacySave.bests,
-            runsPlayed: 4,
-            totalKills: 60,
-            killsByKind: { Shambler: 53, Runner: 7 },
-          },
-        }
-        yield* write(phone, legacySave, restyled)
+          const restyled: PlayerSave = {
+            ...legacySave,
+            appearance: { ...legacySave.appearance, shirtColor: 'Purple' },
+            bests: {
+              ...legacySave.bests,
+              runsPlayed: 4,
+              totalKills: 60,
+              killsByKind: { Shambler: 53, Runner: 7 },
+            },
+          }
+          yield* write(phone, legacySave, restyled)
 
-        const code = yield* phone.requestLinkCode
-        yield* laptop.redeemLinkCode(code)
-        const onLaptop = yield* until(laptop.load, maybeSave =>
-          Option.exists(
-            maybeSave,
-            save => save.appearance.shirtColor === 'Purple',
-          ),
-        )
-        expect(onLaptop).toEqual(Option.some(restyled))
+          const code = yield* phone.requestLinkCode
+          yield* laptop.redeemLinkCode(code)
+          const onLaptop = yield* until(laptop.load, maybeSave =>
+            Option.exists(
+              maybeSave,
+              save => save.appearance.shirtColor === 'Purple',
+            ),
+          )
+          expect(onLaptop).toEqual(Option.some(restyled))
 
-        const quiet: PlayerSave = {
-          ...restyled,
-          settings: { ...restyled.settings, music: 'Off' },
-          home: { ...restyled.home, openedEntries: ['Shambler', 'Runner'] },
-          rotation: 'Auto',
-        }
-        yield* write(laptop, restyled, quiet)
-        const onPhone = yield* until(phone.load, maybeSave =>
-          Option.exists(maybeSave, save => save.settings.music === 'Off'),
-        )
-        expect(onPhone).toEqual(Option.some(quiet))
-        const heard = yield* until(Ref.get(phoneEvents), events =>
-          events.includes('Off'),
-        )
-        expect(heard).toContain('Synced')
-      }),
-    ))
+          const quiet: PlayerSave = {
+            ...restyled,
+            settings: { ...restyled.settings, music: 'Off' },
+            home: { ...restyled.home, openedEntries: ['Shambler', 'Runner'] },
+            rotation: 'Auto',
+          }
+          yield* write(laptop, restyled, quiet)
+          const onPhone = yield* until(phone.load, maybeSave =>
+            Option.exists(maybeSave, save => save.settings.music === 'Off'),
+          )
+          expect(onPhone).toEqual(Option.some(quiet))
+          const heard = yield* until(Ref.get(phoneEvents), events =>
+            events.includes('Off'),
+          )
+          expect(heard).toContain('Synced')
+        }),
+      ),
+  )
 
-  test('a name set on one linked device shows on the other, and the last one set wins', () =>
-    runSynced(
-      Effect.gen(function* () {
-        const server = yield* makeServer()
-        const network = yield* server.host.network()
-        const setup = Option.some<SyncSetup>({
-          identityApi: server.api,
-          transports: [network.transport],
-        })
-        const phone = yield* openOn(
-          yield* makeHub(),
-          (yield* makeLegacy(Option.some(legacySave))).legacy,
-          setup,
-        )
-        const laptop = yield* openOn(
-          yield* makeHub(),
-          (yield* makeLegacy(Option.none())).legacy,
-          setup,
-        )
-        yield* phone.load
-        const code = yield* phone.requestLinkCode
-        yield* laptop.redeemLinkCode(code)
-        yield* until(laptop.load, maybeSave =>
-          Option.exists(maybeSave, save => save.name === 'Lil Gnaw'),
-        )
+  it.effect(
+    'a name set on one linked device shows on the other, and the last one set wins',
+    () =>
+      synced(
+        Effect.gen(function* () {
+          const server = yield* makeServer()
+          const network = yield* server.host.network()
+          const setup = Option.some<SyncSetup>({
+            identityApi: server.api,
+            transports: [network.transport],
+          })
+          const phone = yield* openOn(
+            yield* makeHub(),
+            (yield* makeLegacy(Option.some(legacySave))).legacy,
+            setup,
+          )
+          const laptop = yield* openOn(
+            yield* makeHub(),
+            (yield* makeLegacy(Option.none())).legacy,
+            setup,
+          )
+          yield* phone.load
+          const code = yield* phone.requestLinkCode
+          yield* laptop.redeemLinkCode(code)
+          yield* until(laptop.load, maybeSave =>
+            Option.exists(maybeSave, save => save.name === 'Lil Gnaw'),
+          )
 
-        const onPhone: PlayerSave = { ...legacySave, name: 'Snackula' }
-        yield* write(phone, legacySave, onPhone)
-        const reached = yield* until(laptop.load, maybeSave =>
-          Option.exists(maybeSave, save => save.name === 'Snackula'),
-        )
-        expect(Option.map(reached, save => save.name)).toEqual(
-          Option.some('Snackula'),
-        )
+          const onPhone: PlayerSave = { ...legacySave, name: 'Snackula' }
+          yield* write(phone, legacySave, onPhone)
+          const reached = yield* until(laptop.load, maybeSave =>
+            Option.exists(maybeSave, save => save.name === 'Snackula'),
+          )
+          expect(Option.map(reached, save => save.name)).toEqual(
+            Option.some('Snackula'),
+          )
 
-        const onLaptop: PlayerSave = { ...onPhone, name: 'Baron Burp' }
-        yield* write(laptop, onPhone, onLaptop)
-        const back = yield* until(phone.load, maybeSave =>
-          Option.exists(maybeSave, save => save.name === 'Baron Burp'),
-        )
-        expect(back).toEqual(Option.some(onLaptop))
-      }),
-    ))
+          const onLaptop: PlayerSave = { ...onPhone, name: 'Baron Burp' }
+          yield* write(laptop, onPhone, onLaptop)
+          const back = yield* until(phone.load, maybeSave =>
+            Option.exists(maybeSave, save => save.name === 'Baron Burp'),
+          )
+          expect(back).toEqual(Option.some(onLaptop))
+        }),
+      ),
+  )
 
-  test('power-ups seen on two devices at once are all kept', () =>
-    runSynced(
+  it.effect('power-ups seen on two devices at once are all kept', () =>
+    synced(
       Effect.gen(function* () {
         const server = yield* makeServer()
         const network = yield* server.host.network()
@@ -798,10 +792,11 @@ describe('two devices syncing one player', () => {
         expect(isEverySeen(yield* until(phone.load, isEverySeen))).toBe(true)
         expect(isEverySeen(yield* until(laptop.load, isEverySeen))).toBe(true)
       }),
-    ))
+    ),
+  )
 
-  test('run records from two devices merge to the larger of each', () =>
-    runSynced(
+  it.effect('run records from two devices merge to the larger of each', () =>
+    synced(
       Effect.gen(function* () {
         const server = yield* makeServer()
         const network = yield* server.host.network()
@@ -863,61 +858,65 @@ describe('two devices syncing one player', () => {
         expect(isHigh(onPhone)).toBe(true)
         expect(isHigh(onLaptop)).toBe(true)
       }),
-    ))
+    ),
+  )
 
-  test('a finished run settles once the server confirms it, and the scope is fresh', () =>
-    runSynced(
-      Effect.gen(function* () {
-        const server = yield* makeServer()
-        const network = yield* server.host.network()
-        const setup = Option.some<SyncSetup>({
-          identityApi: server.api,
-          transports: [network.transport],
-        })
-        const legacy = yield* makeLegacy(Option.some(legacySave))
-        const phone = yield* openOn(yield* makeHub(), legacy.legacy, setup)
-        const scopeStatuses = yield* Ref.make<ReadonlyArray<string>>([])
-        yield* pipe(
-          phone.events,
-          Stream.runForEach(event =>
-            event._tag === 'ScopeStatus'
-              ? Ref.update(scopeStatuses, all => [
-                  ...all,
-                  event.status._tag === 'Ready'
-                    ? `Ready ${event.status.fresh ? 'fresh' : 'cached'}`
-                    : event.status._tag,
-                ])
-              : Effect.void,
-          ),
-          Effect.forkScoped,
-        )
-        const played: PlayerSave = {
-          ...legacySave,
-          bests: {
-            ...legacySave.bests,
-            runsPlayed: 4,
-            totalKills: 70,
-            killsByKind: { Shambler: 63, Runner: 7 },
-          },
-        }
-        const maybeRunId = yield* write(phone, legacySave, played)
-        expect(Option.isSome(maybeRunId)).toBe(true)
-        const settled = yield* settle(
-          phone.awaitSettled(Option.getOrElse(maybeRunId, () => '')),
-        )
-        expect(settled._tag).toBe('Confirmed')
-        const seen = yield* until(Ref.get(scopeStatuses), all =>
-          all.includes('Ready fresh'),
-        )
-        expect(seen).toContain('Loading')
-        expect(yield* write(phone, played, muted(played))).toEqual(
-          Option.none(),
-        )
-      }),
-    ))
+  it.effect(
+    'a finished run settles once the server confirms it, and the scope is fresh',
+    () =>
+      synced(
+        Effect.gen(function* () {
+          const server = yield* makeServer()
+          const network = yield* server.host.network()
+          const setup = Option.some<SyncSetup>({
+            identityApi: server.api,
+            transports: [network.transport],
+          })
+          const legacy = yield* makeLegacy(Option.some(legacySave))
+          const phone = yield* openOn(yield* makeHub(), legacy.legacy, setup)
+          const scopeStatuses = yield* Ref.make<ReadonlyArray<string>>([])
+          yield* pipe(
+            phone.events,
+            Stream.runForEach(event =>
+              event._tag === 'ScopeStatus'
+                ? Ref.update(scopeStatuses, all => [
+                    ...all,
+                    event.status._tag === 'Ready'
+                      ? `Ready ${event.status.fresh ? 'fresh' : 'cached'}`
+                      : event.status._tag,
+                  ])
+                : Effect.void,
+            ),
+            Effect.forkScoped,
+          )
+          const played: PlayerSave = {
+            ...legacySave,
+            bests: {
+              ...legacySave.bests,
+              runsPlayed: 4,
+              totalKills: 70,
+              killsByKind: { Shambler: 63, Runner: 7 },
+            },
+          }
+          const maybeRunId = yield* write(phone, legacySave, played)
+          expect(Option.isSome(maybeRunId)).toBe(true)
+          const settled = yield* settle(
+            phone.awaitSettled(Option.getOrElse(maybeRunId, () => '')),
+          )
+          expect(settled._tag).toBe('Confirmed')
+          const seen = yield* until(Ref.get(scopeStatuses), all =>
+            all.includes('Ready fresh'),
+          )
+          expect(seen).toContain('Loading')
+          expect(yield* write(phone, played, muted(played))).toEqual(
+            Option.none(),
+          )
+        }),
+      ),
+  )
 
-  test('a build without a sync server returns no run id to wait on', () =>
-    runSynced(
+  it.effect('a build without a sync server returns no run id to wait on', () =>
+    synced(
       Effect.gen(function* () {
         const legacy = yield* makeLegacy(Option.some(legacySave))
         const local = yield* openOn(yield* makeHub(), legacy.legacy)
@@ -927,7 +926,8 @@ describe('two devices syncing one player', () => {
         }
         expect(yield* write(local, legacySave, played)).toEqual(Option.none())
       }),
-    ))
+    ),
+  )
 })
 
 // THE LIVE SAVE
@@ -1043,35 +1043,38 @@ const realLegacy: LegacySave = {
 describe("the live game's version 4 save", () => {
   afterEach(() => localStorage.clear())
 
-  test('moves from localStorage into SQLite and the server with nothing lost', () =>
-    runSynced(
-      Effect.gen(function* () {
-        localStorage.setItem(SAVE_KEY, LIVE_VERSION_4_SAVE)
-        const server = yield* makeServer()
-        const network = yield* server.host.network()
-        const setup = Option.some<SyncSetup>({
-          identityApi: server.api,
-          transports: [network.transport],
-        })
-        const phoneHub = yield* makeHub()
+  it.effect(
+    'moves from localStorage into SQLite and the server with nothing lost',
+    () =>
+      synced(
+        Effect.gen(function* () {
+          localStorage.setItem(SAVE_KEY, LIVE_VERSION_4_SAVE)
+          const server = yield* makeServer()
+          const network = yield* server.host.network()
+          const setup = Option.some<SyncSetup>({
+            identityApi: server.api,
+            transports: [network.transport],
+          })
+          const phoneHub = yield* makeHub()
 
-        const phone = yield* openOn(phoneHub, realLegacy, setup)
-        expect(yield* phone.load).toEqual(Option.some(migratedLiveSave))
+          const phone = yield* openOn(phoneHub, realLegacy, setup)
+          expect(yield* phone.load).toEqual(Option.some(migratedLiveSave))
 
-        localStorage.removeItem(SAVE_KEY)
-        const reloaded = yield* openOn(phoneHub, realLegacy, setup)
-        expect(yield* reloaded.load).toEqual(Option.some(migratedLiveSave))
+          localStorage.removeItem(SAVE_KEY)
+          const reloaded = yield* openOn(phoneHub, realLegacy, setup)
+          expect(yield* reloaded.load).toEqual(Option.some(migratedLiveSave))
 
-        const laptopLegacy = yield* makeLegacy(Option.none())
-        const laptop = yield* openOn(
-          yield* makeHub(),
-          laptopLegacy.legacy,
-          setup,
-        )
-        const code = yield* reloaded.requestLinkCode
-        yield* laptop.redeemLinkCode(code)
-        const onLaptop = yield* until(laptop.load, Option.isSome)
-        expect(onLaptop).toEqual(Option.some(migratedLiveSave))
-      }),
-    ))
+          const laptopLegacy = yield* makeLegacy(Option.none())
+          const laptop = yield* openOn(
+            yield* makeHub(),
+            laptopLegacy.legacy,
+            setup,
+          )
+          const code = yield* reloaded.requestLinkCode
+          yield* laptop.redeemLinkCode(code)
+          const onLaptop = yield* until(laptop.load, Option.isSome)
+          expect(onLaptop).toEqual(Option.some(migratedLiveSave))
+        }),
+      ),
+  )
 })

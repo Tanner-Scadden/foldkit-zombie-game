@@ -20,5 +20,8 @@
   },
   "peerDependencies": {
     "effect": "4.0.6"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.6"
   }
 }

@@ -1,9 +1,10 @@
-import { describe, expect, test } from 'bun:test'
+import * as Clock from 'effect/Clock'
 import * as Effect from 'effect/Effect'
 import * as Option from 'effect/Option'
 import * as Result from 'effect/Result'
 import * as SqlClient from 'effect/sql/SqlClient'
 
+import { describe, expect, it } from '@effect/vitest'
 import {
   ChangedReady,
   type ClientFrame,
@@ -30,7 +31,13 @@ import {
   makeRoomHost,
   reactionsOf,
 } from './gameRoomCore.ts'
-import { decodeTagged, fakeSocket, memory } from './testing.ts'
+import {
+  decodeTagged,
+  fakeSocket,
+  fromJson,
+  memory,
+  toJson,
+} from './testing.ts'
 
 const SECRET = 'infra-room-test-secret'
 const CODE = 'KX7PQ'
@@ -41,24 +48,23 @@ const CY = 'CCCCCCCCCCCCCCCCCCCCCC'
 const DEE = 'DDDDDDDDDDDDDDDDDDDDDD'
 const EVE = 'EEEEEEEEEEEEEEEEEEEEEE'
 
-const roomHost = async (): Promise<RoomHost> => {
-  const sql = await memory()
-  return Effect.runPromise(
-    Effect.provideService(
-      makeRoomHost(SCOPE, SECRET),
-      SqlClient.SqlClient,
-      sql,
-    ),
-  )
-}
+const roomHost = Effect.flatMap(memory, sql =>
+  Effect.provideService(makeRoomHost(SCOPE, SECRET), SqlClient.SqlClient, sql),
+)
 
-const tokenOf = (playerId: string, expiresMs = Date.now() + 60_000) =>
-  Effect.runPromise(
-    signToken(SECRET, { playerId, deviceId: `${playerId}-device`, expiresMs }),
+// NOTE: a token that runs out a minute after now, on the TestClock, or at
+// `expiresMs` when given.
+const tokenOf = (playerId: string, expiresMs?: number) =>
+  Effect.flatMap(Clock.currentTimeMillis, nowMs =>
+    signToken(SECRET, {
+      playerId,
+      deviceId: `${playerId}-device`,
+      expiresMs: expiresMs ?? nowMs + 60_000,
+    }),
   )
 
 const hello = (token: string) =>
-  JSON.stringify({
+  toJson({
     _tag: 'Hello',
     protocol: PROTOCOL_VERSION,
     scope: SCOPE,
@@ -69,25 +75,27 @@ const hello = (token: string) =>
     versions: mutationVersions(RoomScope),
   })
 
-const pushOf = async <A, I>(
+const pushOf = <A, I>(
   mutation: Parameters<typeof encodeArgs<A, I>>[0],
   args: A,
   id: string,
 ) =>
-  JSON.stringify({
-    _tag: 'Push',
-    mutations: [
-      {
-        id,
-        name: mutation.name,
-        version: mutation.version,
-        args: await Effect.runPromise(encodeArgs(mutation, args)),
-      },
-    ],
-  })
+  Effect.map(encodeArgs(mutation, args), encoded =>
+    toJson({
+      _tag: 'Push',
+      mutations: [
+        {
+          id,
+          name: mutation.name,
+          version: mutation.version,
+          args: encoded,
+        },
+      ],
+    }),
+  )
 
-const lobbyOf = async (host: RoomHost): Promise<Lobby> =>
-  Option.getOrThrow(await Effect.runPromise(host.lobby))
+const lobbyOf = (host: RoomHost): Effect.Effect<Lobby> =>
+  Effect.map(host.lobby, Option.getOrThrow)
 
 const helloFrame = (
   token: string,
@@ -100,55 +108,47 @@ const helloFrame = (
 })
 
 describe('the room host', () => {
-  test('creating seats the host; joining fills slots up to 4', async () => {
-    const host = await roomHost()
-    const created = await Effect.runPromise(
-      host.create(
+  it.effect('creating seats the host; joining fills slots up to 4', () =>
+    Effect.gen(function* () {
+      const host = yield* roomHost
+      const created = yield* host.create(
         ANA,
         'Ana',
         'Male.Crop.Brown.Light.Blue',
         false,
         CODE,
         'Private',
-      ),
-    )
-    expect(created).toEqual(Result.succeed({ code: CODE, slot: 0 }))
-    const again = await Effect.runPromise(
-      host.create(BO, 'Ana', '', false, CODE, 'Private'),
-    )
-    expect(Result.isFailure(again)).toBe(true)
-    const tickets = await Promise.all(
-      [BO, CY, DEE].map(playerId =>
-        Effect.runPromise(host.join(playerId, 'name', '', false, [])),
-      ),
-    ).then(results =>
-      results.map(result => Result.map(result, ticket => ticket.slot)),
-    )
-    expect(tickets).toEqual([
-      Result.succeed(1),
-      Result.succeed(2),
-      Result.succeed(3),
-    ])
-    const rejoined = await Effect.runPromise(
-      host.join(CY, 'name', '', false, []),
-    )
-    expect(rejoined).toEqual(Result.succeed({ code: CODE, slot: 2 }))
-    const full = await Effect.runPromise(host.join(EVE, 'name', '', false, []))
-    expect(full).toEqual(Result.fail({ _tag: 'Full' }))
-    const lobby = Option.getOrThrow(await Effect.runPromise(host.lobby))
-    expect(lobby.members.map(member => member.look)).toEqual([
-      'Broad.Short.Brown.Light.Blue.AAAA',
-      '',
-      '',
-      '',
-    ])
-  })
+      )
+      expect(created).toEqual(Result.succeed({ code: CODE, slot: 0 }))
+      const again = yield* host.create(BO, 'Ana', '', false, CODE, 'Private')
+      expect(Result.isFailure(again)).toBe(true)
+      const tickets = yield* Effect.forEach(
+        [BO, CY, DEE],
+        playerId => host.join(playerId, 'name', '', false, []),
+        { concurrency: 'unbounded' },
+      )
+      expect(
+        tickets.map(result => Result.map(result, ticket => ticket.slot)),
+      ).toEqual([Result.succeed(1), Result.succeed(2), Result.succeed(3)])
+      const rejoined = yield* host.join(CY, 'name', '', false, [])
+      expect(rejoined).toEqual(Result.succeed({ code: CODE, slot: 2 }))
+      const full = yield* host.join(EVE, 'name', '', false, [])
+      expect(full).toEqual(Result.fail({ _tag: 'Full' }))
+      const lobby = yield* lobbyOf(host)
+      expect(lobby.members.map(member => member.look)).toEqual([
+        'Broad.Short.Brown.Light.Blue.AAAA',
+        '',
+        '',
+        '',
+      ])
+    }),
+  )
 
   // NOTE: the look a player sends is kept only when it is one of the game's
   // looks (src/playerData.ts): the simple look, or an older code (five
   // words from the first look, or the many-part look's five letters) read
   // as its closest simple look. Anything else seats the player with none.
-  test('a sent look is kept when it is a real look, and dropped when it is junk', () => {
+  it('a sent look is kept when it is a real look, and dropped when it is junk', () => {
     expect(lookOfRequest('Slim.Mohawk.Pink.Deep.Teal.CCBB')).toBe(
       'Slim.Mohawk.Pink.Deep.Teal.CCBB',
     )
@@ -186,175 +186,169 @@ describe('the room host', () => {
     expect(junks.map(lookOfRequest)).toEqual(junks.map(() => ''))
   })
 
-  test('joining a room that does not exist says so', async () => {
-    const host = await roomHost()
-    expect(
-      await Effect.runPromise(host.join(BO, 'name', '', false, [])),
-    ).toEqual(Result.fail({ _tag: 'NoRoom' }))
-  })
+  it.effect('joining a room that does not exist says so', () =>
+    Effect.gen(function* () {
+      const host = yield* roomHost
+      expect(yield* host.join(BO, 'name', '', false, [])).toEqual(
+        Result.fail({ _tag: 'NoRoom' }),
+      )
+    }),
+  )
 
-  test('members follow the scope; others may not', async () => {
-    const host = await roomHost()
-    await Effect.runPromise(host.create(ANA, 'Ana', '', false, CODE, 'Private'))
-    const member = fakeSocket()
-    const stranger = fakeSocket()
-    await Effect.runPromise(
-      host.scope.onMessage(member, hello(await tokenOf(ANA)), [member]),
-    )
-    await Effect.runPromise(
-      host.scope.onMessage(stranger, hello(await tokenOf(BO)), [
+  it.effect('members follow the scope; others may not', () =>
+    Effect.gen(function* () {
+      const host = yield* roomHost
+      yield* host.create(ANA, 'Ana', '', false, CODE, 'Private')
+      const member = fakeSocket()
+      const stranger = fakeSocket()
+      yield* host.scope.onMessage(member, hello(yield* tokenOf(ANA)), [member])
+      yield* host.scope.onMessage(stranger, hello(yield* tokenOf(BO)), [
         member,
         stranger,
-      ]),
-    )
-    expect(decodeTagged(member.sent[0] ?? '{}')._tag).toBe('Snapshot')
-    expect(JSON.parse(stranger.sent[0] ?? '{}')).toMatchObject({
-      _tag: 'Failed',
-      code: 'Forbidden',
-    })
-  })
+      ])
+      expect(decodeTagged(member.sent[0] ?? '{}')._tag).toBe('Snapshot')
+      expect(fromJson(stranger.sent[0] ?? '{}')).toMatchObject({
+        _tag: 'Failed',
+        code: 'Forbidden',
+      })
+    }),
+  )
 
-  test('a join reaches every joined socket, and the last READY starts the run', async () => {
-    const host = await roomHost()
-    await Effect.runPromise(host.create(ANA, 'Ana', '', false, CODE, 'Private'))
-    const ana = fakeSocket()
-    await Effect.runPromise(
-      host.scope.onMessage(ana, hello(await tokenOf(ANA)), [ana]),
-    )
-    await Effect.runPromise(host.join(BO, 'name', '', false, [ana]))
-    expect(JSON.parse(ana.sent.at(-1) ?? '{}')).toMatchObject({
-      _tag: 'Deltas',
-    })
-    const bo = fakeSocket()
-    await Effect.runPromise(
-      host.scope.onMessage(bo, hello(await tokenOf(BO)), [ana, bo]),
-    )
-    const ready = await Effect.runPromise(
-      host.scope.onMessage(
-        bo,
-        await pushOf(ChangedReady, { by: BO, ready: true }, 'ready-bo-0001'),
-        [ana, bo],
-      ),
-    )
-    expect(await Effect.runPromise(reactionsOf(ready))).toEqual([
-      { _tag: 'MaybeStart' },
-    ])
-    expect((await lobbyOf(host)).status).toBe('Lobby')
-    const started = await Effect.runPromise(
-      host.scope.onMessage(
-        ana,
-        await pushOf(ChangedReady, { by: ANA, ready: true }, 'ready-ana-0001'),
-        [ana, bo],
-      ),
-    )
-    expect(await Effect.runPromise(reactionsOf(started))).toEqual([
-      { _tag: 'MaybeStart' },
-    ])
-    expect((await lobbyOf(host)).status).toBe('Playing')
-    expect(
-      await Effect.runPromise(host.join(CY, 'name', '', false, [])),
-    ).toEqual(Result.fail({ _tag: 'Started' }))
-  })
+  it.effect(
+    'a join reaches every joined socket, and the last READY starts the run',
+    () =>
+      Effect.gen(function* () {
+        const host = yield* roomHost
+        yield* host.create(ANA, 'Ana', '', false, CODE, 'Private')
+        const ana = fakeSocket()
+        yield* host.scope.onMessage(ana, hello(yield* tokenOf(ANA)), [ana])
+        yield* host.join(BO, 'name', '', false, [ana])
+        expect(fromJson(ana.sent.at(-1) ?? '{}')).toMatchObject({
+          _tag: 'Deltas',
+        })
+        const bo = fakeSocket()
+        yield* host.scope.onMessage(bo, hello(yield* tokenOf(BO)), [ana, bo])
+        const ready = yield* host.scope.onMessage(
+          bo,
+          yield* pushOf(ChangedReady, { by: BO, ready: true }, 'ready-bo-0001'),
+          [ana, bo],
+        )
+        expect(yield* reactionsOf(ready)).toEqual([{ _tag: 'MaybeStart' }])
+        expect((yield* lobbyOf(host)).status).toBe('Lobby')
+        const started = yield* host.scope.onMessage(
+          ana,
+          yield* pushOf(
+            ChangedReady,
+            { by: ANA, ready: true },
+            'ready-ana-0001',
+          ),
+          [ana, bo],
+        )
+        expect(yield* reactionsOf(started)).toEqual([{ _tag: 'MaybeStart' }])
+        expect((yield* lobbyOf(host)).status).toBe('Playing')
+        expect(yield* host.join(CY, 'name', '', false, [])).toEqual(
+          Result.fail({ _tag: 'Started' }),
+        )
+      }),
+  )
 
-  test('a kick says who to drop, and a result ends the game', async () => {
-    const host = await roomHost()
-    await Effect.runPromise(host.create(ANA, 'Ana', '', false, CODE, 'Private'))
-    await Effect.runPromise(host.join(BO, 'name', '', false, []))
-    const ana = fakeSocket()
-    await Effect.runPromise(
-      host.scope.onMessage(ana, hello(await tokenOf(ANA)), [ana]),
-    )
-    const kicked = await Effect.runPromise(
-      host.scope.onMessage(
+  it.effect('a kick says who to drop, and a result ends the game', () =>
+    Effect.gen(function* () {
+      const host = yield* roomHost
+      yield* host.create(ANA, 'Ana', '', false, CODE, 'Private')
+      yield* host.join(BO, 'name', '', false, [])
+      const ana = fakeSocket()
+      yield* host.scope.onMessage(ana, hello(yield* tokenOf(ANA)), [ana])
+      const kicked = yield* host.scope.onMessage(
         ana,
-        await pushOf(KickedPlayer, { by: ANA, playerId: BO }, 'kick-bo-00001'),
+        yield* pushOf(KickedPlayer, { by: ANA, playerId: BO }, 'kick-bo-00001'),
         [ana],
-      ),
-    )
-    expect(await Effect.runPromise(reactionsOf(kicked))).toEqual([
-      { _tag: 'DropPlayer', playerId: BO, kicked: true },
-    ])
-    await Effect.runPromise(host.join(BO, 'name', '', false, []))
-    await Effect.runPromise(host.freeSeat(BO, 1, [ana]))
-    expect(
-      (await lobbyOf(host)).members.map(member => member.playerId),
-    ).toEqual([ANA])
-  })
+      )
+      expect(yield* reactionsOf(kicked)).toEqual([
+        { _tag: 'DropPlayer', playerId: BO, kicked: true },
+      ])
+      yield* host.join(BO, 'name', '', false, [])
+      yield* host.freeSeat(BO, 1, [ana])
+      expect(
+        (yield* lobbyOf(host)).members.map(member => member.playerId),
+      ).toEqual([ANA])
+    }),
+  )
 })
 
 describe('a game socket Hello', () => {
-  const lobbyWith = async () => {
-    const host = await roomHost()
-    await Effect.runPromise(host.create(ANA, 'Ana', '', false, CODE, 'Private'))
-    return Effect.runPromise(host.lobby)
-  }
+  const lobbyWith = Effect.gen(function* () {
+    const host = yield* roomHost
+    yield* host.create(ANA, 'Ana', '', false, CODE, 'Private')
+    return yield* host.lobby
+  })
 
-  test('is accepted for a member with a good token', async () => {
-    const answer = await Effect.runPromise(
-      answerHello(
-        helloFrame(await tokenOf(ANA)),
+  it.effect('is accepted for a member with a good token', () =>
+    Effect.gen(function* () {
+      const answer = yield* answerHello(
+        helloFrame(yield* tokenOf(ANA)),
         SECRET,
-        await lobbyWith(),
-        Date.now(),
-      ),
-    )
-    expect(answer).toEqual({
-      _tag: 'Accept',
-      playerId: ANA,
-      slot: 0,
-      version: ROOM_PROTOCOL_VERSION,
-    })
-  })
+        yield* lobbyWith,
+        yield* Clock.currentTimeMillis,
+      )
+      expect(answer).toEqual({
+        _tag: 'Accept',
+        playerId: ANA,
+        slot: 0,
+        version: ROOM_PROTOCOL_VERSION,
+      })
+    }),
+  )
 
-  test('is refused for each reason', async () => {
-    const lobby = await lobbyWith()
-    const now = Date.now()
-    const answers = await Promise.all([
-      Effect.runPromise(answerHello({ _tag: 'Leave' }, SECRET, lobby, now)),
-      Effect.runPromise(
-        answerHello(
-          {
-            _tag: 'Hello',
-            minVersion: 1,
-            maxVersion: 1,
-            token: await tokenOf(ANA),
-          },
-          SECRET,
-          lobby,
-          now,
+  it.effect('is refused for each reason', () =>
+    Effect.gen(function* () {
+      const lobby = yield* lobbyWith
+      const now = yield* Clock.currentTimeMillis
+      const answers = yield* Effect.all(
+        [
+          answerHello({ _tag: 'Leave' }, SECRET, lobby, now),
+          answerHello(
+            {
+              _tag: 'Hello',
+              minVersion: 1,
+              maxVersion: 1,
+              token: yield* tokenOf(ANA),
+            },
+            SECRET,
+            lobby,
+            now,
+          ),
+          answerHello(helloFrame('forged.token'), SECRET, lobby, now),
+          answerHello(
+            helloFrame(yield* tokenOf(ANA, now - 1)),
+            SECRET,
+            lobby,
+            now,
+          ),
+          answerHello(helloFrame(yield* tokenOf(BO)), SECRET, lobby, now),
+          answerHello(
+            helloFrame(yield* tokenOf(ANA)),
+            SECRET,
+            Option.none(),
+            now,
+          ),
+        ],
+        { concurrency: 'unbounded' },
+      )
+      expect(
+        answers.map(answer =>
+          answer._tag === 'Refuse' ? answer.reason : 'Accept',
         ),
-      ),
-      Effect.runPromise(
-        answerHello(helloFrame('forged.token'), SECRET, lobby, now),
-      ),
-      Effect.runPromise(
-        answerHello(
-          helloFrame(await tokenOf(ANA, now - 1)),
-          SECRET,
-          lobby,
-          now,
-        ),
-      ),
-      Effect.runPromise(
-        answerHello(helloFrame(await tokenOf(BO)), SECRET, lobby, now),
-      ),
-      Effect.runPromise(
-        answerHello(helloFrame(await tokenOf(ANA)), SECRET, Option.none(), now),
-      ),
-    ])
-    expect(
-      answers.map(answer =>
-        answer._tag === 'Refuse' ? answer.reason : 'Accept',
-      ),
-    ).toEqual([
-      'BadMessage',
-      'VersionMismatch',
-      'Unauthorized',
-      'Unauthorized',
-      'NotMember',
-      'NoRoom',
-    ])
-  })
+      ).toEqual([
+        'BadMessage',
+        'VersionMismatch',
+        'Unauthorized',
+        'Unauthorized',
+        'NotMember',
+        'NoRoom',
+      ])
+    }),
+  )
 })
 
 describe('the alarm', () => {
@@ -377,7 +371,7 @@ describe('the alarm', () => {
       members: [],
     })
 
-  test('watches a running loop, records a lost game, and deletes old rooms', () => {
+  it('watches a running loop, records a lost game, and deletes old rooms', () => {
     const nowMs = 10 * DELETE_AFTER_MS
     expect(
       decideAlarm({
@@ -431,32 +425,36 @@ describe('the alarm', () => {
 })
 
 describe('a public room', () => {
-  test('lists itself for Quick Play while its lobby has seats', async () => {
-    const host = await roomHost()
-    await Effect.runPromise(host.create(ANA, 'Ana', '', false, CODE, 'Public'))
-    await Effect.runPromise(host.join(BO, '  Bo\u0000  ', '', false, []))
-    const lobby = await lobbyOf(host)
-    expect(lobby.members.map(member => member.name)).toEqual(['Ana', 'Bo'])
-    expect(listingOf(lobby)).toEqual(
-      Option.some({ code: CODE, members: 2, open: true }),
-    )
-    await Effect.runPromise(host.join(CY, '', '', false, []))
-    await Effect.runPromise(host.join(DEE, 'Dee', '', false, []))
-    const full = await lobbyOf(host)
-    expect(full.members.map(member => member.name)).toEqual([
-      'Ana',
-      'Bo',
-      'Player 3',
-      'Dee',
-    ])
-    expect(listingOf(full)).toEqual(
-      Option.some({ code: CODE, members: 4, open: false }),
-    )
-  })
+  it.effect('lists itself for Quick Play while its lobby has seats', () =>
+    Effect.gen(function* () {
+      const host = yield* roomHost
+      yield* host.create(ANA, 'Ana', '', false, CODE, 'Public')
+      yield* host.join(BO, '  Bo\u0000  ', '', false, [])
+      const lobby = yield* lobbyOf(host)
+      expect(lobby.members.map(member => member.name)).toEqual(['Ana', 'Bo'])
+      expect(listingOf(lobby)).toEqual(
+        Option.some({ code: CODE, members: 2, open: true }),
+      )
+      yield* host.join(CY, '', '', false, [])
+      yield* host.join(DEE, 'Dee', '', false, [])
+      const full = yield* lobbyOf(host)
+      expect(full.members.map(member => member.name)).toEqual([
+        'Ana',
+        'Bo',
+        'Player 3',
+        'Dee',
+      ])
+      expect(listingOf(full)).toEqual(
+        Option.some({ code: CODE, members: 4, open: false }),
+      )
+    }),
+  )
 
-  test('a private room never lists itself', async () => {
-    const host = await roomHost()
-    await Effect.runPromise(host.create(ANA, 'Ana', '', false, CODE, 'Private'))
-    expect(listingOf(await lobbyOf(host))).toEqual(Option.none())
-  })
+  it.effect('a private room never lists itself', () =>
+    Effect.gen(function* () {
+      const host = yield* roomHost
+      yield* host.create(ANA, 'Ana', '', false, CODE, 'Private')
+      expect(listingOf(yield* lobbyOf(host))).toEqual(Option.none())
+    }),
+  )
 })

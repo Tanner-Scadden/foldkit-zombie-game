@@ -10,16 +10,16 @@ import {
   pipe,
 } from 'effect'
 import { SqlClient } from 'effect/sql'
-import { describe, expect, test } from 'vitest'
+
+import { describe, expect, it } from '@effect/vitest'
 
 import { type Hub, makeHub } from '../src/inProcess'
 import { SqliteClient } from '../src/index'
 
-const run = <A, E>(
+const withHub = <A, E>(
   program: (hub: Hub) => Effect.Effect<A, E, Scope.Scope>,
   options: Parameters<typeof makeHub>[0] = {},
-): Promise<A> =>
-  Effect.runPromise(Effect.scoped(Effect.flatMap(makeHub(options), program)))
+): Effect.Effect<A, E, Scope.Scope> => Effect.flatMap(makeHub(options), program)
 
 const withClient = <A, E>(
   hub: Hub,
@@ -36,8 +36,8 @@ const createPeople = Effect.gen(function* () {
 })
 
 describe('SqliteClient over the in-process hub', () => {
-  test('opens in memory in Node and says why', () =>
-    run(hub =>
+  it.effect('opens in memory in Node and says why', () =>
+    withHub(hub =>
       withClient(
         hub,
         Effect.gen(function* () {
@@ -47,10 +47,11 @@ describe('SqliteClient over the in-process hub', () => {
           expect(status.persistence._tag).toBe('Memory')
         }),
       ),
-    ))
+    ),
+  )
 
-  test('runs the sql tagged template and decodes rows with a Schema', () =>
-    run(hub =>
+  it.effect('runs the sql tagged template and decodes rows with a Schema', () =>
+    withHub(hub =>
       withClient(
         hub,
         Effect.gen(function* () {
@@ -81,10 +82,11 @@ describe('SqliteClient over the in-process hub', () => {
           expect(values).toEqual([['Bo']])
         }),
       ),
-    ))
+    ),
+  )
 
-  test('binds booleans, nulls, bigints, and bytes', () =>
-    run(hub =>
+  it.effect('binds booleans, nulls, bigints, and bytes', () =>
+    withHub(hub =>
       withClient(
         hub,
         Effect.gen(function* () {
@@ -99,10 +101,11 @@ describe('SqliteClient over the in-process hub', () => {
           })
         }),
       ),
-    ))
+    ),
+  )
 
-  test('a failing transaction rolls back and a passing one commits', () =>
-    run(hub =>
+  it.effect('a failing transaction rolls back and a passing one commits', () =>
+    withHub(hub =>
       withClient(
         hub,
         Effect.gen(function* () {
@@ -127,10 +130,11 @@ describe('SqliteClient over the in-process hub', () => {
           expect(afterCommit).toEqual([{ n: 1 }])
         }),
       ),
-    ))
+    ),
+  )
 
-  test('a constraint failure is a typed SqlError', () =>
-    run(hub =>
+  it.effect('a constraint failure is a typed SqlError', () =>
+    withHub(hub =>
       withClient(
         hub,
         Effect.gen(function* () {
@@ -146,10 +150,11 @@ describe('SqliteClient over the in-process hub', () => {
           expect(syntax.reason.message).toMatch(/syntax error/)
         }),
       ),
-    ))
+    ),
+  )
 
-  test('migrations run in id order, once, whatever the key order', () =>
-    run(hub =>
+  it.effect('migrations run in id order, once, whatever the key order', () =>
+    withHub(hub =>
       withClient(
         hub,
         Effect.gen(function* () {
@@ -175,10 +180,11 @@ describe('SqliteClient over the in-process hub', () => {
           expect(later).toEqual([[3, 'add_toys']])
         }),
       ),
-    ))
+    ),
+  )
 
-  test('a failing migration leaves nothing behind', () =>
-    run(hub =>
+  it.effect('a failing migration leaves nothing behind', () =>
+    withHub(hub =>
       withClient(
         hub,
         Effect.gen(function* () {
@@ -196,10 +202,11 @@ describe('SqliteClient over the in-process hub', () => {
           expect(tables).toEqual([])
         }),
       ),
-    ))
+    ),
+  )
 
-  test('changes arrive after a commit and never after a rollback', () =>
-    run(hub =>
+  it.effect('changes arrive after a commit and never after a rollback', () =>
+    withHub(hub =>
       withClient(
         hub,
         Effect.gen(function* () {
@@ -228,10 +235,11 @@ describe('SqliteClient over the in-process hub', () => {
           expect(changes).toEqual([[{ table: 'people', operation: 'Update' }]])
         }),
       ),
-    ))
+    ),
+  )
 
-  test('every message crosses the protocol', () =>
-    run(hub =>
+  it.effect('every message crosses the protocol', () =>
+    withHub(hub =>
       Effect.gen(function* () {
         yield* withClient(
           hub,
@@ -240,12 +248,15 @@ describe('SqliteClient over the in-process hub', () => {
         const crossings = yield* hub.crossings
         expect(crossings).toBeGreaterThanOrEqual(4)
       }),
-    ))
+    ),
+  )
 })
 
 describe('two sessions on one database, like two tabs', () => {
-  test('a write from another session waits for an open transaction', () =>
-    run(hub =>
+  // NOTE: it.live where sessions race on real time: one sleeps inside a
+  // transaction while another waits, or the idle timeout rolls one back.
+  it.live('a write from another session waits for an open transaction', () =>
+    withHub(hub =>
       Effect.gen(function* () {
         const shared = yield* Layer.build(hub.layer())
         const other = yield* Layer.build(hub.layer())
@@ -283,10 +294,11 @@ describe('two sessions on one database, like two tabs', () => {
           'second saw 2',
         ])
       }),
-    ))
+    ),
+  )
 
-  test('a transaction left idle is rolled back so others can go on', () =>
-    run(
+  it.live('a transaction left idle is rolled back so others can go on', () =>
+    withHub(
       hub =>
         Effect.gen(function* () {
           const stuck = yield* Layer.build(hub.layer())
@@ -311,39 +323,43 @@ describe('two sessions on one database, like two tabs', () => {
           expect(rows).toEqual([{ n: 0 }])
         }),
       { transactionIdleTimeout: '100 millis' },
-    ))
+    ),
+  )
 
-  test('a session that closes mid-transaction is rolled back at once', () =>
-    run(
-      hub =>
-        Effect.gen(function* () {
-          const other = yield* Layer.build(hub.layer())
-          yield* Effect.provide(createPeople, other)
-          yield* Effect.scoped(
-            Effect.provide(
-              Effect.flatMap(SqlClient.SqlClient, sql =>
-                Effect.andThen(
-                  sql`BEGIN`,
-                  sql`INSERT INTO people (id, name) VALUES (1, 'Closed')`,
+  it.effect(
+    'a session that closes mid-transaction is rolled back at once',
+    () =>
+      withHub(
+        hub =>
+          Effect.gen(function* () {
+            const other = yield* Layer.build(hub.layer())
+            yield* Effect.provide(createPeople, other)
+            yield* Effect.scoped(
+              Effect.provide(
+                Effect.flatMap(SqlClient.SqlClient, sql =>
+                  Effect.andThen(
+                    sql`BEGIN`,
+                    sql`INSERT INTO people (id, name) VALUES (1, 'Closed')`,
+                  ),
                 ),
+                hub.layer(),
               ),
-              hub.layer(),
-            ),
-          )
-          const rows = yield* Effect.provide(
-            Effect.flatMap(
-              SqlClient.SqlClient,
-              sql => sql`SELECT COUNT(*) AS n FROM people`,
-            ),
-            other,
-          )
-          expect(rows).toEqual([{ n: 0 }])
-        }),
-      { transactionIdleTimeout: '1 minute' },
-    ))
+            )
+            const rows = yield* Effect.provide(
+              Effect.flatMap(
+                SqlClient.SqlClient,
+                sql => sql`SELECT COUNT(*) AS n FROM people`,
+              ),
+              other,
+            )
+            expect(rows).toEqual([{ n: 0 }])
+          }),
+        { transactionIdleTimeout: '1 minute' },
+      ),
+  )
 
-  test('an interrupted call waiting in line is cancelled', () =>
-    run(
+  it.live('an interrupted call waiting in line is cancelled', () =>
+    withHub(
       hub =>
         Effect.gen(function* () {
           const holder = yield* Layer.build(hub.layer())
@@ -380,5 +396,6 @@ describe('two sessions on one database, like two tabs', () => {
           expect(rows).toEqual([{ n: 0 }])
         }),
       { transactionIdleTimeout: '5 seconds' },
-    ))
+    ),
+  )
 })

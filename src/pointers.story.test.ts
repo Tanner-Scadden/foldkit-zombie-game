@@ -2,7 +2,8 @@
 import { Effect, Fiber, Option, Stream } from 'effect'
 import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
-import { describe, expect, test } from 'vitest'
+
+import { describe, expect, it, test } from '@effect/vitest'
 
 import { isTrackingPointer } from './input'
 import { update } from './main'
@@ -36,30 +37,26 @@ const isAnyStickActive = (current: Model): boolean =>
   Stick.isAnyOf(['Active'])(current.input.moveStick) ||
   Stick.isAnyOf(['Active'])(current.input.aimStick)
 
-const firstReleaseMessage = (
-  dispatch: () => void,
-): Promise<ReadonlyArray<Message>> => {
+// NOTE: the subscription listens for real document events, so the event
+// goes out on a real timer until it is heard: run it with `it.live`.
+const firstReleaseMessage = (dispatch: () => void) => {
   const { pointerReleases } = subscriptions
   const stream = pointerReleases.dependenciesToStream(
     pointerReleases.modelToDependencies(initialModel),
   )
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      const fiber = yield* Effect.forkChild(
-        Stream.runCollect(Stream.take(stream, 1)),
-      )
-      const dispatcher = yield* Effect.forkChild(
-        Effect.forever(
-          Effect.andThen(Effect.sleep('10 millis'), Effect.sync(dispatch)),
-        ),
-      )
-      const messages = yield* Fiber.join(fiber).pipe(
-        Effect.timeout('5 seconds'),
-      )
-      yield* Fiber.interrupt(dispatcher)
-      return messages
-    }).pipe(Effect.provide(pointerReleases.layer)),
-  )
+  return Effect.gen(function* () {
+    const fiber = yield* Effect.forkChild(
+      Stream.runCollect(Stream.take(stream, 1)),
+    )
+    const dispatcher = yield* Effect.forkChild(
+      Effect.forever(
+        Effect.andThen(Effect.sleep('10 millis'), Effect.sync(dispatch)),
+      ),
+    )
+    const messages = yield* Fiber.join(fiber).pipe(Effect.timeout('5 seconds'))
+    yield* Fiber.interrupt(dispatcher)
+    return messages
+  }).pipe(Effect.provide(pointerReleases.layer))
 }
 
 describe('stuck sticks', () => {
@@ -114,26 +111,30 @@ describe('stuck sticks', () => {
     )
   })
 
-  test('releases are heard while no pointer is tracked', async () => {
-    expect(isTrackingPointer(initialModel.input)).toBe(false)
-    const messages = await firstReleaseMessage(() => {
-      document.dispatchEvent(
-        new PointerEvent('pointerup', { pointerId: LEFT_THUMB }),
-      )
-    })
-    expect(messages).toEqual([
-      Message.ReleasedPointer({ pointerId: LEFT_THUMB }),
-    ])
-  })
+  it.live('releases are heard while no pointer is tracked', () =>
+    Effect.gen(function* () {
+      expect(isTrackingPointer(initialModel.input)).toBe(false)
+      const messages = yield* firstReleaseMessage(() => {
+        document.dispatchEvent(
+          new PointerEvent('pointerup', { pointerId: LEFT_THUMB }),
+        )
+      })
+      expect(messages).toEqual([
+        Message.ReleasedPointer({ pointerId: LEFT_THUMB }),
+      ])
+    }),
+  )
 
-  test('cancels are heard while no pointer is tracked', async () => {
-    const messages = await firstReleaseMessage(() => {
-      document.dispatchEvent(
-        new PointerEvent('pointercancel', { pointerId: RIGHT_THUMB }),
-      )
-    })
-    expect(messages).toEqual([
-      Message.CancelledPointer({ pointerId: RIGHT_THUMB }),
-    ])
-  })
+  it.live('cancels are heard while no pointer is tracked', () =>
+    Effect.gen(function* () {
+      const messages = yield* firstReleaseMessage(() => {
+        document.dispatchEvent(
+          new PointerEvent('pointercancel', { pointerId: RIGHT_THUMB }),
+        )
+      })
+      expect(messages).toEqual([
+        Message.CancelledPointer({ pointerId: RIGHT_THUMB }),
+      ])
+    }),
+  )
 })

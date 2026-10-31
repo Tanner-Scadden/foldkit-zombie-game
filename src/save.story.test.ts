@@ -1,8 +1,8 @@
 import { Array, Effect, Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
-import { afterEach, describe, expect, test } from 'vitest'
 
+import { afterEach, describe, expect, it, test } from '@effect/vitest'
 import { Dialog, DialogBlock } from '@foldkit/ui'
 
 // @vitest-environment happy-dom
@@ -489,17 +489,21 @@ describe('the schema', () => {
 describe('the legacy localStorage copy', () => {
   afterEach(() => localStorage.clear())
 
-  test('writes and reads back under one key', () => {
-    Effect.runSync(writeLegacySave(learnedSave))
-    expect(localStorage.getItem(SAVE_KEY)).not.toBeNull()
-    expect(Effect.runSync(readLegacySave)).toEqual(Option.some(learnedSave))
-  })
+  it.effect('writes and reads back under one key', () =>
+    Effect.gen(function* () {
+      yield* writeLegacySave(learnedSave)
+      expect(localStorage.getItem(SAVE_KEY)).not.toBeNull()
+      expect(yield* readLegacySave).toEqual(Option.some(learnedSave))
+    }),
+  )
 
-  test('a missing or corrupted save reads as no save', () => {
-    expect(Effect.runSync(readLegacySave)).toEqual(Option.none())
-    localStorage.setItem(SAVE_KEY, 'not json at all')
-    expect(Effect.runSync(readLegacySave)).toEqual(Option.none())
-  })
+  it.effect('a missing or corrupted save reads as no save', () =>
+    Effect.gen(function* () {
+      expect(yield* readLegacySave).toEqual(Option.none())
+      localStorage.setItem(SAVE_KEY, 'not json at all')
+      expect(yield* readLegacySave).toEqual(Option.none())
+    }),
+  )
 })
 
 describe('loading the save', () => {

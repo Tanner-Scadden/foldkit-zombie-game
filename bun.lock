@@ -16,6 +16,7 @@
       "devDependencies": {
         "@effect/platform-node": "4.0.6",
         "@effect/tsgo": "0.62.0",
+        "@effect/vitest": "4.0.6",
         "@foldkit/devtools": "0.169.0-canary.90746b32d2ca",
         "@foldkit/devtools-mcp": "0.25.0-canary.90746b32d2ca",
         "@foldkit/oxlint-plugin": "0.15.3-canary.90746b32d2ca",
@@ -41,6 +42,7 @@
         "@munch/sync-engine": "workspace:*",
       },
       "devDependencies": {
+        "@effect/vitest": "4.0.6",
         "@munch/sqlite-wasm-effect": "workspace:*",
       },
       "peerDependencies": {
@@ -53,6 +55,9 @@
       "dependencies": {
         "@sqlite.org/sqlite-wasm": "3.54.1-build1",
       },
+      "devDependencies": {
+        "@effect/vitest": "4.0.6",
+      },
       "peerDependencies": {
         "effect": "4.0.6",
       },
@@ -61,6 +66,7 @@
       "name": "@munch/sync-engine",
       "version": "0.1.0",
       "devDependencies": {
+        "@effect/vitest": "4.0.6",
         "@munch/sqlite-wasm-effect": "workspace:*",
       },
       "peerDependencies": {
@@ -75,6 +81,7 @@
     "@effect/platform-browser": "4.0.6",
     "@effect/platform-node": "4.0.6",
     "@effect/platform-node-shared": "4.0.6",
+    "@effect/vitest": "4.0.6",
     "effect": "4.0.6",
   },
   "packages": {
@@ -99,6 +106,8 @@
     "@effect/tsgo-win32-arm64": ["@effect/tsgo-win32-arm64@0.62.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-OJmsJQx2cmsTcZJNHHdELMG454vvOIrQpEKiHXdppjZ7/AZGbTPKboNnbggb1ZukRrooRpn3Jz3yTkMkNnEKVg=="],
 
     "@effect/tsgo-win32-x64": ["@effect/tsgo-win32-x64@0.62.0", "", { "os": "win32", "cpu": "x64" }, "sha512-oGXuTBpMv/ZuN6BvbN87VsG2+kZnY/EEvYa45J+2iQJ3wK6h0+p6c8EpcfwrcCMRkLA/2luwMa/YJSKa+Vpygw=="],
+
+    "@effect/vitest": ["@effect/vitest@4.0.6", "", { "peerDependencies": { "effect": "^4.0.6", "vitest": ">=5.0.0 <6.0.0" } }, "sha512-oKNbtyUHK5+0o730CXwojULEu7f3+c235pYFD4U5T//o+hHrJbYbZU4bRkcv936tPr5IOnmujeyQiC/LuJJjHw=="],
 
     "@floating-ui/core": ["@floating-ui/core@1.8.0", "", { "dependencies": { "@floating-ui/utils": "^0.2.12" } }, "sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ=="],
 

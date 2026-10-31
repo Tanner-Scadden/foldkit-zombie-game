@@ -2,7 +2,8 @@ import { Effect, Option, Schema } from 'effect'
 import { FetchHttpClient } from 'effect/http'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+
+import { afterEach, describe, expect, it, test, vi } from '@effect/vitest'
 
 import {
   CauseOfDeath,
@@ -333,71 +334,81 @@ describe('the beacon', () => {
     vi.unstubAllGlobals()
   })
 
-  test('a visit id is 16 hex digits', () => {
-    expect(Effect.runSync(generateVisitId)).toMatch(/^[0-9a-f]{16}$/)
-  })
+  it.effect('a visit id is 16 hex digits', () =>
+    Effect.gen(function* () {
+      expect(yield* generateVisitId).toMatch(/^[0-9a-f]{16}$/)
+    }),
+  )
 
-  test('a build with no API origin sends nothing', () => {
-    expect(maybeRunsUrl('')).toEqual(Option.none())
-    expect(Effect.runSync(sendRunSummary(summary, ''))).toBe('Unconfigured')
-  })
+  it.effect('a build with no API origin sends nothing', () =>
+    Effect.gen(function* () {
+      expect(maybeRunsUrl('')).toEqual(Option.none())
+      expect(yield* sendRunSummary(summary, '')).toBe('Unconfigured')
+    }),
+  )
 
-  test('the summary goes out as a beacon to the runs path', async () => {
-    const sendBeacon = vi.fn<Navigator['sendBeacon']>(() => true)
-    vi.stubGlobal('navigator', { sendBeacon })
-    const transport = await Effect.runPromise(
-      sendRunSummary(summary, 'https://api.example.test'),
-    )
-    expect(transport).toBe('Beacon')
-    expect(sendBeacon).toHaveBeenCalledWith(
-      'https://api.example.test/api/runs',
-      expect.any(Blob),
-    )
-  })
+  it.effect('the summary goes out as a beacon to the runs path', () =>
+    Effect.gen(function* () {
+      const sendBeacon = vi.fn<Navigator['sendBeacon']>(() => true)
+      vi.stubGlobal('navigator', { sendBeacon })
+      const transport = yield* sendRunSummary(
+        summary,
+        'https://api.example.test',
+      )
+      expect(transport).toBe('Beacon')
+      expect(sendBeacon).toHaveBeenCalledWith(
+        'https://api.example.test/api/runs',
+        expect.any(Blob),
+      )
+    }),
+  )
 
-  test('a refused beacon falls back to a keepalive fetch', async () => {
-    const requests: Array<{ url: string; init: RequestInit | undefined }> = []
-    const fetch: typeof globalThis.fetch = (input, requestInit) => {
-      requests.push({
-        url: input instanceof Request ? input.url : String(input),
-        init: requestInit,
-      })
-      return Promise.resolve(new Response(null))
-    }
-    vi.stubGlobal('navigator', { sendBeacon: () => false })
-    const transport = await Effect.runPromise(
-      sendRunSummary(summary, 'https://api.example.test').pipe(
-        Effect.provideService(FetchHttpClient.Fetch, fetch),
-      ),
-    )
-    expect(transport).toBe('Fetch')
-    expect(requests).toHaveLength(1)
-    expect(requests[0]?.url).toBe('https://api.example.test/api/runs')
-    expect(requests[0]?.init).toEqual(
-      expect.objectContaining({
-        keepalive: true,
-        method: 'POST',
-        mode: 'no-cors',
-        credentials: 'omit',
-      }),
-    )
-    expect(new Headers(requests[0]?.init?.headers).get('content-type')).toBe(
-      'text/plain;charset=UTF-8',
-    )
-    expect(new Headers(requests[0]?.init?.headers).has('traceparent')).toBe(
-      false,
-    )
-  })
+  it.effect('a refused beacon falls back to a keepalive fetch', () =>
+    Effect.gen(function* () {
+      const requests: Array<{ url: string; init: RequestInit | undefined }> = []
+      const fetch: typeof globalThis.fetch = (input, requestInit) => {
+        requests.push({
+          url: input instanceof Request ? input.url : String(input),
+          init: requestInit,
+        })
+        return Promise.resolve(new Response(null))
+      }
+      vi.stubGlobal('navigator', { sendBeacon: () => false })
+      const transport = yield* sendRunSummary(
+        summary,
+        'https://api.example.test',
+      ).pipe(Effect.provideService(FetchHttpClient.Fetch, fetch))
+      expect(transport).toBe('Fetch')
+      expect(requests).toHaveLength(1)
+      expect(requests[0]?.url).toBe('https://api.example.test/api/runs')
+      expect(requests[0]?.init).toEqual(
+        expect.objectContaining({
+          keepalive: true,
+          method: 'POST',
+          mode: 'no-cors',
+          credentials: 'omit',
+        }),
+      )
+      expect(new Headers(requests[0]?.init?.headers).get('content-type')).toBe(
+        'text/plain;charset=UTF-8',
+      )
+      expect(new Headers(requests[0]?.init?.headers).has('traceparent')).toBe(
+        false,
+      )
+    }),
+  )
 
-  test('a keepalive fetch that never goes out is a failed send', async () => {
-    const fetch: typeof globalThis.fetch = () =>
-      Promise.reject(new TypeError('Failed to fetch'))
-    vi.stubGlobal('navigator', { sendBeacon: () => false })
-    const exit = await Effect.runPromiseExit(
-      sendRunSummary(summary, 'https://api.example.test').pipe(
-        Effect.provideService(FetchHttpClient.Fetch, fetch),
-      ),
-    )
-    expect(exit._tag).toBe('Failure')
-  })
+  it.effect('a keepalive fetch that never goes out is a failed send', () =>
+    Effect.gen(function* () {
+      const fetch: typeof globalThis.fetch = () =>
+        Promise.reject(new TypeError('Failed to fetch'))
+      vi.stubGlobal('navigator', { sendBeacon: () => false })
+      const exit = yield* Effect.exit(
+        sendRunSummary(summary, 'https://api.example.test').pipe(
+          Effect.provideService(FetchHttpClient.Fetch, fetch),
+        ),
+      )
+      expect(exit._tag).toBe('Failure')
+    }),
+  )
 })

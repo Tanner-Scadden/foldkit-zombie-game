@@ -1,15 +1,7 @@
-import {
-  Context,
-  Effect,
-  Layer,
-  Option,
-  Schedule,
-  type Scope,
-  Stream,
-} from 'effect'
+import { Context, Effect, Layer, Option, Schedule, Stream } from 'effect'
 import { SqlClient } from 'effect/sql'
-import { describe, expect, test } from 'vitest'
 
+import { describe, expect, it, test } from '@effect/vitest'
 import { SqliteClient } from '@munch/sqlite-wasm-effect'
 import { makeHub } from '@munch/sqlite-wasm-effect/in-process'
 import {
@@ -24,6 +16,7 @@ import {
   startSync,
 } from '@munch/sync-engine'
 import { makeHost } from '@munch/sync-engine/in-process'
+import { first, settle } from '@munch/sync-engine/testing'
 
 import {
   ChangedPicks,
@@ -48,9 +41,6 @@ import {
 const CODE = 'KX7PQ'
 const SCOPE = roomScopeId(CODE)
 const [ANA, BO, CY, DEE, EVE] = ['ana', 'bo', 'cy', 'dee', 'eve']
-
-const run = <A, E>(program: Effect.Effect<A, E, Scope.Scope>): Promise<A> =>
-  Effect.runPromise(Effect.scoped(program))
 
 const openDatabase = () =>
   Effect.gen(function* () {
@@ -164,8 +154,9 @@ describe('room codes', () => {
 })
 
 describe('the room scope', () => {
-  test('the creator hosts in slot 0, and joiners take the free slots up to 4', () =>
-    run(
+  it.effect(
+    'the creator hosts in slot 0, and joiners take the free slots up to 4',
+    () =>
       Effect.gen(function* () {
         const server = yield* created
         yield* seat(server, BO)
@@ -198,29 +189,29 @@ describe('the room scope', () => {
           '',
         ])
       }),
-    ))
+  )
 
-  test('a player sets only their own READY', () =>
-    run(
-      Effect.gen(function* () {
-        const server = yield* created
-        yield* seat(server, BO)
-        expect(
-          yield* push(server, BO, ChangedReady, { by: BO, ready: true }),
-        ).toBe('Acked')
-        expect(
-          yield* push(server, BO, ChangedReady, { by: ANA, ready: true }),
-        ).toMatch(/^Rejected: Forbidden/)
-        expect(
-          yield* push(server, EVE, ChangedReady, { by: EVE, ready: true }),
-        ).toMatch(/^Rejected: Forbidden/)
-        const lobby = yield* lobbyOf(server)
-        expect(lobby.members.map(member => member.ready)).toEqual([false, true])
-      }),
-    ))
+  it.effect('a player sets only their own READY', () =>
+    Effect.gen(function* () {
+      const server = yield* created
+      yield* seat(server, BO)
+      expect(
+        yield* push(server, BO, ChangedReady, { by: BO, ready: true }),
+      ).toBe('Acked')
+      expect(
+        yield* push(server, BO, ChangedReady, { by: ANA, ready: true }),
+      ).toMatch(/^Rejected: Forbidden/)
+      expect(
+        yield* push(server, EVE, ChangedReady, { by: EVE, ready: true }),
+      ).toMatch(/^Rejected: Forbidden/)
+      const lobby = yield* lobbyOf(server)
+      expect(lobby.members.map(member => member.ready)).toEqual([false, true])
+    }),
+  )
 
-  test('the run starts when everyone is READY, and nobody joins mid-run', () =>
-    run(
+  it.effect(
+    'the run starts when everyone is READY, and nobody joins mid-run',
+    () =>
       Effect.gen(function* () {
         const server = yield* created
         yield* seat(server, BO)
@@ -236,10 +227,11 @@ describe('the room scope', () => {
           yield* push(server, BO, ChangedReady, { by: BO, ready: true }),
         ).toMatch(/Not in the lobby/)
       }),
-    ))
+  )
 
-  test('a run records its result, and everyone READY again keeps going', () =>
-    run(
+  it.effect(
+    'a run records its result, and everyone READY again keeps going',
+    () =>
       Effect.gen(function* () {
         const server = yield* created
         yield* seat(server, BO)
@@ -277,10 +269,11 @@ describe('the room scope', () => {
         expect(again.status).toBe('Playing')
         expect(again.round).toBe(2)
       }),
-    ))
+  )
 
-  test('the host picks the mode and difficulty, which takes back READY', () =>
-    run(
+  it.effect(
+    'the host picks the mode and difficulty, which takes back READY',
+    () =>
       Effect.gen(function* () {
         const server = yield* created
         yield* seat(server, BO)
@@ -333,106 +326,105 @@ describe('the room scope', () => {
           }),
         ).toMatch(/Not in the lobby/)
       }),
-    ))
+  )
 
-  test('Nightmare is for a host the room found it unlocked for', () =>
-    run(
-      Effect.gen(function* () {
-        const locked = yield* created
-        yield* seat(locked, CY)
-        const nightmare = (server: ScopeServer, by: string) =>
-          push(server, by, ChangedPicks, {
-            by,
-            mode: 'Campaign',
-            difficulty: 'Nightmare',
-          })
-        expect(yield* nightmare(locked, ANA)).toMatch(/Nightmare is locked/)
-        expect((yield* lobbyOf(locked)).difficulty).toBe('Normal')
+  it.effect('Nightmare is for a host the room found it unlocked for', () =>
+    Effect.gen(function* () {
+      const locked = yield* created
+      yield* seat(locked, CY)
+      const nightmare = (server: ScopeServer, by: string) =>
+        push(server, by, ChangedPicks, {
+          by,
+          mode: 'Campaign',
+          difficulty: 'Nightmare',
+        })
+      expect(yield* nightmare(locked, ANA)).toMatch(/Nightmare is locked/)
+      expect((yield* lobbyOf(locked)).difficulty).toBe('Normal')
 
-        const unlocked = yield* createdBy(true)
-        yield* seat(unlocked, BO)
-        expect(yield* nightmare(unlocked, ANA)).toBe('Acked')
-        yield* push(unlocked, ANA, ChangedReady, { by: ANA, ready: true })
-        yield* push(unlocked, BO, ChangedReady, { by: BO, ready: true })
-        expect((yield* lobbyOf(unlocked)).status).toBe('Playing')
-        yield* unlocked.runServer(
+      const unlocked = yield* createdBy(true)
+      yield* seat(unlocked, BO)
+      expect(yield* nightmare(unlocked, ANA)).toBe('Acked')
+      yield* push(unlocked, ANA, ChangedReady, { by: ANA, ready: true })
+      yield* push(unlocked, BO, ChangedReady, { by: BO, ready: true })
+      expect((yield* lobbyOf(unlocked)).status).toBe('Playing')
+      yield* unlocked.runServer(
+        RecordedRoomResult,
+        { result: { round: 1, reason: 'Won', ticks: 9, scores: [] } },
+        'recorded-result-won',
+      )
+      const won = yield* lobbyOf(unlocked)
+      expect([won.mode, won.difficulty]).toEqual(['KeepGoing', 'Nightmare'])
+      yield* push(unlocked, BO, ChangedReady, { by: BO, ready: true })
+      yield* push(unlocked, ANA, LeftRoom, { by: ANA })
+      const handed = yield* lobbyOf(unlocked)
+      expect(handed.host).toBe(BO)
+      expect([handed.mode, handed.difficulty, handed.canKeepGoing]).toEqual([
+        'Endless',
+        'Hard',
+        false,
+      ])
+      expect(handed.members.map(member => member.ready)).toEqual([false])
+      expect(yield* nightmare(unlocked, BO)).toMatch(/Nightmare is locked/)
+    }),
+  )
+
+  it.effect('a won campaign offers to keep going until the crew changes', () =>
+    Effect.gen(function* () {
+      const server = yield* created
+      yield* seat(server, BO)
+      const record = (round: number, reason: 'Won' | 'GameOver') =>
+        server.runServer(
           RecordedRoomResult,
-          { result: { round: 1, reason: 'Won', ticks: 9, scores: [] } },
-          'recorded-result-won',
+          { result: { round, reason, ticks: 900, scores: [] } },
+          `recorded-result-${round}`,
         )
-        const won = yield* lobbyOf(unlocked)
-        expect([won.mode, won.difficulty]).toEqual(['KeepGoing', 'Nightmare'])
-        yield* push(unlocked, BO, ChangedReady, { by: BO, ready: true })
-        yield* push(unlocked, ANA, LeftRoom, { by: ANA })
-        const handed = yield* lobbyOf(unlocked)
-        expect(handed.host).toBe(BO)
-        expect([handed.mode, handed.difficulty, handed.canKeepGoing]).toEqual([
-          'Endless',
-          'Hard',
-          false,
-        ])
-        expect(handed.members.map(member => member.ready)).toEqual([false])
-        expect(yield* nightmare(unlocked, BO)).toMatch(/Nightmare is locked/)
-      }),
-    ))
-
-  test('a won campaign offers to keep going until the crew changes', () =>
-    run(
-      Effect.gen(function* () {
-        const server = yield* created
-        yield* seat(server, BO)
-        const record = (round: number, reason: 'Won' | 'GameOver') =>
-          server.runServer(
-            RecordedRoomResult,
-            { result: { round, reason, ticks: 900, scores: [] } },
-            `recorded-result-${round}`,
-          )
-        const playRound = Effect.gen(function* () {
-          yield* push(server, ANA, ChangedReady, { by: ANA, ready: true })
-          yield* push(server, BO, ChangedReady, { by: BO, ready: true })
-        })
-        yield* playRound
-        yield* record(1, 'Won')
-        const won = yield* lobbyOf(server)
-        expect([won.mode, won.canKeepGoing]).toEqual(['KeepGoing', true])
-        yield* push(server, ANA, ChangedPicks, {
-          by: ANA,
-          mode: 'Campaign',
-          difficulty: 'Normal',
-        })
-        expect(
-          yield* push(server, ANA, ChangedPicks, {
-            by: ANA,
-            mode: 'KeepGoing',
-            difficulty: 'Normal',
-          }),
-        ).toBe('Acked')
-        yield* playRound
-        expect((yield* lobbyOf(server)).mode).toBe('KeepGoing')
-        yield* record(2, 'GameOver')
-        const lost = yield* lobbyOf(server)
-        expect([lost.mode, lost.canKeepGoing]).toEqual(['Endless', false])
-        yield* push(server, ANA, ChangedPicks, {
-          by: ANA,
-          mode: 'Campaign',
-          difficulty: 'Normal',
-        })
-        yield* playRound
-        yield* record(3, 'Won')
+      const playRound = Effect.gen(function* () {
+        yield* push(server, ANA, ChangedReady, { by: ANA, ready: true })
         yield* push(server, BO, ChangedReady, { by: BO, ready: true })
-        yield* seat(server, CY)
-        const joined = yield* lobbyOf(server)
-        expect([joined.mode, joined.canKeepGoing]).toEqual(['Endless', false])
-        expect(joined.members.map(member => member.ready)).toEqual([
-          false,
-          false,
-          false,
-        ])
-      }),
-    ))
+      })
+      yield* playRound
+      yield* record(1, 'Won')
+      const won = yield* lobbyOf(server)
+      expect([won.mode, won.canKeepGoing]).toEqual(['KeepGoing', true])
+      yield* push(server, ANA, ChangedPicks, {
+        by: ANA,
+        mode: 'Campaign',
+        difficulty: 'Normal',
+      })
+      expect(
+        yield* push(server, ANA, ChangedPicks, {
+          by: ANA,
+          mode: 'KeepGoing',
+          difficulty: 'Normal',
+        }),
+      ).toBe('Acked')
+      yield* playRound
+      expect((yield* lobbyOf(server)).mode).toBe('KeepGoing')
+      yield* record(2, 'GameOver')
+      const lost = yield* lobbyOf(server)
+      expect([lost.mode, lost.canKeepGoing]).toEqual(['Endless', false])
+      yield* push(server, ANA, ChangedPicks, {
+        by: ANA,
+        mode: 'Campaign',
+        difficulty: 'Normal',
+      })
+      yield* playRound
+      yield* record(3, 'Won')
+      yield* push(server, BO, ChangedReady, { by: BO, ready: true })
+      yield* seat(server, CY)
+      const joined = yield* lobbyOf(server)
+      expect([joined.mode, joined.canKeepGoing]).toEqual(['Endless', false])
+      expect(joined.members.map(member => member.ready)).toEqual([
+        false,
+        false,
+        false,
+      ])
+    }),
+  )
 
-  test('a public room is open to QUICK PLAY only in its lobby with a seat', () =>
-    run(
+  it.effect(
+    'a public room is open to QUICK PLAY only in its lobby with a seat',
+    () =>
       Effect.gen(function* () {
         const server = yield* openServer
         yield* server.addMember(ANA)
@@ -455,10 +447,11 @@ describe('the room scope', () => {
         yield* seat(server, DEE)
         expect(isOpenToQuickPlay(yield* lobbyOf(server))).toBe(false)
       }),
-    ))
+  )
 
-  test('the host kicks; a host who leaves hands over; the last out closes', () =>
-    run(
+  it.effect(
+    'the host kicks; a host who leaves hands over; the last out closes',
+    () =>
       Effect.gen(function* () {
         const server = yield* created
         yield* seat(server, BO)
@@ -476,82 +469,85 @@ describe('the room scope', () => {
         expect(yield* push(server, BO, LeftRoom, { by: BO })).toBe('Acked')
         expect((yield* lobbyOf(server)).status).toBe('Closed')
       }),
-    ))
+  )
 
-  test('a Replica follows the room, as the game will', () =>
-    run(
-      Effect.gen(function* () {
-        const authenticate: Authenticate = token =>
-          token.length > 0
-            ? Effect.succeed(
-                Actor.cases.Device.make({
-                  playerId: token,
-                  deviceId: `${token}-d`,
-                }),
-              )
-            : Effect.fail(new Unauthorized({ reason: 'No token' }))
-        const host = yield* makeHost({
-          definitions: [RoomScope],
-          openDatabase,
-          authenticate,
-        })
-        const server = yield* host.server(SCOPE)
-        yield* server.addMember(ANA)
-        yield* server.runServer(
-          CreatedRoom,
-          {
-            code: CODE,
-            host: ANA,
-            hostName: 'Ana',
-            hostLook: 'Male.Crop.Brown.Light.Blue',
-            hostNightmare: false,
-            mode: 'Campaign',
-            visibility: 'Private',
-          },
-          'created-room',
-        )
-        yield* seat(server, BO)
-        const hub = yield* makeHub()
-        const context = yield* Effect.orDie(Layer.build(hub.layer()))
-        const client = Context.get(context, SqliteClient)
-        const replica = yield* makeReplica({
-          definition: RoomScope,
-          database: {
-            sql: client.sql,
-            changes: client.changes,
-            role: Effect.succeed('Leader'),
-          },
-          scope: SCOPE,
-        })
-        const network = yield* host.network()
-        yield* startSync({
-          replica,
-          transports: [network.transport],
-          credentials: Effect.succeed({ token: BO, clientId: 'bo-tab' }),
-          backoff: Schedule.spaced('15 millis'),
-        })
-        yield* Stream.runHead(
-          Stream.filter(replica.status, status => status._tag === 'Ready'),
-        ).pipe(Effect.timeout('10 seconds'))
-        yield* replica.run(ChangedReady, { by: BO, ready: true })
-        const ready = yield* Stream.runHead(
-          Stream.filterEffect(
-            Stream.concat(Stream.make(undefined), replica.remoteChanges),
-            () =>
-              Effect.map(
-                Effect.orDie(
-                  client.sql`SELECT ready FROM members WHERE player_id = ${BO}`,
-                ),
-                rows => rows[0]?.['ready'] === 1,
+  it.effect('a Replica follows the room, as the game will', () =>
+    Effect.gen(function* () {
+      const authenticate: Authenticate = token =>
+        token.length > 0
+          ? Effect.succeed(
+              Actor.cases.Device.make({
+                playerId: token,
+                deviceId: `${token}-d`,
+              }),
+            )
+          : Effect.fail(new Unauthorized({ reason: 'No token' }))
+      const host = yield* makeHost({
+        definitions: [RoomScope],
+        openDatabase,
+        authenticate,
+      })
+      const server = yield* host.server(SCOPE)
+      yield* server.addMember(ANA)
+      yield* server.runServer(
+        CreatedRoom,
+        {
+          code: CODE,
+          host: ANA,
+          hostName: 'Ana',
+          hostLook: 'Male.Crop.Brown.Light.Blue',
+          hostNightmare: false,
+          mode: 'Campaign',
+          visibility: 'Private',
+        },
+        'created-room',
+      )
+      yield* seat(server, BO)
+      const hub = yield* makeHub()
+      const context = yield* Effect.orDie(Layer.build(hub.layer()))
+      const client = Context.get(context, SqliteClient)
+      const replica = yield* makeReplica({
+        definition: RoomScope,
+        database: {
+          sql: client.sql,
+          changes: client.changes,
+          role: Effect.succeed('Leader'),
+        },
+        scope: SCOPE,
+      })
+      const network = yield* host.network()
+      yield* startSync({
+        replica,
+        transports: [network.transport],
+        credentials: Effect.succeed({ token: BO, clientId: 'bo-tab' }),
+        backoff: Schedule.spaced('15 millis'),
+      })
+      yield* first(replica.status, status => status._tag === 'Ready')
+      yield* replica.run(ChangedReady, { by: BO, ready: true })
+      // NOTE: the row reads ready on the device, then on the server.
+      yield* first(
+        Stream.filterEffect(
+          Stream.concat(Stream.make(undefined), replica.remoteChanges),
+          () =>
+            Effect.map(
+              Effect.orDie(
+                client.sql`SELECT ready FROM members WHERE player_id = ${BO}`,
               ),
-          ),
-        ).pipe(Effect.timeout('10 seconds'))
-        expect(Option.isSome(ready)).toBe(true)
-        yield* Effect.sleep('100 millis')
-        const lobby = yield* lobbyOf(server)
-        expect(
-          lobby.members.find(member => member.playerId === BO)?.ready,
-        ).toBe(true)
-      }),
-    ))
+              rows => rows[0]?.['ready'] === 1,
+            ),
+        ),
+        () => true,
+      )
+      const lobby = yield* settle(
+        Effect.repeat(lobbyOf(server), {
+          until: ({ members }) =>
+            members.find(member => member.playerId === BO)?.ready === true,
+          schedule: Schedule.spaced('10 millis'),
+        }),
+      )
+      expect(lobby.members.find(member => member.playerId === BO)?.ready).toBe(
+        true,
+      )
+    }),
+  )
 })

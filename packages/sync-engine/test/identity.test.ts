@@ -1,6 +1,7 @@
 import { Effect, Exit, Option, type Scope } from 'effect'
 import { SqlClient } from 'effect/sql'
-import { describe, expect, test } from 'vitest'
+
+import { describe, expect, it, test } from '@effect/vitest'
 
 import {
   ATTEMPT_WINDOW_MS,
@@ -30,7 +31,7 @@ import {
   verifySignature,
   verifyToken,
 } from '../src/index'
-import { openServerDatabase, run } from './fixtures'
+import { openServerDatabase } from './fixtures'
 
 const SECRET = 'test-secret-that-is-long-enough'
 
@@ -71,48 +72,46 @@ describe('pairing codes', () => {
 })
 
 describe('tokens and keys', () => {
-  test('a token carries its claims and fails when forged or expired', () =>
-    run(
-      Effect.gen(function* () {
-        const claims = {
-          deviceId: 'device',
-          playerId: 'player',
-          expiresMs: 5_000,
-        }
-        const token = yield* signToken(SECRET, claims)
-        expect(yield* verifyToken(SECRET, token, 1_000)).toEqual(claims)
-        const expired = yield* Effect.exit(verifyToken(SECRET, token, 5_000))
-        const forged = yield* Effect.exit(
-          verifyToken('another-secret', token, 1_000),
-        )
-        const [body] = token.split('.')
-        const tampered = yield* Effect.exit(
-          verifyToken(SECRET, `${body}x.${token.split('.')[1]}`, 1_000),
-        )
-        expect(Exit.isFailure(expired)).toBe(true)
-        expect(Exit.isFailure(forged)).toBe(true)
-        expect(Exit.isFailure(tampered)).toBe(true)
-      }),
-    ))
+  it.effect('a token carries its claims and fails when forged or expired', () =>
+    Effect.gen(function* () {
+      const claims = {
+        deviceId: 'device',
+        playerId: 'player',
+        expiresMs: 5_000,
+      }
+      const token = yield* signToken(SECRET, claims)
+      expect(yield* verifyToken(SECRET, token, 1_000)).toEqual(claims)
+      const expired = yield* Effect.exit(verifyToken(SECRET, token, 5_000))
+      const forged = yield* Effect.exit(
+        verifyToken('another-secret', token, 1_000),
+      )
+      const [body] = token.split('.')
+      const tampered = yield* Effect.exit(
+        verifyToken(SECRET, `${body}x.${token.split('.')[1]}`, 1_000),
+      )
+      expect(Exit.isFailure(expired)).toBe(true)
+      expect(Exit.isFailure(forged)).toBe(true)
+      expect(Exit.isFailure(tampered)).toBe(true)
+    }),
+  )
 
-  test('a device key signs what only its public key verifies', () =>
-    run(
-      Effect.gen(function* () {
-        const stored = yield* generateKey
-        const other = yield* generateKey
-        const key = yield* importKey(stored)
-        const signature = yield* key.sign('hello')
-        expect(
-          yield* verifySignature(stored.publicKey, 'hello', signature),
-        ).toBe(true)
-        expect(
-          yield* verifySignature(stored.publicKey, 'hellO', signature),
-        ).toBe(false)
-        expect(
-          yield* verifySignature(other.publicKey, 'hello', signature),
-        ).toBe(false)
-      }),
-    ))
+  it.effect('a device key signs what only its public key verifies', () =>
+    Effect.gen(function* () {
+      const stored = yield* generateKey
+      const other = yield* generateKey
+      const key = yield* importKey(stored)
+      const signature = yield* key.sign('hello')
+      expect(yield* verifySignature(stored.publicKey, 'hello', signature)).toBe(
+        true,
+      )
+      expect(yield* verifySignature(stored.publicKey, 'hellO', signature)).toBe(
+        false,
+      )
+      expect(yield* verifySignature(other.publicKey, 'hello', signature)).toBe(
+        false,
+      )
+    }),
+  )
 })
 
 const directoryApi = (
@@ -156,27 +155,25 @@ const withDirectory = <A, E>(
     clock: { now: number },
   ) => Effect.Effect<A, E, Scope.Scope>,
 ) =>
-  run(
-    Effect.gen(function* () {
-      const sql = yield* openServerDatabase()
-      const directory = yield* Effect.provideService(
-        makeDirectory(SECRET),
-        SqlClient.SqlClient,
-        sql,
-      )
-      const clock = { now: 1_000_000 }
-      return yield* body(
-        directoryApi(directory, () => clock.now),
-        clock,
-      )
-    }),
-  )
+  Effect.gen(function* () {
+    const sql = yield* openServerDatabase()
+    const directory = yield* Effect.provideService(
+      makeDirectory(SECRET),
+      SqlClient.SqlClient,
+      sql,
+    )
+    const clock = { now: 1_000_000 }
+    return yield* body(
+      directoryApi(directory, () => clock.now),
+      clock,
+    )
+  })
 
 const openIdentity = (api: IdentityApi) =>
   Effect.flatMap(openServerDatabase(), sql => makeDeviceIdentity({ sql, api }))
 
 describe('device identity and linking', () => {
-  test('a device registers with the player id it made, and keeps it', () =>
+  it.effect('a device registers with the player id it made, and keeps it', () =>
     withDirectory(api =>
       Effect.gen(function* () {
         const device = yield* openIdentity(api)
@@ -189,9 +186,10 @@ describe('device identity and linking', () => {
         expect(second.deviceId).toBe(first.deviceId)
         expect(second.playerId).toBe(playerId)
       }),
-    ))
+    ),
+  )
 
-  test('a signature for another nonce or player id is refused', () =>
+  it.effect('a signature for another nonce or player id is refused', () =>
     withDirectory(api =>
       Effect.gen(function* () {
         const stored = yield* generateKey
@@ -210,85 +208,91 @@ describe('device identity and linking', () => {
         )
         expect(refused.failure._tag).toBe('Unauthorized')
       }),
-    ))
+    ),
+  )
 
-  test("a code links a second device to the first device's player, once", () =>
-    withDirectory((api, clock) =>
-      Effect.gen(function* () {
-        const phone = yield* openIdentity(api)
-        const laptop = yield* openIdentity(api)
-        const phonePlayer = (yield* phone.session).playerId
-        const laptopBefore = (yield* laptop.session).playerId
-        expect(laptopBefore).not.toBe(phonePlayer)
-        const { code, expiresMs } = yield* phone.createLinkCode
-        expect(expiresMs - clock.now).toBe(CODE_TTL_MS)
-        const linked = yield* laptop.redeem(code.toLowerCase())
-        expect(linked.playerId).toBe(phonePlayer)
-        expect(linked.devices).toBe(2)
-        expect(yield* laptop.playerId).toBe(phonePlayer)
-        const again = yield* Effect.flip(laptop.redeem(code))
-        expect(again.failure._tag).toBe('WrongCode')
-      }),
-    ))
+  it.effect(
+    "a code links a second device to the first device's player, once",
+    () =>
+      withDirectory((api, clock) =>
+        Effect.gen(function* () {
+          const phone = yield* openIdentity(api)
+          const laptop = yield* openIdentity(api)
+          const phonePlayer = (yield* phone.session).playerId
+          const laptopBefore = (yield* laptop.session).playerId
+          expect(laptopBefore).not.toBe(phonePlayer)
+          const { code, expiresMs } = yield* phone.createLinkCode
+          expect(expiresMs - clock.now).toBe(CODE_TTL_MS)
+          const linked = yield* laptop.redeem(code.toLowerCase())
+          expect(linked.playerId).toBe(phonePlayer)
+          expect(linked.devices).toBe(2)
+          expect(yield* laptop.playerId).toBe(phonePlayer)
+          const again = yield* Effect.flip(laptop.redeem(code))
+          expect(again.failure._tag).toBe('WrongCode')
+        }),
+      ),
+  )
 
-  test('an expired code is refused, and guessing gets a device locked out', () =>
-    withDirectory((api, clock) =>
-      Effect.gen(function* () {
-        const phone = yield* openIdentity(api)
-        const laptop = yield* openIdentity(api)
-        yield* laptop.session
-        const { code } = yield* phone.createLinkCode
-        clock.now += CODE_TTL_MS
-        const late = yield* Effect.flip(laptop.redeem(code))
-        expect(late.failure._tag).toBe('WrongCode')
-        const fresh = yield* phone.createLinkCode
-        yield* Effect.forEach(['AAAAAA', 'BBBBBB', 'CCCCCC', 'DDDDDD'], guess =>
-          Effect.flip(laptop.redeem(guess)),
-        )
-        const locked = yield* Effect.flip(laptop.redeem(fresh.code))
-        expect(locked.failure._tag).toBe('TooManyTries')
-      }),
-    ))
+  it.effect(
+    'an expired code is refused, and guessing gets a device locked out',
+    () =>
+      withDirectory((api, clock) =>
+        Effect.gen(function* () {
+          const phone = yield* openIdentity(api)
+          const laptop = yield* openIdentity(api)
+          yield* laptop.session
+          const { code } = yield* phone.createLinkCode
+          clock.now += CODE_TTL_MS
+          const late = yield* Effect.flip(laptop.redeem(code))
+          expect(late.failure._tag).toBe('WrongCode')
+          const fresh = yield* phone.createLinkCode
+          yield* Effect.forEach(
+            ['AAAAAA', 'BBBBBB', 'CCCCCC', 'DDDDDD'],
+            guess => Effect.flip(laptop.redeem(guess)),
+          )
+          const locked = yield* Effect.flip(laptop.redeem(fresh.code))
+          expect(locked.failure._tag).toBe('TooManyTries')
+        }),
+      ),
+  )
 })
 
 describe('the wire protocol', () => {
-  test('client and server messages round trip as JSON', () =>
-    run(
-      Effect.gen(function* () {
-        const hello = {
-          _tag: 'Hello' as const,
-          protocol: 1,
-          scope: 'player:abc',
-          lastSeq: 3,
-          mode: 'Catchup' as const,
-          clientId: 'tab',
-          token: 'token',
-          versions: { ChangedSettings: 1 },
-        }
-        const json = yield* encodeClientMessage(hello)
-        expect(yield* decodeClientMessage(json)).toEqual(hello)
-        const ack = { _tag: 'Acked' as const, id: 'mutation-0001', seq: 4 }
-        expect(
-          yield* decodeServerMessage(yield* encodeServerMessage(ack)),
-        ).toEqual(ack)
-        expect(ClientMessageJson).toBeDefined()
-        expect(ServerMessageJson).toBeDefined()
-      }),
-    ))
+  it.effect('client and server messages round trip as JSON', () =>
+    Effect.gen(function* () {
+      const hello = {
+        _tag: 'Hello' as const,
+        protocol: 1,
+        scope: 'player:abc',
+        lastSeq: 3,
+        mode: 'Catchup' as const,
+        clientId: 'tab',
+        token: 'token',
+        versions: { ChangedSettings: 1 },
+      }
+      const json = yield* encodeClientMessage(hello)
+      expect(yield* decodeClientMessage(json)).toEqual(hello)
+      const ack = { _tag: 'Acked' as const, id: 'mutation-0001', seq: 4 }
+      expect(
+        yield* decodeServerMessage(yield* encodeServerMessage(ack)),
+      ).toEqual(ack)
+      expect(ClientMessageJson).toBeDefined()
+      expect(ServerMessageJson).toBeDefined()
+    }),
+  )
 
-  test('malformed messages are refused', () =>
-    run(
-      Effect.gen(function* () {
-        const bad = yield* Effect.exit(
-          decodeClientMessage('{"_tag":"Push","mutations":[{"id":"x"}]}'),
-        )
-        const shortId = yield* Effect.exit(
-          decodeServerMessage('{"_tag":"Acked","id":"short","seq":1}'),
-        )
-        const notJson = yield* Effect.exit(decodeClientMessage('nope'))
-        expect(Exit.isFailure(bad)).toBe(true)
-        expect(Exit.isFailure(shortId)).toBe(true)
-        expect(Exit.isFailure(notJson)).toBe(true)
-      }),
-    ))
+  it.effect('malformed messages are refused', () =>
+    Effect.gen(function* () {
+      const bad = yield* Effect.exit(
+        decodeClientMessage('{"_tag":"Push","mutations":[{"id":"x"}]}'),
+      )
+      const shortId = yield* Effect.exit(
+        decodeServerMessage('{"_tag":"Acked","id":"short","seq":1}'),
+      )
+      const notJson = yield* Effect.exit(decodeClientMessage('nope'))
+      expect(Exit.isFailure(bad)).toBe(true)
+      expect(Exit.isFailure(shortId)).toBe(true)
+      expect(Exit.isFailure(notJson)).toBe(true)
+    }),
+  )
 })
