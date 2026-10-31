@@ -10,9 +10,10 @@ import {
   text,
 } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
-import { describe, test } from 'vitest'
+import { describe, test, expect as vitestExpect } from 'vitest'
 
 import { levelOf, openExitIn } from './arena'
+import { cameraOf, screenCameraOf } from './camera'
 import { FIXED_STEP_MS } from './constants'
 import { EXIT_RULES, KITCHEN_EXIT } from './exits'
 import { FRIDGE_RULES, fridgeBoxOf } from './leftovers'
@@ -24,7 +25,8 @@ import {
   Phase,
   initialModel,
 } from './model'
-import { pastTimedBreaks } from './model.fixture'
+import { inPortrait, pastTimedBreaks } from './model.fixture'
+import { purchaseOverlayShapes } from './purchaseView'
 import {
   HOLD_TICKS,
   ROOT,
@@ -158,5 +160,25 @@ describe('taking a fridge prize on touch', () => {
         Message.ReleasedPointer({ pointerId: 4 }),
       ),
     )
+  })
+})
+
+describe('the price tag in a zoomed phone window', () => {
+  const tagsFor = (model: Model) =>
+    purchaseOverlayShapes(model, screenCameraOf(model))
+  const upright = (y: number): Model =>
+    inPortrait(
+      modifyFields(atBoards('Touch', 85), {
+        player: player => modifyFields(player, { y: () => y }),
+      }),
+    )
+
+  test('hangs on the boards while the window shows them', () => {
+    vitestExpect(tagsFor(upright(26))).not.toHaveLength(0)
+  })
+
+  test('is not drawn over the HUD band once the window has followed the player away', () => {
+    vitestExpect(cameraOf(upright(170)).y).toBeGreaterThan(40)
+    vitestExpect(tagsFor(upright(170))).toHaveLength(0)
   })
 })

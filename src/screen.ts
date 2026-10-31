@@ -33,6 +33,18 @@ export const LANDSCAPE_SCREEN: Screen = {
   zoom: 1,
 }
 
+// NOTE: a phone on its side draws the world 4/3 bigger than a desktop, so a
+// zombie reads at a glance while a thumb steers (owner, 2026-10-30). The
+// window shows 240 by 135 of the room, whole pixels, stretched over the same
+// 320 by 180 screen, so the HUD on it keeps its size. A keyboard and mouse
+// keep the whole 320 by 180 in any window.
+const LANDSCAPE_TOUCH_ZOOM = 4 / 3
+
+export const LANDSCAPE_TOUCH_SCREEN: Screen = {
+  ...LANDSCAPE_SCREEN,
+  zoom: LANDSCAPE_TOUCH_ZOOM,
+}
+
 // NOTE: a portrait screen is as many arena pixels wide as a landscape phone
 // is tall, so the HUD, the banners, and the cards keep the scale they have
 // when the phone is turned. Its height follows the phone's shape, the HUD
@@ -47,33 +59,36 @@ const PORTRAIT_MIN_HEIGHT =
 const PORTRAIT_MAX_HEIGHT = 440
 const PORTRAIT_DEFAULT_HEIGHT = 390
 
-// NOTE: the world window always shows the room's full 180 pixel height.
-// Zooming in makes it taller on the screen and narrower in the room. These
-// are the room widths it can show, widest first. Each one makes the window a
-// whole number of screen pixels tall (180 * 180 / width), so the window, the
-// camera, and the zoom stay exact.
-const PORTRAIT_VIEW_WIDTHS: ReadonlyArray<number> = [
-  180, 162, 150, 144, 135, 120,
+// NOTE: the world window shows the room 128 rows high, across
+// 180 * 128 / height of its width, so a taller window zooms in further.
+// Changed on 2026-10-30 at the owner's request, from the room's full 180
+// rows: a phone held upright draws a Groaner about 1.4 times as big as it
+// did. These are the window heights, shortest first. Each one shows a whole
+// number of the room's columns (96 to 128), so the window, the camera, and
+// the zoom stay exact.
+export const PORTRAIT_VIEW_ROWS = 128
+
+const PORTRAIT_WINDOW_HEIGHTS: Array.NonEmptyReadonlyArray<number> = [
+  VIEW_HEIGHT,
+  192,
+  240,
+  256,
 ]
 
-type WorldWindow = Readonly<{ viewWidth: number; height: number }>
+const fitsThumbs = (screenHeight: number, windowHeight: number): boolean =>
+  screenHeight - PORTRAIT_HUD_PX - windowHeight >= PORTRAIT_MIN_THUMB_PX &&
+  windowHeight <= screenHeight * PORTRAIT_MAX_WORLD_SHARE
 
-const windowFor = (viewWidth: number): WorldWindow => ({
-  viewWidth,
-  height: Math.round((PORTRAIT_WIDTH * VIEW_HEIGHT) / viewWidth),
-})
-
-const fitsThumbs = (screenHeight: number, window: WorldWindow): boolean =>
-  screenHeight - PORTRAIT_HUD_PX - window.height >= PORTRAIT_MIN_THUMB_PX &&
-  window.height <= screenHeight * PORTRAIT_MAX_WORLD_SHARE
-
-// NOTE: the most zoom that still leaves a thumb area at least 76 pixels tall
-// and keeps the world window under two thirds of the screen. A 390 or 400
-// pixel screen (390x844, 430x932, 360x800) shows 135 of the room's 320
-// pixel width at 4/3 zoom, and a 320 pixel one (375x667) shows 162 at 10/9.
-const portraitWindowFor = (screenHeight: number): WorldWindow =>
-  Array.reduce(PORTRAIT_VIEW_WIDTHS, windowFor(VIEW_HEIGHT), (best, width) =>
-    fitsThumbs(screenHeight, windowFor(width)) ? windowFor(width) : best,
+// NOTE: the tallest window that still leaves a thumb area at least 76
+// pixels tall and keeps the world window under two thirds of the screen. A
+// 390 or 400 pixel screen (390x844, 430x932, 360x800) gets a 240 pixel
+// window, which shows 96 by 128 of the room at 15/8, and a 320 pixel one
+// (375x667) a 192 pixel window, 120 by 128 at 3/2.
+const portraitWindowFor = (screenHeight: number): number =>
+  Array.reduce(
+    PORTRAIT_WINDOW_HEIGHTS,
+    Array.headNonEmpty(PORTRAIT_WINDOW_HEIGHTS),
+    (best, height) => (fitsThumbs(screenHeight, height) ? height : best),
   )
 
 export const portraitHeightFor = (surface: SurfaceRectangle): number =>
@@ -86,7 +101,7 @@ export const portraitHeightFor = (surface: SurfaceRectangle): number =>
     : PORTRAIT_DEFAULT_HEIGHT
 
 export const portraitScreen = (height: number): Screen => {
-  const window = portraitWindowFor(height)
+  const windowHeight = portraitWindowFor(height)
   return {
     layout: 'Portrait',
     width: PORTRAIT_WIDTH,
@@ -95,9 +110,9 @@ export const portraitScreen = (height: number): Screen => {
       x: 0,
       y: PORTRAIT_HUD_PX,
       width: PORTRAIT_WIDTH,
-      height: window.height,
+      height: windowHeight,
     },
-    zoom: PORTRAIT_WIDTH / window.viewWidth,
+    zoom: windowHeight / PORTRAIT_VIEW_ROWS,
   }
 }
 
@@ -111,15 +126,20 @@ const layoutOf = (model: Model): Layout =>
 export const isPortrait = (model: Model): boolean =>
   layoutOf(model) === 'Portrait'
 
-export const screenOf = (model: Model): Screen =>
-  isPortrait(model)
-    ? portraitScreen(
-        Option.match(model.maybeSurface, {
-          onNone: () => PORTRAIT_DEFAULT_HEIGHT,
-          onSome: portraitHeightFor,
-        }),
-      )
-    : LANDSCAPE_SCREEN
+export const screenOf = (model: Model): Screen => {
+  if (isPortrait(model)) {
+    return portraitScreen(
+      Option.match(model.maybeSurface, {
+        onNone: () => PORTRAIT_DEFAULT_HEIGHT,
+        onSome: portraitHeightFor,
+      }),
+    )
+  } else if (model.lastDevice === 'Touch') {
+    return LANDSCAPE_TOUCH_SCREEN
+  } else {
+    return LANDSCAPE_SCREEN
+  }
+}
 
 export const thumbAreaTop = (screen: Screen): number =>
   screen.world.y + screen.world.height

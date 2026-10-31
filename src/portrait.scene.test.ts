@@ -222,6 +222,49 @@ describe('turning the phone', () => {
   })
 })
 
+describe('the world zoom on phones', () => {
+  const worldCanvas = selector('.game-canvas')
+  const worldWindow = selector('.world-window')
+
+  test('a phone on its side draws 240 by 135 of the room over the whole screen', () => {
+    scene(
+      ROOT,
+      given(fighting),
+      measure(PHONE_LANDSCAPE),
+      expect(root).toHaveAttr('data-layout', 'Landscape'),
+      expect(worldCanvas).toHaveAttr('width', '240'),
+      expect(worldCanvas).toHaveAttr('height', '135'),
+      expect(worldWindow).toHaveStyle('width', '100%'),
+      expect(worldWindow).toHaveStyle('height', '100%'),
+    )
+  })
+
+  test('a phone held upright draws 96 by 128 of the room in the window over the thumbs', () => {
+    scene(
+      ROOT,
+      given(fighting),
+      measure(PHONE_PORTRAIT),
+      expect(root).toHaveAttr('data-layout', 'Portrait'),
+      expect(worldCanvas).toHaveAttr('width', '96'),
+      expect(worldCanvas).toHaveAttr('height', '128'),
+      expect(worldWindow).toHaveStyle('height', `${(240 / 390) * 100}%`),
+      expect(selector('.thumb-area')).toExist(),
+    )
+  })
+
+  test('a keyboard and mouse draw the whole room, in a wide or a tall window', () => {
+    Array.forEach([PHONE_LANDSCAPE, PHONE_PORTRAIT], surface => {
+      scene(
+        ROOT,
+        given(modifyFields(fighting, { lastDevice: () => 'KeyboardMouse' })),
+        measure(surface),
+        expect(worldCanvas).toHaveAttr('width', '320'),
+        expect(worldCanvas).toHaveAttr('height', '180'),
+      )
+    })
+  })
+})
+
 describe('the portrait home menu', () => {
   test('keeps every slot: the player, the MORE deck, and PLAY with its mode and difficulty, and no bests badge before a best', () => {
     scene(
