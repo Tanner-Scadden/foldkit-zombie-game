@@ -50,6 +50,7 @@ const maybeShownOffer = (model: Model): Option.Option<Offer> =>
         maybeOfferInReach(model),
       ),
     Done: () => maybeOfferInReach(model),
+    Spent: () => maybeOfferInReach(model),
   })
 
 const isRefusedAt = (model: Model, offer: Offer): boolean =>
@@ -60,6 +61,7 @@ const isRefusedAt = (model: Model, offer: Offer): boolean =>
       isSamePurchasable(target, offer.target) &&
       sinceMs < PURCHASE_RULES.refusedMs,
     Done: () => false,
+    Spent: () => false,
   })
 
 const progressAt = (model: Model, offer: Offer): number =>
@@ -71,6 +73,7 @@ const progressAt = (model: Model, offer: Offer): number =>
         : 0,
     Refused: () => 0,
     Done: () => 0,
+    Spent: () => 0,
   })
 
 // NOTE: the button is held, not clicked: the finger that lands on it holds
@@ -141,8 +144,8 @@ const announcementOf = (model: Model, offer: Offer): string => {
   const shortBy = shortfallFor(model, offer)
   const how =
     model.lastDevice === 'Touch'
-      ? 'Hold the button to buy.'
-      : 'Hold Enter to buy.'
+      ? 'Stand still or hold the button to buy.'
+      : 'Stand still or hold Enter to buy.'
   return shortBy > 0
     ? `${nameOf(offer.target)}, ${offer.price} dollars. ${shortBy} dollars short.`
     : `${nameOf(offer.target)}, ${offer.price} dollars. ${how}`

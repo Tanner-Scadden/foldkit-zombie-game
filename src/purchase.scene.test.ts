@@ -104,7 +104,9 @@ describe('holding to buy on a keyboard', () => {
       measureSurface,
       expect(holdButton).toBeAbsent(),
       expect(
-        text(`the kitchen, ${EXIT_RULES.price} dollars. Hold Enter to buy.`),
+        text(
+          `the kitchen, ${EXIT_RULES.price} dollars. Stand still or hold Enter to buy.`,
+        ),
       ).toExist(),
     )
   })

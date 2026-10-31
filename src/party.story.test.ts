@@ -38,7 +38,13 @@ import { asVeteran } from './veteran'
 import { beginPreparation, rollSpawns, waveBonus } from './waves'
 import { WEAPONS } from './weapons'
 import { type World, withWorld } from './world'
-import { Purchasable, Purchase, type Seat, idleIntent } from './worldSchema'
+import {
+  type Intent,
+  Purchasable,
+  Purchase,
+  type Seat,
+  idleIntent,
+} from './worldSchema'
 import { ZOMBIE_KINDS } from './zombies'
 
 // Co-op's World rules (MULTIPLAYER.md, Phase 1), played through `update`
@@ -357,24 +363,35 @@ describe('money', () => {
   const DOOR_Y = 26
   const HOLD_TICKS = Math.ceil(PURCHASE_RULES.holdMs / TICK_MS) + 2
 
-  const holding = (slots: ReadonlyArray<number>) =>
-    new Map(
-      Array.map(slots, slot => [
+  // NOTE: the seats in `firing` shoot the whole time, so standing at the
+  // door does not buy for them (src/purchase.ts).
+  const holding = (
+    slots: ReadonlyArray<number>,
+    firing: ReadonlyArray<number> = [],
+  ) =>
+    new Map<number, Intent>([
+      ...Array.map(firing, slot => [
+        slot,
+        { ...idleIntent, trigger: 'Held' as const },
+      ] as const),
+      ...Array.map(slots, slot => [
         slot,
         { ...idleIntent, interact: 'Held' as const },
-      ]),
-    )
+      ] as const),
+    ])
 
   const holdFor = (
     current: Model,
     slots: ReadonlyArray<number>,
     count: number,
+    firing: ReadonlyArray<number> = [],
   ): Model =>
     withWorld(current, world =>
       Array.reduce(
         Array.makeBy(count, () => slots),
         world,
-        (stepped, holders) => stepWorld(stepped, holding(holders)).world,
+        (stepped, holders) =>
+          stepWorld(stepped, holding(holders, firing)).world,
       ),
     )
 
@@ -391,7 +408,7 @@ describe('money', () => {
       placed(0, DOOR_X - 8, DOOR_Y),
       placed(1, DOOR_X + 8, DOOR_Y),
     )(crewOf(2, preparation))
-    const halfway = holdFor(atDoor, [1], Math.floor(HOLD_TICKS / 2))
+    const halfway = holdFor(atDoor, [1], Math.floor(HOLD_TICKS / 2), [0])
     expect(levelOf(halfway).key).toBe(levelOf(atDoor).key)
     expect(
       Purchase.isAnyOf(['Holding'])(seatWorldOf(halfway, 1).purchase),
@@ -399,7 +416,34 @@ describe('money', () => {
     expect(Purchase.isAnyOf(['Idle'])(seatWorldOf(halfway, 0).purchase)).toBe(
       true,
     )
-    const bought = holdFor(atDoor, [1], HOLD_TICKS)
+    const bought = holdFor(atDoor, [1], HOLD_TICKS, [0])
+    expect(seatedAt(bought, 1).wallet.balance).toBe(100 - EXIT_RULES.price)
+    expect(seatedAt(bought, 0).wallet.balance).toBe(100)
+    expect(levelOf(bought).key).not.toBe(levelOf(atDoor).key)
+  })
+
+  test('a seat standing still at a door buys it alone, while a teammate shooting beside it never does', () => {
+    const preparation = Phase.Preparation({
+      wave: 3,
+      remainingMs: 30_000,
+      durationMs: 30_000,
+      spawns: [],
+    })
+    const atDoor = pipeline(
+      withMoney(0, 100),
+      withMoney(1, 100),
+      placed(0, DOOR_X - 8, DOOR_Y),
+      placed(1, DOOR_X + 8, DOOR_Y),
+    )(crewOf(2, preparation))
+    const standTicks = Math.ceil(PURCHASE_RULES.standMs / TICK_MS) + 2
+    const halfway = holdFor(atDoor, [], Math.floor(standTicks / 2), [0])
+    expect(
+      Purchase.isAnyOf(['Holding'])(seatWorldOf(halfway, 1).purchase),
+    ).toBe(true)
+    expect(Purchase.isAnyOf(['Idle'])(seatWorldOf(halfway, 0).purchase)).toBe(
+      true,
+    )
+    const bought = holdFor(atDoor, [], standTicks, [0])
     expect(seatedAt(bought, 1).wallet.balance).toBe(100 - EXIT_RULES.price)
     expect(seatedAt(bought, 0).wallet.balance).toBe(100)
     expect(levelOf(bought).key).not.toBe(levelOf(atDoor).key)
@@ -439,7 +483,7 @@ describe('money', () => {
       withMoney(1, 100),
       placed(1, DOOR_X, DOOR_Y),
     )(crewOf(2, fighting))
-    const bought = holdFor(atDoor, [1], HOLD_TICKS)
+    const bought = holdFor(atDoor, [1], HOLD_TICKS, [0])
     expect(seatedAt(bought, 1).wallet.balance).toBe(100 - EXIT_RULES.price)
     expect(seatedAt(bought, 0).wallet.balance).toBe(100)
     expect(levelOf(bought).key).not.toBe(levelOf(atDoor).key)

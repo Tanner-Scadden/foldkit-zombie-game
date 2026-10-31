@@ -358,6 +358,7 @@ const offerShapes =
           ? refusedShapes(offer, tag, shortBy, sinceMs)
           : [tagShape, ...prompt],
       Done: () => [tagShape],
+      Spent: () => [tagShape, ...prompt],
     })
     return [...shapes, ...replaced]
   }

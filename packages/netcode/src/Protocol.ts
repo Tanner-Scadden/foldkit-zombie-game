@@ -40,8 +40,11 @@ import {
 // the pistol back, whose code follows the old ones.
 // Version 8: the boss's brace target and rush length go as positions, not
 // unit values, so a client draws the charge lane where the room aims it.
-export const PROTOCOL_VERSION = 8
-export const MIN_PROTOCOL_VERSION = 8
+// Version 9: standing still buys as the hold does (src/purchase.ts), and a
+// seat's purchase can be Spent, waiting for its player to move before
+// standing buys again; a version 8 client cannot read it.
+export const PROTOCOL_VERSION = 9
+export const MIN_PROTOCOL_VERSION = 9
 
 // NOTE: a round trip as the wire carries it, in whole ms.
 export const MAX_RTT_MS = 60_000

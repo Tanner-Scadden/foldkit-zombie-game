@@ -1225,9 +1225,12 @@ export const Purchasable = defineTaggedUnion({
 })
 export type Purchasable = typeof Purchasable.Type
 
-// NOTE: one player's hold at a purchasable. Holding fills toward the buy;
+// NOTE: one player's hold at a purchasable. Holding fills toward the buy,
+// from the key held or the player standing still (src/purchase.ts);
 // Refused is a press the wallet could not cover, shaking for a moment;
-// Done waits for the key to be let go after a buy, so one hold buys once.
+// Done waits for the key to be let go after a buy, so one hold buys once;
+// Spent waits for a player who bought and stands still to move before
+// standing buys again, so one buy never chains into the next.
 export const Purchase = defineTaggedUnion({
   Idle: {},
   Holding: { target: Purchasable, heldMs: MillisNumber },
@@ -1237,6 +1240,7 @@ export const Purchase = defineTaggedUnion({
     sinceMs: MillisNumber,
   },
   Done: {},
+  Spent: {},
 })
 export type Purchase = typeof Purchase.Type
 

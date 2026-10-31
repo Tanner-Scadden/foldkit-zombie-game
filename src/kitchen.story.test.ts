@@ -167,7 +167,7 @@ describe('holding to buy the kitchen open', () => {
       release('Enter'),
       tick(FRAME_MS),
       model(current => {
-        expect(current.purchase).toEqual(Purchase.Idle())
+        expect(current.purchase).toEqual(Purchase.Spent())
       }),
     )
   })
@@ -187,18 +187,20 @@ describe('holding to buy the kitchen open', () => {
     )
   })
 
-  test('letting go before the ring fills cancels, and the next hold starts over', () => {
+  test('letting go and stepping off before the ring fills cancels, and the next hold starts over', () => {
     story(
       update,
       given(inBreak(3, 85)),
       press('Enter'),
       ...ticks(HOLD_TICKS - 6, FRAME_MS),
+      press('KeyD'),
       release('Enter'),
       tick(FRAME_MS),
       model(current => {
         expect(current.purchase).toEqual(Purchase.Idle())
         expect(isKitchenOpen(current)).toBe(false)
       }),
+      release('KeyD'),
       press('Enter'),
       ...ticks(HOLD_TICKS - 6, FRAME_MS),
       model(current => {
@@ -332,13 +334,13 @@ describe('holding to buy the kitchen open', () => {
       message(Message.ReleasedPointer({ pointerId: 2 })),
       tick(FRAME_MS),
       model(current => {
-        expect(current.purchase).toEqual(Purchase.Idle())
+        expect(current.purchase).toEqual(Purchase.Spent())
         expect(Stick.isAnyOf(['Active'])(current.input.moveStick)).toBe(true)
       }),
     )
   })
 
-  test('on touch, lifting the holding finger cancels, and lifting a stick finger does not', () => {
+  test('on touch, lifting the holding finger drops to standing speed, and lifting a stick finger does not cancel', () => {
     const touching = modifyFields(inBreak(3, 85), {
       lastDevice: () => 'Touch' as const,
     })
@@ -363,7 +365,10 @@ describe('holding to buy the kitchen open', () => {
       message(Message.ReleasedPointer({ pointerId: 2 })),
       tick(FRAME_MS),
       model(current => {
-        expect(current.purchase).toEqual(Purchase.Idle())
+        expect(Purchase.isAnyOf(['Holding'])(current.purchase)).toBe(true)
+        expect(holdProgress(current.purchase)).toBeLessThan(
+          (13 * FRAME_MS) / PURCHASE_RULES.holdMs,
+        )
         expect(isKitchenOpen(current)).toBe(false)
       }),
     )
