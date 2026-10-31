@@ -13,6 +13,7 @@ import {
   pressKey,
   releaseAll,
 } from '../input'
+import { Message } from '../message'
 import {
   type GunSlot,
   type Model,
@@ -26,7 +27,7 @@ import { isRoundActive } from '../waves'
 import { heldSlotOf } from '../weapons'
 import { pressInRoom } from './coop'
 import { playSounds, toggleAudioFromKey, uiCue, unlockAudio } from './sound'
-import { type UpdateStep, withInput } from './step'
+import { type UpdateStep, modelStep, unchanged, withInput } from './step'
 
 // The Messages an online co-op run handles its own way (MULTIPLAYER.md,
 // Phase 2). The room runs the World, so nothing here steps it: a press
@@ -34,7 +35,8 @@ import { type UpdateStep, withInput } from './step'
 // to the room as a seat action, the frame comes from the room, and there
 // is no pause (decided 7). Everything else (moving, aiming, the dialogs,
 // the menus, audio, the save) runs as it does in single player. Each
-// handler in src/main.ts checks isRunOn once and takes a Step from here.
+// of these handlers in src/main.ts wraps its single player Step in
+// `orInRun`, which checks isRunOn once and matches the Message.
 
 export const isRunOn = (model: Model): boolean =>
   isOnlineRun(model) && isRoundActive(model.phase)
@@ -96,20 +98,63 @@ export const keyInRun = (code: string) =>
         }),
   )
 
-export const gunSlotPress = (model: Model, slot: GunSlot): SeatAction =>
+const gunSlotPress = (model: Model, slot: GunSlot): SeatAction =>
   heldSlotOf(model.player.arsenal) === slot
     ? SeatAction.Reload()
     : SeatAction.Swap()
 
-export const blurInRun: UpdateStep = stepModel => ({
-  model: withInput(stepModel, releaseAll),
-})
+const blurInRun = modelStep(model => withInput(model, releaseAll))
 
-export const pageVisibilityInRun =
-  (visibility: PageVisibility): UpdateStep =>
-  stepModel => ({
-    model: withInput(
-      modifyFields(stepModel, { pageVisibility: () => visibility }),
+const pageVisibilityInRun = (visibility: PageVisibility) =>
+  modelStep(model =>
+    withInput(
+      modifyFields(model, { pageVisibility: () => visibility }),
       releaseAll,
     ),
+  )
+
+// THE RUN'S MESSAGES
+
+type RunMessage =
+  | typeof Message.TickedFrame.Type
+  | typeof Message.PressedKey.Type
+  | typeof Message.BlurredWindow.Type
+  | typeof Message.ChangedPageVisibility.Type
+  | typeof Message.ClickedPauseButton.Type
+  | typeof Message.ClickedStartWaveButton.Type
+  | typeof Message.ClickedSwapButton.Type
+  | typeof Message.ClickedGunSlot.Type
+  | typeof Message.ClickedReloadButton.Type
+  | typeof Message.ClickedPlaceTrapButton.Type
+  | typeof Message.ClickedNextTrapButton.Type
+  | typeof Message.ClickedBuyButton.Type
+  | typeof Message.PressedBuyKey.Type
+
+// NOTE: Message.match, exhaustive over just these Messages. Effect's
+// Match would unify the Steps' types and drop the Binding evidence
+// makeStep needs.
+const inRun = (model: Model, message: RunMessage) =>
+  Message.match(message, {
+    TickedFrame: () => unchanged,
+    PressedKey: ({ code }) => keyInRun(code),
+    BlurredWindow: () => blurInRun,
+    ChangedPageVisibility: ({ visibility }) => pageVisibilityInRun(visibility),
+    ClickedPauseButton: () => unchanged,
+    ClickedStartWaveButton: () => pressInRun(SeatAction.Ready()),
+    ClickedSwapButton: () => pressInRun(SeatAction.Swap()),
+    ClickedGunSlot: ({ slot }) => pressInRun(gunSlotPress(model, slot)),
+    ClickedReloadButton: () => pressInRun(SeatAction.Reload()),
+    ClickedPlaceTrapButton: () => pressInRun(SeatAction.PlaceTrap()),
+    ClickedNextTrapButton: () => pressInRun(SeatAction.NextTrap()),
+    ClickedBuyButton: ({ item }) => buyInRun(item),
+    PressedBuyKey: ({ item }) => buyInRun(item),
   })
+
+// NOTE: the Message's Step in an online run, or the single player Step
+// given here. A handler hands it to `makeStep` itself, so the Step's
+// Binding evidence comes from its own single player Step:
+// `makeStep(orInRun(message, swapFromButton))`.
+export const orInRun =
+  <Offline>(message: RunMessage, offline: Offline) =>
+  (model: Model): ReturnType<typeof inRun> | Offline =>
+    isRunOn(model) ? inRun(model, message) : offline

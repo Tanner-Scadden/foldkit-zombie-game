@@ -11,13 +11,21 @@ import { isLeftFromRoom, maybeRunRoom, playRoomFrame } from '../coopPlay'
 import { makeStep } from '../definition'
 import { isCoopKey } from '../home'
 import { releaseAll } from '../input'
+import { MenuState, menuState } from '../menuState'
 import type { Model } from '../model'
 import { isLearned } from '../onboarding'
 import { lookCodeOf } from '../playerData'
 import { joinName } from '../profile'
+import { stepWhen } from '../stepWhen'
 import type { SeatAction } from '../stepWorld'
-import { canMoveHomeFocus, goHome } from './home'
-import { type UpdateStep, combine, unchanged, withInput } from './step'
+import { goHome } from './home'
+import {
+  type UpdateStep,
+  combine,
+  modelStep,
+  unchanged,
+  withInput,
+} from './step'
 
 // NOTE: co-op opens only for a player who has finished the tutorial
 // (MULTIPLAYER.md, decision 14): wave 1 cleared and wave 2 started from its
@@ -32,8 +40,7 @@ export const isCoopOpen = (model: Model): boolean => Coop.isOpen(model.coop)
 // NOTE: the World a room run left in the root goes home once the room is
 // gone. Co-op says so with LeftRoom, and every co-op OutMessage checks it,
 // as NeededNewerBuild also drops the room.
-export const leftRoom: UpdateStep = stepModel =>
-  isLeftFromRoom(stepModel) ? goHome(stepModel) : { model: stepModel }
+export const leftRoom = stepWhen(isLeftFromRoom, goHome)
 
 export const closedCoop: UpdateStep = stepModel =>
   combine(stepModel, [
@@ -80,22 +87,28 @@ export const pressCoopKey = (code: string) =>
 export const releaseCoopKey = (code: string) =>
   makeStep(() => CoopBinding.requestReleaseKey({ code }))
 
-const releaseInput: UpdateStep = stepModel => ({
-  model: withInput(stepModel, releaseAll),
-})
+const releaseInput = modelStep(model => withInput(model, releaseAll))
+
+// NOTE: co-op opens over the bare home menu. A room link read at boot may
+// land while the update greeting is up: co-op opens under it, so neither
+// the link nor the party is lost.
+const canOpenCoop = (model: Model): boolean =>
+  IS_COOP_RELEASED &&
+  hasFinishedTutorial(model) &&
+  MenuState.isAnyOf(['Home', 'UpdateGreeting'])(menuState(model))
 
 export const openCoop = (maybeCode: Option.Option<string>) =>
   makeStep(model =>
-    !IS_COOP_RELEASED || !hasFinishedTutorial(model) || !canMoveHomeFocus(model)
-      ? unchanged
-      : Update.combineSteps([
+    canOpenCoop(model)
+      ? Update.combineSteps([
           releaseInput,
           CoopBinding.requestOpen({
             name: joinName(model),
             maybeCode,
             look: lookCodeOf(model.appearance),
           }),
-        ]),
+        ])
+      : unchanged,
   )
 
 export const coopFromKey = (code: string) =>

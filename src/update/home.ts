@@ -17,7 +17,6 @@ import {
   PanelDialogBinding,
   UpdateGreetingBinding,
 } from '../composition'
-import { Screen as CoopScreen } from '../coop/model'
 import { runDifficultyOf } from '../coopPlay'
 import { makeStep } from '../definition'
 import {
@@ -49,6 +48,15 @@ import {
 } from '../home'
 import { isMenuKey, isStartKey, maybeFocusStep, releaseAll } from '../input'
 import {
+  MenuState,
+  isAnyPanelOpen,
+  isHandOpen,
+  isOnHomeMenu,
+  isPanelOpen,
+  isPastRestartGrace,
+  menuState,
+} from '../menuState'
+import {
   type Difficulty,
   DifficultyCard,
   type HandCard,
@@ -60,19 +68,15 @@ import {
   Phase,
   type RunMode,
 } from '../model'
+import { stepWhen } from '../stepWhen'
 import { openProfile } from './profile'
-import {
-  isPastRestartGrace,
-  isPaused,
-  startFromButton,
-  startWhenAllowed,
-  startsRun,
-} from './run'
+import { isPaused, startFromButton, startWhenAllowed, startsRun } from './run'
 import { playSounds, uiCue, unlockAudio } from './sound'
 import {
   type UpdateReturn,
   type UpdateStep,
   combine,
+  modelStep,
   unchanged,
   withInput,
 } from './step'
@@ -87,19 +91,12 @@ export const forgetAskedMode: UpdateStep = stepModel => ({
     : stepModel,
 })
 
-const isPanelAllowed = (model: Model, panel: MenuPanel): boolean => {
-  if (
-    model.panelDialog.isOpen ||
-    model.profileDialog.isOpen ||
-    model.handDialog.isOpen
-  ) {
-    return false
-  } else if (panel === 'LeaveRun') {
-    return isPaused(model.phase)
-  } else {
-    return isOnHome(model.phase)
-  }
-}
+// NOTE: Leave Run opens over the pause menu, every other panel over the
+// bare home menu.
+const isPanelAllowed = (model: Model, panel: MenuPanel): boolean =>
+  MenuState.isAnyOf([panel === 'LeaveRun' ? 'Paused' : 'Home'])(
+    menuState(model),
+  )
 
 const showPanel =
   (panel: MenuPanel): UpdateStep =>
@@ -130,12 +127,12 @@ export const openPanel = (panel: MenuPanel) =>
   )
 
 export const closePanel = makeStep(model =>
-  model.panelDialog.isOpen ? PanelDialogBinding.requestClose() : unchanged,
+  isAnyPanelOpen(model) ? PanelDialogBinding.requestClose() : unchanged,
 )
 
-export const goHome: UpdateStep = stepModel => ({
-  model: returnHome(withInput(stepModel, releaseAll)),
-})
+export const goHome = modelStep(model =>
+  returnHome(withInput(model, releaseAll)),
+)
 
 const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
 
@@ -149,8 +146,10 @@ export const leaveFromMenu = makeStep(model => {
   }
 })
 
+// NOTE: only from the open Leave Run panel: a LEAVE tapped as the panel
+// fades out after Back stays in the run.
 export const leaveRun = makeStep(model =>
-  isPaused(model.phase) && model.panel === 'LeaveRun'
+  isPaused(model.phase) && isPanelOpen(model, 'LeaveRun')
     ? Update.combineSteps([closePanel, goHome])
     : unchanged,
 )
@@ -161,27 +160,18 @@ const isEndMenuKey = (model: Model, code: string): boolean =>
 export const menuFromKey = (code: string) =>
   makeStep(model => (isEndMenuKey(model, code) ? leaveFromMenu : unchanged))
 
-export const canMoveHomeFocus = (model: Model): boolean =>
-  isOnHome(model.phase) &&
-  CoopScreen.isAnyOf(['Closed'])(model.coop.screen) &&
-  !model.panelDialog.isOpen &&
-  !model.profileDialog.isOpen &&
-  !model.handDialog.isOpen
-
 // NOTE: the gear opens the Profile on its Settings tab, only from the menu
 // itself, as the gear is only there.
 export const openSettingsFromGear = makeStep(model =>
-  canMoveHomeFocus(model) ? openProfile('Settings') : unchanged,
+  isOnHomeMenu(model) ? openProfile('Settings') : unchanged,
 )
 
 // THE MANOR HAND
 
-const releaseInput: UpdateStep = stepModel => ({
-  model: withInput(stepModel, releaseAll),
-})
+const releaseInput = modelStep(model => withInput(model, releaseAll))
 
 export const openHand = makeStep(model =>
-  canMoveHomeFocus(model)
+  isOnHomeMenu(model)
     ? Update.combineSteps([releaseInput, HandDialogBinding.requestOpen()])
     : unchanged,
 )
@@ -190,11 +180,11 @@ export const openHand = makeStep(model =>
 // panel's Done or Esc lands back on the menu, not in the hand: a card's
 // handler runs closeHand, then the card's own Step.
 export const closeHand = makeStep(model =>
-  model.handDialog.isOpen ? HandDialogBinding.requestClose() : unchanged,
+  isHandOpen(model) ? HandDialogBinding.requestClose() : unchanged,
 )
 
 export const stepHandFocus = (model: Model, card: HandCard): UpdateReturn =>
-  model.handDialog.isOpen && Array.contains(dealtCards(model), card)
+  isHandOpen(model) && Array.contains(dealtCards(model), card)
     ? { model, commands: [FocusHandCard({ card })] }
     : { model }
 
@@ -203,7 +193,7 @@ export const homeFocusFromKey: (code: string) => UpdateStep =
     Option.match(maybeFocusStep(code), {
       onNone: () => ({ model: stepModel }),
       onSome: step => {
-        if (!canMoveHomeFocus(stepModel)) {
+        if (!isOnHomeMenu(stepModel)) {
           return { model: stepModel }
         }
 
@@ -219,23 +209,17 @@ export const homeFocusFromKey: (code: string) => UpdateStep =
 
 // HOME MENU
 
-const isPanelOpen = (model: Model, panel: MenuPanel): boolean =>
-  model.panelDialog.isOpen && model.panel === panel
-
 export const homeStartFromKey = (model: Model, code: string): Model =>
   isStartKey(code) ? startWhenAllowed(model, runModeOf(model.home.mode)) : model
 
-const seeNewsStep: UpdateStep = stepModel => ({ model: seeNews(stepModel) })
-
 export const openWhatsNew = makeStep(model =>
   isPanelAllowed(model, 'WhatsNew')
-    ? Update.combineSteps([seeNewsStep, openPanel('WhatsNew')])
+    ? Update.combineSteps([modelStep(seeNews), openPanel('WhatsNew')])
     : unchanged,
 )
 
-const showPage =
-  (page: MunchopediaPage): UpdateStep =>
-  stepModel => ({ model: showMunchopediaPage(stepModel, page) })
+const showPage = (page: MunchopediaPage) =>
+  modelStep(model => showMunchopediaPage(model, page))
 
 export const openMunchopedia = (page: MunchopediaPage) =>
   makeStep(model =>
@@ -272,19 +256,15 @@ const openCard = (card: KeyedHandCard) => {
   }
 }
 
-const switchModeStep: UpdateStep = stepModel => ({
-  model: switchMode(stepModel),
-})
-
 // NOTE: C opens the character picker on every screen that offers it, so it
 // stays with characterFromKey and is left out here. The card keys work from
 // the menu without opening the hand first.
 export const homeFromKey = (code: string) =>
   makeStep(model => {
-    if (!canMoveHomeFocus(model)) {
+    if (!isOnHomeMenu(model)) {
       return unchanged
     } else if (isModeKey(code)) {
-      return switchModeStep
+      return modelStep(switchMode)
     } else if (isDifficultyKey(code)) {
       return openPanel('Difficulty')
     } else if (isManorKey(code)) {
@@ -380,12 +360,11 @@ export const settleNightmareFrom =
       : stepModel,
   })
 
-export const unlockNightmareFrom =
-  (before: Model): UpdateStep =>
-  stepModel =>
-    isNightmareUnlockedBy(before, stepModel, runDifficultyOf(stepModel))
-      ? playSounds([uiCue('PowerUp')])(unlockNightmare(stepModel))
-      : { model: stepModel }
+export const unlockNightmareFrom = (before: Model): UpdateStep =>
+  stepWhen(
+    model => isNightmareUnlockedBy(before, model, runDifficultyOf(model)),
+    model => playSounds([uiCue('PowerUp')])(unlockNightmare(model)),
+  )
 
 // SETTINGS
 
@@ -411,14 +390,10 @@ export const dismissHomeScreenTip = (model: Model): Model =>
     ? model
     : modifyFields(model, { homeScreenTip: () => 'Dismissed' })
 
-const dismissTip: UpdateStep = stepModel => ({
-  model: dismissHomeScreenTip(stepModel),
-})
-
 const openHomeScreenSteps = makeStep(model =>
-  model.homeScreenSteps.isOpen
-    ? unchanged
-    : Update.combineSteps([releaseInput, HomeScreenStepsBinding.requestOpen()]),
+  isOnHomeMenu(model)
+    ? Update.combineSteps([releaseInput, HomeScreenStepsBinding.requestOpen()])
+    : unchanged,
 )
 
 const promptInstall: UpdateStep = stepModel => ({
@@ -435,7 +410,10 @@ export const pressInstall = makeStep(model => {
   } else if (model.installOffer === 'Ready') {
     return promptInstall
   } else {
-    return Update.combineSteps([dismissTip, openHomeScreenSteps])
+    return Update.combineSteps([
+      modelStep(dismissHomeScreenTip),
+      openHomeScreenSteps,
+    ])
   }
 })
 
@@ -449,16 +427,17 @@ export const settleInstallPrompt = (
 
 // UPDATE GIFT
 
-export const unwrapUpdateGift: UpdateStep = model =>
-  isUpdateGiftShown(model) && model.updateGift === 'Wrapped'
-    ? combine(model, [
-        stepModel => ({
-          model: modifyFields(stepModel, { updateGift: () => 'Unwrapping' }),
-          commands: [WaitForUnwrap()],
-        }),
-        playSounds([uiCue('LootPop')]),
-      ])
-    : { model }
+export const unwrapUpdateGift: UpdateStep = stepWhen(
+  model => isUpdateGiftShown(model) && model.updateGift === 'Wrapped',
+  model =>
+    combine(model, [
+      stepModel => ({
+        model: modifyFields(stepModel, { updateGift: () => 'Unwrapping' }),
+        commands: [WaitForUnwrap()],
+      }),
+      playSounds([uiCue('LootPop')]),
+    ]),
+)
 
 export const rewrapUpdateGift = (model: Model): Model =>
   modifyFields(model, { updateGift: () => 'Wrapped' })
@@ -472,10 +451,13 @@ export const reloadOntoNewerBuild: UpdateStep = model =>
 // UPDATE GREETING
 
 // NOTE: the page just reloaded from the gift onto the build it unwrapped,
-// so the home menu throws a little party, once.
+// so the home menu throws a little party, once. A room link read at the
+// same boot may already have co-op open: the party goes over it.
 export const greetUpdate = (isDue: boolean) =>
   makeStep(model =>
-    isDue && isOnHome(model.phase) && !model.updateGreeting.isOpen
+    isDue &&
+    isOnHome(model.phase) &&
+    MenuState.isAnyOf(['Home', 'Coop'])(menuState(model))
       ? UpdateGreetingBinding.requestOpen()
       : unchanged,
   )

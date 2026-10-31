@@ -11,6 +11,7 @@ import {
   makeOutMessageFold,
   makeStep,
 } from './definition'
+import { isProfileOpen } from './menuState'
 import { mounts } from './mount'
 import { ProfileTabsBlock } from './profile'
 import { isBrowsing } from './shop'
@@ -94,7 +95,7 @@ export const UpdateGreetingBinding = makeBinding(DialogBlock, {
 export const ProfileTabsBinding = makeBinding(ProfileTabsBlock, {
   field: 'profileTabs',
   init: false,
-  delivery: { when: model => model.profileDialog.isOpen },
+  delivery: { when: isProfileOpen },
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(ProfileTabsBlock, {
     Selected: ({ value }) => settled(switchTab(value)),

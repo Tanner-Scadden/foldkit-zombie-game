@@ -15,6 +15,7 @@ import {
   SOUND_OFF_ICON,
   SOUND_ON_ICON,
 } from './icons'
+import { isProfileOpen } from './menuState'
 import { Message } from './message'
 import { DebutCard, type Model, Phase, type ZombieKind } from './model'
 import { canSkipDebutCard } from './onboarding'
@@ -115,13 +116,11 @@ const cornerButtons = (
   })
 }
 
-const isPickingCharacter = (model: Model): boolean => model.profileDialog.isOpen
-
 export const cornerButtonsView = (
   model: Model,
   h: ApplicationViewBuilder,
 ): Html =>
-  isPickingCharacter(model)
+  isProfileOpen(model)
     ? h.empty
     : h.div([h.Class('corner-buttons')], cornerButtons(model, h))
 

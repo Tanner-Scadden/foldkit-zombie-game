@@ -81,6 +81,7 @@ import { startOrResume } from '@game/runFlow'
 import { STALL_BOX } from '@game/shop'
 import { shedParts } from '@game/simulation'
 import { frameAt, group, gunSprite } from '@game/sprite'
+import { stepWhen } from '@game/stepWhen'
 import { layer as PlayerStoreLayer } from '@game/store'
 import { subscriptions } from '@game/subscriptions'
 import { withInput } from '@game/update/step'
@@ -1752,19 +1753,20 @@ const sceneOf = (model: Model): HarnessReturn => {
       ? modifyFields(model, { rngState: () => config.seed ?? 1 })
       : model
   const profileTab = config.profile
-  const opened: HarnessReturn =
-    config.picker || profileTab !== undefined
-      ? openProfileOn(
-          modifyFields(seeded, { screenMs: () => 99999 }),
-          profileTab === 'name'
-            ? 'Name'
-            : profileTab === 'account'
-              ? 'Account'
-              : profileTab === 'settings'
-                ? 'Settings'
-                : 'Look',
-        )
-      : { model: seeded }
+  const opened: HarnessReturn = stepWhen(
+    (_: Model) => config.picker || profileTab !== undefined,
+    current =>
+      openProfileOn(
+        modifyFields(current, { screenMs: () => 99999 }),
+        profileTab === 'name'
+          ? 'Name'
+          : profileTab === 'account'
+            ? 'Account'
+            : profileTab === 'settings'
+              ? 'Settings'
+              : 'Look',
+      ),
+  )(seeded)
   const lookSection = config.looksection
   const sectioned: HarnessReturn =
     lookSection === undefined

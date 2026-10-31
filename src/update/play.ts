@@ -30,6 +30,7 @@ import {
   type InputDevice,
   type Model,
   type Orientation,
+  type PageVisibility,
   Phase,
   RunMode,
 } from '../model'
@@ -50,6 +51,7 @@ import { startWave } from '../runFlow'
 import { isUsingServiceWorker } from '../serviceWorker'
 import { isAtCounter, isBrowsing } from '../shop'
 import { tallyFrame } from '../stats'
+import { stepWhen } from '../stepWhen'
 import {
   RUNNING_BUILD,
   isCheckingForUpdates,
@@ -65,7 +67,6 @@ import {
   swapWeapon,
 } from '../weapons'
 import { coopFromKey, isCoopOpen, pressCoopKey, releaseCoopKey } from './coop'
-import { isRunOn, keyInRun } from './coopRun'
 import {
   difficultyCardFromKey,
   homeFocusFromKey,
@@ -102,6 +103,7 @@ import {
   type UpdateReturn,
   type UpdateStep,
   combine,
+  modelStep,
   toModel,
   unchanged,
   withInput,
@@ -252,26 +254,33 @@ export const reloadHeldGun: UpdateStep = stepModel => {
   ])(dropClip(modifyFields(stepModel, { player: beginReload })))
 }
 
-export const reloadFromKey: (code: string) => UpdateStep = code => stepModel =>
-  isReloadKey(code) ? reloadHeldGun(stepModel) : { model: stepModel }
+export const reloadFromKey = (code: string): UpdateStep =>
+  stepWhen(() => isReloadKey(code), reloadHeldGun)
 
 // PAUSE
 
-export const pauseStep: UpdateStep = stepModel => ({
-  model: withInput(pause(stepModel), releaseAll),
-})
-
 export const pauseRound = makeStep(() =>
-  Update.combineSteps([closeShop, pauseStep]),
+  Update.combineSteps([
+    closeShop,
+    modelStep(model => withInput(pause(model), releaseAll)),
+  ]),
 )
 
-export const releaseInput: UpdateStep = stepModel => ({
-  model: withInput(stepModel, releaseAll),
-})
+export const releaseInput = modelStep(model => withInput(model, releaseAll))
 
 export const pauseWhenAway = makeStep(model =>
   isRoundActive(model.phase) ? pauseRound : releaseInput,
 )
+
+// NOTE: a hidden page pauses the round; a page shown again checks for a
+// newer build.
+export const notePageVisibility = (visibility: PageVisibility) =>
+  makeStep(model => {
+    const noted = modifyFields(model, { pageVisibility: () => visibility })
+    return visibility === 'Hidden'
+      ? Update.combineSteps([toModel(noted), pauseWhenAway])
+      : Update.combineSteps([toModel(noted), checkForUpdate])
+  })
 
 export const isFreshRun = (model: Model): boolean =>
   Phase.isAnyOf(['Preparation'])(model.phase) &&
@@ -310,13 +319,11 @@ export const registerServiceWorkerAfterSplash = (
 
 // FRAME
 
-// NOTE: one frame of single player, or nothing while an online run's room
-// runs the World (its frames are TickedRoomFrame).
+// NOTE: one frame of single player. An online run's room runs the World,
+// so there its frames are TickedRoomFrame (orInRun in src/update/coopRun.ts).
 export const tickFrame = (deltaTime: number) =>
   makeStep(model => {
-    if (isRunOn(model)) {
-      return unchanged
-    } else if (isDebutCardBlocking(model)) {
+    if (isDebutCardBlocking(model)) {
       return toModel(ageDebutCard(model, clampFrameDelta(deltaTime)))
     } else if (isRoundActive(model.phase)) {
       const framed = moveHintBand(
@@ -362,10 +369,6 @@ export const tickFrame = (deltaTime: number) =>
 
 export const pressedKey = (code: string) =>
   makeStep(model => {
-    if (isRunOn(model)) {
-      return keyInRun(code)
-    }
-
     const keyed = useDevice(model, 'KeyboardMouse')
     if (isCouchKey(keyed, code)) {
       return toModel(
