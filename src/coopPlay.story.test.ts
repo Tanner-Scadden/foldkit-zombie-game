@@ -7,7 +7,6 @@ import { describe, expect, test } from 'vitest'
 import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import { positionVariation } from './audio'
-import { PlaySound } from './commands'
 import { CoopBinding, ShopDialogBinding } from './composition'
 import { Message as CoopMessage } from './coop/message'
 import { Screen } from './coop/model'
@@ -31,6 +30,7 @@ import {
 } from './roomWorld'
 import { aimTracers } from './simulation'
 import { SeatAction } from './stepWorld'
+import { PlaySound } from './update/sound'
 import { asVeteran } from './veteran'
 import { beginPreparation, startWaveEarly } from './waves'
 import {

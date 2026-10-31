@@ -10,13 +10,10 @@ import { Dialog, DialogBlock } from '@foldkit/ui'
 import {
   AwaitFirstFrame,
   DecodeSprites,
-  HideSplash,
   LoadFonts,
   LoadSave,
   LoadStyles,
-  ReadRoomLink,
-  ShowLoadProgress,
-} from './commands'
+} from './boot'
 import { PanelDialogBinding } from './composition'
 import { FIXED_STEP_MS, RESTART_GRACE_MS } from './constants'
 import { bestsFor, withBests } from './difficulty'
@@ -35,6 +32,8 @@ import {
 import { scoreOf } from './stats'
 import { maybeKeyDownMessage } from './subscriptions'
 import { scoring, showDialog } from './testing'
+import { ReadRoomLink } from './update/coop'
+import { HideSplash, ShowLoadProgress } from './update/save'
 import { asVeteran } from './veteran'
 import { FINAL_WAVE } from './waves'
 import { pause } from './waves'

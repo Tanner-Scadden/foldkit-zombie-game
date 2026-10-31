@@ -11,7 +11,7 @@ Short answer: every sprite is encoded as an uncompressed PNG data URL in JavaScr
 
 ## 1. What happens today
 
-`src/png.ts` writes PNGs with stored (uncompressed) deflate blocks and returns base64 data URLs. `spriteShapes` and `bakeShapes` in `src/sprite.ts` turn pixel maps and fixed rectangle lists into one `Canvas.Image` each, and record every source so the warm-up canvases in `src/layers.ts` and the `DecodeSprites` load step in `src/commands.ts` can decode them before the splash goes. The patched Foldkit painter keeps one `HTMLImageElement` per distinct `src` for the life of the page (`patches/foldkit@0.169.0-canary.90746b32d2ca.patch`, `requestImage` in `canvas/paint.js`), and `crop` already works: `src/occluders.ts` crops the room image.
+`src/png.ts` writes PNGs with stored (uncompressed) deflate blocks and returns base64 data URLs. `spriteShapes` and `bakeShapes` in `src/sprite.ts` turn pixel maps and fixed rectangle lists into one `Canvas.Image` each, and record every source so the warm-up canvases in `src/layers.ts` and the `DecodeSprites` load step in `src/boot.ts` can decode them before the splash goes. The patched Foldkit painter keeps one `HTMLImageElement` per distinct `src` for the life of the page (`patches/foldkit@0.169.0-canary.90746b32d2ca.patch`, `requestImage` in `canvas/paint.js`), and `crop` already works: `src/occluders.ts` crops the room image.
 
 ### Measurements
 

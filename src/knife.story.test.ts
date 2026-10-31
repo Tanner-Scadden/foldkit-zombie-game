@@ -5,7 +5,6 @@ import { describe, expect, test } from 'vitest'
 
 import { NEUTRAL_INPUT } from '@munch/netcode'
 
-import { FocusShopItem } from './commands'
 import { FIXED_STEP_MS, PISTOL_MAGAZINE } from './constants'
 import { KNIFE_RULES } from './knife'
 import { update } from './main'
@@ -39,6 +38,7 @@ import {
   tick,
   zombieOf,
 } from './testing'
+import { FocusShopItem } from './update/shop'
 import { asVeteran } from './veteran'
 import {
   STARTING_PISTOL,

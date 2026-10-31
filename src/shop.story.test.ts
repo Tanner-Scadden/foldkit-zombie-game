@@ -6,7 +6,6 @@ import { describe, expect, test } from 'vitest'
 
 import { Dialog, DialogBlock, Tabs } from '@foldkit/ui'
 
-import { FocusShopItem } from './commands'
 import { ShopDialogBinding, ShopTabsBinding } from './composition'
 import {
   BULLET_MAX,
@@ -65,6 +64,7 @@ import {
   ticks,
   zombieAt,
 } from './testing'
+import { FocusShopItem } from './update/shop'
 import { asVeteran } from './veteran'
 import { FINAL_WAVE, waveBonus } from './waves'
 import { UPGRADE_TIERS, WEAPONS, magazineOf, startingRounds } from './weapons'

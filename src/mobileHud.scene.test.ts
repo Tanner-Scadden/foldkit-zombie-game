@@ -25,7 +25,6 @@ import { describe, test, expect as vitestExpect } from 'vitest'
 
 import { Dialog, DialogBlock } from '@foldkit/ui'
 
-import { ShowInstallPrompt } from './commands'
 import { HomeScreenStepsBinding } from './composition'
 import { PREPARATION_MS } from './constants'
 import { update } from './main'
@@ -37,6 +36,7 @@ import {
   holdingSecond,
   measureSurface,
 } from './testing'
+import { ShowInstallPrompt } from './update/home'
 import { asVeteran } from './veteran'
 import { tierName } from './weapons'
 

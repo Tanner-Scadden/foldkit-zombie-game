@@ -1,24 +1,46 @@
-import { Option } from 'effect'
+import { Effect, Option } from 'effect'
 import { Update } from 'foldkit'
 
 import { NEUTRAL_INPUT } from '@munch/netcode'
 
-import { FetchBuild, FocusHomeButton } from '../commands'
 import { CoopBinding } from '../composition'
 import { IS_COOP_RELEASED } from '../coop/release'
 import * as Coop from '../coop/update'
 import { isLeftFromRoom, maybeRunRoom, playRoomFrame } from '../coopPlay'
-import { makeStep } from '../definition'
+import { makeCommand, makeStep } from '../definition'
 import { isCoopKey } from '../home'
 import { MenuState, menuState } from '../menuState'
+import { Message } from '../message'
 import type { Model } from '../model'
 import { isLearned } from '../onboarding'
 import { lookCodeOf } from '../playerData'
 import { joinName } from '../profile'
 import { stepWhen } from '../stepWhen'
 import type { SeatAction } from '../stepWorld'
-import { goHome } from './home'
+import { FocusHomeButton, goHome } from './home'
 import { type UpdateStep, combine, releaseInput, unchanged } from './step'
+import { FetchBuild } from './version'
+
+// COMMAND
+
+// NOTE: a `?room=CODE` link, read once the splash is gone, joins that room.
+export const ReadRoomLink = makeCommand('ReadRoomLink', {
+  messages: [Message.CompletedReadRoomLink],
+  handler: function* () {
+    return () =>
+      Effect.sync(() =>
+        Message.CompletedReadRoomLink({
+          maybeCode: Coop.readRoomLink(location.search),
+        }),
+      )
+  },
+})
+
+// NOTE: once the splash is gone, a room link in the address joins its room.
+export const askForRoomLink: UpdateStep = model => ({
+  model,
+  commands: [ReadRoomLink()],
+})
 
 // NOTE: co-op opens only for a player who has finished the tutorial
 // (MULTIPLAYER.md, decision 14): wave 1 cleared and wave 2 started from its

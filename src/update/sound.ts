@@ -1,16 +1,103 @@
-import { Array, Option, pipe } from 'effect'
+import { Array, Effect, Option, Schema, pipe } from 'effect'
+import type { ManagedResource } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import { isTickingShot } from '../ammoWarning'
-import { type SoundEffect, positionVariation } from '../audio'
-import { PlaySound, ResumeAudio } from '../commands'
+import {
+  type AudioEngine,
+  type AudioEngineError,
+  SoundEffect,
+  acquireAudioEngine,
+  playSound,
+  positionVariation,
+  releaseAudioEngine,
+  resumeAudio,
+} from '../audio'
+import { makeCommand, makeManagedResources, makeResource } from '../definition'
 import { maybeLandedBetween, prizeSpotOf, revealOf } from '../fridgeReveal'
+import { Message } from '../message'
 import { AudioState, GameEvent, type Model, type Player } from '../model'
 import { PICKUPS } from '../powerups'
 import { TRAPS } from '../traps'
 import { WEAPONS, heldWeapon } from '../weapons'
 import { ZOMBIE_KINDS, isArmorShedAt } from '../zombies'
 import type { UpdateStep } from './step'
+
+// AUDIO
+
+export const AudioEngineResource = makeResource<AudioEngine>()('AudioEngine')
+
+const wantsAudioEngine = (audio: AudioState): boolean =>
+  AudioState.match(audio, {
+    Locked: () => false,
+    Unlocking: () => true,
+    Suspended: () => true,
+    Ready: () => true,
+    Unavailable: () => false,
+  })
+
+export const managedResources = makeManagedResources(entry => ({
+  audioEngine: entry('ManageAudioEngine', Schema.Option(Schema.Null), {
+    resource: AudioEngineResource,
+    modelToMaybeRequirements: model =>
+      wantsAudioEngine(model.audio) ? Option.some(null) : Option.none(),
+    onAcquired: () => Message.AcquiredAudioEngine(),
+    onAcquireError: error =>
+      Message.FailedAcquireAudioEngine({ reason: String(error) }),
+    onReleased: () => Message.ReleasedAudioEngine(),
+    handler: function* () {
+      return {
+        acquire: () => acquireAudioEngine,
+        release: releaseAudioEngine,
+      }
+    },
+  }),
+}))
+
+export const audioFailureReason = (
+  error: AudioEngineError | ManagedResource.ResourceNotAvailable,
+): string =>
+  error._tag === 'AudioEngineError'
+    ? error.reason
+    : `${error.resource} is not acquired`
+
+export const ResumeAudio = makeCommand('ResumeAudio', {
+  messages: [Message.CompletedResumeAudio, Message.FailedResumeAudio],
+  handler: function* () {
+    return () =>
+      pipe(
+        AudioEngineResource.get,
+        Effect.flatMap(resumeAudio),
+        Effect.map(playback => Message.CompletedResumeAudio({ playback })),
+        Effect.catch(error =>
+          Effect.succeed(
+            Message.FailedResumeAudio({ reason: audioFailureReason(error) }),
+          ),
+        ),
+      )
+  },
+})
+
+export const PlaySound = makeCommand('PlaySound', {
+  args: { sound: SoundEffect, variation: Schema.Number },
+  messages: [Message.CompletedPlaySound, Message.FailedPlaySound],
+  handler: function* () {
+    return ({ sound, variation }) =>
+      pipe(
+        AudioEngineResource.get,
+        Effect.flatMap(engine => playSound(engine, sound, variation)),
+        Effect.map(outcome => Message.CompletedPlaySound({ sound, outcome })),
+        Effect.catch(error =>
+          Effect.succeed(
+            Message.FailedPlaySound({
+              sound,
+              reason: audioFailureReason(error),
+            }),
+          ),
+        ),
+      )
+  },
+})
 
 const MUTE_KEY = 'KeyM'
 const MUSIC_KEY = 'KeyN'

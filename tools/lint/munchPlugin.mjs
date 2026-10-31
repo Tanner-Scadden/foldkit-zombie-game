@@ -392,6 +392,48 @@ const noMenuField = {
   },
 }
 
+// NOTE: `const X = makeCommand(...)` or `const X = Definition.makeCommand(...)`.
+const isMakeCommand = node =>
+  node?.type === 'CallExpression' &&
+  ((node.callee.type === 'Identifier' && node.callee.name === 'makeCommand') ||
+    memberName(node.callee) === 'makeCommand')
+
+const commandBesideUpdate = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description:
+        'Define a Command in the module whose update returns it, not in a module of Commands.',
+    },
+  },
+  create(context) {
+    const commands = []
+    const called = new Set()
+    return {
+      VariableDeclarator(node) {
+        if (node.id.type === 'Identifier' && isMakeCommand(node.init)) {
+          commands.push(node.id)
+        }
+      },
+      CallExpression(node) {
+        if (node.callee.type === 'Identifier') {
+          called.add(node.callee.name)
+        }
+      },
+      'Program:exit'() {
+        commands
+          .filter(command => !called.has(command.name))
+          .forEach(command =>
+            context.report({
+              node: command,
+              message: `${command.name} is never returned here: define a Command beside the update that returns it, and its .layer joins CommandsLayer in src/layer.ts (AGENTS.md "Code shape").`,
+            }),
+          )
+      },
+    }
+  },
+}
+
 export default {
   meta: { name: 'munch' },
   rules: {
@@ -401,5 +443,6 @@ export default {
     'no-conditional-step': noConditionalStep,
     'no-world-spread': noWorldSpread,
     'no-menu-field': noMenuField,
+    'command-beside-update': commandBesideUpdate,
   },
 }

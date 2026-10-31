@@ -1,14 +1,8 @@
-import { Option } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import { noteAmmoTip } from '../ammoWarning'
 import { positionVariation } from '../audio'
-import {
-  FetchBuild,
-  RegisterServiceWorker,
-  UpdateServiceWorker,
-} from '../commands'
 import { isCouchKey, pressCouchKey } from '../couch'
 import { makeStep } from '../definition'
 import { advanceQuest } from '../firstBreakQuest'
@@ -49,15 +43,9 @@ import { dropClip } from '../particles'
 import { isCoop } from '../party'
 import { isInteractTaken } from '../purchase'
 import { startWave } from '../runFlow'
-import { isUsingServiceWorker } from '../serviceWorker'
 import { isAtCounter, isBrowsing } from '../shop'
 import { tallyFrame } from '../stats'
 import { stepWhen } from '../stepWhen'
-import {
-  RUNNING_BUILD,
-  isCheckingForUpdates,
-  maybeNewerBuild,
-} from '../version'
 import { isRoundActive, pause } from '../waves'
 import {
   beginReload,
@@ -102,7 +90,6 @@ import {
   unlockAudio,
 } from './sound'
 import {
-  type UpdateReturn,
   type UpdateStep,
   combine,
   modelStep,
@@ -112,6 +99,7 @@ import {
   withInput,
 } from './step'
 import { trapFromKey } from './traps'
+import { checkForUpdate } from './version'
 
 // The Steps the root's handlers (src/main.ts) are made of: the frame, the
 // keys and pointers, the guns and traps, pausing, and the build check.
@@ -286,37 +274,6 @@ export const notePageVisibility = (visibility: PageVisibility) =>
 export const isFreshRun = (model: Model): boolean =>
   Phase.isAnyOf(['Preparation'])(model.phase) &&
   model.elapsedMs < START_SOUND_GRACE_MS
-
-// VERSION
-
-export const checkForUpdate = (model: Model): UpdateReturn =>
-  isCheckingForUpdates(RUNNING_BUILD)
-    ? { model, commands: [FetchBuild()] }
-    : { model }
-
-// NOTE: a newer build also asks the service worker to look for it, so the
-// new build installs in the background before the player taps the chip.
-export const recordRemoteBuild = (
-  model: Model,
-  runningBuild: string,
-  remoteBuild: string,
-): UpdateReturn => {
-  const maybeNewer = maybeNewerBuild(runningBuild, remoteBuild)
-  const next = modifyFields(model, { maybeNewerBuild: () => maybeNewer })
-  return Option.isSome(maybeNewer) && isUsingServiceWorker(runningBuild)
-    ? { model: next, commands: [UpdateServiceWorker()] }
-    : { model: next }
-}
-
-// NOTE: the service worker registers once the splash is gone, so precaching
-// the game for offline play never slows the game's own first load.
-export const registerServiceWorkerAfterSplash = (
-  model: Model,
-  runningBuild: string,
-): UpdateReturn =>
-  isUsingServiceWorker(runningBuild)
-    ? { model, commands: [RegisterServiceWorker()] }
-    : { model }
 
 // FRAME
 

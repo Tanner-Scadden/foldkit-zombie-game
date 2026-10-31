@@ -2,23 +2,7 @@ import { Option } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import {
-  AwaitFirstFrame,
-  DecodeSprites,
-  DetectInputDevice,
-  DetectLocalPlayers,
-  DetectOrientationLock,
-  DetectScreenFit,
-  GenerateSeed,
-  GenerateVisitId,
-  LoadFonts,
-  LoadSave,
-  LoadStyles,
-  ReadRoomLink,
-  ReadUpdateMarker,
-  ResumeAudio,
-  SetFullscreen,
-} from './commands'
+import { bootCommands } from './boot'
 import { ApplicationComposition } from './composition'
 import { makeStep } from './definition'
 import { endQuest } from './firstBreakQuest'
@@ -50,8 +34,9 @@ import { skipDebutCard } from './onboarding'
 import { LinkFlow } from './playerSync'
 import { forgetTutorial } from './save'
 import { stepWhen } from './stepWhen'
-import { openCoop, tickRoomFrame } from './update/coop'
+import { askForRoomLink, openCoop, tickRoomFrame } from './update/coop'
 import { orInRun } from './update/coopRun'
+import { toggleFullscreen } from './update/fullscreen'
 import {
   closeHand,
   closePanel,
@@ -81,7 +66,6 @@ import {
 } from './update/home'
 import {
   asAllowedPress,
-  checkForUpdate,
   isDebutCardBlocking,
   isFreshRun,
   isTrapButtonHeld,
@@ -91,8 +75,6 @@ import {
   pauseWhenAway,
   pressGunSlot,
   pressedKey,
-  recordRemoteBuild,
-  registerServiceWorkerAfterSplash,
   releasedKey,
   reloadHeldGun,
   resumeFromPointer,
@@ -130,6 +112,7 @@ import {
 import { type SaveWrite, afterMessage } from './update/settle'
 import { buy, focusShopItem, moveShopFocus } from './update/shop'
 import {
+  ResumeAudio,
   playSounds,
   playStartSoundWhen,
   toggleMusic,
@@ -145,6 +128,11 @@ import {
   withInput,
 } from './update/step'
 import { nextTrap, placeSelectedTrap } from './update/traps'
+import {
+  checkForUpdate,
+  recordRemoteBuild,
+  registerServiceWorkerAfterSplash,
+} from './update/version'
 import { RUNNING_BUILD, isGreetingDue } from './version'
 import { isRoundActive } from './waves'
 // INIT
@@ -157,20 +145,7 @@ export const init = ApplicationComposition.makeInit(() => ({
   model: modifyFields(initialModel, {
     loading: () => Loading.Loading({ pending: LOAD_STEPS }),
   }),
-  commands: [
-    LoadSave(),
-    GenerateSeed(),
-    GenerateVisitId(),
-    DetectInputDevice(),
-    DetectScreenFit(),
-    DetectOrientationLock(),
-    DetectLocalPlayers(),
-    ReadUpdateMarker(),
-    LoadStyles(),
-    LoadFonts(),
-    AwaitFirstFrame(),
-    DecodeSprites(),
-  ],
+  commands: bootCommands(),
 }))
 
 // SETTLING
@@ -426,15 +401,7 @@ export const update = ApplicationComposition.makeUpdate({
       ...afterMessage(model),
     ]),
 
-  ClickedFullscreenButton: model =>
-    settle(model, {
-      model,
-      commands: [
-        SetFullscreen({
-          fullscreen: model.fullscreen === 'On' ? 'Off' : 'On',
-        }),
-      ],
-    }),
+  ClickedFullscreenButton: model => settle(model, toggleFullscreen(model)),
 
   CompletedSetFullscreen: (model, { fullscreen }) =>
     settle(model, {
@@ -710,7 +677,7 @@ export const update = ApplicationComposition.makeUpdate({
       model,
       combine(model, [
         stepModel => registerServiceWorkerAfterSplash(stepModel, RUNNING_BUILD),
-        stepModel => ({ model: stepModel, commands: [ReadRoomLink()] }),
+        askForRoomLink,
       ]),
     ),
 

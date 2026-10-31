@@ -7,7 +7,6 @@ import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import changelogMarkdown from '../CHANGELOG.md?raw'
 import { NEWS_DAYS, newsHeadline, parseChangelog } from './changelog'
-import { WriteSave } from './commands'
 import { FIXED_STEP_MS } from './constants'
 import { HOME_BUTTONS, HOME_KEYS, isNewsUnseen } from './home'
 import { update } from './main'
@@ -32,6 +31,7 @@ import {
 } from './munchopedia'
 import { saveOf } from './save'
 import { SURFACE, press, showDialog, tick } from './testing'
+import { WriteSave } from './update/save'
 import { asVeteran } from './veteran'
 
 const home: Model = modifyFields(asVeteran(initialModel), {

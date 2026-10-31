@@ -5,13 +5,6 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { Dialog, DialogBlock } from '@foldkit/ui'
 
-import {
-  FocusTutorialReset,
-  HideSplash,
-  ReadRoomLink,
-  ShowLoadProgress,
-  WriteSave,
-} from './commands'
 // @vitest-environment happy-dom
 import { FIXED_STEP_MS } from './constants'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
@@ -52,6 +45,13 @@ import {
   writeLegacySave,
 } from './save'
 import { SURFACE, showDialog, tick } from './testing'
+import { ReadRoomLink } from './update/coop'
+import {
+  FocusTutorialReset,
+  HideSplash,
+  ShowLoadProgress,
+  WriteSave,
+} from './update/save'
 import { ZOMBIE_KIND_ORDER } from './zombies'
 
 const learnedSave: PlayerSave = {

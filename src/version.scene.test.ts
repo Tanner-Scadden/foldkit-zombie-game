@@ -15,12 +15,12 @@ import { describe, test } from 'vitest'
 import { Dialog, DialogBlock } from '@foldkit/ui'
 
 import { maybeNewestNewsDay, newsHeadline } from './changelog'
-import { ReloadPage, WaitForUnwrap } from './commands'
 import { PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
 import { ROOT, SCENE_SUBSCRIPTIONS, fighting, measureSurface } from './testing'
+import { ReloadPage, WaitForUnwrap } from './update/home'
 import { RUNNING_BUILD } from './version'
 import { pause } from './waves'
 

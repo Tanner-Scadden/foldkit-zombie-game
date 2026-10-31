@@ -2,9 +2,9 @@ import type { Layer } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import type { CommandsLayer } from '../commands'
 import { refreshIntent } from '../frame'
 import { releaseAll } from '../input'
+import type { CommandsLayer } from '../layer'
 import type { Message } from '../message'
 import type { Input, Model } from '../model'
 

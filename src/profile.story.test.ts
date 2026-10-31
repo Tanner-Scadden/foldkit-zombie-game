@@ -7,7 +7,6 @@ import { describe, expect, test } from 'vitest'
 import { Dialog, DialogBlock, RadioGroup, Tabs } from '@foldkit/ui'
 
 import * as Character from './character'
-import { PlaySound, WriteSave } from './commands'
 import {
   CharacterBinding,
   ProfileDialogBinding,
@@ -39,6 +38,8 @@ import {
 } from './profile'
 import { saveOf } from './save'
 import { SURFACE, press, showDialog } from './testing'
+import { WriteSave } from './update/save'
+import { PlaySound } from './update/sound'
 import { asVeteran } from './veteran'
 
 const home: Model = modifyFields(asVeteran(initialModel), {

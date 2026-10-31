@@ -20,13 +20,6 @@ import { describe, test, expect as vitestExpect } from 'vitest'
 
 import { Dialog, DialogBlock } from '@foldkit/ui'
 
-import {
-  ApplyRotation,
-  FocusHandCard,
-  FocusHomeButton,
-  FocusTutorialReset,
-  WriteSave,
-} from './commands'
 import { RESTART_GRACE_MS } from './constants'
 import { withBests } from './difficulty'
 import { KEEP_TUTORIAL_BUTTON_ID, RESET_TUTORIAL_BUTTON_ID } from './home'
@@ -42,6 +35,9 @@ import {
   pickCardInScene,
   showDialogInScene,
 } from './testing'
+import { FocusHandCard, FocusHomeButton } from './update/home'
+import { ApplyRotation } from './update/rotation'
+import { FocusTutorialReset, WriteSave } from './update/save'
 import { asVeteran } from './veteran'
 import { pause } from './waves'
 
