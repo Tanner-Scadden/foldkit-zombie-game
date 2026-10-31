@@ -2,7 +2,14 @@ import { Array, Option, Order, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import type { SoundEffect } from './audio'
-import { type Model, Phase, RunMode, type RunRecord } from './model'
+import { withBests } from './difficulty'
+import {
+  type DifficultyBests,
+  type Model,
+  Phase,
+  RunMode,
+  type RunRecord,
+} from './model'
 import { isCoop, playersOf } from './party'
 import type { Difficulty } from './playerData'
 import type { SharedRun } from './share'
@@ -137,7 +144,7 @@ export const tallyRowsOf = (model: Model): ReadonlyArray<TallyRow> =>
         label: 'SPLATTED',
         value: totalKills(model.stats),
         format: plain,
-        isBest: false,
+        isBest: isRecord(model, 'Kills'),
       },
       {
         icon: 'Streak',
@@ -285,20 +292,76 @@ export const recordsBroken = (
     Preparation: (): ReadonlyArray<RunRecord> => [],
     Wave: (): ReadonlyArray<RunRecord> => [],
     Paused: (): ReadonlyArray<RunRecord> => [],
-    Victory: (): ReadonlyArray<RunRecord> =>
-      Option.exists(
-        bests.maybeFastestWinMs,
-        fastest => after.stats.runMs < fastest,
-      )
-        ? ['Time']
-        : [],
-    GameOver: ({ wave }): ReadonlyArray<RunRecord> =>
-      RunMode.isAnyOf(['Endless'])(after.mode) &&
-      Option.exists(bests.maybeBestEndlessWave, best => wave > best)
-        ? ['Wave']
-        : [],
+    Victory: (): ReadonlyArray<RunRecord> => [
+      ...recordWhen(
+        Option.exists(
+          bests.maybeFastestWinMs,
+          fastest => after.stats.runMs < fastest,
+        ),
+        'Time',
+      ),
+      ...killsRecord(bests, after),
+    ],
+    GameOver: ({ wave }): ReadonlyArray<RunRecord> => [
+      ...recordWhen(
+        Option.exists(
+          RunMode.isAnyOf(['Endless'])(after.mode)
+            ? bests.maybeBestEndlessWave
+            : bests.maybeFurthestWave,
+          best => wave > best,
+        ),
+        'Wave',
+      ),
+      ...killsRecord(bests, after),
+    ],
   })
 }
+
+const recordWhen = (
+  isBroken: boolean,
+  record: RunRecord,
+): ReadonlyArray<RunRecord> => (isBroken ? [record] : [])
+
+const killsRecord = (
+  bests: DifficultyBests,
+  after: Model,
+): ReadonlyArray<RunRecord> =>
+  recordWhen(
+    Option.exists(bests.maybeMostKills, most => totalKills(after.stats) > most),
+    'Kills',
+  )
+
+const higher = (maybeBest: Option.Option<number>, reached: number) =>
+  Option.some(
+    Option.match(maybeBest, {
+      onNone: () => reached,
+      onSome: best => Math.max(best, reached),
+    }),
+  )
+
+// NOTE: the run records a finished run sets, on the frame it ends: the
+// most kills in a run, and in the campaign the furthest wave reached (a win
+// reaches the last wave). Endless keeps its own deepest wave in the bests.
+export const reachRecords = (
+  before: Model,
+  after: Model,
+  played: Difficulty = after.difficulty.chosen,
+): Model =>
+  !isEndScreen(before.phase) && isEndScreen(after.phase)
+    ? withBests(
+        after,
+        bests =>
+          modifyFields(bests, {
+            maybeMostKills: maybeMost =>
+              higher(maybeMost, totalKills(after.stats)),
+            maybeFurthestWave: maybeFurthest =>
+              RunMode.isAnyOf(['Campaign'])(after.mode)
+                ? higher(maybeFurthest, roundWave(after.phase))
+                : maybeFurthest,
+          }),
+        played,
+      )
+    : after
 
 export const noteRecords = (
   before: Model,

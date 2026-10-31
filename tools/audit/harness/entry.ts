@@ -1332,7 +1332,8 @@ const scenarioModelOf = (): Model => {
   }
   if (config.bests) {
     model = modifyFields(
-      withBests(model, () => ({
+      withBests(model, current => ({
+        ...current,
         maybeBestEndlessWave: Option.some(12),
         maybeFastestWinMs: Option.some(402_000),
       })),

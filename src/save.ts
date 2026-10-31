@@ -28,6 +28,7 @@ import {
   noPractice,
 } from './model'
 import {
+  Appearance,
   HomeScreenTip,
   MusicSetting,
   PlayerName,
@@ -42,12 +43,15 @@ import {
   type SavedLessons,
   SavedOnboarding,
   SavedPowerUps,
+  type SavedRunRecord,
+  type SavedRunRecords,
   SavedSettings,
   type SavedTrapHint,
   ShakeSetting,
   ShareStatsSetting,
   SoundSetting,
   StoredAppearance,
+  noSavedRunRecords,
 } from './playerData'
 import { cleanName } from './profile'
 
@@ -66,6 +70,8 @@ export {
   SavedNightmare,
   SavedOnboarding,
   SavedPowerUps,
+  SavedRunRecord,
+  SavedRunRecords,
   SavedSettings,
   SavedTrapHint,
 } from './playerData'
@@ -232,7 +238,25 @@ const PlayerSaveV9 = Schema.Struct({
 })
 type PlayerSaveV9 = typeof PlayerSaveV9.Type
 
+// NOTE: version 11 is the save before the run records.
+const PlayerSaveV11 = Schema.Struct({
+  version: Schema.Literal(11),
+  onboarding: SavedOnboarding,
+  homeScreenTip: HomeScreenTip,
+  settings: SavedSettings,
+  appearance: Appearance,
+  difficulty: SavedDifficulty,
+  bests: SavedBests,
+  home: SavedHome,
+  seenPowerUps: SavedPowerUps,
+  rotation: RotationSetting,
+  name: PlayerName,
+})
+type PlayerSaveV11 = typeof PlayerSaveV11.Type
+
 const PlayerSaveJson = Schema.fromJsonString(PlayerSave)
+
+const PlayerSaveV11Json = Schema.fromJsonString(PlayerSaveV11)
 
 const PlayerSaveV9Json = Schema.fromJsonString(PlayerSaveV9)
 
@@ -408,8 +432,8 @@ const migrateV8 = (save: PlayerSaveV8): PlayerSaveV9 => ({
 // NOTE: a save from before the simple look keeps its look: every older
 // version reads it through StoredAppearance (src/playerData.ts) as the
 // closest current one, so only the version number moves on.
-const migrateV9 = (save: PlayerSaveV9): PlayerSave => ({
-  version: SAVE_VERSION,
+const migrateV9 = (save: PlayerSaveV9): PlayerSaveV11 => ({
+  version: 11,
   onboarding: save.onboarding,
   homeScreenTip: save.homeScreenTip,
   settings: save.settings,
@@ -422,7 +446,17 @@ const migrateV9 = (save: PlayerSaveV9): PlayerSave => ({
   name: save.name,
 })
 
-const fromV8 = (save: PlayerSaveV8): PlayerSave => migrateV9(migrateV8(save))
+// NOTE: a save from before the run records has none yet, so its first
+// records are set without a NEW BEST.
+const migrateV11 = (save: PlayerSaveV11): PlayerSave => ({
+  ...save,
+  version: SAVE_VERSION,
+  records: noSavedRunRecords,
+})
+
+const fromV9 = (save: PlayerSaveV9): PlayerSave => migrateV11(migrateV9(save))
+
+const fromV8 = (save: PlayerSaveV8): PlayerSave => fromV9(migrateV8(save))
 
 const fromV7 = (save: PlayerSaveV7): PlayerSave => fromV8(migrateV7(save))
 
@@ -450,9 +484,13 @@ const SAVE_VERSIONS: ReadonlyArray<
 > = [
   { version: SAVE_VERSION, read: Schema.decodeOption(PlayerSaveJson) },
   {
-    version: 10,
+    version: 11,
     read: raw =>
-      Option.map(Schema.decodeOption(PlayerSaveV9Json)(raw), migrateV9),
+      Option.map(Schema.decodeOption(PlayerSaveV11Json)(raw), migrateV11),
+  },
+  {
+    version: 10,
+    read: raw => Option.map(Schema.decodeOption(PlayerSaveV9Json)(raw), fromV9),
   },
   {
     version: 8,
@@ -521,6 +559,18 @@ const savedDifficultyBests = (
 ): SavedDifficultyBests => ({
   fastestWinMs: Option.getOrNull(bests.maybeFastestWinMs),
   bestEndlessWave: Option.getOrNull(bests.maybeBestEndlessWave),
+})
+
+const savedRunRecord = (bests: DifficultyBests): SavedRunRecord => ({
+  furthestWave: Option.getOrNull(bests.maybeFurthestWave),
+  mostKills: Option.getOrNull(bests.maybeMostKills),
+})
+
+const savedRunRecords = (bests: PlayerBests): SavedRunRecords => ({
+  Easy: savedRunRecord(bests.byDifficulty.Easy),
+  Normal: savedRunRecord(bests.byDifficulty.Normal),
+  Hard: savedRunRecord(bests.byDifficulty.Hard),
+  Nightmare: savedRunRecord(bests.byDifficulty.Nightmare),
 })
 
 const savedBests = (bests: PlayerBests): SavedBests => ({
@@ -603,6 +653,7 @@ export const saveOf = (model: Model): PlayerSave => ({
   seenPowerUps: model.seenPowerUps,
   rotation: model.rotationSetting,
   name: model.playerName,
+  records: savedRunRecords(model.bests),
 })
 
 // INTO THE MODEL
@@ -644,9 +695,12 @@ const knownPowerUps = (
 
 const restoreDifficultyBests = (
   saved: SavedDifficultyBests,
+  record: SavedRunRecord,
 ): DifficultyBests => ({
   maybeFastestWinMs: Option.fromNullishOr(saved.fastestWinMs),
   maybeBestEndlessWave: Option.fromNullishOr(saved.bestEndlessWave),
+  maybeFurthestWave: Option.fromNullishOr(record.furthestWave),
+  maybeMostKills: Option.fromNullishOr(record.mostKills),
 })
 
 const savedKillsOf =
@@ -671,15 +725,21 @@ const restoreKills = (
   }
 }
 
-const restoreBests = (saved: SavedBests): PlayerBests => ({
+const restoreBests = (
+  saved: SavedBests,
+  records: SavedRunRecords,
+): PlayerBests => ({
   runsPlayed: saved.runsPlayed,
   totalKills: saved.totalKills,
   killsByKind: restoreKills(saved.killsByKind),
   byDifficulty: {
-    Easy: restoreDifficultyBests(saved.byDifficulty.Easy),
-    Normal: restoreDifficultyBests(saved.byDifficulty.Normal),
-    Hard: restoreDifficultyBests(saved.byDifficulty.Hard),
-    Nightmare: restoreDifficultyBests(saved.byDifficulty.Nightmare),
+    Easy: restoreDifficultyBests(saved.byDifficulty.Easy, records.Easy),
+    Normal: restoreDifficultyBests(saved.byDifficulty.Normal, records.Normal),
+    Hard: restoreDifficultyBests(saved.byDifficulty.Hard, records.Hard),
+    Nightmare: restoreDifficultyBests(
+      saved.byDifficulty.Nightmare,
+      records.Nightmare,
+    ),
   },
 })
 
@@ -709,7 +769,7 @@ export const restoreSave = (model: Model, save: PlayerSave): Model =>
       }),
     difficultyCard: card =>
       save.difficulty.card === 'Seen' ? DifficultyCard.Seen() : card,
-    bests: () => restoreBests(save.bests),
+    bests: () => restoreBests(save.bests, save.records),
     home: home =>
       modifyFields(home, {
         maybeSeenNewsDay: () => Option.fromNullishOr(save.home.seenNewsDay),

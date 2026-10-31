@@ -9,7 +9,7 @@ import {
   MAX_FRAME_DELTA_MS,
   RESTART_GRACE_MS,
 } from './constants'
-import { withBests } from './difficulty'
+import { bestsFor, withBests } from './difficulty'
 import {
   TIMELINES,
   doneMs,
@@ -24,6 +24,8 @@ import { update } from './main'
 import { Message } from './message'
 import { AudioState, type Model, Phase, RunMode, initialModel } from './model'
 import { creditKills, seatCrew } from './party'
+import { noSavedRunRecords } from './playerData'
+import { mergeRunRecords } from './playerScope'
 import { GAME_URL, shareText, shareUrl } from './share'
 import { SURFACE, press, tick, zombieOf } from './testing'
 import { OpenShare } from './update/end'
@@ -318,6 +320,118 @@ describe('NEW BEST', () => {
           Message.CompletedPlaySound({ sound: 'PowerUp', outcome: 'Played' }),
         ],
       ),
+    )
+  })
+})
+
+describe('the run records', () => {
+  // NOTE: a campaign death on wave 5 with 34 kills, against records that
+  // stood before it.
+  const campaignAt = (furthestWave: number, mostKills: number): Model =>
+    lastHeart(
+      withBests(
+        modifyFields(midRun, {
+          phase: () => Phase.Wave({ wave: 5, elapsedMs: 4000, spawns: [] }),
+          stats: stats =>
+            modifyFields(stats, {
+              kills: kills => modifyFields(kills, { Shambler: () => 34 }),
+            }),
+        }),
+        bests =>
+          modifyFields(bests, {
+            maybeFurthestWave: () => Option.some(furthestWave),
+            maybeMostKills: () => Option.some(mostKills),
+          }),
+      ),
+    )
+
+  const fall = message(Message.TickedFrame({ deltaTime: FIXED_STEP_MS }))
+
+  test('a campaign death past the furthest wave is a NEW BEST, and is kept', () => {
+    story(
+      update,
+      given(campaignAt(3, 100)),
+      fall,
+      model(after => {
+        expect(after.runRecords).toEqual(['Wave'])
+        expect(tallyRowsOf(after)[0]?.isBest).toBe(true)
+        expect(bestsFor(after).maybeFurthestWave).toEqual(Option.some(5))
+        expect(bestsFor(after).maybeMostKills).toEqual(Option.some(100))
+      }),
+    )
+  })
+
+  test('dying on the furthest wave again is no NEW BEST', () => {
+    story(
+      update,
+      given(campaignAt(5, 100)),
+      fall,
+      model(after => {
+        expect(after.runRecords).toEqual([])
+        expect(bestsFor(after).maybeFurthestWave).toEqual(Option.some(5))
+      }),
+    )
+  })
+
+  test('more kills than ever in one run is a NEW BEST on SPLATTED, and is kept', () => {
+    story(
+      update,
+      given(campaignAt(9, 20)),
+      fall,
+      model(after => {
+        expect(after.runRecords).toEqual(['Kills'])
+        expect(tallyRowsOf(after)[1]?.isBest).toBe(true)
+        expect(bestsFor(after).maybeMostKills).toEqual(Option.some(34))
+        expect(bestsFor(after).maybeFurthestWave).toEqual(Option.some(9))
+      }),
+    )
+  })
+
+  test('matching the most kills is no NEW BEST', () => {
+    story(
+      update,
+      given(campaignAt(9, 34)),
+      fall,
+      model(after => {
+        expect(after.runRecords).toEqual([])
+      }),
+    )
+  })
+
+  test('a first run sets both records without a NEW BEST', () => {
+    story(
+      update,
+      given(
+        lastHeart(
+          modifyFields(midRun, {
+            phase: () => Phase.Wave({ wave: 5, elapsedMs: 4000, spawns: [] }),
+          }),
+        ),
+      ),
+      fall,
+      model(after => {
+        expect(after.runRecords).toEqual([])
+        expect(bestsFor(after).maybeFurthestWave).toEqual(Option.some(5))
+        expect(Option.isSome(bestsFor(after).maybeMostKills)).toBe(true)
+      }),
+    )
+  })
+
+  test('two devices merge their records to the larger of each', () => {
+    const record = (furthestWave: number | null, mostKills: number | null) => ({
+      ...noSavedRunRecords,
+      Hard: { furthestWave, mostKills },
+    })
+    expect(mergeRunRecords(record(7, 40), record(4, 95)).Hard).toEqual({
+      furthestWave: 7,
+      mostKills: 95,
+    })
+    expect(mergeRunRecords(record(null, 12), record(3, null)).Hard).toEqual({
+      furthestWave: 3,
+      mostKills: 12,
+    })
+    expect(mergeRunRecords(record(4, 95), record(7, 40))).toEqual(
+      mergeRunRecords(record(7, 40), record(4, 95)),
     )
   })
 })

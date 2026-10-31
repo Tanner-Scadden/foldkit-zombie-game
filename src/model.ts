@@ -166,7 +166,7 @@ export type ProfilePanel = typeof ProfilePanel.Type
 
 // NOTE: a record the run that just ended broke, for its NEW BEST: the
 // deepest endless wave, or the fastest win (src/endBeat.ts).
-export const RunRecord = Schema.Literals(['Wave', 'Time'])
+export const RunRecord = Schema.Literals(['Wave', 'Time', 'Kills'])
 export type RunRecord = typeof RunRecord.Type
 
 export const Model = Schema.Struct({
@@ -297,6 +297,8 @@ export const LOAD_STEPS: ReadonlyArray<LoadStep> = [
 const noDifficultyBests: DifficultyBests = {
   maybeFastestWinMs: Option.none(),
   maybeBestEndlessWave: Option.none(),
+  maybeFurthestWave: Option.none(),
+  maybeMostKills: Option.none(),
 }
 
 export const noBests: PlayerBests = {

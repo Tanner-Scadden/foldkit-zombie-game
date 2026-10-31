@@ -6,7 +6,7 @@ import { sendRunSummary } from '../analyticsBeacon'
 import { maybeRunOutcome, runSummaryOf } from '../analyticsRun'
 import { isOnlineRun, runDifficultyOf } from '../coopPlay'
 import { makeCommand } from '../definition'
-import { noteRecords } from '../endBeat'
+import { noteRecords, reachRecords } from '../endBeat'
 import { countRunFrom, forgetNewEntriesFrom } from '../home'
 import { Message } from '../message'
 import type { Model } from '../model'
@@ -94,7 +94,11 @@ export const afterMessage = (
   stepModel => ({
     model: countRunFrom(
       before,
-      noteRecords(before, stepModel, runDifficultyOf(stepModel)),
+      reachRecords(
+        before,
+        noteRecords(before, stepModel, runDifficultyOf(stepModel)),
+        runDifficultyOf(stepModel),
+      ),
       runDifficultyOf(stepModel),
     ),
   }),
