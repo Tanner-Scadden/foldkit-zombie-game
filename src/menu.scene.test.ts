@@ -111,8 +111,12 @@ describe('Home menu', () => {
         selector('.home-corner'),
         expect(settingsButton).toHaveAttr('aria-keyshortcuts', 'O'),
         expect(settingsButton).toHaveAttr('aria-haspopup', 'dialog'),
+        expect(role('link', { name: /^Buy Rattles a coffee/ })).toHaveAttr(
+          'aria-keyshortcuts',
+          'B',
+        ),
       ),
-      expectAll(all.selector('.home-stage .home-key')).toHaveCount(6),
+      expectAll(all.selector('.home-stage .home-key')).toHaveCount(7),
       expect(
         role('button', { name: 'Your character: change how you look' }),
       ).toHaveAttr('aria-haspopup', 'dialog'),
@@ -166,24 +170,16 @@ describe('Home menu', () => {
     )
   })
 
-  test('the tip jar is a card in the hand only while a support link is set', () => {
+  test('the hand deals no tip jar card: the coffee stands in the corner', () => {
     scene(
       ROOT,
-      given(
-        modifyFields(home, {
-          maybeSupportUrl: () => Option.some('https://buy.stripe.com/test'),
-        }),
-      ),
+      given(home),
       measureSurface,
-      expect(role('link', { name: /^Tip jar/ })).toBeAbsent(),
       ...openHandInScene(),
       inside(
         hand,
-        expectAll(all.selector('.hand-card')).toHaveCount(6),
-        expect(role('link', { name: /^Tip jar/ })).toHaveAttr(
-          'href',
-          'https://buy.stripe.com/test',
-        ),
+        expectAll(all.selector('.hand-card')).toHaveCount(5),
+        expect(role('link', { name: /coffee/i })).toBeAbsent(),
       ),
     )
   })
@@ -408,6 +404,29 @@ describe('Home menu', () => {
     )
   })
 
+  test('without a support link the arrow keys skip the coffee', () => {
+    scene(
+      ROOT,
+      given(modifyFields(home, { maybeSupportUrl: () => Option.none() })),
+      measureSurface,
+      emitPressedKey('ArrowRight'),
+      Command.resolve(
+        FocusHomeButton({ button: 'Play' }),
+        Message.CompletedFocusHomeButton(),
+      ),
+      emitPressedKey('ArrowUp'),
+      Command.resolve(
+        FocusHomeButton({ button: 'Settings' }),
+        Message.CompletedFocusHomeButton(),
+      ),
+      emitPressedKey('ArrowUp'),
+      Command.resolve(
+        FocusHomeButton({ button: 'Manor' }),
+        Message.CompletedFocusHomeButton(),
+      ),
+    )
+  })
+
   test('arrow keys walk the buttons in order and wrap', () => {
     scene(
       ROOT,
@@ -419,7 +438,15 @@ describe('Home menu', () => {
         Message.CompletedFocusHomeButton(),
       ),
       ...Array.flatMap(
-        ['Mode', 'Difficulty', 'Coop', 'Manor', 'Settings', 'Play'] as const,
+        [
+          'Mode',
+          'Difficulty',
+          'Coop',
+          'Manor',
+          'Support',
+          'Settings',
+          'Play',
+        ] as const,
         button => [
           emitPressedKey('ArrowDown'),
           Command.resolve(

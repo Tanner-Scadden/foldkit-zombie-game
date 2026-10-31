@@ -26,13 +26,15 @@ import type { Difficulty } from './worldSchema'
 // BUTTONS
 
 // NOTE: the home layout. Arrow keys walk PLAY, the mode, the difficulty,
-// CO-OP, the MANOR button, then the gear. Everything else lives in the MANOR hand, so a
-// new feature is a new card there and PLAY never moves.
-// CO-OP joins only in builds where co-op is released (src/coop/release.ts).
+// CO-OP, the MANOR button, the coffee, then the gear. Everything else lives
+// in the MANOR hand, so a new feature is a new card there and PLAY never
+// moves. CO-OP joins only in builds where co-op is released
+// (src/coop/release.ts), and the coffee only while a support link is set
+// (homeButtonsOf).
 export const HOME_BUTTONS: Array.NonEmptyReadonlyArray<HomeButton> =
   IS_COOP_RELEASED
-    ? ['Play', 'Mode', 'Difficulty', 'Coop', 'Manor', 'Settings']
-    : ['Play', 'Mode', 'Difficulty', 'Manor', 'Settings']
+    ? ['Play', 'Mode', 'Difficulty', 'Coop', 'Manor', 'Support', 'Settings']
+    : ['Play', 'Mode', 'Difficulty', 'Manor', 'Support', 'Settings']
 
 const HOME_BUTTON_IDS: Readonly<Record<HomeButton, string>> = {
   Play: 'home-play',
@@ -40,21 +42,32 @@ const HOME_BUTTON_IDS: Readonly<Record<HomeButton, string>> = {
   Difficulty: 'home-difficulty',
   Coop: 'home-coop',
   Manor: 'home-manor',
+  Support: 'home-support',
   Settings: 'home-settings',
 }
+
+export const isSupportShown = (model: Model): boolean =>
+  Option.isSome(model.maybeSupportUrl)
+
+// NOTE: the buttons the home menu draws, in arrow key order.
+export const homeButtonsOf = (model: Model): ReadonlyArray<HomeButton> =>
+  isSupportShown(model)
+    ? HOME_BUTTONS
+    : Array.filter(HOME_BUTTONS, button => button !== 'Support')
 
 type HomeKey = Readonly<{ code: string; cap: string; name: string }>
 
 // NOTE: one key per action. Enter, E, C, L, Z, I, and O were already the
-// home keys. X picks the difficulty, J joins up for co-op, and V opens the
-// MANOR hand, letters no other screen uses, so WASD, R, Q, T, G, H, K, M,
-// and N keep their one meaning.
+// home keys. X picks the difficulty, J joins up for co-op, V opens the
+// MANOR hand, and B buys Rattles a coffee, letters no other screen uses, so
+// WASD, R, Q, T, G, H, K, M, and N keep their one meaning.
 export const HOME_KEYS: Readonly<Record<HomeButton, HomeKey>> = {
   Play: { code: 'Enter', cap: 'ENTER', name: 'Enter' },
   Mode: { code: 'KeyE', cap: 'E', name: 'E' },
   Difficulty: { code: 'KeyX', cap: 'X', name: 'X' },
   Coop: { code: 'KeyJ', cap: 'J', name: 'J' },
   Manor: { code: 'KeyV', cap: 'V', name: 'V' },
+  Support: { code: 'KeyB', cap: 'B', name: 'B' },
   Settings: { code: 'KeyO', cap: 'O', name: 'O' },
 }
 
@@ -67,6 +80,9 @@ export const isCoopKey = (code: string): boolean => code === HOME_KEYS.Coop.code
 
 export const isManorKey = (code: string): boolean =>
   code === HOME_KEYS.Manor.code
+
+export const isSupportKey = (code: string): boolean =>
+  code === HOME_KEYS.Support.code
 
 export const isSettingsKey = (code: string): boolean =>
   code === HOME_KEYS.Settings.code
@@ -83,17 +99,16 @@ export const HAND_CARDS: Array.NonEmptyReadonlyArray<HandCard> = [
   'Munchopedia',
   'WhatsNew',
   'HowToPlay',
-  'Support',
   'Code',
 ]
 
-// NOTE: the link cards open a page in a new tab, so they have no key and no
+// NOTE: the link card opens a page in a new tab, so it has no key and no
 // dialog.
-export type LinkHandCard = Extract<HandCard, 'Support' | 'Code'>
+export type LinkHandCard = Extract<HandCard, 'Code'>
 export type KeyedHandCard = Exclude<HandCard, LinkHandCard>
 
 export const isLinkHandCard = (card: HandCard): card is LinkHandCard =>
-  card === 'Support' || card === 'Code'
+  card === 'Code'
 
 // NOTE: the game's public source, for the Code card.
 export const SOURCE_URL = 'https://github.com/Tanner-Scadden/munch-manor'
@@ -122,12 +137,6 @@ export const maybeHandCardOfKey = (
 export const handCardId = (card: HandCard): string =>
   `hand-card-${card.toLowerCase()}`
 
-export const dealtCards = (model: Model): ReadonlyArray<HandCard> =>
-  Array.filter(
-    HAND_CARDS,
-    card => card !== 'Support' || Option.isSome(model.maybeSupportUrl),
-  )
-
 export const steppedHandCard = (
   cards: ReadonlyArray<HandCard>,
   from: HandCard,
@@ -147,23 +156,26 @@ const STEP_OFFSET: Readonly<Record<FocusStep, number>> = {
 }
 
 export const steppedHomeFocus = (
+  buttons: ReadonlyArray<HomeButton>,
   maybeFocus: Option.Option<HomeButton>,
   step: FocusStep,
-): HomeButton =>
-  Option.match(maybeFocus, {
-    onNone: () => Array.headNonEmpty(HOME_BUTTONS),
+): HomeButton => {
+  const first = Array.headNonEmpty(HOME_BUTTONS)
+  return Option.match(maybeFocus, {
+    onNone: () => first,
     onSome: focused => {
       const index = pipe(
-        Array.findFirstIndex(HOME_BUTTONS, button => button === focused),
+        Array.findFirstIndex(buttons, button => button === focused),
         Option.getOrElse(() => 0),
       )
-      const count = HOME_BUTTONS.length
+      const count = buttons.length
       return pipe(
-        Array.get(HOME_BUTTONS, (index + STEP_OFFSET[step] + count) % count),
-        Option.getOrElse(() => Array.headNonEmpty(HOME_BUTTONS)),
+        Array.get(buttons, (index + STEP_OFFSET[step] + count) % count),
+        Option.getOrElse(() => first),
       )
     },
   })
+}
 
 // HOME
 

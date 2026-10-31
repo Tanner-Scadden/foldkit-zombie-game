@@ -3,8 +3,8 @@ import { Option } from 'effect'
 // THE LINK
 
 // NOTE: the tip jar's Stripe Payment Link. While it is empty the coffee
-// button is drawn nowhere. Set it to the https://buy.stripe.com/... link and
-// it shows as the TIP JAR card in the home menu's MANOR hand (homeView.ts)
+// button is drawn nowhere. Set to the https://buy.stripe.com/... link, it
+// shows as the coffee by the gear in the home menu's corner (homeView.ts)
 // and as a pill on Victory (supportView.ts). support.test.ts fails a
 // link that is not https on buy.stripe.com.
 export const SUPPORT_URL = 'https://buy.stripe.com/14A3cwe3i8xXcMX1qscs800'

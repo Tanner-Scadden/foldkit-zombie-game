@@ -17,13 +17,13 @@ import {
 } from './difficulty'
 import { munchopediaBodyView, munchopediaText } from './guideView'
 import {
+  HAND_CARDS,
   HAND_KEYS,
   HOME_BUTTONS,
   HOME_KEYS,
   type KeyedHandCard,
   type LinkHandCard,
   SOURCE_URL,
-  dealtCards,
   handCardId,
   homeButtonId,
   isEndScreen,
@@ -37,7 +37,8 @@ import {
   CAMPAIGN_ICON,
   CHARACTER_ICON,
   CLOCK_ICON,
-  COFFEE_ICON,
+  COFFEE_CUP_ICON,
+  COFFEE_STEAM_ICON,
   ENDLESS_ICON,
   FULLSCREEN_ICON,
   GITHUB_MARK_ICON,
@@ -88,16 +89,19 @@ const keyBadgeView = (
   h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => keyCapView(model, HOME_KEYS[button].cap, h)
 
-const homeButtonAttributes = (
-  button: HomeButton,
-  h: ApplicationViewBuilder,
-) => [
-  h.Type('button'),
+// NOTE: what every home button shares, a link like the coffee too: its id,
+// its key, and focus for the arrow keys.
+const homeFocusAttributes = (button: HomeButton, h: ApplicationViewBuilder) => [
   h.Id(homeButtonId(button)),
   h.AriaKeyshortcuts(HOME_KEYS[button].name),
   h.OnFocus(Message.FocusedHomeButton({ button })),
   h.OnBlur(Message.BlurredHomeButton()),
 ]
+
+const homeButtonAttributes = (
+  button: HomeButton,
+  h: ApplicationViewBuilder,
+) => [h.Type('button'), ...homeFocusAttributes(button, h)]
 
 // PLAY
 
@@ -293,12 +297,6 @@ const CARD_LOOKS: Readonly<Record<HandCard, CardLook>> = {
     ariaLabel: 'How to play: the controls',
     icon: HELP_ICON,
   },
-  Support: {
-    title: 'TIP JAR',
-    ariaLabel:
-      'Tip jar: buy the shopkeeper a coffee to support the game. Opens in a new tab',
-    icon: COFFEE_ICON,
-  },
   Code: {
     title: 'CODE',
     ariaLabel: "Code: the game's source on GitHub. Opens in a new tab",
@@ -338,14 +336,13 @@ const cardAriaLabel = (model: Model, card: HandCard): string =>
     : CARD_LOOKS[card].ariaLabel
 
 const newsCards = (model: Model): ReadonlyArray<HandCard> =>
-  Array.filter(dealtCards(model), card => hasNews(model, card))
+  Array.filter(HAND_CARDS, card => hasNews(model, card))
 
 const NEWS_NAMES: Readonly<Record<HandCard, string>> = {
   Character: 'Character',
   Munchopedia: 'the Munchopedia',
   WhatsNew: "What's new",
   HowToPlay: 'How to play',
-  Support: 'the tip jar',
   Code: 'the code',
 }
 
@@ -395,7 +392,6 @@ const manorButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
   )
 
 const handKeyMessage = (
-  model: Model,
   card: HandCard,
   key: string,
 ): Option.Option<Message> => {
@@ -407,7 +403,7 @@ const handKeyMessage = (
         : 0
   return step === 0
     ? Option.none()
-    : Option.map(steppedHandCard(dealtCards(model), card, step), next =>
+    : Option.map(steppedHandCard(HAND_CARDS, card, step), next =>
         Message.SteppedHandFocus({ card: next }),
       )
 }
@@ -451,10 +447,9 @@ const cardBodyView = (
   ),
 ]
 
-const linkCardUrl = (model: Model, card: LinkHandCard): string =>
-  card === 'Code'
-    ? SOURCE_URL
-    : Option.getOrElse(model.maybeSupportUrl, () => '')
+const LINK_CARD_URLS: Readonly<Record<LinkHandCard, string>> = {
+  Code: SOURCE_URL,
+}
 
 const handCardView = (
   model: Model,
@@ -472,7 +467,7 @@ const handCardView = (
     h.Style({ '--i': `${index}`, '--n': `${count}` }),
     h.AriaLabel(cardAriaLabel(model, card)),
     ...(isLinkHandCard(card) ? [] : [h.AriaKeyshortcuts(HAND_KEYS[card].name)]),
-    h.OnKeyDownPreventDefault(key => handKeyMessage(model, card, key)),
+    h.OnKeyDownPreventDefault(key => handKeyMessage(card, key)),
   ]
   return h.li(
     [h.Class('hand-slot')],
@@ -481,7 +476,7 @@ const handCardView = (
         ? h.a(
             [
               ...shared,
-              h.Href(linkCardUrl(model, card)),
+              h.Href(LINK_CARD_URLS[card]),
               h.Target('_blank'),
               h.Rel('noopener noreferrer'),
             ],
@@ -507,7 +502,7 @@ const handView = (
   renderInfo: Dialog.RenderInfo,
   h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => {
-  const cards = dealtCards(model)
+  const cards = HAND_CARDS
   return [
     h.h2([...renderInfo.title, h.Class('sr-only')], [HAND_TITLE]),
     h.p(
@@ -644,8 +639,8 @@ const fullscreenButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
       )
     : h.empty
 
-// NOTE: the gear sits in the corner itself, and full screen, where the
-// browser can do it, sits just inside it.
+// NOTE: the gear sits in the corner itself, the coffee just inside it, and
+// full screen, where the browser can do it, inside that.
 const settingsButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.button(
     [
@@ -660,6 +655,46 @@ const settingsButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
       ...keyBadgeView(model, 'Settings', h),
     ],
   )
+
+// NOTE: Buy Rattles a coffee, just left of the gear: a pixel mug with
+// steam rising from it. It is a real link, so the browser opens the tip
+// jar from the tap itself and no popup blocker stops it. Its click still
+// sends ClickedSupportButton for the tap sound, and never prevents the link.
+const COFFEE_LABEL = 'Buy Rattles a coffee'
+
+const STEAM_WISPS = 2
+
+const supportButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
+  Option.match(model.maybeSupportUrl, {
+    onNone: () => h.empty,
+    onSome: url =>
+      h.a(
+        [
+          ...homeFocusAttributes('Support', h),
+          h.Class('home-corner-button home-support'),
+          h.Href(url),
+          h.Target('_blank'),
+          h.Rel('noopener noreferrer'),
+          h.AriaLabel(`${COFFEE_LABEL}. Opens in a new tab`),
+          h.Title(COFFEE_LABEL),
+          h.OnClick(Message.ClickedSupportButton(), { propagation: 'Stop' }),
+        ],
+        [
+          ...Array.makeBy(STEAM_WISPS, wisp =>
+            h.span([
+              h.Class('home-support-steam'),
+              h.AriaHidden(true),
+              h.Style({
+                '--wisp': `${wisp}`,
+                backgroundImage: COFFEE_STEAM_ICON,
+              }),
+            ]),
+          ),
+          iconView('home-corner-icon home-support-cup', COFFEE_CUP_ICON, h),
+          ...keyBadgeView(model, 'Support', h),
+        ],
+      ),
+  })
 
 // NEW ENTRY
 
@@ -761,6 +796,7 @@ export const homeMenuView = (model: Model, h: ApplicationViewBuilder): Html =>
                     [h.Class('home-corner-row')],
                     [
                       fullscreenButtonView(model, h),
+                      supportButtonView(model, h),
                       settingsButtonView(model, h),
                     ],
                   ),
@@ -811,6 +847,7 @@ const MENU_KEY_ACTIONS: Readonly<Record<HomeButton, string>> = {
   Difficulty: 'difficulty',
   Coop: 'co-op',
   Manor: 'manor',
+  Support: 'coffee',
   Settings: 'settings',
 }
 

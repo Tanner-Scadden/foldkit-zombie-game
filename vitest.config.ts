@@ -32,6 +32,10 @@ export default defineConfig({
     setupFiles: ['./src/vitest-setup.ts'],
     env: { VITE_COOP: 'On' },
     isolate: false,
+    // NOTE: a test reads a stylesheet's text with `?raw` (the corner's tap
+    // sizes in src/support.scene.test.ts). Vitest hands every other CSS
+    // file over empty.
+    css: { include: [/menu\.css/] },
     server: {
       deps: {
         inline: ['foldkit', '@foldkit/ui', '@foldkit/devtools'],

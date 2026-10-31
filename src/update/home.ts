@@ -20,11 +20,12 @@ import {
 } from '../difficulty'
 import {
   END_MENU_BUTTON_ID,
+  HAND_CARDS,
   type KeyedHandCard,
-  dealtCards,
   endOffer,
   handCardId,
   homeButtonId,
+  homeButtonsOf,
   isDifficultyKey,
   isEndScreen,
   isInstallTileShown,
@@ -32,6 +33,8 @@ import {
   isModeKey,
   isOnHome,
   isSettingsKey,
+  isSupportKey,
+  isSupportShown,
   isUpdateGiftShown,
   maybeHandCardOfKey,
   returnHome,
@@ -107,6 +110,24 @@ export const FocusHomeButton = makeCommand('FocusHomeButton', {
       )
   },
 })
+
+// NOTE: B buys Rattles a coffee from the keyboard. The coffee is a real
+// link, so the key clicks it, as SHARE's key does: the browser opens the
+// link from a click, which no popup blocker stops, and the click sends
+// ClickedSupportButton like a tap.
+export const ClickSupportLink = makeCommand('ClickSupportLink', {
+  messages: [Message.CompletedClickSupportLink],
+  handler: function* () {
+    return () =>
+      Dom.clickElement(`#${homeButtonId('Support')}`).pipe(
+        Effect.ignore,
+        Effect.as(Message.CompletedClickSupportLink()),
+      )
+  },
+})
+
+const clickSupportLink: UpdateStep = model =>
+  isSupportShown(model) ? { model, commands: [ClickSupportLink()] } : { model }
 
 export const FocusHandCard = makeCommand('FocusHandCard', {
   args: { card: HandCard },
@@ -261,7 +282,7 @@ export const closeHand = makeStep(model =>
 )
 
 export const stepHandFocus = (model: Model, card: HandCard): UpdateReturn =>
-  isHandOpen(model) && Array.contains(dealtCards(model), card)
+  isHandOpen(model) && Array.contains(HAND_CARDS, card)
     ? { model, commands: [FocusHandCard({ card })] }
     : { model }
 
@@ -274,7 +295,11 @@ export const homeFocusFromKey: (code: string) => UpdateStep =
           return { model: stepModel }
         }
 
-        const button = steppedHomeFocus(stepModel.maybeHomeFocus, step)
+        const button = steppedHomeFocus(
+          homeButtonsOf(stepModel),
+          stepModel.maybeHomeFocus,
+          step,
+        )
         return {
           model: modifyFields(stepModel, {
             maybeHomeFocus: () => Option.some(button),
@@ -346,6 +371,8 @@ export const homeFromKey = (code: string) =>
       return openPanel('Difficulty')
     } else if (isManorKey(code)) {
       return openHand
+    } else if (isSupportKey(code)) {
+      return clickSupportLink
     } else if (isSettingsKey(code)) {
       return openProfile('Settings')
     } else {
