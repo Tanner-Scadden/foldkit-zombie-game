@@ -1,5 +1,8 @@
+import { Schema } from 'effect'
+
 import { WARM_UP_CLASS } from '@game/layers'
 
+import { encodeJson } from '../json'
 import { launch, wait } from './lib'
 
 // Loads a deployed copy of the game in headless Chrome and checks that it
@@ -37,5 +40,12 @@ const status = response?.status() ?? 0
 const isOk =
   status === 200 && canvases === EXPECTED_CANVASES && errors.length === 0
 
-console.log(JSON.stringify({ url: URL, status, canvases, errors }, null, 2))
+const Report = Schema.Struct({
+  url: Schema.String,
+  status: Schema.Number,
+  canvases: Schema.Number,
+  errors: Schema.Array(Schema.String),
+})
+
+console.log(encodeJson(Report, 2)({ url: URL, status, canvases, errors }))
 process.exit(isOk ? 0 : 1)

@@ -29,10 +29,10 @@ export type PlayRequest = Readonly<{
   ticks: number
 }>
 
-const IntentJson = Schema.toCodecJson(Intent)
+const IntentJsonText = Schema.fromJsonString(Schema.toCodecJson(Intent))
 
 export const intentToJson = (intent: Intent): string =>
-  JSON.stringify(Schema.encodeSync(IntentJson)(intent))
+  Schema.encodeSync(IntentJsonText)(intent)
 
 const play = (world: World, inputs: InputsByPlayer, ticks: number): World =>
   ticks <= 0 ? world : play(stepWorld(world, inputs).world, inputs, ticks - 1)
@@ -41,10 +41,7 @@ const inputsOf = (request: PlayRequest): InputsByPlayer =>
   new Map(
     request.intents.map(
       ([slot, intent]) =>
-        [
-          slot,
-          Schema.decodeUnknownSync(IntentJson)(JSON.parse(intent)),
-        ] as const,
+        [slot, Schema.decodeSync(IntentJsonText)(intent)] as const,
     ),
   )
 

@@ -11,13 +11,32 @@
           "ticks": 600,
           "segments": [{ "from": 0, "to": 60, "keys": ["KeyD"] }],
           "clicks": [
-            { "at": 150, "selector": "dialog[open] li[data-verdict='available'] button" },
-            { "at": 290, "selector": "dialog[open] li[data-verdict='available'] button" },
-            { "at": 430, "selector": "dialog[open] li[data-verdict='available'] button" }
+            {
+              "at": 150,
+              "selector": "dialog[open] li[data-verdict='available'] button"
+            },
+            {
+              "at": 290,
+              "selector": "dialog[open] li[data-verdict='available'] button"
+            },
+            {
+              "at": 430,
+              "selector": "dialog[open] li[data-verdict='available'] button"
+            }
           ],
           "captions": [
-            { "from": 0, "to": 70, "text": "Rattles is open", "place": "Middle" },
-            { "from": 520, "to": 600, "text": "Spend it all", "place": "Bottom" }
+            {
+              "from": 0,
+              "to": 70,
+              "text": "Rattles is open",
+              "place": "Middle"
+            },
+            {
+              "from": 520,
+              "to": 600,
+              "text": "Spend it all",
+              "place": "Bottom"
+            }
           ],
           "holds": [{ "at": 599, "frames": 30 }],
           "fadeIn": 12,
@@ -35,10 +54,38 @@
           "scene": "wave=4&start=wave&elapsed=12000&seed=4&god&seen=all&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
           "ticks": 600,
           "segments": [
-            { "from": 0, "to": 150, "move": [0.6, -0.4], "aim": "nearest", "turn": 9, "fire": true },
-            { "from": 150, "to": 300, "move": [-0.6, 0.3], "aim": "nearest", "turn": -9, "fire": true },
-            { "from": 300, "to": 450, "move": [0.2, 0.6], "aim": "nearest", "turn": 9, "fire": true },
-            { "from": 450, "to": 600, "move": [-0.4, -0.5], "aim": "nearest", "turn": -9, "fire": true }
+            {
+              "from": 0,
+              "to": 150,
+              "move": [0.6, -0.4],
+              "aim": "nearest",
+              "turn": 9,
+              "fire": true
+            },
+            {
+              "from": 150,
+              "to": 300,
+              "move": [-0.6, 0.3],
+              "aim": "nearest",
+              "turn": -9,
+              "fire": true
+            },
+            {
+              "from": 300,
+              "to": 450,
+              "move": [0.2, 0.6],
+              "aim": "nearest",
+              "turn": 9,
+              "fire": true
+            },
+            {
+              "from": 450,
+              "to": 600,
+              "move": [-0.4, -0.5],
+              "aim": "nearest",
+              "turn": -9,
+              "fire": true
+            }
           ],
           "captions": [
             { "from": 0, "to": 180, "text": "Plays on phones" },
@@ -75,7 +122,14 @@
           "scene": "wave=3&seen=all&kitchen&money=200&gun=smg&prep=14000&px=180&py=-100&hold&fridgeseed=2&seed=3&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
           "ticks": 200,
           "slowMotion": [{ "from": 24, "to": 104, "repeat": 3 }],
-          "captions": [{ "from": 0, "to": 110, "text": "Mystery leftovers", "place": "Middle" }],
+          "captions": [
+            {
+              "from": 0,
+              "to": 110,
+              "text": "Mystery leftovers",
+              "place": "Middle"
+            }
+          ],
           "fadeIn": 12
         },
         {
@@ -83,7 +137,9 @@
           "scene": "wave=4&seen=all&start=wave&elapsed=9000&kitchen&god&px=40&py=-12&gun=freeze&iced=freeze&seed=4&learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak",
           "ticks": 210,
           "segments": [{ "from": 0, "to": 210, "aim": [60, 0], "fire": true }],
-          "captions": [{ "from": 60, "to": 210, "text": "Brain freeze!", "tone": "Plain" }],
+          "captions": [
+            { "from": 60, "to": 210, "text": "Brain freeze!", "tone": "Plain" }
+          ],
           "fadeOut": 12
         }
       ]

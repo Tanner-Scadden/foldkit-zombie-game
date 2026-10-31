@@ -10,30 +10,21 @@
 import type { Page } from 'playwright-core'
 
 import {
-  DESKTOP_1280,
-  PHONE_844,
-  UPRIGHT_390,
+  SHOT_VIEWPORTS,
+  TAG,
   type Viewport,
   deviceQuery,
   finish,
   harnessQuery,
   isPickedScene,
   launch,
-  pickViewports,
+  pressButton,
   scenePages,
   settleAnimations,
   shot,
-  tagOr,
   useHarness,
 } from './lib'
-
-const TAG = tagOr('after')
-
-const VIEWPORTS = pickViewports([
-  { ...DESKTOP_1280, name: 'd1280' },
-  { ...PHONE_844, name: 'l844' },
-  { ...UPRIGHT_390, name: 'p390' },
-])
+import { FIGHTING, LEARNED } from './scenes'
 
 type Scene = Readonly<{
   name: string
@@ -46,19 +37,10 @@ type Scene = Readonly<{
   ) => Promise<void>
 }>
 
-const LEARNED =
-  'learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak'
-const FIGHTING = `wave=4&seen=all&start=wave&elapsed=9000&god&${LEARNED}`
-
-const press = async (page: Page, viewport: Viewport, name: RegExp) => {
-  const button = page.getByRole('button', { name }).first()
-  await (viewport.isPhone ? button.tap() : button.click())
-}
-
 const openHowToPlay = async (page: Page, viewport: Viewport) => {
-  await press(page, viewport, /^More:/)
+  await pressButton(page, viewport, /^More:/)
   await page.locator('dialog[open]').first().waitFor({ state: 'visible' })
-  await press(page, viewport, /^How to play:/)
+  await pressButton(page, viewport, /^How to play:/)
   await page
     .locator('dialog[open] .panel')
     .first()
@@ -148,7 +130,7 @@ await useHarness()
 const browser = await launch()
 const pages = scenePages(browser, ['nodev'])
 const problems: Array<string> = []
-for (const viewport of VIEWPORTS) {
+for (const viewport of SHOT_VIEWPORTS) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
       continue

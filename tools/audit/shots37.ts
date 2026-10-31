@@ -10,6 +10,7 @@ import type { Page } from 'playwright-core'
 import {
   DESKTOP_1280,
   PHONE_844,
+  TAG,
   UPRIGHT_360,
   UPRIGHT_375,
   UPRIGHT_390,
@@ -23,11 +24,8 @@ import {
   scenePages,
   settleAnimations,
   shot,
-  tagOr,
   useHarness,
 } from './lib'
-
-const TAG = tagOr('after')
 
 const VIEWPORTS = pickViewports([
   { ...DESKTOP_1280, name: 'd1280' },
@@ -99,8 +97,7 @@ const checkLayout = async (page: Page, viewport: Viewport, where: string) => {
     ].map(button => {
       const rect = button.getBoundingClientRect()
       return {
-        label:
-          button.getAttribute('aria-label') ?? button.textContent?.trim() ?? '',
+        label: button.getAttribute('aria-label') ?? button.textContent.trim(),
         width: rect.width,
         height: rect.height,
         isShown: rect.width > 0 && rect.height > 0,
@@ -141,11 +138,11 @@ const checkLayout = async (page: Page, viewport: Viewport, where: string) => {
       .map(row => row.querySelector('.look-row-label')?.textContent ?? '?')
     const clippedRows = [...document.querySelectorAll('.look-row')]
       .filter(row => {
-        const page = row.closest('.profile-page')?.getBoundingClientRect()
+        const pageBox = row.closest('.profile-page')?.getBoundingClientRect()
         return (
-          page !== undefined &&
+          pageBox !== undefined &&
           [...row.querySelectorAll('button')].some(
-            button => button.getBoundingClientRect().right > page.right + 1,
+            button => button.getBoundingClientRect().right > pageBox.right + 1,
           )
         )
       })
@@ -153,14 +150,15 @@ const checkLayout = async (page: Page, viewport: Viewport, where: string) => {
     return {
       wrappedRows,
       clippedRows,
-      box: box
-        ? {
-            left: box.left,
-            top: box.top,
-            right: box.right,
-            bottom: box.bottom,
-          }
-        : null,
+      box:
+        box !== undefined
+          ? {
+              left: box.left,
+              top: box.top,
+              right: box.right,
+              bottom: box.bottom,
+            }
+          : null,
       buttons,
       fields,
       width: innerWidth,
@@ -208,7 +206,7 @@ const checkLayout = async (page: Page, viewport: Viewport, where: string) => {
 await useHarness()
 const browser = await launch()
 const pages = scenePages(browser, ['nodev'])
-for (const viewport of VIEWPORTS as ReadonlyArray<Viewport>) {
+for (const viewport of VIEWPORTS) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
       continue

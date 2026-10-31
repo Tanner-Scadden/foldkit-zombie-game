@@ -9,11 +9,13 @@
 //    Every reload after that still reads one whole, current save.
 // Run it through the heavy guard:
 //   BASE=http://localhost:4173/ bun run heavy -- bun tools/audit/sqlite.ts
+import { Schema } from 'effect'
 import type { Page } from 'playwright-core'
 
-import { GAME, launch, wait } from './lib'
+import { encodeJson } from '../json'
+import { GAME, launch, nowMs, wait } from './lib'
 
-const BASE = process.env.BASE ?? GAME
+const BASE = process.env['BASE'] ?? GAME
 const SAVE_KEY = 'munch-manor:save'
 
 const legacySave = {
@@ -108,8 +110,8 @@ const opfsFiles = (page: Page) =>
   page.evaluate(async () => {
     const found: Array<string> = []
     const walk = async (dir: FileSystemDirectoryHandle, path: string) => {
-      for await (const [name, handle] of (dir as any).entries()) {
-        if (handle.kind === 'directory') {
+      for await (const [name, handle] of dir.entries()) {
+        if (handle instanceof FileSystemDirectoryHandle) {
           await walk(handle, `${path}${name}/`)
         } else {
           found.push(`${path}${name}`)
@@ -125,13 +127,13 @@ watch(page, 'tab 1')
 await page.goto(new URL('version.json', BASE).href)
 await page.evaluate(([key, json]) => localStorage.setItem(key, json), [
   SAVE_KEY,
-  JSON.stringify(legacySave),
+  encodeJson(Schema.Json)(legacySave),
 ] as const)
 
-const started = Date.now()
+const started = nowMs()
 await page.goto(BASE)
 await awaitGame(page)
-console.log(`     the first load took ${Date.now() - started} ms`)
+console.log(`     the first load took ${nowMs() - started} ms`)
 await wait(300)
 check(
   (await isMuted(page)) === 'true',

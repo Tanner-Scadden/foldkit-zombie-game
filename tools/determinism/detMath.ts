@@ -50,7 +50,7 @@ const reduce = (x: number): readonly [quadrant: number, rest: number] => {
   return [((n % 4) + 4) % 4, x - n * HALF_PI_HIGH - n * HALF_PI_LOW]
 }
 
-export const detSin = (x: number): number => {
+const detSin = (x: number): number => {
   const [quadrant, r] = reduce(x)
   return quadrant === 0
     ? sinKernel(r)
@@ -61,7 +61,7 @@ export const detSin = (x: number): number => {
         : -cosKernel(r)
 }
 
-export const detCos = (x: number): number => {
+const detCos = (x: number): number => {
   const [quadrant, r] = reduce(x)
   return quadrant === 0
     ? cosKernel(r)
@@ -93,7 +93,7 @@ const detAtan = (x: number): number => {
   return sign * (a <= 1 ? atanUnit(a) : Math.PI / 2 - atanUnit(1 / a))
 }
 
-export const detAtan2 = (y: number, x: number): number => {
+const detAtan2 = (y: number, x: number): number => {
   if (x > 0) {
     return detAtan(y / x)
   }
@@ -103,7 +103,7 @@ export const detAtan2 = (y: number, x: number): number => {
   return y > 0 ? Math.PI / 2 : y < 0 ? -Math.PI / 2 : 0
 }
 
-export const detExp = (x: number): number => {
+const detExp = (x: number): number => {
   if (x > 709) {
     return Infinity
   }
@@ -126,7 +126,7 @@ export const detExp = (x: number): number => {
   return sum * scale
 }
 
-export const detHypot = (...values: Array<number>): number =>
+const detHypot = (...values: Array<number>): number =>
   Math.sqrt(values.reduce((sum, value) => sum + value * value, 0))
 
 // Puts them over Math for the life of the process or isolate.

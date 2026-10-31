@@ -1,11 +1,11 @@
 import { Data, Result } from 'effect'
 
-// NOTE: the bytes under the room protocol, after the estimate in
-// tools/mp-spike/wire.ts: unsigned integers as LEB128 varints, signed ones
-// zigzagged first, positions and other fractions as int16 fixed point,
-// strings and byte runs prefixed with their length, and any other number
-// as a little-endian float64. A Reader that runs off
-// the end, or meets a malformed varint, throws a WireError, and `readAll`
+// NOTE: the bytes under the room protocol, after the spike's estimate
+// (MULTIPLAYER.md, "The wire at 20 Hz"): unsigned integers as LEB128
+// varints, signed ones zigzagged first, positions and other fractions as
+// int16 fixed point, strings and byte runs prefixed with their length, and
+// any other number as a little-endian float64. A Reader that runs off the
+// end, or meets a malformed varint, throws a WireError, and `readAll`
 // turns that into a failed Result, so callers never see an exception.
 
 export class WireError extends Data.TaggedError('WireError')<{

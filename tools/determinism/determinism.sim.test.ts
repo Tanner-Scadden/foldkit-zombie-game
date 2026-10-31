@@ -28,7 +28,8 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 // A second run in a world whose clock and Math.random differ from the first.
 const inSkewedWorld = <A>(run: () => A): A => {
-  const now = Date.now()
+  // NOTE: the real clock, read once to skew it by a day.
+  const now = Date.now() // oxlint-disable-line no-restricted-properties
   const performanceNow = performance.now()
   const randoms = [0.91, 0.13, 0.57, 0.38, 0.74]
   vi.spyOn(Date, 'now').mockImplementation(() => now + DAY_MS)

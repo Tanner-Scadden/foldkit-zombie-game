@@ -2,6 +2,7 @@ import { Array, Effect, MutableRef, Order, Schema, pipe } from 'effect'
 import { TestClock } from 'effect/testing'
 
 import { acquireAudioEngine, playMusic, playSound } from '../../src/audio'
+import type {} from '../audit/page'
 import { type Cue, SoundtrackRequestJson } from './soundtrackRequest'
 
 // THE SOUNDTRACK, OFFLINE
@@ -23,11 +24,12 @@ const CHANNELS = 2
 // NOTE: the engine asks for `new AudioContext()`. It gets the offline one,
 // reading as running, with its clock at `clock.now`: every sound and note
 // is scheduled at its moment before the render starts, so the render is
-// one pass over a finished graph and the same every time.
+// one pass over a finished graph and the same every time. The engine only
+// reads what the two contexts share.
 const liveLike = (
   context: OfflineAudioContext,
   clock: { now: number },
-): AudioContext =>
+): OfflineAudioContext =>
   new Proxy(context, {
     get: (target, key) => {
       if (key === 'state') {
@@ -35,10 +37,14 @@ const liveLike = (
       } else if (key === 'currentTime') {
         return clock.now
       }
-      const value = Reflect.get(target, key, target)
-      return typeof value === 'function' ? value.bind(target) : value
+      const value: unknown = Reflect.get(target, key, target)
+      if (typeof value !== 'function') {
+        return value
+      }
+      const bound: unknown = value.bind(target)
+      return bound
     },
-  }) as unknown as AudioContext
+  })
 
 const toInt16Base64 = (buffer: AudioBuffer): string => {
   const left = buffer.getChannelData(0)
@@ -95,7 +101,7 @@ const render = (
         // NOTE: no voice limit offline: which voices have ended is the
         // render's to say, and every voice is already scheduled before it.
         MutableRef.set(engine.activeVoices, 0)
-        for (const cue of Array.filter(cues, cue => cue.seconds === at)) {
+        for (const cue of Array.filter(cues, each => each.seconds === at)) {
           if (cue._tag === 'Sound') {
             yield* Effect.ignore(playSound(engine, cue.sound, cue.variation))
           } else {
@@ -119,12 +125,9 @@ const render = (
 // the nodes stay connected; an ended voice is silent all the same.
 AudioNode.prototype.disconnect = () => undefined
 
-Object.assign(window, {
-  __renderAudio: (json: string): Promise<string> =>
-    Effect.runPromise(
-      Effect.flatMap(
-        Schema.decodeEffect(SoundtrackRequestJson)(json),
-        request => render(request.cues, request.seconds, request.sampleRate),
-      ),
+window.__renderAudio = (json: string): Promise<string> =>
+  Effect.runPromise(
+    Effect.flatMap(Schema.decodeEffect(SoundtrackRequestJson)(json), request =>
+      render(request.cues, request.seconds, request.sampleRate),
     ),
-})
+  )

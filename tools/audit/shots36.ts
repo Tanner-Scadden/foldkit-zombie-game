@@ -12,30 +12,18 @@
 import type { Page } from 'playwright-core'
 
 import {
-  DESKTOP_1280,
-  PHONE_844,
-  UPRIGHT_390,
+  SHOT_VIEWPORTS,
+  TAG,
   deviceQuery,
   finish,
   harnessQuery,
   isPickedScene,
   launch,
-  model,
-  pickViewports,
   scenePages,
   settleAnimations,
   shot,
-  tagOr,
   useHarness,
 } from './lib'
-
-const TAG = tagOr('after')
-
-const VIEWPORTS = pickViewports([
-  { ...DESKTOP_1280, name: 'd1280' },
-  { ...PHONE_844, name: 'l844' },
-  { ...UPRIGHT_390, name: 'p390' },
-])
 
 type Scene = Readonly<{
   name: string
@@ -55,18 +43,16 @@ const HOLD_MS = 500
 const SMASH_MS = 120
 const WAIT_TIMEOUT_MS = 5000
 const afterGameMs = async (page: Page, ms: number) => {
-  const start: number = await page.evaluate(
-    () => (window as any).__model.elapsedMs,
-  )
+  const start = await page.evaluate(() => window.__model.elapsedMs)
   await page.waitForFunction(
-    end => (window as any).__model.elapsedMs >= end,
+    end => window.__model.elapsedMs >= end,
     start + ms,
     { polling: 'raf', timeout: WAIT_TIMEOUT_MS },
   )
 }
 
 const isKitchenOpen = async (page: Page): Promise<boolean> =>
-  (await model(page)).level.openExits.includes('Kitchen')
+  page.evaluate(() => window.__model.level.openExits.includes('Kitchen'))
 
 const AT_BOARDS = 'px=70&py=27'
 const MID_WAVE = 'wave=4&seen=all&start=wave&elapsed=6000&money=85&gun=smg'
@@ -126,7 +112,7 @@ await useHarness()
 const browser = await launch()
 const pages = scenePages(browser, ['nodev'])
 const problems: Array<string> = []
-for (const viewport of VIEWPORTS) {
+for (const viewport of SHOT_VIEWPORTS) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
       continue

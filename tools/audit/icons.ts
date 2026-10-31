@@ -15,7 +15,7 @@ const PUBLIC = resolve(import.meta.dir, '../../public')
 const INDEX_HTML = resolve(import.meta.dir, '../../index.html')
 const SHOTS = resolve(import.meta.dir, 'shots')
 
-const BACKGROUND = PALETTE.b ?? '#3b2160'
+const BACKGROUND = PALETTE['b'] ?? '#3b2160'
 
 // PIXEL MAPS
 
@@ -66,8 +66,8 @@ const SPARKLES: ReadonlyArray<readonly [number, number]> = [
 
 const BIG_ART: ReadonlyArray<string> = Array.from(
   { length: ART_SIZE },
-  (_, y) =>
-    Array.from({ length: ART_SIZE }, (_, x) => {
+  (_row, y) =>
+    Array.from({ length: ART_SIZE }, (_cell, x) => {
       const headX = x - (ART_SIZE - (BIG_HEAD[0]?.length ?? 0)) / 2
       const headCell = BIG_HEAD[y - HEAD_TOP]?.[headX]
       if (headCell !== undefined && headCell !== '.') {

@@ -15,31 +15,20 @@
 import type { Page } from 'playwright-core'
 
 import {
-  DESKTOP_1280,
-  PHONE_844,
   SHOTS_DIR,
-  UPRIGHT_390,
+  SHOT_VIEWPORTS,
+  TAG,
   deviceQuery,
   finish,
   harnessQuery,
   isPickedScene,
   launch,
-  model,
-  pickViewports,
   scenePages,
   settleAnimations,
   shot,
-  tagOr,
   useHarness,
 } from './lib'
-
-const TAG = tagOr('after')
-
-const VIEWPORTS = pickViewports([
-  { ...DESKTOP_1280, name: 'd1280' },
-  { ...PHONE_844, name: 'l844' },
-  { ...UPRIGHT_390, name: 'p390' },
-])
+import { BREAK, IN_KITCHEN, LEARNED } from './scenes'
 
 type Scene = Readonly<{
   name: string
@@ -56,11 +45,7 @@ type Scene = Readonly<{
 // fridge stands in the kitchen's north-east corner, tiles 17 and 18 of rows
 // -13 and -12, so (180, -102) is just in reach below its door. The weapon
 // scenes stand at (40, -12), on the open floor at the kitchen's foot.
-const LEARNED =
-  'learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak'
-const BREAK = `wave=3&seen=all&kitchen&money=200&gun=smg&prep=14000&${LEARNED}`
 const AT_FRIDGE = 'px=180&py=-102'
-const IN_KITCHEN = `wave=4&seen=all&start=wave&elapsed=9000&kitchen&god&px=40&py=-12&${LEARNED}`
 
 // NOTE: the fridge seed that draws each prize on a first pull, for a player
 // holding the Chatterbox. The hold pays on tick 30, so tick 45 is a quarter
@@ -77,9 +62,9 @@ const PRIZE_SEEDS = {
 const expectDoor =
   (tag: 'Open' | 'Offering' | 'Shut') =>
   async (page: Page, problems: Array<string>, label: string) => {
-    const door = (await model(page)).fridge.door
-    if (door._tag !== tag) {
-      problems.push(`${label}: the fridge door is ${door._tag}, not ${tag}`)
+    const door = await page.evaluate(() => window.__model.fridge.door._tag)
+    if (door !== tag) {
+      problems.push(`${label}: the fridge door is ${door}, not ${tag}`)
     }
   }
 
@@ -188,7 +173,7 @@ await useHarness()
 const browser = await launch()
 const pages = scenePages(browser, ['nodev'])
 const problems: Array<string> = []
-for (const viewport of VIEWPORTS) {
+for (const viewport of SHOT_VIEWPORTS) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
       continue

@@ -185,7 +185,7 @@ const hurry = (clocked: Clocked, spawns: ReadonlyArray<PlannedSpawn>): Paced =>
 
 // TRICKLE
 
-const STRAGGLER_KINDS: ReadonlyArray<ZombieKind> = [
+export const STRAGGLER_KINDS: ReadonlyArray<ZombieKind> = [
   'Shambler',
   'Runner',
   'Exploder',

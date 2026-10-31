@@ -2,27 +2,32 @@
 // parameters and JSON. No game imports, so the orchestrator can load it
 // without the game.
 
-export type ScriptMode = 'Campaign' | 'Endless'
+import { Schema } from 'effect'
+
+const ScriptMode = Schema.Literals(['Campaign', 'Endless'])
+export type ScriptMode = typeof ScriptMode.Type
 
 // How long each frame is. Fixed60 is the room's step. Mixed cycles through
 // 60, 120, 30, and 40 Hz frames, the way a browser's display drives the game
 // today, so the same check keeps working once the fixed step lands (it
 // should then give the same ticks for any pattern).
-export type StepPattern = 'Fixed60' | 'Mixed'
+const StepPattern = Schema.Literals(['Fixed60', 'Mixed'])
+export type StepPattern = typeof StepPattern.Type
 
-export type EngineRequest = Readonly<{
-  frames: number
-  seed: number
-  mode: ScriptMode
-  pattern: StepPattern
-  every: number
-  detMath: boolean
+export const EngineRequest = Schema.Struct({
+  frames: Schema.Number,
+  seed: Schema.Number,
+  mode: ScriptMode,
+  pattern: StepPattern,
+  every: Schema.Number,
+  detMath: Schema.Boolean,
   // NOTE: clear hit-stop after every frame, so no freeze or slow motion
   // ever runs. Hit-stop counts whole ticks since the fixed step, where it
   // cut a frame's world time before, so this compares everything else.
-  noHitStop: boolean
-  dump: number | undefined
-}>
+  noHitStop: Schema.Boolean,
+  dump: Schema.UndefinedOr(Schema.Number),
+})
+export type EngineRequest = typeof EngineRequest.Type
 
 export const DEFAULT_REQUEST: EngineRequest = {
   frames: 18_000,
@@ -62,19 +67,53 @@ export const paramsOf = (request: EngineRequest): string =>
     ...(request.dump === undefined ? {} : { dump: String(request.dump) }),
   }).toString()
 
-export type EngineRun = Readonly<{
-  engine: string
-  frames: number
-  endPhase: string
-  endWave: number
-  checkpoints: ReadonlyArray<readonly [number, number]>
-  unclassified: ReadonlyArray<string>
-}>
+export const EngineRun = Schema.Struct({
+  engine: Schema.String,
+  frames: Schema.Number,
+  endPhase: Schema.String,
+  endWave: Schema.Number,
+  checkpoints: Schema.Array(Schema.Tuple([Schema.Number, Schema.Number])),
+  unclassified: Schema.Array(Schema.String),
+})
+export type EngineRun = typeof EngineRun.Type
 
-export type EngineDump = Readonly<{
-  engine: string
-  frame: number
-  fieldHashes: ReadonlyArray<readonly [string, number]>
+export const EngineDump = Schema.Struct({
+  engine: Schema.String,
+  frame: Schema.Number,
+  fieldHashes: Schema.Array(Schema.Tuple([Schema.String, Schema.Number])),
   // exactJson of the gameplay state.
-  state: string
-}>
+  state: Schema.String,
+})
+export type EngineDump = typeof EngineDump.Type
+
+// NOTE: a dump asked for a frame the run never reached.
+const EngineMissing = Schema.Struct({
+  engine: Schema.String,
+  frame: Schema.Number,
+  missing: Schema.Literal(true),
+})
+
+// NOTE: what an engine answers when the run throws: the stack, or the
+// thrown value as it was.
+const EngineError = Schema.Struct({ error: Schema.Unknown })
+
+// NOTE: every engine answers through these, so all print the same text,
+// and the orchestrators read the answers back through them.
+export const encodeEngineRun = Schema.encodeSync(
+  Schema.fromJsonString(EngineRun),
+)
+export const encodeEngineDump = Schema.encodeSync(
+  Schema.fromJsonString(Schema.Union([EngineDump, EngineMissing])),
+)
+export const encodeEngineError = Schema.encodeSync(
+  Schema.fromJsonString(EngineError),
+)
+export const decodeEngineRun = Schema.decodeUnknownOption(
+  Schema.fromJsonString(EngineRun),
+)
+export const decodeEngineDump = Schema.decodeUnknownOption(
+  Schema.fromJsonString(EngineDump),
+)
+export const decodeEngineError = Schema.decodeUnknownOption(
+  Schema.fromJsonString(EngineError),
+)

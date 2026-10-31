@@ -10,30 +10,18 @@
 import type { Page } from 'playwright-core'
 
 import {
-  DESKTOP_1280,
-  PHONE_844,
-  UPRIGHT_390,
+  SHOT_VIEWPORTS,
+  TAG,
   deviceQuery,
   finish,
   harnessQuery,
   isPickedScene,
   launch,
-  model,
-  pickViewports,
   scenePages,
   settleAnimations,
   shot,
-  tagOr,
   useHarness,
 } from './lib'
-
-const TAG = tagOr('after')
-
-const VIEWPORTS = pickViewports([
-  { ...DESKTOP_1280, name: 'd1280' },
-  { ...PHONE_844, name: 'l844' },
-  { ...UPRIGHT_390, name: 'p390' },
-])
 
 const NEW_PLAYER = 'learned=move,fire,startWave,pickup&seen=all'
 const FIRST_BREAK = `wave=2&break=open&breakMs=3000&money=12&${NEW_PLAYER}`
@@ -65,7 +53,10 @@ const hasFreeTag = async (
   label: string,
 ) => {
   await hasTracker(page, problems, label)
-  const current = await model(page)
+  const current = await page.evaluate(() => ({
+    kitchenTour: { _tag: window.__model.kitchenTour._tag },
+    wallet: { balance: window.__model.wallet.balance },
+  }))
   if (current.kitchenTour._tag !== 'Running') {
     problems.push(`${label}: the kitchen tour is ${current.kitchenTour._tag}`)
   }
@@ -134,7 +125,7 @@ await useHarness()
 const browser = await launch()
 const pages = scenePages(browser, ['nodev'])
 const problems: Array<string> = []
-for (const viewport of VIEWPORTS) {
+for (const viewport of SHOT_VIEWPORTS) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
       continue

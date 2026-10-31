@@ -7,7 +7,7 @@
 
 import './globals'
 import { answer } from './engine'
-import { requestOf } from './request'
+import { encodeEngineError, requestOf } from './request'
 
 document.currentScript?.remove()
 
@@ -21,7 +21,7 @@ const answered = (): string => {
       requestOf(new URLSearchParams(location.search)),
     )
   } catch (error) {
-    return JSON.stringify({
+    return encodeEngineError({
       error: error instanceof Error ? (error.stack ?? error.message) : error,
     })
   }

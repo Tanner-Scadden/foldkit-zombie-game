@@ -1,6 +1,5 @@
 import {
   Array,
-  Data,
   Match,
   Number,
   Option,
@@ -10,6 +9,8 @@ import {
   String,
   pipe,
 } from 'effect'
+
+import { encodeJson } from '../json'
 
 export const BUDGET_WARN_AT = 3
 export const BUDGET_REFUSE_AT = 6
@@ -51,21 +52,21 @@ export const BACKFILL_GRACE_MS = 2 * 60_000
 // such as the balance bot, runs beside Shared jobs when the budget allows,
 // one at a time. Shared jobs, such as screenshot and tap audits, run up to
 // MAX_SHARED_JOBS at once within the budget.
-export type JobClass = Data.TaggedEnum<{
-  Timing: {}
-  Cpu: {}
-  Shared: {}
-}>
-export const JobClass = Data.taggedEnum<JobClass>()
+export const JobClass = Schema.TaggedUnion({
+  Timing: {},
+  Cpu: {},
+  Shared: {},
+})
+export type JobClass = typeof JobClass.Type
 
 const ClassName = Schema.Literals(['Timing', 'Cpu', 'Shared'])
 type ClassName = typeof ClassName.Type
 
 const jobClassOfName = (name: ClassName): JobClass =>
   Match.value(name).pipe(
-    Match.when('Timing', () => JobClass.Timing()),
-    Match.when('Cpu', () => JobClass.Cpu()),
-    Match.when('Shared', () => JobClass.Shared()),
+    Match.when('Timing', () => JobClass.cases.Timing.make({})),
+    Match.when('Cpu', () => JobClass.cases.Cpu.make({})),
+    Match.when('Shared', () => JobClass.cases.Shared.make({})),
     Match.exhaustive,
   )
 
@@ -94,29 +95,29 @@ export const decodeLockHolder = (text: string): Option.Option<LockHolder> =>
   Schema.decodeOption(LockHolderJson)(text)
 
 export const encodeLockHolder = (holder: LockHolder): string =>
-  `${JSON.stringify(holder)}\n`
+  `${encodeJson(LockHolder)(holder)}\n`
 
-export type LockState = Data.TaggedEnum<{
-  Free: {}
-  Held: { readonly holder: LockHolder }
-  Stale: { readonly holder: LockHolder }
-  Unreadable: { readonly text: string }
-}>
-export const LockState = Data.taggedEnum<LockState>()
+export const LockState = Schema.TaggedUnion({
+  Free: {},
+  Held: { holder: LockHolder },
+  Stale: { holder: LockHolder },
+  Unreadable: { text: Schema.String },
+})
+export type LockState = typeof LockState.Type
 
 export const classifyLock = (
   maybeText: Option.Option<string>,
   isAlive: (pid: number) => boolean,
 ): LockState =>
   Option.match(maybeText, {
-    onNone: () => LockState.Free(),
+    onNone: () => LockState.cases.Free.make({}),
     onSome: text =>
       Option.match(decodeLockHolder(text), {
-        onNone: () => LockState.Unreadable({ text }),
+        onNone: () => LockState.cases.Unreadable.make({ text }),
         onSome: holder =>
           isAlive(holder.pid)
-            ? LockState.Held({ holder })
-            : LockState.Stale({ holder }),
+            ? LockState.cases.Held.make({ holder })
+            : LockState.cases.Stale.make({ holder }),
       }),
   })
 
@@ -152,7 +153,7 @@ export const decodeHeldTurn = (text: string): Option.Option<HeldTurn> =>
   Schema.decodeOption(HeldTurnJson)(text)
 
 export const encodeHeldTurn = (turn: HeldTurn): string =>
-  `${JSON.stringify(turn)}\n`
+  `${encodeJson(HeldTurn)(turn)}\n`
 
 // NOTE: FNV-1a over the path, so the file name is short and safe.
 export const turnFileKey = (cwd: string): string =>
@@ -181,7 +182,7 @@ export const decodeLedger = (text: string): Ledger =>
   )
 
 export const encodeLedger = (ledger: Ledger): string =>
-  `${JSON.stringify(ledger, null, 2)}\n`
+  `${encodeJson(Ledger, 2)(ledger)}\n`
 
 export const budgetKey = (repoRoot: string, branch: string): string =>
   `${repoRoot}#${branch}`
@@ -200,32 +201,32 @@ export const resetBudget = (ledger: Ledger, key: string): Ledger =>
 
 // INVOCATION
 
-export type BudgetPolicy = Data.TaggedEnum<{
-  Enforced: {}
-  AllowMore: {}
-}>
-export const BudgetPolicy = Data.taggedEnum<BudgetPolicy>()
+export const BudgetPolicy = Schema.TaggedUnion({
+  Enforced: {},
+  AllowMore: {},
+})
+export type BudgetPolicy = typeof BudgetPolicy.Type
 
-export type Invocation = Data.TaggedEnum<{
+export const Invocation = Schema.TaggedUnion({
   RunCommand: {
-    readonly command: Array.NonEmptyReadonlyArray<string>
-    readonly budgetPolicy: BudgetPolicy
-    readonly maybeClassOverride: Option.Option<JobClass>
-  }
-  ResetBudget: {}
-  ShowUsage: { readonly problem: string }
-}>
-export const Invocation = Data.taggedEnum<Invocation>()
+    command: Schema.NonEmptyArray(Schema.String),
+    budgetPolicy: BudgetPolicy,
+    maybeClassOverride: Schema.Option(JobClass),
+  },
+  ResetBudget: {},
+  ShowUsage: { problem: Schema.String },
+})
+export type Invocation = typeof Invocation.Type
 
 const SEPARATOR = '--'
 const ALLOW_MORE = '--allow-more'
 const RESET_BUDGET = '--reset-budget'
 const CLASS_FLAGS: ReadonlyArray<readonly [string, JobClass]> = [
-  ['--timing', JobClass.Timing()],
+  ['--timing', JobClass.cases.Timing.make({})],
   // NOTE: kept from the two class guard, where Exclusive meant alone.
-  ['--exclusive', JobClass.Timing()],
-  ['--cpu', JobClass.Cpu()],
-  ['--shared', JobClass.Shared()],
+  ['--exclusive', JobClass.cases.Timing.make({})],
+  ['--cpu', JobClass.cases.Cpu.make({})],
+  ['--shared', JobClass.cases.Shared.make({})],
 ]
 const KNOWN_FLAGS: ReadonlyArray<string> = [
   SEPARATOR,
@@ -244,29 +245,30 @@ export const parseArguments = (args: ReadonlyArray<string>): Invocation => {
     flag => !Array.contains(KNOWN_FLAGS, flag),
   )
   if (Array.isArrayNonEmpty(unknownFlags)) {
-    return Invocation.ShowUsage({
+    return Invocation.cases.ShowUsage.make({
       problem: `Unknown flag ${Array.join(unknownFlags, ', ')}.`,
     })
   }
   if (Array.contains(flags, RESET_BUDGET)) {
-    return Invocation.ResetBudget()
+    return Invocation.cases.ResetBudget.make({})
   }
   const classes = Array.filter(CLASS_FLAGS, ([flag]) =>
     Array.contains(flags, flag),
   )
   if (classes.length > 1) {
-    return Invocation.ShowUsage({
+    return Invocation.cases.ShowUsage.make({
       problem: 'Pass at most one of --timing, --cpu, and --shared.',
     })
   }
   return Array.match(command, {
-    onEmpty: () => Invocation.ShowUsage({ problem: 'No command to run.' }),
+    onEmpty: () =>
+      Invocation.cases.ShowUsage.make({ problem: 'No command to run.' }),
     onNonEmpty: nonEmptyCommand =>
-      Invocation.RunCommand({
+      Invocation.cases.RunCommand.make({
         command: nonEmptyCommand,
         budgetPolicy: Array.contains(flags, ALLOW_MORE)
-          ? BudgetPolicy.AllowMore()
-          : BudgetPolicy.Enforced(),
+          ? BudgetPolicy.cases.AllowMore.make({})
+          : BudgetPolicy.cases.Enforced.make({}),
         maybeClassOverride: pipe(
           Array.head(classes),
           Option.map(([, jobClass]) => jobClass),
@@ -277,16 +279,16 @@ export const parseArguments = (args: ReadonlyArray<string>): Invocation => {
 
 // JOB
 
-export type JobKind = Data.TaggedEnum<{
-  Balance: {}
-  Other: {}
-}>
-export const JobKind = Data.taggedEnum<JobKind>()
+export const JobKind = Schema.TaggedUnion({
+  Balance: {},
+  Other: {},
+})
+export type JobKind = typeof JobKind.Type
 
 export const jobKindOf = (command: ReadonlyArray<string>): JobKind =>
   Array.some(command, String.endsWith('balance/simulate.ts'))
-    ? JobKind.Balance()
-    : JobKind.Other()
+    ? JobKind.cases.Balance.make({})
+    : JobKind.cases.Other.make({})
 
 // NOTE: a script counts by its name alone (`taps.ts`, `./taps.ts`) or under
 // an `audit/` folder (`tools/audit/taps.ts`), so `src/save.ts` is not the
@@ -348,14 +350,14 @@ export const jobClassOf = (
   Option.getOrElse(maybeOverride, () => {
     const words = commandWords(command)
     if (mentionsAny(words, TIMING_SCRIPTS)) {
-      return JobClass.Timing()
+      return JobClass.cases.Timing.make({})
     }
     if (mentionsAny(words, CPU_SCRIPTS)) {
-      return JobClass.Cpu()
+      return JobClass.cases.Cpu.make({})
     }
     return mentionsAny(words, SHARED_SCRIPTS)
-      ? JobClass.Shared()
-      : JobClass.Timing()
+      ? JobClass.cases.Shared.make({})
+      : JobClass.cases.Timing.make({})
   })
 
 const parallelOf = (maybeValue: Option.Option<string>): number => {
@@ -412,33 +414,33 @@ export type Snapshot = Readonly<{
   budgetPolicy: BudgetPolicy
 }>
 
-export type LockAction = Data.TaggedEnum<{
-  Create: {}
-  TakeOver: { readonly reason: string }
-}>
-export const LockAction = Data.taggedEnum<LockAction>()
+export const LockAction = Schema.TaggedUnion({
+  Create: {},
+  TakeOver: { reason: Schema.String },
+})
+export type LockAction = typeof LockAction.Type
 
 // NOTE: which file the job holds while it runs: the solo lock, whose name
 // every guard knows and which a Timing or a CPU job holds, or one Shared
 // slot.
-export type Hold = Data.TaggedEnum<{
-  Solo: {}
-  Shared: { readonly slot: number }
-}>
-export const Hold = Data.taggedEnum<Hold>()
+export const Hold = Schema.TaggedUnion({
+  Solo: {},
+  Shared: { slot: Schema.Number },
+})
+export type Hold = typeof Hold.Type
 
-export type Decision = Data.TaggedEnum<{
+export const Decision = Schema.TaggedUnion({
   Run: {
-    readonly hold: Hold
-    readonly workers: number
-    readonly cost: number
-    readonly lockAction: LockAction
-    readonly notes: ReadonlyArray<string>
-  }
-  Wait: { readonly reason: string }
-  Refuse: { readonly reason: string }
-}>
-export const Decision = Data.taggedEnum<Decision>()
+    hold: Hold,
+    workers: Schema.Number,
+    cost: Schema.Number,
+    lockAction: LockAction,
+    notes: Schema.Array(Schema.String),
+  },
+  Wait: { reason: Schema.String },
+  Refuse: { reason: Schema.String },
+})
+export type Decision = typeof Decision.Type
 
 export const formatLoad = (load: number): string => load.toFixed(1)
 
@@ -473,13 +475,13 @@ const ordinal = (count: number): string =>
   )
 
 const isBalance = (snapshot: Snapshot): boolean =>
-  JobKind.$is('Balance')(snapshot.job)
+  JobKind.isAnyOf(['Balance'])(snapshot.job)
 
 const thisBatch = (snapshot: Snapshot): number => snapshot.batchesUsed + 1
 
 const maybeBudgetRefusal = (snapshot: Snapshot): Option.Option<string> =>
   isBalance(snapshot) &&
-  BudgetPolicy.$is('Enforced')(snapshot.budgetPolicy) &&
+  BudgetPolicy.isAnyOf(['Enforced'])(snapshot.budgetPolicy) &&
   thisBatch(snapshot) >= BUDGET_REFUSE_AT
     ? Option.some(
         `This would be balance batch ${thisBatch(snapshot)} on this branch, and the budget stops at ${BUDGET_REFUSE_AT - 1}. Accept near-target results and list the misses as follow-ups, or pass --allow-more.`,
@@ -559,11 +561,11 @@ const liveSharedHolders = (
   shared: ReadonlyArray<SharedSlot>,
 ): ReadonlyArray<LockHolder> =>
   Array.flatMap(shared, ({ lock }) =>
-    LockState.$is('Held')(lock) ? [lock.holder] : [],
+    LockState.isAnyOf(['Held'])(lock) ? [lock.holder] : [],
   )
 
 const liveHolders = (snapshot: Snapshot): ReadonlyArray<LockHolder> => [
-  ...(LockState.$is('Held')(snapshot.lock) ? [snapshot.lock.holder] : []),
+  ...(LockState.isAnyOf(['Held'])(snapshot.lock) ? [snapshot.lock.holder] : []),
   ...liveSharedHolders(snapshot.shared),
   ...snapshot.extraRecent,
 ]
@@ -647,10 +649,10 @@ const earlierWaiters = (snapshot: Snapshot): ReadonlyArray<LockHolder> =>
 // BACKFILL_GRACE_MS, and never applies when the waiter waits only for
 // Shared jobs to drain, so it cannot starve the waiter.
 const canBackfillPast = (snapshot: Snapshot, waiter: LockHolder): boolean =>
-  JobClass.$is('Shared')(snapshot.jobClass) &&
-  !JobClass.$is('Shared')(waiterClassOf(waiter)) &&
-  LockState.$is('Held')(snapshot.lock) &&
-  JobClass.$is('Cpu')(soloClassOf(snapshot.lock.holder)) &&
+  JobClass.isAnyOf(['Shared'])(snapshot.jobClass) &&
+  !JobClass.isAnyOf(['Shared'])(waiterClassOf(waiter)) &&
+  LockState.isAnyOf(['Held'])(snapshot.lock) &&
+  JobClass.isAnyOf(['Cpu'])(soloClassOf(snapshot.lock.holder)) &&
   snapshot.now - waiter.startedAt < BACKFILL_GRACE_MS
 
 const backfilledWaiters = (snapshot: Snapshot): ReadonlyArray<LockHolder> =>
@@ -660,11 +662,11 @@ const backfilledWaiters = (snapshot: Snapshot): ReadonlyArray<LockHolder> =>
 
 const blockingWaiters = (snapshot: Snapshot): ReadonlyArray<LockHolder> =>
   Array.filter(earlierWaiters(snapshot), waiter =>
-    JobClass.$match(waiterClassOf(waiter), {
+    JobClass.match(waiterClassOf(waiter), {
       Timing: () => !canBackfillPast(snapshot, waiter),
       Cpu: () => !canBackfillPast(snapshot, waiter),
       Shared: () =>
-        JobClass.$match(snapshot.jobClass, {
+        JobClass.match(snapshot.jobClass, {
           Timing: () => true,
           Cpu: () => false,
           Shared: () => costOf(waiter) <= snapshot.cost,
@@ -681,7 +683,7 @@ const blockingWaiters = (snapshot: Snapshot): ReadonlyArray<LockHolder> =>
 const reservedCost = (snapshot: Snapshot): number =>
   pipe(
     earlierWaiters(snapshot),
-    Array.filter(waiter => JobClass.$is('Shared')(waiterClassOf(waiter))),
+    Array.filter(waiter => JobClass.isAnyOf(['Shared'])(waiterClassOf(waiter))),
     Array.sort(
       Order.make<LockHolder>((first, second) =>
         Number.sign(
@@ -713,7 +715,7 @@ const budgetPart = (snapshot: Snapshot, need: string): string =>
   `load ${formatLoad(snapshot.load)} + ${formatLoad(recentCost(snapshot))} just started + ${need} is over the target of ${formatLoad(snapshot.target)} on ${snapshot.cores} cores`
 
 const maybeLoadPart = (snapshot: Snapshot): Option.Option<string> =>
-  JobClass.$match(snapshot.jobClass, {
+  JobClass.match(snapshot.jobClass, {
     Timing: () =>
       isOverloaded(snapshot.load, snapshot.cores)
         ? Option.some(
@@ -738,12 +740,12 @@ const maybeLoadPart = (snapshot: Snapshot): Option.Option<string> =>
   })
 
 const maybeSoloBlocker = (snapshot: Snapshot): Option.Option<string> => {
-  if (!LockState.$is('Held')(snapshot.lock)) {
+  if (!LockState.isAnyOf(['Held'])(snapshot.lock)) {
     return Option.none()
   }
   const holder = snapshot.lock.holder
-  const isTiming = JobClass.$is('Timing')(soloClassOf(holder))
-  return JobClass.$is('Shared')(snapshot.jobClass) && !isTiming
+  const isTiming = JobClass.isAnyOf(['Timing'])(soloClassOf(holder))
+  return JobClass.isAnyOf(['Shared'])(snapshot.jobClass) && !isTiming
     ? Option.none()
     : Option.some(
         isTiming
@@ -756,7 +758,7 @@ const maybeSoloBlocker = (snapshot: Snapshot): Option.Option<string> => {
 // keeps it waiting, and says only how long when the reason named it.
 const withLeasePart = (snapshot: Snapshot, reason: string): string => {
   if (
-    !LockState.$is('Held')(snapshot.lock) ||
+    !LockState.isAnyOf(['Held'])(snapshot.lock) ||
     !isPastLease(snapshot.lock.holder, snapshot.now)
   ) {
     return reason
@@ -769,7 +771,7 @@ const withLeasePart = (snapshot: Snapshot, reason: string): string => {
 
 const maybeSharedBlocker = (snapshot: Snapshot): Option.Option<string> => {
   const running = liveSharedHolders(snapshot.shared)
-  return JobClass.$match(snapshot.jobClass, {
+  return JobClass.match(snapshot.jobClass, {
     Timing: () =>
       Array.isReadonlyArrayNonEmpty(running)
         ? Option.some(
@@ -820,20 +822,18 @@ const maybeBaseWaitReason = (snapshot: Snapshot): Option.Option<string> => {
 }
 
 const lockActionOf = (lock: LockState, what: string): LockAction =>
-  Match.value(lock).pipe(
-    Match.tagsExhaustive({
-      Free: () => LockAction.Create(),
-      Held: () => LockAction.Create(),
-      Stale: ({ holder }) =>
-        LockAction.TakeOver({
-          reason: `Taking over a stale ${what}: ${describeHolder(holder)} is gone.`,
-        }),
-      Unreadable: () =>
-        LockAction.TakeOver({
-          reason: `Taking over a ${what} file that does not decode.`,
-        }),
-    }),
-  )
+  LockState.match<LockAction>(lock, {
+    Free: () => LockAction.cases.Create.make({}),
+    Held: () => LockAction.cases.Create.make({}),
+    Stale: ({ holder }) =>
+      LockAction.cases.TakeOver.make({
+        reason: `Taking over a stale ${what}: ${describeHolder(holder)} is gone.`,
+      }),
+    Unreadable: () =>
+      LockAction.cases.TakeOver.make({
+        reason: `Taking over a ${what} file that does not decode.`,
+      }),
+  })
 
 // NOTE: the lowest numbered slot not held by a live job. A missing slot file
 // is free, and a stale or corrupt one is taken over.
@@ -845,10 +845,13 @@ export const freeSlot = (
     Array.map((slot): SharedSlot =>
       pipe(
         Array.findFirst(shared, found => found.slot === slot),
-        Option.getOrElse((): SharedSlot => ({ slot, lock: LockState.Free() })),
+        Option.getOrElse((): SharedSlot => ({
+          slot,
+          lock: LockState.cases.Free.make({}),
+        })),
       ),
     ),
-    Array.findFirst(({ lock }) => !LockState.$is('Held')(lock)),
+    Array.findFirst(({ lock }) => !LockState.isAnyOf(['Held'])(lock)),
   )
 
 type Place = Readonly<{
@@ -866,9 +869,9 @@ const otherWorkers = (snapshot: Snapshot): number =>
   )
 
 const placeOf = (snapshot: Snapshot): Place =>
-  JobClass.$match(snapshot.jobClass, {
+  JobClass.match(snapshot.jobClass, {
     Timing: (): Place => ({
-      hold: Hold.Solo(),
+      hold: Hold.cases.Solo.make({}),
       workers: otherWorkers(snapshot),
       cost: snapshot.cost,
       lockAction: lockActionOf(snapshot.lock, 'lock'),
@@ -876,7 +879,7 @@ const placeOf = (snapshot: Snapshot): Place =>
     Cpu: (): Place => {
       const workers = Math.max(1, cpuWorkers(snapshot))
       return {
-        hold: Hold.Solo(),
+        hold: Hold.cases.Solo.make({}),
         workers,
         cost: workers,
         lockAction: lockActionOf(snapshot.lock, 'lock'),
@@ -885,13 +888,13 @@ const placeOf = (snapshot: Snapshot): Place =>
     Shared: (): Place =>
       Option.match(freeSlot(snapshot.shared), {
         onNone: (): Place => ({
-          hold: Hold.Shared({ slot: 1 }),
+          hold: Hold.cases.Shared.make({ slot: 1 }),
           workers: otherWorkers(snapshot),
           cost: snapshot.cost,
-          lockAction: LockAction.Create(),
+          lockAction: LockAction.cases.Create.make({}),
         }),
         onSome: ({ slot, lock }): Place => ({
-          hold: Hold.Shared({ slot }),
+          hold: Hold.cases.Shared.make({ slot }),
           workers: otherWorkers(snapshot),
           cost: snapshot.cost,
           lockAction: lockActionOf(lock, `shared slot ${slot}`),
@@ -903,7 +906,7 @@ const maybeWorkerNote = (
   snapshot: Snapshot,
   place: Place,
 ): Option.Option<string> =>
-  JobClass.$is('Cpu')(snapshot.jobClass)
+  JobClass.isAnyOf(['Cpu'])(snapshot.jobClass)
     ? Option.some(
         `WORKERS=${place.workers} fits the budget (target ${formatLoad(snapshot.target)}, load ${formatLoad(snapshot.load)}, ${formatLoad(recentCost(snapshot))} just started, cap ${MAX_CPU_WORKERS}).`,
       )
@@ -920,13 +923,13 @@ const maybeBackfillNote = (snapshot: Snapshot): Option.Option<string> => {
 
 export const decide = (snapshot: Snapshot): Decision =>
   Option.match(maybeBudgetRefusal(snapshot), {
-    onSome: reason => Decision.Refuse({ reason }),
+    onSome: reason => Decision.cases.Refuse.make({ reason }),
     onNone: () =>
       Option.match(maybeWaitReason(snapshot), {
-        onSome: reason => Decision.Wait({ reason }),
+        onSome: reason => Decision.cases.Wait.make({ reason }),
         onNone: () => {
           const place = placeOf(snapshot)
-          return Decision.Run({
+          return Decision.cases.Run.make({
             ...place,
             notes: Array.getSomes([
               maybeWorkerNote(snapshot, place),
@@ -948,7 +951,7 @@ export const maybeConflictAfterTaking = (
   lock: LockState,
   shared: ReadonlyArray<SharedSlot>,
 ): Option.Option<string> =>
-  JobClass.$match(jobClass, {
+  JobClass.match(jobClass, {
     Timing: () => {
       const running = Array.filter(
         liveSharedHolders(shared),
@@ -962,9 +965,9 @@ export const maybeConflictAfterTaking = (
     },
     Cpu: () => Option.none(),
     Shared: () =>
-      LockState.$is('Held')(lock) &&
+      LockState.isAnyOf(['Held'])(lock) &&
       !isSameHolderValue(lock.holder, self) &&
-      JobClass.$is('Timing')(soloClassOf(lock.holder))
+      JobClass.isAnyOf(['Timing'])(soloClassOf(lock.holder))
         ? Option.some(
             `a timing job started at the same time (${describeHolder(lock.holder)})`,
           )
@@ -977,11 +980,11 @@ export const maybeConflictAfterTaking = (
 // each boundary. While any other job waits, the guard lets go of its file
 // and queues again as a new arrival; otherwise the job keeps its turn and
 // goes on at once, so a lone job loses nothing to chunking.
-export type Handover = Data.TaggedEnum<{
-  Keep: {}
-  HandOver: { readonly reason: string }
-}>
-export const Handover = Data.taggedEnum<Handover>()
+export const Handover = Schema.TaggedUnion({
+  Keep: {},
+  HandOver: { reason: Schema.String },
+})
+export type Handover = typeof Handover.Type
 
 export const decideHandover = (
   selfPid: number,
@@ -989,10 +992,10 @@ export const decideHandover = (
 ): Handover => {
   const others = Array.filter(waiters, waiter => waiter.pid !== selfPid)
   return Array.isReadonlyArrayNonEmpty(others)
-    ? Handover.HandOver({
+    ? Handover.cases.HandOver.make({
         reason: `${others.length === 1 ? '1 job is' : `${others.length} jobs are`} waiting (${describeHolders(others)})`,
       })
-    : Handover.Keep()
+    : Handover.cases.Keep.make({})
 }
 
 // NOTE: the runs a chunk plays: HEAVY_CHUNK_RUNS when set (0 means no
@@ -1035,14 +1038,14 @@ export const testWorkers = (
         pid: 0,
         cwd: '',
         turns: [],
-        jobClass: JobClass.Shared(),
+        jobClass: JobClass.cases.Shared.make({}),
         cost: 0,
         maybeRequestedWorkers: Option.none(),
         waiters: [],
         arrivedAt: snapshot.now,
         batchesUsed: 0,
-        job: JobKind.Other(),
-        budgetPolicy: BudgetPolicy.Enforced(),
+        job: JobKind.cases.Other.make({}),
+        budgetPolicy: BudgetPolicy.cases.Enforced.make({}),
       }),
     ),
     {

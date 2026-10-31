@@ -12,12 +12,14 @@
 //    comes back online, catches up, and B sees screen shake off.
 // Run it through the heavy guard:
 //   bun run heavy -- bun tools/audit/sync.ts https://munch-manor-pr-2.tanner-scadden.workers.dev/
+import { Schema } from 'effect'
 import { readFileSync } from 'node:fs'
 import type { BrowserContext, Page } from 'playwright-core'
 
-import { launch, wait } from './lib'
+import { encodeJson } from '../json'
+import { awaitGame, launch, pollUntil, wait } from './lib'
 
-const BASE = process.argv[2] ?? process.env.BASE
+const BASE = process.argv[2] ?? process.env['BASE']
 if (BASE === undefined) {
   console.error('Usage: bun tools/audit/sync.ts <site url>')
   process.exit(2)
@@ -28,14 +30,15 @@ const STARTING_KILLS = 57
 
 // NOTE: the newest What's New day, as the build reads it from CHANGELOG.md,
 // so a save that has seen it shows no dot on the What's New button.
-const NEWEST_NEWS_DAY = (
-  readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')
-    .split('\n')
-    .find(line => line.startsWith('## ')) ?? ''
-)
-  .slice(3)
-  .split(': ')[0]
-  ?.trim()
+const NEWEST_NEWS_DAY =
+  (
+    readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')
+      .split('\n')
+      .find(line => line.startsWith('## ')) ?? ''
+  )
+    .slice(3)
+    .split(': ')[0]
+    ?.trim() ?? ''
 
 // NOTE: the live game's save, as it keeps it in localStorage today.
 const olderSave = {
@@ -91,11 +94,6 @@ const watch = (page: Page, name: string) => {
   page.on('pageerror', error => errors.push(`${name}: ${error.message}`))
 }
 
-const awaitGame = (page: Page) =>
-  page.waitForFunction(() => document.getElementById('splash') === null, {
-    timeout: 45_000,
-  })
-
 const toggleSelector = (label: string) =>
   `button[aria-label="${label}"][aria-pressed]`
 
@@ -139,15 +137,15 @@ const syncLine = async (page: Page) => {
 
 // NOTE: waits on the status line until it says what is expected, checking
 // twice a second. Returns the last thing it said.
-const waitForLine = async (page: Page, expected: RegExp, timeoutMs: number) => {
-  const deadline = Date.now() + timeoutMs
-  let line = await syncLine(page)
-  while (!expected.test(line) && Date.now() < deadline) {
-    await wait(500)
-    line = await syncLine(page)
-  }
-  return line
-}
+const waitForLine = async (page: Page, expected: RegExp, timeoutMs: number) =>
+  (
+    await pollUntil(
+      () => syncLine(page),
+      line => expected.test(line),
+      500,
+      timeoutMs,
+    )
+  ).last
 
 const hasNewsDot = async (page: Page) => {
   await closePanel(page)
@@ -156,11 +154,14 @@ const hasNewsDot = async (page: Page) => {
   return label.includes("Something new in What's new")
 }
 
+// NOTE: the home menu's bests badge names each best only for a screen
+// reader, beside its icon, so the kills row is found by that hidden name.
 const splatted = async (page: Page) => {
   await closePanel(page)
-  const best = page.locator(
-    '.home-best:has(.home-best-label:text-is("Zombies splatted")) .home-best-value',
-  )
+  const best = page
+    .locator('.home-best')
+    .filter({ has: page.getByText('Zombies splatted', { exact: true }) })
+    .locator('.home-best-value')
   return (await best.count()) === 0 ? '' : ((await best.textContent()) ?? '')
 }
 
@@ -232,7 +233,7 @@ const a = await newDevice('device A')
 await a.page.goto(new URL('version.json', BASE).href)
 await a.page.evaluate(([key, json]) => localStorage.setItem(key, json), [
   SAVE_KEY,
-  JSON.stringify(olderSave),
+  encodeJson(Schema.Json)(olderSave),
 ] as const)
 await a.page.goto(BASE)
 await awaitGame(a.page)

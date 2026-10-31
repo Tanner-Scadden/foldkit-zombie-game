@@ -5,21 +5,29 @@
 // whatever images the page loads, however the game builds them: data URLs, an
 // atlas, or files.
 
+import { Effect } from 'effect'
+
 const created = new Set<HTMLImageElement>()
 
+// NOTE: the wrappers replace the page's own through defineProperty, which
+// keeps each property's attributes as an assignment would, since a plain
+// function cannot take the place of createElement's overloads or Image's
+// constructor in the DOM's types.
 // oxlint-disable-next-line typescript/unbound-method -- called below with .call(this)
 const nativeCreateElement = Document.prototype.createElement
-Document.prototype.createElement = function (
-  this: Document,
-  tagName: string,
-  options?: ElementCreationOptions,
-) {
-  const element = nativeCreateElement.call(this, tagName, options)
-  if (element instanceof HTMLImageElement) {
-    created.add(element)
-  }
-  return element
-} as typeof Document.prototype.createElement
+Object.defineProperty(Document.prototype, 'createElement', {
+  value: function (
+    this: Document,
+    tagName: string,
+    options?: ElementCreationOptions,
+  ): HTMLElement {
+    const element = nativeCreateElement.call(this, tagName, options)
+    if (element instanceof HTMLImageElement) {
+      created.add(element)
+    }
+    return element
+  },
+})
 
 const NativeImage = window.Image
 function TrackedImage(width?: number, height?: number): HTMLImageElement {
@@ -27,8 +35,10 @@ function TrackedImage(width?: number, height?: number): HTMLImageElement {
   created.add(image)
   return image
 }
-TrackedImage.prototype = NativeImage.prototype
-window.Image = TrackedImage as unknown as typeof Image
+Object.defineProperty(TrackedImage, 'prototype', {
+  value: NativeImage.prototype,
+})
+Object.defineProperty(window, 'Image', { value: TrackedImage })
 
 const isPending = (image: HTMLImageElement): boolean =>
   image.getAttribute('src') !== null && !image.complete
@@ -48,7 +58,11 @@ const pendingImages = (): ReadonlyArray<HTMLImageElement> => {
 }
 
 const nextFrame = (): Promise<void> =>
-  new Promise(resolve => requestAnimationFrame(() => resolve()))
+  Effect.runPromise(
+    Effect.callback<void>(resume => {
+      requestAnimationFrame(() => resume(Effect.void))
+    }),
+  )
 
 const frames = async (count: number): Promise<void> => {
   for (let index = 0; index < count; index++) {

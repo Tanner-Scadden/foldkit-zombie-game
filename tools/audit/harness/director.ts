@@ -130,11 +130,27 @@ export type AudioCue =
       stinger: string
     }>
 
-type Return = Readonly<{
+// NOTE: one Command the game's update gives back.
+export type GameCommand = NonNullable<
+  ReturnType<typeof update>['commands']
+>[number]
+export type Return = Readonly<{
   model: Model
-  commands?: ReadonlyArray<any> | undefined
+  commands?: ReadonlyArray<GameCommand> | undefined
 }>
 type Step = (model: Model, message: Message) => Return
+
+// NOTE: the args the sound and music Commands carry, read back for the log.
+const decodeSoundArgs = Schema.decodeUnknownSync(
+  Schema.Struct({ sound: Schema.String, variation: Schema.Number }),
+)
+const decodeMusicArgs = Schema.decodeUnknownSync(
+  Schema.Struct({
+    mood: Schema.String,
+    level: Schema.String,
+    stinger: Schema.String,
+  }),
+)
 
 const FIXED_TICK_MS = 1000 / 60
 const TOUCH_POINTER_MOVE = 31
@@ -193,20 +209,20 @@ export const seatsOnScreen = (
 
 // NOTE: the sound and music Commands become log lines; the rest run.
 const logAudio = (
-  commands: ReadonlyArray<any>,
+  commands: ReadonlyArray<GameCommand>,
   atTick: number,
-): ReadonlyArray<any> =>
+): ReadonlyArray<GameCommand> =>
   Array.filter(commands, command => {
     if (command.name === PlaySound.name) {
-      cues.push({
-        tick: atTick,
-        _tag: 'Sound',
-        sound: command.args.sound,
-        variation: command.args.variation,
-      })
+      const { sound, variation } = decodeSoundArgs(command.args)
+      cues.push({ tick: atTick, _tag: 'Sound', sound, variation })
       return false
     } else if (command.name === CueMusic.name) {
-      cues.push({ tick: atTick, _tag: 'Music', ...command.args })
+      cues.push({
+        tick: atTick,
+        _tag: 'Music',
+        ...decodeMusicArgs(command.args),
+      })
       return false
     } else {
       return true
@@ -368,12 +384,13 @@ const withKeys = (
   const pressed = Array.filter(wanted, key => !held.includes(key))
   Array.forEach(released, key => scriptedKeys.delete(key))
   Array.forEach(pressed, key => scriptedKeys.add(key))
+  const start: Return = { model }
   return Array.reduce(
     [
       ...Array.map(released, code => Message.ReleasedKey({ code })),
       ...Array.map(pressed, code => Message.PressedKey({ code })),
     ],
-    { model } as Return,
+    start,
     (current, message) => {
       const next = step(current.model, message)
       return {
@@ -594,7 +611,7 @@ const botInput = (
       // NOTE: a bot holds its fire until a zombie is close, so the room
       // fills up first.
       const target = Option.map(
-        Option.filter(nearest, ({ distance }) => distance < FIRE_REACH ** 2),
+        Option.filter(nearest, zombie => zombie.distance < FIRE_REACH ** 2),
         zombie => unit({ x: zombie.x - player.x, y: zombie.y - player.y }),
       )
       return {
@@ -616,9 +633,7 @@ const botInput = (
 }
 
 const isDownedOnPurpose = (coop: CoopPlan, slot: number): boolean =>
-  coop.revive?.down === slot &&
-  isPrerolled &&
-  tick >= coop.revive.at
+  coop.revive?.down === slot && isPrerolled && tick >= coop.revive.at
 
 // NOTE: the shot's own hand on the room before it steps: on `at` the
 // downed seat drops to zero hearts (the room downs it that tick), a tick
@@ -645,26 +660,22 @@ const scripted = (
       isDowned(leadSeatOf(seatWorld))
         ? modifyLeadSeat(seatWorld, seat =>
             modifyFields(seat, {
-              life: () =>
-                Life.Downed({ bleedMs: revive.bleedMs, reviveMs: 0 }),
+              life: () => Life.Downed({ bleedMs: revive.bleedMs, reviveMs: 0 }),
             }),
           )
         : seatWorld,
     )
   }
   if (coop.god === true) {
-    world = Array.reduce(
-      playersOf(world),
-      world,
-      (current, { slot, seat }) =>
-        isDownedOnPurpose(coop, slot) || isDowned(seat)
-          ? current
-          : withSeat(current, slot, seatWorld =>
-              modifyFields(seatWorld, {
-                player: player =>
-                  modifyFields(player, { hp: () => PLAYER_MAX_HP }),
-              }),
-            ),
+    world = Array.reduce(playersOf(world), world, (current, { slot, seat }) =>
+      isDownedOnPurpose(coop, slot) || isDowned(seat)
+        ? current
+        : withSeat(current, slot, seatWorld =>
+            modifyFields(seatWorld, {
+              player: player =>
+                modifyFields(player, { hp: () => PLAYER_MAX_HP }),
+            }),
+          ),
     )
   }
   return world === held.world ? held : { ...held, world }

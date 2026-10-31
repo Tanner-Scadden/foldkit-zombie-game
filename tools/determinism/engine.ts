@@ -11,7 +11,13 @@ import { installDeterministicMath } from './detMath'
 import { exactJson } from './diff'
 import { gameplayOf, unclassifiedFieldsOf } from './fields'
 import { makeGameplayHasher } from './hash'
-import { type EngineDump, type EngineRequest, type EngineRun } from './request'
+import {
+  type EngineDump,
+  type EngineRequest,
+  type EngineRun,
+  encodeEngineDump,
+  encodeEngineRun,
+} from './request'
 import { type RunOptions, runScript } from './run'
 import { startedRun } from './script'
 
@@ -42,7 +48,7 @@ export const answer = (engine: string, request: EngineRequest): string => {
         })
       }
     })
-    return JSON.stringify(
+    return encodeEngineDump(
       dumps[0] ?? { engine, frame: dumpFrame, missing: true },
     )
   }
@@ -55,5 +61,5 @@ export const answer = (engine: string, request: EngineRequest): string => {
     checkpoints: report.checkpoints,
     unclassified: unclassifiedFieldsOf(startedRun(request.seed, request.mode)),
   }
-  return JSON.stringify(run)
+  return encodeEngineRun(run)
 }

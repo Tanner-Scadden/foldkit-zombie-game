@@ -36,6 +36,7 @@ import {
   settleAnimations,
   useHarness,
   wait,
+  waitForDialog,
 } from './lib'
 
 // NOTE: a 2x pixel ratio on every phone keeps the many reloads quick. The hit
@@ -52,7 +53,7 @@ const PORTRAIT: ReadonlyArray<Viewport> = [
 ]
 
 const VIEWPORTS = pickViewports(
-  process.env.PORTRAIT === undefined ? LANDSCAPE : PORTRAIT,
+  process.env['PORTRAIT'] === undefined ? LANDSCAPE : PORTRAIT,
 )
 
 type Scene = Readonly<{
@@ -215,13 +216,6 @@ const tapToOpen = async (page: Page, scene: Scene, selector: string) => {
   await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
 }
 
-const waitForDialog = (page: Page) =>
-  page
-    .locator('dialog[open]')
-    .first()
-    .waitFor({ state: 'visible', timeout: OPEN_TIMEOUT_MS })
-    .catch(() => undefined)
-
 const openScene = async (page: Page, scene: Scene) => {
   if (scene.opensDialog === true) {
     await waitForDialog(page)
@@ -241,7 +235,7 @@ const TAP_TARGETS = 'button, a.end-button, a.home-support'
 
 // NOTE: true once the scene shows a button at `index`, in the open dialog
 // when there is one.
-const hasButton = (page: Page, index: number, hasDialog: boolean) =>
+const hasButton = (page: Page, at: number, isInDialog: boolean) =>
   page
     .waitForFunction(
       ({ index, hasDialog, targets }) => {
@@ -250,7 +244,7 @@ const hasButton = (page: Page, index: number, hasDialog: boolean) =>
           : document
         return scope.querySelectorAll(targets)[index] !== undefined
       },
-      { index, hasDialog, targets: TAP_TARGETS },
+      { index: at, hasDialog: isInDialog, targets: TAP_TARGETS },
       { timeout: OPEN_TIMEOUT_MS },
     )
     .then(() => true)
@@ -288,23 +282,23 @@ const openedScroll = (page: Page): Promise<number> =>
 // button is scrolled into view before it is measured, hit tested, and tapped.
 const placeTarget = (
   page: Page,
-  index: number,
-  hasDialog: boolean,
+  at: number,
+  isInDialog: boolean,
 ): Promise<Target> =>
   page.evaluate(
     ({ index, hasDialog, inset, targets }) => {
       const scope: ParentNode = hasDialog
         ? (document.querySelector('dialog[open]') ?? document)
         : document
-      const button = scope.querySelectorAll(targets)[index]!
+      const button = scope.querySelectorAll(targets)[index]
+      if (button === undefined) {
+        throw new Error(`No tap target at ${index}`)
+      }
       button.scrollIntoView({ block: 'nearest', inline: 'nearest' })
       const box = button.getBoundingClientRect()
       const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
       return {
-        label:
-          button.getAttribute('aria-label') ??
-          button.textContent?.trim() ??
-          '?',
+        label: button.getAttribute('aria-label') ?? button.textContent.trim(),
         index,
         center,
         width: box.width,
@@ -322,14 +316,19 @@ const placeTarget = (
         ],
       }
     },
-    { index, hasDialog, inset: EDGE_INSET, targets: TAP_TARGETS },
+    {
+      index: at,
+      hasDialog: isInDialog,
+      inset: EDGE_INSET,
+      targets: TAP_TARGETS,
+    },
   )
 
 const hitsButton = (
   page: Page,
   target: Target,
   point: Point,
-  hasDialog: boolean,
+  isInDialog: boolean,
 ) =>
   page.evaluate(
     ({ index, point: { x, y }, hasDialog, targets }) => {
@@ -343,7 +342,7 @@ const hitsButton = (
     {
       index: target.index,
       point,
-      hasDialog,
+      hasDialog: isInDialog,
       targets: TAP_TARGETS,
     },
   )
@@ -420,7 +419,7 @@ const checkScene = async (
   pages.release(page)
   for (const target of targets) {
     for (const { name } of target.points.filter(
-      ({ name }) => name === 'center' || name === 'corner',
+      ({ name: pointName }) => pointName === 'center' || pointName === 'corner',
     )) {
       const tapPage = await openWithButton(
         viewport,
@@ -435,11 +434,15 @@ const checkScene = async (
         )
         continue
       }
-      const tapPoint = (
+      const tapPlace = (
         await placeTarget(tapPage, target.index, hasDialog)
-      ).points.find(placed => placed.name === name)!.point
+      ).points.find(placed => placed.name === name)
+      if (tapPlace === undefined) {
+        throw new Error(`No ${name} point on "${target.label}"`)
+      }
+      const tapPoint = tapPlace.point
       await tapPage.evaluate(() => {
-        ;(window as any).__messages.length = 0
+        window.__messages.length = 0
       })
       // NOTE: the end screens' SHARE is a link that opens X in a new tab,
       // and the coffee one that opens the tip jar; x.com and Stripe are
@@ -456,9 +459,7 @@ const checkScene = async (
         )
       await tapPage.touchscreen.tap(tapPoint.x, tapPoint.y)
       await wait(AFTER_TAP_MS)
-      const tags: ReadonlyArray<string> = await tapPage.evaluate(() => [
-        ...(window as any).__messages,
-      ])
+      const tags = await tapPage.evaluate(() => [...window.__messages])
       pages.release(tapPage)
       const tapTags = tags.filter(isTapMessage)
       const reachedSurface = tags.some(tag => surfaceTags.has(tag))

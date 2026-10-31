@@ -37,9 +37,9 @@ import {
   waitForReady,
 } from './lib'
 
-const ROUNDS = Number(process.env.ROUNDS ?? 16)
-const LIVE = process.env.LIVE
-const IS_WEBKIT = process.env.ENGINE === 'webkit'
+const ROUNDS = Number(process.env['ROUNDS'] ?? 16)
+const LIVE = process.env['LIVE']
+const IS_WEBKIT = process.env['ENGINE'] === 'webkit'
 const VIEWPORTS = pickViewports([
   { ...PHONE_844, name: 'l844' },
   { ...UPRIGHT_390, name: 'p390' },
@@ -63,8 +63,8 @@ type Hand = {
 }
 
 const centerOf = (page: Page, selector: string): Promise<Point | null> =>
-  page.evaluate(selector => {
-    const element = document.querySelector(selector)
+  page.evaluate(target => {
+    const element = document.querySelector(target)
     if (element === null) {
       return null
     }
@@ -77,8 +77,17 @@ const PRESSING_ID = 2
 
 // NOTE: Chrome's touch emulation takes every finger still down on a
 // touchStart, and the fingers to lift on a touchEnd.
+// NOTE: the touch session of a phone in Chrome, which every finger goes
+// through.
+const cdpOf = (hand: Hand): CDPSession => {
+  if (hand.cdp === undefined) {
+    throw new Error('Touch needs Chrome on a phone screen')
+  }
+  return hand.cdp
+}
+
 const touch = async (hand: Hand, point: Point) => {
-  const cdp = hand.cdp!
+  const cdp = cdpOf(hand)
   const pressing = { ...point, id: PRESSING_ID }
   const resting =
     hand.resting === undefined ? [] : [{ ...hand.resting, id: RESTING_ID }]
@@ -118,7 +127,7 @@ const press = async (hand: Hand, point: Point) => {
 // control, and left there until the round ends.
 const restFinger = async (hand: Hand) => {
   hand.resting = { x: 6, y: hand.viewport.height - 6 }
-  await hand.cdp!.send('Input.dispatchTouchEvent', {
+  await cdpOf(hand).send('Input.dispatchTouchEvent', {
     type: 'touchStart',
     touchPoints: [{ ...hand.resting, id: RESTING_ID }],
   })
@@ -127,7 +136,7 @@ const restFinger = async (hand: Hand) => {
 
 const liftRestingFinger = async (hand: Hand) => {
   if (hand.resting !== undefined) {
-    await hand.cdp!.send('Input.dispatchTouchEvent', {
+    await cdpOf(hand).send('Input.dispatchTouchEvent', {
       type: 'touchEnd',
       touchPoints: [],
     })
@@ -146,13 +155,14 @@ const IS_CLOSED = `document.querySelector('dialog[open]') === null`
 
 type Tally = { tries: number; misses: Array<string> }
 
+// NOTE: the harness logs Messages; a deployed copy does not.
 const lastTags = (page: Page): Promise<string> =>
-  page.evaluate(
-    () => (window as any).__messages?.slice(-8).join(', ') ?? '(live)',
+  page.evaluate(() =>
+    '__messages' in window ? window.__messages.slice(-8).join(', ') : '(live)',
   )
 
 const messageCount = (page: Page): Promise<number> =>
-  page.evaluate(() => (window as any).__messages?.length ?? 0)
+  page.evaluate(() => ('__messages' in window ? window.__messages.length : 0))
 
 const attempt = async (
   hand: Hand,
@@ -239,11 +249,15 @@ const openHome = async (page: Page, viewport: Viewport) => {
 }
 
 const runRound = async (hand: Hand, tally: Tally, round: number) => {
-  const route = ROUTES[round % ROUTES.length]!
+  const route = ROUTES[round % ROUTES.length]
+  if (route === undefined) {
+    throw new Error('No Profile routes')
+  }
   const isTwoFingers = hand.cdp !== undefined && round % 2 === 1
   const where = `round ${round} ${route.name}${isTwoFingers ? ' (second finger)' : ''}`
   let pressIndex = 0
-  const gap = () => wait(GAPS_MS[(round * 5 + pressIndex++) % GAPS_MS.length]!)
+  const gap = () =>
+    wait(GAPS_MS[(round * 5 + pressIndex++) % GAPS_MS.length] ?? 0)
   // NOTE: a little time on the home menu, as a player would take.
   await wait(300)
   if (!(await waitFor(hand.page, IS_CLOSED))) {
@@ -269,7 +283,7 @@ const runRound = async (hand: Hand, tally: Tally, round: number) => {
     }
     await gap()
   }
-  const last = TABS[round % TABS.length]!
+  const last = TABS[round % TABS.length] ?? 'Look'
   const order = [...TABS.filter(tab => tab !== last), last]
   for (const tab of order) {
     await attempt(
@@ -281,7 +295,7 @@ const runRound = async (hand: Hand, tally: Tally, round: number) => {
     )
     await gap()
   }
-  const inside = IN_TAB[last]!
+  const inside = IN_TAB[last] ?? ''
   if (inside !== '') {
     for (let time = 0; time < 2; time++) {
       const before = await messageCount(hand.page)

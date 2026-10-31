@@ -12,6 +12,8 @@ import { roomShapes } from '../../src/room'
 import { standInKeyOf } from '../../src/spriteAtlas'
 import { SURFACE, imagesIn, openFloorSpot, zombieOf } from '../../src/testing'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from '../../src/zombies'
+import { decodeJson } from '../json'
+import { SpriteKeys } from './manifest'
 
 // NOTE: the atlas holds what ./build.ts finds: every sprite built
 // as the modules load, and the ones src/spritePrecompile.ts builds. A sprite
@@ -24,7 +26,7 @@ const generatorKeys = (): ReadonlySet<string> => {
     encoding: 'utf8',
   })
   expect(result.status).toBe(0)
-  return new Set(JSON.parse(result.stdout))
+  return new Set(decodeJson(SpriteKeys)(result.stdout))
 }
 
 const keysDrawnIn = (model: Model): ReadonlyArray<string> => {

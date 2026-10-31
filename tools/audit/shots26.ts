@@ -20,6 +20,7 @@ import {
   DESKTOP_1280,
   PHONE_667,
   PHONE_844,
+  TAG,
   type Viewport,
   deviceQuery,
   gotoScene,
@@ -29,13 +30,11 @@ import {
   openPage,
   settleAnimations,
   shot,
-  tagOr,
   useHarness,
   wait,
 } from './lib'
 
-const TAG = tagOr('after')
-const PART = process.env.PART ?? 'layout'
+const PART = process.env['PART'] ?? 'layout'
 const ROOT = resolve(import.meta.dir, '../..')
 
 const VIEWPORTS: ReadonlyArray<Viewport> = [PHONE_667, PHONE_844, DESKTOP_1280]
@@ -103,7 +102,7 @@ const chipReport = (page: Page) =>
         'button, .pause-help, .mode-choice, .preparation-controls',
       ),
     )
-      .filter(element => element !== chip && !element.closest('dialog'))
+      .filter(element => element !== chip && element.closest('dialog') === null)
       .filter(element => {
         const box = toBox(element)
         const style = getComputedStyle(element)
@@ -118,10 +117,7 @@ const chipReport = (page: Page) =>
       overlaps: others
         .filter(element => overlaps(chipBox, toBox(element)))
         .map(
-          element =>
-            element.getAttribute('aria-label') ??
-            element.className ??
-            element.textContent,
+          element => element.getAttribute('aria-label') ?? element.className,
         ),
     }
   })

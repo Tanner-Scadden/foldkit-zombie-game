@@ -11,37 +11,28 @@
 // exits with 1 on any miss.
 //   TAG=after bun run heavy -- --shared bun tools/audit/shots43.ts
 // ONLY picks scenes, such as `ONLY=death`, and VIEWPORTS picks screens.
+import { Schema } from 'effect'
 import type { Page } from 'playwright-core'
 
+import { encodeJson } from '../json'
 import {
-  DESKTOP_1280,
-  PHONE_844,
-  UPRIGHT_390,
+  SHOT_VIEWPORTS,
+  TAG,
   deviceQuery,
   finish,
   harnessQuery,
   harnessUrl,
   isPickedScene,
   launch,
-  model,
   openPage,
-  pickViewports,
   scenePages,
   settleAnimations,
   shot,
-  tagOr,
   useHarness,
   waitForReady,
   whenSettled,
 } from './lib'
-
-const TAG = tagOr('after')
-
-const VIEWPORTS = pickViewports([
-  { ...DESKTOP_1280, name: 'd1280' },
-  { ...PHONE_844, name: 'l844' },
-  { ...UPRIGHT_390, name: 'p390' },
-])
+import { evaluateAs } from './page'
 
 const LEARNED =
   'learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak'
@@ -93,15 +84,24 @@ const DEATH_SCENE = `wave=4&start=wave&elapsed=9000&crowd=40&seen=all&seed=7&${L
 const STEP = 6
 const MAX_TICKS = 60 * 40
 
-const directedTick = (page: Page) =>
-  page.evaluate(() => (window as any).__directedTick as number)
+// NOTE: a plan with no input, so the player stands and the crowd comes.
+// The harness decodes it with its own Plan Schema (harness/director.ts).
+const IDLE_PLAN = encodeJson(
+  Schema.Struct({
+    segments: Schema.Array(Schema.Unknown),
+    taps: Schema.Array(Schema.Unknown),
+    cards: Schema.Array(Schema.Unknown),
+  }),
+)({ segments: [], taps: [], cards: [] })
+
+const directedTick = (page: Page) => page.evaluate(() => window.__directedTick)
 
 const stepTo = async (page: Page, target: number) => {
   const now = await directedTick(page)
-  if (target > now) {
-    await page.evaluate(n => (window as any).__director.step(n), target - now)
+  if (now !== undefined && target > now) {
+    await page.evaluate(n => window.__director.step(n), target - now)
     await page.waitForFunction(
-      expected => (window as any).__directedTick === expected,
+      expected => window.__directedTick === expected,
       target,
       { polling: 'raf', timeout: 60_000 },
     )
@@ -109,12 +109,12 @@ const stepTo = async (page: Page, target: number) => {
   await whenSettled(page)
 }
 
-const isOver = async (page: Page) =>
-  (await model(page)).phase._tag === 'GameOver'
+const isOver = (page: Page) =>
+  page.evaluate(() => window.__model.phase._tag === 'GameOver')
 
 const shootDeath = async (
   browser: Awaited<ReturnType<typeof launch>>,
-  viewport: (typeof VIEWPORTS)[number],
+  viewport: (typeof SHOT_VIEWPORTS)[number],
   problems: Array<string>,
 ) => {
   const page = await openPage(browser, viewport)
@@ -122,10 +122,7 @@ const shootDeath = async (
     harnessUrl(DEATH_SCENE, 'director', 'nodev', deviceQuery(viewport)),
   )
   await waitForReady(page)
-  await page.evaluate(
-    json => (window as any).__director.start(json),
-    JSON.stringify({ segments: [], taps: [] }),
-  )
+  await page.evaluate(json => window.__director.start(json), IDLE_PLAN)
   let tick = 0
   let lastAlive = 0
   while (tick < MAX_TICKS && !(await isOver(page))) {
@@ -143,10 +140,7 @@ const shootDeath = async (
     harnessUrl(DEATH_SCENE, 'director', 'nodev', deviceQuery(viewport)),
   )
   await waitForReady(page)
-  await page.evaluate(
-    json => (window as any).__director.start(json),
-    JSON.stringify({ segments: [], taps: [] }),
-  )
+  await page.evaluate(json => window.__director.start(json), IDLE_PLAN)
   await stepTo(page, lastAlive)
   let fall = lastAlive
   while (!(await isOver(page))) {
@@ -202,9 +196,8 @@ const checkShare = async (
   }
   const shares = await page.evaluate(
     () =>
-      ((window as any).__messages ?? []).filter(
-        (message: string) => message === 'ClickedShareButton',
-      ).length,
+      window.__messages.filter(message => message === 'ClickedShareButton')
+        .length,
   )
   if (shares < 1) {
     problems.push(`${label}: tapping SHARE sent no ClickedShareButton`)
@@ -224,18 +217,26 @@ const checkShare = async (
 // Command called it, as a real share sheet needs. `refuse` makes it throw
 // NotAllowedError, as a browser that will not share does, so SHARE falls
 // back to the link.
+// NOTE: what the stand-in share was handed, as the game passes it.
+const Sheet = Schema.Struct({
+  text: Schema.optionalKey(Schema.String),
+  url: Schema.optionalKey(Schema.String),
+  isActive: Schema.Boolean,
+})
+const sheetJson = encodeJson(Sheet)
+
 const SHEET_SCENE = `wave=6&phase=gameover&stats&crowd=10&${LEARNED}&tick=400`
 
 const checkSheet = async (
-  viewport: (typeof VIEWPORTS)[number],
+  viewport: (typeof SHOT_VIEWPORTS)[number],
   problems: Array<string>,
 ) => {
   for (const refuse of [false, true]) {
     const page = await openPage(browser, viewport)
     const label = `${viewport.name} share sheet${refuse ? ' refused' : ''}`
     await page.addInitScript(isRefused => {
-      ;(navigator as any).share = (data: { text: string; url: string }) => {
-        ;(window as any).__sheet = {
+      navigator.share = (data?: ShareData) => {
+        window.__sheet = {
           ...data,
           isActive: navigator.userActivation.isActive,
         }
@@ -254,15 +255,19 @@ const checkSheet = async (
       continue
     }
     const opened = await opensX(page, () => sheetButton.tap())
-    await page.waitForFunction(() => (window as any).__sheet !== undefined, {
+    await page.waitForFunction(() => window.__sheet !== undefined, {
       timeout: 5_000,
     })
-    const sheet = await page.evaluate(() => (window as any).__sheet)
+    const sheet = await evaluateAs(page, Sheet, () => window.__sheet)
     if (!sheet.isActive) {
       problems.push(`${label}: the share sheet was called outside the tap`)
     }
-    if (!String(sheet.text).includes('Munch Manor') || !sheet.url) {
-      problems.push(`${label}: the share sheet got ${JSON.stringify(sheet)}`)
+    if (
+      !(sheet.text ?? '').includes('Munch Manor') ||
+      sheet.url === undefined ||
+      sheet.url === ''
+    ) {
+      problems.push(`${label}: the share sheet got ${sheetJson(sheet)}`)
     }
     await whenSettled(page)
     const isLinkNow = (await page.locator('a#end-share-button').count()) === 1
@@ -285,7 +290,7 @@ await useHarness()
 const browser = await launch()
 const pages = scenePages(browser, ['nodev'])
 const problems: Array<string> = []
-for (const viewport of VIEWPORTS) {
+for (const viewport of SHOT_VIEWPORTS) {
   if (isPickedScene('death')) {
     await shootDeath(browser, viewport, problems)
   }

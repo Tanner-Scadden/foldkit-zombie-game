@@ -457,7 +457,7 @@ From the endless run in Node, sampled every 30 frames (1,800 samples). JSON byte
 
 ### The wire at 20 Hz
 
-`tools/mp-spike/wire.ts` counts what a simple binary encoder would write for one room message every third 60 Hz tick, and `measure.ts` reports it (`bun run heavy -- bun tools/mp-spike/measure.ts 54000 1 endless`, Bun, 15 minutes of endless to wave 12, peak 20 alive, 17,999 messages, 557 of them crowded).
+The spike's `tools/mp-spike/wire.ts` counted what a simple binary encoder would write for one room message every third 60 Hz tick, and `measure.ts` reports it (`bun run heavy -- bun tools/mp-spike/measure.ts 54000 1 endless`, Bun, 15 minutes of endless to wave 12, peak 20 alive, 17,999 messages, 557 of them crowded).
 
 The encoding: a 4 byte header (type and tick); entities in lists with ids as a list and op byte, a varint id, and a 2 byte field mask, then each changed field; positions and vectors as int16 fixed point; integers as zigzag varints; timers as whole milliseconds in a varint; tags and strings as one byte enum indexes; spawns with every field and removals with only the id; the frame events of all three ticks so clients can make particles and sounds; then the WebSocket frame header (2 or 4 bytes). Inputs, run stats, the seeded state, and the id counter are never sent. "Elided" also leaves out timers that only count down by the time since the last message, which the client runs itself from the tick number.
 
@@ -543,7 +543,7 @@ The UDP path, if it becomes real: inputs and deltas over an unreliable channel (
 
 ## Cloudflare costs
 
-Checked against Cloudflare's pricing and limits pages on 2026-10-29 (see "Sources"). `tools/mp-spike/cost.ts` computes every number below.
+Checked against Cloudflare's pricing and limits pages on 2026-10-29 (see "Sources"). The spike's `tools/mp-spike/cost.ts` computed every number below.
 
 ### The verified rules
 
@@ -668,21 +668,7 @@ Two channels, one object. A room's lobby and record are a **sync scope**; the ga
 
 ## The spike
 
-`tools/mp-spike` holds the measuring tools behind this file. They are not shipped, and `bun run typecheck` checks them. Run anything heavy through the guard. The deterministic Math, the scripted player, and a faster gameplay hash were promoted to `tools/determinism`, the permanent harness (see its `README.md`).
-
-| File                           | What it does                                                                                                      |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `scenario.ts`                  | The scripted run, the gameplay subset and hash, the structural delta, and the timing summary                      |
-| `measure.ts`                   | Frame time, sizes, and the 20 Hz wire: `bun run heavy -- bun tools/mp-spike/measure.ts [frames] [seed] [endless]` |
-| `wire.ts`                      | The binary delta size estimate for one room message                                                               |
-| `cost.ts`                      | The monthly Durable Object bill with and without 10 Hz inputs and shards: `bun tools/mp-spike/cost.ts` (light)    |
-| `build.ts`                     | Bundles for Node and workerd into `out/` (gitignored) and lists what the Worker bundle pulls in                   |
-| `hashes.ts`                    | One engine's per-frame hashes; a third argument dumps that frame's gameplay state                                 |
-| `worker.ts`, `workerd.capnp`   | The same run inside workerd, served by `infra/node_modules/.bin/workerd`                                          |
-| `crossEngine.ts`               | Bun, Node, and workerd side by side: `bun run heavy -- bun tools/mp-spike/crossEngine.ts [frames] [seed] [det]`   |
-| `mathCases.ts`, `mathProbe.ts` | The Math probe across the three engines: `bun tools/mp-spike/mathProbe.ts` after `build.ts`                       |
-
-Node frame times come from `node tools/mp-spike/out/measure.js`, after `build.ts`. workerd is not used for timing: it only advances its clock on I/O, so `performance.now()` stands still inside a request.
+The measuring tools behind this file lived in `tools/mp-spike`. The deterministic Math, the scripted player, and a faster gameplay hash were promoted to `tools/determinism`, the permanent harness (see its `README.md`), and the rest was deleted once nothing used it (cleanup slice 9b). The numbers above stand as measured. To run the spike again, check out `tools/mp-spike` from the commit before that change: `scenario.ts` (the scripted run and timing summary), `measure.ts` (frame time, sizes, and the 20 Hz wire), `wire.ts` (the binary delta size estimate), `cost.ts` (the monthly Durable Object bill), `build.ts`, `hashes.ts`, `worker.ts` with `workerd.capnp`, `crossEngine.ts`, and the Math probe (`mathCases.ts`, `mathProbe.ts`). workerd is not used for timing: it only advances its clock on I/O, so `performance.now()` stands still inside a request.
 
 ## Sources
 

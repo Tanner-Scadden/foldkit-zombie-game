@@ -31,6 +31,7 @@ import type {
   WeaponKind,
   ZombieKind,
 } from '../../src/model'
+import { STRAGGLER_KINDS } from '../../src/pacing'
 import { SHOP_ITEMS } from '../../src/shop'
 import { TRAPS } from '../../src/traps'
 import { FINAL_WAVE, rollWave, waveBonus } from '../../src/waves'
@@ -797,12 +798,6 @@ export const rolledWave = (
 
 export const spawnHp = (spawn: PlannedSpawn): number =>
   scaledHp(ZOMBIE_KINDS[spawn.kind].hp, spawn.hpScale)
-
-const STRAGGLER_KINDS: ReadonlyArray<ZombieKind> = [
-  'Shambler',
-  'Runner',
-  'Exploder',
-]
 
 const arrivalOf = (
   spawn: PlannedSpawn,

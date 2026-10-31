@@ -7,12 +7,15 @@
 // diff image, `s17-diff-<viewport>-<scene>.png`, for any scene that differs.
 // ONLY picks scenes by name, BASE points it at another harness port, and
 // COMPARE_ONLY=1 compares the sets already on disk without taking new shots.
+import { Schema } from 'effect'
 import { readdirSync } from 'node:fs'
 
+import { encodeJson } from '../json'
 import {
   DESKTOP_1280,
   PHONE_667,
   SHOTS_DIR,
+  TAG,
   type Viewport,
   comparePngs,
   deviceQuery,
@@ -22,11 +25,17 @@ import {
   launch,
   openPage,
   shot,
-  tagOr,
   useHarness,
 } from './lib'
 
-const TAG = tagOr('after')
+const boxJson = encodeJson(
+  Schema.Struct({
+    left: Schema.Number,
+    top: Schema.Number,
+    right: Schema.Number,
+    bottom: Schema.Number,
+  }),
+)
 
 const VIEWPORTS: ReadonlyArray<Viewport> = [DESKTOP_1280, PHONE_667]
 
@@ -92,7 +101,7 @@ const SCENES: ReadonlyArray<Scene> = [
 const shotName = (tag: string, viewport: Viewport, scene: Scene) =>
   `s17-${tag}-${viewport.name}-${scene.name}`
 
-const isComparingOnly = process.env.COMPARE_ONLY === '1'
+const isComparingOnly = process.env['COMPARE_ONLY'] === '1'
 
 await useHarness()
 const browser = await launch()
@@ -108,8 +117,8 @@ for (const viewport of VIEWPORTS) {
   }
 }
 
-if (process.env.COMPARE) {
-  const compareTag = process.env.COMPARE
+const compareTag = process.env['COMPARE']
+if (compareTag !== undefined && compareTag !== '') {
   const page = await (
     await browser.newContext({ viewport: { width: 400, height: 300 } })
   ).newPage()
@@ -131,12 +140,12 @@ if (process.env.COMPARE) {
       )
       const label = `${viewport.name}-${scene.name}`
       console.log(
-        `${label}: ${result.differing} of ${result.total} pixels differ, max channel delta ${result.maxDelta}${result.box ? `, in ${JSON.stringify(result.box)}` : ''}`,
+        `${label}: ${result.differing} of ${result.total} pixels differ, max channel delta ${result.maxDelta}${result.box === null ? '' : `, in ${boxJson(result.box)}`}`,
       )
-      if (result.diffUrl) {
+      if (result.diffUrl !== null) {
         await Bun.write(
           `${SHOTS_DIR}/s17-diff-${label}.png`,
-          Buffer.from(result.diffUrl.split(',')[1]!, 'base64'),
+          Buffer.from(result.diffUrl.split(',')[1] ?? '', 'base64'),
         )
       }
     }

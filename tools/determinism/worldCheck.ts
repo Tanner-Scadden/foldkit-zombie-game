@@ -13,17 +13,21 @@
 //   bun run world:check
 
 import './globals'
-import { Option } from 'effect'
+import { Option, Schema } from 'effect'
+import { HttpClientRequest } from 'effect/http'
 import { modifyFields } from 'foldkit/struct'
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { PlayerInput } from '@munch/netcode'
+
 import { refreshIntent } from '../../src/frame'
 import { seatCrew, withSeat } from '../../src/party'
 import type { Intent } from '../../src/worldSchema'
 import { worldToJson } from '../../src/worldWire'
+import { askWorkerd } from './askWorkerd'
 import { playFrame, startedRun } from './script'
 import {
   type PlayRequest,
@@ -110,10 +114,29 @@ const workerdBinary = (): string | undefined => {
   ].find(path => path !== undefined && existsSync(path))
 }
 
-const playInWorkerd = async (
-  request: PlayRequest | RoomPlayRequest,
-  path = '/',
-): Promise<string> => {
+// NOTE: the requests as JSON for the worker, which reads them back
+// (worldWorker.ts).
+const encodePlayRequest = Schema.encodeSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      world: Schema.String,
+      intents: Schema.Array(Schema.Tuple([Schema.Number, Schema.String])),
+      ticks: Schema.Number,
+    }),
+  ),
+)
+const encodeRoomPlayRequest = Schema.encodeSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      slots: Schema.Array(Schema.Number),
+      seed: Schema.Number,
+      inputs: Schema.Array(Schema.Tuple([Schema.Number, PlayerInput])),
+      ticks: Schema.Number,
+    }),
+  ),
+)
+
+const playInWorkerd = async (body: string, path = '/'): Promise<string> => {
   const binary = workerdBinary()
   if (binary === undefined) {
     throw new Error('no workerd: run bun install in infra/, or set WORKERD')
@@ -123,25 +146,11 @@ const playInWorkerd = async (
     stdio: ['ignore', 'ignore', 'inherit'],
   })
   try {
-    const attempt = async (left: number): Promise<string> => {
-      try {
-        const response = await fetch(
-          `http://127.0.0.1:${WORKERD_PORT}${path}`,
-          {
-            method: 'POST',
-            body: JSON.stringify(request),
-          },
-        )
-        return await response.text()
-      } catch (error) {
-        if (left <= 0) {
-          throw error
-        }
-        await new Promise(done => setTimeout(done, 200))
-        return attempt(left - 1)
-      }
-    }
-    return await attempt(50)
+    return await askWorkerd(
+      HttpClientRequest.post(`http://127.0.0.1:${WORKERD_PORT}${path}`).pipe(
+        HttpClientRequest.bodyText(body),
+      ),
+    )
   } finally {
     server.kill()
   }
@@ -216,7 +225,7 @@ const requestFor = (players: number): PlayRequest => ({
 
 const checkPlayers = async (players: number): Promise<void> => {
   const request = requestFor(players)
-  const inWorkerd = await playInWorkerd(request)
+  const inWorkerd = await playInWorkerd(encodePlayRequest(request))
   const inBun = playWorld(request)
   if (inWorkerd !== inBun) {
     console.error(
@@ -249,7 +258,7 @@ const checkRoom = async (players: number): Promise<void> => {
     inputs: ROOM_INPUTS.slice(0, players),
     ticks: 900,
   }
-  const inWorkerd = await playInWorkerd(request, '/room')
+  const inWorkerd = await playInWorkerd(encodeRoomPlayRequest(request), '/room')
   const inBun = playRoomWorld(request)
   if (inWorkerd !== inBun) {
     console.error(

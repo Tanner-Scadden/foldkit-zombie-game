@@ -65,37 +65,6 @@
         // NOTE: globs are relative to this file, whichever project extends it.
         "overrides": [
           {
-            // NOTE: tools are host scripts: they time runs, wait on browsers
-            // and child processes, and fetch. The game's determinism rules
-            // do not apply.
-            "include": ["tools/**/*.ts"],
-            "options": {
-              "diagnosticSeverity": {
-                "globalDate": "off",
-                "globalDateInEffect": "off",
-                "globalTimers": "off",
-                "globalTimersInEffect": "off",
-                "globalFetch": "off",
-                "globalFetchInEffect": "off",
-                "globalRandom": "off",
-                "globalRandomInEffect": "off",
-                "newPromise": "off"
-              }
-            }
-          },
-          {
-            // NOTE: these drive headless Chrome, and much of their code runs
-            // in page.evaluate on untyped page globals.
-            "include": [
-              "tools/audit/**/*.ts",
-              "tools/mp-spike/**/*.ts",
-              "tools/sprites/**/*.ts"
-            ],
-            "options": {
-              "diagnosticSeverity": { "strictBooleanExpressions": "off" }
-            }
-          },
-          {
             // NOTE: tests stamp fixtures with the wall clock.
             "include": ["**/*.test.ts"],
             "options": { "diagnosticSeverity": { "globalDate": "off" } }
@@ -110,13 +79,6 @@
                 "globalTimers": "off",
                 "newPromise": "off"
               }
-            }
-          },
-          {
-            // TODO(cleanup slice 9b): the Clang Pan is editing the bot.
-            "include": ["tools/balance/bot.ts", "tools/balance/simulate.ts"],
-            "options": {
-              "diagnosticSeverity": { "strictBooleanExpressions": "off" }
             }
           }
         ]

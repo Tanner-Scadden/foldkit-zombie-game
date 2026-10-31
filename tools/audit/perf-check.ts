@@ -1,52 +1,67 @@
 import { type Subprocess, spawn } from 'bun'
+import { DateTime, Effect, Schema } from 'effect'
+import { FetchHttpClient, HttpClient } from 'effect/http'
 import { connect } from 'node:net'
 import { loadavg } from 'node:os'
 import { resolve } from 'node:path'
 
 import { yieldTurnAsync } from '../heavy/turn'
+import { readJsonFile, writeJsonFile } from '../json'
 import { launch, wait } from './lib'
-import { type FrameRow, calibrationMs, measureScenario } from './measure'
+import { FrameRow, calibrationMs, measureScenario } from './measure'
 
 const ROOT = resolve(import.meta.dir, '../..')
 const VITE = `${ROOT}/node_modules/.bin/vite`
 const BASELINE_PATH = `${import.meta.dir}/frame-baseline.json`
 
-const PORT = Number(process.env.PORT ?? 4179)
-const SCENARIO_NAMES = (process.env.SCENARIOS ?? 'worst,endlessCap').split(',')
-const RATES = (process.env.RATES ?? '1,4,6').split(',').map(Number)
-const SECONDS = Number(process.env.SECONDS ?? 5)
-const TRIALS = Number(process.env.TRIALS ?? 2)
-const IS_UPDATING = process.env.UPDATE === '1'
-const GATE = process.env.GATE ?? 'all'
+const PORT = Number(process.env['PORT'] ?? 4179)
+const SCENARIO_NAMES = (process.env['SCENARIOS'] ?? 'worst,endlessCap').split(
+  ',',
+)
+const RATES = (process.env['RATES'] ?? '1,4,6').split(',').map(Number)
+const SECONDS = Number(process.env['SECONDS'] ?? 5)
+const TRIALS = Number(process.env['TRIALS'] ?? 2)
+const IS_UPDATING = process.env['UPDATE'] === '1'
+const GATE = process.env['GATE'] ?? 'all'
 
-const JS_TOLERANCE = Number(process.env.JS_TOLERANCE ?? 0.25)
-const BUSY_TOLERANCE = Number(process.env.BUSY_TOLERANCE ?? 0.25)
-const FPS_TOLERANCE = Number(process.env.FPS_TOLERANCE ?? 0.15)
-const P95_TOLERANCE = Number(process.env.P95_TOLERANCE ?? 0.3)
+const JS_TOLERANCE = Number(process.env['JS_TOLERANCE'] ?? 0.25)
+const BUSY_TOLERANCE = Number(process.env['BUSY_TOLERANCE'] ?? 0.25)
+const FPS_TOLERANCE = Number(process.env['FPS_TOLERANCE'] ?? 0.15)
+const P95_TOLERANCE = Number(process.env['P95_TOLERANCE'] ?? 0.3)
 
-type Baseline = Readonly<{
-  recordedAt: string
-  calibrationMs: number
-  loadAverage: number
-  seconds: number
-  rows: ReadonlyArray<FrameRow>
-}>
+const Baseline = Schema.Struct({
+  recordedAt: Schema.String,
+  calibrationMs: Schema.Number,
+  loadAverage: Schema.Number,
+  seconds: Schema.Number,
+  rows: Schema.Array(FrameRow),
+})
+type Baseline = typeof Baseline.Type
 
 const isPortTaken = (port: number) =>
-  new Promise<boolean>(done => {
-    const socket = connect(port, '127.0.0.1')
-    socket.once('connect', () => {
-      socket.destroy()
-      done(true)
-    })
-    socket.once('error', () => done(false))
-  })
+  Effect.runPromise(
+    Effect.callback<boolean>(resume => {
+      const socket = connect(port, '127.0.0.1')
+      socket.once('connect', () => {
+        socket.destroy()
+        resume(Effect.succeed(true))
+      })
+      socket.once('error', () => resume(Effect.succeed(false)))
+    }),
+  )
+
+// NOTE: whether `url` answers with a 2xx status, false when it does not
+// answer at all.
+const isServerUp = (url: string) =>
+  HttpClient.get(url).pipe(
+    Effect.map(response => response.status >= 200 && response.status < 300),
+    Effect.orElseSucceed(() => false),
+    Effect.provide(FetchHttpClient.layer),
+  )
 
 const waitForServer = async (url: string) => {
   for (let attempt = 0; attempt < 100; attempt++) {
-    const isUp = await fetch(url)
-      .then(response => response.ok)
-      .catch(() => false)
+    const isUp = await Effect.runPromise(isServerUp(url))
     if (isUp) {
       return
     }
@@ -87,24 +102,24 @@ const stopPreview = (server: Subprocess) => {
   }
 }
 
+// NOTE: the first trial's row with each timing at its best over all trials.
 const bestOf = (trials: ReadonlyArray<FrameRow>): FrameRow => {
-  const [first, ...rest] = trials
-  if (!first) {
+  const [first] = trials
+  if (first === undefined) {
     throw new Error('no trials ran')
   }
-  return rest.reduce(
-    (best, row) => ({
-      ...best,
-      fps: Math.max(best.fps, row.fps),
-      p95: Math.min(best.p95, row.p95),
-      median: Math.min(best.median, row.median),
-      jsMs: Math.min(best.jsMs, row.jsMs),
-      busyMs: Math.min(best.busyMs, row.busyMs),
-      updateMean: Math.min(best.updateMean, row.updateMean),
-      viewMean: Math.min(best.viewMean, row.viewMean),
-    }),
-    first,
-  )
+  const best = (pick: (row: FrameRow) => number, of: typeof Math.min) =>
+    of(...trials.map(pick))
+  return {
+    ...first,
+    fps: best(row => row.fps, Math.max),
+    p95: best(row => row.p95, Math.min),
+    median: best(row => row.median, Math.min),
+    jsMs: best(row => row.jsMs, Math.min),
+    busyMs: best(row => row.busyMs, Math.min),
+    updateMean: best(row => row.updateMean, Math.min),
+    viewMean: best(row => row.viewMean, Math.min),
+  }
 }
 
 const measureAll = async (base: string) => {
@@ -195,7 +210,7 @@ const compare = (
       candidate =>
         candidate.scenario === row.scenario && candidate.rate === row.rate,
     )
-    if (!baseRow) {
+    if (baseRow === undefined) {
       console.log(`${row.scenario} ${row.rate}x: no baseline row, skipped`)
       return []
     }
@@ -218,33 +233,34 @@ const compare = (
 }
 
 const main = async () => {
-  const existingBase = process.env.BASE
-  const server = existingBase
-    ? undefined
-    : await (async () => {
-        if (await isPortTaken(PORT)) {
-          throw new Error(
-            `port ${PORT} is already in use. Stop that server or set PORT.`,
-          )
-        }
-        await buildHarness()
-        const preview = startPreview()
-        await waitForServer(`http://localhost:${PORT}/`)
-        return preview
-      })()
+  const existingBase = process.env['BASE']
+  const server =
+    existingBase !== undefined && existingBase !== ''
+      ? undefined
+      : await (async () => {
+          if (await isPortTaken(PORT)) {
+            throw new Error(
+              `port ${PORT} is already in use. Stop that server or set PORT.`,
+            )
+          }
+          await buildHarness()
+          const preview = startPreview()
+          await waitForServer(`http://localhost:${PORT}/`)
+          return preview
+        })()
   try {
     const measured = await measureAll(
       existingBase ?? `http://localhost:${PORT}/`,
     )
     if (IS_UPDATING) {
       const baseline: Baseline = {
-        recordedAt: new Date().toISOString(),
+        recordedAt: DateTime.formatIso(DateTime.nowUnsafe()),
         calibrationMs: measured.calibration,
         loadAverage: loadavg()[0] ?? 0,
         seconds: SECONDS,
         rows: measured.rows,
       }
-      await Bun.write(BASELINE_PATH, JSON.stringify(baseline, null, 2) + '\n')
+      writeJsonFile(Baseline, BASELINE_PATH, baseline)
       console.log(`\nWrote ${BASELINE_PATH}`)
       return true
     }
@@ -252,9 +268,9 @@ const main = async () => {
     if (!(await file.exists())) {
       throw new Error('no baseline yet. Run with UPDATE=1 to record one.')
     }
-    return compare(measured, await file.json())
+    return compare(measured, readJsonFile(Baseline, BASELINE_PATH))
   } finally {
-    if (server) {
+    if (server !== undefined) {
       stopPreview(server)
     }
   }
