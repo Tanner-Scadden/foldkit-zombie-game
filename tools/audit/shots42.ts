@@ -98,7 +98,7 @@ const SCENES: ReadonlyArray<Scene> = [
     act: async (page, problems, label) => {
       await hasTracker(page, problems, label)
       const skip = await page.locator('.quest-skip').boundingBox()
-      if (skip === null || skip.width < 32 || skip.height < 32) {
+      if (skip === null || skip.width < 48 || skip.height < 48) {
         problems.push(`${label}: the skip button is too small to tap`)
       }
     },

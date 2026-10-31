@@ -971,19 +971,35 @@ body {
   text-shadow: 0 1px 0 #140c10;
 }
 
+/* The skip button's tap area is a full 48 px, as every touch target is,
+   but the negative margin keeps the tracker as slim as its 32 px face. */
 .quest-skip {
-  min-width: 32px;
-  min-height: 32px;
+  position: relative;
+  width: 48px;
+  height: 48px;
+  margin: -8px;
+  padding: 0;
   border: 0;
-  border-radius: 6px;
-  background: rgba(244, 241, 222, 0.1);
+  background: transparent;
   color: #f4f1de;
   font: bold 16px monospace;
   cursor: pointer;
   touch-action: manipulation;
 }
 
+.quest-skip::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 6px;
+  background: rgba(244, 241, 222, 0.1);
+}
+
 .quest-skip:focus-visible {
+  outline: none;
+}
+
+.quest-skip:focus-visible::before {
   outline: 2px solid #9be36a;
 }
 
@@ -1030,10 +1046,14 @@ body {
   right: calc(
     (100cqw - var(--screen-w) * var(--arena-px)) / 2 + 3 * var(--arena-px)
   );
-  top: auto;
-  bottom: calc(
-    100cqh - (100cqh - var(--screen-h) * var(--arena-px)) / 2 -
-      (var(--world-top) - 2) * var(--arena-px)
+  /* Just above the world, and never higher than the pause button's foot,
+     so the skip button's tap area stays clear of it on narrow phones. */
+  top: max(
+    58px,
+    calc(
+      (100cqh - var(--screen-h) * var(--arena-px)) / 2 +
+        (var(--world-top) - 2) * var(--arena-px) - 36px
+    )
   );
   gap: 3px;
   padding: 2px 2px 2px 4px;
@@ -1055,6 +1075,19 @@ body {
 .game-root[data-layout='Portrait'] .quest-step-icon {
   width: 16px;
   height: 14px;
+}
+
+/* In portrait the band's pause button sits just above the tracker, so the
+   skip button's 48 px tap area grows down over the world's top edge
+   instead of up into it. */
+.game-root[data-layout='Portrait'] .quest-skip {
+  margin: 0 -8px -16px;
+  padding-bottom: 16px;
+  align-self: flex-start;
+}
+
+.game-root[data-layout='Portrait'] .quest-skip::before {
+  inset: 0 8px 16px;
 }
 
 .game-root[data-layout='Portrait'] .quest-held {
