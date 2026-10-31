@@ -80,6 +80,8 @@ export type RunFields = Pick<
   | 'stats'
   | 'runTally'
   | 'screenMs'
+  | 'runRecords'
+  | 'bestStreak'
   | 'party'
 >
 
@@ -134,5 +136,7 @@ export const freshRun = (model: Model): RunFields => ({
   stats: freshStats,
   runTally: RunTally.Uncounted(),
   screenMs: 0,
+  runRecords: [],
+  bestStreak: 0,
   party: Party.Solo(),
 })

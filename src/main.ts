@@ -37,6 +37,7 @@ import { forgetTutorial } from './save'
 import { stepWhen } from './stepWhen'
 import { askForRoomLink, openCoop, tickRoomFrame } from './update/coop'
 import { orInRun } from './update/coopRun'
+import { retry, shareFromButton, skipFromPointer } from './update/end'
 import { toggleFullscreen } from './update/fullscreen'
 import {
   closeHand,
@@ -216,7 +217,7 @@ export const update = ApplicationComposition.makeUpdate({
       ? withInput(skipDebutCardWhenUp(started), input =>
           pressPointer(input, started.maybeSurface, press),
         )
-      : refreshIntent(started)
+      : refreshIntent(skipFromPointer(started))
     return settle(
       model,
       combine(pressed, [
@@ -335,6 +336,12 @@ export const update = ApplicationComposition.makeUpdate({
 
   ClickedKeepGoingButton: model =>
     settle(model, startFromButton(model, keepGoingWhenAllowed(model))),
+
+  ClickedRetryButton: model =>
+    settle(model, startFromButton(model, retry(model))),
+
+  ClickedShareButton: model =>
+    settle(model, combine(model, [unlockAudio, shareFromButton])),
 
   ClickedCharacterButton: model =>
     Update.combineSteps(model, [
@@ -661,6 +668,8 @@ export const update = ApplicationComposition.makeUpdate({
   CompletedFocusHomeButton: model => settle(model, { model }),
 
   CompletedFocusEndMenuButton: model => settle(model, { model }),
+
+  CompletedOpenShare: model => settle(model, { model }),
 
   CompletedLoadStyles: model => settle(model, finishLoading(model, 'Styles')),
 

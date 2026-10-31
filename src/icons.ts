@@ -430,20 +430,23 @@ const BADGE_PALETTE: Palette = {
   W: '#4a2a70',
 }
 
-export const TROPHY_ICON = pixelIconUrl(
-  [
-    'YYYYYYYYY',
-    'Y.YYYYY.Y',
-    'Y.YYYYD.Y',
-    '.YYYYYD..',
-    '..YYYD...',
-    '...YD....',
-    '....Y....',
-    '..YYYYY..',
-    '..DDDDD..',
-  ],
-  BADGE_PALETTE,
-)
+// NOTE: the end card draws the trophy and the skulls on its canvas too
+// (src/endView.ts), from the same pixel maps.
+export const TROPHY_PIXELS: ReadonlyArray<string> = [
+  'YYYYYYYYY',
+  'Y.YYYYY.Y',
+  'Y.YYYYD.Y',
+  '.YYYYYD..',
+  '..YYYD...',
+  '...YD....',
+  '....Y....',
+  '..YYYYY..',
+  '..DDDDD..',
+]
+
+export const TROPHY_PALETTE: Palette = BADGE_PALETTE
+
+export const TROPHY_ICON = pixelIconUrl(TROPHY_PIXELS, BADGE_PALETTE)
 
 export const CLOCK_ICON = icon([
   '..XXXXX..',
@@ -479,14 +482,24 @@ const skullPixels = (face: SkullFace): ReadonlyArray<string> => [
 const tinted = (pixels: ReadonlyArray<string>, color: string): string =>
   pixelIconUrl(pixels, { X: color, O: SHADE })
 
+export type PixelArt = Readonly<{
+  pixels: ReadonlyArray<string>
+  palette: Palette
+}>
+
+const tint = (pixels: ReadonlyArray<string>, color: string): PixelArt => ({
+  pixels,
+  palette: { X: color, O: SHADE },
+})
+
 // NOTE: one skull per difficulty, each in its level's color with its own
 // face: sleepy Easy, plain Normal, angry Hard, and Nightmare in flames.
-export const SKULL_ICONS: Readonly<Record<Difficulty, string>> = {
-  Easy: tinted(skullPixels('Sleepy'), '#9be36a'),
-  Normal: tinted(skullPixels('Open'), '#ffe066'),
-  Hard: tinted(skullPixels('Angry'), '#ffa04d'),
-  Nightmare: pixelIconUrl(
-    [
+export const SKULL_ART: Readonly<Record<Difficulty, PixelArt>> = {
+  Easy: tint(skullPixels('Sleepy'), '#9be36a'),
+  Normal: tint(skullPixels('Open'), '#ffe066'),
+  Hard: tint(skullPixels('Angry'), '#ffa04d'),
+  Nightmare: {
+    pixels: [
       'Y..F.Y..F',
       '.Y.FY.FY.',
       '..XXXXX..',
@@ -498,9 +511,16 @@ export const SKULL_ICONS: Readonly<Record<Difficulty, string>> = {
       '..X.X.X..',
       '..XXXXX..',
     ],
-    { X: '#ff6b5e', O: SHADE, Y: '#ffe066', F: '#ffa04d' },
-  ),
+    palette: { X: '#ff6b5e', O: SHADE, Y: '#ffe066', F: '#ffa04d' },
+  },
 }
+
+export const SKULL_OFF_ART: PixelArt = tint(skullPixels('Open'), '#4a3f52')
+
+export const SKULL_ICONS: Readonly<Record<Difficulty, string>> = Record.map(
+  SKULL_ART,
+  ({ pixels, palette }) => pixelIconUrl(pixels, palette),
+)
 
 export const SKULL_OFF_ICON = tinted(skullPixels('Open'), '#4a3f52')
 
@@ -567,6 +587,42 @@ const GITHUB_MARK_PATH =
 export const GITHUB_MARK_ICON = `url("data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#ffffff" d="${GITHUB_MARK_PATH}"/></svg>`,
 )}")`
+
+// NOTE: X's own logo, white and unchanged as X's brand rules ask, on the
+// end screens' share button.
+const X_LOGO_PATH =
+  'M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z'
+
+export const X_LOGO_ICON = `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#ffffff" d="${X_LOGO_PATH}"/></svg>`,
+)}")`
+
+// NOTE: the end screens' RETRY, a round arrow, and HOME, a little house.
+export const RETRY_ICON = pixelIconUrl(
+  [
+    '...XXXX.X',
+    '..X....XX',
+    '.X....XXX',
+    'X........',
+    'X.......X',
+    'X.......X',
+    '.X.....X.',
+    '..XXXXX..',
+  ],
+  { X: SHADE },
+)
+
+export const HOME_ICON = icon([
+  '....X....',
+  '...XXX...',
+  '..XXXXX..',
+  '.XXXXXXX.',
+  'XXXXXXXXX',
+  '.XX...XX.',
+  '.XX.X.XX.',
+  '.XX...XX.',
+  '.XXXXXXX.',
+])
 
 // NOTE: the red pixel X on every menu's close button (closeButtonView).
 export const CLOSE_ICON = pixelIconUrl(

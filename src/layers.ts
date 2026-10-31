@@ -1,4 +1,4 @@
-import { Array, Equal, Result } from 'effect'
+import { Array, Equal, Option, Result } from 'effect'
 import { Canvas } from 'foldkit'
 import { type Html, createLazy } from 'foldkit/html'
 
@@ -9,6 +9,7 @@ import { type Camera, toScreenCamera, worldCameraFor } from './camera'
 import type { ApplicationViewBuilder } from './composition'
 import { coopEdgeShapes } from './coopMarksView'
 import { decalShapes } from './effectsView'
+import { lensOf } from './endBeat'
 import { fridgeRevealShapes, prizeFlightShapes } from './fridgeRevealView'
 import { hudShapes, hudStripShapes } from './hud'
 import {
@@ -238,6 +239,26 @@ const warmUpView = (h: ApplicationViewBuilder): Html =>
 
 const lazyWarmUp = createLazy()
 
+// LENS
+
+const NO_LENS: Readonly<Record<string, string>> = {}
+
+// NOTE: the end of a run's camera punch and color drain (src/endBeat.ts),
+// as a CSS transform and filter on the world alone, so the card and the HUD
+// on the overlay stay sharp and the frame draws nothing more.
+const lensStyle = (
+  model: Model,
+  camera: Camera,
+): Readonly<Record<string, string>> =>
+  Option.match(lensOf(model), {
+    onNone: () => NO_LENS,
+    onSome: ({ zoom, saturation }) => ({
+      transform: `scale(${zoom})`,
+      transformOrigin: `${percentOf(model.player.x - camera.x, camera.width)} ${percentOf(model.player.y - camera.y, camera.height)}`,
+      filter: saturation < 1 ? `saturate(${saturation})` : 'none',
+    }),
+  })
+
 // STAGE
 
 const STAGE_BACKDROP = '#140c10'
@@ -278,15 +299,24 @@ export const gameStageView = (
               }),
             ],
             [
-              floorLayersView(model, camera, worldOffset(model, camera), h),
-              Canvas.view(
-                {
-                  width: camera.width,
-                  height: camera.height,
-                  shapes: worldLayerShapes(model, camera),
-                  className: 'game-canvas',
-                },
-                h,
+              h.div(
+                [
+                  h.Key('world-lens'),
+                  h.Class('world-lens'),
+                  h.Style(lensStyle(model, camera)),
+                ],
+                [
+                  floorLayersView(model, camera, worldOffset(model, camera), h),
+                  Canvas.view(
+                    {
+                      width: camera.width,
+                      height: camera.height,
+                      shapes: worldLayerShapes(model, camera),
+                      className: 'game-canvas',
+                    },
+                    h,
+                  ),
+                ],
               ),
             ],
           ),

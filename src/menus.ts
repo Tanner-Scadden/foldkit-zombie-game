@@ -3,21 +3,30 @@ import type { Html } from 'foldkit/html'
 
 import type { ApplicationViewBuilder } from './composition'
 import { isOpen as isCoopOpen } from './coop/update'
-import { END_MENU_BUTTON_ID, endOffer } from './home'
+import {
+  END_MENU_BUTTON_ID,
+  END_RETRY_BUTTON_ID,
+  END_SHARE_BUTTON_ID,
+  endOffer,
+} from './home'
 import { pauseMenuButtonView } from './homeView'
 import {
+  ENDLESS_ICON,
   FULLSCREEN_ICON,
   GIFT_BOX_ICON,
   GIFT_LID_ICON,
+  HOME_ICON,
   MUSIC_OFF_ICON,
   MUSIC_ON_ICON,
   PAUSE_ICON,
+  RETRY_ICON,
   SOUND_OFF_ICON,
   SOUND_ON_ICON,
+  X_LOGO_ICON,
 } from './icons'
 import { isProfileOpen } from './menuState'
 import { Message } from './message'
-import { DebutCard, type Model, Phase, type ZombieKind } from './model'
+import { DebutCard, type Model, Phase, RunMode, type ZombieKind } from './model'
 import { canSkipDebutCard } from './onboarding'
 import { iconButtonView } from './touchControls'
 import { FINAL_WAVE } from './waves'
@@ -124,72 +133,11 @@ export const cornerButtonsView = (
     ? h.empty
     : h.div([h.Class('corner-buttons')], cornerButtons(model, h))
 
-// MODE BUTTONS
+// END BUTTONS
 
-type ModeButton = Readonly<{
-  id: string
-  className: string
-  label: string
-  detail: string
-  key: string
-  keyName: string
-  ariaLabel: string
-  message: Message
-}>
-
-const CAMPAIGN_BUTTON: ModeButton = {
-  id: 'end-campaign-button',
-  className: 'mode-button',
-  label: 'CAMPAIGN',
-  detail: `${FINAL_WAVE} WAVES`,
-  key: 'ENTER',
-  keyName: 'Enter',
-  ariaLabel: `Campaign: ${FINAL_WAVE} waves, then victory`,
-  message: Message.ClickedCampaignButton(),
-}
-
-const ENDLESS_BUTTON: ModeButton = {
-  id: 'end-endless-button',
-  className: 'mode-button',
-  label: 'ENDLESS',
-  detail: 'UNTIL YOU DROP',
-  key: 'E',
-  keyName: 'E',
-  ariaLabel: 'Endless: waves keep coming until you fall',
-  message: Message.ClickedEndlessButton(),
-}
-
-const KEEP_GOING_BUTTON: ModeButton = {
-  id: 'end-keep-going-button',
-  className: 'mode-button keep-going-button',
-  label: 'KEEP GOING',
-  detail: `ON TO WAVE ${FINAL_WAVE + 1}`,
-  key: 'K',
-  keyName: 'K',
-  ariaLabel: `Keep going: carry on into endless from wave ${FINAL_WAVE + 1} with your money, guns, and traps`,
-  message: Message.ClickedKeepGoingButton(),
-}
-
-const MENU_BUTTON: ModeButton = {
-  id: END_MENU_BUTTON_ID,
-  className: 'mode-button menu-button is-primary',
-  label: 'MENU',
-  detail: 'BACK HOME',
-  key: 'H',
-  keyName: 'H',
-  ariaLabel: 'Menu: back to the home screen',
-  message: Message.ClickedMenuButton(),
-}
-
-const UPDATE_MENU_BUTTON: ModeButton = {
-  ...MENU_BUTTON,
-  key: 'ENTER',
-  keyName: 'Enter H',
-  ariaLabel: 'Menu: back home, where a new version is waiting',
-}
-
-// NOTE: a newer build waits on the menu, so the MENU button carries a
-// little gift that bobs on its corner, the same one the menu shows.
+// NOTE: a newer build waits on the menu, so the end screens offer only MENU,
+// and it carries a little gift that bobs on its corner, the same one the
+// menu shows.
 const updateGiftBadgeView = (h: ApplicationViewBuilder): Html =>
   h.span([
     h.Class('mode-button-gift'),
@@ -197,62 +145,161 @@ const updateGiftBadgeView = (h: ApplicationViewBuilder): Html =>
     h.Style({ backgroundImage: `${GIFT_LID_ICON}, ${GIFT_BOX_ICON}` }),
   ])
 
-const modeButtonView = (
-  model: Model,
-  button: ModeButton,
-  h: ApplicationViewBuilder,
-  badges: ReadonlyArray<Html> = [],
-): Html =>
-  h.button(
-    [
-      h.Type('button'),
-      h.Id(button.id),
-      h.Class(button.className),
-      h.AriaLabel(button.ariaLabel),
-      h.AriaKeyshortcuts(button.keyName),
-      h.OnClick(button.message, {
-        focusSelector: '.game-surface',
-        propagation: 'Stop',
-      }),
-    ],
-    [
-      h.span([h.Class('mode-button-label')], [button.label]),
-      h.span([h.Class('mode-button-detail')], [button.detail]),
-      ...badges,
-      ...(model.lastDevice === 'KeyboardMouse'
-        ? [
-            h.span(
-              [h.Class('mode-button-key'), h.AriaHidden(true)],
-              [button.key],
-            ),
-          ]
-        : []),
-    ],
-  )
-
-const modeButtons = (model: Model): ReadonlyArray<ModeButton> =>
-  Phase.isAnyOf(['Victory'])(model.phase)
-    ? [KEEP_GOING_BUTTON, CAMPAIGN_BUTTON, ENDLESS_BUTTON]
-    : [CAMPAIGN_BUTTON, ENDLESS_BUTTON]
-
 const menuOnlyView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('mode-choice is-update-waiting')],
-    [modeButtonView(model, UPDATE_MENU_BUTTON, h, [updateGiftBadgeView(h)])],
-  )
-
-const menuAndModesView = (model: Model, h: ApplicationViewBuilder): Html =>
-  h.div(
-    [h.Class('mode-choice')],
     [
-      modeButtonView(model, MENU_BUTTON, h),
-      h.div(
-        [h.Class('mode-group'), h.Role('group'), h.AriaLabel('Choose a mode')],
-        Array.map(modeButtons(model), button =>
-          modeButtonView(model, button, h),
-        ),
+      h.button(
+        [
+          h.Type('button'),
+          h.Id(END_MENU_BUTTON_ID),
+          h.Class('mode-button menu-button is-primary'),
+          h.AriaLabel('Menu: back home, where a new version is waiting'),
+          h.AriaKeyshortcuts('Enter H'),
+          h.OnClick(Message.ClickedMenuButton(), {
+            focusSelector: '.game-surface',
+            propagation: 'Stop',
+          }),
+        ],
+        [
+          h.span([h.Class('mode-button-label')], ['MENU']),
+          h.span([h.Class('mode-button-detail')], ['BACK HOME']),
+          updateGiftBadgeView(h),
+          ...(model.lastDevice === 'KeyboardMouse'
+            ? [
+                h.span(
+                  [h.Class('mode-button-key'), h.AriaHidden(true)],
+                  ['ENTER'],
+                ),
+              ]
+            : []),
+        ],
       ),
     ],
+  )
+
+// NOTE: the end card's buttons, icon first: HOME, then the big RETRY (on
+// Victory AGAIN, with KEEP GOING beside it), then SHARE to X. Each pops in
+// a beat after the one before it.
+type EndButton = Readonly<{
+  id: string
+  look: 'Home' | 'Retry' | 'KeepGoing' | 'Share'
+  icon: string
+  label: string
+  key: string
+  keyName: string
+  ariaLabel: string
+  message: Message
+}>
+
+const HOME_BUTTON: EndButton = {
+  id: END_MENU_BUTTON_ID,
+  look: 'Home',
+  icon: HOME_ICON,
+  label: 'HOME',
+  key: 'H',
+  keyName: 'H',
+  ariaLabel: 'Menu: back to the home screen',
+  message: Message.ClickedMenuButton(),
+}
+
+const retryButton = (model: Model): EndButton => ({
+  id: END_RETRY_BUTTON_ID,
+  look: 'Retry',
+  icon: RETRY_ICON,
+  label: Phase.isAnyOf(['Victory'])(model.phase) ? 'AGAIN' : 'RETRY',
+  key: 'ENTER',
+  keyName: 'Enter',
+  ariaLabel: RunMode.match(model.mode, {
+    Campaign: () => `Retry: a new campaign of ${FINAL_WAVE} waves`,
+    Endless: () => 'Retry: a new endless run',
+  }),
+  message: Message.ClickedRetryButton(),
+})
+
+const KEEP_GOING_BUTTON: EndButton = {
+  id: 'end-keep-going-button',
+  look: 'KeepGoing',
+  icon: ENDLESS_ICON,
+  label: 'KEEP GOING',
+  key: 'K',
+  keyName: 'K',
+  ariaLabel: `Keep going: carry on into endless from wave ${FINAL_WAVE + 1} with your money, guns, and traps`,
+  message: Message.ClickedKeepGoingButton(),
+}
+
+const SHARE_BUTTON: EndButton = {
+  id: END_SHARE_BUTTON_ID,
+  look: 'Share',
+  icon: X_LOGO_ICON,
+  label: 'SHARE',
+  key: 'X',
+  keyName: 'X',
+  ariaLabel: 'Share your run on X. Opens in a new tab',
+  message: Message.ClickedShareButton(),
+}
+
+const END_BUTTON_STAGGER_MS = 70
+
+const endButtonView =
+  (model: Model, h: ApplicationViewBuilder) =>
+  (button: EndButton, index: number): Html =>
+    h.keyed('button')(
+      button.id,
+      [
+        h.Type('button'),
+        h.Id(button.id),
+        h.Class('end-button'),
+        h.DataAttribute('look', button.look),
+        h.Style({ animationDelay: `${index * END_BUTTON_STAGGER_MS}ms` }),
+        h.AriaLabel(button.ariaLabel),
+        h.AriaKeyshortcuts(button.keyName),
+        h.OnClick(button.message, {
+          focusSelector: '.game-surface',
+          propagation: 'Stop',
+        }),
+      ],
+      [
+        h.span([
+          h.Class('end-button-icon'),
+          h.AriaHidden(true),
+          h.Style({ backgroundImage: button.icon }),
+        ]),
+        h.span(
+          [h.Class('end-button-label'), h.AriaHidden(true)],
+          [button.label],
+        ),
+        ...(model.lastDevice === 'KeyboardMouse'
+          ? [
+              h.span(
+                [h.Class('end-button-key'), h.AriaHidden(true)],
+                [button.key],
+              ),
+            ]
+          : []),
+      ],
+    )
+
+// NOTE: in an online co-op run the room's lobby comes next, so the card
+// offers only SHARE until the lobby takes over.
+const endButtonsOf = (model: Model): ReadonlyArray<EndButton> => {
+  if (isCoopOpen(model.coop)) {
+    return [SHARE_BUTTON]
+  } else if (Phase.isAnyOf(['Victory'])(model.phase)) {
+    return [HOME_BUTTON, retryButton(model), KEEP_GOING_BUTTON, SHARE_BUTTON]
+  } else {
+    return [HOME_BUTTON, retryButton(model), SHARE_BUTTON]
+  }
+}
+
+const endActionsView = (model: Model, h: ApplicationViewBuilder): Html =>
+  h.div(
+    [
+      h.Class('mode-choice end-actions'),
+      h.Role('group'),
+      h.AriaLabel('What next'),
+    ],
+    Array.map(endButtonsOf(model), endButtonView(model, h)),
   )
 
 export const modeChoiceView = (
@@ -263,7 +310,7 @@ export const modeChoiceView = (
   if (offer === 'MenuOnly') {
     return menuOnlyView(model, h)
   } else if (offer === 'MenuAndModes') {
-    return menuAndModesView(model, h)
+    return endActionsView(model, h)
   } else {
     return h.empty
   }

@@ -68,9 +68,12 @@ import {
 
 // INPUTS
 
+// NOTE: `isRunCardUp` while the root's end card plays a run's end, so the
+// lobby waits behind it and every player sees the same beat first.
 export type ViewInputs = Readonly<{
   look: Appearance
   isKeyboard: boolean
+  isRunCardUp: boolean
 }>
 
 const lookOf = (inputs: ViewInputs, room: Room, seat: number) =>
@@ -619,20 +622,29 @@ const resultView = (
       h.div(
         [h.Class('coop-result'), h.AriaLabel('Last run')],
         [
-          iconView('coop-result-icon', TROPHY_ICON, h),
+          iconView(
+            'coop-result-icon',
+            result.reason === 'Won' ? TROPHY_ICON : SKULL_ICONS.Hard,
+            h,
+          ),
           h.ol(
             [h.Class('coop-result-scores')],
             pipe(
               result.scores,
               Array.sort(BY_SCORE_DESCENDING),
-              Array.map(score =>
+              Array.map((score, index) =>
                 h.keyed('li')(
                   score.playerId,
                   [
                     h.Class('coop-result-score'),
-                    h.AriaLabel(`${nameAt(lobby, score.slot)}: ${score.score}`),
+                    h.AriaLabel(
+                      `${nameAt(lobby, score.slot)}: ${score.score}${index === 0 && score.score > 0 ? ', MVP' : ''}`,
+                    ),
                   ],
                   [
+                    index === 0 && score.score > 0
+                      ? iconView('coop-result-crown', CROWN_ICON, h)
+                      : h.empty,
                     portraitView(
                       lookOf(inputs, room, score.slot),
                       'coop-result-head',
@@ -892,14 +904,6 @@ const awayView = (room: Room, h: HtmlBuilder<Message>): Html =>
       )
     : h.empty
 
-const endedView = (room: Room, h: HtmlBuilder<Message>): Html =>
-  room.session.phase._tag === 'Ended'
-    ? h.div(
-        [h.Class('coop-ended'), h.Role('status'), h.AriaLabel('Run over')],
-        [iconView('coop-ended-icon', TROPHY_ICON, h)],
-      )
-    : h.empty
-
 // NOTE: the link's numbers, for the audit harness and the curious: the
 // round trip, what came down, and how far your own player was corrected.
 const netView = (room: Room, h: HtmlBuilder<Message>): Html => {
@@ -986,7 +990,6 @@ const arenaView = (room: Room, h: HtmlBuilder<Message>): Html =>
     [
       countdownView(room, h),
       awayView(room, h),
-      endedView(room, h),
       h.div(
         [h.Class('coop-arena-hud')],
         [leaveButtonView(room, h), arenaPingsView(room, h)],
@@ -999,7 +1002,23 @@ const roomView = (
   room: Room,
   inputs: ViewInputs,
   h: HtmlBuilder<Message>,
-): Html => (isInLobby(room) ? lobbyView(room, inputs, h) : arenaView(room, h))
+): Html => {
+  if (!isInLobby(room)) {
+    return arenaView(room, h)
+  } else if (inputs.isRunCardUp) {
+    return holdView(room, h)
+  } else {
+    return lobbyView(room, inputs, h)
+  }
+}
+
+// NOTE: the run's end card stays up a moment after the room is back in its
+// lobby, with only LEAVE over it.
+const holdView = (room: Room, h: HtmlBuilder<Message>): Html =>
+  h.div(
+    [h.Class('coop-arena')],
+    [h.div([h.Class('coop-arena-hud')], [leaveButtonView(room, h)])],
+  )
 
 // VIEW
 

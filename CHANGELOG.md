@@ -6,6 +6,8 @@ One entry per day, newest first. Only things a player would notice, a handful of
 
 - 🧭 New here? Your first breaks walk you through it: a free Plank Pile from Rattles, then a free kitchen and a free fridge roll, with the clock on hold. Confetti included.
 - 🔫 Your gun now yells before it runs dry: the ammo blinks amber, then red, the last shots tick, and Rattles hollers from his stall. Out of everything? The knife lights up.
+- 💀 Getting munched is a moment now: you topple, the zombies pile on, MUNCHED! slams down, and your run counts up row by row. Beat a record and NEW BEST! goes off. Tap to skip, Enter to go again.
+- 🏆 Winning rains confetti (and a little gore), drops a trophy with your skulls, and crowns the MVP in co-op. Then hit SHARE to brag on X.
 
 ## October 30, 2026: Bring your friends
 

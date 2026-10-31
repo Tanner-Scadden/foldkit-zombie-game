@@ -3,7 +3,6 @@ import { Canvas } from 'foldkit'
 
 import { playerSprites } from './appearance'
 import {
-  FEEDBACK_LINE,
   GAME_TITLE,
   MS_PER_SECOND,
   PLAYER_FOOT_OFFSET,
@@ -13,7 +12,7 @@ import {
   WAVE_BANNER_MS,
   WAVE_CLEARED_BANNER_MS,
 } from './constants'
-import { DIFFICULTIES, bestsFor } from './difficulty'
+import { endOverlayShapes } from './endView'
 import {
   type BakedText,
   GLYPH_HEIGHT,
@@ -23,7 +22,6 @@ import {
   glyphPixels,
   placeBaked,
   textShapes,
-  textWidth,
   toGlyph,
 } from './font'
 import { clamp } from './geometry'
@@ -32,18 +30,15 @@ import {
   type HintIconSprites,
   hintIconFrame,
 } from './hintIcons'
-import { isAskingForFeedback } from './home'
 import {
   Alarm,
   type Appearance,
   DebutCard,
-  type Difficulty,
   type HintBand,
   type InputDevice,
   type Model,
   Phase,
   RunMode,
-  type RunStats,
   type ZombieKind,
 } from './model'
 import {
@@ -70,22 +65,13 @@ import {
   spriteShapes,
 } from './sprite'
 import {
-  accuracyPercent,
-  defeatVerdict,
-  runTimeLabel,
-  scoreOf,
-  totalKills,
-  victoryVerdict,
-} from './stats'
-import {
   FINAL_WAVE,
   debutKinds,
   endlessDepth,
   hpScaleFor,
-  roundWave,
   waveBonus,
 } from './waves'
-import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
+import { ZOMBIE_KINDS } from './zombies'
 
 // SHARED
 
@@ -1006,232 +992,6 @@ const pausedShapes = (
   centered(RESUME_PROMPT[model.lastDevice], resumeY),
 ]
 
-// RUN STATS
-
-const GAME_OVER = bakeText('GAME OVER', 'Defeat')
-const YOU_SURVIVED = bakeText('YOU SURVIVED!', 'Victory')
-
-const PANEL_LEFT = 76
-const PANEL_RIGHT = VIEW_WIDTH - PANEL_LEFT
-const PANEL_TOP = 37
-const PANEL_ROW_PX = 8
-const PANEL_PAD = 5
-const PANEL_FILL = 'rgba(24, 14, 22, 0.92)'
-const PANEL_EDGE = '#5a3a4a'
-
-type StatRow = Readonly<{ label: BakedText; value: string; tone: TextTone }>
-
-const DIFFICULTY_TONES: Readonly<Record<Difficulty, TextTone>> = {
-  Easy: 'Plain',
-  Normal: 'Plain',
-  Hard: 'Alert',
-  Nightmare: 'Defeat',
-}
-
-const STAT_LABELS = {
-  difficulty: bakeText('DIFFICULTY', 'Hint'),
-  waves: bakeText('WAVES CLEARED', 'Hint'),
-  reached: bakeText('WAVE REACHED', 'Hint'),
-  best: bakeText('BEST THIS SESSION', 'Hint'),
-  kills: bakeText('ZOMBIES SPLATTED', 'Hint'),
-  time: bakeText('RUN TIME', 'Hint'),
-  accuracy: bakeText('ACCURACY', 'Hint'),
-  money: bakeText('MONEY EARNED', 'Hint'),
-  hearts: bakeText('HEARTS LOST', 'Hint'),
-  traps: bakeText('TRAPS PLACED', 'Hint'),
-  score: bakeText('SCORE', 'Hint'),
-}
-
-const waveRows = (model: Model): ReadonlyArray<StatRow> =>
-  RunMode.match(model.mode, {
-    Campaign: (): ReadonlyArray<StatRow> => [
-      {
-        label: STAT_LABELS.waves,
-        value: `${model.stats.wavesCleared} / ${FINAL_WAVE}`,
-        tone: 'Plain',
-      },
-    ],
-    Endless: (): ReadonlyArray<StatRow> => [
-      {
-        label: STAT_LABELS.reached,
-        value: `${roundWave(model.phase)}`,
-        tone: 'Plain',
-      },
-      {
-        label: STAT_LABELS.best,
-        value: Option.match(bestsFor(model).maybeBestEndlessWave, {
-          onNone: () => '--',
-          onSome: best => `WAVE ${best}`,
-        }),
-        tone: 'Victory',
-      },
-    ],
-  })
-
-const statRows = (model: Model): ReadonlyArray<StatRow> => {
-  const { stats } = model
-  return [
-    {
-      label: STAT_LABELS.difficulty,
-      value: String.toUpperCase(DIFFICULTIES[model.difficulty.chosen].name),
-      tone: DIFFICULTY_TONES[model.difficulty.chosen],
-    },
-    ...waveRows(model),
-    {
-      label: STAT_LABELS.kills,
-      value: `${totalKills(stats)}`,
-      tone: 'Plain',
-    },
-    { label: STAT_LABELS.time, value: runTimeLabel(stats), tone: 'Plain' },
-    {
-      label: STAT_LABELS.accuracy,
-      value: `${accuracyPercent(stats)}%`,
-      tone: 'Plain',
-    },
-    {
-      label: STAT_LABELS.money,
-      value: `$${model.wallet.earned}`,
-      tone: 'Coin',
-    },
-    {
-      label: STAT_LABELS.hearts,
-      value: `${stats.heartsLost}`,
-      tone: stats.heartsLost > 0 ? 'Alert' : 'Plain',
-    },
-    {
-      label: STAT_LABELS.traps,
-      value: `${stats.trapsPlaced}`,
-      tone: 'Plain',
-    },
-    {
-      label: STAT_LABELS.score,
-      value: `${scoreOf(model.stats)}`,
-      tone: 'Victory',
-    },
-  ]
-}
-
-const statRowShapes = (
-  { label, value, tone }: StatRow,
-  index: number,
-): ReadonlyArray<Canvas.Shape> => {
-  const y = PANEL_TOP + PANEL_PAD + index * PANEL_ROW_PX
-  return [
-    placeBaked(label, { x: PANEL_LEFT + PANEL_PAD, y, align: 'Left' }),
-    ...textShapes(value, tone, PANEL_RIGHT - PANEL_PAD, y, 'Right'),
-  ]
-}
-
-const KILL_SLOT_PX = 28
-const KILL_ICON_PX = 7
-const KILL_ICON_GAP = 2
-
-const killShapes = (
-  stats: RunStats,
-  y: number,
-): ReadonlyArray<Canvas.Shape> => {
-  const left = Math.round(
-    CENTER_X - (ZOMBIE_KIND_ORDER.length * KILL_SLOT_PX) / 2,
-  )
-  return Array.flatMap(ZOMBIE_KIND_ORDER, (kind, index) => {
-    const count = `x${stats.kills[kind]}`
-    const slotCenter = left + index * KILL_SLOT_PX + KILL_SLOT_PX / 2
-    const x = Math.round(
-      slotCenter - (KILL_ICON_PX + KILL_ICON_GAP + textWidth(count)) / 2,
-    )
-    return [
-      group({
-        translate: { x: x + Math.floor(KILL_ICON_PX / 2), y: y + 3 },
-        shapes: ZOMBIE_SPRITES[kind].icon,
-      }),
-      ...textShapes(count, 'Kill', x + KILL_ICON_PX + KILL_ICON_GAP, y, 'Left'),
-    ]
-  })
-}
-
-const panelBottom = (model: Model): number =>
-  PANEL_TOP + PANEL_PAD * 2 + (statRows(model).length + 1) * PANEL_ROW_PX + 1
-
-const panelShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
-  const rows = statRows(model)
-  const killsY = PANEL_TOP + PANEL_PAD + rows.length * PANEL_ROW_PX + 3
-  const bottom = panelBottom(model)
-  return [
-    Canvas.Rect({
-      x: PANEL_LEFT - 1,
-      y: PANEL_TOP - 1,
-      width: PANEL_RIGHT - PANEL_LEFT + 2,
-      height: bottom - PANEL_TOP + 2,
-      fill: PANEL_EDGE,
-    }),
-    Canvas.Rect({
-      x: PANEL_LEFT,
-      y: PANEL_TOP,
-      width: PANEL_RIGHT - PANEL_LEFT,
-      height: bottom - PANEL_TOP,
-      fill: PANEL_FILL,
-    }),
-    ...Array.flatMap(rows, statRowShapes),
-    Canvas.Rect({
-      x: PANEL_LEFT + PANEL_PAD,
-      y: killsY - 3,
-      width: PANEL_RIGHT - PANEL_LEFT - PANEL_PAD * 2,
-      height: 1,
-      fill: PANEL_EDGE,
-    }),
-    ...killShapes(model.stats, killsY),
-  ]
-}
-
-const VERDICT_Y = 27
-const FEEDBACK = bakeText(String.toUpperCase(FEEDBACK_LINE), 'Hint')
-const FEEDBACK_GAP = 5
-const UNLOCK_BLINK_MS = 400
-const NIGHTMARE_UNLOCKED = bakeText(
-  'NIGHTMARE UNLOCKED! PICK IT IN SETTINGS',
-  'Victory',
-)
-const NIGHTMARE_UNLOCKED_DIM = bakeText(
-  'NIGHTMARE UNLOCKED! PICK IT IN SETTINGS',
-  'Alert',
-)
-
-const endNoteShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
-  const y = panelBottom(model) + FEEDBACK_GAP
-  if (model.difficulty.nightmare === 'JustUnlocked') {
-    return [
-      centered(
-        Math.floor(model.screenMs / UNLOCK_BLINK_MS) % 2 === 0
-          ? NIGHTMARE_UNLOCKED
-          : NIGHTMARE_UNLOCKED_DIM,
-        y,
-      ),
-    ]
-  } else if (isAskingForFeedback(model)) {
-    return [centered(FEEDBACK, y)]
-  } else {
-    return []
-  }
-}
-
-const endShapes = (
-  model: Model,
-  title: BakedText,
-  verdict: string,
-): ReadonlyArray<Canvas.Shape> => [
-  DIM_BACKDROP,
-  centered(title, 10, TITLE_SCALE),
-  ...textShapes(
-    String.toUpperCase(verdict),
-    'Prompt',
-    CENTER_X,
-    VERDICT_Y,
-    'Center',
-  ),
-  ...panelShapes(model),
-  ...endNoteShapes(model),
-]
-
 // OVERLAY
 
 const PORTRAIT_RESUME_LIFT = 34
@@ -1258,7 +1018,6 @@ export const overlayShapes = (
         ? debutCardOverlay(model)
         : [...waveBanner(model, wave, elapsedMs), ...hintShapes(model)],
     Paused: ({ round }) => pausedShapes(model, round.wave, resumeYFor(screen)),
-    Victory: () => endShapes(model, YOU_SURVIVED, victoryVerdict(model.stats)),
-    GameOver: ({ wave }) =>
-      endShapes(model, GAME_OVER, defeatVerdict(wave, model.stats)),
+    Victory: () => endOverlayShapes(model),
+    GameOver: () => endOverlayShapes(model),
   })

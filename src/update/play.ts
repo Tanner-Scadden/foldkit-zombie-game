@@ -5,12 +5,12 @@ import { noteAmmoTip } from '../ammoWarning'
 import { positionVariation } from '../audio'
 import { isCouchKey, pressCouchKey } from '../couch'
 import { makeStep } from '../definition'
+import { isEndScreen, skipBeat } from '../endBeat'
 import { advanceQuest } from '../firstBreakQuest'
 import { advanceGame, clampFrameDelta, refreshIntent } from '../frame'
 import {
   type PointerPress,
   isEndlessKey,
-  isKeepGoingKey,
   isPauseKey,
   isReloadKey,
   isStartKey,
@@ -58,6 +58,14 @@ import {
 } from '../weapons'
 import { coopFromKey, isCoopOpen, pressCoopKey, releaseCoopKey } from './coop'
 import {
+  advanceEndScreen,
+  endFromKey,
+  isBeatSkipKey,
+  isRunCardKey,
+  runCardFromKey,
+  shareFromKey,
+} from './end'
+import {
   difficultyCardFromKey,
   homeFocusFromKey,
   homeFromKey,
@@ -66,13 +74,7 @@ import {
   menuFromKey,
 } from './home'
 import { profileFromKey } from './profile'
-import {
-  isPaused,
-  isScreenAnimated,
-  keepGoingWhenAllowed,
-  startWhenAllowed,
-  startsRun,
-} from './run'
+import { isPaused, isScreenAnimated, startWhenAllowed, startsRun } from './run'
 import {
   closeShop,
   closeShopOutsidePreparation,
@@ -161,9 +163,6 @@ export const startFromKey = (model: Model, code: string): Model => {
 export const resumeFromKey = (model: Model, code: string): Model =>
   isPauseKey(code) ? startWhenAllowed(model, model.mode) : model
 
-export const victoryFromKey = (model: Model, code: string): Model =>
-  isKeepGoingKey(code) ? keepGoingWhenAllowed(model) : startFromKey(model, code)
-
 export const swapGun = (model: Model): Model => {
   if (
     !isRoundActive(model.phase) ||
@@ -217,8 +216,8 @@ export const phaseFromKey = (model: Model, code: string): Model =>
     Preparation: () => preparationFromKey(model, code),
     Wave: () => (isPauseKey(code) ? pause(model) : model),
     Paused: () => resumeFromKey(model, code),
-    Victory: () => victoryFromKey(model, code),
-    GameOver: () => startFromKey(model, code),
+    Victory: () => endFromKey(model, code),
+    GameOver: () => endFromKey(model, code),
   })
 
 export const hasResumed = (before: Model, after: Model): boolean =>
@@ -320,6 +319,8 @@ export const tickFrame = (deltaTime: number) =>
         closeShopOutsidePreparation,
         leaveShopWithoutDialog,
       ])
+    } else if (isEndScreen(model.phase)) {
+      return advanceEndScreen(clampFrameDelta(deltaTime))
     } else if (isScreenAnimated(model.phase)) {
       return toModel(
         modifyFields(model, {
@@ -340,6 +341,13 @@ export const pressedKey = (code: string) =>
       return toModel(
         withInput(pressCouchKey(keyed, code), input => pressKey(input, code)),
       )
+    }
+    if (isRunCardKey(keyed)) {
+      return Update.combineSteps([
+        toModel(toggleAudioFromKey(runCardFromKey(keyed, code), code)),
+        unlockAudio,
+        shareFromKey(code),
+      ])
     }
     if (isCoopOpen(keyed)) {
       return Update.combineSteps([
@@ -372,6 +380,13 @@ export const pressedKey = (code: string) =>
       ])
     }
 
+    if (isBeatSkipKey(keyed, code)) {
+      return Update.combineSteps([
+        toModel(toggleAudioFromKey(skipBeat(keyed), code)),
+        unlockAudio,
+      ])
+    }
+
     const phased = phaseFromKey(keyed, code)
     const pressed = learnSwapWhen(
       model,
@@ -393,6 +408,7 @@ export const pressedKey = (code: string) =>
       homeFromKey(code),
       trapFromKey(code),
       reloadFromKey(code),
+      shareFromKey(code),
       playStartSoundWhen(startsRun(model, pressed)),
       playSwapSoundWhen(changedWeapon(model, pressed)),
     ])

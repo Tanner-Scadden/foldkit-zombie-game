@@ -6,6 +6,7 @@ import { sendRunSummary } from '../analyticsBeacon'
 import { maybeRunOutcome, runSummaryOf } from '../analyticsRun'
 import { isOnlineRun, runDifficultyOf } from '../coopPlay'
 import { makeCommand } from '../definition'
+import { noteRecords } from '../endBeat'
 import { countRunFrom, forgetNewEntriesFrom } from '../home'
 import { Message } from '../message'
 import type { Model } from '../model'
@@ -91,7 +92,11 @@ export const afterMessage = (
   settleNightmareFrom(before),
   unlockNightmareFrom(before),
   stepModel => ({
-    model: countRunFrom(before, stepModel, runDifficultyOf(stepModel)),
+    model: countRunFrom(
+      before,
+      noteRecords(before, stepModel, runDifficultyOf(stepModel)),
+      runDifficultyOf(stepModel),
+    ),
   }),
   sendRunSummaryFrom(before),
   stepModel => ({ model: forgetNewEntriesFrom(before, stepModel) }),

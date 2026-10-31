@@ -249,13 +249,14 @@
     {
       // NOTE: these define the view size (constants, screen), do world math
       // (camera, geometry), or draw deliberately inside inLandscapeFrame
-      // (screens, bossView).
+      // (screens, endView, bossView).
       "files": [
         "src/constants.ts",
         "src/screen.ts",
         "src/camera.ts",
         "src/geometry.ts",
         "src/screens.ts",
+        "src/endView.ts",
         "src/bossView.ts"
       ],
       "rules": {

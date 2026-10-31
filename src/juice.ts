@@ -483,6 +483,10 @@ const advanceStreak = (
   })
 }
 
+// NOTE: the run's best streak, for the end card's tally.
+const streakCount = (streak: Streak): number =>
+  Streak.isAnyOf(['Hot'])(streak) ? streak.count : 0
+
 // FRAME
 
 const countWhere = (
@@ -533,6 +537,7 @@ export const advanceJuice = (
   const events = model.frameEvents
   const kills = countWhere(events, GameEvent.isAnyOf(['ZombieKilled']))
   const newBlasts = Array.flatMap(events, blastOf)
+  const streak = advanceStreak(model.streak, kills, worldMs)
 
   const [shakeState, shake] = advanceShake(
     model.shake,
@@ -566,7 +571,8 @@ export const advanceJuice = (
           POPUP_MAX,
         ),
       ),
-    streak: streak => advanceStreak(streak, kills, worldMs),
+    streak: () => streak,
+    bestStreak: best => Math.max(best, streakCount(streak)),
     wallet: wallet => tickShownMoney(wallet, seconds),
     cosmeticRngState: () => popupState,
   })
