@@ -51,7 +51,7 @@ import {
 
 // NOTE: players are keyed by their room slot. Single player is the one
 // entry at SOLO_SLOT, and a missing entry intends nothing.
-export { type PlayerSlot, SOLO_SLOT }
+export { type PlayerSlot }
 
 export type InputsByPlayer = ReadonlyMap<PlayerSlot, Intent>
 

@@ -139,7 +139,7 @@ const ringSprite = (pixels: ReadonlyArray<RingPixel>, filled: number): Sprite =>
 
 // NOTE: built once per price, as the module loads, so every tag is an
 // image from the atlas.
-export const bakePriceTag = (price: number): PriceTag =>
+const bakePriceTag = (price: number): PriceTag =>
   bakeTag(bakeText(`$${price}`, 'Coin'))
 
 // NOTE: a weapon the fridge offers is already paid for, so its tag says

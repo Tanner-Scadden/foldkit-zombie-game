@@ -114,7 +114,7 @@ export const acquireLock = (
 
 // NOTE: the lock is removed only when it still holds the text that was judged
 // stale, so a guard that took the lock in the meantime keeps it.
-export const clearStaleLock = (
+const clearStaleLock = (
   path: string,
   maybeStaleText: Option.Option<string>,
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem> =>

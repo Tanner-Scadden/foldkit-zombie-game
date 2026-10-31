@@ -348,48 +348,12 @@
       "files": ["src/coop/seam.ts"],
       "rules": { "munch/no-raw-json": "off" }
     },
-    // TODO(cleanup slice 9): the overrides below are temporary. Other changes
-    // were editing these files when the strict rules landed: fix the hits and
-    // drop each override once those changes are in.
     {
-      // TODO(cleanup slice 9): the knife and two gun slots change.
-      "files": ["src/main.ts", "src/update/shop.ts"],
+      // TODO(cleanup slice 9c): one hit (the Model import). The mobile HUD
+      // change is editing this file.
+      "files": ["src/main.ts"],
       "rules": {
         "typescript/consistent-type-imports": "off"
-      }
-    },
-    {
-      // TODO(cleanup slice 9): the sync tests change.
-      "files": ["src/store.test.ts"],
-      "rules": {
-        "typescript/no-unnecessary-condition": "off",
-        "no-restricted-properties": [
-          "error",
-          { "object": "Math", "property": "random" },
-          { "object": "Data", "property": "taggedEnum" }
-        ]
-      }
-    },
-    {
-      // TODO(cleanup slice 9): the sync tests change.
-      "files": ["packages/sync-engine/test/**/*.ts"],
-      "rules": {
-        "typescript/consistent-type-imports": "off",
-        "vitest/expect-expect": "off",
-        "typescript/no-base-to-string": "off",
-        "typescript/no-unsafe-assignment": "off"
-      }
-    },
-    {
-      // TODO(cleanup slice 9): the netcode change.
-      "files": ["packages/netcode/**/*.ts"],
-      "rules": {
-        "no-control-regex": "off",
-        "no-shadow": "off",
-        "typescript/consistent-type-imports": "off",
-        "vitest/require-to-throw-message": "off",
-        "unicorn/no-useless-spread": "off",
-        "typescript/no-unnecessary-condition": "off"
       }
     },
     {
@@ -416,8 +380,8 @@
     }
   ],
   "ignorePatterns": [
-    // TODO(cleanup slice 9): lint the balance bot once the knife and two gun
-    // slots land. It was never linted, and that change is editing it.
+    // TODO(cleanup slice 9b): lint the balance bot once the Clang Pan lands.
+    // It was never linted, and that change is editing it.
     "tools/balance/bot.ts",
     "tools/balance/simulate.ts",
     "dist/",

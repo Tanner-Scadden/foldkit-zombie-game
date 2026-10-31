@@ -21,7 +21,7 @@ const Positive = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))
 export const Format = Schema.Literals(['16:9', '9:16'])
 export type Format = typeof Format.Type
 
-export const Segment = Schema.Struct({
+const Segment = Schema.Struct({
   from: Ticks,
   to: Ticks,
   keys: Schema.optionalKey(Schema.Array(Schema.String)),
@@ -36,16 +36,16 @@ export const Segment = Schema.Struct({
   fire: Schema.optionalKey(Schema.Boolean),
 })
 
-export const Tap = Schema.Struct({ at: Ticks, key: Schema.String })
+const Tap = Schema.Struct({ at: Ticks, key: Schema.String })
 
 // NOTE: a click on the page between ticks, for HTML such as the shop's rows.
-export const Click = Schema.Struct({ at: Ticks, selector: Schema.String })
+const Click = Schema.Struct({ at: Ticks, selector: Schema.String })
 
 // NOTE: a seat downed on purpose and a teammate who comes to revive it:
 // at `at` the seat at `down` drops to zero hearts, and its bleed out clock
 // is set to `bleedMs`, so the revive lands with as much left as the shot
 // wants. From `walkAt` the seat at `reviver` walks to it and stands still.
-export const Revive = Schema.Struct({
+const Revive = Schema.Struct({
   down: Schema.Int,
   reviver: Schema.Int,
   at: Ticks,
@@ -55,7 +55,7 @@ export const Revive = Schema.Struct({
   spot: Schema.optionalKey(Schema.Tuple([Schema.Finite, Schema.Finite])),
 })
 
-export const CoopPlan = Schema.Struct({
+const CoopPlan = Schema.Struct({
   seed: Schema.Finite,
   preroll: Ticks,
   difficulty: Schema.optionalKey(Difficulty),
@@ -68,10 +68,10 @@ export const CoopPlan = Schema.Struct({
 // (tools/audit/harness/cards.ts): the title slam with its drips, the end
 // card with the logo and the chomping Groaner, and four players on a
 // couch with their phones. `at` is the tick the card's own clock starts.
-export const CardName = Schema.Literals(['Title', 'End', 'Couch'])
-export type CardName = typeof CardName.Type
+const CardName = Schema.Literals(['Title', 'End', 'Couch'])
+type CardName = typeof CardName.Type
 
-export const Card = Schema.Struct({
+const Card = Schema.Struct({
   from: Ticks,
   to: Ticks,
   card: CardName,
@@ -80,12 +80,12 @@ export const Card = Schema.Struct({
 // NOTE: slow motion repeats each captured frame of the ticks from `from` up
 // to before `to` `repeat` times; a hold shows the frame at `at` for
 // `frames` more frames.
-export const SlowMotion = Schema.Struct({
+const SlowMotion = Schema.Struct({
   from: Ticks,
   to: Ticks,
   repeat: Positive,
 })
-export const Hold = Schema.Struct({ at: Ticks, frames: Positive })
+const Hold = Schema.Struct({ at: Ticks, frames: Positive })
 
 // NOTE: the director's own camera, on its own path over the finished
 // picture: a key holds where the frame looks at a tick, the center in game
@@ -102,7 +102,7 @@ export type CameraKey = typeof CameraKey.Type
 
 // NOTE: the four device split screen: over these ticks the frame is a
 // laptop and three phones, each showing the room from one seat's camera.
-export const Devices = Schema.Struct({ from: Ticks, to: Ticks })
+const Devices = Schema.Struct({ from: Ticks, to: Ticks })
 
 // NOTE: a caption shows over the ticks from `from` up to before `to`, in
 // the game's pixel font: three or four words at most. `top`, a share of
@@ -154,7 +154,7 @@ export type Shot = typeof Shot.Type
 // NOTE: a clip's own music in place of what the game cued: each cue at
 // the clip frame it starts on. `bpm` is the tune's tempo, so the tool can
 // say how far each cut lands from a beat.
-export const ScoreCue = Schema.Struct({
+const ScoreCue = Schema.Struct({
   frame: Ticks,
   mood: MusicMood,
   level: Schema.optionalKey(MusicLevel),
@@ -179,8 +179,8 @@ export const Clip = Schema.Struct({
 })
 export type Clip = typeof Clip.Type
 
-export const ShotList = Schema.Struct({ clips: Schema.NonEmptyArray(Clip) })
-export type ShotList = typeof ShotList.Type
+const ShotList = Schema.Struct({ clips: Schema.NonEmptyArray(Clip) })
+type ShotList = typeof ShotList.Type
 
 export const decodeShotList = Schema.decodeUnknownEffect(
   Schema.fromJsonString(ShotList),
@@ -190,7 +190,7 @@ export const FRAMES_PER_SECOND = 60
 
 // NOTE: what the director in the page plays a shot with, as the JSON its
 // `start` takes (the harness decodes it with its own copy of this Schema).
-export const DirectorPlan = Schema.Struct({
+const DirectorPlan = Schema.Struct({
   segments: Schema.Array(Segment),
   taps: Schema.Array(Tap),
   coop: Schema.optionalKey(CoopPlan),

@@ -16,8 +16,6 @@ import { describeError } from './describeError'
 
 // API ORIGIN
 
-export { API_ORIGIN }
-
 const maybeApiUrl = (path: string, origin: string): Option.Option<string> =>
   origin === ''
     ? Option.none()
@@ -26,7 +24,7 @@ const maybeApiUrl = (path: string, origin: string): Option.Option<string> =>
 export const maybeRunsUrl = (origin: string): Option.Option<string> =>
   maybeApiUrl(RUNS_PATH, origin)
 
-export const maybeSharesUrl = (origin: string): Option.Option<string> =>
+const maybeSharesUrl = (origin: string): Option.Option<string> =>
   maybeApiUrl(SHARES_PATH, origin)
 
 // VISIT

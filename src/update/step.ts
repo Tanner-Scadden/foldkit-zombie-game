@@ -12,7 +12,7 @@ import type { Input, Model } from '../model'
 // supplies them, so a plain Step can return any root Command. A Step that
 // opens a dialog or talks to co-op uses a Binding, which needs the root's
 // graph: author it with `makeStep` from src/definition.ts instead.
-export type AppHandlers = Layer.Success<typeof CommandsLayer>
+type AppHandlers = Layer.Success<typeof CommandsLayer>
 
 export type UpdateReturn = Update.Return<Model, Message, AppHandlers>
 export type UpdateStep = Update.Step<Model, Message, AppHandlers>

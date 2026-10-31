@@ -127,7 +127,7 @@ const tagWidthOf = (cells: ReadonlyArray<TagCell>): number =>
   )
 
 // NOTE: `bottom` is the row just over the head; the tag sits on it.
-export const nameTagShapes = (
+const nameTagShapes = (
   name: string,
   color: string,
   x: number,

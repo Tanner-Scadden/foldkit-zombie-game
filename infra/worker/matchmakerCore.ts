@@ -38,7 +38,7 @@ export interface MatchmakerIo {
   readonly wakeAt: (atMs: number) => Effect.Effect<void>
 }
 
-export type Event = (
+type Event = (
   matchmaker: Matchmaking.Matchmaker,
   nowMs: number,
 ) => Matchmaking.Stepped

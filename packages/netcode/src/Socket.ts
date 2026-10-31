@@ -67,9 +67,9 @@ export const openSocket = (
       }
     })
     socket.addEventListener('close', event => {
-      Effect.runFork(
-        Queue.fail(
-          inbox,
+      Queue.failCauseUnsafe(
+        inbox,
+        Cause.fail(
           new SocketError({ reason: `Closed (${event.code} ${event.reason})` }),
         ),
       )

@@ -19,7 +19,7 @@ import {
 
 // JOBS
 
-export type View = 'Landscape' | 'Portrait'
+type View = 'Landscape' | 'Portrait'
 
 export type Job = Readonly<{
   id: string
@@ -100,7 +100,7 @@ export const nightlyJobs = (sizes: JobSizes): ReadonlyArray<Job> => [
 
 // ARGUMENTS
 
-export type BaselinePolicy = 'Update' | 'Extend' | 'KeepUnlessMissing'
+type BaselinePolicy = 'Update' | 'Extend' | 'KeepUnlessMissing'
 
 export type Invocation = Readonly<{
   sizes: JobSizes
@@ -143,7 +143,7 @@ export const localDate = (ms: number): string => {
 
 // METRICS
 
-export type Unit = 'Share' | 'Minutes' | 'Seconds' | 'Hearts' | 'Wave' | 'Ratio'
+type Unit = 'Share' | 'Minutes' | 'Seconds' | 'Hearts' | 'Wave' | 'Ratio'
 
 export type Metric = Readonly<{
   key: string
@@ -596,7 +596,7 @@ const rangeOf = (target: Target, unit: Unit): string =>
       }),
   })
 
-export const verdictLine = (
+const verdictLine = (
   metrics: ReadonlyArray<Metric>,
   verdict: Verdict,
 ): string => {

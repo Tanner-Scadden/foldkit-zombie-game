@@ -75,7 +75,7 @@ type Ticks = Readonly<{ count: number; carryMs: number }>
 
 // NOTE: a 60 Hz frame on an empty carry is exactly one tick and leaves
 // exactly zero, so a 60 Hz display steps as it did before the fixed step.
-export const ticksIn = (carryMs: number, count = 0): Ticks =>
+const ticksIn = (carryMs: number, count = 0): Ticks =>
   carryMs >= FIXED_STEP_MS - STEP_EPSILON_MS
     ? ticksIn(carryMs - FIXED_STEP_MS, count + 1)
     : { count, carryMs: Math.max(0, carryMs) }

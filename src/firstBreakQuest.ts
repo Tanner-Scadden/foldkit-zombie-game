@@ -91,10 +91,6 @@ export const endQuest = (model: Model): Model =>
     ? model
     : modifyFields(model, { firstBreakQuest: () => Tour.Over() })
 
-// NOTE: a tutorial reset lets the quest run again.
-export const rewindQuest = (model: Model): Model =>
-  modifyFields(model, { firstBreakQuest: () => Tour.Waiting() })
-
 // NOTE: in the Place step an arrow bobs over the nearest open doorway, the
 // sensible spot for the Plank Pile.
 export const maybeQuestDoor = (model: Model): Option.Option<Vector> => {

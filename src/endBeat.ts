@@ -44,12 +44,12 @@ export const endKindOf = (model: Model): Option.Option<EndKind> =>
 export const FLASH_MS = 220
 export const FALL_START_MS = 100
 export const FALL_MS = 420
-export const LENS_MS = 700
+const LENS_MS = 700
 export const STAMP_MS = 140
 export const TROPHY_DROP_MS = 380
-export const SKULL_GAP_MS = 110
-export const ROW_MS = 200
-export const ROW_GAP_MS = 60
+const SKULL_GAP_MS = 110
+const ROW_MS = 200
+const ROW_GAP_MS = 60
 export const BEST_POP_MS = 260
 
 type Timeline = Readonly<{
@@ -281,7 +281,7 @@ export const skullAtMs = (index: number): number =>
 // NOTE: the records a run just broke, read on the frame it ends: the bests
 // before it (`before`) against the run. Only a record that stood falls; a
 // first win or a first endless run sets one without a NEW BEST.
-export const recordsBroken = (
+const recordsBroken = (
   before: Model,
   after: Model,
   played: Difficulty = after.difficulty.chosen,
@@ -456,7 +456,7 @@ export const lensOf = (model: Model): Option.Option<Lens> =>
 // NOTE: in an online co-op run the room is back in its lobby as soon as the
 // run ends, so the lobby waits behind the end card for the beat and a few
 // seconds more, or until a press lets it in. Every player sees the same.
-export const RUN_CARD_HOLD_MS = 6000
+const RUN_CARD_HOLD_MS = 6000
 
 const runCardEndMs = (kind: EndKind): number => doneMs(kind) + RUN_CARD_HOLD_MS
 

@@ -439,7 +439,7 @@ const sectionsView = (picker: CharacterPicker, h: CharacterViewBuilder): Html =>
 // as few lines as it needs, filled as evenly as it can be.
 const MOST_COLUMNS = 6
 
-export const balancedColumns = (count: number): number => {
+const balancedColumns = (count: number): number => {
   const lines = Math.ceil(count / MOST_COLUMNS)
   return Math.ceil(count / Math.max(1, lines))
 }

@@ -168,7 +168,7 @@ type ExtraKey = Readonly<{ key: string; action: string }>
 
 // NOTE: the rest of the keyboard's keys, one short line under the cards, so
 // every key still has a home on the screen that teaches the controls.
-export const EXTRA_KEYS: Array.NonEmptyReadonlyArray<ExtraKey> = [
+const EXTRA_KEYS: Array.NonEmptyReadonlyArray<ExtraKey> = [
   { key: 'G', action: 'next trap' },
   { key: 'Enter', action: 'start' },
   { key: 'Esc', action: 'pause' },

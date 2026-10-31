@@ -29,7 +29,7 @@ import {
 // tab runs sync, so a follower tab follows the lobby over its own socket
 // instead (see src/coop/net.ts).
 
-export class RoomAccessError extends Data.TaggedError('RoomAccessError')<{
+class RoomAccessError extends Data.TaggedError('RoomAccessError')<{
   readonly reason: string
 }> {}
 

@@ -34,7 +34,7 @@ export interface ServerOptions {
   readonly transactionIdleTimeout?: Duration.Input | undefined
 }
 
-export const DEFAULT_TRANSACTION_IDLE_TIMEOUT: Duration.Input = '10 seconds'
+const DEFAULT_TRANSACTION_IDLE_TIMEOUT: Duration.Input = '10 seconds'
 
 type EngineState = Data.TaggedEnum<{
   Closed: {}

@@ -13,19 +13,5 @@
     "effecttsgo/catch-to-or-else-succeed": "off",
     // NOTE: unstable APIs such as effect/unstable/sql are in use on purpose.
     "effecttsgo/unstable-api-usage": "off"
-  },
-  "overrides": [
-    {
-      // TODO(cleanup slice 9): the netcode change was editing this file when
-      // the strict preset landed. Fix the hit and drop this override.
-      "files": ["packages/netcode/src/Socket.ts"],
-      "rules": { "effecttsgo/run-effect-inside-effect": "off" }
-    },
-    {
-      // TODO(cleanup slice 9): the sync tests change was editing this file
-      // when the strict preset landed. Fix the hits and drop this override.
-      "files": ["packages/sync-engine/test/fixtures.ts"],
-      "rules": { "effecttsgo/lazy-effect": "off" }
-    }
-  ]
+  }
 }

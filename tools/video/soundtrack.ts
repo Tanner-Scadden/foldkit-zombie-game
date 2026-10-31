@@ -10,11 +10,11 @@ import { type ClipCue, SoundtrackRequestJson, cueAt } from './soundtrackRequest'
 // engine in headless Chrome (audioPage.ts, bundled here), offline, and
 // writes the mix as a 16 bit stereo WAV.
 
-export class SoundtrackFailed extends Data.TaggedError('SoundtrackFailed')<{
+class SoundtrackFailed extends Data.TaggedError('SoundtrackFailed')<{
   readonly reason: string
 }> {}
 
-export const SAMPLE_RATE = 48_000
+const SAMPLE_RATE = 48_000
 const CHANNELS = 2
 const BYTES_PER_SAMPLE = 2
 const TAIL_FADE_SECONDS = 0.25

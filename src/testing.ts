@@ -346,14 +346,6 @@ export const lockedNightmare = Scene.role('button', {
   name: 'Nightmare, locked. Beat Hard to unlock',
 })
 
-export const campaignButton = Scene.role('button', {
-  name: 'Campaign: 10 waves, then victory',
-})
-
-export const endlessButton = Scene.role('button', {
-  name: 'Endless: waves keep coming until you fall',
-})
-
 export const keepGoingButton = Scene.role('button', {
   name: 'Keep going: carry on into endless from wave 11 with your money, guns, and traps',
 })

@@ -28,7 +28,7 @@ import { type ClipCue, decodeAudioLog } from './soundtrackRequest'
 // split screen of devices, and dissolves are drawn over the page, so a
 // captured frame is the finished frame.
 
-export class PageFailed extends Data.TaggedError('PageFailed')<{
+class PageFailed extends Data.TaggedError('PageFailed')<{
   readonly step: string
   readonly reason: string
 }> {}
@@ -140,7 +140,7 @@ const captionDrawing = (
 
 // THE OVERLAY
 
-export type Box = Readonly<{
+type Box = Readonly<{
   x: number
   y: number
   width: number
@@ -150,7 +150,7 @@ export type Box = Readonly<{
 // NOTE: a laptop or a phone in the split screen: its outside and its
 // screen, in frame pixels, the part of the page's picture its screen shows,
 // and the size of one of its pixels.
-export type Device = Readonly<{
+type Device = Readonly<{
   kind: 'Laptop' | 'Phone'
   outer: Box
   screen: Box
@@ -163,7 +163,7 @@ export type Device = Readonly<{
 // back up to the frame), the split screen of devices, or a finished frame
 // from disk. It is plain data for code that runs in the page, where
 // Effect's Match is not loaded, hence `kind` and a switch.
-export type Base =
+type Base =
   | Readonly<{ kind: 'Camera'; src: string; crop: Box }>
   | Readonly<{ kind: 'Devices'; src: string; devices: ReadonlyArray<Device> }>
   | Readonly<{ kind: 'Frame'; src: string }>
@@ -226,18 +226,18 @@ const paintOverlay = async ({
     const picture = await load(base.src)
     switch (base.kind) {
       case 'Camera': {
-      context.imageSmoothingEnabled = false
-      context.drawImage(
-        picture,
-        base.crop.x,
-        base.crop.y,
-        base.crop.width,
-        base.crop.height,
-        0,
-        0,
-        canvas.width,
-        canvas.height,
-      )
+        context.imageSmoothingEnabled = false
+        context.drawImage(
+          picture,
+          base.crop.x,
+          base.crop.y,
+          base.crop.width,
+          base.crop.height,
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        )
         break
       }
       case 'Frame': {
@@ -245,94 +245,94 @@ const paintOverlay = async ({
         break
       }
       case 'Devices': {
-      // NOTE: the split screen: a dark room with a purple glow, and each
-      // device drawn in blocks of its unit, its screen showing its crop.
-      fill(0, 0, canvas.width, canvas.height, '#160b24')
-      const rings: ReadonlyArray<readonly [number, string]> = [
-        [0.56, '#1d0f30'],
-        [0.42, '#24123a'],
-        [0.3, '#2b1749'],
-      ]
-      for (const [share, color] of rings) {
-        context.fillStyle = color
-        context.beginPath()
-        context.arc(
-          canvas.width / 2,
-          canvas.height / 2,
-          Math.max(canvas.width, canvas.height) * share,
-          0,
-          Math.PI * 2,
-        )
-        context.fill()
-      }
-      for (const device of base.devices) {
-        const { outer, screen, unit } = device
-        const middle = outer.x + outer.width / 2
-        fill(
-          outer.x - unit,
-          outer.y - unit,
-          outer.width + unit * 2,
-          outer.height + unit * 2,
-          outline,
-        )
-        fill(outer.x, outer.y, outer.width, outer.height, '#3a3550')
-        fill(outer.x, outer.y, outer.width, unit, '#5a5478')
-        if (device.kind === 'Laptop') {
-          const lipY = outer.y + outer.height + unit
+        // NOTE: the split screen: a dark room with a purple glow, and each
+        // device drawn in blocks of its unit, its screen showing its crop.
+        fill(0, 0, canvas.width, canvas.height, '#160b24')
+        const rings: ReadonlyArray<readonly [number, string]> = [
+          [0.56, '#1d0f30'],
+          [0.42, '#24123a'],
+          [0.3, '#2b1749'],
+        ]
+        for (const [share, color] of rings) {
+          context.fillStyle = color
+          context.beginPath()
+          context.arc(
+            canvas.width / 2,
+            canvas.height / 2,
+            Math.max(canvas.width, canvas.height) * share,
+            0,
+            Math.PI * 2,
+          )
+          context.fill()
+        }
+        for (const device of base.devices) {
+          const { outer, screen, unit } = device
+          const middle = outer.x + outer.width / 2
           fill(
-            outer.x - unit * 8,
-            lipY,
-            outer.width + unit * 16,
-            unit * 4,
+            outer.x - unit,
+            outer.y - unit,
+            outer.width + unit * 2,
+            outer.height + unit * 2,
             outline,
           )
+          fill(outer.x, outer.y, outer.width, outer.height, '#3a3550')
+          fill(outer.x, outer.y, outer.width, unit, '#5a5478')
+          if (device.kind === 'Laptop') {
+            const lipY = outer.y + outer.height + unit
+            fill(
+              outer.x - unit * 8,
+              lipY,
+              outer.width + unit * 16,
+              unit * 4,
+              outline,
+            )
+            fill(
+              outer.x - unit * 7,
+              lipY + unit,
+              outer.width + unit * 14,
+              unit * 2,
+              '#5a5478',
+            )
+            fill(middle - unit * 10, lipY + unit, unit * 20, unit, '#3a3550')
+          } else {
+            fill(middle - unit * 3, outer.y + unit * 2, unit * 6, unit, outline)
+            fill(
+              middle - unit * 4,
+              outer.y + outer.height - unit * 3,
+              unit * 8,
+              unit,
+              '#5a5478',
+            )
+          }
           fill(
-            outer.x - unit * 7,
-            lipY + unit,
-            outer.width + unit * 14,
-            unit * 2,
-            '#5a5478',
+            screen.x - unit,
+            screen.y - unit,
+            screen.width + unit * 2,
+            screen.height + unit * 2,
+            outline,
           )
-          fill(middle - unit * 10, lipY + unit, unit * 20, unit, '#3a3550')
-        } else {
-          fill(middle - unit * 3, outer.y + unit * 2, unit * 6, unit, outline)
+          context.imageSmoothingEnabled = true
+          context.imageSmoothingQuality = 'high'
+          context.drawImage(
+            picture,
+            device.crop.x,
+            device.crop.y,
+            device.crop.width,
+            device.crop.height,
+            screen.x,
+            screen.y,
+            screen.width,
+            screen.height,
+          )
+          // NOTE: a glint across the glass.
           fill(
-            middle - unit * 4,
-            outer.y + outer.height - unit * 3,
-            unit * 8,
+            screen.x + unit * 2,
+            screen.y + unit * 2,
+            unit * 3,
             unit,
-            '#5a5478',
+            'rgba(255, 255, 255, 0.35)',
           )
         }
-        fill(
-          screen.x - unit,
-          screen.y - unit,
-          screen.width + unit * 2,
-          screen.height + unit * 2,
-          outline,
-        )
-        context.imageSmoothingEnabled = true
-        context.imageSmoothingQuality = 'high'
-        context.drawImage(
-          picture,
-          device.crop.x,
-          device.crop.y,
-          device.crop.width,
-          device.crop.height,
-          screen.x,
-          screen.y,
-          screen.width,
-          screen.height,
-        )
-        // NOTE: a glint across the glass.
-        fill(
-          screen.x + unit * 2,
-          screen.y + unit * 2,
-          unit * 3,
-          unit,
-          'rgba(255, 255, 255, 0.35)',
-        )
-      }
         break
       }
     }
@@ -449,14 +449,8 @@ const cameraAt = (
 
 const clampBox = (box: Box, within: Box): Box => ({
   ...box,
-  x: Math.min(
-    Math.max(box.x, within.x),
-    within.x + within.width - box.width,
-  ),
-  y: Math.min(
-    Math.max(box.y, within.y),
-    within.y + within.height - box.height,
-  ),
+  x: Math.min(Math.max(box.x, within.x), within.x + within.width - box.width),
+  y: Math.min(Math.max(box.y, within.y), within.y + within.height - box.height),
 })
 
 // NOTE: the part of the frame the camera sees, in frame pixels, or none
@@ -504,7 +498,12 @@ const DEVICE_LAYOUTS: Readonly<
     },
     phones: [192, 234, 276].map((x, index) => ({
       outer: { x, y: index === 1 ? 46 : 56, width: 38, height: 76 },
-      screen: { x: x + 3, y: (index === 1 ? 46 : 56) + 6, width: 32, height: 64 },
+      screen: {
+        x: x + 3,
+        y: (index === 1 ? 46 : 56) + 6,
+        width: 32,
+        height: 64,
+      },
     })),
   },
   '9:16': {
@@ -586,7 +585,7 @@ const devicesOf = (format: Format, { world, seats }: Seats) => {
 
 // THE SHOT
 
-export type ShotFrames = Readonly<{
+type ShotFrames = Readonly<{
   // NOTE: the clip frame each captured tick starts on, by tick.
   frameOfTick: ReadonlyMap<number, number>
   frameCount: number

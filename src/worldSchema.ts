@@ -24,19 +24,12 @@ export {
   Body,
   Difficulty,
   HairColor,
-  CursorSetting,
   HairStyle,
   Outfit,
   Print,
-  HomeScreenTip,
-  MusicSetting,
-  PlayerName,
   RotationSetting,
-  ShakeSetting,
-  ShareStatsSetting,
   ShirtColor,
   SkinTone,
-  SoundSetting,
 } from './playerData'
 
 export const Vector = Schema.Struct({ x: Schema.Number, y: Schema.Number })
@@ -171,8 +164,8 @@ export type Melee = typeof Melee.Type
 // NOTE: what the player has in hand: the arsenal's held gun, or the third
 // slot, the melee weapon. With the melee weapon out the arsenal still names
 // the last gun held, which Q goes back to.
-export const Wield = Schema.Literals(['Gun', 'Melee'])
-export type Wield = typeof Wield.Type
+const Wield = Schema.Literals(['Gun', 'Melee'])
+type Wield = typeof Wield.Type
 
 export const Reload = defineTaggedUnion({
   Ready: {},
@@ -1238,8 +1231,8 @@ export type ShopItemId = typeof ShopItemId.Type
 
 // NOTE: the laser sight is bought in the shop for one run: a line or a
 // spread fan on the floor showing where the held gun's shot goes.
-export const LaserSight = Schema.Literals(['None', 'Fitted'])
-export type LaserSight = typeof LaserSight.Type
+const LaserSight = Schema.Literals(['None', 'Fitted'])
+type LaserSight = typeof LaserSight.Type
 
 export const ShopCategory = Schema.Literals(['Guns', 'Health', 'Traps'])
 export type ShopCategory = typeof ShopCategory.Type
@@ -1331,7 +1324,6 @@ export const Trap = defineTaggedUnion({
   },
 })
 export type Trap = typeof Trap.Type
-export type Barricade = typeof Trap.Barricade.Type
 export type Turret = typeof Trap.Turret.Type
 
 export const TrapCounts = Schema.Struct({
@@ -1449,8 +1441,8 @@ export type Life = typeof Life.Type
 export const Presence = Schema.Literals(['Here', 'Away'])
 export type Presence = typeof Presence.Type
 
-export const Readiness = Schema.Literals(['Waiting', 'Ready'])
-export type Readiness = typeof Readiness.Type
+const Readiness = Schema.Literals(['Waiting', 'Ready'])
+type Readiness = typeof Readiness.Type
 
 // NOTE: what co-op adds to a player: their seat, life, presence, READY for
 // the break, the traps they placed (one of each kind, decided row 21), and

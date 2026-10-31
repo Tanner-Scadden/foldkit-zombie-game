@@ -1,4 +1,4 @@
-import { Array, Option, Result, pipe } from 'effect'
+import { Array, Option, Result } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { findStrike, levelOf } from './arena'
@@ -14,13 +14,7 @@ import {
   woundPlayer,
 } from './combat'
 import { DRY_FIRE_DELAY_MS, PLAYER_RADIUS } from './constants'
-import {
-  OUTWARD,
-  addVectors,
-  circlesOverlap,
-  directionBetween,
-  scaleVector,
-} from './geometry'
+import { addVectors, circlesOverlap, scaleVector } from './geometry'
 import {
   type Blow,
   type Struck,
@@ -32,7 +26,7 @@ import {
   strikeInMelee,
   swingAt,
 } from './melee'
-import { creditKills, leadSeatOf, payTo, shooterOf } from './party'
+import { creditKills, payTo, shooterOf } from './party'
 import { isAmmoFree } from './powerups'
 import { trapBlastTarget } from './traps'
 import {
@@ -88,11 +82,7 @@ import { bodyRadiusOf, isGrounded } from './zombies'
 // lid popping in the hands, hurt players too (MULTIPLAYER.md, decided row
 // 6): its thrower included, in single player as in co-op.
 
-export const FRIDGE_WEAPONS: ReadonlyArray<WeaponKind> = [
-  'Cooker',
-  'Pan',
-  'Freeze',
-]
+const FRIDGE_WEAPONS: ReadonlyArray<WeaponKind> = ['Cooker', 'Pan', 'Freeze']
 
 export const isFridgeWeapon = (kind: WeaponKind): boolean =>
   Array.contains(FRIDGE_WEAPONS, kind)
@@ -621,7 +611,7 @@ const holdMsOf = (player: Player): number =>
     Spent: () => 0,
   })
 
-export const isPanDented = (spare: CarriedGun): boolean => spare.loaded <= 0
+const isPanDented = (spare: CarriedGun): boolean => spare.loaded <= 0
 
 const firePan = (world: World, spare: CarriedGun, deltaMs: number): World => {
   const cooled = withPlayer(world, player => coolDown(player, deltaMs))
@@ -825,19 +815,3 @@ export const shatterEvents = (before: World, after: World): World => {
   })
   return withEvents(after, shattered)
 }
-
-// NOTE: whether the seat in the World's per-player fields is the one that
-// threw a lid, for a view that colors a player's own lids.
-export const isOwnLob = (world: World, lob: Lob): boolean =>
-  pipe(
-    Option.fromNullishOr(lob.shooter),
-    Option.match({
-      onNone: () => true,
-      onSome: shooter => shooter === leadSeatOf(world).slot,
-    }),
-  )
-
-export const lobPoint = (lob: Lob): Vector => ({ x: lob.x, y: lob.y })
-
-export const lobDirection = (lob: Lob): Vector =>
-  Option.getOrElse(directionBetween(lob.from, lob.to), () => OUTWARD)

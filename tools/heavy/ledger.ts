@@ -13,7 +13,7 @@ export const readLedger = (
     Effect.orElseSucceed(() => ({})),
   )
 
-export const writeLedger = (
+const writeLedger = (
   path: string,
   ledger: Ledger,
 ): Effect.Effect<void, PlatformError, FileSystem.FileSystem> =>

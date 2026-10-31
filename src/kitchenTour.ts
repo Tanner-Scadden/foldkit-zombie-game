@@ -71,13 +71,9 @@ export const advanceKitchenTour = (model: Model, deltaMs: number): Model =>
 // NOTE: skipping learns the timed breaks lesson, which ends the tour's
 // rules in the World: the clock runs and prices are back.
 export const skipKitchenTour = (model: Model): Model =>
-  modifyFields(
-    withWorld(model, learnTimedBreaks),
-    { kitchenTour: () => Tour.Over() },
-  )
-
-export const rewindKitchenTour = (model: Model): Model =>
-  modifyFields(model, { kitchenTour: () => Tour.Waiting() })
+  modifyFields(withWorld(model, learnTimedBreaks), {
+    kitchenTour: () => Tour.Over(),
+  })
 
 // NOTE: where the step's marker points: the boards, then the fridge. While
 // the prize floats the TAKE ring and the choice bubble do the teaching.

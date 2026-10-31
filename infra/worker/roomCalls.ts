@@ -76,7 +76,7 @@ const stubFor = (
     : rooms.get(id, { locationHint: hint })
 }
 
-export const callRoom = (
+const callRoom = (
   rooms: DurableObjectNamespace,
   code: string,
   path: string,

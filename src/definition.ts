@@ -14,11 +14,8 @@ export const ApplicationDefinition = Block.makeDefinition('Application', {
 export const {
   makeBinding,
   makeCommand,
-  makeCommandsStep,
   makeComposition,
-  makeFieldsStep,
   makeManagedResources,
-  makeMount,
   makeNoopStep,
   makeOutMessageFold,
   makeResource,

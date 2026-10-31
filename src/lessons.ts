@@ -34,7 +34,7 @@ export const isPending = (lesson: Lesson): boolean =>
 
 // PRACTICE GATE
 
-export const isFirstPreparation = (phase: Phase): boolean =>
+const isFirstPreparation = (phase: Phase): boolean =>
   Phase.match(phase, {
     Ready: () => false,
     Preparation: ({ wave }) => wave === 1,

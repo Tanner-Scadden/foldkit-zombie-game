@@ -26,22 +26,22 @@ import { isProcessAlive, readTextIfPresent } from './lock'
 
 export const TURN_DIR_ENV = 'HEAVY_TURN_DIR'
 export const GUARD_PID_ENV = 'HEAVY_GUARD_PID'
-export const CHUNK_RUNS_ENV = 'HEAVY_CHUNK_RUNS'
+const CHUNK_RUNS_ENV = 'HEAVY_CHUNK_RUNS'
 
 const GRANT_POLL = Duration.millis(200)
 
 // PROTOCOL
 
-export const TurnRequest = Schema.Struct({
+const TurnRequest = Schema.Struct({
   pid: Schema.Int,
   label: Schema.String,
 })
-export type TurnRequest = typeof TurnRequest.Type
+type TurnRequest = typeof TurnRequest.Type
 
 const TurnRequestJson = Schema.fromJsonString(TurnRequest)
 
-export const TurnGrant = Schema.Struct({ workers: Schema.Int })
-export type TurnGrant = typeof TurnGrant.Type
+const TurnGrant = Schema.Struct({ workers: Schema.Int })
+type TurnGrant = typeof TurnGrant.Type
 
 const TurnGrantJson = Schema.fromJsonString(TurnGrant)
 

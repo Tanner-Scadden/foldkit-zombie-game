@@ -9,7 +9,7 @@ import { Option } from 'effect'
 // link that is not https on buy.stripe.com.
 export const SUPPORT_URL = 'https://buy.stripe.com/14A3cwe3i8xXcMX1qscs800'
 
-export const SUPPORT_HOST = 'buy.stripe.com'
+const SUPPORT_HOST = 'buy.stripe.com'
 
 export const isSupportUrl = (url: string): boolean =>
   Option.match(Option.liftThrowable(() => new URL(url))(), {

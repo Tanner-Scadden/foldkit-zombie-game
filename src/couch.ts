@@ -41,7 +41,7 @@ type CouchKeys = Readonly<{
   ready: string
 }>
 
-export const COUCH_KEYS: ReadonlyMap<PlayerSlot, CouchKeys> = new Map([
+const COUCH_KEYS: ReadonlyMap<PlayerSlot, CouchKeys> = new Map([
   [
     1,
     {

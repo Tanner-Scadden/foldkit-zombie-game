@@ -1,5 +1,7 @@
 import { Array, Option } from 'effect'
 
+import type { PickedMode } from '@munch/netcode'
+
 import type {
   FixedShopItemId,
   FridgePrize,
@@ -79,15 +81,20 @@ export const PICKUP_NAMES: Readonly<Record<PickupKind, string>> = {
   Heart: 'PICKLED HEART',
 }
 
+// RUN MODES
+
+// NOTE: the run the home menu and a co-op lobby pick: the campaign, endless,
+// or keeping a won campaign going into endless.
+export const MODE_NAMES: Readonly<Record<PickedMode, string>> = {
+  Campaign: 'Campaign',
+  Endless: 'Endless',
+  KeepGoing: 'Keep going',
+}
+
 // THE FRIDGE
 
-// NOTE: Mystery Leftovers (src/leftovers.ts) and its two gag prizes.
+// NOTE: Mystery Leftovers (src/leftovers.ts).
 export const FRIDGE_NAME = 'Mystery Leftovers'
-
-export const GAG_NAMES = {
-  Sandwich: 'Moldy Sandwich',
-  Dud: 'Fish Bones',
-} as const
 
 // NOTE: the one word that lands with each prize when the fridge's spin
 // stops (src/fridgeReveal.ts).

@@ -7,7 +7,7 @@ import { Array, Order, pipe } from 'effect'
 
 export const SERVICE_WORKER_FILE = 'sw.js'
 
-export const SHELL_FILE = 'index.html'
+const SHELL_FILE = 'index.html'
 
 // NOTE: the shell is cached under the root URL, the one a navigation asks
 // for. Cloudflare answers /index.html with a redirect to /, and a redirected
@@ -18,15 +18,15 @@ export const SHELL_URL = './'
 // come from the network, so a build can tell that a newer one is live; the
 // worker never caches itself; _headers is read by Cloudflare, not served; the
 // og image is only for link previews.
-export const NOT_PRECACHED: ReadonlyArray<string> = [
+const NOT_PRECACHED: ReadonlySet<string> = new Set([
   'version.json',
   SERVICE_WORKER_FILE,
   '_headers',
   'og-image.png',
-]
+])
 
 const isPrecached = (fileName: string): boolean =>
-  !NOT_PRECACHED.includes(fileName) &&
+  !NOT_PRECACHED.has(fileName) &&
   !fileName.endsWith('.map') &&
   !fileName.startsWith('.vite/')
 

@@ -47,7 +47,7 @@ const giftArtView = (h: ApplicationViewBuilder): Html =>
 
 // GIFT
 
-export const UPDATE_GIFT_LABEL = 'Update ready: tap to get it'
+const UPDATE_GIFT_LABEL = 'Update ready: tap to get it'
 
 // NOTE: a wrapped present under the gear on the home menu, with a little
 // paper NEW! tag on a string tied to its bow. It rattles now and then, the tag

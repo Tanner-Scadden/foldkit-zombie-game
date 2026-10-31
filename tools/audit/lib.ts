@@ -2,8 +2,7 @@ import { type Browser, type Page, chromium } from 'playwright-core'
 
 import { builtHarness, serveDir } from './harnessServer'
 
-export const CHROME =
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 export const GAME = 'http://localhost:4173/'
 export const HARNESS = 'http://localhost:4174/'
 
@@ -118,7 +117,7 @@ export const mobile = (browser: Browser, landscape = false) =>
 // set, BASE points at another harness port, ONLY picks scenes by name, and
 // VIEWPORTS picks screens by name.
 export const tagOr = (fallback: string) => process.env.TAG ?? fallback
-export const BASE = process.env.BASE ?? HARNESS
+const BASE = process.env.BASE ?? HARNESS
 
 const listFromEnv = (key: string) => process.env[key]?.split(',')
 const ONLY = listFromEnv('ONLY')
@@ -138,7 +137,7 @@ export const pickViewports = (
 
 // CONCURRENCY
 
-export const DEFAULT_PARALLEL = 3
+const DEFAULT_PARALLEL = 3
 
 // NOTE: how many browser contexts a script drives at once, read from its own
 // variable (such as TAPS_PARALLEL), 3 by default, at least 1.

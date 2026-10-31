@@ -266,7 +266,7 @@ type SoupRules = Readonly<{
   playerSkidAccel: number
 }>
 
-export const SOUP_RULES: SoupRules = {
+const SOUP_RULES: SoupRules = {
   slipMs: 900,
   skidSpeed: 70,
   playerSkidAccel: 260,

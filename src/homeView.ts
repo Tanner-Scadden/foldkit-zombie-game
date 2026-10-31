@@ -74,6 +74,7 @@ import {
   entryName,
   hasUnopenedEntry,
 } from './munchopedia'
+import { MODE_NAMES } from './names'
 import { helpLabel, howToPlayView } from './pauseHelp'
 import { isPortrait } from './screen'
 import { durationLabel } from './stats'
@@ -112,9 +113,6 @@ const MODE_ICONS: Readonly<Record<HomeMode, string>> = {
 
 const otherMode = (mode: HomeMode): HomeMode =>
   mode === 'Campaign' ? 'Endless' : 'Campaign'
-
-const modeName = (mode: HomeMode): string =>
-  mode === 'Campaign' ? 'Campaign' : 'Endless'
 
 // NOTE: show, don't explain. PLAY is the big play icon alone, and the mode
 // beside it says which run it starts.
@@ -156,7 +154,7 @@ const modeButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
       ...homeButtonAttributes('Mode', h),
       h.Class('home-pick home-mode'),
       h.AriaLabel(
-        `Mode: ${modeName(model.home.mode)}. Switch to ${modeName(otherMode(model.home.mode))}`,
+        `Mode: ${MODE_NAMES[model.home.mode]}. Switch to ${MODE_NAMES[otherMode(model.home.mode)]}`,
       ),
       h.OnClick(Message.ClickedModeButton(), { propagation: 'Stop' }),
     ],

@@ -458,7 +458,7 @@ describe('a write the database refuses', () => {
       totalKills: save.bests.totalKills + 4,
       killsByKind: {
         ...save.bests.killsByKind,
-        Shambler: (save.bests.killsByKind.Shambler ?? 0) + 4,
+        Shambler: (save.bests.killsByKind['Shambler'] ?? 0) + 4,
       },
     },
   })

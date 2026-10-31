@@ -59,7 +59,7 @@ export type ScenarioOptions = Readonly<{
 // The Model fields a server would not need to send every frame: cosmetics
 // that clients can make from frameEvents, fields derived from the level and
 // the player, and the home menu, save, settings, and UI state.
-export const COSMETIC_OR_DERIVED: ReadonlySet<string> = new Set([
+const COSMETIC_OR_DERIVED: ReadonlySet<string> = new Set([
   'particles',
   'decals',
   'popups',
@@ -70,7 +70,7 @@ export const COSMETIC_OR_DERIVED: ReadonlySet<string> = new Set([
   'dustCooldownMs',
   'cameraLean',
 ])
-export const LOCAL_ONLY: ReadonlySet<string> = new Set([
+const LOCAL_ONLY: ReadonlySet<string> = new Set([
   'shopDialog',
   'shopTabs',
   'shopCategory',
@@ -133,7 +133,7 @@ export const gameplayOf = (model: Model): Record<string, unknown> =>
 
 // FNV-1a over a string, 32 bits, written with Math.imul so every engine
 // computes it the same way.
-export const fnv1a = (text: string): number => {
+const fnv1a = (text: string): number => {
   let hash = 0x811c9dc5
   for (let index = 0; index < text.length; index++) {
     hash = Math.imul(hash ^ text.charCodeAt(index), 0x01000193)
@@ -230,7 +230,7 @@ const numbersIn = (value: unknown): number =>
         ? 1
         : 0
 
-export const binaryEstimate = (changes: ReadonlyArray<Change>): number =>
+const binaryEstimate = (changes: ReadonlyArray<Change>): number =>
   changes.reduce((bytes, [, value]) => bytes + 2 + 4 * numbersIn(value), 0)
 
 // THE DRIVER
@@ -345,7 +345,7 @@ const drive = (
     () => model,
   )
 
-export const startedRun = (seed: number, mode: ScenarioMode): Model => {
+const startedRun = (seed: number, mode: ScenarioMode): Model => {
   const count = { messages: 0 }
   const ready = send(
     modifyFields(asVeteran(initialModel), {
@@ -373,7 +373,7 @@ const godMode = (model: Model): Model =>
 
 export type FrameTiming = Readonly<{ alive: number; ms: number }>
 
-export type SizeSample = Readonly<{
+type SizeSample = Readonly<{
   alive: number
   modelBytes: number
   gameplayBytes: number

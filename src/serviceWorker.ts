@@ -10,7 +10,7 @@ import { DEV_BUILD } from './version'
 // it had one, online only. See "How updates reach installed apps" in
 // PLATFORM.md.
 
-export const TEST_BUILD = 'test'
+const TEST_BUILD = 'test'
 
 // NOTE: the dev server, the tests, and the audit harness (which builds with
 // the dev id) never register a worker.

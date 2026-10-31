@@ -74,7 +74,7 @@ export const WAVE_LENGTH_TARGETS: ReadonlyArray<WaveLengthTarget> = [
 // NOTE: dead air: the seconds a wave leaves the room empty with nothing at
 // a door while spawns are still to come, on the mean run, and the longest
 // such stretch in any snapshot run.
-export const QUIET_TARGET: Readonly<{
+const QUIET_TARGET: Readonly<{
   meanMaxSeconds: number
   longestMaxSeconds: number
 }> = {

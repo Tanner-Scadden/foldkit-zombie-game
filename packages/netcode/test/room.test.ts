@@ -224,9 +224,7 @@ describe('the room', () => {
     const away = Room.unlink(started.room, 'socket-0', T0 + 100)
     const later = Room.advance(StandIn, away.room, T0 + 100 + 2 * 60 * 1000 + 1)
     const freed = later.out.filter(item => item._tag === 'FreedSeat')
-    expect(
-      freed.map(item => (item._tag === 'FreedSeat' ? item.playerId : '')),
-    ).toEqual(['player-0', 'player-1'])
+    expect(freed.map(item => item.playerId)).toEqual(['player-0', 'player-1'])
     expect(later.room.world.dots).toEqual([])
     expect(later.out.at(-1)).toMatchObject({
       _tag: 'Ended',

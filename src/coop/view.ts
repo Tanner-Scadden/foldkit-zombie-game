@@ -23,6 +23,7 @@ import {
 } from '../icons'
 import { iconView } from '../menuParts'
 import type { Appearance } from '../model'
+import { MODE_NAMES } from '../names'
 import { seatColorOf } from '../partyView'
 import { CoopComposition } from './composition'
 import {
@@ -698,12 +699,6 @@ const MODE_PICK_ICONS: Readonly<Record<PickedMode, string>> = {
   KeepGoing: ENDLESS_ICON,
 }
 
-const MODE_PICK_NAMES: Readonly<Record<PickedMode, string>> = {
-  Campaign: 'Campaign',
-  Endless: 'Endless',
-  KeepGoing: 'Keep going',
-}
-
 // NOTE: a pick the host can change is a button; everyone else sees the
 // same icons, still, with the picked one lit.
 const pickAttributes = (
@@ -727,7 +722,7 @@ const modePickView = (
       h.DataAttribute('mode', mode),
       h.DataAttribute('state', isChosen ? 'Chosen' : 'Other'),
       h.AriaPressed(isChosen ? 'true' : 'false'),
-      h.AriaLabel(MODE_PICK_NAMES[mode]),
+      h.AriaLabel(MODE_NAMES[mode]),
       ...pickAttributes(isPicking(room), Message.ClickedModePick({ mode }), h),
     ],
     [
@@ -800,7 +795,7 @@ const picksView = (
       h.Class('coop-picks'),
       h.DataAttribute('host', isPicking(room) ? 'Picking' : 'Watching'),
       h.AriaLabel(
-        `${MODE_PICK_NAMES[pickedModeOf(lobby)]}, ${DIFFICULTIES[lobby.difficulty].name}`,
+        `${MODE_NAMES[pickedModeOf(lobby)]}, ${DIFFICULTIES[lobby.difficulty].name}`,
       ),
     ],
     [

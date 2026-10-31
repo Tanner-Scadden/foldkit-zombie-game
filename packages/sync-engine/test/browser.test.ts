@@ -5,6 +5,7 @@ import { describe, expect, it } from '@effect/vitest'
 
 import { httpIdentityApi, httpTransport } from '../src/Browser'
 import { IdentityFailure, IdentityRefused } from '../src/Identity'
+import { decodeExchange } from '../src/Protocol'
 
 const ORIGIN = 'https://sync.example.test'
 
@@ -25,7 +26,12 @@ const fakeFetch = (responses: ReadonlyArray<() => Response>) => {
         ? ''
         : await new Response(init.body).text()
     seen.push({
-      url: String(input),
+      url:
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url,
       method: init?.method,
       headers: new Headers(init?.headers),
       body,
@@ -140,7 +146,7 @@ describe('the HTTP transport', () => {
       )
       expect(Exit.isSuccess(exit)).toBe(true)
       expect(seen[0]?.url).toBe(`${ORIGIN}/sync/exchange?scope=notes%3Aada`)
-      expect(JSON.parse(seen[0]?.body ?? '')).toEqual([hello])
+      expect(yield* decodeExchange(seen[0]?.body ?? '')).toEqual([hello])
       expect(seen[0]?.headers.has('traceparent')).toBe(false)
     }),
   )
@@ -158,7 +164,9 @@ describe('the HTTP transport', () => {
         ),
       )
       expect(Exit.isFailure(exit)).toBe(true)
-      expect(JSON.stringify(exit)).toContain('HTTP 503')
+      expect(
+        Option.map(Exit.findErrorOption(exit), error => error.reason),
+      ).toEqual(Option.some('HTTP 503'))
     }),
   )
 })

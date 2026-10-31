@@ -489,7 +489,7 @@ export const toggleShareStats = (model: Model): Model =>
 
 // INSTALL
 
-export const dismissHomeScreenTip = (model: Model): Model =>
+const dismissHomeScreenTip = (model: Model): Model =>
   model.homeScreenTip === 'Dismissed'
     ? model
     : modifyFields(model, { homeScreenTip: () => 'Dismissed' })

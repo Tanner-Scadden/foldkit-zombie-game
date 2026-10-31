@@ -153,7 +153,7 @@ export const ResyncRoom = makeCommand('ResyncRoom', {
   },
 })
 
-export const ROOM_PARAM = 'room'
+const ROOM_PARAM = 'room'
 
 const linkOf = (code: string): string => {
   const url = new URL(location.href)
@@ -286,10 +286,7 @@ const readRoomLinkOf = (typed: string): Option.Option<string> =>
     ? readRoomLink(typed.slice(typed.indexOf('?')))
     : Option.none()
 
-export const memberAt = (
-  lobby: Lobby,
-  slot: number,
-): Option.Option<LobbyMember> =>
+const memberAt = (lobby: Lobby, slot: number): Option.Option<LobbyMember> =>
   Array.findFirst(lobby.members, member => member.slot === slot)
 
 export const meIn = (room: Room): Option.Option<LobbyMember> =>
@@ -686,8 +683,8 @@ const pickFromKey = (model: Model, room: Room, code: string): UpdateReturn =>
 
 const ESCAPE = 'Escape'
 const ENTER = 'Enter'
-export const MODE_KEY = 'KeyE'
-export const DIFFICULTY_KEY = 'KeyX'
+const MODE_KEY = 'KeyE'
+const DIFFICULTY_KEY = 'KeyX'
 
 const keyOnScreen = (model: Model, code: string): UpdateReturn =>
   Screen.match<UpdateReturn>(model.screen, {
@@ -783,7 +780,7 @@ const heardInQueue = (
 export const pressKey = (model: Model, code: string): UpdateReturn =>
   keyOnScreen(model, code)
 
-export const releaseKey = (model: Model, _code: string): UpdateReturn => ({
+const releaseKey = (model: Model, _code: string): UpdateReturn => ({
   model,
 })
 

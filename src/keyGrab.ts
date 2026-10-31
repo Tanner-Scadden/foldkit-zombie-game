@@ -45,7 +45,7 @@ export const isGrabbedKeyUp = ({
   isLetterKeyCode(code)
 
 // NOTE: two misses before the toast, so one stray keyup never shows it.
-export const MISSES_TO_WARN = 2
+const MISSES_TO_WARN = 2
 
 export const noteMissedKeyDown = (model: Model): Model =>
   modifyFields(model, {

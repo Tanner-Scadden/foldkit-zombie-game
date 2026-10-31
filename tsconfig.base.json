@@ -10,9 +10,7 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,
-    // TODO(cleanup slice 9): turn on once the netcode change lands. Its one
-    // hit is packages/netcode/src/Lobby.ts, which every project reaches.
-    "noImplicitReturns": false,
+    "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "noPropertyAccessFromIndexSignature": true,
     "noUnusedLocals": true,
@@ -115,27 +113,10 @@
             }
           },
           {
-            // TODO(cleanup slice 9): the knife and two gun slots change.
+            // TODO(cleanup slice 9b): the Clang Pan is editing the bot.
             "include": ["tools/balance/bot.ts", "tools/balance/simulate.ts"],
             "options": {
               "diagnosticSeverity": { "strictBooleanExpressions": "off" }
-            }
-          },
-          {
-            // TODO(cleanup slice 9): the netcode change.
-            "include": ["packages/netcode/src/Socket.ts"],
-            "options": {
-              "diagnosticSeverity": { "runEffectInsideEffect": "off" }
-            }
-          },
-          {
-            // TODO(cleanup slice 9): the sync tests change.
-            "include": ["packages/sync-engine/test/**/*.ts"],
-            "options": {
-              "diagnosticSeverity": {
-                "preferSchemaOverJson": "off",
-                "lazyEffect": "off"
-              }
             }
           }
         ]

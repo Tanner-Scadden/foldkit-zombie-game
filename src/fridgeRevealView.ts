@@ -49,7 +49,7 @@ const FISH_BONES: Sprite = spriteShapes(
   { k: '#140c10', w: '#e8e2cc' },
 )
 
-export const prizeSprite = (prize: FridgePrize): Sprite =>
+const prizeSprite = (prize: FridgePrize): Sprite =>
   prize === 'Sandwich'
     ? SANDWICH
     : prize === 'Dud'

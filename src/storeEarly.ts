@@ -86,7 +86,7 @@ export const takeLeaderLock = (): Promise<LockResult> | undefined => {
 
 // WORKER
 
-export const makeStoreWorker = (): Worker =>
+const makeStoreWorker = (): Worker =>
   new Worker(new URL('./store.worker.ts', import.meta.url), {
     type: 'module',
     name: 'munch-manor-sqlite',
