@@ -246,7 +246,7 @@ const COFFEE_PALETTE: Palette = {
   S: '#b8c2b0',
 }
 
-// NOTE: a steaming mug for the tip jar's coffee button.
+// NOTE: a steaming mug for the coffee pill on Victory.
 export const COFFEE_ICON = pixelIconUrl(
   [
     '..S..S...',
@@ -262,6 +262,34 @@ export const COFFEE_ICON = pixelIconUrl(
   ],
   COFFEE_PALETTE,
 )
+
+const COFFEE_CUP_PALETTE: Palette = {
+  X: LIGHT,
+  B: '#7a4a24',
+  C: '#e0a46a',
+  H: '#ff6b8b',
+}
+
+// NOTE: the home corner's coffee: Rattles' mug with a heart on it. Its steam
+// is COFFEE_STEAM_ICON, drawn apart so the wisps can rise.
+export const COFFEE_CUP_ICON = pixelIconUrl(
+  [
+    'XXXXXXXX..',
+    'XCCCCCCXXX',
+    'XBBBBBBX.X',
+    'XBHBHBBX.X',
+    'XBHHHBBX.X',
+    'XBBHBBBXXX',
+    'XBBBBBBX..',
+    '.XXXXXX...',
+  ],
+  COFFEE_CUP_PALETTE,
+)
+
+// NOTE: one wisp of steam, rising over the coffee in the home corner.
+export const COFFEE_STEAM_ICON = pixelIconUrl(['.S', 'S.', '.S', 'S.'], {
+  S: '#e8eee0',
+})
 
 // THE MANOR HAND
 

@@ -188,7 +188,9 @@ const checkScene = async (
       )
     }
     const openDialog = document.querySelector('dialog[open]')
-    const buttons = Array.from(document.querySelectorAll('button'))
+    const buttons = Array.from(
+      document.querySelectorAll<HTMLElement>('button, a.home-support'),
+    )
       .filter(isShown)
       .filter(button =>
         openDialog === null

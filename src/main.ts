@@ -653,6 +653,11 @@ export const update = ApplicationComposition.makeUpdate({
       ...afterMessage(model),
     ]),
 
+  // NOTE: the coffee is a real link, so the browser opens it; this only
+  // plays the tap.
+  ClickedSupportButton: model =>
+    Update.combineSteps(model, [unlockAudio, tapSound, ...afterMessage(model)]),
+
   ClickedMenuButton: model =>
     Update.combineSteps(model, [
       unlockAudio,
@@ -689,6 +694,8 @@ export const update = ApplicationComposition.makeUpdate({
   CompletedFocusEndMenuButton: model => settle(model, { model }),
 
   CompletedClickShareLink: model => settle(model, { model }),
+
+  CompletedClickSupportLink: model => settle(model, { model }),
 
   CompletedLoadStyles: model => settle(model, finishLoading(model, 'Styles')),
 

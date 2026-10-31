@@ -225,9 +225,10 @@ const openScene = async (page: Page, scene: Scene) => {
   }
 }
 
-// NOTE: what a tap can land on: every button, and the end screens' SHARE,
-// a link so the browser opens X on the tap itself.
-const TAP_TARGETS = 'button, a.end-button'
+// NOTE: what a tap can land on: every button, the end screens' SHARE, a
+// link so the browser opens X on the tap itself, and the home menu's coffee,
+// a link to the tip jar.
+const TAP_TARGETS = 'button, a.end-button, a.home-support'
 
 // NOTE: true once the scene shows a button at `index`, in the open dialog
 // when there is one.
@@ -431,11 +432,17 @@ const checkScene = async (
       await tapPage.evaluate(() => {
         ;(window as any).__messages.length = 0
       })
-      // NOTE: the end screens' SHARE is a link that opens X in a new tab;
-      // x.com is answered here, so a tap never reaches X.
+      // NOTE: the end screens' SHARE is a link that opens X in a new tab,
+      // and the coffee one that opens the tip jar; x.com and Stripe are
+      // answered here, so a tap never reaches either.
       await tapPage
         .context()
         .route('https://x.com/**', route =>
+          route.fulfill({ status: 200, body: '' }),
+        )
+      await tapPage
+        .context()
+        .route('https://buy.stripe.com/**', route =>
           route.fulfill({ status: 200, body: '' }),
         )
       await tapPage.touchscreen.tap(tapPoint.x, tapPoint.y)

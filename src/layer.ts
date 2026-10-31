@@ -18,8 +18,10 @@ import { MeasureGameSurface } from './mount'
 import { CueMusic } from './musicPlan'
 import { subscriptions } from './subscriptions'
 import { ReadRoomLink } from './update/coop'
+import { ClickShareLink, SendShareEvent } from './update/end'
 import { SetFullscreen } from './update/fullscreen'
 import {
+  ClickSupportLink,
   FocusEndMenuButton,
   FocusHandCard,
   FocusHomeButton,
@@ -38,7 +40,6 @@ import {
   ShowLoadProgress,
   WriteSave,
 } from './update/save'
-import { ClickShareLink, SendShareEvent } from './update/end'
 import { SendRunSummary } from './update/settle'
 import { FocusShopItem } from './update/shop'
 import { PlaySound, ResumeAudio, managedResources } from './update/sound'
@@ -74,6 +75,7 @@ export const CommandsLayer = Layer.mergeAll(
   FocusHandCard.layer,
   FocusEndMenuButton.layer,
   ClickShareLink.layer,
+  ClickSupportLink.layer,
   SendShareEvent.layer,
   LoadStyles.layer,
   LoadFonts.layer,

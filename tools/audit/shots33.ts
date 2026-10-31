@@ -1,6 +1,6 @@
 // The home layout pass: the home menu fresh (news pips on the MANOR
 // deck), with bests, a NEW ENTRY pop, the update chip, and full screen, in
-// Endless, the MANOR hand (with the tip jar card) and once found, What's New
+// Endless, the MANOR hand and once found, What's New
 // and an older day, the Munchopedia empty and half found, an unlocked, a
 // locked, and Uncle Chunk's entry, How to play, Settings (also with ROTATE),
 // the difficulty picker by PLAY (also on Hard), the shop, and Game Over with a NEW ENTRY notice, on 667x375
@@ -160,7 +160,9 @@ const check = (page: Page, minSide: number, isPhone: boolean) =>
     ({ minSide, isPhone }) => {
       const openDialog = document.querySelector('dialog[open]')
       const scope: ParentNode = openDialog ?? document
-      const buttons = Array.from(scope.querySelectorAll('button'))
+      const buttons = Array.from(
+        scope.querySelectorAll('button, a.home-support'),
+      )
         .filter(button => openDialog !== null || !button.closest('dialog'))
         .map(button => ({
           label:
