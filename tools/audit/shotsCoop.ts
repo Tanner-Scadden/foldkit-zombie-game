@@ -9,7 +9,7 @@
 // on a phone button under 48 px, a button covered at its center or off
 // screen, or a page that scrolls.
 //   TAG=after BASE=http://localhost:4174/ bun tools/audit/shotsCoop.ts
-// ONLY picks scenes, such as `ONLY=hub,lobby`, and SHOT_VIEWPORTS picks screens.
+// ONLY picks scenes, such as `ONLY=hub,lobby`, and VIEWPORTS picks screens.
 import type { Page } from 'playwright-core'
 
 import {

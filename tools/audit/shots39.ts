@@ -11,7 +11,7 @@
 // the fridge pulls it and that the control cards fit without scrolling, and
 // exits with 1 on any miss.
 //   TAG=after bun run heavy -- bun tools/audit/shots39.ts
-// ONLY picks scenes, such as `ONLY=tag,pull`, and SHOT_VIEWPORTS picks screens.
+// ONLY picks scenes, such as `ONLY=tag,pull`, and VIEWPORTS picks screens.
 import type { Page } from 'playwright-core'
 
 import {

@@ -5,29 +5,19 @@
 // whole sheet, on a desktop, a landscape phone, and an upright phone.
 //   TAG=after bun run heavy -- bun tools/audit/shotsLooks.ts
 import {
-  DESKTOP_1280,
-  PHONE_844,
   SHOTS_DIR,
+  SHOT_VIEWPORTS,
   TAG,
-  UPRIGHT_390,
-  type Viewport,
   gotoScene,
   harnessUrl,
   launch,
   openPage,
-  pickViewports,
   useHarness,
 } from './lib'
 
-const VIEWPORTS: ReadonlyArray<Viewport> = pickViewports([
-  { ...DESKTOP_1280, name: 'd1280' },
-  { ...PHONE_844, name: 'l844' },
-  { ...UPRIGHT_390, name: 'p390' },
-])
-
 await useHarness()
 const browser = await launch()
-for (const viewport of VIEWPORTS) {
+for (const viewport of SHOT_VIEWPORTS) {
   const page = await openPage(browser, viewport)
   await gotoScene(page, harnessUrl('looksheet', 'freeze=10'))
   // NOTE: the page never scrolls, so the shot grows the screen to the

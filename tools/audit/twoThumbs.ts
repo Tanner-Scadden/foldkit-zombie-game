@@ -8,32 +8,29 @@
 // Exits with 1 on any miss.
 //   TAG=after bun run heavy -- --shared bun tools/audit/twoThumbs.ts
 // VIEWPORTS picks screens, such as `VIEWPORTS=l844`.
+import { Schema } from 'effect'
 import type { CDPSession, Page } from 'playwright-core'
 
 import {
   PHONE_844,
+  TAG,
   UPRIGHT_390,
   type Viewport,
   finish,
   launch,
-  model,
+  modelAs,
   pickViewports,
   scenePages,
   shot,
-  tagOr,
   useHarness,
   wait,
 } from './lib'
-
-const TAG = tagOr('after')
+import { LEARNED } from './scenes'
 
 const VIEWPORTS = pickViewports([
   { ...PHONE_844, name: 'l844' },
   { ...UPRIGHT_390, name: 'p390' },
 ])
-
-const LEARNED =
-  'learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak'
 
 // NOTE: a live wave (no `tick`), so the subscriptions and the frames run
 // as on a phone. The SMG's magazine is part spent, so a reload has rounds
@@ -67,7 +64,10 @@ const touch = (
 // the HUD's buttons.
 const stickPoint = (page: Page): Promise<Point> =>
   page.evaluate(() => {
-    const surface = document.querySelector('.game-surface')!
+    const surface = document.querySelector('.game-surface')
+    if (surface === null) {
+      throw new Error('No .game-surface on the page')
+    }
     const box = surface.getBoundingClientRect()
     const thumbArea = document.querySelector('.thumb-area')
     const top =
@@ -86,15 +86,28 @@ const centerOf = async (page: Page, selector: string): Promise<Point> => {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
 }
 
+const Tagged = Schema.Struct({ _tag: Schema.String })
+
+// NOTE: as much of the Model as the checks read.
+const ThumbView = Schema.Struct({
+  input: Schema.Struct({ moveStick: Tagged }),
+  player: Schema.Struct({
+    arsenal: Tagged,
+    wield: Schema.String,
+    reload: Tagged,
+  }),
+})
+type ThumbView = typeof ThumbView.Type
+
 type Check = Readonly<{
   name: string
   selector: string
   // NOTE: what the tap should have done, read from the Model before and
   // after; a miss names what went wrong.
-  verdict: (before: any, after: any) => string | undefined
+  verdict: (before: ThumbView, after: ThumbView) => string | undefined
 }>
 
-const isMoving = (m: any): boolean => m.input.moveStick._tag === 'Active'
+const isMoving = (m: ThumbView): boolean => m.input.moveStick._tag === 'Active'
 
 const CHECKS: ReadonlyArray<Check> = [
   {
@@ -151,9 +164,9 @@ const twoThumbTap = async (
   await wait(STEP_MS)
   const target = await centerOf(page, check.selector)
   await page.evaluate(() => {
-    ;(window as any).__messages.length = 0
+    window.__messages.length = 0
   })
-  const before = await model(page)
+  const before = await modelAs(page, ThumbView)
   if (!isMoving(before)) {
     problems.push(`${label}: the move stick is not held before the tap`)
   }
@@ -167,9 +180,9 @@ const twoThumbTap = async (
   // a touchStart lists every finger still down.
   await touch(session, 'touchEnd', [{ id: TAP_ID, at: target }])
   await wait(STEP_MS * 3)
-  const after = await model(page)
+  const after = await modelAs(page, ThumbView)
   const tags: ReadonlyArray<string> = await page.evaluate(() => [
-    ...(window as any).__messages,
+    ...window.__messages,
   ])
   if (!isMoving(after)) {
     problems.push(`${label}: the tap let go of the move stick`)

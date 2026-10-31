@@ -15,31 +15,20 @@
 import type { Page } from 'playwright-core'
 
 import {
-  DESKTOP_1280,
-  PHONE_844,
-  UPRIGHT_390,
+  SHOT_VIEWPORTS,
+  TAG,
   type Viewport,
   deviceQuery,
   finish,
   harnessQuery,
   isPickedScene,
   launch,
-  model,
-  pickViewports,
   scenePages,
   settleAnimations,
   shot,
-  tagOr,
   useHarness,
 } from './lib'
-
-const TAG = tagOr('after')
-
-const VIEWPORTS = pickViewports([
-  { ...DESKTOP_1280, name: 'd1280' },
-  { ...PHONE_844, name: 'l844' },
-  { ...UPRIGHT_390, name: 'p390' },
-])
+import { FIGHTING, LEARNED } from './scenes'
 
 type Scene = Readonly<{
   name: string
@@ -65,10 +54,6 @@ const rowCheck = (
     viewport.isPhone,
     viewport.height > viewport.width,
   )
-
-const LEARNED =
-  'learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak'
-const FIGHTING = `wave=4&seen=all&start=wave&elapsed=9000&god&${LEARNED}`
 
 type Edges = Readonly<{
   left: number
@@ -225,8 +210,10 @@ const SCENES: ReadonlyArray<Scene> = [
     name: 'slash',
     query: `${FIGHTING}&gun=smg&iced=pan&stab&tick=4`,
     act: async (page, problems, label) => {
-      const current = await model(page)
-      if (current.player.knifeCooldownMs <= 0) {
+      const knifeCooldownMs = await page.evaluate(
+        () => window.__model.player.knifeCooldownMs,
+      )
+      if (knifeCooldownMs <= 0) {
         problems.push(`${label}: the knife in hand did not stab`)
       }
     },
@@ -299,7 +286,7 @@ await useHarness()
 const browser = await launch()
 const pages = scenePages(browser, ['nodev'])
 const problems: Array<string> = []
-for (const viewport of VIEWPORTS) {
+for (const viewport of SHOT_VIEWPORTS) {
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
       continue

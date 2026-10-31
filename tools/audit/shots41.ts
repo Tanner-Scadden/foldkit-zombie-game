@@ -6,7 +6,7 @@
 // 1280x720 desktop, an 844x390 phone on its side, and a 390x844 phone held
 // upright, as `s41-<TAG>-<viewport>-<scene>.png`.
 //   TAG=after bun run heavy -- --shared bun tools/audit/shots41.ts
-// ONLY picks scenes, such as `ONLY=lowammo`, and SHOT_VIEWPORTS picks screens.
+// ONLY picks scenes, such as `ONLY=lowammo`, and VIEWPORTS picks screens.
 import type { Page } from 'playwright-core'
 
 import {

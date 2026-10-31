@@ -8,7 +8,7 @@
 // checks that a hold opens the kitchen and a hold short of the price does
 // not, and exits with 1 on any miss.
 //   TAG=after bun run heavy -- bun tools/audit/shots36.ts
-// ONLY picks scenes, such as `ONLY=prompt,ring`, and SHOT_VIEWPORTS picks screens.
+// ONLY picks scenes, such as `ONLY=prompt,ring`, and VIEWPORTS picks screens.
 import type { Page } from 'playwright-core'
 
 import {

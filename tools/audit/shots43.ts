@@ -10,7 +10,7 @@
 // tap on SHARE (and X on a keyboard) opens X's post intent in a new tab, and
 // exits with 1 on any miss.
 //   TAG=after bun run heavy -- --shared bun tools/audit/shots43.ts
-// ONLY picks scenes, such as `ONLY=death`, and SHOT_VIEWPORTS picks screens.
+// ONLY picks scenes, such as `ONLY=death`, and VIEWPORTS picks screens.
 import { Schema } from 'effect'
 import type { Page } from 'playwright-core'
 

@@ -8,7 +8,7 @@
 // CHECK=1 it checks that the Pan sits in the melee slot, in hand, with
 // both guns kept, and exits with 1 on a miss.
 //   TAG=after CHECK=1 bun run heavy -- --shared bun tools/audit/shots45.ts
-// ONLY picks scenes, such as `ONLY=take`, and SHOT_VIEWPORTS picks screens.
+// ONLY picks scenes, such as `ONLY=take`, and VIEWPORTS picks screens.
 import type { Page } from 'playwright-core'
 
 import {
