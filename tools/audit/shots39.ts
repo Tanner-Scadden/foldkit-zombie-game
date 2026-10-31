@@ -96,6 +96,17 @@ const SCENES: ReadonlyArray<Scene> = [
     name: 'tag',
     query: `${BREAK}&${AT_FRIDGE}&hold&tick=17`,
   },
+  // NOTE: standing still with no key held: the ring fills at half the
+  // key's speed, so tick 40 shows it about two thirds round.
+  {
+    name: 'stand-fridge',
+    query: `${BREAK}&${AT_FRIDGE}&tick=40`,
+    act: expectDoor('Shut'),
+  },
+  {
+    name: 'stand-boards',
+    query: `wave=3&seen=all&money=200&gun=smg&prep=14000&${LEARNED}&px=70&py=26&tick=40`,
+  },
   {
     name: 'spin',
     query: `${BREAK}&${AT_FRIDGE}&hold&fridgeseed=${PRIZE_SEEDS.freeze}&tick=45`,
