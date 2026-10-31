@@ -135,4 +135,34 @@ export const RunSummaryJson = Schema.fromJsonString(RunSummary)
 
 export const RUNS_PATH = '/api/runs'
 
+// SHARE EVENT
+
+// NOTE: a tap on SHARE to X, counted apart from the run, since the run's
+// summary is sent the moment it ends, before the end card shows. It says
+// which end screen it came from and what the run was, and nothing about
+// who: the same visitId as the summaries, and no text of the post.
+export const SHARE_EVENT_VERSION = 1
+
+export const ShareScreen = Schema.Literals([
+  'Death',
+  'Victory',
+  'CoopDeath',
+  'CoopVictory',
+])
+export type ShareScreen = typeof ShareScreen.Type
+
+export const ShareEvent = Schema.Struct({
+  version: Schema.Literal(SHARE_EVENT_VERSION),
+  visitId: VisitId,
+  build: BuildId,
+  screen: ShareScreen,
+  mode: SummaryMode,
+  difficulty: SummaryDifficulty,
+})
+export type ShareEvent = typeof ShareEvent.Type
+
+export const ShareEventJson = Schema.fromJsonString(ShareEvent)
+
+export const SHARES_PATH = '/api/shares'
+
 export const HEALTH_PATH = '/api/health'

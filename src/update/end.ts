@@ -1,6 +1,9 @@
 import { Array, Effect, Option, Schema } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { ShareEvent } from '../analytics'
+import { sendShareEvent } from '../analyticsBeacon'
+import { shareEventOf } from '../analyticsRun'
 import { isOpen as isCoopOpen } from '../coop/update'
 import { runDifficultyOf } from '../coopPlay'
 import { makeCommand } from '../definition'
@@ -29,6 +32,7 @@ import { type Model, Phase, RunMode } from '../model'
 import { advanceParticles } from '../particles'
 import { shareUrl } from '../share'
 import { stepWhen } from '../stepWhen'
+import { RUNNING_BUILD } from '../version'
 import { keepGoingWhenAllowed, startWhenAllowed } from './run'
 import { playSounds, uiCue } from './sound'
 import { type UpdateStep, combine } from './step'
@@ -166,6 +170,42 @@ export const OpenShare = makeCommand('OpenShare', {
 })
 
 // NOTE: the post is built here from the Model; X opens in the Command.
+// NOTE: a tap on SHARE, sent like a run summary, as an anonymous event.
+export const SendShareEvent = makeCommand('SendShareEvent', {
+  args: { event: ShareEvent },
+  messages: [Message.CompletedSendShareEvent, Message.FailedSendShareEvent],
+  handler: function* () {
+    return ({ event }) =>
+      sendShareEvent(event).pipe(
+        Effect.as(Message.CompletedSendShareEvent()),
+        Effect.catch(error =>
+          Effect.succeed(
+            Message.FailedSendShareEvent({ reason: error.reason }),
+          ),
+        ),
+      )
+  },
+})
+
+// NOTE: a tap is counted, as an anonymous event, only while the player
+// shares play stats (src/analytics.ts, ShareEvent).
+const shareEventCommands = (model: Model) =>
+  model.shareStats === 'On'
+    ? Option.match(model.maybeVisitId, {
+        onNone: () => [],
+        onSome: visitId => [
+          SendShareEvent({
+            event: shareEventOf(
+              model,
+              visitId,
+              RUNNING_BUILD,
+              runDifficultyOf(model),
+            ),
+          }),
+        ],
+      })
+    : []
+
 export const shareRun: UpdateStep = stepWhen(
   (model: Model) => isEndScreen(model.phase),
   model => ({
@@ -174,6 +214,7 @@ export const shareRun: UpdateStep = stepWhen(
       OpenShare({
         url: shareUrl(sharedRunOf(model, runDifficultyOf(model))),
       }),
+      ...shareEventCommands(model),
     ],
   }),
 )

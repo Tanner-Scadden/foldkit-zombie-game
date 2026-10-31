@@ -28,8 +28,9 @@ import { noSavedRunRecords } from './playerData'
 import { mergeRunRecords } from './playerScope'
 import { GAME_URL, shareText, shareUrl } from './share'
 import { SURFACE, press, tick, zombieOf } from './testing'
-import { OpenShare } from './update/end'
+import { OpenShare, SendShareEvent } from './update/end'
 import { PlaySound } from './update/sound'
+import { RUNNING_BUILD } from './version'
 import { asVeteran } from './veteran'
 import { withWorld } from './world'
 
@@ -522,6 +523,79 @@ describe('sharing to X', () => {
         OpenShare({ url: shareUrl({ ...base, outcome: 'Munched', kills: 0 }) }),
       ),
       Command.resolve(OpenShare, Message.CompletedOpenShare()),
+    )
+  })
+
+  const VISIT_ID = '0123456789abcdef'
+  const counted = (ended: Model, shareStats: 'On' | 'Off'): Model =>
+    modifyFields(ended, {
+      shareStats: () => shareStats,
+      maybeVisitId: () => Option.some(VISIT_ID),
+    })
+
+  test('a tap on SHARE is counted as an anonymous event while stats are shared', () => {
+    story(
+      update,
+      given(counted(onEndScreen(gameOver, doneMs('Munched')), 'On')),
+      message(Message.ClickedShareButton()),
+      Command.expectHas(
+        SendShareEvent({
+          event: {
+            version: 1,
+            visitId: VISIT_ID,
+            build: RUNNING_BUILD,
+            screen: 'Death',
+            mode: 'Campaign',
+            difficulty: 'Normal',
+          },
+        }),
+      ),
+      Command.resolveAll(
+        [OpenShare, Message.CompletedOpenShare()],
+        [SendShareEvent, Message.CompletedSendShareEvent()],
+      ),
+    )
+  })
+
+  test('nothing is counted when play stats are off', () => {
+    story(
+      update,
+      given(counted(onEndScreen(gameOver, doneMs('Munched')), 'Off')),
+      message(Message.ClickedShareButton()),
+      Command.expectExact(
+        OpenShare({
+          url: shareUrl({ ...base, outcome: 'Munched', kills: 0 }),
+        }),
+      ),
+      Command.resolve(OpenShare, Message.CompletedOpenShare()),
+    )
+  })
+
+  test('a crew win is counted from the co-op victory screen', () => {
+    const crewed = withWorld(
+      counted(onEndScreen(Phase.Victory(), doneMs('Won')), 'On'),
+      world => seatCrew(world, 3),
+    )
+    story(
+      update,
+      given(crewed),
+      press('KeyX'),
+      Command.expectHas(
+        SendShareEvent({
+          event: {
+            version: 1,
+            visitId: VISIT_ID,
+            build: RUNNING_BUILD,
+            screen: 'CoopVictory',
+            mode: 'Campaign',
+            difficulty: 'Normal',
+          },
+        }),
+      ),
+      Command.resolveAll(
+        [OpenShare, Message.CompletedOpenShare()],
+        [SendShareEvent, Message.CompletedSendShareEvent()],
+      ),
     )
   })
 

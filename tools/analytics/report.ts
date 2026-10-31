@@ -108,6 +108,24 @@ const RUNS_PER_DAY = `
   SELECT received_day, count(*) AS runs FROM runs
   GROUP BY received_day ORDER BY received_day DESC LIMIT 30`
 
+// NOTE: taps on SHARE to X by end screen, against the runs that ended
+// there, so the share rate reads at a glance.
+const ShareRow = Schema.Struct({
+  screen: Schema.String,
+  shares: Count,
+  visits: Count,
+})
+
+const SHARES = `
+  SELECT screen, count(*) AS shares, count(DISTINCT visit_id) AS visits
+  FROM shares GROUP BY screen ORDER BY shares DESC`
+
+const EndRow = Schema.Struct({ outcome: Schema.String, runs: Count })
+
+const ENDS = `
+  SELECT outcome, count(*) AS runs FROM runs
+  WHERE outcome IN ('GameOver', 'Victory') GROUP BY outcome`
+
 // FORMATTING
 
 const percent = (part: number, whole: number): string =>
@@ -167,14 +185,23 @@ const program = Effect.gen(function* () {
   const run = <S extends Schema.Top>(sql: string, row: S) =>
     query(token, account, database, sql, row)
 
-  const [wins, waves, killers, medians, devices, days] = yield* Effect.all([
-    run(WIN_RATE, WinRow),
-    run(DEATH_WAVES, WaveRow),
-    run(DEADLIEST, KillerRow),
-    run(MEDIAN_LENGTH, MedianRow),
-    run(DEVICES, DeviceRow),
-    run(RUNS_PER_DAY, DayRow),
-  ])
+  const [wins, waves, killers, medians, devices, days, shares, ends] =
+    yield* Effect.all([
+      run(WIN_RATE, WinRow),
+      run(DEATH_WAVES, WaveRow),
+      run(DEADLIEST, KillerRow),
+      run(MEDIAN_LENGTH, MedianRow),
+      run(DEVICES, DeviceRow),
+      run(RUNS_PER_DAY, DayRow),
+      run(SHARES, ShareRow),
+      run(ENDS, EndRow),
+    ])
+  const endedAs = (outcome: string): number =>
+    Array.reduce(ends, 0, (sum, row) =>
+      row.outcome === outcome ? sum + row.runs : sum,
+    )
+  const runsEndedOn = (screen: string): number =>
+    screen.endsWith('Victory') ? endedAs('Victory') : endedAs('GameOver')
 
   const totalRuns = Array.reduce(medians, 0, (sum, { runs }) => sum + runs)
   const totalDeaths = Array.reduce(
@@ -230,6 +257,18 @@ const program = Effect.gen(function* () {
             row.screen_fit,
             `${row.runs}`,
             percent(row.runs, totalRuns),
+          ]),
+        ),
+        section(
+          'Shares to X by end screen (solo runs only send summaries)',
+          ['screen', 'shares', 'visits', 'per solo end'],
+          Array.map(shares, row => [
+            row.screen,
+            `${row.shares}`,
+            `${row.visits}`,
+            row.screen.startsWith('Coop')
+              ? '-'
+              : percent(row.shares, runsEndedOn(row.screen)),
           ]),
         ),
         section(

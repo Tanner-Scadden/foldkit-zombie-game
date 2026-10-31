@@ -152,23 +152,37 @@ Built on 2026-10-29 for phase 2. It runs in production and on every pull request
 - **Where.** The Worker's origin is baked into the build as `VITE_API_ORIGIN`, which `infra/alchemy.run.ts` sets from each stage's API Worker URL. A build without it (`bun dev`, the tests, an itch.io zip) sends nothing.
 - **Opting out.** The Profile's ACCOUNT tab has "Share anonymous play stats", on by default, with the line "Sends the wave, kills, and run time when a run ends. Nothing personal." It is saved in `PlayerSave` (save version 5; versions 1 to 4 load with sharing on). When it is off, nothing is sent.
 
+### Shares
+
+A tap on SHARE to X on an end screen is its own tiny event, `ShareEvent` in `src/analytics.ts` (version 1), added on 2026-10-31 at the owner's request. A run's summary is sent the moment the run ends, before the end card shows, so a share cannot ride on it.
+
+| Field                | What                                                    |
+| -------------------- | ------------------------------------------------------- |
+| `version`            | The event's own version, 1 for now                      |
+| `visitId`, `build`   | The same as the run summaries                           |
+| `screen`             | `Death`, `Victory`, `CoopDeath`, or `CoopVictory`       |
+| `mode`, `difficulty` | The run's, the room's difficulty in an online co-op run |
+
+It is built in `update` (`shareEventOf` in `src/analyticsRun.ts`) and posted by the `SendShareEvent` Command the same way as a summary, to `POST /api/shares`. Nothing is sent when "Share anonymous play stats" is off, and nothing of the post's text goes with it. Co-op shares are counted though co-op runs send no summary yet.
+
 ### The Worker
 
 Each stage has its own API Worker, `munch-manor-api` in production and `munch-manor-api-<stage>` elsewhere, beside the game's Worker. It is an Effect `HttpApi` (`infra/worker/api.ts`) on `effect` 4.0.7, writing to D1 through `@effect/sql-d1`.
 
-| Endpoint          | Answers                                                                                                   |
-| ----------------- | --------------------------------------------------------------------------------------------------------- |
-| `POST /api/runs`  | 202 when stored, 400 when the body does not decode, 413 over 8 KB, 429 when rate limited, 503 if D1 fails |
-| `GET /api/health` | 200 with `{"status":"Ok","database":"Ok"}`, or `"Unavailable"` when D1 does not answer                    |
+| Endpoint           | Answers                                                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------------------------- |
+| `POST /api/runs`   | 202 when stored, 400 when the body does not decode, 413 over 8 KB, 429 when rate limited, 503 if D1 fails |
+| `POST /api/shares` | The same, for a share event, with the same size cap and rate limits                                       |
+| `GET /api/health`  | 200 with `{"status":"Ok","database":"Ok"}`, or `"Unavailable"` when D1 does not answer                    |
 
 - **Size cap.** 8 KB (`MAX_SUMMARY_BYTES`), checked against `Content-Length` and again against the bytes read. A summary is about 500 bytes.
 - **Rate limits.** Two Cloudflare Rate Limiting bindings: 6 runs a minute per visit id and 60 a minute per address bucket. The bucket is a SHA-256 of a per-stage secret salt (`Alchemy.Random`), the UTC day, and the IP, so it changes every day. It is only a rate limit key: it is never stored or logged.
-- **D1.** One database per stage, `munch-manor-analytics` or `munch-manor-analytics-<stage>`, with migrations in `infra/migrations` applied on deploy. One table, `runs`: one row per summary, the fields above as columns (`outcome` and `killed_by` split out), `kills` as a JSON object, plus `received_at` and `received_day` from the server clock. No column holds an address.
+- **D1.** One database per stage, `munch-manor-analytics` or `munch-manor-analytics-<stage>`, with migrations in `infra/migrations` applied on deploy. Two tables. `runs`: one row per summary, the fields above as columns (`outcome` and `killed_by` split out), `kills` as a JSON object, plus `received_at` and `received_day` from the server clock. `shares` (migration `0002_create_shares.sql`): one row per share event, its fields as columns, with the same two server times. No column holds an address. `tools/analytics/report.ts` prints shares by end screen beside the runs that ended there.
 - **Free plan.** One run is one Worker request and one D1 row written. The free plan allows 100,000 of each a day.
 
 ### Retention
 
-Run rows are kept for 90 days (decided 2026-10-29).
+Run rows and share rows are kept for 90 days (decided 2026-10-29); the same daily delete clears both.
 
 - **The rule.** `retentionCutoffDay` in `infra/worker/rules.ts` is the UTC day 90 days before now. `deleteExpiredRuns` in `infra/worker/api.ts` deletes every row whose `received_day` is before it, one range delete over the `runs_by_day` index. A row lives 90 to 91 days, depending on the hour it came in.
 - **The schedule.** `infra/alchemy.run.ts` gives the production API Worker the Cron Trigger `17 4 * * *` (04:17 UTC daily). `worker/main.ts` exports a `scheduled` handler that runs the delete as an Effect over the same D1 `SqlClient`, as of the trigger's scheduled time, and logs how many rows went.
@@ -263,21 +277,21 @@ Built on 2026-10-29. The engine's design, API, protocol, and limits are in [`pac
 
 **The player scope** (`src/playerScope.ts`, shared with the Worker, imports only `effect`, the engine, and `src/playerData.ts`):
 
-| Mutation            | Writer     | What it does                                                                                                                            |
-| ------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Mutation            | Writer     | What it does                                                                                                                             |
+| ------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `SeededPlayer`      | Owner      | The device's save from before sync. Only fills an empty scope, so linking never overwrites the player. Version 8 carries save version 11 |
-| `ChangedSettings`   | Owner      | Sound, music, screen shake, and stats sharing                                                                                           |
-| `ChangedName`       | Owner      | The display name, cleaned on the device; the last device to set it wins                                                                 |
-| `ChangedRotation`   | Owner      | Landscape or Auto for an installed phone app; the last device to change it wins                                                         |
-| `ChangedAppearance` | Owner      | The whole look                                                                                                                          |
-| `UnlockedNightmare` | Owner      | Trusted for now; becomes a server mutation once runs are verified                                                                       |
-| `ChangedDifficulty` | Owner      | The chosen level and the first-time card. Refused if it picks Nightmare while the scope has it locked                                   |
-| `ChangedOnboarding` | Owner      | Lessons, the trap hint, the zombie cards seen, and the Home Screen tip                                                                  |
-| `ChangedHome`       | Owner      | The newest What's New day seen and the Munchopedia entries opened, written whole                                                        |
-| `SawPowerUps`       | Owner      | Adds the power-up kinds a device saw to the ones seen, as a union, so two devices offline both keep theirs                              |
-| `ForgotPowerUps`    | Owner      | Clears the power-ups seen, for the tutorial reset                                                                                       |
-| `RecordedRun`       | Owner      | Adds a run's runs and kills, merges its bests. Refused past 3 runs or 5,000 kills a run                                                 |
-| `LinkedDevices`     | ServerOnly | The number of devices on this player, written by the server when one links                                                              |
+| `ChangedSettings`   | Owner      | Sound, music, screen shake, and stats sharing                                                                                            |
+| `ChangedName`       | Owner      | The display name, cleaned on the device; the last device to set it wins                                                                  |
+| `ChangedRotation`   | Owner      | Landscape or Auto for an installed phone app; the last device to change it wins                                                          |
+| `ChangedAppearance` | Owner      | The whole look                                                                                                                           |
+| `UnlockedNightmare` | Owner      | Trusted for now; becomes a server mutation once runs are verified                                                                        |
+| `ChangedDifficulty` | Owner      | The chosen level and the first-time card. Refused if it picks Nightmare while the scope has it locked                                    |
+| `ChangedOnboarding` | Owner      | Lessons, the trap hint, the zombie cards seen, and the Home Screen tip                                                                   |
+| `ChangedHome`       | Owner      | The newest What's New day seen and the Munchopedia entries opened, written whole                                                         |
+| `SawPowerUps`       | Owner      | Adds the power-up kinds a device saw to the ones seen, as a union, so two devices offline both keep theirs                               |
+| `ForgotPowerUps`    | Owner      | Clears the power-ups seen, for the tutorial reset                                                                                        |
+| `RecordedRun`       | Owner      | Adds a run's runs and kills, merges its bests. Refused past 3 runs or 5,000 kills a run                                                  |
+| `LinkedDevices`     | ServerOnly | The number of devices on this player, written by the server when one links                                                               |
 
 **In the game.** The Profile's ACCOUNT tab shows the devices as pixel phones and laptops with sync dots, the status line ("Synced", "Offline, will sync", "Synced. Linked to 2 devices", or "Saved on this device" in a build without a sync server) and the two link buttons. Offline play is unchanged: mutations wait in the outbox and go out when the leader tab reconnects. A build without `VITE_API_ORIGIN` (`bun dev`, the tests, an itch.io zip) keeps everything local.
 

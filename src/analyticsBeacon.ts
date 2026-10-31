@@ -6,6 +6,9 @@ import {
   RUNS_PATH,
   type RunSummary,
   RunSummaryJson,
+  SHARES_PATH,
+  type ShareEvent,
+  ShareEventJson,
   VISIT_ID_LENGTH,
 } from './analytics'
 import { API_ORIGIN } from './apiOrigin'
@@ -15,10 +18,16 @@ import { describeError } from './describeError'
 
 export { API_ORIGIN }
 
-export const maybeRunsUrl = (origin: string): Option.Option<string> =>
+const maybeApiUrl = (path: string, origin: string): Option.Option<string> =>
   origin === ''
     ? Option.none()
-    : Option.liftThrowable(() => new URL(RUNS_PATH, origin).href)()
+    : Option.liftThrowable(() => new URL(path, origin).href)()
+
+export const maybeRunsUrl = (origin: string): Option.Option<string> =>
+  maybeApiUrl(RUNS_PATH, origin)
+
+export const maybeSharesUrl = (origin: string): Option.Option<string> =>
+  maybeApiUrl(SHARES_PATH, origin)
 
 // VISIT
 
@@ -113,6 +122,21 @@ export const sendRunSummary = (
           body => new Blob([body]).size <= MAX_SUMMARY_BYTES,
           () => new SummarySendError({ reason: 'summary too large' }),
         ),
+        Effect.flatMap(body => sendTo(url, body)),
+      ),
+  })
+
+// NOTE: a tap on SHARE, sent the same way as a run summary.
+export const sendShareEvent = (
+  event: ShareEvent,
+  origin: string = API_ORIGIN,
+): Effect.Effect<SummaryTransport, SummarySendError> =>
+  Option.match(maybeSharesUrl(origin), {
+    onNone: () => Effect.succeed<SummaryTransport>('Unconfigured'),
+    onSome: url =>
+      pipe(
+        Schema.encodeEffect(ShareEventJson)(event),
+        Effect.mapError(toSendError),
         Effect.flatMap(body => sendTo(url, body)),
       ),
   })

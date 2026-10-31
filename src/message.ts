@@ -141,6 +141,8 @@ export const Message = defineMessageUnion({
   CompletedFocusHomeButton: {},
   CompletedFocusEndMenuButton: {},
   CompletedOpenShare: {},
+  CompletedSendShareEvent: {},
+  FailedSendShareEvent: { reason: Schema.String },
   CompletedLoadStyles: {},
   CompletedLoadFonts: {},
   FailedLoadFonts: { reason: Schema.String },

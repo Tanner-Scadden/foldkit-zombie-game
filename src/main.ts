@@ -719,6 +719,10 @@ export const update = ApplicationComposition.makeUpdate({
 
   FailedSendRunSummary: model => settle(model, { model }),
 
+  CompletedSendShareEvent: model => settle(model, { model }),
+
+  FailedSendShareEvent: model => settle(model, { model }),
+
   ClickedResetTutorialButton: model => settle(model, askToResetTutorial(model)),
 
   ClickedConfirmResetTutorialButton: model =>
