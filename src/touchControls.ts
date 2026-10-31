@@ -4,9 +4,19 @@ import type { Html } from 'foldkit/html'
 import { isOutOfGuns } from './ammoWarning'
 import type { ApplicationViewBuilder } from './composition'
 import { STICK_RADIUS_PX } from './constants'
-import { MELEE_SLOT_INDEX, gunClusterBox, gunSlotBox, secondsLeft } from './hud'
+import {
+  GUN_PAIR_WIDTH,
+  MELEE_SLOT_INDEX,
+  SLOT_GAP,
+  SLOT_HEIGHT,
+  gunClusterBox,
+  gunSlotBox,
+  gunSlotBoxWidth,
+  secondsLeft,
+} from './hud'
 import { NEXT_TRAP_ICON, RELOAD_ICON, TRAP_BUTTON_ICONS } from './icons'
 import { thumbOffset } from './input'
+import { percentOf } from './menuParts'
 import { Message, type PressedHudSlot } from './message'
 import {
   BreakClock,
@@ -38,9 +48,7 @@ import { isRoundActive } from './waves'
 import {
   canReload,
   gunsOf,
-  heldLoaded,
   heldSlotOf,
-  heldStats,
   heldWeapon,
   isWieldingMelee,
   meleeNameOf,
@@ -48,6 +56,12 @@ import {
 } from './weapons'
 
 // ICON BUTTONS
+
+// NOTE: an icon button's side, as .icon-button in src/styles.css.
+const ICON_BUTTON_PX = 48
+
+// NOTE: the gap between the row and the buttons stacked over it.
+const SIDE_GAP_PX = 4
 
 type IconButton = Readonly<{
   className: string
@@ -98,9 +112,6 @@ const keyBadgeView = (
     ? h.empty
     : h.span([h.Class('key-badge'), h.AriaHidden(true)], [key])
 
-const percentOf = (part: number, whole: number): string =>
-  `${(part * 100) / whole}%`
-
 // GUN SLOTS
 
 type SlotGun = Readonly<{ slot: GunSlot; name: string }>
@@ -112,8 +123,6 @@ const slotGuns = (model: Model): ReadonlyArray<SlotGun> =>
     slot,
     name: tierName(gun.kind, gun.tier),
   }))
-
-const heldSlot = (model: Model): GunSlot => heldSlotOf(model.player.arsenal)
 
 const SLOT_INDEX: Readonly<Record<GunSlot, number>> = { First: 0, Second: 1 }
 
@@ -146,7 +155,7 @@ const toPressedHudSlot = (
 // NOTE: the key that reaches a gun slot: R reloads the held gun, Q swaps
 // to the other; with the knife out, Q goes back to the last gun held.
 const gunSlotKey = (model: Model, slot: GunSlot): Option.Option<string> => {
-  const isLastHeld = slot === heldSlot(model)
+  const isLastHeld = slot === heldSlotOf(model.player.arsenal)
   if (isWieldingMelee(model.player)) {
     return isLastHeld ? Option.some('Q') : Option.none()
   } else {
@@ -172,7 +181,8 @@ const gunSlotButtonView = (
   { slot, name }: SlotGun,
   h: ApplicationViewBuilder,
 ): Html => {
-  const isHeld = !isWieldingMelee(model.player) && slot === heldSlot(model)
+  const isHeld =
+    !isWieldingMelee(model.player) && slot === heldSlotOf(model.player.arsenal)
   const maybeKey = gunSlotKey(model, slot)
   return h.keyed('button')(
     slot,
@@ -255,27 +265,87 @@ const gunSlotsView = (
     ],
   )
 
+// RELOAD
+
+// NOTE: on touch the reload button is always in the row: past the melee
+// slot in landscape, standing on it in portrait, where a phone held upright
+// has no room past it. Its face is drawn as one more slot, in the HUD's own
+// pixels (--hud-px), so it reads as part of the row; its target is at least
+// a thumb wide. It reloads the held gun, or with the knife or the Pan out puts the last
+// gun back and reloads it, as R does. It dims when a reload would load
+// nothing: a full magazine, no rounds left to load, or a reload going.
+const RELOAD_FACE_WIDTH: Readonly<Record<Screen['layout'], number>> = {
+  Landscape: 18,
+  Portrait: gunSlotBoxWidth(MELEE_SLOT_INDEX),
+}
+
+const hudPixels = (count: number): string => `calc(${count} * var(--hud-px))`
+
+const reloadWidth = (screen: Screen): string =>
+  `max(${ICON_BUTTON_PX}px, ${hudPixels(RELOAD_FACE_WIDTH[screen.layout])})`
+
+const reloadSpot = (screen: Screen): Readonly<Record<string, string>> => {
+  const width = reloadWidth(screen)
+  return screen.layout === 'Landscape'
+    ? {
+        left: `calc(100% + ${percentOf(SLOT_GAP, gunClusterBox(screen).width)})`,
+        bottom: '0px',
+        width,
+        height: '100%',
+      }
+    : {
+        right: '0px',
+        bottom: `calc(100% + ${SIDE_GAP_PX}px)`,
+        width,
+        height: `max(${ICON_BUTTON_PX}px, ${hudPixels(SLOT_HEIGHT)})`,
+      }
+}
+
+const reloadButtonView = (
+  model: Model,
+  screen: Screen,
+  h: ApplicationViewBuilder,
+): Html => {
+  const gun = gunName(model, heldWeapon(model.player.arsenal))
+  const isMeleeOut = isWieldingMelee(model.player)
+  const isReady = canReload(model.player)
+  return h.button(
+    [
+      h.Type('button'),
+      h.Class('reload-button'),
+      h.DataAttribute('ready', isReady ? 'true' : 'false'),
+      h.DataAttribute('layout', screen.layout),
+      h.AriaLabel(
+        isMeleeOut ? `Draw and reload the ${gun}` : `Reload the ${gun}`,
+      ),
+      h.AriaKeyshortcuts('R'),
+      ...(isReady || isMeleeOut ? [] : [h.AriaDisabled(true)]),
+      h.Style(reloadSpot(screen)),
+      h.OnClick(Message.ClickedReloadButton(), {
+        focusSelector: '.game-surface',
+      }),
+    ],
+    [
+      h.span([
+        h.Class('reload-face'),
+        h.AriaHidden(true),
+        h.Style({
+          width: hudPixels(RELOAD_FACE_WIDTH[screen.layout]),
+          height: hudPixels(SLOT_HEIGHT),
+          backgroundImage: RELOAD_ICON,
+        }),
+      ]),
+    ],
+  )
+}
+
+const reloadView = (
+  model: Model,
+  screen: Screen,
+  h: ApplicationViewBuilder,
+): Html => (isOnTouch(model) ? reloadButtonView(model, screen, h) : h.empty)
+
 // UTILITY ICONS
-
-const isMagazineLow = (model: Model): boolean =>
-  heldLoaded(model.player) * 2 < heldStats(model.player).magazine
-
-const reloadIconView = (model: Model, h: ApplicationViewBuilder): Html =>
-  isOnTouch(model) &&
-  !isWieldingMelee(model.player) &&
-  isMagazineLow(model) &&
-  canReload(model.player)
-    ? iconButtonView(
-        {
-          className: 'cluster-button reload-icon-button',
-          label: `Reload the ${gunName(model, heldWeapon(model.player.arsenal))}`,
-          icon: RELOAD_ICON,
-          keys: 'R',
-          message: Message.ClickedReloadButton(),
-        },
-        h,
-      )
-    : h.empty
 
 const PLACE_REASON_ID = 'place-trap-reason'
 
@@ -360,39 +430,64 @@ const trapIconsView = (
       })
     : []
 
-// NOTE: the icons beside the guns wrap upward before they reach the stall's
-// outline, so a narrow phone stacks them instead of covering the stall. In
-// portrait the stall is up in the world window, so they run to the edge.
-const SIDE_GAP = 2
-const SIDE_MARGIN = 4
+// NOTE: the hold-to-buy and trap buttons sit over the row, right-aligned,
+// and wrap upward, so they never cover a slot, the reload button, or the
+// start wave button centered over the guns. Mid-wave (only hold-to-buy) they
+// end over the melee slot, left of a player buying at the stall's ammo
+// window. In a landscape break they run from the start wave button to short
+// of the stall. In portrait the reload button stands on the melee slot
+// (the row has no room past it on a phone held upright): mid-wave they run
+// left of it, and in a break, when the start wave button shares that band,
+// they go one band higher.
+const START_WAVE_HALF_PX = 64
+const STALL_CLEARANCE = 10
 
-const sideRight = (screen: Screen): number =>
-  screen.layout === 'Landscape'
-    ? STALL_BOX.left - 10
-    : screen.width - SIDE_MARGIN
+const sideStyle = (
+  model: Model,
+  screen: Screen,
+): Readonly<Record<string, string>> => {
+  const cluster = gunClusterBox(screen)
+  const bottom = `calc(100% + ${SIDE_GAP_PX}px)`
+  const isBreak = Phase.isAnyOf(['Preparation'])(model.phase)
+  if (screen.layout === 'Landscape') {
+    return {
+      left: isBreak
+        ? `calc(${percentOf(GUN_PAIR_WIDTH / 2, cluster.width)} + ${START_WAVE_HALF_PX}px)`
+        : '0px',
+      right: isBreak
+        ? percentOf(
+            cluster.x + cluster.width - (STALL_BOX.left - STALL_CLEARANCE),
+            cluster.width,
+          )
+        : '0px',
+      bottom,
+    }
+  } else if (isBreak) {
+    return {
+      left: '0px',
+      right: '0px',
+      bottom: `calc(100% + ${2 * SIDE_GAP_PX + ICON_BUTTON_PX}px)`,
+    }
+  } else {
+    return {
+      left: '0px',
+      right: isOnTouch(model)
+        ? `calc(${reloadWidth(screen)} + ${SIDE_GAP_PX}px)`
+        : '0px',
+      bottom,
+    }
+  }
+}
 
 const clusterSideView = (
   model: Model,
   screen: Screen,
   h: ApplicationViewBuilder,
-): Html => {
-  const cluster = gunClusterBox(screen)
-  const room = sideRight(screen) - cluster.x - cluster.width
-  return h.div(
-    [
-      h.Class('gun-cluster-side'),
-      h.Style({
-        left: percentOf(cluster.width + SIDE_GAP, cluster.width),
-        width: percentOf(room - SIDE_GAP, cluster.width),
-      }),
-    ],
-    [
-      holdButtonView(model, h),
-      reloadIconView(model, h),
-      ...trapIconsView(model, h),
-    ],
+): Html =>
+  h.div(
+    [h.Class('gun-cluster-side'), h.Style(sideStyle(model, screen))],
+    [holdButtonView(model, h), ...trapIconsView(model, h)],
   )
-}
 
 // START WAVE
 
@@ -414,12 +509,21 @@ const startWaveLabel = (model: Model, wave: number): string => {
     : `Ready for wave ${wave}`
 }
 
-const startWaveButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
+const startWaveButtonView = (
+  model: Model,
+  screen: Screen,
+  h: ApplicationViewBuilder,
+): Html =>
   Phase.match(model.phase, {
     Ready: () => h.empty,
     Preparation: ({ wave }) =>
       h.div(
-        [h.Class('gun-cluster-top')],
+        [
+          h.Class('gun-cluster-top'),
+          h.Style({
+            left: percentOf(GUN_PAIR_WIDTH / 2, gunClusterBox(screen).width),
+          }),
+        ],
         [
           h.button(
             [
@@ -479,8 +583,9 @@ const clusterView = (
             ],
             [
               gunSlotsView(model, screen, h),
+              reloadView(model, screen, h),
               clusterSideView(model, screen, h),
-              startWaveButtonView(model, h),
+              startWaveButtonView(model, screen, h),
             ],
           ),
         ],

@@ -102,6 +102,32 @@ describe('the portrait HUD and thumb area', () => {
     })
   })
 
+  test('the guns sit centered on the screen, in portrait and in landscape', () => {
+    Array.forEach([inPortrait(fighting), fighting], current => {
+      const screen = screenOf(current)
+      const slots = gunSlotFills(current)
+      const left = Math.min(...Array.map(slots, slot => slot.x))
+      const right = Math.max(...Array.map(slots, slot => slot.x + slot.width))
+      vitestExpect(
+        Math.abs((left + right) / 2 - screen.width / 2),
+      ).toBeLessThanOrEqual(1)
+    })
+  })
+
+  test('the reload button stands on the knife slot, as the row has no room past it', () => {
+    scene(
+      ROOT,
+      given(fighting),
+      measure(PHONE_PORTRAIT),
+      expect(selector('.reload-button')).toHaveAttr('data-layout', 'Portrait'),
+      expect(selector('.reload-button')).toHaveStyle('right', '0px'),
+      expect(selector('.reload-button')).toHaveStyle(
+        'bottom',
+        'calc(100% + 4px)',
+      ),
+    )
+  })
+
   test('the hearts, money, and wave label sit in the band above the world window', () => {
     const portrait = inPortrait(fighting)
     const screen = screenOf(portrait)

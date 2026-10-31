@@ -1,12 +1,15 @@
 // The knife and two gun slots pass: the knife in hand mid-slash into a
 // Groaner, the HUD's slots with the pistol traded for a Pressure Cooker and
 // the knife's slot on their right (with a gun in hand, and with the knife),
-// and the shop's GUNS tab offering the Pop Pistol back for $0, on a
-// 1280x720 desktop, an 844x390 phone on its side, and a 390x844 phone held
-// upright, as `s40-<TAG>-<viewport>-<scene>.png`. It checks that the knife
-// in hand stabs on the trigger, that the three slots share a row with the
-// knife's on the right, clear of each other and on screen, and that the
-// shop offers the pistol for $0, and exits with 1 on any miss.
+// the Clang Pan in the melee slot, the row in a break with the trap and hold-to-buy buttons up and mid-wave
+// at the stall, and the shop's GUNS tab offering the Pop Pistol back for $0,
+// on a 1280x720 desktop, an 844x390 phone on its side, and a 390x844 phone
+// held upright, as `s40-<TAG>-<viewport>-<scene>.png`. It checks that the
+// knife in hand stabs on the trigger, that the guns are centered with the
+// melee slot on their right and on touch the reload button past it (on it in
+// portrait), none covering another or the buttons over the row, all on
+// screen, and that the shop offers the pistol for $0. Exits with 1 on any
+// miss.
 //   TAG=after bun run heavy -- --shared bun tools/audit/shots40.ts
 // ONLY picks scenes, such as `ONLY=slash`, and VIEWPORTS picks screens.
 import type { Page } from 'playwright-core'
@@ -15,6 +18,7 @@ import {
   DESKTOP_1280,
   PHONE_844,
   UPRIGHT_390,
+  type Viewport,
   deviceQuery,
   finish,
   harnessQuery,
@@ -40,8 +44,27 @@ const VIEWPORTS = pickViewports([
 type Scene = Readonly<{
   name: string
   query: string
-  act?: (page: Page, problems: Array<string>, label: string) => Promise<void>
+  act?: (
+    page: Page,
+    problems: Array<string>,
+    label: string,
+    viewport: Viewport,
+  ) => Promise<void>
 }>
+
+const rowCheck = (
+  page: Page,
+  problems: Array<string>,
+  label: string,
+  viewport: Viewport,
+) =>
+  checkSlots(
+    page,
+    problems,
+    label,
+    viewport.isPhone,
+    viewport.height > viewport.width,
+  )
 
 const LEARNED =
   'learned=move,fire,startWave,shop,swap,pickup,timedBreaks,openBreak'
@@ -54,58 +77,143 @@ type Edges = Readonly<{
   bottom: number
 }>
 
-// NOTE: three slots in one row, the knife's on the right of the guns, none
-// covering another, all on screen, on every device.
+type Box = Edges & Readonly<{ name: string }>
+
+const overlaps = (a: Edges, b: Edges): boolean =>
+  a.left < b.right - 1 &&
+  a.right > b.left + 1 &&
+  a.top < b.bottom - 1 &&
+  a.bottom > b.top + 1
+
+// NOTE: the HUD row (changed at the owner's request on 2026-10-30): the two
+// guns centered on the screen, the melee slot on their right, and on touch
+// the reload button past it (in portrait, standing on the melee slot, as a
+// phone held upright has no room past it). None covers another, and all
+// are on screen. A desktop has no reload button: R reloads.
 const checkSlots = async (
   page: Page,
   problems: Array<string>,
   label: string,
+  isTouch: boolean,
+  isPortrait: boolean,
 ): Promise<void> => {
-  const slots = await page.evaluate(() =>
-    [...document.querySelectorAll('.gun-slot-button')].map(element => {
+  const { boxes, stage } = await page.evaluate(() => {
+    const edgesOf = (element: Element, name: string) => {
       const { left, right, top, bottom } = element.getBoundingClientRect()
-      return {
-        slot: element.getAttribute('data-slot') ?? '',
-        left,
-        right,
-        top,
-        bottom,
+      return { name, left, right, top, bottom }
+    }
+    const faceOf = (element: Element) =>
+      element.querySelector('.reload-face') ?? element
+    const stageBox = document
+      .querySelector('.hud-tap-stage')
+      ?.getBoundingClientRect()
+    return {
+      boxes: [
+        ...[...document.querySelectorAll('.gun-slot-button')].map(element =>
+          edgesOf(element, element.getAttribute('data-slot') ?? ''),
+        ),
+        ...[...document.querySelectorAll('.reload-button')].map(element =>
+          edgesOf(element, 'Reload'),
+        ),
+        ...[...document.querySelectorAll('.reload-button')].map(element =>
+          edgesOf(faceOf(element), 'ReloadFace'),
+        ),
+        ...[
+          ...document.querySelectorAll(
+            '.gun-cluster-side button, .gun-cluster-top button',
+          ),
+        ].map(element =>
+          edgesOf(element, element.getAttribute('aria-label') ?? 'button'),
+        ),
+      ],
+      stage:
+        stageBox === undefined
+          ? null
+          : { left: stageBox.left, right: stageBox.right },
+    }
+  })
+  const find = (name: string): Box | undefined =>
+    boxes.find(box => box.name === name)
+  const first = find('First')
+  const second = find('Second')
+  const knife = find('Melee')
+  const reload = find('Reload')
+  const face = find('ReloadFace')
+  if (first === undefined || second === undefined || knife === undefined) {
+    problems.push(
+      `${label}: missing a slot (${boxes.map(box => box.name).join(', ')})`,
+    )
+    return
+  }
+  if (stage !== null) {
+    const middle = (stage.left + stage.right) / 2
+    const gunsMiddle = (first.left + second.right) / 2
+    if (Math.abs(gunsMiddle - middle) > 3) {
+      problems.push(
+        `${label}: the guns are ${Math.round(gunsMiddle - middle)} px off the screen's middle`,
+      )
+    }
+  }
+  if (second.right > knife.left + 1 || first.right > second.left + 1) {
+    problems.push(`${label}: the melee slot is not right of the guns`)
+  }
+  if (Math.abs(first.top - knife.top) > 1) {
+    problems.push(`${label}: the melee slot is not in the guns' row`)
+  }
+  if (isTouch) {
+    if (reload === undefined || face === undefined) {
+      problems.push(`${label}: no reload button on touch`)
+    } else if (isPortrait) {
+      if (reload.bottom > knife.top + 1) {
+        problems.push(`${label}: the reload button is not over the melee slot`)
+      }
+      if (face.right < knife.left || face.left > knife.right) {
+        problems.push(`${label}: the reload button is not on the melee slot`)
+      }
+    } else {
+      if (reload.left < knife.right - 1) {
+        problems.push(`${label}: the reload button is not right of the melee`)
+      }
+      if (Math.abs(face.bottom - knife.bottom) > 1) {
+        problems.push(`${label}: the reload button is not in the row`)
+      }
+    }
+    if (
+      reload !== undefined &&
+      (reload.right - reload.left < 47 || reload.bottom - reload.top < 47)
+    ) {
+      problems.push(`${label}: the reload button is under a thumb's 48 px`)
+    }
+  } else if (reload !== undefined) {
+    problems.push(`${label}: a reload button on a desktop`)
+  }
+  const others = boxes.filter(
+    box =>
+      !['First', 'Second', 'Melee', 'Reload', 'ReloadFace'].includes(box.name),
+  )
+  const targets = [
+    first,
+    second,
+    knife,
+    ...(reload === undefined ? [] : [reload]),
+    ...others,
+  ]
+  targets.forEach((a, index) =>
+    targets.slice(index + 1).forEach(b => {
+      if (overlaps(a, b)) {
+        problems.push(`${label}: ${a.name} covers ${b.name}`)
       }
     }),
   )
-  if (slots.length !== 3) {
-    problems.push(`${label}: ${slots.length} slots, not 3`)
-    return
-  }
-  const knife = slots.find(slot => slot.slot === 'Melee')
-  const guns = slots.filter(slot => slot.slot !== 'Melee')
-  if (knife === undefined) {
-    problems.push(`${label}: no knife slot`)
-    return
-  }
-  if (guns.some(gun => gun.right > knife.left + 1)) {
-    problems.push(`${label}: the knife's slot is not right of the guns`)
-  }
-  if (guns.some(gun => Math.abs(gun.top - knife.top) > 1)) {
-    problems.push(`${label}: the knife's slot is not in the guns' row`)
-  }
-  const overlaps = (a: Edges, b: Edges): boolean =>
-    a.left < b.right - 1 &&
-    a.right > b.left + 1 &&
-    a.top < b.bottom &&
-    a.bottom > b.top
-  if (guns.some(gun => overlaps(gun, knife))) {
-    problems.push(`${label}: the knife's slot covers a gun slot`)
-  }
   const size = page.viewportSize()
   if (
     size !== null &&
-    slots.some(
-      slot =>
-        slot.left < 0 ||
-        slot.top < 0 ||
-        slot.right > size.width ||
-        slot.bottom > size.height,
+    targets.some(
+      box =>
+        box.left < 0 ||
+        box.top < 0 ||
+        box.right > size.width ||
+        box.bottom > size.height,
     )
   ) {
     problems.push(`${label}: a slot is off screen`)
@@ -126,13 +234,13 @@ const SCENES: ReadonlyArray<Scene> = [
   {
     name: 'slots',
     query: `${FIGHTING}&first=cooker&gun=smg&tier=2&tick=2`,
-    act: async (page, problems, label) => checkSlots(page, problems, label),
+    act: rowCheck,
   },
   {
     name: 'knifed',
     query: `${FIGHTING}&first=cooker&gun=smg&tier=2&knife&tick=2`,
-    act: async (page, problems, label) => {
-      await checkSlots(page, problems, label)
+    act: async (page, problems, label, viewport) => {
+      await rowCheck(page, problems, label, viewport)
       const held = await page.evaluate(
         () =>
           document
@@ -143,6 +251,32 @@ const SCENES: ReadonlyArray<Scene> = [
         problems.push(`${label}: the knife's slot is not held`)
       }
     },
+  },
+  {
+    name: 'pan',
+    query: `${FIGHTING}&first=cooker&gun=smg&pan&tier=1&loaded=9&tick=2`,
+    act: async (page, problems, label, viewport) => {
+      await rowCheck(page, problems, label, viewport)
+      const name = await page.evaluate(
+        () =>
+          document
+            .querySelector('.gun-slot-button[data-slot="Melee"]')
+            ?.getAttribute('aria-label') ?? '',
+      )
+      if (!name.includes('Pan')) {
+        problems.push(`${label}: the melee slot does not hold the Pan`)
+      }
+    },
+  },
+  {
+    name: 'break',
+    query: `wave=3&seen=all&first=cooker&gun=smg&money=85&barricades=1&turrets=1&px=70&py=27&${LEARNED}`,
+    act: rowCheck,
+  },
+  {
+    name: 'stall',
+    query: `${FIGHTING}&gun=smg&loaded=9&rounds=40&money=85&px=240&py=146&tick=2`,
+    act: rowCheck,
   },
   {
     name: 'shop',
@@ -177,7 +311,7 @@ for (const viewport of VIEWPORTS) {
     const label = `${viewport.name} ${scene.name}`
     await settleAnimations(page)
     if (scene.act !== undefined) {
-      await scene.act(page, problems, label)
+      await scene.act(page, problems, label, viewport)
     }
     await shot(page, `s40-${TAG}-${viewport.name}-${scene.name}`)
     console.log(`shot ${label}`)

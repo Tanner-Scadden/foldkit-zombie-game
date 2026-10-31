@@ -68,7 +68,7 @@ const breakWithTraps: Model = modifyFields(onTouch(initialModel), {
   trapStock: () => ({ Barricade: 1, Turret: 1 }),
 })
 
-const reloadIcon = selector('.reload-icon-button')
+const reloadButton = selector('.reload-button')
 const pauseButton = role('button', { name: 'Pause' })
 const muteButton = role('button', { name: 'Mute sound' })
 const musicButton = role('button', { name: 'Music' })
@@ -86,36 +86,111 @@ const frame = (deltaTime: number) =>
     Message.TickedFrame({ deltaTime }),
   )
 
-describe('the reload icon', () => {
-  test('shows only below half a magazine and hides while reloading', () => {
+// NOTE: a finger's tap: src/touchTaps.ts makes it a click on the button, as
+// it does for a second finger while another holds the move stick.
+const tap = click
+
+// NOTE: a thumb on the left of the surface: the move stick.
+const moveThumb = pointerDown(selector('.game-surface'), {
+  pointerType: 'touch',
+  pointerId: 3,
+  clientX: 120,
+  clientY: 260,
+})
+
+describe('the reload button', () => {
+  test('is always there on touch, dim and inert with a full magazine', () => {
     scene(
       ROOT,
-      given(fightingWith(15)),
+      given(fightingWith(30)),
       measureSurface,
-      expect(reloadIcon).toBeAbsent(),
-      expect(role('button', { name: `Reload the ${SMG_NAME}` })).toExist(),
-    )
-    scene(
-      ROOT,
-      given(fightingWith(14)),
-      measureSurface,
-      expect(reloadIcon).toExist(),
-      expect(reloadIcon).toHaveAttr('aria-keyshortcuts', 'R'),
-      click(reloadIcon),
-      expect(reloadIcon).toBeAbsent(),
+      expect(reloadButton).toExist(),
+      expect(reloadButton).toHaveAttr('aria-keyshortcuts', 'R'),
+      expect(reloadButton).toHaveAttr('data-ready', 'false'),
+      expect(reloadButton).toHaveAttr('aria-disabled', 'true'),
     )
   })
 
-  test('tapping the ammo readout reloads early', () => {
+  test('reloads the held gun on a tap, and dims while it reloads', () => {
     scene(
       ROOT,
       given(fightingWith(20)),
       measureSurface,
-      click(role('button', { name: `Reload the ${SMG_NAME}` })),
+      expect(reloadButton).toHaveAttr('data-ready', 'true'),
+      expect(reloadButton).not.toHaveAttr('aria-disabled'),
+      tap(reloadButton),
+      expect(reloadButton).toHaveAttr('data-ready', 'false'),
       expect(role('button', { name: `Reload the ${SMG_NAME}` })).toHaveAttr(
         'aria-disabled',
         'true',
       ),
+    )
+  })
+
+  test('with the knife out, draws the last gun and reloads it, as R does', () => {
+    const knifeOut = modifyFields(fightingWith(20), {
+      player: player => modifyFields(player, { wield: () => 'Melee' }),
+    })
+    scene(
+      ROOT,
+      given(knifeOut),
+      measureSurface,
+      expect(reloadButton).toHaveAttr(
+        'aria-label',
+        `Draw and reload the ${SMG_NAME}`,
+      ),
+      tap(reloadButton),
+      expect(selector('.gun-slot-button[data-slot="Melee"]')).toHaveAttr(
+        'data-held',
+        'false',
+      ),
+      expect(role('button', { name: `Reload the ${SMG_NAME}` })).toHaveAttr(
+        'data-held',
+        'true',
+      ),
+      expect(reloadButton).toHaveAttr('data-ready', 'false'),
+    )
+  })
+
+  test('with the knife out and a full magazine, is dim but still draws the gun', () => {
+    const knifeOut = modifyFields(fightingWith(30), {
+      player: player => modifyFields(player, { wield: () => 'Melee' }),
+    })
+    scene(
+      ROOT,
+      given(knifeOut),
+      measureSurface,
+      expect(reloadButton).toHaveAttr('data-ready', 'false'),
+      expect(reloadButton).not.toHaveAttr('aria-disabled'),
+      tap(reloadButton),
+      expect(role('button', { name: `Reload the ${SMG_NAME}` })).toHaveAttr(
+        'data-held',
+        'true',
+      ),
+    )
+  })
+
+  test('works with the move stick held by another finger', () => {
+    scene(
+      ROOT,
+      given(fightingWith(20)),
+      measureSurface,
+      moveThumb,
+      expect(selector('.touch-stick[data-stick="move"]')).toExist(),
+      tap(reloadButton),
+      expect(reloadButton).toHaveAttr('data-ready', 'false'),
+      expect(selector('.touch-stick[data-stick="move"]')).toExist(),
+    )
+  })
+
+  test('is not on a keyboard and mouse: R reloads there', () => {
+    scene(
+      ROOT,
+      given(
+        modifyFields(fightingWith(20), { lastDevice: () => 'KeyboardMouse' }),
+      ),
+      measureSurface,
+      expect(reloadButton).toBeAbsent(),
     )
   })
 })
@@ -131,7 +206,7 @@ describe('the gun cluster', () => {
       ROOT,
       given(fightingWith(30)),
       measureSurface,
-      expect(cluster).toHaveStyle('left', '26.875%'),
+      expect(cluster).toHaveStyle('left', '37.1875%'),
       expect(cluster).toHaveStyle('width', '35%'),
       expect(within(cluster, role('group', { name: 'Your guns' }))).toExist(),
       expect(pistolSlot).toHaveAttr('data-held', 'false'),
@@ -150,9 +225,9 @@ describe('the gun cluster', () => {
       ROOT,
       given(fightingWith(20)),
       measureSurface,
-      click(smgSlot),
+      tap(smgSlot),
       expect(smgSlot).toHaveAttr('aria-disabled', 'true'),
-      click(pistolSlot),
+      tap(pistolSlot),
       expect(role('button', { name: 'Reload the Pop Pistol' })).toHaveAttr(
         'data-held',
         'true',
@@ -164,12 +239,33 @@ describe('the gun cluster', () => {
     )
   })
 
-  test('the reload icon sits right beside the guns', () => {
+  test('a tap on a slot swaps while another finger holds the move stick', () => {
+    scene(
+      ROOT,
+      given(fightingWith(20)),
+      measureSurface,
+      moveThumb,
+      tap(pistolSlot),
+      expect(role('button', { name: 'Reload the Pop Pistol' })).toHaveAttr(
+        'data-held',
+        'true',
+      ),
+      expect(selector('.touch-stick[data-stick="move"]')).toExist(),
+    )
+  })
+
+  test('the reload button sits past the knife, in the row', () => {
     scene(
       ROOT,
       given(fightingWith(9)),
       measureSurface,
-      expect(within(selector('.gun-cluster-side'), reloadIcon)).toExist(),
+      expect(within(cluster, reloadButton)).toExist(),
+      expect(reloadButton).toHaveAttr('data-layout', 'Landscape'),
+      expect(reloadButton).toHaveStyle(
+        'left',
+        'calc(100% + 2.6785714285714284%)',
+      ),
+      expect(reloadButton).toHaveStyle('bottom', '0px'),
     )
   })
 
@@ -183,7 +279,7 @@ describe('the gun cluster', () => {
       measureSurface,
       expect(within(smgSlot, selector('.key-badge'))).toHaveText('R'),
       expect(within(pistolSlot, selector('.key-badge'))).toHaveText('Q'),
-      expect(reloadIcon).toBeAbsent(),
+      expect(reloadButton).toBeAbsent(),
       Subscription.emit(
         SCENE_SUBSCRIPTIONS.keyboard,
         Message.PressedKey({ code: 'KeyR' }),

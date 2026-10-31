@@ -91,10 +91,11 @@ const STREAK_X = HUD_MARGIN + 8
 const STREAK_Y = HUD_MARGIN + 30
 
 const SLOT_WIDTH = 40
-const SLOT_HEIGHT = 12
-const SLOT_GAP = 3
+export const SLOT_HEIGHT = 12
+export const SLOT_GAP = 3
 const MELEE_SLOT_WIDTH = 26
-const CLUSTER_WIDTH = 2 * SLOT_WIDTH + MELEE_SLOT_WIDTH + 2 * SLOT_GAP
+export const GUN_PAIR_WIDTH = 2 * SLOT_WIDTH + SLOT_GAP
+const CLUSTER_WIDTH = GUN_PAIR_WIDTH + SLOT_GAP + MELEE_SLOT_WIDTH
 const TRAP_SLOT_WIDTH = 24
 
 const BOOST_CHIPS_LEFT = HUD_MARGIN + PLAYER_MAX_HP * HEART_SPACING + 2
@@ -103,7 +104,6 @@ const BOOST_CHIPS = 4
 
 const PAUSE_BUTTON_CLEARANCE = 34
 const PORTRAIT_PAUSE_CLEARANCE = 24
-const PORTRAIT_SLOT_NUDGE = 8
 
 type HudLayout = Readonly<{
   centerX: number
@@ -118,12 +118,13 @@ type HudLayout = Readonly<{
   trapTop: number
 }>
 
-// NOTE: the guns sit at the bottom middle, nudged a little left in landscape
-// so the buttons beside them stop short of the stall's outline, with the
-// melee slot on their right. In portrait they sit at the bottom of the
-// thumb area and the HUD is a band on top.
+// NOTE: the two guns sit centered at the bottom, with the melee slot on
+// their right (and on touch the reload button past it, src/touchControls.ts).
+// In portrait they sit at the bottom of the thumb area and the HUD is a band
+// on top.
 const hudLayoutFor = (screen: Screen): HudLayout => {
   const slotTop = screen.height - HUD_MARGIN - SLOT_HEIGHT
+  const slotLeft = Math.round((screen.width - GUN_PAIR_WIDTH) / 2)
   if (screen.layout === 'Landscape') {
     return {
       centerX: screen.width / 2,
@@ -133,7 +134,7 @@ const hudLayoutFor = (screen: Screen): HudLayout => {
       boostLeft: BOOST_CHIPS_LEFT,
       boostTop: HUD_MARGIN - 3,
       boostColumns: 2,
-      slotLeft: 86,
+      slotLeft,
       slotTop,
       trapTop: slotTop,
     }
@@ -147,8 +148,7 @@ const hudLayoutFor = (screen: Screen): HudLayout => {
       boostLeft: scoreRight - BOOST_CHIPS * BOOST_CHIP_STRIDE + 3,
       boostTop: HUD_MARGIN + 7,
       boostColumns: BOOST_CHIPS,
-      slotLeft:
-        Math.round((screen.width - CLUSTER_WIDTH) / 2) - PORTRAIT_SLOT_NUDGE,
+      slotLeft,
       slotTop,
       trapTop: Math.max(
         thumbAreaTop(screen) + HUD_MARGIN,
@@ -484,6 +484,8 @@ const slotLeftOf = (layout: HudLayout, index: number): number =>
 
 const slotWidthOf = (index: number): number =>
   index === MELEE_SLOT_INDEX ? MELEE_SLOT_WIDTH : SLOT_WIDTH
+
+export const gunSlotBoxWidth = slotWidthOf
 
 export const gunSlotBox = (screen: Screen, index: number): Box => {
   const layout = hudLayoutFor(screen)

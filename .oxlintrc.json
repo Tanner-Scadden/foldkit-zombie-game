@@ -350,14 +350,6 @@
       "rules": { "munch/no-raw-json": "off" }
     },
     {
-      // TODO(cleanup slice 9c): one hit (the Model import). The mobile HUD
-      // change is editing this file.
-      "files": ["src/main.ts"],
-      "rules": {
-        "typescript/consistent-type-imports": "off"
-      }
-    },
-    {
       // NOTE: known exceptions to max-lines today. Split one, then drop it here.
       "files": [
         "src/audio.ts",

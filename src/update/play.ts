@@ -11,7 +11,6 @@ import { advanceGame, clampFrameDelta, refreshIntent } from '../frame'
 import { isEndScreen } from '../home'
 import {
   type PointerPress,
-  isEndlessKey,
   isKnifeKey,
   isPauseKey,
   isReloadKey,
@@ -31,7 +30,6 @@ import {
   type PageVisibility,
   Phase,
   type PointerDevice,
-  RunMode,
   type SlotClick,
 } from '../model'
 import {
@@ -113,7 +111,7 @@ import { checkForUpdate } from './version'
 // The Steps the root's handlers (src/main.ts) are made of: the frame, the
 // keys and pointers, the guns and traps, pausing, and the build check.
 
-export const START_SOUND_GRACE_MS = 1000
+const START_SOUND_GRACE_MS = 1000
 
 export const useDevice = (model: Model, device: InputDevice): Model =>
   model.lastDevice === device
@@ -134,19 +132,19 @@ export const orientationOf = (width: number, height: number): Orientation =>
 export const resumeFromPointer = (model: Model): Model =>
   isPaused(model.phase) ? startWhenAllowed(model, model.mode) : model
 
-export const hasStartedWave = (before: Model, after: Model): boolean =>
+const hasStartedWave = (before: Model, after: Model): boolean =>
   Phase.isAnyOf(['Preparation'])(before.phase) &&
   Phase.isAnyOf(['Wave'])(after.phase)
 
-export const learnStartWaveWhen = (before: Model, after: Model): Model =>
+const learnStartWaveWhen = (before: Model, after: Model): Model =>
   hasStartedWave(before, after) ? learnStartWave(after) : after
 
-export const learnSwapWhen = (before: Model, after: Model): Model =>
+const learnSwapWhen = (before: Model, after: Model): Model =>
   changedWeapon(before, after) ? learnSwap(after) : after
 
 // NOTE: at a purchasable the interact key holds to buy (src/purchase.ts),
 // so the same key starts the wave only away from one.
-export const preparationFromKey = (model: Model, code: string): Model => {
+const preparationFromKey = (model: Model, code: string): Model => {
   if (isPauseKey(code)) {
     return pause(model)
   } else if (isStartWaveKey(code) && !isInteractTaken(model)) {
@@ -156,17 +154,7 @@ export const preparationFromKey = (model: Model, code: string): Model => {
   }
 }
 
-export const startFromKey = (model: Model, code: string): Model => {
-  if (isStartKey(code)) {
-    return startWhenAllowed(model, RunMode.Campaign())
-  } else if (isEndlessKey(code)) {
-    return startWhenAllowed(model, RunMode.Endless())
-  } else {
-    return model
-  }
-}
-
-export const resumeFromKey = (model: Model, code: string): Model =>
+const resumeFromKey = (model: Model, code: string): Model =>
   isPauseKey(code) ? startWhenAllowed(model, model.mode) : model
 
 const isHandFree = (model: Model): boolean =>
@@ -175,24 +163,23 @@ const isHandFree = (model: Model): boolean =>
   !isDebutCardUp(model)
 
 // NOTE: Q switches guns, or with the knife out goes back to the last gun.
-export const swapGun = (model: Model): Model =>
+const swapGun = (model: Model): Model =>
   isHandFree(model) ? modifyFields(model, { player: swapInHand }) : model
 
 // NOTE: F, or a tap on the knife slot: the knife in hand (GAME_DESIGN.md,
 // "The knife and two gun slots").
-export const equipMelee = (model: Model): Model =>
+const equipMelee = (model: Model): Model =>
   isHandFree(model) ? modifyFields(model, { player: drawMelee }) : model
 
 // NOTE: a tap on a gun slot with the knife out: that gun in hand.
-export const drawGunSlot = (model: Model, slot: GunSlot): Model =>
+const drawGunSlot = (model: Model, slot: GunSlot): Model =>
   isHandFree(model)
     ? modifyFields(model, { player: player => drawSlot(player, slot) })
     : model
 
-export const heldSlot = (model: Model): GunSlot =>
-  heldSlotOf(model.player.arsenal)
+const heldSlot = (model: Model): GunSlot => heldSlotOf(model.player.arsenal)
 
-export const swapFromKey = (model: Model, code: string): Model => {
+const swapFromKey = (model: Model, code: string): Model => {
   if (isSwapKey(code)) {
     return swapGun(model)
   } else if (isKnifeKey(code)) {
@@ -202,10 +189,10 @@ export const swapFromKey = (model: Model, code: string): Model => {
   }
 }
 
-export const changedWeapon = (before: Model, after: Model): boolean =>
+const changedWeapon = (before: Model, after: Model): boolean =>
   inHandOf(before.player) !== inHandOf(after.player)
 
-export const isFighting = Phase.isAnyOf(['Wave'])
+const isFighting = Phase.isAnyOf(['Wave'])
 
 // NOTE: in co-op the new zombie card shows without stopping the game
 // (decided row 9), so only single player waits on it.
@@ -215,7 +202,7 @@ export const isDebutCardBlocking = (model: Model): boolean =>
 export const skipDebutCardWhenUp = (model: Model): Model =>
   isDebutCardBlocking(model) ? skipDebutCard(model) : model
 
-export const debutCardFromKey = (model: Model, code: string): Model => {
+const debutCardFromKey = (model: Model, code: string): Model => {
   if (isStartKey(code)) {
     return skipDebutCard(model)
   } else if (isPauseKey(code)) {
@@ -225,7 +212,7 @@ export const debutCardFromKey = (model: Model, code: string): Model => {
   }
 }
 
-export const phaseFromKey = (model: Model, code: string): Model =>
+const phaseFromKey = (model: Model, code: string): Model =>
   Phase.match(model.phase, {
     Ready: () =>
       isAskingDifficultyFirst(model) ? model : homeStartFromKey(model, code),
@@ -236,7 +223,7 @@ export const phaseFromKey = (model: Model, code: string): Model =>
     GameOver: () => endFromKey(model, code),
   })
 
-export const hasResumed = (before: Model, after: Model): boolean =>
+const hasResumed = (before: Model, after: Model): boolean =>
   isPaused(before.phase) && !isPaused(after.phase)
 
 // MENU TAPS
@@ -247,7 +234,7 @@ export const tapSound: UpdateStep = playSounds([uiCue('Pop')])
 // RELOAD
 
 // NOTE: with the knife out, R puts the last gun back in hand to reload it.
-export const reloadHeldGun: UpdateStep = model => {
+const reloadHeldGun: UpdateStep = model => {
   const stepModel = isWieldingMelee(model.player)
     ? drawGunSlot(model, heldSlot(model))
     : model
@@ -265,7 +252,7 @@ export const reloadHeldGun: UpdateStep = model => {
   ])(dropClip(modifyFields(stepModel, { player: beginReload })))
 }
 
-export const reloadFromKey = (code: string): UpdateStep =>
+const reloadFromKey = (code: string): UpdateStep =>
   stepWhen(() => isReloadKey(code), reloadHeldGun)
 
 // PAUSE
@@ -471,6 +458,13 @@ export const pressGunSlot =
       return swapFromButton(model)
     }
   }
+
+// NOTE: the touch HUD's reload button: R's reload, so with the knife out
+// it puts the last gun back in hand and reloads that.
+export const reloadFromButton: UpdateStep = stepWhen(
+  model => !isDebutCardBlocking(model),
+  model => combine(model, [unlockAudio, reloadHeldGun]),
+)
 
 // NOTE: a press on a HUD gun or knife slot. With a mouse mid-wave it is a
 // shot at the world beneath, like a click anywhere else, so a zombie behind
