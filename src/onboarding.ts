@@ -1,11 +1,13 @@
 import { Array, Option, Result, Schema, String, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { cameraOf, worldToView } from './camera'
+import { screenCameraOf, worldToView } from './camera'
 import { vectorLength } from './geometry'
 import { isPending, isTimedBreak, learn } from './lessons'
 import type { Model } from './model'
+import { landscapeFrameOffset, screenOf } from './screen'
 import { TURRET_WEAPON, maybeSelectedKind } from './traps'
+import { isKitchenTourOn } from './tutorialRules'
 import {
   BreakClock,
   DebutCard,
@@ -21,7 +23,6 @@ import {
   TrapHint,
   type ZombieKind,
 } from './worldSchema'
-import { isKitchenTourOn } from './tutorialRules'
 import { ZOMBIE_KIND_ORDER } from './zombies'
 
 export {
@@ -228,10 +229,16 @@ const followPlayer = (band: HintBand, playerY: number): HintBand => {
   }
 }
 
+// NOTE: the bands are drawn in the landscape frame, so the player is
+// measured there too, whatever the window's zoom.
 export const moveHintBand = (model: Model): Model =>
   modifyFields(model, {
     hintBand: band =>
-      followPlayer(band, worldToView(cameraOf(model), model.player).y),
+      followPlayer(
+        band,
+        worldToView(screenCameraOf(model), model.player).y -
+          landscapeFrameOffset(screenOf(model)).y,
+      ),
   })
 
 // HINTS

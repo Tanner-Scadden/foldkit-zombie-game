@@ -53,7 +53,11 @@ import { Message } from '../../src/message'
 import { type Difficulty, ZombieKind, initialModel } from '../../src/model'
 import { leadSeatOf } from '../../src/party'
 import { maybeOfferInReach } from '../../src/purchase'
-import { DEFAULT_PORTRAIT_SCREEN } from '../../src/screen'
+import {
+  DEFAULT_PORTRAIT_SCREEN,
+  LANDSCAPE_TOUCH_SCREEN,
+  type Screen,
+} from '../../src/screen'
 import {
   STALL_BOX,
   isShopOpenFor,
@@ -415,20 +419,28 @@ const OUT_OF_REACH = new Set(['Burrowed', 'Carried', 'Flying'])
 // VIEW=portrait plays as a phone held upright would: it sees only the
 // zombies inside the portrait camera's window, which follows it and leans
 // toward its aim like the game's. Zombies out of view are not shot or fled.
+// VIEW=touch plays as a phone on its side would, through the landscape
+// phone's zoomed window, with no aim assist, as in the game.
 const SEES_PORTRAIT_ONLY = process.env['VIEW'] === 'portrait'
 
+const maybeWindowScreen =
+  process.env['VIEW'] === 'portrait'
+    ? DEFAULT_PORTRAIT_SCREEN
+    : process.env['VIEW'] === 'touch'
+      ? LANDSCAPE_TOUCH_SCREEN
+      : undefined
+
+const windowCamera = (model: Model, screen: Screen) =>
+  cameraFor(levelOf(model), cameraFocus(model), worldWindowOf(screen))
+
 const portraitCamera = (model: Model) =>
-  cameraFor(
-    levelOf(model),
-    cameraFocus(model),
-    worldWindowOf(DEFAULT_PORTRAIT_SCREEN),
-  )
+  windowCamera(model, DEFAULT_PORTRAIT_SCREEN)
 
 const isInView = (model: Model, zombie: Model['zombies'][number]) => {
-  if (!SEES_PORTRAIT_ONLY) {
+  if (maybeWindowScreen === undefined) {
     return true
   }
-  const camera = portraitCamera(model)
+  const camera = windowCamera(model, maybeWindowScreen)
   return (
     zombie.x >= camera.x &&
     zombie.x <= camera.x + camera.width &&

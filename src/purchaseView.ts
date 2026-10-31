@@ -439,8 +439,27 @@ const offerShapes =
     return [...shapes, ...replaced]
   }
 
-const purchaseShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
-  Array.flatMap(offersOf(model), offerShapes(model, maybeOfferInReach(model)))
+// NOTE: a zoomed phone window can stop short of the boards or the fridge,
+// and the overlay has no edge of its own there: a tag wholly above or
+// below the window would hang over the portrait HUD band or the thumbs.
+const isTagInView =
+  (model: Model, camera: Camera) =>
+  (offer: Offer): boolean => {
+    const { height } = tagOf(model, offer)
+    return (
+      offer.spot.y + height >= camera.y &&
+      offer.spot.y <= camera.y + camera.height
+    )
+  }
+
+const purchaseShapes = (
+  model: Model,
+  camera: Camera,
+): ReadonlyArray<Canvas.Shape> =>
+  Array.flatMap(
+    Array.filter(offersOf(model), isTagInView(model, camera)),
+    offerShapes(model, maybeOfferInReach(model)),
+  )
 
 // NOTE: drawn on the overlay, over the actors and the HUD strip, placed
 // in the world by the screen camera, so a tag is never lost behind a
@@ -449,7 +468,7 @@ export const purchaseOverlayShapes = (
   model: Model,
   camera: Camera,
 ): ReadonlyArray<Canvas.Shape> =>
-  Array.match(purchaseShapes(model), {
+  Array.match(purchaseShapes(model, camera), {
     onEmpty: () => [],
     onNonEmpty: shapes => [
       group({
