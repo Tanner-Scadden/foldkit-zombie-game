@@ -7,7 +7,7 @@
 All on 2026-10-28.
 
 - **Everything moves to Cloudflare.** GitHub Pages was only for testing on other devices. It was removed (the site and `.github/workflows/pages.yml`) on 2026-10-28, once the Cloudflare deploy was live.
-- **The game is hosted at https://munch-manor.tanner-scadden.workers.dev**, the free `workers.dev` address, with no custom domain yet. The account's `workers.dev` subdomain is `tanner-scadden`.
+- **The game is hosted at https://munchmanor.com** since 2026-10-30, a Workers Custom Domain on the production Worker, with `www` redirecting to it and the API Worker at `https://api.munchmanor.com`. The old address, https://munch-manor.tanner-scadden.workers.dev, keeps serving the same build and is never redirected (see "Two origins"). Previews stay on `workers.dev`, whose account subdomain is `tanner-scadden`.
 - **Installed apps find new builds with `version.json`.** Each build stamps its commit into the bundle and into `version.json`, which is never cached. The game fetches it when it comes back into view, on focus, and every five minutes on quiet screens, and offers a tap to reload when the build differs. See "How updates reach installed apps" below.
 - **A small hand-written service worker keeps the game for offline play, and nothing else.** It precaches the build so the game cold starts with no network, and `version.json` still decides which build runs. No Workbox or `vite-plugin-pwa`. Decided 2026-10-29 from the owner: "I want to enjoy it on an airplane."
 - **GitHub Actions is the only deploy path.** Cloudflare Workers Builds (the dashboard's git integration) stays disconnected, so one push never fires two deploys.
@@ -62,7 +62,7 @@ Package names and APIs need checking against the Effect version the game uses (E
 
 ## Phases
 
-1. **Hosting. Done 2026-10-28.** The game is live at https://munch-manor.tanner-scadden.workers.dev. `infra/` declares one `Cloudflare.Website.Foldkit` resource (Alchemy's Foldkit flavor of `Website.Vite`). `.github/workflows/deploy.yml` gates every deploy on typecheck, lint, test, and build, deploys `prod` from `main`, and gives each pull request a `pr-<number>` preview with a comment that is destroyed when it closes. GitHub Pages is gone. See "What Phase 1 taught us" below.
+1. **Hosting. Done 2026-10-28.** The game went live at https://munch-manor.tanner-scadden.workers.dev, and at https://munchmanor.com since 2026-10-30. `infra/` declares one `Cloudflare.Website.Foldkit` resource (Alchemy's Foldkit flavor of `Website.Vite`). `.github/workflows/deploy.yml` gates every deploy on typecheck, lint, test, and build, deploys `prod` from `main`, and gives each pull request a `pr-<number>` preview with a comment that is destroyed when it closes. GitHub Pages is gone. See "What Phase 1 taught us" below.
 2. **Analytics. Live in production since 2026-10-29**, when pull request #2 merged. At the end of a run the game sends one anonymous summary with `navigator.sendBeacon`. A Worker decodes it with the shared Schema, rate limits it, and writes a row to D1. `bun tools/analytics/report.ts --stage <stage>` prints the real win rate and where real players die, which until now we only guessed at with the balance bot. See "Analytics" below.
 3. **Local SQLite. Built and in production since 2026-10-29.** `packages/sqlite-wasm-effect` (published name still open, `@munch/sqlite-wasm-effect` for now) is the Effect wrapper: sqlite-wasm 3.54.1-build1 in a worker on `opfs-sahpool`, behind an `effect/sql` `SqlClient`, with the leader tab chosen by Web Locks. See its README. The on-device save moved into it as the `player` row (`src/store.ts`, `src/storeSqlite.ts`); see "The on-device save". `tools/audit/sqlite.ts` checks it in headless Chrome. The plan as first written: move settings and personal bests into SQLite in the browser. This is the first client mutation path and proves out the wasm build, OPFS, and migrations before sync depends on them. The character's look (`Appearance` in `src/model.ts`) is stored whole by the `ChangedAppearance` mutation.
    - **The difficulty** (`SavedDifficulty` in `src/save.ts`, save version 2): the chosen level, whether the first-time card was answered, and the Nightmare unlock. A version 1 save migrates as Normal with the card still to come. A Hard campaign win unlocks Nightmare, so the server will want to check that win before it trusts the unlock.
@@ -111,6 +111,14 @@ iOS keeps a Home Screen app alive in the background, so players can keep an old 
 - **The greeting.** The reload goes to the same address with `?updated=<build>` (`reloadOnto` in `src/version.ts`). On load `ReadUpdateMarker` takes the marker out of the address with `history.replaceState`, and only when it names the running build does the home menu open the greeting: confetti, the opened gift, "Updated!", the first three bullets of the newest What's New day as an emoji and a few words, a WHAT'S NEW button, and the red X. A reload that still landed on the old build greets nobody, and a later reload never greets again. Nothing is saved for it, so the save and the sync scope are untouched.
 - **The tap.** Once the unwrap plays, the gift first lets the new build's service worker take over (`activateNewBuild` in `src/serviceWorker.ts`): it checks `sw.js` once more, waits up to 15 seconds for the new worker to install, sends it `SkipWaiting`, and waits up to 5 seconds for it to take control. Then the page reloads. With no worker, or one that fails or is slow, the page reloads anyway.
 - **Check it.** `PART=e2e bun shots26.ts` in `tools/audit` builds, serves, rebuilds under an open page, and checks that the gift appears, the reload lands on the new build, and the greeting shows once. `bun run heavy -- bun tools/audit/offline.ts` checks the same with the service worker in the loop, and offline play (below).
+
+### Two origins
+
+Since 2026-10-30 production answers at two origins with one build: https://munchmanor.com (the canonical one) and the old https://munch-manor.tanner-scadden.workers.dev. `infra/alchemy.run.ts` gives the game Worker the custom domain `munchmanor.com`, with `www.munchmanor.com` as a redirect hostname (a 301 rule in the zone's dynamic redirect phase, before the Worker), and the API Worker `api.munchmanor.com`. Both Workers keep `workers.dev` on. The API allows any origin and authenticates with session tokens rather than cookies, so either origin's game reaches it, and builds still cached by a service worker keep reaching it at its old address.
+
+- **Why the old address is not redirected.** A save lives per origin: the SQLite file on OPFS, `localStorage`, and the service worker's cache. An installed app is bound to the origin it was installed from. A redirect would strand every anonymous player's save on the old origin and break installed apps. So the old address serves the same build, and `index.html` names `https://munchmanor.com/` as canonical (with the `og:` tags) so search and shares move over.
+- **The manifest stays relative.** `start_url` and `scope` are `.` and there is no `id`, so the app's identity is the origin it was installed from: an install on the old address stays a working install there, and new installs on munchmanor.com are their own.
+- **Moving a save.** A player who wants their progress on the new origin can link the two with the device link (Profile, ACCOUNT): the entering device takes the other device's progress. Whether to nudge old-origin players to do that is an open question for the owner (`TANNER_TODO.md`).
 
 ### Offline play
 
@@ -396,7 +404,7 @@ Settled on 2026-10-29. `GAME_DESIGN.md` used to list "server-side anything" and 
 
 ## Open questions
 
-1. ~~Which Cloudflare account, and the free `workers.dev` address or a real domain?~~ The owner's one account and `workers.dev` for now. A real domain is still open.
+1. ~~Which Cloudflare account, and the free `workers.dev` address or a real domain?~~ The owner's one account, and munchmanor.com since 2026-10-30 (see "Two origins").
 2. ~~Keep GitHub Pages running in parallel?~~ No. It is removed once Cloudflare is live.
 3. ~~Which analytics fields earn their place?~~ The `RunSummary` fields above, chosen 2026-10-29. ~~How long rows are kept?~~ 90 days, with a daily cleanup, chosen 2026-10-29.
 4. Do we store full runs (seed plus inputs) for replays?

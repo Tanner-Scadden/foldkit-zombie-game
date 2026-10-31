@@ -14,7 +14,7 @@
 // Run it from the repo root through the guard, with its own preview port:
 //   bun run heavy -- bun tools/audit/offline.ts
 // Against a deployed copy (steps 1 and 2 only, nothing is built):
-//   BASE=https://munch-manor.tanner-scadden.workers.dev/ bun run heavy -- bun tools/audit/offline.ts
+//   BASE=https://munchmanor.com/ bun run heavy -- bun tools/audit/offline.ts
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

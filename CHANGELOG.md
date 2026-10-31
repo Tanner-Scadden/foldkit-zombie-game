@@ -9,6 +9,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 - 💀 Getting munched is a moment now: you topple, the zombies pile on, MUNCHED! slams down, and your run counts up. Go further or splat more than ever for a NEW BEST!
 - 🏆 Winning rains confetti (and a little gore) and crowns the MVP in co-op. Hit SHARE to brag on X.
 - 🎯 Zombie lurking behind your gun slots? Mid-wave, a mouse click there shoots it now instead of swapping guns.
+- 🏠 Munch Manor has a real address now: munchmanor.com
 
 ## October 30, 2026: Bring your friends
 

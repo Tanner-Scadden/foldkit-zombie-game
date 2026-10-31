@@ -14,6 +14,7 @@ import {
 // build "smoke-test" so the report can tell it apart:
 //
 //   bun tools/analytics/smoke.ts https://munch-manor-api-pr-42.tanner-scadden.workers.dev
+//   bun tools/analytics/smoke.ts https://api.munchmanor.com   # production
 
 const USAGE = 'Usage: bun tools/analytics/smoke.ts <api origin>'
 

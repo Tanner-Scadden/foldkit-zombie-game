@@ -7,7 +7,7 @@ import { launch, wait } from './lib'
 // throws. The sprite warm-up canvases from src/layers.ts are not counted.
 // Usage: bun live-check.ts [url]
 
-const URL = process.argv[2] ?? 'https://munch-manor.tanner-scadden.workers.dev/'
+const URL = process.argv[2] ?? 'https://munchmanor.com/'
 const EXPECTED_CANVASES = 4
 
 const browser = await launch()

@@ -13,4 +13,6 @@ Things the game is blocked on until the owner does or decides them. Agents add a
 - [ ] **Check the rotation setting on a real Android phone (installed app).** The app now starts in landscape, and Settings' ROTATE tile (LOCKED or AUTO) lets it turn. Install it, flip ROTATE, turn the phone, and say if it follows.
 ## Later
 
-- [ ] **Release video, once co-op lands.** See `RELEASE_VIDEO.md`. You will need: the X account to post from and a decision on a custom domain. The players-together shots are mocked in pixel art.
+- [ ] **Nudge players on the old address to move?** The game now lives at https://munchmanor.com, and the old https://munch-manor.tanner-scadden.workers.dev keeps serving the same build on purpose: a save lives per address (the on-device database, settings, the offline copy), and installed apps are tied to the address they came from, so a redirect would strand every save there. Decide whether to add a small in-game "we moved, bring your save" card on the old address only. It would use the device link that already exists (Profile, ACCOUNT): open munchmanor.com, link it to the old address with a code, and the new address takes the old one's progress. Reply "build the move nudge" or "leave it". Nothing is built yet. See "Two origins" in `PLATFORM.md`.
+
+- [ ] **Release video, once co-op lands.** See `RELEASE_VIDEO.md`. You will need: the X account to post from. The players-together shots are mocked in pixel art.
