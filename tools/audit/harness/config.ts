@@ -151,6 +151,8 @@ export const HarnessConfig = Schema.Struct({
     ),
   ),
   traphint: Choice(['Barricade', 'Turret']),
+  // NOTE: `quest` stages the guided first break running or just done.
+  quest: Choice(['running', 'done']),
   // The player and the guns
   px: MaybeNum,
   py: MaybeNum,

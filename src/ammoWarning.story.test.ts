@@ -169,8 +169,6 @@ describe("Rattles' call about ammo", () => {
 
   test('an onboarding saved before the ammo tip reads it as unseen', () => {
     const { ammoTip: _dropped, ...older } = saveOf(initialModel).onboarding
-    expect(Schema.decodeSync(SavedOnboarding)(older).ammoTip).toBe(
-      'Unseen',
-    )
+    expect(Schema.decodeSync(SavedOnboarding)(older).ammoTip).toBe('Unseen')
   })
 })

@@ -1,0 +1,113 @@
+// The guided first break pass: each step of the tour a new player gets in
+// the break before wave 2 (walk to Rattles, buy a free Plank Pile, place it
+// in a doorway, done), on a 1280x720 desktop and a 390x844 phone held
+// upright, as `s42-<TAG>-<viewport>-<scene>.png`. It checks that the
+// tracker shows on every step, that the Plank Pile is FREE, and that the
+// tracker's skip button is big enough to tap, and exits with 1 on a miss.
+//   TAG=after bun run heavy -- --shared bun tools/audit/shots42.ts
+import type { Page } from 'playwright-core'
+
+import {
+  DESKTOP_1280,
+  UPRIGHT_390,
+  deviceQuery,
+  finish,
+  harnessQuery,
+  isPickedScene,
+  launch,
+  pickViewports,
+  scenePages,
+  settleAnimations,
+  shot,
+  tagOr,
+  useHarness,
+} from './lib'
+
+const TAG = tagOr('after')
+
+const VIEWPORTS = pickViewports([
+  { ...DESKTOP_1280, name: 'd1280' },
+  { ...UPRIGHT_390, name: 'p390' },
+])
+
+const NEW_PLAYER = 'learned=move,fire,startWave,pickup&seen=all'
+const FIRST_BREAK = `wave=2&break=open&breakMs=3000&money=12&${NEW_PLAYER}`
+
+type Scene = Readonly<{
+  name: string
+  query: string
+  act?: (page: Page, problems: Array<string>, label: string) => Promise<void>
+}>
+
+const hasTracker = async (
+  page: Page,
+  problems: Array<string>,
+  label: string,
+) => {
+  if ((await page.locator('.quest-tracker').count()) === 0) {
+    problems.push(`${label}: no tracker`)
+  }
+}
+
+const SCENES: ReadonlyArray<Scene> = [
+  { name: 'go', query: `${FIRST_BREAK}&tick=2`, act: hasTracker },
+  {
+    name: 'buy',
+    query: `${FIRST_BREAK}&px=270&py=142&tick=4`,
+    act: async (page, problems, label) => {
+      await hasTracker(page, problems, label)
+      const tab = page.getByRole('tab', { name: /^Traps/ }).first()
+      await tab.click()
+      await settleAnimations(page)
+      const price = await page
+        .locator('#shop-item-Barricade .shop-tag')
+        .textContent()
+      if (price?.trim() !== 'FREE') {
+        problems.push(`${label}: the Plank Pile is "${price}", not FREE`)
+      }
+    },
+  },
+  {
+    name: 'place',
+    query: `${FIRST_BREAK}&quest=running&traphint=Barricade&barricades=1&px=200&py=60&tick=2`,
+    act: async (page, problems, label) => {
+      await hasTracker(page, problems, label)
+      const skip = await page.locator('.quest-skip').boundingBox()
+      if (skip === null || skip.width < 32 || skip.height < 32) {
+        problems.push(`${label}: the skip button is too small to tap`)
+      }
+    },
+  },
+  {
+    name: 'done',
+    query: `wave=2&break=open&breakMs=3000&quest=done&${NEW_PLAYER}&tick=2`,
+    act: hasTracker,
+  },
+]
+
+await useHarness()
+const browser = await launch()
+const pages = scenePages(browser, ['nodev'])
+const problems: Array<string> = []
+for (const viewport of VIEWPORTS) {
+  for (const scene of SCENES) {
+    if (!isPickedScene(scene.name)) {
+      continue
+    }
+    const label = `${viewport.name} ${scene.name}`
+    const page = await pages.open(
+      viewport,
+      harnessQuery(scene.query, deviceQuery(viewport)),
+    )
+    await settleAnimations(page)
+    if (scene.act !== undefined) {
+      await scene.act(page, problems, label)
+    }
+    await shot(page, `s42-${TAG}-${viewport.name}-${scene.name}`)
+    console.log(`shot ${label}`)
+    pages.release(page)
+  }
+}
+await pages.close()
+await browser.close()
+finish(problems, 'The guided first break pass found no problems.')

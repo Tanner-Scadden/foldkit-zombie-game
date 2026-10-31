@@ -39,6 +39,7 @@ import {
   SCENE_SUBSCRIPTIONS,
   holdingSecond,
   measureSurface,
+  pastFirstBreak,
   withPistol,
 } from './testing'
 import { asVeteran } from './veteran'
@@ -153,7 +154,7 @@ describe('Start wave button', () => {
 })
 
 describe('Shop', () => {
-  const atStall: Model = modifyFields(initialModel, {
+  const atStall: Model = modifyFields(pastFirstBreak(initialModel), {
     maybeSurface: () =>
       Option.some({ left: 0, top: 0, width: 800, height: 400 }),
     phase: () =>

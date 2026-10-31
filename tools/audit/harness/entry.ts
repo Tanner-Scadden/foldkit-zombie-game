@@ -56,6 +56,7 @@ import {
   type Decal,
   type DecalKind,
   DifficultyCard,
+  FirstBreakQuest,
   FridgeDoor,
   Lesson,
   type Model,
@@ -1280,6 +1281,15 @@ const scenarioModelOf = (): Model => {
     model = modifyFields(model, {
       trapHint: () => TrapHint.Showing(),
       selectedTrap: () => traphint,
+    })
+  }
+  const quest = config.quest
+  if (quest !== undefined) {
+    model = modifyFields(model, {
+      firstBreakQuest: () =>
+        quest === 'done'
+          ? FirstBreakQuest.Done({ ageMs: 0 })
+          : FirstBreakQuest.Running(),
     })
   }
   const newer = config.newer

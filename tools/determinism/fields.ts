@@ -82,6 +82,7 @@ export const FIELD_CLASSES = {
   shopTabs: 'Client',
   trapHint: 'Client',
   ammoTip: 'Client',
+  firstBreakQuest: 'Client',
   maybeOpenHelpCard: 'Client',
   trapNotice: 'Client',
   lastDevice: 'Client',

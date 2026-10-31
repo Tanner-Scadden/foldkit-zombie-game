@@ -851,3 +851,66 @@ export const ROUNDS_ICON = pixelIconUrl(
   ],
   { B: '#c9a227', Y: '#ffe066', O: '#a87b1a' },
 )
+
+// NOTE: the guided first break's tracker (src/questView.ts): Rattles' stall,
+// a coin above a Plank Pile to buy, and planks across a doorway to place.
+const QUEST_PALETTE: Palette = {
+  o: SHADE,
+  r: '#ff4a4f',
+  w: LIGHT,
+  R: '#a8302a',
+  f: '#6b4426',
+  d: '#21140c',
+  Y: '#c9a227',
+  y: '#ffe066',
+  P: '#c98a4a',
+  L: '#8a5a2b',
+}
+
+export const QUEST_SHOP_ICON = pixelIconUrl(
+  [
+    'rwrwrwrwrwr',
+    'rwrwrwrwrwr',
+    '.R.R.R.R.R.',
+    '.f..yyy..f.',
+    '.f.yyYyy.f.',
+    '.f.yyYyy.f.',
+    '.f..yyy..f.',
+    'fffffffffff',
+    'fYYYYYYYYYf',
+    'fffffffffff',
+  ],
+  QUEST_PALETTE,
+)
+
+export const QUEST_BUY_ICON = pixelIconUrl(
+  [
+    '....yyy....',
+    '...yyYyy...',
+    '...yyYyy...',
+    '....yyy....',
+    '...........',
+    'ooooooooooo',
+    'oPPPPLPPPPo',
+    'ooooooooooo',
+    'oPPPPLPPPPo',
+    'ooooooooooo',
+  ],
+  QUEST_PALETTE,
+)
+
+export const QUEST_PLACE_ICON = pixelIconUrl(
+  [
+    'fffffffffff',
+    'fdddddddddf',
+    'oooooooooo.',
+    'oPPPLPPPPPo',
+    'oooooooooo.',
+    'fdddddddddf',
+    '.oooooooooo',
+    'oPPPPPLPPPo',
+    '.oooooooooo',
+    'fdddddddddf',
+  ],
+  QUEST_PALETTE,
+)
