@@ -12,26 +12,12 @@ import {
 } from './fridgeWeapons'
 import { FRIDGE_RISE_PX } from './kitchenView'
 import { fridgeBoxOf } from './leftovers'
-import {
-  Charge,
-  FridgeDoor,
-  type FridgePrize,
-  type Lob,
-  type Model,
-  type Player,
-} from './model'
-import { maybePlayerAt } from './party'
-import {
-  type Sprite,
-  bakeShapes,
-  gunIcon,
-  placeAt,
-  spriteShapes,
-} from './sprite'
+import { Charge, FridgeDoor, type Lob, type Model, type Player } from './model'
+import { type Sprite, bakeShapes, placeAt, spriteShapes } from './sprite'
 
 // The Mystery Leftovers fridge in motion (src/leftovers.ts) and the fridge
 // weapons' own pictures (src/fridgeWeapons.ts): the door swinging open on a
-// pull with the prize popping up and flying to whoever pulled, the chain
+// pull (the prize's reveal is src/fridgeRevealView.ts), the chain
 // and padlock while it rests after a slam, the Cooker's pressure dial over
 // the player, and its lids in flight. The fridge itself is baked into the
 // kitchen (fridgeShapes in src/kitchenView.ts).
@@ -84,50 +70,6 @@ const CHAIN: Sprite = bakeShapes([
 ])
 
 const SLAM_SHAKE_MS = 500
-
-// THE PRIZES
-
-const SANDWICH: Sprite = spriteShapes(
-  ['.kkkkkk.', 'kyyyyyyk', 'kgGrgGgk', 'kyyyyyyk', '.kkkkkk.'],
-  { k: '#140c10', y: '#e0c070', g: '#7aa04a', G: '#4e6a2a', r: '#c8343c' },
-)
-
-const FISH_BONES: Sprite = spriteShapes(
-  ['k.......kk.', 'kk.w.w.kwwk', '.wwwwwwwwkw', 'kk.w.w.kwwk', 'k.......kk.'],
-  { k: '#140c10', w: '#e8e2cc' },
-)
-
-const prizeSprite = (prize: FridgePrize): Sprite =>
-  prize === 'Sandwich'
-    ? SANDWICH
-    : prize === 'Dud'
-      ? FISH_BONES
-      : gunIcon(prize, 0)
-
-// NOTE: the prize pops out of the door's middle and only a little up, so
-// on a landscape screen it never rises into the HUD band over the back
-// wall, then drops to the puller, who stands below.
-const RISE_SHARE = 0.45
-const RISE_PX = 6
-const PRIZE_DOOR_PX = 14
-const FLIGHT_ARC_PX = 4
-
-type At = Readonly<{ x: number; y: number }>
-
-const prizeAt = (from: At, to: At, progress: number): At => {
-  if (progress < RISE_SHARE) {
-    return { x: from.x, y: from.y - (progress / RISE_SHARE) * RISE_PX }
-  }
-  const flight = (progress - RISE_SHARE) / (1 - RISE_SHARE)
-  const start = { x: from.x, y: from.y - RISE_PX }
-  return {
-    x: start.x + (to.x - start.x) * flight,
-    y:
-      start.y +
-      (to.y - start.y) * flight -
-      4 * FLIGHT_ARC_PX * flight * (1 - flight),
-  }
-}
 
 type FridgeSpot = Readonly<{ left: number; top: number; bottom: number }>
 
@@ -185,86 +127,6 @@ export const fridgeDrawables = (model: Model): ReadonlyArray<Drawable> =>
           }),
       })
     : []
-
-const PRIZE_LIFT_PX = 14
-
-// NOTE: the prize, drawn over everything, from the fridge to the puller.
-// NOTE: a weapon on offer bobs in the door with a ring round it that
-// empties as its time runs out, blinking near the end.
-const OFFER_BOB_MS = 300
-const OFFER_BLINK_MS = 120
-const OFFER_WARN_MS = 1500
-const OFFER_RING_LIFT_PX = 9
-
-const offerShapes = (
-  model: Model,
-  prize: FridgePrize,
-  remainingMs: number,
-  durationMs: number,
-): ReadonlyArray<Canvas.Shape> =>
-  Option.match(maybeFridgeSpot(model), {
-    onNone: () => [],
-    onSome: spot => {
-      const x = spot.left + FRIDGE_WIDTH / 2
-      const y =
-        spot.top +
-        FREEZER_PX +
-        PRIZE_DOOR_PX -
-        RISE_PX -
-        (Math.floor(model.elapsedMs / OFFER_BOB_MS) % 2)
-      const isBlinkedOut =
-        remainingMs < OFFER_WARN_MS &&
-        Math.floor(model.elapsedMs / OFFER_BLINK_MS) % 2 === 0
-      const ring = Option.getOrElse(
-        Array.get(
-          DIALS,
-          Math.ceil((remainingMs / Math.max(1, durationMs)) * DIAL_STEPS),
-        ),
-        () => DIALS[0],
-      )
-      return isBlinkedOut
-        ? []
-        : [
-            placeAt(Math.round(x), Math.round(y), prizeSprite(prize)),
-            placeAt(Math.round(x), Math.round(y) - OFFER_RING_LIFT_PX, ring),
-          ]
-    },
-  })
-
-const isWeaponPrize = (prize: FridgePrize): boolean =>
-  prize === 'Cooker' || prize === 'Pan' || prize === 'Freeze'
-
-const prizeShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
-  FridgeDoor.match(model.fridge.door, {
-    Shut: () => [],
-    Slammed: () => [],
-    Offering: ({ prize, remainingMs, durationMs }) =>
-      offerShapes(model, prize, remainingMs, durationMs),
-    Open: ({ prize, slot, remainingMs, durationMs }) =>
-      Option.match(maybeFridgeSpot(model), {
-        onNone: () => [],
-        onSome: spot => {
-          const from = {
-            x: spot.left + FRIDGE_WIDTH / 2,
-            y: spot.top + FREEZER_PX + PRIZE_DOOR_PX,
-          }
-          const to = Option.match(maybePlayerAt(model, slot), {
-            onNone: () => from,
-            onSome: ({ player }) => ({
-              x: player.x,
-              y: player.y - PRIZE_LIFT_PX,
-            }),
-          })
-          const progress = 1 - remainingMs / Math.max(1, durationMs)
-          const at = isWeaponPrize(prize)
-            ? prizeAt(from, from, Math.min(progress, RISE_SHARE - 0.001))
-            : prizeAt(from, to, progress)
-          return [
-            placeAt(Math.round(at.x), Math.round(at.y), prizeSprite(prize)),
-          ]
-        },
-      }),
-  })
 
 // THE DIAL
 
@@ -405,8 +267,4 @@ const lidShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
 // NOTE: what flies over the heads of everything standing.
 export const fridgeOverheadShapes = (
   model: Model,
-): ReadonlyArray<Canvas.Shape> => [
-  ...lidShapes(model),
-  ...dialShapes(model),
-  ...prizeShapes(model),
-]
+): ReadonlyArray<Canvas.Shape> => [...lidShapes(model), ...dialShapes(model)]

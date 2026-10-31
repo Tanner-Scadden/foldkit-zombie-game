@@ -606,6 +606,15 @@ export const Callout = Schema.Struct({
 })
 export type Callout = typeof Callout.Type
 
+// NOTE: a cosmetic: a fridge weapon the player just took, flying from the
+// fridge's door (`from`, in the world) into its HUD gun slot, which then
+// pulses (src/fridgeReveal.ts). Never part of the World.
+export const PrizeFlight = defineTaggedUnion({
+  Grounded: {},
+  Flying: { prize: WeaponKind, from: Vector, ageMs: Schema.Number },
+})
+export type PrizeFlight = typeof PrizeFlight.Type
+
 // NOTE: a shot names the seat that fired it (a PlayerSlot), so a co-op
 // client can tell its own shots, which it predicts, from the room's; a
 // trap's shot names none.

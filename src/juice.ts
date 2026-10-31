@@ -386,12 +386,7 @@ const eventPopups = (
     FridgeSlammed: () => noPopups(state),
     PrizeTaken: () => noPopups(state),
     PrizeLeft: () => noPopups(state),
-    DudBurped: ({ x, y, refund }) =>
-      generateMany(
-        state,
-        1,
-        popup('Payday', refund, x, y - PAYDAY_POPUP_LIFT_PX),
-      ),
+    DudBurped: () => noPopups(state),
     LidLaunched: () => noPopups(state),
     LidBlasted: () => noPopups(state),
     CookerPopped: () => noPopups(state),

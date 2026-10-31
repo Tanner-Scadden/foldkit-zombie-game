@@ -10,7 +10,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 
 - 🧟‍♂️🧟‍♀️ CO-OP is here: up to 4 of you in one manor. Share a room code, or hit QUICK PLAY and we'll find you a crew. Revive your buddies before they bleed out!
 - 🎁 Dress up however you like (mohawks, beards, dresses, a rainbow shirt, on any body), unwrap new versions as a rattling gift, and put the game on your Home Screen from the phone tile.
-- 🥡 Mystery Leftovers: hold Enter (or the hand button) at the grimy kitchen fridge to pull a Pressure Cooker that lobs exploding lids, a Clang Pan for home runs, or the rare Brain Freeze that turns zombies into popsicles. Take it or leave it! Or a moldy sandwich. Rattles will soup them up.
+- 🥡 Mystery Leftovers: hold Enter (or the hand button) at the grimy kitchen fridge to pull a Pressure Cooker that lobs exploding lids, a Clang Pan for home runs, or the rare Brain Freeze that turns zombies into popsicles. Take it or leave it! Or a moldy sandwich. Every pull spins like a slot machine and lands with a BOOM, BONK, or BRRR. Rattles will soup them up.
 - 🔪 You always pack a knife now: press F (or the knife button) to stab whatever gets too close. Trade your pistol for a second real gun, and Rattles hands it back for free whenever you miss it.
 - 🧹 Playtest fixes: one big PLAY arrow, the SMG is the Chatterbox, kitchen boards open with a hold, crisper sprites, smoother big hordes on slow phones, truer aim on upright phones, and Hard and Nightmare ease off a hair.
 

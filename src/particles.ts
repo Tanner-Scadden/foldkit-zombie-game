@@ -729,7 +729,6 @@ const frostBit =
 
 const FRIDGE_FOG = 12
 const DUD_FOG = 4
-const DUD_COINS = 5
 const SLAM_DUST = 10
 const LAUNCH_STEAM = 3
 const LID_SMOKE = 6
@@ -1287,13 +1286,7 @@ const eventParticles = (
     PrizeTaken: ({ x, y }) => sparks({ x, y: y + 14 }, LID_SPARKS)(state),
     PrizeLeft: ({ x, y }) =>
       generateMany(state, DUD_FOG, fogPuff({ x, y: y + 14 })),
-    DudBurped: ({ x, y }) =>
-      chain(state, [
-        drawState =>
-          generateMany(drawState, DUD_FOG, fogPuff(playerGround(x, y))),
-        drawState =>
-          generateMany(drawState, DUD_COINS, coin(playerGround(x, y))),
-      ]),
+    DudBurped: () => noParticles(state),
     LidLaunched: ({ x, y }) =>
       generateMany(state, LAUNCH_STEAM, smokePuff(playerGround(x, y))),
     LidBlasted: ({ x, y }) =>

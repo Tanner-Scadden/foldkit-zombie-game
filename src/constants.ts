@@ -406,3 +406,11 @@ export const ENDLESS_ESCORTS_PER_WAVE = 6
 export const ENDLESS_TANKS_BASE = 4
 export const ENDLESS_WAVES_PER_EXTRA_TANK = 2
 export const ENDLESS_EXPLODER_WEIGHT_PER_WAVE = 0.25
+
+// NOTE: how long each face of the Mystery Leftovers spin shows, fast then
+// slow, 0.7 s in all, so the prize lands with 0.4 s of the door's 1.1 s
+// opening still to go (src/fridgeReveal.ts). The spin's clicks keep time
+// with it (src/audio.ts).
+export const FRIDGE_SPIN_STEPS_MS: ReadonlyArray<number> = [
+  40, 40, 45, 50, 55, 65, 75, 90, 110, 130,
+]

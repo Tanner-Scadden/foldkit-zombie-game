@@ -29,6 +29,16 @@ const nameOf = (target: Purchasable): string =>
     Prize: () => 'the prize from the fridge, free',
   })
 
+// NOTE: a weapon on offer is already paid for, so its button says TAKE
+// where a price would be.
+const badgeOf = (offer: Offer): string =>
+  Purchasable.isAnyOf(['Prize'])(offer.target) ? 'TAKE' : `$${offer.price}`
+
+const labelOf = (offer: Offer): string =>
+  Purchasable.isAnyOf(['Prize'])(offer.target)
+    ? 'Hold to take the prize from the fridge'
+    : `Hold to open ${nameOf(offer.target)} for ${offer.price} dollars`
+
 // NOTE: what the player is at: the offer in reach, or the one they still
 // hold or were refused at a moment ago.
 const maybeShownOffer = (model: Model): Option.Option<Offer> =>
@@ -94,9 +104,7 @@ const holdButtonFor = (
           ? 'icon-button cluster-button hold-buy-button is-refused'
           : 'icon-button cluster-button hold-buy-button',
       ),
-      h.AriaLabel(
-        `Hold to open ${nameOf(offer.target)} for ${offer.price} dollars`,
-      ),
+      h.AriaLabel(labelOf(offer)),
       ...(isShort ? [h.AriaDisabled(true)] : []),
       h.DataAttribute('short', isShort ? 'true' : 'false'),
       h.Style({ '--hold': `${progressAt(model, offer)}` }),
@@ -112,7 +120,7 @@ const holdButtonFor = (
       ]),
       h.span(
         [h.Class('icon-button-badge hold-buy-price'), h.AriaHidden(true)],
-        [`$${offer.price}`],
+        [badgeOf(offer)],
       ),
     ],
   )

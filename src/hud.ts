@@ -828,7 +828,7 @@ const playHudShapes = (
     : []),
 ]
 
-const HUD_STRIP_HEIGHT = 20
+export const HUD_STRIP_HEIGHT = 20
 const HUD_STRIP_COLOR = 'rgba(20, 15, 24, 0.75)'
 
 // NOTE: in landscape the top HUD sits over the north wall, whose pictures,

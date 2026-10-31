@@ -1,4 +1,4 @@
-import { Array } from 'effect'
+import { Array, Option } from 'effect'
 import {
   Subscription,
   expect,
@@ -12,10 +12,18 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
+import { levelOf, openExitIn } from './arena'
 import { FIXED_STEP_MS } from './constants'
-import { EXIT_RULES } from './exits'
+import { EXIT_RULES, KITCHEN_EXIT } from './exits'
+import { FRIDGE_RULES, fridgeBoxOf } from './leftovers'
 import { Message } from './message'
-import { type InputDevice, type Model, Phase, initialModel } from './model'
+import {
+  FridgeDoor,
+  type InputDevice,
+  type Model,
+  Phase,
+  initialModel,
+} from './model'
 import { PURCHASE_RULES } from './purchase'
 import { ROOT, SCENE_SUBSCRIPTIONS, measureSurface } from './testing'
 import { asVeteran } from './veteran'
@@ -98,6 +106,52 @@ describe('holding to buy on a keyboard', () => {
       expect(
         text(`the kitchen, ${EXIT_RULES.price} dollars. Hold Enter to buy.`),
       ).toExist(),
+    )
+  })
+})
+
+describe('taking a fridge prize on touch', () => {
+  const offered = (): Model => {
+    const kitchen = openExitIn(asVeteran(initialModel).level, KITCHEN_EXIT)
+    const box = Option.getOrThrow(fridgeBoxOf(levelOf({ level: kitchen })))
+    return modifyFields(atBoards('Touch', 0), {
+      level: () => kitchen,
+      player: player =>
+        modifyFields(player, {
+          x: () => (box.left + box.right) / 2,
+          y: () => box.bottom + 8,
+        }),
+      fridge: fridge =>
+        modifyFields(fridge, {
+          door: () =>
+            FridgeDoor.Offering({
+              prize: 'Freeze',
+              slot: 0,
+              remainingMs: 5000,
+              durationMs: FRIDGE_RULES.offerMs,
+            }),
+        }),
+    })
+  }
+
+  const takeButton = role('button', {
+    name: 'Hold to take the prize from the fridge',
+  })
+
+  test('the hold button says TAKE, not a price, and holding it takes the prize', () => {
+    scene(
+      ROOT,
+      given(offered()),
+      measureSurface,
+      expect(takeButton).toExist(),
+      expect(selector('.hold-buy-price')).toHaveText('TAKE'),
+      pointerDown(takeButton, { pointerType: 'touch', pointerId: 4 }),
+      ...frames(HOLD_TICKS),
+      expect(takeButton).toBeAbsent(),
+      Subscription.emit(
+        SCENE_SUBSCRIPTIONS.pointerReleases,
+        Message.ReleasedPointer({ pointerId: 4 }),
+      ),
     )
   })
 })

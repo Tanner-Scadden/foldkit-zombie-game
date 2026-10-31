@@ -8,6 +8,7 @@ import {
   pipe,
 } from 'effect'
 
+import { FRIDGE_SPIN_STEPS_MS, MS_PER_SECOND } from './constants'
 import { describeError } from './describeError'
 import {
   type MusicCue,
@@ -250,6 +251,23 @@ const PICKUP_CHIRP: ReadonlyArray<ToneLayer> = [
 ]
 
 const JINGLE_START_SECONDS = 0.08
+
+// NOTE: one click for each face of the fridge's spin, on the faces' own
+// beat, then a thunk where it lands.
+const SPIN_CLICK_STARTS: ReadonlyArray<number> = Array.map(
+  Array.makeBy(FRIDGE_SPIN_STEPS_MS.length, index =>
+    Array.reduce(
+      Array.take(FRIDGE_SPIN_STEPS_MS, index),
+      0,
+      (sum, stepMs) => sum + stepMs,
+    ),
+  ),
+  startMs => startMs / MS_PER_SECOND,
+)
+
+const SPIN_LAND_SECONDS =
+  Array.reduce(FRIDGE_SPIN_STEPS_MS, 0, (sum, stepMs) => sum + stepMs) /
+  MS_PER_SECOND
 
 const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
   Shot: {
@@ -1589,6 +1607,100 @@ const RECIPES: Readonly<Record<SoundEffect, Recipe>> = {
         wave: 'triangle',
         pitch: [at(0, 1568), at(0.25, 1568)],
         envelope: envelope(0.2, 0.002, 0.25, 0.21),
+      },
+    ],
+    noises: [],
+  },
+  FridgeSpin: {
+    variationCents: 0,
+    tones: Array.map(SPIN_CLICK_STARTS, (startSeconds, index) => ({
+      wave: 'square' as const,
+      pitch: [at(0, 1320 - index * 60), at(0.025, 990 - index * 50)],
+      envelope: envelope(0.07, 0.001, 0.025, startSeconds),
+    })),
+    noises: [
+      {
+        filter: 'lowpass',
+        quality: 3,
+        cutoff: [at(0, 900), at(0.12, 160)],
+        envelope: envelope(0.4, 0.003, 0.12, SPIN_LAND_SECONDS),
+      },
+    ],
+  },
+  PrizeJackpot: {
+    variationCents: 0,
+    tones: [
+      ...Array.map([784, 988, 1175, 1568, 1976], (frequency, index) => ({
+        wave: 'square' as const,
+        pitch: [at(0, frequency), at(0.06, frequency)],
+        envelope: envelope(0.11, 0.002, 0.07, index * 0.06),
+      })),
+      {
+        wave: 'triangle',
+        pitch: [at(0, 2349), at(0.5, 3136)],
+        envelope: envelope(0.16, 0.004, 0.5, 0.3),
+      },
+      {
+        wave: 'sine',
+        pitch: [at(0, 3520), at(0.4, 4186)],
+        envelope: envelope(0.06, 0.002, 0.4, 0.34),
+      },
+    ],
+    noises: [
+      {
+        filter: 'highpass',
+        quality: 1,
+        cutoff: [at(0, 6000), at(0.5, 9000)],
+        envelope: envelope(0.08, 0.01, 0.5, 0.3),
+      },
+    ],
+  },
+  PrizeChomp: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'square',
+        pitch: [at(0, 220), at(0.06, 110)],
+        envelope: envelope(0.16, 0.002, 0.06),
+      },
+      {
+        wave: 'square',
+        pitch: [at(0, 240), at(0.06, 120)],
+        envelope: envelope(0.16, 0.002, 0.06, 0.16),
+      },
+      {
+        wave: 'triangle',
+        pitch: [at(0, 660), at(0.1, 880)],
+        envelope: envelope(0.1, 0.004, 0.12, 0.3),
+      },
+    ],
+    noises: [
+      {
+        filter: 'bandpass',
+        quality: 2,
+        cutoff: [at(0, 2400), at(0.07, 700)],
+        envelope: envelope(0.45, 0.001, 0.07),
+      },
+      {
+        filter: 'bandpass',
+        quality: 2,
+        cutoff: [at(0, 2600), at(0.07, 760)],
+        envelope: envelope(0.45, 0.001, 0.07, 0.16),
+      },
+    ],
+  },
+  PrizeWomp: {
+    variationCents: 0,
+    tones: [
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 247), at(0.22, 233)],
+        envelope: envelope(0.16, 0.01, 0.22),
+      },
+      {
+        wave: 'sawtooth',
+        pitch: [at(0, 220), at(0.5, 196), at(0.7, 185)],
+        envelope: envelope(0.16, 0.01, 0.6, 0.28),
       },
     ],
     noises: [],

@@ -67,5 +67,9 @@ export const SoundEffect = Schema.Literals([
   'PackBonus',
   'Swish',
   'Stab',
+  'FridgeSpin',
+  'PrizeJackpot',
+  'PrizeChomp',
+  'PrizeWomp',
 ])
 export type SoundEffect = typeof SoundEffect.Type

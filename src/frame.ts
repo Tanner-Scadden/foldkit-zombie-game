@@ -11,6 +11,7 @@ import {
   STEP_EPSILON_MS,
 } from './constants'
 import { couchInputs, isCouchPlay } from './couch'
+import { ageFlight, launchPrize } from './fridgeReveal'
 import { clamp } from './geometry'
 import { deriveIntent } from './input'
 import { advanceJuice } from './juice'
@@ -114,18 +115,21 @@ export const advanceCosmetics = (
   frameMs: number,
   worldMs: number,
 ): Model =>
-  advanceJuice(
-    advanceCallouts(
-      ageTrapNotice(
-        worldMs > 0
-          ? advanceParticles(model, worldMs / MS_PER_SECOND, worldMs)
-          : model,
+  ageFlight(
+    advanceJuice(
+      advanceCallouts(
+        ageTrapNotice(
+          worldMs > 0
+            ? advanceParticles(model, worldMs / MS_PER_SECOND, worldMs)
+            : model,
+          worldMs,
+        ),
         worldMs,
       ),
+      frameMs,
       worldMs,
     ),
     frameMs,
-    worldMs,
   )
 
 // NOTE: the camera leans toward the aim on the display's own time.
@@ -157,15 +161,18 @@ export const advanceGame = (model: Model, deltaTime: number): Model => {
     },
     ticks.count,
   )
-  return advanceCosmetics(
-    leanFor(
-      followRound(
-        model,
-        modifyFields(stepped.model, { frameEvents: () => stepped.events }),
+  return launchPrize(
+    model,
+    advanceCosmetics(
+      leanFor(
+        followRound(
+          model,
+          modifyFields(stepped.model, { frameEvents: () => stepped.events }),
+        ),
+        frameMs,
       ),
       frameMs,
+      stepped.worldMs,
     ),
-    frameMs,
-    stepped.worldMs,
   )
 }

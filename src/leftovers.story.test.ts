@@ -3,14 +3,11 @@ import { given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { levelOf, openExitIn } from './arena'
 import { FIXED_STEP_MS, PLAYER_MAX_HP } from './constants'
-import { KITCHEN_EXIT } from './exits'
 import {
   DUD_REFUND,
   FRIDGE_RULES,
   PRIZE_ORDER,
-  fridgeBoxOf,
   pickPrize,
   prizeWeights,
 } from './leftovers'
@@ -22,16 +19,18 @@ import {
   GameEvent,
   type Model,
   Phase,
-  type PlannedSpawn,
   Purchase,
-  initialModel,
 } from './model'
 import { maybePlayerAt, seatCrew, withSeat } from './party'
 import { nextRandom } from './prng'
 import { PURCHASE_RULES, offersOf } from './purchase'
-import { freshRun } from './runReset'
 import { stepWorld } from './stepWorld'
 import {
+  AT_FRIDGE,
+  FRIDGE_DISTANT_SPAWN,
+  atFridge,
+  freshRunModel,
+  fridgeSeededFor,
   holdingFirst,
   holdingSecond,
   pistolOnly,
@@ -39,7 +38,6 @@ import {
   release,
   ticks,
 } from './testing'
-import { asVeteran } from './veteran'
 import { freshGun } from './weapons'
 import { withWorld } from './world'
 import { idleIntent, shutFridge } from './worldSchema'
@@ -50,72 +48,6 @@ import { idleIntent, shutFridge } from './worldSchema'
 const FRAME_MS = FIXED_STEP_MS
 const HOLD_TICKS = Math.ceil(PURCHASE_RULES.holdMs / FRAME_MS) + 1
 const OPEN_TICKS = Math.ceil(FRIDGE_RULES.openMs / FRAME_MS) + 1
-
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
-const fridgeBox = Option.getOrThrow(
-  fridgeBoxOf(
-    levelOf({ level: openExitIn(freshRunModel().level, KITCHEN_EXIT) }),
-  ),
-)
-
-const AT_FRIDGE = {
-  x: (fridgeBox.left + fridgeBox.right) / 2,
-  y: fridgeBox.bottom + 8,
-}
-
-function freshRunModel(): Model {
-  const veteran = asVeteran(initialModel)
-  return modifyFields(
-    { ...veteran, ...freshRun(veteran) },
-    {
-      maybeSurface: () =>
-        Option.some({ left: 0, top: 0, width: 800, height: 400 }),
-    },
-  )
-}
-
-const atFridge = (balance: number, wave = 5): Model =>
-  modifyFields(freshRunModel(), {
-    level: level => openExitIn(level, KITCHEN_EXIT),
-    phase: () =>
-      Phase.Preparation({
-        wave,
-        remainingMs: 120_000,
-        durationMs: 120_000,
-        spawns: [DISTANT_SPAWN],
-      }),
-    wallet: () => ({ balance, earned: balance, shown: balance }),
-    player: player =>
-      modifyFields(player, { x: () => AT_FRIDGE.x, y: () => AT_FRIDGE.y }),
-  })
-
-// NOTE: a fridge whose stream's next draw lands on `prize`, found by trying
-// seeds, so a test can ask for each prize without knowing the stream.
-const seededFor = (current: Model, prize: FridgePrize): Model => {
-  const seed = Option.getOrThrow(
-    Array.findFirst(
-      Array.makeBy(500, index => index + 1),
-      candidate =>
-        pickPrize(
-          prizeWeights(current.fridge, current.player),
-          nextRandom(candidate).value,
-        ) === prize,
-    ),
-  )
-  return modifyFields(current, {
-    loot: loot => modifyFields(loot, { fridgeRngState: () => seed }),
-  })
-}
 
 const pull = [press('Enter'), ...ticks(HOLD_TICKS, FRAME_MS), release('Enter')]
 
@@ -129,7 +61,7 @@ describe('pulling from Mystery Leftovers', () => {
   test('holding Enter at the fridge pays, swings the door open, and offers a weapon', () => {
     story(
       update,
-      given(seededFor(atFridge(100), 'Cooker')),
+      given(fridgeSeededFor(atFridge(100), 'Cooker')),
       ...pull,
       model(current => {
         expect(current.wallet.balance).toBe(100 - FRIDGE_RULES.price)
@@ -155,7 +87,7 @@ describe('pulling from Mystery Leftovers', () => {
     story(
       update,
       given(
-        seededFor(
+        fridgeSeededFor(
           modifyFields(atFridge(100), {
             player: player =>
               modifyFields(player, {
@@ -182,7 +114,7 @@ describe('pulling from Mystery Leftovers', () => {
     story(
       update,
       given(
-        seededFor(
+        fridgeSeededFor(
           modifyFields(atFridge(100), {
             player: player => modifyFields(player, { arsenal: () => smg }),
           }),
@@ -210,7 +142,7 @@ describe('pulling from Mystery Leftovers', () => {
   test('leave it: when the timer runs out the weapon sinks back', () => {
     story(
       update,
-      given(seededFor(atFridge(100), 'Cooker')),
+      given(fridgeSeededFor(atFridge(100), 'Cooker')),
       ...pull,
       ...ticks(OPEN_TICKS, FRAME_MS),
       ...ticks(Math.ceil(FRIDGE_RULES.offerMs / FRAME_MS) - 10, FRAME_MS),
@@ -230,7 +162,7 @@ describe('pulling from Mystery Leftovers', () => {
   })
 
   test('a pull never touches the waves or the drops: only the fridge draws', () => {
-    const start = seededFor(atFridge(100), 'Pan')
+    const start = fridgeSeededFor(atFridge(100), 'Pan')
     story(
       update,
       given(start),
@@ -247,7 +179,7 @@ describe('pulling from Mystery Leftovers', () => {
     story(
       update,
       given(
-        seededFor(
+        fridgeSeededFor(
           modifyFields(atFridge(100), {
             player: player => modifyFields(player, { hp: () => 2 }),
           }),
@@ -263,10 +195,10 @@ describe('pulling from Mystery Leftovers', () => {
     )
   })
 
-  test('a dud burps half the price back', () => {
+  test('a dud burps half the price back, without a popup to spoil the spin', () => {
     story(
       update,
-      given(seededFor(atFridge(100), 'Dud')),
+      given(fridgeSeededFor(atFridge(100), 'Dud')),
       ...pull,
       model(current => {
         expect(current.wallet.balance).toBe(
@@ -274,7 +206,7 @@ describe('pulling from Mystery Leftovers', () => {
         )
         expect(
           Array.some(current.popups, ({ kind }) => kind === 'Payday'),
-        ).toBe(true)
+        ).toBe(false)
       }),
     )
   })
@@ -304,11 +236,11 @@ describe('pulling from Mystery Leftovers', () => {
   test('mid-wave, the fridge is for sale too', () => {
     const fighting = modifyFields(atFridge(100), {
       phase: () =>
-        Phase.Wave({ wave: 5, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
+        Phase.Wave({ wave: 5, elapsedMs: 0, spawns: [FRIDGE_DISTANT_SPAWN] }),
     })
     story(
       update,
-      given(seededFor(fighting, 'Pan')),
+      given(fridgeSeededFor(fighting, 'Pan')),
       ...pull,
       model(current => {
         expect(current.wallet.balance).toBe(100 - FRIDGE_RULES.price)
@@ -501,7 +433,7 @@ describe('the fridge in co-op', () => {
   })
 
   test('only the puller can take the weapon on offer', () => {
-    const offered = withWorld(seededFor(atFridge(0), 'Pan'), world =>
+    const offered = withWorld(fridgeSeededFor(atFridge(0), 'Pan'), world =>
       withSeat(
         withSeat(seatCrew(world, 2), 1, seat =>
           modifyFields(seat, {
