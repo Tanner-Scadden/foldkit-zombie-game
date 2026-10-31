@@ -39,7 +39,12 @@ import { forgetTutorial } from './save'
 import { stepWhen } from './stepWhen'
 import { askForRoomLink, openCoop, tickRoomFrame } from './update/coop'
 import { orInRun } from './update/coopRun'
-import { retry, shareFromButton, skipFromPointer } from './update/end'
+import {
+  retry,
+  settleShareSheet,
+  shareFromButton,
+  skipFromPointer,
+} from './update/end'
 import { toggleFullscreen } from './update/fullscreen'
 import {
   closeHand,
@@ -696,6 +701,15 @@ export const update = ApplicationComposition.makeUpdate({
   CompletedClickShareLink: model => settle(model, { model }),
 
   CompletedClickSupportLink: model => settle(model, { model }),
+  SettledShareSheet: (model, { outcome }) =>
+    settle(model, settleShareSheet(outcome)(model)),
+
+  CompletedOpenShareLink: model => settle(model, { model }),
+
+  CompletedDetectShareSheet: (model, { shareSheet }) =>
+    settle(model, {
+      model: modifyFields(model, { shareSheet: () => shareSheet }),
+    }),
 
   CompletedLoadStyles: model => settle(model, finishLoading(model, 'Styles')),
 

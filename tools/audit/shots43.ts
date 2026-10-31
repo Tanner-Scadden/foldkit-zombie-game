@@ -165,7 +165,7 @@ const shootDeath = async (
 // NOTE: SHARE is a link, so a tap (or X on a keyboard, which clicks it)
 // must open X's post intent in a new tab by itself. x.com is answered here,
 // so nothing reaches X.
-const X_INTENT = /^https:\/\/x\.com\/intent\/post\?text=.+&url=/
+const X_INTENT = /^https:\/\/x\.com\/intent\/tweet\?text=.+&url=/
 
 const opensX = async (page: Page, act: () => Promise<void>) => {
   await page
@@ -218,6 +218,69 @@ const checkShare = async (
   }
 }
 
+// NOTE: headless Chrome has no share sheet, so a phone's sheet path is
+// checked on a fresh page with a stand-in navigator.share. It records the
+// data and whether the tap's user activation was still live when the
+// Command called it, as a real share sheet needs. `refuse` makes it throw
+// NotAllowedError, as a browser that will not share does, so SHARE falls
+// back to the link.
+const SHEET_SCENE = `wave=6&phase=gameover&stats&crowd=10&${LEARNED}&tick=400`
+
+const checkSheet = async (
+  viewport: (typeof VIEWPORTS)[number],
+  problems: Array<string>,
+) => {
+  for (const refuse of [false, true]) {
+    const page = await openPage(browser, viewport)
+    const label = `${viewport.name} share sheet${refuse ? ' refused' : ''}`
+    await page.addInitScript(isRefused => {
+      ;(navigator as any).share = (data: { text: string; url: string }) => {
+        ;(window as any).__sheet = {
+          ...data,
+          isActive: navigator.userActivation.isActive,
+        }
+        return isRefused
+          ? Promise.reject(new DOMException('no', 'NotAllowedError'))
+          : Promise.resolve()
+      }
+    }, refuse)
+    await page.goto(harnessUrl(SHEET_SCENE, 'nodev', 'device=touch'))
+    await waitForReady(page)
+    await settleAnimations(page)
+    const sheetButton = page.locator('button#end-share-button')
+    if ((await sheetButton.count()) === 0) {
+      problems.push(`${label}: SHARE is not the share sheet button`)
+      await page.context().close()
+      continue
+    }
+    const opened = await opensX(page, () => sheetButton.tap())
+    await page.waitForFunction(() => (window as any).__sheet !== undefined, {
+      timeout: 5_000,
+    })
+    const sheet = await page.evaluate(() => (window as any).__sheet)
+    if (!sheet.isActive) {
+      problems.push(`${label}: the share sheet was called outside the tap`)
+    }
+    if (!String(sheet.text).includes('Munch Manor') || !sheet.url) {
+      problems.push(`${label}: the share sheet got ${JSON.stringify(sheet)}`)
+    }
+    await whenSettled(page)
+    const isLinkNow = (await page.locator('a#end-share-button').count()) === 1
+    if (refuse && !isLinkNow) {
+      problems.push(`${label}: SHARE did not fall back to the link`)
+    }
+    if (!refuse && (isLinkNow || opened !== '')) {
+      problems.push(
+        `${label}: a shared sheet also opened ${opened || 'the link'}`,
+      )
+    }
+    console.log(
+      `${label}: activation ${sheet.isActive ? 'live' : 'gone'}, fallback ${isLinkNow ? 'link' : 'none'}`,
+    )
+    await page.context().close()
+  }
+}
+
 await useHarness()
 const browser = await launch()
 const pages = scenePages(browser, ['nodev'])
@@ -225,6 +288,9 @@ const problems: Array<string> = []
 for (const viewport of VIEWPORTS) {
   if (isPickedScene('death')) {
     await shootDeath(browser, viewport, problems)
+  }
+  if (TAG !== 'before' && viewport.isPhone && isPickedScene('sheet')) {
+    await checkSheet(viewport, problems)
   }
   for (const scene of SCENES) {
     if (!isPickedScene(scene.name)) {
@@ -250,8 +316,19 @@ for (const viewport of VIEWPORTS) {
     }
     await shot(page, `s43-${TAG}-${viewport.name}-${scene.name}`)
     console.log(`shot ${label}`)
-    if (TAG !== 'before' && scene.name === 'gameover') {
+    // NOTE: a phone whose browser has a share sheet (Chrome's phone
+    // emulation has one) shows the sheet's button; checkSheet covers it.
+    const isLink = (await page.locator('a#end-share-button').count()) === 1
+    if (TAG !== 'before' && scene.name === 'gameover' && isLink) {
       await checkShare(page, label, !viewport.isPhone, problems)
+    }
+    if (
+      TAG !== 'before' &&
+      scene.name === 'gameover' &&
+      !isLink &&
+      !viewport.isPhone
+    ) {
+      problems.push(`${label}: SHARE is not the link on a desktop`)
     }
     pages.release(page)
   }

@@ -141,7 +141,9 @@ export const RUNS_PATH = '/api/runs'
 // summary is sent the moment it ends, before the end card shows. It says
 // which end screen it came from and what the run was, and nothing about
 // who: the same visitId as the summaries, and no text of the post.
-export const SHARE_EVENT_VERSION = 1
+// NOTE: version 2 adds `path`: the share sheet or X's intent link. The
+// Worker still takes version 1 from a build cached before it.
+export const SHARE_EVENT_VERSION = 2
 
 export const ShareScreen = Schema.Literals([
   'Death',
@@ -151,6 +153,9 @@ export const ShareScreen = Schema.Literals([
 ])
 export type ShareScreen = typeof ShareScreen.Type
 
+export const SharePath = Schema.Literals(['Sheet', 'Link'])
+export type SharePath = typeof SharePath.Type
+
 export const ShareEvent = Schema.Struct({
   version: Schema.Literal(SHARE_EVENT_VERSION),
   visitId: VisitId,
@@ -158,10 +163,26 @@ export const ShareEvent = Schema.Struct({
   screen: ShareScreen,
   mode: SummaryMode,
   difficulty: SummaryDifficulty,
+  path: SharePath,
 })
 export type ShareEvent = typeof ShareEvent.Type
 
+export const ShareEventV1 = Schema.Struct({
+  version: Schema.Literal(1),
+  visitId: VisitId,
+  build: BuildId,
+  screen: ShareScreen,
+  mode: SummaryMode,
+  difficulty: SummaryDifficulty,
+})
+export type ShareEventV1 = typeof ShareEventV1.Type
+
 export const ShareEventJson = Schema.fromJsonString(ShareEvent)
+
+// NOTE: what the Worker takes: this version, or version 1 with no path.
+export const PostedShareJson = Schema.fromJsonString(
+  Schema.Union([ShareEvent, ShareEventV1]),
+)
 
 export const SHARES_PATH = '/api/shares'
 

@@ -4,10 +4,11 @@ import * as Schema from 'effect/Schema'
 
 import {
   MAX_SUMMARY_BYTES,
+  PostedShareJson,
   type RunSummary,
   RunSummaryJson,
   type ShareEvent,
-  ShareEventJson,
+  type ShareEventV1,
   SummaryKills,
 } from '../../src/analytics.ts'
 
@@ -36,7 +37,7 @@ export const bodySize = (body: string): BodySize =>
 
 export const decodeSummary = Schema.decodeUnknownEffect(RunSummaryJson)
 
-export const decodeShare = Schema.decodeUnknownEffect(ShareEventJson)
+export const decodeShare = Schema.decodeUnknownEffect(PostedShareJson)
 
 // RATE LIMITS
 
@@ -154,9 +155,15 @@ export type ShareRow = Readonly<{
   screen: string
   mode: string
   difficulty: string
+  path: string
 }>
 
-export const shareRowOf = (event: ShareEvent, nowMs: number): ShareRow => ({
+// NOTE: a version 1 event came before the share sheet, so its path was the
+// link.
+export const shareRowOf = (
+  event: ShareEvent | ShareEventV1,
+  nowMs: number,
+): ShareRow => ({
   received_at: isoOf(nowMs),
   received_day: utcDay(nowMs),
   event_version: event.version,
@@ -165,4 +172,5 @@ export const shareRowOf = (event: ShareEvent, nowMs: number): ShareRow => ({
   screen: event.screen,
   mode: event.mode,
   difficulty: event.difficulty,
+  path: 'path' in event ? event.path : 'Link',
 })

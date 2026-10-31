@@ -37,7 +37,7 @@ import {
   retryButton,
   updateChip,
 } from './testing'
-import { SendShareEvent } from './update/end'
+import { OpenShareLink, OpenShareSheet, SendShareEvent } from './update/end'
 import { FocusEndMenuButton } from './update/home'
 import { asVeteran } from './veteran'
 
@@ -127,6 +127,82 @@ describe('the end screens', () => {
       click(shareButton),
       Command.expectHas(SendShareEvent),
       Command.resolve(SendShareEvent, Message.CompletedSendShareEvent()),
+    )
+  })
+
+  // NOTE: a phone whose browser has a share sheet.
+  const onPhoneWithSheet = (model: Model): Model =>
+    modifyFields(model, {
+      lastDevice: () => 'Touch' as const,
+      shareSheet: () => 'Available' as const,
+    })
+
+  const shareSheetButton = role('button', {
+    name: 'Share your run on X. Opens in a new tab',
+  })
+
+  test('on a phone with a share sheet, SHARE is a button that opens the sheet', () => {
+    const gameOver = onPhoneWithSheet(
+      onEndScreen(Phase.GameOver({ wave: 4 }), RESTART_GRACE_MS),
+    )
+    scene(
+      ROOT,
+      given(gameOver),
+      measureSurface,
+      expect(selector('a#end-share-button')).toBeAbsent(),
+      expect(selector('button#end-share-button')).toExist(),
+      click(shareSheetButton),
+      Command.expectHas(OpenShareSheet),
+      Command.resolve(
+        OpenShareSheet,
+        Message.SettledShareSheet({ outcome: 'Cancelled' }),
+      ),
+      expect(selector('button#end-share-button')).toExist(),
+    )
+  })
+
+  test('a refused share sheet turns SHARE back into the link', () => {
+    const gameOver = onPhoneWithSheet(
+      onEndScreen(Phase.GameOver({ wave: 4 }), RESTART_GRACE_MS),
+    )
+    scene(
+      ROOT,
+      given(gameOver),
+      measureSurface,
+      click(shareSheetButton),
+      Command.resolve(
+        OpenShareSheet,
+        Message.SettledShareSheet({ outcome: 'Refused' }),
+      ),
+      Command.resolve(OpenShareLink, Message.CompletedOpenShareLink()),
+      expect(selector('a#end-share-button')).toExist(),
+    )
+  })
+
+  test('on a phone without a share sheet, and on a desktop with one, SHARE is the link', () => {
+    const atEnd = onEndScreen(Phase.GameOver({ wave: 4 }), RESTART_GRACE_MS)
+    scene(
+      ROOT,
+      given(
+        modifyFields(atEnd, {
+          lastDevice: () => 'Touch' as const,
+          shareSheet: () => 'Unavailable' as const,
+        }),
+      ),
+      measureSurface,
+      expect(shareButton).toHaveAttr('href', shareHrefOf(atEnd)),
+    )
+    scene(
+      ROOT,
+      given(
+        modifyFields(atEnd, {
+          lastDevice: () => 'KeyboardMouse' as const,
+          shareSheet: () => 'Available' as const,
+        }),
+      ),
+      measureSurface,
+      expect(shareButton).toHaveAttr('href', shareHrefOf(atEnd)),
+      expect(selector('button#end-share-button')).toBeAbsent(),
     )
   })
 

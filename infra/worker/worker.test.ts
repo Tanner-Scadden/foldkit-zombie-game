@@ -301,12 +301,13 @@ describe('POST /api/runs', () => {
 })
 
 const shareEvent: ShareEvent = {
-  version: 1,
+  version: 2,
   visitId: summary.visitId,
   build: summary.build,
   screen: 'CoopVictory',
   mode: 'Campaign',
   difficulty: 'Hard',
+  path: 'Sheet',
 }
 
 const shareJson = Schema.encodeSync(ShareEventJson)(shareEvent)
@@ -321,7 +322,7 @@ const shareCount = (setup: Setup) => countOf(setup, 'shares')
 
 describe('POST /api/shares', () => {
   it.effect(
-    'a share is stored with its screen, mode, and difficulty, and answers 202',
+    'a share is stored with its screen, mode, difficulty, and path, and answers 202',
     () =>
       Effect.gen(function* () {
         const setup = yield* setUp()
@@ -331,7 +332,7 @@ describe('POST /api/shares', () => {
         expect(response.status).toBe(202)
         const rows = yield* query(
           setup,
-          'SELECT visit_id, screen, mode, difficulty, event_version FROM shares',
+          'SELECT visit_id, screen, mode, difficulty, event_version, path FROM shares',
         )
         expect(rows).toEqual([
           {
@@ -339,12 +340,30 @@ describe('POST /api/shares', () => {
             screen: 'CoopVictory',
             mode: 'Campaign',
             difficulty: 'Hard',
-            event_version: 1,
+            event_version: 2,
+            path: 'Sheet',
           },
         ])
         const stored = toJson(yield* query(setup, 'SELECT * FROM shares'))
         expect(stored).not.toContain('203.0.113.7')
         expect(yield* rowCount(setup)).toBe(0)
+      }),
+  )
+
+  it.effect(
+    'a version 1 share from a cached build is still taken, as the link',
+    () =>
+      Effect.gen(function* () {
+        const setup = yield* setUp()
+        const { path: _path, ...older } = shareEvent
+        const response = yield* postShare(
+          setup,
+          toJson({ ...older, version: 1 }),
+        )
+        expect(response.status).toBe(202)
+        expect(
+          yield* query(setup, 'SELECT event_version, path FROM shares'),
+        ).toEqual([{ event_version: 1, path: 'Link' }])
       }),
   )
 

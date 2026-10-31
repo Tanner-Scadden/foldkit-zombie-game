@@ -4,7 +4,7 @@ import type { Html } from 'foldkit/html'
 import type { ApplicationViewBuilder } from './composition'
 import { isOpen as isCoopOpen } from './coop/update'
 import { runDifficultyOf } from './coopPlay'
-import { sharedRunOf } from './endBeat'
+import { sharePathOf, sharedRunOf } from './endBeat'
 import {
   END_MENU_BUTTON_ID,
   END_RETRY_BUTTON_ID,
@@ -265,10 +265,11 @@ const endButtonFace = (
 export const shareHrefOf = (model: Model): string =>
   shareUrl(sharedRunOf(model, runDifficultyOf(model)))
 
-// NOTE: SHARE is a real link, so the browser opens X on the tap itself
-// (a new tab, the X app on a phone, or the browser from an installed app)
-// and no popup blocker can stop it. Its click still sends its Message, which
-// counts the share and never prevents the link.
+// NOTE: on a keyboard, a mouse, or a phone without a share sheet, SHARE is
+// a real link, so the browser opens X on the click itself and no popup
+// blocker can stop it; its click still sends its Message, which counts the
+// share and never prevents the link. On a touch screen with a share sheet it
+// is a button, and its Message opens the sheet (src/update/end.ts).
 const endButtonView =
   (model: Model, h: ApplicationViewBuilder) =>
   (button: EndButton, index: number): Html => {
@@ -284,7 +285,7 @@ const endButtonView =
         propagation: 'Stop',
       }),
     ]
-    return button.look === 'Share'
+    return button.look === 'Share' && sharePathOf(model) === 'Link'
       ? h.keyed('a')(
           button.id,
           [
