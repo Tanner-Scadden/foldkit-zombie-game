@@ -15,7 +15,7 @@ import {
   type ClientFrame,
   KickedPlayer,
   LeftRoom,
-  type RoomRefusal,
+  RoomRefusal,
 } from '@munch/netcode'
 import {
   LobbyEvent,
@@ -80,19 +80,16 @@ export class CoopNet extends Context.Service<
 
 // LIVE
 
-const problemOfRefusal = (refusal: RoomRefusal): CoopProblem => {
-  if (refusal._tag === 'NoRoom') {
-    return 'NoRoom'
-  } else if (refusal._tag === 'Full') {
-    return 'Full'
-  } else if (refusal._tag === 'Started') {
-    return 'Started'
-  } else if (refusal._tag === 'RateLimited') {
-    return 'Busy'
-  } else {
-    return 'Offline'
-  }
-}
+const problemOfRefusal = (refusal: RoomRefusal): CoopProblem =>
+  RoomRefusal.match(refusal, {
+    NoRoom: () => 'NoRoom',
+    Full: () => 'Full',
+    Started: () => 'Started',
+    RateLimited: () => 'Busy',
+    Unauthorized: () => 'Offline',
+    BadRequest: () => 'Offline',
+    Unavailable: () => 'Offline',
+  })
 
 type LobbyWrite = (
   change: LobbyChange | 'Left',

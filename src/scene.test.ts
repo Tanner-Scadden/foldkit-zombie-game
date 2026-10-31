@@ -19,7 +19,6 @@ import { describe, test, expect as vitestExpect } from 'vitest'
 import { Dialog, DialogBlock, Tabs } from '@foldkit/ui'
 
 import indexHtml from '../index.html?raw'
-import { FocusShopItem } from './commands'
 import type { ApplicationViewBuilder } from './composition'
 import { FIXED_STEP_MS, GAME_TITLE, PREPARATION_MS } from './constants'
 import { FEEDBACK_RUNS } from './home'
@@ -42,6 +41,7 @@ import {
   pastFirstBreak,
   withPistol,
 } from './testing'
+import { FocusShopItem } from './update/shop'
 import { asVeteran } from './veteran'
 import { view } from './view'
 import { pause } from './waves'

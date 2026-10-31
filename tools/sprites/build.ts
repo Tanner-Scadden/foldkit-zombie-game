@@ -37,7 +37,7 @@ useSpriteMode('StandIn')
 const { spriteContents } = await import('../../src/sprite')
 await import('../../src/view')
 await import('../../src/main')
-await import('../../src/commands')
+await import('../../src/boot')
 const { precompileSprites } = await import('../../src/spritePrecompile')
 precompileSprites()
 

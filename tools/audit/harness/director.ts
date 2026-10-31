@@ -2,7 +2,6 @@ import { Array, Option, Schema } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { cameraOf, worldToView } from '@game/camera'
-import { CueMusic, PlaySound } from '@game/commands'
 import { STICK_RADIUS_PX } from '@game/constants'
 import * as CoopModel from '@game/coop/model'
 import { type WorldState, coopWorld } from '@game/coop/seam'
@@ -15,7 +14,7 @@ import {
   Stick,
   type Vector,
 } from '@game/model'
-import { cueMusicFrom } from '@game/musicPlan'
+import { CueMusic, cueMusicFrom } from '@game/musicPlan'
 import { playersOf } from '@game/party'
 import { Difficulty } from '@game/playerData'
 import {
@@ -28,6 +27,7 @@ import {
   roomWorldFor,
 } from '@game/roomWorld'
 import { SeatAction } from '@game/stepWorld'
+import { PlaySound } from '@game/update/sound'
 import { isWalking } from '@game/zombies'
 import { NEUTRAL_INPUT, type PlayerInput, Room } from '@munch/netcode'
 

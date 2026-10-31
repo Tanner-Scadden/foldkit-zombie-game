@@ -5,14 +5,6 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import {
-  FetchBuild,
-  FocusEndMenuButton,
-  RegisterServiceWorker,
-  ReloadPage,
-  UpdateServiceWorker,
-  WaitForUnwrap,
-} from './commands'
 import { FIXED_STEP_MS, PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
@@ -25,10 +17,14 @@ import {
   updateCheckActivity,
 } from './subscriptions'
 import { fighting, showDialog } from './testing'
+import { FocusEndMenuButton, ReloadPage, WaitForUnwrap } from './update/home'
 import {
+  FetchBuild,
+  RegisterServiceWorker,
+  UpdateServiceWorker,
   recordRemoteBuild,
   registerServiceWorkerAfterSplash,
-} from './update/play'
+} from './update/version'
 import {
   RUNNING_BUILD,
   fetchRemoteBuild,

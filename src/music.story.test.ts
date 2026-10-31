@@ -5,7 +5,6 @@ import { describe, expect, test } from 'vitest'
 
 import { PARLOUR } from './arena'
 import type { SoundEffect } from './audio'
-import { CueMusic, FetchBuild, PlaySound, ResumeAudio } from './commands'
 import { FIXED_STEP_MS, ZOMBIE_MAX_HP } from './constants'
 import { update } from './main'
 import { Message } from './message'
@@ -20,7 +19,10 @@ import {
   initialModel,
 } from './model'
 import type { MusicMood } from './music'
+import { CueMusic } from './musicPlan'
 import { SURFACE, tick } from './testing'
+import { PlaySound, ResumeAudio } from './update/sound'
+import { FetchBuild } from './update/version'
 import { asVeteran } from './veteran'
 import { FINAL_WAVE } from './waves'
 

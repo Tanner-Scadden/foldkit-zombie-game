@@ -1,9 +1,40 @@
-import { CueMusic } from './commands'
+import { Effect, pipe } from 'effect'
+
+import { playMusic } from './audio'
+import { makeCommand } from './definition'
+import { Message } from './message'
 import { type Model, Phase, Round } from './model'
-import type { MusicLevel, MusicMood, MusicStinger } from './music'
-import { isSoundAudible } from './update/sound'
+import { MusicLevel, MusicMood, MusicStinger } from './music'
+import {
+  AudioEngineResource,
+  audioFailureReason,
+  isSoundAudible,
+} from './update/sound'
 import type { UpdateStep } from './update/step'
 import { FINAL_WAVE } from './waves'
+
+// COMMAND
+
+export const CueMusic = makeCommand('CueMusic', {
+  args: { mood: MusicMood, level: MusicLevel, stinger: MusicStinger },
+  messages: [Message.CompletedCueMusic, Message.FailedCueMusic],
+  handler: function* () {
+    return cue =>
+      pipe(
+        AudioEngineResource.get,
+        Effect.flatMap(engine => playMusic(engine, cue)),
+        Effect.as(Message.CompletedCueMusic({ mood: cue.mood })),
+        Effect.catch(error =>
+          Effect.succeed(
+            Message.FailedCueMusic({
+              mood: cue.mood,
+              reason: audioFailureReason(error),
+            }),
+          ),
+        ),
+      )
+  },
+})
 
 type MusicPlan = Readonly<{ mood: MusicMood; level: MusicLevel }>
 

@@ -94,6 +94,7 @@
       "rules": {
         "no-console": "error",
         "munch/no-menu-field": "error",
+        "munch/command-beside-update": "error",
         "no-restricted-properties": [
           "error",
           {
@@ -327,7 +328,7 @@
     },
     {
       // NOTE: the arena's readout for the audit harness (tools/audit/coop.ts),
-      // a plain line no Schema reads. Co-op belongs to slice 0b for now.
+      // a plain line no Schema reads.
       "files": ["src/coop/seam.ts"],
       "rules": { "munch/no-raw-json": "off" }
     },
@@ -339,15 +340,6 @@
       "files": ["src/main.ts", "src/update/shop.ts"],
       "rules": {
         "typescript/consistent-type-imports": "off"
-      }
-    },
-    {
-      // TODO(cleanup slice 0b): the Foldkit Block preview rewrites co-op's
-      // Submodel. Match its tag chains and name its variants there.
-      "files": ["src/coop/**/*.ts"],
-      "rules": {
-        "munch/no-tag-chain": "off",
-        "munch/no-extract-tag": "off"
       }
     },
     {

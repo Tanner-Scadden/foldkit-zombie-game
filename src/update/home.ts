@@ -1,16 +1,8 @@
-import { Array, Option } from 'effect'
-import { Update } from 'foldkit'
+import { Array, Duration, Effect, Option, Schema, pipe } from 'effect'
+import { Dom, Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import { NEWS_DAYS } from '../changelog'
-import {
-  FocusEndMenuButton,
-  FocusHandCard,
-  FocusHomeButton,
-  ReloadPage,
-  ShowInstallPrompt,
-  WaitForUnwrap,
-} from '../commands'
 import {
   HandDialogBinding,
   HomeScreenStepsBinding,
@@ -18,7 +10,7 @@ import {
   UpdateGreetingBinding,
 } from '../composition'
 import { runDifficultyOf } from '../coopPlay'
-import { makeStep } from '../definition'
+import { makeCommand, makeStep } from '../definition'
 import {
   chooseDifficulty,
   isLocked,
@@ -27,9 +19,12 @@ import {
   unlockNightmare,
 } from '../difficulty'
 import {
+  END_MENU_BUTTON_ID,
   type KeyedHandCard,
   dealtCards,
   endOffer,
+  handCardId,
+  homeButtonId,
   isDifficultyKey,
   isInstallTileShown,
   isManorKey,
@@ -47,6 +42,7 @@ import {
   turnNewsPage,
 } from '../home'
 import { isMenuKey, isStartKey, maybeFocusStep, releaseAll } from '../input'
+import { InstallPrompt } from '../install'
 import {
   MenuState,
   isAnyPanelOpen,
@@ -56,11 +52,13 @@ import {
   isPastRestartGrace,
   menuState,
 } from '../menuState'
+import { Message } from '../message'
 import {
   type Difficulty,
   DifficultyCard,
-  type HandCard,
+  HandCard,
   type HelpCard,
+  HomeButton,
   type InstallOutcome,
   type MenuPanel,
   type Model,
@@ -68,7 +66,9 @@ import {
   Phase,
   type RunMode,
 } from '../model'
+import { activateNewBuild } from '../serviceWorker'
 import { stepWhen } from '../stepWhen'
+import { reloadOnto } from '../version'
 import { openProfile } from './profile'
 import { isPaused, startFromButton, startWhenAllowed, startsRun } from './run'
 import { playSounds, uiCue, unlockAudio } from './sound'
@@ -77,9 +77,90 @@ import {
   type UpdateStep,
   combine,
   modelStep,
+  releaseInput,
   unchanged,
   withInput,
 } from './step'
+
+// COMMAND
+
+export const ShowInstallPrompt = makeCommand('ShowInstallPrompt', {
+  messages: [Message.CompletedShowInstallPrompt],
+  handler: function* () {
+    return () =>
+      InstallPrompt.use(installPrompt =>
+        Effect.map(installPrompt.prompt, outcome =>
+          Message.CompletedShowInstallPrompt({ outcome }),
+        ),
+      )
+  },
+})
+
+export const FocusHomeButton = makeCommand('FocusHomeButton', {
+  args: { button: HomeButton },
+  messages: [Message.CompletedFocusHomeButton],
+  handler: function* () {
+    return ({ button }) =>
+      Dom.focus(`#${homeButtonId(button)}`).pipe(
+        Effect.ignore,
+        Effect.as(Message.CompletedFocusHomeButton()),
+      )
+  },
+})
+
+export const FocusHandCard = makeCommand('FocusHandCard', {
+  args: { card: HandCard },
+  messages: [Message.CompletedFocusHandCard],
+  handler: function* () {
+    return ({ card }) =>
+      Dom.focus(`#${handCardId(card)}`).pipe(
+        Effect.ignore,
+        Effect.as(Message.CompletedFocusHandCard()),
+      )
+  },
+})
+
+export const FocusEndMenuButton = makeCommand('FocusEndMenuButton', {
+  messages: [Message.CompletedFocusEndMenuButton],
+  handler: function* () {
+    return () =>
+      Dom.focus(`#${END_MENU_BUTTON_ID}`).pipe(
+        Effect.ignore,
+        Effect.as(Message.CompletedFocusEndMenuButton()),
+      )
+  },
+})
+
+// NOTE: long enough for the gift's unwrap animation (src/menu.css) to
+// play out before the page goes.
+const UNWRAP_DURATION = Duration.millis(650)
+
+export const WaitForUnwrap = makeCommand('WaitForUnwrap', {
+  messages: [Message.CompletedWaitForUnwrap],
+  handler: function* () {
+    return () =>
+      Effect.as(Effect.sleep(UNWRAP_DURATION), Message.CompletedWaitForUnwrap())
+  },
+})
+
+// NOTE: the new build's service worker takes over first, when there is one,
+// so the reload and any later offline start run the new build. A worker that
+// fails or is slow never stops the reload.
+export const ReloadPage = makeCommand('ReloadPage', {
+  args: { build: Schema.String },
+  messages: [Message.CompletedReloadPage, Message.FailedReloadPage],
+  handler: function* () {
+    return ({ build }) =>
+      pipe(
+        Effect.ignore(activateNewBuild),
+        Effect.andThen(reloadOnto(build)),
+        Effect.as(Message.CompletedReloadPage()),
+        Effect.catch(error =>
+          Effect.succeed(Message.FailedReloadPage({ reason: error.reason })),
+        ),
+      )
+  },
+})
 
 // MENU
 
@@ -167,8 +248,6 @@ export const openSettingsFromGear = makeStep(model =>
 )
 
 // THE MANOR HAND
-
-const releaseInput = modelStep(model => withInput(model, releaseAll))
 
 export const openHand = makeStep(model =>
   isOnHomeMenu(model)

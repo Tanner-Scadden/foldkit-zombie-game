@@ -3,7 +3,6 @@ import { given, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { PlaySound } from './commands'
 import { FIXED_STEP_MS } from './constants'
 import {
   REVEAL_RULES,
@@ -17,6 +16,7 @@ import { Message } from './message'
 import { AudioState, FridgeDoor, type Model, PrizeFlight } from './model'
 import { PURCHASE_RULES } from './purchase'
 import { atFridge, fridgeSeededFor, press, release, ticks } from './testing'
+import { PlaySound } from './update/sound'
 import { freshGun, maybeReplacedGun, takeGun } from './weapons'
 import { Arsenal } from './worldSchema'
 

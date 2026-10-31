@@ -21,7 +21,6 @@ import { describe, test } from 'vitest'
 
 import { Dialog, DialogBlock, Tabs } from '@foldkit/ui'
 
-import { RequestLinkCode, WriteSave } from './commands'
 import { Message } from './message'
 import { type Model, initialModel } from './model'
 import { MeasureGameSurface } from './mount'
@@ -34,6 +33,7 @@ import {
   measureSurface,
   showDialogInScene,
 } from './testing'
+import { RequestLinkCode, WriteSave } from './update/save'
 import { asVeteran } from './veteran'
 
 const home: Model = modifyFields(asVeteran(initialModel), {

@@ -1,13 +1,13 @@
-import { Option } from 'effect'
-import { Update } from 'foldkit'
+import { Effect, Option } from 'effect'
+import { Dom, Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { FocusShopItem } from '../commands'
 import { CoopBinding, ShopDialogBinding } from '../composition'
-import { makeStep } from '../definition'
+import { makeCommand, makeStep } from '../definition'
 import { refreshIntent } from '../frame'
 import { releaseAll } from '../input'
 import { isShopDialogOpen } from '../menuState'
+import { Message } from '../message'
 import {
   type Model,
   Phase,
@@ -25,6 +25,7 @@ import {
   purchase,
   selectShopCategory,
   shopItem,
+  shopItemElementId,
   stockTag,
 } from '../shop'
 import { SeatAction } from '../stepWorld'
@@ -40,6 +41,20 @@ import {
   unchanged,
   withInput,
 } from './step'
+
+// COMMAND
+
+export const FocusShopItem = makeCommand('FocusShopItem', {
+  args: { item: ShopItemId },
+  messages: [Message.CompletedFocusShopItem],
+  handler: function* () {
+    return ({ item }) =>
+      Dom.focus(`#${shopItemElementId(item)}`).pipe(
+        Effect.ignore,
+        Effect.as(Message.CompletedFocusShopItem()),
+      )
+  },
+})
 
 // DIALOG
 

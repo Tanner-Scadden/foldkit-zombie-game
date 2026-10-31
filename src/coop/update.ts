@@ -16,13 +16,16 @@ import {
   ClientFrame,
   type Lobby,
   type LobbyMember,
+  Matchmaking,
   type PickedMode,
   type PlayerInput,
   type RoomDifficulty,
+  ServerFrame,
   Session,
   canHostPickNightmare,
   normalizeRoomCode,
 } from '@munch/netcode'
+import { QuickPlayEvent, RoomEvent } from '@munch/netcode/browser'
 import { CODE_ALPHABET } from '@munch/sync-engine'
 
 import { actionCodeOf, eventsBetween, heldAction } from '../roomWorld'
@@ -334,63 +337,78 @@ const lobbyUpdated = (model: Model, room: Room, lobby: Lobby): UpdateReturn => {
   }
 }
 
+// NOTE: a Kicked frame leaves and a version refusal asks for a newer build;
+// every other frame, other refusals too, goes to the Session.
+const receiveServerFrame = (
+  model: Model,
+  room: Room,
+  frame: ServerFrame,
+  bytes: number,
+  atMs: number,
+): UpdateReturn =>
+  ServerFrame.matchOrElse(
+    frame,
+    {
+      Kicked: () => leaveFor(model, 'Kicked'),
+      Refused: refused =>
+        refused.reason === 'VersionMismatch'
+          ? {
+              model: hub(model, Option.some('Outdated')),
+              commands: [RememberRoom({ maybeCode: Option.none() })],
+              outMessage: OutMessage.NeededNewerBuild(),
+            }
+          : receiveSessionFrame(model, room, refused, bytes, atMs),
+    },
+    other => receiveSessionFrame(model, room, other, bytes, atMs),
+  )
+
+const receiveSessionFrame = (
+  model: Model,
+  room: Room,
+  frame: ServerFrame,
+  bytes: number,
+  atMs: number,
+): UpdateReturn =>
+  Result.match(Session.receive(coopWorld, room.session, frame, bytes, atMs), {
+    onFailure: () => ({ model }),
+    onSuccess: session => ({
+      model: withRoom(model, { ...room, session, link: 'Online' }),
+      commands:
+        session.isResyncing && !room.session.isResyncing ? [ResyncRoom()] : [],
+    }),
+  })
+
 const receiveFrame = (
   model: Model,
   room: Room,
-  event: Extract<Message, { _tag: 'ReceivedRoomEvent' }>['event'],
+  event: RoomEvent,
   atMs: number,
-): UpdateReturn => {
-  if (event._tag === 'Received') {
-    if (event.frame._tag === 'Kicked') {
-      return leaveFor(model, 'Kicked')
-    }
-    if (
-      event.frame._tag === 'Refused' &&
-      event.frame.reason === 'VersionMismatch'
-    ) {
-      return {
-        model: hub(model, Option.some('Outdated')),
-        commands: [RememberRoom({ maybeCode: Option.none() })],
-        outMessage: OutMessage.NeededNewerBuild(),
-      }
-    }
-    return Result.match(
-      Session.receive(coopWorld, room.session, event.frame, event.bytes, atMs),
-      {
-        onFailure: () => ({ model }),
-        onSuccess: session => ({
-          model: withRoom(model, { ...room, session, link: 'Online' }),
-          commands:
-            session.isResyncing && !room.session.isResyncing
-              ? [ResyncRoom()]
-              : [],
-        }),
-      },
-    )
-  } else if (event._tag === 'Connecting') {
-    return {
+): UpdateReturn =>
+  RoomEvent.match(event, {
+    Received: ({ frame, bytes }) =>
+      receiveServerFrame(model, room, frame, bytes, atMs),
+    Connecting: () => ({
       model: withRoom(model, {
         ...room,
         session: Session.reconnecting(room.session, atMs),
         link: room.link === 'Online' ? 'Reconnecting' : room.link,
       }),
-    }
-  } else if (event._tag === 'Dropped') {
-    return { model: withRoom(model, { ...room, link: 'Reconnecting' }) }
-  } else if (event._tag === 'Ponged') {
-    return {
+    }),
+    Dropped: () => ({
+      model: withRoom(model, { ...room, link: 'Reconnecting' }),
+    }),
+    Ponged: ponged => ({
       model: withRoom(model, {
         ...room,
-        session: Session.heardPong(room.session, event.sentMs, event.atMs),
+        session: Session.heardPong(room.session, ponged.sentMs, ponged.atMs),
       }),
-    }
-  } else {
-    return stepWhen(
-      (_: Model) => event.reason === 'Kicked',
-      current => leaveFor(current, 'Kicked'),
-    )(model)
-  }
-}
+    }),
+    Stopped: stopped =>
+      stepWhen(
+        (_: Model) => stopped.reason === 'Kicked',
+        current => leaveFor(current, 'Kicked'),
+      )(model),
+  })
 
 // NOTE: the next queued press takes over the held value once the one held
 // now has gone out on at least one input tick.
@@ -730,37 +748,33 @@ const answer = (model: Model, queue: Queue, accept: boolean): UpdateReturn => ({
 const heardInQueue = (
   model: Model,
   queue: Queue,
-  event: Extract<Message, { _tag: 'ReceivedQuickPlayEvent' }>['event'],
-): UpdateReturn => {
-  if (event._tag === 'Dropped') {
-    return { model: hub(model, Option.some('Dropped')) }
-  } else if (event._tag === 'Connecting') {
-    return { model }
-  }
-  const heard = event.message
-  if (heard._tag === 'Matched') {
-    return enterRoom(model, heard.code, heard.slot)
-  } else if (heard._tag === 'Refused') {
-    return { model: hub(model, Option.some('Busy')) }
-  } else {
-    return {
-      model: withScreen(
-        model,
-        Screen.Queue({
-          queue: {
-            names: heard.names,
-            waiting: heard.waiting,
-            position: heard.position,
-            groupSize: heard.groupSize,
-            offerPlayers: heard.offerPlayers,
-            accepted: heard.accepted,
-            answer: heard.offerPlayers > 0 ? queue.answer : 'Unanswered',
-          },
+  event: QuickPlayEvent,
+): UpdateReturn =>
+  QuickPlayEvent.match(event, {
+    Dropped: () => ({ model: hub(model, Option.some('Dropped')) }),
+    Connecting: () => ({ model }),
+    Heard: ({ message }) =>
+      Matchmaking.QuickServer.match(message, {
+        Matched: matched => enterRoom(model, matched.code, matched.slot),
+        Refused: () => ({ model: hub(model, Option.some('Busy')) }),
+        Waiting: waiting => ({
+          model: withScreen(
+            model,
+            Screen.Queue({
+              queue: {
+                names: waiting.names,
+                waiting: waiting.waiting,
+                position: waiting.position,
+                groupSize: waiting.groupSize,
+                offerPlayers: waiting.offerPlayers,
+                accepted: waiting.accepted,
+                answer: waiting.offerPlayers > 0 ? queue.answer : 'Unanswered',
+              },
+            }),
+          ),
         }),
-      ),
-    }
-  }
-}
+      }),
+  })
 
 // KEYS
 

@@ -9,7 +9,6 @@ import {
   isRunningLow,
 } from './ammoWarning'
 import { cameraOf } from './camera'
-import { PlaySound } from './commands'
 import { FIXED_STEP_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
@@ -28,6 +27,7 @@ import { SavedOnboarding } from './playerData'
 import { restoreSave, saveOf } from './save'
 import { maybeBubbleKind } from './stallBubble'
 import { SURFACE } from './testing'
+import { PlaySound } from './update/sound'
 import { STARTING_PISTOL, freshGun } from './weapons'
 
 // NOTE: limited ammo made hard to miss, from a playtester who traded up to

@@ -12,6 +12,7 @@ import { describe, expect, test } from 'vitest'
 
 import {
   type ClientFrame,
+  type InputFrame,
   NEUTRAL_INPUT,
   PROTOCOL_VERSION,
   makeWriter,
@@ -449,7 +450,7 @@ describe('the lobby', () => {
 // NOTE: the Input frames a return's SendRoomFrames carry.
 const sentInputs = (
   commands: ReadonlyArray<{ readonly name: string; readonly args?: unknown }>,
-): ReadonlyArray<Extract<ClientFrame, { readonly _tag: 'Input' }>> =>
+): ReadonlyArray<InputFrame> =>
   commands.flatMap(command => {
     const args = command.args
     if (
@@ -462,10 +463,7 @@ const sentInputs = (
       return []
     }
     return args.frames.filter(
-      (
-        frame: ClientFrame,
-      ): frame is Extract<ClientFrame, { readonly _tag: 'Input' }> =>
-        frame._tag === 'Input',
+      (frame: ClientFrame): frame is InputFrame => frame._tag === 'Input',
     )
   })
 

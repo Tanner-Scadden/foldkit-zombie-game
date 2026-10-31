@@ -4,7 +4,6 @@ import { modifyFields } from 'foldkit/struct'
 import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
 
-import { FocusHomeButton } from './commands'
 import { CoopBinding } from './composition'
 import { Message as CoopMessage } from './coop/message'
 import { LobbyChange, RoomRequest, Screen } from './coop/model'
@@ -20,6 +19,7 @@ import { update } from './main'
 import { Message } from './message'
 import { Lesson, type Model, initialModel } from './model'
 import { type Appearance, lookCodeOf } from './playerData'
+import { FocusHomeButton } from './update/home'
 import { asVeteran } from './veteran'
 
 const graduate = (current: Model): Model =>

@@ -3,19 +3,15 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import {
-  ApplyRotation,
-  FetchBuild,
-  HideSplash,
-  ReadRoomLink,
-  ShowLoadProgress,
-  WriteSave,
-} from './commands'
 import { update } from './main'
 import { Message } from './message'
 import { Loading, type Model, initialModel } from './model'
 import { decodeSave, encodeSave, restoreSave, saveOf } from './save'
 import { SURFACE } from './testing'
+import { ReadRoomLink } from './update/coop'
+import { ApplyRotation } from './update/rotation'
+import { HideSplash, ShowLoadProgress, WriteSave } from './update/save'
+import { FetchBuild } from './update/version'
 import { asVeteran } from './veteran'
 
 const onPhone = (base: Model): Model =>

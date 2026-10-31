@@ -3,13 +3,6 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import {
-  AwaitRunSettled,
-  RedeemLinkCode,
-  ReloadSyncedSave,
-  RequestLinkCode,
-  WriteSave,
-} from './commands'
 import { update } from './main'
 import { Message } from './message'
 import { Loading, type Model, initialModel } from './model'
@@ -26,6 +19,13 @@ import {
   withUnsavedChanges,
 } from './playerSync'
 import { type PlayerSave, saveOf } from './save'
+import {
+  AwaitRunSettled,
+  RedeemLinkCode,
+  ReloadSyncedSave,
+  RequestLinkCode,
+  WriteSave,
+} from './update/save'
 
 const read: Model = modifyFields(initialModel, {
   loading: () => Loading.Loaded(),

@@ -21,7 +21,6 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { FocusEndMenuButton } from './commands'
 import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
@@ -32,6 +31,7 @@ import {
   emitPressedKey,
   measureSurface,
 } from './testing'
+import { FocusEndMenuButton } from './update/home'
 import { asVeteran } from './veteran'
 
 const tickPastGrace = () =>

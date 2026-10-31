@@ -1,10 +1,13 @@
-import { Option } from 'effect'
+import { Effect, Option, pipe } from 'effect'
 import { Update } from 'foldkit'
 
+import { RunSummary } from '../analytics'
+import { sendRunSummary } from '../analyticsBeacon'
 import { maybeRunOutcome, runSummaryOf } from '../analyticsRun'
-import { SendRunSummary } from '../commands'
 import { isOnlineRun, runDifficultyOf } from '../coopPlay'
+import { makeCommand } from '../definition'
 import { countRunFrom, forgetNewEntriesFrom } from '../home'
+import { Message } from '../message'
 import type { Model } from '../model'
 import { cueMusicFrom } from '../musicPlan'
 import { RUNNING_BUILD } from '../version'
@@ -16,6 +19,25 @@ import {
 import { applyRotationFrom } from './rotation'
 import { writeSaveFrom } from './save'
 import type { UpdateStep } from './step'
+
+// COMMAND
+
+export const SendRunSummary = makeCommand('SendRunSummary', {
+  args: { summary: RunSummary },
+  messages: [Message.CompletedSendRunSummary, Message.FailedSendRunSummary],
+  handler: function* () {
+    return ({ summary }) =>
+      pipe(
+        sendRunSummary(summary),
+        Effect.as(Message.CompletedSendRunSummary()),
+        Effect.catch(error =>
+          Effect.succeed(
+            Message.FailedSendRunSummary({ reason: error.reason }),
+          ),
+        ),
+      )
+  },
+})
 
 // ANALYTICS
 

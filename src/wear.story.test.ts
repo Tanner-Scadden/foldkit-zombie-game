@@ -10,7 +10,6 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { PARLOUR } from './arena'
-import { PlaySound } from './commands'
 import { DECAL_MAX, FIXED_STEP_MS, PARTICLE_MAX } from './constants'
 import { update } from './main'
 import { Message } from './message'
@@ -35,6 +34,7 @@ import {
   kaboomerFuseTip,
 } from './sprite'
 import { bulletInto, tick, zombieOf } from './testing'
+import { PlaySound } from './update/sound'
 import { zombieHealthBarShapes } from './zombieView'
 import { ZOMBIE_KINDS, isArmorPart, isArmorShedAt, wearAt } from './zombies'
 
