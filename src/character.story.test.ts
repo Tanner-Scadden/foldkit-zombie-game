@@ -40,11 +40,10 @@ import {
   defaultAppearance,
   initialModel,
 } from './model'
+import { home } from './model.fixture'
 import { playerShapes } from './playerView'
 import { imageColors } from './testPng'
-import { asVeteran } from './veteran'
-
-const onTitle: Model = asVeteran(initialModel)
+import { resolveFocusOption } from './testing'
 
 type PartMessage = typeof PartRadioGroupBlock.Message.Type
 
@@ -78,12 +77,6 @@ const choose = (part: LookPart, index: number, value: string) =>
         PartRadioGroupBlock.Message.SelectedOption({ index, value }),
       ),
     ),
-  )
-
-const resolveFocusOption = () =>
-  Command.resolve(
-    RadioGroup.test.FocusOption,
-    PartRadioGroupBlock.Message.CompletedFocusOption(),
   )
 
 const rollDice = () =>
@@ -199,7 +192,7 @@ describe('Character', () => {
   test('picking each part stores it in the appearance', () => {
     story(
       update,
-      given(onTitle),
+      given(home),
       choose('Body', 0, 'Slim'),
       resolveFocusOption(),
       choose('HairStyle', 4, 'Mohawk'),
@@ -225,7 +218,7 @@ describe('Character', () => {
   test('the beard and the glasses each come off with a second tap', () => {
     story(
       update,
-      given(onTitle),
+      given(home),
       flip('Beard'),
       model(({ appearance, profile }) => {
         expect(appearance.beard).toBe(true)
@@ -242,7 +235,7 @@ describe('Character', () => {
   test('a word that is not one of the options leaves the look alone', () => {
     story(
       update,
-      given(onTitle),
+      given(home),
       choose('Body', 0, 'Female'),
       resolveFocusOption(),
       choose('Print', 0, 'Plaid'),
@@ -256,7 +249,7 @@ describe('Character', () => {
   test('the little tabs switch which parts show, and keep the look', () => {
     story(
       update,
-      given(onTitle),
+      given(home),
       model(({ character }) => {
         expect(character.section).toBe('Body')
       }),
@@ -278,7 +271,7 @@ describe('Character', () => {
       ),
       model(({ character, appearance }) => {
         expect(character.section).toBe('Outfit')
-        expect(appearance).toEqual(onTitle.appearance)
+        expect(appearance).toEqual(home.appearance)
       }),
     )
     expect(Character.SECTION_PARTS.Outfit).toEqual([
@@ -306,9 +299,9 @@ describe('Character', () => {
           expect(profile.tab).toBe('Look')
         }),
       )
-    pressC(onTitle)
+    pressC(home)
     pressC(
-      modifyFields(onTitle, {
+      modifyFields(home, {
         phase: () => Phase.GameOver({ wave: 3 }),
         screenMs: () => RESTART_GRACE_MS,
       }),
@@ -317,7 +310,7 @@ describe('Character', () => {
     story(
       update,
       given(
-        modifyFields(onTitle, {
+        modifyFields(home, {
           phase: () => Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [] }),
         }),
       ),
@@ -329,7 +322,7 @@ describe('Character', () => {
     story(
       update,
       given(
-        modifyFields(onTitle, {
+        modifyFields(home, {
           phase: () => Phase.GameOver({ wave: 3 }),
           screenMs: () => 0,
         }),
@@ -343,10 +336,10 @@ describe('Character', () => {
 
   test('the dice rolls the same look from the same seed and moves the seed on', () => {
     const rollFrom = (seed: number): Model => {
-      const holder: { current: Model } = { current: onTitle }
+      const holder: { current: Model } = { current: home }
       story(
         update,
-        given(modifyFields(onTitle, { cosmeticRngState: () => seed })),
+        given(modifyFields(home, { cosmeticRngState: () => seed })),
         rollDice(),
         model(rolled => {
           holder.current = rolled
@@ -403,7 +396,7 @@ describe('Character', () => {
   test('the look lasts through new runs, endless, keep going, and restarts', () => {
     story(
       update,
-      given(withLook(onTitle, PICKED)),
+      given(withLook(home, PICKED)),
       message(Message.ClickedCampaignButton()),
       model(({ phase, appearance }) => {
         expect(Phase.isAnyOf(['Preparation'])(phase)).toBe(true)
@@ -413,7 +406,7 @@ describe('Character', () => {
     story(
       update,
       given(
-        modifyFields(withLook(onTitle, PICKED), {
+        modifyFields(withLook(home, PICKED), {
           phase: () => Phase.GameOver({ wave: 4 }),
           screenMs: () => RESTART_GRACE_MS,
         }),
@@ -427,7 +420,7 @@ describe('Character', () => {
     story(
       update,
       given(
-        modifyFields(withLook(onTitle, PICKED), {
+        modifyFields(withLook(home, PICKED), {
           phase: () => Phase.Victory(),
           screenMs: () => RESTART_GRACE_MS,
         }),
@@ -446,8 +439,8 @@ describe('Character', () => {
 
   test('the player sprite wears the chosen skin and shirt', () => {
     const plainPicked: Appearance = { ...PICKED, print: 'Plain' }
-    const classic = fills(playerShapes(onTitle))
-    const picked = fills(playerShapes(withLook(onTitle, plainPicked)))
+    const classic = fills(playerShapes(home))
+    const picked = fills(playerShapes(withLook(home, plainPicked)))
     expect(classic).toContain(SKIN_SHADES.Light.skin)
     expect(classic).toContain(SHIRT_SHADES.Blue.base)
     expect(picked).toContain(SKIN_SHADES.Deep.skin)
@@ -458,9 +451,7 @@ describe('Character', () => {
 
   test('the Rainbow print wears the six real colors of the pride flag', () => {
     const colors = fills(
-      playerShapes(
-        withLook(onTitle, { ...defaultAppearance, print: 'Rainbow' }),
-      ),
+      playerShapes(withLook(home, { ...defaultAppearance, print: 'Rainbow' })),
     )
     expect(colors).toEqual(
       expect.arrayContaining([

@@ -22,16 +22,23 @@ import {
   type Model,
   Phase,
   Pierce,
-  type PlannedSpawn,
   type Zombie,
   initialModel,
 } from './model'
-import { SURFACE, holdFire, openFloorSpot, tick, zombieAt } from './testing'
+import { DISTANT_SPAWN } from './model.fixture'
+import {
+  MUZZLE_X,
+  SURFACE,
+  holdFire,
+  openFloorSpot,
+  resolvePlayed,
+  tick,
+  zombieAt,
+} from './testing'
 import { PlaySound, ResumeAudio, managedResources } from './update/sound'
 
 const FRAME_MS = FIXED_STEP_MS
 const MID_GAME_MS = 30_000
-const MUZZLE_X = PARLOUR.width / 2 + 10
 const SHOT_X = PARLOUR.width / 2 + 6
 const SHOT_Y = PARLOUR.height / 2
 
@@ -44,20 +51,9 @@ const readyScreen: Model = modifyFields(initialModel, {
 const withAudio = (base: Model, audio: AudioState): Model =>
   modifyFields(base, { audio: () => audio })
 
-const HELD_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const playingWave = (audio: AudioState, wave: number): Model =>
   modifyFields(withAudio(readyScreen, audio), {
-    phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns: [HELD_SPAWN] }),
+    phase: () => Phase.Wave({ wave, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
   })
 
 const playing = (audio: AudioState): Model => playingWave(audio, 1)
@@ -100,12 +96,6 @@ const playedResolver = (sound: SoundEffect): PlaySoundResolver => [
   PlaySound,
   Message.CompletedPlaySound({ sound, outcome: 'Played' }),
 ]
-
-const resolvePlayed = (sound: SoundEffect) =>
-  Command.resolve(
-    PlaySound,
-    Message.CompletedPlaySound({ sound, outcome: 'Played' }),
-  )
 
 const resolveAllPlayed = (sounds: ReadonlyArray<SoundEffect>) =>
   Command.resolveAll(...Array.map(sounds, playedResolver))

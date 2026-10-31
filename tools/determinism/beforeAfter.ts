@@ -19,10 +19,12 @@
 // Heavy (two whole runs), so run it through the guard:
 //   bun run determinism:diff -- [ref] [options]
 //
-// ref defaults to origin/main. Options: --frames N (default 7200, two
-// minutes), --seed S, --mode Endless, --pattern Mixed, --every N,
-// --no-hit-stop (clear hit-stop after every frame on both sides).
-// It exits 1 when the two differ.
+// ref defaults to origin/main. The base is where HEAD branched from ref
+// (`git merge-base HEAD ref`), so commits that landed on ref since then do
+// not read as a difference; --tip compares against ref's tip instead.
+// Options: --frames N (default 7200, two minutes), --seed S, --mode Endless,
+// --pattern Mixed, --every N, --no-hit-stop (clear hit-stop after every
+// frame on both sides). It exits 1 when the two differ.
 
 import { spawnSync } from 'node:child_process'
 import {
@@ -56,6 +58,7 @@ const option = (name: string): string | undefined => {
 }
 const ref =
   argv[0] !== undefined && !argv[0].startsWith('--') ? argv[0] : 'origin/main'
+const isTip = argv.includes('--tip')
 
 const request: EngineRequest = {
   ...DEFAULT_REQUEST,
@@ -177,9 +180,16 @@ const askDump = (cwd: string, frame: number): EngineDump => {
   return parsed
 }
 
+// NOTE: the merge base, not ref's tip: when ref has moved on since HEAD
+// branched (or was rebased onto), its new commits would read as this change's.
+const baseCommit = isTip
+  ? ref
+  : run('git', ['merge-base', 'HEAD', ref], root).trim()
+const baseName = isTip ? ref : `${ref} merge base ${baseCommit.slice(0, 9)}`
+
 const base = mkdtempSync(resolve(tmpdir(), 'determinism-base-'))
 rmSync(base, { recursive: true, force: true })
-run('git', ['worktree', 'add', '--detach', base, ref], root)
+run('git', ['worktree', 'add', '--detach', base, baseCommit], root)
 
 try {
   // NOTE: the old harness goes first: Bun's cpSync keeps a file that is
@@ -190,7 +200,7 @@ try {
     filter: source => !source.includes('/out'),
   })
   installBase(base)
-  checkPatches(base, `base (${ref})`)
+  checkPatches(base, `base (${baseName})`)
   checkPatches(root, 'working tree')
 
   const before = askRun(base, request)
@@ -199,7 +209,7 @@ try {
     `Seed ${request.seed}, ${request.mode}, ${request.pattern} steps, ${request.frames} frames, hashed every ${request.every}${request.noHitStop ? ', no hit-stop' : ''}`,
   )
   console.log(
-    `  before (${ref}): ${before.frames} frames, ended in ${before.endPhase} ${before.endWave}`,
+    `  before (${baseName}): ${before.frames} frames, ended in ${before.endPhase} ${before.endWave}`,
   )
   console.log(
     `  after (working tree): ${after.frames} frames, ended in ${after.endPhase} ${after.endWave}`,

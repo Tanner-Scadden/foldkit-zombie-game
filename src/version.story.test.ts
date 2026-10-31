@@ -9,6 +9,7 @@ import { FIXED_STEP_MS, PREPARATION_MS, RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
+import { fighting } from './model.fixture'
 import { isUsingServiceWorker } from './serviceWorker'
 import {
   maybePageShowMessage,
@@ -16,7 +17,7 @@ import {
   pageVisibilityMessage,
   updateCheckActivity,
 } from './subscriptions'
-import { fighting, showDialog } from './testing'
+import { showDialog } from './testing'
 import { FocusEndMenuButton, ReloadPage, WaitForUnwrap } from './update/home'
 import {
   FetchBuild,

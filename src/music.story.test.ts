@@ -4,7 +4,6 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { PARLOUR } from './arena'
-import type { SoundEffect } from './audio'
 import { FIXED_STEP_MS, ZOMBIE_MAX_HP } from './constants'
 import { update } from './main'
 import { Message } from './message'
@@ -20,7 +19,7 @@ import {
 } from './model'
 import type { MusicMood } from './music'
 import { CueMusic } from './musicPlan'
-import { SURFACE, tick } from './testing'
+import { SURFACE, resolvePlayed, tick } from './testing'
 import { PlaySound, ResumeAudio } from './update/sound'
 import { FetchBuild } from './update/version'
 import { asVeteran } from './veteran'
@@ -68,12 +67,6 @@ const pressKey = (code: string) => message(Message.PressedKey({ code }))
 
 const resolveCue = (mood: MusicMood) =>
   Command.resolve(CueMusic, Message.CompletedCueMusic({ mood }))
-
-const resolvePlayed = (sound: SoundEffect) =>
-  Command.resolve(
-    PlaySound,
-    Message.CompletedPlaySound({ sound, outcome: 'Played' }),
-  )
 
 describe('music follows the phase', () => {
   test('the title and Preparation share the creep loop, cued once audio is ready', () => {

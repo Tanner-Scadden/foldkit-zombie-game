@@ -24,17 +24,16 @@ import {
   Loading,
   type Model,
   Phase,
-  type PlannedSpawn,
   RunTally,
   initialModel,
   noKills,
 } from './model'
+import { DISTANT_SPAWN, home, veteranFighting } from './model.fixture'
 import { scoreOf } from './stats'
 import { maybeKeyDownMessage } from './subscriptions'
 import { scoring, showDialog } from './testing'
 import { ReadRoomLink } from './update/coop'
 import { HideSplash, ShowLoadProgress } from './update/save'
-import { asVeteran } from './veteran'
 import { FINAL_WAVE } from './waves'
 import { pause } from './waves'
 
@@ -42,12 +41,6 @@ const withEndlessBest = (base: Model, wave: number): Model =>
   withBests(base, bests =>
     modifyFields(bests, { maybeBestEndlessWave: () => Option.some(wave) }),
   )
-
-const home: Model = asVeteran(initialModel)
-
-const fighting: Model = modifyFields(home, {
-  phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),
-})
 
 const withKills = (base: Model, shamblers: number, runMs: number): Model =>
   modifyFields(base, {
@@ -58,20 +51,10 @@ const withKills = (base: Model, shamblers: number, runMs: number): Model =>
       }),
   })
 
-const farSpawn: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const dying = (base: Model): Model =>
   modifyFields(base, {
-    phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [farSpawn] }),
+    phase: () =>
+      Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [DISTANT_SPAWN] }),
     player: player => modifyFields(player, { hp: () => 0 }),
   })
 
@@ -79,7 +62,7 @@ describe('the bests', () => {
   test('kills count when the run ends, not as they happen', () => {
     story(
       update,
-      given(withKills(fighting, 3, 0)),
+      given(withKills(veteranFighting, 3, 0)),
       message(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
       model(({ bests, runTally }) => {
         expect(bests.totalKills).toBe(0)
@@ -89,7 +72,7 @@ describe('the bests', () => {
     )
     story(
       update,
-      given(dying(withKills(fighting, 3, 0))),
+      given(dying(withKills(veteranFighting, 3, 0))),
       message(Message.TickedFrame({ deltaTime: FIXED_STEP_MS })),
       model(({ phase, bests }) => {
         expect(Phase.guards.GameOver(phase)).toBe(true)
@@ -101,7 +84,7 @@ describe('the bests', () => {
   })
 
   test('a new run starts a fresh tally and keeps the bests', () => {
-    const over = modifyFields(withKills(fighting, 7, 0), {
+    const over = modifyFields(withKills(veteranFighting, 7, 0), {
       phase: () => Phase.GameOver({ wave: 3 }),
       screenMs: () => RESTART_GRACE_MS,
       runTally: () =>
@@ -128,7 +111,7 @@ describe('the bests', () => {
   test('leaving a paused run for the menu counts it', () => {
     story(
       update,
-      given(pause(withKills(fighting, 5, 0))),
+      given(pause(withKills(veteranFighting, 5, 0))),
       message(Message.PressedKey({ code: 'KeyH' })),
       showDialog(),
       message(Message.ClickedLeaveRunButton()),
@@ -147,7 +130,7 @@ describe('the bests', () => {
   })
 
   test('a win that goes on into endless adds only its new kills when it ends again', () => {
-    const goneOn = modifyFields(dying(withKills(fighting, 6, 0)), {
+    const goneOn = modifyFields(dying(withKills(veteranFighting, 6, 0)), {
       runTally: () =>
         RunTally.Counted({
           kills: modifyFields(noKills, { Shambler: () => 4 }),
@@ -170,7 +153,7 @@ describe('the bests', () => {
   test('a win records the fastest campaign time and keeps the faster one', () => {
     const winning = (runMs: number): Model =>
       withKills(
-        modifyFields(fighting, {
+        modifyFields(veteranFighting, {
           phase: () =>
             Phase.Wave({ wave: FINAL_WAVE, elapsedMs: 90_000, spawns: [] }),
         }),
@@ -212,7 +195,7 @@ describe('leaving a run', () => {
   test('H on the pause screen asks first, and closing the question keeps the run paused', () => {
     story(
       update,
-      given(pause(fighting)),
+      given(pause(veteranFighting)),
       message(Message.PressedKey({ code: 'KeyH' })),
       showDialog(),
       model(({ panel, panelDialog, phase }) => {
@@ -240,7 +223,7 @@ describe('leaving a run', () => {
   test('LEAVE tapped as the question fades out after Back keeps the run', () => {
     story(
       update,
-      given(pause(fighting)),
+      given(pause(veteranFighting)),
       message(Message.PressedKey({ code: 'KeyH' })),
       showDialog(),
       message(
@@ -274,7 +257,7 @@ describe('leaving a run', () => {
   test('H does nothing mid-wave, and Game Over waits out the grace', () => {
     story(
       update,
-      given(fighting),
+      given(veteranFighting),
       message(Message.PressedKey({ code: 'KeyH' })),
       model(({ phase, panelDialog }) => {
         expect(Phase.guards.Wave(phase)).toBe(true)
@@ -292,7 +275,7 @@ describe('leaving a run', () => {
   })
 
   test('going home clears the room but keeps the look, the settings, and the bests', () => {
-    const messy = modifyFields(withEndlessBest(fighting, 11), {
+    const messy = modifyFields(withEndlessBest(veteranFighting, 11), {
       stats: scoring(900),
       soundSetting: () => 'Muted',
       shakeSetting: () => 'Off',

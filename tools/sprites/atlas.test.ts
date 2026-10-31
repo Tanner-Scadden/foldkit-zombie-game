@@ -1,5 +1,4 @@
-import { Array, Match, Option, Record } from 'effect'
-import type { Canvas } from 'foldkit'
+import { Array, Option, Record } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, test } from 'vitest'
@@ -7,16 +6,11 @@ import { describe, expect, test } from 'vitest'
 import { levelOf } from '../../src/arena'
 import { sceneShapes } from '../../src/layers'
 import { type Model, Phase, initialModel } from '../../src/model'
+import { fighting, withActors } from '../../src/model.fixture'
 import { occludersOf } from '../../src/occluders'
 import { roomShapes } from '../../src/room'
 import { standInKeyOf } from '../../src/spriteAtlas'
-import {
-  SURFACE,
-  fighting,
-  openFloorSpot,
-  withActors,
-  zombieOf,
-} from '../../src/testing'
+import { SURFACE, imagesIn, openFloorSpot, zombieOf } from '../../src/testing'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from '../../src/zombies'
 
 // NOTE: the atlas holds what ./build.ts finds: every sprite built
@@ -32,17 +26,6 @@ const generatorKeys = (): ReadonlySet<string> => {
   expect(result.status).toBe(0)
   return new Set(JSON.parse(result.stdout))
 }
-
-const imagesIn = (
-  shapes: ReadonlyArray<Canvas.Shape>,
-): ReadonlyArray<Canvas.Image> =>
-  Array.flatMap(shapes, shape =>
-    Match.value(shape).pipe(
-      Match.tag('Image', image => [image]),
-      Match.tag('Group', ({ shapes: inner }) => imagesIn(inner)),
-      Match.orElse(() => []),
-    ),
-  )
 
 const keysDrawnIn = (model: Model): ReadonlyArray<string> => {
   const level = levelOf(model)

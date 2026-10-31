@@ -8,34 +8,18 @@ import { cameraFocus } from './camera'
 import { FIXED_STEP_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
-import {
-  type Model,
-  Phase,
-  type PlannedSpawn,
-  ShopState,
-  initialModel,
-} from './model'
-import { maybePlayerAt, playersOf, withSeat } from './party'
+import { type Model, Phase, ShopState, initialModel } from './model'
+import { DISTANT_SPAWN, atSeat } from './model.fixture'
+import { maybePlayerAt, playersOf } from './party'
 import { SURFACE, press, release, ticks } from './testing'
 import { asVeteran } from './veteran'
-import { type World, withWorld } from './world'
+import { type World } from './world'
 
 // Two to four players at one keyboard (MULTIPLAYER.md, Phase 1): a dev-only
 // `?local=N` link seats them, player 2 plays on IJKL with U to fire, and
 // the camera frames everyone.
 
 const TICK_MS = FIXED_STEP_MS
-
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
 
 const onTheCouch = (count: number): Model =>
   modifyFields(asVeteran(initialModel), {
@@ -53,12 +37,6 @@ const fighting = (count: number): Model =>
 
 const mateAt = (current: World, slot: number) =>
   Option.getOrThrow(maybePlayerAt(current, slot))
-
-const atSeat = (
-  current: Model,
-  slot: number,
-  change: (world: World) => World,
-): Model => withWorld(current, world => withSeat(world, slot, change))
 
 describe('a ?local link', () => {
   test('reads 2 to 4 players and 1 for anything else', () => {

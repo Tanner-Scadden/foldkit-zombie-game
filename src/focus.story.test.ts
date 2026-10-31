@@ -12,38 +12,21 @@ import {
   type Model,
   MouseButton,
   Phase,
-  type PlannedSpawn,
   RunMode,
   ShopState,
   Stick,
-  initialModel,
 } from './model'
+import { DISTANT_SPAWN, readyModel } from './model.fixture'
 import {
   type KeyDown,
   maybeKeyDownMessage,
   maybeWindowBlurMessage,
 } from './subscriptions'
-import { SURFACE, holdingFirst, tick } from './testing'
-import { asVeteran } from './veteran'
+import { holdingFirst, tick } from './testing'
 
 const FRAME_MS = FIXED_STEP_MS
 const MOUSE_POINTER = 1
 const RIGHT_THUMB = 12
-
-const readyModel: Model = modifyFields(asVeteran(initialModel), {
-  maybeSurface: () => Option.some(SURFACE),
-})
-
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
 
 const FIGHTING_PHASE: Phase = Phase.Wave({
   wave: 2,

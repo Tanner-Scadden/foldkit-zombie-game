@@ -9,7 +9,8 @@ import { describe, expect, test } from 'vitest'
 import { makeReader, makeWriter } from '../../packages/netcode/src/Wire'
 import { refreshIntent } from '../../src/frame'
 import { soloInputs, stepWorld } from '../../src/stepWorld'
-import { World } from '../../src/world'
+import { WORLD_KEYS } from '../../src/testing'
+import type { World } from '../../src/world'
 import {
   isSameOnWire,
   readWorld,
@@ -19,8 +20,6 @@ import {
 } from '../../src/worldCodec'
 import { firstDifference } from './diff'
 import { playFrame, startedRun } from './script'
-
-const WORLD_KEYS = Struct.keys(World.fields)
 
 const roundTrip = (world: World): World => {
   const writer = makeWriter()

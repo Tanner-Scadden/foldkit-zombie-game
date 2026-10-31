@@ -8,7 +8,6 @@ import { FIXED_STEP_MS } from './constants'
 import { CRAWLER_RULES, drawSurfacingSpot } from './crawler'
 import { update } from './main'
 import { Message } from './message'
-import type { GameEvent } from './model'
 import {
   Frenzy,
   type Model,
@@ -19,7 +18,7 @@ import {
   ZombieState,
   initialModel,
 } from './model'
-import { bulletInto, tick, ticks } from './testing'
+import { bulletInto, hasEvent, tick, ticks } from './testing'
 import { doorCounts, floorCounts, rollSpawns } from './waves'
 
 const FRAME_MS = FIXED_STEP_MS
@@ -77,9 +76,6 @@ const crawlerIn = (current: Model): Zombie =>
   Option.getOrThrow(
     Array.findFirst(current.zombies, zombie => zombie.kind === 'Crawler'),
   )
-
-const hasEvent = (current: Model, tag: GameEvent['_tag']): boolean =>
-  Array.some(current.frameEvents, event => event._tag === tag)
 
 const distanceToPlayer = (current: Model, zombie: Zombie): number =>
   Math.hypot(zombie.x - current.player.x, zombie.y - current.player.y)

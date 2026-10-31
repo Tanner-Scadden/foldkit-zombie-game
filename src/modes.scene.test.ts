@@ -23,27 +23,18 @@ import {
   ROOT,
   SCENE_SUBSCRIPTIONS,
   holdingSecond,
+  keepGoingButton,
   measureSurface,
+  modeButton,
+  playButton,
+  playEndlessButton,
+  retryButton,
 } from './testing'
 import { asVeteran } from './veteran'
 
-const retryButton = role('button', {
-  name: 'Retry: a new campaign of 10 waves',
-})
-const playButton = role('button', {
-  name: 'Play',
-})
-const modeButton = role('button', {
-  name: 'Mode: Campaign. Switch to Endless',
-})
 const endlessModeButton = role('button', {
   name: 'Mode: Endless. Switch to Campaign',
 })
-const playEndlessButton = selector(".home-play[data-mode='Endless']")
-const keepGoingButton = role('button', {
-  name: 'Keep going: carry on into endless from wave 11 with your money, guns, and traps',
-})
-
 const START_PROMPT =
   'Press Enter, or use the Start wave button, to start it now.'
 

@@ -6,31 +6,13 @@ import { describe, expect, test } from 'vitest'
 import { AIM_ASSIST } from './aimAssist'
 import { FIXED_STEP_MS, STICK_RADIUS_PX } from './constants'
 import { update } from './main'
-import {
-  type Model,
-  Phase,
-  type PlannedSpawn,
-  Stick,
-  initialModel,
-} from './model'
-import { tick, zombieOf } from './testing'
+import { type Model, Phase, Stick, initialModel } from './model'
+import { DISTANT_SPAWN } from './model.fixture'
+import { PHONE_LANDSCAPE, PHONE_PORTRAIT, tick, zombieOf } from './testing'
 import { asVeteran } from './veteran'
 
-const PORTRAIT_SURFACE = { left: 0, top: 0, width: 390, height: 844 }
-const LANDSCAPE_SURFACE = { left: 0, top: 0, width: 844, height: 390 }
 const PLAYER = { x: 160, y: 100 }
 const ZOMBIE_DISTANCE_PX = 40
-
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
 
 // NOTE: the right thumb holds the aim stick straight right, so the raw aim
 // is angle 0 and the trigger is held.
@@ -43,7 +25,7 @@ const aimingRight = (
     orientation: () => orientation,
     maybeSurface: () =>
       Option.some(
-        orientation === 'Portrait' ? PORTRAIT_SURFACE : LANDSCAPE_SURFACE,
+        orientation === 'Portrait' ? PHONE_PORTRAIT : PHONE_LANDSCAPE,
       ),
     phase: () => Phase.Wave({ wave: 3, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
     player: player => ({ ...player, ...PLAYER }),

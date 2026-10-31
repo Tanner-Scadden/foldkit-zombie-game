@@ -21,16 +21,19 @@ import {
   Phase,
   Purchase,
 } from './model'
+import {
+  AT_FRIDGE,
+  DISTANT_SPAWN,
+  atFridge,
+  freshRunModel,
+  fridgeSeededFor,
+} from './model.fixture'
 import { maybePlayerAt, seatCrew, withSeat } from './party'
 import { nextRandom } from './prng'
 import { PURCHASE_RULES, offersOf } from './purchase'
 import { stepWorld } from './stepWorld'
 import {
-  AT_FRIDGE,
-  FRIDGE_DISTANT_SPAWN,
-  atFridge,
-  freshRunModel,
-  fridgeSeededFor,
+  HOLD_TICKS,
   holdingFirst,
   holdingSecond,
   pistolOnly,
@@ -46,7 +49,6 @@ import { idleIntent, shutFridge } from './worldSchema'
 // with the hold to buy, and what comes out of it.
 
 const FRAME_MS = FIXED_STEP_MS
-const HOLD_TICKS = Math.ceil(PURCHASE_RULES.holdMs / FRAME_MS) + 1
 const OPEN_TICKS = Math.ceil(FRIDGE_RULES.openMs / FRAME_MS) + 1
 
 const pull = [press('Enter'), ...ticks(HOLD_TICKS, FRAME_MS), release('Enter')]
@@ -236,7 +238,7 @@ describe('pulling from Mystery Leftovers', () => {
   test('mid-wave, the fridge is for sale too', () => {
     const fighting = modifyFields(atFridge(100), {
       phase: () =>
-        Phase.Wave({ wave: 5, elapsedMs: 0, spawns: [FRIDGE_DISTANT_SPAWN] }),
+        Phase.Wave({ wave: 5, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
     })
     story(
       update,

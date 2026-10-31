@@ -19,11 +19,11 @@ import { PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import { type Model, MouseButton, Phase, initialModel } from './model'
+import { fighting } from './model.fixture'
 import { CONTROL_CARDS, helpLineOf } from './pauseHelp'
 import {
   ROOT,
   SCENE_SUBSCRIPTIONS,
-  fighting,
   holdingFirst,
   measureSurface,
 } from './testing'

@@ -5,9 +5,9 @@ import { describe, test } from 'vitest'
 
 import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
-import { type Model, Phase, initialModel } from './model'
-import { fighting, measureSurface, openHandInScene } from './testing'
-import { asVeteran } from './veteran'
+import { type Model, Phase } from './model'
+import { fighting, home } from './model.fixture'
+import { measureSurface, openHandInScene } from './testing'
 import { view } from './view'
 import { pause } from './waves'
 
@@ -20,8 +20,6 @@ const withLink = (model: Model): Model =>
 
 const withoutLink = (model: Model): Model =>
   modifyFields(model, { maybeSupportUrl: () => Option.none() })
-
-const home: Model = asVeteran(initialModel)
 
 const onPhase = (phase: Phase, screenMs: number): Model =>
   modifyFields(home, { phase: () => phase, screenMs: () => screenMs })

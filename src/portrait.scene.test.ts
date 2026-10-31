@@ -1,5 +1,5 @@
-import { Array, Match, Option } from 'effect'
-import { Canvas } from 'foldkit'
+import { Array, Match } from 'effect'
+import type { Canvas } from 'foldkit'
 import {
   Mount,
   expect,
@@ -18,39 +18,15 @@ import { TURN_HINT_TEXT } from './homeView'
 import { hudShapes } from './hud'
 import { update } from './main'
 import { Message } from './message'
-import {
-  BreakClock,
-  type Model,
-  Phase,
-  type PlannedSpawn,
-  initialModel,
-} from './model'
+import { BreakClock, type Model, Phase, initialModel } from './model'
+import { DISTANT_SPAWN, inPortrait } from './model.fixture'
 import { MeasureGameSurface } from './mount'
 import { screenOf, thumbAreaTop } from './screen'
-import { ROOT } from './testing'
+import { PHONE_LANDSCAPE, PHONE_PORTRAIT, ROOT, rectsOf } from './testing'
 import { asVeteran } from './veteran'
 import { wavePreviewShapes } from './wavePreview'
 
 type Box = Readonly<{ x: number; y: number; width: number; height: number }>
-
-const rectsOf = (
-  shapes: ReadonlyArray<Canvas.Shape>,
-  offset: Readonly<{ x: number; y: number }>,
-): ReadonlyArray<Canvas.Rect & Box> =>
-  Array.flatMap(shapes, shape =>
-    Match.value(shape).pipe(
-      Match.tag('Group', group =>
-        rectsOf(group.shapes, {
-          x: offset.x + (group.translate?.x ?? 0),
-          y: offset.y + (group.translate?.y ?? 0),
-        }),
-      ),
-      Match.tag('Rect', rect => [
-        Canvas.Rect({ ...rect, x: rect.x + offset.x, y: rect.y + offset.y }),
-      ]),
-      Match.orElse(() => []),
-    ),
-  )
 
 const boxesOf = (
   shapes: ReadonlyArray<Canvas.Shape>,
@@ -71,20 +47,6 @@ const boxesOf = (
     ),
   )
 
-const PORTRAIT = { left: 0, top: 0, width: 390, height: 844 }
-const LANDSCAPE = { left: 0, top: 0, width: 844, height: 390 }
-
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const onTouch = (phase: Phase): Model =>
   modifyFields(asVeteran(initialModel), {
     lastDevice: () => 'Touch',
@@ -94,12 +56,6 @@ const onTouch = (phase: Phase): Model =>
 const fighting = onTouch(
   Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [DISTANT_SPAWN] }),
 )
-
-const inPortrait = (model: Model): Model =>
-  modifyFields(model, {
-    orientation: () => 'Portrait',
-    maybeSurface: () => Option.some(PORTRAIT),
-  })
 
 const SLOT_FILL = 'rgba(8, 10, 12, 0.6)'
 
@@ -113,7 +69,7 @@ const gunSlotFills = (model: Model): ReadonlyArray<Box> =>
   )
 
 const root = selector('.game-root')
-const measure = (surface: typeof PORTRAIT) =>
+const measure = (surface: typeof PHONE_PORTRAIT) =>
   Mount.resolve(MeasureGameSurface, Message.MeasuredGameSurface(surface))
 
 // NOTE: the surface's MeasureGameSurface Mount reports once per Scene, so a
@@ -121,7 +77,7 @@ const measure = (surface: typeof PORTRAIT) =>
 // measurements left, whose Mount then reports the new size.
 const remeasured = (
   model: Model,
-  surfaces: ReadonlyArray<typeof PORTRAIT>,
+  surfaces: ReadonlyArray<typeof PHONE_PORTRAIT>,
 ): Model =>
   surfaces.reduce(
     (current, surface) =>
@@ -177,7 +133,7 @@ describe('the portrait HUD and thumb area', () => {
     scene(
       ROOT,
       given(fighting),
-      measure(PORTRAIT),
+      measure(PHONE_PORTRAIT),
       expect(root).toHaveAttr('data-layout', 'Portrait'),
       expect(selector('.gun-cluster')).toHaveAttr('data-layout', 'Portrait'),
       expect(selector('.gun-cluster')).toHaveStyle(
@@ -197,15 +153,15 @@ describe('turning the phone', () => {
     scene(
       ROOT,
       given(fighting),
-      measure(LANDSCAPE),
+      measure(PHONE_LANDSCAPE),
       expect(root).toHaveAttr('data-layout', 'Landscape'),
       expect(root).toHaveStyle('--screen-w', '320'),
       expect(role('status')).toHaveText('Fighting wave 3 of 10.'),
     )
     scene(
       ROOT,
-      given(remeasured(fighting, [LANDSCAPE])),
-      measure(PORTRAIT),
+      given(remeasured(fighting, [PHONE_LANDSCAPE])),
+      measure(PHONE_PORTRAIT),
       expect(root).toHaveAttr('data-layout', 'Portrait'),
       expect(root).toHaveStyle('--screen-w', '180'),
       expect(root).toHaveStyle('--screen-h', '390'),
@@ -217,8 +173,8 @@ describe('turning the phone', () => {
     )
     scene(
       ROOT,
-      given(remeasured(fighting, [LANDSCAPE, PORTRAIT])),
-      measure(LANDSCAPE),
+      given(remeasured(fighting, [PHONE_LANDSCAPE, PHONE_PORTRAIT])),
+      measure(PHONE_LANDSCAPE),
       expect(root).toHaveAttr('data-layout', 'Landscape'),
       expect(root).toHaveStyle('--frame-top', '0'),
       expect(selector('.thumb-area')).toBeAbsent(),
@@ -230,7 +186,7 @@ describe('turning the phone', () => {
     scene(
       ROOT,
       given(modifyFields(fighting, { lastDevice: () => 'KeyboardMouse' })),
-      measure(PORTRAIT),
+      measure(PHONE_PORTRAIT),
       expect(root).toHaveAttr('data-layout', 'Landscape'),
       expect(role('status')).toHaveText('Fighting wave 3 of 10.'),
     )
@@ -242,7 +198,7 @@ describe('the portrait home menu', () => {
     scene(
       ROOT,
       given(onTouch(Phase.Ready())),
-      measure(PORTRAIT),
+      measure(PHONE_PORTRAIT),
       expect(root).toHaveAttr('data-layout', 'Portrait'),
       expect(role('button', { name: /^More:/ })).toExist(),
       expect(role('region', { name: /^Your bests/ })).toBeAbsent(),
@@ -261,22 +217,24 @@ describe('the turn hint', () => {
     scene(
       ROOT,
       given(onTouch(Phase.Ready())),
-      measure(PORTRAIT),
+      measure(PHONE_PORTRAIT),
       expect(turnHint).toExist(),
       expect(selector('.home-turn-hint')).toExist(),
       expect(text(TURN_HINT_TEXT)).toBeAbsent(),
     )
     scene(
       ROOT,
-      given(remeasured(onTouch(Phase.Ready()), [PORTRAIT])),
-      measure(LANDSCAPE),
+      given(remeasured(onTouch(Phase.Ready()), [PHONE_PORTRAIT])),
+      measure(PHONE_LANDSCAPE),
       expect(root).toHaveAttr('data-layout', 'Landscape'),
       expect(turnHint).toBeAbsent(),
     )
     scene(
       ROOT,
-      given(remeasured(onTouch(Phase.Ready()), [PORTRAIT, LANDSCAPE])),
-      measure(PORTRAIT),
+      given(
+        remeasured(onTouch(Phase.Ready()), [PHONE_PORTRAIT, PHONE_LANDSCAPE]),
+      ),
+      measure(PHONE_PORTRAIT),
       expect(turnHint).toExist(),
     )
   })
@@ -285,7 +243,7 @@ describe('the turn hint', () => {
     scene(
       ROOT,
       given(onTouch(Phase.Ready())),
-      measure(LANDSCAPE),
+      measure(PHONE_LANDSCAPE),
       expect(role('group', { name: 'Play' })).toExist(),
       expect(turnHint).toBeAbsent(),
     )
@@ -295,7 +253,7 @@ describe('the turn hint', () => {
     scene(
       ROOT,
       given(fighting),
-      measure(PORTRAIT),
+      measure(PHONE_PORTRAIT),
       expect(root).toHaveAttr('data-layout', 'Portrait'),
       expect(turnHint).toBeAbsent(),
     )
@@ -309,7 +267,7 @@ describe('the turn hint', () => {
           lastDevice: () => 'KeyboardMouse',
         }),
       ),
-      measure(PORTRAIT),
+      measure(PHONE_PORTRAIT),
       expect(role('group', { name: 'Play' })).toExist(),
       expect(turnHint).toBeAbsent(),
     )

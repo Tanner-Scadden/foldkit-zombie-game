@@ -17,7 +17,8 @@ import { describe, test } from 'vitest'
 
 import { NEWS_DAYS } from './changelog'
 import { RESTART_GRACE_MS } from './constants'
-import { type Model, Phase, type ZombieKind, initialModel } from './model'
+import { type Model, Phase, type ZombieKind } from './model'
+import { home } from './model.fixture'
 import {
   ROOT,
   manorButton,
@@ -26,9 +27,6 @@ import {
   pickCardInScene,
   showDialogInScene,
 } from './testing'
-import { asVeteran } from './veteran'
-
-const home: Model = asVeteran(initialModel)
 
 const withKills = (
   base: Model,

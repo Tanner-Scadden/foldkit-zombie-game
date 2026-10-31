@@ -1,18 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import * as Context from 'effect/Context'
 import * as Effect from 'effect/Effect'
 import * as Exit from 'effect/Exit'
 import * as Layer from 'effect/Layer'
 import * as Option from 'effect/Option'
 import * as Schema from 'effect/Schema'
-import * as Scope from 'effect/Scope'
 import * as SqlClient from 'effect/sql/SqlClient'
 
 import * as SqliteClient from '@effect/sql-sqlite-bun/SqliteClient'
 import {
-  type Connection,
   ExchangeReply,
-  OPENED,
   encodeArgs,
   generateKey,
   importKey,
@@ -26,7 +22,6 @@ import {
   type DirectoryHost,
   type Linked,
   SessionResponseJson,
-  type Socket,
   SyncCallFailed,
   authenticateWith,
   encodeNightmareAnswer,
@@ -40,27 +35,13 @@ import {
   readNightmareUnlock,
   setupOnce,
 } from './syncCore.ts'
+import { decodeTagged, fakeSocket, memory } from './testing.ts'
 
 const decodeCode = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Struct({ code: Schema.String })),
 )
 
-const decodeTagged = Schema.decodeUnknownSync(
-  Schema.fromJsonString(Schema.Struct({ _tag: Schema.String })),
-)
-
 const SECRET = 'infra-sync-test-secret'
-
-const memory = (): Promise<SqlClient.SqlClient> =>
-  Effect.runPromise(
-    Effect.map(
-      Layer.buildWithScope(
-        SqliteClient.layer({ filename: ':memory:' }),
-        Scope.makeUnsafe(),
-      ),
-      context => Context.get(context, SqlClient.SqlClient),
-    ),
-  )
 
 const directoryOn = async () => {
   const sql = await memory()
@@ -104,23 +85,6 @@ const signedIn = async (
   return Schema.decodeSync(Schema.fromJsonString(SessionResponseJson))(
     await handled.response.text(),
   )
-}
-
-const fakeSocket = (): Socket & { readonly sent: Array<string> } => {
-  const sent: Array<string> = []
-  const state: { connection: Connection } = { connection: OPENED }
-  return {
-    sent,
-    send: message => {
-      sent.push(message)
-    },
-    get connection() {
-      return state.connection
-    },
-    setConnection: connection => {
-      state.connection = connection
-    },
-  }
 }
 
 const PLAYER = 'AAAAAAAAAAAAAAAAAAAAAA'

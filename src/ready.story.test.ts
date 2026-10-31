@@ -12,16 +12,14 @@ import {
   Frenzy,
   type Model,
   Phase,
-  type PlannedSpawn,
   type Zombie,
   ZombieAction,
   type ZombieKind,
   ZombieState,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN } from './model.fixture'
 import {
-  type HintId,
-  LESSON_MIN_SHOWN_MS,
   hintIcons,
   hintWords,
   isStartWaveBeckoning,
@@ -30,19 +28,22 @@ import {
 } from './onboarding'
 import { accuracyPercent, totalKills } from './stats'
 import {
+  SHOWN_TICKS,
   SURFACE,
+  hintIds,
   holdFire,
+  mouseDown,
   press,
   release,
   releaseFire,
   ticks,
+  touchDown,
 } from './testing'
 import { ZOMBIE_KINDS } from './zombies'
 
 const FRAME_MS = FIXED_STEP_MS
 const TICK_MS = 50
 const MOVE_TICKS = 10
-const SHOWN_TICKS = Math.ceil(LESSON_MIN_SHOWN_MS / TICK_MS)
 const FIRE_TICKS = 30
 
 const SURFACE_VIEW_X = (clientX: number): number =>
@@ -52,19 +53,6 @@ const readyModel: Model = modifyFields(initialModel, {
   difficultyCard: () => DifficultyCard.Seen(),
   maybeSurface: () => Option.some(SURFACE),
 })
-
-const touchDown = (pointerId: number, clientX: number, clientY: number) =>
-  message(
-    Message.PressedPointer({ pointerId, device: 'Touch', clientX, clientY }),
-  )
-
-const mouseDown = (clientX: number, clientY: number) =>
-  message(
-    Message.PressedPointer({ pointerId: 1, device: 'Mouse', clientX, clientY }),
-  )
-
-const hintIds = (current: Model): ReadonlyArray<HintId> =>
-  Array.map(shownHints(current), ({ id }) => id)
 
 const hintTexts = (current: Model): ReadonlyArray<string> =>
   Array.map(shownHints(current), ({ id }) =>
@@ -217,17 +205,6 @@ describe('onboarding hints', () => {
   })
 })
 
-const HELD_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const standing = (id: number, kind: ZombieKind, x: number): Zombie => ({
   id,
   kind,
@@ -244,7 +221,7 @@ const standing = (id: number, kind: ZombieKind, x: number): Zombie => ({
 })
 
 const shootingGallery: Model = modifyFields(readyModel, {
-  phase: () => Phase.Wave({ wave: 3, elapsedMs: 0, spawns: [HELD_SPAWN] }),
+  phase: () => Phase.Wave({ wave: 3, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
   player: player =>
     modifyFields(player, {
       x: () => 100,

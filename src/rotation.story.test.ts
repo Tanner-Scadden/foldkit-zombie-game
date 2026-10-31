@@ -5,12 +5,12 @@ import { describe, expect, test } from 'vitest'
 
 import { update } from './main'
 import { Message } from './message'
-import { Loading, type Model, initialModel } from './model'
+import { type Model, initialModel } from './model'
+import { loadingSave } from './model.fixture'
 import { decodeSave, encodeSave, restoreSave, saveOf } from './save'
-import { SURFACE } from './testing'
-import { ReadRoomLink } from './update/coop'
+import { SURFACE, finishSplash } from './testing'
 import { ApplyRotation } from './update/rotation'
-import { HideSplash, ShowLoadProgress, WriteSave } from './update/save'
+import { WriteSave } from './update/save'
 import { FetchBuild } from './update/version'
 import { asVeteran } from './veteran'
 
@@ -21,23 +21,6 @@ const veteran: Model = modifyFields(asVeteran(initialModel), {
   maybeSurface: () => Option.some(SURFACE),
   saveStatus: () => 'Read',
 })
-
-const loading: Model = modifyFields(initialModel, {
-  maybeSurface: () => Option.some(SURFACE),
-  loading: () => Loading.Loading({ pending: ['Save'] }),
-})
-
-const finishSplash = [
-  Command.resolve(
-    ShowLoadProgress({ loaded: 5, total: 5 }),
-    Message.CompletedShowLoadProgress(),
-  ),
-  Command.resolve(HideSplash(), Message.CompletedHideSplash()),
-  Command.resolve(
-    ReadRoomLink,
-    Message.CompletedReadRoomLink({ maybeCode: Option.none() }),
-  ),
-]
 
 const applied = (rotation: 'Landscape' | 'Auto') =>
   Command.resolve(ApplyRotation({ rotation }), Message.CompletedApplyRotation())
@@ -74,9 +57,9 @@ describe('applying the rotation', () => {
     }
     story(
       update,
-      given(onPhone(loading)),
+      given(onPhone(loadingSave)),
       message(Message.CompletedLoadSave({ maybeSave: Option.some(autoSave) })),
-      ...finishSplash,
+      finishSplash,
       applied('Auto'),
       model(current => {
         expect(current.rotationSetting).toBe('Auto')

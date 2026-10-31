@@ -21,19 +21,20 @@ import {
   ShopState,
   Stick,
   ZombieAction,
-  initialModel,
 } from './model'
+import { DISTANT_SPAWN, freshRunModel, pastTimedBreaks } from './model.fixture'
 import { PURCHASE_RULES, holdProgress } from './purchase'
 import { freshRun } from './runReset'
 import {
-  pastTimedBreaks,
+  BELOW_KITCHEN_DOOR,
+  HOLD_TICKS,
+  isKitchenOpen,
   press,
   release,
   tick,
   ticks,
   zombieOf,
 } from './testing'
-import { asVeteran } from './veteran'
 import {
   JOIN_LEAD_MS,
   beginPreparation,
@@ -43,31 +44,7 @@ import {
 } from './waves'
 
 const FRAME_MS = FIXED_STEP_MS
-const BELOW_KITCHEN_DOOR = { x: 70, y: 26 }
-
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const base: Model = pastTimedBreaks(freshRunModel())
-
-function freshRunModel(): Model {
-  const veteran = asVeteran(initialModel)
-  return modifyFields(
-    { ...veteran, ...freshRun(veteran) },
-    {
-      maybeSurface: () =>
-        Option.some({ left: 0, top: 0, width: 800, height: 400 }),
-    },
-  )
-}
 
 const inBreak = (wave: number, balance: number): Model =>
   modifyFields(base, {
@@ -109,11 +86,6 @@ const fightingInKitchen = (current: Model): Model =>
   modifyFields(withKitchen(current), {
     phase: () => Phase.Wave({ wave: 4, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
   })
-
-const isKitchenOpen = (current: Model): boolean =>
-  Array.contains(levelOf(current).openExits, KITCHEN_EXIT)
-
-const HOLD_TICKS = Math.ceil(PURCHASE_RULES.holdMs / FRAME_MS) + 1
 
 const KITCHEN_TARGET = Purchasable.Exit({ exit: KITCHEN_EXIT })
 

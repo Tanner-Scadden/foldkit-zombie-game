@@ -13,11 +13,11 @@ import {
   GameEvent,
   type Model,
   Phase,
-  type PlannedSpawn,
   ShopState,
   type Zombie,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN } from './model.fixture'
 import { maybePlayerAt, withSeat } from './party'
 import {
   AIM_REACH,
@@ -36,6 +36,7 @@ import {
   press,
   release,
   tick,
+  tickCountFor,
   zombieOf,
 } from './testing'
 import { FocusShopItem } from './update/shop'
@@ -58,21 +59,10 @@ const FRAME_MS = FIXED_STEP_MS
 const ROW_Y = 104
 const PLAYER_X = 100
 
-const HELD_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const fightingWith = (zombies: ReadonlyArray<Zombie>): Model =>
   modifyFields(asVeteran(initialModel), {
     maybeSurface: () => Option.some(SURFACE),
-    phase: () => Phase.Wave({ wave: 4, elapsedMs: 0, spawns: [HELD_SPAWN] }),
+    phase: () => Phase.Wave({ wave: 4, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
     zombies: () => zombies,
     player: player =>
       modifyFields(player, {
@@ -86,8 +76,6 @@ const zombieIn = (current: Model, id: number): Zombie =>
   Option.getOrThrow(
     Array.findFirst(current.zombies, zombie => zombie.id === id),
   )
-
-const ticksFor = (ms: number): number => Math.ceil(ms / FRAME_MS)
 
 const frames = (start: Model, count: number): ReadonlyArray<Model> =>
   Array.scan(
@@ -155,7 +143,10 @@ describe('the knife', () => {
       fightingWith([lug]),
       Message.PressedKey({ code: 'KeyF' }),
     ).model
-    const seen = frames(held, ticksFor(KNIFE_RULES.intervalMs * 3 - FRAME_MS))
+    const seen = frames(
+      held,
+      tickCountFor(KNIFE_RULES.intervalMs * 3 - FRAME_MS),
+    )
     expect(stabsIn(seen)).toBe(3)
     expect(zombieIn(lastOf(seen), 900).hp).toBe(99 - 3 * KNIFE_RULES.damage)
   })
@@ -170,7 +161,9 @@ describe('the knife', () => {
       Message.TickedFrame({ deltaTime: FRAME_MS }),
     ).model
     const letGo = update(firstStab, Message.ReleasedKey({ code: 'KeyF' })).model
-    expect(stabsIn(frames(letGo, ticksFor(KNIFE_RULES.intervalMs * 3)))).toBe(0)
+    expect(
+      stabsIn(frames(letGo, tickCountFor(KNIFE_RULES.intervalMs * 3))),
+    ).toBe(0)
   })
 
   test('it needs no ammo: it stabs mid-reload with an empty pistol and spends nothing', () => {
@@ -226,9 +219,9 @@ describe('the knife', () => {
       lastOf(stabbed),
       Message.ReleasedPointer({ pointerId: 31 }),
     ).model
-    expect(stabsIn(frames(lifted, ticksFor(KNIFE_RULES.intervalMs * 2)))).toBe(
-      0,
-    )
+    expect(
+      stabsIn(frames(lifted, tickCountFor(KNIFE_RULES.intervalMs * 2))),
+    ).toBe(0)
   })
 
   test('another finger lifting does not let go of the knife', () => {
@@ -240,7 +233,9 @@ describe('the knife', () => {
       fingered,
       Message.ReleasedPointer({ pointerId: 7 }),
     ).model
-    expect(stabsIn(frames(other, ticksFor(KNIFE_RULES.intervalMs * 2)))).toBe(2)
+    expect(
+      stabsIn(frames(other, tickCountFor(KNIFE_RULES.intervalMs * 2))),
+    ).toBe(2)
   })
 
   test('it rests while the player browses the shop', () => {
@@ -285,7 +280,7 @@ describe('two gun slots', () => {
           wave: 2,
           remainingMs: 15_000,
           durationMs: 20_000,
-          spawns: [HELD_SPAWN],
+          spawns: [DISTANT_SPAWN],
         }),
       wallet: () => ({ balance, earned: balance, shown: balance }),
       shop: () => ShopState.Browsing({ focusedItem: 'Shotgun' }),
@@ -400,7 +395,7 @@ describe('two gun slots', () => {
 })
 
 describe('the knife in co-op', () => {
-  const WAVE = Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [HELD_SPAWN] })
+  const WAVE = Phase.Wave({ wave: 2, elapsedMs: 0, spawns: [DISTANT_SPAWN] })
 
   const room = (): RoomWorld => {
     const started = startRoomWorld([0, 1], 7, DEFAULT_ROOM_SETTINGS)

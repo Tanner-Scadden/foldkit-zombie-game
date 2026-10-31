@@ -1,14 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import * as Context from 'effect/Context'
 import * as Effect from 'effect/Effect'
-import * as Layer from 'effect/Layer'
 import * as Option from 'effect/Option'
 import * as Result from 'effect/Result'
-import * as Schema from 'effect/Schema'
-import * as Scope from 'effect/Scope'
 import * as SqlClient from 'effect/sql/SqlClient'
 
-import * as SqliteClient from '@effect/sql-sqlite-bun/SqliteClient'
 import {
   ChangedReady,
   type ClientFrame,
@@ -19,8 +14,6 @@ import {
   roomScopeId,
 } from '@munch/netcode'
 import {
-  type Connection,
-  OPENED,
   PROTOCOL_VERSION,
   encodeArgs,
   mutationVersions,
@@ -37,11 +30,7 @@ import {
   makeRoomHost,
   reactionsOf,
 } from './gameRoomCore.ts'
-import type { Socket } from './syncCore.ts'
-
-const decodeTagged = Schema.decodeUnknownSync(
-  Schema.fromJsonString(Schema.Struct({ _tag: Schema.String })),
-)
+import { decodeTagged, fakeSocket, memory } from './testing.ts'
 
 const SECRET = 'infra-room-test-secret'
 const CODE = 'KX7PQ'
@@ -51,17 +40,6 @@ const BO = 'BBBBBBBBBBBBBBBBBBBBBB'
 const CY = 'CCCCCCCCCCCCCCCCCCCCCC'
 const DEE = 'DDDDDDDDDDDDDDDDDDDDDD'
 const EVE = 'EEEEEEEEEEEEEEEEEEEEEE'
-
-const memory = (): Promise<SqlClient.SqlClient> =>
-  Effect.runPromise(
-    Effect.map(
-      Layer.buildWithScope(
-        SqliteClient.layer({ filename: ':memory:' }),
-        Scope.makeUnsafe(),
-      ),
-      context => Context.get(context, SqlClient.SqlClient),
-    ),
-  )
 
 const roomHost = async (): Promise<RoomHost> => {
   const sql = await memory()
@@ -78,23 +56,6 @@ const tokenOf = (playerId: string, expiresMs = Date.now() + 60_000) =>
   Effect.runPromise(
     signToken(SECRET, { playerId, deviceId: `${playerId}-device`, expiresMs }),
   )
-
-const fakeSocket = (): Socket & { readonly sent: Array<string> } => {
-  const sent: Array<string> = []
-  const state: { connection: Connection } = { connection: OPENED }
-  return {
-    sent,
-    send: message => {
-      sent.push(message)
-    },
-    get connection() {
-      return state.connection
-    },
-    setConnection: connection => {
-      state.connection = connection
-    },
-  }
-}
 
 const hello = (token: string) =>
   JSON.stringify({

@@ -10,12 +10,11 @@ import { describe, expect, test } from 'vitest'
 import { refreshIntent } from '../../src/frame'
 import type { Model } from '../../src/model'
 import { soloInputs, stepWorld } from '../../src/stepWorld'
-import { World } from '../../src/world'
+import { WORLD_KEYS } from '../../src/testing'
+import type { World } from '../../src/world'
 import { firstDifference } from './diff'
 import { FIELD_CLASSES } from './fields'
 import { playFrame, startedRun } from './script'
-
-const WORLD_KEYS = Struct.keys(World.fields)
 
 const worldOf = (model: Model): World => Struct.pick(model, WORLD_KEYS)
 

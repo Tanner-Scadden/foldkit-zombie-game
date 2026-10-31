@@ -29,29 +29,13 @@ import {
   type Particle,
   Phase,
   Pierce,
-  type PlannedSpawn,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN, quietWave } from './model.fixture'
 import { UNREACHED_DISTANCE } from './pathing'
 import { press, tick, ticks, zombieAt } from './testing'
 
 const FRAME_MS = FIXED_STEP_MS
-
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
-const fightingModel: Model = modifyFields(initialModel, {
-  maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
-  phase: () => Phase.Wave({ wave: 1, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
-})
 
 const withPlayerAt = (base: Model, x: number, y: number): Model =>
   modifyFields(base, {
@@ -121,7 +105,7 @@ describe('player collision', () => {
   test('the player stops at the top wall and at the underside of the piano', () => {
     story(
       update,
-      given(withPlayerAt(fightingModel, 125, 40)),
+      given(withPlayerAt(quietWave(1), 125, 40)),
       press('KeyW'),
       ...ticks(40, MAX_FRAME_DELTA_MS),
       model(({ player }) => {
@@ -132,7 +116,7 @@ describe('player collision', () => {
 
     story(
       update,
-      given(withPlayerAt(fightingModel, 25, 70)),
+      given(withPlayerAt(quietWave(1), 25, 70)),
       press('KeyW'),
       ...ticks(20, MAX_FRAME_DELTA_MS),
       model(({ player }) => {
@@ -145,7 +129,7 @@ describe('player collision', () => {
   test('the player slides along cover when pushing into it at an angle', () => {
     story(
       update,
-      given(withPlayerAt(fightingModel, 20, 50)),
+      given(withPlayerAt(quietWave(1), 20, 50)),
       press('KeyW'),
       press('KeyD'),
       ...ticks(5, MAX_FRAME_DELTA_MS),
@@ -167,7 +151,7 @@ describe('player collision', () => {
     story(
       update,
       given(
-        modifyFields(withPlayerAt(fightingModel, 100, ARMCHAIR_ROW_Y), {
+        modifyFields(withPlayerAt(quietWave(1), 100, ARMCHAIR_ROW_Y), {
           player: player =>
             modifyFields(player, { knockback: () => ({ x: 600, y: 0 }) }),
         }),
@@ -182,7 +166,7 @@ describe('player collision', () => {
   test('the player cannot leave the screen through a doorway', () => {
     story(
       update,
-      given(withPlayerAt(fightingModel, 30, PARLOUR.doors.West.center.y)),
+      given(withPlayerAt(quietWave(1), 30, PARLOUR.doors.West.center.y)),
       press('KeyA'),
       ...ticks(40, MAX_FRAME_DELTA_MS),
       model(({ player }) => {
@@ -212,7 +196,7 @@ describe('bullets and cover', () => {
     story(
       update,
       given(
-        modifyFields(withPlayerAt(fightingModel, 250, 150), {
+        modifyFields(withPlayerAt(quietWave(1), 250, 150), {
           bullets: () => [upwardBullet],
           zombies: () => [hiddenZombie],
         }),
@@ -238,7 +222,7 @@ describe('bullets and cover', () => {
     story(
       update,
       given(
-        modifyFields(withPlayerAt(fightingModel, 250, 150), {
+        modifyFields(withPlayerAt(quietWave(1), 250, 150), {
           bullets: () => [
             {
               id: 902,
@@ -284,7 +268,7 @@ describe('particles and walls', () => {
     story(
       update,
       given(
-        modifyFields(fightingModel, {
+        modifyFields(quietWave(1), {
           particles: () => [
             fallingDrop(5, 50),
             fallingDrop(25, 30),
@@ -321,29 +305,26 @@ describe('pathing', () => {
     story(
       update,
       given(
-        modifyFields(
-          withPlayerAt(fightingModel, behindCouch.x, behindCouch.y),
-          {
-            phase: () =>
-              Phase.Wave({
-                wave: 1,
-                elapsedMs: 0,
-                spawns: [
-                  {
-                    atMs: 0,
-                    kind: 'Shambler',
-                    door: 'North',
-                    offset: 0,
-                    speedScale: 1,
-                    hpScale: 1,
-                    pack: 0,
-                    formation: 'Squad',
-                  },
-                  DISTANT_SPAWN,
-                ],
-              }),
-          },
-        ),
+        modifyFields(withPlayerAt(quietWave(1), behindCouch.x, behindCouch.y), {
+          phase: () =>
+            Phase.Wave({
+              wave: 1,
+              elapsedMs: 0,
+              spawns: [
+                {
+                  atMs: 0,
+                  kind: 'Shambler',
+                  door: 'North',
+                  offset: 0,
+                  speedScale: 1,
+                  hpScale: 1,
+                  pack: 0,
+                  formation: 'Squad',
+                },
+                DISTANT_SPAWN,
+              ],
+            }),
+        }),
       ),
       ...Array.flatMap(doorRun(runSeconds), frame => [frame, record]),
     )
@@ -367,7 +348,7 @@ describe('pathing', () => {
   })
 
   test('the flow field is recomputed only when the player changes tile', () => {
-    const start = withPlayerAt(fightingModel, 165, 95)
+    const start = withPlayerAt(quietWave(1), 165, 95)
     story(
       update,
       given(start),
@@ -392,7 +373,7 @@ describe('pathing', () => {
     story(
       update,
       given(
-        modifyFields(withPlayerAt(fightingModel, 280, 150), {
+        modifyFields(withPlayerAt(quietWave(1), 280, 150), {
           zombies: () => [
             zombieAt(1, 100, 100),
             zombieAt(2, 100, 100),

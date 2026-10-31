@@ -21,11 +21,11 @@ import {
   GameEvent,
   type Model,
   Phase,
-  type PlannedSpawn,
   type Zombie,
   ZombieAction,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN } from './model.fixture'
 import {
   holdFire,
   holdingFirst,
@@ -33,6 +33,7 @@ import {
   maybeSpareGun,
   releaseFire,
   tick,
+  tickCountFor,
   ticks,
   zombieOf,
 } from './testing'
@@ -47,17 +48,6 @@ const FRAME_MS = FIXED_STEP_MS
 const ROW_Y = 104
 const PLAYER_X = 100
 
-const HELD_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
 const holding = (
   spare: CarriedGun,
   zombies: ReadonlyArray<Zombie> = [],
@@ -65,7 +55,7 @@ const holding = (
   modifyFields(asVeteran(initialModel), {
     maybeSurface: () =>
       Option.some({ left: 0, top: 0, width: 800, height: 400 }),
-    phase: () => Phase.Wave({ wave: 4, elapsedMs: 0, spawns: [HELD_SPAWN] }),
+    phase: () => Phase.Wave({ wave: 4, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
     zombies: () => zombies,
     player: player =>
       modifyFields(player, {
@@ -81,8 +71,6 @@ const nightmare = (current: Model): Model =>
     difficulty: difficulty =>
       modifyFields(difficulty, { chosen: () => 'Nightmare' }),
   })
-
-const ticksFor = (ms: number): number => Math.ceil(ms / FRAME_MS)
 
 const zombieIn = (current: Model, id: number): Option.Option<Zombie> =>
   Array.findFirst(current.zombies, zombie => zombie.id === id)
@@ -121,7 +109,7 @@ describe('the Pressure Cooker', () => {
       update,
       given(holding(freshGun('Cooker'))),
       holdFire,
-      ...ticks(ticksFor(COOKER_RULES.fullMs / 2), FRAME_MS),
+      ...ticks(tickCountFor(COOKER_RULES.fullMs / 2), FRAME_MS),
       model(current => {
         expect(Charge.isAnyOf(['Building'])(current.player.charge)).toBe(true)
         expect(current.lobs).toEqual([])
@@ -143,7 +131,7 @@ describe('the Pressure Cooker', () => {
     const groaner = zombieOf('Shambler', 900, PLAYER_X + 30, ROW_Y)
     const events = eventsOf(holding(freshGun('Cooker'), [groaner]), [
       press,
-      ...frames(ticksFor(COOKER_RULES.fullMs)),
+      ...frames(tickCountFor(COOKER_RULES.fullMs)),
       lift,
       ...frames(30),
     ])
@@ -155,7 +143,7 @@ describe('the Pressure Cooker', () => {
     const throwAfter = (ms: number) => {
       const start = holding(freshGun('Cooker'))
       const thrown = Array.reduce(
-        [press, ...frames(ticksFor(ms)), lift, tick(FRAME_MS).message],
+        [press, ...frames(tickCountFor(ms)), lift, tick(FRAME_MS).message],
         start,
         (current, sent) => update(current, sent).model,
       )
@@ -176,7 +164,7 @@ describe('the Pressure Cooker', () => {
       given(holding(freshGun('Cooker'))),
       holdFire,
       ...ticks(
-        ticksFor(COOKER_RULES.fullMs + COOKER_RULES.overMs) + 2,
+        tickCountFor(COOKER_RULES.fullMs + COOKER_RULES.overMs) + 2,
         FRAME_MS,
       ),
       model(current => {
@@ -199,7 +187,7 @@ describe('the Pressure Cooker', () => {
     const popped = Array.reduce(
       [
         press,
-        ...frames(ticksFor(COOKER_RULES.fullMs + COOKER_RULES.overMs) + 2),
+        ...frames(tickCountFor(COOKER_RULES.fullMs + COOKER_RULES.overMs) + 2),
       ],
       nightmare(holding(freshGun('Cooker'))),
       (current, sent) => update(current, sent).model,
@@ -258,14 +246,14 @@ describe('the Clang Pan', () => {
   test('a zombie the Pan rang gets up Winded and cannot be dazed again at once', () => {
     const groaner = zombieOf('Shambler', 900, PLAYER_X + 10, ROW_Y, { hp: 99 })
     const swings = Array.reduce(
-      [press, ...frames(ticksFor(PAN_RULES.dazeMs) + 2)],
+      [press, ...frames(tickCountFor(PAN_RULES.dazeMs) + 2)],
       holding(freshGun('Pan'), [groaner]),
       (current, sent) => update(current, sent).model,
     )
     const rung = Option.getOrThrow(zombieIn(swings, 900))
     expect(ZombieAction.isAnyOf(['Winded', 'Reeling'])(rung.action)).toBe(true)
     const later = Array.reduce(
-      frames(ticksFor(PAN_RULES.swingMs) + 2),
+      frames(tickCountFor(PAN_RULES.swingMs) + 2),
       modifyFields(swings, {
         zombies: zombies =>
           Array.map(zombies, zombie =>
@@ -322,7 +310,10 @@ describe('the Clang Pan', () => {
     const target = zombieOf('Tank', 900, PLAYER_X + 12, ROW_Y, { hp: 999 })
     const swingsIn = (spare: CarriedGun, ms: number): number =>
       Array.filter(
-        eventsOf(holding(spare, [target]), [press, ...frames(ticksFor(ms))]),
+        eventsOf(holding(spare, [target]), [
+          press,
+          ...frames(tickCountFor(ms)),
+        ]),
         GameEvent.isAnyOf(['PanSwung']),
       ).length
     expect(swingsIn(dented, 3000)).toBeLessThan(swingsIn(freshGun('Pan'), 3000))
@@ -342,7 +333,7 @@ describe('the Clang Pan', () => {
     const behind = zombieOf('Shambler', 900, PLAYER_X - 14, ROW_Y, { hp: 99 })
     const events = eventsOf(
       holding(modifyFields(freshGun('Pan'), { tier: () => 3 }), [behind]),
-      [press, ...frames(ticksFor(PAN_RULES.smashHoldMs) + 30)],
+      [press, ...frames(tickCountFor(PAN_RULES.smashHoldMs) + 30)],
     )
     expect(Array.some(events, GameEvent.isAnyOf(['PanSmashed']))).toBe(true)
   })

@@ -3,7 +3,6 @@ import { describe, expect, test } from 'vitest'
 
 import {
   type ClientFrame,
-  MOVE_SCALE,
   NEUTRAL_INPUT,
   type PlayerInput,
   ROUND_TICKS,
@@ -13,8 +12,8 @@ import {
   type StandInWorld,
   readAll,
 } from '../src/index'
+import { right } from './fixtures'
 
-const right: PlayerInput = { ...NEUTRAL_INPUT, moveX: MOVE_SCALE }
 const T0 = 1_000_000
 
 type Stepped = Room.Stepped<StandInWorld>

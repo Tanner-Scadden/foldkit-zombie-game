@@ -37,12 +37,10 @@ import {
   calmPacing,
   initialModel,
 } from './model'
-import { tick, ticks } from './testing'
+import { tick, ticks, ticksFor } from './testing'
 import { FINAL_WAVE, debutKinds, rollSpawns, rollWave } from './waves'
 
 const FRAME_MS = 50
-
-const ticksFor = (ms: number) => ticks(Math.round(ms / FRAME_MS), FRAME_MS)
 
 const spawnAt = (
   atMs: number,
@@ -149,15 +147,15 @@ describe('packs', () => {
       given(waveModel(squad)),
       // NOTE: a frame past the second, as sixty 1000/60 ms ticks sum to a
       // hair under it.
-      ...ticksFor(1000 + FRAME_MS),
+      ...ticksFor(1000 + FRAME_MS, FRAME_MS),
       model(current => {
         expect(arrivedDoors(current)).toEqual(['West'])
       }),
-      ...ticksFor(PACK_GAP_MS + FRAME_MS),
+      ...ticksFor(PACK_GAP_MS + FRAME_MS, FRAME_MS),
       model(current => {
         expect(arrivedDoors(current)).toEqual(['West', 'West'])
       }),
-      ...ticksFor(PACK_GAP_MS),
+      ...ticksFor(PACK_GAP_MS, FRAME_MS),
       model(current => {
         expect(arrivedDoors(current)).toEqual(['West', 'West', 'West'])
       }),
@@ -231,7 +229,7 @@ describe('packs', () => {
     story(
       update,
       given(waveModel(horde)),
-      ...ticksFor(500),
+      ...ticksFor(500, FRAME_MS),
       model(current => {
         expect(
           Array.filter(current.frameEvents, GameEvent.guards.PackWarned),
@@ -240,11 +238,11 @@ describe('packs', () => {
           Alarm.Ringing({ remainingMs: DINNER_BELL_MS }),
         )
       }),
-      ...ticksFor(PACK_WARNING_MS),
+      ...ticksFor(PACK_WARNING_MS, FRAME_MS),
       model(current => {
         expect(sortedDoors(arrivedDoors(current))).toEqual(EVERY_DOOR)
       }),
-      ...ticksFor(DINNER_BELL_MS),
+      ...ticksFor(DINNER_BELL_MS, FRAME_MS),
       model(current => {
         expect(current.pacing.alarm).toEqual(Alarm.Quiet())
       }),
@@ -265,7 +263,7 @@ describe('telegraphs', () => {
           [lingerer],
         ),
       ),
-      ...ticksFor(warnedAt - FRAME_MS),
+      ...ticksFor(warnedAt - FRAME_MS, FRAME_MS),
       model(current => {
         expect(current.pacing.warnedPacks).toEqual([])
       }),
@@ -290,7 +288,7 @@ describe('telegraphs', () => {
           Array.filter(current.frameEvents, GameEvent.guards.PackWarned),
         ).toEqual([])
       }),
-      ...ticksFor(PACK_WARNING_MS),
+      ...ticksFor(PACK_WARNING_MS, FRAME_MS),
       model(current => {
         expect(arrivedDoors(current)).toEqual(['East'])
       }),
@@ -309,7 +307,7 @@ describe('telegraphs', () => {
           waveModel([spawnAt(500, 'North', 2), spawnAt(700, 'West', 3)]),
         ),
       ),
-      ...ticksFor(3000),
+      ...ticksFor(3000, FRAME_MS),
       model(current => {
         expect(arrivedDoors(current)).toEqual(['West'])
         const pending = Phase.guards.Wave(current.phase)
@@ -318,7 +316,7 @@ describe('telegraphs', () => {
         expect(Array.map(pending, ({ door }) => door)).toEqual(['North'])
       }),
       message(Message.PressedKey({ code: 'KeyS' })),
-      ...ticksFor(1000),
+      ...ticksFor(1000, FRAME_MS),
       model(current => {
         expect(sortedDoors(arrivedDoors(current))).toEqual(['North', 'West'])
       }),
@@ -340,7 +338,7 @@ describe('sawtooth', () => {
     story(
       update,
       given(waveModel(afterHold, held, crowdOf(FADE_RELEASE_BELOW))),
-      ...ticksFor(HOLD_AT_MS + 10_000),
+      ...ticksFor(HOLD_AT_MS + 10_000, FRAME_MS),
       model(current => {
         expect(waveClock(current)).toBe(HOLD_AT_MS)
         expect(Beat.guards.Fading(current.pacing.beat)).toBe(true)
@@ -353,16 +351,16 @@ describe('sawtooth', () => {
     story(
       update,
       given(waveModel(afterHold, held, crowdOf(FADE_RELEASE_BELOW - 1))),
-      ...ticksFor(HOLD_AT_MS + FRAME_MS),
+      ...ticksFor(HOLD_AT_MS + FRAME_MS, FRAME_MS),
       model(current => {
         expect(waveClock(current)).toBe(HOLD_AT_MS)
         expect(Beat.guards.Resting(current.pacing.beat)).toBe(true)
       }),
-      ...ticksFor(RELAX_MS - FRAME_MS),
+      ...ticksFor(RELAX_MS - FRAME_MS, FRAME_MS),
       model(current => {
         expect(waveClock(current)).toBe(HOLD_AT_MS)
       }),
-      ...ticksFor(1500 + 2 * FRAME_MS),
+      ...ticksFor(1500 + 2 * FRAME_MS, FRAME_MS),
       model(current => {
         expect(Beat.guards.Flowing(current.pacing.beat)).toBe(true)
         expect(arrivedDoors(current)).toContain('South')
@@ -385,7 +383,7 @@ describe('sawtooth', () => {
             { intensity: () => intensity },
           ),
         ),
-        ...Array.flatMap(ticksFor(8000), frame => [
+        ...Array.flatMap(ticksFor(8000, FRAME_MS), frame => [
           frame,
           model((current: Model) => {
             clocks.push(waveClock(current))
@@ -454,7 +452,7 @@ describe('mercy', () => {
           intensity: () => 0.5,
         }),
       ),
-      ...ticksFor(2000),
+      ...ticksFor(2000, FRAME_MS),
       model(current => {
         expect(current.intensity).toBeLessThan(0.5)
         expect(current.intensity).toBeGreaterThan(0)
@@ -514,16 +512,16 @@ describe('dead air', () => {
     story(
       update,
       given(waveModel([spawnAt(atMs, 'East', 1)])),
-      ...ticksFor(QUIET_HURRY_MS - FRAME_MS),
+      ...ticksFor(QUIET_HURRY_MS - FRAME_MS, FRAME_MS),
       model(current => {
         expect(current.pacing.warnedPacks).toEqual([])
       }),
-      ...ticksFor(2 * FRAME_MS),
+      ...ticksFor(2 * FRAME_MS, FRAME_MS),
       model(current => {
         expect(current.pacing.warnedPacks).toEqual([1])
         expect(waveClock(current)).toBeLessThan(atMs)
       }),
-      ...ticksFor(PACK_WARNING_MS),
+      ...ticksFor(PACK_WARNING_MS, FRAME_MS),
       model(current => {
         expect(arrivedDoors(current)).toEqual(['East'])
       }),
@@ -571,11 +569,11 @@ describe('dead air', () => {
     story(
       update,
       given(waveModel([spawnAt(30_000, 'West', 3)])),
-      ...ticksFor(500 - FRAME_MS),
+      ...ticksFor(500 - FRAME_MS, FRAME_MS),
       model(current => {
         expect(current.pacing.warnedPacks).toEqual([])
       }),
-      ...ticksFor(2 * FRAME_MS),
+      ...ticksFor(2 * FRAME_MS, FRAME_MS),
       model(current => {
         expect(current.pacing.warnedPacks).toEqual([3])
       }),
@@ -590,12 +588,12 @@ describe('dead air', () => {
     story(
       update,
       given(waveModel([spawnAt(100_000, 'North', 9)], resting, [lingerer])),
-      ...ticksFor(2500 - 2 * FRAME_MS),
+      ...ticksFor(2500 - 2 * FRAME_MS, FRAME_MS),
       model(current => {
         expect(waveClock(current)).toBe(0)
         expect(Beat.guards.Resting(current.pacing.beat)).toBe(true)
       }),
-      ...ticksFor(3 * FRAME_MS),
+      ...ticksFor(3 * FRAME_MS, FRAME_MS),
       model(current => {
         expect(Beat.guards.Flowing(current.pacing.beat)).toBe(true)
       }),
@@ -640,7 +638,7 @@ describe('fades', () => {
     story(
       update,
       given(waveModel(later, holding, crowdOf(6))),
-      ...ticksFor(3000),
+      ...ticksFor(3000, FRAME_MS),
       model(current => {
         expect(Beat.guards.Fading(current.pacing.beat)).toBe(true)
       }),
@@ -651,7 +649,7 @@ describe('fades', () => {
     story(
       update,
       given(waveModel(later, holding, crowdOf(5))),
-      ...ticksFor(500 + 2 * FRAME_MS),
+      ...ticksFor(500 + 2 * FRAME_MS, FRAME_MS),
       model(current => {
         expect(Beat.guards.Resting(current.pacing.beat)).toBe(true)
       }),

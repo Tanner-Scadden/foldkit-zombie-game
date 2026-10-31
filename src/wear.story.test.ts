@@ -21,12 +21,10 @@ import {
   type Model,
   type Particle,
   type ParticleKind,
-  Phase,
-  type PlannedSpawn,
   type Zombie,
   ZombieKind,
-  initialModel,
 } from './model'
+import { quietWave } from './model.fixture'
 import {
   KABOOMER_FUSE_MAX,
   ZOMBIE_SPRITES,
@@ -42,27 +40,11 @@ const FRAME_MS = FIXED_STEP_MS
 const FAR_X = PARLOUR.width / 2 + 60
 const ROW_Y = PARLOUR.height / 2
 
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
-const fightingModel: Model = modifyFields(initialModel, {
-  maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
-  phase: () => Phase.Wave({ wave: 1, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
-})
-
 const withScene = (
   zombies: ReadonlyArray<Zombie>,
   bullets: ReadonlyArray<Bullet> = [],
 ): Model =>
-  modifyFields(fightingModel, {
+  modifyFields(quietWave(1), {
     zombies: () => zombies,
     bullets: () => bullets,
   })

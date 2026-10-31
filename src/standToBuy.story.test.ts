@@ -1,28 +1,26 @@
-import { Array } from 'effect'
 import { given, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { levelOf } from './arena'
 import { FIXED_STEP_MS } from './constants'
-import { EXIT_RULES, KITCHEN_EXIT } from './exits'
+import { EXIT_RULES } from './exits'
 import { FRIDGE_RULES } from './leftovers'
 import { update } from './main'
+import { FridgeDoor, type Model, Phase, Purchase, ShopState } from './model'
 import {
-  FridgeDoor,
-  type Model,
-  Phase,
-  Purchase,
-  ShopState,
-} from './model'
-import { PURCHASE_RULES, holdProgress, isStandingToBuy } from './purchase'
-import {
-  FRIDGE_DISTANT_SPAWN,
+  DISTANT_SPAWN,
   atFridge,
   freshRunModel,
   fridgeSeededFor,
-  holdFire,
   pastTimedBreaks,
+} from './model.fixture'
+import { PURCHASE_RULES, holdProgress, isStandingToBuy } from './purchase'
+import {
+  BELOW_KITCHEN_DOOR,
+  HOLD_TICKS,
+  STAND_TICKS,
+  holdFire,
+  isKitchenOpen,
   press,
   release,
   ticks,
@@ -35,10 +33,6 @@ import { isCarrying } from './weapons'
 // or moving resets the ring, and one buy never chains into the next.
 
 const FRAME_MS = FIXED_STEP_MS
-const HOLD_TICKS = Math.ceil(PURCHASE_RULES.holdMs / FRAME_MS) + 1
-const STAND_TICKS = Math.ceil(PURCHASE_RULES.standMs / FRAME_MS) + 1
-const BELOW_KITCHEN_DOOR = { x: 70, y: 26 }
-
 const atBoards = (balance: number): Model =>
   modifyFields(pastTimedBreaks(freshRunModel()), {
     phase: () =>
@@ -46,7 +40,7 @@ const atBoards = (balance: number): Model =>
         wave: 3,
         remainingMs: 15_000,
         durationMs: 20_000,
-        spawns: [FRIDGE_DISTANT_SPAWN],
+        spawns: [DISTANT_SPAWN],
       }),
     wallet: () => ({ balance, earned: balance, shown: balance }),
     player: player =>
@@ -55,9 +49,6 @@ const atBoards = (balance: number): Model =>
         y: () => BELOW_KITCHEN_DOOR.y,
       }),
   })
-
-const isKitchenOpen = (current: Model): boolean =>
-  Array.contains(levelOf(current).openExits, KITCHEN_EXIT)
 
 describe('standing still to buy', () => {
   test('standing still at the boards for a second buys them, with the ring filling meanwhile', () => {
@@ -171,7 +162,7 @@ describe('standing still to buy', () => {
   test('not in the first moments of a wave', () => {
     const waveStart = modifyFields(atBoards(85), {
       phase: () =>
-        Phase.Wave({ wave: 3, elapsedMs: 0, spawns: [FRIDGE_DISTANT_SPAWN] }),
+        Phase.Wave({ wave: 3, elapsedMs: 0, spawns: [DISTANT_SPAWN] }),
     })
     story(
       update,
@@ -218,9 +209,7 @@ describe('one buy never chains into the next', () => {
         FRAME_MS,
       ),
       model(current => {
-        expect(FridgeDoor.isAnyOf(['Offering'])(current.fridge.door)).toBe(
-          true,
-        )
+        expect(FridgeDoor.isAnyOf(['Offering'])(current.fridge.door)).toBe(true)
         expect(current.purchase).toEqual(Purchase.Spent())
         expect(current.stats.purchases).toBe(1)
       }),

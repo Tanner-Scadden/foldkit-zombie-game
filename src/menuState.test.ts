@@ -11,20 +11,14 @@ import {
   isProfileOpenOn,
   menuState,
 } from './menuState'
-import { type Model, Phase, initialModel } from './model'
-import { asVeteran } from './veteran'
+import { type Model, Phase, type initialModel } from './model'
+import { home, veteranFighting } from './model.fixture'
 import { pause } from './waves'
 
 type Dialog = typeof initialModel.panelDialog
 
 const opened = (dialog: Dialog): Dialog =>
   modifyFields(dialog, { isOpen: () => true })
-
-const home: Model = asVeteran(initialModel)
-
-const fighting: Model = modifyFields(home, {
-  phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),
-})
 
 const inCoop: Model = modifyFields(home, {
   coop: coop =>
@@ -38,8 +32,8 @@ const tagOf = (model: Model): MenuState['_tag'] => menuState(model)._tag
 describe('menuState', () => {
   test('follows the phase when nothing is open', () => {
     expect(tagOf(home)).toBe('Home')
-    expect(tagOf(fighting)).toBe('Playing')
-    expect(tagOf(pause(fighting))).toBe('Paused')
+    expect(tagOf(veteranFighting)).toBe('Playing')
+    expect(tagOf(pause(veteranFighting))).toBe('Paused')
     expect(
       menuState(
         modifyFields(home, { phase: () => Phase.GameOver({ wave: 3 }) }),
@@ -68,14 +62,16 @@ describe('menuState', () => {
     expect(tagOf(modifyFields(inCoop, { updateGreeting: opened }))).toBe(
       'UpdateGreeting',
     )
-    expect(tagOf(modifyFields(fighting, { shopDialog: opened }))).toBe('Shop')
+    expect(tagOf(modifyFields(veteranFighting, { shopDialog: opened }))).toBe(
+      'Shop',
+    )
     expect(isOnHomeMenu(modifyFields(home, { updateGreeting: opened }))).toBe(
       false,
     )
   })
 
   test('names the open panel and Profile tab', () => {
-    const asking = modifyFields(pause(fighting), {
+    const asking = modifyFields(pause(veteranFighting), {
       panel: () => 'LeaveRun',
       panelDialog: opened,
     })
@@ -83,7 +79,7 @@ describe('menuState', () => {
     expect(isPanelOpen(asking, 'HowToPlay')).toBe(false)
     expect(
       isPanelOpen(
-        modifyFields(pause(fighting), { panel: () => 'LeaveRun' }),
+        modifyFields(pause(veteranFighting), { panel: () => 'LeaveRun' }),
         'LeaveRun',
       ),
     ).toBe(false)

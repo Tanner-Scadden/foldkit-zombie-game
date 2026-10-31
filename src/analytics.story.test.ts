@@ -4,8 +4,6 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
-import { Dialog, DialogBlock } from '@foldkit/ui'
-
 import {
   CauseOfDeath,
   MAX_SUMMARY_BYTES,
@@ -42,7 +40,7 @@ import {
 } from './model'
 import { PlayerChange } from './playerSync'
 import { saveOf } from './save'
-import { SURFACE, showDialog } from './testing'
+import { SURFACE, closeDialog, showDialog } from './testing'
 import { WriteSave } from './update/save'
 import { SendRunSummary } from './update/settle'
 import { asVeteran } from './veteran'
@@ -120,12 +118,6 @@ const expectedSummary = (
   frameTime: 'Under17Ms',
   ...overrides,
 })
-
-const closeDialog = () =>
-  Command.resolve(
-    Dialog.test.CloseDialog,
-    DialogBlock.Message.CompletedCloseDialog(),
-  )
 
 describe('the run summary schema', () => {
   const summary = expectedSummary({

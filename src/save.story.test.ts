@@ -18,7 +18,6 @@ import {
   Loading,
   type Model,
   Phase,
-  type PlannedSpawn,
   RunTally,
   TrapHint,
   freshLessons,
@@ -26,7 +25,9 @@ import {
   noBests,
   noKills,
 } from './model'
+import { DISTANT_SPAWN, loadingSave } from './model.fixture'
 import { isPracticeGateHeld, shownHints } from './onboarding'
+import { noSavedRunRecords } from './playerData'
 import { PlayerChange, changesBetween } from './playerSync'
 import {
   type PlayerSave,
@@ -44,15 +45,8 @@ import {
   unvisitedHome,
   writeLegacySave,
 } from './save'
-import { noSavedRunRecords } from './playerData'
-import { SURFACE, showDialog, tick } from './testing'
-import { ReadRoomLink } from './update/coop'
-import {
-  FocusTutorialReset,
-  HideSplash,
-  ShowLoadProgress,
-  WriteSave,
-} from './update/save'
+import { finishSplash, showDialog, tick } from './testing'
+import { FocusTutorialReset, WriteSave } from './update/save'
 import { ZOMBIE_KIND_ORDER } from './zombies'
 
 const learnedSave: PlayerSave = {
@@ -177,38 +171,10 @@ const { home: _home, ...versionThreeSave } = versionFiveSave
 
 const { bests: _bests, ...versionTwoSave } = versionThreeSave
 
-const loading: Model = modifyFields(initialModel, {
-  maybeSurface: () => Option.some(SURFACE),
-  loading: () => Loading.Loading({ pending: ['Save'] }),
-})
-
-const finishSplash = [
-  Command.resolve(
-    ShowLoadProgress({ loaded: 5, total: 5 }),
-    Message.CompletedShowLoadProgress(),
-  ),
-  Command.resolve(HideSplash(), Message.CompletedHideSplash()),
-  Command.resolve(
-    ReadRoomLink,
-    Message.CompletedReadRoomLink({ maybeCode: Option.none() }),
-  ),
-]
-
-const read: Model = modifyFields(loading, {
+const read: Model = modifyFields(loadingSave, {
   loading: () => Loading.Loaded(),
   saveStatus: () => 'Read',
 })
-
-const farSpawn: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
 
 describe('the schema', () => {
   test('a save round trips through JSON', () => {
@@ -540,11 +506,11 @@ describe('loading the save', () => {
   test('a loaded save skips the learned hints, the practice gate, and seen intro cards', () => {
     story(
       update,
-      given(loading),
+      given(loadingSave),
       message(
         Message.CompletedLoadSave({ maybeSave: Option.some(learnedSave) }),
       ),
-      ...finishSplash,
+      finishSplash,
       model(current => {
         expect(current.saveStatus).toBe('Read')
         expect(current.soundSetting).toBe('Muted')
@@ -585,9 +551,9 @@ describe('loading the save', () => {
   test('with no save, a new player still gets the hints and the practice gate', () => {
     story(
       update,
-      given(loading),
+      given(loadingSave),
       message(Message.CompletedLoadSave({ maybeSave: Option.none() })),
-      ...finishSplash,
+      finishSplash,
       message(Message.ClickedCampaignButton()),
       showDialog(),
       message(Message.ClickedDifficultyCardButton({ difficulty: 'Normal' })),
@@ -608,9 +574,9 @@ describe('loading the save', () => {
   test('storage that cannot be read falls back to the defaults and lets the game in', () => {
     story(
       update,
-      given(loading),
+      given(loadingSave),
       message(Message.FailedLoadSave({ reason: 'SecurityError' })),
-      ...finishSplash,
+      finishSplash,
       model(current => {
         expect(current.saveStatus).toBe('Read')
         expect(current.lessons).toEqual(freshLessons)
@@ -634,9 +600,9 @@ describe('loading the save', () => {
     }
     story(
       update,
-      given(loading),
+      given(loadingSave),
       message(Message.CompletedLoadSave({ maybeSave: Option.some(odd) })),
-      ...finishSplash,
+      finishSplash,
       model(current => {
         expect(current.introducedKinds).toEqual(['Shambler'])
         expect(current.soundSetting).toBe('Muted')
@@ -781,7 +747,8 @@ describe('writing the save', () => {
 
   test('the end of a run writes its kills and the run into the save', () => {
     const dying = modifyFields(read, {
-      phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [farSpawn] }),
+      phase: () =>
+        Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [DISTANT_SPAWN] }),
       player: player => modifyFields(player, { hp: () => 0 }),
       stats: stats =>
         modifyFields(stats, {
@@ -809,7 +776,8 @@ describe('writing the save', () => {
 
   test('kills mid-run write nothing until the run ends', () => {
     const fighting = modifyFields(read, {
-      phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [farSpawn] }),
+      phase: () =>
+        Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [DISTANT_SPAWN] }),
       stats: stats =>
         modifyFields(stats, {
           kills: () => modifyFields(noKills, { Shambler: () => 4 }),
@@ -820,7 +788,8 @@ describe('writing the save', () => {
 
   test('the first grab of a power-up kind writes it, and a second grab writes nothing', () => {
     const fighting = modifyFields(restoreSave(read, neverSeenSave), {
-      phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [farSpawn] }),
+      phase: () =>
+        Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [DISTANT_SPAWN] }),
     })
     const hotSauceUnder = (base: Model): Model =>
       modifyFields(base, {
@@ -866,9 +835,9 @@ describe('writing the save', () => {
     const json = Option.getOrThrow(encodeSave(saveOf(grabbed)))
     story(
       update,
-      given(loading),
+      given(loadingSave),
       message(Message.CompletedLoadSave({ maybeSave: decodeSave(json) })),
-      ...finishSplash,
+      finishSplash,
       model(current => {
         expect(current.seenPowerUps).toEqual(['Damage', 'Heart'])
       }),
@@ -881,7 +850,8 @@ describe('writing the save', () => {
 
   test('a frame mid-wave leaves every saved field as it was, so the save is not rebuilt', () => {
     const fighting = modifyFields(restoreSave(read, learnedSave), {
-      phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [farSpawn] }),
+      phase: () =>
+        Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [DISTANT_SPAWN] }),
     })
     story(
       update,
@@ -902,7 +872,8 @@ describe('writing the save', () => {
 
   test('the saved fields are all the save reads', () => {
     const played = modifyFields(restoreSave(read, learnedSave), {
-      phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [farSpawn] }),
+      phase: () =>
+        Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [DISTANT_SPAWN] }),
       wallet: wallet => modifyFields(wallet, { balance: () => 300 }),
       stats: stats =>
         modifyFields(stats, {
@@ -923,7 +894,7 @@ describe('writing the save', () => {
   test('nothing is written before the save has been read', () => {
     story(
       update,
-      given(loading),
+      given(loadingSave),
       message(Message.ClickedMuteButton()),
       Command.expectNone(),
     )

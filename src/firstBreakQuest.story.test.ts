@@ -14,17 +14,17 @@ import {
   type Model,
   Party,
   Phase,
-  type PlannedSpawn,
   ShopState,
   Tour,
   TrapHint,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN } from './model.fixture'
 import { isStartWaveBeckoning } from './onboarding'
 import { soloSeat } from './party'
 import { forgetTutorial } from './save'
 import { isFirstPlankFree, priceFor } from './shop'
-import { press } from './testing'
+import { BELOW_NORTH_DOOR, nextFrame, press } from './testing'
 import { TRAPS } from './traps'
 import { asTutorialDone, asVeteran } from './veteran'
 
@@ -32,19 +32,6 @@ import { asTutorialDone, asVeteran } from './veteran'
 // buy a Plank Pile (free this once), place it, then START WAVE.
 
 const FRAME_MS = FIXED_STEP_MS
-
-const HELD_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
-
-const BELOW_NORTH_DOOR = { x: 220, y: 27 }
 
 // NOTE: a new save's first break: it has played wave 1, so it has moved
 // and fired, and has a little money, short of a Plank Pile.
@@ -57,7 +44,7 @@ const firstBreak = (base: Model = asVeteran(initialModel)): Model =>
         wave: 2,
         remainingMs: PREPARATION_MS,
         durationMs: PREPARATION_MS,
-        spawns: [HELD_SPAWN],
+        spawns: [DISTANT_SPAWN],
         clock: BreakClock.Waiting({ elapsedMs: 0 }),
       }),
     wallet: wallet => ({ ...wallet, balance: 12, shown: 12, earned: 12 }),
@@ -70,9 +57,6 @@ const firstBreak = (base: Model = asVeteran(initialModel)): Model =>
           Invulnerability.Invulnerable({ remainingMs: 1e9, durationMs: 1e9 }),
       }),
   })
-
-const frame = (current: Model): Model =>
-  update(current, Message.TickedFrame({ deltaTime: FRAME_MS })).model
 
 const stepOf = (current: Model): Option.Option<QuestStep> =>
   questStepOf(current)
@@ -91,7 +75,7 @@ const away = (current: Model): Model =>
 
 describe('the guided first break', () => {
   test('walks a new player from the stall to buying to placing, then START WAVE', () => {
-    const started = frame(firstBreak())
+    const started = nextFrame(firstBreak())
     expect(started.firstBreakQuest).toEqual(Tour.Running())
     expect(stepOf(started)).toEqual(Option.some('Shop'))
 
@@ -121,7 +105,7 @@ describe('the guided first break', () => {
   })
 
   test('with no money for it, the first Plank Pile is free', () => {
-    const started = frame(firstBreak())
+    const started = nextFrame(firstBreak())
     expect(started.wallet.balance).toBeLessThan(TRAPS.Barricade.price)
     expect(priceFor(started, 'Barricade')).toBe(0)
     const bought = buyPlanks(browsing(started))
@@ -131,17 +115,17 @@ describe('the guided first break', () => {
   })
 
   test('the skip button ends it at any step', () => {
-    const started = frame(firstBreak())
+    const started = nextFrame(firstBreak())
     const skipped = update(started, Message.ClickedSkipQuestButton()).model
     expect(skipped.firstBreakQuest).toEqual(Tour.Over())
-    expect(stepOf(frame(skipped))).toEqual(Option.none())
+    expect(stepOf(nextFrame(skipped))).toEqual(Option.none())
   })
 
   test('starting the wave ends it', () => {
-    const started = frame(firstBreak())
+    const started = nextFrame(firstBreak())
     const waved = update(started, Message.ClickedStartWaveButton()).model
     expect(Phase.isAnyOf(['Wave'])(waved.phase)).toBe(true)
-    expect(frame(waved).firstBreakQuest).toEqual(Tour.Over())
+    expect(nextFrame(waved).firstBreakQuest).toEqual(Tour.Over())
   })
 
   test('runs once per save: a player who has shopped or bought a trap never sees it', () => {
@@ -151,29 +135,29 @@ describe('the guided first break', () => {
           modifyFields(lessons, { shop: () => Lesson.Learned({ atMs: 0 }) }),
       }),
     )
-    expect(frame(shopped).firstBreakQuest).toEqual(Tour.Waiting())
+    expect(nextFrame(shopped).firstBreakQuest).toEqual(Tour.Waiting())
     const trapper = firstBreak(
       modifyFields(asVeteran(initialModel), {
         trapHint: () => TrapHint.Seen(),
       }),
     )
-    expect(frame(trapper).firstBreakQuest).toEqual(Tour.Waiting())
+    expect(nextFrame(trapper).firstBreakQuest).toEqual(Tour.Waiting())
     const done = firstBreak(asTutorialDone(asVeteran(initialModel)))
-    expect(stepOf(frame(done))).toEqual(Option.none())
+    expect(stepOf(nextFrame(done))).toEqual(Option.none())
     expect(isFirstPlankFree(done, 'Barricade')).toBe(false)
   })
 
   test('a tutorial reset plays it again', () => {
     const done = firstBreak(asTutorialDone(asVeteran(initialModel)))
     const reset = firstBreak(forgetTutorial(done))
-    expect(frame(reset).firstBreakQuest).toEqual(Tour.Running())
+    expect(nextFrame(reset).firstBreakQuest).toEqual(Tour.Running())
   })
 
   test('in co-op it never runs and planks cost full price', () => {
     const crew = modifyFields(firstBreak(), {
       party: () => Party.Crew({ lead: soloSeat, mates: [] }),
     })
-    expect(stepOf(frame(crew))).toEqual(Option.none())
+    expect(stepOf(nextFrame(crew))).toEqual(Option.none())
     expect(isFirstPlankFree(crew, 'Barricade')).toBe(false)
   })
 })

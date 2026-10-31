@@ -14,8 +14,8 @@ import { FRIDGE_RULES, PRIZE_ORDER } from './leftovers'
 import { update } from './main'
 import { Message } from './message'
 import { AudioState, FridgeDoor, type Model, PrizeFlight } from './model'
-import { PURCHASE_RULES } from './purchase'
-import { atFridge, fridgeSeededFor, press, release, ticks } from './testing'
+import { atFridge, fridgeSeededFor } from './model.fixture'
+import { HOLD_TICKS, press, release, ticks } from './testing'
 import { PlaySound } from './update/sound'
 import { freshGun, maybeReplacedGun, takeGun } from './weapons'
 import { Arsenal } from './worldSchema'
@@ -25,8 +25,6 @@ import { Arsenal } from './worldSchema'
 // into its HUD slot once taken.
 
 const FRAME_MS = FIXED_STEP_MS
-const HOLD_TICKS = Math.ceil(PURCHASE_RULES.holdMs / FRAME_MS) + 1
-
 const audibleAtFridge = (balance: number): Model =>
   modifyFields(atFridge(balance), {
     audio: () => AudioState.Ready(),

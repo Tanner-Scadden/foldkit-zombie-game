@@ -26,16 +26,8 @@ import {
   type ZombieKind,
   ZombieState,
 } from './model'
-import {
-  DISTANT_SPAWN,
-  blastFrames,
-  quietWave,
-  recordTicks,
-  tick,
-  ticks,
-  withActors,
-  zombieOf,
-} from './testing'
+import { DISTANT_SPAWN, quietWave, withActors } from './model.fixture'
+import { blastFrames, recordTicks, tick, ticks, zombieOf } from './testing'
 import {
   FINAL_WAVE,
   type KindWeight,
@@ -55,8 +47,6 @@ const FRAME_MS = FIXED_STEP_MS
 const LONG_FRAME_MS = 50
 const CENTER_X = PARLOUR.width / 2
 const CENTER_Y = PARLOUR.height / 2
-
-const fightingModel: Model = quietWave(1)
 
 const pistolInto = (id: number, zombie: Zombie): Bullet => ({
   id,
@@ -82,7 +72,7 @@ const pistolsInto = (
 const withScene = (
   zombies: ReadonlyArray<Zombie>,
   bullets: ReadonlyArray<Bullet> = [],
-): Model => withActors(fightingModel, zombies, bullets)
+): Model => withActors(quietWave(1), zombies, bullets)
 
 const bomberOf = (kind: ZombieKind) =>
   Behavior.match(ZOMBIE_KINDS[kind].behavior, {
@@ -131,7 +121,7 @@ describe('the kind table', () => {
     story(
       update,
       given(
-        modifyFields(fightingModel, {
+        modifyFields(quietWave(1), {
           phase: () =>
             Phase.Wave({
               wave: 3,

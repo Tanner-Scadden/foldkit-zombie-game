@@ -1,4 +1,4 @@
-import { Array, Option } from 'effect'
+import { Array } from 'effect'
 import {
   Command,
   Subscription,
@@ -25,11 +25,16 @@ import { RESTART_GRACE_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import { type Model, Phase, initialModel } from './model'
+import { withNewerBuild } from './model.fixture'
 import {
   ROOT,
   SCENE_SUBSCRIPTIONS,
   emitPressedKey,
+  keepGoingButton,
+  manorButton,
   measureSurface,
+  retryButton,
+  updateChip,
 } from './testing'
 import { OpenShare } from './update/end'
 import { FocusEndMenuButton } from './update/home'
@@ -44,17 +49,9 @@ const tickPastGrace = () =>
   )
 
 const menuButton = role('button', { name: /^Menu: back/ })
-const retryButton = role('button', {
-  name: 'Retry: a new campaign of 10 waves',
-})
 const shareButton = role('button', {
   name: 'Share your run on X. Opens in a new tab',
 })
-const keepGoingButton = role('button', {
-  name: 'Keep going: carry on into endless from wave 11 with your money, guns, and traps',
-})
-const updateChip = role('button', { name: 'Update ready: tap to get it' })
-const mainMenu = role('button', { name: /^More:/ })
 const updateNote = selector('.mode-button-gift')
 const endButtons = all.selector('.end-actions .end-button')
 const menuOnlyButtons = all.selector('.mode-choice .mode-button')
@@ -69,9 +66,6 @@ const onEndScreen = (phase: Phase, screenMs: number): Model =>
     phase: () => phase,
     screenMs: () => screenMs,
   })
-
-const withNewerBuild = (model: Model): Model =>
-  modifyFields(model, { maybeNewerBuild: () => Option.some('newer-build') })
 
 describe('the end screens', () => {
   test('Game Over puts HOME first, then RETRY and SHARE', () => {
@@ -132,7 +126,7 @@ describe('the end screens', () => {
         expect(keepGoingButton).toBeAbsent(),
         expect(updateChip).toBeAbsent(),
         click(menuButton),
-        expect(mainMenu).toExist(),
+        expect(manorButton).toExist(),
         expect(updateChip).toExist(),
       )
     },
@@ -148,7 +142,7 @@ describe('the end screens', () => {
         expect(menuButton).toBeAbsent(),
         ...tickPastGrace().slice(0, 2),
         emitPressedKey('Enter'),
-        expect(mainMenu).toBeAbsent(),
+        expect(manorButton).toBeAbsent(),
         Command.expectExact(FocusEndMenuButton),
         Command.resolve(
           FocusEndMenuButton,
@@ -157,7 +151,7 @@ describe('the end screens', () => {
         expect(menuButton).toExist(),
         expect(updateNote).toExist(),
         emitPressedKey('Enter'),
-        expect(mainMenu).toExist(),
+        expect(manorButton).toExist(),
         expect(updateChip).toExist(),
       )
     },

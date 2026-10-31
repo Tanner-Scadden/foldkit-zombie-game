@@ -14,12 +14,12 @@ import {
   GameEvent,
   type Model,
   Phase,
-  type PlannedSpawn,
   type Zombie,
   ZombieAction,
   ZombieState,
   initialModel,
 } from './model'
+import { DISTANT_SPAWN } from './model.fixture'
 import { KABOOMER_FUSE_MAX } from './sprite'
 import { bulletInto, tick, ticks } from './testing'
 import { wavePreviewLabel } from './wavePreview'
@@ -41,17 +41,6 @@ const BOMBER = Behavior.match(ZOMBIE_KINDS.Exploder.behavior, {
   Thrower: () => undefined,
   Crawler: () => undefined,
 })
-
-const DISTANT_SPAWN: PlannedSpawn = {
-  atMs: 1e9,
-  kind: 'Shambler',
-  door: 'North',
-  offset: 0,
-  speedScale: 1,
-  hpScale: 1,
-  pack: 0,
-  formation: 'Squad',
-}
 
 const FULL_HP = ZOMBIE_KINDS.Exploder.hp
 
