@@ -4,7 +4,7 @@
 
 **A goofy, gory pixel zombie shooter you can play right now in your browser.** No download, no account, free.
 
-### 🧟 [Play Munch Manor](https://munch-manor.tanner-scadden.workers.dev)
+### 🧟 [Play Munch Manor](https://munch-manor.tanner-scadden.workers.dev) · ☕ [Buy Rattles a coffee](https://buy.stripe.com/14A3cwe3i8xXcMX1qscs800)
 
 The dead have moved into a creaky old manor, and they're hungry. Hold the parlour, board up the doors, spend your hard-earned cash at Rattles' shop, and survive ten waves of shuffling, sprinting, and exploding zombies, right up to the big boss, Uncle Chunk.
 
@@ -37,6 +37,10 @@ The dead have moved into a creaky old manor, and they're hungry. Hold the parlou
 | Pause                                | Esc                       | Pause button                        |
 
 The game teaches the rest as you go. Rattles will point you to his shop after your first wave.
+
+## Buy Rattles a coffee ☕
+
+Munch Manor is free, with no ads and nothing locked behind a paywall. If you had fun and want to say thanks, you can [buy the shopkeeper a coffee](https://buy.stripe.com/14A3cwe3i8xXcMX1qscs800). Any amount helps keep the manor's lights on.
 
 ## Say hi
 
