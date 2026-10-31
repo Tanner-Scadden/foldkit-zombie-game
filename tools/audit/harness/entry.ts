@@ -173,7 +173,7 @@ const FRIDGE_GUNS: Readonly<Record<'cooker' | 'pan' | 'freeze', WeaponKind>> = {
   freeze: 'Freeze',
 }
 
-// NOTE: Mystery Leftovers. `fridge=open|slammed` with `fridgeMs` left sets
+// NOTE: Mystery Leftovers. `fridge=open|offering|slammed` with `fridgeMs` left sets
 // the fridge's door (`prize` names an open door's prize), `fridgeseed` sets
 // the fridge's own stream, so a real pull draws a chosen prize, `lobs` puts
 // three Pressure Cooker lids in the air ahead of the player (one landing a
@@ -221,10 +221,17 @@ const withLeftovers = (start: Model): Model => {
                 remainingMs: config.fridgeMs,
                 durationMs: 1100,
               })
-            : FridgeDoor.Slammed({
-                remainingMs: config.fridgeMs,
-                durationMs: 30_000,
-              }),
+            : door === 'offering'
+              ? FridgeDoor.Offering({
+                  prize: config.prize ?? 'Cooker',
+                  slot: 0,
+                  remainingMs: config.fridgeMs,
+                  durationMs: 6000,
+                })
+              : FridgeDoor.Slammed({
+                  remainingMs: config.fridgeMs,
+                  durationMs: 30_000,
+                }),
       }),
     })
   }

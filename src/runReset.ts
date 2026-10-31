@@ -10,6 +10,7 @@ import {
   DebutCard,
   FIRST_SHOP_CATEGORY,
   Party,
+  PrizeFlight,
   Purchase,
   RunTally,
   ShopState,
@@ -64,6 +65,7 @@ export type RunFields = Pick<
   | 'cosmeticRngState'
   | 'stepCarryMs'
   | 'callouts'
+  | 'prizeFlight'
   | 'trapStock'
   | 'selectedTrap'
   | 'laserSight'
@@ -113,6 +115,7 @@ export const freshRun = (model: Model): RunFields => ({
   cosmeticRngState: cosmeticSeedOf(model.rngState),
   stepCarryMs: 0,
   callouts: [],
+  prizeFlight: PrizeFlight.Grounded(),
   trapStock: emptyTrapStock,
   selectedTrap: 'Barricade',
   laserSight: 'None',

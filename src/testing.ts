@@ -4,13 +4,17 @@ import { modifyFields } from 'foldkit/struct'
 
 import { Dialog, DialogBlock } from '@foldkit/ui'
 
+import { levelOf, openExitIn } from './arena'
 import { ApplicationComposition } from './composition'
 import { SCORE_PER_ZOMBIE, ZOMBIE_MAX_HP } from './constants'
+import { KITCHEN_EXIT } from './exits'
+import { fridgeBoxOf, pickPrize, prizeWeights } from './leftovers'
 import { update } from './main'
 import { Message } from './message'
 import {
   type Bullet,
   Frenzy,
+  type FridgePrize,
   GameEvent,
   type Model,
   Phase,
@@ -24,7 +28,10 @@ import {
   initialModel,
 } from './model'
 import { MeasureGameSurface } from './mount'
+import { nextRandom } from './prng'
+import { freshRun } from './runReset'
 import { subscriptions } from './subscriptions'
+import { asVeteran } from './veteran'
 import { view } from './view'
 import { STARTING_PISTOL, gunsOf, mapGuns, maybeCarried } from './weapons'
 import { Arsenal, type CarriedGun, type Player } from './worldSchema'
@@ -299,3 +306,73 @@ export const pistolOf = (player: Player): CarriedGun =>
 // spare slot held.
 export const maybeSpareGun = (arsenal: Arsenal): Option.Option<CarriedGun> =>
   Array.findFirst(gunsOf(arsenal), gun => gun.kind !== 'Pistol')
+
+// MYSTERY LEFTOVERS
+
+// NOTE: a fresh run with the kitchen open and the player at the fridge's
+// door in a break, for the fridge's Story tests.
+export const FRIDGE_DISTANT_SPAWN: PlannedSpawn = {
+  atMs: 1e9,
+  kind: 'Shambler',
+  door: 'North',
+  offset: 0,
+  speedScale: 1,
+  hpScale: 1,
+  pack: 0,
+  formation: 'Squad',
+}
+
+export const fridgeBox = Option.getOrThrow(
+  fridgeBoxOf(
+    levelOf({ level: openExitIn(freshRunModel().level, KITCHEN_EXIT) }),
+  ),
+)
+
+export const AT_FRIDGE = {
+  x: (fridgeBox.left + fridgeBox.right) / 2,
+  y: fridgeBox.bottom + 8,
+}
+
+export function freshRunModel(): Model {
+  const veteran = asVeteran(initialModel)
+  return modifyFields(
+    { ...veteran, ...freshRun(veteran) },
+    {
+      maybeSurface: () =>
+        Option.some({ left: 0, top: 0, width: 800, height: 400 }),
+    },
+  )
+}
+
+export const atFridge = (balance: number, wave = 5): Model =>
+  modifyFields(freshRunModel(), {
+    level: level => openExitIn(level, KITCHEN_EXIT),
+    phase: () =>
+      Phase.Preparation({
+        wave,
+        remainingMs: 120_000,
+        durationMs: 120_000,
+        spawns: [FRIDGE_DISTANT_SPAWN],
+      }),
+    wallet: () => ({ balance, earned: balance, shown: balance }),
+    player: player =>
+      modifyFields(player, { x: () => AT_FRIDGE.x, y: () => AT_FRIDGE.y }),
+  })
+
+// NOTE: a fridge whose stream's next draw lands on `prize`, found by trying
+// seeds, so a test can ask for each prize without knowing the stream.
+export const fridgeSeededFor = (current: Model, prize: FridgePrize): Model => {
+  const seed = Option.getOrThrow(
+    Array.findFirst(
+      Array.makeBy(500, index => index + 1),
+      candidate =>
+        pickPrize(
+          prizeWeights(current.fridge, current.player),
+          nextRandom(candidate).value,
+        ) === prize,
+    ),
+  )
+  return modifyFields(current, {
+    loot: loot => modifyFields(loot, { fridgeRngState: () => seed }),
+  })
+}

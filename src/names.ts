@@ -2,6 +2,7 @@ import { Array, Option } from 'effect'
 
 import type {
   FixedShopItemId,
+  FridgePrize,
   PickupKind,
   TrapKind,
   WeaponKind,
@@ -87,6 +88,16 @@ export const GAG_NAMES = {
   Sandwich: 'Moldy Sandwich',
   Dud: 'Fish Bones',
 } as const
+
+// NOTE: the one word that lands with each prize when the fridge's spin
+// stops (src/fridgeReveal.ts).
+export const PRIZE_PUNCH_LINES: Readonly<Record<FridgePrize, string>> = {
+  Cooker: 'BOOM',
+  Pan: 'BONK',
+  Freeze: 'BRRR',
+  Sandwich: 'CHOMP',
+  Dud: 'BLEH',
+}
 
 // SHOP GOODS
 

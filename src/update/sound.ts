@@ -4,6 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import { isTickingShot } from '../ammoWarning'
 import { type SoundEffect, positionVariation } from '../audio'
 import { PlaySound, ResumeAudio } from '../commands'
+import { maybeLandedBetween, prizeSpotOf, revealOf } from '../fridgeReveal'
 import { AudioState, GameEvent, type Model, type Player } from '../model'
 import { PICKUPS } from '../powerups'
 import { TRAPS } from '../traps'
@@ -79,18 +80,11 @@ const maybeEventSound = (event: GameEvent): Option.Option<SoundEffect> =>
     Purchased: () => Option.some<SoundEffect>('Purchase'),
     PurchaseRefused: () => Option.some<SoundEffect>('Denied'),
     ExitOpened: () => Option.some<SoundEffect>('Crash'),
-    FridgeOpened: ({ prize }) =>
-      Option.some<SoundEffect>(
-        prize === 'Freeze'
-          ? 'PackBonus'
-          : prize === 'Dud'
-            ? 'GrabBurp'
-            : 'PowerUp',
-      ),
+    FridgeOpened: () => Option.some<SoundEffect>('FridgeSpin'),
     FridgeSlammed: () => Option.some<SoundEffect>('Rumble'),
     PrizeTaken: () => Option.some<SoundEffect>('Swap'),
     PrizeLeft: () => Option.some<SoundEffect>('Thud'),
-    DudBurped: () => Option.some<SoundEffect>('Payday'),
+    DudBurped: () => Option.none<SoundEffect>(),
     LidLaunched: () => Option.some<SoundEffect>('Whoosh'),
     LidBlasted: () => Option.some<SoundEffect>('Boom'),
     CookerPopped: () => Option.some<SoundEffect>('Pop'),
@@ -127,6 +121,26 @@ export const shotSoundCue = (player: Player): SoundCue => ({
   sound: WEAPONS[heldWeapon(player.arsenal)].sound,
   variation: positionVariation(player.x, player.y),
 })
+
+// NOTE: the fridge's spin landing between two frames plays its prize's
+// sting there (src/fridgeReveal.ts). It is read from the door, not from an
+// event, so the room's World needs nothing new for it.
+export const fridgeLandCues = (
+  before: Model,
+  after: Model,
+): ReadonlyArray<SoundCue> =>
+  before.fridge.door === after.fridge.door
+    ? []
+    : pipe(
+        maybeLandedBetween(before.fridge.door, after.fridge.door),
+        Option.flatMap(prize =>
+          Option.map(prizeSpotOf(after), spot => ({
+            sound: revealOf(prize).sting,
+            variation: positionVariation(spot.x, spot.y),
+          })),
+        ),
+        Option.toArray,
+      )
 
 export const frameSoundCues = (
   events: ReadonlyArray<GameEvent>,

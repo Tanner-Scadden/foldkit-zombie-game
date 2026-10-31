@@ -1,6 +1,8 @@
 // The Mystery Leftovers pass: the fridge in the open kitchen with its price
-// tag lit and the hold's ring part filled, a pull (the door open, fog, and
-// the prize flying to the player), the fridge chained shut after a slam,
+// tag lit and the hold's ring part filled, the reveal (its spin, and each
+// prize landed: Cooker, Pan, Brain Freeze, Sandwich, Dud), a weapon on
+// offer with its TAKE tag and the gun it would replace, the take's flight
+// and the slot's pulse, the fridge chained shut after a slam,
 // the Pressure Cooker charging with lids in the air and one bursting, the
 // Clang Pan mid-swing with zombies reeling, Brain Freeze spraying with
 // zombies frozen and chilled, and the pause screen's control cards, on a
@@ -60,8 +62,34 @@ const BREAK = `wave=3&seen=all&kitchen&money=200&gun=smg&prep=14000&${LEARNED}`
 const AT_FRIDGE = 'px=180&py=-102'
 const IN_KITCHEN = `wave=4&seen=all&start=wave&elapsed=9000&kitchen&god&px=40&py=-12&${LEARNED}`
 
-// NOTE: fridge seed 2 draws Brain Freeze, the rare prize.
-const PULL_SEED = 2
+// NOTE: the fridge seed that draws each prize on a first pull, for a player
+// holding the Chatterbox. The hold pays on tick 30, so tick 45 is a quarter
+// of a second into the reveal's spin, tick 85 shows the prize landed, and
+// tick 130 the weapon on offer (the key still held, so it is not taken).
+const PRIZE_SEEDS = {
+  cooker: 7,
+  pan: 1,
+  freeze: 2,
+  sandwich: 30,
+  dud: 4,
+} as const
+
+const expectDoor =
+  (tag: 'Open' | 'Offering' | 'Shut') =>
+  async (page: Page, problems: Array<string>, label: string) => {
+    const door = (await model(page)).fridge.door
+    if (door._tag !== tag) {
+      problems.push(`${label}: the fridge door is ${door._tag}, not ${tag}`)
+    }
+  }
+
+const PULL_SCENES: ReadonlyArray<Scene> = Object.entries(PRIZE_SEEDS).map(
+  ([prize, seed]) => ({
+    name: `pull-${prize}`,
+    query: `${BREAK}&${AT_FRIDGE}&hold&fridgeseed=${seed}&tick=85`,
+    act: expectDoor('Open'),
+  }),
+)
 
 const SCENES: ReadonlyArray<Scene> = [
   {
@@ -69,14 +97,25 @@ const SCENES: ReadonlyArray<Scene> = [
     query: `${BREAK}&${AT_FRIDGE}&hold&tick=17`,
   },
   {
-    name: 'pull',
-    query: `${BREAK}&${AT_FRIDGE}&hold&fridgeseed=${PULL_SEED}&tick=76`,
-    act: async (page, problems, label) => {
-      const door = (await model(page)).fridge.door
-      if (door._tag !== 'Open') {
-        problems.push(`${label}: holding at the fridge did not pull it`)
-      }
-    },
+    name: 'spin',
+    query: `${BREAK}&${AT_FRIDGE}&hold&fridgeseed=${PRIZE_SEEDS.freeze}&tick=45`,
+    act: expectDoor('Open'),
+  },
+  ...PULL_SCENES,
+  {
+    name: 'offer',
+    query: `${BREAK}&${AT_FRIDGE}&hold&fridgeseed=${PRIZE_SEEDS.cooker}&tick=130`,
+    act: expectDoor('Offering'),
+  },
+  {
+    name: 'take',
+    query: `${BREAK}&${AT_FRIDGE}&fridge=offering&prize=Freeze&fridgeMs=5000&hold&tick=40`,
+    act: expectDoor('Shut'),
+  },
+  {
+    name: 'take-slot',
+    query: `${BREAK}&${AT_FRIDGE}&fridge=offering&prize=Freeze&fridgeMs=5000&hold&tick=60`,
+    act: expectDoor('Shut'),
   },
   {
     name: 'slammed',

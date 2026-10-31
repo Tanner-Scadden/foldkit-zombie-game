@@ -250,7 +250,7 @@ export const HarnessConfig = Schema.Struct({
   slip: Flag,
   hold: Flag,
   // Mystery Leftovers
-  fridge: Choice(['open', 'slammed']),
+  fridge: Choice(['open', 'offering', 'slammed']),
   prize: Schema.optionalKey(FridgePrize),
   fridgeMs: Num(600),
   fridgeseed: MaybeNum,

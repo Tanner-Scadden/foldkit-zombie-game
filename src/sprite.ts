@@ -497,6 +497,37 @@ export const placeAt = (
   return group({ translate: { x, y }, shapes: sprite })
 }
 
+// NOTE: draws a sprite stretched by `scaleX` and `scaleY` about its anchor,
+// for a squash and stretch pop. A one image sprite stretches the image
+// itself, so the pop costs no Group.
+export const placeScaled = (
+  x: number,
+  y: number,
+  sprite: ReadonlyArray<Canvas.Shape>,
+  scaleX: number,
+  scaleY: number,
+): Canvas.Shape => {
+  const only = sprite.length === 1 ? sprite[0] : undefined
+  if (only?._tag === 'Image') {
+    return {
+      _tag: 'Image',
+      src: only.src,
+      x: Math.round(x + only.x * scaleX),
+      y: Math.round(y + only.y * scaleY),
+      width: Math.round(only.width * scaleX),
+      height: Math.round(only.height * scaleY),
+      crop: only.crop,
+      rendering: only.rendering,
+    }
+  }
+
+  return group({
+    translate: { x, y },
+    scale: { x: scaleX, y: scaleY },
+    shapes: sprite,
+  })
+}
+
 const mirrorRows = (pixels: ReadonlyArray<string>): ReadonlyArray<string> =>
   Array.map(pixels, row =>
     pipe(String.split(row, ''), Array.reverse, Array.join('')),

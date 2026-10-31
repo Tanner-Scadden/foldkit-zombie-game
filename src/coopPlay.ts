@@ -13,6 +13,7 @@ import {
   leanFor,
   refreshIntent,
 } from './frame'
+import { launchPrize } from './fridgeReveal'
 import { stopForHits, thawTick } from './juice'
 import { isShopDialogOpen } from './menuState'
 import { type Model, Phase } from './model'
@@ -27,6 +28,7 @@ import { TURRET_WEAPON } from './traps'
 import { closeShop, enterShop } from './update/shop'
 import {
   frameSoundCues,
+  fridgeLandCues,
   isOwnShot,
   playSounds,
   playStartSoundWhen,
@@ -268,23 +270,26 @@ const drawRoom = (frameMs: number, maybeShopBefore: Option.Option<ShopState>) =>
           ),
           taken => stopForHits(taken, frameMs),
         )
-        const drawn = ageDebutCard(
-          endRoundOnClient(
-            base,
-            raiseDebutCardFrom(
+        const drawn = launchPrize(
+          base,
+          ageDebutCard(
+            endRoundOnClient(
               base,
-              leanFor(
-                advanceCosmetics(
-                  tallyFrame(base, applied, frameMs),
-                  frameMs,
+              raiseDebutCardFrom(
+                base,
+                leanFor(
+                  advanceCosmetics(
+                    tallyFrame(base, applied, frameMs),
+                    frameMs,
+                    frameMs,
+                  ),
                   frameMs,
                 ),
-                frameMs,
               ),
+              runDifficultyOf(base),
             ),
-            runDifficultyOf(base),
+            frameMs,
           ),
-          frameMs,
         )
         const shopNow = world.shop
         return Update.combineSteps([
@@ -294,6 +299,7 @@ const drawRoom = (frameMs: number, maybeShopBefore: Option.Option<ShopState>) =>
             ...frameSoundCues(
               Array.filter(events, event => !isOwnShot(event, room.slot)),
             ),
+            ...fridgeLandCues(base, drawn),
           ]),
           playStartSoundWhen(isStart),
           ...(isEntering(maybeShopBefore, shopNow, isBrowsing)

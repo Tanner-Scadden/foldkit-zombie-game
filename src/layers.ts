@@ -9,6 +9,7 @@ import { type Camera, toScreenCamera, worldCameraFor } from './camera'
 import type { ApplicationViewBuilder } from './composition'
 import { coopEdgeShapes } from './coopMarksView'
 import { decalShapes } from './effectsView'
+import { fridgeRevealShapes, prizeFlightShapes } from './fridgeRevealView'
 import { hudShapes, hudStripShapes } from './hud'
 import {
   type Decal,
@@ -45,8 +46,16 @@ const overlayLayerShapes = (
 ): ReadonlyArray<Canvas.Shape> => [
   ...hudStripShapes(model, screen),
   ...wavePreviewShapes(model, camera),
-  ...(isRoundActive(model.phase) ? purchaseOverlayShapes(model, camera) : []),
+  ...(isRoundActive(model.phase)
+    ? [
+        ...fridgeRevealShapes(model, screen, camera),
+        ...purchaseOverlayShapes(model, camera),
+      ]
+    : []),
   ...hudShapes(model, screen, camera),
+  ...(isRoundActive(model.phase)
+    ? prizeFlightShapes(model, screen, camera)
+    : []),
   ...calloutLayerShapes(model, camera),
   ...(isRoundActive(model.phase) ? coopEdgeShapes(model, camera) : []),
   ...inLandscapeFrame(screen, overlayShapes(model, screen)),

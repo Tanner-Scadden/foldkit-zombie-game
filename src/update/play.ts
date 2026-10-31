@@ -92,6 +92,7 @@ import {
 import {
   ammoTickCues,
   frameSoundCues,
+  fridgeLandCues,
   playSounds,
   playStartSoundWhen,
   playSwapSoundWhen,
@@ -349,6 +350,7 @@ export const tickFrame = (deltaTime: number) =>
         playSounds([
           ...frameSoundCues(advanced.frameEvents),
           ...ammoTickCues(advanced),
+          ...fridgeLandCues(model, advanced),
         ]),
         ...(hasEnteredShop ? [enterShop] : []),
         closeShopOutsidePreparation,

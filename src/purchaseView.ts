@@ -26,9 +26,11 @@ import {
   TOP_LEFT,
   bakeShapes,
   group,
+  gunIcon,
   placeAt,
   spriteShapes,
 } from './sprite'
+import { maybeReplacedGun } from './weapons'
 
 // NOTE: a purchasable says what it costs without a word: a dark tag with
 // the coin and the price hangs off a nail. Walk up and it brightens, with a
@@ -268,10 +270,72 @@ const refusedShapes = (
         ),
       ]
 
+// NOTE: a weapon on offer fills the fridge's door (src/fridgeRevealView.ts),
+// so its TAKE tag hangs beside the fridge instead of over it.
+const PRIZE_TAG_GAP = 4
+
+const placedOffer = (offer: Offer, tag: PriceTag): Offer =>
+  Purchasable.match(offer.target, {
+    Exit: () => offer,
+    Fridge: () => offer,
+    Prize: () => ({
+      ...offer,
+      spot: {
+        x: offer.box.right + PRIZE_TAG_GAP + Math.ceil(tag.width / 2),
+        y: offer.spot.y,
+      },
+    }),
+  })
+
+// NOTE: with both gun slots full, taking a prize replaces the gun in the
+// player's hands: that gun hangs under the TAKE tag, crossed out.
+const CROSS: Sprite = spriteShapes(
+  [
+    'r.......r',
+    '.r.....r.',
+    '..r...r..',
+    '...r.r...',
+    '....r....',
+    '...r.r...',
+    '..r...r..',
+    '.r.....r.',
+    'r.......r',
+  ],
+  { r: '#ff4a4f' },
+)
+
+const REPLACED_DROP_PX = 7
+
+const REPLACED_PLATE: Sprite = bakeShapes([
+  rect(-7, -6, 14, 12, '#140c10'),
+  rect(-6, -5, 12, 10, '#c9c3b0'),
+])
+
+const replacedShapes = (
+  model: Model,
+  offer: Offer,
+  tag: PriceTag,
+): ReadonlyArray<Canvas.Shape> =>
+  Purchasable.isAnyOf(['Prize'])(offer.target)
+    ? Option.match(maybeReplacedGun(model.player.arsenal), {
+        onNone: () => [],
+        onSome: gun => {
+          const y = offer.spot.y + tag.height + REPLACED_DROP_PX
+          return [
+            placeAt(offer.spot.x, y, REPLACED_PLATE),
+            placeAt(offer.spot.x, y, gunIcon(gun.kind, gun.tier)),
+            placeAt(offer.spot.x, y, CROSS),
+          ]
+        },
+      })
+    : []
+
 const offerShapes =
   (model: Model, maybeInReach: Option.Option<Offer>) =>
-  (offer: Offer): ReadonlyArray<Canvas.Shape> => {
-    const tag = tagOf(offer.target)
+  (unplaced: Offer): ReadonlyArray<Canvas.Shape> => {
+    const tag = tagOf(unplaced.target)
+    const offer = placedOffer(unplaced, tag)
+    const replaced = replacedShapes(model, offer, tag)
     const isMine = (target: Purchasable) =>
       isSamePurchasable(target, offer.target)
     const isInReach = Option.exists(maybeInReach, ({ target }) =>
@@ -283,7 +347,7 @@ const offerShapes =
       isInReach ? tag.lit : tag.plain,
     )
     const prompt = isInReach ? promptShapes(model, offer, tag) : []
-    return Purchase.match(model.purchase, {
+    const shapes = Purchase.match(model.purchase, {
       Idle: () => [tagShape, ...prompt],
       Holding: ({ target }) =>
         isMine(target)
@@ -295,6 +359,7 @@ const offerShapes =
           : [tagShape, ...prompt],
       Done: () => [tagShape],
     })
+    return [...shapes, ...replaced]
   }
 
 const purchaseShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
