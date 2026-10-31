@@ -26,6 +26,7 @@ import {
   handCardId,
   homeButtonId,
   isDifficultyKey,
+  isEndScreen,
   isInstallTileShown,
   isManorKey,
   isModeKey,
@@ -63,7 +64,6 @@ import {
   type MenuPanel,
   type Model,
   MunchopediaPage,
-  Phase,
   type RunMode,
 } from '../model'
 import { activateNewBuild } from '../serviceWorker'
@@ -214,8 +214,6 @@ export const closePanel = makeStep(model =>
 export const goHome = modelStep(model =>
   returnHome(withInput(model, releaseAll)),
 )
-
-const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
 
 export const leaveFromMenu = makeStep(model => {
   if (isPaused(model.phase)) {

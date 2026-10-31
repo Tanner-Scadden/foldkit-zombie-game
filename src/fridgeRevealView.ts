@@ -2,6 +2,7 @@ import { Array, Option, Result, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
 import { type Camera, viewBoxOf, viewToWorld, worldToView } from './camera'
+import { rect } from './drawing'
 import { type BakedText, bakeText, placeBaked } from './font'
 import {
   type DoorReveal,
@@ -35,14 +36,6 @@ import { heldSlotOf } from './weapons'
 // color, the big icon popping with squash and stretch, its punch word, the
 // countdown ring while a weapon waits, and the icon flying into its HUD
 // slot once taken.
-
-const rect = (
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  fill: string,
-): Canvas.Shape => Canvas.Rect({ x, y, width, height, fill })
 
 // THE PRIZES
 

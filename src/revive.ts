@@ -1,14 +1,9 @@
 import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { woundPlayer } from './combat'
+import { bulletDirection, woundPlayer } from './combat'
 import { BULLET_RADIUS, PLAYER_RADIUS } from './constants'
-import {
-  ZERO_VECTOR,
-  circlesOverlap,
-  closestPointOnSegment,
-  normalize,
-} from './geometry'
+import { ZERO_VECTOR, circlesOverlap, closestPointOnSegment } from './geometry'
 import {
   COOP_RULES,
   type SeatedPlayer,
@@ -188,12 +183,6 @@ export const isEveryoneReady = (world: World): boolean =>
 
 const isFriendlyFireOn = (world: World): boolean =>
   isCoop(world) && world.difficulty.chosen === 'Nightmare'
-
-const bulletDirection = (bullet: Bullet): Vector =>
-  Option.getOrElse(
-    normalize({ x: bullet.velocityX, y: bullet.velocityY }),
-    () => ZERO_VECTOR,
-  )
 
 const isTeammateShot =
   (slot: number) =>

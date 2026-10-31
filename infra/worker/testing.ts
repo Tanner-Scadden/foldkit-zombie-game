@@ -1,4 +1,4 @@
-// Shared setup for the Worker's tests. `tools/lint/duplicateTestHelpers.ts`
+// Shared setup for the Worker's tests. `tools/lint/duplicateHelpers.ts`
 // fails a helper copied between test files: add it here instead.
 
 import * as Context from 'effect/Context'

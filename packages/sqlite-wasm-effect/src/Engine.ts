@@ -21,6 +21,7 @@ import {
   type SqlValue,
   type TableChange,
 } from './Protocol'
+import { describeError } from './describeError'
 
 // ENGINE
 
@@ -53,11 +54,6 @@ export interface OpenOptions {
   readonly directory: string
 }
 
-const describe = (error: unknown): string =>
-  Predicate.hasProperty(error, 'message') && Predicate.isString(error.message)
-    ? error.message
-    : String(error)
-
 const errorName = (error: unknown): string =>
   Predicate.hasProperty(error, 'name') && Predicate.isString(error.name)
     ? error.name
@@ -68,9 +64,9 @@ const failureOf = (sqlite3: Sqlite3Static, error: unknown): DatabaseFailure =>
   Predicate.isNumber(error.resultCode)
     ? {
         code: sqlite3.capi.sqlite3_js_rc_str(error.resultCode),
-        message: describe(error),
+        message: describeError(error),
       }
-    : { code: 'SQLITE_ERROR', message: describe(error) }
+    : { code: 'SQLITE_ERROR', message: describeError(error) }
 
 // PERSISTENCE
 
@@ -88,7 +84,7 @@ const HANDLE_BUSY_ERRORS: ReadonlyArray<string> = [
 
 const isHandleBusy = (error: unknown): boolean =>
   Array.contains(HANDLE_BUSY_ERRORS, errorName(error)) ||
-  /access handle/i.test(describe(error))
+  /access handle/i.test(describeError(error))
 
 const hasSyncAccessHandles = (): boolean =>
   Predicate.hasProperty(globalThis, 'FileSystemFileHandle') &&
@@ -144,7 +140,7 @@ const openOpfs = (
           }),
         ),
         Effect.mapError(
-          error => new OpfsUnavailable({ reason: describe(error.cause) }),
+          error => new OpfsUnavailable({ reason: describeError(error.cause) }),
         ),
       )
     : Effect.fail(
@@ -160,7 +156,7 @@ const openMemory = (
     try: (): Database => new sqlite3.oo1.DB(':memory:', 'c'),
     catch: error =>
       new EngineOpenError({
-        failure: { code: 'SQLITE_CANTOPEN', message: describe(error) },
+        failure: { code: 'SQLITE_CANTOPEN', message: describeError(error) },
       }),
   })
 
@@ -297,7 +293,7 @@ const loadSqlite: Effect.Effect<Sqlite3Static, EngineOpenError> =
     try: takeSqlite,
     catch: error =>
       new EngineOpenError({
-        failure: { code: 'SQLITE_CANTOPEN', message: describe(error) },
+        failure: { code: 'SQLITE_CANTOPEN', message: describeError(error) },
       }),
   })
 

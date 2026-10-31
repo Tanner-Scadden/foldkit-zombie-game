@@ -779,7 +779,7 @@ export const isOpenBlock = (
   isInsideRoom(level, column, row) &&
   level.openBlocks.has(tileIndex(level, column, row))
 
-const tileCoordinate = (position: number): number =>
+export const tileCoordinate = (position: number): number =>
   Math.floor(position / TILE_SIZE)
 
 export const isSolidAt = (level: Level, { x, y }: Vector): boolean =>

@@ -341,7 +341,8 @@ const frenziedEvent =
     return GameEvent.PackFrenzied({ x, y, door: spawn.door })
   }
 
-const isThroughDoor = (spawn: PlannedSpawn): boolean => !isFloorKind(spawn.kind)
+export const isThroughDoor = (spawn: PlannedSpawn): boolean =>
+  !isFloorKind(spawn.kind)
 
 const ringFor = (alarm: Alarm, warned: ReadonlyArray<PlannedSpawn>): Alarm =>
   Array.some(warned, ({ formation }) => formation === 'Horde')

@@ -20,6 +20,7 @@ import {
 } from './constants'
 import { normalize } from './geometry'
 import { freshOvens } from './kitchen'
+import { settledLessons } from './lessons'
 import {
   biteGraceFor,
   focusSeat,
@@ -47,6 +48,7 @@ import { FINAL_WAVE, beginPreparation } from './waves'
 import type { World } from './world'
 import {
   readEvent,
+  readMany,
   readWorld,
   readWorldDiff,
   writeEvent,
@@ -63,8 +65,6 @@ import {
   type GameEvent,
   type GunSlot,
   type Intent,
-  Lesson,
-  type Lessons,
   Party,
   Phase,
   type Player,
@@ -319,19 +319,6 @@ export const seatActionOf = (
 }
 
 // START
-
-const learned = Lesson.Learned({ atMs: 0 })
-
-const settledLessons: Lessons = {
-  move: learned,
-  fire: learned,
-  startWave: learned,
-  shop: learned,
-  swap: learned,
-  pickup: learned,
-  timedBreaks: learned,
-  openBreak: learned,
-}
 
 // NOTE: a fresh run's World with nobody seated yet, as single player's run
 // reset starts one, with single player's gates settled.
@@ -627,9 +614,6 @@ const readCount = (reader: Reader): number => {
   }
   return count
 }
-
-const readMany = <A>(count: number, read: () => A): ReadonlyArray<A> =>
-  globalThis.Array.from({ length: count }, read)
 
 export const readRoomDiff = (reader: Reader, prev: RoomWorld): RoomWorld => {
   const tick = prev.tick + reader.varint()

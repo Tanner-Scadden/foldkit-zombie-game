@@ -2,7 +2,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import { OPEN_BREAK_WAVE } from './constants'
 import type { World } from './world'
-import { BreakClock, Lesson, Phase } from './worldSchema'
+import { BreakClock, Lesson, type Lessons, Phase } from './worldSchema'
 
 // The lessons the step itself reads and writes: the practice gate that
 // holds the first break, and the breaks a player has seen. The rest of the
@@ -14,6 +14,20 @@ export const learn = (lesson: Lesson, atMs: number): Lesson =>
     Pending: () => Lesson.Learned({ atMs }),
     Learned: () => lesson,
   })
+
+const learned = Lesson.Learned({ atMs: 0 })
+
+// NOTE: every lesson learned, as a co-op room plays them.
+export const settledLessons: Lessons = {
+  move: learned,
+  fire: learned,
+  startWave: learned,
+  shop: learned,
+  swap: learned,
+  pickup: learned,
+  timedBreaks: learned,
+  openBreak: learned,
+}
 
 export const isPending = (lesson: Lesson): boolean =>
   Lesson.isAnyOf(['Pending'])(lesson)

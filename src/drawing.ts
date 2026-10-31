@@ -4,7 +4,7 @@ import { SHADOW_HEIGHT } from './constants'
 import { GLYPH_HEIGHT, type TextTone, textShapes } from './font'
 import { clamp } from './geometry'
 import type { Vector } from './model'
-import { type Facing, placeAt } from './sprite'
+import { type Facing, type Palette, placeAt, spriteRects } from './sprite'
 
 // SHARED SHAPE HELPERS
 
@@ -18,6 +18,14 @@ export const placeSprite = (
   y: number,
   sprite: ReadonlyArray<Canvas.Shape>,
 ): Canvas.Shape => placeAt(Math.round(x), Math.round(y), sprite)
+
+export const rect = (
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  fill: string,
+): Canvas.Shape => Canvas.Rect({ x, y, width, height, fill })
 
 export const centeredRect = (
   x: number,
@@ -33,6 +41,15 @@ export const centeredRect = (
     height,
     fill,
   })
+
+// NOTE: a pixel map's rectangles with its top left corner at (x, y). Fixed
+// art that is drawn as it is goes through `spriteShapes` instead.
+export const pixelArt = (
+  x: number,
+  y: number,
+  pixels: ReadonlyArray<string>,
+  palette: Palette,
+): ReadonlyArray<Canvas.Shape> => spriteRects(pixels, palette, { x: -x, y: -y })
 
 const GLYPHS_TOP = -Math.floor(GLYPH_HEIGHT / 2)
 

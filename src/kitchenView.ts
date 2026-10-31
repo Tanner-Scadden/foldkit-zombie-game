@@ -10,6 +10,7 @@ import {
   tilesWithSymbol,
 } from './arena'
 import { TILE_SIZE } from './constants'
+import { pixelArt, rect } from './drawing'
 import { maybePadlockedExit } from './exits'
 import { OVEN_RULES, flameBoxOf, ovenBoxesOf, ovensOf } from './kitchen'
 import { type Model, Oven } from './model'
@@ -19,7 +20,6 @@ import {
   type Sprite,
   TOP_LEFT,
   placeAt,
-  spriteRects,
   spriteShapes,
 } from './sprite'
 
@@ -29,21 +29,6 @@ import {
 // flame image while one belches.
 
 type Box = Readonly<{ x: number; y: number; width: number; height: number }>
-
-const rect = (
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  fill: string,
-): Canvas.Shape => Canvas.Rect({ x, y, width, height, fill })
-
-const pixelArt = (
-  x: number,
-  y: number,
-  pixels: ReadonlyArray<string>,
-  palette: Palette,
-): ReadonlyArray<Canvas.Shape> => spriteRects(pixels, palette, { x: -x, y: -y })
 
 const KITCHEN_SEED = 0x6b17c3e5
 
@@ -842,7 +827,7 @@ export const padlockShapes = (model: Model): ReadonlyArray<Canvas.Shape> =>
 
 // OVENS
 
-const isKitchenShown = (model: Model): boolean =>
+export const isKitchenShown = (model: Model): boolean =>
   Array.some(
     levelOf(model).rooms,
     ({ id, isOpen }) => id === 'Kitchen' && isOpen,

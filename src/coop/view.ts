@@ -21,6 +21,7 @@ import {
   SKULL_OFF_ICON,
   TROPHY_ICON,
 } from '../icons'
+import { iconView } from '../menuParts'
 import type { Appearance } from '../model'
 import { seatColorOf } from '../partyView'
 import { CoopComposition } from './composition'
@@ -80,17 +81,6 @@ const lookOf = (inputs: ViewInputs, room: Room, seat: number) =>
   seatLookOf(inputs.look, room.slot, seat, room.maybeLobby)
 
 // PIECES
-
-const iconView = (
-  className: string,
-  icon: string,
-  h: HtmlBuilder<Message>,
-): Html =>
-  h.span([
-    h.Class(className),
-    h.AriaHidden(true),
-    h.Style({ backgroundImage: icon }),
-  ])
 
 const keyCapView = (
   inputs: ViewInputs,

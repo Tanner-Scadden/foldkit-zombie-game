@@ -3,6 +3,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import type { SoundEffect } from './audio'
 import { withBests } from './difficulty'
+import { isEndScreen } from './home'
 import {
   type DifficultyBests,
   type Model,
@@ -36,8 +37,6 @@ export const endKindOf = (model: Model): Option.Option<EndKind> =>
     Victory: () => Option.some<EndKind>('Won'),
     GameOver: () => Option.some<EndKind>('Munched'),
   })
-
-export const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
 
 // TIMELINE
 

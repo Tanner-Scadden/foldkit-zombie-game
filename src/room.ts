@@ -1,5 +1,5 @@
-import { Array, Option, Record, Result, String, pipe } from 'effect'
-import { Canvas } from 'foldkit'
+import { Array, Option, Record, Result, pipe } from 'effect'
+import type { Canvas } from 'foldkit'
 
 import {
   COVER_SYMBOLS,
@@ -21,6 +21,7 @@ import {
   tilesWithSymbol,
 } from './arena'
 import { SHAKE_MAX_PX, TILE_SIZE } from './constants'
+import { pixelArt, rect } from './drawing'
 import {
   backDoorShapes,
   fridgeShapes,
@@ -41,9 +42,9 @@ import {
   type Sprite,
   TOP_LEFT,
   bakeShapes,
+  mirrorRows,
   pixelRuns,
   placeAt,
-  spriteRects,
   spriteShapes,
 } from './sprite'
 
@@ -126,14 +127,6 @@ export const FACE_TOP = 3
 const CHAIR_RAIL_Y = 13
 const BASEBOARD_Y = 19
 
-const rect = (
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  fill: string,
-): Canvas.Shape => Canvas.Rect({ x, y, width, height, fill })
-
 // NOTE: a fixed roll for each decoration, from its two indices, so the room
 // looks the same on every load.
 const roll = (first: number, second: number): number =>
@@ -145,18 +138,6 @@ const pick = <A>(options: Array.NonEmptyReadonlyArray<A>, value: number): A =>
   Option.getOrElse(
     Array.get(options, Math.floor(value * options.length)),
     () => options[0],
-  )
-
-const pixelArt = (
-  x: number,
-  y: number,
-  pixels: ReadonlyArray<string>,
-  palette: Palette,
-): ReadonlyArray<Canvas.Shape> => spriteRects(pixels, palette, { x: -x, y: -y })
-
-const mirrorRows = (pixels: ReadonlyArray<string>): ReadonlyArray<string> =>
-  Array.map(pixels, row =>
-    pipe(String.split(row, ''), Array.reverse, Array.join('')),
   )
 
 type Box = Readonly<{ x: number; y: number; width: number; height: number }>

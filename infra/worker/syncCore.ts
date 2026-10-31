@@ -11,6 +11,8 @@ import * as Scope from 'effect/Scope'
 import * as Semaphore from 'effect/Semaphore'
 import type * as SqlClient from 'effect/sql/SqlClient'
 
+import type { DurableObjectState } from '@cloudflare/workers-types'
+import * as SqliteClient from '@effect/sql-sqlite-do/SqliteClient'
 import type { Unauthorized } from '@munch/sync-engine'
 import {
   Actor,
@@ -249,7 +251,13 @@ export const authenticateWith =
       ),
     )
 
-const bearerOf = (request: Request): Option.Option<string> =>
+// NOTE: each Durable Object's SQLite client, over its own storage. The hosts
+// here build it once, on first use, and keep it for the object's life (see
+// setupOnce).
+export const sqlOf = (storage: DurableObjectState['storage']) =>
+  SqliteClient.layer({ storage })
+
+export const bearerOf = (request: Request): Option.Option<string> =>
   Option.flatMap(
     Option.fromNullishOr(request.headers.get('authorization')),
     header =>

@@ -5,6 +5,9 @@ import type { SurfaceRectangle, Vector } from './model'
 
 export const ZERO_VECTOR: Vector = { x: 0, y: 0 }
 
+// NOTE: the way to push when two things sit on the same spot.
+export const OUTWARD: Vector = { x: 1, y: 0 }
+
 export const vectorLength = ({ x, y }: Vector): number => Math.hypot(x, y)
 
 export const scaleVector = ({ x, y }: Vector, factor: number): Vector => ({
@@ -39,6 +42,9 @@ export const directionBetween = (
   from: Vector,
   to: Vector,
 ): Option.Option<Vector> => normalize({ x: to.x - from.x, y: to.y - from.y })
+
+export const distanceBetween = (from: Vector, to: Vector): number =>
+  Math.hypot(to.x - from.x, to.y - from.y)
 
 export const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
@@ -108,3 +114,7 @@ export const isLeftHalf = (
   surface: SurfaceRectangle,
   clientX: number,
 ): boolean => clientX < surface.left + surface.width / 2
+
+// NOTE: a timer's time left after a frame, never below zero.
+export const countDown = (remainingMs: number, deltaMs: number): number =>
+  Math.max(0, remainingMs - deltaMs)

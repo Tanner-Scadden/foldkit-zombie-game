@@ -10,11 +10,19 @@ import {
   PLAYER_RADIUS,
   ZOMBIE_HIT_PULSE_MS,
 } from './constants'
-import { circlesOverlap, directionBetween, scaleVector } from './geometry'
+import {
+  OUTWARD,
+  ZERO_VECTOR,
+  circlesOverlap,
+  directionBetween,
+  normalize,
+  scaleVector,
+} from './geometry'
 import { forEachSeatWhere, isStanding, payShared } from './party'
 import { trapBlastTarget } from './traps'
 import type { World } from './world'
 import {
+  type Bullet,
   GameEvent,
   Invulnerability,
   type Player,
@@ -129,7 +137,12 @@ export type BlastTarget<A> = Readonly<{
   hurt: (target: A, strike: Strike) => Blasted<A>
 }>
 
-const OUTWARD: Vector = { x: 1, y: 0 }
+// NOTE: the way a bullet flies, or none for a bullet that stands still.
+export const bulletDirection = (bullet: Bullet): Vector =>
+  Option.getOrElse(
+    normalize({ x: bullet.velocityX, y: bullet.velocityY }),
+    () => ZERO_VECTOR,
+  )
 
 const blastOne =
   <A>(blast: BlastSpec, kind: BlastTarget<A>) =>

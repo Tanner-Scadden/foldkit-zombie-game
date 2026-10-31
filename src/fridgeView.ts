@@ -1,16 +1,17 @@
 import { Array, Option, Result, pipe } from 'effect'
-import { Canvas } from 'foldkit'
+import type { Canvas } from 'foldkit'
 
 import { levelOf } from './arena'
 import { TILE_SIZE } from './constants'
 import type { Drawable } from './depth'
+import { rect } from './drawing'
 import {
   PAN_RULES,
   SMASH_TIER,
   chargeOf,
   maybeHeldFridgeWeapon,
 } from './fridgeWeapons'
-import { FRIDGE_RISE_PX } from './kitchenView'
+import { FRIDGE_RISE_PX, isKitchenShown } from './kitchenView'
 import { fridgeBoxOf } from './leftovers'
 import { Charge, FridgeDoor, type Lob, type Model, type Player } from './model'
 import { type Sprite, bakeShapes, placeAt, spriteShapes } from './sprite'
@@ -21,14 +22,6 @@ import { type Sprite, bakeShapes, placeAt, spriteShapes } from './sprite'
 // and padlock while it rests after a slam, the Cooker's pressure dial over
 // the player, and its lids in flight. The fridge itself is baked into the
 // kitchen (fridgeShapes in src/kitchenView.ts).
-
-const rect = (
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  fill: string,
-): Canvas.Shape => Canvas.Rect({ x, y, width, height, fill })
 
 const FRIDGE_WIDTH = TILE_SIZE * 2
 const FREEZER_PX = 11
@@ -79,12 +72,6 @@ const maybeFridgeSpot = (model: Model): Option.Option<FridgeSpot> =>
     top: box.top - FRIDGE_RISE_PX,
     bottom: box.bottom,
   }))
-
-const isKitchenShown = (model: Model): boolean =>
-  Array.some(
-    levelOf(model).rooms,
-    ({ id, isOpen }) => id === 'Kitchen' && isOpen,
-  )
 
 const openDoor = (model: Model, spot: FridgeSpot): ReadonlyArray<Drawable> => [
   {

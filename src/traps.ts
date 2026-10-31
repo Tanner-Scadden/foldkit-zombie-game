@@ -16,6 +16,7 @@ import {
   isWalkableTile,
   levelOf,
   tileBox,
+  tileCoordinate,
   tileIndex,
   tilesWithSymbol,
 } from './arena'
@@ -23,7 +24,6 @@ import type { BlastTarget } from './combat'
 import {
   BARRICADE_REACH_PX,
   PLAYER_RADIUS,
-  TILE_SIZE,
   TRAP_BLAST_RADIUS,
   TRAP_HIT_PULSE_MS,
   TRAP_NOTICE_MS,
@@ -32,7 +32,12 @@ import {
   TURRET_PLACE_REACH_PX,
   TURRET_RANGE_PX,
 } from './constants'
-import { addVectors, directionBetween, scaleVector } from './geometry'
+import {
+  addVectors,
+  countDown,
+  directionBetween,
+  scaleVector,
+} from './geometry'
 import type { Model } from './model'
 import { TRAP_NAMES } from './names'
 import {
@@ -306,9 +311,6 @@ const fuseAgainst =
       Thrower: () => zombie,
       Crawler: () => zombie,
     })
-
-const countDown = (remainingMs: number, deltaMs: number): number =>
-  Math.max(0, remainingMs - deltaMs)
 
 const tickHit =
   (deltaMs: number) =>
@@ -703,9 +705,6 @@ const barricadePlacement = (model: World, isBetweenWaves: boolean) =>
       ]),
     }),
   })
-
-const tileCoordinate = (position: number): number =>
-  Math.floor(position / TILE_SIZE)
 
 const TURRET_SEARCH_PX = 15
 
