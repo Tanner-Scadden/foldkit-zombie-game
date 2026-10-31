@@ -1,9 +1,9 @@
 import { Array, Option, Result, String } from 'effect'
-import { Canvas } from 'foldkit'
+import type { Canvas } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import { FEEDBACK_LINE, VIEW_HEIGHT, VIEW_WIDTH } from './constants'
-import { QUARTER_TURN } from './drawing'
+import { QUARTER_TURN, rect } from './drawing'
 import {
   BEST_POP_MS,
   type CrewMember,
@@ -208,14 +208,6 @@ const KINDS_PX = 11
 const CREW_PX = 25
 const SKULL_STRIDE = 12
 const SKULL_SLOTS = 4
-
-const rect = (
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  fill: string,
-): Canvas.Shape => Canvas.Rect({ x, y, width, height, fill })
 
 // NOTE: reaches well past the landscape screen, so in portrait it covers
 // the HUD band and the thumb area too. The canvas clips the rest.

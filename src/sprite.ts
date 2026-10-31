@@ -528,7 +528,9 @@ export const placeScaled = (
   })
 }
 
-const mirrorRows = (pixels: ReadonlyArray<string>): ReadonlyArray<string> =>
+export const mirrorRows = (
+  pixels: ReadonlyArray<string>,
+): ReadonlyArray<string> =>
   Array.map(pixels, row =>
     pipe(String.split(row, ''), Array.reverse, Array.join('')),
   )
@@ -1440,7 +1442,7 @@ const CRAWLER_ICON_PIXELS: ReadonlyArray<string> = [
 const HEART_PALETTE: Palette = { R: '#e8333a', W: '#ff8a8f' }
 const EMPTY_HEART_PALETTE: Palette = { R: '#3a2328', W: '#3a2328' }
 
-const HEART_PIXELS: ReadonlyArray<string> = [
+export const HEART_PIXELS: ReadonlyArray<string> = [
   '.RR.RR.',
   'RWRRRRR',
   'RRRRRRR',

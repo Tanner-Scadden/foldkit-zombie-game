@@ -4,7 +4,12 @@ import { modifyFields } from 'foldkit/struct'
 import { type Level, hasLineOfSight, levelOf } from './arena'
 import { woundPlayer } from './combat'
 import { MS_PER_SECOND, PLAYER_RADIUS, ZOMBIE_HIT_PULSE_MS } from './constants'
-import { directionBetween, normalize } from './geometry'
+import {
+  OUTWARD,
+  directionBetween,
+  distanceBetween,
+  normalize,
+} from './geometry'
 import { facingNearest, forEachSeatWhere, isStanding } from './party'
 import type { World } from './world'
 import {
@@ -77,9 +82,6 @@ export const CHUCKER_RULES: ChuckerRules = {
 export const THROWER_KIND = 'Thrower'
 
 const LIMP_ARM_STAGE = ZOMBIE_KINDS.Thrower.wear.length
-
-const distanceBetween = (from: Vector, to: Vector): number =>
-  Math.hypot(to.x - from.x, to.y - from.y)
 
 const isChucker = (zombie: Zombie): boolean => zombie.kind === THROWER_KIND
 
@@ -410,8 +412,6 @@ const landings = (
       ? Result.succeed({ id: zombie.id, at: zombie.action.to })
       : Result.failVoid,
   )
-
-const OUTWARD: Vector = { x: 1, y: 0 }
 
 // NOTE: a thrown zombie lands on whoever stands under it: every standing
 // player in co-op.

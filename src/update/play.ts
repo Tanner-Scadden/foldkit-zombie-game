@@ -5,9 +5,10 @@ import { noteAmmoTip } from '../ammoWarning'
 import { positionVariation } from '../audio'
 import { isCouchKey, pressCouchKey } from '../couch'
 import { makeStep } from '../definition'
-import { isEndScreen, skipBeat } from '../endBeat'
+import { skipBeat } from '../endBeat'
 import { advanceQuest } from '../firstBreakQuest'
 import { advanceGame, clampFrameDelta, refreshIntent } from '../frame'
+import { isEndScreen } from '../home'
 import {
   type PointerPress,
   isEndlessKey,

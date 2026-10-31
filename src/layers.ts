@@ -12,6 +12,7 @@ import { decalShapes } from './effectsView'
 import { lensOf } from './endBeat'
 import { fridgeRevealShapes, prizeFlightShapes } from './fridgeRevealView'
 import { hudShapes, hudStripShapes } from './hud'
+import { percentOf } from './menuParts'
 import {
   type Decal,
   type Model,
@@ -77,9 +78,6 @@ export const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => {
 // FLOOR LAYERS
 
 const NO_DECALS: ReadonlyArray<Decal> = []
-
-const percentOf = (part: number, whole: number): string =>
-  `${(part * 100) / whole}%`
 
 // NOTE: a floor canvas covers the whole map, whose first row can sit above
 // the parlour's top wall, so its shapes are moved down by the map's top.

@@ -15,6 +15,7 @@ import {
 } from './combat'
 import { DRY_FIRE_DELAY_MS, PLAYER_RADIUS } from './constants'
 import {
+  OUTWARD,
   addVectors,
   circlesOverlap,
   directionBetween,
@@ -429,8 +430,6 @@ const fireCooker = (
 }
 
 // THE LIDS
-
-const OUTWARD: Vector = { x: 1, y: 0 }
 
 const lidAt = (lob: Lob, remainingMs: number): Vector => {
   const share = 1 - Math.max(0, remainingMs) / Math.max(1, lob.durationMs)

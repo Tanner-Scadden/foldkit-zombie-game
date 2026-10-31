@@ -26,6 +26,7 @@ import {
   dealtCards,
   handCardId,
   homeButtonId,
+  isEndScreen,
   isLinkHandCard,
   isNewsUnseen,
   isOnHome,
@@ -54,6 +55,7 @@ import {
   TURN_PHONE_ICON,
 } from './icons'
 import { installTileView } from './installView'
+import { iconView, isKeyboard, keyCapView } from './menuParts'
 import { Message } from './message'
 import {
   type Difficulty,
@@ -80,18 +82,6 @@ import { whatsNewBodyView, whatsNewText } from './whatsNewView'
 
 // KEY BADGES
 
-const isKeyboard = (model: Model): boolean =>
-  model.lastDevice === 'KeyboardMouse'
-
-const keyCapView = (
-  model: Model,
-  cap: string,
-  h: ApplicationViewBuilder,
-): ReadonlyArray<Html> =>
-  isKeyboard(model)
-    ? [h.span([h.Class('home-key'), h.AriaHidden(true)], [cap])]
-    : []
-
 const keyBadgeView = (
   model: Model,
   button: HomeButton,
@@ -108,17 +98,6 @@ const homeButtonAttributes = (
   h.OnFocus(Message.FocusedHomeButton({ button })),
   h.OnBlur(Message.BlurredHomeButton()),
 ]
-
-const iconView = (
-  className: string,
-  icon: string,
-  h: ApplicationViewBuilder,
-): Html =>
-  h.span([
-    h.Class(className),
-    h.AriaHidden(true),
-    h.Style({ backgroundImage: icon }),
-  ])
 
 // PLAY
 
@@ -715,8 +694,6 @@ const newEntryButtonView = (model: Model, h: ApplicationViewBuilder): Html =>
         ],
       ),
   })
-
-const isEndScreen = Phase.isAnyOf(['Victory', 'GameOver'])
 
 // NOTE: the end screens only tell. The entry opens from the menu.
 export const newEntryNoticeView = (

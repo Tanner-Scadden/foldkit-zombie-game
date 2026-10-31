@@ -35,6 +35,7 @@ import {
   TURN_PHONE_ICON,
   ZAP_ICON,
 } from './icons'
+import { iconView, isKeyboard, keyCapView } from './menuParts'
 import { Message } from './message'
 import type { Model, ProfileTab } from './model'
 import {
@@ -55,29 +56,6 @@ import {
 import { isPortrait } from './screen'
 
 // SHARED
-
-const iconView = (
-  className: string,
-  icon: string,
-  h: ApplicationViewBuilder,
-): Html =>
-  h.span([
-    h.Class(className),
-    h.AriaHidden(true),
-    h.Style({ backgroundImage: icon }),
-  ])
-
-const isKeyboard = (model: Model): boolean =>
-  model.lastDevice === 'KeyboardMouse'
-
-const keyCapView = (
-  model: Model,
-  cap: string,
-  h: ApplicationViewBuilder,
-): ReadonlyArray<Html> =>
-  isKeyboard(model)
-    ? [h.span([h.Class('home-key'), h.AriaHidden(true)], [cap])]
-    : []
 
 // TABS
 

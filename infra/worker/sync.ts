@@ -11,7 +11,6 @@ import type {
   RateLimit,
   WebSocket as WorkersWebSocket,
 } from '@cloudflare/workers-types'
-import * as SqliteClient from '@effect/sql-sqlite-do/SqliteClient'
 import {
   ChallengeResponse,
   Connection,
@@ -42,6 +41,7 @@ import {
   playerScopeId,
   playerScopeOf,
   scopeHostOnce,
+  sqlOf,
   syncErrorResponse,
   tryCall,
 } from './syncCore.ts'
@@ -61,12 +61,6 @@ export type SyncBindings = Readonly<{
 const DIRECTORY_NAME = 'directory'
 const SCOPE_HEADER = 'x-sync-scope'
 const LINKED_DEVICES_PATH = '/internal/linked-devices'
-
-// NOTE: each Durable Object's SQLite client, over its own storage. The hosts
-// in syncCore.ts build it once, on first use, and keep it for the object's
-// life (see setupOnce).
-const sqlOf = (storage: DurableObjectState['storage']) =>
-  SqliteClient.layer({ storage })
 
 const AttachmentSchema = Schema.Struct({
   scope: Schema.String,

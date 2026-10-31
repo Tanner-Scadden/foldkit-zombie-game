@@ -50,6 +50,7 @@ import {
   aliveCount,
   delayCampedPacks,
   isAlive,
+  isThroughDoor,
   quietAlarm,
   stepBeat,
   waitingCount,
@@ -65,6 +66,7 @@ import {
 } from './party'
 import { type Seeded, between, nextRandom } from './prng'
 import { isEveryoneReady, returnFallen } from './revive'
+import { isKitchenTourOn } from './tutorialRules'
 import { type World, withWorld } from './world'
 import type { Round } from './worldSchema'
 import {
@@ -95,7 +97,6 @@ import {
   isWalking,
   scaledHp,
 } from './zombies'
-import { isKitchenTourOn } from './tutorialRules'
 
 export const waveBonus = (wave: number): number =>
   WAVE_BONUS_BASE + WAVE_BONUS_PER_WAVE * wave
@@ -1328,8 +1329,6 @@ const kindCounts = (
     const count = Array.filter(spawns, spawn => spawn.kind === kind).length
     return count > 0 ? Result.succeed({ kind, count }) : Result.failVoid
   })
-
-const isThroughDoor = (spawn: PlannedSpawn): boolean => !isFloorKind(spawn.kind)
 
 // NOTE: zombies that come up through the floor are counted apart from the
 // doors, so every door's count is exactly what walks through it.

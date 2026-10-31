@@ -1,8 +1,9 @@
 import { Array, Option, Result, pipe } from 'effect'
-import { Canvas } from 'foldkit'
+import type { Canvas } from 'foldkit'
 
 import { type AmmoItemId, maybeAmmoItemOf } from './ammoCounter'
 import { type Camera, worldToView } from './camera'
+import { rect } from './drawing'
 import { EXIT_RULES } from './exits'
 import {
   type BakedText,
@@ -40,14 +41,6 @@ import { heldGun, maybeReplacedGun } from './weapons'
 // keycap (or a pointing finger on touch) beside it; hold and a gold ring
 // fills around it; a press the wallet cannot cover shakes it red with the
 // shortfall under it. Nothing covers the fight and the camera stays put.
-
-const rect = (
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  fill: string,
-): Canvas.Shape => Canvas.Rect({ x, y, width, height, fill })
 
 // THE TAG
 

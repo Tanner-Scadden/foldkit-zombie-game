@@ -36,6 +36,7 @@ import {
   makeClient,
   openThrough,
 } from './SqliteClient'
+import { describeError } from './describeError'
 
 // OPTIONS
 
@@ -55,11 +56,6 @@ export interface BrowserOptions extends ClientOptions {
 const DEFAULT_NAME = 'sqlite-wasm-effect'
 const DEFAULT_FILE = '/main.sqlite3'
 const FOLLOWER_ASK_INTERVAL: Duration.Input = '1 second'
-
-const describe = (error: unknown): string =>
-  Predicate.hasProperty(error, 'message') && Predicate.isString(error.message)
-    ? error.message
-    : String(error)
 
 // LOCKS
 
@@ -376,7 +372,7 @@ export const layer = (
       if (firstLock === 'Granted') {
         yield* openAsLeader.pipe(
           Effect.mapError(
-            error => new SqliteOpenError({ reason: describe(error) }),
+            error => new SqliteOpenError({ reason: describeError(error) }),
           ),
         )
       } else {

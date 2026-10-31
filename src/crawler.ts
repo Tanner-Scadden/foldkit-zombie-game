@@ -3,7 +3,7 @@ import { modifyFields } from 'foldkit/struct'
 
 import { type Level, distanceToBox, isSolidAt } from './arena'
 import { PLAYER_RADIUS } from './constants'
-import { circlesOverlap } from './geometry'
+import { circlesOverlap, distanceBetween } from './geometry'
 import { nearestOf, targetsOf } from './party'
 import { type Seeded, between, nextRandom } from './prng'
 import { STALL_BOX } from './shop'
@@ -47,9 +47,6 @@ export const CRAWLER_RULES: CrawlerRules = {
 }
 
 const CRAWLER_KIND = 'Crawler'
-
-const distanceBetween = (from: Vector, to: Vector): number =>
-  Math.hypot(to.x - from.x, to.y - from.y)
 
 // WHERE IT COMES UP
 

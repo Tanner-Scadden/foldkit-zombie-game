@@ -19,6 +19,7 @@ import {
 } from './boss'
 import { advanceChuckers, maybeChuckerHeading, maybeShieldFor } from './chucker'
 import {
+  bulletDirection,
   hitEvent,
   killEvent,
   resolveBlasts,
@@ -52,11 +53,13 @@ import {
   shatterEvents,
 } from './fridgeWeapons'
 import {
+  OUTWARD,
   ZERO_VECTOR,
   addVectors,
   circlesOverlap,
   clamp,
   closestPointOnSegment,
+  countDown,
   directionBetween,
   normalize,
   scaleVector,
@@ -173,9 +176,6 @@ const gateIntent = (model: World): World =>
     : model
 
 // TIMERS
-
-const countDown = (remainingMs: number, deltaMs: number): number =>
-  Math.max(0, remainingMs - deltaMs)
 
 const decayKnockback = (
   knockback: Vector,
@@ -880,8 +880,6 @@ const tickZombieState = (state: ZombieState, deltaMs: number): ZombieState =>
       ZombieState.Dying({ remainingMs: remainingMs - deltaMs, direction }),
   })
 
-const OUTWARD: Vector = { x: 1, y: 0 }
-
 // NOTE: a free zombie stops at the player's body, at most
 // CONTACT_ALLOWANCE_PX deep, so it bites from the edge instead of standing on
 // the player where a shot cannot find it. Only the zombie moves, out along
@@ -1054,12 +1052,6 @@ type BulletHit = Readonly<{
   knockback: number
   maybeShooter: Option.Option<number>
 }>
-
-const bulletDirection = (bullet: Bullet): Vector =>
-  Option.getOrElse(
-    normalize({ x: bullet.velocityX, y: bullet.velocityY }),
-    () => ZERO_VECTOR,
-  )
 
 type Contact = Readonly<{ zombie: Zombie; point: Vector; reach: number }>
 

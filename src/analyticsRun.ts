@@ -14,6 +14,7 @@ import {
   UNKNOWN_CAUSE,
   WonRun,
 } from './analytics'
+import { isInRun } from './home'
 import {
   type Model,
   Phase,
@@ -58,8 +59,6 @@ const summaryScreenFit = (screenFit: ScreenFit): SummaryScreenFit =>
   screenFit === 'Installed' ? 'Installed' : 'Browser'
 
 // RUN END
-
-const isInRun = Phase.isAnyOf(['Preparation', 'Wave', 'Paused'])
 
 // NOTE: a run ends at Game Over, at Victory, or when the player leaves it
 // from the pause MENU. Keeping going after a win starts no new run: when that

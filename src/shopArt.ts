@@ -16,6 +16,7 @@ import {
   rattlesPixels,
 } from './shopkeeper'
 import type { Palette } from './sprite'
+import { HEART_PIXELS } from './sprite'
 
 // NOTE: the shop's pictures are pixel maps turned into SVG once, at module
 // scope, like the HTML buttons' icons. Each keeps its size in pixels so CSS
@@ -376,15 +377,6 @@ export const SWAP_ICON = artOf(
   ],
   { X: '#ff8a3d' },
 )
-
-const HEART_PIXELS: ReadonlyArray<string> = [
-  '.RR.RR.',
-  'RWRRRRR',
-  'RRRRRRR',
-  '.RRRRR.',
-  '..RRR..',
-  '...R...',
-]
 
 export const HEART_FULL = artOf(HEART_PIXELS, { R: '#e8333a', W: '#ff8a8f' })
 export const HEART_EMPTY = artOf(HEART_PIXELS, { R: '#4a2a33', W: '#4a2a33' })

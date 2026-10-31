@@ -3,14 +3,13 @@ import { Array, Match, Option, Result, Struct } from 'effect'
 
 import type { Reader, Writer } from '@munch/netcode'
 
+import { settledLessons } from './lessons'
 import { type WireHint, wireHintOf } from './wireNumber'
 import type { World } from './world'
 import {
   DebutCard,
   type FlowField,
   GameEvent,
-  Lesson,
-  type Lessons,
   World as WorldSchema,
   freshLoot,
   freshStats,
@@ -114,7 +113,7 @@ const lengthOf = (reader: Reader): number => {
   return length > MAX_LIST ? fail(`A list of ${length}`) : length
 }
 
-const readMany = <A>(count: number, read: () => A): ReadonlyArray<A> =>
+export const readMany = <A>(count: number, read: () => A): ReadonlyArray<A> =>
   globalThis.Array.from({ length: count }, read)
 
 // CODECS
@@ -901,19 +900,6 @@ const codecOf = (ast: SchemaAST.AST): Codec =>
   )
 
 // THE WORLD
-
-const learned = Lesson.Learned({ atMs: 0 })
-
-const settledLessons: Lessons = {
-  move: learned,
-  fire: learned,
-  startWave: learned,
-  shop: learned,
-  swap: learned,
-  pickup: learned,
-  timedBreaks: learned,
-  openBreak: learned,
-}
 
 const noFlowField: FlowField = {
   levelKey: '',

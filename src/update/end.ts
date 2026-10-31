@@ -14,11 +14,10 @@ import {
   dropRunCard,
   endKindOf,
   isBeatOver,
-  isEndScreen,
   isRunCardHeld,
   skipBeat,
 } from '../endBeat'
-import { END_SHARE_BUTTON_ID, endOffer } from '../home'
+import { END_SHARE_BUTTON_ID, endOffer, isEndScreen } from '../home'
 import {
   isCharacterKey,
   isEndlessKey,

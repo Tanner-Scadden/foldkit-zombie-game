@@ -13,7 +13,6 @@ import type {
   DurableObjectState,
   WebSocket as WorkersWebSocket,
 } from '@cloudflare/workers-types'
-import * as SqliteClient from '@effect/sql-sqlite-do/SqliteClient'
 import {
   type ClosedReason,
   CreateRequest,
@@ -78,8 +77,10 @@ import {
   CORS_HEADERS,
   type Socket,
   type SyncSetupFailed,
+  bearerOf,
   json,
   readNightmareUnlock,
+  sqlOf,
   syncErrorResponse,
   tryCall,
 } from './syncCore.ts'
@@ -131,9 +132,6 @@ const encodeAttachment = Schema.encodeSync(Attachment)
 
 const attachmentOf = (socket: WorkersWebSocket): Option.Option<Attachment> =>
   decodeAttachment(socket.deserializeAttachment())
-
-const sqlOf = (storage: DurableObjectState['storage']) =>
-  SqliteClient.layer({ storage })
 
 interface Game {
   readonly world: GameRules
@@ -1006,15 +1004,6 @@ const ticketResponse = (result: Result.Result<RoomTicket, RoomRefusal>) =>
   })
 
 // ROUTES
-
-const bearerOf = (request: Request): Option.Option<string> =>
-  Option.flatMap(
-    Option.fromNullishOr(request.headers.get('authorization')),
-    header =>
-      header.startsWith('Bearer ')
-        ? Option.some(header.slice(7))
-        : Option.none(),
-  )
 
 const isWithinRate = (env: GameRoomBindings, request: Request) => {
   const address = request.headers.get('cf-connecting-ip') ?? 'unknown'

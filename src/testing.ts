@@ -1,6 +1,6 @@
 // Shared steps, locators, and builders for Story and Scene tests: what a test
 // does to the game, and the zombies, bullets, and guns it puts in. Named
-// Models live in `model.fixture.ts`. `tools/lint/duplicateTestHelpers.ts`
+// Models live in `model.fixture.ts`. `tools/lint/duplicateHelpers.ts`
 // fails a helper copied between test files: add it here instead.
 
 import { Array, Match, Option, Struct } from 'effect'

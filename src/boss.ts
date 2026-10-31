@@ -11,7 +11,13 @@ import {
 import { woundPlayer } from './combat'
 import { MS_PER_SECOND, PLAYER_RADIUS, ZOMBIE_ALIVE_MAX } from './constants'
 import { difficultySpeedScale } from './difficulty'
-import { circlesOverlap, directionBetween, scaleVector } from './geometry'
+import {
+  OUTWARD,
+  circlesOverlap,
+  directionBetween,
+  distanceBetween,
+  scaleVector,
+} from './geometry'
 import { warningPoint } from './pacing'
 import { type Seeded, nextRandom } from './prng'
 import { trapBlockers } from './traps'
@@ -326,11 +332,6 @@ export const paceOf = (boss: Boss, zombie: Zombie, player: Vector): number => {
       : 1
   return rage * chase
 }
-
-const distanceBetween = (from: Vector, to: Vector): number =>
-  Math.hypot(to.x - from.x, to.y - from.y)
-
-const OUTWARD: Vector = { x: 1, y: 0 }
 
 const awayFrom = (from: Vector, to: Vector): Vector =>
   Option.getOrElse(directionBetween(from, to), () => OUTWARD)
