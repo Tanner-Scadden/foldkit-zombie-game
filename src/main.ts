@@ -75,6 +75,7 @@ import {
   reloadOntoNewerBuild,
   rewrapUpdateGift,
   settleInstallPrompt,
+  showHelpLine,
   startOrAsk,
   stepHandFocus,
   toggleCursor,
@@ -644,6 +645,12 @@ export const update = ApplicationComposition.makeUpdate({
       openPanel('HowToPlay'),
       ...afterMessage(model),
     ]),
+
+  FocusedHelpCard: (model, { card }) =>
+    settle(model, { model: showHelpLine(model, card) }),
+
+  ClickedHelpCard: (model, { card }) =>
+    settle(model, unlockAudio(showHelpLine(model, card))),
 
   ClickedSettingsButton: model =>
     Update.combineSteps(model, [

@@ -1,6 +1,7 @@
 import { Array, Option, String, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
+import { ammoLevelOf, isOutOfGuns } from './ammoWarning'
 import { maybeBossBar } from './boss'
 import { bossBarShapes } from './bossView'
 import { type Camera, viewBoxOf, worldToView } from './camera'
@@ -30,6 +31,8 @@ import {
   textWidth,
 } from './font'
 import { clamp } from './geometry'
+import { hintIconFrame, keyIcon } from './hintIcons'
+import { isPending } from './lessons'
 import {
   type CarriedGun,
   type Model,
@@ -40,7 +43,11 @@ import {
   TrapNotice,
   type WeaponKind,
 } from './model'
-import { isOpenBreak, isPracticeGateHeld } from './onboarding'
+import {
+  isCountdownBeckoning,
+  isOpenBreak,
+  isPracticeGateHeld,
+} from './onboarding'
 import { type SeatedPlayer, leadSeatOf, playersOf } from './party'
 import { seatColorOf } from './partyView'
 import { maybeMsSinceHurt } from './playerView'
@@ -51,10 +58,14 @@ import {
   EMPTY_HEART_SPRITE,
   FLASH_HEART_SPRITE,
   HEART_SPRITE,
+  type Palette,
+  TOP_LEFT,
   TRAP_ICONS,
   group,
   gunIcon,
+  spriteShapes,
 } from './sprite'
+import { stallBubbleShapes } from './stallBubble'
 import { scoreOf } from './stats'
 import { TRAP_KIND_ORDER, maybeSelectedKind } from './traps'
 import { isRoundActive, zombiesRemaining } from './waves'
@@ -232,6 +243,9 @@ const hudText = (
 ): ReadonlyArray<Canvas.Shape> =>
   textShapes(content, tone, layout.centerX, y, 'Center')
 
+// NOTE: the first timed break's countdown blinks red, so the clock is seen.
+const COUNTDOWN_BLINK_MS = 400
+
 const TRY_CONTROLS = bakeText('TRY THE CONTROLS', 'Prompt')
 const NO_TIMER = bakeText('NO TIMER', 'Prompt')
 
@@ -261,7 +275,10 @@ const breakSubtitleShapes = (
       layout,
       layout.subtitleY,
       `STARTS IN ${secondsLeft(remainingMs)}`,
-      'Prompt',
+      isCountdownBeckoning(model) &&
+        Math.floor(model.elapsedMs / COUNTDOWN_BLINK_MS) % 2 === 0
+        ? 'Alert'
+        : 'Prompt',
     )
   }
 }
@@ -342,16 +359,18 @@ const PIP_OFF_COLOR = 'rgba(244, 241, 222, 0.25)'
 
 type SlotGun = Readonly<{ weapon: WeaponKind; tier: number }>
 
-type AmmoLook = 'Loaded' | 'Reloading' | 'Empty'
+type AmmoLook = 'Loaded' | 'Low' | 'Last' | 'Reloading' | 'Empty'
 
 // NOTE: `maybeMeter` is the Clang Pan's dent meter, from 1 (flat) to 0
-// (fully dented), drawn as a bar in place of a count.
+// (fully dented), drawn as a bar in place of a count. `isBeckoning` pulses
+// the slot's border gold: the other gun, until the player has swapped once.
 type SlotLook = Readonly<{
   maybeGun: Option.Option<SlotGun>
   ammo: string
   isHeld: boolean
   ammoLook: AmmoLook
   maybeMeter?: Option.Option<number>
+  isBeckoning?: boolean
 }>
 
 const METER_WIDTH = 12
@@ -386,8 +405,46 @@ const meterShapes = (
 
 const AMMO_TONES: Readonly<Record<AmmoLook, TextTone>> = {
   Loaded: 'Plain',
+  Low: 'Fresh',
+  Last: 'Alert',
   Reloading: 'Prompt',
   Empty: 'Alert',
+}
+
+// NOTE: running low blinks the count, amber slowly and then red quickly, so
+// limited ammo is hard to miss. The blink reads the game's clock, so a
+// paused game holds still.
+const LOW_BLINK_MS = 420
+const LAST_BLINK_MS = 180
+const SLOT_LAST_BORDER = '#ff4a4f'
+const SLOT_BECKON_MS = 520
+
+const isBlinkOff = (look: AmmoLook, elapsedMs: number): boolean => {
+  if (look === 'Low') {
+    return Math.floor(elapsedMs / LOW_BLINK_MS) % 3 === 2
+  } else if (look === 'Last') {
+    return Math.floor(elapsedMs / LAST_BLINK_MS) % 2 === 1
+  } else {
+    return false
+  }
+}
+
+const ammoTone = (look: AmmoLook, elapsedMs: number): TextTone =>
+  isBlinkOff(look, elapsedMs) ? 'Plain' : AMMO_TONES[look]
+
+const slotBorder = (
+  { isHeld, ammoLook: look, isBeckoning = false }: SlotLook,
+  elapsedMs: number,
+): string => {
+  if (look === 'Last' && !isBlinkOff(look, elapsedMs)) {
+    return SLOT_LAST_BORDER
+  } else if (isHeld) {
+    return SLOT_HELD_BORDER
+  } else if (isBeckoning && Math.floor(elapsedMs / SLOT_BECKON_MS) % 2 === 0) {
+    return SLOT_HELD_BORDER
+  } else {
+    return SLOT_BORDER
+  }
 }
 
 const tierPipShapes = (
@@ -428,11 +485,13 @@ export const gunClusterBox = (screen: Screen): Box => {
 const slotShapes = (
   layout: HudLayout,
   index: number,
-  { maybeGun, ammo, isHeld, ammoLook, maybeMeter = Option.none() }: SlotLook,
+  look: SlotLook,
+  elapsedMs: number,
 ): ReadonlyArray<Canvas.Shape> => {
+  const { maybeGun, ammo, isHeld, ammoLook, maybeMeter = Option.none() } = look
   const x = layout.slotLeft + index * (SLOT_WIDTH + SLOT_GAP)
   const top = layout.slotTop
-  const border = isHeld ? SLOT_HELD_BORDER : SLOT_BORDER
+  const border = slotBorder(look, elapsedMs)
   const shapes = [
     Canvas.Rect({
       x,
@@ -459,7 +518,7 @@ const slotShapes = (
       onNone: () =>
         textShapes(
           ammo,
-          AMMO_TONES[ammoLook],
+          ammoTone(ammoLook, elapsedMs),
           x + SLOT_WIDTH - 3,
           top + SLOT_TEXT_TOP,
           'Right',
@@ -473,12 +532,17 @@ const slotShapes = (
 const ammoLook = (
   player: Player,
   isHeld: boolean,
-  loaded: number,
+  gun: CarriedGun,
 ): AmmoLook => {
+  const level = ammoLevelOf(gun)
   if (isHeld && isReloading(player)) {
     return 'Reloading'
-  } else if (loaded <= 0) {
+  } else if (gun.loaded <= 0) {
     return 'Empty'
+  } else if (level === 'Last') {
+    return 'Last'
+  } else if (level === 'Low') {
+    return 'Low'
   } else {
     return 'Loaded'
   }
@@ -502,7 +566,7 @@ const gunSlotLook = (
   maybeGun: Option.some({ weapon: gun.kind, tier: gun.tier }),
   ammo: ammoText(gun),
   isHeld,
-  ammoLook: ammoLook(player, isHeld, gun.loaded),
+  ammoLook: ammoLook(player, isHeld, gun),
   maybeMeter:
     gun.kind === 'Pan'
       ? Option.some(gun.loaded / magazineOf('Pan', gun.tier))
@@ -516,20 +580,35 @@ const EMPTY_SLOT: SlotLook = {
   ammoLook: 'Loaded',
 }
 
+// NOTE: until the player has swapped once, the gun they are not holding
+// pulses, where the swap happens (its Q badge on a keyboard, a tap on
+// touch), in place of a SWAP GUNS label in the room.
+const isSwapBeckoning = (model: Model): boolean =>
+  isRoundActive(model.phase) && isPending(model.lessons.swap)
+
+const beckonWhen = (look: SlotLook, isBeckoning: boolean): SlotLook =>
+  isBeckoning && !look.isHeld ? { ...look, isBeckoning } : look
+
 const loadoutShapes = (
-  player: Player,
+  model: Model,
   layout: HudLayout,
 ): ReadonlyArray<Canvas.Shape> => {
+  const { player } = model
   const { arsenal } = player
   const held = heldSlotOf(arsenal)
+  const isBeckoning = isSwapBeckoning(model)
   const [first, ...rest] = gunsOf(arsenal)
   const secondSlot: SlotLook = Option.match(Array.head(rest), {
     onNone: () => EMPTY_SLOT,
-    onSome: second => gunSlotLook(player, second, held === 'Second'),
+    onSome: second =>
+      beckonWhen(gunSlotLook(player, second, held === 'Second'), isBeckoning),
   })
+  const firstSlot = Array.isReadonlyArrayNonEmpty(rest)
+    ? beckonWhen(gunSlotLook(player, first, held === 'First'), isBeckoning)
+    : gunSlotLook(player, first, held === 'First')
   return [
-    ...slotShapes(layout, 0, gunSlotLook(player, first, held === 'First')),
-    ...slotShapes(layout, 1, secondSlot),
+    ...slotShapes(layout, 0, firstSlot, model.elapsedMs),
+    ...slotShapes(layout, 1, secondSlot, model.elapsedMs),
   ]
 }
 
@@ -589,6 +668,63 @@ const trapStockShapes = (
 
 const NOTICE_LIFT_PX = 14
 const NOTICE_MARGIN_PX = 4
+
+// NOTE: with every gun dry, a keyboard player sees the knife's key and the
+// knife over their head, blinking, until a gun has rounds again. On touch
+// the knife button glows instead (src/touchControls.ts).
+const KNIFE_PALETTE: Palette = { X: '#e9e3cf', R: '#a8302a', o: '#140c10' }
+
+const KNIFE_SPRITE = spriteShapes(
+  [
+    '.......XX',
+    '......XXX',
+    '.....XXX.',
+    '....XXX..',
+    '...XXX...',
+    '.RXXX....',
+    '..RR.....',
+    '.RRR.....',
+    'RR.R.....',
+  ],
+  KNIFE_PALETTE,
+  TOP_LEFT,
+)
+
+const KNIFE_KEY = keyIcon('F')
+const KNIFE_PROMPT_LIFT_PX = 30
+const KNIFE_PROMPT_GAP_PX = 2
+const KNIFE_PROMPT_BLINK_MS = 260
+
+const knifePromptShapes = (
+  model: Model,
+  camera: Camera,
+): ReadonlyArray<Canvas.Shape> => {
+  if (
+    model.lastDevice !== 'KeyboardMouse' ||
+    !Phase.isAnyOf(['Wave'])(model.phase) ||
+    !isOutOfGuns(model.player)
+  ) {
+    return []
+  }
+  const player = worldToView(camera, model.player)
+  const width = KNIFE_KEY.width + KNIFE_PROMPT_GAP_PX + 9
+  const left = Math.round(player.x - width / 2)
+  const top = Math.round(player.y) - KNIFE_PROMPT_LIFT_PX
+  return [
+    placeSprite(left, top, hintIconFrame(KNIFE_KEY, model.elapsedMs)),
+    group({
+      opacity:
+        Math.floor(model.elapsedMs / KNIFE_PROMPT_BLINK_MS) % 2 === 0 ? 1 : 0.5,
+      shapes: [
+        placeSprite(
+          left + KNIFE_KEY.width + KNIFE_PROMPT_GAP_PX,
+          top - 1,
+          KNIFE_SPRITE,
+        ),
+      ],
+    }),
+  ]
+}
 
 const trapNoticeShapes = (
   model: Model,
@@ -669,7 +805,7 @@ const playHudShapes = (
   ...moneyShapes(model),
   ...mateHudShapes(model),
   ...streakShapes(model.streak),
-  ...loadoutShapes(model.player, layout),
+  ...loadoutShapes(model, layout),
   ...boostChipShapes(
     model.boosts,
     layout.boostLeft,
@@ -678,6 +814,8 @@ const playHudShapes = (
   ),
   ...trapStockShapes(model, layout),
   ...trapNoticeShapes(model, camera),
+  ...knifePromptShapes(model, camera),
+  ...stallBubbleShapes(model, camera),
   ...roundHudShapes(model, layout),
   ...(isRoundActive(model.phase)
     ? textShapes(

@@ -1,3 +1,4 @@
+import { Array } from 'effect'
 import {
   Subscription,
   all,
@@ -18,6 +19,7 @@ import { PREPARATION_MS } from './constants'
 import { update } from './main'
 import { Message } from './message'
 import { type Model, MouseButton, Phase, initialModel } from './model'
+import { CONTROL_CARDS, helpLineOf } from './pauseHelp'
 import {
   ROOT,
   SCENE_SUBSCRIPTIONS,
@@ -58,22 +60,15 @@ describe('Pause screen controls', () => {
       expect(keyboardHelp).toExist(),
       inside(
         role('list', { name: 'Controls' }),
-        expect(card('Move', 'WASD')).toExist(),
-        expect(card('Aim + shoot', 'Mouse, hold click')).toExist(),
-        expect(card('Reload', 'R')).toExist(),
-        expect(card('Swap', 'Q')).toExist(),
-        expect(card('Shop', 'Walk into the stall')).toExist(),
-        expect(card('Planks', 'T')).toExist(),
-        expect(card('Leftovers', 'Hold Enter at the kitchen fridge')).toExist(),
-        expect(card('Charge', 'Hold click, let go to throw')).toExist(),
-        expect(card('Goodies', 'Walk over them')).toExist(),
-        expect(card('Pause', 'Esc')).toExist(),
+        ...Array.map(CONTROL_CARDS, ({ id, action }) =>
+          expect(card(action, helpLineOf(id, 'KeyboardMouse'))).toExist(),
+        ),
         expectAll(all.role('listitem')).toHaveCount(10),
       ),
       inside(
         role('list', { name: 'More keys' }),
-        expect(role('listitem', { name: 'T trap' })).toExist(),
         expect(role('listitem', { name: 'G next trap' })).toExist(),
+        expect(role('listitem', { name: 'Esc pause' })).toExist(),
         expect(role('listitem', { name: 'Enter start' })).toExist(),
         expect(role('listitem', { name: 'H menu' })).toExist(),
         expect(role('listitem', { name: 'M sound' })).toExist(),
@@ -99,12 +94,10 @@ describe('Pause screen controls', () => {
       expect(role('list', { name: 'More keys' })).toBeAbsent(),
       inside(
         role('list', { name: 'Controls' }),
-        expect(card('Move', 'Left thumb')).toExist(),
-        expect(card('Aim + shoot', 'Right thumb, hold')).toExist(),
-        expect(card('Reload', 'Tap your gun')).toExist(),
-        expect(card('Swap', 'Tap the other gun')).toExist(),
-        expect(card('Planks', 'Trap button')).toExist(),
-        expect(card('Pause', 'Pause button')).toExist(),
+        ...Array.map(CONTROL_CARDS, ({ id, action }) =>
+          expect(card(action, helpLineOf(id, 'Touch'))).toExist(),
+        ),
+        expectAll(all.role('listitem')).toHaveCount(10),
       ),
     )
   })

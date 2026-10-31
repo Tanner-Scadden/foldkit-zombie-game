@@ -1010,7 +1010,8 @@ const panelBodyView = (
       h.div(
         [h.Class('panel-help'), h.DataAttribute('device', model.lastDevice)],
         howToPlayView(
-          model.lastDevice,
+          model,
+          'Interactive',
           h,
           isKeyboard(model) ? Option.some(menuKeysView(h)) : Option.none(),
         ),

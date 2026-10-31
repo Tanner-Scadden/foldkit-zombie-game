@@ -52,6 +52,7 @@ import {
   type Difficulty,
   DifficultyCard,
   type HandCard,
+  type HelpCard,
   type InstallOutcome,
   type MenuPanel,
   type Model,
@@ -107,10 +108,16 @@ const showPanel =
       modifyFields(stepModel, {
         panel: () => panel,
         tutorialReset: () => 'Idle',
+        maybeOpenHelpCard: () => Option.none(),
       }),
       releaseAll,
     ),
   })
+
+// NOTE: a How to play card shows its line once focused (a keyboard) or
+// tapped (touch), and keeps it until another card takes its place.
+export const showHelpLine = (model: Model, card: HelpCard): Model =>
+  modifyFields(model, { maybeOpenHelpCard: () => Option.some(card) })
 
 export const openPanel = (panel: MenuPanel) =>
   makeStep(model =>

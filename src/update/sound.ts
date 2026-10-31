@@ -1,6 +1,7 @@
 import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { isTickingShot } from '../ammoWarning'
 import { type SoundEffect, positionVariation } from '../audio'
 import { PlaySound, ResumeAudio } from '../commands'
 import { AudioState, GameEvent, type Model, type Player } from '../model'
@@ -136,6 +137,17 @@ export const frameSoundCues = (
     Array.getSomes,
     Array.dedupeWith((first, second) => first.sound === second.sound),
   )
+
+// NOTE: a low tick on each of the last few shots of a gun that can run dry.
+export const ammoTickCues = (model: Model): ReadonlyArray<SoundCue> =>
+  isTickingShot(model.player, model.frameEvents)
+    ? [
+        {
+          sound: 'AmmoTick',
+          variation: positionVariation(model.player.x, model.player.y),
+        },
+      ]
+    : []
 
 export const playSounds =
   (cues: ReadonlyArray<SoundCue>): UpdateStep =>

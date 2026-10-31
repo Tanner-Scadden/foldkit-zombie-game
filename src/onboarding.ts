@@ -2,13 +2,10 @@ import { Array, Option, Result, Schema, String, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { cameraOf, worldToView } from './camera'
-import { WAVE_CLEARED_BANNER_MS } from './constants'
 import { vectorLength } from './geometry'
 import { isPending, isTimedBreak, learn } from './lessons'
 import type { Model } from './model'
-import { isShopOpenFor } from './shop'
 import { TURRET_WEAPON, maybeSelectedKind } from './traps'
-import { maybeOtherGun } from './weapons'
 import {
   BreakClock,
   DebutCard,
@@ -237,24 +234,20 @@ export const moveHintBand = (model: Model): Model =>
 
 // HINTS
 
-export const HintId = Schema.Literals([
-  'Move',
-  'Fire',
-  'Pickup',
-  'Barricade',
-  'Turret',
-  'Shop',
-  'Swap',
-  'StartWave',
-  'OpenBreak',
-  'TimedBreaks',
-])
+// NOTE: hints float only for the controls themselves: moving and aiming in
+// wave 1 on a keyboard, and the key that places a trap once one is bought.
+// Everything else is taught where the player acts, never as a label in the
+// middle of the room, which a playtester took for a place to walk to: the
+// stall waves and calls with a bubble (src/stallBubble.ts), START WAVE and
+// the other gun pulse (src/touchControls.ts, src/hud.ts), a goodie wears a
+// bouncing arrow (src/powerupView.ts), and the break's countdown blinks.
+export const HintId = Schema.Literals(['Move', 'Fire', 'Barricade', 'Turret'])
 export type HintId = typeof HintId.Type
 
 // NOTE: a hint shows instead of explaining: a small moving picture of the
 // key, mouse, thumb, or thing to use, and at most three words. A part with no
 // words is a picture that leads into the next part, such as the T key before
-// the planks.
+// the planks. How to play draws the same pictures (src/pauseHelp.ts).
 export const HintIcon = Schema.Literals([
   'Wasd',
   'Mouse',
@@ -263,13 +256,11 @@ export const HintIcon = Schema.Literals([
   'Tap',
   'KeyT',
   'KeyQ',
-  'KeyEnter',
   'Goodie',
   'PlankDoor',
   'Gnome',
   'Guns',
   'Stall',
-  'Stopwatch',
 ])
 export type HintIcon = typeof HintIcon.Type
 
@@ -278,13 +269,6 @@ export type HintPart = Readonly<{ icon: HintIcon; words: string }>
 type HintParts = Array.NonEmptyReadonlyArray<HintPart>
 
 const part = (icon: HintIcon, words = ''): HintPart => ({ icon, words })
-
-const onBoth = (
-  parts: HintParts,
-): Readonly<Record<InputDevice, HintParts>> => ({
-  KeyboardMouse: parts,
-  Touch: parts,
-})
 
 export const HINT_PARTS: Readonly<
   Record<HintId, Readonly<Record<InputDevice, HintParts>>>
@@ -297,7 +281,6 @@ export const HINT_PARTS: Readonly<
     KeyboardMouse: [part('Mouse', 'AIM + SHOOT')],
     Touch: [part('AimStick', 'AIM + SHOOT')],
   },
-  Pickup: onBoth([part('Goodie', 'GRAB IT')]),
   Barricade: {
     KeyboardMouse: [part('KeyT'), part('PlankDoor', 'BLOCK DOOR')],
     Touch: [part('Tap'), part('PlankDoor', 'BLOCK DOOR')],
@@ -306,17 +289,6 @@ export const HINT_PARTS: Readonly<
     KeyboardMouse: [part('KeyT'), part('Gnome', 'PLONK IT')],
     Touch: [part('Tap'), part('Gnome', 'PLONK IT')],
   },
-  Shop: onBoth([part('Stall', 'GO SHOP')]),
-  Swap: {
-    KeyboardMouse: [part('KeyQ'), part('Guns', 'SWAP GUNS')],
-    Touch: [part('Tap'), part('Guns', 'SWAP GUNS')],
-  },
-  StartWave: {
-    KeyboardMouse: [part('KeyEnter', 'START WAVE')],
-    Touch: [part('Tap', 'START WAVE')],
-  },
-  OpenBreak: onBoth([part('PlankDoor', 'BLOCK'), part('Gnome', 'SHOOT')]),
-  TimedBreaks: onBoth([part('Stopwatch', 'TIMED BREAKS')]),
 }
 
 export const hintWords = (id: HintId, device: InputDevice): string =>
@@ -361,12 +333,6 @@ const isFirstWave = (phase: Phase): boolean =>
     GameOver: () => false,
   })
 
-const learnedAt = (lesson: Lesson): number =>
-  Lesson.match(lesson, {
-    Pending: () => 0,
-    Learned: ({ atMs }) => atMs,
-  })
-
 type HintRule = Readonly<{
   id: HintId
   maybeAgeMs: (model: Model) => Option.Option<number>
@@ -377,9 +343,6 @@ const ageWhen = (isShown: boolean, ageMs: number): Option.Option<number> =>
 
 const isPreparation = (model: Model): boolean =>
   Phase.isAnyOf(['Preparation'])(model.phase)
-
-const isRoundActive = (model: Model): boolean =>
-  Phase.isAnyOf(['Preparation', 'Wave'])(model.phase)
 
 const isBreakWith = (
   model: Model,
@@ -428,17 +391,6 @@ const HINT_RULES: ReadonlyArray<HintRule> = [
       ),
   },
   {
-    id: 'Pickup',
-    maybeAgeMs: model =>
-      ageWhen(
-        isPending(model.lessons.pickup) &&
-          Array.isReadonlyArrayNonEmpty(model.pickups),
-        Array.reduce(model.pickups, 0, (oldest, { ageMs }) =>
-          Math.max(oldest, ageMs),
-        ),
-      ),
-  },
-  {
     id: 'Barricade',
     maybeAgeMs: model =>
       ageWhen(isTrapHintFor(model, 'Barricade'), msIntoPhase(model.phase)),
@@ -448,60 +400,25 @@ const HINT_RULES: ReadonlyArray<HintRule> = [
     maybeAgeMs: model =>
       ageWhen(isTrapHintFor(model, 'Turret'), msIntoPhase(model.phase)),
   },
-  {
-    id: 'Shop',
-    maybeAgeMs: model =>
-      ageWhen(
-        isShopOpenFor(model.phase) &&
-          isPending(model.lessons.shop) &&
-          msIntoPhase(model.phase) >= WAVE_CLEARED_BANNER_MS,
-        msIntoPhase(model.phase) - WAVE_CLEARED_BANNER_MS,
-      ),
-  },
-  {
-    id: 'TimedBreaks',
-    maybeAgeMs: model =>
-      ageWhen(
-        isLaterTimedBreak(model) && isPending(model.lessons.timedBreaks),
-        msIntoPhase(model.phase),
-      ),
-  },
-  {
-    id: 'OpenBreak',
-    maybeAgeMs: model =>
-      ageWhen(
-        isOpenBreak(model) &&
-          isPending(model.lessons.openBreak) &&
-          msIntoPhase(model.phase) >= WAVE_CLEARED_BANNER_MS,
-        msIntoPhase(model.phase) - WAVE_CLEARED_BANNER_MS,
-      ),
-  },
-  {
-    id: 'Swap',
-    maybeAgeMs: model =>
-      ageWhen(
-        isRoundActive(model) &&
-          isPending(model.lessons.swap) &&
-          Option.isSome(maybeOtherGun(model.player.arsenal)),
-        msIntoPhase(model.phase),
-      ),
-  },
-  {
-    id: 'StartWave',
-    maybeAgeMs: ({ phase, lessons, elapsedMs }) =>
-      ageWhen(
-        Phase.isAnyOf(['Preparation'])(phase) &&
-          isPending(lessons.startWave) &&
-          isLearned(lessons.move) &&
-          isLearned(lessons.fire),
-        Math.min(
-          msIntoPhase(phase),
-          elapsedMs -
-            Math.max(learnedAt(lessons.move), learnedAt(lessons.fire)),
-        ),
-      ),
-  },
 ]
+
+// NOTE: START WAVE pulses once the player has moved and fired, until they
+// first start a wave themselves.
+export const isStartWaveBeckoning = ({ phase, lessons }: Model): boolean =>
+  Phase.isAnyOf(['Preparation'])(phase) &&
+  isPending(lessons.startWave) &&
+  isLearned(lessons.move) &&
+  isLearned(lessons.fire)
+
+// NOTE: the first timed break's countdown blinks, so the player sees the
+// clock is running.
+export const isCountdownBeckoning = (model: Model): boolean =>
+  isLaterTimedBreak(model) && isPending(model.lessons.timedBreaks)
+
+// NOTE: a goodie on the floor wears a bouncing arrow until the player has
+// grabbed one.
+export const isGoodieBeckoning = (model: Model): boolean =>
+  isPending(model.lessons.pickup)
 
 export const shownHints = (model: Model): ReadonlyArray<ShownHint> =>
   isDebutCardUp(model)

@@ -68,6 +68,7 @@ const learnedSave: PlayerSave = {
       openBreak: 'Learned',
     },
     trapHint: 'Seen',
+    ammoTip: 'Seen',
     introducedKinds: ZOMBIE_KIND_ORDER,
   },
   homeScreenTip: 'Dismissed',
@@ -742,7 +743,7 @@ describe('writing the save', () => {
     )
   })
 
-  test('the first break heads-up is learned when that break ends', () => {
+  test('the first break is learned when that break ends, with no label in the room', () => {
     const openBreak: Model = modifyFields(read, {
       introducedKinds: () => ZOMBIE_KIND_ORDER,
       phase: () =>
@@ -754,16 +755,13 @@ describe('writing the save', () => {
           clock: BreakClock.Waiting({ elapsedMs: 9000 }),
         }),
     })
-    expect(shownHints(openBreak).map(({ id }) => id)).toContain('OpenBreak')
+    expect(shownHints(openBreak)).toEqual([])
     story(
       update,
       given(openBreak),
       message(Message.ClickedStartWaveButton()),
       model(current => {
         expect(saveOf(current).onboarding.lessons.openBreak).toBe('Learned')
-        expect(
-          shownHints(modifyFields(current, { phase: () => openBreak.phase })),
-        ).not.toContainEqual(expect.objectContaining({ id: 'OpenBreak' }))
       }),
       Command.resolve(WriteSave, Message.CompletedWriteSave()),
     )

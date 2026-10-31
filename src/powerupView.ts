@@ -25,7 +25,13 @@ import {
   PICKUP_BLINK_MS,
   PICKUP_LIFETIME_MS,
 } from './powerups'
-import { PICKUP_SPRITES, group } from './sprite'
+import {
+  PICKUP_SPRITES,
+  TOP_LEFT,
+  group,
+  placeAt,
+  spriteShapes,
+} from './sprite'
 
 // COLORS
 
@@ -119,6 +125,29 @@ export const pickupShapes = (pickup: Pickup): ReadonlyArray<Canvas.Shape> => {
     }),
   ]
 }
+
+// NOTE: until the player has grabbed a goodie, each one on the floor wears
+// a bouncing arrow, in place of a GRAB IT label in the room.
+const GOODIE_ARROW = spriteShapes(
+  ['ooooooo', 'owwwwwo', '.owwwo.', '..owo..', '...o...'],
+  { o: '#140c10', w: '#f4f1de' },
+  TOP_LEFT,
+)
+const GOODIE_ARROW_LIFT_PX = 15
+const GOODIE_ARROW_BOUNCE_MS = 260
+
+export const goodieArrowShapes = (
+  pickup: Pickup,
+): ReadonlyArray<Canvas.Shape> => [
+  placeAt(
+    Math.round(pickup.x) - 3,
+    Math.round(pickup.y) -
+      PICKUP_LIFT_PX -
+      GOODIE_ARROW_LIFT_PX +
+      (Math.floor(pickup.ageMs / GOODIE_ARROW_BOUNCE_MS) % 2),
+    GOODIE_ARROW,
+  ),
+]
 
 // CALLOUTS
 

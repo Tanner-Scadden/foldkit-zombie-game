@@ -1,4 +1,4 @@
-import { Option, Schema, SchemaGetter } from 'effect'
+import { Effect, Option, Schema, SchemaGetter } from 'effect'
 
 // NOTE: the player's lasting data as Schemas, shared with the sync Worker in
 // infra/worker, which bundles it against its own, newer Effect. It imports
@@ -532,9 +532,15 @@ export type SavedLessons = typeof SavedLessons.Type
 export const SavedTrapHint = Schema.Literals(['Unseen', 'Seen'])
 export type SavedTrapHint = typeof SavedTrapHint.Type
 
+// NOTE: ammoTip came after save version 11 as a key that reads as Unseen
+// when missing, so every older save, an older build's copy of this one, and
+// an older device's synced onboarding all still read, with no new version.
 export const SavedOnboarding = Schema.Struct({
   lessons: SavedLessons,
   trapHint: SavedTrapHint,
+  ammoTip: SavedTrapHint.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed('Unseen')),
+  ),
   introducedKinds: Schema.Array(Schema.String),
 })
 export type SavedOnboarding = typeof SavedOnboarding.Type

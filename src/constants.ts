@@ -287,8 +287,8 @@ export const HULL_DECAL_FADED_COLOR = '#4f2624'
 
 export const PAYDAY_POPUP_LIFETIME_MS = 1300
 export const PAYDAY_POPUP_LIFT_PX = 16
-export const EMPTY_POPUP_LIFETIME_MS = 650
-export const EMPTY_POPUP_LIFT_PX = 12
+export const EMPTY_POPUP_LIFETIME_MS = 1100
+export const EMPTY_POPUP_LIFT_PX = 16
 export const ALERT_GLYPH_COLOR = '#ff6b5e'
 export const COIN_GLYPH_COLOR = '#ffe066'
 

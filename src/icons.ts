@@ -374,43 +374,6 @@ export const HOLD_ICON = icon([
   '..OOOOOO..',
 ])
 
-// NOTE: the Mystery Leftovers fridge, ajar, with green fog creeping out,
-// for the control card that teaches holding to pull from it.
-export const FRIDGE_ICON = pixelIconUrl(
-  [
-    '.OOOOOOOO.',
-    'OXXXXXXXXO',
-    'OXXXXXXOXO',
-    'OOOOOOOOOO',
-    'OXXXXOGGGO',
-    'OXXXXOGgGO',
-    'OXXOXOGGGO',
-    'OXXOXOgGgO',
-    'OXXXXOGGGO',
-    'OOOOOOOOOO',
-    '.O.....gO.',
-  ],
-  { X: '#d6cfa4', O: SHADE, G: '#9be36a', g: '#4e6a2a' },
-)
-
-// NOTE: the Pressure Cooker with its dial half full, for the control card
-// that teaches holding fire to charge and letting go to throw.
-export const CHARGE_ICON = pixelIconUrl(
-  [
-    '....YYY...',
-    '...YOOOR..',
-    '...YO.OR..',
-    '....RRR...',
-    '..OOOOOO..',
-    '.OXXXXXXO.',
-    'OOOOOOOOOO',
-    'ROMMMMMMOR',
-    '.OMMMMMMO.',
-    '..OOOOOO..',
-  ],
-  { X: '#d9dde3', O: SHADE, M: '#4a4f5a', R: ALERT, Y: '#ffe066' },
-)
-
 export const SWAP_ICON = icon([
   '......X..',
   'XXXXXXXX.',
@@ -874,4 +837,17 @@ export const HOME_SCREEN_APP_ICON = pixelIconUrl(
     '.TTTTTTTTTT.',
   ],
   PROFILE_PALETTE,
+)
+
+// NOTE: three rounds, for the shop's ammo counts beside a gun.
+export const ROUNDS_ICON = pixelIconUrl(
+  [
+    '.B...B...B.',
+    'BBB.BBB.BBB',
+    'YYY.YYY.YYY',
+    'YYY.YYY.YYY',
+    'YYY.YYY.YYY',
+    'OOO.OOO.OOO',
+  ],
+  { B: '#c9a227', Y: '#ffe066', O: '#a87b1a' },
 )

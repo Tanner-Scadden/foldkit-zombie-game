@@ -2,6 +2,10 @@
 
 One entry per day, newest first. Only things a player would notice, a handful of bullets at most, written for players and not for us.
 
+## October 31, 2026: Rattles has notes
+
+- 🔫 Your gun now yells before it runs dry: the ammo blinks amber, then red, the last shots tick, and Rattles hollers from his stall. Out of everything? The knife lights up.
+
 ## October 30, 2026: Bring your friends
 
 - 🧟‍♂️🧟‍♀️ CO-OP is here: up to 4 of you in one manor. Share a room code, or hit QUICK PLAY and we'll find you a crew. Revive your buddies before they bleed out!

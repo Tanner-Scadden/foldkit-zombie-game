@@ -80,6 +80,8 @@ export const FIELD_CLASSES = {
   shopDialog: 'Client',
   shopTabs: 'Client',
   trapHint: 'Client',
+  ammoTip: 'Client',
+  maybeOpenHelpCard: 'Client',
   trapNotice: 'Client',
   lastDevice: 'Client',
   touchControls: 'Client',
