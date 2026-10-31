@@ -9,8 +9,19 @@ import * as NodeServices from '@effect/platform-node/NodeServices'
 import { launch, useHarness } from '../audit/lib'
 import { yieldTurn } from '../heavy/turn'
 import { INSTALL_FFMPEG, encodeGif, encodeMp4, hasFfmpeg } from './encode'
-import { captureShot, frameName, openShotPage, outputSize } from './frames'
-import { type Clip, FRAMES_PER_SECOND, decodeShotList } from './shotList'
+import {
+  captureShot,
+  frameName,
+  loopFrames,
+  openShotPage,
+  outputSize,
+} from './frames'
+import {
+  type Clip,
+  FRAMES_PER_SECOND,
+  type Score,
+  decodeShotList,
+} from './shotList'
 import { renderSoundtrack } from './soundtrack'
 import type { ClipCue } from './soundtrackRequest'
 
@@ -65,6 +76,52 @@ const hashFiles = (paths: ReadonlyArray<string>, listPath: string) =>
     return hashOf(new TextEncoder().encode(text))
   })
 
+// NOTE: a clip with its own score drops the music the game cued for its
+// shots and plays the score's cues instead; `music: false` drops music.
+const soundsOf = (
+  clip: Clip,
+  cues: ReadonlyArray<ClipCue>,
+): ReadonlyArray<ClipCue> => {
+  const effects = Array.filter(cues, ({ cue }) => cue._tag !== 'Music')
+  if (clip.score !== undefined) {
+    return [
+      ...effects,
+      ...Array.map(
+        clip.score.cues,
+        (cue): ClipCue => ({
+          frame: cue.frame,
+          cue: {
+            _tag: 'Music',
+            tick: cue.frame,
+            mood: cue.mood,
+            level: cue.level ?? 'Full',
+            stinger: cue.stinger ?? 'None',
+          },
+        }),
+      ),
+    ]
+  }
+  return clip.music === false ? effects : cues
+}
+
+// NOTE: the music's first note sounds a moment after its cue, as the
+// game's does (START_DELAY_SECONDS in src/music.ts).
+const MUSIC_START_FRAMES = 0.05 * FRAMES_PER_SECOND
+
+// NOTE: how far each cut (the middle of a dissolve) lands from the score's
+// nearest beat, so a shot list can be cut to the music.
+const beatReport = (score: Score, cuts: ReadonlyArray<number>): string => {
+  const beat = (FRAMES_PER_SECOND * 60) / score.bpm
+  const start = (score.cues[0]?.frame ?? 0) + MUSIC_START_FRAMES
+  const lines = Array.map(cuts, cut => {
+    const beats = (cut - start) / beat
+    const nearest = Math.round(beats)
+    const off = cut - (start + nearest * beat)
+    return `    frame ${cut} (${(cut / FRAMES_PER_SECOND).toFixed(2)} s): beat ${nearest}, ${off >= 0 ? '+' : ''}${off.toFixed(1)} frames`
+  })
+  return [`  cuts against the beat at ${score.bpm} bpm:`, ...lines].join('\n')
+}
+
 const renderClip = (
   browser: Awaited<ReturnType<typeof launch>>,
   clip: Clip,
@@ -86,25 +143,42 @@ const renderClip = (
     const page = yield* openShotPage(browser, clip.format)
     let frames = 0
     const cues: Array<ClipCue> = []
+    const cuts: Array<number> = []
     for (const shot of clip.shots) {
       yield* yieldTurn(`video ${clip.name} ${shot.name}`)
+      const overlap = Math.min(frames, shot.crossfade ?? 0)
+      const firstFrame = frames - overlap
       const result = yield* captureShot(
         page,
         shot,
         clip.format,
         framesDir,
+        firstFrame,
         frames,
         line => Console.log(line),
       )
+      if (firstFrame > 0) {
+        cuts.push(firstFrame + Math.floor(overlap / 2))
+      }
       cues.push(...result.cues)
-      frames += result.frameCount
+      frames = firstFrame + result.frameCount
+    }
+    if (clip.loop !== undefined) {
+      yield* Console.log(`  looping the last ${clip.loop} frames into the first`)
+      const tailStart = yield* loopFrames(page, framesDir, frames, clip.loop)
+      // NOTE: the tail's sounds play over the head it dissolved into.
+      const moved = Array.map(cues, cue =>
+        cue.frame >= tailStart ? { ...cue, frame: cue.frame - tailStart } : cue,
+      )
+      cues.splice(0, cues.length, ...moved)
+      frames = tailStart
     }
     yield* Effect.promise(() => page.context().close())
     const wav = path.join(clipDir, `${clip.name}.wav`)
-    const sounds =
-      clip.music === false
-        ? Array.filter(cues, ({ cue }) => cue._tag !== 'Music')
-        : cues
+    const sounds = soundsOf(clip, cues)
+    if (clip.score !== undefined) {
+      yield* Console.log(beatReport(clip.score, cuts))
+    }
     const seconds = yield* renderSoundtrack(browser, sounds, frames, wav)
     const hash = yield* hashFiles(
       [

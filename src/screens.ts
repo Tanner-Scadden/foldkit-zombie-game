@@ -833,7 +833,7 @@ const logoLineShapes =
     ).shapes
   }
 
-const logoShapes = (screenMs: number): ReadonlyArray<Canvas.Shape> =>
+export const logoShapes = (screenMs: number): ReadonlyArray<Canvas.Shape> =>
   Array.flatMap(LOGO_LINES, logoLineShapes(screenMs))
 
 // ALPHA CHIP

@@ -17,3 +17,20 @@
   font: 14px/1.4 monospace;
   white-space: pre-wrap;
 }
+
+/* The video tool's director cards (cards.ts), over the whole game. */
+.director-stage {
+  display: contents;
+}
+
+.director-card {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
