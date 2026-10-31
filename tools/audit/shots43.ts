@@ -6,8 +6,9 @@
 // played with the harness's director (tools/audit/harness/director.ts), so
 // its frames are the same on every run: it steps until the player falls,
 // then shoots the beat at fixed ticks after. It checks that the end card
-// shows its RETRY, HOME, and SHARE buttons once the beat is over, and exits
-// with 1 on any miss.
+// shows its RETRY, HOME, and SHARE buttons once the beat is over, that a
+// tap on SHARE (and X on a keyboard) opens X's post intent in a new tab, and
+// exits with 1 on any miss.
 //   TAG=after bun run heavy -- --shared bun tools/audit/shots43.ts
 // ONLY picks scenes, such as `ONLY=death`, and VIEWPORTS picks screens.
 import type { Page } from 'playwright-core'
@@ -161,6 +162,62 @@ const shootDeath = async (
   await page.context().close()
 }
 
+// NOTE: SHARE is a link, so a tap (or X on a keyboard, which clicks it)
+// must open X's post intent in a new tab by itself. x.com is answered here,
+// so nothing reaches X.
+const X_INTENT = /^https:\/\/x\.com\/intent\/post\?text=.+&url=/
+
+const opensX = async (page: Page, act: () => Promise<void>) => {
+  await page
+    .context()
+    .route('https://x.com/**', route =>
+      route.fulfill({ status: 200, body: 'share' }),
+    )
+  const opening = page
+    .context()
+    .waitForEvent('page', { timeout: 5_000 })
+    .catch(() => null)
+  await act()
+  const tab = await opening
+  if (tab === null) {
+    return ''
+  }
+  await tab.waitForLoadState('domcontentloaded').catch(() => undefined)
+  const url = tab.url()
+  await tab.close()
+  return url
+}
+
+const checkShare = async (
+  page: Page,
+  label: string,
+  isKeyboard: boolean,
+  problems: Array<string>,
+) => {
+  const tapped = await opensX(page, () =>
+    page.locator('a#end-share-button').click(),
+  )
+  if (!X_INTENT.test(tapped)) {
+    problems.push(`${label}: tapping SHARE opened ${tapped || 'nothing'}`)
+  }
+  const shares = await page.evaluate(
+    () =>
+      ((window as any).__messages ?? []).filter(
+        (message: string) => message === 'ClickedShareButton',
+      ).length,
+  )
+  if (shares < 1) {
+    problems.push(`${label}: tapping SHARE sent no ClickedShareButton`)
+  }
+  if (isKeyboard) {
+    await page.locator('.game-surface').focus()
+    const keyed = await opensX(page, () => page.keyboard.press('KeyX'))
+    if (!X_INTENT.test(keyed)) {
+      problems.push(`${label}: X opened ${keyed || 'nothing'}`)
+    }
+  }
+}
+
 await useHarness()
 const browser = await launch()
 const pages = scenePages(browser, ['nodev'])
@@ -193,6 +250,9 @@ for (const viewport of VIEWPORTS) {
     }
     await shot(page, `s43-${TAG}-${viewport.name}-${scene.name}`)
     console.log(`shot ${label}`)
+    if (TAG !== 'before' && scene.name === 'gameover') {
+      await checkShare(page, label, !viewport.isPhone, problems)
+    }
     pages.release(page)
   }
 }

@@ -21,6 +21,7 @@ import {
   tallyRowsOf,
 } from './endBeat'
 import { update } from './main'
+import { shareHrefOf } from './menus'
 import { Message } from './message'
 import { AudioState, type Model, Phase, RunMode, initialModel } from './model'
 import { creditKills, seatCrew } from './party'
@@ -28,7 +29,7 @@ import { noSavedRunRecords } from './playerData'
 import { mergeRunRecords } from './playerScope'
 import { GAME_URL, shareText, shareUrl } from './share'
 import { SURFACE, press, tick, zombieOf } from './testing'
-import { OpenShare, SendShareEvent } from './update/end'
+import { ClickShareLink, SendShareEvent } from './update/end'
 import { PlaySound } from './update/sound'
 import { RUNNING_BUILD } from './version'
 import { asVeteran } from './veteran'
@@ -500,32 +501,6 @@ describe('sharing to X', () => {
     expect(url.searchParams.get('text')).toContain('wave 4')
   })
 
-  test('SHARE opens X with the run through a Command', () => {
-    story(
-      update,
-      given(onEndScreen(gameOver, doneMs('Munched'))),
-      message(Message.ClickedShareButton()),
-      Command.expectExact(
-        OpenShare({
-          url: shareUrl({ ...base, outcome: 'Munched', kills: 0 }),
-        }),
-      ),
-      Command.resolve(OpenShare, Message.CompletedOpenShare()),
-    )
-  })
-
-  test('X shares from the keyboard, even mid beat', () => {
-    story(
-      update,
-      given(onEndScreen(gameOver, RESTART_GRACE_MS)),
-      press('KeyX'),
-      Command.expectHas(
-        OpenShare({ url: shareUrl({ ...base, outcome: 'Munched', kills: 0 }) }),
-      ),
-      Command.resolve(OpenShare, Message.CompletedOpenShare()),
-    )
-  })
-
   const VISIT_ID = '0123456789abcdef'
   const counted = (ended: Model, shareStats: 'On' | 'Off'): Model =>
     modifyFields(ended, {
@@ -533,12 +508,25 @@ describe('sharing to X', () => {
       maybeVisitId: () => Option.some(VISIT_ID),
     })
 
-  test('a tap on SHARE is counted as an anonymous event while stats are shared', () => {
+  test('the SHARE link carries the run as X post intent', () => {
+    expect(shareHrefOf(onEndScreen(gameOver, doneMs('Munched')))).toBe(
+      shareUrl({ ...base, outcome: 'Munched', kills: 0 }),
+    )
+    const crewed = withWorld(
+      onEndScreen(Phase.Victory(), doneMs('Won')),
+      world => creditKills(creditKills(seatCrew(world, 2), 0, 4), 1, 7),
+    )
+    expect(shareHrefOf(crewed)).toBe(
+      shareUrl({ ...base, outcome: 'Won', wave: 10, kills: 0, crew: 2 }),
+    )
+  })
+
+  test('clicking the SHARE link still sends the share event, and opens nothing itself', () => {
     story(
       update,
       given(counted(onEndScreen(gameOver, doneMs('Munched')), 'On')),
       message(Message.ClickedShareButton()),
-      Command.expectHas(
+      Command.expectExact(
         SendShareEvent({
           event: {
             version: 1,
@@ -550,10 +538,7 @@ describe('sharing to X', () => {
           },
         }),
       ),
-      Command.resolveAll(
-        [OpenShare, Message.CompletedOpenShare()],
-        [SendShareEvent, Message.CompletedSendShareEvent()],
-      ),
+      Command.resolve(SendShareEvent, Message.CompletedSendShareEvent()),
     )
   })
 
@@ -562,12 +547,17 @@ describe('sharing to X', () => {
       update,
       given(counted(onEndScreen(gameOver, doneMs('Munched')), 'Off')),
       message(Message.ClickedShareButton()),
-      Command.expectExact(
-        OpenShare({
-          url: shareUrl({ ...base, outcome: 'Munched', kills: 0 }),
-        }),
-      ),
-      Command.resolve(OpenShare, Message.CompletedOpenShare()),
+      Command.expectNone(),
+    )
+  })
+
+  test('X clicks the SHARE link, so the click counts it once', () => {
+    story(
+      update,
+      given(counted(onEndScreen(gameOver, RESTART_GRACE_MS), 'On')),
+      press('KeyX'),
+      Command.expectExact(ClickShareLink()),
+      Command.resolve(ClickShareLink, Message.CompletedClickShareLink()),
     )
   })
 
@@ -579,8 +569,8 @@ describe('sharing to X', () => {
     story(
       update,
       given(crewed),
-      press('KeyX'),
-      Command.expectHas(
+      message(Message.ClickedShareButton()),
+      Command.expectExact(
         SendShareEvent({
           event: {
             version: 1,
@@ -592,34 +582,7 @@ describe('sharing to X', () => {
           },
         }),
       ),
-      Command.resolveAll(
-        [OpenShare, Message.CompletedOpenShare()],
-        [SendShareEvent, Message.CompletedSendShareEvent()],
-      ),
-    )
-  })
-
-  test('a crew shares as a crew', () => {
-    const crewed = withWorld(
-      onEndScreen(Phase.Victory(), doneMs('Won')),
-      world => creditKills(creditKills(seatCrew(world, 2), 0, 4), 1, 7),
-    )
-    story(
-      update,
-      given(crewed),
-      message(Message.ClickedShareButton()),
-      Command.expectExact(
-        OpenShare({
-          url: shareUrl({
-            ...base,
-            outcome: 'Won',
-            wave: 10,
-            kills: 0,
-            crew: 2,
-          }),
-        }),
-      ),
-      Command.resolve(OpenShare, Message.CompletedOpenShare()),
+      Command.resolve(SendShareEvent, Message.CompletedSendShareEvent()),
     )
   })
 })

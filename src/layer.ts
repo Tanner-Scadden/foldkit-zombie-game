@@ -38,7 +38,7 @@ import {
   ShowLoadProgress,
   WriteSave,
 } from './update/save'
-import { OpenShare, SendShareEvent } from './update/end'
+import { ClickShareLink, SendShareEvent } from './update/end'
 import { SendRunSummary } from './update/settle'
 import { FocusShopItem } from './update/shop'
 import { PlaySound, ResumeAudio, managedResources } from './update/sound'
@@ -73,7 +73,7 @@ export const CommandsLayer = Layer.mergeAll(
   FocusHomeButton.layer,
   FocusHandCard.layer,
   FocusEndMenuButton.layer,
-  OpenShare.layer,
+  ClickShareLink.layer,
   SendShareEvent.layer,
   LoadStyles.layer,
   LoadFonts.layer,

@@ -669,7 +669,7 @@ export const update = ApplicationComposition.makeUpdate({
 
   CompletedFocusEndMenuButton: model => settle(model, { model }),
 
-  CompletedOpenShare: model => settle(model, { model }),
+  CompletedClickShareLink: model => settle(model, { model }),
 
   CompletedLoadStyles: model => settle(model, finishLoading(model, 'Styles')),
 
