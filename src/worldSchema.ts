@@ -91,6 +91,12 @@ export type Orientation = typeof Orientation.Type
 export const Trigger = Schema.Literals(['Released', 'Held'])
 export type Trigger = typeof Trigger.Type
 
+// NOTE: what the click after a press on a HUD gun or knife slot does. A
+// mouse press there mid-wave is a shot at the world beneath, so its click
+// passes through; a touch, or a mouse outside a wave, acts on the slot.
+export const SlotClick = Schema.Literals(['Acts', 'PassesThrough'])
+export type SlotClick = typeof SlotClick.Type
+
 export const Input = Schema.Struct({
   pressedKeys: Schema.Array(Schema.String),
   maybeMouseInView: Schema.Option(Vector),
@@ -98,6 +104,7 @@ export const Input = Schema.Struct({
   moveStick: Stick,
   aimStick: Stick,
   holdButton: HoldButton,
+  slotClick: SlotClick,
 })
 export type Input = typeof Input.Type
 
@@ -1567,6 +1574,7 @@ export const idleInput: Input = {
   moveStick: Stick.Idle(),
   aimStick: Stick.Idle(),
   holdButton: HoldButton.Released(),
+  slotClick: 'Acts',
 }
 
 export const idleIntent: Intent = {
