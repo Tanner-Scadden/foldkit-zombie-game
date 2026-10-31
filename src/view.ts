@@ -36,6 +36,7 @@ import {
   type RunStats,
 } from './model'
 import { MeasureGameSurface } from './mount'
+import { KNIFE_NAME } from './names'
 import { isOpenBreak, isPracticeGateHeld } from './onboarding'
 import { pauseHelpView } from './pauseHelp'
 import { BOOST_KIND_ORDER, PICKUPS, isBoosted } from './powerups'
@@ -68,6 +69,7 @@ import {
   hasEndlessRounds,
   heldTier,
   heldWeapon,
+  isWieldingKnife,
   maxTier,
   maybeOtherGun,
   tierName,
@@ -178,7 +180,9 @@ const statusText = (model: Model): string => {
 
 const gunLabel = (model: Model): string => {
   const { player } = model
-  const held = tierName(heldWeapon(player.arsenal), heldTier(player))
+  const held = isWieldingKnife(player)
+    ? KNIFE_NAME
+    : tierName(heldWeapon(player.arsenal), heldTier(player))
   return Option.match(maybeOtherGun(player.arsenal), {
     onNone: () => `Holding the ${held}. Your second slot is empty.`,
     onSome: other =>

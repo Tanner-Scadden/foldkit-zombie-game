@@ -199,6 +199,9 @@ describe('inputs and presses', () => {
       SeatAction.NextTrap(),
       SeatAction.LeaveCounter(),
       SeatAction.Ready(),
+      SeatAction.Knife(),
+      SeatAction.Draw({ slot: 'First' }),
+      SeatAction.Draw({ slot: 'Second' }),
       SeatAction.Buy({ item: 'LaserSight' }),
       SeatAction.Buy({ item: 'Turret' }),
     ]
@@ -222,6 +225,9 @@ describe('inputs and presses', () => {
       [SeatAction.NextTrap(), 4],
       [SeatAction.LeaveCounter(), 5],
       [SeatAction.Ready(), 6],
+      [SeatAction.Knife(), 7],
+      [SeatAction.Draw({ slot: 'First' }), 8],
+      [SeatAction.Draw({ slot: 'Second' }), 9],
       [SeatAction.Buy({ item: 'Shotgun' }), 16],
       [SeatAction.Buy({ item: 'ShotgunShells' }), 17],
       [SeatAction.Buy({ item: 'ShotgunUpgrade' }), 18],
@@ -296,12 +302,10 @@ describe('inputs and presses', () => {
       maybeAim: Option.some({ x: 0, y: 1 }),
       trigger: 'Held' as const,
       interact: 'Released' as const,
-      stab: 'Released' as const,
     }
     const back = intentOfInput(inputOfIntent(intent, 0))
     expect(back.trigger).toBe('Held')
     expect(back.interact).toBe('Released')
-    expect(back.stab).toBe('Released')
     expect(back.move.x).toBeCloseTo(0.6, 2)
     expect(back.move.y).toBeCloseTo(-0.8, 2)
     expect(back.maybeAim).toEqual(Option.some({ x: 0, y: 1 }))

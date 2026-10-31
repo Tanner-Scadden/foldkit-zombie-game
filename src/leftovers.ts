@@ -17,6 +17,7 @@ import { isKitchenOpen } from './kitchen'
 import { leadSeatOf, maybePlayerAt } from './party'
 import { nextRandom } from './prng'
 import type { Offer } from './purchase'
+import { isKitchenTourOn } from './tutorialRules'
 import { cancelReload, freshGun, isCarrying, takeGun } from './weapons'
 import type { World } from './world'
 import {
@@ -29,7 +30,6 @@ import {
   Purchasable,
   type WeaponKind,
 } from './worldSchema'
-import { isKitchenTourOn } from './tutorialRules'
 
 // Mystery Leftovers (GAME_DESIGN.md): a grimy fridge against the kitchen's
 // back wall. Once the kitchen is open it is for sale any time the round
@@ -125,8 +125,10 @@ export const prizeWeights = (
 export const weaponsOnly = (
   weights: ReadonlyArray<readonly [FridgePrize, number]>,
 ): ReadonlyArray<readonly [FridgePrize, number]> =>
-  Array.map(weights, ([prize, weight]) =>
-    [prize, isFridgePrizeWeapon(prize) ? weight : 0] as const,
+  Array.map(
+    weights,
+    ([prize, weight]) =>
+      [prize, isFridgePrizeWeapon(prize) ? weight : 0] as const,
   )
 
 // NOTE: a roll from 0 to 1 against the weights, in their order.
@@ -239,6 +241,7 @@ export const fridgeOffers = (world: World): ReadonlyArray<Offer> =>
 const giveWeapon = (player: Player, kind: WeaponKind): Player =>
   modifyFields(dropCharge(cancelReload(player)), {
     arsenal: arsenal => takeGun(arsenal, freshGun(kind)),
+    wield: () => 'Gun',
     fireCooldownMs: () => 0,
   })
 

@@ -7,8 +7,8 @@ import { fighting } from './model.fixture'
 import { ROOT, measureSurface } from './testing'
 import { freshGun } from './weapons'
 
-// NOTE: on touch, with every gun dry, the knife button glows: it is the way
-// out (a keyboard sees the F key over the player instead).
+// NOTE: with every gun dry, the knife's slot pulses: it is the way out, and
+// the next pull draws it by itself.
 
 const dry = (gun: CarriedGun): CarriedGun => ({ ...gun, rounds: 0, loaded: 0 })
 
@@ -21,24 +21,24 @@ const onTouchWith = (first: CarriedGun, second: CarriedGun): Model =>
       }),
   })
 
-const knifeButton = selector('.knife-button')
+const knifeSlot = selector('.gun-slot-button[data-slot="Knife"]')
 
 describe('the knife when the guns run dry', () => {
-  test('the knife button glows once every gun is dry', () => {
+  test('the knife slot pulses once every gun is dry', () => {
     scene(
       ROOT,
       given(onTouchWith(dry(freshGun('Shotgun')), dry(freshGun('Smg')))),
       measureSurface,
-      expect(knifeButton).toHaveAttr('data-out', 'true'),
+      expect(knifeSlot).toHaveAttr('data-out', 'true'),
     )
   })
 
-  test('a gun with rounds left keeps the knife button plain', () => {
+  test('a gun with rounds left keeps the knife slot plain', () => {
     scene(
       ROOT,
       given(onTouchWith(freshGun('Shotgun'), dry(freshGun('Smg')))),
       measureSurface,
-      expect(knifeButton).toHaveAttr('data-out', 'false'),
+      expect(knifeSlot).toHaveAttr('data-out', 'false'),
     )
   })
 })

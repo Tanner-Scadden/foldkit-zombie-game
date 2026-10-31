@@ -2,16 +2,18 @@ import { Option } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { isInArc, maybeNearest, payStriker, strikeInMelee } from './melee'
+import { isWieldingKnife } from './weapons'
 import type { World } from './world'
 import { GameEvent, type Player, ShopState } from './worldSchema'
 import { isGrounded } from './zombies'
 
 // The knife (GAME_DESIGN.md, "The knife and two gun slots"): every player
-// always carries one on its own key, F or the touch knife button. Held, it
-// stabs on repeat: a quick, weak jab at the one zombie nearest in a short
-// arc in front, with a small shove. It never runs out and never upgrades;
-// the Clang Pan is the only melee upgrade. It strikes through
-// src/melee.ts, as the Pan does, and works mid-reload and with any gun.
+// always carries one in a third slot, right of the guns. F or a tap on the
+// slot draws it (src/weapons.ts, drawKnife), and then the trigger stabs on
+// repeat: a quick, weak jab at the one zombie nearest in a short arc in
+// front, with a small shove. It never runs out and never upgrades; the
+// Clang Pan is the only melee upgrade. It strikes through src/melee.ts, as
+// the Pan does.
 
 type KnifeRules = Readonly<{
   intervalMs: number
@@ -95,10 +97,12 @@ const stab = (world: World): World => {
 }
 
 // NOTE: one tick of the knife for the seat in the World's per-player
-// fields. It rests while that player browses the shop.
+// fields: in hand, the held trigger stabs. It rests while that player
+// browses the shop.
 export const stabWithKnife = (world: World, deltaMs: number): World => {
   const cooled = coolKnife(world, deltaMs)
-  return cooled.intent.stab === 'Held' &&
+  return isWieldingKnife(cooled.player) &&
+    cooled.intent.trigger === 'Held' &&
     cooled.player.knifeCooldownMs <= 0 &&
     !ShopState.isAnyOf(['Browsing'])(cooled.shop)
     ? stab(cooled)

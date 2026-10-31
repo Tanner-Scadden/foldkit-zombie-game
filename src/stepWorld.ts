@@ -25,13 +25,16 @@ import { isRoundActive, startWaveEarly } from './waves'
 import {
   beginReload,
   canReload,
-  cancelReload,
-  heldWeapon,
-  swapWeapon,
+  drawKnife,
+  drawSlot,
+  heldSlotOf,
+  isWieldingKnife,
+  swapInHand,
 } from './weapons'
 import type { World } from './world'
 import {
   type GameEvent,
+  GunSlot,
   type Intent,
   type PlayerSlot,
   SOLO_SLOT,
@@ -103,13 +106,16 @@ export const stepWorld = (
 // ACTIONS
 
 // NOTE: a player's presses between ticks, as inputs the room applies to
-// their own seat (MULTIPLAYER.md, Phase 1): swapping and reloading, traps,
+// their own seat (MULTIPLAYER.md, Phase 1): swapping, drawing the knife or
+// a gun by its slot, and reloading, traps,
 // the shop's buys and its leaving (decided row 8), and READY (decided 7).
 // Single player's client runs the same rules through its own Messages. A
 // purchasable in the world is no press: it is bought by holding the
 // intent's interact (src/purchase.ts).
 export const SeatAction = defineTaggedUnion({
   Swap: {},
+  Knife: {},
+  Draw: { slot: GunSlot },
   Reload: {},
   PlaceTrap: {},
   NextTrap: {},
@@ -124,22 +130,27 @@ const isFighting = (world: World): boolean =>
   isStanding(leadSeatOf(world)) &&
   !ShopState.isAnyOf(['Browsing'])(world.shop)
 
-const swap = (world: World): World => {
-  if (!isFighting(world)) {
-    return world
-  }
-  const swapped = modifyFields(world, {
-    player: player => modifyFields(player, { arsenal: swapWeapon }),
-  })
-  return heldWeapon(swapped.player.arsenal) === heldWeapon(world.player.arsenal)
-    ? swapped
-    : modifyFields(swapped, { player: cancelReload })
-}
+const inHand =
+  (change: (player: World['player']) => World['player']) =>
+  (world: World): World =>
+    isFighting(world) ? modifyFields(world, { player: change }) : world
 
-const reload = (world: World): World =>
-  isFighting(world) && canReload(world.player)
-    ? modifyFields(world, { player: beginReload })
+const swap = inHand(swapInHand)
+
+const knife = inHand(drawKnife)
+
+const draw = (world: World, slot: GunSlot): World =>
+  inHand(player => drawSlot(player, slot))(world)
+
+// NOTE: with the knife out, a reload puts the last gun back in hand first.
+const reload = (world: World): World => {
+  const drawn = isWieldingKnife(world.player)
+    ? draw(world, heldSlotOf(world.player.arsenal))
     : world
+  return isFighting(drawn) && canReload(drawn.player)
+    ? modifyFields(drawn, { player: beginReload })
+    : drawn
+}
 
 const placeTrap = (world: World): World =>
   isFighting(world)
@@ -167,6 +178,8 @@ const ready = (world: World): World =>
 const applyToSeat = (world: World, action: SeatAction): World =>
   SeatAction.match(action, {
     Swap: () => swap(world),
+    Knife: () => knife(world),
+    Draw: ({ slot }) => draw(world, slot),
     Reload: () => reload(world),
     PlaceTrap: () => placeTrap(world),
     NextTrap: () => (isFighting(world) ? cycleTrap(world) : world),

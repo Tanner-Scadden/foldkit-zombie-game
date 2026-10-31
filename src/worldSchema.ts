@@ -98,19 +98,17 @@ export const Input = Schema.Struct({
   moveStick: Stick,
   aimStick: Stick,
   holdButton: HoldButton,
-  knifeButton: HoldButton,
 })
 export type Input = typeof Input.Type
 
 // NOTE: `interact` is the interact key or the touch hold button, held to
-// buy what the player stands at (src/purchase.ts). `stab` is the knife key
-// or the touch knife button, held to stab on repeat (src/knife.ts).
+// buy what the player stands at (src/purchase.ts). With the knife in hand
+// the trigger stabs instead of shooting (src/knife.ts).
 export const Intent = Schema.Struct({
   move: Heading,
   maybeAim: Schema.Option(Heading),
   trigger: Trigger,
   interact: Trigger,
-  stab: Trigger,
 })
 export type Intent = typeof Intent.Type
 
@@ -153,6 +151,12 @@ export const Arsenal = defineTaggedUnion({
 })
 export type Arsenal = typeof Arsenal.Type
 
+// NOTE: what the player has in hand (GAME_DESIGN.md, "The knife and two gun
+// slots"): the arsenal's held gun, or the knife, the third slot. With the
+// knife out the arsenal still names the last gun held, which Q goes back to.
+export const Wield = Schema.Literals(['Gun', 'Knife'])
+export type Wield = typeof Wield.Type
+
 export const Reload = defineTaggedUnion({
   Ready: {},
   Reloading: { remainingMs: MillisNumber, durationMs: MillisNumber },
@@ -183,6 +187,7 @@ export const Player = Schema.Struct({
   reload: Reload,
   charge: Charge,
   knifeCooldownMs: MillisNumber,
+  wield: Wield,
 })
 export type Player = typeof Player.Type
 
@@ -1540,6 +1545,7 @@ export const initialPlayer: Player = {
   reload: Reload.Ready(),
   charge: Charge.Idle(),
   knifeCooldownMs: 0,
+  wield: 'Gun',
 }
 
 export const emptyWallet: Wallet = { balance: 0, earned: 0, shown: 0 }
@@ -1561,7 +1567,6 @@ export const idleInput: Input = {
   moveStick: Stick.Idle(),
   aimStick: Stick.Idle(),
   holdButton: HoldButton.Released(),
-  knifeButton: HoldButton.Released(),
 }
 
 export const idleIntent: Intent = {
@@ -1569,7 +1574,6 @@ export const idleIntent: Intent = {
   maybeAim: Option.none(),
   trigger: 'Released',
   interact: 'Released',
-  stab: 'Released',
 }
 
 export const emptyTrapStock: TrapCounts = { Barricade: 0, Turret: 0 }

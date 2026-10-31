@@ -136,6 +136,7 @@ describe('standing still to buy', () => {
       given(atBoards(85)),
       ...ticks(STAND_TICKS - 10, FRAME_MS),
       press('KeyF'),
+      holdFire,
       ...ticks(1, FRAME_MS),
       model(current => {
         expect(current.purchase).toEqual(Purchase.Idle())

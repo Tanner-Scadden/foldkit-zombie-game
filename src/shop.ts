@@ -1019,6 +1019,7 @@ const grant = (model: World, good: ShopGood): World =>
       equip(model, player =>
         modifyFields(cancelReload(player), {
           arsenal: arsenal => takeGun(arsenal, freshGun(weapon)),
+          wield: () => 'Gun',
         }),
       ),
     Ammo: ({ weapon, rounds }) =>

@@ -45,8 +45,12 @@ import {
 // standing buys again; a version 8 client cannot read it.
 // Version 10: the ammo window mid-wave (src/ammoCounter.ts), a seat's
 // purchase can target the stall's Ammo.
-export const PROTOCOL_VERSION = 10
-export const MIN_PROTOCOL_VERSION = 10
+// Version 11: the knife is a third slot. Each player holds a gun or the
+// knife (`wield`), the knife is drawn by a press (a new action code, as is
+// drawing a gun by its slot) and stabs on the fire button, and button bit
+// 4 no longer holds it.
+export const PROTOCOL_VERSION = 11
+export const MIN_PROTOCOL_VERSION = 11
 
 // NOTE: a round trip as the wire carries it, in whole ms.
 export const MAX_RTT_MS = 60_000

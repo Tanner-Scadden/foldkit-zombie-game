@@ -5,7 +5,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 ## October 31, 2026: Rattles has notes
 
 - 🧭 New here? Your first breaks walk you through it: a free Plank Pile from Rattles, then a free kitchen and a free fridge roll, with the clock on hold. Confetti included.
-- 🔫 Your gun now yells before it runs dry: the ammo blinks amber, then red, the last shots tick, and Rattles hollers from his stall, where his AMMO window now sells you more mid-wave. Out of everything? The knife lights up.
+- 🔫 Your gun now yells before it runs dry: the ammo blinks amber, then red, the last shots tick, and Rattles hollers from his stall, where his AMMO window now sells you more mid-wave. Out of everything? Out comes the knife.
 - 💀 Getting munched is a moment now: you topple, the zombies pile on, MUNCHED! slams down, and your run counts up. Go further or splat more than ever for a NEW BEST!
 - 🏆 Winning rains confetti (and a little gore) and crowns the MVP in co-op. Hit SHARE to brag on X.
 
@@ -14,7 +14,7 @@ One entry per day, newest first. Only things a player would notice, a handful of
 - 🧟‍♂️🧟‍♀️ CO-OP is here: up to 4 of you in one manor. Share a room code, or hit QUICK PLAY and we'll find you a crew. Revive your buddies before they bleed out!
 - 🎁 Dress up however you like (mohawks, beards, dresses, a rainbow shirt, on any body), unwrap new versions as a rattling gift, and put the game on your Home Screen from the phone tile.
 - 🥡 Mystery Leftovers: hold Enter (or the hand button) at the grimy kitchen fridge to pull a Pressure Cooker that lobs exploding lids, a Clang Pan for home runs, or the rare Brain Freeze that turns zombies into popsicles. Take it or leave it! Or a moldy sandwich. Every pull spins like a slot machine and lands with a BOOM, BONK, or BRRR. Rattles will soup them up.
-- 🔪 You always pack a knife now: press F (or the knife button) to stab whatever gets too close. Trade your pistol for a second real gun, and Rattles hands it back for free whenever you miss it.
+- 🔪 You always pack a knife now, in its own slot right of your guns: tap it (or press F), then fire to stab whatever gets too close. Trade your pistol for a second real gun, and Rattles hands it back for free whenever you miss it.
 - 🧹 Playtest fixes: just stand still at a price tag to buy it (no button needed), one big PLAY arrow, the SMG is the Chatterbox, kitchen boards open with a hold, crisper sprites, smoother big hordes on slow phones, truer aim on upright phones, and Hard and Nightmare ease off a hair.
 
 ## October 29, 2026: How tough are you?

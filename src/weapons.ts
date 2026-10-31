@@ -571,8 +571,9 @@ export const swapWeapon = (arsenal: Arsenal): Arsenal =>
   })
 
 // NOTE: a new gun goes in the player's hands. It fills an empty second
-// slot; with both slots full it replaces the gun the player holds, upgrades
-// and all (GAME_DESIGN.md, "The knife and two gun slots").
+// slot; with both slots full it replaces the gun the player holds (with the
+// knife out, the last gun held), upgrades and all (GAME_DESIGN.md, "The
+// knife and two gun slots").
 export const takeGun = (arsenal: Arsenal, gun: CarriedGun): Arsenal =>
   Arsenal.match(arsenal, {
     OneGun: ({ first }) => Arsenal.HoldingSecond({ first, second: gun }),
@@ -671,13 +672,62 @@ export const spendRound = (player: Player): Player =>
       ),
   })
 
+// THE KNIFE IN HAND
+
+// NOTE: the knife is the third slot, right of the two guns (GAME_DESIGN.md,
+// "The knife and two gun slots"). The arsenal keeps naming the last gun
+// held, and a reload of that gun carries on while the knife is out, so a
+// player can stab mid-reload and go back to a full magazine. Only changing
+// guns stops a reload.
+export const isWieldingKnife = (player: Player): boolean =>
+  player.wield === 'Knife'
+
+export type InHand = WeaponKind | 'Knife'
+
+// NOTE: what the player holds: the knife, or the held gun's kind.
+export const inHandOf = (player: Player): InHand =>
+  isWieldingKnife(player) ? 'Knife' : heldWeapon(player.arsenal)
+
+export const drawKnife = (player: Player): Player =>
+  isWieldingKnife(player)
+    ? player
+    : modifyFields(player, { wield: () => 'Knife' })
+
+// NOTE: the gun in `slot` in hand. A slot with no gun leaves the arsenal
+// as it is, and a gun that changes stops a reload.
+export const drawSlot = (player: Player, slot: GunSlot): Player => {
+  const arsenal =
+    heldSlotOf(player.arsenal) === slot
+      ? player.arsenal
+      : swapWeapon(player.arsenal)
+  const drawn = modifyFields(player, {
+    arsenal: () => arsenal,
+    wield: () => 'Gun',
+  })
+  return heldGun(drawn.arsenal) === heldGun(player.arsenal)
+    ? drawn
+    : cancelReload(drawn)
+}
+
+// NOTE: Q. With the knife out it goes back to the last gun held; with a
+// gun in hand it switches to the other gun.
+export const swapInHand = (player: Player): Player =>
+  isWieldingKnife(player)
+    ? modifyFields(player, { wield: () => 'Gun' })
+    : drawSlot(player, heldSlotOf(swapWeapon(player.arsenal)))
+
 // NOTE: a gun that runs dry with nothing left to load hands over to the
-// other gun if that one can still fire; otherwise the player keeps it, and
-// the knife and Rattles' ammo are what is left.
-export const handOverWhenDry = (arsenal: Arsenal): Arsenal =>
-  Option.exists(maybeOtherGun(arsenal), hasRoundsLeft)
-    ? swapWeapon(arsenal)
-    : arsenal
+// other gun if that one can still fire. With every gun dry the knife comes
+// out by itself, and Rattles' ammo is what brings a gun back.
+export const handOverWhenDry = (player: Player): Player => {
+  if (Option.exists(maybeOtherGun(player.arsenal), hasRoundsLeft)) {
+    return modifyFields(player, { arsenal: swapWeapon })
+  } else if (Array.every(gunsOf(player.arsenal), gun => !hasRoundsLeft(gun))) {
+    return drawKnife(player)
+  } else {
+    return player
+  }
+}
 
 // NOTE: the Pop Pistol as a run starts with it, in the first slot.
 export const STARTING_PISTOL: CarriedGun = freshGun(SIDEARM)

@@ -233,11 +233,12 @@ const withHeld = (
 const runDry = (world: World): World =>
   withEvents(
     withPlayer(world, player =>
-      modifyFields(player, {
-        fireCooldownMs: () => DRY_FIRE_DELAY_MS,
-        arsenal: handOverWhenDry,
-        charge: () => Charge.Idle(),
-      }),
+      handOverWhenDry(
+        modifyFields(player, {
+          fireCooldownMs: () => DRY_FIRE_DELAY_MS,
+          charge: () => Charge.Idle(),
+        }),
+      ),
     ),
     [GameEvent.RanDry({ x: world.player.x, y: world.player.y })],
   )

@@ -102,11 +102,11 @@ export const CONTROL_CARDS: Array.NonEmptyReadonlyArray<ControlCard> = [
     id: 'Knife',
     action: KNIFE_NAME,
     keyboard: input(
-      'Hold F to stab. It works with no ammo at all.',
+      'Press F to draw it, then fire to stab. No ammo needed.',
       HELP_DEMO_SPRITES.Knife,
     ),
     touch: input(
-      'Hold the stab button by your guns. It works with no ammo.',
+      'Tap its slot by your guns, then fire to stab. No ammo needed.',
       HELP_DEMO_SPRITES.Knife,
     ),
   },

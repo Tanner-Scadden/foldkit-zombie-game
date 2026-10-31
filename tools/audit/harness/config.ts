@@ -162,11 +162,14 @@ export const HarnessConfig = Schema.Struct({
   py: MaybeNum,
   gun: Choice(['smg', 'shotgun', 'cooker', 'pan', 'freeze']),
   // NOTE: `first` puts a gun in the first slot in place of the pistol, as
-  // a player who traded it away carries; `stab` holds the knife (F, or on
-  // touch a finger on the knife button) from the first frame.
+  // a player who traded it away carries; `knife` puts the knife in hand
+  // (the third slot), and `stab` does and holds the trigger from the first
+  // frame, so the knife stabs.
   first: Choice(['smg', 'shotgun', 'cooker', 'pan', 'freeze']),
+  knife: Flag,
   stab: Flag,
-  // NOTE: `dry` empties every gun the player carries, for the knife prompt.
+  // NOTE: `dry` empties every gun the player carries, so the knife's slot
+  // pulses.
   dry: Flag,
   rounds: MaybeNum,
   loaded: Num(30),

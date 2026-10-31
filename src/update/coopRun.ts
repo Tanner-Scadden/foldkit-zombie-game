@@ -5,6 +5,7 @@ import { modifyFields } from 'foldkit/struct'
 import { isOnlineRun } from '../coopPlay'
 import { makeStep } from '../definition'
 import {
+  isKnifeKey,
   isPauseKey,
   isReloadKey,
   isStartWaveKey,
@@ -24,14 +25,14 @@ import { isInteractTaken } from '../purchase'
 import { isAtCounter, verdictFor } from '../shop'
 import { SeatAction } from '../stepWorld'
 import { isRoundActive } from '../waves'
-import { heldSlotOf } from '../weapons'
+import { heldSlotOf, isWieldingKnife } from '../weapons'
 import { pressInRoom } from './coop'
 import { playSounds, toggleAudioFromKey, uiCue, unlockAudio } from './sound'
 import { type UpdateStep, modelStep, unchanged, withInput } from './step'
 
 // The Messages an online co-op run handles its own way (MULTIPLAYER.md,
 // Phase 2). The room runs the World, so nothing here steps it: a press
-// (swap, reload, a trap, READY, a buy, leaving the counter) goes
+// (swap, the knife, reload, a trap, READY, a buy, leaving the counter) goes
 // to the room as a seat action, the frame comes from the room, and there
 // is no pause (decided 7). Everything else (moving, aiming, the dialogs,
 // the menus, audio, the save) runs as it does in single player. Each
@@ -63,6 +64,8 @@ export const buyInRun = (item: ShopItemId) =>
 const keyAction = (model: Model, code: string): Option.Option<SeatAction> => {
   if (isSwapKey(code)) {
     return Option.some(SeatAction.Swap())
+  } else if (isKnifeKey(code)) {
+    return Option.some(SeatAction.Knife())
   } else if (isReloadKey(code)) {
     return Option.some(SeatAction.Reload())
   } else if (isStartWaveKey(code) && !isInteractTaken(model)) {
@@ -98,10 +101,12 @@ export const keyInRun = (code: string) =>
         }),
   )
 
+// NOTE: a tap on the held gun reloads it; any other tap draws that gun,
+// including from the knife.
 const gunSlotPress = (model: Model, slot: GunSlot): SeatAction =>
-  heldSlotOf(model.player.arsenal) === slot
+  !isWieldingKnife(model.player) && heldSlotOf(model.player.arsenal) === slot
     ? SeatAction.Reload()
-    : SeatAction.Swap()
+    : SeatAction.Draw({ slot })
 
 const blurInRun = modelStep(model => withInput(model, releaseAll))
 
@@ -124,6 +129,7 @@ type RunMessage =
   | typeof Message.ClickedStartWaveButton.Type
   | typeof Message.ClickedSwapButton.Type
   | typeof Message.ClickedGunSlot.Type
+  | typeof Message.ClickedKnifeSlot.Type
   | typeof Message.ClickedReloadButton.Type
   | typeof Message.ClickedPlaceTrapButton.Type
   | typeof Message.ClickedNextTrapButton.Type
@@ -143,6 +149,7 @@ const inRun = (model: Model, message: RunMessage) =>
     ClickedStartWaveButton: () => pressInRun(SeatAction.Ready()),
     ClickedSwapButton: () => pressInRun(SeatAction.Swap()),
     ClickedGunSlot: ({ slot }) => pressInRun(gunSlotPress(model, slot)),
+    ClickedKnifeSlot: () => pressInRun(SeatAction.Knife()),
     ClickedReloadButton: () => pressInRun(SeatAction.Reload()),
     ClickedPlaceTrapButton: () => pressInRun(SeatAction.PlaceTrap()),
     ClickedNextTrapButton: () => pressInRun(SeatAction.NextTrap()),

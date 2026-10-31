@@ -236,8 +236,9 @@ describe("the boss's charge on the wire", () => {
 // NOTE: the bytes of a scripted room of three in wave 4, its snapshots,
 // diffs, and events, then a boss bracing and rushing. Protocol 8 changed
 // the boss's bytes (its brace target and rush length went from unit
-// values to positions). The wire must not change without a protocol bump.
-const GOLDEN_DIGEST = '63700:473963e5e94dc6f7'
+// values to positions); protocol 11 added each player's `wield`, the knife
+// or a gun in hand. The wire must not change without a protocol bump.
+const GOLDEN_DIGEST = '63700:d4f4046dedbaed07'
 const WIRE_TICKS = 360
 
 const bytesOf = (write: (writer: Writer) => void): Uint8Array => {

@@ -127,6 +127,7 @@ import {
   heldLoaded,
   heldWeapon,
   isReloading,
+  isWieldingKnife,
   spendRound,
 } from './weapons'
 import type { World } from './world'
@@ -386,10 +387,9 @@ const shoot = (
 const runDry = (model: World): World =>
   modifyFields(model, {
     player: player =>
-      modifyFields(player, {
-        fireCooldownMs: () => DRY_FIRE_DELAY_MS,
-        arsenal: handOverWhenDry,
-      }),
+      handOverWhenDry(
+        modifyFields(player, { fireCooldownMs: () => DRY_FIRE_DELAY_MS }),
+      ),
     frameEvents: Array.append(
       GameEvent.RanDry({ x: model.player.x, y: model.player.y }),
     ),
@@ -452,9 +452,13 @@ const withoutCharge = (model: World): World =>
     : modifyFields(model, { player: dropCharge })
 
 // NOTE: a fridge weapon fires no bullets, so its trigger is its own
-// (src/fridgeWeapons.ts). The stall and a reload let go of a charge.
+// (src/fridgeWeapons.ts). The stall and a reload let go of a charge. With
+// the knife in hand the trigger stabs (src/knife.ts) and the gun rests.
 const fire = (stocked: World, deltaMs: number): World => {
   const topped = topUp(stocked)
+  if (isWieldingKnife(topped.player)) {
+    return coolTrigger(withoutCharge(topped), deltaMs, false)
+  }
   const maybeFridgeWeapon = maybeHeldFridgeWeapon(topped.player)
   const model = Option.isSome(maybeFridgeWeapon)
     ? topped

@@ -123,19 +123,23 @@ describe('the gun cluster', () => {
   const cluster = selector('.gun-cluster')
   const smgSlot = role('button', { name: `Reload the ${SMG_NAME}` })
   const pistolSlot = role('button', { name: 'Switch to the Pop Pistol' })
+  const knifeSlot = selector('.gun-slot-button[data-slot="Knife"]')
 
   test('sits at the bottom middle with the held gun marked', () => {
     scene(
       ROOT,
       given(fightingWith(30)),
       measureSurface,
-      expect(cluster).toHaveStyle('left', '35.9375%'),
-      expect(cluster).toHaveStyle('width', '25.9375%'),
+      expect(cluster).toHaveStyle('left', '26.875%'),
+      expect(cluster).toHaveStyle('width', '35%'),
       expect(within(cluster, role('group', { name: 'Your guns' }))).toExist(),
       expect(pistolSlot).toHaveAttr('data-held', 'false'),
       expect(pistolSlot).toHaveStyle('left', '0%'),
       expect(smgSlot).toHaveAttr('data-held', 'true'),
-      expect(smgSlot).toHaveStyle('left', '51.80722891566265%'),
+      expect(smgSlot).toHaveStyle('left', '38.392857142857146%'),
+      expect(knifeSlot).toHaveAttr('data-held', 'false'),
+      expect(knifeSlot).toHaveStyle('left', '76.78571428571429%'),
+      expect(knifeSlot).toHaveStyle('width', '23.214285714285715%'),
       expect(selector('.key-badge')).toBeAbsent(),
     )
   })
@@ -194,6 +198,36 @@ describe('the gun cluster', () => {
       ),
       click(role('button', { name: `Switch to the ${SMG_NAME}` })),
       expect(smgSlot).toHaveAttr('data-held', 'true'),
+    )
+  })
+
+  test('the knife slot, right of the guns, draws the knife and shows F', () => {
+    const onKeyboard = modifyFields(fightingWith(20), {
+      lastDevice: () => 'KeyboardMouse',
+    })
+    scene(
+      ROOT,
+      given(onKeyboard),
+      measureSurface,
+      expect(within(knifeSlot, selector('.key-badge'))).toHaveText('F'),
+      click(role('button', { name: 'Switch to the Knife' })),
+      expect(knifeSlot).toHaveAttr('data-held', 'true'),
+      expect(knifeSlot).toHaveAttr('aria-disabled', 'true'),
+      expect(within(knifeSlot, selector('.key-badge'))).toBeAbsent(),
+      expect(role('button', { name: `Switch to the ${SMG_NAME}` })).toHaveAttr(
+        'data-held',
+        'false',
+      ),
+      expect(
+        within(
+          role('button', { name: `Switch to the ${SMG_NAME}` }),
+          selector('.key-badge'),
+        ),
+      ).toHaveText('Q'),
+      expect(within(pistolSlot, selector('.key-badge'))).toBeAbsent(),
+      click(role('button', { name: `Switch to the ${SMG_NAME}` })),
+      expect(smgSlot).toHaveAttr('data-held', 'true'),
+      expect(knifeSlot).toHaveAttr('data-held', 'false'),
     )
   })
 })

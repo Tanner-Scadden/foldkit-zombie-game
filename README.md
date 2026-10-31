@@ -29,7 +29,7 @@ The dead have moved into a creaky old manor, and they're hungry. Hold the parlou
 | ------------------------------------ | ------------------------- | ----------------------------------- |
 | Move                                 | WASD                      | Left thumb                          |
 | Aim and shoot                        | Mouse, hold click         | Right thumb                         |
-| Stab                                 | F                         | Knife button                        |
+| Stab                                 | F, then fire              | Tap the knife, then fire            |
 | Reload / swap guns                   | R / Q                     | Tap a gun                           |
 | Place a trap                         | T (G picks which)         | Trap button                         |
 | Buy a door or a fridge pull          | Stand still or hold Enter | Stand still or hold the hand button |

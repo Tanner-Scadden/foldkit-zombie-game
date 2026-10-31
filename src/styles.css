@@ -388,54 +388,6 @@ body {
   border-color: rgba(255, 224, 102, 0.7);
 }
 
-/* THE KNIFE: a touch button held to stab, just left of the gun slots. */
-
-.gun-cluster-knife {
-  position: absolute;
-  right: calc(100% + 4px);
-  bottom: 0;
-  display: flex;
-  pointer-events: none;
-}
-
-.cluster-button.knife-button {
-  border-color: rgba(244, 241, 222, 0.75);
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
-
-/* Out of every gun: the knife is the way out, so its button glows. */
-.cluster-button.knife-button[data-out='true'] {
-  border-color: #ff4a4f;
-  animation: knife-out 0.5s steps(2, jump-none) infinite alternate;
-}
-
-@keyframes knife-out {
-  from {
-    background: rgba(255, 74, 79, 0.15);
-    box-shadow: 0 0 0 0 rgba(255, 74, 79, 0);
-  }
-  to {
-    background: rgba(255, 74, 79, 0.45);
-    box-shadow: 0 0 0 4px rgba(255, 74, 79, 0.55);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cluster-button.knife-button[data-out='true'] {
-    animation: none;
-    background: rgba(255, 74, 79, 0.4);
-  }
-}
-
-.cluster-button.knife-button[data-held='true'] {
-  border-color: #ffe066;
-  background: rgba(255, 224, 102, 0.25);
-  opacity: 1;
-}
-
 .gun-cluster-top {
   position: absolute;
   bottom: calc(100% + 6px);
