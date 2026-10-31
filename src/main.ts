@@ -21,6 +21,7 @@ import {
 } from './commands'
 import { ApplicationComposition } from './composition'
 import { makeStep } from './definition'
+import { endQuest } from './firstBreakQuest'
 import { refreshIntent } from './frame'
 import { runModeOf, switchMode } from './home'
 import {
@@ -644,6 +645,8 @@ export const update = ApplicationComposition.makeUpdate({
 
   ClickedHelpCard: (model, { card }) =>
     settle(model, unlockAudio(showHelpLine(model, card))),
+
+  ClickedSkipQuestButton: model => settle(model, unlockAudio(endQuest(model))),
 
   ClickedSettingsButton: model =>
     Update.combineSteps(model, [

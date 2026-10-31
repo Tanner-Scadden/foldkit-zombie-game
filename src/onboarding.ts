@@ -9,6 +9,7 @@ import { TURRET_WEAPON, maybeSelectedKind } from './traps'
 import {
   BreakClock,
   DebutCard,
+  FirstBreakQuest,
   GameEvent,
   type HintBand,
   type InputDevice,
@@ -404,11 +405,16 @@ const HINT_RULES: ReadonlyArray<HintRule> = [
 
 // NOTE: START WAVE pulses once the player has moved and fired, until they
 // first start a wave themselves.
-export const isStartWaveBeckoning = ({ phase, lessons }: Model): boolean =>
+export const isStartWaveBeckoning = ({
+  phase,
+  lessons,
+  firstBreakQuest,
+}: Model): boolean =>
   Phase.isAnyOf(['Preparation'])(phase) &&
-  isPending(lessons.startWave) &&
-  isLearned(lessons.move) &&
-  isLearned(lessons.fire)
+  ((isPending(lessons.startWave) &&
+    isLearned(lessons.move) &&
+    isLearned(lessons.fire)) ||
+    FirstBreakQuest.isAnyOf(['Done'])(firstBreakQuest))
 
 // NOTE: the first timed break's countdown blinks, so the player sees the
 // clock is running.

@@ -1,4 +1,4 @@
-import { Array } from 'effect'
+import { Array, Option } from 'effect'
 import type { Canvas } from 'foldkit'
 
 import { type Level, isInsideRoomAt, levelOf } from './arena'
@@ -15,6 +15,7 @@ import {
   groundParticleShapes,
   popupShape,
 } from './effectsView'
+import { maybeQuestDoor } from './firstBreakQuest'
 import {
   fridgeDrawables,
   fridgeOverheadShapes,
@@ -40,6 +41,7 @@ import {
 import {
   auraShapes,
   burpRingShapes,
+  doorArrowShapes,
   goodieArrowShapes,
   pickupFootY,
   pickupShapes,
@@ -229,6 +231,10 @@ const overheadShapes = (
   ...(isGoodieBeckoning(model)
     ? Array.flatMap(model.pickups, goodieArrowShapes)
     : []),
+  ...Option.match(maybeQuestDoor(model), {
+    onNone: () => [],
+    onSome: door => doorArrowShapes(door, model.elapsedMs),
+  }),
   ...Array.map(model.popups, popupShape(camera)),
   ...reloadBarShapes(model.player),
   ...fridgeOverheadShapes(model),

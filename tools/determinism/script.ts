@@ -19,7 +19,7 @@ import { modifyFields } from 'foldkit/struct'
 import { PLAYER_MAX_HP } from '../../src/constants'
 import { update } from '../../src/main'
 import { Message } from '../../src/message'
-import { type Model, Phase, initialModel } from '../../src/model'
+import { Lesson, type Model, Phase, initialModel } from '../../src/model'
 import { asVeteran } from '../../src/veteran'
 import type { ScriptMode, StepPattern } from './request'
 
@@ -145,10 +145,28 @@ export const driveFrame = (model: Model, frame: number): Model =>
     () => model,
   )
 
+// NOTE: every lesson learned, written out here rather than imported, since
+// this harness is copied over an older commit to play it the same way: the
+// script plays a save past the tutorial, with no guided first break.
+const pastTutorial = (model: Model): Model =>
+  modifyFields(model, {
+    lessons: lessons =>
+      modifyFields(lessons, {
+        move: () => Lesson.Learned({ atMs: 0 }),
+        fire: () => Lesson.Learned({ atMs: 0 }),
+        startWave: () => Lesson.Learned({ atMs: 0 }),
+        shop: () => Lesson.Learned({ atMs: 0 }),
+        swap: () => Lesson.Learned({ atMs: 0 }),
+        pickup: () => Lesson.Learned({ atMs: 0 }),
+        timedBreaks: () => Lesson.Learned({ atMs: 0 }),
+        openBreak: () => Lesson.Learned({ atMs: 0 }),
+      }),
+  })
+
 // A returning player's Model, seeded, measured, and started into a run.
 export const startedRun = (seed: number, mode: ScriptMode): Model => {
   const ready = send(
-    modifyFields(asVeteran(initialModel), {
+    modifyFields(pastTutorial(asVeteran(initialModel)), {
       rngState: () => seed,
       difficulty: () => ({ chosen: 'Normal', nightmare: 'Unlocked' }),
     }),

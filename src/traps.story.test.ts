@@ -41,7 +41,15 @@ import {
   verdictFor,
 } from './shop'
 import { scoreOf } from './stats'
-import { holdFire, press, release, tick, ticks, zombieOf } from './testing'
+import {
+  holdFire,
+  pastFirstBreak,
+  press,
+  release,
+  tick,
+  ticks,
+  zombieOf,
+} from './testing'
 import { TRAPS, repairPrice, stageOf, tollsOf } from './traps'
 import { WEAPONS } from './weapons'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
@@ -75,7 +83,7 @@ const PLANNED_SPAWNS: ReadonlyArray<PlannedSpawn> = [
 const BELOW_NORTH_DOOR: Vector = { x: 220, y: 27 }
 const ROOM_MIDDLE: Vector = { x: 160, y: 95 }
 
-const readyModel: Model = modifyFields(initialModel, {
+const readyModel: Model = modifyFields(pastFirstBreak(initialModel), {
   maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
 })
 

@@ -15,6 +15,7 @@ import {
 } from './constants'
 import type { Model } from './model'
 import { SHOP_GOOD_NAMES } from './names'
+import { isCoop } from './party'
 import { countPurchase } from './stats'
 import {
   TRAPS,
@@ -597,6 +598,19 @@ export const maybeDisplacedFocus = (model: World): Option.Option<ShopItemId> =>
     Dismissed: () => Option.none(),
   })
 
+// NOTE: the guided first break (src/firstBreakQuest.ts) has a new player
+// buy a Plank Pile and place it, so a lesson never dead-ends on an empty
+// wallet: in a new save's first break (no timer, before any wave 2), with no
+// Plank Pile owned yet, the first one is free. Only a player alone; a
+// co-op room has its lessons learned. A save past the tutorial never sees it.
+export const isFirstPlankFree = (model: World, kind: TrapKind): boolean =>
+  kind === 'Barricade' &&
+  !isCoop(model) &&
+  Lesson.isAnyOf(['Pending'])(model.lessons.openBreak) &&
+  Phase.isAnyOf(['Preparation'])(model.phase) &&
+  model.phase.wave === SHOP_FIRST_WAVE &&
+  ownedCount(model, 'Barricade') === 0
+
 export const priceFor = (model: World, id: ShopItemId): number =>
   ShopGood.match(shopItem(id).good, {
     Gun: () => shopItem(id).price,
@@ -607,7 +621,8 @@ export const priceFor = (model: World, id: ShopItemId): number =>
         onSome: ({ price }) => price,
       }),
     Heart: () => shopItem(id).price,
-    Trap: () => shopItem(id).price,
+    Trap: ({ kind }) =>
+      isFirstPlankFree(model, kind) ? 0 : shopItem(id).price,
     Repair: () =>
       Option.match(maybeRepairTrap(model, id), {
         onNone: () => 0,

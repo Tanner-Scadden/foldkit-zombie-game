@@ -1,7 +1,36 @@
 import { modifyFields } from 'foldkit/struct'
 
-import { DifficultyCard, Lesson, type Model } from './model'
+import {
+  AmmoTip,
+  DifficultyCard,
+  FirstBreakQuest,
+  Lesson,
+  type Model,
+  TrapHint,
+} from './model'
 import { ZOMBIE_KIND_ORDER } from './zombies'
+
+const learned = (): Lesson => Lesson.Learned({ atMs: 0 })
+
+// NOTE: a player past every lesson and first-time tip, as the balance bot
+// plays: no guided first break and no free Plank Pile, so the tutorial
+// never moves the balance numbers.
+export const asTutorialDone = (model: Model): Model =>
+  modifyFields(model, {
+    lessons: () => ({
+      move: learned(),
+      fire: learned(),
+      startWave: learned(),
+      shop: learned(),
+      swap: learned(),
+      pickup: learned(),
+      timedBreaks: learned(),
+      openBreak: learned(),
+    }),
+    trapHint: () => TrapHint.Seen(),
+    ammoTip: () => AmmoTip.Seen(),
+    firstBreakQuest: () => FirstBreakQuest.Over(),
+  })
 
 export const asVeteran = (model: Model): Model =>
   modifyFields(model, {

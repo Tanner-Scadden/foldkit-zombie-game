@@ -59,7 +59,7 @@ import {
   repairItemId,
   verdictFor,
 } from '../../src/shop'
-import { asVeteran } from '../../src/veteran'
+import { asTutorialDone, asVeteran } from '../../src/veteran'
 import { beginPreparation, doorCounts } from '../../src/waves'
 import {
   canReload,
@@ -1711,7 +1711,7 @@ const blame = (
 // The model of a fresh run on the title, already started.
 export const startedRun = (seed: number, options: BotOptions): Model => {
   const ready = send(
-    modifyFields(asVeteran(initialModel), {
+    modifyFields(asTutorialDone(asVeteran(initialModel)), {
       rngState: () => seed,
       difficulty: () => ({ chosen: options.difficulty, nightmare: 'Unlocked' }),
     }),

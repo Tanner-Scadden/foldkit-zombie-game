@@ -16,6 +16,7 @@ import {
   Frenzy,
   type FridgePrize,
   GameEvent,
+  Lesson,
   type Model,
   Phase,
   Pierce,
@@ -140,6 +141,14 @@ export const pickCardInScene = (name: string | RegExp) => [
     DialogBlock.Message.SucceededShowDialog(),
   ),
 ]
+
+// NOTE: past the first break's lesson, so a Plank Pile has its price (a
+// new save's first one is free, see isFirstPlankFree in src/shop.ts).
+export const pastFirstBreak = (model: Model): Model =>
+  modifyFields(model, {
+    lessons: lessons =>
+      modifyFields(lessons, { openBreak: () => Lesson.Learned({ atMs: 0 }) }),
+  })
 
 export const fighting: Model = modifyFields(initialModel, {
   phase: () => Phase.Wave({ wave: 3, elapsedMs: 4000, spawns: [] }),

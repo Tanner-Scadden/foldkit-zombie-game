@@ -149,6 +149,21 @@ export const goodieArrowShapes = (
   ),
 ]
 
+// NOTE: the guided first break's arrow over the doorway where the first
+// Plank Pile goes (src/firstBreakQuest.ts).
+export const doorArrowShapes = (
+  point: Readonly<{ x: number; y: number }>,
+  elapsedMs: number,
+): ReadonlyArray<Canvas.Shape> => [
+  placeAt(
+    Math.round(point.x) - 3,
+    Math.round(point.y) -
+      GOODIE_ARROW_LIFT_PX +
+      (Math.floor(elapsedMs / GOODIE_ARROW_BOUNCE_MS) % 2) * 2,
+    GOODIE_ARROW,
+  ),
+]
+
 // CALLOUTS
 
 type CalloutText = Readonly<{ title: BakedText; blurb: BakedText }>

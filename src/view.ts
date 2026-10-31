@@ -40,6 +40,7 @@ import { pauseHelpView } from './pauseHelp'
 import { BOOST_KIND_ORDER, PICKUPS, isBoosted } from './powerups'
 import { profileView } from './profileView'
 import { purchaseAnnouncementView } from './purchaseHud'
+import { questTrackerView } from './questView'
 import { landscapeFrameOffset, screenOf } from './screen'
 import { isShopOpenFor } from './shop'
 import { shopDialogView } from './shopView'
@@ -271,6 +272,7 @@ export const view = ApplicationComposition.makeView((model, h): Document => {
         preparationControlsView(model, h),
         gunClusterView(model, h),
         debutCardView(model, h),
+        questTrackerView(model, h),
         modeChoiceView(model, h),
         victorySupportView(model, h),
         newEntryNoticeView(model, h),

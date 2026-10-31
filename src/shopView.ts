@@ -420,7 +420,12 @@ const tagView = (
 ): Html =>
   StockTag.match(stockTag(model, item), {
     Price: ({ price }) =>
-      h.span([h.Class('shop-tag shop-item-price')], withCoins(`$${price}`, h)),
+      price === 0 && ShopGood.isAnyOf(['Trap'])(shopItem(item).good)
+        ? h.span([h.Class('shop-tag is-free shop-item-price')], ['FREE'])
+        : h.span(
+            [h.Class('shop-tag shop-item-price')],
+            withCoins(`$${price}`, h),
+          ),
     Short: ({ price }) =>
       h.span(
         [h.Class('shop-tag is-short shop-item-price')],

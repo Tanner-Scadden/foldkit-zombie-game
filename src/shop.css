@@ -294,6 +294,12 @@
   }
 }
 
+.shop-tag.is-free {
+  background: #9be36a;
+  color: #140c10;
+  letter-spacing: 0.08em;
+}
+
 /* CARDS */
 
 .shop-items {

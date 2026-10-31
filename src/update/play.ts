@@ -11,6 +11,7 @@ import {
 } from '../commands'
 import { isCouchKey, pressCouchKey } from '../couch'
 import { makeStep } from '../definition'
+import { advanceQuest } from '../firstBreakQuest'
 import { advanceGame, clampFrameDelta, refreshIntent } from '../frame'
 import {
   type PointerPress,
@@ -328,14 +329,17 @@ export const tickFrame = (deltaTime: number) =>
       return toModel(ageDebutCard(model, clampFrameDelta(deltaTime)))
     } else if (isRoundActive(model.phase)) {
       const framed = moveHintBand(
-        noteAmmoTip(
-          learnFromFrame(
-            model,
-            tallyFrame(
+        advanceQuest(
+          noteAmmoTip(
+            learnFromFrame(
               model,
-              advanceGame(model, deltaTime),
-              clampFrameDelta(deltaTime),
+              tallyFrame(
+                model,
+                advanceGame(model, deltaTime),
+                clampFrameDelta(deltaTime),
+              ),
             ),
+            clampFrameDelta(deltaTime),
           ),
           clampFrameDelta(deltaTime),
         ),

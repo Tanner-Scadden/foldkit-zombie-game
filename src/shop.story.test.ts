@@ -57,6 +57,7 @@ import {
   holdingFirst,
   holdingSecond,
   maybeSpareGun,
+  pastFirstBreak,
   pistolOnly,
   press,
   release,
@@ -75,9 +76,13 @@ const PLAYER_Y = 90
 const BESIDE_STALL = { x: 241, y: 142 }
 const FRAMES_TO_STALL = 3
 
-const readyModel: Model = modifyFields(asVeteran(initialModel), {
-  maybeSurface: () => Option.some({ left: 0, top: 0, width: 800, height: 400 }),
-})
+const readyModel: Model = modifyFields(
+  pastFirstBreak(asVeteran(initialModel)),
+  {
+    maybeSurface: () =>
+      Option.some({ left: 0, top: 0, width: 800, height: 400 }),
+  },
+)
 
 const DISTANT_SPAWN: PlannedSpawn = {
   atMs: 1e9,
