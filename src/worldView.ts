@@ -1,6 +1,7 @@
 import { Array, Option } from 'effect'
 import type { Canvas } from 'foldkit'
 
+import { isAtAmmoWindow, isCounterOpen } from './ammoCounter'
 import { type Level, isInsideRoomAt, levelOf } from './arena'
 import { bossGroundShapes, bossOverheadShapes } from './bossView'
 import { type Camera, sceneOffset } from './camera'
@@ -23,7 +24,14 @@ import {
   lidShadowShapes,
 } from './fridgeView'
 import { ovenFlameShapes, ovenGlowShapes, padlockShapes } from './kitchenView'
-import { type Model, Phase, ShopState, type Vector, type Zombie } from './model'
+import {
+  CounterSale,
+  type Model,
+  Phase,
+  ShopState,
+  type Vector,
+  type Zombie,
+} from './model'
 import { isBehindWall, occludersOf } from './occluders'
 import { isGoodieBeckoning } from './onboarding'
 import {
@@ -54,6 +62,7 @@ import { group } from './sprite'
 import {
   STALL_FOOT_Y,
   type StallLook,
+  counterSaleShapes,
   stallGroundShapes,
   stallPromptShapes,
   stallShapes,
@@ -89,7 +98,12 @@ export const worldOffset = (model: Model, camera: Camera): Vector =>
 // STALL
 
 const stallLook = (model: Model): StallLook => {
-  if (!isShopOpenFor(model.phase)) {
+  if (isCounterOpen(model)) {
+    return isAtAmmoWindow(model) ||
+      CounterSale.isAnyOf(['Selling'])(model.counterSale)
+      ? 'CounterAwake'
+      : 'Counter'
+  } else if (!isShopOpenFor(model.phase)) {
     return 'Closed'
   } else if (ShopState.isAnyOf(['Away'])(model.shop)) {
     return 'Beckoning'
@@ -245,6 +259,10 @@ const overheadShapes = (
   ...mateOverheadShapes(model),
   ...coopNameShapes(model),
   ...stallPromptShapes(stallPrompt(model)),
+  ...CounterSale.match(model.counterSale, {
+    Quiet: () => [],
+    Selling: ({ ageMs, line }) => counterSaleShapes(ageMs, line),
+  }),
   ...padlockShapes(model),
 ]
 

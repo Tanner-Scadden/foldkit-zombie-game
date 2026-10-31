@@ -92,6 +92,7 @@ export const exitOffers = (model: World): ReadonlyArray<Offer> =>
         price: exitPriceFor(model),
         box,
         reachPx: EXIT_RULES.reachPx,
+        isFull: false,
         spot: {
           x: Math.round((box.left + box.right) / 2),
           y: box.top + EXIT_RULES.tagDropPx,

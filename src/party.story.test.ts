@@ -32,11 +32,12 @@ import {
   withSeat,
 } from './party'
 import { PURCHASE_RULES } from './purchase'
+import { SHOP_ITEMS, STALL_BOX } from './shop'
 import { SeatAction, applySeatAction, soloInputs, stepWorld } from './stepWorld'
 import { SURFACE, ticks, zombieOf } from './testing'
 import { asVeteran } from './veteran'
 import { beginPreparation, rollSpawns, waveBonus } from './waves'
-import { WEAPONS } from './weapons'
+import { WEAPONS, freshGun, heldGun } from './weapons'
 import { type World, withWorld } from './world'
 import {
   type Intent,
@@ -370,14 +371,14 @@ describe('money', () => {
     firing: ReadonlyArray<number> = [],
   ) =>
     new Map<number, Intent>([
-      ...Array.map(firing, slot => [
-        slot,
-        { ...idleIntent, trigger: 'Held' as const },
-      ] as const),
-      ...Array.map(slots, slot => [
-        slot,
-        { ...idleIntent, interact: 'Held' as const },
-      ] as const),
+      ...Array.map(
+        firing,
+        slot => [slot, { ...idleIntent, trigger: 'Held' as const }] as const,
+      ),
+      ...Array.map(
+        slots,
+        slot => [slot, { ...idleIntent, interact: 'Held' as const }] as const,
+      ),
     ])
 
   const holdFor = (
@@ -420,6 +421,46 @@ describe('money', () => {
     expect(seatedAt(bought, 1).wallet.balance).toBe(100 - EXIT_RULES.price)
     expect(seatedAt(bought, 0).wallet.balance).toBe(100)
     expect(levelOf(bought).key).not.toBe(levelOf(atDoor).key)
+  })
+
+  test('at the ammo window mid-wave each player buys ammo for themselves', () => {
+    const smgOf = (rounds: number) =>
+      Arsenal.HoldingSecond({
+        first: freshGun('Pistol'),
+        second: modifyFields(freshGun('Smg'), { rounds: () => rounds }),
+      })
+    const armed =
+      (slot: number, rounds: number) =>
+      (current: Model): Model =>
+        atSeat(current, slot, world =>
+          modifyFields(world, {
+            player: player =>
+              modifyFields(player, { arsenal: () => smgOf(rounds) }),
+          }),
+        )
+    const stallX = (STALL_BOX.left + STALL_BOX.right) / 2
+    const lateWave = Phase.Wave({
+      wave: 5,
+      elapsedMs: 20_000,
+      spawns: [DISTANT_SPAWN],
+    })
+    const atStall = pipeline(
+      withMoney(0, 100),
+      withMoney(1, 100),
+      armed(0, 10),
+      armed(1, 10),
+      placed(0, stallX - 30, STALL_BOX.bottom + 30),
+      placed(1, stallX, STALL_BOX.bottom + 6),
+    )(crewOf(2, lateWave))
+    const bought = holdFor(atStall, [1], HOLD_TICKS)
+    expect(seatedAt(bought, 1).wallet.balance).toBe(
+      100 - SHOP_ITEMS.SmgRounds.price,
+    )
+    expect(heldGun(seatedAt(bought, 1).player.arsenal).rounds).toBeGreaterThan(
+      10,
+    )
+    expect(seatedAt(bought, 0).wallet.balance).toBe(100)
+    expect(heldGun(seatedAt(bought, 0).player.arsenal).rounds).toBe(10)
   })
 
   test('a seat standing still at a door buys it alone, while a teammate shooting beside it never does', () => {

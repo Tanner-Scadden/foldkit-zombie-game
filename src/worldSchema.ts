@@ -615,6 +615,15 @@ export const PrizeFlight = defineTaggedUnion({
 })
 export type PrizeFlight = typeof PrizeFlight.Type
 
+// NOTE: a cosmetic: Rattles sliding a box of rounds across the ammo
+// window's counter after a sale mid-wave, with `line` picking what he says
+// (src/ammoCounter.ts). Never part of the World.
+export const CounterSale = defineTaggedUnion({
+  Quiet: {},
+  Selling: { ageMs: Schema.Number, line: Schema.Number },
+})
+export type CounterSale = typeof CounterSale.Type
+
 // NOTE: a shot names the seat that fired it (a PlayerSlot), so a co-op
 // client can tell its own shots, which it predicts, from the room's; a
 // trap's shot names none.
@@ -1219,13 +1228,15 @@ export const ShopState = defineTaggedUnion({
 })
 export type ShopState = typeof ShopState.Type
 
-// NOTE: something in the world bought by holding the interact key beside
-// it, the way a wall buy works (src/purchase.ts): a boarded exit, or the
-// Mystery Leftovers fridge (src/leftovers.ts).
+// NOTE: something in the world bought by standing still or holding the
+// interact key beside it, the way a wall buy works (src/purchase.ts): a
+// boarded exit, the Mystery Leftovers fridge (src/leftovers.ts) and its
+// prize, or mid-wave the held gun's ammo at the stall (src/ammoCounter.ts).
 export const Purchasable = defineTaggedUnion({
   Exit: { exit: ExitId },
   Fridge: {},
   Prize: {},
+  Ammo: {},
 })
 export type Purchasable = typeof Purchasable.Type
 

@@ -382,6 +382,7 @@ const fridgeTotals = results.reduce(
     totals.taken += fridge.taken
     totals.stabs += fridge.stabs
     totals.stabHits += fridge.stabHits
+    totals.counterBuys += fridge.counterBuys
     return totals
   },
   {
@@ -396,6 +397,7 @@ const fridgeTotals = results.reduce(
     taken: 0,
     stabs: 0,
     stabHits: 0,
+    counterBuys: 0,
   },
 )
 const fridgeWins = (prize: string) =>
@@ -410,6 +412,9 @@ console.log(
   `Fridge weapons taken: ${fridgeTotals.taken}. Knife: ${fridgeTotals.stabs} stabs, ${fridgeTotals.stabHits} hits (${(fridgeTotals.stabs / Math.max(1, results.length)).toFixed(1)} stabs a run).`,
 )
 console.log(
+  `Ammo window: ${fridgeTotals.counterBuys} refills mid-wave (${(fridgeTotals.counterBuys / Math.max(1, results.length)).toFixed(1)} a run)`,
+)
+console.log(
   `Fridge weapons: ${fridgeTotals.lids} lids, ${fridgeTotals.pops} pops, ${fridgeTotals.swings} swings (${fridgeTotals.clangs} clangs), ${fridgeTotals.sprays} sprays, ${fridgeTotals.shatters} shatters`,
 )
 console.log(
@@ -418,7 +423,9 @@ console.log(
       const runs = fridgeWins(prize)
       return `${prize} ${runs.filter(r => r.victory).length}/${runs.length}`
     })
-    .join(', ')}, none ${results.filter(r => r.fridge.pulls === 0 && r.victory).length}/${results.filter(r => r.fridge.pulls === 0).length}`,
+    .join(
+      ', ',
+    )}, none ${results.filter(r => r.fridge.pulls === 0 && r.victory).length}/${results.filter(r => r.fridge.pulls === 0).length}`,
 )
 console.log(
   `Median run length: ${(median(results.map(r => r.runMs)) / 60000).toFixed(2)} min`,

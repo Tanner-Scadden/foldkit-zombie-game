@@ -16,6 +16,8 @@ import { toParentMessage } from 'foldkit/test'
 import { DialogBlock } from '@foldkit/ui'
 
 import { assistAim } from '../../src/aimAssist'
+import { isCounterOpen, maybeAmmoItemOf } from '../../src/ammoCounter'
+import { ammoLevelOf } from '../../src/ammoWarning'
 import {
   boxCenter,
   distanceToBox,
@@ -177,9 +179,12 @@ export type FridgeLog = {
   taken: number
   stabs: number
   stabHits: number
+  // Refills bought at the ammo window mid-wave.
+  counterBuys: number
 }
 
 const emptyFridgeLog = (): FridgeLog => ({
+  counterBuys: 0,
   taken: 0,
   stabs: 0,
   stabHits: 0,
@@ -1269,6 +1274,12 @@ const STALL_FRONT: Vector = {
   y: STALL_BOX.top - 3,
 }
 
+// NOTE: where the bot stands at the ammo window, just below the counter.
+const STALL_BELOW: Vector = {
+  x: (STALL_BOX.left + STALL_BOX.right) / 2,
+  y: STALL_BOX.bottom + 6,
+}
+
 // The bot shops the way a careful player would: a heart when low, the
 // first gun it can afford (the cheap shotgun right after the tutorial, the
 // SMG once it can), ammo below half, two Plank Piles, then upgrades and a
@@ -1454,6 +1465,43 @@ const wantsKitchen = (model: Model): boolean => {
 }
 
 let kitchenWave = 0
+
+// THE AMMO WINDOW
+
+// Mid-wave, when the gun in its hands runs low and it stands near the
+// stall with the price in hand, the bot walks up to the ammo window
+// (src/ammoCounter.ts) and holds the interact key until it buys. It keeps
+// shooting on the way, so standing alone never buys for it. AMMO=0 is the
+// bot that never uses the window.
+const NO_AMMO_WINDOW = process.env.AMMO === '0'
+const AMMO_WINDOW_NEAR_PX = 70
+
+const wantsAmmoWindow = (model: Model): boolean => {
+  const gun = heldGun(model.player.arsenal)
+  return (
+    !NO_AMMO_WINDOW &&
+    isCounterOpen(model) &&
+    ammoLevelOf(gun) !== 'Plenty' &&
+    Option.exists(
+      maybeAmmoItemOf(gun.kind),
+      item => model.wallet.balance >= priceFor(model, item),
+    ) &&
+    distance(model.player, STALL_FRONT) < AMMO_WINDOW_NEAR_PX
+  )
+}
+
+const isAtAmmoOffer = (model: Model): boolean =>
+  Option.exists(maybeOfferInReach(model), offer => offer.target._tag === 'Ammo')
+
+const holdingAtWindow = (model: Model, keys: Set<string>): Set<string> =>
+  wantsAmmoWindow(model) && isAtAmmoOffer(model)
+    ? new Set([...keys, KEYS.interact])
+    : keys
+
+const towardWindow = (model: Model, direction: Vector): Vector =>
+  wantsAmmoWindow(model) && !isAtAmmoOffer(model)
+    ? steerToward(model.player, STALL_BELOW)
+    : direction
 
 // The bot buys the room as a player does: it holds the interact key at the
 // boards until the hold fills (src/purchase.ts), mid-wave too when it
@@ -1882,7 +1930,16 @@ export const play = (
       if (frame % MOVE_EVERY_FRAMES === 0) {
         model = pressKeys(
           model,
-          stabbing(model, holdingAtKitchen(model, desiredKeys(kite(model)))),
+          stabbing(
+            model,
+            holdingAtWindow(
+              model,
+              holdingAtKitchen(
+                model,
+                desiredKeys(towardWindow(model, kite(model))),
+              ),
+            ),
+          ),
         )
       }
       const fridgeSpare = fridgeSpareOf(model)
@@ -1922,6 +1979,13 @@ export const play = (
       if (event._tag === 'KnifeStabbed') fridgeLog.stabs += 1
       if (event._tag === 'KnifeHit') fridgeLog.stabHits += 1
       if (event._tag === 'PrizeTaken') fridgeLog.taken += 1
+      if (
+        event._tag === 'Purchased' &&
+        model.phase._tag === 'Wave' &&
+        distance(event, STALL_BELOW) < AMMO_WINDOW_NEAR_PX
+      ) {
+        fridgeLog.counterBuys += 1
+      }
       if (event._tag === 'FreezeSprayed') fridgeLog.sprays += 1
       if (event._tag === 'ZombieShattered') fridgeLog.shatters += 1
     })

@@ -7,6 +7,7 @@ import type { Model } from './model'
 import { flowFieldToward } from './pathing'
 import {
   Boss,
+  CounterSale,
   DebutCard,
   FIRST_SHOP_CATEGORY,
   Party,
@@ -66,6 +67,7 @@ export type RunFields = Pick<
   | 'stepCarryMs'
   | 'callouts'
   | 'prizeFlight'
+  | 'counterSale'
   | 'trapStock'
   | 'selectedTrap'
   | 'laserSight'
@@ -118,6 +120,7 @@ export const freshRun = (model: Model): RunFields => ({
   stepCarryMs: 0,
   callouts: [],
   prizeFlight: PrizeFlight.Grounded(),
+  counterSale: CounterSale.Quiet(),
   trapStock: emptyTrapStock,
   selectedTrap: 'Barricade',
   laserSight: 'None',
