@@ -216,6 +216,7 @@ export const fridgeOffers = (world: World): ReadonlyArray<Offer> =>
               price: fridgePriceFor(world),
               box,
               reachPx: FRIDGE_RULES.reachPx,
+              isFull: false,
               spot: fridgeSpot(box),
             },
           ]
@@ -226,6 +227,7 @@ export const fridgeOffers = (world: World): ReadonlyArray<Offer> =>
                 price: 0,
                 box,
                 reachPx: FRIDGE_RULES.reachPx,
+                isFull: false,
                 spot: fridgeSpot(box),
               },
             ]

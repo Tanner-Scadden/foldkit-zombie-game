@@ -42,7 +42,9 @@ const AMMO_PALETTE: Palette = {
   G: '#6fa34f',
 }
 
-const AMMO_BOX: Sprite = spriteShapes(
+export const AMMO_BOX_WIDTH = 7
+
+export const AMMO_BOX: Sprite = spriteShapes(
   ['.B.B.B.', '.b.b.b.', 'ooooooo', 'oGGGGGo', 'oGgggGo', 'oGGGGGo', 'ooooooo'],
   AMMO_PALETTE,
   TOP_LEFT,

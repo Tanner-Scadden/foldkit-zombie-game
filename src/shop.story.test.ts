@@ -868,7 +868,7 @@ describe('the stall entrance', () => {
     )
   })
 
-  test('touching the side of the stall mid-wave does not open it', () => {
+  test('touching the side of the stall mid-wave does not open the shop: it is only the ammo window', () => {
     story(
       update,
       given(
@@ -880,7 +880,7 @@ describe('the stall entrance', () => {
       model(current => {
         expect(current.shop).toEqual(ShopState.Away())
         expect(current.shopDialog.isOpen).toBe(false)
-        expect(stallPrompt(current)).toBe('ClosedDuringWave')
+        expect(stallPrompt(current)).toBe('None')
       }),
     )
   })

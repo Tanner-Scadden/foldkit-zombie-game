@@ -1151,14 +1151,12 @@ export const refreshShopPresence = (model: World): World =>
       }),
   })
 
-export type StallPrompt =
-  | 'None'
-  | 'WalkUp'
-  | 'ClosedDuringWave'
-  | 'ClosedUntilFirstClear'
+export type StallPrompt = 'None' | 'WalkUp' | 'ClosedUntilFirstClear'
 
+// NOTE: mid-wave the stall is the ammo window (src/ammoCounter.ts), whose
+// own sign and tag say what it sells, so it needs no words.
 const closedPrompt = (phase: Phase): StallPrompt =>
-  Phase.isAnyOf(['Wave'])(phase) ? 'ClosedDuringWave' : 'ClosedUntilFirstClear'
+  Phase.isAnyOf(['Wave'])(phase) ? 'None' : 'ClosedUntilFirstClear'
 
 // NOTE: the words teach the stall once. After the player has shopped, its
 // sign and the bobbing coin over it say the same without words.

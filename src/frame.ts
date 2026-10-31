@@ -2,6 +2,7 @@ import { Option } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { assistAim } from './aimAssist'
+import { advanceCounterSale } from './ammoCounter'
 import { levelOf } from './arena'
 import { cameraOf, leanCamera, screenCameraOf } from './camera'
 import {
@@ -115,19 +116,22 @@ export const advanceCosmetics = (
   frameMs: number,
   worldMs: number,
 ): Model =>
-  ageFlight(
-    advanceJuice(
-      advanceCallouts(
-        ageTrapNotice(
-          worldMs > 0
-            ? advanceParticles(model, worldMs / MS_PER_SECOND, worldMs)
-            : model,
+  advanceCounterSale(
+    ageFlight(
+      advanceJuice(
+        advanceCallouts(
+          ageTrapNotice(
+            worldMs > 0
+              ? advanceParticles(model, worldMs / MS_PER_SECOND, worldMs)
+              : model,
+            worldMs,
+          ),
           worldMs,
         ),
+        frameMs,
         worldMs,
       ),
       frameMs,
-      worldMs,
     ),
     frameMs,
   )

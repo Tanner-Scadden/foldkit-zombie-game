@@ -31,17 +31,33 @@ const nameOf = (target: Purchasable): string =>
     Exit: ({ exit }) => exitName(exit).toLowerCase(),
     Fridge: () => FRIDGE_NAME.toLowerCase(),
     Prize: () => 'the prize from the fridge, free',
+    Ammo: () => 'ammo for the gun in your hands',
   })
 
 // NOTE: a weapon on offer is already paid for, so its button says TAKE
 // where a price would be.
-const badgeOf = (offer: Offer): string =>
-  Purchasable.isAnyOf(['Prize'])(offer.target) ? 'TAKE' : `$${offer.price}`
+const badgeOf = (offer: Offer): string => {
+  if (Purchasable.isAnyOf(['Prize'])(offer.target)) {
+    return 'TAKE'
+  } else if (offer.isFull) {
+    return 'FULL'
+  } else {
+    return `$${offer.price}`
+  }
+}
 
 const labelOf = (offer: Offer): string =>
-  Purchasable.isAnyOf(['Prize'])(offer.target)
-    ? 'Hold to take the prize from the fridge'
-    : `Hold to open ${nameOf(offer.target)} for ${priceWords(offer.price)}`
+  Purchasable.match(offer.target, {
+    Exit: () =>
+      `Hold to open ${nameOf(offer.target)} for ${priceWords(offer.price)}`,
+    Fridge: () =>
+      `Hold to open ${nameOf(offer.target)} for ${priceWords(offer.price)}`,
+    Prize: () => 'Hold to take the prize from the fridge',
+    Ammo: () =>
+      offer.isFull
+        ? 'Your gun is full'
+        : `Hold to buy ammo for ${priceWords(offer.price)}`,
+  })
 
 // NOTE: what the player is at: the offer in reach, or the one they still
 // hold or were refused at a moment ago.

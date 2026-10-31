@@ -2,6 +2,7 @@ import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { type Box, distanceToBox } from './arena'
+import { ammoCounterOffers, sellAmmo } from './ammoCounter'
 import { buyExit, exitOffers } from './exits'
 import { fridgeOffers, pullFridge, takePrize } from './leftovers'
 import type { World } from './world'
@@ -55,17 +56,21 @@ export const PURCHASE_RULES: PurchaseRules = {
 // NOTE: a purchasable for sale right now: what it is, its price, the box a
 // player must stand within `reachPx` of, and the spot its price tag hangs
 // from (the top middle of the tag).
+// `isFull` is an offer with nothing left to sell right now, such as the
+// ammo window for a full gun: a press shakes it, and standing never buys.
 export type Offer = Readonly<{
   target: Purchasable
   price: number
   box: Box
   reachPx: number
   spot: Vector
+  isFull: boolean
 }>
 
 export const offersOf = (world: World): ReadonlyArray<Offer> => [
   ...exitOffers(world),
   ...fridgeOffers(world),
+  ...ammoCounterOffers(world),
 ]
 
 const buy = (world: World, offer: Offer): Option.Option<World> =>
@@ -73,6 +78,7 @@ const buy = (world: World, offer: Offer): Option.Option<World> =>
     Exit: ({ exit }) => buyExit(world, exit, offer.price),
     Fridge: () => pullFridge(world, offer.price),
     Prize: () => takePrize(world),
+    Ammo: () => sellAmmo(world),
   })
 
 export const isSamePurchasable = (
@@ -83,6 +89,7 @@ export const isSamePurchasable = (
     Exit: ({ exit }) => second._tag === 'Exit' && second.exit === exit,
     Fridge: () => second._tag === 'Fridge',
     Prize: () => second._tag === 'Prize',
+    Ammo: () => second._tag === 'Ammo',
   })
 
 const reachOf = (world: World, offer: Offer): number =>
@@ -166,7 +173,7 @@ const refuse = (world: World, offer: Offer): World =>
   )
 
 const press = (world: World, offer: Offer): World =>
-  shortfallFor(world, offer) > 0
+  offer.isFull || shortfallFor(world, offer) > 0
     ? refuse(world, offer)
     : withPurchase(world, Purchase.Holding({ target: offer.target, heldMs: 0 }))
 
@@ -191,7 +198,7 @@ export const advancePurchase = (world: World, deltaMs: number): World => {
       onSome: offer =>
         isHeld
           ? press(world, offer)
-          : isStanding && shortfallFor(world, offer) === 0
+          : isStanding && !offer.isFull && shortfallFor(world, offer) === 0
             ? withPurchase(
                 world,
                 Purchase.Holding({

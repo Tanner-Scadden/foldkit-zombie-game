@@ -1,6 +1,7 @@
 import { Array, Option, Result, pipe } from 'effect'
 import { Canvas } from 'foldkit'
 
+import { type AmmoItemId, maybeAmmoItemOf } from './ammoCounter'
 import { type Camera, worldToView } from './camera'
 import { EXIT_RULES } from './exits'
 import {
@@ -21,6 +22,7 @@ import {
   maybeOfferInReach,
   offersOf,
 } from './purchase'
+import { SHOP_ITEMS } from './shop'
 import {
   type Sprite,
   TOP_LEFT,
@@ -30,7 +32,8 @@ import {
   placeAt,
   spriteShapes,
 } from './sprite'
-import { maybeReplacedGun } from './weapons'
+import { AMMO_BOX, AMMO_BOX_WIDTH } from './stallBubble'
+import { heldGun, maybeReplacedGun } from './weapons'
 
 // NOTE: a purchasable says what it costs without a word: a dark tag with
 // the coin and the price hangs off a nail. Walk up and it brightens, with a
@@ -75,21 +78,38 @@ type PriceTag = Readonly<{
   rings: Array.NonEmptyReadonlyArray<Sprite>
 }>
 
+// NOTE: a tag can lead with a small picture of what it sells, such as the
+// ammo window's box of rounds.
+type TagIcon = Readonly<{ sprite: Sprite; width: number }>
+
+const ICON_GAP = 2
+
 const tagSprite = (
   text: BakedText,
+  maybeIcon: Option.Option<TagIcon>,
   width: number,
   height: number,
   look: TagLook,
-): Sprite => [
-  ...bakeShapes([
-    rect(Math.floor(width / 2), -4, 1, 4, '#c9c3b0'),
-    rect(Math.floor(width / 2) - 1, -5, 3, 1, '#8a8a96'),
-    rect(-1, -1, width + 2, height + 2, look.edge),
-    rect(0, 0, width, height, look.face),
-    rect(0, 0, width, 1, look.trim),
-  ]),
-  placeBaked(text, { x: TAG_PAD, y: TAG_PAD, align: 'Left' }),
-]
+): Sprite => {
+  const textLeft = Option.match(maybeIcon, {
+    onNone: () => TAG_PAD,
+    onSome: icon => TAG_PAD + icon.width + ICON_GAP,
+  })
+  return [
+    ...bakeShapes([
+      rect(Math.floor(width / 2), -4, 1, 4, '#c9c3b0'),
+      rect(Math.floor(width / 2) - 1, -5, 3, 1, '#8a8a96'),
+      rect(-1, -1, width + 2, height + 2, look.edge),
+      rect(0, 0, width, height, look.face),
+      rect(0, 0, width, 1, look.trim),
+    ]),
+    ...Option.match(maybeIcon, {
+      onNone: () => [],
+      onSome: icon => [placeAt(TAG_PAD, TAG_PAD - 1, icon.sprite)],
+    }),
+    placeBaked(text, { x: textLeft, y: TAG_PAD, align: 'Left' }),
+  ]
+}
 
 type RingPixel = Readonly<{ x: number; y: number; turn: number }>
 
@@ -130,16 +150,23 @@ export const bakePriceTag = (price: number): PriceTag =>
 
 // NOTE: a weapon the fridge offers is already paid for, so its tag says
 // TAKE in place of a price.
-const bakeTag = (text: BakedText): PriceTag => {
-  const width = text.width + TAG_PAD * 2 + 1
+const bakeTag = (
+  text: BakedText,
+  maybeIcon: Option.Option<TagIcon> = Option.none(),
+): PriceTag => {
+  const iconWidth = Option.match(maybeIcon, {
+    onNone: () => 0,
+    onSome: icon => icon.width + ICON_GAP,
+  })
+  const width = text.width + iconWidth + TAG_PAD * 2 + 1
   const height = GLYPH_HEIGHT + TAG_PAD * 2
   const pixels = ringPixels(Math.ceil(width / 2) + RING_GAP)
   return {
     width,
     height,
-    plain: tagSprite(text, width, height, PLAIN_LOOK),
-    lit: tagSprite(text, width, height, LIT_LOOK),
-    short: tagSprite(text, width, height, SHORT_LOOK),
+    plain: tagSprite(text, maybeIcon, width, height, PLAIN_LOOK),
+    lit: tagSprite(text, maybeIcon, width, height, LIT_LOOK),
+    short: tagSprite(text, maybeIcon, width, height, SHORT_LOOK),
     rings: [
       ringSprite(pixels, 0),
       ...Array.makeBy(RING_STEPS, step =>
@@ -159,11 +186,41 @@ const TAKE_TAG = bakeTag(bakeText('TAKE', 'Prompt'))
 // (src/tutorialRules.ts), so their tags say FREE.
 const FREE_TAG = bakeTag(bakeText('FREE', 'Title'))
 
-const tagOf = ({ target, price }: Offer): PriceTag =>
-  Purchasable.match(target, {
-    Exit: () => (price === 0 ? FREE_TAG : EXIT_TAG),
-    Fridge: () => (price === 0 ? FREE_TAG : FRIDGE_TAG),
+// NOTE: the ammo window's tags: the box of rounds with the price of the
+// held gun's ammo, or FULL when there is no room for more.
+const AMMO_ICON: TagIcon = { sprite: AMMO_BOX, width: AMMO_BOX_WIDTH }
+
+const AMMO_TAGS: Readonly<Record<AmmoItemId, PriceTag>> = {
+  ShotgunShells: bakeTag(
+    bakeText(`$${SHOP_ITEMS.ShotgunShells.price}`, 'Coin'),
+    Option.some(AMMO_ICON),
+  ),
+  SmgRounds: bakeTag(
+    bakeText(`$${SHOP_ITEMS.SmgRounds.price}`, 'Coin'),
+    Option.some(AMMO_ICON),
+  ),
+  LidStack: bakeTag(
+    bakeText(`$${SHOP_ITEMS.LidStack.price}`, 'Coin'),
+    Option.some(AMMO_ICON),
+  ),
+}
+
+const FULL_TAG = bakeTag(bakeText('FULL', 'Hint'), Option.some(AMMO_ICON))
+
+const ammoTagOf = (model: Model, offer: Offer): PriceTag =>
+  offer.isFull
+    ? FULL_TAG
+    : Option.match(maybeAmmoItemOf(heldGun(model.player.arsenal).kind), {
+        onNone: () => FULL_TAG,
+        onSome: item => AMMO_TAGS[item],
+      })
+
+const tagOf = (model: Model, offer: Offer): PriceTag =>
+  Purchasable.match(offer.target, {
+    Exit: () => (offer.price === 0 ? FREE_TAG : EXIT_TAG),
+    Fridge: () => (offer.price === 0 ? FREE_TAG : FRIDGE_TAG),
     Prize: () => TAKE_TAG,
+    Ammo: () => ammoTagOf(model, offer),
   })
 
 // THE PROMPT
@@ -282,6 +339,7 @@ const placedOffer = (offer: Offer, tag: PriceTag): Offer =>
   Purchasable.match(offer.target, {
     Exit: () => offer,
     Fridge: () => offer,
+    Ammo: () => offer,
     Prize: () => ({
       ...offer,
       spot: {
@@ -337,7 +395,7 @@ const replacedShapes = (
 const offerShapes =
   (model: Model, maybeInReach: Option.Option<Offer>) =>
   (unplaced: Offer): ReadonlyArray<Canvas.Shape> => {
-    const tag = tagOf(unplaced)
+    const tag = tagOf(model, unplaced)
     const offer = placedOffer(unplaced, tag)
     const replaced = replacedShapes(model, offer, tag)
     const isMine = (target: Purchasable) =>

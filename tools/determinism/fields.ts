@@ -76,6 +76,7 @@ export const FIELD_CLASSES = {
   blasts: 'Cosmetic',
   callouts: 'Cosmetic',
   prizeFlight: 'Cosmetic',
+  counterSale: 'Cosmetic',
   cosmeticRngState: 'Cosmetic',
 
   difficultyCard: 'Client',
