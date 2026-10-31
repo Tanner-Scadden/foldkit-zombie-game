@@ -37,6 +37,7 @@ import {
   isCarrying,
   isHolding,
   looseRounds,
+  mapCarried,
   mapGuns,
   maxRounds,
   maxTier,
@@ -1000,15 +1001,12 @@ const refill = (
       : gun,
   )
 
+// NOTE: an upgrade finds its gun in a gun slot or, for the Pan, in the
+// melee slot.
 const upgrade = (player: Player, weapon: WeaponKind): Player =>
-  modifyFields(player, {
-    arsenal: arsenal =>
-      mapGuns(arsenal, gun =>
-        gun.kind === weapon
-          ? modifyFields(gun, { tier: tier => tier + 1 })
-          : gun,
-      ),
-  })
+  mapCarried(player, gun =>
+    gun.kind === weapon ? modifyFields(gun, { tier: tier => tier + 1 }) : gun,
+  )
 
 const equip = (model: World, toPlayer: (player: Player) => Player): World =>
   modifyFields(model, { player: toPlayer })

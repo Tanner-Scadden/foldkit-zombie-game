@@ -77,8 +77,8 @@ const checkSlots = async (
     problems.push(`${label}: ${slots.length} slots, not 3`)
     return
   }
-  const knife = slots.find(slot => slot.slot === 'Knife')
-  const guns = slots.filter(slot => slot.slot !== 'Knife')
+  const knife = slots.find(slot => slot.slot === 'Melee')
+  const guns = slots.filter(slot => slot.slot !== 'Melee')
   if (knife === undefined) {
     problems.push(`${label}: no knife slot`)
     return
@@ -136,7 +136,7 @@ const SCENES: ReadonlyArray<Scene> = [
       const held = await page.evaluate(
         () =>
           document
-            .querySelector('.gun-slot-button[data-slot="Knife"]')
+            .querySelector('.gun-slot-button[data-slot="Melee"]')
             ?.getAttribute('data-held') ?? '',
       )
       if (held !== 'true') {

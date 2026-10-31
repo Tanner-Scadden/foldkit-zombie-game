@@ -4,7 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import { FIXED_STEP_MS } from './constants'
-import { KNIFE_SLOT_INDEX, gunSlotBox } from './hud'
+import { MELEE_SLOT_INDEX, gunSlotBox } from './hud'
 import { update } from './main'
 import { Message } from './message'
 import {
@@ -95,11 +95,11 @@ const hasFired = (current: Model): boolean =>
 
 describe('a press on a HUD slot', () => {
   test('mid-wave, a mouse press on the knife slot shoots through it and leaves the knife be', () => {
-    const { view } = slotMiddle(midWave, KNIFE_SLOT_INDEX)
+    const { view } = slotMiddle(midWave, MELEE_SLOT_INDEX)
     story(
       update,
       given(midWave),
-      message(pressSlot(midWave, KNIFE_SLOT_INDEX, 'Mouse', MOUSE)),
+      message(pressSlot(midWave, MELEE_SLOT_INDEX, 'Mouse', MOUSE)),
       model(({ input, lastDevice }) => {
         expect(input.mouseButton._tag).toBe('Held')
         expect(lastDevice).toBe('KeyboardMouse')
@@ -112,7 +112,7 @@ describe('a press on a HUD slot', () => {
         expect(hasFired(current)).toBe(true)
       }),
       message(Message.ReleasedPointer({ pointerId: MOUSE })),
-      message(Message.ClickedKnifeSlot()),
+      message(Message.ClickedMeleeSlot()),
       model(({ player, input }) => {
         expect(player.wield).toBe('Gun')
         expect(heldWeapon(player.arsenal)).toBe('Pistol')
@@ -143,7 +143,7 @@ describe('a press on a HUD slot', () => {
     story(
       update,
       given(midWave),
-      message(pressSlot(midWave, KNIFE_SLOT_INDEX, 'Touch', FINGER)),
+      message(pressSlot(midWave, MELEE_SLOT_INDEX, 'Touch', FINGER)),
       model(({ input, lastDevice }) => {
         expect(input.mouseButton._tag).toBe('Released')
         expect(input.aimStick._tag).toBe('Idle')
@@ -151,9 +151,9 @@ describe('a press on a HUD slot', () => {
         expect(lastDevice).toBe('Touch')
       }),
       message(Message.ReleasedPointer({ pointerId: FINGER })),
-      message(Message.ClickedKnifeSlot()),
+      message(Message.ClickedMeleeSlot()),
       model(({ player }) => {
-        expect(player.wield).toBe('Knife')
+        expect(player.wield).toBe('Melee')
       }),
       message(tickFrame),
       model(current => {
@@ -166,14 +166,14 @@ describe('a press on a HUD slot', () => {
     story(
       update,
       given(inBreak),
-      message(pressSlot(inBreak, KNIFE_SLOT_INDEX, 'Mouse', MOUSE)),
+      message(pressSlot(inBreak, MELEE_SLOT_INDEX, 'Mouse', MOUSE)),
       model(({ input }) => {
         expect(input.mouseButton._tag).toBe('Released')
       }),
       message(Message.ReleasedPointer({ pointerId: MOUSE })),
-      message(Message.ClickedKnifeSlot()),
+      message(Message.ClickedMeleeSlot()),
       model(({ player }) => {
-        expect(player.wield).toBe('Knife')
+        expect(player.wield).toBe('Melee')
       }),
       message(tickFrame),
       model(current => {
@@ -199,12 +199,12 @@ describe('a press on a HUD slot', () => {
     story(
       update,
       given(midWave),
-      message(pressSlot(midWave, KNIFE_SLOT_INDEX, 'Mouse', MOUSE)),
+      message(pressSlot(midWave, MELEE_SLOT_INDEX, 'Mouse', MOUSE)),
       message(Message.ReleasedPointer({ pointerId: MOUSE })),
-      message(Message.ClickedKnifeSlot()),
-      message(Message.ClickedKnifeSlot()),
+      message(Message.ClickedMeleeSlot()),
+      message(Message.ClickedMeleeSlot()),
       model(({ player }) => {
-        expect(player.wield).toBe('Knife')
+        expect(player.wield).toBe('Melee')
       }),
     )
   })

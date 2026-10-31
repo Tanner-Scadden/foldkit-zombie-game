@@ -223,7 +223,7 @@ const SIMPLE_ACTIONS: ReadonlyArray<SeatAction['_tag']> = [
   'NextTrap',
   'LeaveCounter',
   'Ready',
-  'Knife',
+  'Melee',
 ]
 
 // NOTE: drawing a gun by its slot follows the simple actions' codes.
@@ -254,7 +254,7 @@ const itemCode = (item: string): number =>
 export const actionCodeOf = (action: SeatAction): number =>
   SeatAction.match(action, {
     Swap: () => simpleCode('Swap'),
-    Knife: () => simpleCode('Knife'),
+    Melee: () => simpleCode('Melee'),
     Draw: ({ slot }) => drawCode(slot),
     Reload: () => simpleCode('Reload'),
     PlaceTrap: () => simpleCode('PlaceTrap'),
@@ -281,8 +281,8 @@ const simpleAction = (tag: SeatAction['_tag']): Option.Option<SeatAction> => {
     return Option.some(SeatAction.LeaveCounter())
   } else if (tag === 'Ready') {
     return Option.some(SeatAction.Ready())
-  } else if (tag === 'Knife') {
-    return Option.some(SeatAction.Knife())
+  } else if (tag === 'Melee') {
+    return Option.some(SeatAction.Melee())
   } else {
     return Option.none()
   }

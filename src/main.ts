@@ -80,7 +80,7 @@ import {
   pauseRound,
   pauseWhenAway,
   pressGunSlot,
-  pressKnifeSlot,
+  pressMeleeSlot,
   pressedKey,
   releasedKey,
   reloadHeldGun,
@@ -405,11 +405,11 @@ export const update = ApplicationComposition.makeUpdate({
           ...afterMessage(model),
         ]),
 
-  ClickedKnifeSlot: (model, message) =>
+  ClickedMeleeSlot: (model, message) =>
     isSlotClickPassingThrough(model)
       ? passSlotClick(model)
       : Update.combineSteps(model, [
-          makeStep(orInRun(message, pressKnifeSlot)),
+          makeStep(orInRun(message, pressMeleeSlot)),
           ...afterMessage(model),
         ]),
 

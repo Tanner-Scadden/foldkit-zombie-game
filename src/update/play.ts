@@ -55,11 +55,11 @@ import { isRoundActive, pause } from '../waves'
 import {
   beginReload,
   canReload,
-  drawKnife,
+  drawMelee,
   drawSlot,
   heldSlotOf,
   inHandOf,
-  isWieldingKnife,
+  isWieldingMelee,
   swapInHand,
 } from '../weapons'
 import { coopFromKey, isCoopOpen, pressCoopKey, releaseCoopKey } from './coop'
@@ -180,8 +180,8 @@ export const swapGun = (model: Model): Model =>
 
 // NOTE: F, or a tap on the knife slot: the knife in hand (GAME_DESIGN.md,
 // "The knife and two gun slots").
-export const equipKnife = (model: Model): Model =>
-  isHandFree(model) ? modifyFields(model, { player: drawKnife }) : model
+export const equipMelee = (model: Model): Model =>
+  isHandFree(model) ? modifyFields(model, { player: drawMelee }) : model
 
 // NOTE: a tap on a gun slot with the knife out: that gun in hand.
 export const drawGunSlot = (model: Model, slot: GunSlot): Model =>
@@ -196,7 +196,7 @@ export const swapFromKey = (model: Model, code: string): Model => {
   if (isSwapKey(code)) {
     return swapGun(model)
   } else if (isKnifeKey(code)) {
-    return equipKnife(model)
+    return equipMelee(model)
   } else {
     return model
   }
@@ -248,7 +248,7 @@ export const tapSound: UpdateStep = playSounds([uiCue('Pop')])
 
 // NOTE: with the knife out, R puts the last gun back in hand to reload it.
 export const reloadHeldGun: UpdateStep = model => {
-  const stepModel = isWieldingKnife(model.player)
+  const stepModel = isWieldingMelee(model.player)
     ? drawGunSlot(model, heldSlot(model))
     : model
   const { player } = stepModel
@@ -463,7 +463,7 @@ export const pressGunSlot =
   model => {
     if (isDebutCardBlocking(model)) {
       return { model }
-    } else if (isWieldingKnife(model.player)) {
+    } else if (isWieldingMelee(model.player)) {
       return drawFromButton(current => drawGunSlot(current, slot))(model)
     } else if (slot === heldSlot(model)) {
       return combine(model, [unlockAudio, reloadHeldGun])
@@ -489,9 +489,9 @@ export const isSlotClickPassingThrough = (model: Model): boolean =>
 
 // NOTE: a tap on the knife slot draws the knife; on the knife in hand it
 // does nothing.
-export const pressKnifeSlot: UpdateStep = stepWhen(
-  model => !isDebutCardBlocking(model) && !isWieldingKnife(model.player),
-  drawFromButton(equipKnife),
+export const pressMeleeSlot: UpdateStep = stepWhen(
+  model => !isDebutCardBlocking(model) && !isWieldingMelee(model.player),
+  drawFromButton(equipMelee),
 )
 
 // NOTE: the counter and the new zombie card hold the round's buttons.

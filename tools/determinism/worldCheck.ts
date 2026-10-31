@@ -201,7 +201,7 @@ const requestFor = (players: number): PlayRequest => ({
   world: worldToJson(
     withSeat(seatCrew(intended, players), KNIFE_SEAT, seatWorld =>
       modifyFields(seatWorld, {
-        player: player => modifyFields(player, { wield: () => 'Knife' }),
+        player: player => modifyFields(player, { wield: () => 'Melee' }),
       }),
     ),
   ),

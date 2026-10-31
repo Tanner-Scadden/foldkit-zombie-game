@@ -18,7 +18,7 @@ import { leadSeatOf, maybePlayerAt } from './party'
 import { nextRandom } from './prng'
 import type { Offer } from './purchase'
 import { isKitchenTourOn } from './tutorialRules'
-import { cancelReload, freshGun, isCarrying, takeGun } from './weapons'
+import { cancelReload, freshGun, isCarrying, takeGun, takePan } from './weapons'
 import type { World } from './world'
 import {
   type Fridge,
@@ -36,8 +36,9 @@ import {
 // runs, through the hold to buy (src/purchase.ts): hold the interact key at
 // its door and the price is paid, the door creaks open in a puff of green
 // fog, and the prize pops up and flies to whoever pulled. Its prizes are
-// the fridge-only weapons (src/fridgeWeapons.ts), into the spare gun slot as
-// a bought gun goes, or a gag: a moldy Sandwich that heals a heart, or a Dud
+// the fridge-only weapons (src/fridgeWeapons.ts), the Cooker and Brain
+// Freeze into a gun slot as a bought gun goes and the Clang Pan into the
+// melee slot in place of the knife, or a gag: a moldy Sandwich that heals a heart, or a Dud
 // that burps half the price back. After three or four pulls it slams shut
 // with a rumble for a while, and the rare prize comes a little more often
 // after each slam.
@@ -238,12 +239,19 @@ export const fridgeOffers = (world: World): ReadonlyArray<Offer> =>
 
 // THE PULL
 
+// NOTE: the Cooker and Brain Freeze go in a gun slot, as a bought gun
+// does. The Pan goes in the melee slot in place of the knife and both guns
+// stay; a reload of the last gun carries on, as it does with the knife out.
 const giveWeapon = (player: Player, kind: WeaponKind): Player =>
-  modifyFields(dropCharge(cancelReload(player)), {
-    arsenal: arsenal => takeGun(arsenal, freshGun(kind)),
-    wield: () => 'Gun',
-    fireCooldownMs: () => 0,
-  })
+  kind === 'Pan'
+    ? modifyFields(takePan(dropCharge(player), freshGun(kind)), {
+        fireCooldownMs: () => 0,
+      })
+    : modifyFields(dropCharge(cancelReload(player)), {
+        arsenal: arsenal => takeGun(arsenal, freshGun(kind)),
+        wield: () => 'Gun',
+        fireCooldownMs: () => 0,
+      })
 
 // NOTE: a gag resolves at once; a weapon waits on offer in the door.
 const givePrize = (world: World, prize: FridgePrize): World =>
@@ -366,8 +374,8 @@ const spotOf = (world: World) =>
     onSome: fridgeSpot,
   })
 
-// NOTE: take it: the puller holds at the door and the weapon replaces
-// their spare gun, as a bought gun does.
+// NOTE: take it: the puller holds at the door and the weapon is theirs: a
+// gun slot for the Cooker or Brain Freeze, the melee slot for the Pan.
 export const takePrize = (world: World): Option.Option<World> =>
   isOfferedTo(world) && FridgeDoor.isAnyOf(['Offering'])(world.fridge.door)
     ? Option.map(weaponOf(world.fridge.door.prize), kind => {

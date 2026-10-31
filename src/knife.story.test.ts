@@ -135,13 +135,13 @@ describe('the knife', () => {
         }),
     })
     const drawn = send(reloading, Message.PressedKey({ code: 'KeyF' }))
-    expect(drawn.player.wield).toBe('Knife')
+    expect(drawn.player.wield).toBe('Melee')
     expect(inHandOf(drawn.player)).toBe('Knife')
     expect(drawn.player.reload._tag).toBe('Reloading')
     const reloaded = lastOf(frames(drawn, tickCountFor(600) + 1))
     expect(reloaded.player.reload._tag).toBe('Ready')
     expect(heldGun(reloaded.player.arsenal).loaded).toBe(PISTOL_MAGAZINE)
-    expect(reloaded.player.wield).toBe('Knife')
+    expect(reloaded.player.wield).toBe('Melee')
   })
 
   test('changing guns from the knife stops the reload of the last gun', () => {
@@ -150,7 +150,7 @@ describe('the knife', () => {
         modifyFields(player, {
           arsenal: () => holdingSecond(freshGun('Smg')),
           reload: () => Reload.Reloading({ remainingMs: 600, durationMs: 800 }),
-          wield: () => 'Knife',
+          wield: () => 'Melee',
         }),
     })
     const toPistol = send(reloading, Message.ClickedGunSlot({ slot: 'First' }))
@@ -164,9 +164,9 @@ describe('the knife', () => {
     story(
       update,
       given(fightingWith([])),
-      message(Message.ClickedKnifeSlot()),
+      message(Message.ClickedMeleeSlot()),
       model(({ player }) => {
-        expect(player.wield).toBe('Knife')
+        expect(player.wield).toBe('Melee')
       }),
     )
   })
@@ -179,8 +179,8 @@ describe('the knife', () => {
             pistolOnly(modifyFields(STARTING_PISTOL, { loaded: () => 0 })),
         }),
     })
-    const drawn = update(emptyPistol, Message.ClickedKnifeSlot()).model
-    const again = update(drawn, Message.ClickedKnifeSlot())
+    const drawn = update(emptyPistol, Message.ClickedMeleeSlot()).model
+    const again = update(drawn, Message.ClickedMeleeSlot())
     expect(again.model.player).toEqual(drawn.player)
     expect(again.model.player.reload._tag).toBe('Ready')
     expect(again.commands ?? []).toHaveLength(0)
@@ -244,7 +244,10 @@ describe('the knife', () => {
   test('fire held stabs on repeat, one stab per cooldown and no faster', () => {
     const lug = zombieOf('Tank', 900, PLAYER_X + 12, ROW_Y, { hp: 99 })
     const held = send(knifed([lug]), fire)
-    const seen = frames(held, tickCountFor(KNIFE_RULES.intervalMs * 3 - FRAME_MS))
+    const seen = frames(
+      held,
+      tickCountFor(KNIFE_RULES.intervalMs * 3 - FRAME_MS),
+    )
     expect(stabsIn(seen)).toBe(3)
     expect(zombieIn(lastOf(seen), 900).hp).toBe(99 - 3 * KNIFE_RULES.damage)
   })
@@ -254,7 +257,9 @@ describe('the knife', () => {
       frames(send(knifed([tough(900, PLAYER_X + 10)]), fire), 1),
     )
     const letGo = send(firstStab, letGoOfFire)
-    expect(stabsIn(frames(letGo, tickCountFor(KNIFE_RULES.intervalMs * 3)))).toBe(0)
+    expect(
+      stabsIn(frames(letGo, tickCountFor(KNIFE_RULES.intervalMs * 3))),
+    ).toBe(0)
   })
 
   test('another finger lifting does not let go of the trigger', () => {
@@ -263,7 +268,9 @@ describe('the knife', () => {
       fire,
       Message.ReleasedPointer({ pointerId: 7 }),
     )
-    expect(stabsIn(frames(held, tickCountFor(KNIFE_RULES.intervalMs * 2)))).toBe(2)
+    expect(
+      stabsIn(frames(held, tickCountFor(KNIFE_RULES.intervalMs * 2))),
+    ).toBe(2)
   })
 
   test('Q puts the knife away for the last gun held', () => {
@@ -300,7 +307,7 @@ describe('the knife', () => {
     story(
       update,
       given(armed),
-      message(Message.ClickedKnifeSlot()),
+      message(Message.ClickedMeleeSlot()),
       message(Message.ClickedGunSlot({ slot: 'First' })),
       model(({ player }) => {
         expect(player.wield).toBe('Gun')
@@ -316,7 +323,7 @@ describe('the knife', () => {
             modifyFields(player, { arsenal: () => holdingSecond(emptySmg) }),
         }),
       ),
-      message(Message.ClickedKnifeSlot()),
+      message(Message.ClickedMeleeSlot()),
       message(Message.ClickedGunSlot({ slot: 'Second' })),
       model(({ player }) => {
         expect(player.wield).toBe('Gun')
@@ -332,7 +339,7 @@ describe('the knife', () => {
         modifyFields(player, {
           arsenal: () =>
             pistolOnly(modifyFields(STARTING_PISTOL, { loaded: () => 0 })),
-          wield: () => 'Knife',
+          wield: () => 'Melee',
         }),
     })
     story(
@@ -358,7 +365,7 @@ describe('the knife', () => {
     })
     const seen = frames(send(allDry, fire), 1)
     const pulled = lastOf(seen)
-    expect(pulled.player.wield).toBe('Knife')
+    expect(pulled.player.wield).toBe('Melee')
     expect(Array.some(pulled.frameEvents, GameEvent.isAnyOf(['RanDry']))).toBe(
       true,
     )
@@ -530,7 +537,7 @@ describe('two gun slots', () => {
     ).model
     const stuckAfter = lastOf(frames(stuck, 2)).player
     expect(heldWeapon(stuckAfter.arsenal)).toBe('Smg')
-    expect(stuckAfter.wield).toBe('Knife')
+    expect(stuckAfter.wield).toBe('Melee')
   })
 
   test('the pistol upgrade goes with the pistol, wherever it sits', () => {
@@ -594,7 +601,7 @@ describe('the knife in co-op', () => {
   test('a seat draws its own knife and its fire stabs in front of its own player only', () => {
     const stepped = stepWith(room(), slot =>
       slot === 1
-        ? { action: pressed(SeatAction.Knife(), 1), buttons: FIRE_BUTTON }
+        ? { action: pressed(SeatAction.Melee(), 1), buttons: FIRE_BUTTON }
         : {},
     )
     const hpOf = (id: number): number =>
@@ -605,7 +612,7 @@ describe('the knife in co-op', () => {
     expect(hpOf(901)).toBe(99)
     const stabber = Option.getOrThrow(maybePlayerAt(stepped.world, 1))
     const other = Option.getOrThrow(maybePlayerAt(stepped.world, 0))
-    expect(stabber.player.wield).toBe('Knife')
+    expect(stabber.player.wield).toBe('Melee')
     expect(stabber.player.knifeCooldownMs).toBeGreaterThan(0)
     expect(other.player.wield).toBe('Gun')
     expect(other.player.knifeCooldownMs).toBe(0)
@@ -613,7 +620,7 @@ describe('the knife in co-op', () => {
 
   test('a seat goes back to a gun by its slot', () => {
     const drawn = stepWith(room(), slot =>
-      slot === 1 ? { action: pressed(SeatAction.Knife(), 1) } : {},
+      slot === 1 ? { action: pressed(SeatAction.Melee(), 1) } : {},
     )
     const back = stepWith(drawn, slot =>
       slot === 1

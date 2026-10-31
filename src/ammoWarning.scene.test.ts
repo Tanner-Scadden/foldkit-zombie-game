@@ -21,7 +21,7 @@ const onTouchWith = (first: CarriedGun, second: CarriedGun): Model =>
       }),
   })
 
-const knifeSlot = selector('.gun-slot-button[data-slot="Knife"]')
+const knifeSlot = selector('.gun-slot-button[data-slot="Melee"]')
 
 describe('the knife when the guns run dry', () => {
   test('the knife slot pulses once every gun is dry', () => {

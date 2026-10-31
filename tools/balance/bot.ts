@@ -70,11 +70,13 @@ import {
   heldGun,
   heldLoaded,
   heldStats,
+  isCarrying,
   isReloading,
-  isWieldingKnife,
+  isWieldingMelee,
   maxRounds,
   maxTier,
   maybeOtherGun,
+  maybePanOf,
 } from '../../src/weapons'
 import { withWorld } from '../../src/world'
 import { ZOMBIE_KINDS, bodyRadiusOf } from '../../src/zombies'
@@ -702,8 +704,10 @@ const routeTo = (from: Vector, goal: Vector): Vector => {
 // THE FRIDGE WEAPONS' PLAN
 
 // How the bot fights while it carries a fridge weapon, chosen every few
-// frames: whether to hold the spare or the pistol, what to aim at, how long
-// to hold a Cooker charge, and the zombie a Pan keeps its distance to.
+// frames: whether to hold the spare or the pistol, what to aim at, and how
+// long to hold a Cooker charge. The Pan is in the melee slot, so its plan
+// (panPlanNow) is its own: whether to swing, and the zombie it keeps its
+// distance to.
 type Zombie = Model['zombies'][number]
 
 type FridgePlan = {
@@ -721,6 +725,7 @@ const GUN_PLAN: FridgePlan = {
 }
 
 let fridgePlan: FridgePlan = GUN_PLAN
+let panPlanNow: FridgePlan = GUN_PLAN
 
 // The Pan dazes and knocks back the small kinds; it keeps its distance
 // from an Exploder, which would burst in its face, and from the big ones.
@@ -731,7 +736,7 @@ const PAN_NEAR_PX = 12
 const PAN_FAR_PX = 16
 
 const panStance = (model: Model): Vector | undefined => {
-  const { panTarget } = fridgePlan
+  const { panTarget } = panPlanNow
   if (panTarget === undefined) return undefined
   const { player } = model
   const threat = walking(model)
@@ -768,7 +773,7 @@ const isGunIdle = (model: Model): boolean => {
   return (
     isReloading(player) ||
     isSpent(held) ||
-    (held.kind !== 'Pan' && heldLoaded(player) <= 0 && !canReload(player))
+    (heldLoaded(player) <= 0 && !canReload(player))
   )
 }
 
@@ -779,13 +784,15 @@ const isWithinKnife = (model: Model): boolean =>
       KNIFE_RULES.reachPx - STAB_SLACK_PX,
   )
 
+// With the Pan in the melee slot the same rules draw it, and while its
+// plan swings it the bot keeps it out.
 const handleKnife = (model: Model): Model => {
-  if (!isWieldingKnife(model.player)) {
+  if (!isWieldingMelee(model.player)) {
     return isWithinKnife(model) && isGunIdle(model)
       ? tapKey(model, KEYS.knife)
       : model
   }
-  return !isOutOfGuns(model.player) && !isGunIdle(model)
+  return !panPlanNow.useSpare && !isOutOfGuns(model.player) && !isGunIdle(model)
     ? tapKey(model, 'KeyQ')
     : model
 }
@@ -1038,7 +1045,12 @@ type Gun = ReturnType<typeof heldGun>
 const gunsOfBot = (model: Model): ReadonlyArray<Gun> =>
   gunsOf(model.player.arsenal)
 
-// The fridge weapon the bot carries, in either slot.
+// The Clang Pan in the melee slot, if the fridge has given one.
+const panOf = (model: Model): Gun | undefined =>
+  Option.getOrUndefined(maybePanOf(model.player))
+
+// The fridge weapon the bot carries in a gun slot (the Cooker or Brain
+// Freeze; the Pan is in the melee slot).
 const fridgeSpareOf = (model: Model): Gun | undefined =>
   gunsOfBot(model).find(gun => isFridgeWeapon(gun.kind))
 
@@ -1068,7 +1080,6 @@ const gunValue = (gun: Gun): number => {
   if (gun.kind === 'Pistol') return 1 + gun.tier
   if (gun.kind === 'Shotgun') return 2 + gun.tier
   if (gun.kind === 'Smg') return 3 + gun.tier * 1.5
-  if (gun.kind === 'Pan') return 2.5 + gun.tier
   if (gun.kind === 'Freeze') return 3
   return 4 + gun.tier
 }
@@ -1231,11 +1242,33 @@ const freezePlan = (model: Model, spare: FridgeSpare): FridgePlan => {
     : gunPlan()
 }
 
-const planFor = (model: Model, spare: FridgeSpare): FridgePlan => {
-  if (spare.kind === 'Cooker') return cookerPlan(model, spare)
-  if (spare.kind === 'Pan') return panPlan(model)
-  return freezePlan(model, spare)
+const planFor = (model: Model, spare: FridgeSpare): FridgePlan =>
+  spare.kind === 'Cooker' ? cookerPlan(model, spare) : freezePlan(model, spare)
+
+// The Pan swings as the knife stabs: F draws it, fire held swings at the
+// planned zombie, and handleKnife puts it away (Q) once the plan has no
+// target and a gun can shoot.
+const swingPan = (model: Model, frame: number): Model => {
+  const drawn = isWieldingMelee(model.player)
+    ? model
+    : tapKey(model, KEYS.knife)
+  const { target } = panPlanNow
+  if (frame % AIM_EVERY_FRAMES !== 0 || target === undefined) {
+    return holdAssistedAim(drawn)
+  }
+  const aimed = aimAt(drawn, target)
+  return pressFire(aimed.model, aimed.point)
 }
+
+// The Pan out with no target to swing at goes back to the last gun at
+// once, unless no gun can shoot.
+const sheathPan = (model: Model): Model =>
+  isWieldingMelee(model.player) &&
+  panOf(model) !== undefined &&
+  !isOutOfGuns(model.player) &&
+  !isGunIdle(model)
+    ? tapKey(model, 'KeyQ')
+    : model
 
 const isHoldingSpare = (model: Model) =>
   isFridgeWeapon(heldGun(model.player.arsenal).kind)
@@ -1435,6 +1468,16 @@ const wantedPurchase = (model: Model): ItemId | undefined => {
   ) {
     return fridgeUpgrade
   }
+  // The Pan in the melee slot gets its tiers in the same place.
+  const pan = panOf(model)
+  if (
+    spare.tier >= maxTier(spare.kind) &&
+    pan !== undefined &&
+    pan.tier < maxTier(pan.kind) &&
+    canSpare('PanUpgrade')
+  ) {
+    return 'PanUpgrade'
+  }
   if (spare.tier >= maxTier(spare.kind) && canSpare('PistolUpgrade')) {
     return 'PistolUpgrade'
   }
@@ -1557,9 +1600,15 @@ const isFridgeInReach = (model: Model): boolean =>
 // Rattles sells it back for $0 once the fridge weapon is spent.
 const FRIDGE_PRIZES = ['Cooker', 'Pan', 'Freeze'] as const
 
+// The Pan takes the knife's place, not a gun's, so it always beats what
+// it replaces.
 const beatsWeaker = (model: Model, kind: Gun['kind']): boolean => {
   const weaker = weakerGun(model)
-  return weaker === undefined || gunValue(freshGun(kind)) > gunValue(weaker)
+  return (
+    kind === 'Pan' ||
+    weaker === undefined ||
+    gunValue(freshGun(kind)) > gunValue(weaker)
+  )
 }
 
 const offeredWeapon = (model: Model): Gun['kind'] | undefined => {
@@ -1579,9 +1628,9 @@ const wouldTake = (model: Model): boolean => {
 // the weapons the fridge can still give it (never the one it carries) must
 // beat its weaker gun. Otherwise the $75 buys a prize it walks away from.
 const wouldTakeAnyPrize = (model: Model): boolean =>
-  FRIDGE_PRIZES.filter(
-    kind => !gunsOfBot(model).some(gun => gun.kind === kind),
-  ).every(kind => beatsWeaker(model, kind))
+  FRIDGE_PRIZES.filter(kind => !isCarrying(model.player, kind)).every(kind =>
+    beatsWeaker(model, kind),
+  )
 
 const isOfferedToBot = (model: Model): boolean =>
   model.fridge.door._tag === 'Offering' &&
@@ -1835,6 +1884,7 @@ export const play = (
   kitchenWave = 0
   fridgeLog = emptyFridgeLog()
   fridgePlan = GUN_PLAN
+  panPlanNow = GUN_PLAN
   boughtLog = []
   gnomeTries = 0
   gnomesPlaced = 0
@@ -1905,7 +1955,12 @@ export const play = (
           item === undefined ? undefined : replacedBy(model, item),
         )
       }
-      if (plan === 'Fridge' && isOfferedToBot(model) && wouldTake(model)) {
+      if (
+        plan === 'Fridge' &&
+        isOfferedToBot(model) &&
+        wouldTake(model) &&
+        offeredWeapon(model) !== 'Pan'
+      ) {
         model = holdToReplace(model, weakerGun(model))
       }
       if (plan === 'Fridge' && isFridgeInReach(model)) {
@@ -1955,12 +2010,19 @@ export const play = (
           ),
         )
       }
+      if (panOf(model) === undefined) {
+        panPlanNow = GUN_PLAN
+      } else if (frame % AIM_EVERY_FRAMES === 0) {
+        panPlanNow = panPlan(model)
+      }
       const fridgeSpare = fridgeSpareOf(model)
-      if (fridgeSpare === undefined) {
+      if (panPlanNow.useSpare) {
+        model = swingPan(model, frame)
+      } else if (fridgeSpare === undefined) {
         fridgePlan = GUN_PLAN
-        model = aimAndFire(model, frame)
+        model = aimAndFire(sheathPan(model), frame)
       } else {
-        model = fightWithFridge(model, frame, fridgeSpare)
+        model = fightWithFridge(sheathPan(model), frame, fridgeSpare)
       }
     }
     lastPosition = model.player

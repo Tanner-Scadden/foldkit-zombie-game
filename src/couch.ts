@@ -208,7 +208,7 @@ const buyActionOf = (model: Model, slot: PlayerSlot): SeatAction =>
 const ACTION_KEYS: ReadonlyArray<readonly [keyof CouchKeys, () => SeatAction]> =
   [
     ['swap', () => SeatAction.Swap()],
-    ['knife', () => SeatAction.Knife()],
+    ['knife', () => SeatAction.Melee()],
     ['reload', () => SeatAction.Reload()],
     ['placeTrap', () => SeatAction.PlaceTrap()],
     ['nextTrap', () => SeatAction.NextTrap()],

@@ -19,6 +19,7 @@ import {
   type CarriedGun,
   Charge,
   GameEvent,
+  Melee,
   type Model,
   Phase,
   type Zombie,
@@ -38,7 +39,7 @@ import {
   zombieOf,
 } from './testing'
 import { asVeteran } from './veteran'
-import { WEAPONS, freshGun, magazineOf } from './weapons'
+import { WEAPONS, freshGun, magazineOf, maybePanOf } from './weapons'
 
 // The Mystery Leftovers weapons (src/fridgeWeapons.ts), played through
 // `update` with a thumb on the aim stick: hold to charge or swing, lift to
@@ -62,7 +63,9 @@ const holding = (
         x: () => PLAYER_X,
         y: () => ROW_Y,
         facing: () => ({ x: 1, y: 0 }),
-        arsenal: () => holdingSecond(spare),
+        ...(spare.kind === 'Pan'
+          ? { melee: () => Melee.Pan({ pan: spare }), wield: () => 'Melee' }
+          : { arsenal: () => holdingSecond(spare) }),
       }),
   })
 
@@ -100,8 +103,14 @@ const press = Message.PressedPointer({
 
 const lift = Message.ReleasedPointer({ pointerId: 70 })
 
+// NOTE: the Pan is in the melee slot, the Cooker and Brain Freeze in a gun
+// slot.
 const spareOf = (current: Model): CarriedGun =>
-  Option.getOrThrow(maybeSpareGun(current.player.arsenal))
+  Option.getOrThrow(
+    Option.orElse(maybePanOf(current.player), () =>
+      maybeSpareGun(current.player.arsenal),
+    ),
+  )
 
 describe('the Pressure Cooker', () => {
   test('holding builds pressure; lifting throws one lid along the aim', () => {

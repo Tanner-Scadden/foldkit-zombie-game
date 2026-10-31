@@ -124,7 +124,7 @@ describe('the gun cluster', () => {
   const cluster = selector('.gun-cluster')
   const smgSlot = role('button', { name: `Reload the ${SMG_NAME}` })
   const pistolSlot = role('button', { name: 'Switch to the Pop Pistol' })
-  const knifeSlot = selector('.gun-slot-button[data-slot="Knife"]')
+  const knifeSlot = selector('.gun-slot-button[data-slot="Melee"]')
 
   test('sits at the bottom middle with the held gun marked', () => {
     scene(

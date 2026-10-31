@@ -56,9 +56,9 @@ import {
 import {
   type MuzzleFlash,
   type WeaponStats,
-  heldTier,
-  heldWeapon,
+  heldGun,
   isWieldingKnife,
+  maybeWieldedPan,
   statsAt,
 } from './weapons'
 
@@ -238,9 +238,12 @@ type PlayerPose = Readonly<{
   bodyY: number
 }>
 
+// NOTE: the Pan drawn from the melee slot is held and swung as a gun in
+// hand is; with the knife out the last gun's pose stays.
 const playerPose = (player: Player): PlayerPose => {
-  const weapon = heldWeapon(player.arsenal)
-  const tier = heldTier(player)
+  const { kind: weapon, tier } = Option.getOrElse(maybeWieldedPan(player), () =>
+    heldGun(player.arsenal),
+  )
   const stats = statsAt(weapon, tier)
   const recoil = clamp(player.recoilRemainingMs / stats.recoilMs, 0, 1)
   const kick = stats.recoilKickPx * recoil

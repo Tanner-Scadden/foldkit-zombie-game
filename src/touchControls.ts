@@ -4,7 +4,7 @@ import type { Html } from 'foldkit/html'
 import { isOutOfGuns } from './ammoWarning'
 import type { ApplicationViewBuilder } from './composition'
 import { STICK_RADIUS_PX } from './constants'
-import { KNIFE_SLOT_INDEX, gunClusterBox, gunSlotBox, secondsLeft } from './hud'
+import { MELEE_SLOT_INDEX, gunClusterBox, gunSlotBox, secondsLeft } from './hud'
 import { NEXT_TRAP_ICON, RELOAD_ICON, TRAP_BUTTON_ICONS } from './icons'
 import { thumbOffset } from './input'
 import { Message, type PressedHudSlot } from './message'
@@ -16,7 +16,6 @@ import {
   Stick,
   TrapHint,
 } from './model'
-import { KNIFE_NAME } from './names'
 import {
   type GhostStick,
   isDebutCardUp,
@@ -43,7 +42,8 @@ import {
   heldSlotOf,
   heldStats,
   heldWeapon,
-  isWieldingKnife,
+  isWieldingMelee,
+  meleeNameOf,
   tierName,
 } from './weapons'
 
@@ -147,7 +147,7 @@ const toPressedHudSlot = (
 // to the other; with the knife out, Q goes back to the last gun held.
 const gunSlotKey = (model: Model, slot: GunSlot): Option.Option<string> => {
   const isLastHeld = slot === heldSlot(model)
-  if (isWieldingKnife(model.player)) {
+  if (isWieldingMelee(model.player)) {
     return isLastHeld ? Option.some('Q') : Option.none()
   } else {
     return Option.some(isLastHeld ? 'R' : 'Q')
@@ -172,7 +172,7 @@ const gunSlotButtonView = (
   { slot, name }: SlotGun,
   h: ApplicationViewBuilder,
 ): Html => {
-  const isHeld = !isWieldingKnife(model.player) && slot === heldSlot(model)
+  const isHeld = !isWieldingMelee(model.player) && slot === heldSlot(model)
   const maybeKey = gunSlotKey(model, slot)
   return h.keyed('button')(
     slot,
@@ -202,30 +202,29 @@ const gunSlotButtonView = (
   )
 }
 
-// NOTE: the knife's slot, right of the guns: a tap draws the knife, and a
-// tap on the knife in hand does nothing.
-const knifeSlotButtonView = (
+// NOTE: the melee slot, right of the guns: a tap draws the knife or the
+// Pan, and a tap on the one in hand does nothing.
+const meleeSlotButtonView = (
   model: Model,
   screen: Screen,
   h: ApplicationViewBuilder,
 ): Html => {
-  const isHeld = isWieldingKnife(model.player)
+  const isHeld = isWieldingMelee(model.player)
+  const name = meleeNameOf(model.player)
   return h.keyed('button')(
-    'Knife',
+    'Melee',
     [
       h.Type('button'),
       h.Class('gun-slot-button'),
-      h.DataAttribute('slot', 'Knife'),
+      h.DataAttribute('slot', 'Melee'),
       h.DataAttribute('held', isHeld ? 'true' : 'false'),
       h.DataAttribute('out', isOutOfGuns(model.player) ? 'true' : 'false'),
-      h.AriaLabel(
-        isHeld ? `The ${KNIFE_NAME} is in hand` : `Switch to the ${KNIFE_NAME}`,
-      ),
+      h.AriaLabel(isHeld ? `The ${name} is in hand` : `Switch to the ${name}`),
       h.AriaKeyshortcuts('F'),
       ...(isHeld ? [h.AriaDisabled(true)] : []),
-      h.Style(slotSpan(screen, KNIFE_SLOT_INDEX)),
+      h.Style(slotSpan(screen, MELEE_SLOT_INDEX)),
       h.OnPointerDown(toPressedHudSlot),
-      h.OnClick(Message.ClickedKnifeSlot(), {
+      h.OnClick(Message.ClickedMeleeSlot(), {
         focusSelector: '.game-surface',
       }),
     ],
@@ -252,7 +251,7 @@ const gunSlotsView = (
       ...Array.map(slotGuns(model), gun =>
         gunSlotButtonView(model, screen, gun, h),
       ),
-      knifeSlotButtonView(model, screen, h),
+      meleeSlotButtonView(model, screen, h),
     ],
   )
 
@@ -263,7 +262,7 @@ const isMagazineLow = (model: Model): boolean =>
 
 const reloadIconView = (model: Model, h: ApplicationViewBuilder): Html =>
   isOnTouch(model) &&
-  !isWieldingKnife(model.player) &&
+  !isWieldingMelee(model.player) &&
   isMagazineLow(model) &&
   canReload(model.player)
     ? iconButtonView(

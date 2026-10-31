@@ -25,10 +25,10 @@ import { isRoundActive, startWaveEarly } from './waves'
 import {
   beginReload,
   canReload,
-  drawKnife,
+  drawMelee,
   drawSlot,
   heldSlotOf,
-  isWieldingKnife,
+  isWieldingMelee,
   swapInHand,
 } from './weapons'
 import type { World } from './world'
@@ -114,7 +114,7 @@ export const stepWorld = (
 // intent's interact (src/purchase.ts).
 export const SeatAction = defineTaggedUnion({
   Swap: {},
-  Knife: {},
+  Melee: {},
   Draw: { slot: GunSlot },
   Reload: {},
   PlaceTrap: {},
@@ -137,14 +137,14 @@ const inHand =
 
 const swap = inHand(swapInHand)
 
-const knife = inHand(drawKnife)
+const melee = inHand(drawMelee)
 
 const draw = (world: World, slot: GunSlot): World =>
   inHand(player => drawSlot(player, slot))(world)
 
 // NOTE: with the knife out, a reload puts the last gun back in hand first.
 const reload = (world: World): World => {
-  const drawn = isWieldingKnife(world.player)
+  const drawn = isWieldingMelee(world.player)
     ? draw(world, heldSlotOf(world.player.arsenal))
     : world
   return isFighting(drawn) && canReload(drawn.player)
@@ -178,7 +178,7 @@ const ready = (world: World): World =>
 const applyToSeat = (world: World, action: SeatAction): World =>
   SeatAction.match(action, {
     Swap: () => swap(world),
-    Knife: () => knife(world),
+    Melee: () => melee(world),
     Draw: ({ slot }) => draw(world, slot),
     Reload: () => reload(world),
     PlaceTrap: () => placeTrap(world),

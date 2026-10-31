@@ -36,7 +36,6 @@ import {
   type RunStats,
 } from './model'
 import { MeasureGameSurface } from './mount'
-import { KNIFE_NAME } from './names'
 import { isOpenBreak, isPracticeGateHeld } from './onboarding'
 import { pauseHelpView } from './pauseHelp'
 import { BOOST_KIND_ORDER, PICKUPS, isBoosted } from './powerups'
@@ -69,9 +68,10 @@ import {
   hasEndlessRounds,
   heldTier,
   heldWeapon,
-  isWieldingKnife,
+  isWieldingMelee,
   maxTier,
   maybeOtherGun,
+  meleeNameOf,
   tierName,
 } from './weapons'
 import { ZOMBIE_KINDS, ZOMBIE_KIND_ORDER } from './zombies'
@@ -180,8 +180,8 @@ const statusText = (model: Model): string => {
 
 const gunLabel = (model: Model): string => {
   const { player } = model
-  const held = isWieldingKnife(player)
-    ? KNIFE_NAME
+  const held = isWieldingMelee(player)
+    ? meleeNameOf(player)
     : tierName(heldWeapon(player.arsenal), heldTier(player))
   return Option.match(maybeOtherGun(player.arsenal), {
     onNone: () => `Holding the ${held}. Your second slot is empty.`,

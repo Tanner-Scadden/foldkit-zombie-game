@@ -86,7 +86,7 @@ export const Message = defineMessageUnion({
   ClickedDebutCardButton: {},
   ClickedSwapButton: {},
   ClickedGunSlot: { slot: GunSlot },
-  ClickedKnifeSlot: {},
+  ClickedMeleeSlot: {},
   ClickedReloadButton: {},
   ClickedFullscreenButton: {},
   CompletedSetFullscreen: { fullscreen: FullscreenSetting },
