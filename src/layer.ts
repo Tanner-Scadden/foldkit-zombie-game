@@ -7,6 +7,7 @@ import {
   DetectLocalPlayers,
   DetectOrientationLock,
   DetectScreenFit,
+  DetectShareSheet,
   GenerateSeed,
   GenerateVisitId,
   LoadFonts,
@@ -18,7 +19,12 @@ import { MeasureGameSurface } from './mount'
 import { CueMusic } from './musicPlan'
 import { subscriptions } from './subscriptions'
 import { ReadRoomLink } from './update/coop'
-import { ClickShareLink, SendShareEvent } from './update/end'
+import {
+  ClickShareLink,
+  OpenShareLink,
+  OpenShareSheet,
+  SendShareEvent,
+} from './update/end'
 import { SetFullscreen } from './update/fullscreen'
 import {
   ClickSupportLink,
@@ -55,6 +61,7 @@ import {
 export const CommandsLayer = Layer.mergeAll(
   GenerateSeed.layer,
   DetectInputDevice.layer,
+  DetectShareSheet.layer,
   DetectScreenFit.layer,
   ShowInstallPrompt.layer,
   DetectLocalPlayers.layer,
@@ -76,6 +83,8 @@ export const CommandsLayer = Layer.mergeAll(
   FocusEndMenuButton.layer,
   ClickShareLink.layer,
   ClickSupportLink.layer,
+  OpenShareSheet.layer,
+  OpenShareLink.layer,
   SendShareEvent.layer,
   LoadStyles.layer,
   LoadFonts.layer,

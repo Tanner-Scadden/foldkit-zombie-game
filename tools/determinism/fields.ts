@@ -94,6 +94,7 @@ export const FIELD_CLASSES = {
   hintBand: 'Client',
   screenMs: 'Client',
   runRecords: 'Client',
+  shareSheet: 'Client',
   stepCarryMs: 'Client',
   audio: 'Client',
   soundSetting: 'Client',

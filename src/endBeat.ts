@@ -1,6 +1,7 @@
 import { Array, Option, Order, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import type { SharePath } from './analytics'
 import type { SoundEffect } from './audio'
 import { withBests } from './difficulty'
 import { isEndScreen } from './home'
@@ -406,6 +407,13 @@ export const mvpOf = (
   )
 
 // SHARING
+
+// NOTE: a touch screen with a share sheet shares through it; a keyboard,
+// a mouse, or a browser without one gets X's intent link.
+export const sharePathOf = (model: Model): SharePath =>
+  model.lastDevice === 'Touch' && model.shareSheet === 'Available'
+    ? 'Sheet'
+    : 'Link'
 
 // NOTE: `played` is the run's difficulty: the player's own, or in an online
 // co-op run the room's.

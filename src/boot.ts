@@ -266,6 +266,21 @@ export const GenerateVisitId = makeCommand('GenerateVisitId', {
 
 // BOOT
 
+// NOTE: a share sheet is there when the browser has navigator.share; only a
+// touch screen uses it (src/menus.ts).
+export const DetectShareSheet = makeCommand('DetectShareSheet', {
+  messages: [Message.CompletedDetectShareSheet],
+  handler: function* () {
+    return () =>
+      Effect.sync(() =>
+        Message.CompletedDetectShareSheet({
+          shareSheet:
+            typeof navigator.share === 'function' ? 'Available' : 'Unavailable',
+        }),
+      )
+  },
+})
+
 // NOTE: every Command init starts, in this order. A new LoadStep joins
 // LOAD_STEPS with a Command here that loads it.
 export const bootCommands = () => [
@@ -273,6 +288,7 @@ export const bootCommands = () => [
   GenerateSeed(),
   GenerateVisitId(),
   DetectInputDevice(),
+  DetectShareSheet(),
   DetectScreenFit(),
   DetectOrientationLock(),
   DetectLocalPlayers(),

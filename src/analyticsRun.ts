@@ -9,6 +9,7 @@ import {
   type RunSummary,
   SHARE_EVENT_VERSION,
   type ShareEvent,
+  type SharePath,
   type ShareScreen,
   type SummaryScreenFit,
   UNKNOWN_CAUSE,
@@ -141,6 +142,7 @@ export const shareEventOf = (
   visitId: string,
   build: string,
   played: Difficulty,
+  path: SharePath,
 ): ShareEvent => {
   return {
     version: SHARE_EVENT_VERSION,
@@ -152,5 +154,6 @@ export const shareEventOf = (
     ),
     mode: RunMode.isAnyOf(['Endless'])(model.mode) ? 'Endless' : 'Campaign',
     difficulty: played,
+    path,
   }
 }

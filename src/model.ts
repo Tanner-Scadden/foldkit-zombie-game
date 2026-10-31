@@ -165,6 +165,21 @@ export const ProfilePanel = Schema.Struct({
 })
 export type ProfilePanel = typeof ProfilePanel.Type
 
+// NOTE: whether the browser has a share sheet (navigator.share). On a touch
+// screen SHARE opens it, so the player picks X and X's own composer opens
+// with the post filled in; elsewhere SHARE is X's intent link.
+export const ShareSheet = Schema.Literals(['Available', 'Unavailable'])
+export type ShareSheet = typeof ShareSheet.Type
+
+// NOTE: how a share sheet ended: shared, cancelled by the player (nothing
+// more happens), or refused by the browser (SHARE falls back to the link).
+export const ShareSheetOutcome = Schema.Literals([
+  'Shared',
+  'Cancelled',
+  'Refused',
+])
+export type ShareSheetOutcome = typeof ShareSheetOutcome.Type
+
 // NOTE: a record the run that just ended broke, for its NEW BEST: the
 // deepest endless wave, or the fastest win (src/endBeat.ts).
 export const RunRecord = Schema.Literals(['Wave', 'Time', 'Kills'])
@@ -205,6 +220,7 @@ export const Model = Schema.Struct({
   hintBand: HintBand,
   screenMs: Schema.Number,
   runRecords: Schema.Array(RunRecord),
+  shareSheet: ShareSheet,
   audio: AudioState,
   soundSetting: SoundSetting,
   musicSetting: MusicSetting,
@@ -386,6 +402,7 @@ export const initialModel: Model = {
   stats: freshStats,
   screenMs: 0,
   runRecords: [],
+  shareSheet: 'Unavailable',
   audio: AudioState.Locked(),
   soundSetting: 'On',
   musicSetting: 'On',

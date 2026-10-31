@@ -17,6 +17,7 @@ import {
   mvpOf,
   rowLandMs,
   rowStartMs,
+  sharePathOf,
   shownValue,
   tallyRowsOf,
 } from './endBeat'
@@ -24,12 +25,17 @@ import { update } from './main'
 import { shareHrefOf } from './menus'
 import { Message } from './message'
 import { AudioState, type Model, Phase, RunMode, initialModel } from './model'
-import { creditKills, seatCrew } from './party'
+import { seatCrew } from './party'
 import { noSavedRunRecords } from './playerData'
 import { mergeRunRecords } from './playerScope'
 import { GAME_URL, shareText, shareUrl } from './share'
 import { SURFACE, press, tick, zombieOf } from './testing'
-import { ClickShareLink, SendShareEvent } from './update/end'
+import {
+  ClickShareLink,
+  OpenShareLink,
+  OpenShareSheet,
+  SendShareEvent,
+} from './update/end'
 import { PlaySound } from './update/sound'
 import { RUNNING_BUILD } from './version'
 import { asVeteran } from './veteran'
@@ -495,7 +501,7 @@ describe('sharing to X', () => {
 
   test('the link is X post intent with the text and the game, and nothing else', () => {
     const url = new URL(shareUrl({ ...base, outcome: 'Munched' }))
-    expect(`${url.origin}${url.pathname}`).toBe('https://x.com/intent/post')
+    expect(`${url.origin}${url.pathname}`).toBe('https://x.com/intent/tweet')
     expect([...url.searchParams.keys()]).toEqual(['text', 'url'])
     expect(url.searchParams.get('url')).toBe(GAME_URL)
     expect(url.searchParams.get('text')).toContain('wave 4')
@@ -508,37 +514,121 @@ describe('sharing to X', () => {
       maybeVisitId: () => Option.some(VISIT_ID),
     })
 
-  test('the SHARE link carries the run as X post intent', () => {
-    expect(shareHrefOf(onEndScreen(gameOver, doneMs('Munched')))).toBe(
-      shareUrl({ ...base, outcome: 'Munched', kills: 0 }),
-    )
-    const crewed = withWorld(
-      onEndScreen(Phase.Victory(), doneMs('Won')),
-      world => creditKills(creditKills(seatCrew(world, 2), 0, 4), 1, 7),
-    )
-    expect(shareHrefOf(crewed)).toBe(
-      shareUrl({ ...base, outcome: 'Won', wave: 10, kills: 0, crew: 2 }),
+  // NOTE: a phone whose browser has a share sheet, and a desktop.
+  const onPhone = (ended: Model): Model =>
+    modifyFields(ended, {
+      lastDevice: () => 'Touch' as const,
+      shareSheet: () => 'Available' as const,
+    })
+
+  const deathEvent = (path: 'Sheet' | 'Link') =>
+    SendShareEvent({
+      event: {
+        version: 2,
+        visitId: VISIT_ID,
+        build: RUNNING_BUILD,
+        screen: 'Death',
+        mode: 'Campaign',
+        difficulty: 'Normal',
+        path,
+      },
+    })
+
+  const sheet = OpenShareSheet({
+    text: shareText({ ...base, outcome: 'Munched', kills: 0 }),
+    url: GAME_URL,
+  })
+
+  test('the boot finds the share sheet', () => {
+    story(
+      update,
+      given(home),
+      message(Message.CompletedDetectShareSheet({ shareSheet: 'Available' })),
+      model(after => {
+        expect(after.shareSheet).toBe('Available')
+      }),
     )
   })
 
-  test('clicking the SHARE link still sends the share event, and opens nothing itself', () => {
+  test('a phone with a share sheet opens it, and counts the share once on the Sheet path', () => {
     story(
       update,
-      given(counted(onEndScreen(gameOver, doneMs('Munched')), 'On')),
+      given(onPhone(counted(onEndScreen(gameOver, doneMs('Munched')), 'On'))),
       message(Message.ClickedShareButton()),
+      Command.expectExact(sheet, deathEvent('Sheet')),
+      Command.resolveAll(
+        [OpenShareSheet, Message.SettledShareSheet({ outcome: 'Shared' })],
+        [SendShareEvent, Message.CompletedSendShareEvent()],
+      ),
+      model(after => {
+        expect(after.shareSheet).toBe('Available')
+      }),
+    )
+  })
+
+  test('a cancelled share sheet does nothing more', () => {
+    story(
+      update,
+      given(onPhone(onEndScreen(gameOver, doneMs('Munched')))),
+      message(Message.SettledShareSheet({ outcome: 'Cancelled' })),
+      Command.expectNone(),
+      model(after => {
+        expect(after.shareSheet).toBe('Available')
+      }),
+    )
+  })
+
+  test('a refused share sheet opens the intent link, and SHARE is the link from then on', () => {
+    story(
+      update,
+      given(onPhone(onEndScreen(gameOver, doneMs('Munched')))),
+      message(Message.SettledShareSheet({ outcome: 'Refused' })),
       Command.expectExact(
-        SendShareEvent({
-          event: {
-            version: 1,
-            visitId: VISIT_ID,
-            build: RUNNING_BUILD,
-            screen: 'Death',
-            mode: 'Campaign',
-            difficulty: 'Normal',
-          },
+        OpenShareLink({
+          url: shareUrl({ ...base, outcome: 'Munched', kills: 0 }),
         }),
       ),
+      Command.resolve(OpenShareLink, Message.CompletedOpenShareLink()),
+      model(after => {
+        expect(after.shareSheet).toBe('Unavailable')
+        expect(sharePathOf(after)).toBe('Link')
+      }),
+    )
+  })
+
+  test('a phone with no share sheet uses the link, and counts it on the Link path', () => {
+    story(
+      update,
+      given(
+        modifyFields(counted(onEndScreen(gameOver, doneMs('Munched')), 'On'), {
+          lastDevice: () => 'Touch' as const,
+          shareSheet: () => 'Unavailable' as const,
+        }),
+      ),
+      message(Message.ClickedShareButton()),
+      Command.expectExact(deathEvent('Link')),
       Command.resolve(SendShareEvent, Message.CompletedSendShareEvent()),
+    )
+  })
+
+  test('a desktop uses the link even where a share sheet exists', () => {
+    story(
+      update,
+      given(
+        modifyFields(counted(onEndScreen(gameOver, doneMs('Munched')), 'On'), {
+          lastDevice: () => 'KeyboardMouse' as const,
+          shareSheet: () => 'Available' as const,
+        }),
+      ),
+      message(Message.ClickedShareButton()),
+      Command.expectExact(deathEvent('Link')),
+      Command.resolve(SendShareEvent, Message.CompletedSendShareEvent()),
+    )
+  })
+
+  test('the SHARE link carries the run as X post intent', () => {
+    expect(shareHrefOf(onEndScreen(gameOver, doneMs('Munched')))).toBe(
+      shareUrl({ ...base, outcome: 'Munched', kills: 0 }),
     )
   })
 
@@ -551,11 +641,14 @@ describe('sharing to X', () => {
     )
   })
 
-  test('X clicks the SHARE link, so the click counts it once', () => {
+  test('X on a keyboard clicks the SHARE link, so the click counts it once', () => {
     story(
       update,
-      given(counted(onEndScreen(gameOver, RESTART_GRACE_MS), 'On')),
+      given(onPhone(counted(onEndScreen(gameOver, RESTART_GRACE_MS), 'On'))),
       press('KeyX'),
+      model(after => {
+        expect(sharePathOf(after)).toBe('Link')
+      }),
       Command.expectExact(ClickShareLink()),
       Command.resolve(ClickShareLink, Message.CompletedClickShareLink()),
     )
@@ -573,12 +666,13 @@ describe('sharing to X', () => {
       Command.expectExact(
         SendShareEvent({
           event: {
-            version: 1,
+            version: 2,
             visitId: VISIT_ID,
             build: RUNNING_BUILD,
             screen: 'CoopVictory',
             mode: 'Campaign',
             difficulty: 'Normal',
+            path: 'Link',
           },
         }),
       ),
