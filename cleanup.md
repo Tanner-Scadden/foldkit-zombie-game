@@ -30,7 +30,7 @@ The findings come from an audit of `main` at 70d10c95 on 2026-10-30, with patter
    - Done: 41 chains are matches now (13 in `src`, 9 in the packages, 6 in `infra/worker`, 13 in the tools), the store's Backend is a Schema union, and 17 `Extract<…, { _tag }>` outside co-op are named aliases. oxlint has no `no-restricted-syntax`, so `tools/lint/munchPlugin.mjs` adds `munch/no-tag-chain` and `munch/no-extract-tag`, on in the root and `infra` configs. `switch-exhaustiveness-check` was already on from 0a.
    - Waits for 0b: the chains and `Extract`s in `src/coop/` (`net.ts:84`, `update.ts:299-303`, `:689-697`, `story.test.ts:451,466`). An override in `.oxlintrc.json` marked `TODO(cleanup slice 0b)` turns the two rules off there; drop it when 0b converts them.
    - Waits for slice 9: `tools/balance/bot.ts:575,581`, in `ignorePatterns` until the knife lands.
-2. [x] **Derived menu state and update helpers.** (S/M) (#PR)
+2. [x] **Derived menu state and update helpers.** (S/M) (#26)
    - "Is a menu open" lives in three places that disagree: `update/home.ts:94-106` `isPanelAllowed`, `:156-161` `canMoveHomeFocus`, `update/profile.ts:101-104` `canOpenProfile`. `update/home.ts:159` reads `model.coop.screen` instead of `isCoopOpen`. `update/save.ts:244` `isSettingsOpen` duplicates the unused `isProfileOpenOn`.
    - Replace with one derived `menuState(model)` tagged union, computed never stored, read by update and view (domains `searchViewState.ts:36`).
    - `cond ? step(m) : { model: m }` appears 23 times (15 in `update/home.ts`): add `stepWhen(pred, step)` and `modelStep(f)` to `update/step.ts` (or use `Update.combineSteps` after 0b). Drop the `Step` suffix from step names (`keepNameStep`, `leaveShopStep`, `finishLoadStep`).
